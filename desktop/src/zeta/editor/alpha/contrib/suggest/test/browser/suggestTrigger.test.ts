@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { type AlphaTextMeasurer } from "../../../../browser/view/fontMetrics.js";
+import { type TextMeasurer } from "../../../../browser/view/fontMetrics.js";
 import { EditorSelectionController } from "../../../../common/cursor/editorSelectionController.js";
 import { registerBuiltinLanguageConfigurations } from "../../../../common/languages/languageBuiltinConfigurations.js";
 import { LanguageConfigurationRegistry } from "../../../../common/languages/languageConfiguration.js";
@@ -30,8 +30,8 @@ for (const [name, value] of Object.entries({
   });
 }
 
-const { AlphaEditorViewport } = await import("../../../../browser/view/editorViewport.js");
-const { AlphaTextInputController } = await import("../../../../browser/input/textInputController.js");
+const { EditorViewport } = await import("../../../../browser/view/editorViewport.js");
+const { TextInputController } = await import("../../../../browser/input/textInputController.js");
 
 test("Ctrl+Space requests providers through the completion service", async () => {
   const requests: LanguageCompletionProviderRequest[] = [];
@@ -165,7 +165,7 @@ test("Completion request wiring rejects a same-model session from another servic
   using selections = controllerAt(model, TextPosition.at(0, 3));
   using session = new LanguageCompletionSessionController(firstService.results, selections);
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container: requiredElement<HTMLElement>(dom.window.document, "main"),
     model,
     lineHeight: 20,
@@ -173,7 +173,7 @@ test("Completion request wiring rejects a same-model session from another servic
     selectionController: selections,
   });
 
-  assert.throws(() => new AlphaTextInputController(viewport, selections, {
+  assert.throws(() => new TextInputController(viewport, selections, {
     completion: {
       session,
       requests: {
@@ -184,7 +184,7 @@ test("Completion request wiring rejects a same-model session from another servic
   }), /must share one text model and completion result store/);
   using configurations = new LanguageConfigurationRegistry();
   using builtins = registerBuiltinLanguageConfigurations(configurations);
-  assert.throws(() => new AlphaTextInputController(viewport, selections, {
+  assert.throws(() => new TextInputController(viewport, selections, {
     language: {
       languageId: "json",
       configurations,
@@ -205,7 +205,7 @@ interface TriggerFixture extends Disposable {
   readonly model: TextModel;
   readonly service: LanguageCompletionService;
   readonly session: LanguageCompletionSessionController;
-  readonly input: InstanceType<typeof AlphaTextInputController>;
+  readonly input: InstanceType<typeof TextInputController>;
 }
 
 function createFixture(provider: LanguageCompletionProvider, text = "con"): TriggerFixture {
@@ -218,7 +218,7 @@ function createFixture(provider: LanguageCompletionProvider, text = "con"): Trig
   const session = new LanguageCompletionSessionController(service.results, selections);
   const configurations = new LanguageConfigurationRegistry();
   const builtinConfigurations = registerBuiltinLanguageConfigurations(configurations);
-  const viewport = new AlphaEditorViewport({
+  const viewport = new EditorViewport({
     container: requiredElement<HTMLElement>(dom.window.document, "main"),
     model,
     lineHeight: 20,
@@ -226,7 +226,7 @@ function createFixture(provider: LanguageCompletionProvider, text = "con"): Trig
     selectionController: selections,
   });
   viewport.layout({ width: 300, height: 40 });
-  const input = new AlphaTextInputController(viewport, selections, {
+  const input = new TextInputController(viewport, selections, {
     language: {
       languageId: "typescript",
       configurations,
@@ -321,7 +321,7 @@ function requiredElement<T extends Element = HTMLElement>(root: ParentNode, sele
   return element;
 }
 
-class FixedTextMeasurer implements AlphaTextMeasurer {
+class FixedTextMeasurer implements TextMeasurer {
   readonly horizontalPadding = 24;
   readonly contentLeftPadding = 12;
 

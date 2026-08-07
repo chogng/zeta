@@ -5,23 +5,23 @@ import { type EditorSelectionController } from "../../../common/cursor/editorSel
 import { resolveEditorIndentationOptions, type EditorIndentationOptions, type ResolvedEditorIndentationOptions } from "../../indentation/common/indentation.js";
 import { createDeleteLinesCommand, createDuplicateLinesCommand, createInsertLineCommand, createMoveLinesCommand, EditorLineDuplicateDirection, EditorLineInsertDirection, EditorLineMoveDirection } from "./linesOperations.js";
 import { createLineIndentCommand, EditorLineIndentDirection } from "./lineIndentCommands.js";
-import { type AlphaEditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 
-export interface AlphaLineOperationsControllerOptions {
+export interface LineOperationsControllerOptions {
   readonly operatingSystem?: OperatingSystem;
   readonly indentation?: EditorIndentationOptions;
 }
 
 /** Routes VS Code-compatible physical-line operation and indentation chords locally. */
-export class AlphaLineOperationsController extends DisposableOwner {
+export class LineOperationsController extends DisposableOwner {
   private readonly targetOperatingSystem: OperatingSystem;
   private readonly indentation: ResolvedEditorIndentationOptions;
 
   constructor(
     input: HTMLTextAreaElement,
-    private readonly viewport: AlphaEditorViewport,
+    private readonly viewport: EditorViewport,
     private readonly selections: EditorSelectionController,
-    options: AlphaLineOperationsControllerOptions = {},
+    options: LineOperationsControllerOptions = {},
   ) {
     super();
     try {

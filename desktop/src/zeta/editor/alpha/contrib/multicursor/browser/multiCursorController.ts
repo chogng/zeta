@@ -3,21 +3,21 @@ import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
 import { operatingSystem, OperatingSystem } from "../../../../../base/common/platform.js";
 import { addAdjacentLineCursors, addCursorsToSelectedLineEnds, EditorCursorInsertionDirection } from "../../../common/cursor/cursorInsertion.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
-import { type AlphaEditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 
-export interface AlphaMultiCursorControllerOptions {
+export interface MultiCursorControllerOptions {
   readonly operatingSystem?: OperatingSystem;
 }
 
 /** Routes platform-specific add-cursor-above/below chords through Alpha common state. */
-export class AlphaMultiCursorController extends DisposableOwner {
+export class MultiCursorController extends DisposableOwner {
   private readonly targetOperatingSystem: OperatingSystem;
 
   constructor(
     input: HTMLTextAreaElement,
-    private readonly viewport: AlphaEditorViewport,
+    private readonly viewport: EditorViewport,
     private readonly selections: EditorSelectionController,
-    options: AlphaMultiCursorControllerOptions = {},
+    options: MultiCursorControllerOptions = {},
   ) {
     super();
     try {

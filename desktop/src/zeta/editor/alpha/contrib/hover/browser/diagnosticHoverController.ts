@@ -1,13 +1,13 @@
 import { addDisposableListener } from "../../../../../base/browser/dom.js";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
-import { type AlphaEditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 
 /** Owns Alpha's non-modal diagnostic hover over projected gutter markers. */
-export class AlphaDiagnosticHoverController extends DisposableOwner {
+export class DiagnosticHoverController extends DisposableOwner {
   private readonly element: HTMLDivElement;
   private activeMarker: HTMLElement | undefined;
 
-  constructor(private readonly viewport: AlphaEditorViewport) {
+  constructor(private readonly viewport: EditorViewport) {
     super();
     const ownerDocument = viewport.element.ownerDocument;
     this.element = ownerDocument.createElement("div");

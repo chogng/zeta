@@ -15,7 +15,7 @@ for (const [name, value] of Object.entries({
   Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { AlphaSaveController } = await import("../../browser/saveController.js");
+const { SaveController } = await import("../../browser/saveController.js");
 
 test.after(() => browserEnvironment.window.close());
 
@@ -24,7 +24,7 @@ test("Save shortcut prevents browser save and does not overlap writes", async ()
   const input = dom.window.document.querySelector<HTMLTextAreaElement>("textarea")!;
   const pending = deferred<void>();
   let saves = 0;
-  using controller = new AlphaSaveController(input, {
+  using controller = new SaveController(input, {
     save: async () => {
       saves += 1;
       await pending.promise;
@@ -56,7 +56,7 @@ test("Save shortcut reports successful completion", async () => {
   const dom = new JSDOM("<!doctype html><body><textarea></textarea></body>");
   const input = dom.window.document.querySelector<HTMLTextAreaElement>("textarea")!;
   let successes = 0;
-  using controller = new AlphaSaveController(input, {
+  using controller = new SaveController(input, {
     save: async () => {},
     onSaveSuccess: () => {
       successes += 1;

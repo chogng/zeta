@@ -1,14 +1,14 @@
 import { type TextRange } from "../../common/core/text.js";
 import { type TextModel } from "../../common/model/textModel.js";
 import { type EditorLineRange } from "../../common/viewLayout/editorViewportModel.js";
-import { type AlphaTextMeasurer } from "./fontMetrics.js";
+import { type TextMeasurer } from "./fontMetrics.js";
 
-export interface AlphaRangeGeometryEntry<T> {
+export interface RangeGeometryEntry<T> {
   readonly range: TextRange;
   readonly value: T;
 }
 
-export interface AlphaRangeRectangle<T> {
+export interface RangeRectangle<T> {
   readonly value: T;
   readonly lineIndex: number;
   readonly left: number;
@@ -16,7 +16,7 @@ export interface AlphaRangeRectangle<T> {
 }
 
 /** Controls whether a zero-length range produces a visible geometry rectangle. */
-export enum AlphaEmptyRangeRendering {
+export enum EmptyRangeRendering {
   Ignore = "ignore",
   RenderAsSpace = "render-as-space",
 }
@@ -24,17 +24,17 @@ export enum AlphaEmptyRangeRendering {
 /** @internal */
 export function createAlphaRangeRectangles<T>(
   model: TextModel,
-  entries: readonly AlphaRangeGeometryEntry<T>[],
+  entries: readonly RangeGeometryEntry<T>[],
   renderLines: EditorLineRange,
   textLeft: number,
-  measurer: AlphaTextMeasurer,
-  emptyRangeRendering = AlphaEmptyRangeRendering.Ignore,
-): readonly AlphaRangeRectangle<T>[] {
-  const rectangles: AlphaRangeRectangle<T>[] = [];
+  measurer: TextMeasurer,
+  emptyRangeRendering = EmptyRangeRendering.Ignore,
+): readonly RangeRectangle<T>[] {
+  const rectangles: RangeRectangle<T>[] = [];
   const newlineWidth = measurer.measureLineWidth(" ");
 
   for (const entry of entries) {
-    if (entry.range.empty && emptyRangeRendering === AlphaEmptyRangeRendering.RenderAsSpace) {
+    if (entry.range.empty && emptyRangeRendering === EmptyRangeRendering.RenderAsSpace) {
       const lineIndex = entry.range.start.lineIndex;
       if (!containsLine(renderLines, lineIndex)) continue;
       rectangles.push(Object.freeze({
@@ -89,7 +89,7 @@ function prefixWidth(
   model: TextModel,
   lineIndex: number,
   columnIndex: number,
-  measurer: AlphaTextMeasurer,
+  measurer: TextMeasurer,
 ): number {
   return measurer.measureLineWidth(
     model.getLineContent(lineIndex).slice(0, columnIndex),

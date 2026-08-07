@@ -1,10 +1,10 @@
 /** Minimal document access required to derive Alpha's bounded minimap density rows. */
-export interface AlphaMinimapTextSource {
+export interface MinimapTextSource {
   readonly lineCount: number;
   getLineContent(lineIndex: number): string;
 }
 
-export interface AlphaMinimapRow {
+export interface MinimapRow {
   readonly startLineIndex: number;
   readonly endLineIndexExclusive: number;
   /** Relative non-whitespace content density, normalized to the sampled document maximum. */
@@ -20,7 +20,7 @@ export const ALPHA_MINIMAP_MAX_ROWS = 160;
  * redraw work bounded even for very large files. The minimap is a navigation
  * preview, not a syntax or exact-glyph layout surface.
  */
-export function createAlphaMinimapRows(source: AlphaMinimapTextSource, maximumRows = ALPHA_MINIMAP_MAX_ROWS): readonly AlphaMinimapRow[] {
+export function createAlphaMinimapRows(source: MinimapTextSource, maximumRows = ALPHA_MINIMAP_MAX_ROWS): readonly MinimapRow[] {
   if (!source || !Number.isSafeInteger(source.lineCount) || source.lineCount < 1 || typeof source.getLineContent !== "function") {
     throw new TypeError("Alpha minimap requires a non-empty text source");
   }
@@ -46,7 +46,7 @@ export function createAlphaMinimapRows(source: AlphaMinimapTextSource, maximumRo
   })]));
 }
 
-function sampledContentLength(source: AlphaMinimapTextSource, startLineIndex: number, endLineIndexExclusive: number): number {
+function sampledContentLength(source: MinimapTextSource, startLineIndex: number, endLineIndexExclusive: number): number {
   const lineCount = endLineIndexExclusive - startLineIndex;
   const samples = Math.min(4, lineCount);
   let maximum = 0;

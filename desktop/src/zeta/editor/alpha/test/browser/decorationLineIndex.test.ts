@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { AlphaDecorationLineIndex } from "../../browser/view/decorationLineIndex.js";
-import { AlphaDecorationPresentation, type AlphaResolvedDecoration } from "../../browser/view/decorationPresentation.js";
+import { DecorationLineIndex } from "../../browser/view/decorationLineIndex.js";
+import { DecorationPresentation, type ResolvedDecoration } from "../../browser/view/decorationPresentation.js";
 import { type TextDecorationId } from "../../common/model/decorationCollection.js";
 import { TextPosition, TextRange } from "../../common/core/text.js";
 
 test("Decoration line index resolves visible intervals and preserves source order", () => {
-  const index = new AlphaDecorationLineIndex([
+  const index = new DecorationLineIndex([
     decoration(1, 4, 0, 4, 1),
     decoration(2, 1, 2, 3, 0),
     decoration(3, 0, 0, 0, 1),
@@ -21,20 +21,20 @@ test("Decoration line index resolves visible intervals and preserves source orde
 });
 
 test("Decoration line index validates line queries", () => {
-  const index = new AlphaDecorationLineIndex([]);
+  const index = new DecorationLineIndex([]);
   assert.throws(() => index.getIntersectingLines(-1, 0), /non-negative ordered integer span/);
   assert.throws(() => index.getIntersectingLines(2, 1), /non-negative ordered integer span/);
   assert.throws(() => index.getIntersectingLines(0, 0.5), /non-negative ordered integer span/);
 });
 
-function decoration(id: number, startLineIndex: number, startColumnIndex: number, endLineIndex: number, endColumnIndex: number): AlphaResolvedDecoration {
+function decoration(id: number, startLineIndex: number, startColumnIndex: number, endLineIndex: number, endColumnIndex: number): ResolvedDecoration {
   return Object.freeze({
     id: id as TextDecorationId,
     range: TextRange.from(TextPosition.at(startLineIndex, startColumnIndex), TextPosition.at(endLineIndex, endColumnIndex)),
-    presentation: AlphaDecorationPresentation.ErrorUnderline,
+    presentation: DecorationPresentation.ErrorUnderline,
   });
 }
 
-function ids(decorations: readonly AlphaResolvedDecoration[]): readonly number[] {
+function ids(decorations: readonly ResolvedDecoration[]): readonly number[] {
   return decorations.map(decoration => decoration.id as number);
 }

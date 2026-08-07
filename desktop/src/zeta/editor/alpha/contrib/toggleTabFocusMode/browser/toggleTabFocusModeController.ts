@@ -1,13 +1,13 @@
 import "./media/toggleTabFocusMode.css";
 import { addDisposableListener, stopEvent } from "../../../../../base/browser/dom.js";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
-import { type AlphaEditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 
 /** Controls whether Tab is routed to editor text insertion or browser focus traversal. */
-export class AlphaToggleTabFocusModeController extends DisposableOwner {
+export class ToggleTabFocusModeController extends DisposableOwner {
   private enabled = false;
 
-  constructor(private readonly input: HTMLTextAreaElement, private readonly viewport: AlphaEditorViewport) {
+  constructor(private readonly input: HTMLTextAreaElement, private readonly viewport: EditorViewport) {
     super();
     this.own(addDisposableListener(input, "keydown", event => this.handleToggle(event), true));
     this.own(addDisposableListener(input, "keydown", event => {

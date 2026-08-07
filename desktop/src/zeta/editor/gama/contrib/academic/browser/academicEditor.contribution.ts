@@ -1,7 +1,7 @@
 import { registerEditorPane } from "../../../../../workbench/browser/parts/editor/editorRegistry.js";
-import { AlphaEmbeddedTextEditorFactory } from "../../../../alpha/browser/alphaEmbeddedTextEditor.js";
-import { GamaEditorPane } from "../../../browser/gamaEditorPane.js";
-import { createGamaEditorPaneOptions, findGamaEditorProfile, matchGamaEditorProfiles } from "../../../browser/services/gamaEditorProfile.js";
+import { EmbeddedTextEditorFactory } from "../../../../alpha/browser/embeddedTextEditor.js";
+import { EditorPane } from "../../../browser/editorPane.js";
+import { createGamaEditorPaneOptions, findGamaEditorProfile, matchGamaEditorProfiles } from "../../../browser/services/editorProfile.js";
 import { academicProfile } from "./profile.js";
 
 const profiles = [academicProfile] as const;
@@ -19,12 +19,12 @@ for (const profile of profiles) {
       const paneOptions = createGamaEditorPaneOptions(selectedProfile, {
         onSave: options.onSave,
         workingCopyService: options.workingCopyService,
-        embeddedTextEditorFactory: options.embeddedTextEditorFactory ?? new AlphaEmbeddedTextEditorFactory({
+        embeddedTextEditorFactory: options.embeddedTextEditorFactory ?? new EmbeddedTextEditorFactory({
           textMateService: options.textMateService,
           languageFeaturesService: options.languageFeaturesService,
         }),
       });
-      return new GamaEditorPane(options.textFileService, paneOptions);
+      return new EditorPane(options.textFileService, paneOptions);
     },
   });
 }

@@ -12,10 +12,10 @@ test("editor unit tests remain co-located with Alpha and Gama source domains", (
   assert.equal(exists(join(desktopRoot, "test/monaco")), false);
   assert.equal(exists(join(desktopRoot, "test/editor")), false);
   assert.equal(exists(join(editorRoot, "alpha/test/common/textModel.test.ts")), true);
-  assert.equal(exists(join(editorRoot, "alpha/test/browser/alphaEditorPane.test.ts")), true);
+  assert.equal(exists(join(editorRoot, "alpha/test/browser/editorPane.test.ts")), true);
   assert.equal(exists(join(editorRoot, "alpha/contrib/find/test/browser/findController.test.ts")), true);
   assert.equal(exists(join(editorRoot, "gama/test/common/document-model.test.ts")), true);
-  assert.equal(exists(join(editorRoot, "gama/test/browser/gama-editor-session.test.ts")), true);
+  assert.equal(exists(join(editorRoot, "gama/test/browser/editorWidget.test.ts")), true);
 });
 
 test("Alpha browser integration owns only Alpha runtime coverage", () => {

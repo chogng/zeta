@@ -1,7 +1,7 @@
 import { containsDocumentNode, findDocumentNode, type DocumentAttributes, type DocumentMark, type DocumentNode, type DocumentNodeId } from "../model/document.js";
 import { type DocumentFragment } from "../model/documentSerialization.js";
 import { nodeSelection, type DocumentPoint, type DocumentSelection, textSelection } from "../core/documentSelection.js";
-import { type DocumentSchema } from "../model/documentSchema.js";
+import { type DocumentSchema, type DocumentTextStyleAttributes } from "../model/documentSchema.js";
 import { DocumentTransaction } from "../model/documentTransaction.js";
 
 export type AdjacentBlockDirection = "backward" | "forward";
@@ -766,6 +766,11 @@ export function createSetMarkCommand(schema: DocumentSchema, document: DocumentN
   return createMarkCommand(schema, document, blockId, textNodeId, selection, markType, attrs, "set", storedMarks);
 }
 
+/** Updates one persistent typography attribute without discarding the other text-style attribute. */
+export function createSetTextStyleCommand(schema: DocumentSchema, document: DocumentNode, blockId: DocumentNodeId, textNodeId: DocumentNodeId, selection: DocumentSelection, attrs: DocumentTextStyleAttributes, storedMarks?: readonly DocumentMark[]): DocumentCommand | undefined {
+  return createMarkCommand(schema, document, blockId, textNodeId, selection, "textStyle", { ...attrs }, "merge", storedMarks);
+}
+
 /** Removes a mark across a text selection. */
 export function createRemoveMarkCommand(schema: DocumentSchema, document: DocumentNode, blockId: DocumentNodeId, textNodeId: DocumentNodeId, selection: DocumentSelection, markType: string, storedMarks?: readonly DocumentMark[]): DocumentCommand | undefined {
   return createMarkCommand(schema, document, blockId, textNodeId, selection, markType, {}, "remove", storedMarks);
@@ -778,7 +783,7 @@ export function createSetLinkMarkCommand(schema: DocumentSchema, document: Docum
   return createSetMarkCommand(schema, document, blockId, textNodeId, selection, "link", { href: normalizedHref }, storedMarks);
 }
 
-function createMarkCommand(schema: DocumentSchema, document: DocumentNode, blockId: DocumentNodeId, textNodeId: DocumentNodeId, selection: DocumentSelection, markType: string, attrs: DocumentAttributes, mode: "remove" | "set" | "toggle", storedMarks?: readonly DocumentMark[]): DocumentCommand | undefined {
+function createMarkCommand(schema: DocumentSchema, document: DocumentNode, blockId: DocumentNodeId, textNodeId: DocumentNodeId, selection: DocumentSelection, markType: string, attrs: DocumentAttributes, mode: "remove" | "set" | "toggle" | "merge", storedMarks?: readonly DocumentMark[]): DocumentCommand | undefined {
   if (selection.kind !== "text" || (selection.anchor.nodeId !== textNodeId && selection.head.nodeId !== textNodeId)) return undefined;
   const blockLocation = findDocumentNode(document, blockId);
   if (!blockLocation || !isTextBlock(blockLocation.node)) return undefined;
@@ -797,7 +802,7 @@ function createMarkCommand(schema: DocumentSchema, document: DocumentNode, block
     const node = blockLocation.node.content[index]!;
     const from = index === range.startIndex ? range.start.offset : 0;
     const to = index === range.endIndex ? range.end.offset : node.text!.length;
-    replacements.set(index, createMarkedTextSegments(schema, node, from, to, markType, attrs, removeMark, mode === "set"));
+    replacements.set(index, createMarkedTextSegments(schema, node, from, to, markType, attrs, removeMark, mode === "set" || mode === "merge", mode === "merge"));
   }
   let transaction = new DocumentTransaction();
   for (let index = range.endIndex; index >= range.startIndex; index -= 1) {
@@ -819,12 +824,14 @@ function marksAtPoint(block: DocumentNode, point: DocumentPoint): readonly Docum
   return node?.marks ?? [];
 }
 
-function updateStoredMarks(schema: DocumentSchema, current: readonly DocumentMark[], markType: string, attrs: DocumentAttributes, mode: "remove" | "set" | "toggle"): readonly DocumentMark[] {
+function updateStoredMarks(schema: DocumentSchema, current: readonly DocumentMark[], markType: string, attrs: DocumentAttributes, mode: "remove" | "set" | "toggle" | "merge"): readonly DocumentMark[] {
   const hasMark = current.some(mark => mark.type === markType);
   const remove = mode === "remove" || (mode === "toggle" && hasMark);
+  const existing = current.find(mark => mark.type === markType);
+  const nextAttrs = mode === "merge" && existing ? { ...existing.attrs, ...attrs } : attrs;
   const next = remove
     ? current.filter(mark => mark.type !== markType)
-    : [...current.filter(mark => mark.type !== markType), { type: markType, attrs }];
+    : [...current.filter(mark => mark.type !== markType), { type: markType, attrs: nextAttrs }];
   schema.validateMarks(next);
   return Object.freeze(next.map(mark => Object.freeze({ type: mark.type, attrs: Object.freeze({ ...(mark.attrs ?? {}) }) })));
 }
@@ -1079,7 +1086,7 @@ function resolveInlineRange(block: DocumentNode, selection: Extract<DocumentSele
   return { startIndex, endIndex, start, end, forward, selected };
 }
 
-function createMarkedTextSegments(schema: DocumentSchema, node: DocumentNode, from: number, to: number, markType: string, attrs: DocumentAttributes, removeMark: boolean, replaceExisting: boolean): readonly TextSegment[] {
+function createMarkedTextSegments(schema: DocumentSchema, node: DocumentNode, from: number, to: number, markType: string, attrs: DocumentAttributes, removeMark: boolean, replaceExisting: boolean, mergeExisting = false): readonly TextSegment[] {
   if (from === to) return [{ from: 0, to: node.text!.length, node }];
   const parts: Array<{ from: number; to: number; marks: DocumentNode["marks"] }> = [];
   if (from > 0) parts.push({ from: 0, to: from, marks: node.marks });
@@ -1088,7 +1095,7 @@ function createMarkedTextSegments(schema: DocumentSchema, node: DocumentNode, fr
       ? node.marks.filter(mark => mark.type !== markType)
       : replaceExisting
         ? node.marks.some(mark => mark.type === markType)
-          ? node.marks.map(mark => mark.type === markType ? { type: markType, attrs } : mark)
+          ? node.marks.map(mark => mark.type === markType ? { type: markType, attrs: mergeExisting ? { ...mark.attrs, ...attrs } : attrs } : mark)
           : [...node.marks, { type: markType, attrs }]
         : node.marks.some(mark => mark.type === markType) ? node.marks : [...node.marks, { type: markType, attrs }];
     parts.push({ from, to, marks });

@@ -1,9 +1,9 @@
 import { BIBLIOGRAPHY_NODE_TYPE, CITATION_NODE_TYPE, REFERENCE_NODE_TYPE } from "../common/schema.js";
 import { REFERENCE_INDEX_KEY } from "../common/references.js";
-import type { GamaInlineNodeViewFactory, GamaNodeViewContext, GamaNodeViewFactory } from "../../../browser/gamaEditorSession.js";
+import type { InlineNodeViewFactory, NodeViewContext, NodeViewFactory } from "../../../browser/editorWidget.js";
 
 /** Block projections owned by the citation capability. */
-export const nodeViews: Readonly<Record<string, GamaNodeViewFactory>> = Object.freeze({
+export const nodeViews: Readonly<Record<string, NodeViewFactory>> = Object.freeze({
   [BIBLIOGRAPHY_NODE_TYPE]: context => createWrapper(context, "section", "bibliography", "References"),
   [REFERENCE_NODE_TYPE]: context => {
     const element = context.previousElement ?? context.ownerDocument.createElement("article");
@@ -16,7 +16,7 @@ export const nodeViews: Readonly<Record<string, GamaNodeViewFactory>> = Object.f
 });
 
 /** Inline projection owned by the citation capability. */
-export const inlineNodeViews: Readonly<Record<string, GamaInlineNodeViewFactory>> = Object.freeze({
+export const inlineNodeViews: Readonly<Record<string, InlineNodeViewFactory>> = Object.freeze({
   [CITATION_NODE_TYPE]: context => {
     const element = context.ownerDocument.createElement("span");
     const key = typeof context.node.attrs.key === "string" ? context.node.attrs.key : "";
@@ -41,7 +41,7 @@ export const inlineNodeViews: Readonly<Record<string, GamaInlineNodeViewFactory>
   },
 });
 
-function createWrapper(context: GamaNodeViewContext, tagName: "section", role: string, label: string): HTMLElement {
+function createWrapper(context: NodeViewContext, tagName: "section", role: string, label: string): HTMLElement {
   const element = context.previousElement ?? context.ownerDocument.createElement(tagName);
   element.className = "zeta-citation-" + role;
   element.dataset.citationRole = role;

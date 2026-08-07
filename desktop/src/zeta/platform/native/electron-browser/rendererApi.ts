@@ -7,6 +7,7 @@ import { createElectronExtensionApi } from "../../extensions/electron-browser/ex
 import { createNativeContextMenuApi } from "../../contextview/electron-browser/contextMenuApi.js";
 import { createFileApi } from "../../files/electron-browser/fileApi.js";
 import { createDiffApi } from "../../diff/electron-browser/diffApi.js";
+import { createSyntaxApi } from "../../syntax/electron-browser/syntaxApi.js";
 import { createGitApi } from "../../git/electron-browser/gitApi.js";
 import { createKeybindingsResourceApi } from "../../keybinding/electron-browser/keybindingsResourceApi.js";
 import { createNativeMenubarApi } from "../../menubar/electron-browser/nativeMenubarApi.js";
@@ -40,6 +41,7 @@ export function createElectronRendererApi(): ZetaElectronRendererApi {
     extensions: createElectronExtensionApi(resource),
     fs: createFileApi(),
     diff: createDiffApi(),
+    syntax: createSyntaxApi(),
     git: createGitApi(),
     workspaceSearch: createWorkspaceSearchApi(),
     terminal: new ElectronTerminalProcessService(appServer),

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { OperatingSystem } from "../../../../../../base/common/platform.js";
-import { type AlphaTextMeasurer } from "../../../../browser/view/fontMetrics.js";
+import { type TextMeasurer } from "../../../../browser/view/fontMetrics.js";
 import { EditorSelectionController } from "../../../../common/cursor/editorSelectionController.js";
 import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
 import { TextPosition } from "../../../../common/core/text.js";
@@ -21,19 +21,19 @@ for (const [name, value] of Object.entries({
   Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { AlphaEditorViewport } = await import("../../../../browser/view/editorViewport.js");
-const { AlphaMultiCursorController, resolveAlphaAdjacentCursorDirection } = await import("../../browser/multiCursorController.js");
+const { EditorViewport } = await import("../../../../browser/view/editorViewport.js");
+const { MultiCursorController, resolveAlphaAdjacentCursorDirection } = await import("../../browser/multiCursorController.js");
 
 test("Multi-cursor shortcut adds a logical adjacent caret through Alpha common state", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   const container = dom.window.document.querySelector<HTMLElement>("main")!;
   using model = new TextModel("zero\none\ntwo");
   using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(1, 1))));
-  using viewport = new AlphaEditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+  using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
   viewport.layout({ width: 200, height: 60 });
   const input = dom.window.document.createElement("textarea");
   container.append(input);
-  using controller = new AlphaMultiCursorController(input, viewport, selections, { operatingSystem: OperatingSystem.Windows });
+  using controller = new MultiCursorController(input, viewport, selections, { operatingSystem: OperatingSystem.Windows });
 
   const addBelow = keydown(dom.window, "ArrowDown", { ctrlKey: true, altKey: true });
   input.dispatchEvent(addBelow);
@@ -51,11 +51,11 @@ test("Multi-cursor shortcut replaces selected rows with line-end carets", () => 
   const container = dom.window.document.querySelector<HTMLElement>("main")!;
   using model = new TextModel("zero\none\ntwo");
   using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.from(TextPosition.at(0, 1), TextPosition.at(2, 0))));
-  using viewport = new AlphaEditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+  using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
   viewport.layout({ width: 200, height: 60 });
   const input = dom.window.document.createElement("textarea");
   container.append(input);
-  using controller = new AlphaMultiCursorController(input, viewport, selections);
+  using controller = new MultiCursorController(input, viewport, selections);
 
   const addEnds = keydown(dom.window, "i", { shiftKey: true, altKey: true });
   input.dispatchEvent(addEnds);
@@ -94,17 +94,17 @@ test("Multi-cursor controller rejects cross-model wiring", () => {
   using other = new TextModel("two");
   using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
   using otherSelections = new EditorSelectionController(other, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
-  using viewport = new AlphaEditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
+  using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
   const input = dom.window.document.createElement("textarea");
-  assert.throws(() => new AlphaMultiCursorController(input, viewport, otherSelections), /must share one text model/);
-  assert.throws(() => new AlphaMultiCursorController(input, viewport, selections, {
+  assert.throws(() => new MultiCursorController(input, viewport, otherSelections), /must share one text model/);
+  assert.throws(() => new MultiCursorController(input, viewport, selections, {
     operatingSystem: "solar" as OperatingSystem,
   }), /operating system/);
 
   dom.window.close();
 });
 
-class FixedTextMeasurer implements AlphaTextMeasurer {
+class FixedTextMeasurer implements TextMeasurer {
   readonly horizontalPadding = 24;
   readonly contentLeftPadding = 12;
 

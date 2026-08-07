@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { type AlphaTextMeasurer } from "../../../../browser/view/fontMetrics.js";
+import { type TextMeasurer } from "../../../../browser/view/fontMetrics.js";
 import { TextDecorationCollection } from "../../../../common/model/decorationCollection.js";
 import { EditorSelectionController } from "../../../../common/cursor/editorSelectionController.js";
 import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
@@ -23,9 +23,9 @@ for (const [name, value] of Object.entries({
   Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { AlphaEditorViewport } = await import("../../../../browser/view/editorViewport.js");
-const { AlphaDecorationPresentation, createAlphaDecorationSource } = await import("../../../../browser/view/decorationPresentation.js");
-const { AlphaFindController } = await import("../../browser/findController.js");
+const { EditorViewport } = await import("../../../../browser/view/editorViewport.js");
+const { DecorationPresentation, createAlphaDecorationSource } = await import("../../../../browser/view/decorationPresentation.js");
+const { FindController } = await import("../../browser/findController.js");
 
 test.after(() => browserEnvironment.window.close());
 
@@ -144,9 +144,9 @@ interface Fixture extends Disposable {
   readonly model: TextModel;
   readonly selections: EditorSelectionController;
   readonly decorations: TextDecorationCollection<void>;
-  readonly viewport: InstanceType<typeof AlphaEditorViewport>;
+  readonly viewport: InstanceType<typeof EditorViewport>;
   readonly editorInput: HTMLTextAreaElement;
-  readonly find: InstanceType<typeof AlphaFindController>;
+  readonly find: InstanceType<typeof FindController>;
 }
 
 function createFixture(text: string, anchor = TextPosition.at(0, 0), active = anchor): Fixture {
@@ -155,18 +155,18 @@ function createFixture(text: string, anchor = TextPosition.at(0, 0), active = an
   const model = new TextModel(text);
   const selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.from(anchor, active)));
   const decorations = new TextDecorationCollection<void>(model);
-  const viewport = new AlphaEditorViewport({
+  const viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
     textMeasurer: new FixedTextMeasurer(),
     selectionController: selections,
-    decorationSources: [createAlphaDecorationSource(decorations, () => AlphaDecorationPresentation.SearchMatch)],
+    decorationSources: [createAlphaDecorationSource(decorations, () => DecorationPresentation.SearchMatch)],
   });
   viewport.layout({ width: 600, height: 120 });
   const editorInput = dom.window.document.createElement("textarea") as unknown as HTMLTextAreaElement;
   viewport.element.append(editorInput);
-  const find = new AlphaFindController(editorInput, viewport, selections, decorations);
+  const find = new FindController(editorInput, viewport, selections, decorations);
   return {
     dom,
     model,
@@ -207,7 +207,7 @@ function requiredElement<T extends Element = HTMLElement>(root: ParentNode, sele
   return element;
 }
 
-class FixedTextMeasurer implements AlphaTextMeasurer {
+class FixedTextMeasurer implements TextMeasurer {
   readonly horizontalPadding = 24;
   readonly contentLeftPadding = 12;
 

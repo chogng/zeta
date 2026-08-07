@@ -1,13 +1,13 @@
 import { TextPosition, TextRange } from "../../../common/core/text.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 
-export type AlphaUnicodeHighlightKind = "invisible" | "bidi" | "confusable";
+export type UnicodeHighlightKind = "invisible" | "bidi" | "confusable";
 
-export interface AlphaUnicodeHighlight { readonly range: TextRange; readonly kind: AlphaUnicodeHighlightKind; readonly character: string; }
+export interface UnicodeHighlight { readonly range: TextRange; readonly kind: UnicodeHighlightKind; readonly character: string; }
 
 /** Finds editor-dangerous invisible, bidi-control, and likely confusable characters. */
-export function findUnicodeHighlights(model: TextModel): readonly AlphaUnicodeHighlight[] {
-  const result: AlphaUnicodeHighlight[] = [];
+export function findUnicodeHighlights(model: TextModel): readonly UnicodeHighlight[] {
+  const result: UnicodeHighlight[] = [];
   for (let lineIndex = 0; lineIndex < model.lineCount; lineIndex += 1) {
     const line = model.getLineContent(lineIndex);
     let columnIndex = 0;
@@ -21,7 +21,7 @@ export function findUnicodeHighlights(model: TextModel): readonly AlphaUnicodeHi
   return Object.freeze(result);
 }
 
-function classifyCharacter(character: string, line: string): AlphaUnicodeHighlightKind | undefined {
+function classifyCharacter(character: string, line: string): UnicodeHighlightKind | undefined {
   const codePoint = character.codePointAt(0)!;
   if (isBidiControl(codePoint)) return "bidi";
   if (isInvisible(codePoint)) return "invisible";

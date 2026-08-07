@@ -4,11 +4,11 @@ import { type TextRange } from "../../common/core/text.js";
 import { type TextModel } from "../../common/model/textModel.js";
 import { type EditorVisualLineProjection } from "../../common/viewModel/modelLineProjection.js";
 import { type EditorLineRange } from "../../common/viewLayout/editorViewportModel.js";
-import { type AlphaTextMeasurer } from "./fontMetrics.js";
-import { AlphaEmptyRangeRendering, createAlphaRangeRectangles } from "./rangeGeometry.js";
+import { type TextMeasurer } from "./fontMetrics.js";
+import { EmptyRangeRendering, createAlphaRangeRectangles } from "./rangeGeometry.js";
 import { createAlphaVisualRangeRectangles } from "./visualRangeGeometry.js";
 
-export enum AlphaDecorationPresentation {
+export enum DecorationPresentation {
   SearchMatch = "search-match",
   OccurrenceHighlight = "occurrence-highlight",
   BracketMatch = "bracket-match",
@@ -20,30 +20,30 @@ export enum AlphaDecorationPresentation {
   UnusualLineTerminator = "unusual-line-terminator",
 }
 
-export interface AlphaResolvedDecoration {
+export interface ResolvedDecoration {
   readonly id: TextDecorationId;
   readonly range: TextRange;
-  readonly presentation: AlphaDecorationPresentation;
+  readonly presentation: DecorationPresentation;
   readonly hoverText?: string;
 }
 
-export interface AlphaDecorationSource {
+export interface DecorationSource {
   readonly onDidChange: Event<void>;
-  readonly decorations: readonly AlphaResolvedDecoration[];
+  readonly decorations: readonly ResolvedDecoration[];
 }
 
-export interface AlphaDecorationRectangle {
+export interface DecorationRectangle {
   readonly id: TextDecorationId;
-  readonly presentation: AlphaDecorationPresentation;
+  readonly presentation: DecorationPresentation;
   readonly lineIndex: number;
   readonly left: number;
   readonly width: number;
   readonly hoverText?: string;
 }
 
-export interface AlphaVisualDecorationRectangle {
+export interface VisualDecorationRectangle {
   readonly id: TextDecorationId;
-  readonly presentation: AlphaDecorationPresentation;
+  readonly presentation: DecorationPresentation;
   readonly visualLineIndex: number;
   readonly left: number;
   readonly width: number;
@@ -61,16 +61,16 @@ export function createAlphaDecorationSource<TMetadata>(
   collection: TextDecorationCollection<TMetadata>,
   resolvePresentation: (
     decoration: TextDecorationSnapshot<TMetadata>,
-  ) => AlphaDecorationPresentation | undefined,
+  ) => DecorationPresentation | undefined,
   resolveHoverText?: (decoration: TextDecorationSnapshot<TMetadata>) => string | undefined,
-): AlphaDecorationSource {
+): DecorationSource {
   const onDidChange: Event<void> = listener => {
     return collection.onDidChange(() => listener());
   };
   return Object.freeze({
     onDidChange,
-    get decorations(): readonly AlphaResolvedDecoration[] {
-      const resolved: AlphaResolvedDecoration[] = [];
+    get decorations(): readonly ResolvedDecoration[] {
+      const resolved: ResolvedDecoration[] = [];
       for (const decoration of collection.decorations) {
         const presentation = resolvePresentation(decoration);
         if (presentation === undefined) continue;
@@ -94,11 +94,11 @@ export function createAlphaDecorationSource<TMetadata>(
 /** @internal */
 export function createAlphaDecorationRectangles(
   model: TextModel,
-  decorations: readonly AlphaResolvedDecoration[],
+  decorations: readonly ResolvedDecoration[],
   renderLines: EditorLineRange,
   textLeft: number,
-  measurer: AlphaTextMeasurer,
-): readonly AlphaDecorationRectangle[] {
+  measurer: TextMeasurer,
+): readonly DecorationRectangle[] {
   return Object.freeze(createAlphaRangeRectangles(
     model,
     decorations.map(decoration => ({
@@ -108,7 +108,7 @@ export function createAlphaDecorationRectangles(
     renderLines,
     textLeft,
     measurer,
-    AlphaEmptyRangeRendering.RenderAsSpace,
+    EmptyRangeRendering.RenderAsSpace,
   ).map(rectangle => Object.freeze({
     id: rectangle.value.id,
     presentation: rectangle.value.presentation,
@@ -120,7 +120,7 @@ export function createAlphaDecorationRectangles(
 }
 
 /** @internal */
-export function createAlphaVisualDecorationRectangles(model: TextModel, decorations: readonly AlphaResolvedDecoration[], projection: EditorVisualLineProjection, renderLines: EditorLineRange, textLeft: number, measurer: AlphaTextMeasurer): readonly AlphaVisualDecorationRectangle[] {
+export function createAlphaVisualDecorationRectangles(model: TextModel, decorations: readonly ResolvedDecoration[], projection: EditorVisualLineProjection, renderLines: EditorLineRange, textLeft: number, measurer: TextMeasurer): readonly VisualDecorationRectangle[] {
   return Object.freeze(createAlphaVisualRangeRectangles(
     model,
     decorations.map(decoration => ({
@@ -131,7 +131,7 @@ export function createAlphaVisualDecorationRectangles(model: TextModel, decorati
     renderLines,
     textLeft,
     measurer,
-    AlphaEmptyRangeRendering.RenderAsSpace,
+    EmptyRangeRendering.RenderAsSpace,
   ).map(rectangle => Object.freeze({
     id: rectangle.value.id,
     presentation: rectangle.value.presentation,
@@ -143,18 +143,18 @@ export function createAlphaVisualDecorationRectangles(model: TextModel, decorati
 }
 
 function validatePresentation(
-  presentation: AlphaDecorationPresentation,
+  presentation: DecorationPresentation,
 ): void {
   if (
-    presentation !== AlphaDecorationPresentation.SearchMatch &&
-    presentation !== AlphaDecorationPresentation.OccurrenceHighlight &&
-    presentation !== AlphaDecorationPresentation.BracketMatch &&
-    presentation !== AlphaDecorationPresentation.ErrorUnderline &&
-    presentation !== AlphaDecorationPresentation.WarningUnderline &&
-    presentation !== AlphaDecorationPresentation.InformationUnderline &&
-    presentation !== AlphaDecorationPresentation.HintUnderline
-    && presentation !== AlphaDecorationPresentation.UnicodeHighlight
-    && presentation !== AlphaDecorationPresentation.UnusualLineTerminator
+    presentation !== DecorationPresentation.SearchMatch &&
+    presentation !== DecorationPresentation.OccurrenceHighlight &&
+    presentation !== DecorationPresentation.BracketMatch &&
+    presentation !== DecorationPresentation.ErrorUnderline &&
+    presentation !== DecorationPresentation.WarningUnderline &&
+    presentation !== DecorationPresentation.InformationUnderline &&
+    presentation !== DecorationPresentation.HintUnderline
+    && presentation !== DecorationPresentation.UnicodeHighlight
+    && presentation !== DecorationPresentation.UnusualLineTerminator
   ) {
     throw new TypeError(`Unknown Alpha decoration presentation '${presentation}'`);
   }

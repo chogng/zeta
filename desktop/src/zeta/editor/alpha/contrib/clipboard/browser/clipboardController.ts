@@ -8,49 +8,49 @@ import { type EditorEditCommand } from "../../../common/commands/editorEditComma
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { type TextSelectionSet } from "../../../common/core/selection.js";
 import { type TextModel } from "../../../common/model/textModel.js";
-import { type AlphaEditorViewport } from "../../../browser/view/editorViewport.js";
-import { type AlphaSemanticTokenSource } from "../../../browser/view/semanticTokenPresentation.js";
+import { type EditorViewport } from "../../../browser/view/editorViewport.js";
+import { type SemanticTokenSource } from "../../../browser/view/semanticTokenPresentation.js";
 import { createAlphaSyntaxClipboardHtml } from "./syntaxClipboardHtml.js";
 import { ALPHA_TEXT_FILE_TRANSFER_MAX_BYTES, selectAlphaTextFileTransfer } from "../../dropOrPasteInto/browser/textFileTransfer.js";
-import { captureAlphaClipboardTextTransfer, normalizeAlphaClipboardPasteProviders, provideAlphaClipboardPaste, type AlphaClipboardPasteProvider } from "./clipboardPasteProvider.js";
-import { createAlphaBrowserClipboardSystemTextReader, type AlphaClipboardSystemTextReader } from "./clipboardSystemText.js";
-import { createAlphaBrowserClipboardRichTextReader, createAlphaBrowserClipboardRichTextWriter, type AlphaClipboardRichTextItem, type AlphaClipboardRichTextReader, type AlphaClipboardRichTextWriter } from "./clipboardRichText.js";
+import { captureAlphaClipboardTextTransfer, normalizeAlphaClipboardPasteProviders, provideAlphaClipboardPaste, type ClipboardPasteProvider } from "./clipboardPasteProvider.js";
+import { createAlphaBrowserClipboardSystemTextReader, type ClipboardSystemTextReader } from "./clipboardSystemText.js";
+import { createAlphaBrowserClipboardRichTextReader, createAlphaBrowserClipboardRichTextWriter, type ClipboardRichTextItem, type ClipboardRichTextReader, type ClipboardRichTextWriter } from "./clipboardRichText.js";
 
 export const ALPHA_EDITOR_CLIPBOARD_MIME = "application/x-zeta-alpha-editor";
 export const ALPHA_EDITOR_HTML_CLIPBOARD_MIME = "text/html";
 
-export enum AlphaClipboardLineEnding {
+export enum ClipboardLineEnding {
   LF = "\n",
   CRLF = "\r\n",
 }
 
-export interface AlphaClipboardControllerOptions {
-  readonly lineEnding?: AlphaClipboardLineEnding;
+export interface ClipboardControllerOptions {
+  readonly lineEnding?: ClipboardLineEnding;
   readonly emptySelectionPolicy?: EditorEmptySelectionClipboardPolicy;
   /** Optional current token projection used only for portable HTML copy output. */
-  readonly semanticTokens?: AlphaSemanticTokenSource;
+  readonly semanticTokens?: SemanticTokenSource;
   /** Rejects cut and paste while another input adapter owns a protected edit. */
   readonly isEditingAllowed?: () => boolean;
   /** Ordered local providers for declared non-plain clipboard representations. */
-  readonly pasteProviders?: readonly AlphaClipboardPasteProvider[];
+  readonly pasteProviders?: readonly ClipboardPasteProvider[];
   /**
    * Optional Async Clipboard plain-text fallback. It is used only when the
    * native paste event has no textual, metadata, file, or provider payload.
    */
-  readonly systemTextReader?: AlphaClipboardSystemTextReader;
+  readonly systemTextReader?: ClipboardSystemTextReader;
   /** Optional rich Async Clipboard fallback, used before the plain-text fallback. */
-  readonly richTextReader?: AlphaClipboardRichTextReader;
+  readonly richTextReader?: ClipboardRichTextReader;
   /** Optional rich Async Clipboard writer, used only without event clipboard data. */
-  readonly richTextWriter?: AlphaClipboardRichTextWriter;
+  readonly richTextWriter?: ClipboardRichTextWriter;
 }
 
-interface AlphaClipboardMetadata {
+interface ClipboardMetadata {
   readonly version: 2;
   readonly selectionTexts: readonly string[];
   readonly pasteModes: readonly EditorClipboardPasteMode[];
 }
 
-interface AlphaClipboardPasteData {
+interface ClipboardPasteData {
   readonly texts: readonly string[];
   readonly modes: readonly EditorClipboardPasteMode[];
 }
@@ -58,23 +58,23 @@ interface AlphaClipboardPasteData {
 /**
  * Routes native clipboard events through Alpha's selection-aware commands.
  */
-export class AlphaClipboardController extends DisposableOwner {
-  private readonly lineEnding: AlphaClipboardLineEnding;
+export class ClipboardController extends DisposableOwner {
+  private readonly lineEnding: ClipboardLineEnding;
   private readonly emptySelectionPolicy: EditorEmptySelectionClipboardPolicy;
-  private readonly semanticTokens: AlphaSemanticTokenSource | undefined;
+  private readonly semanticTokens: SemanticTokenSource | undefined;
   private readonly isEditingAllowed: () => boolean;
-  private readonly pasteProviders: readonly AlphaClipboardPasteProvider[];
-  private readonly systemTextReader: AlphaClipboardSystemTextReader | undefined;
-  private readonly richTextReader: AlphaClipboardRichTextReader | undefined;
-  private readonly richTextWriter: AlphaClipboardRichTextWriter | undefined;
+  private readonly pasteProviders: readonly ClipboardPasteProvider[];
+  private readonly systemTextReader: ClipboardSystemTextReader | undefined;
+  private readonly richTextReader: ClipboardRichTextReader | undefined;
+  private readonly richTextWriter: ClipboardRichTextWriter | undefined;
   private asynchronousPasteRequest = 0;
   private disposed = false;
 
   constructor(
     private readonly element: HTMLTextAreaElement,
-    private readonly viewport: AlphaEditorViewport,
+    private readonly viewport: EditorViewport,
     private readonly selectionController: EditorSelectionController,
-    options: AlphaClipboardControllerOptions = {},
+    options: ClipboardControllerOptions = {},
   ) {
     super();
     if (viewport.textModel !== selectionController.textModel) {
@@ -344,7 +344,7 @@ export class AlphaClipboardController extends DisposableOwner {
     } catch {
       return false;
     }
-    const metadata: AlphaClipboardMetadata = {
+    const metadata: ClipboardMetadata = {
       version: 2,
       selectionTexts: entries.map(entry => entry.text),
       pasteModes: entries.map(entry => entry.pasteMode),
@@ -365,7 +365,7 @@ export class AlphaClipboardController extends DisposableOwner {
     return true;
   }
 
-  private createClipboardPayload(entries: readonly EditorClipboardEntry[]): Required<AlphaClipboardRichTextItem> {
+  private createClipboardPayload(entries: readonly EditorClipboardEntry[]): Required<ClipboardRichTextItem> {
     return Object.freeze({
       plainText: joinClipboardEntries(entries, this.lineEnding),
       html: createAlphaSyntaxClipboardHtml(
@@ -385,7 +385,7 @@ export class AlphaClipboardController extends DisposableOwner {
   }
 }
 
-function createMetadataPasteCommand(model: TextModel, selections: TextSelectionSet, data: AlphaClipboardPasteData): EditorEditCommand {
+function createMetadataPasteCommand(model: TextModel, selections: TextSelectionSet, data: ClipboardPasteData): EditorEditCommand {
   return data.modes.every(mode => mode === EditorClipboardPasteMode.Line) &&
     canPasteCompleteLines(selections)
     ? createLinePasteCommand(model, selections, data.texts)
@@ -396,11 +396,11 @@ function canPasteCompleteLines(selections: TextSelectionSet): boolean {
   return selections.selections.every(selection => selection.collapsed);
 }
 
-function readLineEnding(lineEnding: AlphaClipboardLineEnding | undefined): AlphaClipboardLineEnding {
+function readLineEnding(lineEnding: ClipboardLineEnding | undefined): ClipboardLineEnding {
   const resolved = lineEnding ?? (
-    isWindows ? AlphaClipboardLineEnding.CRLF : AlphaClipboardLineEnding.LF
+    isWindows ? ClipboardLineEnding.CRLF : ClipboardLineEnding.LF
   );
-  if (!Object.values(AlphaClipboardLineEnding).includes(resolved)) {
+  if (!Object.values(ClipboardLineEnding).includes(resolved)) {
     throw new TypeError("Unknown Alpha clipboard line ending");
   }
   return resolved;
@@ -414,7 +414,7 @@ function readEmptySelectionPolicy(policy: EditorEmptySelectionClipboardPolicy | 
   return resolved;
 }
 
-function joinClipboardEntries(entries: readonly EditorClipboardEntry[], lineEnding: AlphaClipboardLineEnding): string {
+function joinClipboardEntries(entries: readonly EditorClipboardEntry[], lineEnding: ClipboardLineEnding): string {
   const included = entries.filter(entry => entry.text.length > 0);
   let result = "";
   let previousMode: EditorClipboardPasteMode | undefined;
@@ -431,10 +431,10 @@ function joinClipboardEntries(entries: readonly EditorClipboardEntry[], lineEndi
   return result;
 }
 
-function toExternalLineEndings(text: string, lineEnding: AlphaClipboardLineEnding): string {
-  return lineEnding === AlphaClipboardLineEnding.LF
+function toExternalLineEndings(text: string, lineEnding: ClipboardLineEnding): string {
+  return lineEnding === ClipboardLineEnding.LF
     ? text
-    : text.replaceAll("\n", AlphaClipboardLineEnding.CRLF);
+    : text.replaceAll("\n", ClipboardLineEnding.CRLF);
 }
 
 function readClipboardText(clipboardData: DataTransfer, ownerDocument: Document): string {
@@ -499,7 +499,7 @@ const HTML_CLIPBOARD_BLOCK_ELEMENTS = new Set([
   "main", "nav", "ol", "p", "section", "table", "tbody", "td", "tfoot", "th", "thead", "tr", "ul",
 ]);
 
-function readClipboardMetadata(clipboardData: DataTransfer, selectionCount: number): AlphaClipboardPasteData | undefined {
+function readClipboardMetadata(clipboardData: DataTransfer, selectionCount: number): ClipboardPasteData | undefined {
   let parsed: unknown;
   try {
     const raw = clipboardData.getData(ALPHA_EDITOR_CLIPBOARD_MIME);

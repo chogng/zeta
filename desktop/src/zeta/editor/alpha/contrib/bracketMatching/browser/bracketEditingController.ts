@@ -3,13 +3,13 @@ import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
 import { createRemoveMatchingBracketsCommand } from "../common/bracketEditing.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { type LanguageBracketMatcher } from "../common/bracketMatching.js";
-import { type AlphaEditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 
 /** Routes the VS Code remove-brackets chord through Alpha's lexical bracket matcher. */
-export class AlphaBracketEditingController extends DisposableOwner {
+export class BracketEditingController extends DisposableOwner {
   constructor(
     input: HTMLTextAreaElement,
-    private readonly viewport: AlphaEditorViewport,
+    private readonly viewport: EditorViewport,
     private readonly selections: EditorSelectionController,
     private readonly matcher: LanguageBracketMatcher,
   ) {

@@ -4,33 +4,33 @@ import { type TextRange } from "../../common/core/text.js";
 import { type TextModel } from "../../common/model/textModel.js";
 import { type EditorVisualLineProjection } from "../../common/viewModel/modelLineProjection.js";
 import { type EditorLineRange } from "../../common/viewLayout/editorViewportModel.js";
-import { AlphaDecorationPresentation, createAlphaVisualDecorationRectangles, type AlphaResolvedDecoration } from "./decorationPresentation.js";
-import { type AlphaTextMeasurer } from "./fontMetrics.js";
+import { DecorationPresentation, createAlphaVisualDecorationRectangles, type ResolvedDecoration } from "./decorationPresentation.js";
+import { type TextMeasurer } from "./fontMetrics.js";
 import { getAlphaDomTextCaretLeft, getAlphaDomTextRangeRectangles } from "./domTextGeometry.js";
-import { type AlphaRenderedLine } from "./renderedLine.js";
+import { type RenderedLine } from "./renderedLine.js";
 import { createAlphaVisualRangeRectangles } from "./visualRangeGeometry.js";
 import { createAlphaVisualSelectionGeometry } from "./visualSelectionGeometry.js";
 
-const DIAGNOSTIC_PRESENTATION_PRIORITY = new Map<AlphaResolvedDecoration["presentation"], number>([
-  [AlphaDecorationPresentation.ErrorUnderline, 4],
-  [AlphaDecorationPresentation.WarningUnderline, 3],
-  [AlphaDecorationPresentation.InformationUnderline, 2],
-  [AlphaDecorationPresentation.HintUnderline, 1],
+const DIAGNOSTIC_PRESENTATION_PRIORITY = new Map<ResolvedDecoration["presentation"], number>([
+  [DecorationPresentation.ErrorUnderline, 4],
+  [DecorationPresentation.WarningUnderline, 3],
+  [DecorationPresentation.InformationUnderline, 2],
+  [DecorationPresentation.HintUnderline, 1],
 ]);
 
-export interface AlphaViewportOverlayContext {
+export interface ViewportOverlayContext {
   readonly ownerDocument: Document;
   readonly model: TextModel;
   readonly visualLineProjection: EditorVisualLineProjection;
-  readonly renderedLines: ReadonlyMap<number, AlphaRenderedLine>;
+  readonly renderedLines: ReadonlyMap<number, RenderedLine>;
   readonly renderLines: EditorLineRange;
   readonly textLeft: number;
-  readonly textMeasurer: AlphaTextMeasurer;
+  readonly textMeasurer: TextMeasurer;
   /** Uses browser range geometry when text direction may produce non-monotonic advances. */
   readonly useDomTextGeometry: boolean;
 }
 
-export function projectAlphaSelectionOverlays(context: AlphaViewportOverlayContext, controller: EditorSelectionController | undefined): void {
+export function projectAlphaSelectionOverlays(context: ViewportOverlayContext, controller: EditorSelectionController | undefined): void {
   const activeLineIndex = controller?.selections.primary.active.lineIndex;
   for (const [visualLineIndex, line] of context.renderedLines) {
     reset(line.selectionElement);
@@ -89,32 +89,32 @@ export function projectAlphaSelectionOverlays(context: AlphaViewportOverlayConte
   }
 }
 
-interface AlphaDomSelectionRectangle {
+interface DomSelectionRectangle {
   readonly selectionIndex: number;
   readonly visualLineIndex: number;
   readonly left: number;
   readonly width: number;
 }
 
-interface AlphaDomCaretRectangle {
+interface DomCaretRectangle {
   readonly selectionIndex: number;
   readonly visualLineIndex: number;
   readonly left: number;
   readonly primary: boolean;
 }
 
-interface AlphaDomSelectionGeometry {
+interface DomSelectionGeometry {
   readonly selectionIndexes: ReadonlySet<number>;
-  readonly selections: readonly AlphaDomSelectionRectangle[];
+  readonly selections: readonly DomSelectionRectangle[];
   readonly caretIndexes: ReadonlySet<number>;
-  readonly carets: readonly AlphaDomCaretRectangle[];
+  readonly carets: readonly DomCaretRectangle[];
 }
 
-function createDomSelectionGeometry(context: AlphaViewportOverlayContext, selections: EditorSelectionController["selections"]): AlphaDomSelectionGeometry | undefined {
+function createDomSelectionGeometry(context: ViewportOverlayContext, selections: EditorSelectionController["selections"]): DomSelectionGeometry | undefined {
   const selectionIndexes = new Set<number>();
-  const domSelections: AlphaDomSelectionRectangle[] = [];
+  const domSelections: DomSelectionRectangle[] = [];
   const caretIndexes = new Set<number>();
-  const domCarets: AlphaDomCaretRectangle[] = [];
+  const domCarets: DomCaretRectangle[] = [];
   for (let selectionIndex = 0; selectionIndex < selections.selections.length; selectionIndex += 1) {
     const selection = selections.selections[selectionIndex]!;
     if (!selection.collapsed) {
@@ -153,14 +153,14 @@ function createDomSelectionGeometry(context: AlphaViewportOverlayContext, select
   });
 }
 
-interface AlphaDomVisualRangeRectangle {
+interface DomVisualRangeRectangle {
   readonly visualLineIndex: number;
   readonly left: number;
   readonly width: number;
 }
 
-function domRangeRectanglesForRange(context: AlphaViewportOverlayContext, range: TextRange): readonly AlphaDomVisualRangeRectangle[] | undefined {
-  const result: AlphaDomVisualRangeRectangle[] = [];
+function domRangeRectanglesForRange(context: ViewportOverlayContext, range: TextRange): readonly DomVisualRangeRectangle[] | undefined {
+  const result: DomVisualRangeRectangle[] = [];
   let intersectsRenderedLine = false;
   for (let visualLineIndex = context.renderLines.startLineIndex; visualLineIndex < context.renderLines.endLineIndexExclusive; visualLineIndex += 1) {
     const visualLine = context.visualLineProjection.lineAt(visualLineIndex);
@@ -197,7 +197,7 @@ function isCurrentDomTextOffset(element: HTMLElement, offset: number): boolean {
   return Number.isSafeInteger(offset) && offset >= 0 && offset <= element.textContent?.length;
 }
 
-export function projectAlphaDecorationOverlays(context: AlphaViewportOverlayContext, decorations: readonly AlphaResolvedDecoration[]): void {
+export function projectAlphaDecorationOverlays(context: ViewportOverlayContext, decorations: readonly ResolvedDecoration[]): void {
   const rectangles = createAlphaVisualDecorationRectangles(context.model, decorations, context.visualLineProjection, context.renderLines, context.textLeft, context.textMeasurer);
   const domRectangles = context.useDomTextGeometry
     ? new Map(decorations.map(decoration => [decoration.id, domRangeRectanglesForRange(context, decoration.range)] as const))
@@ -236,8 +236,8 @@ export function projectAlphaDecorationOverlays(context: AlphaViewportOverlayCont
   projectDiagnosticGutterMarkers(context, decorations);
 }
 
-function projectDiagnosticGutterMarkers(context: AlphaViewportOverlayContext, decorations: readonly AlphaResolvedDecoration[]): void {
-  const diagnosticsByLine = new Map<number, AlphaResolvedDecoration[]>();
+function projectDiagnosticGutterMarkers(context: ViewportOverlayContext, decorations: readonly ResolvedDecoration[]): void {
+  const diagnosticsByLine = new Map<number, ResolvedDecoration[]>();
   for (const decoration of decorations) {
     if (!DIAGNOSTIC_PRESENTATION_PRIORITY.has(decoration.presentation)) continue;
     const startLineIndex = decoration.range.start.lineIndex;
@@ -276,17 +276,17 @@ function projectDiagnosticGutterMarkers(context: AlphaViewportOverlayContext, de
   }
 }
 
-function diagnosticMarkerClass(presentation: AlphaResolvedDecoration["presentation"]): "error" | "warning" | "information" | "hint" {
+function diagnosticMarkerClass(presentation: ResolvedDecoration["presentation"]): "error" | "warning" | "information" | "hint" {
   switch (presentation) {
-    case AlphaDecorationPresentation.ErrorUnderline: return "error";
-    case AlphaDecorationPresentation.WarningUnderline: return "warning";
-    case AlphaDecorationPresentation.InformationUnderline: return "information";
-    case AlphaDecorationPresentation.HintUnderline: return "hint";
+    case DecorationPresentation.ErrorUnderline: return "error";
+    case DecorationPresentation.WarningUnderline: return "warning";
+    case DecorationPresentation.InformationUnderline: return "information";
+    case DecorationPresentation.HintUnderline: return "hint";
     default: throw new TypeError(`Unknown diagnostic presentation '${presentation}'`);
   }
 }
 
-export function projectAlphaCompositionOverlay(context: AlphaViewportOverlayContext, range: TextRange | undefined): void {
+export function projectAlphaCompositionOverlay(context: ViewportOverlayContext, range: TextRange | undefined): void {
   for (const line of context.renderedLines.values()) reset(line.compositionElement);
   if (!range) return;
   const domRectangles = context.useDomTextGeometry ? domRangeRectanglesForRange(context, range) : undefined;

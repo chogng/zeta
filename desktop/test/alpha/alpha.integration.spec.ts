@@ -27,13 +27,25 @@ test("Alpha public API and browser pane type, undo, save, and start a browser wo
   await input.focus();
   await page.keyboard.press("Control+Home");
   await page.keyboard.type("/* integrated */ ");
-  await expect.poll(() => page.evaluate(() => window.zetaAlphaIntegration.getValue())).toBe("/* integrated */ const answer = 42;\nconsole.log(answer);");
+  await expect.poll(() => page.evaluate(() => window.zetaAlphaIntegration.getValue())).toBe("/* integrated */ fn main() {\n  answer();\n}\n");
 
   await page.keyboard.press("ControlOrMeta+z");
-  await expect.poll(() => page.evaluate(() => window.zetaAlphaIntegration.getValue())).toBe("const answer = 42;\nconsole.log(answer);");
+  await expect.poll(() => page.evaluate(() => window.zetaAlphaIntegration.getValue())).toBe("fn main() {\n  answer();\n}\n");
   await page.evaluate(() => window.zetaAlphaIntegration.save());
-  await expect.poll(() => page.evaluate(() => window.zetaAlphaIntegration.getSavedText())).toBe("const answer = 42;\nconsole.log(answer);");
+  await expect.poll(() => page.evaluate(() => window.zetaAlphaIntegration.getSavedText())).toBe("fn main() {\n  answer();\n}\n");
   await expect.poll(() => workers.length).toBeGreaterThan(0);
+});
+
+test("Alpha projects revision-bound Rust syntax tokens, diagnostics, folding, and symbols", async ({ page }) => {
+  await page.goto("/alpha.html");
+  await expect.poll(() => page.evaluate(() => window.zetaAlphaIntegration.getSyntaxAnalysisCount())).toBeGreaterThan(0);
+  await expect(page.locator(".zeta-alpha-editor-token.token-keyword")).toHaveText("fn");
+  await expect(page.locator(".zeta-alpha-editor-diagnostic-marker.error")).toHaveCount(1);
+
+  const input = page.locator(".zeta-alpha-editor-input");
+  await input.focus();
+  await page.keyboard.press("ControlOrMeta+Shift+o");
+  await expect(page.locator(".zeta-alpha-editor-goto-symbol-item")).toHaveText("main");
 });
 
 test("Alpha public distribution has the editor accessibility contract", async ({ page }) => {

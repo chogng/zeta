@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { OperatingSystem } from "../../../../../../base/common/platform.js";
-import { type AlphaTextMeasurer } from "../../../../browser/view/fontMetrics.js";
+import { type TextMeasurer } from "../../../../browser/view/fontMetrics.js";
 import { EditorSelectionController } from "../../../../common/cursor/editorSelectionController.js";
 import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
 import { TextPosition } from "../../../../common/core/text.js";
@@ -19,8 +19,8 @@ for (const [name, value] of Object.entries({
   KeyboardEvent: browserEnvironment.window.KeyboardEvent,
 })) Object.defineProperty(globalThis, name, { configurable: true, value });
 
-const { AlphaEditorViewport } = await import("../../../../browser/view/editorViewport.js");
-const { AlphaCursorUndoController, isCursorUndoChord } = await import("../../browser/cursorUndoController.js");
+const { EditorViewport } = await import("../../../../browser/view/editorViewport.js");
+const { CursorUndoController, isCursorUndoChord } = await import("../../browser/cursorUndoController.js");
 
 test.after(() => browserEnvironment.window.close());
 
@@ -29,10 +29,10 @@ test("Cursor undo restores macOS multi-cursor history without changing text", ()
   const container = dom.window.document.querySelector<HTMLElement>("main")!;
   using model = new TextModel("one\ntwo");
   using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
-  using viewport = new AlphaEditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+  using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
   const input = dom.window.document.createElement("textarea") as unknown as HTMLTextAreaElement;
   container.append(input);
-  using controller = new AlphaCursorUndoController(input, viewport, selections, { operatingSystem: OperatingSystem.Macintosh });
+  using controller = new CursorUndoController(input, viewport, selections, { operatingSystem: OperatingSystem.Macintosh });
   selections.setCursorSelections(TextSelectionSet.withPrimary([
     TextSelection.collapsedAt(TextPosition.at(0, 0)),
     TextSelection.collapsedAt(TextPosition.at(1, 0)),
@@ -53,7 +53,7 @@ test("Cursor undo chord keeps macOS and Windows modifiers distinct", () => {
   assert.equal(isCursorUndoChord(keydown(browserEnvironment.window, "u", { ctrlKey: true }), OperatingSystem.Windows), true);
 });
 
-class FixedTextMeasurer implements AlphaTextMeasurer {
+class FixedTextMeasurer implements TextMeasurer {
   readonly horizontalPadding = 24;
   readonly contentLeftPadding = 12;
   refresh(): boolean { return false; }

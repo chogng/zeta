@@ -1,32 +1,32 @@
 import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
 import { type TextPosition } from "../../../common/core/text.js";
 
-export enum AlphaPointerMultiCursorModifier {
+export enum PointerMultiCursorModifier {
   Alt = "alt",
   ControlOrMeta = "controlOrMeta",
 }
 
-export interface AlphaPointerModifierState {
+export interface PointerModifierState {
   readonly altKey: boolean;
   readonly ctrlKey: boolean;
   readonly metaKey: boolean;
   readonly shiftKey: boolean;
 }
 
-export function readAlphaPointerMultiCursorModifier(value: AlphaPointerMultiCursorModifier | undefined): AlphaPointerMultiCursorModifier {
-  const resolved = value ?? AlphaPointerMultiCursorModifier.Alt;
+export function readAlphaPointerMultiCursorModifier(value: PointerMultiCursorModifier | undefined): PointerMultiCursorModifier {
+  const resolved = value ?? PointerMultiCursorModifier.Alt;
   if (
-    resolved !== AlphaPointerMultiCursorModifier.Alt &&
-    resolved !== AlphaPointerMultiCursorModifier.ControlOrMeta
+    resolved !== PointerMultiCursorModifier.Alt &&
+    resolved !== PointerMultiCursorModifier.ControlOrMeta
   ) {
     throw new TypeError("Unknown Alpha pointer multi-cursor modifier");
   }
   return resolved;
 }
 
-export function isAlphaPointerMultiCursorGesture(state: AlphaPointerModifierState, modifier: AlphaPointerMultiCursorModifier): boolean {
+export function isAlphaPointerMultiCursorGesture(state: PointerModifierState, modifier: PointerMultiCursorModifier): boolean {
   if (state.shiftKey) return false;
-  if (modifier === AlphaPointerMultiCursorModifier.Alt) {
+  if (modifier === PointerMultiCursorModifier.Alt) {
     return state.altKey && !state.ctrlKey && !state.metaKey;
   }
   return (state.ctrlKey || state.metaKey) && !state.altKey;

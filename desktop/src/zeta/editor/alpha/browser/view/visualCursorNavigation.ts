@@ -5,26 +5,26 @@ import { type TextModel } from "../../common/model/textModel.js";
 import { type EditorVisualLineProjection } from "../../common/viewModel/modelLineProjection.js";
 import { getTextGraphemeBoundaries } from "../../common/core/textSegmentation.js";
 
-export interface AlphaVisualCursorNavigationRequest {
+export interface VisualCursorNavigationRequest {
   readonly command: EditorCursorNavigationCommand.LineUp | EditorCursorNavigationCommand.LineDown | EditorCursorNavigationCommand.PageUp | EditorCursorNavigationCommand.PageDown;
   readonly mode: EditorCursorNavigationMode;
   readonly pageLineCount: number;
   readonly preferredHorizontalOffsets?: readonly number[];
 }
 
-export interface AlphaVisualCursorNavigationResult {
+export interface VisualCursorNavigationResult {
   readonly selections: TextSelectionSet;
   readonly preferredHorizontalOffsets: readonly number[];
 }
 
 /** Browser-provided visual coordinates for layouts whose logical prefix width is not monotonic. */
-export interface AlphaVisualCursorGeometry {
+export interface VisualCursorGeometry {
   getHorizontalOffset(position: TextPosition): number | undefined;
   getNearestPosition(visualLineIndex: number, horizontalOffset: number): TextPosition | undefined;
 }
 
 /** Navigates selections by browser-measured wrapped visual rows. */
-export function navigateAlphaVisualCursors(model: TextModel, projection: EditorVisualLineProjection, selections: TextSelectionSet, request: AlphaVisualCursorNavigationRequest, measureTextWidth: (text: string) => number, geometry?: AlphaVisualCursorGeometry): AlphaVisualCursorNavigationResult {
+export function navigateAlphaVisualCursors(model: TextModel, projection: EditorVisualLineProjection, selections: TextSelectionSet, request: VisualCursorNavigationRequest, measureTextWidth: (text: string) => number, geometry?: VisualCursorGeometry): VisualCursorNavigationResult {
   validateRequest(model, projection, selections, request, measureTextWidth);
   const preferredHorizontalOffsets = resolvePreferredHorizontalOffsets(
     model,
@@ -51,7 +51,7 @@ export function navigateAlphaVisualCursors(model: TextModel, projection: EditorV
   return normalizeResult(navigated, selections.primaryIndex, preferredHorizontalOffsets);
 }
 
-function visualVerticalTarget(model: TextModel, projection: EditorVisualLineProjection, position: TextPosition, lineDelta: number, preferredHorizontalOffset: number, measureTextWidth: (text: string) => number, geometry: AlphaVisualCursorGeometry | undefined): TextPosition {
+function visualVerticalTarget(model: TextModel, projection: EditorVisualLineProjection, position: TextPosition, lineDelta: number, preferredHorizontalOffset: number, measureTextWidth: (text: string) => number, geometry: VisualCursorGeometry | undefined): TextPosition {
   const currentVisualLineIndex = projection.visualLineIndexAt(position);
   const targetVisualLineIndex = clamp(
     currentVisualLineIndex + lineDelta,
@@ -78,7 +78,7 @@ function visualVerticalTarget(model: TextModel, projection: EditorVisualLineProj
   );
 }
 
-function resolvePreferredHorizontalOffsets(model: TextModel, projection: EditorVisualLineProjection, selections: TextSelectionSet, preferredHorizontalOffsets: readonly number[] | undefined, measureTextWidth: (text: string) => number, geometry: AlphaVisualCursorGeometry | undefined): readonly number[] {
+function resolvePreferredHorizontalOffsets(model: TextModel, projection: EditorVisualLineProjection, selections: TextSelectionSet, preferredHorizontalOffsets: readonly number[] | undefined, measureTextWidth: (text: string) => number, geometry: VisualCursorGeometry | undefined): readonly number[] {
   if (preferredHorizontalOffsets?.length === selections.selections.length) {
     return Object.freeze([...preferredHorizontalOffsets]);
   }
@@ -112,7 +112,7 @@ function nearestCursorColumn(text: string, horizontalOffset: number, measureText
   return boundaries[low] ?? text.length;
 }
 
-function lineDelta(request: AlphaVisualCursorNavigationRequest): number {
+function lineDelta(request: VisualCursorNavigationRequest): number {
   switch (request.command) {
     case EditorCursorNavigationCommand.LineUp:
       return -1;
@@ -125,7 +125,7 @@ function lineDelta(request: AlphaVisualCursorNavigationRequest): number {
   }
 }
 
-function normalizeResult(selections: readonly TextSelection[], primaryIndex: number, preferredHorizontalOffsets: readonly number[]): AlphaVisualCursorNavigationResult {
+function normalizeResult(selections: readonly TextSelection[], primaryIndex: number, preferredHorizontalOffsets: readonly number[]): VisualCursorNavigationResult {
   const normalized: TextSelection[] = [];
   const normalizedOffsets: number[] = [];
   const sourceToNormalized: number[] = [];
@@ -147,7 +147,7 @@ function normalizeResult(selections: readonly TextSelection[], primaryIndex: num
   });
 }
 
-function validateRequest(model: TextModel, projection: EditorVisualLineProjection, selections: TextSelectionSet, request: AlphaVisualCursorNavigationRequest, measureTextWidth: (text: string) => number): void {
+function validateRequest(model: TextModel, projection: EditorVisualLineProjection, selections: TextSelectionSet, request: VisualCursorNavigationRequest, measureTextWidth: (text: string) => number): void {
   if (projection.modelVersion !== model.version) {
     throw new Error("Visual cursor navigation requires the current text model projection");
   }
@@ -169,7 +169,7 @@ function validateRequest(model: TextModel, projection: EditorVisualLineProjectio
   for (const selection of selections.selections) model.offsetAt(selection.active);
 }
 
-function isVisualVerticalCommand(command: EditorCursorNavigationCommand): command is AlphaVisualCursorNavigationRequest["command"] {
+function isVisualVerticalCommand(command: EditorCursorNavigationCommand): command is VisualCursorNavigationRequest["command"] {
   return command === EditorCursorNavigationCommand.LineUp ||
     command === EditorCursorNavigationCommand.LineDown ||
     command === EditorCursorNavigationCommand.PageUp ||

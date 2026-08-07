@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { OperatingSystem } from "../../../../base/common/platform.js";
-import { type AlphaTextMeasurer } from "../../browser/view/fontMetrics.js";
+import { type TextMeasurer } from "../../browser/view/fontMetrics.js";
 import { EditorIndentationKind } from "../../contrib/indentation/common/indentation.js";
 import { EditorSelectionController } from "../../common/cursor/editorSelectionController.js";
 import { registerBuiltinLanguageConfigurations } from "../../common/languages/languageBuiltinConfigurations.js";
@@ -12,7 +12,7 @@ import { TextSelection, TextSelectionSet } from "../../common/core/selection.js"
 import { TextPosition, TextRange } from "../../common/core/text.js";
 import { TextModel } from "../../common/model/textModel.js";
 
-class FixedTextMeasurer implements AlphaTextMeasurer {
+class FixedTextMeasurer implements TextMeasurer {
   readonly horizontalPadding = 24;
   readonly contentLeftPadding = 12;
 
@@ -42,9 +42,9 @@ for (const [name, value] of Object.entries({
   });
 }
 
-const { AlphaEditorTextDirection, AlphaEditorViewport } = await import("../../browser/view/editorViewport.js");
-const { AlphaKeyboardNavigationController } = await import("../../browser/input/keyboardNavigationController.js");
-const { AlphaTextInputController } = await import("../../browser/input/textInputController.js");
+const { EditorTextDirection, EditorViewport } = await import("../../browser/view/editorViewport.js");
+const { KeyboardNavigationController } = await import("../../browser/input/keyboardNavigationController.js");
+const { TextInputController } = await import("../../browser/input/textInputController.js");
 
 test("Textarea routes navigation, typing, history, deletion, and Tab", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
@@ -55,7 +55,7 @@ test("Textarea routes navigation, typing, history, deletion, and Tab", () => {
     model,
     TextSelectionSet.single(caret(0, 1)),
   );
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
@@ -63,12 +63,12 @@ test("Textarea routes navigation, typing, history, deletion, and Tab", () => {
     selectionController: selections,
   });
   viewport.layout({ width: 100, height: 40 });
-  using keyboard = new AlphaKeyboardNavigationController(
+  using keyboard = new KeyboardNavigationController(
     viewport,
     selections,
     { operatingSystem: OperatingSystem.Windows },
   );
-  const input = new AlphaTextInputController(viewport, selections);
+  const input = new TextInputController(viewport, selections);
 
   viewport.element.focus();
   assert.equal(dom.window.document.activeElement, input.element);
@@ -185,8 +185,8 @@ test("Textarea keyboard fallback routes undo and redo without browser history in
   assert.ok(container);
   using model = new TextModel("value");
   using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 5)));
-  using viewport = new AlphaEditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
-  using input = new AlphaTextInputController(viewport, selections);
+  using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+  using input = new TextInputController(viewport, selections);
 
   input.element.dispatchEvent(beforeInput(dom.window, "insertText", "!"));
   const undo = keyboardEvent(dom.window, "z", { ctrlKey: true });
@@ -207,8 +207,8 @@ test("Textarea routes browser soft-line deletion through Alpha commands", () => 
   assert.ok(container);
   using model = new TextModel("alpha\nbeta");
   using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 3)));
-  using viewport = new AlphaEditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
-  using input = new AlphaTextInputController(viewport, selections);
+  using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+  using input = new TextInputController(viewport, selections);
 
   const backward = beforeInput(dom.window, "deleteSoftLineBackward");
   input.element.dispatchEvent(backward);
@@ -227,8 +227,8 @@ test("Textarea accepts an isolated composing dead-key commit without a compositi
   assert.ok(container);
   using model = new TextModel("e");
   using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 1)));
-  using viewport = new AlphaEditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
-  using input = new AlphaTextInputController(viewport, selections);
+  using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+  using input = new TextInputController(viewport, selections);
 
   const commit = beforeInput(dom.window, "insertText", "́", true);
   input.element.dispatchEvent(commit);
@@ -251,8 +251,8 @@ test("Textarea mirrors the focused document and primary selection for assistive 
   assert.ok(container);
   using model = new TextModel("alpha\nbeta");
   using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 2)));
-  using viewport = new AlphaEditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
-  using input = new AlphaTextInputController(viewport, selections, { ariaLabel: "Source file" });
+  using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+  using input = new TextInputController(viewport, selections, { ariaLabel: "Source file" });
 
   input.focus();
   assert.equal(input.element.getAttribute("aria-roledescription"), "code editor");
@@ -296,15 +296,15 @@ test("Textarea inherits the viewport direction for macOS accessibility text serv
   assert.ok(container);
   using model = new TextModel("שלום");
   using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 0)));
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
     textMeasurer: new FixedTextMeasurer(),
     selectionController: selections,
-    textDirection: AlphaEditorTextDirection.RightToLeft,
+    textDirection: EditorTextDirection.RightToLeft,
   });
-  using input = new AlphaTextInputController(viewport, selections);
+  using input = new TextInputController(viewport, selections);
 
   assert.equal(input.element.dir, "rtl");
   dom.window.close();
@@ -316,8 +316,8 @@ test("Textarea toggles transient overtype mode for ordinary input", () => {
   assert.ok(container);
   using model = new TextModel("a😊bc");
   using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 1)));
-  using viewport = new AlphaEditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
-  using input = new AlphaTextInputController(viewport, selections);
+  using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+  using input = new TextInputController(viewport, selections);
 
   const enable = keyboardEvent(dom.window, "Insert");
   input.element.dispatchEvent(enable);
@@ -345,7 +345,7 @@ test("Textarea rejects cross-model wiring without owning either model", () => {
     otherModel,
     TextSelectionSet.single(caret(0, 0)),
   );
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
@@ -353,17 +353,17 @@ test("Textarea rejects cross-model wiring without owning either model", () => {
   });
 
   assert.throws(
-    () => new AlphaTextInputController(viewport, selections),
+    () => new TextInputController(viewport, selections),
     /must share one text model/,
   );
   using compatibleSelections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 0)));
-  assert.throws(() => new AlphaTextInputController(viewport, compatibleSelections, {
+  assert.throws(() => new TextInputController(viewport, compatibleSelections, {
     language: {
       languageId: "*",
       configurations: { getLanguageConfiguration: () => { throw new Error("unreachable"); } },
     },
   }), /Language ID/);
-  assert.throws(() => new AlphaTextInputController(viewport, compatibleSelections, {
+  assert.throws(() => new TextInputController(viewport, compatibleSelections, {
     language: {
       languageId: "typescript",
       configurations: {} as LanguageConfigurationRegistry,
@@ -372,14 +372,14 @@ test("Textarea rejects cross-model wiring without owning either model", () => {
   using lexicalModel = new TextModel("");
   using lexicalConfigurations = new LanguageConfigurationRegistry();
   using lexicalContext = new LanguageLexicalContextIndex(lexicalModel, "typescript", lexicalConfigurations);
-  assert.throws(() => new AlphaTextInputController(viewport, compatibleSelections, {
+  assert.throws(() => new TextInputController(viewport, compatibleSelections, {
     language: {
       languageId: "typescript",
       configurations: { getLanguageConfiguration: () => { throw new Error("unreachable"); } },
       lexicalContext,
     },
   }), /lexical context/);
-  assert.throws(() => new AlphaTextInputController(viewport, compatibleSelections, {
+  assert.throws(() => new TextInputController(viewport, compatibleSelections, {
     indentation: { tabSize: 0 },
   }), /tab size/);
   model.applyEdits([{
@@ -399,14 +399,14 @@ test("Textarea applies current language pair configuration through editor comman
   using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 4)));
   using configurations = new LanguageConfigurationRegistry();
   using builtins = registerBuiltinLanguageConfigurations(configurations);
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
     textMeasurer: new FixedTextMeasurer(),
     selectionController: selections,
   });
-  using input = new AlphaTextInputController(viewport, selections, {
+  using input = new TextInputController(viewport, selections, {
     language: {
       languageId: "typescript",
       configurations,
@@ -453,14 +453,14 @@ test("Textarea does not trust matching pairs that it did not auto-close", () => 
   using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 1)));
   using configurations = new LanguageConfigurationRegistry();
   using builtins = registerBuiltinLanguageConfigurations(configurations);
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
     textMeasurer: new FixedTextMeasurer(),
     selectionController: selections,
   });
-  using input = new AlphaTextInputController(viewport, selections, {
+  using input = new TextInputController(viewport, selections, {
     language: {
       languageId: "typescript",
       configurations,
@@ -487,14 +487,14 @@ test("Textarea applies current on-enter rules with editor-owned indentation", ()
   using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 1)));
   using configurations = new LanguageConfigurationRegistry();
   using builtins = registerBuiltinLanguageConfigurations(configurations);
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
     textMeasurer: new FixedTextMeasurer(),
     selectionController: selections,
   });
-  using input = new AlphaTextInputController(viewport, selections, {
+  using input = new TextInputController(viewport, selections, {
     indentation: {
       kind: EditorIndentationKind.Spaces,
       tabSize: 2,
@@ -538,14 +538,14 @@ test("Textarea Enter ignores structural brackets inside lexical string tokens", 
   using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, model.getText().length)));
   using configurations = new LanguageConfigurationRegistry();
   using builtins = registerBuiltinLanguageConfigurations(configurations);
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
     textMeasurer: new FixedTextMeasurer(),
     selectionController: selections,
   });
-  using input = new AlphaTextInputController(viewport, selections, {
+  using input = new TextInputController(viewport, selections, {
     indentation: {
       kind: EditorIndentationKind.Spaces,
       tabSize: 2,
@@ -571,14 +571,14 @@ test("Textarea respects auto-closing notIn inside lexical string tokens", () => 
   using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 7)));
   using configurations = new LanguageConfigurationRegistry();
   using builtins = registerBuiltinLanguageConfigurations(configurations);
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
     textMeasurer: new FixedTextMeasurer(),
     selectionController: selections,
   });
-  using input = new AlphaTextInputController(viewport, selections, {
+  using input = new TextInputController(viewport, selections, {
     language: {
       languageId: "typescript",
       configurations,

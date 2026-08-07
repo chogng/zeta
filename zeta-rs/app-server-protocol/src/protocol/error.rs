@@ -25,6 +25,7 @@ pub enum AppServerErrorName {
     GitNotRepository,
     GitOperationFailed,
     DiffOperationFailed,
+    SyntaxAnalysisFailed,
     SearchUnavailable,
     SearchNotFound,
     SearchNotOwner,

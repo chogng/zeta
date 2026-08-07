@@ -2,7 +2,7 @@
 
 > 文件级目录映射、Alpha/VS Code 对照和装配边界见 [`editor-architecture.md`](./editor-architecture.md)。本文记录实现契约、当前行为、测试证据和已知限制。
 
-Gama owns the structured-document domain. Its `common` layer is DOM-free and does not depend on Workbench, Electron, Alpha, or an external editor runtime. `GamaEditorPane` is the Workbench pane, `GamaEditorSession` owns one structured-document browser session, and `TextEditorWidget` is only the embedded Alpha-backed editor for one `textBlock`.
+Gama owns the structured-document domain. Its `common` layer is DOM-free and does not depend on Workbench, Electron, Alpha, or an external editor runtime. `EditorPane` is the Workbench pane, `EditorWidget` owns the structured-document browser surface, and `TextEditorWidget` is only the embedded Alpha-backed editor for one `textBlock`.
 
 The current core provides:
 
@@ -22,8 +22,12 @@ The current core provides:
   joining, indentation, and outdentation;
 - blockquote wrapping/unwrapping and horizontal-rule insertion through common
   structural commands and the browser toolbar;
-- schema-validated block-type transactions and a GamaEditorSession-owned block toolbar for
+- schema-validated block-type transactions and the `contrib/formatting` toolbar for
   paragraph, heading, bullet-list, and ordered-list formats;
+- persistent `textStyle` marks for selected text: the Gama formatting contribution
+  composes the shared `ToolBar` with font-family and font-size controls, merges
+  independent typography attributes, and preserves the model selection while a
+  native select owns browser focus;
 - schema-backed table/row/cell nodes, rectangular table insertion, cell-order
   navigation, append-on-last-cell Tab, and undoable row/column insertion and
   deletion;
@@ -34,12 +38,12 @@ The current core provides:
   bold/italic/link toggle is kept as insertion state and applied to subsequent
   typing, paste, and IME replacement;
 - selection-aware inline image insertion/rendering; image files pasted into a
-  GamaEditorSession text surface are read as data URLs, replace the active text selection,
+  EditorWidget text surface are read as data URLs, replace the active text selection,
   and commit as `image` nodes;
 - profile-owned inline atomic nodes through `inlineNodeViews` and generic
   insertion commands; the `contrib/citation` capability supplies `citation`
   atoms, bibliography/reference nodes, reference resolution, and its toolbar
-  actions without adding citation semantics to GamaEditorSession common;
+  actions without adding citation semantics to Gama common;
 - inline `NodeSelection` for images: clicking an image projects a selected DOM
   state, Backspace/Delete removes it through a common command, and undo restores
   both the image and its node selection;
@@ -53,10 +57,10 @@ The current core provides:
   blocks, including deletion, replacement, multiline paste, and undoable
   removal of intermediate blocks;
 - common plain-text extraction for inline and cross-block selections, with
-  rich-surface copy/cut routed through GamaEditorSession's model transactions;
+  rich-surface copy/cut routed through EditorWidget's model transactions;
 - whole-document `AllSelection` with structured/plain clipboard extraction,
   document replacement, and deletion back to an editable empty paragraph;
-- GamaEditorSession-owned structured clipboard fragments with a versioned custom MIME
+- EditorWidget-owned structured clipboard fragments with a versioned custom MIME
   envelope, schema validation, node-id remapping on insertion, and plain-text
   clipboard fallback for other applications;
 - transaction-level undo/redo with selection snapshots, implicit selection
@@ -98,8 +102,8 @@ The current core provides:
 - versioned JSON serialization and strict deserialization.
 
 The Gama document model is deliberately separate from Alpha's line-oriented
-`TextModel`. `BrowserDocumentModelService` resolves one `DocumentModelReference`; `GamaEditorPane` hosts the corresponding `GamaEditorSession`; `DocumentWorkingCopy` adapts Gama serialization, dirty/revert/conflict state, and untitled Save As to the shared Workbench working-copy contract.
-Alpha's corresponding editor surface is a `codeBlock`; Gama deliberately names the document node `textBlock`. It is a Gama-owned block whose content is zero or one plain `text` child. It is a text block in Gama's document model, not an embedded Alpha document; its language is a block attribute. The browser widget may project that text through the shared `IEmbeddedTextEditor` boundary, and `AlphaEmbeddedTextEditorFactory` supplies the implementation backed by Alpha's `CodeEditorWidget`. Gama owns the block identity and transactions; Alpha never depends on Gama document types. Gama common remains independent of Alpha and can fall back to its own text surface when no factory is supplied.
+`TextModel`. `BrowserDocumentModelService` resolves one `DocumentModelReference`; `EditorPane` hosts the corresponding `EditorWidget`; `DocumentWorkingCopy` adapts Gama serialization, dirty/revert/conflict state, and untitled Save As to the shared Workbench working-copy contract.
+Alpha's corresponding editor surface is a `codeBlock`; Gama deliberately names the document node `textBlock`. It is a Gama-owned block whose content is zero or one plain `text` child. It is a text block in Gama's document model, not an embedded Alpha document; its language is a block attribute. The browser widget may project that text through the shared `IEmbeddedTextEditor` boundary, and `EmbeddedTextEditorFactory` supplies the implementation backed by Alpha's `CodeEditorWidget`. Gama owns the block identity and transactions; Alpha never depends on Gama document types. Gama common remains independent of Alpha and can fall back to its own text surface when no factory is supplied.
 `DocumentSchema` validates custom top-node definitions as well as the default
 `doc` schema; transaction application never assumes that the root is named
 `doc`.
@@ -112,21 +116,21 @@ composite fragment while one atomic transaction assembles it; strict
 `DocumentSchema.validate` is still required before a document snapshot can be
 committed. `validateFragment` remains strict by default and exposes an explicit
 `allowIncompleteContent` option only for this assembly boundary.
-`GamaEditorSessionOptions.schema` lets a product provide the corresponding
+`EditorWidgetOptions.schema` lets a product provide the corresponding
 custom schema, while `nodeViews` supplies browser-owned projections for domain
 nodes without adding those node types or DOM dependencies to `common`. A node
 view may return a reusable `{ element, update, dispose }` handle; the Pane owns
 that lifecycle and exposes a `renderChildren` callback for composing default
-GamaEditorSession child projections.
-`GamaEditorSessionOptions.inlineNodeViews` is the atomic-inline counterpart:
+EditorWidget child projections.
+`EditorWidgetOptions.inlineNodeViews` is the atomic-inline counterpart:
 the common model owns the node and selection semantics, while a profile owns
 its label, accessibility, and click projection. `toolbarActions` provides the
 matching browser command extension point.
-`GamaEditorSessionOptions.createEmptyDocument` is the matching lifecycle
+`EditorWidgetOptions.createEmptyDocument` is the matching lifecycle
 boundary for a profile's canonical new-document shape; the same factory is
 used by `DocumentWorkingCopy` during empty-resource revert/reload, while
 non-empty plain text still follows the generic paragraph migration path.
-`GamaEditorProfile` groups the profile matcher, schema factory, empty-document
+`EditorProfile` groups the profile matcher, schema factory, empty-document
 factory, node views, toolbar actions, and plugins. `createGamaEditorPaneOptions`
 materializes that group while the Workbench composition root injects text-file,
 working-copy, and embedded line-editor services. The Academic Gama contribution selects
@@ -149,19 +153,19 @@ The Academic profile composes the default `doc` schema through
 plain-document compatibility. `academic/browser/nodeViews.ts` owns the
 profile wrapper projections; `contrib/citation` owns citation/reference
 schema, commands, inline projection, and reference-index state. Headings,
-paragraphs, marks, selection, and input remain GamaEditorSession-owned child projections.
+paragraphs, marks, selection, and input remain EditorWidget-owned child projections.
 `DocumentSchema.getNodeSpecs` and `getMarkSpecs` are the
 explicit snapshot boundary for domain-owned schema composition.
 
 The browser pane projects unmarked single-run paragraphs to a lightweight
 textarea. Paragraphs containing multiple inline runs, marks, hard breaks, or
-images use GamaEditorSession's run-based `contenteditable` surface; each rendered run keeps
+images use EditorWidget's run-based `contenteditable` surface; each rendered run keeps
 its document node identity so input and selection can be mapped back to the
 common model. `beforeinput` handles text insertion, deletion, paste, and
 paragraph splitting through common commands. Textarea and rich-surface IME
 composition stays provisional in the DOM and commits through one
 metadata-bearing `composition` history transaction; cancellation restores the
-last GamaEditorSession snapshot. Shift+Enter is projected
+last EditorWidget snapshot. Shift+Enter is projected
 to a common `hardBreak` transaction, and selection deletion is likewise routed
 through common inline replacement. Table-cell Tab navigation is a pane-level
 focus projection over the common `findAdjacentTableCell` query;
@@ -171,7 +175,7 @@ active DOM selection when the toolbar is clicked, while the common mark command
 owns range splitting, attribute replacement, removal, and history mapping.
 Rich-text selection mapping also spans sibling block surfaces, so deletion and
 multiline paste can use one common transaction across those blocks.
-GamaEditorSession clipboard fragments are extracted from the common selection model and
+EditorWidget clipboard fragments are extracted from the common selection model and
 serialized by `serializeDocumentFragment`; the browser layer only transports
 the custom MIME payload and falls back to `text/plain` when the payload is
 missing or unsupported. Paste validation and fresh identity allocation stay in
@@ -198,17 +202,17 @@ validated envelope. It still does not choose server order or implement
 client-id conflict arbitration, and `DocumentModel.dispatchRemote` remains a
 low-level API that expects an already-transformed transaction.
 
-GamaEditorSession plugins are common-layer state extensions, not browser contributions.
+EditorWidget plugins are common-layer state extensions, not browser contributions.
 `DocumentPluginState.apply` receives immutable before/after document snapshots,
 the metadata-bearing transaction, selection snapshots, origin, and model versions. A plugin may
 also implement `applySelection` when its derived state depends on selection
-changes that do not modify the document. `GamaEditorSessionOptions.plugins`
+changes that do not modify the document. `EditorWidgetOptions.plugins`
 passes these extensions into every model created by the pane; academic/full
 features can therefore register outline, reference, search, or collaboration
 state without placing that ownership in the pane or in the base layer.
 Plugins may additionally provide a `decorations` projection. `DocumentModel`
 keeps each plugin-owned `DocumentDecorationSet` separate, while
-`GamaEditorSession` resolves its identity-based ranges to text-node spans,
+`EditorWidget` resolves its identity-based ranges to text-node spans,
 projects class names and safe `data-*` attributes, and upgrades a plain
 single-run paragraph to the rich surface only when a decoration needs it.
 `DocumentTransactionMapping` is the common mapping boundary used by decoration

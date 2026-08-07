@@ -30,7 +30,7 @@ test("Alpha synchronous layers do not import Workbench, Electron, or generated D
 
 test("Alpha implementation ledger names the active browser and service owners", () => {
   const requiredFiles = [
-    "browser/alphaEditorSession.ts",
+    "browser/editorSession.ts",
     "browser/view/editorViewport.ts",
     "browser/input/textInputController.ts",
     "browser/services/rustDiffComputationService.ts",

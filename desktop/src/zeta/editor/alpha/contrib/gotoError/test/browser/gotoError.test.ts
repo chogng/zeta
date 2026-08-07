@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { type AlphaTextMeasurer } from "../../../../browser/view/fontMetrics.js";
+import { type TextMeasurer } from "../../../../browser/view/fontMetrics.js";
 import { TextDecorationCollection } from "../../../../common/model/decorationCollection.js";
 import { EditorSelectionController } from "../../../../common/cursor/editorSelectionController.js";
 import { LanguageDiagnosticSeverity, type LanguageDiagnostic } from "../../../../common/languages/languageResults.js";
@@ -12,8 +12,8 @@ import { TrackedRangeStickiness } from "../../../../common/model/trackedRange.js
 
 const environment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({ window: environment.window, document: environment.window.document, Node: environment.window.Node, Element: environment.window.Element, HTMLElement: environment.window.HTMLElement, Event: environment.window.Event, KeyboardEvent: environment.window.KeyboardEvent })) Object.defineProperty(globalThis, name, { configurable: true, value });
-const { AlphaEditorViewport } = await import("../../../../browser/view/editorViewport.js");
-const { AlphaDiagnosticNavigationController } = await import("../../browser/gotoError.js");
+const { EditorViewport } = await import("../../../../browser/view/editorViewport.js");
+const { DiagnosticNavigationController } = await import("../../browser/gotoError.js");
 
 test("F8 navigates current diagnostics in both directions", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
@@ -23,10 +23,10 @@ test("F8 navigates current diagnostics in both directions", () => {
   using diagnostics = new TextDecorationCollection<LanguageDiagnostic>(model);
   diagnostics.add({ range: TextRange.from(TextPosition.at(0, 1), TextPosition.at(0, 2)), stickiness: TrackedRangeStickiness.NeverGrowsAtEdges, metadata: diagnostic("first") });
   diagnostics.add({ range: TextRange.from(TextPosition.at(2, 1), TextPosition.at(2, 3)), stickiness: TrackedRangeStickiness.NeverGrowsAtEdges, metadata: diagnostic("last") });
-  using viewport = new AlphaEditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+  using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
   const input = dom.window.document.createElement("textarea");
   container.append(input);
-  using controller = new AlphaDiagnosticNavigationController(input, viewport, selections, diagnostics);
+  using controller = new DiagnosticNavigationController(input, viewport, selections, diagnostics);
   const next = key(dom.window, false); input.dispatchEvent(next);
   assert.equal(next.defaultPrevented, true); assert.deepEqual(selections.selections.primary.range, TextRange.from(TextPosition.at(0, 1), TextPosition.at(0, 2)));
   assert.equal(viewport.element.querySelector(".zeta-alpha-editor-accessibility-status")?.textContent, "warning: first");
@@ -42,4 +42,4 @@ test("F8 navigates current diagnostics in both directions", () => {
 
 function diagnostic(message: string): LanguageDiagnostic { return { range: TextRange.emptyAt(TextPosition.at(0, 0)), severity: LanguageDiagnosticSeverity.Warning, message }; }
 function key(window: typeof environment.window, shiftKey: boolean): KeyboardEvent { return new window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "F8", shiftKey }) as unknown as KeyboardEvent; }
-class FixedTextMeasurer implements AlphaTextMeasurer { readonly horizontalPadding = 24; readonly contentLeftPadding = 12; refresh(): boolean { return false; } measureLineWidth(text: string): number { return text.length * 10; } }
+class FixedTextMeasurer implements TextMeasurer { readonly horizontalPadding = 24; readonly contentLeftPadding = 12; refresh(): boolean { return false; } measureLineWidth(text: string): number { return text.length * 10; } }

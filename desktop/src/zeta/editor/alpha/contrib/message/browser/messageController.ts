@@ -1,13 +1,13 @@
 import "./media/message.css";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
-import { type AlphaEditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 
 /** Owns transient editor-local messages without replacing host notifications. */
-export class AlphaMessageController extends DisposableOwner {
+export class MessageController extends DisposableOwner {
   private readonly element: HTMLDivElement;
   private timer: ReturnType<typeof setTimeout> | undefined;
 
-  constructor(private readonly viewport: AlphaEditorViewport) {
+  constructor(private readonly viewport: EditorViewport) {
     super();
     this.element = viewport.element.ownerDocument.createElement("div");
     this.element.className = "zeta-alpha-editor-message";

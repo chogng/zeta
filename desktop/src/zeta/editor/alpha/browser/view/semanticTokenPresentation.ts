@@ -4,7 +4,7 @@ import { type SemanticTokensModelPart } from "../../contrib/semanticTokens/commo
 import { type LanguageToken } from "../../common/tokens/languageTokens.js";
 import { type TextModel } from "../../common/model/textModel.js";
 
-export enum AlphaSemanticTokenPresentation {
+export enum SemanticTokenPresentation {
   Comment = "token-comment",
   Keyword = "token-keyword",
   String = "token-string",
@@ -17,7 +17,7 @@ export enum AlphaSemanticTokenPresentation {
 }
 
 /** Fixed browser presentation modifiers recognized from LSP semantic-token data. */
-export enum AlphaSemanticTokenModifier {
+export enum SemanticTokenModifier {
   Declaration = "token-modifier-declaration",
   Readonly = "token-modifier-readonly",
   Static = "token-modifier-static",
@@ -26,33 +26,33 @@ export enum AlphaSemanticTokenModifier {
   Async = "token-modifier-async",
 }
 
-export interface AlphaResolvedSemanticToken {
+export interface ResolvedSemanticToken {
   readonly startColumn: number;
   readonly endColumn: number;
-  readonly presentation: AlphaSemanticTokenPresentation;
+  readonly presentation: SemanticTokenPresentation;
   /** Stable browser-only modifiers; unknown backend modifiers are excluded. */
-  readonly modifiers?: readonly AlphaSemanticTokenModifier[];
+  readonly modifiers?: readonly SemanticTokenModifier[];
 }
 
-export interface AlphaBracketColorizationSpan {
+export interface BracketColorizationSpan {
   readonly startColumn: number;
   readonly endColumn: number;
   readonly level: number;
 }
 
-export interface AlphaSemanticTokenLine {
+export interface SemanticTokenLine {
   readonly lineIndex: number;
-  readonly tokens: readonly AlphaResolvedSemanticToken[];
+  readonly tokens: readonly ResolvedSemanticToken[];
 }
 
-export interface AlphaSemanticTokenSource {
+export interface SemanticTokenSource {
   readonly textModel: TextModel;
   readonly onDidChange: Event<void>;
-  readonly lines: readonly AlphaSemanticTokenLine[];
-  getLineTokens(lineIndex: number): readonly AlphaResolvedSemanticToken[];
+  readonly lines: readonly SemanticTokenLine[];
+  getLineTokens(lineIndex: number): readonly ResolvedSemanticToken[];
 }
 
-export type AlphaSemanticTokenResolver = (token: LanguageToken) => AlphaSemanticTokenPresentation | undefined;
+export type SemanticTokenResolver = (token: LanguageToken) => SemanticTokenPresentation | undefined;
 
 /**
  * Adapts one caller-owned common token index to named browser presentations.
@@ -62,8 +62,8 @@ export type AlphaSemanticTokenResolver = (token: LanguageToken) => AlphaSemantic
  */
 export function createAlphaSemanticTokenSource(
   index: SemanticTokensModelPart,
-  resolvePresentation: AlphaSemanticTokenResolver = resolveAlphaSemanticTokenPresentation,
-): AlphaSemanticTokenSource {
+  resolvePresentation: SemanticTokenResolver = resolveAlphaSemanticTokenPresentation,
+): SemanticTokenSource {
   if (typeof resolvePresentation !== "function") {
     throw new TypeError("Alpha semantic token resolver must be a function");
   }
@@ -71,7 +71,7 @@ export function createAlphaSemanticTokenSource(
   return Object.freeze({
     textModel: index.textModel,
     onDidChange,
-    get lines(): readonly AlphaSemanticTokenLine[] {
+    get lines(): readonly SemanticTokenLine[] {
       return Object.freeze(index.lines.map(line => Object.freeze({
         lineIndex: line.lineIndex,
         tokens: resolveLineTokens(line.tokens, resolvePresentation),
@@ -82,29 +82,29 @@ export function createAlphaSemanticTokenSource(
 }
 
 /** Maps common semantic-token names to Alpha's stable presentation vocabulary. */
-export function resolveAlphaSemanticTokenPresentation(token: LanguageToken): AlphaSemanticTokenPresentation | undefined {
+export function resolveAlphaSemanticTokenPresentation(token: LanguageToken): SemanticTokenPresentation | undefined {
   switch (token.tokenType) {
-    case "comment": return AlphaSemanticTokenPresentation.Comment;
+    case "comment": return SemanticTokenPresentation.Comment;
     case "keyword":
-    case "modifier": return AlphaSemanticTokenPresentation.Keyword;
-    case "string": return AlphaSemanticTokenPresentation.String;
-    case "number": return AlphaSemanticTokenPresentation.Number;
-    case "regexp": return AlphaSemanticTokenPresentation.Regexp;
+    case "modifier": return SemanticTokenPresentation.Keyword;
+    case "string": return SemanticTokenPresentation.String;
+    case "number": return SemanticTokenPresentation.Number;
+    case "regexp": return SemanticTokenPresentation.Regexp;
     case "class":
     case "enum":
     case "interface":
     case "namespace":
     case "struct":
     case "type":
-    case "typeParameter": return AlphaSemanticTokenPresentation.Type;
+    case "typeParameter": return SemanticTokenPresentation.Type;
     case "function":
-    case "method": return AlphaSemanticTokenPresentation.Function;
+    case "method": return SemanticTokenPresentation.Function;
     case "enumMember":
     case "event":
     case "parameter":
     case "property":
-    case "variable": return AlphaSemanticTokenPresentation.Variable;
-    case "operator": return AlphaSemanticTokenPresentation.Operator;
+    case "variable": return SemanticTokenPresentation.Variable;
+    case "operator": return SemanticTokenPresentation.Operator;
     default: return undefined;
   }
 }
@@ -113,8 +113,8 @@ export function resolveAlphaSemanticTokenPresentation(token: LanguageToken): Alp
 export function projectAlphaSemanticTokenLine(
   element: HTMLElement,
   lineText: string,
-  tokens: readonly AlphaResolvedSemanticToken[],
-  brackets: readonly AlphaBracketColorizationSpan[] = [],
+  tokens: readonly ResolvedSemanticToken[],
+  brackets: readonly BracketColorizationSpan[] = [],
 ): void {
   validateLineTokens(lineText, tokens);
   validateBracketColorizations(lineText, brackets);
@@ -148,7 +148,7 @@ export function projectAlphaSemanticTokenLine(
   reset(element, fragment);
 }
 
-function validateBracketColorizations(lineText: string, brackets: readonly AlphaBracketColorizationSpan[]): void {
+function validateBracketColorizations(lineText: string, brackets: readonly BracketColorizationSpan[]): void {
   let previousEnd = 0;
   for (const bracket of brackets) {
     if (!Number.isSafeInteger(bracket.startColumn) || !Number.isSafeInteger(bracket.endColumn) || bracket.startColumn < previousEnd || bracket.endColumn <= bracket.startColumn || bracket.endColumn > lineText.length) {
@@ -162,8 +162,8 @@ function validateBracketColorizations(lineText: string, brackets: readonly Alpha
 }
 
 /** Captures and validates one source before a viewport replaces its snapshot. */
-export function snapshotAlphaSemanticTokenLines(source: AlphaSemanticTokenSource): ReadonlyMap<number, readonly AlphaResolvedSemanticToken[]> {
-  const result = new Map<number, readonly AlphaResolvedSemanticToken[]>();
+export function snapshotAlphaSemanticTokenLines(source: SemanticTokenSource): ReadonlyMap<number, readonly ResolvedSemanticToken[]> {
+  const result = new Map<number, readonly ResolvedSemanticToken[]>();
   for (const line of source.lines) {
     if (!Number.isSafeInteger(line.lineIndex) || line.lineIndex < 0) {
       throw new RangeError("Alpha semantic token line index must be a non-negative safe integer");
@@ -183,7 +183,7 @@ export function snapshotAlphaSemanticTokenLines(source: AlphaSemanticTokenSource
   return result;
 }
 
-function validateLineTokens(lineText: string, tokens: readonly AlphaResolvedSemanticToken[]): void {
+function validateLineTokens(lineText: string, tokens: readonly ResolvedSemanticToken[]): void {
   let previousEnd = 0;
   for (const token of tokens) {
     validatePresentation(token.presentation);
@@ -201,21 +201,21 @@ function validateLineTokens(lineText: string, tokens: readonly AlphaResolvedSema
   }
 }
 
-function validatePresentation(presentation: AlphaSemanticTokenPresentation): void {
-  if (!Object.values(AlphaSemanticTokenPresentation).includes(presentation)) {
+function validatePresentation(presentation: SemanticTokenPresentation): void {
+  if (!Object.values(SemanticTokenPresentation).includes(presentation)) {
     throw new TypeError(`Unknown Alpha semantic token presentation '${presentation}'`);
   }
 }
 
-function validateModifiers(modifiers: readonly AlphaSemanticTokenModifier[] | undefined): void {
+function validateModifiers(modifiers: readonly SemanticTokenModifier[] | undefined): void {
   if (modifiers === undefined) return;
-  if (new Set(modifiers).size !== modifiers.length || modifiers.some(modifier => !Object.values(AlphaSemanticTokenModifier).includes(modifier))) {
+  if (new Set(modifiers).size !== modifiers.length || modifiers.some(modifier => !Object.values(SemanticTokenModifier).includes(modifier))) {
     throw new TypeError("Unknown or duplicate Alpha semantic token modifier");
   }
 }
 
-function resolveLineTokens(tokens: readonly LanguageToken[], resolvePresentation: AlphaSemanticTokenResolver): readonly AlphaResolvedSemanticToken[] {
-  const resolved: AlphaResolvedSemanticToken[] = [];
+function resolveLineTokens(tokens: readonly LanguageToken[], resolvePresentation: SemanticTokenResolver): readonly ResolvedSemanticToken[] {
+  const resolved: ResolvedSemanticToken[] = [];
   for (const token of tokens) {
     const presentation = resolvePresentation(token);
     if (presentation === undefined) continue;
@@ -232,17 +232,17 @@ function resolveLineTokens(tokens: readonly LanguageToken[], resolvePresentation
 }
 
 /** Maps standard LSP modifier names to Alpha's closed browser presentation set. */
-export function resolveAlphaSemanticTokenModifiers(token: LanguageToken): readonly AlphaSemanticTokenModifier[] {
-  const resolved = new Set<AlphaSemanticTokenModifier>();
+export function resolveAlphaSemanticTokenModifiers(token: LanguageToken): readonly SemanticTokenModifier[] {
+  const resolved = new Set<SemanticTokenModifier>();
   for (const modifier of token.modifiers) {
     switch (modifier) {
       case "declaration":
-      case "definition": resolved.add(AlphaSemanticTokenModifier.Declaration); break;
-      case "readonly": resolved.add(AlphaSemanticTokenModifier.Readonly); break;
-      case "static": resolved.add(AlphaSemanticTokenModifier.Static); break;
-      case "deprecated": resolved.add(AlphaSemanticTokenModifier.Deprecated); break;
-      case "abstract": resolved.add(AlphaSemanticTokenModifier.Abstract); break;
-      case "async": resolved.add(AlphaSemanticTokenModifier.Async); break;
+      case "definition": resolved.add(SemanticTokenModifier.Declaration); break;
+      case "readonly": resolved.add(SemanticTokenModifier.Readonly); break;
+      case "static": resolved.add(SemanticTokenModifier.Static); break;
+      case "deprecated": resolved.add(SemanticTokenModifier.Deprecated); break;
+      case "abstract": resolved.add(SemanticTokenModifier.Abstract); break;
+      case "async": resolved.add(SemanticTokenModifier.Async); break;
     }
   }
   return Object.freeze([...resolved]);

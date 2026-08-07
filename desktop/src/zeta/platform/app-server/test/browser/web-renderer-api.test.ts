@@ -63,6 +63,14 @@ test("disconnected Web renderer API rejects product operations explicitly", asyn
     },
   );
   await assert.rejects(
+    api.syntax.analyze({ language: "rust", revision: 1, text: "fn main() {}\n" }),
+    (error: unknown) => {
+      assert.ok(error instanceof WebAppServerUnavailableError);
+      assert.equal(error.operation, "syntax.analyze");
+      return true;
+    },
+  );
+  await assert.rejects(
     api.turn.resolveInteraction({
       commandId: "resolve-1",
       sessionId: "session-1",

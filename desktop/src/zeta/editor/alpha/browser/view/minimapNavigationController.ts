@@ -9,7 +9,7 @@ import { type EditorScrollPosition, type EditorViewportLayout } from "../../comm
  * pointer's vertical position to canonical scroll state and continues that
  * mapping while the pointer is dragged outside the narrow minimap element.
  */
-export class AlphaMinimapNavigationController extends DisposableOwner {
+export class MinimapNavigationController extends DisposableOwner {
   private pointerId: number | undefined;
 
   constructor(

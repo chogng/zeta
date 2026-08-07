@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { type AlphaTextMeasurer } from "../../../../browser/view/fontMetrics.js";
+import { type TextMeasurer } from "../../../../browser/view/fontMetrics.js";
 import { EditorSelectionController } from "../../../../common/cursor/editorSelectionController.js";
 import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
 import { TextPosition } from "../../../../common/core/text.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 
-class FixedTextMeasurer implements AlphaTextMeasurer {
+class FixedTextMeasurer implements TextMeasurer {
   readonly horizontalPadding = 24;
   readonly contentLeftPadding = 12;
 
@@ -109,11 +109,11 @@ for (const [name, value] of Object.entries({
   });
 }
 
-const { AlphaEditorViewport } = await import("../../../../browser/view/editorViewport.js");
-const { ALPHA_EDITOR_CLIPBOARD_MIME, ALPHA_EDITOR_HTML_CLIPBOARD_MIME, AlphaClipboardLineEnding } = await import("../../browser/clipboardController.js");
+const { EditorViewport } = await import("../../../../browser/view/editorViewport.js");
+const { ALPHA_EDITOR_CLIPBOARD_MIME, ALPHA_EDITOR_HTML_CLIPBOARD_MIME, ClipboardLineEnding } = await import("../../browser/clipboardController.js");
 const { EditorClipboardPasteMode, EditorEmptySelectionClipboardPolicy } = await import("../../common/clipboard.js");
-const { AlphaSemanticTokenPresentation } = await import("../../../../browser/view/semanticTokenPresentation.js");
-const { AlphaTextInputController } = await import("../../../../browser/input/textInputController.js");
+const { SemanticTokenPresentation } = await import("../../../../browser/view/semanticTokenPresentation.js");
+const { TextInputController } = await import("../../../../browser/input/textInputController.js");
 
 test("Clipboard copies, distributes paste, cuts, and restores isolated history", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
@@ -125,7 +125,7 @@ test("Clipboard copies, distributes paste, cuts, and restores isolated history",
     selection(1, 0, 1, 5),
   ], 1);
   using selections = new EditorSelectionController(model, copiedSelections);
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
@@ -133,8 +133,8 @@ test("Clipboard copies, distributes paste, cuts, and restores isolated history",
     selectionController: selections,
   });
   viewport.layout({ width: 80, height: 40 });
-  using input = new AlphaTextInputController(viewport, selections, {
-    clipboard: { lineEnding: AlphaClipboardLineEnding.LF },
+  using input = new TextInputController(viewport, selections, {
+    clipboard: { lineEnding: ClipboardLineEnding.LF },
   });
 
   const copiedData = new MemoryClipboardData();
@@ -204,7 +204,7 @@ test("Clipboard repeats external text and copies an empty selection as a line", 
     model,
     TextSelectionSet.withPrimary([caret(0, 0), caret(0, 2)], 0),
   );
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
@@ -212,8 +212,8 @@ test("Clipboard repeats external text and copies an empty selection as a line", 
     selectionController: selections,
   });
   viewport.layout({ width: 80, height: 20 });
-  const input = new AlphaTextInputController(viewport, selections, {
-    clipboard: { lineEnding: AlphaClipboardLineEnding.LF },
+  const input = new TextInputController(viewport, selections, {
+    clipboard: { lineEnding: ClipboardLineEnding.LF },
   });
 
   const externalData = new MemoryClipboardData();
@@ -263,7 +263,7 @@ test("Clipboard round-trips complete lines and preserves target columns", () => 
     model,
     TextSelectionSet.withPrimary([caret(0, 1), caret(2, 2)], 1),
   );
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
@@ -271,8 +271,8 @@ test("Clipboard round-trips complete lines and preserves target columns", () => 
     selectionController: selections,
   });
   viewport.layout({ width: 80, height: 40 });
-  using input = new AlphaTextInputController(viewport, selections, {
-    clipboard: { lineEnding: AlphaClipboardLineEnding.LF },
+  using input = new TextInputController(viewport, selections, {
+    clipboard: { lineEnding: ClipboardLineEnding.LF },
   });
 
   const lineData = new MemoryClipboardData();
@@ -346,15 +346,15 @@ test("Mixed line and selection metadata falls back to selection paste", () => {
       selection(1, 0, 1, 1),
     ], 1),
   );
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
     textMeasurer: new FixedTextMeasurer(),
     selectionController: selections,
   });
-  using input = new AlphaTextInputController(viewport, selections, {
-    clipboard: { lineEnding: AlphaClipboardLineEnding.LF },
+  using input = new TextInputController(viewport, selections, {
+    clipboard: { lineEnding: ClipboardLineEnding.LF },
   });
 
   const data = new MemoryClipboardData();
@@ -392,16 +392,16 @@ test("Empty-selection clipboard policy may explicitly preserve browser behavior"
     model,
     TextSelectionSet.single(caret(0, 1)),
   );
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
     textMeasurer: new FixedTextMeasurer(),
     selectionController: selections,
   });
-  using input = new AlphaTextInputController(viewport, selections, {
+  using input = new TextInputController(viewport, selections, {
     clipboard: {
-      lineEnding: AlphaClipboardLineEnding.LF,
+      lineEnding: ClipboardLineEnding.LF,
       emptySelectionPolicy: EditorEmptySelectionClipboardPolicy.Ignore,
     },
   });
@@ -421,14 +421,14 @@ test("Clipboard copies escaped HTML and safely falls back to external HTML text"
   assert.ok(container);
   using model = new TextModel("if (a < b && c > d) {}");
   using selections = new EditorSelectionController(model, TextSelectionSet.single(selection(0, 0, 0, model.getLineContent(0).length)));
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
     textMeasurer: new FixedTextMeasurer(),
     selectionController: selections,
   });
-  using input = new AlphaTextInputController(viewport, selections);
+  using input = new TextInputController(viewport, selections);
 
   const copied = new MemoryClipboardData();
   input.element.dispatchEvent(clipboardEvent(dom.window, "copy", copied));
@@ -452,7 +452,7 @@ test("Clipboard preserves current semantic token markup in portable HTML", () =>
   dom.window.document.documentElement.style.setProperty("--zeta-editor-token-keyword-foreground", "rgb(1, 2, 3)");
   using model = new TextModel("const value\nnext");
   using selections = new EditorSelectionController(model, TextSelectionSet.single(selection(0, 0, 1, model.getLineContent(1).length)));
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
@@ -467,18 +467,18 @@ test("Clipboard preserves current semantic token markup in portable HTML", () =>
       ? [{
         startColumn: 0,
         endColumn: 5,
-        presentation: AlphaSemanticTokenPresentation.Keyword,
+        presentation: SemanticTokenPresentation.Keyword,
       }]
       : lineIndex === 1
         ? [{
           startColumn: 0,
           endColumn: 4,
-          presentation: AlphaSemanticTokenPresentation.Keyword,
+          presentation: SemanticTokenPresentation.Keyword,
         }]
         : [],
   };
-  using input = new AlphaTextInputController(viewport, selections, {
-    clipboard: { lineEnding: AlphaClipboardLineEnding.LF, semanticTokens },
+  using input = new TextInputController(viewport, selections, {
+    clipboard: { lineEnding: ClipboardLineEnding.LF, semanticTokens },
   });
 
   const copied = new MemoryClipboardData();
@@ -506,14 +506,14 @@ test("Clipboard reads one user-provided text file only while its revision and se
   assert.ok(container);
   using model = new TextModel("one");
   using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 3)));
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
     textMeasurer: new FixedTextMeasurer(),
     selectionController: selections,
   });
-  using input = new AlphaTextInputController(viewport, selections);
+  using input = new TextInputController(viewport, selections);
   const file = new DeferredTextFile("snippet.rs");
   const data = new MemoryClipboardData();
   data.files = [file as unknown as File];
@@ -543,7 +543,7 @@ test("Clipboard runs local URI providers and discards stale asynchronous provide
   assert.ok(container);
   using model = new TextModel("one");
   using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 3)));
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
@@ -554,7 +554,7 @@ test("Clipboard runs local URI providers and discards stale asynchronous provide
   const providedText = new Promise<string>(resolve => {
     resolveProvidedText = resolve;
   });
-  using input = new AlphaTextInputController(viewport, selections, {
+  using input = new TextInputController(viewport, selections, {
     clipboard: {
       pasteProviders: [{
         id: "test.delayed-snippet",
@@ -592,7 +592,7 @@ test("Clipboard uses the system text reader only as a stale-safe empty-transfer 
   assert.ok(container);
   using model = new TextModel("one");
   using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 3)));
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
@@ -600,7 +600,7 @@ test("Clipboard uses the system text reader only as a stale-safe empty-transfer 
     selectionController: selections,
   });
   const systemTextReader = new DeferredSystemTextReader();
-  using input = new AlphaTextInputController(viewport, selections, {
+  using input = new TextInputController(viewport, selections, {
     clipboard: { systemTextReader },
   });
 
@@ -636,9 +636,9 @@ test("Clipboard safely prefers the rich system reader before its plain-text fall
   assert.ok(container);
   using model = new TextModel("one");
   using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 3)));
-  using viewport = new AlphaEditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+  using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
   let plainReaderCalls = 0;
-  using input = new AlphaTextInputController(viewport, selections, {
+  using input = new TextInputController(viewport, selections, {
     clipboard: {
       richTextReader: { readText: () => Promise.resolve({ html: "<b> two</b><script>ignored()</script>" }) },
       systemTextReader: { readText: () => { plainReaderCalls += 1; return Promise.resolve(" fallback"); } },
@@ -659,9 +659,9 @@ test("Clipboard falls back to Async rich copy and delays cut until it succeeds",
   assert.ok(container);
   using model = new TextModel("one");
   using selections = new EditorSelectionController(model, TextSelectionSet.single(selection(0, 0, 0, 3)));
-  using viewport = new AlphaEditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+  using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
   const writer = new DeferredRichTextWriter();
-  using input = new AlphaTextInputController(viewport, selections, { clipboard: { richTextWriter: writer } });
+  using input = new TextInputController(viewport, selections, { clipboard: { richTextWriter: writer } });
 
   const copy = clipboardEvent(dom.window, "copy", null);
   input.element.dispatchEvent(copy);
@@ -689,14 +689,14 @@ test("Clipboard preserves an active IME composition by rejecting mutable clipboa
   assert.ok(container);
   using model = new TextModel("one");
   using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 3)));
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
     textMeasurer: new FixedTextMeasurer(),
     selectionController: selections,
   });
-  using input = new AlphaTextInputController(viewport, selections);
+  using input = new TextInputController(viewport, selections);
   input.element.dispatchEvent(compositionEvent(dom.window, "compositionstart", ""));
   assert.equal(input.compositionController.composing, true);
 

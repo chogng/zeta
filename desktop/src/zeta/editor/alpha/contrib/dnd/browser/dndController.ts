@@ -8,10 +8,10 @@ import { TextPosition, TextRange } from "../../../common/core/text.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 import { TrackedRangeStickiness, type TrackedRange } from "../../../common/model/trackedRange.js";
 import { getWordSelectionRange } from "../../../common/cursor/wordBoundary.js";
-import { type AlphaEditorViewport } from "../../../browser/view/editorViewport.js";
-import { AlphaPointerAutoScroller } from "./pointerAutoScroll.js";
-import { AlphaEditorHitTargetKind, type AlphaEditorHitTarget } from "../../../browser/view/pointerHitTest.js";
-import { AlphaPointerMultiCursorModifier, combineAlphaPointerSelection, findAlphaPointerToggleCandidate, isAlphaPointerMultiCursorGesture, readAlphaPointerMultiCursorModifier } from "../common/pointerMultiCursor.js";
+import { type EditorViewport } from "../../../browser/view/editorViewport.js";
+import { PointerAutoScroller } from "./pointerAutoScroll.js";
+import { EditorHitTargetKind, type EditorHitTarget } from "../../../browser/view/pointerHitTest.js";
+import { PointerMultiCursorModifier, combineAlphaPointerSelection, findAlphaPointerToggleCandidate, isAlphaPointerMultiCursorGesture, readAlphaPointerMultiCursorModifier } from "../common/pointerMultiCursor.js";
 
 enum PointerSelectionKind {
   Character = "character",
@@ -42,8 +42,8 @@ interface AdditionalPointerSelections {
   readonly toggleCandidateIndex: number | undefined;
 }
 
-export interface AlphaPointerSelectionControllerOptions {
-  readonly multiCursorModifier?: AlphaPointerMultiCursorModifier;
+export interface PointerSelectionControllerOptions {
+  readonly multiCursorModifier?: PointerMultiCursorModifier;
   /** Resolves the current language-specific word pattern for double-click selection. */
   readonly wordPattern?: () => RegExp | undefined;
 }
@@ -54,18 +54,18 @@ export interface AlphaPointerSelectionControllerOptions {
  * The adapter owns pointer listeners and capture only. Text and selections
  * remain owned by the supplied common-layer controller.
  */
-export class AlphaPointerSelectionController extends DisposableOwner {
+export class PointerSelectionController extends DisposableOwner {
   private readonly dragListeners =
     this.own(new ResettableDisposableGroup());
-  private readonly multiCursorModifier: AlphaPointerMultiCursorModifier;
+  private readonly multiCursorModifier: PointerMultiCursorModifier;
   private readonly wordPattern: (() => RegExp | undefined) | undefined;
   private activeSelection: ActivePointerSelection | undefined;
-  private autoScroller: AlphaPointerAutoScroller | undefined;
+  private autoScroller: PointerAutoScroller | undefined;
 
   constructor(
-    private readonly viewport: AlphaEditorViewport,
+    private readonly viewport: EditorViewport,
     private readonly selectionController: EditorSelectionController,
-    options: AlphaPointerSelectionControllerOptions = {},
+    options: PointerSelectionControllerOptions = {},
   ) {
     super();
     try {
@@ -112,7 +112,7 @@ export class AlphaPointerSelectionController extends DisposableOwner {
         hitTarget,
         pointerId,
         event.shiftKey,
-        event.altKey && event.shiftKey && hitTarget.kind !== AlphaEditorHitTargetKind.Gutter,
+        event.altKey && event.shiftKey && hitTarget.kind !== EditorHitTargetKind.Gutter,
         readClickCount(event),
         addSelection,
       );
@@ -123,7 +123,7 @@ export class AlphaPointerSelectionController extends DisposableOwner {
 
       const targetWindow = getWindow(this.viewport.element);
       this.autoScroller = this.dragListeners.add(
-        new AlphaPointerAutoScroller(
+        new PointerAutoScroller(
           targetWindow,
           this.viewport,
           target => this.applyHitTarget(target),
@@ -165,7 +165,7 @@ export class AlphaPointerSelectionController extends DisposableOwner {
   }
 
   private createActiveSelection(
-    hitTarget: AlphaEditorHitTarget,
+    hitTarget: EditorHitTarget,
     pointerId: number | undefined,
     extend: boolean,
     column: boolean,
@@ -177,7 +177,7 @@ export class AlphaPointerSelectionController extends DisposableOwner {
     if (column && clickCount === 1) {
       kind = PointerSelectionKind.Column;
       anchorRange = TextRange.emptyAt(hitTarget.position);
-    } else if (hitTarget.kind === AlphaEditorHitTargetKind.Gutter) {
+    } else if (hitTarget.kind === EditorHitTargetKind.Gutter) {
       if (extend) {
         kind = PointerSelectionKind.ExtendToLine;
         anchorRange = TextRange.emptyAt(
@@ -294,7 +294,7 @@ export class AlphaPointerSelectionController extends DisposableOwner {
     this.stopPointerSelection();
   }
 
-  private applyHitTarget(hitTarget: AlphaEditorHitTarget): void {
+  private applyHitTarget(hitTarget: EditorHitTarget): void {
     const active = this.activeSelection;
     if (!active) return;
     const anchorRange = active.anchor.range;
@@ -326,7 +326,7 @@ export class AlphaPointerSelectionController extends DisposableOwner {
     ));
   }
 
-  private applyColumnFallback(active: ActivePointerSelection, hitTarget: AlphaEditorHitTarget): void {
+  private applyColumnFallback(active: ActivePointerSelection, hitTarget: EditorHitTarget): void {
     const anchor = active.columnFallbackAnchor?.range.start;
     if (!anchor) return;
     this.selectionController.setSelections(TextSelectionSet.single(
@@ -373,7 +373,7 @@ export function isPositionInSelections(position: TextPosition, selections: TextS
   return selections.selections.some(selection => !selection.collapsed && position.compareTo(selection.range.start) >= 0 && position.compareTo(selection.range.end) < 0);
 }
 
-function pointerSelectionForTarget(kind: PointerSelectionKind, model: TextModel, anchorRange: TextRange, hitTarget: AlphaEditorHitTarget, wordPattern: RegExp | undefined): TextSelection {
+function pointerSelectionForTarget(kind: PointerSelectionKind, model: TextModel, anchorRange: TextRange, hitTarget: EditorHitTarget, wordPattern: RegExp | undefined): TextSelection {
   const anchor = anchorRange.start;
   if (kind === PointerSelectionKind.Character) {
     return TextSelection.from(anchor, hitTarget.position);

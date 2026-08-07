@@ -1,23 +1,23 @@
-import { AlphaDecorationPresentation, type AlphaResolvedDecoration } from "../../../browser/view/decorationPresentation.js";
+import { DecorationPresentation, type ResolvedDecoration } from "../../../browser/view/decorationPresentation.js";
 
-export interface AlphaDiagnosticOverviewMarker {
+export interface DiagnosticOverviewMarker {
   readonly startLineIndex: number;
   readonly endLineIndexExclusive: number;
-  readonly presentation: AlphaDecorationPresentation;
+  readonly presentation: DecorationPresentation;
   readonly hoverText: string | undefined;
 }
 
-const PRESENTATION_PRIORITY = new Map<AlphaDecorationPresentation, number>([
-  [AlphaDecorationPresentation.ErrorUnderline, 4],
-  [AlphaDecorationPresentation.WarningUnderline, 3],
-  [AlphaDecorationPresentation.InformationUnderline, 2],
-  [AlphaDecorationPresentation.HintUnderline, 1],
+const PRESENTATION_PRIORITY = new Map<DecorationPresentation, number>([
+  [DecorationPresentation.ErrorUnderline, 4],
+  [DecorationPresentation.WarningUnderline, 3],
+  [DecorationPresentation.InformationUnderline, 2],
+  [DecorationPresentation.HintUnderline, 1],
 ]);
 
 /** Condenses diagnostic decoration spans into one highest-severity marker per logical line. */
-export function createAlphaDiagnosticOverviewMarkers(decorations: readonly AlphaResolvedDecoration[], lineCount: number): readonly AlphaDiagnosticOverviewMarker[] {
+export function createAlphaDiagnosticOverviewMarkers(decorations: readonly ResolvedDecoration[], lineCount: number): readonly DiagnosticOverviewMarker[] {
   if (!Number.isSafeInteger(lineCount) || lineCount < 1) throw new RangeError("Diagnostic overview requires a positive line count");
-  const byLine = new Map<number, AlphaResolvedDecoration[]>();
+  const byLine = new Map<number, ResolvedDecoration[]>();
   for (const decoration of decorations) {
     if (!PRESENTATION_PRIORITY.has(decoration.presentation)) continue;
     const startLineIndex = decoration.range.start.lineIndex;
@@ -30,7 +30,7 @@ export function createAlphaDiagnosticOverviewMarkers(decorations: readonly Alpha
       byLine.set(lineIndex, line);
     }
   }
-  const markers: AlphaDiagnosticOverviewMarker[] = [];
+  const markers: DiagnosticOverviewMarker[] = [];
   for (const lineIndex of [...byLine.keys()].sort((left, right) => left - right)) {
     const lineDecorations = byLine.get(lineIndex)!;
     const highest = lineDecorations.reduce((current, candidate) =>
@@ -56,7 +56,7 @@ export function createAlphaDiagnosticOverviewMarkers(decorations: readonly Alpha
   return Object.freeze(markers);
 }
 
-function uniqueHoverText(decorations: readonly AlphaResolvedDecoration[]): string | undefined {
+function uniqueHoverText(decorations: readonly ResolvedDecoration[]): string | undefined {
   const values = [...new Set(decorations.flatMap(decoration => decoration.hoverText === undefined ? [] : [decoration.hoverText]))];
   return values.length > 0 ? values.join("\n") : undefined;
 }

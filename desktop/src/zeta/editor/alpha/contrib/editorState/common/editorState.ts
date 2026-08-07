@@ -3,7 +3,7 @@ import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
 import { type TextSelectionSet } from "../../../common/core/selection.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 
-export interface AlphaEditorState {
+export interface EditorState {
   readonly focused: boolean;
   readonly modelVersion: number;
   readonly selections: TextSelectionSet;
@@ -13,9 +13,9 @@ export interface AlphaEditorState {
 
 /** Observable editor-instance state shared by context actions and browser contributions. */
 export class EditorStateModel extends DisposableOwner {
-  private readonly changeEmitter = this.own(new Emitter<AlphaEditorState>());
-  private state: AlphaEditorState;
-  readonly onDidChange: Event<AlphaEditorState> = this.changeEmitter.event;
+  private readonly changeEmitter = this.own(new Emitter<EditorState>());
+  private state: EditorState;
+  readonly onDidChange: Event<EditorState> = this.changeEmitter.event;
 
   constructor(private readonly model: TextModel, selections: TextSelectionSet) {
     super();
@@ -23,7 +23,7 @@ export class EditorStateModel extends DisposableOwner {
     this.own(model.onDidChange(() => this.update({ modelVersion: model.version })));
   }
 
-  get value(): AlphaEditorState {
+  get value(): EditorState {
     return this.state;
   }
 
@@ -41,7 +41,7 @@ export class EditorStateModel extends DisposableOwner {
     this.update({ scrollLeft, scrollTop });
   }
 
-  private update(partial: Partial<AlphaEditorState>): void {
+  private update(partial: Partial<EditorState>): void {
     const next = Object.freeze({ ...this.state, ...partial });
     if (next.focused === this.state.focused && next.modelVersion === this.state.modelVersion && next.selections === this.state.selections && next.scrollLeft === this.state.scrollLeft && next.scrollTop === this.state.scrollTop) return;
     this.state = next;

@@ -5,7 +5,7 @@ import { type EditorFoldingModel } from "./foldingModel.js";
 import { type EditorFoldingRegion } from "./foldingRanges.js";
 
 /** Owns folding gutter presentation and mirrors every fold-state change. */
-export class AlphaFoldingDecorationProvider extends DisposableOwner {
+export class FoldingDecorationProvider extends DisposableOwner {
   private readonly changeEmitter = this.own(new Emitter<void>());
 
   readonly onDidChange: Event<void> = this.changeEmitter.event;

@@ -1,16 +1,16 @@
 import "./media/zoneWidget.css";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
 import { type TextPosition } from "../../../common/core/text.js";
-import { type AlphaEditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 
-export interface AlphaZoneWidgetOptions { readonly anchor: TextPosition; readonly createContent: (document: Document) => HTMLElement; readonly className?: string; }
+export interface ZoneWidgetOptions { readonly anchor: TextPosition; readonly createContent: (document: Document) => HTMLElement; readonly className?: string; }
 
 /** Anchors a transient interactive widget to a model position and follows viewport layout. */
-export class AlphaZoneWidget extends DisposableOwner {
+export class ZoneWidget extends DisposableOwner {
   readonly element: HTMLDivElement;
   private content: HTMLElement;
 
-  constructor(private readonly viewport: AlphaEditorViewport, options: AlphaZoneWidgetOptions) {
+  constructor(private readonly viewport: EditorViewport, options: ZoneWidgetOptions) {
     super();
     viewport.textModel.offsetAt(options.anchor);
     this.element = viewport.element.ownerDocument.createElement("div");

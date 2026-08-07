@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { type AlphaTextMeasurer } from "../../../../browser/view/fontMetrics.js";
+import { type TextMeasurer } from "../../../../browser/view/fontMetrics.js";
 import { EditorSelectionController } from "../../../../common/cursor/editorSelectionController.js";
 import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
 import { TextPosition } from "../../../../common/core/text.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 
-class FixedTextMeasurer implements AlphaTextMeasurer {
+class FixedTextMeasurer implements TextMeasurer {
   readonly horizontalPadding = 24;
   readonly contentLeftPadding = 12;
 
@@ -61,8 +61,8 @@ for (const [name, value] of Object.entries({
   Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { AlphaEditorViewport } = await import("../../../../browser/view/editorViewport.js");
-const { AlphaTextDropController } = await import("../../browser/textDropController.js");
+const { EditorViewport } = await import("../../../../browser/view/editorViewport.js");
+const { TextDropController } = await import("../../browser/textDropController.js");
 
 test.after(() => browserEnvironment.window.close());
 
@@ -71,10 +71,10 @@ test("Plain-text drops insert at the viewport hit target", () => {
   const container = dom.window.document.querySelector<HTMLElement>("main")!;
   using model = new TextModel("ab\ncd");
   using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(1, 0))));
-  using viewport = new AlphaEditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+  using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
   viewport.element.getBoundingClientRect = () => rectangle(120, 40);
   viewport.layout({ width: 120, height: 40 });
-  using controller = new AlphaTextDropController(viewport, selections);
+  using controller = new TextDropController(viewport, selections);
   const data = new MemoryDragData(["text/plain"], new Map([["text/plain", "X\r\nY"]]));
 
   const dragOver = dragEvent(dom.window, "dragover", data, 100, 5);
@@ -95,10 +95,10 @@ test("Non-text drops remain available to their host", () => {
   const container = dom.window.document.querySelector<HTMLElement>("main")!;
   using model = new TextModel("alpha");
   using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
-  using viewport = new AlphaEditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+  using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
   viewport.element.getBoundingClientRect = () => rectangle(120, 20);
   viewport.layout({ width: 120, height: 20 });
-  using controller = new AlphaTextDropController(viewport, selections);
+  using controller = new TextDropController(viewport, selections);
   const data = new MemoryDragData(["Files"], new Map());
 
   const dragOver = dragEvent(dom.window, "dragover", data, 50, 5);
@@ -116,10 +116,10 @@ test("Rich HTML drops reduce to inert text when plain text is unavailable", () =
   const container = dom.window.document.querySelector<HTMLElement>("main")!;
   using model = new TextModel("ab");
   using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
-  using viewport = new AlphaEditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+  using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
   viewport.element.getBoundingClientRect = () => rectangle(120, 20);
   viewport.layout({ width: 120, height: 20 });
-  using controller = new AlphaTextDropController(viewport, selections);
+  using controller = new TextDropController(viewport, selections);
   const data = new MemoryDragData(["text/html"], new Map([["text/html", "<div>first</div><script>ignored()</script><div>second<br>third</div>"]]));
 
   const dragOver = dragEvent(dom.window, "dragover", data, 100, 5);
@@ -137,10 +137,10 @@ test("One user-provided text file drop inserts at the hit target after decoding"
   const container = dom.window.document.querySelector<HTMLElement>("main")!;
   using model = new TextModel("ab\ncd");
   using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
-  using viewport = new AlphaEditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+  using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
   viewport.element.getBoundingClientRect = () => rectangle(120, 40);
   viewport.layout({ width: 120, height: 40 });
-  using controller = new AlphaTextDropController(viewport, selections);
+  using controller = new TextDropController(viewport, selections);
   const file = new DeferredTextFile("snippet.rs");
   const data = new MemoryDragData(["Files"], new Map(), [file as unknown as File]);
 

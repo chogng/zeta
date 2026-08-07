@@ -4,12 +4,12 @@ import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { LanguageCompletionDetailsStatus, type LanguageCompletionSessionState, LanguageCompletionSessionController } from "../common/suggestModel.js";
 import { LanguageCompletionItemKind } from "../../../common/languages/completion/languageCompletions.js";
-import { type AlphaEditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 
 let nextCompletionWidgetId = 1;
 
 /** Projects one common completion session into Alpha-owned browser UI. */
-export class AlphaCompletionWidget extends DisposableOwner {
+export class CompletionWidget extends DisposableOwner {
   readonly element: HTMLDivElement;
   private readonly widgetId: string;
   private readonly previousAriaAutocomplete: string | null;
@@ -19,7 +19,7 @@ export class AlphaCompletionWidget extends DisposableOwner {
 
   constructor(
     private readonly inputElement: HTMLTextAreaElement,
-    private readonly viewport: AlphaEditorViewport,
+    private readonly viewport: EditorViewport,
     private readonly selectionController: EditorSelectionController,
     private readonly session: LanguageCompletionSessionController,
   ) {

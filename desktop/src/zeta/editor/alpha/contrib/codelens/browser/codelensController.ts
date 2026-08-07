@@ -1,16 +1,16 @@
 import "./media/codelens.css";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
-import { type AlphaEditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 import { type CodeLensService, type LanguageCodeLens } from "../common/codelens.js";
 
-export type AlphaExecuteCodeLensCommand = (id: string, args: readonly unknown[] | undefined) => void | Promise<void>;
+export type ExecuteCodeLensCommand = (id: string, args: readonly unknown[] | undefined) => void | Promise<void>;
 
 /** Projects provider code lenses as inline command buttons and delegates execution to the host. */
-export class AlphaCodeLensController extends DisposableOwner {
+export class CodeLensController extends DisposableOwner {
   private lenses: readonly LanguageCodeLens[] = [];
   private request: AbortController | undefined;
 
-  constructor(private readonly viewport: AlphaEditorViewport, private readonly service: CodeLensService, private readonly languageId: string, private readonly onExecuteCommand?: AlphaExecuteCodeLensCommand, private readonly onError: (error: unknown) => void = error => console.error("Alpha code lens failed", error)) {
+  constructor(private readonly viewport: EditorViewport, private readonly service: CodeLensService, private readonly languageId: string, private readonly onExecuteCommand?: ExecuteCodeLensCommand, private readonly onError: (error: unknown) => void = error => console.error("Alpha code lens failed", error)) {
     super();
     this.own(viewport.onDidChangeLayout(() => this.render()));
     this.own(viewport.textModel.onDidChange(() => void this.refresh()));

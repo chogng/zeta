@@ -30,11 +30,12 @@ test("Gama follows VS Code editor common/browser/contrib ownership", () => {
     "browser/services/documentWorkingCopy.ts",
     "browser/services/browserDocumentModelService.ts",
     "browser/editorInput.ts",
-    "browser/gamaEditorPane.ts",
-    "browser/gamaEditorSession.ts",
-    "browser/services/gamaEditorProfile.ts",
+    "browser/editorPane.ts",
+    "browser/editorWidget.ts",
+    "browser/services/editorProfile.ts",
     "browser/widget/textEditorWidget.ts",
-    "browser/media/gamaEditorSession.css",
+    "browser/media/editorWidget.css",
+    "contrib/formatting/browser/formattingContribution.ts",
     "contrib/academic/browser/profile.ts",
     "contrib/academic/browser/academicEditor.contribution.ts",
   ]) assert.equal(statSafe(join(gamaRoot, file)), true, file);
@@ -48,22 +49,25 @@ test("Gama follows VS Code editor common/browser/contrib ownership", () => {
 
 test("Gama keeps textBlock semantics and uses Alpha only through the embedded-editor seam", () => {
   const schema = readFileSync(join(gamaRoot, "common/model/documentSchema.ts"), "utf8");
-  const pane = readFileSync(join(gamaRoot, "browser/gamaEditorPane.ts"), "utf8");
-  const session = readFileSync(join(gamaRoot, "browser/gamaEditorSession.ts"), "utf8");
+  const pane = readFileSync(join(gamaRoot, "browser/editorPane.ts"), "utf8");
+  const editor = readFileSync(join(gamaRoot, "browser/editorWidget.ts"), "utf8");
+  const formatting = readFileSync(join(gamaRoot, "contrib/formatting/browser/formattingContribution.ts"), "utf8");
   const widget = readFileSync(join(gamaRoot, "browser/widget/textEditorWidget.ts"), "utf8");
   const editorAll = readFileSync(join(gamaRoot, "editor.all.ts"), "utf8");
   assert.match(schema, /textBlock:/u);
   assert.doesNotMatch(schema, /codeBlock/u);
-  assert.match(pane, /export class GamaEditorPane/u);
+  assert.match(pane, /export class EditorPane/u);
   assert.match(pane, /implements IEditorPane/u);
   assert.match(pane, /BrowserDocumentModelService/u);
-  assert.match(session, /export class GamaEditorSession/u);
-  assert.match(session, /IDocumentModelService/u);
-  assert.match(session, /DocumentModelReference/u);
+  assert.match(editor, /export class EditorWidget/u);
+  assert.match(editor, /IDocumentModelService/u);
+  assert.match(editor, /DocumentModelReference/u);
   assert.match(widget, /export class TextEditorWidget/u);
   assert.match(widget, /IEmbeddedTextEditorFactory/u);
-  assert.match(session, /new TextEditorWidget\(/u);
-  assert.doesNotMatch(widget, /AlphaEmbeddedTextEditorFactory/u);
+  assert.match(editor, /new TextEditorWidget\(/u);
+  assert.doesNotMatch(widget, /editor\/alpha\/browser\/embeddedTextEditor/u);
+  assert.match(formatting, /new ToolBar\(/u);
+  assert.doesNotMatch(editor, /Session/u);
   assert.match(editorAll, /academicEditor\.contribution/u);
 });
 
@@ -73,6 +77,11 @@ function directoryNames(directory: string): string[] {
     .map(entry => entry.name)
     .sort();
 }
+
+test("editor domains do not repeat their directory name in internal TypeScript symbols", () => {
+  assertNoDomainPrefixedSymbols(join(editorRoot, "alpha"), "Alpha");
+  assertNoDomainPrefixedSymbols(gamaRoot, "Gama");
+});
 
 function collectFiles(directory: string): string[] {
   const result: string[] = [];
@@ -89,5 +98,13 @@ function statSafe(file: string): boolean {
     return statSync(file).isDirectory() || statSync(file).isFile();
   } catch {
     return false;
+  }
+}
+
+function assertNoDomainPrefixedSymbols(root: string, domain: string): void {
+  const expression = new RegExp(`\\b${domain}[A-Z][A-Za-z0-9_]*\\b`, "u");
+  for (const file of collectFiles(root)) {
+    if (!file.endsWith(".ts")) continue;
+    assert.doesNotMatch(readFileSync(file, "utf8"), expression, relative(root, file));
   }
 }

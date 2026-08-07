@@ -3,14 +3,14 @@ import { addDisposableListener, stopEvent } from "../../../../../base/browser/do
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
 import { type ParameterHintsService, type LanguageParameterHints } from "../common/parameterHints.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
-import { type AlphaEditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 
 /** Routes the signature-help shortcut and owns the accessible parameter widget. */
-export class AlphaParameterHintsController extends DisposableOwner {
+export class ParameterHintsController extends DisposableOwner {
   private readonly element: HTMLDivElement;
   private request: AbortController | undefined;
 
-  constructor(private readonly input: HTMLTextAreaElement, private readonly viewport: AlphaEditorViewport, private readonly selections: EditorSelectionController, private readonly service: ParameterHintsService, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Alpha parameter hints failed", error)) {
+  constructor(private readonly input: HTMLTextAreaElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: ParameterHintsService, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Alpha parameter hints failed", error)) {
     super();
     this.element = viewport.element.ownerDocument.createElement("div");
     this.element.className = "zeta-alpha-editor-parameter-hints";

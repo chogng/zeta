@@ -2,15 +2,15 @@ import { type TextRange } from "../../common/core/text.js";
 import { type TextModel } from "../../common/model/textModel.js";
 import { type EditorVisualLineProjection } from "../../common/viewModel/modelLineProjection.js";
 import { type EditorLineRange } from "../../common/viewLayout/editorViewportModel.js";
-import { type AlphaTextMeasurer } from "./fontMetrics.js";
-import { AlphaEmptyRangeRendering } from "./rangeGeometry.js";
+import { type TextMeasurer } from "./fontMetrics.js";
+import { EmptyRangeRendering } from "./rangeGeometry.js";
 
-export interface AlphaVisualRangeGeometryEntry<T> {
+export interface VisualRangeGeometryEntry<T> {
   readonly range: TextRange;
   readonly value: T;
 }
 
-export interface AlphaVisualRangeRectangle<T> {
+export interface VisualRangeRectangle<T> {
   readonly value: T;
   readonly visualLineIndex: number;
   readonly left: number;
@@ -18,14 +18,14 @@ export interface AlphaVisualRangeRectangle<T> {
 }
 
 /** @internal */
-export function createAlphaVisualRangeRectangles<T>(model: TextModel, entries: readonly AlphaVisualRangeGeometryEntry<T>[], projection: EditorVisualLineProjection, renderLines: EditorLineRange, textLeft: number, measurer: AlphaTextMeasurer, emptyRangeRendering = AlphaEmptyRangeRendering.Ignore): readonly AlphaVisualRangeRectangle<T>[] {
+export function createAlphaVisualRangeRectangles<T>(model: TextModel, entries: readonly VisualRangeGeometryEntry<T>[], projection: EditorVisualLineProjection, renderLines: EditorLineRange, textLeft: number, measurer: TextMeasurer, emptyRangeRendering = EmptyRangeRendering.Ignore): readonly VisualRangeRectangle<T>[] {
   if (projection.modelVersion !== model.version) {
     throw new Error("Visual range geometry requires the current text model projection");
   }
-  const rectangles: AlphaVisualRangeRectangle<T>[] = [];
+  const rectangles: VisualRangeRectangle<T>[] = [];
   const newlineWidth = measurer.measureLineWidth(" ");
   for (const entry of entries) {
-    if (entry.range.empty && emptyRangeRendering === AlphaEmptyRangeRendering.RenderAsSpace) {
+    if (entry.range.empty && emptyRangeRendering === EmptyRangeRendering.RenderAsSpace) {
       const visualLineIndex = projection.visualLineIndexAt(entry.range.start);
       const visualLine = projection.lineAt(visualLineIndex);
       if (!visualLine || visualLineIndex < renderLines.startLineIndex || visualLineIndex >= renderLines.endLineIndexExclusive) continue;

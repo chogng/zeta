@@ -1,14 +1,14 @@
 import "./media/symbolIcons.css";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
-import { type AlphaEditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 import { type DocumentSymbolService, type LanguageDocumentSymbol } from "../../documentSymbols/common/documentSymbols.js";
 
 /** Projects document-symbol kinds into small, feature-owned gutter icons. */
-export class AlphaSymbolIconsController extends DisposableOwner {
+export class SymbolIconsController extends DisposableOwner {
   private symbols: readonly LanguageDocumentSymbol[] = [];
   private request: AbortController | undefined;
 
-  constructor(private readonly viewport: AlphaEditorViewport, private readonly service: DocumentSymbolService, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Alpha symbol icons failed", error)) {
+  constructor(private readonly viewport: EditorViewport, private readonly service: DocumentSymbolService, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Alpha symbol icons failed", error)) {
     super();
     if (service.textModel !== viewport.textModel) throw new TypeError("Alpha symbol icon dependencies must share a text model");
     this.own(viewport.onDidChangeLayout(() => this.render()));

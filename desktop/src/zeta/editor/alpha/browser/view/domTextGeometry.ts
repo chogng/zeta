@@ -1,27 +1,27 @@
-export interface AlphaDomTextRectangle {
+export interface DomTextRectangle {
   readonly left: number;
   readonly width: number;
 }
 
-interface AlphaTextSegment {
+interface TextSegment {
   readonly node: Text;
   readonly startOffset: number;
   readonly endOffset: number;
 }
 
-interface AlphaCaretPosition {
+interface CaretPosition {
   readonly offsetNode: Node;
   readonly offset: number;
 }
 
-interface AlphaCaretRange {
+interface CaretRange {
   readonly startContainer: Node;
   readonly startOffset: number;
 }
 
-interface AlphaCaretDocument {
-  caretPositionFromPoint?(x: number, y: number): AlphaCaretPosition | null;
-  caretRangeFromPoint?(x: number, y: number): AlphaCaretRange | null;
+interface CaretDocument {
+  caretPositionFromPoint?(x: number, y: number): CaretPosition | null;
+  caretRangeFromPoint?(x: number, y: number): CaretRange | null;
 }
 
 /**
@@ -46,7 +46,7 @@ export function createAlphaDomTextRange(element: HTMLElement, startOffset: numbe
 }
 
 /** Returns browser-shaped visual rectangles for one source range, if layout is available. */
-export function getAlphaDomTextRangeRectangles(element: HTMLElement, startOffset: number, endOffset: number, relativeTo: HTMLElement): readonly AlphaDomTextRectangle[] | undefined {
+export function getAlphaDomTextRangeRectangles(element: HTMLElement, startOffset: number, endOffset: number, relativeTo: HTMLElement): readonly DomTextRectangle[] | undefined {
   const range = createAlphaDomTextRange(element, startOffset, endOffset);
   if (!range || startOffset === endOffset) return undefined;
   if (typeof range.getClientRects !== "function") return undefined;
@@ -78,7 +78,7 @@ export function getAlphaDomTextOffsetAtClientPoint(element: HTMLElement, clientX
   if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) {
     throw new RangeError("Alpha DOM hit-test coordinates must be finite");
   }
-  const document = element.ownerDocument as unknown as AlphaCaretDocument;
+  const document = element.ownerDocument as unknown as CaretDocument;
   const position = document.caretPositionFromPoint?.(clientX, clientY) ?? document.caretRangeFromPoint?.(clientX, clientY);
   if (!position) return undefined;
   const node = "offsetNode" in position ? position.offsetNode : position.startContainer;
@@ -87,8 +87,8 @@ export function getAlphaDomTextOffsetAtClientPoint(element: HTMLElement, clientX
   return offsetForDomPosition(textSegments(element), node, offset);
 }
 
-function textSegments(element: HTMLElement): readonly AlphaTextSegment[] {
-  const segments: AlphaTextSegment[] = [];
+function textSegments(element: HTMLElement): readonly TextSegment[] {
+  const segments: TextSegment[] = [];
   const walker = element.ownerDocument.createTreeWalker(element, 4);
   let offset = 0;
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {
@@ -100,7 +100,7 @@ function textSegments(element: HTMLElement): readonly AlphaTextSegment[] {
   return segments;
 }
 
-function resolveBoundary(segments: readonly AlphaTextSegment[], offset: number): { readonly node: Text; readonly offset: number } | undefined {
+function resolveBoundary(segments: readonly TextSegment[], offset: number): { readonly node: Text; readonly offset: number } | undefined {
   if (segments.length === 0) return undefined;
   const segment = offset === segments.at(-1)?.endOffset
     ? segments.at(-1)
@@ -109,7 +109,7 @@ function resolveBoundary(segments: readonly AlphaTextSegment[], offset: number):
   return Object.freeze({ node: segment.node, offset: offset - segment.startOffset });
 }
 
-function offsetForDomPosition(segments: readonly AlphaTextSegment[], node: Node, offset: number): number | undefined {
+function offsetForDomPosition(segments: readonly TextSegment[], node: Node, offset: number): number | undefined {
   if (!Number.isSafeInteger(offset) || offset < 0) return undefined;
   if (node.nodeType === node.TEXT_NODE) {
     const segment = segments.find(candidate => candidate.node === node);

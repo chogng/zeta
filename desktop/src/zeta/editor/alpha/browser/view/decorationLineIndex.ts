@@ -1,7 +1,7 @@
-import { type AlphaResolvedDecoration } from "./decorationPresentation.js";
+import { type ResolvedDecoration } from "./decorationPresentation.js";
 
 interface DecorationInterval {
-  readonly decoration: AlphaResolvedDecoration;
+  readonly decoration: ResolvedDecoration;
   readonly startLineIndex: number;
   readonly endLineIndex: number;
   readonly order: number;
@@ -20,10 +20,10 @@ interface DecorationIntervalNode {
  * The index owns only a snapshot of browser presentation data. Callers keep
  * decoration collections, invalidation, and geometry projection ownership.
  */
-export class AlphaDecorationLineIndex {
+export class DecorationLineIndex {
   private readonly root: DecorationIntervalNode | undefined;
 
-  constructor(decorations: readonly AlphaResolvedDecoration[]) {
+  constructor(decorations: readonly ResolvedDecoration[]) {
     this.root = buildIntervalTree(decorations.map((decoration, order) => Object.freeze({
       decoration,
       startLineIndex: decoration.range.start.lineIndex,
@@ -33,7 +33,7 @@ export class AlphaDecorationLineIndex {
   }
 
   /** Returns decorations that can produce geometry on the inclusive line span. */
-  getIntersectingLines(startLineIndex: number, endLineIndex: number): readonly AlphaResolvedDecoration[] {
+  getIntersectingLines(startLineIndex: number, endLineIndex: number): readonly ResolvedDecoration[] {
     if (!Number.isSafeInteger(startLineIndex) || !Number.isSafeInteger(endLineIndex) || startLineIndex < 0 || endLineIndex < startLineIndex) {
       throw new RangeError("Alpha decoration line queries require a non-negative ordered integer span");
     }
@@ -73,7 +73,7 @@ function compareIntervals(left: DecorationInterval, right: DecorationInterval): 
   return left.startLineIndex - right.startLineIndex || left.endLineIndex - right.endLineIndex || left.order - right.order;
 }
 
-function lastCoveredLineIndex(decoration: AlphaResolvedDecoration): number {
+function lastCoveredLineIndex(decoration: ResolvedDecoration): number {
   const { start, end } = decoration.range;
   if (decoration.range.empty || end.columnIndex > 0 || end.lineIndex === start.lineIndex) return end.lineIndex;
   return end.lineIndex - 1;

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { OperatingSystem } from "../../../../../../base/common/platform.js";
-import { type AlphaTextMeasurer } from "../../../../browser/view/fontMetrics.js";
+import { type TextMeasurer } from "../../../../browser/view/fontMetrics.js";
 import { EditorSelectionController } from "../../../../common/cursor/editorSelectionController.js";
 import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
 import { TextPosition } from "../../../../common/core/text.js";
@@ -21,19 +21,19 @@ for (const [name, value] of Object.entries({
   Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { AlphaEditorViewport } = await import("../../../../browser/view/editorViewport.js");
-const { AlphaGotoLineController, isAlphaGotoLineChord } = await import("../../browser/quickAccessController.js");
+const { EditorViewport } = await import("../../../../browser/view/editorViewport.js");
+const { GotoLineController, isAlphaGotoLineChord } = await import("../../browser/quickAccessController.js");
 
 test("Go to Line previews locally, accepts a line and column, and cancels without changing selections", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   const container = dom.window.document.querySelector<HTMLElement>("main")!;
   using model = new TextModel("zero\none\ntwo");
   using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
-  using viewport = new AlphaEditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+  using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
   viewport.layout({ width: 200, height: 40 });
   const editorInput = dom.window.document.createElement("textarea");
   container.append(editorInput);
-  using controller = new AlphaGotoLineController(editorInput, viewport, selections, { operatingSystem: OperatingSystem.Linux });
+  using controller = new GotoLineController(editorInput, viewport, selections, { operatingSystem: OperatingSystem.Linux });
 
   const open = keydown(dom.window, "g", { ctrlKey: true });
   editorInput.dispatchEvent(open);
@@ -60,10 +60,10 @@ test("Go to Line uses Command+G on macOS", () => {
   const container = dom.window.document.querySelector<HTMLElement>("main")!;
   using model = new TextModel("zero\none");
   using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
-  using viewport = new AlphaEditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+  using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
   const editorInput = dom.window.document.createElement("textarea");
   container.append(editorInput);
-  using controller = new AlphaGotoLineController(editorInput, viewport, selections, { operatingSystem: OperatingSystem.Macintosh });
+  using controller = new GotoLineController(editorInput, viewport, selections, { operatingSystem: OperatingSystem.Macintosh });
 
   const open = keydown(dom.window, "g", { metaKey: true });
   editorInput.dispatchEvent(open);
@@ -73,7 +73,7 @@ test("Go to Line uses Command+G on macOS", () => {
   dom.window.close();
 });
 
-class FixedTextMeasurer implements AlphaTextMeasurer {
+class FixedTextMeasurer implements TextMeasurer {
   readonly horizontalPadding = 24;
   readonly contentLeftPadding = 12;
 

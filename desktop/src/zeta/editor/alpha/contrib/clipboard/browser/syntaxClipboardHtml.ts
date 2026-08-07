@@ -1,6 +1,6 @@
 import { EditorClipboardPasteMode, type EditorClipboardEntry } from "../common/clipboard.js";
 import { type TextPosition } from "../../../common/core/text.js";
-import { AlphaSemanticTokenPresentation, type AlphaSemanticTokenSource } from "../../../browser/view/semanticTokenPresentation.js";
+import { SemanticTokenPresentation, type SemanticTokenSource } from "../../../browser/view/semanticTokenPresentation.js";
 
 /**
  * Creates portable preformatted HTML for an Alpha clipboard operation.
@@ -9,14 +9,14 @@ import { AlphaSemanticTokenPresentation, type AlphaSemanticTokenSource } from ".
  * representation of the current, version-bound browser token source and never
  * changes the copied characters.
  */
-export function createAlphaSyntaxClipboardHtml(entries: readonly EditorClipboardEntry[], lineEnding: "\n" | "\r\n", tokens: AlphaSemanticTokenSource | undefined, ownerDocument: Document): string {
+export function createAlphaSyntaxClipboardHtml(entries: readonly EditorClipboardEntry[], lineEnding: "\n" | "\r\n", tokens: SemanticTokenSource | undefined, ownerDocument: Document): string {
   const included = entries.filter(entry => entry.text.length > 0);
   const contents = included.map(entry => renderClipboardEntry(entry, tokens, ownerDocument));
   const separators = included.map((entry, index) => index === 0 || included[index - 1]!.pasteMode === EditorClipboardPasteMode.Line ? "" : "\n");
   return `<pre><code>${toExternalLineEndings(contents.map((content, index) => `${separators[index]}${content}`).join(""), lineEnding)}</code></pre>`;
 }
 
-function renderClipboardEntry(entry: EditorClipboardEntry, tokens: AlphaSemanticTokenSource | undefined, ownerDocument: Document): string {
+function renderClipboardEntry(entry: EditorClipboardEntry, tokens: SemanticTokenSource | undefined, ownerDocument: Document): string {
   if (!tokens) return escapeHtml(entry.text);
   try {
     const model = tokens.textModel;
@@ -42,7 +42,7 @@ function renderClipboardEntry(entry: EditorClipboardEntry, tokens: AlphaSemantic
   }
 }
 
-function renderTokenizedRange(tokens: AlphaSemanticTokenSource, start: TextPosition, end: TextPosition, ownerDocument: Document): string {
+function renderTokenizedRange(tokens: SemanticTokenSource, start: TextPosition, end: TextPosition, ownerDocument: Document): string {
   const parts: string[] = [];
   const model = tokens.textModel;
   const colors = resolveTokenColors(ownerDocument);
@@ -62,7 +62,7 @@ function renderTokenizedRange(tokens: AlphaSemanticTokenSource, start: TextPosit
   return parts.join("");
 }
 
-function renderTokenizedLine(lineText: string, startColumn: number, endColumn: number, tokens: ReturnType<AlphaSemanticTokenSource["getLineTokens"]>, colors: ReadonlyMap<AlphaSemanticTokenPresentation, string>): string {
+function renderTokenizedLine(lineText: string, startColumn: number, endColumn: number, tokens: ReturnType<SemanticTokenSource["getLineTokens"]>, colors: ReadonlyMap<SemanticTokenPresentation, string>): string {
   let column = startColumn;
   const parts: string[] = [];
   for (const token of tokens) {
@@ -80,11 +80,11 @@ function renderTokenizedLine(lineText: string, startColumn: number, endColumn: n
   return parts.join("");
 }
 
-function resolveTokenColors(ownerDocument: Document): ReadonlyMap<AlphaSemanticTokenPresentation, string> {
+function resolveTokenColors(ownerDocument: Document): ReadonlyMap<SemanticTokenPresentation, string> {
   const view = ownerDocument.defaultView;
   if (!view) return new Map();
   const style = view.getComputedStyle(ownerDocument.documentElement);
-  const colors = new Map<AlphaSemanticTokenPresentation, string>();
+  const colors = new Map<SemanticTokenPresentation, string>();
   for (const [presentation, variable] of TOKEN_COLOR_VARIABLES) {
     const color = style.getPropertyValue(variable).trim();
     if (color.length > 0) colors.set(presentation, color);
@@ -92,16 +92,16 @@ function resolveTokenColors(ownerDocument: Document): ReadonlyMap<AlphaSemanticT
   return colors;
 }
 
-const TOKEN_COLOR_VARIABLES = new Map<AlphaSemanticTokenPresentation, string>([
-  [AlphaSemanticTokenPresentation.Comment, "--zeta-editor-token-comment-foreground"],
-  [AlphaSemanticTokenPresentation.Keyword, "--zeta-editor-token-keyword-foreground"],
-  [AlphaSemanticTokenPresentation.String, "--zeta-editor-token-string-foreground"],
-  [AlphaSemanticTokenPresentation.Number, "--zeta-editor-token-number-foreground"],
-  [AlphaSemanticTokenPresentation.Regexp, "--zeta-editor-token-regexp-foreground"],
-  [AlphaSemanticTokenPresentation.Type, "--zeta-editor-token-type-foreground"],
-  [AlphaSemanticTokenPresentation.Function, "--zeta-editor-token-function-foreground"],
-  [AlphaSemanticTokenPresentation.Variable, "--zeta-editor-token-variable-foreground"],
-  [AlphaSemanticTokenPresentation.Operator, "--zeta-editor-token-operator-foreground"],
+const TOKEN_COLOR_VARIABLES = new Map<SemanticTokenPresentation, string>([
+  [SemanticTokenPresentation.Comment, "--zeta-editor-token-comment-foreground"],
+  [SemanticTokenPresentation.Keyword, "--zeta-editor-token-keyword-foreground"],
+  [SemanticTokenPresentation.String, "--zeta-editor-token-string-foreground"],
+  [SemanticTokenPresentation.Number, "--zeta-editor-token-number-foreground"],
+  [SemanticTokenPresentation.Regexp, "--zeta-editor-token-regexp-foreground"],
+  [SemanticTokenPresentation.Type, "--zeta-editor-token-type-foreground"],
+  [SemanticTokenPresentation.Function, "--zeta-editor-token-function-foreground"],
+  [SemanticTokenPresentation.Variable, "--zeta-editor-token-variable-foreground"],
+  [SemanticTokenPresentation.Operator, "--zeta-editor-token-operator-foreground"],
 ]);
 
 function toExternalLineEndings(text: string, lineEnding: "\n" | "\r\n"): string {

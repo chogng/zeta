@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { type AlphaTextMeasurer } from "../../../../browser/view/fontMetrics.js";
+import { type TextMeasurer } from "../../../../browser/view/fontMetrics.js";
 import { LanguageConfigurationRegistry } from "../../../../common/languages/languageConfiguration.js";
 import { EditorSelectionController } from "../../../../common/cursor/editorSelectionController.js";
 import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
@@ -21,8 +21,8 @@ for (const [name, value] of Object.entries({
   Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { AlphaEditorViewport } = await import("../../../../browser/view/editorViewport.js");
-const { AlphaBlockCommentController } = await import("../../browser/blockCommentController.js");
+const { EditorViewport } = await import("../../../../browser/view/editorViewport.js");
+const { BlockCommentController } = await import("../../browser/blockCommentController.js");
 
 test("Block comment shortcut toggles the active language pair locally", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
@@ -35,11 +35,11 @@ test("Block comment shortcut toggles the active language pair locally", () => {
   using registration = configurations.register("typescript", {
     comments: { blockComment: { open: "/*", close: "*/" } },
   });
-  using viewport = new AlphaEditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+  using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
   viewport.layout({ width: 200, height: 20 });
   const input = dom.window.document.createElement("textarea");
   container.append(input);
-  using controller = new AlphaBlockCommentController(input, viewport, selections, { languageId: "typescript", configurations });
+  using controller = new BlockCommentController(input, viewport, selections, { languageId: "typescript", configurations });
 
   const toggle = keydown(dom.window, "a", { shiftKey: true, altKey: true });
   input.dispatchEvent(toggle);
@@ -57,10 +57,10 @@ test("Block comment shortcut leaves languages without a block pair alone", () =>
   using model = new TextModel("alpha");
   using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
   using configurations = new LanguageConfigurationRegistry();
-  using viewport = new AlphaEditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
+  using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
   const input = dom.window.document.createElement("textarea");
   container.append(input);
-  using controller = new AlphaBlockCommentController(input, viewport, selections, { languageId: "plaintext", configurations });
+  using controller = new BlockCommentController(input, viewport, selections, { languageId: "plaintext", configurations });
   const toggle = keydown(dom.window, "a", { shiftKey: true, altKey: true });
   input.dispatchEvent(toggle);
   assert.equal(toggle.defaultPrevented, false);
@@ -69,7 +69,7 @@ test("Block comment shortcut leaves languages without a block pair alone", () =>
   dom.window.close();
 });
 
-class FixedTextMeasurer implements AlphaTextMeasurer {
+class FixedTextMeasurer implements TextMeasurer {
   readonly horizontalPadding = 24;
   readonly contentLeftPadding = 12;
 

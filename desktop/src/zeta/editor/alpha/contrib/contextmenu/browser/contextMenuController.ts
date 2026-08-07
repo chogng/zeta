@@ -1,14 +1,14 @@
 import { addDisposableListener } from "../../../../../base/browser/dom.js";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
 import { type TextPosition } from "../../../common/core/text.js";
-import { type AlphaEditorHitTarget } from "../../../browser/view/pointerHitTest.js";
-import { type AlphaEditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorHitTarget } from "../../../browser/view/pointerHitTest.js";
+import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 
-export interface AlphaContextMenuRequest { readonly position: TextPosition; readonly target: AlphaEditorHitTarget | undefined; readonly clientX: number; readonly clientY: number; }
+export interface ContextMenuRequest { readonly position: TextPosition; readonly target: EditorHitTarget | undefined; readonly clientX: number; readonly clientY: number; }
 
 /** Delegates context-menu composition to the host while keeping editor hit testing local. */
-export class AlphaContextMenuController extends DisposableOwner {
-  constructor(private readonly viewport: AlphaEditorViewport, private readonly showContextMenu: (request: AlphaContextMenuRequest) => void | Promise<void>, private readonly onError: (error: unknown) => void = error => console.error("Alpha context menu failed", error)) {
+export class ContextMenuController extends DisposableOwner {
+  constructor(private readonly viewport: EditorViewport, private readonly showContextMenu: (request: ContextMenuRequest) => void | Promise<void>, private readonly onError: (error: unknown) => void = error => console.error("Alpha context menu failed", error)) {
     super();
     this.own(addDisposableListener<MouseEvent>(viewport.element, "contextmenu", event => {
       event.preventDefault();

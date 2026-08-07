@@ -3,7 +3,7 @@ import test from "node:test";
 import { URI } from "../../../../base/common/uri.js";
 import { academicProfile } from "../../contrib/academic/browser/profile.js";
 import { matchGamaEditor } from "../../browser/editorInput.js";
-import { createGamaEditorPaneOptions, findGamaEditorProfile, matchGamaEditorProfiles } from "../../browser/services/gamaEditorProfile.js";
+import { createGamaEditorPaneOptions, findGamaEditorProfile, matchGamaEditorProfiles } from "../../browser/services/editorProfile.js";
 import { EditorPaneMatch } from "../../../../workbench/browser/parts/editor/editorPane.js";
 import { createDefaultDocumentSchema, DocumentSchema } from "../../common/model/documentSchema.js";
 import { createInsertCitationCommand, createInsertReferenceCommand } from "../../contrib/citation/common/commands.js";
@@ -20,7 +20,7 @@ import { deserializeDocument, deserializeDocumentFragment, DocumentSerialization
 import { allSelection, nodeSelection, textSelection } from "../../common/core/documentSelection.js";
 import { DocumentTransaction } from "../../common/model/documentTransaction.js";
 import { deserializeDocumentTransaction, serializeDocumentTransaction } from "../../common/model/documentTransactionSerialization.js";
-import { createDeleteAdjacentInlineNodeCommand, createDeleteInlineSelectionCommand, createDeleteNodeSelectionCommand, createDeleteTableColumnCommand, createDeleteTableRowCommand, createExitEmptyListItemCommand, createInsertFragmentCommand, createInsertHardBreakCommand, createInsertHorizontalRuleCommand, createInsertImageAtSelectionCommand, createInsertImageCommand, createInsertParagraphAfterCommand, createInsertTableColumnCommand, createInsertTableCommand, createInsertTableRowCommand, createJoinAdjacentBlockCommand, createJoinAdjacentListItemCommand, createJoinAdjacentTextRunCommand, createListItemIndentationCommand, createMoveBlockCommand, createPasteTextCommand, createRemoveMarkCommand, createReplaceTextCommand, createSetBlockTypeCommand, createSetLinkMarkCommand, createSplitBlockCommand, createSplitListItemCommand, createToggleBlockquoteCommand, createToggleListCommand, createToggleMarkCommand, findAdjacentTableCell, findTableCellContext } from "../../common/commands/documentCommands.js";
+import { createDeleteAdjacentInlineNodeCommand, createDeleteInlineSelectionCommand, createDeleteNodeSelectionCommand, createDeleteTableColumnCommand, createDeleteTableRowCommand, createExitEmptyListItemCommand, createInsertFragmentCommand, createInsertHardBreakCommand, createInsertHorizontalRuleCommand, createInsertImageAtSelectionCommand, createInsertImageCommand, createInsertParagraphAfterCommand, createInsertTableColumnCommand, createInsertTableCommand, createInsertTableRowCommand, createJoinAdjacentBlockCommand, createJoinAdjacentListItemCommand, createJoinAdjacentTextRunCommand, createListItemIndentationCommand, createMoveBlockCommand, createPasteTextCommand, createRemoveMarkCommand, createReplaceTextCommand, createSetBlockTypeCommand, createSetLinkMarkCommand, createSetTextStyleCommand, createSplitBlockCommand, createSplitListItemCommand, createToggleBlockquoteCommand, createToggleListCommand, createToggleMarkCommand, findAdjacentTableCell, findTableCellContext } from "../../common/commands/documentCommands.js";
 
 function createDocument(schema: DocumentSchema) {
   const paragraph = schema.createNode("paragraph", {
@@ -799,6 +799,37 @@ test("Gama link mark commands set, update, remove, and undo link attributes", ()
   assert.deepEqual(content.map(node => node.marks.map(mark => mark.type)), [[], [], ["strong"]]);
   model.undo();
   assert.equal(model.document.content[0]?.content[1]?.marks.find(mark => mark.type === "link")?.attrs.href, "https://updated.test");
+});
+
+test("Gama text-style commands merge persistent font attributes", () => {
+  const schema = createDefaultDocumentSchema();
+  const paragraph = schema.createNode("paragraph", {
+    id: "paragraph-1",
+    content: [schema.createText("Hello", { id: "text-1" })],
+  });
+  using model = new DocumentModel(schema, schema.createDocument([paragraph], "document-1"));
+  const selection = textSelection({ nodeId: "text-1", offset: 1 }, { nodeId: "text-1", offset: 4 });
+
+  const setFamily = createSetTextStyleCommand(schema, model.document, "paragraph-1", "text-1", selection, { fontFamily: "serif" });
+  assert.ok(setFamily);
+  model.dispatch(setFamily.transaction);
+  let styled = model.document.content[0]?.content[1];
+  assert.ok(styled);
+  assert.deepEqual(styled.marks, [{ type: "textStyle", attrs: { fontFamily: "serif" } }]);
+
+  const styledSelection = model.selection;
+  assert.equal(styledSelection?.kind, "text");
+  if (styledSelection?.kind !== "text") return;
+  const setSize = createSetTextStyleCommand(schema, model.document, "paragraph-1", styledSelection.anchor.nodeId, styledSelection, { fontSize: 18 });
+  assert.ok(setSize);
+  model.dispatch(setSize.transaction);
+  styled = model.document.content[0]?.content[1];
+  assert.ok(styled);
+  assert.deepEqual(styled.marks, [{ type: "textStyle", attrs: { fontFamily: "serif", fontSize: 18 } }]);
+
+  const serialized = serializeDocument(model.document, schema);
+  assert.deepEqual(deserializeDocument(serialized, schema).content[0]?.content[1]?.marks, [{ type: "textStyle", attrs: { fontFamily: "serif", fontSize: 18 } }]);
+  assert.throws(() => schema.createText("Invalid", { marks: [{ type: "textStyle", attrs: {} }] }), /Text style marks require/);
 });
 
 test("Gama block commands preserve inline runs while splitting and joining", () => {

@@ -3,11 +3,11 @@ import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
 import { createEditorEditCommand } from "../../../common/commands/editorCommand.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { TextRange } from "../../../common/core/text.js";
-import { type AlphaEditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 
 /** Replaces the current selection with the next or previous matching occurrence. */
-export class AlphaInPlaceReplaceController extends DisposableOwner {
-  constructor(private readonly input: HTMLTextAreaElement, private readonly viewport: AlphaEditorViewport, private readonly selections: EditorSelectionController) {
+export class InPlaceReplaceController extends DisposableOwner {
+  constructor(private readonly input: HTMLTextAreaElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController) {
     super();
     if (viewport.textModel !== selections.textModel) throw new TypeError("Alpha in-place replace dependencies must share a text model");
     this.own(addDisposableListener(input, "keydown", event => {

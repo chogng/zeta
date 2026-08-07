@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { type AlphaTextMeasurer } from "../../../../browser/view/fontMetrics.js";
+import { type TextMeasurer } from "../../../../browser/view/fontMetrics.js";
 import { EditorSelectionController } from "../../../../common/cursor/editorSelectionController.js";
 import { LanguageCompletionDetailsStatus, LanguageCompletionSessionController, type LanguageCompletionSessionOptions } from "../../common/suggestModel.js";
 import { LanguageResultAcceptance } from "../../../../common/languages/languageResultStore.js";
@@ -27,8 +27,8 @@ for (const [name, value] of Object.entries({
   });
 }
 
-const { AlphaEditorViewport } = await import("../../../../browser/view/editorViewport.js");
-const { AlphaTextInputController } = await import("../../../../browser/input/textInputController.js");
+const { EditorViewport } = await import("../../../../browser/view/editorViewport.js");
+const { TextInputController } = await import("../../../../browser/input/textInputController.js");
 
 test("Completion widget projects named options, focus, ARIA, and content coordinates", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
@@ -37,7 +37,7 @@ test("Completion widget projects named options, focus, ARIA, and content coordin
   using selections = controllerAt(model, TextPosition.at(0, 3));
   using store = createLanguageCompletionStore(model);
   using session = new LanguageCompletionSessionController(store, selections);
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
@@ -45,7 +45,7 @@ test("Completion widget projects named options, focus, ARIA, and content coordin
     selectionController: selections,
   });
   viewport.layout({ width: 300, height: 40 });
-  using input = new AlphaTextInputController(viewport, selections, {
+  using input = new TextInputController(viewport, selections, {
     completion: { session },
   });
   input.focus();
@@ -221,18 +221,18 @@ test("Completion widget validates ownership and restores input ARIA on disposal"
   using otherStore = createLanguageCompletionStore(otherModel);
   using session = new LanguageCompletionSessionController(store, selections);
   using otherSession = new LanguageCompletionSessionController(otherStore, otherSelections);
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
     textMeasurer: new FixedTextMeasurer(),
     selectionController: selections,
   });
-  assert.throws(() => new AlphaTextInputController(viewport, selections, {
+  assert.throws(() => new TextInputController(viewport, selections, {
     completion: { session: otherSession },
   }), /must share one text model/);
 
-  const input = new AlphaTextInputController(viewport, selections, {
+  const input = new TextInputController(viewport, selections, {
     completion: { session },
   });
   assert.equal(input.element.getAttribute("aria-autocomplete"), "none");
@@ -303,8 +303,8 @@ interface CompletionFixture extends Disposable {
   readonly selections: EditorSelectionController;
   readonly store: ReturnType<typeof createLanguageCompletionStore>;
   readonly session: LanguageCompletionSessionController;
-  readonly viewport: InstanceType<typeof AlphaEditorViewport>;
-  readonly input: InstanceType<typeof AlphaTextInputController>;
+  readonly viewport: InstanceType<typeof EditorViewport>;
+  readonly input: InstanceType<typeof TextInputController>;
 }
 
 function createFixture(text: string, sessionOptions: LanguageCompletionSessionOptions = {}): CompletionFixture {
@@ -313,7 +313,7 @@ function createFixture(text: string, sessionOptions: LanguageCompletionSessionOp
   const selections = controllerAt(model, TextPosition.at(0, text.length));
   const store = createLanguageCompletionStore(model);
   const session = new LanguageCompletionSessionController(store, selections, sessionOptions);
-  const viewport = new AlphaEditorViewport({
+  const viewport = new EditorViewport({
     container: requiredElement<HTMLElement>(dom.window.document, "main"),
     model,
     lineHeight: 20,
@@ -321,7 +321,7 @@ function createFixture(text: string, sessionOptions: LanguageCompletionSessionOp
     selectionController: selections,
   });
   viewport.layout({ width: 300, height: 40 });
-  const input = new AlphaTextInputController(viewport, selections, {
+  const input = new TextInputController(viewport, selections, {
     completion: { session },
   });
   input.focus();
@@ -416,7 +416,7 @@ function requiredElement<T extends Element = HTMLElement>(root: ParentNode, sele
   return element;
 }
 
-class FixedTextMeasurer implements AlphaTextMeasurer {
+class FixedTextMeasurer implements TextMeasurer {
   readonly horizontalPadding = 24;
   readonly contentLeftPadding = 12;
 

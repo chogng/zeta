@@ -6,11 +6,11 @@ import { createEditorEditCommand } from "../../../common/commands/editorCommand.
 import { TextRange } from "../../../common/core/text.js";
 import { type LanguageDiagnostic } from "../../../common/languages/languageResults.js";
 import { TextDecorationCollection } from "../../../common/model/decorationCollection.js";
-import { type AlphaEditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 import { type CodeActionService, type LanguageCodeAction } from "../common/codeAction.js";
 
 /** Owns the editor-local code-action picker and routes selected edits through cursor commands. */
-export class AlphaCodeActionController extends DisposableOwner {
+export class CodeActionController extends DisposableOwner {
   private readonly element: HTMLDivElement;
   private readonly actionListeners = this.own(new ResettableDisposableGroup());
   private request: AbortController | undefined;
@@ -18,7 +18,7 @@ export class AlphaCodeActionController extends DisposableOwner {
   private actionRange: TextRange | undefined;
   private actionDiagnostics: readonly LanguageDiagnostic[] = [];
 
-  constructor(private readonly input: HTMLTextAreaElement, private readonly viewport: AlphaEditorViewport, private readonly selections: EditorSelectionController, private readonly service: CodeActionService, private readonly diagnostics: TextDecorationCollection<LanguageDiagnostic>, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Alpha code action failed", error)) {
+  constructor(private readonly input: HTMLTextAreaElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: CodeActionService, private readonly diagnostics: TextDecorationCollection<LanguageDiagnostic>, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Alpha code action failed", error)) {
     super();
     if (viewport.textModel !== selections.textModel || diagnostics.textModel !== selections.textModel) throw new TypeError("Alpha code action dependencies must share one text model");
     const ownerDocument = viewport.element.ownerDocument;

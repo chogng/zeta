@@ -6,7 +6,7 @@ import { type EditorCompositionSession } from "../../common/cursor/editorComposi
 import { type EditorSelectionController } from "../../common/cursor/editorSelectionController.js";
 import { type TextSelectionOffsets } from "../../common/commands/editorEditCommand.js";
 import { normalizeTextLineEndings, type TextPosition } from "../../common/core/text.js";
-import { type AlphaEditorViewport } from "../view/editorViewport.js";
+import { type EditorViewport } from "../view/editorViewport.js";
 
 interface ActiveComposition {
   readonly session: EditorCompositionSession;
@@ -19,7 +19,7 @@ interface ActiveComposition {
 /**
  * Maps textarea composition events to one protected Alpha composition session.
  */
-export class AlphaCompositionController extends DisposableOwner {
+export class CompositionController extends DisposableOwner {
   private readonly _onDidChange = this.own(new Emitter<boolean>());
   private readonly initialReadOnly: boolean;
   private activeComposition: ActiveComposition | undefined;
@@ -28,7 +28,7 @@ export class AlphaCompositionController extends DisposableOwner {
 
   constructor(
     private readonly element: HTMLTextAreaElement,
-    private readonly viewport: AlphaEditorViewport,
+    private readonly viewport: EditorViewport,
     private readonly selectionController: EditorSelectionController,
   ) {
     super();

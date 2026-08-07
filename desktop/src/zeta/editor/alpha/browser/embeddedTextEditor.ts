@@ -6,37 +6,37 @@ import { type IEmbeddedTextEditor, type EmbeddedTextEditorOptions, type IEmbedde
 import { type ILanguageFeaturesService } from "../common/services/languageService.js";
 import { type TextResourceChangeEvent, type TextResourceContent, type TextResourceResolveRequest, type TextResourceSaveRequest, type ITextResourceStore } from "../common/services/textResourceStore.js";
 import { BrowserTextModelService } from "./services/browserTextModelService.js";
-import { AlphaEditorPane } from "./alphaEditorPane.js";
-import { AlphaEditorSession } from "./alphaEditorSession.js";
+import { EditorPane } from "./editorPane.js";
+import { EditorSession } from "./editorSession.js";
 
 /** Options shared by Alpha CodeEditorWidget projections mounted in TextEditorWidget textBlock nodes. */
-export interface AlphaEmbeddedTextEditorFactoryOptions {
+export interface EmbeddedTextEditorFactoryOptions {
   readonly textMateService?: ITextMateService;
   readonly languageFeaturesService?: ILanguageFeaturesService;
 }
 
 /** Creates Alpha line editors for TextEditorWidget textBlock projections. */
-export class AlphaEmbeddedTextEditorFactory implements IEmbeddedTextEditorFactory {
-  constructor(private readonly options: AlphaEmbeddedTextEditorFactoryOptions = {}) {}
+export class EmbeddedTextEditorFactory implements IEmbeddedTextEditorFactory {
+  constructor(private readonly options: EmbeddedTextEditorFactoryOptions = {}) {}
 
   create(options: EmbeddedTextEditorOptions): IEmbeddedTextEditor {
-    return new AlphaEmbeddedTextEditor(options, this.options);
+    return new EmbeddedTextEditor(options, this.options);
   }
 }
 
-class AlphaEmbeddedTextEditor extends DisposableOwner implements IEmbeddedTextEditor {
+class EmbeddedTextEditor extends DisposableOwner implements IEmbeddedTextEditor {
   private readonly changeEmitter = this.own(new Emitter<string>());
   readonly onDidChange = this.changeEmitter.event;
   private readonly resourceStore: EmbeddedTextResourceStore;
   private readonly modelService: BrowserTextModelService;
-  private readonly pane: AlphaEditorPane;
+  private readonly pane: EditorPane;
   private readonly input: EmbeddedTextEditorInput;
-  private session: AlphaEditorSession | undefined;
+  private session: EditorSession | undefined;
   private parent: HTMLElement | undefined;
   private pendingValue: string;
   private started = false;
 
-  constructor(options: EmbeddedTextEditorOptions, factoryOptions: AlphaEmbeddedTextEditorFactoryOptions) {
+  constructor(options: EmbeddedTextEditorOptions, factoryOptions: EmbeddedTextEditorFactoryOptions) {
     super();
     this.pendingValue = options.initialText;
     this.resourceStore = this.own(new EmbeddedTextResourceStore(options.resource, options.initialText));
@@ -48,12 +48,12 @@ class AlphaEmbeddedTextEditor extends DisposableOwner implements IEmbeddedTextEd
       readOnly: options.readOnly,
       initialText: options.initialText,
     };
-    this.pane = this.own(new AlphaEditorPane(this.resourceStore, {
+    this.pane = this.own(new EditorPane(this.resourceStore, {
       modelService: this.modelService,
       textMateService: factoryOptions.textMateService,
       languageFeaturesService: factoryOptions.languageFeaturesService,
       createSession: sessionOptions => {
-        const session = new AlphaEditorSession({ ...sessionOptions, presentation: "embedded" });
+        const session = new EditorSession({ ...sessionOptions, presentation: "embedded" });
         this.session = session;
         this.own(session.onDidChange(() => {
           this.pendingValue = session.getValue();

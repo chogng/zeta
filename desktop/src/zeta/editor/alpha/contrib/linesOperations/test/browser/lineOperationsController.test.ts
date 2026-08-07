@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { OperatingSystem } from "../../../../../../base/common/platform.js";
-import { type AlphaTextMeasurer } from "../../../../browser/view/fontMetrics.js";
+import { type TextMeasurer } from "../../../../browser/view/fontMetrics.js";
 import { EditorSelectionController } from "../../../../common/cursor/editorSelectionController.js";
 import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
 import { TextPosition } from "../../../../common/core/text.js";
@@ -21,8 +21,8 @@ for (const [name, value] of Object.entries({
   Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { AlphaEditorViewport } = await import("../../../../browser/view/editorViewport.js");
-const { AlphaLineOperationsController, resolveAlphaDuplicateLineDirection } = await import("../../browser/lineOperationsController.js");
+const { EditorViewport } = await import("../../../../browser/view/editorViewport.js");
+const { LineOperationsController, resolveAlphaDuplicateLineDirection } = await import("../../browser/lineOperationsController.js");
 
 test("Line operation shortcuts duplicate and delete through Alpha commands", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
@@ -31,7 +31,7 @@ test("Line operation shortcuts duplicate and delete through Alpha commands", () 
   using selections = new EditorSelectionController(model, TextSelectionSet.single(
     TextSelection.collapsedAt(TextPosition.at(1, 1)),
   ));
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
@@ -41,7 +41,7 @@ test("Line operation shortcuts duplicate and delete through Alpha commands", () 
   viewport.layout({ width: 200, height: 60 });
   const input = dom.window.document.createElement("textarea");
   container.append(input);
-  using controller = new AlphaLineOperationsController(input, viewport, selections);
+  using controller = new LineOperationsController(input, viewport, selections);
 
   const duplicate = keydown(dom.window, "ArrowDown", { shiftKey: true, altKey: true });
   input.dispatchEvent(duplicate);
@@ -60,11 +60,11 @@ test("Line operation shortcuts insert blank lines above and below selected group
   const container = dom.window.document.querySelector<HTMLElement>("main")!;
   using model = new TextModel("zero\none");
   using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 1))));
-  using viewport = new AlphaEditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+  using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
   viewport.layout({ width: 200, height: 60 });
   const input = dom.window.document.createElement("textarea");
   container.append(input);
-  using controller = new AlphaLineOperationsController(input, viewport, selections);
+  using controller = new LineOperationsController(input, viewport, selections);
 
   const after = keydown(dom.window, "Enter", { ctrlKey: true });
   input.dispatchEvent(after);
@@ -83,7 +83,7 @@ test("Line operation shortcuts move selected lines without duplicating them", ()
   using selections = new EditorSelectionController(model, TextSelectionSet.single(
     TextSelection.collapsedAt(TextPosition.at(1, 1)),
   ));
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
@@ -93,7 +93,7 @@ test("Line operation shortcuts move selected lines without duplicating them", ()
   viewport.layout({ width: 200, height: 60 });
   const input = dom.window.document.createElement("textarea");
   container.append(input);
-  using controller = new AlphaLineOperationsController(input, viewport, selections);
+  using controller = new LineOperationsController(input, viewport, selections);
 
   const moveDown = keydown(dom.window, "ArrowDown", { altKey: true });
   input.dispatchEvent(moveDown);
@@ -114,15 +114,15 @@ test("Line operation controller rejects cross-model wiring and leaves unrelated 
   using other = new TextModel("beta");
   using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
   using otherSelections = new EditorSelectionController(other, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
-  using viewport = new AlphaEditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
+  using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
   const input = dom.window.document.createElement("textarea");
   container.append(input);
-  using controller = new AlphaLineOperationsController(input, viewport, selections);
+  using controller = new LineOperationsController(input, viewport, selections);
   const unrelated = keydown(dom.window, "ArrowDown", { altKey: true, ctrlKey: true });
   input.dispatchEvent(unrelated);
   assert.equal(unrelated.defaultPrevented, false);
   assert.equal(model.getText(), "alpha");
-  assert.throws(() => new AlphaLineOperationsController(input, viewport, otherSelections), /must share one text model/);
+  assert.throws(() => new LineOperationsController(input, viewport, otherSelections), /must share one text model/);
 
   dom.window.close();
 });
@@ -142,7 +142,7 @@ test("Line duplication reserves Linux Shift+Alt arrows for multi-cursor commands
   ), "up");
 });
 
-class FixedTextMeasurer implements AlphaTextMeasurer {
+class FixedTextMeasurer implements TextMeasurer {
   readonly horizontalPadding = 24;
   readonly contentLeftPadding = 12;
 

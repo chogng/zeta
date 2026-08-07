@@ -19,7 +19,7 @@ const CHAT_INPUT_MIN_HEIGHT = 62;
 const CHAT_INPUT_MAX_HEIGHT = 250;
 
 /** Alpha-backed embedded editor used by the Chat composer. */
-export class AlphaChatInputEditor extends DisposableOwner implements IChatInputEditor {
+export class ChatInputEditor extends DisposableOwner implements IChatInputEditor {
   readonly element: HTMLDivElement;
   private readonly model = this.own(new TextModel());
   private readonly selections = this.own(new EditorSelectionController(this.model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0)))));

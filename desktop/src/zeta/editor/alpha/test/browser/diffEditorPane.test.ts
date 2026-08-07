@@ -19,13 +19,13 @@ for (const [name, value] of Object.entries({
   Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { AlphaDiffEditorPane } = await import("../../browser/alphaDiffEditorPane.js");
+const { DiffEditorPane } = await import("../../browser/diffEditorPane.js");
 const { BrowserTextModelService } = await import("../../browser/services/browserTextModelService.js");
 const { BrowserTextResourceStore } = await import("../../browser/services/browserTextResourceStore.js");
 const { createAlphaDiffEditorInput } = await import("../../browser/diffEditorInput.js");
 
 test("Alpha diff pane rejects a missing Rust diff computation service", () => {
-  assert.throws(() => new AlphaDiffEditorPane(new BrowserTextResourceStore(new BootstrapTextFiles()), undefined as never), /requires the Rust diff computation service/);
+  assert.throws(() => new DiffEditorPane(new BrowserTextResourceStore(new BootstrapTextFiles()), undefined as never), /requires the Rust diff computation service/);
 });
 
 test("Alpha diff pane acquires both models, lays out the review view, and releases both references", async () => {
@@ -34,7 +34,7 @@ test("Alpha diff pane acquires both models, lays out the review view, and releas
   const textFiles = new BootstrapTextFiles();
   const resourceStore = new BrowserTextResourceStore(textFiles);
   using models = new BrowserTextModelService(resourceStore);
-  const pane = new AlphaDiffEditorPane(resourceStore, {
+  const pane = new DiffEditorPane(resourceStore, {
     modelService: models,
     createComputationService: () => new PaneTestDiffComputationService(),
   });

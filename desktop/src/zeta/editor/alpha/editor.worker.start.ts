@@ -3,7 +3,7 @@ import { createDedicatedWorkerLanguagePort } from "./browser/language/dedicatedW
 import type { LanguageWorkerWirePort } from "./common/languages/languageWorkerWire.js";
 
 /** Context supplied to one Alpha dedicated-worker runtime. */
-export interface AlphaEditorWorkerContext {
+export interface EditorWorkerContext {
   readonly port: LanguageWorkerWirePort;
   readonly resources: DisposableStore;
 }
@@ -11,7 +11,7 @@ export interface AlphaEditorWorkerContext {
 let activeResources: DisposableStore | undefined;
 
 /** Starts one Alpha worker runtime over the editor's canonical language-wire port. */
-export function start(bootstrap: (context: AlphaEditorWorkerContext) => void): void {
+export function start(bootstrap: (context: EditorWorkerContext) => void): void {
   if (typeof bootstrap !== "function") throw new TypeError("Alpha editor worker bootstrap must be a function");
   if (activeResources) throw new Error("Alpha editor worker has already started");
   const resources = new DisposableStore();

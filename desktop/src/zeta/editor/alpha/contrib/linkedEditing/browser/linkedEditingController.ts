@@ -5,18 +5,18 @@ import { createEditorEditCommand } from "../../../common/commands/editorCommand.
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { TextRange, type TextModelChange } from "../../../common/core/text.js";
 import { TrackedRangeStickiness, type TrackedRange } from "../../../common/model/trackedRange.js";
-import { type AlphaEditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 import { type LinkedEditingService } from "../common/linkedEditing.js";
 
 /** Synchronizes provider-declared linked ranges through ordinary model transactions. */
-export class AlphaLinkedEditingController extends DisposableOwner {
+export class LinkedEditingController extends DisposableOwner {
   private readonly ranges = this.own(new ResettableDisposableGroup());
   private trackedRanges: readonly { readonly range: TrackedRange; readonly lastStartOffset: number; readonly lastEndOffset: number }[] = [];
   private active = false;
   private applying = false;
   private request: AbortController | undefined;
 
-  constructor(private readonly input: HTMLTextAreaElement, private readonly viewport: AlphaEditorViewport, private readonly selections: EditorSelectionController, private readonly service: LinkedEditingService, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Alpha linked editing failed", error)) {
+  constructor(private readonly input: HTMLTextAreaElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: LinkedEditingService, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Alpha linked editing failed", error)) {
     super();
     if (viewport.textModel !== selections.textModel || service.textModel !== selections.textModel) throw new TypeError("Alpha linked editing dependencies must share a text model");
     this.own(addDisposableListener(input, "keydown", event => { if (event.defaultPrevented || event.isComposing || !event.shiftKey || (!event.ctrlKey && !event.metaKey) || event.altKey || event.key.toLowerCase() !== "l") return; stopEvent(event); void this.activate(); }, true));

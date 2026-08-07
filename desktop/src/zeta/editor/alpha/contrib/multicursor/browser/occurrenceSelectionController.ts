@@ -2,19 +2,19 @@ import { addDisposableListener, stopEvent } from "../../../../../base/browser/do
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
 import { addOccurrenceSelection, EditorOccurrenceDirection, selectAllOccurrences } from "../common/occurrenceSelection.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
-import { type AlphaEditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 
-export interface AlphaOccurrenceSelectionControllerOptions {
+export interface OccurrenceSelectionControllerOptions {
   readonly wordPattern?: () => RegExp | undefined;
 }
 
 /** Routes VS Code-compatible occurrence-selection shortcuts through Alpha's common model. */
-export class AlphaOccurrenceSelectionController extends DisposableOwner {
+export class OccurrenceSelectionController extends DisposableOwner {
   constructor(
     input: HTMLTextAreaElement,
-    private readonly viewport: AlphaEditorViewport,
+    private readonly viewport: EditorViewport,
     private readonly selections: EditorSelectionController,
-    options: AlphaOccurrenceSelectionControllerOptions = {},
+    options: OccurrenceSelectionControllerOptions = {},
   ) {
     super();
     try {

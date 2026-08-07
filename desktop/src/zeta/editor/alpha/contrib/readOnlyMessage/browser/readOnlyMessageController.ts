@@ -1,23 +1,23 @@
 import "./media/readOnlyMessage.css";
 import { addDisposableListener, stopEvent } from "../../../../../base/browser/dom.js";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
-import { type AlphaEditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 
-export interface AlphaReadOnlyMessageControllerOptions {
+export interface ReadOnlyMessageControllerOptions {
   readonly message?: string;
   readonly durationMs?: number;
 }
 
 /** Explains blocked mutations without making read-only state part of model policy. */
-export class AlphaReadOnlyMessageController extends DisposableOwner {
+export class ReadOnlyMessageController extends DisposableOwner {
   readonly element: HTMLDivElement;
   private readonly durationMs: number;
   private hideTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(
     input: HTMLTextAreaElement,
-    private readonly viewport: AlphaEditorViewport,
-    options: AlphaReadOnlyMessageControllerOptions = {},
+    private readonly viewport: EditorViewport,
+    options: ReadOnlyMessageControllerOptions = {},
   ) {
     super();
     const message = options.message ?? "This editor is read-only";

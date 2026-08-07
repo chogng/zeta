@@ -1,16 +1,18 @@
 import { URI } from "../../src/zeta/base/common/uri.js";
-import { AlphaEmbeddedTextEditorFactory } from "../../src/zeta/editor/alpha/browser/alphaEmbeddedTextEditor.js";
+import { EmbeddedTextEditorFactory } from "../../src/zeta/editor/alpha/browser/embeddedTextEditor.js";
 import { createDefaultDocumentSchema } from "../../src/zeta/editor/gama/editor.main.js";
 import { createTextNode } from "../../src/zeta/editor/gama/editor.main.js";
 import { DocumentModel } from "../../src/zeta/editor/gama/editor.main.js";
-import { GamaEditorPane } from "../../src/zeta/editor/gama/browser/gamaEditorPane.js";
+import { EditorPane } from "../../src/zeta/editor/gama/browser/editorPane.js";
 import { serializeDocument } from "../../src/zeta/editor/gama/common/model/documentSerialization.js";
 import { MemoryTextFiles } from "./memoryTextFiles.js";
 
-interface GamaIntegrationHarness {
+interface IntegrationHarness {
   readonly apiDocumentType: string;
   getTextBlockText(): string | undefined;
   getStructuredBlockTexts(): readonly string[];
+  getStructuredFirstTextMarks(): readonly { readonly type: string; readonly attrs: Readonly<Record<string, string | number | boolean | null>> }[];
+  getStructuredSelection(): unknown;
   saveTextBlock(): Promise<void>;
   getSavedTextBlock(): string;
   dispose(): void;
@@ -18,7 +20,7 @@ interface GamaIntegrationHarness {
 
 declare global {
   interface Window {
-    zetaGamaIntegration: GamaIntegrationHarness;
+    zetaGamaIntegration: IntegrationHarness;
   }
 }
 
@@ -34,8 +36,8 @@ const textBlockDocument = schema.createDocument([schema.createNode("textBlock", 
 })], "gama-text-document");
 const textBlockFiles = new MemoryTextFiles(textBlockResource, serializeDocument(textBlockDocument, schema));
 const structuredFiles = new MemoryTextFiles(structuredResource, "Title\nBody");
-const textBlockPane = new GamaEditorPane(textBlockFiles, { embeddedTextEditorFactory: new AlphaEmbeddedTextEditorFactory() });
-const structuredPane = new GamaEditorPane(structuredFiles);
+const textBlockPane = new EditorPane(textBlockFiles, { embeddedTextEditorFactory: new EmbeddedTextEditorFactory() });
+const structuredPane = new EditorPane(structuredFiles);
 
 textBlockPane.create(requiredElement("#gama-text-block"));
 structuredPane.create(requiredElement("#gama-structured"));
@@ -48,6 +50,8 @@ window.zetaGamaIntegration = {
   apiDocumentType: apiModel.document.type,
   getTextBlockText: () => textBlockPane.getDocument().content[0]?.content[0]?.text,
   getStructuredBlockTexts: () => structuredPane.getDocument().content.map(block => block.content.find(child => child.text !== undefined)?.text ?? ""),
+  getStructuredFirstTextMarks: () => structuredPane.getDocument().content[0]?.content[0]?.marks ?? [],
+  getStructuredSelection: () => structuredPane.getDocumentSelection(),
   saveTextBlock: () => textBlockPane.save(),
   getSavedTextBlock: () => textBlockFiles.read(textBlockResource),
   dispose: () => {

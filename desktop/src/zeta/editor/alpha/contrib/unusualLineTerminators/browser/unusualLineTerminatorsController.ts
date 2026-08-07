@@ -6,7 +6,7 @@ import { type TextModel } from "../../../common/model/textModel.js";
 import { findUnusualLineTerminators } from "../common/unusualLineTerminators.js";
 
 /** Highlights unusual Unicode line separators without changing the canonical LF model. */
-export class AlphaUnusualLineTerminatorsController extends DisposableOwner {
+export class UnusualLineTerminatorsController extends DisposableOwner {
   private lastVersion = -1;
 
   constructor(private readonly model: TextModel, readonly decorations: TextDecorationCollection<void>) {

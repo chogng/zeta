@@ -1,4 +1,4 @@
-import "./media/alphaDiffEditorPane.css";
+import "./media/diffEditorPane.css";
 import { type IDimension } from "../../../base/browser/geometry.js";
 import { throwIfCancelled } from "../../../base/common/cancellation.js";
 import { DisposableOwner, DisposableSlot } from "../../../base/common/lifecycle.js";
@@ -12,22 +12,22 @@ import { DiffModel } from "../common/diff/diffModel.js";
 import { type IDiffComputationService } from "../common/diff/diffComputationService.js";
 import { DiffEditorWidget } from "./widget/diffEditor/diffEditorWidget.js";
 import { type TextModelReference, type ITextModelService } from "../common/services/textModelService.js";
-import { AlphaDiffEditorBreadcrumbsController } from "../contrib/diffEditorBreadcrumbs/browser/diffEditorBreadcrumbs.js";
+import { DiffEditorBreadcrumbsController } from "../contrib/diffEditorBreadcrumbs/browser/diffEditorBreadcrumbs.js";
 
-export interface AlphaDiffEditorPaneOptions {
+export interface DiffEditorPaneOptions {
   readonly modelService: ITextModelService;
   readonly createComputationService: () => IDiffComputationService;
 }
 
 /** Workbench pane that acquires two Alpha text references for a read-only comparison. */
-export class AlphaDiffEditorPane extends DisposableOwner implements IEditorPane {
+export class DiffEditorPane extends DisposableOwner implements IEditorPane {
   readonly id = ALPHA_DIFF_EDITOR_ID;
-  private readonly session = this.own(new DisposableSlot<AlphaDiffEditorPaneSession>());
+  private readonly session = this.own(new DisposableSlot<DiffEditorPaneSession>());
   private readonly modelService: ITextModelService;
   private container: HTMLDivElement | undefined;
   private dimension: IDimension = { width: 0, height: 0 };
 
-  constructor(private readonly resourceStore: ITextResourceStore, private readonly options: AlphaDiffEditorPaneOptions) {
+  constructor(private readonly resourceStore: ITextResourceStore, private readonly options: DiffEditorPaneOptions) {
     super();
     if (!resourceStore || typeof resourceStore.resolve !== "function") {
       this.dispose();
@@ -45,7 +45,7 @@ export class AlphaDiffEditorPane extends DisposableOwner implements IEditorPane 
   }
 
   create(parent: HTMLElement): void {
-    if (this.container) throw new ReferenceError("AlphaDiffEditorPane has already been created");
+    if (this.container) throw new ReferenceError("DiffEditorPane has already been created");
     const container = parent.ownerDocument.createElement("div");
     container.className = "zeta-alpha-diff-editor-pane";
     parent.append(container);
@@ -64,12 +64,12 @@ export class AlphaDiffEditorPane extends DisposableOwner implements IEditorPane 
     throwIfCancelled(signal, "Alpha diff editor input loading was cancelled");
     const original = await this.modelService.acquire(input.original, signal);
     let modified: TextModelReference | undefined;
-    let next: AlphaDiffEditorPaneSession | undefined;
+    let next: DiffEditorPaneSession | undefined;
     try {
       throwIfCancelled(signal, "Alpha diff editor input loading was cancelled");
       modified = await this.modelService.acquire(input.modified, signal);
       throwIfCancelled(signal, "Alpha diff editor input loading was cancelled");
-      next = new AlphaDiffEditorPaneSession(container, original, modified, input.original.label, input.modified.label, this.options.createComputationService);
+      next = new DiffEditorPaneSession(container, original, modified, input.original.label, input.modified.label, this.options.createComputationService);
       throwIfCancelled(signal, "Alpha diff editor input loading was cancelled");
     } catch (error) {
       next?.dispose();
@@ -108,7 +108,7 @@ export class AlphaDiffEditorPane extends DisposableOwner implements IEditorPane 
   }
 }
 
-class AlphaDiffEditorPaneSession extends DisposableOwner {
+class DiffEditorPaneSession extends DisposableOwner {
   readonly editor: DiffEditorWidget;
 
   constructor(container: HTMLElement, original: TextModelReference, modified: TextModelReference, originalLabel: string | undefined, modifiedLabel: string | undefined, createComputationService: () => IDiffComputationService) {
@@ -131,7 +131,7 @@ class AlphaDiffEditorPaneSession extends DisposableOwner {
       originalAriaLabel: originalLabel,
       modifiedAriaLabel: modifiedLabel,
     }));
-    this.own(new AlphaDiffEditorBreadcrumbsController(this.editor, model));
+    this.own(new DiffEditorBreadcrumbsController(this.editor, model));
   }
 
   layout(dimension: IDimension): void {

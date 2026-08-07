@@ -6,9 +6,9 @@ import { EditorFoldingModel } from "./foldingModel.js";
 import { type EditorFoldingRegion } from "./foldingRanges.js";
 import { TextPosition } from "../../../common/core/text.js";
 import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
-import { type AlphaEditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 
-export enum AlphaFoldingCommand {
+export enum FoldingCommand {
   Collapse = "collapse",
   Expand = "expand",
   CollapseRecursively = "collapseRecursively",
@@ -20,21 +20,21 @@ export enum AlphaFoldingCommand {
   ExpandAll = "expandAll",
 }
 
-export interface AlphaFoldingControllerOptions {
+export interface FoldingControllerOptions {
   readonly operatingSystem?: OperatingSystem;
 }
 
 /** Routes local VS Code fold chords and gutter controls through Alpha's folding model. */
-export class AlphaFoldingController extends DisposableOwner {
+export class FoldingController extends DisposableOwner {
   private readonly targetOperatingSystem: OperatingSystem;
   private awaitingChord = false;
 
   constructor(
     input: HTMLTextAreaElement,
-    private readonly viewport: AlphaEditorViewport,
+    private readonly viewport: EditorViewport,
     private readonly selections: EditorSelectionController,
     private readonly folding: EditorFoldingModel,
-    options: AlphaFoldingControllerOptions = {},
+    options: FoldingControllerOptions = {},
   ) {
     super();
     try {
@@ -63,21 +63,21 @@ export class AlphaFoldingController extends DisposableOwner {
       stopEvent(event);
       if (typeof chord === "object") {
         this.setCollapsedToLevel(chord.level);
-      } else if (chord === AlphaFoldingCommand.CollapseAll || chord === AlphaFoldingCommand.ExpandAll) {
-        this.setAllCollapsed(chord === AlphaFoldingCommand.CollapseAll);
-      } else if (chord === AlphaFoldingCommand.CreateManualRange) {
+      } else if (chord === FoldingCommand.CollapseAll || chord === FoldingCommand.ExpandAll) {
+        this.setAllCollapsed(chord === FoldingCommand.CollapseAll);
+      } else if (chord === FoldingCommand.CreateManualRange) {
         this.createManualRange();
-      } else if (chord === AlphaFoldingCommand.RemoveManualRange) {
+      } else if (chord === FoldingCommand.RemoveManualRange) {
         this.removeManualRange();
       } else {
-        this.setContainingFoldRecursively(chord === AlphaFoldingCommand.CollapseRecursively);
+        this.setContainingFoldRecursively(chord === FoldingCommand.CollapseRecursively);
       }
       return;
     }
     const command = resolveAlphaFoldingCommand(event, this.targetOperatingSystem);
     if (!command) return;
     stopEvent(event);
-    this.setContainingFoldCollapsed(command === AlphaFoldingCommand.Collapse);
+    this.setContainingFoldCollapsed(command === FoldingCommand.Collapse);
   }
 
   private handleGutterPointerDown(event: PointerEvent): void {
@@ -153,30 +153,30 @@ export class AlphaFoldingController extends DisposableOwner {
   }
 }
 
-function resolveAlphaFoldingChord(event: Pick<KeyboardEvent, "key" | "ctrlKey" | "shiftKey" | "altKey" | "metaKey">, targetOperatingSystem: OperatingSystem, awaitingChord: boolean): AlphaFoldingChord | undefined {
+function resolveAlphaFoldingChord(event: Pick<KeyboardEvent, "key" | "ctrlKey" | "shiftKey" | "altKey" | "metaKey">, targetOperatingSystem: OperatingSystem, awaitingChord: boolean): FoldingChord | undefined {
   const modifier = targetOperatingSystem === OperatingSystem.Macintosh ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
   if (!modifier || event.shiftKey || event.altKey) return undefined;
   if (!awaitingChord) return event.key.toLowerCase() === "k" ? "prefix" : undefined;
-  if (event.key === "0") return AlphaFoldingCommand.CollapseAll;
-  if (event.key.toLowerCase() === "j") return AlphaFoldingCommand.ExpandAll;
-  if (event.key === "[") return AlphaFoldingCommand.CollapseRecursively;
-  if (event.key === "]") return AlphaFoldingCommand.ExpandRecursively;
-  if (event.key === ",") return AlphaFoldingCommand.CreateManualRange;
-  if (event.key === ".") return AlphaFoldingCommand.RemoveManualRange;
+  if (event.key === "0") return FoldingCommand.CollapseAll;
+  if (event.key.toLowerCase() === "j") return FoldingCommand.ExpandAll;
+  if (event.key === "[") return FoldingCommand.CollapseRecursively;
+  if (event.key === "]") return FoldingCommand.ExpandRecursively;
+  if (event.key === ",") return FoldingCommand.CreateManualRange;
+  if (event.key === ".") return FoldingCommand.RemoveManualRange;
   const level = Number(event.key);
   return Number.isSafeInteger(level) && level >= 1 && level <= 9
-    ? Object.freeze({ command: AlphaFoldingCommand.CollapseToLevel, level })
+    ? Object.freeze({ command: FoldingCommand.CollapseToLevel, level })
     : undefined;
 }
 
-type AlphaFoldingChord = AlphaFoldingCommand | "prefix" | { readonly command: AlphaFoldingCommand.CollapseToLevel; readonly level: number };
+type FoldingChord = FoldingCommand | "prefix" | { readonly command: FoldingCommand.CollapseToLevel; readonly level: number };
 
 /** Resolves the platform-specific fold and unfold chords used by VS Code. */
-export function resolveAlphaFoldingCommand(event: Pick<KeyboardEvent, "key" | "ctrlKey" | "shiftKey" | "altKey" | "metaKey">, targetOperatingSystem: OperatingSystem): AlphaFoldingCommand | undefined {
+export function resolveAlphaFoldingCommand(event: Pick<KeyboardEvent, "key" | "ctrlKey" | "shiftKey" | "altKey" | "metaKey">, targetOperatingSystem: OperatingSystem): FoldingCommand | undefined {
   const command = event.key === "["
-    ? AlphaFoldingCommand.Collapse
+    ? FoldingCommand.Collapse
     : event.key === "]"
-      ? AlphaFoldingCommand.Expand
+      ? FoldingCommand.Expand
       : undefined;
   if (!command) return undefined;
   if (targetOperatingSystem === OperatingSystem.Macintosh) {

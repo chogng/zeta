@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { AlphaPointerMultiCursorModifier, combineAlphaPointerSelection, isAlphaPointerMultiCursorGesture, readAlphaPointerMultiCursorModifier } from "../../common/pointerMultiCursor.js";
+import { PointerMultiCursorModifier, combineAlphaPointerSelection, isAlphaPointerMultiCursorGesture, readAlphaPointerMultiCursorModifier } from "../../common/pointerMultiCursor.js";
 import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
 import { TextPosition } from "../../../../common/core/text.js";
 
@@ -14,27 +14,27 @@ test("Pointer multi-cursor modifiers require their exact configured chord", () =
 
   assert.equal(isAlphaPointerMultiCursorGesture(
     state(true, false, false),
-    AlphaPointerMultiCursorModifier.Alt,
+    PointerMultiCursorModifier.Alt,
   ), true);
   assert.equal(isAlphaPointerMultiCursorGesture(
     state(true, false, false, true),
-    AlphaPointerMultiCursorModifier.Alt,
+    PointerMultiCursorModifier.Alt,
   ), false);
   assert.equal(isAlphaPointerMultiCursorGesture(
     state(true, true, false),
-    AlphaPointerMultiCursorModifier.Alt,
+    PointerMultiCursorModifier.Alt,
   ), false);
   assert.equal(isAlphaPointerMultiCursorGesture(
     state(false, true, false),
-    AlphaPointerMultiCursorModifier.ControlOrMeta,
+    PointerMultiCursorModifier.ControlOrMeta,
   ), true);
   assert.equal(isAlphaPointerMultiCursorGesture(
     state(false, false, true),
-    AlphaPointerMultiCursorModifier.ControlOrMeta,
+    PointerMultiCursorModifier.ControlOrMeta,
   ), true);
-  assert.equal(readAlphaPointerMultiCursorModifier(undefined), AlphaPointerMultiCursorModifier.Alt);
+  assert.equal(readAlphaPointerMultiCursorModifier(undefined), PointerMultiCursorModifier.Alt);
   assert.throws(
-    () => readAlphaPointerMultiCursorModifier("shift" as AlphaPointerMultiCursorModifier),
+    () => readAlphaPointerMultiCursorModifier("shift" as PointerMultiCursorModifier),
     /Unknown Alpha pointer multi-cursor modifier/,
   );
 });

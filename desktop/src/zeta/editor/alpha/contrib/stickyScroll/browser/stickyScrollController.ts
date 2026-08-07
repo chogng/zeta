@@ -1,15 +1,15 @@
 import "./media/stickyScroll.css";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
 import { TextPosition } from "../../../common/core/text.js";
-import { type AlphaEditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 import { type EditorFoldingModel } from "../../folding/browser/foldingModel.js";
 import { buildStickyScrollEntries } from "../common/stickyScrollModel.js";
 
 /** Projects folding ancestors above the viewport as an accessible sticky header stack. */
-export class AlphaStickyScrollController extends DisposableOwner {
+export class StickyScrollController extends DisposableOwner {
   private readonly element: HTMLDivElement;
 
-  constructor(private readonly viewport: AlphaEditorViewport, private readonly folding: EditorFoldingModel) {
+  constructor(private readonly viewport: EditorViewport, private readonly folding: EditorFoldingModel) {
     super();
     if (folding.model !== viewport.textModel) throw new TypeError("Alpha sticky scroll dependencies must share a text model");
     this.element = viewport.element.ownerDocument.createElement("div");

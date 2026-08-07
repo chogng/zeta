@@ -4,17 +4,17 @@ import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { operatingSystem, OperatingSystem } from "../../../../base/common/platform.js";
 import { EditorCursorNavigationCommand, EditorCursorNavigationMode, navigateEditorCursors } from "../../common/cursor/cursorNavigation.js";
 import { type EditorSelectionController } from "../../common/cursor/editorSelectionController.js";
-import { type AlphaEditorViewport } from "../view/editorViewport.js";
-import { AlphaEditorLineWrapping } from "../view/visualLineProjection.js";
+import { type EditorViewport } from "../view/editorViewport.js";
+import { EditorLineWrapping } from "../view/visualLineProjection.js";
 import { navigateAlphaVisualCursors } from "../view/visualCursorNavigation.js";
 
-export interface AlphaKeyboardNavigationControllerOptions {
+export interface KeyboardNavigationControllerOptions {
   readonly operatingSystem?: OperatingSystem;
   /** Resolves the active language word matcher for word navigation. */
   readonly wordPattern?: () => RegExp | undefined;
 }
 
-export interface AlphaKeyboardNavigationCommand {
+export interface KeyboardNavigationCommand {
   readonly command: EditorCursorNavigationCommand;
   readonly mode: EditorCursorNavigationMode;
 }
@@ -22,7 +22,7 @@ export interface AlphaKeyboardNavigationCommand {
 /**
  * Routes browser keydown navigation into Alpha common selection commands.
  */
-export class AlphaKeyboardNavigationController extends DisposableOwner {
+export class KeyboardNavigationController extends DisposableOwner {
   private readonly targetOperatingSystem: OperatingSystem;
   private readonly wordPattern: (() => RegExp | undefined) | undefined;
   private preferredColumns: readonly number[] | undefined;
@@ -30,9 +30,9 @@ export class AlphaKeyboardNavigationController extends DisposableOwner {
   private applyingNavigation = false;
 
   constructor(
-    private readonly viewport: AlphaEditorViewport,
+    private readonly viewport: EditorViewport,
     private readonly selectionController: EditorSelectionController,
-    options: AlphaKeyboardNavigationControllerOptions = {},
+    options: KeyboardNavigationControllerOptions = {},
   ) {
     super();
     try {
@@ -83,7 +83,7 @@ export class AlphaKeyboardNavigationController extends DisposableOwner {
     const visualCommand = isVisualVerticalCommand(navigation.command)
       ? navigation.command
       : undefined;
-    const result = this.viewport.lineWrapping === AlphaEditorLineWrapping.On &&
+    const result = this.viewport.lineWrapping === EditorLineWrapping.On &&
       visualCommand !== undefined
       ? navigateAlphaVisualCursors(
         this.viewport.textModel,
@@ -135,7 +135,7 @@ function isVisualVerticalCommand(command: EditorCursorNavigationCommand): comman
     command === EditorCursorNavigationCommand.PageDown;
 }
 
-export function resolveAlphaKeyboardNavigation(event: Pick<StandardKeyboardEvent, "key" | "ctrlKey" | "shiftKey" | "altKey" | "metaKey" | "altGraphKey" | "isComposing">, targetOperatingSystem: OperatingSystem): AlphaKeyboardNavigationCommand | undefined {
+export function resolveAlphaKeyboardNavigation(event: Pick<StandardKeyboardEvent, "key" | "ctrlKey" | "shiftKey" | "altKey" | "metaKey" | "altGraphKey" | "isComposing">, targetOperatingSystem: OperatingSystem): KeyboardNavigationCommand | undefined {
   if (event.isComposing || event.altGraphKey) return undefined;
   const mode = event.shiftKey
     ? EditorCursorNavigationMode.Extend

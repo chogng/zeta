@@ -4,17 +4,17 @@ import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
 import { RGBA8 } from "../../../common/core/misc/rgba.js";
 import { createEditorEditCommand } from "../../../common/commands/editorCommand.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
-import { type AlphaEditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 import { type ColorService, type LanguageColorInformation } from "../common/color.js";
 
 /** Presents provider colors through a native color input and applies the selected text presentation. */
-export class AlphaColorPickerController extends DisposableOwner {
+export class ColorPickerController extends DisposableOwner {
   private readonly element: HTMLDivElement;
   private readonly input: HTMLInputElement;
   private request: AbortController | undefined;
   private colors: readonly LanguageColorInformation[] = [];
 
-  constructor(private readonly editorInput: HTMLTextAreaElement, private readonly viewport: AlphaEditorViewport, private readonly selections: EditorSelectionController, private readonly service: ColorService, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Alpha color picker failed", error)) {
+  constructor(private readonly editorInput: HTMLTextAreaElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: ColorService, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Alpha color picker failed", error)) {
     super();
     if (viewport.textModel !== selections.textModel) throw new TypeError("Alpha color picker dependencies must share a text model");
     const document = viewport.element.ownerDocument;

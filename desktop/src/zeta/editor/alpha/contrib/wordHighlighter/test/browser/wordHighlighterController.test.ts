@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { AlphaDecorationPresentation, createAlphaDecorationSource } from "../../../../browser/view/decorationPresentation.js";
-import { type AlphaTextMeasurer } from "../../../../browser/view/fontMetrics.js";
+import { DecorationPresentation, createAlphaDecorationSource } from "../../../../browser/view/decorationPresentation.js";
+import { type TextMeasurer } from "../../../../browser/view/fontMetrics.js";
 import { TextDecorationCollection } from "../../../../common/model/decorationCollection.js";
 import { EditorCommandHistoryMode, EditorSelectionController } from "../../../../common/cursor/editorSelectionController.js";
 import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
@@ -21,8 +21,8 @@ for (const [name, value] of Object.entries({
   Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { AlphaEditorViewport } = await import("../../../../browser/view/editorViewport.js");
-const { AlphaOccurrenceHighlightController } = await import("../../browser/wordHighlighterController.js");
+const { EditorViewport } = await import("../../../../browser/view/editorViewport.js");
+const { OccurrenceHighlightController } = await import("../../browser/wordHighlighterController.js");
 
 test("Occurrence highlight controller projects and clears current-word decorations without changing selections", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
@@ -30,15 +30,15 @@ test("Occurrence highlight controller projects and clears current-word decoratio
   using model = new TextModel("item itemized item\nitem");
   using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 1))));
   using decorations = new TextDecorationCollection<void>(model);
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
     textMeasurer: new FixedTextMeasurer(),
     selectionController: selections,
-    decorationSources: [createAlphaDecorationSource(decorations, () => AlphaDecorationPresentation.OccurrenceHighlight)],
+    decorationSources: [createAlphaDecorationSource(decorations, () => DecorationPresentation.OccurrenceHighlight)],
   });
-  using controller = new AlphaOccurrenceHighlightController(selections, decorations);
+  using controller = new OccurrenceHighlightController(selections, decorations);
   viewport.layout({ width: 240, height: 40 });
 
   assert.equal(decorations.size, 3);
@@ -58,7 +58,7 @@ test("Occurrence highlight controller ignores the transient pre-command selectio
     TextPosition.at(0, model.getLineLength(0)),
   )));
   using decorations = new TextDecorationCollection<void>(model);
-  using controller = new AlphaOccurrenceHighlightController(selections, decorations);
+  using controller = new OccurrenceHighlightController(selections, decorations);
 
   assert.doesNotThrow(() => selections.execute({
     edits: [{ range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, model.getLineLength(0))), text: "x" }],
@@ -70,7 +70,7 @@ test("Occurrence highlight controller ignores the transient pre-command selectio
   assert.deepEqual(selections.selections.primary, TextSelection.collapsedAt(TextPosition.at(0, 1)));
 });
 
-class FixedTextMeasurer implements AlphaTextMeasurer {
+class FixedTextMeasurer implements TextMeasurer {
   readonly horizontalPadding = 24;
   readonly contentLeftPadding = 12;
 

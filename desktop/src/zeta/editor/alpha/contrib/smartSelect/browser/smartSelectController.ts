@@ -2,14 +2,14 @@ import { addDisposableListener, stopEvent } from "../../../../../base/browser/do
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { type TextSelectionSet } from "../../../common/core/selection.js";
-import { type AlphaEditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 import { expandSmartSelection } from "../common/smartSelect.js";
 
 /** Routes the editor smart-select shortcut into the DOM-free range expansion policy. */
-export class AlphaSmartSelectController extends DisposableOwner {
+export class SmartSelectController extends DisposableOwner {
   private readonly history: TextSelectionSet[] = [];
 
-  constructor(private readonly input: HTMLTextAreaElement, private readonly viewport: AlphaEditorViewport, private readonly selections: EditorSelectionController, private readonly wordPattern?: () => RegExp | undefined) {
+  constructor(private readonly input: HTMLTextAreaElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly wordPattern?: () => RegExp | undefined) {
     super();
     if (viewport.textModel !== selections.textModel) throw new TypeError("Alpha smart select dependencies must share a text model");
     this.own(addDisposableListener(input, "keydown", event => this.handleKeydown(event), true));

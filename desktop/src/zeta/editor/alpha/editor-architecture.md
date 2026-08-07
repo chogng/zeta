@@ -119,7 +119,7 @@ VS Code 的官方源码组织说明了这些 editor 边界：`vs/editor` 不应�
 | `textModelPart.ts` | `contrib/tokenization/common/tokenizationTextModelPart.ts`、`common/languages/*` 等显式 feature contract | 当前（职责迁移） | Alpha 不建立一个拥有所有 model part 生命周期的通用基类；各 feature 明确拥有自己的 state、listener 和 dispose。 |
 | `textModelTokens.ts` | `common/tokens/*`、`contrib/tokenization/*`、`common/languages/analysis/*` | 部分具备 | 版本化 token result、按行 sparse index 和 tokenization model-part contract 已具备；VS Code 的全部 background tokenizer/state backend 尚未一一覆盖。 |
 | `tokens/{abstractSyntaxTokenBackend,annotations,tokenizationFontDecorationsProvider,tokenizationTextModelPart,tokenizerSyntaxTokenBackend}.ts` | `common/tokens/*`、`contrib/tokenization/*`、TextMate/analysis adapters | 部分具备 | token 生产由 Alpha language/provider contract 决定；不得为了文件对齐把 Workbench tokenizer 或第三方 runtime 直接放进 model。 |
-| `tokens/treeSitter/*` | 暂无 Alpha canonical owner | 尚未完成 | parser/AST 级 token backend 仍是后续 provider 能力；在 contract 确定前不复制 Tree-sitter 内部实现。 |
+| `tokens/treeSitter/*` | `zeta-rs/syntax`、`platform/syntax`、`browser/services/rustSyntaxFactsService.ts` | 部分具备 | Rust owns bounded Tree-sitter parsing and UTF-16 DTO projection; Alpha consumes revision-bound token, diagnostic, symbol, and folding facts for JSON, JSONC, Rust, and Shell through existing result stores and contribs. Broader language coverage remains future work. |
 | `bracketPairsTextModelPart/*` | `contrib/bracketMatching/common/*`、`common/languages/languageLexical*`、对应 browser presentation | 当前（职责迁移） | lexical bracket matching、colorization、navigation、pair editing 已有独立 feature owner；Alpha 当前没有 model-resident incremental bracket-pair tree。 |
 
 这张表的用途是保持“可搜索的语义对齐”，不是承诺 Alpha 复刻 VS Code 的内部数据结构。
@@ -191,7 +191,7 @@ Alpha 已将原来的 `common/view` 拆成 `viewLayout` 与 `viewModel`；后续
 | `common/view/visualLineProjection.ts` | `common/viewModel/modelLineProjection.ts` | logical line 到 visual line 的投影；Current |
 | `browser/visualLineProjection.ts` | `browser/view/visualLineProjection.ts` | browser wrapping/measurement adapter |
 | `browser/visibleLineProjection.ts` | `browser/view/visibleLineProjection.ts` | folding/hidden line 的可见行组合 |
-| `browser/alphaEditorViewport.ts` | `browser/view/editorViewport.ts` | DOM viewport、render scheduling、hit testing 组合 |
+| `browser/editorViewport.ts` | `browser/view/editorViewport.ts` | DOM viewport、render scheduling、hit testing 组合 |
 | `browser/renderedLine.ts` | `browser/view/renderedLine.ts` | 一行的 DOM/render representation |
 | `browser/rangeGeometry.ts` | `browser/view/rangeGeometry.ts` | model range 到像素矩形 |
 | `browser/selectionGeometry.ts` | `browser/view/selectionGeometry.ts` | selection 到 presentation geometry |
@@ -321,9 +321,9 @@ contrib/<feature>/
 | --- | --- | --- | --- | --- |
 | `editorState` | `contrib/editorState/common/editorState.ts`、`browser/editorStateController.ts` | `contrib/editorState/{common,browser}/*`、session 装配 | Current | editor focus、model、selection、scroll 的可观察状态 |
 | `contextmenu` | `contrib/contextmenu/browser/contextMenuController.ts` | `contrib/contextmenu/browser/contextMenuController.ts`；host callback 可选 | Partial | context menu action 组合；不定义 command 语义 |
-| `diffEditorBreadcrumbs` | `contrib/diffEditorBreadcrumbs/browser/diffEditorBreadcrumbs.ts` | Rust diff model + `AlphaDiffEditorPane` 装配 | Current | diff editor 当前 hunk/文件导航，不参与 diff 计算 |
+| `diffEditorBreadcrumbs` | `contrib/diffEditorBreadcrumbs/browser/diffEditorBreadcrumbs.ts` | Rust diff model + `DiffEditorPane` 装配 | Current | diff editor 当前 hunk/文件导航，不参与 diff 计算 |
 | `floatingMenu` | `contrib/floatingMenu/browser/floatingMenuController.ts` | `contrib/floatingMenu/browser/floatingMenuController.ts`；宿主按 action 注入 | Current | selection/hover anchor 的 transient menu |
-| `fontZoom` | `contrib/fontZoom/browser/fontZoomController.ts` | `contrib/fontZoom/browser/fontZoomController.ts` + `AlphaEditorViewport.refreshFontMetrics` | Current | editor font zoom state 与 measurement invalidation |
+| `fontZoom` | `contrib/fontZoom/browser/fontZoomController.ts` | `contrib/fontZoom/browser/fontZoomController.ts` + `EditorViewport.refreshFontMetrics` | Current | editor font zoom state 与 measurement invalidation |
 | `gpu` | `contrib/gpu/browser/gpuRenderer.ts` | `contrib/gpu/browser/gpuRenderer.ts` + viewport minimap | Current | GPU renderer capability；不得让 viewModel 依赖 WebGL |
 | `longLinesHelper` | `contrib/longLinesHelper/browser/longLinesHelper.ts` | `contrib/longLinesHelper/browser/longLinesHelper.ts`、viewport budgets | Current | long-line policy、measurement budget 和 degrade strategy |
 | `middleScroll` | `contrib/middleScroll/browser/middleScrollController.ts` | `contrib/middleScroll/browser/middleScrollController.ts` | Current | middle-button scroll，不污染普通 pointer selection |
@@ -347,7 +347,7 @@ contrib/<feature>/
 | --- | --- | --- | --- |
 | `common/view/viewport.ts` | `common/viewLayout/editorViewportModel.ts` | 重命名并保持无 DOM | Current |
 | `common/view/visualLineProjection.ts` | `common/viewModel/modelLineProjection.ts` | 拆出 model projection | Current |
-| `browser/alphaEditorViewport.ts` | `browser/view/editorViewport.ts` | 只保留 DOM viewport 组合 | Current |
+| `browser/editorViewport.ts` | `browser/view/editorViewport.ts` | 只保留 DOM viewport 组合 | Current |
 | `browser/renderedLine.ts` | `browser/view/renderedLine.ts` | 归入 view renderer | Current |
 | `browser/visualLineProjection.ts` | `browser/view/visualLineProjection.ts` | 归入 browser view | Current |
 | `browser/textInputController.ts` | `browser/input/textInputController.ts` | 输入 adapter，不改 common command | Current |
@@ -402,7 +402,7 @@ contrib/<feature>/
 
 ### 5.2 当前已装配的 Alpha session
 
-`browser/alphaEditorSession.ts` 是单个 editor instance 的装配入口，顺序固定为：
+`browser/editorSession.ts` 是单个 editor instance 的装配入口，顺序固定为：
 
 ```text
 TextModelReference
@@ -414,7 +414,7 @@ TextModelReference
   → bracket/comment/lines/find/quickAccess/hover/format/rename/readOnly/save
 ```
 
-`browser/browserAlphaEditorSession.ts` 只提供 TextMate grammar readiness、analysis Worker 和 completion Worker；它不能把 Workbench 类型传入 `common`。`contrib/editor.contribution.ts` 只负责 pane 注册和强制 adapter 注入；根级 `editor.all.ts` 是产品入口导入的公开 contribution bundle。新 contribution 若需要跨宿主能力，必须先扩展 `common/services` contract，再在这里装配 browser adapter。
+`browser/browserEditorSession.ts` 只提供 TextMate grammar readiness、analysis Worker 和 completion Worker；它不能把 Workbench 类型传入 `common`。`contrib/editor.contribution.ts` 只负责 pane 注册和强制 adapter 注入；根级 `editor.all.ts` 是产品入口导入的公开 contribution bundle。新 contribution 若需要跨宿主能力，必须先扩展 `common/services` contract，再在这里装配 browser adapter。
 
 ### 5.3 当前仍保留的宿主边界
 

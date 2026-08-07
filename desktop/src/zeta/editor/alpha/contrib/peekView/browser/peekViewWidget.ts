@@ -1,14 +1,14 @@
 import "./media/peekView.css";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
 import { type TextPosition } from "../../../common/core/text.js";
-import { type AlphaEditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 
 /** A lifecycle-safe preview surface anchored to an editor position. */
-export class AlphaPeekViewWidget extends DisposableOwner {
+export class PeekViewWidget extends DisposableOwner {
   readonly element: HTMLElement;
   private readonly body: HTMLDivElement;
 
-  constructor(private readonly viewport: AlphaEditorViewport, anchor: TextPosition, title = "Preview") {
+  constructor(private readonly viewport: EditorViewport, anchor: TextPosition, title = "Preview") {
     super();
     viewport.textModel.offsetAt(anchor);
     const document = viewport.element.ownerDocument;

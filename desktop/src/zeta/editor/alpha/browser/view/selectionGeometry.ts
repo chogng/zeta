@@ -1,26 +1,26 @@
 import { type TextSelectionSet } from "../../common/core/selection.js";
 import { type TextModel } from "../../common/model/textModel.js";
 import { type EditorLineRange } from "../../common/viewLayout/editorViewportModel.js";
-import { type AlphaTextMeasurer } from "./fontMetrics.js";
+import { type TextMeasurer } from "./fontMetrics.js";
 import { createAlphaRangeRectangles } from "./rangeGeometry.js";
 
-export interface AlphaSelectionRectangle {
+export interface SelectionRectangle {
   readonly selectionIndex: number;
   readonly lineIndex: number;
   readonly left: number;
   readonly width: number;
 }
 
-export interface AlphaCaretRectangle {
+export interface CaretRectangle {
   readonly selectionIndex: number;
   readonly lineIndex: number;
   readonly left: number;
   readonly primary: boolean;
 }
 
-export interface AlphaSelectionGeometry {
-  readonly selections: readonly AlphaSelectionRectangle[];
-  readonly carets: readonly AlphaCaretRectangle[];
+export interface SelectionGeometry {
+  readonly selections: readonly SelectionRectangle[];
+  readonly carets: readonly CaretRectangle[];
 }
 
 /** @internal */
@@ -29,9 +29,9 @@ export function createAlphaSelectionGeometry(
   selectionSet: TextSelectionSet,
   renderLines: EditorLineRange,
   textLeft: number,
-  measurer: AlphaTextMeasurer,
-): AlphaSelectionGeometry {
-  const carets: AlphaCaretRectangle[] = [];
+  measurer: TextMeasurer,
+): SelectionGeometry {
+  const carets: CaretRectangle[] = [];
 
   for (
     let selectionIndex = 0;
@@ -80,7 +80,7 @@ function prefixWidth(
   model: TextModel,
   lineIndex: number,
   columnIndex: number,
-  measurer: AlphaTextMeasurer,
+  measurer: TextMeasurer,
 ): number {
   return measurer.measureLineWidth(
     model.getLineContent(lineIndex).slice(0, columnIndex),

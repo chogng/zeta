@@ -1,25 +1,25 @@
 /** A permission-gated Async Clipboard item reduced to Alpha's safe text formats. */
-export interface AlphaClipboardRichTextItem {
+export interface ClipboardRichTextItem {
   readonly plainText?: string;
   readonly html?: string;
 }
 
 /** Reads rich text only after a native paste event cannot expose a transferable payload. */
-export interface AlphaClipboardRichTextReader {
-  readText(): PromiseLike<AlphaClipboardRichTextItem | undefined>;
+export interface ClipboardRichTextReader {
+  readText(): PromiseLike<ClipboardRichTextItem | undefined>;
 }
 
 /** Writes Alpha's portable plain-text and safe HTML clipboard representations. */
-export interface AlphaClipboardRichTextWriter {
-  writeText(item: Required<AlphaClipboardRichTextItem>): PromiseLike<void>;
+export interface ClipboardRichTextWriter {
+  writeText(item: Required<ClipboardRichTextItem>): PromiseLike<void>;
 }
 
 /** Creates the browser adapter without exposing ClipboardItem or Blob to Alpha consumers. */
-export function createAlphaBrowserClipboardRichTextReader(ownerDocument: Document): AlphaClipboardRichTextReader | undefined {
+export function createAlphaBrowserClipboardRichTextReader(ownerDocument: Document): ClipboardRichTextReader | undefined {
   const clipboard = ownerDocument.defaultView?.navigator.clipboard;
   if (!clipboard || typeof clipboard.read !== "function") return undefined;
   return Object.freeze({
-    readText: async (): Promise<AlphaClipboardRichTextItem | undefined> => {
+    readText: async (): Promise<ClipboardRichTextItem | undefined> => {
       const items = await clipboard.read();
       for (const item of items) {
         const plainText = item.types.includes("text/plain") ? await (await item.getType("text/plain")).text() : undefined;
@@ -38,14 +38,14 @@ export function createAlphaBrowserClipboardRichTextReader(ownerDocument: Documen
  * Creates a permission-gated Async Clipboard writer when this browser exposes
  * both `Clipboard.write` and the `ClipboardItem` constructor.
  */
-export function createAlphaBrowserClipboardRichTextWriter(ownerDocument: Document): AlphaClipboardRichTextWriter | undefined {
+export function createAlphaBrowserClipboardRichTextWriter(ownerDocument: Document): ClipboardRichTextWriter | undefined {
   const ownerWindow = ownerDocument.defaultView;
   const clipboard = ownerWindow?.navigator.clipboard;
   const ClipboardItemConstructor = ownerWindow?.ClipboardItem;
   const BlobConstructor = ownerWindow?.Blob;
   if (!clipboard || typeof clipboard.write !== "function" || !ClipboardItemConstructor || !BlobConstructor) return undefined;
   return Object.freeze({
-    writeText: (item: Required<AlphaClipboardRichTextItem>): Promise<void> => clipboard.write([new ClipboardItemConstructor({
+    writeText: (item: Required<ClipboardRichTextItem>): Promise<void> => clipboard.write([new ClipboardItemConstructor({
       "text/plain": new BlobConstructor([item.plainText], { type: "text/plain" }),
       "text/html": new BlobConstructor([item.html], { type: "text/html" }),
     })]),

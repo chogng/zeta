@@ -3,15 +3,15 @@ import { addDisposableListener } from "../../../../../base/browser/dom.js";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
 import { type HoverService, type LanguageHover } from "../common/hover.js";
 import { type TextPosition } from "../../../common/core/text.js";
-import { type AlphaEditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 
 /** Projects provider-backed hover content into an editor-local, non-modal widget. */
-export class AlphaHoverController extends DisposableOwner {
+export class HoverController extends DisposableOwner {
   private readonly element: HTMLDivElement;
   private request: AbortController | undefined;
   private timer: ReturnType<typeof setTimeout> | undefined;
 
-  constructor(private readonly viewport: AlphaEditorViewport, private readonly service: HoverService, private readonly languageId: string) {
+  constructor(private readonly viewport: EditorViewport, private readonly service: HoverService, private readonly languageId: string) {
     super();
     this.element = viewport.element.ownerDocument.createElement("div");
     this.element.className = "zeta-alpha-editor-hover";

@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { AlphaDecorationPresentation, createAlphaDecorationSource } from "../../../../browser/view/decorationPresentation.js";
-import { type AlphaTextMeasurer } from "../../../../browser/view/fontMetrics.js";
+import { DecorationPresentation, createAlphaDecorationSource } from "../../../../browser/view/decorationPresentation.js";
+import { type TextMeasurer } from "../../../../browser/view/fontMetrics.js";
 import { LanguageBracketMatcher } from "../../common/bracketMatching.js";
 import { LanguageConfigurationRegistry } from "../../../../common/languages/languageConfiguration.js";
 import { TextDecorationCollection } from "../../../../common/model/decorationCollection.js";
@@ -23,8 +23,8 @@ for (const [name, value] of Object.entries({
   Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { AlphaEditorViewport } = await import("../../../../browser/view/editorViewport.js");
-const { AlphaBracketMatchController } = await import("../../browser/bracketMatchController.js");
+const { EditorViewport } = await import("../../../../browser/view/editorViewport.js");
+const { BracketMatchController } = await import("../../browser/bracketMatchController.js");
 
 test("Bracket match controller projects current pairs and clears them for a range selection", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
@@ -39,7 +39,7 @@ test("Bracket match controller projects current pairs and clears them for a rang
   ));
   using matcher = new LanguageBracketMatcher(model, "typescript", configurations);
   using decorations = new TextDecorationCollection<void>(model);
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
@@ -47,10 +47,10 @@ test("Bracket match controller projects current pairs and clears them for a rang
     selectionController: selections,
     decorationSources: [createAlphaDecorationSource(
       decorations,
-      () => AlphaDecorationPresentation.BracketMatch,
+      () => DecorationPresentation.BracketMatch,
     )],
   });
-  using controller = new AlphaBracketMatchController(selections, matcher, decorations);
+  using controller = new BracketMatchController(selections, matcher, decorations);
   viewport.layout({ width: 240, height: 40 });
 
   assert.deepEqual([...viewport.element.querySelectorAll<HTMLElement>(".bracket-match")].map(element => ({
@@ -74,7 +74,7 @@ test("Bracket match controller projects current pairs and clears them for a rang
   dom.window.close();
 });
 
-class FixedTextMeasurer implements AlphaTextMeasurer {
+class FixedTextMeasurer implements TextMeasurer {
   readonly horizontalPadding = 24;
   readonly contentLeftPadding = 12;
 

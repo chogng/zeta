@@ -8,7 +8,7 @@ import { URI } from "../../../../base/common/uri.js";
 import type { IFileChangeEvent } from "../../../../platform/files/common/files.js";
 import type { ITextFileService, ResolvedTextFileContent, TextFileResolveRequest, TextFileSaveRequest } from "../../../../workbench/services/textfile/common/textFileService.js";
 import { GAMA_EDITOR_ID } from "../../browser/editorInput.js";
-import { GamaEditorPane } from "../../browser/gamaEditorPane.js";
+import { EditorPane } from "../../browser/editorPane.js";
 import { nodeViews as profileNodeViews } from "../../contrib/academic/browser/nodeViews.js";
 import { inlineNodeViews as citationInlineNodeViews, nodeViews as citationNodeViews } from "../../contrib/citation/browser/nodeViews.js";
 import { citationToolbarActions } from "../../contrib/citation/browser/toolbarAction.js";
@@ -20,12 +20,18 @@ import { createDocumentPlugin, DocumentPluginKey } from "../../common/model/docu
 import { DOCUMENT_FRAGMENT_CLIPBOARD_MIME, serializeDocument } from "../../common/model/documentSerialization.js";
 import { createDefaultDocumentSchema } from "../../common/model/documentSchema.js";
 
-test("Gama migrates plain text and edits a structured paragraph", async () => {
+function documentAction(parent: ParentNode, actionId: string): HTMLButtonElement {
+  const button = parent.querySelector<HTMLButtonElement>(`[data-action-id='${actionId}'] button`);
+  assert.ok(button, `Missing Gama document action '${actionId}'`);
+  return button;
+}
+
+test("Gama editor migrates plain text and edits a structured paragraph", async () => {
   const environment = new JSDOM("<!doctype html><body></body>");
   const files = new MemoryTextFiles("Title\nBody");
   const parent = environment.window.document.createElement("main");
   environment.window.document.body.append(parent);
-  using pane = new GamaEditorPane(files);
+  using pane = new EditorPane(files);
   pane.create(parent);
 
   await pane.setInput({
@@ -54,7 +60,7 @@ test("DocumentWorkingCopy clears dirty state after an untitled save succeeds", a
   const environment = new JSDOM("<!doctype html><body></body>");
   let saveCalls = 0;
   const parent = environment.window.document.createElement("main");
-  const pane = new GamaEditorPane(new MemoryTextFiles(""), { onSave: async () => { saveCalls += 1; } });
+  const pane = new EditorPane(new MemoryTextFiles(""), { onSave: async () => { saveCalls += 1; } });
   pane.create(parent);
   await pane.setInput({ resource: URI.parse("untitled:academic/draft"), initialText: "Draft" }, new AbortController().signal);
   const textarea = parent.querySelector<HTMLTextAreaElement>("textarea.zeta-document-text-input");
@@ -74,7 +80,7 @@ test("Gama routes block keyboard commands through Gama", async () => {
   const files = new MemoryTextFiles("Hello\nWorld\nGama");
   const parent = environment.window.document.createElement("main");
   environment.window.document.body.append(parent);
-  using pane = new GamaEditorPane(files);
+  using pane = new EditorPane(files);
   pane.create(parent);
   await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
 
@@ -137,7 +143,7 @@ test("Gama projects plugin decorations onto rich text runs", async () => {
     },
     apply: (value, context) => value.map(context.previousDocument, context.schema, context.transaction),
   }, { decorations: state => state });
-  using pane = new GamaEditorPane(files, { plugins: [plugin] });
+  using pane = new EditorPane(files, { plugins: [plugin] });
   pane.create(parent);
   await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
 
@@ -159,7 +165,7 @@ test("Gama commits textarea composition as one Gama transaction", async () => {
   const files = new MemoryTextFiles("Hello");
   const parent = environment.window.document.createElement("main");
   environment.window.document.body.append(parent);
-  using pane = new GamaEditorPane(files);
+  using pane = new EditorPane(files);
   pane.create(parent);
   await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
 
@@ -192,7 +198,7 @@ test("Gama accepts a schema and custom node view without changing Gama common no
   environment.window.document.body.append(parent);
   let updates = 0;
   let disposals = 0;
-  using pane = new GamaEditorPane(new MemoryTextFiles(""), {
+  using pane = new EditorPane(new MemoryTextFiles(""), {
     schema,
     nodeViews: {
       blockquote: ({ previousElement, renderChildren }) => {
@@ -240,7 +246,7 @@ test("Gama projects Academic wrappers while editing Gama child blocks", async ()
   ], "academic-document");
   const parent = environment.window.document.createElement("main");
   environment.window.document.body.append(parent);
-  using pane = new GamaEditorPane(new MemoryTextFiles(""), { schema, nodeViews: profileNodeViews, outlineNavigator: true });
+  using pane = new EditorPane(new MemoryTextFiles(""), { schema, nodeViews: profileNodeViews, outlineNavigator: true });
   pane.create(parent);
   await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic"), initialText: serializeDocument(document, schema) }, new AbortController().signal);
 
@@ -286,7 +292,7 @@ test("Gama renders and deletes Academic citation inline nodes", async () => {
   const document = schema.createDocument([schema.createNode("title", { id: "citation-title", content: [schema.createNode("heading", { id: "citation-title-heading", content: [schema.createText("Citations", { id: "citation-title-text" })] })] }), schema.createNode("abstract", { id: "citation-abstract", content: [schema.createNode("paragraph", { id: "citation-abstract-paragraph" })] }), schema.createNode("section", { id: "citation-section", content: [schema.createNode("heading", { id: "citation-section-heading", content: [schema.createText("References", { id: "citation-section-text" })] }), paragraph] })], "citation-document");
   const parent = environment.window.document.createElement("main");
   environment.window.document.body.append(parent);
-  using pane = new GamaEditorPane(new MemoryTextFiles(""), { schema, nodeViews: profileNodeViews, inlineNodeViews: citationInlineNodeViews });
+  using pane = new EditorPane(new MemoryTextFiles(""), { schema, nodeViews: profileNodeViews, inlineNodeViews: citationInlineNodeViews });
   pane.create(parent);
   await pane.setInput({ resource: URI.file("C:\\project\\citations.zeta-academic"), initialText: serializeDocument(document, schema) }, new AbortController().signal);
 
@@ -316,17 +322,17 @@ test("Gama exposes Academic citation insertion as a toolbar action", async () =>
   const document = schema.createDocument([paragraph], "toolbar-document");
   const parent = environment.window.document.createElement("main");
   environment.window.document.body.append(parent);
-  using pane = new GamaEditorPane(new MemoryTextFiles(""), { schema, nodeViews: profileNodeViews, inlineNodeViews: citationInlineNodeViews, toolbarActions: citationToolbarActions });
+  using pane = new EditorPane(new MemoryTextFiles(""), { schema, nodeViews: profileNodeViews, inlineNodeViews: citationInlineNodeViews, toolbarActions: citationToolbarActions });
   pane.create(parent);
   await pane.setInput({ resource: URI.file("C:\\project\\toolbar.zeta-academic"), initialText: serializeDocument(document, schema) }, new AbortController().signal);
 
   const textarea = parent.querySelector<HTMLTextAreaElement>("textarea[data-block-id='toolbar-paragraph']");
-  const citationButton = parent.querySelector<HTMLButtonElement>("button[data-block-type='citation']");
   assert.ok(textarea);
-  assert.ok(citationButton);
   textarea.focus();
   textarea.setSelectionRange(3, 3);
   textarea.dispatchEvent(new environment.window.Event("select", { bubbles: true }));
+  const citationButton = documentAction(parent, "citation");
+  assert.equal(citationButton.disabled, false);
   citationButton.click();
   const inserted = pane.getDocument().content[0]?.content.find(node => node.type === "citation");
   assert.equal(inserted?.attrs.key, "smith-2024");
@@ -348,7 +354,7 @@ test("Gama renders resolved citations and bibliography references", async () => 
   ], "resolved-document");
   const parent = environment.window.document.createElement("main");
   environment.window.document.body.append(parent);
-  using pane = new GamaEditorPane(new MemoryTextFiles(""), { schema, nodeViews: { ...profileNodeViews, ...citationNodeViews }, inlineNodeViews: citationInlineNodeViews, plugins: [createReferenceIndexPlugin()] });
+  using pane = new EditorPane(new MemoryTextFiles(""), { schema, nodeViews: { ...profileNodeViews, ...citationNodeViews }, inlineNodeViews: citationInlineNodeViews, plugins: [createReferenceIndexPlugin()] });
   pane.create(parent);
   await pane.setInput({ resource: URI.file("C:\\project\\resolved.zeta-academic"), initialText: serializeDocument(document, schema) }, new AbortController().signal);
 
@@ -372,15 +378,15 @@ test("Gama exposes reference insertion as a citation toolbar action", async () =
   const document = schema.createDocument([paragraph], "reference-toolbar-document");
   const parent = environment.window.document.createElement("main");
   environment.window.document.body.append(parent);
-  using pane = new GamaEditorPane(new MemoryTextFiles(""), { schema, nodeViews: { ...profileNodeViews, ...citationNodeViews }, inlineNodeViews: citationInlineNodeViews, toolbarActions: citationToolbarActions });
+  using pane = new EditorPane(new MemoryTextFiles(""), { schema, nodeViews: { ...profileNodeViews, ...citationNodeViews }, inlineNodeViews: citationInlineNodeViews, toolbarActions: citationToolbarActions });
   pane.create(parent);
   await pane.setInput({ resource: URI.file("C:\\project\\reference-toolbar.zeta-academic"), initialText: serializeDocument(document, schema) }, new AbortController().signal);
 
   const textarea = parent.querySelector<HTMLTextAreaElement>("textarea[data-block-id='reference-toolbar-paragraph']");
-  const referenceButton = parent.querySelector<HTMLButtonElement>("button[data-block-type='reference']");
   assert.ok(textarea);
-  assert.ok(referenceButton);
   textarea.focus();
+  const referenceButton = documentAction(parent, "reference");
+  assert.equal(referenceButton.disabled, false);
   referenceButton.click();
   const bibliography = pane.getDocument().content.find(node => node.type === "bibliography");
   assert.ok(bibliography);
@@ -394,7 +400,7 @@ test("Gama uses the Academic empty document through revert", async () => {
   const schema = createAcademicDocumentSchema();
   const parent = environment.window.document.createElement("main");
   environment.window.document.body.append(parent);
-  using pane = new GamaEditorPane(new MemoryTextFiles(""), {
+  using pane = new EditorPane(new MemoryTextFiles(""), {
     schema,
     createEmptyDocument: () => createEmptyAcademicDocument(schema),
     nodeViews: profileNodeViews,
@@ -423,7 +429,7 @@ test("Gama uses the Academic empty document through revert", async () => {
 test("Gama projects read-only inputs without accepting model mutations", async () => {
   const environment = new JSDOM("<!doctype html><body></body>");
   const parent = environment.window.document.createElement("main");
-  const pane = new GamaEditorPane(new MemoryTextFiles("Hello"));
+  const pane = new EditorPane(new MemoryTextFiles("Hello"));
   pane.create(parent);
   await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic"), readOnly: true }, new AbortController().signal);
 
@@ -431,7 +437,8 @@ test("Gama projects read-only inputs without accepting model mutations", async (
   assert.ok(textarea);
   assert.equal(textarea.readOnly, true);
   assert.equal(textarea.getAttribute("aria-readonly"), "true");
-  assert.equal([...parent.querySelectorAll<HTMLButtonElement>(".zeta-document-block-toolbar-button")].every(button => button.disabled), true);
+  assert.equal([...parent.querySelectorAll<HTMLButtonElement>(".zeta-structured-format-toolbar button")].every(button => button.disabled), true);
+  assert.equal([...parent.querySelectorAll<HTMLSelectElement>(".zeta-structured-format-toolbar select")].every(select => select.disabled), true);
   textarea.value = "Rejected";
   textarea.dispatchEvent(new environment.window.Event("input", { bubbles: true }));
   assert.equal(pane.getDocument().content[0]?.content[0]?.text, "Hello");
@@ -447,7 +454,7 @@ test("Gama routes text undo and redo through Gama history", async () => {
   const files = new MemoryTextFiles("Hello");
   const parent = environment.window.document.createElement("main");
   environment.window.document.body.append(parent);
-  using pane = new GamaEditorPane(files);
+  using pane = new EditorPane(files);
   pane.create(parent);
   await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
 
@@ -483,7 +490,7 @@ test("Gama creates a hard break with Shift+Enter", async () => {
   const files = new MemoryTextFiles("Hello");
   const parent = environment.window.document.createElement("main");
   environment.window.document.body.append(parent);
-  using pane = new GamaEditorPane(files);
+  using pane = new EditorPane(files);
   pane.create(parent);
   await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
 
@@ -525,7 +532,7 @@ test("Gama deletes a selection spanning a hard break", async () => {
   }));
   const parent = environment.window.document.createElement("main");
   environment.window.document.body.append(parent);
-  using pane = new GamaEditorPane(files);
+  using pane = new EditorPane(files);
   pane.create(parent);
   await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
 
@@ -579,7 +586,7 @@ test("Gama renders semantic lists and splits list items", async () => {
   }));
   const parent = environment.window.document.createElement("main");
   environment.window.document.body.append(parent);
-  using pane = new GamaEditorPane(files);
+  using pane = new EditorPane(files);
   pane.create(parent);
   await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
 
@@ -622,7 +629,7 @@ test("Gama indents and outdents list items with Tab", async () => {
   }));
   const parent = environment.window.document.createElement("main");
   environment.window.document.body.append(parent);
-  using pane = new GamaEditorPane(files);
+  using pane = new EditorPane(files);
   pane.create(parent);
   await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
 
@@ -658,7 +665,7 @@ test("Gama exits an empty list item on the second Enter", async () => {
   }));
   const parent = environment.window.document.createElement("main");
   environment.window.document.body.append(parent);
-  using pane = new GamaEditorPane(files);
+  using pane = new EditorPane(files);
   pane.create(parent);
   await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
 
@@ -678,34 +685,84 @@ test("Gama exposes a block toolbar for block and list formats", async () => {
   const files = new MemoryTextFiles("Hello");
   const parent = environment.window.document.createElement("main");
   environment.window.document.body.append(parent);
-  using pane = new GamaEditorPane(files);
+  using pane = new EditorPane(files);
   pane.create(parent);
   await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
 
-  const toolbar = parent.querySelector<HTMLDivElement>(".zeta-document-block-toolbar");
+  const toolbar = parent.querySelector<HTMLDivElement>(".zeta-structured-format-toolbar");
   const textarea = parent.querySelector<HTMLTextAreaElement>("textarea.zeta-document-text-input");
   assert.ok(toolbar);
   assert.ok(textarea);
   assert.equal(toolbar.hidden, false);
+  assert.ok(toolbar.querySelector(".zeta-toolbar"));
   textarea.focus();
-  toolbar.querySelector<HTMLButtonElement>("button[data-block-type='heading']")?.click();
+  documentAction(toolbar, "heading").click();
   assert.equal(pane.getDocument().content[0]?.type, "heading");
   assert.ok(parent.querySelector("h2"));
-  assert.equal(toolbar.querySelector("button[data-block-type='heading']")?.classList.contains("checked"), true);
+  assert.equal(documentAction(toolbar, "heading").classList.contains("checked"), true);
 
-  toolbar.querySelector<HTMLButtonElement>("button[data-block-type='bulletList']")?.click();
+  documentAction(toolbar, "bulletList").click();
   assert.equal(pane.getDocument().content[0]?.type, "bulletList");
   assert.equal(parent.querySelectorAll("ul > li").length, 1);
-  toolbar.querySelector<HTMLButtonElement>("button[data-block-type='orderedList']")?.click();
+  documentAction(toolbar, "orderedList").click();
   assert.equal(pane.getDocument().content[0]?.type, "orderedList");
   assert.equal(parent.querySelectorAll("ol > li").length, 1);
-  assert.equal(toolbar.querySelector("button[data-block-type='orderedList']")?.classList.contains("checked"), true);
+  assert.equal(documentAction(toolbar, "orderedList").classList.contains("checked"), true);
 
-  toolbar.querySelector<HTMLButtonElement>("button[data-block-type='paragraph']")?.click();
+  documentAction(toolbar, "paragraph").click();
   assert.equal(pane.getDocument().content[0]?.content[0]?.content[0]?.type, "paragraph");
-  toolbar.querySelector<HTMLButtonElement>("button[data-block-type='table']")?.click();
+  documentAction(toolbar, "table").click();
   assert.equal(parent.querySelectorAll("table").length, 1);
   assert.equal(parent.querySelectorAll("table td").length, 4);
+  environment.window.close();
+});
+
+test("Gama formats selected text with persistent typography marks", async () => {
+  const environment = new JSDOM("<!doctype html><body></body>");
+  const parent = environment.window.document.createElement("main");
+  environment.window.document.body.append(parent);
+  using pane = new EditorPane(new MemoryTextFiles("Hello"));
+  pane.create(parent);
+  await pane.setInput({ resource: URI.file("C:\\project\\formatted.zeta-academic") }, new AbortController().signal);
+
+  const toolbar = parent.querySelector<HTMLDivElement>(".zeta-structured-format-toolbar");
+  const textarea = parent.querySelector<HTMLTextAreaElement>("textarea.zeta-document-text-input");
+  const fontFamily = parent.querySelector<HTMLSelectElement>("select[aria-label='Font family']");
+  const fontSize = parent.querySelector<HTMLSelectElement>("select[aria-label='Font size']");
+  assert.ok(toolbar);
+  assert.ok(textarea);
+  assert.ok(fontFamily);
+  assert.ok(fontSize);
+  assert.equal(toolbar.dataset.context, "text");
+  assert.ok(documentAction(toolbar, "bold").querySelector(".zeta-icon"));
+
+  textarea.focus();
+  textarea.setSelectionRange(1, 4);
+  textarea.dispatchEvent(new environment.window.Event("select", { bubbles: true }));
+  fontFamily.value = "serif";
+  fontFamily.dispatchEvent(new environment.window.Event("change", { bubbles: true }));
+  fontSize.value = "18";
+  fontSize.dispatchEvent(new environment.window.Event("change", { bubbles: true }));
+  documentAction(toolbar, "bold").click();
+
+  let styled = pane.getDocument().content[0]?.content.find(node => node.text === "ell");
+  assert.ok(styled);
+  assert.deepEqual(styled.marks, [
+    { type: "textStyle", attrs: { fontFamily: "serif", fontSize: 18 } },
+    { type: "strong", attrs: {} },
+  ]);
+  const styledRun = parent.querySelector<HTMLElement>(".zeta-document-mark-textStyle[data-font-family='serif']");
+  assert.ok(styledRun);
+  assert.equal(styledRun.style.fontSize, "18px");
+  assert.equal(fontFamily.value, "serif");
+  assert.equal(fontSize.value, "18");
+  assert.equal(documentAction(toolbar, "bold").classList.contains("checked"), true);
+
+  fontFamily.value = "";
+  fontFamily.dispatchEvent(new environment.window.Event("change", { bubbles: true }));
+  styled = pane.getDocument().content[0]?.content.find(node => node.text === "ell");
+  assert.ok(styled);
+  assert.deepEqual(styled.marks, [{ type: "strong", attrs: {} }]);
   environment.window.close();
 });
 
@@ -714,24 +771,24 @@ test("Gama toggles blockquotes and inserts horizontal rules", async () => {
   const files = new MemoryTextFiles("Quoted");
   const parent = environment.window.document.createElement("main");
   environment.window.document.body.append(parent);
-  using pane = new GamaEditorPane(files);
+  using pane = new EditorPane(files);
   pane.create(parent);
   await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
 
-  const toolbar = parent.querySelector<HTMLDivElement>(".zeta-document-block-toolbar");
+  const toolbar = parent.querySelector<HTMLDivElement>(".zeta-structured-format-toolbar");
   const textarea = parent.querySelector<HTMLTextAreaElement>("textarea.zeta-document-text-input");
   assert.ok(toolbar);
   assert.ok(textarea);
   textarea.focus();
-  toolbar.querySelector<HTMLButtonElement>("button[data-block-type='blockquote']")?.click();
+  documentAction(toolbar, "blockquote").click();
   assert.equal(parent.querySelectorAll("blockquote").length, 1);
-  assert.equal(toolbar.querySelector("button[data-block-type='blockquote']")?.classList.contains("checked"), true);
+  assert.equal(documentAction(toolbar, "blockquote").classList.contains("checked"), true);
 
-  toolbar.querySelector<HTMLButtonElement>("button[data-block-type='blockquote']")?.click();
+  documentAction(toolbar, "blockquote").click();
   assert.equal(parent.querySelectorAll("blockquote").length, 0);
-  assert.equal(toolbar.querySelector("button[data-block-type='blockquote']")?.classList.contains("checked"), false);
+  assert.equal(documentAction(toolbar, "blockquote").classList.contains("checked"), false);
 
-  toolbar.querySelector<HTMLButtonElement>("button[data-block-type='horizontalRule']")?.click();
+  documentAction(toolbar, "horizontalRule").click();
   assert.equal(parent.querySelectorAll("hr.zeta-document-horizontal-rule").length, 1);
   assert.deepEqual(pane.getDocument().content.map(node => node.type), ["paragraph", "horizontalRule"]);
   environment.window.close();
@@ -742,16 +799,16 @@ test("Gama navigates table cells with Tab and exposes row and column operations"
   const files = new MemoryTextFiles("Hello");
   const parent = environment.window.document.createElement("main");
   environment.window.document.body.append(parent);
-  using pane = new GamaEditorPane(files);
+  using pane = new EditorPane(files);
   pane.create(parent);
   await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
 
-  const toolbar = parent.querySelector<HTMLDivElement>(".zeta-document-block-toolbar");
+  const toolbar = parent.querySelector<HTMLDivElement>(".zeta-structured-format-toolbar");
   const source = parent.querySelector<HTMLTextAreaElement>("textarea.zeta-document-text-input");
   assert.ok(toolbar);
   assert.ok(source);
   source.focus();
-  toolbar.querySelector<HTMLButtonElement>("button[data-block-type='table']")?.click();
+  documentAction(toolbar, "table").click();
 
   let cells = Array.from(parent.querySelectorAll<HTMLTextAreaElement>("table td textarea"));
   assert.equal(cells.length, 4);
@@ -774,13 +831,13 @@ test("Gama navigates table cells with Tab and exposes row and column operations"
   assert.equal(parent.querySelectorAll("table td").length, 6);
   assert.equal(environment.window.document.activeElement, parent.querySelectorAll<HTMLTextAreaElement>("table td textarea")[4]);
 
-  toolbar.querySelector<HTMLButtonElement>("button[data-block-type='insertTableRow']")?.click();
+  documentAction(toolbar, "insertTableRow").click();
   assert.equal(parent.querySelectorAll("table td").length, 8);
-  toolbar.querySelector<HTMLButtonElement>("button[data-block-type='insertTableColumn']")?.click();
+  documentAction(toolbar, "insertTableColumn").click();
   assert.equal(parent.querySelectorAll("table td").length, 12);
-  toolbar.querySelector<HTMLButtonElement>("button[data-block-type='deleteTableColumn']")?.click();
+  documentAction(toolbar, "deleteTableColumn").click();
   assert.equal(parent.querySelectorAll("table td").length, 8);
-  toolbar.querySelector<HTMLButtonElement>("button[data-block-type='deleteTableRow']")?.click();
+  documentAction(toolbar, "deleteTableRow").click();
   assert.equal(parent.querySelectorAll("table td").length, 6);
   const activeCell = environment.window.document.activeElement as HTMLTextAreaElement;
   const undo = new environment.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "z", ctrlKey: true });
@@ -818,7 +875,7 @@ test("Gama renders inline image nodes in the rich surface", async () => {
   }));
   const parent = environment.window.document.createElement("main");
   environment.window.document.body.append(parent);
-  using pane = new GamaEditorPane(files);
+  using pane = new EditorPane(files);
   pane.create(parent);
   await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
 
@@ -848,7 +905,7 @@ test("Gama turns an image clipboard paste into an image node", async () => {
   const files = new MemoryTextFiles("Before");
   const parent = environment.window.document.createElement("main");
   environment.window.document.body.append(parent);
-  using pane = new GamaEditorPane(files);
+  using pane = new EditorPane(files);
   pane.create(parent);
   await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
 
@@ -892,7 +949,7 @@ test("Gama inserts a pasted image at a rich-text selection", async () => {
   }));
   const parent = environment.window.document.createElement("main");
   environment.window.document.body.append(parent);
-  using pane = new GamaEditorPane(files);
+  using pane = new EditorPane(files);
   pane.create(parent);
   await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
 
@@ -964,7 +1021,7 @@ test("Gama renders and edits marked inline runs", async () => {
   }));
   const parent = environment.window.document.createElement("main");
   environment.window.document.body.append(parent);
-  using pane = new GamaEditorPane(files);
+  using pane = new EditorPane(files);
   pane.create(parent);
   await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
 
@@ -1015,7 +1072,7 @@ test("Gama carries collapsed mark toggles into later input", async () => {
   const environment = new JSDOM("<!doctype html><body></body>");
   const parent = environment.window.document.createElement("main");
   environment.window.document.body.append(parent);
-  using pane = new GamaEditorPane(new MemoryTextFiles("Hello"));
+  using pane = new EditorPane(new MemoryTextFiles("Hello"));
   pane.create(parent);
   await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
 
@@ -1082,7 +1139,7 @@ test("Gama applies, updates, and removes link marks", async () => {
   }));
   const parent = environment.window.document.createElement("main");
   environment.window.document.body.append(parent);
-  using pane = new GamaEditorPane(files);
+  using pane = new EditorPane(files);
   pane.create(parent);
   await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
 
@@ -1101,11 +1158,11 @@ test("Gama applies, updates, and removes link marks", async () => {
   };
 
   select(0, 1, 1, 6);
-  parent.querySelector<HTMLButtonElement>("button[data-block-type='link']")?.click();
+  documentAction(parent, "link").click();
   assert.deepEqual(pane.getDocument().content[0]?.content.map(node => node.marks.map(mark => mark.type)), [[], ["link"], ["strong", "link"]]);
   let links = Array.from(rich.querySelectorAll<HTMLAnchorElement>("a.zeta-document-inline-run"));
   assert.deepEqual(links.map(link => link.getAttribute("href")), ["https://example.test", "https://example.test"]);
-  assert.equal(parent.querySelector("button[data-block-type='link']")?.classList.contains("checked"), true);
+  assert.equal(documentAction(parent, "link").classList.contains("checked"), true);
 
   promptValue = "https://updated.test";
   select(1, 0, 2, 6);
@@ -1116,7 +1173,7 @@ test("Gama applies, updates, and removes link marks", async () => {
   assert.deepEqual(links.map(link => link.getAttribute("href")), ["https://updated.test", "https://updated.test"]);
 
   select(1, 0, 2, 6);
-  parent.querySelector<HTMLButtonElement>("button[data-block-type='unlink']")?.click();
+  documentAction(parent, "unlink").click();
   assert.equal(rich.querySelectorAll("a.zeta-document-inline-run").length, 0);
   assert.deepEqual(pane.getDocument().content[0]?.content.map(node => node.marks.map(mark => mark.type)), [[], [], ["strong"]]);
   environment.window.close();
@@ -1146,7 +1203,7 @@ test("Gama routes rich-text copy and cut through Gama", async () => {
   }));
   const parent = environment.window.document.createElement("main");
   environment.window.document.body.append(parent);
-  using pane = new GamaEditorPane(files);
+  using pane = new EditorPane(files);
   pane.create(parent);
   await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
 
@@ -1238,7 +1295,7 @@ test("Gama handles whole-document select all, copy, and cut", async () => {
   }));
   const parent = environment.window.document.createElement("main");
   environment.window.document.body.append(parent);
-  using pane = new GamaEditorPane(files);
+  using pane = new EditorPane(files);
   pane.create(parent);
   await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
 
@@ -1302,7 +1359,7 @@ test("Gama replaces a rich-text selection spanning sibling blocks", async () => 
   }));
   const parent = environment.window.document.createElement("main");
   environment.window.document.body.append(parent);
-  using pane = new GamaEditorPane(files);
+  using pane = new EditorPane(files);
   pane.create(parent);
   await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
 
@@ -1364,7 +1421,7 @@ test("Gama pastes multiline text as structured blocks", async () => {
   }));
   const parent = environment.window.document.createElement("main");
   environment.window.document.body.append(parent);
-  using pane = new GamaEditorPane(files);
+  using pane = new EditorPane(files);
   pane.create(parent);
   await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
 
@@ -1408,12 +1465,15 @@ test("Gama restores serialized blocks and releases its model", async () => {
     },
   }));
   const parent = environment.window.document.createElement("main");
-  using pane = new GamaEditorPane(files);
+  using pane = new EditorPane(files);
   pane.create(parent);
   await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
 
   assert.equal(parent.querySelector("[data-editor-kind='text-block']")?.textContent, "");
   assert.equal(parent.querySelector<HTMLTextAreaElement>("textarea")?.value, "const value = 1;");
+  assert.equal(parent.querySelector<HTMLElement>(".zeta-structured-format-toolbar")?.dataset.context, "code");
+  assert.equal(parent.querySelector<HTMLElement>(".zeta-structured-format-code-context")?.textContent, "Code block · Alpha");
+  assert.equal(parent.querySelector<HTMLElement>(".zeta-structured-format-typography-controls")?.hidden, true);
   pane.clearInput();
   assert.throws(() => pane.getDocument(), /no active model/);
   environment.window.close();
@@ -1440,7 +1500,7 @@ test("Gama delegates text blocks to an embedded line editor", async () => {
   }));
   const factory = new FakeEmbeddedTextEditorFactory();
   const parent = environment.window.document.createElement("main");
-  using pane = new GamaEditorPane(files, { embeddedTextEditorFactory: factory });
+  using pane = new EditorPane(files, { embeddedTextEditorFactory: factory });
   pane.create(parent);
   await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
 
@@ -1456,7 +1516,7 @@ test("Gama delegates text blocks to an embedded line editor", async () => {
   environment.window.close();
 });
 
-test("AlphaEmbeddedTextEditorFactory creates a line editor surface", async () => {
+test("EmbeddedTextEditorFactory creates a line editor surface", async () => {
   const environment = new JSDOM("<!doctype html><body></body>");
   const parent = environment.window.document.createElement("main");
   const previousWindow = (globalThis as typeof globalThis & { window?: Window }).window;
@@ -1466,8 +1526,8 @@ test("AlphaEmbeddedTextEditorFactory creates a line editor surface", async () =>
   Object.defineProperty(globalThis, "document", { configurable: true, value: environment.window.document });
   Object.defineProperty(globalThis, "Node", { configurable: true, value: environment.window.Node });
   try {
-    const { AlphaEmbeddedTextEditorFactory } = await import("../../../alpha/browser/alphaEmbeddedTextEditor.js");
-    using editor = new AlphaEmbeddedTextEditorFactory().create({
+    const { EmbeddedTextEditorFactory } = await import("../../../alpha/browser/embeddedTextEditor.js");
+    using editor = new EmbeddedTextEditorFactory().create({
       resource: URI.parse("untitled:test/code"),
       label: "code",
       languageId: "typescript",

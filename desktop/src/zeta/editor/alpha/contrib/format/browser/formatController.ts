@@ -1,20 +1,20 @@
 import { addDisposableListener, stopEvent } from "../../../../../base/browser/dom.js";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
-import { type AlphaEditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 import { createFormattingCommand, type FormatService, type LanguageFormattingOptions } from "../common/formatCommands.js";
 
-export interface AlphaFormatControllerOptions {
+export interface FormatControllerOptions {
   readonly formattingOptions?: LanguageFormattingOptions;
   readonly onError?: (error: unknown) => void;
 }
 
 /** Routes the editor format shortcut into the Alpha formatting service and command layer. */
-export class AlphaFormatController extends DisposableOwner {
+export class FormatController extends DisposableOwner {
   private readonly options: LanguageFormattingOptions;
   private readonly onError: (error: unknown) => void;
 
-  constructor(private readonly input: HTMLTextAreaElement, private readonly viewport: AlphaEditorViewport, private readonly selections: EditorSelectionController, private readonly service: FormatService, private readonly languageId: string, options: AlphaFormatControllerOptions = {}) {
+  constructor(private readonly input: HTMLTextAreaElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: FormatService, private readonly languageId: string, options: FormatControllerOptions = {}) {
     super();
     if (viewport.textModel !== selections.textModel) throw new TypeError("Alpha format dependencies must share one text model");
     this.options = options.formattingOptions ?? { tabSize: 4, insertSpaces: true };

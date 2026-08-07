@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { type AlphaTextMeasurer } from "../../browser/view/fontMetrics.js";
+import { type TextMeasurer } from "../../browser/view/fontMetrics.js";
 import { EditorSelectionController } from "../../common/cursor/editorSelectionController.js";
 import { EditorFoldingModel } from "../../contrib/folding/browser/foldingModel.js";
 import { EditorHiddenRangeModel } from "../../contrib/folding/browser/hiddenRangeModel.js";
@@ -24,27 +24,27 @@ for (const [name, value] of Object.entries({
   });
 }
 
-const { AlphaEditorViewport } = await import(
+const { EditorViewport } = await import(
   "../../browser/view/editorViewport.js"
 );
-const { AlphaEditorMinimap } = await import(
+const { EditorMinimap } = await import(
   "../../browser/view/editorViewport.js"
 );
-const { AlphaEditorTextDirection } = await import(
+const { EditorTextDirection } = await import(
   "../../browser/view/editorViewport.js"
 );
-const { AlphaEditorLineWrapping } = await import(
+const { EditorLineWrapping } = await import(
   "../../browser/view/visualLineProjection.js"
 );
 
-test("AlphaEditorViewport projects the initial virtual line window", () => {
+test("EditorViewport projects the initial virtual line window", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   const container = requiredElement(dom.window.document, "main");
   using model = new TextModel([
     "<strong>not markup</strong>",
     ...lines(99),
   ].join("\n"));
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
@@ -85,38 +85,38 @@ test("AlphaEditorViewport projects the initial virtual line window", () => {
   dom.window.close();
 });
 
-test("AlphaEditorViewport gives browser text shaping an explicit paragraph direction", () => {
+test("EditorViewport gives browser text shaping an explicit paragraph direction", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   const container = requiredElement(dom.window.document, "main");
   using model = new TextModel("שלום alpha");
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
     textMeasurer: fixedTextMeasurer(),
-    textDirection: AlphaEditorTextDirection.RightToLeft,
+    textDirection: EditorTextDirection.RightToLeft,
   });
   viewport.layout({ width: 300, height: 40 });
 
-  assert.equal(viewport.editorTextDirection, AlphaEditorTextDirection.RightToLeft);
+  assert.equal(viewport.editorTextDirection, EditorTextDirection.RightToLeft);
   assert.equal(viewport.element.dir, "rtl");
   assert.equal(viewport.element.classList.contains("zeta-alpha-editor-direction-rtl"), true);
   assert.equal(lineText(requiredLine(viewport.element, 0)).dir, "rtl");
   dom.window.close();
 });
 
-test("AlphaEditorViewport uses browser range geometry for RTL selections and carets", () => {
+test("EditorViewport uses browser range geometry for RTL selections and carets", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   const container = requiredElement(dom.window.document, "main");
   using model = new TextModel("abc אבג");
   using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
     textMeasurer: fixedTextMeasurer(),
     selectionController: selections,
-    textDirection: AlphaEditorTextDirection.RightToLeft,
+    textDirection: EditorTextDirection.RightToLeft,
   });
   viewport.layout({ width: 300, height: 40 });
   const line = requiredLine(viewport.element, 0);
@@ -152,16 +152,16 @@ test("AlphaEditorViewport uses browser range geometry for RTL selections and car
   dom.window.close();
 });
 
-test("AlphaEditorViewport resolves RTL pointer hits from the browser caret position", () => {
+test("EditorViewport resolves RTL pointer hits from the browser caret position", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   const container = requiredElement(dom.window.document, "main");
   using model = new TextModel("abc אבג");
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
     textMeasurer: fixedTextMeasurer(),
-    textDirection: AlphaEditorTextDirection.RightToLeft,
+    textDirection: EditorTextDirection.RightToLeft,
   });
   viewport.layout({ width: 300, height: 40 });
   const text = lineText(requiredLine(viewport.element, 0));
@@ -178,12 +178,12 @@ test("AlphaEditorViewport resolves RTL pointer hits from the browser caret posit
   dom.window.close();
 });
 
-test("AlphaEditorViewport announces cursor and selection changes through its live region", () => {
+test("EditorViewport announces cursor and selection changes through its live region", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   const container = requiredElement(dom.window.document, "main");
   using model = new TextModel("alpha\nbeta");
   using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
-  using viewport = new AlphaEditorViewport({ container, model, lineHeight: 20, textMeasurer: fixedTextMeasurer(), selectionController: selections });
+  using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: fixedTextMeasurer(), selectionController: selections });
 
   const status = requiredElement(viewport.element, ".zeta-alpha-editor-accessibility-status");
   assert.equal(status.getAttribute("aria-live"), "polite");
@@ -198,11 +198,11 @@ test("AlphaEditorViewport announces cursor and selection changes through its liv
   dom.window.close();
 });
 
-test("AlphaEditorViewport accepts explicit accessibility status announcements", () => {
+test("EditorViewport accepts explicit accessibility status announcements", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   const container = requiredElement(dom.window.document, "main");
   using model = new TextModel("alpha");
-  using viewport = new AlphaEditorViewport({ container, model, lineHeight: 20, textMeasurer: fixedTextMeasurer() });
+  using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: fixedTextMeasurer() });
 
   viewport.announceAccessibilityStatus("  Saved  ");
   assert.equal(requiredElement(viewport.element, ".zeta-alpha-editor-accessibility-status").textContent, "Saved");
@@ -210,11 +210,11 @@ test("AlphaEditorViewport accepts explicit accessibility status announcements", 
   dom.window.close();
 });
 
-test("AlphaEditorViewport projects indentation guides for visible logical rows only", () => {
+test("EditorViewport projects indentation guides for visible logical rows only", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   const container = requiredElement(dom.window.document, "main");
   using model = new TextModel("    alpha\n  beta");
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
@@ -231,16 +231,16 @@ test("AlphaEditorViewport projects indentation guides for visible logical rows o
   dom.window.close();
 });
 
-test("AlphaEditorViewport renders a bounded minimap and maps a primary click to document scroll", () => {
+test("EditorViewport renders a bounded minimap and maps a primary click to document scroll", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   const container = requiredElement(dom.window.document, "main");
   using model = new TextModel(lines(200).join("\n"));
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
     textMeasurer: fixedTextMeasurer(),
-    minimap: AlphaEditorMinimap.On,
+    minimap: EditorMinimap.On,
   });
   viewport.layout({ width: 300, height: 100 });
   const minimap = requiredElement<HTMLElement>(viewport.element, ".zeta-alpha-editor-minimap");
@@ -277,11 +277,11 @@ test("AlphaEditorViewport renders a bounded minimap and maps a primary click to 
   dom.window.close();
 });
 
-test("AlphaEditorViewport keeps minimaps out of embedded presentations", () => {
+test("EditorViewport keeps minimaps out of embedded presentations", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   const container = requiredElement(dom.window.document, "main");
   using model = new TextModel("alpha");
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
@@ -292,11 +292,11 @@ test("AlphaEditorViewport keeps minimaps out of embedded presentations", () => {
   dom.window.close();
 });
 
-test("AlphaEditorViewport rejects an unknown minimap mode", () => {
+test("EditorViewport rejects an unknown minimap mode", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   const container = requiredElement(dom.window.document, "main");
   using model = new TextModel("alpha");
-  assert.throws(() => new AlphaEditorViewport({
+  assert.throws(() => new EditorViewport({
     container,
     model,
     lineHeight: 20,
@@ -310,7 +310,7 @@ test("Scrolling virtualizes rows while preserving overlapping DOM identity", () 
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   const container = requiredElement(dom.window.document, "main");
   using model = new TextModel(lines(100).join("\n"));
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
@@ -348,12 +348,12 @@ test("Soft wrapping virtualizes visual rows and maps DOM coordinates back to log
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   const container = requiredElement(dom.window.document, "main");
   using model = new TextModel("abcdef\ngh");
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
     textMeasurer: fixedTextMeasurer(10, 24),
-    lineWrapping: AlphaEditorLineWrapping.On,
+    lineWrapping: EditorLineWrapping.On,
   });
 
   viewport.layout({ width: 70, height: 40 });
@@ -416,7 +416,7 @@ test("Folding model removes folded physical rows from the viewport projection", 
   using folding = new EditorFoldingModel(model);
   using hiddenRanges = new EditorHiddenRangeModel(model, folding);
   folding.setRanges([{ startLineIndex: 0, endLineIndex: 2 }]);
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
@@ -460,7 +460,7 @@ test("Model edits refresh visible rows and clamp a shrinking document", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   const container = requiredElement(dom.window.document, "main");
   using model = new TextModel(lines(100).join("\n"));
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
@@ -514,7 +514,7 @@ test("Selection controller projects gutter state, ranges, and carets", () => {
       TextSelection.collapsedAt(TextPosition.at(2, 1)),
     ], 0),
   );
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
@@ -613,7 +613,7 @@ test("Measured content width, line height, and scroll stay synchronized", () => 
     "x".repeat(458),
     ...lines(29),
   ].join("\n"));
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
@@ -646,7 +646,7 @@ test("Line width indexing updates only affected model line groups", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   const container = requiredElement(dom.window.document, "main");
   using model = new TextModel("abcdef\nxx");
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
@@ -685,7 +685,7 @@ test("Font metric refresh rebuilds authoritative horizontal width", () => {
   const container = requiredElement(dom.window.document, "main");
   const measurer = fixedTextMeasurer(10, 20);
   using model = new TextModel("xxxx");
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
@@ -707,7 +707,7 @@ test("Viewport disposal removes DOM without owning the text model", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   const container = requiredElement(dom.window.document, "main");
   using model = new TextModel("alpha");
-  const viewport = new AlphaEditorViewport({
+  const viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
@@ -778,7 +778,7 @@ function fixedTextMeasurer(
   return new TestTextMeasurer(characterWidth, horizontalPadding);
 }
 
-class TestTextMeasurer implements AlphaTextMeasurer {
+class TestTextMeasurer implements TextMeasurer {
   private dirty = false;
 
   constructor(

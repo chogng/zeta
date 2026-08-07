@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { OperatingSystem } from "../../../../../../base/common/platform.js";
-import { type AlphaTextMeasurer } from "../../../../browser/view/fontMetrics.js";
+import { type TextMeasurer } from "../../../../browser/view/fontMetrics.js";
 import { EditorSelectionController } from "../../../../common/cursor/editorSelectionController.js";
 import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
 import { TextPosition } from "../../../../common/core/text.js";
@@ -21,19 +21,19 @@ for (const [name, value] of Object.entries({
   Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { AlphaEditorViewport } = await import("../../../../browser/view/editorViewport.js");
-const { AlphaLineJoinController, isAlphaJoinLinesChord } = await import("../../browser/lineJoinController.js");
+const { EditorViewport } = await import("../../../../browser/view/editorViewport.js");
+const { LineJoinController, isAlphaJoinLinesChord } = await import("../../browser/lineJoinController.js");
 
 test("Join-lines shortcut runs locally and leaves unrelated chords alone", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   const container = dom.window.document.querySelector<HTMLElement>("main")!;
   using model = new TextModel("first\n  second");
   using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 2))));
-  using viewport = new AlphaEditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+  using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
   viewport.layout({ width: 200, height: 60 });
   const input = dom.window.document.createElement("textarea");
   container.append(input);
-  using controller = new AlphaLineJoinController(input, viewport, selections, { operatingSystem: OperatingSystem.Linux });
+  using controller = new LineJoinController(input, viewport, selections, { operatingSystem: OperatingSystem.Linux });
 
   const join = keydown(dom.window, "j", { ctrlKey: true });
   input.dispatchEvent(join);
@@ -51,10 +51,10 @@ test("Join-lines uses Command+J on macOS", () => {
   const container = dom.window.document.querySelector<HTMLElement>("main")!;
   using model = new TextModel("first\nsecond");
   using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
-  using viewport = new AlphaEditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+  using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
   const input = dom.window.document.createElement("textarea");
   container.append(input);
-  using controller = new AlphaLineJoinController(input, viewport, selections, { operatingSystem: OperatingSystem.Macintosh });
+  using controller = new LineJoinController(input, viewport, selections, { operatingSystem: OperatingSystem.Macintosh });
 
   const join = keydown(dom.window, "j", { metaKey: true });
   input.dispatchEvent(join);
@@ -64,7 +64,7 @@ test("Join-lines uses Command+J on macOS", () => {
   dom.window.close();
 });
 
-class FixedTextMeasurer implements AlphaTextMeasurer {
+class FixedTextMeasurer implements TextMeasurer {
   readonly horizontalPadding = 24;
   readonly contentLeftPadding = 12;
 

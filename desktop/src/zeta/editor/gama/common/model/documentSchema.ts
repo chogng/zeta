@@ -6,6 +6,15 @@ export interface DocumentMarkSpec {
   readonly validateAttributes?: (attrs: DocumentAttributes) => void;
 }
 
+/** Font families that Gama stores as semantic document text styles. */
+export type DocumentTextStyleFontFamily = "sans" | "serif" | "monospace";
+
+/** Persistent typography attributes applied by Gama's document-formatting controls. */
+export interface DocumentTextStyleAttributes {
+  readonly fontFamily?: DocumentTextStyleFontFamily;
+  readonly fontSize?: number;
+}
+
 export interface DocumentNodeSpec {
   readonly kind: DocumentNodeKind;
   readonly content?: readonly DocumentContentTerm[];
@@ -264,6 +273,7 @@ function defaultMarkSpecs(): Readonly<Record<string, DocumentMarkSpec>> {
     em: {},
     code: {},
     link: { validateAttributes: attrs => validateStringAttribute(attrs, "href", true) },
+    textStyle: { validateAttributes: validateTextStyleMarkAttributes },
   };
 }
 
@@ -288,6 +298,19 @@ function validateStringAttribute(attrs: DocumentAttributes, name: string, requir
 function validateIntegerAttribute(attrs: DocumentAttributes, name: string, min: number, max: number): void {
   const value = attrs[name];
   if (typeof value !== "number" || !Number.isSafeInteger(value) || value < min || value > max) throw new RangeError(`Attribute '${name}' must be an integer between ${min} and ${max}`);
+}
+
+function validateTextStyleMarkAttributes(attrs: DocumentAttributes): void {
+  const fontFamily = attrs.fontFamily;
+  const fontSize = attrs.fontSize;
+  if (fontFamily === undefined && fontSize === undefined) throw new TypeError("Text style marks require a font family or font size");
+  if (fontFamily !== undefined && fontFamily !== "sans" && fontFamily !== "serif" && fontFamily !== "monospace") {
+    throw new TypeError("Text style font family must be sans, serif, or monospace");
+  }
+  if (fontSize !== undefined) validateIntegerAttribute(attrs, "fontSize", 8, 72);
+  for (const key of Object.keys(attrs)) {
+    if (key !== "fontFamily" && key !== "fontSize") throw new TypeError(`Unknown text style attribute '${key}'`);
+  }
 }
 
 function validateCardinality(type: string, spec: DocumentNodeSpec): void {

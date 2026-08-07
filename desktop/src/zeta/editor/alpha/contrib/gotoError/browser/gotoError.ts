@@ -5,11 +5,11 @@ import { type EditorSelectionController } from "../../../common/cursor/editorSel
 import { type LanguageDiagnostic } from "../../../common/languages/languageResults.js";
 import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
 import { type TextPosition } from "../../../common/core/text.js";
-import { type AlphaEditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 
 /** Moves the primary selection through current-version diagnostics with F8. */
-export class AlphaDiagnosticNavigationController extends DisposableOwner {
-  constructor(input: HTMLTextAreaElement, private readonly viewport: AlphaEditorViewport, private readonly selections: EditorSelectionController, private readonly diagnostics: TextDecorationCollection<LanguageDiagnostic>) {
+export class DiagnosticNavigationController extends DisposableOwner {
+  constructor(input: HTMLTextAreaElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly diagnostics: TextDecorationCollection<LanguageDiagnostic>) {
     super();
     if (viewport.textModel !== selections.textModel || diagnostics.textModel !== selections.textModel) {
       this.dispose();

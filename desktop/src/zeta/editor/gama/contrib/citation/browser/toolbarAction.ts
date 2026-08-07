@@ -1,8 +1,8 @@
 import { createInsertCitationCommand, createInsertReferenceCommand } from "../common/commands.js";
-import type { GamaEditorToolbarAction } from "../../../browser/gamaEditorSession.js";
+import type { EditorToolbarAction } from "../../../browser/editorWidget.js";
 
 /** Toolbar actions contributed by the citation capability. */
-export const citationToolbarActions: readonly GamaEditorToolbarAction[] = Object.freeze([
+export const citationToolbarActions: readonly EditorToolbarAction[] = Object.freeze([
   {
     id: "citation",
     label: "Citation",

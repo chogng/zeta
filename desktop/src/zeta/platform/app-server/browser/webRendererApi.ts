@@ -3,6 +3,7 @@ import { ViteDevAppServerConnection, type ViteDevAppServerConnectionOptions, typ
 import { createViteDevFileApi } from "../../files/browser/fileApi.js";
 import { createViteDevExtensionApi } from "../../extensions/browser/extensionApi.js";
 import { createViteDevDiffApi } from "../../diff/browser/diffApi.js";
+import { createViteDevSyntaxApi } from "../../syntax/browser/syntaxApi.js";
 import { createViteDevGitApi } from "../../git/browser/gitApi.js";
 import type { IRendererHost } from "../../renderer/common/rendererHost.js";
 import { createViteDevWorkspaceSearchApi } from "../../search/browser/searchApi.js";
@@ -46,6 +47,7 @@ function createRendererHost(connection: ViteDevAppServerConnection): IRendererHo
     extensions: createViteDevExtensionApi(connection, resource),
     fs: createViteDevFileApi(connection),
     diff: createViteDevDiffApi(connection),
+    syntax: createViteDevSyntaxApi(connection),
     git: createViteDevGitApi(connection),
     workspaceSearch: createViteDevWorkspaceSearchApi(connection),
     terminal: new ViteDevTerminalProcessService(connection, appServer),

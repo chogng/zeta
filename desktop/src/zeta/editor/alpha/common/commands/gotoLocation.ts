@@ -1,14 +1,14 @@
 import { TextPosition } from "../core/text.js";
 import { type TextModel } from "../model/textModel.js";
 
-export interface AlphaGotoLocation {
+export interface GotoLocation {
   readonly position: TextPosition;
   readonly kind: "lineColumn" | "offset";
 }
 
-export type AlphaGotoLocationParseResult =
+export type GotoLocationParseResult =
   | { readonly kind: "empty" | "invalid"; readonly message: string }
-  | { readonly kind: "location"; readonly location: AlphaGotoLocation; readonly message: string };
+  | { readonly kind: "location"; readonly location: GotoLocation; readonly message: string };
 
 /**
  * Parses Alpha's Go to Line input into a clamped model position.
@@ -18,7 +18,7 @@ export type AlphaGotoLocationParseResult =
  * addresses the one-based UTF-16 offset N, with negative offsets counted from
  * the end of the document.
  */
-export function parseAlphaGotoLocation(model: TextModel, value: string): AlphaGotoLocationParseResult {
+export function parseAlphaGotoLocation(model: TextModel, value: string): GotoLocationParseResult {
   if (typeof value !== "string") throw new TypeError("Go to Line input must be text");
   const input = value.trim().replace(/^:/u, "");
   if (input.length === 0) {
@@ -28,7 +28,7 @@ export function parseAlphaGotoLocation(model: TextModel, value: string): AlphaGo
   return parseLineColumn(model, input);
 }
 
-function parseOffset(model: TextModel, value: string): AlphaGotoLocationParseResult {
+function parseOffset(model: TextModel, value: string): GotoLocationParseResult {
   const offset = parseInteger(value);
   if (offset === undefined) {
     return Object.freeze({ kind: "invalid", message: `Type an offset from 1 to ${model.createSnapshot().length}` });
@@ -39,7 +39,7 @@ function parseOffset(model: TextModel, value: string): AlphaGotoLocationParseRes
   return locationResult(position, "offset");
 }
 
-function parseLineColumn(model: TextModel, value: string): AlphaGotoLocationParseResult {
+function parseLineColumn(model: TextModel, value: string): GotoLocationParseResult {
   const parts = value.split(/[,:#]/u, 2);
   const requestedLine = parseInteger(parts[0]!.trim());
   if (requestedLine === undefined) {
@@ -62,7 +62,7 @@ function parseLineColumn(model: TextModel, value: string): AlphaGotoLocationPars
   return locationResult(TextPosition.at(lineIndex, clamp(oneBasedColumn - 1, 0, lineLength)), "lineColumn");
 }
 
-function locationResult(position: TextPosition, kind: AlphaGotoLocation["kind"]): AlphaGotoLocationParseResult {
+function locationResult(position: TextPosition, kind: GotoLocation["kind"]): GotoLocationParseResult {
   return Object.freeze({
     kind: "location",
     location: Object.freeze({ position, kind }),

@@ -9,92 +9,98 @@ import type { IWorkingCopy } from "../../../workbench/services/workingCopy/commo
 import type { IWorkingCopyService } from "../../../workbench/services/workingCopy/common/workingCopyService.js";
 import { BrowserDocumentModelService } from "./services/browserDocumentModelService.js";
 import type { DocumentNode } from "../common/model/document.js";
+import type { DocumentSelection } from "../common/core/documentSelection.js";
 import type { DocumentOutline } from "../common/model/documentOutline.js";
 import { GAMA_EDITOR_ID } from "./editorInput.js";
-import { GamaEditorSession, type GamaEditorSessionOptions } from "./gamaEditorSession.js";
+import { EditorWidget, type EditorWidgetOptions } from "./editorWidget.js";
 
-/** Workbench-only services that complement one Gama editor session. */
-export interface GamaEditorPaneOptions extends GamaEditorSessionOptions {
+/** Workbench-only services that complement one Gama editor. */
+export interface EditorPaneOptions extends EditorWidgetOptions {
   readonly workingCopyService?: IWorkingCopyService;
 }
 
-/** Workbench pane that hosts one Gama structured-editor session. */
-export class GamaEditorPane extends DisposableOwner implements IEditorPane {
+/** Workbench pane that hosts one Gama structured editor. */
+export class EditorPane extends DisposableOwner implements IEditorPane {
   readonly id = GAMA_EDITOR_ID;
 
-  private readonly session: GamaEditorSession;
+  private readonly editor: EditorWidget;
   private container: HTMLDivElement | undefined;
   private dimension: IDimension = { width: 0, height: 0 };
 
   get workingCopy(): IWorkingCopy | undefined {
-    return this.session.workingCopy;
+    return this.editor.workingCopy;
   }
 
-  constructor(textFiles: ITextFileService, options: GamaEditorPaneOptions = {}) {
+  constructor(textFiles: ITextFileService, options: EditorPaneOptions = {}) {
     super();
     const modelService = this.own(new BrowserDocumentModelService(textFiles, options.workingCopyService));
-    this.session = this.own(new GamaEditorSession(modelService, options));
+    this.editor = this.own(new EditorWidget(modelService, options));
   }
 
   create(parent: HTMLElement): void {
     if (this.container) throw new ReferenceError("Gama editor pane has already been created");
     const container = parent.ownerDocument.createElement("div");
-    container.className = "zeta-gama-editor-pane";
+    container.className = "zeta-structured-editor-pane";
     parent.append(container);
     this.container = container;
-    this.session.create(container);
+    this.editor.create(container);
   }
 
   async setInput(input: EditorInput, signal: AbortSignal): Promise<void> {
     this.requireContainer();
-    await this.session.setInput(input, signal);
-    this.session.layout(this.dimension);
+    await this.editor.setInput(input, signal);
+    this.editor.layout(this.dimension);
   }
 
   clearInput(): void {
-    this.session.clearInput();
+    this.editor.clearInput();
   }
 
   layout(dimension: IDimension): void {
     this.dimension = { width: Math.max(0, dimension.width), height: Math.max(0, dimension.height) };
-    this.session.layout(this.dimension);
+    this.editor.layout(this.dimension);
   }
 
   setVisible(visibility: EditorPaneVisibility): void {
     if (this.container) this.container.hidden = visibility === EditorPaneVisibility.Hidden;
-    this.session.setVisible(visibility);
+    this.editor.setVisible(visibility);
   }
 
   focus(): void {
-    this.session.focus();
+    this.editor.focus();
   }
 
   async save(): Promise<void> {
-    await this.session.save();
+    await this.editor.save();
   }
 
   async saveAs(resource: URI): Promise<void> {
-    await this.session.saveAs(resource);
+    await this.editor.saveAs(resource);
   }
 
   async revert(): Promise<void> {
-    await this.session.revert();
+    await this.editor.revert();
   }
 
   get isDirty(): boolean {
-    return this.session.isDirty;
+    return this.editor.isDirty;
   }
 
   get hasExternalChange(): boolean {
-    return this.session.hasExternalChange;
+    return this.editor.hasExternalChange;
   }
 
   getDocument(): DocumentNode {
-    return this.session.getDocument();
+    return this.editor.getDocument();
+  }
+
+  /** Returns the current structured-document selection of the hosted Gama editor. */
+  getDocumentSelection(): DocumentSelection | undefined {
+    return this.editor.getDocumentSelection();
   }
 
   getOutline(): DocumentOutline {
-    return this.session.getOutline();
+    return this.editor.getOutline();
   }
 
   override dispose(): void {

@@ -7,6 +7,7 @@ import { serializeDocument } from "../../src/zeta/editor/gama/common/model/docum
 export interface TestWorkspace {
   readonly directory: string;
   readonly file: string;
+  readonly rustFile: string;
   readonly academicFile: string;
 }
 
@@ -14,10 +15,12 @@ export interface TestWorkspace {
 export async function createTestWorkspace(): Promise<TestWorkspace> {
   const directory = await mkdtemp(join(tmpdir(), "zeta-playwright-workspace-"));
   const file = join(directory, "main.ts");
+  const rustFile = join(directory, "main.rs");
   const academicFile = join(directory, "paper.zeta-academic");
   await writeFile(file, "const value = 1;\n", "utf8");
+  await writeFile(rustFile, "fn main() {\n    work();\n}\n", "utf8");
   await writeFile(academicFile, createAcademicDocument(), "utf8");
-  return { directory, file, academicFile };
+  return { directory, file, rustFile, academicFile };
 }
 
 /** Removes one test workspace created by {@link createTestWorkspace}. */

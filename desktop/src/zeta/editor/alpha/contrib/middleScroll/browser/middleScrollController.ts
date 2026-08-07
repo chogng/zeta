@@ -1,13 +1,13 @@
 import "./media/middleScroll.css";
 import { addDisposableListener } from "../../../../../base/browser/dom.js";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
-import { type AlphaEditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 
 /** Implements editor-local middle-button panning without entering pointer selection mode. */
-export class AlphaMiddleScrollController extends DisposableOwner {
+export class MiddleScrollController extends DisposableOwner {
   private active: { readonly pointerId: number; readonly x: number; readonly y: number; readonly left: number; readonly top: number } | undefined;
 
-  constructor(private readonly viewport: AlphaEditorViewport) {
+  constructor(private readonly viewport: EditorViewport) {
     super();
     this.own(addDisposableListener<PointerEvent>(viewport.element, "pointerdown", event => {
       if (event.button !== 1) return;

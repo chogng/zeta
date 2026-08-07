@@ -2,13 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { IME } from "../../../../base/common/ime.js";
-import { type AlphaTextMeasurer } from "../../browser/view/fontMetrics.js";
+import { type TextMeasurer } from "../../browser/view/fontMetrics.js";
 import { EditorSelectionController } from "../../common/cursor/editorSelectionController.js";
 import { TextSelection, TextSelectionSet } from "../../common/core/selection.js";
 import { TextPosition, TextRange } from "../../common/core/text.js";
 import { TextModel } from "../../common/model/textModel.js";
 
-class FixedTextMeasurer implements AlphaTextMeasurer {
+class FixedTextMeasurer implements TextMeasurer {
   readonly horizontalPadding = 24;
   readonly contentLeftPadding = 12;
 
@@ -39,8 +39,8 @@ for (const [name, value] of Object.entries({
   });
 }
 
-const { AlphaEditorViewport } = await import("../../browser/view/editorViewport.js");
-const { AlphaTextInputController } = await import("../../browser/input/textInputController.js");
+const { EditorViewport } = await import("../../browser/view/editorViewport.js");
+const { TextInputController } = await import("../../browser/input/textInputController.js");
 
 test("Textarea composition commits one revision and positions the IME input", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
@@ -49,7 +49,7 @@ test("Textarea composition commits one revision and positions the IME input", ()
   using model = new TextModel("hello");
   const initial = TextSelectionSet.single(selection(0, 1, 0, 4));
   using selections = new EditorSelectionController(model, initial);
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
@@ -57,7 +57,7 @@ test("Textarea composition commits one revision and positions the IME input", ()
     selectionController: selections,
   });
   viewport.layout({ width: 100, height: 20 });
-  using input = new AlphaTextInputController(viewport, selections);
+  using input = new TextInputController(viewport, selections);
   const states: boolean[] = [];
   using listener = input.compositionController.onDidChange(state => states.push(state));
 
@@ -145,7 +145,7 @@ test("Escape, blur, and disposal cancel active textarea composition", () => {
   using model = new TextModel("abc");
   const initial = TextSelectionSet.single(caret(0, 1));
   using selections = new EditorSelectionController(model, initial);
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
@@ -153,7 +153,7 @@ test("Escape, blur, and disposal cancel active textarea composition", () => {
     selectionController: selections,
   });
   viewport.layout({ width: 100, height: 20 });
-  const input = new AlphaTextInputController(viewport, selections);
+  const input = new TextInputController(viewport, selections);
 
   startAndUpdate(dom.window, input.element, "中");
   input.element.dispatchEvent(keyboardEvent(dom.window, "Escape", true));
@@ -190,14 +190,14 @@ test("Empty composition end commits deletion while a stray end is ignored", () =
   using model = new TextModel("abc");
   const initial = TextSelectionSet.single(selection(0, 1, 0, 2));
   using selections = new EditorSelectionController(model, initial);
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
     textMeasurer: new FixedTextMeasurer(),
     selectionController: selections,
   });
-  using input = new AlphaTextInputController(viewport, selections);
+  using input = new TextInputController(viewport, selections);
 
   input.element.dispatchEvent(compositionEvent(dom.window, "compositionstart", ""));
   input.element.dispatchEvent(compositionEvent(dom.window, "compositionend", ""));
@@ -231,7 +231,7 @@ test("IME coordination, multi-cursor rejection, and external invalidation are sa
     model,
     TextSelectionSet.withPrimary([caret(1, 1), caret(0, 0)], 0),
   );
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
@@ -239,7 +239,7 @@ test("IME coordination, multi-cursor rejection, and external invalidation are sa
     selectionController: selections,
   });
   viewport.layout({ width: 100, height: 40 });
-  using input = new AlphaTextInputController(viewport, selections);
+  using input = new TextInputController(viewport, selections);
 
   const multiStart = compositionEvent(dom.window, "compositionstart", "");
   input.element.dispatchEvent(multiStart);

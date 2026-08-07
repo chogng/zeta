@@ -1,26 +1,55 @@
-.zeta-document-block-toolbar {
+.zeta-structured-format-toolbar {
   box-sizing: border-box;
   display: flex;
+  align-items: center;
+  flex-wrap: wrap;
   gap: 4px;
   padding: 6px 12px;
   border-bottom: 1px solid var(--zeta-border);
   background: var(--zeta-editor-background);
 }
 
-.zeta-document-block-toolbar-button {
-  padding: 3px 8px;
-  border: 1px solid transparent;
+.zeta-structured-format-toolbar .zeta-action-bar {
+  gap: 2px;
+}
+
+.zeta-structured-format-typography-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-inline: 6px;
+  border-inline: 1px solid var(--zeta-border);
+}
+
+.zeta-structured-format-select-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--zeta-description-foreground, var(--zeta-editor-foreground));
+  font-size: 0.9em;
+}
+
+.zeta-structured-format-select {
+  min-width: 88px;
+  height: 24px;
+  padding-inline: 5px;
+  border: 1px solid var(--zeta-border);
   border-radius: 4px;
-  color: inherit;
-  background: transparent;
-  cursor: pointer;
+  color: var(--zeta-editor-foreground);
+  background: var(--zeta-input-background, var(--zeta-editor-background));
   font: inherit;
 }
 
-.zeta-document-block-toolbar-button:hover { background: var(--zeta-toolbar-hover-background); }
-.zeta-document-block-toolbar-button.checked {
-  border-color: var(--zeta-border);
-  background: var(--zeta-action-bar-toggled-background);
+.zeta-structured-format-font-size .zeta-structured-format-select { min-width: 64px; }
+
+.zeta-structured-format-select:focus-visible {
+  outline: 1px solid var(--zeta-focus-border);
+  outline-offset: 1px;
+}
+
+.zeta-structured-format-code-context {
+  color: var(--zeta-description-foreground, var(--zeta-editor-foreground));
+  font-size: 0.9em;
 }
 
 .zeta-text-editor-widget-layout {
@@ -199,6 +228,9 @@
 }
 .zeta-document-mark-strong { font-weight: 700; }
 .zeta-document-mark-em { font-style: italic; }
+.zeta-document-mark-textStyle[data-font-family="sans"] { font-family: var(--zeta-font-family); }
+.zeta-document-mark-textStyle[data-font-family="serif"] { font-family: Georgia, "Times New Roman", serif; }
+.zeta-document-mark-textStyle[data-font-family="monospace"] { font-family: var(--zeta-font-family-monospace); }
 .zeta-document-mark-code {
   padding: 0 2px;
   border-radius: 3px;

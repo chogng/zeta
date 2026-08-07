@@ -2,14 +2,14 @@ import "./media/inlayHints.css";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
 import { TextPosition, TextRange } from "../../../common/core/text.js";
 import { type InlayHintsService, type LanguageInlayHint } from "../common/inlayHints.js";
-import { type AlphaEditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 
 /** Projects versioned inlay hints into lightweight editor-local inline nodes. */
-export class AlphaInlayHintsController extends DisposableOwner {
+export class InlayHintsController extends DisposableOwner {
   private hints: readonly LanguageInlayHint[] = [];
   private request: AbortController | undefined;
 
-  constructor(private readonly viewport: AlphaEditorViewport, private readonly service: InlayHintsService, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Alpha inlay hints failed", error)) {
+  constructor(private readonly viewport: EditorViewport, private readonly service: InlayHintsService, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Alpha inlay hints failed", error)) {
     super();
     this.own(viewport.onDidChangeLayout(() => this.render()));
     this.own(viewport.textModel.onDidChange(() => void this.refresh()));

@@ -18,32 +18,32 @@ import { createLanguagePairBackspaceCommand, createLanguagePairTypeCommand, type
 import { createOvertypeTextCommand } from "../../common/cursor/cursorOvertype.js";
 import { type TextModelChange } from "../../common/core/text.js";
 import { TextSelection, TextSelectionSet } from "../../common/core/selection.js";
-import { type AlphaEditorViewport } from "../view/editorViewport.js";
-import { AlphaClipboardController, type AlphaClipboardControllerOptions } from "../../contrib/clipboard/browser/clipboardController.js";
-import { AlphaUriListPasteProvider } from "../../contrib/clipboard/browser/clipboardPasteProvider.js";
-import { AlphaCompletionWidget } from "../../contrib/suggest/browser/suggestWidget.js";
-import { AlphaCompositionController } from "./compositionController.js";
+import { type EditorViewport } from "../view/editorViewport.js";
+import { ClipboardController, type ClipboardControllerOptions } from "../../contrib/clipboard/browser/clipboardController.js";
+import { UriListPasteProvider } from "../../contrib/clipboard/browser/clipboardPasteProvider.js";
+import { CompletionWidget } from "../../contrib/suggest/browser/suggestWidget.js";
+import { CompositionController } from "./compositionController.js";
 
-export interface AlphaTextInputControllerOptions {
+export interface TextInputControllerOptions {
   readonly ariaLabel?: string;
-  readonly clipboard?: AlphaClipboardControllerOptions;
-  readonly completion?: AlphaTextInputCompletionOptions;
+  readonly clipboard?: ClipboardControllerOptions;
+  readonly completion?: TextInputCompletionOptions;
   readonly indentation?: EditorIndentationOptions;
-  readonly language?: AlphaTextInputLanguageOptions;
+  readonly language?: TextInputLanguageOptions;
 }
 
-export interface AlphaTextInputLanguageOptions {
+export interface TextInputLanguageOptions {
   readonly languageId: string;
   readonly configurations: LanguageConfigurationSource;
   readonly lexicalContext?: LanguageLexicalContextSource;
 }
 
-export interface AlphaTextInputCompletionOptions {
+export interface TextInputCompletionOptions {
   readonly session: LanguageCompletionSessionController;
-  readonly requests?: AlphaTextInputCompletionRequests;
+  readonly requests?: TextInputCompletionRequests;
 }
 
-export interface AlphaTextInputCompletionRequests {
+export interface TextInputCompletionRequests {
   readonly service: LanguageCompletionService;
   readonly languageId: string;
   readonly onRequestError?: (error: unknown) => void;
@@ -52,13 +52,13 @@ export interface AlphaTextInputCompletionRequests {
 /**
  * Owns Alpha's hidden textarea and non-composition beforeinput editing.
  */
-export class AlphaTextInputController extends DisposableOwner {
+export class TextInputController extends DisposableOwner {
   readonly element: HTMLTextAreaElement;
-  readonly compositionController: AlphaCompositionController;
-  readonly completionWidget: AlphaCompletionWidget | undefined;
+  readonly compositionController: CompositionController;
+  readonly completionWidget: CompletionWidget | undefined;
   private readonly completionSession: LanguageCompletionSessionController | undefined;
-  private readonly completionRequests: AlphaTextInputCompletionRequests | undefined;
-  private readonly language: AlphaTextInputLanguageOptions | undefined;
+  private readonly completionRequests: TextInputCompletionRequests | undefined;
+  private readonly language: TextInputLanguageOptions | undefined;
   private readonly indentation: ResolvedEditorIndentationOptions;
   private readonly languageLexicalContext: LanguageLexicalContextSource | undefined;
   private readonly autoClosingTracker: LanguageAutoClosingTracker | undefined;
@@ -69,9 +69,9 @@ export class AlphaTextInputController extends DisposableOwner {
   private disposed = false;
 
   constructor(
-    private readonly viewport: AlphaEditorViewport,
+    private readonly viewport: EditorViewport,
     private readonly selectionController: EditorSelectionController,
-    options: AlphaTextInputControllerOptions = {},
+    options: TextInputControllerOptions = {},
   ) {
     super();
     if (
@@ -155,26 +155,26 @@ export class AlphaTextInputController extends DisposableOwner {
     this.element.setAttribute("aria-roledescription", "code editor");
     this.element.setAttribute("aria-readonly", String(selectionController.readOnly));
     this.completionWidget = this.completionSession
-      ? this.own(new AlphaCompletionWidget(
+      ? this.own(new CompletionWidget(
         this.element,
         viewport,
         selectionController,
         this.completionSession,
       ))
       : undefined;
-    this.compositionController = this.own(new AlphaCompositionController(
+    this.compositionController = this.own(new CompositionController(
       this.element,
       viewport,
       selectionController,
     ));
-    this.own(new AlphaClipboardController(
+    this.own(new ClipboardController(
       this.element,
       viewport,
       selectionController,
       {
         ...options.clipboard,
         isEditingAllowed: () => !this.compositionController.composing && (options.clipboard?.isEditingAllowed?.() ?? true),
-        pasteProviders: [AlphaUriListPasteProvider, ...(options.clipboard?.pasteProviders ?? [])],
+        pasteProviders: [UriListPasteProvider, ...(options.clipboard?.pasteProviders ?? [])],
       },
     ));
     viewport.element.append(this.element);

@@ -1,7 +1,7 @@
 import { addDisposableListener, stopEvent } from "../../../base/browser/dom.js";
 import { DisposableOwner } from "../../../base/common/lifecycle.js";
 
-export interface AlphaSaveControllerOptions {
+export interface SaveControllerOptions {
   readonly save: () => Promise<void | boolean>;
   readonly beforeSave?: () => void | Promise<void>;
   readonly onSaveSuccess?: () => void;
@@ -9,14 +9,14 @@ export interface AlphaSaveControllerOptions {
 }
 
 /** Routes the focused editor's standard save shortcut without overlapping writes. */
-export class AlphaSaveController extends DisposableOwner {
+export class SaveController extends DisposableOwner {
   private readonly save: () => Promise<void | boolean>;
   private readonly beforeSave: () => void | Promise<void>;
   private readonly onSaveSuccess: () => void;
   private readonly onSaveError: (error: unknown) => void;
   private saving = false;
 
-  constructor(input: HTMLTextAreaElement, options: AlphaSaveControllerOptions) {
+  constructor(input: HTMLTextAreaElement, options: SaveControllerOptions) {
     super();
     if (!options || typeof options.save !== "function") {
       this.dispose();

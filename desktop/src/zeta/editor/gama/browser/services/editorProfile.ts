@@ -4,44 +4,44 @@ import type { DocumentPlugin } from "../../common/model/documentPlugin.js";
 import type { DocumentSchema } from "../../common/model/documentSchema.js";
 import type { EditorInput } from "../../../../workbench/browser/parts/editor/editorInput.js";
 import { EditorPaneMatch } from "../../../../workbench/browser/parts/editor/editorPane.js";
-import type { GamaEditorSessionOptions } from "../gamaEditorSession.js";
-import type { GamaEditorPaneOptions } from "../gamaEditorPane.js";
-import { matchGamaEditor, type GamaEditorInputMatcher } from "../editorInput.js";
+import type { EditorWidgetOptions } from "../editorWidget.js";
+import type { EditorPaneOptions } from "../editorPane.js";
+import { matchGamaEditor, type EditorInputMatcher } from "../editorInput.js";
 
 /** Product-neutral schema and browser composition for one Gama document kind. */
-export interface GamaEditorProfile {
+export interface EditorProfile {
   readonly id: string;
   readonly editorId: string;
   readonly editorName: string;
-  readonly input: GamaEditorInputMatcher;
+  readonly input: EditorInputMatcher;
   readonly createSchema: () => DocumentSchema;
   readonly createEmptyDocument?: (schema: DocumentSchema) => DocumentNode;
   readonly outline?: DocumentOutlineOptions;
   readonly outlineNavigator?: boolean;
-  readonly nodeViews?: GamaEditorSessionOptions["nodeViews"];
-  readonly inlineNodeViews?: GamaEditorSessionOptions["inlineNodeViews"];
-  readonly toolbarActions?: GamaEditorSessionOptions["toolbarActions"];
+  readonly nodeViews?: EditorWidgetOptions["nodeViews"];
+  readonly inlineNodeViews?: EditorWidgetOptions["inlineNodeViews"];
+  readonly toolbarActions?: EditorWidgetOptions["toolbarActions"];
   readonly createPlugins?: () => readonly DocumentPlugin<unknown>[];
 }
 
-export interface GamaEditorRuntimeOptions {
-  readonly onSave?: GamaEditorSessionOptions["onSave"];
-  readonly embeddedTextEditorFactory?: GamaEditorSessionOptions["embeddedTextEditorFactory"];
-  readonly workingCopyService?: GamaEditorPaneOptions["workingCopyService"];
+export interface EditorRuntimeOptions {
+  readonly onSave?: EditorWidgetOptions["onSave"];
+  readonly embeddedTextEditorFactory?: EditorWidgetOptions["embeddedTextEditorFactory"];
+  readonly workingCopyService?: EditorPaneOptions["workingCopyService"];
 }
 
 /** Selects the first profile that claims one Workbench input. */
-export function findGamaEditorProfile(input: EditorInput, profiles: readonly GamaEditorProfile[]): GamaEditorProfile | undefined {
+export function findGamaEditorProfile(input: EditorInput, profiles: readonly EditorProfile[]): EditorProfile | undefined {
   return profiles.find(profile => matchGamaEditor(input, profile.input) !== EditorPaneMatch.None);
 }
 
 /** Produces the editor-pane match used by a profile registry contribution. */
-export function matchGamaEditorProfiles(input: EditorInput, profiles: readonly GamaEditorProfile[]): EditorPaneMatch {
+export function matchGamaEditorProfiles(input: EditorInput, profiles: readonly EditorProfile[]): EditorPaneMatch {
   return findGamaEditorProfile(input, profiles) ? EditorPaneMatch.Default : EditorPaneMatch.None;
 }
 
 /** Materializes one profile into pane options while keeping Workbench services at the composition root. */
-export function createGamaEditorPaneOptions(profile: GamaEditorProfile, runtime: GamaEditorRuntimeOptions = {}): GamaEditorPaneOptions {
+export function createGamaEditorPaneOptions(profile: EditorProfile, runtime: EditorRuntimeOptions = {}): EditorPaneOptions {
   const schema = profile.createSchema();
   return {
     ...runtime,

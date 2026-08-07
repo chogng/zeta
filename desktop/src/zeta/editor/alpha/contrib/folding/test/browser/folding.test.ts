@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { OperatingSystem } from "../../../../../../base/common/platform.js";
-import { type AlphaTextMeasurer } from "../../../../browser/view/fontMetrics.js";
+import { type TextMeasurer } from "../../../../browser/view/fontMetrics.js";
 import { EditorSelectionController } from "../../../../common/cursor/editorSelectionController.js";
 import { EditorFoldingModel } from "../../browser/foldingModel.js";
 import { EditorHiddenRangeModel } from "../../browser/hiddenRangeModel.js";
@@ -24,8 +24,8 @@ for (const [name, value] of Object.entries({
   Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { AlphaEditorViewport } = await import("../../../../browser/view/editorViewport.js");
-const { AlphaFoldingCommand, AlphaFoldingController, resolveAlphaFoldingCommand } = await import("../../browser/folding.js");
+const { EditorViewport } = await import("../../../../browser/view/editorViewport.js");
+const { FoldingCommand, FoldingController, resolveAlphaFoldingCommand } = await import("../../browser/folding.js");
 
 test.after(() => browserEnvironment.window.close());
 
@@ -37,7 +37,7 @@ test("Folding controller routes platform chords and gutter toggles through the f
   using folding = new EditorFoldingModel(model);
   using hiddenRanges = new EditorHiddenRangeModel(model, folding);
   folding.setRanges([{ startLineIndex: 0, endLineIndex: 2 }]);
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
@@ -49,7 +49,7 @@ test("Folding controller routes platform chords and gutter toggles through the f
   viewport.layout({ width: 300, height: 60 });
   const input = dom.window.document.createElement("textarea") as unknown as HTMLTextAreaElement;
   viewport.element.append(input);
-  using controller = new AlphaFoldingController(input, viewport, selections, folding, { operatingSystem: OperatingSystem.Windows });
+  using controller = new FoldingController(input, viewport, selections, folding, { operatingSystem: OperatingSystem.Windows });
 
   const collapse = keyboardEvent(dom.window, "[", { ctrlKey: true, shiftKey: true });
   input.dispatchEvent(collapse);
@@ -72,8 +72,8 @@ test("Folding controller routes platform chords and gutter toggles through the f
 });
 
 test("Folding chord resolution follows Windows/Linux and macOS conventions", () => {
-  assert.equal(resolveAlphaFoldingCommand({ key: "[", ctrlKey: true, shiftKey: true, altKey: false, metaKey: false }, OperatingSystem.Linux), AlphaFoldingCommand.Collapse);
-  assert.equal(resolveAlphaFoldingCommand({ key: "]", ctrlKey: false, shiftKey: false, altKey: true, metaKey: true }, OperatingSystem.Macintosh), AlphaFoldingCommand.Expand);
+  assert.equal(resolveAlphaFoldingCommand({ key: "[", ctrlKey: true, shiftKey: true, altKey: false, metaKey: false }, OperatingSystem.Linux), FoldingCommand.Collapse);
+  assert.equal(resolveAlphaFoldingCommand({ key: "]", ctrlKey: false, shiftKey: false, altKey: true, metaKey: true }, OperatingSystem.Macintosh), FoldingCommand.Expand);
   assert.equal(resolveAlphaFoldingCommand({ key: "[", ctrlKey: true, shiftKey: false, altKey: false, metaKey: false }, OperatingSystem.Windows), undefined);
 });
 
@@ -85,10 +85,10 @@ test("Folding controller routes macOS Command+K chords without accepting Control
   using folding = new EditorFoldingModel(model);
   using hiddenRanges = new EditorHiddenRangeModel(model, folding);
   folding.setRanges([{ startLineIndex: 0, endLineIndex: 1 }, { startLineIndex: 2, endLineIndex: 3 }]);
-  using viewport = new AlphaEditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections, foldingModel: folding, hiddenRangeModel: hiddenRanges });
+  using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections, foldingModel: folding, hiddenRangeModel: hiddenRanges });
   const input = dom.window.document.createElement("textarea") as unknown as HTMLTextAreaElement;
   viewport.element.append(input);
-  using controller = new AlphaFoldingController(input, viewport, selections, folding, { operatingSystem: OperatingSystem.Macintosh });
+  using controller = new FoldingController(input, viewport, selections, folding, { operatingSystem: OperatingSystem.Macintosh });
 
   input.dispatchEvent(keyboardEvent(dom.window, "k", { metaKey: true }));
   const collapseAll = keyboardEvent(dom.window, "0", { metaKey: true });
@@ -110,10 +110,10 @@ test("Folding controller collapses and expands every range through Ctrl+K chords
   using folding = new EditorFoldingModel(model);
   using hiddenRanges = new EditorHiddenRangeModel(model, folding);
   folding.setRanges([{ startLineIndex: 0, endLineIndex: 1 }, { startLineIndex: 2, endLineIndex: 3 }]);
-  using viewport = new AlphaEditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections, foldingModel: folding, hiddenRangeModel: hiddenRanges });
+  using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections, foldingModel: folding, hiddenRangeModel: hiddenRanges });
   const input = dom.window.document.createElement("textarea") as unknown as HTMLTextAreaElement;
   viewport.element.append(input);
-  using controller = new AlphaFoldingController(input, viewport, selections, folding, { operatingSystem: OperatingSystem.Windows });
+  using controller = new FoldingController(input, viewport, selections, folding, { operatingSystem: OperatingSystem.Windows });
   input.dispatchEvent(keyboardEvent(dom.window, "k", { ctrlKey: true }));
   const collapseAll = keyboardEvent(dom.window, "0", { ctrlKey: true });
   input.dispatchEvent(collapseAll);
@@ -133,10 +133,10 @@ test("Folding controller recursively folds nested regions through platform prefi
   using folding = new EditorFoldingModel(model);
   using hiddenRanges = new EditorHiddenRangeModel(model, folding);
   folding.setRanges([{ startLineIndex: 0, endLineIndex: 4 }, { startLineIndex: 1, endLineIndex: 3 }, { startLineIndex: 2, endLineIndex: 3 }]);
-  using viewport = new AlphaEditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections, foldingModel: folding, hiddenRangeModel: hiddenRanges });
+  using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections, foldingModel: folding, hiddenRangeModel: hiddenRanges });
   const input = dom.window.document.createElement("textarea") as unknown as HTMLTextAreaElement;
   viewport.element.append(input);
-  using controller = new AlphaFoldingController(input, viewport, selections, folding, { operatingSystem: OperatingSystem.Macintosh });
+  using controller = new FoldingController(input, viewport, selections, folding, { operatingSystem: OperatingSystem.Macintosh });
 
   input.dispatchEvent(keyboardEvent(dom.window, "k", { metaKey: true }));
   const fold = keyboardEvent(dom.window, "[", { metaKey: true });
@@ -158,10 +158,10 @@ test("Folding controller creates and removes manual ranges through macOS prefix 
   using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.from(TextPosition.at(1, 0), TextPosition.at(4, 0))));
   using folding = new EditorFoldingModel(model);
   using hiddenRanges = new EditorHiddenRangeModel(model, folding);
-  using viewport = new AlphaEditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections, foldingModel: folding, hiddenRangeModel: hiddenRanges });
+  using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections, foldingModel: folding, hiddenRangeModel: hiddenRanges });
   const input = dom.window.document.createElement("textarea") as unknown as HTMLTextAreaElement;
   viewport.element.append(input);
-  using controller = new AlphaFoldingController(input, viewport, selections, folding, { operatingSystem: OperatingSystem.Macintosh });
+  using controller = new FoldingController(input, viewport, selections, folding, { operatingSystem: OperatingSystem.Macintosh });
 
   input.dispatchEvent(keyboardEvent(dom.window, "k", { metaKey: true }));
   input.dispatchEvent(keyboardEvent(dom.window, ",", { metaKey: true }));
@@ -182,10 +182,10 @@ test("Folding controller collapses macOS prefix levels without hiding shallower 
   using folding = new EditorFoldingModel(model);
   using hiddenRanges = new EditorHiddenRangeModel(model, folding);
   folding.setRanges([{ startLineIndex: 0, endLineIndex: 5 }, { startLineIndex: 1, endLineIndex: 4 }, { startLineIndex: 2, endLineIndex: 3 }]);
-  using viewport = new AlphaEditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections, foldingModel: folding, hiddenRangeModel: hiddenRanges });
+  using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections, foldingModel: folding, hiddenRangeModel: hiddenRanges });
   const input = dom.window.document.createElement("textarea") as unknown as HTMLTextAreaElement;
   viewport.element.append(input);
-  using controller = new AlphaFoldingController(input, viewport, selections, folding, { operatingSystem: OperatingSystem.Macintosh });
+  using controller = new FoldingController(input, viewport, selections, folding, { operatingSystem: OperatingSystem.Macintosh });
 
   input.dispatchEvent(keyboardEvent(dom.window, "k", { metaKey: true }));
   const level = keyboardEvent(dom.window, "2", { metaKey: true });
@@ -209,7 +209,7 @@ function requiredElement<T extends Element = HTMLElement>(root: ParentNode, sele
   return element;
 }
 
-class FixedTextMeasurer implements AlphaTextMeasurer {
+class FixedTextMeasurer implements TextMeasurer {
   readonly horizontalPadding = 24;
   readonly contentLeftPadding = 12;
 

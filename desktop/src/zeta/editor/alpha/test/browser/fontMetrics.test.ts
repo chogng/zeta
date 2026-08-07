@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { AlphaDomTextMeasurer } from "../../browser/view/fontMetrics.js";
+import { DomTextMeasurer } from "../../browser/view/fontMetrics.js";
 
-test("AlphaDomTextMeasurer resolves computed spacing and tab stops", () => {
+test("DomTextMeasurer resolves computed spacing and tab stops", () => {
   const dom = new JSDOM("<!doctype html><body><div></div></body>");
   const context = {
     font: "",
@@ -27,7 +27,7 @@ test("AlphaDomTextMeasurer resolves computed spacing and tab stops", () => {
   reference.style.paddingLeft = "2px";
   reference.style.paddingRight = "3px";
   reference.style.tabSize = "4";
-  const measurer = new AlphaDomTextMeasurer(reference);
+  const measurer = new DomTextMeasurer(reference);
 
   assert.equal(measurer.horizontalPadding, 5);
   assert.equal(measurer.contentLeftPadding, 2);

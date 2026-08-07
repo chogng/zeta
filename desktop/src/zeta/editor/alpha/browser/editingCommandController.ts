@@ -3,13 +3,13 @@ import { DisposableOwner } from "../../../base/common/lifecycle.js";
 import { type EditorSelectionController } from "../common/cursor/editorSelectionController.js";
 import { expandLineSelections } from "../contrib/lineSelection/browser/lineSelection.js";
 import { TextSelection, TextSelectionSet } from "../common/core/selection.js";
-import { type AlphaEditorViewport } from "./view/editorViewport.js";
+import { type EditorViewport } from "./view/editorViewport.js";
 
 /** Routes synchronous document-wide editing shortcuts into Alpha commands. */
-export class AlphaEditingCommandController extends DisposableOwner {
+export class EditingCommandController extends DisposableOwner {
   constructor(
     input: HTMLTextAreaElement,
-    private readonly viewport: AlphaEditorViewport,
+    private readonly viewport: EditorViewport,
     private readonly selections: EditorSelectionController,
   ) {
     super();

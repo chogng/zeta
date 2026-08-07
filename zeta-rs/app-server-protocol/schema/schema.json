@@ -271,6 +271,7 @@
         "GitNotRepository",
         "GitOperationFailed",
         "DiffOperationFailed",
+        "SyntaxAnalysisFailed",
         "SearchUnavailable",
         "SearchNotFound",
         "SearchNotOwner",
@@ -1057,6 +1058,22 @@
             },
             "params": {
               "$ref": "#/$defs/DiffComputeParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "syntax/analyze"
+            },
+            "params": {
+              "$ref": "#/$defs/SyntaxAnalyzeParams"
             }
           },
           "required": [
@@ -2085,6 +2102,22 @@
             },
             "result": {
               "$ref": "#/$defs/DiffComputeResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "syntax/analyze"
+            },
+            "result": {
+              "$ref": "#/$defs/SyntaxAnalyzeResult"
             }
           },
           "required": [
@@ -6276,6 +6309,237 @@
       "description": "Stable identity for one transient stream-emitter incarnation.\n\nA new value is created whenever the emitter restarts. Its sequence is meaningful only within\nthat instance, so consumers must discard a previous cursor when this value changes.",
       "type": "string",
       "minLength": 1
+    },
+    "SyntaxAnalyzeParams": {
+      "description": "Immutable document snapshot submitted for bounded syntax analysis.",
+      "type": "object",
+      "properties": {
+        "language": {
+          "$ref": "#/$defs/SyntaxLanguageDto"
+        },
+        "revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "text": {
+          "type": "string",
+          "maxLength": 4194304
+        }
+      },
+      "required": [
+        "language",
+        "revision",
+        "text"
+      ]
+    },
+    "SyntaxAnalyzeResult": {
+      "description": "Parser-derived facts for exactly one submitted editor revision.",
+      "type": "object",
+      "properties": {
+        "diagnostics": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SyntaxDiagnosticDto"
+          }
+        },
+        "foldingRanges": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SyntaxFoldingRangeDto"
+          }
+        },
+        "hasErrors": {
+          "type": "boolean"
+        },
+        "revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "symbols": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SyntaxSymbolDto"
+          }
+        },
+        "tokens": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SyntaxTokenDto"
+          }
+        }
+      },
+      "required": [
+        "revision",
+        "hasErrors",
+        "tokens",
+        "foldingRanges",
+        "symbols",
+        "diagnostics"
+      ]
+    },
+    "SyntaxDiagnosticDto": {
+      "description": "One parser diagnostic projected for editor presentation.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/SyntaxDiagnosticKindDto"
+        },
+        "range": {
+          "$ref": "#/$defs/SyntaxRangeDto"
+        }
+      },
+      "required": [
+        "range",
+        "kind"
+      ]
+    },
+    "SyntaxDiagnosticKindDto": {
+      "description": "Recoverable parser-diagnostic category.",
+      "type": "string",
+      "enum": [
+        "error",
+        "missing"
+      ]
+    },
+    "SyntaxFoldingRangeDto": {
+      "description": "One parser-derived multi-line folding range.",
+      "type": "object",
+      "properties": {
+        "range": {
+          "$ref": "#/$defs/SyntaxRangeDto"
+        }
+      },
+      "required": [
+        "range"
+      ]
+    },
+    "SyntaxLanguageDto": {
+      "description": "Grammar supported by the authoritative syntax-analysis service.",
+      "type": "string",
+      "enum": [
+        "json",
+        "jsonc",
+        "rust",
+        "shell"
+      ]
+    },
+    "SyntaxPositionDto": {
+      "description": "One zero-based UTF-16 position, matching Alpha's text-model coordinate system.",
+      "type": "object",
+      "properties": {
+        "columnIndex": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "lineIndex": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "lineIndex",
+        "columnIndex"
+      ]
+    },
+    "SyntaxRangeDto": {
+      "description": "One ordered, end-exclusive UTF-16 source range.",
+      "type": "object",
+      "properties": {
+        "end": {
+          "$ref": "#/$defs/SyntaxPositionDto"
+        },
+        "start": {
+          "$ref": "#/$defs/SyntaxPositionDto"
+        }
+      },
+      "required": [
+        "start",
+        "end"
+      ]
+    },
+    "SyntaxSymbolDto": {
+      "description": "One parser-derived declaration in a document snapshot.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/SyntaxSymbolKindDto"
+        },
+        "name": {
+          "type": "string"
+        },
+        "range": {
+          "$ref": "#/$defs/SyntaxRangeDto"
+        },
+        "selectionRange": {
+          "$ref": "#/$defs/SyntaxRangeDto"
+        }
+      },
+      "required": [
+        "name",
+        "kind",
+        "range",
+        "selectionRange"
+      ]
+    },
+    "SyntaxSymbolKindDto": {
+      "description": "Language-neutral kind for one syntactically declared document symbol.",
+      "type": "string",
+      "enum": [
+        "constant",
+        "enum",
+        "field",
+        "function",
+        "macro",
+        "method",
+        "module",
+        "static",
+        "struct",
+        "trait",
+        "type",
+        "variable"
+      ]
+    },
+    "SyntaxTokenDto": {
+      "description": "One parser-derived syntax token.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/SyntaxTokenKindDto"
+        },
+        "range": {
+          "$ref": "#/$defs/SyntaxRangeDto"
+        }
+      },
+      "required": [
+        "range",
+        "kind"
+      ]
+    },
+    "SyntaxTokenKindDto": {
+      "description": "Stable highlighting category projected from the Rust syntax engine.",
+      "type": "string",
+      "enum": [
+        "attribute",
+        "comment",
+        "constant",
+        "constructor",
+        "embedded",
+        "function",
+        "keyword",
+        "label",
+        "module",
+        "number",
+        "operator",
+        "property",
+        "punctuation",
+        "string",
+        "type",
+        "variable"
+      ]
     },
     "TerminalCloseParams": {
       "description": "Terminates and releases one connection-owned terminal.",

@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { type AlphaTextMeasurer } from "../../../../browser/view/fontMetrics.js";
-import { AlphaPointerMultiCursorModifier } from "../../common/pointerMultiCursor.js";
+import { type TextMeasurer } from "../../../../browser/view/fontMetrics.js";
+import { PointerMultiCursorModifier } from "../../common/pointerMultiCursor.js";
 import { EditorSelectionController } from "../../../../common/cursor/editorSelectionController.js";
 import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
 import { TextPosition, TextRange } from "../../../../common/core/text.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 
-class FixedTextMeasurer implements AlphaTextMeasurer {
+class FixedTextMeasurer implements TextMeasurer {
   readonly horizontalPadding = 24;
   readonly contentLeftPadding = 12;
 
@@ -36,8 +36,8 @@ for (const [name, value] of Object.entries({
   });
 }
 
-const { AlphaEditorViewport } = await import("../../../../browser/view/editorViewport.js");
-const { AlphaPointerSelectionController } = await import("../../browser/dndController.js");
+const { EditorViewport } = await import("../../../../browser/view/editorViewport.js");
+const { PointerSelectionController } = await import("../../browser/dndController.js");
 
 test("Alt pointer gestures add, toggle, drag, and track multiple selections", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
@@ -48,7 +48,7 @@ test("Alt pointer gestures add, toggle, drag, and track multiple selections", ()
     model,
     TextSelectionSet.single(caret(0, 1)),
   );
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
@@ -57,7 +57,7 @@ test("Alt pointer gestures add, toggle, drag, and track multiple selections", ()
   });
   viewport.layout({ width: 200, height: 60 });
   viewport.element.getBoundingClientRect = () => editorBounds();
-  using pointer = new AlphaPointerSelectionController(viewport, selections);
+  using pointer = new PointerSelectionController(viewport, selections);
 
   click(dom.window, viewport.element, 1, 158, 75, { altKey: true });
   assert.deepEqual(selections.selections, TextSelectionSet.withPrimary([
@@ -142,7 +142,7 @@ test("Control-or-Meta mode is explicit and leaves Alt as a normal click", () => 
     model,
     TextSelectionSet.single(caret(0, 0)),
   );
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
@@ -151,8 +151,8 @@ test("Control-or-Meta mode is explicit and leaves Alt as a normal click", () => 
   });
   viewport.layout({ width: 200, height: 60 });
   viewport.element.getBoundingClientRect = () => editorBounds();
-  using pointer = new AlphaPointerSelectionController(viewport, selections, {
-    multiCursorModifier: AlphaPointerMultiCursorModifier.ControlOrMeta,
+  using pointer = new PointerSelectionController(viewport, selections, {
+    multiCursorModifier: PointerMultiCursorModifier.ControlOrMeta,
   });
 
   click(dom.window, viewport.element, 6, 158, 55, { ctrlKey: true });
@@ -169,8 +169,8 @@ test("Control-or-Meta mode is explicit and leaves Alt as a normal click", () => 
     TextSelectionSet.single(caret(2, 1)),
   );
   assert.throws(
-    () => new AlphaPointerSelectionController(viewport, selections, {
-      multiCursorModifier: "shift" as AlphaPointerMultiCursorModifier,
+    () => new PointerSelectionController(viewport, selections, {
+      multiCursorModifier: "shift" as PointerMultiCursorModifier,
     }),
     /Unknown Alpha pointer multi-cursor modifier/,
   );

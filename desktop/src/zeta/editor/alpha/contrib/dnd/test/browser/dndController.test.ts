@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { type AlphaTextMeasurer } from "../../../../browser/view/fontMetrics.js";
+import { type TextMeasurer } from "../../../../browser/view/fontMetrics.js";
 import { EditorSelectionController } from "../../../../common/cursor/editorSelectionController.js";
 import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
 import { TextPosition, TextRange } from "../../../../common/core/text.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 
-class FixedTextMeasurer implements AlphaTextMeasurer {
+class FixedTextMeasurer implements TextMeasurer {
   readonly horizontalPadding = 24;
   readonly contentLeftPadding = 12;
 
@@ -35,10 +35,10 @@ for (const [name, value] of Object.entries({
   });
 }
 
-const { AlphaEditorViewport } = await import(
+const { EditorViewport } = await import(
   "../../../../browser/view/editorViewport.js"
 );
-const { AlphaPointerSelectionController } = await import(
+const { PointerSelectionController } = await import(
   "../../browser/dndController.js"
 );
 
@@ -53,7 +53,7 @@ test("Pointer selection supports clicks, Shift, drag, gutter, and cancellation",
       TextSelection.collapsedAt(TextPosition.at(0, 0)),
     ),
   );
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
@@ -68,7 +68,7 @@ test("Pointer selection supports clicks, Shift, drag, gutter, and cancellation",
   viewport.element.releasePointerCapture = pointerId => {
     captured.delete(pointerId);
   };
-  const pointer = new AlphaPointerSelectionController(viewport, selections);
+  const pointer = new PointerSelectionController(viewport, selections);
 
   const click = pointerEvent(dom.window, "pointerdown", 148, 75, {
     pointerId: 1,
@@ -257,7 +257,7 @@ test("Pointer and viewport selection wiring rejects different text models", () =
       TextSelection.collapsedAt(TextPosition.at(0, 0)),
     ),
   );
-  assert.throws(() => new AlphaEditorViewport({
+  assert.throws(() => new EditorViewport({
     container,
     model,
     lineHeight: 20,
@@ -266,14 +266,14 @@ test("Pointer and viewport selection wiring rejects different text models", () =
   }), /must share one text model/);
   assert.equal(container.childElementCount, 0);
 
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
     textMeasurer: new FixedTextMeasurer(),
   });
   assert.throws(
-    () => new AlphaPointerSelectionController(viewport, selections),
+    () => new PointerSelectionController(viewport, selections),
     /must share one text model/,
   );
   model.applyEdits([{
@@ -291,7 +291,7 @@ test("Alt+Shift pointer drag creates a front-end column selection", () => {
   assert.ok(container);
   using model = new TextModel("abcdef\nab\n12345\nxy");
   using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
@@ -304,7 +304,7 @@ test("Alt+Shift pointer drag creates a front-end column selection", () => {
   viewport.element.setPointerCapture = pointerId => captured.add(pointerId);
   viewport.element.hasPointerCapture = pointerId => captured.has(pointerId);
   viewport.element.releasePointerCapture = pointerId => captured.delete(pointerId);
-  using pointer = new AlphaPointerSelectionController(viewport, selections);
+  using pointer = new PointerSelectionController(viewport, selections);
 
   viewport.element.dispatchEvent(pointerEvent(dom.window, "pointerdown", 172, 115, {
     pointerId: 19,
@@ -343,7 +343,7 @@ test("Pointer drag anchor tracks model edits and window blur ends capture", () =
       TextSelection.collapsedAt(TextPosition.at(0, 0)),
     ),
   );
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
@@ -362,7 +362,7 @@ test("Pointer drag anchor tracks model edits and window blur ends capture", () =
   viewport.element.releasePointerCapture = pointerId => {
     captured.delete(pointerId);
   };
-  using pointer = new AlphaPointerSelectionController(viewport, selections);
+  using pointer = new PointerSelectionController(viewport, selections);
 
   viewport.element.dispatchEvent(pointerEvent(
     dom.window,

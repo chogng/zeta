@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { AlphaDecorationPresentation, createAlphaDecorationRectangles, createAlphaDecorationSource } from "../../browser/view/decorationPresentation.js";
-import { type AlphaTextMeasurer } from "../../browser/view/fontMetrics.js";
+import { DecorationPresentation, createAlphaDecorationRectangles, createAlphaDecorationSource } from "../../browser/view/decorationPresentation.js";
+import { type TextMeasurer } from "../../browser/view/fontMetrics.js";
 import { TextDecorationCollection } from "../../common/model/decorationCollection.js";
 import { TextPosition, TextRange } from "../../common/core/text.js";
 import { TextModel } from "../../common/model/textModel.js";
@@ -13,7 +13,7 @@ test("Decoration source resolves opaque metadata without owning the collection",
   const matchId = collection.add({
     range: TextRange.from(TextPosition.at(0, 1), TextPosition.at(1, 2)),
     stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
-    metadata: { presentation: AlphaDecorationPresentation.SearchMatch },
+    metadata: { presentation: DecorationPresentation.SearchMatch },
   });
   collection.add({
     range: TextRange.from(TextPosition.at(1, 0), TextPosition.at(1, 1)),
@@ -23,7 +23,7 @@ test("Decoration source resolves opaque metadata without owning the collection",
   const errorId = collection.add({
     range: TextRange.from(TextPosition.at(2, 0), TextPosition.at(2, 2)),
     stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
-    metadata: { presentation: AlphaDecorationPresentation.ErrorUnderline },
+    metadata: { presentation: DecorationPresentation.ErrorUnderline },
   });
   const source = createAlphaDecorationSource(
     collection,
@@ -33,11 +33,11 @@ test("Decoration source resolves opaque metadata without owning the collection",
   assert.deepEqual(source.decorations, [{
     id: matchId,
     range: TextRange.from(TextPosition.at(0, 1), TextPosition.at(1, 2)),
-    presentation: AlphaDecorationPresentation.SearchMatch,
+    presentation: DecorationPresentation.SearchMatch,
   }, {
     id: errorId,
     range: TextRange.from(TextPosition.at(2, 0), TextPosition.at(2, 2)),
-    presentation: AlphaDecorationPresentation.ErrorUnderline,
+    presentation: DecorationPresentation.ErrorUnderline,
   }]);
   assert.equal(Object.isFrozen(source.decorations), true);
 
@@ -50,19 +50,19 @@ test("Decoration source resolves opaque metadata without owning the collection",
   );
   assert.deepEqual(rectangles, [{
     id: matchId,
-    presentation: AlphaDecorationPresentation.SearchMatch,
+    presentation: DecorationPresentation.SearchMatch,
     lineIndex: 0,
     left: 48,
     width: 40,
   }, {
     id: matchId,
-    presentation: AlphaDecorationPresentation.SearchMatch,
+    presentation: DecorationPresentation.SearchMatch,
     lineIndex: 1,
     left: 38,
     width: 20,
   }, {
     id: errorId,
-    presentation: AlphaDecorationPresentation.ErrorUnderline,
+    presentation: DecorationPresentation.ErrorUnderline,
     lineIndex: 2,
     left: 38,
     width: 20,
@@ -85,7 +85,7 @@ test("Decoration geometry clips lines and rejects unknown presentations", () => 
   });
   const source = createAlphaDecorationSource(
     collection,
-    () => AlphaDecorationPresentation.SearchMatch,
+    () => DecorationPresentation.SearchMatch,
   );
 
   assert.deepEqual(createAlphaDecorationRectangles(
@@ -96,7 +96,7 @@ test("Decoration geometry clips lines and rejects unknown presentations", () => 
     new FixedTextMeasurer(),
   ), [{
     id,
-    presentation: AlphaDecorationPresentation.SearchMatch,
+    presentation: DecorationPresentation.SearchMatch,
     lineIndex: 1,
     left: 38,
     width: 20,
@@ -104,18 +104,18 @@ test("Decoration geometry clips lines and rejects unknown presentations", () => 
 
   const invalid = createAlphaDecorationSource(
     collection,
-    () => "unknown" as AlphaDecorationPresentation,
+    () => "unknown" as DecorationPresentation,
   );
   assert.throws(() => invalid.decorations, /Unknown Alpha decoration/);
 });
 
 test("Decoration geometry presents an empty diagnostic at its text position", () => {
   using model = new TextModel("abcd\nefgh");
-  using collection = new TextDecorationCollection<AlphaDecorationPresentation>(model);
+  using collection = new TextDecorationCollection<DecorationPresentation>(model);
   const id = collection.add({
     range: TextRange.emptyAt(TextPosition.at(1, 2)),
     stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
-    metadata: AlphaDecorationPresentation.HintUnderline,
+    metadata: DecorationPresentation.HintUnderline,
   });
   const source = createAlphaDecorationSource(collection, decoration => decoration.metadata);
 
@@ -127,7 +127,7 @@ test("Decoration geometry presents an empty diagnostic at its text position", ()
     new FixedTextMeasurer(),
   ), [{
     id,
-    presentation: AlphaDecorationPresentation.HintUnderline,
+    presentation: DecorationPresentation.HintUnderline,
     lineIndex: 1,
     left: 58,
     width: 10,
@@ -135,10 +135,10 @@ test("Decoration geometry presents an empty diagnostic at its text position", ()
 });
 
 interface DecorationMetadata {
-  readonly presentation?: AlphaDecorationPresentation;
+  readonly presentation?: DecorationPresentation;
 }
 
-class FixedTextMeasurer implements AlphaTextMeasurer {
+class FixedTextMeasurer implements TextMeasurer {
   readonly horizontalPadding = 24;
   readonly contentLeftPadding = 12;
 

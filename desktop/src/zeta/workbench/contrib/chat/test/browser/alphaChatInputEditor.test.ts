@@ -16,7 +16,7 @@ for (const [name, value] of Object.entries({
   Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { AlphaChatInputEditor } = await import("../../browser/input/alphaChatInputEditor.js");
+const { ChatInputEditor } = await import("../../browser/input/alphaChatInputEditor.js");
 const { DesktopSlashCommands, SlashCommandCatalog } = await import("../../common/slashCommands.js");
 
 test.after(() => browserEnvironment.window.close());
@@ -25,7 +25,7 @@ test("Alpha Chat input completes slash commands before submitting", async () => 
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   dom.window.HTMLCanvasElement.prototype.getContext = () => null;
   const container = requiredElement<HTMLElement>(dom.window.document, "main");
-  using editor = new AlphaChatInputEditor({ container, placeholder: "Ask Zeta", ariaLabel: "Chat message", slashCommands: new SlashCommandCatalog(DesktopSlashCommands, []) });
+  using editor = new ChatInputEditor({ container, placeholder: "Ask Zeta", ariaLabel: "Chat message", slashCommands: new SlashCommandCatalog(DesktopSlashCommands, []) });
   let submissions = 0;
   using submitListener = editor.onDidSubmit(() => submissions += 1);
   const input = requiredElement<HTMLTextAreaElement>(editor.element, ".zeta-alpha-editor-input");
@@ -57,7 +57,7 @@ test("Alpha Chat input restores message behavior when the slash is deleted", asy
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   dom.window.HTMLCanvasElement.prototype.getContext = () => null;
   const container = requiredElement<HTMLElement>(dom.window.document, "main");
-  using editor = new AlphaChatInputEditor({ container, placeholder: "Ask Zeta", ariaLabel: "Chat message", slashCommands: new SlashCommandCatalog(DesktopSlashCommands, []) });
+  using editor = new ChatInputEditor({ container, placeholder: "Ask Zeta", ariaLabel: "Chat message", slashCommands: new SlashCommandCatalog(DesktopSlashCommands, []) });
   const changes: string[] = [];
   using changeListener = editor.onDidChange(value => changes.push(value));
   const input = requiredElement<HTMLTextAreaElement>(editor.element, ".zeta-alpha-editor-input");

@@ -1,4 +1,4 @@
-import { type AlphaMinimapRow } from "../../../browser/view/minimapProjection.js";
+import { type MinimapRow } from "../../../browser/view/minimapProjection.js";
 
 const VERTEX_SHADER_SOURCE = `
   attribute vec2 position;
@@ -22,12 +22,12 @@ const FRAGMENT_SHADER_SOURCE = `
  * the bounded, non-semantic minimap density rectangles and is optional: callers
  * must retain a DOM fallback when WebGL is unavailable or loses its context.
  */
-export class AlphaGpuMinimapRenderer {
+export class GpuMinimapRenderer {
   private readonly program: WebGLProgram;
   private readonly positionLocation: number;
   private readonly colorLocation: WebGLUniformLocation;
   private readonly vertexBuffer: WebGLBuffer;
-  private rows: readonly AlphaMinimapRow[] = [];
+  private rows: readonly MinimapRow[] = [];
   private lineCount = 1;
   private width = 0;
   private height = 0;
@@ -52,7 +52,7 @@ export class AlphaGpuMinimapRenderer {
   }
 
   /** Returns a renderer only when the current browser can provide WebGL. */
-  static tryCreate(canvas: HTMLCanvasElement): AlphaGpuMinimapRenderer | undefined {
+  static tryCreate(canvas: HTMLCanvasElement): GpuMinimapRenderer | undefined {
     if (canvas.ownerDocument.defaultView?.navigator.userAgent.includes("jsdom")) {
       return undefined;
     }
@@ -64,7 +64,7 @@ export class AlphaGpuMinimapRenderer {
         preserveDrawingBuffer: false,
         stencil: false,
       });
-      return context ? new AlphaGpuMinimapRenderer(canvas, context) : undefined;
+      return context ? new GpuMinimapRenderer(canvas, context) : undefined;
     } catch {
       return undefined;
     }
@@ -81,7 +81,7 @@ export class AlphaGpuMinimapRenderer {
   }
 
   /** Replaces the current bounded density data and redraws the current surface. */
-  setRows(rows: readonly AlphaMinimapRow[], lineCount: number): void {
+  setRows(rows: readonly MinimapRow[], lineCount: number): void {
     if (!Number.isSafeInteger(lineCount) || lineCount < 1) {
       throw new RangeError("Alpha GPU minimap line count must be a positive safe integer");
     }
@@ -155,7 +155,7 @@ function compileShader(context: WebGLRenderingContext, kind: number, source: str
   throw new Error("Alpha GPU minimap could not compile a WebGL shader");
 }
 
-function minimapVertices(rows: readonly AlphaMinimapRow[], lineCount: number, width: number): Float32Array {
+function minimapVertices(rows: readonly MinimapRow[], lineCount: number, width: number): Float32Array {
   const vertices = new Float32Array(rows.length * 12);
   for (let index = 0; index < rows.length; index += 1) {
     const row = rows[index]!;

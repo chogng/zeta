@@ -15,7 +15,7 @@ for (const [name, value] of Object.entries({
   Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { AlphaEditorViewport } = await import("../../browser/view/editorViewport.js");
+const { EditorViewport } = await import("../../browser/view/editorViewport.js");
 
 test.after(() => browserEnvironment.window.close());
 
@@ -34,7 +34,7 @@ test("Alpha viewport resize observations use the scrollable client area", () => 
   Object.defineProperty(dom.window, "ResizeObserver", { configurable: true, value: TestResizeObserver });
   const container = requiredElement(dom.window.document, "main");
   using model = new TextModel();
-  using viewport = new AlphaEditorViewport({ container, model, lineHeight: 20 });
+  using viewport = new EditorViewport({ container, model, lineHeight: 20 });
   Object.defineProperties(viewport.element, {
     clientWidth: { configurable: true, value: 383 },
     clientHeight: { configurable: true, value: 62 },
@@ -55,7 +55,7 @@ test("Alpha viewport enables scrollbars only for model-backed overflow", () => {
   dom.window.HTMLCanvasElement.prototype.getContext = () => null;
   const container = requiredElement(dom.window.document, "main");
   using model = new TextModel(`${"x".repeat(100)}\nsecond line`);
-  using viewport = new AlphaEditorViewport({ container, model, lineHeight: 20 });
+  using viewport = new EditorViewport({ container, model, lineHeight: 20 });
 
   viewport.layout({ width: 50, height: 20 });
 

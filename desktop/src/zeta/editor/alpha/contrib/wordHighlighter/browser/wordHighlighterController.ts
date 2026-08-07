@@ -4,18 +4,18 @@ import { type EditorSelectionController } from "../../../common/cursor/editorSel
 import { getOccurrenceHighlightRanges } from "../common/wordHighlighter.js";
 import { TrackedRangeStickiness } from "../../../common/model/trackedRange.js";
 
-export interface AlphaOccurrenceHighlightControllerOptions {
+export interface OccurrenceHighlightControllerOptions {
   readonly wordPattern?: () => RegExp | undefined;
 }
 
 /** Projects current primary-word occurrences through a caller-owned decoration collection. */
-export class AlphaOccurrenceHighlightController extends DisposableOwner {
+export class OccurrenceHighlightController extends DisposableOwner {
   private lastKey = "";
 
   constructor(
     private readonly selections: EditorSelectionController,
     private readonly decorations: TextDecorationCollection<void>,
-    options: AlphaOccurrenceHighlightControllerOptions = {},
+    options: OccurrenceHighlightControllerOptions = {},
   ) {
     super();
     try {

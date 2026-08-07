@@ -3,21 +3,21 @@ import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
 import { operatingSystem, OperatingSystem } from "../../../../../base/common/platform.js";
 import { createTransposeCharactersCommand } from "../../../common/cursor/cursorTranspose.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
-import { type AlphaEditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 
-export interface AlphaTransposeControllerOptions {
+export interface TransposeControllerOptions {
   readonly operatingSystem?: OperatingSystem;
 }
 
 /** Routes VS Code's macOS Ctrl+T transpose chord through Alpha's common command. */
-export class AlphaTransposeController extends DisposableOwner {
+export class TransposeController extends DisposableOwner {
   private readonly targetOperatingSystem: OperatingSystem;
 
   constructor(
     input: HTMLTextAreaElement,
-    private readonly viewport: AlphaEditorViewport,
+    private readonly viewport: EditorViewport,
     private readonly selections: EditorSelectionController,
-    options: AlphaTransposeControllerOptions = {},
+    options: TransposeControllerOptions = {},
   ) {
     super();
     try {

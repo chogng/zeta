@@ -2,7 +2,7 @@ import { Emitter, type Event } from "../../../../../base/common/event.js";
 import { DisposableOwner, DisposableSlot, type IDisposable } from "../../../../../base/common/lifecycle.js";
 import { type TextModelChange } from "../../../common/core/text.js";
 import { type TextModel } from "../../../common/model/textModel.js";
-import { type AlphaTextMeasurer } from "../../../browser/view/fontMetrics.js";
+import { type TextMeasurer } from "../../../browser/view/fontMetrics.js";
 
 interface AffectedLineGroup {
   readonly oldStartLineIndex: number;
@@ -15,7 +15,7 @@ interface MeasuredLineGroup extends AffectedLineGroup {
 }
 
 /** Schedules a later, cancellable portion of an initial line-width scan. */
-export type AlphaLineWidthMeasurementScheduler = (callback: () => void) => IDisposable;
+export type LineWidthMeasurementScheduler = (callback: () => void) => IDisposable;
 
 /**
  * Controls a non-blocking initial width scan for a large, non-wrapped model.
@@ -24,24 +24,24 @@ export type AlphaLineWidthMeasurementScheduler = (callback: () => void) => IDisp
  * Later slices monotonically refine it, and `onDidChange` fires whenever that
  * bound changes or the scan has to restart after an edit.
  */
-export interface AlphaLineWidthInitialMeasurementOptions {
+export interface LineWidthInitialMeasurementOptions {
   readonly initialLineCount?: number;
   readonly linesPerSlice?: number;
-  readonly schedule: AlphaLineWidthMeasurementScheduler;
+  readonly schedule: LineWidthMeasurementScheduler;
 }
 
-export interface AlphaLineWidthIndexOptions {
-  readonly initialMeasurement?: AlphaLineWidthInitialMeasurementOptions;
+export interface LineWidthIndexOptions {
+  readonly initialMeasurement?: LineWidthInitialMeasurementOptions;
 }
 
 interface ResolvedInitialMeasurement {
   readonly initialLineCount: number;
   readonly linesPerSlice: number;
-  readonly schedule: AlphaLineWidthMeasurementScheduler;
+  readonly schedule: LineWidthMeasurementScheduler;
 }
 
 /** @internal */
-export class AlphaLineWidthIndex extends DisposableOwner {
+export class LineWidthIndex extends DisposableOwner {
   private widths: number[] = [];
   private readonly widthCounts = new Map<number, number>();
   private readonly changeEmitter = this.own(new Emitter<void>());
@@ -53,8 +53,8 @@ export class AlphaLineWidthIndex extends DisposableOwner {
 
   constructor(
     private readonly model: TextModel,
-    private readonly measurer: AlphaTextMeasurer,
-    options: AlphaLineWidthIndexOptions = {},
+    private readonly measurer: TextMeasurer,
+    options: LineWidthIndexOptions = {},
   ) {
     super();
     this.initialMeasurement = readInitialMeasurement(options.initialMeasurement);
@@ -212,7 +212,7 @@ export class AlphaLineWidthIndex extends DisposableOwner {
   }
 }
 
-function readInitialMeasurement(value: AlphaLineWidthInitialMeasurementOptions | undefined): ResolvedInitialMeasurement | undefined {
+function readInitialMeasurement(value: LineWidthInitialMeasurementOptions | undefined): ResolvedInitialMeasurement | undefined {
   if (value === undefined) return undefined;
   if (!value || typeof value.schedule !== "function") {
     throw new TypeError("Alpha initial line measurement requires a scheduler");

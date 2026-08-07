@@ -39,6 +39,7 @@ mod operations;
 mod search_operations;
 mod skill_operations;
 pub(crate) mod skills_runtime;
+mod syntax_operations;
 mod terminal_operations;
 mod update_broker;
 mod workspace_operations;
@@ -469,6 +470,7 @@ impl AppServer {
             Some(ClientMethod::FsReadDirectory) => self.fs_read_directory(&request.params),
             Some(ClientMethod::FsReadFile) => self.fs_read_file(&request.params),
             Some(ClientMethod::DiffCompute) => self.diff_compute(&request.params),
+            Some(ClientMethod::SyntaxAnalyze) => self.syntax_analyze(&request.params),
             Some(ClientMethod::FsWriteFile) => self.fs_write_file(&request.params),
             Some(ClientMethod::GitStatus) => self.git_status(),
             Some(ClientMethod::GitTextDiff) => self.git_text_diff(),

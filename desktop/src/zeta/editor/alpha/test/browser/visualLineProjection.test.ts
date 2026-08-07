@@ -1,15 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { toDisposable } from "../../../../base/common/lifecycle.js";
-import { AlphaEditorLineWrapping, AlphaVisualLineProjection } from "../../browser/view/visualLineProjection.js";
-import { type AlphaTextMeasurer } from "../../browser/view/fontMetrics.js";
+import { EditorLineWrapping, VisualLineProjection } from "../../browser/view/visualLineProjection.js";
+import { type TextMeasurer } from "../../browser/view/fontMetrics.js";
 import { TextModel } from "../../common/model/textModel.js";
 import { TextPosition, TextRange } from "../../common/core/text.js";
 
 test("browser visual-line projection wraps at grapheme boundaries and rebuilds after edits", () => {
   using model = new TextModel("ab😀cd\nxyz");
-  using projection = new AlphaVisualLineProjection(model, new FixedTextMeasurer(), {
-    wrapping: AlphaEditorLineWrapping.On,
+  using projection = new VisualLineProjection(model, new FixedTextMeasurer(), {
+    wrapping: EditorLineWrapping.On,
     wrapWidth: 20,
   });
   let changes = 0;
@@ -34,22 +34,22 @@ test("browser visual-line projection wraps at grapheme boundaries and rebuilds a
   assert.equal(changes, 1);
   assert.equal(projection.projection.visualLineCount, 6);
 
-  projection.setWrapping(AlphaEditorLineWrapping.Off);
+  projection.setWrapping(EditorLineWrapping.Off);
   assert.equal(projection.projection.visualLineCount, 2);
 });
 
 test("browser visual-line projection validates its public wrapping inputs", () => {
   using model = new TextModel("text");
-  assert.throws(() => new AlphaVisualLineProjection(model, new FixedTextMeasurer(), {
-    wrapping: "invalid" as AlphaEditorLineWrapping,
+  assert.throws(() => new VisualLineProjection(model, new FixedTextMeasurer(), {
+    wrapping: "invalid" as EditorLineWrapping,
   }), /wrapping mode/);
-  assert.throws(() => new AlphaVisualLineProjection(model, new FixedTextMeasurer(), {
+  assert.throws(() => new VisualLineProjection(model, new FixedTextMeasurer(), {
     wrapWidth: -1,
   }), /wrap width/);
-  assert.throws(() => new AlphaVisualLineProjection(model, new FixedTextMeasurer(), {
+  assert.throws(() => new VisualLineProjection(model, new FixedTextMeasurer(), {
     initialWrappingMeasurement: { schedule: undefined as never },
   }), /requires a scheduler/);
-  assert.throws(() => new AlphaVisualLineProjection(model, new FixedTextMeasurer(), {
+  assert.throws(() => new VisualLineProjection(model, new FixedTextMeasurer(), {
     initialWrappingMeasurement: { initialLineCount: 0, schedule: () => toDisposable(() => {}) },
   }), /measurement count/);
 });
@@ -58,8 +58,8 @@ test("browser visual-line projection measures initial wrapped rows in cancellabl
   using model = new TextModel("abc\ndefg\nhij");
   const scheduled: (() => void)[] = [];
   const measurer = new CountingTextMeasurer();
-  using projection = new AlphaVisualLineProjection(model, measurer, {
-    wrapping: AlphaEditorLineWrapping.On,
+  using projection = new VisualLineProjection(model, measurer, {
+    wrapping: EditorLineWrapping.On,
     wrapWidth: 20,
     initialWrappingMeasurement: {
       initialLineCount: 1,
@@ -94,8 +94,8 @@ test("browser visual-line projection measures initial wrapped rows in cancellabl
 test("browser visual-line projection restarts an incomplete wrapped scan after an edit", () => {
   using model = new TextModel("abc\ndef");
   const scheduled: (() => void)[] = [];
-  using projection = new AlphaVisualLineProjection(model, new FixedTextMeasurer(), {
-    wrapping: AlphaEditorLineWrapping.On,
+  using projection = new VisualLineProjection(model, new FixedTextMeasurer(), {
+    wrapping: EditorLineWrapping.On,
     wrapWidth: 20,
     initialWrappingMeasurement: {
       initialLineCount: 1,
@@ -127,7 +127,7 @@ test("browser visual-line projection restarts an incomplete wrapped scan after a
   assert.equal(projection.projection.visualLineCount, 4);
 });
 
-class FixedTextMeasurer implements AlphaTextMeasurer {
+class FixedTextMeasurer implements TextMeasurer {
   readonly horizontalPadding = 0;
   readonly contentLeftPadding = 0;
 

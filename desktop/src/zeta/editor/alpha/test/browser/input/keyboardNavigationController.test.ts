@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { OperatingSystem } from "../../../../../base/common/platform.js";
-import { type AlphaTextMeasurer } from "../../../browser/view/fontMetrics.js";
+import { type TextMeasurer } from "../../../browser/view/fontMetrics.js";
 import { resolveAlphaKeyboardNavigation } from "../../../browser/input/keyboardNavigationController.js";
 import { EditorCursorNavigationCommand, EditorCursorNavigationMode } from "../../../common/cursor/cursorNavigation.js";
 import { EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
@@ -10,7 +10,7 @@ import { TextSelection, TextSelectionSet } from "../../../common/core/selection.
 import { TextPosition } from "../../../common/core/text.js";
 import { TextModel } from "../../../common/model/textModel.js";
 
-class FixedTextMeasurer implements AlphaTextMeasurer {
+class FixedTextMeasurer implements TextMeasurer {
   readonly horizontalPadding = 24;
   readonly contentLeftPadding = 12;
 
@@ -103,9 +103,9 @@ for (const [name, value] of Object.entries({
   });
 }
 
-const { AlphaEditorViewport } = await import("../../../browser/view/editorViewport.js");
-const { AlphaKeyboardNavigationController } = await import("../../../browser/input/keyboardNavigationController.js");
-const { AlphaEditorLineWrapping } = await import("../../../browser/view/visualLineProjection.js");
+const { EditorViewport } = await import("../../../browser/view/editorViewport.js");
+const { KeyboardNavigationController } = await import("../../../browser/input/keyboardNavigationController.js");
+const { EditorLineWrapping } = await import("../../../browser/view/visualLineProjection.js");
 
 test("Keyboard controller retains columns, routes multi-selection, and reveals primary", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
@@ -127,7 +127,7 @@ test("Keyboard controller retains columns, routes multi-selection, and reveals p
     model,
     TextSelectionSet.single(caret(0, 5)),
   );
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
@@ -135,7 +135,7 @@ test("Keyboard controller retains columns, routes multi-selection, and reveals p
     selectionController: selections,
   });
   viewport.layout({ width: 80, height: 40 });
-  using keyboard = new AlphaKeyboardNavigationController(
+  using keyboard = new KeyboardNavigationController(
     viewport,
     selections,
     { operatingSystem: OperatingSystem.Windows },
@@ -224,16 +224,16 @@ test("Keyboard controller moves by measured visual rows when soft wrapping is en
     model,
     TextSelectionSet.single(caret(0, 1)),
   );
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
     textMeasurer: new FixedTextMeasurer(),
     selectionController: selections,
-    lineWrapping: AlphaEditorLineWrapping.On,
+    lineWrapping: EditorLineWrapping.On,
   });
   viewport.layout({ width: 70, height: 40 });
-  using keyboard = new AlphaKeyboardNavigationController(
+  using keyboard = new KeyboardNavigationController(
     viewport,
     selections,
     { operatingSystem: OperatingSystem.Windows },
@@ -279,7 +279,7 @@ test("Keyboard controller rejects cross-model wiring and invalid OS options", ()
     model,
     TextSelectionSet.single(caret(0, 0)),
   );
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
@@ -287,11 +287,11 @@ test("Keyboard controller rejects cross-model wiring and invalid OS options", ()
   });
 
   assert.throws(
-    () => new AlphaKeyboardNavigationController(viewport, selections),
+    () => new KeyboardNavigationController(viewport, selections),
     /must share one text model/,
   );
   assert.throws(
-    () => new AlphaKeyboardNavigationController(
+    () => new KeyboardNavigationController(
       viewport,
       ownSelections,
       { operatingSystem: "plan9" as OperatingSystem },

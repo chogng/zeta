@@ -6,7 +6,7 @@ import { type TextRange } from "../../../common/core/text.js";
 import { TrackedRangeStickiness } from "../../../common/model/trackedRange.js";
 
 /** Projects current collapsed-cursor bracket matches into caller-owned decorations. */
-export class AlphaBracketMatchController extends DisposableOwner {
+export class BracketMatchController extends DisposableOwner {
   constructor(
     private readonly selections: EditorSelectionController,
     private readonly matcher: LanguageBracketMatcher,

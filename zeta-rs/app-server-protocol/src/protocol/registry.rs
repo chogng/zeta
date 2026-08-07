@@ -71,6 +71,18 @@ use crate::protocol::skills::{
     SkillSourceKindDto, SkillsChanged,
 };
 use crate::protocol::slash_commands::{SlashCommandArgumentModeDto, SlashCommandDefinition};
+use crate::protocol::syntax::SyntaxAnalyzeParams;
+use crate::protocol::syntax::SyntaxAnalyzeResult;
+use crate::protocol::syntax::SyntaxDiagnosticDto;
+use crate::protocol::syntax::SyntaxDiagnosticKindDto;
+use crate::protocol::syntax::SyntaxFoldingRangeDto;
+use crate::protocol::syntax::SyntaxLanguageDto;
+use crate::protocol::syntax::SyntaxPositionDto;
+use crate::protocol::syntax::SyntaxRangeDto;
+use crate::protocol::syntax::SyntaxSymbolDto;
+use crate::protocol::syntax::SyntaxSymbolKindDto;
+use crate::protocol::syntax::SyntaxTokenDto;
+use crate::protocol::syntax::SyntaxTokenKindDto;
 use crate::protocol::terminal::{
     TerminalCloseParams, TerminalCommandStatus, TerminalCommandStatusEvent, TerminalCreateParams,
     TerminalCreateResult, TerminalOutputChunk, TerminalProfile, TerminalProfileListResult,
@@ -431,6 +443,11 @@ client_methods! {
     DiffCompute => "diff/compute" {
         params: DiffComputeParams,
         response: DiffComputeResult,
+        serialization: GlobalSharedRead,
+    },
+    SyntaxAnalyze => "syntax/analyze" {
+        params: SyntaxAnalyzeParams,
+        response: SyntaxAnalyzeResult,
         serialization: GlobalSharedRead,
     },
     FsWriteFile => "fs/writeFile" {
@@ -808,6 +825,18 @@ typescript_bindings! {
     DiffComputeRowDto,
     DiffHunkDto,
     DiffComputeResult,
+    SyntaxLanguageDto,
+    SyntaxPositionDto,
+    SyntaxRangeDto,
+    SyntaxTokenKindDto,
+    SyntaxTokenDto,
+    SyntaxFoldingRangeDto,
+    SyntaxSymbolKindDto,
+    SyntaxSymbolDto,
+    SyntaxDiagnosticKindDto,
+    SyntaxDiagnosticDto,
+    SyntaxAnalyzeParams,
+    SyntaxAnalyzeResult,
     FsWriteFileParams,
     FsWriteFileResult,
     FsChanged,

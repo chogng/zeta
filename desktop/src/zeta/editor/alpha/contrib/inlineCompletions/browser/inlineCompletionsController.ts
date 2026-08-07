@@ -5,15 +5,15 @@ import { createEditorEditCommand } from "../../../common/commands/editorCommand.
 import { TextRange } from "../../../common/core/text.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { type InlineCompletionsService, type LanguageInlineCompletionItem } from "../common/inlineCompletions.js";
-import { type AlphaEditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 
 /** Owns ghost-text projection and explicit acceptance of one inline completion. */
-export class AlphaInlineCompletionsController extends DisposableOwner {
+export class InlineCompletionsController extends DisposableOwner {
   private readonly element: HTMLSpanElement;
   private request: AbortController | undefined;
   private item: LanguageInlineCompletionItem | undefined;
 
-  constructor(private readonly input: HTMLTextAreaElement, private readonly viewport: AlphaEditorViewport, private readonly selections: EditorSelectionController, private readonly service: InlineCompletionsService, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Alpha inline completion failed", error)) {
+  constructor(private readonly input: HTMLTextAreaElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: InlineCompletionsService, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Alpha inline completion failed", error)) {
     super();
     const element = this.element = viewport.element.ownerDocument.createElement("span");
     element.className = "zeta-alpha-editor-inline-completion";

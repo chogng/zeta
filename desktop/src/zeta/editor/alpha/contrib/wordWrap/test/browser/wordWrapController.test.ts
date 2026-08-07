@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { type AlphaTextMeasurer } from "../../../../browser/view/fontMetrics.js";
+import { type TextMeasurer } from "../../../../browser/view/fontMetrics.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
@@ -17,24 +17,24 @@ for (const [name, value] of Object.entries({
   Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { AlphaEditorViewport } = await import("../../../../browser/view/editorViewport.js");
-const { AlphaEditorLineWrapping } = await import("../../../../browser/view/visualLineProjection.js");
-const { AlphaWordWrapController } = await import("../../browser/wordWrapController.js");
+const { EditorViewport } = await import("../../../../browser/view/editorViewport.js");
+const { EditorLineWrapping } = await import("../../../../browser/view/visualLineProjection.js");
+const { WordWrapController } = await import("../../browser/wordWrapController.js");
 
 test("Word-wrap shortcut switches Alpha's visual projection without editing text", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   const container = dom.window.document.querySelector<HTMLElement>("main")!;
   using model = new TextModel("abcdef");
-  using viewport = new AlphaEditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
+  using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
   viewport.layout({ width: 70, height: 40 });
   const input = dom.window.document.createElement("textarea");
   container.append(input);
-  using controller = new AlphaWordWrapController(input, viewport);
+  using controller = new WordWrapController(input, viewport);
 
   const enable = keydown(dom.window, "z", { altKey: true });
   input.dispatchEvent(enable);
   assert.equal(enable.defaultPrevented, true);
-  assert.equal(viewport.lineWrapping, AlphaEditorLineWrapping.On);
+  assert.equal(viewport.lineWrapping, EditorLineWrapping.On);
   assert.equal(viewport.element.classList.contains("word-wrapped"), true);
   assert.equal(viewport.viewportLayout.contentSize.height, 60);
   assert.equal(model.getText(), "abcdef");
@@ -42,7 +42,7 @@ test("Word-wrap shortcut switches Alpha's visual projection without editing text
   const disable = keydown(dom.window, "z", { altKey: true });
   input.dispatchEvent(disable);
   assert.equal(disable.defaultPrevented, true);
-  assert.equal(viewport.lineWrapping, AlphaEditorLineWrapping.Off);
+  assert.equal(viewport.lineWrapping, EditorLineWrapping.Off);
   assert.equal(viewport.element.classList.contains("word-wrapped"), false);
   assert.equal(viewport.viewportLayout.contentSize.height, 40);
 
@@ -52,7 +52,7 @@ test("Word-wrap shortcut switches Alpha's visual projection without editing text
   dom.window.close();
 });
 
-class FixedTextMeasurer implements AlphaTextMeasurer {
+class FixedTextMeasurer implements TextMeasurer {
   readonly horizontalPadding = 24;
   readonly contentLeftPadding = 12;
 

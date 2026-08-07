@@ -13,6 +13,8 @@ export type LanguageAnalysisLane = typeof LANGUAGE_TOKEN_LANE | typeof LANGUAGE_
 export type LanguageAnalysisProviderOperation = LanguageAnalysisLane | typeof LANGUAGE_ANALYSIS_SYNCHRONIZATION;
 export type LanguageAnalysisWorker = LanguageWorker<LanguageAnalysisLane, LanguageAnalysisRequest, LanguageAnalysisResult>;
 export type LanguageAnalysisWorkerFactory = () => LanguageAnalysisWorker;
+/** Wraps the default worker without bypassing its provider-module and synchronization lifecycle. */
+export type LanguageAnalysisWorkerDecorator = (fallback: LanguageAnalysisWorker) => LanguageAnalysisWorker;
 export type LanguageAnalysisProviderErrorHandler = (providerId: string, operation: LanguageAnalysisProviderOperation, error: unknown) => void;
 
 export interface LanguageTokenAnalysisResult {
@@ -29,6 +31,8 @@ export type LanguageAnalysisResult = LanguageTokenAnalysisResult | LanguageDiagn
 
 export interface LanguageAnalysisServiceOptions {
   readonly workerFactory?: LanguageAnalysisWorkerFactory;
+  /** Per-model runtime adapter applied outside the common language provider registry. */
+  readonly workerDecorator?: LanguageAnalysisWorkerDecorator;
   readonly onProviderError?: LanguageAnalysisProviderErrorHandler;
 }
 
@@ -57,6 +61,10 @@ export class LanguageAnalysisService extends DisposableOwner {
       this.dispose();
       throw new TypeError("Language analysis worker factory must be a function");
     }
+    if (options.workerDecorator !== undefined && typeof options.workerDecorator !== "function") {
+      this.dispose();
+      throw new TypeError("Language analysis worker decorator must be a function");
+    }
     if (options.onProviderError !== undefined && typeof options.onProviderError !== "function") {
       this.dispose();
       throw new TypeError("Language analysis provider error handler must be a function");
@@ -67,9 +75,14 @@ export class LanguageAnalysisService extends DisposableOwner {
     }
     this.tokens = this.own(createLanguageTokenStore(model));
     this.diagnostics = this.own(createLanguageDiagnosticStore(model));
+    const createFallbackWorker = options.workerFactory ?? (() => new LanguageAnalysisProviderWorker(registry, options.onProviderError));
+    const workerDecorator = options.workerDecorator;
+    const createWorker = workerDecorator
+      ? () => workerDecorator(createFallbackWorker())
+      : createFallbackWorker;
     this.coordinator = this.own(new LanguageRequestCoordinator(
       model,
-      options.workerFactory ?? (() => new LanguageAnalysisProviderWorker(registry, options.onProviderError)),
+      createWorker,
     ));
   }
 

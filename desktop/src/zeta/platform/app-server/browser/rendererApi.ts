@@ -2,6 +2,7 @@ import { createDisconnectedAppServerApi, createDisconnectedResourceApi, createDi
 import { createDisconnectedFileApi } from "../../files/browser/fileApi.js";
 import { createDisconnectedExtensionApi } from "../../extensions/browser/extensionApi.js";
 import { createDisconnectedDiffApi } from "../../diff/browser/diffApi.js";
+import { createDisconnectedSyntaxApi } from "../../syntax/browser/syntaxApi.js";
 import { createDisconnectedGitApi } from "../../git/browser/gitApi.js";
 import type { IRendererHost } from "../../renderer/common/rendererHost.js";
 import { unavailableOperation, WebAppServerUnavailableError } from "../../renderer/browser/disconnectedHost.js";
@@ -26,6 +27,7 @@ export function createDisconnectedRendererApi(): IRendererHost {
     extensions: createDisconnectedExtensionApi(unavailableOperation),
     fs: createDisconnectedFileApi(unavailableOperation),
     diff: createDisconnectedDiffApi(unavailableOperation),
+    syntax: createDisconnectedSyntaxApi(unavailableOperation),
     git: createDisconnectedGitApi(unavailableOperation),
     workspaceSearch: createDisconnectedWorkspaceSearchApi(unavailableOperation),
     terminal: new DisconnectedTerminalProcessService(unavailableOperation, appServer),

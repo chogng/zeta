@@ -3,13 +3,13 @@ import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
 import { jumpToMatchingBrackets } from "../common/bracketNavigation.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { type LanguageBracketMatcher } from "../common/bracketMatching.js";
-import { type AlphaEditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 
 /** Routes the VS Code go-to-bracket shortcut through Alpha's lexical matcher. */
-export class AlphaBracketNavigationController extends DisposableOwner {
+export class BracketNavigationController extends DisposableOwner {
   constructor(
     input: HTMLTextAreaElement,
-    private readonly viewport: AlphaEditorViewport,
+    private readonly viewport: EditorViewport,
     private readonly selections: EditorSelectionController,
     private readonly matcher: LanguageBracketMatcher,
   ) {

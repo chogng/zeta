@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { type AlphaTextMeasurer } from "../../browser/view/fontMetrics.js";
-import { AlphaSemanticTokenPresentation, createAlphaSemanticTokenSource } from "../../browser/view/semanticTokenPresentation.js";
+import { type TextMeasurer } from "../../browser/view/fontMetrics.js";
+import { SemanticTokenPresentation, createAlphaSemanticTokenSource } from "../../browser/view/semanticTokenPresentation.js";
 import { LanguageResultAcceptance } from "../../common/languages/languageResultStore.js";
 import { LanguageTokenLineIndex } from "../../common/tokens/languageTokenLineIndex.js";
 import { createLanguageTokenStore, type LanguageToken } from "../../common/languages/languageResults.js";
@@ -24,8 +24,8 @@ for (const [name, value] of Object.entries({
   });
 }
 
-const { AlphaEditorViewport } = await import("../../browser/view/editorViewport.js");
-const { AlphaEditorLineWrapping } = await import("../../browser/view/visualLineProjection.js");
+const { EditorViewport } = await import("../../browser/view/editorViewport.js");
+const { EditorLineWrapping } = await import("../../browser/view/visualLineProjection.js");
 
 test("Viewport projects tokens only for virtualized lines and preserves overlapping rows", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
@@ -39,7 +39,7 @@ test("Viewport projects tokens only for virtualized lines and preserves overlapp
   ]);
   using index = new LanguageTokenLineIndex(store);
   const source = createAlphaSemanticTokenSource(index);
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
@@ -70,7 +70,7 @@ test("Same-version token replacement rerenders visible text and model edits clea
   acceptTokens(store, model, 1, [token(0, 0, 5, "string")]);
   using index = new LanguageTokenLineIndex(store);
   const source = createAlphaSemanticTokenSource(index);
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
@@ -81,7 +81,7 @@ test("Same-version token replacement rerenders visible text and model edits clea
   const textElement = requiredElement<HTMLElement>(requiredLine(viewport.element, 0), ".zeta-alpha-editor-line-text");
   assert.equal(textElement.textContent, "<tag> value");
   assert.equal(textElement.querySelector("tag"), null);
-  assert.equal(requiredElement(textElement, ".zeta-alpha-editor-token").classList.contains(AlphaSemanticTokenPresentation.String), true);
+  assert.equal(requiredElement(textElement, ".zeta-alpha-editor-token").classList.contains(SemanticTokenPresentation.String), true);
 
   acceptTokens(store, model, 2, [token(0, 6, 11, "variable")]);
   assert.equal(textElement.textContent, "<tag> value");
@@ -110,13 +110,13 @@ test("Viewport clips semantic token spans to every soft-wrapped text fragment", 
   using store = createLanguageTokenStore(model);
   acceptTokens(store, model, 1, [token(0, 1, 5, "keyword")]);
   using index = new LanguageTokenLineIndex(store);
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
     textMeasurer: new FixedTextMeasurer(),
     semanticTokenSource: createAlphaSemanticTokenSource(index),
-    lineWrapping: AlphaEditorLineWrapping.On,
+    lineWrapping: EditorLineWrapping.On,
   });
   viewport.layout({ width: 70, height: 60 });
 
@@ -146,14 +146,14 @@ test("Viewport rejects cross-model token sources and owns none of their common s
   const source = createAlphaSemanticTokenSource(index);
   const otherSource = createAlphaSemanticTokenSource(otherIndex);
 
-  assert.throws(() => new AlphaEditorViewport({
+  assert.throws(() => new EditorViewport({
     container,
     model,
     lineHeight: 20,
     textMeasurer: new FixedTextMeasurer(),
     semanticTokenSource: otherSource,
   }), /must share one text model/);
-  const viewport = new AlphaEditorViewport({
+  const viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
@@ -182,9 +182,9 @@ test("Viewport resolves semantic tokens only for virtualized lines", () => {
   let resolverCalls = 0;
   const source = createAlphaSemanticTokenSource(index, () => {
     resolverCalls += 1;
-    return AlphaSemanticTokenPresentation.Keyword;
+    return SemanticTokenPresentation.Keyword;
   });
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
@@ -254,7 +254,7 @@ function requiredElement<T extends Element = HTMLElement>(root: ParentNode, sele
   return element;
 }
 
-class FixedTextMeasurer implements AlphaTextMeasurer {
+class FixedTextMeasurer implements TextMeasurer {
   readonly horizontalPadding = 24;
   readonly contentLeftPadding = 12;
 

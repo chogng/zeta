@@ -1,4 +1,4 @@
-import "../media/alphaEditorViewport.css";
+import "../media/editorViewport.css";
 import { addDisposableListener, reset } from "../../../../base/browser/dom.js";
 import { getClientArea } from "../../../../base/browser/geometry.js";
 import { runWhenWindowIdle } from "../../../../base/browser/scheduler.js";
@@ -14,66 +14,66 @@ import { type TextModel } from "../../common/model/textModel.js";
 import { TrackedRangeStickiness, type TrackedRange } from "../../common/model/trackedRange.js";
 import { type EditorVisualLineProjection } from "../../common/viewModel/modelLineProjection.js";
 import { type EditorLineRange, type EditorScrollPosition, type EditorViewportChange, type EditorViewportLayout, EditorViewportModel } from "../../common/viewLayout/editorViewportModel.js";
-import { type AlphaDecorationSource, type AlphaResolvedDecoration } from "./decorationPresentation.js";
-import { AlphaDecorationLineIndex } from "./decorationLineIndex.js";
+import { type DecorationSource, type ResolvedDecoration } from "./decorationPresentation.js";
+import { DecorationLineIndex } from "./decorationLineIndex.js";
 import { createAlphaDiagnosticOverviewMarkers } from "../../contrib/gotoError/browser/diagnosticOverviewRuler.js";
-import { AlphaDomTextMeasurer, type AlphaTextMeasurer } from "./fontMetrics.js";
-import { AlphaFoldingDecorationProvider } from "../../contrib/folding/browser/foldingDecorations.js";
-import { type AlphaBracketColorizationSource } from "../../contrib/bracketMatching/browser/bracketColorizationPresentation.js";
-import { AlphaLineWidthIndex } from "../../contrib/longLinesHelper/browser/longLinesHelper.js";
+import { DomTextMeasurer, type TextMeasurer } from "./fontMetrics.js";
+import { FoldingDecorationProvider } from "../../contrib/folding/browser/foldingDecorations.js";
+import { type BracketColorizationSource } from "../../contrib/bracketMatching/browser/bracketColorizationPresentation.js";
+import { LineWidthIndex } from "../../contrib/longLinesHelper/browser/longLinesHelper.js";
 import { createAlphaIndentationGuides } from "../../contrib/indentation/browser/indentation.js";
-import { AlphaGpuMinimapRenderer } from "../../contrib/gpu/browser/gpuRenderer.js";
-import { AlphaMinimapNavigationController } from "./minimapNavigationController.js";
+import { GpuMinimapRenderer } from "../../contrib/gpu/browser/gpuRenderer.js";
+import { MinimapNavigationController } from "./minimapNavigationController.js";
 import { createAlphaMinimapRows } from "./minimapProjection.js";
-import { type AlphaClientPoint, type AlphaEditorHitTarget, AlphaEditorHitTargetKind, hitTestAlphaVisualEditorPoint } from "./pointerHitTest.js";
+import { type ClientPoint, type EditorHitTarget, EditorHitTargetKind, hitTestAlphaVisualEditorPoint } from "./pointerHitTest.js";
 import { getAlphaDomTextCaretLeft, getAlphaDomTextOffsetAtClientPoint } from "./domTextGeometry.js";
-import { createAlphaRenderedLine, type AlphaRenderedLine } from "./renderedLine.js";
-import { projectAlphaSemanticTokenLine, type AlphaResolvedSemanticToken, type AlphaSemanticTokenSource } from "../../browser/view/semanticTokenPresentation.js";
-import { type AlphaBracketColorizationSpan } from "../../browser/view/semanticTokenPresentation.js";
-import { projectAlphaCompositionOverlay, projectAlphaDecorationOverlays, projectAlphaSelectionOverlays, type AlphaViewportOverlayContext } from "./viewportOverlayPresentation.js";
-import { AlphaEditorLineWrapping, AlphaVisualLineProjection } from "./visualLineProjection.js";
-import { AlphaVisibleLineProjection } from "./visibleLineProjection.js";
+import { createAlphaRenderedLine, type RenderedLine } from "./renderedLine.js";
+import { projectAlphaSemanticTokenLine, type ResolvedSemanticToken, type SemanticTokenSource } from "../../browser/view/semanticTokenPresentation.js";
+import { type BracketColorizationSpan } from "../../browser/view/semanticTokenPresentation.js";
+import { projectAlphaCompositionOverlay, projectAlphaDecorationOverlays, projectAlphaSelectionOverlays, type ViewportOverlayContext } from "./viewportOverlayPresentation.js";
+import { EditorLineWrapping, VisualLineProjection } from "./visualLineProjection.js";
+import { VisibleLineProjection } from "./visibleLineProjection.js";
 import { getTextGraphemeBoundaries } from "../../common/core/textSegmentation.js";
 
 const GUTTER_HORIZONTAL_PADDING = 16;
 const OVERVIEW_RULER_WIDTH = 6;
 const MINIMAP_WIDTH = 56;
 
-export type AlphaEditorViewportPresentation = "document" | "embedded";
-export enum AlphaEditorMinimap {
+export type EditorViewportPresentation = "document" | "embedded";
+export enum EditorMinimap {
   On = "on",
   Off = "off",
 }
 
 /** Controls the browser paragraph direction used to shape Alpha's rendered text. */
-export enum AlphaEditorTextDirection {
+export enum EditorTextDirection {
   Auto = "auto",
   LeftToRight = "ltr",
   RightToLeft = "rtl",
 }
 
-export interface AlphaEditorViewportOptions {
+export interface EditorViewportOptions {
   readonly container: HTMLElement;
   readonly model: TextModel;
   readonly lineHeight: number;
   readonly overscanLineCount?: number;
   readonly ariaLabel?: string;
-  readonly textMeasurer?: AlphaTextMeasurer;
+  readonly textMeasurer?: TextMeasurer;
   readonly selectionController?: EditorSelectionController;
-  readonly decorationSources?: readonly AlphaDecorationSource[];
-  readonly semanticTokenSource?: AlphaSemanticTokenSource;
-  readonly bracketColorizationSource?: AlphaBracketColorizationSource;
+  readonly decorationSources?: readonly DecorationSource[];
+  readonly semanticTokenSource?: SemanticTokenSource;
+  readonly bracketColorizationSource?: BracketColorizationSource;
   readonly foldingModel?: EditorFoldingModel;
   readonly hiddenRangeModel?: EditorHiddenRangeModel;
-  readonly presentation?: AlphaEditorViewportPresentation;
-  readonly lineWrapping?: AlphaEditorLineWrapping;
-  readonly minimap?: AlphaEditorMinimap;
+  readonly presentation?: EditorViewportPresentation;
+  readonly lineWrapping?: EditorLineWrapping;
+  readonly minimap?: EditorMinimap;
   readonly indentation?: EditorIndentationOptions;
   /** Browser text-direction input; automatic direction is the default. */
-  readonly textDirection?: AlphaEditorTextDirection;
+  readonly textDirection?: EditorTextDirection;
 }
 
-export interface AlphaEditorContentPosition {
+export interface EditorContentPosition {
   readonly left: number;
   readonly top: number;
   readonly height: number;
@@ -85,7 +85,7 @@ export interface AlphaEditorContentPosition {
  * The common viewport owns layout math. This component owns the scroll host,
  * virtual line DOM, measurement inputs, and their lifecycle.
  */
-export class AlphaEditorViewport extends DisposableOwner {
+export class EditorViewport extends DisposableOwner {
   readonly element: HTMLDivElement;
   readonly onDidChangeLayout: Event<EditorViewportChange>;
   private readonly model: TextModel;
@@ -98,22 +98,22 @@ export class AlphaEditorViewport extends DisposableOwner {
   private readonly minimapElement: HTMLDivElement;
   private readonly minimapCanvasElement: HTMLCanvasElement;
   private readonly minimapViewportElement: HTMLDivElement;
-  private readonly minimapGpuRenderer: AlphaGpuMinimapRenderer | undefined;
-  private readonly textMeasurer: AlphaTextMeasurer;
-  private readonly lineWidths: AlphaLineWidthIndex;
-  private readonly visualLineProjection: AlphaVisualLineProjection;
-  private readonly visibleLineProjection: AlphaVisibleLineProjection;
-  private readonly foldingDecorations: AlphaFoldingDecorationProvider;
+  private readonly minimapGpuRenderer: GpuMinimapRenderer | undefined;
+  private readonly textMeasurer: TextMeasurer;
+  private readonly lineWidths: LineWidthIndex;
+  private readonly visualLineProjection: VisualLineProjection;
+  private readonly visibleLineProjection: VisibleLineProjection;
+  private readonly foldingDecorations: FoldingDecorationProvider;
   private readonly selectionController: EditorSelectionController | undefined;
-  private readonly decorationSources: readonly AlphaDecorationSource[];
-  private readonly semanticTokenSource: AlphaSemanticTokenSource | undefined;
-  private readonly bracketColorizationSource: AlphaBracketColorizationSource | undefined;
-  private readonly presentation: AlphaEditorViewportPresentation;
+  private readonly decorationSources: readonly DecorationSource[];
+  private readonly semanticTokenSource: SemanticTokenSource | undefined;
+  private readonly bracketColorizationSource: BracketColorizationSource | undefined;
+  private readonly presentation: EditorViewportPresentation;
   private readonly indentation: ResolvedEditorIndentationOptions;
   private readonly decorationSnapshots =
-    new Map<AlphaDecorationSource, AlphaDecorationSource["decorations"]>();
-  private decorationLineIndex = new AlphaDecorationLineIndex([]);
-  private renderedLines = new Map<number, AlphaRenderedLine>();
+    new Map<DecorationSource, DecorationSource["decorations"]>();
+  private decorationLineIndex = new DecorationLineIndex([]);
+  private renderedLines = new Map<number, RenderedLine>();
   private renderedRange: EditorLineRange = {
     startLineIndex: 0,
     endLineIndexExclusive: 0,
@@ -125,12 +125,12 @@ export class AlphaEditorViewport extends DisposableOwner {
   private renderedOverviewRevision = -1;
   private minimapRevision = 0;
   private renderedMinimapRevision = -1;
-  private readonly minimap: AlphaEditorMinimap;
-  private readonly textDirection: AlphaEditorTextDirection;
+  private readonly minimap: EditorMinimap;
+  private readonly textDirection: EditorTextDirection;
   private softWrapping: boolean;
   private compositionRange: TrackedRange | undefined;
 
-  constructor(options: AlphaEditorViewportOptions) {
+  constructor(options: EditorViewportOptions) {
     super();
     const ownerDocument = options.container.ownerDocument;
     this.model = options.model;
@@ -147,15 +147,15 @@ export class AlphaEditorViewport extends DisposableOwner {
     this.semanticTokenSource = options.semanticTokenSource;
     this.bracketColorizationSource = options.bracketColorizationSource;
     this.presentation = options.presentation ?? "document";
-    this.minimap = options.minimap ?? (this.presentation === "document" ? AlphaEditorMinimap.On : AlphaEditorMinimap.Off);
-    this.textDirection = options.textDirection ?? AlphaEditorTextDirection.Auto;
-    this.softWrapping = options.lineWrapping === AlphaEditorLineWrapping.On;
+    this.minimap = options.minimap ?? (this.presentation === "document" ? EditorMinimap.On : EditorMinimap.Off);
+    this.textDirection = options.textDirection ?? EditorTextDirection.Auto;
+    this.softWrapping = options.lineWrapping === EditorLineWrapping.On;
     try {
       this.indentation = resolveEditorIndentationOptions(options.indentation);
-      if (!Object.values(AlphaEditorMinimap).includes(this.minimap)) {
+      if (!Object.values(EditorMinimap).includes(this.minimap)) {
         throw new TypeError("Unknown Alpha editor minimap mode");
       }
-      if (!Object.values(AlphaEditorTextDirection).includes(this.textDirection)) {
+      if (!Object.values(EditorTextDirection).includes(this.textDirection)) {
         throw new TypeError("Unknown Alpha editor text direction");
       }
       if (this.selectionController && this.selectionController.textModel !== this.model) {
@@ -182,7 +182,7 @@ export class AlphaEditorViewport extends DisposableOwner {
       this.dispose();
       throw error;
     }
-    this.foldingDecorations = this.own(new AlphaFoldingDecorationProvider(options.foldingModel));
+    this.foldingDecorations = this.own(new FoldingDecorationProvider(options.foldingModel));
     this.decorationSources = Object.freeze([
       ...(options.decorationSources ?? []),
     ]);
@@ -206,7 +206,7 @@ export class AlphaEditorViewport extends DisposableOwner {
     this.overviewRulerElement.className = "zeta-alpha-editor-overview-ruler";
     this.overviewRulerElement.setAttribute("aria-hidden", "true");
     this.minimapElement.className = "zeta-alpha-editor-minimap";
-    this.minimapElement.hidden = this.minimap === AlphaEditorMinimap.Off;
+    this.minimapElement.hidden = this.minimap === EditorMinimap.Off;
     this.minimapElement.setAttribute("aria-hidden", "true");
     this.minimapCanvasElement.className = "zeta-alpha-editor-minimap-gpu";
     this.minimapCanvasElement.setAttribute("aria-hidden", "true");
@@ -217,14 +217,14 @@ export class AlphaEditorViewport extends DisposableOwner {
     options.container.append(this.element);
     this.defer(() => this.element.remove());
     this.defer(() => this.compositionRange?.dispose());
-    this.minimapGpuRenderer = this.minimap === AlphaEditorMinimap.On
-      ? AlphaGpuMinimapRenderer.tryCreate(this.minimapCanvasElement)
+    this.minimapGpuRenderer = this.minimap === EditorMinimap.On
+      ? GpuMinimapRenderer.tryCreate(this.minimapCanvasElement)
       : undefined;
     this.defer(() => this.minimapGpuRenderer?.dispose());
     this.textMeasurer =
       options.textMeasurer ??
-      new AlphaDomTextMeasurer(this.textMetricsElement);
-    this.lineWidths = this.own(new AlphaLineWidthIndex(
+      new DomTextMeasurer(this.textMetricsElement);
+    this.lineWidths = this.own(new LineWidthIndex(
       this.model,
       this.textMeasurer,
       {
@@ -237,7 +237,7 @@ export class AlphaEditorViewport extends DisposableOwner {
         },
       },
     ));
-    this.visualLineProjection = this.own(new AlphaVisualLineProjection(
+    this.visualLineProjection = this.own(new VisualLineProjection(
       this.model,
       this.textMeasurer,
       {
@@ -251,7 +251,7 @@ export class AlphaEditorViewport extends DisposableOwner {
         },
       },
     ));
-    this.visibleLineProjection = this.own(new AlphaVisibleLineProjection(
+    this.visibleLineProjection = this.own(new VisibleLineProjection(
       this.visualLineProjection,
       options.hiddenRangeModel,
     ));
@@ -277,7 +277,7 @@ export class AlphaEditorViewport extends DisposableOwner {
       });
       this.syncScrollPosition(layout);
     }));
-    this.own(new AlphaMinimapNavigationController(
+    this.own(new MinimapNavigationController(
       this.minimapElement,
       ownerDocument,
       () => this.viewport.layout,
@@ -346,23 +346,23 @@ export class AlphaEditorViewport extends DisposableOwner {
     return this.model;
   }
 
-  get lineWrapping(): AlphaEditorLineWrapping {
+  get lineWrapping(): EditorLineWrapping {
     return this.softWrapping
-      ? AlphaEditorLineWrapping.On
-      : AlphaEditorLineWrapping.Off;
+      ? EditorLineWrapping.On
+      : EditorLineWrapping.Off;
   }
 
   /** Returns the browser paragraph direction used by the text projection. */
-  get editorTextDirection(): AlphaEditorTextDirection {
+  get editorTextDirection(): EditorTextDirection {
     return this.textDirection;
   }
 
   /** Changes only this viewport's visual row projection; document text is unaffected. */
-  setLineWrapping(lineWrapping: AlphaEditorLineWrapping): EditorViewportLayout {
-    if (!Object.values(AlphaEditorLineWrapping).includes(lineWrapping)) {
+  setLineWrapping(lineWrapping: EditorLineWrapping): EditorViewportLayout {
+    if (!Object.values(EditorLineWrapping).includes(lineWrapping)) {
       throw new TypeError("Unknown Alpha editor line wrapping mode");
     }
-    const nextSoftWrapping = lineWrapping === AlphaEditorLineWrapping.On;
+    const nextSoftWrapping = lineWrapping === EditorLineWrapping.On;
     if (nextSoftWrapping === this.softWrapping) return this.viewport.layout;
     this.softWrapping = nextSoftWrapping;
     if (nextSoftWrapping) this.updateWrapWidth(this.viewport.layout.viewportSize.width);
@@ -452,7 +452,7 @@ export class AlphaEditorViewport extends DisposableOwner {
     return this.scrollTo({ left, top });
   }
 
-  getPositionContentCoordinates(position: TextPosition): AlphaEditorContentPosition {
+  getPositionContentCoordinates(position: TextPosition): EditorContentPosition {
     this.model.offsetAt(position);
     const visualProjection = this.visualProjection;
     const visualLineIndex = visualProjection.visualLineIndexAt(position);
@@ -480,7 +480,7 @@ export class AlphaEditorViewport extends DisposableOwner {
   /** Resolves the nearest browser-shaped cursor on one currently rendered visual line. */
   getNearestPositionAtVisualHorizontalOffset(visualLineIndex: number, horizontalOffset: number): TextPosition | undefined {
     if (!Number.isFinite(horizontalOffset)) throw new RangeError("Alpha visual cursor horizontal offset must be finite");
-    if (this.textDirection === AlphaEditorTextDirection.LeftToRight) return undefined;
+    if (this.textDirection === EditorTextDirection.LeftToRight) return undefined;
     const visualLine = this.visualProjection.lineAt(visualLineIndex);
     const line = this.renderedLines.get(visualLineIndex);
     if (!visualLine || !line) return undefined;
@@ -515,10 +515,10 @@ export class AlphaEditorViewport extends DisposableOwner {
   }
 
   getTargetAtClientPoint(
-    point: AlphaClientPoint,
-  ): AlphaEditorHitTarget | undefined {
+    point: ClientPoint,
+  ): EditorHitTarget | undefined {
     validateClientPoint(point);
-    const domTarget = this.textDirection === AlphaEditorTextDirection.LeftToRight
+    const domTarget = this.textDirection === EditorTextDirection.LeftToRight
       ? undefined
       : this.getDomTargetAtClientPoint(point);
     if (domTarget) return domTarget;
@@ -529,9 +529,9 @@ export class AlphaEditorViewport extends DisposableOwner {
     );
   }
 
-  getNearestTargetAtClientPoint(point: AlphaClientPoint): AlphaEditorHitTarget | undefined {
+  getNearestTargetAtClientPoint(point: ClientPoint): EditorHitTarget | undefined {
     validateClientPoint(point);
-    const domTarget = this.textDirection === AlphaEditorTextDirection.LeftToRight
+    const domTarget = this.textDirection === EditorTextDirection.LeftToRight
       ? undefined
       : this.getDomTargetAtClientPoint(point);
     if (domTarget) return domTarget;
@@ -549,7 +549,7 @@ export class AlphaEditorViewport extends DisposableOwner {
     );
   }
 
-  private hitTestViewportPoint(left: number, top: number): AlphaEditorHitTarget | undefined {
+  private hitTestViewportPoint(left: number, top: number): EditorHitTarget | undefined {
     return hitTestAlphaVisualEditorPoint(
       this.model,
       this.visualProjection,
@@ -563,7 +563,7 @@ export class AlphaEditorViewport extends DisposableOwner {
     );
   }
 
-  private getDomTargetAtClientPoint(point: AlphaClientPoint): AlphaEditorHitTarget | undefined {
+  private getDomTargetAtClientPoint(point: ClientPoint): EditorHitTarget | undefined {
     for (const [visualLineIndex, renderedLine] of this.renderedLines) {
       const offset = getAlphaDomTextOffsetAtClientPoint(
         renderedLine.textElement,
@@ -574,7 +574,7 @@ export class AlphaEditorViewport extends DisposableOwner {
       const visualLine = this.visualProjection.lineAt(visualLineIndex);
       if (!visualLine) continue;
       return Object.freeze({
-        kind: AlphaEditorHitTargetKind.Text,
+        kind: EditorHitTargetKind.Text,
         position: TextPosition.at(visualLine.logicalLineIndex, visualLine.startColumn + offset),
       });
     }
@@ -582,7 +582,7 @@ export class AlphaEditorViewport extends DisposableOwner {
   }
 
   private domCaretLeft(visualLineIndex: number, offset: number): number | undefined {
-    if (this.textDirection === AlphaEditorTextDirection.LeftToRight) return undefined;
+    if (this.textDirection === EditorTextDirection.LeftToRight) return undefined;
     const line = this.renderedLines.get(visualLineIndex);
     return line && Number.isSafeInteger(offset) && offset >= 0 && offset <= line.textElement.textContent?.length
       ? getAlphaDomTextCaretLeft(line.textElement, offset, line.element)
@@ -652,7 +652,7 @@ export class AlphaEditorViewport extends DisposableOwner {
     const ownerDocument = this.element.ownerDocument;
     const semanticTokens = this.resolveSemanticTokenRange(layout.renderLines);
     const fragment = ownerDocument.createDocumentFragment();
-    const next = new Map<number, AlphaRenderedLine>();
+    const next = new Map<number, RenderedLine>();
     for (
       let visualLineIndex = layout.renderLines.startLineIndex;
       visualLineIndex < layout.renderLines.endLineIndexExclusive;
@@ -701,7 +701,7 @@ export class AlphaEditorViewport extends DisposableOwner {
     }
   }
 
-  private projectLineText(line: AlphaRenderedLine, visualLine: { readonly logicalLineIndex: number; readonly startColumn: number; readonly endColumn: number }, tokens: readonly AlphaResolvedSemanticToken[]): void {
+  private projectLineText(line: RenderedLine, visualLine: { readonly logicalLineIndex: number; readonly startColumn: number; readonly endColumn: number }, tokens: readonly ResolvedSemanticToken[]): void {
     const fullText = this.model.getLineContent(visualLine.logicalLineIndex);
     const text = fullText.slice(visualLine.startColumn, visualLine.endColumn);
     const brackets = this.bracketColorizationSource?.getLineBrackets(visualLine.logicalLineIndex) ?? [];
@@ -731,10 +731,10 @@ export class AlphaEditorViewport extends DisposableOwner {
   }
 
 
-  private resolveSemanticTokenRange(range: EditorLineRange): ReadonlyMap<number, readonly AlphaResolvedSemanticToken[]> {
+  private resolveSemanticTokenRange(range: EditorLineRange): ReadonlyMap<number, readonly ResolvedSemanticToken[]> {
     const source = this.semanticTokenSource;
     if (!source) return new Map();
-    const tokens = new Map<number, readonly AlphaResolvedSemanticToken[]>();
+    const tokens = new Map<number, readonly ResolvedSemanticToken[]>();
     const projection = this.visualProjection;
     for (let visualLineIndex = range.startLineIndex; visualLineIndex < range.endLineIndexExclusive; visualLineIndex += 1) {
       const visualLine = projection.lineAt(visualLineIndex);
@@ -777,7 +777,7 @@ export class AlphaEditorViewport extends DisposableOwner {
     projectAlphaCompositionOverlay(this.overlayContext(layout), this.compositionRange?.range);
   }
 
-  private overlayContext(layout: EditorViewportLayout): AlphaViewportOverlayContext {
+  private overlayContext(layout: EditorViewportLayout): ViewportOverlayContext {
     return {
       ownerDocument: this.element.ownerDocument,
       model: this.model,
@@ -786,12 +786,12 @@ export class AlphaEditorViewport extends DisposableOwner {
       renderLines: layout.renderLines,
       textLeft: this.textLeft,
       textMeasurer: this.textMeasurer,
-      useDomTextGeometry: this.textDirection !== AlphaEditorTextDirection.LeftToRight,
+      useDomTextGeometry: this.textDirection !== EditorTextDirection.LeftToRight,
     };
   }
 
   private rebuildDecorationLineIndex(): void {
-    this.decorationLineIndex = new AlphaDecorationLineIndex(this.decorationSources.flatMap(
+    this.decorationLineIndex = new DecorationLineIndex(this.decorationSources.flatMap(
       source => this.decorationSnapshots.get(source) ?? [],
     ));
     this.overviewRevision += 1;
@@ -799,7 +799,7 @@ export class AlphaEditorViewport extends DisposableOwner {
   }
 
   private projectOverviewRuler(layout: EditorViewportLayout): void {
-    const rightOffset = this.minimap === AlphaEditorMinimap.On ? MINIMAP_WIDTH + 4 : 0;
+    const rightOffset = this.minimap === EditorMinimap.On ? MINIMAP_WIDTH + 4 : 0;
     this.overviewRulerElement.style.left = `${layout.scrollPosition.left + Math.max(0, layout.viewportSize.width - OVERVIEW_RULER_WIDTH - rightOffset)}px`;
     this.overviewRulerElement.style.top = `${layout.scrollPosition.top}px`;
     this.overviewRulerElement.style.height = `${layout.viewportSize.height}px`;
@@ -823,7 +823,7 @@ export class AlphaEditorViewport extends DisposableOwner {
   }
 
   private projectMinimap(layout: EditorViewportLayout): void {
-    if (this.minimap === AlphaEditorMinimap.Off) return;
+    if (this.minimap === EditorMinimap.Off) return;
     this.minimapElement.style.left = `${layout.scrollPosition.left + Math.max(0, layout.viewportSize.width - MINIMAP_WIDTH)}px`;
     this.minimapElement.style.top = `${layout.scrollPosition.top}px`;
     this.minimapElement.style.height = `${layout.viewportSize.height}px`;
@@ -863,7 +863,7 @@ export class AlphaEditorViewport extends DisposableOwner {
     this.renderedMinimapRevision = this.minimapRevision;
   }
 
-  private resolveVisibleDecorations(layout: EditorViewportLayout): readonly AlphaResolvedDecoration[] {
+  private resolveVisibleDecorations(layout: EditorViewportLayout): readonly ResolvedDecoration[] {
     const projection = this.visualProjection;
     let minimumLogicalLineIndex = Number.POSITIVE_INFINITY;
     let maximumLogicalLineIndex = -1;
@@ -892,7 +892,7 @@ export class AlphaEditorViewport extends DisposableOwner {
   }
 }
 
-function validateClientPoint(point: AlphaClientPoint): void {
+function validateClientPoint(point: ClientPoint): void {
   if (
     !point ||
     !Number.isFinite(point.clientX) ||
@@ -913,7 +913,7 @@ function lineRangesEqual(left: EditorLineRange, right: EditorLineRange): boolean
     left.endLineIndexExclusive === right.endLineIndexExclusive;
 }
 
-function clipSemanticTokens(tokens: readonly AlphaResolvedSemanticToken[], startColumn: number, endColumn: number): readonly AlphaResolvedSemanticToken[] {
+function clipSemanticTokens(tokens: readonly ResolvedSemanticToken[], startColumn: number, endColumn: number): readonly ResolvedSemanticToken[] {
   return Object.freeze(tokens.flatMap(token => {
     const start = Math.max(token.startColumn, startColumn);
     const end = Math.min(token.endColumn, endColumn);
@@ -927,7 +927,7 @@ function clipSemanticTokens(tokens: readonly AlphaResolvedSemanticToken[], start
   }));
 }
 
-function clipBracketColorizations(brackets: readonly AlphaBracketColorizationSpan[], startColumn: number, endColumn: number): readonly AlphaBracketColorizationSpan[] {
+function clipBracketColorizations(brackets: readonly BracketColorizationSpan[], startColumn: number, endColumn: number): readonly BracketColorizationSpan[] {
   return Object.freeze(brackets.flatMap(bracket => {
     const start = Math.max(bracket.startColumn, startColumn);
     const end = Math.min(bracket.endColumn, endColumn);

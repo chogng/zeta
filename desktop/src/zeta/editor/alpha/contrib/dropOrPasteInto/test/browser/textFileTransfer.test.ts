@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ALPHA_TEXT_FILE_TRANSFER_MAX_BYTES, selectAlphaTextFileTransfer, type AlphaTextFileTransfer } from "../../browser/textFileTransfer.js";
+import { ALPHA_TEXT_FILE_TRANSFER_MAX_BYTES, selectAlphaTextFileTransfer, type TextFileTransfer } from "../../browser/textFileTransfer.js";
 
-function file(name: string, type: string, size = 1): AlphaTextFileTransfer {
+function file(name: string, type: string, size = 1): TextFileTransfer {
   return {
     name,
     type,

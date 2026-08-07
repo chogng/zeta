@@ -6,7 +6,7 @@ import { TextModel } from "../../common/model/textModel.js";
 import { EditorVisualLineProjection } from "../../common/viewModel/modelLineProjection.js";
 import { createAlphaVisualRangeRectangles } from "../../browser/view/visualRangeGeometry.js";
 import { createAlphaVisualSelectionGeometry } from "../../browser/view/visualSelectionGeometry.js";
-import { type AlphaTextMeasurer } from "../../browser/view/fontMetrics.js";
+import { type TextMeasurer } from "../../browser/view/fontMetrics.js";
 
 test("visual selection geometry splits one logical range across wrapped fragments", () => {
   using model = new TextModel("abcdef\ngh");
@@ -41,7 +41,7 @@ test("visual range geometry rejects a projection from another model version", ()
   }], projection, { startLineIndex: 0, endLineIndexExclusive: 1 }, 0, new FixedTextMeasurer()), /current text model projection/);
 });
 
-class FixedTextMeasurer implements AlphaTextMeasurer {
+class FixedTextMeasurer implements TextMeasurer {
   readonly horizontalPadding = 0;
   readonly contentLeftPadding = 0;
 

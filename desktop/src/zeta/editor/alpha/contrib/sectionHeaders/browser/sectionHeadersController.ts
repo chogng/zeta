@@ -1,11 +1,11 @@
 import "./media/sectionHeaders.css";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
-import { type AlphaEditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 import { type EditorFoldingModel } from "../../folding/browser/foldingModel.js";
 
 /** Marks logical lines that introduce a foldable section for browser presentation and accessibility. */
-export class AlphaSectionHeadersController extends DisposableOwner {
-  constructor(private readonly viewport: AlphaEditorViewport, private readonly folding: EditorFoldingModel) {
+export class SectionHeadersController extends DisposableOwner {
+  constructor(private readonly viewport: EditorViewport, private readonly folding: EditorFoldingModel) {
     super();
     if (folding.model !== viewport.textModel) throw new TypeError("Alpha section header dependencies must share a text model");
     this.own(viewport.onDidChangeLayout(() => this.update()));

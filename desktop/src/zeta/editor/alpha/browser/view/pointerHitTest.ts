@@ -3,19 +3,19 @@ import { type TextModel } from "../../common/model/textModel.js";
 import { type EditorVisualLineProjection } from "../../common/viewModel/modelLineProjection.js";
 import { getTextGraphemeBoundaries } from "../../common/core/textSegmentation.js";
 import { type EditorScrollPosition } from "../../common/viewLayout/editorViewportModel.js";
-import { type AlphaTextMeasurer } from "./fontMetrics.js";
+import { type TextMeasurer } from "./fontMetrics.js";
 
-export interface AlphaClientPoint {
+export interface ClientPoint {
   readonly clientX: number;
   readonly clientY: number;
 }
 
-export interface AlphaViewportPoint {
+export interface ViewportPoint {
   readonly left: number;
   readonly top: number;
 }
 
-export interface AlphaHitTestLayout {
+export interface HitTestLayout {
   readonly lineHeight: number;
   readonly viewportSize: {
     readonly width: number;
@@ -24,31 +24,31 @@ export interface AlphaHitTestLayout {
   readonly scrollPosition: EditorScrollPosition;
 }
 
-export interface AlphaHitTestMetrics {
+export interface HitTestMetrics {
   readonly gutterWidth: number;
   readonly textLeft: number;
 }
 
-export enum AlphaEditorHitTargetKind {
+export enum EditorHitTargetKind {
   Gutter = "gutter",
   Text = "text",
   EmptyContent = "emptyContent",
   AfterLines = "afterLines",
 }
 
-export interface AlphaEditorHitTarget {
-  readonly kind: AlphaEditorHitTargetKind;
+export interface EditorHitTarget {
+  readonly kind: EditorHitTargetKind;
   readonly position: TextPosition;
 }
 
 /** @internal */
 export function hitTestAlphaEditorPoint(
   model: TextModel,
-  layout: AlphaHitTestLayout,
-  point: AlphaViewportPoint,
-  metrics: AlphaHitTestMetrics,
-  measurer: AlphaTextMeasurer,
-): AlphaEditorHitTarget | undefined {
+  layout: HitTestLayout,
+  point: ViewportPoint,
+  metrics: HitTestMetrics,
+  measurer: TextMeasurer,
+): EditorHitTarget | undefined {
   validatePoint(point);
   validateLayout(layout);
   validateMetrics(metrics);
@@ -66,38 +66,38 @@ export function hitTestAlphaEditorPoint(
   if (lineIndex >= model.lineCount) {
     const lastLineIndex = model.lineCount - 1;
     return target(
-      AlphaEditorHitTargetKind.AfterLines,
+      EditorHitTargetKind.AfterLines,
       lastLineIndex,
       model.getLineContent(lastLineIndex).length,
     );
   }
   if (point.left < metrics.gutterWidth) {
-    return target(AlphaEditorHitTargetKind.Gutter, lineIndex, 0);
+    return target(EditorHitTargetKind.Gutter, lineIndex, 0);
   }
 
   const line = model.getLineContent(lineIndex);
   const textOffset =
     point.left + layout.scrollPosition.left - metrics.textLeft;
   if (textOffset < 0 || line.length === 0) {
-    return target(AlphaEditorHitTargetKind.EmptyContent, lineIndex, 0);
+    return target(EditorHitTargetKind.EmptyContent, lineIndex, 0);
   }
   const lineWidth = measurer.measureLineWidth(line);
   if (textOffset >= lineWidth) {
     return target(
-      AlphaEditorHitTargetKind.EmptyContent,
+      EditorHitTargetKind.EmptyContent,
       lineIndex,
       line.length,
     );
   }
   return target(
-    AlphaEditorHitTargetKind.Text,
+    EditorHitTargetKind.Text,
     lineIndex,
     nearestCursorColumn(line, textOffset, measurer),
   );
 }
 
 /** @internal */
-export function hitTestAlphaVisualEditorPoint(model: TextModel, projection: EditorVisualLineProjection, layout: AlphaHitTestLayout, point: AlphaViewportPoint, metrics: AlphaHitTestMetrics, measurer: AlphaTextMeasurer): AlphaEditorHitTarget | undefined {
+export function hitTestAlphaVisualEditorPoint(model: TextModel, projection: EditorVisualLineProjection, layout: HitTestLayout, point: ViewportPoint, metrics: HitTestMetrics, measurer: TextMeasurer): EditorHitTarget | undefined {
   validatePoint(point);
   validateLayout(layout);
   validateMetrics(metrics);
@@ -116,24 +116,24 @@ export function hitTestAlphaVisualEditorPoint(model: TextModel, projection: Edit
   const visualLineIndex = Math.floor(contentTop / layout.lineHeight);
   if (visualLineIndex >= projection.visualLineCount) {
     const logicalLineIndex = model.lineCount - 1;
-    return target(AlphaEditorHitTargetKind.AfterLines, logicalLineIndex, model.getLineContent(logicalLineIndex).length);
+    return target(EditorHitTargetKind.AfterLines, logicalLineIndex, model.getLineContent(logicalLineIndex).length);
   }
   const visualLine = projection.lineAt(visualLineIndex)!;
   if (point.left < metrics.gutterWidth) {
-    return target(AlphaEditorHitTargetKind.Gutter, visualLine.logicalLineIndex, 0);
+    return target(EditorHitTargetKind.Gutter, visualLine.logicalLineIndex, 0);
   }
   const fullLine = model.getLineContent(visualLine.logicalLineIndex);
   const text = fullLine.slice(visualLine.startColumn, visualLine.endColumn);
   const textOffset = point.left + layout.scrollPosition.left - metrics.textLeft;
   if (textOffset < 0 || text.length === 0) {
-    return target(AlphaEditorHitTargetKind.EmptyContent, visualLine.logicalLineIndex, visualLine.startColumn);
+    return target(EditorHitTargetKind.EmptyContent, visualLine.logicalLineIndex, visualLine.startColumn);
   }
   const lineWidth = measurer.measureLineWidth(text);
   if (textOffset >= lineWidth) {
-    return target(AlphaEditorHitTargetKind.EmptyContent, visualLine.logicalLineIndex, visualLine.endColumn);
+    return target(EditorHitTargetKind.EmptyContent, visualLine.logicalLineIndex, visualLine.endColumn);
   }
   return target(
-    AlphaEditorHitTargetKind.Text,
+    EditorHitTargetKind.Text,
     visualLine.logicalLineIndex,
     visualLine.startColumn + nearestCursorColumn(text, textOffset, measurer),
   );
@@ -142,7 +142,7 @@ export function hitTestAlphaVisualEditorPoint(model: TextModel, projection: Edit
 function nearestCursorColumn(
   line: string,
   horizontalOffset: number,
-  measurer: AlphaTextMeasurer,
+  measurer: TextMeasurer,
 ): number {
   const boundaries = getTextGraphemeBoundaries(line);
   let low = 0;
@@ -163,17 +163,17 @@ function nearestCursorColumn(
 }
 
 function target(
-  kind: AlphaEditorHitTargetKind,
+  kind: EditorHitTargetKind,
   lineIndex: number,
   columnIndex: number,
-): AlphaEditorHitTarget {
+): EditorHitTarget {
   return Object.freeze({
     kind,
     position: TextPosition.at(lineIndex, columnIndex),
   });
 }
 
-function validatePoint(point: AlphaViewportPoint): void {
+function validatePoint(point: ViewportPoint): void {
   if (
     !point ||
     !Number.isFinite(point.left) ||
@@ -183,7 +183,7 @@ function validatePoint(point: AlphaViewportPoint): void {
   }
 }
 
-function validateLayout(layout: AlphaHitTestLayout): void {
+function validateLayout(layout: HitTestLayout): void {
   if (
     !layout ||
     !Number.isFinite(layout.lineHeight) ||
@@ -203,7 +203,7 @@ function validateLayout(layout: AlphaHitTestLayout): void {
   }
 }
 
-function validateMetrics(metrics: AlphaHitTestMetrics): void {
+function validateMetrics(metrics: HitTestMetrics): void {
   if (
     !metrics ||
     !Number.isFinite(metrics.gutterWidth) ||

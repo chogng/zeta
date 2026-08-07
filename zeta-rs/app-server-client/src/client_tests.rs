@@ -21,6 +21,8 @@ use zeta_app_server_protocol::protocol::skills::{
 use zeta_app_server_protocol::protocol::slash_commands::{
     SlashCommandArgumentModeDto, SlashCommandDefinition,
 };
+use zeta_app_server_protocol::protocol::syntax::SyntaxAnalyzeParams;
+use zeta_app_server_protocol::protocol::syntax::SyntaxLanguageDto;
 use zeta_app_server_protocol::protocol::turn::InputItem;
 use zeta_app_server_protocol::schema_hash;
 use zeta_async_utils::CancellationToken;
@@ -113,6 +115,24 @@ fn client_reads_workspace_directories_through_the_typed_contract() {
     assert_eq!(result.entries.len(), 1);
     assert_eq!(result.entries[0].name, "src");
     assert_eq!(result.entries[0].file_type, FsFileType::Directory);
+}
+
+#[test]
+fn client_analyzes_syntax_through_the_typed_contract() {
+    let mut client = AppServerClient::new(MockTransport(VecDeque::from([
+        r#"{"jsonrpc":"2.0","id":1,"result":{"revision":8,"hasErrors":false,"tokens":[],"foldingRanges":[],"symbols":[],"diagnostics":[]}}"#.into(),
+    ])));
+
+    let result = client
+        .analyze_syntax(SyntaxAnalyzeParams {
+            language: SyntaxLanguageDto::Rust,
+            revision: 8,
+            text: "fn main() {}\n".into(),
+        })
+        .unwrap();
+
+    assert_eq!(result.revision, 8);
+    assert!(!result.has_errors);
 }
 
 #[test]
@@ -239,6 +259,36 @@ fn in_process_client_uses_session_first_contract_and_canonical_updates() {
         ThreadItem::UserImage { url, .. }
             if url == "data:image/png;base64,iVBORw0KGgpwYXlsb2Fk"
     ));
+}
+
+#[test]
+fn in_process_client_routes_syntax_analysis_to_the_server() {
+    let mut client = AppServerClient::new(InProcessTransport::from_server(app_server()));
+    client
+        .initialize(InitializeParams {
+            client_info: ClientInfo {
+                name: "test-client".into(),
+                version: "1".into(),
+            },
+            capabilities: ClientCapabilities::default(),
+        })
+        .expect("in-process client initializes");
+
+    let result = client
+        .analyze_syntax(SyntaxAnalyzeParams {
+            language: SyntaxLanguageDto::Rust,
+            revision: 9,
+            text: "fn main() {\n}\n".into(),
+        })
+        .expect("syntax analysis succeeds");
+
+    assert_eq!(result.revision, 9);
+    assert!(
+        result
+            .folding_ranges
+            .iter()
+            .any(|range| { range.range.start.line_index == 0 && range.range.end.line_index == 1 })
+    );
 }
 
 #[test]

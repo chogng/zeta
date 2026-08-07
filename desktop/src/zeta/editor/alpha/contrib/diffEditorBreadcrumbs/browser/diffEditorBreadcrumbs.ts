@@ -5,7 +5,7 @@ import { type DiffModel } from "../../../common/diff/diffModel.js";
 import { type DiffEditorWidget } from "../../../browser/widget/diffEditor/diffEditorWidget.js";
 
 /** Adds compact changed-hunk navigation to the Alpha diff editor without touching diff computation. */
-export class AlphaDiffEditorBreadcrumbsController extends DisposableOwner {
+export class DiffEditorBreadcrumbsController extends DisposableOwner {
   private readonly element: HTMLElement;
 
   constructor(private readonly editor: DiffEditorWidget, private readonly model: DiffModel) {

@@ -30,7 +30,7 @@ for (const [name, value] of Object.entries({
 
 const { EditorPart } = await import("../../../../workbench/browser/parts/editor/editorPart.js");
 const { EditorPanes } = await import("../../../../workbench/browser/parts/editor/editorRegistry.js");
-const { AlphaEditorPane } = await import("../../browser/alphaEditorPane.js");
+const { EditorPane } = await import("../../browser/editorPane.js");
 const { ALPHA_EDITOR_ID } = await import("../../browser/editorInput.js");
 await import("../../contrib/editor.contribution.js");
 
@@ -52,11 +52,11 @@ test("EditorPart opens a real Alpha pane and saves its edited model", async () =
     assert.equal(EditorPanes.resolve(input).id, ALPHA_EDITOR_ID);
 
     const pane = await editor.openEditor(input);
-    const alphaPane = pane as InstanceType<typeof AlphaEditorPane>;
+    const alphaPane = pane as InstanceType<typeof EditorPane>;
 
     assert.equal(pane.id, ALPHA_EDITOR_ID);
     assert.equal(editor.activePane, pane);
-    assert.equal(pane instanceof AlphaEditorPane, true);
+    assert.equal(pane instanceof EditorPane, true);
     assert.ok(document.querySelector(".zeta-alpha-editor"));
     const textInput = document.querySelector<HTMLTextAreaElement>(".zeta-alpha-editor-input");
     assert.ok(textInput);

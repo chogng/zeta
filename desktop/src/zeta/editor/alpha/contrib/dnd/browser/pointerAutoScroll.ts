@@ -1,7 +1,7 @@
 import { AnimationFrameScheduler } from "../../../../../base/browser/scheduler.js";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
-import { type AlphaEditorViewport } from "../../../browser/view/editorViewport.js";
-import { type AlphaClientPoint, type AlphaEditorHitTarget } from "../../../browser/view/pointerHitTest.js";
+import { type EditorViewport } from "../../../browser/view/editorViewport.js";
+import { type ClientPoint, type EditorHitTarget } from "../../../browser/view/pointerHitTest.js";
 
 const MINIMUM_SPEED = 240;
 const MAXIMUM_SPEED = 2_400;
@@ -10,12 +10,12 @@ const DEFAULT_FRAME_DURATION = 1_000 / 60;
 const MINIMUM_FRAME_DURATION = 4;
 const MAXIMUM_FRAME_DURATION = 50;
 
-export interface AlphaPointerAutoScrollVelocity {
+export interface PointerAutoScrollVelocity {
   readonly left: number;
   readonly top: number;
 }
 
-export interface AlphaPointerAutoScrollBounds {
+export interface PointerAutoScrollBounds {
   readonly left: number;
   readonly top: number;
   readonly right: number;
@@ -28,7 +28,7 @@ export interface AlphaPointerAutoScrollBounds {
  * Each axis remains independent, starts at a usable minimum speed, and is
  * capped so a distant captured pointer cannot jump through a document.
  */
-export function getAlphaPointerAutoScrollVelocity(bounds: AlphaPointerAutoScrollBounds, point: AlphaClientPoint): AlphaPointerAutoScrollVelocity {
+export function getAlphaPointerAutoScrollVelocity(bounds: PointerAutoScrollBounds, point: ClientPoint): PointerAutoScrollVelocity {
   validateBounds(bounds);
   validatePoint(point);
   return Object.freeze({
@@ -40,15 +40,15 @@ export function getAlphaPointerAutoScrollVelocity(bounds: AlphaPointerAutoScroll
 /**
  * Owns animation-frame scrolling for one active pointer drag.
  */
-export class AlphaPointerAutoScroller extends DisposableOwner {
+export class PointerAutoScroller extends DisposableOwner {
   private readonly scheduler: AnimationFrameScheduler;
-  private pointer: AlphaClientPoint | undefined;
+  private pointer: ClientPoint | undefined;
   private lastFrameTime: number | undefined;
 
   constructor(
     private readonly targetWindow: Window,
-    private readonly viewport: AlphaEditorViewport,
-    private readonly applyTarget: (target: AlphaEditorHitTarget) => void,
+    private readonly viewport: EditorViewport,
+    private readonly applyTarget: (target: EditorHitTarget) => void,
   ) {
     super();
     this.scheduler = this.own(new AnimationFrameScheduler(
@@ -57,7 +57,7 @@ export class AlphaPointerAutoScroller extends DisposableOwner {
     ));
   }
 
-  updatePointer(point: AlphaClientPoint): void {
+  updatePointer(point: ClientPoint): void {
     validatePoint(point);
     this.pointer = Object.freeze({
       clientX: point.clientX,
@@ -102,7 +102,7 @@ export class AlphaPointerAutoScroller extends DisposableOwner {
     }
   }
 
-  private readVelocity(point: AlphaClientPoint): AlphaPointerAutoScrollVelocity {
+  private readVelocity(point: ClientPoint): PointerAutoScrollVelocity {
     return getAlphaPointerAutoScrollVelocity(
       this.viewport.element.getBoundingClientRect(),
       point,
@@ -123,7 +123,7 @@ function speedForOverflow(overflow: number): number {
   );
 }
 
-function validatePoint(point: AlphaClientPoint): void {
+function validatePoint(point: ClientPoint): void {
   if (
     !point ||
     !Number.isFinite(point.clientX) ||
@@ -133,7 +133,7 @@ function validatePoint(point: AlphaClientPoint): void {
   }
 }
 
-function validateBounds(bounds: AlphaPointerAutoScrollBounds): void {
+function validateBounds(bounds: PointerAutoScrollBounds): void {
   if (
     !bounds ||
     !Number.isFinite(bounds.left) ||

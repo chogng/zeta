@@ -3,17 +3,17 @@ import { addDisposableListener, stopEvent } from "../../../../../base/browser/do
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { createEditorEditCommand } from "../../../common/commands/editorCommand.js";
-import { type AlphaEditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 import { type RenameService } from "../common/rename.js";
 
 /** Owns the local rename input and applies provider edits through the cursor command contract. */
-export class AlphaRenameController extends DisposableOwner {
+export class RenameController extends DisposableOwner {
   private readonly element: HTMLDivElement;
   private readonly input: HTMLInputElement;
   private readonly status: HTMLSpanElement;
   private request: AbortController | undefined;
 
-  constructor(private readonly editorInput: HTMLTextAreaElement, private readonly viewport: AlphaEditorViewport, private readonly selections: EditorSelectionController, private readonly service: RenameService, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Alpha rename failed", error)) {
+  constructor(private readonly editorInput: HTMLTextAreaElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: RenameService, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Alpha rename failed", error)) {
     super();
     if (viewport.textModel !== selections.textModel) throw new TypeError("Alpha rename dependencies must share one text model");
     const ownerDocument = viewport.element.ownerDocument;

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { type AlphaTextMeasurer } from "../../../../browser/view/fontMetrics.js";
+import { type TextMeasurer } from "../../../../browser/view/fontMetrics.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
@@ -17,17 +17,17 @@ for (const [name, value] of Object.entries({
   Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { AlphaEditorViewport } = await import("../../../../browser/view/editorViewport.js");
-const { AlphaToggleTabFocusModeController } = await import("../../browser/toggleTabFocusModeController.js");
+const { EditorViewport } = await import("../../../../browser/view/editorViewport.js");
+const { ToggleTabFocusModeController } = await import("../../browser/toggleTabFocusModeController.js");
 
 test("Tab focus mode exposes state through Alpha-owned data and an accessibility announcement", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   const container = dom.window.document.querySelector<HTMLElement>("main")!;
   using model = new TextModel("text");
-  using viewport = new AlphaEditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
+  using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
   const input = dom.window.document.createElement("textarea");
   container.append(input);
-  using controller = new AlphaToggleTabFocusModeController(input, viewport);
+  using controller = new ToggleTabFocusModeController(input, viewport);
 
   assert.equal(viewport.element.getAttribute("role"), "region");
   assert.equal(viewport.element.hasAttribute("aria-pressed"), false);
@@ -44,7 +44,7 @@ test("Tab focus mode exposes state through Alpha-owned data and an accessibility
   dom.window.close();
 });
 
-class FixedTextMeasurer implements AlphaTextMeasurer {
+class FixedTextMeasurer implements TextMeasurer {
   readonly horizontalPadding = 24;
   readonly contentLeftPadding = 12;
 

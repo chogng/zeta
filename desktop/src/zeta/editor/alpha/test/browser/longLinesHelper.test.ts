@@ -1,19 +1,19 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { toDisposable } from "../../../../base/common/lifecycle.js";
-import { type AlphaTextMeasurer } from "../../browser/view/fontMetrics.js";
-import { AlphaLineWidthIndex } from "../../contrib/longLinesHelper/browser/longLinesHelper.js";
+import { type TextMeasurer } from "../../browser/view/fontMetrics.js";
+import { LineWidthIndex } from "../../contrib/longLinesHelper/browser/longLinesHelper.js";
 import { TextRange } from "../../common/core/text.js";
 import { TextModel } from "../../common/model/textModel.js";
 
-test("AlphaLineWidthIndex matches full scans across random transactions", () => {
+test("LineWidthIndex matches full scans across random transactions", () => {
   const random = seededRandom(0xA17A);
   const measurer = new WeightedTextMeasurer();
   using model = new TextModel(Array.from(
     { length: 30 },
     (_, index) => `initial ${index}`,
   ).join("\n"));
-  const index = new AlphaLineWidthIndex(model, measurer);
+  const index = new LineWidthIndex(model, measurer);
   using listener = model.onDidChange(change => {
     index.applyModelChange(change);
   });
@@ -35,11 +35,11 @@ test("AlphaLineWidthIndex matches full scans across random transactions", () => 
   }
 });
 
-test("AlphaLineWidthIndex refines large initial scans without blocking construction", () => {
+test("LineWidthIndex refines large initial scans without blocking construction", () => {
   const scheduler = new ManualMeasurementScheduler();
   const measurer = new WeightedTextMeasurer();
   using model = new TextModel("a\nbbbbbbbb\ncccccccccc\nddddddddddd");
-  using index = new AlphaLineWidthIndex(model, measurer, {
+  using index = new LineWidthIndex(model, measurer, {
     initialMeasurement: {
       initialLineCount: 1,
       linesPerSlice: 2,
@@ -60,11 +60,11 @@ test("AlphaLineWidthIndex refines large initial scans without blocking construct
   assert.deepEqual(maxima, [20, 33]);
 });
 
-test("AlphaLineWidthIndex restarts an incomplete scan after an edit", () => {
+test("LineWidthIndex restarts an incomplete scan after an edit", () => {
   const scheduler = new ManualMeasurementScheduler();
   const measurer = new WeightedTextMeasurer();
   using model = new TextModel("a\nbbbbbbbb\ncccccccccc\nddddddddddd");
-  using index = new AlphaLineWidthIndex(model, measurer, {
+  using index = new LineWidthIndex(model, measurer, {
     initialMeasurement: {
       initialLineCount: 1,
       linesPerSlice: 1,
@@ -105,7 +105,7 @@ class ManualMeasurementScheduler {
   }
 }
 
-class WeightedTextMeasurer implements AlphaTextMeasurer {
+class WeightedTextMeasurer implements TextMeasurer {
   readonly horizontalPadding = 0;
   readonly contentLeftPadding = 0;
 
@@ -126,7 +126,7 @@ class WeightedTextMeasurer implements AlphaTextMeasurer {
 
 function fullScanMaximum(
   model: TextModel,
-  measurer: AlphaTextMeasurer,
+  measurer: TextMeasurer,
 ): number {
   let maximum = 0;
   for (let lineIndex = 0; lineIndex < model.lineCount; lineIndex++) {

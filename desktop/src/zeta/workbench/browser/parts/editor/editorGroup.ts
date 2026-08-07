@@ -10,6 +10,7 @@ import { type ITextMateService } from "../../../services/textMate/common/textMat
 import { type ILanguageFeaturesService } from "../../../services/language/common/languageFeaturesService.js";
 import type { IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";
 import type { IDiffApi } from "../../../../platform/diff/common/diffApi.js";
+import type { ISyntaxApi } from "../../../../platform/syntax/common/syntaxApi.js";
 import type { EditorInput, EditorOpenOptions } from "./editorInput.js";
 import type { TextResourceLanguageResolver } from "../../../../platform/language/common/textResourceLanguage.js";
 import { type IEditorPane, EditorPaneVisibility } from "./editorPane.js";
@@ -50,6 +51,7 @@ export interface EditorGroupOptions {
   readonly languageFeaturesService?: ILanguageFeaturesService;
   readonly languageResolver?: TextResourceLanguageResolver;
   readonly diffApi?: IDiffApi;
+  readonly syntaxApi?: ISyntaxApi;
   readonly workingCopyService?: IWorkingCopyService;
   readonly onSave?: (group: IEditorGroup, input: EditorInput, pane: IEditorPane) => Promise<boolean>;
   readonly titleActions?: EditorTitleActions;
@@ -78,6 +80,7 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
   private readonly languageFeaturesService: ILanguageFeaturesService | undefined;
   private readonly languageResolver: TextResourceLanguageResolver | undefined;
   private readonly diffApi: IDiffApi | undefined;
+  private readonly syntaxApi: ISyntaxApi | undefined;
   private readonly workingCopyService: IWorkingCopyService | undefined;
   private readonly onSave: ((group: IEditorGroup, input: EditorInput, pane: IEditorPane) => Promise<boolean>) | undefined;
   private readonly titleControl: EditorTitleControl;
@@ -98,6 +101,7 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
     this.languageFeaturesService = options.languageFeaturesService;
     this.languageResolver = options.languageResolver;
     this.diffApi = options.diffApi;
+    this.syntaxApi = options.syntaxApi;
     this.workingCopyService = options.workingCopyService;
     this.onSave = options.onSave;
     this.element = options.ownerDocument.createElement("section");
@@ -208,6 +212,7 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
       textMateService: this.textMateService,
       languageFeaturesService: this.languageFeaturesService,
       diffApi: this.diffApi,
+      syntaxApi: this.syntaxApi,
       workingCopyService: this.workingCopyService,
       ...(this.onSave ? {
         onSave: () => {

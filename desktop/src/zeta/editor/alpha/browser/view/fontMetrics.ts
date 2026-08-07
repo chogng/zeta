@@ -4,7 +4,7 @@
  * Implementations must be ready to measure immediately. `refresh` returns
  * whether cached line widths must be rebuilt after a font or style change.
  */
-export interface AlphaTextMeasurer {
+export interface TextMeasurer {
   readonly horizontalPadding: number;
   readonly contentLeftPadding: number;
   refresh(): boolean;
@@ -28,7 +28,7 @@ interface ResolvedFontMetrics {
  * Canvas handles shaping and font fallback. Tabs advance to CSS `tab-size`
  * stops based on the measured space glyph.
  */
-export class AlphaDomTextMeasurer implements AlphaTextMeasurer {
+export class DomTextMeasurer implements TextMeasurer {
   private readonly context: CanvasRenderingContext2D | undefined;
   private metrics: ResolvedFontMetrics;
 

@@ -43,6 +43,7 @@ zeta-search = { workspace = true }
 zeta-shell-command = { workspace = true }
 zeta-slash-commands = { workspace = true }
 zeta-skills = { workspace = true }
+zeta-syntax = { workspace = true }
 zeta-tools = { workspace = true }
 zeta-typst = { workspace = true }
 zeta-utils-pty = { workspace = true }

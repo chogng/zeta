@@ -1,15 +1,15 @@
 import "./media/floatingMenu.css";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
-import { type AlphaEditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 
-export interface AlphaFloatingMenuAction { readonly label: string; readonly run: () => void | Promise<void>; }
+export interface FloatingMenuAction { readonly label: string; readonly run: () => void | Promise<void>; }
 
 /** Provides an opt-in selection-anchored action menu for embedding hosts. */
-export class AlphaFloatingMenuController extends DisposableOwner {
+export class FloatingMenuController extends DisposableOwner {
   private readonly element: HTMLDivElement;
 
-  constructor(private readonly viewport: AlphaEditorViewport, private readonly selections: EditorSelectionController, actions: readonly AlphaFloatingMenuAction[] = [], private readonly onError: (error: unknown) => void = error => console.error("Alpha floating menu failed", error)) {
+  constructor(private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, actions: readonly FloatingMenuAction[] = [], private readonly onError: (error: unknown) => void = error => console.error("Alpha floating menu failed", error)) {
     super();
     if (viewport.textModel !== selections.textModel) throw new TypeError("Alpha floating menu dependencies must share a text model");
     this.element = viewport.element.ownerDocument.createElement("div");
@@ -22,7 +22,7 @@ export class AlphaFloatingMenuController extends DisposableOwner {
     this.update(actions);
   }
 
-  private update(actions: readonly AlphaFloatingMenuAction[]): void {
+  private update(actions: readonly FloatingMenuAction[]): void {
     const selection = this.selections.selections.primary;
     if (selection.range.empty || actions.length === 0) { this.element.hidden = true; return; }
     this.element.replaceChildren(...actions.map(action => {

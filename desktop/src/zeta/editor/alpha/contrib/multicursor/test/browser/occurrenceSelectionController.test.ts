@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { type AlphaTextMeasurer } from "../../../../browser/view/fontMetrics.js";
+import { type TextMeasurer } from "../../../../browser/view/fontMetrics.js";
 import { EditorSelectionController } from "../../../../common/cursor/editorSelectionController.js";
 import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
 import { TextPosition } from "../../../../common/core/text.js";
@@ -20,19 +20,19 @@ for (const [name, value] of Object.entries({
   Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { AlphaEditorViewport } = await import("../../../../browser/view/editorViewport.js");
-const { AlphaOccurrenceSelectionController } = await import("../../browser/occurrenceSelectionController.js");
+const { EditorViewport } = await import("../../../../browser/view/editorViewport.js");
+const { OccurrenceSelectionController } = await import("../../browser/occurrenceSelectionController.js");
 
 test("Occurrence shortcuts select a word, add its next match, and select every match", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   const container = dom.window.document.querySelector<HTMLElement>("main")!;
   using model = new TextModel("echo echo\necho");
   using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 1))));
-  using viewport = new AlphaEditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+  using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
   viewport.layout({ width: 200, height: 60 });
   const input = dom.window.document.createElement("textarea");
   container.append(input);
-  using controller = new AlphaOccurrenceSelectionController(input, viewport, selections);
+  using controller = new OccurrenceSelectionController(input, viewport, selections);
 
   const selectWord = keydown(dom.window, "d", { ctrlKey: true });
   input.dispatchEvent(selectWord);
@@ -53,19 +53,19 @@ test("Occurrence controller rejects cross-model wiring and leaves unrelated chor
   using other = new TextModel("echo");
   using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
   using otherSelections = new EditorSelectionController(other, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
-  using viewport = new AlphaEditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
+  using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
   const input = dom.window.document.createElement("textarea");
   container.append(input);
-  using controller = new AlphaOccurrenceSelectionController(input, viewport, selections);
+  using controller = new OccurrenceSelectionController(input, viewport, selections);
   const unrelated = keydown(dom.window, "d", { ctrlKey: true, altKey: true });
   input.dispatchEvent(unrelated);
   assert.equal(unrelated.defaultPrevented, false);
-  assert.throws(() => new AlphaOccurrenceSelectionController(input, viewport, otherSelections), /must share one text model/);
+  assert.throws(() => new OccurrenceSelectionController(input, viewport, otherSelections), /must share one text model/);
 
   dom.window.close();
 });
 
-class FixedTextMeasurer implements AlphaTextMeasurer {
+class FixedTextMeasurer implements TextMeasurer {
   readonly horizontalPadding = 24;
   readonly contentLeftPadding = 12;
 

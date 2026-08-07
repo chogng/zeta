@@ -2,10 +2,10 @@ import { Emitter, type Event } from "../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type EditorLineVisibilitySource, EditorVisualLineProjection } from "../../common/viewModel/modelLineProjection.js";
 import { type EditorViewportLineSource } from "../../common/viewLayout/editorViewportModel.js";
-import { AlphaVisualLineProjection } from "./visualLineProjection.js";
+import { VisualLineProjection } from "./visualLineProjection.js";
 
 /** Filters Alpha's wrapped visual rows through an optional logical-line visibility source. */
-export class AlphaVisibleLineProjection extends DisposableOwner {
+export class VisibleLineProjection extends DisposableOwner {
   private readonly changeEmitter = this.own(new Emitter<void>());
   private projectionRevision = 0;
   private currentProjection: EditorVisualLineProjection;
@@ -13,7 +13,7 @@ export class AlphaVisibleLineProjection extends DisposableOwner {
   readonly onDidChange: Event<void> = this.changeEmitter.event;
   readonly lineSource: EditorViewportLineSource;
 
-  constructor(private readonly source: AlphaVisualLineProjection, private readonly visibility: EditorLineVisibilitySource | undefined) {
+  constructor(private readonly source: VisualLineProjection, private readonly visibility: EditorLineVisibilitySource | undefined) {
     super();
     this.currentProjection = this.createProjection();
     const projection = this;

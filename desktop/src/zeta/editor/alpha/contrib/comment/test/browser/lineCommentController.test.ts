@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { type AlphaTextMeasurer } from "../../../../browser/view/fontMetrics.js";
+import { type TextMeasurer } from "../../../../browser/view/fontMetrics.js";
 import { LanguageConfigurationRegistry } from "../../../../common/languages/languageConfiguration.js";
 import { EditorSelectionController } from "../../../../common/cursor/editorSelectionController.js";
 import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
@@ -21,8 +21,8 @@ for (const [name, value] of Object.entries({
   Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { AlphaEditorViewport } = await import("../../../../browser/view/editorViewport.js");
-const { AlphaLineCommentController } = await import("../../browser/lineCommentController.js");
+const { EditorViewport } = await import("../../../../browser/view/editorViewport.js");
+const { LineCommentController } = await import("../../browser/lineCommentController.js");
 
 test("Line comment shortcut toggles current language comments through one editor transaction", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
@@ -35,7 +35,7 @@ test("Line comment shortcut toggles current language comments through one editor
   using registration = configurations.register("typescript", {
     comments: { lineComment: "//" },
   });
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
@@ -45,7 +45,7 @@ test("Line comment shortcut toggles current language comments through one editor
   viewport.layout({ width: 200, height: 40 });
   const input = dom.window.document.createElement("textarea");
   container.append(input);
-  using controller = new AlphaLineCommentController(input, viewport, selections, {
+  using controller = new LineCommentController(input, viewport, selections, {
     languageId: "typescript",
     configurations,
   });
@@ -68,20 +68,20 @@ test("Line comment shortcut ignores unsupported languages and invalid wiring", (
   using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
   using otherSelections = new EditorSelectionController(other, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
   using configurations = new LanguageConfigurationRegistry();
-  using viewport = new AlphaEditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
+  using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
   const input = dom.window.document.createElement("textarea");
   container.append(input);
-  using controller = new AlphaLineCommentController(input, viewport, selections, { languageId: "plaintext", configurations });
+  using controller = new LineCommentController(input, viewport, selections, { languageId: "plaintext", configurations });
   const toggle = keydown(dom.window, "/", { ctrlKey: true });
   input.dispatchEvent(toggle);
   assert.equal(toggle.defaultPrevented, false);
   assert.equal(model.getText(), "alpha");
-  assert.throws(() => new AlphaLineCommentController(input, viewport, otherSelections, { languageId: "plaintext", configurations }), /must share one text model/);
+  assert.throws(() => new LineCommentController(input, viewport, otherSelections, { languageId: "plaintext", configurations }), /must share one text model/);
 
   dom.window.close();
 });
 
-class FixedTextMeasurer implements AlphaTextMeasurer {
+class FixedTextMeasurer implements TextMeasurer {
   readonly horizontalPadding = 24;
   readonly contentLeftPadding = 12;
 

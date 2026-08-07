@@ -1,13 +1,13 @@
 import "./media/inlineProgress.css";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
-import { type AlphaEditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 
 /** Provides a reusable inline progress presentation for asynchronous editor requests. */
-export class AlphaInlineProgressController extends DisposableOwner {
+export class InlineProgressController extends DisposableOwner {
   private readonly element: HTMLDivElement;
   private active = 0;
 
-  constructor(private readonly viewport: AlphaEditorViewport) {
+  constructor(private readonly viewport: EditorViewport) {
     super();
     this.element = viewport.element.ownerDocument.createElement("div");
     this.element.className = "zeta-alpha-editor-inline-progress";

@@ -2,7 +2,7 @@ import { DisposableOwner, type IDisposable } from "../../../../base/common/lifec
 import { type TextModel } from "../model/textModel.js";
 import { registerBuiltinLanguageConfigurations } from "../languages/languageBuiltinConfigurations.js";
 import { LanguageAnalysisProviderRegistry, type LanguageAnalysisProvider } from "../languages/analysis/languageAnalysisProviders.js";
-import { LanguageAnalysisService, type LanguageAnalysisWorkerFactory } from "../languages/analysis/languageAnalysisService.js";
+import { LanguageAnalysisService, type LanguageAnalysisWorkerDecorator, type LanguageAnalysisWorkerFactory } from "../languages/analysis/languageAnalysisService.js";
 import { LanguageCompletionProviderRegistry, type LanguageCompletionProvider } from "../languages/completion/languageCompletionProviders.js";
 import { LanguageCompletionService, type LanguageCompletionWorkerFactory } from "../languages/completion/languageCompletionService.js";
 import { LanguageConfigurationRegistry, type LanguageConfiguration, type LanguageConfigurationRegistrationOptions, type LanguageConfigurationSource } from "../languages/languageConfiguration.js";
@@ -13,7 +13,7 @@ import { createLanguageLexicalAnalysisProvider } from "../languages/languageLexi
 import { createLanguageWordCompletionProvider } from "../languages/completion/languageWordCompletionProvider.js";
 import { CodeActionService, type LanguageCodeActionProvider } from "../../contrib/codeAction/common/codeAction.js";
 import { CodeLensService, type LanguageCodeLensProvider } from "../../contrib/codelens/common/codelens.js";
-import { DocumentSymbolService, type LanguageDocumentSymbolProvider } from "../../contrib/documentSymbols/common/documentSymbols.js";
+import { DocumentSymbolService, type DocumentSymbolServiceOptions, type LanguageDocumentSymbolProvider } from "../../contrib/documentSymbols/common/documentSymbols.js";
 import { FormatService, type LanguageFormattingProvider } from "../../contrib/format/common/formatCommands.js";
 import { GotoSymbolService } from "../../contrib/gotoSymbol/common/gotoSymbol.js";
 import { HoverService, type LanguageHoverProvider } from "../../contrib/hover/common/hover.js";
@@ -51,9 +51,9 @@ export interface ILanguageFeaturesService extends IDisposable {
   createCompletionService(model: TextModel, options?: LanguageCompletionFeaturesOptions): LanguageCompletionService;
   createCodeActionService(model: TextModel): CodeActionService;
   createCodeLensService(model: TextModel): CodeLensService;
-  createDocumentSymbolService(model: TextModel): DocumentSymbolService;
+  createDocumentSymbolService(model: TextModel, options?: DocumentSymbolServiceOptions): DocumentSymbolService;
   createFormatService(model: TextModel): FormatService;
-  createGotoSymbolService(model: TextModel): GotoSymbolService;
+  createGotoSymbolService(model: TextModel, options?: DocumentSymbolServiceOptions): GotoSymbolService;
   createHoverService(model: TextModel): HoverService;
   createInlayHintsService(model: TextModel): InlayHintsService;
   createInlineCompletionsService(model: TextModel): InlineCompletionsService;
@@ -66,6 +66,7 @@ export interface ILanguageFeaturesService extends IDisposable {
 
 export interface LanguageAnalysisFeaturesOptions {
   readonly workerFactory?: LanguageAnalysisWorkerFactory;
+  readonly workerDecorator?: LanguageAnalysisWorkerDecorator;
 }
 
 export interface LanguageCompletionFeaturesOptions {
@@ -186,6 +187,7 @@ export class LanguageFeaturesService extends DisposableOwner implements ILanguag
   createAnalysisService(model: TextModel, options: LanguageAnalysisFeaturesOptions = {}): LanguageAnalysisService {
     return new LanguageAnalysisService(model, this.analysisProviders, {
       ...(options.workerFactory ? { workerFactory: options.workerFactory } : {}),
+      ...(options.workerDecorator ? { workerDecorator: options.workerDecorator } : {}),
     });
   }
 
@@ -203,16 +205,16 @@ export class LanguageFeaturesService extends DisposableOwner implements ILanguag
     return new CodeLensService(model, this.codeLensProviders);
   }
 
-  createDocumentSymbolService(model: TextModel): DocumentSymbolService {
-    return new DocumentSymbolService(model, this.documentSymbolProviders);
+  createDocumentSymbolService(model: TextModel, options: DocumentSymbolServiceOptions = {}): DocumentSymbolService {
+    return new DocumentSymbolService(model, this.documentSymbolProviders, options);
   }
 
   createFormatService(model: TextModel): FormatService {
     return new FormatService(model, this.formattingProviders);
   }
 
-  createGotoSymbolService(model: TextModel): GotoSymbolService {
-    return new GotoSymbolService(this.createDocumentSymbolService(model));
+  createGotoSymbolService(model: TextModel, options: DocumentSymbolServiceOptions = {}): GotoSymbolService {
+    return new GotoSymbolService(this.createDocumentSymbolService(model, options));
   }
 
   createHoverService(model: TextModel): HoverService {

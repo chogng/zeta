@@ -3,21 +3,21 @@ import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { createToggleLineCommentCommand } from "../common/lineCommentCommands.js";
 import { type LanguageConfigurationSource } from "../../../common/languages/languageConfiguration.js";
-import { type AlphaEditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 
-export interface AlphaLineCommentControllerOptions {
+export interface LineCommentControllerOptions {
   readonly languageId: string;
   readonly configurations: LanguageConfigurationSource;
   readonly insertSpace?: boolean;
 }
 
 /** Routes the platform line-comment shortcut through Alpha's local command model. */
-export class AlphaLineCommentController extends DisposableOwner {
+export class LineCommentController extends DisposableOwner {
   constructor(
     input: HTMLTextAreaElement,
-    private readonly viewport: AlphaEditorViewport,
+    private readonly viewport: EditorViewport,
     private readonly selections: EditorSelectionController,
-    private readonly options: AlphaLineCommentControllerOptions,
+    private readonly options: LineCommentControllerOptions,
   ) {
     super();
     try {
@@ -50,7 +50,7 @@ export class AlphaLineCommentController extends DisposableOwner {
   }
 }
 
-function validateOptions(options: AlphaLineCommentControllerOptions): void {
+function validateOptions(options: LineCommentControllerOptions): void {
   if (!options || typeof options !== "object" || typeof options.languageId !== "string" || options.languageId.length === 0) {
     throw new TypeError("Alpha line comment controller requires a language ID");
   }

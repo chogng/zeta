@@ -6,7 +6,7 @@ import { EditorSelectionController } from "../../../../common/cursor/editorSelec
 import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
 import { TextPosition } from "../../../../common/core/text.js";
 import { TextModel } from "../../../../common/model/textModel.js";
-import { type AlphaTextMeasurer } from "../../../../browser/view/fontMetrics.js";
+import { type TextMeasurer } from "../../../../browser/view/fontMetrics.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -21,9 +21,9 @@ for (const [name, value] of Object.entries({
   Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { AlphaEditorViewport } = await import("../../../../browser/view/editorViewport.js");
-const { AlphaLineOperationsController } = await import("../../browser/lineOperationsController.js");
-const { AlphaTextInputController } = await import("../../../../browser/input/textInputController.js");
+const { EditorViewport } = await import("../../../../browser/view/editorViewport.js");
+const { LineOperationsController } = await import("../../browser/lineOperationsController.js");
+const { TextInputController } = await import("../../../../browser/input/textInputController.js");
 
 test.after(() => browserEnvironment.window.close());
 
@@ -32,7 +32,7 @@ test("Line operations controller routes selected-line Tab and Shift+Tab through 
   const container = dom.window.document.querySelector<HTMLElement>("main")!;
   using model = new TextModel("one\n  two\nthree");
   using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
@@ -40,8 +40,8 @@ test("Line operations controller routes selected-line Tab and Shift+Tab through 
     selectionController: selections,
   });
   viewport.layout({ width: 400, height: 100 });
-  using input = new AlphaTextInputController(viewport, selections);
-  using controller = new AlphaLineOperationsController(input.element, viewport, selections, {
+  using input = new TextInputController(viewport, selections);
+  using controller = new LineOperationsController(input.element, viewport, selections, {
     indentation: { kind: EditorIndentationKind.Spaces, tabSize: 2 },
   });
 
@@ -67,7 +67,7 @@ test("Line operations controller validates model ownership and indentation optio
   using otherModel = new TextModel("two");
   using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
   using otherSelections = new EditorSelectionController(otherModel, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
@@ -75,8 +75,8 @@ test("Line operations controller validates model ownership and indentation optio
     selectionController: selections,
   });
   const input = dom.window.document.createElement("textarea") as unknown as HTMLTextAreaElement;
-  assert.throws(() => new AlphaLineOperationsController(input, viewport, otherSelections), /must share one text model/);
-  assert.throws(() => new AlphaLineOperationsController(input, viewport, selections, {
+  assert.throws(() => new LineOperationsController(input, viewport, otherSelections), /must share one text model/);
+  assert.throws(() => new LineOperationsController(input, viewport, selections, {
     indentation: { tabSize: 0 },
   }), /tab size/);
   dom.window.close();
@@ -91,7 +91,7 @@ function keyboardEvent(targetWindow: typeof browserEnvironment.window, key: stri
   }) as unknown as KeyboardEvent;
 }
 
-class FixedTextMeasurer implements AlphaTextMeasurer {
+class FixedTextMeasurer implements TextMeasurer {
   readonly horizontalPadding = 24;
   readonly contentLeftPadding = 12;
 

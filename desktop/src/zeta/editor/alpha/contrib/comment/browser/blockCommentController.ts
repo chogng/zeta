@@ -3,20 +3,20 @@ import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
 import { createToggleBlockCommentCommand } from "../common/blockCommentCommands.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { type LanguageConfigurationSource } from "../../../common/languages/languageConfiguration.js";
-import { type AlphaEditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 
-export interface AlphaBlockCommentControllerOptions {
+export interface BlockCommentControllerOptions {
   readonly languageId: string;
   readonly configurations: LanguageConfigurationSource;
 }
 
 /** Routes the platform block-comment shortcut through Alpha's local command model. */
-export class AlphaBlockCommentController extends DisposableOwner {
+export class BlockCommentController extends DisposableOwner {
   constructor(
     input: HTMLTextAreaElement,
-    private readonly viewport: AlphaEditorViewport,
+    private readonly viewport: EditorViewport,
     private readonly selections: EditorSelectionController,
-    private readonly options: AlphaBlockCommentControllerOptions,
+    private readonly options: BlockCommentControllerOptions,
   ) {
     super();
     try {
@@ -46,7 +46,7 @@ export class AlphaBlockCommentController extends DisposableOwner {
   }
 }
 
-function validateOptions(options: AlphaBlockCommentControllerOptions): void {
+function validateOptions(options: BlockCommentControllerOptions): void {
   if (!options || typeof options !== "object" || typeof options.languageId !== "string" || options.languageId.length === 0) {
     throw new TypeError("Alpha block comment controller requires a language ID");
   }

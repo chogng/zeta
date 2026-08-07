@@ -1,12 +1,12 @@
 import "./media/placeholderText.css";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
-import { type AlphaEditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 
 /** Presents a non-editable hint when the shared model is empty. */
-export class AlphaPlaceholderTextController extends DisposableOwner {
+export class PlaceholderTextController extends DisposableOwner {
   private readonly element: HTMLDivElement;
 
-  constructor(private readonly viewport: AlphaEditorViewport, placeholder: string) {
+  constructor(private readonly viewport: EditorViewport, placeholder: string) {
     super();
     if (typeof placeholder !== "string" || placeholder.trim().length === 0) throw new TypeError("Alpha placeholder text must be non-empty");
     this.element = viewport.element.ownerDocument.createElement("div");

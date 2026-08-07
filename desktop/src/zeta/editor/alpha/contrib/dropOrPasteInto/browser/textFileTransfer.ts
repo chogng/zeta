@@ -2,7 +2,7 @@
 export const ALPHA_TEXT_FILE_TRANSFER_MAX_BYTES = 5 * 1024 * 1024;
 
 /** Browser file capability accepted only after a user supplies it through a transfer. */
-export interface AlphaTextFileTransfer {
+export interface TextFileTransfer {
   readonly name: string;
   readonly size: number;
   readonly type: string;
@@ -15,7 +15,7 @@ export interface AlphaTextFileTransfer {
  * Binary files, unknown empty-MIME extensions, multi-file transfers, and oversized
  * files are deliberately left to the host rather than being decoded into the editor.
  */
-export function selectAlphaTextFileTransfer(files: Iterable<AlphaTextFileTransfer>): AlphaTextFileTransfer | undefined {
+export function selectAlphaTextFileTransfer(files: Iterable<TextFileTransfer>): TextFileTransfer | undefined {
   const values = [...files];
   if (values.length !== 1) return undefined;
   const file = values[0]!;

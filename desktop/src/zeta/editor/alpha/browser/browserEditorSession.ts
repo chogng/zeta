@@ -5,11 +5,11 @@ import { type TextMateGrammarCatalog } from "../../../workbench/services/textMat
 import { type TextMateGrammarDefinition } from "../../../workbench/services/textMate/common/textMateGrammarRegistry.js";
 import { type ITextMateService } from "../../../workbench/services/textMate/common/textMateService.js";
 import { type TextMateScopeThemeSource } from "../../../workbench/services/textMate/common/textMateScopeTheme.js";
-import { AlphaEditorSession, type AlphaEditorSessionOptions } from "./alphaEditorSession.js";
+import { EditorSession, type EditorSessionOptions } from "./editorSession.js";
 import { createCompletionWorkerFactory } from "../browser/language/languageCompletionWorkerClient.js";
 
 /** Creates Alpha's product browser session with Workbench TextMate and Alpha completion workers. */
-export interface BrowserAlphaEditorSessionOptions extends AlphaEditorSessionOptions {
+export interface BrowserAlphaEditorSessionOptions extends EditorSessionOptions {
   /** Shared Workbench TextMate service. Direct callers may omit it to get a private browser service. */
   readonly textMateService?: ITextMateService;
   /** Product or extension grammar contributions owned by this browser session. */
@@ -19,7 +19,7 @@ export interface BrowserAlphaEditorSessionOptions extends AlphaEditorSessionOpti
 }
 
 /** Creates Alpha's product browser session with Workbench TextMate and Alpha completion workers. */
-export function createBrowserAlphaEditorSession(options: BrowserAlphaEditorSessionOptions): AlphaEditorSession {
+export function createBrowserAlphaEditorSession(options: BrowserAlphaEditorSessionOptions): EditorSession {
   const textMateService = options.textMateService ?? new BrowserTextMateService(options.textMateGrammars, options.textMateScopeTheme);
   const ownsTextMateService = options.textMateService === undefined;
   const onDidChangeLanguageSupport: Event<void> = listener => {
@@ -29,7 +29,7 @@ export function createBrowserAlphaEditorSession(options: BrowserAlphaEditorSessi
     return subscriptions;
   };
   try {
-    return new AlphaEditorSession({
+    return new EditorSession({
       ...options,
       analysisWorkerFactory: textMateService.analysisWorkerFactory,
       completionWorkerFactory: createCompletionWorkerFactory(),

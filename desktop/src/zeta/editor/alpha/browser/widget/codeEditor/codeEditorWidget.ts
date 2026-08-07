@@ -2,13 +2,13 @@ import { getClientArea, type IDimension } from "../../../../../base/browser/geom
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { type TextModel } from "../../../common/model/textModel.js";
-import { AlphaEditorViewport, type AlphaEditorViewportOptions } from "../../view/editorViewport.js";
-import { AlphaKeyboardNavigationController, type AlphaKeyboardNavigationControllerOptions } from "../../input/keyboardNavigationController.js";
-import { AlphaPointerSelectionController, type AlphaPointerSelectionControllerOptions } from "../../../contrib/dnd/browser/dndController.js";
-import { AlphaTextInputController, type AlphaTextInputControllerOptions } from "../../input/textInputController.js";
-import { AlphaTextDropController } from "../../../contrib/dropOrPasteInto/browser/textDropController.js";
+import { EditorViewport, type EditorViewportOptions } from "../../view/editorViewport.js";
+import { KeyboardNavigationController, type KeyboardNavigationControllerOptions } from "../../input/keyboardNavigationController.js";
+import { PointerSelectionController, type PointerSelectionControllerOptions } from "../../../contrib/dnd/browser/dndController.js";
+import { TextInputController, type TextInputControllerOptions } from "../../input/textInputController.js";
+import { TextDropController } from "../../../contrib/dropOrPasteInto/browser/textDropController.js";
 
-export type CodeEditorWidgetViewportOptions = Omit<AlphaEditorViewportOptions, "container" | "model" | "lineHeight" | "ariaLabel" | "selectionController">;
+export type CodeEditorWidgetViewportOptions = Omit<EditorViewportOptions, "container" | "model" | "lineHeight" | "ariaLabel" | "selectionController">;
 
 export interface CodeEditorWidgetOptions {
   readonly container: HTMLElement;
@@ -17,9 +17,9 @@ export interface CodeEditorWidgetOptions {
   readonly lineHeight: number;
   readonly ariaLabel?: string;
   readonly viewport?: CodeEditorWidgetViewportOptions;
-  readonly textInput?: Omit<AlphaTextInputControllerOptions, "ariaLabel">;
-  readonly keyboardNavigation?: AlphaKeyboardNavigationControllerOptions;
-  readonly pointerSelection?: AlphaPointerSelectionControllerOptions;
+  readonly textInput?: Omit<TextInputControllerOptions, "ariaLabel">;
+  readonly keyboardNavigation?: KeyboardNavigationControllerOptions;
+  readonly pointerSelection?: PointerSelectionControllerOptions;
 }
 
 /**
@@ -29,14 +29,14 @@ export interface CodeEditorWidgetOptions {
  * projection, native text input, keyboard and pointer navigation, and external text-drop adapter.
  */
 export class CodeEditorWidget extends DisposableOwner {
-  readonly viewport: AlphaEditorViewport;
-  readonly textInput: AlphaTextInputController;
+  readonly viewport: EditorViewport;
+  readonly textInput: TextInputController;
 
   constructor(options: CodeEditorWidgetOptions) {
     super();
     try {
       validateOptions(options);
-      this.viewport = this.own(new AlphaEditorViewport({
+      this.viewport = this.own(new EditorViewport({
         ...options.viewport,
         container: options.container,
         model: options.model,
@@ -44,13 +44,13 @@ export class CodeEditorWidget extends DisposableOwner {
         ariaLabel: options.ariaLabel,
         selectionController: options.selectionController,
       }));
-      this.textInput = this.own(new AlphaTextInputController(this.viewport, options.selectionController, {
+      this.textInput = this.own(new TextInputController(this.viewport, options.selectionController, {
         ...options.textInput,
         ariaLabel: options.ariaLabel,
       }));
-      this.own(new AlphaKeyboardNavigationController(this.viewport, options.selectionController, options.keyboardNavigation));
-      this.own(new AlphaPointerSelectionController(this.viewport, options.selectionController, options.pointerSelection));
-      this.own(new AlphaTextDropController(this.viewport, options.selectionController));
+      this.own(new KeyboardNavigationController(this.viewport, options.selectionController, options.keyboardNavigation));
+      this.own(new PointerSelectionController(this.viewport, options.selectionController, options.pointerSelection));
+      this.own(new TextDropController(this.viewport, options.selectionController));
     } catch (error) {
       this.dispose();
       throw error;

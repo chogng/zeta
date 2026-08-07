@@ -4,16 +4,16 @@ import { createPasteTextCommand } from "../../../common/cursor/cursorTypeOperati
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
 import { type TextPosition } from "../../../common/core/text.js";
-import { type AlphaEditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 import { readAlphaHtmlText } from "../../clipboard/browser/clipboardController.js";
 import { ALPHA_TEXT_FILE_TRANSFER_MAX_BYTES, selectAlphaTextFileTransfer } from "./textFileTransfer.js";
 
 /** Routes external plain-text drops into one insertion at the viewport hit target. */
-export class AlphaTextDropController extends DisposableOwner {
+export class TextDropController extends DisposableOwner {
   private fileDropRequest = 0;
   private disposed = false;
 
-  constructor(private readonly viewport: AlphaEditorViewport, private readonly selections: EditorSelectionController) {
+  constructor(private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController) {
     super();
     if (viewport.textModel !== selections.textModel) {
       this.dispose();

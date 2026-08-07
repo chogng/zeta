@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { AlphaVisibleLineProjection } from "../../browser/view/visibleLineProjection.js";
-import { AlphaEditorLineWrapping, AlphaVisualLineProjection } from "../../browser/view/visualLineProjection.js";
-import { type AlphaTextMeasurer } from "../../browser/view/fontMetrics.js";
+import { VisibleLineProjection } from "../../browser/view/visibleLineProjection.js";
+import { EditorLineWrapping, VisualLineProjection } from "../../browser/view/visualLineProjection.js";
+import { type TextMeasurer } from "../../browser/view/fontMetrics.js";
 import { EditorFoldingModel } from "../../contrib/folding/browser/foldingModel.js";
 import { EditorHiddenRangeModel } from "../../contrib/folding/browser/hiddenRangeModel.js";
 import { TextModel } from "../../common/model/textModel.js";
@@ -10,13 +10,13 @@ import { TextPosition, TextRange } from "../../common/core/text.js";
 
 test("Visible visual-line projection removes hidden bodies while preserving wrapped header rows", () => {
   using model = new TextModel("header\ninside\nend\nlast");
-  using wrapping = new AlphaVisualLineProjection(model, new FixedTextMeasurer(), {
-    wrapping: AlphaEditorLineWrapping.On,
+  using wrapping = new VisualLineProjection(model, new FixedTextMeasurer(), {
+    wrapping: EditorLineWrapping.On,
     wrapWidth: 20,
   });
   using folding = new EditorFoldingModel(model);
   using hiddenRanges = new EditorHiddenRangeModel(model, folding);
-  using projection = new AlphaVisibleLineProjection(wrapping, hiddenRanges);
+  using projection = new VisibleLineProjection(wrapping, hiddenRanges);
 
   assert.deepEqual(projection.projection.lines.map(line => ({ logical: line.logicalLineIndex, start: line.startColumn, end: line.endColumn })), [
     { logical: 0, start: 0, end: 2 },
@@ -42,8 +42,8 @@ test("Visible visual-line projection refreshes the source before collapsed range
   using model = new TextModel("header\ninside\nend");
   using folding = new EditorFoldingModel(model);
   using hiddenRanges = new EditorHiddenRangeModel(model, folding);
-  using wrapping = new AlphaVisualLineProjection(model, new FixedTextMeasurer());
-  using projection = new AlphaVisibleLineProjection(wrapping, hiddenRanges);
+  using wrapping = new VisualLineProjection(model, new FixedTextMeasurer());
+  using projection = new VisibleLineProjection(wrapping, hiddenRanges);
   folding.setRanges([{ startLineIndex: 0, endLineIndex: 2, collapsed: true }]);
 
   assert.doesNotThrow(() => model.applyEdits([{
@@ -55,7 +55,7 @@ test("Visible visual-line projection refreshes the source before collapsed range
   assert.equal(projection.projection.lineAt(0)?.logicalLineIndex, 0);
 });
 
-class FixedTextMeasurer implements AlphaTextMeasurer {
+class FixedTextMeasurer implements TextMeasurer {
   readonly horizontalPadding = 0;
   readonly contentLeftPadding = 0;
 

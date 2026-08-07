@@ -2,17 +2,17 @@ import { addDisposableListener, stopEvent } from "../../../../../base/browser/do
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
 import { operatingSystem, OperatingSystem } from "../../../../../base/common/platform.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
-import { type AlphaEditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 
-export interface AlphaCursorUndoControllerOptions {
+export interface CursorUndoControllerOptions {
   readonly operatingSystem?: OperatingSystem;
 }
 
 /** Routes the platform cursor-undo chord to selection-only history without changing document undo. */
-export class AlphaCursorUndoController extends DisposableOwner {
+export class CursorUndoController extends DisposableOwner {
   private readonly targetOperatingSystem: OperatingSystem;
 
-  constructor(input: HTMLTextAreaElement, private readonly viewport: AlphaEditorViewport, private readonly selections: EditorSelectionController, options: AlphaCursorUndoControllerOptions = {}) {
+  constructor(input: HTMLTextAreaElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, options: CursorUndoControllerOptions = {}) {
     super();
     try {
       this.targetOperatingSystem = readOperatingSystem(options.operatingSystem);

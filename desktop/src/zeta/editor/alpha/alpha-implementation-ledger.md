@@ -6,11 +6,11 @@
 
 | 入口 | 职责 |
 | --- | --- |
-| `browser/alphaEditorSession.ts` | 一个编辑器实例的唯一装配点；创建 model reference、selection、folding、analysis/token、completion、viewport、input 和 contrib controllers。 |
-| `browser/alphaEditorPane.ts` | Workbench pane 生命周期；只把 host 的 resource/model contract 传给 session，不实现编辑语义。 |
+| `browser/editorSession.ts` | 一个编辑器实例的唯一装配点；创建 model reference、selection、folding、analysis/token、completion、viewport、input 和 contrib controllers。 |
+| `browser/editorPane.ts` | Workbench pane 生命周期；只把 host 的 resource/model contract 传给 session，不实现编辑语义。 |
 | `browser/editorInput.ts` | Workbench `EditorInput` 匹配和语言 identity adapter；不进入同步 model/core。 |
 | `browser/diffEditorInput.ts` | Workbench 双资源 diff input 和 synthetic tab identity；不创建 diff model，也不计算 diff。 |
-| `browser/browserAlphaEditorSession.ts` | TextMate grammar readiness、analysis Worker 和 completion Worker 的 browser adapter。 |
+| `browser/browserEditorSession.ts` | TextMate grammar readiness、analysis Worker 和 completion Worker 的 browser adapter。 |
 | `editor.api.ts` | DOM-free 的 Alpha text-model 程序化 API；不加载 Workbench、DOM 或 contribution。 |
 | `editor.all.ts` | Alpha 对产品入口公开的 contribution bundle；加载 editor browser contribution。 |
 | `editor.main.ts` | 完整 Alpha 入口；组合 `editor.all.ts` 与 `editor.api.ts`。 |
@@ -68,7 +68,7 @@
 | tokenization contrib | `contrib/tokenization/common/tokenizationTextModelPart.ts`、`browser/tokenizationController.ts` | 将 token index 作为独立 model part 暴露给 browser/view；不生产 token。 |
 | semantic tokens contrib | `contrib/semanticTokens/common/semanticTokens.ts`、`browser/semanticTokenPresentation.ts` | 规定 token source contract；presentation 只转换成稳定的 Alpha CSS vocabulary。 |
 | frontend service | `common/services/languageService.ts` | provider registry、feature factory 和 per-model service；不暴露 Workbench transport 或 generated Rust DTO。 |
-| runtime adapter | `browser/services/browserTextResourceStore.ts`、`browser/services/browserTextModelService.ts`、`browser/services/rustDiffComputationService.ts` | Workbench text file / Rust App Server 到 Alpha contract 的薄适配。 |
+| runtime adapter | `browser/services/browserTextResourceStore.ts`、`browser/services/browserTextModelService.ts`、`browser/services/rustDiffComputationService.ts`、`browser/services/rustSyntaxFactsService.ts` | Workbench text file / Rust App Server 到 Alpha contract 的薄适配；Rust syntax facts 只经 revision gate 进入 token、diagnostic、symbol 和 folding consumer。 |
 
 ## 4. 已装配的编辑 contrib
 

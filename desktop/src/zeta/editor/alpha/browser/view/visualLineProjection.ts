@@ -4,44 +4,44 @@ import { type TextModel } from "../../common/model/textModel.js";
 import { EditorVisualLineProjection } from "../../common/viewModel/modelLineProjection.js";
 import { getTextGraphemeBoundaries } from "../../common/core/textSegmentation.js";
 import { type EditorViewportLineSource } from "../../common/viewLayout/editorViewportModel.js";
-import { type AlphaTextMeasurer } from "./fontMetrics.js";
+import { type TextMeasurer } from "./fontMetrics.js";
 
-export enum AlphaEditorLineWrapping {
+export enum EditorLineWrapping {
   Off = "off",
   On = "on",
 }
 
-export interface AlphaVisualLineProjectionOptions {
-  readonly wrapping?: AlphaEditorLineWrapping;
+export interface VisualLineProjectionOptions {
+  readonly wrapping?: EditorLineWrapping;
   readonly wrapWidth?: number;
   /**
    * Defers expensive initial soft-wrap measurement while preserving a usable
    * one-row-per-logical-line projection until the complete result is ready.
    */
-  readonly initialWrappingMeasurement?: AlphaVisualLineInitialMeasurementOptions;
+  readonly initialWrappingMeasurement?: VisualLineInitialMeasurementOptions;
 }
 
 /** Schedules a later, cancellable slice of initial soft-wrap measurement. */
-export type AlphaVisualLineMeasurementScheduler = (callback: () => void) => IDisposable;
+export type VisualLineMeasurementScheduler = (callback: () => void) => IDisposable;
 
 /** Controls non-blocking initial measurement for a large wrapped document. */
-export interface AlphaVisualLineInitialMeasurementOptions {
+export interface VisualLineInitialMeasurementOptions {
   readonly initialLineCount?: number;
   readonly linesPerSlice?: number;
-  readonly schedule: AlphaVisualLineMeasurementScheduler;
+  readonly schedule: VisualLineMeasurementScheduler;
 }
 
 interface ResolvedInitialMeasurement {
   readonly initialLineCount: number;
   readonly linesPerSlice: number;
-  readonly schedule: AlphaVisualLineMeasurementScheduler;
+  readonly schedule: VisualLineMeasurementScheduler;
 }
 
 /** Browser-measured, DOM-free visual-line projection for one Alpha TextModel. */
-export class AlphaVisualLineProjection extends DisposableOwner {
+export class VisualLineProjection extends DisposableOwner {
   private readonly changeEmitter = this.own(new Emitter<void>());
   private readonly lineCountChangeEmitter = this.own(new Emitter<void>());
-  private wrapping: AlphaEditorLineWrapping;
+  private wrapping: EditorLineWrapping;
   private wrapWidth: number;
   private readonly initialMeasurement: ResolvedInitialMeasurement | undefined;
   private readonly pendingMeasurement = this.own(new DisposableSlot<IDisposable>());
@@ -57,8 +57,8 @@ export class AlphaVisualLineProjection extends DisposableOwner {
 
   constructor(
     private readonly model: TextModel,
-    private readonly textMeasurer: AlphaTextMeasurer,
-    options: AlphaVisualLineProjectionOptions = {},
+    private readonly textMeasurer: TextMeasurer,
+    options: VisualLineProjectionOptions = {},
   ) {
     super();
     this.wrapping = readWrapping(options.wrapping);
@@ -104,7 +104,7 @@ export class AlphaVisualLineProjection extends DisposableOwner {
     return this.currentProjection;
   }
 
-  setWrapping(wrapping: AlphaEditorLineWrapping): void {
+  setWrapping(wrapping: EditorLineWrapping): void {
     const next = readWrapping(wrapping);
     if (next === this.wrapping) return;
     this.wrapping = next;
@@ -209,12 +209,12 @@ export class AlphaVisualLineProjection extends DisposableOwner {
 
   private usesInitialMeasurement(): boolean {
     return this.initialMeasurement !== undefined &&
-      this.wrapping === AlphaEditorLineWrapping.On &&
+      this.wrapping === EditorLineWrapping.On &&
       this.wrapWidth > 0;
   }
 
   private breakColumnsForLine(text: string): number[] {
-    if (this.wrapping === AlphaEditorLineWrapping.Off || this.wrapWidth === 0 || text.length === 0) {
+    if (this.wrapping === EditorLineWrapping.Off || this.wrapWidth === 0 || text.length === 0) {
       return [text.length];
     }
     const breaks: number[] = [];
@@ -238,9 +238,9 @@ export class AlphaVisualLineProjection extends DisposableOwner {
   }
 }
 
-function readWrapping(value: AlphaEditorLineWrapping | undefined): AlphaEditorLineWrapping {
-  const wrapping = value ?? AlphaEditorLineWrapping.Off;
-  if (!Object.values(AlphaEditorLineWrapping).includes(wrapping)) {
+function readWrapping(value: EditorLineWrapping | undefined): EditorLineWrapping {
+  const wrapping = value ?? EditorLineWrapping.Off;
+  if (!Object.values(EditorLineWrapping).includes(wrapping)) {
     throw new TypeError("Unknown Alpha editor line wrapping mode");
   }
   return wrapping;
@@ -254,7 +254,7 @@ function readWrapWidth(value: number | undefined): number {
   return width;
 }
 
-function readInitialMeasurement(value: AlphaVisualLineInitialMeasurementOptions | undefined): ResolvedInitialMeasurement | undefined {
+function readInitialMeasurement(value: VisualLineInitialMeasurementOptions | undefined): ResolvedInitialMeasurement | undefined {
   if (value === undefined) return undefined;
   if (!value || typeof value.schedule !== "function") {
     throw new TypeError("Alpha initial visual-line measurement requires a scheduler");

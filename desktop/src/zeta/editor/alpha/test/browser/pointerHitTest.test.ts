@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { type AlphaTextMeasurer } from "../../browser/view/fontMetrics.js";
-import { AlphaEditorHitTargetKind, hitTestAlphaEditorPoint } from "../../browser/view/pointerHitTest.js";
+import { type TextMeasurer } from "../../browser/view/fontMetrics.js";
+import { EditorHitTargetKind, hitTestAlphaEditorPoint } from "../../browser/view/pointerHitTest.js";
 import { TextPosition } from "../../common/core/text.js";
 import { TextModel } from "../../common/model/textModel.js";
 
-class FixedTextMeasurer implements AlphaTextMeasurer {
+class FixedTextMeasurer implements TextMeasurer {
   readonly horizontalPadding = 24;
   readonly contentLeftPadding = 12;
 
@@ -54,43 +54,43 @@ test("Pointer hit testing distinguishes gutter, text, empty content, and lines",
     measurer,
   ), /layout is invalid/);
   assert.deepEqual(hit(10, 25), {
-    kind: AlphaEditorHitTargetKind.Gutter,
+    kind: EditorHitTargetKind.Gutter,
     position: TextPosition.at(1, 0),
   });
   assert.deepEqual(hit(35, 5), {
-    kind: AlphaEditorHitTargetKind.EmptyContent,
+    kind: EditorHitTargetKind.EmptyContent,
     position: TextPosition.at(0, 0),
   });
   assert.deepEqual(hit(54, 5), {
-    kind: AlphaEditorHitTargetKind.Text,
+    kind: EditorHitTargetKind.Text,
     position: TextPosition.at(0, 1),
   });
   assert.deepEqual(hit(65, 5), {
-    kind: AlphaEditorHitTargetKind.Text,
+    kind: EditorHitTargetKind.Text,
     position: TextPosition.at(0, 2),
   });
   assert.deepEqual(hit(86, 5), {
-    kind: AlphaEditorHitTargetKind.Text,
+    kind: EditorHitTargetKind.Text,
     position: TextPosition.at(0, 3),
   });
   assert.deepEqual(hit(100, 5), {
-    kind: AlphaEditorHitTargetKind.EmptyContent,
+    kind: EditorHitTargetKind.EmptyContent,
     position: TextPosition.at(0, 3),
   });
   assert.deepEqual(hit(44, 25), {
-    kind: AlphaEditorHitTargetKind.Text,
+    kind: EditorHitTargetKind.Text,
     position: TextPosition.at(1, 0),
   });
   assert.deepEqual(hit(45, 25), {
-    kind: AlphaEditorHitTargetKind.Text,
+    kind: EditorHitTargetKind.Text,
     position: TextPosition.at(1, 2),
   });
   assert.deepEqual(hit(40, 45), {
-    kind: AlphaEditorHitTargetKind.EmptyContent,
+    kind: EditorHitTargetKind.EmptyContent,
     position: TextPosition.at(2, 0),
   });
   assert.deepEqual(hit(40, 65), {
-    kind: AlphaEditorHitTargetKind.AfterLines,
+    kind: EditorHitTargetKind.AfterLines,
     position: TextPosition.at(2, 0),
   });
 });
@@ -111,7 +111,7 @@ test("Pointer hit testing applies sticky gutter and viewport scrolling", () => {
     metrics,
     new FixedTextMeasurer(),
   ), {
-    kind: AlphaEditorHitTargetKind.Gutter,
+    kind: EditorHitTargetKind.Gutter,
     position: TextPosition.at(1, 0),
   });
   assert.deepEqual(hitTestAlphaEditorPoint(
@@ -121,7 +121,7 @@ test("Pointer hit testing applies sticky gutter and viewport scrolling", () => {
     metrics,
     new FixedTextMeasurer(),
   ), {
-    kind: AlphaEditorHitTargetKind.Text,
+    kind: EditorHitTargetKind.Text,
     position: TextPosition.at(1, 2),
   });
 });
@@ -141,7 +141,7 @@ for (const [name, value] of Object.entries({
   });
 }
 
-const { AlphaEditorViewport } = await import(
+const { EditorViewport } = await import(
   "../../browser/view/editorViewport.js"
 );
 
@@ -152,7 +152,7 @@ test("Viewport maps client coordinates through its bounds and scroll state", () 
   using model = new TextModel(
     Array.from({ length: 20 }, () => "abcdefghij".repeat(3)).join("\n"),
   );
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
@@ -176,14 +176,14 @@ test("Viewport maps client coordinates through its bounds and scroll state", () 
     clientX: 110,
     clientY: 55,
   }), {
-    kind: AlphaEditorHitTargetKind.Gutter,
+    kind: EditorHitTargetKind.Gutter,
     position: TextPosition.at(1, 0),
   });
   assert.deepEqual(viewport.getTargetAtClientPoint({
     clientX: 140,
     clientY: 55,
   }), {
-    kind: AlphaEditorHitTargetKind.Text,
+    kind: EditorHitTargetKind.Text,
     position: TextPosition.at(1, 1),
   });
   assert.equal(viewport.getTargetAtClientPoint({
@@ -194,14 +194,14 @@ test("Viewport maps client coordinates through its bounds and scroll state", () 
     clientX: 50,
     clientY: 55,
   }), {
-    kind: AlphaEditorHitTargetKind.Gutter,
+    kind: EditorHitTargetKind.Gutter,
     position: TextPosition.at(1, 0),
   });
   assert.deepEqual(viewport.getNearestTargetAtClientPoint({
     clientX: 140,
     clientY: 100,
   }), {
-    kind: AlphaEditorHitTargetKind.Text,
+    kind: EditorHitTargetKind.Text,
     position: TextPosition.at(2, 1),
   });
   assert.throws(() => viewport.getTargetAtClientPoint({

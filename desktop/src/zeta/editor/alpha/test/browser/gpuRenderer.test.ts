@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { AlphaGpuMinimapRenderer } from "../../contrib/gpu/browser/gpuRenderer.js";
+import { GpuMinimapRenderer } from "../../contrib/gpu/browser/gpuRenderer.js";
 
 test("GPU minimap renders bounded density rows at device resolution and can yield to a fallback", () => {
   const calls: string[] = [];
   const context = fakeWebGlContext(calls);
   const canvas = fakeCanvas(context);
-  const renderer = AlphaGpuMinimapRenderer.tryCreate(canvas);
+  const renderer = GpuMinimapRenderer.tryCreate(canvas);
   assert.ok(renderer);
 
   renderer.resize(56, 100);
@@ -31,7 +31,7 @@ test("GPU minimap renders bounded density rows at device resolution and can yiel
 
 test("GPU minimap declines test and non-WebGL canvases without affecting its DOM caller", () => {
   const canvas = fakeCanvas(undefined, "jsdom");
-  assert.equal(AlphaGpuMinimapRenderer.tryCreate(canvas), undefined);
+  assert.equal(GpuMinimapRenderer.tryCreate(canvas), undefined);
 });
 
 function fakeCanvas(context: WebGLRenderingContext | undefined, userAgent = "Electron"): HTMLCanvasElement {

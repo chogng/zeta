@@ -18,7 +18,7 @@ for (const [name, value] of Object.entries({
   Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { AlphaEditorSession } = await import("../../browser/alphaEditorSession.js");
+const { EditorSession } = await import("../../browser/editorSession.js");
 
 test.after(() => browserEnvironment.window.close());
 
@@ -29,7 +29,7 @@ test("Alpha editor session composes native input, local language analysis, and p
   const model = new TextModel("{\"name\": \"alpha\"");
   const reference = modelReference(URI.file("C:\\project\\settings.json"), model);
   const errors: unknown[] = [];
-  const session = new AlphaEditorSession({
+  const session = new EditorSession({
     container,
     input: {
       resource: reference.resource,
@@ -73,7 +73,7 @@ test("Alpha editor session derives indentation folds and projects their gutter c
   const container = dom.window.document.querySelector<HTMLElement>("main")!;
   const model = new TextModel("root\n  child\nafter");
   const reference = modelReference(URI.file("C:\\project\\fold.txt"), model);
-  const session = new AlphaEditorSession({
+  const session = new EditorSession({
     container,
     input: {
       resource: reference.resource,
@@ -99,7 +99,7 @@ test("Alpha editor session honors a read-only input without disabling selection 
   const container = dom.window.document.querySelector<HTMLElement>("main")!;
   const model = new TextModel("alpha");
   const reference = modelReference(URI.file("C:\\project\\preview.txt"), model);
-  const session = new AlphaEditorSession({
+  const session = new EditorSession({
     container,
     input: { resource: reference.resource, label: "preview.txt", readOnly: true },
     languageId: "plaintext",
@@ -132,7 +132,7 @@ test("Alpha editor session announces save completion and forwards failures", asy
   const reference = modelReference(URI.file("C:\\project\\save.txt"), model);
   const errors: unknown[] = [];
   let fail = false;
-  const session = new AlphaEditorSession({
+  const session = new EditorSession({
     container,
     input: { resource: reference.resource, label: "save.txt" },
     languageId: "plaintext",

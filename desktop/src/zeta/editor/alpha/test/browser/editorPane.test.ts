@@ -19,10 +19,10 @@ for (const [name, value] of Object.entries({
   Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { AlphaEditorPane } = await import("../../browser/alphaEditorPane.js");
+const { EditorPane } = await import("../../browser/editorPane.js");
 const { BrowserTextModelService } = await import("../../browser/services/browserTextModelService.js");
 const { BrowserTextResourceStore } = await import("../../browser/services/browserTextResourceStore.js");
-const { AlphaEditorTextDirection } = await import("../../browser/view/editorViewport.js");
+const { EditorTextDirection } = await import("../../browser/view/editorViewport.js");
 
 test.after(() => browserEnvironment.window.close());
 
@@ -33,7 +33,7 @@ test("Alpha editor pane loads, lays out, focuses, hides, and clears one native s
   const textFiles = new ImmediateTextFiles("from disk");
   const resourceStore = new BrowserTextResourceStore(textFiles);
   using models = new BrowserTextModelService(resourceStore);
-  const pane = new AlphaEditorPane(resourceStore, { modelService: models, textDirection: AlphaEditorTextDirection.RightToLeft });
+  const pane = new EditorPane(resourceStore, { modelService: models, textDirection: EditorTextDirection.RightToLeft });
   pane.create(parent);
   pane.layout({ width: 640, height: 480 });
   await pane.setInput({
@@ -70,7 +70,7 @@ test("Alpha editor pane releases a load cancelled before content resolution", as
   const textFiles = { onDidChangeFiles: inertFileChanges, resolve: () => pending.promise, save: async () => {} };
   const resourceStore = new BrowserTextResourceStore(textFiles);
   using models = new BrowserTextModelService(resourceStore);
-  const pane = new AlphaEditorPane(resourceStore, { modelService: models });
+  const pane = new EditorPane(resourceStore, { modelService: models });
   pane.create(parent);
   const controller = new AbortController();
   const opening = pane.setInput({ resource: URI.file("C:\\project\\slow.ts") }, controller.signal);
@@ -96,7 +96,7 @@ test("Alpha editor pane saves and reverts its shared model reference", async () 
   using models = new BrowserTextModelService(resourceStore);
   const resource = URI.file("C:\\project\\main.ts");
   const reference = await models.acquire({ resource }, new AbortController().signal);
-  const pane = new AlphaEditorPane(resourceStore, { modelService: models });
+  const pane = new EditorPane(resourceStore, { modelService: models });
   pane.create(parent);
   await pane.setInput({ resource, label: "main.ts" }, new AbortController().signal);
 

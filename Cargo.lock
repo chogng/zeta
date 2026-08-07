@@ -7800,6 +7800,7 @@ dependencies = [
  "zeta-shell-command",
  "zeta-skills",
  "zeta-slash-commands",
+ "zeta-syntax",
  "zeta-tools",
  "zeta-typst",
  "zeta-utils-pty",

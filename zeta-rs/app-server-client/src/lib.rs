@@ -46,6 +46,8 @@ use zeta_app_server_protocol::protocol::session::{
 use zeta_app_server_protocol::protocol::skills::{
     SkillListParams, SkillListResult, SkillSetEnablementParams,
 };
+use zeta_app_server_protocol::protocol::syntax::SyntaxAnalyzeParams;
+use zeta_app_server_protocol::protocol::syntax::SyntaxAnalyzeResult;
 use zeta_app_server_protocol::protocol::workspace::{WorkspaceSwitchParams, WorkspaceSwitchResult};
 use zeta_app_server_protocol::rpc::{JsonRpcId, JsonRpcRequest, JsonRpcResponse};
 
@@ -170,6 +172,13 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         params: DiffComputeParams,
     ) -> Result<DiffComputeResult, ClientError> {
         self.call(ClientMethod::DiffCompute, params)
+    }
+
+    pub fn analyze_syntax(
+        &mut self,
+        params: SyntaxAnalyzeParams,
+    ) -> Result<SyntaxAnalyzeResult, ClientError> {
+        self.call(ClientMethod::SyntaxAnalyze, params)
     }
 
     pub fn list_git_branches(&mut self) -> Result<GitBranchListResult, ClientError> {

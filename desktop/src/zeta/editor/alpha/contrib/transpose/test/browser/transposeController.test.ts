@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { OperatingSystem } from "../../../../../../base/common/platform.js";
-import { type AlphaTextMeasurer } from "../../../../browser/view/fontMetrics.js";
+import { type TextMeasurer } from "../../../../browser/view/fontMetrics.js";
 import { EditorSelectionController } from "../../../../common/cursor/editorSelectionController.js";
 import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
 import { TextPosition } from "../../../../common/core/text.js";
@@ -21,19 +21,19 @@ for (const [name, value] of Object.entries({
   Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { AlphaEditorViewport } = await import("../../../../browser/view/editorViewport.js");
-const { AlphaTransposeController } = await import("../../browser/transposeController.js");
+const { EditorViewport } = await import("../../../../browser/view/editorViewport.js");
+const { TransposeController } = await import("../../browser/transposeController.js");
 
 test("Transpose consumes Ctrl+T only for the VS Code macOS binding", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   const container = dom.window.document.querySelector<HTMLElement>("main")!;
   using model = new TextModel("abc");
   using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 1))));
-  using viewport = new AlphaEditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+  using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
   viewport.layout({ width: 200, height: 60 });
   const input = dom.window.document.createElement("textarea");
   container.append(input);
-  using controller = new AlphaTransposeController(input, viewport, selections, { operatingSystem: OperatingSystem.Macintosh });
+  using controller = new TransposeController(input, viewport, selections, { operatingSystem: OperatingSystem.Macintosh });
 
   const transpose = keydown(dom.window, "t", { ctrlKey: true });
   input.dispatchEvent(transpose);
@@ -46,7 +46,7 @@ test("Transpose consumes Ctrl+T only for the VS Code macOS binding", () => {
   dom.window.close();
 });
 
-class FixedTextMeasurer implements AlphaTextMeasurer {
+class FixedTextMeasurer implements TextMeasurer {
   readonly horizontalPadding = 24;
   readonly contentLeftPadding = 12;
 

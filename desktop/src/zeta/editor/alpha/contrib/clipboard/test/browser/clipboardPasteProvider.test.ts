@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { AlphaUriListPasteProvider, captureAlphaClipboardTextTransfer, normalizeAlphaClipboardPasteProviders, provideAlphaClipboardPaste, type AlphaClipboardPasteProvider, type AlphaClipboardTextTransfer } from "../../browser/clipboardPasteProvider.js";
+import { UriListPasteProvider, captureAlphaClipboardTextTransfer, normalizeAlphaClipboardPasteProviders, provideAlphaClipboardPaste, type ClipboardPasteProvider, type ClipboardTextTransfer } from "../../browser/clipboardPasteProvider.js";
 
 test("Clipboard paste providers receive only a synchronous textual transfer snapshot", () => {
   const transfer = captureAlphaClipboardTextTransfer({
@@ -34,14 +34,14 @@ test("Clipboard paste providers validate identity and preserve declared preceden
 
 test("URI-list paste omits comments and preserves stable URI order", async () => {
   const transfer = textTransfer("text/uri-list", "# copied locations\r\nfile:///workspace/one.rs\n\nhttps://example.test/two\n");
-  assert.equal(await provideAlphaClipboardPaste([AlphaUriListPasteProvider], transfer), "file:///workspace/one.rs\nhttps://example.test/two");
+  assert.equal(await provideAlphaClipboardPaste([UriListPasteProvider], transfer), "file:///workspace/one.rs\nhttps://example.test/two");
 });
 
-function provider(id: string, mimeTypes: readonly string[], providePaste: AlphaClipboardPasteProvider["providePaste"]): AlphaClipboardPasteProvider {
+function provider(id: string, mimeTypes: readonly string[], providePaste: ClipboardPasteProvider["providePaste"]): ClipboardPasteProvider {
   return { id, mimeTypes, providePaste };
 }
 
-function textTransfer(type: string, text: string): AlphaClipboardTextTransfer {
+function textTransfer(type: string, text: string): ClipboardTextTransfer {
   return Object.freeze({
     types: Object.freeze([type]),
     getText: (requestedType: string): string => requestedType === type ? text : "",

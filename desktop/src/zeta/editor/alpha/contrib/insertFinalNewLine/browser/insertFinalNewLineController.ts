@@ -3,7 +3,7 @@ import { type EditorSelectionController } from "../../../common/cursor/editorSel
 import { createInsertFinalNewLineCommand } from "../common/insertFinalNewLine.js";
 
 /** Applies the final-newline policy immediately before a save operation. */
-export class AlphaInsertFinalNewLineController extends DisposableOwner {
+export class InsertFinalNewLineController extends DisposableOwner {
   constructor(private readonly selections: EditorSelectionController) {
     super();
   }

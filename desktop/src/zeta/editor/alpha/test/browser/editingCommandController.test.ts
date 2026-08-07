@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { type AlphaTextMeasurer } from "../../browser/view/fontMetrics.js";
+import { type TextMeasurer } from "../../browser/view/fontMetrics.js";
 import { EditorSelectionController } from "../../common/cursor/editorSelectionController.js";
 import { TextSelection, TextSelectionSet } from "../../common/core/selection.js";
 import { TextPosition } from "../../common/core/text.js";
@@ -20,9 +20,9 @@ for (const [name, value] of Object.entries({
   Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { AlphaEditorViewport } = await import("../../browser/view/editorViewport.js");
-const { AlphaEditingCommandController } = await import("../../browser/editingCommandController.js");
-const { AlphaTextInputController } = await import("../../browser/input/textInputController.js");
+const { EditorViewport } = await import("../../browser/view/editorViewport.js");
+const { EditingCommandController } = await import("../../browser/editingCommandController.js");
+const { TextInputController } = await import("../../browser/input/textInputController.js");
 
 test.after(() => browserEnvironment.window.close());
 
@@ -31,7 +31,7 @@ test("editing shortcuts select all", () => {
   const container = dom.window.document.querySelector<HTMLElement>("main")!;
   using model = new TextModel("one\n  two\nthree");
   using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
@@ -39,8 +39,8 @@ test("editing shortcuts select all", () => {
     selectionController: selections,
   });
   viewport.layout({ width: 400, height: 100 });
-  using input = new AlphaTextInputController(viewport, selections);
-  using commands = new AlphaEditingCommandController(input.element, viewport, selections);
+  using input = new TextInputController(viewport, selections);
+  using commands = new EditingCommandController(input.element, viewport, selections);
 
   const selectAll = keyboardEvent(dom.window, "a", { metaKey: true });
   input.element.dispatchEvent(selectAll);
@@ -55,10 +55,10 @@ test("editing shortcuts expand each selection by its next physical line", () => 
   const container = dom.window.document.querySelector<HTMLElement>("main")!;
   using model = new TextModel("one\ntwo\nthree");
   using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 1))));
-  using viewport = new AlphaEditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+  using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
   viewport.layout({ width: 400, height: 100 });
-  using input = new AlphaTextInputController(viewport, selections);
-  using commands = new AlphaEditingCommandController(input.element, viewport, selections);
+  using input = new TextInputController(viewport, selections);
+  using commands = new EditingCommandController(input.element, viewport, selections);
 
   const first = keyboardEvent(dom.window, "l", { ctrlKey: true });
   input.element.dispatchEvent(first);
@@ -76,7 +76,7 @@ test("editing shortcuts reject dependencies from different text models", () => {
   using otherModel = new TextModel("two");
   using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
   using otherSelections = new EditorSelectionController(otherModel, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container: dom.window.document.querySelector<HTMLElement>("main")!,
     model,
     lineHeight: 20,
@@ -84,7 +84,7 @@ test("editing shortcuts reject dependencies from different text models", () => {
     selectionController: selections,
   });
   const input = dom.window.document.createElement("textarea") as unknown as HTMLTextAreaElement;
-  assert.throws(() => new AlphaEditingCommandController(input, viewport, otherSelections), /must share one text model/);
+  assert.throws(() => new EditingCommandController(input, viewport, otherSelections), /must share one text model/);
   dom.window.close();
 });
 
@@ -97,7 +97,7 @@ function keyboardEvent(targetWindow: typeof browserEnvironment.window, key: stri
   }) as unknown as KeyboardEvent;
 }
 
-class FixedTextMeasurer implements AlphaTextMeasurer {
+class FixedTextMeasurer implements TextMeasurer {
   readonly horizontalPadding = 24;
   readonly contentLeftPadding = 12;
 

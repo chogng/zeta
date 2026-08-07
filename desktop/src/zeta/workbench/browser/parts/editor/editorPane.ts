@@ -13,6 +13,7 @@ import { type ITextMateService } from "../../../services/textMate/common/textMat
 import { type ILanguageFeaturesService } from "../../../services/language/common/languageFeaturesService.js";
 import type { EditorInput } from "./editorInput.js";
 import type { IDiffApi } from "../../../../platform/diff/common/diffApi.js";
+import type { ISyntaxApi } from "../../../../platform/syntax/common/syntaxApi.js";
 import type { IEmbeddedTextEditorFactory } from "./embeddedTextEditor.js";
 import type { IWorkingCopyService, IWorkingCopy } from "../../../services/workingCopy/common/workingCopyService.js";
 
@@ -55,6 +56,7 @@ export interface EditorPaneCreationOptions {
   readonly textMateService?: ITextMateService;
   readonly languageFeaturesService?: ILanguageFeaturesService;
   readonly diffApi?: IDiffApi;
+  readonly syntaxApi?: ISyntaxApi;
   readonly embeddedTextEditorFactory?: IEmbeddedTextEditorFactory;
   readonly workingCopyService?: IWorkingCopyService;
   readonly onSave?: () => Promise<void | boolean>;

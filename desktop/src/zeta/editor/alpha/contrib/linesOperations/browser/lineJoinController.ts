@@ -3,19 +3,19 @@ import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
 import { operatingSystem, OperatingSystem } from "../../../../../base/common/platform.js";
 import { createJoinLinesCommand } from "../common/lineJoin.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
-import { type AlphaEditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 
-export interface AlphaLineJoinControllerOptions {
+export interface LineJoinControllerOptions {
   readonly operatingSystem?: OperatingSystem;
 }
 
 /** Routes the platform join-lines chord to Alpha's DOM-free command semantics. */
-export class AlphaLineJoinController extends DisposableOwner {
+export class LineJoinController extends DisposableOwner {
   constructor(
     input: HTMLTextAreaElement,
-    private readonly viewport: AlphaEditorViewport,
+    private readonly viewport: EditorViewport,
     private readonly selections: EditorSelectionController,
-    options: AlphaLineJoinControllerOptions = {},
+    options: LineJoinControllerOptions = {},
   ) {
     super();
     this.targetOperatingSystem = options.operatingSystem ?? operatingSystem;

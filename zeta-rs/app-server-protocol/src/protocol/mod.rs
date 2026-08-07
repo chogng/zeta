@@ -17,6 +17,7 @@ pub mod search;
 pub mod session;
 pub mod skills;
 pub mod slash_commands;
+pub mod syntax;
 pub mod terminal;
 pub mod turn;
 pub mod workspace;

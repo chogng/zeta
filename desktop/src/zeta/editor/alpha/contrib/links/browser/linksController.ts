@@ -3,16 +3,16 @@ import { addDisposableListener, stopEvent } from "../../../../../base/browser/do
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
 import { type LinkService, type LanguageLink } from "../common/links.js";
 import { type TextPosition } from "../../../common/core/text.js";
-import { type AlphaEditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 
 /** Resolves provider links on demand and delegates opening to the host callback. */
-export class AlphaLinksController extends DisposableOwner {
+export class LinksController extends DisposableOwner {
   private request: AbortController | undefined;
   private links: readonly LanguageLink[] = [];
   private activeLink: LanguageLink | undefined;
   private hoverPosition: TextPosition | undefined;
 
-  constructor(private readonly viewport: AlphaEditorViewport, private readonly service: LinkService, private readonly languageId: string, private readonly onOpenLink: (target: string) => void | Promise<void>, private readonly onError: (error: unknown) => void = error => console.error("Alpha link opening failed", error)) {
+  constructor(private readonly viewport: EditorViewport, private readonly service: LinkService, private readonly languageId: string, private readonly onOpenLink: (target: string) => void | Promise<void>, private readonly onError: (error: unknown) => void = error => console.error("Alpha link opening failed", error)) {
     super();
     this.own(addDisposableListener<PointerEvent>(viewport.element, "pointermove", event => this.update(event)));
     this.own(addDisposableListener(viewport.element, "pointerleave", () => this.clear()));

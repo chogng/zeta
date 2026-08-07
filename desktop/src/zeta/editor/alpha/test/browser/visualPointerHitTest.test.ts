@@ -3,8 +3,8 @@ import test from "node:test";
 import { TextPosition } from "../../common/core/text.js";
 import { TextModel } from "../../common/model/textModel.js";
 import { EditorVisualLineProjection } from "../../common/viewModel/modelLineProjection.js";
-import { hitTestAlphaVisualEditorPoint, AlphaEditorHitTargetKind } from "../../browser/view/pointerHitTest.js";
-import { type AlphaTextMeasurer } from "../../browser/view/fontMetrics.js";
+import { hitTestAlphaVisualEditorPoint, EditorHitTargetKind } from "../../browser/view/pointerHitTest.js";
+import { type TextMeasurer } from "../../browser/view/fontMetrics.js";
 
 test("visual hit testing maps wrapped visual coordinates back to logical UTF-16 positions", () => {
   using model = new TextModel("abcdef\ngh");
@@ -18,20 +18,20 @@ test("visual hit testing maps wrapped visual coordinates back to logical UTF-16 
   const measurer = new FixedTextMeasurer();
 
   assert.deepEqual(hitTestAlphaVisualEditorPoint(model, projection, layout, { left: 52, top: 25 }, metrics, measurer), {
-    kind: AlphaEditorHitTargetKind.Text,
+    kind: EditorHitTargetKind.Text,
     position: TextPosition.at(0, 3),
   });
   assert.deepEqual(hitTestAlphaVisualEditorPoint(model, projection, layout, { left: 100, top: 45 }, metrics, measurer), {
-    kind: AlphaEditorHitTargetKind.EmptyContent,
+    kind: EditorHitTargetKind.EmptyContent,
     position: TextPosition.at(0, 6),
   });
   assert.deepEqual(hitTestAlphaVisualEditorPoint(model, projection, layout, { left: 10, top: 65 }, metrics, measurer), {
-    kind: AlphaEditorHitTargetKind.Gutter,
+    kind: EditorHitTargetKind.Gutter,
     position: TextPosition.at(1, 0),
   });
 });
 
-class FixedTextMeasurer implements AlphaTextMeasurer {
+class FixedTextMeasurer implements TextMeasurer {
   readonly horizontalPadding = 0;
   readonly contentLeftPadding = 0;
 

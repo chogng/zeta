@@ -1,16 +1,16 @@
 import "./media/fontZoom.css";
 import { addDisposableListener, stopEvent } from "../../../../../base/browser/dom.js";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
-import { type AlphaEditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 
-export interface AlphaFontZoomControllerOptions { readonly baseLineHeight?: number; readonly initialScale?: number; }
+export interface FontZoomControllerOptions { readonly baseLineHeight?: number; readonly initialScale?: number; }
 
 /** Owns per-editor font zoom state and invalidates browser measurements after each change. */
-export class AlphaFontZoomController extends DisposableOwner {
+export class FontZoomController extends DisposableOwner {
   private readonly baseLineHeight: number;
   private scale: number;
 
-  constructor(private readonly input: HTMLTextAreaElement, private readonly viewport: AlphaEditorViewport, options: AlphaFontZoomControllerOptions = {}) {
+  constructor(private readonly input: HTMLTextAreaElement, private readonly viewport: EditorViewport, options: FontZoomControllerOptions = {}) {
     super();
     this.baseLineHeight = readPositive(options.baseLineHeight ?? viewport.viewportLayout.lineHeight, "baseLineHeight");
     this.scale = readScale(options.initialScale ?? 1);

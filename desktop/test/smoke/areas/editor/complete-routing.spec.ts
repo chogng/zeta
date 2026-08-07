@@ -21,7 +21,7 @@ test("Complete routes source files to Alpha and academic documents to Gama", asy
 
   await academicRow.click();
   await expect(group.tabs).toHaveCount(2);
-  await expect(group.content.locator(".zeta-editor-pane-host:not([hidden]) .zeta-gama-editor-pane")).toBeVisible();
+  await expect(group.content.locator(".zeta-editor-pane-host:not([hidden]) .zeta-structured-editor-pane")).toBeVisible();
 
   await sourceRow.click();
   await expect(group.content.locator(".zeta-editor-pane-host:not([hidden]) .zeta-alpha-editor[aria-label='main.ts']")).toBeVisible();

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { type AlphaTextMeasurer } from "../../../../browser/view/fontMetrics.js";
+import { type TextMeasurer } from "../../../../browser/view/fontMetrics.js";
 import { EditorSelectionController } from "../../../../common/cursor/editorSelectionController.js";
 import { LanguageConfigurationRegistry } from "../../../../common/languages/languageConfiguration.js";
 import { LanguageBracketMatcher } from "../../common/bracketMatching.js";
@@ -22,8 +22,8 @@ for (const [name, value] of Object.entries({
   Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { AlphaEditorViewport } = await import("../../../../browser/view/editorViewport.js");
-const { AlphaBracketNavigationController } = await import("../../browser/bracketNavigationController.js");
+const { EditorViewport } = await import("../../../../browser/view/editorViewport.js");
+const { BracketNavigationController } = await import("../../browser/bracketNavigationController.js");
 
 test("Go-to-bracket shortcut uses the Alpha lexical bracket matcher", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
@@ -32,11 +32,11 @@ test("Go-to-bracket shortcut uses the Alpha lexical bracket matcher", () => {
   using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
   using configurations = configurationsForBrackets();
   using matcher = new LanguageBracketMatcher(model, "typescript", configurations);
-  using viewport = new AlphaEditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+  using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
   viewport.layout({ width: 200, height: 60 });
   const input = dom.window.document.createElement("textarea");
   container.append(input);
-  using controller = new AlphaBracketNavigationController(input, viewport, selections, matcher);
+  using controller = new BracketNavigationController(input, viewport, selections, matcher);
 
   const jump = keydown(dom.window, "\\", { ctrlKey: true, shiftKey: true });
   input.dispatchEvent(jump);
@@ -55,19 +55,19 @@ test("Bracket navigation controller rejects cross-model wiring and unrelated cho
   using configurations = configurationsForBrackets();
   using matcher = new LanguageBracketMatcher(model, "typescript", configurations);
   using otherMatcher = new LanguageBracketMatcher(other, "typescript", configurations);
-  using viewport = new AlphaEditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
+  using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
   const input = dom.window.document.createElement("textarea");
   container.append(input);
-  using controller = new AlphaBracketNavigationController(input, viewport, selections, matcher);
+  using controller = new BracketNavigationController(input, viewport, selections, matcher);
   const unrelated = keydown(dom.window, "\\", { ctrlKey: true });
   input.dispatchEvent(unrelated);
   assert.equal(unrelated.defaultPrevented, false);
-  assert.throws(() => new AlphaBracketNavigationController(input, viewport, selections, otherMatcher), /must share one text model/);
+  assert.throws(() => new BracketNavigationController(input, viewport, selections, otherMatcher), /must share one text model/);
 
   dom.window.close();
 });
 
-class FixedTextMeasurer implements AlphaTextMeasurer {
+class FixedTextMeasurer implements TextMeasurer {
   readonly horizontalPadding = 24;
   readonly contentLeftPadding = 12;
 

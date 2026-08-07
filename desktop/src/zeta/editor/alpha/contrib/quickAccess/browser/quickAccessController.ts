@@ -2,18 +2,18 @@ import "./media/gotoLineWidget.css";
 import { addDisposableListener, stopEvent } from "../../../../../base/browser/dom.js";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
 import { operatingSystem, OperatingSystem } from "../../../../../base/common/platform.js";
-import { parseAlphaGotoLocation, type AlphaGotoLocationParseResult } from "../../../common/commands/gotoLocation.js";
+import { parseAlphaGotoLocation, type GotoLocationParseResult } from "../../../common/commands/gotoLocation.js";
 import { EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
 import { type EditorScrollPosition } from "../../../common/viewLayout/editorViewportModel.js";
-import { type AlphaEditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 
-export interface AlphaGotoLineControllerOptions {
+export interface GotoLineControllerOptions {
   readonly operatingSystem?: OperatingSystem;
 }
 
 /** Owns Alpha's local Go to Line/Column dialog and platform G shortcut. */
-export class AlphaGotoLineController extends DisposableOwner {
+export class GotoLineController extends DisposableOwner {
   readonly element: HTMLDivElement;
   readonly input: HTMLInputElement;
   private readonly status: HTMLSpanElement;
@@ -21,9 +21,9 @@ export class AlphaGotoLineController extends DisposableOwner {
 
   constructor(
     private readonly editorInput: HTMLTextAreaElement,
-    private readonly viewport: AlphaEditorViewport,
+    private readonly viewport: EditorViewport,
     private readonly selections: EditorSelectionController,
-    options: AlphaGotoLineControllerOptions = {},
+    options: GotoLineControllerOptions = {},
   ) {
     super();
     this.targetOperatingSystem = options.operatingSystem ?? operatingSystem;
@@ -119,7 +119,7 @@ export class AlphaGotoLineController extends DisposableOwner {
     if (result.kind === "location") this.viewport.revealPosition(result.location.position);
   }
 
-  private readResult(): AlphaGotoLocationParseResult {
+  private readResult(): GotoLocationParseResult {
     return parseAlphaGotoLocation(this.viewport.textModel, this.input.value);
   }
 

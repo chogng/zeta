@@ -6,14 +6,14 @@ export const ALPHA_DIFF_EDITOR_ID = "zeta.editor.alpha-diff";
 export const ALPHA_DIFF_EDITOR_CONTENT_TYPE = "application/vnd.zeta.alpha-diff";
 
 /** One Workbench input that compares two ordinary text-resource editor inputs. */
-export interface AlphaDiffEditorInput extends EditorInput {
+export interface DiffEditorInput extends EditorInput {
   readonly contentType: typeof ALPHA_DIFF_EDITOR_CONTENT_TYPE;
   readonly original: EditorInput;
   readonly modified: EditorInput;
 }
 
 /** Creates a stable synthetic tab identity for an Alpha original/modified comparison. */
-export function createAlphaDiffEditorInput(original: EditorInput, modified: EditorInput, label?: string): AlphaDiffEditorInput {
+export function createAlphaDiffEditorInput(original: EditorInput, modified: EditorInput, label?: string): DiffEditorInput {
   assertTextResourceInput(original, "Alpha diff original input");
   assertTextResourceInput(modified, "Alpha diff modified input");
   if (label !== undefined && (typeof label !== "string" || label.trim().length === 0)) {
@@ -31,7 +31,7 @@ export function createAlphaDiffEditorInput(original: EditorInput, modified: Edit
 }
 
 /** Narrows a generic Workbench editor input to the Alpha two-resource diff contract. */
-export function isAlphaDiffEditorInput(input: EditorInput): input is AlphaDiffEditorInput {
+export function isAlphaDiffEditorInput(input: EditorInput): input is DiffEditorInput {
   return input.contentType === ALPHA_DIFF_EDITOR_CONTENT_TYPE &&
     "original" in input &&
     "modified" in input &&

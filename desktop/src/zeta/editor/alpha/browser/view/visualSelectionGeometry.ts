@@ -2,34 +2,34 @@ import { type TextSelectionSet } from "../../common/core/selection.js";
 import { type TextModel } from "../../common/model/textModel.js";
 import { type EditorVisualLineProjection } from "../../common/viewModel/modelLineProjection.js";
 import { type EditorLineRange } from "../../common/viewLayout/editorViewportModel.js";
-import { type AlphaTextMeasurer } from "./fontMetrics.js";
+import { type TextMeasurer } from "./fontMetrics.js";
 import { createAlphaVisualRangeRectangles } from "./visualRangeGeometry.js";
 
-export interface AlphaVisualSelectionRectangle {
+export interface VisualSelectionRectangle {
   readonly selectionIndex: number;
   readonly visualLineIndex: number;
   readonly left: number;
   readonly width: number;
 }
 
-export interface AlphaVisualCaretRectangle {
+export interface VisualCaretRectangle {
   readonly selectionIndex: number;
   readonly visualLineIndex: number;
   readonly left: number;
   readonly primary: boolean;
 }
 
-export interface AlphaVisualSelectionGeometry {
-  readonly selections: readonly AlphaVisualSelectionRectangle[];
-  readonly carets: readonly AlphaVisualCaretRectangle[];
+export interface VisualSelectionGeometry {
+  readonly selections: readonly VisualSelectionRectangle[];
+  readonly carets: readonly VisualCaretRectangle[];
 }
 
 /** @internal */
-export function createAlphaVisualSelectionGeometry(model: TextModel, selectionSet: TextSelectionSet, projection: EditorVisualLineProjection, renderLines: EditorLineRange, textLeft: number, measurer: AlphaTextMeasurer): AlphaVisualSelectionGeometry {
+export function createAlphaVisualSelectionGeometry(model: TextModel, selectionSet: TextSelectionSet, projection: EditorVisualLineProjection, renderLines: EditorLineRange, textLeft: number, measurer: TextMeasurer): VisualSelectionGeometry {
   if (projection.modelVersion !== model.version) {
     throw new Error("Visual selection geometry requires the current text model projection");
   }
-  const carets: AlphaVisualCaretRectangle[] = [];
+  const carets: VisualCaretRectangle[] = [];
   for (let selectionIndex = 0; selectionIndex < selectionSet.selections.length; selectionIndex += 1) {
     const selection = selectionSet.selections[selectionIndex];
     if (!selection) continue;

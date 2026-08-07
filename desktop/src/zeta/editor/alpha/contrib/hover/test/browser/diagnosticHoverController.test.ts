@@ -1,15 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { AlphaDecorationPresentation, createAlphaDecorationSource } from "../../../../browser/view/decorationPresentation.js";
-import { AlphaDiagnosticHoverController } from "../../browser/diagnosticHoverController.js";
-import { type AlphaTextMeasurer } from "../../../../browser/view/fontMetrics.js";
+import { DecorationPresentation, createAlphaDecorationSource } from "../../../../browser/view/decorationPresentation.js";
+import { DiagnosticHoverController } from "../../browser/diagnosticHoverController.js";
+import { type TextMeasurer } from "../../../../browser/view/fontMetrics.js";
 import { TextDecorationCollection } from "../../../../common/model/decorationCollection.js";
 import { TextPosition, TextRange } from "../../../../common/core/text.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 import { TrackedRangeStickiness } from "../../../../common/model/trackedRange.js";
 
-class FixedTextMeasurer implements AlphaTextMeasurer {
+class FixedTextMeasurer implements TextMeasurer {
   readonly horizontalPadding = 24;
   readonly contentLeftPadding = 12;
 
@@ -34,7 +34,7 @@ for (const [name, value] of Object.entries({
   Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { AlphaEditorViewport } = await import("../../../../browser/view/editorViewport.js");
+const { EditorViewport } = await import("../../../../browser/view/editorViewport.js");
 
 test("Diagnostic hover presents current gutter-marker messages and hides on pointer exit", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
@@ -46,18 +46,18 @@ test("Diagnostic hover presents current gutter-marker messages and hides on poin
     stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
     metadata: "Use let instead",
   });
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
     textMeasurer: new FixedTextMeasurer(),
     decorationSources: [createAlphaDecorationSource(
       decorations,
-      () => AlphaDecorationPresentation.WarningUnderline,
+      () => DecorationPresentation.WarningUnderline,
       decoration => decoration.metadata,
     )],
   });
-  using controller = new AlphaDiagnosticHoverController(viewport);
+  using controller = new DiagnosticHoverController(viewport);
   viewport.layout({ width: 160, height: 20 });
   const marker = viewport.element.querySelector<HTMLElement>(".zeta-alpha-editor-diagnostic-marker")!;
   marker.dispatchEvent(new dom.window.Event("pointerover", { bubbles: true }));

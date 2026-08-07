@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { type AlphaTextMeasurer } from "../../../../browser/view/fontMetrics.js";
+import { type TextMeasurer } from "../../../../browser/view/fontMetrics.js";
 import { EditorSelectionController } from "../../../../common/cursor/editorSelectionController.js";
 import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
 import { TextPosition } from "../../../../common/core/text.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 
-class FixedTextMeasurer implements AlphaTextMeasurer {
+class FixedTextMeasurer implements TextMeasurer {
   readonly horizontalPadding = 24;
   readonly contentLeftPadding = 12;
 
@@ -73,8 +73,8 @@ for (const [name, value] of Object.entries({
   });
 }
 
-const { AlphaEditorViewport } = await import("../../../../browser/view/editorViewport.js");
-const { AlphaPointerSelectionController } = await import("../../browser/dndController.js");
+const { EditorViewport } = await import("../../../../browser/view/editorViewport.js");
+const { PointerSelectionController } = await import("../../browser/dndController.js");
 
 test("Pointer drag autoscroll advances selection and stops at boundaries", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
@@ -89,7 +89,7 @@ test("Pointer drag autoscroll advances selection and stops at boundaries", () =>
     model,
     TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))),
   );
-  using viewport = new AlphaEditorViewport({
+  using viewport = new EditorViewport({
     container,
     model,
     lineHeight: 20,
@@ -98,7 +98,7 @@ test("Pointer drag autoscroll advances selection and stops at boundaries", () =>
   });
   viewport.layout({ width: 100, height: 40 });
   viewport.element.getBoundingClientRect = () => editorBounds();
-  using pointer = new AlphaPointerSelectionController(viewport, selections);
+  using pointer = new PointerSelectionController(viewport, selections);
 
   viewport.element.dispatchEvent(pointerEvent(
     dom.window,

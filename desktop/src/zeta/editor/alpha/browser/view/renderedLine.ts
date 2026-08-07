@@ -1,6 +1,6 @@
 import { createAlphaFoldingDecoration } from "../../contrib/folding/browser/foldingDecorations.js";
 
-export interface AlphaRenderedLine {
+export interface RenderedLine {
   readonly element: HTMLDivElement;
   readonly numberElement: HTMLSpanElement;
   readonly foldingElement: HTMLButtonElement;
@@ -13,7 +13,7 @@ export interface AlphaRenderedLine {
 }
 
 /** Creates one reusable virtual-line DOM subtree owned by Alpha. */
-export function createAlphaRenderedLine(ownerDocument: Document, lineIndex: number): AlphaRenderedLine {
+export function createAlphaRenderedLine(ownerDocument: Document, lineIndex: number): RenderedLine {
   const element = ownerDocument.createElement("div");
   const numberElement = ownerDocument.createElement("span");
   const foldingElement = createAlphaFoldingDecoration(ownerDocument);

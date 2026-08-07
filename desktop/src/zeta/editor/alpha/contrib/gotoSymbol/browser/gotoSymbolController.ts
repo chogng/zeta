@@ -4,10 +4,10 @@ import { DisposableOwner, ResettableDisposableGroup } from "../../../../../base/
 import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { type GotoSymbolService, type LanguageSymbolMatch } from "../common/gotoSymbol.js";
-import { type AlphaEditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 
 /** Owns editor-local document-symbol quick navigation (Ctrl/Cmd+Shift+O). */
-export class AlphaGotoSymbolController extends DisposableOwner {
+export class GotoSymbolController extends DisposableOwner {
   private readonly element: HTMLDivElement;
   private readonly queryInput: HTMLInputElement;
   private readonly list: HTMLDivElement;
@@ -15,7 +15,7 @@ export class AlphaGotoSymbolController extends DisposableOwner {
   private request: AbortController | undefined;
   private matches: readonly LanguageSymbolMatch[] = [];
 
-  constructor(private readonly input: HTMLTextAreaElement, private readonly viewport: AlphaEditorViewport, private readonly selections: EditorSelectionController, private readonly service: GotoSymbolService, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Alpha goto symbol failed", error)) {
+  constructor(private readonly input: HTMLTextAreaElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: GotoSymbolService, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Alpha goto symbol failed", error)) {
     super();
     const ownerDocument = viewport.element.ownerDocument;
     this.element = ownerDocument.createElement("div");

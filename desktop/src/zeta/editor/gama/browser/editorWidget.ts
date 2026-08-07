@@ -1,4 +1,4 @@
-import "./media/gamaEditorSession.css";
+import "./media/editorWidget.css";
 import { throwIfCancelled } from "../../../base/common/cancellation.js";
 import { DisposableOwner, DisposableSlot, type IDisposable } from "../../../base/common/lifecycle.js";
 import { assertDefined } from "../../../base/common/types.js";
@@ -14,19 +14,20 @@ import type { DocumentDecoration } from "../common/model/documentDecoration.js";
 import { buildDocumentOutline, type DocumentOutline, type DocumentOutlineOptions } from "../common/model/documentOutline.js";
 import { documentPointToPosition } from "../common/core/documentPosition.js";
 import { documentSelectionToText } from "../common/model/documentText.js";
-import { createDeleteAdjacentInlineNodeCommand, createDeleteInlineSelectionCommand, createDeleteNodeSelectionCommand, createDeleteTableColumnCommand, createDeleteTableRowCommand, createExitEmptyListItemCommand, createInsertFragmentCommand, createInsertHardBreakCommand, createInsertHorizontalRuleCommand, createInsertImageAtSelectionCommand, createInsertImageCommand, createInsertParagraphAfterCommand, createInsertTableColumnCommand, createInsertTableCommand, createInsertTableRowCommand, createJoinAdjacentBlockCommand, createJoinAdjacentListItemCommand, createJoinAdjacentTextRunCommand, createListItemIndentationCommand, createMoveBlockCommand, createRemoveMarkCommand, createPasteTextCommand, createReplaceTextCommand, createSetBlockTypeCommand, createSetLinkMarkCommand, createSplitBlockCommand, createSplitListItemCommand, createToggleBlockquoteCommand, createToggleListCommand, createToggleMarkCommand, findAdjacentTableCell, findTableCellContext, type DocumentCommand } from "../common/commands/documentCommands.js";
+import { createDeleteAdjacentInlineNodeCommand, createDeleteInlineSelectionCommand, createDeleteNodeSelectionCommand, createDeleteTableColumnCommand, createDeleteTableRowCommand, createExitEmptyListItemCommand, createInsertFragmentCommand, createInsertHardBreakCommand, createInsertHorizontalRuleCommand, createInsertImageAtSelectionCommand, createInsertImageCommand, createInsertParagraphAfterCommand, createInsertTableColumnCommand, createInsertTableCommand, createInsertTableRowCommand, createJoinAdjacentBlockCommand, createJoinAdjacentListItemCommand, createJoinAdjacentTextRunCommand, createListItemIndentationCommand, createMoveBlockCommand, createRemoveMarkCommand, createPasteTextCommand, createReplaceTextCommand, createSetBlockTypeCommand, createSetLinkMarkCommand, createSetTextStyleCommand, createSplitBlockCommand, createSplitListItemCommand, createToggleBlockquoteCommand, createToggleListCommand, createToggleMarkCommand, findAdjacentTableCell, findTableCellContext, type DocumentCommand } from "../common/commands/documentCommands.js";
 import { extractDocumentFragment } from "../common/model/documentFragment.js";
-import { createDefaultDocumentSchema, type DocumentSchema } from "../common/model/documentSchema.js";
+import { createDefaultDocumentSchema, type DocumentSchema, type DocumentTextStyleAttributes } from "../common/model/documentSchema.js";
 import { DOCUMENT_FRAGMENT_CLIPBOARD_MIME, deserializeDocumentFragment, serializeDocumentFragment } from "../common/model/documentSerialization.js";
 import { allSelection, nodeSelection, textSelection, type DocumentSelection, type TextSelection } from "../common/core/documentSelection.js";
 import { DocumentTransaction } from "../common/model/documentTransaction.js";
 import { DocumentOutlineNavigator } from "./widget/documentOutlineNavigator.js";
+import { FormattingContribution, type FormattingDocumentAction } from "../contrib/formatting/browser/formattingContribution.js";
 import { TextEditorWidget } from "./widget/textEditorWidget.js";
 import type { IWorkingCopy } from "../../../workbench/services/workingCopy/common/workingCopyService.js";
 import type { IDocumentModelService } from "../common/services/documentModelService.js";
 import type { DocumentModelReference } from "../common/services/documentModelService.js";
 
-export interface GamaEditorSessionOptions {
+export interface EditorWidgetOptions {
   readonly onSave?: () => Promise<void | boolean>;
   readonly embeddedTextEditorFactory?: IEmbeddedTextEditorFactory;
   readonly plugins?: readonly DocumentPlugin<unknown>[];
@@ -38,13 +39,13 @@ export interface GamaEditorSessionOptions {
   /** Adds the browser-owned outline navigator to the pane layout. */
   readonly outlineNavigator?: boolean;
   /** Supplies browser projections for profile-owned inline atomic nodes. */
-  readonly inlineNodeViews?: Readonly<Record<string, GamaInlineNodeViewFactory>>;
+  readonly inlineNodeViews?: Readonly<Record<string, InlineNodeViewFactory>>;
   /** Adds profile-owned commands to the shared block toolbar. */
-  readonly toolbarActions?: readonly GamaEditorToolbarAction[];
-  readonly nodeViews?: Readonly<Record<string, GamaNodeViewFactory>>;
+  readonly toolbarActions?: readonly EditorToolbarAction[];
+  readonly nodeViews?: Readonly<Record<string, NodeViewFactory>>;
 }
 
-export interface GamaNodeViewContext {
+export interface NodeViewContext {
   readonly node: DocumentNode;
   readonly model: DocumentModel;
   readonly ownerDocument: Document;
@@ -52,53 +53,71 @@ export interface GamaNodeViewContext {
   readonly renderChildren: (parent: HTMLElement) => void;
 }
 
-export interface GamaNodeView {
+export interface NodeView {
   readonly element: HTMLElement;
-  readonly update?: (context: GamaNodeViewContext) => boolean;
+  readonly update?: (context: NodeViewContext) => boolean;
   readonly dispose?: () => void;
 }
 
-export type GamaNodeViewFactory = (context: GamaNodeViewContext) => HTMLElement | GamaNodeView;
+export type NodeViewFactory = (context: NodeViewContext) => HTMLElement | NodeView;
 
-export interface GamaInlineNodeViewContext {
+export interface InlineNodeViewContext {
   readonly node: DocumentNode;
   readonly model: DocumentModel;
   readonly ownerDocument: Document;
   readonly select: () => void;
 }
 
-export type GamaInlineNodeViewFactory = (context: GamaInlineNodeViewContext) => HTMLElement;
+export type InlineNodeViewFactory = (context: InlineNodeViewContext) => HTMLElement;
 
-export interface GamaEditorToolbarActionContext {
+export interface EditorToolbarActionContext {
   readonly model: DocumentModel;
   readonly blockId: DocumentNodeId;
   readonly selection: TextSelection | undefined;
   readonly ownerDocument: Document;
 }
 
-export interface GamaEditorToolbarAction {
+export interface EditorToolbarAction {
   readonly id: string;
   readonly label: string;
-  readonly run: (context: GamaEditorToolbarActionContext) => DocumentCommand | undefined;
+  readonly run: (context: EditorToolbarActionContext) => DocumentCommand | undefined;
 }
 
+const DEFAULT_DOCUMENT_ACTIONS: readonly FormattingDocumentAction[] = [
+  { id: "paragraph", label: "Paragraph" },
+  { id: "heading", label: "Heading" },
+  { id: "blockquote", label: "Blockquote" },
+  { id: "bulletList", label: "Bullet list" },
+  { id: "orderedList", label: "Ordered list" },
+  { id: "horizontalRule", label: "Rule" },
+  { id: "link", label: "Link" },
+  { id: "unlink", label: "Unlink" },
+  { id: "table", label: "Table" },
+  { id: "insertTableRow", label: "Add row" },
+  { id: "insertTableColumn", label: "Add column" },
+  { id: "deleteTableRow", label: "Delete row" },
+  { id: "deleteTableColumn", label: "Delete column" },
+];
+
+type CommandFocusBehavior = "focus-editor" | "preserve-focus";
+
 /**
- * One browser session for a Gama structured document.
+ * One browser editor for a Gama structured document.
  *
- * The session owns the structured model, working copy, DOM projection, and
- * block-level input. `GamaEditorPane` owns Workbench pane lifecycle, while
+ * The editor owns the structured model, working copy, DOM projection, and
+ * block-level input. `EditorPane` owns Workbench pane lifecycle, while
  * `TextEditorWidget` owns only an embedded Alpha-backed `textBlock` surface.
  */
-export class GamaEditorSession extends DisposableOwner {
+export class EditorWidget extends DisposableOwner {
 
   private readonly modelReferenceSlot = this.own(new DisposableSlot<DocumentModelReference>());
   private readonly modelChangeListenerSlot = this.own(new DisposableSlot<IDisposable>());
   private readonly schema: DocumentSchema;
   private readonly embeddedEditors = new Map<string, TextEditorWidget>();
-  private readonly nodeViewSlots = new Map<string, { readonly type: string; readonly view: GamaNodeView }>();
+  private readonly nodeViewSlots = new Map<string, { readonly type: string; readonly view: NodeView }>();
   private container: HTMLDivElement | undefined;
   private layoutContainer: HTMLDivElement | undefined;
-  private toolbar: HTMLDivElement | undefined;
+  private formattingContribution: FormattingContribution | undefined;
   private outlineNavigator: DocumentOutlineNavigator | undefined;
   private input: EditorInput | undefined;
   private activeBlockId: string | undefined;
@@ -110,11 +129,11 @@ export class GamaEditorSession extends DisposableOwner {
     return this.modelReferenceSlot.value;
   }
 
-  constructor(private readonly modelService: IDocumentModelService, private readonly options: GamaEditorSessionOptions = {}) {
+  constructor(private readonly modelService: IDocumentModelService, private readonly options: EditorWidgetOptions = {}) {
     super();
     if (!modelService || typeof modelService.acquire !== "function") {
       this.dispose();
-      throw new TypeError("Gama editor session requires a document model service");
+      throw new TypeError("Gama editor requires a document model service");
     }
     this.schema = options.schema ?? createDefaultDocumentSchema();
     this.defer(() => this.disposeEmbeddedEditors());
@@ -122,23 +141,15 @@ export class GamaEditorSession extends DisposableOwner {
   }
 
   create(parent: HTMLElement): void {
-    if (this.container) throw new ReferenceError("Gama editor session has already been created");
-    const toolbar = parent.ownerDocument.createElement("div");
-    toolbar.className = "zeta-document-block-toolbar";
-    toolbar.hidden = true;
-    toolbar.setAttribute("role", "toolbar");
-    toolbar.setAttribute("aria-label", "Block formatting");
-    const toolbarActions = [{ type: "paragraph", label: "Paragraph" }, { type: "heading", label: "Heading" }, { type: "blockquote", label: "Blockquote" }, { type: "bulletList", label: "Bullet list" }, { type: "orderedList", label: "Ordered list" }, { type: "horizontalRule", label: "Rule" }, { type: "link", label: "Link" }, { type: "unlink", label: "Unlink" }, { type: "table", label: "Table" }, { type: "insertTableRow", label: "Add row" }, { type: "insertTableColumn", label: "Add column" }, { type: "deleteTableRow", label: "Delete row" }, { type: "deleteTableColumn", label: "Delete column" }, ...(this.options.toolbarActions?.map(action => ({ type: action.id, label: action.label })) ?? [])];
-    for (const action of toolbarActions) {
-      const button = parent.ownerDocument.createElement("button");
-      button.type = "button";
-      button.className = "zeta-document-block-toolbar-button";
-      button.dataset.blockType = action.type;
-      button.textContent = action.label;
-      button.addEventListener("mousedown", event => event.preventDefault());
-      button.addEventListener("click", () => this.handleToolbarAction(action.type));
-      toolbar.append(button);
-    }
+    if (this.container) throw new ReferenceError("Gama editor has already been created");
+    const formattingContribution = this.own(new FormattingContribution({
+      ownerDocument: parent.ownerDocument,
+      documentActions: [...DEFAULT_DOCUMENT_ACTIONS, ...(this.options.toolbarActions?.map(action => ({ id: action.id, label: action.label })) ?? [])],
+      onToggleMark: markType => this.handleTextMarkAction(markType),
+      onSetTextStyle: attrs => this.handleTextStyleAction(attrs),
+      onClearTextStyle: () => this.handleClearTextStyleAction(),
+      onRunDocumentAction: actionId => this.handleToolbarAction(actionId),
+    }));
     const container = parent.ownerDocument.createElement("div");
     container.className = "zeta-text-editor-widget-pane";
     const layoutContainer = parent.ownerDocument.createElement("div");
@@ -146,8 +157,8 @@ export class GamaEditorSession extends DisposableOwner {
     const outlineNavigator = this.options.outlineNavigator ? new DocumentOutlineNavigator({ ownerDocument: parent.ownerDocument, onSelect: nodeId => this.revealOutlineNode(nodeId) }) : undefined;
     if (outlineNavigator) layoutContainer.append(outlineNavigator.element);
     layoutContainer.append(container);
-    parent.append(toolbar, layoutContainer);
-    this.toolbar = toolbar;
+    parent.append(formattingContribution.element, layoutContainer);
+    this.formattingContribution = formattingContribution;
     this.container = container;
     this.layoutContainer = layoutContainer;
     this.outlineNavigator = outlineNavigator;
@@ -156,8 +167,8 @@ export class GamaEditorSession extends DisposableOwner {
     this.defer(() => {
       parent.ownerDocument.removeEventListener("selectionchange", onSelectionChange);
       outlineNavigator?.dispose();
-      toolbar.remove();
-      this.toolbar = undefined;
+      formattingContribution.element.remove();
+      this.formattingContribution = undefined;
       this.layoutContainer = undefined;
       container.remove();
       this.outlineNavigator = undefined;
@@ -190,7 +201,7 @@ export class GamaEditorSession extends DisposableOwner {
     this.activeBlockId = undefined;
     this.disposeEmbeddedEditors();
     container.replaceChildren();
-    if (this.toolbar) this.toolbar.hidden = false;
+    if (this.formattingContribution) this.formattingContribution.element.hidden = false;
     this.render();
   }
 
@@ -203,7 +214,7 @@ export class GamaEditorSession extends DisposableOwner {
     this.input = undefined;
     this.activeBlockId = undefined;
     this.outlineNavigator?.setOutline([]);
-    if (this.toolbar) this.toolbar.hidden = true;
+    if (this.formattingContribution) this.formattingContribution.element.hidden = true;
     this.container?.replaceChildren();
   }
 
@@ -255,6 +266,11 @@ export class GamaEditorSession extends DisposableOwner {
 
   getDocument(): DocumentNode {
     return this.requireModel().document;
+  }
+
+  /** Returns the current structured-document selection, if the editor has input. */
+  getDocumentSelection(): DocumentSelection | undefined {
+    return this.modelReferenceSlot.value?.model.selection;
   }
 
   getOutline(): DocumentOutline {
@@ -567,6 +583,7 @@ export class GamaEditorSession extends DisposableOwner {
     for (const child of node.content) {
       if (child.text !== undefined) {
         const linkMark = child.marks.find(mark => mark.type === "link");
+        const textStyleMark = child.marks.find(mark => mark.type === "textStyle");
         const start = documentPointToPosition(model.document, model.schema, { nodeId: child.id, offset: 0 });
         const end = documentPointToPosition(model.document, model.schema, { nodeId: child.id, offset: child.text.length });
         const localDecorations = decorations.filter(decoration => decoration.to > start && decoration.from < end);
@@ -585,6 +602,7 @@ export class GamaEditorSession extends DisposableOwner {
           run.className = "zeta-document-inline-run";
           run.dataset.textNodeId = child.id;
           for (const mark of child.marks) run.classList.add(`zeta-document-mark-${mark.type}`);
+          applyTextStyleMark(run, textStyleMark);
           if (linkMark) {
             run.setAttribute("href", typeof linkMark.attrs.href === "string" ? linkMark.attrs.href : "");
             run.addEventListener("click", event => event.preventDefault());
@@ -907,6 +925,7 @@ export class GamaEditorSession extends DisposableOwner {
   private syncRichTextSelection(editor: HTMLDivElement, model: DocumentModel, force = false): void {
     if (this.modelReferenceSlot.value?.model !== model) return;
     const inlineSelection = readDocumentTextSelection(this.requireContainer(), true);
+    if (inlineSelection && !isTextSelectionInDocument(model.document, inlineSelection.selection)) return;
     this.activeBlockId = inlineSelection?.blockId ?? editor.dataset.blockId;
     if (inlineSelection && !(model.selection?.kind === "all" && isCollapsedTextSelection(inlineSelection.selection) && !force)) model.setSelection(inlineSelection.selection);
     this.updateToolbar();
@@ -919,6 +938,7 @@ export class GamaEditorSession extends DisposableOwner {
     if (!model || !container) return;
     const inlineSelection = readDocumentTextSelection(container, true);
     if (!inlineSelection) return;
+    if (!isTextSelectionInDocument(model.document, inlineSelection.selection)) return;
     this.activeBlockId = inlineSelection.blockId;
     if (!(model.selection?.kind === "all" && isCollapsedTextSelection(inlineSelection.selection))) model.setSelection(inlineSelection.selection);
     this.updateToolbar();
@@ -1144,10 +1164,15 @@ export class GamaEditorSession extends DisposableOwner {
     this.updateToolbar();
   }
 
-  private dispatchCommand(model: DocumentModel, command: DocumentCommand, historyGroup?: string): void {
+  private dispatchCommand(model: DocumentModel, command: DocumentCommand, historyGroup?: string, focusBehavior: CommandFocusBehavior = "focus-editor"): void {
     if (this.isReadOnly() || this.modelReferenceSlot.value?.model !== model) return;
     this.activeBlockId = command.focus.blockId;
     model.dispatch(historyGroup ? command.transaction.withHistoryGroup(historyGroup) : command.transaction);
+    if (focusBehavior === "preserve-focus") {
+      this.updateToolbar();
+      this.updateInlineNodeSelection();
+      return;
+    }
     const editor = findBlockEditor(this.requireContainer(), command.focus.blockId);
     if (!editor) return;
     editor.focus();
@@ -1165,7 +1190,7 @@ export class GamaEditorSession extends DisposableOwner {
     if (this.isReadOnly()) return;
     const model = this.modelReferenceSlot.value?.model;
     if (!model) return;
-    const blockId = this.activeBlockId ?? findTextBlockId(model.document, model.selection?.kind === "text" ? model.selection.anchor.nodeId : undefined);
+    const blockId = this.activeBlockId ?? findTextBlockId(model.document, model.selection?.kind === "text" ? model.selection.anchor.nodeId : undefined) ?? findFirstEditableBlock(model.document)?.id;
     if (!blockId) return;
     const selection = this.readActiveTextSelection(model, blockId);
     const selectionBlockId = selection ? findTextBlockId(model.document, selection.anchor.nodeId) : undefined;
@@ -1226,39 +1251,98 @@ export class GamaEditorSession extends DisposableOwner {
     this.dispatchCommand(model, command);
   }
 
+  private handleTextMarkAction(markType: "strong" | "em"): void {
+    if (this.isReadOnly()) return;
+    const model = this.modelReferenceSlot.value?.model;
+    if (!model) return;
+    const blockId = this.activeBlockId ?? findTextBlockId(model.document, model.selection?.kind === "text" ? model.selection.anchor.nodeId : undefined);
+    if (!blockId) return;
+    const block = findNode(model.document, blockId);
+    if (!isTypographyBlock(block)) return;
+    const selection = this.readActiveTextSelection(model, blockId);
+    if (!selection) return;
+    const command = createToggleMarkCommand(this.schema, model.document, blockId, selection.anchor.nodeId, selection, markType, {}, model.storedMarks);
+    if (command) this.dispatchCommand(model, command, undefined, "preserve-focus");
+  }
+
+  private handleTextStyleAction(attrs: DocumentTextStyleAttributes): void {
+    if (this.isReadOnly()) return;
+    const model = this.modelReferenceSlot.value?.model;
+    if (!model) return;
+    const blockId = this.activeBlockId ?? findTextBlockId(model.document, model.selection?.kind === "text" ? model.selection.anchor.nodeId : undefined);
+    if (!blockId) return;
+    const block = findNode(model.document, blockId);
+    if (!isTypographyBlock(block)) return;
+    const selection = this.readActiveTextSelection(model, blockId);
+    if (!selection) return;
+    const command = createSetTextStyleCommand(this.schema, model.document, blockId, selection.anchor.nodeId, selection, attrs, model.storedMarks);
+    if (command) this.dispatchCommand(model, command, undefined, "preserve-focus");
+  }
+
+  private handleClearTextStyleAction(): void {
+    if (this.isReadOnly()) return;
+    const model = this.modelReferenceSlot.value?.model;
+    if (!model) return;
+    const blockId = this.activeBlockId ?? findTextBlockId(model.document, model.selection?.kind === "text" ? model.selection.anchor.nodeId : undefined);
+    if (!blockId) return;
+    const block = findNode(model.document, blockId);
+    if (!isTypographyBlock(block)) return;
+    const selection = this.readActiveTextSelection(model, blockId);
+    if (!selection) return;
+    const command = createRemoveMarkCommand(this.schema, model.document, blockId, selection.anchor.nodeId, selection, "textStyle", model.storedMarks);
+    if (command) this.dispatchCommand(model, command, undefined, "preserve-focus");
+  }
+
   private readActiveTextSelection(model: DocumentModel, blockId: string): TextSelection | undefined {
+    const modelSelection = model.selection;
+    if (modelSelection?.kind === "text" && findTextBlockId(model.document, modelSelection.anchor.nodeId) === blockId && isTextSelectionInDocument(model.document, modelSelection)) {
+      return modelSelection;
+    }
     const editor = findBlockEditor(this.requireContainer(), blockId);
-    if (editor?.tagName === "TEXTAREA") return createTextareaTextSelection(model.document, blockId, editor as HTMLTextAreaElement);
+    if (editor?.tagName === "TEXTAREA") {
+      const selection = createTextareaTextSelection(model.document, blockId, editor as HTMLTextAreaElement);
+      return selection;
+    }
     if (editor?.classList.contains("zeta-document-rich-text-input")) {
       const inlineSelection = readDocumentTextSelection(this.requireContainer(), true);
-      if (inlineSelection?.blockId === blockId) return inlineSelection.selection;
+      if (inlineSelection?.blockId === blockId && isTextSelectionInDocument(model.document, inlineSelection.selection)) {
+        return inlineSelection.selection;
+      }
     }
-    const selection = model.selection;
-    return selection?.kind === "text" && findTextBlockId(model.document, selection.anchor.nodeId) === blockId ? selection : undefined;
+    return undefined;
   }
 
   private updateToolbar(): void {
-    const toolbar = this.toolbar;
+    const toolbar = this.formattingContribution;
     const model = this.modelReferenceSlot.value?.model;
     if (!toolbar || !model) return;
-    const blockId = this.activeBlockId ?? findTextBlockId(model.document, model.selection?.kind === "text" ? model.selection.anchor.nodeId : undefined);
+    const blockId = this.activeBlockId ?? findTextBlockId(model.document, model.selection?.kind === "text" ? model.selection.anchor.nodeId : undefined) ?? findFirstEditableBlock(model.document)?.id;
+    if (blockId && !this.activeBlockId) this.activeBlockId = blockId;
     const block = blockId ? findNode(model.document, blockId) : undefined;
     const list = block ? findListForBlock(model.document, block.id) : undefined;
     const selection = model.selection?.kind === "text" ? model.selection : undefined;
     const selectionBlock = selection ? findNode(model.document, findTextBlockId(model.document, selection.anchor.nodeId) ?? "") : undefined;
     const readOnly = this.isReadOnly();
-    for (const button of toolbar.querySelectorAll<HTMLButtonElement>("button[data-block-type]")) {
-      const type = button.dataset.blockType;
+    const checkedDocumentActionIds = new Set<string>();
+    for (const { id: type } of DEFAULT_DOCUMENT_ACTIONS) {
       let checked = false;
       if (type === "paragraph" || type === "heading") checked = block?.type === type;
       else if (type === "blockquote") checked = block !== undefined && findBlockquoteForBlock(model.document, block.id) !== undefined;
       else if (type === "link") checked = selection !== undefined && (selectionBlock?.type === "paragraph" || selectionBlock?.type === "heading") && isTextSelectionMarked(selectionBlock, selection, "link", model.storedMarks);
       else checked = list?.type === type;
-      button.classList.toggle("checked", checked === true);
-      button.setAttribute("aria-pressed", String(checked === true));
-      button.disabled = readOnly;
-      button.setAttribute("aria-disabled", String(readOnly));
+      if (checked) checkedDocumentActionIds.add(type);
     }
+    const textContext = isTypographyBlock(block);
+    const activeSelection = textContext ? this.readActiveTextSelection(model, block!.id) ?? selection : undefined;
+    toolbar.setState({
+      context: block?.type === "textBlock" ? "code" : textContext ? "text" : "none",
+      readOnly,
+      bold: textContext && activeSelection ? isTextSelectionMarked(block!, activeSelection, "strong", model.storedMarks) : false,
+      italic: textContext && activeSelection ? isTextSelectionMarked(block!, activeSelection, "em", model.storedMarks) : false,
+      fontFamily: textContext && activeSelection ? selectedTextStyleFontFamily(block!, activeSelection, model.storedMarks) : undefined,
+      fontSize: textContext && activeSelection ? selectedTextStyleFontSize(block!, activeSelection, model.storedMarks) : undefined,
+      checkedDocumentActionIds,
+    });
   }
 
   private renderChildren(element: HTMLElement, node: DocumentNode, model: DocumentModel, previousElements: Map<string, HTMLElement>, activeNodeIds: Set<string>, decorations: readonly ViewDecoration[]): void {
@@ -1275,13 +1359,13 @@ export class GamaEditorSession extends DisposableOwner {
 
   private requireContainer(): HTMLDivElement {
     const container = this.container;
-    assertDefined(container, new ReferenceError("Gama editor session has not been created"));
+    assertDefined(container, new ReferenceError("Gama editor has not been created"));
     return container;
   }
 
   private requireModel(): DocumentModel {
     const model = this.modelReferenceSlot.value?.model;
-    assertDefined(model, new ReferenceError("Gama editor session has no active model"));
+    assertDefined(model, new ReferenceError("Gama editor has no active model"));
     return model;
   }
 
@@ -1293,7 +1377,7 @@ export class GamaEditorSession extends DisposableOwner {
 
   private requireInput(): EditorInput {
     const input = this.input;
-    assertDefined(input, new ReferenceError("Gama editor session has no active input"));
+    assertDefined(input, new ReferenceError("Gama editor has no active input"));
     return input;
   }
 
@@ -1325,6 +1409,35 @@ function editableBlockAriaLabel(node: DocumentNode): string {
   }
 }
 
+function applyTextStyleMark(element: HTMLElement, mark: DocumentMark | undefined): void {
+  if (!mark) return;
+  const fontFamily = mark.attrs.fontFamily;
+  if (isTextStyleFontFamily(fontFamily)) element.dataset.fontFamily = fontFamily;
+  const fontSize = mark.attrs.fontSize;
+  if (isTextStyleFontSize(fontSize)) element.style.fontSize = `${fontSize}px`;
+}
+
+function isTypographyBlock(node: DocumentNode | undefined): node is DocumentNode {
+  return node?.type === "paragraph" || node?.type === "heading";
+}
+
+function isTextSelectionInDocument(document: DocumentNode, selection: TextSelection): boolean {
+  const anchor = findNode(document, selection.anchor.nodeId);
+  const head = findNode(document, selection.head.nodeId);
+  return anchor?.text !== undefined
+    && head?.text !== undefined
+    && selection.anchor.offset <= anchor.text.length
+    && selection.head.offset <= head.text.length;
+}
+
+function isTextStyleFontFamily(value: unknown): value is "sans" | "serif" | "monospace" {
+  return value === "sans" || value === "serif" || value === "monospace";
+}
+
+function isTextStyleFontSize(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 8 && value <= 72;
+}
+
 function findNode(document: DocumentNode, id: string): DocumentNode | undefined {
   if (document.id === id) return document;
   for (const child of document.content) {
@@ -1334,14 +1447,14 @@ function findNode(document: DocumentNode, id: string): DocumentNode | undefined 
   return undefined;
 }
 
-function normalizeGamaNodeView(value: HTMLElement | GamaNodeView, nodeType: string): GamaNodeView {
+function normalizeGamaNodeView(value: HTMLElement | NodeView, nodeType: string): NodeView {
   if (!value || typeof value !== "object") throw new TypeError(`Gama node view '${nodeType}' must return an HTMLElement or node view handle`);
   if ("nodeType" in value) {
     if (value.nodeType !== 1) throw new TypeError(`Gama node view '${nodeType}' must return an HTMLElement`);
     return { element: value as HTMLElement };
   }
   if (!("element" in value) || !value.element || value.element.nodeType !== 1) throw new TypeError(`Gama node view '${nodeType}' must return an HTMLElement or node view handle`);
-  const handle = value as GamaNodeView;
+  const handle = value as NodeView;
   if (handle.update !== undefined && typeof handle.update !== "function") throw new TypeError(`Gama node view '${nodeType}' update must be a function`);
   if (handle.dispose !== undefined && typeof handle.dispose !== "function") throw new TypeError(`Gama node view '${nodeType}' dispose must be a function`);
   return handle;
@@ -1590,6 +1703,50 @@ function isTextSelectionMarked(block: DocumentNode, selection: TextSelection, ma
     if (!node.marks.some(mark => mark.type === markType)) return false;
   }
   return selectedText;
+}
+
+function selectedTextStyleFontFamily(block: DocumentNode, selection: TextSelection, storedMarks?: readonly DocumentMark[]): "sans" | "serif" | "monospace" | undefined {
+  return selectedTextStyleAttribute(block, selection, "fontFamily", isTextStyleFontFamily, storedMarks);
+}
+
+function selectedTextStyleFontSize(block: DocumentNode, selection: TextSelection, storedMarks?: readonly DocumentMark[]): number | undefined {
+  return selectedTextStyleAttribute(block, selection, "fontSize", isTextStyleFontSize, storedMarks);
+}
+
+function selectedTextStyleAttribute<T extends string | number>(block: DocumentNode, selection: TextSelection, attribute: "fontFamily" | "fontSize", isValid: (value: unknown) => value is T, storedMarks?: readonly DocumentMark[]): T | undefined {
+  const anchorIndex = block.content.findIndex(child => child.id === selection.anchor.nodeId && child.text !== undefined);
+  const headIndex = block.content.findIndex(child => child.id === selection.head.nodeId && child.text !== undefined);
+  if (anchorIndex < 0 || headIndex < 0) return undefined;
+  const anchorNode = block.content[anchorIndex]!;
+  const headNode = block.content[headIndex]!;
+  if (selection.anchor.offset > anchorNode.text!.length || selection.head.offset > headNode.text!.length) return undefined;
+  if (anchorIndex === headIndex && selection.anchor.offset === selection.head.offset) {
+    return readTextStyleAttribute(storedMarks ?? anchorNode.marks, attribute, isValid);
+  }
+  const forward = anchorIndex < headIndex || (anchorIndex === headIndex && selection.anchor.offset <= selection.head.offset);
+  const startIndex = forward ? anchorIndex : headIndex;
+  const endIndex = forward ? headIndex : anchorIndex;
+  const startOffset = forward ? selection.anchor.offset : selection.head.offset;
+  const endOffset = forward ? selection.head.offset : selection.anchor.offset;
+  let value: T | undefined;
+  let hasValue = false;
+  for (let index = startIndex; index <= endIndex; index += 1) {
+    const node = block.content[index]!;
+    if (node.text === undefined) return undefined;
+    const from = index === startIndex ? startOffset : 0;
+    const to = index === endIndex ? endOffset : node.text.length;
+    if (to <= from) continue;
+    const nextValue = readTextStyleAttribute(node.marks, attribute, isValid);
+    if (nextValue === undefined || (hasValue && nextValue !== value)) return undefined;
+    value = nextValue;
+    hasValue = true;
+  }
+  return hasValue ? value : undefined;
+}
+
+function readTextStyleAttribute<T extends string | number>(marks: readonly DocumentMark[], attribute: "fontFamily" | "fontSize", isValid: (value: unknown) => value is T): T | undefined {
+  const value = marks.find(mark => mark.type === "textStyle")?.attrs[attribute];
+  return isValid(value) ? value : undefined;
 }
 
 interface DomTextSelection {
