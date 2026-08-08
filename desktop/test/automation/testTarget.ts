@@ -23,6 +23,7 @@ export function playwrightTargetForProject(projectName: string, baseURL: string 
       return { kind: "electron", appServerMode: "disabled", product: "code" };
     case "electron-app-server":
     case "electron-editor-code-app-server":
+    case "electron-pdf-corpus-code-app-server":
       return { kind: "electron", appServerMode: "required", product: "code" };
     case "electron-editor-academic-app-server":
       return { kind: "electron", appServerMode: "required", product: "academic" };

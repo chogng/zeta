@@ -68,6 +68,8 @@
     "test:smoke:desktop:debug": "pnpm run pretest:smoke:desktop && playwright test --project=electron-app-server --debug",
     "pretest:app:code": "pnpm run build:code && node scripts/prepare-dev-package.mjs && tsc -p test/automation/tsconfig.json",
     "test:app:code": "playwright test --project=electron-editor-code-app-server",
+    "pretest:app:pdf-corpus": "pnpm run build:code && node scripts/prepare-dev-package.mjs && tsc -p test/automation/tsconfig.json",
+    "test:app:pdf-corpus": "playwright test --project=electron-pdf-corpus-code-app-server",
     "pretest:app:academic": "pnpm run build:academic && node scripts/prepare-dev-package.mjs && tsc -p test/automation/tsconfig.json",
     "test:app:academic": "playwright test --project=electron-editor-academic-app-server",
     "pretest:app:complete": "pnpm run build:complete && node scripts/prepare-dev-package.mjs && tsc -p test/automation/tsconfig.json",

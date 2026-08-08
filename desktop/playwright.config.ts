@@ -17,6 +17,7 @@ export default defineConfig({
     { name: "electron-ui" },
     { name: "electron-app-server" },
     { name: "electron-editor-code-app-server", testMatch: "**/areas/editor/editor-open.spec.ts" },
+    { name: "electron-pdf-corpus-code-app-server", testMatch: "**/areas/pdf/pdf-academic-corpus.spec.ts" },
     { name: "electron-editor-academic-app-server", testMatch: "**/areas/editor/gama-open.spec.ts" },
     { name: "electron-editor-complete-app-server", testMatch: "**/areas/editor/complete-routing.spec.ts" },
   ],
