@@ -49,6 +49,11 @@ export class ChatInputWidget extends DisposableOwner {
     }));
     this.form.append(inputContainer, this.toolbar.element);
     this.element.append(this.status, this.interaction, this.form);
+    this.own(addDisposableListener(this.form, "focusin", () => this.form.classList.add("focused")));
+    this.own(addDisposableListener(this.form, "focusout", event => {
+      if (this.form.contains(event.relatedTarget as Node | null)) return;
+      this.form.classList.remove("focused");
+    }));
     this.own(addDisposableListener(this.form, "submit", (event) => {
       event.preventDefault();
       const value = this.input.value;

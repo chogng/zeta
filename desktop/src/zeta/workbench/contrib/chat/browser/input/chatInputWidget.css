@@ -63,7 +63,7 @@
   background: var(--zeta-input-background);
 }
 
-.zeta-chat-composer:focus-within {
+.zeta-chat-composer.focused {
   border-color: var(--zeta-focus-border);
 }
 

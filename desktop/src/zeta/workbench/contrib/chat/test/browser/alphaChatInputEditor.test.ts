@@ -34,6 +34,7 @@ test("Alpha Chat input completes slash commands before submitting", async () => 
   await waitFor(() => completionLabels(editor.element).length === 2);
   assert.deepEqual(completionLabels(editor.element), ["/new", "/history"]);
   assert.equal(editor.element.querySelector(".zeta-alpha-editor")?.classList.contains("zeta-alpha-editor-embedded"), true);
+  assert.equal(editor.element.querySelector(".zeta-alpha-editor")?.classList.contains("zeta-alpha-editor-focus-owner-host"), true);
   assert.equal(editor.element.querySelector<HTMLElement>(".zeta-alpha-editor-line-number")?.style.display, "");
 
   input.dispatchEvent(beforeInputEvent(dom.window, "n"));

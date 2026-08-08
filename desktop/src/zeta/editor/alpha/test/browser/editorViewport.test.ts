@@ -292,6 +292,30 @@ test("EditorViewport keeps minimaps out of embedded presentations", () => {
   dom.window.close();
 });
 
+test("EditorViewport lets a direct host own its focus outline", () => {
+  const dom = new JSDOM("<!doctype html><body><main></main></body>");
+  const container = requiredElement(dom.window.document, "main");
+  using model = new TextModel("alpha");
+  using embeddedViewport = new EditorViewport({
+    container,
+    model,
+    lineHeight: 20,
+    textMeasurer: fixedTextMeasurer(),
+    presentation: "embedded",
+    focusOutlineOwner: "host",
+  });
+  assert.equal(embeddedViewport.element.classList.contains("zeta-alpha-editor-focus-owner-host"), true);
+  assert.equal(embeddedViewport.element.classList.contains("zeta-alpha-editor-focus-owner-editor"), false);
+  assert.throws(() => new EditorViewport({
+    container,
+    model,
+    lineHeight: 20,
+    textMeasurer: fixedTextMeasurer(),
+    focusOutlineOwner: "unknown" as never,
+  }), /Unknown Alpha editor focus outline owner/);
+  dom.window.close();
+});
+
 test("EditorViewport rejects an unknown minimap mode", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   const container = requiredElement(dom.window.document, "main");

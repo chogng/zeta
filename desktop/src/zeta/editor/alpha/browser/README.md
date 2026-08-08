@@ -619,8 +619,10 @@ session closed is ignored.
 The component reuses `base/browser/dom` for disposable events and DOM reset,
 `base/browser/geometry` for host measurement, and `base/common/lifecycle` for
 ownership. Its `.zeta-alpha-editor` root and internal line classes are styled
-only by `media/editorViewport.css`; Workbench hosts may size the root but
-must not override internal rows or focus state. The component projects stable
+only by `media/editorViewport.css`; Workbench hosts may size the root and
+explicitly select `focusOutlineOwner: "host"` when their direct control owns
+one surrounding focus indicator, but must not override internal rows or focus
+state. The component projects stable
 `.active` state for the primary active line and `.primary` identity on the
 primary caret; CSS does not use ARIA attributes as visual selectors.
 

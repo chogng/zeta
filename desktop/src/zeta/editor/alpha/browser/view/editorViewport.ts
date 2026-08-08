@@ -40,6 +40,10 @@ const OVERVIEW_RULER_WIDTH = 6;
 const MINIMAP_WIDTH = 56;
 
 export type EditorViewportPresentation = "document" | "embedded";
+
+/** Chooses which component renders the visible focus outline for an Alpha viewport. */
+export type EditorFocusOutlineOwner = "editor" | "host";
+
 export enum EditorMinimap {
   On = "on",
   Off = "off",
@@ -66,6 +70,8 @@ export interface EditorViewportOptions {
   readonly foldingModel?: EditorFoldingModel;
   readonly hiddenRangeModel?: EditorHiddenRangeModel;
   readonly presentation?: EditorViewportPresentation;
+  /** `host` delegates the visible focus outline to the viewport's direct host. */
+  readonly focusOutlineOwner?: EditorFocusOutlineOwner;
   readonly lineWrapping?: EditorLineWrapping;
   readonly minimap?: EditorMinimap;
   readonly indentation?: EditorIndentationOptions;
@@ -109,6 +115,7 @@ export class EditorViewport extends DisposableOwner {
   private readonly semanticTokenSource: SemanticTokenSource | undefined;
   private readonly bracketColorizationSource: BracketColorizationSource | undefined;
   private readonly presentation: EditorViewportPresentation;
+  private readonly focusOutlineOwner: EditorFocusOutlineOwner;
   private readonly indentation: ResolvedEditorIndentationOptions;
   private readonly decorationSnapshots =
     new Map<DecorationSource, DecorationSource["decorations"]>();
@@ -147,6 +154,7 @@ export class EditorViewport extends DisposableOwner {
     this.semanticTokenSource = options.semanticTokenSource;
     this.bracketColorizationSource = options.bracketColorizationSource;
     this.presentation = options.presentation ?? "document";
+    this.focusOutlineOwner = options.focusOutlineOwner ?? "editor";
     this.minimap = options.minimap ?? (this.presentation === "document" ? EditorMinimap.On : EditorMinimap.Off);
     this.textDirection = options.textDirection ?? EditorTextDirection.Auto;
     this.softWrapping = options.lineWrapping === EditorLineWrapping.On;
@@ -157,6 +165,9 @@ export class EditorViewport extends DisposableOwner {
       }
       if (!Object.values(EditorTextDirection).includes(this.textDirection)) {
         throw new TypeError("Unknown Alpha editor text direction");
+      }
+      if (this.focusOutlineOwner !== "editor" && this.focusOutlineOwner !== "host") {
+        throw new TypeError("Unknown Alpha editor focus outline owner");
       }
       if (this.selectionController && this.selectionController.textModel !== this.model) {
         throw new TypeError(
@@ -189,6 +200,7 @@ export class EditorViewport extends DisposableOwner {
 
     this.element.className = "zeta-alpha-editor";
     this.element.classList.add(`zeta-alpha-editor-${this.presentation}`);
+    this.element.classList.add(`zeta-alpha-editor-focus-owner-${this.focusOutlineOwner}`);
     this.element.classList.add(`zeta-alpha-editor-direction-${this.textDirection}`);
     this.element.dir = this.textDirection;
     this.element.classList.toggle("word-wrapped", this.softWrapping);

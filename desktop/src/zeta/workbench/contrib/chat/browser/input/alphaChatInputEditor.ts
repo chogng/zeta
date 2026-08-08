@@ -49,6 +49,7 @@ export class ChatInputEditor extends DisposableOwner implements IChatInputEditor
       selectionController: this.selections,
       viewport: {
         presentation: "embedded",
+        focusOutlineOwner: "host",
       },
       textInput: {
         completion: {

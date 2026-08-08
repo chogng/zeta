@@ -23,12 +23,8 @@
   overflow-y: auto;
 }
 
-.zeta-alpha-editor:focus-visible {
-  outline: 1px solid var(--zeta-focus-border);
-  outline-offset: -1px;
-}
-
-.zeta-alpha-editor.input-focused {
+.zeta-alpha-editor-focus-owner-editor:focus-visible,
+.zeta-alpha-editor-focus-owner-editor.input-focused {
   outline: 1px solid var(--zeta-focus-border);
   outline-offset: -1px;
 }
@@ -461,8 +457,8 @@
     background: Canvas;
   }
 
-  .zeta-alpha-editor:focus-visible,
-  .zeta-alpha-editor.input-focused {
+  .zeta-alpha-editor-focus-owner-editor:focus-visible,
+  .zeta-alpha-editor-focus-owner-editor.input-focused {
     outline-color: Highlight;
   }
 

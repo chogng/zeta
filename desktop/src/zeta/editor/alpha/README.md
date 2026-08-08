@@ -611,8 +611,9 @@ that remain inside the render range, updates visible text whenever the model
 version advances, and synchronizes clamped common scroll coordinates back to
 the DOM. Text is assigned through `textContent`; model content is never parsed
 as markup. The component owns its root, internal classes, focus presentation,
-model listener, resize observer, and scroll listener, but never owns the shared
-`TextModel`.
+model listener, resize observer, and scroll listener. A direct host can choose
+`focusOutlineOwner: "host"` when it owns the one surrounding focus indicator;
+the viewport never owns the shared `TextModel`.
 
 `DomTextMeasurer` reads the line layer's computed font, letter spacing,
 tab size, and horizontal padding. Canvas measures shaped text segments and
