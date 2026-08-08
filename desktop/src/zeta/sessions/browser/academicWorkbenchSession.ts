@@ -5,6 +5,7 @@ import { CHAT_AGENT_SIDEBAR_VIEW_CONTAINER_ID, CHAT_VIEW_CONTAINER_ID } from "..
 /** Academic product session: the document surface gets the full right edge. */
 export const academicWorkbenchSession = createWorkbenchSession({
   id: "academic",
+  productId: "academic",
   label: "Academic Workbench",
   layout: {
     version: 3,

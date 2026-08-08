@@ -1,10 +1,19 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import {
-  getProductConfiguration,
-  type ProductId,
-  productIds,
-} from "../common/product.js";
+import { getProductConfiguration, type ProductConfiguration, type ProductId, productIds } from "../common/product.js";
+
+export interface ProductDataPaths {
+  readonly userDataPath: string;
+  readonly sessionDataPath: string;
+}
+
+/** Resolves the persistent Electron roots for one product edition. */
+export function resolveProductDataPaths(appDataPath: string, product: ProductConfiguration): ProductDataPaths {
+  if (appDataPath.trim().length === 0) throw new TypeError("Application data path must not be empty");
+  if (product.userDataFolderName.trim().length === 0) throw new TypeError("Product user data folder name must not be empty");
+  const userDataPath = join(appDataPath, product.userDataFolderName);
+  return { userDataPath, sessionDataPath: join(userDataPath, "session-data") };
+}
 
 /**
  * Resolves the product identity baked into a packaged renderer tree.

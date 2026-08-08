@@ -264,6 +264,11 @@ export class Workbench extends DisposableOwner {
   ) {
     super();
     const normalizedSession = createWorkbenchSession(session);
+    if (normalizedSession.productId !== product.id) {
+      throw new TypeError(
+        `Workbench session '${normalizedSession.id}' belongs to '${normalizedSession.productId}', not '${product.id}'`,
+      );
+    }
     this.session = normalizedSession;
     const services = new ServiceCollection();
     const instantiationService = new InstantiationService(services);
@@ -345,7 +350,7 @@ export class Workbench extends DisposableOwner {
     }
     const storage = this.own(new BrowserStorageService({
       ownerWindow,
-      applicationId: product.id,
+      applicationId: product.storageNamespace,
       workspaceId: workspace.id,
     }));
     this.workbenchWindow = workbenchWindow;

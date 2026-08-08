@@ -5,6 +5,7 @@ import { CHAT_AGENT_SIDEBAR_VIEW_CONTAINER_ID, CHAT_VIEW_CONTAINER_ID } from "..
 /** Complete product session: keeps both Code and Academic surfaces available. */
 export const completeWorkbenchSession = createWorkbenchSession({
   id: "complete",
+  productId: "complete",
   label: "Complete Workbench",
   layout: {
     version: 3,

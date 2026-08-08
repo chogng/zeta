@@ -5,6 +5,7 @@ import { CHAT_AGENT_SIDEBAR_VIEW_CONTAINER_ID, CHAT_VIEW_CONTAINER_ID } from "..
 /** Code product session: Explorer, Chat, and Terminal are the initial surfaces. */
 export const codeWorkbenchSession = createWorkbenchSession({
   id: "code",
+  productId: "code",
   label: "Code Workbench",
   layout: {
     version: 3,

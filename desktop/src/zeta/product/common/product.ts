@@ -18,24 +18,39 @@ export type RendererEntryName = typeof rendererEntryNames[number];
 export interface ProductConfiguration {
   readonly id: ProductId;
   readonly name: string;
+  /** Stable installer/application identity; never derive this from `name`. */
+  readonly applicationId: string;
+  /** Stable directory name below the platform application-data root. */
+  readonly userDataFolderName: string;
+  /** Stable renderer storage namespace for this product edition. */
+  readonly storageNamespace: string;
   readonly rendererEntry: RendererEntryName;
 }
 
 export const ZetaDesktopProduct: ProductConfiguration = {
   id: "code",
   name: "Zeta",
+  applicationId: "com.zeta.desktop.code",
+  userDataFolderName: "Zeta",
+  storageNamespace: "code",
   rendererEntry: "workbench-code",
 };
 
 export const AcademicProduct: ProductConfiguration = {
   id: "academic",
   name: "Zeta Academic",
+  applicationId: "com.zeta.desktop.academic",
+  userDataFolderName: "Zeta Academic",
+  storageNamespace: "academic",
   rendererEntry: "workbench-academic",
 };
 
 export const CompleteProduct: ProductConfiguration = {
   id: "complete",
   name: "Zeta Complete",
+  applicationId: "com.zeta.desktop.complete",
+  userDataFolderName: "Zeta Complete",
+  storageNamespace: "complete",
   rendererEntry: "workbench-complete",
 };
 

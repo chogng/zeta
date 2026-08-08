@@ -68,6 +68,10 @@ Renderer 产品目录，并从该目录与入口名确定产品身份。
 - `sessions/browser/*WorkbenchSession.ts` 为 Code、Academic、Complete 分别提供初始 Workbench
   布局 profile；共享 Workbench 只消费通用 profile 契约，并按产品/工作区恢复用户已保存的尺寸和显隐。
 - Main、Preload 和 App Server 当前由三个 Electron 构建变体共享，尚未按变体裁剪原生能力或 Rust feature。
+- Code、Academic、Complete 使用不同的稳定 `applicationId`、`userDataFolderName` 和 Renderer
+  storage namespace；Electron Main 在启动前显式设置 `userData`、`sessionData`、logs 和 crash
+  roots，并按产品申请单实例锁。因此 Code 与 Academic 可以同时安装、同时运行，App Server
+  仍可复用同一个二进制；各自的 `ZETA_PROFILE_ROOT` 指向各自 user data 下的 `state`。
 - 未注入 Web host 的 Browser 页面使用显式 disconnected renderer API：页面和 Workbench
   可以运行，连接状态为 `stopped`，所有 App Server 产品操作以
   `WebAppServerUnavailableError` 失败。当前 Rust App Server 只监听 `stdio://`，尚无浏览器可
@@ -80,6 +84,24 @@ Markdown 默认由 Alpha 打开。
 Workbench session profile 与实时聊天 session 是两层不同的概念：前者只决定产品入口的初始
 Workbench 组成，后者由 `IWorkbenchSessionService` 管理当前 thread、transcript 和服务端
 lifecycle。`SessionsPart` 是可选的状态投影，不拥有 Workbench 布局拓扑。
+
+## 同机安装与隔离契约
+
+这三个构建变体共享执行内核，但不应共享产品身份或可写数据目录。部署时必须保持以下边界：
+
+| 资源 | Code | Academic | 是否允许共享 |
+| --- | --- | --- | --- |
+| Workbench / App Server 二进制 | 相同 | 相同 | ✅ 只读代码与协议 |
+| installer/application ID | `com.zeta.desktop.code` | `com.zeta.desktop.academic` | ❌ |
+| Electron user data | `Zeta` | `Zeta Academic` | ❌ |
+| App Server profile root | `<userData>/state` | `<userData>/state` | ❌ |
+| 同一 workspace 文件 | 可打开 | 可打开 | 协调访问，不是产品状态共享 |
+
+因此“内核相同”不是冲突源；共用 `userData`、Chromium `sessionData`、App Server 的
+`state.sqlite3` 或 installer identity 才会造成配置、登录态、窗口状态、Session/Thread
+历史、lease 和单实例锁互相覆盖。当前 Electron 测试传入的显式 `--user-data-dir` 会保留，
+方便每个测试使用临时目录；发布包不应靠环境变量选择产品，而应只携带一个 Renderer 产品目录
+并使用对应的 installer ID。
 
 ## 编辑器装配契约
 

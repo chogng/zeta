@@ -204,6 +204,14 @@ export class ZetaApplication extends DisposableOwner {
     }
   }
 
+  /** Brings this product instance to the foreground for a second-instance launch. */
+  focusMainWindow(): void {
+    const window = this.mainWindow;
+    if (!window || window.isDestroyed()) return;
+    if (window.isMinimized()) window.restore();
+    window.focus();
+  }
+
   private async createPersistentServices(): Promise<void> {
     const state = await StateService.create(
       join(app.getPath("userData"), "state.json"),

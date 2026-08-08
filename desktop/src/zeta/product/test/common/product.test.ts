@@ -16,6 +16,7 @@ import {
 } from "../../../product/common/product.js";
 import {
   resolvePackagedProductId,
+  resolveProductDataPaths,
 } from "../../../product/node/product.js";
 
 test("product selection defaults to the Zeta Desktop build and accepts every edition", () => {
@@ -26,7 +27,13 @@ test("product selection defaults to the Zeta Desktop build and accepts every edi
     assert.equal(resolveProductId(productId), productId);
     assert.equal(product.id, productId);
     assert.ok(rendererEntryNames.includes(product.rendererEntry));
+    assert.match(product.applicationId, /^com\.zeta\.desktop\./);
+    assert.ok(product.userDataFolderName.length > 0);
+    assert.equal(product.storageNamespace, product.id);
   }
+  assert.equal(new Set(productIds.map((id) => getProductConfiguration(id).applicationId)).size, productIds.length);
+  assert.equal(new Set(productIds.map((id) => getProductConfiguration(id).userDataFolderName)).size, productIds.length);
+  assert.equal(new Set(productIds.map((id) => getProductConfiguration(id).storageNamespace)).size, productIds.length);
   assert.equal(
     getProductConfiguration("code").rendererEntry,
     "workbench-code",
@@ -40,6 +47,20 @@ test("product selection defaults to the Zeta Desktop build and accepts every edi
     getProductConfiguration("complete").rendererEntry,
     "workbench-complete",
   );
+});
+
+test("product data paths keep installed editions and Chromium session data separate", () => {
+  const paths = productIds.map((productId) => resolveProductDataPaths(
+    "/application-data",
+    getProductConfiguration(productId),
+  ));
+
+  assert.equal(paths[0]?.userDataPath, "/application-data/Zeta");
+  assert.equal(paths[1]?.userDataPath, "/application-data/Zeta Academic");
+  assert.equal(paths[2]?.userDataPath, "/application-data/Zeta Complete");
+  assert.equal(new Set(paths.map((value) => value.userDataPath)).size, paths.length);
+  assert.equal(new Set(paths.map((value) => value.sessionDataPath)).size, paths.length);
+  assert.ok(paths.every((value) => value.sessionDataPath.endsWith("/session-data")));
 });
 
 test("product selection rejects unknown build editions", () => {
