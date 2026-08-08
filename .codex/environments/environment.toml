@@ -6,19 +6,24 @@ name = "zeta"
 script = ""
 
 [[actions]]
-name = "electron-ui"
+name = "web-code"
 icon = "debug"
-command = "corepack pnpm dev:desktop:ui"
+command = "corepack pnpm dev:web:code"
 
 [[actions]]
-name = "web-ui"
+name = "web-aca"
 icon = "debug"
-command = "corepack pnpm dev:web"
+command = "corepack pnpm dev:web:academic"
 
 [[actions]]
-name = "web-ui-app-server"
+name = "web-code-app-server"
 icon = "debug"
-command = "corepack pnpm dev:web:full"
+command = "corepack pnpm dev:web:full:code"
+
+[[actions]]
+name = "web-aca-app-server"
+icon = "debug"
+command = "corepack pnpm dev:web:full:academic"
 
 [[actions]]
 name = "zeterm"
@@ -29,11 +34,6 @@ command = "just zeterm"
 name = "zeterm-dev"
 icon = "debug"
 command = "just zeterm-dev"
-
-[[actions]]
-name = "electron-desktop"
-icon = "debug"
-command = "corepack pnpm dev:desktop"
 
 [[actions]]
 name = "electron-code"
