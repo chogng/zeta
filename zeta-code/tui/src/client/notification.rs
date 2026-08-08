@@ -19,7 +19,9 @@ pub(crate) fn map_event(event: AppServerEvent) -> Option<ClientEvent> {
             Some(ClientEvent::ThreadUpdated(update))
         }
         AppServerEvent::Notification(
-            ServerNotification::SessionUpdate(_)
+            ServerNotification::DocumentCollaborationUpdate(_)
+            | ServerNotification::DocumentCollaborationPresence(_)
+            | ServerNotification::SessionUpdate(_)
             | ServerNotification::ConfigChanged(_)
             | ServerNotification::GitStatusChanged(_)
             | ServerNotification::FsChanged(_)

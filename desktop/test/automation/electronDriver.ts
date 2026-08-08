@@ -7,20 +7,19 @@ export class ElectronPlaywrightDriver extends PlaywrightDriver {
     super(application, currentPage);
   }
 
-  override async setWindowSize(size: WindowSize): Promise<void> {
+  override async setWindowSize(size: WindowSize): Promise<WindowSize> {
     const application = this.application;
     if (!("windows" in application)) {
       throw new Error("Electron window control requires an Electron application");
     }
-    await application.evaluate(({ BrowserWindow }, requestedSize) => {
+    const actualSize = await application.evaluate(({ BrowserWindow }, requestedSize) => {
       const window = BrowserWindow.getAllWindows()[0];
       if (!window) throw new Error("Zeta workbench window is unavailable");
       window.setSize(requestedSize.width, requestedSize.height);
+      const bounds = window.getBounds();
+      return { width: bounds.width, height: bounds.height };
     }, size);
-    await this.currentPage.waitForFunction(
-      requestedSize => window.innerWidth === requestedSize.width && window.innerHeight === requestedSize.height,
-      size,
-    );
     await this.workbench.waitForUiIdle();
+    return actualSize;
   }
 }

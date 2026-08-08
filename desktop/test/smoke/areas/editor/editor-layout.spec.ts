@@ -24,9 +24,11 @@ test("empty editor keeps its title, content, and watermark inside the editor par
 test("editor layout remains valid across workbench window sizes", async ({ driver, workbench }) => {
   const editors = workbench.editors;
   const group = editors.groupAt(0);
+  const observedSizes = new Set<string>();
 
   for (const size of [{ width: 900, height: 700 }, { width: 1200, height: 800 }, { width: 1494, height: 1104 }]) {
-    await driver.setWindowSize(size);
+    const actualSize = await driver.setWindowSize(size);
+    observedSizes.add(`${actualSize.width}x${actualSize.height}`);
     await expect.poll(async () => editorGeometry(editors.element, group.element, group.title, group.content, group.watermark), { message: `editor geometry at ${size.width}x${size.height}` }).toEqual({
       groupFillsEditorClient: true,
       titleAboveContent: true,
@@ -35,6 +37,8 @@ test("editor layout remains valid across workbench window sizes", async ({ drive
       watermarkInsideContent: true,
     });
   }
+
+  expect(observedSizes.size).toBe(3);
 });
 
 async function editorGeometry(editor: Locator, group: Locator, title: Locator, content: Locator, watermark: Locator) {

@@ -19,12 +19,13 @@ export class PlaywrightDriver {
     this.workbench = new Workbench(currentPage);
   }
 
-  async setWindowSize(size: WindowSize): Promise<void> {
+  async setWindowSize(size: WindowSize): Promise<WindowSize> {
     await this.currentPage.setViewportSize(size);
     await this.currentPage.waitForFunction(
       requestedSize => window.innerWidth === requestedSize.width && window.innerHeight === requestedSize.height,
       size,
     );
     await this.workbench.waitForUiIdle();
+    return size;
   }
 }

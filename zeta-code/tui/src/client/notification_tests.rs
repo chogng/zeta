@@ -1,6 +1,9 @@
 use super::ClientEvent;
 use super::map_event;
 use zeta_app_server_client::{AppServerEvent, ConnectionCloseReason, ServerNotification};
+use zeta_app_server_protocol::protocol::collaboration::DocumentCollaborationPresence;
+use zeta_app_server_protocol::protocol::collaboration::DocumentCollaborationPresenceSnapshot;
+use zeta_app_server_protocol::protocol::collaboration::DocumentCollaborationUpdate;
 use zeta_app_server_protocol::protocol::git::{GitHeadDto, GitStatusChanged, GitStatusResult};
 use zeta_app_server_protocol::protocol::notification::{SkillsChanged, ThreadUpdateEnvelope};
 use zeta_protocol::{SessionId, StreamInstanceId, ThreadEvent, ThreadId, ThreadUpdate};
@@ -59,6 +62,39 @@ fn git_status_change_is_explicitly_ignored_until_the_tui_owns_git_state() {
     assert_eq!(
         map_event(AppServerEvent::Notification(
             ServerNotification::GitStatusChanged(changed)
+        )),
+        None
+    );
+}
+
+#[test]
+fn document_collaboration_notifications_are_explicitly_ignored_until_the_tui_owns_documents() {
+    let update = DocumentCollaborationUpdate {
+        room_id: "gama-room".into(),
+        client_id: "client-a".into(),
+        sequence: 1,
+        base_version: 0,
+        version: 1,
+        transaction: "{\"format\":\"zeta.document.transaction\"}".into(),
+    };
+    let presence = DocumentCollaborationPresenceSnapshot {
+        room_id: "gama-room".into(),
+        generation: 1,
+        presences: vec![DocumentCollaborationPresence {
+            client_id: "client-a".into(),
+            selection: "anchor=0".into(),
+        }],
+    };
+
+    assert_eq!(
+        map_event(AppServerEvent::Notification(
+            ServerNotification::DocumentCollaborationUpdate(update)
+        )),
+        None
+    );
+    assert_eq!(
+        map_event(AppServerEvent::Notification(
+            ServerNotification::DocumentCollaborationPresence(presence)
         )),
         None
     );

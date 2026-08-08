@@ -7,6 +7,7 @@ const desktopRoot = resolve(import.meta.dirname, "../../../..");
 const editorRoot = join(desktopRoot, "src/zeta/editor");
 const alphaIntegrationRoot = join(desktopRoot, "test/alpha");
 const gamaIntegrationRoot = join(desktopRoot, "test/gama");
+const rootPackage = JSON.parse(readFileSync(join(desktopRoot, "../package.json"), "utf8")) as { scripts?: Record<string, string> };
 
 test("editor unit tests remain co-located with Alpha and Gama source domains", () => {
   assert.equal(exists(join(desktopRoot, "test/monaco")), false);
@@ -44,6 +45,11 @@ test("Gama browser integration owns only Gama runtime coverage", () => {
   assert.match(config, /name:\s*"chromium"/u);
   assert.match(config, /name:\s*"firefox"/u);
   assert.doesNotMatch(integration, /zetaAlphaIntegration/u);
+});
+
+test("root test entrypoints keep Alpha and Gama browser suites independently executable", () => {
+  assert.equal(rootPackage.scripts?.["test:desktop:alpha"], "corepack pnpm --dir desktop test:alpha");
+  assert.equal(rootPackage.scripts?.["test:desktop:gama"], "corepack pnpm --dir desktop test:gama");
 });
 
 function exists(file: string): boolean {
