@@ -126,6 +126,7 @@
     "dompurify": "^3.4.12",
     "markdown-it": "^14.3.0",
     "marked": "^18.0.7",
+    "pdfjs-dist": "6.1.200",
     "vscode-oniguruma": "1.7.0",
     "vscode-textmate": "9.3.2"
   }

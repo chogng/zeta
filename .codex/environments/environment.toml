@@ -29,3 +29,8 @@ command = "just zeterm"
 name = "zeterm-dev"
 icon = "debug"
 command = "just zeterm-dev"
+
+[[actions]]
+name = "electron-desktop"
+icon = "debug"
+command = "corepack pnpm dev:desktop"

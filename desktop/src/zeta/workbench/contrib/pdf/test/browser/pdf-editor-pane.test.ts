@@ -6,9 +6,12 @@ import { URI } from "../../../../../base/common/uri.js";
 import { FileKind, type IFileService } from "../../../../../platform/files/common/files.js";
 import type { EditorInput } from "../../../../../workbench/browser/parts/editor/editorInput.js";
 import { EditorPaneMatch, EditorPaneVisibility } from "../../../../../workbench/browser/parts/editor/editorPane.js";
-import { PdfEditorPane, type IPdfObjectUrlFactory } from "../../../../../workbench/contrib/pdf/browser/pdfEditorPane.js";
-import { PDF_CONTENT_TYPE, matchPdfEditor } from "../../../../../workbench/contrib/pdf/browser/pdfEditorInput.js";
+import { PdfEditorPane } from "../../../../../workbench/contrib/pdf/browser/pdfEditorPane.js";
+import type { IPdfAnnotationStore, PdfAnnotationSnapshot } from "../../../../../workbench/contrib/pdf/browser/pdfAnnotationStore.js";
 import { WorkspacePdfDocumentLoader } from "../../../../../workbench/contrib/pdf/browser/pdfDocumentLoader.js";
+import type { IPdfRenderResult, IPdfRenderer, PdfRenderRequest } from "../../../../../workbench/contrib/pdf/browser/pdfRenderer.js";
+import { matchPdfEditor } from "../../../../../workbench/contrib/pdf/browser/pdfEditorInput.js";
+import { emptyPdfAnnotationDocument, type PdfAnnotationDocument } from "../../../../../workbench/contrib/pdf/common/pdfAnnotations.js";
 
 test("PDF editor matching selects only application/pdf and .pdf resources", () => {
   assert.equal(matchPdfEditor(input("paper.PDF")), EditorPaneMatch.Default);
@@ -16,43 +19,85 @@ test("PDF editor matching selects only application/pdf and .pdf resources", () =
   assert.equal(matchPdfEditor(input("paper.txt")), EditorPaneMatch.None);
 });
 
-test("PDF editor loads bytes into Chromium's viewer and releases object URLs", async () => {
+test("PDF editor renders pages, creates annotations, and saves a companion document", async () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  const urls = new TestObjectUrls();
-  const pane = new PdfEditorPane({ load: async () => new Uint8Array([37, 80, 68, 70]) }, urls);
+  const annotations = new TestAnnotationStore();
+  const renderer = new TestRenderer();
+  const pane = new PdfEditorPane({ load: async () => new Uint8Array([37, 80, 68, 70]) }, annotations, renderer);
   pane.create(dom.window.document.body);
 
   await pane.setInput(input("paper.pdf"), new AbortController().signal);
-  const frame = dom.window.document.querySelector<HTMLIFrameElement>(".zeta-pdf-editor-frame");
-  assert.ok(frame);
-  assert.match(frame.src, /blob:zeta-pdf-1$/);
-  assert.equal(frame.title, "paper.pdf PDF reader");
+  const reader = dom.window.document.querySelector<HTMLElement>(".zeta-pdf-editor");
+  const pages = dom.window.document.querySelector<HTMLElement>(".zeta-pdf-pages");
+  const page = dom.window.document.querySelector<HTMLElement>(".zeta-pdf-page");
+  let layer = dom.window.document.querySelector<HTMLElement>(".zeta-pdf-annotation-layer");
+  assert.ok(reader);
+  assert.ok(pages);
+  assert.ok(page);
+  assert.ok(layer);
+  assert.equal(page.querySelectorAll(".zeta-pdf-page-canvas").length, 1);
+  assert.equal(renderer.requests.length, 1);
+
+  actionButton(dom, "zeta.pdf.annotations.highlight").click();
+  layer = dom.window.document.querySelector<HTMLElement>(".zeta-pdf-annotation-layer");
+  assert.ok(layer);
+  setLayerBounds(layer);
+  layer.dispatchEvent(pointer(dom, "pointerdown", 24, 36));
+  layer.dispatchEvent(pointer(dom, "pointermove", 180, 90));
+  layer.dispatchEvent(pointer(dom, "pointerup", 180, 90));
+
+  assert.equal(dom.window.document.querySelectorAll(".zeta-pdf-annotation-highlight").length, 1);
+  assert.match(dom.window.document.querySelector(".zeta-pdf-annotation-status")?.textContent ?? "", /Unsaved/);
+  assert.equal(actionButton(dom, "zeta.pdf.annotations.save").disabled, false);
+  await pane.save();
+  assert.equal(annotations.saved.length, 1);
+  assert.equal(annotations.saved[0]?.document.annotations[0]?.kind, "highlight");
+  assert.match(dom.window.document.querySelector(".zeta-pdf-annotation-status")?.textContent ?? "", /saved/);
+
+  actionButton(dom, "zeta.pdf.annotations.ink").click();
+  layer = dom.window.document.querySelector<HTMLElement>(".zeta-pdf-annotation-layer");
+  assert.ok(layer);
+  setLayerBounds(layer);
+  layer.dispatchEvent(pointer(dom, "pointerdown", 42, 36));
+  layer.dispatchEvent(pointer(dom, "pointermove", 108, 72));
+  layer.dispatchEvent(pointer(dom, "pointerup", 180, 96));
+  assert.equal(dom.window.document.querySelectorAll(".zeta-pdf-annotation-ink").length, 1);
+
+  actionButton(dom, "zeta.pdf.annotations.note").click();
+  layer = dom.window.document.querySelector<HTMLElement>(".zeta-pdf-annotation-layer");
+  assert.ok(layer);
+  setLayerBounds(layer);
+  layer.dispatchEvent(pointer(dom, "pointerdown", 210, 60));
+  assert.equal(dom.window.document.querySelectorAll(".zeta-pdf-annotation-note").length, 1);
+  actionButton(dom, "zeta.pdf.annotations.delete").click();
+  assert.equal(dom.window.document.querySelectorAll(".zeta-pdf-annotation-note").length, 0);
+  actionButton(dom, "zeta.pdf.annotations.undo").click();
+  assert.equal(dom.window.document.querySelectorAll(".zeta-pdf-annotation-note").length, 1);
+  actionButton(dom, "zeta.pdf.annotations.redo").click();
+  assert.equal(dom.window.document.querySelectorAll(".zeta-pdf-annotation-note").length, 0);
+
   pane.setVisible(EditorPaneVisibility.Hidden);
-  assert.equal(dom.window.document.querySelector<HTMLElement>(".zeta-pdf-editor")?.hidden, true);
+  assert.equal(reader.hidden, true);
   pane.setVisible(EditorPaneVisibility.Visible);
   pane.focus();
-  assert.equal(dom.window.document.activeElement, frame);
-
-  await pane.setInput(input("replacement.pdf"), new AbortController().signal);
-  assert.deepEqual(urls.revoked, ["blob:zeta-pdf-1"]);
+  assert.equal(dom.window.document.activeElement, pages);
   pane.clearInput();
-  assert.deepEqual(urls.revoked, ["blob:zeta-pdf-1", "blob:zeta-pdf-2"]);
-  assert.equal(frame.src, "about:blank");
+  assert.equal(dom.window.document.querySelectorAll(".zeta-pdf-page").length, 0);
+  assert.equal(renderer.disposed, 1);
   pane.dispose();
-  assert.deepEqual(urls.revoked, ["blob:zeta-pdf-1", "blob:zeta-pdf-2"]);
   dom.window.close();
 });
 
-test("PDF editor observes cancellation before installing an object URL", async () => {
+test("PDF editor observes cancellation before rendering pages", async () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  const urls = new TestObjectUrls();
-  const pane = new PdfEditorPane({ load: async () => new Uint8Array([37]) }, urls);
+  const renderer = new TestRenderer();
+  const pane = new PdfEditorPane({ load: async () => new Uint8Array([37]) }, new TestAnnotationStore(), renderer);
   pane.create(dom.window.document.body);
   const controller = new AbortController();
   controller.abort("closed");
 
   await assert.rejects(pane.setInput(input("paper.pdf"), controller.signal), CancellationError);
-  assert.equal(urls.created.length, 0);
+  assert.equal(renderer.requests.length, 0);
   pane.dispose();
   dom.window.close();
 });
@@ -75,16 +120,59 @@ function input(name: string): EditorInput {
   return { resource: URI.file(`C:\\project\\${name}`), label: name };
 }
 
-class TestObjectUrls implements IPdfObjectUrlFactory {
-  readonly created: Uint8Array[] = [];
-  readonly revoked: string[] = [];
+function actionButton(dom: JSDOM, id: string): HTMLButtonElement {
+  const button = dom.window.document.querySelector<HTMLButtonElement>(`[data-action-id="${id}"] button`);
+  assert.ok(button, `expected action ${id}`);
+  return button;
+}
 
-  create(bytes: Uint8Array): string {
-    this.created.push(bytes);
-    return `blob:zeta-pdf-${this.created.length}`;
+function pointer(dom: JSDOM, type: string, clientX: number, clientY: number): MouseEvent {
+  return new dom.window.MouseEvent(type, { bubbles: true, button: 0, clientX, clientY });
+}
+
+function setLayerBounds(layer: HTMLElement): void {
+  Object.defineProperty(layer, "getBoundingClientRect", {
+    value: () => ({ left: 0, top: 0, width: 300, height: 144 }),
+  });
+}
+
+class TestAnnotationStore implements IPdfAnnotationStore {
+  readonly saved: PdfAnnotationSnapshot[] = [];
+
+  async load(): Promise<PdfAnnotationSnapshot> {
+    return { document: emptyPdfAnnotationDocument(), revision: undefined };
   }
 
-  revoke(url: string): void {
-    this.revoked.push(url);
+  async save(_resource: URI, document: PdfAnnotationDocument, _expectedRevision: string | undefined): Promise<PdfAnnotationSnapshot> {
+    const snapshot = { document, revision: `revision-${this.saved.length + 1}` };
+    this.saved.push(snapshot);
+    return snapshot;
+  }
+}
+
+class TestRenderer implements IPdfRenderer {
+  readonly requests: PdfRenderRequest[] = [];
+  disposed = 0;
+
+  async render(request: PdfRenderRequest): Promise<IPdfRenderResult> {
+    this.requests.push(request);
+    const page = request.container.ownerDocument.createElement("div");
+    page.className = "zeta-pdf-page";
+    const canvas = request.container.ownerDocument.createElement("canvas");
+    canvas.className = "zeta-pdf-page-canvas";
+    page.append(canvas);
+    request.container.append(page);
+    return {
+      pages: [{ pageNumber: 1, element: page, width: 300, height: 144 }],
+      pageCount: 1,
+      dispose: () => {
+        this.disposed += 1;
+        page.remove();
+      },
+      [Symbol.dispose]: () => {
+        this.disposed += 1;
+        page.remove();
+      },
+    };
   }
 }

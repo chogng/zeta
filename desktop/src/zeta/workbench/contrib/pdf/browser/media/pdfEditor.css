@@ -1,14 +1,189 @@
 .zeta-pdf-editor {
   background: var(--zeta-editor-background);
   block-size: 100%;
+  color: var(--zeta-editor-foreground);
+  display: flex;
+  flex-direction: column;
   inline-size: 100%;
   min-block-size: 0;
   min-inline-size: 0;
 }
 
-.zeta-pdf-editor-frame {
-  block-size: 100%;
-  border: 0;
+.zeta-pdf-editor-toolbar {
+  background: var(--zeta-editor-background);
+  border-block-end: 1px solid var(--zeta-widget-border);
+  flex: 0 0 auto;
+  min-block-size: 32px;
+  padding-inline: 4px;
+}
+
+.zeta-pdf-editor-content {
+  display: flex;
+  flex: 1 1 auto;
+  min-block-size: 0;
+  min-inline-size: 0;
+}
+
+.zeta-pdf-pages {
+  align-items: center;
+  background: var(--zeta-editor-background);
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 20px;
+  min-block-size: 0;
+  min-inline-size: 0;
+  overflow: auto;
+  padding: 20px;
+}
+
+.zeta-pdf-page {
+  background: var(--zeta-input-background);
+  box-shadow: 0 1px 4px color-mix(in srgb, var(--zeta-editor-foreground) 22%, transparent);
+  flex: 0 0 auto;
+  position: relative;
+}
+
+.zeta-pdf-page-canvas {
   display: block;
+}
+
+.zeta-pdf-annotation-layer {
+  cursor: default;
+  inset: 0;
+  position: absolute;
+  touch-action: none;
+}
+
+.zeta-pdf-annotation-layer[data-annotation-mode="highlight"],
+.zeta-pdf-annotation-layer[data-annotation-mode="ink"] {
+  cursor: crosshair;
+}
+
+.zeta-pdf-annotation-layer[data-annotation-mode="note"] {
+  cursor: copy;
+}
+
+.zeta-pdf-annotation-highlight {
+  box-sizing: border-box;
+  pointer-events: none;
+  position: absolute;
+}
+
+.zeta-pdf-annotation-highlight.selected {
+  outline: 1px solid var(--zeta-focus-border);
+}
+
+.zeta-pdf-annotation-ink {
+  block-size: 100%;
   inline-size: 100%;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+  position: absolute;
+}
+
+.zeta-pdf-annotation-ink.selected polyline {
+  filter: drop-shadow(0 0 1px var(--zeta-focus-border));
+}
+
+.zeta-pdf-annotation-preview {
+  pointer-events: none;
+}
+
+.zeta-pdf-annotation-note {
+  background: var(--zeta-input-background);
+  border: 1px solid var(--zeta-editor-foreground);
+  border-radius: 50%;
+  block-size: 14px;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--zeta-editor-foreground) 35%, transparent);
+  inline-size: 14px;
+  padding: 0;
+  position: absolute;
+  transform: translate(-50%, -50%);
+}
+
+.zeta-pdf-annotation-note.selected {
+  outline: 2px solid var(--zeta-focus-border);
+  outline-offset: 1px;
+}
+
+.zeta-pdf-annotation-sidebar {
+  background: var(--zeta-side-bar-background);
+  border-inline-start: 1px solid var(--zeta-widget-border);
+  display: flex;
+  flex: 0 0 248px;
+  flex-direction: column;
+  gap: 10px;
+  min-block-size: 0;
+  overflow: auto;
+  padding: 12px;
+}
+
+.zeta-pdf-annotation-heading {
+  color: var(--zeta-editor-foreground);
+  font-size: 12px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.zeta-pdf-annotation-field {
+  color: var(--zeta-editor-foreground);
+  display: grid;
+  font-size: 11px;
+  gap: 4px;
+}
+
+.zeta-pdf-annotation-color {
+  background: transparent;
+  border: 0;
+  block-size: 26px;
+  inline-size: 100%;
+  padding: 0;
+}
+
+.zeta-pdf-annotation-text {
+  background: var(--zeta-input-background);
+  border: 1px solid var(--zeta-input-border);
+  border-radius: 2px;
+  color: var(--zeta-input-foreground);
+  font: inherit;
+  min-block-size: 70px;
+  padding: 6px;
+  resize: vertical;
+}
+
+.zeta-pdf-annotation-text:focus {
+  border-color: var(--zeta-focus-border);
+  outline: 0;
+}
+
+.zeta-pdf-annotation-list {
+  display: grid;
+  gap: 2px;
+}
+
+.zeta-pdf-annotation-list-item {
+  background: transparent;
+  border: 0;
+  color: var(--zeta-editor-foreground);
+  cursor: pointer;
+  font: inherit;
+  overflow: hidden;
+  padding: 5px 6px;
+  text-align: start;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zeta-pdf-annotation-list-item:hover,
+.zeta-pdf-annotation-list-item.selected {
+  background: var(--zeta-list-active-selection-background);
+  color: var(--zeta-list-active-selection-foreground);
+}
+
+.zeta-pdf-annotation-status {
+  color: var(--zeta-description-foreground);
+  font-size: 11px;
+  margin-block-start: auto;
 }

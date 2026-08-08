@@ -55,7 +55,7 @@ test("Code consumes App Server Rust syntax facts in Alpha", async ({ target, wor
   await expect(group.content.locator(".zeta-alpha-editor-goto-symbol-item")).toContainText("main");
 });
 
-test("Code opens workspace PDFs in Chromium's native reader", async ({ target, workbench }) => {
+test("Code renders workspace PDFs and persists review annotations", async ({ target, testWorkspace, workbench }) => {
   test.skip(
     target.kind !== "electron" || target.appServerMode !== "required" || target.product !== "code",
     "This scenario requires the Code Electron App Server product",
@@ -71,5 +71,29 @@ test("Code opens workspace PDFs in Chromium's native reader", async ({ target, w
   await expect(group.tabs.first()).toContainText("paper.pdf");
   const reader = group.content.locator(".zeta-pdf-editor");
   await expect(reader).toBeVisible();
-  await expect(reader.locator(".zeta-pdf-editor-frame")).toHaveAttribute("src", /^blob:/);
+  await expect(reader.locator(".zeta-pdf-page-canvas")).toBeVisible();
+
+  await reader.locator("[data-action-id='zeta.pdf.annotations.highlight'] button").click();
+  const layer = reader.locator(".zeta-pdf-annotation-layer");
+  const bounds = await layer.boundingBox();
+  if (!bounds) throw new Error("PDF annotation layer has no visual bounds");
+  await workbench.page.mouse.move(bounds.x + 24, bounds.y + 24);
+  await workbench.page.mouse.down();
+  await workbench.page.mouse.move(bounds.x + Math.min(180, bounds.width - 12), bounds.y + Math.min(90, bounds.height - 12));
+  await workbench.page.mouse.up();
+
+  await expect(reader.locator(".zeta-pdf-annotation-highlight")).toHaveCount(1);
+  await expect(reader.locator(".zeta-pdf-annotation-status")).toContainText("Unsaved annotations");
+  await reader.locator("[data-action-id='zeta.pdf.annotations.save'] button").click();
+  await expect.poll(
+    async () => {
+      try {
+        const document = JSON.parse(await readFile(`${testWorkspace.pdfFile}.zeta-annotations.json`, "utf8")) as { annotations: unknown[] };
+        return document.annotations.length;
+      } catch {
+        return 0;
+      }
+    },
+    { timeout: 15_000, message: "PDF annotation sidecar is saved through the App Server workspace" },
+  ).toBe(1);
 });

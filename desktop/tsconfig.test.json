@@ -6,6 +6,7 @@
     "types": ["node"]
   },
   "include": [
+    "src/typings/**/*.d.ts",
     "src/zeta/base/browser/dom.ts",
     "src/zeta/base/common/**/*.ts",
     "src/zeta/base/parts/contextmenu/common/**/*.ts",
