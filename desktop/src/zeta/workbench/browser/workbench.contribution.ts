@@ -29,6 +29,7 @@ import { registerPanelPlaceholderViews } from "../contrib/panel/browser/panel.co
 import { registerTerminalView } from "../contrib/terminal/browser/terminal.contribution.js";
 import { lxiconsLibrary } from "../../base/common/lxiconsLibrary.js";
 import "../contrib/markdown/browser/markdown.contribution.js";
+import "../contrib/pdf/browser/pdf.contribution.js";
 import "../contrib/preferences/browser/preferences.contribution.js";
 import "../contrib/quickaccess/browser/commandsQuickAccess.js";
 import "../contrib/sash/browser/sash.contribution.js";

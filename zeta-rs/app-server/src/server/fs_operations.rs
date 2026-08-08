@@ -1,18 +1,23 @@
-use super::{decode, result, AppServer, RpcError};
+use super::{decode, result, AppServer, ConnectionState, RpcError};
+use super::operations::resource_rpc_error;
 use serde_json::Value;
+use std::time::Duration;
 use zeta_app_server_protocol::protocol::error::AppServerErrorName;
 use zeta_app_server_protocol::protocol::fs::{
-    FsFileType, FsGetMetadataParams, FsGetMetadataResult, FsReadDirectoryEntry,
-    FsReadDirectoryParams, FsReadDirectoryResult, FsReadFileParams, FsReadFileResult,
-    FsWriteFileParams, FsWriteFileResult,
+    FsFileType, FsGetMetadataParams, FsGetMetadataResult, FsReadBinaryFileParams,
+    FsReadBinaryFileResult, FsReadDirectoryEntry, FsReadDirectoryParams, FsReadDirectoryResult,
+    FsReadFileParams, FsReadFileResult, FsWriteFileParams, FsWriteFileResult,
 };
+use zeta_app_server_protocol::protocol::resources::ResourceMetadataResult;
 use zeta_file_system::file_revision;
 use zeta_file_system::FileMetadata;
 use zeta_file_system::FileSystemError;
 use zeta_file_system::FileType;
 use zeta_file_system::FileWriteCondition;
+use crate::resource_store::MAX_RESOURCE_BYTES;
 
 const MAX_EDITOR_FILE_BYTES: usize = 10 * 1024 * 1024;
+const BINARY_PREVIEW_RESOURCE_TTL: Duration = Duration::from_secs(300);
 
 impl AppServer {
     pub(super) fn fs_get_metadata(&self, params: &Value) -> Result<Value, RpcError> {
@@ -50,6 +55,38 @@ impl AppServer {
         })?;
         result(&FsReadFileResult {
             content: text,
+            revision: content.revision,
+        })
+    }
+
+    pub(super) fn fs_read_binary_file(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: FsReadBinaryFileParams = decode(params)?;
+        let content = self
+            .file_system_service()?
+            .read_file_with_revision(&params.path, MAX_RESOURCE_BYTES)
+            .map_err(file_system_error)?;
+        let metadata = self
+            .resources
+            .lock()
+            .map_err(|_| RpcError::new(-32000, AppServerErrorName::ServerOverloaded))?
+            .create(
+                connection.connection_id,
+                "application/octet-stream".into(),
+                content.bytes,
+                BINARY_PREVIEW_RESOURCE_TTL,
+            )
+            .map_err(resource_rpc_error)?;
+        result(&FsReadBinaryFileResult {
+            resource: ResourceMetadataResult {
+                resource_id: metadata.resource_id,
+                mime_type: metadata.mime_type,
+                size: metadata.size,
+                sha256: metadata.sha256,
+            },
             revision: content.revision,
         })
     }

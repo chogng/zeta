@@ -1,4 +1,4 @@
-import type { FsGetMetadataResult, FsReadDirectoryResult, FsReadFileResult, FsWriteFileResult } from "../../../../../generated/app-server/types.js";
+import type { FsGetMetadataResult, FsReadBinaryFileResult, FsReadDirectoryResult, FsReadFileResult, FsWriteFileResult } from "../../../../../generated/app-server/types.js";
 import { invoke } from "../../ipc/electron-browser/rendererIpc.js";
 import type { IFileApi } from "../common/fileApi.js";
 
@@ -7,6 +7,7 @@ export function createFileApi(): IFileApi {
     getMetadata: (params) => invoke<FsGetMetadataResult>("zeta:fs:get-metadata", params),
     readDirectory: (params) => invoke<FsReadDirectoryResult>("zeta:fs:read-directory", params),
     readFile: (params) => invoke<FsReadFileResult>("zeta:fs:read-file", params),
+    readBinaryFile: (params) => invoke<FsReadBinaryFileResult>("zeta:fs:read-binary-file", params),
     writeFile: (params) => invoke<FsWriteFileResult>("zeta:fs:write-file", params),
   };
 }

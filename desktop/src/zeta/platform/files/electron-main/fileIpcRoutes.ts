@@ -1,4 +1,4 @@
-import { APP_SERVER_METHODS, type FsGetMetadataParams, type FsReadDirectoryParams, type FsReadFileParams, type FsWriteFileParams } from "../../../../../generated/app-server/types.js";
+import { APP_SERVER_METHODS, type FsGetMetadataParams, type FsReadBinaryFileParams, type FsReadDirectoryParams, type FsReadFileParams, type FsWriteFileParams } from "../../../../../generated/app-server/types.js";
 import type { AppServerSupervisor } from "../../app-server/electron-main/app-server-supervisor.js";
 import { record, string } from "../../ipc/electron-main/ipcValidation.js";
 import type { IpcRoute } from "../../ipc/electron-main/trustedIpcRouter.js";
@@ -21,6 +21,11 @@ export function fileIpcRoutes(supervisor: AppServerSupervisor): readonly IpcRout
       channel: "zeta:fs:read-file",
       validate: fsReadFileParams,
       invoke: (params) => supervisor.request(APP_SERVER_METHODS["fs/readFile"], params),
+    }),
+    route({
+      channel: "zeta:fs:read-binary-file",
+      validate: fsReadBinaryFileParams,
+      invoke: (params) => supervisor.request(APP_SERVER_METHODS["fs/readBinaryFile"], params),
     }),
     route({
       channel: "zeta:fs:write-file",
@@ -48,6 +53,10 @@ function fsReadDirectoryParams(value: unknown): FsReadDirectoryParams {
 }
 
 function fsReadFileParams(value: unknown): FsReadFileParams {
+  return fsGetMetadataParams(value);
+}
+
+function fsReadBinaryFileParams(value: unknown): FsReadBinaryFileParams {
   return fsGetMetadataParams(value);
 }
 

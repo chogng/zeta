@@ -109,6 +109,10 @@ class TestFileService implements IFileService {
     return { resource, content: await this.content, revision: "revision-1" };
   }
 
+  async readFileBytes(resource: URI) {
+    return { resource, bytes: new Uint8Array(), revision: "revision-1" };
+  }
+
   async writeFile(request: IFileWriteRequest) {
     if (this.rejectWritesWithRevisionConflict) throw new FileRevisionConflictError(request.resource);
     this.writes.push(request);

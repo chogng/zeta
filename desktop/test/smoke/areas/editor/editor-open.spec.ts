@@ -54,3 +54,22 @@ test("Code consumes App Server Rust syntax facts in Alpha", async ({ target, wor
   await input.press(process.platform === "darwin" ? "Meta+Shift+O" : "Control+Shift+O");
   await expect(group.content.locator(".zeta-alpha-editor-goto-symbol-item")).toContainText("main");
 });
+
+test("Code opens workspace PDFs in Chromium's native reader", async ({ target, workbench }) => {
+  test.skip(
+    target.kind !== "electron" || target.appServerMode !== "required" || target.product !== "code",
+    "This scenario requires the Code Electron App Server product",
+  );
+
+  const explorer = workbench.page.locator(".zeta-explorer");
+  const fileRow = explorer.locator(".zeta-tree-row").filter({ hasText: "paper.pdf" });
+  await expect.poll(() => fileRow.count(), { timeout: 15_000, message: "PDF appears in Explorer" }).toBe(1);
+  await fileRow.click();
+
+  const group = workbench.editors.groupAt(0);
+  await expect(group.tabs).toHaveCount(1);
+  await expect(group.tabs.first()).toContainText("paper.pdf");
+  const reader = group.content.locator(".zeta-pdf-editor");
+  await expect(reader).toBeVisible();
+  await expect(reader.locator(".zeta-pdf-editor-frame")).toHaveAttribute("src", /^blob:/);
+});

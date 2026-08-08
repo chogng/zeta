@@ -46,9 +46,9 @@ use crate::protocol::extensions::ExtensionResourceOpenParams;
 use crate::protocol::extensions::ExtensionResourceOpenResult;
 use crate::protocol::extensions::ExtensionSourceKindDto;
 use crate::protocol::fs::{
-    FsChanged, FsFileType, FsGetMetadataParams, FsGetMetadataResult, FsReadDirectoryEntry,
-    FsReadDirectoryParams, FsReadDirectoryResult, FsReadFileParams, FsReadFileResult,
-    FsWriteFileParams, FsWriteFileResult,
+    FsChanged, FsFileType, FsGetMetadataParams, FsGetMetadataResult, FsReadBinaryFileParams,
+    FsReadBinaryFileResult, FsReadDirectoryEntry, FsReadDirectoryParams, FsReadDirectoryResult,
+    FsReadFileParams, FsReadFileResult, FsWriteFileParams, FsWriteFileResult,
 };
 use crate::protocol::git::{
     GitBranchDto, GitBranchListResult, GitBranchSwitchParams, GitChangeStatusDto, GitCommitParams,
@@ -470,6 +470,11 @@ client_methods! {
         response: FsReadFileResult,
         serialization: GlobalSharedRead,
     },
+    FsReadBinaryFile => "fs/readBinaryFile" {
+        params: FsReadBinaryFileParams,
+        response: FsReadBinaryFileResult,
+        serialization: GlobalSharedRead,
+    },
     DiffCompute => "diff/compute" {
         params: DiffComputeParams,
         response: DiffComputeResult,
@@ -863,6 +868,8 @@ typescript_bindings! {
     FsReadDirectoryParams,
     FsReadDirectoryEntry,
     FsReadDirectoryResult,
+    FsReadBinaryFileParams,
+    FsReadBinaryFileResult,
     FsReadFileParams,
     FsReadFileResult,
     DiffComputeParams,

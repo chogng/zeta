@@ -38,6 +38,7 @@ export class BrowserMenubarControl extends DisposableOwner
     this.menu = this.own(menuService.createMenu(MenuId.MenubarMainMenu));
     this.button = this.own(new Button({
       label: "Application menu",
+      title: "Application menu",
       icon: lxiconsLibrary.menu,
       ownerDocument,
       onClick: () => this.toggleMenu(),

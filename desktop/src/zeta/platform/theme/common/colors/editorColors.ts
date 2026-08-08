@@ -1,5 +1,6 @@
 import { registerColor } from "../colorRegistry.js";
-import { errorForeground, foreground, mutedForeground, successForeground } from "./baseColors.js";
+import { border as defaultBorder, descriptionForeground as baseDescriptionForeground, errorForeground, foreground, mutedForeground, successForeground, widgetBorder as baseWidgetBorder, widgetShadow as baseWidgetShadow } from "./baseColors.js";
+import { hoverBackground as componentHoverBackground, hoverBorder as componentHoverBorder, hoverForeground as componentHoverForeground, inputBackground as componentInputBackground, listHoverBackground as componentListHoverBackground } from "./componentColors.js";
 
 const owner = "editor.presentation";
 const color = (id: string, dark: string, light: string, description: string): string => registerColor(id, { dark, light }, { description, owner });
@@ -22,6 +23,19 @@ export const tokenLabelForeground = alias("editor.token.labelForeground", tokenK
 export const tokenModuleForeground = alias("editor.token.moduleForeground", tokenTypeForeground, "Foreground for module and namespace tokens.");
 export const tokenPropertyForeground = alias("editor.token.propertyForeground", tokenVariableForeground, "Foreground for property tokens.");
 export const tokenPunctuationForeground = alias("editor.token.punctuationForeground", tokenOperatorForeground, "Foreground for punctuation tokens.");
+
+export const border = alias("editor.border", defaultBorder, "Editor surface border.");
+export const widgetBackground = color("editor.widgetBackground", "#252526", "#f3f3f3", "Background for floating editor widgets.");
+export const widgetBorder = alias("editor.widgetBorder", baseWidgetBorder, "Border around floating editor widgets.");
+export const widgetShadow = alias("editor.widgetShadow", baseWidgetShadow, "Shadow around floating editor widgets.");
+export const inputBackground = alias("editor.inputBackground", componentInputBackground, "Background for editor widget inputs.");
+export const listHoverBackground = alias("editor.listHoverBackground", componentListHoverBackground, "Hover background for editor widget lists.");
+export const descriptionForeground = alias("editor.descriptionForeground", baseDescriptionForeground, "Foreground for editor widget descriptions.");
+export const hoverForeground = alias("editor.hoverForeground", componentHoverForeground, "Foreground for editor Hovers.");
+export const hoverBackground = alias("editor.hoverBackground", componentHoverBackground, "Background for editor Hovers.");
+export const hoverBorder = alias("editor.hoverBorder", componentHoverBorder, "Border around editor Hovers.");
+export const inlayHintForeground = alias("editor.inlayHintForeground", mutedForeground, "Foreground for editor inlay hints.");
+export const inlineCompletionForeground = alias("editor.inlineCompletionForeground", mutedForeground, "Foreground for inline completions.");
 
 export const diffRemovedLineBackground = color("diffEditor.removedLineBackground", "#4b1818", "#ffebe9", "Background for removed diff lines.");
 export const diffInsertedLineBackground = color("diffEditor.insertedLineBackground", "#173d24", "#dafbe1", "Background for inserted diff lines.");

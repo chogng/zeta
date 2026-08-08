@@ -26,6 +26,13 @@ export interface IFileContent {
   readonly revision: string;
 }
 
+/** Binary content read from a workspace resource together with its opaque exact-content revision. */
+export interface IFileBytes {
+  readonly resource: URI;
+  readonly bytes: Uint8Array;
+  readonly revision: string;
+}
+
 /** One conditional text write requested by a Workbench persistence service. */
 export interface IFileWriteRequest {
   readonly resource: URI;
@@ -66,6 +73,7 @@ export interface IFileService {
   stat(resource: URI): Promise<IFileStat>;
   readDirectory(resource: URI): Promise<readonly IFileEntry[]>;
   readFile(resource: URI): Promise<IFileContent>;
+  readFileBytes(resource: URI): Promise<IFileBytes>;
   writeFile(request: IFileWriteRequest): Promise<IFileWriteResult>;
 }
 

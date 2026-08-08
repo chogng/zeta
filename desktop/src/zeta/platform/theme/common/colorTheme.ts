@@ -2,6 +2,7 @@ import type { Color } from "../../../base/common/color.js";
 import { Colors, colorCssVariable, type ColorIdentifier, type ColorValue, type ResolvedColorContribution } from "./colorRegistry.js";
 import * as baseColors from "./colors/baseColors.js";
 import * as chatColors from "./colors/chatColors.js";
+import "./colors/collaborationColors.js";
 import * as componentColors from "./colors/componentColors.js";
 import * as editorColors from "./colors/editorColors.js";
 import * as filesColors from "./colors/filesColors.js";

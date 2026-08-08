@@ -1,9 +1,10 @@
-import type { FsFileType, FsGetMetadataParams, FsGetMetadataResult, FsReadDirectoryParams, FsReadDirectoryResult, FsReadFileParams, FsReadFileResult, FsWriteFileParams, FsWriteFileResult } from "../../../../../generated/app-server/types.js";
+import type { FsFileType, FsGetMetadataParams, FsGetMetadataResult, FsReadBinaryFileParams, FsReadBinaryFileResult, FsReadDirectoryParams, FsReadDirectoryResult, FsReadFileParams, FsReadFileResult, FsWriteFileParams, FsWriteFileResult, ResourceMetadataResult, ResourceReadResult } from "../../../../../generated/app-server/types.js";
 import type { FsChanged } from "../../../../../generated/app-server/types.js";
+import type { IResourceApi } from "../../app-server/common/appServerApi.js";
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { DisposableOwner } from "../../../base/common/lifecycle.js";
 import { URI } from "../../../base/common/uri.js";
-import { FileKind, FileRevisionConflictError, type IFileChangeEvent, type IFileContent, type IFileEntry, type IFileService, type IFileStat, type IFileWriteRequest, type IFileWriteResult } from "../common/files.js";
+import { FileKind, FileRevisionConflictError, type IFileBytes, type IFileChangeEvent, type IFileContent, type IFileEntry, type IFileService, type IFileStat, type IFileWriteRequest, type IFileWriteResult } from "../common/files.js";
 import type { IWorkspaceContextService } from "../../workspace/common/workspace.js";
 
 /** Narrow App Server surface consumed by the browser file-service adapter. */
@@ -11,11 +12,13 @@ export interface IFileSystemApi {
   getMetadata(params: FsGetMetadataParams): Promise<FsGetMetadataResult>;
   readDirectory(params: FsReadDirectoryParams): Promise<FsReadDirectoryResult>;
   readFile(params: FsReadFileParams): Promise<FsReadFileResult>;
+  readBinaryFile(params: FsReadBinaryFileParams): Promise<FsReadBinaryFileResult>;
   writeFile(params: FsWriteFileParams): Promise<FsWriteFileResult>;
 }
 
 export interface BrowserFileServiceOptions {
   readonly api: IFileSystemApi;
+  readonly resourceApi: IResourceApi;
   readonly workspaceContextService: IWorkspaceContextService;
   readonly onDidChange?: Event<FsChanged>;
 }
@@ -25,6 +28,7 @@ export interface BrowserFileServiceOptions {
  */
 export class BrowserFileService extends DisposableOwner implements IFileService {
   private readonly api: IFileSystemApi;
+  private readonly resourceApi: IResourceApi;
   private readonly workspaceContextService: IWorkspaceContextService;
   private readonly fileChanges = this.own(new Emitter<IFileChangeEvent>());
 
@@ -33,6 +37,7 @@ export class BrowserFileService extends DisposableOwner implements IFileService 
   constructor(options: BrowserFileServiceOptions) {
     super();
     this.api = options.api;
+    this.resourceApi = options.resourceApi;
     this.workspaceContextService = options.workspaceContextService;
     if (options.onDidChange) this.own(options.onDidChange(change => this.acceptFileChange(change)));
   }
@@ -68,6 +73,18 @@ export class BrowserFileService extends DisposableOwner implements IFileService 
     return Object.freeze({ resource, content: result.content, revision: result.revision });
   }
 
+  async readFileBytes(resource: URI): Promise<IFileBytes> {
+    const result = await this.api.readBinaryFile({
+      path: this.relativePath(resource),
+    });
+    try {
+      const bytes = await this.readResourceBytes(result.resource);
+      return Object.freeze({ resource, bytes, revision: result.revision });
+    } finally {
+      await this.resourceApi.release({ resourceId: result.resource.resourceId });
+    }
+  }
+
   async writeFile(request: IFileWriteRequest): Promise<IFileWriteResult> {
     try {
       const result = await this.api.writeFile({
@@ -101,6 +118,25 @@ export class BrowserFileService extends DisposableOwner implements IFileService 
     return workspaceRelativePath(folders[0].uri, resource);
   }
 
+  private async readResourceBytes(resource: ResourceMetadataResult): Promise<Uint8Array> {
+    if (!Number.isSafeInteger(resource.size) || resource.size < 0 || resource.size > MAX_BINARY_FILE_BYTES) {
+      throw new Error("Workspace binary resource size is invalid");
+    }
+    const bytes = new Uint8Array(resource.size);
+    let offset = 0;
+    while (offset < bytes.length) {
+      const chunk = await this.resourceApi.read({
+        resourceId: resource.resourceId,
+        offset,
+        maxBytes: Math.min(MAX_RESOURCE_READ_BYTES, bytes.length - offset),
+      });
+      const chunkBytes = decodeResourceChunk(chunk, resource.resourceId, offset, bytes.length);
+      bytes.set(chunkBytes, offset);
+      offset += chunkBytes.length;
+    }
+    return bytes;
+  }
+
   private acceptFileChange(change: FsChanged): void {
     if (change.type === "rescanRequired") {
       this.fileChanges.fire(Object.freeze({ resources: undefined }));
@@ -124,6 +160,22 @@ export class BrowserFileService extends DisposableOwner implements IFileService 
 
 function isRevisionConflict(error: unknown): boolean {
   return error instanceof Error && error.message === "FileSystemRevisionConflict";
+}
+
+const MAX_RESOURCE_READ_BYTES = 262_144;
+const MAX_BINARY_FILE_BYTES = 16 * 1024 * 1024;
+
+function decodeResourceChunk(chunk: ResourceReadResult, resourceId: string, expectedOffset: number, totalSize: number): Uint8Array {
+  if (chunk.resourceId !== resourceId || chunk.offset !== expectedOffset) {
+    throw new Error("Workspace binary resource response is inconsistent");
+  }
+  const binary = atob(chunk.dataBase64);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index++) bytes[index] = binary.charCodeAt(index);
+  if (chunk.decodedLength !== bytes.length || bytes.length === 0 || bytes.length > totalSize - expectedOffset || chunk.eof !== (expectedOffset + bytes.length === totalSize)) {
+    throw new Error("Workspace binary resource response is inconsistent");
+  }
+  return bytes;
 }
 
 /** Resolves a resource to a slash-separated path beneath one workspace root. */

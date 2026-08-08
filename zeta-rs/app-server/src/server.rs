@@ -485,6 +485,9 @@ impl AppServer {
             Some(ClientMethod::FsGetMetadata) => self.fs_get_metadata(&request.params),
             Some(ClientMethod::FsReadDirectory) => self.fs_read_directory(&request.params),
             Some(ClientMethod::FsReadFile) => self.fs_read_file(&request.params),
+            Some(ClientMethod::FsReadBinaryFile) => {
+                self.fs_read_binary_file(connection, &request.params)
+            }
             Some(ClientMethod::DiffCompute) => self.diff_compute(&request.params),
             Some(ClientMethod::SyntaxAnalyze) => self.syntax_analyze(&request.params),
             Some(ClientMethod::FsWriteFile) => self.fs_write_file(&request.params),

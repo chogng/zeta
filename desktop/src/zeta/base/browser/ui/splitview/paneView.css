@@ -1,6 +1,6 @@
 .zeta-pane-view { display: flex; min-width: 0; min-height: 0; flex: 1 1 0; flex-direction: column; overflow: hidden; }
 .zeta-pane-view-header { display: flex; height: 28px; flex: 0 0 28px; align-items: center; border-radius: 4px; padding: 0 4px; font-size: 12px; font-weight: 600; }
-.zeta-pane-view-header:hover { background: #F2F2F2; }
+.zeta-pane-view-header:hover { background: var(--zeta-toolbar-hover-background); }
 .zeta-pane-view-header-button {
   display: flex;
   min-width: 0;

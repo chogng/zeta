@@ -21,9 +21,9 @@ test("ViewPane title chevron tracks collapsed state", async () => {
     });
     dom.window.document.body.append(pane.element);
 
-    const title = pane.element.querySelector(".zeta-view-pane-title");
-    const button = pane.element.querySelector<HTMLButtonElement>(".zeta-view-pane-title-button");
-    const content = pane.element.querySelector<HTMLElement>(".zeta-view-pane-content");
+    const title = pane.element.querySelector(".zeta-pane-view-header-title");
+    const button = pane.element.querySelector<HTMLButtonElement>(".zeta-pane-view-header-button");
+    const content = pane.element.querySelector<HTMLElement>(".zeta-pane-view-content");
     assert.equal(title?.textContent, "Test Pane");
     assert.equal(button?.getAttribute("aria-expanded"), "false");
     assert.equal(button?.getAttribute("aria-controls"), content?.id);

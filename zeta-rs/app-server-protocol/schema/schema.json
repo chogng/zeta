@@ -1119,6 +1119,22 @@
           "properties": {
             "method": {
               "type": "string",
+              "const": "fs/readBinaryFile"
+            },
+            "params": {
+              "$ref": "#/$defs/FsReadBinaryFileParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
               "const": "diff/compute"
             },
             "params": {
@@ -2215,6 +2231,22 @@
             },
             "result": {
               "$ref": "#/$defs/FsReadFileResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "fs/readBinaryFile"
+            },
+            "result": {
+              "$ref": "#/$defs/FsReadBinaryFileResult"
             }
           },
           "required": [
@@ -3552,6 +3584,35 @@
         "fileType",
         "sizeBytes",
         "readonly"
+      ]
+    },
+    "FsReadBinaryFileParams": {
+      "description": "Read one binary file relative to the configured workspace root.",
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ]
+    },
+    "FsReadBinaryFileResult": {
+      "description": "Connection-owned binary resource opened from one workspace file.",
+      "type": "object",
+      "properties": {
+        "resource": {
+          "$ref": "#/$defs/ResourceMetadataResult"
+        },
+        "revision": {
+          "description": "Opaque exact-content revision of the resource bytes.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "resource",
+        "revision"
       ]
     },
     "FsReadDirectoryEntry": {

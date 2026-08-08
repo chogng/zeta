@@ -8,11 +8,7 @@
   overflow: hidden;
   color: var(--zeta-editor-foreground);
   background: var(--zeta-editor-background);
-  font-family:
-    var(
-      --zeta-editor-font-family,
-      var(--zeta-font-family-monospace, ui-monospace, monospace)
-    );
+  font-family: var(--zeta-font-family-monospace, ui-monospace, monospace);
   white-space: pre;
   tab-size: 4;
   outline: none;

@@ -279,6 +279,7 @@ export class Workbench extends DisposableOwner {
     services.set(IWorkspaceContextService, workspaceContext);
     const fileService = new BrowserFileService({
       api: api.fs,
+      resourceApi: api.resource,
       workspaceContextService: workspaceContext,
       onDidChange: listener => {
         const subscription = api.events.subscribe(event => {
@@ -504,6 +505,7 @@ export class Workbench extends DisposableOwner {
     const editor = this.own(new EditorPart(ownerDocument, {
       configurationService: configuration,
       keybindingService: keybindings,
+      fileService,
       textFileService,
       textMateService,
       languageFeaturesService,

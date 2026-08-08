@@ -8,7 +8,8 @@ use zeta_app_server::AppServer;
 use zeta_app_server::SlashCommandCatalog;
 use zeta_app_server_protocol::protocol::common::{ClientCapabilities, ClientInfo};
 use zeta_app_server_protocol::protocol::fs::{
-    FsFileType, FsGetMetadataParams, FsReadDirectoryParams, FsReadFileParams, FsWriteFileParams,
+    FsFileType, FsGetMetadataParams, FsReadBinaryFileParams, FsReadDirectoryParams,
+    FsReadFileParams, FsWriteFileParams,
 };
 use zeta_app_server_protocol::protocol::initialize::InitializeParams;
 use zeta_app_server_protocol::protocol::session::{
@@ -139,13 +140,19 @@ fn client_analyzes_syntax_through_the_typed_contract() {
 fn client_reads_writes_and_versions_workspace_files_through_typed_contracts() {
     let mut client = AppServerClient::new(MockTransport(VecDeque::from([
         r#"{"jsonrpc":"2.0","id":1,"result":{"content":"fn main() {}\n","revision":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}"#.into(),
-        r#"{"jsonrpc":"2.0","id":2,"result":{"fileType":"file","sizeBytes":13,"readonly":false,"modifiedAtMillis":41}}"#.into(),
-        r#"{"jsonrpc":"2.0","id":3,"result":{"metadata":{"fileType":"file","sizeBytes":14,"readonly":false,"modifiedAtMillis":42},"revision":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}}"#.into(),
+        r#"{"jsonrpc":"2.0","id":2,"result":{"resource":{"resourceId":"resource_0000000000000001","mimeType":"application/octet-stream","size":9,"sha256":"sha256:abc"},"revision":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}"#.into(),
+        r#"{"jsonrpc":"2.0","id":3,"result":{"fileType":"file","sizeBytes":13,"readonly":false,"modifiedAtMillis":41}}"#.into(),
+        r#"{"jsonrpc":"2.0","id":4,"result":{"metadata":{"fileType":"file","sizeBytes":14,"readonly":false,"modifiedAtMillis":42},"revision":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}}"#.into(),
     ])));
 
     let read = client
         .read_file(FsReadFileParams {
             path: "src/main.rs".into(),
+        })
+        .unwrap();
+    let binary = client
+        .read_binary_file(FsReadBinaryFileParams {
+            path: "paper.pdf".into(),
         })
         .unwrap();
     let metadata = client
@@ -162,6 +169,7 @@ fn client_reads_writes_and_versions_workspace_files_through_typed_contracts() {
         .unwrap();
 
     assert_eq!(read.content, "fn main() {}\n");
+    assert_eq!(binary.resource.resource_id, "resource_0000000000000001");
     assert_eq!(metadata.modified_at_millis, Some(41));
     assert_eq!(written.metadata.modified_at_millis, Some(42));
 }

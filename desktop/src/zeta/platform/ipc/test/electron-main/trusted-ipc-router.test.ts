@@ -119,6 +119,9 @@ test("capability IPC validators reject malformed input", () => {
   const fsReadFile = routes.find(
     (route) => route.channel === "zeta:fs:read-file",
   )!;
+  const fsReadBinaryFile = routes.find(
+    (route) => route.channel === "zeta:fs:read-binary-file",
+  )!;
   const searchStart = routes.find(
     (route) => route.channel === "zeta:workspace-search:start",
   )!;
@@ -157,7 +160,7 @@ test("capability IPC validators reject malformed input", () => {
         title: "title",
         unexpected: true,
       }),
-    /exactly/,
+    /only optional keys/,
   );
   assert.throws(
     () =>
@@ -241,6 +244,9 @@ test("capability IPC validators reject malformed input", () => {
   assert.deepEqual(fsReadFile.validate({ path: "src/main.ts" }), {
     path: "src/main.ts",
   });
+  assert.deepEqual(fsReadBinaryFile.validate({ path: "paper.pdf" }), {
+    path: "paper.pdf",
+  });
   for (const path of [
     "../outside",
     "src/../../outside",
@@ -255,6 +261,10 @@ test("capability IPC validators reject malformed input", () => {
     );
     assert.throws(
       () => fsReadFile.validate({ path }),
+      /relative to the workspace root/,
+    );
+    assert.throws(
+      () => fsReadBinaryFile.validate({ path }),
       /relative to the workspace root/,
     );
   }

@@ -116,7 +116,7 @@ test("editor registry resolves defaults and explicit Open With choices", () => {
   assert.throws(() => registry.resolve(markdown), /No editor can open/);
 });
 
-test("EditorPart passes the Workbench text-file service to pane factories", async () => {
+test("EditorPart passes Workbench file services to pane factories", async () => {
   const dom = new JSDOM("<!doctype html><body></body>");
   const registry = new EditorPaneRegistry();
   const textFileService = {
@@ -131,24 +131,29 @@ test("EditorPart passes the Workbench text-file service to pane factories", asyn
       throw new Error("not used");
     },
   };
+  const fileService = {} as never;
   let observedTextFileService: unknown;
+  let observedFileService: unknown;
   registry.register({
     id: "zeta.editor.text-service-test",
     name: "Text Service Test",
     canOpen: () => EditorPaneMatch.Default,
     create: options => {
       observedTextFileService = options.textFileService;
+      observedFileService = options.fileService;
       return new TestEditorPane("zeta.editor.text-service-test");
     },
   });
   const editor = new EditorPart(dom.window.document, {
     registry,
+    fileService,
     textFileService,
   });
 
   await editor.openEditor(input("C:\\project\\main.ts"));
 
   assert.equal(observedTextFileService, textFileService);
+  assert.equal(observedFileService, fileService);
   editor.dispose();
   dom.window.close();
 });

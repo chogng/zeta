@@ -9,6 +9,7 @@ import type {
   IConfigurationService,
 } from "../../../../platform/configuration/common/configuration.js";
 import { type ITextFileService } from "../../../services/textfile/common/textFileService.js";
+import type { IFileService } from "../../../../platform/files/common/files.js";
 import { type ITextMateService } from "../../../services/textMate/common/textMateService.js";
 import { type ILanguageFeaturesService } from "../../../services/language/common/languageFeaturesService.js";
 import type { EditorInput } from "./editorInput.js";
@@ -54,6 +55,7 @@ export interface EditorPaneCreationOptions {
   /** The input used to choose a profile-specific pane implementation. */
   readonly input?: EditorInput;
   readonly configurationService?: IConfigurationService;
+  readonly fileService?: IFileService;
   readonly textFileService?: ITextFileService;
   readonly textMateService?: ITextMateService;
   readonly languageFeaturesService?: ILanguageFeaturesService;

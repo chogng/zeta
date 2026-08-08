@@ -37,6 +37,7 @@ export class ChatViewPane extends ViewPane {
   private readonly panes = new Map<string, ChatPane>();
   private readonly tabOrder: string[] = [];
   private activePane: ChatPane | undefined;
+  private initialUntitledSessionId: string | undefined;
   private viewDisposed = false;
 
   constructor(
@@ -90,6 +91,7 @@ export class ChatViewPane extends ViewPane {
     this.ensureTabForVisibleChat();
     void sessionService.initialize().then(() => {
       if (this.viewDisposed) return;
+      this.discardInitialUntitledSessionWhenDurableChatExists();
       this.ensureTabForVisibleChat();
     });
   }
@@ -156,10 +158,11 @@ export class ChatViewPane extends ViewPane {
       this.panes.delete(paneId);
       pane.dispose();
     }
-    const orderedEntries = this.orderEntries(entries);
-    this.paneHost.replaceChildren(...orderedEntries.map((entry) => entry.pane.element), this.empty);
     const activePaneId = this.activePaneId();
-    this.activePane = activePaneId ? this.panes.get(activePaneId) : undefined;
+    const activePane = activePaneId ? this.panes.get(activePaneId) : undefined;
+    const orderedEntries = this.orderEntries(entries, activePane);
+    this.paneHost.replaceChildren(...orderedEntries.map((entry) => entry.pane.element), this.empty);
+    this.activePane = activePane;
     for (const entry of orderedEntries) entry.pane.setVisible(entry.pane === this.activePane);
     this.empty.hidden = orderedEntries.length > 0;
     const activeTabId = this.activePane?.element.id;
@@ -228,11 +231,13 @@ export class ChatViewPane extends ViewPane {
     this.syncSessions();
   }
 
-  private orderEntries(entries: readonly ChatPaneEntry[]): readonly ChatPaneEntry[] {
+  private orderEntries(entries: readonly ChatPaneEntry[], activePane: ChatPane | undefined): readonly ChatPaneEntry[] {
     const entriesByTabId = new Map(entries.map((entry) => [entry.tabId, entry]));
     const orderedTabIds = this.tabOrder.filter((tabId) => entriesByTabId.has(tabId));
     for (const entry of entries) {
-      if (!orderedTabIds.includes(entry.tabId)) orderedTabIds.push(entry.tabId);
+      if (orderedTabIds.includes(entry.tabId)) continue;
+      if (entry.pane === activePane) orderedTabIds.unshift(entry.tabId);
+      else orderedTabIds.push(entry.tabId);
     }
     this.tabOrder.splice(0, this.tabOrder.length, ...orderedTabIds);
     return orderedTabIds.map((tabId) => entriesByTabId.get(tabId)!);
@@ -240,7 +245,19 @@ export class ChatViewPane extends ViewPane {
 
   private ensureTabForVisibleChat(): void {
     if (!this.layoutService.isPartVisible("auxiliarybar") || this.panes.size > 0) return;
-    this.sessionService.createUntitledSession();
+    const session = this.sessionService.createUntitledSession();
+    if (this.sessionService.state === "loading" && this.initialUntitledSessionId === undefined) {
+      this.initialUntitledSessionId = session.untitledSessionId;
+    }
+  }
+
+  private discardInitialUntitledSessionWhenDurableChatExists(): void {
+    const untitledSessionId = this.initialUntitledSessionId;
+    this.initialUntitledSessionId = undefined;
+    if (!untitledSessionId || !this.panes.has(`untitled:${untitledSessionId}`)) return;
+    if ([...this.panes.keys()].some((paneId) => paneId.startsWith("session:"))) {
+      this.sessionService.discardUntitledSession(untitledSessionId);
+    }
   }
 
   private hideChatWhenEmpty(): void {

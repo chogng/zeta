@@ -63,7 +63,7 @@
   height: 100%;
   content: "";
   pointer-events: none;
-  background: #000;
+  background: var(--zeta-focus-border);
 }
 
 .zeta-tab.zeta-dnd-drop-before::before {

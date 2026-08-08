@@ -37,7 +37,7 @@ test("Gama follows VS Code editor common/browser/contrib ownership", () => {
     "browser/media/editorWidget.css",
     "contrib/clipboard/browser/htmlDocumentFragment.ts",
     "contrib/formatting/browser/formattingContribution.ts",
-    "contrib/collaboration/common/session.ts",
+    "contrib/collaboration/common/protocol.ts",
     "contrib/collaboration/common/controller.ts",
     "contrib/collaboration/browser/collaborationContribution.ts",
     "common/services/documentCollaborationService.ts",
@@ -45,6 +45,7 @@ test("Gama follows VS Code editor common/browser/contrib ownership", () => {
     "contrib/academic/browser/profile.ts",
     "contrib/academic/browser/academicEditor.contribution.ts",
   ]) assert.equal(statSafe(join(gamaRoot, file)), true, file);
+  assert.equal(statSafe(join(gamaRoot, "contrib", "collaboration", "common", "session.ts")), false);
   assert.equal(statSafe(join(gamaRoot, "contrib", "editor.contribution.ts")), false);
   for (const file of collectFiles(join(gamaRoot, "common"))) {
     if (!file.endsWith(".ts")) continue;

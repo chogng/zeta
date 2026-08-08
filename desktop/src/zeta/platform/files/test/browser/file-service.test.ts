@@ -10,6 +10,7 @@ import { WorkspaceContextService } from "../../../../workbench/services/workspac
 
 test("workspaceRelativePath confines resources to the folder", () => {
   const root = URI.file("C:\\project");
+  const releasedResources: string[] = [];
   assert.equal(workspaceRelativePath(root, URI.file("C:\\project")), ".");
   assert.equal(
     workspaceRelativePath(root, URI.file("C:\\project\\src\\main.ts")),
@@ -23,6 +24,7 @@ test("workspaceRelativePath confines resources to the folder", () => {
 
 test("BrowserFileService maps wire entries back to resource URIs", async () => {
   const root = URI.file("C:\\project");
+  const releasedResources: string[] = [];
   using workspaceContextService: IWorkspaceContextService =
     new WorkspaceContextService({ id: "workspace", uri: root });
   const service = new BrowserFileService({
@@ -47,6 +49,13 @@ test("BrowserFileService maps wire entries back to resource URIs", async () => {
         assert.equal(path, "src/main.ts");
         return { content: "export {};", revision: "revision-read" };
       },
+      readBinaryFile: async ({ path }) => {
+        assert.equal(path, "paper.pdf");
+        return {
+          resource: { resourceId: "resource-pdf", mimeType: "application/octet-stream", size: 9, sha256: "sha256:pdf" },
+          revision: "revision-binary",
+        };
+      },
       writeFile: async ({ path, content, expectedRevision }) => {
         assert.equal(path, "src/main.ts");
         assert.equal(content, "export const saved = true;");
@@ -61,6 +70,16 @@ test("BrowserFileService maps wire entries back to resource URIs", async () => {
           revision: "revision-write",
         };
       },
+    },
+    resourceApi: {
+      metadata: async () => { throw new Error("not used"); },
+      read: async ({ resourceId, offset, maxBytes }) => {
+        assert.equal(resourceId, "resource-pdf");
+        assert.equal(offset, 0);
+        assert.equal(maxBytes, 9);
+        return { resourceId, offset, dataBase64: "JVBERi0xLjcK", decodedLength: 9, eof: true };
+      },
+      release: async ({ resourceId }) => { releasedResources.push(resourceId); },
     },
   });
 
@@ -77,6 +96,11 @@ test("BrowserFileService maps wire entries back to resource URIs", async () => {
     await service.readFile(URI.file("C:\\project\\src\\main.ts")),
     { resource: URI.file("C:\\project\\src\\main.ts"), content: "export {};", revision: "revision-read" },
   );
+  assert.deepEqual(
+    await service.readFileBytes(URI.file("C:\\project\\paper.pdf")),
+    { resource: URI.file("C:\\project\\paper.pdf"), bytes: new Uint8Array([37, 80, 68, 70, 45, 49, 46, 55, 10]), revision: "revision-binary" },
+  );
+  assert.deepEqual(releasedResources, ["resource-pdf"]);
   assert.deepEqual(
     await service.writeFile({
       resource: URI.file("C:\\project\\src\\main.ts"),
@@ -101,15 +125,61 @@ test("BrowserFileService maps App Server revision conflicts to the file contract
   using workspaceContextService: IWorkspaceContextService = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:\\project") });
   const service = new BrowserFileService({
     workspaceContextService,
+    resourceApi: unavailableResourceApi(),
     api: {
       getMetadata: async () => { throw new Error("unavailable"); },
       readDirectory: async () => { throw new Error("unavailable"); },
       readFile: async () => { throw new Error("unavailable"); },
+      readBinaryFile: async () => { throw new Error("unavailable"); },
       writeFile: async () => { throw new Error("FileSystemRevisionConflict"); },
     },
   });
 
   await assert.rejects(service.writeFile({ resource, content: "local", expectedRevision: "stale" }), FileRevisionConflictError);
+});
+
+test("BrowserFileService reads connection-owned binary resources in bounded chunks", async () => {
+  const root = URI.file("C:\\project");
+  const resource = URI.file("C:\\project\\large.pdf");
+  const bytes = new Uint8Array(262_145);
+  bytes[0] = 37;
+  bytes[262_144] = 70;
+  const readOffsets: number[] = [];
+  const releasedResources: string[] = [];
+  using workspaceContextService: IWorkspaceContextService = new WorkspaceContextService({ id: "workspace", uri: root });
+  const service = new BrowserFileService({
+    workspaceContextService,
+    api: {
+      getMetadata: async () => { throw new Error("not used"); },
+      readDirectory: async () => { throw new Error("not used"); },
+      readFile: async () => { throw new Error("not used"); },
+      readBinaryFile: async () => ({
+        resource: { resourceId: "resource-large", mimeType: "application/octet-stream", size: bytes.length, sha256: "sha256:large" },
+        revision: "revision-large",
+      }),
+      writeFile: async () => { throw new Error("not used"); },
+    },
+    resourceApi: {
+      metadata: async () => { throw new Error("not used"); },
+      read: async ({ resourceId, offset, maxBytes }) => {
+        assert.equal(resourceId, "resource-large");
+        readOffsets.push(offset);
+        const data = bytes.slice(offset, offset + maxBytes);
+        return {
+          resourceId,
+          offset,
+          dataBase64: Buffer.from(data).toString("base64"),
+          decodedLength: data.length,
+          eof: offset + data.length === bytes.length,
+        };
+      },
+      release: async ({ resourceId }) => { releasedResources.push(resourceId); },
+    },
+  });
+
+  assert.deepEqual((await service.readFileBytes(resource)).bytes, bytes);
+  assert.deepEqual(readOffsets, [0, 262_144]);
+  assert.deepEqual(releasedResources, ["resource-large"]);
 });
 
 test("BrowserFileService maps App Server invalidations to workspace resources", () => {
@@ -118,6 +188,7 @@ test("BrowserFileService maps App Server invalidations to workspace resources", 
   using changes = new Emitter<FsChanged>();
   using service = new BrowserFileService({
     workspaceContextService,
+    resourceApi: unavailableResourceApi(),
     api: unavailableFileApi(),
     onDidChange: changes.event,
   });
@@ -135,6 +206,15 @@ function unavailableFileApi() {
     getMetadata: async () => { throw new Error("unavailable"); },
     readDirectory: async () => { throw new Error("unavailable"); },
     readFile: async () => { throw new Error("unavailable"); },
+    readBinaryFile: async () => { throw new Error("unavailable"); },
     writeFile: async () => { throw new Error("unavailable"); },
+  };
+}
+
+function unavailableResourceApi() {
+  return {
+    metadata: async () => { throw new Error("unavailable"); },
+    read: async () => { throw new Error("unavailable"); },
+    release: async () => { throw new Error("unavailable"); },
   };
 }

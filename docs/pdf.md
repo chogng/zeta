@@ -33,7 +33,7 @@ Electron/Chromium 的 PDF Viewer 可以负责普通预览，不需要由 `zeta-p
 
 | 用户需求 | 当前路径 | 当前状态 |
 | --- | --- | --- |
-| 在 Desktop 中查看 PDF | Chromium PDF Viewer | 可由界面直接承担 |
+| 在 Desktop 的 Code Workbench 中查看 workspace PDF | Chromium PDF Viewer | 已实现：Explorer 打开 `.pdf`，受限读取后以 Blob URL 交给浏览器阅读器 |
 | 让 Agent 读取原生文字 | PDF 处理边界提取逐页文字 | 已实现 |
 | 识别扫描版 PDF | 渲染页面后交给 OCR | 计划设计 |
 | 建立可搜索知识库 | 文档库负责身份、切片和索引 | 尚未实现 |
@@ -77,6 +77,18 @@ resources/native/pdfium/
 特别地，PDF 知识库和 Agent Memory 必须分开：PDF chunk 是可复现、可引用的
 客观文档证据；Memory 是用户偏好、确认的决策和会变化的项目状态。回答时可以
 分别检索两者，但不得把 PDF 片段写成用户 Memory。
+
+### 3.1 当前 Workbench 阅读器
+
+`desktop/src/zeta/workbench/contrib/pdf` 是一个 Workbench contribution，不属于
+`editor/alpha` 或 `editor/gama`。它匹配 `application/pdf` 和 `.pdf` resource；通过
+`IFileService.readFileBytes` 请求 App Server 的 workspace-relative `fs/readBinaryFile`，
+再创建 `application/pdf` Blob URL 并嵌入 Chromium 的原生 PDF Viewer。
+
+这条路径的边界是刻意的：Renderer 不会收到主机绝对路径，`file:` URL 也不会进入
+PDF 阅读器；后端将预览读取限制为 16 MiB，并经连接所有的 ResourceStore 以 256 KiB
+分块读取，避免二进制内容超过 JSONL 帧上限。页面、缩放、搜索、打印与下载由 Chromium
+PDF Viewer 自己负责，贡献只拥有匹配、加载、可见性和 Blob URL 生命周期。
 
 ## 4. 身份、所有权与引用
 

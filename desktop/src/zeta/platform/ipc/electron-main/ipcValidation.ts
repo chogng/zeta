@@ -6,7 +6,7 @@ export function record(value: unknown, keys: readonly string[], optionalKeys: re
   const actualKeys = Object.keys(params).sort();
   const allowedKeys = new Set([...keys, ...optionalKeys]);
   if (actualKeys.some(key => !allowedKeys.has(key)) || keys.some(key => !Object.hasOwn(params, key))) {
-    throw new Error(`IPC params must contain required keys ${keys.join(", ")} and only optional keys ${optionalKeys.join(", ")}`);
+    throw new Error(`IPC params must contain exactly required keys ${keys.join(", ")} and only optional keys ${optionalKeys.join(", ")}`);
   }
   return params;
 }

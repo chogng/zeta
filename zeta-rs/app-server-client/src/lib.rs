@@ -20,8 +20,9 @@ use zeta_app_server_protocol::protocol::diff::DiffComputeParams;
 use zeta_app_server_protocol::protocol::diff::DiffComputeResult;
 use zeta_app_server_protocol::protocol::document::{TypstCompileParams, TypstCompileResult};
 use zeta_app_server_protocol::protocol::fs::{
-    FsGetMetadataParams, FsGetMetadataResult, FsReadDirectoryParams, FsReadDirectoryResult,
-    FsReadFileParams, FsReadFileResult, FsWriteFileParams, FsWriteFileResult,
+    FsGetMetadataParams, FsGetMetadataResult, FsReadBinaryFileParams, FsReadBinaryFileResult,
+    FsReadDirectoryParams, FsReadDirectoryResult, FsReadFileParams, FsReadFileResult,
+    FsWriteFileParams, FsWriteFileResult,
 };
 use zeta_app_server_protocol::protocol::git::{
     GitBranchListResult, GitBranchSwitchParams, GitOperationResult, GitTextDiffResult,
@@ -154,6 +155,13 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
 
     pub fn read_file(&mut self, params: FsReadFileParams) -> Result<FsReadFileResult, ClientError> {
         self.call(ClientMethod::FsReadFile, params)
+    }
+
+    pub fn read_binary_file(
+        &mut self,
+        params: FsReadBinaryFileParams,
+    ) -> Result<FsReadBinaryFileResult, ClientError> {
+        self.call(ClientMethod::FsReadBinaryFile, params)
     }
 
     pub fn write_file(

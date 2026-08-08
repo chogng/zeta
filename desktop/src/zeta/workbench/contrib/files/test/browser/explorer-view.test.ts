@@ -60,6 +60,9 @@ test("ExplorerViewPane renders, expands, and opens workspace files", async () =>
     readFile: async (_resource) => {
       throw new Error("Explorer must delegate file content resolution to the selected editor");
     },
+    readFileBytes: async (_resource) => {
+      throw new Error("Explorer must delegate file content resolution to the selected editor");
+    },
     writeFile: async (_request) => {
       throw new Error("Explorer must delegate file writes to the selected editor");
     },
@@ -163,11 +166,11 @@ test("ExplorerViewPane renders, expands, and opens workspace files", async () =>
       ".zeta-tree-row",
     ).length === 2);
     assert.equal(
-      pane.element.querySelector(".zeta-view-pane-title")?.textContent,
+      pane.element.querySelector(".zeta-pane-view-header-title")?.textContent,
       "project",
     );
     assert.equal(
-      pane.element.querySelector(".zeta-view-pane-title")?.classList.contains("zeta-explorer-title"),
+      pane.element.querySelector(".zeta-pane-view-header")?.classList.contains("zeta-explorer-title"),
       true,
     );
     assert.deepEqual(rowLabels(pane.element), ["src", "README.md"]);
@@ -228,7 +231,7 @@ test("ExplorerViewPane renders, expands, and opens workspace files", async () =>
       uri: nextRoot,
     });
     await waitFor(() =>
-      pane.element.querySelector(".zeta-view-pane-title")?.textContent ===
+      pane.element.querySelector(".zeta-pane-view-header-title")?.textContent ===
         "next-project" &&
       rowLabels(pane.element).includes("next.txt")
     );

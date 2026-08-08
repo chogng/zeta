@@ -6,6 +6,7 @@ import { DisposableOwner, setDisposableOwner } from "../../../../base/common/lif
 import type { IKeybindingService } from "../../../../platform/keybinding/common/keybinding.js";
 import type { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
 import { type ITextFileService } from "../../../services/textfile/common/textFileService.js";
+import type { IFileService } from "../../../../platform/files/common/files.js";
 import { type ITextMateService } from "../../../services/textMate/common/textMateService.js";
 import { type ILanguageFeaturesService } from "../../../services/language/common/languageFeaturesService.js";
 import type { IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";
@@ -48,6 +49,7 @@ export interface EditorGroupOptions {
   readonly registry: EditorPaneRegistry;
   readonly configurationService?: IConfigurationService;
   readonly keybindingService?: IKeybindingService;
+  readonly fileService?: IFileService;
   readonly textFileService?: ITextFileService;
   readonly textMateService?: ITextMateService;
   readonly languageFeaturesService?: ILanguageFeaturesService;
@@ -79,6 +81,7 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
   private readonly contentElement: HTMLDivElement;
   private readonly registry: EditorPaneRegistry;
   private readonly configurationService: IConfigurationService | undefined;
+  private readonly fileService: IFileService | undefined;
   private readonly textFileService: ITextFileService | undefined;
   private readonly textMateService: ITextMateService | undefined;
   private readonly languageFeaturesService: ILanguageFeaturesService | undefined;
@@ -102,6 +105,7 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
     super();
     this.registry = options.registry;
     this.configurationService = options.configurationService;
+    this.fileService = options.fileService;
     this.textFileService = options.textFileService;
     this.textMateService = options.textMateService;
     this.languageFeaturesService = options.languageFeaturesService;
@@ -216,6 +220,7 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
       ownerDocument: this.element.ownerDocument,
       input,
       configurationService: this.configurationService,
+      fileService: this.fileService,
       textFileService: this.textFileService,
       textMateService: this.textMateService,
       languageFeaturesService: this.languageFeaturesService,

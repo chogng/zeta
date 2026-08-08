@@ -7,7 +7,7 @@
   background: var(--zeta-editor-widget-background, var(--zeta-editor-background));
   border: 1px solid var(--zeta-editor-widget-border, var(--zeta-editor-border));
   border-radius: 4px;
-  box-shadow: 0 4px 14px rgb(0 0 0 / 24%);
+  box-shadow: 0 4px 14px var(--zeta-editor-widget-shadow);
 }
 
 .zeta-alpha-editor-code-action button {
@@ -23,7 +23,7 @@
 
 .zeta-alpha-editor-code-action button:hover,
 .zeta-alpha-editor-code-action button:focus-visible {
-  background: var(--zeta-editor-list-hover-background, rgb(127 127 127 / 18%));
+  background: var(--zeta-editor-list-hover-background);
   outline: none;
 }
 

@@ -242,6 +242,86 @@
       }
     },
     {
+      "id": "collaboration.selection0Background",
+      "kind": "color",
+      "cssVariable": "--zeta-collaboration-selection0-background",
+      "owner": "collaboration.presentation",
+      "description": "Background tint for the first concurrent collaborator selection.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#3584e4",
+        "light": "#3584e4",
+        "high-contrast-dark": "#3584e4",
+        "high-contrast-light": "#3584e4"
+      },
+      "values": {
+        "dark": "#3584e4",
+        "light": "#3584e4",
+        "high-contrast-dark": "#3584e4",
+        "high-contrast-light": "#3584e4"
+      }
+    },
+    {
+      "id": "collaboration.selection1Background",
+      "kind": "color",
+      "cssVariable": "--zeta-collaboration-selection1-background",
+      "owner": "collaboration.presentation",
+      "description": "Background tint for the second concurrent collaborator selection.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#9141ac",
+        "light": "#9141ac",
+        "high-contrast-dark": "#9141ac",
+        "high-contrast-light": "#9141ac"
+      },
+      "values": {
+        "dark": "#9141ac",
+        "light": "#9141ac",
+        "high-contrast-dark": "#9141ac",
+        "high-contrast-light": "#9141ac"
+      }
+    },
+    {
+      "id": "collaboration.selection2Background",
+      "kind": "color",
+      "cssVariable": "--zeta-collaboration-selection2-background",
+      "owner": "collaboration.presentation",
+      "description": "Background tint for the third concurrent collaborator selection.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#26a269",
+        "light": "#26a269",
+        "high-contrast-dark": "#26a269",
+        "high-contrast-light": "#26a269"
+      },
+      "values": {
+        "dark": "#26a269",
+        "light": "#26a269",
+        "high-contrast-dark": "#26a269",
+        "high-contrast-light": "#26a269"
+      }
+    },
+    {
+      "id": "collaboration.selection3Background",
+      "kind": "color",
+      "cssVariable": "--zeta-collaboration-selection3-background",
+      "owner": "collaboration.presentation",
+      "description": "Background tint for the fourth concurrent collaborator selection.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#c64600",
+        "light": "#c64600",
+        "high-contrast-dark": "#c64600",
+        "high-contrast-light": "#c64600"
+      },
+      "values": {
+        "dark": "#c64600",
+        "light": "#c64600",
+        "high-contrast-dark": "#c64600",
+        "high-contrast-light": "#c64600"
+      }
+    },
+    {
       "id": "input.foreground",
       "kind": "color",
       "cssVariable": "--zeta-input-foreground",
@@ -1422,6 +1502,246 @@
       }
     },
     {
+      "id": "editor.border",
+      "kind": "color",
+      "cssVariable": "--zeta-editor-border",
+      "owner": "editor.presentation",
+      "description": "Editor surface border.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "border",
+        "light": "border",
+        "high-contrast-dark": "border",
+        "high-contrast-light": "border"
+      },
+      "values": {
+        "dark": "#2b2b2b",
+        "light": "#e5e5e5",
+        "high-contrast-dark": "#2b2b2b",
+        "high-contrast-light": "#e5e5e5"
+      }
+    },
+    {
+      "id": "editor.widgetBackground",
+      "kind": "color",
+      "cssVariable": "--zeta-editor-widget-background",
+      "owner": "editor.presentation",
+      "description": "Background for floating editor widgets.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#252526",
+        "light": "#f3f3f3",
+        "high-contrast-dark": "#252526",
+        "high-contrast-light": "#f3f3f3"
+      },
+      "values": {
+        "dark": "#252526",
+        "light": "#f3f3f3",
+        "high-contrast-dark": "#252526",
+        "high-contrast-light": "#f3f3f3"
+      }
+    },
+    {
+      "id": "editor.widgetBorder",
+      "kind": "color",
+      "cssVariable": "--zeta-editor-widget-border",
+      "owner": "editor.presentation",
+      "description": "Border around floating editor widgets.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "widget.border",
+        "light": "widget.border",
+        "high-contrast-dark": "widget.border",
+        "high-contrast-light": "widget.border"
+      },
+      "values": {
+        "dark": "#454545",
+        "light": "#d4d4d4",
+        "high-contrast-dark": "#454545",
+        "high-contrast-light": "#d4d4d4"
+      }
+    },
+    {
+      "id": "editor.widgetShadow",
+      "kind": "color",
+      "cssVariable": "--zeta-editor-widget-shadow",
+      "owner": "editor.presentation",
+      "description": "Shadow around floating editor widgets.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "widget.shadow",
+        "light": "widget.shadow",
+        "high-contrast-dark": "widget.shadow",
+        "high-contrast-light": "widget.shadow"
+      },
+      "values": {
+        "dark": "#00000066",
+        "light": "#00000029",
+        "high-contrast-dark": "#00000066",
+        "high-contrast-light": "#00000029"
+      }
+    },
+    {
+      "id": "editor.inputBackground",
+      "kind": "color",
+      "cssVariable": "--zeta-editor-input-background",
+      "owner": "editor.presentation",
+      "description": "Background for editor widget inputs.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "input.background",
+        "light": "input.background",
+        "high-contrast-dark": "input.background",
+        "high-contrast-light": "input.background"
+      },
+      "values": {
+        "dark": "#313131",
+        "light": "#ffffff",
+        "high-contrast-dark": "#313131",
+        "high-contrast-light": "#ffffff"
+      }
+    },
+    {
+      "id": "editor.listHoverBackground",
+      "kind": "color",
+      "cssVariable": "--zeta-editor-list-hover-background",
+      "owner": "editor.presentation",
+      "description": "Hover background for editor widget lists.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "list.hoverBackground",
+        "light": "list.hoverBackground",
+        "high-contrast-dark": "list.hoverBackground",
+        "high-contrast-light": "list.hoverBackground"
+      },
+      "values": {
+        "dark": "#2a2d2e",
+        "light": "#e8e8e8",
+        "high-contrast-dark": "#2a2d2e",
+        "high-contrast-light": "#e8e8e8"
+      }
+    },
+    {
+      "id": "editor.descriptionForeground",
+      "kind": "color",
+      "cssVariable": "--zeta-editor-description-foreground",
+      "owner": "editor.presentation",
+      "description": "Foreground for editor widget descriptions.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "description.foreground",
+        "light": "description.foreground",
+        "high-contrast-dark": "description.foreground",
+        "high-contrast-light": "description.foreground"
+      },
+      "values": {
+        "dark": "#b8b8b8",
+        "light": "#616161",
+        "high-contrast-dark": "#b8b8b8",
+        "high-contrast-light": "#616161"
+      }
+    },
+    {
+      "id": "editor.hoverForeground",
+      "kind": "color",
+      "cssVariable": "--zeta-editor-hover-foreground",
+      "owner": "editor.presentation",
+      "description": "Foreground for editor Hovers.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "hover.foreground",
+        "light": "hover.foreground",
+        "high-contrast-dark": "hover.foreground",
+        "high-contrast-light": "hover.foreground"
+      },
+      "values": {
+        "dark": "#cccccc",
+        "light": "#3b3b3b",
+        "high-contrast-dark": "#cccccc",
+        "high-contrast-light": "#3b3b3b"
+      }
+    },
+    {
+      "id": "editor.hoverBackground",
+      "kind": "color",
+      "cssVariable": "--zeta-editor-hover-background",
+      "owner": "editor.presentation",
+      "description": "Background for editor Hovers.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "hover.background",
+        "light": "hover.background",
+        "high-contrast-dark": "hover.background",
+        "high-contrast-light": "hover.background"
+      },
+      "values": {
+        "dark": "#252526",
+        "light": "#f8f8f8",
+        "high-contrast-dark": "#252526",
+        "high-contrast-light": "#f8f8f8"
+      }
+    },
+    {
+      "id": "editor.hoverBorder",
+      "kind": "color",
+      "cssVariable": "--zeta-editor-hover-border",
+      "owner": "editor.presentation",
+      "description": "Border around editor Hovers.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "hover.border",
+        "light": "hover.border",
+        "high-contrast-dark": "hover.border",
+        "high-contrast-light": "hover.border"
+      },
+      "values": {
+        "dark": "#454545",
+        "light": "#d4d4d4",
+        "high-contrast-dark": "#454545",
+        "high-contrast-light": "#d4d4d4"
+      }
+    },
+    {
+      "id": "editor.inlayHintForeground",
+      "kind": "color",
+      "cssVariable": "--zeta-editor-inlay-hint-foreground",
+      "owner": "editor.presentation",
+      "description": "Foreground for editor inlay hints.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "muted.foreground",
+        "light": "muted.foreground",
+        "high-contrast-dark": "muted.foreground",
+        "high-contrast-light": "muted.foreground"
+      },
+      "values": {
+        "dark": "#8f8f8f",
+        "light": "#767676",
+        "high-contrast-dark": "#8f8f8f",
+        "high-contrast-light": "#767676"
+      }
+    },
+    {
+      "id": "editor.inlineCompletionForeground",
+      "kind": "color",
+      "cssVariable": "--zeta-editor-inline-completion-foreground",
+      "owner": "editor.presentation",
+      "description": "Foreground for inline completions.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "muted.foreground",
+        "light": "muted.foreground",
+        "high-contrast-dark": "muted.foreground",
+        "high-contrast-light": "muted.foreground"
+      },
+      "values": {
+        "dark": "#8f8f8f",
+        "light": "#767676",
+        "high-contrast-dark": "#8f8f8f",
+        "high-contrast-light": "#767676"
+      }
+    },
+    {
       "id": "diffEditor.removedLineBackground",
       "kind": "color",
       "cssVariable": "--zeta-diff-editor-removed-line-background",
@@ -1878,15 +2198,15 @@
       "description": "Editor background.",
       "needsTransparency": false,
       "defaults": {
-        "dark": "#FFFFFF",
-        "light": "#FFFFFF",
-        "high-contrast-dark": "#FFFFFF",
-        "high-contrast-light": "#FFFFFF"
+        "dark": "#1e1e1e",
+        "light": "#ffffff",
+        "high-contrast-dark": "#1e1e1e",
+        "high-contrast-light": "#ffffff"
       },
       "values": {
-        "dark": "#ffffff",
+        "dark": "#1e1e1e",
         "light": "#ffffff",
-        "high-contrast-dark": "#ffffff",
+        "high-contrast-dark": "#1e1e1e",
         "high-contrast-light": "#ffffff"
       }
     },
@@ -1898,15 +2218,15 @@
       "description": "Editor foreground.",
       "needsTransparency": false,
       "defaults": {
-        "dark": "#333333",
+        "dark": "#d4d4d4",
         "light": "#333333",
-        "high-contrast-dark": "#333333",
+        "high-contrast-dark": "#d4d4d4",
         "high-contrast-light": "#333333"
       },
       "values": {
-        "dark": "#333333",
+        "dark": "#d4d4d4",
         "light": "#333333",
-        "high-contrast-dark": "#333333",
+        "high-contrast-dark": "#d4d4d4",
         "high-contrast-light": "#333333"
       }
     },
@@ -2164,9 +2484,9 @@
         "high-contrast-light": "editor.background"
       },
       "values": {
-        "dark": "#ffffff",
+        "dark": "#1e1e1e",
         "light": "#ffffff",
-        "high-contrast-dark": "#ffffff",
+        "high-contrast-dark": "#1e1e1e",
         "high-contrast-light": "#ffffff"
       }
     },
@@ -2184,9 +2504,9 @@
         "high-contrast-light": "editor.foreground"
       },
       "values": {
-        "dark": "#333333",
+        "dark": "#d4d4d4",
         "light": "#333333",
-        "high-contrast-dark": "#333333",
+        "high-contrast-dark": "#d4d4d4",
         "high-contrast-light": "#333333"
       }
     },
@@ -2364,9 +2684,9 @@
         "high-contrast-light": "terminal.foreground"
       },
       "values": {
-        "dark": "#333333",
+        "dark": "#d4d4d4",
         "light": "#333333",
-        "high-contrast-dark": "#333333",
+        "high-contrast-dark": "#d4d4d4",
         "high-contrast-light": "#333333"
       }
     },

@@ -12,12 +12,12 @@
 }
 
 .zeta-document-collaboration-toolbar[data-state="connected"] {
-  color: var(--zeta-testing-icon-passed, var(--zeta-editor-foreground));
+  color: var(--zeta-success-foreground);
 }
 
 .zeta-document-collaboration-toolbar[data-state="error"],
 .zeta-document-collaboration-toolbar[data-state="resyncRequired"] {
-  color: var(--zeta-testing-icon-failed, var(--zeta-editor-foreground));
+  color: var(--zeta-error-foreground);
 }
 
 .zeta-document-collaboration-actions .zeta-action-bar {

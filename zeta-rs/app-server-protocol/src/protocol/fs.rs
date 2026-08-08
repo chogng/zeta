@@ -2,6 +2,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use ts_rs::TS;
+use crate::protocol::resources::ResourceMetadataResult;
 
 /// Stable filesystem entry kind exposed to clients.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -67,6 +68,22 @@ pub struct FsReadFileParams {
 pub struct FsReadFileResult {
     pub content: String,
     /// Opaque exact-content revision required to protect a later conditional write.
+    pub revision: String,
+}
+
+/// Read one binary file relative to the configured workspace root.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct FsReadBinaryFileParams {
+    pub path: PathBuf,
+}
+
+/// Connection-owned binary resource opened from one workspace file.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct FsReadBinaryFileResult {
+    pub resource: ResourceMetadataResult,
+    /// Opaque exact-content revision of the resource bytes.
     pub revision: String,
 }
 

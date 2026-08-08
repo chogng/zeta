@@ -247,10 +247,10 @@
   box-decoration-break: clone;
 }
 
-.zeta-document-remote-selection-0 { background: color-mix(in srgb, #3584e4 26%, transparent); }
-.zeta-document-remote-selection-1 { background: color-mix(in srgb, #9141ac 26%, transparent); }
-.zeta-document-remote-selection-2 { background: color-mix(in srgb, #26a269 26%, transparent); }
-.zeta-document-remote-selection-3 { background: color-mix(in srgb, #c64600 26%, transparent); }
+.zeta-document-remote-selection-0 { background: color-mix(in srgb, var(--zeta-collaboration-selection0-background) 26%, transparent); }
+.zeta-document-remote-selection-1 { background: color-mix(in srgb, var(--zeta-collaboration-selection1-background) 26%, transparent); }
+.zeta-document-remote-selection-2 { background: color-mix(in srgb, var(--zeta-collaboration-selection2-background) 26%, transparent); }
+.zeta-document-remote-selection-3 { background: color-mix(in srgb, var(--zeta-collaboration-selection3-background) 26%, transparent); }
 
 .zeta-document-text-block {
   padding: 12px 16px;

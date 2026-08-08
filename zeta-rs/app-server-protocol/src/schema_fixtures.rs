@@ -56,6 +56,7 @@ fn registry_method_and_notification_names_are_unique() {
     assert!(methods.contains("fs/getMetadata"));
     assert!(methods.contains("fs/readDirectory"));
     assert!(methods.contains("fs/readFile"));
+    assert!(methods.contains("fs/readBinaryFile"));
     assert!(methods.contains("fs/writeFile"));
     assert!(methods.contains("git/status"));
     assert!(methods.contains("git/textDiff"));
@@ -285,6 +286,7 @@ fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
     assert!(typescript.contains(r#""fs/getMetadata": { method: "fs/getMetadata" }"#));
     assert!(typescript.contains(r#""fs/readDirectory": { method: "fs/readDirectory" }"#));
     assert!(typescript.contains(r#""fs/readFile": { method: "fs/readFile" }"#));
+    assert!(typescript.contains(r#""fs/readBinaryFile": { method: "fs/readBinaryFile" }"#));
     assert!(typescript.contains(r#""fs/writeFile": { method: "fs/writeFile" }"#));
     assert!(typescript.contains(r#""fs/changed": { method: "fs/changed" }"#));
     assert!(

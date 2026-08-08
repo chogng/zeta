@@ -1782,6 +1782,7 @@ fn filesystem_rpc_lists_and_describes_workspace_paths() {
     ));
     std::fs::create_dir_all(root.join("src")).unwrap();
     std::fs::write(root.join("src/lib.rs"), "hello").unwrap();
+    std::fs::write(root.join("paper.pdf"), b"%PDF-1.7\n").unwrap();
     let server = server().with_file_system(Arc::new(LocalFileSystem::new(
         WorkspaceRoot::open(&root).unwrap(),
     )));
@@ -1848,6 +1849,26 @@ fn filesystem_rpc_lists_and_describes_workspace_paths() {
             "params":{"path":"src/lib.rs","content":"stale","expectedRevision":contents["result"]["revision"]}
         }),
     );
+    let binary = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":8,
+            "method":"fs/readBinaryFile",
+            "params":{"path":"paper.pdf"}
+        }),
+    );
+    let binary_data = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":9,
+            "method":"resource/read",
+            "params":{"resourceId":binary["result"]["resource"]["resourceId"],"offset":0,"maxBytes":262144}
+        }),
+    );
 
     assert_eq!(
         listed["result"]["entries"],
@@ -1862,6 +1883,12 @@ fn filesystem_rpc_lists_and_describes_workspace_paths() {
     assert_eq!(created["result"]["metadata"]["sizeBytes"], 3);
     assert_eq!(stale["error"]["code"], -32042);
     assert_eq!(stale["error"]["message"], "FileSystemRevisionConflict");
+    assert_eq!(binary["result"]["resource"]["mimeType"], "application/octet-stream");
+    assert_eq!(binary["result"]["resource"]["size"], 9);
+    assert!(binary["result"]["revision"].is_string());
+    assert_eq!(binary_data["result"]["dataBase64"], "JVBERi0xLjcK");
+    assert_eq!(binary_data["result"]["decodedLength"], 9);
+    assert_eq!(binary_data["result"]["eof"], true);
     assert_eq!(
         std::fs::read_to_string(root.join("src/lib.rs")).unwrap(),
         "updated"

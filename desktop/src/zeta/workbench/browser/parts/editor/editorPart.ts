@@ -8,6 +8,7 @@ import type { IConfigurationService } from "../../../../platform/configuration/c
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 import type { IKeybindingService } from "../../../../platform/keybinding/common/keybinding.js";
 import { type ITextFileService } from "../../../services/textfile/common/textFileService.js";
+import type { IFileService } from "../../../../platform/files/common/files.js";
 import { type ITextMateService } from "../../../services/textMate/common/textMateService.js";
 import { type ILanguageFeaturesService } from "../../../services/language/common/languageFeaturesService.js";
 import type { IDiffApi } from "../../../../platform/diff/common/diffApi.js";
@@ -53,6 +54,7 @@ export const IEditorPart =
 export interface IEditorPartOptions {
   readonly configurationService?: IConfigurationService;
   readonly keybindingService?: IKeybindingService;
+  readonly fileService?: IFileService;
   readonly textFileService?: ITextFileService;
   readonly textMateService?: ITextMateService;
   readonly languageFeaturesService?: ILanguageFeaturesService;
@@ -94,6 +96,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
       registry: options.registry ?? EditorPanes,
       configurationService: options.configurationService,
       keybindingService: options.keybindingService,
+      fileService: options.fileService,
       textFileService: options.textFileService,
       textMateService: options.textMateService,
       languageFeaturesService: options.languageFeaturesService,

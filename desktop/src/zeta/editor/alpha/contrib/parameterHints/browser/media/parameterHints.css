@@ -7,7 +7,7 @@
   background: var(--zeta-editor-hover-background, var(--zeta-editor-background));
   border: 1px solid var(--zeta-editor-border);
   border-radius: 4px;
-  box-shadow: 0 4px 14px rgb(0 0 0 / 24%);
+  box-shadow: 0 4px 14px var(--zeta-editor-widget-shadow);
 }
 
 .zeta-alpha-editor-parameter-hints-signature.active {
