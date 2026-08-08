@@ -124,6 +124,30 @@ test("Alpha editor part honors a read-only input without disabling selection inf
   dom.window.close();
 });
 
+test("Alpha editor part mounts text drop as an optional full-editor contribution", () => {
+  const dom = new JSDOM("<!doctype html><body><main></main></body>");
+  dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+  const container = dom.window.document.querySelector<HTMLElement>("main")!;
+  const model = new TextModel("alpha");
+  const reference = modelReference(URI.file("C:\\project\\drop.txt"), model);
+  const editorPart = new EditorPart({
+    container,
+    input: { resource: reference.resource, label: "drop.txt" },
+    languageId: "plaintext",
+    modelReference: reference,
+  });
+  editorPart.layout({ width: 120, height: 20 });
+  editorPart.viewport.element.getBoundingClientRect = () => rectangle(120, 20);
+  const drop = textDropEvent(dom.window, "dropped", 100, 5);
+
+  editorPart.viewport.element.dispatchEvent(drop);
+
+  assert.equal(drop.defaultPrevented, true);
+  assert.equal(editorPart.getValue(), "alphadropped");
+  editorPart.dispose();
+  dom.window.close();
+});
+
 test("Alpha editor part announces save completion and forwards failures", async () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   dom.window.HTMLCanvasElement.prototype.getContext = () => null;
@@ -198,6 +222,37 @@ function modelReference(resource: URI, model: TextModel): TextModelReference {
 
 function nextTask(): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, 0));
+}
+
+function textDropEvent(targetWindow: typeof browserEnvironment.window, text: string, clientX: number, clientY: number): DragEvent {
+  const event = new targetWindow.Event("drop", { bubbles: true, cancelable: true });
+  Object.defineProperties(event, {
+    clientX: { value: clientX },
+    clientY: { value: clientY },
+    dataTransfer: {
+      value: {
+        types: ["text/plain"],
+        getData(type: string): string {
+          return type === "text/plain" ? text : "";
+        },
+      },
+    },
+  });
+  return event as unknown as DragEvent;
+}
+
+function rectangle(width: number, height: number): DOMRect {
+  return {
+    x: 0,
+    y: 0,
+    width,
+    height,
+    top: 0,
+    right: width,
+    bottom: height,
+    left: 0,
+    toJSON: () => ({}),
+  };
 }
 
 async function waitFor(predicate: () => boolean): Promise<void> {

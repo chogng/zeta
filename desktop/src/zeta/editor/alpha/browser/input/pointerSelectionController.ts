@@ -1,17 +1,17 @@
-import { addDisposableListener } from "../../../../../base/browser/dom.js";
-import { getWindow } from "../../../../../base/browser/window.js";
-import { DisposableOwner, ResettableDisposableGroup } from "../../../../../base/common/lifecycle.js";
-import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
-import { createEditorColumnSelectionSet } from "../../../common/cursor/columnSelection.js";
-import { SelectionDirection, TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
-import { TextPosition, TextRange } from "../../../common/core/text.js";
-import { type TextModel } from "../../../common/model/textModel.js";
-import { TrackedRangeStickiness, type TrackedRange } from "../../../common/model/trackedRange.js";
-import { getWordSelectionRange } from "../../../common/cursor/wordBoundary.js";
-import { type EditorViewport } from "../../../browser/view/editorViewport.js";
+import { addDisposableListener } from "../../../../base/browser/dom.js";
+import { getWindow } from "../../../../base/browser/window.js";
+import { DisposableOwner, ResettableDisposableGroup } from "../../../../base/common/lifecycle.js";
+import { type EditorSelectionController } from "../../common/cursor/editorSelectionController.js";
+import { createEditorColumnSelectionSet } from "../../common/cursor/columnSelection.js";
+import { SelectionDirection, TextSelection, TextSelectionSet } from "../../common/core/selection.js";
+import { TextPosition, TextRange } from "../../common/core/text.js";
+import { type TextModel } from "../../common/model/textModel.js";
+import { TrackedRangeStickiness, type TrackedRange } from "../../common/model/trackedRange.js";
+import { getWordSelectionRange } from "../../common/cursor/wordBoundary.js";
+import { type EditorViewport } from "../view/editorViewport.js";
 import { PointerAutoScroller } from "./pointerAutoScroll.js";
-import { EditorHitTargetKind, type EditorHitTarget } from "../../../browser/view/pointerHitTest.js";
-import { PointerMultiCursorModifier, combineAlphaPointerSelection, findAlphaPointerToggleCandidate, isAlphaPointerMultiCursorGesture, readAlphaPointerMultiCursorModifier } from "../common/pointerMultiCursor.js";
+import { EditorHitTargetKind, type EditorHitTarget } from "../view/pointerHitTest.js";
+import { PointerMultiCursorModifier, combineAlphaPointerSelection, findAlphaPointerToggleCandidate, isAlphaPointerMultiCursorGesture, readAlphaPointerMultiCursorModifier } from "./pointerMultiCursor.js";
 
 enum PointerSelectionKind {
   Character = "character",

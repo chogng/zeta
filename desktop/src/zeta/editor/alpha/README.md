@@ -168,7 +168,7 @@ architectural drift signal and require extraction at that point.
 | Parser/indentation/lexical/named-region/manual folding, visible-row projection, gutter toggle, recursive/level fold chords, collapse-all and expand-all | ✅ | `browser/services/rustSyntaxFoldingService.ts` adds revision-bound parser folds for JavaScript/JSX, TypeScript/TSX, JSON, JSONC, Rust, and Shell; `contrib/folding/browser/{foldingRanges,syntaxRangeProvider,indentRangeProvider,foldingModel,hiddenRangeModel,foldingDecorations,folding}` retains lexical, marker, indentation, and manual fallback |
 | Transient Alt+Z word-wrap toggle | ✅ | `EditorViewport` / `WordWrapController` |
 | Read-only virtual line DOM projection | ✅ | `browser/EditorViewport` |
-| Canonical browser CodeEditor composition | ✅ | `browser/widget/codeEditor/CodeEditorWidget`; owns viewport, native input, keyboard/pointer navigation, and text drop while model and selections remain caller-owned |
+| Canonical browser CodeEditor composition | ✅ | `browser/widget/codeEditor/CodeEditorWidget`; owns viewport, native input, and keyboard/pointer navigation while model and selections remain caller-owned; optional text drop is mounted by the full-editor contribution composition |
 | Computed-font measurement and incremental line widths | ✅ | `DomTextMeasurer` / `LineWidthIndex` |
 | Virtual line-number gutter | ✅ | `browser/EditorViewport` |
 | Multi-selection and caret geometry/DOM projection | ✅ | `createAlphaSelectionGeometry` / `EditorViewport` |

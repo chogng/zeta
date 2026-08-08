@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { type TextMeasurer } from "../../../../browser/view/fontMetrics.js";
-import { EditorSelectionController } from "../../../../common/cursor/editorSelectionController.js";
-import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
-import { TextPosition, TextRange } from "../../../../common/core/text.js";
-import { TextModel } from "../../../../common/model/textModel.js";
+import { type TextMeasurer } from "../../../browser/view/fontMetrics.js";
+import { EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
+import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
+import { TextPosition, TextRange } from "../../../common/core/text.js";
+import { TextModel } from "../../../common/model/textModel.js";
 
 class FixedTextMeasurer implements TextMeasurer {
   readonly horizontalPadding = 24;
@@ -36,10 +36,10 @@ for (const [name, value] of Object.entries({
 }
 
 const { EditorViewport } = await import(
-  "../../../../browser/view/editorViewport.js"
+  "../../../browser/view/editorViewport.js"
 );
 const { PointerSelectionController } = await import(
-  "../../browser/dndController.js"
+  "../../../browser/input/pointerSelectionController.js"
 );
 
 test("Pointer selection supports clicks, Shift, drag, gutter, and cancellation", () => {

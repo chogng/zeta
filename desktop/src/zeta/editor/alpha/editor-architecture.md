@@ -282,8 +282,8 @@ contrib/<feature>/
 | `indentation` | `contrib/indentation/common/indentation.ts`、`browser/indentation.ts` | 同名 contrib | Current | indentation calculation 与 guides presentation |
 | `comment` | `contrib/comment/common/{blockCommentCommands,lineCommentCommands}.ts`、browser controllers | 同名 contrib | Current | comment language contract、toggle command 和 selection presentation |
 | `clipboard` | `contrib/clipboard/common/clipboard.ts`、browser clipboard 系列 | 同名 contrib | Current | copy/cut/paste、selection metadata、safe HTML 和 line policy |
-| `dnd` | `contrib/dnd/browser/{dndController,pointerAutoScroll}.ts`、`common/pointerMultiCursor.ts` | 同名 contrib | Current | editor 内拖拽 selection；文件 drop 归 dropOrPasteInto |
-| `dropOrPasteInto` | `contrib/dropOrPasteInto/browser/{textDropController,textFileTransfer}.ts` | 同名 contrib | Current | file/text/URI drop、MIME provider 和 paste provider |
+| pointer selection | `browser/input/{pointerSelectionController,pointerAutoScroll,pointerMultiCursor}.ts` | `CodeEditorWidget` | Current | 基础 pointer selection、拖动自动滚动与修饰键多光标；不是 contrib，也不处理外部 drop |
+| `dropOrPasteInto` | `contrib/dropOrPasteInto/browser/{textDropController,textFileTransfer}.ts` | 同名 contrib，由完整 `EditorPart` 装配 | Current | file/text/URI drop、MIME provider 和 paste provider；基础 `CodeEditorWidget` 不硬编码该可选行为 |
 | `insertFinalNewLine` | `contrib/insertFinalNewLine/{common/insertFinalNewLine.ts,browser/insertFinalNewLineController.ts}` | 同名 contrib | Current | save 边界的最终换行策略，不由 TextModel 隐式执行 |
 | `inPlaceReplace` | `contrib/inPlaceReplace/browser/inPlaceReplaceController.ts` | `contrib/inPlaceReplace/browser/inPlaceReplaceController.ts` | Current | 当前 selection 的 next/previous replacement |
 | `smartSelect` | `contrib/smartSelect/common/smartSelect.ts`、`browser/smartSelectController.ts` | `contrib/smartSelect/common/smartSelect.ts`、`browser/smartSelectController.ts` | Current | 语法/词边界扩展选择；不能把语言 AST 直接塞进 model |
@@ -394,9 +394,9 @@ contrib/<feature>/
 | tokens | `common/tokens/{languageTokens,languageTokenLineIndex}.ts` | token value、delta、normalizer、按行索引 | 不渲染 CSS；presentation 由 browser/view 负责 |
 | services | `common/services/{languageService,textModelService,textResourceStore}.ts` | Alpha-owned provider factory、model reference、resource resolve/save/change contract | 不导出 Workbench transport 或 generated DTO |
 | browser/view | `browser/view/*.ts` | DOM viewport、rendered line、geometry、minimap、semantic token 和 decoration presentation | view 只能读取 model/viewModel snapshot；CSS 由 view owner 管理 |
-| browser/input | `browser/input/{textInputController,compositionController,keyboardNavigationController}.ts` | textarea、IME、键盘导航和输入事件适配 | 输入热路径不等待 IPC/RPC |
+| browser/input | `browser/input/{textInputController,compositionController,keyboardNavigationController,pointerSelectionController,pointerAutoScroll,pointerMultiCursor}.ts` | textarea、IME、键盘和 pointer navigation、输入事件适配 | 输入热路径不等待 IPC/RPC |
 | browser/services | `browser/services/{browserTextModelService,browserTextResourceStore,rustDiffComputationService}.ts` | Workbench textfile、Rust App Server 与 Alpha contract 的薄适配 | 强制 transport 缺失时显式报错，不做 production fallback |
-| contrib/editing | `contrib/{clipboard,comment,dnd,dropOrPasteInto,linesOperations,transpose,wordWrap,insertFinalNewLine}/` | 每个功能自己拥有 common command、browser controller、presentation 和 tests | 新增功能不得回填 browser 根目录 |
+| contrib/editing | `contrib/{clipboard,comment,dropOrPasteInto,linesOperations,transpose,wordWrap,insertFinalNewLine}/` | 每个功能自己拥有 common command、browser controller、presentation 和 tests | 新增功能不得回填 browser 根目录 |
 | contrib/language UX | `contrib/{bracketMatching,folding,gotoError,hover,suggest,snippet,format,rename}/` | 语言驱动的编辑、诊断、hover、completion、format 和 rename | provider contract 在 common；DOM/widget 在 browser |
 | contrib/query contracts | `contrib/{documentSymbols,gotoSymbol,links,codeAction,inlayHints,inlineCompletions,parameterHints,linkedEditing,codelens}/common/` | provider request/result、版本 freshness、resolve 和 edit contract | 没有浏览器 UI 时仍必须保持可测试的 common contract；不得创建空 controller |
 

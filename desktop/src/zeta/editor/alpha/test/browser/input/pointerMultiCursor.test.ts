@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { PointerMultiCursorModifier, combineAlphaPointerSelection, isAlphaPointerMultiCursorGesture, readAlphaPointerMultiCursorModifier } from "../../common/pointerMultiCursor.js";
-import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
-import { TextPosition } from "../../../../common/core/text.js";
+import { PointerMultiCursorModifier, combineAlphaPointerSelection, isAlphaPointerMultiCursorGesture, readAlphaPointerMultiCursorModifier } from "../../../browser/input/pointerMultiCursor.js";
+import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
+import { TextPosition } from "../../../common/core/text.js";
 
 test("Pointer multi-cursor modifiers require their exact configured chord", () => {
   const state = (

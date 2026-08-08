@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { getAlphaPointerAutoScrollVelocity } from "../../browser/pointerAutoScroll.js";
+import { getAlphaPointerAutoScrollVelocity } from "../../../browser/input/pointerAutoScroll.js";
 
 const bounds = {
   left: 100,

@@ -44,11 +44,12 @@ Gama is a sibling structured-editor domain. Alpha browser code must not import G
 
 `CodeEditorWidget` is the canonical browser editing surface consumed by editor parts and
 embedded widgets. It owns one `EditorViewport`, one `TextInputController`, keyboard and
-pointer navigation, and text-drop adaptation. Its caller retains the shared `TextModel` and the
-editor-local `EditorSelectionController`, so disposing a widget never disposes document state and
-multiple editors may safely project the same model. `EditorPart` adds language, folding,
-diagnostic, save, and command controllers around this surface; product widgets must consume the
-CodeEditorWidget rather than assembling viewport and native-input internals themselves.
+pointer navigation. Its caller retains the shared `TextModel` and the editor-local
+`EditorSelectionController`, so disposing a widget never disposes document state and multiple
+editors may safely project the same model. `EditorPart` adds language, folding, diagnostic,
+save, command, and optional text-drop controllers around this surface; product widgets must
+consume the `CodeEditorWidget` rather than assembling viewport and native-input internals
+themselves.
 
 `EditorViewport` is the first native browser projection. It consumes
 `EditorViewportModel`, creates one component-owned scroll surface, and renders

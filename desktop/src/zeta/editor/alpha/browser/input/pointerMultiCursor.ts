@@ -1,5 +1,5 @@
-import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
-import { type TextPosition } from "../../../common/core/text.js";
+import { TextSelection, TextSelectionSet } from "../../common/core/selection.js";
+import { type TextPosition } from "../../common/core/text.js";
 
 export enum PointerMultiCursorModifier {
   Alt = "alt",

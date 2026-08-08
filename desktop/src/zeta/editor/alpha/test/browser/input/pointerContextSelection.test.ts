@@ -1,15 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
-import { TextPosition } from "../../../../common/core/text.js";
+import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
+import { TextPosition } from "../../../common/core/text.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({ window: browserEnvironment.window, document: browserEnvironment.window.document, Node: browserEnvironment.window.Node, Element: browserEnvironment.window.Element, HTMLElement: browserEnvironment.window.HTMLElement, Event: browserEnvironment.window.Event })) {
   Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { isPositionInSelections } = await import("../../browser/dndController.js");
+const { isPositionInSelections } = await import("../../../browser/input/pointerSelectionController.js");
 
 test("Context-menu selection policy preserves only non-empty selected content", () => {
   const selections = TextSelectionSet.withPrimary([

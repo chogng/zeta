@@ -16,7 +16,8 @@
 | `editor.main.ts` | 完整 Alpha 入口；组合 `editor.all.ts` 与 `editor.api.ts`。 |
 | `editor.worker.start.ts` | Alpha dedicated language worker 的统一启动协议；syntax 与 completion worker 使用它建立 canonical wire port。 |
 | `contrib/editor.contribution.ts` | 注册 Alpha code/diff pane，并强制注入 Workbench text-file 与 Rust diff adapter；生产环境不提供 fallback。 |
-| `browser/widget/codeEditor/codeEditorWidget.ts` | 组合 viewport、输入、键盘导航、pointer selection 和 text drop；不拥有语言功能。 |
+| `browser/widget/codeEditor/codeEditorWidget.ts` | 组合 viewport、输入、键盘导航和 pointer selection；不拥有语言功能或可选 drop/paste contrib。 |
+| `browser/input/{pointerSelectionController,pointerAutoScroll,pointerMultiCursor}.ts` | 浏览器基础 pointer selection、拖动自动滚动与修饰键多光标；由 `CodeEditorWidget` 装配，不属于可选 contrib。 |
 | `browser/widget/diffEditor/diffEditorWidget.ts` | 消费 `common/diff/diffModel.ts` 的只读 side-by-side projection；不计算 diff。 |
 
 ## 2. 公共同步内核
@@ -83,7 +84,7 @@
 | `linesOperations` | `contrib/linesOperations/common/lineJoin.ts`、`browser/*.ts` | join、indent、duplicate、move、delete line groups。 |
 | `comment` | `contrib/comment/common/*.ts`、`browser/*.ts` | language configuration 驱动的 line/block comment command。 |
 | `clipboard` | `contrib/clipboard/common/clipboard.ts`、`browser/*.ts` | copy/cut/paste、line policy、URI/text provider 和 safe rich text。 |
-| `dnd` / `dropOrPasteInto` | 各自的 `common`/`browser` | editor 内拖动 selection 与外部 file/text/URI drop；不可混入 pointer selection。 |
+| `dropOrPasteInto` | `contrib/dropOrPasteInto/browser/*.ts` | 外部 file/text/URI drop、MIME provider 和 paste provider；只由完整 `EditorPart` 装配，不能混入基础 pointer selection。 |
 | `snippet` / `suggest` | `contrib/snippet/common/*.ts`、`contrib/suggest/{common,browser}/*` | parser、placeholder session、completion trigger/filter/resolve/widget。 |
 | `wordWrap` / `transpose` / `insertFinalNewLine` | 各 feature 的 browser/common 文件 | 只改变 editor presentation 或 save boundary，不改变 model 默认语义。 |
 

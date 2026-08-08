@@ -4,9 +4,8 @@ import { type EditorSelectionController } from "../../../common/cursor/editorSel
 import { type TextModel } from "../../../common/model/textModel.js";
 import { EditorViewport, type EditorViewportOptions } from "../../view/editorViewport.js";
 import { KeyboardNavigationController, type KeyboardNavigationControllerOptions } from "../../input/keyboardNavigationController.js";
-import { PointerSelectionController, type PointerSelectionControllerOptions } from "../../../contrib/dnd/browser/dndController.js";
+import { PointerSelectionController, type PointerSelectionControllerOptions } from "../../input/pointerSelectionController.js";
 import { TextInputController, type TextInputControllerOptions } from "../../input/textInputController.js";
-import { TextDropController } from "../../../contrib/dropOrPasteInto/browser/textDropController.js";
 
 export type CodeEditorWidgetViewportOptions = Omit<EditorViewportOptions, "container" | "model" | "lineHeight" | "ariaLabel" | "selectionController">;
 
@@ -26,7 +25,8 @@ export interface CodeEditorWidgetOptions {
  * Canonical browser editing surface for one Alpha text model and editor-local selection controller.
  *
  * Callers retain ownership of the model and selection controller. This component owns their DOM
- * projection, native text input, keyboard and pointer navigation, and external text-drop adapter.
+ * projection plus native text input, keyboard navigation, and pointer selection. Optional
+ * drop/paste behavior belongs to the host's contribution composition.
  */
 export class CodeEditorWidget extends DisposableOwner {
   readonly viewport: EditorViewport;
@@ -50,7 +50,6 @@ export class CodeEditorWidget extends DisposableOwner {
       }));
       this.own(new KeyboardNavigationController(this.viewport, options.selectionController, options.keyboardNavigation));
       this.own(new PointerSelectionController(this.viewport, options.selectionController, options.pointerSelection));
-      this.own(new TextDropController(this.viewport, options.selectionController));
     } catch (error) {
       this.dispose();
       throw error;

@@ -111,6 +111,32 @@ test("Non-text drops remain available to their host", () => {
   dom.window.close();
 });
 
+test("Read-only editors leave text drops available to their host", () => {
+  const dom = new JSDOM("<!doctype html><body><main></main></body>");
+  const container = dom.window.document.querySelector<HTMLElement>("main")!;
+  using model = new TextModel("alpha");
+  using selections = new EditorSelectionController(
+    model,
+    TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))),
+    { readOnly: true },
+  );
+  using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+  viewport.element.getBoundingClientRect = () => rectangle(120, 20);
+  viewport.layout({ width: 120, height: 20 });
+  using controller = new TextDropController(viewport, selections);
+  const data = new MemoryDragData(["text/plain"], new Map([["text/plain", "dropped"]]));
+
+  const dragOver = dragEvent(dom.window, "dragover", data, 50, 5);
+  const drop = dragEvent(dom.window, "drop", data, 50, 5);
+  viewport.element.dispatchEvent(dragOver);
+  viewport.element.dispatchEvent(drop);
+
+  assert.equal(dragOver.defaultPrevented, false);
+  assert.equal(drop.defaultPrevented, false);
+  assert.equal(model.getText(), "alpha");
+  dom.window.close();
+});
+
 test("Rich HTML drops reduce to inert text when plain text is unavailable", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   const container = dom.window.document.querySelector<HTMLElement>("main")!;

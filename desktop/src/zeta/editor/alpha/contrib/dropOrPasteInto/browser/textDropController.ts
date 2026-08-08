@@ -28,13 +28,14 @@ export class TextDropController extends DisposableOwner {
   }
 
   private handleDragOver(event: DragEvent): void {
-    if (event.defaultPrevented || !containsText(event.dataTransfer) && !selectAlphaTextFileTransfer(event.dataTransfer?.files ?? [])) return;
+    if (this.selections.readOnly || event.defaultPrevented) return;
+    if (!containsText(event.dataTransfer) && !selectAlphaTextFileTransfer(event.dataTransfer?.files ?? [])) return;
     event.preventDefault();
     if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
   }
 
   private handleDrop(event: DragEvent): void {
-    if (event.defaultPrevented) return;
+    if (this.selections.readOnly || event.defaultPrevented) return;
     const text = readDropText(event.dataTransfer, this.viewport.element.ownerDocument);
     const target = this.viewport.getNearestTargetAtClientPoint(event);
     if (!target) return;

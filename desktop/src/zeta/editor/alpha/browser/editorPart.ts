@@ -8,6 +8,7 @@ import { type TextModelReference } from "../common/services/textModelService.js"
 import { CodeEditorWidget } from "./widget/codeEditor/codeEditorWidget.js";
 import { type EditorTextDirection, type EditorViewport, type EditorViewportPresentation } from "./view/editorViewport.js";
 import { DecorationPresentation, createAlphaDecorationSource } from "./view/decorationPresentation.js";
+import { TextDropController } from "../contrib/dropOrPasteInto/browser/textDropController.js";
 import { CursorUndoController } from "../contrib/cursorUndo/browser/cursorUndoController.js";
 import { DiagnosticNavigationController } from "../contrib/gotoError/browser/gotoError.js";
 import { DiagnosticHoverController } from "../contrib/hover/browser/diagnosticHoverController.js";
@@ -288,6 +289,7 @@ export class EditorPart extends DisposableOwner {
       }));
       this.viewport = this.codeEditor.viewport;
       this.textInput = this.codeEditor.textInput;
+      this.own(new TextDropController(this.viewport, this.selections));
       this.own(new TokenizationController(this.viewport, tokenization));
       this.own(new EditorStateController(this.textInput.element, this.viewport, this.selections, editorState));
       if (options.input.readOnly) this.own(new ReadOnlyMessageController(this.textInput.element, this.viewport));
