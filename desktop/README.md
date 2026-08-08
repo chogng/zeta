@@ -4,7 +4,7 @@
 通过 App Server 使用 Rust 后端；三条公开产品线的关系见
 [`docs/product-lines.md`](../docs/product-lines.md)。
 
-`code`、`academic` 与 `complete` 三种内部构建变体的静态入口、输出目录和 contribution 所有权以
+`code` 与 `academic` 两种内部构建变体的静态入口、输出目录和 contribution 所有权以
 [`docs/product-editions.md`](../docs/product-editions.md) 为准；本 README 只记录 Desktop
 实现、运行与验证入口。
 
@@ -28,7 +28,7 @@ corepack pnpm dev:desktop
 corepack pnpm dev:desktop:ui
 ```
 
-该命令只同步前端生成资源，并启动 Vite、Electron 主进程、预加载脚本和 Electron 窗口；不会构建 Rust 开发包，也不会启动 App Server。窗口中的 App Server 状态会保持为已停止，依赖后端的聊天、文件、Git、终端和搜索操作会明确不可用；选择文件夹仅更新界面的工作区上下文，方便检查前端布局和状态。`dev:desktop:ui:code`、`dev:desktop:ui:academic` 和 `dev:desktop:ui:complete` 可用于选择产品变体。
+该命令只同步前端生成资源，并启动 Vite、Electron 主进程、预加载脚本和 Electron 窗口；不会构建 Rust 开发包，也不会启动 App Server。窗口中的 App Server 状态会保持为已停止，依赖后端的聊天、文件、Git、终端和搜索操作会明确不可用；选择文件夹仅更新界面的工作区上下文，方便检查前端布局和状态。`dev:desktop:ui:code` 与 `dev:desktop:ui:academic` 可用于选择产品变体。
 
 只开发 Browser Workbench 界面时，在仓库根目录运行：
 
@@ -49,8 +49,8 @@ corepack pnpm dev:web:full
 
 完整模式监听 `127.0.0.1:5174`，根地址同样会进入当前产品版本。Browser 通过 Vite 已认证的 HMR WebSocket 连接本地开发
 桥接器；桥接器为每个浏览器连接启动独立的 `zeta app-server --listen stdio://` 子进程，
-浏览器连接关闭时对应子进程也会被回收。`dev:web:code`、`dev:web:academic`、
-`dev:web:complete` 与对应的 `dev:web:full:*` 命令用于显式选择产品版本。
+浏览器连接关闭时对应子进程也会被回收。`dev:web:code`、`dev:web:academic` 与对应的
+`dev:web:full:*` 命令用于显式选择产品版本。
 
 `dev:desktop` 与 `dev:web:full` 会先通过 Node 开发组装器生成
 `desktop/.tmp/zeta-package`；其中包含 debug Rust

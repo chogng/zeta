@@ -7,7 +7,6 @@ test("Workbench entry redirects root requests to the selected product", () => {
   for (const [rendererEntry, expectedLocation] of [
     ["workbench-code", "/browser/workbench/workbench-code.html"],
     ["workbench-academic", "/browser/workbench/workbench-academic.html"],
-    ["workbench-complete", "/browser/workbench/workbench-complete.html"],
   ]) {
     const middleware = configuredMiddleware(rendererEntry);
     const result = invoke(middleware, { method: "GET", url: "/?theme=dark" });

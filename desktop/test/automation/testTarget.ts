@@ -1,5 +1,5 @@
 export type AppServerTestMode = "disabled" | "required";
-export type DesktopProduct = "academic" | "code" | "complete";
+export type DesktopProduct = "academic" | "code";
 
 export type PlaywrightTarget =
   | {
@@ -27,8 +27,6 @@ export function playwrightTargetForProject(projectName: string, baseURL: string 
       return { kind: "electron", appServerMode: "required", product: "code" };
     case "electron-editor-academic-app-server":
       return { kind: "electron", appServerMode: "required", product: "academic" };
-    case "electron-editor-complete-app-server":
-      return { kind: "electron", appServerMode: "required", product: "complete" };
     default:
       throw new Error(`Unsupported Playwright project: ${projectName}`);
   }

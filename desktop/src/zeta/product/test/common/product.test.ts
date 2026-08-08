@@ -43,10 +43,6 @@ test("product selection defaults to the Zeta Desktop build and accepts every edi
     getProductConfiguration("academic").rendererEntry,
     "workbench-academic",
   );
-  assert.equal(
-    getProductConfiguration("complete").rendererEntry,
-    "workbench-complete",
-  );
 });
 
 test("product data paths keep installed editions and Chromium session data separate", () => {
@@ -57,7 +53,6 @@ test("product data paths keep installed editions and Chromium session data separ
 
   assert.equal(paths[0]?.userDataPath, "/application-data/Zeta");
   assert.equal(paths[1]?.userDataPath, "/application-data/Zeta Academic");
-  assert.equal(paths[2]?.userDataPath, "/application-data/Zeta Complete");
   assert.equal(new Set(paths.map((value) => value.userDataPath)).size, paths.length);
   assert.equal(new Set(paths.map((value) => value.sessionDataPath)).size, paths.length);
   assert.ok(paths.every((value) => value.sessionDataPath.endsWith("/session-data")));
@@ -70,9 +65,15 @@ test("product selection rejects unknown build editions", () => {
   );
 });
 
-test("packaged product selection requires exactly one renderer edition", () => {
+test("packaged product selection requires exactly one complete renderer edition", () => {
   const rendererRoot = mkdtempSync(join(tmpdir(), "zeta-products-"));
   try {
+    assert.throws(
+      () => resolvePackagedProductId(rendererRoot),
+      /found none/,
+    );
+
+    createPackagedWorkbench(rendererRoot, "academic");
     assert.throws(
       () => resolvePackagedProductId(rendererRoot),
       /found none/,
@@ -95,6 +96,24 @@ test("packaged product selection requires exactly one renderer edition", () => {
 });
 
 function createPackagedRenderer(
+  rendererRoot: string,
+  productId: "code" | "academic",
+): void {
+  createPackagedWorkbench(rendererRoot, productId);
+  const sessionsRoot = join(
+    rendererRoot,
+    productId,
+    "electron-browser",
+    "sessions",
+  );
+  mkdirSync(sessionsRoot, { recursive: true });
+  writeFileSync(
+    join(sessionsRoot, `sessions-${productId}.html`),
+    "<!doctype html>",
+  );
+}
+
+function createPackagedWorkbench(
   rendererRoot: string,
   productId: "code" | "academic",
 ): void {

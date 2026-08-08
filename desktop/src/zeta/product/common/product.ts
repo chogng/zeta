@@ -1,7 +1,6 @@
 export const productIds = [
   "code",
   "academic",
-  "complete",
 ] as const;
 
 export type ProductId = typeof productIds[number];
@@ -9,7 +8,6 @@ export type ProductId = typeof productIds[number];
 export const rendererEntryNames = [
   "workbench-code",
   "workbench-academic",
-  "workbench-complete",
 ] as const;
 
 export type RendererEntryName = typeof rendererEntryNames[number];
@@ -45,19 +43,9 @@ export const AcademicProduct: ProductConfiguration = {
   rendererEntry: "workbench-academic",
 };
 
-export const CompleteProduct: ProductConfiguration = {
-  id: "complete",
-  name: "Zeta Complete",
-  applicationId: "com.zeta.desktop.complete",
-  userDataFolderName: "Zeta Complete",
-  storageNamespace: "complete",
-  rendererEntry: "workbench-complete",
-};
-
 const products: Readonly<Record<ProductId, ProductConfiguration>> = {
   code: ZetaDesktopProduct,
   academic: AcademicProduct,
-  complete: CompleteProduct,
 };
 
 /** Resolves the selected Electron Desktop build, defaulting local and legacy builds to Zeta. */

@@ -1,7 +1,10 @@
 import "../../../workbench/workbench.web.main.js";
 import "../../../editor/alpha/editor.all.js";
 import { codeWorkbenchSession } from "../../../sessions/browser/codeWorkbenchSession.js";
+import { codeSessionsProfile } from "../../../sessions/browser/code/codeSessionsProfile.js";
+import { registerSessionsTitlebarEntry } from "../../../sessions/browser/common/sessionTitlebarEntry.js";
 import { ZetaDesktopProduct } from "../../../product/common/product.js";
 import { startBrowserWorkbench } from "../../../workbench/browser/web.bootstrap.js";
 
+registerSessionsTitlebarEntry(codeSessionsProfile.titlebarActionId, "Open Code Sessions", "../sessions/sessions-code.html");
 startBrowserWorkbench(ZetaDesktopProduct, codeWorkbenchSession);

@@ -367,6 +367,13 @@ export class ZetaApplication extends DisposableOwner {
       "workbench",
       `${this.product.rendererEntry}.html`,
     );
+    const sessionsRendererFile = join(
+      this.rendererRoot,
+      this.product.id,
+      "electron-browser",
+      "sessions",
+      `sessions-${this.product.id}.html`,
+    );
     const rendererEntryUrl =
       !app.isPackaged && rendererUrl
         ? new URL(
@@ -374,6 +381,13 @@ export class ZetaApplication extends DisposableOwner {
           rendererUrl,
         ).href
         : pathToFileURL(rendererFile).href;
+    const sessionsEntryUrl =
+      !app.isPackaged && rendererUrl
+        ? new URL(
+          `/electron-browser/sessions/sessions-${this.product.id}.html`,
+          rendererUrl,
+        ).href
+        : pathToFileURL(sessionsRendererFile).href;
 
     const windowDisposables = this.own(new DisposableStore());
     windowDisposables.add(this.windowStateTracking);
@@ -474,7 +488,10 @@ export class ZetaApplication extends DisposableOwner {
       ipcMain,
       {
         webContents: window.webContents,
-        allowedEntryUrls: new Set([normalizeEntryUrl(rendererEntryUrl)]),
+        allowedEntryUrls: new Set([
+          normalizeEntryUrl(rendererEntryUrl),
+          normalizeEntryUrl(sessionsEntryUrl),
+        ]),
       },
       ipcRoutes,
     ));

@@ -18,8 +18,8 @@ Zeta 不是一个 UI 宿主的三种包装，而是三条产品线共享 Rust �
 | `zeta` | Electron Desktop | Renderer + Preload + Electron Main | Electron Main 启动并桥接 Rust App Server | 当前 Renderer 用 xterm；Rust/App Server 管理 `zeta-utils-pty` |
 | `zeterm` | 纯 Rust Desktop | `zeterm/` 原生窗口与 UI | Rust 进程内直接组合 | `zeta-terminal` 负责终端语义，`zeta-utils-pty` 负责 PTY/进程 |
 
-产品线与 Electron 的内部构建变体不是同一个维度。当前 Desktop 仍保留 `code`、`academic`、
-`complete` 这些源码和构建标识；它们是 `zeta` Electron Desktop 的构建变体，不代表
+产品线与 Electron 的内部构建变体不是同一个维度。当前 Desktop 保留 `code`、`academic`
+两个源码和构建标识；它们是 `zeta` Electron Desktop 的构建变体，不代表
 `zeta code` TUI，也不构成额外的公开产品线。具体说明见
 [`product-editions.md`](product-editions.md)。
 

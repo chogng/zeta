@@ -1,52 +1,31 @@
-# Workbench sessions
+# Dedicated Sessions workbenches
 
-`sessions` owns product-specific Workbench session profiles. A profile is the
-initial composition of the shared Workbench for one product entry; it is not a
-chat transcript, thread, or live `IWorkbenchSessionService` state.
+`sessions/` is a top-level product layer beside `workbench/`, modelled after
+VS Code's dedicated Agents Window. It may import reusable Workbench
+contributions; `workbench/` must never import this directory. The regular
+Workbench layout therefore remains untouched.
 
-There are two deliberately separate session layers:
-
-| Layer | Owner | Code / Academic boundary |
+| Surface | Owner | Current composition |
 | --- | --- | --- |
-| Workbench profile | `sessions/browser/*WorkbenchSession.ts` | separate initial layout and Composite selection |
-| Runtime Chat Session | `workbench/services/sessions` + App Server | same protocol and kernel, separate product profile root |
+| Code Sessions | `browser/code/` | session list, agent transcript, and a focused development context |
+| Academic Sessions | `browser/academic/` | research-session list, local literature import, PDF reader, native research browser, writing draft, and agent chat |
+| Shared runtime | `browser/common/sessionsRuntime.ts` | one App Server-backed session/thread service and Chat service per Sessions page |
 
-Code and Academic may therefore share the Workbench and Rust App Server
-implementation. They must not share the product runtime identity by accident.
-`product/common/product.ts` declares the stable application ID, user-data
-folder, and renderer storage namespace; Electron Main applies those values
-before it creates persistent services. The App Server receives
-`<product userData>/state` as `ZETA_PROFILE_ROOT`, so its SQLite session/thread
-store and lease files are also isolated.
+Each ordinary product Workbench entry imports only the small
+`sessionTitlebarEntry` contribution. That action navigates to the matching
+sibling Sessions HTML page. Electron Main includes both pages in its trusted
+IPC entry allowlist, while `sessions/electron-browser/electronSessions.ts`
+creates the dedicated host. Returning to Workbench performs the inverse page
+navigation.
 
-The current profiles are:
+The Academic layout is deliberately fixed: library and research sessions on
+the left; read, browse, and draft surfaces in the centre; writing agent on the
+right. Its embedded browser is the existing main-owned `BrowserView` API, so
+external pages stay isolated from renderer privileges. Imported PDF/BibTeX/RIS
+files currently live only in the active renderer page; durable literature
+library storage and citation parsing are future Academic-domain work, not
+hidden Workbench state.
 
-| Profile | Product entry | Editor bundle | Default layout |
-| --- | --- | --- | --- |
-| `code` | `workbench-code` | `editor/alpha/editor.all` | Explorer + Terminal panel, Chat/Auxiliary Bar visible |
-| `academic` | `workbench-academic` | `editor/gama/editor.all` | wider Sidebar, Problems panel, document-first central surface, Auxiliary Bar hidden |
-| `complete` | `workbench-complete` | Alpha + Gama `editor.all` | combined Code + Academic composition with Terminal panel |
-
-`createWorkbenchSession` validates and freezes the profile before it crosses
-the product-to-Workbench boundary. Each product entry composes exactly one
-profile with its declared editor public bundle; the shared Workbench consumes
-only the generic `WorkbenchSession` contract, applies its region layout and
-initial Composite selection, and does not import these product profiles or any
-product contribution.
-
-The profile is a default, not a forced reset. `WorkbenchLayoutStateModel`
-loads the stored workspace layout after the profile is selected, so users keep
-their manual resizing and visibility changes within the product/workspace
-storage namespace. `SessionsPart` remains an optional runtime status Part and
-does not own layout topology.
-
-## Same-machine installation
-
-Installing the Code and Academic editions together is supported when the
-installer consumes each product's `applicationId` and the runtime keeps each
-product's `userDataFolderName` and `sessionData` distinct. A shared kernel is
-safe because it is code and protocol, not a shared mutable state directory.
-
-Opening the same workspace in both editions is still a shared-file scenario:
-file edits, external changes, and workspace-level tools can observe the same
-workspace. Product isolation does not turn one workspace into two copies.
+`browser/*WorkbenchSession.ts` remains the legacy initial profile consumed by
+the normal Workbench. It is not the dedicated Sessions workbench and must not
+gain Sessions-specific layout logic.

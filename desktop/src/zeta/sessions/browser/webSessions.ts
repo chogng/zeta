@@ -1,0 +1,21 @@
+import { installBaseUiStyles } from "../../base/browser/ui/styles.js";
+import { DisposableStore, type IDisposable } from "../../base/common/lifecycle.js";
+import type { ProductConfiguration } from "../../product/common/product.js";
+import { createDisconnectedRendererApi } from "../../platform/app-server/browser/rendererApi.js";
+import type { SessionsProfile } from "../common/sessionsProfile.js";
+import { startSessionsWorkbench } from "./sessionsWorkbench.js";
+
+/** Starts a browser-hosted Sessions page with the optional renderer host. */
+export function startBrowserSessions(product: ProductConfiguration, profile: SessionsProfile): IDisposable {
+  installBaseUiStyles();
+  const sessions = new DisposableStore();
+  const host = globalThis.zetaWebWorkbenchHost;
+  sessions.add(startSessionsWorkbench({
+    product,
+    profile,
+    api: host?.api ?? createDisconnectedRendererApi(),
+    container: host?.container ?? document.querySelector<HTMLElement>("#app"),
+  }));
+  window.addEventListener("pagehide", () => sessions.dispose(), { once: true });
+  return sessions;
+}
