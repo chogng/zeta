@@ -87,10 +87,25 @@ Renderer 类型检查前同步到 `generated/file-icons/`。TypeScript 直接从
 
 ## Electron 启动门禁
 
-根入口 `src/main.ts` 先同步执行 Electron bootstrap，再加载产品主进程入口；
-`code/electron-main/main.ts` 通过 Electron `ready` 事件启动应用，不在 ESM 顶层等待
-`app.whenReady()`。`ZetaApplication.startupAfterReady()` 会断言 Electron 已进入 Ready，
-从结构上避免入口模块和 `ready` 生命周期互相等待。
+`src/main-code.ts` 与 `src/main-aca.ts` 是 Code 和 Academic 的显式 Electron
+启动入口；根入口 `src/main.ts` 保留给打包产物和兼容启动，并由
+`ZETA_ELECTRON_MAIN` 选择产品入口。两个产品入口都会先同步执行 Electron
+bootstrap，再通过 `code/electron-main/codeMain.ts` 或 `acaMain.ts` 在 Electron
+`ready` 事件启动应用，不在 ESM 顶层等待 `app.whenReady()`。
+`ZetaApplication.startupAfterReady()` 会断言 Electron 已进入 Ready，从结构上避免
+入口模块和 `ready` 生命周期互相等待。
+
+本地 Electron 调试按产品入口分别启动：
+
+```sh
+pnpm dev:code
+pnpm dev:aca
+pnpm dev:ui:code
+pnpm dev:ui:aca
+```
+
+`code` 与 `aca` 会分别设置匹配的 Renderer 产品和 Electron Main 入口；
+`dev:academic`、`dev:ui:academic`、`start:academic` 保留为 `aca` 的完整别名。
 
 Ready 后在后台启动 App Server，并完成 initialize、server identity、protocol version
 与 schema hash 校验；门禁通过后才创建业务 Workbench 窗口。主窗口初始保持隐藏，

@@ -1,0 +1,41 @@
+import { expect, test } from "../../../automation/test.js";
+
+test("Code opens Sessions in a dedicated Electron window and returns to Workbench", async ({ application, target, workbench }) => {
+  test.skip(
+    target.kind !== "electron" || target.product !== "code",
+    "This scenario verifies the Code Electron Sessions window.",
+  );
+  if (target.kind !== "electron") {
+    return;
+  }
+  if (!("windows" in application)) {
+    throw new Error("Dedicated Sessions window verification requires Electron");
+  }
+
+  const workbenchPage = workbench.page;
+  const openSessions = workbenchPage.locator("[data-action-id='zeta.code.open-sessions'] button");
+  await expect(openSessions).toBeVisible();
+  const sessionPagePromise = application.waitForEvent("window");
+  await openSessions.click();
+  const sessionsPage = await sessionPagePromise;
+  await sessionsPage.waitForLoadState("domcontentloaded");
+  await expect(sessionsPage.locator(".zeta-code-sessions-window")).toBeVisible();
+  await expect.poll(() => application.windows().length).toBe(2);
+
+  const sessionWindowState = await application.evaluate(({ BrowserWindow }) => {
+    const windows = BrowserWindow.getAllWindows();
+    return windows.map((window) => ({
+      id: window.id,
+      title: window.getTitle(),
+      url: window.webContents.getURL(),
+    }));
+  });
+  expect(sessionWindowState).toHaveLength(2);
+  expect(sessionWindowState.some((window) => window.url.includes("sessions-code.html"))).toBe(true);
+
+  const closed = sessionsPage.waitForEvent("close");
+  await sessionsPage.getByRole("button", { name: "Workbench" }).click();
+  await closed;
+  await expect.poll(() => application.windows().length).toBe(1);
+  await expect(workbenchPage.locator(".zeta-workbench")).toBeVisible();
+});

@@ -40,9 +40,14 @@ test("product selection defaults to the Zeta Desktop build and accepts every edi
   );
   assert.equal(getProductConfiguration("code").name, "Zeta");
   assert.equal(
+    getProductConfiguration("code").dedicatedSessions?.rendererEntry,
+    "sessions-code",
+  );
+  assert.equal(
     getProductConfiguration("academic").rendererEntry,
     "workbench-academic",
   );
+  assert.equal(getProductConfiguration("academic").dedicatedSessions, undefined);
 });
 
 test("product data paths keep installed editions and Chromium session data separate", () => {
@@ -74,12 +79,12 @@ test("packaged product selection requires exactly one complete renderer edition"
     );
 
     createPackagedWorkbench(rendererRoot, "academic");
-    assert.throws(
-      () => resolvePackagedProductId(rendererRoot),
-      /found none/,
+    assert.equal(
+      resolvePackagedProductId(rendererRoot),
+      "academic",
     );
 
-    createPackagedRenderer(rendererRoot, "academic");
+    createPackagedWorkbench(rendererRoot, "code");
     assert.equal(
       resolvePackagedProductId(rendererRoot),
       "academic",
@@ -100,6 +105,8 @@ function createPackagedRenderer(
   productId: "code" | "academic",
 ): void {
   createPackagedWorkbench(rendererRoot, productId);
+  const dedicatedSessions = getProductConfiguration(productId).dedicatedSessions;
+  if (!dedicatedSessions) return;
   const sessionsRoot = join(
     rendererRoot,
     productId,
@@ -108,7 +115,7 @@ function createPackagedRenderer(
   );
   mkdirSync(sessionsRoot, { recursive: true });
   writeFileSync(
-    join(sessionsRoot, `sessions-${productId}.html`),
+    join(sessionsRoot, `${dedicatedSessions.rendererEntry}.html`),
     "<!doctype html>",
   );
 }

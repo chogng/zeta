@@ -19,9 +19,10 @@ export function resolveProductDataPaths(appDataPath: string, product: ProductCon
  * Resolves the product identity baked into a packaged renderer tree.
  *
  * Release packaging must include exactly one complete product directory.
- * Both the normal Workbench and its sibling Sessions entry are required;
- * multiple complete directories are rejected so installed application identity
- * never depends on a user-controlled environment variable.
+ * Each product requires its normal Workbench and only products that declare a
+ * dedicated Sessions capability require its sibling Sessions entry. Multiple
+ * complete directories are rejected so installed application identity never
+ * depends on a user-controlled environment variable.
  */
 export function resolvePackagedProductId(
   rendererRoot: string,
@@ -31,7 +32,9 @@ export function resolvePackagedProductId(
     const productRendererRoot = join(rendererRoot, productId, "electron-browser");
     return (
       existsSync(join(productRendererRoot, "workbench", `${product.rendererEntry}.html`)) &&
-      existsSync(join(productRendererRoot, "sessions", `sessions-${productId}.html`))
+      (!product.dedicatedSessions || existsSync(
+        join(productRendererRoot, "sessions", `${product.dedicatedSessions.rendererEntry}.html`),
+      ))
     );
   });
   if (packagedProducts.length !== 1) {

@@ -27,30 +27,107 @@ export interface TrustedIpcTarget {
   readonly allowedEntryUrls: ReadonlySet<string>;
 }
 
+interface RegisteredRoute {
+  readonly target: TrustedIpcTarget;
+  readonly route: IpcRoute<unknown, unknown>;
+}
+
+/**
+ * Owns trusted IPC routes shared by multiple Electron renderer windows.
+ *
+ * A channel has exactly one Electron handler. The handler then selects the
+ * registration belonging to its sender before validation and invocation, so
+ * each window can expose the same capability through a window-local service.
+ */
+export class TrustedIpcRouter implements IDisposable {
+  private readonly routesByChannel = new Map<string, Set<RegisteredRoute>>();
+
+  constructor(private readonly ipcMain: IpcMainLike) {}
+
+  /** Registers routes for one renderer target and returns its scoped cleanup. */
+  register(target: TrustedIpcTarget, routes: readonly IpcRoute<unknown, unknown>[]): IDisposable {
+    const channels = new Set<string>();
+    for (const route of routes) {
+      if (channels.has(route.channel)) {
+        throw new Error(`Duplicate IPC route: ${route.channel}`);
+      }
+      channels.add(route.channel);
+    }
+
+    const registered: RegisteredRoute[] = [];
+    try {
+      for (const route of routes) {
+        let registrations = this.routesByChannel.get(route.channel);
+        if (!registrations) {
+          registrations = new Set();
+          this.routesByChannel.set(route.channel, registrations);
+          try {
+            this.ipcMain.handle(route.channel, (event, rawParams) =>
+              this.invoke(route.channel, event, rawParams)
+            );
+          } catch (error) {
+            this.routesByChannel.delete(route.channel);
+            throw error;
+          }
+        }
+        const registration = { target, route };
+        registrations.add(registration);
+        registered.push(registration);
+      }
+    } catch (error) {
+      this.remove(registered);
+      throw error;
+    }
+
+    return toDisposable(() => this.remove(registered));
+  }
+
+  dispose(): void {
+    for (const channel of this.routesByChannel.keys()) {
+      this.ipcMain.removeHandler(channel);
+    }
+    this.routesByChannel.clear();
+  }
+
+  [Symbol.dispose](): void {
+    this.dispose();
+  }
+
+  private invoke(channel: string, event: IpcMainInvokeEventLike, rawParams: unknown): unknown {
+    const registrations = this.routesByChannel.get(channel);
+    if (!registrations) {
+      throw new Error(`IPC route is not registered: ${channel}`);
+    }
+    const registration = [...registrations].find(({ target }) =>
+      target.webContents === event.sender
+    );
+    if (!registration) {
+      throw new Error("Untrusted renderer IPC sender");
+    }
+    requireTrustedSender(event, registration.target);
+    return registration.route.invoke(registration.route.validate(rawParams));
+  }
+
+  private remove(registrations: readonly RegisteredRoute[]): void {
+    for (const registration of registrations) {
+      const routes = this.routesByChannel.get(registration.route.channel);
+      if (!routes) continue;
+      routes.delete(registration);
+      if (routes.size === 0) {
+        this.routesByChannel.delete(registration.route.channel);
+        this.ipcMain.removeHandler(registration.route.channel);
+      }
+    }
+  }
+}
+
 /** Registers finite IPC routes with one shared sender, main-frame, URL, and params gate. */
 export function registerTrustedIpcRoutes(ipcMain: IpcMainLike, target: TrustedIpcTarget, routes: readonly IpcRoute<unknown, unknown>[]): IDisposable {
-  const channels = new Set<string>();
-  for (const route of routes) {
-    if (channels.has(route.channel)) {
-      throw new Error(`Duplicate IPC route: ${route.channel}`);
-    }
-    channels.add(route.channel);
-  }
-  const registered: string[] = [];
-  try {
-    for (const route of routes) {
-      ipcMain.handle(route.channel, (event, rawParams) => {
-        requireTrustedSender(event, target);
-        return route.invoke(route.validate(rawParams));
-      });
-      registered.push(route.channel);
-    }
-  } catch (error) {
-    for (const channel of registered) ipcMain.removeHandler(channel);
-    throw error;
-  }
+  const router = new TrustedIpcRouter(ipcMain);
+  const registration = router.register(target, routes);
   return toDisposable(() => {
-    for (const channel of channels) ipcMain.removeHandler(channel);
+    registration.dispose();
+    router.dispose();
   });
 }
 

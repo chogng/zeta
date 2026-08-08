@@ -34,10 +34,7 @@ import {
   AppServerSupervisor,
 } from "../../platform/app-server/electron-main/app-server-supervisor.js";
 import { appServerExecutablePath } from "../../platform/app-server/electron-main/app-server-package.js";
-import {
-  normalizeEntryUrl,
-  registerTrustedIpcRoutes,
-} from "../../platform/ipc/electron-main/trustedIpcRouter.js";
+import { normalizeEntryUrl, TrustedIpcRouter } from "../../platform/ipc/electron-main/trustedIpcRouter.js";
 import {
   BROWSER_VIEW_EVENT_CHANNEL,
 } from "../../platform/browser/common/browserView.js";
@@ -83,6 +80,7 @@ import {
 import { NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL } from "../../platform/native/common/nativeHost.js";
 import { searchIpcRoutes } from "../../platform/search/electron-main/searchIpcRoutes.js";
 import { sessionIpcRoutes } from "../../platform/sessions/electron-main/sessionIpcRoutes.js";
+import { sessionsWindowIpcRoutes } from "../../sessions/electron-main/sessionsWindowIpc.js";
 import {
   StateService,
 } from "../../platform/state/node/stateService.js";
@@ -94,6 +92,7 @@ import {
   applyWindowState,
   resolveBrowserWindowOptions,
 } from "../../platform/windows/electron-main/windows.js";
+import { WindowMode } from "../../platform/window/electron-main/window.js";
 import {
   WindowsStateHandler,
 } from "../../platform/windows/electron-main/windowsStateHandler.js";
@@ -117,6 +116,12 @@ interface PersistentServices {
   readonly keybindings: KeybindingsResourceMainService;
 }
 
+interface RendererEntry {
+  readonly file: string;
+  readonly url: string;
+  readonly useDevelopmentUrl: boolean;
+}
+
 /**
  * Owns the Electron application's services, primary window, IPC, and shutdown.
  */
@@ -126,9 +131,11 @@ export class ZetaApplication extends DisposableOwner {
   private readonly appServerStartupMode: AppServerStartupMode;
   private readonly disposableTracker: DisposableTracker | undefined;
   private readonly tracking: Disposable | undefined;
+  private readonly trustedIpcRouter: TrustedIpcRouter;
 
   private supervisor: AppServerSupervisor | undefined;
   private mainWindow: BrowserWindow | undefined;
+  private sessionsWindow: BrowserWindow | undefined;
   private persistentServices: PersistentServices | undefined;
   private _windowsStateHandler: WindowsStateHandler | undefined;
   private windowStateTracking: IDisposable | undefined;
@@ -148,6 +155,7 @@ export class ZetaApplication extends DisposableOwner {
     this.appServerStartupMode = options.appServerStartupMode;
     this.disposableTracker = disposableTracker;
     this.tracking = tracking;
+    this.trustedIpcRouter = this.own(new TrustedIpcRouter(ipcMain));
 
     app.on("before-quit", this.onBeforeQuit);
     app.on("will-quit", this.onWillQuit);
@@ -329,21 +337,11 @@ export class ZetaApplication extends DisposableOwner {
     workspaces: WorkspacesMainService,
     supervisor: AppServerSupervisor,
   ): Promise<void> {
-    const workspace = workspaceContext.getWorkspace();
     const windowsStateHandler = this.windowsStateHandler;
     const windowState = windowsStateHandler.restoreWindowState();
     const browserWindowOptions = resolveBrowserWindowOptions({
       state: windowState,
-      webPreferences: {
-        contextIsolation: true,
-        nodeIntegration: false,
-        sandbox: true,
-        preload: join(
-          app.getAppPath(),
-          "dist/preload/src/zeta/base/parts/sandbox/electron-browser/preload.cjs",
-        ),
-        additionalArguments: [],
-      },
+      webPreferences: this.createSandboxWebPreferences(),
     });
     const window = new BrowserWindow({
       ...browserWindowOptions,
@@ -359,35 +357,7 @@ export class ZetaApplication extends DisposableOwner {
       window.show();
     });
 
-    const rendererUrl = process.env.ZETA_RENDERER_URL;
-    const rendererFile = join(
-      this.rendererRoot,
-      this.product.id,
-      "electron-browser",
-      "workbench",
-      `${this.product.rendererEntry}.html`,
-    );
-    const sessionsRendererFile = join(
-      this.rendererRoot,
-      this.product.id,
-      "electron-browser",
-      "sessions",
-      `sessions-${this.product.id}.html`,
-    );
-    const rendererEntryUrl =
-      !app.isPackaged && rendererUrl
-        ? new URL(
-          `/electron-browser/workbench/${this.product.rendererEntry}.html`,
-          rendererUrl,
-        ).href
-        : pathToFileURL(rendererFile).href;
-    const sessionsEntryUrl =
-      !app.isPackaged && rendererUrl
-        ? new URL(
-          `/electron-browser/sessions/sessions-${this.product.id}.html`,
-          rendererUrl,
-        ).href
-        : pathToFileURL(sessionsRendererFile).href;
+    const rendererEntry = this.resolveRendererEntry("workbench");
 
     const windowDisposables = this.own(new DisposableStore());
     windowDisposables.add(this.windowStateTracking);
@@ -474,6 +444,12 @@ export class ZetaApplication extends DisposableOwner {
       ...userThemeIpcRoutes(new UserThemeFileService(join(app.getPath("userData"), "themes"))),
       ...workspaceContextIpcRoutes(workspaceContext),
     ];
+    if (this.product.dedicatedSessions) {
+      ipcRoutes.push(...sessionsWindowIpcRoutes({
+        openSessionsWindow: () => this.openSessionsWindow(supervisor),
+        returnToWorkbench: () => this.focusMainWindow(),
+      }));
+    }
     if (process.platform === "darwin") {
       const nativeContextMenu = windowDisposables.add(
         new ElectronContextMenu(window),
@@ -484,13 +460,11 @@ export class ZetaApplication extends DisposableOwner {
       ipcRoutes.push(...nativeContextMenuIpcRoutes(nativeContextMenu));
       ipcRoutes.push(...nativeMenubarIpcRoutes(nativeMenubar));
     }
-    windowDisposables.add(registerTrustedIpcRoutes(
-      ipcMain,
+    windowDisposables.add(this.trustedIpcRouter.register(
       {
         webContents: window.webContents,
         allowedEntryUrls: new Set([
-          normalizeEntryUrl(rendererEntryUrl),
-          normalizeEntryUrl(sessionsEntryUrl),
+          normalizeEntryUrl(rendererEntry.url),
         ]),
       },
       ipcRoutes,
@@ -510,16 +484,150 @@ export class ZetaApplication extends DisposableOwner {
     window.once("closed", () => {
       windowDisposables.dispose();
       if (this.mainWindow === window) {
+        this.closeSessionsWindow();
         this.mainWindow = undefined;
         this.windowStateTracking = undefined;
       }
     });
 
-    if (!app.isPackaged && rendererUrl) {
-      await window.loadURL(rendererEntryUrl);
+    if (rendererEntry.useDevelopmentUrl) {
+      await window.loadURL(rendererEntry.url);
     } else {
-      await window.loadFile(rendererFile);
+      await window.loadFile(rendererEntry.file);
     }
+  }
+
+  /** Creates or focuses the one product-scoped Sessions window beside Workbench. */
+  private async openSessionsWindow(supervisor: AppServerSupervisor): Promise<void> {
+    if (!this.product.dedicatedSessions) {
+      throw new Error(`${this.product.name} does not provide a dedicated Sessions window`);
+    }
+    const existing = this.sessionsWindow;
+    if (existing && !existing.isDestroyed()) {
+      if (existing.isMinimized()) existing.restore();
+      existing.focus();
+      return;
+    }
+
+    const sessionsEntry = this.resolveRendererEntry("sessions");
+    const browserWindowOptions = resolveBrowserWindowOptions({
+      state: {
+        mode: WindowMode.Normal,
+        width: 1_180,
+        height: 780,
+      },
+      webPreferences: this.createSandboxWebPreferences(),
+    });
+    const window = new BrowserWindow({
+      ...browserWindowOptions,
+      show: false,
+      title: `${this.product.name} Sessions`,
+    });
+    this.sessionsWindow = window;
+    window.once("ready-to-show", () => {
+      if (!window.isDestroyed()) {
+        window.show();
+      }
+    });
+
+    const windowDisposables = this.own(new DisposableStore());
+    windowDisposables.add(this.trustedIpcRouter.register(
+      {
+        webContents: window.webContents,
+        allowedEntryUrls: new Set([
+          normalizeEntryUrl(sessionsEntry.url),
+        ]),
+      },
+      [
+        ...appServerIpcRoutes(supervisor),
+        ...sessionIpcRoutes(supervisor),
+        ...sessionsWindowIpcRoutes({
+          openSessionsWindow: () => this.openSessionsWindow(supervisor),
+          returnToWorkbench: () => this.returnToMainWindow(window),
+        }),
+      ],
+    ));
+    windowDisposables.add(supervisor.onNotification((notification) => {
+      if (!window.isDestroyed()) {
+        window.webContents.send("zeta:event", notification);
+      }
+    }));
+    windowDisposables.add(supervisor.onStateChange((state) => {
+      if (!window.isDestroyed()) {
+        window.webContents.send("zeta:app-server:stateChanged", state);
+      }
+    }));
+    window.once("closed", () => {
+      windowDisposables.dispose();
+      if (this.sessionsWindow === window) {
+        this.sessionsWindow = undefined;
+      }
+    });
+
+    try {
+      if (sessionsEntry.useDevelopmentUrl) {
+        await window.loadURL(sessionsEntry.url);
+      } else {
+        await window.loadFile(sessionsEntry.file);
+      }
+    } catch (error) {
+      if (!window.isDestroyed()) {
+        window.destroy();
+      }
+      throw error;
+    }
+  }
+
+  private returnToMainWindow(sessionsWindow: BrowserWindow): void {
+    this.focusMainWindow();
+    if (!sessionsWindow.isDestroyed()) {
+      sessionsWindow.close();
+    }
+  }
+
+  private closeSessionsWindow(): void {
+    const window = this.sessionsWindow;
+    if (window && !window.isDestroyed()) {
+      window.close();
+    }
+  }
+
+  private resolveRendererEntry(kind: "workbench" | "sessions"): RendererEntry {
+    const entry = kind === "workbench"
+      ? this.product.rendererEntry
+      : this.product.dedicatedSessions?.rendererEntry;
+    if (!entry) {
+      throw new Error(`${this.product.name} does not provide a Sessions renderer entry`);
+    }
+    const file = join(
+      this.rendererRoot,
+      this.product.id,
+      "electron-browser",
+      kind,
+      `${entry}.html`,
+    );
+    const rendererUrl = process.env.ZETA_RENDERER_URL;
+    const useDevelopmentUrl = !app.isPackaged && rendererUrl !== undefined;
+    return {
+      file,
+      url: useDevelopmentUrl
+        ? new URL(`/electron-browser/${kind}/${entry}.html`, rendererUrl).href
+        : pathToFileURL(file).href,
+      useDevelopmentUrl,
+    };
+  }
+
+  private createSandboxWebPreferences() {
+    return {
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      preload: join(
+        app.getAppPath(),
+        "dist/preload/src/zeta/base/parts/sandbox/electron-browser/preload.cjs",
+      ),
+      additionalArguments: [],
+    };
   }
 
   private createWorkspaceTransitionRuntime(

@@ -21,6 +21,8 @@ export function playwrightTargetForProject(projectName: string, baseURL: string 
       return { kind: "browser", appServerMode: "required", baseURL: requiredBaseURL(baseURL, projectName) };
     case "electron-ui":
       return { kind: "electron", appServerMode: "disabled", product: "code" };
+    case "electron-academic-ui":
+      return { kind: "electron", appServerMode: "disabled", product: "academic" };
     case "electron-app-server":
     case "electron-editor-code-app-server":
     case "electron-pdf-corpus-code-app-server":

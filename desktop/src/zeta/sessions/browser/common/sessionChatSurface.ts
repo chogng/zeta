@@ -12,6 +12,8 @@ export class SessionChatSurface extends DisposableOwner {
   private readonly sessionService: IWorkbenchSessionService;
   private readonly chatService: IChatService;
   private readonly list: ChatListWidget;
+  private readonly transcript: HTMLDivElement;
+  private readonly emptyState: HTMLDivElement;
   private readonly form: HTMLFormElement;
   private readonly input: HTMLTextAreaElement;
   private readonly sendButton: HTMLButtonElement;
@@ -20,7 +22,7 @@ export class SessionChatSurface extends DisposableOwner {
   private model: ChatPaneModel | undefined;
   private selectionKey: string | undefined;
 
-  constructor(ownerDocument: Document, sessionService: IWorkbenchSessionService, chatService: IChatService, placeholder: string, defaultSessionTitle: string) {
+  constructor(ownerDocument: Document, sessionService: IWorkbenchSessionService, chatService: IChatService, placeholder: string, defaultSessionTitle: string, emptyStateTitle: string, emptyStateDescription: string) {
     super();
     this.sessionService = sessionService;
     this.chatService = chatService;
@@ -28,6 +30,19 @@ export class SessionChatSurface extends DisposableOwner {
     this.element.className = "zeta-sessions-chat-surface";
     this.list = this.own(new ChatListWidget(ownerDocument));
     this.list.setVisible(true);
+    this.transcript = ownerDocument.createElement("div");
+    this.transcript.className = "zeta-sessions-chat-transcript";
+    this.emptyState = ownerDocument.createElement("div");
+    this.emptyState.className = "zeta-sessions-chat-empty";
+    const emptyStateEyebrow = ownerDocument.createElement("span");
+    emptyStateEyebrow.className = "zeta-sessions-chat-empty-eyebrow";
+    emptyStateEyebrow.textContent = "New conversation";
+    const emptyStateHeading = ownerDocument.createElement("h2");
+    emptyStateHeading.textContent = emptyStateTitle;
+    const emptyStateDetail = ownerDocument.createElement("p");
+    emptyStateDetail.textContent = emptyStateDescription;
+    this.emptyState.append(emptyStateEyebrow, emptyStateHeading, emptyStateDetail);
+    this.transcript.append(this.list.element, this.emptyState);
     this.status = ownerDocument.createElement("p");
     this.status.className = "zeta-sessions-chat-status";
     this.form = ownerDocument.createElement("form");
@@ -42,7 +57,7 @@ export class SessionChatSurface extends DisposableOwner {
     this.sendButton.className = "zeta-sessions-button zeta-sessions-primary-button";
     this.sendButton.textContent = "Send";
     this.form.append(this.input, this.sendButton);
-    this.element.append(this.list.element, this.status, this.form);
+    this.element.append(this.transcript, this.status, this.form);
     this.own(addDisposableListener(this.form, "submit", (event) => {
       event.preventDefault();
       void this.send(this.input.value);
@@ -103,6 +118,9 @@ export class SessionChatSurface extends DisposableOwner {
     const model = this.model;
     if (!model) return;
     this.list.render(model.items);
+    const hasItems = model.items.length > 0;
+    this.list.element.hidden = !hasItems;
+    this.emptyState.hidden = hasItems;
     this.sendButton.disabled = model.state === "loading" || model.state === "submitting" || model.canInterrupt;
     this.status.textContent = chatStatus(model.state, model.error, model.canInterrupt);
   }

@@ -4,8 +4,9 @@ import type { ProductConfiguration } from "../../product/common/product.js";
 import { createElectronRendererApi } from "../../platform/native/electron-browser/rendererApi.js";
 import type { SessionsProfile } from "../common/sessionsProfile.js";
 import { startSessionsWorkbench } from "../browser/sessionsWorkbench.js";
+import { createSessionsWindowApi } from "./sessionsWindowApi.js";
 
-/** Starts an Electron Sessions page with native browser support when requested by Academic. */
+/** Starts the Code-specific Electron Sessions page. */
 export function startElectronSessions(product: ProductConfiguration, profile: SessionsProfile): IDisposable {
   installBaseUiStyles();
   const api = createElectronRendererApi();
@@ -14,7 +15,7 @@ export function startElectronSessions(product: ProductConfiguration, profile: Se
     product,
     profile,
     api,
-    browserViewApi: api.browserView,
+    sessionsWindowApi: createSessionsWindowApi(),
     container: document.querySelector<HTMLElement>("#app"),
   }));
   window.addEventListener("pagehide", () => sessions.dispose(), { once: true });

@@ -87,7 +87,7 @@ const { InstantiationService, ServiceCollection, SyncDescriptor } = await import
   "../../../platform/instantiation/common/instantiation.js"
 );
 const { academicWorkbenchSession } = await import(
-  "../../../sessions/browser/academicWorkbenchSession.js"
+  "../../../code/browser/workbench/academicWorkbenchSession.js"
 );
 
 type WorkbenchPartId =

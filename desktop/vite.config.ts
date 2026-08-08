@@ -12,8 +12,13 @@ export default defineConfig(() => {
   const sourceRoot = resolve(import.meta.dirname, "src/zeta/code");
   const browserEntry = `browser/workbench/${product.rendererEntry}`;
   const electronEntry = `electron-browser/workbench/${product.rendererEntry}`;
-  const browserSessionsEntry = `browser/sessions/sessions-${product.id}`;
-  const electronSessionsEntry = `electron-browser/sessions/sessions-${product.id}`;
+  const dedicatedSessions = product.dedicatedSessions;
+  const sessionsInputs = dedicatedSessions
+    ? {
+        [`browser/sessions/${dedicatedSessions.rendererEntry}`]: resolve(sourceRoot, `browser/sessions/${dedicatedSessions.rendererEntry}.html`),
+        [`electron-browser/sessions/${dedicatedSessions.rendererEntry}`]: resolve(sourceRoot, `electron-browser/sessions/${dedicatedSessions.rendererEntry}.html`),
+      }
+    : {};
 
   return {
     base: "./",
@@ -34,8 +39,7 @@ export default defineConfig(() => {
         input: {
           [browserEntry]: resolve(sourceRoot, `${browserEntry}.html`),
           [electronEntry]: resolve(sourceRoot, `${electronEntry}.html`),
-          [browserSessionsEntry]: resolve(sourceRoot, `${browserSessionsEntry}.html`),
-          [electronSessionsEntry]: resolve(sourceRoot, `${electronSessionsEntry}.html`),
+          ...sessionsInputs,
         },
       },
     },

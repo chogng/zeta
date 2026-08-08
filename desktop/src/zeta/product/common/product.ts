@@ -12,6 +12,11 @@ export const rendererEntryNames = [
 
 export type RendererEntryName = typeof rendererEntryNames[number];
 
+/** Product-owned renderer entry for an optional dedicated Sessions window. */
+export interface DedicatedSessionsConfiguration {
+  readonly rendererEntry: string;
+}
+
 /** Build-time identity and presentation owned by one Zeta product edition. */
 export interface ProductConfiguration {
   readonly id: ProductId;
@@ -23,6 +28,8 @@ export interface ProductConfiguration {
   /** Stable renderer storage namespace for this product edition. */
   readonly storageNamespace: string;
   readonly rendererEntry: RendererEntryName;
+  /** Omitted when the product keeps all of its work inside the regular Workbench. */
+  readonly dedicatedSessions?: DedicatedSessionsConfiguration;
 }
 
 export const ZetaDesktopProduct: ProductConfiguration = {
@@ -32,6 +39,9 @@ export const ZetaDesktopProduct: ProductConfiguration = {
   userDataFolderName: "Zeta",
   storageNamespace: "code",
   rendererEntry: "workbench-code",
+  dedicatedSessions: {
+    rendererEntry: "sessions-code",
+  },
 };
 
 export const AcademicProduct: ProductConfiguration = {

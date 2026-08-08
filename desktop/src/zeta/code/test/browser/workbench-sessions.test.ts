@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { academicWorkbenchSession } from "../../browser/academicWorkbenchSession.js";
-import { codeWorkbenchSession } from "../../browser/codeWorkbenchSession.js";
+import { academicWorkbenchSession } from "../../browser/workbench/academicWorkbenchSession.js";
+import { codeWorkbenchSession } from "../../browser/workbench/codeWorkbenchSession.js";
 
-test("product sessions provide distinct Workbench layout profiles", () => {
+test("product Workbenches provide distinct default layout profiles", () => {
   assert.equal(codeWorkbenchSession.id, "code");
   assert.equal(codeWorkbenchSession.productId, "code");
   assert.equal(academicWorkbenchSession.id, "academic");
@@ -15,7 +15,7 @@ test("product sessions provide distinct Workbench layout profiles", () => {
   assert.equal(academicWorkbenchSession.composition.panel, "zeta.panel.problems");
 });
 
-test("session layout profiles are immutable at the profile boundary", () => {
+test("product Workbench layout profiles are immutable at the profile boundary", () => {
   assert.throws(() => {
     (codeWorkbenchSession as { id: string }).id = "academic";
   }, TypeError);

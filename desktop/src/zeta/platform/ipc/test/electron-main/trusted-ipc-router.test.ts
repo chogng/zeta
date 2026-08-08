@@ -2,7 +2,7 @@ import { strict as assert } from "node:assert";
 import test from "node:test";
 import type { AppServerSupervisor } from "../../../../platform/app-server/electron-main/app-server-supervisor.js";
 import { appServerIpcRoutes } from "../../../../platform/app-server/electron-main/app-server-ipc.js";
-import { registerTrustedIpcRoutes, type IpcMainInvokeEventLike, type IpcMainLike, type IpcRoute } from "../../../../platform/ipc/electron-main/trustedIpcRouter.js";
+import { registerTrustedIpcRoutes, TrustedIpcRouter, type IpcMainInvokeEventLike, type IpcMainLike, type IpcRoute } from "../../../../platform/ipc/electron-main/trustedIpcRouter.js";
 import { fileIpcRoutes } from "../../../../platform/files/electron-main/fileIpcRoutes.js";
 import { gitIpcRoutes } from "../../../../platform/git/electron-main/gitIpcRoutes.js";
 import { searchIpcRoutes } from "../../../../platform/search/electron-main/searchIpcRoutes.js";
@@ -93,6 +93,44 @@ test("trusted IPC router enforces webContents, main frame, exact URL, and params
 
   dispose.dispose();
   assert.equal(ipcMain.handlers.size, 0);
+});
+
+test("trusted IPC router selects a route per trusted renderer window", async () => {
+  const ipcMain = new FakeIpcMain();
+  const router = new TrustedIpcRouter(ipcMain);
+  const workbench = target("file:///app/workbench.html");
+  const sessions = target("file:///app/sessions.html");
+  const workbenchRegistration = router.register({
+    webContents: workbench.webContents,
+    allowedEntryUrls: new Set(["file:///app/workbench.html"]),
+  }, [{
+    channel: "test:shared",
+    validate: (value) => value,
+    invoke: () => "workbench",
+  }]);
+  const sessionsRegistration = router.register({
+    webContents: sessions.webContents,
+    allowedEntryUrls: new Set(["file:///app/sessions.html"]),
+  }, [{
+    channel: "test:shared",
+    validate: (value) => value,
+    invoke: () => "sessions",
+  }]);
+  const invoke = ipcMain.handlers.get("test:shared")!;
+
+  assert.equal(await invoke(workbench.event, undefined), "workbench");
+  assert.equal(await invoke(sessions.event, undefined), "sessions");
+  assert.throws(
+    () => invoke(target().event, undefined),
+    /Untrusted renderer/,
+  );
+
+  sessionsRegistration.dispose();
+  assert.equal(ipcMain.handlers.has("test:shared"), true);
+  assert.equal(await invoke(workbench.event, undefined), "workbench");
+  workbenchRegistration.dispose();
+  assert.equal(ipcMain.handlers.has("test:shared"), false);
+  router.dispose();
 });
 
 test("capability IPC validators reject malformed input", () => {

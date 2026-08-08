@@ -1,8 +1,8 @@
-import { createWorkbenchSession } from "../../workbench/browser/workbenchSession.js";
-import { WorkbenchViewContainerId } from "../../workbench/common/views.js";
-import { CHAT_AGENT_SIDEBAR_VIEW_CONTAINER_ID, CHAT_VIEW_CONTAINER_ID } from "../../workbench/contrib/chat/common/chat.js";
+import { createWorkbenchSession } from "../../../workbench/browser/workbenchSession.js";
+import { CHAT_AGENT_SIDEBAR_VIEW_CONTAINER_ID, CHAT_VIEW_CONTAINER_ID } from "../../../workbench/contrib/chat/common/chat.js";
+import { WorkbenchViewContainerId } from "../../../workbench/common/views.js";
 
-/** Academic product session: the document surface gets the full right edge. */
+/** Academic product's default Workbench layout keeps the document surface prominent. */
 export const academicWorkbenchSession = createWorkbenchSession({
   id: "academic",
   productId: "academic",

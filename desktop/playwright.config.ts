@@ -15,6 +15,7 @@ export default defineConfig({
   projects: [
     ...browserProjects,
     { name: "electron-ui" },
+    { name: "electron-academic-ui", testMatch: "**/areas/academic/academic-workbench.spec.ts" },
     { name: "electron-app-server" },
     { name: "electron-editor-code-app-server", testMatch: "**/areas/editor/editor-open.spec.ts" },
     { name: "electron-pdf-corpus-code-app-server", testMatch: "**/areas/pdf/pdf-academic-corpus.spec.ts" },

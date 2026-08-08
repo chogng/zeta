@@ -9,6 +9,8 @@
     "generated/**/*.ts",
     "src/bootstrap.ts",
     "src/main.ts",
+    "src/main-code.ts",
+    "src/main-aca.ts",
     "src/zeta/base/common/**/*.ts",
     "src/zeta/base/parts/contextmenu/common/**/*.ts",
     "src/zeta/base/parts/contextmenu/electron-main/**/*.ts",

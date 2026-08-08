@@ -1,8 +1,8 @@
-import { createWorkbenchSession } from "../../workbench/browser/workbenchSession.js";
-import { WorkbenchViewContainerId } from "../../workbench/common/views.js";
-import { CHAT_AGENT_SIDEBAR_VIEW_CONTAINER_ID, CHAT_VIEW_CONTAINER_ID } from "../../workbench/contrib/chat/common/chat.js";
+import { createWorkbenchSession } from "../../../workbench/browser/workbenchSession.js";
+import { CHAT_AGENT_SIDEBAR_VIEW_CONTAINER_ID, CHAT_VIEW_CONTAINER_ID } from "../../../workbench/contrib/chat/common/chat.js";
+import { WorkbenchViewContainerId } from "../../../workbench/common/views.js";
 
-/** Code product session: Explorer, Chat, and Terminal are the initial surfaces. */
+/** Code product's default Workbench layout: Explorer, Chat, and Terminal. */
 export const codeWorkbenchSession = createWorkbenchSession({
   id: "code",
   productId: "code",
