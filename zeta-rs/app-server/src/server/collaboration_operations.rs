@@ -5,6 +5,8 @@ use super::decode;
 use super::result;
 use serde_json::Value;
 use zeta_app_server_protocol::protocol::collaboration::DocumentCollaborationOpenParams;
+use zeta_app_server_protocol::protocol::collaboration::DocumentCollaborationPresenceParams;
+use zeta_app_server_protocol::protocol::collaboration::DocumentCollaborationPresenceReadParams;
 use zeta_app_server_protocol::protocol::collaboration::DocumentCollaborationSubmitParams;
 use zeta_app_server_protocol::protocol::collaboration::DocumentCollaborationSubmitResult;
 use zeta_app_server_protocol::protocol::error::AppServerErrorName;
@@ -41,6 +43,36 @@ impl AppServer {
             self.updates.publish_document_collaboration(update.clone());
         }
         result(&submitted)
+    }
+
+    pub(super) fn document_collaboration_presence_publish(
+        &self,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: DocumentCollaborationPresenceParams = decode(params)?;
+        let snapshot = self
+            .collaboration
+            .lock()
+            .map_err(|_| collaboration_error())?
+            .publish_presence(params)
+            .map_err(invalid_collaboration_params)?;
+        self.updates
+            .publish_document_collaboration_presence(snapshot.clone());
+        result(&snapshot)
+    }
+
+    pub(super) fn document_collaboration_presence_read(
+        &self,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: DocumentCollaborationPresenceReadParams = decode(params)?;
+        let snapshot = self
+            .collaboration
+            .lock()
+            .map_err(|_| collaboration_error())?
+            .read_presence(params)
+            .map_err(invalid_collaboration_params)?;
+        result(&snapshot)
     }
 }
 

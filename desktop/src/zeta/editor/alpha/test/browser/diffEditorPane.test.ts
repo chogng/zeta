@@ -67,10 +67,13 @@ class BootstrapTextFiles implements ITextFileService {
       resource: request.resource,
       text: request.bootstrapText ?? "",
       source: request.bootstrapText === undefined ? TextFileContentSource.FileSystem : TextFileContentSource.Bootstrap,
+      revision: undefined,
     };
   }
 
-  async save(): Promise<void> {}
+  async save(): Promise<{ readonly revision: string | undefined }> {
+    return { revision: undefined };
+  }
 }
 
 class PaneTestDiffComputationService implements IDiffComputationService {

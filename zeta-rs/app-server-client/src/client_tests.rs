@@ -138,9 +138,9 @@ fn client_analyzes_syntax_through_the_typed_contract() {
 #[test]
 fn client_reads_writes_and_versions_workspace_files_through_typed_contracts() {
     let mut client = AppServerClient::new(MockTransport(VecDeque::from([
-        r#"{"jsonrpc":"2.0","id":1,"result":{"content":"fn main() {}\n"}}"#.into(),
+        r#"{"jsonrpc":"2.0","id":1,"result":{"content":"fn main() {}\n","revision":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}"#.into(),
         r#"{"jsonrpc":"2.0","id":2,"result":{"fileType":"file","sizeBytes":13,"readonly":false,"modifiedAtMillis":41}}"#.into(),
-        r#"{"jsonrpc":"2.0","id":3,"result":{"metadata":{"fileType":"file","sizeBytes":14,"readonly":false,"modifiedAtMillis":42}}}"#.into(),
+        r#"{"jsonrpc":"2.0","id":3,"result":{"metadata":{"fileType":"file","sizeBytes":14,"readonly":false,"modifiedAtMillis":42},"revision":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}}"#.into(),
     ])));
 
     let read = client
@@ -157,6 +157,7 @@ fn client_reads_writes_and_versions_workspace_files_through_typed_contracts() {
         .write_file(FsWriteFileParams {
             path: "src/main.rs".into(),
             content: "fn main() { }\n".into(),
+            expected_revision: None,
         })
         .unwrap();
 
@@ -283,12 +284,10 @@ fn in_process_client_routes_syntax_analysis_to_the_server() {
         .expect("syntax analysis succeeds");
 
     assert_eq!(result.revision, 9);
-    assert!(
-        result
-            .folding_ranges
-            .iter()
-            .any(|range| { range.range.start.line_index == 0 && range.range.end.line_index == 1 })
-    );
+    assert!(result
+        .folding_ranges
+        .iter()
+        .any(|range| { range.range.start.line_index == 0 && range.range.end.line_index == 1 }));
 }
 
 #[test]
@@ -485,17 +484,15 @@ fn embedded_skill_catalog_lists_built_ins_and_persists_enablement() {
     let disabled = client.list_skills(SkillListParams::default()).unwrap();
     assert_eq!(disabled.generation, listed.generation + 1);
     assert_eq!(disabled.skills[0].enablement, SkillEnablementDto::Disabled);
-    assert!(
-        client
-            .drain_notifications()
-            .unwrap()
-            .iter()
-            .any(|notification| matches!(
-                notification,
-                ServerNotification::SkillsChanged(changed)
-                    if changed.generation == disabled.generation
-            ))
-    );
+    assert!(client
+        .drain_notifications()
+        .unwrap()
+        .iter()
+        .any(|notification| matches!(
+            notification,
+            ServerNotification::SkillsChanged(changed)
+                if changed.generation == disabled.generation
+        )));
 
     drop(client);
     let _ = fs::remove_dir_all(state_root);

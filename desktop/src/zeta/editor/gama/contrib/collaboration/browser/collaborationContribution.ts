@@ -1,16 +1,30 @@
+import "./media/collaborationContribution.css";
 import { ToolBar } from "../../../../../base/browser/ui/toolbar/toolbar.js";
 import type { IContextMenuProvider } from "../../../../../base/browser/contextmenu.js";
 import type { IAction } from "../../../../../base/common/actions.js";
 import { lxiconsLibrary } from "../../../../../base/common/lxiconsLibrary.js";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
+import type { DocumentCollaborationInvite } from "../../../common/services/documentCollaborationService.js";
+import type { DocumentCollaborationMember } from "../../../common/services/documentCollaborationService.js";
+import type { DocumentCollaborationRoomRole } from "../../../common/services/documentCollaborationService.js";
 import type { DocumentCollaborationTarget } from "../../../common/services/documentCollaborationService.js";
 
 export type CollaborationToolbarState = "unavailable" | "inactive" | "connecting" | "connected" | "resyncRequired" | "error";
 
+export interface CollaborationStartResult {
+  readonly roomId: string;
+  readonly principalId: string | undefined;
+  readonly canManageMembers: boolean;
+}
+
 export interface CollaborationContributionOptions {
   readonly ownerDocument: Document;
-  readonly onStart: (roomId: string | undefined, target: DocumentCollaborationTarget) => Promise<string>;
+  readonly onStart: (roomId: string | undefined, target: DocumentCollaborationTarget) => Promise<CollaborationStartResult>;
   readonly onStop: () => void;
+  readonly onInvite: (displayName: string, role: DocumentCollaborationRoomRole) => Promise<DocumentCollaborationInvite>;
+  readonly onListMembers: () => Promise<readonly DocumentCollaborationMember[]>;
+  readonly onRotateMemberAccessToken: (principalId: string) => Promise<DocumentCollaborationInvite>;
+  readonly onRevokeMember: (principalId: string) => Promise<void>;
 }
 
 /** Browser contribution that exposes Gama collaboration without owning document state or transport. */
@@ -18,10 +32,16 @@ export class CollaborationContribution extends DisposableOwner {
   readonly element: HTMLDivElement;
   private readonly toolbar: ToolBar;
   private readonly status: HTMLSpanElement;
+  private readonly invitation: HTMLDivElement;
+  private readonly invitationToken: HTMLPreElement;
+  private readonly members: HTMLDivElement;
+  private readonly memberList: HTMLDivElement;
   private _state: CollaborationToolbarState = "unavailable";
   private roomId: string | undefined;
   private message: string | undefined;
   private target: DocumentCollaborationTarget | undefined;
+  private principalId: string | undefined;
+  private canManageMembers = false;
 
   constructor(private readonly options: CollaborationContributionOptions) {
     super();
@@ -44,15 +64,51 @@ export class CollaborationContribution extends DisposableOwner {
     status.className = "zeta-document-collaboration-status";
     status.setAttribute("role", "status");
     this.status = status;
-    element.append(this.toolbar.element, status);
+    const invitation = options.ownerDocument.createElement("div");
+    invitation.className = "zeta-document-collaboration-invitation";
+    invitation.hidden = true;
+    invitation.setAttribute("role", "group");
+    invitation.setAttribute("aria-label", "Collaboration invitation");
+    this.invitation = invitation;
+    const invitationToken = options.ownerDocument.createElement("pre");
+    invitationToken.className = "zeta-document-collaboration-invitation-token";
+    invitationToken.tabIndex = 0;
+    invitationToken.setAttribute("aria-label", "Invitation credentials");
+    this.invitationToken = invitationToken;
+    const dismissInvitation = options.ownerDocument.createElement("button");
+    dismissInvitation.className = "zeta-document-collaboration-invitation-dismiss";
+    dismissInvitation.type = "button";
+    dismissInvitation.textContent = "Dismiss";
+    dismissInvitation.addEventListener("click", () => this.clearInvitation());
+    invitation.append(invitationToken, dismissInvitation);
+    const members = options.ownerDocument.createElement("div");
+    members.className = "zeta-document-collaboration-members";
+    members.hidden = true;
+    members.setAttribute("role", "group");
+    members.setAttribute("aria-label", "Collaboration members");
+    this.members = members;
+    const memberList = options.ownerDocument.createElement("div");
+    memberList.className = "zeta-document-collaboration-member-list";
+    memberList.setAttribute("role", "list");
+    this.memberList = memberList;
+    members.append(memberList);
+    element.append(this.toolbar.element, status, invitation, members);
     this.render();
   }
 
-  setState(state: CollaborationToolbarState, options: { readonly roomId?: string; readonly message?: string; readonly target?: DocumentCollaborationTarget } = {}): void {
+  setState(state: CollaborationToolbarState, options: { readonly roomId?: string; readonly message?: string; readonly target?: DocumentCollaborationTarget; readonly principalId?: string; readonly canManageMembers?: boolean } = {}): void {
     this._state = state;
     this.roomId = options.roomId;
     this.message = options.message;
+    if (state !== "connected") {
+      this.clearInvitation();
+      this.clearMembers();
+      this.principalId = undefined;
+    }
     if (options.target !== undefined) this.target = options.target;
+    if (options.principalId !== undefined) this.principalId = options.principalId;
+    if (options.canManageMembers !== undefined) this.canManageMembers = options.canManageMembers;
+    else if (state !== "connected") this.canManageMembers = false;
     this.render();
   }
 
@@ -61,14 +117,19 @@ export class CollaborationContribution extends DisposableOwner {
     const busy = this._state === "connecting";
     const enabled = this._state !== "unavailable" && !busy;
     this.element.dataset.state = this._state;
-    this.toolbar.setActions([createAction(
+    const actions = [createAction(
       connected ? "stopCollaboration" : "startCollaboration",
       connected ? "Stop collaborating" : "Collaborate",
       connected ? "Leave this collaboration room" : "Create or join a collaboration room",
       enabled,
       connected,
       () => this.toggle(),
-    )]);
+    )];
+    if (connected && this.target?.kind === "remote" && this.canManageMembers) {
+      actions.push(createAction("inviteCollaborator", "Invite collaborator", "Create a room invitation", true, false, () => this.createInvite()));
+      actions.push(createAction("manageCollaborators", "Manage collaborators", "View, rotate, or revoke active room members", true, false, () => this.manageCollaborators()));
+    }
+    this.toolbar.setActions(actions);
     this.status.textContent = this.statusText();
   }
 
@@ -77,7 +138,10 @@ export class CollaborationContribution extends DisposableOwner {
       case "unavailable": return "Collaboration unavailable";
       case "inactive": return "Share a room ID to collaborate";
       case "connecting": return "Connecting…";
-      case "connected": return this.roomId ? `${this.target?.kind === "remote" ? "Remote room" : "Room"}: ${this.roomId}` : "Connected";
+      case "connected": {
+        const connected = this.roomId ? `${this.target?.kind === "remote" ? "Remote room" : "Room"}: ${this.roomId}` : "Connected";
+        return this.message ? `${connected} — ${this.message}` : connected;
+      }
       case "resyncRequired": return this.roomId ? `Room ${this.roomId}: ${this.message ?? "rejoin required"}` : this.message ?? "Collaboration requires a resync";
       case "error": return this.roomId ? `Room ${this.roomId}: ${this.message ?? "collaboration failed"}` : this.message ?? "Collaboration failed";
     }
@@ -94,8 +158,8 @@ export class CollaborationContribution extends DisposableOwner {
     if (entered == null) return;
     this.setState("connecting");
     void this.options.onStart(entered.trim() || undefined, target).then(
-      roomId => {
-        if (this._state === "connecting") this.setState("connected", { roomId, target });
+      result => {
+        if (this._state === "connecting") this.setState("connected", { roomId: result.roomId, target, canManageMembers: result.canManageMembers });
       },
       error => {
         if (this._state === "connecting") this.setState("error", { message: error instanceof Error ? error.message : "Collaboration could not be started" });
@@ -110,6 +174,149 @@ export class CollaborationContribution extends DisposableOwner {
     const bearerToken = this.options.ownerDocument.defaultView?.prompt("Enter the remote collaboration server bearer token.", "");
     if (bearerToken == null) return undefined;
     return { kind: "remote", endpoint: endpoint.trim(), bearerToken: bearerToken.trim() };
+  }
+
+  private createInvite(): void {
+    if (this._state !== "connected" || !this.roomId || this.target?.kind !== "remote" || !this.canManageMembers) return;
+    const displayName = this.options.ownerDocument.defaultView?.prompt("Enter a collaborator name.", "");
+    if (displayName == null) return;
+    const role = this.requestInviteRole();
+    if (!role) return;
+    const roomId = this.roomId;
+    const target = this.target;
+    void this.options.onInvite(displayName, role).then(
+      invite => {
+        if (this._state !== "connected" || this.roomId !== roomId) return;
+        this.setState("connected", { roomId, target, canManageMembers: true, message: `Invitation created for ${invite.displayName}` });
+        this.showInvitation(invite);
+      },
+      error => {
+        if (this._state === "connected" && this.roomId === roomId) this.setState("connected", { roomId, target, canManageMembers: true, message: error instanceof Error ? error.message : "Collaboration invitation could not be created" });
+      },
+    );
+  }
+
+  private manageCollaborators(): void {
+    if (this._state !== "connected" || !this.roomId || this.target?.kind !== "remote" || !this.canManageMembers) return;
+    this.refreshMembers();
+  }
+
+  private refreshMembers(): void {
+    if (this._state !== "connected" || !this.roomId || this.target?.kind !== "remote" || !this.canManageMembers) return;
+    const roomId = this.roomId;
+    const target = this.target;
+    this.members.hidden = false;
+    this.memberList.replaceChildren("Loading collaborators…");
+    void this.options.onListMembers().then(
+      members => {
+        if (this._state !== "connected" || this.roomId !== roomId || this.target !== target) return;
+        this.renderMembers(members);
+      },
+      error => {
+        if (this._state === "connected" && this.roomId === roomId) this.setState("connected", { roomId, target, principalId: this.principalId, canManageMembers: true, message: error instanceof Error ? error.message : "Collaboration members could not be read" });
+      },
+    );
+  }
+
+  private renderMembers(members: readonly DocumentCollaborationMember[]): void {
+    const document = this.options.ownerDocument;
+    const fragment = document.createDocumentFragment();
+    if (members.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "zeta-document-collaboration-members-empty";
+      empty.setAttribute("role", "listitem");
+      empty.textContent = "No active collaborators";
+      fragment.append(empty);
+    }
+    for (const member of members) {
+      const item = document.createElement("div");
+      item.className = "zeta-document-collaboration-member";
+      item.setAttribute("role", "listitem");
+      item.dataset.principalId = member.principalId;
+      const identity = document.createElement("span");
+      identity.className = "zeta-document-collaboration-member-identity";
+      identity.textContent = member.displayName;
+      const details = document.createElement("span");
+      details.className = "zeta-document-collaboration-member-details";
+      details.textContent = `${member.role} · ${member.principalId}`;
+      const actions = document.createElement("span");
+      actions.className = "zeta-document-collaboration-member-actions";
+      const rotate = document.createElement("button");
+      rotate.type = "button";
+      rotate.textContent = "Rotate token";
+      rotate.addEventListener("click", () => this.rotateMemberAccessToken(member));
+      actions.append(rotate);
+      const revoke = document.createElement("button");
+      revoke.type = "button";
+      revoke.textContent = "Revoke";
+      if (member.principalId === this.principalId) {
+        revoke.disabled = true;
+        revoke.title = "You cannot revoke your own active owner credential";
+      }
+      revoke.addEventListener("click", () => this.revokeMember(member));
+      actions.append(revoke);
+      item.append(identity, details, actions);
+      fragment.append(item);
+    }
+    this.memberList.replaceChildren(fragment);
+  }
+
+  private rotateMemberAccessToken(member: DocumentCollaborationMember): void {
+    if (this._state !== "connected" || !this.roomId || this.target?.kind !== "remote" || !this.canManageMembers) return;
+    const roomId = this.roomId;
+    const target = this.target;
+    void this.options.onRotateMemberAccessToken(member.principalId).then(
+      invite => {
+        if (this._state !== "connected" || this.roomId !== roomId || this.target !== target) return;
+        this.setState("connected", { roomId, target, principalId: this.principalId, canManageMembers: true, message: `Access token rotated for ${invite.displayName}` });
+        this.showInvitation(invite);
+        this.refreshMembers();
+      },
+      error => {
+        if (this._state === "connected" && this.roomId === roomId) this.setState("connected", { roomId, target, principalId: this.principalId, canManageMembers: true, message: error instanceof Error ? error.message : "Collaboration credential could not be rotated" });
+      },
+    );
+  }
+
+  private revokeMember(member: DocumentCollaborationMember): void {
+    if (this._state !== "connected" || !this.roomId || this.target?.kind !== "remote" || !this.canManageMembers || member.principalId === this.principalId) return;
+    if (this.options.ownerDocument.defaultView?.confirm(`Revoke ${member.displayName}'s room access?`) !== true) return;
+    const roomId = this.roomId;
+    const target = this.target;
+    void this.options.onRevokeMember(member.principalId).then(
+      () => {
+        if (this._state !== "connected" || this.roomId !== roomId || this.target !== target) return;
+        this.setState("connected", { roomId, target, principalId: this.principalId, canManageMembers: true, message: `Access revoked for ${member.displayName}` });
+        this.refreshMembers();
+      },
+      error => {
+        if (this._state === "connected" && this.roomId === roomId) this.setState("connected", { roomId, target, principalId: this.principalId, canManageMembers: true, message: error instanceof Error ? error.message : "Collaboration member could not be revoked" });
+      },
+    );
+  }
+
+  private requestInviteRole(): DocumentCollaborationRoomRole | undefined {
+    const entered = this.options.ownerDocument.defaultView?.prompt("Enter the collaborator role: owner, editor, or viewer.", "editor");
+    if (entered == null) return undefined;
+    const role = entered.trim().toLowerCase();
+    if (role === "owner" || role === "editor" || role === "viewer") return role;
+    if (this.roomId) this.setState("connected", { roomId: this.roomId, target: this.target, canManageMembers: true, message: "Collaboration role must be owner, editor, or viewer" });
+    return undefined;
+  }
+
+  private showInvitation(invite: DocumentCollaborationInvite): void {
+    this.invitationToken.textContent = `Room ID: ${invite.roomId}\nAccess token: ${invite.accessToken}`;
+    this.invitation.hidden = false;
+  }
+
+  private clearInvitation(): void {
+    this.invitationToken.textContent = "";
+    this.invitation.hidden = true;
+  }
+
+  private clearMembers(): void {
+    this.memberList.replaceChildren();
+    this.members.hidden = true;
   }
 }
 

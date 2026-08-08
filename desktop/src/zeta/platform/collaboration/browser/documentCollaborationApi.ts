@@ -7,6 +7,8 @@ export function createDisconnectedDocumentCollaborationApi(unavailable: Unavaila
   return {
     open: () => unavailable("documentCollaboration.open"),
     submit: () => unavailable("documentCollaboration.submit"),
+    publishPresence: () => unavailable("documentCollaboration.publishPresence"),
+    readPresence: () => unavailable("documentCollaboration.readPresence"),
   };
 }
 
@@ -14,5 +16,7 @@ export function createViteDevDocumentCollaborationApi(connection: ViteDevAppServ
   return {
     open: params => viteDevRequest(connection, "document/collaboration/open", params),
     submit: params => viteDevRequest(connection, "document/collaboration/submit", params),
+    publishPresence: params => viteDevRequest(connection, "document/collaboration/presence/publish", params),
+    readPresence: params => viteDevRequest(connection, "document/collaboration/presence/read", params),
   };
 }

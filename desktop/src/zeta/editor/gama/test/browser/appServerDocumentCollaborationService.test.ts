@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { DocumentCollaborationOpenParams } from "../../../../../../generated/app-server/types.js";
 import type { DocumentCollaborationOpenResult } from "../../../../../../generated/app-server/types.js";
+import type { DocumentCollaborationPresenceParams } from "../../../../../../generated/app-server/types.js";
+import type { DocumentCollaborationPresenceReadParams } from "../../../../../../generated/app-server/types.js";
+import type { DocumentCollaborationPresenceSnapshot } from "../../../../../../generated/app-server/types.js";
 import type { DocumentCollaborationSubmitParams } from "../../../../../../generated/app-server/types.js";
 import type { DocumentCollaborationSubmitResult } from "../../../../../../generated/app-server/types.js";
 import type { DocumentCollaborationUpdate } from "../../../../../../generated/app-server/types.js";
@@ -12,8 +15,9 @@ import { AppServerDocumentCollaborationService } from "../../browser/services/ap
 import type { DocumentNode } from "../../common/model/document.js";
 import { createDefaultDocumentSchema, type DocumentSchema } from "../../common/model/documentSchema.js";
 import { applyDocumentTransaction, DocumentTransaction } from "../../common/model/documentTransaction.js";
+import { textSelection } from "../../common/core/documentSelection.js";
 import { serializeDocumentTransaction } from "../../common/model/documentTransactionSerialization.js";
-import type { DocumentCollaborationRemoteEnvelope } from "../../contrib/collaboration/common/session.js";
+import type { DocumentCollaborationRemoteEnvelope } from "../../contrib/collaboration/common/protocol.js";
 
 test("Gama App Server collaboration adapter uses JSON-safe ordered versions and delivers room updates", async () => {
   const schema = createDefaultDocumentSchema();
@@ -24,7 +28,13 @@ test("Gama App Server collaboration adapter uses JSON-safe ordered versions and 
   using connection = await service.open({ clientId: "client-a", schemaId: "gama-default-v1", schema, document }, new AbortController().signal);
 
   assert.equal(connection.roomId, "room-a");
+  assert.equal(connection.canEdit, true);
+  assert.equal(connection.canManageMembers, false);
+  assert.equal(connection.principalId, undefined);
+  await assert.rejects(connection.createInvite("Writer", "editor", new AbortController().signal), /does not manage remote room members/);
+  await assert.rejects(connection.listMembers(new AbortController().signal), /does not manage remote room members/);
   assert.equal(connection.initialSnapshot.version, 0);
+  assert.equal(connection.currentPresence[0]?.clientId, "client-c");
   const received: DocumentCollaborationRemoteEnvelope[] = [];
   connection.onDidReceiveUpdate(update => received.push(update));
   const remote = new DocumentTransaction().replaceText("text-1", 0, 0, "R");
@@ -40,6 +50,13 @@ test("Gama App Server collaboration adapter uses JSON-safe ordered versions and 
   assert.equal(api.submissions[0]?.baseVersion, 0);
   assert.equal(outcome.kind, "accepted");
   assert.equal(outcome.kind === "accepted" ? outcome.update.version : -1, 1);
+
+  const receivedPresence: string[] = [];
+  connection.onDidReceivePresence(presences => receivedPresence.push(...presences.map(presence => presence.clientId)));
+  await connection.updatePresence(textSelection({ nodeId: "text-1", offset: 1 }), new AbortController().signal);
+  assert.equal(api.presenceUpdates[0]?.clientId, "client-a");
+  events.firePresence({ roomId: "room-a", generation: 1, presences: [{ clientId: "client-b", selection: JSON.stringify(textSelection({ nodeId: "text-1", offset: 0 }, { nodeId: "text-1", offset: 1 })) }] });
+  assert.deepEqual(receivedPresence, ["client-b"]);
 });
 
 function createDocument(schema: DocumentSchema): DocumentNode {
@@ -48,6 +65,8 @@ function createDocument(schema: DocumentSchema): DocumentNode {
 
 class FakeDocumentCollaborationApi implements IDocumentCollaborationApi {
   readonly submissions: DocumentCollaborationSubmitParams[] = [];
+  readonly presenceUpdates: DocumentCollaborationPresenceParams[] = [];
+  readonly initialPresence: DocumentCollaborationPresenceSnapshot = { roomId: "room-a", generation: 0, presences: [{ clientId: "client-c", selection: JSON.stringify(textSelection({ nodeId: "text-1", offset: 0 })) }] };
 
   async open(params: DocumentCollaborationOpenParams): Promise<DocumentCollaborationOpenResult> {
     return { clientId: params.clientId, schemaId: params.schemaId, snapshot: { roomId: "room-a", version: 0, document: params.document } };
@@ -67,6 +86,16 @@ class FakeDocumentCollaborationApi implements IDocumentCollaborationApi {
       },
     };
   }
+
+  async publishPresence(params: DocumentCollaborationPresenceParams): Promise<DocumentCollaborationPresenceSnapshot> {
+    this.presenceUpdates.push(params);
+    return { roomId: params.roomId, generation: this.presenceUpdates.length, presences: [] };
+  }
+
+  async readPresence(params: DocumentCollaborationPresenceReadParams): Promise<DocumentCollaborationPresenceSnapshot> {
+    assert.equal(params.roomId, this.initialPresence.roomId);
+    return this.initialPresence;
+  }
 }
 
 class FakeServerEvents implements IServerEventApi {
@@ -79,6 +108,11 @@ class FakeServerEvents implements IServerEventApi {
 
   fire(update: DocumentCollaborationUpdate): void {
     const event: ServerNotification = { method: "document/collaboration/update", params: update };
+    for (const listener of this.listeners) listener(event);
+  }
+
+  firePresence(presence: DocumentCollaborationPresenceSnapshot): void {
+    const event: ServerNotification = { method: "document/collaboration/presence", params: presence };
     for (const listener of this.listeners) listener(event);
   }
 }

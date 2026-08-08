@@ -4,29 +4,17 @@ import { validateDocumentSelection } from "../../../common/core/documentSelectio
 import { freezeDocumentNode, type DocumentNode } from "../../../common/model/document.js";
 import { DocumentSchema } from "../../../common/model/documentSchema.js";
 import { applyDocumentTransaction, DocumentTransaction, type DocumentStep } from "../../../common/model/documentTransaction.js";
+import type { DocumentCollaborationAcknowledgement, DocumentCollaborationEnvelope, DocumentCollaborationRemoteEnvelope } from "./protocol.js";
 import { rebaseDocumentTransaction } from "./rebase.js";
 
-export interface DocumentCollaborationEnvelope {
-  readonly clientId: string;
-  readonly sequence: number;
-  readonly baseVersion: number;
-  readonly transaction: DocumentTransaction;
-}
-
-export interface DocumentCollaborationRemoteEnvelope extends DocumentCollaborationEnvelope {
-  readonly version: number;
-}
-
-export type DocumentCollaborationAcknowledgement = DocumentCollaborationRemoteEnvelope;
-
-export interface DocumentCollaborationSessionOptions {
+export interface DocumentCollaborationSynchronizerOptions {
   readonly schema: DocumentSchema;
   readonly document: DocumentNode;
   readonly clientId: string;
   readonly version?: number;
 }
 
-export interface DocumentCollaborationChange {
+export interface DocumentCollaborationSynchronizationChange {
   readonly kind: "local" | "remote" | "acknowledged";
   readonly document: DocumentNode;
   readonly canonicalDocument: DocumentNode;
@@ -36,14 +24,14 @@ export interface DocumentCollaborationChange {
 }
 
 /**
- * Coordinates one ordered server submission with a locally optimistic buffer.
+ * Synchronizes one ordered server submission with a locally optimistic buffer.
  *
  * A client never blocks typing for network I/O: the first local transaction is
  * in flight, later transactions are buffered, and remote updates rebase the
  * combined local intent before the next submission is issued.
  */
-export class DocumentCollaborationSession extends DisposableOwner {
-  private readonly changeEmitter = this.own(new Emitter<DocumentCollaborationChange>());
+export class DocumentCollaborationSynchronizer extends DisposableOwner {
+  private readonly changeEmitter = this.own(new Emitter<DocumentCollaborationSynchronizationChange>());
   private _canonicalDocument: DocumentNode;
   private _document: DocumentNode;
   private _inFlight: DocumentCollaborationEnvelope | undefined;
@@ -52,9 +40,9 @@ export class DocumentCollaborationSession extends DisposableOwner {
   private _sequence = 0;
   private disposed = false;
 
-  readonly onDidChange: Event<DocumentCollaborationChange> = this.changeEmitter.event;
+  readonly onDidChange: Event<DocumentCollaborationSynchronizationChange> = this.changeEmitter.event;
 
-  constructor(options: DocumentCollaborationSessionOptions) {
+  constructor(options: DocumentCollaborationSynchronizerOptions) {
     super();
     if (typeof options.clientId !== "string" || options.clientId.trim().length === 0) throw new TypeError("A collaboration client id is required");
     const version = options.version ?? 0;
@@ -105,7 +93,7 @@ export class DocumentCollaborationSession extends DisposableOwner {
   /** Snapshot produced by the exact in-flight update, excluding later local typing. */
   get inFlightDocument(): DocumentNode | undefined {
     this.ensureAlive();
-    return this._inFlight ? applySessionTransaction(this._canonicalDocument, this.schema, this._inFlight.transaction).document : undefined;
+    return this._inFlight ? applySynchronizerTransaction(this._canonicalDocument, this.schema, this._inFlight.transaction).document : undefined;
   }
 
   get pendingSequence(): number | undefined {
@@ -116,7 +104,7 @@ export class DocumentCollaborationSession extends DisposableOwner {
   /** Applies a local transaction optimistically and returns an immediately sendable envelope when idle. */
   dispatchLocal(transaction: DocumentTransaction): DocumentCollaborationEnvelope | undefined {
     this.ensureAlive();
-    const applied = applySessionTransaction(this._document, this.schema, transaction);
+    const applied = applySynchronizerTransaction(this._document, this.schema, transaction);
     this._document = applied.document;
     if (transaction.steps.length === 0) return undefined;
     if (this._inFlight) {
@@ -139,11 +127,11 @@ export class DocumentCollaborationSession extends DisposableOwner {
   }
 
   /** Applies a server-ordered remote update and rebases every unsent local change. */
-  receiveRemote(envelope: DocumentCollaborationRemoteEnvelope): DocumentCollaborationChange {
+  receiveRemote(envelope: DocumentCollaborationRemoteEnvelope): DocumentCollaborationSynchronizationChange {
     this.ensureAlive();
     this.validateRemoteEnvelope(envelope);
     if (envelope.clientId === this.clientId) throw new DocumentCollaborationError("A local update must be acknowledged, not received as remote");
-    const remote = applySessionTransaction(this._canonicalDocument, this.schema, envelope.transaction);
+    const remote = applySynchronizerTransaction(this._canonicalDocument, this.schema, envelope.transaction);
     const local = this.pending;
     const rebased = local ? rebaseDocumentTransaction(this._canonicalDocument, this.schema, local, envelope.transaction) : undefined;
     this._canonicalDocument = remote.document;
@@ -155,16 +143,16 @@ export class DocumentCollaborationSession extends DisposableOwner {
   }
 
   /** Commits the exact server-accepted in-flight transaction while retaining later local input. */
-  acknowledge(envelope: DocumentCollaborationAcknowledgement): DocumentCollaborationChange {
+  acknowledge(envelope: DocumentCollaborationAcknowledgement): DocumentCollaborationSynchronizationChange {
     this.ensureAlive();
     this.validateRemoteEnvelope(envelope);
     if (envelope.clientId !== this.clientId) throw new DocumentCollaborationError("Only the local client can acknowledge its own update");
     if (!this._inFlight || envelope.sequence !== this._inFlight.sequence) throw new DocumentCollaborationError("The acknowledgement does not match the current in-flight update");
-    const committed = applySessionTransaction(this._canonicalDocument, this.schema, envelope.transaction);
+    const committed = applySynchronizerTransaction(this._canonicalDocument, this.schema, envelope.transaction);
     this._canonicalDocument = committed.document;
     this._version = envelope.version;
     this._inFlight = undefined;
-    this._document = this._buffer ? applySessionTransaction(committed.document, this.schema, this._buffer).document : committed.document;
+    this._document = this._buffer ? applySynchronizerTransaction(committed.document, this.schema, this._buffer).document : committed.document;
     return this.emitChange({ kind: "acknowledged", envelope, droppedSteps: [] });
   }
 
@@ -196,14 +184,14 @@ export class DocumentCollaborationSession extends DisposableOwner {
     if (!(envelope.transaction instanceof DocumentTransaction)) throw new TypeError("A collaboration envelope requires a Gama transaction");
   }
 
-  private emitChange(options: { readonly kind: DocumentCollaborationChange["kind"]; readonly envelope: DocumentCollaborationEnvelope; readonly droppedSteps: readonly DocumentStep[] }): DocumentCollaborationChange {
+  private emitChange(options: { readonly kind: DocumentCollaborationSynchronizationChange["kind"]; readonly envelope: DocumentCollaborationEnvelope; readonly droppedSteps: readonly DocumentStep[] }): DocumentCollaborationSynchronizationChange {
     const change = Object.freeze({ kind: options.kind, document: this._document, canonicalDocument: this._canonicalDocument, pending: this.pending, envelope: options.envelope, droppedSteps: Object.freeze([...options.droppedSteps]) });
     this.changeEmitter.fire(change);
     return change;
   }
 
   private ensureAlive(): void {
-    if (this.disposed) throw new ReferenceError("Document collaboration session is already disposed");
+    if (this.disposed) throw new ReferenceError("Document collaboration synchronizer is already disposed");
   }
 }
 
@@ -214,7 +202,7 @@ export class DocumentCollaborationError extends Error {
   }
 }
 
-function applySessionTransaction(document: DocumentNode, schema: DocumentSchema, transaction: DocumentTransaction): { readonly document: DocumentNode } {
+function applySynchronizerTransaction(document: DocumentNode, schema: DocumentSchema, transaction: DocumentTransaction): { readonly document: DocumentNode } {
   const applied = applyDocumentTransaction(document, schema, transaction);
   if (transaction.selection) validateDocumentSelection(applied.document, transaction.selection);
   return applied;

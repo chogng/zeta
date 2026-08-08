@@ -57,10 +57,10 @@ test("ExplorerViewPane renders, expands, and opens workspace files", async () =>
         kind: FileKind.File,
       }];
     },
-    readFile: async () => {
+    readFile: async (_resource) => {
       throw new Error("Explorer must delegate file content resolution to the selected editor");
     },
-    writeFile: async () => {
+    writeFile: async (_request) => {
       throw new Error("Explorer must delegate file writes to the selected editor");
     },
   };

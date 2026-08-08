@@ -1,11 +1,3 @@
-use crate::DocumentCollaborationOpenParams;
-use crate::DocumentCollaborationOpenResult;
-use crate::DocumentCollaborationSubmitParams;
-use crate::DocumentCollaborationSubmitResult;
-use crate::DocumentCollaborationUpdate;
-use crate::room::DocumentCollaborationReplay;
-use crate::room::MAX_JAVASCRIPT_SAFE_INTEGER;
-use crate::room::MAX_ROOM_HISTORY;
 use crate::room::random_room_id;
 use crate::room::replay;
 use crate::room::replay_submit_result;
@@ -13,7 +5,20 @@ use crate::room::snapshot;
 use crate::room::validate_document;
 use crate::room::validate_identifier;
 use crate::room::validate_javascript_safe_integer;
+use crate::room::validate_presence_selection;
 use crate::room::validate_transaction;
+use crate::room::DocumentCollaborationReplay;
+use crate::room::MAX_JAVASCRIPT_SAFE_INTEGER;
+use crate::room::MAX_ROOM_HISTORY;
+use crate::DocumentCollaborationOpenParams;
+use crate::DocumentCollaborationOpenResult;
+use crate::DocumentCollaborationPresence;
+use crate::DocumentCollaborationPresenceParams;
+use crate::DocumentCollaborationPresenceReadParams;
+use crate::DocumentCollaborationPresenceSnapshot;
+use crate::DocumentCollaborationSubmitParams;
+use crate::DocumentCollaborationSubmitResult;
+use crate::DocumentCollaborationUpdate;
 use std::collections::BTreeMap;
 use std::collections::VecDeque;
 
@@ -27,6 +32,8 @@ struct DocumentCollaborationRoom {
     schema_id: String,
     document: String,
     version: u64,
+    presence_generation: u64,
+    presences: BTreeMap<String, String>,
     updates: VecDeque<DocumentCollaborationUpdate>,
     submitted_operations: BTreeMap<(String, u64), SubmittedOperation>,
 }
@@ -65,6 +72,8 @@ impl InMemoryDocumentCollaborationRooms {
             schema_id: params.schema_id.clone(),
             document: params.document,
             version: 0,
+            presence_generation: 0,
+            presences: BTreeMap::new(),
             updates: VecDeque::new(),
             submitted_operations: BTreeMap::new(),
         };
@@ -168,6 +177,50 @@ impl InMemoryDocumentCollaborationRooms {
         ))
     }
 
+    /// Publishes or clears one room-local client selection without changing document history.
+    pub fn publish_presence(
+        &mut self,
+        params: DocumentCollaborationPresenceParams,
+    ) -> Result<DocumentCollaborationPresenceSnapshot, String> {
+        validate_identifier(&params.room_id, "roomId")?;
+        validate_identifier(&params.client_id, "clientId")?;
+        if let Some(selection) = &params.selection {
+            validate_presence_selection(selection)?;
+        }
+        let Some(room) = self.rooms.get_mut(&params.room_id) else {
+            return Err("The collaboration room does not exist".into());
+        };
+        room.presence_generation = room
+            .presence_generation
+            .checked_add(1)
+            .filter(|generation| *generation <= MAX_JAVASCRIPT_SAFE_INTEGER)
+            .ok_or_else(|| {
+                "The collaboration room presence generation exceeded JavaScript's safe integer range"
+                    .to_string()
+            })?;
+        match params.selection {
+            Some(selection) => {
+                room.presences.insert(params.client_id, selection);
+            }
+            None => {
+                room.presences.remove(&params.client_id);
+            }
+        }
+        Ok(presence_snapshot(&params.room_id, room))
+    }
+
+    /// Reads the current room-local presence set after a client has subscribed to the room.
+    pub fn read_presence(
+        &self,
+        params: DocumentCollaborationPresenceReadParams,
+    ) -> Result<DocumentCollaborationPresenceSnapshot, String> {
+        validate_identifier(&params.room_id, "roomId")?;
+        let Some(room) = self.rooms.get(&params.room_id) else {
+            return Err("The collaboration room does not exist".into());
+        };
+        Ok(presence_snapshot(&params.room_id, room))
+    }
+
     fn create_room_id(&self) -> Result<String, String> {
         loop {
             let room_id = random_room_id()?;
@@ -175,5 +228,23 @@ impl InMemoryDocumentCollaborationRooms {
                 return Ok(room_id);
             }
         }
+    }
+}
+
+fn presence_snapshot(
+    room_id: &str,
+    room: &DocumentCollaborationRoom,
+) -> DocumentCollaborationPresenceSnapshot {
+    DocumentCollaborationPresenceSnapshot {
+        room_id: room_id.into(),
+        generation: room.presence_generation,
+        presences: room
+            .presences
+            .iter()
+            .map(|(client_id, selection)| DocumentCollaborationPresence {
+                client_id: client_id.clone(),
+                selection: selection.clone(),
+            })
+            .collect(),
     }
 }

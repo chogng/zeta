@@ -15,13 +15,17 @@ model tool adapter 都依赖它；本 crate 不依赖 JSON-RPC、Desktop、Tool 
 | --- | --- |
 | `service.rs` / `WorkspaceFileSystem` | consumer 共享 trait；实现必须约束所有输入到 authority root |
 | `local.rs` / `LocalFileSystem` | 当前 local implementation；组合 `zeta_workspace::WorkspaceRoot` 与宿主 I/O |
-| `types.rs` | `FileType`、`FileMetadata`、`DirectoryEntry`，不携带 wire/UI DTO |
-| `error.rs` / `FileSystemError` | path、文件/目录类型、读写上限、只读状态与 I/O failure |
+| `types.rs` | `FileType`、`FileMetadata`、`DirectoryEntry`、`FileContent`、`FileWriteCondition` 与 content revision helper；不携带 wire/UI DTO |
+| `error.rs` / `FileSystemError` | path、文件/目录类型、读写上限、revision conflict、只读状态与 I/O failure |
 
-`WorkspaceFileSystem::{read_file,write_file,get_metadata,read_directory}` 都接收相对路径。
+`WorkspaceFileSystem::{read_file,read_file_with_revision,write_file,write_file_with_condition,get_metadata,read_directory}` 都接收相对路径。
 `read_file` 的 limit 单位是 bytes，不做 UTF-8 解码；内容解释属于调用方。
 `write_file` 同样使用 byte limit，在现有父目录内原子替换或新建普通文件，并保留被替换文件
 的权限；它不隐式创建目录。
+`read_file_with_revision` 以当前字节的 SHA-256 返回 opaque revision；调用方不应把 hash
+算法当作业务协议。`write_file_with_condition(..., ExpectedRevision)` 只接受与读取版本一致
+的写入，并以 `RevisionConflict` 明确拒绝过期写入；`Unconditional` 只用于有意不依赖先前
+读取的 create/overwrite 操作。
 `read_directory` 只返回直接子项，并按 lossily represented child name 排序。
 
 ## 执行与可信边界
@@ -44,12 +48,16 @@ schema 层做的格式校验只用于快速失败，不能替代这里的 author
 | `LocalFileSystem::resolve_existing` | 解析并约束读取目标 | 调用方绕过它直接拼接 workspace path |
 | `LocalFileSystem::resolve_for_write` | 约束现有或待创建文件及最近现有父目录 | mutation 在 authority check 前执行 I/O |
 | `local::atomic_write` | 同目录临时写、权限复制、flush、replace 与父目录 sync | 开始决定 RPC、dirty state 或冲突 UI |
+| `LocalFileSystem::write_file_with_condition` | 在本进程 filesystem instance 的写锁内检查 revision 并替换 | 在此 crate 中复制 App Server/UI conflict policy |
 | `local::metadata` | host metadata → consumer-neutral `FileMetadata` | 返回 wire DTO 或 Renderer identity |
 
 `read_file` 最多读取 `maximum_bytes + 1` 来可靠检测 overflow；limit 为零也失败。
 `write_file` 在打开临时文件前检查完整 content byte length，向目标同目录写入并 `sync_all`，
 再原子替换目标及同步父目录。现有普通文件的权限会复制到临时文件；只读文件、目录、缺失父
 目录和越过 root 的 symlink 都会失败。
+`LocalFileSystem` 把普通与条件写入串行化，因此同一 instance 的并发 writer 不会同时通过
+一个旧 revision。这个锁不是跨进程文件锁：独立的宿主进程仍可能在检查与替换之间修改文件；
+App Server watcher 负责把后续外部变化投影为 invalidation。
 `get_metadata` 返回 millisecond Unix timestamp（宿主不提供或早于 epoch 时为 `None`）。
 错误可能包含宿主 I/O 诊断；App Server 必须在 external boundary 映射为稳定错误，不得直接
 回显。
@@ -71,7 +79,8 @@ bazel test //zeta-rs/file-system:file-system-unit-tests
 
 ## 当前限制与扩展点
 
-- Current：只有 in-process local implementation；具备有界原子文件写入，不包含 rename/delete。
+- Current：只有 in-process local implementation；具备有界原子文件写入及 instance-local
+  expected-revision write，不包含跨进程 compare-and-swap、rename/delete。
 - Current：watcher 是独立的 invalidation primitive，不进入 filesystem trait；App Server 负责
   组合二者并发布产品 notification。
 - Current：non-UTF-8 directory entry name 使用 lossy conversion。

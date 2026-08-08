@@ -11,12 +11,28 @@ export interface TextResourceResolveRequest {
 export interface TextResourceContent {
   readonly resource: URI;
   readonly text: string;
+  /** Opaque file revision when the resource was resolved from persistent storage. */
+  readonly revision: string | undefined;
 }
 
 /** Resource-content write requested by a text model service. */
 export interface TextResourceSaveRequest {
   readonly resource: URI;
   readonly text: string;
+  readonly expectedRevision?: string;
+}
+
+/** Result returned after persistent text has been accepted. */
+export interface TextResourceSaveResult {
+  readonly revision: string | undefined;
+}
+
+/** The resource changed after the model resolved it, so persistence was rejected. */
+export class TextResourceConflictError extends Error {
+  constructor(readonly resource: URI) {
+    super(`Text resource changed since it was resolved: ${resource.toString()}`);
+    this.name = "TextResourceConflictError";
+  }
 }
 
 /** Coarse invalidation event for resources that may have changed externally. */
@@ -33,5 +49,5 @@ export interface TextResourceChangeEvent {
 export interface ITextResourceStore {
   readonly onDidChange: Event<TextResourceChangeEvent>;
   resolve(request: TextResourceResolveRequest, signal: AbortSignal): Promise<TextResourceContent>;
-  save(request: TextResourceSaveRequest, signal: AbortSignal): Promise<void>;
+  save(request: TextResourceSaveRequest, signal: AbortSignal): Promise<TextResourceSaveResult>;
 }

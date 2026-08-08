@@ -6,7 +6,7 @@ import { Emitter } from "../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { URI } from "../../../../base/common/uri.js";
 import type { IFileChangeEvent } from "../../../../platform/files/common/files.js";
-import type { ITextFileService, ResolvedTextFileContent, TextFileResolveRequest, TextFileSaveRequest } from "../../../../workbench/services/textfile/common/textFileService.js";
+import { TextFileSaveConflictError, type ITextFileService, type ResolvedTextFileContent, type TextFileResolveRequest, type TextFileSaveRequest } from "../../../../workbench/services/textfile/common/textFileService.js";
 import { GAMA_EDITOR_ID } from "../../browser/editorInput.js";
 import { EditorPane } from "../../browser/editorPane.js";
 import { nodeViews as profileNodeViews } from "../../contrib/academic/browser/nodeViews.js";
@@ -72,6 +72,26 @@ test("DocumentWorkingCopy clears dirty state after an untitled save succeeds", a
   assert.equal(saveCalls, 1);
   assert.equal(pane.isDirty, false);
   pane.dispose();
+  environment.window.close();
+});
+
+test("Gama refuses a stale conditional save even before a file-change notification arrives", async () => {
+  const environment = new JSDOM("<!doctype html><body></body>");
+  const files = new MemoryTextFiles("Initial");
+  const parent = environment.window.document.createElement("main");
+  using pane = new EditorPane(files);
+  pane.create(parent);
+  await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
+  const textarea = parent.querySelector<HTMLTextAreaElement>("textarea.zeta-document-text-input");
+  assert.ok(textarea);
+  textarea.value = "Local";
+  textarea.dispatchEvent(new environment.window.Event("input", { bubbles: true }));
+  files.setExternalText("External");
+
+  await assert.rejects(pane.save(), TextFileSaveConflictError);
+  assert.equal(pane.isDirty, true);
+  assert.equal(pane.hasExternalChange, true);
+  assert.equal(files.lastSavedText, "");
   environment.window.close();
 });
 
@@ -1620,16 +1640,36 @@ class MemoryTextFiles implements ITextFileService {
     [Symbol.dispose](): void {},
   });
   lastSavedText = "";
+  private revision = 1;
 
   constructor(private text: string) {}
 
   async resolve(request: TextFileResolveRequest, _signal: AbortSignal): Promise<ResolvedTextFileContent> {
-    return { resource: request.resource, text: request.bootstrapText ?? this.text, source: "fileSystem" as ResolvedTextFileContent["source"] };
+    return {
+      resource: request.resource,
+      text: request.bootstrapText ?? this.text,
+      source: request.bootstrapText === undefined ? "fileSystem" as ResolvedTextFileContent["source"] : "bootstrap" as ResolvedTextFileContent["source"],
+      revision: request.bootstrapText === undefined ? this.currentRevision() : undefined,
+    };
   }
 
-  async save(request: TextFileSaveRequest, _signal: AbortSignal): Promise<void> {
+  async save(request: TextFileSaveRequest, _signal: AbortSignal): Promise<{ readonly revision: string | undefined }> {
+    if (request.expectedRevision !== undefined && request.expectedRevision !== this.currentRevision()) {
+      throw new TextFileSaveConflictError(request.resource);
+    }
     this.lastSavedText = request.text;
     this.text = request.text;
+    this.revision += 1;
+    return { revision: this.currentRevision() };
+  }
+
+  setExternalText(text: string): void {
+    this.text = text;
+    this.revision += 1;
+  }
+
+  private currentRevision(): string {
+    return `revision-${this.revision}`;
   }
 }
 

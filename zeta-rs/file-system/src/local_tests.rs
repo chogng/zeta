@@ -67,6 +67,40 @@ fn atomically_replaces_and_creates_bounded_files() {
 }
 
 #[test]
+fn conditionally_writes_only_the_revision_that_was_read() {
+    let workspace = TestWorkspace::new();
+    fs::write(workspace.path.join("document.txt"), "first").unwrap();
+    let file_system = workspace.file_system();
+    let read = file_system
+        .read_file_with_revision(Path::new("document.txt"), 1024)
+        .unwrap();
+
+    file_system
+        .write_file_with_condition(
+            Path::new("document.txt"),
+            b"second",
+            1024,
+            &FileWriteCondition::ExpectedRevision(read.revision.clone()),
+        )
+        .unwrap();
+    assert_eq!(
+        file_system.write_file_with_condition(
+            Path::new("document.txt"),
+            b"stale",
+            1024,
+            &FileWriteCondition::ExpectedRevision(read.revision),
+        ),
+        Err(FileSystemError::RevisionConflict(PathBuf::from(
+            "document.txt"
+        ))),
+    );
+    assert_eq!(
+        fs::read_to_string(workspace.path.join("document.txt")).unwrap(),
+        "second"
+    );
+}
+
+#[test]
 fn rejects_unsafe_or_oversized_write_targets() {
     let workspace = TestWorkspace::new();
     fs::create_dir(workspace.path.join("src")).unwrap();

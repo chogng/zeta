@@ -230,8 +230,8 @@ class EditorWorkingCopy extends DisposableOwner implements IWorkingCopy {
     return this.reference.save(signal);
   }
 
-  saveAs(resource: URI, signal: AbortSignal): Promise<void> {
-    return this.resourceStore.save({ resource, text: this.reference.model.getText() }, signal);
+  async saveAs(resource: URI, signal: AbortSignal): Promise<void> {
+    await this.resourceStore.save({ resource, text: this.reference.model.getText() }, signal);
   }
 
   revert(signal: AbortSignal): Promise<void> {

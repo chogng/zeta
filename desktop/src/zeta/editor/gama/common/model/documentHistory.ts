@@ -9,6 +9,12 @@ export interface DocumentHistoryEntry {
   readonly historyGroup: string | undefined;
 }
 
+/** Immutable snapshots of the local undo and redo branches. */
+export interface DocumentHistoryEntries {
+  readonly undo: readonly DocumentHistoryEntry[];
+  readonly redo: readonly DocumentHistoryEntry[];
+}
+
 /** Transaction history for one Gama document; selection state travels with each step. */
 export class DocumentHistory {
   private readonly undoStack: DocumentHistoryEntry[] = [];
@@ -82,6 +88,16 @@ export class DocumentHistory {
     this.redoStack.push(entry);
     this.groupOpen = false;
     this.trim(this.redoStack);
+  }
+
+  /** Replaces both local history branches with entries rebased by a collaboration adapter. */
+  rebase(mapper: (entries: DocumentHistoryEntries) => DocumentHistoryEntries): void {
+    const entries = mapper(Object.freeze({ undo: Object.freeze([...this.undoStack]), redo: Object.freeze([...this.redoStack]) }));
+    this.undoStack.splice(0, this.undoStack.length, ...entries.undo);
+    this.redoStack.splice(0, this.redoStack.length, ...entries.redo);
+    this.trim(this.undoStack);
+    this.trim(this.redoStack);
+    this.groupOpen = false;
   }
 
   private trim(stack: DocumentHistoryEntry[]): void {

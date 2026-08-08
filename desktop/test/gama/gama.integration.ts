@@ -10,10 +10,15 @@ import type { DocumentNode } from "../../src/zeta/editor/gama/common/model/docum
 import { serializeDocument } from "../../src/zeta/editor/gama/common/model/documentSerialization.js";
 import type { DocumentSchema } from "../../src/zeta/editor/gama/common/model/documentSchema.js";
 import type { DocumentCollaborationConnection } from "../../src/zeta/editor/gama/common/services/documentCollaborationService.js";
+import type { DocumentCollaborationInvite } from "../../src/zeta/editor/gama/common/services/documentCollaborationService.js";
+import type { DocumentCollaborationMember } from "../../src/zeta/editor/gama/common/services/documentCollaborationService.js";
 import type { DocumentCollaborationOpenInput } from "../../src/zeta/editor/gama/common/services/documentCollaborationService.js";
+import type { DocumentCollaborationPresence } from "../../src/zeta/editor/gama/common/services/documentCollaborationService.js";
+import type { DocumentCollaborationRoomRole } from "../../src/zeta/editor/gama/common/services/documentCollaborationService.js";
+import type { DocumentSelection } from "../../src/zeta/editor/gama/common/core/documentSelection.js";
 import type { DocumentCollaborationSnapshot } from "../../src/zeta/editor/gama/common/services/documentCollaborationService.js";
-import type { DocumentCollaborationRemoteEnvelope } from "../../src/zeta/editor/gama/contrib/collaboration/common/session.js";
-import type { DocumentCollaborationEnvelope } from "../../src/zeta/editor/gama/contrib/collaboration/common/session.js";
+import type { DocumentCollaborationRemoteEnvelope } from "../../src/zeta/editor/gama/contrib/collaboration/common/protocol.js";
+import type { DocumentCollaborationEnvelope } from "../../src/zeta/editor/gama/contrib/collaboration/common/protocol.js";
 import type { DocumentCollaborationSubmitOutcome } from "../../src/zeta/editor/gama/common/services/documentCollaborationService.js";
 import type { IDocumentCollaborationService } from "../../src/zeta/editor/gama/common/services/documentCollaborationService.js";
 import { MemoryTextFiles } from "./memoryTextFiles.js";
@@ -37,23 +42,29 @@ declare global {
 
 class BrowserDocumentCollaborationService extends DisposableOwner implements IDocumentCollaborationService {
   async open(input: DocumentCollaborationOpenInput, _signal: AbortSignal): Promise<DocumentCollaborationConnection> {
-    return new BrowserDocumentCollaborationConnection(input.schema, input.clientId, input.document, input.roomId ?? "gama-browser-room");
+    return new BrowserDocumentCollaborationConnection(input.schema, input.clientId, input.document, input.roomId ?? "gama-browser-room", input.target?.kind === "remote");
   }
 }
 
 class BrowserDocumentCollaborationConnection extends DisposableOwner implements DocumentCollaborationConnection {
   private readonly updates = this.own(new Emitter<DocumentCollaborationRemoteEnvelope>());
   private readonly snapshots = this.own(new Emitter<DocumentCollaborationSnapshot>());
+  private readonly presences = this.own(new Emitter<readonly DocumentCollaborationPresence[]>());
   private readonly failures = this.own(new Emitter<Error>());
   private version = 0;
 
   readonly initialSnapshot;
+  readonly canEdit = true;
+  readonly principalId: string | undefined;
   readonly onDidReceiveUpdate: Event<DocumentCollaborationRemoteEnvelope> = this.updates.event;
   readonly onDidReceiveSnapshot: Event<DocumentCollaborationSnapshot> = this.snapshots.event;
+  readonly onDidReceivePresence: Event<readonly DocumentCollaborationPresence[]> = this.presences.event;
   readonly onDidFail: Event<Error> = this.failures.event;
+  readonly currentPresence: readonly DocumentCollaborationPresence[] = [];
 
-  constructor(readonly schema: DocumentSchema, readonly clientId: string, document: DocumentNode, readonly roomId: string) {
+  constructor(readonly schema: DocumentSchema, readonly clientId: string, document: DocumentNode, readonly roomId: string, readonly canManageMembers: boolean) {
     super();
+    this.principalId = canManageMembers ? "browser-owner" : undefined;
     this.initialSnapshot = Object.freeze({ roomId, version: this.version, document });
   }
 
@@ -69,6 +80,30 @@ class BrowserDocumentCollaborationConnection extends DisposableOwner implements 
         transaction: envelope.transaction,
       },
     };
+  }
+
+  async updatePresence(_selection: DocumentSelection | undefined, _signal: AbortSignal): Promise<void> {}
+
+  async createInvite(displayName: string, role: DocumentCollaborationRoomRole, _signal: AbortSignal): Promise<DocumentCollaborationInvite> {
+    if (!this.canManageMembers) throw new Error("This collaboration member cannot create room invitations");
+    return Object.freeze({ roomId: this.roomId, principalId: "browser-member", displayName, role, accessToken: "gama-browser-member-token" });
+  }
+
+  async listMembers(_signal: AbortSignal): Promise<readonly DocumentCollaborationMember[]> {
+    if (!this.canManageMembers) throw new Error("This collaboration member cannot inspect room members");
+    return Object.freeze([
+      Object.freeze({ principalId: "browser-owner", displayName: "Browser owner", role: "owner" }),
+      Object.freeze({ principalId: "browser-member", displayName: "Writer", role: "editor" }),
+    ]);
+  }
+
+  async rotateMemberAccessToken(principalId: string, _signal: AbortSignal): Promise<DocumentCollaborationInvite> {
+    if (!this.canManageMembers) throw new Error("This collaboration member cannot manage room credentials");
+    return Object.freeze({ roomId: this.roomId, principalId, displayName: principalId === "browser-owner" ? "Browser owner" : "Writer", role: principalId === "browser-owner" ? "owner" : "editor", accessToken: "gama-browser-rotated-token" });
+  }
+
+  async revokeMember(_principalId: string, _signal: AbortSignal): Promise<void> {
+    if (!this.canManageMembers) throw new Error("This collaboration member cannot manage room credentials");
   }
 }
 

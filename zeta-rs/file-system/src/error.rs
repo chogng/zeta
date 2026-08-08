@@ -9,6 +9,7 @@ pub enum FileSystemError {
     NotDirectory(PathBuf),
     ReadLimitExceeded { maximum_bytes: usize },
     WriteLimitExceeded { maximum_bytes: usize },
+    RevisionConflict(PathBuf),
     ReadOnly(PathBuf),
     Io(String),
 }
@@ -39,6 +40,13 @@ impl fmt::Display for FileSystemError {
                 write!(
                     formatter,
                     "content exceeds the {maximum_bytes}-byte write limit"
+                )
+            }
+            Self::RevisionConflict(path) => {
+                write!(
+                    formatter,
+                    "file changed since the expected revision: {}",
+                    path.display()
                 )
             }
             Self::ReadOnly(path) => {

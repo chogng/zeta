@@ -5,6 +5,10 @@
 
 pub use zeta_collaboration::DocumentCollaborationOpenParams;
 pub use zeta_collaboration::DocumentCollaborationOpenResult;
+pub use zeta_collaboration::DocumentCollaborationPresence;
+pub use zeta_collaboration::DocumentCollaborationPresenceParams;
+pub use zeta_collaboration::DocumentCollaborationPresenceReadParams;
+pub use zeta_collaboration::DocumentCollaborationPresenceSnapshot;
 pub use zeta_collaboration::DocumentCollaborationSnapshot;
 pub use zeta_collaboration::DocumentCollaborationSubmitParams;
 pub use zeta_collaboration::DocumentCollaborationSubmitResult;

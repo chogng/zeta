@@ -11,10 +11,9 @@ test("Alpha and Gama expose VS Code-shaped public editor entrypoints", () => {
   for (const entrypoint of ["editor.api.ts", "editor.all.ts", "editor.main.ts", "editor.worker.start.ts"]) {
     assert.equal(exists(join(alpha, entrypoint)), true, `alpha/${entrypoint}`);
   }
-  for (const entrypoint of ["editor.api.ts", "editor.all.ts", "editor.main.ts"]) {
+  for (const entrypoint of ["editor.api.ts", "editor.all.ts", "editor.main.ts", "editor.worker.start.ts"]) {
     assert.equal(exists(join(gama, entrypoint)), true, `gama/${entrypoint}`);
   }
-  assert.equal(exists(join(gama, "editor.worker.start.ts")), false);
 });
 
 test("public editor entrypoints retain distinct API, contribution, main, and worker roles", () => {
@@ -25,6 +24,7 @@ test("public editor entrypoints retain distinct API, contribution, main, and wor
   const alphaWorker = readFileSync(join(alpha, "editor.worker.start.ts"), "utf8");
   const gamaApi = readFileSync(join(gama, "editor.api.ts"), "utf8");
   const gamaMain = readFileSync(join(gama, "editor.main.ts"), "utf8");
+  const gamaWorker = readFileSync(join(gama, "editor.worker.start.ts"), "utf8");
   const analysisWorker = readFileSync(join(alpha, "browser/language/syntaxWorkerMain.ts"), "utf8");
   const completionWorker = readFileSync(join(alpha, "browser/language/languageCompletionWorkerMain.ts"), "utf8");
   assert.match(alphaApi, /TextModel/u);
@@ -36,6 +36,7 @@ test("public editor entrypoints retain distinct API, contribution, main, and wor
     assert.match(main, /export \* from "\.\/editor\.api\.js"/u);
   }
   assert.match(alphaWorker, /export function start/u);
+  assert.match(gamaWorker, /export function start/u);
   assert.match(analysisWorker, /editor\.worker\.start/u);
   assert.match(completionWorker, /editor\.worker\.start/u);
 });

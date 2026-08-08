@@ -1,7 +1,15 @@
-use crate::{DirectoryEntry, FileMetadata, FileSystemError, FileType, WorkspaceFileSystem};
+use crate::file_revision;
+use crate::DirectoryEntry;
+use crate::FileContent;
+use crate::FileMetadata;
+use crate::FileSystemError;
+use crate::FileType;
+use crate::FileWriteCondition;
+use crate::WorkspaceFileSystem;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use std::time::UNIX_EPOCH;
 use tempfile::NamedTempFile;
 use zeta_workspace::WorkspaceRoot;
@@ -9,11 +17,15 @@ use zeta_workspace::WorkspaceRoot;
 /// Local implementation that confines all operations to one canonical workspace root.
 pub struct LocalFileSystem {
     workspace: WorkspaceRoot,
+    write_lock: Mutex<()>,
 }
 
 impl LocalFileSystem {
     pub fn new(workspace: WorkspaceRoot) -> Self {
-        Self { workspace }
+        Self {
+            workspace,
+            write_lock: Mutex::new(()),
+        }
     }
 
     fn resolve_existing(&self, path: &Path) -> Result<PathBuf, FileSystemError> {
@@ -27,27 +39,8 @@ impl LocalFileSystem {
             .resolve_for_write(path)
             .map_err(|_| FileSystemError::InvalidPath(path.to_path_buf()))
     }
-}
 
-impl WorkspaceFileSystem for LocalFileSystem {
-    fn read_file(&self, path: &Path, maximum_bytes: usize) -> Result<Vec<u8>, FileSystemError> {
-        if maximum_bytes == 0 {
-            return Err(FileSystemError::ReadLimitExceeded { maximum_bytes });
-        }
-        let resolved = self.resolve_existing(path)?;
-        let mut file = File::open(resolved).map_err(io_error)?;
-        let mut bytes = Vec::with_capacity(maximum_bytes.min(8 * 1024));
-        Read::by_ref(&mut file)
-            .take((maximum_bytes + 1) as u64)
-            .read_to_end(&mut bytes)
-            .map_err(io_error)?;
-        if bytes.len() > maximum_bytes {
-            return Err(FileSystemError::ReadLimitExceeded { maximum_bytes });
-        }
-        Ok(bytes)
-    }
-
-    fn write_file(
+    fn write_file_inner(
         &self,
         path: &Path,
         content: &[u8],
@@ -88,6 +81,70 @@ impl WorkspaceFileSystem for LocalFileSystem {
         )
         .map_err(io_error)?;
         metadata(&resolved)
+    }
+}
+
+impl WorkspaceFileSystem for LocalFileSystem {
+    fn read_file(&self, path: &Path, maximum_bytes: usize) -> Result<Vec<u8>, FileSystemError> {
+        if maximum_bytes == 0 {
+            return Err(FileSystemError::ReadLimitExceeded { maximum_bytes });
+        }
+        let resolved = self.resolve_existing(path)?;
+        let mut file = File::open(resolved).map_err(io_error)?;
+        let mut bytes = Vec::with_capacity(maximum_bytes.min(8 * 1024));
+        Read::by_ref(&mut file)
+            .take((maximum_bytes + 1) as u64)
+            .read_to_end(&mut bytes)
+            .map_err(io_error)?;
+        if bytes.len() > maximum_bytes {
+            return Err(FileSystemError::ReadLimitExceeded { maximum_bytes });
+        }
+        Ok(bytes)
+    }
+
+    fn write_file(
+        &self,
+        path: &Path,
+        content: &[u8],
+        maximum_bytes: usize,
+    ) -> Result<FileMetadata, FileSystemError> {
+        let _guard = self
+            .write_lock
+            .lock()
+            .map_err(|_| FileSystemError::Io("workspace write lock is poisoned".into()))?;
+        self.write_file_inner(path, content, maximum_bytes)
+    }
+
+    fn read_file_with_revision(
+        &self,
+        path: &Path,
+        maximum_bytes: usize,
+    ) -> Result<FileContent, FileSystemError> {
+        let bytes = self.read_file(path, maximum_bytes)?;
+        Ok(FileContent {
+            revision: file_revision(&bytes),
+            bytes,
+        })
+    }
+
+    fn write_file_with_condition(
+        &self,
+        path: &Path,
+        content: &[u8],
+        maximum_bytes: usize,
+        condition: &FileWriteCondition,
+    ) -> Result<FileMetadata, FileSystemError> {
+        let _guard = self
+            .write_lock
+            .lock()
+            .map_err(|_| FileSystemError::Io("workspace write lock is poisoned".into()))?;
+        if let FileWriteCondition::ExpectedRevision(expected) = condition {
+            let current = self.read_file(path, maximum_bytes)?;
+            if file_revision(&current) != *expected {
+                return Err(FileSystemError::RevisionConflict(path.to_path_buf()));
+            }
+        }
+        self.write_file_inner(path, content, maximum_bytes)
     }
 
     fn get_metadata(&self, path: &Path) -> Result<FileMetadata, FileSystemError> {

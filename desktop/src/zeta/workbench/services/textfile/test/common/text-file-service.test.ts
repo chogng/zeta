@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { URI } from "../../../../../base/common/uri.js";
-import { FileKind, type IFileService } from "../../../../../platform/files/common/files.js";
-import { TextFileContentSource, TextFileService } from "../../../../../workbench/services/textfile/common/textFileService.js";
+import { FileKind, FileRevisionConflictError, type IFileService, type IFileWriteRequest } from "../../../../../platform/files/common/files.js";
+import { TextFileContentSource, TextFileSaveConflictError, TextFileService } from "../../../../../workbench/services/textfile/common/textFileService.js";
 
 test("TextFileService uses bootstrap content without reading the workspace", async () => {
   const files = new TestFileService("workspace");
@@ -13,6 +13,7 @@ test("TextFileService uses bootstrap content without reading the workspace", asy
 
   assert.equal(content.text, "bootstrap");
   assert.equal(content.source, TextFileContentSource.Bootstrap);
+  assert.equal(content.revision, undefined);
   assert.equal(files.readCount, 0);
 });
 
@@ -23,6 +24,7 @@ test("TextFileService reads missing bootstrap content and observes cancellation"
   const content = await service.resolve({ resource }, new AbortController().signal);
   assert.equal(content.text, "workspace");
   assert.equal(content.source, TextFileContentSource.FileSystem);
+  assert.equal(content.revision, "revision-1");
 
   const cancelled = new AbortController();
   cancelled.abort("closed");
@@ -58,8 +60,9 @@ test("TextFileService writes text and observes cancellation", async () => {
   const service = new TextFileService(files);
   const resource = URI.file("C:\\project\\main.ts");
 
-  await service.save({ resource, text: "saved" }, new AbortController().signal);
-  assert.deepEqual(files.writes, [{ resource, text: "saved" }]);
+  const saved = await service.save({ resource, text: "saved", expectedRevision: "revision-1" }, new AbortController().signal);
+  assert.deepEqual(files.writes, [{ resource, content: "saved", expectedRevision: "revision-1" }]);
+  assert.equal(saved.revision, "revision-2");
 
   const cancelled = new AbortController();
   cancelled.abort("closed");
@@ -67,9 +70,19 @@ test("TextFileService writes text and observes cancellation", async () => {
   assert.equal(files.writes.length, 1);
 });
 
+test("TextFileService maps conditional file-write conflicts to its editor-facing error", async () => {
+  const files = new TestFileService("workspace");
+  files.rejectWritesWithRevisionConflict = true;
+  const service = new TextFileService(files);
+  const resource = URI.file("C:\\project\\main.ts");
+
+  await assert.rejects(service.save({ resource, text: "saved", expectedRevision: "stale" }, new AbortController().signal), TextFileSaveConflictError);
+});
+
 class TestFileService implements IFileService {
   readCount = 0;
-  readonly writes: { resource: URI; text: string }[] = [];
+  readonly writes: IFileWriteRequest[] = [];
+  rejectWritesWithRevisionConflict = false;
   readonly onDidChangeFiles = () => ({
     dispose() {},
     [Symbol.dispose]() {},
@@ -91,19 +104,23 @@ class TestFileService implements IFileService {
     return [];
   }
 
-  async readFile() {
+  async readFile(resource: URI) {
     this.readCount += 1;
-    return await this.content;
+    return { resource, content: await this.content, revision: "revision-1" };
   }
 
-  async writeFile(resource: URI, content: string) {
-    this.writes.push({ resource, text: content });
+  async writeFile(request: IFileWriteRequest) {
+    if (this.rejectWritesWithRevisionConflict) throw new FileRevisionConflictError(request.resource);
+    this.writes.push(request);
     return {
-      resource,
-      kind: FileKind.File,
-      sizeBytes: content.length,
-      readonly: false,
-      modifiedAtMillis: undefined,
+      stat: {
+        resource: request.resource,
+        kind: FileKind.File,
+        sizeBytes: request.content.length,
+        readonly: false,
+        modifiedAtMillis: undefined,
+      },
+      revision: "revision-2",
     };
   }
 }

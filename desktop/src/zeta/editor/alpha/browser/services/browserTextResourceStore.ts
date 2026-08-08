@@ -1,6 +1,7 @@
 import { type Event } from "../../../../base/common/event.js";
 import { type ITextFileService } from "../../../../workbench/services/textfile/common/textFileService.js";
-import { type TextResourceChangeEvent, type TextResourceContent, type TextResourceResolveRequest, type TextResourceSaveRequest, type ITextResourceStore } from "../../common/services/textResourceStore.js";
+import { TextFileSaveConflictError } from "../../../../workbench/services/textfile/common/textFileService.js";
+import { TextResourceConflictError, type TextResourceChangeEvent, type TextResourceContent, type TextResourceResolveRequest, type TextResourceSaveRequest, type TextResourceSaveResult, type ITextResourceStore } from "../../common/services/textResourceStore.js";
 
 /** Adapts the Workbench text-file service to the editor resource contract. */
 export class BrowserTextResourceStore implements ITextResourceStore {
@@ -13,11 +14,16 @@ export class BrowserTextResourceStore implements ITextResourceStore {
 
   async resolve(request: TextResourceResolveRequest, signal: AbortSignal): Promise<TextResourceContent> {
     const content = await this.textFiles.resolve(request, signal);
-    return Object.freeze({ resource: content.resource, text: content.text });
+    return Object.freeze({ resource: content.resource, text: content.text, revision: content.revision });
   }
 
-  save(request: TextResourceSaveRequest, signal: AbortSignal): Promise<void> {
-    return this.textFiles.save(request, signal);
+  async save(request: TextResourceSaveRequest, signal: AbortSignal): Promise<TextResourceSaveResult> {
+    try {
+      return await this.textFiles.save(request, signal);
+    } catch (error) {
+      if (error instanceof TextFileSaveConflictError) throw new TextResourceConflictError(request.resource);
+      throw error;
+    }
   }
 }
 

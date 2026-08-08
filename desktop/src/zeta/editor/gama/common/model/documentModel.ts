@@ -1,7 +1,7 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { DocumentDecorationSet } from "./documentDecoration.js";
-import { DocumentHistory, type DocumentHistoryEntry } from "./documentHistory.js";
+import { DocumentHistory, type DocumentHistoryEntries } from "./documentHistory.js";
 import { type DocumentPlugin, type DocumentPluginApplyContext, type DocumentPluginChangeOrigin, type DocumentPluginDecorationContext, type DocumentPluginInitContext, type DocumentPluginKey, type DocumentPluginSelectionContext, type DocumentPluginTransactionContext } from "./documentPlugin.js";
 import { isDocumentSelectionValid, selectionsEqual, validateDocumentSelection, type DocumentSelection } from "../core/documentSelection.js";
 import { freezeDocumentNode, type DocumentMark, type DocumentNode } from "./document.js";
@@ -9,6 +9,12 @@ import { DocumentSchema } from "./documentSchema.js";
 import { applyDocumentTransaction, DocumentTransaction } from "./documentTransaction.js";
 
 export type DocumentChangeOrigin = DocumentPluginChangeOrigin;
+
+/** Selects whether an already-rebased remote transaction retains local undo/redo entries. */
+export enum DocumentRemoteHistoryPolicy {
+  Clear = "clear",
+  Preserve = "preserve",
+}
 
 export interface DocumentChange {
   readonly version: number;
@@ -157,8 +163,8 @@ export class DocumentModel extends DisposableOwner {
     return change;
   }
 
-  /** Applies an already-transformed remote transaction; it is never added to local history, which is cleared until a collaboration layer can rebase it. */
-  dispatchRemote(transaction: DocumentTransaction): DocumentChange | undefined {
+  /** Applies an already-transformed remote transaction outside local author history. */
+  dispatchRemote(transaction: DocumentTransaction, historyPolicy: DocumentRemoteHistoryPolicy = DocumentRemoteHistoryPolicy.Clear): DocumentChange | undefined {
     this.ensureAlive();
     if (transaction.steps.length === 0 && !transaction.selectionSet && !transaction.storedMarksSet) return undefined;
     if (!this.acceptsTransaction(transaction, "remote")) return undefined;
@@ -173,7 +179,7 @@ export class DocumentModel extends DisposableOwner {
       }
       if (transaction.storedMarksSet) this.setStoredMarks(transaction.storedMarks);
       if (selectionChanged) this.selectionEmitter.fire(selectionAfter);
-      this.history.clear();
+      this.applyRemoteHistoryPolicy(historyPolicy);
       return Object.freeze({ version: this._version, origin: "remote" as const, transaction, previousDocument: this._document, document: this._document, selectionBefore, selectionAfter });
     }
     const applied = applyDocumentTransaction(this._document, this.schema, transaction, this._selection);
@@ -181,8 +187,14 @@ export class DocumentModel extends DisposableOwner {
     if (transaction.selection) validateDocumentSelection(applied.document, transaction.selection);
     const change = this.commit(applied.document, transaction, "remote", this._selection, selectionAfter);
     if (transaction.storedMarksSet) this.setStoredMarks(transaction.storedMarks);
-    this.history.clear();
+    this.applyRemoteHistoryPolicy(historyPolicy);
     return change;
+  }
+
+  /** Rewrites locally authored undo/redo branches before a preserving remote dispatch. */
+  rebaseHistory(mapper: (entries: DocumentHistoryEntries) => DocumentHistoryEntries): void {
+    this.ensureAlive();
+    this.history.rebase(mapper);
   }
 
   undo(): DocumentChange | undefined {
@@ -217,7 +229,7 @@ export class DocumentModel extends DisposableOwner {
       }
       const applied = applyDocumentTransaction(this._document, this.schema, entry.transaction);
       const change = this.commit(applied.document, entry.transaction, "redo", this._selection, entry.selectionAfter);
-      this.history.pushUndo(entry);
+      this.history.restoreUndo(entry);
       return change;
     } catch (error) {
       this.history.restoreRedo(entry);
@@ -298,6 +310,17 @@ export class DocumentModel extends DisposableOwner {
     this.changeEmitter.fire(change);
     if (!selectionsEqual(selectionBefore, selectionAfter)) this.selectionEmitter.fire(selectionAfter);
     return change;
+  }
+
+  private applyRemoteHistoryPolicy(historyPolicy: DocumentRemoteHistoryPolicy): void {
+    switch (historyPolicy) {
+      case DocumentRemoteHistoryPolicy.Clear:
+        this.history.clear();
+        return;
+      case DocumentRemoteHistoryPolicy.Preserve:
+        this.history.closeGroup();
+        return;
+    }
   }
 
   private applyPluginStates(context: DocumentPluginApplyContext): Map<DocumentPluginKey<unknown>, unknown> {

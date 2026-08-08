@@ -1,16 +1,21 @@
 use crate::ClientError;
 use serde::Deserialize;
 use serde_json::Value;
-use zeta_app_server_protocol::protocol::notification::{
-    ConfigChanged, FsChanged, GitStatusChanged, SessionUpdateEnvelope, SkillsChanged,
-    ThreadUpdateEnvelope,
-};
-use zeta_app_server_protocol::protocol::registry::{
-    ServerNotificationMethod, server_notification_method,
-};
+use zeta_app_server_protocol::protocol::collaboration::DocumentCollaborationPresenceSnapshot;
+use zeta_app_server_protocol::protocol::collaboration::DocumentCollaborationUpdate;
+use zeta_app_server_protocol::protocol::notification::ConfigChanged;
+use zeta_app_server_protocol::protocol::notification::FsChanged;
+use zeta_app_server_protocol::protocol::notification::GitStatusChanged;
+use zeta_app_server_protocol::protocol::notification::SessionUpdateEnvelope;
+use zeta_app_server_protocol::protocol::notification::SkillsChanged;
+use zeta_app_server_protocol::protocol::notification::ThreadUpdateEnvelope;
+use zeta_app_server_protocol::protocol::registry::server_notification_method;
+use zeta_app_server_protocol::protocol::registry::ServerNotificationMethod;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ServerNotification {
+    DocumentCollaborationUpdate(DocumentCollaborationUpdate),
+    DocumentCollaborationPresence(DocumentCollaborationPresenceSnapshot),
     SessionUpdate(SessionUpdateEnvelope),
     SessionThreadUpdate(Box<ThreadUpdateEnvelope>),
     ConfigChanged(ConfigChanged),
@@ -30,6 +35,10 @@ pub(crate) fn decode(raw: &str) -> Result<ServerNotification, ClientError> {
     let envelope: NotificationEnvelope =
         serde_json::from_str(raw).map_err(|error| ClientError::Protocol(error.to_string()))?;
     match server_notification_method(&envelope.method) {
+        Some(ServerNotificationMethod::DocumentCollaborationUpdate) => decode_params(envelope.params)
+            .map(ServerNotification::DocumentCollaborationUpdate),
+        Some(ServerNotificationMethod::DocumentCollaborationPresence) => decode_params(envelope.params)
+            .map(ServerNotification::DocumentCollaborationPresence),
         Some(ServerNotificationMethod::SessionUpdate) => {
             decode_params(envelope.params).map(ServerNotification::SessionUpdate)
         }

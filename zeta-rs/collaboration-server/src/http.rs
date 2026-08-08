@@ -2,27 +2,34 @@ mod wire;
 
 use crate::CollaborationServerError;
 use crate::CollaborationServerOptions;
+use serde::Deserialize;
 use serde::Serialize;
 use serde_json::json;
 use std::io::ErrorKind;
 use std::net::TcpListener;
 use std::net::TcpStream;
-use std::sync::Arc;
-use std::sync::Condvar;
-use std::sync::Mutex;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
+use std::sync::Arc;
+use std::sync::Condvar;
+use std::sync::Mutex;
 use std::thread;
 use std::time::Duration;
-use wire::HttpReadError;
-use wire::HttpRequest;
+use std::time::Instant;
 use wire::authorized;
+use wire::bearer_token;
 use wire::read_request;
 use wire::write_empty_response;
 use wire::write_json_response;
+use wire::HttpReadError;
+use wire::HttpRequest;
+use zeta_collaboration::DocumentCollaborationAuditEvent;
+use zeta_collaboration::DocumentCollaborationMember;
 use zeta_collaboration::DocumentCollaborationOpenParams;
+use zeta_collaboration::DocumentCollaborationPrincipal;
 use zeta_collaboration::DocumentCollaborationReplay;
+use zeta_collaboration::DocumentCollaborationRoomRole;
 use zeta_collaboration::DocumentCollaborationSnapshot;
 use zeta_collaboration::DocumentCollaborationSubmitParams;
 use zeta_collaboration::DocumentCollaborationSubmitResult;
@@ -32,7 +39,12 @@ use zeta_collaboration::SqliteDocumentCollaborationRooms;
 const API_ROOT: &str = "/v1/document-collaboration";
 const OPEN_PATH: &str = "/v1/document-collaboration/rooms/open";
 const SUBMIT_PATH: &str = "/v1/document-collaboration/rooms/submit";
+const INVITES_PATH: &str = "/v1/document-collaboration/rooms/invites";
+const REVOKE_MEMBER_PATH: &str = "/v1/document-collaboration/rooms/members/revoke";
+const ROTATE_MEMBER_TOKEN_PATH: &str = "/v1/document-collaboration/rooms/members/rotate-token";
+const PRESENCE_PATH: &str = "/v1/document-collaboration/rooms/presence";
 const POLL_TIMEOUT: Duration = Duration::from_secs(25);
+const EXTERNAL_HOST_RECHECK: Duration = Duration::from_millis(250);
 
 pub(crate) fn serve(options: CollaborationServerOptions) -> Result<(), CollaborationServerError> {
     let listener =
@@ -82,12 +94,12 @@ impl UpdateSignal {
         }
     }
 
-    fn wait_for_change(&self, generation: u64) {
+    fn wait_for_change(&self, generation: u64, timeout: Duration) {
         let Ok(guard) = self.generation.lock() else {
             return;
         };
         if *guard == generation {
-            let _ = self.changed.wait_timeout(guard, POLL_TIMEOUT);
+            let _ = self.changed.wait_timeout(guard, timeout);
         }
     }
 }
@@ -166,7 +178,7 @@ fn handle_connection(
         )
         .map_err(CollaborationServerError::http);
     }
-    if !authorized(&request, runtime.options.bearer_token()) {
+    if bearer_token(&request).is_none() {
         let mut headers = cors_headers(&request);
         headers.push(("WWW-Authenticate", "Bearer"));
         return write_empty_response(&mut stream, 401, "Unauthorized", &headers)
@@ -175,6 +187,27 @@ fn handle_connection(
     match (request.method.as_str(), path) {
         ("POST", OPEN_PATH) => handle_open(&mut stream, runtime, &request),
         ("POST", SUBMIT_PATH) => handle_submit(&mut stream, runtime, &request),
+        ("POST", INVITES_PATH) => handle_create_invite(&mut stream, runtime, &request),
+        ("POST", REVOKE_MEMBER_PATH) => handle_revoke_member(&mut stream, runtime, &request),
+        ("POST", ROTATE_MEMBER_TOKEN_PATH) => {
+            handle_rotate_member_token(&mut stream, runtime, &request)
+        }
+        ("POST", PRESENCE_PATH) => handle_publish_presence(&mut stream, runtime, &request),
+        ("GET", path)
+            if path.starts_with(&format!("{API_ROOT}/rooms/")) && path.ends_with("/audit") =>
+        {
+            handle_audit(&mut stream, runtime, &request)
+        }
+        ("GET", path)
+            if path.starts_with(&format!("{API_ROOT}/rooms/")) && path.ends_with("/members") =>
+        {
+            handle_members(&mut stream, runtime, &request)
+        }
+        ("GET", path)
+            if path.starts_with(&format!("{API_ROOT}/rooms/")) && path.ends_with("/presence") =>
+        {
+            handle_presence(&mut stream, runtime, &request)
+        }
         ("GET", _) => handle_updates(&mut stream, runtime, &request),
         _ => {
             let mut headers = cors_headers(&request);
@@ -200,9 +233,63 @@ fn handle_open(
             "Expected a valid collaboration room request",
         );
     };
-    match runtime.rooms.open(params) {
-        Ok(result) => write_json(stream, runtime, request, 200, "OK", &result),
+    let principal = match authenticate_open_principal(runtime, request, params.room_id.as_deref()) {
+        Ok(principal) => principal,
+        Err(error) => return write_authentication_error(stream, runtime, request, error),
+    };
+    match runtime.rooms.open_as(&principal, params) {
+        Ok(result) => match runtime
+            .rooms
+            .room_role_as(&principal, &result.snapshot.room_id)
+        {
+            Ok(role) => write_json(
+                stream,
+                runtime,
+                request,
+                200,
+                "OK",
+                &RemoteOpenResult::from((result, principal, role)),
+            ),
+            Err(error) => write_domain_error(stream, runtime, request, error),
+        },
         Err(error) => write_domain_error(stream, runtime, request, error),
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RemoteOpenResult {
+    client_id: String,
+    principal_id: String,
+    schema_id: String,
+    snapshot: DocumentCollaborationSnapshot,
+    can_edit: bool,
+    can_manage_members: bool,
+}
+
+impl
+    From<(
+        zeta_collaboration::DocumentCollaborationOpenResult,
+        DocumentCollaborationPrincipal,
+        DocumentCollaborationRoomRole,
+    )> for RemoteOpenResult
+{
+    fn from(
+        value: (
+            zeta_collaboration::DocumentCollaborationOpenResult,
+            DocumentCollaborationPrincipal,
+            DocumentCollaborationRoomRole,
+        ),
+    ) -> Self {
+        let (result, principal, role) = value;
+        Self {
+            client_id: result.client_id,
+            principal_id: principal.id,
+            schema_id: result.schema_id,
+            snapshot: result.snapshot,
+            can_edit: role.can_submit(),
+            can_manage_members: role.can_manage_members(),
+        }
     }
 }
 
@@ -221,7 +308,11 @@ fn handle_submit(
             "Expected a valid collaboration update",
         );
     };
-    match runtime.rooms.submit(params) {
+    let principal = match authenticate_room_principal(runtime, request, &params.room_id) {
+        Ok(principal) => principal,
+        Err(error) => return write_authentication_error(stream, runtime, request, error),
+    };
+    match runtime.rooms.submit_as(&principal, params) {
         Ok(result) => {
             if matches!(result, DocumentCollaborationSubmitResult::Accepted { .. }) {
                 runtime.updates.notify();
@@ -230,6 +321,259 @@ fn handle_submit(
         }
         Err(error) => write_domain_error(stream, runtime, request, error),
     }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CreateInviteParams {
+    room_id: String,
+    display_name: String,
+    role: DocumentCollaborationRoomRole,
+}
+
+fn handle_create_invite(
+    stream: &mut TcpStream,
+    runtime: &HttpRuntime,
+    request: &HttpRequest,
+) -> Result<(), CollaborationServerError> {
+    let Some(params) = decode_json::<CreateInviteParams>(request) else {
+        return write_error(
+            stream,
+            runtime,
+            request,
+            400,
+            "Bad Request",
+            "Expected a valid collaboration invitation request",
+        );
+    };
+    let principal = match authenticate_room_principal(runtime, request, &params.room_id) {
+        Ok(principal) => principal,
+        Err(error) => return write_authentication_error(stream, runtime, request, error),
+    };
+    match runtime.rooms.create_invite(
+        &params.room_id,
+        &principal,
+        &params.display_name,
+        params.role,
+    ) {
+        Ok(invite) => write_json(stream, runtime, request, 201, "Created", &invite),
+        Err(error) => write_domain_error(stream, runtime, request, error),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RevokeMemberParams {
+    room_id: String,
+    principal_id: String,
+}
+
+fn handle_revoke_member(
+    stream: &mut TcpStream,
+    runtime: &HttpRuntime,
+    request: &HttpRequest,
+) -> Result<(), CollaborationServerError> {
+    let Some(params) = decode_json::<RevokeMemberParams>(request) else {
+        return write_error(
+            stream,
+            runtime,
+            request,
+            400,
+            "Bad Request",
+            "Expected a valid collaboration member revocation request",
+        );
+    };
+    let principal = match authenticate_room_principal(runtime, request, &params.room_id) {
+        Ok(principal) => principal,
+        Err(error) => return write_authentication_error(stream, runtime, request, error),
+    };
+    match runtime
+        .rooms
+        .revoke_member(&params.room_id, &principal, &params.principal_id)
+    {
+        Ok(()) => {
+            runtime.updates.notify();
+            write_empty_response(stream, 204, "No Content", &cors_headers(request))
+                .map_err(CollaborationServerError::http)
+        }
+        Err(error) => write_domain_error(stream, runtime, request, error),
+    }
+}
+
+fn handle_rotate_member_token(
+    stream: &mut TcpStream,
+    runtime: &HttpRuntime,
+    request: &HttpRequest,
+) -> Result<(), CollaborationServerError> {
+    let Some(params) = decode_json::<RevokeMemberParams>(request) else {
+        return write_error(
+            stream,
+            runtime,
+            request,
+            400,
+            "Bad Request",
+            "Expected a valid collaboration credential rotation request",
+        );
+    };
+    let principal = match authenticate_room_principal(runtime, request, &params.room_id) {
+        Ok(principal) => principal,
+        Err(error) => return write_authentication_error(stream, runtime, request, error),
+    };
+    match runtime.rooms.rotate_member_access_token(
+        &params.room_id,
+        &principal,
+        &params.principal_id,
+    ) {
+        Ok(invite) => write_json(stream, runtime, request, 200, "OK", &invite),
+        Err(error) => write_domain_error(stream, runtime, request, error),
+    }
+}
+
+fn handle_audit(
+    stream: &mut TcpStream,
+    runtime: &HttpRuntime,
+    request: &HttpRequest,
+) -> Result<(), CollaborationServerError> {
+    let (path, _) = split_target(&request.target);
+    let Some(room_id) = room_id_for_path(path, "/audit") else {
+        return write_empty_response(stream, 404, "Not Found", &cors_headers(request))
+            .map_err(CollaborationServerError::http);
+    };
+    let principal = match authenticate_room_principal(runtime, request, room_id) {
+        Ok(principal) => principal,
+        Err(error) => return write_authentication_error(stream, runtime, request, error),
+    };
+    match runtime.rooms.audit_events(room_id, &principal) {
+        Ok(events) => write_json(stream, runtime, request, 200, "OK", &AuditEvents { events }),
+        Err(error) => write_domain_error(stream, runtime, request, error),
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RoomMembers {
+    members: Vec<DocumentCollaborationMember>,
+}
+
+fn handle_members(
+    stream: &mut TcpStream,
+    runtime: &HttpRuntime,
+    request: &HttpRequest,
+) -> Result<(), CollaborationServerError> {
+    let (path, _) = split_target(&request.target);
+    let Some(room_id) = room_id_for_path(path, "/members") else {
+        return write_empty_response(stream, 404, "Not Found", &cors_headers(request))
+            .map_err(CollaborationServerError::http);
+    };
+    let principal = match authenticate_room_principal(runtime, request, room_id) {
+        Ok(principal) => principal,
+        Err(error) => return write_authentication_error(stream, runtime, request, error),
+    };
+    match runtime.rooms.list_members(room_id, &principal) {
+        Ok(members) => write_json(
+            stream,
+            runtime,
+            request,
+            200,
+            "OK",
+            &RoomMembers { members },
+        ),
+        Err(error) => write_domain_error(stream, runtime, request, error),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PublishPresenceParams {
+    room_id: String,
+    client_id: String,
+    #[serde(default)]
+    selection: Option<String>,
+}
+
+fn handle_publish_presence(
+    stream: &mut TcpStream,
+    runtime: &HttpRuntime,
+    request: &HttpRequest,
+) -> Result<(), CollaborationServerError> {
+    let Some(params) = decode_json::<PublishPresenceParams>(request) else {
+        return write_error(
+            stream,
+            runtime,
+            request,
+            400,
+            "Bad Request",
+            "Expected a valid collaboration presence update",
+        );
+    };
+    let principal = match authenticate_room_principal(runtime, request, &params.room_id) {
+        Ok(principal) => principal,
+        Err(error) => return write_authentication_error(stream, runtime, request, error),
+    };
+    match runtime.rooms.update_presence_as(
+        &principal,
+        &params.room_id,
+        &params.client_id,
+        params.selection.as_deref(),
+    ) {
+        Ok(_) => {
+            runtime.updates.notify();
+            write_empty_response(stream, 204, "No Content", &cors_headers(request))
+                .map_err(CollaborationServerError::http)
+        }
+        Err(error) => write_domain_error(stream, runtime, request, error),
+    }
+}
+
+fn handle_presence(
+    stream: &mut TcpStream,
+    runtime: &HttpRuntime,
+    request: &HttpRequest,
+) -> Result<(), CollaborationServerError> {
+    let (path, query) = split_target(&request.target);
+    let Some(room_id) = room_id_for_path(path, "/presence") else {
+        return write_empty_response(stream, 404, "Not Found", &cors_headers(request))
+            .map_err(CollaborationServerError::http);
+    };
+    let Some(after_generation) = query.and_then(after_generation) else {
+        return write_error(
+            stream,
+            runtime,
+            request,
+            400,
+            "Bad Request",
+            "afterGeneration must be a non-negative safe integer",
+        );
+    };
+    let principal = match authenticate_room_principal(runtime, request, room_id) {
+        Ok(principal) => principal,
+        Err(error) => return write_authentication_error(stream, runtime, request, error),
+    };
+    let deadline = Instant::now() + POLL_TIMEOUT;
+    let replay = loop {
+        let replay = match runtime
+            .rooms
+            .replay_presence_as(&principal, room_id, after_generation)
+        {
+            Ok(replay) => replay,
+            Err(error) => return write_domain_error(stream, runtime, request, error),
+        };
+        if replay.generation != after_generation || Instant::now() >= deadline {
+            break replay;
+        }
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        runtime.updates.wait_for_change(
+            runtime.updates.current(),
+            remaining.min(EXTERNAL_HOST_RECHECK),
+        );
+    };
+    write_json(stream, runtime, request, 200, "OK", &replay)
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AuditEvents {
+    events: Vec<DocumentCollaborationAuditEvent>,
 }
 
 fn handle_updates(
@@ -255,25 +599,104 @@ fn handle_updates(
             "afterVersion must be a non-negative safe integer",
         );
     };
-    let generation = runtime.updates.current();
-    let replay = match runtime.rooms.replay(room_id, after_version) {
-        Ok(replay) => replay,
-        Err(error) => return write_domain_error(stream, runtime, request, error),
+    let principal = match authenticate_room_principal(runtime, request, room_id) {
+        Ok(principal) => principal,
+        Err(error) => return write_authentication_error(stream, runtime, request, error),
     };
-    if matches!(replay, DocumentCollaborationReplay::Updates(ref updates) if updates.is_empty()) {
-        runtime.updates.wait_for_change(generation);
+    let deadline = Instant::now() + POLL_TIMEOUT;
+    let replay = loop {
+        let replay = match runtime.rooms.replay_as(&principal, room_id, after_version) {
+            Ok(replay) => replay,
+            Err(error) => return write_domain_error(stream, runtime, request, error),
+        };
+        if !matches!(replay, DocumentCollaborationReplay::Updates(ref updates) if updates.is_empty())
+            || Instant::now() >= deadline
+        {
+            break replay;
+        }
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        runtime.updates.wait_for_change(
+            runtime.updates.current(),
+            remaining.min(EXTERNAL_HOST_RECHECK),
+        );
+    };
+    write_json(
+        stream,
+        runtime,
+        request,
+        200,
+        "OK",
+        &RemoteReplay::from(replay),
+    )
+}
+
+enum AuthenticationError {
+    Unauthorized,
+    Domain(String),
+}
+
+fn authenticate_open_principal(
+    runtime: &HttpRuntime,
+    request: &HttpRequest,
+    room_id: Option<&str>,
+) -> Result<DocumentCollaborationPrincipal, AuthenticationError> {
+    match room_id {
+        Some(room_id) => authenticate_room_principal(runtime, request, room_id),
+        None if authorized(request, runtime.options.bearer_token()) => Ok(bootstrap_principal()),
+        None => Err(AuthenticationError::Unauthorized),
     }
-    match runtime.rooms.replay(room_id, after_version) {
-        Ok(replay) => write_json(
-            stream,
-            runtime,
-            request,
-            200,
-            "OK",
-            &RemoteReplay::from(replay),
-        ),
-        Err(error) => write_domain_error(stream, runtime, request, error),
+}
+
+fn authenticate_room_principal(
+    runtime: &HttpRuntime,
+    request: &HttpRequest,
+    room_id: &str,
+) -> Result<DocumentCollaborationPrincipal, AuthenticationError> {
+    if authorized(request, runtime.options.bearer_token()) {
+        let principal = bootstrap_principal();
+        runtime
+            .rooms
+            .initialize_owner_if_unowned(room_id, &principal)
+            .map_err(AuthenticationError::Domain)?;
+        return Ok(principal);
     }
+    let Some(access_token) = bearer_token(request) else {
+        return Err(AuthenticationError::Unauthorized);
+    };
+    runtime
+        .rooms
+        .principal_for_access_token(room_id, access_token)
+        .map_err(AuthenticationError::Domain)?
+        .ok_or(AuthenticationError::Unauthorized)
+}
+
+fn bootstrap_principal() -> DocumentCollaborationPrincipal {
+    DocumentCollaborationPrincipal {
+        id: "server-admin".into(),
+        display_name: "Server administrator".into(),
+    }
+}
+
+fn write_authentication_error(
+    stream: &mut TcpStream,
+    runtime: &HttpRuntime,
+    request: &HttpRequest,
+    error: AuthenticationError,
+) -> Result<(), CollaborationServerError> {
+    match error {
+        AuthenticationError::Unauthorized => {
+            let mut headers = cors_headers(request);
+            headers.push(("WWW-Authenticate", "Bearer"));
+            write_empty_response(stream, 401, "Unauthorized", &headers)
+                .map_err(CollaborationServerError::http)
+        }
+        AuthenticationError::Domain(error) => write_domain_error(stream, runtime, request, error),
+    }
+}
+
+fn room_id_for_path<'a>(path: &'a str, suffix: &str) -> Option<&'a str> {
+    path.strip_prefix(&format!("{API_ROOT}/rooms/"))?
+        .strip_suffix(suffix)
 }
 
 #[derive(Serialize)]
@@ -313,10 +736,18 @@ fn split_target(target: &str) -> (&str, Option<&str>) {
 }
 
 fn after_version(query: &str) -> Option<u64> {
+    query_safe_integer(query, "afterVersion")
+}
+
+fn after_generation(query: &str) -> Option<u64> {
+    query_safe_integer(query, "afterGeneration")
+}
+
+fn query_safe_integer(query: &str, expected_name: &str) -> Option<u64> {
     let mut value = None;
     for pair in query.split('&') {
         let (name, candidate) = pair.split_once('=')?;
-        if name != "afterVersion" || value.is_some() {
+        if name != expected_name || value.is_some() {
             return None;
         }
         let parsed = candidate.parse::<u64>().ok()?;
@@ -409,6 +840,12 @@ fn write_domain_error(
     }
     let (status, reason) = if error.contains("does not exist") {
         (404, "Not Found")
+    } else if error.contains("not a room member")
+        || error.contains("read-only")
+        || error.starts_with("Only collaboration room owners")
+        || error.contains("cannot revoke themselves")
+    {
+        (403, "Forbidden")
     } else {
         (422, "Unprocessable Content")
     };

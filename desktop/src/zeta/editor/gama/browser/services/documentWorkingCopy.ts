@@ -2,6 +2,7 @@ import { throwIfCancelled } from "../../../../base/common/cancellation.js";
 import { Emitter } from "../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
+import { TextFileSaveConflictError } from "../../../../workbench/services/textfile/common/textFileService.js";
 import type { ITextFileService } from "../../../../workbench/services/textfile/common/textFileService.js";
 import type { IWorkingCopy } from "../../../../workbench/services/workingCopy/common/workingCopyService.js";
 import type { IWorkingCopyService } from "../../../../workbench/services/workingCopy/common/workingCopyService.js";
@@ -15,6 +16,7 @@ export interface DocumentWorkingCopyOptions {
   readonly resource: URI;
   readonly model: DocumentModel;
   readonly initialDocument: DocumentNode;
+  readonly initialRevision: string | undefined;
   readonly textFiles: ITextFileService;
   readonly workingCopyService?: IWorkingCopyService;
   readonly onSave?: () => Promise<void | boolean>;
@@ -30,6 +32,7 @@ export class DocumentWorkingCopy extends DisposableOwner implements IWorkingCopy
   private readonly initialDocument: DocumentNode;
   private readonly initialContent: string;
   private savedContent: string;
+  private revision: string | undefined;
   private dirty = false;
   private externalChange = false;
 
@@ -44,6 +47,7 @@ export class DocumentWorkingCopy extends DisposableOwner implements IWorkingCopy
     this.initialDocument = options.initialDocument;
     this.initialContent = serializeDocument(options.initialDocument, this.schema);
     this.savedContent = this.initialContent;
+    this.revision = options.initialRevision;
     this.own(options.model.onDidChange(() => this.refreshDirty()));
     this.own(options.textFiles.onDidChangeFiles(event => {
       if (this.resource.scheme === "untitled" || (event.resources && !event.resources.some(resource => resource.toString() === this.resource.toString()))) return;
@@ -76,8 +80,15 @@ export class DocumentWorkingCopy extends DisposableOwner implements IWorkingCopy
       return;
     }
     const serialized = serializeDocument(this.options.model.document, this.schema);
-    await this.options.textFiles.save({ resource: this.resource, text: serialized }, signal);
+    let saved;
+    try {
+      saved = await this.options.textFiles.save({ resource: this.resource, text: serialized, ...(this.revision === undefined ? {} : { expectedRevision: this.revision }) }, signal);
+    } catch (error) {
+      if (error instanceof TextFileSaveConflictError) this.setExternalChange(true);
+      throw error;
+    }
     this.savedContent = serialized;
+    this.revision = saved.revision;
     this.refreshDirty();
     this.setExternalChange(false);
   }
@@ -103,6 +114,7 @@ export class DocumentWorkingCopy extends DisposableOwner implements IWorkingCopy
     throwIfCancelled(signal, "Document revert was cancelled");
     const document = parseDocument(content.text, this.schema, this.options.createEmptyDocument);
     this.savedContent = serializeDocument(document, this.schema);
+    this.revision = content.revision;
     this.options.model.reset(document);
     this.setExternalChange(false);
   }
@@ -116,6 +128,7 @@ export class DocumentWorkingCopy extends DisposableOwner implements IWorkingCopy
       }
       const document = parseDocument(content.text, this.schema, this.options.createEmptyDocument);
       this.savedContent = serializeDocument(document, this.schema);
+      this.revision = content.revision;
       this.options.model.reset(document);
       this.setExternalChange(false);
     } catch {

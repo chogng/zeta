@@ -21,6 +21,7 @@ pub enum AppServerErrorName {
     InvalidResourceOffset,
     FileSystemUnavailable,
     FileSystemOperationFailed,
+    FileSystemRevisionConflict,
     GitUnavailable,
     GitNotRepository,
     GitOperationFailed,

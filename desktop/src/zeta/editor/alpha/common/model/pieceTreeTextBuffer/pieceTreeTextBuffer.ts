@@ -349,10 +349,10 @@ export class PieceTreeTextBuffer {
     );
     const before = this.merge(
       node.left,
-      this.createNode(leftPiece),
+      this.createNode(leftPiece, node.priority),
     );
     const after = this.merge(
-      this.createNode(rightPiece),
+      this.createNode(rightPiece, node.priority),
       node.right,
     );
     return [before, after];
@@ -399,8 +399,8 @@ export class PieceTreeTextBuffer {
     );
   }
 
-  private createNode(piece: Piece): PieceNode {
-    return new PieceNode(piece, this.nextPriority());
+  private createNode(piece: Piece, priority = this.nextPriority()): PieceNode {
+    return new PieceNode(piece, priority);
   }
 
   private nextPriority(): number {

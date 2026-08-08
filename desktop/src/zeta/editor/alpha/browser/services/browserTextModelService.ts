@@ -4,7 +4,7 @@ import { type IDisposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { runWhenWindowIdle } from "../../../../base/browser/scheduler.js";
 import { TextModelConflictError, type TextModelInput, type TextModelReference, type ITextModelService } from "../../common/services/textModelService.js";
-import { type TextResourceChangeEvent, type ITextResourceStore } from "../../common/services/textResourceStore.js";
+import { TextResourceConflictError, type TextResourceChangeEvent, type ITextResourceStore } from "../../common/services/textResourceStore.js";
 import { normalizeTextLineEndings } from "../../common/core/text.js";
 import { TextModel, type TextModelMaintenanceOptions } from "../../common/model/textModel.js";
 
@@ -16,6 +16,7 @@ interface TextModelEntry {
   readonly modelChangeListener: IDisposable;
   readonly fileChangeListener: IDisposable;
   savedText: string;
+  revision: string | undefined;
   lineEnding: ExternalLineEnding;
   dirty: boolean;
   hasExternalChange: boolean;
@@ -77,6 +78,7 @@ export class BrowserTextModelService implements ITextModelService {
       modelChangeListener: model.onDidChange(() => this.refreshDirty(entry)),
       fileChangeListener: this.resourceStore.onDidChange(event => this.acceptFileChange(entry, event)),
       savedText: model.getText(),
+      revision: content.revision,
       lineEnding: detectExternalLineEnding(content.text),
       dirty: false,
       hasExternalChange: false,
@@ -134,14 +136,19 @@ export class BrowserTextModelService implements ITextModelService {
     throwIfCancelled(signal, "Text model save was cancelled");
     const savedText = entry.model.getText();
     const save = entry.saveQueue.then(async () => {
-      const current = await this.resourceStore.resolve({ resource: entry.resource }, signal);
-      if (normalizeTextLineEndings(current.text) !== entry.savedText) {
-        this.setExternalChange(entry, true);
-        throw new TextModelConflictError(entry.resource);
+      let saved;
+      try {
+        saved = await this.resourceStore.save({ resource: entry.resource, text: toExternalLineEndings(savedText, entry.lineEnding), ...(entry.revision === undefined ? {} : { expectedRevision: entry.revision }) }, signal);
+      } catch (error) {
+        if (error instanceof TextResourceConflictError) {
+          this.setExternalChange(entry, true);
+          throw new TextModelConflictError(entry.resource);
+        }
+        throw error;
       }
-      await this.resourceStore.save({ resource: entry.resource, text: toExternalLineEndings(savedText, entry.lineEnding) }, signal);
       if (entry.disposed) return;
       entry.savedText = savedText;
+      entry.revision = saved.revision;
       this.setExternalChange(entry, false);
       this.refreshDirty(entry);
     });
@@ -157,7 +164,7 @@ export class BrowserTextModelService implements ITextModelService {
     const content = await this.resourceStore.resolve({ resource: entry.resource }, signal);
     throwIfCancelled(signal, "Text model revert was cancelled");
     this.ensureEntryAlive(entry);
-    this.applyFileContent(entry, content.text);
+    this.applyFileContent(entry, content.text, content.revision);
     this.setExternalChange(entry, false);
   }
 
@@ -184,18 +191,20 @@ export class BrowserTextModelService implements ITextModelService {
       }
       if (normalizeTextLineEndings(content.text) === entry.savedText) {
         entry.lineEnding = detectExternalLineEnding(content.text);
+        entry.revision = content.revision;
         this.setExternalChange(entry, false);
         return;
       }
-      this.applyFileContent(entry, content.text);
+      this.applyFileContent(entry, content.text, content.revision);
       this.setExternalChange(entry, false);
     }).catch(() => {
       if (!entry.disposed) this.setExternalChange(entry, true);
     });
   }
 
-  private applyFileContent(entry: TextModelEntry, text: string): void {
+  private applyFileContent(entry: TextModelEntry, text: string, revision: string | undefined): void {
     entry.savedText = normalizeTextLineEndings(text);
+    entry.revision = revision;
     entry.lineEnding = detectExternalLineEnding(text);
     entry.model.reset(text);
     this.refreshDirty(entry);

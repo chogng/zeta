@@ -3,7 +3,7 @@ import type { FsChanged } from "../../../../../generated/app-server/types.js";
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { DisposableOwner } from "../../../base/common/lifecycle.js";
 import { URI } from "../../../base/common/uri.js";
-import { FileKind, type IFileChangeEvent, type IFileEntry, type IFileService, type IFileStat } from "../common/files.js";
+import { FileKind, FileRevisionConflictError, type IFileChangeEvent, type IFileContent, type IFileEntry, type IFileService, type IFileStat, type IFileWriteRequest, type IFileWriteResult } from "../common/files.js";
 import type { IWorkspaceContextService } from "../../workspace/common/workspace.js";
 
 /** Narrow App Server surface consumed by the browser file-service adapter. */
@@ -61,25 +61,34 @@ export class BrowserFileService extends DisposableOwner implements IFileService 
     }));
   }
 
-  async readFile(resource: URI): Promise<string> {
+  async readFile(resource: URI): Promise<IFileContent> {
     const result = await this.api.readFile({
       path: this.relativePath(resource),
     });
-    return result.content;
+    return Object.freeze({ resource, content: result.content, revision: result.revision });
   }
 
-  async writeFile(resource: URI, content: string): Promise<IFileStat> {
-    const result = await this.api.writeFile({
-      path: this.relativePath(resource),
-      content,
-    });
-    return {
-      resource,
-      kind: fileKind(result.metadata.fileType),
-      sizeBytes: result.metadata.sizeBytes,
-      readonly: result.metadata.readonly,
-      modifiedAtMillis: result.metadata.modifiedAtMillis ?? undefined,
-    };
+  async writeFile(request: IFileWriteRequest): Promise<IFileWriteResult> {
+    try {
+      const result = await this.api.writeFile({
+        path: this.relativePath(request.resource),
+        content: request.content,
+        ...(request.expectedRevision === undefined ? {} : { expectedRevision: request.expectedRevision }),
+      });
+      return Object.freeze({
+        stat: {
+          resource: request.resource,
+          kind: fileKind(result.metadata.fileType),
+          sizeBytes: result.metadata.sizeBytes,
+          readonly: result.metadata.readonly,
+          modifiedAtMillis: result.metadata.modifiedAtMillis ?? undefined,
+        },
+        revision: result.revision,
+      });
+    } catch (error) {
+      if (isRevisionConflict(error)) throw new FileRevisionConflictError(request.resource);
+      throw error;
+    }
   }
 
   private relativePath(resource: URI): string {
@@ -111,6 +120,10 @@ export class BrowserFileService extends DisposableOwner implements IFileService 
     for (const resource of resources) unique.set(resource!.toString(), resource!);
     this.fileChanges.fire(Object.freeze({ resources: Object.freeze([...unique.values()]) }));
   }
+}
+
+function isRevisionConflict(error: unknown): boolean {
+  return error instanceof Error && error.message === "FileSystemRevisionConflict";
 }
 
 /** Resolves a resource to a slash-separated path beneath one workspace root. */

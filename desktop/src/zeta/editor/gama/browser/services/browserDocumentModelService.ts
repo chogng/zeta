@@ -32,6 +32,7 @@ export class BrowserDocumentModelService extends DisposableOwner implements IDoc
       resource: input.resource,
       model,
       initialDocument: document,
+      initialRevision: content.revision,
       textFiles: this.textFiles,
       workingCopyService: this.workingCopyService,
       onSave: input.onSave,

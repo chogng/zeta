@@ -113,12 +113,13 @@ class EmbeddedTextResourceStore extends DisposableOwner implements ITextResource
   async resolve(request: TextResourceResolveRequest, _signal: AbortSignal): Promise<TextResourceContent> {
     if (request.bootstrapText !== undefined && !this.resolved) this.text = request.bootstrapText;
     this.resolved = true;
-    return Object.freeze({ resource: request.resource, text: this.text });
+    return Object.freeze({ resource: request.resource, text: this.text, revision: undefined });
   }
 
-  async save(request: TextResourceSaveRequest, _signal: AbortSignal): Promise<void> {
+  async save(request: TextResourceSaveRequest, _signal: AbortSignal): Promise<{ readonly revision: string | undefined }> {
     this.text = request.text;
     this.changeEmitter.fire({ resources: [this.resource] });
+    return Object.freeze({ revision: undefined });
   }
 }
 

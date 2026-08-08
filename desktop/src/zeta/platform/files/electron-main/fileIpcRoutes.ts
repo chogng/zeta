@@ -52,9 +52,10 @@ function fsReadFileParams(value: unknown): FsReadFileParams {
 }
 
 function fsWriteFileParams(value: unknown): FsWriteFileParams {
-  const params = record(value, ["path", "content"]);
+  const params = record(value, ["path", "content"], ["expectedRevision"]);
   return {
     path: relativeWorkspacePath(params.path),
     content: string(params.content, "content"),
+    ...(params.expectedRevision === undefined ? {} : { expectedRevision: string(params.expectedRevision, "expectedRevision") }),
   };
 }

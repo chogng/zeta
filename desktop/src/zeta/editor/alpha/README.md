@@ -55,7 +55,7 @@ class:
 | Concern | Owner | Current decision |
 | --- | --- | --- |
 | Events, lifecycle, URI identity, resource collections | `base/common` | Reuse existing primitives; editor semantics must not flow back into base |
-| Raw resource I/O | `platform/files` | `IFileService` owns workspace reads and App-Server-backed atomic UTF-8 writes |
+| Raw resource I/O | `platform/files` | `IFileService` owns workspace reads, opaque content revisions, and App-Server-backed conditional UTF-8 writes |
 | Text resource loading and save transport | `workbench/services/textfile/common` | ✅ `ITextFileService.resolve/save`; it deliberately does not own a live editor model |
 | Syntax token production | `workbench/services/textMate` and Alpha syntax providers | ✅ Bundled language packages are declarative resources loaded through the Workbench TextMate service; Alpha owns the displayed token result and its versioned stores |
 | Parser-derived syntax facts | `zeta-rs/syntax` via `platform/syntax` | ✅ Rust owns bounded parse/tree traversal and UTF-16 projection; Alpha consumes revision-bound tokens, parser diagnostics, document symbols, and folding for JavaScript/JSX, TypeScript/TSX, JSON, JSONC, Rust, and Shell while other languages retain TextMate/lexical/indent fallback |
@@ -68,11 +68,13 @@ class:
 
 The current `textfile` contract was extracted only after Alpha, Gama, and
 Explorer established a real shared loading boundary. It now
-owns transport-only resolve/save operations; Alpha's baseline, dirty state and
-transaction semantics remain editor-owned. `fs/changed` invalidation is
-forwarded through this boundary: Alpha reloads a clean shared model and marks
-a dirty model externally changed while retaining its local edits.
-Expected-revision writes remain a future document-layer contract.
+owns transport-only resolve/save operations and the opaque revision returned by
+the workspace file authority; Alpha's baseline, dirty state and transaction
+semantics remain editor-owned. `fs/changed` invalidation is forwarded through
+this boundary: Alpha reloads a clean shared model and marks a dirty model
+externally changed while retaining its local edits. A save includes the revision
+resolved with its baseline, so a stale write is rejected by the file authority
+instead of relying on a renderer-side read-before-write race.
 The TextMate service was extracted only after Alpha's Syntax provider/module
 path became its real consumer. Conversely, file loading or grammar-runtime imports appearing inside
 `TextModel`, `LanguageTokenLineIndex`, or Alpha browser components are an
@@ -197,8 +199,8 @@ architectural drift signal and require extraction at that point.
 | Explicit file-system revert | ✅ | `TextModelReference.revert` / `EditorPane.revert` |
 | CRLF/LF source line-ending preservation on save | ✅ | `ITextModelService` |
 | Workspace external-change invalidation, clean reload, and dirty-model conflict state | ✅ | `IFileService.onDidChangeFiles` / `ITextModelService` |
-| Pre-write external-change conflict detection | ✅, defense in depth | `ITextModelService` |
-| Atomic expected-revision writes and backup recovery | 尚未完成 | Future document-layer contract |
+| Conditional expected-revision writes and conflict projection | ✅ | `ITextModelService` → `ITextFileService` → `IFileService` → App Server |
+| Backup recovery | 尚未完成 | A recovery/backup policy is a Workbench product concern, not Alpha model state |
 
 `TextPosition` names both indices explicitly and counts UTF-16 code units so
 conversion to JavaScript strings and browser selections is deterministic.
@@ -208,8 +210,9 @@ model. Alpha records whether loaded or reverted content uses CRLF and restores
 that convention on save; all other input is written as LF. Mixed line endings
 and encoding policy remain document-layer concerns. Coarse workspace change
 events reload clean Alpha models; dirty models retain local content, expose
-`hasExternalChange`, announce the conflict to assistive technology, and keep
-the save-time baseline check as a second defense.
+`hasExternalChange`, and announce the conflict to assistive technology. The
+resolved opaque revision is the canonical save-time guard; watcher invalidation
+only provides earlier conflict feedback.
 
 When focused, `TextInputController` mirrors the normalized model into its
 native textarea with the primary selection's offsets and direction. Native

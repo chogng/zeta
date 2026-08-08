@@ -11,6 +11,7 @@ name = "zeta_file_system"
 path = "src/lib.rs"
 
 [dependencies]
+sha2 = { workspace = true }
 tempfile = { workspace = true }
 zeta-workspace = { workspace = true }
 

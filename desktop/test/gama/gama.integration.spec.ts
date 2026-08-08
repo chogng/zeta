@@ -86,6 +86,24 @@ test("Gama exposes collaboration as a separate toolbar contribution", async ({ p
   await expect(toolbar.locator(".zeta-document-collaboration-status")).toHaveText("Room: gama-browser-room");
 });
 
+test("Gama exposes remote-owner invitations through the collaboration contribution", async ({ page }) => {
+  await page.goto("/gama.html");
+  const prompts = ["https://collaboration.zeta.example", "0123456789abcdef0123456789abcdef", "gama-browser-room", "Writer", "viewer"];
+  await page.evaluate(({ prompts }) => {
+    window.prompt = () => prompts.shift() ?? null;
+  }, { prompts });
+  const toolbar = page.locator("#gama-structured .zeta-document-collaboration-toolbar");
+  await toolbar.locator("[data-action-id='startCollaboration'] button").click();
+  await expect(toolbar.locator("[data-action-id='inviteCollaborator'] button")).toBeVisible();
+  await toolbar.locator("[data-action-id='inviteCollaborator'] button").click();
+  await expect(toolbar.locator(".zeta-document-collaboration-status")).toContainText("Invitation created for Writer");
+  await expect(toolbar.locator(".zeta-document-collaboration-invitation-token")).toHaveText("Room ID: gama-browser-room\nAccess token: gama-browser-member-token");
+  await toolbar.locator("[data-action-id='manageCollaborators'] button").click();
+  await expect(toolbar.locator("[data-principal-id='browser-member']")).toContainText("Writereditor · browser-member");
+  await toolbar.locator("[data-principal-id='browser-member'] button").first().click();
+  await expect(toolbar.locator(".zeta-document-collaboration-invitation-token")).toHaveText("Room ID: gama-browser-room\nAccess token: gama-browser-rotated-token");
+});
+
 test("Gama public distribution has the structured-editor accessibility contract", async ({ page }) => {
   await page.goto("/gama.html");
   const toolbar = page.locator("#gama-structured .zeta-structured-format-toolbar");

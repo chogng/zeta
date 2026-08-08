@@ -416,6 +416,12 @@ impl AppServer {
             Some(ClientMethod::DocumentCollaborationSubmit) => {
                 self.document_collaboration_submit(&request.params)
             }
+            Some(ClientMethod::DocumentCollaborationPresencePublish) => {
+                self.document_collaboration_presence_publish(&request.params)
+            }
+            Some(ClientMethod::DocumentCollaborationPresenceRead) => {
+                self.document_collaboration_presence_read(&request.params)
+            }
             Some(ClientMethod::SessionCreate) => self.session_create(connection, &request.params),
             Some(ClientMethod::SessionRead) => self.session_read(&request.params),
             Some(ClientMethod::SessionList) => self.session_list(),

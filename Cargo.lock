@@ -7929,6 +7929,7 @@ dependencies = [
  "schemars",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "tempfile",
  "ts-rs",
 ]
@@ -8062,6 +8063,7 @@ dependencies = [
 name = "zeta-file-system"
 version = "0.1.0"
 dependencies = [
+ "sha2 0.10.9",
  "tempfile",
  "zeta-workspace",
 ]

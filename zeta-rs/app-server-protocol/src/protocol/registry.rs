@@ -1,5 +1,9 @@
 use crate::protocol::collaboration::DocumentCollaborationOpenParams;
 use crate::protocol::collaboration::DocumentCollaborationOpenResult;
+use crate::protocol::collaboration::DocumentCollaborationPresence;
+use crate::protocol::collaboration::DocumentCollaborationPresenceParams;
+use crate::protocol::collaboration::DocumentCollaborationPresenceReadParams;
+use crate::protocol::collaboration::DocumentCollaborationPresenceSnapshot;
 use crate::protocol::collaboration::DocumentCollaborationSnapshot;
 use crate::protocol::collaboration::DocumentCollaborationSubmitParams;
 use crate::protocol::collaboration::DocumentCollaborationSubmitResult;
@@ -260,6 +264,16 @@ client_methods! {
         params: DocumentCollaborationSubmitParams,
         response: DocumentCollaborationSubmitResult,
         serialization: GlobalExclusive,
+    },
+    DocumentCollaborationPresencePublish => "document/collaboration/presence/publish" {
+        params: DocumentCollaborationPresenceParams,
+        response: DocumentCollaborationPresenceSnapshot,
+        serialization: GlobalExclusive,
+    },
+    DocumentCollaborationPresenceRead => "document/collaboration/presence/read" {
+        params: DocumentCollaborationPresenceReadParams,
+        response: DocumentCollaborationPresenceSnapshot,
+        serialization: GlobalSharedRead,
     },
     SessionCreate => "session/create" {
         params: SessionCreateParams,
@@ -632,6 +646,9 @@ server_notifications! {
     DocumentCollaborationUpdate => "document/collaboration/update" {
         params: DocumentCollaborationUpdate,
     },
+    DocumentCollaborationPresence => "document/collaboration/presence" {
+        params: DocumentCollaborationPresenceSnapshot,
+    },
     SessionUpdate => "session/update" {
         params: SessionUpdateEnvelope,
     },
@@ -682,6 +699,10 @@ typescript_bindings! {
     DocumentCollaborationOpenParams,
     DocumentCollaborationSnapshot,
     DocumentCollaborationOpenResult,
+    DocumentCollaborationPresence,
+    DocumentCollaborationPresenceParams,
+    DocumentCollaborationPresenceReadParams,
+    DocumentCollaborationPresenceSnapshot,
     DocumentCollaborationUpdate,
     DocumentCollaborationSubmitParams,
     DocumentCollaborationSubmitResult,

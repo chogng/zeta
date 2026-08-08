@@ -1,5 +1,8 @@
-use super::{ServerNotification, decode};
+use super::decode;
+use super::ServerNotification;
 use zeta_app_server_protocol::protocol::config::ConfigChanged;
+use zeta_app_server_protocol::protocol::collaboration::DocumentCollaborationUpdate;
+use zeta_app_server_protocol::protocol::collaboration::DocumentCollaborationPresenceSnapshot;
 use zeta_app_server_protocol::protocol::fs::FsChanged;
 use zeta_app_server_protocol::protocol::git::{GitChangeStatusDto, GitHeadDto};
 
@@ -51,6 +54,65 @@ fn decodes_git_status_changed_notification() {
     assert_eq!(
         changed.status.changes[0].worktree_status,
         GitChangeStatusDto::Modified
+    );
+}
+
+#[test]
+fn decodes_document_collaboration_update_notification() {
+    let notification = decode(
+        r#"{
+            "jsonrpc": "2.0",
+            "method": "document/collaboration/update",
+            "params": {
+                "roomId": "gama-room",
+                "clientId": "client-a",
+                "sequence": 1,
+                "baseVersion": 0,
+                "version": 1,
+                "transaction": "{\"format\":\"zeta.document.transaction\"}"
+            }
+        }"#,
+    )
+    .expect("collaboration update notification decodes");
+
+    assert_eq!(
+        notification,
+        ServerNotification::DocumentCollaborationUpdate(DocumentCollaborationUpdate {
+            room_id: "gama-room".into(),
+            client_id: "client-a".into(),
+            sequence: 1,
+            base_version: 0,
+            version: 1,
+            transaction: "{\"format\":\"zeta.document.transaction\"}".into(),
+        })
+    );
+}
+
+#[test]
+fn decodes_document_collaboration_presence_notification() {
+    let notification = decode(
+        r#"{
+            "jsonrpc": "2.0",
+            "method": "document/collaboration/presence",
+            "params": {
+                "roomId": "gama-room",
+                "generation": 3,
+                "presences": [{"clientId": "client-a", "selection": "anchor=0"}]
+            }
+        }"#,
+    )
+    .expect("collaboration presence notification decodes");
+
+    assert_eq!(
+        notification,
+        ServerNotification::DocumentCollaborationPresence(DocumentCollaborationPresenceSnapshot {
+            room_id: "gama-room".into(),
+            generation: 3,
+            presences: vec![zeta_app_server_protocol::protocol::collaboration::DocumentCollaborationPresence {
+                client_id: "client-a".into(),
+                selection: "anchor=0".into(),
+            }],
+        })
     );
 }
 

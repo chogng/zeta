@@ -10,7 +10,7 @@ import type { IEmbeddedTextEditorFactory } from "../../../workbench/browser/part
 import { DocumentModel } from "../common/model/documentModel.js";
 import type { DocumentPlugin } from "../common/model/documentPlugin.js";
 import { containsDocumentNode, findDocumentNode, type DocumentMark, type DocumentNode, type DocumentNodeId } from "../common/model/document.js";
-import type { DocumentDecoration } from "../common/model/documentDecoration.js";
+import { createDocumentDecoration, type DocumentDecoration } from "../common/model/documentDecoration.js";
 import { buildDocumentOutline, type DocumentOutline, type DocumentOutlineOptions } from "../common/model/documentOutline.js";
 import { documentPointToPosition } from "../common/core/documentPosition.js";
 import { documentSelectionToText } from "../common/model/documentText.js";
@@ -22,7 +22,7 @@ import { allSelection, nodeSelection, textSelection, type DocumentSelection, typ
 import { DocumentTransaction } from "../common/model/documentTransaction.js";
 import { DocumentOutlineNavigator } from "./widget/documentOutlineNavigator.js";
 import { FormattingContribution, type FormattingDocumentAction } from "../contrib/formatting/browser/formattingContribution.js";
-import { CollaborationContribution } from "../contrib/collaboration/browser/collaborationContribution.js";
+import { CollaborationContribution, type CollaborationStartResult } from "../contrib/collaboration/browser/collaborationContribution.js";
 import { DocumentCollaborationController } from "../contrib/collaboration/common/controller.js";
 import { createDocumentFragmentFromHtml } from "../contrib/clipboard/browser/htmlDocumentFragment.js";
 import { TextEditorWidget } from "./widget/textEditorWidget.js";
@@ -31,6 +31,10 @@ import type { IDocumentModelService } from "../common/services/documentModelServ
 import type { DocumentModelReference } from "../common/services/documentModelService.js";
 import type { IDocumentCollaborationService } from "../common/services/documentCollaborationService.js";
 import type { DocumentCollaborationTarget } from "../common/services/documentCollaborationService.js";
+import type { DocumentCollaborationPresence } from "../common/services/documentCollaborationService.js";
+import type { DocumentCollaborationInvite } from "../common/services/documentCollaborationService.js";
+import type { DocumentCollaborationMember } from "../common/services/documentCollaborationService.js";
+import type { DocumentCollaborationRoomRole } from "../common/services/documentCollaborationService.js";
 
 export interface EditorWidgetOptions {
   readonly onSave?: () => Promise<void | boolean>;
@@ -123,6 +127,7 @@ export class EditorWidget extends DisposableOwner {
   private readonly modelChangeListenerSlot = this.own(new DisposableSlot<IDisposable>());
   private readonly collaborationControllerSlot = this.own(new DisposableSlot<DocumentCollaborationController>());
   private readonly collaborationStateListenerSlot = this.own(new DisposableSlot<IDisposable>());
+  private readonly collaborationPresenceListenerSlot = this.own(new DisposableSlot<IDisposable>());
   private readonly schema: DocumentSchema;
   private readonly embeddedEditors = new Map<string, TextEditorWidget>();
   private readonly nodeViewSlots = new Map<string, { readonly type: string; readonly view: NodeView }>();
@@ -135,6 +140,7 @@ export class EditorWidget extends DisposableOwner {
   private activeBlockId: string | undefined;
   private composition: DocumentComposition | undefined;
   private collaborationStart: AbortController | undefined;
+  private remotePresences: readonly DocumentCollaborationPresence[] = [];
   private updatingEmbeddedTextBlockModel: DocumentModel | undefined;
   private dimension: IDimension = { width: 0, height: 0 };
 
@@ -160,6 +166,10 @@ export class EditorWidget extends DisposableOwner {
       ownerDocument: parent.ownerDocument,
       onStart: (roomId, target) => this.startCollaboration(roomId, target),
       onStop: () => this.stopCollaboration(),
+      onInvite: (displayName, role) => this.createCollaborationInvite(displayName, role),
+      onListMembers: () => this.listCollaborationMembers(),
+      onRotateMemberAccessToken: principalId => this.rotateCollaborationMemberAccessToken(principalId),
+      onRevokeMember: principalId => this.revokeCollaborationMember(principalId),
     }));
     const formattingContribution = this.own(new FormattingContribution({
       ownerDocument: parent.ownerDocument,
@@ -217,7 +227,9 @@ export class EditorWidget extends DisposableOwner {
     }
     const model = modelReference.model;
     this.collaborationStateListenerSlot.clear();
+    this.collaborationPresenceListenerSlot.clear();
     this.collaborationControllerSlot.clear();
+    this.remotePresences = [];
     this.modelChangeListenerSlot.clear();
     this.modelReferenceSlot.replace(modelReference);
     this.modelChangeListenerSlot.replace(model.onDidChange(() => {
@@ -239,7 +251,9 @@ export class EditorWidget extends DisposableOwner {
     this.composition = undefined;
     this.cancelCollaborationStart();
     this.collaborationStateListenerSlot.clear();
+    this.collaborationPresenceListenerSlot.clear();
     this.collaborationControllerSlot.clear();
+    this.remotePresences = [];
     this.modelChangeListenerSlot.clear();
     this.modelReferenceSlot.clear();
     this.disposeEmbeddedEditors();
@@ -335,7 +349,7 @@ export class EditorWidget extends DisposableOwner {
       if (element.dataset.nodeId) previousElements.set(element.dataset.nodeId, element);
     }
     const activeNodeIds = new Set<string>();
-    const decorations = resolveViewDecorations(model);
+    const decorations = resolveViewDecorations(model, remotePresenceDecorations(model.document, this.remotePresences));
     const fragment = container.ownerDocument.createDocumentFragment();
     for (const node of model.document.content) fragment.append(this.renderNode(node, model, previousElements, activeNodeIds, decorations));
     container.replaceChildren(fragment);
@@ -1425,14 +1439,16 @@ export class EditorWidget extends DisposableOwner {
     return model;
   }
 
-  private async startCollaboration(roomId: string | undefined, target: DocumentCollaborationTarget): Promise<string> {
+  private async startCollaboration(roomId: string | undefined, target: DocumentCollaborationTarget): Promise<CollaborationStartResult> {
     const service = this.options.documentCollaborationService;
     if (!service) throw new Error("Gama collaboration is unavailable in this renderer");
     const model = this.requireModel();
     const input = this.requireInput();
     this.cancelCollaborationStart();
     this.collaborationStateListenerSlot.clear();
+    this.collaborationPresenceListenerSlot.clear();
     this.collaborationControllerSlot.clear();
+    this.remotePresences = [];
     const start = new AbortController();
     this.collaborationStart = start;
     try {
@@ -1450,11 +1466,18 @@ export class EditorWidget extends DisposableOwner {
       }
       const controller = new DocumentCollaborationController(model, connection);
       this.collaborationControllerSlot.replace(controller);
+      this.remotePresences = controller.presences;
       this.collaborationStateListenerSlot.replace(controller.onDidChangeState(change => {
         if (this.collaborationControllerSlot.value !== controller) return;
-        this.collaborationContribution?.setState(change.state, { roomId: change.roomId, ...(change.message === undefined ? {} : { message: change.message }) });
+        this.collaborationContribution?.setState(change.state, { roomId: change.roomId, target, principalId: controller.principalId, canManageMembers: controller.canManageMembers, ...(change.message === undefined ? {} : { message: change.message }) });
       }));
-      return controller.roomId;
+      this.collaborationPresenceListenerSlot.replace(controller.onDidChangePresence(change => {
+        if (this.collaborationControllerSlot.value !== controller) return;
+        this.remotePresences = change.presences;
+        this.render();
+      }));
+      this.render();
+      return { roomId: controller.roomId, principalId: controller.principalId, canManageMembers: controller.canManageMembers };
     } finally {
       if (this.collaborationStart === start) this.collaborationStart = undefined;
     }
@@ -1463,8 +1486,34 @@ export class EditorWidget extends DisposableOwner {
   private stopCollaboration(): void {
     this.cancelCollaborationStart();
     this.collaborationStateListenerSlot.clear();
+    this.collaborationPresenceListenerSlot.clear();
     this.collaborationControllerSlot.clear();
+    this.remotePresences = [];
     this.collaborationContribution?.setState(this.options.documentCollaborationService ? "inactive" : "unavailable");
+  }
+
+  private createCollaborationInvite(displayName: string, role: DocumentCollaborationRoomRole): Promise<DocumentCollaborationInvite> {
+    const controller = this.collaborationControllerSlot.value;
+    if (!controller) return Promise.reject(new Error("Gama collaboration is not connected"));
+    return controller.createInvite(displayName, role);
+  }
+
+  private listCollaborationMembers(): Promise<readonly DocumentCollaborationMember[]> {
+    const controller = this.collaborationControllerSlot.value;
+    if (!controller) return Promise.reject(new Error("Gama collaboration is not connected"));
+    return controller.listMembers();
+  }
+
+  private rotateCollaborationMemberAccessToken(principalId: string): Promise<DocumentCollaborationInvite> {
+    const controller = this.collaborationControllerSlot.value;
+    if (!controller) return Promise.reject(new Error("Gama collaboration is not connected"));
+    return controller.rotateMemberAccessToken(principalId);
+  }
+
+  private revokeCollaborationMember(principalId: string): Promise<void> {
+    const controller = this.collaborationControllerSlot.value;
+    if (!controller) return Promise.reject(new Error("Gama collaboration is not connected"));
+    return controller.revokeMember(principalId);
   }
 
   private cancelCollaborationStart(): void {
@@ -1485,7 +1534,7 @@ export class EditorWidget extends DisposableOwner {
   }
 
   private isReadOnly(): boolean {
-    return this.input?.readOnly === true;
+    return this.input?.readOnly === true || this.collaborationControllerSlot.value?.canEdit === false;
   }
 }
 
@@ -1694,21 +1743,50 @@ function findSingleTextNodeInBlock(document: DocumentNode, blockId: string): Doc
   return textNodes.length === 1 ? textNodes[0] : undefined;
 }
 
-function resolveViewDecorations(model: DocumentModel): readonly ViewDecoration[] {
+function resolveViewDecorations(model: DocumentModel, externalDecorations: readonly DocumentDecoration[] = []): readonly ViewDecoration[] {
   const result: ViewDecoration[] = [];
-  for (const source of model.getPluginDecorations()) {
-    for (const decoration of source.set.decorations) {
-      try {
-        const from = documentPointToPosition(model.document, model.schema, decoration.from);
-        const to = documentPointToPosition(model.document, model.schema, decoration.to);
-        if (from === to) continue;
-        result.push({ from: Math.min(from, to), to: Math.max(from, to), decoration });
-      } catch {
-        // A stale plugin range is ignored until the plugin maps or replaces it.
-      }
+  const decorations = [...model.getPluginDecorations().flatMap(source => source.set.decorations), ...externalDecorations];
+  for (const decoration of decorations) {
+    try {
+      const from = documentPointToPosition(model.document, model.schema, decoration.from);
+      const to = documentPointToPosition(model.document, model.schema, decoration.to);
+      if (from === to) continue;
+      result.push({ from: Math.min(from, to), to: Math.max(from, to), decoration });
+    } catch {
+      // A stale plugin or remote-presence range is ignored until it is replaced.
     }
   }
   return Object.freeze(result);
+}
+
+function remotePresenceDecorations(document: DocumentNode, presences: readonly DocumentCollaborationPresence[]): readonly DocumentDecoration[] {
+  const decorations: DocumentDecoration[] = [];
+  for (const presence of presences) {
+    if (presence.selection.kind !== "text") continue;
+    let from = presence.selection.anchor;
+    let to = presence.selection.head;
+    if (from.nodeId === to.nodeId && from.offset === to.offset) {
+      const text = findNode(document, from.nodeId)?.text;
+      if (!text) continue;
+      if (from.offset < text.length) to = { nodeId: from.nodeId, offset: from.offset + 1 };
+      else if (from.offset > 0) from = { nodeId: from.nodeId, offset: from.offset - 1 };
+      else continue;
+    }
+    decorations.push(createDocumentDecoration({
+      id: `remote-presence-${presence.clientId}`,
+      from,
+      to,
+      className: `zeta-document-remote-selection zeta-document-remote-selection-${presenceColorIndex(presence.clientId)}`,
+      attrs: { "data-collaboration-client": presence.clientId },
+    }));
+  }
+  return Object.freeze(decorations);
+}
+
+function presenceColorIndex(clientId: string): number {
+  let hash = 0;
+  for (let index = 0; index < clientId.length; index += 1) hash = (hash * 31 + clientId.charCodeAt(index)) >>> 0;
+  return hash % 4;
 }
 
 function hasRenderableDecoration(model: DocumentModel, node: DocumentNode, decorations: readonly ViewDecoration[]): boolean {

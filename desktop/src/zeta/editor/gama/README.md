@@ -72,12 +72,15 @@ The current core provides:
 - one-sided pending-local rebase in `contrib/collaboration`: stable node targets
   survive remote changes, text offsets and sibling indices are shifted, local
   selections are remapped, and steps whose targets were remotely deleted are
-  reported as dropped;
+  reported as dropped. `rebaseDocumentHistory` separately rewrites both local
+  undo and redo branches after a server-ordered remote projection, retaining
+  text and structural history only when it can replay without replacing remote
+  content;
 - server-ordered collaboration rooms: the process-local App Server and the
   independently hosted durable collaboration server share one ordering,
   bounded-replay, snapshot-resync, and exact-submit-retry contract; room IDs
   are opaque random capability identifiers for explicit sharing;
-- `DocumentCollaborationSession` keeps canonical, in-flight, and later local
+- `DocumentCollaborationSynchronizer` keeps canonical, in-flight, and later local
   buffered snapshots separate. A submit contains only the exact in-flight
   transaction's resulting snapshot; typing never waits for I/O or leaks later
   local edits into an earlier server version;
@@ -88,8 +91,11 @@ The current core provides:
   `DocumentCollaborationService` routes an explicit target to either the
   process-local `AppServerDocumentCollaborationService` or the authenticated
   long-polling `RemoteDocumentCollaborationService`. The separate toolbar
-  contribution owns only the create/join/leave affordance and keeps a remote
-  endpoint/token in memory rather than in the document model;
+  contribution owns create/join/leave plus remote-owner invitations and active
+  member management. It keeps a remote endpoint/token in memory rather than in
+  the document model, shows newly issued or rotated credentials only for the
+  one-time secure handoff, and delegates listing/revocation to the transport
+  seam rather than owning room state;
 - versioned collaboration envelopes in `envelopeSerialization.ts` wrap the
   existing transaction envelope and validate client, sequence, base-version,
   and server-version fields before a transport adapter accepts them;
@@ -115,7 +121,7 @@ The current core provides:
 - versioned JSON serialization and strict deserialization.
 
 The Gama document model is deliberately separate from Alpha's line-oriented
-`TextModel`. `BrowserDocumentModelService` resolves one `DocumentModelReference`; `EditorPane` hosts the corresponding `EditorWidget`; `DocumentWorkingCopy` adapts Gama serialization, dirty/revert/conflict state, and untitled Save As to the shared Workbench working-copy contract.
+`TextModel`. `BrowserDocumentModelService` resolves one `DocumentModelReference`; `EditorPane` hosts the corresponding `EditorWidget`; `DocumentWorkingCopy` adapts Gama serialization, dirty/revert/conflict state, expected-revision persistence, and untitled Save As to the shared Workbench working-copy contract.
 Alpha's corresponding editor surface is a `codeBlock`; Gama deliberately names the document node `textBlock`. It is a Gama-owned block whose content is zero or one plain `text` child. It is a text block in Gama's document model, not an embedded Alpha document; its language is a block attribute. The browser widget may project that text through the shared `IEmbeddedTextEditor` boundary, and `EmbeddedTextEditorFactory` supplies the implementation backed by Alpha's `CodeEditorWidget`. Gama owns the block identity and transactions; Alpha never depends on Gama document types. Gama common remains independent of Alpha and can fall back to its own text surface when no factory is supplied.
 `DocumentSchema` validates custom top-node definitions as well as the default
 `doc` schema; transaction application never assumes that the root is named
@@ -204,9 +210,13 @@ transport-neutral protocol for replay and collaboration adapters.
 remote transaction that share the same base snapshot. It preserves stable
 structural targets, shifts text and sibling coordinates, keeps local
 transaction dependencies, and exposes dropped steps when a remote deletion
-removes their target. The primitive deliberately does not choose server order,
-provide client-id tie breaking, or implement a complete OT/CRDT session;
-`DocumentCollaborationSession` provides the common-layer boundary: it owns the
+removes their target. `rebaseDocumentHistory` is the complementary
+author-history primitive: it rebuilds the undo and redo branches in the exact
+states where they will replay, preserves the established ordering of text and
+block insertions, and drops the complete unsafe branch when an inverse could
+overwrite remote content. The primitive deliberately does not choose server
+order, provide client-id tie breaking, or implement a complete OT/CRDT session;
+`DocumentCollaborationSynchronizer` provides the common-layer boundary: it owns the
 canonical version, exact in-flight update, and later optimistic buffer.
 `DocumentCollaborationController` consumes a connection from
 `IDocumentCollaborationService`, so neither the document model nor the widget
@@ -240,11 +250,12 @@ node can still map or drop ranges without relying on DOM lifetime.
 
 | Area | Status | Current boundary |
 | --- | --- | --- |
-| Cross-device durable collaboration | ✅ 当前 | `zeta-collaboration-server` owns an authenticated, CORS-restricted, SQLite-backed remote room authority. Gama connects through the remote service using an explicit server origin and bearer token; it does not need an App Server or a session. Long-poll transport retries transient network/5xx failures from its last confirmed version; authentication, authorization, schema, and room errors remain explicit. The deployer must run one host behind TLS and configure the renderer origin. |
-| Collaboration authorization and semantic server validation | 部分具备 | The remote host requires one deployment-scoped bearer token and room IDs are unguessable. It bounds/parses JSON and enforces schema compatibility IDs, while Gama clients validate actual document/transaction schemas. Per-user identities, per-room ACLs, token rotation, audit policy, and a Rust implementation of each Gama schema are not yet present. |
-| Presence, remote selections, and shared undo | 尚未完成 | The ordered document-update protocol intentionally carries only transactions and snapshots. Presence/cursors need a separate ephemeral notification contract; shared undo needs a per-author history/rebase policy rather than reusing local `DocumentModel` undo. |
+| Cross-device durable collaboration | ✅ 当前 | `zeta-collaboration-server` owns an authenticated, CORS-restricted, SQLite-backed remote room authority. Gama connects through an explicit server origin and room credential; it does not need an App Server or a session. Long-poll transport retries transient network/5xx failures from its last confirmed version, and a second host sharing the SQLite database observes external writes within 250 ms. Deploy behind TLS and configure the renderer origin. |
+| Collaboration authorization and semantic server validation | ✅ 当前 | The deployment token is a bootstrap owner identity. Each room persists `owner`/`editor`/`viewer` membership; owners list active members, issue and rotate room-scoped credentials, and revoke other members, while the server retains immutable security audit events and rejects owner self-revocation. The remote open contract projects `viewer` as `canEdit: false` and only owners as `canManageMembers: true`, so the Gama widget becomes read-only before it can create optimistic local edits and exposes invitation/member-management actions only to remote owners. Rust rejects malformed/bounded document and transaction envelopes and every unknown Gama core step. The active Gama profile remains the canonical validator for profile-defined node and mark semantics; the backend must not copy browser profile schemas. |
+| Presence and remote selections | ✅ 当前 | Remote rooms carry a separate ephemeral selection stream with a 60-second lease; App Server rooms publish the same selection snapshot over their typed notification channel. Both project colored, non-editable text-range highlights. |
+| Selective author undo/redo | 部分具备 | A local undo/redo is submitted as a normal ordered transaction, so connected peers receive it. `rebaseDocumentHistory` preserves local text and structural branches through acknowledged remote updates and projection-consistent in-flight/buffered rebases. If a branch cannot be replayed without overwriting a remote replacement or deleted target, Gama drops that branch rather than applying a stale inverse. |
 | Rich content pasted from other applications | ✅ 当前 | `contrib/clipboard/browser/htmlDocumentFragment.ts` converts a restricted HTML vocabulary into a schema-validated fragment; scripts, event attributes, unsafe URLs, styles, and unknown DOM state never enter the document model. |
-| Browser worker | Non-goal currently | The structured model, transaction mapping, and current browser projection have no worker consumer. Add `editor.worker.start.ts` only with a real collaboration or layout protocol. |
+| Browser worker bootstrap | ✅ 当前 | `editor.worker.start.ts` owns the dedicated-worker structured-clone port and resource lifecycle without pulling worker globals into `editor.api.ts`. It is the canonical entrypoint for a concrete collaboration, layout, or analysis worker; the current browser projection does not speculate by moving synchronous document mutations off-thread. |
 
 These are not gaps in the `DocumentModel` transaction boundary. They require a
 product-level protocol or security policy, so they must not be filled by adding

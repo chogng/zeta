@@ -66,6 +66,8 @@ pub struct FsReadFileParams {
 #[serde(rename_all = "camelCase")]
 pub struct FsReadFileResult {
     pub content: String,
+    /// Opaque exact-content revision required to protect a later conditional write.
+    pub revision: String,
 }
 
 /// Atomically write one UTF-8 file relative to the configured workspace root.
@@ -74,6 +76,10 @@ pub struct FsReadFileResult {
 pub struct FsWriteFileParams {
     pub path: PathBuf,
     pub content: String,
+    /// When supplied, rejects the write if the file no longer has this exact revision.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub expected_revision: Option<String>,
 }
 
 /// Metadata returned after one successful `fs/writeFile`.
@@ -81,6 +87,8 @@ pub struct FsWriteFileParams {
 #[serde(rename_all = "camelCase")]
 pub struct FsWriteFileResult {
     pub metadata: FsGetMetadataResult,
+    /// Opaque exact-content revision of the successfully written file.
+    pub revision: String,
 }
 
 /// Coarse workspace filesystem invalidation published by `fs/changed`.

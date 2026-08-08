@@ -4,6 +4,7 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::sync::{Arc, Condvar, Mutex, Weak};
 use zeta_app_server_protocol::protocol::collaboration::DocumentCollaborationUpdate;
+use zeta_app_server_protocol::protocol::collaboration::DocumentCollaborationPresenceSnapshot;
 use zeta_app_server_protocol::protocol::config::ConfigChanged;
 use zeta_app_server_protocol::protocol::fs::FsChanged;
 use zeta_app_server_protocol::protocol::git::{GitStatusChanged, GitStatusResult};
@@ -205,6 +206,31 @@ impl UpdateBroker {
                 queue.push(notification(
                     ServerNotificationMethod::DocumentCollaborationUpdate,
                     &update,
+                ));
+            }
+            true
+        });
+    }
+
+    pub(super) fn publish_document_collaboration_presence(
+        &self,
+        snapshot: DocumentCollaborationPresenceSnapshot,
+    ) {
+        let Ok(mut subscribers) = self.subscribers.lock() else {
+            return;
+        };
+        subscribers.retain(|_, subscriber| {
+            let Some(queue) = subscriber
+                .queue
+                .upgrade()
+                .map(NotificationQueue::from_inner)
+            else {
+                return false;
+            };
+            if subscriber.collaboration_rooms.contains(&snapshot.room_id) {
+                queue.push(notification(
+                    ServerNotificationMethod::DocumentCollaborationPresence,
+                    &snapshot,
                 ));
             }
             true

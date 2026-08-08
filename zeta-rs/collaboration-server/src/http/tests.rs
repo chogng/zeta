@@ -1,5 +1,5 @@
-use super::HttpRuntime;
 use super::serve_listener;
+use super::HttpRuntime;
 use crate::CollaborationServerOptions;
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -8,9 +8,9 @@ use std::io::Write;
 use std::net::SocketAddr;
 use std::net::TcpListener;
 use std::net::TcpStream;
-use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
+use std::sync::Arc;
 use std::thread;
 use tempfile::TempDir;
 use zeta_collaboration::SqliteDocumentCollaborationRooms;
@@ -85,6 +85,8 @@ fn remote_host_authenticates_origins_and_orders_cross_client_updates() {
         .unwrap()
         .to_string();
     assert_eq!(opened_body["snapshot"]["version"], 0);
+    assert_eq!(opened_body["canEdit"], true);
+    assert_eq!(opened_body["canManageMembers"], true);
 
     let joined = send_json(
         address,
@@ -106,7 +108,7 @@ fn remote_host_authenticates_origins_and_orders_cross_client_updates() {
             "clientId": "client-a",
             "sequence": 1,
             "baseVersion": 0,
-            "transaction": serde_json::json!({"steps": []}).to_string(),
+            "transaction": transaction(),
             "document": document("first"),
         }),
     );
@@ -136,14 +138,318 @@ fn remote_host_authenticates_origins_and_orders_cross_client_updates() {
     worker.join().unwrap();
 }
 
+#[test]
+fn remote_host_enforces_room_roles_rotates_credentials_and_exposes_owner_audit() {
+    let directory = TempDir::new().unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let options =
+        CollaborationServerOptions::new(address, directory.path().join("rooms.sqlite3"), TOKEN)
+            .with_allowed_origin(ORIGIN);
+    let runtime = Arc::new(HttpRuntime::new(
+        SqliteDocumentCollaborationRooms::open_at(options.database_path()).unwrap(),
+        options,
+    ));
+    let shutdown = Arc::new(AtomicBool::new(false));
+    let worker_runtime = runtime.clone();
+    let worker_shutdown = shutdown.clone();
+    let worker =
+        thread::spawn(move || serve_listener(listener, worker_runtime, worker_shutdown).unwrap());
+
+    let opened = send_json(
+        address,
+        "/v1/document-collaboration/rooms/open",
+        &serde_json::json!({
+            "clientId": "owner-client", "schemaId": "gama-v1", "document": document("initial"),
+        }),
+    );
+    let room_id = serde_json::from_slice::<Value>(&opened.body).unwrap()["snapshot"]["roomId"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let viewer = send_json(
+        address,
+        "/v1/document-collaboration/rooms/invites",
+        &serde_json::json!({
+            "roomId": room_id, "displayName": "Viewer", "role": "viewer",
+        }),
+    );
+    assert_eq!(viewer.status, 201);
+    let viewer_body: Value = serde_json::from_slice(&viewer.body).unwrap();
+    let viewer_token = viewer_body["accessToken"].as_str().unwrap().to_string();
+    let viewer_id = viewer_body["principalId"].as_str().unwrap().to_string();
+
+    let members = send(
+        address,
+        "GET",
+        &format!("/v1/document-collaboration/rooms/{room_id}/members"),
+        &[
+            ("Authorization", &format!("Bearer {TOKEN}")),
+            ("Origin", ORIGIN),
+        ],
+        b"",
+    );
+    assert_eq!(members.status, 200);
+    let members_body: Value = serde_json::from_slice(&members.body).unwrap();
+    assert_eq!(members_body["members"].as_array().unwrap().len(), 2);
+
+    let viewer_open = send_json_as(
+        address,
+        "/v1/document-collaboration/rooms/open",
+        &viewer_token,
+        &serde_json::json!({
+            "roomId": room_id, "clientId": "viewer-client", "schemaId": "gama-v1", "document": document("ignored"),
+        }),
+    );
+    assert_eq!(viewer_open.status, 200);
+    let viewer_open_body: Value = serde_json::from_slice(&viewer_open.body).unwrap();
+    assert_eq!(viewer_open_body["canEdit"], false);
+    assert_eq!(viewer_open_body["canManageMembers"], false);
+    assert_eq!(viewer_open_body["principalId"], viewer_id);
+    let viewer_members = send(
+        address,
+        "GET",
+        &format!("/v1/document-collaboration/rooms/{room_id}/members"),
+        &[
+            ("Authorization", &format!("Bearer {viewer_token}")),
+            ("Origin", ORIGIN),
+        ],
+        b"",
+    );
+    assert_eq!(viewer_members.status, 403);
+    let viewer_submit = send_json_as(
+        address,
+        "/v1/document-collaboration/rooms/submit",
+        &viewer_token,
+        &serde_json::json!({
+            "roomId": room_id, "clientId": "viewer-client", "sequence": 1, "baseVersion": 0, "transaction": transaction(), "document": document("rejected"),
+        }),
+    );
+    assert_eq!(viewer_submit.status, 403);
+    let viewer_presence = send_json_as(
+        address,
+        "/v1/document-collaboration/rooms/presence",
+        &viewer_token,
+        &serde_json::json!({
+            "roomId": room_id, "clientId": "viewer-client", "selection": selection(),
+        }),
+    );
+    assert_eq!(viewer_presence.status, 204);
+    let presence = send(
+        address,
+        "GET",
+        &format!("/v1/document-collaboration/rooms/{room_id}/presence?afterGeneration=0"),
+        &[
+            ("Authorization", &format!("Bearer {TOKEN}")),
+            ("Origin", ORIGIN),
+        ],
+        b"",
+    );
+    assert_eq!(presence.status, 200);
+    assert_eq!(
+        serde_json::from_slice::<Value>(&presence.body).unwrap()["presences"][0]["clientId"],
+        "viewer-client"
+    );
+
+    let editor = send_json(
+        address,
+        "/v1/document-collaboration/rooms/invites",
+        &serde_json::json!({
+            "roomId": room_id, "displayName": "Editor", "role": "editor",
+        }),
+    );
+    let editor_body: Value = serde_json::from_slice(&editor.body).unwrap();
+    let editor_token = editor_body["accessToken"].as_str().unwrap().to_string();
+    let editor_id = editor_body["principalId"].as_str().unwrap().to_string();
+    let editor_submit = send_json_as(
+        address,
+        "/v1/document-collaboration/rooms/submit",
+        &editor_token,
+        &serde_json::json!({
+            "roomId": room_id, "clientId": "editor-client", "sequence": 1, "baseVersion": 0, "transaction": transaction(), "document": document("accepted"),
+        }),
+    );
+    assert_eq!(editor_submit.status, 200);
+
+    let rotated = send_json(
+        address,
+        "/v1/document-collaboration/rooms/members/rotate-token",
+        &serde_json::json!({
+            "roomId": room_id, "principalId": editor_id,
+        }),
+    );
+    assert_eq!(rotated.status, 200);
+    let rotated_token = serde_json::from_slice::<Value>(&rotated.body).unwrap()["accessToken"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let expired = send_json_as(
+        address,
+        "/v1/document-collaboration/rooms/open",
+        &editor_token,
+        &serde_json::json!({
+            "roomId": room_id, "clientId": "editor-client", "schemaId": "gama-v1", "document": document("ignored"),
+        }),
+    );
+    assert_eq!(expired.status, 401);
+    let renewed = send_json_as(
+        address,
+        "/v1/document-collaboration/rooms/open",
+        &rotated_token,
+        &serde_json::json!({
+            "roomId": room_id, "clientId": "editor-client", "schemaId": "gama-v1", "document": document("ignored"),
+        }),
+    );
+    assert_eq!(renewed.status, 200);
+
+    let revoked = send_json(
+        address,
+        "/v1/document-collaboration/rooms/members/revoke",
+        &serde_json::json!({
+            "roomId": room_id, "principalId": editor_id,
+        }),
+    );
+    assert_eq!(revoked.status, 204);
+    let revoked_open = send_json_as(
+        address,
+        "/v1/document-collaboration/rooms/open",
+        &rotated_token,
+        &serde_json::json!({
+            "roomId": room_id, "clientId": "editor-client", "schemaId": "gama-v1", "document": document("ignored"),
+        }),
+    );
+    assert_eq!(revoked_open.status, 401);
+    let members_after_revocation = send(
+        address,
+        "GET",
+        &format!("/v1/document-collaboration/rooms/{room_id}/members"),
+        &[
+            ("Authorization", &format!("Bearer {TOKEN}")),
+            ("Origin", ORIGIN),
+        ],
+        b"",
+    );
+    assert_eq!(members_after_revocation.status, 200);
+    assert_eq!(
+        serde_json::from_slice::<Value>(&members_after_revocation.body).unwrap()["members"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+
+    let audit = send(
+        address,
+        "GET",
+        &format!("/v1/document-collaboration/rooms/{room_id}/audit"),
+        &[
+            ("Authorization", &format!("Bearer {TOKEN}")),
+            ("Origin", ORIGIN),
+        ],
+        b"",
+    );
+    assert_eq!(audit.status, 200);
+    let audit_body: Value = serde_json::from_slice(&audit.body).unwrap();
+    assert_eq!(audit_body["events"].as_array().unwrap().len(), 6);
+    assert_eq!(audit_body["events"][4]["eventType"], "member.token_rotated");
+    assert_eq!(audit_body["events"][5]["eventType"], "member.revoked");
+
+    shutdown.store(true, Ordering::Release);
+    worker.join().unwrap();
+}
+
+#[test]
+fn remote_hosts_recheck_shared_sqlite_for_cross_instance_updates() {
+    let directory = TempDir::new().unwrap();
+    let database_path = directory.path().join("rooms.sqlite3");
+    let listener_a = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address_a = listener_a.local_addr().unwrap();
+    let listener_b = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address_b = listener_b.local_addr().unwrap();
+    let options_a = CollaborationServerOptions::new(address_a, &database_path, TOKEN)
+        .with_allowed_origin(ORIGIN);
+    let options_b = CollaborationServerOptions::new(address_b, &database_path, TOKEN)
+        .with_allowed_origin(ORIGIN);
+    let runtime_a = Arc::new(HttpRuntime::new(
+        SqliteDocumentCollaborationRooms::open_at(options_a.database_path()).unwrap(),
+        options_a,
+    ));
+    let runtime_b = Arc::new(HttpRuntime::new(
+        SqliteDocumentCollaborationRooms::open_at(options_b.database_path()).unwrap(),
+        options_b,
+    ));
+    let shutdown_a = Arc::new(AtomicBool::new(false));
+    let shutdown_b = Arc::new(AtomicBool::new(false));
+    let worker_a = thread::spawn({
+        let runtime = runtime_a.clone();
+        let shutdown = shutdown_a.clone();
+        move || serve_listener(listener_a, runtime, shutdown).unwrap()
+    });
+    let worker_b = thread::spawn({
+        let runtime = runtime_b.clone();
+        let shutdown = shutdown_b.clone();
+        move || serve_listener(listener_b, runtime, shutdown).unwrap()
+    });
+
+    let opened = send_json(
+        address_a,
+        "/v1/document-collaboration/rooms/open",
+        &serde_json::json!({
+            "clientId": "client-a", "schemaId": "gama-v1", "document": document("initial"),
+        }),
+    );
+    let room_id = serde_json::from_slice::<Value>(&opened.body).unwrap()["snapshot"]["roomId"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let poll_room_id = room_id.clone();
+    let poll = thread::spawn(move || {
+        send(
+            address_b,
+            "GET",
+            &format!("/v1/document-collaboration/rooms/{poll_room_id}/updates?afterVersion=0"),
+            &[
+                ("Authorization", &format!("Bearer {TOKEN}")),
+                ("Origin", ORIGIN),
+            ],
+            b"",
+        )
+    });
+    thread::sleep(std::time::Duration::from_millis(100));
+    let submitted = send_json(
+        address_a,
+        "/v1/document-collaboration/rooms/submit",
+        &serde_json::json!({
+            "roomId": room_id, "clientId": "client-a", "sequence": 1, "baseVersion": 0, "transaction": transaction(), "document": document("first"),
+        }),
+    );
+    assert_eq!(submitted.status, 200);
+    let updates = poll.join().unwrap();
+    assert_eq!(updates.status, 200);
+    assert_eq!(
+        serde_json::from_slice::<Value>(&updates.body).unwrap()["updates"][0]["version"],
+        1
+    );
+
+    shutdown_a.store(true, Ordering::Release);
+    shutdown_b.store(true, Ordering::Release);
+    worker_a.join().unwrap();
+    worker_b.join().unwrap();
+}
+
 fn send_json(address: SocketAddr, path: &str, body: &Value) -> HttpResponse {
+    send_json_as(address, path, TOKEN, body)
+}
+
+fn send_json_as(address: SocketAddr, path: &str, token: &str, body: &Value) -> HttpResponse {
     let encoded = serde_json::to_vec(body).unwrap();
+    let authorization = format!("Bearer {token}");
     send(
         address,
         "POST",
         path,
         &[
-            ("Authorization", &format!("Bearer {TOKEN}")),
+            ("Authorization", &authorization),
             ("Origin", ORIGIN),
             ("Content-Type", "application/json"),
         ],
@@ -210,6 +516,14 @@ fn decode_response(bytes: &[u8]) -> HttpResponse {
 
 fn document(value: &str) -> String {
     format!(
-        r#"{{"format":"zeta.document","version":1,"document":{{"type":"document","content":["{value}"]}}}}"#
+        r#"{{"format":"zeta.document","version":1,"document":{{"id":"document-1","type":"doc","attrs":{{}},"marks":[],"content":[{{"id":"text-1","type":"text","attrs":{{}},"marks":[],"content":[],"text":"{value}"}}]}}}}"#
     )
+}
+
+fn transaction() -> String {
+    r#"{"format":"zeta.document.transaction","version":1,"transaction":{"steps":[],"addToHistory":true,"selectionSet":false,"storedMarksSet":false,"metadata":[]}}"#.into()
+}
+
+fn selection() -> &'static str {
+    r#"{"kind":"text","anchor":{"nodeId":"text-1","offset":0},"head":{"nodeId":"text-1","offset":1}}"#
 }

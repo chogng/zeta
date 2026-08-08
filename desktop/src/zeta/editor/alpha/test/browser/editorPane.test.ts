@@ -67,7 +67,7 @@ test("Alpha editor pane releases a load cancelled before content resolution", as
   dom.window.HTMLCanvasElement.prototype.getContext = () => null;
   const parent = dom.window.document.querySelector<HTMLElement>("main")!;
   const pending = deferred<ResolvedTextFileContent>();
-  const textFiles = { onDidChangeFiles: inertFileChanges, resolve: () => pending.promise, save: async () => {} };
+  const textFiles = { onDidChangeFiles: inertFileChanges, resolve: () => pending.promise, save: async () => ({ revision: undefined }) };
   const resourceStore = new BrowserTextResourceStore(textFiles);
   using models = new BrowserTextModelService(resourceStore);
   const pane = new EditorPane(resourceStore, { modelService: models });
@@ -79,6 +79,7 @@ test("Alpha editor pane releases a load cancelled before content resolution", as
     resource: URI.file("C:\\project\\slow.ts"),
     text: "late",
     source: TextFileContentSource.FileSystem,
+    revision: "revision-1",
   });
 
   await assert.rejects(opening, error => (error as Error).name === "CancellationError");
@@ -126,6 +127,7 @@ test("Alpha editor pane saves and reverts its shared model reference", async () 
 class ImmediateTextFiles implements ITextFileService {
   readonly savedTexts: string[] = [];
   readonly onDidChangeFiles = inertFileChanges;
+  private revision = 1;
 
   constructor(private text: string) {}
 
@@ -134,16 +136,24 @@ class ImmediateTextFiles implements ITextFileService {
       resource: request.resource,
       text: request.bootstrapText ?? this.text,
       source: request.bootstrapText === undefined ? TextFileContentSource.FileSystem : TextFileContentSource.Bootstrap,
+      revision: request.bootstrapText === undefined ? this.currentRevision() : undefined,
     };
   }
 
-  async save(request: { readonly text: string }): Promise<void> {
+  async save(request: { readonly text: string }): Promise<{ readonly revision: string | undefined }> {
     this.savedTexts.push(request.text);
     this.text = request.text;
+    this.revision += 1;
+    return { revision: this.currentRevision() };
   }
 
   setText(text: string): void {
     this.text = text;
+    this.revision += 1;
+  }
+
+  private currentRevision(): string {
+    return `revision-${this.revision}`;
   }
 }
 

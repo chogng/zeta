@@ -267,6 +267,7 @@
         "InvalidResourceOffset",
         "FileSystemUnavailable",
         "FileSystemOperationFailed",
+        "FileSystemRevisionConflict",
         "GitUnavailable",
         "GitNotRepository",
         "GitOperationFailed",
@@ -450,6 +451,38 @@
             },
             "params": {
               "$ref": "#/$defs/DocumentCollaborationSubmitParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "document/collaboration/presence/publish"
+            },
+            "params": {
+              "$ref": "#/$defs/DocumentCollaborationPresenceParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "document/collaboration/presence/read"
+            },
+            "params": {
+              "$ref": "#/$defs/DocumentCollaborationPresenceReadParams"
             }
           },
           "required": [
@@ -1526,6 +1559,38 @@
             },
             "result": {
               "$ref": "#/$defs/DocumentCollaborationSubmitResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "document/collaboration/presence/publish"
+            },
+            "result": {
+              "$ref": "#/$defs/DocumentCollaborationPresenceSnapshot"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "document/collaboration/presence/read"
+            },
+            "result": {
+              "$ref": "#/$defs/DocumentCollaborationPresenceSnapshot"
             }
           },
           "required": [
@@ -2931,6 +2996,86 @@
         "snapshot"
       ]
     },
+    "DocumentCollaborationPresence": {
+      "description": "One active client selection announced independently from document history.",
+      "type": "object",
+      "properties": {
+        "clientId": {
+          "type": "string"
+        },
+        "selection": {
+          "description": "Serialized Gama selection, validated as a bounded selection envelope by the authority.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "clientId",
+        "selection"
+      ]
+    },
+    "DocumentCollaborationPresenceParams": {
+      "description": "One local-process presence mutation requested through the App Server protocol.",
+      "type": "object",
+      "properties": {
+        "clientId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "roomId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "selection": {
+          "description": "Omitting the selection clears this client's ephemeral presence record.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "roomId",
+        "clientId"
+      ]
+    },
+    "DocumentCollaborationPresenceReadParams": {
+      "description": "Reads the current ephemeral presence projection after opening a room.",
+      "type": "object",
+      "properties": {
+        "roomId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "roomId"
+      ]
+    },
+    "DocumentCollaborationPresenceSnapshot": {
+      "description": "Full current local-process presence projection for one collaboration room.",
+      "type": "object",
+      "properties": {
+        "generation": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "presences": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DocumentCollaborationPresence"
+          }
+        },
+        "roomId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "roomId",
+        "generation",
+        "presences"
+      ]
+    },
     "DocumentCollaborationSnapshot": {
       "description": "Versioned canonical document snapshot returned while opening or resynchronizing a room.",
       "type": "object",
@@ -3470,10 +3615,15 @@
       "properties": {
         "content": {
           "type": "string"
+        },
+        "revision": {
+          "description": "Opaque exact-content revision required to protect a later conditional write.",
+          "type": "string"
         }
       },
       "required": [
-        "content"
+        "content",
+        "revision"
       ]
     },
     "FsWriteFileParams": {
@@ -3482,6 +3632,13 @@
       "properties": {
         "content": {
           "type": "string"
+        },
+        "expectedRevision": {
+          "description": "When supplied, rejects the write if the file no longer has this exact revision.",
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "path": {
           "type": "string"
@@ -3498,10 +3655,15 @@
       "properties": {
         "metadata": {
           "$ref": "#/$defs/FsGetMetadataResult"
+        },
+        "revision": {
+          "description": "Opaque exact-content revision of the successfully written file.",
+          "type": "string"
         }
       },
       "required": [
-        "metadata"
+        "metadata",
+        "revision"
       ]
     },
     "GitBranchDto": {
@@ -5260,6 +5422,22 @@
             },
             "params": {
               "$ref": "#/$defs/DocumentCollaborationUpdate"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "document/collaboration/presence"
+            },
+            "params": {
+              "$ref": "#/$defs/DocumentCollaborationPresenceSnapshot"
             }
           },
           "required": [

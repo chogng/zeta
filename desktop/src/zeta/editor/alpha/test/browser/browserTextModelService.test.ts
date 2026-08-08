@@ -3,7 +3,7 @@ import test from "node:test";
 import { Emitter } from "../../../../base/common/event.js";
 import { URI } from "../../../../base/common/uri.js";
 import { type IFileChangeEvent } from "../../../../platform/files/common/files.js";
-import { TextFileContentSource, type ITextFileService, type TextFileSaveRequest } from "../../../../workbench/services/textfile/common/textFileService.js";
+import { TextFileContentSource, TextFileSaveConflictError, type ITextFileService, type TextFileSaveRequest } from "../../../../workbench/services/textfile/common/textFileService.js";
 import { TextModelConflictError } from "../../common/services/textModelService.js";
 import { BrowserTextModelService } from "../../browser/services/browserTextModelService.js";
 import { BrowserTextResourceStore } from "../../browser/services/browserTextResourceStore.js";
@@ -86,10 +86,12 @@ test("Alpha text model save tolerates its final reference closing before I/O com
         resource: request.resource,
         text: "from disk",
         source: TextFileContentSource.FileSystem,
+        revision: "revision-1",
       };
     },
     async save() {
       await pending.promise;
+      return { revision: "revision-2" };
     },
   };
   using models = new BrowserTextModelService(new BrowserTextResourceStore(textFiles));
@@ -168,6 +170,7 @@ class TestTextFileService implements ITextFileService {
   resolveCount = 0;
   readonly savedTexts: string[] = [];
   private readonly fileChanges = new Emitter<IFileChangeEvent>();
+  private revision = 1;
   readonly onDidChangeFiles = this.fileChanges.event;
 
   constructor(private text: string) {}
@@ -178,20 +181,31 @@ class TestTextFileService implements ITextFileService {
       resource: request.resource,
       text: request.bootstrapText ?? this.text,
       source: request.bootstrapText === undefined ? TextFileContentSource.FileSystem : TextFileContentSource.Bootstrap,
+      revision: request.bootstrapText === undefined ? this.currentRevision() : undefined,
     };
   }
 
-  async save(request: TextFileSaveRequest): Promise<void> {
+  async save(request: TextFileSaveRequest): Promise<{ readonly revision: string | undefined }> {
+    if (request.expectedRevision !== undefined && request.expectedRevision !== this.currentRevision()) {
+      throw new TextFileSaveConflictError(request.resource);
+    }
     this.savedTexts.push(request.text);
     this.text = request.text;
+    this.revision += 1;
+    return { revision: this.currentRevision() };
   }
 
   setText(text: string): void {
     this.text = text;
+    this.revision += 1;
   }
 
   fireExternalChange(resource: URI): void {
     this.fileChanges.fire(Object.freeze({ resources: Object.freeze([resource]) }));
+  }
+
+  private currentRevision(): string {
+    return `revision-${this.revision}`;
   }
 }
 

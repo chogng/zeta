@@ -1,12 +1,12 @@
-export function record(value: unknown, keys: readonly string[]): Record<string, unknown> {
+export function record(value: unknown, keys: readonly string[], optionalKeys: readonly string[] = []): Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new Error("IPC params must be an object");
   }
   const params = value as Record<string, unknown>;
   const actualKeys = Object.keys(params).sort();
-  const expectedKeys = [...keys].sort();
-  if (actualKeys.length !== expectedKeys.length || actualKeys.some((key, index) => key !== expectedKeys[index])) {
-    throw new Error(`IPC params must contain exactly: ${expectedKeys.join(", ")}`);
+  const allowedKeys = new Set([...keys, ...optionalKeys]);
+  if (actualKeys.some(key => !allowedKeys.has(key)) || keys.some(key => !Object.hasOwn(params, key))) {
+    throw new Error(`IPC params must contain required keys ${keys.join(", ")} and only optional keys ${optionalKeys.join(", ")}`);
   }
   return params;
 }

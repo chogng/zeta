@@ -1,4 +1,4 @@
-use super::{AppServer, RpcError, decode, result};
+use super::{decode, result, AppServer, RpcError};
 use serde_json::Value;
 use zeta_app_server_protocol::protocol::error::AppServerErrorName;
 use zeta_app_server_protocol::protocol::fs::{
@@ -6,7 +6,11 @@ use zeta_app_server_protocol::protocol::fs::{
     FsReadDirectoryParams, FsReadDirectoryResult, FsReadFileParams, FsReadFileResult,
     FsWriteFileParams, FsWriteFileResult,
 };
-use zeta_file_system::{FileMetadata, FileSystemError, FileType};
+use zeta_file_system::file_revision;
+use zeta_file_system::FileMetadata;
+use zeta_file_system::FileSystemError;
+use zeta_file_system::FileType;
+use zeta_file_system::FileWriteCondition;
 
 const MAX_EDITOR_FILE_BYTES: usize = 10 * 1024 * 1024;
 
@@ -37,28 +41,37 @@ impl AppServer {
 
     pub(super) fn fs_read_file(&self, params: &Value) -> Result<Value, RpcError> {
         let params: FsReadFileParams = decode(params)?;
-        let bytes = self
+        let content = self
             .file_system_service()?
-            .read_file(&params.path, MAX_EDITOR_FILE_BYTES)
+            .read_file_with_revision(&params.path, MAX_EDITOR_FILE_BYTES)
             .map_err(file_system_error)?;
-        let content = String::from_utf8(bytes).map_err(|_| {
+        let text = String::from_utf8(content.bytes).map_err(|_| {
             file_system_error(FileSystemError::Io("file is not valid UTF-8".into()))
         })?;
-        result(&FsReadFileResult { content })
+        result(&FsReadFileResult {
+            content: text,
+            revision: content.revision,
+        })
     }
 
     pub(super) fn fs_write_file(&self, params: &Value) -> Result<Value, RpcError> {
         let params: FsWriteFileParams = decode(params)?;
+        let condition = match params.expected_revision {
+            Some(revision) => FileWriteCondition::ExpectedRevision(revision),
+            None => FileWriteCondition::Unconditional,
+        };
         let metadata = self
             .file_system_service()?
-            .write_file(
+            .write_file_with_condition(
                 &params.path,
                 params.content.as_bytes(),
                 MAX_EDITOR_FILE_BYTES,
+                &condition,
             )
             .map_err(file_system_error)?;
         result(&FsWriteFileResult {
             metadata: metadata_result(metadata),
+            revision: file_revision(params.content.as_bytes()),
         })
     }
 }
@@ -81,6 +94,11 @@ fn file_type(file_type: FileType) -> FsFileType {
     }
 }
 
-fn file_system_error(_error: FileSystemError) -> RpcError {
-    RpcError::new(-32041, AppServerErrorName::FileSystemOperationFailed)
+fn file_system_error(error: FileSystemError) -> RpcError {
+    match error {
+        FileSystemError::RevisionConflict(_) => {
+            RpcError::new(-32042, AppServerErrorName::FileSystemRevisionConflict)
+        }
+        _ => RpcError::new(-32041, AppServerErrorName::FileSystemOperationFailed),
+    }
 }

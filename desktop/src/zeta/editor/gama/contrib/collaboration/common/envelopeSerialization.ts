@@ -1,7 +1,7 @@
 import { DocumentSerializationError } from "../../../common/model/documentSerialization.js";
 import { type DocumentSchema } from "../../../common/model/documentSchema.js";
 import { deserializeDocumentTransaction, serializeDocumentTransaction, type SerializedDocumentTransaction } from "../../../common/model/documentTransactionSerialization.js";
-import { type DocumentCollaborationEnvelope, type DocumentCollaborationRemoteEnvelope } from "./session.js";
+import { type DocumentCollaborationEnvelope, type DocumentCollaborationRemoteEnvelope } from "./protocol.js";
 
 export const DOCUMENT_COLLABORATION_SERIALIZATION_FORMAT = "zeta.document.collaboration";
 export const DOCUMENT_COLLABORATION_SERIALIZATION_VERSION = 1;

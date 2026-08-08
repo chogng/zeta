@@ -106,13 +106,14 @@ pub(super) fn find_header_end(bytes: &[u8]) -> Option<usize> {
 }
 
 pub(super) fn authorized(request: &HttpRequest, token: &str) -> bool {
-    let Some(value) = request.header("authorization") else {
-        return false;
-    };
-    let Some(candidate) = value.strip_prefix("Bearer ") else {
+    let Some(candidate) = bearer_token(request) else {
         return false;
     };
     constant_time_eq(candidate.as_bytes(), token.as_bytes())
+}
+
+pub(super) fn bearer_token(request: &HttpRequest) -> Option<&str> {
+    request.header("authorization")?.strip_prefix("Bearer ")
 }
 
 pub(super) fn write_json_response(

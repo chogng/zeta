@@ -19,6 +19,35 @@ export interface IFileStat {
   readonly modifiedAtMillis: number | undefined;
 }
 
+/** Text read from a workspace resource together with its opaque exact-content revision. */
+export interface IFileContent {
+  readonly resource: URI;
+  readonly content: string;
+  readonly revision: string;
+}
+
+/** One conditional text write requested by a Workbench persistence service. */
+export interface IFileWriteRequest {
+  readonly resource: URI;
+  readonly content: string;
+  /** Omit only when intentionally creating or overwriting without a prior read. */
+  readonly expectedRevision?: string;
+}
+
+/** Result of a workspace write, including the new opaque content revision. */
+export interface IFileWriteResult {
+  readonly stat: IFileStat;
+  readonly revision: string;
+}
+
+/** The file changed after a caller read its revision, so its write was rejected. */
+export class FileRevisionConflictError extends Error {
+  constructor(readonly resource: URI) {
+    super(`File changed since it was read: ${resource.toString()}`);
+    this.name = "FileRevisionConflictError";
+  }
+}
+
 /** One direct child returned by a directory read. */
 export interface IFileEntry {
   readonly resource: URI;
@@ -36,8 +65,8 @@ export interface IFileService {
   readonly onDidChangeFiles: Event<IFileChangeEvent>;
   stat(resource: URI): Promise<IFileStat>;
   readDirectory(resource: URI): Promise<readonly IFileEntry[]>;
-  readFile(resource: URI): Promise<string>;
-  writeFile(resource: URI, content: string): Promise<IFileStat>;
+  readFile(resource: URI): Promise<IFileContent>;
+  writeFile(request: IFileWriteRequest): Promise<IFileWriteResult>;
 }
 
 export const IFileService =

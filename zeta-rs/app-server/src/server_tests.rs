@@ -115,7 +115,7 @@ fn document_collaboration_orders_updates_and_returns_rebase_history() {
     let mut second = server.connection();
     initialize(&server, &mut first);
     initialize(&server, &mut second);
-    let document = r#"{"format":"zeta.document","version":1,"document":{"type":"document"}}"#;
+    let document = collaboration_document("initial");
     let opened = call(
         &server,
         &mut first,
@@ -149,14 +149,39 @@ fn document_collaboration_orders_updates_and_returns_rebase_history() {
         }),
     );
     assert_eq!(joined["result"]["snapshot"]["document"], document);
-    let accepted = call(
+    let presence = call(
         &server,
         &mut first,
         serde_json::json!({
             "jsonrpc":"2.0",
             "id":3,
+            "method":"document/collaboration/presence/publish",
+            "params":{"roomId":room_id,"clientId":"client-a","selection":"{\"kind\":\"text\",\"anchor\":{\"nodeId\":\"text-1\",\"offset\":0},\"head\":{\"nodeId\":\"text-1\",\"offset\":1}}"}
+        }),
+    );
+    assert_eq!(presence["result"]["generation"], 1);
+    assert_eq!(presence["result"]["presences"][0]["clientId"], "client-a");
+    let notifications = server.drain_notifications(&mut second);
+    assert!(notifications.iter().any(|notification| notification.contains("document/collaboration/presence")));
+    let read_presence = call(
+        &server,
+        &mut second,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":3,
+            "method":"document/collaboration/presence/read",
+            "params":{"roomId":room_id}
+        }),
+    );
+    assert_eq!(read_presence["result"]["presences"][0]["clientId"], "client-a");
+    let accepted = call(
+        &server,
+        &mut first,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":4,
             "method":"document/collaboration/submit",
-            "params":{"roomId":room_id,"clientId":"client-a","sequence":1,"baseVersion":0,"transaction":"{\"steps\":[]}","document":"{\"format\":\"zeta.document\",\"version\":1,\"document\":{\"type\":\"document\",\"content\":[]}}"}
+            "params":{"roomId":room_id,"clientId":"client-a","sequence":1,"baseVersion":0,"transaction":collaboration_transaction(),"document":collaboration_document("first")}
         }),
     );
     assert_eq!(accepted["result"]["status"], "accepted");
@@ -172,14 +197,24 @@ fn document_collaboration_orders_updates_and_returns_rebase_history() {
         &mut second,
         serde_json::json!({
             "jsonrpc":"2.0",
-            "id":3,
+            "id":4,
             "method":"document/collaboration/submit",
-            "params":{"roomId":room_id,"clientId":"client-b","sequence":1,"baseVersion":0,"transaction":"{\"steps\":[]}","document":"{}"}
+            "params":{"roomId":room_id,"clientId":"client-b","sequence":1,"baseVersion":0,"transaction":collaboration_transaction(),"document":"{}"}
         }),
     );
     assert_eq!(conflict["result"]["status"], "conflict");
     assert_eq!(conflict["result"]["updates"][0]["clientId"], "client-a");
     assert_eq!(conflict["result"]["updates"][0]["version"], 1);
+}
+
+fn collaboration_document(value: &str) -> String {
+    format!(
+        r#"{{"format":"zeta.document","version":1,"document":{{"id":"document-1","type":"doc","attrs":{{}},"marks":[],"content":[{{"id":"text-1","type":"text","attrs":{{}},"marks":[],"content":[],"text":"{value}"}}]}}}}"#
+    )
+}
+
+fn collaboration_transaction() -> String {
+    r#"{"format":"zeta.document.transaction","version":1,"transaction":{"steps":[],"addToHistory":true,"selectionSet":false,"storedMarksSet":false,"metadata":[]}}"#.into()
 }
 
 fn create_session(
@@ -1790,7 +1825,7 @@ fn filesystem_rpc_lists_and_describes_workspace_paths() {
             "jsonrpc":"2.0",
             "id":5,
             "method":"fs/writeFile",
-            "params":{"path":"src/lib.rs","content":"updated"}
+            "params":{"path":"src/lib.rs","content":"updated","expectedRevision":contents["result"]["revision"]}
         }),
     );
     let created = call(
@@ -1803,6 +1838,16 @@ fn filesystem_rpc_lists_and_describes_workspace_paths() {
             "params":{"path":"src/new.rs","content":"new"}
         }),
     );
+    let stale = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":7,
+            "method":"fs/writeFile",
+            "params":{"path":"src/lib.rs","content":"stale","expectedRevision":contents["result"]["revision"]}
+        }),
+    );
 
     assert_eq!(
         listed["result"]["entries"],
@@ -1811,8 +1856,12 @@ fn filesystem_rpc_lists_and_describes_workspace_paths() {
     assert_eq!(metadata["result"]["fileType"], "file");
     assert_eq!(metadata["result"]["sizeBytes"], 5);
     assert_eq!(contents["result"]["content"], "hello");
+    assert!(contents["result"]["revision"].is_string());
     assert_eq!(written["result"]["metadata"]["sizeBytes"], 7);
+    assert!(written["result"]["revision"].is_string());
     assert_eq!(created["result"]["metadata"]["sizeBytes"], 3);
+    assert_eq!(stale["error"]["code"], -32042);
+    assert_eq!(stale["error"]["message"], "FileSystemRevisionConflict");
     assert_eq!(
         std::fs::read_to_string(root.join("src/lib.rs")).unwrap(),
         "updated"

@@ -23,6 +23,7 @@ editor/gama/
   editor.api.ts                    # DOM-free structured-document API
   editor.all.ts                    # public contribution bundle for product entries
   editor.main.ts                   # editor.all + editor.api
+  editor.worker.start.ts           # dedicated structured-worker bootstrap
   common/
     core/                         # position、selection
     model/                        # document、schema、transaction、history、serialization
@@ -37,7 +38,7 @@ editor/gama/
       documentCollaborationService # local/remote collaboration routing seam
       appServerDocumentCollaborationService # local App Server adapter
       remoteDocumentCollaborationService # authenticated remote HTTP adapter
-      documentWorkingCopy         # persistence / dirty / external-change adapter
+      documentWorkingCopy         # expected-revision persistence / dirty / external-change adapter
       editorProfile           # profile → pane options
     widget/
       textEditorWidget            # one textBlock's embedded Alpha line editor
@@ -64,11 +65,11 @@ editor/gama/
 | `browser/widget/textEditorWidget` | `IEmbeddedTextEditorFactory` | 一个 `textBlock` 的 Alpha line-editor wrapper；不得创建/保存整个 Gama document |
 | `contrib/formatting/browser` | Gama browser、base toolbar | Word-like formatting toolbar；只通过 Gama editor command/selection seam 工作，不依赖 Workbench 或产品 composition |
 | `contrib/collaboration/common` | Gama common、Gama collaboration service contract | canonical/in-flight/buffered state、rebase、model controller 与 transport-neutral connection；不依赖 DOM、Workbench、Electron 或 App Server DTO |
-| `contrib/collaboration/browser` | Gama browser、base toolbar | create/join/leave toolbar and status projection；只调用 `EditorWidget` 的 collaboration seam，不拥有 transaction、room ordering 或 transport |
+| `contrib/collaboration/browser` | Gama browser、base toolbar | create/join/leave、remote-owner invitation and member-management toolbar/status projection；只调用 `EditorWidget` 的 collaboration seam，不拥有 transaction、room ordering 或 transport |
 | `browser/services/appServerDocumentCollaborationService` | Gama service contract、platform collaboration API | App Server DTO/notification adapter；不得把 protocol names or generated DTOs leak into Gama common or widget |
 | `browser/services/remoteDocumentCollaborationService` | Gama service contract、Fetch | authenticated remote HTTP/long-poll adapter；只在 runtime module 中持有 transport DTO，remote URL/token 不得进入 document/model |
 | `browser/services/documentCollaborationService` | Gama service contract、transport adapters | composition-local router；按显式 target 选择 local App Server 或 remote transport，不得把这项选择下沉到 common/model |
 | `contrib/<feature>/common` | Gama common | feature 的 schema、commands、collaboration data |
 | `contrib/<feature>/browser` | Gama browser、feature common、Workbench composition contracts | node views、toolbar、profile 与该 feature 的 pane registration |
 
-Gama 的对外入口分工镜像 VS Code：`editor.api.ts` 只公开 DOM-free document model、schema、transaction 与 serialization；`editor.all.ts` 是 product entry 使用的 contribution bundle；`editor.main.ts` 是 all + api 的完整入口。当前 Gama 没有浏览器 Worker consumer，因此不提供虚假的 `editor.worker.start.ts`；未来 collaboration/layout worker 出现时才在此添加其真实启动协议。产品的 Workbench composition 在 editor domain 外按版本选择 Alpha 或 Gama entry；它不参与 EditorWidget、formatting contrib 或 document selection 的运行时。`academicEditor.contribution.ts` 在唯一的 composition seam 注入 `EmbeddedTextEditorFactory`。Alpha 从不依赖 Gama document types。
+Gama 的对外入口分工镜像 VS Code：`editor.api.ts` 只公开 DOM-free document model、schema、transaction 与 serialization；`editor.all.ts` 是 product entry 使用的 contribution bundle；`editor.main.ts` 是 all + api 的完整入口；`editor.worker.start.ts` 统一 dedicated worker 的 structured-clone port 和资源生命周期。它不预设某项 document computation 必须放进 Worker；实际 collaboration、layout 或 analysis worker 由其 own entry 调用这一启动协议。产品的 Workbench composition 在 editor domain 外按版本选择 Alpha 或 Gama entry；它不参与 EditorWidget、formatting contrib 或 document selection 的运行时。`academicEditor.contribution.ts` 在唯一的 composition seam 注入 `EmbeddedTextEditorFactory`。Alpha 从不依赖 Gama document types。

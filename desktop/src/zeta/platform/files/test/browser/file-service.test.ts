@@ -3,7 +3,7 @@ import test from "node:test";
 import { Emitter } from "../../../../base/common/event.js";
 import { URI } from "../../../../base/common/uri.js";
 import { BrowserFileService, workspaceRelativePath } from "../../../../platform/files/browser/fileService.js";
-import { FileKind } from "../../../../platform/files/common/files.js";
+import { FileKind, FileRevisionConflictError } from "../../../../platform/files/common/files.js";
 import type { FsChanged } from "../../../../../../generated/app-server/types.js";
 import type { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import { WorkspaceContextService } from "../../../../workbench/services/workspaces/browser/workspaceContextService.js";
@@ -45,11 +45,12 @@ test("BrowserFileService maps wire entries back to resource URIs", async () => {
       },
       readFile: async ({ path }) => {
         assert.equal(path, "src/main.ts");
-        return { content: "export {};" };
+        return { content: "export {};", revision: "revision-read" };
       },
-      writeFile: async ({ path, content }) => {
+      writeFile: async ({ path, content, expectedRevision }) => {
         assert.equal(path, "src/main.ts");
         assert.equal(content, "export const saved = true;");
+        assert.equal(expectedRevision, "revision-read");
         return {
           metadata: {
             fileType: "file",
@@ -57,6 +58,7 @@ test("BrowserFileService maps wire entries back to resource URIs", async () => {
             readonly: false,
             modifiedAtMillis: 123,
           },
+          revision: "revision-write",
         };
       },
     },
@@ -71,20 +73,43 @@ test("BrowserFileService maps wire entries back to resource URIs", async () => {
       kind: FileKind.File,
     }],
   );
-  assert.equal(
+  assert.deepEqual(
     await service.readFile(URI.file("C:\\project\\src\\main.ts")),
-    "export {};",
+    { resource: URI.file("C:\\project\\src\\main.ts"), content: "export {};", revision: "revision-read" },
   );
   assert.deepEqual(
-    await service.writeFile(URI.file("C:\\project\\src\\main.ts"), "export const saved = true;"),
-    {
+    await service.writeFile({
       resource: URI.file("C:\\project\\src\\main.ts"),
-      kind: FileKind.File,
-      sizeBytes: 26,
-      readonly: false,
-      modifiedAtMillis: 123,
+      content: "export const saved = true;",
+      expectedRevision: "revision-read",
+    }),
+    {
+      stat: {
+        resource: URI.file("C:\\project\\src\\main.ts"),
+        kind: FileKind.File,
+        sizeBytes: 26,
+        readonly: false,
+        modifiedAtMillis: 123,
+      },
+      revision: "revision-write",
     },
   );
+});
+
+test("BrowserFileService maps App Server revision conflicts to the file contract", async () => {
+  const resource = URI.file("C:\\project\\src\\main.ts");
+  using workspaceContextService: IWorkspaceContextService = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:\\project") });
+  const service = new BrowserFileService({
+    workspaceContextService,
+    api: {
+      getMetadata: async () => { throw new Error("unavailable"); },
+      readDirectory: async () => { throw new Error("unavailable"); },
+      readFile: async () => { throw new Error("unavailable"); },
+      writeFile: async () => { throw new Error("FileSystemRevisionConflict"); },
+    },
+  });
+
+  await assert.rejects(service.writeFile({ resource, content: "local", expectedRevision: "stale" }), FileRevisionConflictError);
 });
 
 test("BrowserFileService maps App Server invalidations to workspace resources", () => {
