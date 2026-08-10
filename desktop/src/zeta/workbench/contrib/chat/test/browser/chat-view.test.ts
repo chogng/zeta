@@ -298,9 +298,9 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
   assert.equal(chatPanes.length, 2);
   for (const chatPane of chatPanes) {
     assert.equal(chatPane.childElementCount, 2);
-    assert.ok(chatPane.firstElementChild?.classList.contains("zeta-chat-input-widget"));
+    assert.ok(chatPane.firstElementChild?.classList.contains("zeta-chat-input-part"));
     assert.ok(chatPane.lastElementChild?.classList.contains("zeta-chat-list-widget"));
-    const inputToolbar = chatPane.querySelector<HTMLElement>(".zeta-chat-input-toolbar");
+    const inputToolbar = chatPane.querySelector<HTMLElement>(".zeta-chat-input-toolbars");
     assert.equal(inputToolbar?.getAttribute("role"), "toolbar");
     assert.deepEqual(
       [...inputToolbar?.querySelectorAll<HTMLElement>("[data-action-id]") ?? []].map((item) => item.dataset.actionId),

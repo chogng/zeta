@@ -1,4 +1,7 @@
 .zeta-alpha-editor {
+  --alpha-editor-padding-left: 12px;
+  --alpha-editor-padding-right: 12px;
+
   position: relative;
   box-sizing: border-box;
   width: 100%;
@@ -235,7 +238,7 @@
 .zeta-alpha-editor-line-text,
 .zeta-alpha-editor-text-metrics {
   box-sizing: border-box;
-  padding: 0 12px;
+  padding: 0 var(--alpha-editor-padding-right) 0 var(--alpha-editor-padding-left);
 }
 
 .zeta-alpha-editor-accessibility-status {

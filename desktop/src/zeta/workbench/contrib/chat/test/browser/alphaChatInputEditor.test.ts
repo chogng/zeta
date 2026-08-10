@@ -35,6 +35,7 @@ test("Alpha Chat input completes slash commands before submitting", async () => 
   assert.deepEqual(completionLabels(editor.element), ["/new", "/history"]);
   assert.equal(editor.element.querySelector(".zeta-alpha-editor")?.classList.contains("zeta-alpha-editor-embedded"), true);
   assert.equal(editor.element.querySelector(".zeta-alpha-editor")?.classList.contains("zeta-alpha-editor-focus-owner-host"), true);
+  assert.equal(editor.element.querySelector(".zeta-alpha-editor")?.classList.contains("word-wrapped"), true);
   assert.equal(editor.element.querySelector<HTMLElement>(".zeta-alpha-editor-line-number")?.style.display, "");
 
   input.dispatchEvent(beforeInputEvent(dom.window, "n"));
@@ -74,7 +75,22 @@ test("Alpha Chat input restores message behavior when the slash is deleted", asy
 
   assert.equal(editor.value, "");
   assert.deepEqual(changes, ["/", "/x", "/", ""]);
-  assert.equal(requiredElement<HTMLElement>(editor.element, ".zeta-alpha-chat-input-placeholder").hidden, false);
+  const placeholder = requiredElement<HTMLElement>(editor.element, ".zeta-alpha-editor-placeholder-text");
+  assert.equal(placeholder.hidden, false);
+  assert.equal(placeholder.style.top, "0px");
+  assert.equal(placeholder.style.left, "0px");
+  dom.window.close();
+});
+
+test("Alpha Chat input starts at the InputPart default height and still grows with content", () => {
+  const dom = new JSDOM("<!doctype html><body><main></main></body>");
+  dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+  const container = requiredElement<HTMLElement>(dom.window.document, "main");
+  using editor = new ChatInputEditor({ container, placeholder: "Ask Zeta", ariaLabel: "Chat message", slashCommands: new SlashCommandCatalog(DesktopSlashCommands, []) });
+
+  assert.equal(editor.element.style.height, "106px");
+  editor.value = Array.from({ length: 12 }, (_, index) => `Line ${index + 1}`).join("\n");
+  assert.equal(editor.element.style.height, "240px");
   dom.window.close();
 });
 

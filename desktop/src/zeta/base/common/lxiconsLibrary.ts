@@ -37,6 +37,7 @@ export const lxiconsLibrary = {
   linkExternal: register("link-external", svg.linkExternal),
   menu: register("menu", svg.menu),
   model: register("model", svg.model),
+  paperclip: register("paperclip", svg.paperclip),
   refresh: register("refresh", svg.refresh),
   repoFetch: register("repo-fetch", svg.repoFetch),
   repoPull: register("repo-pull", svg.repoPull),
@@ -52,4 +53,5 @@ export const lxiconsLibrary = {
   terminalCmd: register("terminal-cmd", svg.terminalCmd),
   terminalGitBash: register("terminal-git-bash", svg.terminalGitBash),
   trash: register("trash", svg.trash),
+  unlimited: register("unlimited", svg.unlimited),
 } as const;

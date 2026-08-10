@@ -18,6 +18,9 @@ const DIAGNOSTIC_PRESENTATION_PRIORITY = new Map<ResolvedDecoration["presentatio
   [DecorationPresentation.HintUnderline, 1],
 ]);
 
+/** Selects whether selection projection marks the cursor's logical line as active. */
+export type ActiveLineHighlight = "on" | "off";
+
 export interface ViewportOverlayContext {
   readonly ownerDocument: Document;
   readonly model: TextModel;
@@ -28,13 +31,15 @@ export interface ViewportOverlayContext {
   readonly textMeasurer: TextMeasurer;
   /** Uses browser range geometry when text direction may produce non-monotonic advances. */
   readonly useDomTextGeometry: boolean;
+  /** `off` matches simple input editors by omitting current-line presentation DOM. */
+  readonly activeLineHighlight: ActiveLineHighlight;
 }
 
 export function projectAlphaSelectionOverlays(context: ViewportOverlayContext, controller: EditorSelectionController | undefined): void {
   const activeLineIndex = controller?.selections.primary.active.lineIndex;
   for (const [visualLineIndex, line] of context.renderedLines) {
     reset(line.selectionElement);
-    const active = context.visualLineProjection.lineAt(visualLineIndex)?.logicalLineIndex === activeLineIndex;
+    const active = context.activeLineHighlight === "on" && context.visualLineProjection.lineAt(visualLineIndex)?.logicalLineIndex === activeLineIndex;
     line.numberElement.classList.toggle("active", active);
     line.element.classList.toggle("active", active);
   }

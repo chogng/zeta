@@ -46,6 +46,33 @@ test("CodeEditorWidget owns one canonical browser editing surface", () => {
   dom.window.close();
 });
 
+test("CodeEditorWidget owns padding, placeholder, and current-line presentation for embedded editors", () => {
+  const dom = new JSDOM("<!doctype html><body><main></main></body>");
+  dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+  const container = requiredElement(dom.window.document, "main");
+  using model = new TextModel("alpha");
+  using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
+  using editor = new CodeEditorWidget({
+    container,
+    model,
+    selectionController: selections,
+    lineHeight: 20,
+    placeholder: "Ask Zeta",
+    viewport: { presentation: "embedded", padding: { top: 20, right: 20, bottom: 20, left: 20 } },
+  });
+
+  editor.layout({ width: 320, height: 40 });
+
+  assert.equal(editor.element.querySelector(".zeta-alpha-editor-line.active"), null);
+  assert.ok(editor.element.querySelector(".zeta-alpha-editor-caret"));
+  assert.equal(requiredElement<HTMLElement>(editor.element, ".zeta-alpha-editor-lines").style.transform, "translate3d(0, 20px, 0)");
+  assert.equal(editor.element.style.getPropertyValue("--alpha-editor-padding-left"), "20px");
+  assert.equal(editor.element.style.getPropertyValue("--alpha-editor-padding-right"), "20px");
+  assert.equal(requiredElement<HTMLElement>(editor.element, ".zeta-alpha-editor-placeholder-text").style.top, "20px");
+  assert.equal(editor.viewport.viewportLayout.contentSize.height, 60);
+  dom.window.close();
+});
+
 test("CodeEditorWidget rejects a selection controller from another model", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   dom.window.HTMLCanvasElement.prototype.getContext = () => null;

@@ -73,7 +73,6 @@ import { InPlaceReplaceController } from "../contrib/inPlaceReplace/browser/inPl
 import { ContextMenuController, type ContextMenuRequest } from "../contrib/contextmenu/browser/contextMenuController.js";
 import { FontZoomController } from "../contrib/fontZoom/browser/fontZoomController.js";
 import { MiddleScrollController } from "../contrib/middleScroll/browser/middleScrollController.js";
-import { PlaceholderTextController } from "../contrib/placeholderText/browser/placeholderTextController.js";
 import { ToggleTabFocusModeController } from "../contrib/toggleTabFocusMode/browser/toggleTabFocusModeController.js";
 import { UnicodeHighlighterController } from "../contrib/unicodeHighlighter/browser/unicodeHighlighterController.js";
 import { UnusualLineTerminatorsController } from "../contrib/unusualLineTerminators/browser/unusualLineTerminatorsController.js";
@@ -245,6 +244,7 @@ export class EditorPart extends DisposableOwner {
         lineHeight: 20,
         selectionController: this.selections,
         ariaLabel,
+        placeholder: options.placeholder,
         viewport: {
           foldingModel: folding,
           hiddenRangeModel: hiddenRanges,
@@ -327,7 +327,6 @@ export class EditorPart extends DisposableOwner {
       this.own(new FontZoomController(this.textInput.element, this.viewport, { baseLineHeight: 20, initialScale: options.fontZoom?.initialScale }));
       this.own(new MiddleScrollController(this.viewport));
       this.own(new ToggleTabFocusModeController(this.textInput.element, this.viewport));
-      if (options.placeholder) this.own(new PlaceholderTextController(this.viewport, options.placeholder));
       if (options.onShowContextMenu) this.own(new ContextMenuController(this.viewport, options.onShowContextMenu, this.onLanguageError));
       this.own(new StickyScrollController(this.viewport, folding));
       this.own(new SectionHeadersController(this.viewport, folding));

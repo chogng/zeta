@@ -4,7 +4,7 @@ import type { IContextMenuService } from "../../../../../platform/contextview/br
 import type { IChatService } from "../../../../services/chat/common/chatService.js";
 import type { IActiveSessionThread, IUntitledChatSession, IWorkbenchSessionService, SessionId, ThreadId } from "../../../../services/sessions/common/sessionService.js";
 import type { ChatInputDelegate } from "../input/chatInput.js";
-import { ChatInputWidget } from "../input/chatInputWidget.js";
+import { ChatInputPart } from "../input/chatInputPart.js";
 import { ChatListWidget } from "../list/chatListWidget.js";
 import { ChatPaneModel, type ChatPaneSelection } from "./chatPaneModel.js";
 
@@ -13,7 +13,7 @@ export class ChatPane extends DisposableOwner {
   readonly element: HTMLElement;
   private readonly model: ChatPaneModel;
   private readonly listWidget: ChatListWidget;
-  private readonly inputWidget: ChatInputWidget;
+  private readonly inputPart: ChatInputPart;
 
   constructor(ownerDocument: Document, panelId: string, chatService: IChatService, selection: ChatPaneSelection, sessionService: IWorkbenchSessionService, contextMenuService: IContextMenuService, commandService: ICommandService) {
     super();
@@ -31,8 +31,8 @@ export class ChatPane extends DisposableOwner {
       selectModel: (model) => this.model.selectModel(model),
       resolveInteraction: (response) => this.model.resolveInteraction(response),
     };
-    this.inputWidget = this.own(new ChatInputWidget(ownerDocument, inputDelegate, contextMenuService));
-    this.element.append(this.inputWidget.element, this.listWidget.element);
+    this.inputPart = this.own(new ChatInputPart(ownerDocument, inputDelegate, contextMenuService));
+    this.element.append(this.inputPart.element, this.listWidget.element);
     this.own(this.model.onDidChange(() => this.render()));
     this.defer(() => this.element.remove());
     this.render();
@@ -76,18 +76,18 @@ export class ChatPane extends DisposableOwner {
 
   setVisible(visible: boolean): void {
     this.element.hidden = !visible;
-    this.inputWidget.setVisible(visible);
+    this.inputPart.setVisible(visible);
     this.listWidget.setVisible(visible);
   }
 
   focus(): void {
-    this.inputWidget.focus();
+    this.inputPart.focus();
   }
 
   private render(): void {
     this.syncIdentity();
     this.listWidget.render(this.model.items);
-    this.inputWidget.render({
+    this.inputPart.render({
       phase: this.model.state,
       error: this.model.error,
       canInterrupt: this.model.canInterrupt,

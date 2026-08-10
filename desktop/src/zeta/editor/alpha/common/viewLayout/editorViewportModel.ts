@@ -45,6 +45,13 @@ export interface EditorViewportOptions {
   readonly lineHeight: number;
   readonly overscanLineCount?: number;
   readonly lineSource?: EditorViewportLineSource;
+  readonly padding?: EditorViewportVerticalPadding;
+}
+
+/** Vertical space reserved around the editor's projected text rows. */
+export interface EditorViewportVerticalPadding {
+  readonly top: number;
+  readonly bottom: number;
 }
 
 /** Supplies the fixed-height row count that a viewport virtualizes. */
@@ -64,6 +71,7 @@ export class EditorViewportModel extends DisposableOwner {
     this.own(new Emitter<EditorViewportChange>());
   private readonly overscanLineCount: number;
   private readonly lineSource: EditorViewportLineSource;
+  private readonly padding: EditorViewportVerticalPadding;
   private viewportSize: ISize = Object.freeze({ width: 0, height: 0 });
   private measuredContentWidth = 0;
   private requestedScrollPosition: EditorScrollPosition =
@@ -86,6 +94,7 @@ export class EditorViewportModel extends DisposableOwner {
     model.version;
     super();
     this.lineSource = options.lineSource ?? createModelLineSource(model);
+    this.padding = readPadding(options.padding);
     validateLineSource(this.lineSource);
     this.currentLineHeight = lineHeight;
     this.overscanLineCount = overscanLineCount;
@@ -123,12 +132,14 @@ export class EditorViewportModel extends DisposableOwner {
   setLineHeight(lineHeight: number): EditorViewportLayout {
     const next = positiveFinite(lineHeight, "lineHeight");
     if (this.currentLineHeight === next) return this.currentLayout;
-    const topLine = this.currentLayout.scrollPosition.top /
-      this.currentLineHeight;
+    const currentTop = this.currentLayout.scrollPosition.top;
+    const nextTop = currentTop <= this.padding.top
+      ? currentTop
+      : this.padding.top + (currentTop - this.padding.top) / this.currentLineHeight * next;
     this.currentLineHeight = next;
     this.requestedScrollPosition = Object.freeze({
       left: this.currentLayout.scrollPosition.left,
-      top: topLine * next,
+      top: nextTop,
     });
     this.publish(EditorViewportChangeReason.LineHeight);
     return this.currentLayout;
@@ -174,7 +185,7 @@ export class EditorViewportModel extends DisposableOwner {
       ),
       height: Math.max(
         this.viewportSize.height,
-        lineCount * this.currentLineHeight,
+        this.padding.top + lineCount * this.currentLineHeight + this.padding.bottom,
       ),
     });
     const maximumScrollPosition = Object.freeze({
@@ -198,6 +209,7 @@ export class EditorViewportModel extends DisposableOwner {
       this.currentLineHeight,
       this.viewportSize.height,
       scrollPosition.top,
+      this.padding.top,
     );
     const hasVisibleLines =
       visibleLines.startLineIndex <
@@ -225,7 +237,7 @@ export class EditorViewportModel extends DisposableOwner {
       visibleLines,
       renderLines,
       renderTop:
-        renderLines.startLineIndex * this.currentLineHeight,
+        this.padding.top + renderLines.startLineIndex * this.currentLineHeight,
     });
   }
 }
@@ -235,6 +247,7 @@ function visibleLineRange(
   lineHeight: number,
   viewportHeight: number,
   scrollTop: number,
+  paddingTop: number,
 ): EditorLineRange {
   if (viewportHeight === 0) {
     return Object.freeze({
@@ -242,15 +255,33 @@ function visibleLineRange(
       endLineIndexExclusive: 0,
     });
   }
+  const visibleTop = scrollTop - paddingTop;
+  const visibleBottom = scrollTop + viewportHeight - paddingTop;
+  if (visibleBottom <= 0) {
+    return Object.freeze({
+      startLineIndex: 0,
+      endLineIndexExclusive: 0,
+    });
+  }
+  if (visibleTop >= lineCount * lineHeight) {
+    return Object.freeze({
+      startLineIndex: lineCount,
+      endLineIndexExclusive: lineCount,
+    });
+  }
   return Object.freeze({
-    startLineIndex: Math.min(
-      lineCount - 1,
-      Math.floor(scrollTop / lineHeight),
-    ),
+    startLineIndex: Math.max(0, Math.floor(visibleTop / lineHeight)),
     endLineIndexExclusive: Math.min(
       lineCount,
-      Math.ceil((scrollTop + viewportHeight) / lineHeight),
+      Math.ceil(visibleBottom / lineHeight),
     ),
+  });
+}
+
+function readPadding(padding: EditorViewportVerticalPadding | undefined): EditorViewportVerticalPadding {
+  return Object.freeze({
+    top: nonNegativeFinite(padding?.top ?? 0, "padding.top"),
+    bottom: nonNegativeFinite(padding?.bottom ?? 0, "padding.bottom"),
   });
 }
 

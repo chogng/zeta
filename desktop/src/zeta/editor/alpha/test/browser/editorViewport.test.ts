@@ -292,10 +292,11 @@ test("EditorViewport keeps minimaps out of embedded presentations", () => {
   dom.window.close();
 });
 
-test("EditorViewport lets a direct host own its focus outline", () => {
+test("EditorViewport lets a direct host own its focus outline and omits active lines by default when embedded", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   const container = requiredElement(dom.window.document, "main");
   using model = new TextModel("alpha");
+  using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
   using embeddedViewport = new EditorViewport({
     container,
     model,
@@ -303,9 +304,13 @@ test("EditorViewport lets a direct host own its focus outline", () => {
     textMeasurer: fixedTextMeasurer(),
     presentation: "embedded",
     focusOutlineOwner: "host",
+    selectionController: selections,
   });
+  embeddedViewport.layout({ width: 300, height: 40 });
   assert.equal(embeddedViewport.element.classList.contains("zeta-alpha-editor-focus-owner-host"), true);
   assert.equal(embeddedViewport.element.classList.contains("zeta-alpha-editor-focus-owner-editor"), false);
+  assert.equal(embeddedViewport.element.querySelector(".zeta-alpha-editor-line.active"), null);
+  assert.ok(embeddedViewport.element.querySelector(".zeta-alpha-editor-caret"));
   assert.throws(() => new EditorViewport({
     container,
     model,
@@ -313,6 +318,13 @@ test("EditorViewport lets a direct host own its focus outline", () => {
     textMeasurer: fixedTextMeasurer(),
     focusOutlineOwner: "unknown" as never,
   }), /Unknown Alpha editor focus outline owner/);
+  assert.throws(() => new EditorViewport({
+    container,
+    model,
+    lineHeight: 20,
+    textMeasurer: fixedTextMeasurer(),
+    activeLineHighlight: "unknown" as never,
+  }), /Unknown Alpha editor active-line highlight/);
   dom.window.close();
 });
 

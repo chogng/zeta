@@ -634,8 +634,14 @@ Each rendered row now contains a sticky line-number gutter, text, and a
 component-owned overlay. The gutter width is measured from the current
 line-count digit width and contributes to horizontal content width.
 `EditorViewport` may observe a caller-owned `EditorSelectionController`.
-It marks the primary active line with `.active` and projects all selection
-ranges and carets into the overscanned window. Prefix measurement keeps tabs
+Document presentations mark the primary active line with `.active`; embedded
+presentations omit that visual state by default, while callers may explicitly
+override `activeLineHighlight`. Both always project selections and carets into
+the overscanned window. `EditorViewportPadding` reserves four-sided editor space;
+vertical padding participates in content height, virtualization, hit testing,
+scrolling, and position queries, while horizontal padding participates in text
+measurement, wrapping, and horizontal hit testing;
+the CodeEditor-owned placeholder consumes those same coordinates. Prefix measurement keeps tabs
 and shaped glyphs consistent with line-width measurement; selected newlines
 receive one measured-space cell so multi-line end-exclusive ranges remain
 visible. `.active` is the component-owned active-line visual state, while

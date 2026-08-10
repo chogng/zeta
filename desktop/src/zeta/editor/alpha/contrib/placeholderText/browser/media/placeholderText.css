@@ -1,9 +1,11 @@
 .zeta-alpha-editor-placeholder-text {
   position: absolute;
-  top: 8px;
-  left: 12px;
   z-index: 7;
   color: var(--zeta-description-foreground);
   pointer-events: none;
   white-space: pre-wrap;
+}
+
+.zeta-alpha-editor-embedded .zeta-alpha-editor-placeholder-text {
+  color: var(--zeta-input-placeholder-foreground);
 }

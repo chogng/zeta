@@ -27,6 +27,7 @@ export interface HitTestLayout {
 export interface HitTestMetrics {
   readonly gutterWidth: number;
   readonly textLeft: number;
+  readonly paddingTop?: number;
 }
 
 export enum EditorHitTargetKind {
@@ -61,7 +62,10 @@ export function hitTestAlphaEditorPoint(
     return undefined;
   }
 
-  const contentTop = point.top + layout.scrollPosition.top;
+  const contentTop = point.top + layout.scrollPosition.top - (metrics.paddingTop ?? 0);
+  if (contentTop < 0) {
+    return target(EditorHitTargetKind.EmptyContent, 0, 0);
+  }
   const lineIndex = Math.floor(contentTop / layout.lineHeight);
   if (lineIndex >= model.lineCount) {
     const lastLineIndex = model.lineCount - 1;
@@ -112,7 +116,10 @@ export function hitTestAlphaVisualEditorPoint(model: TextModel, projection: Edit
   ) {
     return undefined;
   }
-  const contentTop = point.top + layout.scrollPosition.top;
+  const contentTop = point.top + layout.scrollPosition.top - (metrics.paddingTop ?? 0);
+  if (contentTop < 0) {
+    return target(EditorHitTargetKind.EmptyContent, 0, 0);
+  }
   const visualLineIndex = Math.floor(contentTop / layout.lineHeight);
   if (visualLineIndex >= projection.visualLineCount) {
     const logicalLineIndex = model.lineCount - 1;
@@ -209,7 +216,9 @@ function validateMetrics(metrics: HitTestMetrics): void {
     !Number.isFinite(metrics.gutterWidth) ||
     metrics.gutterWidth < 0 ||
     !Number.isFinite(metrics.textLeft) ||
-    metrics.textLeft < metrics.gutterWidth
+    metrics.textLeft < metrics.gutterWidth ||
+    !Number.isFinite(metrics.paddingTop ?? 0) ||
+    (metrics.paddingTop ?? 0) < 0
   ) {
     throw new RangeError("Alpha hit-test metrics are invalid");
   }

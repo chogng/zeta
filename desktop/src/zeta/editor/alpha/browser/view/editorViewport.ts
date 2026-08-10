@@ -30,7 +30,7 @@ import { getAlphaDomTextCaretLeft, getAlphaDomTextOffsetAtClientPoint } from "./
 import { createAlphaRenderedLine, type RenderedLine } from "./renderedLine.js";
 import { projectAlphaSemanticTokenLine, type ResolvedSemanticToken, type SemanticTokenSource } from "../../browser/view/semanticTokenPresentation.js";
 import { type BracketColorizationSpan } from "../../browser/view/semanticTokenPresentation.js";
-import { projectAlphaCompositionOverlay, projectAlphaDecorationOverlays, projectAlphaSelectionOverlays, type ViewportOverlayContext } from "./viewportOverlayPresentation.js";
+import { projectAlphaCompositionOverlay, projectAlphaDecorationOverlays, projectAlphaSelectionOverlays, type ActiveLineHighlight, type ViewportOverlayContext } from "./viewportOverlayPresentation.js";
 import { EditorLineWrapping, VisualLineProjection } from "./visualLineProjection.js";
 import { VisibleLineProjection } from "./visibleLineProjection.js";
 import { getTextGraphemeBoundaries } from "../../common/core/textSegmentation.js";
@@ -43,6 +43,17 @@ export type EditorViewportPresentation = "document" | "embedded";
 
 /** Chooses which component renders the visible focus outline for an Alpha viewport. */
 export type EditorFocusOutlineOwner = "editor" | "host";
+
+/** Controls whether the viewport projects current-line presentation DOM. */
+export type EditorActiveLineHighlight = ActiveLineHighlight;
+
+/** Space reserved around the editor's projected text rows. */
+export interface EditorViewportPadding {
+  readonly top: number;
+  readonly right: number;
+  readonly bottom: number;
+  readonly left: number;
+}
 
 export enum EditorMinimap {
   On = "on",
@@ -60,6 +71,7 @@ export interface EditorViewportOptions {
   readonly container: HTMLElement;
   readonly model: TextModel;
   readonly lineHeight: number;
+  readonly padding?: EditorViewportPadding;
   readonly overscanLineCount?: number;
   readonly ariaLabel?: string;
   readonly textMeasurer?: TextMeasurer;
@@ -72,6 +84,8 @@ export interface EditorViewportOptions {
   readonly presentation?: EditorViewportPresentation;
   /** `host` delegates the visible focus outline to the viewport's direct host. */
   readonly focusOutlineOwner?: EditorFocusOutlineOwner;
+  /** `off` omits current-line presentation while preserving selections and carets. */
+  readonly activeLineHighlight?: EditorActiveLineHighlight;
   readonly lineWrapping?: EditorLineWrapping;
   readonly minimap?: EditorMinimap;
   readonly indentation?: EditorIndentationOptions;
@@ -116,6 +130,8 @@ export class EditorViewport extends DisposableOwner {
   private readonly bracketColorizationSource: BracketColorizationSource | undefined;
   private readonly presentation: EditorViewportPresentation;
   private readonly focusOutlineOwner: EditorFocusOutlineOwner;
+  private readonly activeLineHighlight: EditorActiveLineHighlight;
+  private readonly padding: EditorViewportPadding;
   private readonly indentation: ResolvedEditorIndentationOptions;
   private readonly decorationSnapshots =
     new Map<DecorationSource, DecorationSource["decorations"]>();
@@ -155,6 +171,8 @@ export class EditorViewport extends DisposableOwner {
     this.bracketColorizationSource = options.bracketColorizationSource;
     this.presentation = options.presentation ?? "document";
     this.focusOutlineOwner = options.focusOutlineOwner ?? "editor";
+    this.activeLineHighlight = options.activeLineHighlight ?? (this.presentation === "embedded" ? "off" : "on");
+    this.padding = resolveEditorViewportPadding(options.padding);
     this.minimap = options.minimap ?? (this.presentation === "document" ? EditorMinimap.On : EditorMinimap.Off);
     this.textDirection = options.textDirection ?? EditorTextDirection.Auto;
     this.softWrapping = options.lineWrapping === EditorLineWrapping.On;
@@ -168,6 +186,9 @@ export class EditorViewport extends DisposableOwner {
       }
       if (this.focusOutlineOwner !== "editor" && this.focusOutlineOwner !== "host") {
         throw new TypeError("Unknown Alpha editor focus outline owner");
+      }
+      if (this.activeLineHighlight !== "on" && this.activeLineHighlight !== "off") {
+        throw new TypeError("Unknown Alpha editor active-line highlight");
       }
       if (this.selectionController && this.selectionController.textModel !== this.model) {
         throw new TypeError(
@@ -202,6 +223,8 @@ export class EditorViewport extends DisposableOwner {
     this.element.classList.add(`zeta-alpha-editor-${this.presentation}`);
     this.element.classList.add(`zeta-alpha-editor-focus-owner-${this.focusOutlineOwner}`);
     this.element.classList.add(`zeta-alpha-editor-direction-${this.textDirection}`);
+    this.element.style.setProperty("--alpha-editor-padding-left", `${this.padding.left}px`);
+    this.element.style.setProperty("--alpha-editor-padding-right", `${this.padding.right}px`);
     this.element.dir = this.textDirection;
     this.element.classList.toggle("word-wrapped", this.softWrapping);
     this.element.tabIndex = 0;
@@ -271,6 +294,7 @@ export class EditorViewport extends DisposableOwner {
       lineHeight: options.lineHeight,
       overscanLineCount: options.overscanLineCount,
       lineSource: this.visibleLineProjection.lineSource,
+      padding: { top: this.padding.top, bottom: this.padding.bottom },
     }));
     this.viewport = viewport;
     this.onDidChangeLayout = viewport.onDidChange;
@@ -438,7 +462,7 @@ export class EditorViewport extends DisposableOwner {
     const visualProjection = this.visualProjection;
     const visualLineIndex = visualProjection.visualLineIndexAt(position);
     const visualLine = visualProjection.lineAt(visualLineIndex)!;
-    const lineTop = visualLineIndex * layout.lineHeight;
+    const lineTop = this.padding.top + visualLineIndex * layout.lineHeight;
     const lineBottom = lineTop + layout.lineHeight;
     let top = layout.scrollPosition.top;
     if (lineTop < top) {
@@ -474,7 +498,7 @@ export class EditorViewport extends DisposableOwner {
       left: domCaretLeft ?? (this.textLeft + this.textMeasurer.measureLineWidth(
         this.model.getLineContent(visualLine.logicalLineIndex).slice(visualLine.startColumn, position.columnIndex),
       )),
-      top: visualLineIndex * this.viewport.layout.lineHeight,
+      top: this.padding.top + visualLineIndex * this.viewport.layout.lineHeight,
       height: this.viewport.layout.lineHeight,
     });
   }
@@ -570,6 +594,7 @@ export class EditorViewport extends DisposableOwner {
       {
         gutterWidth: this.gutterWidth,
         textLeft: this.textLeft,
+        paddingTop: this.padding.top,
       },
       this.textMeasurer,
     );
@@ -799,6 +824,7 @@ export class EditorViewport extends DisposableOwner {
       textLeft: this.textLeft,
       textMeasurer: this.textMeasurer,
       useDomTextGeometry: this.textDirection !== EditorTextDirection.LeftToRight,
+      activeLineHighlight: this.activeLineHighlight,
     };
   }
 
@@ -914,6 +940,22 @@ function validateClientPoint(point: ClientPoint): void {
       "Alpha client point must contain finite coordinates",
     );
   }
+}
+
+function resolveEditorViewportPadding(padding: EditorViewportPadding | undefined): EditorViewportPadding {
+  return Object.freeze({
+    top: nonNegativePaddingValue(padding?.top ?? 0, "top"),
+    right: nonNegativePaddingValue(padding?.right ?? 12, "right"),
+    bottom: nonNegativePaddingValue(padding?.bottom ?? 0, "bottom"),
+    left: nonNegativePaddingValue(padding?.left ?? 12, "left"),
+  });
+}
+
+function nonNegativePaddingValue(value: number, side: keyof EditorViewportPadding): number {
+  if (!Number.isFinite(value) || value < 0) {
+    throw new RangeError(`Alpha editor padding.${side} must be non-negative and finite`);
+  }
+  return value;
 }
 
 function clamp(value: number, minimum: number, maximum: number): number {

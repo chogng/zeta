@@ -55,6 +55,41 @@ test("EditorViewportModel calculates visible and overscan line ranges", () => {
   });
 });
 
+test("EditorViewportModel includes vertical padding in content and row projection", () => {
+  using model = new TextModel(lines(10));
+  using viewport = new EditorViewportModel(model, {
+    lineHeight: 20,
+    overscanLineCount: 2,
+    padding: { top: 20, bottom: 10 },
+  });
+
+  viewport.setViewportSize({ width: 200, height: 40 });
+  assert.deepEqual({
+    contentHeight: viewport.layout.contentSize.height,
+    visibleLines: viewport.layout.visibleLines,
+    renderLines: viewport.layout.renderLines,
+    renderTop: viewport.layout.renderTop,
+  }, {
+    contentHeight: 230,
+    visibleLines: { startLineIndex: 0, endLineIndexExclusive: 1 },
+    renderLines: { startLineIndex: 0, endLineIndexExclusive: 3 },
+    renderTop: 20,
+  });
+
+  viewport.setScrollPosition({ left: 0, top: 1_000 });
+  assert.deepEqual({
+    scrollTop: viewport.layout.scrollPosition.top,
+    visibleLines: viewport.layout.visibleLines,
+    renderLines: viewport.layout.renderLines,
+    renderTop: viewport.layout.renderTop,
+  }, {
+    scrollTop: 190,
+    visibleLines: { startLineIndex: 8, endLineIndexExclusive: 10 },
+    renderLines: { startLineIndex: 6, endLineIndexExclusive: 10 },
+    renderTop: 140,
+  });
+});
+
 test("Viewport resize and line-height changes preserve a stable top line", () => {
   using model = new TextModel(lines(100));
   using viewport = new EditorViewportModel(model, {
@@ -255,6 +290,13 @@ test("EditorViewportModel validates geometry before changing layout", () => {
       overscanLineCount: 1.5,
     }),
     /overscanLineCount/,
+  );
+  assert.throws(
+    () => new EditorViewportModel(model, {
+      lineHeight: 20,
+      padding: { top: -1, bottom: 0 },
+    }),
+    /padding.top must be non-negative/,
   );
 
   using viewport = new EditorViewportModel(model, {

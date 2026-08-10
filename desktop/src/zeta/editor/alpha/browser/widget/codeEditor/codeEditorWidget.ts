@@ -6,6 +6,7 @@ import { EditorViewport, type EditorViewportOptions } from "../../view/editorVie
 import { KeyboardNavigationController, type KeyboardNavigationControllerOptions } from "../../input/keyboardNavigationController.js";
 import { PointerSelectionController, type PointerSelectionControllerOptions } from "../../input/pointerSelectionController.js";
 import { TextInputController, type TextInputControllerOptions } from "../../input/textInputController.js";
+import { PlaceholderTextController } from "../../../contrib/placeholderText/browser/placeholderTextController.js";
 
 export type CodeEditorWidgetViewportOptions = Omit<EditorViewportOptions, "container" | "model" | "lineHeight" | "ariaLabel" | "selectionController">;
 
@@ -15,6 +16,7 @@ export interface CodeEditorWidgetOptions {
   readonly selectionController: EditorSelectionController;
   readonly lineHeight: number;
   readonly ariaLabel?: string;
+  readonly placeholder?: string;
   readonly viewport?: CodeEditorWidgetViewportOptions;
   readonly textInput?: Omit<TextInputControllerOptions, "ariaLabel">;
   readonly keyboardNavigation?: KeyboardNavigationControllerOptions;
@@ -48,6 +50,7 @@ export class CodeEditorWidget extends DisposableOwner {
         ...options.textInput,
         ariaLabel: options.ariaLabel,
       }));
+      if (options.placeholder) this.own(new PlaceholderTextController(this.viewport, options.placeholder));
       this.own(new KeyboardNavigationController(this.viewport, options.selectionController, options.keyboardNavigation));
       this.own(new PointerSelectionController(this.viewport, options.selectionController, options.pointerSelection));
     } catch (error) {

@@ -49,7 +49,9 @@ pointer navigation. Its caller retains the shared `TextModel` and the editor-loc
 editors may safely project the same model. `EditorPart` adds language, folding, diagnostic,
 save, command, and optional text-drop controllers around this surface; product widgets must
 consume the `CodeEditorWidget` rather than assembling viewport and native-input internals
-themselves.
+themselves. `CodeEditorWidget` also owns optional placeholder composition, while viewport
+padding is canonical editor geometry shared by row projection, hit testing, scrolling, and
+placeholder placement.
 
 `EditorViewport` is the first native browser projection. It consumes
 `EditorViewportModel`, creates one component-owned scroll surface, and renders
@@ -624,7 +626,11 @@ explicitly select `focusOutlineOwner: "host"` when their direct control owns
 one surrounding focus indicator, but must not override internal rows or focus
 state. The component projects stable
 `.active` state for the primary active line and `.primary` identity on the
-primary caret; CSS does not use ARIA attributes as visual selectors.
+primary caret; CSS does not use ARIA attributes as visual selectors. Embedded
+presentations omit `.active` by default. Vertical padding participates in the
+viewport content height and row coordinates instead of being simulated by a
+host selector; left and right padding are component-owned text-measurement
+inputs, so wrapping, carets, placeholders, and pointer hits share one inset.
 
 `DomTextMeasurer` derives the active font, letter spacing, tab size, and
 horizontal padding from the line layer's computed style. Canvas measures

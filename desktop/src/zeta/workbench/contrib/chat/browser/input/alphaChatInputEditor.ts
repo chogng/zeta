@@ -2,6 +2,7 @@ import "./alphaChatInputEditor.css";
 import { addDisposableListener, stopEvent } from "../../../../../base/browser/dom.js";
 import { Emitter, type Event } from "../../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
+import { EditorLineWrapping } from "../../../../../editor/alpha/browser/view/visualLineProjection.js";
 import { CodeEditorWidget } from "../../../../../editor/alpha/browser/widget/codeEditor/codeEditorWidget.js";
 import { EditorSelectionController } from "../../../../../editor/alpha/common/cursor/editorSelectionController.js";
 import { LanguageCompletionService } from "../../../../../editor/alpha/common/languages/completion/languageCompletionService.js";
@@ -14,17 +15,16 @@ import { type ChatInputEditorOptions, type IChatInputEditor } from "./chatInputE
 import { CHAT_INPUT_LANGUAGE_ID, createAlphaChatCommandCompletionProvider } from "./alphaChatCommandCompletion.js";
 
 const CHAT_INPUT_LINE_HEIGHT = 20;
-const CHAT_INPUT_VERTICAL_PADDING = 16;
-const CHAT_INPUT_MIN_HEIGHT = 62;
-const CHAT_INPUT_MAX_HEIGHT = 250;
+const CHAT_INPUT_EDITOR_PADDING = Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 });
+const CHAT_INPUT_MIN_HEIGHT = 106;
+const CHAT_INPUT_MAX_HEIGHT = 320;
 
-/** Alpha-backed embedded editor used by the Chat composer. */
+/** Alpha-backed embedded editor hosted by the Chat input part. */
 export class ChatInputEditor extends DisposableOwner implements IChatInputEditor {
   readonly element: HTMLDivElement;
   private readonly model = this.own(new TextModel());
   private readonly selections = this.own(new EditorSelectionController(this.model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0)))));
   private readonly editor: CodeEditorWidget;
-  private readonly placeholder: HTMLDivElement;
   private readonly _onDidChange = this.own(new Emitter<string>());
   private readonly _onDidSubmit = this.own(new Emitter<void>());
   readonly onDidChange: Event<string> = this._onDidChange.event;
@@ -46,10 +46,13 @@ export class ChatInputEditor extends DisposableOwner implements IChatInputEditor
       model: this.model,
       lineHeight: CHAT_INPUT_LINE_HEIGHT,
       ariaLabel: options.ariaLabel,
+      placeholder: options.placeholder,
       selectionController: this.selections,
       viewport: {
         presentation: "embedded",
         focusOutlineOwner: "host",
+        padding: CHAT_INPUT_EDITOR_PADDING,
+        lineWrapping: EditorLineWrapping.On,
       },
       textInput: {
         completion: {
@@ -63,13 +66,7 @@ export class ChatInputEditor extends DisposableOwner implements IChatInputEditor
     }));
     const completionWidget = this.editor.textInput.completionWidget;
     if (completionWidget) this.element.append(completionWidget.element);
-    this.placeholder = options.container.ownerDocument.createElement("div");
-    this.placeholder.className = "zeta-alpha-chat-input-placeholder";
-    this.placeholder.textContent = options.placeholder;
-    this.placeholder.setAttribute("aria-hidden", "true");
-    this.element.append(this.placeholder);
     this.own(this.model.onDidChange(() => {
-      this.placeholder.hidden = this.model.length > 0;
       this.syncHeight();
       this._onDidChange.fire(this.value);
     }));
@@ -103,7 +100,7 @@ export class ChatInputEditor extends DisposableOwner implements IChatInputEditor
   }
 
   private syncHeight(): void {
-    const contentHeight = this.model.lineCount * CHAT_INPUT_LINE_HEIGHT + CHAT_INPUT_VERTICAL_PADDING;
+    const contentHeight = this.model.lineCount * CHAT_INPUT_LINE_HEIGHT + CHAT_INPUT_EDITOR_PADDING.top + CHAT_INPUT_EDITOR_PADDING.bottom;
     const height = Math.min(CHAT_INPUT_MAX_HEIGHT, Math.max(CHAT_INPUT_MIN_HEIGHT, contentHeight));
     if (height === this.height) return;
     this.height = height;
