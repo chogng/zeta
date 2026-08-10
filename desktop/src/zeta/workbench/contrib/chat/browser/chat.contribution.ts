@@ -3,6 +3,7 @@ import "./actions/chatLayoutActions.js";
 import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
 import { IMenuService } from "../../../../platform/actions/common/menuService.js";
 import { IContextMenuService } from "../../../../platform/contextview/browser/contextMenu.js";
+import { IContextViewService } from "../../../../platform/contextview/browser/contextView.js";
 import { ICommandService } from "../../../../platform/commands/common/commands.js";
 import { SyncDescriptor } from "../../../../platform/instantiation/common/instantiation.js";
 import { ViewContainerLocation, type WorkbenchViewRegistry, ViewsRegistry } from "../../../common/views.js";
@@ -41,6 +42,7 @@ export function registerChatViews(registry: WorkbenchViewRegistry = ViewsRegistr
         IWorkbenchSessionService,
         IMenuService,
         IContextMenuService,
+        IContextViewService,
         ICommandService,
         IWorkbenchLayoutService,
       ],

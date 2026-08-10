@@ -30,6 +30,7 @@ export class ChatInputEditor extends DisposableOwner implements IChatInputEditor
   readonly onDidChange: Event<string> = this._onDidChange.event;
   readonly onDidSubmit: Event<void> = this._onDidSubmit.event;
   private height = CHAT_INPUT_MIN_HEIGHT;
+  private closed = false;
 
   constructor(options: ChatInputEditorOptions) {
     super();
@@ -75,8 +76,11 @@ export class ChatInputEditor extends DisposableOwner implements IChatInputEditor
       stopEvent(event);
       this._onDidSubmit.fire();
     }));
+    this.defer(() => this.closed = true);
     this.defer(() => this.element.remove());
-    queueMicrotask(() => this.layout());
+    queueMicrotask(() => {
+      if (!this.closed) this.layout();
+    });
   }
 
   get value(): string {

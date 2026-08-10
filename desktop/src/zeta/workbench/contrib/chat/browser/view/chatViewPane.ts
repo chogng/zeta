@@ -2,6 +2,7 @@ import "../media/chat.css";
 import { setDisposableOwner } from "../../../../../base/common/lifecycle.js";
 import type { IMenuService } from "../../../../../platform/actions/common/menuService.js";
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
+import type { IContextViewService } from "../../../../../platform/contextview/browser/contextView.js";
 import type { ICommandService } from "../../../../../platform/commands/common/commands.js";
 import { ViewPane, type IViewPaneOptions, type PartTitleProjection } from "../../../../browser/parts/views/viewPane.js";
 import type { IWorkbenchLayoutService } from "../../../../services/layout/browser/layoutService.js";
@@ -46,6 +47,7 @@ export class ChatViewPane extends ViewPane {
     sessionService: IWorkbenchSessionService,
     menuService: IMenuService,
     contextMenuService: IContextMenuService,
+    private readonly contextViewService: IContextViewService,
     commandService: ICommandService,
     private readonly layoutService: IWorkbenchLayoutService,
   ) {
@@ -120,6 +122,7 @@ export class ChatViewPane extends ViewPane {
           { kind: "untitled", session: untitledSession },
           this.sessionService,
           this.contextMenuService,
+          this.contextViewService,
           this.commandService,
         );
         setDisposableOwner(pane, this);
@@ -144,6 +147,7 @@ export class ChatViewPane extends ViewPane {
           { kind: "session", active: selection },
           this.sessionService,
           this.contextMenuService,
+          this.contextViewService,
           this.commandService,
         );
         setDisposableOwner(pane, this);

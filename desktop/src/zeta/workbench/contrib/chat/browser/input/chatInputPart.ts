@@ -1,13 +1,17 @@
 import "./chatInputPart.css";
-import { addDisposableListener } from "../../../../../base/browser/dom.js";
+import { addDisposableListener, stopEvent } from "../../../../../base/browser/dom.js";
 import { ButtonActionViewItem, type ActionViewItem } from "../../../../../base/browser/ui/actionbar/actionViewItems.js";
+import { AnchorPosition, ContextView, ContextViewFocusRestore } from "../../../../../base/browser/ui/contextview/contextview.js";
 import { DropdownMenuActionViewItem } from "../../../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js";
+import { appendIcon } from "../../../../../base/browser/ui/icon/icon.js";
+import { Menu } from "../../../../../base/browser/ui/menu/menu.js";
 import type { IAction } from "../../../../../base/common/actions.js";
 import type { Icon } from "../../../../../base/common/icon.js";
-import { DisposableOwner, ResettableDisposableGroup } from "../../../../../base/common/lifecycle.js";
+import { DisposableOwner, DisposableSlot, ResettableDisposableGroup } from "../../../../../base/common/lifecycle.js";
 import { lxiconsLibrary } from "../../../../../base/common/lxiconsLibrary.js";
 import { WorkbenchToolBar } from "../../../../../platform/actions/browser/toolbar.js";
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
+import type { IContextViewService } from "../../../../../platform/contextview/browser/contextView.js";
 import type { ModelCatalogEntry } from "../../../../services/chat/common/chatService.js";
 import type { ModelRef } from "../../../../services/sessions/common/sessionService.js";
 import { DesktopSlashCommands, parseSlashCommandInput, SlashCommandCatalog } from "../../common/slashCommands.js";
@@ -49,7 +53,7 @@ export class ChatInputPart extends DisposableOwner {
   private serverSlashCommands: ChatInputState["slashCommands"] = [];
   private mode: ChatInputMode = "agent";
 
-  constructor(ownerDocument: Document, delegate: ChatInputDelegate, contextMenuService: IContextMenuService) {
+  constructor(ownerDocument: Document, delegate: ChatInputDelegate, contextMenuService: IContextMenuService, contextViewService: IContextViewService) {
     super();
     this.delegate = delegate;
     this.element = ownerDocument.createElement("div");
@@ -72,7 +76,7 @@ export class ChatInputPart extends DisposableOwner {
     }));
     this.inputToolbar = this.own(new WorkbenchToolBar(contextMenuService, ownerDocument, {
       ariaLabel: "Chat input actions",
-      actionViewItemProvider: action => this.createToolbarViewItem(action, contextMenuService),
+      actionViewItemProvider: action => this.createToolbarViewItem(action, contextMenuService, contextViewService),
     }));
     this.inputToolbar.element.classList.add("zeta-chat-input-toolbars");
     this.inputContainer.append(editorHost, this.inputToolbar.element);
@@ -172,7 +176,6 @@ export class ChatInputPart extends DisposableOwner {
           "mode",
           () => {
             this.mode = option.id;
-            this.renderToolbarActions();
           },
           option.id === this.mode,
         )),
@@ -220,9 +223,13 @@ export class ChatInputPart extends DisposableOwner {
     this.inputToolbar.setActions([...inputActions, trailingAction]);
   }
 
-  private createToolbarViewItem(action: IAction, contextMenuService: IContextMenuService): ActionViewItem | undefined {
+  private createToolbarViewItem(action: IAction, contextMenuService: IContextMenuService, contextViewService: IContextViewService): ActionViewItem | undefined {
     if (!(action instanceof ChatInputAction)) return undefined;
-    if (action instanceof SelectorAction) return new ChatInputSelectorViewItem(action, contextMenuService);
+    if (action instanceof SelectorAction) {
+      return action.presentation === "mode"
+        ? new ChatInputModeSelectorViewItem(action, contextViewService, () => this.renderToolbarActions())
+        : new ChatInputSelectorViewItem(action, contextMenuService);
+    }
     return new ChatInputButtonViewItem(action);
   }
 
@@ -367,6 +374,97 @@ class ChatInputSelectorViewItem extends DropdownMenuActionViewItem {
     super.render(container);
     container.classList.add("zeta-chat-input-selector", `zeta-chat-input-${this.presentation}-selector`);
     container.classList.toggle("disabled", !this.action.enabled);
+    const button = container.querySelector<HTMLButtonElement>(":scope > .zeta-button");
+    button?.classList.add("zeta-chat-input-action", `zeta-chat-input-${this.presentation}-action`);
+    button?.classList.toggle("disabled", !this.action.enabled);
+  }
+}
+
+/** Chat-owned HTML popup presentation for the mode selector. */
+class ChatInputModeSelectorViewItem extends ButtonActionViewItem {
+  private readonly selectorAction: SelectorAction;
+  private readonly contextViewService: IContextViewService;
+  private readonly onDidSelect: () => void;
+  private readonly menu = this.own(new DisposableSlot<Menu>());
+  private contextView: ContextView | undefined;
+  private visible = false;
+
+  constructor(action: SelectorAction, contextViewService: IContextViewService, onDidSelect: () => void) {
+    super(action);
+    this.selectorAction = action;
+    this.contextViewService = contextViewService;
+    this.onDidSelect = onDidSelect;
+  }
+
+  override render(container: HTMLElement): void {
+    super.render(container);
+    container.classList.add("zeta-chat-input-selector", "zeta-chat-input-mode-selector", "zeta-dropdown-menu-action-view-item");
+    container.classList.toggle("disabled", !this.action.enabled);
+    const button = this.button.element;
+    button.classList.add("zeta-chat-input-action", "zeta-chat-input-mode-action");
+    button.classList.toggle("disabled", !this.action.enabled);
+    button.querySelector(".zeta-button-label")?.classList.add("zeta-chat-input-mode-action-label");
+    button.setAttribute("aria-haspopup", "menu");
+    button.setAttribute("aria-expanded", "false");
+    const indicator = container.ownerDocument.createElement("span");
+    indicator.className = "zeta-dropdown-menu-indicator zeta-chat-input-mode-indicator";
+    appendIcon(lxiconsLibrary.dropdownIndicator, indicator);
+    button.append(indicator);
+    this.contextView = this.own(new ContextView(this.contextViewService.container));
+    this.own(addDisposableListener(button, "keydown", (event) => {
+      if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+      stopEvent(event);
+      this.show();
+    }));
+  }
+
+  protected override runAction(): void {
+    if (this.visible) {
+      this.contextView?.hide();
+      return;
+    }
+    this.show();
+  }
+
+  private show(): void {
+    const contextView = this.contextView;
+    if (!contextView || this.visible || !this.action.enabled) return;
+    const actions = typeof this.selectorAction.actions === "function" ? this.selectorAction.actions() : this.selectorAction.actions;
+    if (actions.length === 0) return;
+    const menu = new Menu({
+      actions,
+      ownerDocument: this.button.element.ownerDocument,
+      contextViewContainer: this.contextViewService.container,
+      layer: 20,
+      onDidSelect: () => {
+        contextView.hide();
+        this.onDidSelect();
+      },
+    });
+    menu.element.classList.add("zeta-chat-input-mode-menu");
+    this.menu.replace(menu);
+    const shown = contextView.show({
+      anchor: this.button.element,
+      content: menu.element,
+      anchorPosition: AnchorPosition.Below,
+      gap: 2,
+      presentation: "menu",
+      focusRestore: ContextViewFocusRestore.Previous,
+      layer: 20,
+      isTargetWithin: target => menu.contains(target),
+      onHide: () => {
+        this.visible = false;
+        this.button.element.setAttribute("aria-expanded", "false");
+        this.menu.clear();
+      },
+    });
+    if (!shown) {
+      this.menu.clear();
+      return;
+    }
+    this.visible = true;
+    this.button.element.setAttribute("aria-expanded", "true");
+    menu.focusFirst();
   }
 }
 
@@ -382,5 +480,7 @@ class ChatInputButtonViewItem extends ButtonActionViewItem {
     super.render(container);
     container.classList.add(`zeta-chat-input-${this.presentation}`);
     container.classList.toggle("disabled", !this.action.enabled);
+    this.button.element.classList.add("zeta-chat-input-action", `zeta-chat-input-${this.presentation}-action`);
+    this.button.element.classList.toggle("disabled", !this.action.enabled);
   }
 }

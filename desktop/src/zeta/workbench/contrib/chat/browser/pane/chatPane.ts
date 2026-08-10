@@ -1,6 +1,7 @@
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
 import type { ICommandService } from "../../../../../platform/commands/common/commands.js";
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
+import type { IContextViewService } from "../../../../../platform/contextview/browser/contextView.js";
 import type { IChatService } from "../../../../services/chat/common/chatService.js";
 import type { IActiveSessionThread, IUntitledChatSession, IWorkbenchSessionService, SessionId, ThreadId } from "../../../../services/sessions/common/sessionService.js";
 import type { ChatInputDelegate } from "../input/chatInput.js";
@@ -15,7 +16,7 @@ export class ChatPane extends DisposableOwner {
   private readonly listWidget: ChatListWidget;
   private readonly inputPart: ChatInputPart;
 
-  constructor(ownerDocument: Document, panelId: string, chatService: IChatService, selection: ChatPaneSelection, sessionService: IWorkbenchSessionService, contextMenuService: IContextMenuService, commandService: ICommandService) {
+  constructor(ownerDocument: Document, panelId: string, chatService: IChatService, selection: ChatPaneSelection, sessionService: IWorkbenchSessionService, contextMenuService: IContextMenuService, contextViewService: IContextViewService, commandService: ICommandService) {
     super();
     this.element = ownerDocument.createElement("div");
     this.element.id = panelId;
@@ -31,7 +32,7 @@ export class ChatPane extends DisposableOwner {
       selectModel: (model) => this.model.selectModel(model),
       resolveInteraction: (response) => this.model.resolveInteraction(response),
     };
-    this.inputPart = this.own(new ChatInputPart(ownerDocument, inputDelegate, contextMenuService));
+    this.inputPart = this.own(new ChatInputPart(ownerDocument, inputDelegate, contextMenuService, contextViewService));
     this.element.append(this.inputPart.element, this.listWidget.element);
     this.own(this.model.onDidChange(() => this.render()));
     this.defer(() => this.element.remove());

@@ -47,6 +47,9 @@ for (const [name, value] of Object.entries({
 const { registerChatViews } = await import(
   "../../../../../workbench/contrib/chat/browser/chat.contribution.js"
 );
+const { BrowserContextViewService } = await import(
+  "../../../../../platform/contextview/browser/contextViewService.js"
+);
 const { ChatViewPane } = await import(
   "../../../../../workbench/contrib/chat/browser/view/chatViewPane.js"
 );
@@ -108,6 +111,8 @@ test("Chat contribution owns the fixed Auxiliary Bar view", () => {
 
 test("Chat title separates Session tabs from its action toolbar", async () => {
   const dom = new JSDOM("<!doctype html><body></body>");
+  dom.window.HTMLElement.prototype.scrollTo = () => {};
+  using contextViewService = new BrowserContextViewService(dom.window.document.body);
   const fake = fakeApi({
     sessions: [
       session("session-1", "thread-1"),
@@ -169,6 +174,7 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
     sessions,
     menuService,
     contextMenuService,
+    contextViewService,
     commands,
     layout,
   );
@@ -318,9 +324,16 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
   }
   const firstChatPane = chatPanes[0]!;
   firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='zeta.chat.input.mode'] button")?.click();
-  assert.deepEqual(shownContextMenuActions.map((action) => action.label), ["Agent", "Plan", "Debug", "Multitask", "Ask"]);
-  shownContextMenuActions[1]?.run();
+  assert.deepEqual(shownContextMenuActions, []);
+  const modeMenu = dom.window.document.querySelector<HTMLElement>(".zeta-chat-input-mode-menu");
+  assert.equal(modeMenu?.closest(".zeta-context-view")?.parentElement, contextViewService.container);
+  assert.deepEqual(
+    [...modeMenu?.querySelectorAll<HTMLElement>("[data-action-id]") ?? []].map(item => item.textContent),
+    ["Agent", "Plan", "Debug", "Multitask", "Ask"],
+  );
+  modeMenu?.querySelector<HTMLButtonElement>("[data-action-id='zeta.chat.input.mode.plan'] button")?.click();
   assert.equal(firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='zeta.chat.input.mode'] button")?.textContent, "Plan");
+  assert.equal(dom.window.document.querySelector(".zeta-chat-input-mode-menu"), null);
   assert.deepEqual([...chatPanes].map((chatPane) => chatPane.hidden), [false, true]);
   const composerInputs = [...chatPanes].map((chatPane) => {
     const input = chatPane.querySelector<HTMLTextAreaElement>(".zeta-alpha-editor-input");
@@ -411,6 +424,7 @@ test("Empty chat transcripts do not render a redundant placeholder", () => {
 
 test("an empty Session list opens an untitled session and persists it on its first send", async () => {
   const dom = new JSDOM("<!doctype html><body></body>");
+  using contextViewService = new BrowserContextViewService(dom.window.document.body);
   const createdSession = session("session-1", undefined, "New Chat");
   const attachedSession = session("session-1", "thread-1", "New Chat");
   const fake = fakeApi({
@@ -450,6 +464,7 @@ test("an empty Session list opens an untitled session and persists it on its fir
     sessions,
     menuService,
     contextMenuService,
+    contextViewService,
     commands,
     layout,
   );
@@ -508,6 +523,7 @@ test("an empty Session list opens an untitled session and persists it on its fir
 
 test("the New Chat slash command opens an untitled session", async () => {
   const dom = new JSDOM("<!doctype html><body></body>");
+  using contextViewService = new BrowserContextViewService(dom.window.document.body);
   const initialSession = session("session-1", "thread-1", "First Chat");
   const fake = fakeApi({ sessions: [initialSession] });
   const services = new ServiceCollection();
@@ -542,6 +558,7 @@ test("the New Chat slash command opens an untitled session", async () => {
     sessions,
     menuService,
     contextMenuService,
+    contextViewService,
     commands,
     layout,
   );
@@ -581,6 +598,7 @@ test("the New Chat slash command opens an untitled session", async () => {
 
 test("failed first send keeps the untitled session and its input draft", async () => {
   const dom = new JSDOM("<!doctype html><body></body>");
+  using contextViewService = new BrowserContextViewService(dom.window.document.body);
   const fake = fakeApi({
     sessions: [],
     createSessionError: new Error("Cannot create Session"),
@@ -613,6 +631,7 @@ test("failed first send keeps the untitled session and its input draft", async (
     sessions,
     menuService,
     contextMenuService,
+    contextViewService,
     commands,
     layout,
   );
@@ -643,6 +662,7 @@ test("failed first send keeps the untitled session and its input draft", async (
 
 test("one Session retains one Chat pane while its selected Thread changes", async () => {
   const dom = new JSDOM("<!doctype html><body></body>");
+  using contextViewService = new BrowserContextViewService(dom.window.document.body);
   const multiThreadSession: Session = {
     ...session("session-1", "thread-1", "One Chat"),
     threads: [
@@ -681,6 +701,7 @@ test("one Session retains one Chat pane while its selected Thread changes", asyn
     sessions,
     menuService,
     contextMenuService,
+    contextViewService,
     commands,
     layout,
   );

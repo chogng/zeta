@@ -25,6 +25,7 @@ for (const [name, value] of Object.entries({
 }
 
 const { ChatViewPane } = await import("../../browser/view/chatViewPane.js");
+const { BrowserContextViewService } = await import("../../../../../platform/contextview/browser/contextViewService.js");
 
 test.after(() => browserEnvironment.window.close());
 
@@ -32,12 +33,14 @@ test("opens a local Chat tab before the backend session request settles", () => 
   const document = browserEnvironment.window.document;
   const sessionService = new PendingSessionService();
   const layoutService = new VisibleAuxiliarybarLayoutService();
+  using contextViewService = new BrowserContextViewService(document.body);
   using view = new ChatViewPane(
     { id: "workbench.chat", title: "Chat", ownerDocument: document },
     unavailableChatService(),
     sessionService,
     emptyMenuService(),
     {} as IContextMenuService,
+    contextViewService,
     {} as ICommandService,
     layoutService,
   );
