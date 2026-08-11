@@ -45,11 +45,19 @@
   flex: 1 1 auto;
 }
 
+.zeta-chat.empty > .zeta-chat-list-widget {
+  flex: 0 0 0;
+}
+
 .zeta-chat > .zeta-chat-input-part {
   box-sizing: border-box;
   min-height: 0;
   flex: 0 0 auto;
   padding: 22px 24px 24px;
+}
+
+.zeta-chat.has-conversation > .zeta-chat-input-part {
+  padding: 8px 12px 12px;
 }
 
 .zeta-chat-view-empty {

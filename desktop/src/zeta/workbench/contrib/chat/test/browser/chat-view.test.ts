@@ -304,8 +304,10 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
   assert.equal(chatPanes.length, 2);
   for (const chatPane of chatPanes) {
     assert.equal(chatPane.childElementCount, 2);
-    assert.ok(chatPane.firstElementChild?.classList.contains("zeta-chat-input-part"));
-    assert.ok(chatPane.lastElementChild?.classList.contains("zeta-chat-list-widget"));
+    assert.equal(chatPane.classList.contains("empty"), true);
+    assert.equal(chatPane.classList.contains("has-conversation"), false);
+    assert.ok(chatPane.firstElementChild?.classList.contains("zeta-chat-list-widget"));
+    assert.ok(chatPane.lastElementChild?.classList.contains("zeta-chat-input-part"));
     const inputToolbar = chatPane.querySelector<HTMLElement>(".zeta-chat-input-toolbars");
     assert.equal(inputToolbar?.getAttribute("role"), "toolbar");
     assert.deepEqual(
@@ -493,12 +495,17 @@ test("an empty Session list opens an untitled session and persists it on its fir
   assert.ok(untitledPane?.dataset.untitledSessionId);
   const input = untitledPane.querySelector<HTMLTextAreaElement>(".zeta-alpha-editor-input");
   assert.ok(input);
+  assert.equal(untitledPane.classList.contains("empty"), true);
   typeAlphaText(dom.window, input, "Hello from an untitled session");
   input.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
     bubbles: true,
     cancelable: true,
     key: "Enter",
   }));
+  assert.equal(untitledPane.classList.contains("empty"), false);
+  assert.equal(untitledPane.classList.contains("has-conversation"), true);
+  assert.ok(untitledPane.firstElementChild?.classList.contains("zeta-chat-list-widget"));
+  assert.ok(untitledPane.lastElementChild?.classList.contains("zeta-chat-input-part"));
   await waitFor(() => fake.turnStartRequests.length === 1);
 
   assert.equal(fake.createSessionRequests.length, 1);
@@ -655,6 +662,8 @@ test("failed first send keeps the untitled session and its input draft", async (
   assert.equal(sessions.untitledSessions.length, 1);
   assert.equal(pane.element.querySelector(".zeta-alpha-editor-line-text")?.textContent, "Keep this draft");
   assert.equal(pane.element.querySelector<HTMLElement>("[role='tabpanel']")?.dataset.untitledSessionId, sessions.untitledSessions[0]?.untitledSessionId);
+  assert.equal(pane.element.querySelector<HTMLElement>("[role='tabpanel']")?.classList.contains("empty"), true);
+  assert.equal(pane.element.querySelector<HTMLElement>("[role='tabpanel']")?.classList.contains("has-conversation"), false);
   assert.match(pane.element.querySelector<HTMLElement>(".zeta-chat-status")?.textContent ?? "", /Cannot create Session/);
 
   dom.window.close();

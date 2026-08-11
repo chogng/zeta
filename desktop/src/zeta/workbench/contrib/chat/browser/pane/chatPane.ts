@@ -15,6 +15,7 @@ export class ChatPane extends DisposableOwner {
   private readonly model: ChatPaneModel;
   private readonly listWidget: ChatListWidget;
   private readonly inputPart: ChatInputPart;
+  private submittedMessage = false;
 
   constructor(ownerDocument: Document, panelId: string, chatService: IChatService, selection: ChatPaneSelection, sessionService: IWorkbenchSessionService, contextMenuService: IContextMenuService, contextViewService: IContextViewService, commandService: ICommandService) {
     super();
@@ -26,14 +27,14 @@ export class ChatPane extends DisposableOwner {
     this.model = this.own(new ChatPaneModel(chatService, selection, sessionService));
     this.listWidget = this.own(new ChatListWidget(ownerDocument));
     const inputDelegate: ChatInputDelegate = {
-      send: (text) => this.model.send(text),
+      send: (text) => this.send(text),
       executeCommand: (invocation) => commandService.executeCommand(invocation.commandId, invocation.argumentsText),
       interrupt: () => this.model.interrupt(),
       selectModel: (model) => this.model.selectModel(model),
       resolveInteraction: (response) => this.model.resolveInteraction(response),
     };
     this.inputPart = this.own(new ChatInputPart(ownerDocument, inputDelegate, contextMenuService, contextViewService));
-    this.element.append(this.inputPart.element, this.listWidget.element);
+    this.element.append(this.listWidget.element, this.inputPart.element);
     this.own(this.model.onDidChange(() => this.render()));
     this.defer(() => this.element.remove());
     this.render();
@@ -55,6 +56,7 @@ export class ChatPane extends DisposableOwner {
     if (active.session.sessionId !== this.sessionId) {
       throw new Error(`ChatPane cannot select a Thread from another Session: ${active.session.sessionId}`);
     }
+    if (active.threadId !== this.threadId) this.submittedMessage = false;
     return this.model.selectThread(active);
   }
 
@@ -85,9 +87,25 @@ export class ChatPane extends DisposableOwner {
     this.inputPart.focus();
   }
 
+  private async send(text: string): Promise<void> {
+    this.submittedMessage = true;
+    this.updateConversationState();
+    try {
+      await this.model.send(text);
+    } catch (error) {
+      if (this.model.items.length === 0) {
+        this.submittedMessage = false;
+        this.updateConversationState();
+      }
+      throw error;
+    }
+  }
+
   private render(): void {
     this.syncIdentity();
-    this.listWidget.render(this.model.items);
+    const items = this.model.items;
+    this.updateConversationState(items.length > 0);
+    this.listWidget.render(items);
     this.inputPart.render({
       phase: this.model.state,
       error: this.model.error,
@@ -97,6 +115,12 @@ export class ChatPane extends DisposableOwner {
       selectedModel: this.model.selectedModel,
       interaction: this.model.interaction,
     });
+  }
+
+  private updateConversationState(hasTranscript = this.model.items.length > 0): void {
+    const hasConversation = this.submittedMessage || hasTranscript;
+    this.element.classList.toggle("empty", !hasConversation);
+    this.element.classList.toggle("has-conversation", hasConversation);
   }
 
   private syncIdentity(): void {

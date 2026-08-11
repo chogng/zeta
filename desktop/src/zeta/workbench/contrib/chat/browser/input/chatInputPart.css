@@ -62,7 +62,7 @@
   container-type: inline-size;
   flex: 0 0 auto;
   flex-direction: column;
-  min-height: 160px;
+  min-height: 140px;
   padding: 10px;
   border: 1px solid var(--zeta-input-border);
   border-radius: 8px;
