@@ -50,6 +50,7 @@ members = [
     "zeta-rs/lsp",
     "zeta-rs/model-provider",
     "zeta-rs/model-provider-config",
+    "zeta-rs/models-manager",
     "zeta-rs/model-tokenizer",
     "zeta-rs/mcp",
     "zeta-rs/mcp-server",
@@ -252,6 +253,7 @@ zeta-mcp = { path = "zeta-rs/mcp" }
 zeta-mcp-server = { path = "zeta-rs/mcp-server" }
 zeta-model-provider = { path = "zeta-rs/model-provider" }
 zeta-model-provider-config = { path = "zeta-rs/model-provider-config" }
+zeta-models-manager = { path = "zeta-rs/models-manager" }
 zeta-model-tokenizer = { path = "zeta-rs/model-tokenizer" }
 zeta-policy = { path = "zeta-rs/policy" }
 zeta-plugins = { path = "zeta-rs/plugins" }

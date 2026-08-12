@@ -342,8 +342,10 @@ start/interrupt 与 interaction resolve，并以 tagged `SessionRequestResult` �
 5. replay 时同时校验 input、model 与 approval mode，terminal failure/interruption 不伪装成 success；
 6. 新 start 发布 durable update 后调用 `TurnExecutor::start`。
 
-`model/list` 由 `ModelCatalog` 投影当前已配置 provider 的可选模型；`session/request::SetModel`
-先通过同一 catalog 校验，再提交 Session command。全局 `preferredModel` 只作为新 Session
+`model/list` 由 `ModelCatalog` adapter 投影 shared `zeta-models-manager` 中当前已配置 provider 的
+可选模型；`session/request::SetModel` 先通过同一个 manager 的 typed resolution 校验，再提交 Session
+command。App Server 不读取 `ProviderDefinition.models` 或维护第二份排序/allow-unlisted 判断。全局
+`preferredModel` 只作为新 Session
 和历史无模型 Session 的默认值，不承担当前 Session 的模型切换。
 
 `session/request::ResolveInteraction` 使用 exact durable

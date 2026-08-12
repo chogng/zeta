@@ -48,6 +48,9 @@ use zeta_model_provider::ModelRuntimeRequest;
 use zeta_model_provider::TokenizerAssetCatalog;
 use zeta_model_provider::UnavailableModel;
 use zeta_model_provider_config::ProviderConfigRegistry;
+use zeta_models_manager::CatalogQuery;
+use zeta_models_manager::ModelRequirements;
+use zeta_models_manager::ModelsManager;
 use zeta_protocol::ContextWindow;
 use zeta_rollout::LocalStateRepository;
 use zeta_secrets::SecretStore;
@@ -472,15 +475,19 @@ pub fn open_local_app_server_with_code_index_providers(
         })
         .map_err(|error| OpenAppServerError(error.to_string()))?,
     );
+    let provider_configs = ProviderConfigRegistry::builtin();
     let model_provider = match options.model_operation_client.take() {
-        Some(client) => ModelProviderRuntime::builtin_with_client(client),
-        None => ModelProviderRuntime::builtin(),
+        Some(client) => ModelProviderRuntime::with_client(provider_configs.clone(), client),
+        None => ModelProviderRuntime::new(provider_configs.clone()),
     }
     .with_local_tokenizers(local_tokenizers);
+    let models_manager = model_provider.models_manager();
     let model_provider = Arc::new(model_provider);
     let model = Arc::new(ConfigBackedModelService {
         config: config.clone(),
         workspace: workspace.clone(),
+        provider_configs: provider_configs.clone(),
+        models_manager,
         resolver: Arc::new(ModelProviderSnapshotResolver {
             model_provider: model_provider.clone(),
         }),
@@ -490,7 +497,7 @@ pub fn open_local_app_server_with_code_index_providers(
         .map_err(|error| OpenAppServerError(error.to_string()))?;
     let approval_model_provider: Arc<dyn ModelProvider> = model_provider.clone();
     let approval_review_model =
-        crate::ReviewModelResolver::new(ProviderConfigRegistry::builtin(), approval_model_provider)
+        crate::ReviewModelResolver::new(provider_configs, approval_model_provider)
             .resolve(&runtime_config)
             .ok();
     let skill_config = Arc::new(LocalSkillConfigProvider {
@@ -800,6 +807,8 @@ impl ModelSnapshotResolver for ModelProviderSnapshotResolver {
 struct ConfigBackedModelService {
     config: Arc<ConfigStore>,
     workspace: Option<Arc<WorkspaceConfigTracker>>,
+    provider_configs: ProviderConfigRegistry,
+    models_manager: ModelsManager,
     resolver: Arc<dyn ModelSnapshotResolver>,
 }
 
@@ -851,25 +860,29 @@ impl ModelCatalog for ConfigBackedModelService {
         &self,
     ) -> Result<Vec<zeta_app_server_protocol::protocol::model::ModelCatalogEntry>, CoreError> {
         let config = self.resolved_config()?;
-        let registry = ProviderConfigRegistry::builtin();
-        let mut models = Vec::new();
-        for provider_id in config.providers.keys() {
-            let Some(provider) = registry.get(provider_id) else {
-                continue;
-            };
-            models.extend(provider.models.iter().cloned().map(|model| {
-                zeta_app_server_protocol::protocol::model::ModelCatalogEntry {
-                    model: zeta_protocol::ModelRef::new(provider_id.clone(), model.id),
-                    display_name: model.display_name,
-                }
-            }));
-        }
+        let providers = config.providers.keys().cloned().collect::<Vec<_>>();
+        let mut models = self
+            .models_manager
+            .list_static(&providers, &CatalogQuery::selectable())
+            .map_err(|error| CoreError::Model(error.to_string()))?
+            .into_iter()
+            .map(
+                |entry| zeta_app_server_protocol::protocol::model::ModelCatalogEntry {
+                    model: entry.model().clone(),
+                    display_name: entry.info().display_name.clone(),
+                },
+            )
+            .collect::<Vec<_>>();
         if let Some(preferred) = config.preferred_model
             && !models.iter().any(|entry| entry.model == preferred)
         {
+            let resolved = self
+                .models_manager
+                .resolve_static(&preferred, &ModelRequirements::agent())
+                .map_err(|error| CoreError::Model(error.to_string()))?;
             models.push(
                 zeta_app_server_protocol::protocol::model::ModelCatalogEntry {
-                    display_name: preferred.model.to_string(),
+                    display_name: resolved.entry().info().display_name.clone(),
                     model: preferred,
                 },
             );
@@ -895,10 +908,12 @@ impl ModelCatalog for ConfigBackedModelService {
                 model.provider
             ))
         })?;
-        let registry = ProviderConfigRegistry::builtin();
-        registry
+        self.provider_configs
             .normalize_for(provider, &model.provider)
-            .and_then(|_| registry.validate_model_selection(model))
+            .map_err(|error| CoreError::Model(error.to_string()))?;
+        self.models_manager
+            .resolve_static(model, &ModelRequirements::agent())
+            .map(|_| ())
             .map_err(|error| CoreError::Model(error.to_string()))
     }
 }

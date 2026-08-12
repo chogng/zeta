@@ -358,7 +358,7 @@ deserialize。JSON Schema 的最小长度只是外部提示，不能替代 Rust 
 
 ## 6. 供应商无关的模型契约
 
-`models.rs` 定义 model invocation 的 canonical value：
+`model/invocation.rs` 定义 model invocation 的 canonical value：
 
 - `ModelRequest`；
 - input message / content / tool result；
@@ -370,13 +370,18 @@ deserialize。JSON Schema 的最小长度只是外部提示，不能替代 Rust 
 `zeta-api` 负责把它转换为 OpenAI、Anthropic、Qwen 等 provider wire。Provider 特有字段不能
 反向污染 canonical model。
 
-`zeta_models.rs` 定义 model catalog metadata：
+`model/catalog.rs` 定义 model catalog metadata：
 
 - provider/model identity；
 - context window；
 - tools、reasoning、parallel tool call、personality capability；
 - reasoning effort；
-- auto-compaction threshold metadata。
+- auto-compaction threshold metadata；
+- model availability、catalog freshness、lifecycle 与 metadata quality 的跨 crate 值。
+
+目录 cache、scope、refresh、generation、字段 provenance 和 typed resolution 属于
+[`zeta-models-manager`](../zeta-rs/models-manager/README.md)，不进入纯 protocol value 层。完整
+snapshot wire wrapper 尚未落地；当前 App Server 仍投影精简 `model/list` DTO。
 
 这里的 compaction 仅是声明信息。Context builder、token accounting policy、summary
 checkpoint 和 compaction 执行都不属于 protocol。

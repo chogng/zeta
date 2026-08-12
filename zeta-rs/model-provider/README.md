@@ -2,7 +2,8 @@
 
 > 本 README 解释 provider runtime instantiation、adapter selection 与 immutable model invoker。
 > Declarative config 见 [`zeta-model-provider-config`](../model-provider-config/README.md)，跨系统
-> credential/provider 设计见 [`docs/model-provider.md`](../../docs/model-provider.md)。
+> credential/provider 设计见 [`docs/model-provider.md`](../../docs/model-provider.md)，模型目录实现见
+> [`zeta-models-manager`](../models-manager/README.md)。
 
 `zeta-model-provider` 把 validated declarative config 与 `ModelRef(provider, model)` 解析成
 `Arc<dyn ModelInvoker>`。它选择 provider runtime 和 API profile；wire codec 属于 `zeta-api`，
@@ -19,7 +20,7 @@ config resolver。本 crate 仍只拥有模型 API 选择、credential materiali
 | Symbol | 职责 | 生命周期 |
 | --- | --- | --- |
 | `ModelProvider` | `ModelRuntimeRequest → ModelInvoker` port | composition/invocation safe point |
-| `ModelProviderRuntime` | built-in concrete resolver | 持有 config registry、shared lazy operation client 和可选 local tokenizer service |
+| `ModelProviderRuntime` | built-in concrete resolver | 持有 config registry、shared `ModelsManager`、lazy operation client 和可选 local tokenizer service |
 | `ModelRuntimeRequest` | exact `ModelRef + ModelProviderConfig` | immutable selection request |
 | `ModelInvoker` | canonical `ModelRequest → ModelResponse` | one immutable provider/model snapshot |
 | `ModelInvoker::{input_token_measurement_capability,measure_input_with_cancellation}` | frozen request 的 tokenizer/preflight port | 与 invocation 相同 immutable snapshot |
@@ -47,7 +48,7 @@ invocation，不原地修改已经运行的 `RegisteredModelInvoker`。
 | `LocalInputTokenCounter` | crate-private struct | 官方预检不可用时把整份请求交给本地计数服务 | 不下载资产、不按 provider 猜 tokenizer revision |
 | `api_endpoint` | private function | `ApiProfile → zeta_api::ApiEndpoint` | 按 profile，不按 provider name 猜 |
 | provider `*Adapter::new` | crate-private | normalized base URL + fixed headers + endpoint | one immutable runtime snapshot |
-| `Provider::resolve_model` | private method | listed lookup 或 allow-unlisted synthetic model | 不做远端 catalog request |
+| `Provider::resolve_model` | private method | 委托 shared manager 的 static typed resolution | 不复制 catalog policy 或做远端请求 |
 | `RegisteredModelInvoker` | private struct | bind exact Provider + resolved Model | request 时只应用 normalized defaults |
 | `RegisteredModelInvoker::invoke` | private trait impl | clone canonical request、apply max tokens、complete | 不读取 product config |
 
@@ -63,6 +64,7 @@ ModelProviderRuntime::runtime(ModelRuntimeRequest)
    │     └─ providers::instantiate(adapter kind, normalized config)
    └─ Provider::build_model(model_id)
       ├─ Provider::resolve_model
+      │  └─ ModelsManager::resolve_static
       └─ RegisteredModelInvoker { provider, model }
 
 RegisteredModelInvoker::invoke(request)
@@ -85,8 +87,9 @@ Google、Kimi 与 Z.AI 声明 remote/estimated。`Provider` 统一执行“官�
 unavailable”的优先级；因此任何 provider 只要注入精确 `ModelRef` binding 都能使用 local/estimated，
 不再由各 adapter 复制本地选择逻辑。
 
-`Provider::complete` 再次 resolve model，因此 direct Provider callers 与 bound invoker 使用相同
-catalog policy。
+`Provider::complete` 再次通过同一个 manager resolve model，因此 direct Provider callers 与 bound
+invoker 使用相同 catalog policy。App Server 通过 `ModelProviderRuntime::models_manager()` 获得同一
+进程内 manager clone，目录展示与 invocation 不再分别读取 `ProviderDefinition.models`。
 
 ## 供应商适配器模式
 
@@ -111,8 +114,8 @@ profile，但只有 configuration definition 可以决定 profile。
 | wire/operation/transport initialization failure | `Api(ApiError)` |
 | explicitly unavailable host model | `Unavailable` |
 
-`AllowUnlisted` 只创建 `Model::new(id, id)` 作为 runtime selection，不证明 entitlement、capability 或
-remote availability。`ListedOnly` 在任何 network call 前拒绝。
+`AllowUnlisted` 由 manager 生成 unverified metadata，不证明 entitlement、capability 或 remote
+availability。`ListedOnly` 由 manager 在任何 network call 前拒绝。
 
 ## 方向偏差检查
 
@@ -143,7 +146,10 @@ OpenAI semantic adapter 可以从 host 注入的 `SecretStore` materialize API k
 OpenAI-compatible semantic endpoint 当前按 unauthenticated endpoint 调用。持久化 secret backend、
 credential 设置 UI、subscription backend、streaming 与动态 catalog 的长期设计仍在系统文档中演进。
 新增能力应保持 invoker immutable、profile explicit、
-provider adapter private，以及 config/codec/operation/network 四层分离。
+provider adapter private，以及 config/catalog/codec/operation/network 分层。
+
+当前 runtime 尚未实现 provider-specific `ModelCatalogSource`；动态 discovery endpoint/DTO 和 credential
+binding 属于下一阶段 adapter 工作。静态 invocation resolution 已统一进入 manager。
 
 当前 input-token preflight 已贯穿 `ModelInvoker → ProviderAdapter → zeta-api → OperationClient` 的
 caller-owned cancellation。所有 estimated endpoint 使用额外 1%/至少 32 tokens 的保守记账余量；这

@@ -2,8 +2,9 @@ mod catalog;
 mod invocation;
 
 pub use catalog::{
-    CapabilitySupport, ContextWindow, InvalidModelIdentity, Model, ModelCapabilities, ModelId,
-    ModelInfo, ModelPreset, ModelRef, ProviderId, ReasoningEffort,
+    CapabilitySupport, ContextWindow, InvalidModelIdentity, Model, ModelAvailability,
+    ModelCapabilities, ModelCatalogFreshness, ModelId, ModelInfo, ModelLifecycle,
+    ModelMetadataQuality, ModelPreset, ModelRef, ProviderId, ReasoningEffort,
 };
 pub use invocation::{
     ContentPart, ImageDetail, ImageDetailDecision, ImageDetailDecisionReason, InputItem, Message,

@@ -34,7 +34,8 @@ pub use item::{PlanStep, PlanStepStatus, PlanUpdate, ThreadItem};
 pub use model::{
     CapabilitySupport, ContentPart, ContextWindow, ImageDetail, ImageDetailDecision,
     ImageDetailDecisionReason, InputItem, InvalidModelIdentity, Message, MessageRole, Model,
-    ModelCapabilities, ModelId, ModelInfo, ModelPreset, ModelRef, ModelRequest, ModelResponse,
+    ModelAvailability, ModelCapabilities, ModelCatalogFreshness, ModelId, ModelInfo,
+    ModelLifecycle, ModelMetadataQuality, ModelPreset, ModelRef, ModelRequest, ModelResponse,
     ModelStreamEvent, ModelUsage, ProviderId, ReasoningConfig, ReasoningEffort, ResponseItem,
     StopReason, ToolCall, ToolChoice, ToolDefinition, ToolResult,
 };

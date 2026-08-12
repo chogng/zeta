@@ -1,8 +1,9 @@
 # 模型目录系统
 
-> 计划物理位置：`zeta-rs/models-manager/`
+> 物理位置：`zeta-rs/models-manager/`
 > Rust crate：`zeta_models_manager`
-> 当前状态：Proposed，尚未创建 crate
+> 当前状态：Phase 1 core 已实现；动态 provider adapters、持久缓存和完整 App Server snapshot API 尚未实现
+> Crate 实现说明：[`zeta-models-manager` README](../zeta-rs/models-manager/README.md)
 > Canonical model contract：[`protocol.md`](protocol.md#6-provider-independent-model-contract)
 > Provider wire adapter：[`zeta-api.md`](zeta-api.md)
 > Provider runtime：[`model-provider.md`](model-provider.md)
@@ -15,8 +16,9 @@
 
 ## 快速理解
 
-模型目录系统回答“当前有哪些模型可选、这些信息有多可信”；它管理发现、缓存和合并，不执行
-模型调用。该系统目前仍是计划设计。
+模型目录系统回答“当前有哪些模型可选、这些信息有多可信”；它管理发现、内存缓存和合并，不执行
+模型调用。当前静态目录、动态 source port、snapshot/generation、singleflight、merge/filter/resolve
+已经落地；真实 provider discovery 与完整客户端协议仍按后续阶段推进。
 
 | 读者首先会问 | 直接答案 | 深入阅读 |
 | --- | --- | --- |
@@ -59,24 +61,39 @@ model provider 负责“如何用已选模型执行一次调用”
 字段，就把已有的已知值覆盖成“不支持”，也禁止根据 model ID 字符串猜测工具、推理或上下文
 能力。
 
-## 2. 当前仓库审计
+## 2. 当前实现状态与仓库审计
 
 当前模型相关职责分布如下：
 
 | 位置 | 已有职责 | 不应继续扩张的方向 |
 | --- | --- | --- |
-| `zeta-protocol::model::catalog` | `ProviderId`、`ModelId`、`ModelRef`、`ModelInfo`、capability value | 请求调度、缓存、provider DTO、refresh state |
+| `zeta-protocol::model::catalog` | identity、`ModelInfo`、capability、availability/freshness/lifecycle/quality value | 请求调度、缓存、provider DTO、refresh state |
 | `zeta-model-provider-config` | provider definition、endpoint/default、静态 seed models、配置归一化 | HTTP、凭据读取、动态 discovery、TTL |
-| `zeta-model-provider` | provider runtime、adapter 选择、模型调用 | catalog policy、跨 provider merge、UI 查询 |
+| `zeta-models-manager` | scope、静态 seed、memory cache、source port、singleflight、merge/filter/resolve、snapshot generation | provider DTO、secret、调用、Config persistence、UI |
+| `zeta-model-provider` | provider runtime、adapter 选择、模型调用、manager static resolution consumer | catalog policy、跨 provider merge、UI 查询 |
 | `zeta-api` | endpoint/request/event 的 Provider wire codec | transport、retry、catalog authority、用户筛选 |
 | `zeta-http-client` | HTTP/WebSocket execution、proxy/TLS/pool、transport diagnostics | Provider DTO、catalog policy、模型选择 |
 | `zeta-client` | operation retry、SSE/NDJSON framing、telemetry | Provider DTO、catalog policy、模型选择 |
 | `zeta-config` | 用户配置 authority、patch/merge/persistence | provider 请求和进程内 refresh task |
-| App Server / clients | 组合、RPC、展示与交互 | 各自维护模型表或推断 capability |
+| App Server / clients | 组合、RPC、展示与交互；Local App Server 已投影 shared manager | 各自维护模型表或推断 capability |
 
-`ProviderDefinition.models` 当前可以作为启动 seed 和内置 metadata 的来源，但不能继续兼任动态
-可用性缓存。`ModelProviderRuntime::resolve_model` 当前的 `ListedOnly` / `AllowUnlisted`
-语义仍有价值，但最终应消费 manager 的 resolution，而不是独立维护另一套 catalog 判断。
+`ProviderDefinition.models` 当前只作为启动 seed 和内置 metadata 来源，不兼任动态可用性缓存。
+`ModelProviderRuntime::resolve_model` 已消费 manager 的 static resolution；Local App Server 的
+`model/list` 和 Session model validation 也使用同一个 manager clone，不再独立维护
+`ListedOnly` / `AllowUnlisted` 判断。
+
+当前实现边界如下：
+
+| 能力 | 状态 | 实现证据 |
+| --- | --- | --- |
+| 静态 seed、确定排序、typed resolution | ✅ | `ModelsManager::{static_snapshot,list_static,resolve_static}` |
+| 动态 source port、scope 校验、partial/complete merge | ✅ | `ModelCatalogSource`、`commit_discovery`、`apply_discovery` |
+| per-scope memory cache、freshness、singleflight | ✅ | `ManagedScope`、`ScopeState`、`ModelsManager::{read,refresh}` |
+| 字段 provenance 与 Unknown 保留 | ✅ | `CatalogRecord`、`ModelMetadataProvenance` |
+| model-provider/App Server 静态目录统一 | ✅ | `ModelProviderRuntime::models_manager`、`ConfigBackedModelService` |
+| 真实 provider discovery adapters | 尚未完成 | Phase 2 |
+| persisted observation cache、backoff/jitter、并发总闸 | 尚未完成 | Phase 4 / 后续 core hardening |
+| `model/refresh`、`model/updated`、完整 snapshot DTO | 尚未完成 | Phase 3 |
 
 现有 `ModelInfo` 也存在后续需要修正的语义缺口：
 
@@ -906,14 +923,16 @@ model/list(stale)
 
 ### 阶段 1：纯目录核心
 
-- 创建 `zeta-models-manager`；
-- 定义 source port、scope、snapshot、read/refresh policy；
-- 从 `ProviderDefinition.models` 读取 seed；
-- 实现 memory cache、singleflight、merge/filter/resolve；
-- 先接 fake source 和完整单元测试；
-- 在 protocol 补齐 snapshot wrapper 和最小必要 metadata 类型。
+- ✅ 创建 `zeta-models-manager`；
+- ✅ 定义 source port、scope、snapshot、read/refresh policy；
+- ✅ 从 `ProviderDefinition.models` 读取 seed；
+- ✅ 实现 memory cache、singleflight、merge/filter/resolve；
+- ✅ 接入 fake source/fake clock 单元测试；
+- 部分具备：protocol 已补 availability/freshness/lifecycle/quality；完整 snapshot wrapper 随 Phase 3
+  App Server API 一并落地，当前 snapshot 是 manager 的进程内 immutable value。
 
-完成条件：无网络也能从统一 manager 获得确定 catalog，且不再由 UI/provider runtime 各自筛选。
+当前结果：无网络可以从统一 manager 获得确定 catalog，provider runtime 与 Local App Server 已迁移；
+其他产品 picker 尚未接入，因此跨 Desktop/CLI/TUI 的完成条件仍留在 Phase 3。
 
 ### 阶段 2：高价值动态供应商
 

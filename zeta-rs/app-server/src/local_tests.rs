@@ -14,8 +14,13 @@ use zeta_model_provider::EmbeddingRequest;
 use zeta_model_provider::EmbeddingResponse;
 use zeta_model_provider::EmbeddingVector;
 use zeta_model_provider::{ModelId, ModelInvoker, ModelProviderError, ProviderId};
+use zeta_model_provider_config::ApiProfile;
+use zeta_model_provider_config::EndpointPolicy;
+use zeta_model_provider_config::ModelCatalogPolicy;
 use zeta_model_provider_config::ModelContextConfig;
 use zeta_model_provider_config::ModelProviderConfig;
+use zeta_model_provider_config::ProviderAdapter;
+use zeta_model_provider_config::ProviderDefinition;
 use zeta_protocol::{
     CommandId, ModelRef, ModelRequest, ModelResponse, Patch, ResponseItem, StopReason,
 };
@@ -297,9 +302,12 @@ fn model_invocations_use_latest_config_without_mutating_an_in_flight_snapshot() 
     let configured = configure_test_provider(&config, ConfigRevision::INITIAL);
     let before_update = select_model(&config, "select-before", configured, "before-update");
     let gate = Arc::new(ResponseGate::default());
+    let provider_configs = test_provider_registry();
     let model = Arc::new(ConfigBackedModelService {
         config: config.clone(),
         workspace: None,
+        provider_configs: provider_configs.clone(),
+        models_manager: ModelsManager::new(provider_configs),
         resolver: Arc::new(RecordingSnapshotResolver { gate: gate.clone() }),
     });
 
@@ -335,9 +343,12 @@ model = "workspace-model"
         &workspace_path,
         WorkspaceConfigScope::new(WorkspaceId::new("project").unwrap()),
     )));
+    let provider_configs = test_provider_registry();
     let model = ConfigBackedModelService {
         config: config.clone(),
         workspace: Some(workspace.clone()),
+        provider_configs: provider_configs.clone(),
+        models_manager: ModelsManager::new(provider_configs),
         resolver: Arc::new(RecordingSnapshotResolver {
             gate: Arc::new(ResponseGate::default()),
         }),
@@ -363,6 +374,31 @@ model = "workspace-model"
     let _ = std::fs::remove_file(workspace_path);
 }
 
+#[test]
+fn local_catalog_projects_allow_unlisted_preferred_model_through_models_manager() {
+    let path = config_path("models-manager-catalog");
+    let config = Arc::new(ConfigStore::open(&path).unwrap());
+    let configured = configure_test_provider(&config, ConfigRevision::INITIAL);
+    select_model(&config, "select-custom", configured, "custom-model");
+    let provider_configs = test_provider_registry();
+    let model = ConfigBackedModelService {
+        config,
+        workspace: None,
+        provider_configs: provider_configs.clone(),
+        models_manager: ModelsManager::new(provider_configs),
+        resolver: Arc::new(RecordingSnapshotResolver {
+            gate: Arc::new(ResponseGate::default()),
+        }),
+    };
+
+    let models = model.list().unwrap();
+
+    assert_eq!(models.len(), 1);
+    assert_eq!(models[0].model, model_ref("custom-model"));
+    assert_eq!(models[0].display_name, "custom-model");
+    remove_config_files(&path);
+}
+
 fn invoke_text(model: &dyn ModelService, prompt: &str) -> String {
     model
         .invoke(
@@ -372,4 +408,19 @@ fn invoke_text(model: &dyn ModelService, prompt: &str) -> String {
         )
         .unwrap()
         .text()
+}
+
+fn test_provider_registry() -> ProviderConfigRegistry {
+    let mut registry = ProviderConfigRegistry::builtin();
+    registry
+        .register(ProviderDefinition::new(
+            ProviderId::new("test").unwrap(),
+            "Test",
+            ProviderAdapter::OpenAiCompatible,
+            ApiProfile::OpenAiChatCompletions,
+            EndpointPolicy::ConfiguredOnly,
+            ModelCatalogPolicy::AllowUnlisted,
+        ))
+        .unwrap();
+    registry
 }

@@ -87,6 +87,44 @@ pub enum ContextWindow {
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
+pub enum ModelAvailability {
+    Available,
+    Unavailable,
+    Unverified,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum ModelCatalogFreshness {
+    Fresh,
+    StaleUsable,
+    Expired,
+    StaticOnly,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum ModelLifecycle {
+    Stable,
+    Preview,
+    Legacy,
+    Retired,
+    Unknown,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum ModelMetadataQuality {
+    ProviderLive,
+    UserConfigured,
+    BuiltinCurated,
+    ProviderSeed,
+    PersistedObservation,
+    Unknown,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
 pub struct ModelCapabilities {
     pub tools: CapabilitySupport,
     pub reasoning: CapabilitySupport,

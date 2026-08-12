@@ -21,7 +21,7 @@ credential、secret、connection pool 或 process-local adapter。
 | `InputTokenCountDefinition` | provider-owned preflight declaration | profile、target 与明确 model policy |
 | `NormalizedInputTokenCountConfig` | runtime-ready count snapshot | 已解析 base URL；不包含 client 或准确度策略 |
 | `EndpointPolicy` | provider default 或 configured-only | 不执行 DNS/network validation |
-| `ModelCatalogPolicy` | listed-only 或 allow-unlisted | 只表达 static catalog gate |
+| `ModelCatalogPolicy` | listed-only 或 allow-unlisted | 声明 static gate，由 `zeta-models-manager` 执行 canonical resolution |
 | `ApprovalReviewModelDefault` | automatic review default | active model 或 provider-declared model |
 | `ProviderConfigError` | static/normalization error | 不包含 transport/auth failure |
 
@@ -51,7 +51,7 @@ src/
 | `ProviderConfigRegistry::normalize` | public method | config + definition → normalized snapshot | endpoint/default/profile precedence 在此唯一实现 |
 | `normalize_for` | public method | 先 enforce selected/configured provider identity | 防止 model ref 与 config 串线 |
 | `automatic_approval_review_model` | public method | provider default 或 active model fallback | 不证明远端 entitlement |
-| `validate_model_selection` | public method | listed catalog 的 static gate | allow-unlisted 仍需 runtime validation |
+| `validate_model_selection` | public compatibility/preflight method | listed catalog 的 deterministic static gate | 新 runtime consumer 使用 `zeta-models-manager` canonical resolution |
 | `normalize_base_url` | crate-private function | apply explicit normalization rule | 不追加 API route |
 | `is_http_url` | crate-private function | 最小 HTTP(S) shape check | 不是 full URL/network validator |
 | `providers::builtin` | crate-private function | 13 个 built-in definitions | 每个 provider 在 sibling module 独立定义 |

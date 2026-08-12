@@ -40,7 +40,7 @@ serde / schemars / ts-rs
 | Consumer update | `SessionUpdateEnvelope`, `ThreadUpdateEnvelope`, `ThreadUpdate`, `ItemDelta` | durable committed 与 transient projection |
 | Interaction | `TurnInteraction`, `AgentRequest`, `AgentResponse`, `PendingInteraction` | Turn 等待/恢复的 typed request-response |
 | Approval | `ActionApprovalRequest`, `ActionApprovalResponse`, capability/decision enums | exact action/policy binding |
-| Model catalog | `ProviderId`, `ModelId`, `ModelRef`, `ModelInfo`, `ModelCapabilities`, `ModelPreset` | provider-neutral selection metadata |
+| Model catalog | identity、`ModelInfo`、capabilities、availability/freshness/lifecycle/quality enums、`ModelPreset` | provider-neutral selection metadata；cache/snapshot orchestration 属于 `zeta-models-manager` |
 | Model invocation | `ModelRequest`, `InputItem`, `Message`, tools, `ModelResponse`, `ModelStreamEvent` | canonical model I/O |
 | Config values | `Patch<T>`, `ApprovalMode`, `SandboxMode`, `Personality`, `Theme`, `WebSearchMode` | shared pure values |
 | Stable failure | `StableTurnError`, `StableTurnErrorCode` | durable/client-safe Turn failure |

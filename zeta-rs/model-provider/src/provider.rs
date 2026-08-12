@@ -19,7 +19,6 @@ use zeta_context_engine::ContextTokenMeasurementCapability;
 use zeta_context_engine::ContextTokenMeasurementOutcome;
 use zeta_http_client::UreqHttpClient;
 use zeta_model_provider_config::Model;
-use zeta_model_provider_config::ModelCatalogPolicy;
 use zeta_model_provider_config::ModelId;
 use zeta_model_provider_config::ModelProviderConfig;
 use zeta_model_provider_config::NormalizedModelProviderConfig;
@@ -29,6 +28,9 @@ use zeta_model_provider_config::ProviderDefinition;
 use zeta_model_provider_config::ProviderId;
 use zeta_model_tokenizer::LocalTokenizerRegistry;
 use zeta_model_tokenizer::LocalTokenizerService;
+use zeta_models_manager::ModelRequirements;
+use zeta_models_manager::ModelsManager;
+use zeta_models_manager::ModelsManagerError;
 use zeta_protocol::CapabilitySupport;
 use zeta_protocol::ModelRef;
 use zeta_secrets::SecretStore;
@@ -38,6 +40,7 @@ use zeta_secrets::UnavailableSecretStore;
 pub struct Provider {
     definition: ProviderDefinition,
     config: NormalizedModelProviderConfig,
+    models: ModelsManager,
     adapter: Arc<dyn ProviderAdapter>,
     client: Arc<dyn OperationClient>,
     local_counter: providers::measurement::LocalInputTokenCounter,
@@ -47,6 +50,7 @@ impl Provider {
     pub(crate) fn instantiate(
         definition: ProviderDefinition,
         config: NormalizedModelProviderConfig,
+        models: ModelsManager,
         client: Arc<dyn OperationClient>,
         local_tokenizers: Arc<dyn LocalTokenizerService>,
     ) -> Result<Self, ModelProviderError> {
@@ -65,6 +69,7 @@ impl Provider {
         Ok(Self {
             definition,
             config,
+            models,
             adapter,
             client,
             local_counter,
@@ -177,29 +182,20 @@ impl Provider {
     }
 
     fn resolve_model(&self, model_id: &ModelId) -> Result<Model, ModelProviderError> {
-        if let Some(model) = self
-            .definition
-            .models
-            .iter()
-            .find(|model| &model.id == model_id)
-        {
-            return Ok(model.clone());
-        }
-        match self.definition.model_catalog_policy {
-            ModelCatalogPolicy::ListedOnly => Err(ModelProviderError::ModelNotRegistered {
-                provider: self.definition.id.clone(),
-                model: model_id.clone(),
-            }),
-            ModelCatalogPolicy::AllowUnlisted => {
-                Ok(Model::new(model_id.clone(), model_id.as_str()))
-            }
-        }
+        self.models
+            .resolve_static(
+                &ModelRef::new(self.definition.id.clone(), model_id.clone()),
+                &ModelRequirements::agent(),
+            )
+            .map(|resolved| resolved.entry().info().clone())
+            .map_err(model_resolution_error)
     }
 }
 
 /// Process-local runtime that instantiates declarative provider configuration.
 pub struct ModelProviderRuntime {
     configs: ProviderConfigRegistry,
+    models: ModelsManager,
     client: Arc<dyn OperationClient>,
     secrets: Arc<dyn SecretStore>,
     local_tokenizers: Arc<dyn LocalTokenizerService>,
@@ -214,8 +210,10 @@ impl ModelProviderRuntime {
     }
 
     pub fn with_client(configs: ProviderConfigRegistry, client: Arc<dyn OperationClient>) -> Self {
+        let models = ModelsManager::new(configs.clone());
         Self {
             configs,
+            models,
             client,
             secrets: Arc::new(UnavailableSecretStore),
             local_tokenizers: Arc::new(LocalTokenizerRegistry::new()),
@@ -227,8 +225,10 @@ impl ModelProviderRuntime {
         client: Arc<dyn OperationClient>,
         secrets: Arc<dyn SecretStore>,
     ) -> Self {
+        let models = ModelsManager::new(configs.clone());
         Self {
             configs,
+            models,
             client,
             secrets,
             local_tokenizers: Arc::new(LocalTokenizerRegistry::new()),
@@ -253,6 +253,11 @@ impl ModelProviderRuntime {
 
     pub fn builtin_with_client(client: Arc<dyn OperationClient>) -> Self {
         Self::with_client(ProviderConfigRegistry::builtin(), client)
+    }
+
+    /// Returns the shared catalog manager used by this runtime for model resolution.
+    pub fn models_manager(&self) -> ModelsManager {
+        self.models.clone()
     }
 
     pub fn instantiate(
@@ -296,9 +301,19 @@ impl ModelProviderRuntime {
         Provider::instantiate(
             definition,
             normalized,
+            self.models.clone(),
             self.client.clone(),
             self.local_tokenizers.clone(),
         )
+    }
+}
+
+fn model_resolution_error(error: ModelsManagerError) -> ModelProviderError {
+    match error {
+        ModelsManagerError::ModelNotListed { provider, model } => {
+            ModelProviderError::ModelNotRegistered { provider, model }
+        }
+        error => ModelProviderError::Unavailable(error.to_string()),
     }
 }
 

@@ -8242,6 +8242,7 @@ dependencies = [
  "zeta-mcp-extension",
  "zeta-model-provider",
  "zeta-model-provider-config",
+ "zeta-models-manager",
  "zeta-policy",
  "zeta-prompts",
  "zeta-protocol",
@@ -8834,6 +8835,7 @@ dependencies = [
  "zeta-http-client",
  "zeta-model-provider-config",
  "zeta-model-tokenizer",
+ "zeta-models-manager",
  "zeta-protocol",
  "zeta-secrets",
 ]
@@ -8860,6 +8862,15 @@ dependencies = [
  "zeta-http-client",
  "zeta-protocol",
  "zeta-utils-path",
+]
+
+[[package]]
+name = "zeta-models-manager"
+version = "0.1.0"
+dependencies = [
+ "tokio",
+ "zeta-model-provider-config",
+ "zeta-protocol",
 ]
 
 [[package]]
