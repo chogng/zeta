@@ -1,5 +1,6 @@
 import "../../../workbench/workbench.desktop.main.js";
 import "../../../editor/editor.code.all.js";
+import "../../../workbench/contrib/codeEditor/browser/codeEditor.contribution.js";
 import { codeWorkbenchSession } from "../../browser/workbench/codeWorkbenchSession.js";
 import { codeSessionsProfile } from "../../../sessions/browser/code/codeSessionsProfile.js";
 import { registerSessionsTitlebarEntry } from "../../../sessions/browser/common/sessionTitlebarEntry.js";

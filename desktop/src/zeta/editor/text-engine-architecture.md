@@ -364,7 +364,7 @@ contrib/<feature>/
 | `language/common/*` | `common/languages/*`、`common/tokens/*` | syntax/completion/token拆分 | Current |
 | `language/browser/*` | `browser/language/*` | Worker 和浏览器 adapter 归位 | Current |
 | `browser/diff/rustDiffComputationService.ts` | `browser/services/rustDiffComputationService.ts` | runtime adapter 归服务层 | Current |
-| `browser/browserTextModelService.ts` | `browser/services/browserTextModelService.ts` | 与 resource store 一起归位 | Current |
+| `browser/browserTextModelService.ts` | `browser/services/browserTextModelService.ts` | model reference、dirty/conflict 与保存语义归 Editor；文件 I/O 通过 `ITextResourceStore` 注入 | Current |
 
 ### 5.1 当前实现台账：按文件阅读 Aster 的入口
 
@@ -395,7 +395,8 @@ contrib/<feature>/
 | services | `common/services/{languageService,textModelService,textResourceStore}.ts` | Aster-owned provider factory、model reference、resource resolve/save/change contract | 不导出 Workbench transport 或 generated DTO |
 | browser/view | `browser/view/*.ts` | DOM viewport、rendered line、geometry、minimap、semantic token 和 decoration presentation | view 只能读取 model/viewModel snapshot；CSS 由 view owner 管理 |
 | browser/input | `browser/input/{textInputController,compositionController,keyboardNavigationController,pointerSelectionController,pointerAutoScroll,pointerMultiCursor}.ts` | textarea、IME、键盘和 pointer navigation、输入事件适配 | 输入热路径不等待 IPC/RPC |
-| browser/services | `browser/services/{browserTextModelService,browserTextResourceStore,rustDiffComputationService}.ts` | Workbench textfile、Rust App Server 与 Aster contract 的薄适配 | 强制 transport 缺失时显式报错，不做 production fallback |
+| editor browser/services | `browser/services/{browserTextModelService,rustDiffComputationService,rustSyntaxFactsService}.ts` | 管理 model reference/dirty/conflict，并将前端 `IDiffApi` / `ISyntaxApi` 结果投影为 editor facts | 不引用 Workbench、IPC 或 generated App Server DTO；强制能力缺失时显式报错 |
+| Workbench adapter | `workbench/contrib/codeEditor/browser/{browserTextResourceStore,browserEditorPart}.ts` | 文件、TextMate、worker 与产品服务接线 | 只实现 editor-owned contract，不复制 model、selection 或 contribution 行为 |
 | contrib/editing | `contrib/{clipboard,comment,dropOrPasteInto,linesOperations,transpose,wordWrap,insertFinalNewLine}/` | 每个功能自己拥有 common command、browser controller、presentation 和 tests | 新增功能不得回填 browser 根目录 |
 | contrib/language UX | `contrib/{bracketMatching,folding,gotoError,hover,suggest,snippet,format,rename}/` | 语言驱动的编辑、诊断、hover、completion、format 和 rename | provider contract 在 common；DOM/widget 在 browser |
 | contrib/query contracts | `contrib/{documentSymbols,gotoSymbol,links,codeAction,inlayHints,inlineCompletions,parameterHints,linkedEditing,codelens}/common/` | provider request/result、版本 freshness、resolve 和 edit contract | 没有浏览器 UI 时仍必须保持可测试的 common contract；不得创建空 controller |
@@ -412,7 +413,7 @@ producer, synchronization, and presentation owners stay separate:
 | Snapshot synchronization, provider priority/fallback, result freshness, and wire deltas | Aster `common/languages/syntax/*` | `SyntaxService`, `SyntaxWorker`, `SyntaxProvider` | parser implementation, App Server transport, or product file access |
 | TextMate grammar tokenization | `workbench/services/textMate` | `TextMateSyntaxWorker` contributes a high-priority `SyntaxProvider` | document model, diagnostics UI, or App Server syntax facts |
 | Token spans, markers, symbol navigation, and folding presentation | Aster `common/tokens` plus the matching `contrib` | versioned stores consumed by the respective contrib | parser state or cross-editor part state |
-| Structured-document editing | Aster | `textBlock` may use Aster only through `IEmbeddedTextEditor` | Aster syntax runtime, TextMate worker, or code-editor part state |
+| Structured-document editing | Aster | `textBlock` may use the line editor only through editor-owned `IEmbeddedTextEditorFactory` | line-editor syntax runtime, TextMate worker, or code-editor part state |
 
 The Rust adapter is optional and bounded. Unsupported languages and oversized
 documents fall back to the frontend provider chain; a failed Rust request does
@@ -434,7 +435,7 @@ TextModelReference
   → bracket/comment/lines/find/quickAccess/hover/format/rename/readOnly/save
 ```
 
-`browser/browserEditorPart.ts` 只提供 TextMate grammar readiness、syntax Worker 和 completion Worker；它不能把 Workbench 类型传入 `common`。`browser/editorContribution.ts` 提供 feature group 的静态注册契约，`contrib/codeEditorPart.contribution.ts` 组合默认 line-editor runtime，单项能力由自己的 `*.contribution.ts` 安装。`contrib/editor.contribution.ts` 只负责 pane 注册和强制 adapter 注入；根级 `editor.code.all.ts` 是 Code 产品入口导入的显式 capability list，`editor.all.ts` 仅提供完整集合。新 contribution 若需要跨宿主能力，必须先扩展 `common/services` contract，再在这里装配 browser adapter。
+`workbench/contrib/codeEditor/browser/browserEditorPart.ts` 提供 TextMate grammar readiness、syntax Worker 和 completion Worker；它只能通过 editor-owned options/contract 注入能力。`browser/editorContribution.ts` 提供 feature group 的静态注册契约，`contrib/codeEditorPart.contribution.ts` 组合默认 line-editor runtime，单项能力由自己的 `*.contribution.ts` 安装。`workbench/contrib/codeEditor/browser/codeEditor.contribution.ts` 只负责 pane 注册和强制 adapter 注入；根级 `editor.code.all.ts` 是 Code 产品入口导入的显式 capability list，`editor.all.ts` 仅提供完整 editor 能力集合。新 contribution 若需要跨宿主能力，必须先扩展 editor common/browser contract，再由 Workbench adapter 注入。
 
 ### 5.3 当前仍保留的宿主边界
 
@@ -479,7 +480,7 @@ Current：本文、`README.md` 和 `docs/editor-architecture.md` 共同描述 As
 
 ### Phase 3：完成 services/adapters（Current）
 
-1. 新增 `ITextResourceStore`。Current：`common/services/textResourceStore.ts` + `browser/services/browserTextResourceStore.ts`。
+1. 新增 `ITextResourceStore`。Current：`common/services/textResourceStore.ts` + `workbench/contrib/codeEditor/browser/browserTextResourceStore.ts`。
 2. `BrowserTextResourceStore` 适配 Workbench `ITextFileService`。
 3. `BrowserTextModelService` 只负责 model cache、baseline、dirty 和 conflict。
 4. Rust diff/language/file adapters 只实现 Aster-owned frontend contract。

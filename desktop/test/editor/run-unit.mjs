@@ -2,7 +2,17 @@ import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 
 const desktopDirectory = resolve(import.meta.dirname, "../..");
-const result = spawnSync(process.execPath, ["--import", "./scripts/ignore-css-imports.mjs", "--test", "--test-concurrency=1", "dist/test/src/zeta/editor/**/test/**/*.test.js"], {
+const result = spawnSync(process.execPath, [
+  "--import",
+  "./scripts/ignore-css-imports.mjs",
+  "--test",
+  "--test-concurrency=1",
+  "dist/test/src/zeta/editor/**/test/**/*.test.js",
+  "dist/test/src/zeta/workbench/contrib/academic/**/test/**/*.test.js",
+  "dist/test/src/zeta/workbench/contrib/codeEditor/**/test/**/*.test.js",
+  "dist/test/src/zeta/workbench/contrib/documentEditor/**/test/**/*.test.js",
+  "dist/test/src/zeta/workbench/services/documentCollaboration/**/test/**/*.test.js",
+], {
   cwd: desktopDirectory,
   stdio: "inherit",
 });

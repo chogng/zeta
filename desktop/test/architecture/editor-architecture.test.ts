@@ -6,13 +6,23 @@ import { findDesktopRoot } from "./testPaths.js";
 
 const desktopRoot = findDesktopRoot(import.meta.dirname);
 const editorRoot = resolve(desktopRoot, "src/zeta/editor");
+const workbenchRoot = resolve(desktopRoot, "src/zeta/workbench");
 
 test("Editor keeps explicit feature files without index barrels", () => {
   const indexFiles = collectFiles(editorRoot).filter(file => file.endsWith("\\index.ts") || file.endsWith("/index.ts"));
   assert.deepEqual(indexFiles, []);
 });
 
-test("Editor synchronous layers do not import Workbench, Electron, or generated DTOs", () => {
+test("Editor production code does not depend on Workbench or generated transport DTOs", () => {
+  for (const file of collectFiles(editorRoot)) {
+    if (!file.endsWith(".ts") || file.includes(`${join("editor", "test")}`)) continue;
+    const source = readFileSync(file, "utf8");
+    assert.doesNotMatch(source, /from\s+["'][^"']*workbench[^"']*["']|import\s+["'][^"']*workbench[^"']*["']/u, relative(editorRoot, file));
+    assert.doesNotMatch(source, /from\s+["'][^"']*generated\/app-server[^"']*["']/u, relative(editorRoot, file));
+  }
+});
+
+test("Editor synchronous layers do not import Electron or generated DTOs", () => {
   const protectedDirectories = [
     "common/core",
     "common/model",
@@ -25,7 +35,7 @@ test("Editor synchronous layers do not import Workbench, Electron, or generated 
     for (const file of collectFiles(join(editorRoot, directory))) {
       if (!file.endsWith(".ts")) continue;
       const source = readFileSync(file, "utf8");
-      assert.doesNotMatch(source, /from\s+["'][^"']*(?:workbench|electron|generated)[^"']*["']/u, relative(editorRoot, file));
+      assert.doesNotMatch(source, /from\s+["'][^"']*(?:electron|generated)[^"']*["']/u, relative(editorRoot, file));
     }
   }
 });
@@ -33,7 +43,6 @@ test("Editor synchronous layers do not import Workbench, Electron, or generated 
 test("Flat editor layout keeps both engine owners and product bundles", () => {
   const requiredFiles = [
     "browser/editorPart.ts",
-    "browser/browserEditorPart.ts",
     "browser/view/editorViewport.ts",
     "browser/input/textInputController.ts",
     "browser/services/rustDiffComputationService.ts",
@@ -48,11 +57,11 @@ test("Flat editor layout keeps both engine owners and product bundles", () => {
     "contrib/longLinesHelper/browser/longLinesHelper.ts",
     "contrib/tokenization/common/tokenizationTextModelPart.ts",
     "contrib/semanticTokens/common/semanticTokens.ts",
-    "browser/codeEditorPane.ts",
-    "browser/documentEditorPane.ts",
+    "common/editorResource.ts",
+    "browser/widget/embeddedTextEditor.ts",
     "common/model/documentModel.ts",
     "common/model/documentTransaction.ts",
-    "contrib/academic/browser/academicEditor.contribution.ts",
+    "contrib/academic/common/schema.ts",
     "editor.code.all.ts",
     "editor.academic.all.ts",
     "editor.all.ts",
@@ -84,9 +93,9 @@ test("Aster source does not retain retired engine compatibility identifiers", ()
 
 test("Aster owns its public protocol and DOM vocabulary without renaming the editor domain", () => {
   const api = readFileSync(join(editorRoot, "editor.api.ts"), "utf8");
-  const codeInput = readFileSync(join(editorRoot, "browser/codeEditorInput.ts"), "utf8");
-  const documentInput = readFileSync(join(editorRoot, "browser/documentEditorInput.ts"), "utf8");
-  const diffInput = readFileSync(join(editorRoot, "browser/diffEditorInput.ts"), "utf8");
+  const codeInput = readFileSync(join(workbenchRoot, "contrib/codeEditor/browser/codeEditorInput.ts"), "utf8");
+  const documentInput = readFileSync(join(workbenchRoot, "contrib/documentEditor/browser/documentEditorInput.ts"), "utf8");
+  const diffInput = readFileSync(join(workbenchRoot, "contrib/codeEditor/browser/diffEditorInput.ts"), "utf8");
   const viewport = readFileSync(join(editorRoot, "browser/view/editorViewport.ts"), "utf8");
   assert.match(api, /Stable DOM-free Aster API/u);
   assert.match(codeInput, /aster\.editor\.code/u);
@@ -106,10 +115,10 @@ test("Product entries statically select their Aster contribution bundles", () =>
   const codeBundle = readFileSync(join(editorRoot, "editor.code.all.ts"), "utf8");
   const academicBundle = readFileSync(join(editorRoot, "editor.academic.all.ts"), "utf8");
   const completeBundle = readFileSync(join(editorRoot, "editor.all.ts"), "utf8");
-  assert.match(codeBundle, /contrib\/editor\.contribution/u);
+  assert.match(codeBundle, /contrib\/codeEditorPart\.contribution/u);
   assert.doesNotMatch(codeBundle, /contrib\/academic/u);
-  assert.match(academicBundle, /contrib\/academic\/browser\/academicEditor\.contribution/u);
-  assert.doesNotMatch(academicBundle, /contrib\/editor\.contribution/u);
+  assert.match(academicBundle, /contrib\/documentEditor\.contribution/u);
+  assert.doesNotMatch(academicBundle, /workbench|academicEditor\.contribution/u);
   assert.match(completeBundle, /editor\.code\.all/u);
   assert.match(completeBundle, /editor\.academic\.all/u);
 
@@ -118,12 +127,16 @@ test("Product entries statically select their Aster contribution bundles", () =>
   const electronCodeEntry = readFileSync(resolve(editorRoot, "../code/electron-browser/workbench/workbench-code.ts"), "utf8");
   const electronAcademicEntry = readFileSync(resolve(editorRoot, "../code/electron-browser/workbench/workbench-academic.ts"), "utf8");
   assert.match(codeEntry, /editor\/editor\.code\.all/u);
+  assert.match(codeEntry, /workbench\/contrib\/codeEditor\/browser\/codeEditor\.contribution/u);
   assert.doesNotMatch(codeEntry, /editor\/editor\.academic\.all/u);
   assert.match(academicEntry, /editor\/editor\.academic\.all/u);
+  assert.match(academicEntry, /workbench\/contrib\/academic\/browser\/academicEditor\.contribution/u);
   assert.doesNotMatch(academicEntry, /editor\/editor\.code\.all/u);
   assert.match(electronCodeEntry, /editor\/editor\.code\.all/u);
+  assert.match(electronCodeEntry, /workbench\/contrib\/codeEditor\/browser\/codeEditor\.contribution/u);
   assert.doesNotMatch(electronCodeEntry, /editor\/editor\.academic\.all/u);
   assert.match(electronAcademicEntry, /editor\/editor\.academic\.all/u);
+  assert.match(electronAcademicEntry, /workbench\/contrib\/academic\/browser\/academicEditor\.contribution/u);
   assert.doesNotMatch(electronAcademicEntry, /editor\/editor\.code\.all/u);
 });
 
@@ -131,19 +144,24 @@ test("Editor engines delegate optional feature composition to product bundles", 
   const textHost = readFileSync(join(editorRoot, "browser/editorPart.ts"), "utf8");
   const textContribution = readFileSync(join(editorRoot, "contrib/codeEditorPart.contribution.ts"), "utf8");
   const findContribution = readFileSync(join(editorRoot, "contrib/find/browser/find.contribution.ts"), "utf8");
+  const quickAccessContribution = readFileSync(join(editorRoot, "contrib/quickAccess/browser/quickAccess.contribution.ts"), "utf8");
   const documentHost = readFileSync(join(editorRoot, "browser/editorWidget.ts"), "utf8");
   const documentContribution = readFileSync(join(editorRoot, "contrib/documentEditor.contribution.ts"), "utf8");
-  const codePaneContribution = readFileSync(join(editorRoot, "contrib/editor.contribution.ts"), "utf8");
-  const academicPaneContribution = readFileSync(join(editorRoot, "contrib/academic/browser/academicEditor.contribution.ts"), "utf8");
+  const codePaneContribution = readFileSync(join(workbenchRoot, "contrib/codeEditor/browser/codeEditor.contribution.ts"), "utf8");
+  const academicPaneContribution = readFileSync(join(workbenchRoot, "contrib/academic/browser/academicEditor.contribution.ts"), "utf8");
   const codeBundle = readFileSync(join(editorRoot, "editor.code.all.ts"), "utf8");
   const academicBundle = readFileSync(join(editorRoot, "editor.academic.all.ts"), "utf8");
   assert.doesNotMatch(textHost, /from\s+["'][^"']*\/contrib\/(?:find|folding|hover|format|rename|codeAction|collaboration|formatting)\//u);
   assert.match(textHost, /registerEditorPartFactory/u);
   assert.match(textContribution, /registerEditorPartFactory/u);
   assert.doesNotMatch(textContribution, /FindController/u);
+  assert.doesNotMatch(textContribution, /AnchorSelectController|ContextMenuController|FontZoomController|GotoLineController|InPlaceReplaceController|InlineProgressController|MessageController|MiddleScrollController|SmartSelectController|ToggleTabFocusModeController/u);
   assert.match(findContribution, /registerEditorContribution/u);
+  assert.match(quickAccessContribution, /registerEditorContribution/u);
   assert.match(codeBundle, /find\/browser\/find\.contribution/u);
+  assert.match(codeBundle, /quickAccess\/browser\/quickAccess\.contribution/u);
   assert.match(academicBundle, /find\/browser\/find\.contribution/u);
+  assert.match(academicBundle, /quickAccess\/browser\/quickAccess\.contribution/u);
   assert.doesNotMatch(codePaneContribution, /codeEditorPart\.contribution/u);
   assert.doesNotMatch(documentHost, /from\s+["'][^"']*\/contrib\/(?:formatting|collaboration)\/browser\//u);
   assert.match(documentHost, /getEditorContributions/u);

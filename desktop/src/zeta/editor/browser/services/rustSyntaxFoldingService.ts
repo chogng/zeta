@@ -1,5 +1,5 @@
-import type { SyntaxAnalyzeResult } from "../../../../../generated/app-server/types.js";
 import { DisposableOwner } from "../../../base/common/lifecycle.js";
+import type { SyntaxAnalyzeResult } from "../../../platform/syntax/common/syntaxApi.js";
 import { type EditorFoldingRange, EditorFoldingRangeSource } from "../../contrib/folding/browser/foldingRanges.js";
 import { type TextSnapshot } from "../../common/core/text.js";
 import { type TextModel } from "../../common/model/textModel.js";

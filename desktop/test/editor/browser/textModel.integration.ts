@@ -1,8 +1,8 @@
 import { URI } from "../../../src/zeta/base/common/uri.js";
-import { EditorPane } from "../../../src/zeta/editor/browser/codeEditorPane.js";
-import { createBrowserEditorPart } from "../../../src/zeta/editor/browser/browserEditorPart.js";
+import { createBrowserEditorPart } from "../../../src/zeta/workbench/contrib/codeEditor/browser/browserEditorPart.js";
+import { CodeEditorPane } from "../../../src/zeta/workbench/contrib/codeEditor/browser/codeEditorPane.js";
 import { BrowserTextModelService } from "../../../src/zeta/editor/browser/services/browserTextModelService.js";
-import { BrowserTextResourceStore } from "../../../src/zeta/editor/browser/services/browserTextResourceStore.js";
+import { BrowserTextResourceStore } from "../../../src/zeta/workbench/contrib/codeEditor/browser/browserTextResourceStore.js";
 import { TextModel } from "../../../src/zeta/editor/editor.api.js";
 import "../../../src/zeta/editor/editor.code.all.js";
 import { MemoryTextFiles } from "./memoryTextFiles.js";
@@ -28,7 +28,7 @@ const files = new MemoryTextFiles(resource, "fn main() {\n  answer();\n}\n");
 const resourceStore = new BrowserTextResourceStore(files);
 const models = new BrowserTextModelService(resourceStore);
 let syntaxAnalysisCount = 0;
-const pane = new EditorPane(resourceStore, {
+const pane = new CodeEditorPane(resourceStore, {
   modelService: models,
   createPart: createBrowserEditorPart,
   syntaxApi: {

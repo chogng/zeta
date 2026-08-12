@@ -1,12 +1,12 @@
 import { URI } from "../../../src/zeta/base/common/uri.js";
 import { Emitter, type Event } from "../../../src/zeta/base/common/event.js";
 import { DisposableOwner } from "../../../src/zeta/base/common/lifecycle.js";
-import { EmbeddedTextEditorFactory } from "../../../src/zeta/editor/browser/embeddedTextEditor.js";
+import { EmbeddedTextEditorFactory } from "../../../src/zeta/workbench/contrib/codeEditor/browser/embeddedTextEditor.js";
 import { createDefaultDocumentSchema } from "../../../src/zeta/editor/editor.api.js";
 import { createTextNode } from "../../../src/zeta/editor/editor.api.js";
 import { DocumentModel } from "../../../src/zeta/editor/editor.api.js";
 import "../../../src/zeta/editor/editor.academic.all.js";
-import { EditorPane } from "../../../src/zeta/editor/browser/documentEditorPane.js";
+import { DocumentEditorPane } from "../../../src/zeta/workbench/contrib/documentEditor/browser/documentEditorPane.js";
 import type { DocumentNode } from "../../../src/zeta/editor/common/model/document.js";
 import { serializeDocument } from "../../../src/zeta/editor/common/model/documentSerialization.js";
 import type { DocumentSchema } from "../../../src/zeta/editor/common/model/documentSchema.js";
@@ -120,8 +120,8 @@ const textBlockDocument = schema.createDocument([schema.createNode("textBlock", 
 })], "editor-text-document");
 const textBlockFiles = new MemoryTextFiles(textBlockResource, serializeDocument(textBlockDocument, schema));
 const structuredFiles = new MemoryTextFiles(structuredResource, "Title\nBody");
-const textBlockPane = new EditorPane(textBlockFiles, { embeddedTextEditorFactory: new EmbeddedTextEditorFactory() });
-const structuredPane = new EditorPane(structuredFiles, { documentCollaborationService: new BrowserDocumentCollaborationService() });
+const textBlockPane = new DocumentEditorPane(textBlockFiles, { embeddedTextEditorFactory: new EmbeddedTextEditorFactory() });
+const structuredPane = new DocumentEditorPane(structuredFiles, { documentCollaborationService: new BrowserDocumentCollaborationService() });
 
 textBlockPane.create(requiredElement("#text-block"));
 structuredPane.create(requiredElement("#document-editor"));

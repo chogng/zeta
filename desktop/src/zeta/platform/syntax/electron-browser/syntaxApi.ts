@@ -1,6 +1,5 @@
-import type { SyntaxAnalyzeResult } from "../../../../../generated/app-server/types.js";
 import { invoke } from "../../ipc/electron-browser/rendererIpc.js";
-import type { ISyntaxApi } from "../common/syntaxApi.js";
+import type { ISyntaxApi, SyntaxAnalyzeResult } from "../common/syntaxApi.js";
 
 export function createSyntaxApi(): ISyntaxApi {
   return {

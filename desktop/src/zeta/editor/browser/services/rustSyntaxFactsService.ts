@@ -1,7 +1,6 @@
-import type { SyntaxAnalyzeResult, SyntaxDiagnosticDto, SyntaxSymbolDto, SyntaxTokenDto } from "../../../../../generated/app-server/types.js";
 import { raceCancellation } from "../../../base/common/cancellation.js";
 import { DisposableOwner } from "../../../base/common/lifecycle.js";
-import type { ISyntaxApi } from "../../../platform/syntax/common/syntaxApi.js";
+import type { ISyntaxApi, SyntaxAnalyzeResult, SyntaxDiagnostic, SyntaxSymbol, SyntaxToken } from "../../../platform/syntax/common/syntaxApi.js";
 import { type LanguageDocumentSymbol, type LanguageDocumentSymbolProvider } from "../../contrib/documentSymbols/common/documentSymbols.js";
 import { TextPosition, TextRange, type TextSnapshot } from "../../common/core/text.js";
 import type { SyntaxRequest } from "../../common/languages/syntax/syntaxProviders.js";
@@ -155,7 +154,7 @@ export function projectRustSyntaxSymbols(result: SyntaxAnalyzeResult, snapshot: 
   return Object.freeze(result.symbols.map(symbol => projectRustSyntaxSymbol(symbol, lines)));
 }
 
-function projectRustSyntaxDiagnostic(diagnostic: SyntaxDiagnosticDto, lines: readonly string[]) {
+function projectRustSyntaxDiagnostic(diagnostic: SyntaxDiagnostic, lines: readonly string[]) {
   const range = projectRange(diagnostic.range, lines);
   return Object.freeze({
     range,
@@ -166,7 +165,7 @@ function projectRustSyntaxDiagnostic(diagnostic: SyntaxDiagnosticDto, lines: rea
   });
 }
 
-function projectRustSyntaxSymbol(symbol: SyntaxSymbolDto, lines: readonly string[]): LanguageDocumentSymbol {
+function projectRustSyntaxSymbol(symbol: SyntaxSymbol, lines: readonly string[]): LanguageDocumentSymbol {
   if (typeof symbol.name !== "string" || symbol.name.trim().length === 0) {
     throw new TypeError("Rust syntax symbol must have a non-empty name");
   }
@@ -178,7 +177,7 @@ function projectRustSyntaxSymbol(symbol: SyntaxSymbolDto, lines: readonly string
   });
 }
 
-function syntaxTokenType(token: SyntaxTokenDto): string {
+function syntaxTokenType(token: SyntaxToken): string {
   switch (token.kind) {
     case "attribute": return "modifier";
     case "comment": return "comment";
@@ -199,7 +198,7 @@ function syntaxTokenType(token: SyntaxTokenDto): string {
   }
 }
 
-function projectSingleLineRanges(range: SyntaxTokenDto["range"], lines: readonly string[]): readonly TextRange[] {
+function projectSingleLineRanges(range: SyntaxToken["range"], lines: readonly string[]): readonly TextRange[] {
   const projected = projectRange(range, lines);
   if (projected.empty) return Object.freeze([]);
   const ranges: TextRange[] = [];
@@ -211,7 +210,7 @@ function projectSingleLineRanges(range: SyntaxTokenDto["range"], lines: readonly
   return Object.freeze(ranges);
 }
 
-function projectRange(range: SyntaxTokenDto["range"], lines: readonly string[]): TextRange {
+function projectRange(range: SyntaxToken["range"], lines: readonly string[]): TextRange {
   return TextRange.from(projectPosition(range.start, lines), projectPosition(range.end, lines));
 }
 

@@ -74,7 +74,7 @@ syntax processing, and model persistence stay with ordinary Aster editor
 parts. `nextChange`/`previousChange` and F7/Shift+F7 wrap over changed rows,
 add the component-owned `.active` state, and announce the original/modified
 location through the diff view's live region.
-`DiffEditorInput` gives the Workbench one synthetic tab resource while
+Workbench `DiffEditorInput` gives the Workbench one synthetic tab resource while
 retaining two ordinary caller-owned text-resource inputs. `DiffEditorPane`
 acquires and releases both `TextModelReference` values, then hosts this
 view; it neither turns the synthetic URI into a text model nor owns either

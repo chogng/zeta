@@ -8,8 +8,8 @@ Aster 是 Zeta 唯一的可组装编辑器内核，源码保持在一个扁平�
 
 | 使用场景 | 产品加载入口 | 编辑能力 |
 | --- | --- | --- |
-| Code | `editor.code.all.ts` | code/diff pane、语言、folding、suggest 和其他行式编辑能力 |
-| Academic | `editor.academic.all.ts` | 结构化文档 profile、formatting、citation、collaboration 和 embedded code widget |
+| Code | `editor.code.all.ts` + `workbench/contrib/codeEditor` | 行式 editor 能力 + code/diff pane/input 与文件服务接线 |
+| Academic | `editor.academic.all.ts` + `workbench/contrib/academic` | 结构化 editor 能力 + Academic profile、document pane 与 embedded code factory |
 | 完整宿主与集成测试 | `editor.all.ts` | 两组 contribution 的并集 |
 | DOM-free 调用 | `editor.api.ts` | 两个 model、schema、transaction、serialization 和坐标 API；不注册 pane |
 
@@ -22,9 +22,10 @@ legacy editor runtime 不再是产品模型或公共接口的定义者，只保�
 | 层 | 当前状态 | 责任 |
 | --- | --- | --- |
 | `editor/common` | 两个同步内核与纯投影状态已具备 | `TextModel`、`DocumentModel`、坐标、selection、transaction、history、schema、serialization、cursor、纯 viewport 与版本化语言状态；不得引用 Workbench、Electron 或 generated DTO |
-| `editor/browser` | 两个 engine 的 pane/widget/service adapter 已具备 | code/document/diff widget、DOM input、viewport、model service、working-copy adapter 和 embedded line-editor adapter；不得选择产品版本 |
-| `editor/contrib` | 行式与结构化 feature 已按能力组织 | 命令、controller、可移除投影、Academic profile、citation 和 collaboration；不得拥有第二套 model 或读取产品 ID |
-| `aster.*.all.ts` | 产品静态装配已具备 | Code、Academic 与完整 contribution 清单；不得实现 engine 行为 |
+| `editor/browser` | 两个 engine 的 widget 与 DOM projection 已具备 | code/document/diff widget、DOM input、viewport、editor contribution registry 与 frontend-contract adapter；不得引用 Workbench 或选择产品版本 |
+| `editor/contrib` | 行式与结构化 feature 已按能力组织 | 命令、controller、可移除投影、schema、citation 和 collaboration；不得注册 pane、拥有第二套 model 或读取产品 ID |
+| `editor.*.all.ts` | editor 能力静态装配已具备 | Code、Academic 与完整 editor contribution 清单；不得注册 Workbench pane/input |
+| `workbench/contrib/{codeEditor,documentEditor,academic}` | 产品宿主适配已具备 | pane/input、文件与 working-copy 接线、Academic profile、embedded factory 和产品注册；不得实现编辑事务或视图内部行为 |
 | `workbench/services/textMate` | 部分具备 | grammar revision registry、真实 TextMate/Oniguruma runtime、增量行状态缓存、Aster provider/module adapter、版本化 catalog/theme wire 与独立 browser Worker、JSON/JSONC 资源、caller-resolved session contribution 与声明式 scope-theme selector 已完成；extension resource discovery 尚未完成 |
 | Document service | 部分具备 | `IFileService` 将 App Server `fs/changed` 映射为工作区失效事件，`ITextFileService` 转发；Aster 模型服务提供 dirty、快照保存、显式 revert、CRLF/LF 保留、干净模型重载与脏模型外改状态；URI revision/CAS、恢复仍未完成 |
 | Selection/decorations | 基础具备 | selection、实例控制器、tracked range、decoration collection |
@@ -81,7 +82,7 @@ editor/
 ```text
 EditorInput → ITextFileService.resolve
         ↓
-BrowserTextModelService → Aster TextModel
+Workbench BrowserTextResourceStore → Editor BrowserTextModelService → Aster TextModel
         ↓
 Aster language session → Analysis/completion workers
         ↓
@@ -1438,8 +1439,8 @@ revision 变化时为打开文档请求重分析；Current 46 已补齐这两个
 
 ### Current 46：Workbench TextFile 边界与 Aster 产品 Pane
 
-Aster 已从独立内核演进为真实 `IEditorPane`，但仍保持“Workbench 负责资源与宿主、
-编辑器域负责模型和交互语义”的单向依赖。Code 与 Complete 产品注册 Aster 为
+Aster 已从独立内核演进为由真实 `IEditorPane` 宿主的编辑器能力，但仍保持“Workbench 负责资源与宿主、
+编辑器域负责模型和交互语义”的单向依赖。Code 与 Academic 产品通过 Workbench contribution 注册 Aster 为
 普通文本的 `Default` editor；legacy editor runtime 保留为 `Optional` compatibility editor，并可通过显式
 `preferredEditorId` 选择。
 
@@ -1454,7 +1455,7 @@ Aster 已从独立内核演进为真实 `IEditorPane`，但仍保持“Workbench
 | file/bootstrap 内容决策 | `ITextFileService` | ✅ Workbench service |
 | URI 到 Aster `TextModel` 的共享引用 | `BrowserTextModelService` | ✅ editor-owned |
 | Aster viewport、native input、基础键盘/指针与 text drop | `CodeEditorWidget` | ✅ document session 与 embedded widget 共用的浏览器编辑表面 |
-| Aster language、folding、diagnostic、save 与文档命令组合 | `EditorPart` | ✅ per-pane integration ownership |
+| Aster language、folding、diagnostic、save 与文档命令组合 | `EditorPart` + editor contribution registry | ✅ per-editor runtime；可独立能力由产品 bundle 选择 |
 | original/modified 版本 gate、diff result 与前端计算取消 | `DiffModel` / `IDiffComputationService` | ✅ common model；browser Worker 为当前实现 |
 | JSON/JSONC TextMate 与 Analysis Worker | `workbench/services/textMate` (`ITextMateService`) | ✅ 产品 Aster pane 已选择 |
 | Completion Worker | `createBrowserEditorPart` | ✅ 产品 Aster pane 已选择 |

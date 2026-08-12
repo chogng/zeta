@@ -4,9 +4,8 @@ import { DisposableOwner, DisposableSlot, type IDisposable } from "../../base/co
 import { assertDefined } from "../../base/common/types.js";
 import type { IDimension } from "../../base/browser/geometry.js";
 import { URI } from "../../base/common/uri.js";
-import { EditorPaneVisibility } from "../../workbench/browser/parts/editor/editorPane.js";
-import type { EditorInput } from "../../workbench/browser/parts/editor/editorInput.js";
-import type { IEmbeddedTextEditorFactory } from "../../workbench/browser/parts/editor/embeddedTextEditor.js";
+import type { EditorResourceInput } from "../common/editorResource.js";
+import type { IEmbeddedTextEditorFactory } from "./widget/embeddedTextEditor.js";
 import { DocumentModel } from "../common/model/documentModel.js";
 import type { DocumentPlugin } from "../common/model/documentPlugin.js";
 import { containsDocumentNode, findDocumentNode, type DocumentMark, type DocumentNode, type DocumentNodeId } from "../common/model/document.js";
@@ -25,7 +24,6 @@ import { DocumentOutlineNavigator } from "./widget/documentOutlineNavigator.js";
 import { DocumentCollaborationController } from "../contrib/collaboration/common/controller.js";
 import { createDocumentFragmentFromHtml } from "../contrib/clipboard/browser/htmlDocumentFragment.js";
 import { TextEditorWidget } from "./widget/textEditorWidget.js";
-import type { IWorkingCopy } from "../../workbench/services/workingCopy/common/workingCopyService.js";
 import type { IDocumentModelService } from "../common/services/documentModelService.js";
 import type { DocumentModelReference } from "../common/services/documentModelService.js";
 import type { IDocumentCollaborationService } from "../common/services/documentCollaborationService.js";
@@ -135,7 +133,7 @@ export class EditorWidget extends DisposableOwner {
   private formattingContribution: DocumentFormattingContribution | undefined;
   private collaborationContribution: DocumentCollaborationContribution | undefined;
   private outlineNavigator: DocumentOutlineNavigator | undefined;
-  private input: EditorInput | undefined;
+  private input: EditorResourceInput | undefined;
   private activeBlockId: string | undefined;
   private composition: DocumentComposition | undefined;
   private collaborationStart: AbortController | undefined;
@@ -143,7 +141,7 @@ export class EditorWidget extends DisposableOwner {
   private updatingEmbeddedTextBlockModel: DocumentModel | undefined;
   private dimension: IDimension = { width: 0, height: 0 };
 
-  get workingCopy(): IWorkingCopy | undefined {
+  get modelReference(): DocumentModelReference | undefined {
     return this.modelReferenceSlot.value;
   }
 
@@ -218,7 +216,7 @@ export class EditorWidget extends DisposableOwner {
     });
   }
 
-  async setInput(input: EditorInput, signal: AbortSignal): Promise<void> {
+  async setInput(input: EditorResourceInput, signal: AbortSignal): Promise<void> {
     const container = this.requireContainer();
     this.cancelCollaborationStart();
     throwIfCancelled(signal, "Document editor input loading was cancelled");
@@ -288,10 +286,6 @@ export class EditorWidget extends DisposableOwner {
     }
   }
 
-  setVisible(visibility: EditorPaneVisibility): void {
-    if (this.container) this.container.hidden = visibility === EditorPaneVisibility.Hidden;
-  }
-
   focus(): void {
     const firstEmbeddedEditor = this.embeddedEditors.values().next().value;
     if (firstEmbeddedEditor) {
@@ -314,11 +308,11 @@ export class EditorWidget extends DisposableOwner {
   }
 
   get isDirty(): boolean {
-    return this.workingCopy?.isDirty ?? false;
+    return this.modelReference?.isDirty ?? false;
   }
 
   get hasExternalChange(): boolean {
-    return this.workingCopy?.hasExternalChange ?? false;
+    return this.modelReference?.hasExternalChange ?? false;
   }
 
   getDocument(): DocumentNode {
@@ -1530,13 +1524,13 @@ export class EditorWidget extends DisposableOwner {
     this.collaborationStart = undefined;
   }
 
-  private requireWorkingCopy(): IWorkingCopy {
+  private requireWorkingCopy(): DocumentModelReference {
     const workingCopy = this.modelReferenceSlot.value;
     assertDefined(workingCopy, new ReferenceError("Document editor pane has no active working copy"));
     return workingCopy;
   }
 
-  private requireInput(): EditorInput {
+  private requireInput(): EditorResourceInput {
     const input = this.input;
     assertDefined(input, new ReferenceError("Document editor has no active input"));
     return input;

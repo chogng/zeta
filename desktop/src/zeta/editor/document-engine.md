@@ -2,7 +2,7 @@
 
 > 文件级目录映射、Aster/VS Code 对照和装配边界见 [`document-engine-architecture.md`](./document-engine-architecture.md)。统一目录与产品装配边界见 [`README.md`](./README.md)。本文记录实现契约、当前行为、测试证据和已知限制。
 
-Aster's Document Engine owns the structured-document domain. Its `common` layer is DOM-free and does not depend on Workbench, Electron, the Text Engine, or an external editor runtime. `EditorPane` is the Workbench pane, `EditorWidget` owns the structured-document browser surface, and `TextEditorWidget` is only the embedded Aster text editor for one `textBlock`.
+Aster's Document Engine owns the structured-document domain. Its `common` layer is DOM-free and does not depend on Workbench, Electron, the Text Engine, or an external editor runtime. Workbench `DocumentEditorPane` hosts the editor, `EditorWidget` owns the structured-document browser surface, and `TextEditorWidget` is only the embedded Aster text editor for one `textBlock`.
 
 The current core provides:
 
@@ -121,7 +121,7 @@ The current core provides:
 - versioned JSON serialization and strict deserialization.
 
 The Aster document model is deliberately separate from Aster's line-oriented
-`TextModel`. `BrowserDocumentModelService` resolves one `DocumentModelReference`; `EditorPane` hosts the corresponding `EditorWidget`; `DocumentWorkingCopy` adapts Aster serialization, dirty/revert/conflict state, expected-revision persistence, and untitled Save As to the shared Workbench working-copy contract.
+`TextModel`. Workbench `BrowserDocumentModelService` resolves one `DocumentModelReference`; `DocumentEditorPane` hosts the corresponding `EditorWidget`; `DocumentWorkingCopy` adapts Aster serialization, dirty/revert/conflict state, expected-revision persistence, and untitled Save As to the shared Workbench working-copy contract.
 The Text Engine's corresponding editor surface is a `codeBlock`; the Document Engine deliberately names its document node `textBlock`. It is a document-owned block whose content is zero or one plain `text` child, not an embedded text document; its language is a block attribute. The browser widget may project that text through the shared `IEmbeddedTextEditor` boundary, and `EmbeddedTextEditorFactory` supplies the implementation backed by Aster's `CodeEditorWidget`. The Document Engine owns block identity and transactions; the Text Engine never depends on document types. Document common remains independent of the Text Engine and can fall back to its own text surface when no factory is supplied.
 `DocumentSchema` validates custom top-node definitions as well as the default
 `doc` schema; transaction application never assumes that the root is named
@@ -149,10 +149,10 @@ matching browser command extension point.
 boundary for a profile's canonical new-document shape; the same factory is
 used by `DocumentWorkingCopy` during empty-resource revert/reload, while
 non-empty plain text still follows the generic paragraph migration path.
-`EditorProfile` groups the profile matcher, schema factory, empty-document
+Workbench `EditorProfile` groups the profile matcher, schema factory, empty-document
 factory, node views, toolbar actions, and plugins. `createDocumentEditorPaneOptions`
 materializes that group while the Workbench composition root injects text-file,
-working-copy, and embedded line-editor services. The Academic Aster contribution selects
+working-copy, and embedded line-editor services. The Academic Workbench contribution selects
 from a profile list, so adding another structured document kind does not require
 moving profile-specific schema or matching logic into the common pane.
 Each profile also owns a stable `editorId`; profiles with different schemas must

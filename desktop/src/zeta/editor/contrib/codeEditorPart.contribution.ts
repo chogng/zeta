@@ -3,7 +3,7 @@ import { isCancellationError } from "../../base/common/cancellation.js";
 import { type Event } from "../../base/common/event.js";
 import { DisposableOwner, type IDisposable } from "../../base/common/lifecycle.js";
 import { type ISyntaxApi } from "../../platform/syntax/common/syntaxApi.js";
-import { type EditorInput } from "../../workbench/browser/parts/editor/editorInput.js";
+import { type EditorResourceInput } from "../common/editorResource.js";
 import { type TextModelReference } from "../common/services/textModelService.js";
 import { CodeEditorWidget } from "../browser/widget/codeEditor/codeEditorWidget.js";
 import { type EditorViewport } from "../browser/view/editorViewport.js";
@@ -30,7 +30,6 @@ import { BracketNavigationController } from "../contrib/bracketMatching/browser/
 import { BlockCommentController } from "../contrib/comment/browser/blockCommentController.js";
 import { EditingCommandController } from "../browser/editingCommandController.js";
 import { FoldingController } from "../contrib/folding/browser/folding.js";
-import { GotoLineController } from "../contrib/quickAccess/browser/quickAccessController.js";
 import { LineCommentController } from "../contrib/comment/browser/lineCommentController.js";
 import { LineJoinController } from "../contrib/linesOperations/browser/lineJoinController.js";
 import { LineOperationsController } from "../contrib/linesOperations/browser/lineOperationsController.js";
@@ -63,21 +62,12 @@ import { TextSelection, TextSelectionSet } from "../common/core/selection.js";
 import { TextPosition } from "../common/core/text.js";
 import { TokenizationTextModelPart } from "../contrib/tokenization/common/tokenizationTextModelPart.js";
 import { TokenizationController } from "../contrib/tokenization/browser/tokenizationController.js";
-import { AnchorSelectController } from "../contrib/anchorSelect/browser/anchorSelectController.js";
-import { SmartSelectController } from "../contrib/smartSelect/browser/smartSelectController.js";
-import { InPlaceReplaceController } from "../contrib/inPlaceReplace/browser/inPlaceReplaceController.js";
-import { ContextMenuController } from "../contrib/contextmenu/browser/contextMenuController.js";
-import { FontZoomController } from "../contrib/fontZoom/browser/fontZoomController.js";
-import { MiddleScrollController } from "../contrib/middleScroll/browser/middleScrollController.js";
-import { ToggleTabFocusModeController } from "../contrib/toggleTabFocusMode/browser/toggleTabFocusModeController.js";
 import { UnicodeHighlighterController } from "../contrib/unicodeHighlighter/browser/unicodeHighlighterController.js";
 import { UnusualLineTerminatorsController } from "../contrib/unusualLineTerminators/browser/unusualLineTerminatorsController.js";
 import { type UnicodeHighlight } from "../contrib/unicodeHighlighter/common/unicodeHighlighter.js";
 import { StickyScrollController } from "../contrib/stickyScroll/browser/stickyScrollController.js";
 import { SectionHeadersController } from "../contrib/sectionHeaders/browser/sectionHeadersController.js";
 import { SymbolIconsController } from "../contrib/symbolIcons/browser/symbolIconsController.js";
-import { MessageController } from "../contrib/message/browser/messageController.js";
-import { InlineProgressController } from "../contrib/inlineProgress/browser/inlineProgressController.js";
 import { ColorPickerController } from "../contrib/colorPicker/browser/colorPickerController.js";
 import { LinkedEditingController } from "../contrib/linkedEditing/browser/linkedEditingController.js";
 import { CodeLensController } from "../contrib/codelens/browser/codelensController.js";
@@ -282,22 +272,12 @@ class ContributedEditorPart extends DisposableOwner implements IEditorPartRuntim
       this.own(new InlineCompletionsController(this.textInput.element, this.viewport, this.selections, inlineCompletions, this.languageId, this.onLanguageError));
       this.own(new ParameterHintsController(this.textInput.element, this.viewport, this.selections, parameterHints, this.languageId, this.onLanguageError));
       this.own(new GotoSymbolController(this.textInput.element, this.viewport, this.selections, gotoSymbol, this.languageId, this.onLanguageError));
-      this.own(new AnchorSelectController(this.textInput.element, this.viewport, this.selections, () => configurations.getLanguageConfiguration(this.languageId).wordPattern));
-      this.own(new SmartSelectController(this.textInput.element, this.viewport, this.selections, () => configurations.getLanguageConfiguration(this.languageId).wordPattern));
-      this.own(new InPlaceReplaceController(this.textInput.element, this.viewport, this.selections));
-      this.own(new FontZoomController(this.textInput.element, this.viewport, { baseLineHeight: 20, initialScale: options.fontZoom?.initialScale }));
-      this.own(new MiddleScrollController(this.viewport));
-      this.own(new ToggleTabFocusModeController(this.textInput.element, this.viewport));
-      if (options.onShowContextMenu) this.own(new ContextMenuController(this.viewport, options.onShowContextMenu, this.onLanguageError));
       this.own(new StickyScrollController(this.viewport, folding));
       this.own(new SectionHeadersController(this.viewport, folding));
       this.own(new SymbolIconsController(this.viewport, documentSymbols, this.languageId, this.onLanguageError));
       this.own(new CodeLensController(this.viewport, codeLenses, this.languageId, options.onExecuteEditorCommand, this.onLanguageError));
       this.own(new ColorPickerController(this.textInput.element, this.viewport, this.selections, colors, this.languageId, this.onLanguageError));
       this.own(new LinkedEditingController(this.textInput.element, this.viewport, this.selections, linkedEditing, this.languageId, this.onLanguageError));
-      this.own(new MessageController(this.viewport));
-      this.own(new InlineProgressController(this.viewport));
-      this.own(new GotoLineController(this.textInput.element, this.viewport, this.selections));
       this.own(new BracketMatchController(this.selections, bracketMatcher, bracketDecorations));
       this.own(new BracketNavigationController(this.textInput.element, this.viewport, this.selections, bracketMatcher));
       this.own(new BracketEditingController(this.textInput.element, this.viewport, this.selections, bracketMatcher));
@@ -434,13 +414,13 @@ function validateOptions(options: EditorPartOptions): void {
   }
 }
 
-function editorLabel(input: EditorInput): string {
+function editorLabel(input: EditorResourceInput): string {
   if (input.label?.trim()) return input.label;
   const path = decodeURIComponent(input.resource.path);
   return path.slice(path.lastIndexOf("/") + 1) || "Text editor";
 }
 
-function createSnippetVariables(input: EditorInput): { readonly resolveVariable: (name: string) => string | undefined } {
+function createSnippetVariables(input: EditorResourceInput): { readonly resolveVariable: (name: string) => string | undefined } {
   const filePath = decodeURIComponent(input.resource.path);
   const separator = filePath.lastIndexOf("/");
   const filename = filePath.slice(separator + 1);

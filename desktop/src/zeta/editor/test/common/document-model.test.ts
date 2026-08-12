@@ -1,10 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { URI } from "../../../base/common/uri.js";
-import { academicProfile } from "../../contrib/academic/browser/profile.js";
-import { matchDocumentEditor } from "../../browser/documentEditorInput.js";
-import { createDocumentEditorPaneOptions, findEditorProfile, matchEditorProfiles } from "../../browser/services/editorProfile.js";
-import { EditorPaneMatch } from "../../../workbench/browser/parts/editor/editorPane.js";
 import { createDefaultDocumentSchema, DocumentSchema } from "../../common/model/documentSchema.js";
 import { createInsertCitationCommand, createInsertReferenceCommand } from "../../contrib/citation/common/commands.js";
 import { buildReferenceIndex, createReferenceIndexPlugin, REFERENCE_INDEX_KEY } from "../../contrib/citation/common/references.js";
@@ -34,26 +30,6 @@ function createDocument(schema: DocumentSchema) {
   });
   return schema.createDocument([paragraph, textBlock], "document-1");
 }
-
-test("Aster input matching is supplied by the active profile", () => {
-  const matcher = { contentTypes: ["application/vnd.zeta.document+json"], extensions: [".zeta-doc"] };
-  assert.equal(matchDocumentEditor({ resource: URI.file("C:\\project\\paper.ZETA-DOC") }, matcher), EditorPaneMatch.Default);
-  assert.equal(matchDocumentEditor({ resource: URI.file("C:\\project\\paper.bin"), contentType: "application/vnd.zeta.document+json" }, matcher), EditorPaneMatch.Default);
-  assert.equal(matchDocumentEditor({ resource: URI.file("C:\\project\\paper.bin"), contentType: "text/plain" }, matcher), EditorPaneMatch.None);
-  assert.equal(matchEditorProfiles({ resource: URI.file("C:\\project\\paper.zeta-academic") }, [academicProfile]), EditorPaneMatch.Default);
-  assert.equal(findEditorProfile({ resource: URI.file("C:\\project\\paper.txt") }, [academicProfile]), undefined);
-});
-
-test("Aster profile materialization keeps schema and browser extensions together", () => {
-  const options = createDocumentEditorPaneOptions(academicProfile);
-  assert.equal(options.schema?.getNodeSpec("citation")?.kind, "inline");
-  assert.equal(options.schema?.getNodeSpec("bibliography")?.kind, "block");
-  assert.equal(options.outlineNavigator, true);
-  assert.equal(options.plugins?.length, 1);
-  assert.ok(options.nodeViews?.bibliography);
-  assert.ok(options.inlineNodeViews?.citation);
-  assert.deepEqual(options.createEmptyDocument?.().content.map(node => node.type), ["title", "abstract"]);
-});
 
 test("DocumentSchema creates and validates block, inline, and text-block nodes", () => {
   const schema = createDefaultDocumentSchema();

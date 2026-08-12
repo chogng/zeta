@@ -13,10 +13,10 @@ test("Aster unit tests follow the flat editor common, browser, and contrib layou
   assert.equal(exists(join(desktopRoot, "test/monaco")), false);
   assert.equal(exists(join(desktopRoot, "test/editor/run-unit.mjs")), true);
   assert.equal(exists(join(editorRoot, "test/common/textModel.test.ts")), true);
-  assert.equal(exists(join(editorRoot, "test/browser/editorPane.test.ts")), true);
+  assert.equal(exists(join(desktopRoot, "src/zeta/workbench/contrib/codeEditor/test/browser/codeEditorPane.test.ts")), true);
   assert.equal(exists(join(editorRoot, "contrib/find/test/browser/findController.test.ts")), true);
   assert.equal(exists(join(editorRoot, "test/common/document-model.test.ts")), true);
-  assert.equal(exists(join(editorRoot, "test/browser/editorWidget.test.ts")), true);
+  assert.equal(exists(join(desktopRoot, "src/zeta/workbench/contrib/documentEditor/test/browser/documentEditorPane.test.ts")), true);
 });
 
 test("Aster browser integration is flat and named after concrete model mount points", () => {

@@ -4,7 +4,9 @@ import { join, relative, resolve } from "node:path";
 import test from "node:test";
 import { findDesktopRoot } from "./testPaths.js";
 
-const editorRoot = resolve(findDesktopRoot(import.meta.dirname), "src/zeta/editor");
+const desktopRoot = findDesktopRoot(import.meta.dirname);
+const editorRoot = resolve(desktopRoot, "src/zeta/editor");
+const workbenchRoot = resolve(desktopRoot, "src/zeta/workbench");
 
 test("editor exposes one flat VS Code-shaped domain for both engines", () => {
   assert.deepEqual(directoryNames(editorRoot), ["browser", "common", "contrib", "test"]);
@@ -17,18 +19,14 @@ test("editor exposes one flat VS Code-shaped domain for both engines", () => {
   assert.deepEqual(collectFiles(editorRoot).filter(file => /[\\/]index\.ts$/u.test(file)), []);
 });
 
-test("document editing follows VS Code editor common/browser/contrib ownership", () => {
+test("document editing separates editor capabilities from Workbench hosting", () => {
   for (const file of [
     "common/core/documentSelection.ts",
     "common/model/documentModel.ts",
     "common/services/documentModelService.ts",
     "common/commands/documentCommands.ts",
-    "browser/services/documentWorkingCopy.ts",
-    "browser/services/browserDocumentModelService.ts",
-    "browser/documentEditorInput.ts",
-    "browser/documentEditorPane.ts",
     "browser/editorWidget.ts",
-    "browser/services/editorProfile.ts",
+    "browser/widget/embeddedTextEditor.ts",
     "browser/widget/textEditorWidget.ts",
     "browser/media/editorWidget.css",
     "contrib/clipboard/browser/htmlDocumentFragment.ts",
@@ -37,10 +35,18 @@ test("document editing follows VS Code editor common/browser/contrib ownership",
     "contrib/collaboration/common/controller.ts",
     "contrib/collaboration/browser/collaborationContribution.ts",
     "common/services/documentCollaborationService.ts",
-    "browser/services/appServerDocumentCollaborationService.ts",
-    "contrib/academic/browser/profile.ts",
-    "contrib/academic/browser/academicEditor.contribution.ts",
+    "contrib/academic/common/schema.ts",
   ]) assert.equal(statSafe(join(editorRoot, file)), true, file);
+  for (const file of [
+    "contrib/documentEditor/browser/documentEditorInput.ts",
+    "contrib/documentEditor/browser/documentEditorPane.ts",
+    "contrib/documentEditor/browser/editorProfile.ts",
+    "contrib/academic/browser/academicEditorProfile.ts",
+    "contrib/academic/browser/academicEditor.contribution.ts",
+    "services/documentEditor/browser/documentWorkingCopy.ts",
+    "services/documentEditor/browser/browserDocumentModelService.ts",
+    "services/documentCollaboration/browser/appServerDocumentCollaborationService.ts",
+  ]) assert.equal(statSafe(join(workbenchRoot, file)), true, file);
   assert.equal(statSafe(join(editorRoot, "contrib", "collaboration", "common", "session.ts")), false);
   for (const file of collectFiles(join(editorRoot, "common"))) {
     if (!file.endsWith(".ts")) continue;
@@ -51,14 +57,14 @@ test("document editing follows VS Code editor common/browser/contrib ownership",
 
 test("document editing keeps textBlock semantics behind the embedded-editor seam", () => {
   const schema = readFileSync(join(editorRoot, "common/model/documentSchema.ts"), "utf8");
-  const pane = readFileSync(join(editorRoot, "browser/documentEditorPane.ts"), "utf8");
+  const pane = readFileSync(join(workbenchRoot, "contrib/documentEditor/browser/documentEditorPane.ts"), "utf8");
   const editor = readFileSync(join(editorRoot, "browser/editorWidget.ts"), "utf8");
   const formatting = readFileSync(join(editorRoot, "contrib/formatting/browser/formattingContribution.ts"), "utf8");
   const widget = readFileSync(join(editorRoot, "browser/widget/textEditorWidget.ts"), "utf8");
   const editorAll = readFileSync(join(editorRoot, "editor.academic.all.ts"), "utf8");
   assert.match(schema, /textBlock:/u);
   assert.doesNotMatch(schema, /codeBlock/u);
-  assert.match(pane, /export class EditorPane/u);
+  assert.match(pane, /export class DocumentEditorPane/u);
   assert.match(pane, /implements IEditorPane/u);
   assert.match(pane, /BrowserDocumentModelService/u);
   assert.match(editor, /export class EditorWidget/u);
@@ -76,7 +82,7 @@ test("document editing keeps textBlock semantics behind the embedded-editor seam
   assert.match(collaborationWidget, /CollaborationContribution/u);
   assert.doesNotMatch(collaborationWidget, /AppServerDocumentCollaborationService/u);
   assert.doesNotMatch(editor, /Session/u);
-  assert.match(editorAll, /academicEditor\.contribution/u);
+  assert.doesNotMatch(editorAll, /academicEditor\.contribution|workbench/u);
 });
 
 function directoryNames(directory: string): string[] {

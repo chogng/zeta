@@ -1,7 +1,7 @@
 import type { IDimension } from "../../../base/browser/geometry.js";
 import type { Event } from "../../../base/common/event.js";
 import { DisposableOwner } from "../../../base/common/lifecycle.js";
-import type { EmbeddedTextEditorOptions, IEmbeddedTextEditor, IEmbeddedTextEditorFactory } from "../../../workbench/browser/parts/editor/embeddedTextEditor.js";
+import type { EmbeddedTextEditorOptions, IEmbeddedTextEditor, IEmbeddedTextEditorFactory } from "./embeddedTextEditor.js";
 
 /**
  * A document `textBlock` projection backed by the line-oriented editor.
@@ -11,6 +11,7 @@ import type { EmbeddedTextEditorOptions, IEmbeddedTextEditor, IEmbeddedTextEdito
  */
 export class TextEditorWidget extends DisposableOwner implements IEmbeddedTextEditor {
   private readonly editor: IEmbeddedTextEditor;
+  private container: HTMLDivElement | undefined;
   readonly onDidChange: Event<string>;
 
   constructor(factory: IEmbeddedTextEditorFactory, options: EmbeddedTextEditorOptions) {
@@ -21,7 +22,16 @@ export class TextEditorWidget extends DisposableOwner implements IEmbeddedTextEd
   }
 
   create(parent: HTMLElement): void {
-    this.editor.create(parent);
+    if (this.container) throw new ReferenceError("Text editor widget has already been created");
+    const container = parent.ownerDocument.createElement("div");
+    container.className = "zeta-document-embedded-text-editor";
+    parent.append(container);
+    this.container = container;
+    this.editor.create(container);
+    this.defer(() => {
+      container.remove();
+      this.container = undefined;
+    });
   }
 
   setValue(value: string): void {

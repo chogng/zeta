@@ -29,10 +29,12 @@ test("public Aster entrypoints retain distinct API, contribution, main, and work
   assert.match(api, /TextModel/u);
   assert.match(api, /DocumentModel/u);
   assert.doesNotMatch(api, /workbench|browser|contrib/u);
-  assert.match(codeBundle, /contrib\/editor\.contribution/u);
+  assert.match(codeBundle, /contrib\/codeEditorPart\.contribution/u);
+  assert.match(codeBundle, /quickAccess\/browser\/quickAccess\.contribution/u);
   assert.doesNotMatch(codeBundle, /contrib\/academic/u);
-  assert.match(academicBundle, /contrib\/academic\/browser\/academicEditor\.contribution/u);
-  assert.doesNotMatch(academicBundle, /contrib\/editor\.contribution/u);
+  assert.match(academicBundle, /contrib\/documentEditor\.contribution/u);
+  assert.match(academicBundle, /quickAccess\/browser\/quickAccess\.contribution/u);
+  assert.doesNotMatch(academicBundle, /workbench|academicEditor\.contribution/u);
   assert.match(all, /editor\.code\.all/u);
   assert.match(all, /editor\.academic\.all/u);
   assert.match(main, /import "\.\/editor\.all\.js"/u);

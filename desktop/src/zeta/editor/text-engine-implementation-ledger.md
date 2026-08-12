@@ -7,18 +7,20 @@
 | 入口 | 职责 |
 | --- | --- |
 | `browser/editorPart.ts` | 一个编辑器实例的唯一装配点；创建 model reference、selection、folding、syntax/token、completion、viewport、input 和 contrib controllers。 |
-| `browser/codeEditorPane.ts` | Workbench pane 生命周期；只把 host 的 resource/model contract 传给 part，不实现编辑语义。 |
-| `browser/codeEditorInput.ts` | Workbench `EditorInput` 匹配和语言 identity adapter；不进入同步 model/core。 |
-| `browser/diffEditorInput.ts` | Workbench 双资源 diff input 和 synthetic tab identity；不创建 diff model，也不计算 diff。 |
-| `browser/browserEditorPart.ts` | TextMate grammar readiness、syntax Worker 和 completion Worker 的 browser adapter。 |
+| `workbench/contrib/codeEditor/browser/codeEditorPane.ts` | Workbench pane 生命周期；只把 host 的 resource/model contract 传给 part，不实现编辑语义。 |
+| `workbench/contrib/codeEditor/browser/codeEditorInput.ts` | Workbench `EditorInput` 匹配和语言 identity adapter；不进入同步 model/core。 |
+| `workbench/contrib/codeEditor/browser/diffEditorInput.ts` | Workbench 双资源 diff input 和 synthetic tab identity；不创建 diff model，也不计算 diff。 |
+| `workbench/contrib/codeEditor/browser/browserEditorPart.ts` | TextMate grammar readiness、syntax Worker 和 completion Worker 的 Workbench browser adapter。 |
 | `editor.api.ts` | DOM-free 的统一程序化 API；其中 Aster text-model 导出不加载 Workbench、DOM 或 contribution。 |
-| `editor.code.all.ts` | Code 产品的 contribution bundle；加载 code/diff pane contribution。 |
+| `editor.code.all.ts` | Code 产品的 editor capability bundle；不加载 code/diff pane contribution。 |
 | `editor.main.ts` | 完整入口；组合 `editor.all.ts` 与 `editor.api.ts`。 |
 | `browser/language/languageWorker.start.ts` | dedicated language worker 的统一启动协议；syntax 与 completion worker 使用它建立 canonical wire port。 |
-| `contrib/editor.contribution.ts` | 注册 Aster code/diff pane，并强制注入 Workbench text-file 与 Rust diff adapter；生产环境不提供 fallback。 |
+| `workbench/contrib/codeEditor/browser/codeEditor.contribution.ts` | 注册 Aster code/diff pane，并注入 Workbench text-file、TextMate 与 Rust adapter；生产环境不提供 fallback。 |
 | `browser/widget/codeEditor/codeEditorWidget.ts` | 组合 viewport、输入、键盘导航和 pointer selection；不拥有语言功能或可选 drop/paste contrib。 |
 | `browser/input/{pointerSelectionController,pointerAutoScroll,pointerMultiCursor}.ts` | 浏览器基础 pointer selection、拖动自动滚动与修饰键多光标；由 `CodeEditorWidget` 装配，不属于可选 contrib。 |
 | `browser/widget/diffEditor/diffEditorWidget.ts` | 消费 `common/diff/diffModel.ts` 的只读 side-by-side projection；不计算 diff。 |
+
+`codeEditorPart.contribution.ts` 只直接装配需要共享私有 runtime state 的控制器。只依赖 `TextEditorContributionContext` 的能力必须拥有独立 `*.contribution.ts`，当前已拆分 `find`、`anchorSelect`、`smartSelect`、`inPlaceReplace`、`contextmenu`、`fontZoom`、`middleScroll`、`toggleTabFocusMode`、`message`、`inlineProgress` 与 `quickAccess`；产品 bundle 可以逐项选择它们。
 
 ## 2. 公共同步内核
 
@@ -69,7 +71,7 @@
 | tokenization contrib | `contrib/tokenization/common/tokenizationTextModelPart.ts`、`browser/tokenizationController.ts` | 将 token index 作为独立 model part 暴露给 browser/view；不生产 token。 |
 | semantic tokens contrib | `contrib/semanticTokens/common/semanticTokens.ts`、`browser/semanticTokenPresentation.ts` | 规定 token source contract；presentation 只转换成稳定的 Aster CSS vocabulary。 |
 | frontend service | `common/services/languageService.ts` | provider registry、feature factory 和 per-model service；不暴露 Workbench transport 或 generated Rust DTO。 |
-| runtime adapter | `browser/services/browserTextResourceStore.ts`、`browser/services/browserTextModelService.ts`、`browser/services/rustDiffComputationService.ts`、`browser/services/rustSyntaxFactsService.ts` | Workbench text file / Rust App Server 到 Aster contract 的薄适配；Rust syntax facts 只经 revision gate 进入 token、diagnostic、symbol 和 folding consumer。 |
+| runtime adapter | `browser/services/browserTextModelService.ts`、`workbench/contrib/codeEditor/browser/browserTextResourceStore.ts`、`browser/services/rustDiffComputationService.ts`、`browser/services/rustSyntaxFactsService.ts` | model reference、dirty/conflict 语义留在 Editor；Workbench 只提供资源 I/O adapter；Rust computation adapter 依赖前端 `ISyntaxApi`/diff contract，结果只经 revision gate 进入 Aster consumer，不引用 generated DTO。 |
 
 ## 4. 已装配的编辑 contrib
 

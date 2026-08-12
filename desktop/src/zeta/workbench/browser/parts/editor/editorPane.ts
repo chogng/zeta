@@ -15,7 +15,7 @@ import { type ILanguageFeaturesService } from "../../../services/language/common
 import type { EditorInput } from "./editorInput.js";
 import type { IDiffApi } from "../../../../platform/diff/common/diffApi.js";
 import type { ISyntaxApi } from "../../../../platform/syntax/common/syntaxApi.js";
-import type { IEmbeddedTextEditorFactory } from "./embeddedTextEditor.js";
+import type { IEmbeddedTextEditorFactory } from "../../../../editor/browser/widget/embeddedTextEditor.js";
 import type { IWorkingCopyService, IWorkingCopy } from "../../../services/workingCopy/common/workingCopyService.js";
 import type { IDocumentCollaborationApi } from "../../../../platform/collaboration/common/documentCollaborationApi.js";
 import type { IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";

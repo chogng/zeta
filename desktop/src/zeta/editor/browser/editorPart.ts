@@ -2,7 +2,7 @@ import { type IDimension } from "../../base/browser/geometry.js";
 import { type Event } from "../../base/common/event.js";
 import { DisposableOwner, type IDisposable } from "../../base/common/lifecycle.js";
 import { type ISyntaxApi } from "../../platform/syntax/common/syntaxApi.js";
-import { type EditorInput } from "../../workbench/browser/parts/editor/editorInput.js";
+import { type EditorResourceInput } from "../common/editorResource.js";
 import { type EditorSelectionController } from "../common/cursor/editorSelectionController.js";
 import { type TextPosition } from "../common/core/text.js";
 import { type LanguageCompletionWorkerFactory } from "../common/languages/completion/languageCompletionService.js";
@@ -25,7 +25,7 @@ export interface EditorContextMenuRequest {
 
 export interface EditorPartOptions {
   readonly container: HTMLElement;
-  readonly input: EditorInput;
+  readonly input: EditorResourceInput;
   readonly languageId: string;
   /** Optional shared language registrations and providers for this editor host. */
   readonly languageFeaturesService?: ILanguageFeaturesService;

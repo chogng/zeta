@@ -260,7 +260,7 @@
   font-family: var(--zeta-font-family-monospace);
 }
 
-.zeta-document-text-block .aster-editor-pane {
+.zeta-document-embedded-text-editor {
   height: 180px;
   min-height: 120px;
 }
