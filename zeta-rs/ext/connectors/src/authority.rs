@@ -5,10 +5,12 @@ use std::sync::Mutex;
 use std::sync::mpsc;
 use std::time::Duration;
 
+use zeta_connectors::ConnectorConnection;
 use zeta_connectors::ConnectorConnectionState;
 use zeta_connectors::ConnectorConnectionUpdate;
 use zeta_connectors::ConnectorDefinition;
 use zeta_connectors::ConnectorDefinitionDigest;
+use zeta_connectors::ConnectorEntry;
 use zeta_connectors::ConnectorError;
 use zeta_connectors::ConnectorId;
 use zeta_connectors::ConnectorSnapshot;
@@ -71,6 +73,7 @@ impl AuthorityEvent {
 struct AuthorityState {
     snapshot: ConnectorSnapshot,
     receipts: BTreeMap<String, CommandReceipt>,
+    retired_entries: BTreeMap<ConnectorId, ConnectorEntry>,
 }
 
 enum Persistence {
@@ -89,6 +92,26 @@ impl Persistence {
         match self {
             Self::Memory => Ok(()),
             Self::Sqlite(sqlite) => sqlite.persist(event, result_generation, command_id, receipt),
+        }
+    }
+
+    fn persist_generation(
+        &self,
+        generation: ConnectorSnapshotGeneration,
+    ) -> Result<(), ConnectorAuthorityError> {
+        match self {
+            Self::Memory => Ok(()),
+            Self::Sqlite(sqlite) => sqlite.persist_generation(generation),
+        }
+    }
+
+    fn restore_connections(
+        &self,
+        definitions: &[ConnectorDefinition],
+    ) -> Result<BTreeMap<ConnectorId, ConnectorConnection>, ConnectorAuthorityError> {
+        match self {
+            Self::Memory => Ok(BTreeMap::new()),
+            Self::Sqlite(sqlite) => sqlite.restore_connections(definitions),
         }
     }
 }
@@ -141,7 +164,11 @@ impl ConnectorAuthority {
     ) -> Self {
         Self {
             inner: Arc::new(ConnectorAuthorityInner {
-                state: Mutex::new(AuthorityState { snapshot, receipts }),
+                state: Mutex::new(AuthorityState {
+                    snapshot,
+                    receipts,
+                    retired_entries: BTreeMap::new(),
+                }),
                 persistence,
                 subscribers: Mutex::new(Vec::new()),
             }),
@@ -229,6 +256,60 @@ impl ConnectorAuthority {
         })
     }
 
+    /// Replaces the active Connector definition catalog while retaining durable account state.
+    ///
+    /// Removed definitions disappear from new snapshots without deleting their credential or
+    /// connection records. Reintroduced exact definitions recover those records; changed
+    /// definitions require reauthorization before becoming ready again.
+    pub fn reconcile_definitions(
+        &self,
+        definitions: impl IntoIterator<Item = ConnectorDefinition>,
+    ) -> Result<ConnectorSnapshotGeneration, ConnectorAuthorityError> {
+        let definitions = definitions.into_iter().collect::<Vec<_>>();
+        let restored = self.inner.persistence.restore_connections(&definitions)?;
+        let mut state = self
+            .inner
+            .state
+            .lock()
+            .map_err(|_| persistence_error("connector authority lock poisoned"))?;
+        let mut current = state
+            .snapshot
+            .entries()
+            .iter()
+            .map(|entry| (entry.definition().id().clone(), entry.clone()))
+            .collect::<BTreeMap<_, _>>();
+        let mut entries = Vec::with_capacity(definitions.len());
+        for definition in definitions {
+            let connection = match current.remove(definition.id()) {
+                Some(entry) => connection_for_definition(&entry, &definition)?,
+                None => match state.retired_entries.remove(definition.id()) {
+                    Some(entry) => connection_for_definition(&entry, &definition)?,
+                    None => restored
+                        .get(definition.id())
+                        .cloned()
+                        .unwrap_or_else(ConnectorConnection::disconnected),
+                },
+            };
+            entries.push(ConnectorEntry::restore(definition, connection));
+        }
+        for (connector_id, entry) in current {
+            state.retired_entries.insert(connector_id, entry);
+        }
+        let candidate = ConnectorSnapshot::restore(state.snapshot.generation(), entries)
+            .map_err(domain_error)?;
+        if candidate.entries() == state.snapshot.entries() {
+            return Ok(state.snapshot.generation());
+        }
+        let generation = next_generation(state.snapshot.generation())?;
+        let next = ConnectorSnapshot::restore(generation, candidate.entries().to_vec())
+            .map_err(domain_error)?;
+        self.inner.persistence.persist_generation(generation)?;
+        state.snapshot = next;
+        drop(state);
+        self.publish(generation);
+        Ok(generation)
+    }
+
     /// Checks the live generation and definition digest used by a prepared Connector tool call.
     pub fn authorizes(
         &self,
@@ -289,6 +370,29 @@ impl ConnectorAuthority {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .retain(|subscriber| subscriber.send(generation).is_ok());
     }
+}
+
+fn connection_for_definition(
+    entry: &ConnectorEntry,
+    definition: &ConnectorDefinition,
+) -> Result<ConnectorConnection, ConnectorAuthorityError> {
+    if entry.definition().digest() == definition.digest() {
+        return Ok(entry.connection().clone());
+    }
+    let generation = entry.connection().generation();
+    let state = match entry.connection().state() {
+        ConnectorConnectionState::Connected(account)
+        | ConnectorConnectionState::ReauthorizationRequired { account, .. } => {
+            ConnectorConnectionState::ReauthorizationRequired {
+                account: account.clone(),
+                previous_definition: entry.definition().digest(),
+            }
+        }
+        ConnectorConnectionState::Disconnected
+        | ConnectorConnectionState::Connecting
+        | ConnectorConnectionState::Unavailable { .. } => ConnectorConnectionState::Disconnected,
+    };
+    ConnectorConnection::restore(generation, state).map_err(domain_error)
 }
 
 /// Blocking subscription to committed Connector authority generations.

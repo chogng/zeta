@@ -101,6 +101,10 @@ flowchart TD
 - App Server 已把 enabled user declaration materialize 为 `McpServerDefinition`，通过持续运行
   的 Tokio worker 桥接同步 Core `ToolService`，合并 local/MCP definitions，并为每次 MCP call
   生成 exact `ActionSource::McpServer` review、durable one-time approval 与 unknown outcome；
+- `McpRuntimeOwner::prepare_call` 会把 exact `McpToolBinding` 与 JSON-object arguments 收敛为
+  一个 `McpPreparedCall`；worker 在进入 remote session 前仍以自己的 immutable catalog 复核
+  binding。App Server 的 generation-bound `BoundToolCall` 继续负责跨 prepare/execute 的保留，
+  因而 runtime replacement 不会把旧 Tool Call 重绑定到同名新工具；
 - `compose_mcp_tools_with_connectors` 已通过 host-injected `ConnectorMcpRuntimeProvider` 读取 ready
   Connector credential，并用 exact connector ID / connection generation / definition digest 在 prepare
   与 dispatch 前 fail closed；本地 reconcile loop 同时订阅 Config 与 Connector authority；

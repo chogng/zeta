@@ -9,6 +9,10 @@ pub enum PluginErrorKind {
     ManifestInvalid,
     ContributionInvalid,
     PackageConflict,
+    AuthorityUnavailable,
+    GenerationConflict,
+    CommandConflict,
+    PackageInUse,
 }
 
 /// Sanitized failure returned while parsing or discovering a local Plugin package.

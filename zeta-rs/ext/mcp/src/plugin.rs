@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+use std::sync::Arc;
 
 use serde::Deserialize;
 use url::Url;
@@ -11,7 +12,10 @@ use zeta_mcp::McpServerTransport;
 use zeta_plugins::ContributionKind;
 use zeta_plugins::InstalledPluginPackage;
 use zeta_plugins::Permission;
+use zeta_plugins::PluginActivationAuthority;
 use zeta_plugins::PluginActivationSnapshot;
+use zeta_plugins::PluginInvocationFence;
+use zeta_plugins::PluginInvocationLease;
 use zeta_plugins::PluginPath;
 use zeta_rmcp_client::BearerToken;
 use zeta_rmcp_client::StdioServerCommand;
@@ -20,6 +24,8 @@ use zeta_secrets::SecretValue;
 
 use crate::ConnectorMcpRuntimeError;
 use crate::ConnectorMcpRuntimeProvider;
+use crate::RuntimeInvocationFence;
+use crate::RuntimeInvocationLease;
 use crate::StandaloneMcpServer;
 
 const MAX_PLUGIN_MCP_DEFINITION_BYTES: u64 = 64 * 1024;
@@ -40,10 +46,30 @@ impl PluginConnectorMcpRuntimeProvider {
     pub fn from_activation(
         activation: &PluginActivationSnapshot,
     ) -> Result<Self, ConnectorMcpRuntimeError> {
+        Self::from_activation_with_authority(activation, None)
+    }
+
+    /// Builds a provider whose contributions remain bound to exact live Plugin authority.
+    pub fn from_authority(
+        authority: &PluginActivationAuthority,
+    ) -> Result<Self, ConnectorMcpRuntimeError> {
+        let snapshot = authority.snapshot();
+        Self::from_activation_with_authority(snapshot.activation(), Some(authority))
+    }
+
+    fn from_activation_with_authority(
+        activation: &PluginActivationSnapshot,
+        authority: Option<&PluginActivationAuthority>,
+    ) -> Result<Self, ConnectorMcpRuntimeError> {
         let mut servers = BTreeMap::new();
         let mut standalone = Vec::new();
         for package in activation.packages() {
             let manifest = package.manifest();
+            let invocation_fence = authority
+                .and_then(|authority| authority.invocation_fence(package))
+                .map(|fence| {
+                    Arc::new(PluginRuntimeInvocationFence(fence)) as Arc<dyn RuntimeInvocationFence>
+                });
             for contribution in &manifest.contributions.mcp_servers {
                 let server_id =
                     McpServerId::new(format!("plugin:{}:mcp:{}", manifest.id, contribution.id))
@@ -67,6 +93,7 @@ impl PluginConnectorMcpRuntimeProvider {
                         display_name: format!("{}: {}", manifest.display_name, contribution.id),
                         package: package.clone(),
                         definition,
+                        invocation_fence: invocation_fence.clone(),
                     });
                     continue;
                 }
@@ -90,6 +117,7 @@ impl PluginConnectorMcpRuntimeProvider {
                             package: package.clone(),
                             connector_ids,
                             definition,
+                            invocation_fence: invocation_fence.clone(),
                         },
                     )
                     .is_some()
@@ -132,15 +160,31 @@ impl ConnectorMcpRuntimeProvider for PluginConnectorMcpRuntimeProvider {
             .iter()
             .map(|server| {
                 let transport = materialize_transport(&server.package, &server.definition, None)?;
+                let invocation_fence = server.invocation_fence.clone();
                 let definition = McpServerDefinition::new(
                     server.server_id.clone(),
                     &server.display_name,
                     transport,
                 )
                 .map_err(|error| runtime_error(error.to_string()))?;
-                Ok(StandaloneMcpServer::new(definition))
+                let standalone = StandaloneMcpServer::new(definition);
+                Ok(match invocation_fence {
+                    Some(fence) => standalone.with_invocation_fence(fence),
+                    None => standalone,
+                })
             })
             .collect()
+    }
+
+    fn invocation_fence(
+        &self,
+        connector: &ConnectorDefinition,
+    ) -> Option<Arc<dyn RuntimeInvocationFence>> {
+        let server_id =
+            McpServerId::new(connector.runtime_binding().mcp_server_id().to_string()).ok()?;
+        self.servers
+            .get(&server_id)
+            .and_then(|server| server.invocation_fence.clone())
     }
 }
 
@@ -149,6 +193,7 @@ struct ActivatedPluginMcpServer {
     package: InstalledPluginPackage,
     connector_ids: BTreeSet<ConnectorId>,
     definition: PluginMcpDefinition,
+    invocation_fence: Option<Arc<dyn RuntimeInvocationFence>>,
 }
 
 #[derive(Clone)]
@@ -157,7 +202,24 @@ struct ActivatedStandaloneMcpServer {
     display_name: String,
     package: InstalledPluginPackage,
     definition: PluginMcpDefinition,
+    invocation_fence: Option<Arc<dyn RuntimeInvocationFence>>,
 }
+
+struct PluginRuntimeInvocationFence(PluginInvocationFence);
+
+impl RuntimeInvocationFence for PluginRuntimeInvocationFence {
+    fn authorizes(&self) -> bool {
+        self.0.authorizes()
+    }
+
+    fn acquire(&self) -> Option<Box<dyn RuntimeInvocationLease>> {
+        self.0
+            .acquire()
+            .map(|lease| Box::new(lease) as Box<dyn RuntimeInvocationLease>)
+    }
+}
+
+impl RuntimeInvocationLease for PluginInvocationLease {}
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

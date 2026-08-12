@@ -5,7 +5,11 @@ use zeta_connectors::ConnectorDefinition;
 use zeta_connectors_extension::ConnectorCatalog;
 use zeta_mcp::McpServerTransport;
 use zeta_plugins::LocalPluginPackage;
+use zeta_plugins::PluginActivationAuthority;
 use zeta_plugins::PluginActivationSnapshot;
+use zeta_plugins::PluginAuthorityCommand;
+use zeta_plugins::PluginAuthorityCommandId;
+use zeta_plugins::PluginAuthorityCommandRequest;
 use zeta_plugins::PluginPackageStore;
 use zeta_secrets::SecretValue;
 
@@ -102,6 +106,30 @@ fn activation(package: LocalPluginPackage) -> PluginActivationSnapshot {
     PluginActivationSnapshot::resolve(1, &store, [installed]).unwrap()
 }
 
+fn enabled_authority(package: LocalPluginPackage) -> PluginActivationAuthority {
+    let store_root = tempdir().unwrap().keep();
+    let store = PluginPackageStore::open(&store_root).unwrap();
+    let installed = store.install_local(&package).unwrap();
+    let authority = PluginActivationAuthority::in_memory(store).unwrap();
+    authority
+        .apply(PluginAuthorityCommandRequest {
+            command_id: PluginAuthorityCommandId::new("install").unwrap(),
+            expected_revision: 0,
+            command: PluginAuthorityCommand::Install {
+                package: installed.clone(),
+            },
+        })
+        .unwrap();
+    authority
+        .apply(PluginAuthorityCommandRequest {
+            command_id: PluginAuthorityCommandId::new("enable").unwrap(),
+            expected_revision: 1,
+            command: PluginAuthorityCommand::Enable { package: installed },
+        })
+        .unwrap();
+    authority
+}
+
 fn connector(activation: &PluginActivationSnapshot) -> ConnectorDefinition {
     ConnectorCatalog::from_activation(activation)
         .unwrap()
@@ -162,4 +190,27 @@ fn activation_materializes_connector_free_plugin_mcp_as_standalone() {
             .to_string_lossy()
             .ends_with("bin/local-server")
     );
+}
+
+#[test]
+fn live_authority_fences_old_connector_runtime_after_disable() {
+    let source = tempdir().unwrap();
+    let authority = enabled_authority(package(source.path(), "bin/review-server"));
+    let snapshot = authority.snapshot();
+    let connector = connector(snapshot.activation());
+    let provider = PluginConnectorMcpRuntimeProvider::from_authority(&authority).unwrap();
+    let fence = provider.invocation_fence(&connector).unwrap();
+    assert!(fence.authorizes());
+
+    authority
+        .apply(PluginAuthorityCommandRequest {
+            command_id: PluginAuthorityCommandId::new("disable").unwrap(),
+            expected_revision: 2,
+            command: PluginAuthorityCommand::Disable {
+                plugin_id: snapshot.activation().packages()[0].manifest().id.clone(),
+            },
+        })
+        .unwrap();
+    assert!(!fence.authorizes());
+    assert!(fence.acquire().is_none());
 }

@@ -98,13 +98,16 @@ Core/store 继续拥有 Session/Thread durable state；需要进程内生命周�
 `AppServer::new` 默认用 `TurnExecutor::without_tools`。`with_tool_service` 才会替换为有 Tool 和
 Policy port 的 executor。`open_local_app_server` 会从 user config snapshot 连接明确 `enabled`
 的 unauthenticated MCP server，并把 catalog 与本地工具组合。Host 可用
-`LocalAppServerOptions::with_plugin_activation` 注入 exact activation；它会自动构造 Connector catalog、
-SQLite authority 与 package-rooted Plugin MCP provider。没有注入时，local composition 使用空 activation
-和按 profile 隔离的 `KeyringSecretStore`，因此 `connector/list` 仍可用但目录为空。Keyring operation
+`LocalAppServerOptions::with_plugin_activation` 注入固定 activation，或用 `with_plugin_authority` 注入 live
+authority；两者都会自动构造 Connector catalog、SQLite authority 与 package-rooted Plugin MCP provider。
+没有注入时，local composition 打开 `<profile>/plugins` 的 durable `PluginActivationAuthority` 和按 profile
+隔离的 `KeyringSecretStore`。Authority generation 会重建 Connector definitions 与 Plugin MCP provider，
+并复用 MCP safe-point replacement。Keyring operation
 失败会 fail closed，不自动降级到文件副本；host 仍可通过显式 runtime 注入 `FileSecretStore`。Config、Connector
 或 MCP list-changed hint 会在后台构建新 generation；每次 model invocation 同时冻结可见 definitions 和响应后的 binder，因此 watcher 在模型
 响应前发布新 registry 也不会把旧响应劫持到同名新工具。已绑定调用继续持有原 Tool/Policy generation，
-直到 execute 排空；Connector-bound call 在 dispatch 前额外复核 live connection generation/digest，
+直到 execute 排空；Plugin-backed call 在 dispatch 前获取 exact activation lease，Connector-bound call 再
+额外复核 live connection generation/digest，
 disconnect 会等待已经 dispatch 的调用结束。每次 MCP tool
 call 仍必须经过 durable one-time approval。Host 安装的 read-only
 extension executor（当前包括统一的 `skills-read`）和 client-hosted dynamic tools 也进入同一个 registry，
@@ -454,10 +457,11 @@ local tools + enabled user MCP declarations
 ├─ install ReloadableToolPorts
 └─ ToolConfigWatcher(ConfigChange)
 
-Plugin request + Hook declaration
-└─ config/read + typed mutation only
-   ├─ Plugin install/enable authority 与 live activation manager 尚未实现
-   └─ Hook execution/policy runtime 尚未实现
+Plugin lifecycle + Hook declaration
+├─ PluginActivationAuthority(<profile>/plugins)
+│  └─ live generation → Connector/MCP reconcile + invocation drain
+├─ Plugin lifecycle RPC/management UI 尚未实现
+└─ Hook execution/policy runtime 尚未实现
 
 Language-server preference
 └─ config/read + languageServer/configure|remove

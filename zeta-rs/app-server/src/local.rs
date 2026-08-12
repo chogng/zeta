@@ -55,6 +55,7 @@ use zeta_model_provider_config::ProviderConfigRegistry;
 use zeta_models_manager::CatalogQuery;
 use zeta_models_manager::ModelRequirements;
 use zeta_models_manager::ModelsManager;
+use zeta_plugins::PluginActivationAuthority;
 use zeta_plugins::PluginActivationSnapshot;
 use zeta_protocol::ContextWindow;
 use zeta_rollout::LocalStateRepository;
@@ -256,6 +257,17 @@ impl LocalAppServerOptions {
             LocalConnectorRuntime::from_plugin_activation(&self.profile_root, activation, secrets)?;
         Ok(self.with_connector_runtime(runtime))
     }
+
+    /// Installs a live Plugin authority whose generations drive Connector and MCP replacement.
+    pub fn with_plugin_authority(
+        self,
+        authority: PluginActivationAuthority,
+        secrets: Arc<dyn SecretStore>,
+    ) -> Result<Self, OpenAppServerError> {
+        let runtime =
+            LocalConnectorRuntime::from_plugin_authority(&self.profile_root, authority, secrets)?;
+        Ok(self.with_connector_runtime(runtime))
+    }
 }
 
 impl fmt::Debug for LocalAppServerOptions {
@@ -318,6 +330,7 @@ pub struct LocalConnectorRuntime {
     service: Arc<zeta_connectors_extension::ConnectorCredentialService>,
     secrets: Arc<dyn SecretStore>,
     mcp: Arc<dyn ConnectorMcpRuntimeProvider>,
+    plugin_authority: Option<PluginActivationAuthority>,
 }
 
 impl LocalConnectorRuntime {
@@ -330,6 +343,7 @@ impl LocalConnectorRuntime {
             service,
             secrets,
             mcp,
+            plugin_authority: None,
         }
     }
 
@@ -357,6 +371,63 @@ impl LocalConnectorRuntime {
             Arc::clone(&secrets),
         ));
         Ok(Self::new(service, secrets, Arc::new(mcp)))
+    }
+
+    /// Builds a reloadable Connector/MCP projection from one live Plugin authority.
+    pub fn from_plugin_authority(
+        profile_root: impl AsRef<Path>,
+        plugin_authority: PluginActivationAuthority,
+        secrets: Arc<dyn SecretStore>,
+    ) -> Result<Self, OpenAppServerError> {
+        let snapshot = plugin_authority.snapshot();
+        let catalog =
+            zeta_connectors_extension::ConnectorCatalog::from_activation(snapshot.activation())
+                .map_err(|error| OpenAppServerError(error.to_string()))?;
+        let authority = zeta_connectors_extension::ConnectorAuthority::open_sqlite(
+            profile_root.as_ref().join("connectors.sqlite3"),
+            catalog
+                .snapshot()
+                .entries()
+                .iter()
+                .map(|entry| entry.definition().clone()),
+        )
+        .map_err(|error| OpenAppServerError(error.to_string()))?;
+        let mcp = PluginConnectorMcpRuntimeProvider::from_authority(&plugin_authority)
+            .map_err(|error| OpenAppServerError(error.to_string()))?;
+        let service = Arc::new(zeta_connectors_extension::ConnectorCredentialService::new(
+            authority,
+            Arc::clone(&secrets),
+        ));
+        Ok(Self {
+            service,
+            secrets,
+            mcp: Arc::new(mcp),
+            plugin_authority: Some(plugin_authority),
+        })
+    }
+
+    fn reconcile_plugin_activation(&mut self) -> Result<(), OpenAppServerError> {
+        let Some(authority) = &self.plugin_authority else {
+            return Ok(());
+        };
+        let snapshot = authority.snapshot();
+        let catalog =
+            zeta_connectors_extension::ConnectorCatalog::from_activation(snapshot.activation())
+                .map_err(|error| OpenAppServerError(error.to_string()))?;
+        let mcp = PluginConnectorMcpRuntimeProvider::from_authority(authority)
+            .map_err(|error| OpenAppServerError(error.to_string()))?;
+        self.service
+            .authority()
+            .reconcile_definitions(
+                catalog
+                    .snapshot()
+                    .entries()
+                    .iter()
+                    .map(|entry| entry.definition().clone()),
+            )
+            .map_err(|error| OpenAppServerError(error.to_string()))?;
+        self.mcp = Arc::new(mcp);
+        Ok(())
     }
 
     fn ptr_eq(&self, other: &Self) -> bool {
@@ -493,15 +564,16 @@ pub fn open_local_app_server_with_code_index_providers(
     let connector_runtime = match options.connector_runtime.take() {
         Some(runtime) => Some(runtime),
         None => {
-            let activation = PluginActivationSnapshot::empty(1)
-                .map_err(|error| OpenAppServerError(error.to_string()))?;
             let secrets = Arc::new(
                 KeyringSecretStore::for_profile(&options.profile_root)
                     .map_err(|error| OpenAppServerError(error.to_string()))?,
             );
-            Some(LocalConnectorRuntime::from_plugin_activation(
+            let plugin_authority =
+                PluginActivationAuthority::open(options.profile_root.join("plugins"))
+                    .map_err(|error| OpenAppServerError(error.to_string()))?;
+            Some(LocalConnectorRuntime::from_plugin_authority(
                 &options.profile_root,
-                &activation,
+                plugin_authority,
                 secrets,
             )?)
         }
@@ -665,7 +737,7 @@ impl ToolConfigWatcher {
         config: Arc<ConfigStore>,
         workspace_tools: Arc<WorkspaceToolPorts>,
         workspace_runtime: crate::server::WorkspaceRuntimeControl,
-        connector_runtime: Option<LocalConnectorRuntime>,
+        mut connector_runtime: Option<LocalConnectorRuntime>,
         mcp_updates: McpCatalogUpdates,
         mcp_changes: McpCatalogUpdateSubscription,
     ) -> Self {
@@ -679,6 +751,10 @@ impl ToolConfigWatcher {
         let connector_changes = connector_runtime
             .as_ref()
             .map(|runtime| runtime.service.authority().subscribe());
+        let plugin_changes = connector_runtime
+            .as_ref()
+            .and_then(|runtime| runtime.plugin_authority.as_ref())
+            .map(PluginActivationAuthority::subscribe);
         let (shutdown, shutdown_receiver) = std::sync::mpsc::channel();
         let thread = std::thread::Builder::new()
             .name("zeta-tool-config".into())
@@ -706,7 +782,13 @@ impl ToolConfigWatcher {
                     while mcp_changes.try_recv().is_ok() {
                         mcp_changed = true;
                     }
-                    if !config_changed && !connector_changed && !mcp_changed {
+                    let mut plugin_changed = false;
+                    if let Some(plugin_changes) = &plugin_changes {
+                        while plugin_changes.try_recv().is_ok() {
+                            plugin_changed = true;
+                        }
+                    }
+                    if !config_changed && !connector_changed && !mcp_changed && !plugin_changed {
                         continue;
                     }
                     let snapshot = match config.read_snapshot() {
@@ -735,6 +817,13 @@ impl ToolConfigWatcher {
                                 continue;
                             }
                         }
+                    }
+                    if plugin_changed
+                        && let Some(connectors) = connector_runtime.as_mut()
+                        && let Err(error) = connectors.reconcile_plugin_activation()
+                    {
+                        workspace_tools.record_reconcile_failure(error.to_string());
+                        continue;
                     }
                     catalog_generation = match catalog_generation.checked_add(1) {
                         Some(generation) => generation,

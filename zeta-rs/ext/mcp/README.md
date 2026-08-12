@@ -30,6 +30,17 @@ linearization requires a replacement contract, not a best-effort state check.
 hints. App Server constructs the complete next runtime, then atomically replaces future model safe
 points; prepared calls retain their old `ToolService` generation until completion.
 
+`McpRuntimeOwner::prepare_call` freezes the exact immutable `McpToolBinding` and JSON-object
+arguments into one `McpPreparedCall`. Dispatch accepts that object rather than independent route
+and argument values; the worker still revalidates the binding against its own immutable runtime
+catalog before entering the remote session. App Server's generation-bound `BoundToolCall` is the
+cross-request retention boundary, so a replacement runtime cannot retarget an in-flight call.
+
+Plugin-backed servers also carry a `RuntimeInvocationFence` derived from the exact active package.
+Review rejects a retired package; execute acquires a `PluginInvocationLease` immediately before MCP
+dispatch. Disable/update commits first, rejects new dispatch through the old runtime, publishes a
+reconcile generation, and waits for already-admitted leases to drain.
+
 Standalone Config credential references remain unsupported and fail before session startup.
 OAuth and secret persistence are outside this crate. Connector PKCE orchestration and OS keyring /
 explicit-file persistence exist in their owning crates; concrete OAuth providers, browser callback

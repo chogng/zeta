@@ -114,6 +114,7 @@ fn prepares_exact_mcp_provenance_and_requires_user_approval() {
                     executable: "/test/mcp".into(),
                 },
                 connector_fence: None,
+                runtime_fence: None,
             },
         )]),
         ConfigGeneration::INITIAL.get() + 1,

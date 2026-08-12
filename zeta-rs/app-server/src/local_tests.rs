@@ -1,9 +1,10 @@
 use super::*;
+use crate::ConnectionState;
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::{Condvar, Mutex};
 use std::thread;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use zeta_async_utils::CancellationSource;
 use zeta_config::{
     ConfigCommandRequest, ConfigRevision, PreferencesUpdate, ResolvedConfig, UserConfigCommand,
@@ -21,9 +22,15 @@ use zeta_model_provider_config::ModelContextConfig;
 use zeta_model_provider_config::ModelProviderConfig;
 use zeta_model_provider_config::ProviderAdapter;
 use zeta_model_provider_config::ProviderDefinition;
+use zeta_plugins::LocalPluginPackage;
+use zeta_plugins::PluginAuthorityCommand;
+use zeta_plugins::PluginAuthorityCommandId;
+use zeta_plugins::PluginAuthorityCommandRequest;
+use zeta_plugins::PluginPackageStore;
 use zeta_protocol::{
     CommandId, ModelRef, ModelRequest, ModelResponse, Patch, ResponseItem, StopReason,
 };
+use zeta_secrets::MemorySecretStore;
 use zeta_web_search_extension::WebSearchBackend;
 use zeta_web_search_extension::WebSearchError;
 use zeta_web_search_extension::WebSearchRequest;
@@ -49,6 +56,145 @@ fn workspace_config_path(label: &str) -> PathBuf {
             .unwrap()
             .as_nanos()
     ))
+}
+
+fn connector_plugin(root: &Path) -> LocalPluginPackage {
+    std::fs::create_dir_all(root.join(".zeta-plugin")).unwrap();
+    std::fs::create_dir_all(root.join("mcp")).unwrap();
+    std::fs::write(
+        root.join(".zeta-plugin/plugin.json"),
+        r#"{
+            "schemaVersion": 1,
+            "id": "acme/live",
+            "version": "1.0.0",
+            "displayName": "Live Plugin",
+            "compatibility": {"zeta": ">=0.1.0"},
+            "contributions": {
+                "mcpServers": [{"id": "live", "definition": "mcp/live.json"}],
+                "connectors": [{
+                    "id": "account",
+                    "displayName": "Live account",
+                    "description": "A live activation test connector.",
+                    "mcpServer": "live"
+                }]
+            },
+            "permissions": [{"type": "network", "hosts": ["example.com"]}],
+            "credentialSlots": [{
+                "name": "token",
+                "kind": "secretText",
+                "requiredFor": ["connector:account", "mcp:live"]
+            }]
+        }"#,
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("mcp/live.json"),
+        r#"{"transport":{"type":"streamableHttp","url":"https://example.com/mcp"}}"#,
+    )
+    .unwrap();
+    LocalPluginPackage::load(root).unwrap()
+}
+
+fn plugin_request(
+    authority: &PluginActivationAuthority,
+    command_id: &str,
+    command: PluginAuthorityCommand,
+) -> PluginAuthorityCommandRequest {
+    PluginAuthorityCommandRequest {
+        command_id: PluginAuthorityCommandId::new(command_id).unwrap(),
+        expected_revision: authority.snapshot().revision(),
+        command,
+    }
+}
+
+fn connector_count(server: &AppServer, connection: &mut ConnectionState, request_id: u64) -> usize {
+    let response: serde_json::Value = serde_json::from_str(
+        &server.handle_json(
+            connection,
+            &serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "method": "connector/list",
+                "params": {}
+            })
+            .to_string(),
+        ),
+    )
+    .unwrap();
+    response["result"]["connectors"].as_array().unwrap().len()
+}
+
+fn wait_for_connector_count(
+    server: &AppServer,
+    connection: &mut ConnectionState,
+    expected: usize,
+    request_id: &mut u64,
+) {
+    for _ in 0..100 {
+        *request_id += 1;
+        if connector_count(server, connection, *request_id) == expected {
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    panic!("Connector projection did not reach {expected} entries");
+}
+
+#[test]
+fn live_plugin_authority_reconciles_connector_projection() {
+    let profile = tempfile::tempdir().unwrap();
+    let source = tempfile::tempdir().unwrap();
+    let plugin_root = profile.path().join("plugins");
+    let store = PluginPackageStore::open(&plugin_root).unwrap();
+    let installed = store
+        .install_local(&connector_plugin(source.path()))
+        .unwrap();
+    let authority = PluginActivationAuthority::open(&plugin_root).unwrap();
+    authority
+        .apply(plugin_request(
+            &authority,
+            "install-live",
+            PluginAuthorityCommand::Install {
+                package: installed.clone(),
+            },
+        ))
+        .unwrap();
+    let options = LocalAppServerOptions::new(profile.path())
+        .without_built_in_skills()
+        .with_session_state_mode(SessionStateMode::Ephemeral)
+        .with_plugin_authority(authority.clone(), Arc::new(MemorySecretStore::default()))
+        .unwrap();
+    let server = open_local_app_server(options).unwrap();
+    let mut connection = server.connection();
+    let initialize = server.handle_json(
+        &mut connection,
+        r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"test","version":"1"},"capabilities":{}}}"#,
+    );
+    assert!(initialize.contains("\"result\""));
+    let mut request_id = 1;
+    wait_for_connector_count(&server, &mut connection, 0, &mut request_id);
+
+    authority
+        .apply(plugin_request(
+            &authority,
+            "enable-live",
+            PluginAuthorityCommand::Enable {
+                package: installed.clone(),
+            },
+        ))
+        .unwrap();
+    wait_for_connector_count(&server, &mut connection, 1, &mut request_id);
+
+    authority
+        .apply(plugin_request(
+            &authority,
+            "disable-live",
+            PluginAuthorityCommand::Disable {
+                plugin_id: installed.id,
+            },
+        ))
+        .unwrap();
+    wait_for_connector_count(&server, &mut connection, 0, &mut request_id);
 }
 
 struct LocalSemanticEmbedding;

@@ -35,25 +35,55 @@ pub trait ConnectorMcpRuntimeProvider: Send + Sync {
     fn standalone_servers(&self) -> Result<Vec<StandaloneMcpServer>, ConnectorMcpRuntimeError> {
         Ok(Vec::new())
     }
+
+    /// Returns the exact live authority fence for one materialized Connector contribution.
+    fn invocation_fence(
+        &self,
+        _definition: &ConnectorDefinition,
+    ) -> Option<Arc<dyn RuntimeInvocationFence>> {
+        None
+    }
 }
+
+/// Runtime-neutral fence checked before review and acquired immediately before MCP dispatch.
+pub trait RuntimeInvocationFence: Send + Sync {
+    fn authorizes(&self) -> bool;
+
+    fn acquire(&self) -> Option<Box<dyn RuntimeInvocationLease>>;
+}
+
+/// Held authority lease whose drop marks one admitted runtime invocation as drained.
+pub trait RuntimeInvocationLease: Send {}
 
 /// One runtime-ready standalone Plugin MCP contribution.
 pub struct StandaloneMcpServer {
     definition: McpServerDefinition,
+    invocation_fence: Option<Arc<dyn RuntimeInvocationFence>>,
 }
 
 impl StandaloneMcpServer {
     /// Wraps a host-materialized definition for publication by the shared composition layer.
     pub fn new(definition: McpServerDefinition) -> Self {
-        Self { definition }
+        Self {
+            definition,
+            invocation_fence: None,
+        }
+    }
+
+    /// Binds the standalone server to exact live contribution authority.
+    pub fn with_invocation_fence(mut self, fence: Arc<dyn RuntimeInvocationFence>) -> Self {
+        self.invocation_fence = Some(fence);
+        self
     }
 
     pub fn definition(&self) -> &McpServerDefinition {
         &self.definition
     }
 
-    pub fn into_definition(self) -> McpServerDefinition {
-        self.definition
+    pub(crate) fn into_parts(
+        self,
+    ) -> (McpServerDefinition, Option<Arc<dyn RuntimeInvocationFence>>) {
+        (self.definition, self.invocation_fence)
     }
 }
 
@@ -109,6 +139,7 @@ pub(crate) fn materialize_connector_servers(
         let transport = provider
             .materialize(entry.definition(), credential)
             .map_err(|error| McpToolCompositionError::new(error.to_string()))?;
+        let runtime_fence = provider.invocation_fence(entry.definition());
         let invocation_transport = match &transport {
             McpServerTransport::Stdio(command) => McpInvocationTransport::Stdio {
                 executable: command.program().to_string_lossy().into_owned(),
@@ -134,6 +165,7 @@ pub(crate) fn materialize_connector_servers(
                     display_name: entry.definition().display_name().to_string(),
                     transport: invocation_transport,
                     connector_fence: Some(Arc::new(connector_fence)),
+                    runtime_fence,
                 },
             )
             .is_some()

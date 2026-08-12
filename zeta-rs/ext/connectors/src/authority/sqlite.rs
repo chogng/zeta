@@ -52,7 +52,8 @@ impl SqliteAuthority {
             .values()
             .map(|record| record.snapshot_generation)
             .max()
-            .unwrap_or(1);
+            .unwrap_or(1)
+            .max(load_generation(&connection)?);
         let mut entries = Vec::with_capacity(definitions.len());
         for definition in definitions {
             let connection = match records.get(definition.id()) {
@@ -104,7 +105,46 @@ impl SqliteAuthority {
                 ],
             )
             .map_err(sql_error)?;
+        update_generation(&transaction, result_generation)?;
         transaction.commit().map_err(sql_error)
+    }
+
+    pub fn persist_generation(
+        &self,
+        generation: ConnectorSnapshotGeneration,
+    ) -> Result<(), ConnectorAuthorityError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| persistence_error("connector SQLite lock poisoned"))?;
+        connection
+            .execute(
+                "UPDATE connector_authority_meta SET snapshot_generation = ?1 WHERE singleton = 1",
+                [to_i64(generation.get())?],
+            )
+            .map_err(sql_error)?;
+        Ok(())
+    }
+
+    pub fn restore_connections(
+        &self,
+        definitions: &[ConnectorDefinition],
+    ) -> Result<BTreeMap<ConnectorId, ConnectorConnection>, ConnectorAuthorityError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| persistence_error("connector SQLite lock poisoned"))?;
+        let records = load_latest_records(&connection)?;
+        definitions
+            .iter()
+            .filter_map(|definition| {
+                records.get(definition.id()).map(|record| {
+                    record
+                        .restore(definition)
+                        .map(|connection| (definition.id().clone(), connection))
+                })
+            })
+            .collect()
     }
 }
 
@@ -184,9 +224,39 @@ fn initialize(connection: &Connection) -> Result<(), ConnectorAuthorityError> {
                 connector_id TEXT NOT NULL,
                 command_digest TEXT NOT NULL,
                 result_generation INTEGER NOT NULL
-             );",
+             );
+             CREATE TABLE IF NOT EXISTS connector_authority_meta (
+                singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+                snapshot_generation INTEGER NOT NULL
+             );
+             INSERT OR IGNORE INTO connector_authority_meta (singleton, snapshot_generation)
+             VALUES (1, 1);",
         )
         .map_err(sql_error)
+}
+
+fn load_generation(connection: &Connection) -> Result<u64, ConnectorAuthorityError> {
+    let generation = connection
+        .query_row(
+            "SELECT snapshot_generation FROM connector_authority_meta WHERE singleton = 1",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
+        .map_err(sql_error)?;
+    from_i64(generation)
+}
+
+fn update_generation(
+    transaction: &rusqlite::Transaction<'_>,
+    generation: ConnectorSnapshotGeneration,
+) -> Result<(), ConnectorAuthorityError> {
+    transaction
+        .execute(
+            "UPDATE connector_authority_meta SET snapshot_generation = ?1 WHERE singleton = 1",
+            [to_i64(generation.get())?],
+        )
+        .map_err(sql_error)?;
+    Ok(())
 }
 
 fn insert_event(

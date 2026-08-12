@@ -1,0 +1,704 @@
+use std::collections::BTreeMap;
+use std::fmt;
+use std::fmt::Write as _;
+use std::path::Path;
+use std::sync::Arc;
+use std::sync::Condvar;
+use std::sync::Mutex;
+use std::sync::mpsc;
+use std::time::Duration;
+
+use serde::Serialize;
+use sha2::Digest;
+use sha2::Sha256;
+
+use crate::InstalledPluginPackage;
+use crate::InstalledPluginRef;
+use crate::LocalPluginPackage;
+use crate::PluginActivationSnapshot;
+use crate::PluginError;
+use crate::PluginErrorKind;
+use crate::PluginId;
+use crate::PluginPackageDigest;
+use crate::PluginPackageStore;
+
+mod persistence;
+
+use persistence::FileAuthorityPersistence;
+use persistence::PersistedAuthority;
+use persistence::PersistedCommandReceipt;
+
+const MAX_COMMAND_ID_BYTES: usize = 128;
+
+/// Stable retry identity for one Plugin authority mutation.
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub struct PluginAuthorityCommandId(String);
+
+impl PluginAuthorityCommandId {
+    pub fn new(value: impl Into<String>) -> Result<Self, PluginError> {
+        let value = value.into();
+        if value.is_empty()
+            || value.len() > MAX_COMMAND_ID_BYTES
+            || value.chars().any(char::is_control)
+        {
+            return Err(authority_error(
+                PluginErrorKind::CommandConflict,
+                "Plugin command ID is invalid",
+            ));
+        }
+        Ok(Self(value))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+/// One exact, retry-safe mutation of installed or active Plugin authority.
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase", tag = "type")]
+pub enum PluginAuthorityCommand {
+    Install { package: InstalledPluginRef },
+    Enable { package: InstalledPluginRef },
+    Disable { plugin_id: PluginId },
+    Uninstall { package: InstalledPluginRef },
+}
+
+/// Compare-and-swap request applied to the durable Plugin authority.
+#[derive(Clone, Debug)]
+pub struct PluginAuthorityCommandRequest {
+    pub command_id: PluginAuthorityCommandId,
+    pub expected_revision: u64,
+    pub command: PluginAuthorityCommand,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PluginAuthorityDisposition {
+    Updated,
+    Replayed,
+}
+
+/// Result of one committed or exactly replayed Plugin authority command.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PluginAuthorityCommandResult {
+    pub revision: u64,
+    pub activation_generation: u64,
+    pub disposition: PluginAuthorityDisposition,
+}
+
+/// Exact installed object and authority commit produced by one local installation.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PluginInstallResult {
+    pub package: InstalledPluginRef,
+    pub command: PluginAuthorityCommandResult,
+}
+
+/// Immutable installed and active projection of the Plugin authority.
+#[derive(Clone, Debug)]
+pub struct PluginAuthoritySnapshot {
+    revision: u64,
+    installed: Vec<InstalledPluginRef>,
+    activation: PluginActivationSnapshot,
+}
+
+impl PluginAuthoritySnapshot {
+    pub fn revision(&self) -> u64 {
+        self.revision
+    }
+
+    pub fn installed(&self) -> &[InstalledPluginRef] {
+        &self.installed
+    }
+
+    pub fn activation(&self) -> &PluginActivationSnapshot {
+        &self.activation
+    }
+}
+
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+struct InstalledKey {
+    id: PluginId,
+    version: crate::PluginVersion,
+}
+
+impl InstalledKey {
+    fn from_package(package: &InstalledPluginRef) -> Self {
+        Self {
+            id: package.id.clone(),
+            version: package.version.clone(),
+        }
+    }
+}
+
+#[derive(Clone)]
+struct ActivePlugin {
+    package: InstalledPluginRef,
+    activation_revision: u64,
+}
+
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+struct InvocationKey {
+    plugin_id: PluginId,
+    package_digest: PluginPackageDigest,
+    activation_revision: u64,
+}
+
+struct AuthorityState {
+    revision: u64,
+    activation_generation: u64,
+    installed: BTreeMap<InstalledKey, InstalledPluginRef>,
+    active: BTreeMap<PluginId, ActivePlugin>,
+    activation: PluginActivationSnapshot,
+    receipts: BTreeMap<String, PersistedCommandReceipt>,
+    in_flight: BTreeMap<InvocationKey, usize>,
+}
+
+enum Persistence {
+    Memory,
+    File(FileAuthorityPersistence),
+}
+
+impl Persistence {
+    fn persist(&self, authority: &PersistedAuthority) -> Result<(), PluginError> {
+        match self {
+            Self::Memory => Ok(()),
+            Self::File(file) => file.persist(authority),
+        }
+    }
+}
+
+struct PluginActivationAuthorityInner {
+    store: PluginPackageStore,
+    state: Mutex<AuthorityState>,
+    drained: Condvar,
+    persistence: Persistence,
+    subscribers: Mutex<Vec<mpsc::Sender<u64>>>,
+}
+
+/// Durable source of truth for installed packages and the exact active Plugin set.
+///
+/// Implementations publish immutable activation snapshots. Runtime consumers must bind an
+/// invocation fence to each contribution and acquire its lease immediately before dispatch.
+#[derive(Clone)]
+pub struct PluginActivationAuthority {
+    inner: Arc<PluginActivationAuthorityInner>,
+}
+
+impl PluginActivationAuthority {
+    /// Opens one profile authority and its colocated content-addressed package store.
+    pub fn open(root: impl AsRef<Path>) -> Result<Self, PluginError> {
+        let root = root.as_ref();
+        let store = PluginPackageStore::open(root)?;
+        let persistence = FileAuthorityPersistence::open(root.join("authority.json"))?;
+        let persisted = persistence
+            .load()?
+            .unwrap_or_else(PersistedAuthority::empty);
+        Self::from_persisted(store, persisted, Persistence::File(persistence))
+    }
+
+    /// Creates a process-local authority over an existing package store.
+    pub fn in_memory(store: PluginPackageStore) -> Result<Self, PluginError> {
+        Self::from_persisted(store, PersistedAuthority::empty(), Persistence::Memory)
+    }
+
+    fn from_persisted(
+        store: PluginPackageStore,
+        persisted: PersistedAuthority,
+        persistence: Persistence,
+    ) -> Result<Self, PluginError> {
+        persisted.validate()?;
+        let mut installed = BTreeMap::new();
+        for package in persisted.installed {
+            store.read(&package)?;
+            if installed
+                .insert(InstalledKey::from_package(&package), package)
+                .is_some()
+            {
+                return Err(authority_error(
+                    PluginErrorKind::PackageConflict,
+                    "Plugin authority contains duplicate installed versions",
+                ));
+            }
+        }
+        let mut active = BTreeMap::new();
+        for record in persisted.active {
+            let key = InstalledKey::from_package(&record.package);
+            if installed.get(&key) != Some(&record.package)
+                || active
+                    .insert(
+                        record.package.id.clone(),
+                        ActivePlugin {
+                            package: record.package,
+                            activation_revision: record.activation_revision,
+                        },
+                    )
+                    .is_some()
+            {
+                return Err(authority_error(
+                    PluginErrorKind::PackageConflict,
+                    "Plugin authority active set does not match installed objects",
+                ));
+            }
+        }
+        let activation = resolve_activation(persisted.activation_generation, &store, &active)?;
+        Ok(Self {
+            inner: Arc::new(PluginActivationAuthorityInner {
+                store,
+                state: Mutex::new(AuthorityState {
+                    revision: persisted.revision,
+                    activation_generation: persisted.activation_generation,
+                    installed,
+                    active,
+                    activation,
+                    receipts: persisted.receipts,
+                    in_flight: BTreeMap::new(),
+                }),
+                drained: Condvar::new(),
+                persistence,
+                subscribers: Mutex::new(Vec::new()),
+            }),
+        })
+    }
+
+    pub fn snapshot(&self) -> PluginAuthoritySnapshot {
+        let state = self
+            .inner
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        PluginAuthoritySnapshot {
+            revision: state.revision,
+            installed: state.installed.values().cloned().collect(),
+            activation: state.activation.clone(),
+        }
+    }
+
+    pub fn subscribe(&self) -> PluginAuthoritySubscription {
+        let (sender, receiver) = mpsc::channel();
+        self.inner
+            .subscribers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push(sender);
+        PluginAuthoritySubscription { receiver }
+    }
+
+    /// Validates, copies, and records one local-development package without enabling it.
+    pub fn install_local(
+        &self,
+        command_id: PluginAuthorityCommandId,
+        expected_revision: u64,
+        package: &LocalPluginPackage,
+    ) -> Result<PluginInstallResult, PluginError> {
+        let installed = self.inner.store.install_local(package)?;
+        let command = self.apply(PluginAuthorityCommandRequest {
+            command_id,
+            expected_revision,
+            command: PluginAuthorityCommand::Install {
+                package: installed.clone(),
+            },
+        })?;
+        Ok(PluginInstallResult {
+            package: installed,
+            command,
+        })
+    }
+
+    pub fn apply(
+        &self,
+        request: PluginAuthorityCommandRequest,
+    ) -> Result<PluginAuthorityCommandResult, PluginError> {
+        let command_digest = command_digest(&request.command)?;
+        let mut state = self
+            .inner
+            .state
+            .lock()
+            .map_err(|_| authority_unavailable("Plugin authority lock is unavailable"))?;
+        if let Some(receipt) = state.receipts.get(request.command_id.as_str()) {
+            if receipt.expected_revision != request.expected_revision
+                || receipt.command_digest != command_digest
+            {
+                return Err(authority_error(
+                    PluginErrorKind::CommandConflict,
+                    "Plugin command ID was already used for a different request",
+                ));
+            }
+            return Ok(PluginAuthorityCommandResult {
+                revision: receipt.result_revision,
+                activation_generation: receipt.activation_generation,
+                disposition: PluginAuthorityDisposition::Replayed,
+            });
+        }
+        if state.revision != request.expected_revision {
+            return Err(authority_error(
+                PluginErrorKind::GenerationConflict,
+                format!(
+                    "Plugin authority revision conflict: expected {}, actual {}",
+                    request.expected_revision, state.revision
+                ),
+            ));
+        }
+
+        let result_revision = state
+            .revision
+            .checked_add(1)
+            .ok_or_else(|| authority_unavailable("Plugin authority revision overflow"))?;
+        let mut installed = state.installed.clone();
+        let mut active = state.active.clone();
+        apply_command(
+            &self.inner.store,
+            &mut installed,
+            &mut active,
+            &request.command,
+        )?;
+        let activation_changed = !same_active_set(&state.active, &active);
+        let activation_generation = if activation_changed {
+            state
+                .activation_generation
+                .checked_add(1)
+                .ok_or_else(|| authority_unavailable("Plugin activation generation overflow"))?
+        } else {
+            state.activation_generation
+        };
+        if activation_changed {
+            stamp_changed_activations(&state.active, &mut active, activation_generation);
+        }
+        let activation = if activation_changed {
+            resolve_activation(activation_generation, &self.inner.store, &active)?
+        } else {
+            state.activation.clone()
+        };
+        let drained = revoked_invocations(&state.active, &active);
+        let receipt = PersistedCommandReceipt {
+            expected_revision: request.expected_revision,
+            command_digest,
+            result_revision,
+            activation_generation,
+        };
+        let mut receipts = state.receipts.clone();
+        receipts.insert(request.command_id.as_str().to_string(), receipt);
+        self.inner
+            .persistence
+            .persist(&PersistedAuthority::from_state(
+                result_revision,
+                activation_generation,
+                &installed,
+                &active,
+                &receipts,
+            ))?;
+        state.revision = result_revision;
+        state.activation_generation = activation_generation;
+        state.installed = installed;
+        state.active = active;
+        state.activation = activation;
+        state.receipts = receipts;
+        drop(state);
+
+        if activation_changed {
+            self.publish(activation_generation);
+        }
+        self.wait_for_drain(drained)?;
+        Ok(PluginAuthorityCommandResult {
+            revision: result_revision,
+            activation_generation,
+            disposition: PluginAuthorityDisposition::Updated,
+        })
+    }
+
+    /// Creates an exact dispatch fence for one package in the current active snapshot.
+    pub fn invocation_fence(
+        &self,
+        package: &InstalledPluginPackage,
+    ) -> Option<PluginInvocationFence> {
+        let state = self
+            .inner
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let active = state.active.get(&package.manifest().id)?;
+        if active.package.digest != *package.package_digest() {
+            return None;
+        }
+        Some(PluginInvocationFence {
+            authority: self.clone(),
+            key: InvocationKey {
+                plugin_id: active.package.id.clone(),
+                package_digest: active.package.digest.clone(),
+                activation_revision: active.activation_revision,
+            },
+        })
+    }
+
+    fn publish(&self, generation: u64) {
+        self.inner
+            .subscribers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .retain(|subscriber| subscriber.send(generation).is_ok());
+    }
+
+    fn wait_for_drain(&self, drained: Vec<InvocationKey>) -> Result<(), PluginError> {
+        if drained.is_empty() {
+            return Ok(());
+        }
+        let mut state = self
+            .inner
+            .state
+            .lock()
+            .map_err(|_| authority_unavailable("Plugin authority lock is unavailable"))?;
+        while drained
+            .iter()
+            .any(|key| state.in_flight.get(key).copied().unwrap_or(0) != 0)
+        {
+            state = self
+                .inner
+                .drained
+                .wait(state)
+                .map_err(|_| authority_unavailable("Plugin invocation drain is unavailable"))?;
+        }
+        Ok(())
+    }
+
+    fn authorizes(&self, key: &InvocationKey) -> bool {
+        let state = self
+            .inner
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        active_matches(&state.active, key)
+    }
+
+    fn acquire(&self, key: &InvocationKey) -> Option<PluginInvocationLease> {
+        let mut state = self
+            .inner
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if !active_matches(&state.active, key) {
+            return None;
+        }
+        *state.in_flight.entry(key.clone()).or_default() += 1;
+        Some(PluginInvocationLease {
+            authority: self.clone(),
+            key: Some(key.clone()),
+        })
+    }
+
+    fn release(&self, key: &InvocationKey) {
+        let mut state = self
+            .inner
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let remove = match state.in_flight.get_mut(key) {
+            Some(count) => {
+                *count -= 1;
+                *count == 0
+            }
+            None => false,
+        };
+        if remove {
+            state.in_flight.remove(key);
+            self.inner.drained.notify_all();
+        }
+    }
+}
+
+/// Exact Plugin activation facts attached to one prepared runtime contribution.
+#[derive(Clone)]
+pub struct PluginInvocationFence {
+    authority: PluginActivationAuthority,
+    key: InvocationKey,
+}
+
+impl PluginInvocationFence {
+    pub fn authorizes(&self) -> bool {
+        self.authority.authorizes(&self.key)
+    }
+
+    /// Acquires a lease that keeps a committed disable/update waiting until dispatch completes.
+    pub fn acquire(&self) -> Option<PluginInvocationLease> {
+        self.authority.acquire(&self.key)
+    }
+}
+
+/// RAII lease for one invocation admitted by exact live Plugin authority.
+#[must_use = "dropping the lease releases the Plugin invocation"]
+pub struct PluginInvocationLease {
+    authority: PluginActivationAuthority,
+    key: Option<InvocationKey>,
+}
+
+impl Drop for PluginInvocationLease {
+    fn drop(&mut self) {
+        if let Some(key) = self.key.take() {
+            self.authority.release(&key);
+        }
+    }
+}
+
+/// Blocking subscription to consumer-visible Plugin activation generations.
+pub struct PluginAuthoritySubscription {
+    receiver: mpsc::Receiver<u64>,
+}
+
+impl PluginAuthoritySubscription {
+    pub fn try_recv(&self) -> Result<u64, mpsc::TryRecvError> {
+        self.receiver.try_recv()
+    }
+
+    pub fn recv_timeout(&self, timeout: Duration) -> Result<u64, mpsc::RecvTimeoutError> {
+        self.receiver.recv_timeout(timeout)
+    }
+}
+
+fn apply_command(
+    store: &PluginPackageStore,
+    installed: &mut BTreeMap<InstalledKey, InstalledPluginRef>,
+    active: &mut BTreeMap<PluginId, ActivePlugin>,
+    command: &PluginAuthorityCommand,
+) -> Result<(), PluginError> {
+    match command {
+        PluginAuthorityCommand::Install { package } => {
+            store.read(package)?;
+            let key = InstalledKey::from_package(package);
+            if let Some(existing) = installed.get(&key)
+                && existing != package
+            {
+                return Err(authority_error(
+                    PluginErrorKind::PackageConflict,
+                    "one Plugin version cannot refer to multiple package digests",
+                ));
+            }
+            installed.insert(key, package.clone());
+        }
+        PluginAuthorityCommand::Enable { package } => {
+            let key = InstalledKey::from_package(package);
+            if installed.get(&key) != Some(package) {
+                return Err(authority_error(
+                    PluginErrorKind::SourceUnavailable,
+                    "Plugin enable targets an uninstalled package",
+                ));
+            }
+            store.activate(package)?;
+            active.insert(
+                package.id.clone(),
+                ActivePlugin {
+                    package: package.clone(),
+                    activation_revision: 0,
+                },
+            );
+        }
+        PluginAuthorityCommand::Disable { plugin_id } => {
+            active.remove(plugin_id);
+        }
+        PluginAuthorityCommand::Uninstall { package } => {
+            if active
+                .get(&package.id)
+                .is_some_and(|active| active.package == *package)
+            {
+                return Err(authority_error(
+                    PluginErrorKind::PackageInUse,
+                    "active Plugin package must be disabled before uninstall",
+                ));
+            }
+            installed.remove(&InstalledKey::from_package(package));
+        }
+    }
+    Ok(())
+}
+
+fn same_active_set(
+    left: &BTreeMap<PluginId, ActivePlugin>,
+    right: &BTreeMap<PluginId, ActivePlugin>,
+) -> bool {
+    left.len() == right.len()
+        && left.iter().all(|(id, package)| {
+            right
+                .get(id)
+                .is_some_and(|other| package.package == other.package)
+        })
+}
+
+fn stamp_changed_activations(
+    previous: &BTreeMap<PluginId, ActivePlugin>,
+    next: &mut BTreeMap<PluginId, ActivePlugin>,
+    activation_generation: u64,
+) {
+    for (id, active) in next {
+        active.activation_revision = previous
+            .get(id)
+            .filter(|previous| previous.package == active.package)
+            .map(|previous| previous.activation_revision)
+            .unwrap_or(activation_generation);
+    }
+}
+
+fn revoked_invocations(
+    previous: &BTreeMap<PluginId, ActivePlugin>,
+    next: &BTreeMap<PluginId, ActivePlugin>,
+) -> Vec<InvocationKey> {
+    previous
+        .iter()
+        .filter(|(id, active)| {
+            next.get(*id)
+                .is_none_or(|next| next.package != active.package)
+        })
+        .map(|(_, active)| InvocationKey {
+            plugin_id: active.package.id.clone(),
+            package_digest: active.package.digest.clone(),
+            activation_revision: active.activation_revision,
+        })
+        .collect()
+}
+
+fn active_matches(active: &BTreeMap<PluginId, ActivePlugin>, key: &InvocationKey) -> bool {
+    active.get(&key.plugin_id).is_some_and(|active| {
+        active.package.digest == key.package_digest
+            && active.activation_revision == key.activation_revision
+    })
+}
+
+fn resolve_activation(
+    generation: u64,
+    store: &PluginPackageStore,
+    active: &BTreeMap<PluginId, ActivePlugin>,
+) -> Result<PluginActivationSnapshot, PluginError> {
+    PluginActivationSnapshot::resolve(
+        generation,
+        store,
+        active.values().map(|active| active.package.clone()),
+    )
+}
+
+fn command_digest(command: &PluginAuthorityCommand) -> Result<String, PluginError> {
+    let bytes = serde_json::to_vec(command)
+        .map_err(|_| authority_unavailable("Plugin command could not be encoded"))?;
+    let digest = Sha256::digest(bytes);
+    let mut value = String::with_capacity(digest.len() * 2);
+    for byte in digest {
+        write!(value, "{byte:02x}").expect("writing to a String cannot fail");
+    }
+    Ok(value)
+}
+
+fn authority_unavailable(message: impl Into<String>) -> PluginError {
+    authority_error(PluginErrorKind::AuthorityUnavailable, message)
+}
+
+fn authority_error(kind: PluginErrorKind, message: impl Into<String>) -> PluginError {
+    PluginError::new(kind, message)
+}
+
+impl fmt::Debug for PluginActivationAuthority {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("PluginActivationAuthority")
+            .field("snapshot", &self.snapshot())
+            .finish_non_exhaustive()
+    }
+}
+
+#[cfg(test)]
+#[path = "authority_tests.rs"]
+mod tests;

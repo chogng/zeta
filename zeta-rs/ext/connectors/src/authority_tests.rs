@@ -192,6 +192,48 @@ fn disconnect_waits_for_an_authorized_invocation_then_fences_future_calls() {
 }
 
 #[test]
+fn catalog_reconcile_retires_and_restores_exact_connector_state() {
+    let connector = definition("plugin:acme/github:mcp:github");
+    let connector_id = connector.id().clone();
+    let authority = ConnectorAuthority::in_memory([connector.clone()]).unwrap();
+    let connection_generation = connect(&authority);
+
+    let removed_generation = authority.reconcile_definitions(std::iter::empty()).unwrap();
+    assert!(authority.snapshot().entry(&connector_id).is_none());
+    assert!(removed_generation.get() > 1);
+
+    authority.reconcile_definitions([connector]).unwrap();
+    let restored = authority.snapshot();
+    let entry = restored.entry(&connector_id).unwrap();
+    assert_eq!(entry.connection().generation(), connection_generation);
+    assert!(matches!(
+        entry.connection().state(),
+        ConnectorConnectionState::Connected(_)
+    ));
+}
+
+#[test]
+fn catalog_reconcile_requires_reauthorization_for_a_changed_definition() {
+    let connector = definition("plugin:acme/github:mcp:github");
+    let connector_id = connector.id().clone();
+    let authority = ConnectorAuthority::in_memory([connector]).unwrap();
+    connect(&authority);
+
+    authority
+        .reconcile_definitions([definition("plugin:acme/github:mcp:github-v2")])
+        .unwrap();
+    assert!(matches!(
+        authority
+            .snapshot()
+            .entry(&connector_id)
+            .unwrap()
+            .connection()
+            .state(),
+        ConnectorConnectionState::ReauthorizationRequired { .. }
+    ));
+}
+
+#[test]
 fn sqlite_authority_restores_connection_and_receipts_after_restart() {
     let directory = tempdir().unwrap();
     let path = directory.path().join("connectors.sqlite3");
@@ -219,6 +261,19 @@ fn sqlite_authority_restores_connection_and_receipts_after_restart() {
         .unwrap();
     assert_eq!(replay.disposition, ConnectorCommandDisposition::Replayed);
     assert_eq!(replay.generation.get(), 3);
+}
+
+#[test]
+fn sqlite_authority_persists_catalog_only_generations() {
+    let directory = tempdir().unwrap();
+    let path = directory.path().join("connectors.sqlite3");
+    let generation = {
+        let authority = ConnectorAuthority::open_sqlite(&path, [definition("server")]).unwrap();
+        authority.reconcile_definitions(std::iter::empty()).unwrap()
+    };
+
+    let reopened = ConnectorAuthority::open_sqlite(&path, std::iter::empty()).unwrap();
+    assert_eq!(reopened.snapshot().generation(), generation);
 }
 
 #[test]

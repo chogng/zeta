@@ -15,6 +15,8 @@ pub use composition::compose_mcp_tools_with_connectors_and_updates;
 pub use composition::compose_mcp_tools_with_updates;
 pub use connector::ConnectorMcpRuntimeError;
 pub use connector::ConnectorMcpRuntimeProvider;
+pub use connector::RuntimeInvocationFence;
+pub use connector::RuntimeInvocationLease;
 pub use connector::StandaloneMcpServer;
 pub use plugin::PluginConnectorMcpRuntimeProvider;
 pub use updates::McpCatalogUpdateSubscription;

@@ -78,18 +78,40 @@ fn bridges_sync_calls_to_continuously_running_async_runtime() {
     .expect("start owner");
 
     assert_eq!(owner.definitions().len(), 1);
-    let binding = owner
-        .resolve(&owner.definitions()[0].name)
-        .expect("binding")
-        .clone();
+    let tool_name = owner.definitions()[0].name.clone();
+    let prepared = owner
+        .prepare_call(&tool_name, serde_json::json!({}))
+        .expect("prepare call");
+    assert_eq!(prepared.binding().exposed_name(), &tool_name);
     let output = owner
-        .call(
-            binding,
-            serde_json::json!({}),
-            CancellationSource::new().token(),
-        )
+        .call(prepared, CancellationSource::new().token())
         .expect("call tool");
 
     assert_eq!(output.status(), ToolOutputStatus::Success);
     assert_eq!(output.content(), &[ToolContent::Text(server.to_string())]);
+}
+
+#[test]
+fn prepared_call_rejects_non_object_arguments_before_dispatch() {
+    let server = McpServerId::new("user:mcp:test").unwrap();
+    let definition = McpServerDefinition::new(
+        server,
+        "Test",
+        McpServerTransport::Stdio(StdioServerCommand::new("unused")),
+    )
+    .unwrap();
+    let owner = McpRuntimeOwner::start_with_factory(
+        vec![definition],
+        McpRuntimeOptions::new("app-server-test", "0"),
+        Arc::new(FakeFactory),
+    )
+    .expect("start owner");
+
+    let error = owner
+        .prepare_call(
+            &owner.definitions()[0].name,
+            serde_json::json!("not-an-object"),
+        )
+        .unwrap_err();
+    assert!(error.to_string().contains("JSON object"));
 }

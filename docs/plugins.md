@@ -3,7 +3,7 @@
 > 物理位置：`zeta-rs/plugins/`
 > Rust crate：`zeta_plugins`
 > 当前状态：PL0 已实现并支持 `ConnectorContribution` 引用 `McpServerContribution` 的声明校验；PL1 的 local
-> content-addressed store 与 exact `PluginActivationSnapshot` 已实现，installed/enable authority 尚未完成；Connector domain 已提取到
+> content-addressed store、durable installed/enable authority、exact `PluginActivationSnapshot`、live generation publish 与 invocation drain 已实现；Connector domain 已提取到
 > `zeta-rs/connectors`，Plugin projection、durable authority 与 API-token connect/revoke 位于
 > `zeta-rs/ext/connectors`；App Server 已能从注入的 activation 自动接线 Connector 与 MCP，通用 OAuth
 > PKCE 状态机已实现，具体 provider/browser flow 尚未接入；
@@ -83,8 +83,9 @@ failure semantics 由 crate
 User/Workspace TOML 与 App Server 已能表达 exact Plugin request 和 desired enablement，但它们
 只是 `zeta-config` intent。Package store 已能安全保存 immutable object，并能把调用方选择的 exact
 installed package 解析为 generation-bound activation snapshot；App Server 可据此自动构造 Connector
-catalog、durable authority 和 package-rooted MCP provider。installed/enable authority、grant、live
-activation 切换与 package lifecycle API 尚未实现。`docs/tui.md` 也明确要求 Plugin domain projection 进入 canonical
+catalog、durable authority 和 package-rooted MCP provider。Plugin authority 现已持久化 installed/active
+refs 和 command receipts，并驱动 live activation 切换；grant、workspace-profile layering 与完整 package
+lifecycle RPC 尚未实现。`docs/tui.md` 也明确要求 Plugin domain projection 进入 canonical
 App Server contract 后，TUI 才能增加管理 feature。TUI 已有可复用的 interaction view stack 与
 tabs/search/selection presentation primitive，但当前没有 Plugin view model 或 `/plugins` command；
 这些 UI 基础设施不改变本节的 backend gate。
@@ -558,8 +559,9 @@ binding variant。
 `zeta-connectors::ConnectorSnapshot`：disconnected entry 进入 discovery，只有认证 owner 通过合法
 generation transition 发布 `ConnectorAccount` 后才输出 ready MCP server ID。当前 API-token adapter、
 SQLite authority、exact activation 到 package-rooted MCP provider 的自动构造、独立 Plugin MCP、
-Connector-bound MCP composition 和通用 OAuth PKCE 状态机已实现。具体 OAuth provider/browser flow 与
-live Plugin enable/update authority 仍未实现。完整边界由 [`connectors.md`](connectors.md) 维护。
+Connector-bound MCP composition 和通用 OAuth PKCE 状态机已实现。具体 OAuth provider/browser flow
+仍未实现。Plugin enable/update 已能 live replacement，并通过 exact invocation lease 阻止旧 contribution
+在 authority commit 后开始 dispatch。完整边界由 [`connectors.md`](connectors.md) 维护。
 
 | 概念 | Identity/lifecycle | 例子 |
 | --- | --- | --- |
@@ -703,12 +705,14 @@ content-addressed object、重新验证 exact digest，再原子 promote。mutab
 ### 阶段 PL1：权威+激活（content store 与 snapshot 已完成）
 
 - ✅ local content-addressed store：unique staging、copy-time validation、digest revalidation、atomic promote；
-- install/enable/disable/grant typed commands；
+- ✅ install/enable/disable/uninstall typed commands；grant command 尚未实现；
 - ✅ exact installed package resolution 与 activation snapshot generation；
+- ✅ durable install/enable/disable/uninstall authority record 与 typed command replay；
+- ✅ live generation subscription、App Server reconcile 与 exact invocation drain；
 - Skill contribution vertical slice；
 - Connector contribution 的 normalized projection；
-- 部分具备：staging/promote 与调用方选择后的 snapshot resolution 已落地；authority commit、profile
-  enablement 与 startup orphan recovery 尚未完成。
+- 部分具备：user-profile authority 已落地；workspace profile layering、grant 与 startup orphan recovery
+  尚未完成。
 
 完成条件：失败激活不改变上一 generation，重启可恢复唯一 active package set。
 
@@ -717,7 +721,7 @@ content-addressed object、重新验证 exact digest，再原子 promote。mutab
 - ✅ package-rooted strict MCP definition 与 standalone/Connector projection；
 - ✅ manifest process/network/credential ceiling 校验；
 - ✅ 与 `zeta-mcp` 的 prepare/publish 和 safe-point old-generation drain；
-- Plugin disable/update authority 触发 live activation 与 session drain 尚未完成。
+- ✅ Plugin disable/update authority 触发 live activation、safe-point replacement 与 dispatch drain。
 
 完成条件：安装不启动进程，enable 无 grant 不启动，update 不劫持 in-flight tool binding。
 

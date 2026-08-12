@@ -14,8 +14,7 @@ const MCP_COMMAND_QUEUE_CAPACITY: usize = 64;
 
 enum RuntimeCommand {
     Call {
-        binding: Box<McpToolBinding>,
-        arguments: serde_json::Value,
+        prepared: Box<McpPreparedCall>,
         cancellation: CancellationToken,
         response: mpsc::Sender<Result<ToolOutput, McpCallError>>,
     },
@@ -25,6 +24,23 @@ enum RuntimeCommand {
 struct RuntimeStartup {
     definitions: Vec<ToolDefinition>,
     bindings: BTreeMap<ToolName, McpToolBinding>,
+}
+
+/// Exact MCP route and arguments admitted for one runtime dispatch.
+///
+/// The owner creates this value from its immutable startup catalog. App Server keeps the owner
+/// inside its generation-bound per-call binding, so a later catalog replacement cannot change the
+/// route or arguments used by an already prepared Tool Call.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct McpPreparedCall {
+    binding: McpToolBinding,
+    arguments: serde_json::Value,
+}
+
+impl McpPreparedCall {
+    pub(crate) fn binding(&self) -> &McpToolBinding {
+        &self.binding
+    }
 }
 
 /// Synchronous extension handle for one continuously driven async MCP runtime.
@@ -86,10 +102,25 @@ impl McpRuntimeOwner {
         self.bindings.get(name)
     }
 
+    pub(crate) fn prepare_call(
+        &self,
+        name: &ToolName,
+        arguments: serde_json::Value,
+    ) -> Result<McpPreparedCall, McpCallError> {
+        if !arguments.is_object() {
+            return Err(McpCallError::NotStarted(
+                "MCP tool arguments must be a JSON object".into(),
+            ));
+        }
+        let binding = self.bindings.get(name).cloned().ok_or_else(|| {
+            McpCallError::NotStarted(format!("MCP tool is not available: {name}"))
+        })?;
+        Ok(McpPreparedCall { binding, arguments })
+    }
+
     pub(crate) fn call(
         &self,
-        binding: McpToolBinding,
-        arguments: serde_json::Value,
+        prepared: McpPreparedCall,
         cancellation: CancellationToken,
     ) -> Result<ToolOutput, McpCallError> {
         let (response, receiver) = mpsc::channel();
@@ -97,8 +128,7 @@ impl McpRuntimeOwner {
             .as_ref()
             .ok_or_else(|| McpCallError::NotStarted("MCP runtime is shutting down".into()))?
             .try_send(RuntimeCommand::Call {
-                binding: Box::new(binding),
-                arguments,
+                prepared: Box::new(prepared),
                 cancellation,
                 response,
             })
@@ -194,15 +224,18 @@ fn run_worker(
                 command = commands.recv() => {
                     match command {
                         Some(RuntimeCommand::Call {
-                            binding,
-                            arguments,
+                            prepared,
                             cancellation,
                             response,
                         }) => {
                             let mcp = Arc::clone(&mcp);
                             calls.spawn(async move {
                                 let result = mcp
-                                    .call_tool(binding.as_ref(), arguments, &cancellation)
+                                    .call_tool(
+                                        prepared.binding(),
+                                        prepared.arguments.clone(),
+                                        &cancellation,
+                                    )
                                     .await;
                                 let _ = response.send(result);
                             });

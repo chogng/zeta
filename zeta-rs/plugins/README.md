@@ -5,11 +5,11 @@
 > [`docs/plugins.md`](../../docs/plugins.md) 维护；Connector account/lifecycle 由
 > [`docs/connectors.md`](../../docs/connectors.md) 维护。
 
-`zeta-plugins` 当前完成 PL0，并实现 PL1 的 package-store 与 activation snapshot vertical slice：严格解析 declarative
+`zeta-plugins` 当前完成 PL0，并实现 PL1 的 package-store、durable live authority 与 activation snapshot vertical slice：严格解析 declarative
 Plugin v1 package，验证 package-relative path 与本地文件树，计算确定性 SHA-256 digest，提供只读
 local-development catalog，并能把一个已验证本地包复制、复验后原子提升到 content-addressed object
-store；调用方可把 exact installed package 解析为 generation-bound `PluginActivationSnapshot`。它不写
-installed/enable authority record、不自行选择或执行 Plugin，不保存 grant/credential，也不解析
+store；authority 持久化 installed/active exact refs、typed command receipts 和单调 activation generation，
+并发布 generation subscription 与 exact invocation lease。它不自行执行 Plugin，不保存 grant/credential，也不解析
 `SKILL.md` 或 MCP JSON-RPC。
 
 ## 公共契约
@@ -27,6 +27,8 @@ installed/enable authority record、不自行选择或执行 Plugin，不保存 
 | `PluginPackageStore::read` | 按 exact installed ref 重新验证 object | authority lookup、版本选择 |
 | `PluginPackageStore::activate` | 把 exact installed refs 解析为一个 activation generation | installed/enable authority、live publish |
 | `PluginActivationSnapshot::resolve` | 拒绝重复 Plugin identity 并固定 immutable object handles | contribution runtime、profile resolution |
+| `PluginActivationAuthority` | installed/enable/disable/uninstall record、replay、generation 与 live publish | contribution parsing、runtime composition |
+| `PluginInvocationFence` / `PluginInvocationLease` | dispatch 前复核 exact digest/revision，disable/update commit 后 drain | Tool Registry replacement、MCP protocol |
 | `InstalledPluginPackage::resolve_file` / `read_utf8_file` | 在 exact object root 内解析 regular file，并提供有界 UTF-8 读取 | 任意目录扫描、MCP/Skill 内容解释 |
 
 `PluginManifest` 的 serde `Deserialize` 与 `from_json` 使用同一 semantic validation，不存在绕过
@@ -115,6 +117,8 @@ Digest 与 source root 无关，对 normalized relative path 和每个 regular f
 | `reject_duplicate_exact_versions` | local catalog exact-version uniqueness | future resolver semantics |
 | `PluginPackageStore::install_local` | staging/revalidation/atomic promotion boundary | authority commit、store recovery tests |
 | `PluginActivationSnapshot::resolve` | exact package set 与 generation 的不可变发布边界 | profile resolver、consumer projection tests |
+| `PluginActivationAuthority::apply` | CAS mutation、atomic authority persistence、publish-before-drain | App Server reconcile、MCP fence tests |
+| `FileAuthorityPersistence` | bounded strict JSON、0600 staging、fsync + atomic rename | recovery tests、schema migration |
 | `copy_package_tree` | copy-time entry and file-identity checks | archive ingestion、platform link semantics |
 
 出现以下变化表示 ownership 漂移：
@@ -151,10 +155,10 @@ bazel test //zeta-rs/plugins:plugins-unit-tests
 
 ## 当前限制与扩展点
 
-PL1 的 local content store 与调用方选择后的 activation snapshot 已实现；authority command/recovery、
-profile enablement、grant 与 live activation publish 尚未实现。当前 object directory 的只读性由
+PL1 的 local content store、durable authority、exact snapshot 和 live activation publish 已实现；grant、
+workspace-profile layering 与 authority schema migration 尚未实现。当前 object directory 的只读性由
 “不暴露可写根路径 + digest revalidation”保证，
 尚未施加平台级 immutable flag，也没有 orphan staging startup recovery。PL2+ 的 MCP activation、
-registry、signature、update、rollback 和 GC authority 也尚未实现；package-rooted MCP consumer
+registry、signature、rollback 和 GC authority 也尚未实现；package-rooted MCP consumer
 已位于 `zeta-mcp-extension`，不能反向并入本 crate。这些能力应在新的 private
 `authority/resolution` modules 中接入，不扩大 loader/store 为隐式 enable manager。

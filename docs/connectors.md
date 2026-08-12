@@ -147,7 +147,7 @@ connection generation；任何状态变化都必须同时推进 snapshot generat
 | Plugin manifest → Connector domain projection | ✅ 已实现 |
 | disconnected discovery / connected ready binding projection | ✅ 已实现 |
 | SQLite connection authority + exact retry receipts | ✅ 已实现 |
-| definition/package digest 变化触发 reauthorization | ✅ 重启恢复路径已实现；live Plugin activation 更新仍待 authority 接入 |
+| definition/package digest 变化触发 reauthorization | ✅ 重启恢复与 live Plugin activation 更新均已实现 |
 | API-token connect/disconnect + local secret cleanup | ✅ 已实现 |
 | OAuth state/PKCE/exchange 编排 | ✅ 已实现通用 provider port；具体 provider/浏览器回调尚未接入 |
 | refresh、远端 revoke | 尚未完成 |
@@ -158,9 +158,9 @@ connection generation；任何状态变化都必须同时推进 snapshot generat
 | Desktop API-token UI；TUI 列表/断开/通知刷新 | ✅ 已实现 |
 | OAuth browser interaction；TUI secret 输入 | 尚未完成 |
 | ready binding → `zeta-mcp-extension` composition + dispatch fence | ✅ 已实现（host-injected provider） |
-| exact Plugin activation → Connector/MCP runtime provider | ✅ 已实现；live install/enable authority 尚未完成 |
+| exact Plugin activation → Connector/MCP runtime provider | ✅ 已实现，支持 live install/enable/disable authority reconcile |
 | MCP `tools/list_changed` → safe-point rebuild | ✅ 已实现 |
 
 下一阶段只补具体服务适配和 lifecycle authority：OAuth provider/browser callback、refresh/revoke，
-以及 Plugin install/enable 的 live activation 切换。它们必须复用现有 authority、SecretStore、
+以及 Plugin grant/workspace-profile layering。它们必须复用现有 authority、SecretStore、
 App Server safe point 和 MCP dispatch fence，不得创建第二套 Connector 状态机。

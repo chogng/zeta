@@ -218,7 +218,7 @@ impl fmt::Display for InvalidPluginPackageDigest {
 impl std::error::Error for InvalidPluginPackageDigest {}
 
 /// Exact identity of an installed Plugin package.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct InstalledPluginRef {
     pub id: PluginId,

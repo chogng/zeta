@@ -15,7 +15,7 @@ use zeta_connectors_extension::ConnectorAuthority;
 use zeta_core::{CoreError, PolicyService, ToolAuthorization, ToolService};
 use zeta_mcp::{
     McpCallError, McpRuntimeOptions, McpServerDefinition, McpServerTransport, McpSessionFactory,
-    McpStartupPolicy, McpToolBinding,
+    McpStartupPolicy,
 };
 use zeta_policy::{
     ActionDigest, ActionKind, ActionProvenance, ActionReviewPhase, ActionReviewRequest,
@@ -30,7 +30,9 @@ use zeta_secrets::SecretStore;
 use zeta_tools::{ToolContent, ToolOutput, ToolOutputStatus};
 
 use crate::connector::ConnectorMcpRuntimeProvider;
+use crate::connector::RuntimeInvocationFence;
 use crate::connector::materialize_connector_servers;
+use crate::runtime::McpPreparedCall;
 use crate::runtime::McpRuntimeOwner;
 use crate::runtime::McpRuntimeOwnerError;
 use crate::updates::McpCatalogUpdates;
@@ -56,6 +58,7 @@ pub(crate) struct McpInvocationAuthority {
     pub display_name: String,
     pub transport: McpInvocationTransport,
     pub connector_fence: Option<Arc<ConnectorInvocationFence>>,
+    pub runtime_fence: Option<Arc<dyn RuntimeInvocationFence>>,
 }
 
 pub struct McpToolComposition {
@@ -213,7 +216,7 @@ fn materialize_standalone_plugin_servers(
         .standalone_servers()
         .map_err(|error| McpToolCompositionError::new(error.to_string()))?
     {
-        let definition = standalone.into_definition();
+        let (definition, runtime_fence) = standalone.into_parts();
         let server_id = definition.id().clone();
         let display_name = definition.display_name().to_string();
         let transport = match definition.transport() {
@@ -229,6 +232,7 @@ fn materialize_standalone_plugin_servers(
                     display_name,
                     transport,
                     connector_fence: None,
+                    runtime_fence,
                 },
             )
             .is_some()
@@ -340,6 +344,7 @@ fn materialize_servers(
                 display_name: server.display_name.clone(),
                 transport: authority,
                 connector_fence: None,
+                runtime_fence: None,
             },
         );
     }
@@ -376,19 +381,15 @@ struct McpToolService {
 }
 
 impl McpToolService {
-    fn binding(&self, name: &ToolName) -> Result<&McpToolBinding, CoreError> {
+    fn prepared_call(&self, call: &ToolCall) -> Result<McpPreparedCall, CoreError> {
         self.owner
-            .resolve(name)
-            .ok_or_else(|| CoreError::Policy(format!("MCP tool is not available: {name}")))
+            .prepare_call(&call.name, call.arguments.clone())
+            .map_err(|error| CoreError::Policy(error.to_string()))
     }
 
     fn review_request(&self, call: &ToolCall) -> Result<ActionReviewRequest, CoreError> {
-        let binding = self.binding(&call.name)?;
-        if !call.arguments.is_object() {
-            return Err(CoreError::Policy(
-                "MCP tool arguments must be a JSON object".into(),
-            ));
-        }
+        let prepared = self.prepared_call(call)?;
+        let binding = prepared.binding();
         let server = binding.remote().server();
         let authority = self.authorities.get(server).ok_or_else(|| {
             CoreError::Policy(format!("MCP server authority is unavailable: {server}"))
@@ -403,6 +404,15 @@ impl McpToolService {
             return Err(CoreError::Policy(format!(
                 "Connector is no longer authorized: {}",
                 fence.connector_id
+            )));
+        }
+        if authority
+            .runtime_fence
+            .as_ref()
+            .is_some_and(|fence| !fence.authorizes())
+        {
+            return Err(CoreError::Policy(format!(
+                "Plugin contribution is no longer active: {server}"
             )));
         }
         let authority_scope = match &authority.transport {
@@ -500,16 +510,23 @@ impl ToolService for McpToolService {
                     .into(),
             ));
         }
-        let binding = self.binding(&call.name)?.clone();
+        let prepared = self.prepared_call(call)?;
+        let binding = prepared.binding().clone();
         let authority = self
             .authorities
             .get(binding.remote().server())
             .cloned()
             .ok_or_else(|| CoreError::Policy("MCP invocation authority is unavailable".into()))?;
-        let invoke = || {
-            self.owner
-                .call(binding, call.arguments.clone(), cancellation.clone())
+        let _runtime_lease = match authority.runtime_fence.as_ref() {
+            Some(fence) => Some(fence.acquire().ok_or_else(|| {
+                CoreError::Policy(format!(
+                    "Plugin contribution was disabled before MCP dispatch: {}",
+                    binding.remote().server()
+                ))
+            })?),
+            None => None,
         };
+        let invoke = || self.owner.call(prepared, cancellation.clone());
         let invocation = match authority.connector_fence {
             Some(fence) => fence
                 .authority
