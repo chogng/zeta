@@ -195,3 +195,24 @@ fn up_and_down_recall_plain_submissions_and_restore_the_current_draft() {
     composer.handle_key(key(KeyCode::Down));
     assert_eq!(composer.text(), "draft");
 }
+
+#[test]
+fn shift_enter_inserts_a_newline_and_enter_submits_the_multiline_prompt() {
+    let mut composer = ChatComposer::new();
+    composer.insert_text("first line");
+
+    assert_eq!(
+        composer.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::SHIFT)),
+        ComposerOutcome::Consumed
+    );
+    composer.insert_text("second line");
+
+    let ComposerOutcome::Submit(submission) = composer.handle_key(key(KeyCode::Enter)) else {
+        panic!("multiline prompt should submit");
+    };
+    assert_eq!(submission.display_text, "first line\nsecond line");
+    assert_eq!(
+        submission.input,
+        vec![ComposerInput::Text("first line\nsecond line".into())]
+    );
+}

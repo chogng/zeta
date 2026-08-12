@@ -299,6 +299,89 @@ fn control_v_requests_a_clipboard_image_read() {
 }
 
 #[test]
+fn control_o_requests_copy_and_control_z_requests_suspend() {
+    let mut app = App::new();
+
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Char('o'), KeyModifiers::CONTROL)),
+        Some(AppCommand::CopyLastResponse)
+    );
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Char('z'), KeyModifiers::CONTROL)),
+        Some(AppCommand::Suspend)
+    );
+}
+
+#[test]
+fn copy_and_export_slash_commands_stay_in_the_terminal_host() {
+    let mut app = App::new();
+    app.insert_text("/copy");
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        Some(AppCommand::CopyLastResponse)
+    );
+
+    app.insert_text("/export notes/conversation.md");
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        Some(AppCommand::ExportTranscript {
+            requested_path: Some(std::path::PathBuf::from("notes/conversation.md")),
+        })
+    );
+}
+
+#[test]
+fn export_rejects_image_arguments_before_host_io() {
+    let mut app = App::new();
+    app.insert_text("/export ");
+    app.update(AppEvent::ClipboardImageRead(Ok(
+        b"\x89PNG\r\n\x1a\npayload".to_vec(),
+    )));
+
+    let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    assert_eq!(action, None);
+    assert_eq!(app.status(), &Status::Ready);
+    assert!(
+        app.messages()
+            .last()
+            .unwrap()
+            .text
+            .contains("relative text path")
+    );
+}
+
+#[test]
+fn local_conversation_commands_do_not_replace_a_running_turn() {
+    let mut app = App::new();
+    app.insert_text("first");
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    app.insert_text("/new");
+
+    let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    assert_eq!(action, None);
+    assert_eq!(app.status(), &Status::Working);
+    assert!(
+        app.messages()
+            .last()
+            .unwrap()
+            .text
+            .contains("is unavailable")
+    );
+}
+
+#[test]
+fn control_home_requests_an_older_history_page() {
+    let mut app = App::new();
+
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Home, KeyModifiers::CONTROL)),
+        Some(AppCommand::LoadOlderHistory)
+    );
+}
+
+#[test]
 fn clipboard_png_submits_through_the_existing_attachment_path() {
     let mut app = App::new();
     app.update(AppEvent::ClipboardImageRead(Ok(
@@ -318,14 +401,14 @@ fn clipboard_png_submits_through_the_existing_attachment_path() {
 }
 
 #[test]
-fn active_turn_ignores_the_clipboard_image_shortcut() {
+fn active_turn_accepts_clipboard_images_for_a_follow_up() {
     let mut app = App::new();
     app.insert_text("first");
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
     let action = app.handle_key(KeyEvent::new(KeyCode::Char('v'), KeyModifiers::CONTROL));
 
-    assert_eq!(action, None);
+    assert_eq!(action, Some(AppCommand::ReadClipboardImage));
     assert_eq!(app.input(), "");
 }
 
@@ -640,18 +723,19 @@ fn control_c_interrupts_a_turn_waiting_for_user_input() {
 }
 
 #[test]
-fn working_turn_does_not_accept_a_second_prompt_or_paste() {
+fn working_turn_accepts_and_submits_a_follow_up_prompt() {
     let mut app = App::new();
     app.insert_text("first");
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
-    let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     app.insert_text("second");
     app.handle_paste("third".into());
+    let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
-    assert_eq!(action, None);
+    assert!(matches!(action, Some(AppCommand::SubmitTurn(_))));
     assert_eq!(app.input(), "");
-    assert_eq!(app.messages().len(), 1);
+    assert_eq!(app.messages().len(), 2);
+    assert_eq!(app.messages()[1].text, "secondthird");
 }
 
 #[test]

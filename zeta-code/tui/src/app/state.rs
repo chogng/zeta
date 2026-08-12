@@ -1,5 +1,6 @@
 use super::command::AppCommand;
 use super::event::AppEvent;
+use crate::components::composer::ComposerInput;
 use crate::components::interaction::InteractionPane;
 use crate::components::interaction::InteractionPaneOutcome;
 use crate::components::pane::PaneView;
@@ -37,6 +38,7 @@ use crossterm::event::KeyEventKind;
 use crossterm::event::KeyModifiers;
 use std::collections::BTreeMap;
 use std::path::Path;
+use std::path::PathBuf;
 use std::time::Duration;
 use std::time::Instant;
 
@@ -331,6 +333,15 @@ impl App {
         self.interaction_pane.cursor_display_width()
     }
 
+    pub(crate) fn input_cursor_line(&self) -> usize {
+        self.interaction_pane.cursor_line()
+    }
+
+    pub(crate) fn composer_desired_height(&self, available_width: u16) -> u16 {
+        self.interaction_pane
+            .composer_desired_height(available_width)
+    }
+
     pub(crate) fn slash_popup(&self) -> Option<SlashCommandsView<'_>> {
         self.interaction_pane.slash_popup()
     }
@@ -460,6 +471,14 @@ impl App {
         self.thread.messages()
     }
 
+    pub(crate) fn latest_agent_response(&self) -> Option<&str> {
+        crate::components::transcript::latest_agent_response(self.messages())
+    }
+
+    pub(crate) fn transcript_markdown(&self) -> String {
+        crate::components::transcript::export_markdown(self.messages())
+    }
+
     pub(crate) fn transcript_scroll(&self) -> &TranscriptScroll {
         &self.transcript_scroll
     }
@@ -473,11 +492,13 @@ impl App {
     }
 
     pub(crate) fn accepts_input(&self) -> bool {
-        matches!(&self.status, Status::Ready | Status::Error)
-            || matches!(
-                self.selection_actions.last(),
-                Some(SelectionActions::Interaction(_))
-            )
+        matches!(
+            &self.status,
+            Status::Ready | Status::Working | Status::Error
+        ) || matches!(
+            self.selection_actions.last(),
+            Some(SelectionActions::Interaction(_))
+        )
     }
 
     pub(crate) fn update(&mut self, event: AppEvent) {
@@ -504,6 +525,14 @@ impl App {
             }
             AppEvent::FileViewOpened(view) => self.show_file_view(view),
             AppEvent::GitStatusReceived(status) => self.status_line.apply_git_status(&status),
+            AppEvent::HostOperationCompleted(Ok(notice)) => {
+                self.thread
+                    .update(ThreadPresentationEvent::NoticeReceived(notice));
+            }
+            AppEvent::HostOperationCompleted(Err(error)) => {
+                self.thread
+                    .update(ThreadPresentationEvent::FailureReported(error));
+            }
             AppEvent::InterruptFailed(error) => {
                 self.thread
                     .update(ThreadPresentationEvent::FailureReported(format!(
@@ -565,7 +594,8 @@ impl App {
 
     fn handle_global_key(&mut self, key: KeyEvent, now: Instant) -> Option<AppCommand> {
         if self.selection_view().is_none() && self.transcript_scroll.handle_key(key) {
-            return None;
+            return (key.modifiers == KeyModifiers::CONTROL && key.code == KeyCode::Home)
+                .then_some(AppCommand::LoadOlderHistory);
         }
         if key.code == KeyCode::Esc
             && key.modifiers.is_empty()
@@ -592,6 +622,8 @@ impl App {
             return match key.code {
                 KeyCode::Char('c') => self.quit_or_interrupt(),
                 KeyCode::Char('d') if self.input().is_empty() => self.quit_or_interrupt(),
+                KeyCode::Char('o') => Some(AppCommand::CopyLastResponse),
+                KeyCode::Char('z') => Some(AppCommand::Suspend),
                 _ => None,
             };
         }
@@ -604,11 +636,46 @@ impl App {
             .name
             .parse::<TuiSlashCommandAction>()
             .ok();
+        if matches!(local, Some(TuiSlashCommandAction::Export))
+            && invocation
+                .arguments
+                .iter()
+                .any(|argument| matches!(argument, ComposerInput::Image { .. }))
+        {
+            self.thread.update(ThreadPresentationEvent::FailureReported(
+                "/export accepts a relative text path, not image arguments".into(),
+            ));
+            return None;
+        }
+        if matches!(self.status, Status::Working)
+            && invocation.origin == SlashCommandOrigin::Local
+            && !matches!(
+                local,
+                Some(TuiSlashCommandAction::Copy | TuiSlashCommandAction::Export)
+            )
+        {
+            self.thread
+                .update(ThreadPresentationEvent::FailureReported(format!(
+                    "/{} is unavailable while a turn is running; submit a follow-up prompt or wait for the turn to finish",
+                    invocation.command.name
+                )));
+            return None;
+        }
         match (invocation.origin, local) {
             (
                 SlashCommandOrigin::Local,
                 Some(TuiSlashCommandAction::Quit | TuiSlashCommandAction::Exit),
             ) if invocation.arguments.is_empty() => Some(AppCommand::Quit),
+            (SlashCommandOrigin::Local, Some(TuiSlashCommandAction::Copy))
+                if invocation.arguments.is_empty() =>
+            {
+                Some(AppCommand::CopyLastResponse)
+            }
+            (SlashCommandOrigin::Local, Some(TuiSlashCommandAction::Export)) => {
+                let requested_path = (!invocation.display_arguments.trim().is_empty())
+                    .then(|| PathBuf::from(invocation.display_arguments.trim()));
+                Some(AppCommand::ExportTranscript { requested_path })
+            }
             (SlashCommandOrigin::Server, _) => {
                 let submission = invocation.into_forwarded_submission();
                 self.thread.update(ThreadPresentationEvent::UserSubmitted(

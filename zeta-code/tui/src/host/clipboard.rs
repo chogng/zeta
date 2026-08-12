@@ -1,10 +1,24 @@
-//! Native system-clipboard image input for the terminal host.
+//! Native system-clipboard text output and image input for the terminal host.
 
 #[derive(Debug, Eq, PartialEq)]
 pub(crate) struct ClipboardImage {
     pub(crate) png: Vec<u8>,
     pub(crate) width: u32,
     pub(crate) height: u32,
+}
+
+#[cfg(not(target_os = "android"))]
+pub(crate) fn write_text(text: &str) -> Result<(), String> {
+    let mut clipboard =
+        arboard::Clipboard::new().map_err(|error| format!("clipboard unavailable: {error}"))?;
+    clipboard
+        .set_text(text)
+        .map_err(|error| format!("could not write clipboard text: {error}"))
+}
+
+#[cfg(target_os = "android")]
+pub(crate) fn write_text(_text: &str) -> Result<(), String> {
+    Err("clipboard text output is unsupported on Android".into())
 }
 
 #[cfg(not(target_os = "android"))]

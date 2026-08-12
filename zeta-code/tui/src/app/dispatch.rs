@@ -254,6 +254,11 @@ impl ActiveConversation {
                     .events
                     .push(AppEvent::SelectionViewOpened(help_selection_view()));
             }
+            TuiSlashCommandAction::Copy | TuiSlashCommandAction::Export => {
+                return Err(CommandExecutionError(
+                    "host command reached the App Server dispatcher".into(),
+                ));
+            }
             TuiSlashCommandAction::Model => {
                 if arguments.is_empty() {
                     output

@@ -19,6 +19,7 @@ where
         .read_session_thread(SessionThreadReadParams {
             session_id: session_id.clone(),
             thread_id: thread_id.clone(),
+            history: None,
         })
         .map(|result| rewind_selection_view(&result.thread))
 }

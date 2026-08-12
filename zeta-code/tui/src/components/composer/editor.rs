@@ -4,6 +4,7 @@ use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 use std::ops::Range;
+use unicode_width::UnicodeWidthChar;
 use unicode_width::UnicodeWidthStr;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -70,11 +71,19 @@ impl TextArea {
                 TextAreaOutcome::Consumed
             }
             KeyCode::Home => {
-                self.cursor = 0;
+                self.cursor = self.current_line_start();
                 TextAreaOutcome::Consumed
             }
             KeyCode::End => {
-                self.cursor = self.text.len();
+                self.cursor = self.current_line_end();
+                TextAreaOutcome::Consumed
+            }
+            KeyCode::Up if self.can_move_up() => {
+                self.move_up();
+                TextAreaOutcome::Consumed
+            }
+            KeyCode::Down if self.can_move_down() => {
+                self.move_down();
                 TextAreaOutcome::Consumed
             }
             KeyCode::Char(character) => {
@@ -206,7 +215,26 @@ impl TextArea {
     }
 
     pub(super) fn cursor_display_width(&self) -> usize {
-        self.text[..self.cursor].width()
+        self.text[self.current_line_start()..self.cursor].width()
+    }
+
+    pub(super) fn cursor_line(&self) -> usize {
+        self.text[..self.cursor]
+            .bytes()
+            .filter(|byte| *byte == b'\n')
+            .count()
+    }
+
+    pub(super) fn insert_newline(&mut self) {
+        self.insert_text("\n");
+    }
+
+    pub(super) fn can_move_up(&self) -> bool {
+        self.current_line_start() > 0
+    }
+
+    pub(super) fn can_move_down(&self) -> bool {
+        self.current_line_end() < self.text.len()
     }
 
     pub(super) fn clear(&mut self) {
@@ -287,6 +315,40 @@ impl TextArea {
         }
     }
 
+    fn move_up(&mut self) {
+        let target_width = self.cursor_display_width();
+        let current_start = self.current_line_start();
+        let previous_end = current_start.saturating_sub(1);
+        let previous_start = self.text[..previous_end]
+            .rfind('\n')
+            .map_or(0, |index| index + 1);
+        self.cursor =
+            boundary_for_display_width(&self.text[previous_start..previous_end], target_width)
+                + previous_start;
+    }
+
+    fn move_down(&mut self) {
+        let target_width = self.cursor_display_width();
+        let next_start = self.current_line_end().saturating_add(1);
+        let next_end = self.text[next_start..]
+            .find('\n')
+            .map_or(self.text.len(), |offset| next_start + offset);
+        self.cursor =
+            boundary_for_display_width(&self.text[next_start..next_end], target_width) + next_start;
+    }
+
+    fn current_line_start(&self) -> usize {
+        self.text[..self.cursor]
+            .rfind('\n')
+            .map_or(0, |index| index + 1)
+    }
+
+    fn current_line_end(&self) -> usize {
+        self.text[self.cursor..]
+            .find('\n')
+            .map_or(self.text.len(), |offset| self.cursor + offset)
+    }
+
     fn shift_elements_for_insertion(&mut self, at: usize, inserted_len: usize) {
         for element in &mut self.elements {
             if element.range.start >= at {
@@ -327,6 +389,18 @@ impl TextArea {
             .map(|(offset, _)| self.cursor + offset)
             .or_else(|| (self.cursor < self.text.len()).then_some(self.text.len()))
     }
+}
+
+fn boundary_for_display_width(text: &str, target_width: usize) -> usize {
+    let mut width: usize = 0;
+    for (index, character) in text.char_indices() {
+        let character_width = character.width().unwrap_or(0);
+        if width.saturating_add(character_width) > target_width {
+            return index;
+        }
+        width = width.saturating_add(character_width);
+    }
+    text.len()
 }
 
 #[cfg(test)]

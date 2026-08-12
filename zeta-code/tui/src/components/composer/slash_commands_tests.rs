@@ -19,6 +19,8 @@ fn builtins_follow_enum_presentation_order() {
             ("files", TuiSlashCommandAction::Files),
             ("fork", TuiSlashCommandAction::Fork),
             ("help", TuiSlashCommandAction::Help),
+            ("copy", TuiSlashCommandAction::Copy),
+            ("export", TuiSlashCommandAction::Export),
             ("model", TuiSlashCommandAction::Model),
             ("theme", TuiSlashCommandAction::Theme),
             ("new", TuiSlashCommandAction::New),
@@ -26,7 +28,7 @@ fn builtins_follow_enum_presentation_order() {
             ("exit", TuiSlashCommandAction::Exit),
         ]
     );
-    assert_eq!(built_in_slash_command_definitions().len(), 18);
+    assert_eq!(built_in_slash_command_definitions().len(), 20);
 }
 
 #[test]
@@ -53,6 +55,10 @@ fn builtins_declare_argument_support() {
     );
     assert_eq!(
         TuiSlashCommandAction::Theme.argument_mode(),
+        SlashCommandArgumentMode::Optional
+    );
+    assert_eq!(
+        TuiSlashCommandAction::Export.argument_mode(),
         SlashCommandArgumentMode::Optional
     );
     assert_eq!(

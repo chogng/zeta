@@ -6,8 +6,10 @@ use super::editor::TextElementId;
 use super::mentions::MentionPopupView;
 use super::mentions::Mentions;
 use super::pending_pastes::PendingPastes;
+use super::wrap::wrap_input;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
+use crossterm::event::KeyModifiers;
 use std::collections::BTreeMap;
 use zeta_file_search::PathSearchSnapshot;
 use zeta_protocol::SkillRef;
@@ -132,7 +134,10 @@ impl ChatComposer {
                     self.sync_after_text_change();
                     return ComposerOutcome::Consumed;
                 }
-                KeyCode::Enter if self.mentions.complete_selected(&mut self.textarea) => {
+                KeyCode::Enter
+                    if key.modifiers.is_empty()
+                        && self.mentions.complete_selected(&mut self.textarea) =>
+                {
                     self.sync_after_text_change();
                     return ComposerOutcome::Consumed;
                 }
@@ -160,7 +165,7 @@ impl ChatComposer {
                     }
                     return ComposerOutcome::Consumed;
                 }
-                KeyCode::Enter => {
+                KeyCode::Enter if key.modifiers.is_empty() => {
                     if let Some(command) = self.slash_commands.selected_command().cloned() {
                         self.complete_slash_command(&command);
                         return self.submit();
@@ -170,12 +175,18 @@ impl ChatComposer {
             }
         }
 
-        if key.code == KeyCode::Enter {
+        if is_newline_key(key) {
+            self.reset_history_navigation();
+            self.textarea.insert_newline();
+            self.sync_after_text_change();
+            return ComposerOutcome::Consumed;
+        }
+        if key.code == KeyCode::Enter && key.modifiers.is_empty() {
             return self.submit();
         }
         match key.code {
-            KeyCode::Up => return self.previous_history(),
-            KeyCode::Down => return self.next_history(),
+            KeyCode::Up if !self.textarea.can_move_up() => return self.previous_history(),
+            KeyCode::Down if !self.textarea.can_move_down() => return self.next_history(),
             _ => {}
         }
 
@@ -226,6 +237,24 @@ impl ChatComposer {
 
     pub(crate) fn cursor_display_width(&self) -> usize {
         self.textarea.cursor_display_width()
+    }
+
+    pub(crate) fn cursor_line(&self) -> usize {
+        self.textarea.cursor_line()
+    }
+
+    pub(crate) fn desired_height(&self, available_width: u16) -> u16 {
+        const MAX_VISIBLE_LINES: usize = 6;
+        let rows = wrap_input(
+            self.textarea.text(),
+            self.textarea.cursor_line(),
+            self.textarea.cursor_display_width(),
+            available_width,
+        )
+        .lines
+        .len()
+        .min(MAX_VISIBLE_LINES);
+        u16::try_from(rows.saturating_add(2)).unwrap_or(u16::MAX)
     }
 
     pub(crate) fn slash_popup(&self) -> Option<SlashCommandsView<'_>> {
@@ -480,6 +509,14 @@ fn push_text_input(input: &mut Vec<ComposerInput>, text: &mut String) {
     if !text.is_empty() {
         input.push(ComposerInput::Text(text.to_owned()));
     }
+}
+
+fn is_newline_key(key: KeyEvent) -> bool {
+    (matches!(key.code, KeyCode::Enter)
+        && key
+            .modifiers
+            .intersects(KeyModifiers::SHIFT | KeyModifiers::ALT))
+        || matches!(key.code, KeyCode::Char('j')) && key.modifiers == KeyModifiers::CONTROL
 }
 
 #[cfg(test)]

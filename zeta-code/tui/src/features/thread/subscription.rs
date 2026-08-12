@@ -2,9 +2,11 @@ use std::collections::BTreeMap;
 use zeta_app_server_client::AppServerClient;
 use zeta_app_server_client::ClientError;
 use zeta_app_server_client::JsonRpcTransport;
+use zeta_app_server_protocol::protocol::session::MAX_THREAD_SNAPSHOT_TURNS;
 use zeta_app_server_protocol::protocol::session::SessionThreadReadParams;
 use zeta_app_server_protocol::protocol::session::SessionThreadSubscribeParams;
 use zeta_app_server_protocol::protocol::session::SessionThreadUnsubscribeParams;
+use zeta_app_server_protocol::protocol::session::ThreadSnapshotHistory;
 use zeta_protocol::SessionId;
 use zeta_protocol::StreamInstanceId;
 use zeta_protocol::Thread;
@@ -20,8 +22,11 @@ pub(crate) struct ThreadSubscription {
     session_id: SessionId,
     thread_id: ThreadId,
     confirmed_sequence: u64,
+    history_turn_limit: u32,
     stream_sequences: BTreeMap<StreamInstanceId, u64>,
 }
+
+const HISTORY_PAGE_TURNS: u32 = 50;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum ThreadUpdateDisposition {
@@ -55,6 +60,9 @@ impl ThreadSubscription {
             session_id: session_id.clone(),
             thread_id: thread_id.clone(),
             after_sequence: 0,
+            history: Some(ThreadSnapshotHistory::Latest {
+                turn_limit: HISTORY_PAGE_TURNS,
+            }),
         })?;
         validate_snapshot_scope(&result.thread, session_id, thread_id)?;
         validate_update_scopes(&result.updates, session_id, thread_id)?;
@@ -68,6 +76,9 @@ impl ThreadSubscription {
                 .read_session_thread(SessionThreadReadParams {
                     session_id: session_id.clone(),
                     thread_id: thread_id.clone(),
+                    history: Some(ThreadSnapshotHistory::Latest {
+                        turn_limit: HISTORY_PAGE_TURNS,
+                    }),
                 })?
                 .thread
         } else {
@@ -75,7 +86,7 @@ impl ThreadSubscription {
         };
         validate_snapshot_scope(&snapshot, session_id, thread_id)?;
 
-        Ok((Self::from_snapshot(&snapshot), snapshot))
+        Ok((Self::from_snapshot(&snapshot, HISTORY_PAGE_TURNS), snapshot))
     }
 
     pub(crate) fn switch<T>(
@@ -92,10 +103,11 @@ impl ThreadSubscription {
                 .read_session_thread(SessionThreadReadParams {
                     session_id: session_id.clone(),
                     thread_id: thread_id.clone(),
+                    history: Some(self.history()),
                 })
                 .map(|result| result.thread)?;
             validate_snapshot_scope(&snapshot, session_id, thread_id)?;
-            *self = Self::from_snapshot(&snapshot);
+            *self = Self::from_snapshot(&snapshot, self.history_turn_limit);
             return Ok(ThreadSwitch::Complete { snapshot });
         }
 
@@ -161,11 +173,25 @@ impl ThreadSubscription {
         }
     }
 
-    fn from_snapshot(snapshot: &Thread) -> Self {
+    pub(crate) fn history(&self) -> ThreadSnapshotHistory {
+        ThreadSnapshotHistory::Latest {
+            turn_limit: self.history_turn_limit,
+        }
+    }
+
+    pub(crate) fn expand_history(&mut self) {
+        self.history_turn_limit = self
+            .history_turn_limit
+            .saturating_add(HISTORY_PAGE_TURNS)
+            .min(MAX_THREAD_SNAPSHOT_TURNS);
+    }
+
+    fn from_snapshot(snapshot: &Thread, history_turn_limit: u32) -> Self {
         Self {
             session_id: snapshot.session_id.clone(),
             thread_id: snapshot.thread_id.clone(),
             confirmed_sequence: snapshot.sequence,
+            history_turn_limit,
             stream_sequences: BTreeMap::new(),
         }
     }

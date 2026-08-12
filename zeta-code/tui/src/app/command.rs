@@ -14,6 +14,12 @@ pub(crate) enum AppCommand {
     ExecuteProductCommand(SlashCommandInvocation),
     Quit,
     Interrupt,
+    Suspend,
+    CopyLastResponse,
+    ExportTranscript {
+        requested_path: Option<PathBuf>,
+    },
+    LoadOlderHistory,
     ReadClipboardImage,
     OpenCustomThemePane,
     OpenRewindPane,

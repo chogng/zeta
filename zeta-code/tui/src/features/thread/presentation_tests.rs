@@ -6,14 +6,14 @@ use zeta_protocol::TurnId;
 use zeta_protocol::TurnStatus;
 
 #[test]
-fn recovery_selects_the_latest_nonterminal_turn() {
+fn recovery_selects_the_oldest_nonterminal_turn_for_a_serial_queue() {
     let turns = vec![
         turn("completed", TurnStatus::Completed),
         turn("waiting", TurnStatus::WaitingForApproval),
         turn("running", TurnStatus::Running),
     ];
 
-    assert_eq!(recover_active_turn(&turns).unwrap().as_str(), "running");
+    assert_eq!(recover_active_turn(&turns).unwrap().as_str(), "waiting");
 }
 
 #[test]

@@ -948,6 +948,120 @@ fn rewind_endpoint_imports_only_history_before_the_selected_turn() {
     );
 }
 
+#[test]
+fn thread_read_returns_a_bounded_latest_history_window() {
+    let server = server();
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    let session = create_session(&server, &mut connection, 2, "session");
+    let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
+    let root = create_thread(&server, &mut connection, 3, "root", session_id, 1);
+    let thread_id = root["result"]["value"]["threadId"].as_str().unwrap();
+
+    let first = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":4,"method":"session/request",
+            "params":{
+                "commandId":"turn-first","sessionId":session_id,"expectedSequence":1,
+                "request":{"type":"startTurn","threadId":thread_id,"input":[{"type":"text","text":"first"}]}
+            }
+        }),
+    );
+    wait_for_latest_turn(&server, thread_id, TurnStatus::Completed);
+    let full_after_first = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":5,"method":"session/thread/read",
+            "params":{"sessionId":session_id,"threadId":thread_id}
+        }),
+    );
+    let second = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":6,"method":"session/request",
+            "params":{
+                "commandId":"turn-second","sessionId":session_id,
+                "expectedSequence":full_after_first["result"]["thread"]["sequence"],
+                "request":{"type":"startTurn","threadId":thread_id,"input":[{"type":"text","text":"second"}]}
+            }
+        }),
+    );
+    wait_for_latest_turn(&server, thread_id, TurnStatus::Completed);
+
+    let page = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":7,"method":"session/thread/read",
+            "params":{
+                "sessionId":session_id,"threadId":thread_id,
+                "history":{"type":"latest","turnLimit":1}
+            }
+        }),
+    );
+
+    assert_eq!(
+        page["result"]["thread"]["turns"].as_array().unwrap().len(),
+        1
+    );
+    assert_eq!(
+        page["result"]["thread"]["turns"][0]["turnId"],
+        second["result"]["value"]["turnId"]
+    );
+    assert_eq!(page["result"]["history"]["hasOlderTurns"], true);
+    assert_eq!(
+        page["result"]["history"]["oldestTurnId"],
+        second["result"]["value"]["turnId"]
+    );
+    assert_ne!(
+        page["result"]["history"]["oldestTurnId"],
+        first["result"]["value"]["turnId"]
+    );
+
+    let subscription = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":8,"method":"session/thread/subscribe",
+            "params":{
+                "sessionId":session_id,"threadId":thread_id,"afterSequence":0,
+                "history":{"type":"latest","turnLimit":1}
+            }
+        }),
+    );
+    assert_eq!(
+        subscription["result"]["thread"]["turns"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    assert!(
+        subscription["result"]["updates"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(subscription["result"]["history"]["hasOlderTurns"], true);
+
+    let invalid = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":9,"method":"session/thread/read",
+            "params":{
+                "sessionId":session_id,"threadId":thread_id,
+                "history":{"type":"latest","turnLimit":0}
+            }
+        }),
+    );
+    assert_eq!(invalid["error"]["message"], "InvalidParams");
+}
+
 #[derive(Default)]
 struct CountingModel {
     calls: AtomicUsize,

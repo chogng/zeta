@@ -127,8 +127,8 @@ production consumer，因此下表的共享 URI 状态仍为“部分具备”�
 文件图标的跨客户端数据契约由
 [`zeta-file-icons`](../zeta-rs/file-icons/README.md) 拥有：crate 内保存 Seti manifest、WOFF
 并提供 Rust resolver。Desktop 在构建前同步运行时资源、直接从 JSON 推导 TypeScript 所需
-结构并负责 DOM glyph 渲染；App Server 不参与图标解析。当前尚未实现 Rust TUI 的 terminal
-Seti codepoint adapter。
+结构并负责 DOM glyph 渲染；App Server 不参与图标解析。Rust TUI 当前没有 terminal
+Seti codepoint adapter；`zeta code` 的当前产品要求也不包含该呈现，因此不构成 TUI backlog。
 
 因此，一项完整功能可以具有一条跨层执行路径：
 

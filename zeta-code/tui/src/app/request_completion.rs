@@ -17,13 +17,14 @@ use crate::features::thread::ThreadSubscription;
 use crate::features::thread::ThreadSwitch;
 use crate::features::thread::evaluate_active_turn;
 use crate::features::thread::interrupt_turn;
-use crate::features::thread::read_thread;
+use crate::features::thread::read_thread_history;
 use crate::features::thread::recover_active_turn;
 use crate::features::thread::resolve_interaction;
 use crate::features::thread::submit_prompt;
 use std::collections::BTreeMap;
 use zeta_app_server_client::AppServerRequestHandle;
 use zeta_app_server_client::ClientError;
+use zeta_app_server_protocol::protocol::session::ThreadSnapshotHistory;
 use zeta_app_server_protocol::protocol::skills::SkillCatalogReloadDto;
 use zeta_app_server_protocol::protocol::skills::SkillListParams;
 use zeta_app_server_protocol::protocol::slash_commands::SlashCommandDefinition;
@@ -92,6 +93,7 @@ pub(super) fn resolve_interaction_and_read(
     mut client: AppServerRequestHandle,
     scope: ThreadRequestScope,
     response: InteractionResponse,
+    history: ThreadSnapshotHistory,
 ) -> Result<Thread, ClientError> {
     let session_id = scope.session_id().clone();
     let thread_id = scope.thread_id().clone();
@@ -102,29 +104,31 @@ pub(super) fn resolve_interaction_and_read(
         response.request_id,
         response.response,
     )?;
-    read_thread(&mut client, &session_id, &thread_id)
+    read_thread_history(&mut client, &session_id, &thread_id, history)
 }
 
 pub(super) fn interrupt_and_read(
     mut client: AppServerRequestHandle,
     scope: ThreadRequestScope,
     turn_id: TurnId,
+    history: ThreadSnapshotHistory,
 ) -> Result<Thread, ClientError> {
     let session_id = scope.session_id().clone();
     let thread_id = scope.thread_id().clone();
     interrupt_turn(&mut client, scope, &turn_id)?;
-    read_thread(&mut client, &session_id, &thread_id)
+    read_thread_history(&mut client, &session_id, &thread_id, history)
 }
 
 pub(super) fn start_turn_and_read(
     mut client: AppServerRequestHandle,
     scope: ThreadRequestScope,
     submission: ComposerSubmission,
+    history: ThreadSnapshotHistory,
 ) -> Result<(TurnStartResult, Thread), ClientError> {
     let session_id = scope.session_id().clone();
     let thread_id = scope.thread_id().clone();
     let start = submit_prompt(&mut client, scope, submission)?;
-    let snapshot = read_thread(&mut client, &session_id, &thread_id)?;
+    let snapshot = read_thread_history(&mut client, &session_id, &thread_id, history)?;
     Ok((start, snapshot))
 }
 
@@ -261,12 +265,13 @@ pub(super) fn apply_request_completion(
         RequestCompletion::TurnStarted(Ok((start, snapshot))) => {
             conversation.set_thread_sequence(snapshot.sequence.max(start.sequence));
             thread_subscription.confirm_sequence(snapshot.sequence);
-            *active_turn = Some(start.turn_id);
+            if active_turn.is_none() {
+                *active_turn = Some(start.turn_id);
+            }
             apply_thread_snapshot(app, active_turn, snapshot);
         }
         RequestCompletion::TurnStarted(Err(error)) => {
-            *active_turn = None;
-            app.update(AppEvent::FailureReported(error.to_string()));
+            report_turn_start_failure(app, active_turn, error.to_string());
         }
         RequestCompletion::InteractionResolved(Ok(snapshot)) => {
             conversation.set_thread_sequence(snapshot.sequence);
@@ -308,13 +313,31 @@ pub(super) fn apply_request_completion(
     }
 }
 
+fn report_turn_start_failure(app: &mut App, active_turn: &Option<TurnId>, error: String) {
+    if active_turn.is_some() {
+        app.update(AppEvent::HostOperationCompleted(Err(format!(
+            "could not queue the follow-up: {error}"
+        ))));
+    } else {
+        app.update(AppEvent::FailureReported(error));
+    }
+}
+
 #[cfg(test)]
 pub(crate) fn apply_active_turn_snapshot(
     app: &mut App,
     active_turn: &mut Option<TurnId>,
     turns: &[Turn],
 ) {
-    apply_active_turn_update(app, evaluate_active_turn(active_turn, turns));
+    let update = evaluate_active_turn(active_turn, turns);
+    apply_active_turn_update(app, update);
+    if active_turn.is_none() {
+        *active_turn = recover_active_turn(turns);
+        if active_turn.is_some() {
+            let next_update = evaluate_active_turn(active_turn, turns);
+            apply_active_turn_update(app, next_update);
+        }
+    }
 }
 
 fn apply_active_turn_update(app: &mut App, update: ActiveTurnUpdate) {
@@ -329,6 +352,10 @@ fn apply_active_turn_update(app: &mut App, update: ActiveTurnUpdate) {
     }
 }
 
+#[cfg(test)]
+#[path = "request_completion_tests.rs"]
+mod tests;
+
 pub(super) fn apply_thread_snapshot(
     app: &mut App,
     active_turn: &mut Option<TurnId>,
@@ -338,8 +365,21 @@ pub(super) fn apply_thread_snapshot(
         *active_turn = recover_active_turn(&snapshot.turns);
     }
     let active_turn_update = evaluate_active_turn(active_turn, &snapshot.turns);
+    let next_active_turn_update = if active_turn.is_none() {
+        *active_turn = recover_active_turn(&snapshot.turns);
+        if active_turn.is_some() {
+            Some(evaluate_active_turn(active_turn, &snapshot.turns))
+        } else {
+            None
+        }
+    } else {
+        None
+    };
     app.update(AppEvent::ThreadSnapshotReceived(snapshot));
     apply_active_turn_update(app, active_turn_update);
+    if let Some(next_active_turn_update) = next_active_turn_update {
+        apply_active_turn_update(app, next_active_turn_update);
+    }
 }
 
 enum ConversationCompletionPresentation {

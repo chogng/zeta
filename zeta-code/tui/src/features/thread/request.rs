@@ -4,6 +4,7 @@ use crate::components::composer::ComposerSubmission;
 use zeta_app_server_client::AppServerClient;
 use zeta_app_server_client::ClientError;
 use zeta_app_server_client::JsonRpcTransport;
+use zeta_app_server_protocol::protocol::session::ThreadSnapshotHistory;
 use zeta_app_server_protocol::protocol::session::{
     SessionRequest, SessionRequestParams, SessionRequestResult, SessionThreadReadParams,
 };
@@ -79,6 +80,7 @@ where
     }
 }
 
+#[cfg(test)]
 pub(crate) fn read_thread<T>(
     client: &mut AppServerClient<T>,
     session_id: &SessionId,
@@ -91,6 +93,25 @@ where
         .read_session_thread(SessionThreadReadParams {
             session_id: session_id.clone(),
             thread_id: thread_id.clone(),
+            history: None,
+        })
+        .map(|result| result.thread)
+}
+
+pub(crate) fn read_thread_history<T>(
+    client: &mut AppServerClient<T>,
+    session_id: &SessionId,
+    thread_id: &ThreadId,
+    history: ThreadSnapshotHistory,
+) -> Result<Thread, ClientError>
+where
+    T: JsonRpcTransport,
+{
+    client
+        .read_session_thread(SessionThreadReadParams {
+            session_id: session_id.clone(),
+            thread_id: thread_id.clone(),
+            history: Some(history),
         })
         .map(|result| result.thread)
 }

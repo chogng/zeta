@@ -14,7 +14,11 @@ pub(crate) fn help_selection_view() -> PaneViewModel<SelectionViewModel> {
         .collect();
     let keys = [
         ("Enter", "submit the current prompt"),
+        ("Shift-Enter", "insert a newline in the current prompt"),
+        ("Ctrl-O", "copy the latest Zeta response"),
+        ("Ctrl-Z", "suspend Zeta on Unix and restore it after fg"),
         ("Ctrl-V", "attach an image from the system clipboard"),
+        ("Ctrl-Home", "load 50 older turns and move to history start"),
         ("Esc", "close the active view"),
         ("Ctrl-C", "interrupt an active turn or exit while idle"),
         ("← / →", "switch tabs in an interactive view"),

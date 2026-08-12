@@ -53,6 +53,7 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
             areas.interaction,
             app.input(),
             app.input_cursor_width(),
+            app.input_cursor_line(),
             cursor,
         );
         footer::draw(frame, areas.footer, app.status());
@@ -84,7 +85,9 @@ fn interaction_layout(app: &App, terminal_area: Rect) -> InteractionLayout {
         .map(|view| InteractionLayout::Expanded {
             desired_height: pane::desired_height(view.body().desired_height(terminal_area.width)),
         })
-        .unwrap_or(InteractionLayout::Composer)
+        .unwrap_or(InteractionLayout::Composer {
+            desired_height: app.composer_desired_height(terminal_area.width),
+        })
 }
 
 #[cfg(test)]

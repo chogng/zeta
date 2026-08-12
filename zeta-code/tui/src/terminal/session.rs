@@ -52,6 +52,17 @@ impl TerminalSession {
             .size()
             .map(|size| Rect::new(0, 0, size.width, size.height))
     }
+
+    /// Restores the parent terminal, suspends this process, and reacquires TUI modes on resume.
+    pub(crate) fn suspend(&mut self) -> io::Result<()> {
+        self.modes.restore();
+        let _ = self.terminal.show_cursor();
+        let suspend_result = suspend_process();
+        let reacquire_result = self.modes.reacquire();
+        suspend_result?;
+        reacquire_result?;
+        self.terminal.clear()
+    }
 }
 
 impl Drop for TerminalSession {
@@ -90,15 +101,26 @@ impl<O: TerminalModeOperations> TerminalModeGuard<O> {
             mouse_capture: false,
         };
 
-        guard.operations.enable_raw_mode()?;
-        guard.raw_mode = true;
-        guard.operations.enter_alternate_screen()?;
-        guard.alternate_screen = true;
-        guard.operations.enable_bracketed_paste()?;
-        guard.bracketed_paste = true;
-        guard.operations.enable_mouse_capture()?;
-        guard.mouse_capture = true;
+        guard.reacquire()?;
         Ok(guard)
+    }
+
+    fn reacquire(&mut self) -> io::Result<()> {
+        let result = (|| {
+            self.operations.enable_raw_mode()?;
+            self.raw_mode = true;
+            self.operations.enter_alternate_screen()?;
+            self.alternate_screen = true;
+            self.operations.enable_bracketed_paste()?;
+            self.bracketed_paste = true;
+            self.operations.enable_mouse_capture()?;
+            self.mouse_capture = true;
+            Ok(())
+        })();
+        if result.is_err() {
+            self.restore();
+        }
+        result
     }
 
     fn restore(&mut self) {
@@ -161,6 +183,20 @@ impl TerminalModeOperations for CrosstermModeOperations {
     fn disable_raw_mode(&mut self) -> io::Result<()> {
         disable_raw_mode()
     }
+}
+
+#[cfg(unix)]
+fn suspend_process() -> io::Result<()> {
+    rustix::process::kill_process(rustix::process::getpid(), rustix::process::Signal::TSTP)
+        .map_err(io::Error::from)
+}
+
+#[cfg(not(unix))]
+fn suspend_process() -> io::Result<()> {
+    Err(io::Error::new(
+        io::ErrorKind::Unsupported,
+        "process suspension is unsupported on this platform",
+    ))
 }
 
 #[cfg(test)]

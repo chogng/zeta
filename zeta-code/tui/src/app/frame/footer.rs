@@ -15,7 +15,7 @@ pub(super) fn draw(frame: &mut Frame<'_>, area: Rect, status: &Status) {
             Style::default().fg(muted()),
         ),
         Status::Working => (
-            "working…  ·  ctrl-c interrupt",
+            "working…  ·  enter queue  ·  shift-enter newline  ·  ctrl-c interrupt",
             Style::default().fg(warning()),
         ),
         Status::WaitingForApproval => (

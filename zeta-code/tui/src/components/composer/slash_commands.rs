@@ -24,6 +24,8 @@ pub(crate) enum TuiSlashCommandAction {
     Files,
     Fork,
     Help,
+    Copy,
+    Export,
     Model,
     Theme,
     New,
@@ -51,6 +53,8 @@ impl TuiSlashCommandAction {
             Self::Files => "browse and preview workspace files",
             Self::Fork => "fork the current chat",
             Self::Help => "show executable slash commands",
+            Self::Copy => "copy the latest Zeta response",
+            Self::Export => "export this conversation as Markdown",
             Self::Model => "show or set the preferred provider/model",
             Self::Theme => "show or set the terminal color theme",
             Self::New => "start a new chat",
@@ -67,6 +71,7 @@ impl TuiSlashCommandAction {
             | Self::Clear
             | Self::Files
             | Self::Fork
+            | Self::Export
             | Self::Model
             | Self::Theme
             | Self::New => SlashCommandArgumentMode::Optional,

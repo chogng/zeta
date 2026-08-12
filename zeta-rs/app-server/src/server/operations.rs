@@ -16,6 +16,9 @@ use zeta_app_server_protocol::protocol::resources::{
     ResourceMetadataParams, ResourceMetadataResult, ResourceReadParams, ResourceReadResult,
     ResourceReleaseParams,
 };
+use zeta_app_server_protocol::protocol::session::MAX_THREAD_SNAPSHOT_TURNS;
+use zeta_app_server_protocol::protocol::session::ThreadHistoryBoundary;
+use zeta_app_server_protocol::protocol::session::ThreadSnapshotHistory;
 use zeta_app_server_protocol::protocol::session::{
     SessionCreateParams, SessionListResult, SessionReadParams, SessionRequest,
     SessionRequestParams, SessionRequestResult, SessionResult, SessionSubscribeParams,
@@ -576,9 +579,8 @@ impl AppServer {
     pub(super) fn session_thread_read(&self, params: &Value) -> Result<Value, RpcError> {
         let params: SessionThreadReadParams = decode(params)?;
         let snapshot = self.read_session_thread_snapshot(&params.session_id, &params.thread_id)?;
-        result(&SessionThreadReadResult {
-            thread: snapshot.public_thread(),
-        })
+        let (thread, history) = bounded_thread_snapshot(snapshot.public_thread(), params.history)?;
+        result(&SessionThreadReadResult { thread, history })
     }
 
     pub(super) fn session_thread_subscribe(
@@ -587,12 +589,18 @@ impl AppServer {
         params: &Value,
     ) -> Result<Value, RpcError> {
         let params: SessionThreadSubscribeParams = decode(params)?;
+        let bounded_history = params.history.is_some();
         let snapshot = self.read_session_thread_snapshot(&params.session_id, &params.thread_id)?;
-        let thread = snapshot.public_thread();
+        let (thread, history) = bounded_thread_snapshot(snapshot.public_thread(), params.history)?;
+        let replay_after = if bounded_history {
+            params.after_sequence.max(thread.sequence)
+        } else {
+            params.after_sequence
+        };
         let updates = self
             .sessions
             .threads()
-            .thread_updates_after(&params.thread_id, params.after_sequence)
+            .thread_updates_after(&params.thread_id, replay_after)
             .map_err(core_error)?;
         self.updates.subscribe_session_thread(
             connection.connection_id,
@@ -601,7 +609,11 @@ impl AppServer {
             thread.sequence,
         );
         self.offer_pending_interactions(&snapshot);
-        result(&SessionThreadSubscribeResult { thread, updates })
+        result(&SessionThreadSubscribeResult {
+            thread,
+            updates,
+            history,
+        })
     }
 
     pub(super) fn session_thread_unsubscribe(
@@ -1098,6 +1110,32 @@ impl AppServer {
         self.updates.publish_thread(thread_id, &updates);
         Ok(())
     }
+}
+
+fn bounded_thread_snapshot(
+    mut thread: zeta_protocol::Thread,
+    history: Option<ThreadSnapshotHistory>,
+) -> Result<(zeta_protocol::Thread, Option<ThreadHistoryBoundary>), RpcError> {
+    let Some(ThreadSnapshotHistory::Latest { turn_limit }) = history else {
+        return Ok((thread, None));
+    };
+    if turn_limit == 0 || turn_limit > MAX_THREAD_SNAPSHOT_TURNS {
+        return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+    }
+    let retained = usize::try_from(turn_limit).unwrap_or(usize::MAX);
+    let first_retained = thread.turns.len().saturating_sub(retained);
+    let has_older_turns = first_retained > 0;
+    if has_older_turns {
+        thread.turns.drain(..first_retained);
+    }
+    let oldest_turn_id = thread.turns.first().map(|turn| turn.turn_id.clone());
+    Ok((
+        thread,
+        Some(ThreadHistoryBoundary {
+            has_older_turns,
+            oldest_turn_id,
+        }),
+    ))
 }
 
 pub(super) fn resource_rpc_error(error: crate::resource_store::ResourceError) -> RpcError {

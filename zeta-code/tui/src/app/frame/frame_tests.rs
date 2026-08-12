@@ -73,6 +73,32 @@ fn composer_uses_light_gray_edge_to_edge_horizontal_rules_and_prompt() {
 }
 
 #[test]
+fn multiline_composer_grows_upward_and_keeps_all_lines_visible() {
+    let mut app = App::new();
+    app.insert_text("first\nsecond\nthird");
+
+    let rendered = render(&app, 80, 20);
+    let rows = rendered.lines().collect::<Vec<_>>();
+
+    assert!(rows[15].contains("first"));
+    assert!(rows[16].contains("second"));
+    assert!(rows[17].contains("third"));
+    assert!(rows[19].contains("enter send"));
+}
+
+#[test]
+fn composer_soft_wraps_long_lines_instead_of_clipping_them() {
+    let mut app = App::new();
+    app.insert_text("abcdefghij");
+
+    let rendered = render(&app, 8, 20);
+    let rows = rendered.lines().collect::<Vec<_>>();
+
+    assert!(rows[16].contains("abcdef"));
+    assert!(rows[17].contains("ghij"));
+}
+
+#[test]
 fn selection_view_replaces_the_composer_but_keeps_the_transcript_surface() {
     let mut app = App::new();
     app.update(AppEvent::ProductNotice(

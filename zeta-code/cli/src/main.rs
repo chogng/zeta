@@ -184,6 +184,7 @@ fn run_prompt_in_session(
             session_id: session.session.session_id.clone(),
             thread_id: thread.thread_id.clone(),
             after_sequence: 0,
+            history: None,
         })
         .map_err(|error| error.to_string())?;
     let events = app_server
@@ -225,6 +226,7 @@ fn run_prompt_in_session(
             .read_session_thread(SessionThreadReadParams {
                 session_id: session.session.session_id.clone(),
                 thread_id: thread.thread_id.clone(),
+                history: None,
             })
             .map_err(|error| error.to_string())?;
         let turn = snapshot

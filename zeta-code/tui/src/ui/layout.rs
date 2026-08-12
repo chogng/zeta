@@ -2,7 +2,6 @@ use ratatui::layout::Rect;
 
 const MIN_HISTORY_HEIGHT: u16 = 4;
 const STATUS_LINE_HEIGHT: u16 = 1;
-const COMPOSER_HEIGHT: u16 = 3;
 const FOOTER_HEIGHT: u16 = 1;
 
 pub(crate) struct FrameAreas {
@@ -14,7 +13,7 @@ pub(crate) struct FrameAreas {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum InteractionLayout {
-    Composer,
+    Composer { desired_height: u16 },
     Expanded { desired_height: u16 },
 }
 
@@ -22,7 +21,9 @@ pub(crate) fn frame_areas(area: Rect, interaction_layout: InteractionLayout) -> 
     let available_height = area.height;
     let (requested_status_line_height, requested_interaction_height, requested_footer_height) =
         match interaction_layout {
-            InteractionLayout::Composer => (STATUS_LINE_HEIGHT, COMPOSER_HEIGHT, FOOTER_HEIGHT),
+            InteractionLayout::Composer { desired_height } => {
+                (STATUS_LINE_HEIGHT, desired_height.max(3), FOOTER_HEIGHT)
+            }
             InteractionLayout::Expanded { desired_height } => (0, desired_height, 0),
         };
     let footer_height = requested_footer_height.min(available_height);

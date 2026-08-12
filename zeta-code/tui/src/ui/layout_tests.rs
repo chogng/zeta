@@ -5,7 +5,7 @@ use ratatui::layout::Rect;
 fn composer_frame_surfaces_are_anchored_to_bottom() {
     let area = Rect::new(0, 0, 80, 24);
 
-    let areas = frame_areas(area, InteractionLayout::Composer);
+    let areas = frame_areas(area, InteractionLayout::Composer { desired_height: 3 });
 
     assert_eq!(areas.history, Rect::new(0, 0, 80, 19));
     assert_eq!(areas.status_line, Rect::new(0, 19, 80, 1));
@@ -29,6 +29,18 @@ fn expanded_interaction_grows_upward_from_bottom() {
     assert_eq!(taller.footer.height, 0);
     assert_eq!(shorter.status_line.height, 0);
     assert_eq!(taller.status_line.height, 0);
+}
+
+#[test]
+fn multiline_composer_grows_upward_without_displacing_the_footer() {
+    let area = Rect::new(0, 0, 80, 24);
+
+    let areas = frame_areas(area, InteractionLayout::Composer { desired_height: 6 });
+
+    assert_eq!(areas.history, Rect::new(0, 0, 80, 16));
+    assert_eq!(areas.status_line, Rect::new(0, 16, 80, 1));
+    assert_eq!(areas.interaction, Rect::new(0, 17, 80, 6));
+    assert_eq!(areas.footer, Rect::new(0, 23, 80, 1));
 }
 
 #[test]

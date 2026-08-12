@@ -74,6 +74,41 @@ fn completed_active_turn_only_updates_lifecycle_after_snapshot_mapping() {
 }
 
 #[test]
+fn completed_turn_advances_to_the_next_queued_turn() {
+    let first_id = TurnId::new("turn_1").unwrap();
+    let second_id = TurnId::new("turn_2").unwrap();
+    let mut active_turn = Some(first_id.clone());
+    let mut app = working_app();
+    let turns = vec![
+        Turn {
+            turn_id: first_id.clone(),
+            status: TurnStatus::Completed,
+            model: None,
+            items: vec![ThreadItem::AgentMessage {
+                item_id: ItemId::new("item_first").unwrap(),
+                turn_id: first_id,
+                text: "first answer".into(),
+            }],
+            pending_interaction: None,
+            error: None,
+        },
+        Turn {
+            turn_id: second_id.clone(),
+            status: TurnStatus::Running,
+            model: None,
+            items: Vec::new(),
+            pending_interaction: None,
+            error: None,
+        },
+    ];
+
+    apply_active_turn_snapshot(&mut app, &mut active_turn, &turns);
+
+    assert_eq!(active_turn, Some(second_id));
+    assert_eq!(app.status(), &Status::Working);
+}
+
+#[test]
 fn waiting_active_turn_remains_interruptible() {
     let turn_id = turn_id();
     let mut active_turn = Some(turn_id.clone());

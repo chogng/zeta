@@ -112,3 +112,33 @@ fn existing_text_can_be_marked_and_unmarked_without_changing_its_contents() {
     assert_eq!(textarea.text(), "/review details");
     assert_eq!(textarea.element_range(element), None);
 }
+
+#[test]
+fn multiline_cursor_moves_between_visual_columns() {
+    let mut textarea = TextArea::new();
+    textarea.insert_text("ab\n你c\nxyz");
+
+    textarea.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+
+    assert_eq!(textarea.cursor_line(), 1);
+    assert_eq!(textarea.cursor_display_width(), 3);
+
+    textarea.handle_key(KeyEvent::new(KeyCode::Home, KeyModifiers::NONE));
+    assert_eq!(textarea.cursor_line(), 1);
+    assert_eq!(textarea.cursor_display_width(), 0);
+
+    textarea.handle_key(KeyEvent::new(KeyCode::End, KeyModifiers::NONE));
+    assert_eq!(textarea.cursor_display_width(), 3);
+}
+
+#[test]
+fn newline_insertion_preserves_atomic_element_ranges() {
+    let mut textarea = TextArea::new();
+    textarea.insert_text("first");
+    textarea.insert_newline();
+    let element = textarea.insert_element("[Image]");
+
+    assert_eq!(textarea.text(), "first\n[Image]");
+    assert_eq!(textarea.cursor_line(), 1);
+    assert_eq!(textarea.element_range(element), Some(6..13));
+}

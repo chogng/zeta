@@ -13,7 +13,9 @@ pub(crate) use presentation::present_turn_error;
 pub(crate) use presentation::recover_active_turn;
 pub(crate) use request::ThreadRequestScope;
 pub(crate) use request::interrupt_turn;
+#[cfg(test)]
 pub(crate) use request::read_thread;
+pub(crate) use request::read_thread_history;
 pub(crate) use request::resolve_interaction;
 pub(crate) use request::submit_prompt;
 pub(crate) use state::ThreadFeatureState;

@@ -99,6 +99,7 @@ impl ActiveConversation {
             .read_session_thread(SessionThreadReadParams {
                 session_id: session.session_id.clone(),
                 thread_id: thread_id.clone(),
+                history: None,
             })?
             .thread;
         self.session = session;
@@ -162,6 +163,7 @@ impl ActiveConversation {
             .read_session_thread(SessionThreadReadParams {
                 session_id: self.session.session_id.clone(),
                 thread_id: self.thread_id.clone(),
+                history: None,
             })?
             .thread;
         self.thread_sequence = snapshot.sequence;
@@ -260,6 +262,7 @@ impl ActiveConversation {
             .read_session_thread(SessionThreadReadParams {
                 session_id: result.session.session_id.clone(),
                 thread_id: result.thread_id.clone(),
+                history: None,
             })?
             .thread;
         self.session = result.session;
@@ -297,6 +300,7 @@ impl ActiveConversation {
             .read_session_thread(SessionThreadReadParams {
                 session_id: result.session.session_id.clone(),
                 thread_id: result.thread_id.clone(),
+                history: None,
             })?
             .thread;
         self.session = result.session;
@@ -357,6 +361,7 @@ impl ActiveConversation {
             .read_session_thread(SessionThreadReadParams {
                 session_id: session.session_id.clone(),
                 thread_id: thread_id.clone(),
+                history: None,
             })?
             .thread;
         self.session = session;
@@ -395,6 +400,7 @@ where
         .read_session_thread(SessionThreadReadParams {
             session_id: thread.session.session_id.clone(),
             thread_id: thread.thread_id.clone(),
+            history: None,
         })?
         .thread;
     Ok((

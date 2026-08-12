@@ -31,7 +31,7 @@ use crate::features::theme as theme_feature;
 use crate::features::thread::ThreadRequestScope;
 use crate::features::thread::ThreadSubscription;
 use crate::features::thread::ThreadUpdateDisposition;
-use crate::features::thread::read_thread;
+use crate::features::thread::read_thread_history;
 use crate::features::workspace_files::FileSearchManager;
 use crate::host;
 use crate::terminal;
@@ -219,6 +219,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             if pending_request.is_none() {
                                 let request_client = client.clone();
                                 let scope = thread_request_scope(&conversation);
+                                let history = thread_subscription.history();
                                 pending_request = spawn_request(
                                     "zeta-tui-interrupt-turn",
                                     move || {
@@ -226,6 +227,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                             request_client,
                                             scope,
                                             turn_id,
+                                            history,
                                         ))
                                     },
                                     &mut app,
@@ -240,6 +242,52 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     AppCommand::ReadClipboardImage => app.update(AppEvent::ClipboardImageRead(
                         host::clipboard::read_image().map(|image| image.png),
                     )),
+                    AppCommand::CopyLastResponse => {
+                        let result = app
+                            .latest_agent_response()
+                            .ok_or_else(|| "there is no Zeta response to copy".to_owned())
+                            .and_then(|response| {
+                                host::clipboard::write_text(response)
+                                    .map(|()| "Copied the latest Zeta response".to_owned())
+                            });
+                        app.update(AppEvent::HostOperationCompleted(result));
+                    }
+                    AppCommand::ExportTranscript { requested_path } => {
+                        let markdown = app.transcript_markdown();
+                        let result = if markdown.is_empty() {
+                            Err("there is no conversation to export".to_owned())
+                        } else {
+                            host::transcript_export::write(
+                                &workspace_root,
+                                requested_path.as_deref(),
+                                &markdown,
+                            )
+                            .map(|path| format!("Exported conversation to {}", path.display()))
+                        };
+                        app.update(AppEvent::HostOperationCompleted(result));
+                    }
+                    AppCommand::Suspend => terminal.suspend()?,
+                    AppCommand::LoadOlderHistory => {
+                        if pending_request.is_none() {
+                            thread_subscription.expand_history();
+                            let mut request_client = client.clone();
+                            let session_id = conversation.session_id().clone();
+                            let thread_id = conversation.thread_id().clone();
+                            let history = thread_subscription.history();
+                            pending_request = spawn_request(
+                                "zeta-tui-load-older-history",
+                                move || {
+                                    RequestCompletion::ThreadRefreshed(read_thread_history(
+                                        &mut request_client,
+                                        &session_id,
+                                        &thread_id,
+                                        history,
+                                    ))
+                                },
+                                &mut app,
+                            );
+                        }
+                    }
                     AppCommand::OpenCustomThemePane => match ui::theme_catalog() {
                         Ok(catalog) => app.update(AppEvent::ThemeViewOpened(
                             theme_feature::custom_theme_selection_view(&catalog),
@@ -431,6 +479,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                         if pending_request.is_none() {
                             let request_client = client.clone();
                             let scope = thread_request_scope(&conversation);
+                            let history = thread_subscription.history();
                             pending_request = spawn_request(
                                 "zeta-tui-resolve-interaction",
                                 move || {
@@ -439,6 +488,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                             request_client,
                                             scope,
                                             response,
+                                            history,
                                         ),
                                     )
                                 },
@@ -544,6 +594,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                         if pending_request.is_none() {
                             let request_client = client.clone();
                             let scope = thread_request_scope(&conversation);
+                            let history = thread_subscription.history();
                             pending_request = spawn_request(
                                 "zeta-tui-start-turn",
                                 move || {
@@ -551,6 +602,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                         request_client,
                                         scope,
                                         prompt,
+                                        history,
                                     ))
                                 },
                                 &mut app,
@@ -563,13 +615,15 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                 let mut request_client = client.clone();
                 let session_id = conversation.session_id().clone();
                 let thread_id = conversation.thread_id().clone();
+                let history = thread_subscription.history();
                 pending_request = spawn_request(
                     "zeta-tui-refresh-thread",
                     move || {
-                        RequestCompletion::ThreadRefreshed(read_thread(
+                        RequestCompletion::ThreadRefreshed(read_thread_history(
                             &mut request_client,
                             &session_id,
                             &thread_id,
+                            history,
                         ))
                     },
                     &mut app,
@@ -634,6 +688,9 @@ fn uses_request_task(action: &AppCommand) -> bool {
     !matches!(
         action,
         AppCommand::Quit
+            | AppCommand::Suspend
+            | AppCommand::CopyLastResponse
+            | AppCommand::ExportTranscript { .. }
             | AppCommand::ReadClipboardImage
             | AppCommand::OpenCustomThemePane
             | AppCommand::SetCustomTheme { .. }

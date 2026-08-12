@@ -44,6 +44,7 @@ Zeta 的产品 authority、typed contract 和 crate dependency direction 仍由�
 | independent request driver、wakeable event pump | Current | [`app-server-client.md`](app-server-client.md) 与 crate README |
 | 非阻塞 request completion dispatch、有界 transient data plane、Session/Thread/interaction 垂直切片 | Current | [`zeta-code/tui/README.md`](../zeta-code/tui/README.md) |
 | plain-text transcript、必要 popup mouse hit 与 embedded session | Current product support boundary | 本文与 crate README |
+| active-Turn follow-up queue、多行 composer、copy/export、分页历史与 suspend/resume | Current | [`zeta-code/tui/README.md`](../zeta-code/tui/README.md) |
 | 尚无 `zeta code` 产品要求或 canonical contract 的 feature | 非目标或 Potential；不构成实现承诺 | 对应产品线、领域与 App Server API 文档 |
 
 本文只为已经接受的 `zeta code` 能力规定架构与迁移顺序。“某能力在 TUI 中不存在”不自动产生
@@ -606,8 +607,9 @@ owner 的公开 typed interface，`view.rs` 组装 component。没有请求的 f
 | `workspace_files` | `zeta-file-search` mention completion + typed filesystem browser/preview |
 | `status_line` | 汇集既有接口结果并执行 item 排列、降级与渲染 |
 
-resources 等已经有 typed contract、但尚未开始 TUI 工作的能力不提前出现在目录树中；开始
-实现时再按同一文件契约添加 feature。
+resources 等已经有 typed contract、但尚无 `zeta code` 用户场景的能力不提前出现在
+目录树中，也不构成 TUI backlog。只有产品文档先接受具体场景后，才按同一文件契约
+添加 feature。
 
 approval、request-user-input 与 MCP 已在 canonical contract 完整后作为垂直切片接入；TUI 只声明
 实际支持的 interaction kind，App Server 选择唯一 owner，deadline/cancellation 不由 view 决定。
@@ -649,7 +651,7 @@ Git、配置或 Thread。
 | workspace | `TuiOptions::workspace_root` | 保留完整路径和 basename 两种展示值 | 已实现 |
 | Git branch/state | App Server `git/status` + `git/statusChanged`，其 owner 调用 `zeta-git` | startup/read 与 notification 映射 branch/dirty/count | 已实现 |
 | Thread/Turn/usage | App Server typed snapshot/update | 消费 contract 已提供的字段，不从 transcript 推导 | contract 尚未提供完整 usage |
-| connection/runtime state | `client/` 与 `app/` 本地状态 | 映射为 presentation item | 规划中 |
+| connection/runtime state | `client/` 与 `app/` 本地状态 | 只在已接受的用户场景中映射 | Potential；embedded TUI 当前无独立 connection UI 需求 |
 
 依赖方向固定为：
 
@@ -673,7 +675,8 @@ stale 语义。任何新 item 都应先回答“哪个 crate/interface 拥有这
 宽度测试。
 
 当前实现由 `features/status_line/model.rs` 拥有 model、Git projection 与宽度降级，
-`features/status_line/view.rs` 只负责右对齐渲染。usage 和可配置 item/order 仍未完成。
+`features/status_line/view.rs` 只负责右对齐渲染。usage 和可配置 item/order 缺少已接受的
+typed contract，因此不是当前 TUI 完成项。
 
 ## 12. `host/`：窄宿主能力
 
@@ -1035,8 +1038,10 @@ lib_tests.rs
 
 当前产品支持边界与非目标：
 
-- transcript 采用 bounded plain-text wrapping 和键盘滚动。Native Agent Timeline 的 Markdown、
-  table、selection、折叠与虚拟化属于 `zeterm`，不是 TUI 的“尚未完成”；
+- transcript 采用 bounded plain-text wrapping、分页键盘滚动、最后回复 copy 与当前已加载 history
+  window 的 Markdown export。
+  Native Agent Timeline 的 Markdown/table、任意 pointer selection、折叠与虚拟化属于 `zeterm`，
+  不是 TUI 的“尚未完成”；
 - Mouse 只覆盖 slash/file-mention popup 的必要左键命中。完整 pointer/selection 交互不属于当前
   `zeta code` 要求；Vim mode/motion/operator 也没有被产品文档接受；
 - 当前入口消费 embedded `AppServerSession`，不提供 remote selector 或自动 reconnect。若未来接受
@@ -1074,6 +1079,9 @@ lib_tests.rs
 | Thread transient merge、cursor recovery 与 bounded data plane | Current |
 | Session/Thread picker、archive 与恢复 | Current |
 | owner-directed approval / user input / deadline | Current |
+| 多行 composer 与 active-Turn follow-up queue | Current |
+| bounded Thread history window 与 Ctrl-Home 增量加载 | Current |
+| command copy/export 与 Ctrl-Z suspend/resume | Current |
 
 ### 阶段零：固定行为与性能基线
 

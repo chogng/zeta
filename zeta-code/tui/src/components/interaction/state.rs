@@ -115,6 +115,14 @@ impl InteractionPane {
         self.composer.cursor_display_width()
     }
 
+    pub(crate) fn cursor_line(&self) -> usize {
+        self.composer.cursor_line()
+    }
+
+    pub(crate) fn composer_desired_height(&self, available_width: u16) -> u16 {
+        self.composer.desired_height(available_width)
+    }
+
     pub(crate) fn slash_popup(&self) -> Option<SlashCommandsView<'_>> {
         if !self.views.is_empty() {
             return None;

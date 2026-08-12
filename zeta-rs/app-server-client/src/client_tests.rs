@@ -236,6 +236,7 @@ fn in_process_client_uses_session_first_contract_and_canonical_updates() {
             .read_session_thread(SessionThreadReadParams {
                 session_id: session.session.session_id.clone(),
                 thread_id: thread.thread_id.clone(),
+                history: None,
             })
             .expect("Thread remains readable");
         if snapshot.thread.turns[0].status == TurnStatus::Completed {

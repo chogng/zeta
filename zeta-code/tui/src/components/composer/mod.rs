@@ -5,6 +5,7 @@ mod pending_pastes;
 mod slash_commands;
 mod state;
 mod view;
+mod wrap;
 
 pub(crate) use mentions::MentionPopupView;
 pub(crate) use slash_commands::TuiSlashCommandAction;

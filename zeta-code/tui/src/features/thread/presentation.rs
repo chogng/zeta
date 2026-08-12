@@ -76,7 +76,6 @@ pub(crate) fn evaluate_active_turn(
 pub(crate) fn recover_active_turn(turns: &[Turn]) -> Option<TurnId> {
     turns
         .iter()
-        .rev()
         .find(|turn| {
             matches!(
                 turn.status,

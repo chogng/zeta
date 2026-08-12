@@ -26,6 +26,7 @@ pub(crate) enum AppEvent {
     FileSearchSnapshotReceived(PathSearchSnapshot),
     FileViewOpened(FileSelectionView),
     GitStatusReceived(GitStatusResult),
+    HostOperationCompleted(Result<String, String>),
     InterruptFailed(String),
     ProductNotice(String),
     InteractionViewOpened(InteractionSelectionView),

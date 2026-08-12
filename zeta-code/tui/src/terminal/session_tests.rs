@@ -106,6 +106,39 @@ fn explicit_restore_is_idempotent() {
     );
 }
 
+#[test]
+fn suspend_cycle_restores_then_reacquires_all_modes() {
+    let calls = Rc::new(RefCell::new(Vec::new()));
+    let mut guard =
+        TerminalModeGuard::acquire(FakeOperations::new(calls.clone(), None)).expect("acquire");
+
+    guard.restore();
+    guard.reacquire().expect("reacquire");
+    drop(guard);
+
+    assert_eq!(
+        calls.borrow().as_slice(),
+        [
+            ENABLE_RAW_MODE,
+            ENTER_ALTERNATE_SCREEN,
+            ENABLE_BRACKETED_PASTE,
+            ENABLE_MOUSE_CAPTURE,
+            DISABLE_MOUSE_CAPTURE,
+            DISABLE_BRACKETED_PASTE,
+            LEAVE_ALTERNATE_SCREEN,
+            DISABLE_RAW_MODE,
+            ENABLE_RAW_MODE,
+            ENTER_ALTERNATE_SCREEN,
+            ENABLE_BRACKETED_PASTE,
+            ENABLE_MOUSE_CAPTURE,
+            DISABLE_MOUSE_CAPTURE,
+            DISABLE_BRACKETED_PASTE,
+            LEAVE_ALTERNATE_SCREEN,
+            DISABLE_RAW_MODE,
+        ]
+    );
+}
+
 struct FakeOperations {
     calls: Rc<RefCell<Vec<&'static str>>>,
     failure: Option<&'static str>,

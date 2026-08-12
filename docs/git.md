@@ -93,7 +93,8 @@ stderr、磁盘绝对路径和非 UTF-8 path 不进入 Renderer。
 - 当前是单 workspace `GitRuntime`，尚无 multi-repository registry；
 - operation 由 runtime mutex 串行化，但尚无可观测 queue、progress、caller cancellation 或 retry；
 - App Server 与 Native 已支持切换现有本地分支；系统仍无 branch 新建/删除/重命名、
-  tag/worktree mutation 或 credential prompt；TUI 尚未投影 Git UI；
+  tag/worktree mutation 或 credential prompt；`zeta code` TUI 只消费 branch/dirty 会话上下文，
+  当前产品定义不包含 SCM 管理 UI；
 - pull 固定为 fast-forward only；discard 不删除 untracked 文件；
 - 当前是单 workspace root contract，不是 multi-root repository collection；
 - SCM change row 尚未接入 editor diff/open workflow。
@@ -107,7 +108,8 @@ stderr、磁盘绝对路径和非 UTF-8 path 不进入 Renderer。
 1. 增加显式 repository identity 与 multi-root registry；
 2. 为长时间 remote operation 增加 progress、queue state 和 caller cancellation；
 3. 接入 diff/open 与更细粒度的错误 UI；
-4. 按明确产品语义增加 branch lifecycle 等额外 mutation，并让 TUI 消费同一协议。
+4. 按明确产品语义增加 branch lifecycle 等额外 mutation，并让已接受该产品需求的
+   UI consumer 消费同一协议。协议存在不自动使其成为 TUI 功能。
 
 长期不变量是：Desktop、Native 与 TUI 不直接执行 Git；App Server adapter 不复制 Git
 command/parsing；watch event 只触发重新确认，不能自身成为 repository truth。

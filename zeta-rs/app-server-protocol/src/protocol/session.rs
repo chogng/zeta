@@ -114,6 +114,33 @@ pub struct SessionRequestParams {
 pub struct SessionThreadReadParams {
     pub session_id: SessionId,
     pub thread_id: ThreadId,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub history: Option<ThreadSnapshotHistory>,
+}
+
+/// Maximum Turn count accepted by one bounded Thread snapshot request.
+pub const MAX_THREAD_SNAPSHOT_TURNS: u32 = 100_000;
+
+/// Selects how much durable Turn history is included in a Thread snapshot.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum ThreadSnapshotHistory {
+    Latest { turn_limit: u32 },
+}
+
+/// Describes whether a bounded Thread snapshot has older durable Turns available.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ThreadHistoryBoundary {
+    pub has_older_turns: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub oldest_turn_id: Option<TurnId>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -123,6 +150,9 @@ pub struct SessionThreadSubscribeParams {
     pub thread_id: ThreadId,
     #[ts(type = "number")]
     pub after_sequence: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub history: Option<ThreadSnapshotHistory>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -172,6 +202,9 @@ pub struct SessionThreadResult {
 #[serde(rename_all = "camelCase")]
 pub struct SessionThreadReadResult {
     pub thread: Thread,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub history: Option<ThreadHistoryBoundary>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -179,6 +212,9 @@ pub struct SessionThreadReadResult {
 pub struct SessionThreadSubscribeResult {
     pub thread: Thread,
     pub updates: Vec<ThreadUpdateEnvelope>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub history: Option<ThreadHistoryBoundary>,
 }
 
 /// Typed result returned by the canonical Session aggregate mutation endpoint.

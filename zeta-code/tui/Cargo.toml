@@ -28,7 +28,7 @@ zeta-terminal-detection = { workspace = true }
 zeta-theme = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
-rustix = { workspace = true, features = ["fs", "stdio"] }
+rustix = { workspace = true, features = ["fs", "process", "stdio"] }
 signal-hook = { workspace = true }
 
 [target.'cfg(not(target_os = "android"))'.dependencies]

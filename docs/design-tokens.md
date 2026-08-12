@@ -88,6 +88,7 @@ flowchart LR
 
 - 高对比度使用明暗默认值回退，尚未提供独立视觉设计；类型、解析路径和 manifest 已保留独立 scheme。
 - Desktop 的保存/预览可即时更新；Native 与 TUI 当前在进程启动时加载一次，外部文件修改需要重启对应宿主。
+  这是当前宿主生命周期边界；`zeta code` 产品文档未要求外部主题热重载，因此不构成 TUI backlog。
 - `tui.colorTheme` 当前有 typed configuration contract，但尚无 Settings UI；TUI 可用 `/theme` 打开
   不带搜索的八项 Zeta Code Theme Pane，用 Enter 原子保存、即时切换并返回主界面，也可用 `/theme <id>` 快速
   切换；Theme Pane 的 syntax/diff preview 读取同一 resolved snapshot，切换不追加 transcript notice；

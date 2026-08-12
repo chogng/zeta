@@ -316,6 +316,7 @@ impl<T: JsonRpcTransport + Send> AppServerAgentService<T> {
                 session_id: session_id.clone(),
                 thread_id: thread_id.clone(),
                 after_sequence: 0,
+                history: None,
             })
         })?;
         let turn_command = command_id(&self.principal, invocation_id, "turn")?;
@@ -471,6 +472,7 @@ impl<T: JsonRpcTransport + Send> AppServerAgentService<T> {
             client.read_session_thread(SessionThreadReadParams {
                 session_id: session_id.clone(),
                 thread_id: thread_id.clone(),
+                history: None,
             })
         })
     }
@@ -494,6 +496,7 @@ impl<T: JsonRpcTransport + Send> AppServerAgentService<T> {
             .read_session_thread(SessionThreadReadParams {
                 session_id: session_id.clone(),
                 thread_id: thread_id.clone(),
+                history: None,
             })
             .map_err(|error| AgentCallError::AppServer(error.to_string()))?;
         let updates = client

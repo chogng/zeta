@@ -1,3 +1,5 @@
+use super::super::wrap::PROMPT_WIDTH;
+use super::super::wrap::wrap_input;
 use crate::ui::composer_chrome;
 use ratatui::Frame;
 use ratatui::layout::Rect;
@@ -20,26 +22,51 @@ pub(crate) fn draw(
     area: Rect,
     input: &str,
     cursor_width: usize,
+    cursor_line: usize,
     cursor: ComposerCursor,
 ) {
-    let composer = Paragraph::new(Line::from(vec![
-        Span::styled(
-            "❯ ",
-            Style::default()
-                .fg(composer_chrome())
-                .add_modifier(Modifier::BOLD),
-        ),
-        Span::raw(input),
-    ]))
-    .block(
-        Block::default()
-            .borders(Borders::TOP | Borders::BOTTOM)
-            .border_style(Style::default().fg(composer_chrome())),
-    );
+    let wrapped = wrap_input(input, cursor_line, cursor_width, area.width);
+    let lines = wrapped
+        .lines
+        .iter()
+        .enumerate()
+        .map(|(index, line)| {
+            let prompt = if index == 0 { "❯ " } else { "  " };
+            Line::from(vec![
+                Span::styled(
+                    prompt,
+                    Style::default()
+                        .fg(composer_chrome())
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::raw(line),
+            ])
+        })
+        .collect::<Vec<_>>();
+    let visible_rows = area.height.saturating_sub(2) as usize;
+    let scroll_row = wrapped
+        .cursor_row
+        .saturating_sub(visible_rows.saturating_sub(1));
+    let composer = Paragraph::new(lines)
+        .scroll((scroll_row.min(u16::MAX as usize) as u16, 0))
+        .block(
+            Block::default()
+                .borders(Borders::TOP | Borders::BOTTOM)
+                .border_style(Style::default().fg(composer_chrome())),
+        );
     frame.render_widget(composer, area);
 
     if cursor == ComposerCursor::Visible {
-        let input_width = cursor_width.min(area.width.saturating_sub(3) as usize) as u16;
-        frame.set_cursor_position((area.x + 2 + input_width, area.y + 1));
+        let input_width = wrapped
+            .cursor_column
+            .min(area.width.saturating_sub(PROMPT_WIDTH as u16 + 1) as usize)
+            as u16;
+        let visible_cursor_line = wrapped.cursor_row.saturating_sub(scroll_row);
+        let cursor_y = area
+            .y
+            .saturating_add(1)
+            .saturating_add(visible_cursor_line.min(u16::MAX as usize) as u16)
+            .min(area.y.saturating_add(area.height.saturating_sub(2)));
+        frame.set_cursor_position((area.x + PROMPT_WIDTH as u16 + input_width, cursor_y));
     }
 }

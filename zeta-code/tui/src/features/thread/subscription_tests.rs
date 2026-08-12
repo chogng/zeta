@@ -1,3 +1,4 @@
+use super::HISTORY_PAGE_TURNS;
 use super::ThreadSubscription;
 use super::ThreadUpdateDisposition;
 use std::collections::VecDeque;
@@ -6,6 +7,8 @@ use std::sync::Mutex;
 use zeta_app_server_client::AppServerClient;
 use zeta_app_server_client::ClientError;
 use zeta_app_server_client::JsonRpcTransport;
+use zeta_app_server_protocol::protocol::session::MAX_THREAD_SNAPSHOT_TURNS;
+use zeta_app_server_protocol::protocol::session::ThreadSnapshotHistory;
 use zeta_protocol::SessionId;
 use zeta_protocol::StreamCursor;
 use zeta_protocol::StreamInstanceId;
@@ -37,7 +40,7 @@ impl JsonRpcTransport for RecordingTransport {
 #[test]
 fn newer_update_for_active_scope_requests_snapshot() {
     let snapshot = thread("session-1", "thread-1", 4);
-    let mut subscription = ThreadSubscription::from_snapshot(&snapshot);
+    let mut subscription = ThreadSubscription::from_snapshot(&snapshot, HISTORY_PAGE_TURNS);
 
     assert_eq!(
         subscription.classify_update(&update("session-1", "thread-1", 5)),
@@ -46,9 +49,41 @@ fn newer_update_for_active_scope_requests_snapshot() {
 }
 
 #[test]
+fn history_window_expands_one_page_at_a_time() {
+    let snapshot = thread("session-1", "thread-1", 4);
+    let mut subscription = ThreadSubscription::from_snapshot(&snapshot, HISTORY_PAGE_TURNS);
+
+    assert_eq!(
+        subscription.history(),
+        ThreadSnapshotHistory::Latest { turn_limit: 50 }
+    );
+    subscription.expand_history();
+    assert_eq!(
+        subscription.history(),
+        ThreadSnapshotHistory::Latest { turn_limit: 100 }
+    );
+}
+
+#[test]
+fn history_window_never_exceeds_the_server_limit() {
+    let snapshot = thread("session-1", "thread-1", 4);
+    let mut subscription =
+        ThreadSubscription::from_snapshot(&snapshot, MAX_THREAD_SNAPSHOT_TURNS - 10);
+
+    subscription.expand_history();
+
+    assert_eq!(
+        subscription.history(),
+        ThreadSnapshotHistory::Latest {
+            turn_limit: MAX_THREAD_SNAPSHOT_TURNS
+        }
+    );
+}
+
+#[test]
 fn duplicate_and_updates_for_another_thread_do_not_request_snapshot() {
     let snapshot = thread("session-1", "thread-1", 4);
-    let mut subscription = ThreadSubscription::from_snapshot(&snapshot);
+    let mut subscription = ThreadSubscription::from_snapshot(&snapshot, HISTORY_PAGE_TURNS);
 
     assert_eq!(
         subscription.classify_update(&update("session-1", "thread-1", 4)),
@@ -63,7 +98,7 @@ fn duplicate_and_updates_for_another_thread_do_not_request_snapshot() {
 #[test]
 fn session_mismatch_for_active_thread_requests_authoritative_snapshot() {
     let snapshot = thread("session-1", "thread-1", 4);
-    let mut subscription = ThreadSubscription::from_snapshot(&snapshot);
+    let mut subscription = ThreadSubscription::from_snapshot(&snapshot, HISTORY_PAGE_TURNS);
 
     assert_eq!(
         subscription.classify_update(&update("session-old", "thread-1", 4)),
@@ -74,7 +109,7 @@ fn session_mismatch_for_active_thread_requests_authoritative_snapshot() {
 #[test]
 fn confirming_a_new_snapshot_suppresses_buffered_duplicates() {
     let snapshot = thread("session-1", "thread-1", 4);
-    let mut subscription = ThreadSubscription::from_snapshot(&snapshot);
+    let mut subscription = ThreadSubscription::from_snapshot(&snapshot, HISTORY_PAGE_TURNS);
     subscription.confirm_sequence(7);
 
     assert_eq!(
@@ -90,7 +125,7 @@ fn confirming_a_new_snapshot_suppresses_buffered_duplicates() {
 #[test]
 fn transient_updates_are_applied_once_in_stream_order() {
     let snapshot = thread("session-1", "thread-1", 4);
-    let mut subscription = ThreadSubscription::from_snapshot(&snapshot);
+    let mut subscription = ThreadSubscription::from_snapshot(&snapshot, HISTORY_PAGE_TURNS);
     let transient = transient_update("stream-1", 1);
 
     assert_eq!(
@@ -110,7 +145,7 @@ fn transient_updates_are_applied_once_in_stream_order() {
 #[test]
 fn transient_gap_resets_projection_and_requests_snapshot() {
     let snapshot = thread("session-1", "thread-1", 4);
-    let mut subscription = ThreadSubscription::from_snapshot(&snapshot);
+    let mut subscription = ThreadSubscription::from_snapshot(&snapshot, HISTORY_PAGE_TURNS);
     assert_eq!(
         subscription.classify_update(&transient_update("stream-1", 1)),
         ThreadUpdateDisposition::ApplyTransientAfterReset
@@ -132,7 +167,7 @@ fn transient_gap_resets_projection_and_requests_snapshot() {
 #[test]
 fn new_stream_instance_resets_the_previous_transient_projection() {
     let snapshot = thread("session-1", "thread-1", 4);
-    let mut subscription = ThreadSubscription::from_snapshot(&snapshot);
+    let mut subscription = ThreadSubscription::from_snapshot(&snapshot, HISTORY_PAGE_TURNS);
     assert_eq!(
         subscription.classify_update(&transient_update("stream-1", 1)),
         ThreadUpdateDisposition::ApplyTransientAfterReset
@@ -161,7 +196,7 @@ fn switching_threads_unsubscribes_the_previous_session_and_thread() {
         ]),
         requests: Arc::clone(&requests),
     });
-    let mut subscription = ThreadSubscription::from_snapshot(&previous);
+    let mut subscription = ThreadSubscription::from_snapshot(&previous, HISTORY_PAGE_TURNS);
 
     subscription
         .switch(
@@ -172,6 +207,8 @@ fn switching_threads_unsubscribes_the_previous_session_and_thread() {
         .expect("thread switch should succeed");
 
     let requests = requests.lock().expect("request log is not poisoned");
+    assert_eq!(requests[0]["params"]["history"]["type"], "latest");
+    assert_eq!(requests[0]["params"]["history"]["turnLimit"], 50);
     assert_eq!(requests[1]["method"], "session/thread/unsubscribe");
     assert_eq!(requests[1]["params"]["sessionId"], "session-1");
     assert_eq!(requests[1]["params"]["threadId"], "thread-1");

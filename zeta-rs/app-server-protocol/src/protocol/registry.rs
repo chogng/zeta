@@ -95,6 +95,7 @@ use crate::protocol::session::{
     SessionSubscribeResult, SessionThreadProjection, SessionThreadReadParams,
     SessionThreadReadResult, SessionThreadResult, SessionThreadSubscribeParams,
     SessionThreadSubscribeResult, SessionThreadUnsubscribeParams, SessionUnsubscribeParams,
+    ThreadHistoryBoundary, ThreadSnapshotHistory,
 };
 use crate::protocol::skills::{
     SkillCatalogReloadDto, SkillCompatibilityDto, SkillDiagnosticCodeDto, SkillDiagnosticDto,
@@ -884,6 +885,8 @@ typescript_bindings! {
     SessionSubscribeResult,
     SessionThreadProjection,
     SessionThreadResult,
+    ThreadSnapshotHistory,
+    ThreadHistoryBoundary,
     ModelCatalogEntry,
     ModelListResult,
     StableTurnErrorCode,

@@ -95,6 +95,12 @@ contract，不伪装成主动 notification stream。
 Session durable gap 和 `SessionThreadProjection` 列表；App Server 同时为这些 child Thread 建立
 connection-local update delivery。需要单独读取或追赶一个 child Thread 时使用
 `session/thread/read` / `session/thread/subscribe`，两者都必须携带 `sessionId`。
+两种 Thread snapshot 请求都可携带 `ThreadSnapshotHistory::Latest { turnLimit }`（范围为
+`1..=MAX_THREAD_SNAPSHOT_TURNS`），使长会话客户端只
+取得连续的最新 Turn 窗口；result 的 `ThreadHistoryBoundary` 明确报告是否仍有更早 Turn 以及当前
+最老 Turn identity。省略 history 保持完整 snapshot 语义，供 rewind、MCP Agent 等需要完整历史的
+调用方使用。subscribe 的 durable gap 从返回 snapshot 的 sequence 之后开始，不重复传输已经包含在
+snapshot 中的事件；省略 history 的 reconnect 调用仍从客户端提供的 `afterSequence` 返回完整 gap。
 `SessionRequestParams` / `SessionRequest` 是 mutation 的 canonical Session contract：公共请求统一
 携带 `CommandId`、Session sequence 和 typed operation，结果通过 `SessionRequestResult` 的 tagged
 union 返回。旧的独立 Session/Thread/Turn mutation methods 不在 registry 中。

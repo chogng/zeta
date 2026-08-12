@@ -7416,6 +7416,16 @@
     "SessionThreadReadParams": {
       "type": "object",
       "properties": {
+        "history": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ThreadSnapshotHistory"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "sessionId": {
           "$ref": "#/$defs/SessionId"
         },
@@ -7431,6 +7441,16 @@
     "SessionThreadReadResult": {
       "type": "object",
       "properties": {
+        "history": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ThreadHistoryBoundary"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "thread": {
           "$ref": "#/$defs/Thread"
         }
@@ -7471,6 +7491,16 @@
           "format": "uint64",
           "minimum": 0
         },
+        "history": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ThreadSnapshotHistory"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "sessionId": {
           "$ref": "#/$defs/SessionId"
         },
@@ -7487,6 +7517,16 @@
     "SessionThreadSubscribeResult": {
       "type": "object",
       "properties": {
+        "history": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ThreadHistoryBoundary"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "thread": {
           "$ref": "#/$defs/Thread"
         },
@@ -9035,6 +9075,28 @@
         }
       ]
     },
+    "ThreadHistoryBoundary": {
+      "description": "Describes whether a bounded Thread snapshot has older durable Turns available.",
+      "type": "object",
+      "properties": {
+        "hasOlderTurns": {
+          "type": "boolean"
+        },
+        "oldestTurnId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TurnId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "hasOlderTurns"
+      ]
+    },
     "ThreadId": {
       "description": "Stable identity for one independently ordered Agent execution branch.",
       "type": "string",
@@ -9290,6 +9352,29 @@
             "parentThreadId",
             "parentSequence",
             "beforeTurnId"
+          ]
+        }
+      ]
+    },
+    "ThreadSnapshotHistory": {
+      "description": "Selects how much durable Turn history is included in a Thread snapshot.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "turnLimit": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            },
+            "type": {
+              "type": "string",
+              "const": "latest"
+            }
+          },
+          "required": [
+            "type",
+            "turnLimit"
           ]
         }
       ]

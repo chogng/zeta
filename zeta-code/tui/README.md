@@ -18,7 +18,8 @@ Tool、approval policy 或 persistence。
 ## 当前能力
 
 - 启动时创建一个 product Session 和 root Thread；
-- 单行文本 composer，支持 typing、Unicode-safe cursor/editing 与 bracketed paste；超过 1000
+- 最多显示六行正文的多行 composer，支持 typing、Unicode-safe cursor/editing、Shift/Alt-Enter
+  换行、按行 Home/End/Up/Down、Unicode display-cell 软换行与 bracketed paste；超过 1000
   个 Unicode scalar value 的 paste 会显示为原子占位符，并只在提交时展开；
 - 粘贴 PNG/JPEG/GIF/WEBP 本地文件路径时立即读取最多 16 MiB 的图片，显示可原子编辑的
   `[Image #N]` 占位符，并以结构化图片项提交；
@@ -37,7 +38,7 @@ Tool、approval policy 或 persistence。
   large-paste placeholder；product command 明确拒绝 image arguments；
 - command popup 只注册已有真实执行流的 built-ins：`/status`、`/skills`、`/mcp`、`/resume`、
   `/thread`、`/archive-thread`、`/archive-session`、`/rewind`、`/clear`、`/config`、`/files`、
-  `/fork`、`/help`、`/model`、`/theme`、`/new`、`/quit` 与 `/exit`；
+  `/fork`、`/help`、`/copy`、`/export`、`/model`、`/theme`、`/new`、`/quit` 与 `/exit`；
 - `/help` 使用保留 composer 的 interaction view stack 打开 Commands/Keys 双 Tab selection
   surface；Space 进入搜索模式，左右键或 Tab/BackTab 循环切页、上下键循环选择，以及 Esc/Ctrl-C
   返回 composer；
@@ -59,7 +60,8 @@ Tool、approval policy 或 persistence。
   [`zeta-slash-commands`](../../zeta-rs/slash-commands/README.md) 与 built-ins 做防冲突合并；
   server-advertised command 保留 `/name`、inline text/image/large-paste 参数并作为普通 Turn
   input 提交；slash popup 不清空或铺设独立背景，透明继承当前 TUI 主题 surface，选中项使用候选 highlight 色粗体且不添加行首标记；
-- Enter 按 composer 顺序提交由 text/image items 组成的 Turn；
+- Enter 按 composer 顺序提交由 text/image items 组成的 Turn；active Turn 执行期间仍可编辑并提交
+  follow-up，Core 的 per-Thread mailbox 按接受顺序串行执行这些 Turn；
 - 启动及 `/new`、`/fork`、`/resume`、`/rewind` 后维护 active Thread subscription；typed update 按
   Session/Thread scope 和 durable sequence 过滤，并通过 `session/thread/read` 触发权威 snapshot
   resync，不在 TUI 内复制 Thread reducer；
@@ -74,13 +76,18 @@ Tool、approval policy 或 persistence。
   App Server 选中的、声明对应 capability 且订阅该 Thread 的 connection 能 resolve。交互不可用
   Esc 关闭，但可 Ctrl-C interrupt；deadline 由 App Server 执行并投影为稳定 Turn failure；
 - composer 保存最近 100 条纯文本提交，Up/Down 可召回并恢复原 draft；transcript 支持
-  PageUp/PageDown 与 Ctrl-Home/Ctrl-End；
+  PageUp/PageDown 与 Ctrl-Home/Ctrl-End。初始 Thread snapshot 只读取最近 50 个 Turn，Ctrl-Home
+  每次扩展 50 个 Turn 的连续历史窗口；
+- `/copy` 或 Ctrl-O 把最后一条 Agent response 写入系统剪贴板；`/export [relative-path]` 以
+  Markdown 导出当前已加载的 transcript history window，路径限制在 workspace 内且绝不覆盖已有文件；
 - 顶部显示低干扰的运行状态；composer 上方右对齐显示 preferred model、workspace 与 typed Git
   branch/dirty state，并按宽度降级；composer 只使用上下两条浅灰分隔线，footer 只包含下一步操作；
 - Ctrl-C 或 Ctrl-D（空输入）在 idle 时退出，active 时请求 interrupt；单次 Esc 在根界面保持
   inert，连续两次 Esc 打开 Rewind Pane；
 - Unix `SIGINT`/`SIGTERM` 进入同一个 event loop 退出路径，确保 watcher 重启和 host termination
   仍执行 session shutdown 与 terminal RAII cleanup；
+- Ctrl-Z 在 Unix 上先恢复 mouse/bracketed-paste/alternate-screen/raw-mode，再发送 `SIGTSTP`；
+  `fg` 恢复后按原顺序重新获取所有 terminal mode 并清屏重绘；
 - raw mode、alternate screen、bracketed paste、mouse capture 与 cursor cleanup；
 - 启动时通过 `zeta-theme` 读取共享用户主题；chrome 投影 accent/error/success/warning/muted/highlight，
   Theme Pane preview 投影有限的 syntax/diff token，并按 TrueColor、ANSI-256、ANSI-16 或
@@ -175,7 +182,8 @@ src/
 │   ├── status_line/               # model/workspace model and pure view
 │   └── workspace_files/           # bounded async file-search runtime
 ├── host/
-│   └── clipboard.rs               # native file/RGBA clipboard adapter
+│   ├── clipboard.rs               # native text output plus file/RGBA image input
+│   └── transcript_export.rs       # workspace-bounded, no-overwrite Markdown export
 ├── terminal/
 │   ├── session.rs                 # transactional terminal acquisition and RAII restore
 │   └── terminal_probe.rs          # bounded OSC query before the crossterm event reader starts
@@ -192,7 +200,7 @@ src/
 | Symbol | 可见性 | 当前职责 | 方向约束 |
 | --- | --- | --- | --- |
 | `App` | crate-private | presentation `Status`、feature/局部交互协调和单写者 state transition | 不保存 worker/channel、不复制 feature state 或编辑器细节 |
-| `AppCommand` | crate-private | execute/quit/interrupt/clipboard/skill/Turn 的 typed side-effect intent | 只描述待执行行为，不携带任意闭包或执行 I/O |
+| `AppCommand` | crate-private | execute/quit/interrupt/suspend/copy/export/history/skill/Turn 的 typed side-effect intent | 只描述待执行行为，不携带任意闭包或执行 I/O |
 | `AppEvent` | crate-private | config、clipboard、file search、Thread/Turn 与 product command 的已完成事实 | 只能由 `App::update` 改变 presentation state |
 | `TurnActivity` | crate-private | canonical Turn status 到 Working/waiting/Cancelling presentation state 的窄映射 | 不复制完整 Turn reducer |
 | `ThreadFeatureState` | crate-private | active canonical `Thread` snapshot、transcript projection 与本地 optimistic/diagnostic overlay | 下一份 snapshot 替换 projection；不执行 RPC、不复制 product reducer |
@@ -210,14 +218,15 @@ src/
 | `client::RequestTask<T>` | crate-private | 在独立 worker 执行一个 typed request 并以单槽 completion 非阻塞回投 | 不修改 `App`、不解释领域结果 |
 | `app::request_completion` | private module | 校验 request scope、安装 subscription/snapshot 并把 typed completion 映射为 `AppEvent` | 不执行 renderer、不复制 reducer |
 | `client::map_event` / `ClientEvent` | crate-private | 把共享 connection event 映射为 agent request、skills/Git changed、Thread update 与 connection failure | 不保存 transport、不应用 projection |
-| `ThreadSubscription` | crate-private | 分开维护 durable sequence 与 stream-instance cursor，分类 duplicate/gap/runtime switch 并请求 snapshot resync | 不应用 `ThreadEvent` reducer、不保存 transient projection |
+| `ThreadSubscription` | crate-private | 分开维护 durable sequence、stream-instance cursor 与连续 history Turn window，分类 duplicate/gap/runtime switch 并请求 bounded snapshot resync | 不应用 `ThreadEvent` reducer、不保存 transient projection |
 | `features::interactions` | crate-private | full agent request → approval/user-input view state → exact typed response | 不决定 policy、不选择 owner、不支持未声明的 dynamic Tool |
 | `InteractionPane` | crate-private | 保留 composer、拥有 temporary view stack，并把 key/paste 路由到 active view 或 composer | 不保存 Plugin/Session 等产品 feature 状态 |
 | `components::selection::SelectionViewState` | crate-private | 可配置 tabs/search/titled preview、Space search mode、过滤索引、候选 presentation highlight、选择与循环导航 | 不执行 action、不依赖产品 ID 或 App Server |
 | `components::selection::draw` | crate-private | generic title/tabs/search/items、可配置间距的水平分隔 preview、caption/footer Ratatui surface | 只读 selection state、不解释产品 action |
-| `ChatComposer` | private | blank/trim/submit、paste routing、slash completion application、参数结构化与 local dispatch | 不自行实现 slash grammar，不拥有 cursor、Vim state 或 RPC |
+| `ChatComposer` | private | blank/trim/submit、多行换行、paste routing、slash completion application、参数结构化与 local dispatch | 不自行实现 slash grammar，不拥有 cursor、Vim state 或 RPC |
 | `Attachments` | private | 图片 bytes/path、data URL 与原子占位符绑定、删除后重新编号 | 不直接读取系统 clipboard、不发 RPC、不渲染 |
 | `host::clipboard::read_image` | crate-private | 从本机 clipboard 文件列表/RGBA image 读取并统一编码 PNG | 不改变 composer、不发 RPC、不持久化临时文件 |
+| `host::clipboard::write_text` / `host::transcript_export::write` | crate-private | command-based response copy 与 workspace-bounded Markdown export | 不拥有 transcript、不覆盖文件、不实现任意屏幕文本 selection |
 | `FileSearchManager` | crate-private | event loop 持有的 workspace search runtime；非阻塞 drain snapshot 并丢弃旧 query 结果 | 不进入 `App` state、不解析输入、不保存 popup state |
 | `Mentions` / `MentionPopup` | private | `@token` query/range、异步结果应用、选择/关闭和原子路径补全 | 不扫描 workspace、不拥有 worker、不构造结构化 app/plugin Mention |
 | `PendingPastes` | private | 超过 1000 字符的 text-paste payload、唯一占位符与提交时展开 | 不识别或保存图片，不解释 slash、不渲染、不直接提交 |
@@ -225,9 +234,9 @@ src/
 | `zeta_slash_commands::{SlashCommandInput,SlashCommandCatalog}` | shared public types | 统一输入 grammar，并合并 built-in 与 server metadata | TUI 不重新校验名称、不执行 App Server operation |
 | `SlashCommandInvocation` | crate-private | command identity、trimmed display arguments 与有序 text/image argument items | 不执行 RPC |
 | `features::sessions::ActiveConversation` | crate-private | 当前 Session/Thread identity、sequence 与 typed create/fork/resume/rewind/archive lifecycle | 不解析 composer text、不更新 `App`、不拥有 App Server |
-| `TextArea` | private | UTF-8 buffer、byte-safe cursor、原子元素 insert/delete/movement 与局部 keymap 扩展边界 | 不保存 paste payload，不解释 Enter submission 或 slash command；当前不承诺 Vim mode |
+| `TextArea` | private | UTF-8 多行 buffer、byte-safe line/cursor movement、原子元素 insert/delete 与局部 keymap 扩展边界 | 不保存 paste payload，不解释 Enter submission 或 slash command；当前不承诺 Vim mode |
 | `features::thread::submit_prompt` | private | 从显式 `ThreadRequestScope` build typed `session/request` `StartTurn` operation 并返回 typed result | 不引用或更新 `App`、不手写 method string/JSON |
-| `app::request_completion::apply_thread_snapshot` | private | 安装 canonical snapshot、恢复最新 nonterminal Turn 并协调 presentation mapping | 不 drain notification；snapshot 是 authoritative UI source |
+| `app::request_completion::apply_thread_snapshot` | private | 安装 canonical snapshot、恢复最早 nonterminal Turn 作为执行队首并协调 presentation mapping | 不 drain notification；snapshot 是 authoritative UI source |
 | `features::thread::interrupt_turn` | private | 从显式 scope 执行 typed Turn interrupt 并返回结果 | 不引用或更新 `App` |
 | `app::apply_active_turn_snapshot` | test-visible | canonical Turn presentation outcome → `AppEvent` | 不从 log/text 猜 terminal state |
 | `present_turn_error` | private | stable Turn error code → user-facing recovery message | 不显示 Rust Debug/provider secret |
@@ -314,7 +323,7 @@ base64 data URL，避免提交时路径失效。占位符绑定到稳定 `TextEl
 `Ctrl-V` 是独立的 clipboard-image intent，不依赖 terminal `Event::Paste` 是否能携带位图。
 adapter 优先读取 clipboard file list 中可解码的图片，否则读取 RGBA image data，并统一编码为
 PNG bytes；`App` 再把 bytes 交给 `Attachments`，因此系统剪贴板和本地路径共享大小校验、
-占位符绑定、删除和提交语义。active Turn 期间该快捷键被忽略。
+占位符绑定、删除和提交语义。active Turn 期间同样可把图片加入 follow-up draft。
 
 该实现会让 data URL 进入 command receipt 与 durable Thread history，snapshot/store 体积随图片
 增长；当前 16 MiB 上限是保护边界。若产品接受 durable resource/blob 能力，长期替代方案必须由
@@ -360,7 +369,8 @@ registry，不显示占位提示，也不转成普通 prompt 冒充成功。
 
 ## 快照→ UI 映射
 
-`apply_active_turn_snapshot` 只观察当前 `active_turn`：
+`apply_active_turn_snapshot` 观察当前执行队首；队首进入 terminal state 后选择最早的下一个
+non-terminal Turn，因此 follow-up queue 不会把 interrupt/status 错绑到队尾：
 
 | Canonical `TurnStatus` | UI effect |
 | --- | --- |
@@ -390,6 +400,7 @@ transient 永远不决定 completed/failed/interrupted。
 ```text
 Ready / Error
 ├─ Enter(non-empty) → Submit → Working
+├─ Shift/Alt-Enter 或 Ctrl-J → insert newline
 ├─ Enter(/quit or /exit) → Quit
 ├─ Enter(其他 built-in command) → structured invocation → typed command dispatcher
 ├─ Enter(server dynamic command) → preserve /name + ordered arguments → Submit
@@ -401,7 +412,8 @@ Ready / Error
 
 Working / Waiting*
 ├─ Esc / Ctrl-C / empty Ctrl-D → Interrupt → Cancelling
-└─ typing/paste/second submit ignored
+├─ Working: typing/paste/editing accepted；Enter → queue follow-up Turn
+└─ Waiting*: owner-directed interaction Pane owns input until resolved/interrupted
 
 Cancelling
 └─ further quit/interrupt keys ignored until snapshot terminal state
@@ -439,14 +451,18 @@ cleanup 是幂等的；显式 restore 后 guard Drop 不会重复发出控制操
 Drop 路径的刻意选择，避免 panic during unwind。新增 terminal capability 时必须同时更新
 acquisition flag、reverse cleanup 和 `session_tests.rs` 的 partial-failure case。
 
+Ctrl-Z 复用同一个 `restore → SIGTSTP → reacquire` 生命周期；reacquire 任一步失败时再次逆序
+回滚已经恢复的 mode，避免 `fg` 后留下半初始化 terminal。
+
 ## 渲染
 
-当前 layout 在 composer 模式是固定四段：
+当前 layout 在 composer 模式是底部锚定的四段：
 
 1. expandable、无外框的 transcript；空会话显示由 `components::welcome` 拥有的 responsive
    Welcome Banner，宽终端使用双栏，窄终端降级为单栏；
 2. 一行右对齐 status line，显示现有接口提供的 model/workspace/Git context；
-3. 三行 composer：上下浅灰水平线，中间一行以浅灰 `❯` 开始；
+3. 三至八行 composer：上下浅灰水平线，正文随逻辑行增长、最多显示六行，首行以浅灰 `❯`
+   开始；超过可见高度时跟随光标纵向滚动；
 4. 一行 recovery/help footer。
 
 所有 interaction surface 都以 terminal 底部为锚点：composer/footer 固定在底部，slash/mention
@@ -501,7 +517,7 @@ cursor filtering、range completion、bare/inline submission、dynamic metadata�
 structured text/image/paste arguments、popup render/mouse hit testing 与 local quit dispatch、Unicode
 Thread notification decode、active scope/sequence resync 判定、
 并覆盖游标/编辑、在游标处粘贴、大段粘贴占位符展开/绑定/删除、退出/中断、
-keyboard semantics、duplicate interrupt suppression、图片路径识别/占位符删除重编号/结构化提交、input lock、
+keyboard semantics、duplicate interrupt suppression、active-Turn follow-up queue、图片路径识别/占位符删除重编号/结构化提交、多行编辑、
 canonical Thread snapshot 替换 optimistic transcript、snapshot identity/sequence 保留、完整
 ThreadItem projection、transient identity/UTF-8/容量上限、stream duplicate/gap/runtime switch、
 response lifecycle/error/interrupted transitions、interaction view 的
@@ -509,14 +525,15 @@ composer 保留、tabs wrap/左右循环切换、
 approval 与多问题 option/free-form user input、blocked Esc/Ctrl-C semantics、搜索过滤/选择修复、
 selection render，以及 snapshot
 terminal/wait/resume mapping，以及 transcript chrome、error 去重、role
-label/Unicode/zero-width wrapping、scroll/history，以及 status-line Git/长短值降级、Unicode-safe truncation 和
-composer 上方的右对齐渲染，以及 terminal mode acquisition failure、逆序 rollback 与幂等
+label/Unicode/zero-width wrapping、bounded scroll/history window、copy/export，以及 status-line Git/长短值降级、Unicode-safe truncation 和
+composer 上方的右对齐渲染，以及 terminal mode acquisition failure、逆序 rollback、suspend/reacquire 与幂等
 restore；还覆盖 request task 非阻塞 completion、request intent 保序、Session/Thread picker/archive、
 workspace directory/preview 和 interaction deadline。
 
 Render tests 使用 Ratatui `TestBackend` 固定 empty/error surface，transcript component tests
 固定 row estimation；命令行状态测试是通过依据，没有截图/像素基线。完整 fake-transport `run`
 event-loop integration 可以继续加强当前 embedded 路径，但 remote reconnect trace、Native
-Markdown/diff/table、selection/copy 和完整 pointer parity 都不是当前 TUI 验收项。产品要求与
+Markdown/diff/table、任意鼠标文本框选和完整 pointer parity 都不是当前 TUI 验收项；命令式
+copy/export 已由 TUI host adapter 提供。产品要求与
 owner 判断以 [`docs/tui.md`](../../docs/tui.md#17-已接受的架构迁移顺序) 和
 [`docs/product-lines.md`](../../docs/product-lines.md) 为准。
