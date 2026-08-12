@@ -21,7 +21,7 @@ pub const fn supports_stored_event_schema_version(schema_version: u32) -> bool {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct EventId(pub String);
 
-/// Unix timestamp in nanoseconds attached to a persisted Thread history record.
+/// Unix timestamp in milliseconds attached to a persisted Thread history record.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct Timestamp(pub u128);
 

@@ -1,3 +1,4 @@
+use super::request::require_history_boundary;
 use std::collections::BTreeMap;
 use zeta_app_server_client::AppServerClient;
 use zeta_app_server_client::ClientError;
@@ -82,14 +83,16 @@ impl ThreadSubscription {
                     turn_limit: HISTORY_PAGE_TURNS,
                 }),
             })?;
-            (read.thread, read.history)
+            let boundary = require_history_boundary(read.history)?;
+            (read.thread, boundary)
         } else {
-            (result.thread, result.history)
+            let boundary = require_history_boundary(result.history)?;
+            (result.thread, boundary)
         };
         validate_snapshot_scope(&snapshot, session_id, thread_id)?;
 
         Ok((
-            Self::from_snapshot_with_boundary(&snapshot, HISTORY_PAGE_TURNS, boundary),
+            Self::from_snapshot_with_boundary(&snapshot, HISTORY_PAGE_TURNS, Some(boundary)),
             snapshot,
         ))
     }
@@ -110,11 +113,12 @@ impl ThreadSubscription {
                 history: Some(self.history()),
             })?;
             let snapshot = result.thread;
+            let boundary = require_history_boundary(result.history)?;
             validate_snapshot_scope(&snapshot, session_id, thread_id)?;
             *self = Self::from_snapshot_with_boundary(
                 &snapshot,
                 self.history_turn_limit,
-                result.history,
+                Some(boundary),
             );
             return Ok(ThreadSwitch::Complete { snapshot });
         }
@@ -187,6 +191,20 @@ impl ThreadSubscription {
         }
     }
 
+    /// Applies the cursor and sequence returned with a latest-history snapshot.
+    pub(crate) fn apply_latest_snapshot(
+        &mut self,
+        snapshot: &Thread,
+        boundary: ThreadHistoryBoundary,
+    ) {
+        self.confirm_sequence(snapshot.sequence);
+        self.oldest_turn_id = boundary
+            .oldest_turn_id
+            .clone()
+            .or_else(|| snapshot.turns.first().map(|turn| turn.turn_id.clone()));
+        self.has_older_turns = boundary.has_older_turns;
+    }
+
     pub(crate) fn older_history(&self) -> Option<ThreadSnapshotHistory> {
         self.has_older_turns
             .then(|| self.oldest_turn_id.clone())
@@ -200,17 +218,17 @@ impl ThreadSubscription {
     pub(crate) fn apply_history_page(
         &mut self,
         snapshot: &Thread,
-        boundary: Option<ThreadHistoryBoundary>,
+        boundary: ThreadHistoryBoundary,
     ) {
         self.history_turn_limit = self
             .history_turn_limit
             .saturating_add(snapshot.turns.len() as u32)
             .min(MAX_THREAD_SNAPSHOT_TURNS);
         self.oldest_turn_id = boundary
-            .as_ref()
-            .and_then(|history| history.oldest_turn_id.clone())
+            .oldest_turn_id
+            .clone()
             .or_else(|| snapshot.turns.first().map(|turn| turn.turn_id.clone()));
-        self.has_older_turns = boundary.is_some_and(|history| history.has_older_turns);
+        self.has_older_turns = boundary.has_older_turns;
     }
 
     #[cfg(test)]

@@ -19,6 +19,9 @@ use zeta_protocol::ThreadId;
 use zeta_protocol::ThreadStatus;
 use zeta_protocol::ThreadUpdate;
 use zeta_protocol::ThreadUpdateEnvelope;
+use zeta_protocol::Turn;
+use zeta_protocol::TurnId;
+use zeta_protocol::TurnStatus;
 
 #[derive(Clone)]
 struct RecordingTransport {
@@ -100,6 +103,68 @@ fn older_history_uses_the_server_turn_cursor() {
             turn_id: oldest_turn_id,
             turn_limit: HISTORY_PAGE_TURNS,
         })
+    );
+}
+
+#[test]
+fn latest_snapshot_replaces_a_stale_history_boundary() {
+    let mut initial = thread("session-1", "thread-1", 4);
+    initial.turns = vec![turn("turn-50")];
+    let mut subscription = ThreadSubscription::from_snapshot_with_boundary(
+        &initial,
+        HISTORY_PAGE_TURNS,
+        Some(ThreadHistoryBoundary {
+            has_older_turns: false,
+            oldest_turn_id: Some(TurnId::new("turn-50").unwrap()),
+        }),
+    );
+    assert_eq!(subscription.older_history(), None);
+
+    let mut refreshed = thread("session-1", "thread-1", 5);
+    refreshed.turns = vec![turn("turn-51")];
+    let oldest_turn_id = TurnId::new("turn-51").unwrap();
+    subscription.apply_latest_snapshot(
+        &refreshed,
+        ThreadHistoryBoundary {
+            has_older_turns: true,
+            oldest_turn_id: Some(oldest_turn_id.clone()),
+        },
+    );
+
+    assert_eq!(
+        subscription.older_history(),
+        Some(ThreadSnapshotHistory::Before {
+            turn_id: oldest_turn_id,
+            turn_limit: HISTORY_PAGE_TURNS,
+        })
+    );
+}
+
+#[test]
+fn older_page_does_not_confirm_durable_state_missing_from_the_page() {
+    let snapshot = thread("session-1", "thread-1", 4);
+    let mut subscription = ThreadSubscription::from_snapshot_with_boundary(
+        &snapshot,
+        HISTORY_PAGE_TURNS,
+        Some(ThreadHistoryBoundary {
+            has_older_turns: true,
+            oldest_turn_id: Some(TurnId::new("turn-50").unwrap()),
+        }),
+    );
+    let mut older_page = thread("session-1", "thread-1", 7);
+    older_page.turns = vec![turn("turn-1")];
+
+    subscription.apply_history_page(
+        &older_page,
+        ThreadHistoryBoundary {
+            has_older_turns: false,
+            oldest_turn_id: Some(TurnId::new("turn-1").unwrap()),
+        },
+    );
+
+    assert_eq!(
+        subscription.classify_update(&update("session-1", "thread-1", 5)),
+        ThreadUpdateDisposition::RefreshSnapshot
     );
 }
 
@@ -212,7 +277,11 @@ fn switching_threads_unsubscribes_the_previous_session_and_thread() {
             serde_json::json!({
                 "jsonrpc": "2.0",
                 "id": 1,
-                "result": { "thread": next, "updates": [] }
+                "result": {
+                    "thread": next,
+                    "updates": [],
+                    "history": { "hasOlderTurns": false, "oldestTurnId": null }
+                }
             })
             .to_string(),
             serde_json::json!({ "jsonrpc": "2.0", "id": 2, "result": null }).to_string(),
@@ -237,6 +306,30 @@ fn switching_threads_unsubscribes_the_previous_session_and_thread() {
     assert_eq!(requests[1]["params"]["threadId"], "thread-1");
 }
 
+#[test]
+fn bounded_snapshot_without_a_history_boundary_is_rejected() {
+    let snapshot = thread("session-1", "thread-1", 4);
+    let mut client = AppServerClient::new(RecordingTransport {
+        responses: VecDeque::from([serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "result": { "thread": snapshot.clone() }
+        })
+        .to_string()]),
+        requests: Arc::new(Mutex::new(Vec::new())),
+    });
+    let mut subscription = ThreadSubscription::from_snapshot(&snapshot, HISTORY_PAGE_TURNS);
+
+    assert!(matches!(
+        subscription.switch(
+            &mut client,
+            &SessionId::new("session-1").unwrap(),
+            &ThreadId::new("thread-1").unwrap(),
+        ),
+        Err(ClientError::Protocol(message)) if message.contains("history boundary")
+    ));
+}
+
 fn thread(session_id: &str, thread_id: &str, sequence: u64) -> Thread {
     Thread {
         session_id: SessionId::new(session_id).unwrap(),
@@ -245,6 +338,17 @@ fn thread(session_id: &str, thread_id: &str, sequence: u64) -> Thread {
         status: ThreadStatus::Active,
         sequence,
         turns: Vec::new(),
+    }
+}
+
+fn turn(turn_id: &str) -> Turn {
+    Turn {
+        turn_id: TurnId::new(turn_id).unwrap(),
+        status: TurnStatus::Completed,
+        model: None,
+        items: Vec::new(),
+        pending_interaction: None,
+        error: None,
     }
 }
 

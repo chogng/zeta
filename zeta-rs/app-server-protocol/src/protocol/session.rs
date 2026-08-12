@@ -134,6 +134,9 @@ pub enum ThreadSnapshotHistory {
         turn_limit: u32,
     },
     /// Selects a bounded page of Turns older than the supplied durable Turn identity.
+    ///
+    /// The returned Thread sequence still describes the aggregate at read time. It does not mean
+    /// that the older page contains or confirms every Turn represented by that sequence.
     Before {
         turn_id: TurnId,
         turn_limit: u32,
@@ -209,6 +212,7 @@ pub struct SessionThreadResult {
 #[serde(rename_all = "camelCase")]
 pub struct SessionThreadReadResult {
     pub thread: Thread,
+    /// Present whenever the request selected bounded history.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub history: Option<ThreadHistoryBoundary>,

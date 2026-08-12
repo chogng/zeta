@@ -7442,6 +7442,7 @@
       "type": "object",
       "properties": {
         "history": {
+          "description": "Present whenever the request selected bounded history.",
           "anyOf": [
             {
               "$ref": "#/$defs/ThreadHistoryBoundary"
@@ -9378,7 +9379,7 @@
           ]
         },
         {
-          "description": "Selects a bounded page of Turns older than the supplied durable Turn identity.",
+          "description": "Selects a bounded page of Turns older than the supplied durable Turn identity.\n\nThe returned Thread sequence still describes the aggregate at read time. It does not mean\nthat the older page contains or confirms every Turn represented by that sequence.",
           "type": "object",
           "properties": {
             "turnId": {

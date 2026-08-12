@@ -11,6 +11,7 @@ pub(crate) use presentation::evaluate_active_turn;
 #[cfg(test)]
 pub(crate) use presentation::present_turn_error;
 pub(crate) use presentation::recover_active_turn;
+pub(crate) use request::LatestThreadSnapshot;
 pub(crate) use request::OlderThreadHistoryPage;
 pub(crate) use request::ThreadRequestScope;
 pub(crate) use request::interrupt_turn;

@@ -69,8 +69,7 @@ zeta-history
 
 zeta-thread-store
   ├─ ThreadEventBatch
-  ├─ ThreadHistoryQuery / ThreadHistoryPage
-  └─ ThreadStore + append/page validation
+  └─ ThreadStore + append validation / full recovery
 
 zeta-core
   ├─ SessionCoordinator + Session reducer

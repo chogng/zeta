@@ -1,7 +1,7 @@
 # `zeta-history`
 
 > 本 README 解释模型历史与持久化 Thread record 的数据契约。Canonical `ThreadEvent` 语义见
-> [`docs/protocol.md`](../../docs/protocol.md)，查询与追加接口见
+> [`docs/protocol.md`](../../docs/protocol.md)，恢复与追加接口见
 > [`zeta-thread-store`](../thread-store/README.md)，物理 SQLite 映射见
 > [`zeta-storage`](../storage/README.md)。
 
@@ -14,7 +14,8 @@
 | --- | --- | --- |
 | 哪些事实可以持久化？ | `zeta-protocol::ThreadEvent` | ❌，只引用 canonical fact |
 | 事实落盘时携带哪些稳定元数据？ | `zeta-history` | ✅ |
-| 如何追加、分页和报告 sequence conflict？ | `zeta-thread-store` | ❌ |
+| 如何完整读取、追加和报告 sequence conflict？ | `zeta-thread-store` | ❌ |
+| 如何返回有界 Turn 窗口？ | Core projection / App Server | ❌ |
 | 如何写入 SQLite、提交事务和恢复？ | `zeta-storage` / `zeta-core` | ❌ |
 | 如何显示旧消息？ | App Server client / TUI | ❌ |
 
@@ -28,7 +29,7 @@ Thread Store。Zeta 仍只有一份 authoritative Thread stream。
 | `StoredEvent` | 一个 durable `ThreadEvent` 的 canonical envelope | 保留 thread、sequence、event ID、时间戳与可选 command receipt |
 | `ThreadCommandReceipt` | 被接受命令的 exact typed copy | 支持恢复后的幂等结果与同 ID/different payload 冲突检测 |
 | `EventId` | 单条历史记录 identity | 同一 stream 内不得重复 |
-| `Timestamp` | Unix nanoseconds | 只描述记录时间，不参与 aggregate ordering |
+| `Timestamp` | Unix milliseconds | 只描述记录时间，不参与 aggregate ordering |
 | `CURRENT_STORED_EVENT_SCHEMA_VERSION` | 新记录使用的 schema | writer 只产生 current version |
 | `MINIMUM_SUPPORTED_EVENT_SCHEMA_VERSION` | recovery 可接受的下界 | reducer 显式拒绝区间外版本 |
 | `supports_stored_event_schema_version` | 判断 persisted record 是否可读 | 读取兼容区间与新写 current version 分开 |
@@ -40,7 +41,7 @@ zeta-protocol::ThreadEvent
 zeta-core constructs StoredEvent
           │
           ▼
-zeta-thread-store validates append/query contract
+zeta-thread-store validates recovery/append contract
           │
           ▼
 zeta-storage serializes exact record to SQLite

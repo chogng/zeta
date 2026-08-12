@@ -100,6 +100,8 @@ connection-local update delivery。需要单独读取或追赶一个 child Threa
 `ThreadSnapshotHistory::Before { turnId, turnLimit }` 取得指定 durable Turn 之前的一页历史。两者的
 result 都通过 `ThreadHistoryBoundary` 明确报告是否仍有更早 Turn 以及当前页最老 Turn identity，
 因此客户端可以使用 durable Turn identity 继续向前翻页，而不需要自行保存或重建 Thread history。
+`Before` 页返回的 `Thread.sequence` 仍是读取时的聚合序号，不表示该旧页覆盖了这一序号对应的最新
+Turns；客户端不得用旧页确认 durable update cursor，也不得用旧页替换已加载的最新窗口。
 省略 history 保持完整 snapshot 语义，供 rewind、MCP Agent 等需要完整历史的调用方使用。subscribe
 的 durable gap 从返回 snapshot 的 sequence 之后开始，不重复传输已经包含在 snapshot 中的事件；
 省略 history 的 reconnect 调用仍从客户端提供的 `afterSequence` 返回完整 gap。

@@ -12,6 +12,7 @@ use crate::features::sessions::ConversationTranscript;
 use crate::features::skills;
 use crate::features::skills::SkillSelectionView;
 use crate::features::thread::ActiveTurnUpdate;
+use crate::features::thread::LatestThreadSnapshot;
 use crate::features::thread::OlderThreadHistoryPage;
 use crate::features::thread::ThreadRequestScope;
 use crate::features::thread::ThreadSubscription;
@@ -48,11 +49,11 @@ pub(super) enum RequestCompletion {
         result: Result<config::PreferredModelUpdate, String>,
     },
     SkillsRefreshed(Result<SkillRequestCompletion, String>),
-    InteractionResolved(Result<Thread, ClientError>),
-    ThreadRefreshed(Result<Thread, ClientError>),
+    InteractionResolved(Result<LatestThreadSnapshot, ClientError>),
+    ThreadRefreshed(Result<LatestThreadSnapshot, ClientError>),
     ThreadHistoryPage(Result<OlderThreadHistoryPage, ClientError>),
-    TurnInterrupted(Result<Thread, ClientError>),
-    TurnStarted(Result<(TurnStartResult, Thread), ClientError>),
+    TurnInterrupted(Result<LatestThreadSnapshot, ClientError>),
+    TurnStarted(Result<(TurnStartResult, LatestThreadSnapshot), ClientError>),
 }
 
 pub(super) struct ConversationRequestCompletion {
@@ -96,7 +97,7 @@ pub(super) fn resolve_interaction_and_read(
     scope: ThreadRequestScope,
     response: InteractionResponse,
     history: ThreadSnapshotHistory,
-) -> Result<Thread, ClientError> {
+) -> Result<LatestThreadSnapshot, ClientError> {
     let session_id = scope.session_id().clone();
     let thread_id = scope.thread_id().clone();
     resolve_interaction(
@@ -114,7 +115,7 @@ pub(super) fn interrupt_and_read(
     scope: ThreadRequestScope,
     turn_id: TurnId,
     history: ThreadSnapshotHistory,
-) -> Result<Thread, ClientError> {
+) -> Result<LatestThreadSnapshot, ClientError> {
     let session_id = scope.session_id().clone();
     let thread_id = scope.thread_id().clone();
     interrupt_turn(&mut client, scope, &turn_id)?;
@@ -126,7 +127,7 @@ pub(super) fn start_turn_and_read(
     scope: ThreadRequestScope,
     submission: ComposerSubmission,
     history: ThreadSnapshotHistory,
-) -> Result<(TurnStartResult, Thread), ClientError> {
+) -> Result<(TurnStartResult, LatestThreadSnapshot), ClientError> {
     let session_id = scope.session_id().clone();
     let thread_id = scope.thread_id().clone();
     let start = submit_prompt(&mut client, scope, submission)?;
@@ -265,41 +266,41 @@ pub(super) fn apply_request_completion(
             }
         }
         RequestCompletion::TurnStarted(Ok((start, snapshot))) => {
-            conversation.set_thread_sequence(snapshot.sequence.max(start.sequence));
-            thread_subscription.confirm_sequence(snapshot.sequence);
+            conversation.set_thread_sequence(snapshot.thread.sequence.max(start.sequence));
+            thread_subscription.apply_latest_snapshot(&snapshot.thread, snapshot.boundary);
             if active_turn.is_none() {
                 *active_turn = Some(start.turn_id);
             }
-            apply_thread_snapshot(app, active_turn, snapshot);
+            apply_thread_snapshot(app, active_turn, snapshot.thread);
         }
         RequestCompletion::TurnStarted(Err(error)) => {
             report_turn_start_failure(app, active_turn, error.to_string());
         }
         RequestCompletion::InteractionResolved(Ok(snapshot)) => {
-            conversation.set_thread_sequence(snapshot.sequence);
-            thread_subscription.confirm_sequence(snapshot.sequence);
+            conversation.set_thread_sequence(snapshot.thread.sequence);
+            thread_subscription.apply_latest_snapshot(&snapshot.thread, snapshot.boundary);
             app.update(AppEvent::SelectionViewClosed);
-            apply_thread_snapshot(app, active_turn, snapshot);
+            apply_thread_snapshot(app, active_turn, snapshot.thread);
         }
         RequestCompletion::InteractionResolved(Err(error)) => {
             app.update(AppEvent::FailureReported(error.to_string()));
         }
         RequestCompletion::ThreadRefreshed(Ok(snapshot)) => {
-            if snapshot.session_id != *conversation.session_id()
-                || snapshot.thread_id != *conversation.thread_id()
+            if snapshot.thread.session_id != *conversation.session_id()
+                || snapshot.thread.thread_id != *conversation.thread_id()
             {
                 app.update(AppEvent::FailureReported(format!(
                     "session/thread/read returned snapshot for {}/{}; expected {}/{}",
-                    snapshot.session_id,
-                    snapshot.thread_id,
+                    snapshot.thread.session_id,
+                    snapshot.thread.thread_id,
                     conversation.session_id(),
                     conversation.thread_id()
                 )));
                 return;
             }
-            conversation.set_thread_sequence(snapshot.sequence);
-            thread_subscription.confirm_sequence(snapshot.sequence);
-            apply_thread_snapshot(app, active_turn, snapshot);
+            conversation.set_thread_sequence(snapshot.thread.sequence);
+            thread_subscription.apply_latest_snapshot(&snapshot.thread, snapshot.boundary);
+            apply_thread_snapshot(app, active_turn, snapshot.thread);
         }
         RequestCompletion::ThreadHistoryPage(Ok(page)) => {
             if page.thread.session_id != *conversation.session_id()
@@ -314,8 +315,6 @@ pub(super) fn apply_request_completion(
                 )));
                 return;
             }
-            conversation.set_thread_sequence(page.thread.sequence);
-            thread_subscription.confirm_sequence(page.thread.sequence);
             thread_subscription.apply_history_page(&page.thread, page.boundary);
             app.update(AppEvent::ThreadHistoryPageReceived(page.thread));
         }
@@ -326,9 +325,9 @@ pub(super) fn apply_request_completion(
             app.update(AppEvent::FailureReported(error.to_string()));
         }
         RequestCompletion::TurnInterrupted(Ok(snapshot)) => {
-            conversation.set_thread_sequence(snapshot.sequence);
-            thread_subscription.confirm_sequence(snapshot.sequence);
-            apply_thread_snapshot(app, active_turn, snapshot);
+            conversation.set_thread_sequence(snapshot.thread.sequence);
+            thread_subscription.apply_latest_snapshot(&snapshot.thread, snapshot.boundary);
+            apply_thread_snapshot(app, active_turn, snapshot.thread);
         }
         RequestCompletion::TurnInterrupted(Err(error)) => {
             app.update(AppEvent::InterruptFailed(error.to_string()));

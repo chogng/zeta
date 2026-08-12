@@ -76,7 +76,7 @@ serde / serde_json / schemars / ts-rs
 | `zeta-core` | reducer 输入、projection、execution intent | actor message、policy、effect、recovery |
 | `zeta-session-store` | 持久化 `SessionEvent` | sequence、timestamp、receipt envelope |
 | `zeta-history` | 为 `ThreadEvent` 定义 persisted record envelope | Store、SQLite、reducer、UI history |
-| `zeta-thread-store` | 追加和分页 `zeta_history::StoredEvent` | record serde shape、SQLite、reducer |
+| `zeta-thread-store` | 完整读取和追加 `zeta_history::StoredEvent` | record serde shape、SQLite、reducer、UI Turn page |
 | `zeta-api` | canonical model value 与 provider wire 互转 | HTTP DTO、header、endpoint |
 | `zeta-model-provider` | model catalog 与 invocation request/response | transport、credential、retry |
 | `zeta-app-server-protocol` | 机械复用 canonical view/update | JSON-RPC params、result、method registry |

@@ -54,6 +54,7 @@ fn older_history_page_is_merged_before_the_loaded_snapshot() {
     state.update(ThreadPresentationEvent::SnapshotReceived(current.clone()));
     let older_turn_id = TurnId::new("turn_0").unwrap();
     state.update(ThreadPresentationEvent::HistoryPageReceived(Thread {
+        sequence: 99,
         turns: vec![Turn {
             turn_id: older_turn_id.clone(),
             status: TurnStatus::Completed,
@@ -70,10 +71,56 @@ fn older_history_page_is_merged_before_the_loaded_snapshot() {
     }));
 
     let snapshot = state.snapshot().unwrap();
+    assert_eq!(snapshot.sequence, 7);
     assert_eq!(snapshot.turns.len(), 2);
     assert_eq!(snapshot.turns[0].turn_id.as_str(), "turn_0");
     assert_eq!(snapshot.turns[1].turn_id.as_str(), "turn_1");
     assert_eq!(state.messages()[0].text, "older prompt");
+}
+
+#[test]
+fn older_history_page_preserves_the_active_transient_projection() {
+    let mut state = ThreadFeatureState::default();
+    let current = thread_snapshot();
+    state.update(ThreadPresentationEvent::SnapshotReceived(current.clone()));
+    let turn_id = TurnId::new("turn_stream").unwrap();
+    let item_id = ItemId::new("item_stream").unwrap();
+    state.update(ThreadPresentationEvent::TransientUpdateReceived(Box::new(
+        transient(ThreadUpdate::ItemDelta {
+            turn_id: turn_id.clone(),
+            item_id: item_id.clone(),
+            delta: zeta_protocol::ItemDelta::AgentMessage {
+                text: "stream".into(),
+            },
+        }),
+    )));
+
+    let older_turn_id = TurnId::new("turn_0").unwrap();
+    state.update(ThreadPresentationEvent::HistoryPageReceived(Thread {
+        turns: vec![Turn {
+            turn_id: older_turn_id.clone(),
+            status: TurnStatus::Completed,
+            model: None,
+            items: vec![ThreadItem::UserMessage {
+                item_id: ItemId::new("older_item").unwrap(),
+                turn_id: older_turn_id,
+                text: "older prompt".into(),
+            }],
+            pending_interaction: None,
+            error: None,
+        }],
+        ..current
+    }));
+    state.update(ThreadPresentationEvent::TransientUpdateReceived(Box::new(
+        transient(ThreadUpdate::ItemDelta {
+            turn_id,
+            item_id,
+            delta: zeta_protocol::ItemDelta::AgentMessage { text: "ing".into() },
+        }),
+    )));
+
+    assert_eq!(state.messages()[0].text, "older prompt");
+    assert_eq!(state.messages().last().unwrap().text, "streaming");
 }
 
 #[test]

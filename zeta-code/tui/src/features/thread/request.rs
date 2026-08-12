@@ -4,11 +4,12 @@ use crate::components::composer::ComposerSubmission;
 use zeta_app_server_client::AppServerClient;
 use zeta_app_server_client::ClientError;
 use zeta_app_server_client::JsonRpcTransport;
+use zeta_app_server_protocol::protocol::session::SessionRequest;
+use zeta_app_server_protocol::protocol::session::SessionRequestParams;
+use zeta_app_server_protocol::protocol::session::SessionRequestResult;
+use zeta_app_server_protocol::protocol::session::SessionThreadReadParams;
 use zeta_app_server_protocol::protocol::session::ThreadHistoryBoundary;
 use zeta_app_server_protocol::protocol::session::ThreadSnapshotHistory;
-use zeta_app_server_protocol::protocol::session::{
-    SessionRequest, SessionRequestParams, SessionRequestResult, SessionThreadReadParams,
-};
 use zeta_app_server_protocol::protocol::turn::InputItem;
 use zeta_app_server_protocol::protocol::turn::TurnInteractionResolveResult;
 use zeta_app_server_protocol::protocol::turn::TurnInterruptResult;
@@ -99,27 +100,35 @@ where
         .map(|result| result.thread)
 }
 
+pub(crate) struct LatestThreadSnapshot {
+    pub(crate) thread: Thread,
+    pub(crate) boundary: ThreadHistoryBoundary,
+}
+
 pub(crate) fn read_thread_history<T>(
     client: &mut AppServerClient<T>,
     session_id: &SessionId,
     thread_id: &ThreadId,
     history: ThreadSnapshotHistory,
-) -> Result<Thread, ClientError>
+) -> Result<LatestThreadSnapshot, ClientError>
 where
     T: JsonRpcTransport,
 {
-    client
-        .read_session_thread(SessionThreadReadParams {
-            session_id: session_id.clone(),
-            thread_id: thread_id.clone(),
-            history: Some(history),
-        })
-        .map(|result| result.thread)
+    let result = client.read_session_thread(SessionThreadReadParams {
+        session_id: session_id.clone(),
+        thread_id: thread_id.clone(),
+        history: Some(history),
+    })?;
+    let boundary = require_history_boundary(result.history)?;
+    Ok(LatestThreadSnapshot {
+        thread: result.thread,
+        boundary,
+    })
 }
 
 pub(crate) struct OlderThreadHistoryPage {
     pub(crate) thread: Thread,
-    pub(crate) boundary: Option<ThreadHistoryBoundary>,
+    pub(crate) boundary: ThreadHistoryBoundary,
 }
 
 pub(crate) fn read_older_thread_history<T>(
@@ -139,9 +148,18 @@ where
             turn_limit: 50,
         }),
     })?;
+    let boundary = require_history_boundary(result.history)?;
     Ok(OlderThreadHistoryPage {
         thread: result.thread,
-        boundary: result.history,
+        boundary,
+    })
+}
+
+pub(super) fn require_history_boundary(
+    boundary: Option<ThreadHistoryBoundary>,
+) -> Result<ThreadHistoryBoundary, ClientError> {
+    boundary.ok_or_else(|| {
+        ClientError::Protocol("bounded Thread snapshot omitted its history boundary".into())
     })
 }
 

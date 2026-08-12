@@ -287,7 +287,7 @@ Thread 的执行历史。不同 Thread 可并行，不受 Session sequence 阻�
 [`history/README.md`](../zeta-rs/history/README.md)。
 
 `zeta-session-store` 仍拥有 Session envelope；`zeta-thread-store` 拥有 storage-neutral Thread
-Store trait、分页/追加请求、atomic batch validator 与错误。Core 依赖 history 类型和这些 port，
+Store trait、完整恢复/追加请求、atomic batch validator 与错误。Core 依赖 history 类型和这些 port，
 不依赖本地文件实现。Store 细节分别见
 [`session-store/README.md`](../zeta-rs/session-store/README.md) 与
 [`thread-store/README.md`](../zeta-rs/thread-store/README.md)。

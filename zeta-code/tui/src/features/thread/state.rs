@@ -93,22 +93,25 @@ impl ThreadFeatureState {
         if current.session_id != page.session_id || current.thread_id != page.thread_id {
             return;
         }
+        let mut older_projection = page;
+        let older_turns = std::mem::take(&mut older_projection.turns)
+            .into_iter()
+            .filter(|turn| {
+                current
+                    .turns
+                    .iter()
+                    .all(|existing| existing.turn_id != turn.turn_id)
+            })
+            .collect::<Vec<_>>();
+        older_projection.turns = older_turns.clone();
+        let mut messages = project_messages(&older_projection);
+        messages.append(&mut self.messages);
+
         let mut merged = current.clone();
-        let mut turns = page.turns;
+        let mut turns = older_turns;
         turns.extend(current.turns.iter().cloned());
-        let mut deduplicated = Vec::with_capacity(turns.len());
-        for turn in turns {
-            if deduplicated
-                .iter()
-                .all(|existing: &zeta_protocol::Turn| existing.turn_id != turn.turn_id)
-            {
-                deduplicated.push(turn);
-            }
-        }
-        merged.sequence = merged.sequence.max(page.sequence);
-        merged.turns = deduplicated;
-        self.messages = project_messages(&merged);
-        self.transient.clear();
+        merged.turns = turns;
+        self.messages = messages;
         self.snapshot = Some(merged);
     }
 
