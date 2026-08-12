@@ -265,9 +265,15 @@ impl ToolService for McpToolService {
         cancellation
             .check()
             .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
-        if !matches!(authorization, ToolAuthorization::ApprovedOnce(_)) {
+        if !matches!(
+            authorization,
+            ToolAuthorization::ApprovedOnce(_)
+                | ToolAuthorization::AutoReviewed(_)
+                | ToolAuthorization::PermissionBypassed(_)
+        ) {
             return Err(CoreError::Policy(
-                "MCP tools require an exact one-time user approval".into(),
+                "MCP tools require exact user, automatic-review, or permission-bypass authority"
+                    .into(),
             ));
         }
         let binding = self.binding(&call.name)?.clone();

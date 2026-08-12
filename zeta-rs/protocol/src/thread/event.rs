@@ -3,6 +3,7 @@ use crate::AgentJoin;
 use crate::AgentJoinId;
 use crate::AgentMessage;
 use crate::AgentResponse;
+use crate::ApprovalMode;
 use crate::ContextCheckpoint;
 use crate::DelegationId;
 use crate::DelegationResult;
@@ -34,6 +35,7 @@ pub enum ToolExecutionAuthority {
     Sandboxed,
     UnsandboxedGrant { grant_id: String },
     AutoReviewed { assessment_id: String },
+    PermissionBypassed,
     ApprovedOnce { request_id: RequestId },
 }
 
@@ -72,6 +74,8 @@ pub enum ThreadEvent {
         turn_id: TurnId,
         #[serde(default = "legacy_turn_policy_revision")]
         policy_revision: String,
+        #[serde(default)]
+        approval_mode: ApprovalMode,
         #[serde(default)]
         activated_skills: Vec<FrozenSkillActivation>,
         #[serde(default, skip_serializing_if = "Option::is_none")]

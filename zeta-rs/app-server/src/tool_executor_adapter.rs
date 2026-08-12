@@ -141,6 +141,7 @@ impl ToolExecutorRuntime {
             ToolAuthorization::Sandboxed(policy) => ToolRuntimeAuthority::Sandboxed(*policy),
             ToolAuthorization::UnsandboxedGrant { .. }
             | ToolAuthorization::AutoReviewed(_)
+            | ToolAuthorization::PermissionBypassed(_)
             | ToolAuthorization::ApprovedOnce(_) => ToolRuntimeAuthority::Unrestricted,
         };
         let invocation = zeta_tools::ToolInvocation::new(

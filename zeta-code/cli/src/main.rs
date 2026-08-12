@@ -198,6 +198,7 @@ fn run_prompt_in_session(
             expected_sequence: 1,
             request: SessionRequest::StartTurn {
                 thread_id: thread.thread_id.clone(),
+                approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 input: vec![InputItem::Text { text: prompt }],
             },
         })

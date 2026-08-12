@@ -323,9 +323,9 @@ start/interrupt 与 interaction resolve，并以 tagged `SessionRequestResult` �
 
 1. 校验 Thread 属于 supplied Session；
 2. 校验 Session 仍为 active；
-3. 读取 Session 当前模型，并把它作为 `TurnAccepted` 的 durable snapshot；
+3. 读取 Session 当前模型，并把它与请求携带的 `ApprovalMode` 一起作为 `TurnAccepted` 的 durable snapshot；
 4. `start_turn` 使用 typed command ID + exact expected sequence；
-5. replay 时读取既有 Turn，terminal failure/interruption 不伪装成 success；
+5. replay 时同时校验 input、model 与 approval mode，terminal failure/interruption 不伪装成 success；
 6. 新 start 发布 durable update 后调用 `TurnExecutor::start`。
 
 `model/list` 由 `ModelCatalog` 投影当前已配置 provider 的可选模型；`session/request::SetModel`
@@ -525,8 +525,17 @@ user text，并附 response schema；同时清空 tools、设置 `ToolChoice::No
 并使用 temperature 0。Response 只拼接 text fragments，忽略 reasoning，拒绝 refusal、Tool Call 与
 空 JSON。
 
-这里负责选择/隔离 review runtime；classifier schema validation 与 authorization decision分别属于
-`zeta-auto-review` 和 `zeta-policy`。
+`ApprovalModePolicyService` 先调用 authoritative base policy，并且只处理其 `AskUser` 结果：
+
+| Turn 模式 | `AskUser` 后续行为 | 不变量 |
+| --- | --- | --- |
+| `AskPermissions` | 保留 durable approval interaction | 用户仍只能 approve once / decline |
+| `AutoReview` | 用冻结的 review runtime 创建 `LlmActionClassifier`，由 `PolicyEngine` 应用风险矩阵 | reviewer 缺失或失败时回退 `AskUser` |
+| `BypassPermissions` | 签发绑定 action digest、完整 capabilities 与 policy revision 的 permission-bypass authority | 只跳过交互；不能改变 `Block`、revision error 或其他 base decision |
+
+这里负责选择/隔离 review runtime 和按 Turn 模式组合 policy；classifier schema validation 与
+Auto Review authorization decision 分别属于 `zeta-auto-review` 和 `zeta-policy`。review runtime
+当前在 local App Server 启动时从 frozen config 解析；配置变化需要重启 App Server 才能换用新模型。
 
 ## 资源存储
 

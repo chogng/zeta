@@ -73,6 +73,25 @@ impl<C: ActionClassifier> PolicyEngine<C> {
         self.apply_assessment(request, assessment)
     }
 
+    /// Applies classifier review after another authoritative policy already returned `AskUser`.
+    ///
+    /// This entry point intentionally skips this engine's sandbox fast path and deterministic
+    /// layers. Hosts may call it only after those layers have evaluated the same exact request and
+    /// requested an interaction. Classifier binding validation and the automatic-approval risk
+    /// matrix remain identical to [`Self::decide`].
+    pub fn review_after_authoritative_ask_user(
+        &self,
+        request: &ActionReviewRequest,
+        cancellation: &CancellationToken,
+    ) -> Result<ExecutionDecision, PolicyError> {
+        self.ensure_revision(request)?;
+        let assessment = match self.classifier.classify(request, cancellation) {
+            Ok(assessment) => assessment,
+            Err(error) => return Ok(self.review_failure_decision(request, error.to_string())),
+        };
+        self.apply_assessment(request, assessment)
+    }
+
     fn ensure_revision(&self, request: &ActionReviewRequest) -> Result<(), PolicyError> {
         if self.revision == *request.policy_revision() {
             Ok(())

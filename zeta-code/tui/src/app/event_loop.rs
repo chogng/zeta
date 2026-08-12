@@ -592,7 +592,10 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             );
                         }
                     }
-                    AppCommand::SubmitTurn(prompt) => {
+                    AppCommand::SubmitTurn {
+                        submission,
+                        approval_mode,
+                    } => {
                         terminal.draw(|terminal_frame| frame::draw(terminal_frame, &app))?;
                         if pending_request.is_none() {
                             let request_client = client.clone();
@@ -604,7 +607,8 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                     RequestCompletion::TurnStarted(start_turn_and_read(
                                         request_client,
                                         scope,
-                                        prompt,
+                                        submission,
+                                        approval_mode,
                                         history,
                                     ))
                                 },

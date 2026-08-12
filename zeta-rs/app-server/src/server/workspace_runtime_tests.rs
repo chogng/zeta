@@ -355,6 +355,7 @@ fn user_config_revocation_removes_executable_services_but_keeps_file_access() {
                 expected_sequence: SequenceExpectation::Exact(1),
                 model: None,
                 policy_revision: "test-policy-v1".into(),
+                approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
                     text: "must be interrupted".into(),
@@ -623,6 +624,7 @@ fn active_turn_blocks_workspace_switch_without_changing_authority() {
                 expected_sequence: SequenceExpectation::Exact(1),
                 model: None,
                 policy_revision: "test-policy-v1".into(),
+                approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
                     text: "stay in the first Workspace".into(),

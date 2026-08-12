@@ -16,7 +16,8 @@ pub(super) fn validate_escalation_authority(
 ) -> Result<(), CoreError> {
     match authority {
         ToolExecutionAuthority::UnsandboxedGrant { .. }
-        | ToolExecutionAuthority::AutoReviewed { .. } => Ok(()),
+        | ToolExecutionAuthority::AutoReviewed { .. }
+        | ToolExecutionAuthority::PermissionBypassed => Ok(()),
         ToolExecutionAuthority::ApprovedOnce { request_id } => {
             let item_id = snapshot.items.iter().find_map(|item| match item {
                 ThreadItem::ToolCall {

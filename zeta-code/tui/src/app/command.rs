@@ -4,6 +4,7 @@ use crate::features::interactions::InteractionResponse;
 use std::path::PathBuf;
 use zeta_app_server_protocol::protocol::config::McpServerEnablementDto;
 use zeta_app_server_protocol::protocol::skills::SkillEnablementDto;
+use zeta_protocol::ApprovalMode;
 use zeta_protocol::SkillId;
 use zeta_protocol::ThreadId;
 use zeta_protocol::TurnId;
@@ -60,5 +61,8 @@ pub(crate) enum AppCommand {
         skill_id: SkillId,
         enablement: SkillEnablementDto,
     },
-    SubmitTurn(ComposerSubmission),
+    SubmitTurn {
+        submission: ComposerSubmission,
+        approval_mode: ApprovalMode,
+    },
 }

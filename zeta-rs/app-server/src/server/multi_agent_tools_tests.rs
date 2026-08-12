@@ -182,6 +182,7 @@ fn recovered_spawn_starts_a_new_child_turn_once() {
                 expected_sequence: SequenceExpectation::Exact(1),
                 model: None,
                 policy_revision: "test-policy-v1".into(),
+                approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
                     text: "delegate".into(),

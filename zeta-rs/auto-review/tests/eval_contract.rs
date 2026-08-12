@@ -366,7 +366,9 @@ fn decision_name(decision: &ExecutionDecision) -> EvalFinalDecision {
         ExecutionDecision::ReviseAction(_) => EvalFinalDecision::ReviseAction,
         ExecutionDecision::AskUser(_) => EvalFinalDecision::AskUser,
         ExecutionDecision::Block(_) => EvalFinalDecision::Block,
-        ExecutionDecision::RunSandboxed(_) | ExecutionDecision::RunUnsandboxed { .. } => {
+        ExecutionDecision::RunSandboxed(_)
+        | ExecutionDecision::RunUnsandboxed { .. }
+        | ExecutionDecision::RunWithPermissionBypass(_) => {
             panic!("eval cases must reach the classifier path")
         }
     }

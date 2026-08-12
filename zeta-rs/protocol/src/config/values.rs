@@ -18,12 +18,13 @@ pub enum Personality {
     None,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum ApprovalMode {
-    OnRequest,
-    OnFailure,
-    Never,
+    #[default]
+    AskPermissions,
+    AutoReview,
+    BypassPermissions,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

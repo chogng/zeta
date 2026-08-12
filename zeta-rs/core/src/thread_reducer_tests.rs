@@ -21,6 +21,7 @@ fn envelope(sequence: u64, event: ThreadEvent) -> StoredEvent {
             command: ThreadCommand::StartTurn {
                 model: None,
                 activated_skills: Vec::new(),
+                approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 input: vec![UserInput::Text {
                     text: "hello".into(),
                 }],
@@ -62,6 +63,7 @@ fn reducer_rebuilds_a_failed_turn_with_stable_error_details() {
                 thread_id: ThreadId::new("thread_1").expect("test ID is non-empty"),
                 turn_id: TurnId::new("turn_1").expect("test ID is non-empty"),
                 policy_revision: "test-policy-v1".into(),
+                approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 activated_skills: Vec::new(),
                 model: None,
             },
@@ -148,6 +150,7 @@ fn reducer_verifies_and_rebuilds_a_context_checkpoint() {
                 thread_id: ThreadId::new("thread_1").unwrap(),
                 turn_id: TurnId::new("turn_1").unwrap(),
                 policy_revision: "test-policy-v1".into(),
+                approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 activated_skills: Vec::new(),
                 model: None,
             },
@@ -276,6 +279,7 @@ fn reducer_rejects_sequence_gaps_and_illegal_transitions() {
                     thread_id: ThreadId::new("thread_1").expect("test ID is non-empty"),
                     turn_id: TurnId::new("turn_1").expect("test ID is non-empty"),
                     policy_revision: "test-policy-v1".into(),
+                    approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                     activated_skills: Vec::new(),
                     model: None
                 }
@@ -292,6 +296,7 @@ fn reducer_rejects_sequence_gaps_and_illegal_transitions() {
                 thread_id: ThreadId::new("thread_1").expect("test ID is non-empty"),
                 turn_id: TurnId::new("turn_1").expect("test ID is non-empty"),
                 policy_revision: "test-policy-v1".into(),
+                approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 activated_skills: Vec::new(),
                 model: None,
             },
@@ -321,6 +326,7 @@ fn reducer_rebuilds_typed_command_receipt_and_all_durable_item_kinds() {
             thread_id: ThreadId::new("thread_1").expect("test ID is non-empty"),
             turn_id: TurnId::new("turn_1").expect("test ID is non-empty"),
             policy_revision: "test-policy-v1".into(),
+            approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
             activated_skills: Vec::new(),
             model: None,
         },
@@ -330,6 +336,7 @@ fn reducer_rebuilds_typed_command_receipt_and_all_durable_item_kinds() {
         command: ThreadCommand::StartTurn {
             model: None,
             activated_skills: Vec::new(),
+            approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
             input: vec![UserInput::Text {
                 text: "hello".into(),
             }],
@@ -455,6 +462,7 @@ fn reducer_rejects_a_tool_result_without_its_tool_call() {
                 thread_id: ThreadId::new("thread_1").expect("test ID is non-empty"),
                 turn_id: TurnId::new("turn_1").expect("test ID is non-empty"),
                 policy_revision: "test-policy-v1".into(),
+                approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 activated_skills: Vec::new(),
                 model: None,
             },
@@ -561,6 +569,7 @@ fn started_sandboxed_tool_snapshot() -> ThreadSnapshot {
                 thread_id: ThreadId::new("thread_1").unwrap(),
                 turn_id: TurnId::new("turn_1").unwrap(),
                 policy_revision: "test-policy-v1".into(),
+                approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 activated_skills: Vec::new(),
                 model: None,
             },

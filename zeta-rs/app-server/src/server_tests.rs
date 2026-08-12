@@ -2056,6 +2056,7 @@ fn interaction_resolution_uses_the_durable_request_identity() {
                 expected_sequence: zeta_core::SequenceExpectation::Exact(1),
                 model: None,
                 policy_revision: "test-policy-v1".into(),
+                approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
                     text: "wait".into(),
@@ -2149,6 +2150,7 @@ fn expired_interaction_is_cancelled_and_fails_the_turn() {
                 expected_sequence: zeta_core::SequenceExpectation::Exact(1),
                 model: None,
                 policy_revision: "test-policy-v1".into(),
+                approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
                     text: "wait".into(),
@@ -2237,6 +2239,7 @@ fn approval_interaction_resolves_through_the_typed_app_server_contract() {
                 expected_sequence: zeta_core::SequenceExpectation::Exact(1),
                 model: None,
                 policy_revision: "test-policy-v1".into(),
+                approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
                     text: "approve".into(),
@@ -2350,6 +2353,7 @@ fn interaction_response_is_rejected_from_a_capable_non_owner_connection() {
                 expected_sequence: zeta_core::SequenceExpectation::Exact(1),
                 model: None,
                 policy_revision: "test-policy-v1".into(),
+                approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
                     text: "approve".into(),

@@ -24,6 +24,7 @@ use std::path::Path;
 use std::time::Duration;
 use std::time::Instant;
 use std::time::{SystemTime, UNIX_EPOCH};
+use zeta_protocol::ApprovalMode;
 use zeta_protocol::ContentDigest;
 use zeta_protocol::ItemId;
 use zeta_protocol::SessionId;
@@ -275,7 +276,7 @@ fn pasted_image_path_submits_a_structured_image() {
 
     assert_eq!(app.input(), "[Image #1] ");
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    let Some(AppCommand::SubmitTurn(submission)) = action else {
+    let Some(AppCommand::SubmitTurn { submission, .. }) = action else {
         panic!("expected image submission");
     };
     assert_eq!(submission.display_text, "[Image #1]");
@@ -390,7 +391,7 @@ fn clipboard_png_submits_through_the_existing_attachment_path() {
 
     assert_eq!(app.input(), "[Image #1] ");
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    let Some(AppCommand::SubmitTurn(submission)) = action else {
+    let Some(AppCommand::SubmitTurn { submission, .. }) = action else {
         panic!("expected image submission");
     };
     assert_eq!(submission.display_text, "[Image #1]");
@@ -493,10 +494,13 @@ fn runtime_command_registry_drives_popup_and_submission_consistently() {
 
     assert_eq!(
         action,
-        Some(AppCommand::SubmitTurn(ComposerSubmission {
-            display_text: "/diagnose logs".into(),
-            input: vec![ComposerInput::Text("/diagnose logs".into())],
-        }))
+        Some(AppCommand::SubmitTurn {
+            submission: ComposerSubmission {
+                display_text: "/diagnose logs".into(),
+                input: vec![ComposerInput::Text("/diagnose logs".into())],
+            },
+            approval_mode: ApprovalMode::AskPermissions,
+        })
     );
     assert_eq!(app.status(), &Status::Working);
     assert_eq!(app.messages()[0].role, MessageRole::User);
@@ -535,13 +539,16 @@ fn direct_skill_slash_command_submits_exact_skill_ref_with_visible_intent() {
 
     assert_eq!(
         action,
-        Some(AppCommand::SubmitTurn(ComposerSubmission {
-            display_text: "/commit staged changes".into(),
-            input: vec![
-                ComposerInput::Skill { skill },
-                ComposerInput::Text("/commit staged changes".into()),
-            ],
-        }))
+        Some(AppCommand::SubmitTurn {
+            submission: ComposerSubmission {
+                display_text: "/commit staged changes".into(),
+                input: vec![
+                    ComposerInput::Skill { skill },
+                    ComposerInput::Text("/commit staged changes".into()),
+                ],
+            },
+            approval_mode: ApprovalMode::AskPermissions,
+        })
     );
     assert_eq!(app.messages()[0].text, "/commit staged changes");
     let _ = fs::remove_dir_all(workspace);
@@ -732,7 +739,7 @@ fn working_turn_accepts_and_submits_a_follow_up_prompt() {
     app.handle_paste("third".into());
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
-    assert!(matches!(action, Some(AppCommand::SubmitTurn(_))));
+    assert!(matches!(action, Some(AppCommand::SubmitTurn { .. })));
     assert_eq!(app.input(), "");
     assert_eq!(app.messages().len(), 2);
     assert_eq!(app.messages()[1].text, "secondthird");
@@ -779,14 +786,42 @@ fn interrupted_turn_returns_to_ready_with_a_notice() {
 }
 
 fn assert_text_submission(action: Option<AppCommand>, expected: &str) {
-    let Some(AppCommand::SubmitTurn(submission)) = action else {
+    let Some(AppCommand::SubmitTurn {
+        submission,
+        approval_mode,
+    }) = action
+    else {
         panic!("expected text submission");
     };
+    assert_eq!(approval_mode, ApprovalMode::AskPermissions);
     assert_eq!(submission.display_text, expected);
     assert_eq!(
         submission.input,
         vec![ComposerInput::Text(expected.to_owned())]
     );
+}
+
+#[test]
+fn backtab_cycles_approval_mode_and_submission_freezes_the_selected_mode() {
+    let mut app = App::new();
+
+    app.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT));
+    assert_eq!(app.approval_mode(), ApprovalMode::AutoReview);
+    app.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT));
+    assert_eq!(app.approval_mode(), ApprovalMode::BypassPermissions);
+    app.insert_text("run it");
+
+    let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert!(matches!(
+        action,
+        Some(AppCommand::SubmitTurn {
+            approval_mode: ApprovalMode::BypassPermissions,
+            ..
+        })
+    ));
+
+    app.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT));
+    assert_eq!(app.approval_mode(), ApprovalMode::AskPermissions);
 }
 
 fn wait_for_mention_results(app: &mut App, workspace: &Path) {

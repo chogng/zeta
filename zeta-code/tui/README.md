@@ -75,6 +75,9 @@ Tool、approval policy 或 persistence。
 - owner-directed `agent/request` 支持 approval（approve once/decline）和多问题 user input；只有
   App Server 选中的、声明对应 capability 且订阅该 Thread 的 connection 能 resolve。交互不可用
   Esc 关闭，但可 Ctrl-C interrupt；deadline 由 App Server 执行并投影为稳定 Turn failure；
+- footer 最左侧显示当前 Turn 权限模式；Shift-Tab 在 `ask permissions on`、`auto review on` 与
+  `bypass permissions on` 之间循环。提交时把当前模式写入 typed `StartTurn`，因此切换只影响之后
+  提交的 Turn；TUI 不解释策略结果，也不自行签发执行授权；
 - composer 保存最近 100 条纯文本提交，Up/Down 可召回并恢复原 draft；transcript 支持
   PageUp/PageDown 与 Ctrl-Home/Ctrl-End。初始 Thread snapshot 只读取最近 50 个 Turn，Ctrl-Home
   通过 App Server 的 durable Turn cursor 请求更早的 50 个 Turn，并在 presentation projection 中
@@ -237,6 +240,7 @@ src/
 | `features::sessions::ActiveConversation` | crate-private | 当前 Session/Thread identity、sequence 与 typed create/fork/resume/rewind/archive lifecycle | 不解析 composer text、不更新 `App`、不拥有 App Server |
 | `TextArea` | private | UTF-8 多行 buffer、byte-safe line/cursor movement、原子元素 insert/delete 与局部 keymap 扩展边界 | 不保存 paste payload，不解释 Enter submission 或 slash command；当前不承诺 Vim mode |
 | `features::thread::submit_prompt` | private | 从显式 `ThreadRequestScope` build typed `session/request` `StartTurn` operation 并返回 typed result | 不引用或更新 `App`、不手写 method string/JSON |
+| `App::approval_mode` | crate-private | 持有 connection-local 的下一次提交模式；Shift-Tab 循环并在 submit command 中冻结 | 不回写运行中 Turn、不判断或绕过 policy |
 | `app::request_completion::apply_thread_snapshot` | private | 安装 canonical snapshot、恢复最早 nonterminal Turn 作为执行队首并协调 presentation mapping | 不 drain notification；snapshot 是 authoritative UI source |
 | `features::thread::interrupt_turn` | private | 从显式 scope 执行 typed Turn interrupt 并返回结果 | 不引用或更新 `App` |
 | `app::apply_active_turn_snapshot` | test-visible | canonical Turn presentation outcome → `AppEvent` | 不从 log/text 猜 terminal state |
@@ -401,6 +405,7 @@ transient 永远不决定 completed/failed/interrupted。
 ```text
 Ready / Error
 ├─ Enter(non-empty) → Submit → Working
+├─ Shift-Tab → cycle next-Turn approval mode
 ├─ Shift/Alt-Enter 或 Ctrl-J → insert newline
 ├─ Enter(/quit or /exit) → Quit
 ├─ Enter(其他 built-in command) → structured invocation → typed command dispatcher
@@ -413,6 +418,7 @@ Ready / Error
 
 Working / Waiting*
 ├─ Esc / Ctrl-C / empty Ctrl-D → Interrupt → Cancelling
+├─ Working: Shift-Tab → cycle mode for later submissions
 ├─ Working: typing/paste/editing accepted；Enter → queue follow-up Turn
 └─ Waiting*: owner-directed interaction Pane owns input until resolved/interrupted
 
@@ -464,7 +470,7 @@ Ctrl-Z 复用同一个 `restore → SIGTSTP → reacquire` 生命周期；reacqu
 2. 一行右对齐 status line，显示现有接口提供的 model/workspace/Git context；
 3. 三至八行 composer：上下浅灰水平线，正文随逻辑行增长、最多显示六行，首行以浅灰 `❯`
    开始；超过可见高度时跟随光标纵向滚动；
-4. 一行 recovery/help footer。
+4. 一行左对齐 recovery/help footer；首项是当前权限模式，随后提示 Shift-Tab 切换。
 
 所有 interaction surface 都以 terminal 底部为锚点：composer/footer 固定在底部，slash/mention
 popup 从 composer 上沿向上展开；temporary interaction view active 时替换 composer/footer 区域，

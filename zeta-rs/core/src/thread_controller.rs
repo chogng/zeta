@@ -28,6 +28,7 @@ use zeta_history::ThreadCommandReceipt;
 use zeta_history::Timestamp;
 use zeta_protocol::AgentRequest;
 use zeta_protocol::AgentResponse;
+use zeta_protocol::ApprovalMode;
 use zeta_protocol::CommandId;
 use zeta_protocol::ContextCheckpoint;
 use zeta_protocol::ContextCheckpointId;
@@ -72,6 +73,7 @@ pub struct StartTurnRequest {
     pub model: Option<ModelRef>,
     pub policy_revision: String,
     /// Host-seeded automatic activations. Explicit selections are resolved by extensions.
+    pub approval_mode: ApprovalMode,
     pub activated_skills: Vec<FrozenSkillActivation>,
     pub input: Vec<UserInput>,
 }
@@ -98,6 +100,7 @@ pub struct StartShellTurnRequest {
     pub command_id: CommandId,
     pub expected_sequence: SequenceExpectation,
     pub policy_revision: String,
+    pub approval_mode: ApprovalMode,
     pub invocation: ShellTurnInvocation,
 }
 
@@ -406,6 +409,7 @@ impl ThreadController {
             let ThreadCommand::StartTurn {
                 model,
                 activated_skills,
+                approval_mode,
                 input,
             } = &existing.receipt.command
             else {
@@ -418,6 +422,7 @@ impl ThreadController {
                 .collect::<Vec<_>>();
             if model != &request.model
                 || host_activations != request.activated_skills
+                || approval_mode != &request.approval_mode
                 || input != &request.input
             {
                 return Err(CoreError::CommandConflict);
@@ -458,6 +463,7 @@ impl ThreadController {
         let command = ThreadCommand::StartTurn {
             model: request.model.clone(),
             activated_skills: activated_skills.clone(),
+            approval_mode: request.approval_mode,
             input: request.input.clone(),
         };
         self.mutate_thread(thread_id, |snapshot| {
@@ -491,6 +497,7 @@ impl ThreadController {
                 thread_id: thread_id.clone(),
                 turn_id: turn_id.clone(),
                 policy_revision: request.policy_revision.clone(),
+                approval_mode: request.approval_mode,
                 activated_skills: activated_skills.clone(),
                 model: request.model.clone(),
             });
@@ -554,6 +561,7 @@ impl ThreadController {
         }
         let command = ThreadCommand::StartShellTurn {
             command: request.invocation.command.clone(),
+            approval_mode: request.approval_mode,
         };
         self.mutate_thread(thread_id, |snapshot| {
             if let Some(existing) = snapshot
@@ -599,6 +607,7 @@ impl ThreadController {
                     thread_id: thread_id.clone(),
                     turn_id: turn_id.clone(),
                     policy_revision: request.policy_revision.clone(),
+                    approval_mode: request.approval_mode,
                     activated_skills: Vec::new(),
                     model: None,
                 },

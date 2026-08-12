@@ -1,13 +1,18 @@
 use crate::CoreError;
 use zeta_async_utils::CancellationToken;
-use zeta_policy::{
-    ActionClassifier, ActionReviewRequest, ApprovalRequest, CapabilityKind, ExecutionDecision,
-    PolicyEngine,
-};
-use zeta_protocol::{
-    ActionApprovalCapability, ActionApprovalCapabilityKind, ActionApprovalRequest,
-    SandboxDenialOutput, ToolReplaySafety,
-};
+use zeta_policy::ActionClassifier;
+use zeta_policy::ActionReviewRequest;
+use zeta_policy::ApprovalRequest;
+use zeta_policy::CapabilityKind;
+use zeta_policy::ExecutionDecision;
+use zeta_policy::PermissionBypassGrant;
+use zeta_policy::PolicyEngine;
+use zeta_protocol::ActionApprovalCapability;
+use zeta_protocol::ActionApprovalCapabilityKind;
+use zeta_protocol::ActionApprovalRequest;
+use zeta_protocol::ApprovalMode;
+use zeta_protocol::SandboxDenialOutput;
+use zeta_protocol::ToolReplaySafety;
 
 /// Evaluates one fully resolved action without executing it or mutating durable Thread state.
 ///
@@ -34,6 +39,34 @@ pub trait PolicyService: Send + Sync {
             )));
         }
         self.decide(request, cancellation)
+    }
+
+    /// Applies one Turn's frozen approval ceiling after the owning policy evaluates the action.
+    ///
+    /// Permission bypass converts only an interactive approval result. Deterministic blocks,
+    /// invalid requests, revision mismatches, sandbox execution, and other policy decisions remain
+    /// unchanged. Implementations with an automatic reviewer may override this method to replace
+    /// `AskUser` in [`ApprovalMode::AutoReview`] while retaining the same fail-closed boundary.
+    fn decide_for_turn_with_approval_mode(
+        &self,
+        frozen_revision: &str,
+        approval_mode: ApprovalMode,
+        request: &ActionReviewRequest,
+        cancellation: &CancellationToken,
+    ) -> Result<ExecutionDecision, CoreError> {
+        let decision = self.decide_for_turn(frozen_revision, request, cancellation)?;
+        if approval_mode == ApprovalMode::BypassPermissions
+            && matches!(decision, ExecutionDecision::AskUser(_))
+        {
+            return Ok(ExecutionDecision::RunWithPermissionBypass(
+                PermissionBypassGrant::new(
+                    request.action().digest().clone(),
+                    request.action().required_capabilities().clone(),
+                    request.policy_revision().clone(),
+                ),
+            ));
+        }
+        Ok(decision)
     }
 
     fn decide(

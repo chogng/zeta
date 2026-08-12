@@ -1,11 +1,28 @@
 use std::fmt;
 use std::sync::Arc;
 use zeta_async_utils::CancellationToken;
-use zeta_auto_review::{ReviewModel, ReviewModelError, ReviewModelRequest};
+use zeta_auto_review::LlmActionClassifier;
+use zeta_auto_review::ReviewModel;
+use zeta_auto_review::ReviewModelError;
+use zeta_auto_review::ReviewModelRequest;
 use zeta_config::ResolvedConfig;
-use zeta_model_provider::{ModelInvoker, ModelProvider, ModelProviderRuntime, ModelRuntimeRequest};
+use zeta_core::CoreError;
+use zeta_core::PolicyService;
+use zeta_model_provider::ModelInvoker;
+use zeta_model_provider::ModelProvider;
+use zeta_model_provider::ModelProviderRuntime;
+use zeta_model_provider::ModelRuntimeRequest;
 use zeta_model_provider_config::ProviderConfigRegistry;
-use zeta_protocol::{ModelRef, ModelRequest, ResponseItem, ToolChoice};
+use zeta_policy::ActionReviewRequest;
+use zeta_policy::ExecutionDecision;
+use zeta_policy::PermissionBypassGrant;
+use zeta_policy::PolicyEngine;
+use zeta_policy::ReviewFailurePolicy;
+use zeta_protocol::ApprovalMode;
+use zeta_protocol::ModelRef;
+use zeta_protocol::ModelRequest;
+use zeta_protocol::ResponseItem;
+use zeta_protocol::ToolChoice;
 
 /// Resolves one immutable provider-backed model for an approval assessment safe point.
 ///
@@ -58,9 +75,93 @@ impl Default for ReviewModelResolver {
 }
 
 /// Immutable review-only adapter over one provider/model runtime.
+#[derive(Clone)]
 pub struct ProviderReviewModel {
     model: ModelRef,
     invoker: Arc<dyn ModelInvoker>,
+}
+
+/// Adds per-Turn approval-mode semantics around one authoritative Tool policy.
+///
+/// The base policy always evaluates first. Automatic review and permission bypass may replace
+/// only an `AskUser` result, so deterministic denial and all request/revision validation stay
+/// owned by the underlying policy.
+pub(crate) struct ApprovalModePolicyService {
+    base: Arc<dyn PolicyService>,
+    review_model: Option<ProviderReviewModel>,
+}
+
+impl ApprovalModePolicyService {
+    pub(crate) fn new(
+        base: Arc<dyn PolicyService>,
+        review_model: Option<ProviderReviewModel>,
+    ) -> Self {
+        Self { base, review_model }
+    }
+}
+
+impl PolicyService for ApprovalModePolicyService {
+    fn revision(&self) -> String {
+        let reviewer = self.review_model.as_ref().map_or_else(
+            || "unavailable".into(),
+            |model| format!("{}/{}", model.model().provider, model.model().model),
+        );
+        format!("{}:auto-review={reviewer}", self.base.revision())
+    }
+
+    fn decide(
+        &self,
+        request: &ActionReviewRequest,
+        cancellation: &CancellationToken,
+    ) -> Result<ExecutionDecision, CoreError> {
+        self.base.decide(request, cancellation)
+    }
+
+    fn decide_for_turn_with_approval_mode(
+        &self,
+        frozen_revision: &str,
+        approval_mode: ApprovalMode,
+        request: &ActionReviewRequest,
+        cancellation: &CancellationToken,
+    ) -> Result<ExecutionDecision, CoreError> {
+        let current_revision = self.revision();
+        if current_revision != frozen_revision {
+            return Err(CoreError::Policy(format!(
+                "Turn policy revision changed from {frozen_revision} to {current_revision}; continuation requires explicit authorization"
+            )));
+        }
+        let decision = self.base.decide(request, cancellation)?;
+        if !matches!(decision, ExecutionDecision::AskUser(_)) {
+            return Ok(decision);
+        }
+        match approval_mode {
+            ApprovalMode::AskPermissions => Ok(decision),
+            ApprovalMode::BypassPermissions => Ok(ExecutionDecision::RunWithPermissionBypass(
+                PermissionBypassGrant::new(
+                    request.action().digest().clone(),
+                    request.action().required_capabilities().clone(),
+                    request.policy_revision().clone(),
+                ),
+            )),
+            ApprovalMode::AutoReview => {
+                let Some(review_model) = self.review_model.clone() else {
+                    return Ok(decision);
+                };
+                let engine = PolicyEngine::new(
+                    request.policy_revision().clone(),
+                    LlmActionClassifier::new(review_model),
+                    ReviewFailurePolicy::AskUser,
+                );
+                let reviewed = engine
+                    .review_after_authoritative_ask_user(request, cancellation)
+                    .map_err(|error| CoreError::Policy(error.to_string()))?;
+                cancellation
+                    .check()
+                    .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
+                Ok(reviewed)
+            }
+        }
+    }
 }
 
 impl ProviderReviewModel {

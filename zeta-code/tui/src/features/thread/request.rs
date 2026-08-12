@@ -15,6 +15,7 @@ use zeta_app_server_protocol::protocol::turn::TurnInteractionResolveResult;
 use zeta_app_server_protocol::protocol::turn::TurnInterruptResult;
 use zeta_app_server_protocol::protocol::turn::TurnStartResult;
 use zeta_protocol::AgentResponse;
+use zeta_protocol::ApprovalMode;
 use zeta_protocol::RequestId;
 use zeta_protocol::SessionId;
 use zeta_protocol::Thread;
@@ -54,6 +55,7 @@ pub(crate) fn submit_prompt<T>(
     client: &mut AppServerClient<T>,
     scope: ThreadRequestScope,
     submission: ComposerSubmission,
+    approval_mode: ApprovalMode,
 ) -> Result<TurnStartResult, ClientError>
 where
     T: JsonRpcTransport,
@@ -64,6 +66,7 @@ where
         expected_sequence: scope.expected_sequence,
         request: SessionRequest::StartTurn {
             thread_id: scope.thread_id,
+            approval_mode,
             input: submission
                 .input
                 .into_iter()

@@ -89,6 +89,36 @@ fn supported_actions_run_in_the_sandbox_without_classifier_review() {
 }
 
 #[test]
+fn review_after_authoritative_ask_user_does_not_reapply_the_sandbox_fast_path() {
+    let policy = SandboxPolicy::new(FileSystemAccess::ReadOnly, NetworkAccess::Denied);
+    let request = request(SandboxCompatibility::Supported(policy));
+    let assessment = ClassifierAssessment::new(
+        AssessmentId::new("assessment-after-ask"),
+        request.action().digest().clone(),
+        request.policy_revision().clone(),
+        "test-prompt",
+        ClassifierRecommendation::Approve {
+            capabilities: request.action().required_capabilities().clone(),
+            risk: RiskLevel::Medium,
+            user_authorization: UserAuthorization::Explicit,
+            reason: "the authoritative policy requested contextual review".to_owned(),
+        },
+    );
+    let engine = PolicyEngine::new(
+        PolicyRevision::new("policy-1"),
+        StaticClassifier(Ok(assessment)),
+        ReviewFailurePolicy::Block,
+    );
+
+    assert!(matches!(
+        engine
+            .review_after_authoritative_ask_user(&request, &CancellationSource::new().token())
+            .unwrap(),
+        ExecutionDecision::RunAutoReviewed(_)
+    ));
+}
+
+#[test]
 fn confirmed_sandbox_denial_reaches_the_classifier() {
     let policy = SandboxPolicy::new(FileSystemAccess::ReadOnly, NetworkAccess::Denied);
     let request = request(SandboxCompatibility::Supported(policy)).after_sandbox_denial(

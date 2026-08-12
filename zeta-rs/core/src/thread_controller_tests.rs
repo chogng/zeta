@@ -36,6 +36,7 @@ fn start_request(key: &str) -> StartTurnRequest {
         expected_sequence: SequenceExpectation::Any,
         model: None,
         policy_revision: "test-policy-v1".into(),
+        approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
         activated_skills: Vec::new(),
         input: vec![UserInput::Text {
             text: "hello".into(),
@@ -683,6 +684,7 @@ fn shell_turn_atomically_persists_its_exact_command_and_tool_call() {
         command_id: CommandId::new("shell-start").unwrap(),
         expected_sequence: SequenceExpectation::Any,
         policy_revision: "test-policy-v1".into(),
+        approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
         invocation: ShellTurnInvocation {
             command: "cargo test -p zeta-core".into(),
             shell_program: "/bin/sh".into(),
@@ -699,7 +701,7 @@ fn shell_turn_atomically_persists_its_exact_command_and_tool_call() {
     assert_eq!(snapshot.turns.len(), 1);
     assert!(matches!(
         &snapshot.commands[0].receipt.command,
-        zeta_protocol::ThreadCommand::StartShellTurn { command }
+        zeta_protocol::ThreadCommand::StartShellTurn { command, .. }
             if command == "cargo test -p zeta-core"
     ));
     let ThreadItem::ToolCall {
@@ -734,6 +736,7 @@ fn typed_command_rejects_reusing_an_id_with_different_input() {
         expected_sequence: SequenceExpectation::Any,
         model: None,
         policy_revision: "test-policy-v1".into(),
+        approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
         activated_skills: Vec::new(),
         input: vec![UserInput::Text {
             text: "different".into(),
@@ -812,6 +815,27 @@ fn start_turn_snapshots_the_selected_model() {
             .find(|turn| turn.turn_id == started.turn_id)
             .and_then(|turn| turn.model.clone()),
         Some(model)
+    );
+}
+
+#[test]
+fn start_turn_freezes_the_selected_approval_mode() {
+    let threads = ThreadController::with_store(Arc::new(InMemoryThreadStore::default()));
+    let thread = create_thread(&threads, "approval-mode");
+    let mut request = start_request("approval-mode-start");
+    request.approval_mode = zeta_protocol::ApprovalMode::BypassPermissions;
+
+    let started = threads.start_turn(&thread, request).unwrap();
+    let snapshot = threads.read_thread(&thread).unwrap();
+    let turn = snapshot
+        .turns
+        .iter()
+        .find(|turn| turn.turn_id == started.turn_id)
+        .unwrap();
+
+    assert_eq!(
+        turn.approval_mode,
+        zeta_protocol::ApprovalMode::BypassPermissions
     );
 }
 
@@ -931,6 +955,7 @@ fn start_turn_persists_ordered_text_and_image_items() {
                 expected_sequence: SequenceExpectation::Any,
                 model: None,
                 policy_revision: "test-policy-v1".into(),
+                approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 activated_skills: Vec::new(),
                 input: vec![
                     UserInput::Text {

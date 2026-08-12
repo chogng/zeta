@@ -392,6 +392,11 @@ pub fn open_local_app_server_with_code_index_providers(
     let runtime_config = model
         .resolve_config(&user_config)
         .map_err(|error| OpenAppServerError(error.to_string()))?;
+    let approval_model_provider: Arc<dyn ModelProvider> = model_provider.clone();
+    let approval_review_model =
+        crate::ReviewModelResolver::new(ProviderConfigRegistry::builtin(), approval_model_provider)
+            .resolve(&runtime_config)
+            .ok();
     let skill_config = Arc::new(LocalSkillConfigProvider {
         config: Arc::clone(&config),
     });
@@ -399,6 +404,7 @@ pub fn open_local_app_server_with_code_index_providers(
     let extension_roots = resolve_extension_roots(&options.profile_root);
     let mut server = AppServer::new(sessions, model.clone())
         .with_model_catalog(model)
+        .with_approval_review_model(approval_review_model)
         .with_config_store(Arc::clone(&config))
         .with_slash_command_catalog(options.slash_commands)
         .with_code_index_storage_root(options.profile_root.join("code-index"))

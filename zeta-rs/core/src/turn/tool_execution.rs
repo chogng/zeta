@@ -2,15 +2,15 @@ use super::policy_feedback::{denied_feedback, safer_action_feedback};
 use crate::policy_service::durable_sandbox_escalation_approval_request;
 use crate::thread_controller::{RecordToolExecutionEscalation, RecordToolExecutionStart};
 use crate::{
-    AutoReviewedToolGrant, CoreError, PolicyService, RecordToolResultRequest,
-    RequestTurnInteraction, SandboxDenialOutput, ThreadController, ThreadUpdateSink,
-    ToolAuthorization, ToolCallOutput, ToolExecutionFacts, ToolExecutionOutput, ToolOutputSink,
-    ToolReplaySafety, ToolService,
+    AutoReviewedToolGrant, CoreError, PermissionBypassToolGrant, PolicyService,
+    RecordToolResultRequest, RequestTurnInteraction, SandboxDenialOutput, ThreadController,
+    ThreadUpdateSink, ToolAuthorization, ToolCallOutput, ToolExecutionFacts, ToolExecutionOutput,
+    ToolOutputSink, ToolReplaySafety, ToolService,
 };
 use zeta_async_utils::CancellationToken;
 use zeta_policy::{ActionReviewRequest, ExecutionDecision, SandboxDenialEvidence};
 use zeta_protocol::{
-    AgentRequest, ItemId, StreamCursor, StreamInstanceId, ThreadId, ThreadUpdate,
+    AgentRequest, ApprovalMode, ItemId, StreamCursor, StreamInstanceId, ThreadId, ThreadUpdate,
     ThreadUpdateEnvelope, ToolCall, ToolCallId, ToolExecutionAuthority,
     ToolExecutionAuthority::Sandboxed, ToolOutputStream, TurnId,
 };
@@ -29,6 +29,7 @@ pub(super) struct ToolExecutionContext<'a> {
     turn_id: &'a TurnId,
     item_id: &'a ItemId,
     frozen_policy_revision: &'a str,
+    approval_mode: ApprovalMode,
     cancellation: &'a CancellationToken,
 }
 
@@ -38,6 +39,7 @@ impl<'a> ToolExecutionContext<'a> {
         turn_id: &'a TurnId,
         item_id: &'a ItemId,
         frozen_policy_revision: &'a str,
+        approval_mode: ApprovalMode,
         cancellation: &'a CancellationToken,
     ) -> Self {
         Self {
@@ -45,6 +47,7 @@ impl<'a> ToolExecutionContext<'a> {
             turn_id,
             item_id,
             frozen_policy_revision,
+            approval_mode,
             cancellation,
         }
     }
@@ -334,8 +337,9 @@ impl<'a> ToolExecutionOrchestrator<'a> {
                 denial_reason.clone(),
                 denial_output,
             ));
-        let decision = match self.policy.decide_for_turn(
+        let decision = match self.policy.decide_for_turn_with_approval_mode(
             context.frozen_policy_revision,
+            context.approval_mode,
             &second_review,
             context.cancellation,
         ) {
@@ -367,6 +371,21 @@ impl<'a> ToolExecutionOrchestrator<'a> {
                     ));
                 }
                 ToolAuthorization::AutoReviewed(AutoReviewedToolGrant::new(call.id.clone(), grant))
+            }
+            ExecutionDecision::RunWithPermissionBypass(grant) => {
+                if !grant.matches(
+                    reviewed.action().digest(),
+                    reviewed.action().required_capabilities(),
+                    reviewed.policy_revision(),
+                ) {
+                    return Err(CoreError::Policy(
+                        "permission-bypass retry grant is not bound to the prepared action".into(),
+                    ));
+                }
+                ToolAuthorization::PermissionBypassed(PermissionBypassToolGrant::new(
+                    call.id.clone(),
+                    grant,
+                ))
             }
             ExecutionDecision::RunSandboxed(_) => {
                 return Ok(ToolAttempt::Commit {
@@ -502,6 +521,7 @@ fn execution_authority(authorization: &ToolAuthorization) -> ToolExecutionAuthor
         ToolAuthorization::AutoReviewed(grant) => ToolExecutionAuthority::AutoReviewed {
             assessment_id: grant.policy_grant().assessment_id().as_str().to_owned(),
         },
+        ToolAuthorization::PermissionBypassed(_) => ToolExecutionAuthority::PermissionBypassed,
         ToolAuthorization::ApprovedOnce(grant) => ToolExecutionAuthority::ApprovedOnce {
             request_id: grant.request_id().clone(),
         },

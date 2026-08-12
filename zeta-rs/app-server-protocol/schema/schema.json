@@ -933,6 +933,14 @@
         "ExtensionOperationFailed"
       ]
     },
+    "ApprovalMode": {
+      "type": "string",
+      "enum": [
+        "askPermissions",
+        "autoReview",
+        "bypassPermissions"
+      ]
+    },
     "ApprovalReviewModelSelectionDto": {
       "description": "User-facing selection for the model that reviews approval requests.",
       "oneOf": [
@@ -9438,6 +9446,10 @@
         {
           "type": "object",
           "properties": {
+            "approvalMode": {
+              "$ref": "#/$defs/ApprovalMode",
+              "default": "askPermissions"
+            },
             "input": {
               "type": "array",
               "items": {
@@ -9462,6 +9474,10 @@
         {
           "type": "object",
           "properties": {
+            "approvalMode": {
+              "$ref": "#/$defs/ApprovalMode",
+              "default": "askPermissions"
+            },
             "command": {
               "type": "string"
             },
@@ -11111,6 +11127,10 @@
                 "$ref": "#/$defs/FrozenSkillActivation"
               }
             },
+            "approvalMode": {
+              "$ref": "#/$defs/ApprovalMode",
+              "default": "askPermissions"
+            },
             "model": {
               "anyOf": [
                 {
@@ -12221,6 +12241,18 @@
           "required": [
             "type",
             "assessmentId"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "permissionBypassed"
+            }
+          },
+          "required": [
+            "type"
           ]
         },
         {

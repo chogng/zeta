@@ -6,6 +6,7 @@ use zeta_policy::{
     CapabilitySet, ClassifierAssessment, ClassifierRecommendation, PolicyRevision,
     ProcessInvocationKind, ResolvedAction, SandboxCompatibility,
 };
+use zeta_protocol::ApprovalMode;
 
 #[derive(Debug)]
 struct ClassifierError;
@@ -98,4 +99,55 @@ fn durable_approval_rejects_a_capability_set_from_another_action() {
             .to_string(),
         "policy error: approval request is not bound to the reviewed action"
     );
+}
+
+#[test]
+fn permission_bypass_replaces_only_a_bound_ask_user_decision() {
+    let request = review_request();
+    let engine = PolicyEngine::new(
+        PolicyRevision::new("policy-1"),
+        AskClassifier,
+        zeta_policy::ReviewFailurePolicy::Block,
+    );
+    let service: &dyn PolicyService = &engine;
+
+    let decision = service
+        .decide_for_turn_with_approval_mode(
+            "policy-1",
+            ApprovalMode::BypassPermissions,
+            &request,
+            &CancellationSource::new().token(),
+        )
+        .unwrap();
+    let ExecutionDecision::RunWithPermissionBypass(grant) = decision else {
+        panic!("permission bypass should replace the interactive approval");
+    };
+    assert!(grant.matches(
+        request.action().digest(),
+        request.action().required_capabilities(),
+        request.policy_revision(),
+    ));
+}
+
+#[test]
+fn ask_permissions_keeps_the_same_action_interactive() {
+    let request = review_request();
+    let engine = PolicyEngine::new(
+        PolicyRevision::new("policy-1"),
+        AskClassifier,
+        zeta_policy::ReviewFailurePolicy::Block,
+    );
+    let service: &dyn PolicyService = &engine;
+
+    assert!(matches!(
+        service
+            .decide_for_turn_with_approval_mode(
+                "policy-1",
+                ApprovalMode::AskPermissions,
+                &request,
+                &CancellationSource::new().token(),
+            )
+            .unwrap(),
+        ExecutionDecision::AskUser(_)
+    ));
 }

@@ -215,6 +215,7 @@ fn in_process_client_uses_session_first_contract_and_canonical_updates() {
             expected_sequence: 1,
             request: SessionRequest::StartTurn {
                 thread_id: thread.thread_id.clone(),
+                approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 input: vec![
                     InputItem::Text {
                         text: "hello".into(),

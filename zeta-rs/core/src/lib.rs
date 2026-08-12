@@ -48,6 +48,7 @@ pub use services::NoContextSource;
 pub use services::NoThreadUpdates;
 pub use services::NoTools;
 pub use services::OneTimeToolGrant;
+pub use services::PermissionBypassToolGrant;
 pub use services::ThreadUpdateSink;
 pub use services::ToolAuthorization;
 pub use services::ToolExecutionFacts;

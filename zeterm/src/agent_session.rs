@@ -863,6 +863,7 @@ fn submit_agent_message(
             expected_sequence: active.sequence,
             request: SessionRequest::StartTurn {
                 thread_id: active.thread_id.clone(),
+                approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 input: vec![InputItem::Text { text }],
             },
         })
@@ -891,6 +892,7 @@ fn submit_shell_command(
             expected_sequence: active.sequence,
             request: SessionRequest::StartShellTurn {
                 thread_id: active.thread_id.clone(),
+                approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 command,
                 working_directory: ".".into(),
             },

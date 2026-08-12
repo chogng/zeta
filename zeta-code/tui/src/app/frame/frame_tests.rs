@@ -38,11 +38,9 @@ fn empty_frame_uses_lightweight_chrome_and_a_welcome_banner() {
     assert!(rendered.contains("Welcome back!"));
     assert!(rendered.contains("Tips for getting started"));
     assert!(rendered.contains("Try asking"));
-    assert!(
-        rendered.contains(
-            "shift-tab policy · enter send · ctrl-v image · esc esc rewind · ctrl-c quit"
-        )
-    );
+    assert!(rendered.contains("ask permissions on · shift-tab switch · enter send · ctrl-v image"));
+    let footer = rendered.lines().last().unwrap();
+    assert!(footer.starts_with("ask permissions on"));
 }
 
 #[test]
@@ -189,7 +187,10 @@ fn error_detail_is_rendered_once_and_the_footer_only_offers_recovery() {
             .count(),
         1
     );
-    assert!(rendered.contains("ready to retry  ·  esc esc rewind  ·  ctrl-c quit"));
+    assert!(
+        rendered
+            .contains("ask permissions on · shift-tab switch · ready to retry · esc esc rewind")
+    );
     assert!(!rendered.contains("StableTurnError"));
 }
 

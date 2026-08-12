@@ -5,9 +5,10 @@ use super::tool_execution::{
 };
 use crate::policy_service::approval_matches_review;
 use crate::{
-    AutoReviewedToolGrant, CoreError, NoThreadUpdates, OneTimeToolGrant, PolicyService,
-    RecordToolResultRequest, RequestTurnInteraction, ThreadController, ThreadSnapshot,
-    ThreadUpdateSink, ToolAuthorization, ToolCallOutput, ToolService, durable_approval_request,
+    AutoReviewedToolGrant, CoreError, NoThreadUpdates, OneTimeToolGrant, PermissionBypassToolGrant,
+    PolicyService, RecordToolResultRequest, RequestTurnInteraction, ThreadController,
+    ThreadSnapshot, ThreadUpdateSink, ToolAuthorization, ToolCallOutput, ToolService,
+    durable_approval_request,
 };
 use std::sync::Arc;
 use zeta_async_utils::CancellationToken;
@@ -70,11 +71,18 @@ impl ToolScheduler {
                 .find(|turn| &turn.turn_id == turn_id)
                 .map(|turn| turn.policy_revision.as_str())
                 .ok_or_else(|| CoreError::NotFound(turn_id.to_string()))?;
+            let approval_mode = snapshot
+                .turns
+                .iter()
+                .find(|turn| &turn.turn_id == turn_id)
+                .map(|turn| turn.approval_mode)
+                .ok_or_else(|| CoreError::NotFound(turn_id.to_string()))?;
             let execution = ToolExecutionContext::new(
                 thread_id,
                 turn_id,
                 &pending.item_id,
                 frozen_policy_revision,
+                approval_mode,
                 cancellation,
             );
 
@@ -205,10 +213,12 @@ impl ToolScheduler {
 
             let reviewed =
                 self.prepare_review(&snapshot, turn_id, &pending.item_id, &pending.call)?;
-            match self
-                .policy
-                .decide_for_turn(frozen_policy_revision, &reviewed, cancellation)?
-            {
+            match self.policy.decide_for_turn_with_approval_mode(
+                frozen_policy_revision,
+                approval_mode,
+                &reviewed,
+                cancellation,
+            )? {
                 ExecutionDecision::RunSandboxed(sandbox) => {
                     let progress = self.execute(
                         &execution,
@@ -248,6 +258,26 @@ impl ToolScheduler {
                         self.execute(&execution, pending.call, &reviewed, authorization)?;
                     if progress != ToolSchedulingProgress::Complete {
                         return Ok(progress);
+                    }
+                }
+                ExecutionDecision::RunWithPermissionBypass(grant) => {
+                    if !grant.matches(
+                        reviewed.action().digest(),
+                        reviewed.action().required_capabilities(),
+                        reviewed.policy_revision(),
+                    ) {
+                        return Err(CoreError::Policy(
+                            "permission-bypass grant is not bound to the prepared action".into(),
+                        ));
+                    }
+                    let authorization = ToolAuthorization::PermissionBypassed(
+                        PermissionBypassToolGrant::new(pending.call.id.clone(), grant),
+                    );
+                    if matches!(
+                        self.execute(&execution, pending.call, &reviewed, authorization)?,
+                        ToolSchedulingProgress::WaitingForApproval
+                    ) {
+                        return Ok(ToolSchedulingProgress::WaitingForApproval);
                     }
                 }
                 ExecutionDecision::ReviseAction(revision) => {

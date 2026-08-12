@@ -10,10 +10,10 @@ use zeta_model_provider_config::{
 };
 use zeta_policy::{
     ActionClassifier, ActionDigest, ActionKind, ActionProvenance, ActionReviewRequest,
-    ActionSource, Capability, CapabilityKind, CapabilitySet, PolicyRevision, ProcessInvocationKind,
-    ResolvedAction, ReviewContext, SandboxCompatibility,
+    ActionSource, Capability, CapabilityKind, CapabilitySet, ExecutionDecision, PolicyRevision,
+    ProcessInvocationKind, ResolvedAction, ReviewContext, SandboxCompatibility,
 };
-use zeta_protocol::{ContentPart, InputItem, ModelResponse, StopReason};
+use zeta_protocol::{ApprovalMode, ContentPart, InputItem, ModelResponse, StopReason};
 
 struct RecordingProvider {
     selected: Arc<Mutex<Vec<ModelRef>>>,
@@ -194,4 +194,73 @@ fn explicit_review_rejects_a_model_outside_a_listed_catalog() {
         resolver.resolve(&config).err().unwrap().to_string(),
         "model 'missing' is not registered for provider 'test'"
     );
+}
+
+struct AskPolicy;
+
+impl PolicyService for AskPolicy {
+    fn revision(&self) -> String {
+        "base-policy-v1".into()
+    }
+
+    fn decide(
+        &self,
+        request: &ActionReviewRequest,
+        _: &CancellationToken,
+    ) -> Result<ExecutionDecision, CoreError> {
+        Ok(ExecutionDecision::AskUser(
+            zeta_policy::ApprovalRequest::new(
+                request.action().digest().clone(),
+                request.action().required_capabilities().clone(),
+                "needs approval",
+            ),
+        ))
+    }
+}
+
+#[test]
+fn approval_mode_policy_runs_the_reviewer_only_for_auto_review() {
+    let review_model = ProviderReviewModel {
+        model: model_ref("test", "review-model"),
+        invoker: Arc::new(StaticResponseInvoker(
+            r#"{"recommendation":"deny","reason":"unsafe"}"#.into(),
+        )),
+    };
+    let policy = ApprovalModePolicyService::new(Arc::new(AskPolicy), Some(review_model));
+    let revision = policy.revision();
+    let request = review_request();
+
+    assert!(matches!(
+        policy
+            .decide_for_turn_with_approval_mode(
+                &revision,
+                ApprovalMode::AskPermissions,
+                &request,
+                &CancellationSource::new().token(),
+            )
+            .unwrap(),
+        ExecutionDecision::AskUser(_)
+    ));
+    assert!(matches!(
+        policy
+            .decide_for_turn_with_approval_mode(
+                &revision,
+                ApprovalMode::AutoReview,
+                &request,
+                &CancellationSource::new().token(),
+            )
+            .unwrap(),
+        ExecutionDecision::Block(_)
+    ));
+    assert!(matches!(
+        policy
+            .decide_for_turn_with_approval_mode(
+                &revision,
+                ApprovalMode::BypassPermissions,
+                &request,
+                &CancellationSource::new().token(),
+            )
+            .unwrap(),
+        ExecutionDecision::RunWithPermissionBypass(_)
+    ));
 }

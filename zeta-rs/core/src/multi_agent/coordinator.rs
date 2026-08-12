@@ -434,6 +434,7 @@ impl MultiAgentCoordinator {
                 expected_sequence: SequenceExpectation::Any,
                 model: seed.role.model.clone(),
                 policy_revision: seed.policy_ceiling.policy_revision.clone(),
+                approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 activated_skills: seed.capability_scope.skills.clone(),
                 input: vec![UserInput::Text {
                     text: seed.task.instructions.clone(),

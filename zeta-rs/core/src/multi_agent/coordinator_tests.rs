@@ -650,6 +650,7 @@ fn fixture() -> Fixture {
                 expected_sequence: SequenceExpectation::Exact(1),
                 model: None,
                 policy_revision: "policy-v1".into(),
+                approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
                     text: "Delegate a review".into(),

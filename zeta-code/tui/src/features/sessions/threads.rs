@@ -141,6 +141,11 @@ fn origin_label(origin: &ThreadOrigin) -> String {
             before_turn_id,
             ..
         } => format!("rewind of {parent_thread_id} before {before_turn_id}"),
+        ThreadOrigin::AgentSpawn {
+            parent_thread_id,
+            delegation_id,
+            ..
+        } => format!("agent {delegation_id} from {parent_thread_id}"),
     }
 }
 

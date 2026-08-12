@@ -38,6 +38,7 @@ use zeta_core::{
     StartTurnRequest, ThreadSnapshot, TurnStatus,
 };
 use zeta_protocol::AgentRequestEnvelope;
+use zeta_protocol::ApprovalMode;
 use zeta_protocol::ModelRef;
 use zeta_protocol::SessionStatus;
 use zeta_protocol::UserInput;
@@ -353,16 +354,25 @@ impl AppServer {
             SessionRequest::ArchiveThread { thread_id } => result(&SessionRequestResult::Session(
                 self.archive_session_thread_request(mutation, thread_id)?,
             )),
-            SessionRequest::StartTurn { thread_id, input } => result(&SessionRequestResult::Turn(
-                self.start_turn_request(mutation, thread_id, input)?,
-            )),
+            SessionRequest::StartTurn {
+                thread_id,
+                approval_mode,
+                input,
+            } => result(&SessionRequestResult::Turn(self.start_turn_request(
+                mutation,
+                thread_id,
+                approval_mode,
+                input,
+            )?)),
             SessionRequest::StartShellTurn {
                 thread_id,
+                approval_mode,
                 command,
                 working_directory,
             } => result(&SessionRequestResult::Turn(self.start_shell_turn_request(
                 mutation,
                 thread_id,
+                approval_mode,
                 command,
                 working_directory,
             )?)),
@@ -697,6 +707,7 @@ impl AppServer {
         &self,
         mutation: SessionMutation,
         thread_id: zeta_protocol::ThreadId,
+        approval_mode: ApprovalMode,
         input: Vec<InputItem>,
     ) -> Result<TurnStartResult, RpcError> {
         let thread_before = self
@@ -728,9 +739,12 @@ impl AppServer {
                 InputItem::Skill { skill } => UserInput::Skill { skill },
             })
             .collect::<Vec<_>>();
-        if let Some(replayed) =
-            super::start_turn::replayed_result(&thread_before, &mutation.command_id, &input)?
-        {
+        if let Some(replayed) = super::start_turn::replayed_result(
+            &thread_before,
+            &mutation.command_id,
+            approval_mode,
+            &input,
+        )? {
             return Ok(replayed);
         }
         let model = match session.model {
@@ -758,6 +772,7 @@ impl AppServer {
                     expected_sequence: SequenceExpectation::Exact(mutation.expected_sequence),
                     model,
                     policy_revision,
+                    approval_mode,
                     activated_skills: Vec::new(),
                     input,
                 },
@@ -770,8 +785,13 @@ impl AppServer {
                 .threads()
                 .read_thread(&thread_id)
                 .map_err(core_error)?;
-            return super::start_turn::replayed_result(&snapshot, &command_id, &replay_input)?
-                .ok_or_else(|| RpcError::new(-32000, AppServerErrorName::InternalError));
+            return super::start_turn::replayed_result(
+                &snapshot,
+                &command_id,
+                approval_mode,
+                &replay_input,
+            )?
+            .ok_or_else(|| RpcError::new(-32000, AppServerErrorName::InternalError));
         }
         self.notify_thread_updates(&thread_id, mutation.expected_sequence)?;
         turn_executor
@@ -787,6 +807,7 @@ impl AppServer {
         &self,
         mutation: SessionMutation,
         thread_id: zeta_protocol::ThreadId,
+        approval_mode: ApprovalMode,
         command: String,
         working_directory: String,
     ) -> Result<TurnStartResult, RpcError> {
@@ -814,6 +835,7 @@ impl AppServer {
                     command_id: mutation.command_id,
                     expected_sequence: SequenceExpectation::Exact(mutation.expected_sequence),
                     policy_revision,
+                    approval_mode,
                     invocation: ShellTurnInvocation {
                         command,
                         shell_program: "/bin/sh".into(),

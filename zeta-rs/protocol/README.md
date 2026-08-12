@@ -108,7 +108,10 @@ Command
 Event 不携带 sequence、timestamp、schema version、event ID 或 transport metadata。特别地，
 `ThreadEvent::ToolExecutionStarted` durable 地保存 action digest、policy revision 和
 `ToolExecutionAuthority`，但不负责判断 authority 是否有效。`SessionEvent::SessionModelChanged`
-保存 Session 当前模型，而 `ThreadEvent::TurnAccepted` 再保存该 Turn 的不可变模型快照。
+保存 Session 当前模型，而 `ThreadEvent::TurnAccepted` 再保存该 Turn 的不可变模型与
+`ApprovalMode` 快照。`ApprovalMode` 的 canonical variants 是 `AskPermissions`、`AutoReview` 和
+`BypassPermissions`；旧数据缺字段时按 `AskPermissions` 读取。模式只给 policy safe point 使用，
+不能替代 action、capability、revision 或 Tool Call 的精确绑定。
 一次 sandbox denial 获得新的 exact
 authority 后，`ThreadEvent::ToolExecutionEscalated` 在重试前保存完整
 `SandboxDenialOutput` 与新 authority；Core reducer 负责验证它只能引用 started、未完成且尚未

@@ -458,6 +458,7 @@ impl<B: SandboxBackend> ToolService for LocalShellToolService<B> {
             ToolAuthorization::Sandboxed(policy) => CommandExecutionAuthority::Sandboxed(*policy),
             ToolAuthorization::UnsandboxedGrant { .. }
             | ToolAuthorization::AutoReviewed(_)
+            | ToolAuthorization::PermissionBypassed(_)
             | ToolAuthorization::ApprovedOnce(_) => CommandExecutionAuthority::Unrestricted,
         };
         match self

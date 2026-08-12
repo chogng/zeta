@@ -148,6 +148,7 @@ use crate::protocol::workspace::{WorkspaceSwitchParams, WorkspaceSwitchResult};
 use schemars::JsonSchema;
 use ts_rs::{Config, TS};
 use zeta_protocol::AgentRequestEnvelope;
+use zeta_protocol::ApprovalMode;
 use zeta_protocol::{
     ActionApprovalCapability, ActionApprovalCapabilityKind, ActionApprovalDecision,
     ActionApprovalRequest, ActionApprovalResponse, AgentContextContent, AgentContextMode,
@@ -1009,6 +1010,7 @@ typescript_bindings! {
     SessionEvent,
     SessionUpdate,
     SessionUpdateEnvelope,
+    ApprovalMode,
     SessionCreateParams,
     SessionReadParams,
     SessionSubscribeParams,

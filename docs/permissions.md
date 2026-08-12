@@ -33,6 +33,22 @@ Zeta 使用分层权限系统来平衡功能和安全性：能在明确沙箱边
 | 一次性绑定 | 批准请求、工具调用、动作摘要、完整能力集合和策略版本 |
 | 安全原则 | 可以减少无效询问，但不能用模糊匹配、模型自信或历史点击替代精确授权 |
 
+### 每个 Turn 的交互模式
+
+TUI 当前在 footer 最左侧显示并用 Shift-Tab 循环三种模式。模式在提交时冻结到
+`TurnAccepted`，所以运行中切换只影响后续 Turn，包括排队的 follow-up。
+
+| Footer 文案 | 模式 | authoritative policy 返回 `AskUser` 时 |
+| --- | --- | --- |
+| `ask permissions on` | `AskPermissions` | 创建 durable approval，由用户 approve once 或 decline |
+| `auto review on` | `AutoReview` | 调用配置的审查模型，再由 `PolicyEngine` 应用风险与授权矩阵；模型不可用或失败时继续询问用户 |
+| `bypass permissions on` | `BypassPermissions` | 跳过这次交互并签发精确绑定的 bypass authority |
+
+`BypassPermissions` 不是关闭全部安全检查。base policy 始终先运行；确定性 `Block`、策略版本不匹配、
+无效 action/capability binding、沙箱硬约束和 policy error 都不会被改写。bypass authority 仍绑定
+当前 action digest、完整 capability set、policy revision 和 exact Tool Call，并在副作用开始前
+durable 记录。
+
 ### 系统内部如何表达
 
 上表描述用户行为；系统内部将每次判断表示为以下类型化结果：
@@ -42,6 +58,7 @@ Zeta 使用分层权限系统来平衡功能和安全性：能在明确沙箱边
 | `RunSandboxed` | 在明确的文件系统和网络限制中执行 | 确定性策略 |
 | `RunAutoReviewed` | 不适用沙箱或需要额外能力，但上下文风险满足自动授权条件 | 策略引擎 `PolicyEngine`；风险审查器只提供建议 |
 | `RunUnsandboxed` | 使用已有的精确用户授权执行 | 用户授权 + `PolicyEngine` 精确匹配 |
+| `RunWithPermissionBypass` | 当前 Turn 选择跳过本来需要的交互，但仍保留精确绑定与审计 | 可信产品 policy adapter；只能替换 `AskUser` |
 | `AskUser` | 缺少足够、明确的执行授权 | 用户 |
 | `ReviseAction` | 当前动作过宽，Agent 应提出更小、更安全的动作 | `PolicyEngine` |
 | `Block` | 命中确定性禁令、极高风险、审查失败或沙箱硬约束 | 确定性策略 |
@@ -230,6 +247,7 @@ session/cache 的 `~/.claude.json` 也不会进入当前发现计划。Skill 中
 | 优先拒绝、强制沙箱和精确授权的决策顺序 | 当前已实现 | 规则当前以精确动作摘要为主 |
 | Auto Review 类型化建议与风险门槛 | 当前已实现 | 当前是单次审查，没有分层审查或多审查器协作 |
 | 持久化批准请求与 `ApproveOnce` / `Decline` | 当前已实现 | 各客户端的呈现体验尚未完全统一 |
+| TUI 的 Ask / Auto Review / Bypass per-Turn 模式 | 当前已实现 | 模式在提交时冻结；review model 当前在 App Server 启动时解析 |
 | 副作用前记录工具执行开始 | 当前已实现 | 崩溃后的未知结果不自动重放 |
 | 类型化沙箱拒绝再审查 | 当前已实现 | 最多一次；真实平台拒绝样本仍有限 |
 | macOS、Linux 和 Windows 平台沙箱 | 部分具备 | 具体支持和集成验收以沙箱文档为准 |

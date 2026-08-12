@@ -56,7 +56,7 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
             app.input_cursor_line(),
             cursor,
         );
-        footer::draw(frame, areas.footer, app.status());
+        footer::draw(frame, areas.footer, app);
     }
 }
 

@@ -21,7 +21,7 @@ approval UI、不选择 model、不持久化 rule/grant。
 | User allowlist | `UserAllowlist`, `UnsandboxedGrant` | exact digest/revision/capability matching；显式 unsandboxed authority |
 | Advisory port | `ActionClassifier`, `ClassifierAssessment`, `ClassifierRecommendation` | implementation 不能执行或授权 |
 | Final outcome | `ExecutionDecision`, `BlockReason`, `ApprovalRequest`, `SaferActionRequest` | caller 必须按 typed branch 处理 |
-| Authority | `AutoReviewGrant` | constructor crate-private，只能由 engine 签发 |
+| Authority | `AutoReviewGrant`, `PermissionBypassGrant` | Auto Review 只能由 engine 签发；permission bypass 只能由可信产品 policy adapter 针对 `AskUser` 签发 |
 
 `ActionDigest::from_canonical_bytes` 只负责 SHA-256。哪些字段进入 canonical bytes 由 host action
 materializer 负责；遗漏 cwd、environment、resolved path 或 provenance 会导致错误 grant reuse，
@@ -44,6 +44,7 @@ src/
 | Symbol | 可见性 | 当前职责 | 方向约束 |
 | --- | --- | --- | --- |
 | `PolicyEngine::decide` | public | 唯一 top-level precedence entry | classifier 不能绕过 earlier deterministic branches |
+| `PolicyEngine::review_after_authoritative_ask_user` | public | 可信 host 在另一个 authoritative policy 已对同一 request 返回 `AskUser` 后应用 classifier 与风险矩阵 | 不得作为普通 top-level entry，也不重新采用 sandbox fast path |
 | `ensure_revision` | private | engine/request safe-point equality | mismatch 是 `PolicyError`，不是 classifier question |
 | `BuiltInSafetyPolicy::decision` | crate-private | deny first，再 require-sandbox | built-in constraint 必须优先于 user allowlist |
 | `UserAllowlist::matching_grant` | crate-private | exact user grant lookup | 不接受 Tool name、摘要或命令前缀 |
@@ -54,6 +55,7 @@ src/
 | `UnsandboxedGrant::matches` | public method | digest + capabilities + revision exact match | 不使用 summary/Tool name 模糊匹配 |
 | `AutoReviewGrant::new` | crate-private | engine-only authority construction | 不得公开给 classifier/host adapter |
 | `AutoReviewGrant::matches` | public method | execution-time binding check | Core 还需绑定 exact Tool Call |
+| `PermissionBypassGrant::{new,matches}` | public methods | host policy adapter 签发并校验 digest + capabilities + revision | 只能替换已经由 authoritative policy 产生的 `AskUser`，不能覆盖 `Block` 或 contract error |
 | `AssessmentId::from_response` | public constructor | request/review-protocol/response audit hash | classifier 实现负责 canonical response bytes |
 
 ## 决策调用图

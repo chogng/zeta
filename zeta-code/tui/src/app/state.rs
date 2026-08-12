@@ -41,6 +41,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
 use std::time::Instant;
+use zeta_protocol::ApprovalMode;
 
 const DOUBLE_ESCAPE_WINDOW: Duration = Duration::from_millis(500);
 
@@ -64,6 +65,7 @@ pub(crate) struct App {
     last_root_escape: Option<Instant>,
     status: Status,
     status_line: StatusLineModel,
+    approval_mode: ApprovalMode,
 }
 
 #[derive(Debug)]
@@ -91,6 +93,7 @@ impl App {
             last_root_escape: None,
             status: Status::Ready,
             status_line: StatusLineModel::for_workspace(Path::new(".")),
+            approval_mode: ApprovalMode::AskPermissions,
         }
     }
 
@@ -114,6 +117,7 @@ impl App {
             last_root_escape: None,
             status: Status::Ready,
             status_line: StatusLineModel::for_workspace(workspace_root),
+            approval_mode: ApprovalMode::AskPermissions,
         }
     }
 
@@ -159,7 +163,10 @@ impl App {
                     submission.display_text.clone(),
                 ));
                 self.status = Status::Working;
-                Some(AppCommand::SubmitTurn(submission))
+                Some(AppCommand::SubmitTurn {
+                    submission,
+                    approval_mode: self.approval_mode,
+                })
             }
             InteractionPaneOutcome::Consumed => None,
             InteractionPaneOutcome::Unhandled => None,
@@ -487,6 +494,10 @@ impl App {
         &self.status
     }
 
+    pub(crate) fn approval_mode(&self) -> ApprovalMode {
+        self.approval_mode
+    }
+
     pub(crate) fn status_line(&self) -> &StatusLineModel {
         &self.status_line
     }
@@ -596,6 +607,18 @@ impl App {
     }
 
     fn handle_global_key(&mut self, key: KeyEvent, now: Instant) -> Option<AppCommand> {
+        if self.selection_view().is_none()
+            && self.accepts_input()
+            && key.kind == KeyEventKind::Press
+            && key.code == KeyCode::BackTab
+        {
+            self.approval_mode = match self.approval_mode {
+                ApprovalMode::AskPermissions => ApprovalMode::AutoReview,
+                ApprovalMode::AutoReview => ApprovalMode::BypassPermissions,
+                ApprovalMode::BypassPermissions => ApprovalMode::AskPermissions,
+            };
+            return None;
+        }
         if self.selection_view().is_none() && self.transcript_scroll.handle_key(key) {
             return (key.modifiers == KeyModifiers::CONTROL && key.code == KeyCode::Home)
                 .then_some(AppCommand::LoadOlderHistory);
@@ -685,7 +708,10 @@ impl App {
                     submission.display_text.clone(),
                 ));
                 self.status = Status::Working;
-                Some(AppCommand::SubmitTurn(submission))
+                Some(AppCommand::SubmitTurn {
+                    submission,
+                    approval_mode: self.approval_mode,
+                })
             }
             (SlashCommandOrigin::Skill, _) => None,
             (SlashCommandOrigin::Local, Some(_)) => {

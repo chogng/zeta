@@ -23,8 +23,8 @@ pub use classifier::{
 };
 pub use context::{ReviewContext, ReviewEvidence, ReviewEvidenceKind, ReviewEvidenceTrust};
 pub use decision::{
-    ApprovalRequest, AutoReviewGrant, BlockReason, ExecutionDecision, PolicyError,
-    ReviewFailurePolicy, SaferActionRequest,
+    ApprovalRequest, AutoReviewGrant, BlockReason, ExecutionDecision, PermissionBypassGrant,
+    PolicyError, ReviewFailurePolicy, SaferActionRequest,
 };
 pub use engine::PolicyEngine;
 pub use layers::{BuiltInSafetyPolicy, UserAllowlist};

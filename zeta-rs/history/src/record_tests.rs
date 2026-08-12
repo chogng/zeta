@@ -18,6 +18,7 @@ fn stored_event_round_trip_preserves_history_contract() {
             command_id: CommandId::new("command_1").unwrap(),
             command: ThreadCommand::StartShellTurn {
                 command: "pwd".into(),
+                approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
             },
         }),
         event: ThreadEvent::ThreadCreated {

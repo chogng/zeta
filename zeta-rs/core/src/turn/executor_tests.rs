@@ -166,6 +166,7 @@ fn compacts_durable_history_then_replans_with_the_verified_checkpoint() {
                     expected_sequence: SequenceExpectation::Any,
                     model: None,
                     policy_revision: "test-policy-v1".into(),
+                    approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                     activated_skills: Vec::new(),
                     input: vec![UserInput::Text {
                         text: format!("history input {index}"),
@@ -186,6 +187,7 @@ fn compacts_durable_history_then_replans_with_the_verified_checkpoint() {
                 expected_sequence: SequenceExpectation::Any,
                 model: None,
                 policy_revision: "test-policy-v1".into(),
+                approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
                     text: "current input".into(),
@@ -311,6 +313,7 @@ fn explicit_skill_selection_uses_frozen_digest_and_layered_body() {
                 expected_sequence: SequenceExpectation::Any,
                 model: None,
                 policy_revision: "test-policy-v1".into(),
+                approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 activated_skills: vec![activation.clone()],
                 input: vec![
                     UserInput::Skill {
@@ -644,6 +647,7 @@ fn per_thread_mailboxes_run_independently_and_interrupt_the_active_turn() {
                 expected_sequence: SequenceExpectation::Any,
                 model: None,
                 policy_revision: "test-policy-v1".into(),
+                approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
                     text: "fast".into(),
@@ -1338,6 +1342,7 @@ fn started_turn() -> (Arc<ThreadController>, ThreadId, TurnId) {
                 expected_sequence: SequenceExpectation::Any,
                 model: None,
                 policy_revision: "test-policy-v1".into(),
+                approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
                     text: "hello".into(),

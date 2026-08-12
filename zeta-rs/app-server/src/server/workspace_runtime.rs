@@ -13,6 +13,7 @@ use crate::dynamic_tools::DynamicToolCompositionError;
 use crate::dynamic_tools::compose_dynamic_tools;
 use crate::local_tools::append_local_tool;
 use crate::local_tools::compose_local_tools;
+use crate::review::ApprovalModePolicyService;
 use crate::tool_composition::ReloadableToolPorts;
 use crate::tool_composition::ToolPort;
 use crate::tool_composition::ToolSearchOptions;
@@ -740,11 +741,15 @@ impl AppServer {
             &providers,
             self.semantic_model_provider.clone(),
         )?;
+        let policy = Arc::new(ApprovalModePolicyService::new(
+            tools.reloadable.policy(),
+            self.approval_review_model.clone(),
+        ));
         let mut executor = TurnExecutor::new(
             self.sessions.threads().clone(),
             Arc::clone(&self.model),
             tools.reloadable.tools(),
-            tools.reloadable.policy(),
+            policy,
         )
         .with_thread_updates(Arc::new(AppServerThreadUpdates {
             updates: Arc::clone(&self.updates),

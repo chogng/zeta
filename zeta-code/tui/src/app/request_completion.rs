@@ -31,6 +31,7 @@ use zeta_app_server_protocol::protocol::skills::SkillCatalogReloadDto;
 use zeta_app_server_protocol::protocol::skills::SkillListParams;
 use zeta_app_server_protocol::protocol::slash_commands::SlashCommandDefinition;
 use zeta_app_server_protocol::protocol::turn::TurnStartResult;
+use zeta_protocol::ApprovalMode;
 use zeta_protocol::SkillRef;
 use zeta_protocol::Thread;
 #[cfg(test)]
@@ -126,11 +127,12 @@ pub(super) fn start_turn_and_read(
     mut client: AppServerRequestHandle,
     scope: ThreadRequestScope,
     submission: ComposerSubmission,
+    approval_mode: ApprovalMode,
     history: ThreadSnapshotHistory,
 ) -> Result<(TurnStartResult, LatestThreadSnapshot), ClientError> {
     let session_id = scope.session_id().clone();
     let thread_id = scope.thread_id().clone();
-    let start = submit_prompt(&mut client, scope, submission)?;
+    let start = submit_prompt(&mut client, scope, submission, approval_mode)?;
     let snapshot = read_thread_history(&mut client, &session_id, &thread_id, history)?;
     Ok((start, snapshot))
 }

@@ -11,6 +11,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 use zeta_protocol::AgentResponse;
+use zeta_protocol::ApprovalMode;
 use zeta_protocol::ModelRef;
 use zeta_protocol::Session;
 use zeta_protocol::SessionUpdateEnvelope;
@@ -78,11 +79,15 @@ pub enum SessionRequest {
     },
     StartTurn {
         thread_id: ThreadId,
+        #[serde(default)]
+        approval_mode: ApprovalMode,
         #[schemars(length(min = 1))]
         input: Vec<InputItem>,
     },
     StartShellTurn {
         thread_id: ThreadId,
+        #[serde(default)]
+        approval_mode: ApprovalMode,
         command: String,
         working_directory: String,
     },

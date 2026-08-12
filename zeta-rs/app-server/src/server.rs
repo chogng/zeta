@@ -1,6 +1,8 @@
 use crate::SlashCommandCatalog;
 use crate::model_catalog::{ModelCatalog, unavailable_model_catalog};
 use crate::resource_store::{ResourceError, ResourceStore};
+use crate::review::ApprovalModePolicyService;
+use crate::review::ProviderReviewModel;
 use serde::Deserialize;
 use serde_json::Value;
 use std::collections::BTreeSet;
@@ -46,9 +48,9 @@ mod fs_watcher;
 mod git_operations;
 mod git_runtime;
 mod interaction_runtime;
-pub(crate) mod multi_agent_tools;
 mod language_operations;
 mod language_runtime;
+pub(crate) mod multi_agent_tools;
 mod notification_queue;
 mod operations;
 mod search_operations;
@@ -107,6 +109,7 @@ pub struct AppServer {
     pub(super) extensions: Mutex<ExtensionCatalog>,
     pub(super) config: Option<Arc<ConfigStore>>,
     language: Mutex<language_runtime::AppServerLanguageRuntime>,
+    approval_review_model: Option<ProviderReviewModel>,
     pub(super) workspace_authority_gate: Arc<Mutex<()>>,
     workspace_runtime: Arc<RwLock<WorkspaceRuntime>>,
     local_workspace_host: Option<LocalWorkspaceHost>,
@@ -200,6 +203,7 @@ impl AppServer {
             extensions: Mutex::new(ExtensionCatalog::default()),
             config: None,
             language: Mutex::new(language_runtime::AppServerLanguageRuntime::default()),
+            approval_review_model: None,
             workspace_authority_gate,
             workspace_runtime: Arc::new(RwLock::new(WorkspaceRuntime::empty(turn_executor))),
             local_workspace_host: None,
@@ -311,6 +315,14 @@ impl AppServer {
             Arc::clone(&self.updates),
         ));
         self.config = Some(config);
+        self
+    }
+
+    pub(crate) fn with_approval_review_model(
+        mut self,
+        review_model: Option<ProviderReviewModel>,
+    ) -> Self {
+        self.approval_review_model = review_model;
         self
     }
 
@@ -466,6 +478,10 @@ impl AppServer {
         tools: Arc<dyn ToolService>,
         policy: Arc<dyn PolicyService>,
     ) -> Self {
+        let policy = Arc::new(ApprovalModePolicyService::new(
+            policy,
+            self.approval_review_model.clone(),
+        ));
         let mut executor = TurnExecutor::new(
             self.sessions.threads().clone(),
             self.model.clone(),

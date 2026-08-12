@@ -71,6 +71,7 @@ fn stop_archives_session_and_interrupts_active_child_turns() {
                 expected_sequence: SequenceExpectation::Any,
                 model: None,
                 policy_revision: "test-policy-v1".into(),
+                approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 activated_skills: Vec::new(),
                 input: vec![zeta_protocol::UserInput::Text {
                     text: "hello".into(),
@@ -234,6 +235,7 @@ fn rewind_creates_a_child_with_only_turns_before_the_checkpoint() {
                     expected_sequence: SequenceExpectation::Exact(sequence),
                     model: None,
                     policy_revision: "test-policy-v1".into(),
+                    approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                     activated_skills: Vec::new(),
                     input: vec![zeta_protocol::UserInput::Text {
                         text: prompt.into(),

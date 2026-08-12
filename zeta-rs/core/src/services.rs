@@ -5,13 +5,26 @@ use crate::CoreError;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 use zeta_async_utils::CancellationToken;
-use zeta_policy::{ActionReviewRequest, AutoReviewGrant, GrantId, ReviewEvidence};
+use zeta_policy::ActionReviewRequest;
+use zeta_policy::AutoReviewGrant;
+use zeta_policy::GrantId;
+use zeta_policy::PermissionBypassGrant;
+use zeta_policy::ReviewEvidence;
+use zeta_protocol::ActionApprovalRequest;
+use zeta_protocol::ModelRef;
+use zeta_protocol::ModelRequest;
+use zeta_protocol::ModelResponse;
+use zeta_protocol::ModelStreamEvent;
+use zeta_protocol::RequestId;
+use zeta_protocol::SessionId;
+use zeta_protocol::ThreadId;
+use zeta_protocol::ThreadUpdateEnvelope;
+use zeta_protocol::ToolCall;
+use zeta_protocol::ToolCallId;
+use zeta_protocol::ToolDefinition;
+use zeta_protocol::ToolExecutionOutput;
+use zeta_protocol::ToolOutputStream;
 use zeta_protocol::TurnId;
-use zeta_protocol::{
-    ActionApprovalRequest, ModelRef, ModelRequest, ModelResponse, ModelStreamEvent, RequestId,
-    SessionId, ThreadId, ThreadUpdateEnvelope, ToolCall, ToolCallId, ToolDefinition,
-    ToolExecutionOutput, ToolOutputStream,
-};
 use zeta_sandboxing::SandboxPolicy;
 
 /// Holds a process-local or inter-process write lock for a Thread.
@@ -200,6 +213,7 @@ pub enum ToolAuthorization {
     Sandboxed(SandboxPolicy),
     UnsandboxedGrant { grant_id: GrantId },
     AutoReviewed(AutoReviewedToolGrant),
+    PermissionBypassed(PermissionBypassToolGrant),
     ApprovedOnce(OneTimeToolGrant),
 }
 
@@ -223,6 +237,30 @@ impl AutoReviewedToolGrant {
     }
 
     pub fn policy_grant(&self) -> &AutoReviewGrant {
+        &self.policy_grant
+    }
+}
+
+/// Non-reusable permission-bypass authority bound to one exact durable Tool Call.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PermissionBypassToolGrant {
+    tool_call_id: ToolCallId,
+    policy_grant: PermissionBypassGrant,
+}
+
+impl PermissionBypassToolGrant {
+    pub(crate) fn new(tool_call_id: ToolCallId, policy_grant: PermissionBypassGrant) -> Self {
+        Self {
+            tool_call_id,
+            policy_grant,
+        }
+    }
+
+    pub fn tool_call_id(&self) -> &ToolCallId {
+        &self.tool_call_id
+    }
+
+    pub fn policy_grant(&self) -> &PermissionBypassGrant {
         &self.policy_grant
     }
 }

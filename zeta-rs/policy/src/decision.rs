@@ -53,6 +53,43 @@ pub struct AutoReviewGrant {
     policy_revision: PolicyRevision,
 }
 
+/// One-use authority derived from a Turn's explicit permission-bypass ceiling.
+///
+/// Hosts may create this grant only after their authoritative policy has evaluated the exact
+/// action and returned an interactive approval request. Built-in denial, policy revision, action
+/// digest, and complete capability binding therefore remain mandatory in bypass mode.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PermissionBypassGrant {
+    action_digest: ActionDigest,
+    capabilities: CapabilitySet,
+    policy_revision: PolicyRevision,
+}
+
+impl PermissionBypassGrant {
+    pub fn new(
+        action_digest: ActionDigest,
+        capabilities: CapabilitySet,
+        policy_revision: PolicyRevision,
+    ) -> Self {
+        Self {
+            action_digest,
+            capabilities,
+            policy_revision,
+        }
+    }
+
+    pub fn matches(
+        &self,
+        action_digest: &ActionDigest,
+        capabilities: &CapabilitySet,
+        policy_revision: &PolicyRevision,
+    ) -> bool {
+        self.action_digest == *action_digest
+            && self.capabilities == *capabilities
+            && self.policy_revision == *policy_revision
+    }
+}
+
 impl AutoReviewGrant {
     pub(crate) fn new(
         assessment_id: AssessmentId,
@@ -146,6 +183,7 @@ pub enum ExecutionDecision {
     RunSandboxed(SandboxPolicy),
     RunUnsandboxed { grant_id: GrantId },
     RunAutoReviewed(AutoReviewGrant),
+    RunWithPermissionBypass(PermissionBypassGrant),
     ReviseAction(SaferActionRequest),
     AskUser(ApprovalRequest),
     Block(BlockReason),

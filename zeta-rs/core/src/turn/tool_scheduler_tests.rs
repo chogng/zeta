@@ -164,6 +164,41 @@ fn approved_dynamic_tool_waits_for_its_owner_then_commits_the_response() {
 }
 
 #[test]
+fn permission_bypass_executes_with_exact_durable_authority_without_an_interaction() {
+    let fixture = fixture_with_approval_mode(
+        Arc::new(ReviewTool::default()),
+        Arc::new(AskPolicy),
+        zeta_protocol::ApprovalMode::BypassPermissions,
+    );
+
+    assert!(matches!(
+        fixture.scheduler.run_pending(
+            &fixture.thread_id,
+            &fixture.turn_id,
+            &CancellationSource::new().token()
+        ),
+        Ok(ToolSchedulingProgress::Complete)
+    ));
+
+    let authorizations = fixture.tools.authorizations.lock().unwrap();
+    assert!(matches!(
+        authorizations.as_slice(),
+        [ToolAuthorization::PermissionBypassed(grant)]
+            if grant.tool_call_id() == &fixture.call_id
+    ));
+    let snapshot = fixture.threads.read_thread(&fixture.thread_id).unwrap();
+    assert!(snapshot.turns.last().unwrap().pending_interaction.is_none());
+    assert_eq!(
+        snapshot
+            .tool_execution_starts
+            .get(&fixture.call_id)
+            .unwrap()
+            .authority,
+        ToolExecutionAuthority::PermissionBypassed
+    );
+}
+
+#[test]
 fn decline_records_a_tool_failure_without_execution() {
     let fixture = fixture();
     fixture
@@ -797,6 +832,14 @@ fn fixture() -> Fixture {
 }
 
 fn fixture_with(tools: Arc<ReviewTool>, policy: Arc<dyn PolicyService>) -> Fixture {
+    fixture_with_approval_mode(tools, policy, zeta_protocol::ApprovalMode::AskPermissions)
+}
+
+fn fixture_with_approval_mode(
+    tools: Arc<ReviewTool>,
+    policy: Arc<dyn PolicyService>,
+    approval_mode: zeta_protocol::ApprovalMode,
+) -> Fixture {
     let store = Arc::new(InMemoryThreadStore::default());
     let threads = Arc::new(ThreadController::with_store(store.clone()));
     let policy_revision = policy.revision();
@@ -816,6 +859,7 @@ fn fixture_with(tools: Arc<ReviewTool>, policy: Arc<dyn PolicyService>) -> Fixtu
                 expected_sequence: SequenceExpectation::Any,
                 model: None,
                 policy_revision,
+                approval_mode,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text { text: "run".into() }],
             },

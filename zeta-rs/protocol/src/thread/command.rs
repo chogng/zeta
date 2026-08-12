@@ -1,6 +1,6 @@
 use crate::{
-    ActionApprovalResponse, DynamicToolResponse, FrozenSkillActivation, ModelRef, RequestId,
-    RequestUserInputResponse, TurnId, UserInput,
+    ActionApprovalResponse, ApprovalMode, DynamicToolResponse, FrozenSkillActivation, ModelRef,
+    RequestId, RequestUserInputResponse, TurnId, UserInput,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -19,10 +19,14 @@ pub enum ThreadCommand {
         model: Option<ModelRef>,
         #[serde(default)]
         activated_skills: Vec<FrozenSkillActivation>,
+        #[serde(default)]
+        approval_mode: ApprovalMode,
         input: Vec<UserInput>,
     },
     StartShellTurn {
         command: String,
+        #[serde(default)]
+        approval_mode: ApprovalMode,
     },
     InterruptTurn {
         turn_id: TurnId,

@@ -17,6 +17,7 @@ use zeta_protocol::AgentMessage;
 use zeta_protocol::AgentMessageId;
 use zeta_protocol::AgentRequest;
 use zeta_protocol::AgentResponse;
+use zeta_protocol::ApprovalMode;
 use zeta_protocol::ContextCheckpoint;
 use zeta_protocol::ContextSourceDigest;
 use zeta_protocol::ContextSourceRange;
@@ -160,6 +161,7 @@ pub struct TurnSnapshot {
     pub status: TurnStatus,
     pub model: Option<ModelRef>,
     pub policy_revision: String,
+    pub approval_mode: ApprovalMode,
     pub activated_skills: Vec<FrozenSkillActivation>,
     pub failure: Option<StableTurnError>,
     pub pending_interaction: Option<TurnInteraction>,
@@ -326,6 +328,7 @@ pub fn reduce_thread_event(
             turn_id,
             model,
             policy_revision,
+            approval_mode,
             activated_skills,
             ..
         } => {
@@ -339,6 +342,7 @@ pub fn reduce_thread_event(
                 turn_id,
                 model.clone(),
                 policy_revision.clone(),
+                *approval_mode,
                 activated_skills.clone(),
             )?;
             let receipt = envelope.command.clone().ok_or_else(|| {
@@ -348,15 +352,22 @@ pub fn reduce_thread_event(
                 ThreadCommand::StartTurn {
                     model: command_model,
                     activated_skills: command_skills,
+                    approval_mode: command_approval_mode,
                     input,
                     ..
                 } => {
                     command_model == model
                         && command_skills == activated_skills
+                        && command_approval_mode == approval_mode
                         && turn_skill_activations_match(input, activated_skills)
                 }
-                ThreadCommand::StartShellTurn { .. } => {
-                    model.is_none() && activated_skills.is_empty()
+                ThreadCommand::StartShellTurn {
+                    approval_mode: command_approval_mode,
+                    ..
+                } => {
+                    model.is_none()
+                        && command_approval_mode == approval_mode
+                        && activated_skills.is_empty()
                 }
                 _ => false,
             };
@@ -1319,6 +1330,7 @@ fn import_history(
             status: turn.status,
             model: turn.model.clone(),
             policy_revision: "imported-history-policy".into(),
+            approval_mode: ApprovalMode::AskPermissions,
             activated_skills: Vec::new(),
             failure: turn.error.clone(),
             pending_interaction: None,
@@ -1492,6 +1504,7 @@ fn create_turn(
     turn_id: &TurnId,
     model: Option<ModelRef>,
     policy_revision: String,
+    approval_mode: ApprovalMode,
     activated_skills: Vec<FrozenSkillActivation>,
 ) -> Result<(), CoreError> {
     if snapshot.turns.iter().any(|turn| turn.turn_id == *turn_id) {
@@ -1504,6 +1517,7 @@ fn create_turn(
         status: TurnStatus::Created,
         model,
         policy_revision,
+        approval_mode,
         activated_skills,
         failure: None,
         pending_interaction: None,
