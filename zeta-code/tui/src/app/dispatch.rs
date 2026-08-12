@@ -113,7 +113,7 @@ impl ActiveConversation {
                         self.session_id().as_str(),
                         self.thread_id().as_str(),
                         self.thread_sequence(),
-                        &config::preferred_model(&config),
+                        &config::preferred_model(config.preferred_model.as_ref()),
                     )));
             }
             TuiSlashCommandAction::Skills => {
@@ -274,7 +274,7 @@ impl ActiveConversation {
                         .map_err(|error| CommandExecutionError(error.to_string()))?;
                     output
                         .events
-                        .push(AppEvent::ConfigSnapshotReceived(update.config));
+                        .push(AppEvent::PreferredModelReceived(update.preferred_model));
                     output.events.push(AppEvent::ProductNotice(update.notice));
                 }
             }

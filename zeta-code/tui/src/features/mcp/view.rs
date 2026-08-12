@@ -6,7 +6,6 @@ use crate::components::selection::SelectionItemId;
 use crate::components::selection::SelectionTab;
 use crate::components::selection::SelectionViewModel;
 use std::collections::BTreeMap;
-use zeta_app_server_protocol::protocol::config::ConfigReadResult;
 use zeta_app_server_protocol::protocol::config::McpServerConfigDto;
 use zeta_app_server_protocol::protocol::config::McpServerEnablementDto;
 use zeta_app_server_protocol::protocol::config::McpTransportDto;
@@ -24,23 +23,24 @@ pub(crate) struct McpSelectionView {
     pub(crate) actions: BTreeMap<SelectionItemId, McpSelectionAction>,
 }
 
-pub(crate) fn mcp_selection_view(config: &ConfigReadResult) -> McpSelectionView {
+pub(crate) fn mcp_selection_view(
+    servers: &BTreeMap<String, McpServerConfigDto>,
+) -> McpSelectionView {
     let mut actions = BTreeMap::new();
-    let all = config
-        .mcp_servers
+    let all = servers
         .values()
         .enumerate()
         .map(|(index, server)| mcp_item(index, server, &mut actions))
         .collect::<Vec<_>>();
     let enabled = all
         .iter()
-        .zip(config.mcp_servers.values())
+        .zip(servers.values())
         .filter(|(_, server)| server.enablement == McpServerEnablementDto::Enabled)
         .map(|(item, _)| item.clone())
         .collect::<Vec<_>>();
     let disabled = all
         .iter()
-        .zip(config.mcp_servers.values())
+        .zip(servers.values())
         .filter(|(_, server)| server.enablement == McpServerEnablementDto::Disabled)
         .map(|(item, _)| item.clone())
         .collect::<Vec<_>>();

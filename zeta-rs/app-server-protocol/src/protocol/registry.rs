@@ -817,6 +817,7 @@ macro_rules! server_notifications {
         $(
             $variant:ident => $method:literal {
                 params: $params:ty,
+                $(storage: $storage:ident,)?
             }
         ),+ $(,)?
     ) => {
@@ -837,6 +838,41 @@ macro_rules! server_notifications {
             match method {
                 $($method => Some(ServerNotificationMethod::$variant),)+
                 _ => None,
+            }
+        }
+
+        /// A typed App Server notification decoded from the external wire contract.
+        ///
+        /// Consumers should project only the capabilities they own and retain a fallback arm.
+        /// Adding a protocol notification is intentionally exhaustive only inside this crate.
+        #[non_exhaustive]
+        #[derive(Clone, Debug, Eq, PartialEq)]
+        pub enum ServerNotification {
+            $(
+                $variant(notification_storage_type!($params $(, $storage)?)),
+            )+
+            Unknown {
+                method: String,
+                params: serde_json::Value,
+            },
+        }
+
+        /// Decodes one registered notification payload while preserving unknown methods.
+        pub fn decode_server_notification(
+            method: String,
+            params: serde_json::Value,
+        ) -> Result<ServerNotification, serde_json::Error> {
+            match server_notification_method(&method) {
+                $(
+                    Some(ServerNotificationMethod::$variant) => {
+                        serde_json::from_value::<$params>(params).map(|payload| {
+                            ServerNotification::$variant(notification_storage!(
+                                payload $(, $storage)?
+                            ))
+                        })
+                    }
+                )+
+                None => Ok(ServerNotification::Unknown { method, params }),
             }
         }
 
@@ -862,6 +898,24 @@ macro_rules! server_notifications {
     };
 }
 
+macro_rules! notification_storage_type {
+    ($params:ty) => {
+        $params
+    };
+    ($params:ty, boxed) => {
+        Box<$params>
+    };
+}
+
+macro_rules! notification_storage {
+    ($payload:expr) => {
+        $payload
+    };
+    ($payload:expr, boxed) => {
+        Box::new($payload)
+    };
+}
+
 server_notifications! {
     AgentRequest => "agent/request" {
         params: AgentRequestEnvelope,
@@ -877,6 +931,7 @@ server_notifications! {
     },
     SessionThreadUpdate => "session/thread/update" {
         params: ThreadUpdateEnvelope,
+        storage: boxed,
     },
     ConfigChanged => "config/changed" {
         params: ConfigChanged,

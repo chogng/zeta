@@ -1,9 +1,6 @@
 use super::ClientEvent;
 use super::map_event;
 use zeta_app_server_client::{AppServerEvent, ConnectionCloseReason, ServerNotification};
-use zeta_app_server_protocol::protocol::collaboration::DocumentCollaborationPresence;
-use zeta_app_server_protocol::protocol::collaboration::DocumentCollaborationPresenceSnapshot;
-use zeta_app_server_protocol::protocol::collaboration::DocumentCollaborationUpdate;
 use zeta_app_server_protocol::protocol::connectors::ConnectorsChanged;
 use zeta_app_server_protocol::protocol::git::{GitHeadDto, GitStatusChanged, GitStatusResult};
 use zeta_app_server_protocol::protocol::notification::{SkillsChanged, ThreadUpdateEnvelope};
@@ -80,34 +77,12 @@ fn git_status_change_updates_tui_owned_status_projection() {
 }
 
 #[test]
-fn document_collaboration_notifications_are_explicitly_ignored_until_the_tui_owns_documents() {
-    let update = DocumentCollaborationUpdate {
-        room_id: "gama-room".into(),
-        client_id: "client-a".into(),
-        sequence: 1,
-        base_version: 0,
-        version: 1,
-        transaction: "{\"format\":\"zeta.document.transaction\"}".into(),
-    };
-    let presence = DocumentCollaborationPresenceSnapshot {
-        room_id: "gama-room".into(),
-        generation: 1,
-        presences: vec![DocumentCollaborationPresence {
-            client_id: "client-a".into(),
-            selection: "anchor=0".into(),
-        }],
-    };
-
+fn unowned_notifications_do_not_enter_the_tui_projection() {
     assert_eq!(
-        map_event(AppServerEvent::Notification(
-            ServerNotification::DocumentCollaborationUpdate(update)
-        )),
-        None
-    );
-    assert_eq!(
-        map_event(AppServerEvent::Notification(
-            ServerNotification::DocumentCollaborationPresence(presence)
-        )),
+        map_event(AppServerEvent::Notification(ServerNotification::Unknown {
+            method: "future/changed".into(),
+            params: serde_json::json!({ "generation": 4 }),
+        })),
         None
     );
 }

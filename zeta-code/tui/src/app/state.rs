@@ -549,7 +549,9 @@ impl App {
         match event {
             AppEvent::ClipboardImageRead(Ok(bytes)) => self.attach_image_bytes(bytes),
             AppEvent::ClipboardImageRead(Err(error)) => self.record_clipboard_error(error),
-            AppEvent::ConfigSnapshotReceived(config) => self.status_line.apply_config(&config),
+            AppEvent::PreferredModelReceived(model) => {
+                self.status_line.apply_preferred_model(model.as_ref())
+            }
             AppEvent::CommandStarted(command) => {
                 self.thread
                     .update(ThreadPresentationEvent::CommandStarted(command));

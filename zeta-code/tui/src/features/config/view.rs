@@ -36,7 +36,10 @@ fn overview(config: &ConfigReadResult) -> Vec<SelectionItem> {
     vec![
         detail("Revision", config.revision.to_string()),
         detail("Generation", config.generation.to_string()),
-        detail("Preferred model", preferred_model(config)),
+        detail(
+            "Preferred model",
+            preferred_model(config.preferred_model.as_ref()),
+        ),
         detail(
             "Approval review model",
             approval_review_model(&config.approval_review_model),

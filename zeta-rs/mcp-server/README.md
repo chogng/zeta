@@ -104,6 +104,9 @@ run_stdio 或 run_http
 ```
 
 每个 HTTP MCP 会话获得独立的 App Server 连接，但共享同一个嵌入式 App Server 宿主和回执权威。
+`agent/progress.rs::committed` 只选择 MCP 明确拥有的 Turn 生命周期和交互事件；其他
+`ThreadEvent` 统一不进入进度投影。新增委托、上下文或其他 canonical event 不应迫使 MCP
+适配器逐项声明忽略，只有新的 MCP 可见语义才修改该 projection。
 
 ## 4. 校验与限制
 

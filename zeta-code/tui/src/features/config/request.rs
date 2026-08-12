@@ -3,13 +3,12 @@ use std::fmt;
 use zeta_app_server_client::AppServerClient;
 use zeta_app_server_client::ClientError;
 use zeta_app_server_client::JsonRpcTransport;
-use zeta_app_server_protocol::protocol::config::ConfigReadResult;
 use zeta_app_server_protocol::protocol::config::ConfigUpdateParams;
 use zeta_app_server_protocol::protocol::config::ModelRefDto;
 use zeta_protocol::Patch;
 
 pub(crate) struct PreferredModelUpdate {
-    pub(crate) config: ConfigReadResult,
+    pub(crate) preferred_model: Option<ModelRefDto>,
     pub(crate) notice: String,
 }
 
@@ -62,14 +61,18 @@ where
         approval_review_model: Patch::Missing,
     })?;
     let config = client.read_config()?;
-    let notice = format!("Preferred model: {}", preferred_model(&config));
-    Ok(PreferredModelUpdate { config, notice })
+    let notice = format!(
+        "Preferred model: {}",
+        preferred_model(config.preferred_model.as_ref())
+    );
+    Ok(PreferredModelUpdate {
+        preferred_model: config.preferred_model,
+        notice,
+    })
 }
 
-pub(crate) fn preferred_model(config: &ConfigReadResult) -> String {
-    config
-        .preferred_model
-        .as_ref()
+pub(crate) fn preferred_model(model: Option<&ModelRefDto>) -> String {
+    model
         .map(|model| format!("{}/{}", model.provider, model.model))
         .unwrap_or_else(|| "not configured".into())
 }

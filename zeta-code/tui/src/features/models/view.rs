@@ -6,7 +6,7 @@ use crate::components::selection::SelectionItemId;
 use crate::components::selection::SelectionTab;
 use crate::components::selection::SelectionViewModel;
 use std::collections::BTreeMap;
-use zeta_app_server_protocol::protocol::config::ConfigReadResult;
+use zeta_app_server_protocol::protocol::config::ModelRefDto;
 use zeta_app_server_protocol::protocol::model::ModelListResult;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -21,12 +21,9 @@ pub(crate) struct ModelSelectionView {
 
 pub(crate) fn model_selection_view(
     catalog: &ModelListResult,
-    config: &ConfigReadResult,
+    preferred_model: Option<&ModelRefDto>,
 ) -> ModelSelectionView {
-    let current = config
-        .preferred_model
-        .as_ref()
-        .map(|model| format!("{}/{}", model.provider, model.model));
+    let current = preferred_model.map(|model| format!("{}/{}", model.provider, model.model));
     let mut actions = BTreeMap::new();
     let automatic_id = SelectionItemId::new("model-automatic");
     actions.insert(

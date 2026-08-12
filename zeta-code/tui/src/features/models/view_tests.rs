@@ -1,9 +1,6 @@
 use super::ModelSelectionAction;
 use super::model_selection_view;
 use crate::components::selection::SelectionViewState;
-use std::collections::BTreeMap;
-use zeta_app_server_protocol::protocol::config::ApprovalReviewModelSelectionDto;
-use zeta_app_server_protocol::protocol::config::ConfigReadResult;
 use zeta_app_server_protocol::protocol::config::ModelRefDto;
 use zeta_app_server_protocol::protocol::model::ModelCatalogEntry;
 use zeta_app_server_protocol::protocol::model::ModelListResult;
@@ -22,13 +19,12 @@ fn model_pane_marks_the_preference_and_maps_selection_to_slash_arguments() {
             display_name: "GPT Zeta".into(),
         }],
     };
-    let mut config = empty_config();
-    config.preferred_model = Some(ModelRefDto {
+    let preferred_model = ModelRefDto {
         provider: "openai".into(),
         model: "gpt-zeta".into(),
-    });
+    };
 
-    let view = model_selection_view(&catalog, &config);
+    let view = model_selection_view(&catalog, Some(&preferred_model));
     let state = SelectionViewState::new(view.model.into_body());
 
     assert_eq!(state.title(), "Model");
@@ -40,29 +36,4 @@ fn model_pane_marks_the_preference_and_maps_selection_to_slash_arguments() {
                 preference: "openai/gpt-zeta".into(),
             }
     }));
-}
-
-fn empty_config() -> ConfigReadResult {
-    ConfigReadResult {
-        revision: 0,
-        generation: 0,
-        preferred_model: None,
-        approval_review_model: ApprovalReviewModelSelectionDto::Automatic,
-        providers: BTreeMap::new(),
-        mcp_servers: BTreeMap::new(),
-        skill_sources: BTreeMap::new(),
-        plugin_requests: BTreeMap::new(),
-        hooks: BTreeMap::new(),
-        language_servers: BTreeMap::new(),
-        tool_search: zeta_app_server_protocol::protocol::config::ToolSearchConfigDto {
-            mode: zeta_app_server_protocol::protocol::config::ToolSearchModeDto::Lexical,
-            embedding_model: None,
-            embedding_status: zeta_app_server_protocol::protocol::config::ToolSearchEmbeddingStatusDto::Disabled,
-        },
-        semantic_code_index: zeta_app_server_protocol::protocol::config::SemanticCodeIndexConfigDto {
-            selection: zeta_app_server_protocol::protocol::config::SemanticCodeIndexSelectionDto::Disabled,
-            automatic_context: zeta_app_server_protocol::protocol::config::SemanticCodeIndexAutomaticContextDto::Off,
-            active_workspace_authorized: false,
-        },
-    }
 }

@@ -6,6 +6,8 @@ mod components;
 mod features;
 mod host;
 mod terminal;
+#[cfg(test)]
+mod test_support;
 mod ui;
 
 use std::fmt;

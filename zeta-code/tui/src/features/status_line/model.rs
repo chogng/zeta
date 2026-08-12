@@ -1,7 +1,7 @@
 use std::path::Path;
 use unicode_width::UnicodeWidthChar;
 use unicode_width::UnicodeWidthStr;
-use zeta_app_server_protocol::protocol::config::ConfigReadResult;
+use zeta_app_server_protocol::protocol::config::ModelRefDto;
 use zeta_app_server_protocol::protocol::git::GitHeadDto;
 use zeta_app_server_protocol::protocol::git::GitStatusResult;
 
@@ -39,8 +39,8 @@ impl StatusLineModel {
         }
     }
 
-    pub(crate) fn apply_config(&mut self, config: &ConfigReadResult) {
-        self.preferred_model = config.preferred_model.as_ref().map(|model| DisplayValue {
+    pub(crate) fn apply_preferred_model(&mut self, model: Option<&ModelRefDto>) {
+        self.preferred_model = model.map(|model| DisplayValue {
             full: format!("{}/{}", model.provider, model.model),
             compact: model.model.clone(),
         });

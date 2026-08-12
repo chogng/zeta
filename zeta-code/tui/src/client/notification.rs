@@ -17,32 +17,25 @@ pub(crate) enum ClientEvent {
 
 pub(crate) fn map_event(event: AppServerEvent) -> Option<ClientEvent> {
     match event {
-        AppServerEvent::Notification(ServerNotification::AgentRequest(request)) => {
-            Some(ClientEvent::AgentRequest(Box::new(request)))
-        }
-        AppServerEvent::Notification(ServerNotification::SkillsChanged(_)) => {
-            Some(ClientEvent::SkillsChanged)
-        }
-        AppServerEvent::Notification(ServerNotification::ConnectorsChanged(_)) => {
-            Some(ClientEvent::ConnectorsChanged)
-        }
-        AppServerEvent::Notification(ServerNotification::GitStatusChanged(changed)) => {
-            Some(ClientEvent::GitStatusChanged(changed.status))
-        }
-        AppServerEvent::Notification(ServerNotification::SessionThreadUpdate(update)) => {
-            Some(ClientEvent::ThreadUpdated(update))
-        }
-        AppServerEvent::Notification(
-            ServerNotification::DocumentCollaborationUpdate(_)
-            | ServerNotification::DocumentCollaborationPresence(_)
-            | ServerNotification::SessionUpdate(_)
-            | ServerNotification::ConfigChanged(_)
-            | ServerNotification::FsChanged(_)
-            | ServerNotification::Unknown { .. },
-        ) => None,
+        AppServerEvent::Notification(notification) => project_notification(notification),
         AppServerEvent::ConnectionClosed(reason) => Some(ClientEvent::Failed(format!(
             "App Server connection closed: {reason:?}"
         ))),
+    }
+}
+
+fn project_notification(notification: ServerNotification) -> Option<ClientEvent> {
+    match notification {
+        ServerNotification::AgentRequest(request) => {
+            Some(ClientEvent::AgentRequest(Box::new(request)))
+        }
+        ServerNotification::ConnectorsChanged(_) => Some(ClientEvent::ConnectorsChanged),
+        ServerNotification::SkillsChanged(_) => Some(ClientEvent::SkillsChanged),
+        ServerNotification::GitStatusChanged(changed) => {
+            Some(ClientEvent::GitStatusChanged(changed.status))
+        }
+        ServerNotification::SessionThreadUpdate(update) => Some(ClientEvent::ThreadUpdated(update)),
+        _ => None,
     }
 }
 

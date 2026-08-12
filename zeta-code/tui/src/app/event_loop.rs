@@ -91,7 +91,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
     app.replace_slash_commands(slash_registry.catalog, slash_registry.skills);
     apply_thread_snapshot(&mut app, &mut active_turn, initial_thread);
     if let Ok(config) = client.read_config() {
-        app.update(AppEvent::ConfigSnapshotReceived(config));
+        app.update(AppEvent::PreferredModelReceived(config.preferred_model));
     }
     if let Ok(status) = client.git_status() {
         app.update(AppEvent::GitStatusReceived(status));

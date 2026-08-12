@@ -1,0 +1,43 @@
+use super::ConnectorsChanged;
+use super::ServerNotification;
+use super::decode_server_notification;
+use serde_json::json;
+
+#[test]
+fn registry_decodes_known_notification_payloads() {
+    let notification = decode_server_notification(
+        "connector/changed".into(),
+        json!({
+            "generation": 9,
+        }),
+    )
+    .expect("registered Connector notification should decode");
+
+    assert_eq!(
+        notification,
+        ServerNotification::ConnectorsChanged(ConnectorsChanged { generation: 9 })
+    );
+}
+
+#[test]
+fn registry_preserves_unknown_notifications_for_forward_compatibility() {
+    let params = json!({ "generation": 12 });
+    let notification = decode_server_notification("future/changed".into(), params.clone()).unwrap();
+
+    assert_eq!(
+        notification,
+        ServerNotification::Unknown {
+            method: "future/changed".into(),
+            params,
+        }
+    );
+}
+
+#[test]
+fn registry_rejects_invalid_payloads_for_known_notifications() {
+    assert!(
+        decode_server_notification("connector/changed".into(), json!({ "generation": "nine" }),)
+            .is_err(),
+        "known notifications must retain strict payload validation"
+    );
+}

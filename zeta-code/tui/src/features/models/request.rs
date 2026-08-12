@@ -12,5 +12,8 @@ where
 {
     let config = client.read_config()?;
     let catalog = client.list_models()?;
-    Ok(model_selection_view(&catalog, &config))
+    Ok(model_selection_view(
+        &catalog,
+        config.preferred_model.as_ref(),
+    ))
 }

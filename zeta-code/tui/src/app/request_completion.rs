@@ -246,7 +246,7 @@ pub(super) fn apply_request_completion(
             command,
             result: Ok(update),
         } => {
-            app.update(AppEvent::ConfigSnapshotReceived(update.config));
+            app.update(AppEvent::PreferredModelReceived(update.preferred_model));
             app.update(AppEvent::CommandCompleted {
                 command,
                 result: update.notice,

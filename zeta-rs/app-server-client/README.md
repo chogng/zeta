@@ -39,7 +39,7 @@ Session/Thread coordinator 的存储，不改变 Config、Workspace、Tool 或 p
 | `AppServerSession::take_events` | 单次取出 `AppServerEvents`；第二次返回 `TakeEventsError` |
 | `AppServerSession::shutdown` | 拒绝后续 request、关闭 connection、唤醒 event pump 并 join tasks |
 | `AppServerEvents::{recv,recv_timeout,try_recv}` | 接收 typed notification 与最终 connection close event |
-| `AppServerEvent::Notification` | 已由 client boundary 解码的 `ServerNotification` |
+| `AppServerEvent::Notification` | client boundary 交付的 canonical `ServerNotification`；variant 与 payload decoder 由 protocol registry 同源生成，跨 crate 为非穷尽枚举 |
 | `AppServerEvent::ConnectionClosed` | 明确的 shutdown、driver stop 或 protocol failure |
 | `AppServerClient<T>` | typed JSON-RPC client；method 与 DTO source 仍来自 protocol crate |
 | `InProcessClientOptions::with_session_state_mode` | 明确选择 profile durable history 或 process-local ephemeral Session/Thread state |
@@ -73,7 +73,7 @@ Notification 不依附 request completion；consumer 不得对 session handle �
 | `src/in_process.rs` | embedded composition 与 initialized connection |
 | `src/profile.rs` | `ZETA_PROFILE_ROOT` 与 host-wide default profile state path |
 | `src/lib.rs` | generic typed JSON-RPC methods、request ID/result pairing 与 public exports |
-| `src/notification.rs` | wire notification method 到 `ServerNotification` 的 typed decode |
+| `src/notification.rs` | 解析 notification envelope，并把 method/payload 交给 protocol-owned canonical decoder |
 | `src/session_tests.rs` | owned lifecycle、idle wakeup、clone identity 与 shutdown contract |
 | `src/client_tests.rs` | JSON-RPC pairing、schema、Session contract、Skill catalog/watcher contract |
 
@@ -101,7 +101,8 @@ AppServerRequestHandle typed method
 App Server background update
 ├─ UpdateBroker → NotificationQueue::push/extend
 ├─ condition variable wake
-├─ notification pump → typed decode
+├─ notification pump → envelope decode
+├─ protocol::registry::decode_server_notification → canonical typed notification
 └─ bounded AppServerEvents (1024)
 ```
 
@@ -128,6 +129,8 @@ Connection driver 在 request response completion 发送之前持有 delivery ba
 
 - `session::drive_connection` 唯一拥有 `ConnectionState` 与 request dispatch；
 - `session::pump_notifications` 唯一解码 session outbound notification；
+- `protocol::registry::server_notifications!` 同时生成 method registry、canonical
+  `ServerNotification` 与 payload decoder；client crate 不维护第二份 variant mapping；
 - `server::notification_queue::NotificationQueue`（App Server crate）拥有 wake/close queue primitive；
 - `AppServerClient::call` 拥有 request ID、JSON-RPC pairing 与 typed result decode；
 - `in_process::initialize_client` 只服务 embedded startup。
@@ -137,6 +140,7 @@ Connection driver 在 request response completion 发送之前持有 delivery ba
 - CLI/TUI 恢复调用 `start_in_process_client` 或 `drain_notifications`；
 - consumer 直接创建 `AppServer`/`ConnectionState`；
 - notification 再次只在 request 后被 drain；
+- consumer 穷尽匹配完整 `ServerNotification`，或为未拥有的 capability 逐项添加 ignore arm；
 - session lifetime 由最后一个 client clone 的 drop 决定；
 - request driver 绕过 `AppServer::handle_json` 直连 Core/store；
 - shutdown 不再 join session 启动的 tasks。
@@ -146,7 +150,7 @@ Connection driver 在 request response completion 发送之前持有 delivery ba
 | 修改 | 必须同步检查 |
 | --- | --- |
 | 新 typed RPC method | protocol registry/DTO、`AppServerClient` method、wire contract tests |
-| notification variant | protocol registry、`notification::decode`、session/TUI mapping tests |
+| notification variant | protocol registry 与 protocol decoder tests；只有拥有该 capability 的 consumer projection 需要修改 |
 | request/event queue policy | causal barrier、shutdown unblock、durable loss/lag contract 与系统文档 |
 | connection-owned resource | `AppServer::close_connection` cleanup、cross-connection rejection tests |
 | 新 backend | initialize/schema gate、同一 session contract suite、failure/reconnect ownership |

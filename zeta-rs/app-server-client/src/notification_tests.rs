@@ -206,13 +206,13 @@ fn decodes_connectors_changed_notification() {
         r#"{
             "jsonrpc": "2.0",
             "method": "connector/changed",
-            "params": {"generation": 7}
+            "params": {"generation": 9}
         }"#,
     )
     .expect("Connector notification decodes");
 
     assert_eq!(
         notification,
-        ServerNotification::ConnectorsChanged(ConnectorsChanged { generation: 7 })
+        ServerNotification::ConnectorsChanged(ConnectorsChanged { generation: 9 })
     );
 }

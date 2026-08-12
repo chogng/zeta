@@ -1,4 +1,8 @@
-use zeta_protocol::{ThreadEvent, ThreadUpdate, ThreadUpdateEnvelope, TurnId, TurnInteraction};
+use zeta_protocol::ThreadEvent;
+use zeta_protocol::ThreadUpdate;
+use zeta_protocol::ThreadUpdateEnvelope;
+use zeta_protocol::TurnId;
+use zeta_protocol::TurnInteraction;
 
 pub(super) enum TurnUpdate {
     Progress(String),
@@ -54,12 +58,7 @@ fn committed(event: &ThreadEvent, turn_id: &TurnId) -> Option<TurnUpdate> {
         ThreadEvent::TurnFailed { turn_id, .. } => (turn_id, "Turn failed"),
         ThreadEvent::TurnCancelling { turn_id, .. } => (turn_id, "Turn cancelling"),
         ThreadEvent::TurnInterrupted { turn_id, .. } => (turn_id, "Turn interrupted"),
-        ThreadEvent::ThreadCreated { .. }
-        | ThreadEvent::HistoryImported { .. }
-        | ThreadEvent::ContextCheckpointCommitted { .. }
-        | ThreadEvent::InteractionRequested { .. } => {
-            return None;
-        }
+        _ => return None,
     };
     (event_turn == turn_id).then(|| TurnUpdate::Progress(message.into()))
 }

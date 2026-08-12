@@ -36,7 +36,7 @@ Tool、approval policy 或 persistence。
   后按需加载；`skills/changed` 会刷新这部分动态命令；
 - `/resume`、`/thread`、`/archive-thread`、`/rewind`、`/clear`、`/files`、`/fork`、`/model`、`/theme` 与 `/new` 可解析 inline arguments，并在执行前展开
   large-paste placeholder；product command 明确拒绝 image arguments；
-- command popup 只注册已有真实执行流的 built-ins：`/status`、`/skills`、`/mcp`、`/resume`、
+- command popup 只注册已有真实执行流的 built-ins：`/status`、`/skills`、`/mcp`、`/connectors`、`/resume`、
   `/thread`、`/archive-thread`、`/archive-session`、`/rewind`、`/clear`、`/config`、`/files`、
   `/fork`、`/help`、`/copy`、`/export`、`/model`、`/theme`、`/new`、`/quit` 与 `/exit`；
 - `/help` 使用保留 composer 的 interaction view stack 打开 Commands/Keys 双 Tab selection
@@ -46,6 +46,9 @@ Tool、approval policy 或 persistence。
   All/Enabled/Disabled/Manage/Errors tabs、数量、搜索和 source-qualified metadata；只有 Manage
   tab 的动作通过 revision-checked `skill/enablement/set` 修改 enablement；该页面是目录管理入口，
   不直接激活 Skill；
+- `/connectors` 通过 typed `connector/list` 打开 Connector Pane；已连接项可以执行
+  generation-checked disconnect，`connector/changed` 只在该 Pane 打开时触发 catalog refresh；
+  API token/OAuth 连接仍由 Desktop Settings 完成；
 - `/rewind` 或主界面 500 ms 内连续按两次 Esc 打开可搜索的历史消息 checkpoint Pane；Enter
   通过 typed `session/request` 的 `RewindThread` operation，创建具有 Rewind lineage 的子 Thread，只导入所选消息之前的
   terminal Turns。原 Thread 保持不变，TUI 切换订阅并以 `/rewind <turn-id>` 记录结果；
@@ -188,6 +191,7 @@ src/
 ├── host/
 │   ├── clipboard.rs               # native text output plus file/RGBA image input
 │   └── transcript_export.rs       # workspace-bounded, no-overwrite Markdown export
+├── test_support.rs                 # test-only canonical aggregate fixture defaults
 ├── terminal/
 │   ├── session.rs                 # transactional terminal acquisition and RAII restore
 │   └── terminal_probe.rs          # bounded OSC query before the crossterm event reader starts
@@ -213,7 +217,7 @@ src/
 | `ui::layout` | private module | 跨 surface 复用的纯 geometry | 不读取 App/feature、不调用 terminal 或 RPC |
 | `ui::theme` | private module | 将 `zeta-theme::ThemeSnapshot` 的明确子集投影到终端能力 | 不复制完整 Desktop token catalog、不拥有用户文件加载、不定义产品状态 |
 | `Status` | crate-private | Ready/Working/waiting/Cancelling/Error display state | 只能由 canonical snapshot/result驱动 |
-| `StatusLineModel` | crate-private | 把 config/workspace/Git typed result 变成长短展示值并执行宽度降级 | 不查询接口、不保存领域 authority、不渲染 |
+| `StatusLineModel` | crate-private | 把 preferred model、workspace 与 Git 的窄输入变成长短展示值并执行宽度降级 | 不接收完整 config aggregate、不查询接口、不保存领域 authority、不渲染 |
 | `App::update` | crate-private | 将一个 `AppEvent` 应用到唯一 presentation state owner | 不执行 I/O、不访问 runtime resource |
 | `App::handle_key` | crate-private | 先委托局部输入，再处理未消费的全局键 | 不直接调用 client |
 | `App::activate_slash_command` | crate-private | 将鼠标命中的 command index 委托给 composer 并复用 command dispatch | 不计算 terminal geometry |
@@ -510,6 +514,8 @@ follow-latest。`estimated_wrapped_rows` 使用
 | 新 terminal mode | `open` rollback、`Drop` cleanup、manual terminal recovery |
 | Composer behavior | `accepts_input`、paste/key handling、cursor width、app tests |
 | Incremental notifications | `features/thread` sequence/cursor state、gap/resync、client event pump、snapshot fallback |
+| `ConfigReadResult` 新字段 | `test_support::empty_config_snapshot` 与真实消费该字段的 feature tests；无关 view tests 不复制完整 aggregate |
+| `ThreadItem` variant 字段 | 构造该 variant 的 projection tests 必须显式更新，不能由通用 fixture 隐藏领域不变量 |
 
 ## 测试与支持边界
 
@@ -536,6 +542,16 @@ label/Unicode/zero-width wrapping、bounded scroll/history window、copy/export�
 composer 上方的右对齐渲染，以及 terminal mode acquisition failure、逆序 rollback、suspend/reacquire 与幂等
 restore；还覆盖 request task 非阻塞 completion、request intent 保序、Session/Thread picker/archive、
 workspace directory/preview 和 interaction deadline。
+
+跨 feature 复用的完整配置快照只由 `test_support::empty_config_snapshot` 构造；各测试随后只修改
+自己拥有的字段。该 helper 仅存在于 `cfg(test)`，不会给生产协议增加 `Default`，也不会让真实
+`ConfigReadResult` 新字段在 App Server 或消费该字段的 feature 中被静默忽略。相反，直接构造
+`ThreadItem` variant 的测试必须明确填写其全部字段，因为这些字段属于被测试对象本身的领域语义。
+
+生产路径同样按能力收窄：`config/read` 的完整聚合只停留在 request adapter 和 `/config` 总览；
+Model Pane 只接收 preferred model，MCP Pane 只接收 server map，status line 只通过
+`AppEvent::PreferredModelReceived` 接收模型选择。新增 Tool Search 或 CodeIndex 配置字段不会扩散到
+这些不拥有该能力的展示组件。
 
 Render tests 使用 Ratatui `TestBackend` 固定 empty/error surface，transcript component tests
 固定 row estimation；命令行状态测试是通过依据，没有截图/像素基线。完整 fake-transport `run`

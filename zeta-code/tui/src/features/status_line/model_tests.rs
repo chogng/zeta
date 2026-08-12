@@ -1,9 +1,6 @@
 use super::*;
-use std::collections::BTreeMap;
 use std::path::Path;
-use zeta_app_server_protocol::protocol::config::{
-    ApprovalReviewModelSelectionDto, ConfigReadResult, ModelRefDto,
-};
+use zeta_app_server_protocol::protocol::config::ModelRefDto;
 use zeta_app_server_protocol::protocol::git::GitHeadDto;
 use zeta_app_server_protocol::protocol::git::GitStatusResult;
 use zeta_protocol::StreamInstanceId;
@@ -11,7 +8,7 @@ use zeta_protocol::StreamInstanceId;
 #[test]
 fn wide_status_line_prefers_full_model_and_workspace_values() {
     let mut status_line = StatusLineModel::for_workspace(Path::new("/work/zeta"));
-    status_line.apply_config(&config_with_model("anthropic", "claude-sonnet"));
+    status_line.apply_preferred_model(Some(&model("anthropic", "claude-sonnet")));
 
     assert_eq!(
         status_line.text_for_width(80),
@@ -22,7 +19,7 @@ fn wide_status_line_prefers_full_model_and_workspace_values() {
 #[test]
 fn narrow_status_line_uses_compact_values_before_hiding_workspace() {
     let mut status_line = StatusLineModel::for_workspace(Path::new("/work/zeta"));
-    status_line.apply_config(&config_with_model("anthropic", "claude-sonnet"));
+    status_line.apply_preferred_model(Some(&model("anthropic", "claude-sonnet")));
 
     assert_eq!(status_line.text_for_width(20), "claude-sonnet · zeta");
     assert_eq!(status_line.text_for_width(13), "claude-sonnet");
@@ -39,7 +36,7 @@ fn status_line_without_a_configured_model_shows_the_workspace() {
 #[test]
 fn very_narrow_status_line_truncates_on_character_boundaries() {
     let mut status_line = StatusLineModel::for_workspace(Path::new("/work/zeta"));
-    status_line.apply_config(&config_with_model("provider", "模型alpha"));
+    status_line.apply_preferred_model(Some(&model("provider", "模型alpha")));
 
     assert_eq!(status_line.text_for_width(5), "模型…");
     assert_eq!(status_line.text_for_width(1), "…");
@@ -49,7 +46,7 @@ fn very_narrow_status_line_truncates_on_character_boundaries() {
 #[test]
 fn git_status_adds_branch_and_dirty_state_without_displacing_the_model_first() {
     let mut status_line = StatusLineModel::for_workspace(Path::new("/work/zeta"));
-    status_line.apply_config(&config_with_model("anthropic", "claude-sonnet"));
+    status_line.apply_preferred_model(Some(&model("anthropic", "claude-sonnet")));
     status_line.apply_git_status(&GitStatusResult {
         stream_instance_id: StreamInstanceId::new("git-stream").unwrap(),
         revision: 3,
@@ -87,30 +84,9 @@ fn test_change() -> zeta_app_server_protocol::protocol::git::GitRepositoryChange
     }
 }
 
-fn config_with_model(provider: &str, model: &str) -> ConfigReadResult {
-    ConfigReadResult {
-        revision: 0,
-        generation: 0,
-        preferred_model: Some(ModelRefDto {
-            provider: provider.into(),
-            model: model.into(),
-        }),
-        approval_review_model: ApprovalReviewModelSelectionDto::Automatic,
-        providers: BTreeMap::new(),
-        mcp_servers: BTreeMap::new(),
-        skill_sources: BTreeMap::new(),
-        plugin_requests: BTreeMap::new(),
-        hooks: BTreeMap::new(),
-        language_servers: BTreeMap::new(),
-        tool_search: zeta_app_server_protocol::protocol::config::ToolSearchConfigDto {
-            mode: zeta_app_server_protocol::protocol::config::ToolSearchModeDto::Lexical,
-            embedding_model: None,
-            embedding_status: zeta_app_server_protocol::protocol::config::ToolSearchEmbeddingStatusDto::Disabled,
-        },
-        semantic_code_index: zeta_app_server_protocol::protocol::config::SemanticCodeIndexConfigDto {
-            selection: zeta_app_server_protocol::protocol::config::SemanticCodeIndexSelectionDto::Disabled,
-            automatic_context: zeta_app_server_protocol::protocol::config::SemanticCodeIndexAutomaticContextDto::Off,
-            active_workspace_authorized: false,
-        },
+fn model(provider: &str, model: &str) -> ModelRefDto {
+    ModelRefDto {
+        provider: provider.into(),
+        model: model.into(),
     }
 }

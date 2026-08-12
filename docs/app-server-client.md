@@ -296,11 +296,17 @@ pub enum AppServerEvent {
 ```
 
 当前 App Server API 包含 `session/update`、`session/thread/update`、owner-directed
-`agent/request`、`skills/changed`、Git 与 filesystem notification，均由 `ServerNotification`
+`agent/request`、`connector/changed`、`skills/changed`、Git 与 filesystem notification，均由 `ServerNotification`
 typed enum 表达。approval/user-input 通过 `agent/request` + canonical
 `SessionRequest::ResolveInteraction` 完成，不在 client crate 建第二套 server-request envelope。
 显式 `Lagged`/`Desynced` lifecycle event 尚未提供；当前 transient overflow 通过 cursor gap 触发
 consumer snapshot resync，control-only overflow 关闭 connection。
+
+`ServerNotification`、method registry 与 payload decoder 由 protocol crate 的同一个
+`server_notifications!` 定义生成。该总枚举跨 crate 标记为非穷尽：client boundary 必须严格解码
+每一个已注册 method，而 consumer 只能在自己的 projection 中选择所拥有的 capability，并为其余
+通知保留 fallback。新增 Document 或其他领域通知因此不会要求无关产品同步增加 ignore
+arm。
 
 事件 driver 负责：
 
@@ -323,6 +329,23 @@ Event channel 不负责：
 - 合并不同 aggregate 的 sequence。
 
 这些属于 `zeta-exec` 的输出/终态协调或 TUI projection。
+
+Consumer projection 的依赖方向是：
+
+```text
+protocol registry（method + payload + decoder）
+                    │
+                    ▼
+AppServerEvents::Notification(ServerNotification)
+                    │
+                    ├─► TUI notification projection ─► ClientEvent
+                    ├─► zeterm agent/session projection ─► AgentSessionEvent
+                    └─► headless completion projection
+```
+
+产品 projection 不得穷尽列出未拥有的 notification。TUI 当前拥有 Connector Pane，因此由
+Connector capability 消费 `ConnectorsChanged` 并触发 canonical list refresh；其他产品若不拥有
+Connector UI，则无需增加对应分支。Connector 状态不能塞进通用 connection lifecycle event。
 
 ## 7. Driver 与 App Server 的连接方式
 
@@ -445,7 +468,10 @@ TUI 不再接收一个同步 `&mut AppServerClient<T>`，也不调用 `drain_not
 - successful `InitializeResult` 保存在 `AppServerClient::initialization` snapshot 中，consumer
   可读取 server capabilities 与动态 slash catalog，而无需重复 handshake；
 - typed `list_skills` / `set_skill_enablement` method；
-- known notification typed decode，包括 `agent/request`、`skills/changed` 与 Git status。
+- protocol registry 同源生成 known notification typed decode，包括 `agent/request`、
+  `connector/changed`、`skills/changed` 与 Git status；
+- TUI notification adapter 只投影自己拥有的 Agent、Connector、Skill、Git 与 Thread capability，
+  未拥有领域不进入 `ClientEvent`。
 
 同步适配面与剩余工作：
 

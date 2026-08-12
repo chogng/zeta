@@ -15,7 +15,7 @@ where
 {
     client
         .read_config()
-        .map(|config| mcp_selection_view(&config))
+        .map(|config| mcp_selection_view(&config.mcp_servers))
 }
 
 pub(crate) fn set_enablement<T>(

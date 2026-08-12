@@ -11,7 +11,7 @@ use crate::features::skills::SkillSelectionView;
 use crate::features::theme::ThemeSelectionView;
 use crate::features::thread::TurnActivity;
 use crate::features::workspace_files::FileSelectionView;
-use zeta_app_server_protocol::protocol::config::ConfigReadResult;
+use zeta_app_server_protocol::protocol::config::ModelRefDto;
 use zeta_app_server_protocol::protocol::git::GitStatusResult;
 use zeta_file_search::PathSearchSnapshot;
 use zeta_protocol::Thread;
@@ -22,9 +22,9 @@ pub(crate) enum AppEvent {
     ClipboardImageRead(Result<Vec<u8>, String>),
     CommandStarted(String),
     CommandCompleted { command: String, result: String },
-    ConfigSnapshotReceived(ConfigReadResult),
     ConnectorViewOpened(ConnectorSelectionView),
     ConnectorViewReplaced(ConnectorSelectionView),
+    PreferredModelReceived(Option<ModelRefDto>),
     FailureReported(String),
     FileSearchSnapshotReceived(PathSearchSnapshot),
     FileViewOpened(FileSelectionView),

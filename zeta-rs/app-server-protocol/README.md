@@ -9,7 +9,8 @@
 
 `zeta-app-server-protocol` 是 App Server 对外 wire contract 的唯一 Rust source。它定义 typed
 params/results/errors、JSON-RPC 2.0 envelopes、method/notification registry，并从同一套定义生成
-JSON Schema、TypeScript binding 和协商用 schema hash。
+canonical `ServerNotification`、payload decoder、JSON Schema、TypeScript binding 和协商用
+schema hash。
 
 它不拥有 connection、framing、dispatcher、业务执行、Core state、resource bytes 或 persistence。
 
@@ -45,6 +46,7 @@ zeta-rs/app-server-protocol/
 ├── src/
 │   ├── protocol/
 │   │   ├── registry.rs       # method、notification、serialization scope
+│   │   ├── notification.rs   # canonical notification API re-export
 │   │   ├── common.rs         # handshake/shared wire values
 │   │   ├── initialize.rs
 │   │   ├── slash_commands.rs
@@ -81,6 +83,8 @@ zeta-rs/app-server-protocol/
 | `ServerNotificationMethod` | typed enum of server notifications |
 | `server_notification_method` | exact string → notification enum |
 | `SERVER_NOTIFICATIONS` | notification name 与 params type |
+| `ServerNotification` | 跨 crate 非穷尽的 canonical typed notification；consumer 只投影自己拥有的 capability |
+| `decode_server_notification` | registry-generated method/payload decoder；未知 method 无损保留为 `Unknown` |
 | `SerializationScopeDefinition` | dispatcher serialization requirement |
 
 方法注册表当前覆盖初始化、Session 生命周期/聚合订阅、canonical `session/request` mutation、
@@ -154,7 +158,7 @@ Generator 只返回字符串，不读写 filesystem。只有 `write_schema_fixtu
 | Symbol | 可见性 | 当前职责 | 方向约束 |
 | --- | --- | --- | --- |
 | `client_methods!` | private macro | 一次定义 method enum、lookup、metadata、request/result schema enums | method 不得在 dispatcher 建第二份表 |
-| `server_notifications!` | private macro | 一次定义 notification enum、lookup、metadata、schema enum | notification list 唯一来源 |
+| `server_notifications!` | private macro | 一次定义 method enum、lookup、canonical runtime enum、payload decoder、metadata 与 schema enum | notification list 与 decode mapping 的唯一来源 |
 | `typescript_bindings!` | private macro | 建立显式 DTO declaration list | canonical/re-exported nested types 也必须可生成 |
 | `ClientRequestSchema` | crate-private generated enum | 聚合所有 request params 到 root schema | 不是 runtime dispatcher payload |
 | `ClientResultSchema` | crate-private generated enum | 聚合所有 method result | 与 method registry lockstep |
@@ -181,6 +185,7 @@ client_methods!
 
 server_notifications!
 ├─ ServerNotificationMethod / lookup
+├─ ServerNotification / decode_server_notification
 ├─ SERVER_NOTIFICATIONS
 └─ ServerNotificationSchema
 
@@ -250,6 +255,8 @@ dispatcher 的 executable metadata，不能被误写成已经落实的并发保�
 ```
 
 新增 notification 使用同一流程，但修改 `server_notifications!` 和 broker/connection publish path。
+由于该宏同时生成 runtime enum 与 decoder，不得再在 client crate 增加平行 decode match；只有实际
+拥有该 capability 的产品 projection 才需要增加消费逻辑。
 
 Fixture 更新必须显式执行：
 
@@ -279,6 +286,8 @@ diff，明确客户端是否能同步升级；不要在测试中为了保留旧 
 - `rpc.rs` 引用具体 Session/Config DTO：generic envelope 边界被破坏；
 - `export.rs` 读取/写入文件或环境：generator 不再 pure/deterministic；
 - Rust DTO 更新但 fixture 未变：binding list/root schema 可能漏项；
+- Client crate 出现按 method 维护的第二份 notification decoder：registry 不再是唯一事实源；
+- 产品穷尽枚举未拥有的 notification：wire capability 变化重新扩散到无关 consumer；
 - Canonical value 在本 crate 被复制：`zeta-protocol` source 分叉；
 - Connection owner、actor handle 或 resource bytes 进入 DTO：runtime state 泄漏到 wire；
 - `AppServerError` 传递内部 error string：安全与兼容性 contract 漂移；
