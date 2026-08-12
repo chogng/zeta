@@ -1,5 +1,5 @@
-import { type SyntaxWorkerFactory } from "../../../../editor/alpha/common/languages/syntax/syntaxService.js";
-import { BrowserLanguageWorkerPort } from "../../../../editor/alpha/browser/language/browserLanguageWorkerPort.js";
+import { type SyntaxWorkerFactory } from "../../../../editor/common/languages/syntax/syntaxService.js";
+import { BrowserLanguageWorkerPort } from "../../../../editor/browser/language/browserLanguageWorkerPort.js";
 import { TextMateSyntaxModuleWorkerClient } from "../common/textMateSyntaxModuleWorkerClient.js";
 import { type TextMateGrammarCatalogSource } from "../common/textMateGrammarCatalog.js";
 import { type TextMateScopeThemeSource } from "../common/textMateScopeTheme.js";

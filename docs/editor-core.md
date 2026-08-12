@@ -4,7 +4,7 @@
 > Renderer 内独立的 TypeScript editor，不通过 WASM 或 App Server RPC 复用该同步 core。Rust 实现契约见
 > [`zeta-editor-core`](../zeta-rs/editor-core/README.md)，app presentation 见
 > [`zeta-editor`](../zeterm/editor/README.md)，Alpha 实现见
-> [`desktop/src/zeta/editor/alpha/README.md`](../desktop/src/zeta/editor/alpha/README.md)。
+> [`desktop/src/zeta/editor/text-engine.md`](../desktop/src/zeta/editor/text-engine.md)。
 
 ## 当前所有权
 

@@ -16,7 +16,7 @@ The filename split is intentional:
 | --- | --- | --- |
 | `languageFeaturesService.ts` | Workbench | Shared registration and per-document service composition |
 | `languageLexical*`, `languagePair*`, `languageBracket*` | Editor language layer | Deterministic editor semantics and editing behavior |
-| `editor/alpha/contrib/folding/browser/` | Editor contribution | Folding range providers, tracked fold state, commands, and browser projection; it consumes language configuration but does not own language infrastructure |
+| `editor/contrib/folding/browser/` | Editor contribution | Folding range providers, tracked fold state, commands, and browser projection; it consumes language configuration but does not own language infrastructure |
 | `languageCompletionSession*`, `languageDiagnostic*`, `languageTokenLineIndex.ts` | Editor language layer | Version gates, session state, and browser-facing result projection |
 | `*Provider*`, `*Worker*`, `*Wire*` | Language contracts/runtime for now | Provider protocol and Worker transport; external adapters enter through this service instead of importing editor internals |
 

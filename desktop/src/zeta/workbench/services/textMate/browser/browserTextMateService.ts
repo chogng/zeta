@@ -1,5 +1,5 @@
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
-import { type SyntaxWorkerFactory } from "../../../../editor/alpha/common/languages/syntax/syntaxService.js";
+import { type SyntaxWorkerFactory } from "../../../../editor/common/languages/syntax/syntaxService.js";
 import { type ITextMateService } from "../common/textMateService.js";
 import { type TextMateGrammarDefinition } from "../common/textMateGrammarRegistry.js";
 import { TextMateScopeThemeModel, type TextMateScopeThemeSource } from "../common/textMateScopeTheme.js";

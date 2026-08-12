@@ -1,6 +1,6 @@
-import { type LanguageWorkerDocumentSynchronization } from "../../../../editor/alpha/common/languages/languageWorkerDocumentMirror.js";
-import { type LanguageToken, type LanguageTokenResult } from "../../../../editor/alpha/common/languages/languageResults.js";
-import { TextPosition, TextRange, type TextSnapshot } from "../../../../editor/alpha/common/core/text.js";
+import { type LanguageWorkerDocumentSynchronization } from "../../../../editor/common/languages/languageWorkerDocumentMirror.js";
+import { type LanguageToken, type LanguageTokenResult } from "../../../../editor/common/languages/languageResults.js";
+import { TextPosition, TextRange, type TextSnapshot } from "../../../../editor/common/core/text.js";
 import { defaultTextMateScopeResolver, type TextMateResolvedTokenStyle, type TextMateScopeResolver } from "./textMateScopeResolver.js";
 import { type TextMateGrammarContent, type RegisteredTextMateGrammarDefinition, type TextMateGrammarRegistrySnapshot, type TextMateGrammarTokenType } from "./textMateGrammarRegistry.js";
 import * as textMateNamespace from "vscode-textmate";

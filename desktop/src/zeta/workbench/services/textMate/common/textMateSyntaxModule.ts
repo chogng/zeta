@@ -1,4 +1,4 @@
-import { type SyntaxProviderModule } from "../../../../editor/alpha/common/languages/syntax/syntaxProviderModules.js";
+import { type SyntaxProviderModule } from "../../../../editor/common/languages/syntax/syntaxProviderModules.js";
 import { createTextMateSyntaxProvider } from "./textMateSyntaxProvider.js";
 import { TextMateTokenizationService } from "./textMateTokenizationService.js";
 

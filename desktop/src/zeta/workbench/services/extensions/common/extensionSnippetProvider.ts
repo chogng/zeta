@@ -1,7 +1,7 @@
-import { parseLanguageCompletionSnippet } from "../../../../editor/alpha/contrib/snippet/common/snippetParser.js";
-import { LanguageCompletionItemKind, LanguageCompletionInsertTextFormat } from "../../../../editor/alpha/common/languages/completion/languageCompletions.js";
-import type { LanguageCompletionProvider, LanguageCompletionProviderRequest, LanguageCompletionProviderResult } from "../../../../editor/alpha/common/languages/completion/languageCompletionProviders.js";
-import { TextPosition, TextRange } from "../../../../editor/alpha/common/core/text.js";
+import { parseLanguageCompletionSnippet } from "../../../../editor/contrib/snippet/common/snippetParser.js";
+import { LanguageCompletionItemKind, LanguageCompletionInsertTextFormat } from "../../../../editor/common/languages/completion/languageCompletions.js";
+import type { LanguageCompletionProvider, LanguageCompletionProviderRequest, LanguageCompletionProviderResult } from "../../../../editor/common/languages/completion/languageCompletionProviders.js";
+import { TextPosition, TextRange } from "../../../../editor/common/core/text.js";
 
 export interface ExtensionSnippetDefinition {
   readonly name: string;

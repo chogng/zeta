@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { TextModel } from "../../../../../editor/alpha/common/model/textModel.js";
-import { LanguageRequestStatus } from "../../../../../editor/alpha/common/languages/languageRequestCoordinator.js";
+import { TextModel } from "../../../../../editor/common/model/textModel.js";
+import { LanguageRequestStatus } from "../../../../../editor/common/languages/languageRequestCoordinator.js";
 import { LanguageFeaturesService } from "../../common/languageFeaturesService.js";
 
 test("Language features service owns shared registrations while document services stay caller-owned", async () => {

@@ -1,7 +1,7 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { DisposableOwner, DisposableStore } from "../../../../base/common/lifecycle.js";
-import { parseLanguageConfiguration } from "../../../../editor/alpha/common/languages/languageConfigurationParser.js";
-import type { ILanguageFeaturesService } from "../../../../editor/alpha/common/services/languageService.js";
+import { parseLanguageConfiguration } from "../../../../editor/common/languages/languageConfigurationParser.js";
+import type { ILanguageFeaturesService } from "../../../../editor/common/services/languageService.js";
 import type { IExtensionApi, ExtensionCatalog, ExtensionDescriptor } from "../../../../platform/extensions/common/extensionApi.js";
 import type { ITextMateService } from "../../textMate/common/textMateService.js";
 import type { TextMateGrammarDefinition } from "../../textMate/common/textMateGrammarRegistry.js";

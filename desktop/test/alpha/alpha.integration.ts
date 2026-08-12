@@ -1,9 +1,9 @@
 import { URI } from "../../src/zeta/base/common/uri.js";
-import { EditorPane } from "../../src/zeta/editor/alpha/browser/editorPane.js";
-import { createBrowserEditorPart } from "../../src/zeta/editor/alpha/browser/browserEditorPart.js";
-import { BrowserTextModelService } from "../../src/zeta/editor/alpha/browser/services/browserTextModelService.js";
-import { BrowserTextResourceStore } from "../../src/zeta/editor/alpha/browser/services/browserTextResourceStore.js";
-import { TextModel } from "../../src/zeta/editor/alpha/editor.main.js";
+import { EditorPane } from "../../src/zeta/editor/browser/codeEditorPane.js";
+import { createBrowserEditorPart } from "../../src/zeta/editor/browser/browserEditorPart.js";
+import { BrowserTextModelService } from "../../src/zeta/editor/browser/services/browserTextModelService.js";
+import { BrowserTextResourceStore } from "../../src/zeta/editor/browser/services/browserTextResourceStore.js";
+import { TextModel } from "../../src/zeta/editor/editor.main.js";
 import { MemoryTextFiles } from "./memoryTextFiles.js";
 
 interface IntegrationHarness {

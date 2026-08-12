@@ -1,8 +1,8 @@
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createAcademicDocumentSchema } from "../../src/zeta/editor/gama/contrib/academic/common/schema.js";
-import { serializeDocument } from "../../src/zeta/editor/gama/common/model/documentSerialization.js";
+import { createAcademicDocumentSchema } from "../../src/zeta/editor/contrib/academic/common/schema.js";
+import { serializeDocument } from "../../src/zeta/editor/common/model/documentSerialization.js";
 
 export interface TestWorkspace {
   readonly directory: string;

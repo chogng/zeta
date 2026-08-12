@@ -1,30 +1,30 @@
-# Alpha / Gama Editor：内核所有权与分阶段演进
+# Editor：多内核、可装配能力与产品边界
 
-> 本文是跨 editor、document、language、browser view、Workbench 和过渡
-> adapter 的 canonical 架构文档。文本内核的具体实现与修改契约见
-> [`desktop/src/zeta/editor/alpha/README.md`](../desktop/src/zeta/editor/alpha/README.md)。
-> Alpha editor 的文件级架构、VS Code `contrib` 全量迁移清单和目标文件名见 [`desktop/src/zeta/editor/alpha/editor-architecture.md`](../desktop/src/zeta/editor/alpha/editor-architecture.md)。
+> 本文是跨 editor、document、language、browser view、Workbench 和过渡 adapter 的 canonical 架构文档。扁平模块的实现和修改契约见 [`desktop/src/zeta/editor/README.md`](../desktop/src/zeta/editor/README.md)；行式文本与结构化文档 engine 的详细契约分别见 [`text-engine.md`](../desktop/src/zeta/editor/text-engine.md) 和 [`document-engine.md`](../desktop/src/zeta/editor/document-engine.md)。
 
-## 决策摘要
+## 快速理解
 
-Alpha 是 Zeta 从底层向上自建、并由产品默认选择的编辑器栈。legacy editor runtime 不再是产品模型或公共
-接口的定义者，只保留为显式选择的兼容 editor 和工具能力参照。
+Zeta 只有一个扁平的 editor 领域模块，但包含两个独立的同步权威：行式文本 `TextModel` 和结构化文档 `DocumentModel`。两者共同使用 VS Code 风格的 `common / browser / contrib / test` 分区；Code 与 Academic 不拥有第二份 editor 源码，而是在产品入口静态加载不同的 contribution bundle。
 
-Gama 是 Alpha 的 sibling editor，而不是 Alpha 的模式或嵌入文档模型。`editor/` 根目录只包含
-`alpha/` 与 `gama/`；两者均按 VS Code `src/vs/editor` 的实际子目录组织：`editor.api.ts`、`editor.all.ts`、`editor.main.ts`、`common/{core,model,commands,services,...}`、`browser/{widget,services,...}`、`contrib/<feature>/{common,browser}` 与 `test/{common,browser}`。`editor.api.ts` 是 DOM-free 程序化模型 API，`editor.all.ts` 是 product entry 使用的 contribution bundle，`editor.main.ts` 组合 all + api；只有存在真实 worker runtime 的 editor 才提供 `editor.worker.start.ts`。产品入口静态选择对应 bundle 与对应 Workbench session。Gama 复用 Alpha 的 `editorInput → EditorPane → EditorSession → Browser*ModelService → widget` 骨架：Gama common 拥有结构化文档树和事务，`GamaEditorPane` 宿主 `GamaEditorSession`，`BrowserDocumentModelService` 创建 document reference。`TextEditorWidget` 只在 Gama `textBlock` 内通过 `IEmbeddedTextEditor` 投影 Alpha 的 `CodeEditorWidget`。Gama 的 `textBlock` 对应 Alpha `codeBlock` 的位置，但仍是带语言属性的普通文本节点；Alpha 不反向依赖 Gama。
-其具体契约见 [`desktop/src/zeta/editor/gama/README.md`](../desktop/src/zeta/editor/gama/README.md)。
+| 使用场景 | 产品加载入口 | 编辑能力 |
+| --- | --- | --- |
+| Code | `editor.code.all.ts` | code/diff pane、语言、folding、suggest 和其他行式编辑能力 |
+| Academic | `editor.academic.all.ts` | 结构化文档 profile、formatting、citation、collaboration 和 embedded code widget |
+| 完整宿主与集成测试 | `editor.all.ts` | 两组 contribution 的并集 |
+| DOM-free 调用 | `editor.api.ts` | 两个 model、schema、transaction、serialization 和坐标 API；不注册 pane |
 
-这不是一次性重写。每一阶段必须先形成可独立测试的 Zeta contract，再
-让上层依赖它，最后才能删除 legacy editor runtime 中对应的所有权。
+Alpha 与 Gama 现在是两个 engine 的兼容名称，不再是目录或产品边界。`TextModel` 与 `DocumentModel` 不互相继承，也不通过一个带大量可选方法的万能 model 接口合并。可共享能力必须依赖小而完整的 capability contract；schema validation、transaction、selection mapping、IME commit 和 model lifecycle 仍属于对应 engine，不能变成任意开关 contribution。
+
+legacy editor runtime 不再是产品模型或公共接口的定义者，只保留为显式选择的兼容 editor 和工具能力参照。后续迁移仍必须先形成可独立测试的 Zeta contract，再让上层依赖它，最后删除 legacy runtime 中对应的所有权。
 
 ## 所有权
 
 | 层 | 当前状态 | 责任 |
 | --- | --- | --- |
-| `editor/alpha/common` | 内核、基础 viewport 与版本语言状态已具备 | 文本坐标、事务、Piece Tree、版本快照、有界历史、压实、Unicode segment、光标导航、纯 viewport 状态、语言分析 lane/result store、completion provider registry/host/wire codec、增量 Worker 文档镜像、增量词法分析、取消、过期结果拒绝与 worker 生命周期 |
-| `editor/alpha/browser` | viewport、selection、基础文本、clipboard、桌面式 IME、四级 diagnostic、semantic token、completion widget/trigger/Worker factory 与 side-by-side diff view 已具备 | 虚拟行 DOM、viewport、增量行宽与初始换行测量、gutter、selection/caret、decoration、Error/Warning/Information/Hint underline、每行最高严重级别 diagnostic gutter marker、版本化 semantic-token 行投影、completion list/accept/invoke/trigger/incomplete refresh/module Worker、pointer selection、Alt+Shift 列选择、autoscroll、多光标、键盘导航、普通 textarea 编辑、event/Async rich clipboard 安全 HTML 读写、单个显式文本文件 clipboard paste/drop、前端本地 MIME paste provider 与 `text/uri-list`、macOS desktop composition/VoiceOver DOM contract、composition 基线与 provisional underline、`AlphaDiffEditorInput`/Pane 承载的只读虚拟化 side-by-side line diff；`EditorInput.readOnly` 在 common 提交闸门阻止文档修改；移动端不在 Alpha 桌面范围，Windows 辅助技术验收另行进行 |
-| `editor/gama/common` | 结构化文档内核已具备 | DOM-free `DocumentModel`、schema、selection、transaction、history、serialization、plugins 与 `IDocumentModelService` contract；不得引用 Alpha、Workbench 或 Electron |
-| `editor/gama/browser` | pane/session/model-service/widget 分层已具备 | `GamaEditorPane` 负责 Workbench lifecycle，`GamaEditorSession` 负责结构化 DOM/input，`BrowserDocumentModelService` 负责 document reference/working copy，`TextEditorWidget` 仅负责一个 `textBlock` 的 Alpha line-editor projection |
+| `editor/common` | 两个同步内核与纯投影状态已具备 | `TextModel`、`DocumentModel`、坐标、selection、transaction、history、schema、serialization、cursor、纯 viewport 与版本化语言状态；不得引用 Workbench、Electron 或 generated DTO |
+| `editor/browser` | 两个 engine 的 pane/widget/service adapter 已具备 | code/document/diff widget、DOM input、viewport、model service、working-copy adapter 和 embedded line-editor adapter；不得选择产品版本 |
+| `editor/contrib` | 行式与结构化 feature 已按能力组织 | 命令、controller、可移除投影、Academic profile、citation 和 collaboration；不得拥有第二套 model 或读取产品 ID |
+| `editor.*.all.ts` | 产品静态装配已具备 | Code、Academic 与完整 contribution 清单；不得实现 engine 行为 |
 | `workbench/services/textMate` | 部分具备 | grammar revision registry、真实 TextMate/Oniguruma runtime、增量行状态缓存、Alpha provider/module adapter、版本化 catalog/theme wire 与独立 browser Worker、JSON/JSONC 资源、caller-resolved session contribution 与声明式 scope-theme selector 已完成；extension resource discovery 尚未完成 |
 | Document service | 部分具备 | `IFileService` 将 App Server `fs/changed` 映射为工作区失效事件，`ITextFileService` 转发；Alpha 模型服务提供 dirty、快照保存、显式 revert、CRLF/LF 保留、干净模型重载与脏模型外改状态；URI revision/CAS、恢复仍未完成 |
 | Selection/decorations | 基础具备 | selection、实例控制器、tracked range、decoration collection |
@@ -41,14 +41,14 @@ decoration 等身份只能由 `editor` 领域定义，不得为了复用而下�
 
 ## 环境分层与 base 联动
 
-依赖方向是 `alpha/browser → alpha/common → base/common`，同时
-`alpha/browser → base/browser`。`base` 反向引用 editor 严格禁止；
+依赖方向是 `contrib/browser → browser/common → common → base/common`，同时
+`browser → base/browser`。`base` 反向引用 editor 严格禁止；
 这不表示 editor 要回避 base，恰恰相反，通用机制必须优先复用 base。
 
 | Editor 层 | 应复用的 base 能力 | 仍由 editor 定义 |
 | --- | --- | --- |
-| `alpha/common` | event、lifecycle、IME realm coordination、cancellation、通用 geometry | position/range、model version、history、selection、decoration、composition transaction、language request/lane/result identity、snapshot version gate、worker ownership、纯 view-model 语义 |
-| `alpha/browser` | DOM lifecycle、通用控件基础、platform/keybinding 状态、通用 layout primitive | viewport、行布局投影、textarea/input adapter、字体测量、editor ARIA |
+| `common` | event、lifecycle、IME realm coordination、cancellation、通用 geometry | 两个 engine 的 position/range、model version、history、selection、transaction、schema、language request/lane/result identity、snapshot version gate 和纯 view-model 语义 |
+| `browser` | DOM lifecycle、通用控件基础、platform/keybinding 状态、通用 layout primitive | code/document viewport、行与节点投影、textarea/input adapter、字体测量、editor ARIA |
 | Workbench host | platform service、context key、commands、configuration、theme | editor pane 接线、document/workspace 绑定和外部区域布局 |
 | Transition adapter | 对应第三方 renderer API | 仅适配，不得反向定义 Zeta common/browser contract |
 
@@ -56,19 +56,18 @@ decoration 等身份只能由 `editor` 领域定义，不得为了复用而下�
 
 ```text
 editor/
-  alpha/            # Monaco/VS Code-aligned line editor
-    common/{core,model,commands,...}
-    browser/{view,widget,services,...}
-    contrib/<feature>/{common,browser}
-    test/{common,browser}
-  gama/            # ProseMirror-aligned structured editor
-    common/{core,model,commands,services}
-    browser/{editorInput,gamaEditorPane,gamaEditorSession,widget,services}
-    contrib/<feature>/{common,browser}
-    test/{common,browser}
+  common/{core,model,commands,services,...}
+  browser/{view,widget,services,...}
+  contrib/<feature>/{common,browser}
+  test/{common,browser}
+  editor.code.all.ts
+  editor.academic.all.ts
+  editor.all.ts
+  editor.api.ts
+  editor.main.ts
 ```
 
-当前 `editor/alpha/common` 已直接复用 `base/common/event`、
+当前 `editor/common` 已直接复用 `base/common/event`、
 `base/common/lifecycle`、`base/common/ime` 和 `base/common/layout.ISize`。
 其中 composition 开始必须
 遵守共享 `IME.enabled` 状态，避免编辑器与 keybinding/inputbox 各自维护
@@ -229,7 +228,7 @@ anchor；Android diff、macOS 长按及其他平台差异仍未完成。
 
 ### Current 6：固定行高 viewport 内核
 
-`EditorViewportModel` 已在 `alpha/common` 中建立 DOM 无关的 view-model
+`EditorViewportModel` 已在 `editor/common` 中建立 DOM 无关的 view-model
 边界。browser 层负责测量并输入 viewport size、content width 和 line height；
 common 层负责内容尺寸、横纵滚动约束、可见行范围和 overscan render range。
 输出 layout 是不可变快照并携带 `TextModel.version`，因此即使一次编辑没有
@@ -238,7 +237,7 @@ common 层负责内容尺寸、横纵滚动约束、可见行范围和 overscan 
 内容边界。
 
 common 契约明确限定为固定行高，不包含软换行、折叠、inline widget、字体
-测量或 DOM。`alpha/browser` 已按 Current 7 消费这个 contract；浏览器职责
+测量或 DOM。`editor/browser` 已按 Current 7 消费这个 contract；浏览器职责
 没有进入 common，也没有下沉进 base。
 
 ### Current 7：只读虚拟行 browser projection
@@ -572,7 +571,7 @@ event 没有 `clipboardData` 时，Async writer 输出等价的 plain/HTML paylo
 
 ### Current 21：Versioned language request boundary
 
-`editor/alpha/common/LanguageRequestCoordinator` 为每个请求捕获不可变
+`editor/common/LanguageRequestCoordinator` 为每个请求捕获不可变
 `TextSnapshot`、单调 request ID、具名 lane 和调用方 payload。同一 lane 是
 latest-wins；不同 lane 可以共享一个惰性创建的 worker 并发运行。该 adapter
 直接复用标准 `AbortSignal`，模型事务、同 lane 新请求、调用方取消、worker
@@ -1046,7 +1045,7 @@ token 数组；若要进一步消除 renderer 端整数组分配，需要后续�
 | event、lifecycle、URI、resource collection | `base` | ✅ 复用现有领域无关基座；禁止 editor 反向依赖 |
 | 原始资源 I/O 与粗粒度失效 | `platform/files` | ✅ App Server-backed UTF-8 read/write 与 `fs/changed` projection |
 | load/save 传输、共享文档引用与 Alpha dirty/revert/conflict policy | `workbench/services/textfile/common` / `AlphaTextModelService` | ✅ 首个 file-backed Alpha consumer 已建立；CAS、备份恢复仍未完成 |
-| 文本事务、selection、decoration、language result | `editor/alpha/common` | ✅ editor 领域所有权 |
+| 文本事务、selection、decoration、language result | `editor/common` | ✅ editor 领域所有权 |
 | TextMate grammar/runtime 与 token provider | 独立 `workbench/services/textMate` adapter | 部分具备；runtime/provider/browser WASM、产品 JSON/JSONC 资源与 caller-resolved session contribution 已完成，extension resource discovery 仍待完成 |
 
 因此 Current 36 不为 token delta 新造 service，也不提前创建没有保存、冲突或 grammar
@@ -1058,7 +1057,7 @@ TextMate adapter。未来若文件 I/O、dirty 状态或 TextMate runtime import
 ### Current 37：共享 provider module 基座与 Analysis 激活屏障
 
 Completion 原先拥有的 module registry、host、catalog、activation 状态机和
-wire request/response 校验已经抽为 `editor/alpha/common` 内的通用语言域设施。
+wire request/response 校验已经抽为 `editor/common` 内的通用语言域设施。
 Completion 与 Analysis 仅保留 provider 类型和协议描述符的薄封装。该抽取不会进入
 `base`：module ID、provider batch 与 Worker catalog 都是编辑器语言域语义，反向下沉
 会违反 base 的领域无关边界。
@@ -1163,7 +1162,7 @@ auto-close edit 生成 post-transaction `LanguageAutoClosingAction`；调用者�
 model version 仍是当前已提交版本时，才能把 action 交给
 `LanguageAutoClosingTracker`。同步 listener 引发重入编辑时，过期 action 会被丢弃。
 
-`LanguageAutoClosingTracker` 位于 `alpha/common`，但由每个输入 controller 实例拥有。
+`LanguageAutoClosingTracker` 位于 `editor/common`，但由每个输入 controller 实例拥有。
 它复用 `TextModel.trackRange`，分别追踪 enclosing range 与 closer range，并借用同一
 model 的 `EditorSelectionController`：
 
@@ -1277,7 +1276,7 @@ revision、销毁、跨 model/language 拒绝、Enter、auto-closing `notIn` 与
 
 TextMate grammar 已经出现真实消费者：Alpha Analysis provider/module seam 可以接收比
 baseline lexical scanner 更高保真的 token provider。因此 runtime 不进入
-`editor/alpha`，而是建立单向依赖 `workbench/services/textMate → editor/alpha/common →
+`editor`，而是建立单向依赖 `workbench/services/textMate → editor/common →
 base/common`。`base` 不认识 grammar、scope、language ID 或 token provider；
 Alpha 也不 import `vscode-textmate`、`vscode-oniguruma` 或 WASM。
 
@@ -1479,7 +1478,7 @@ Alpha pane 先通过 `AlphaTextModelService.acquire` 获取引用：已有资源
 独立嵌入和确定性测试。详细 TextFile 实现契约见
 [`desktop/src/zeta/workbench/services/textfile/README.md`](../desktop/src/zeta/workbench/services/textfile/README.md)，
 Alpha 内部契约见
-[`desktop/src/zeta/editor/alpha/README.md`](../desktop/src/zeta/editor/alpha/README.md)。
+[`desktop/src/zeta/editor/text-engine.md`](../desktop/src/zeta/editor/text-engine.md)。
 
 当前内置 grammar catalog 与 Analysis Worker 都跟随一个 Alpha session 生命周期。
 这是有意的阶段性所有权：静态 JSON/JSONC grammar 尚未形成跨 pane 的贡献消费者，

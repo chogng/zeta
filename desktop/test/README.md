@@ -24,9 +24,9 @@ Editor tests follow VS Code's two-layer layout, with no shared editor runtime su
 
 | Layer | Location | Purpose |
 | --- | --- | --- |
-| Alpha unit | `src/zeta/editor/alpha/test` and Alpha contribution `test` folders | Alpha model, command, controller, persistence, and projection contracts in Node/jsdom |
+| Editor unit | `src/zeta/editor/test` and editor contribution `test` folders | Text/document model, command, controller, persistence, and projection contracts in Node/jsdom |
 | Alpha browser | `test/alpha` | Alpha public API, pane, input, undo, save, worker, and accessibility contracts independently in Chromium and Firefox |
-| Gama unit | `src/zeta/editor/gama/test` and Gama contribution `test` folders | Gama document model, transactions, controller, persistence, and projection contracts in Node/jsdom |
+| Editor architecture | `test/architecture/editor-architecture.test.ts` | Flat `common/browser/contrib/test` ownership, product bundles, and synchronous-layer dependency rules |
 | Gama browser | `test/gama` | Gama public API, structured editing, `textBlock` seam, and accessibility contracts independently in Chromium and Firefox |
 
 Run `pnpm test:alpha` or `pnpm test:gama`; each command runs only its named editor's unit and browser tests.

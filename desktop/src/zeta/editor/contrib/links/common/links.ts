@@ -1,0 +1,43 @@
+import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { type TextRange } from "../../../common/core/text.js";
+import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageFeatureRequest } from "../../../common/languages/languageFeatureRequest.js";
+import { LanguageFeatureProviderRegistry, type LanguageFeatureProviderMetadata } from "../../../common/languages/languageFeatureRegistry.js";
+import { type TextModel } from "../../../common/model/textModel.js";
+
+export interface LanguageLink {
+  readonly range: TextRange;
+  readonly target: string;
+  readonly tooltip?: string;
+}
+
+export interface LanguageLinkRequest extends LanguageFeatureRequest {}
+
+export interface LanguageLinkProvider extends LanguageFeatureProviderMetadata {
+  provideLinks(request: LanguageLinkRequest, signal: AbortSignal): readonly LanguageLink[] | Promise<readonly LanguageLink[]>;
+}
+
+/** Provides link candidates; opening a target remains a host-owned operation. */
+export class LinkService extends DisposableOwner {
+  constructor(private readonly model: TextModel, private readonly providers: LanguageFeatureProviderRegistry<LanguageLinkProvider>) {
+    super();
+  }
+
+  async provideLinks(languageId: string, signal: AbortSignal = new AbortController().signal): Promise<readonly LanguageLink[]> {
+    const request = createLanguageFeatureRequest(this.model, languageId, signal);
+    const links: LanguageLink[] = [];
+    const seen = new Set<string>();
+    for (const provider of this.providers.getProviders(languageId)) {
+      if (!isLanguageFeatureRequestCurrent(request)) return Object.freeze([]);
+      const result = await provider.provideLinks(request, signal);
+      if (!isLanguageFeatureRequestCurrent(request)) return Object.freeze([]);
+      for (const link of result) {
+        if (typeof link.target !== "string" || link.target.length === 0) continue;
+        const key = `${this.model.offsetAt(link.range.start)}:${this.model.offsetAt(link.range.end)}:${link.target}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        links.push(Object.freeze({ range: link.range, target: link.target, ...(link.tooltip !== undefined ? { tooltip: link.tooltip } : {}) }));
+      }
+    }
+    return Object.freeze(links);
+  }
+}

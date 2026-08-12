@@ -1,11 +1,11 @@
 import { raceCancellation } from "../../../../base/common/cancellation.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
-import { SyntaxModuleWorkerClient } from "../../../../editor/alpha/common/languages/syntax/syntaxModuleWorkerClient.js";
-import { type SyntaxRequest } from "../../../../editor/alpha/common/languages/syntax/syntaxProviders.js";
-import { type SyntaxLane, type SyntaxResult, type SyntaxWorker } from "../../../../editor/alpha/common/languages/syntax/syntaxService.js";
-import { type LanguageWorkerModelSynchronizer, type LanguageWorkerRequest, type LanguageWorkerResultDisposition, type LanguageWorkerResultSettler } from "../../../../editor/alpha/common/languages/languageRequestCoordinator.js";
-import { type LanguageWorkerWireClientPort } from "../../../../editor/alpha/common/languages/languageWorkerWire.js";
-import { type TextModelChange } from "../../../../editor/alpha/common/core/text.js";
+import { SyntaxModuleWorkerClient } from "../../../../editor/common/languages/syntax/syntaxModuleWorkerClient.js";
+import { type SyntaxRequest } from "../../../../editor/common/languages/syntax/syntaxProviders.js";
+import { type SyntaxLane, type SyntaxResult, type SyntaxWorker } from "../../../../editor/common/languages/syntax/syntaxService.js";
+import { type LanguageWorkerModelSynchronizer, type LanguageWorkerRequest, type LanguageWorkerResultDisposition, type LanguageWorkerResultSettler } from "../../../../editor/common/languages/languageRequestCoordinator.js";
+import { type LanguageWorkerWireClientPort } from "../../../../editor/common/languages/languageWorkerWire.js";
+import { type TextModelChange } from "../../../../editor/common/core/text.js";
 import { type TextMateGrammarCatalog, type TextMateGrammarCatalogSource } from "./textMateGrammarCatalog.js";
 import { TextMateGrammarCatalogWireClient } from "./textMateGrammarCatalogWire.js";
 import { type TextMateScopeTheme, type TextMateScopeThemeSource } from "./textMateScopeTheme.js";

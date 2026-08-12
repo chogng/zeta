@@ -49,6 +49,8 @@ Academic 的导入文件当前只保留在打开的 Sessions renderer 页中。�
 Academic 使用 Gama。它们只决定正常工作台启动时的默认区域和 editor bundle；Dedicated
 Sessions 自己构造固定页面，不读取或更改 `WorkbenchLayout`。
 
+产品入口分别静态加载 `editor.code.all.ts` 与 `editor.academic.all.ts`。两个 bundle 都来自同一个扁平的 `src/zeta/editor` 模块；Alpha/Gama 表示 `TextModel` 与 `DocumentModel` 两个 engine，不再表示两套源码目录。
+
 ## 构建与验证
 
 从仓库根目录执行：

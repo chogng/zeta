@@ -1,5 +1,5 @@
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
-import { type LanguageWorkerWireClientPort, type LanguageWorkerWirePort } from "../../../../editor/alpha/common/languages/languageWorkerWire.js";
+import { type LanguageWorkerWireClientPort, type LanguageWorkerWirePort } from "../../../../editor/common/languages/languageWorkerWire.js";
 import { normalizeTextMateGrammarCatalog, type TextMateGrammarCatalog } from "./textMateGrammarCatalog.js";
 import { TextMateGrammarCatalogStore } from "./textMateGrammarCatalogStore.js";
 

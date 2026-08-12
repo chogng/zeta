@@ -1,0 +1,292 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { Emitter, type Event } from "../../../base/common/event.js";
+import { DisposableOwner } from "../../../base/common/lifecycle.js";
+import { DocumentModel } from "../../common/model/documentModel.js";
+import type { DocumentNode } from "../../common/model/document.js";
+import { createDefaultDocumentSchema, type DocumentSchema } from "../../common/model/documentSchema.js";
+import { DocumentTransaction } from "../../common/model/documentTransaction.js";
+import { textSelection, type DocumentSelection } from "../../common/core/documentSelection.js";
+import type { DocumentCollaborationConnection } from "../../common/services/documentCollaborationService.js";
+import type { DocumentCollaborationInvite } from "../../common/services/documentCollaborationService.js";
+import type { DocumentCollaborationMember } from "../../common/services/documentCollaborationService.js";
+import type { DocumentCollaborationSnapshot } from "../../common/services/documentCollaborationService.js";
+import type { DocumentCollaborationPresence } from "../../common/services/documentCollaborationService.js";
+import type { DocumentCollaborationRoomRole } from "../../common/services/documentCollaborationService.js";
+import type { DocumentCollaborationSubmitOutcome } from "../../common/services/documentCollaborationService.js";
+import { DocumentCollaborationController } from "../../contrib/collaboration/common/controller.js";
+import type { DocumentCollaborationEnvelope } from "../../contrib/collaboration/common/protocol.js";
+import type { DocumentCollaborationRemoteEnvelope } from "../../contrib/collaboration/common/protocol.js";
+
+test("Gama collaboration submits only the in-flight snapshot while later typing is buffered", async () => {
+  const schema = createDefaultDocumentSchema();
+  const document = createDocument(schema);
+  using model = new DocumentModel(schema, document);
+  const connection = new FakeDocumentCollaborationConnection(schema, document);
+  using controller = new DocumentCollaborationController(model, connection);
+
+  model.dispatch(new DocumentTransaction().replaceText("text-1", 0, 0, "A"));
+  assert.equal(connection.submissions.length, 1);
+  assert.equal(firstText(connection.submissions[0]!.document), "AHello");
+
+  model.dispatch(new DocumentTransaction().replaceText("text-1", 1, 1, "B"));
+  assert.equal(firstText(model.document), "ABHello");
+  assert.equal(connection.submissions.length, 1);
+
+  connection.accept(0, 1);
+  await flushMicrotasks();
+  assert.equal(connection.submissions.length, 2);
+  assert.equal(connection.submissions[1]!.envelope.sequence, 2);
+  assert.equal(connection.submissions[1]!.envelope.baseVersion, 1);
+  assert.equal(firstText(connection.submissions[1]!.document), "ABHello");
+
+  connection.accept(1, 2);
+  await flushMicrotasks();
+  assert.equal(firstText(model.document), "ABHello");
+  assert.equal(controller.state, "connected");
+});
+
+test("Gama collaboration shares an author's undo and redo as ordered transactions", async () => {
+  const schema = createDefaultDocumentSchema();
+  const document = createDocument(schema);
+  using model = new DocumentModel(schema, document);
+  const connection = new FakeDocumentCollaborationConnection(schema, document);
+  using controller = new DocumentCollaborationController(model, connection);
+
+  model.dispatch(new DocumentTransaction().replaceText("text-1", 0, 0, "A"));
+  connection.accept(0, 1);
+  await flushMicrotasks();
+  assert.equal(firstText(model.document), "AHello");
+
+  assert.ok(model.undo());
+  await flushMicrotasks();
+  assert.equal(connection.submissions.length, 2);
+  assert.equal(connection.submissions[1]?.envelope.baseVersion, 1);
+  assert.equal(firstText(connection.submissions[1]!.document), "Hello");
+  connection.accept(1, 2);
+  await flushMicrotasks();
+
+  assert.ok(model.redo());
+  await flushMicrotasks();
+  assert.equal(connection.submissions.length, 3);
+  assert.equal(connection.submissions[2]?.envelope.baseVersion, 2);
+  assert.equal(firstText(connection.submissions[2]!.document), "AHello");
+  connection.accept(2, 3);
+  await flushMicrotasks();
+  assert.equal(controller.state, "connected");
+});
+
+test("Gama collaboration preserves a local author's history through an acknowledged remote edit", async () => {
+  const schema = createDefaultDocumentSchema();
+  const document = createDocument(schema);
+  using model = new DocumentModel(schema, document);
+  const connection = new FakeDocumentCollaborationConnection(schema, document);
+  using controller = new DocumentCollaborationController(model, connection);
+
+  model.dispatch(new DocumentTransaction().replaceText("text-1", 0, 0, "A"));
+  connection.accept(0, 1);
+  await flushMicrotasks();
+  model.dispatch(new DocumentTransaction().replaceText("text-1", 0, 0, "C"));
+  connection.accept(1, 2);
+  await flushMicrotasks();
+
+  connection.receiveRemote(new DocumentTransaction().replaceText("text-1", 1, 1, "B"), 3);
+  assert.equal(firstText(model.document), "CBAHello");
+  assert.equal(model.canUndo, true);
+
+  assert.ok(model.undo());
+  await flushMicrotasks();
+  assert.equal(firstText(model.document), "BAHello");
+  connection.accept(2, 4);
+  await flushMicrotasks();
+
+  assert.ok(model.undo());
+  await flushMicrotasks();
+  assert.equal(firstText(model.document), "BHello");
+  connection.accept(3, 5);
+  await flushMicrotasks();
+
+  assert.ok(model.redo());
+  await flushMicrotasks();
+  assert.equal(firstText(model.document), "BAHello");
+  connection.accept(4, 6);
+  await flushMicrotasks();
+
+  assert.ok(model.redo());
+  await flushMicrotasks();
+  assert.equal(firstText(model.document), "CBAHello");
+  connection.accept(5, 7);
+  await flushMicrotasks();
+  assert.equal(controller.state, "connected");
+});
+
+test("Gama collaboration preserves local history when a remote update rebases in-flight typing", async () => {
+  const schema = createDefaultDocumentSchema();
+  const document = createDocument(schema);
+  using model = new DocumentModel(schema, document);
+  const connection = new FakeDocumentCollaborationConnection(schema, document);
+  using controller = new DocumentCollaborationController(model, connection);
+
+  model.dispatch(new DocumentTransaction().replaceText("text-1", 0, 0, "A"));
+  connection.conflictWithRemote(0, new DocumentTransaction().replaceText("text-1", 1, 1, "B"), 1);
+  await flushMicrotasks();
+  assert.equal(firstText(model.document), "AHBello");
+  assert.equal(connection.submissions.length, 2);
+  assert.equal(connection.submissions[1]?.envelope.baseVersion, 1);
+  assert.equal(firstText(connection.submissions[1]!.document), "AHBello");
+  connection.accept(1, 2);
+  await flushMicrotasks();
+
+  assert.ok(model.undo());
+  await flushMicrotasks();
+  assert.equal(firstText(model.document), "HBello");
+  connection.accept(2, 3);
+  await flushMicrotasks();
+
+  assert.ok(model.redo());
+  await flushMicrotasks();
+  assert.equal(firstText(model.document), "AHBello");
+  connection.accept(3, 4);
+  await flushMicrotasks();
+  assert.equal(controller.state, "connected");
+});
+
+test("Gama collaboration publishes local selections without versioning them and exposes remote selections", async () => {
+  const schema = createDefaultDocumentSchema();
+  const document = createDocument(schema);
+  using model = new DocumentModel(schema, document);
+  const connection = new FakeDocumentCollaborationConnection(schema, document);
+  using controller = new DocumentCollaborationController(model, connection);
+  const received: (readonly { readonly clientId: string }[])[] = [];
+  controller.onDidChangePresence(change => received.push(change.presences));
+
+  const local = textSelection({ nodeId: "text-1", offset: 1 });
+  model.setSelection(local);
+  await flushMicrotasks();
+  assert.deepEqual(connection.presenceUpdates.at(-1), local);
+  connection.acceptPresence([{ clientId: "client-b", selection: textSelection({ nodeId: "text-1", offset: 0 }, { nodeId: "text-1", offset: 1 }) }]);
+  assert.equal(received[0]?.[0]?.clientId, "client-b");
+});
+
+function createDocument(schema: DocumentSchema): DocumentNode {
+  return schema.createDocument([schema.createNode("paragraph", { id: "paragraph-1", content: [schema.createText("Hello", { id: "text-1" })] })], "document-1");
+}
+
+function firstText(document: DocumentNode): string | undefined {
+  return document.content[0]?.content[0]?.text;
+}
+
+async function flushMicrotasks(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
+class FakeDocumentCollaborationConnection extends DisposableOwner implements DocumentCollaborationConnection {
+  private readonly updateEmitter = this.own(new Emitter<DocumentCollaborationRemoteEnvelope>());
+  private readonly snapshotEmitter = this.own(new Emitter<DocumentCollaborationSnapshot>());
+  private readonly presenceEmitter = this.own(new Emitter<readonly DocumentCollaborationPresence[]>());
+  private readonly failureEmitter = this.own(new Emitter<Error>());
+
+  readonly roomId = "gama-test-room";
+  readonly clientId = "client-a";
+  readonly principalId = undefined;
+  readonly canEdit = true;
+  readonly canManageMembers = false;
+  readonly initialSnapshot: DocumentCollaborationSnapshot;
+  readonly currentPresence: readonly DocumentCollaborationPresence[] = [];
+  readonly onDidReceiveUpdate: Event<DocumentCollaborationRemoteEnvelope> = this.updateEmitter.event;
+  readonly onDidReceiveSnapshot: Event<DocumentCollaborationSnapshot> = this.snapshotEmitter.event;
+  readonly onDidReceivePresence: Event<readonly DocumentCollaborationPresence[]> = this.presenceEmitter.event;
+  readonly onDidFail: Event<Error> = this.failureEmitter.event;
+  readonly submissions: Submission[] = [];
+  readonly presenceUpdates: (DocumentSelection | undefined)[] = [];
+
+  constructor(readonly schema: DocumentSchema, document: DocumentNode) {
+    super();
+    this.initialSnapshot = Object.freeze({ roomId: this.roomId, version: 0, document });
+  }
+
+  submit(envelope: DocumentCollaborationEnvelope, document: DocumentNode, _signal: AbortSignal): Promise<DocumentCollaborationSubmitOutcome> {
+    const submission = new Submission(envelope, document);
+    this.submissions.push(submission);
+    return submission.promise;
+  }
+
+  updatePresence(selection: DocumentSelection | undefined): Promise<void> {
+    this.presenceUpdates.push(selection);
+    return Promise.resolve();
+  }
+
+  createInvite(_displayName: string, _role: DocumentCollaborationRoomRole, _signal: AbortSignal): Promise<DocumentCollaborationInvite> {
+    return Promise.reject(new Error("Fake collaboration connection does not manage room members"));
+  }
+
+  listMembers(_signal: AbortSignal): Promise<readonly DocumentCollaborationMember[]> {
+    return Promise.reject(new Error("Fake collaboration connection does not manage room members"));
+  }
+
+  rotateMemberAccessToken(_principalId: string, _signal: AbortSignal): Promise<DocumentCollaborationInvite> {
+    return Promise.reject(new Error("Fake collaboration connection does not manage room members"));
+  }
+
+  revokeMember(_principalId: string, _signal: AbortSignal): Promise<void> {
+    return Promise.reject(new Error("Fake collaboration connection does not manage room members"));
+  }
+
+  acceptPresence(presences: readonly DocumentCollaborationPresence[]): void {
+    this.presenceEmitter.fire(presences);
+  }
+
+  accept(index: number, version: number): void {
+    const submission = this.submissions[index];
+    assert.ok(submission, `Expected collaboration submission ${index}`);
+    submission.resolve({
+      kind: "accepted",
+      update: {
+        clientId: this.clientId,
+        sequence: submission.envelope.sequence,
+        baseVersion: submission.envelope.baseVersion,
+        version,
+        transaction: submission.envelope.transaction,
+      },
+    });
+  }
+
+  receiveRemote(transaction: DocumentTransaction, version: number): void {
+    this.updateEmitter.fire({ clientId: "client-b", sequence: version, baseVersion: version - 1, version, transaction });
+  }
+
+  conflictWithRemote(index: number, transaction: DocumentTransaction, version: number): void {
+    const submission = this.submissions[index];
+    assert.ok(submission, `Expected collaboration submission ${index}`);
+    submission.resolve({ kind: "conflict", updates: [{ clientId: "client-b", sequence: version, baseVersion: version - 1, version, transaction }] });
+  }
+}
+
+class Submission {
+  private readonly deferred: Deferred<DocumentCollaborationSubmitOutcome>;
+
+  readonly promise: Promise<DocumentCollaborationSubmitOutcome>;
+
+  constructor(readonly envelope: DocumentCollaborationEnvelope, readonly document: DocumentNode) {
+    this.deferred = new Deferred<DocumentCollaborationSubmitOutcome>();
+    this.promise = this.deferred.promise;
+  }
+
+  resolve(value: DocumentCollaborationSubmitOutcome): void {
+    this.deferred.resolve(value);
+  }
+}
+
+class Deferred<T> {
+  private _resolve: ((value: T) => void) | undefined;
+
+  readonly promise = new Promise<T>(resolve => {
+    this._resolve = resolve;
+  });
+
+  resolve(value: T): void {
+    this._resolve?.(value);
+  }
+}

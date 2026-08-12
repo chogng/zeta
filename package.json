@@ -10,6 +10,7 @@
     "build:desktop:complete": "corepack pnpm --dir desktop build:complete",
     "test:desktop:alpha": "corepack pnpm --dir desktop test:alpha",
     "test:desktop:gama": "corepack pnpm --dir desktop test:gama",
+    "test:desktop:editor": "corepack pnpm --dir desktop test:editor",
     "test:desktop:smoke": "corepack pnpm --dir desktop test:smoke:desktop",
     "test:desktop:smoke:ui": "corepack pnpm --dir desktop test:smoke:ui",
     "test:desktop:smoke:browser": "corepack pnpm --dir desktop test:smoke:browser",

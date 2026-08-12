@@ -1,5 +1,5 @@
-import { type SyntaxProvider, type SyntaxProviderRequest } from "../../../../editor/alpha/common/languages/syntax/syntaxProviders.js";
-import { type LanguageWorkerDocumentSynchronization } from "../../../../editor/alpha/common/languages/languageWorkerDocumentMirror.js";
+import { type SyntaxProvider, type SyntaxProviderRequest } from "../../../../editor/common/languages/syntax/syntaxProviders.js";
+import { type LanguageWorkerDocumentSynchronization } from "../../../../editor/common/languages/languageWorkerDocumentMirror.js";
 import { TextMateTokenizationService } from "./textMateTokenizationService.js";
 
 export const TEXTMATE_SYNTAX_PROVIDER_ID = "textmate.grammar";

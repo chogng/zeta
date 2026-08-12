@@ -1,7 +1,7 @@
 import { raceCancellation } from "../../../../base/common/cancellation.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
-import { assertLanguageId } from "../../../../editor/alpha/common/languages/languageId.js";
+import { assertLanguageId } from "../../../../editor/common/languages/languageId.js";
 import { type TextMateGrammarRegistrySnapshot, type TextMateGrammarTokenType } from "./textMateGrammarRegistry.js";
 
 export interface TextMateGrammarCatalogEntry {
