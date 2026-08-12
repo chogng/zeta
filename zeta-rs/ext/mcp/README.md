@@ -5,9 +5,22 @@
 `zeta-core::ToolService`, projects exact source generations, and produces the matching approval
 policy.
 
-The lower `zeta-mcp` crate remains the protocol/session domain. App Server is only the composition
-root: it installs the returned tool service into the shared registry and replaces it at config safe
-points.
+The lower `zeta-mcp` crate remains the protocol/session domain. App Server is the composition root:
+it installs the returned tool service into the shared registry and replaces it when Config or
+Connector authority generations change.
 
-Credential resolution and extension-contributed MCP overlays are not implemented yet. An enabled
-declaration containing an unresolved credential reference fails closed before a session starts.
+`compose_mcp_tools` handles enabled user Config declarations. `compose_mcp_tools_with_connectors`
+also reads the exact ready Connector snapshot, loads each opaque credential through the injected
+`SecretStore`, and delegates Plugin-specific transport construction to
+`ConnectorMcpRuntimeProvider`. Config/Connector server-ID collisions fail closed.
+
+`materialize_connector_servers` binds every resulting server to `ConnectorInvocationFence`.
+`McpToolService::review_request` rejects stale connections before approval, while
+`McpToolService::execute` calls `ConnectorAuthority::with_authorized_invocation` immediately around
+the actual MCP dispatch. This prevents an old prepared call from starting after disconnect commits.
+The authority lock may delay disconnect until an already-dispatched call returns; weakening that
+linearization requires a replacement contract, not a best-effort state check.
+
+Standalone Config credential references remain unsupported and fail before session startup.
+Plugin activation must still implement a concrete `ConnectorMcpRuntimeProvider`; OAuth and
+production secret persistence are outside this crate.

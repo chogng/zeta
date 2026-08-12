@@ -34,7 +34,9 @@ use zeta_core::SessionCoordinator;
 use zeta_core::ThreadController;
 use zeta_extensions::ExtensionRoot;
 use zeta_install_context::InstallContext;
+use zeta_mcp_extension::ConnectorMcpRuntimeProvider;
 use zeta_mcp_extension::compose_mcp_tools;
+use zeta_mcp_extension::compose_mcp_tools_with_connectors;
 use zeta_model_provider::HttpTokenizerAssetDownloader;
 use zeta_model_provider::HuggingFaceTokenizerAssetDiscoverer;
 use zeta_model_provider::ManagedLocalTokenizerService;
@@ -48,6 +50,7 @@ use zeta_model_provider::UnavailableModel;
 use zeta_model_provider_config::ProviderConfigRegistry;
 use zeta_protocol::ContextWindow;
 use zeta_rollout::LocalStateRepository;
+use zeta_secrets::SecretStore;
 use zeta_skills_extension::BuiltInSkillSource;
 use zeta_skills_extension::SkillConfigSnapshotProvider;
 
@@ -158,6 +161,7 @@ pub struct LocalAppServerOptions {
     pub session_state_mode: SessionStateMode,
     model_operation_client: Option<Arc<dyn OperationClient>>,
     web_search_backend: Option<Arc<dyn zeta_web_search_extension::WebSearchBackend>>,
+    connector_runtime: Option<LocalConnectorRuntime>,
 }
 
 impl LocalAppServerOptions {
@@ -171,6 +175,7 @@ impl LocalAppServerOptions {
             session_state_mode: SessionStateMode::Durable,
             model_operation_client: None,
             web_search_backend: None,
+            connector_runtime: None,
         }
     }
 
@@ -226,6 +231,12 @@ impl LocalAppServerOptions {
         self.web_search_backend = Some(backend);
         self
     }
+
+    /// Installs product/plugin Connector authority, secret storage, and MCP materialization.
+    pub fn with_connector_runtime(mut self, runtime: LocalConnectorRuntime) -> Self {
+        self.connector_runtime = Some(runtime);
+        self
+    }
 }
 
 impl fmt::Debug for LocalAppServerOptions {
@@ -245,6 +256,10 @@ impl fmt::Debug for LocalAppServerOptions {
             .field(
                 "web_search_backend_injected",
                 &self.web_search_backend.is_some(),
+            )
+            .field(
+                "connector_runtime_injected",
+                &self.connector_runtime.is_some(),
             )
             .finish()
     }
@@ -268,10 +283,43 @@ impl PartialEq for LocalAppServerOptions {
                 (None, None) => true,
                 _ => false,
             }
+            && match (&self.connector_runtime, &other.connector_runtime) {
+                (Some(left), Some(right)) => left.ptr_eq(right),
+                (None, None) => true,
+                _ => false,
+            }
     }
 }
 
 impl Eq for LocalAppServerOptions {}
+
+/// Host-provided Connector runtime ports used by the local App Server composition root.
+#[derive(Clone)]
+pub struct LocalConnectorRuntime {
+    service: Arc<zeta_connectors_extension::ConnectorCredentialService>,
+    secrets: Arc<dyn SecretStore>,
+    mcp: Arc<dyn ConnectorMcpRuntimeProvider>,
+}
+
+impl LocalConnectorRuntime {
+    pub fn new(
+        service: Arc<zeta_connectors_extension::ConnectorCredentialService>,
+        secrets: Arc<dyn SecretStore>,
+        mcp: Arc<dyn ConnectorMcpRuntimeProvider>,
+    ) -> Self {
+        Self {
+            service,
+            secrets,
+            mcp,
+        }
+    }
+
+    fn ptr_eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.service, &other.service)
+            && Arc::ptr_eq(&self.secrets, &other.secrets)
+            && Arc::ptr_eq(&self.mcp, &other.mcp)
+    }
+}
 
 /// Selects the lifecycle of Session and Thread state in a local App Server.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -397,6 +445,7 @@ pub fn open_local_app_server_with_code_index_providers(
     let user_config = config
         .read_snapshot()
         .map_err(|error| OpenAppServerError(error.0))?;
+    let connector_runtime = options.connector_runtime.take();
     let workspace = options.workspace.map(|workspace| {
         Arc::new(WorkspaceConfigTracker::new(WorkspaceConfigStore::open(
             workspace.config_path,
@@ -469,9 +518,21 @@ pub fn open_local_app_server_with_code_index_providers(
     if let Some(models) = providers.semantic_models {
         server = server.with_code_index_semantic_models(models);
     }
-    let mcp = compose_mcp_tools(&runtime_config, user_config.generation)
-        .map_err(|error| OpenAppServerError(error.to_string()))?
-        .map(|mcp| ToolPort::mcp(mcp.tools, mcp.policy));
+    let mcp = match &connector_runtime {
+        Some(connectors) => compose_mcp_tools_with_connectors(
+            &runtime_config,
+            1,
+            connectors.service.authority().clone(),
+            Arc::clone(&connectors.secrets),
+            Arc::clone(&connectors.mcp),
+        ),
+        None => compose_mcp_tools(&runtime_config, user_config.generation),
+    }
+    .map_err(|error| OpenAppServerError(error.to_string()))?
+    .map(|mcp| ToolPort::mcp(mcp.tools, mcp.policy));
+    if let Some(connectors) = &connector_runtime {
+        server = server.with_connector_service(Arc::clone(&connectors.service));
+    }
     server = server
         .with_local_workspace_host(
             mcp,
@@ -499,6 +560,7 @@ pub fn open_local_app_server_with_code_index_providers(
         config,
         workspace_tools,
         workspace_runtime,
+        connector_runtime,
     ));
     Ok(server)
 }
@@ -532,6 +594,7 @@ impl ToolConfigWatcher {
         config: Arc<ConfigStore>,
         workspace_tools: Arc<WorkspaceToolPorts>,
         workspace_runtime: crate::server::WorkspaceRuntimeControl,
+        connector_runtime: Option<LocalConnectorRuntime>,
     ) -> Self {
         let mut semantic_binding = config.read_snapshot().ok().map(|snapshot| {
             (
@@ -540,65 +603,94 @@ impl ToolConfigWatcher {
             )
         });
         let changes = config.subscribe_changes();
+        let connector_changes = connector_runtime
+            .as_ref()
+            .map(|runtime| runtime.service.authority().subscribe());
         let (shutdown, shutdown_receiver) = std::sync::mpsc::channel();
         let thread = std::thread::Builder::new()
             .name("zeta-tool-config".into())
             .spawn(move || {
+                let mut catalog_generation = 1_u64;
                 loop {
                     if shutdown_receiver.try_recv().is_ok() {
                         break;
                     }
-                    match changes.recv_timeout(Duration::from_millis(100)) {
-                        Ok(mut change) => {
-                            while let Ok(next) = changes.try_recv() {
-                                change = next;
-                            }
-                            let snapshot = match config.read_snapshot() {
-                                Ok(snapshot) => snapshot,
-                                Err(error) => {
-                                    workspace_tools.record_reconcile_failure(error.to_string());
-                                    continue;
-                                }
-                            };
+                    let config_changed = match changes.recv_timeout(Duration::from_millis(100)) {
+                        Ok(_) => {
+                            while changes.try_recv().is_ok() {}
+                            true
+                        }
+                        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => false,
+                        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
+                    };
+                    let mut connector_changed = false;
+                    if let Some(connector_changes) = &connector_changes {
+                        while connector_changes.try_recv().is_ok() {
+                            connector_changed = true;
+                        }
+                    }
+                    if !config_changed && !connector_changed {
+                        continue;
+                    }
+                    let snapshot = match config.read_snapshot() {
+                        Ok(snapshot) => snapshot,
+                        Err(error) => {
+                            workspace_tools.record_reconcile_failure(error.to_string());
+                            continue;
+                        }
+                    };
+                    if config_changed {
+                        if let Err(error) = workspace_runtime.reconcile_user_trust(&snapshot.values)
+                        {
+                            workspace_tools.record_reconcile_failure(error.to_string());
+                            continue;
+                        }
+                        let next_semantic_binding = (
+                            snapshot.values.semantic_code_index.clone(),
+                            snapshot.values.providers.clone(),
+                        );
+                        if semantic_binding.as_ref() != Some(&next_semantic_binding) {
+                            semantic_binding = Some(next_semantic_binding);
                             if let Err(error) =
-                                workspace_runtime.reconcile_user_trust(&snapshot.values)
+                                workspace_runtime.reconcile_semantic_code_index_runtime()
                             {
                                 workspace_tools.record_reconcile_failure(error.to_string());
                                 continue;
                             }
-                            let next_semantic_binding = (
-                                snapshot.values.semantic_code_index.clone(),
-                                snapshot.values.providers.clone(),
-                            );
-                            if semantic_binding.as_ref() != Some(&next_semantic_binding) {
-                                semantic_binding = Some(next_semantic_binding);
-                                if let Err(error) =
-                                    workspace_runtime.reconcile_semantic_code_index_runtime()
-                                {
-                                    workspace_tools.record_reconcile_failure(error.to_string());
-                                    continue;
-                                }
-                            }
-                            let mcp = match compose_mcp_tools(&snapshot.values, change.generation) {
-                                Ok(mcp) => mcp.map(|mcp| ToolPort::mcp(mcp.tools, mcp.policy)),
-                                Err(error) => {
-                                    workspace_tools.record_reconcile_failure(error.to_string());
-                                    continue;
-                                }
-                            };
-                            if let Err(error) = workspace_tools.reconcile_user_config(
-                                mcp,
-                                &snapshot.values.tool_search,
-                                &snapshot.values.providers,
-                            ) {
-                                log::error!(
-                                    "requested tool-search configuration is unavailable: {error}"
-                                );
-                                workspace_tools.record_reconcile_failure(error.to_string());
-                            }
                         }
-                        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
-                        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
+                    }
+                    catalog_generation = match catalog_generation.checked_add(1) {
+                        Some(generation) => generation,
+                        None => {
+                            workspace_tools
+                                .record_reconcile_failure("MCP catalog generation overflow");
+                            continue;
+                        }
+                    };
+                    let composition = match &connector_runtime {
+                        Some(connectors) => compose_mcp_tools_with_connectors(
+                            &snapshot.values,
+                            catalog_generation,
+                            connectors.service.authority().clone(),
+                            Arc::clone(&connectors.secrets),
+                            Arc::clone(&connectors.mcp),
+                        ),
+                        None => compose_mcp_tools(&snapshot.values, snapshot.generation),
+                    };
+                    let mcp = match composition {
+                        Ok(mcp) => mcp.map(|mcp| ToolPort::mcp(mcp.tools, mcp.policy)),
+                        Err(error) => {
+                            workspace_tools.record_reconcile_failure(error.to_string());
+                            continue;
+                        }
+                    };
+                    if let Err(error) = workspace_tools.reconcile_user_config(
+                        mcp,
+                        &snapshot.values.tool_search,
+                        &snapshot.values.providers,
+                    ) {
+                        log::error!("requested tool-search configuration is unavailable: {error}");
+                        workspace_tools.record_reconcile_failure(error.to_string());
                     }
                 }
             })

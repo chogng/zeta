@@ -15,6 +15,13 @@ pub struct ConnectorEntry {
 }
 
 impl ConnectorEntry {
+    pub fn restore(definition: ConnectorDefinition, connection: ConnectorConnection) -> Self {
+        Self {
+            definition,
+            connection,
+        }
+    }
+
     pub fn definition(&self) -> &ConnectorDefinition {
         &self.definition
     }
@@ -58,6 +65,27 @@ impl ConnectorSnapshot {
             return Err(ConnectorError::new(
                 ConnectorErrorKind::DuplicateIdentity,
                 "connector snapshot contains a duplicate connector ID",
+            ));
+        }
+        Ok(Self {
+            generation,
+            entries,
+        })
+    }
+
+    /// Restores a durable set of already validated definitions and connections.
+    pub fn restore(
+        generation: ConnectorSnapshotGeneration,
+        mut entries: Vec<ConnectorEntry>,
+    ) -> Result<Self, ConnectorError> {
+        entries.sort_by(|left, right| left.definition.id().cmp(right.definition.id()));
+        if entries
+            .windows(2)
+            .any(|window| window[0].definition.id() == window[1].definition.id())
+        {
+            return Err(ConnectorError::new(
+                ConnectorErrorKind::DuplicateIdentity,
+                "restored Connector snapshot contains a duplicate connector ID",
             ));
         }
         Ok(Self {

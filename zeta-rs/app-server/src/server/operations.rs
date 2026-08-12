@@ -130,6 +130,7 @@ impl AppServer {
                 typst: true,
                 update_replay: true,
                 extensions,
+                connectors: self.connectors.is_some(),
             },
             slash_commands: self.slash_commands.commands().to_vec(),
         })

@@ -199,7 +199,7 @@ fn returned_output(
             }
             ToolContent::Image { url, detail } => Ok(ContentPart::ImageUrl {
                 url: url.clone(),
-                detail: (*detail).into(),
+                detail: *detail,
             }),
         })
         .collect::<Result<Vec<_>, CoreError>>()?;

@@ -5,6 +5,7 @@ use crate::ConnectorConnectionState;
 use crate::ConnectorConnectionUpdate;
 use crate::ConnectorCredentialRef;
 use crate::ConnectorDefinition;
+use crate::ConnectorDefinitionDigest;
 use crate::ConnectorErrorKind;
 use crate::ConnectorId;
 use crate::ConnectorRuntimeBinding;
@@ -40,6 +41,38 @@ fn snapshot_rejects_duplicate_connector_identity() {
     .unwrap_err();
 
     assert_eq!(error.kind(), ConnectorErrorKind::DuplicateIdentity);
+}
+
+#[test]
+fn definition_digest_is_stable_and_runtime_sensitive() {
+    let original = definition("acme:github");
+    let same = definition("acme:github");
+    let changed = ConnectorDefinition::new(
+        ConnectorId::new("acme:github").unwrap(),
+        "GitHub",
+        "Connect a GitHub account.",
+        ConnectorRuntimeBinding::mcp_server("plugin:acme/github:mcp:github-v2").unwrap(),
+    )
+    .unwrap();
+
+    assert_eq!(original.digest(), same.digest());
+    assert_ne!(original.digest(), changed.digest());
+    assert!(original.digest().as_str().starts_with("sha256:"));
+
+    let display_only = ConnectorDefinition::new(
+        ConnectorId::new("acme:github").unwrap(),
+        "GitHub renamed",
+        "Updated marketing copy.",
+        ConnectorRuntimeBinding::mcp_server("plugin:acme/github:mcp:github").unwrap(),
+    )
+    .unwrap();
+    assert_eq!(original.digest(), display_only.digest());
+
+    let revised = original
+        .clone()
+        .with_authorization_revision("sha256:runtime-v2")
+        .unwrap();
+    assert_ne!(original.digest(), revised.digest());
 }
 
 #[test]
@@ -171,4 +204,49 @@ fn disconnect_revokes_runtime_readiness_under_new_generations() {
         ConnectorConnectionState::Disconnected
     ));
     assert_eq!(disconnected.ready_entries().count(), 0);
+}
+
+#[test]
+fn definition_change_requires_reauthorization_and_revokes_readiness() {
+    let id = ConnectorId::new("acme:github").unwrap();
+    let definition = definition(id.as_str());
+    let previous_definition: ConnectorDefinitionDigest = definition.digest();
+    let connection_generation = ConnectorConnectionGeneration::new(1);
+    let connected = ConnectorSnapshot::new(ConnectorSnapshotGeneration::new(1), [definition])
+        .unwrap()
+        .with_connection_update(
+            ConnectorSnapshotGeneration::new(2),
+            &id,
+            ConnectorConnectionUpdate::Begin {
+                generation: connection_generation,
+            },
+        )
+        .unwrap()
+        .with_connection_update(
+            ConnectorSnapshotGeneration::new(3),
+            &id,
+            ConnectorConnectionUpdate::Connected {
+                account: connected_account(connection_generation),
+            },
+        )
+        .unwrap();
+
+    let reauthorization = connected
+        .with_connection_update(
+            ConnectorSnapshotGeneration::new(4),
+            &id,
+            ConnectorConnectionUpdate::DefinitionChanged {
+                previous_definition: previous_definition.clone(),
+            },
+        )
+        .unwrap();
+
+    assert!(!reauthorization.entry(&id).unwrap().is_ready());
+    assert!(matches!(
+        reauthorization.entry(&id).unwrap().connection().state(),
+        ConnectorConnectionState::ReauthorizationRequired {
+            previous_definition: actual,
+            ..
+        } if actual == &previous_definition
+    ));
 }

@@ -52,6 +52,7 @@ zeta-rs/app-server-protocol/
 │   │   ├── model.rs
 │   │   ├── turn.rs
 │   │   ├── config.rs
+│   │   ├── connectors.rs     # redacted connection DTO + inbound-only secret
 │   │   ├── resources.rs
 │   │   ├── search.rs
 │   │   ├── code_index.rs
@@ -83,11 +84,12 @@ zeta-rs/app-server-protocol/
 | `SerializationScopeDefinition` | dispatcher serialization requirement |
 
 方法注册表当前覆盖初始化、Session 生命周期/聚合订阅、canonical `session/request` mutation、
-带 Session scope 的 Thread 读取/订阅、模型目录、配置/供应商/MCP/Skill/Plugin request/Hook declaration 修改、
+带 Session scope 的 Thread 读取/订阅、模型目录、Connector list/API-token connect/disconnect、
+配置/供应商/MCP/Skill/Plugin request/Hook declaration 修改、
 Turn 与 Resource metadata/read/release、filesystem metadata/read/write、workspace search start/read/cancel、
 workspace code-index status/search/rebuild，以及 cloud code-index status/preview/authorize/sync/revoke。
 Notification 包含 `session/update`、Session-owned child 的 `session/thread/update`、owner-directed
-`agent/request`、`skills/changed`、`git/statusChanged` 与 `fs/changed`；Terminal 当前使用
+`agent/request`、`connector/changed`、`skills/changed`、`git/statusChanged` 与 `fs/changed`；Terminal 当前使用
 profile/list 与 create/write/resize/read/close 的有界 pull
 contract，不伪装成主动 notification stream。
 
@@ -123,6 +125,10 @@ status 带 revision 和 repository-relative `workspacePath`，投影变化通过
 共享协议。
 Filesystem 注册 `fs/writeFile` global-exclusive mutation；`fs/changed` 只携带 workspace-relative
 invalidation hint 或 rescan request，不成为 durable 文件事件。
+
+`ConnectorSecretDto` 只实现 inbound `Deserialize`，`Debug` 永远脱敏并在 Drop 时 zeroize；它不能增加
+`Clone`、`Serialize` 或普通字符串 getter。新增 Connector response 字段必须继续证明 schema/result 中
+没有 credential reference 或 value。修改 registry 后必须同步生成两份 schema fixture。
 
 ### JSON-RPC
 

@@ -14,6 +14,7 @@ pub use connection::ConnectorConnection;
 pub use connection::ConnectorConnectionState;
 pub use connection::ConnectorConnectionUpdate;
 pub use definition::ConnectorDefinition;
+pub use definition::ConnectorDefinitionDigest;
 pub use definition::ConnectorRuntimeBinding;
 pub use error::ConnectorError;
 pub use error::ConnectorErrorKind;

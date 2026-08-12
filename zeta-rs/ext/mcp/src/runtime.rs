@@ -14,7 +14,7 @@ const MCP_COMMAND_QUEUE_CAPACITY: usize = 64;
 
 enum RuntimeCommand {
     Call {
-        binding: McpToolBinding,
+        binding: Box<McpToolBinding>,
         arguments: serde_json::Value,
         cancellation: CancellationToken,
         response: mpsc::Sender<Result<ToolOutput, McpCallError>>,
@@ -97,7 +97,7 @@ impl McpRuntimeOwner {
             .as_ref()
             .ok_or_else(|| McpCallError::NotStarted("MCP runtime is shutting down".into()))?
             .try_send(RuntimeCommand::Call {
-                binding,
+                binding: Box::new(binding),
                 arguments,
                 cancellation,
                 response,
@@ -202,7 +202,7 @@ fn run_worker(
                             let mcp = Arc::clone(&mcp);
                             calls.spawn(async move {
                                 let result = mcp
-                                    .call_tool(&binding, arguments, &cancellation)
+                                    .call_tool(binding.as_ref(), arguments, &cancellation)
                                     .await;
                                 let _ = response.send(result);
                             });

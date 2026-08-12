@@ -10,5 +10,8 @@ doctest = false
 name = "zeta_connectors"
 path = "src/lib.rs"
 
+[dependencies]
+sha2 = { workspace = true }
+
 [lints]
 workspace = true

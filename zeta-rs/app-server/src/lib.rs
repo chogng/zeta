@@ -26,8 +26,8 @@ pub use local::open_local_app_server;
 pub use local::open_local_app_server_with_cloud_providers;
 pub use local::open_local_app_server_with_code_index_providers;
 pub use local::{
-    BuiltInSkillRoot, LocalAppServerOptions, LocalCodeIndexProviders, LocalWorkspaceConfigOptions,
-    SessionStateMode,
+    BuiltInSkillRoot, LocalAppServerOptions, LocalCodeIndexProviders, LocalConnectorRuntime,
+    LocalWorkspaceConfigOptions, SessionStateMode,
 };
 pub use review::{ProviderReviewModel, ReviewModelResolutionError, ReviewModelResolver};
 pub use server::AppServer;

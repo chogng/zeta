@@ -399,10 +399,11 @@ impl TurnExecutor {
                 .map_err(ExecutionFailure::model)?;
             let activated = activated_tool_names(self.tools.as_ref(), &snapshot.items, turn_id)
                 .map_err(ExecutionFailure::model)?;
-            let tools = self
+            let tool_catalog = self
                 .tools
-                .model_definitions(&activated)
+                .model_catalog_snapshot(&activated)
                 .map_err(ExecutionFailure::model)?;
+            let tools = tool_catalog.definitions().to_vec();
             let turn = snapshot
                 .turns
                 .iter()
@@ -600,7 +601,13 @@ impl TurnExecutor {
                 }
                 .map_err(ExecutionFailure::persistence)?;
             }
-            match self.execute_tools(thread_id, turn_id, &tool_calls, cancellation)? {
+            match self.execute_tools(
+                thread_id,
+                turn_id,
+                &tool_calls,
+                &tool_catalog,
+                cancellation,
+            )? {
                 ToolSchedulingProgress::Complete => {}
                 ToolSchedulingProgress::WaitingForApproval => {
                     return Ok(TurnExecutionOutcome::WaitingForApproval);
@@ -676,19 +683,22 @@ impl TurnExecutor {
         thread_id: &ThreadId,
         turn_id: &TurnId,
         calls: &[ToolCall],
+        catalog: &crate::ModelToolCatalogSnapshot,
         cancellation: &CancellationToken,
     ) -> Result<ToolSchedulingProgress, ExecutionFailure> {
         for call in calls {
-            let binding = self
-                .tools
-                .bind_call(call, zeta_protocol::ToolCallCaller::Direct)
-                .map_err(ExecutionFailure::service)?
-                .ok_or_else(|| {
-                    ExecutionFailure::service(CoreError::Execution(format!(
-                        "tool service did not freeze a durable binding for {}",
-                        call.name
-                    )))
-                })?;
+            let caller = zeta_protocol::ToolCallCaller::Direct;
+            let binding = match catalog.bind_call(call, caller.clone()) {
+                Some(binding) => binding,
+                None => self.tools.bind_call(call, caller),
+            }
+            .map_err(ExecutionFailure::service)?
+            .ok_or_else(|| {
+                ExecutionFailure::service(CoreError::Execution(format!(
+                    "tool service did not freeze a durable binding for {}",
+                    call.name
+                )))
+            })?;
             self.threads
                 .record_model_tool_call(thread_id, turn_id, call, binding)
                 .map_err(ExecutionFailure::persistence)?;

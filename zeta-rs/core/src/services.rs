@@ -6,6 +6,7 @@ use sha2::Digest;
 use sha2::Sha256;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
+use std::sync::Arc;
 use zeta_async_utils::CancellationToken;
 use zeta_policy::ActionReviewRequest;
 use zeta_policy::AutoReviewGrant;
@@ -222,6 +223,59 @@ pub enum ToolAuthorization {
     ApprovedOnce(OneTimeToolGrant),
 }
 
+type ModelToolCallBinder =
+    dyn Fn(&ToolCall, ToolCallCaller) -> Result<Option<ToolCallBinding>, CoreError> + Send + Sync;
+
+/// Frozen tool catalog selected for one model invocation safe point.
+///
+/// Reloadable registries attach a binder that resolves model-produced calls against this exact
+/// catalog generation. Static services may omit the binder and let Core use their ordinary live
+/// binding method because their definitions cannot change during the invocation.
+pub struct ModelToolCatalogSnapshot {
+    definitions: Vec<ToolDefinition>,
+    binder: Option<Arc<ModelToolCallBinder>>,
+}
+
+impl ModelToolCatalogSnapshot {
+    /// Freezes one static catalog that continues to use the service's ordinary binder.
+    pub fn new(definitions: Vec<ToolDefinition>) -> Self {
+        Self {
+            definitions,
+            binder: None,
+        }
+    }
+
+    /// Freezes a reloadable catalog with the exact binder that produced its definitions.
+    pub fn with_binder(
+        definitions: Vec<ToolDefinition>,
+        binder: impl Fn(&ToolCall, ToolCallCaller) -> Result<Option<ToolCallBinding>, CoreError>
+        + Send
+        + Sync
+        + 'static,
+    ) -> Self {
+        Self {
+            definitions,
+            binder: Some(Arc::new(binder)),
+        }
+    }
+
+    /// Returns the definitions visible to this model invocation.
+    pub fn definitions(&self) -> &[ToolDefinition] {
+        &self.definitions
+    }
+
+    /// Uses the frozen binder when the service supplied one.
+    ///
+    /// `None` means Core must use the static service's ordinary `bind_call` implementation.
+    pub fn bind_call(
+        &self,
+        call: &ToolCall,
+        caller: ToolCallCaller,
+    ) -> Option<Result<Option<ToolCallBinding>, CoreError>> {
+        self.binder.as_ref().map(|binder| binder(call, caller))
+    }
+}
+
 /// Non-reusable automatic-review authority bound to one exact durable Tool Call.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AutoReviewedToolGrant {
@@ -386,6 +440,19 @@ pub trait ToolService: Send + Sync {
     ) -> Result<Vec<ToolDefinition>, CoreError> {
         let _ = activated;
         Ok(self.definitions())
+    }
+
+    /// Freezes definitions and optional generation-bound binding authority for one model call.
+    ///
+    /// A reloadable implementation must override this method so a registry publication between
+    /// model request and response cannot rebind a returned call to a newer same-named tool.
+    fn model_catalog_snapshot(
+        &self,
+        activated: &BTreeSet<zeta_protocol::ToolName>,
+    ) -> Result<ModelToolCatalogSnapshot, CoreError> {
+        Ok(ModelToolCatalogSnapshot::new(
+            self.model_definitions(activated)?,
+        ))
     }
 
     /// Interprets one successful tool result as additive model-tool activation.

@@ -4,8 +4,8 @@
 > Rust crate：`zeta_mcp`
 > Low-level client 当前实现：[`zeta-rs/rmcp-client/`](../zeta-rs/rmcp-client/README.md)，
 > Rust crate：`zeta_rmcp_client`
-> 当前状态：low-level client、tools-only product runtime 与启动时 App Server/Core tools
-> vertical slice 已实现
+> 当前状态：low-level client、tools-only product runtime、Config/Connector hot composition、
+> App Server/Core tools vertical slice 与 Connector disconnect dispatch fence 已实现
 > Core architecture：[`core.md`](core.md)
 > Agent runtime：[`zeta-agent-runtime-architecture.md`](zeta-agent-runtime-architecture.md)
 > Tool shared contract 与纯转换：[`tools.md`](tools.md)
@@ -32,16 +32,19 @@ MCP 客户端把外部 Server 的工具转换成 Zeta 的工具目录；方向�
 | MCP 暴露工具 | 转成带来源、绑定和失效 generation 的统一工具 | 已实现基础目录与调用路由 |
 | MCP 暴露资源或提示词 | 进入各自的上下文和产品契约 | 仍属计划设计 |
 | Server 需要凭据或网络 | 由凭据领域、权限和宿主策略处理 | MCP 不自行成为信任根 |
-| Plugin 声明 MCP Server | Plugin 只贡献声明，MCP runtime 决定连接状态 | 安装不等于连接或授权 |
+| Plugin 独立声明 MCP Server | Plugin 只贡献声明，经激活和策略解析后由 MCP runtime 启动 | 安装不等于连接或授权 |
+| Plugin 声明需要外部账号的 Connector | Connector connected 后发布 ready MCP binding | Connector 不启动 MCP session |
+| 用户或 Workspace 直接配置 MCP Server | 配置经凭据、grant 和 policy 解析后直接进入 MCP runtime | 不必须先安装 Plugin 或创建 Connector |
 
 ## 1. 结论
 
 MCP client 分成两个边界：Current `zeta-rmcp-client` 负责官方 RMCP SDK、单 server session、
 initialize、原始 tools API 和 stdio/Streamable HTTP transport；Current `zeta-mcp` tools-only
 runtime 负责多 server 启动、provider-neutral tool catalog/binding、分页/大小限制、调用路由、
-取消与失效标记。Current App Server adapter 将启动时 user config snapshot 接入 Core
-ToolService、逐次用户 approval 和 durable result。resources、prompts、reconnect/health、
-credential lifecycle、hot reload 与 interaction delivery 仍是 Proposed。
+取消与失效标记。Current App Server adapter 将 user config 与 ready Connector snapshot 接入 Core
+`ToolService`、逐次用户 approval 和 durable result，并在两类 generation 变化时重建 tool port。
+Connector API-token materialization 已实现；独立 Config credential reference、OAuth、resources、prompts、
+reconnect/health 与 interaction delivery 仍是 Proposed。
 
 方向相反的 `zeta-mcp-server` 通过 App Server 将 Zeta Agent 暴露给外部 MCP Host。两者不共享
 runtime ownership，也不互相依赖；具体边界见 [`mcp-server.md`](mcp-server.md)。
@@ -54,17 +57,23 @@ runtime ownership，也不互相依赖；具体边界见 [`mcp-server.md`](mcp-s
 - MCP server 输出、tool annotation 或 prompt 内容的信任背书；
 - Zeta Session、Thread、Turn 或 App Server connection 的替代品。
 
-三者边界固定为：
+Plugin、Connector 与 MCP 的 canonical 关系由 [`connectors.md`](connectors.md) 维护。从 MCP runtime 视角看，
+边界可压缩为：
 
-```text
-Plugin = 如何分发、安装、启用一组扩展贡献
-Skill  = Agent 在什么任务下应遵循哪些渐进加载的指令
-MCP    = 如何与一个外部 capability server 建立有状态协议会话
+> Plugin 管扩展分发，Connector 管外部账号连接，MCP 管协议会话与能力调用，Tool 是 Agent 最终消费的能力。
+
+```mermaid
+flowchart TD
+    U["User / Workspace MCP configuration"] --> R["MCP runtime"]
+    P["Standalone Plugin MCP contribution"] --> R
+    C["Connected Connector"] --> B["Ready MCP binding"]
+    B --> R
+    R --> T["Tool Registry / Core / Agent"]
 ```
 
-一个 Plugin 可以声明 MCP server，也可以携带 Skill；独立配置的 MCP server 和独立安装的 Skill
-同样是一等来源。安装 Plugin 不等于允许其 MCP server 启动，启用 MCP server 也不等于自动批准
-其每次 tool call。
+这三条是并列的 declaration/readiness source，不是必须逐层包装的类型层次。Plugin 可以声明 MCP server，
+也可以携带 Skill 或 Connector；独立配置的 MCP server 和独立安装的 Skill 同样是一等来源。
+安装 Plugin 不等于允许其 MCP server 启动，Connector connected 不等于自动批准每次 Tool call。
 
 ## 2. 当前仓库审计
 
@@ -91,8 +100,11 @@ MCP    = 如何与一个外部 capability server 建立有状态协议会话
 - App Server 已把 enabled user declaration materialize 为 `McpServerDefinition`，通过持续运行
   的 Tokio worker 桥接同步 Core `ToolService`，合并 local/MCP definitions，并为每次 MCP call
   生成 exact `ActionSource::McpServer` review、durable one-time approval 与 unknown outcome；
-- 当前没有 credential materialization、OAuth、自动 reconnect/health state machine、
-  config/list-changed 自动 rebuild、workspace/Plugin trust activation、resource/prompt product
+- `compose_mcp_tools_with_connectors` 已通过 host-injected `ConnectorMcpRuntimeProvider` 读取 ready
+  Connector credential，并用 exact connector ID / connection generation / definition digest 在 prepare
+  与 dispatch 前 fail closed；本地 reconcile loop 同时订阅 Config 与 Connector authority；
+- 当前没有独立 Config credential materialization、OAuth、自动 reconnect/health state machine、
+  MCP list-changed 自动 rebuild、workspace/Plugin trust activation、resource/prompt product
   adapter、progress/elicitation delivery 或跨重启 remote request 恢复。
 
 因此 low-level protocol/transport、独立 tools-only runtime 和窄 App Server/Core tools slice
@@ -111,8 +123,8 @@ operation。[官方架构](https://modelcontextprotocol.io/specification/2025-11
 | --- | --- | --- |
 | Base JSON-RPC lifecycle | Current | Current 多 session startup/shutdown；reconnect/health Proposed |
 | stdio | Current direct-local + injectable transport | Current absolute executable startup；sandboxed launcher Proposed |
-| Streamable HTTP | Current unauthenticated/bearer transport | Current unauthenticated App Server startup；credential/OAuth Proposed |
-| Tools | Current 原始 list/call | Current catalog/binding/Core approval/durable result；hot reload Proposed |
+| Streamable HTTP | Current unauthenticated/bearer transport | Current unauthenticated Config + injected Connector credential；OAuth Proposed |
+| Tools | Current 原始 list/call | Current catalog/binding/Core approval/durable result；Config/Connector hot rebuild Current |
 | Resources | 尚未暴露 | 首发只做 list/read，显式进入 context |
 | Prompts | 尚未暴露 | 首发只做 list/get，不当作 Skill |
 | Roots | 尚未暴露 | 只暴露已授权 workspace root，不能替代 OS sandbox |
@@ -159,30 +171,24 @@ Proposed 扩展仍包括 resources/prompts、reconnect/health state machine、cr
 - UI 中 MCP picker、OAuth browser window、confirmation dialog 的布局；
 - 把 server instructions、prompt、resource 或 tool result 提升为 system instruction。
 
-MCP auth runtime 拥有 credential/OAuth lifecycle，并把 opaque token persistence 委托给
-`zeta-secrets`；`zeta-sandboxing` / host capability 实施资源边界，Agent runtime 决定何时调用
-工具，Core 负责 durable commit，App Server 是 composition root。
+独立 MCP declaration 的 auth adapter 拥有对应 credential/OAuth lifecycle；Connector-bound MCP 的认证和账号
+lifecycle 则属于 Connector auth adapter。两者都把 opaque token persistence 委托给 `zeta-secrets`，并只向
+MCP runtime 提供 materialized credential/binding。`zeta-sandboxing` / host capability 实施资源边界，
+Agent runtime 决定何时调用工具，Core 负责 durable commit，App Server 是 composition root。
 
 ## 5. 目标依赖与运行时结构
 
-```text
-                          zeta-protocol
-                                ▲
-                          zeta-tools
-                    shared tool contract/adapters
-                         ▲             ▲
-                         │             │
-                    zeta-mcp       zeta-core ─────► Session/Thread stores
-                         ▲             ▲
-                  zeta-rmcp-client     │
-                         ▲             │
-                         │             │ Core ToolService adapter
-                         └──────┬──────┘
-                            App Server
-                          composition root
-                          ▲       ▲       ▲
-                          │       │       │
-                zeta-plugins  credentials  process/HTTP host adapters
+```mermaid
+flowchart TD
+    P["zeta-plugins：validated MCP declarations"] --> A["App Server composition"]
+    C["zeta-connectors：ready runtime bindings"] --> A
+    U["User / Workspace MCP configuration"] --> A
+    H["Credential materializer + process/HTTP host adapters"] --> A
+    A --> M["zeta-mcp：multi-server runtime"]
+    M --> R["zeta-rmcp-client：protocol session / transport"]
+    M --> Z["zeta-tools：provider-neutral definitions/results"]
+    Z --> K["zeta-core ToolService"]
+    K --> D["Session / Thread durable records"]
 ```
 
 规则：
@@ -195,6 +201,7 @@ MCP auth runtime 拥有 credential/OAuth lifecycle，并把 opaque token persist
 - `zeta-core` 定义 consumer-owned `ToolService` port；App Server adapter 将 MCP tool
   handle/catalog 适配到该 port，Core 不读取 MCP wire DTO；
 - Plugin manager 只产出经过验证的 server declaration，不持有 live MCP session；
+- Connector runtime 只产出 generation-bound ready binding，不持有 live MCP session 或 Tool registry；
 - App Server 注入 credential materializer、process launcher、HTTP transport、workspace roots 和
   policy，不能让 `zeta-mcp` 自己扫描全局环境；
 - RMCP wire DTO 停在 `zeta-rmcp-client` / `zeta-mcp` adapter boundary，不进入
@@ -543,9 +550,11 @@ local tool policy override
 
 secret、PID、request ID、OAuth verifier、SSE cursor 和 live session ID 不持久化为 ordinary config。
 
-当前 App Server 只在启动安全点读取已启用的用户声明、建立运行时并把工具接入 Core；尚无独立
-的运行时、目录、认证或诊断 RPC。配置更新保留类型化命令语义，但必须重启 App Server 才会
-生成新的 MCP 世代。
+当前 App Server 在启动安全点读取已启用的用户声明和 ready Connector snapshot，并由后台 reconcile
+同时订阅 Config 与 Connector generation。新 MCP runtime 完整启动后才原子发布到 future model safe
+point；模型可见 definitions 和响应 binder 属于同一冻结 generation，旧 generation 由已绑定调用持有到
+排空。Connector list/API-token connect/disconnect 与 changed notification 已有 typed RPC；独立 MCP
+runtime/catalog/auth/diagnostic RPC 仍未实现，`tools/list_changed` 也尚未触发自动重建。
 
 计划中的 App Server 接口面分为：
 
@@ -636,7 +645,8 @@ security 和 identity。resources/prompts/auth/reconnect 落地时按独立 owne
 - ✅ tools/list pagination、catalog snapshot 和 list-changed stale 标记；
 - ✅ frozen tool binding、argument shape/output size validation 与 protocol cancellation；
 - ✅ 接入 Core Turn tool loop、逐次 approval、durable Tool Call/Result 和 UnknownOutcome；
-- sandbox/process supervisor、config/list-changed rebuild 与 interaction delivery 尚未接入。
+- Config/Connector hot rebuild、model-safe-point binding 与 old-generation drain 已接入；
+- sandbox/process supervisor、`tools/list_changed` rebuild 与 interaction delivery 尚未接入。
 
 完成条件：server crash、取消和 Thread recovery 不会静默重放有副作用调用。
 

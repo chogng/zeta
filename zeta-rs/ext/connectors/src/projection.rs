@@ -10,6 +10,7 @@ use zeta_connectors::ConnectorId;
 use zeta_connectors::ConnectorRuntimeBinding;
 use zeta_connectors::ConnectorSnapshot;
 use zeta_connectors::ConnectorSnapshotGeneration;
+use zeta_plugins::LocalPluginPackage;
 use zeta_plugins::PluginId;
 use zeta_plugins::PluginManifest;
 use zeta_tools::CapabilityDiscoveryId;
@@ -32,9 +33,40 @@ impl ConnectorCatalog {
         generation: ConnectorSnapshotGeneration,
         manifests: impl IntoIterator<Item = &'a PluginManifest>,
     ) -> Result<Self, ConnectorCatalogError> {
+        Self::from_manifest_revisions(
+            generation,
+            manifests.into_iter().map(|manifest| {
+                (
+                    manifest,
+                    format!("manifest:{}@{}", manifest.id, manifest.version),
+                )
+            }),
+        )
+    }
+
+    /// Projects exact validated Plugin packages and binds authorization to package content.
+    pub fn from_packages<'a>(
+        generation: ConnectorSnapshotGeneration,
+        packages: impl IntoIterator<Item = &'a LocalPluginPackage>,
+    ) -> Result<Self, ConnectorCatalogError> {
+        Self::from_manifest_revisions(
+            generation,
+            packages.into_iter().map(|package| {
+                (
+                    package.manifest(),
+                    package.package_digest().as_str().to_string(),
+                )
+            }),
+        )
+    }
+
+    fn from_manifest_revisions<'a>(
+        generation: ConnectorSnapshotGeneration,
+        sources: impl IntoIterator<Item = (&'a PluginManifest, String)>,
+    ) -> Result<Self, ConnectorCatalogError> {
         let mut definitions = Vec::new();
         let mut provider_plugins = BTreeMap::new();
-        for manifest in manifests {
+        for (manifest, authorization_revision) in sources {
             for connector in &manifest.contributions.connectors {
                 let id = ConnectorId::new(format!("{}:connector:{}", manifest.id, connector.id))?;
                 let definition = ConnectorDefinition::new(
@@ -45,7 +77,8 @@ impl ConnectorCatalog {
                         "plugin:{}:mcp:{}",
                         manifest.id, connector.mcp_server
                     ))?,
-                )?;
+                )?
+                .with_authorization_revision(authorization_revision.clone())?;
                 definitions.push(definition);
                 if provider_plugins.insert(id, manifest.id.clone()).is_some() {
                     return Err(ConnectorCatalogError(
@@ -99,6 +132,7 @@ impl ConnectorCatalog {
                 matches!(
                     entry.connection().state(),
                     ConnectorConnectionState::Disconnected
+                        | ConnectorConnectionState::ReauthorizationRequired { .. }
                 )
             })
             .map(|entry| {

@@ -91,7 +91,7 @@ flowchart TD
 
 | 系统 | 回答的核心问题 | 应当拥有 | 重点审计边界 | 权威文档 |
 | --- | --- | --- | --- | --- |
-| 扩展系统 | 外部能力如何被发现、激活和撤销？ | Plugin 安装与激活、Skill 加载、Connector 连接、MCP 会话和能力贡献 | 扩展发现、信任、授权、绑定和运行时消费是否分层 | [`plugins.md`](plugins.md)、[`connectors.md`](connectors.md)、[`skills.md`](skills.md)、[`mcp.md`](mcp.md) |
+| 扩展系统 | 外部能力如何被发现、激活和撤销？ | Plugin 管扩展分发，Connector 管外部账号连接，MCP 管协议会话与能力调用，Skill 管指令加载 | 声明控制面、连接状态面、协议运行时和 Agent 消费是否分层 | [`plugins.md`](plugins.md)、[`connectors.md`](connectors.md)、[`skills.md`](skills.md)、[`mcp.md`](mcp.md) |
 | App Server 与协议 | 产品入口如何调用同一套权威能力？ | 唯一外部进入/输出边界、对外方法、DTO、事件、订阅、版本和客户端契约 | 客户端是否绕过门禁，或协议层是否偷偷拥有产品决定或持久化规则 | [`zeta-app-server-api.md`](zeta-app-server-api.md)、[`app-server-client.md`](app-server-client.md)、[`protocol.md`](protocol.md) |
 | 产品界面 | 用户如何观察和控制这些系统？ | Desktop、CLI、TUI 的交互、呈现和平台适配 | 界面是否复制 Core 状态或在本地发明业务规则 | [`zeta-desktop-architecture.md`](zeta-desktop-architecture.md)、[`zeta-cli-architecture.md`](zeta-cli-architecture.md)、[`tui.md`](tui.md) |
 

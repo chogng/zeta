@@ -8210,6 +8210,7 @@ dependencies = [
  "sha2 0.10.9",
  "tempfile",
  "tokio",
+ "zeroize",
  "zeta-agents",
  "zeta-app-server-protocol",
  "zeta-app-server-transport",
@@ -8223,6 +8224,8 @@ dependencies = [
  "zeta-code-retrieval",
  "zeta-collaboration",
  "zeta-config",
+ "zeta-connectors",
+ "zeta-connectors-extension",
  "zeta-core",
  "zeta-diff",
  "zeta-extension-api",
@@ -8245,6 +8248,7 @@ dependencies = [
  "zeta-rollout",
  "zeta-sandboxing",
  "zeta-search",
+ "zeta-secrets",
  "zeta-shell-command",
  "zeta-skills",
  "zeta-skills-extension",
@@ -8282,6 +8286,7 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "ts-rs",
+ "zeroize",
  "zeta-collaboration",
  "zeta-protocol",
 ]
@@ -8458,14 +8463,21 @@ dependencies = [
 [[package]]
 name = "zeta-connectors"
 version = "0.1.0"
+dependencies = [
+ "sha2 0.10.9",
+]
 
 [[package]]
 name = "zeta-connectors-extension"
 version = "0.1.0"
 dependencies = [
+ "rusqlite",
  "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
  "zeta-connectors",
  "zeta-plugins",
+ "zeta-secrets",
  "zeta-tools",
 ]
 
@@ -8782,11 +8794,14 @@ dependencies = [
  "tokio",
  "zeta-async-utils",
  "zeta-config",
+ "zeta-connectors",
+ "zeta-connectors-extension",
  "zeta-core",
  "zeta-mcp",
  "zeta-policy",
  "zeta-protocol",
  "zeta-rmcp-client",
+ "zeta-secrets",
  "zeta-tools",
 ]
 

@@ -10,6 +10,7 @@ use std::io::{BufRead, Write};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
+use zeroize::Zeroize;
 use zeta_app_server_protocol::protocol::error::{AppServerError, AppServerErrorName};
 use zeta_app_server_protocol::protocol::registry::{ClientMethod, client_method};
 use zeta_app_server_protocol::rpc::{
@@ -40,6 +41,8 @@ mod collaboration_operations;
 mod collaboration_runtime;
 mod config_operations;
 mod config_runtime;
+mod connector_operations;
+mod connector_runtime;
 mod diff_operations;
 mod extension_config_operations;
 mod extension_operations;
@@ -108,6 +111,7 @@ pub struct AppServer {
     pub(super) collaboration: Mutex<collaboration_runtime::DocumentCollaborationStore>,
     pub(super) extensions: Mutex<ExtensionCatalog>,
     pub(super) config: Option<Arc<ConfigStore>>,
+    pub(super) connectors: Option<Arc<zeta_connectors_extension::ConnectorCredentialService>>,
     language: Mutex<language_runtime::AppServerLanguageRuntime>,
     approval_review_model: Option<ProviderReviewModel>,
     pub(super) workspace_authority_gate: Arc<Mutex<()>>,
@@ -127,6 +131,7 @@ pub struct AppServer {
     pub(super) skills: Option<Arc<SkillRuntime>>,
     _skill_watcher: Option<SkillWatcher>,
     _config_watcher: Option<config_runtime::ConfigWatcher>,
+    _connector_watcher: Option<connector_runtime::ConnectorWatcher>,
     _tool_config_watcher: Option<crate::local::ToolConfigWatcher>,
     _interaction_deadline_watcher: interaction_runtime::InteractionDeadlineWatcher,
     updates: Arc<UpdateBroker>,
@@ -202,6 +207,7 @@ impl AppServer {
             collaboration: Mutex::new(collaboration_runtime::DocumentCollaborationStore::default()),
             extensions: Mutex::new(ExtensionCatalog::default()),
             config: None,
+            connectors: None,
             language: Mutex::new(language_runtime::AppServerLanguageRuntime::default()),
             approval_review_model: None,
             workspace_authority_gate,
@@ -222,6 +228,7 @@ impl AppServer {
             skills: None,
             _skill_watcher: None,
             _config_watcher: None,
+            _connector_watcher: None,
             _tool_config_watcher: None,
             _interaction_deadline_watcher: interaction_deadline_watcher,
             updates,
@@ -315,6 +322,19 @@ impl AppServer {
             Arc::clone(&self.updates),
         ));
         self.config = Some(config);
+        self
+    }
+
+    /// Installs the product-owned Connector credential service and change notifications.
+    pub fn with_connector_service(
+        mut self,
+        connectors: Arc<zeta_connectors_extension::ConnectorCredentialService>,
+    ) -> Self {
+        self._connector_watcher = Some(connector_runtime::ConnectorWatcher::start(
+            connectors.authority(),
+            Arc::clone(&self.updates),
+        ));
+        self.connectors = Some(connectors);
         self
     }
 
@@ -588,7 +608,7 @@ impl AppServer {
                 ));
             }
         };
-        let request = match serde_json::from_value::<JsonRpcRequest<Value>>(raw_request) {
+        let mut request = match serde_json::from_value::<JsonRpcRequest<Value>>(raw_request) {
             Ok(request)
                 if request.jsonrpc == JsonRpcVersion::V2
                     && request.id.as_u64().is_some_and(|request_id| request_id > 0) =>
@@ -611,7 +631,7 @@ impl AppServer {
                 AppServerErrorName::InvalidRequest,
             ));
         }
-        let response = match self.dispatch(connection, &request) {
+        let response = match self.dispatch(connection, &mut request) {
             Ok(result) => serde_json::to_value(JsonRpcSuccess::new(request.id, result))
                 .expect("JSON-RPC success response must serialize"),
             Err(error) => error_response(request.id, error.code, error.message),
@@ -631,8 +651,9 @@ impl AppServer {
         let mut transport = JsonlTransport::new(reader, writer, DEFAULT_MAX_MESSAGE_BYTES);
         let mut connection = self.connection();
         let result = (|| {
-            while let Some(line) = transport.read_message()? {
+            while let Some(mut line) = transport.read_message()? {
                 let response = self.handle_json(&mut connection, &line);
+                line.zeroize();
                 transport.write_message(&response)?;
                 for notification in self.drain_notifications(&mut connection) {
                     transport.write_message(&notification)?;
@@ -647,7 +668,7 @@ impl AppServer {
     fn dispatch(
         &self,
         connection: &mut ConnectionState,
-        request: &JsonRpcRequest<Value>,
+        request: &mut JsonRpcRequest<Value>,
     ) -> Result<Value, RpcError> {
         if client_method(&request.method) == Some(ClientMethod::Initialize) {
             return self.initialize(connection, &request.params);
@@ -689,6 +710,11 @@ impl AppServer {
             }
             Some(ClientMethod::TypstCompile) => self.typst_compile(connection, &request.params),
             Some(ClientMethod::ConfigRead) => self.config_read(),
+            Some(ClientMethod::ConnectorList) => self.connector_list(),
+            Some(ClientMethod::ConnectorApiTokenConnect) => {
+                self.connector_api_token_connect(std::mem::take(&mut request.params))
+            }
+            Some(ClientMethod::ConnectorDisconnect) => self.connector_disconnect(&request.params),
             Some(ClientMethod::ModelList) => self.model_list(),
             Some(ClientMethod::ConfigUpdate) => self.config_update(&request.params),
             Some(ClientMethod::ToolSearchConfigure) => self.tool_search_configure(&request.params),

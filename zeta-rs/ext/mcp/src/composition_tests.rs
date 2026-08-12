@@ -6,6 +6,15 @@ use zeta_config::{
     ConfigGeneration, McpConfig, McpCredentialBinding, McpServerConfig, McpServerEnablement,
     McpServerId, McpTransportConfig, ResolvedConfig,
 };
+use zeta_connectors::ConnectorAccountId;
+use zeta_connectors::ConnectorConnectionGeneration;
+use zeta_connectors::ConnectorDefinition;
+use zeta_connectors::ConnectorId;
+use zeta_connectors::ConnectorRuntimeBinding;
+use zeta_connectors_extension::ConnectorApiTokenConnectRequest;
+use zeta_connectors_extension::ConnectorAuthority;
+use zeta_connectors_extension::ConnectorCommandId;
+use zeta_connectors_extension::ConnectorCredentialService;
 use zeta_mcp::{
     McpConnectFuture, McpPageCursor, McpServerDefinition, McpServerTransport, McpSession,
     McpSessionError, McpSessionFactory, McpSessionFuture,
@@ -19,11 +28,17 @@ use zeta_rmcp_client::{
     CallToolRequestParams, CallToolResult, JsonObject, ListToolsResult, RmcpClientOptions,
     ServerInfo, StdioServerCommand, Tool,
 };
+use zeta_secrets::MemorySecretStore;
+use zeta_secrets::SecretStore;
+use zeta_secrets::SecretValue;
 
 use super::{
     MCP_POLICY_REVISION, McpInvocationAuthority, McpInvocationTransport, compose_mcp_tools,
     start_mcp_tools,
 };
+use crate::connector::ConnectorMcpRuntimeError;
+use crate::connector::ConnectorMcpRuntimeProvider;
+use crate::connector::materialize_connector_servers;
 
 struct FakeFactory;
 
@@ -34,6 +49,19 @@ impl McpSessionFactory for FakeFactory {
 }
 
 struct FakeSession;
+
+struct TokenStdioProvider;
+
+impl ConnectorMcpRuntimeProvider for TokenStdioProvider {
+    fn materialize(
+        &self,
+        _: &ConnectorDefinition,
+        credential: SecretValue,
+    ) -> Result<McpServerTransport, ConnectorMcpRuntimeError> {
+        assert_eq!(credential.expose(), b"secret-token");
+        Ok(McpServerTransport::Stdio(StdioServerCommand::new("unused")))
+    }
+}
 
 impl McpSession for FakeSession {
     fn server_info(&self) -> ServerInfo {
@@ -85,9 +113,10 @@ fn prepares_exact_mcp_provenance_and_requires_user_approval() {
                 transport: McpInvocationTransport::Stdio {
                     executable: "/test/mcp".into(),
                 },
+                connector_fence: None,
             },
         )]),
-        ConfigGeneration::INITIAL,
+        ConfigGeneration::INITIAL.get() + 1,
         Some(Arc::new(FakeFactory)),
     )
     .expect("compose MCP tools");
@@ -157,4 +186,59 @@ fn rejects_relative_stdio_executable_before_starting_runtime() {
         Err(error) => error,
     };
     assert!(error.to_string().contains("absolute executable path"));
+}
+
+#[test]
+fn connector_tool_is_materialized_only_while_exact_connection_is_authorized() {
+    let connector = ConnectorDefinition::new(
+        ConnectorId::new("acme/github:connector:account").unwrap(),
+        "GitHub",
+        "GitHub tools",
+        ConnectorRuntimeBinding::mcp_server("plugin:acme/github:mcp:github").unwrap(),
+    )
+    .unwrap();
+    let connector_id = connector.id().clone();
+    let authority = ConnectorAuthority::in_memory([connector]).unwrap();
+    let secrets = Arc::new(MemorySecretStore::default());
+    let secret_store: Arc<dyn SecretStore> = secrets.clone();
+    let service = ConnectorCredentialService::new(authority.clone(), secret_store);
+    service
+        .connect_api_token(ConnectorApiTokenConnectRequest {
+            command_id: ConnectorCommandId::new("connect-github").unwrap(),
+            expected_generation: authority.snapshot().generation(),
+            connector_id: connector_id.clone(),
+            connection_generation: ConnectorConnectionGeneration::new(1),
+            account_id: ConnectorAccountId::new("octocat").unwrap(),
+            account_display_name: "Octocat".into(),
+            token: SecretValue::new(b"secret-token".to_vec()),
+        })
+        .unwrap();
+    let materialized =
+        materialize_connector_servers(authority.clone(), secrets.as_ref(), &TokenStdioProvider)
+            .unwrap();
+    let composition = start_mcp_tools(
+        materialized.definitions,
+        materialized.authorities,
+        1,
+        Some(Arc::new(FakeFactory)),
+    )
+    .unwrap();
+    let tool = composition.tools.definitions().remove(0);
+    let call = ToolCall {
+        id: ToolCallId::new("connector-call").unwrap(),
+        name: tool.name,
+        arguments: serde_json::json!({}),
+    };
+    composition.tools.prepare(&call).unwrap();
+
+    let connected_generation = authority.snapshot().generation();
+    service
+        .disconnect(
+            ConnectorCommandId::new("disconnect-github").unwrap(),
+            connected_generation,
+            connector_id,
+        )
+        .unwrap();
+
+    assert!(composition.tools.prepare(&call).is_err());
 }

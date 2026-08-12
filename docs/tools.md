@@ -108,7 +108,8 @@ Core durable Tool Call / Tool Result lifecycle
   snapshot，`zeta-tools` 已定义 generation-bound install/enable/connect request；`zeta-plugins` 已能把
   local package stage、复验并原子 promote 到 content-addressed store，实际安装 authority 仍处于 Proposed；
 - App Server 以 frozen `ToolBinding` 的 runtime key 执行，不再在执行阶段按 live tool name 猜 source
-  service；hot reload 只影响未来 prepare safe point，已准备调用保留原 generation 和 policy。
+  service；model invocation 会同时冻结 definitions 与 generation-bound binder，hot reload 只影响后续
+  model safe point，已绑定调用保留原 generation 和 policy 直到排空。
 - Core 在 durable Tool Call 中保存 registry generation、definition digest、source chain 和 caller；恢复
   时 exact binding 不匹配会失败关闭，不会按同名新工具重放。Shell Turn 和 Code Mode nested call 也走
   同一绑定入口；
@@ -118,11 +119,11 @@ Core durable Tool Call / Tool Result lifecycle
 当前剩余问题集中在尚未收口的跨边界能力，而不是再增加一套 registry：
 
 - dynamic owner 断连已经 fail closed，但还缺“持久化后重启恢复”的完整 App Server fixture；
-- Plugin/Connector 已有 catalog-only typed discovery，Plugin manifest 可声明一个 Connector 到其 MCP
-  contribution 的绑定；`zeta-connectors` 拥有 account connection state，`zeta-connectors-extension`
-  只拥有 Plugin/discovery/runtime-binding projection；
-  local package store 也已落地。仍缺真正的 OAuth/connect/revoke authority、用户确认交互和 activation，
-  不能用 executable registry 反向代替 package authority；
+- Plugin/Connector 已有 typed discovery，Plugin manifest 可声明一个 Connector 到其 MCP contribution
+  的绑定；`zeta-connectors` 拥有 account connection state，`zeta-connectors-extension` 拥有 Plugin
+  projection、SQLite authority 与 API-token credential orchestration，ready binding 已接入 MCP/App Server
+  hot composition。local package store 也已落地。仍缺 OAuth/refresh/远端 revoke、用户确认交互和
+  Plugin activation，不能用 executable registry 反向代替 package authority；
 - `zeta-web-search-extension` 已有 bounded request、executor、JSON HTTP backend 与 App Server opt-in 安装口；
   当前没有默认生产 Search provider 或 credential UI，宿主未注入 backend 时工具完全不可用；
 - provider adapter 可能分别决定 namespace flattening、strict schema 和 image detail fallback；

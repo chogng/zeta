@@ -39,4 +39,5 @@ pub struct ServerCapabilities {
     pub typst: bool,
     pub update_replay: bool,
     pub extensions: bool,
+    pub connectors: bool,
 }

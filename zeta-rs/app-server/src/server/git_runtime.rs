@@ -402,13 +402,12 @@ fn watch_git(
                         refresh_runtime.refresh_from_watcher();
                     }).await;
                     let next_paths = git_runtime.watched_paths();
-                    if next_paths != watched_paths {
-                        if let Ok(next_registration) =
+                    if next_paths != watched_paths
+                        && let Ok(next_registration) =
                             subscriber.register_paths(next_paths.clone())
-                        {
-                            registration = next_registration;
-                            watched_paths = next_paths;
-                        }
+                    {
+                        registration = next_registration;
+                        watched_paths = next_paths;
                     }
                 }
             }

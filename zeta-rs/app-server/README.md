@@ -36,6 +36,7 @@ JSONL / in-process caller
    ├─ request-scoped CodeRetrievalService → lexical/semantic/remote RRF + verification + budget
    ├─ optional TerminalService → zeta-utils-pty
    ├─ reloadable MCP Tool generation → zeta-mcp-extension → zeta-mcp
+   ├─ optional ConnectorCredentialService → list/connect/disconnect + ready MCP reconcile
    ├─ client-hosted dynamic tools → durable Agent interaction owner
    ├─ read-only/capability ToolExecutor contributions → zeta-extension-api
    ├─ optional Web Search executor → zeta-web-search-extension
@@ -44,7 +45,7 @@ JSONL / in-process caller
    │                                  → zeta-skills + zeta-file-watcher
    ├─ WorkspaceCustomizations → zeta-instructions + zeta-agents
    ├─ connection-owned ResourceStore
-   └─ UpdateBroker → session/update, session/thread/update, config/changed, skills/changed, git/statusChanged, fs/changed
+   └─ UpdateBroker → session/update, session/thread/update, config/changed, connector/changed, skills/changed, git/statusChanged, fs/changed
 ```
 
 App Server connection 不是 product Session。关闭 connection 只失去 connection-local subscription、
@@ -68,6 +69,7 @@ Core/store 继续拥有 Session/Thread durable state；需要进程内生命周�
 | `AppServer::{serve_stdio,serve_jsonl}` | 同步 JSON Lines service loop |
 | `AppServer::create_resource` | 创建 5 分钟 TTL 的 connection-owned resource |
 | `AppServer::with_config_store` | 开启 config/provider/MCP/Skill RPC |
+| `AppServer::with_connector_service` | 开启 Connector RPC、capability 与 generation notification watcher |
 | `AppServer::with_slash_command_catalog` | 安装 initialize 时下发的 immutable 动态命令 snapshot |
 | `AppServer::with_file_system` | 注入受 workspace 约束的 filesystem authority |
 | `AppServer::with_file_system_watcher` | 监听可信 workspace root 并发布相对路径 invalidation hint |
@@ -83,7 +85,8 @@ Core/store 继续拥有 Session/Thread durable state；需要进程内生命周�
 | `open_local_app_server` | 按 SessionStateMode 选择 durable/in-memory coordinator，打开 config 并组合 provider-backed model |
 | `open_local_app_server_with_cloud_providers` | 在 Workspace 激活前注入 cloud code-index providers；默认入口使用空 registry |
 | `open_local_app_server_with_code_index_providers` | 在 Workspace 激活前同时注入本地 semantic models 与可选 cloud providers |
-| `LocalAppServerOptions` | user profile root + SessionStateMode + optional config/runtime Workspace + validated slash catalog + built-in Skill root selection + optional model operation client |
+| `LocalAppServerOptions` | user profile root + SessionStateMode + optional Workspace/Connector runtime + validated slash catalog + built-in Skill root selection + optional model operation client |
+| `LocalConnectorRuntime` | Connector credential service + shared SecretStore + Plugin-specific MCP materializer |
 | `SessionStateMode` | 明确选择 profile SQLite durable history 或 process-local ephemeral Session/Thread state |
 | `BuiltInSkillRoot` | auto-detected release root、explicit test/host root 或 unavailable 的自解释选择 |
 | `zeta_slash_commands::SlashCommandCatalog` | 委托共享 crate 校验动态命令并冻结 server-advertised snapshot；App Server 只拥有 composition |
@@ -92,9 +95,13 @@ Core/store 继续拥有 Session/Thread durable state；需要进程内生命周�
 
 `AppServer::new` 默认用 `TurnExecutor::without_tools`。`with_tool_service` 才会替换为有 Tool 和
 Policy port 的 executor。`open_local_app_server` 会从 user config snapshot 连接明确 `enabled`
-的 unauthenticated MCP server，并把 catalog 与本地工具组合；Config commit 会在后台构建新
-generation 并只切换未来的 prepare。已 prepare 的调用继续绑定原 Tool/Policy generation，直到
-execute 完成。每次 MCP tool call 仍必须经过 durable one-time approval。Host 安装的 read-only
+的 unauthenticated MCP server，并把 catalog 与本地工具组合；host 注入 `LocalConnectorRuntime` 后，
+同一 composition 还会 materialize ready Connector MCP declaration。Config 或 Connector commit 会在后台构建新
+generation；每次 model invocation 同时冻结可见 definitions 和响应后的 binder，因此 watcher 在模型
+响应前发布新 registry 也不会把旧响应劫持到同名新工具。已绑定调用继续持有原 Tool/Policy generation，
+直到 execute 排空；Connector-bound call 在 dispatch 前额外复核 live connection generation/digest，
+disconnect 会等待已经 dispatch 的调用结束。每次 MCP tool
+call 仍必须经过 durable one-time approval。Host 安装的 read-only
 extension executor（当前包括统一的 `skills-read`）和 client-hosted dynamic tools 也进入同一个 registry，
 不得绕过 binding、policy 或 durable result commit。它仅在调用方通过
 `LocalAppServerOptions::with_workspace_root` 提供统一 Workspace 根时同时组合 filesystem、
@@ -157,6 +164,8 @@ src/
 │       ├── operations.rs          # Session/Thread/Turn/Resource methods
 │       ├── config_operations.rs   # Config/provider/MCP/Skill methods + DTO conversion
 │       ├── config_runtime.rs      # Config commit → config/changed fanout
+│       ├── connector_operations.rs # list/API-token connect/disconnect DTO adapter
+│       ├── connector_runtime.rs   # authority generation → connector/changed fanout
 │       ├── skill_operations.rs    # Skill catalog/enablement DTO conversion and error mapping
 │       ├── skill_operations.rs     # Skill runtime snapshot → protocol DTO
 │       ├── start_turn.rs           # durable command replay before mutable model/Skill resolution
@@ -505,13 +514,15 @@ metadata-only catalog 生成直接 `/name` Skill command，
 而 `/skills` 只承担管理；正文变化或 source 消失会使恢复/后续 safe point 失败即
 关闭，不会用新 bytes 替换 frozen digest。
 
-MCP runtime 当前只在 `open_local_app_server` safe point 构造。`enabled` 是建立连接/启动 server
-的显式用户 intent；它不批准任何 tool call。stdio command 必须是存在的 absolute executable，
-HTTP 当前只接受 unauthenticated endpoint，credential reference 会使 composition 明确失败。
-Workspace MCP intent 仍保持 pending trust，不会接入。Config mutation 或 `tools/list_changed`
-不会原地改 catalog：list-changed 后旧 runtime fail closed；当前需重启 App Server 才会构造新
-generation。启动采用 `RequireAll`，任一 enabled server 无法 initialize 时 App Server 明确启动
-失败，不会静默丢失部分 catalog。
+MCP runtime 在 `open_local_app_server` 构造初始 generation；后台 `ToolConfigWatcher` 同时订阅 Config
+和 Connector authority，完整构造下一 generation 后原子切换 future model safe points，旧 generation
+由 model snapshot 和已绑定调用持有到排空。`enabled` 是建立连接/启动 server 的显式用户 intent；它不
+批准任何 tool call。stdio command 必须是存在的 absolute executable，独立 Config HTTP 当前只接受
+unauthenticated endpoint，credential reference 会使 composition 明确失败；注入的 Connector runtime
+可在 ready account 下 materialize credential-bearing transport。Workspace MCP intent 仍保持 pending
+trust，不会接入。`tools/list_changed` 当前只会让旧 runtime fail closed，尚未触发独立 reconcile。
+启动与重建采用 `RequireAll`，任一 enabled server 无法 initialize 时保留旧 generation 并记录诊断，
+不会静默发布不完整 catalog。
 
 缺少 preferred model/provider 时创建 `UnavailableModel`，使 invocation 显式失败，不回退到 echo
 或任意默认 provider。

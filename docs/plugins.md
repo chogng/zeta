@@ -2,9 +2,10 @@
 
 > 物理位置：`zeta-rs/plugins/`
 > Rust crate：`zeta_plugins`
-> 当前状态：PL0 已实现并支持 Connector → MCP contribution 的声明校验；PL1 的 local
+> 当前状态：PL0 已实现并支持 `ConnectorContribution` 引用 `McpServerContribution` 的声明校验；PL1 的 local
 > content-addressed store 已实现，authority/activation 尚未完成；Connector domain 已提取到
-> `zeta-rs/connectors`，Plugin projection 位于 `zeta-rs/ext/connectors`，OAuth/connect/revoke 仍未实现；
+> `zeta-rs/connectors`，Plugin projection、durable authority 与 API-token connect/revoke 位于
+> `zeta-rs/ext/connectors`；Plugin activation 自动接线和 OAuth 仍未实现；
 > PL2–PL4 Proposed
 > 当前 crate 实现契约：[`zeta-rs/plugins/README.md`](../zeta-rs/plugins/README.md)
 > Connector account/lifecycle：[`connectors.md`](connectors.md)
@@ -20,7 +21,7 @@ Plugin 是经过校验和版本管理的扩展包，不是安装后便能执行�
 | 用户动作 | 系统发生什么 | 不会自动发生什么 |
 | --- | --- | --- |
 | 安装 Plugin | 校验不可变包、清单、来源和内容摘要后写入本地存储 | 不启用贡献、不授予权限 |
-| 在用户或 Workspace 中启用 | 允许其贡献参与解析 | 不启动 MCP、不执行脚本 |
+| 在用户或 Workspace 中启用 | 允许其贡献参与解析 | 不连接 Connector、不启动 MCP、不执行脚本 |
 | 批准请求的能力 | 记录精确的进程、网络、目录或凭据授权 | 不批准未来每一次工具调用 |
 | 激活贡献 | 生成带来源和 generation 的不可变快照 | 不把 live manager 注入 Agent |
 | 更新或回滚 | 并存校验后的版本并原子切换 | 不原地修改已安装包 |
@@ -29,7 +30,7 @@ Plugin 是经过校验和版本管理的扩展包，不是安装后便能执行�
 ## 1. 结论
 
 `zeta-plugins` 是 Zeta 的扩展分发、安装、解析、启用和版本管理控制面。Plugin 是一个不可变、
-可校验的包，可以贡献 Skill、MCP server declaration 和静态资源；Plugin manager 将这些贡献
+可校验的包，可以贡献 Skill、Connector declaration、MCP server declaration 和静态资源；Plugin manager 将这些贡献
 解析为带来源和 digest 的 activation snapshot，再由 App Server 注入对应 runtime。
 
 Plugin 不是：
@@ -43,21 +44,23 @@ Plugin 不是：
 
 边界固定为：
 
-```text
-Plugin package
-  ├─ 声明“包含什么、需要什么、来自哪里”
-  ├─ 不可变内容与 manifest
-  └─ install / update / remove 生命周期
-
-Skill runtime
-  └─ 读取 Plugin 贡献的 Skill
-
-MCP runtime
-  └─ 启动或连接 Plugin 声明的 MCP server
-
-Agent runtime
-  └─ 只消费解析后的 instruction/tool snapshot
+```mermaid
+flowchart TD
+    P["Plugin activation snapshot"] --> S["SkillContribution → Skill runtime"]
+    P --> C["ConnectorContribution → Connector runtime"]
+    P --> M["McpServerContribution"]
+    P --> A["StaticAssetContribution → Resource consumer"]
+    C -. "references declaration" .-> M
+    C -->|"connected"| B["Ready MCP binding"]
+    M -->|"standalone activation"| R["MCP runtime"]
+    M --> B
+    B --> R
+    R --> T["Tool Registry / Core"]
 ```
+
+Plugin 只负责声明控制面和 package lifecycle。Skill、Connector、MCP 和 Resource consumer 分别拥有自己的运行时
+语义；它们不是 Plugin manager 内部的 live 子对象。Plugin、Connector 与 MCP 的 canonical 关系由
+[`connectors.md`](connectors.md) 维护。
 
 安装、启用、授权和调用是四个不同动作：
 
@@ -96,7 +99,7 @@ tabs/search/selection presentation primitive，但当前没有 Plugin view model
 因此第一版不应从“动态加载代码”开始，而应先完成一个 declarative package：
 
 ```text
-Plugin v1 contributions = Skills + MCP server declarations + static assets
+Plugin v1 contributions = Skills + Connectors + MCP server declarations + static assets
 ```
 
 第三方 UI、native library、hooks、model provider adapter 和任意 App Server method registration
@@ -114,14 +117,14 @@ Plugin v1 contributions = Skills + MCP server declarations + static assets
 - requested permissions、credential slots 与 user grants 的差异计算；
 - immutable `PluginActivationSnapshot` 和 generation；
 - package provenance、signature/trust result、revocation/blocked diagnostics；
-- enabled Plugin 向 Skill/MCP runtime 的 normalized contribution projection；
+- enabled Plugin 向 Skill/Connector/MCP runtime 的 normalized contribution projection；
 - install/update/enable/disable/uninstall 的 typed command replay；
 - 不含秘密的 audit record 和 health projection。
 
 ### 3.2 Plugin manager 不拥有
 
 - Skill 的自动选择、prompt layering 或 context budget；
-- MCP JSON-RPC、process supervision、OAuth 或 tools/resources/prompts catalog；
+- MCP JSON-RPC、process supervision、Connector connection/OAuth 或 tools/resources/prompts catalog；
 - script、binary 或 MCP tool 的实际执行；
 - API token、OAuth token、cookie 或 private key；
 - OS sandbox、network enforcement 或 per-call approval 的最终实现；
@@ -146,19 +149,19 @@ Plugin v1 contributions = Skills + MCP server declarations + static assets
                     \                         /
                      \                       /
                       App Server composition
-                         │             │
-             SkillContribution   McpServerContribution
-                         │             │
-                         ▼             ▼
-                    zeta-skills     zeta-mcp
+                         │          │          │
+             SkillContribution  ConnectorContribution  McpServerContribution
+                         │          │          │
+                         ▼          ▼          ▼
+                    zeta-skills  zeta-connectors   zeta-mcp
 ```
 
 具体规则：
 
-- `zeta-plugins` 不依赖 `zeta-skills` 或 `zeta-mcp` live runtime；
+- `zeta-plugins` 不依赖 `zeta-skills`、`zeta-connectors` 或 `zeta-mcp` live runtime；
 - Plugin manager 只输出 normalized descriptor 和 immutable root handle；
-- App Server 将 Skill contribution 注册到 Skill source，将 MCP contribution 解析为
-  `McpServerDefinition`；
+- App Server 将 Skill contribution 注册到 Skill source，将 Connector contribution 交给 Connector adapter，
+  并将独立或 ready-bound MCP contribution 解析为 `McpServerDefinition`；
 - contribution consumer 必须再次执行自己领域的校验，不能因为 package 已验证就跳过 schema、
   content 或 runtime policy；
 - Plugin state 不进入 SessionStore/ThreadStore；
@@ -393,7 +396,7 @@ Workspace 声明可以请求某 Plugin/version，但不能静默下载、启用�
 - exact `PluginId` 在一个 profile resolution 中只能有一个 active version；
 - workspace pin 可以覆盖 user 的版本选择，但必须产生可见的 `VersionPinOverride`；
 - 两个不同 Plugin 的 contribution 同名不能按 source priority 静默覆盖；
-- Skill/MCP consumer 使用 namespaced identity；
+- Skill/Connector/MCP consumer 使用 namespaced identity；
 - manifest-local duplicate ID 使整个 package validation 失败；
 - incompatible/blocked Plugin 不提供部分“看起来能用”的 contribution，除非 manifest 明确声明
   独立 optional contribution group，且 resolver 能原子判断。
@@ -522,33 +525,37 @@ Uninstall：
   owner 决定；
 - workspace 中的声明保留为 unresolved request，不能静默重装。
 
-## 13. Skill 与 MCP 的明确关系
+## 13. Skill、Connector 与 MCP 的明确关系
 
-| 行为 | Plugin manager | Skill manager | MCP runtime |
-| --- | --- | --- | --- |
-| 校验 package digest/path | 负责 | 不负责 | 不负责 |
-| 解析 `SKILL.md` | 不负责 | 负责 | 不负责 |
-| 选择/加载 Skill | 不负责 | 负责 | 不负责 |
-| 解析 MCP JSON-RPC | 不负责 | 不负责 | 负责 |
-| 启动 MCP process | 只声明/grant | 不负责 | 负责 |
-| 存 secret | 不负责 | 不负责 | 不负责，使用 credential port |
-| 执行 script/tool | 不负责 | 不执行 | MCP tool 只执行协议调用 |
-| approval/sandbox | 只提供最大 grant | 不扩大权限 | 服从 Agent/host policy |
+| 行为 | Plugin manager | Skill manager | Connector / Auth | MCP runtime |
+| --- | --- | --- | --- | --- |
+| 校验 package digest/path | 负责 | 不负责 | 不负责 | 不负责 |
+| 解析 `SKILL.md` | 不负责 | 负责 | 不负责 | 不负责 |
+| 选择/加载 Skill | 不负责 | 负责 | 不负责 | 不负责 |
+| 管理外部账号连接状态 | 只声明 Connector | 不负责 | Connector runtime 负责 | 不负责 |
+| OAuth/API-key 交互和 secret bytes | 只声明 credential slot | 不负责 | Auth adapter 执行，Secrets owner 保存 | 只消费 materialized credential |
+| 发布 ready runtime binding | 只提供 declaration/provenance | 不负责 | connected generation 负责 | 只消费 binding |
+| 解析 MCP JSON-RPC | 不负责 | 不负责 | 不负责 | 负责 |
+| 启动 MCP process/session | 只声明/grant | 不负责 | 不启动 | 负责 |
+| 执行 script/tool | 不负责 | 不执行 | 不执行 Tool | MCP tool 只执行协议调用 |
+| approval/sandbox | 只提供最大 grant | 不扩大权限 | 连接成功不代表调用获批 | 服从 Agent/host policy |
 
 一个 Skill 可以指示 Agent 使用同 Plugin 的 MCP tool，但关联必须通过 stable contribution identity
 解析。Skill 文本不能通过写一句“此工具已批准”跳过 grant 或 approval。
 
 ### 13.1 Connector 与 built-in 工具
 
-`Connector` 是用户配置并授权的外部产品连接，不是 package format。一个 connector 可以由 MCP
-server、内置 host adapter 或将来的其他稳定 port 实现；一个 Plugin 也可以贡献 connector 所需的
-MCP declaration 和展示 metadata，但二者 identity/lifecycle 仍然不同。
+`Connector` 是外部产品连接的 domain object，不是 package format。Plugin 可以贡献 Connector declaration
+和它引用的 MCP declaration，但二者进入独立的 Connector/MCP runtime 后，identity 和 lifecycle 仍然不同。
+Connector 当前通过 MCP binding 连接能力 runtime；未来只有出现真实的非 MCP consumer 后，才扩展其他
+binding variant。
 
 当前 v1 manifest 已允许 `contributions.connectors[]` 用 manifest-local ID 引用同包的一个
 `mcpServers[]`。`zeta-connectors-extension::ConnectorCatalog` 将声明转换为
 `zeta-connectors::ConnectorSnapshot`：disconnected entry 进入 discovery，只有认证 owner 通过合法
-generation transition 发布 `ConnectorAccount` 后才输出 ready MCP server ID。这个纵向切片不执行
-OAuth、不保存 secret value，也不自行启动 MCP；完整边界由 [`connectors.md`](connectors.md) 维护。
+generation transition 发布 `ConnectorAccount` 后才输出 ready MCP server ID。当前 API-token adapter、
+SQLite authority 和注入式 MCP composition 已实现；Plugin activation 自动构造 runtime provider 与 OAuth
+仍未实现。完整边界由 [`connectors.md`](connectors.md) 维护。
 
 | 概念 | Identity/lifecycle | 例子 |
 | --- | --- | --- |
@@ -584,7 +591,7 @@ payload`；download progress 是瞬态 update，最终 installed/active state �
 - exact ID/version/digest/origin；
 - signed/unsigned/revoked/quarantined 状态；
 - requested 与 granted permissions diff；
-- 贡献的 Skills/MCP servers；
+- 贡献的 Skills、Connectors 和 MCP servers；
 - credential slots 只显示绑定状态，不显示 secret；
 - update 的 contribution/permission diff；
 - blocked/broken 的稳定诊断。
@@ -695,6 +702,7 @@ content-addressed object、重新验证 exact digest，再原子 promote。mutab
 - install/enable/disable/grant typed commands；
 - activation snapshot generation；
 - Skill contribution vertical slice；
+- Connector contribution 的 normalized projection；
 - 部分具备：staging/promote 已落地；authority commit 与 startup orphan recovery 尚未完成。
 
 完成条件：失败激活不改变上一 generation，重启可恢复唯一 active package set。

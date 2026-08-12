@@ -13,7 +13,8 @@
 | Symbol | 当前职责 | 不承担 |
 | --- | --- | --- |
 | `ConnectorId` | 一个 connectable product declaration 的稳定 identity | Plugin identity、外部账号 identity |
-| `ConnectorDefinition` | display metadata 与 runtime-free binding | OAuth 配置、live transport |
+| `ConnectorDefinition` | display metadata、runtime-free binding 与 authorization revision | OAuth 配置、live transport |
+| `ConnectorDefinitionDigest` | connector ID、runtime binding 与授权 revision 的稳定摘要 | display copy、secret bytes |
 | `ConnectorRuntimeBinding` | 描述连接成功后可 materialize 的 runtime；当前为 MCP server ID | MCP session、tool registry |
 | `ConnectorAccount` | 外部产品账号与 non-secret credential reference | Zeta login、secret bytes |
 | `ConnectorConnection` | connection generation 与状态转换校验 | durable persistence、retry scheduling |
@@ -41,11 +42,17 @@ Disconnected / Unavailable / Connected
 `Unavailable` 当前只保留 sanitized reason，不保留上一个 connected account；后续 reconnect 必须开始
 新的 connection generation。该约束避免 unavailable state 被误当成仍持有调用 authority。
 
+`DefinitionChanged` 只允许从 `Connected` 进入 `ReauthorizationRequired`，保持 account projection 供 UI
+解释，但 `ConnectorEntry::is_ready` 立即返回 false。Plugin adapter 必须把 exact package/runtime permission
+digest 传给 `with_authorization_revision`；display name 或 description 变化不会改变 digest。
+
 ## 内部所有权与调用路径
 
 ```text
 ConnectorDefinition::new
   -> definition::validate_text
+  -> ConnectorDefinition::with_authorization_revision
+  -> ConnectorDefinition::digest
   -> ConnectorSnapshot::new
        -> sort + duplicate identity rejection
 
@@ -58,7 +65,8 @@ ConnectorSnapshot::with_connection_update
 
 | Private symbol | Ownership | 漂移信号 |
 | --- | --- | --- |
-| `definition::validate_text` | definition/account/reason 的 bounded plain-text invariant | 开始解释 provider 或 Plugin schema |
+| `definition::validate_text` | definition/account/reason/revision 的 bounded plain-text invariant | 开始解释 provider 或 Plugin schema |
+| `definition::update_digest_field` | authorization compatibility digest 的 domain-separated framing | hash display copy 或 secret bytes |
 | `ConnectorConnection::apply` | connection transition 与 generation ordering | 执行 OAuth、读取 secrets、启动 MCP |
 | `ConnectorSnapshot::with_connection_update` | immutable atomic projection | 持久化 authority 或 App Server event delivery |
 
@@ -87,11 +95,11 @@ bazel test //zeta-rs/connectors:connectors-unit-tests
 ```
 
 当前测试覆盖 duplicate identity、必须经过 `Connecting`、connection generation 匹配、snapshot stale
-update 拒绝，以及 disconnect 后 runtime readiness 撤销。
+update 拒绝、definition digest / reauthorization，以及 disconnect 后 runtime readiness 撤销。
 
 ## 当前限制与扩展点
 
 当前只定义 MCP runtime binding；将来只有在出现真实的非 MCP consumer 后，才增加新的 binding
-variant。持久化恢复、OAuth/connect/revoke authority、credential materialization、health/reconnect 和
-App Server projection 尚未实现，分别属于上层 integration 与具体 runtime，而不是扩张本 crate 的
-I/O ownership。
+variant。持久化 authority、API-token credential orchestration 和 App Server projection 已在
+`zeta-connectors-extension` / `zeta-app-server` 实现；OAuth、health/reconnect、生产 credential backend
+和产品 UI 仍属于上层 integration，而不是扩张本 crate 的 I/O ownership。

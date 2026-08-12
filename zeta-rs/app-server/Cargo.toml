@@ -19,6 +19,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "sync", "time"] }
+zeroize = { workspace = true }
 zeta-app-server-protocol = { workspace = true }
 zeta-app-server-transport = { workspace = true }
 zeta-apply-patch = { workspace = true }
@@ -31,6 +32,8 @@ zeta-code-index-cloud = { workspace = true }
 zeta-code-index-semantic = { workspace = true }
 zeta-code-retrieval = { workspace = true }
 zeta-config = { workspace = true }
+zeta-connectors = { workspace = true }
+zeta-connectors-extension = { workspace = true }
 zeta-core = { workspace = true }
 zeta-client = { workspace = true }
 zeta-diff = { workspace = true }
@@ -54,6 +57,7 @@ zeta-rollout = { workspace = true }
 zeta-sandboxing = { workspace = true }
 zeta-workspace = { workspace = true }
 zeta-search = { workspace = true }
+zeta-secrets = { workspace = true }
 zeta-shell-command = { workspace = true }
 zeta-slash-commands = { workspace = true }
 zeta-skills = { workspace = true }

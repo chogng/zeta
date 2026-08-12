@@ -117,14 +117,13 @@ impl ToolService for DynamicToolService {
     }
 
     fn source_provenance(&self, name: &ToolName) -> Vec<ToolSourceProvenance> {
-        self.bindings
-            .contains_key(name)
-            .then(|| {
-                vec![ToolSourceProvenance::Dynamic {
-                    name: name.to_string(),
-                }]
-            })
-            .unwrap_or_default()
+        if self.bindings.contains_key(name) {
+            vec![ToolSourceProvenance::Dynamic {
+                name: name.to_string(),
+            }]
+        } else {
+            Vec::new()
+        }
     }
 
     fn execution_interaction(&self, call: &ToolCall) -> Result<Option<AgentRequest>, CoreError> {

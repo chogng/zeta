@@ -1,6 +1,7 @@
 use crate::ConnectorAccountId;
 use crate::ConnectorConnectionGeneration;
 use crate::ConnectorCredentialRef;
+use crate::ConnectorDefinitionDigest;
 use crate::ConnectorError;
 use crate::ConnectorErrorKind;
 use crate::definition::validate_text;
@@ -61,7 +62,13 @@ pub enum ConnectorConnectionState {
     Disconnected,
     Connecting,
     Connected(ConnectorAccount),
-    Unavailable { reason: String },
+    Unavailable {
+        reason: String,
+    },
+    ReauthorizationRequired {
+        account: ConnectorAccount,
+        previous_definition: ConnectorDefinitionDigest,
+    },
 }
 
 /// One validated connection lifecycle value and its monotonic generation.
@@ -85,6 +92,38 @@ impl ConnectorConnection {
 
     pub fn state(&self) -> &ConnectorConnectionState {
         &self.state
+    }
+
+    /// Restores one previously validated durable connection projection.
+    ///
+    /// Persistence adapters must still construct every identity/account through its validated
+    /// public constructor before calling this method.
+    pub fn restore(
+        generation: ConnectorConnectionGeneration,
+        state: ConnectorConnectionState,
+    ) -> Result<Self, ConnectorError> {
+        match &state {
+            ConnectorConnectionState::Disconnected => {}
+            ConnectorConnectionState::Connecting | ConnectorConnectionState::Unavailable { .. } => {
+                if generation == ConnectorConnectionGeneration::INITIAL {
+                    return Err(invalid_transition(
+                        "an active Connector state requires a non-initial connection generation",
+                    ));
+                }
+            }
+            ConnectorConnectionState::Connected(account)
+            | ConnectorConnectionState::ReauthorizationRequired { account, .. } => {
+                if generation == ConnectorConnectionGeneration::INITIAL
+                    || account.connection_generation() != generation
+                {
+                    return Err(ConnectorError::new(
+                        ConnectorErrorKind::StaleGeneration,
+                        "restored Connector account does not match its connection generation",
+                    ));
+                }
+            }
+        }
+        Ok(Self { generation, state })
     }
 
     pub(crate) fn apply(&self, update: ConnectorConnectionUpdate) -> Result<Self, ConnectorError> {
@@ -145,6 +184,22 @@ impl ConnectorConnection {
                     state: ConnectorConnectionState::Unavailable { reason },
                 })
             }
+            ConnectorConnectionUpdate::DefinitionChanged {
+                previous_definition,
+            } => {
+                let ConnectorConnectionState::Connected(account) = &self.state else {
+                    return Err(invalid_transition(
+                        "only a connected Connector can require reauthorization",
+                    ));
+                };
+                Ok(Self {
+                    generation: self.generation,
+                    state: ConnectorConnectionState::ReauthorizationRequired {
+                        account: account.clone(),
+                        previous_definition,
+                    },
+                })
+            }
         }
     }
 
@@ -181,6 +236,9 @@ pub enum ConnectorConnectionUpdate {
     Unavailable {
         generation: ConnectorConnectionGeneration,
         reason: String,
+    },
+    DefinitionChanged {
+        previous_definition: ConnectorDefinitionDigest,
     },
 }
 

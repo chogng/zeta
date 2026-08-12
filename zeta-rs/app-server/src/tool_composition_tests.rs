@@ -863,6 +863,64 @@ fn reload_after_durable_binding_but_before_prepare_keeps_original_generation() {
 }
 
 #[test]
+fn model_catalog_snapshot_binds_response_to_the_generation_visible_to_the_model() {
+    let initial = combine_tool_ports(vec![ToolPort::local(
+        Arc::new(FakeTools::new(
+            "shared_tool",
+            ActionSource::BuiltInTool,
+            "initial",
+        )),
+        Arc::new(AskPolicy),
+    )])
+    .unwrap();
+    let reloadable = ReloadableToolPorts::new(initial);
+    let tools = reloadable.tools();
+    let catalog = tools
+        .model_catalog_snapshot(&std::collections::BTreeSet::new())
+        .expect("freeze model catalog");
+
+    reloadable.replace(
+        combine_tool_ports(vec![ToolPort::local(
+            Arc::new(FakeTools::new(
+                "shared_tool",
+                ActionSource::BuiltInTool,
+                "replacement",
+            )),
+            Arc::new(AskPolicy),
+        )])
+        .unwrap(),
+    );
+
+    let call = ToolCall {
+        id: zeta_protocol::ToolCallId::new("model-safe-point").unwrap(),
+        name: ToolName::new("shared_tool").unwrap(),
+        arguments: serde_json::json!({}),
+    };
+    let binding = catalog
+        .bind_call(&call, zeta_protocol::ToolCallCaller::Direct)
+        .expect("reloadable catalog installs a frozen binder")
+        .expect("bind against model-visible generation")
+        .expect("model-visible tool remains callable");
+    tools
+        .validate_call_binding(&call, Some(&binding))
+        .expect("frozen model binding remains live");
+    let review = tools.prepare(&call).unwrap();
+    assert_eq!(review.provenance().source_id(), "initial");
+    assert_eq!(
+        tools
+            .execute(
+                &call,
+                &ToolAuthorization::UnsandboxedGrant {
+                    grant_id: GrantId::new("test"),
+                },
+                &zeta_async_utils::CancellationSource::new().token(),
+            )
+            .unwrap(),
+        ToolExecutionOutput::Success("initial".into())
+    );
+}
+
+#[test]
 fn durable_binding_from_another_process_incarnation_fails_closed() {
     let combined = combine_tool_ports(vec![ToolPort::local(
         Arc::new(FakeTools::new(

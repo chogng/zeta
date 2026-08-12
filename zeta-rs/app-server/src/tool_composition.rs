@@ -7,6 +7,7 @@ use std::sync::RwLock;
 use zeta_async_utils::CancellationToken;
 use zeta_config::ToolSearchModeConfig;
 use zeta_core::CoreError;
+use zeta_core::ModelToolCatalogSnapshot;
 use zeta_core::PolicyService;
 use zeta_core::ToolAuthorization;
 use zeta_core::ToolExecutionFacts;
@@ -480,6 +481,42 @@ impl ReloadableToolPorts {
                 .unwrap_or_else(std::sync::PoisonError::into_inner),
         )
     }
+
+    fn bind_call_in_generation(
+        &self,
+        generation: &Arc<ToolGeneration>,
+        call: &ToolCall,
+        caller: ToolCallCaller,
+    ) -> Result<Option<ToolCallBinding>, CoreError> {
+        if let Some(tools) = self
+            .calls
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(&call.id)
+            .map(|binding| Arc::clone(&binding.tools))
+        {
+            return Ok(with_registry_incarnation(
+                tools.bind_call(call, caller)?,
+                &self.incarnation,
+            ));
+        }
+        let binding =
+            with_registry_incarnation(generation.tools.bind_call(call, caller)?, &self.incarnation);
+        if binding.is_some() {
+            self.calls
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .insert(
+                    call.id.clone(),
+                    BoundToolCall {
+                        tools: Arc::clone(&generation.tools),
+                        policy: Arc::clone(&generation.policy),
+                        action_digest: None,
+                    },
+                );
+        }
+        Ok(binding)
+    }
 }
 
 fn new_registry_incarnation() -> String {
@@ -521,44 +558,27 @@ impl ToolService for ReloadableToolService {
         self.ports.generation().tools.model_definitions(activated)
     }
 
+    fn model_catalog_snapshot(
+        &self,
+        activated: &BTreeSet<ToolName>,
+    ) -> Result<ModelToolCatalogSnapshot, CoreError> {
+        let generation = self.ports.generation();
+        let definitions = generation.tools.model_definitions(activated)?;
+        let ports = Arc::clone(&self.ports);
+        Ok(ModelToolCatalogSnapshot::with_binder(
+            definitions,
+            move |call, caller| ports.bind_call_in_generation(&generation, call, caller),
+        ))
+    }
+
     fn bind_call(
         &self,
         call: &ToolCall,
         caller: ToolCallCaller,
     ) -> Result<Option<ToolCallBinding>, CoreError> {
-        if let Some(tools) = self
-            .ports
-            .calls
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .get(&call.id)
-            .map(|binding| Arc::clone(&binding.tools))
-        {
-            return Ok(with_registry_incarnation(
-                tools.bind_call(call, caller)?,
-                &self.ports.incarnation,
-            ));
-        }
         let generation = self.ports.generation();
-        let binding = with_registry_incarnation(
-            generation.tools.bind_call(call, caller)?,
-            &self.ports.incarnation,
-        );
-        if binding.is_some() {
-            self.ports
-                .calls
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .insert(
-                    call.id.clone(),
-                    BoundToolCall {
-                        tools: Arc::clone(&generation.tools),
-                        policy: Arc::clone(&generation.policy),
-                        action_digest: None,
-                    },
-                );
-        }
-        Ok(binding)
+        self.ports
+            .bind_call_in_generation(&generation, call, caller)
     }
 
     fn validate_call_binding(
@@ -741,14 +761,14 @@ impl ReloadableToolService {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .remove(&call.id);
-        if let Some(binding) = binding {
-            if let Some(action_digest) = binding.action_digest {
-                self.ports
-                    .policies
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .remove(&action_digest);
-            }
+        if let Some(binding) = binding
+            && let Some(action_digest) = binding.action_digest
+        {
+            self.ports
+                .policies
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .remove(&action_digest);
         }
     }
 

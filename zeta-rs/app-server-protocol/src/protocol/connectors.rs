@@ -1,0 +1,162 @@
+use schemars::JsonSchema;
+use serde::Deserialize;
+use serde::Serialize;
+use std::fmt;
+use ts_rs::TS;
+use zeroize::Zeroize;
+
+/// Non-secret account identity projected by the Connector authority.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectorAccountDto {
+    pub id: String,
+    pub display_name: String,
+}
+
+/// Current connection lifecycle projected without credential references or values.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(
+    tag = "status",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum ConnectorConnectionStateDto {
+    Disconnected,
+    Connecting,
+    Connected {
+        account: ConnectorAccountDto,
+    },
+    Unavailable {
+        reason: String,
+    },
+    ReauthorizationRequired {
+        account: ConnectorAccountDto,
+        previous_definition: String,
+    },
+}
+
+/// Mutation the current Connector state permits a client to offer.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum ConnectorAvailableActionDto {
+    ConnectApiToken,
+    Disconnect,
+    ReauthorizeApiToken,
+}
+
+/// One runtime-free Connector catalog entry and its account-state projection.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectorDto {
+    pub id: String,
+    pub display_name: String,
+    pub description: String,
+    pub runtime_server_id: String,
+    pub definition_digest: String,
+    #[ts(type = "number")]
+    pub connection_generation: u64,
+    pub state: ConnectorConnectionStateDto,
+    pub available_actions: Vec<ConnectorAvailableActionDto>,
+}
+
+/// Exact non-secret projection of the durable Connector authority.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectorListResult {
+    #[ts(type = "number")]
+    pub generation: u64,
+    pub connectors: Vec<ConnectorDto>,
+}
+
+/// Inbound-only API token that redacts diagnostics and clears its allocation on drop.
+#[derive(Deserialize, Eq, JsonSchema, PartialEq, TS)]
+#[serde(transparent)]
+pub struct ConnectorSecretDto(String);
+
+impl ConnectorSecretDto {
+    pub fn into_bytes(mut self) -> Vec<u8> {
+        std::mem::take(&mut self.0).into_bytes()
+    }
+}
+
+impl fmt::Debug for ConnectorSecretDto {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("ConnectorSecretDto([REDACTED])")
+    }
+}
+
+impl Drop for ConnectorSecretDto {
+    fn drop(&mut self) {
+        self.0.zeroize();
+    }
+}
+
+/// Retry-safe API-token authorization request.
+#[derive(Debug, Deserialize, Eq, JsonSchema, PartialEq, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectorApiTokenConnectParams {
+    pub command_id: String,
+    #[schemars(range(min = 1))]
+    #[ts(type = "number")]
+    pub expected_generation: u64,
+    pub connector_id: String,
+    #[schemars(range(min = 1))]
+    #[ts(type = "number")]
+    pub connection_generation: u64,
+    pub account_id: String,
+    pub account_display_name: String,
+    pub api_token: ConnectorSecretDto,
+}
+
+/// Retry-safe readiness revocation request.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectorDisconnectParams {
+    pub command_id: String,
+    #[schemars(range(min = 1))]
+    #[ts(type = "number")]
+    pub expected_generation: u64,
+    pub connector_id: String,
+}
+
+/// Whether a retry-safe mutation committed or replayed its exact receipt.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum ConnectorCommandDispositionDto {
+    Updated,
+    Replayed,
+}
+
+/// Result of connecting one account.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectorCommandResultDto {
+    #[ts(type = "number")]
+    pub generation: u64,
+    pub disposition: ConnectorCommandDispositionDto,
+}
+
+/// Best-effort cleanup status after authoritative readiness revocation.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum ConnectorCredentialCleanupDto {
+    Deleted,
+    AlreadyAbsent,
+    RetryRequired,
+}
+
+/// Disconnect result keeps revocation success distinct from credential cleanup retries.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectorDisconnectResultDto {
+    pub command: ConnectorCommandResultDto,
+    pub credential_cleanup: ConnectorCredentialCleanupDto,
+}
+
+/// Notification emitted after a committed Connector authority generation.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectorsChanged {
+    #[ts(type = "number")]
+    pub generation: u64,
+}

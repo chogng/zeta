@@ -8,6 +8,10 @@ use zeta_config::{
     ConfigGeneration, McpCredentialBinding, McpServerEnablement, McpServerId, McpTransportConfig,
     ResolvedConfig,
 };
+use zeta_connectors::ConnectorConnectionGeneration;
+use zeta_connectors::ConnectorDefinitionDigest;
+use zeta_connectors::ConnectorId;
+use zeta_connectors_extension::ConnectorAuthority;
 use zeta_core::{CoreError, PolicyService, ToolAuthorization, ToolService};
 use zeta_mcp::{
     McpCallError, McpRuntimeOptions, McpServerDefinition, McpServerTransport, McpSessionFactory,
@@ -22,23 +26,35 @@ use zeta_protocol::ContentPart;
 use zeta_protocol::ToolSourceProvenance;
 use zeta_protocol::{ToolCall, ToolDefinition, ToolExecutionOutput, ToolName};
 use zeta_rmcp_client::{StdioServerCommand, StreamableHttpServer};
+use zeta_secrets::SecretStore;
 use zeta_tools::{ToolContent, ToolOutput, ToolOutputStatus};
 
+use crate::connector::ConnectorMcpRuntimeProvider;
+use crate::connector::materialize_connector_servers;
 use crate::runtime::McpRuntimeOwner;
 use crate::runtime::McpRuntimeOwnerError;
 
 const MCP_POLICY_REVISION: &str = "mcp-user-approval-v1";
 
 #[derive(Clone)]
-enum McpInvocationTransport {
+pub(crate) enum McpInvocationTransport {
     Stdio { executable: String },
     StreamableHttp,
 }
 
 #[derive(Clone)]
-struct McpInvocationAuthority {
-    display_name: String,
-    transport: McpInvocationTransport,
+pub(crate) struct ConnectorInvocationFence {
+    pub authority: ConnectorAuthority,
+    pub connector_id: ConnectorId,
+    pub connection_generation: ConnectorConnectionGeneration,
+    pub definition_digest: ConnectorDefinitionDigest,
+}
+
+#[derive(Clone)]
+pub(crate) struct McpInvocationAuthority {
+    pub display_name: String,
+    pub transport: McpInvocationTransport,
+    pub connector_fence: Option<Arc<ConnectorInvocationFence>>,
 }
 
 pub struct McpToolComposition {
@@ -55,19 +71,54 @@ pub fn compose_mcp_tools(
     if definitions.is_empty() {
         return Ok(None);
     }
-    start_mcp_tools(definitions, authorities, generation, None).map(Some)
+    let catalog_generation = generation
+        .get()
+        .checked_add(1)
+        .ok_or_else(|| McpToolCompositionError("MCP catalog generation overflow".into()))?;
+    start_mcp_tools(definitions, authorities, catalog_generation, None).map(Some)
+}
+
+/// Composes user-configured MCP servers with the exact ready Connector authority projection.
+///
+/// `catalog_generation` is owned by the host reconcile loop and must advance whenever either its
+/// Config or Connector inputs change. The runtime provider is the Plugin activation boundary that
+/// materializes each referenced MCP declaration with its connection-time credential.
+pub fn compose_mcp_tools_with_connectors(
+    config: &ResolvedConfig,
+    catalog_generation: u64,
+    connector_authority: ConnectorAuthority,
+    secrets: Arc<dyn SecretStore>,
+    provider: Arc<dyn ConnectorMcpRuntimeProvider>,
+) -> Result<Option<McpToolComposition>, McpToolCompositionError> {
+    if catalog_generation == 0 {
+        return Err(McpToolCompositionError(
+            "MCP catalog generation must be non-zero".into(),
+        ));
+    }
+    let (mut definitions, mut authorities) = materialize_servers(config)?;
+    let connectors =
+        materialize_connector_servers(connector_authority, secrets.as_ref(), provider.as_ref())?;
+    for server in connectors.authorities.keys() {
+        if authorities.contains_key(server) {
+            return Err(McpToolCompositionError(format!(
+                "MCP server identity is declared by Config and a Connector: {server}"
+            )));
+        }
+    }
+    definitions.extend(connectors.definitions);
+    authorities.extend(connectors.authorities);
+    if definitions.is_empty() {
+        return Ok(None);
+    }
+    start_mcp_tools(definitions, authorities, catalog_generation, None).map(Some)
 }
 
 fn start_mcp_tools(
     definitions: Vec<McpServerDefinition>,
     authorities: BTreeMap<McpServerId, McpInvocationAuthority>,
-    generation: ConfigGeneration,
+    catalog_generation: u64,
     factory: Option<Arc<dyn McpSessionFactory>>,
 ) -> Result<McpToolComposition, McpToolCompositionError> {
-    let catalog_generation = generation
-        .get()
-        .checked_add(1)
-        .ok_or_else(|| McpToolCompositionError("MCP catalog generation overflow".into()))?;
     let options = McpRuntimeOptions::new("zeta-app-server", env!("CARGO_PKG_VERSION"))
         .with_startup_policy(McpStartupPolicy::RequireAll)
         .with_catalog_generation(catalog_generation)
@@ -146,6 +197,7 @@ fn materialize_servers(
             McpInvocationAuthority {
                 display_name: server.display_name.clone(),
                 transport: authority,
+                connector_fence: None,
             },
         );
     }
@@ -199,6 +251,18 @@ impl McpToolService {
         let authority = self.authorities.get(server).ok_or_else(|| {
             CoreError::Policy(format!("MCP server authority is unavailable: {server}"))
         })?;
+        if let Some(fence) = &authority.connector_fence
+            && !fence.authority.authorizes(
+                &fence.connector_id,
+                fence.connection_generation,
+                &fence.definition_digest,
+            )
+        {
+            return Err(CoreError::Policy(format!(
+                "Connector is no longer authorized: {}",
+                fence.connector_id
+            )));
+        }
         let authority_scope = match &authority.transport {
             McpInvocationTransport::Stdio { executable } => {
                 json!({"type": "stdio", "executable": executable})
@@ -295,10 +359,33 @@ impl ToolService for McpToolService {
             ));
         }
         let binding = self.binding(&call.name)?.clone();
-        match self
-            .owner
-            .call(binding, call.arguments.clone(), cancellation.clone())
-        {
+        let authority = self
+            .authorities
+            .get(binding.remote().server())
+            .cloned()
+            .ok_or_else(|| CoreError::Policy("MCP invocation authority is unavailable".into()))?;
+        let invoke = || {
+            self.owner
+                .call(binding, call.arguments.clone(), cancellation.clone())
+        };
+        let invocation = match authority.connector_fence {
+            Some(fence) => fence
+                .authority
+                .with_authorized_invocation(
+                    &fence.connector_id,
+                    fence.connection_generation,
+                    &fence.definition_digest,
+                    invoke,
+                )
+                .ok_or_else(|| {
+                    CoreError::Policy(format!(
+                        "Connector was disconnected before MCP dispatch: {}",
+                        fence.connector_id
+                    ))
+                })?,
+            None => invoke(),
+        };
+        match invocation {
             Ok(output) => protocol_execution_output(output),
             Err(McpCallError::OutcomeUncertain(message)) => {
                 Ok(ToolExecutionOutput::OutcomeUnknown(message))
@@ -319,7 +406,7 @@ fn protocol_execution_output(output: ToolOutput) -> Result<ToolExecutionOutput, 
             ToolContent::Text(text) => ContentPart::Text(text.clone()),
             ToolContent::Image { url, detail } => ContentPart::ImageUrl {
                 url: url.clone(),
-                detail: (*detail).into(),
+                detail: *detail,
             },
         })
         .collect::<Vec<_>>();
@@ -373,6 +460,10 @@ impl PolicyService for McpApprovalPolicy {
 pub struct McpToolCompositionError(String);
 
 impl McpToolCompositionError {
+    pub(crate) fn new(message: impl Into<String>) -> Self {
+        Self(message.into())
+    }
+
     fn runtime(error: McpRuntimeOwnerError) -> Self {
         Self(error.to_string())
     }

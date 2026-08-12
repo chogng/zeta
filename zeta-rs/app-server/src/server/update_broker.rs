@@ -9,6 +9,7 @@ use zeta_app_server_protocol::protocol::collaboration::DocumentCollaborationPres
 use zeta_app_server_protocol::protocol::collaboration::DocumentCollaborationUpdate;
 use zeta_app_server_protocol::protocol::common::AgentInteractionCapability;
 use zeta_app_server_protocol::protocol::config::ConfigChanged;
+use zeta_app_server_protocol::protocol::connectors::ConnectorsChanged;
 use zeta_app_server_protocol::protocol::fs::FsChanged;
 use zeta_app_server_protocol::protocol::git::{GitStatusChanged, GitStatusResult};
 use zeta_app_server_protocol::protocol::registry::ServerNotificationMethod;
@@ -451,6 +452,22 @@ impl UpdateBroker {
                     revision: change.revision.get(),
                     generation: change.generation.get(),
                 },
+            ));
+            true
+        });
+    }
+
+    pub(super) fn publish_connectors_changed(&self, generation: u64) {
+        let Ok(mut state) = self.state.lock() else {
+            return;
+        };
+        state.subscribers.retain(|_, subscriber| {
+            let Some(queue) = subscriber.queue.upgrade() else {
+                return false;
+            };
+            queue.push(notification(
+                ServerNotificationMethod::ConnectorsChanged,
+                &ConnectorsChanged { generation },
             ));
             true
         });

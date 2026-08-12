@@ -52,6 +52,19 @@ use crate::protocol::config::{
     SkillSourceSetEnablementParams, ToolSearchConfigDto, ToolSearchConfigureParams,
     ToolSearchEmbeddingStatusDto, ToolSearchModeDto,
 };
+use crate::protocol::connectors::ConnectorAccountDto;
+use crate::protocol::connectors::ConnectorApiTokenConnectParams;
+use crate::protocol::connectors::ConnectorAvailableActionDto;
+use crate::protocol::connectors::ConnectorCommandDispositionDto;
+use crate::protocol::connectors::ConnectorCommandResultDto;
+use crate::protocol::connectors::ConnectorConnectionStateDto;
+use crate::protocol::connectors::ConnectorCredentialCleanupDto;
+use crate::protocol::connectors::ConnectorDisconnectParams;
+use crate::protocol::connectors::ConnectorDisconnectResultDto;
+use crate::protocol::connectors::ConnectorDto;
+use crate::protocol::connectors::ConnectorListResult;
+use crate::protocol::connectors::ConnectorSecretDto;
+use crate::protocol::connectors::ConnectorsChanged;
 use crate::protocol::diff::DiffComputeParams;
 use crate::protocol::diff::DiffComputeResult;
 use crate::protocol::diff::DiffComputeRowDto;
@@ -375,6 +388,21 @@ client_methods! {
         params: EmptyParams,
         response: ConfigReadResult,
         serialization: GlobalSharedRead,
+    },
+    ConnectorList => "connector/list" {
+        params: EmptyParams,
+        response: ConnectorListResult,
+        serialization: GlobalSharedRead,
+    },
+    ConnectorApiTokenConnect => "connector/connect/apiToken" {
+        params: ConnectorApiTokenConnectParams,
+        response: ConnectorCommandResultDto,
+        serialization: GlobalExclusive,
+    },
+    ConnectorDisconnect => "connector/disconnect" {
+        params: ConnectorDisconnectParams,
+        response: ConnectorDisconnectResultDto,
+        serialization: GlobalExclusive,
     },
     ModelList => "model/list" {
         params: EmptyParams,
@@ -842,6 +870,9 @@ server_notifications! {
     ConfigChanged => "config/changed" {
         params: ConfigChanged,
     },
+    ConnectorsChanged => "connector/changed" {
+        params: ConnectorsChanged,
+    },
     SkillsChanged => "skills/changed" {
         params: SkillsChanged,
     },
@@ -874,6 +905,19 @@ typescript_bindings! {
     ItemId,
     ToolCallId,
     ToolName,
+    ConnectorAccountDto,
+    ConnectorAvailableActionDto,
+    ConnectorConnectionStateDto,
+    ConnectorDto,
+    ConnectorListResult,
+    ConnectorSecretDto,
+    ConnectorApiTokenConnectParams,
+    ConnectorDisconnectParams,
+    ConnectorCommandDispositionDto,
+    ConnectorCommandResultDto,
+    ConnectorCredentialCleanupDto,
+    ConnectorDisconnectResultDto,
+    ConnectorsChanged,
     TurnId,
     DelegationId,
     AgentJoinId,

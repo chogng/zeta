@@ -180,6 +180,9 @@ inline argument parsing；提交仍通过 `session/request` 的 `StartTurn.input
 | `session/thread/subscribe` | Session + Thread + connection | snapshot + `afterSequence` 之后的 durable gap |
 | `session/thread/unsubscribe` | Session + Thread + connection | 删除 child Thread 订阅 |
 | `config/read` | config | 读取配置 |
+| `connector/list` | Connector authority | 读取不含 secret/reference 的外部账号连接投影 |
+| `connector/connect/apiToken` | Connector authority + secret store | retry-safe 保存 API token 并发布 connected account |
+| `connector/disconnect` | Connector authority + secret store | 先撤销 runtime readiness，再报告 credential cleanup 状态 |
 | `config/update` | config | typed command 更新配置 |
 | `toolSearch/configure` | config + semantic model runtime | 选择词法模式，或探活 exact embedding 模型后启用混合 Tool Search |
 | `workspace/codeIndex/semantic/configure` / `authorize` / `revoke` | config + Workspace | 独立配置 semantic CodeIndex，并显式管理源码外发授权 |
@@ -229,7 +232,25 @@ inline argument parsing；提交仍通过 `session/request` 的 `StartTurn.input
 | `terminal/read` | connection + Terminal | 按 sequence 拉取有界 Base64 输出 |
 | `terminal/close` | connection + Terminal | 终止并释放 PTY |
 
-长期 account control plane 另见[第 11 节](#11-account-与登录)。它尚未进入当前 registry/schema，
+Connector account 是 GitHub、Slack 等外部产品账号，不是第 11 节的 Zeta account/login control plane。
+
+### Connector 外部账号连接
+
+`initialize.capabilities.connectors` 只有在 host 注入 `ConnectorCredentialService` 时为 true。客户端收到
+`connector/changed { generation }` 后重新调用 `connector/list`；notification 不携带 account body、
+credential reference 或 secret。
+
+connect/disconnect 都携带 `commandId` 与 `expectedGeneration`。API-token connect 还携带单调的
+`connectionGeneration`、外部 account ID/display name 和 `apiToken`。Secret field 只存在于 inbound
+request；App Server 把它移出通用 JSON value 后包装为 zeroizing `SecretValue`，任何 list/result/error
+都不得回显。一次 successful connect 会因 Begin 和 Complete 两次 commit 推进两个 snapshot generation。
+
+disconnect 先提交新的 disconnected generation，再删除 secret。结果中的 `credentialCleanup` 为
+`deleted`、`alreadyAbsent` 或 `retryRequired`；后者不回滚 disconnect。客户端不得因为 cleanup 需要重试
+而继续显示 tools ready。`reauthorizationRequired` 同样不是 ready 状态，通常表示 Plugin package/runtime
+authorization revision 已改变。
+
+长期 Zeta account control plane 另见[第 11 节](#11-account-与登录)。它尚未进入当前 registry/schema，
 加入时必须和 Rust DTO、TypeScript 与 JSON Schema 同步提交。
 
 ### 文件系统
@@ -604,6 +625,9 @@ Resource bytes 使用标准 RFC 4648 Base64；`decodedLength` 是原始 byte 数
 - `GitNotRepository`
 - `GitOperationFailed`
 - `ConfigUnavailable`
+- `ConnectorsUnavailable`
+- `ConnectorGenerationConflict`
+- `ConnectorOperationFailed`
 - `SkillsUnavailable`
 - `SkillNotFound`
 - `SkillOperationFailed`

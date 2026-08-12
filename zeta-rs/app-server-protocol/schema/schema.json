@@ -918,6 +918,9 @@
         "TerminalOperationFailed",
         "ConfigUnavailable",
         "ConfigRevisionConflict",
+        "ConnectorsUnavailable",
+        "ConnectorGenerationConflict",
+        "ConnectorOperationFailed",
         "ToolSearchUnavailable",
         "SkillsUnavailable",
         "SkillOperationFailed",
@@ -1297,6 +1300,54 @@
             },
             "params": {
               "$ref": "#/$defs/EmptyParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "connector/list"
+            },
+            "params": {
+              "$ref": "#/$defs/EmptyParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "connector/connect/apiToken"
+            },
+            "params": {
+              "$ref": "#/$defs/ConnectorApiTokenConnectParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "connector/disconnect"
+            },
+            "params": {
+              "$ref": "#/$defs/ConnectorDisconnectParams"
             }
           },
           "required": [
@@ -2821,6 +2872,54 @@
             },
             "result": {
               "$ref": "#/$defs/ConfigReadResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "connector/list"
+            },
+            "result": {
+              "$ref": "#/$defs/ConnectorListResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "connector/connect/apiToken"
+            },
+            "result": {
+              "$ref": "#/$defs/ConnectorCommandResultDto"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "connector/disconnect"
+            },
+            "result": {
+              "$ref": "#/$defs/ConnectorDisconnectResultDto"
             }
           },
           "required": [
@@ -4854,6 +4953,309 @@
       "required": [
         "commandId",
         "expectedRevision"
+      ]
+    },
+    "ConnectorAccountDto": {
+      "description": "Non-secret account identity projected by the Connector authority.",
+      "type": "object",
+      "properties": {
+        "displayName": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "displayName"
+      ]
+    },
+    "ConnectorApiTokenConnectParams": {
+      "description": "Retry-safe API-token authorization request.",
+      "type": "object",
+      "properties": {
+        "accountDisplayName": {
+          "type": "string"
+        },
+        "accountId": {
+          "type": "string"
+        },
+        "apiToken": {
+          "$ref": "#/$defs/ConnectorSecretDto"
+        },
+        "commandId": {
+          "type": "string"
+        },
+        "connectionGeneration": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 1
+        },
+        "connectorId": {
+          "type": "string"
+        },
+        "expectedGeneration": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedGeneration",
+        "connectorId",
+        "connectionGeneration",
+        "accountId",
+        "accountDisplayName",
+        "apiToken"
+      ]
+    },
+    "ConnectorAvailableActionDto": {
+      "description": "Mutation the current Connector state permits a client to offer.",
+      "type": "string",
+      "enum": [
+        "connectApiToken",
+        "disconnect",
+        "reauthorizeApiToken"
+      ]
+    },
+    "ConnectorCommandDispositionDto": {
+      "description": "Whether a retry-safe mutation committed or replayed its exact receipt.",
+      "type": "string",
+      "enum": [
+        "updated",
+        "replayed"
+      ]
+    },
+    "ConnectorCommandResultDto": {
+      "description": "Result of connecting one account.",
+      "type": "object",
+      "properties": {
+        "disposition": {
+          "$ref": "#/$defs/ConnectorCommandDispositionDto"
+        },
+        "generation": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "generation",
+        "disposition"
+      ]
+    },
+    "ConnectorConnectionStateDto": {
+      "description": "Current connection lifecycle projected without credential references or values.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "const": "disconnected"
+            }
+          },
+          "required": [
+            "status"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "const": "connecting"
+            }
+          },
+          "required": [
+            "status"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "account": {
+              "$ref": "#/$defs/ConnectorAccountDto"
+            },
+            "status": {
+              "type": "string",
+              "const": "connected"
+            }
+          },
+          "required": [
+            "status",
+            "account"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "reason": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string",
+              "const": "unavailable"
+            }
+          },
+          "required": [
+            "status",
+            "reason"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "account": {
+              "$ref": "#/$defs/ConnectorAccountDto"
+            },
+            "previousDefinition": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string",
+              "const": "reauthorizationRequired"
+            }
+          },
+          "required": [
+            "status",
+            "account",
+            "previousDefinition"
+          ]
+        }
+      ]
+    },
+    "ConnectorCredentialCleanupDto": {
+      "description": "Best-effort cleanup status after authoritative readiness revocation.",
+      "type": "string",
+      "enum": [
+        "deleted",
+        "alreadyAbsent",
+        "retryRequired"
+      ]
+    },
+    "ConnectorDisconnectParams": {
+      "description": "Retry-safe readiness revocation request.",
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "type": "string"
+        },
+        "connectorId": {
+          "type": "string"
+        },
+        "expectedGeneration": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedGeneration",
+        "connectorId"
+      ]
+    },
+    "ConnectorDisconnectResultDto": {
+      "description": "Disconnect result keeps revocation success distinct from credential cleanup retries.",
+      "type": "object",
+      "properties": {
+        "command": {
+          "$ref": "#/$defs/ConnectorCommandResultDto"
+        },
+        "credentialCleanup": {
+          "$ref": "#/$defs/ConnectorCredentialCleanupDto"
+        }
+      },
+      "required": [
+        "command",
+        "credentialCleanup"
+      ]
+    },
+    "ConnectorDto": {
+      "description": "One runtime-free Connector catalog entry and its account-state projection.",
+      "type": "object",
+      "properties": {
+        "availableActions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ConnectorAvailableActionDto"
+          }
+        },
+        "connectionGeneration": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "definitionDigest": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "displayName": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "runtimeServerId": {
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/$defs/ConnectorConnectionStateDto"
+        }
+      },
+      "required": [
+        "id",
+        "displayName",
+        "description",
+        "runtimeServerId",
+        "definitionDigest",
+        "connectionGeneration",
+        "state",
+        "availableActions"
+      ]
+    },
+    "ConnectorListResult": {
+      "description": "Exact non-secret projection of the durable Connector authority.",
+      "type": "object",
+      "properties": {
+        "connectors": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ConnectorDto"
+          }
+        },
+        "generation": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "generation",
+        "connectors"
+      ]
+    },
+    "ConnectorSecretDto": {
+      "description": "Inbound-only API token that redacts diagnostics and clears its allocation on drop.",
+      "type": "string"
+    },
+    "ConnectorsChanged": {
+      "description": "Notification emitted after a committed Connector authority generation.",
+      "type": "object",
+      "properties": {
+        "generation": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "generation"
       ]
     },
     "ContentDigest": {
@@ -8872,6 +9274,9 @@
         "codeIndex": {
           "type": "boolean"
         },
+        "connectors": {
+          "type": "boolean"
+        },
         "documentCollaboration": {
           "type": "boolean"
         },
@@ -8924,7 +9329,8 @@
         "terminal",
         "typst",
         "updateReplay",
-        "extensions"
+        "extensions",
+        "connectors"
       ]
     },
     "ServerInfo": {
@@ -9033,6 +9439,22 @@
             },
             "params": {
               "$ref": "#/$defs/ConfigChanged"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "connector/changed"
+            },
+            "params": {
+              "$ref": "#/$defs/ConnectorsChanged"
             }
           },
           "required": [

@@ -4,14 +4,16 @@
 > `zeta_connectors`。
 > Plugin/discovery 集成：[`zeta-rs/ext/connectors/`](../zeta-rs/ext/connectors/README.md)。
 > Plugin 分发边界：[`plugins.md`](plugins.md)。MCP 调用边界：[`mcp.md`](mcp.md)。
-> 当前状态：Connector domain 与 Plugin catalog projection 已实现；认证、持久化 authority、App Server
-> API 和 ready binding runtime composition 尚未完成。
+> 当前状态：Connector domain、SQLite authority、API-token connect/disconnect、App Server 协议、
+> 注入式 ready MCP composition、model-safe-point registry replacement 与 in-flight dispatch drain 已实现。
+> Plugin activation、OAuth、生产 `SecretStore` backend 和产品 UI 尚未完成。
 
 ## 快速理解
 
-Connector 管理“外部服务是否已经连接以及连接对应哪个账号”；它位于 Plugin declaration 与 MCP
-runtime 之间。Connector 不要求用户登录 Zeta，连接的账号是 GitHub、Slack、Google Drive 等外部
-产品账号。
+Connector 管理“外部服务是否已经连接以及连接对应哪个账号”。在 Plugin 提供外部服务的
+常见路径中，Plugin 声明 Connector 和 MCP server，Connector 在认证成功后发布就绪的 MCP 绑定。
+这是 declaration 和 runtime 之间的数据流，不是 Plugin 在运行时包含 Connector、MCP session 或 Tool。
+Connector 不要求用户登录 Zeta，连接的账号是 GitHub、Slack、Google Drive 等外部产品账号。
 
 | 用户场景 | 系统发生什么 | 不会自动发生什么 |
 | --- | --- | --- |
@@ -20,25 +22,54 @@ runtime 之间。Connector 不要求用户登录 Zeta，连接的账号是 GitHu
 | 完成 GitHub OAuth | 认证 owner 保存 secret，并向 Connector 发布 non-secret account/reference | Connector 不读取 token bytes |
 | Connector 成为 connected | ready MCP binding 可以由 host materialize | 不绕过 MCP policy 或 Tool approval |
 | 用户断开 GitHub | connection generation 前进，ready binding 立即撤销 | 不删除 Plugin package 或 Thread 历史 |
+| 用户直接配置 MCP server | 经过配置、凭据和策略解析后直接进入 MCP runtime | 不必须伪造 Plugin 或 Connector |
 
 ## 1. 结论
 
 系统边界固定为：
 
-> Plugin 管扩展，Connector 管连接，MCP 管调用，Tool 是最终能力。
+> Plugin 管扩展分发，Connector 管外部账号连接，MCP 管协议会话与能力调用，Tool 是 Agent 最终消费的能力。
+
+| 对象 | 回答的核心问题 | 产出 | 不拥有 |
+| --- | --- | --- | --- |
+| Plugin | “要给 Zeta 分发和启用哪些扩展贡献？” | 带版本、摘要和来源的 contribution declaration | 外部账号、OAuth 状态、MCP session |
+| Connector | “这个外部产品连上了吗，连的是哪个账号？” | generation-bound connection state 和 ready runtime binding | Plugin package、secret bytes、MCP transport |
+| MCP | “如何与 capability server 建立会话并发现、调用能力？” | session、capability catalog、绑定和调用结果 | Plugin/Connector authority、每次 Tool approval |
+| Tool Registry / Core | “Agent 当前可以调用什么，这次调用是否允许？” | provider-independent Tool definition、approval 和 durable result | Plugin 安装、connect/OAuth lifecycle |
 
 ```mermaid
 flowchart TD
-    P["Plugin：安装和声明能力"] --> C["Connector：外部账号连接状态"]
-    C -->|"connected + credential reference"| B["Ready runtime binding"]
-    B --> M["MCP：session / list_tools / call_tool"]
-    M --> T["Tool Registry / Agent"]
+    subgraph P["Plugin package：声明控制面"]
+        PC["ConnectorContribution"]
+        PM["McpServerContribution"]
+        PO["Skill / static asset / other contributions"]
+    end
+
+    PC -. "references" .-> PM
+    PC --> CP["Connector definition + Plugin provenance"]
+    CP --> C["Connector runtime：account / state / generation"]
+    A["Auth adapter + Secrets owner"] -->|"account + credential reference"| C
+    C -->|"connected"| B["Ready MCP binding"]
     C -->|"disconnected"| D["Catalog discovery：Connect"]
+    PM -->|"standalone activation"| M["MCP runtime：session / list_tools / call_tool"]
+    PM --> B
+    U["User / Workspace MCP configuration"] --> M
+    B --> M
+    M --> T["Tool Registry / Core / Agent"]
+    PO --> O["Corresponding contribution consumer"]
 ```
 
-Plugin 可以没有 Connector；Connector 在 disconnected 状态下仍是合法产品对象；MCP 只有获得 ready
-binding 后才可启动。当前 binding 使用 MCP server declaration，但 Connector domain 不拥有 MCP
-transport/session。
+图中的连线表示合法的声明与运行时组合，不表示安装 Plugin 后会自动执行后续阶段。Plugin 可以没有
+Connector；Plugin 或 User/Workspace 也可以独立声明 MCP server。只有“该 MCP server 需要一个已连接的
+外部账号”时，才经过 Connector 路径；该路径只有在 connected 状态下才能发布 ready binding。
+当前 binding 使用 MCP server declaration，但 Connector domain 不拥有 MCP transport/session。
+
+### 1.1 关系是组合，不是运行时包含
+
+- Plugin 包可以同时声明 `ConnectorContribution` 和被它引用的 `McpServerContribution`，但 Plugin manager 只负责验证、分发和激活这些声明。
+- Connector runtime 消费 Connector declaration 并发布连接状态；OAuth/API-key 交互由认证 adapter 执行，secret bytes 由 Secrets owner 保存。
+- Ready binding 只是“已可以 materialize 哪个 runtime”的 generation-bound 描述，不是 live MCP session 或 Tool binding。
+- MCP runtime 消费 ready binding 或独立 MCP declaration，建立 session 并向统一 Tool Registry 贡献能力；Tool 不回归 Connector 或 Plugin 所有。
 
 ## 2. 所有权边界
 
@@ -56,28 +87,30 @@ adapter；不得成为 `ConnectorId`、connection generation 或本地 runtime r
 
 ## 3. 当前执行路径
 
-当前已经实现的路径是：
+当前 API-token 路径为：
 
-1. `PluginManifest` 校验 Connector 引用同包的 MCP contribution。
-2. `ConnectorCatalog::from_manifests` 转换为 backend-neutral `ConnectorDefinition`。
-3. `ConnectorSnapshot` 以独立 snapshot/connection generation 校验状态迁移。
-4. disconnected entry 投影为 catalog-only `Connect` candidate。
-5. connected entry 投影为 ready MCP server ID，不直接产生 tool binding。
+1. `ConnectorCatalog::from_packages` 把已校验 Plugin package 投影为带 package digest 的 `ConnectorDefinition`；仅持有 manifest 的调用方可使用较弱的 `from_manifests` 投影。
+2. App Server 通过 `connector/list` 返回不含 credential reference 的状态；`connector/connect/apiToken` 接收一次性 secret DTO。
+3. `ConnectorCredentialService` 先提交 `Connecting`，再把 token 写入 `SecretStore`，最后向 `ConnectorAuthority` 提交只含 account 与 opaque reference 的 `Connected`。
+4. SQLite authority 在一个事务中追加状态事件与 retry receipt；重复 command ID 只重放完全相同的请求。
+5. 本地 composition root 订阅 Config 与 Connector generation；ready entry 经 `ConnectorMcpRuntimeProvider` materialize 后替换 MCP tool port。
+6. 每个 Connector MCP call 在 prepare 和真正 dispatch 前复核 connector ID、connection generation 与 definition digest；disconnect 提交和 dispatch 使用同一 authority lock 线性化。
 
-尚未完成的生产路径是：
-
-```text
-App Server connect command
-  -> user confirmation / browser or API-key interaction
-  -> authentication adapter
-  -> zeta-secrets stores opaque bytes
-  -> durable Connector authority commits account + credential reference
-  -> ConnectorSnapshot publishes connected generation
-  -> host materializes ready declaration through zeta-mcp-extension
-  -> Tool Registry safe-point replacement
+```mermaid
+flowchart TD
+    API["connector/connect/apiToken"] --> B["BeginConnect receipt"]
+    B --> S["SecretStore::store"]
+    S --> C["CompleteConnect receipt"]
+    C --> N["connector/changed"]
+    N --> R["Config + Connector reconcile"]
+    R --> M["ConnectorMcpRuntimeProvider"]
+    M --> T["MCP Tool port"]
+    T --> F["live authority fence"]
+    D["connector/disconnect"] --> F
 ```
 
-上述未完成路径是 Proposed，不能从现有 catalog tests 推断为产品可用。
+OAuth browser/device flow、refresh/revoke provider adapter、生产钥匙串 backend、Plugin activation 自动注入
+和 Renderer/TUI 连接界面仍是 Proposed；当前代码不能把这些能力描述为已交付产品体验。
 
 ## 4. 身份、凭据与 generation
 
@@ -109,11 +142,16 @@ connection generation；任何状态变化都必须同时推进 snapshot generat
 | connection transition 与双 generation 防 stale | ✅ 已实现 |
 | Plugin manifest → Connector domain projection | ✅ 已实现 |
 | disconnected discovery / connected ready binding projection | ✅ 已实现 |
-| durable installed/connection authority | 尚未完成 |
-| OAuth/API-key connect、refresh、revoke | 尚未完成 |
-| `zeta-secrets` credential materialization | 尚未完成 |
-| App Server protocol、UI 与 interaction | 尚未完成 |
-| ready binding → `zeta-mcp-extension` live composition | 尚未完成 |
+| SQLite connection authority + exact retry receipts | ✅ 已实现 |
+| definition/package digest 变化触发 reauthorization | ✅ 重启恢复路径已实现；live Plugin activation 尚未完成 |
+| API-token connect/disconnect + local secret cleanup | ✅ 已实现 |
+| OAuth、refresh、远端 revoke | 尚未完成 |
+| `zeta-secrets` memory/unavailable backend | ✅ 已实现 |
+| 生产 OS keyring / explicit-file backend | 尚未完成 |
+| App Server list/connect/disconnect + changed notification | ✅ 已实现 |
+| Renderer/TUI UI 与 browser interaction | 尚未完成 |
+| ready binding → `zeta-mcp-extension` composition + dispatch fence | ✅ 已实现（host-injected provider） |
+| Plugin activation 自动构造 Connector/MCP runtime provider | 尚未完成 |
 
-下一阶段应先实现 durable Connector authority 和 typed connect/revoke App Server contract，再接认证
-adapter；只有 authority 能稳定发布 ready snapshot 后，才把它接入 MCP safe-point composition。
+下一阶段应由 Plugin activation 输出 exact package-rooted MCP materializer，并补生产 secret backend 与具体
+OAuth provider；它们复用现有 authority/App Server/MCP fence，不再创建第二套 Connector 状态机。
