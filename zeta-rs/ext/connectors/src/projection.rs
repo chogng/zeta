@@ -1,6 +1,15 @@
+use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::fmt;
 
+use zeta_connectors::ConnectorConnectionState;
+use zeta_connectors::ConnectorConnectionUpdate;
+use zeta_connectors::ConnectorDefinition;
+use zeta_connectors::ConnectorError;
+use zeta_connectors::ConnectorId;
+use zeta_connectors::ConnectorRuntimeBinding;
+use zeta_connectors::ConnectorSnapshot;
+use zeta_connectors::ConnectorSnapshotGeneration;
 use zeta_plugins::PluginId;
 use zeta_plugins::PluginManifest;
 use zeta_tools::CapabilityDiscoveryId;
@@ -10,129 +19,108 @@ use zeta_tools::DiscoverableConnectorInfo;
 use zeta_tools::DiscoveryAction;
 use zeta_tools::DiscoveryValueError;
 
-use crate::ConnectorBinding;
-use crate::ConnectorConnectionState;
-use crate::ConnectorId;
-use crate::ConnectorIdentityError;
-
-/// One connector declaration plus its independent account connection state.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ConnectorEntry {
-    pub id: ConnectorId,
-    pub display_name: String,
-    pub description: String,
-    pub provider_plugin: PluginId,
-    pub binding: ConnectorBinding,
-    pub state: ConnectorConnectionState,
-}
-
-/// Immutable generation-bound connector catalog.
+/// Plugin-projected Connector definitions plus their backend-neutral domain snapshot.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ConnectorCatalog {
-    generation: u64,
-    entries: Vec<ConnectorEntry>,
+    snapshot: ConnectorSnapshot,
+    provider_plugins: BTreeMap<ConnectorId, PluginId>,
 }
 
 impl ConnectorCatalog {
-    /// Projects validated Plugin connector metadata without connecting accounts or starting MCP.
+    /// Projects validated Plugin connector declarations without connecting accounts or starting MCP.
     pub fn from_manifests<'a>(
-        generation: u64,
+        generation: ConnectorSnapshotGeneration,
         manifests: impl IntoIterator<Item = &'a PluginManifest>,
     ) -> Result<Self, ConnectorCatalogError> {
-        let mut entries = manifests
-            .into_iter()
-            .flat_map(|manifest| {
-                manifest.contributions.connectors.iter().map(|connector| {
-                    let id =
-                        ConnectorId::new(format!("{}:connector:{}", manifest.id, connector.id));
-                    id.map(|id| ConnectorEntry {
-                        id,
-                        display_name: connector.display_name.clone(),
-                        description: connector.description.clone(),
-                        provider_plugin: manifest.id.clone(),
-                        binding: ConnectorBinding::McpServer {
-                            server_id: format!(
-                                "plugin:{}:mcp:{}",
-                                manifest.id, connector.mcp_server
-                            ),
-                        },
-                        state: ConnectorConnectionState::Disconnected,
-                    })
-                })
-            })
-            .collect::<Result<Vec<_>, ConnectorIdentityError>>()?;
-        entries.sort_by(|left, right| left.id.cmp(&right.id));
-        if entries
-            .windows(2)
-            .any(|window| window[0].id == window[1].id)
-        {
-            return Err(ConnectorCatalogError("duplicate connector identity".into()));
+        let mut definitions = Vec::new();
+        let mut provider_plugins = BTreeMap::new();
+        for manifest in manifests {
+            for connector in &manifest.contributions.connectors {
+                let id = ConnectorId::new(format!("{}:connector:{}", manifest.id, connector.id))?;
+                let definition = ConnectorDefinition::new(
+                    id.clone(),
+                    connector.display_name.clone(),
+                    connector.description.clone(),
+                    ConnectorRuntimeBinding::mcp_server(format!(
+                        "plugin:{}:mcp:{}",
+                        manifest.id, connector.mcp_server
+                    ))?,
+                )?;
+                definitions.push(definition);
+                if provider_plugins.insert(id, manifest.id.clone()).is_some() {
+                    return Err(ConnectorCatalogError(
+                        "duplicate Plugin connector identity".into(),
+                    ));
+                }
+            }
         }
         Ok(Self {
-            generation,
-            entries,
+            snapshot: ConnectorSnapshot::new(generation, definitions)?,
+            provider_plugins,
         })
     }
 
-    pub fn generation(&self) -> u64 {
-        self.generation
+    pub fn snapshot(&self) -> &ConnectorSnapshot {
+        &self.snapshot
     }
 
-    pub fn entries(&self) -> &[ConnectorEntry] {
-        &self.entries
+    pub fn provider_plugin(&self, id: &ConnectorId) -> Option<&PluginId> {
+        self.provider_plugins.get(id)
     }
 
-    /// Applies a host-authoritative connection state snapshot to one known connector.
-    pub fn with_state(
+    /// Applies a host-authoritative connection update to the backend-neutral snapshot.
+    pub fn with_connection_update(
         mut self,
+        generation: ConnectorSnapshotGeneration,
         id: &ConnectorId,
-        state: ConnectorConnectionState,
+        update: ConnectorConnectionUpdate,
     ) -> Result<Self, ConnectorCatalogError> {
-        let entry = self
-            .entries
-            .iter_mut()
-            .find(|entry| entry.id == *id)
-            .ok_or_else(|| ConnectorCatalogError("connector is not declared".into()))?;
-        entry.state = state;
+        self.snapshot = self
+            .snapshot
+            .with_connection_update(generation, id, update)?;
         Ok(self)
     }
 
-    /// Returns MCP server identities whose connector account authority is currently ready.
+    /// Returns MCP declaration identities whose Connector account is currently ready.
     pub fn ready_mcp_server_ids(&self) -> BTreeSet<&str> {
-        self.entries
-            .iter()
-            .filter(|entry| matches!(entry.state, ConnectorConnectionState::Connected(_)))
-            .map(|entry| match &entry.binding {
-                ConnectorBinding::McpServer { server_id } => server_id.as_str(),
-            })
+        self.snapshot
+            .ready_entries()
+            .map(|entry| entry.definition().runtime_binding().mcp_server_id())
             .collect()
     }
 
-    /// Projects only disconnected connectors into catalog discovery; ready connectors are tools.
+    /// Projects disconnected Connectors into catalog discovery without creating executable tools.
     pub fn discovery_snapshot(&self) -> Result<CapabilityDiscoverySnapshot, DiscoveryValueError> {
         let candidates = self
-            .entries
+            .snapshot
+            .entries()
             .iter()
-            .filter(|entry| matches!(entry.state, ConnectorConnectionState::Disconnected))
+            .filter(|entry| {
+                matches!(
+                    entry.connection().state(),
+                    ConnectorConnectionState::Disconnected
+                )
+            })
             .map(|entry| {
+                let definition = entry.definition();
                 DiscoverableCapability::Connector(DiscoverableConnectorInfo {
-                    id: CapabilityDiscoveryId::new(entry.id.to_string())
+                    id: CapabilityDiscoveryId::new(definition.id().to_string())
                         .expect("validated connector ID is non-empty"),
-                    display_name: entry.display_name.clone(),
-                    description: entry.description.clone(),
+                    display_name: definition.display_name().to_string(),
+                    description: definition.description().to_string(),
                     action: DiscoveryAction::Connect,
                 })
             })
             .collect();
-        CapabilityDiscoverySnapshot::new(self.generation, candidates)
+        CapabilityDiscoverySnapshot::new(self.snapshot.generation().get(), candidates)
     }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ConnectorCatalogError(String);
 
-impl From<ConnectorIdentityError> for ConnectorCatalogError {
-    fn from(error: ConnectorIdentityError) -> Self {
+impl From<ConnectorError> for ConnectorCatalogError {
+    fn from(error: ConnectorError) -> Self {
         Self(error.to_string())
     }
 }

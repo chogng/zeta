@@ -3,7 +3,7 @@
 > 计划物理位置：`zeta-rs/tools/`  
 > Rust crate：`zeta_tools`  
 > 当前状态：T1 主链完成，T2 MCP/dynamic 主链完成；MCP host runtime 已提取到 `ext/mcp`。T3 的
-> Tool Search、capability-bearing extension、Connector catalog/lifecycle、Plugin catalog projection 与
+> Tool Search、capability-bearing extension、Connector discovery projection、Plugin catalog projection 与
 > typed discovery request 已接入共享契约；`ext/web-search` 已提供默认关闭、宿主注入 backend 后才注册的
 > `web_search` 工具。Tool Call 已持久化 registry
 > generation、definition digest、source chain 与 direct/code-mode caller；Tool Result 已能持久化结构化
@@ -119,7 +119,8 @@ Core durable Tool Call / Tool Result lifecycle
 
 - dynamic owner 断连已经 fail closed，但还缺“持久化后重启恢复”的完整 App Server fixture；
 - Plugin/Connector 已有 catalog-only typed discovery，Plugin manifest 可声明一个 Connector 到其 MCP
-  contribution 的绑定，`zeta-connectors-extension` 已分离 account connection state 与 package/runtime identity；
+  contribution 的绑定；`zeta-connectors` 拥有 account connection state，`zeta-connectors-extension`
+  只拥有 Plugin/discovery/runtime-binding projection；
   local package store 也已落地。仍缺真正的 OAuth/connect/revoke authority、用户确认交互和 activation，
   不能用 executable registry 反向代替 package authority；
 - `zeta-web-search-extension` 已有 bounded request、executor、JSON HTTP backend 与 App Server opt-in 安装口；
@@ -1488,7 +1489,7 @@ mod tests;
 - ✅ `ReadOnlyToolContributor` 产出的 host extension executor 进入共享 registry/policy/runtime（当前包括统一的 `skills-read`）；
 - ✅ `CapabilityToolContributor` 冻结 exact network/credential scope，并通过普通一次性 approval 执行；
 - ✅ `ext/web-search` 提供 eager `web_search`、可注入 backend 和默认关闭门禁；
-- ✅ `ext/connectors` 分离 Connector account lifecycle、discovery projection 与 ready MCP binding；
+- ✅ `zeta-connectors` 分离 Connector account lifecycle，`ext/connectors` 提供 discovery 与 ready MCP binding projection；
 - ✅ enabled connector/MCP catalog 与 local/dynamic/extension port 做统一 collision check；
 - ✅ Plugin/Connector catalog-only discovery value、generation-bound snapshot 与 local Plugin projection；
 - ✅ typed install/enable/connect request 和通用 client capability filtering；

@@ -2,7 +2,8 @@
 
 > 本 README 是 Plugin manifest、identity、local package validation 与 discovery 的当前实现
 > 契约。跨 crate 的安装、activation、权限和运行时演进由
-> [`docs/plugins.md`](../../docs/plugins.md) 维护。
+> [`docs/plugins.md`](../../docs/plugins.md) 维护；Connector account/lifecycle 由
+> [`docs/connectors.md`](../../docs/connectors.md) 维护。
 
 `zeta-plugins` 当前完成 PL0，并实现 PL1 的第一段 package-store vertical slice：严格解析 declarative
 Plugin v1 package，验证 package-relative path 与本地文件树，计算确定性 SHA-256 digest，提供只读
@@ -34,7 +35,8 @@ programmatic mutation 后必须再次调用 `PluginManifest::validate`。
 
 - `schemaVersion == 1`；
 - Plugin version 使用 SemVer；
-- Skill、MCP server 和 asset 都有稳定 manifest-local ID；
+- Skill、MCP server、Connector 和 asset 都有稳定 manifest-local ID；
+- Connector 必须引用同一个 manifest 中已声明的 MCP server contribution；
 - permission 是 `process/workspace/network` tagged value；
 - network v1 只接受 exact lowercase DNS/IP host，不接受 scheme、port 或 wildcard；
 - credential slot 只能引用已声明的 `skill:<id>`、`mcp:<id>` 或 `asset:<id>`；

@@ -1,10 +1,14 @@
+use zeta_connectors::ConnectorAccount;
+use zeta_connectors::ConnectorAccountId;
+use zeta_connectors::ConnectorConnectionGeneration;
+use zeta_connectors::ConnectorConnectionUpdate;
+use zeta_connectors::ConnectorCredentialRef;
+use zeta_connectors::ConnectorSnapshotGeneration;
 use zeta_plugins::PluginManifest;
 use zeta_tools::DiscoverableCapability;
 use zeta_tools::DiscoveryAction;
 
-use crate::ConnectedAccount;
 use crate::ConnectorCatalog;
-use crate::ConnectorConnectionState;
 
 fn manifest() -> PluginManifest {
     PluginManifest::from_json(
@@ -31,7 +35,8 @@ fn manifest() -> PluginManifest {
 #[test]
 fn disconnected_connector_is_discoverable_but_not_runtime_ready() {
     let manifest = manifest();
-    let catalog = ConnectorCatalog::from_manifests(7, [&manifest]).unwrap();
+    let catalog =
+        ConnectorCatalog::from_manifests(ConnectorSnapshotGeneration::new(7), [&manifest]).unwrap();
     let snapshot = catalog.discovery_snapshot().unwrap();
 
     assert!(catalog.ready_mcp_server_ids().is_empty());
@@ -45,17 +50,31 @@ fn disconnected_connector_is_discoverable_but_not_runtime_ready() {
 #[test]
 fn connected_account_gates_its_mcp_binding_out_of_discovery() {
     let manifest = manifest();
-    let catalog = ConnectorCatalog::from_manifests(8, [&manifest]).unwrap();
-    let id = catalog.entries()[0].id.clone();
+    let catalog =
+        ConnectorCatalog::from_manifests(ConnectorSnapshotGeneration::new(8), [&manifest]).unwrap();
+    let id = catalog.snapshot().entries()[0].definition().id().clone();
+    let connection_generation = ConnectorConnectionGeneration::new(1);
     let catalog = catalog
-        .with_state(
+        .with_connection_update(
+            ConnectorSnapshotGeneration::new(9),
             &id,
-            ConnectorConnectionState::Connected(ConnectedAccount {
-                account_id: "octocat".into(),
-                display_name: "Octocat".into(),
-                credential_reference: "secret:github-octocat".into(),
-                connection_generation: 4,
-            }),
+            ConnectorConnectionUpdate::Begin {
+                generation: connection_generation,
+            },
+        )
+        .unwrap()
+        .with_connection_update(
+            ConnectorSnapshotGeneration::new(10),
+            &id,
+            ConnectorConnectionUpdate::Connected {
+                account: ConnectorAccount::new(
+                    ConnectorAccountId::new("octocat").unwrap(),
+                    "Octocat",
+                    ConnectorCredentialRef::new("secret:github-octocat").unwrap(),
+                    connection_generation,
+                )
+                .unwrap(),
+            },
         )
         .unwrap();
 

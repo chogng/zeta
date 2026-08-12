@@ -11,6 +11,7 @@
 > Tool shared contract 与纯转换：[`tools.md`](tools.md)
 > Config authority 与 runtime snapshot 接入：[`config.md`](config.md)
 > Plugin 分发边界：[`plugins.md`](plugins.md)
+> Connector account 与 ready binding：[`connectors.md`](connectors.md)
 > Skill 指令边界：[`skills.md`](skills.md)
 > 将 Zeta Agent 暴露为 MCP server：[`mcp-server.md`](mcp-server.md)
 

@@ -3,9 +3,11 @@
 > 物理位置：`zeta-rs/plugins/`
 > Rust crate：`zeta_plugins`
 > 当前状态：PL0 已实现并支持 Connector → MCP contribution 的声明校验；PL1 的 local
-> content-addressed store 已实现，authority/activation 尚未完成；Connector lifecycle projection 已提取到
-> `zeta-rs/ext/connectors`，OAuth/connect/revoke 仍未实现；PL2–PL4 Proposed
+> content-addressed store 已实现，authority/activation 尚未完成；Connector domain 已提取到
+> `zeta-rs/connectors`，Plugin projection 位于 `zeta-rs/ext/connectors`，OAuth/connect/revoke 仍未实现；
+> PL2–PL4 Proposed
 > 当前 crate 实现契约：[`zeta-rs/plugins/README.md`](../zeta-rs/plugins/README.md)
+> Connector account/lifecycle：[`connectors.md`](connectors.md)
 > MCP runtime：[`mcp.md`](mcp.md)
 > Skill runtime：[`skills.md`](skills.md)
 > Config authority 与 runtime snapshot 接入：[`config.md`](config.md)
@@ -543,10 +545,10 @@ server、内置 host adapter 或将来的其他稳定 port 实现；一个 Plugi
 MCP declaration 和展示 metadata，但二者 identity/lifecycle 仍然不同。
 
 当前 v1 manifest 已允许 `contributions.connectors[]` 用 manifest-local ID 引用同包的一个
-`mcpServers[]`。`zeta-connectors-extension::ConnectorCatalog` 将该声明投影为 disconnected discovery，
-只有 credential owner 提供 `ConnectedAccount` 后才发布 ready MCP server ID。这个纵向切片不执行
-OAuth、不保存 secret value，也不自行启动 MCP；后两项分别属于 Connector auth owner 与
-`zeta-mcp-extension`。
+`mcpServers[]`。`zeta-connectors-extension::ConnectorCatalog` 将声明转换为
+`zeta-connectors::ConnectorSnapshot`：disconnected entry 进入 discovery，只有认证 owner 通过合法
+generation transition 发布 `ConnectorAccount` 后才输出 ready MCP server ID。这个纵向切片不执行
+OAuth、不保存 secret value，也不自行启动 MCP；完整边界由 [`connectors.md`](connectors.md) 维护。
 
 | 概念 | Identity/lifecycle | 例子 |
 | --- | --- | --- |

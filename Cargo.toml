@@ -19,6 +19,7 @@ members = [
     "zeta-rs/bwrap",
     "zeta-code/cli",
     "zeta-rs/config",
+    "zeta-rs/connectors",
     "zeta-rs/context-engine",
     "zeta-rs/core",
     "zeta-rs/diff",
@@ -211,6 +212,7 @@ zeta-bwrap = { path = "zeta-rs/bwrap" }
 zeta-api = { path = "zeta-rs/zeta-api" }
 zeta-client = { path = "zeta-rs/zeta-client" }
 zeta-config = { path = "zeta-rs/config" }
+zeta-connectors = { path = "zeta-rs/connectors" }
 zeta-context-engine = { path = "zeta-rs/context-engine" }
 zeta-core = { path = "zeta-rs/core" }
 zeta-diff = { path = "zeta-rs/diff" }

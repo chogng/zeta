@@ -8456,10 +8456,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "zeta-connectors"
+version = "0.1.0"
+
+[[package]]
 name = "zeta-connectors-extension"
 version = "0.1.0"
 dependencies = [
  "serde_json",
+ "zeta-connectors",
  "zeta-plugins",
  "zeta-tools",
 ]

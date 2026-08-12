@@ -11,6 +11,7 @@ name = "zeta_connectors_extension"
 path = "src/lib.rs"
 
 [dependencies]
+zeta-connectors = { workspace = true }
 zeta-plugins = { workspace = true }
 zeta-tools = { workspace = true }
 
