@@ -3,8 +3,8 @@
 > 本 README 拥有云代码索引的 crate 内部 contract。两种部署选择、隐私边界和产品状态由
 > [`docs/code-index.md`](../../docs/code-index.md) canonical 维护；本地扫描、chunk identity 与
 > revision verification 见 [`zeta-code-index` README](../code-index/README.md)，候选融合与预算见
-> [`zeta-code-retrieval` README](../code-retrieval/README.md)，远端语义管线见
-> [`zeta-code-index-service` README](../code-index-service/README.md)。
+> [`zeta-code-retrieval` README](../code-retrieval/README.md)。本地语义编排见
+> [`zeta-code-index-semantic` README](../code-index-semantic/README.md)；具体远端语义服务不属于本仓库。
 
 ## 快速理解
 
@@ -146,8 +146,8 @@ bazel test //zeta-rs/code-index-cloud:code-index-cloud-unit-tests
   现有 local scan limits、grant byte ceiling 和未来的 streaming/batch contract 共同约束。
 - Current：本 crate 暴露 exact-generation provider query，要求云端返回 final relevance order 并校验返回边界；跨来源 candidate fusion、复核与预算由
   `zeta-code-retrieval` 拥有。
-- Current：`zeta-code-index-service` 已提供 provider-neutral embedding/vector recall/rerank/final-order
-  pipeline 和内存 reference store，但尚未通过网络 adapter 接到本 controller。
+- Current：本仓库不实现或部署远端 embedding/vector database/rerank service；concrete provider 应在
+  独立服务或 adapter 项目中完成，再通过本 crate 的 typed port 注入。
 - Current limitation：没有 concrete remote search adapter、production vector store、remote retention receipt 或用户可见
   deletion audit record。
 - Current limitation：controller 是单 root owner；Workspace switch 不隐式撤销 grant，inactive root

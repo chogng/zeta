@@ -8,10 +8,11 @@
 `Arc<dyn ModelInvoker>`。它选择 provider runtime 和 API profile；wire codec 属于 `zeta-api`，
 operation retry/framing 属于 `zeta-client`，socket/TLS/proxy 属于 `zeta-http-client`。
 
-当前 `EmbeddingInvoker` / `RerankInvoker` 已定义 canonical、有序、provider-neutral 调用契约；
-concrete provider codec 和 runtime resolver 尚未接入。本 crate 仍只拥有模型 API 选择、请求适配和执行。
+当前 `EmbeddingInvoker` / `RerankInvoker` 除 canonical、有序、provider-neutral 调用契约外，已接入
+OpenAI-compatible embedding/rerank wire codec、OpenAI/Ollama embedding runtime 和 exact provider
+config resolver。本 crate 仍只拥有模型 API 选择、credential materialization、请求适配和执行。
 它不决定代码如何切块、查询哪个向量索引、准备哪些 rerank 候选，也不拥有排序、过滤或截断
-策略；这些属于调用模型的 CodeIndex 服务。
+策略；本地 CodeIndex 的这些策略属于 `zeta-code-index-semantic`，远端托管索引则属于具体 provider。
 
 ## 公共契约
 
@@ -21,12 +22,14 @@ concrete provider codec 和 runtime resolver 尚未接入。本 crate 仍只拥�
 | `ModelProviderRuntime` | built-in concrete resolver | 持有 config registry + shared lazy operation client |
 | `ModelRuntimeRequest` | exact `ModelRef + ModelProviderConfig` | immutable selection request |
 | `ModelInvoker` | canonical `ModelRequest → ModelResponse` | one immutable provider/model snapshot |
+| `ModelInvoker::{input_token_measurement_capability,measure_input_with_cancellation}` | frozen request 的 tokenizer/preflight port | 与 invocation 相同 immutable snapshot |
 | `EmbeddingInvoker` | ordered text batch → finite equal-dimension vectors | one immutable embedding model snapshot |
 | `RerankInvoker` | query + ordered documents → ordered finite scores | one immutable rerank model snapshot |
+| `SemanticModelProvider` | exact model/config → embedding 或 rerank invoker | provider transport/credential boundary |
 | `Provider` | normalized provider runtime | definition、config、private adapter、client |
 | `UnavailableModel` | explicit failing invoker | host 无法配置 model 时 fail closed |
 | `EchoModel` | deterministic test/local fixture | 不是 production model |
-| `ModelProviderError` | config/model/API/unavailable error | 保留 failure domain |
+| `ModelProviderError` | config/model/API/credential/unavailable error | 保留 failure domain |
 
 App Server 应在每次 model invocation safe point 重新 resolve invoker；config update 影响下一次
 invocation，不原地修改已经运行的 `RegisteredModelInvoker`。
@@ -39,7 +42,7 @@ invocation，不原地修改已经运行的 `RegisteredModelInvoker`。
 | `LazyOperationClient` | private struct | 第一次 operation 才创建 production HTTP client，并缓存结果 | App Server 启动和 config inspection 不接触 TLS/proxy |
 | `Provider::instantiate` | crate-private | enforce definition/config ID equality，materialize adapter | 不读取 mutable config/credential store |
 | `providers::instantiate` | crate-private function | exhaustive `ProviderAdapter` enum dispatch | provider selection 唯一 switch |
-| `ProviderAdapter` | crate-private trait | protocol + complete against `OperationClient` | 不暴露给 Core/public config |
+| `ProviderAdapter` | crate-private trait | protocol + explicit token measurement capability + complete | 不按 model ID 或 URL 猜能力 |
 | `api_endpoint` | private function | `ApiProfile → zeta_api::ApiEndpoint` | 按 profile，不按 provider name 猜 |
 | provider `*Adapter::new` | crate-private | normalized base URL + fixed headers + endpoint | one immutable runtime snapshot |
 | `Provider::resolve_model` | private method | listed lookup 或 allow-unlisted synthetic model | 不做远端 catalog request |
@@ -71,6 +74,11 @@ RegisteredModelInvoker::invoke(request)
             ├─ first operation: build fallible production client
             └─ OperationClient
 ```
+
+`RegisteredModelInvoker::measure_input_with_cancellation` 复用同一个 `prepare_request`，因此 provider
+默认 `max_output_tokens` 与最终 invocation 一致；adapter 再把 canonical input 编成 count endpoint
+接受的 wire shape。OpenAI Responses 声明 remote/exact，Anthropic Messages 声明 remote/estimated；
+OpenAI-compatible、Google 当前兼容 profile 和其他未声明 adapter 一律返回 unavailable。
 
 `Provider::complete` 再次 resolve model，因此 direct Provider callers 与 bound invoker 使用相同
 catalog policy。
@@ -109,7 +117,7 @@ remote availability。`ListedOnly` 在任何 network call 前拒绝。
 - adapter 直接构造 ureq/reqwest client：network substrate/retry ownership 漂移；
 - `RegisteredModelInvoker` 读取 mutable config：safe-point snapshot 被破坏；
 - `EchoModel` 出现在 production fallback：配置失败被静默掩盖；
-- API/network layer 读取 secret store：credential lifecycle 下沉到错误层。
+- API codec/network layer 读取 secret store：credential materialization 必须停留在 provider runtime。
 
 ## 测试、限制与演进
 
@@ -122,12 +130,19 @@ bazel test //zeta-rs/model-provider:model-provider-unit-tests
 自定义端点、默认值、供应商不匹配、目录策略、固定标头、取消传播和默认 HTTP 传输；lazy client
 测试另外断言构造前不访问 transport、只初始化一次，并把初始化失败作为普通 transport error 返回。
 
-当前 completion `ModelInvoker` 已有 concrete provider adapters；embedding/rerank 已有 canonical invoker、
-request/response validation 和 CodeIndex service consumer，但尚无 concrete provider codec/runtime resolver。
+当前 completion `ModelInvoker` 已有 concrete provider adapters；embedding/rerank 已有 canonical
+invoker、request/response validation、OpenAI-compatible/Ollama runtime resolver，以及本地
+`zeta-code-index-semantic` 和 Tool Search consumers。
 当前 invocation 是同步 unary；
-credential materialization、subscription backend、streaming 与动态
-catalog 的长期设计仍在系统文档中演进。新增能力应保持 invoker immutable、profile explicit、
+OpenAI semantic adapter 可以从 host 注入的 `SecretStore` materialize API key；Ollama 与
+OpenAI-compatible semantic endpoint 当前按 unauthenticated endpoint 调用。持久化 secret backend、
+credential 设置 UI、subscription backend、streaming 与动态 catalog 的长期设计仍在系统文档中演进。
+新增能力应保持 invoker immutable、profile explicit、
 provider adapter private，以及 config/codec/operation/network 四层分离。
+
+当前 input-token preflight 已贯穿 `ModelInvoker → ProviderAdapter → zeta-api → OperationClient` 的
+caller-owned cancellation。Anthropic 的额外 1%/至少 32 tokens 只是 Zeta 的保守预算策略，不是
+provider 承诺的硬上界。本地 tokenizer registry 和 Google native `countTokens` codec 尚未实现。
 
 `RegisteredModelInvoker::invoke_with_cancellation` 把 caller token 逐层传给 private
 `ProviderAdapter::complete` 和 `OperationClient::execute_with_cancellation`。取消是独立的

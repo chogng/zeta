@@ -13,6 +13,7 @@ mod identity;
 mod mcp;
 mod output;
 mod protocol_adapter;
+mod registry;
 mod schema;
 
 pub use binding::ToolBinding;
@@ -23,7 +24,7 @@ pub use definition::{
 pub use dynamic::from_dynamic_tool_spec;
 pub use error::{
     DynamicToolAdapterError, McpToolAdapterError, ProtocolToolAdapterError, ToolDefinitionError,
-    ToolSchemaError,
+    ToolRegistryError, ToolSchemaError, ToolSearchError,
 };
 pub use execution::{
     ToolConcurrency, ToolConflictClass, ToolExecutionContext, ToolExecutionFuture,
@@ -36,7 +37,15 @@ pub use identity::{
 };
 pub use mcp::{McpOutputSchemaProjection, McpToolProjection, from_mcp_tool_projection};
 pub use output::{ToolContent, ToolOutput, ToolOutputStatus};
-pub use protocol_adapter::{to_protocol_tool_definition, to_protocol_tool_result};
+pub use protocol_adapter::{
+    from_protocol_tool_definition, to_protocol_tool_definition, to_protocol_tool_result,
+};
+pub use registry::{
+    LoadableToolSpec, RegisteredTool, TOOL_SEARCH_DEFAULT_LIMIT, TOOL_SEARCH_TOOL_NAME,
+    ToolRegistryBuilder, ToolRegistryRegistration, ToolRegistrySnapshot, ToolSearchDocument,
+    ToolSearchLimit, ToolSearchMatch, ToolSearchMetadata, ToolSearchQuery, ToolSearchQuerySyntax,
+    ToolSearchResult, ToolSearchScore,
+};
 pub use schema::{ToolInputSchema, ToolSchema, ToolSchemaDigest};
 pub use zeta_protocol::{ImageDetail, ToolCallId, ToolName};
 pub use zeta_protocol::{

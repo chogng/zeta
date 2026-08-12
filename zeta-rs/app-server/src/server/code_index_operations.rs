@@ -13,6 +13,8 @@ use zeta_app_server_protocol::protocol::code_index::CodeIndexSearchParams;
 use zeta_app_server_protocol::protocol::code_index::CodeIndexSearchResult;
 use zeta_app_server_protocol::protocol::code_index::CodeIndexStateDto;
 use zeta_app_server_protocol::protocol::code_index::CodeIndexStatusResult;
+use zeta_app_server_protocol::protocol::code_index::SemanticCodeIndexStateDto;
+use zeta_app_server_protocol::protocol::code_index::SemanticCodeIndexStatusDto;
 use zeta_app_server_protocol::protocol::common::EmptyParams;
 use zeta_app_server_protocol::protocol::error::AppServerErrorName;
 use zeta_code_index::CodeIndexError;
@@ -26,7 +28,7 @@ impl AppServer {
     pub(super) fn code_index_status(&self, params: &Value) -> Result<Value, RpcError> {
         let _: EmptyParams = decode(params)?;
         let runtime = self.code_index_service()?;
-        result(&project_status(&runtime))
+        result(&self.project_code_index_status(&runtime))
     }
 
     pub(super) fn code_index_search(&self, params: &Value) -> Result<Value, RpcError> {
@@ -43,7 +45,7 @@ impl AppServer {
             .map(project_hit)
             .collect();
         result(&CodeIndexSearchResult {
-            status: project_status(&runtime),
+            status: self.project_code_index_status(&runtime),
             hits,
         })
     }
@@ -52,7 +54,77 @@ impl AppServer {
         let _: EmptyParams = decode(params)?;
         let runtime = self.code_index_service()?;
         runtime.rebuild().map_err(code_index_error)?;
-        result(&project_status(&runtime))
+        if let Some(job) = self.code_index_semantic_job() {
+            job.schedule();
+        }
+        result(&self.project_code_index_status(&runtime))
+    }
+
+    pub(super) fn semantic_code_index_cancel(&self, params: &Value) -> Result<Value, RpcError> {
+        let _: EmptyParams = decode(params)?;
+        if let Some(job) = self.code_index_semantic_job() {
+            job.cancel();
+        }
+        let runtime = self.code_index_service()?;
+        result(&self.project_code_index_status(&runtime))
+    }
+
+    pub(super) fn semantic_code_index_retry(&self, params: &Value) -> Result<Value, RpcError> {
+        let _: EmptyParams = decode(params)?;
+        if let Some(job) = self.code_index_semantic_job() {
+            job.schedule();
+        }
+        let runtime = self.code_index_service()?;
+        result(&self.project_code_index_status(&runtime))
+    }
+
+    pub(super) fn project_code_index_status(
+        &self,
+        runtime: &CodeIndexRuntime,
+    ) -> CodeIndexStatusResult {
+        let mut status = project_status(runtime);
+        status.semantic =
+            self.code_index_semantic_job()
+                .map_or_else(unavailable_semantic_status, |job| {
+                    let snapshot = job.snapshot();
+                    SemanticCodeIndexStatusDto {
+                        state: match snapshot.state {
+                            super::semantic_index_job::SemanticIndexJobState::Idle => {
+                                SemanticCodeIndexStateDto::Idle
+                            }
+                            super::semantic_index_job::SemanticIndexJobState::Syncing => {
+                                SemanticCodeIndexStateDto::Syncing
+                            }
+                            super::semantic_index_job::SemanticIndexJobState::Ready => {
+                                SemanticCodeIndexStateDto::Ready
+                            }
+                            super::semantic_index_job::SemanticIndexJobState::Stale => {
+                                SemanticCodeIndexStateDto::Stale
+                            }
+                            super::semantic_index_job::SemanticIndexJobState::Cancelled => {
+                                SemanticCodeIndexStateDto::Cancelled
+                            }
+                            super::semantic_index_job::SemanticIndexJobState::Failed => {
+                                SemanticCodeIndexStateDto::Failed
+                            }
+                        },
+                        operation_id: snapshot.operation_id,
+                        target_generation: snapshot.target_generation,
+                        published_generation: snapshot.published_generation,
+                        phase: snapshot
+                            .phase
+                            .map(|phase| format!("{phase:?}").to_lowercase()),
+                        total_chunk_count: snapshot.total_chunk_count,
+                        processed_chunk_count: snapshot.processed_chunk_count,
+                        reused_embedding_count: snapshot.reused_embedding_count,
+                        embedded_chunk_count: snapshot.embedded_chunk_count,
+                        completed_batch_count: snapshot.completed_batch_count,
+                        total_batch_count: snapshot.total_batch_count,
+                        retry_count: snapshot.retry_count,
+                        last_error_code: snapshot.last_error_code.map(str::to_owned),
+                    }
+                });
+        status
     }
 }
 
@@ -83,6 +155,25 @@ fn project_snapshot(
         truncated_file_count: snapshot.map_or(0, |snapshot| snapshot.truncated_file_count),
         file_limit_hit: snapshot.is_some_and(|snapshot| snapshot.file_limit_hit),
         source_bytes_limit_hit: snapshot.is_some_and(|snapshot| snapshot.source_bytes_limit_hit),
+        semantic: unavailable_semantic_status(),
+    }
+}
+
+fn unavailable_semantic_status() -> SemanticCodeIndexStatusDto {
+    SemanticCodeIndexStatusDto {
+        state: SemanticCodeIndexStateDto::Unavailable,
+        operation_id: None,
+        target_generation: 0,
+        published_generation: None,
+        phase: None,
+        total_chunk_count: 0,
+        processed_chunk_count: 0,
+        reused_embedding_count: 0,
+        embedded_chunk_count: 0,
+        completed_batch_count: 0,
+        total_batch_count: 0,
+        retry_count: 0,
+        last_error_code: None,
     }
 }
 

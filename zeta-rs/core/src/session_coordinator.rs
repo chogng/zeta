@@ -1,7 +1,7 @@
 use crate::{
-    CoreError, CreateThreadRequest, LeaseGuard, SessionCommandResult, SessionSnapshot,
-    StartShellTurnRequest, StartTurnRequest, StartTurnResult, ThreadController, WriterLease,
-    reduce_session_event,
+    CoreError, CreateAgentThreadRequest, CreateThreadRequest, LeaseGuard, SessionCommandResult,
+    SessionSnapshot, StartShellTurnRequest, StartTurnRequest, StartTurnResult, ThreadController,
+    WriterLease, reduce_session_event,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -17,6 +17,10 @@ use zeta_session_store::{
     SessionEventBatch, SessionEventId, SessionStore, SessionStoreError, SessionTimestamp,
     StoredSessionEvent, validate_session_append_batch,
 };
+
+mod agent_spawn;
+
+pub use agent_spawn::SpawnAgentThreadRequest;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SequenceExpectation {
@@ -620,6 +624,7 @@ impl SessionCoordinator {
         }
         let title = planned.title.clone();
         let origin = planned.membership.origin.clone();
+        let agent_context_seed = planned.agent_context_seed.clone();
         match origin {
             ThreadOrigin::Rewind {
                 parent_thread_id,
@@ -634,7 +639,22 @@ impl SessionCoordinator {
                     source_thread_id: parent_thread_id,
                     before_turn_id,
                 })?,
+            ThreadOrigin::AgentSpawn { .. } => {
+                self.threads.create_agent_thread(CreateAgentThreadRequest {
+                    session_id: snapshot.session_id.clone(),
+                    thread_id: thread_id.clone(),
+                    title,
+                    context_seed: agent_context_seed.ok_or_else(|| {
+                        CoreError::Journal("Agent child Thread is missing its context seed".into())
+                    })?,
+                })?
+            }
             ThreadOrigin::Root | ThreadOrigin::Fork { .. } => {
+                if agent_context_seed.is_some() {
+                    return Err(CoreError::Journal(
+                        "ordinary Thread cannot carry an Agent context seed".into(),
+                    ));
+                }
                 self.threads.create_thread(CreateThreadRequest {
                     session_id: snapshot.session_id.clone(),
                     thread_id: thread_id.clone(),

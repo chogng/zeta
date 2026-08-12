@@ -115,10 +115,326 @@
         "decision"
       ]
     },
+    "AgentContextContent": {
+      "description": "Provider-independent content copied from one immutable source into a child seed.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "userText"
+            }
+          },
+          "required": [
+            "type",
+            "text"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "userImage"
+            },
+            "url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "url"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "assistantText"
+            }
+          },
+          "required": [
+            "type",
+            "text"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "reasoning"
+            }
+          },
+          "required": [
+            "type",
+            "text"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "plan"
+            }
+          },
+          "required": [
+            "type",
+            "text"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "argumentsJson": {
+              "type": "string"
+            },
+            "name": {
+              "$ref": "#/$defs/ToolName"
+            },
+            "type": {
+              "type": "string",
+              "const": "toolCall"
+            }
+          },
+          "required": [
+            "type",
+            "name",
+            "argumentsJson"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "isError": {
+              "type": "boolean"
+            },
+            "text": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "toolResult"
+            }
+          },
+          "required": [
+            "type",
+            "text",
+            "isError"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "summary": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "checkpoint"
+            }
+          },
+          "required": [
+            "type",
+            "summary"
+          ]
+        }
+      ]
+    },
+    "AgentContextMode": {
+      "description": "Explicit context inheritance selected for one child Agent.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "fresh"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "sources": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/AgentContextSource"
+              }
+            },
+            "type": {
+              "type": "string",
+              "const": "selected"
+            }
+          },
+          "required": [
+            "type",
+            "sources"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "selection": {
+              "$ref": "#/$defs/ForkedAgentContext"
+            },
+            "type": {
+              "type": "string",
+              "const": "forkedPrefix"
+            }
+          },
+          "required": [
+            "type",
+            "selection"
+          ]
+        }
+      ]
+    },
+    "AgentContextSeed": {
+      "description": "Durable, verifiable input captured before the first child Turn starts.",
+      "type": "object",
+      "properties": {
+        "capabilityScope": {
+          "$ref": "#/$defs/DelegatedCapabilityScope"
+        },
+        "delegationId": {
+          "$ref": "#/$defs/DelegationId"
+        },
+        "digest": {
+          "type": "string"
+        },
+        "inheritance": {
+          "$ref": "#/$defs/AgentContextMode"
+        },
+        "materializedContext": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AgentMaterializedContext"
+          }
+        },
+        "parentSequence": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "parentThreadId": {
+          "$ref": "#/$defs/ThreadId"
+        },
+        "parentTurnId": {
+          "$ref": "#/$defs/TurnId"
+        },
+        "policyCeiling": {
+          "$ref": "#/$defs/DelegatedPolicyCeiling"
+        },
+        "role": {
+          "$ref": "#/$defs/AgentRoleSnapshot"
+        },
+        "task": {
+          "$ref": "#/$defs/DelegatedTask"
+        }
+      },
+      "required": [
+        "delegationId",
+        "parentThreadId",
+        "parentTurnId",
+        "parentSequence",
+        "task",
+        "role",
+        "inheritance",
+        "policyCeiling",
+        "capabilityScope",
+        "digest"
+      ]
+    },
+    "AgentContextSource": {
+      "description": "One immutable source selected from a fixed sequence of another Thread.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "itemId": {
+              "$ref": "#/$defs/ItemId"
+            },
+            "sourceSequence": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "sourceThreadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "type": {
+              "type": "string",
+              "const": "item"
+            }
+          },
+          "required": [
+            "type",
+            "sourceThreadId",
+            "sourceSequence",
+            "itemId"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "checkpointId": {
+              "$ref": "#/$defs/ContextCheckpointId"
+            },
+            "sourceSequence": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "sourceThreadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "type": {
+              "type": "string",
+              "const": "checkpoint"
+            }
+          },
+          "required": [
+            "type",
+            "sourceThreadId",
+            "sourceSequence",
+            "checkpointId"
+          ]
+        }
+      ]
+    },
     "AgentInteractionCapability": {
       "description": "Agent interaction kinds that one client connection can present and resolve.\n\nApp Server uses this declaration only for ephemeral owner selection. It never persists the\nconnection capability in Session or Thread state, and clients must still subscribe to the\ntarget Thread before they can become an interaction owner.",
       "type": "object",
       "properties": {
+        "dynamicTools": {
+          "description": "Exact client-hosted dynamic tool names this connection can execute.\n\nThis is ephemeral routing authority, not an executable registration. App Server still\naccepts and validates definitions through its composition root.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/$defs/ToolName"
+          }
+        },
         "kinds": {
           "type": "array",
           "items": {
@@ -142,6 +458,238 @@
         "approval",
         "userInput",
         "dynamicTool"
+      ]
+    },
+    "AgentJoin": {
+      "description": "Frozen target set and current durable outcome for one Agent join.",
+      "type": "object",
+      "properties": {
+        "delegations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DelegationId"
+          }
+        },
+        "joinId": {
+          "$ref": "#/$defs/AgentJoinId"
+        },
+        "parentThreadId": {
+          "$ref": "#/$defs/ThreadId"
+        },
+        "policy": {
+          "$ref": "#/$defs/AgentJoinPolicy"
+        },
+        "satisfiedBy": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DelegationId"
+          }
+        },
+        "status": {
+          "$ref": "#/$defs/AgentJoinStatus"
+        }
+      },
+      "required": [
+        "joinId",
+        "parentThreadId",
+        "policy",
+        "delegations",
+        "status",
+        "satisfiedBy"
+      ]
+    },
+    "AgentJoinId": {
+      "description": "Stable identity for one durable parent-side Agent join.",
+      "type": "string",
+      "minLength": 1
+    },
+    "AgentJoinPolicy": {
+      "description": "Durable join condition evaluated from delegation terminal facts.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "all"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "any"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "count": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            },
+            "type": {
+              "type": "string",
+              "const": "quorum"
+            }
+          },
+          "required": [
+            "type",
+            "count"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "delegations": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/DelegationId"
+              }
+            },
+            "type": {
+              "type": "string",
+              "const": "explicit"
+            }
+          },
+          "required": [
+            "type",
+            "delegations"
+          ]
+        }
+      ]
+    },
+    "AgentJoinStatus": {
+      "description": "Durable lifecycle of one parent-side Agent join.",
+      "type": "string",
+      "enum": [
+        "waiting",
+        "satisfied"
+      ]
+    },
+    "AgentMaterializedContext": {
+      "description": "One verified source value materialized before the child Thread is allowed to run.",
+      "type": "object",
+      "properties": {
+        "content": {
+          "$ref": "#/$defs/AgentContextContent"
+        },
+        "contentDigest": {
+          "$ref": "#/$defs/ContentDigest"
+        },
+        "source": {
+          "$ref": "#/$defs/AgentContextSource"
+        }
+      },
+      "required": [
+        "source",
+        "content",
+        "contentDigest"
+      ]
+    },
+    "AgentMessage": {
+      "description": "Durable cross-Thread message with stable delivery and provenance identity.",
+      "type": "object",
+      "properties": {
+        "content": {
+          "$ref": "#/$defs/AgentMessageContent"
+        },
+        "delegationId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DelegationId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "messageId": {
+          "$ref": "#/$defs/AgentMessageId"
+        },
+        "provenance": {
+          "$ref": "#/$defs/AgentMessageProvenance"
+        },
+        "receiverThreadId": {
+          "$ref": "#/$defs/ThreadId"
+        },
+        "senderSequence": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "senderThreadId": {
+          "$ref": "#/$defs/ThreadId"
+        }
+      },
+      "required": [
+        "messageId",
+        "senderThreadId",
+        "receiverThreadId",
+        "senderSequence",
+        "content",
+        "provenance"
+      ]
+    },
+    "AgentMessageContent": {
+      "description": "Bounded payload sent between independently ordered Agent Threads.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "instruction"
+            }
+          },
+          "required": [
+            "type",
+            "text"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "result": {
+              "$ref": "#/$defs/DelegationResult"
+            },
+            "type": {
+              "type": "string",
+              "const": "result"
+            }
+          },
+          "required": [
+            "type",
+            "result"
+          ]
+        }
+      ]
+    },
+    "AgentMessageId": {
+      "description": "Stable identity used to deduplicate one cross-Thread Agent message.",
+      "type": "string",
+      "minLength": 1
+    },
+    "AgentMessageProvenance": {
+      "description": "Provenance class for one durable cross-Thread Agent message.",
+      "type": "string",
+      "enum": [
+        "agent",
+        "user",
+        "system"
       ]
     },
     "AgentRequest": {
@@ -272,6 +820,32 @@
         }
       ]
     },
+    "AgentRoleSnapshot": {
+      "description": "Frozen Agent role instructions selected before a child Thread is created.",
+      "type": "object",
+      "properties": {
+        "instructions": {
+          "type": "string"
+        },
+        "model": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "instructions"
+      ]
+    },
     "AppServerError": {
       "type": "object",
       "properties": {
@@ -341,6 +915,7 @@
         "TerminalOperationFailed",
         "ConfigUnavailable",
         "ConfigRevisionConflict",
+        "ToolSearchUnavailable",
         "SkillsUnavailable",
         "SkillOperationFailed",
         "SkillNotFound",
@@ -743,6 +1318,70 @@
             },
             "params": {
               "$ref": "#/$defs/ConfigUpdateParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "toolSearch/configure"
+            },
+            "params": {
+              "$ref": "#/$defs/ToolSearchConfigureParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "workspace/codeIndex/semantic/configure"
+            },
+            "params": {
+              "$ref": "#/$defs/SemanticCodeIndexConfigureParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "workspace/codeIndex/semantic/authorize"
+            },
+            "params": {
+              "$ref": "#/$defs/SemanticCodeIndexAuthorizeParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "workspace/codeIndex/semantic/revoke"
+            },
+            "params": {
+              "$ref": "#/$defs/SemanticCodeIndexRevokeParams"
             }
           },
           "required": [
@@ -1555,6 +2194,38 @@
           "properties": {
             "method": {
               "type": "string",
+              "const": "workspace/codeIndex/semantic/cancel"
+            },
+            "params": {
+              "$ref": "#/$defs/EmptyParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "workspace/codeIndex/semantic/retry"
+            },
+            "params": {
+              "$ref": "#/$defs/EmptyParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
               "const": "workspace/codeIndex/cloud/status"
             },
             "params": {
@@ -2008,6 +2679,70 @@
             "method": {
               "type": "string",
               "const": "config/update"
+            },
+            "result": {
+              "$ref": "#/$defs/ConfigCommandResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "toolSearch/configure"
+            },
+            "result": {
+              "$ref": "#/$defs/ConfigCommandResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "workspace/codeIndex/semantic/configure"
+            },
+            "result": {
+              "$ref": "#/$defs/ConfigCommandResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "workspace/codeIndex/semantic/authorize"
+            },
+            "result": {
+              "$ref": "#/$defs/ConfigCommandResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "workspace/codeIndex/semantic/revoke"
             },
             "result": {
               "$ref": "#/$defs/ConfigCommandResult"
@@ -2823,6 +3558,38 @@
           "properties": {
             "method": {
               "type": "string",
+              "const": "workspace/codeIndex/semantic/cancel"
+            },
+            "result": {
+              "$ref": "#/$defs/CodeIndexStatusResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "workspace/codeIndex/semantic/retry"
+            },
+            "result": {
+              "$ref": "#/$defs/CodeIndexStatusResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
               "const": "workspace/codeIndex/cloud/status"
             },
             "result": {
@@ -3381,6 +4148,9 @@
         "rootId": {
           "type": "string"
         },
+        "semantic": {
+          "$ref": "#/$defs/SemanticCodeIndexStatusDto"
+        },
         "skippedFileCount": {
           "type": "integer",
           "format": "uint",
@@ -3408,12 +4178,25 @@
         "skippedFileCount",
         "truncatedFileCount",
         "fileLimitHit",
-        "sourceBytesLimitHit"
+        "sourceBytesLimitHit",
+        "semantic"
       ]
     },
     "CodeRetrievalDegradationDto": {
       "description": "Non-fatal loss reported while preserving usable retrieval results.",
       "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "localSemanticQueryFailed"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
         {
           "type": "object",
           "properties": {
@@ -3513,6 +4296,7 @@
       "type": "string",
       "enum": [
         "localLexical",
+        "localSemantic",
         "cloudSemantic"
       ]
     },
@@ -3676,11 +4460,17 @@
           "format": "uint64",
           "minimum": 0
         },
+        "semanticCodeIndex": {
+          "$ref": "#/$defs/SemanticCodeIndexConfigDto"
+        },
         "skillSources": {
           "type": "object",
           "additionalProperties": {
             "$ref": "#/$defs/SkillSourceConfigDto"
           }
+        },
+        "toolSearch": {
+          "$ref": "#/$defs/ToolSearchConfigDto"
         }
       },
       "required": [
@@ -3692,7 +4482,9 @@
         "skillSources",
         "pluginRequests",
         "hooks",
-        "languageServers"
+        "languageServers",
+        "toolSearch",
+        "semanticCodeIndex"
       ]
     },
     "ConfigUpdateParams": {
@@ -3837,6 +4629,136 @@
       "required": [
         "startSequence",
         "endSequence"
+      ]
+    },
+    "DelegatedCapabilityScope": {
+      "description": "Frozen upper bound on the tools and Skill instructions visible to a child Agent.",
+      "type": "object",
+      "properties": {
+        "skills": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FrozenSkillActivation"
+          }
+        },
+        "tools": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ToolName"
+          }
+        }
+      },
+      "required": [
+        "tools",
+        "skills"
+      ]
+    },
+    "DelegatedPolicyCeiling": {
+      "description": "Policy revision ceiling delegated by a parent to a child Agent.",
+      "type": "object",
+      "properties": {
+        "policyRevision": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "policyRevision"
+      ]
+    },
+    "DelegatedTask": {
+      "description": "Immutable task text captured when a parent delegates work to a child Agent.",
+      "type": "object",
+      "properties": {
+        "instructions": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "title",
+        "instructions"
+      ]
+    },
+    "DelegationArtifactRef": {
+      "description": "Artifact reference returned by a child without embedding artifact bytes in Thread history.",
+      "type": "object",
+      "properties": {
+        "contentDigest": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ContentDigest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "uri": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "uri"
+      ]
+    },
+    "DelegationId": {
+      "description": "Stable identity for one parent-to-child Agent delegation.",
+      "type": "string",
+      "minLength": 1
+    },
+    "DelegationResult": {
+      "description": "Bounded terminal result delivered from one child Thread to its parent.",
+      "type": "object",
+      "properties": {
+        "artifacts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DelegationArtifactRef"
+          }
+        },
+        "childThreadId": {
+          "$ref": "#/$defs/ThreadId"
+        },
+        "delegationId": {
+          "$ref": "#/$defs/DelegationId"
+        },
+        "digest": {
+          "type": "string"
+        },
+        "sourceRange": {
+          "$ref": "#/$defs/ThreadSequenceRange"
+        },
+        "status": {
+          "$ref": "#/$defs/DelegationResultStatus"
+        },
+        "summary": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "delegationId",
+        "childThreadId",
+        "status",
+        "summary",
+        "artifacts",
+        "sourceRange",
+        "digest"
+      ]
+    },
+    "DelegationResultStatus": {
+      "description": "Stable terminal outcome for a child Agent delegation.",
+      "type": "string",
+      "enum": [
+        "completed",
+        "failed",
+        "cancelled",
+        "policyDenied",
+        "capacityRejected",
+        "contextSeedInvalid",
+        "deliveryFailed",
+        "unknownOutcome"
       ]
     },
     "DiffComputeParams": {
@@ -4302,6 +5224,10 @@
         "callId": {
           "$ref": "#/$defs/ToolCallId"
         },
+        "definitionDigest": {
+          "description": "Digest of the exact model-visible definition that produced this call.\n\nInteraction owners must echo results only for this frozen definition. This prevents a\nsame-name tool installed after a restart or hot reload from claiming an older invocation.",
+          "type": "string"
+        },
         "name": {
           "$ref": "#/$defs/ToolName"
         }
@@ -4309,6 +5235,7 @@
       "required": [
         "callId",
         "name",
+        "definitionDigest",
         "arguments"
       ]
     },
@@ -4523,6 +5450,53 @@
       "enum": [
         "builtIn",
         "user"
+      ]
+    },
+    "ForkedAgentContext": {
+      "description": "Selection policy for inheriting a fixed prefix of parent Thread history.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "full"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "count": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            },
+            "type": {
+              "type": "string",
+              "const": "lastTurns"
+            }
+          },
+          "required": [
+            "type",
+            "count"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "checkpointAndTail"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        }
       ]
     },
     "FrozenSkillActivation": {
@@ -6503,6 +7477,252 @@
     "SchemaHash": {
       "type": "string"
     },
+    "SemanticCodeIndexAuthorizeParams": {
+      "description": "Authorizes the exact active Workspace and current model pair to send source-derived text.",
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision"
+      ]
+    },
+    "SemanticCodeIndexAutomaticContextDto": {
+      "description": "Whether verified code evidence is automatically attached to an Agent Turn.",
+      "type": "string",
+      "enum": [
+        "off",
+        "firstInvocation"
+      ]
+    },
+    "SemanticCodeIndexConfigDto": {
+      "description": "Current authorization state for the active Workspace and configured semantic model pair.",
+      "type": "object",
+      "properties": {
+        "activeWorkspaceAuthorized": {
+          "type": "boolean"
+        },
+        "automaticContext": {
+          "$ref": "#/$defs/SemanticCodeIndexAutomaticContextDto"
+        },
+        "selection": {
+          "$ref": "#/$defs/SemanticCodeIndexSelectionDto"
+        }
+      },
+      "required": [
+        "selection",
+        "automaticContext",
+        "activeWorkspaceAuthorized"
+      ]
+    },
+    "SemanticCodeIndexConfigureParams": {
+      "description": "Replaces semantic model selection and revokes all previous source-egress grants when it changes.",
+      "type": "object",
+      "properties": {
+        "automaticContext": {
+          "$ref": "#/$defs/SemanticCodeIndexAutomaticContextDto",
+          "default": "off"
+        },
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "selection": {
+          "$ref": "#/$defs/SemanticCodeIndexSelectionDto"
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision",
+        "selection"
+      ]
+    },
+    "SemanticCodeIndexModelsDto": {
+      "description": "Model pair used by Zeta's local semantic code-index orchestration.",
+      "type": "object",
+      "properties": {
+        "embeddingModel": {
+          "$ref": "#/$defs/ModelRefDto"
+        },
+        "rerankModel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelRefDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "embeddingModel"
+      ]
+    },
+    "SemanticCodeIndexRevokeParams": {
+      "description": "Revokes source egress for the active Workspace and deletes its local semantic projection.",
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision"
+      ]
+    },
+    "SemanticCodeIndexSelectionDto": {
+      "description": "Product selection for semantic code indexing. Remote is explicit because it can send bounded\ncode chunks and queries to the selected model provider after Workspace authorization.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "disabled"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "models": {
+              "$ref": "#/$defs/SemanticCodeIndexModelsDto"
+            },
+            "type": {
+              "type": "string",
+              "const": "remote"
+            }
+          },
+          "required": [
+            "type",
+            "models"
+          ]
+        }
+      ]
+    },
+    "SemanticCodeIndexStateDto": {
+      "description": "Lifecycle state of the local semantic projection for the active Workspace.",
+      "type": "string",
+      "enum": [
+        "unavailable",
+        "idle",
+        "syncing",
+        "ready",
+        "stale",
+        "cancelled",
+        "failed"
+      ]
+    },
+    "SemanticCodeIndexStatusDto": {
+      "description": "Content-free progress for a semantic projection built from the lexical generation.",
+      "type": "object",
+      "properties": {
+        "completedBatchCount": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "embeddedChunkCount": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "lastErrorCode": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "operationId": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "phase": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "processedChunkCount": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "publishedGeneration": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "retryCount": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "reusedEmbeddingCount": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "state": {
+          "$ref": "#/$defs/SemanticCodeIndexStateDto"
+        },
+        "targetGeneration": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "totalBatchCount": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "totalChunkCount": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "state",
+        "targetGeneration",
+        "totalChunkCount",
+        "processedChunkCount",
+        "reusedEmbeddingCount",
+        "embeddedChunkCount",
+        "completedBatchCount",
+        "totalBatchCount",
+        "retryCount"
+      ]
+    },
     "ServerCapabilities": {
       "type": "object",
       "properties": {
@@ -6866,6 +8086,34 @@
             "sessionId",
             "thread",
             "title"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "contextSeed": {
+              "$ref": "#/$defs/AgentContextSeed"
+            },
+            "sessionId": {
+              "$ref": "#/$defs/SessionId"
+            },
+            "thread": {
+              "$ref": "#/$defs/SessionThread"
+            },
+            "title": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "agentThreadCreationPlanned"
+            }
+          },
+          "required": [
+            "type",
+            "sessionId",
+            "thread",
+            "title",
+            "contextSeed"
           ]
         },
         {
@@ -8701,6 +9949,26 @@
         {
           "type": "object",
           "properties": {
+            "seed": {
+              "$ref": "#/$defs/AgentContextSeed"
+            },
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "type": {
+              "type": "string",
+              "const": "agentContextSeedCommitted"
+            }
+          },
+          "required": [
+            "type",
+            "threadId",
+            "seed"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
             "beforeTurnId": {
               "$ref": "#/$defs/TurnId"
             },
@@ -9073,6 +10341,221 @@
             "threadId",
             "turnId"
           ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "seed": {
+              "$ref": "#/$defs/AgentContextSeed"
+            },
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "type": {
+              "type": "string",
+              "const": "delegationRequested"
+            }
+          },
+          "required": [
+            "type",
+            "threadId",
+            "seed"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "childThreadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "delegationId": {
+              "$ref": "#/$defs/DelegationId"
+            },
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "type": {
+              "type": "string",
+              "const": "delegationStarted"
+            }
+          },
+          "required": [
+            "type",
+            "threadId",
+            "delegationId",
+            "childThreadId"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "delegationId": {
+              "$ref": "#/$defs/DelegationId"
+            },
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "type": {
+              "type": "string",
+              "const": "delegationCancellationRequested"
+            }
+          },
+          "required": [
+            "type",
+            "threadId",
+            "delegationId"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "delegationId": {
+              "$ref": "#/$defs/DelegationId"
+            },
+            "parentThreadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "type": {
+              "type": "string",
+              "const": "agentCancellationReceived"
+            }
+          },
+          "required": [
+            "type",
+            "threadId",
+            "delegationId",
+            "parentThreadId"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "result": {
+              "$ref": "#/$defs/DelegationResult"
+            },
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "type": {
+              "type": "string",
+              "const": "delegationResultProduced"
+            }
+          },
+          "required": [
+            "type",
+            "threadId",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "result": {
+              "$ref": "#/$defs/DelegationResult"
+            },
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "type": {
+              "type": "string",
+              "const": "delegationResultReceived"
+            }
+          },
+          "required": [
+            "type",
+            "threadId",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "message": {
+              "$ref": "#/$defs/AgentMessage"
+            },
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "type": {
+              "type": "string",
+              "const": "agentMessageSent"
+            }
+          },
+          "required": [
+            "type",
+            "threadId",
+            "message"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "message": {
+              "$ref": "#/$defs/AgentMessage"
+            },
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "type": {
+              "type": "string",
+              "const": "agentMessageReceived"
+            }
+          },
+          "required": [
+            "type",
+            "threadId",
+            "message"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "join": {
+              "$ref": "#/$defs/AgentJoin"
+            },
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "type": {
+              "type": "string",
+              "const": "agentJoinRequested"
+            }
+          },
+          "required": [
+            "type",
+            "threadId",
+            "join"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "joinId": {
+              "$ref": "#/$defs/AgentJoinId"
+            },
+            "satisfiedBy": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/DelegationId"
+              }
+            },
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "type": {
+              "type": "string",
+              "const": "agentJoinSatisfied"
+            }
+          },
+          "required": [
+            "type",
+            "threadId",
+            "joinId",
+            "satisfiedBy"
+          ]
         }
       ]
     },
@@ -9354,7 +10837,53 @@
             "parentSequence",
             "beforeTurnId"
           ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "delegationId": {
+              "$ref": "#/$defs/DelegationId"
+            },
+            "parentSequence": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "parentThreadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "type": {
+              "type": "string",
+              "const": "agentSpawn"
+            }
+          },
+          "required": [
+            "type",
+            "parentThreadId",
+            "parentSequence",
+            "delegationId"
+          ]
         }
+      ]
+    },
+    "ThreadSequenceRange": {
+      "description": "Inclusive durable child Thread sequence range supporting a delegation result.",
+      "type": "object",
+      "properties": {
+        "endSequence": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "startSequence": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "startSequence",
+        "endSequence"
       ]
     },
     "ThreadSnapshotHistory": {
@@ -9645,6 +11174,131 @@
       "enum": [
         "safeToRetry",
         "mayHaveSideEffects"
+      ]
+    },
+    "ToolSearchConfigDto": {
+      "description": "Durable Tool Search preference plus the active App Server runtime status.",
+      "type": "object",
+      "properties": {
+        "embeddingModel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelRefDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "embeddingStatus": {
+          "$ref": "#/$defs/ToolSearchEmbeddingStatusDto"
+        },
+        "mode": {
+          "$ref": "#/$defs/ToolSearchModeDto"
+        }
+      },
+      "required": [
+        "mode",
+        "embeddingStatus"
+      ]
+    },
+    "ToolSearchConfigureParams": {
+      "description": "Selects lexical Tool Search or enables one exact embedding model after a readiness probe.",
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "embeddingModel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelRefDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "mode": {
+          "$ref": "#/$defs/ToolSearchModeDto"
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision",
+        "mode"
+      ]
+    },
+    "ToolSearchEmbeddingStatusDto": {
+      "description": "Runtime readiness of the optional Tool Search embedding path.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "disabled"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "model": {
+              "$ref": "#/$defs/ModelRefDto"
+            },
+            "type": {
+              "type": "string",
+              "const": "ready"
+            }
+          },
+          "required": [
+            "type",
+            "model"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "model": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ModelRefDto"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "reason": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "unavailable"
+            }
+          },
+          "required": [
+            "type",
+            "reason"
+          ]
+        }
+      ]
+    },
+    "ToolSearchModeDto": {
+      "description": "User-selected retrieval mode for deferred Agent tools.",
+      "type": "string",
+      "enum": [
+        "lexical",
+        "hybridEmbedding"
       ]
     },
     "Turn": {

@@ -294,7 +294,10 @@ turn/steer { command_id, expected_sequence, turn_id, input: Vec<UserInput> }
 - 窗口与阈值来自 `ModelInfo`，或用户按模型 ID 配置的
   `ModelProviderConfig.model_context`；自动压缩阈值不超过窗口的 90%；
 - `ContextWindow::Unknown` 不猜 128k，而是明确使用 `ContextBudget::ProviderManaged`；
-- `deterministic-bytes-v1` 以 bytes/4 加结构开销做确定性估算，并在诊断中记录 revision。
+- `zeta-context-engine` 已统一压力线、模型硬窗口、精准计量与带保守记账余量的估算结果；
+- 生产 planner 仍由 `deterministic-bytes-v1` 以 bytes/4 加结构开销做确定性估算，并在诊断中记录
+  revision；最终 request 接近压力线或 compaction 后会调用 OpenAI exact / Anthropic estimated
+  remote preflight，本地 tokenizer adapter 尚未接入。
 
 usage 按 Thread 持久化和基于 provider usage 的 EMA 校准尚未实现；在此之前不能把粗估写成精确
 tokenizer 保证。

@@ -16,6 +16,8 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 zeta-async-utils = { workspace = true }
+zeta-context-engine = { workspace = true }
+zeta-extension-api = { workspace = true }
 zeta-history = { workspace = true }
 zeta-policy = { workspace = true }
 zeta-prompts = { workspace = true }

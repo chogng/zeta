@@ -2,11 +2,14 @@
 
 > 计划物理位置：`zeta-rs/tools/`  
 > Rust crate：`zeta_tools`  
-> 当前状态：Phase T0 已创建 crate 并落地受限 schema、host definition、protocol/dynamic/MCP
-> adapter、output、binding、invocation 与 `ToolExecutor` contract。三个独立 crate 已实现
-> `shell-command`、`file-system` 与 `apply-patch`；App Server 已将只读 `rg` profile 接入
-> Core Tool port。通用 live registry、tool search、Plugin discovery、code mode、图片精度仍为
-> Proposed
+> 当前状态：T1 主链完成，T2 MCP/dynamic 主链完成，T3 的 Tool Search 与 host read-only extension
+> 接入完成。`zeta-tools` 已提供受限 schema、host definition、protocol/dynamic/MCP adapter、output、
+> binding、invocation、`ToolExecutor`、不可变 `ToolRegistrySnapshot`、Direct/Deferred/Hidden exposure、
+> 默认 BM25/Regex Tool Search 和可选 embedding 混合召回。App Server 已把 local、MCP、dynamic 与
+> extension contribution 放进同一 registry/runtime-key/policy 链；Core 根据同 generation 的 durable
+> `tool_search` 结果在下一模型步骤加载精确定义。仍未完成的是 Tool Call durable source/digest、
+> Plugin/Connector 安装发现、code mode、完整图片精度适配，以及 dynamic owner 断连后的持久化重启
+> 端到端 fixture。
 > Canonical value 与 durable Tool Item：[`protocol.md`](protocol.md)  
 > Core 调度、approval 与恢复：[`core.md`](core.md)  
 > MCP client runtime：[`mcp.md`](mcp.md)  
@@ -25,7 +28,7 @@
 | 工具名称就是执行身份吗？ | 不是；稳定身份还包含来源、绑定和快照 generation | [身份、来源与绑定](#5-身份来源与绑定) |
 | Agent 当前能看到哪些工具？ | 由不可变注册表快照和暴露范围决定，运行中不会被静默改写 | [注册表与快照](#7-注册表与快照) |
 | 谁决定工具能不能执行？ | 权限系统决定授权；Core 调度；工具执行器落实调用 | [当前本地工具来源](#41-当前本地工具来源运行时) |
-| 当前完成到哪里？ | 基础契约和三类本地工具已落地，通用动态注册、搜索和 Plugin 发现仍在计划中 | [当前仓库审计](#2-当前仓库审计) |
+| 当前完成到哪里？ | 统一 registry/executor/search、MCP/dynamic 和 read-only extension 主链已落地；安装发现、code mode 与 durable provenance 仍待完成 | [当前仓库审计](#2-当前仓库审计) |
 
 ## 1. 结论
 
@@ -93,28 +96,31 @@ Core durable Tool Call / Tool Result lifecycle
 - `zeta-core::ContextAssembler` 已能重建 Tool Call/Result pairing；
 - `zeta-api` 已分别把 canonical function tool 和图片 detail 转成 OpenAI Responses、
   Chat Completions 与 Anthropic Messages wire payload；
-- `zeta-shell-command`、`zeta-file-system` 与 `zeta-apply-patch`
-  已各自提供一个独立 executor；App Server 当前只组合 `zeta-shell-command` 的只读 `rg`
-  profile；
-- `zeta-plugins` 已实现 PL0 manifest/local validation，但 authority、activation 与 App Server
-  API 仍处于 Proposed；`zeta-mcp` 的 tools-only catalog/binding runtime 已实现，但其 Core
-  adapter、通用 Tool registry/search 和 code mode 仍处于 Proposed；
-  当前 Core port adapter 是 App Server 私有的固定 `rg` registry，不代表通用 registry 已完成。
+- `zeta-shell-command`、`zeta-file-system` 与 `zeta-apply-patch` 各自提供独立 executor；App Server
+  已用 `ToolExecutorRuntime` 把它们接入 durable facts、policy authority、streaming output 与统一
+  registry，旧 read/write/edit 名称只保留 hidden migration route；
+- `zeta-mcp` 的 tools-only catalog/binding runtime 与 App Server/Core adapter 已进入共享
+  registry/search projection；client-hosted dynamic tool 已进入同一 approval、durable interaction、
+  exact owner 与 unknown-outcome 链；
+- `zeta-extension-api::ReadOnlyToolContributor` 产生的 host executor 已进入同一 registry/policy/runtime，
+  当前 `skills-read` 走这条路径；Plugin package discovery、install/enable/connect API 仍处于 Proposed；
+- App Server 以 frozen `ToolBinding` 的 runtime key 执行，不再在执行阶段按 live tool name 猜 source
+  service；hot reload 只影响未来 prepare safe point，已准备调用保留原 generation 和 policy。
 
-当前问题不是缺少一个更大的 `tools` module，而是共享语义没有统一落点：
+当前剩余问题集中在尚未收口的跨边界能力，而不是再增加一套 registry：
 
-- `zeta-protocol::ToolDefinition` 只覆盖当前 model request 的最小 function schema，不能表达
-  source、binding、deferred loading、namespace、freeform 或 runtime exposure；
-- 当前 `ToolService::definitions() + prepare(call) + execute(call, authorization)` 已分开
-  materialization、policy review 与 authorized execution，但 registry snapshot、binding
-  generation、rich output 和 reconciliation 仍需由 `zeta-tools` adapter 完整接入；
-- MCP 和 dynamic tool 都需要重复 schema 清洗、name collision、output conversion；
+- `zeta-protocol::ToolDefinition` 有意只覆盖 model request 的最小 function schema；source、binding、
+  loading、exposure 和 runtime authority 由 host registry 持有，但 durable Tool Call 还没有记录
+  source/digest provenance；
+- dynamic owner 断连已经 fail closed，但还缺“持久化后重启恢复”的完整 App Server fixture；
+- Plugin/Connector 还缺 typed discovery 与 install/enable/connect lifecycle，不能用 executable registry
+  反向代替 package authority；
 - provider adapter 可能分别决定 namespace flattening、strict schema 和 image detail fallback；
 - tool search、Plugin discovery 和 install request 容易被混成一个有隐式副作用的“发现服务”；
 - code mode 若直接持有 executor，会绕过普通 tool 的 approval、durable commit 和 tracing。
 
-因此第一阶段应创建一个窄的共享 crate，先迁移纯值和纯转换，再由 App Server composition root
-接通 live registry。不能把现有 `core/src/tools` 的编排逻辑一次性整体搬入新 crate。
+后续扩展必须继续经过现有 `zeta-tools` 窄共享契约和 App Server composition root，不能在 Plugin、
+Connector、code mode 或 provider adapter 内另建可执行 registry。
 
 本方案参考本地 `../codex/codex-rs/tools/` 已验证的提取方向：共享 definition/spec、MCP/dynamic
 adapter、tool search/discovery、code-mode bridge、image-detail normalization 与 executor
@@ -875,10 +881,11 @@ model emits Tool Call
 
 Dynamic tool owner disconnect 时：
 
-- 尚未投递：`NotStarted(OwnerUnavailable)`；
-- 已投递且 side effect 可能开始：按 policy 进入 uncertain outcome；
-- 不能将请求转交给同名的新 owner；
-- reconnect 后只接受与原 request/owner incarnation 匹配的 response。
+- 尚未投递：等待能够精确承载该 tool name 的 owner；
+- 已投递且 side effect 可能开始：持久化 `OwnerDisconnected` cancellation，按 unknown outcome
+  收口；
+- 不能将请求转交给同名的新 owner，也不能自动重试；
+- 原 interaction 取消后，重连客户端的迟到 response 会被拒绝。
 
 ### 11.3 运行时注册
 
@@ -933,6 +940,12 @@ name/schema 后要求 host 执行。
 第一版 `ToolSearchLimit` 默认值为 8，并受 host-configured hard cap 限制。超出 hard cap 返回
 typed validation error，不以无限结果或静默全量 catalog 作为 fallback。
 
+当前 App Server 的默认 exposure policy 是：built-in Workspace 与 client-hosted dynamic port 直接
+暴露，MCP port 默认 Deferred，extension executor 使用自身声明的 exposure；单个 host contribution
+还可在 composition 时显式覆盖。只有 registry 中确实存在 Deferred 工具时才增加 `tool_search`。
+这个默认值是 host policy，不属于 registry 的来源特例；以后可根据真实调用覆盖率调整，但 Plugin、
+Connector 和 dynamic contribution 仍必须经过同一 exposure contract，不能各自创建搜索入口。
+
 ### 12.3 索引与排序
 
 第一版使用 snapshot-local、可重建的 deterministic index：
@@ -948,6 +961,35 @@ typed validation error，不以无限结果或静默全量 catalog 作为 fallba
 
 向量或远端搜索只有在独立隐私、缓存和 failure contract 完成后加入。search index 不包含 secret、
 tool output、conversation history 或未经允许的 Plugin package content。
+
+当前默认模式是 `Lexical`：自然语言 query 使用 exact/substring name 优先和 snapshot-local BM25；
+调用方明确选择 `regex` strategy 时，使用有 query byte 上限的线性时间 Regex 匹配完整 search
+document。默认返回 8 个、硬上限 32 个。这条路径不调用模型，也不发送工具元数据到进程外。
+
+User Config 可把 `toolSearch.mode` 设为 `hybridEmbedding`，并用独立的
+`toolSearch.embeddingModel` 选择 exact `ModelRef`。App Server 通过 `SemanticModelProvider` 把该选择
+和对应 provider config 解析成 `EmbeddingInvoker`；它不借用 CodeIndex 的模型选择或启用状态。
+`toolSearch/configure` 在提交配置前先发送一条不包含工具元数据的固定 readiness probe；缺少模型、
+provider/credential/runtime、请求失败、响应数量错误或零向量都会返回 `ToolSearchUnavailable`，配置
+不提交。若 hybrid 配置来自外部 TOML 或进程启动恢复，但运行时不可达，App Server 把
+`config/read.toolSearch.embeddingStatus` 投影为 `unavailable`；自然语言搜索明确失败，不静默改用
+BM25。用户显式切回 `lexical` 后才恢复纯词法自然语言搜索。
+
+门禁通过后，自然语言搜索为 query 和当前 deferred tool documents 生成 embedding，再用
+reciprocal-rank fusion 与 BM25 排名合并；Regex 始终保持本地词法路径。向量只缓存在当前 registry
+generation 的内存中。后续真实 embedding 调用失败、返回数量/维度错误或向量无有效模长时，当前
+`tool_search` 直接返回明确错误，不静默回落到 BM25。模型调用继续属于 `model-provider`；
+snapshot-local 目录、输入准备、召回融合、generation 校验、过滤与截断仍属于 Tool Search owner。
+
+Trusted local Workspace 还会注册 direct built-in `search_code`。它不属于 deferred Tool Search：Agent
+可以显式传入自然语言 query 与最多 20 条结果，App Server 使用 canonical CodeRetrieval 编排本地 FTS、
+已授权 semantic 和可选 cloud candidates，再返回 bounded、current-source-verified excerpts。Policy 只
+为 exact `workspace-code-index-read-only` grant 放行；伪造或复用其他 unsandboxed grant 会被拒绝。
+
+`zeta-rs/tools/src/registry_search_eval_tests.rs` 保存一份跨 coding、GitHub、Slack、Calendar、
+Browser 和 Database 的离线查询集，比较当前 BM25 排序与 uniform token-overlap baseline，并以
+Top-1、Top-3 和 MRR 设置回归门槛。该 synthetic fixture 只防止明显退化，不替代基于匿名真实调用
+构建的长期评测集；纯语义同义词和跨语言查询单独计分，不冒充词法方案已经解决的能力。
 
 ### 12.4 加载流程
 
@@ -1393,37 +1435,57 @@ mod tests;
 
 完成条件：OpenAI/Anthropic 当前 function tool request round-trip 不回归，且新 crate 不依赖 Core。
 
-### 阶段 T1：执行器与注册表（共享类型完成；运行时接入待实现）
+### 阶段 T1：执行器与注册表（主执行链已接入）
 
 - ✅ 定义 `ToolBinding`、`ToolExecutor`、materialized invocation、cancellation context 与 outcome；
-- built-in process tool 实现 executor contract；
-- App Server 构造 immutable registry snapshot；
-- Core `ToolService` adapter 只执行 frozen binding；
-- definitions 与 execution path 不再读取同一个 live `ToolService`。
+- ✅ built-in process、filesystem 与 apply-patch tool 实现 executor contract；
+- ✅ App Server 构造 immutable registry snapshot，并在 Workspace replacement 时单调递增 generation；
+- ✅ Core `ToolService` adapter 按 frozen binding/runtime key 路由，并把 durable Turn facts 投影为 `ToolInvocation`；
+- ✅ prepared call 在 hot reload 后继续使用原 Tool/Policy generation，sandbox retry 不切换 generation；
+- ✅ definitions 与 execution route 由同一个 immutable registry snapshot 产生，不按 live name 直接猜 service。
 
 完成条件：registry 更新不能劫持 in-flight call，stale binding 被明确拒绝。
 
-### 阶段 T2：MCP 与动态适配器（MCP 工具纵向切片部分完成）
+### 阶段 T2：MCP 与动态适配器（MCP/dynamic 主链完成，durable provenance 继续收紧）
 
 - ✅ `zeta-mcp` 输出 `McpToolProjection` 并建立 immutable catalog/binding；
 - ✅ 接通 MCP schema/name/result conversion 与调用取消；
 - ✅ MCP App Server/Core adapter 接入逐次 approval、durable commit 和 unknown outcome；
-- dynamic definition 与 interaction execution 使用同一 output contract；
-- Tool Call durable provenance 增加 source/digest；
-- 覆盖 transport-lost 和 owner-disconnect uncertain outcome 的端到端语义。
+- ✅ dynamic definition 进入共享 registry，execution 经过 approval、durable interaction 与 Tool Result commit；
+- ✅ dynamic request 固定 definition digest、call id、name 与 arguments；同名新定义不能认领旧 response；
+- ✅ 多连接 delivery 还按 initialize capability 的 exact dynamic tool name 选 owner；
+- ✅ 已投递 dynamic owner 断连/退订后不重新分配，按 unknown outcome 且不重试收口；
+- 尚未完成：Tool Call durable provenance 增加 source/digest；
+- 部分具备：MCP transport-lost 已覆盖；dynamic owner-disconnect 已覆盖 broker/Core continuation，
+  仍需补持久化重启的完整端到端 fixture。
 
 完成条件：MCP/dynamic 工具都不能绕过普通 approval、commit 和 recovery。
 
 ### 阶段 T3：工具搜索与 Plugin 发现
 
-- deferred exposure 和 deterministic search index；
-- host tool-search vertical slice；
-- Plugin/Connector discovery projection；
-- typed install/enable/connect request；
-- client capability filtering。
+- ✅ deferred exposure 和 deterministic search index；
+- ✅ host tool-search vertical slice；
+- ✅ Core 根据 successful durable search result 在下一 model step 增量暴露定义；
+- ✅ `ReadOnlyToolContributor` 产出的 host extension executor 进入共享 registry/policy/runtime（当前包括 `skills-read`）；
+- ✅ enabled connector/MCP catalog 与 local/dynamic/extension port 做统一 collision check；
+- 尚未完成：Plugin/Connector discovery projection；
+- 尚未完成：typed install/enable/connect request；
+- 尚未完成：通用 client capability filtering；dynamic owner 的 exact tool-name filtering 已完成。
 
 完成条件：search 只返回当前 registry 工具，Plugin discovery 不产生可执行 binding，install 无隐式
 grant。
+
+当前受控检索回归包含 20 个代表工具、140 个 collision/distractor 工具和中英文 semantic cases：
+
+| 路径 | Corpus | Top-1 | Top-3 | 说明 |
+| --- | ---: | ---: | ---: | --- |
+| BM25 | 20 | 95% | 100% | 默认、离线、零模型成本 |
+| BM25 | 160 | 91% | 100% | 验证大 catalog 下的 lexical precision |
+| BM25 | 10 个中文/同义 case | 0% | 0% | 明确暴露纯词法边界 |
+| controlled semantic + RRF | 同上 | 100% | 100% | 验证 hybrid 编排；不代表任何具体 embedding 模型质量 |
+
+真实 embedding 的模型质量必须按具体 provider/model 另做可重复 eval；CI 中的 controlled semantic
+ranking 只证明 gate、document embedding、cosine ranking 和 hybrid merge 接线不会退化成伪 fallback。
 
 ### 阶段 T4：代码模式
 

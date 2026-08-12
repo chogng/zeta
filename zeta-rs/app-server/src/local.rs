@@ -1,10 +1,10 @@
 use crate::AppServer;
+use crate::CodeIndexSemanticModels;
 use crate::SlashCommandCatalog;
 use crate::mcp_tools::compose_mcp_tools;
 use crate::model_catalog::ModelCatalog;
 use crate::server::WorkspaceSwitchTrustPolicy;
 use crate::server::WorkspaceToolPorts;
-use crate::server::skills_runtime::{BuiltInSkillSource, SkillConfigSnapshotProvider};
 use crate::tool_composition::ToolPort;
 use sha2::{Digest, Sha256};
 use std::fmt;
@@ -24,6 +24,8 @@ use zeta_config::{
 use zeta_core::ContextBudget;
 use zeta_core::ContextCompactionLimit;
 use zeta_core::ContextTokenCount;
+use zeta_core::ContextTokenMeasurementCapability;
+use zeta_core::ContextTokenMeasurementOutcome;
 use zeta_core::CoreError;
 use zeta_core::InMemorySessionStore;
 use zeta_core::InMemoryThreadStore;
@@ -39,6 +41,8 @@ use zeta_model_provider::{
 use zeta_model_provider_config::ProviderConfigRegistry;
 use zeta_protocol::ContextWindow;
 use zeta_rollout::LocalStateRepository;
+use zeta_skills_extension::BuiltInSkillSource;
+use zeta_skills_extension::SkillConfigSnapshotProvider;
 
 const MAX_GIT_STATUS_LINES: usize = 40;
 const DEFAULT_MODEL_OUTPUT_RESERVATION_TOKENS: u32 = 4_096;
@@ -284,17 +288,53 @@ impl fmt::Display for OpenAppServerError {
 
 impl std::error::Error for OpenAppServerError {}
 
+/// Optional code-index adapters installed before the local Workspace runtime is activated.
+#[derive(Default)]
+pub struct LocalCodeIndexProviders {
+    semantic_models: Option<CodeIndexSemanticModels>,
+    cloud: CloudCodeIndexProviderRegistry,
+}
+
+impl LocalCodeIndexProviders {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Installs models invoked by local semantic CodeIndex and opt-in Tool Search orchestration.
+    pub fn with_semantic_models(mut self, models: CodeIndexSemanticModels) -> Self {
+        self.semantic_models = Some(models);
+        self
+    }
+
+    /// Installs optional remote code-index provider adapters.
+    pub fn with_cloud(mut self, cloud: CloudCodeIndexProviderRegistry) -> Self {
+        self.cloud = cloud;
+        self
+    }
+}
+
 /// Opens the authoritative local composition root used by in-process and stdio clients.
 pub fn open_local_app_server(
     options: LocalAppServerOptions,
 ) -> Result<AppServer, OpenAppServerError> {
-    open_local_app_server_with_cloud_providers(options, CloudCodeIndexProviderRegistry::default())
+    open_local_app_server_with_code_index_providers(options, LocalCodeIndexProviders::default())
 }
 
 /// Opens a local composition with explicit cloud code-index provider adapters.
 pub fn open_local_app_server_with_cloud_providers(
-    mut options: LocalAppServerOptions,
+    options: LocalAppServerOptions,
     cloud_code_index_providers: CloudCodeIndexProviderRegistry,
+) -> Result<AppServer, OpenAppServerError> {
+    open_local_app_server_with_code_index_providers(
+        options,
+        LocalCodeIndexProviders::new().with_cloud(cloud_code_index_providers),
+    )
+}
+
+/// Opens a local composition with semantic model and/or remote index provider adapters.
+pub fn open_local_app_server_with_code_index_providers(
+    mut options: LocalAppServerOptions,
+    providers: LocalCodeIndexProviders,
 ) -> Result<AppServer, OpenAppServerError> {
     if options.workspace.is_none()
         && let Some(workspace_root) = &options.workspace_root
@@ -338,14 +378,16 @@ pub fn open_local_app_server_with_cloud_providers(
             .read()
             .map_err(|error| OpenAppServerError(error.0))?;
     }
-    let model_provider: Arc<dyn ModelProvider> = match options.model_operation_client.take() {
+    let model_provider = match options.model_operation_client.take() {
         Some(client) => Arc::new(ModelProviderRuntime::builtin_with_client(client)),
         None => Arc::new(ModelProviderRuntime::builtin()),
     };
     let model = Arc::new(ConfigBackedModelService {
         config: config.clone(),
         workspace: workspace.clone(),
-        resolver: Arc::new(ModelProviderSnapshotResolver { model_provider }),
+        resolver: Arc::new(ModelProviderSnapshotResolver {
+            model_provider: model_provider.clone(),
+        }),
     });
     let runtime_config = model
         .resolve_config(&user_config)
@@ -360,11 +402,16 @@ pub fn open_local_app_server_with_cloud_providers(
         .with_config_store(Arc::clone(&config))
         .with_slash_command_catalog(options.slash_commands)
         .with_code_index_storage_root(options.profile_root.join("code-index"))
+        .with_code_index_semantic_storage_root(options.profile_root.join("code-index-semantic"))
+        .with_semantic_model_provider(model_provider)
         .with_cloud_code_index_storage_root(options.profile_root.join("code-index-cloud"))
-        .with_cloud_code_index_providers(cloud_code_index_providers)
+        .with_cloud_code_index_providers(providers.cloud)
         .with_extension_roots(extension_roots)
         .with_skill_runtime(built_in_skill_root, skill_config)
         .map_err(OpenAppServerError)?;
+    if let Some(models) = providers.semantic_models {
+        server = server.with_code_index_semantic_models(models);
+    }
     let mcp = compose_mcp_tools(&runtime_config, user_config.generation)
         .map_err(|error| OpenAppServerError(error.to_string()))?
         .map(|mcp| ToolPort::mcp(mcp.tools, mcp.policy));
@@ -379,6 +426,9 @@ pub fn open_local_app_server_with_cloud_providers(
             .activate_host_configured_workspace_root(workspace_root)
             .map_err(|error| OpenAppServerError(error.to_string()))?;
     }
+    server
+        .resume_recovered_agent_coordinations()
+        .map_err(open_error)?;
     server
         .resume_recovered_tool_continuations()
         .map_err(open_error)?;
@@ -426,6 +476,12 @@ impl ToolConfigWatcher {
         workspace_tools: Arc<WorkspaceToolPorts>,
         workspace_runtime: crate::server::WorkspaceRuntimeControl,
     ) -> Self {
+        let mut semantic_binding = config.read_snapshot().ok().map(|snapshot| {
+            (
+                snapshot.values.semantic_code_index,
+                snapshot.values.providers,
+            )
+        });
         let changes = config.subscribe_changes();
         let (shutdown, shutdown_receiver) = std::sync::mpsc::channel();
         let thread = std::thread::Builder::new()
@@ -453,6 +509,19 @@ impl ToolConfigWatcher {
                                 workspace_tools.record_reconcile_failure(error.to_string());
                                 continue;
                             }
+                            let next_semantic_binding = (
+                                snapshot.values.semantic_code_index.clone(),
+                                snapshot.values.providers.clone(),
+                            );
+                            if semantic_binding.as_ref() != Some(&next_semantic_binding) {
+                                semantic_binding = Some(next_semantic_binding);
+                                if let Err(error) =
+                                    workspace_runtime.reconcile_semantic_code_index_runtime()
+                                {
+                                    workspace_tools.record_reconcile_failure(error.to_string());
+                                    continue;
+                                }
+                            }
                             let mcp = match compose_mcp_tools(&snapshot.values, change.generation) {
                                 Ok(mcp) => mcp.map(|mcp| ToolPort::mcp(mcp.tools, mcp.policy)),
                                 Err(error) => {
@@ -460,7 +529,14 @@ impl ToolConfigWatcher {
                                     continue;
                                 }
                             };
-                            if let Err(error) = workspace_tools.replace_mcp(mcp) {
+                            if let Err(error) = workspace_tools.reconcile_user_config(
+                                mcp,
+                                &snapshot.values.tool_search,
+                                &snapshot.values.providers,
+                            ) {
+                                log::error!(
+                                    "requested tool-search configuration is unavailable: {error}"
+                                );
                                 workspace_tools.record_reconcile_failure(error.to_string());
                             }
                         }
@@ -581,6 +657,29 @@ struct ConfigBackedModelService {
 impl ModelService for ConfigBackedModelService {
     fn context_budget(&self, selection: ModelSelection<'_>) -> Result<ContextBudget, CoreError> {
         context_budget_for_config(&self.config_for_selection(selection)?)
+    }
+
+    fn input_token_measurement_capability(
+        &self,
+        selection: ModelSelection<'_>,
+    ) -> Result<ContextTokenMeasurementCapability, CoreError> {
+        let config = self.config_for_selection(selection)?;
+        ProviderModelService::new(self.resolver.resolve(&config))
+            .input_token_measurement_capability(ModelSelection::ConfiguredDefault)
+    }
+
+    fn measure_input(
+        &self,
+        selection: ModelSelection<'_>,
+        request: &zeta_protocol::ModelRequest,
+        cancellation: &CancellationToken,
+    ) -> Result<ContextTokenMeasurementOutcome, CoreError> {
+        let config = self.config_for_selection(selection)?;
+        ProviderModelService::new(self.resolver.resolve(&config)).measure_input(
+            ModelSelection::ConfiguredDefault,
+            request,
+            cancellation,
+        )
     }
 
     fn invoke(
@@ -813,6 +912,32 @@ impl ProviderModelService {
 }
 
 impl ModelService for ProviderModelService {
+    fn input_token_measurement_capability(
+        &self,
+        _: ModelSelection<'_>,
+    ) -> Result<ContextTokenMeasurementCapability, CoreError> {
+        Ok(self.invoker.input_token_measurement_capability())
+    }
+
+    fn measure_input(
+        &self,
+        _: ModelSelection<'_>,
+        request: &zeta_protocol::ModelRequest,
+        cancellation: &CancellationToken,
+    ) -> Result<ContextTokenMeasurementOutcome, CoreError> {
+        cancellation
+            .check()
+            .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
+        let outcome = self
+            .invoker
+            .measure_input_with_cancellation(request, cancellation)
+            .map_err(map_model_provider_error)?;
+        cancellation
+            .check()
+            .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
+        Ok(outcome)
+    }
+
     fn invoke(
         &self,
         _: ModelSelection<'_>,
@@ -825,17 +950,21 @@ impl ModelService for ProviderModelService {
         let response = self
             .invoker
             .invoke_with_cancellation(request, cancellation)
-            .map_err(|error| match error {
-                zeta_model_provider::ModelProviderError::Cancelled(message) => {
-                    CoreError::Cancelled(message)
-                }
-                error if error.is_transient() => CoreError::ModelTransient(error.to_string()),
-                error => CoreError::Model(error.to_string()),
-            })?;
+            .map_err(map_model_provider_error)?;
         cancellation
             .check()
             .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
         Ok(response)
+    }
+}
+
+fn map_model_provider_error(error: zeta_model_provider::ModelProviderError) -> CoreError {
+    match error {
+        zeta_model_provider::ModelProviderError::Cancelled(message) => {
+            CoreError::Cancelled(message)
+        }
+        error if error.is_transient() => CoreError::ModelTransient(error.to_string()),
+        error => CoreError::Model(error.to_string()),
     }
 }
 

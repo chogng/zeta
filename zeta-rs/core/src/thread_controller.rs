@@ -12,12 +12,13 @@ use crate::context::ContextPreparation;
 use crate::context::FrozenModelSelection;
 use crate::context::ModelInvocationPreparation;
 use crate::context::ModelInvocationSnapshot;
-use crate::context::SkillInstruction;
 use crate::reduce_thread_event;
 use crate::thread_reducer::validate_agent_request;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::RwLock;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 use zeta_history::CURRENT_STORED_EVENT_SCHEMA_VERSION;
@@ -39,6 +40,7 @@ use zeta_protocol::ItemId;
 use zeta_protocol::ModelRef;
 use zeta_protocol::RequestId;
 use zeta_protocol::SessionId;
+use zeta_protocol::SkillActivationReason;
 use zeta_protocol::StableTurnError;
 use zeta_protocol::ThreadCommand;
 use zeta_protocol::ThreadEvent;
@@ -56,18 +58,32 @@ use zeta_thread_store::AppendBatchResult;
 use zeta_thread_store::ThreadStoreError;
 use zeta_thread_store::validate_append_batch;
 
+mod agent;
 mod execution;
 mod loaded_thread;
 mod mailbox;
 mod user_input;
+
+pub use agent::CreateAgentThreadRequest;
 
 pub struct StartTurnRequest {
     pub command_id: CommandId,
     pub expected_sequence: SequenceExpectation,
     pub model: Option<ModelRef>,
     pub policy_revision: String,
+    /// Host-seeded automatic activations. Explicit selections are resolved by extensions.
     pub activated_skills: Vec<FrozenSkillActivation>,
     pub input: Vec<UserInput>,
+}
+
+/// Named inputs for preparing one immutable model invocation from durable Thread state.
+pub(crate) struct PrepareModelInvocationRequest<'a> {
+    pub turn_id: &'a TurnId,
+    pub instructions: &'a HarnessInstructions,
+    pub extension_fragments: Vec<zeta_extension_api::PromptFragment>,
+    pub evidence: Vec<crate::ContextEvidence>,
+    pub tools: Vec<ToolDefinition>,
+    pub budget: ContextBudget,
 }
 
 /// Concrete host invocation used to execute one explicit Shell Turn.
@@ -242,6 +258,7 @@ pub struct ThreadController {
     writer_lease: Option<Arc<dyn WriterLease<ThreadId>>>,
     loaded_threads: Arc<loaded_thread::LoadedThreads>,
     execution_mailboxes: mailbox::ThreadExecutionMailboxes,
+    extensions: RwLock<Arc<zeta_extension_api::ExtensionRegistry>>,
     next_id: AtomicU64,
 }
 
@@ -252,6 +269,7 @@ impl ThreadController {
             store,
             writer_lease: None,
             execution_mailboxes: mailbox::ThreadExecutionMailboxes::new(loaded_threads.clone()),
+            extensions: RwLock::new(Arc::new(zeta_extension_api::ExtensionRegistry::default())),
             loaded_threads,
             next_id: AtomicU64::new(1),
         }
@@ -268,9 +286,23 @@ impl ThreadController {
             store,
             writer_lease: Some(writer_lease),
             execution_mailboxes: mailbox::ThreadExecutionMailboxes::new(loaded_threads.clone()),
+            extensions: RwLock::new(Arc::new(zeta_extension_api::ExtensionRegistry::default())),
             loaded_threads,
             next_id: AtomicU64::new(1),
         }
+    }
+
+    /// Installs the shared agent extension registry before product Turns are accepted.
+    pub fn install_extensions(
+        &self,
+        extensions: Arc<zeta_extension_api::ExtensionRegistry>,
+    ) -> Result<(), CoreError> {
+        *self
+            .extensions
+            .write()
+            .map_err(|_| CoreError::Journal("extension registry lock poisoned".into()))? =
+            extensions;
+        Ok(())
     }
 
     /// Creates the child Thread already planned by its owning Session.
@@ -363,11 +395,69 @@ impl ThreadController {
         thread_id: &ThreadId,
         request: StartTurnRequest,
     ) -> Result<StartTurnResult, CoreError> {
-        let validated_input = user_input::validate(&request.input, &request.activated_skills)?;
         validate_command_id(&request.command_id)?;
         validate_policy_revision(&request.policy_revision)?;
+        if let Some(existing) = self
+            .read_thread(thread_id)?
+            .commands
+            .into_iter()
+            .find(|existing| existing.receipt.command_id == request.command_id)
+        {
+            let ThreadCommand::StartTurn {
+                model,
+                activated_skills,
+                input,
+            } = &existing.receipt.command
+            else {
+                return Err(CoreError::CommandConflict);
+            };
+            let host_activations = activated_skills
+                .iter()
+                .filter(|activation| activation.reason == SkillActivationReason::Automatic)
+                .cloned()
+                .collect::<Vec<_>>();
+            if model != &request.model
+                || host_activations != request.activated_skills
+                || input != &request.input
+            {
+                return Err(CoreError::CommandConflict);
+            }
+            let ThreadCommandResult::TurnAccepted { turn_id } = existing.result else {
+                return Err(CoreError::Journal(
+                    "start-Turn command has an invalid result".into(),
+                ));
+            };
+            return Ok(StartTurnResult {
+                turn_id,
+                sequence: existing.response_sequence,
+                disposition: StartTurnDisposition::Replayed,
+            });
+        }
+        let mut activated_skills = request.activated_skills.clone();
+        let contributed_activations = self
+            .extensions
+            .read()
+            .map_err(|_| CoreError::Journal("extension registry lock poisoned".into()))?
+            .contribute_skill_activations(zeta_extension_api::SkillActivationContext::new(
+                &request.input,
+            ))
+            .map_err(|error| CoreError::InvalidInput(error.to_string()))?;
+        for activation in contributed_activations {
+            if activated_skills
+                .iter()
+                .any(|existing| existing.id == activation.id)
+            {
+                return Err(CoreError::InvalidInput(format!(
+                    "Skill '{}:{}' was activated more than once",
+                    activation.id.source, activation.id.name
+                )));
+            }
+            activated_skills.push(activation);
+        }
+        let validated_input = user_input::validate(&request.input, &activated_skills)?;
         let command = ThreadCommand::StartTurn {
             model: request.model.clone(),
+            activated_skills: activated_skills.clone(),
             input: request.input.clone(),
         };
         self.mutate_thread(thread_id, |snapshot| {
@@ -401,7 +491,7 @@ impl ThreadController {
                 thread_id: thread_id.clone(),
                 turn_id: turn_id.clone(),
                 policy_revision: request.policy_revision.clone(),
-                activated_skills: request.activated_skills.clone(),
+                activated_skills: activated_skills.clone(),
                 model: request.model.clone(),
             });
             events.extend(
@@ -889,36 +979,39 @@ impl ThreadController {
     pub(crate) fn prepare_model_invocation(
         &self,
         thread_id: &ThreadId,
-        turn_id: &TurnId,
-        instructions: &HarnessInstructions,
-        skill_instructions: &[SkillInstruction],
-        tools: Vec<ToolDefinition>,
-        budget: ContextBudget,
+        request: PrepareModelInvocationRequest<'_>,
     ) -> Result<ModelInvocationPreparation, CoreError> {
         self.with_loaded_thread(thread_id, |loaded| {
             let turn = loaded
                 .snapshot
                 .turns
                 .iter()
-                .find(|turn| &turn.turn_id == turn_id)
-                .ok_or_else(|| CoreError::NotFound(turn_id.to_string()))?;
+                .find(|turn| &turn.turn_id == request.turn_id)
+                .ok_or_else(|| CoreError::NotFound(request.turn_id.to_string()))?;
             let model = match &turn.model {
                 Some(model) => FrozenModelSelection::Selected(model.clone()),
                 None => FrozenModelSelection::ConfiguredDefault,
             };
-            let mut instruction_fragments = instructions.context_fragments();
+            let mut instruction_fragments = request.instructions.context_fragments();
+            instruction_fragments.extend(crate::multi_agent::agent_context_fragments(
+                &loaded.snapshot,
+            ));
             instruction_fragments.extend(
-                skill_instructions
-                    .iter()
-                    .map(SkillInstruction::context_fragment),
+                request
+                    .extension_fragments
+                    .into_iter()
+                    .map(crate::context::InstructionFragment::try_from)
+                    .collect::<Result<Vec<_>, _>>()?,
             );
+            let tools = crate::multi_agent::scope_agent_tools(&loaded.snapshot, request.tools);
             let input = ContextInput::new(
                 &loaded.snapshot,
-                turn_id.clone(),
+                request.turn_id.clone(),
                 instruction_fragments,
                 tools,
-                budget,
-            );
+                request.budget,
+            )
+            .with_evidence(request.evidence);
             match loaded
                 .context
                 .prepare(&input)
@@ -928,7 +1021,7 @@ impl ThreadController {
                     ModelInvocationSnapshot::new(
                         loaded.snapshot.session_id.clone(),
                         loaded.snapshot.thread_id.clone(),
-                        turn_id.clone(),
+                        request.turn_id.clone(),
                         model,
                         context,
                     ),

@@ -1,5 +1,11 @@
+use crate::AgentContextSeed;
+use crate::AgentJoin;
+use crate::AgentJoinId;
+use crate::AgentMessage;
 use crate::AgentResponse;
 use crate::ContextCheckpoint;
+use crate::DelegationId;
+use crate::DelegationResult;
 use crate::FrozenSkillActivation;
 use crate::InteractionCancelReason;
 use crate::ModelRef;
@@ -46,6 +52,10 @@ pub enum ThreadEvent {
         session_id: SessionId,
         thread_id: ThreadId,
         title: String,
+    },
+    AgentContextSeedCommitted {
+        thread_id: ThreadId,
+        seed: Box<AgentContextSeed>,
     },
     HistoryImported {
         thread_id: ThreadId,
@@ -128,6 +138,49 @@ pub enum ThreadEvent {
         thread_id: ThreadId,
         turn_id: TurnId,
     },
+    DelegationRequested {
+        thread_id: ThreadId,
+        seed: Box<AgentContextSeed>,
+    },
+    DelegationStarted {
+        thread_id: ThreadId,
+        delegation_id: DelegationId,
+        child_thread_id: ThreadId,
+    },
+    DelegationCancellationRequested {
+        thread_id: ThreadId,
+        delegation_id: DelegationId,
+    },
+    AgentCancellationReceived {
+        thread_id: ThreadId,
+        delegation_id: DelegationId,
+        parent_thread_id: ThreadId,
+    },
+    DelegationResultProduced {
+        thread_id: ThreadId,
+        result: Box<DelegationResult>,
+    },
+    DelegationResultReceived {
+        thread_id: ThreadId,
+        result: Box<DelegationResult>,
+    },
+    AgentMessageSent {
+        thread_id: ThreadId,
+        message: Box<AgentMessage>,
+    },
+    AgentMessageReceived {
+        thread_id: ThreadId,
+        message: Box<AgentMessage>,
+    },
+    AgentJoinRequested {
+        thread_id: ThreadId,
+        join: Box<AgentJoin>,
+    },
+    AgentJoinSatisfied {
+        thread_id: ThreadId,
+        join_id: AgentJoinId,
+        satisfied_by: Vec<DelegationId>,
+    },
 }
 
 fn legacy_turn_policy_revision() -> String {
@@ -138,6 +191,7 @@ impl ThreadEvent {
     pub fn kind(&self) -> &'static str {
         match self {
             Self::ThreadCreated { .. } => "thread.created",
+            Self::AgentContextSeedCommitted { .. } => "agent.context_seed_committed",
             Self::HistoryImported { .. } => "thread.history_imported",
             Self::ContextCheckpointCommitted { .. } => "context.checkpoint_committed",
             Self::TurnAccepted { .. } => "turn.accepted",
@@ -152,12 +206,25 @@ impl ThreadEvent {
             Self::TurnFailed { .. } => "turn.failed",
             Self::TurnCancelling { .. } => "turn.cancelling",
             Self::TurnInterrupted { .. } => "turn.interrupted",
+            Self::DelegationRequested { .. } => "agent.delegation_requested",
+            Self::DelegationStarted { .. } => "agent.delegation_started",
+            Self::DelegationCancellationRequested { .. } => {
+                "agent.delegation_cancellation_requested"
+            }
+            Self::AgentCancellationReceived { .. } => "agent.cancellation_received",
+            Self::DelegationResultProduced { .. } => "agent.delegation_result_produced",
+            Self::DelegationResultReceived { .. } => "agent.delegation_result_received",
+            Self::AgentMessageSent { .. } => "agent.message_sent",
+            Self::AgentMessageReceived { .. } => "agent.message_received",
+            Self::AgentJoinRequested { .. } => "agent.join_requested",
+            Self::AgentJoinSatisfied { .. } => "agent.join_satisfied",
         }
     }
 
     pub fn thread_id(&self) -> &ThreadId {
         match self {
             Self::ThreadCreated { thread_id, .. }
+            | Self::AgentContextSeedCommitted { thread_id, .. }
             | Self::HistoryImported { thread_id, .. }
             | Self::ContextCheckpointCommitted { thread_id, .. }
             | Self::TurnAccepted { thread_id, .. }
@@ -171,7 +238,17 @@ impl ThreadEvent {
             | Self::TurnCompleted { thread_id, .. }
             | Self::TurnFailed { thread_id, .. }
             | Self::TurnCancelling { thread_id, .. }
-            | Self::TurnInterrupted { thread_id, .. } => thread_id,
+            | Self::TurnInterrupted { thread_id, .. }
+            | Self::DelegationRequested { thread_id, .. }
+            | Self::DelegationStarted { thread_id, .. }
+            | Self::DelegationCancellationRequested { thread_id, .. }
+            | Self::AgentCancellationReceived { thread_id, .. }
+            | Self::DelegationResultProduced { thread_id, .. }
+            | Self::DelegationResultReceived { thread_id, .. }
+            | Self::AgentMessageSent { thread_id, .. }
+            | Self::AgentMessageReceived { thread_id, .. }
+            | Self::AgentJoinRequested { thread_id, .. }
+            | Self::AgentJoinSatisfied { thread_id, .. } => thread_id,
         }
     }
 }

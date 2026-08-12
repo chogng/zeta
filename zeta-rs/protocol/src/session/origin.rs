@@ -1,3 +1,4 @@
+use crate::DelegationId;
 use crate::ThreadId;
 use crate::TurnId;
 use schemars::JsonSchema;
@@ -23,5 +24,11 @@ pub enum ThreadOrigin {
         #[ts(type = "number")]
         parent_sequence: u64,
         before_turn_id: TurnId,
+    },
+    AgentSpawn {
+        parent_thread_id: ThreadId,
+        #[ts(type = "number")]
+        parent_sequence: u64,
+        delegation_id: DelegationId,
     },
 }

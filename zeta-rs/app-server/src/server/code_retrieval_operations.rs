@@ -18,7 +18,6 @@ use zeta_code_retrieval::CodeRetrievalService;
 
 use super::AppServer;
 use super::RpcError;
-use super::code_index_operations::project_status;
 use super::code_index_runtime::CodeIndexRuntimeError;
 use super::decode;
 use super::result;
@@ -38,20 +37,29 @@ impl AppServer {
             .ensure_searchable()
             .map_err(code_index_runtime_error)?;
         let index = runtime.index();
-        let service = match self.cloud_code_index_service() {
-            Ok(cloud) => match cloud.status() {
-                Ok(status) if status.deployment_mode == CodeIndexDeploymentMode::LocalOnly => {
-                    CodeRetrievalService::local(index)
-                }
-                Ok(_) | Err(_) => {
-                    CodeRetrievalService::hybrid(index, cloud).map_err(code_retrieval_error)?
-                }
-            },
-            Err(_) => CodeRetrievalService::local(index),
+        let semantic = self.code_index_semantic_service();
+        let cloud = self
+            .cloud_code_index_service()
+            .ok()
+            .and_then(|cloud| match cloud.status() {
+                Ok(status) if status.deployment_mode == CodeIndexDeploymentMode::LocalOnly => None,
+                Ok(_) | Err(_) => Some(cloud),
+            });
+        let service = match (semantic, cloud) {
+            (Some(semantic), Some(cloud)) => {
+                CodeRetrievalService::local_semantic_with_cloud(index, semantic, cloud)
+                    .map_err(code_retrieval_error)?
+            }
+            (Some(semantic), None) => CodeRetrievalService::local_semantic(index, semantic)
+                .map_err(code_retrieval_error)?,
+            (None, Some(cloud)) => {
+                CodeRetrievalService::hybrid(index, cloud).map_err(code_retrieval_error)?
+            }
+            (None, None) => CodeRetrievalService::local(index),
         };
         let retrieval = service.retrieve(&query).map_err(code_retrieval_error)?;
         result(&CodeRetrievalResult {
-            status: project_status(&runtime),
+            status: self.project_code_index_status(&runtime),
             hits: retrieval.hits.into_iter().map(project_hit).collect(),
             degradations: retrieval
                 .degradations
@@ -83,12 +91,16 @@ fn project_hit(hit: CodeRetrievalHit) -> CodeRetrievalHitDto {
 fn project_origin(origin: CodeRetrievalOrigin) -> CodeRetrievalOriginDto {
     match origin {
         CodeRetrievalOrigin::LocalLexical => CodeRetrievalOriginDto::LocalLexical,
+        CodeRetrievalOrigin::LocalSemantic => CodeRetrievalOriginDto::LocalSemantic,
         CodeRetrievalOrigin::CloudSemantic => CodeRetrievalOriginDto::CloudSemantic,
     }
 }
 
 fn project_degradation(degradation: CodeRetrievalDegradation) -> CodeRetrievalDegradationDto {
     match degradation {
+        CodeRetrievalDegradation::LocalSemanticQueryFailed => {
+            CodeRetrievalDegradationDto::LocalSemanticQueryFailed
+        }
         CodeRetrievalDegradation::CloudQueryFailed => CodeRetrievalDegradationDto::CloudQueryFailed,
         CodeRetrievalDegradation::CandidateVerificationFailed { discarded } => {
             CodeRetrievalDegradationDto::CandidateVerificationFailed { discarded }
@@ -115,7 +127,9 @@ fn code_retrieval_error(error: CodeRetrievalError) -> RpcError {
         CodeRetrievalError::InvalidQuery(_) => {
             RpcError::new(-32602, AppServerErrorName::InvalidParams)
         }
-        CodeRetrievalError::RootMismatch | CodeRetrievalError::LocalIndex(_) => {
+        CodeRetrievalError::RootMismatch
+        | CodeRetrievalError::LocalIndex(_)
+        | CodeRetrievalError::Cancelled(_) => {
             RpcError::new(-32096, AppServerErrorName::CodeRetrievalOperationFailed)
         }
     }

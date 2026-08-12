@@ -8,6 +8,9 @@ use std::thread;
 use zeta_api::{ModelRequest, StopReason, ToolDefinition, ToolName};
 use zeta_async_utils::CancellationSource;
 use zeta_client::{ClientError, ClientRequest, ClientResponse, OperationClient};
+use zeta_context_engine::ContextTokenMeasurementAccuracy;
+use zeta_context_engine::ContextTokenMeasurementCapability;
+use zeta_context_engine::ContextTokenMeasurementOutcome;
 use zeta_http_client::HttpHeader;
 use zeta_model_provider_config::{
     ApiProfile, EndpointPolicy, ModelCatalogPolicy, ModelProviderConfig, ProviderAdapter,
@@ -177,6 +180,36 @@ fn openai_runtime_uses_the_responses_adapter_and_dynamic_endpoint() {
 }
 
 #[test]
+fn openai_runtime_exposes_exact_remote_input_measurement() {
+    let transport = Arc::new(CapturingTransport::new(json!({"input_tokens": 321})));
+    let runtime = ModelProviderRuntime::builtin_with_client(transport.clone());
+    let model = runtime
+        .build_model(
+            &provider_config_with_endpoint("openai", "https://example.test/v1"),
+            &model_ref("openai", "gpt-5.6"),
+        )
+        .unwrap();
+
+    assert_eq!(
+        model.input_token_measurement_capability(),
+        ContextTokenMeasurementCapability::Remote
+    );
+    let ContextTokenMeasurementOutcome::Measured(measurement) =
+        model.measure_input(&ModelRequest::text("hello")).unwrap()
+    else {
+        panic!("expected a provider measurement");
+    };
+    assert_eq!(measurement.measured_input().get(), 321);
+    assert_eq!(measurement.accounted_input().get(), 321);
+    assert_eq!(
+        measurement.accuracy(),
+        ContextTokenMeasurementAccuracy::Exact
+    );
+    let (endpoint, _, _) = transport.request.lock().unwrap().clone().unwrap();
+    assert_eq!(endpoint, "https://example.test/v1/responses/input_tokens");
+}
+
+#[test]
 fn model_provider_resolves_runtime_from_declarative_config() {
     let transport = Arc::new(CapturingTransport::new(completion_response(
         "Unified runtime",
@@ -277,6 +310,59 @@ fn anthropic_runtime_uses_messages_shape_and_declarative_defaults() {
     assert!(headers.iter().all(|header| header.name() != "x-api-key"));
     assert_eq!(request["model"], "claude-test");
     assert_eq!(request["max_tokens"], 1024);
+}
+
+#[test]
+fn anthropic_runtime_exposes_conservative_remote_input_measurement() {
+    let transport = Arc::new(CapturingTransport::new(json!({"input_tokens": 10_000})));
+    let runtime = ModelProviderRuntime::builtin_with_client(transport.clone());
+    let model = runtime
+        .build_model(
+            &provider_config("anthropic"),
+            &model_ref("anthropic", "claude-test"),
+        )
+        .unwrap();
+
+    assert_eq!(
+        model.input_token_measurement_capability(),
+        ContextTokenMeasurementCapability::Remote
+    );
+    let ContextTokenMeasurementOutcome::Measured(measurement) =
+        model.measure_input(&ModelRequest::text("hello")).unwrap()
+    else {
+        panic!("expected a provider measurement");
+    };
+    assert_eq!(measurement.measured_input().get(), 10_000);
+    assert_eq!(measurement.accounted_input().get(), 10_100);
+    assert_eq!(
+        measurement.accuracy(),
+        ContextTokenMeasurementAccuracy::Estimated
+    );
+    let (endpoint, _, _) = transport.request.lock().unwrap().clone().unwrap();
+    assert_eq!(
+        endpoint,
+        "https://api.anthropic.com/v1/messages/count_tokens"
+    );
+}
+
+#[test]
+fn google_compatible_runtime_does_not_claim_native_token_counting() {
+    let runtime = ModelProviderRuntime::builtin();
+    let model = runtime
+        .build_model(
+            &provider_config("google"),
+            &model_ref("google", "gemini-test"),
+        )
+        .unwrap();
+
+    assert_eq!(
+        model.input_token_measurement_capability(),
+        ContextTokenMeasurementCapability::Unavailable
+    );
+    assert_eq!(
+        model.measure_input(&ModelRequest::text("hello")).unwrap(),
+        ContextTokenMeasurementOutcome::Unavailable
+    );
 }
 
 #[test]

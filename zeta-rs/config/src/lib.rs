@@ -3,6 +3,7 @@
 //! This crate owns ordinary, non-secret user configuration. It does not own credential values,
 //! Plugin packages, MCP connections, or any live runtime state.
 
+mod code_index;
 mod command;
 mod document;
 mod hooks;
@@ -16,9 +17,14 @@ mod store;
 mod store_file;
 mod store_monitor;
 mod store_schema;
+mod tool_search;
 mod workspace;
 mod workspace_trust;
 
+pub use code_index::{
+    SemanticCodeIndexAutomaticContext, SemanticCodeIndexConfig, SemanticCodeIndexEgressGrant,
+    SemanticCodeIndexModelSelection, SemanticCodeIndexSelection,
+};
 pub use command::{
     ConfigCommandDisposition, ConfigCommandError, ConfigCommandRequest, ConfigCommandResult,
     PreferencesUpdate, UserConfigCommand,
@@ -47,6 +53,8 @@ pub use resolution::{
 };
 pub use skills::{SkillEnablement, SkillSourceConfig, SkillSourceEnablement, SkillsConfig};
 pub use store::{ConfigChange, ConfigError, ConfigStore};
+pub use tool_search::ToolSearchConfig;
+pub use tool_search::ToolSearchModeConfig;
 pub use workspace::{
     WorkspaceAgentConfig, WorkspaceConfigDocument, WorkspaceConfigIntent, WorkspaceConfigRevision,
     WorkspaceConfigScope, WorkspaceConfigStore, WorkspaceId, WorkspaceMcpConfig,

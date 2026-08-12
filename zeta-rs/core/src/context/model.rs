@@ -1,4 +1,5 @@
 use super::ContextBudget;
+use crate::ContextEvidence;
 use crate::ThreadSnapshot;
 use std::collections::BTreeMap;
 use zeta_protocol::ContextCheckpoint;
@@ -26,26 +27,26 @@ pub(crate) enum InstructionRetention {
 /// Stable, diagnostic provenance for an instruction fragment.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct InstructionSource {
-    kind: &'static str,
+    kind: String,
     identity: String,
     revision: String,
 }
 
 impl InstructionSource {
     pub(crate) fn new(
-        kind: &'static str,
+        kind: impl Into<String>,
         identity: impl Into<String>,
         revision: impl Into<String>,
     ) -> Self {
         Self {
-            kind,
+            kind: kind.into(),
             identity: identity.into(),
             revision: revision.into(),
         }
     }
 
-    pub(crate) fn kind(&self) -> &'static str {
-        self.kind
+    pub(crate) fn kind(&self) -> &str {
+        &self.kind
     }
 
     pub(crate) fn identity(&self) -> &str {
@@ -54,6 +55,26 @@ impl InstructionSource {
 
     pub(crate) fn revision(&self) -> &str {
         &self.revision
+    }
+}
+
+impl TryFrom<&zeta_extension_api::PromptFragmentSource> for InstructionSource {
+    type Error = crate::CoreError;
+
+    fn try_from(source: &zeta_extension_api::PromptFragmentSource) -> Result<Self, Self::Error> {
+        if source.kind().trim().is_empty()
+            || source.identity().trim().is_empty()
+            || source.revision().trim().is_empty()
+        {
+            return Err(crate::CoreError::Context(
+                "extension prompt fragment provenance must not be empty".into(),
+            ));
+        }
+        Ok(Self {
+            kind: source.kind().to_owned(),
+            identity: source.identity().to_owned(),
+            revision: source.revision().to_owned(),
+        })
     }
 }
 
@@ -98,12 +119,43 @@ impl InstructionFragment {
     }
 }
 
+impl TryFrom<zeta_extension_api::PromptFragment> for InstructionFragment {
+    type Error = crate::CoreError;
+
+    fn try_from(fragment: zeta_extension_api::PromptFragment) -> Result<Self, Self::Error> {
+        if fragment.body().trim().is_empty() {
+            return Err(crate::CoreError::Context(
+                "extension prompt fragment body must not be empty".into(),
+            ));
+        }
+        Ok(Self {
+            source: InstructionSource::try_from(fragment.source())?,
+            layer: match fragment.layer() {
+                zeta_extension_api::PromptFragmentLayer::System => InstructionLayer::System,
+                zeta_extension_api::PromptFragmentLayer::Product => InstructionLayer::Product,
+                zeta_extension_api::PromptFragmentLayer::Workspace => InstructionLayer::Workspace,
+                zeta_extension_api::PromptFragmentLayer::Skill => InstructionLayer::Skill,
+            },
+            retention: match fragment.retention() {
+                zeta_extension_api::PromptFragmentRetention::Required => {
+                    InstructionRetention::Required
+                }
+                zeta_extension_api::PromptFragmentRetention::BestEffort => {
+                    InstructionRetention::BestEffort
+                }
+            },
+            body: fragment.body().to_owned(),
+        })
+    }
+}
+
 /// Complete immutable input to one context-planning operation.
 #[derive(Clone, Debug)]
 pub(crate) struct ContextInput {
     source_thread_sequence: u64,
     current_turn_id: TurnId,
     instructions: Vec<InstructionFragment>,
+    evidence: Vec<ContextEvidence>,
     items: Vec<ThreadItem>,
     checkpoints: Vec<ContextCheckpoint>,
     item_sequences: BTreeMap<ItemId, u64>,
@@ -123,12 +175,18 @@ impl ContextInput {
             source_thread_sequence: snapshot.sequence,
             current_turn_id,
             instructions,
+            evidence: Vec::new(),
             items: snapshot.items.clone(),
             checkpoints: snapshot.context_checkpoints.clone(),
             item_sequences: snapshot.item_sequences.clone(),
             tools,
             budget,
         }
+    }
+
+    pub(crate) fn with_evidence(mut self, evidence: Vec<ContextEvidence>) -> Self {
+        self.evidence = evidence;
+        self
     }
 
     pub(crate) const fn source_thread_sequence(&self) -> u64 {
@@ -145,6 +203,10 @@ impl ContextInput {
 
     pub(crate) fn items(&self) -> &[ThreadItem] {
         &self.items
+    }
+
+    pub(crate) fn evidence(&self) -> &[ContextEvidence] {
+        &self.evidence
     }
 
     pub(crate) fn checkpoints(&self) -> &[ContextCheckpoint] {

@@ -4,7 +4,8 @@
 > - Rust crate：`zeta_model_provider`
 > - 层次：Provider 运行时与选择层
 > - 当前状态：同步 unary runtime 已直接组合 `zeta-api` endpoint profile、`zeta-client`
->   operation retry 与 `zeta-http-client` transport；credential 与 streaming 尚未实现
+>   operation retry 与 `zeta-http-client` transport；semantic OpenAI API-key materialization 已有 host-injected
+>   `SecretStore` 路径，持久化 credential 产品闭环与 streaming 尚未实现
 > - Crate 实现与 adapter 调用图：[`zeta-rs/model-provider/README.md`](../zeta-rs/model-provider/README.md)
 > - 声明配置层：[`model-provider-config.md`](model-provider-config.md)
 > - API 协议层：[`zeta-api.md`](zeta-api.md)
@@ -26,7 +27,7 @@
 | 自定义服务地址会影响什么？ | 只在供应商配置明确允许时生效，不会把一个服务偷偷当成另一个协议 | [供应商与 API 端点](#5-供应商与-api-端点的联动) |
 | 凭据由这里保存吗？ | 不保存；这里只取得本次调用所需的凭据，保存和登录属于相邻系统 | [供应商凭据](#6-供应商凭据与订阅后端) |
 | 失败后会自动重试吗？ | 只有调用类型明确允许安全重试时才会重试；模型推理默认不能仅凭“没收到输出”重跑 | [重试分工](#8-重试分工) |
-| 当前已经能做什么？ | 已具备同步、非流式调用组合；凭据闭环和真实流式调用尚未完成 | [当前实现审计](#3-当前实现审计) |
+| 当前已经能做什么？ | 已具备同步非流式 completion、embedding/rerank 调用；持久化凭据闭环和真实流式调用尚未完成 | [当前实现审计](#3-当前实现审计) |
 
 ## 1. 一次调用如何形成
 
@@ -103,6 +104,7 @@ flowchart TD
 - `ModelInvoker` 表达不可变 Provider/model selection；
 - `src/providers/` 按外部服务组织 runtime adapter；
 - `NormalizedModelProviderConfig::api_profile` 显式选择 `ApiEndpoint`；
+- `SemanticRuntimeResolver` 将 OpenAI-compatible/OpenAI/Ollama 的 exact config 解析为 immutable embedding/rerank invoker；
 - `model-provider → zeta-api`、`zeta-client` 和 `zeta-http-client`，没有反向依赖。
 
 已移除的重复分派为：

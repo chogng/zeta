@@ -1,6 +1,7 @@
 use std::fmt;
 use zeta_api::ApiError;
 use zeta_model_provider_config::{ModelId, ProviderConfigError, ProviderId};
+use zeta_secrets::SecretStoreError;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ModelProviderError {
@@ -12,6 +13,7 @@ pub enum ModelProviderError {
         model: ModelId,
     },
     Api(ApiError),
+    Credential(String),
     Cancelled(String),
     Unavailable(String),
 }
@@ -29,9 +31,18 @@ impl fmt::Display for ModelProviderError {
                 "model '{model}' is not registered under provider '{provider}'"
             ),
             Self::Api(error) => error.fmt(formatter),
+            Self::Credential(message) => {
+                write!(formatter, "provider credential unavailable: {message}")
+            }
             Self::Cancelled(message) => write!(formatter, "model invocation cancelled: {message}"),
             Self::Unavailable(message) => formatter.write_str(message),
         }
+    }
+}
+
+impl From<SecretStoreError> for ModelProviderError {
+    fn from(error: SecretStoreError) -> Self {
+        Self::Credential(error.to_string())
     }
 }
 
@@ -60,5 +71,15 @@ impl ModelProviderError {
                 | Self::Api(ApiError::RateLimited { .. })
                 | Self::Api(ApiError::Overloaded)
         )
+    }
+
+    /// Returns the bounded server-requested delay for a transient rate limit.
+    pub fn retry_after(&self) -> Option<std::time::Duration> {
+        match self {
+            Self::Api(ApiError::RateLimited {
+                retry_after_ms: Some(delay),
+            }) => Some(std::time::Duration::from_millis(*delay)),
+            _ => None,
+        }
     }
 }

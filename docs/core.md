@@ -78,7 +78,8 @@ Agent 生命周期能够成为 authority 的前提。
 - provider wire-level streaming 与 App Server 独立 outbound worker；
 - 完整 `TurnPolicySnapshot` 中除 revision 外的 execution limit/agent role 集合，以及
   `ModelInvocationSnapshot` 的独立 provider/config/catalog revision 集合；
-- provider 精确 tokenizer/usage 校准、prompt cache/reference baseline 与跨 Thread context seed；
+- provider 精确 tokenizer 生产 adapter、usage 校准、prompt cache/reference baseline 与跨 Thread
+  context seed；
 - 并行 Tool、通用 deadline、声明式 retry 与 reconciliation；
 - durable multi-Agent delegation、跨 Thread message/result 与 Agent tree resource budget；
 - 所有 durable boundary 的 fault injection。
@@ -310,9 +311,10 @@ Turn 就继续执行。安全边界应由可取消的 token/cost/deadline policy
 capability revision 索引的派生视图，但不能维护第二份 canonical transcript。完整契约见
 [`core-context.md`](core-context.md)。
 
-### 5.6 MultiAgentCoordinator（仅设计）
+### 5.6 MultiAgentCoordinator（部分实现）
 
-这是只在多 Agent 模式下参与的跨 Thread 协调组件，负责：
+这是只在多 Agent 模式下参与的跨 Thread 协调组件。当前已负责 Fresh spawn、durable
+delegation、message/result delivery、recovery 与结构性 tree budget；目标完整职责包括：
 
 - spawn、send、join、cancel、close；
 - durable delegation 与 delivery identity；
@@ -531,7 +533,8 @@ durable Thread snapshot
 ContextManager
   → validate source revisions
   → select history/injected fragments/checkpoint
-  → apply precedence and context budget
+  → apply precedence
+  → resolve model-neutral budget through zeta-context-engine
   → produce ContextPlan
 ContextAssembler
   → validate structural invariants
@@ -738,27 +741,26 @@ zeta-rs/core/src/
 │  ├─ model.rs
 │  ├─ plan.rs
 │  ├─ assembler.rs
-│  ├─ budget.rs
 │  └─ validation.rs
 ├─ context_manager/
 │  ├─ manager.rs
 │  ├─ selection.rs
 │  ├─ window.rs
 │  └─ compaction.rs
+├─ multi_agent.rs
 ├─ multi_agent/
-│  ├─ mod.rs
 │  ├─ coordinator.rs
-│  ├─ delegation.rs
-│  ├─ spawn.rs
-│  ├─ messaging.rs
-│  ├─ join.rs
 │  ├─ budget.rs
-│  └─ recovery.rs
+│  ├─ context.rs
+│  └─ coordinator_tests.rs
 └─ tool/
    ├─ scheduler.rs
    ├─ policy.rs
    └─ outcome.rs
 ```
+
+模型无关预算、精准/估算 token 计量结果和边界判定位于同级 `zeta-context-engine` crate，不在 Core
+目录内复制；Core `context` 只保留 Thread 内容选择、结构校验与组装。
 
 约束：
 
@@ -822,11 +824,13 @@ Fault-injection tests：
    execution mailbox；
 3. 已落地 durable policy revision binding 与 `ModelInvocationSnapshot` 核心纵向切片；完整
    policy/provider revision 集合按真实需求扩展；
-4. 已引入独立 `context/` 与 `context_manager`，完成纯 budget planner、checkpoint 与 compaction；
+4. 已引入独立 `context/` 与 `context_manager`，完成纯内容选择、checkpoint 与 compaction；通用预算
+   数学和 token 计量契约已提取到 `zeta-context-engine`；
 5. 扩展现有 ToolScheduler：已完成 durable one-time approval、safe sandbox escalation、顺序
    Tool 与 UnknownOutcome 基线，后续增加并行计划、deadline、声明式 retry、reconciliation 与
    resource conflict；
-6. 增加 `multi_agent/`、MultiAgentCoordinator、delegation protocol 与 context inheritance；
+6. 已增加 `multi_agent.rs`、`MultiAgentCoordinator`、delegation protocol 与 Fresh context
+   inheritance；Selected/ForkedPrefix、durable join 和 cancellation tree 继续演进；
 7. 完成 provider wire streaming、outbound writer 与 fault injection；
 8. 通过 context continuity、多 Agent 隔离、取消和副作用恢复评测。
 
@@ -841,6 +845,7 @@ Thread projection、store、command receipt 或 App Server 时，才评审提取
 - 每个 loaded Thread 一个 ContextManager，不共享可变 context；
 - ContextManager 是可重建派生协调状态，不是第二份 canonical history；
 - ContextAssembler 是纯组装组件，不承担 context 生命周期；
+- 模型无关 context budget 与 token measurement 属于 `zeta-context-engine`；
 - Agent delegation、fork lineage 与 context inheritance 是三种不同关系；
 - child Agent 使用独立 Thread，父子只通过 durable seed/message/result 交流；
 - 每个 Thread 的 context budget 与整个 Agent tree 的资源预算分开；

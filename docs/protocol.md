@@ -114,10 +114,10 @@ Session
 Session 不嵌入 Thread 的 Turn/Item 历史。`ThreadOrigin::Fork` 保存
 `parentThreadId + parentSequence`，表达不可变的分支历史锚点。
 
-当前 canonical `ThreadOrigin` 只有 `Root` 与 `Fork`。Agent spawn、delegation、context seed 和
-跨 Thread message/result 尚未进入本契约；目标语义由
-[`core-multi-agent.md`](core-multi-agent.md) 先行定义，实施时必须同步更新 canonical Rust 类型、
-schema、TypeScript、store 和 App Server contract，不能把 `Fork` 临时复用成 Agent spawn。
+当前 canonical `ThreadOrigin` 包含 `Root`、`Fork`、`Rewind` 与 `AgentSpawn`。Agent spawn 使用
+独立 `DelegationId`、不可变 `AgentContextSeed` 和跨 Thread message/result events；不复用
+`Fork`。当前实现边界与尚未完成的 join/cancellation 语义见
+[`core-multi-agent.md`](core-multi-agent.md)。
 
 长期若 Session shared defaults 需要被多个客户端读取、修改并持久恢复，应以明确的
 `SessionSettings` value 和 typed event 进入本契约；当前代码尚未形成该闭环，不能把 Core
@@ -147,7 +147,8 @@ Session sequence 与 Thread sequence 是两个 aggregate 的 revision，不是 I
 其中 `WaitingForUserInput` 与 `WaitingForCapability` 已有 durable interaction event、Core reducer
 和 recovery 支持；它们不能再被解释成单纯预留 enum。App Server 已按 initialize capability +
 Session-owned Thread subscription 选择 ephemeral owner，通过 `agent/request` 主动投递，并执行
-断连重选和 durable deadline cancellation；这些 runtime state 仍不属于 canonical Thread。
+按 interaction 语义决定的断连处理和 durable deadline cancellation；这些 runtime state 仍不属于
+canonical Thread。
 
 ### 3.4 ThreadItem
 
@@ -293,13 +294,16 @@ request fact committed
 
 这里的 `owner connection` 不能进入 `ThreadEvent`、`TurnInteraction` 或 canonical Thread snapshot：
 connection ID 在断开后失效，不是产品身份。App Server 必须维护短暂的 `RequestId → connection`
-delivery assignment；断开时只能重新选择并重投递，或追加 `InteractionCancelled {
-reason: OwnerDisconnected }`，不得让 durable Turn 永远停在 waiting。deadline 同样是 durable
-absolute instant，但 timer 和超时 policy 属于执行控制层。
+delivery assignment；断开时，尚未产生外部副作用的 approval/user-input 可以重新选择并重投递，
+已经投递的 dynamic tool 必须追加 `InteractionCancelled { reason: OwnerDisconnected }` 并按
+unknown outcome 收口，不能交给另一连接重试。任何分支都不得让 durable Turn 永远停在 waiting。
+deadline 同样是 durable absolute instant，但 timer 和超时 policy 属于执行控制层。
 
 当前已完成 canonical contract、Core reducer/recovery、`session/request::ResolveInteraction`、
-initialize capability、connection owner selection、`agent/request` 主动 delivery、断连重选与
-deadline timer。具体 host 只声明它实际支持的 interaction kind；未声明 kind 不会被错误投递。
+initialize capability、connection owner selection、`agent/request` 主动 delivery、按 interaction
+语义处理 owner 断连与 deadline timer。具体 host 只声明它实际支持的 interaction kind；对于
+dynamic tool，还必须在 `dynamicTools` 中声明它实际承载的 exact tool name，仅声明
+`DynamicTool` kind 不会获得其他动态工具的执行权。
 
 ## 5. Sequence、Cursor 与 ID
 

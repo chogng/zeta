@@ -1,4 +1,5 @@
 use super::code_index_runtime::CodeIndexRuntime;
+use super::semantic_index_job::SemanticIndexJobController;
 use super::update_broker::UpdateBroker;
 use std::collections::BTreeSet;
 use std::fmt;
@@ -30,6 +31,7 @@ enum FileSystemWatcherObservers {
     None,
     WorkspaceRuntime {
         code_index: Arc<CodeIndexRuntime>,
+        code_index_semantic: Option<Arc<SemanticIndexJobController>>,
         changes: Arc<dyn WorkspaceFileChangeSink>,
     },
 }
@@ -74,7 +76,10 @@ struct CodeIndexRefreshWorker {
 }
 
 impl CodeIndexRefreshWorker {
-    fn start(runtime: Arc<CodeIndexRuntime>) -> Result<Self, String> {
+    fn start(
+        runtime: Arc<CodeIndexRuntime>,
+        semantic: Option<Arc<SemanticIndexJobController>>,
+    ) -> Result<Self, String> {
         let pending = Arc::new(Mutex::new(PendingCodeIndexRefresh::None));
         let (wake, receiver) = std::sync::mpsc::sync_channel(1);
         let worker_runtime = Arc::clone(&runtime);
@@ -88,7 +93,22 @@ impl CodeIndexRefreshWorker {
                         .unwrap_or_else(|poisoned| poisoned.into_inner())
                         .take_event();
                     if let Some(event) = event {
+                        let previous_generation = worker_runtime
+                            .index()
+                            .snapshot()
+                            .map(|snapshot| snapshot.generation)
+                            .ok();
                         worker_runtime.apply_watcher_event(&event);
+                        let current_generation = worker_runtime
+                            .index()
+                            .snapshot()
+                            .map(|snapshot| snapshot.generation)
+                            .ok();
+                        if previous_generation != current_generation
+                            && let Some(semantic) = &semantic
+                        {
+                            semantic.schedule();
+                        }
                     }
                 }
             })
@@ -101,6 +121,8 @@ impl CodeIndexRefreshWorker {
     }
 
     fn schedule(&self, event: FileWatcherEvent) {
+        // Cancellation is owned by the semantic job; the lexical worker publishes the next exact
+        // generation before asking it to resume.
         self.pending
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -143,6 +165,7 @@ impl FileSystemWatcher {
         workspace: WorkspaceRoot,
         updates: Arc<UpdateBroker>,
         code_index: Arc<CodeIndexRuntime>,
+        code_index_semantic: Option<Arc<SemanticIndexJobController>>,
         changes: Arc<dyn WorkspaceFileChangeSink>,
     ) -> Result<Self, FileSystemWatcherError> {
         Self::start_inner(
@@ -150,6 +173,7 @@ impl FileSystemWatcher {
             updates,
             FileSystemWatcherObservers::WorkspaceRuntime {
                 code_index,
+                code_index_semantic,
                 changes,
             },
         )
@@ -217,12 +241,13 @@ fn watch_workspace(
     mut shutdown: tokio::sync::oneshot::Receiver<()>,
     startup: std::sync::mpsc::SyncSender<Result<(), String>>,
 ) {
-    let (code_index, changes) = match observers {
-        FileSystemWatcherObservers::None => (None, None),
+    let (code_index, code_index_semantic, changes) = match observers {
+        FileSystemWatcherObservers::None => (None, None, None),
         FileSystemWatcherObservers::WorkspaceRuntime {
             code_index,
+            code_index_semantic,
             changes,
-        } => (Some(code_index), Some(changes)),
+        } => (Some(code_index), code_index_semantic, Some(changes)),
     };
     let Ok(tokio_runtime) = tokio::runtime::Builder::new_current_thread()
         .enable_time()
@@ -263,13 +288,15 @@ fn watch_workspace(
             }
         };
         let code_index_worker = match code_index {
-            Some(code_index) => match CodeIndexRefreshWorker::start(code_index) {
-                Ok(worker) => Some(worker),
-                Err(error) => {
-                    let _ = startup.send(Err(error));
-                    return;
+            Some(code_index) => {
+                match CodeIndexRefreshWorker::start(code_index, code_index_semantic) {
+                    Ok(worker) => Some(worker),
+                    Err(error) => {
+                        let _ = startup.send(Err(error));
+                        return;
+                    }
                 }
-            },
+            }
             None => None,
         };
         if let Some(changes) = &changes {

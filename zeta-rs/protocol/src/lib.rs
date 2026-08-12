@@ -6,6 +6,7 @@ mod ids;
 mod interaction;
 mod item;
 mod model;
+mod multi_agent;
 mod session;
 mod skill;
 mod stream;
@@ -17,8 +18,8 @@ mod turn;
 pub use config::{ApprovalMode, Patch, Personality, SandboxMode, Theme, WebSearchMode};
 pub use error::{StableTurnError, StableTurnErrorCode};
 pub use ids::{
-    CommandId, ContextCheckpointId, InvalidIdentifier, ItemId, RequestId, SessionId, ThreadId,
-    ToolCallId, TurnId,
+    AgentJoinId, AgentMessageId, CommandId, ContextCheckpointId, DelegationId, InvalidIdentifier,
+    ItemId, RequestId, SessionId, ThreadId, ToolCallId, TurnId,
 };
 pub use interaction::{
     ActionApprovalCapability, ActionApprovalCapabilityKind, ActionApprovalDecision,
@@ -34,6 +35,14 @@ pub use model::{
     Message, MessageRole, Model, ModelCapabilities, ModelId, ModelInfo, ModelPreset, ModelRef,
     ModelRequest, ModelResponse, ModelStreamEvent, ModelUsage, ProviderId, ReasoningConfig,
     ReasoningEffort, ResponseItem, StopReason, ToolCall, ToolChoice, ToolDefinition, ToolResult,
+};
+pub use multi_agent::{
+    AgentContextContent, AgentContextMode, AgentContextSeed, AgentContextSource, AgentJoin,
+    AgentJoinPolicy, AgentJoinStatus, AgentMaterializedContext, AgentMessage, AgentMessageContent,
+    AgentMessageProvenance, AgentRoleSnapshot, ContextSeedDigest, DelegatedCapabilityScope,
+    DelegatedPolicyCeiling, DelegatedTask, DelegationArtifactRef, DelegationResult,
+    DelegationResultDigest, DelegationResultStatus, ForkedAgentContext, InvalidContextSeedDigest,
+    InvalidDelegationResultDigest, ThreadSequenceRange,
 };
 pub use session::{
     Session, SessionCommand, SessionEvent, SessionStatus, SessionThread, SessionThreadStatus,

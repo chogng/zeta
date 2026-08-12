@@ -12,6 +12,8 @@ import { createDisconnectedSkillApi } from "../../skills/browser/skillApi.js";
 import { DisconnectedTerminalProcessService } from "../../terminal/browser/disconnectedTerminalProcessService.js";
 import { createDisconnectedTypstApi } from "../../typst/browser/typstApi.js";
 import { createDisconnectedDocumentCollaborationApi } from "../../collaboration/browser/documentCollaborationApi.js";
+import { createDisconnectedCodeIndexApi } from "../../codeIndex/browser/codeIndexApi.js";
+import { createDisconnectedToolSearchApi } from "../../toolSearch/browser/toolSearchApi.js";
 
 export { WebAppServerUnavailableError };
 
@@ -36,5 +38,7 @@ export function createDisconnectedRendererApi(): IRendererHost {
     workspaceSearch: createDisconnectedWorkspaceSearchApi(unavailableOperation),
     terminal: new DisconnectedTerminalProcessService(unavailableOperation, appServer),
     events: createDisconnectedServerEventApi(),
+    codeIndex: createDisconnectedCodeIndexApi(unavailableOperation),
+    toolSearch: createDisconnectedToolSearchApi(unavailableOperation),
   };
 }

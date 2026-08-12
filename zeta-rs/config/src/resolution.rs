@@ -26,6 +26,8 @@ pub struct ConfigProvenance {
     pub plugin_requests: BTreeMap<PluginId, ConfigValueSource>,
     pub hooks: BTreeMap<HookId, ConfigValueSource>,
     pub language_servers: BTreeMap<LanguageServerId, ConfigValueSource>,
+    pub tool_search: ConfigValueSource,
+    pub semantic_code_index: ConfigValueSource,
 }
 
 impl ConfigProvenance {
@@ -78,6 +80,8 @@ impl ConfigProvenance {
                 .cloned()
                 .map(|id| (id, ConfigValueSource::User))
                 .collect(),
+            tool_search: ConfigValueSource::User,
+            semantic_code_index: ConfigValueSource::User,
         }
     }
 }

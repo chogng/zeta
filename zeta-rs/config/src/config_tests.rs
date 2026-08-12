@@ -50,6 +50,70 @@ fn model_ref(provider: &str, model: &str) -> ModelRef {
     )
 }
 
+#[test]
+fn tool_search_defaults_to_lexical_and_requires_a_configured_embedding_model() {
+    let default_document = toml::from_str::<UserConfigDocument>("").unwrap();
+    assert_eq!(
+        default_document.tool_search.mode,
+        ToolSearchModeConfig::Lexical
+    );
+
+    let invalid_hybrid =
+        toml::from_str::<UserConfigDocument>("[toolSearch]\nmode = \"hybridEmbedding\"\n").unwrap();
+    assert!(invalid_hybrid.validate().is_err());
+
+    let provider = provider_id("ollama");
+    let embedding_model = model_ref("ollama", "nomic-embed-text");
+    let mut hybrid_document = UserConfigDocument::default();
+    hybrid_document
+        .providers
+        .insert(provider.clone(), ModelProviderConfig::new(provider));
+    hybrid_document.tool_search = ToolSearchConfig {
+        mode: ToolSearchModeConfig::HybridEmbedding,
+        embedding_model: Some(embedding_model.clone()),
+    };
+    hybrid_document.validate().unwrap();
+    assert_eq!(
+        ResolvedConfig::from(&hybrid_document).tool_search,
+        ToolSearchConfig {
+            mode: ToolSearchModeConfig::HybridEmbedding,
+            embedding_model: Some(embedding_model),
+        }
+    );
+}
+
+#[test]
+fn tool_search_command_persists_the_exact_embedding_model() {
+    let path = config_path("tool-search-command");
+    let store = ConfigStore::open(&path).unwrap();
+    let provider = configure_provider(&store, 0, "ollama");
+    let embedding_model = model_ref("ollama", "nomic-embed-text");
+
+    let configured = store
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("configure-tool-search").unwrap(),
+            expected_revision: provider.revision,
+            command: UserConfigCommand::ConfigureToolSearch {
+                config: ToolSearchConfig {
+                    mode: ToolSearchModeConfig::HybridEmbedding,
+                    embedding_model: Some(embedding_model.clone()),
+                },
+            },
+        })
+        .unwrap();
+
+    assert_eq!(configured.revision, ConfigRevision::new(2));
+    assert_eq!(
+        store.read_snapshot().unwrap().values.tool_search,
+        ToolSearchConfig {
+            mode: ToolSearchModeConfig::HybridEmbedding,
+            embedding_model: Some(embedding_model),
+        }
+    );
+    drop(store);
+    remove_config_files(&path);
+}
+
 fn configure_provider(store: &ConfigStore, revision: u64, provider: &str) -> ConfigCommandResult {
     store
         .apply(ConfigCommandRequest {
@@ -80,6 +144,59 @@ fn update_preferences(
 
 fn workspace_trust_id() -> WorkspaceTrustId {
     format!("sha256:{}", "12".repeat(32)).parse().unwrap()
+}
+
+#[test]
+fn semantic_code_index_egress_grants_are_bound_to_workspace_models_and_provider_config() {
+    let workspace = workspace_trust_id();
+    let provider = provider_id("openai-compatible");
+    let mut provider_config = ModelProviderConfig::new(provider.clone());
+    provider_config.base_url = Some("https://models.example.test/v1".into());
+    let mut providers = BTreeMap::from([(provider.clone(), provider_config.clone())]);
+    let first_models = SemanticCodeIndexModelSelection {
+        embedding_model: model_ref("openai-compatible", "embed-v1"),
+        rerank_model: Some(model_ref("openai-compatible", "rerank-v1")),
+    };
+    let mut config = SemanticCodeIndexConfig::default();
+    config.replace_selection(SemanticCodeIndexSelection::Remote {
+        models: first_models.clone(),
+    });
+    config.authorize(workspace.clone(), &providers).unwrap();
+    assert_eq!(
+        config.authorized_remote_models(&workspace, &providers),
+        Some(&first_models)
+    );
+
+    providers.get_mut(&provider).unwrap().base_url =
+        Some("https://different.example.test/v1".into());
+    assert_eq!(
+        config.authorized_remote_models(&workspace, &providers),
+        None
+    );
+
+    providers.insert(provider, provider_config);
+    config.replace_selection(SemanticCodeIndexSelection::Remote {
+        models: SemanticCodeIndexModelSelection {
+            embedding_model: model_ref("openai-compatible", "embed-v2"),
+            rerank_model: None,
+        },
+    });
+    assert_eq!(
+        config.authorized_remote_models(&workspace, &providers),
+        None
+    );
+
+    config.authorize(workspace.clone(), &providers).unwrap();
+    assert!(
+        config
+            .authorized_remote_models(&workspace, &providers)
+            .is_some()
+    );
+    config.revoke(&workspace);
+    assert_eq!(
+        config.authorized_remote_models(&workspace, &providers),
+        None
+    );
 }
 
 fn mcp_server() -> McpServerConfig {
@@ -338,7 +455,7 @@ fn additive_document_schema_upgrade_keeps_revision_and_generation() {
             |row| row.get(0),
         )
         .unwrap();
-    assert_eq!(document_schema_version, 8);
+    assert_eq!(document_schema_version, 9);
     drop(store);
     remove_config_files(&path);
 }

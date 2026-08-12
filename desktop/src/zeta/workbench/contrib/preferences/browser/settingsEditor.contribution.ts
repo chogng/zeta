@@ -5,6 +5,8 @@ import type { IThemeService } from "../../../../platform/theme/common/themeServi
 import { ModalEditorPart } from "../../../browser/parts/editor/modalEditorPart.js";
 import type { IUserThemeService } from "../../../common/userThemes.js";
 import type { ISettingsService } from "../../../services/preferences/common/settings.js";
+import type { ICodeIndexService } from "../../../../platform/codeIndex/common/codeIndexService.js";
+import type { IToolSearchService } from "../../../../platform/toolSearch/common/toolSearchService.js";
 import { SettingsEditor } from "./settingsEditor.js";
 
 export interface SettingsEditorContributionOptions {
@@ -14,6 +16,8 @@ export interface SettingsEditorContributionOptions {
   readonly settingsService: ISettingsService;
   readonly themeService: IThemeService;
   readonly userThemeService: IUserThemeService;
+  readonly codeIndexService?: ICodeIndexService;
+  readonly toolSearchService?: IToolSearchService;
 }
 
 /** Connects window Settings state to its modal editor host and content. */
@@ -30,6 +34,8 @@ export class SettingsEditorContribution extends DisposableOwner {
       settingsService: options.settingsService,
       themeService: options.themeService,
       userThemeService: options.userThemeService,
+      codeIndexService: options.codeIndexService ?? unavailableCodeIndexService,
+      toolSearchService: options.toolSearchService ?? unavailableToolSearchService,
     }));
     this.modalEditor = this.own(new ModalEditorPart({
       container: options.container,
@@ -57,3 +63,19 @@ export class SettingsEditorContribution extends DisposableOwner {
     this.editor.layout();
   }
 }
+
+const unavailableCodeIndexService: ICodeIndexService = {
+  readConfig: () => Promise.reject(new Error("Code index settings are unavailable.")),
+  configureProvider: () => Promise.reject(new Error("Code index settings are unavailable.")),
+  configure: () => Promise.reject(new Error("Code index settings are unavailable.")),
+  authorize: () => Promise.reject(new Error("Code index settings are unavailable.")),
+  revoke: () => Promise.reject(new Error("Code index settings are unavailable.")),
+  status: () => Promise.reject(new Error("Code index settings are unavailable.")),
+  cancel: () => Promise.reject(new Error("Code index settings are unavailable.")),
+  retry: () => Promise.reject(new Error("Code index settings are unavailable.")),
+};
+
+const unavailableToolSearchService: IToolSearchService = {
+  readConfig: () => Promise.reject(new Error("Tool Search settings are unavailable.")),
+  configure: () => Promise.reject(new Error("Tool Search settings are unavailable.")),
+};

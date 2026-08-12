@@ -83,14 +83,17 @@ impl UpdateBroker {
         }
     }
 
-    pub(super) fn unregister(&self, connection_id: u64) {
+    pub(super) fn unregister(&self, connection_id: u64) -> Vec<AgentRequestEnvelope> {
         if let Ok(mut state) = self.state.lock() {
+            let lost = take_owned_dynamic_interactions(&mut state, connection_id, |_| true);
             state.subscribers.remove(&connection_id);
             state
                 .interaction_assignments
                 .retain(|_, owner| *owner != connection_id);
             reconcile_interaction_assignments(&mut state);
+            return lost;
         }
+        Vec::new()
     }
 
     pub(super) fn set_agent_interaction_capability(
@@ -180,7 +183,11 @@ impl UpdateBroker {
         }
     }
 
-    pub(super) fn unsubscribe_session(&self, connection_id: u64, session_id: &SessionId) {
+    pub(super) fn unsubscribe_session(
+        &self,
+        connection_id: u64,
+        session_id: &SessionId,
+    ) -> Vec<AgentRequestEnvelope> {
         if let Ok(mut state) = self.state.lock()
             && let Some(subscriber) = state.subscribers.get_mut(&connection_id)
         {
@@ -189,8 +196,13 @@ impl UpdateBroker {
                 subscription.session_owners.remove(session_id);
                 !subscription.session_owners.is_empty()
             });
+            let lost = take_owned_dynamic_interactions(&mut state, connection_id, |request| {
+                &request.session_id == session_id
+            });
             reconcile_interaction_assignments(&mut state);
+            return lost;
         }
+        Vec::new()
     }
 
     pub(super) fn subscribe_document_collaboration(&self, connection_id: u64, room_id: String) {
@@ -262,7 +274,7 @@ impl UpdateBroker {
         connection_id: u64,
         session_id: &SessionId,
         thread_id: &ThreadId,
-    ) {
+    ) -> Vec<AgentRequestEnvelope> {
         if let Ok(mut state) = self.state.lock()
             && let Some(subscriber) = state.subscribers.get_mut(&connection_id)
         {
@@ -272,8 +284,13 @@ impl UpdateBroker {
                     subscriber.threads.remove(thread_id);
                 }
             }
+            let lost = take_owned_dynamic_interactions(&mut state, connection_id, |request| {
+                &request.session_id == session_id && &request.thread_id == thread_id
+            });
             reconcile_interaction_assignments(&mut state);
+            return lost;
         }
+        Vec::new()
     }
 
     pub(super) fn publish_session(
@@ -492,6 +509,41 @@ impl UpdateBroker {
     }
 }
 
+fn take_owned_dynamic_interactions(
+    state: &mut BrokerState,
+    connection_id: u64,
+    matches_scope: impl Fn(&AgentRequestEnvelope) -> bool,
+) -> Vec<AgentRequestEnvelope> {
+    let request_ids = state
+        .interaction_assignments
+        .iter()
+        .filter_map(|(request_id, owner)| {
+            if *owner != connection_id {
+                return None;
+            }
+            let request = state.pending_interactions.get(request_id)?;
+            (matches!(
+                &request.interaction.request,
+                zeta_protocol::AgentRequest::DynamicTool { .. }
+            ) && matches_scope(request))
+            .then(|| request_id.clone())
+        })
+        .collect::<Vec<_>>();
+    request_ids
+        .into_iter()
+        .filter_map(|request_id| {
+            state.interaction_assignments.remove(&request_id);
+            state.pending_interactions.remove(&request_id)
+        })
+        .collect()
+}
+
+impl zeta_skills_extension::SkillRuntimeEventSink for UpdateBroker {
+    fn skills_changed(&self, generation: u64) {
+        self.publish_skills_changed(generation);
+    }
+}
+
 fn reconcile_interaction_assignments(state: &mut BrokerState) {
     let invalid_assignments = state
         .interaction_assignments
@@ -545,10 +597,18 @@ fn interaction_owner_matches(subscriber: &Subscriber, request: &AgentRequestEnve
         .agent_interactions
         .as_ref()
         .is_some_and(|capability| {
+            let supports_exact_dynamic_tool = match &request.interaction.request {
+                zeta_protocol::AgentRequest::DynamicTool { call } => capability
+                    .dynamic_tools
+                    .as_ref()
+                    .is_some_and(|tools| tools.contains(&call.name)),
+                _ => true,
+            };
             capability.version == 1
                 && capability
                     .kinds
                     .contains(&request.interaction.request.kind())
+                && supports_exact_dynamic_tool
         });
     supports_kind
         && subscriber

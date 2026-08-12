@@ -334,9 +334,72 @@ fn canonical_identifiers_reject_empty_construction_and_deserialization() {
     assert!(SessionId::new("").is_err());
     assert!(ThreadId::new("   ").is_err());
     assert!(CommandId::new("").is_err());
+    assert!(DelegationId::new("").is_err());
+    assert!(AgentJoinId::new(" ").is_err());
+    assert!(AgentMessageId::new(" ").is_err());
     assert!(ToolCallId::new("\n").is_err());
     assert!(serde_json::from_str::<SessionId>("\"\"").is_err());
     assert!(serde_json::from_str::<StreamInstanceId>("\"  \"").is_err());
+}
+
+#[test]
+fn agent_join_and_cancellation_facts_have_stable_wire_shapes() {
+    let join = AgentJoin {
+        join_id: AgentJoinId::new("join-1").unwrap(),
+        parent_thread_id: ThreadId::new("parent").unwrap(),
+        policy: AgentJoinPolicy::Quorum { count: 2 },
+        delegations: vec![
+            DelegationId::new("one").unwrap(),
+            DelegationId::new("two").unwrap(),
+        ],
+        status: AgentJoinStatus::Waiting,
+        satisfied_by: Vec::new(),
+    };
+    assert_eq!(
+        serde_json::to_value(join).unwrap(),
+        json!({
+            "joinId": "join-1",
+            "parentThreadId": "parent",
+            "policy": { "type": "quorum", "count": 2 },
+            "delegations": ["one", "two"],
+            "status": "waiting",
+            "satisfiedBy": []
+        })
+    );
+    assert_eq!(
+        serde_json::to_value(ThreadEvent::DelegationCancellationRequested {
+            thread_id: ThreadId::new("parent").unwrap(),
+            delegation_id: DelegationId::new("one").unwrap(),
+        })
+        .unwrap(),
+        json!({
+            "type": "delegationCancellationRequested",
+            "threadId": "parent",
+            "delegationId": "one"
+        })
+    );
+}
+
+#[test]
+fn agent_spawn_lineage_and_digests_have_a_stable_wire_shape() {
+    let origin = ThreadOrigin::AgentSpawn {
+        parent_thread_id: ThreadId::new("thread_parent").unwrap(),
+        parent_sequence: 17,
+        delegation_id: DelegationId::new("delegation_review").unwrap(),
+    };
+
+    assert_eq!(
+        serde_json::to_value(origin).unwrap(),
+        json!({
+            "type": "agentSpawn",
+            "parentThreadId": "thread_parent",
+            "parentSequence": 17,
+            "delegationId": "delegation_review"
+        })
+    );
+    assert!(ContextSeedDigest::new(format!("sha256:{}", "a".repeat(64))).is_ok());
+    assert!(ContextSeedDigest::new(format!("sha256:{}", "A".repeat(64))).is_err());
+    assert!(DelegationResultDigest::new("sha256:short").is_err());
 }
 
 #[test]

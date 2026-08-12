@@ -7,6 +7,7 @@ use zeta_protocol::ActionApprovalRequest;
 use zeta_protocol::AgentInteractionKind;
 use zeta_protocol::AgentRequest;
 use zeta_protocol::AgentRequestEnvelope;
+use zeta_protocol::DynamicToolCall;
 use zeta_protocol::RequestId;
 use zeta_protocol::SessionEvent;
 use zeta_protocol::SessionUpdate;
@@ -14,6 +15,8 @@ use zeta_protocol::ThreadEvent;
 use zeta_protocol::ThreadId;
 use zeta_protocol::ThreadUpdate;
 use zeta_protocol::ThreadUpdateEnvelope;
+use zeta_protocol::ToolCallId;
+use zeta_protocol::ToolName;
 use zeta_protocol::TurnId;
 
 #[test]
@@ -140,6 +143,49 @@ fn agent_request_is_reassigned_when_its_connection_closes() {
 }
 
 #[test]
+fn delivered_dynamic_tool_is_not_reassigned_when_its_owner_closes() {
+    let broker = UpdateBroker::default();
+    let first = NotificationQueue::default();
+    let second = NotificationQueue::default();
+    let session_id = SessionId::new("session_1").unwrap();
+    let thread_id = ThreadId::new("thread_1").unwrap();
+    broker.register(1, &first);
+    broker.register(2, &second);
+    broker.set_agent_interaction_capability(1, Some(dynamic_tool_capability()));
+    broker.set_agent_interaction_capability(2, Some(dynamic_tool_capability()));
+    broker.subscribe_session_thread(1, session_id.clone(), thread_id.clone(), 0);
+    broker.subscribe_session_thread(2, session_id.clone(), thread_id.clone(), 0);
+    broker.offer_agent_request(dynamic_tool_request(&session_id, &thread_id));
+    first.drain();
+
+    let lost = broker.unregister(1);
+
+    assert_eq!(lost.len(), 1);
+    assert_eq!(lost[0].interaction.request_id.as_str(), "dynamic_1");
+    assert!(second.drain().is_empty());
+}
+
+#[test]
+fn dynamic_tool_is_delivered_only_to_a_connection_hosting_that_tool_name() {
+    let broker = UpdateBroker::default();
+    let other = NotificationQueue::default();
+    let owner = NotificationQueue::default();
+    let session_id = SessionId::new("session_1").unwrap();
+    let thread_id = ThreadId::new("thread_1").unwrap();
+    broker.register(1, &other);
+    broker.register(2, &owner);
+    broker.set_agent_interaction_capability(1, Some(dynamic_tool_capability_for("other_tool")));
+    broker.set_agent_interaction_capability(2, Some(dynamic_tool_capability()));
+    broker.subscribe_session_thread(1, session_id.clone(), thread_id.clone(), 0);
+    broker.subscribe_session_thread(2, session_id.clone(), thread_id.clone(), 0);
+
+    broker.offer_agent_request(dynamic_tool_request(&session_id, &thread_id));
+
+    assert!(other.drain().is_empty());
+    assert_eq!(owner.drain().len(), 1);
+}
+
+#[test]
 fn agent_request_waits_until_a_matching_capability_subscribes() {
     let broker = UpdateBroker::default();
     let queue = NotificationQueue::default();
@@ -159,6 +205,40 @@ fn approval_capability() -> AgentInteractionCapability {
     AgentInteractionCapability {
         version: 1,
         kinds: vec![AgentInteractionKind::Approval],
+        dynamic_tools: None,
+    }
+}
+
+fn dynamic_tool_capability() -> AgentInteractionCapability {
+    dynamic_tool_capability_for("client_lookup")
+}
+
+fn dynamic_tool_capability_for(name: &str) -> AgentInteractionCapability {
+    AgentInteractionCapability {
+        version: 1,
+        kinds: vec![AgentInteractionKind::DynamicTool],
+        dynamic_tools: Some(vec![ToolName::new(name).unwrap()]),
+    }
+}
+
+fn dynamic_tool_request(session_id: &SessionId, thread_id: &ThreadId) -> AgentRequestEnvelope {
+    AgentRequestEnvelope {
+        session_id: session_id.clone(),
+        thread_id: thread_id.clone(),
+        turn_id: TurnId::new("turn_1").unwrap(),
+        interaction: zeta_protocol::TurnInteraction {
+            request_id: RequestId::new("dynamic_1").unwrap(),
+            item_id: None,
+            request: AgentRequest::DynamicTool {
+                call: DynamicToolCall {
+                    call_id: ToolCallId::new("call_1").unwrap(),
+                    name: ToolName::new("client_lookup").unwrap(),
+                    definition_digest: "a".repeat(64),
+                    arguments: serde_json::json!({"query": "zeta"}),
+                },
+            },
+            deadline: None,
+        },
     }
 }
 

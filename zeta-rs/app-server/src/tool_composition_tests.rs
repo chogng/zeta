@@ -1,18 +1,42 @@
 use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 
 use zeta_async_utils::CancellationToken;
-use zeta_core::{CoreError, PolicyService, ToolAuthorization, ToolService};
+use zeta_config::ToolSearchModeConfig;
+use zeta_core::CoreError;
+use zeta_core::PolicyService;
+use zeta_core::ProcessExecutionOutput;
+use zeta_core::ProcessExitStatus;
+use zeta_core::SandboxDenialOutput;
+use zeta_core::ToolAuthorization;
+use zeta_core::ToolExecutionFacts;
+use zeta_core::ToolOutputSink;
+use zeta_core::ToolService;
+use zeta_model_provider::EmbeddingInvoker;
+use zeta_model_provider::EmbeddingRequest;
+use zeta_model_provider::EmbeddingResponse;
+use zeta_model_provider::EmbeddingVector;
+use zeta_model_provider::ModelProviderError;
 use zeta_policy::{
     ActionDigest, ActionKind, ActionProvenance, ActionReviewRequest, ActionSource, ApprovalRequest,
     Capability, CapabilityKind, CapabilitySet, ExecutionDecision, GrantId, PolicyRevision,
     ResolvedAction, SandboxCompatibility,
 };
+use zeta_protocol::ToolOutputStream;
 use zeta_protocol::{ToolCall, ToolDefinition, ToolExecutionOutput, ToolName};
+use zeta_tools::ToolExposure;
 
-use super::{ReloadableToolPorts, ToolPort, combine_tool_ports};
+use super::CombinedToolPorts;
+use super::ReloadableToolPorts;
+use super::ToolPort;
+use super::ToolSearchOptions;
+use super::combine_tool_ports;
+use super::combine_tool_ports_at_generation;
+use super::combine_tool_ports_at_generation_with_search;
 
 struct FakeTools {
-    definition: ToolDefinition,
+    definitions: Vec<ToolDefinition>,
     source: ActionSource,
     source_id: &'static str,
 }
@@ -20,12 +44,30 @@ struct FakeTools {
 impl FakeTools {
     fn new(name: &str, source: ActionSource, source_id: &'static str) -> Self {
         Self {
-            definition: ToolDefinition {
+            definitions: vec![ToolDefinition {
                 name: ToolName::new(name).unwrap(),
                 description: name.into(),
                 parameters: serde_json::json!({"type": "object"}),
                 strict: false,
-            },
+            }],
+            source,
+            source_id,
+        }
+    }
+
+    fn catalog(prefix: &str, count: usize, source: ActionSource, source_id: &'static str) -> Self {
+        Self {
+            definitions: (0..count)
+                .map(|index| ToolDefinition {
+                    name: ToolName::new(format!("{prefix}_{index}")).unwrap(),
+                    description: format!("External capability number {index}"),
+                    parameters: serde_json::json!({
+                        "type": "object",
+                        "properties": {}
+                    }),
+                    strict: false,
+                })
+                .collect(),
             source,
             source_id,
         }
@@ -34,7 +76,7 @@ impl FakeTools {
 
 impl ToolService for FakeTools {
     fn definitions(&self) -> Vec<ToolDefinition> {
-        vec![self.definition.clone()]
+        self.definitions.clone()
     }
 
     fn prepare(&self, _: &ToolCall) -> Result<ActionReviewRequest, CoreError> {
@@ -66,6 +108,400 @@ impl ToolService for FakeTools {
     }
 }
 
+#[test]
+fn small_mcp_catalog_is_deferred_by_its_contribution_policy() {
+    let combined = combine_tool_ports(vec![
+        ToolPort::local(
+            Arc::new(FakeTools::new(
+                "read_file",
+                ActionSource::BuiltInTool,
+                "local",
+            )),
+            Arc::new(AskPolicy),
+        ),
+        ToolPort::mcp(
+            Arc::new(FakeTools::new(
+                "external_status",
+                ActionSource::McpServer,
+                "user:mcp:test",
+            )),
+            Arc::new(AskPolicy),
+        ),
+    ])
+    .unwrap()
+    .unwrap();
+
+    let visible = combined
+        .tools
+        .model_definitions(&std::collections::BTreeSet::new())
+        .unwrap();
+
+    assert_eq!(
+        visible
+            .iter()
+            .map(|definition| definition.name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["read_file", "tool_search"]
+    );
+}
+
+#[test]
+fn one_tool_can_override_its_source_default_exposure() {
+    let external = ToolName::new("external_status").unwrap();
+    let mcp = ToolPort::mcp(
+        Arc::new(FakeTools::new(
+            external.as_str(),
+            ActionSource::McpServer,
+            "user:mcp:test",
+        )),
+        Arc::new(AskPolicy),
+    )
+    .with_tool_exposure(&external, ToolExposure::Direct)
+    .unwrap();
+    let combined = combine_tool_ports(vec![mcp]).unwrap().unwrap();
+
+    let visible = combined
+        .tools
+        .model_definitions(&std::collections::BTreeSet::new())
+        .unwrap();
+
+    assert_eq!(
+        visible
+            .iter()
+            .map(|definition| definition.name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["external_status"]
+    );
+}
+
+#[test]
+fn direct_tools_remain_visible_and_deferred_matches_load_after_search() {
+    let combined = combine_tool_ports_at_generation(
+        vec![
+            ToolPort::local(
+                Arc::new(FakeTools::new(
+                    "read_file",
+                    ActionSource::BuiltInTool,
+                    "local",
+                )),
+                Arc::new(AskPolicy),
+            ),
+            ToolPort::mcp(
+                Arc::new(FakeTools::catalog(
+                    "external",
+                    20,
+                    ActionSource::McpServer,
+                    "user:mcp:test",
+                )),
+                Arc::new(AskPolicy),
+            ),
+        ],
+        zeta_tools::ToolRegistryGeneration::new(7),
+    )
+    .unwrap()
+    .unwrap();
+
+    let initial = combined
+        .tools
+        .model_definitions(&std::collections::BTreeSet::new())
+        .unwrap();
+    assert_eq!(
+        initial
+            .iter()
+            .map(|definition| definition.name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["read_file", "tool_search"]
+    );
+
+    let search_call = ToolCall {
+        id: zeta_protocol::ToolCallId::new("search-call").unwrap(),
+        name: ToolName::new("tool_search").unwrap(),
+        arguments: serde_json::json!({
+            "query": "external capability number 17",
+            "limit": 1
+        }),
+    };
+    let review = combined.tools.prepare(&search_call).unwrap();
+    let ExecutionDecision::RunUnsandboxed { grant_id } = combined
+        .policy
+        .decide(
+            &review,
+            &zeta_async_utils::CancellationSource::new().token(),
+        )
+        .unwrap()
+    else {
+        panic!("tool search must receive the internal read-only grant");
+    };
+    let ToolExecutionOutput::Success(output) = combined
+        .tools
+        .execute(
+            &search_call,
+            &ToolAuthorization::UnsandboxedGrant { grant_id },
+            &zeta_async_utils::CancellationSource::new().token(),
+        )
+        .unwrap()
+    else {
+        panic!("tool search must return a successful result");
+    };
+    let activated = combined
+        .tools
+        .activated_tool_names(&search_call, &output)
+        .unwrap()
+        .into_iter()
+        .collect::<std::collections::BTreeSet<_>>();
+
+    let next = combined.tools.model_definitions(&activated).unwrap();
+    assert_eq!(
+        next.iter()
+            .map(|definition| definition.name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["external_17", "read_file", "tool_search"]
+    );
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&output).unwrap()["registry_generation"],
+        7
+    );
+
+    let mut forged = serde_json::from_str::<serde_json::Value>(&output).unwrap();
+    forged["registry_generation"] = serde_json::json!(8);
+    assert!(
+        combined
+            .tools
+            .activated_tool_names(&search_call, &forged.to_string())
+            .is_err()
+    );
+}
+
+enum TestEmbeddingBehavior {
+    RankExternalSeventeen,
+    Fail,
+    FailAfterProbe,
+}
+
+struct TestEmbedding {
+    behavior: TestEmbeddingBehavior,
+    calls: Arc<AtomicUsize>,
+}
+
+impl EmbeddingInvoker for TestEmbedding {
+    fn embed(&self, request: &EmbeddingRequest) -> Result<EmbeddingResponse, ModelProviderError> {
+        let call = self.calls.fetch_add(1, Ordering::SeqCst);
+        if matches!(self.behavior, TestEmbeddingBehavior::Fail)
+            || matches!(self.behavior, TestEmbeddingBehavior::FailAfterProbe) && call > 0
+        {
+            return Err(ModelProviderError::Unavailable(
+                "test embedding unavailable".into(),
+            ));
+        }
+        EmbeddingResponse::new(
+            request
+                .inputs()
+                .iter()
+                .map(|input| {
+                    let values =
+                        if input.contains("arrange appointment") || input.contains("external_17") {
+                            vec![1.0, 0.0]
+                        } else {
+                            vec![0.0, 1.0]
+                        };
+                    EmbeddingVector::new(values)
+                })
+                .collect::<Result<Vec<_>, _>>()?,
+        )
+    }
+}
+
+fn external_catalog() -> Vec<ToolPort> {
+    vec![ToolPort::mcp(
+        Arc::new(FakeTools::catalog(
+            "external",
+            21,
+            ActionSource::McpServer,
+            "user:mcp:test",
+        )),
+        Arc::new(AskPolicy),
+    )]
+}
+
+fn try_execute_search(
+    combined: &CombinedToolPorts,
+    query: &str,
+    strategy: &str,
+) -> Result<Vec<String>, CoreError> {
+    let call = ToolCall {
+        id: zeta_protocol::ToolCallId::new(format!("search-{strategy}")).unwrap(),
+        name: ToolName::new("tool_search").unwrap(),
+        arguments: serde_json::json!({
+            "query": query,
+            "limit": 1,
+            "strategy": strategy
+        }),
+    };
+    let review = combined.tools.prepare(&call).unwrap();
+    let ExecutionDecision::RunUnsandboxed { grant_id } = combined
+        .policy
+        .decide(
+            &review,
+            &zeta_async_utils::CancellationSource::new().token(),
+        )
+        .unwrap()
+    else {
+        panic!("tool search must receive a grant");
+    };
+    let output = combined.tools.execute(
+        &call,
+        &ToolAuthorization::UnsandboxedGrant { grant_id },
+        &zeta_async_utils::CancellationSource::new().token(),
+    )?;
+    let ToolExecutionOutput::Success(output) = output else {
+        return Err(CoreError::Execution(
+            "tool search returned failure output".into(),
+        ));
+    };
+    Ok(
+        serde_json::from_str::<serde_json::Value>(&output).unwrap()["tools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|tool| tool["name"].as_str().unwrap().to_owned())
+            .collect(),
+    )
+}
+
+fn execute_search(combined: &CombinedToolPorts, query: &str, strategy: &str) -> Vec<String> {
+    try_execute_search(combined, query, strategy).unwrap()
+}
+
+#[test]
+fn lexical_mode_never_invokes_an_available_embedding_model() {
+    let calls = Arc::new(AtomicUsize::new(0));
+    let embedding = Arc::new(TestEmbedding {
+        behavior: TestEmbeddingBehavior::RankExternalSeventeen,
+        calls: Arc::clone(&calls),
+    });
+    let options = ToolSearchOptions::new().with_embedding(embedding).unwrap();
+    let combined = combine_tool_ports_at_generation_with_search(
+        external_catalog(),
+        zeta_tools::ToolRegistryGeneration::new(1),
+        options,
+    )
+    .unwrap()
+    .unwrap();
+
+    assert_eq!(
+        execute_search(&combined, "external capability number 17", "bm25"),
+        vec!["external_17"]
+    );
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+}
+
+#[test]
+fn hybrid_mode_adds_embedding_recall_to_the_lexical_ranking() {
+    let calls = Arc::new(AtomicUsize::new(0));
+    let embedding = Arc::new(TestEmbedding {
+        behavior: TestEmbeddingBehavior::RankExternalSeventeen,
+        calls: Arc::clone(&calls),
+    });
+    let options = ToolSearchOptions::new()
+        .with_embedding(embedding)
+        .unwrap()
+        .with_mode(ToolSearchModeConfig::HybridEmbedding)
+        .unwrap();
+    let combined = combine_tool_ports_at_generation_with_search(
+        external_catalog(),
+        zeta_tools::ToolRegistryGeneration::new(1),
+        options,
+    )
+    .unwrap()
+    .unwrap();
+
+    assert_eq!(
+        execute_search(&combined, "arrange appointment", "bm25"),
+        vec!["external_17"]
+    );
+    assert!(calls.load(Ordering::SeqCst) >= 3);
+}
+
+#[test]
+fn hybrid_mode_gate_rejects_a_missing_or_unavailable_embedding_adapter() {
+    let missing = ToolSearchOptions::new()
+        .with_mode(ToolSearchModeConfig::HybridEmbedding)
+        .err()
+        .unwrap();
+    assert!(
+        missing
+            .to_string()
+            .contains("requires an installed embedding")
+    );
+
+    let calls = Arc::new(AtomicUsize::new(0));
+    let embedding = Arc::new(TestEmbedding {
+        behavior: TestEmbeddingBehavior::Fail,
+        calls: Arc::clone(&calls),
+    });
+    let error = ToolSearchOptions::new()
+        .with_embedding(embedding)
+        .unwrap()
+        .with_mode(ToolSearchModeConfig::HybridEmbedding)
+        .err()
+        .unwrap();
+
+    assert!(error.to_string().contains("readiness probe failed"));
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn enabled_hybrid_mode_reports_runtime_embedding_failure_without_fallback() {
+    let calls = Arc::new(AtomicUsize::new(0));
+    let embedding = Arc::new(TestEmbedding {
+        behavior: TestEmbeddingBehavior::FailAfterProbe,
+        calls: Arc::clone(&calls),
+    });
+    let options = ToolSearchOptions::new()
+        .with_embedding(embedding)
+        .unwrap()
+        .with_mode(ToolSearchModeConfig::HybridEmbedding)
+        .unwrap();
+    let combined = combine_tool_ports_at_generation_with_search(
+        external_catalog(),
+        zeta_tools::ToolRegistryGeneration::new(1),
+        options,
+    )
+    .unwrap()
+    .unwrap();
+
+    let error = try_execute_search(&combined, "external capability number 17", "bm25").unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("hybrid embedding tool search is unavailable")
+    );
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
+}
+
+#[test]
+fn unavailable_persisted_hybrid_mode_does_not_silently_fallback_to_bm25() {
+    let combined = combine_tool_ports_at_generation_with_search(
+        external_catalog(),
+        zeta_tools::ToolRegistryGeneration::new(1),
+        ToolSearchOptions::unavailable("configured embedding model is offline"),
+    )
+    .unwrap()
+    .unwrap();
+
+    let error = try_execute_search(&combined, "external capability number 17", "bm25")
+        .expect_err("enabled hybrid mode must fail closed when its model is unavailable");
+    assert!(
+        error
+            .to_string()
+            .contains("configured embedding model is offline")
+    );
+    assert_eq!(
+        execute_search(&combined, "external_17", "regex"),
+        vec!["external_17"]
+    );
+}
+
 struct AskPolicy;
 
 impl PolicyService for AskPolicy {
@@ -84,6 +520,104 @@ impl PolicyService for AskPolicy {
             "test",
         )))
     }
+}
+
+struct FactsAwareTools {
+    definition: ToolDefinition,
+}
+
+struct SandboxThenSuccessTools {
+    definition: ToolDefinition,
+    result: &'static str,
+    calls: AtomicUsize,
+}
+
+impl ToolService for SandboxThenSuccessTools {
+    fn definitions(&self) -> Vec<ToolDefinition> {
+        vec![self.definition.clone()]
+    }
+
+    fn prepare(&self, _: &ToolCall) -> Result<ActionReviewRequest, CoreError> {
+        fake_review(ActionSource::BuiltInTool, self.result)
+    }
+
+    fn execute(
+        &self,
+        _: &ToolCall,
+        _: &ToolAuthorization,
+        _: &CancellationToken,
+    ) -> Result<ToolExecutionOutput, CoreError> {
+        if self.calls.fetch_add(1, Ordering::SeqCst) == 0 {
+            return Ok(ToolExecutionOutput::SandboxDenied(
+                SandboxDenialOutput::safe_to_retry(
+                    "test denial",
+                    ProcessExecutionOutput::from_captured_streams(
+                        ProcessExitStatus::Code(1),
+                        "",
+                        "denied",
+                    ),
+                ),
+            ));
+        }
+        Ok(ToolExecutionOutput::Success(self.result.into()))
+    }
+}
+
+impl ToolService for FactsAwareTools {
+    fn definitions(&self) -> Vec<ToolDefinition> {
+        vec![self.definition.clone()]
+    }
+
+    fn prepare(&self, _: &ToolCall) -> Result<ActionReviewRequest, CoreError> {
+        fake_review(ActionSource::BuiltInTool, "facts-aware")
+    }
+
+    fn execute(
+        &self,
+        _: &ToolCall,
+        _: &ToolAuthorization,
+        _: &CancellationToken,
+    ) -> Result<ToolExecutionOutput, CoreError> {
+        Ok(ToolExecutionOutput::Success("facts-dropped".into()))
+    }
+
+    fn execute_streaming_with_facts(
+        &self,
+        _: &ToolCall,
+        _: &ToolAuthorization,
+        _: &CancellationToken,
+        _: &ToolExecutionFacts,
+        _: &mut dyn ToolOutputSink,
+    ) -> Result<ToolExecutionOutput, CoreError> {
+        Ok(ToolExecutionOutput::Success("facts-preserved".into()))
+    }
+}
+
+struct TestSink;
+
+impl ToolOutputSink for TestSink {
+    fn emit(&mut self, _: ToolOutputStream, _: String) -> Result<(), CoreError> {
+        Ok(())
+    }
+}
+
+fn fake_review(
+    source: ActionSource,
+    source_id: &'static str,
+) -> Result<ActionReviewRequest, CoreError> {
+    Ok(ActionReviewRequest::new(
+        ResolvedAction::new(
+            ActionDigest::from_canonical_bytes(source_id.as_bytes()),
+            ActionKind::SystemOperation,
+            source_id,
+            CapabilitySet::new([]),
+        ),
+        ActionProvenance::new(source, source_id),
+        SandboxCompatibility::NotApplicable {
+            reason: "test".into(),
+        },
+        PolicyRevision::new("test"),
+    ))
 }
 
 #[test]
@@ -216,6 +750,115 @@ fn reload_switches_future_calls_but_preserves_prepared_call_generation() {
             )
             .unwrap(),
         ToolExecutionOutput::Success("replacement".into())
+    );
+}
+
+#[test]
+fn sandbox_retry_keeps_the_prepared_generation_across_reload() {
+    let definition = ToolDefinition {
+        name: ToolName::new("sandboxed-tool").unwrap(),
+        description: "sandboxed tool".into(),
+        parameters: serde_json::json!({"type": "object"}),
+        strict: false,
+    };
+    let initial = combine_tool_ports(vec![ToolPort::local(
+        Arc::new(SandboxThenSuccessTools {
+            definition: definition.clone(),
+            result: "initial",
+            calls: AtomicUsize::new(0),
+        }),
+        Arc::new(AskPolicy),
+    )])
+    .unwrap();
+    let reloadable = ReloadableToolPorts::new(initial);
+    let tools = reloadable.tools();
+    let call = ToolCall {
+        id: zeta_protocol::ToolCallId::new("sandbox-retry").unwrap(),
+        name: definition.name,
+        arguments: serde_json::json!({}),
+    };
+    tools.prepare(&call).unwrap();
+    assert!(matches!(
+        tools
+            .execute(
+                &call,
+                &ToolAuthorization::Sandboxed(zeta_sandboxing::SandboxPolicy::new(
+                    zeta_sandboxing::FileSystemAccess::ReadOnly,
+                    zeta_sandboxing::NetworkAccess::Denied,
+                )),
+                &zeta_async_utils::CancellationSource::new().token(),
+            )
+            .unwrap(),
+        ToolExecutionOutput::SandboxDenied(_)
+    ));
+
+    let replacement = combine_tool_ports(vec![ToolPort::local(
+        Arc::new(SandboxThenSuccessTools {
+            definition: ToolDefinition {
+                name: ToolName::new("sandboxed-tool").unwrap(),
+                description: "replacement".into(),
+                parameters: serde_json::json!({"type": "object"}),
+                strict: false,
+            },
+            result: "replacement",
+            calls: AtomicUsize::new(1),
+        }),
+        Arc::new(AskPolicy),
+    )])
+    .unwrap();
+    reloadable.replace(replacement);
+
+    assert_eq!(
+        tools
+            .execute(
+                &call,
+                &ToolAuthorization::UnsandboxedGrant {
+                    grant_id: GrantId::new("retry"),
+                },
+                &zeta_async_utils::CancellationSource::new().token(),
+            )
+            .unwrap(),
+        ToolExecutionOutput::Success("initial".into())
+    );
+}
+
+#[test]
+fn reloadable_and_composite_layers_preserve_durable_execution_facts() {
+    let definition = ToolDefinition {
+        name: ToolName::new("facts-aware").unwrap(),
+        description: "facts aware".into(),
+        parameters: serde_json::json!({"type": "object"}),
+        strict: false,
+    };
+    let combined = combine_tool_ports(vec![ToolPort::local(
+        Arc::new(FactsAwareTools { definition }),
+        Arc::new(AskPolicy),
+    )])
+    .unwrap();
+    let reloadable = ReloadableToolPorts::new(combined);
+    let tools = reloadable.tools();
+    let call = ToolCall {
+        id: zeta_protocol::ToolCallId::new("facts-call").unwrap(),
+        name: ToolName::new("facts-aware").unwrap(),
+        arguments: serde_json::json!({}),
+    };
+    tools.prepare(&call).unwrap();
+
+    let output = tools
+        .execute_streaming_with_facts(
+            &call,
+            &ToolAuthorization::UnsandboxedGrant {
+                grant_id: GrantId::new("test"),
+            },
+            &zeta_async_utils::CancellationSource::new().token(),
+            &ToolExecutionFacts::default(),
+            &mut TestSink,
+        )
+        .unwrap();
+
+    assert_eq!(
+        output,
+        ToolExecutionOutput::Success("facts-preserved".into())
     );
 }
 

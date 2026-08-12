@@ -1,5 +1,4 @@
 use super::config_operations::{config_command_result, config_operation_error};
-use super::skills_runtime::{SkillCatalogReload, SkillRuntimeDiagnostic, SkillRuntimeSnapshot};
 use super::{AppServer, RpcError, decode, result};
 use serde_json::Value;
 use zeta_app_server_protocol::protocol::config::ConfigCommandResult;
@@ -10,7 +9,12 @@ use zeta_app_server_protocol::protocol::skills::{
     SkillSourceKindDto,
 };
 use zeta_config::{ConfigCommandRequest, ConfigRevision, SkillEnablement, UserConfigCommand};
-use zeta_skills::{SkillCompatibility, SkillDiagnosticCode, SkillSourceKind};
+use zeta_skills_extension::SkillCatalogReload;
+use zeta_skills_extension::SkillCompatibility;
+use zeta_skills_extension::SkillDiagnosticCode;
+use zeta_skills_extension::SkillRuntimeDiagnostic;
+use zeta_skills_extension::SkillRuntimeSnapshot;
+use zeta_skills_extension::SkillSourceKind;
 
 impl AppServer {
     pub(super) fn skill_list(&self, params: &Value) -> Result<Value, RpcError> {

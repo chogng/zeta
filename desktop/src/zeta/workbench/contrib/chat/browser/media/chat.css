@@ -94,6 +94,26 @@
   text-align: center;
 }
 .zeta-chat-agent-session {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.zeta-chat-agent-session-title {
+  color: var(--zeta-description-foreground);
+  font-size: 11px;
+  font-weight: 600;
+  margin: 8px 8px 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.zeta-chat-agent-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.zeta-chat-agent-thread {
   align-items: flex-start;
   background: transparent;
   border: 0;
@@ -101,19 +121,43 @@
   color: inherit;
   cursor: pointer;
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 6px 8px;
+  gap: 6px;
+  padding: 5px 8px;
   text-align: left;
+  width: 100%;
 }
-.zeta-chat-agent-session:hover, .zeta-chat-agent-session.checked {
+.zeta-chat-agent-thread:hover, .zeta-chat-agent-thread.checked {
   background: var(--zeta-list-hover-background);
 }
-.zeta-chat-agent-session:focus-visible {
+.zeta-chat-agent-thread:focus-visible {
   outline: 1px solid var(--zeta-focus-border);
   outline-offset: -1px;
 }
-.zeta-chat-agent-session-title { font: inherit; }
+.zeta-chat-agent-thread:disabled { cursor: default; opacity: 0.65; }
+.zeta-chat-agent-thread-marker {
+  background: var(--zeta-description-foreground);
+  border-radius: 50%;
+  flex: 0 0 6px;
+  height: 6px;
+  margin-top: 6px;
+  opacity: 0.7;
+  width: 6px;
+}
+.zeta-chat-agent-thread[data-origin="agentSpawn"] > .zeta-chat-agent-thread-marker { background: var(--zeta-focus-border); }
+.zeta-chat-agent-thread[data-execution-status="running"] > .zeta-chat-agent-thread-marker,
+.zeta-chat-agent-thread[data-execution-status="waiting"] > .zeta-chat-agent-thread-marker { box-shadow: 0 0 0 2px color-mix(in srgb, var(--zeta-focus-border) 25%, transparent); }
+.zeta-chat-agent-thread-text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.zeta-chat-agent-thread-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .zeta-chat-agent-session-detail {
   color: var(--zeta-description-foreground);
   font-size: 11px;

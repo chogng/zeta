@@ -6,8 +6,8 @@ mod store;
 
 pub use error::SessionStoreError;
 pub use record::{
-    CURRENT_SESSION_EVENT_SCHEMA_VERSION, SessionCommandReceipt, SessionEventId, SessionTimestamp,
-    StoredSessionEvent,
+    CURRENT_SESSION_EVENT_SCHEMA_VERSION, MINIMUM_SUPPORTED_SESSION_EVENT_SCHEMA_VERSION,
+    SessionCommandReceipt, SessionEventId, SessionTimestamp, StoredSessionEvent,
 };
 pub use store::{
     AppendSessionBatchResult, SessionEventBatch, SessionStore, validate_session_append_batch,

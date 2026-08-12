@@ -2,12 +2,16 @@ use std::collections::BTreeMap;
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 
+use zeta_async_utils::CancellationSource;
+use zeta_async_utils::CancellationToken;
 use zeta_code_index::ChunkReference;
 use zeta_code_index::CodeIndex;
 use zeta_code_index::CodeIndexQuery;
 use zeta_code_index::SourceExcerptReference;
 use zeta_code_index_cloud::CloudCodeIndexController;
 use zeta_code_index_cloud::CloudCodeIndexQuery;
+use zeta_code_index_semantic::CodeIndexSemanticQuery;
+use zeta_code_index_semantic::CodeIndexSemanticService;
 
 use crate::CodeRetrievalBudget;
 use crate::CodeRetrievalDegradation;
@@ -23,7 +27,12 @@ const MAX_CANDIDATES_PER_SOURCE: usize = 100;
 
 enum RetrievalDeployment {
     LocalOnly,
-    Hybrid(Arc<CloudCodeIndexController>),
+    LocalSemantic(Arc<CodeIndexSemanticService>),
+    Cloud(Arc<CloudCodeIndexController>),
+    Hybrid {
+        semantic: Arc<CodeIndexSemanticService>,
+        cloud: Arc<CloudCodeIndexController>,
+    },
 }
 
 /// Workspace-scoped local/cloud candidate coordinator.
@@ -54,7 +63,38 @@ impl CodeRetrievalService {
         }
         Ok(Self {
             index,
-            deployment: RetrievalDeployment::Hybrid(cloud),
+            deployment: RetrievalDeployment::Cloud(cloud),
+            budget: CodeRetrievalBudget::default(),
+        })
+    }
+
+    /// Creates a local-first service that fuses lexical and local semantic candidates.
+    pub fn local_semantic(
+        index: Arc<CodeIndex>,
+        semantic: Arc<CodeIndexSemanticService>,
+    ) -> Result<Self, CodeRetrievalError> {
+        if index.root_id() != semantic.root_id() {
+            return Err(CodeRetrievalError::RootMismatch);
+        }
+        Ok(Self {
+            index,
+            deployment: RetrievalDeployment::LocalSemantic(semantic),
+            budget: CodeRetrievalBudget::default(),
+        })
+    }
+
+    /// Creates a service with local lexical, local semantic, and optional remote semantic sources.
+    pub fn local_semantic_with_cloud(
+        index: Arc<CodeIndex>,
+        semantic: Arc<CodeIndexSemanticService>,
+        cloud: Arc<CloudCodeIndexController>,
+    ) -> Result<Self, CodeRetrievalError> {
+        if index.root_id() != semantic.root_id() || index.root_id() != cloud.root_id() {
+            return Err(CodeRetrievalError::RootMismatch);
+        }
+        Ok(Self {
+            index,
+            deployment: RetrievalDeployment::Hybrid { semantic, cloud },
             budget: CodeRetrievalBudget::default(),
         })
     }
@@ -69,6 +109,16 @@ impl CodeRetrievalService {
         &self,
         query: &CodeRetrievalQuery,
     ) -> Result<CodeRetrievalResult, CodeRetrievalError> {
+        self.retrieve_with_cancellation(query, &CancellationSource::new().token())
+    }
+
+    /// Retrieves while forwarding cancellation into local semantic model calls.
+    pub fn retrieve_with_cancellation(
+        &self,
+        query: &CodeRetrievalQuery,
+        cancellation: &CancellationToken,
+    ) -> Result<CodeRetrievalResult, CodeRetrievalError> {
+        check_cancelled(cancellation)?;
         let candidate_limit = query
             .result_limit()
             .get()
@@ -86,7 +136,31 @@ impl CodeRetrievalService {
         );
 
         let mut degradations = Vec::new();
-        if let RetrievalDeployment::Hybrid(cloud) = &self.deployment {
+        let semantic = match &self.deployment {
+            RetrievalDeployment::LocalSemantic(semantic)
+            | RetrievalDeployment::Hybrid { semantic, .. } => Some(semantic),
+            RetrievalDeployment::LocalOnly | RetrievalDeployment::Cloud(_) => None,
+        };
+        if let Some(semantic) = semantic {
+            let semantic_query = CodeIndexSemanticQuery::new(query.text(), candidate_limit)
+                .expect("retrieval query has already been validated");
+            match semantic.query_with_cancellation(&semantic_query, cancellation) {
+                Ok(result) => add_ranked(
+                    &mut fused,
+                    result.candidates,
+                    CodeRetrievalOrigin::LocalSemantic,
+                ),
+                Err(_) => degradations.push(CodeRetrievalDegradation::LocalSemanticQueryFailed),
+            }
+        }
+
+        let cloud = match &self.deployment {
+            RetrievalDeployment::Cloud(cloud) | RetrievalDeployment::Hybrid { cloud, .. } => {
+                Some(cloud)
+            }
+            RetrievalDeployment::LocalOnly | RetrievalDeployment::LocalSemantic(_) => None,
+        };
+        if let Some(cloud) = cloud {
             let cloud_query = CloudCodeIndexQuery::new(query.text(), candidate_limit)
                 .expect("retrieval query has already been validated");
             match cloud.query(&cloud_query) {
@@ -116,6 +190,7 @@ impl CodeRetrievalService {
         let mut budget_discarded = 0usize;
         let mut total_bytes = 0usize;
         for candidate in ranked {
+            check_cancelled(cancellation)?;
             if hits.len() == query.result_limit().get() {
                 break;
             }
@@ -151,6 +226,12 @@ impl CodeRetrievalService {
         }
         Ok(CodeRetrievalResult { hits, degradations })
     }
+}
+
+fn check_cancelled(cancellation: &CancellationToken) -> Result<(), CodeRetrievalError> {
+    cancellation
+        .check()
+        .map_err(|signal| CodeRetrievalError::Cancelled(signal.reason().to_string()))
 }
 
 struct FusedCandidate {

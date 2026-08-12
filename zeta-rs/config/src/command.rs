@@ -1,3 +1,6 @@
+use crate::SemanticCodeIndexAutomaticContext;
+use crate::SemanticCodeIndexSelection;
+use crate::ToolSearchConfig;
 use crate::{
     ApprovalReviewModelSelection, ConfigGeneration, ConfigRevision, HookConfig, HookEnablement,
     HookId, LanguageServerConfig, LanguageServerId, McpServerConfig, McpServerEnablement,
@@ -81,6 +84,19 @@ pub enum UserConfigCommand {
     },
     RemoveLanguageServerConfiguration {
         server_id: LanguageServerId,
+    },
+    ConfigureSemanticCodeIndex {
+        selection: SemanticCodeIndexSelection,
+        automatic_context: SemanticCodeIndexAutomaticContext,
+    },
+    ConfigureToolSearch {
+        config: ToolSearchConfig,
+    },
+    AuthorizeSemanticCodeIndexEgress {
+        workspace: WorkspaceTrustId,
+    },
+    RevokeSemanticCodeIndexEgress {
+        workspace: WorkspaceTrustId,
     },
     SetWorkspaceTrust {
         workspace: WorkspaceTrustId,

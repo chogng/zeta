@@ -8,7 +8,7 @@ use crate::CodeRetrievalError;
 const DEFAULT_MAX_ITEM_BYTES: usize = 32 * 1024;
 const DEFAULT_MAX_TOTAL_BYTES: usize = 128 * 1024;
 
-/// Literal query shared by local lexical and remote semantic candidate sources.
+/// Literal query shared by local lexical and optional semantic candidate sources.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CodeRetrievalQuery {
     text: String,
@@ -90,12 +90,14 @@ impl Default for CodeRetrievalBudget {
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum CodeRetrievalOrigin {
     LocalLexical,
+    LocalSemantic,
     CloudSemantic,
 }
 
 /// Non-fatal loss of one optional source or candidate set.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum CodeRetrievalDegradation {
+    LocalSemanticQueryFailed,
     CloudQueryFailed,
     CandidateVerificationFailed { discarded: usize },
     ContentBudgetExceeded { discarded: usize },

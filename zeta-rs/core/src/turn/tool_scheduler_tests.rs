@@ -17,8 +17,8 @@ use zeta_policy::{
 };
 use zeta_protocol::{
     ActionApprovalDecision, ActionApprovalResponse, AgentRequest, AgentResponse, CommandId,
-    SessionId, ThreadId, ThreadItem, ToolCallId, ToolDefinition, ToolExecutionAuthority, ToolName,
-    TurnStatus, UserInput,
+    DynamicToolOutput, DynamicToolResponse, SessionId, ThreadId, ThreadItem, ToolCallId,
+    ToolDefinition, ToolExecutionAuthority, ToolName, TurnStatus, UserInput,
 };
 use zeta_sandboxing::{FileSystemAccess, NetworkAccess, SandboxPolicy};
 
@@ -65,6 +65,100 @@ fn approve_once_resumes_the_exact_tool_call() {
                     is_error: false,
                     ..
                 } if tool_call_id == &fixture.call_id && text == "executed"
+            ))
+    );
+}
+
+#[test]
+fn approved_dynamic_tool_waits_for_its_owner_then_commits_the_response() {
+    let fixture = fixture_with(
+        Arc::new(ReviewTool {
+            dynamic_interaction: true,
+            ..ReviewTool::default()
+        }),
+        Arc::new(AskPolicy),
+    );
+    assert_eq!(
+        fixture
+            .scheduler
+            .run_pending(
+                &fixture.thread_id,
+                &fixture.turn_id,
+                &CancellationSource::new().token(),
+            )
+            .unwrap(),
+        ToolSchedulingProgress::WaitingForApproval
+    );
+    resolve(&fixture, ActionApprovalDecision::ApproveOnce);
+    assert_eq!(
+        fixture
+            .scheduler
+            .run_pending(
+                &fixture.thread_id,
+                &fixture.turn_id,
+                &CancellationSource::new().token(),
+            )
+            .unwrap(),
+        ToolSchedulingProgress::WaitingForCapability
+    );
+
+    let snapshot = fixture.threads.read_thread(&fixture.thread_id).unwrap();
+    let interaction = snapshot
+        .turns
+        .last()
+        .and_then(|turn| turn.pending_interaction.clone())
+        .unwrap();
+    let AgentRequest::DynamicTool { call } = &interaction.request else {
+        panic!("dynamic execution must request its interaction owner")
+    };
+    assert_eq!(call.call_id, fixture.call_id);
+    assert_eq!(call.name.as_str(), "reviewed");
+    assert_eq!(call.arguments, json!({"value": 1}));
+
+    fixture
+        .threads
+        .resolve_turn_interaction(
+            &fixture.thread_id,
+            ResolveTurnInteractionRequest {
+                command_id: CommandId::new("resolve-dynamic").unwrap(),
+                expected_sequence: SequenceExpectation::Exact(snapshot.sequence),
+                turn_id: fixture.turn_id.clone(),
+                request_id: interaction.request_id,
+                response: AgentResponse::DynamicTool {
+                    response: DynamicToolResponse {
+                        call_id: fixture.call_id.clone(),
+                        content: vec![DynamicToolOutput::Text {
+                            text: "client result".into(),
+                        }],
+                        success: true,
+                    },
+                },
+            },
+        )
+        .unwrap();
+    assert_eq!(
+        fixture
+            .scheduler
+            .run_pending(
+                &fixture.thread_id,
+                &fixture.turn_id,
+                &CancellationSource::new().token(),
+            )
+            .unwrap(),
+        ToolSchedulingProgress::Complete
+    );
+    assert!(fixture.tools.authorizations.lock().unwrap().is_empty());
+    assert!(
+        fixture
+            .threads
+            .read_thread(&fixture.thread_id)
+            .unwrap()
+            .items
+            .iter()
+            .any(|item| matches!(
+                item,
+                ThreadItem::ToolResult { tool_call_id, text, is_error: false, .. }
+                    if tool_call_id == &fixture.call_id && text.contains("client result")
             ))
     );
 }
@@ -793,6 +887,7 @@ struct ReviewTool {
     outputs: Mutex<VecDeque<ToolExecutionOutput>>,
     requires_escalation: bool,
     evidence: Vec<ReviewEvidence>,
+    dynamic_interaction: bool,
 }
 
 impl Default for ReviewTool {
@@ -802,6 +897,7 @@ impl Default for ReviewTool {
             outputs: Mutex::new(VecDeque::new()),
             requires_escalation: false,
             evidence: Vec::new(),
+            dynamic_interaction: false,
         }
     }
 }
@@ -813,6 +909,48 @@ impl ToolService for ReviewTool {
 
     fn prepare(&self, call: &ToolCall) -> Result<ActionReviewRequest, CoreError> {
         Ok(review_request(call, self.requires_escalation))
+    }
+
+    fn execution_interaction(&self, call: &ToolCall) -> Result<Option<AgentRequest>, CoreError> {
+        Ok(self.dynamic_interaction.then(|| AgentRequest::DynamicTool {
+            call: zeta_protocol::DynamicToolCall {
+                call_id: call.id.clone(),
+                name: call.name.clone(),
+                definition_digest: "a".repeat(64),
+                arguments: call.arguments.clone(),
+            },
+        }))
+    }
+
+    fn resolve_execution_interaction(
+        &self,
+        call: &ToolCall,
+        request: &AgentRequest,
+        response: &AgentResponse,
+    ) -> Result<Option<ToolExecutionOutput>, CoreError> {
+        if !self.dynamic_interaction {
+            return Ok(None);
+        }
+        let (
+            AgentRequest::DynamicTool {
+                call: requested_call,
+            },
+            AgentResponse::DynamicTool { response },
+        ) = (request, response)
+        else {
+            return Ok(None);
+        };
+        if requested_call.call_id != call.id || response.call_id != call.id {
+            return Err(CoreError::Policy(
+                "dynamic response does not match Tool Call".into(),
+            ));
+        }
+        let text = serde_json::to_string(&response.content).unwrap();
+        Ok(Some(if response.success {
+            ToolExecutionOutput::Success(text)
+        } else {
+            ToolExecutionOutput::Failure(text)
+        }))
     }
 
     fn review_evidence(&self, _: &ToolCall) -> Result<Vec<ReviewEvidence>, CoreError> {

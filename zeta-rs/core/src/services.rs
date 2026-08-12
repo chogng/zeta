@@ -1,13 +1,16 @@
 use crate::ContextBudget;
+use crate::ContextTokenMeasurementCapability;
+use crate::ContextTokenMeasurementOutcome;
 use crate::CoreError;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 use zeta_async_utils::CancellationToken;
 use zeta_policy::{ActionReviewRequest, AutoReviewGrant, GrantId, ReviewEvidence};
+use zeta_protocol::TurnId;
 use zeta_protocol::{
     ActionApprovalRequest, ModelRef, ModelRequest, ModelResponse, ModelStreamEvent, RequestId,
-    ThreadUpdateEnvelope, ToolCall, ToolCallId, ToolDefinition, ToolExecutionOutput,
-    ToolOutputStream,
+    SessionId, ThreadId, ThreadUpdateEnvelope, ToolCall, ToolCallId, ToolDefinition,
+    ToolExecutionOutput, ToolOutputStream,
 };
 use zeta_sandboxing::SandboxPolicy;
 
@@ -59,6 +62,30 @@ pub trait ModelService: Send + Sync {
         Ok(ContextBudget::provider_managed())
     }
 
+    /// Reports whether the selected immutable model can measure input locally or remotely.
+    fn input_token_measurement_capability(
+        &self,
+        _: ModelSelection<'_>,
+    ) -> Result<ContextTokenMeasurementCapability, CoreError> {
+        Ok(ContextTokenMeasurementCapability::Unavailable)
+    }
+
+    /// Measures one fully assembled candidate request before invocation.
+    ///
+    /// Implementations must measure the same immutable model and canonical request snapshot that
+    /// [`Self::invoke`] receives. Post-response usage does not satisfy this contract.
+    fn measure_input(
+        &self,
+        _: ModelSelection<'_>,
+        _: &ModelRequest,
+        cancellation: &CancellationToken,
+    ) -> Result<ContextTokenMeasurementOutcome, CoreError> {
+        cancellation
+            .check()
+            .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
+        Ok(ContextTokenMeasurementOutcome::Unavailable)
+    }
+
     fn invoke(
         &self,
         selection: ModelSelection<'_>,
@@ -104,6 +131,52 @@ pub trait ModelService: Send + Sync {
 /// commits on a slow client connection. Durable updates can always be replayed from the store.
 pub trait ThreadUpdateSink: Send + Sync {
     fn publish(&self, update: ThreadUpdateEnvelope);
+}
+
+/// One bounded, revision-bound piece of untrusted evidence supplied to model context.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ContextEvidence {
+    pub source: String,
+    pub reference: String,
+    pub revision: String,
+    pub body: String,
+}
+
+/// Stable identities and user query for one optional context-source lookup.
+pub struct ContextSourceRequest<'a> {
+    pub session_id: &'a SessionId,
+    pub thread_id: &'a ThreadId,
+    pub turn_id: &'a TurnId,
+    pub query: &'a str,
+}
+
+/// Supplies optional, low-trust evidence without owning context ordering or budget policy.
+///
+/// Implementations must return bounded data, preserve revision/provenance identities, observe
+/// cancellation, and avoid mutating Thread state. Core treats all returned bodies as untrusted
+/// user-level data and may omit them under budget pressure.
+pub trait ContextSource: Send + Sync {
+    fn collect(
+        &self,
+        request: &ContextSourceRequest<'_>,
+        cancellation: &CancellationToken,
+    ) -> Result<Vec<ContextEvidence>, CoreError>;
+}
+
+/// Empty source used when a host has not enabled automatic context enrichment.
+pub struct NoContextSource;
+
+impl ContextSource for NoContextSource {
+    fn collect(
+        &self,
+        _: &ContextSourceRequest<'_>,
+        cancellation: &CancellationToken,
+    ) -> Result<Vec<ContextEvidence>, CoreError> {
+        cancellation
+            .check()
+            .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
+        Ok(Vec::new())
+    }
 }
 
 /// Receives transient, typed output from one running Tool Call.
@@ -196,6 +269,57 @@ impl OneTimeToolGrant {
 pub trait ToolService: Send + Sync {
     fn definitions(&self) -> Vec<ToolDefinition>;
 
+    /// Selects the exact definitions visible to the next model invocation.
+    ///
+    /// Implementations with no deferred catalog retain the complete definition set. Registry-backed
+    /// implementations must include their direct tools and may additionally expose only the
+    /// generation-validated names supplied in `activated`.
+    fn model_definitions(
+        &self,
+        activated: &BTreeSet<zeta_protocol::ToolName>,
+    ) -> Result<Vec<ToolDefinition>, CoreError> {
+        let _ = activated;
+        Ok(self.definitions())
+    }
+
+    /// Interprets one successful tool result as additive model-tool activation.
+    ///
+    /// Ordinary tools return no names. A tool-search implementation must validate its own result,
+    /// registry generation, binding identity, and definition digest before returning names. This
+    /// method never executes a tool or changes the live registry.
+    fn activated_tool_names(
+        &self,
+        _: &ToolCall,
+        _: &str,
+    ) -> Result<Vec<zeta_protocol::ToolName>, CoreError> {
+        Ok(Vec::new())
+    }
+
+    /// Returns a durable client interaction required to execute this exact Tool Call.
+    ///
+    /// Ordinary host and MCP tools return `None`. Dynamic tools return a request carrying the same
+    /// Tool Call identity. Core persists and routes the request only after policy authorization;
+    /// implementations must not contact a client or perform the action from this method.
+    fn execution_interaction(
+        &self,
+        _: &ToolCall,
+    ) -> Result<Option<zeta_protocol::AgentRequest>, CoreError> {
+        Ok(None)
+    }
+
+    /// Converts a resolved execution interaction into the canonical Tool execution outcome.
+    ///
+    /// Implementations must validate request kind, Tool Call identity, and output shape. Returning
+    /// `None` declares that the response is not owned by this tool service.
+    fn resolve_execution_interaction(
+        &self,
+        _: &ToolCall,
+        _: &zeta_protocol::AgentRequest,
+        _: &zeta_protocol::AgentResponse,
+    ) -> Result<Option<ToolExecutionOutput>, CoreError> {
+        Ok(None)
+    }
+
     /// Materializes every security-relevant field before policy review.
     ///
     /// Implementations must resolve aliases, paths, executable identity, provenance, required
@@ -269,14 +393,37 @@ pub trait ToolService: Send + Sync {
 /// Read-before-write evidence reconstructed from successful durable `read_file` results.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ToolExecutionFacts {
+    execution: Option<ToolExecutionIdentity>,
     read_paths: BTreeSet<PathBuf>,
+    available_tools: BTreeSet<zeta_protocol::ToolName>,
+    activated_skills: Vec<zeta_protocol::FrozenSkillActivation>,
 }
 
 impl ToolExecutionFacts {
-    pub(crate) fn from_items(items: &[zeta_protocol::ThreadItem]) -> Self {
+    pub(crate) fn for_turn(
+        snapshot: &crate::ThreadSnapshot,
+        turn_id: &zeta_protocol::TurnId,
+        available_tools: impl IntoIterator<Item = zeta_protocol::ToolName>,
+    ) -> Result<Self, CoreError> {
+        let turn = snapshot
+            .turns
+            .iter()
+            .find(|turn| &turn.turn_id == turn_id)
+            .ok_or_else(|| CoreError::NotFound(turn_id.to_string()))?;
         let mut calls = std::collections::BTreeMap::new();
-        let mut facts = Self::default();
-        for item in items {
+        let mut facts = Self {
+            execution: Some(ToolExecutionIdentity {
+                session_id: snapshot.session_id.clone(),
+                thread_id: snapshot.thread_id.clone(),
+                turn_id: turn_id.clone(),
+                model: turn.model.clone(),
+                policy_revision: turn.policy_revision.clone(),
+            }),
+            read_paths: BTreeSet::new(),
+            available_tools: available_tools.into_iter().collect(),
+            activated_skills: turn.activated_skills.clone(),
+        };
+        for item in &snapshot.items {
             match item {
                 zeta_protocol::ThreadItem::ToolCall {
                     tool_call_id,
@@ -305,11 +452,58 @@ impl ToolExecutionFacts {
                 _ => {}
             }
         }
-        facts
+        Ok(facts)
     }
 
     pub fn read_paths(&self) -> impl Iterator<Item = &PathBuf> {
         self.read_paths.iter()
+    }
+
+    /// Returns the exact durable Thread/Turn identity executing the current Tool Call.
+    pub fn execution_identity(&self) -> Option<&ToolExecutionIdentity> {
+        self.execution.as_ref()
+    }
+
+    /// Returns the host tool names from which the child capability ceiling may be derived.
+    pub fn available_tools(&self) -> impl Iterator<Item = &zeta_protocol::ToolName> {
+        self.available_tools.iter()
+    }
+
+    /// Returns the exact Skill versions already frozen for the current Turn.
+    pub fn activated_skills(&self) -> &[zeta_protocol::FrozenSkillActivation] {
+        &self.activated_skills
+    }
+}
+
+/// Durable caller identity supplied to a Tool Service without granting Thread mutation access.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ToolExecutionIdentity {
+    session_id: zeta_protocol::SessionId,
+    thread_id: zeta_protocol::ThreadId,
+    turn_id: zeta_protocol::TurnId,
+    model: Option<zeta_protocol::ModelRef>,
+    policy_revision: String,
+}
+
+impl ToolExecutionIdentity {
+    pub fn session_id(&self) -> &zeta_protocol::SessionId {
+        &self.session_id
+    }
+
+    pub fn thread_id(&self) -> &zeta_protocol::ThreadId {
+        &self.thread_id
+    }
+
+    pub fn turn_id(&self) -> &zeta_protocol::TurnId {
+        &self.turn_id
+    }
+
+    pub fn model(&self) -> Option<&zeta_protocol::ModelRef> {
+        self.model.as_ref()
+    }
+
+    pub fn policy_revision(&self) -> &str {
+        &self.policy_revision
     }
 }
 

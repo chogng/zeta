@@ -1,8 +1,13 @@
 use crate::ModelProviderError;
 use std::sync::Arc;
-use zeta_api::{ApiEndpoint, ApiProtocol, ModelRequest, ModelResponse};
+use zeta_api::ApiEndpoint;
+use zeta_api::ApiProtocol;
+use zeta_api::ModelRequest;
+use zeta_api::ModelResponse;
 use zeta_async_utils::CancellationToken;
 use zeta_client::OperationClient;
+use zeta_context_engine::ContextTokenMeasurementCapability;
+use zeta_context_engine::ContextTokenMeasurementOutcome;
 use zeta_model_provider_config::{
     ApiProfile, NormalizedModelProviderConfig, ProviderAdapter as ProviderAdapterKind,
 };
@@ -28,6 +33,22 @@ mod zai;
 /// exposing transport-specific state to callers.
 pub(crate) trait ProviderAdapter: Send + Sync {
     fn protocol(&self) -> ApiProtocol;
+
+    /// Reports whether this immutable adapter can measure canonical input locally or remotely.
+    fn input_token_measurement_capability(&self) -> ContextTokenMeasurementCapability {
+        ContextTokenMeasurementCapability::Unavailable
+    }
+
+    /// Measures one fully assembled request using the adapter's declared tokenizer contract.
+    fn measure_input(
+        &self,
+        _: &str,
+        _: &ModelRequest,
+        _: &dyn OperationClient,
+        _: &CancellationToken,
+    ) -> Result<ContextTokenMeasurementOutcome, ModelProviderError> {
+        Ok(ContextTokenMeasurementOutcome::Unavailable)
+    }
 
     fn complete(
         &self,

@@ -1,4 +1,5 @@
 use crate::ModelProviderError;
+use zeta_async_utils::CancellationToken;
 
 const MAX_BATCH_ITEMS: usize = 2_048;
 
@@ -83,6 +84,37 @@ impl EmbeddingResponse {
 /// order. They do not choose code chunks, persist vectors, retrieve candidates, or rank results.
 pub trait EmbeddingInvoker: Send + Sync {
     fn embed(&self, request: &EmbeddingRequest) -> Result<EmbeddingResponse, ModelProviderError>;
+
+    /// Invokes the model while observing a caller-owned cancellation domain.
+    ///
+    /// Implementations with cancellation-aware transports should override this method. The
+    /// default preserves compatibility for local deterministic invokers.
+    fn embed_with_cancellation(
+        &self,
+        request: &EmbeddingRequest,
+        cancellation: &CancellationToken,
+    ) -> Result<EmbeddingResponse, ModelProviderError> {
+        cancellation
+            .check()
+            .map_err(|signal| ModelProviderError::Cancelled(signal.reason().to_string()))?;
+        self.embed(request)
+    }
+}
+
+/// Immutable provider/model/config binding used to construct one embedding invoker.
+#[derive(Clone)]
+pub struct EmbeddingRuntimeRequest {
+    pub model: crate::ModelRef,
+    pub config: zeta_model_provider_config::ModelProviderConfig,
+}
+
+impl EmbeddingRuntimeRequest {
+    pub fn new(
+        model: crate::ModelRef,
+        config: zeta_model_provider_config::ModelProviderConfig,
+    ) -> Self {
+        Self { model, config }
+    }
 }
 
 /// Query and candidate texts sent to one immutable rerank model invocation.
@@ -150,4 +182,48 @@ impl RerankResponse {
 /// score interpretation, sorting, filtering, and truncation remain with the CodeIndex service.
 pub trait RerankInvoker: Send + Sync {
     fn rerank(&self, request: &RerankRequest) -> Result<RerankResponse, ModelProviderError>;
+
+    /// Invokes the reranker while observing a caller-owned cancellation domain.
+    fn rerank_with_cancellation(
+        &self,
+        request: &RerankRequest,
+        cancellation: &CancellationToken,
+    ) -> Result<RerankResponse, ModelProviderError> {
+        cancellation
+            .check()
+            .map_err(|signal| ModelProviderError::Cancelled(signal.reason().to_string()))?;
+        self.rerank(request)
+    }
+}
+
+/// Immutable provider/model/config binding used to construct one rerank invoker.
+#[derive(Clone)]
+pub struct RerankRuntimeRequest {
+    pub model: crate::ModelRef,
+    pub config: zeta_model_provider_config::ModelProviderConfig,
+}
+
+impl RerankRuntimeRequest {
+    pub fn new(
+        model: crate::ModelRef,
+        config: zeta_model_provider_config::ModelProviderConfig,
+    ) -> Self {
+        Self { model, config }
+    }
+}
+
+/// Resolves configured semantic models into immutable provider invokers.
+///
+/// Implementations own provider transport and credential materialization only. Code chunking,
+/// vector persistence, recall, candidate sorting, and fusion remain with code-index crates.
+pub trait SemanticModelProvider: Send + Sync {
+    fn embedding_runtime(
+        &self,
+        request: EmbeddingRuntimeRequest,
+    ) -> Result<std::sync::Arc<dyn EmbeddingInvoker>, ModelProviderError>;
+
+    fn rerank_runtime(
+        &self,
+        request: RerankRuntimeRequest,
+    ) -> Result<std::sync::Arc<dyn RerankInvoker>, ModelProviderError>;
 }

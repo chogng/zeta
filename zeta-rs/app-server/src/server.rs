@@ -1,7 +1,6 @@
 use crate::SlashCommandCatalog;
 use crate::model_catalog::{ModelCatalog, unavailable_model_catalog};
 use crate::resource_store::{ResourceError, ResourceStore};
-use crate::server::skills_runtime::{SkillConfigSnapshotProvider, SkillRuntime, SkillWatcher};
 use serde::Deserialize;
 use serde_json::Value;
 use std::collections::BTreeSet;
@@ -17,13 +16,18 @@ use zeta_app_server_protocol::rpc::{
 use zeta_app_server_transport::{DEFAULT_MAX_MESSAGE_BYTES, JsonlTransport};
 use zeta_config::ConfigStore;
 use zeta_core::{
-    CoreError, ModelService, PolicyService, SessionCoordinator, ThreadUpdateSink, ToolService,
-    TurnExecutor,
+    AgentTreeLimits, CancelTurnInteractionRequest, CoreError, ModelService, MultiAgentCoordinator,
+    PolicyService, SessionCoordinator, ThreadUpdateSink, ToolService, TurnExecutor,
 };
+use zeta_extension_api::ExtensionRegistry;
 use zeta_extensions::ExtensionCatalog;
 use zeta_extensions::ExtensionRoot;
 use zeta_file_system::WorkspaceFileSystem;
+use zeta_protocol::InteractionCancelReason;
 use zeta_protocol::ThreadUpdateEnvelope;
+use zeta_skills_extension::SkillConfigSnapshotProvider;
+use zeta_skills_extension::SkillRuntime;
+use zeta_skills_extension::SkillWatcher;
 use zeta_typst::TypstCompiler;
 
 mod cloud_code_index_operations;
@@ -42,11 +46,12 @@ mod fs_watcher;
 mod git_operations;
 mod git_runtime;
 mod interaction_runtime;
+pub(crate) mod multi_agent_tools;
 mod notification_queue;
 mod operations;
 mod search_operations;
+mod semantic_index_job;
 mod skill_operations;
-pub(crate) mod skills_runtime;
 mod start_turn;
 mod syntax_operations;
 mod terminal_operations;
@@ -63,8 +68,35 @@ pub(crate) use workspace_runtime::{
     WorkspaceRuntimeControl, WorkspaceSwitchTrustPolicy, WorkspaceToolPorts,
 };
 
+/// Immutable model selection used by the local semantic code-index pipeline.
+#[derive(Clone)]
+pub struct CodeIndexSemanticModels {
+    model_id: zeta_code_index_semantic::CodeIndexEmbeddingModelId,
+    embedding: Arc<dyn zeta_model_provider::EmbeddingInvoker>,
+    rerank: Option<Arc<dyn zeta_model_provider::RerankInvoker>>,
+}
+
+impl CodeIndexSemanticModels {
+    pub fn new(
+        model_id: zeta_code_index_semantic::CodeIndexEmbeddingModelId,
+        embedding: Arc<dyn zeta_model_provider::EmbeddingInvoker>,
+    ) -> Self {
+        Self {
+            model_id,
+            embedding,
+            rerank: None,
+        }
+    }
+
+    pub fn with_rerank(mut self, rerank: Arc<dyn zeta_model_provider::RerankInvoker>) -> Self {
+        self.rerank = Some(rerank);
+        self
+    }
+}
+
 pub struct AppServer {
     pub(super) sessions: Arc<SessionCoordinator>,
+    pub(super) multi_agent: Arc<MultiAgentCoordinator>,
     model: Arc<dyn ModelService>,
     model_catalog: Arc<dyn ModelCatalog>,
     next_connection_id: AtomicU64,
@@ -75,11 +107,17 @@ pub struct AppServer {
     pub(super) workspace_authority_gate: Arc<Mutex<()>>,
     workspace_runtime: Arc<RwLock<WorkspaceRuntime>>,
     local_workspace_host: Option<LocalWorkspaceHost>,
+    dynamic_tool_port: Option<crate::tool_composition::ToolPort>,
+    extension_tool_port: Option<crate::tool_composition::ToolPort>,
     code_index_storage_root: Option<std::path::PathBuf>,
+    code_index_semantic_storage_root: Option<std::path::PathBuf>,
+    code_index_semantic_models: Option<CodeIndexSemanticModels>,
+    semantic_model_provider: Option<Arc<dyn zeta_model_provider::SemanticModelProvider>>,
     cloud_code_index_storage_root: Option<std::path::PathBuf>,
     cloud_code_index_providers: zeta_code_index_cloud::CloudCodeIndexProviderRegistry,
     pub(super) typst: TypstCompiler,
     pub(super) slash_commands: SlashCommandCatalog,
+    agent_extensions: Arc<ExtensionRegistry>,
     pub(super) skills: Option<Arc<SkillRuntime>>,
     _skill_watcher: Option<SkillWatcher>,
     _config_watcher: Option<config_runtime::ConfigWatcher>,
@@ -128,6 +166,11 @@ impl ConnectionNotifications {
 impl AppServer {
     pub fn new(sessions: Arc<SessionCoordinator>, model: Arc<dyn ModelService>) -> Self {
         let updates = Arc::new(UpdateBroker::default());
+        let agent_extensions = Arc::new(ExtensionRegistry::default());
+        sessions
+            .threads()
+            .install_extensions(Arc::clone(&agent_extensions))
+            .expect("a new Thread controller accepts its initial extension registry");
         let workspace_authority_gate = Arc::new(Mutex::new(()));
         let interaction_deadline_watcher = interaction_runtime::InteractionDeadlineWatcher::start(
             sessions.threads().clone(),
@@ -137,9 +180,15 @@ impl AppServer {
         let turn_executor = TurnExecutor::without_tools(sessions.threads().clone(), model.clone())
             .with_thread_updates(Arc::new(AppServerThreadUpdates {
                 updates: updates.clone(),
-            }));
+            }))
+            .with_extensions(Arc::clone(&agent_extensions));
+        let multi_agent = Arc::new(MultiAgentCoordinator::new(
+            Arc::clone(&sessions),
+            AgentTreeLimits::default(),
+        ));
         Self {
             sessions,
+            multi_agent,
             model,
             model_catalog: unavailable_model_catalog(),
             next_connection_id: AtomicU64::new(1),
@@ -150,12 +199,18 @@ impl AppServer {
             workspace_authority_gate,
             workspace_runtime: Arc::new(RwLock::new(WorkspaceRuntime::empty(turn_executor))),
             local_workspace_host: None,
+            dynamic_tool_port: None,
+            extension_tool_port: None,
             code_index_storage_root: None,
+            code_index_semantic_storage_root: None,
+            code_index_semantic_models: None,
+            semantic_model_provider: None,
             cloud_code_index_storage_root: None,
             cloud_code_index_providers:
                 zeta_code_index_cloud::CloudCodeIndexProviderRegistry::default(),
             typst: TypstCompiler::new(),
             slash_commands: SlashCommandCatalog::default(),
+            agent_extensions,
             skills: None,
             _skill_watcher: None,
             _config_watcher: None,
@@ -187,13 +242,62 @@ impl AppServer {
 
     /// Releases connection-scoped subscriptions and runtime resources.
     pub fn close_connection(&self, connection: ConnectionState) {
-        self.updates.unregister(connection.connection_id);
+        let lost_dynamic_tools = self.updates.unregister(connection.connection_id);
+        self.cancel_lost_dynamic_tool_owners(lost_dynamic_tools);
         connection.outbound_notifications.close();
         if let Ok(mut resources) = self.resources.lock() {
             resources.release_owner(connection.connection_id);
         }
         if let Some(terminals) = self.configured_terminal_service() {
             terminals.close_owner(connection.connection_id);
+        }
+    }
+
+    fn cancel_lost_dynamic_tool_owners(&self, requests: Vec<zeta_protocol::AgentRequestEnvelope>) {
+        for request in requests {
+            let Ok(_mutation) = self.workspace_authority_gate.lock() else {
+                return;
+            };
+            let Ok(snapshot) = self.sessions.threads().read_thread(&request.thread_id) else {
+                continue;
+            };
+            let still_pending = snapshot
+                .turns
+                .iter()
+                .find(|turn| turn.turn_id == request.turn_id)
+                .and_then(|turn| turn.pending_interaction.as_ref())
+                .is_some_and(|interaction| {
+                    interaction.request_id == request.interaction.request_id
+                });
+            if !still_pending {
+                continue;
+            }
+            let before_sequence = snapshot.sequence;
+            if self
+                .sessions
+                .threads()
+                .cancel_turn_interaction(
+                    &request.thread_id,
+                    CancelTurnInteractionRequest {
+                        turn_id: request.turn_id.clone(),
+                        request_id: request.interaction.request_id.clone(),
+                        reason: InteractionCancelReason::OwnerDisconnected,
+                    },
+                )
+                .is_err()
+            {
+                continue;
+            }
+            if let Ok(updates) = self
+                .sessions
+                .threads()
+                .thread_updates_after(&request.thread_id, before_sequence)
+            {
+                self.updates.publish_thread(&request.thread_id, &updates);
+            }
+            let _ = self
+                .turn_executor_snapshot()
+                .resume(&request.thread_id, &request.turn_id);
         }
     }
 
@@ -213,17 +317,31 @@ impl AppServer {
 
     pub(crate) fn with_skill_runtime(
         mut self,
-        built_in_source: skills_runtime::BuiltInSkillSource,
+        built_in_source: zeta_skills_extension::BuiltInSkillSource,
         config: Arc<dyn SkillConfigSnapshotProvider>,
     ) -> Result<Self, String> {
-        let runtime = SkillRuntime::new(built_in_source, config, Arc::clone(&self.updates))?;
+        let runtime = SkillRuntime::new(built_in_source, config, self.updates.clone())?;
+        let mut builder = zeta_extension_api::ExtensionRegistryBuilder::new();
+        zeta_skills_extension::install(&mut builder, Arc::clone(&runtime));
+        let agent_extensions = Arc::new(builder.build());
+        let extension_tool_port =
+            crate::extension_tools::compose_extension_tools(agent_extensions.as_ref())
+                .map_err(|error| error.to_string())?;
+        self.sessions
+            .threads()
+            .install_extensions(Arc::clone(&agent_extensions))
+            .map_err(|error| error.to_string())?;
         self._skill_watcher = Some(runtime.start_watching());
         let executor = self
             .workspace_runtime_mut()
             .turn_executor
             .clone()
-            .with_skill_instructions_provider(runtime.clone());
+            .with_extensions(Arc::clone(&agent_extensions));
         self.workspace_runtime_mut().turn_executor = executor;
+        self.agent_extensions = agent_extensions;
+        self = self
+            .with_extension_tool_port(extension_tool_port)
+            .map_err(|error| error.to_string())?;
         self.skills = Some(runtime);
         Ok(self)
     }
@@ -243,6 +361,31 @@ impl AppServer {
         storage_root: impl Into<std::path::PathBuf>,
     ) -> Self {
         self.code_index_storage_root = Some(storage_root.into());
+        self
+    }
+
+    pub(crate) fn with_code_index_semantic_storage_root(
+        mut self,
+        storage_root: impl Into<std::path::PathBuf>,
+    ) -> Self {
+        self.code_index_semantic_storage_root = Some(storage_root.into());
+        self
+    }
+
+    /// Installs immutable embedding/rerank adapters for local semantic indexing.
+    pub(crate) fn with_code_index_semantic_models(
+        mut self,
+        models: CodeIndexSemanticModels,
+    ) -> Self {
+        self.code_index_semantic_models = Some(models);
+        self
+    }
+
+    pub(crate) fn with_semantic_model_provider(
+        mut self,
+        provider: Arc<dyn zeta_model_provider::SemanticModelProvider>,
+    ) -> Self {
+        self.semantic_model_provider = Some(provider);
         self
     }
 
@@ -328,9 +471,7 @@ impl AppServer {
         .with_thread_updates(Arc::new(AppServerThreadUpdates {
             updates: self.updates.clone(),
         }));
-        if let Some(skills) = &self.skills {
-            executor = executor.with_skill_instructions_provider(skills.clone());
-        }
+        executor = executor.with_extensions(Arc::clone(&self.agent_extensions));
         self.workspace_runtime_mut().turn_executor = executor;
         self
     }
@@ -352,6 +493,30 @@ impl AppServer {
 
     pub fn sessions(&self) -> &Arc<SessionCoordinator> {
         &self.sessions
+    }
+
+    /// Reconciles durable Agent spawn/delivery sagas and starts newly materialized child Turns.
+    pub fn resume_recovered_agent_coordinations(&self) -> Result<usize, CoreError> {
+        let executor = self.turn_executor_snapshot();
+        let mut resumed = 0;
+        for session in self.sessions.list_sessions()? {
+            for spawned in self.multi_agent.recover_session(&session.session_id)? {
+                let child = self
+                    .sessions
+                    .threads()
+                    .read_thread(&spawned.child_thread_id)?;
+                let should_start = child.turns.iter().any(|turn| {
+                    turn.turn_id == spawned.child_turn_id
+                        && turn.status == zeta_protocol::TurnStatus::Running
+                        && !child.has_resumable_tool_continuation(&turn.turn_id)
+                });
+                if should_start {
+                    executor.start(&spawned.child_thread_id, &spawned.child_turn_id)?;
+                    resumed += 1;
+                }
+            }
+        }
+        Ok(resumed)
     }
 
     /// Re-enqueues durable running Tool continuations after host services are installed.
@@ -502,6 +667,16 @@ impl AppServer {
             Some(ClientMethod::ConfigRead) => self.config_read(),
             Some(ClientMethod::ModelList) => self.model_list(),
             Some(ClientMethod::ConfigUpdate) => self.config_update(&request.params),
+            Some(ClientMethod::ToolSearchConfigure) => self.tool_search_configure(&request.params),
+            Some(ClientMethod::SemanticCodeIndexConfigure) => {
+                self.semantic_code_index_configure(&request.params)
+            }
+            Some(ClientMethod::SemanticCodeIndexAuthorize) => {
+                self.semantic_code_index_authorize(&request.params)
+            }
+            Some(ClientMethod::SemanticCodeIndexRevoke) => {
+                self.semantic_code_index_revoke(&request.params)
+            }
             Some(ClientMethod::LanguageServerConfigure) => {
                 self.language_server_configure(&request.params)
             }
@@ -575,6 +750,12 @@ impl AppServer {
             Some(ClientMethod::CodeIndexSearch) => self.code_index_search(&request.params),
             Some(ClientMethod::CodeIndexRetrieve) => self.code_retrieve(&request.params),
             Some(ClientMethod::CodeIndexRebuild) => self.code_index_rebuild(&request.params),
+            Some(ClientMethod::SemanticCodeIndexCancel) => {
+                self.semantic_code_index_cancel(&request.params)
+            }
+            Some(ClientMethod::SemanticCodeIndexRetry) => {
+                self.semantic_code_index_retry(&request.params)
+            }
             Some(ClientMethod::CloudCodeIndexStatus) => {
                 self.cloud_code_index_status(&request.params)
             }

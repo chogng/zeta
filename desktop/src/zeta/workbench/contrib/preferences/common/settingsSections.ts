@@ -89,7 +89,7 @@ export const SettingsSections = [
   {
     id: "indexing",
     label: "Indexing",
-    description: "Control workspace indexing and search discovery.",
+    description: "Control Agent tool discovery and workspace semantic search.",
   },
   {
     id: "experimental",

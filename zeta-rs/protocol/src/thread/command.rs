@@ -1,6 +1,6 @@
 use crate::{
-    ActionApprovalResponse, DynamicToolResponse, ModelRef, RequestId, RequestUserInputResponse,
-    TurnId, UserInput,
+    ActionApprovalResponse, DynamicToolResponse, FrozenSkillActivation, ModelRef, RequestId,
+    RequestUserInputResponse, TurnId, UserInput,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -17,6 +17,8 @@ pub enum ThreadCommand {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional = nullable)]
         model: Option<ModelRef>,
+        #[serde(default)]
+        activated_skills: Vec<FrozenSkillActivation>,
         input: Vec<UserInput>,
     },
     StartShellTurn {

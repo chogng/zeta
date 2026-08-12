@@ -18,6 +18,8 @@ use zeta_code_index_cloud::CloudCodeIndexPublication;
 use zeta_code_index_cloud::CloudCodeIndexPublicationRequest;
 use zeta_code_index_cloud::CloudCodeIndexSelection;
 use zeta_code_index_cloud::CloudCodeIndexState;
+use zeta_config::ToolSearchConfig;
+use zeta_config::ToolSearchModeConfig;
 use zeta_config::{
     ConfigCommandRequest, ConfigRevision, ConfigStore, UserConfigCommand, WorkspaceTrustSetting,
 };
@@ -27,10 +29,68 @@ use zeta_core::{
     StartTurnRequest, ThreadController,
 };
 use zeta_model_provider::EchoModel;
+use zeta_model_provider::EmbeddingInvoker;
+use zeta_model_provider::EmbeddingRequest;
+use zeta_model_provider::EmbeddingResponse;
+use zeta_model_provider::EmbeddingVector;
+use zeta_model_provider::ModelProviderError;
+use zeta_model_provider_config::ModelProviderConfig;
 use zeta_policy::{ActionReviewRequest, ExecutionDecision};
+use zeta_protocol::ModelId;
+use zeta_protocol::ModelRef;
+use zeta_protocol::ProviderId;
 use zeta_protocol::{CommandId, UserInput};
 use zeta_shell_command::RipgrepExecutable;
 use zeta_workspace::WorkspaceTrustSource;
+
+struct TrustBoundSemanticEmbedding;
+
+impl EmbeddingInvoker for TrustBoundSemanticEmbedding {
+    fn embed(&self, request: &EmbeddingRequest) -> Result<EmbeddingResponse, ModelProviderError> {
+        EmbeddingResponse::new(
+            request
+                .inputs()
+                .iter()
+                .map(|_| EmbeddingVector::new(vec![1.0, 0.0]))
+                .collect::<Result<Vec<_>, _>>()?,
+        )
+    }
+}
+
+#[test]
+fn unavailable_hybrid_tool_search_remains_gated_and_reports_status() {
+    let tools = WorkspaceToolPorts::new(
+        None,
+        None,
+        None,
+        &ToolSearchConfig::default(),
+        &Default::default(),
+        None,
+    )
+    .unwrap();
+    let before = tools.state.lock().unwrap().registry_generation;
+    let provider = ProviderId::new("ollama").unwrap();
+    let model = ModelRef::new(provider.clone(), ModelId::new("nomic-embed-text").unwrap());
+    let config = ToolSearchConfig {
+        mode: ToolSearchModeConfig::HybridEmbedding,
+        embedding_model: Some(model.clone()),
+    };
+    let providers =
+        std::collections::BTreeMap::from([(provider.clone(), ModelProviderConfig::new(provider))]);
+
+    tools
+        .reconcile_user_config(None, &config, &providers)
+        .unwrap();
+
+    assert!(tools.state.lock().unwrap().registry_generation > before);
+    assert_eq!(
+        tools.tool_search_status(),
+        ToolSearchEmbeddingStatus::Unavailable {
+            model: Some(model),
+            reason: "this App Server host does not provide semantic model invocation".into(),
+        }
+    );
+}
 
 #[test]
 fn workspace_runtime_replaces_authority_without_replacing_connection_owned_services() {
@@ -44,6 +104,19 @@ fn workspace_runtime_replaces_authority_without_replacing_connection_owned_servi
     server
         .commit_trusted_workspace_runtime(first.authorization(), test_local_tools(), host)
         .unwrap();
+    let trusted_tool_names = host
+        .tools
+        .reloadable
+        .tools()
+        .definitions()
+        .into_iter()
+        .map(|definition| definition.name.to_string())
+        .collect::<std::collections::BTreeSet<_>>();
+    assert!(trusted_tool_names.contains(crate::server::multi_agent_tools::SPAWN_AGENT_TOOL_NAME));
+    assert!(
+        trusted_tool_names.contains(crate::server::multi_agent_tools::SEND_AGENT_MESSAGE_TOOL_NAME)
+    );
+    assert!(trusted_tool_names.contains(crate::server::multi_agent_tools::WAIT_AGENT_TOOL_NAME));
     let Ok(first_file_system) = server.file_system_service() else {
         panic!("first file system should be installed");
     };
@@ -142,6 +215,17 @@ fn restricted_workspace_installs_only_non_executable_services() {
     assert!(server.git_runtime_service().is_err());
     assert!(server.workspace_search_service().is_err());
     assert!(server.terminal_service().is_err());
+    assert!(
+        server
+            .local_workspace_host
+            .as_ref()
+            .unwrap()
+            .tools
+            .reloadable
+            .tools()
+            .definitions()
+            .is_empty()
+    );
 }
 
 #[test]
@@ -156,7 +240,7 @@ fn workspace_activation_binds_native_skill_source() {
     .unwrap();
     let server = server()
         .with_skill_runtime(
-            crate::server::skills_runtime::BuiltInSkillSource::Omitted,
+            zeta_skills_extension::BuiltInSkillSource::Omitted,
             Arc::new(EmptySkillConfig),
         )
         .unwrap()
@@ -171,7 +255,7 @@ fn workspace_activation_binds_native_skill_source() {
         .skills
         .as_ref()
         .unwrap()
-        .list(crate::server::skills_runtime::SkillCatalogReload::Cached)
+        .list(zeta_skills_extension::SkillCatalogReload::Cached)
         .unwrap();
     assert_eq!(snapshot.entries.len(), 1);
     assert_eq!(
@@ -332,6 +416,57 @@ fn user_config_revocation_removes_executable_services_but_keeps_file_access() {
             .definitions()
             .is_empty()
     );
+}
+
+#[test]
+fn user_config_revocation_removes_local_semantic_model_access() {
+    let workspace = TestWorkspace::new("semantic-revocation", "source.rs");
+    let root = workspace.root();
+    let config = Arc::new(ConfigStore::open(workspace.path.join("trust.sqlite3")).unwrap());
+    let trusted = config
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("trust-semantic-workspace").unwrap(),
+            expected_revision: ConfigRevision::INITIAL,
+            command: UserConfigCommand::SetWorkspaceTrust {
+                workspace: root.trust_id(),
+                setting: WorkspaceTrustSetting::Trusted,
+            },
+        })
+        .unwrap();
+    let models = crate::CodeIndexSemanticModels::new(
+        zeta_code_index_semantic::CodeIndexEmbeddingModelId::new("trust-test-v1").unwrap(),
+        Arc::new(TrustBoundSemanticEmbedding),
+    );
+    let server = server()
+        .with_code_index_semantic_models(models)
+        .with_local_workspace_host(
+            None,
+            WorkspaceSwitchTrustPolicy::UserConfig(Arc::clone(&config)),
+        )
+        .unwrap();
+    server
+        .switch_local_workspace_root(workspace.path.clone())
+        .unwrap();
+    assert!(server.code_index_semantic_service().is_some());
+
+    config
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("restrict-semantic-workspace").unwrap(),
+            expected_revision: trusted.revision,
+            command: UserConfigCommand::SetWorkspaceTrust {
+                workspace: root.trust_id(),
+                setting: WorkspaceTrustSetting::Restricted,
+            },
+        })
+        .unwrap();
+    server
+        .workspace_runtime_control()
+        .unwrap()
+        .reconcile_user_trust(&config.read_snapshot().unwrap().values)
+        .unwrap();
+
+    assert!(server.code_index_semantic_service().is_none());
+    assert!(server.code_index_service().is_ok());
 }
 
 #[test]
@@ -529,11 +664,11 @@ fn server() -> AppServer {
 }
 
 fn test_local_tools() -> LocalToolComposition {
-    LocalToolComposition {
-        tools: Arc::new(NoTools),
-        policy: Arc::new(RejectPolicy),
-        ripgrep: RipgrepExecutable::from_path(std::env::current_exe().unwrap()).unwrap(),
-    }
+    LocalToolComposition::without_executors(
+        Arc::new(NoTools),
+        Arc::new(RejectPolicy),
+        RipgrepExecutable::from_path(std::env::current_exe().unwrap()).unwrap(),
+    )
 }
 
 fn host_trust() -> WorkspaceSwitchTrustPolicy {
@@ -616,7 +751,7 @@ fn cloud_grant(
     }
 }
 
-impl crate::server::skills_runtime::SkillConfigSnapshotProvider for EmptySkillConfig {
+impl zeta_skills_extension::SkillConfigSnapshotProvider for EmptySkillConfig {
     fn snapshot(&self) -> Result<zeta_config::SkillsConfig, String> {
         Ok(zeta_config::SkillsConfig::default())
     }

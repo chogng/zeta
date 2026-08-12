@@ -1,209 +1,157 @@
 # 工作区代码索引
 
-> 状态：Current。本文 canonical 拥有代码索引的跨 crate 架构、两种部署选择、隐私边界与产品状态。
-> 本地实现见 [`zeta-code-index` README](../zeta-rs/code-index/README.md)，云 grant/provider contract
-> 见 [`zeta-code-index-cloud` README](../zeta-rs/code-index-cloud/README.md)，召回编排见
-> [`zeta-code-retrieval` README](../zeta-rs/code-retrieval/README.md)，App Server 适配见
-> [`zeta-rs/app-server/README.md`](../zeta-rs/app-server/README.md)，云端语义管线见
-> [`zeta-code-index-service` README](../zeta-rs/code-index-service/README.md)。
+> 状态：Current。本文 canonical 拥有 CodeIndex 的跨 crate 架构、数据位置、隐私边界与实施状态。
+> 具体实现见 [`zeta-code-index`](../zeta-rs/code-index/README.md)、
+> [`zeta-code-index-semantic`](../zeta-rs/code-index-semantic/README.md)、
+> [`zeta-code-retrieval`](../zeta-rs/code-retrieval/README.md)；可选远端 provider 控制面见
+> [`zeta-code-index-cloud`](../zeta-rs/code-index-cloud/README.md)。
 
-## 快速理解
+## 结论
 
-Zeta 只有两种部署选择，默认始终是 `LocalOnly`。启用 `Cloud` 只把 Workspace 已切好、已复核的
-chunks 发布给远端；文件扫描、ignore、读取、切块、revision 与 chunk identity 始终留在 Workspace
-authority。云能力不会从文件权限自动推导，必须通过独立、持久、可撤销的 source-egress grant 启用。
+Zeta 采用 local-first：本地扫描与切块、本地 SQLite/FTS、本地向量存储、本地 recall/fusion/final
+ordering。`zeta-model-provider` 只接入 embedding/rerank 模型；它不决定 chunks、候选、排序或存储。
 
-| 用户选择 | 切块位置 | 外发内容 | 当前状态 |
+| 环节 | 执行位置 | 当前状态 |
+| --- | --- | --- |
+| scan、ignore、chunk、revision identity | Workspace 本地 | ✅ |
+| lexical SQLite/FTS | 本地 | ✅ |
+| embedding/rerank API 调用 | model adapter；模型可本地或远程 | ✅ OpenAI-compatible embedding/rerank；OpenAI/Ollama embedding |
+| embedding persistence、vector recall、rerank 分数解释与来源内排序 | 本地 `zeta-code-index-semantic` | ✅；自适应 exact/SimHash ANN |
+| lexical/semantic/optional remote fusion、复核与预算 | 本地 `zeta-code-retrieval` | ✅ |
+| 远端托管 code-index | 独立 provider | 可选 contract ✅；concrete provider 尚未完成 |
+| Agent 检索消费 | App Server + Core consumer | ✅ `search_code`；可选 first-invocation 自动 evidence |
+
+因此，Zeta 当前不是“把源码上传给自建服务器再让服务器完成整个 RAG”。默认 semantic selection 为
+disabled，只运行 lexical。用户配置 exact provider/model 并授权当前 Workspace 后，Zeta 才把模型当作
+计算 API 调用；向量数据库和检索编排仍在本地。若 endpoint 位于远端，相应 chunk/query/candidate 文本
+会外发给模型。
+
+## 为什么这样分
+
+| 方案 | 优点 | 代价 | Zeta 选择 |
 | --- | --- | --- | --- |
-| `LocalOnly` | Workspace host 本地 | 无 | ✅ 默认；本地 SQLite/FTS 已接入 App Server |
-| `Cloud` | Workspace host 本地 | revision-verified exact chunks | publish/query/retrieval contract 已实现；concrete provider 尚未接入 |
+| 全本地模型 + 本地检索 | 最强隐私、离线 | 模型质量和硬件受限 | ✅ Ollama embedding；rerank 需兼容 endpoint |
+| 远程模型 + 本地检索 | 模型效果好；索引、召回与排序规则仍可控 | embedding/rerank 文本会外发 | ✅ 主要目标形态，需 consent |
+| 托管远端 code-index | 多设备复用、服务端可上 ANN | 需上传 chunks、租户与删除控制面 | 可选 provider，不是默认 |
+| 整文件上传后云端重新切块 | 服务端自主 | 外发面大，复制 Workspace authority，stale 难验证 | ❌ |
+| PostgreSQL 作为本地统一数据库 | 与服务器技术栈统一 | 要求 daemon/账号/端口，桌面生命周期复杂 | ❌；本地用 SQLite |
 
-这个边界保留“文件事实与切块靠近 Workspace”的隐私和一致性优势，同时允许远端独立演进
-embedding、向量索引、rerank 与服务端排序。远端服务管理的是语义索引，不是 Workspace 源码生命周期。
+SQLite 是嵌入式本地 projection；PostgreSQL/pgvector 只可能属于未来独立远端服务仓库。Zeta 仓库保留
+typed provider port、consent 和 exact chunk identity，不拥有某个云部署的数据库、migration 或运维。
 
-默认 local composition 的 provider registry 为空，因此 `initialize.capabilities.cloudCodeIndex` 为
-`false`，不会创建任何云网络请求。只有 host 注入满足删除保证的 concrete provider 后，云 RPC 才
-可用；当前仓库实现的是安全控制面和适配边界，不是已上线的云服务。
-
-## 为什么只允许 Workspace 切块
-
-| 方案 | 优点 | 成本 / 风险 | Zeta 判断 |
-| --- | --- | --- | --- |
-| 本地切块 + 本地 lexical | 离线、最小外发、易验证 stale | 没有 dense semantic recall | ✅ 默认基线 |
-| Workspace 切块 + 云 embedding/vector | 外发粒度小，复用稳定 chunk identity，云结果可精确复核 | chunker version 与远端 vector schema 需要显式协同升级 | ✅ 唯一云路径 |
-| 整文件 + 云端重新切块 | provider 可独立改 chunk boundary | 复制 Workspace 操作、扩大外发面、云候选难以证明来自当前 generation | ❌ |
-| Renderer / Native 自行切块 | 接 UI 快 | 复制 ignore/watcher/runtime，破坏共享 backend ownership | ❌ |
-
-一个 Workspace 同时只能存在一个 grant；切换 provider、tenant、collection、path scope 或 byte ceiling
-时必须先 revoke 再重新 authorize，不能静默扩大原 consent。
-
-## 端到端流程
+## 本地端到端路径
 
 ```mermaid
 flowchart TD
-    Root["Authorized WorkspaceRoot"] --> Watch["Register filesystem watcher"]
-    Watch --> Scan["Ignore-aware bounded scan"]
-    Scan --> Chunk["Local declaration / line chunking"]
-    Chunk --> Identity["Revision + chunk hashes"]
-    Identity --> SQLite["Atomic local SQLite generation + FTS5"]
-    SQLite --> Choice{"Deployment choice"}
-    Choice -->|"LocalOnly"| Local["Local lexical retrieval"]
-    Choice -->|"Cloud"| PreviewChunks["Preview selected chunk bytes"]
-    PreviewChunks --> Grant["Persist root/destination/scope/byte grant"]
-    Grant --> Sync["Persist Syncing"]
-    Sync --> Verify["Reread and verify current revision"]
-    Verify --> SendChunks["Provider receives exact verified chunks"]
-    SendChunks --> Ready["Persist remote generation"]
-    Ready --> Query["Query exact ready generation"]
-    Query --> CloudRank["Cloud query embedding + vector recall + rerank + filter/truncate"]
-    SQLite --> Recall["Local lexical candidates"]
-    CloudRank --> Recall
-    Recall --> Fuse["RRF + identity dedupe + current-source verification + byte budget"]
-    Ready --> Revoke["Persist Revoking"]
-    Revoke --> Delete["Idempotent provider grant deletion"]
-    Delete --> Local
+    Root["Trusted WorkspaceRoot"] --> Watch["filesystem watcher"]
+    Watch --> Scan["bounded ignore-aware scan"]
+    Scan --> Chunk["local structural/line chunking"]
+    Chunk --> Lexical["SQLite generation + FTS5"]
+    Lexical --> Verify["materialize exact current chunks"]
+    Verify --> Reuse["reuse vectors by root/model/path/language/chunk key"]
+    Reuse --> Embed["EmbeddingInvoker for missing chunks"]
+    Embed --> Dense["local SQLite embeddings"]
+    Query["workspace/codeIndex/retrieve"] --> FTS["local lexical recall"]
+    Query --> QueryEmbed["query embedding"]
+    QueryEmbed --> Vector["local cosine recall"]
+    Vector --> Rerank["optional RerankInvoker"]
+    Rerank --> Fuse["local RRF + identity dedupe"]
+    FTS --> Fuse
+    Fuse --> Current["reread + verify current source"]
+    Current --> Budget["item/total byte budget"]
 ```
 
-初始本地顺序不能交换：host 先注册 watcher，再把 full scan 投递到独立 refresh worker。Watcher event
-只是“可能变化”的 invalidation hint；runtime 会重新读取路径，并在 ignore、目录或容量语义不确定时
-完整重建。云 preview 和 sync 都消费一份原子 local generation；publication 前再次读取 source 并
-验证 revision/range/hash，旧 manifest 不会被当作当前源码上传。
+App Server 先注册 watcher，再把 scan/reconcile 投递给独立 refresh worker。lexical generation 成功更新后，
+worker 同步 semantic projection。新 semantic generation 采用 transaction 发布；同步完成前查询不会把旧
+generation 冒充当前结果，而是明确降级为 lexical。
 
-## Egress consent 怎么做
+重建并不等于重新调用所有 embedding。semantic store 使用 root、model ID、relative path、language 与
+稳定 chunk key 匹配可复用向量；只计算新增或变化的 chunks，再原子替换当前 generation。模型 ID 变化会
+使全部旧向量失效。
 
-客户端先调用无副作用 `preview`，展示文件数、chunk 数、上传单元数、当前 generation 的精确
-source-content bytes，以及 proposed byte ceiling 是否足够。该数字不包含 provider serialization
-或 transport metadata overhead；provider adapter 还必须独立限制实际 request size。preview 不保存
-consent，也不触网。
+## 职责边界
 
-用户确认后保存 `CloudCodeIndexGrant`：
-
-| Grant 字段 | 约束 | 目的 |
+| 能力 | Owner | 判断 |
 | --- | --- | --- |
-| `grantId` | 稳定、非空 | 远端 object 与删除边界 |
-| `rootId` | server 从 active controller 绑定，客户端不能选择 | 防止授权跨 Workspace 复用 |
-| `provider/tenant/collection` | 每次 grant 固定 | 防止静默换租户或远端 namespace |
-| `selection` | `entireIndex` 或规范化相对 path prefixes | 明确哪些源码可外发 |
-| `maxEgressBytes` | 非零；限制 source-content bytes；authorize 和每次 sync 重检 | source 变化后也不能突破用户上限 |
+| filesystem scan、ignore、chunk、source revision 与 lexical FTS | `zeta-code-index` | ✅ 本地 authority |
+| embedding/rerank 请求与响应 transport | `zeta-model-provider` | ✅ adapter contract；不排序 |
+| 模型输入准备、embedding cache、vector recall、rerank 时机/分数解释/排序 | `zeta-code-index-semantic` | ✅ 本地 orchestration |
+| 多来源 RRF、dedupe、current-source verification、content budget | `zeta-code-retrieval` | ✅ |
+| root trust、watcher、model/provider injection、profile paths、RPC | App Server | ✅ |
+| remote publication grant/query/delete lifecycle | `zeta-code-index-cloud` | 可选 |
+| remote vector DB、tenant auth、endpoint 与 retention | 独立服务/provider 项目 | ❌ 不属于 Zeta |
+| settings endpoint/model 与 Workspace consent/revoke | 产品 UI + App Server policy | ✅；含本地 progress/cancel/retry；远端 retention audit 仍属 cloud provider |
 
-`authorize` 只建立 durable permission，不上传；`sync` 才 materialize 并调用 provider。若新 generation
-超出上限、source revision 改变，或 provider 不承诺幂等删除，operation fail
-closed。local generation 尚未首次发布时返回 `CodeIndexNotReady`，不会创建“空但 ready”的远端
-index。完全相同的 grant 可幂等 authorize；不同 grant 返回 consent conflict。
+关键不变量：model provider 只“调用模型并返回有序向量/分数”。把文本变成哪些 model documents、向量
+如何持久化、候选如何召回、rerank 分数如何解释以及最终如何排序，都由 code-index domain owner 决定。
 
-## 删除与信任撤销怎么做
+## 数据与 consent
 
-provider 必须把 grant ID 作为完整 remote deletion domain，并保证重复 `delete_grant` 安全成功；
-删除范围包含该 grant 创建的 files、chunks、vectors 和 metadata。
-
-撤销顺序是：
-
-1. 本地先持久化 `Revoking`，防止崩溃后忘记待删除授权；
-2. 调用 provider 的幂等 grant deletion；
-3. 只有 provider 确认成功后，才清空 grant 并回到 `LocalOnly`；
-4. 失败时保留 `Revoking`，重启后继续用同一 grant 重试，不恢复 sync；
-5. Workspace 从 Trusted 降为 Restricted 时自动走同一撤销流程，并移除 cloud controller。即使远端
-   删除暂时失败，受限 Workspace 也不再具备外发能力；后续受限 activation 会重试 pending deletion。
-
-当前 durable state 是删除控制状态，不是删除审计证明。若产品需要合规 receipt、远端 retention
-deadline 或管理员强制删除，需要 concrete provider contract 再增加可验证 receipt，而不是把
-`delete_grant` 的返回值描述成法律层面的证明。
-
-## 所有权
-
-| 能力 | Owner | 当前状态 |
+| 模式 | 可能离开设备的数据 | 必须满足 |
 | --- | --- | --- |
-| 文件扫描、ignore、chunk/revision identity、SQLite/FTS、materialization | `zeta-code-index` | ✅ |
-| cloud grant、preview、provider port、publication/query/deletion lifecycle | `zeta-code-index-cloud` | ✅ |
-| local/cloud fan-out、RRF、identity dedupe、fallback、context byte budget | `zeta-code-retrieval` | ✅ |
-| query 准备、embedding、vector recall、rerank、云候选排序/过滤/截断 | `zeta-code-index-service` | ✅ provider-neutral pipeline；缺 production adapters |
-| grammar、declaration ranges | `zeta-syntax` | ✅ 被索引消费，不拥有 workspace lifecycle |
-| root trust、profile DB placement、watcher、provider injection、RPC state | App Server workspace runtime | ✅ |
-| local/cloud DTO、schema、TypeScript binding | `zeta-app-server-protocol` | ✅ |
-| embedding/rerank 模型 API 适配与调用 | `zeta-model-provider` | 部分具备：canonical invoker 已完成；concrete codec/runtime 尚未接入 |
-| concrete vector cloud transport adapter | App Server integration + `zeta-api` / `zeta-client` | 尚未完成 |
-| Agent Tool/context 自动消费 retrieval RPC | Core/App Server Agent integration | 尚未完成 |
-| Editor 未保存 buffer overlay | Editor vertical | 尚未完成 |
+| lexical only | 无 | 默认可用 |
+| local model semantic | 无 | host 安装本地 invoker |
+| remote embedding | exact chunk 文本、query 文本 | 明示源码外发 consent、destination/model、scope、删除/retention 说明 |
+| remote rerank | query + recalled candidate 文本 | 同上；UI 需单独说明 rerank 外发 |
+| remote code-index provider | grant scope 内的 verified chunks | durable `CloudCodeIndexGrant`、byte ceiling、幂等 grant deletion |
 
-`zeta-code-index` 和 `zeta-code-index-cloud` 位于共享 Rust backend。Native 已进入迁移期，不能新增
-另一套 index registry、network client、timer、chunker 或 consent owner。
+Desktop Settings 可以保存 Ollama 或 unauthenticated OpenAI-compatible endpoint、选择 embedding/optional
+rerank 模型，并对 active Workspace 单独授权或撤销。授权精确绑定 Workspace、模型和对应 provider
+配置；模型或 base URL 变化后旧授权立即失效，语义 runtime 被卸载。普通聊天模型配置不会自动授权
+后台索引源码。当前 UI 尚未提供 chunk/byte 预览、同步进度或远端 retention 证明。
 
-## App Server 协议与持久化
+远端托管 code-index 使用另一套 durable grant：`provider/tenant/collection`、path selection、最大 source
+bytes 与稳定 grant ID。`authorize` 只持久化 permission；`sync` 才 materialize 并发送。`revoke` 先保存
+`Revoking`，provider 完成 grant 级幂等删除后才清除本地 pending state。该 provider 的实际数据库与
+endpoint 不在本仓库。
 
-本地能力：
+## App Server 与持久化
+
+canonical 本地协议：
 
 - `workspace/codeIndex/status {}`；
-- `workspace/codeIndex/search { query, maxResults }`；
-- `workspace/codeIndex/retrieve { query, maxResults }`；
+- `workspace/codeIndex/search { query, maxResults }`：纯 lexical 诊断；
+- `workspace/codeIndex/retrieve { query, maxResults }`：lexical + 可用 semantic/remote sources；
 - `workspace/codeIndex/rebuild {}`。
 
-`search` 保持纯本地 lexical 诊断接口；`retrieve` 才是 canonical 召回接口。后者在未启用云能力时
-只查本地；在已授权云 generation 可用时纳入云端已排序 candidates，用 RRF 做跨来源合并、按 revision-bound
-chunk identity 去重，再从 Workspace 重读并复核完整 chunk identity。云查询失败不会丢掉本地结果，
-而是返回显式 degradation；单条与总 content bytes 都受预算限制。
+`retrieve` origin 明确区分 `localLexical`、`localSemantic` 和 `cloudSemantic`。本地 semantic 或远端来源
+失败不会吞掉 FTS，而会返回 `localSemanticQueryFailed` 或 `cloudQueryFailed` degradation。
 
-host 注入 provider 后额外广告 `capabilities.cloudCodeIndex` 并提供下列协议；实际 controller 仍只在
-Trusted Workspace 安装：
+| projection | 默认路径 | 内容 |
+| --- | --- | --- |
+| lexical | `<profile>/code-index/<root-digest>.sqlite3` | chunks、generation、FTS |
+| local semantic | `<profile>/code-index-semantic/<root-digest>.sqlite3` | chunks、model ID、embeddings |
+| remote control state | `<profile>/code-index-cloud/<root-digest>.sqlite3` | grant/phase/generation metadata；不保存源码/secret |
 
-- `workspace/codeIndex/cloud/status {}`；
-- `workspace/codeIndex/cloud/preview { selection, maxEgressBytes }`；
-- `workspace/codeIndex/cloud/authorize { grant }`；
-- `workspace/codeIndex/cloud/sync {}`；
-- `workspace/codeIndex/cloud/revoke {}`。
+Unix persistent files 固定为普通文件和 `0600`。lexical/semantic 都是可重建 projection，不提升为源码
+authority。restricted Workspace 可继续 lexical；当前 semantic invoker 和 remote controller 只在 Trusted
+Workspace 安装。
 
-local index 位于 `<profile>/code-index/<root-digest>.sqlite3`；cloud grant/state 位于
-`<profile>/code-index-cloud/<root-digest>.sqlite3`。两者 Unix 权限都是 `0600`。local projection
-保存可重建原文 chunks；cloud state 只保存 consent、phase 和 generation metadata，不保存源码或
-credential。restricted Workspace 可以继续本地索引，但不会安装 cloud controller。
+## 一致性与安全
 
-默认 local scan 最多 50,000 files、单文件 4 MiB、总 source 512 MiB；chunk 目标 8 KiB、hard
-limit 12 KiB、单文件最多 2,048 chunks。grant byte ceiling 是附加上限，不替代这些读取上限。
+- SQLite publication 使用 transaction；读者只看到完整 generation。
+- lexical、semantic 和 remote candidates 都只是 references；返回前必须从 Workspace 重读并验证
+  root、revision、chunk key、range、line span 与 content hash。
+- full scan 默认排除 hidden files，读取 Git ignore，并硬排除 `.git`、`.zeta`、`node_modules`、`target`。
+- 文件读取权限不等于网络 egress consent；默认 provider/model registry 为空。
+- OpenAI API-key semantic 调用要求 host 注入 `SecretStore`；Desktop 尚无持久化 API-key 管理 UI，因此
+  当前产品闭环面向 Ollama 或 unauthenticated OpenAI-compatible endpoint。
+- semantic model 或 chunker 语义变化必须换 model/chunker identity，使不兼容 cache 显式失效。
 
-## 一致性、失败与安全边界
-
-- SQLite publication 使用 transaction；读者只看到完整旧 generation 或完整新 generation。
-- local FTS hit、cloud manifest 与 cloud query candidate 都不是直接 content authority；消费前重读并
-  验证 source revision、byte/line range、content hash、chunk key 与 chunker version。云端返回不在当前
-  Workspace manifest 中的 reference 时拒绝整个 provider result。
-- full scan 默认排除 hidden files，读取 Git ignore，并硬排除 `.git`、`.zeta`、`node_modules`、
-  `target`；云 selection 只能缩小这份集合，不能把被 ignore 文件加回来。
-- local file permission 不等于 network egress consent；provider registry 为空时 cloud capability 为
-  false。
-- provider adapter 必须拥有 credential、proxy/TLS、tenant isolation、request limit 与日志脱敏；
-  grant/state 不记录正文、secret 或 provider response body。
-- local generation 变化后 remote status 为 `Stale`；显式 sync 成功前不得把旧 remote generation
-  描述为 current。
-
-## 当前实现、计划与长期不变量
+## 当前状态与下一步
 
 | 阶段 | 状态 | 内容 |
 | --- | --- | --- |
-| 本地索引基础 | ✅ Current | scan、chunks、stable hashes、SQLite generation、FTS5 |
-| Workspace lifecycle | ✅ Current | initial build、watcher reconcile、root switch、persistent reopen |
-| 云安全控制面 | ✅ Current | chunk-only preview、durable grant、byte/scope gate、revoke recovery |
-| App Server contract | ✅ Current | local + cloud capabilities/RPC、schema/types、trust-revocation hook |
-| 召回编排 | ✅ Current | local/cloud candidate fan-out、RRF、dedupe、fallback、verification、byte budget |
-| 云端语义 pipeline | ✅ Current | Workspace chunks → embedding → vector recall → optional rerank → final order |
-| concrete 云 provider | 尚未完成 | credential/network adapter、production vector store、embedding/rerank codec/runtime、remote endpoint |
-| 产品设置与 consent UI | 尚未完成 | cloud toggle、preview copy、progress、deletion retry/audit |
-| Agent context consumer | 尚未完成 | retrieval RPC → Agent Tool/context assembly；不再做云候选 rerank |
+| 本地 lexical | ✅ Current | scan、chunk、stable identity、SQLite generation、FTS5、watcher |
+| 本地 semantic domain | ✅ Current | SQLite vectors、增量复用、embedding batches、cosine recall、optional rerank |
+| retrieval RPC | ✅ Current | 三来源 origin、RRF、dedupe、fallback、verification、byte budget |
+| App Server composition | ✅ Current | durable selection/consent、trusted-only runtime、config rebind、background sync |
+| concrete embedding/rerank adapter | 部分具备 | OpenAI-compatible embedding/rerank、OpenAI/Ollama embedding；调用支持 cancellation/retry；持久化 credential UI 仍待补 |
+| semantic consent UI | 部分具备 | endpoint/model disclosure、exact Workspace scope、authorize/revoke、progress/cancel/retry；远端 retention audit 仍待 cloud provider |
+| scalable local ANN | ✅ Current | ≥2,048 chunks 使用 rebuildable SimHash candidates + exact cosine；异常自动 brute-force |
+| optional hosted provider | 尚未完成 | concrete endpoint、tenant auth、server DB、retention/deletion receipt |
+| Agent consumer | ✅ Current | 显式只读 `search_code`；可选 first-invocation 自动 evidence，默认关闭、预算受限且标记 untrusted |
+| Editor unsaved overlay | 尚未完成 | 当前只索引磁盘 generation |
 
-当前 cloud sync 是同步显式 operation，没有 background debounce、progress、cancellation 或 retry
-scheduler；没有 provider 时不可调用。local full rebuild 也尚无 cancellation checkpoint，workspace
-retirement 会等待正在运行的 scan 完成。
-
-单纯切换到另一个 Workspace 不等于撤销原 root 的 durable grant；远端数据保留到显式 revoke。
-inactive root 的 trust 变化目前没有全局后台 grant catalog，下一次以 Restricted 状态 activation 时才
-重试删除；要求立即删除时，产品必须在离开 root 前调用 cloud revoke。这是 concrete provider 上线前
-仍需补齐的后台控制面。
-
-长期不变量：
-
-- 默认 `LocalOnly`，文件权限不隐式授予网络外发；
-- 扫描、ignore、读取、切块、revision verification 与 chunk identity 始终在 Workspace authority 一侧执行；
-- 云端只接收 Workspace 当前 generation 中 grant 范围内的复核 chunks，不能接收整文件后重新切块；
-- 云端 CodeIndex 拥有 embedding/vector recall/rerank 编排与云候选最终排序；
-- `zeta-code-retrieval` 只保留来源内顺序并执行跨来源融合，不解释模型原始分数；
-- destination、scope 或 byte ceiling 变化必须建立新 grant；
-- remote object 必须按 grant 可幂等删除，删除成功前不丢弃 pending state；
-- 产品 host 不复制共享 index/consent runtime，Native 不成为新 owner。
+接下来的优先级是 secure credential 产品接入、ANN 召回/延迟实测与远端 retention audit。远端托管 provider
+与 PostgreSQL/pgvector 不应阻塞本地主路径。

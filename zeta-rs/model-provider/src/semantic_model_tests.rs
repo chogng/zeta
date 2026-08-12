@@ -1,4 +1,53 @@
 use super::*;
+use serde_json::Value;
+use serde_json::json;
+use std::sync::Arc;
+use std::sync::Mutex;
+use zeta_client::ClientError;
+use zeta_client::ClientRequest;
+use zeta_client::ClientResponse;
+use zeta_client::OperationClient;
+use zeta_model_provider_config::ModelProviderConfig;
+use zeta_model_provider_config::ProviderConfigRegistry;
+use zeta_secrets::MemorySecretStore;
+use zeta_secrets::SecretKey;
+use zeta_secrets::SecretStore;
+use zeta_secrets::SecretValue;
+
+struct SemanticTransport {
+    requests: Mutex<Vec<ClientRequest>>,
+}
+
+impl Default for SemanticTransport {
+    fn default() -> Self {
+        Self {
+            requests: Mutex::new(Vec::new()),
+        }
+    }
+}
+
+impl OperationClient for SemanticTransport {
+    fn execute(&self, request: &ClientRequest) -> Result<ClientResponse, ClientError> {
+        self.requests.lock().unwrap().push(request.clone());
+        let response: Value = if request.url().ends_with("/embeddings") {
+            json!({"data": [{"index": 0, "embedding": [0.25, 0.75]}]})
+        } else {
+            json!({"results": [{"index": 0, "relevance_score": 0.9}]})
+        };
+        Ok(ClientResponse::new(
+            200,
+            Vec::new(),
+            serde_json::to_vec(&response).unwrap(),
+        ))
+    }
+}
+
+fn semantic_model(provider: &str, model: &str) -> ModelRef {
+    ModelRef::new(
+        ProviderId::new(provider).unwrap(),
+        ModelId::new(model).unwrap(),
+    )
+}
 
 #[test]
 fn embedding_response_rejects_inconsistent_dimensions_and_non_finite_values() {
@@ -26,4 +75,79 @@ fn rerank_contract_preserves_document_order_for_the_calling_service() {
 
     assert_eq!(request.documents(), &["first", "second"]);
     assert_eq!(response.scores(), &[0.25, 0.75]);
+}
+
+#[test]
+fn semantic_runtime_invokes_concrete_embedding_and_rerank_endpoints() {
+    let transport = Arc::new(SemanticTransport::default());
+    let runtime =
+        ModelProviderRuntime::with_client(ProviderConfigRegistry::builtin(), transport.clone());
+    let config = ModelProviderConfig::new(ProviderId::new("ollama").unwrap());
+    let embedding = runtime
+        .embedding_runtime(EmbeddingRuntimeRequest::new(
+            semantic_model("ollama", "nomic-embed-text"),
+            config.clone(),
+        ))
+        .unwrap();
+    assert_eq!(
+        embedding
+            .embed(&EmbeddingRequest::new(vec!["source".into()]).unwrap())
+            .unwrap()
+            .vectors()[0]
+            .values(),
+        &[0.25, 0.75]
+    );
+    let mut rerank_config = ModelProviderConfig::new(ProviderId::new("openai-compatible").unwrap());
+    rerank_config.base_url = Some("https://rerank.example.test/v1".into());
+    let rerank = runtime
+        .rerank_runtime(RerankRuntimeRequest::new(
+            semantic_model("openai-compatible", "rerank-model"),
+            rerank_config,
+        ))
+        .unwrap();
+    assert_eq!(
+        rerank
+            .rerank(&RerankRequest::new("query", vec!["candidate".into()]).unwrap())
+            .unwrap()
+            .scores(),
+        &[0.9]
+    );
+
+    let requests = transport.requests.lock().unwrap();
+    assert_eq!(requests[0].url(), "http://localhost:11434/v1/embeddings");
+    assert_eq!(requests[1].url(), "https://rerank.example.test/v1/rerank");
+}
+
+#[test]
+fn openai_semantic_runtime_requires_and_materializes_its_secret() {
+    let transport = Arc::new(SemanticTransport::default());
+    let secrets = Arc::new(MemorySecretStore::default());
+    let config = ModelProviderConfig::new(ProviderId::new("openai").unwrap());
+    let request =
+        EmbeddingRuntimeRequest::new(semantic_model("openai", "text-embedding-3-small"), config);
+    let unavailable = ModelProviderRuntime::with_client_and_secrets(
+        ProviderConfigRegistry::builtin(),
+        transport.clone(),
+        secrets.clone(),
+    );
+    assert!(matches!(
+        unavailable.embedding_runtime(request.clone()),
+        Err(ModelProviderError::Credential(_))
+    ));
+
+    secrets
+        .store(
+            &SecretKey::new("provider/openai/default/api-key").unwrap(),
+            &SecretValue::new("test-secret"),
+        )
+        .unwrap();
+    unavailable
+        .embedding_runtime(request)
+        .unwrap()
+        .embed(&EmbeddingRequest::new(vec!["source".into()]).unwrap())
+        .unwrap();
+    let requests = transport.requests.lock().unwrap();
+    assert!(requests[0].headers().iter().any(|header| {
+        header.name() == "Authorization" && header.value() == "Bearer test-secret"
+    }));
 }

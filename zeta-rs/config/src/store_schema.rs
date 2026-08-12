@@ -147,7 +147,9 @@ fn upgrade_document_schema(
     if stored_version == document_schema_version {
         return Ok(());
     }
-    if stored_version + 1 != document_schema_version {
+    if stored_version > document_schema_version
+        || document_schema_version.saturating_sub(stored_version) > 2
+    {
         return Err(ConfigError(format!(
             "unsupported config document schema version {stored_version}"
         )));
@@ -183,7 +185,7 @@ fn migrate_v1(
             },
         )
         .map_err(sql_error)?;
-    if legacy.0 != document_schema_version && legacy.0 + 1 != document_schema_version {
+    if legacy.0 > document_schema_version || document_schema_version.saturating_sub(legacy.0) > 2 {
         return Err(ConfigError(format!(
             "unsupported config document schema version {}",
             legacy.0

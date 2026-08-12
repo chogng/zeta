@@ -52,7 +52,7 @@ export interface UserInputOption { readonly label: string; readonly description:
 export interface UserInputQuestion { readonly id: string; readonly header: string; readonly question: string; readonly options?: readonly UserInputOption[]; readonly allowFreeForm: boolean }
 export interface RequestUserInput { readonly questions: readonly UserInputQuestion[] }
 export interface ActionApprovalRequest { readonly reason: string }
-export interface DynamicToolCall { readonly callId: string; readonly name: string; readonly arguments: unknown }
+export interface DynamicToolCall { readonly callId: string; readonly name: string; readonly definitionDigest: string; readonly arguments: unknown }
 
 export type AgentRequest =
   | { readonly type: "approval"; readonly request: ActionApprovalRequest }

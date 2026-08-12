@@ -39,6 +39,34 @@ pub(crate) fn apply_command(
                     provider
                 )));
             }
+            if document
+                .semantic_code_index
+                .selection
+                .remote_models()
+                .is_some_and(|models| {
+                    models.embedding_model.provider == *provider
+                        || models
+                            .rerank_model
+                            .as_ref()
+                            .is_some_and(|model| model.provider == *provider)
+                })
+            {
+                return Err(ConfigError(format!(
+                    "cannot remove provider '{}' while semantic code indexing uses it",
+                    provider
+                )));
+            }
+            if document
+                .tool_search
+                .embedding_model
+                .as_ref()
+                .is_some_and(|model| model.provider == *provider)
+            {
+                return Err(ConfigError(format!(
+                    "cannot remove provider '{}' while Tool Search uses it",
+                    provider
+                )));
+            }
             document.providers.remove(provider);
         }
         UserConfigCommand::UpsertMcpServer { server } => {
@@ -129,6 +157,30 @@ pub(crate) fn apply_command(
         }
         UserConfigCommand::RemoveLanguageServerConfiguration { server_id } => {
             document.language_servers.servers.remove(server_id);
+        }
+        UserConfigCommand::ConfigureSemanticCodeIndex {
+            selection,
+            automatic_context,
+        } => {
+            document
+                .semantic_code_index
+                .replace_selection(selection.clone());
+            document
+                .semantic_code_index
+                .replace_automatic_context(*automatic_context);
+        }
+        UserConfigCommand::ConfigureToolSearch { config } => {
+            document.tool_search = config.clone();
+        }
+        UserConfigCommand::AuthorizeSemanticCodeIndexEgress { workspace } => {
+            let providers = document.providers.clone();
+            document
+                .semantic_code_index
+                .authorize(workspace.clone(), &providers)
+                .map_err(|message| ConfigError(message.into()))?;
+        }
+        UserConfigCommand::RevokeSemanticCodeIndexEgress { workspace } => {
+            document.semantic_code_index.revoke(workspace);
         }
         UserConfigCommand::SetWorkspaceTrust { workspace, setting } => {
             document

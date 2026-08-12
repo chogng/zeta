@@ -24,17 +24,23 @@ JSONL / in-process caller
    ├─ JSON-RPC validation / initialization gate
    ├─ protocol method dispatch
    ├─ SessionCoordinator / ThreadController
+   ├─ MultiAgentCoordinator → child Thread spawn/context seed + durable delivery/join/cancellation
    ├─ TurnExecutor
    ├─ ConfigStore
    ├─ optional WorkspaceFileSystem + filesystem watcher
    ├─ optional GitRuntime → zeta-file-watcher + GitService → zeta-git
    ├─ optional SearchService → zeta-search
    ├─ optional CodeIndexRuntime → zeta-code-index + filesystem watcher
+   ├─ optional CodeIndexSemanticService → local SQLite vectors + host model adapters
    ├─ optional CloudCodeIndexController → zeta-code-index-cloud + host provider registry
-   ├─ request-scoped CodeRetrievalService → local/cloud RRF + verification + content budget
+   ├─ request-scoped CodeRetrievalService → lexical/semantic/remote RRF + verification + budget
    ├─ optional TerminalService → zeta-utils-pty
    ├─ reloadable MCP Tool generation → zeta-mcp
-   ├─ SkillRuntime → zeta-skills + zeta-file-watcher
+   ├─ client-hosted dynamic tools → durable Agent interaction owner
+   ├─ read-only extension ToolExecutor contributions → zeta-extension-api
+   ├─ trusted Workspace Agent tools → spawn_agent / send_agent_message / wait_agent
+   ├─ Skill RPC/config/event adapters → zeta-skills-extension
+   │                                  → zeta-skills + zeta-file-watcher
    ├─ WorkspaceCustomizations → zeta-instructions + zeta-agents
    ├─ connection-owned ResourceStore
    └─ UpdateBroker → session/update, session/thread/update, config/changed, skills/changed, git/statusChanged, fs/changed
@@ -67,11 +73,15 @@ Core/store 继续拥有 Session/Thread durable state；需要进程内生命周�
 | `AppServer::with_git_root` | 冻结 workspace root，开启 Git status/mutation、watcher 与 revision notification |
 | `AppServer::with_workspace_search` | 注入 workspace root 与冻结的 ripgrep executable，构造外部内容搜索服务 |
 | `AppServer::with_code_index_storage_root` | 配置按 root identity 分隔的 persistent index cache |
+| `LocalCodeIndexProviders::with_semantic_models` | 在 Workspace activation 前注入本地 semantic 使用的 immutable embedding/rerank adapters |
 | `AppServer::with_cloud_code_index_providers` | 注入冻结的 provider registry；空 registry 不广告 cloud capability |
 | `AppServer::with_cloud_code_index_storage_root` | local composition 配置按 root identity 分隔的 durable grant/deletion state |
 | `AppServer::with_tool_service` | 安装同一 server 内所有 Turn 使用的 Core Tool/Policy ports |
+| `AppServer::with_dynamic_tools` | 校验 client-hosted dynamic specs，并接入共享 registry、审批和 durable interaction 执行链 |
+| `AppServer::resume_recovered_agent_coordinations` | 恢复 Agent spawn/delivery/join/cancellation saga，并调度恢复期间新建的 child Turn |
 | `open_local_app_server` | 按 SessionStateMode 选择 durable/in-memory coordinator，打开 config 并组合 provider-backed model |
 | `open_local_app_server_with_cloud_providers` | 在 Workspace 激活前注入 cloud code-index providers；默认入口使用空 registry |
+| `open_local_app_server_with_code_index_providers` | 在 Workspace 激活前同时注入本地 semantic models 与可选 cloud providers |
 | `LocalAppServerOptions` | user profile root + SessionStateMode + optional config/runtime Workspace + validated slash catalog + built-in Skill root selection + optional model operation client |
 | `SessionStateMode` | 明确选择 profile SQLite durable history 或 process-local ephemeral Session/Thread state |
 | `BuiltInSkillRoot` | auto-detected release root、explicit test/host root 或 unavailable 的自解释选择 |
@@ -83,7 +93,9 @@ Core/store 继续拥有 Session/Thread durable state；需要进程内生命周�
 Policy port 的 executor。`open_local_app_server` 会从 user config snapshot 连接明确 `enabled`
 的 unauthenticated MCP server，并把 catalog 与本地工具组合；Config commit 会在后台构建新
 generation 并只切换未来的 prepare。已 prepare 的调用继续绑定原 Tool/Policy generation，直到
-execute 完成。每次 MCP tool call 仍必须经过 durable one-time approval。它仅在调用方通过
+execute 完成。每次 MCP tool call 仍必须经过 durable one-time approval。Host 安装的 read-only
+extension executor（当前包括 `skills-read`）和 client-hosted dynamic tools 也进入同一个 registry，
+不得绕过 binding、policy 或 durable result commit。它仅在调用方通过
 `LocalAppServerOptions::with_workspace_root` 提供统一 Workspace 根时同时组合 filesystem、
 `.zeta` 自定义 catalog、Workspace code index、Workspace search、Git SCM、connection-owned Terminal runtime、
 只读 `rg` registry；Zeta CLI 的 stdio 与
@@ -101,6 +113,28 @@ local composition 会配置 `<profile>/code-index-cloud` 的 durable state 位�
 为空，因此不会安装 cloud controller、广告 `cloudCodeIndex` 或创建网络请求。具体 host 只有在注入
 接受 Workspace-owned exact chunks 且满足幂等 grant deletion 的 provider 后，才能启用云能力。
 
+local composition 同时配置 `<profile>/code-index-semantic` 并安装共享的
+`SemanticModelProvider` resolver，但 semantic CodeIndex 默认仍关闭，所以不会后台发送 chunks 或创建
+vectors。用户选择模型并对 exact Workspace 授权源码外发后，Trusted Workspace 的 lexical generation
+更新才会在 refresh worker 中同步本地 semantic SQLite。模型只返回 embedding/rerank 结果，召回与
+排序仍由本地 domain crate 完成；host 也可用 `LocalCodeIndexProviders::with_semantic_models` 注入测试
+或专用 immutable adapters。
+
+Trusted Workspace 同时获得 built-in read-only `search_code` 工具。它只接受
+`workspace-code-index-read-only` exact grant，调用 canonical `CodeRetrievalService`，并返回 bounded、
+current-source-verified excerpts 与 degradation；未配置 semantic 时自然退回 lexical。semantic grant
+精确绑定 Workspace、model selection 与 provider config，provider URL 或模型变化会卸载旧 runtime 并
+要求重新授权。Desktop 当前可配置 Ollama/unauthenticated OpenAI-compatible endpoint；OpenAI API key
+仍需 host 注入 secure `SecretStore`，尚无产品 credential UI。
+
+Tool Search 拥有独立的 `toolSearch.embeddingModel`，不复用 CodeIndex 的模型选择。只有 User Config
+明确设置 `toolSearch.mode = "hybridEmbedding"` 才会调用；默认 `lexical` 不产生 embedding 请求。
+`toolSearch/configure` 先解析 exact provider/model 并执行固定文本 readiness probe，失败返回
+`ToolSearchUnavailable` 且不提交配置。外部配置或启动恢复遇到不可用模型时，App Server 通过
+`config/read.toolSearch.embeddingStatus` 报告原因，hybrid 自然语言搜索明确失败；只有用户显式切回
+`lexical` 才启用纯 BM25。Regex 始终是本地显式策略。门禁通过后，Tool Search 只缓存当前 registry
+generation 的工具向量；实际调用或响应校验失败会使该次搜索明确失败，不静默回落到 BM25。
+
 Tab 关闭的停止语义属于本层适配，而不是 `zeta-protocol` 的新 command：前端通过
 `session/request` 的 `Stop` operation 到达 Session mutation dispatcher，后者调用 Core 的
 `SessionCoordinator::stop`，再从 durable gap 发布 Session 和 child Thread updates。单纯
@@ -117,7 +151,7 @@ src/
 │       ├── config_operations.rs   # Config/provider/MCP/Skill methods + DTO conversion
 │       ├── config_runtime.rs      # Config commit → config/changed fanout
 │       ├── skill_operations.rs    # Skill catalog/enablement DTO conversion and error mapping
-│       ├── skills_runtime.rs       # source composition、catalog cache、watcher、projection
+│       ├── skill_operations.rs     # Skill runtime snapshot → protocol DTO
 │       ├── start_turn.rs           # durable command replay before mutable model/Skill resolution
 │       ├── workspace_customizations.rs # Instruction/Agent catalogs + reloadable harness snapshot
 │       ├── fs_operations.rs       # root-relative filesystem DTO conversion/error mapping
@@ -125,6 +159,7 @@ src/
 │       ├── git_operations.rs      # Git RPC decode 与稳定错误映射
 │       ├── git_runtime.rs         # status projection/revision、watcher、去重与通知
 │       ├── interaction_runtime.rs # pending interaction deadline enforcement
+│       ├── multi_agent_tools.rs   # Core coordinator Tool adapter + child Turn scheduling
 │       ├── notification_queue.rs  # bounded per-connection queue + wake/close semantics
 │       ├── search_operations.rs   # search RPC decode、ownership 与稳定错误映射
 │       ├── code_index_operations.rs # status/search/rebuild DTO 与 error mapping
@@ -136,7 +171,10 @@ src/
 ├── local_tools.rs                 # frozen rg registry + Core Tool/Policy adapters
 ├── mcp_runtime.rs                 # continuously driven Tokio worker + synchronous Core bridge
 ├── mcp_tools.rs                   # Config materialization + MCP Tool/Policy adapters
-├── tool_composition.rs            # local/MCP routing + generation-safe atomic replacement
+├── dynamic_tools.rs               # dynamic spec validation + durable interaction Tool adapter
+├── extension_tools.rs             # ReadOnlyToolContributor → reviewed ToolExecutor port
+├── tool_executor_adapter.rs       # frozen payload/binding → ToolExecutor invocation
+├── tool_composition.rs            # local/MCP/dynamic/extension routing + generation-safe replacement
 ├── review.rs                      # review-only provider adapter
 ├── resource_store.rs              # bounded in-memory connection-owned resources
 ├── git_service.rs                 # workspace root + GitClient + synchronous RPC runtime bridge
@@ -160,11 +198,10 @@ src/
 | `UpdateBroker` | private | subscription、durable cursor、weak queue fanout | 不持有 connection/session runtime authority |
 | `UpdateBroker::publish_thread_update` | private | committed 按 durable cursor；transient 直接给 subscriber | 两类 cursor semantics 不得混合 |
 | `InteractionDeadlineWatcher` | crate-private | 在 workspace mutation gate 下重检 durable pending request，持久化 `DeadlineElapsed` cancellation 并失败 Turn | 不选择 UI、不解释 approval policy、不修改 reducer |
-| `SkillRuntime` | crate-private | 组合 roots、缓存 metadata projection、叠加 enablement，并把 exact Skill body 适配为 Core 的通用 `SkillInstruction` | 不执行 Skill 脚本、不拥有 config durability 或 instruction precedence |
+| `zeta-skills-extension::SkillRuntime` | external runtime | 组合 roots、缓存 metadata projection、叠加 enablement，并贡献 durable activation/context fragment | App Server 只安装 runtime、提供 config/event adapter 与协议 projection |
 | `start_turn::replayed_result` | private | 用 durable command receipt 校验重复 `StartTurn` 输入并返回原 Turn 结果 | 重放不重新读取 model config 或 Skill 文件；不同输入返回 `CommandConflict` |
-| `SkillConfigSnapshotProvider` | crate-private trait | 给 runtime 最新 `SkillsConfig` 与 commit signal | implementation 不把客户端 path 直接升级为 trusted root |
-| `compose_sources` | private | release root + enabled user absolute roots + `.zeta/skills` → validated `SkillSourceRoot` | Plugin source 尚不在当前 composition |
-| `watch_skill_sources` | private | watcher invalidation 后完整 reconcile 并更新 watched path registration | watch event 不是文件事实，不直接推进 generation |
+| `SkillConfigSnapshotProvider` adapter | crate-private implementation | 给 external runtime 最新 `SkillsConfig` 与 commit signal | implementation 不把客户端 path 直接升级为 trusted root |
+| `SkillRuntimeEventSink` adapter | `UpdateBroker` implementation | 把 runtime generation change 投影为 `skills/changed` | 不参与 catalog reconcile |
 | `WorkspaceCustomizations` | crate-private | 发现/刷新 `.zeta/instructions` 与 `.zeta/agents`，发布 future-invocation harness snapshot | 不执行 Agent、不激活 Skill、不解析外部生态格式 |
 | `WorkspaceFileChangeSink` | crate-private trait | 在 `fs/changed` 发布前把 projected invalidation 交给内部 runtime owner | callback 不把 watcher event 当作文件事实 |
 | `notification<T>` | private | canonical update → JSON-RPC notification | method 来自 `ServerNotificationMethod` |
@@ -180,6 +217,7 @@ src/
 | `SearchService` | external crate | 持有 active workspace、frozen rg 和 owner-bound job map | App Server 不把 connection/DTO/UI 语义写入该 crate |
 | `CodeIndexRuntime` | crate-private | 串行 rebuild/refresh，投影 lifecycle，并在返回前 materialize | 不拥有 scan/chunk/schema，也不创建网络请求 |
 | `CodeIndexRefreshWorker` | private | 单 wake + merged paths/rescan priority 的后台刷新 | 不阻塞 filesystem notification thread，不建立无界 event queue |
+| `CodeIndexSemanticService` | external crate | 同步 exact lexical generation、复用/持久化 vectors、本地 recall/rerank | App Server 不解释模型分数或拥有 vector schema |
 | `code_index_operations::project_status` | private | runtime state + last usable snapshot → stable protocol status | 不暴露 SQLite/internal error text |
 | `CloudCodeIndexController` | external crate | root-bound grant、publication/deletion lifecycle 与 provider port | App Server 不复制 consent state 或允许 provider 直接读 Workspace |
 | `cloud_code_index_operations::project_status` | private | cloud lifecycle + grant → stable protocol DTO | 不回传 credential、绝对路径或 provider error text |
@@ -197,9 +235,11 @@ src/
 | `McpRuntimeOwner` | crate-private | worker thread 持有 Tokio runtime 和 live `McpRuntime` | Core thread 不嵌套 `block_on` |
 | `McpToolService::review_request` | private | exact binding/arguments/generation → MCP action digest | remote annotation 不授予只读信任 |
 | `McpApprovalPolicy::decide` | private | 只接受已知 user MCP provenance 并返回 one-time approval | 不自动批准远端副作用 |
-| `CompositeToolService` | private | model tool name → frozen local/MCP service | duplicate name 在 composition 时失败 |
+| `CompositeToolService` | private | frozen binding/runtime key → local、MCP、dynamic、extension runtime | duplicate name 在 composition 时失败，不按 live name 猜 executor |
 | `CompositePolicyService` | private | trusted `ActionSource` → owning policy | 不依靠 trial-and-error policy fallback |
 | `ReloadableToolPorts` | crate-private | 原子替换未来 Tool generation，并为 prepared call 固定 service/policy | reconcile failure 保留上一份可用 runtime |
+| `DynamicToolService` | private | exact spec digest + arguments → durable `AgentRequest::DynamicTool`，并校验 owner response | 同名新定义不能认领旧 interaction |
+| `ExtensionToolReviewer` | private | host-installed read-only executor → frozen payload 与 exact Plugin provenance | extension contributor 不直接获得未审查执行权 |
 | `ModelSnapshotResolver` | private trait | frozen config → immutable invoker | implementation 不持有 mutable config view |
 | `zeta_slash_commands::SlashCommandCatalog::new` | shared public constructor | 校验 lowercase ASCII/interior-hyphen name、非空描述与唯一性 | App Server 不复制 grammar、不执行命令、不引用 client-local commands |
 | `ProviderReviewModel::request` | private | system/input/schema → tool-disabled zero-temperature request | reviewer 不获得 Tool capability |
@@ -294,8 +334,13 @@ start/interrupt 与 interaction resolve，并以 tagged `SessionRequestResult` �
 
 `session/request::ResolveInteraction` 使用 exact durable
 `RequestId`，且只接受 `UpdateBroker` 选出的、声明该 kind 并订阅 scope 的 connection；full request
-只通过 `agent/request` 投递，普通 Thread snapshot 保持 redacted。owner 断连或退订会确定性重选，
-非 owner 返回 `AgentInteractionNotOwner`，过期响应返回 `AgentInteractionExpired`。当 response 是 Tool Call 对应的 approval，
+只通过 `agent/request` 投递，普通 Thread snapshot 保持 redacted。Dynamic owner 还必须在 initialize
+capability 中声明 exact hosted tool name；仅声明 interaction kind 不能领取其他 dynamic tool。
+approval/user-input owner 断连或
+退订可以确定性重选；已投递的 dynamic tool 不会转交给另一个连接，而是持久化
+`InteractionCancelled(OwnerDisconnected)`，恢复原 Tool path并收口为 unknown-outcome failure，
+非 owner 返回 `AgentInteractionNotOwner`，过期响应返回 `AgentInteractionExpired`。当 response 是
+Tool Call 对应的 approval 或 dynamic tool result，
 且 Core 确实产生 `Resolved` disposition，App Server 再启动 executor 恢复 Tool path。这个判断依赖
 pending interaction 的 item binding，不能简化为“所有 approval 都 restart”。
 同一路径同时恢复执行前 approval 与带结构化 `sandboxDenial` 的 sandbox escalation approval；
@@ -384,6 +429,7 @@ Workspace activation
 
 local tools + enabled user MCP declarations
 ├─ materialize absolute stdio executable / unauthenticated HTTP endpoint
+├─ collect host read-only extension executors and accepted dynamic specs
 ├─ combine duplicate-free model Tool names
 ├─ install ReloadableToolPorts
 └─ ToolConfigWatcher(ConfigChange)
@@ -431,12 +477,10 @@ skill/enablement/set
 session/request StartTurn { SkillRef }
 ├─ start_turn::replayed_result
 │  └─ existing command → validate exact input and return durable result without mutable reads
-└─ new command
-   ├─ SkillRuntime::activate_explicit
-   │  ├─ require enabled + compatible catalog entry
-   │  └─ SkillCatalog::activate → exact body + frozen digest/generation/reason
+└─ Core extension lifecycle
+   ├─ SkillsExtension activation contributor → exact frozen activation
    ├─ ThreadEvent::TurnAccepted persists FrozenSkillActivation
-   └─ TurnExecutor safe point → SkillInstructionsProvider::resolve frozen digest → ContextPlan
+   └─ TurnExecutor safe point → TurnInputContributor → PromptFragment → ContextPlan
 ```
 
 Watcher 订阅当前 source roots；Config authority 通过 commit channel（包括 TOML 外部编辑与
@@ -445,10 +489,12 @@ SQLite cross-connection change）触发配置 reconcile。change、overflow 或 
 notification。Watcher 启动失败时 local App Server 仍可用，显式
 `skills/list { reload: "refresh" }` 是恢复路径。
 
-当前组合 built-in、user 与 active Workspace `.zeta/skills` source。显式正文 activation、durable
-provenance、通用 `SkillInstruction` context injection 和 invocation safe-point reload 已实现；禁用只影响 future Turn
+`zeta-skills-extension` 当前组合 built-in、user 与 active Workspace `.zeta/skills` source。显式正文
+activation、durable provenance、通用 prompt fragment injection 和 invocation safe-point reload
+已实现；其 `ReadOnlyToolContributor` 现在把 `skills-read` 作为普通 `ToolExecutor` 投影进共享 registry，
+由模型按 metadata 中的 exact source/name 按需加载正文。禁用只影响 future Turn
 eligibility，不能改变已经冻结的 Turn。Plugin source、reference/resource resolver、automatic
-selection 尚未实现。TUI 与 Desktop 已从 metadata-only catalog 生成直接 `/name` Skill command，
+selection 的更高层决策尚未实现。TUI 与 Desktop 已从 metadata-only catalog 生成直接 `/name` Skill command，
 而 `/skills` 只承担管理；正文变化或 source 消失会使恢复/后续 safe point 失败即
 关闭，不会用新 bytes 替换 frozen digest。
 

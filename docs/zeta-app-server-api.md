@@ -181,6 +181,9 @@ inline argument parsing；提交仍通过 `session/request` 的 `StartTurn.input
 | `session/thread/unsubscribe` | Session + Thread + connection | 删除 child Thread 订阅 |
 | `config/read` | config | 读取配置 |
 | `config/update` | config | typed command 更新配置 |
+| `toolSearch/configure` | config + semantic model runtime | 选择词法模式，或探活 exact embedding 模型后启用混合 Tool Search |
+| `workspace/codeIndex/semantic/configure` / `authorize` / `revoke` | config + Workspace | 独立配置 semantic CodeIndex，并显式管理源码外发授权 |
+| `workspace/codeIndex/semantic/cancel` / `retry` | semantic index job | 取消或重新调度 exact-generation 本地语义 projection；status 返回无内容进度计数 |
 | `languageServer/configure` / `languageServer/remove` | config | revision-safe 修改或恢复 language-server mode/path preference |
 | `provider/configure` / `provider/remove` | config | 修改 Provider declaration |
 | `mcp/server/upsert` / `mcp/server/remove` / `mcp/server/enablement/set` | config | 修改 standalone MCP desired config |
@@ -481,11 +484,14 @@ interaction 的同一 request kind；相同 `commandId + typed payload` 会重�
 `requestId` 或 response kind 会被拒绝。该 method 解决已 durable 的 interaction，不用于创建
 新的 Agent request。
 
-connection 在 initialize 时通过 `agentInteractions { version: 1, kinds: [...] }` 声明实际支持的
-interaction kind。App Server 只在声明 capability 且订阅该 Session-owned Thread 的 connection 中
-确定性选择一个 owner，并通过 `agent/request` 主动投递 full `AgentRequestEnvelope`；断连、退订或
-capability 变化会重选，ownership 始终是短暂 delivery state，不写入 Thread snapshot/event。
-非 owner resolve 返回 `AgentInteractionNotOwner`。
+connection 在 initialize 时通过
+`agentInteractions { version: 1, kinds: [...], dynamicTools?: [...] }` 声明实际支持的 interaction
+kind；承载 dynamic tool 时还必须列出 exact hosted tool name。App Server 只在声明对应 capability
+且订阅该 Session-owned Thread 的 connection 中确定性选择一个 owner，并通过 `agent/request`
+主动投递 full `AgentRequestEnvelope`。approval/user-input 在 owner 断连或退订后可以重选；已经
+投递的 dynamic tool 不会转交给另一连接，而是 durable 取消并按 unknown outcome 收口，避免不确定
+副作用被重复执行。ownership 始终是短暂 delivery state，不写入 Thread snapshot/event。非 owner
+resolve 返回 `AgentInteractionNotOwner`。
 
 可选 `InteractionDeadline` 是 durable absolute Unix millisecond instant。App Server runtime 在
 mutation gate 下重读 exact pending request，过期后持久化 `DeadlineElapsed` cancellation 并将 Turn
@@ -541,9 +547,18 @@ exact replay 不推进 revision/generation，也不发布 change。外部 TOML �
 SQLite connection 提交也会被观察并投影。
 
 `config/read` 当前返回 Agent preference、Provider、standalone MCP、Skill source、exact Plugin
-request、declarative Hook 与 language-server mode/path preference。Plugin request 的 `enabled` 只表示期望参与未来 activation；
+request、declarative Hook、language-server mode/path preference、semantic CodeIndex 配置和 Tool
+Search 配置。`toolSearch.embeddingStatus` 明确区分 `disabled`、`ready` 和带脱敏原因的
+`unavailable`；不能只根据 desired `mode` 推断 embedding 已可用。Plugin request 的 `enabled` 只表示期望参与未来 activation；
 Hook 的 `enabled` 也不表示 process 已获准或已经执行。两者的 runtime/lifecycle projection 必须由
 后续独立领域 API 返回，不能从 Config desired state 推断。
+
+`toolSearch/configure` 的 `hybridEmbedding` 必须携带 exact `embeddingModel`。App Server 在 durable
+commit 前从 Provider Config 解析模型并发送固定 readiness probe；失败返回
+`ToolSearchUnavailable`，不会把混合模式写入配置。默认 `lexical` 完全本地运行。Tool Search 的模型
+选择与 semantic CodeIndex 的模型和 Workspace source-egress grant 相互独立。外部配置或启动恢复的
+hybrid 模型不可用时，`embeddingStatus` 为 `unavailable`，自然语言搜索明确失败而不回退 BM25；
+显式 Regex 仍保持本地运行。
 
 Provider DTO 的 `modelContext` 以模型 ID 映射 `contextWindow` 和可选
 `autoCompactTokenLimit`，用于 Core context budget。它是非 secret declarative metadata；零值在

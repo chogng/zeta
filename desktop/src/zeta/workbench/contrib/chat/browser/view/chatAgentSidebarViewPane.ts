@@ -1,7 +1,8 @@
 import { ViewPane, type IViewPaneOptions } from "../../../../browser/parts/views/viewPane.js";
 import type { IWorkbenchSessionService, Session, SessionThread } from "../../../../services/sessions/common/sessionService.js";
+import { type AgentTreeNode, projectAgentTree } from "./chatAgentTree.js";
 
-/** Lists durable Chat sessions available to the Workbench Agent Sidebar. */
+/** Projects durable Session Thread lineage as the Workbench Agent tree. */
 export class ChatAgentSidebarViewPane extends ViewPane {
   private readonly sessionService: IWorkbenchSessionService;
 
@@ -14,7 +15,7 @@ export class ChatAgentSidebarViewPane extends ViewPane {
   }
 
   override focus(): void {
-    this.contentElement.querySelector<HTMLButtonElement>("button")?.focus();
+    this.contentElement.querySelector<HTMLButtonElement>("[role='treeitem']")?.focus();
   }
 
   private render(): void {
@@ -29,40 +30,82 @@ export class ChatAgentSidebarViewPane extends ViewPane {
       content.append(empty);
       return;
     }
-    for (const session of sessions) content.append(this.createSessionButton(session, active?.session.sessionId, active?.threadId));
+    for (const session of sessions) {
+      content.append(this.createSessionTree(session, active?.session.sessionId, active?.threadId));
+    }
   }
 
-  private createSessionButton(session: Session, activeSessionId: string | undefined, activeThreadId: string | undefined): HTMLButtonElement {
+  private createSessionTree(session: Session, activeSessionId: string | undefined, activeThreadId: string | undefined): HTMLElement {
+    const group = this.contentElement.ownerDocument.createElement("section");
+    group.className = "zeta-chat-agent-session";
+    group.dataset.sessionId = session.sessionId;
+    const heading = this.contentElement.ownerDocument.createElement("h3");
+    heading.className = "zeta-chat-agent-session-title";
+    heading.textContent = session.title;
+    const tree = this.contentElement.ownerDocument.createElement("div");
+    tree.className = "zeta-chat-agent-tree";
+    tree.setAttribute("role", "tree");
+    tree.setAttribute("aria-label", `${session.title} agents`);
+    const nodes = projectAgentTree(session);
+    if (nodes.length === 0) {
+      const empty = this.contentElement.ownerDocument.createElement("span");
+      empty.className = "zeta-chat-agent-session-detail";
+      empty.textContent = session.status;
+      tree.append(empty);
+    } else {
+      for (const node of nodes) this.appendNode(tree, session, node, 1, activeSessionId, activeThreadId);
+    }
+    group.append(heading, tree);
+    return group;
+  }
+
+  private appendNode(container: HTMLElement, session: Session, node: AgentTreeNode, depth: number, activeSessionId: string | undefined, activeThreadId: string | undefined): void {
     const button = this.contentElement.ownerDocument.createElement("button");
-    button.className = "zeta-chat-agent-session";
+    button.className = "zeta-chat-agent-thread";
     button.type = "button";
-    const selected = session.sessionId === activeSessionId;
+    button.dataset.threadId = node.thread.threadId;
+    button.dataset.origin = node.thread.origin.type;
+    button.dataset.executionStatus = node.thread.executionStatus ?? "idle";
+    button.style.paddingInlineStart = `${8 + (depth - 1) * 14}px`;
+    button.setAttribute("role", "treeitem");
+    button.setAttribute("aria-level", String(depth));
+    if (node.children.length > 0) button.setAttribute("aria-expanded", "true");
+    const selected = session.sessionId === activeSessionId && node.thread.threadId === activeThreadId;
     button.classList.toggle("checked", selected);
-    button.setAttribute("aria-pressed", String(selected));
+    button.setAttribute("aria-selected", String(selected));
+    const marker = this.contentElement.ownerDocument.createElement("span");
+    marker.className = "zeta-chat-agent-thread-marker";
+    marker.setAttribute("aria-hidden", "true");
+    const text = this.contentElement.ownerDocument.createElement("span");
+    text.className = "zeta-chat-agent-thread-text";
     const title = this.contentElement.ownerDocument.createElement("span");
-    title.className = "zeta-chat-agent-session-title";
-    title.textContent = session.title;
+    title.className = "zeta-chat-agent-thread-title";
+    title.textContent = node.thread.title ?? defaultThreadTitle(session, node.thread);
     const detail = this.contentElement.ownerDocument.createElement("span");
     detail.className = "zeta-chat-agent-session-detail";
-    detail.textContent = sessionDetail(session, activeSessionId === session.sessionId ? activeThreadId : undefined);
-    button.append(title, detail);
-    const thread = activeThread(session);
-    button.disabled = thread === undefined;
-    button.addEventListener("click", () => {
-      if (thread) this.sessionService.selectThread(session.sessionId, thread.threadId);
-    });
-    return button;
+    detail.textContent = threadDetail(node.thread);
+    text.append(title, detail);
+    button.append(marker, text);
+    button.disabled = node.thread.status !== "active" || session.status !== "active";
+    button.addEventListener("click", () => this.sessionService.selectThread(session.sessionId, node.thread.threadId));
+    container.append(button);
+    for (const child of node.children) this.appendNode(container, session, child, depth + 1, activeSessionId, activeThreadId);
   }
 }
 
-function activeThread(session: Session): SessionThread | undefined {
-  return session.threads.find((thread) => thread.status === "active");
+function defaultThreadTitle(session: Session, thread: SessionThread): string {
+  if (thread.origin.type === "root") return session.title;
+  if (thread.origin.type === "agentSpawn") return `Agent ${thread.origin.delegationId}`;
+  return "Agent branch";
 }
 
-function sessionDetail(session: Session, selectedThreadId: string | undefined): string {
-  const thread = selectedThreadId === undefined
-    ? activeThread(session)
-    : session.threads.find((candidate) => candidate.threadId === selectedThreadId);
-  if (!thread) return session.status;
-  return thread.origin.type === "root" ? "Active agent" : "Agent branch";
+function threadDetail(thread: SessionThread): string {
+  const kind = thread.origin.type === "root"
+    ? "Root"
+    : thread.origin.type === "agentSpawn"
+      ? "Agent"
+      : thread.origin.type === "fork"
+        ? "Fork"
+        : "Rewind";
+  return `${kind} · ${thread.executionStatus ?? thread.status}`;
 }

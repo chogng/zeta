@@ -56,6 +56,10 @@ impl<'a> ToolExecutionContext<'a> {
     pub(super) fn turn_id(&self) -> &TurnId {
         self.turn_id
     }
+
+    pub(super) fn item_id(&self) -> &ItemId {
+        self.item_id
+    }
 }
 
 enum ToolAttempt {
@@ -129,6 +133,54 @@ impl<'a> ToolExecutionOrchestrator<'a> {
             },
         )?;
         Ok(completion)
+    }
+
+    pub(super) fn start_execution_interaction(
+        &self,
+        context: &ToolExecutionContext<'_>,
+        call: &ToolCall,
+        reviewed: &ActionReviewRequest,
+        authorization: &ToolAuthorization,
+    ) -> Result<(), CoreError> {
+        self.threads.record_tool_execution_started(
+            context.thread_id,
+            context.turn_id,
+            RecordToolExecutionStart {
+                tool_call_id: call.id.clone(),
+                action_digest: reviewed.action().digest().as_str().to_owned(),
+                policy_revision: reviewed.policy_revision().as_str().to_owned(),
+                authority: execution_authority(authorization),
+            },
+        )?;
+        Ok(())
+    }
+
+    pub(super) fn complete_execution_interaction(
+        &self,
+        context: &ToolExecutionContext<'_>,
+        call: ToolCall,
+        output: ToolExecutionOutput,
+    ) -> Result<ToolExecutionCompletion, CoreError> {
+        let output = match output {
+            ToolExecutionOutput::Success(text) => ToolCallOutput::Success(text),
+            ToolExecutionOutput::Failure(text) => ToolCallOutput::Failure(text),
+            ToolExecutionOutput::OutcomeUnknown(reason) => ToolCallOutput::Failure(format!(
+                "dynamic tool execution outcome is unknown: {reason}"
+            )),
+            ToolExecutionOutput::SandboxDenied(denial) => ToolCallOutput::Failure(format!(
+                "dynamic tool interaction returned an invalid sandbox denial: {}",
+                denial.reason()
+            )),
+        };
+        self.threads.record_tool_result(
+            context.thread_id,
+            context.turn_id,
+            RecordToolResultRequest {
+                tool_call_id: call.id,
+                output,
+            },
+        )?;
+        Ok(ToolExecutionCompletion::Complete)
     }
 
     pub(super) fn execute_approved_escalation(
@@ -240,7 +292,14 @@ impl<'a> ToolExecutionOrchestrator<'a> {
         authorization: &ToolAuthorization,
     ) -> Result<ToolExecutionOutput, CoreError> {
         let snapshot = self.threads.read_thread(context.thread_id)?;
-        let facts = ToolExecutionFacts::from_items(&snapshot.items);
+        let facts = ToolExecutionFacts::for_turn(
+            &snapshot,
+            context.turn_id,
+            self.tools
+                .definitions()
+                .into_iter()
+                .map(|definition| definition.name),
+        )?;
         let mut stream = ToolUpdateStream {
             updates: self.updates,
             session_id: snapshot.session_id,

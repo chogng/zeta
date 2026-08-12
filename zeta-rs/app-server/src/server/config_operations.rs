@@ -7,21 +7,31 @@ use zeta_app_server_protocol::protocol::config::{
     LanguageServerModeDto, LanguageServerRemoveParams, McpCredentialBindingDto, McpServerConfigDto,
     McpServerEnablementDto, McpServerRemoveParams, McpServerSetEnablementParams,
     McpServerUpsertParams, McpTransportDto, ModelContextConfigDto, ModelRefDto, ProviderConfigDto,
-    ProviderConfigureParams, ProviderRemoveParams, SkillSourceAddParams, SkillSourceConfigDto,
+    ProviderConfigureParams, ProviderRemoveParams, SemanticCodeIndexAuthorizeParams,
+    SemanticCodeIndexAutomaticContextDto, SemanticCodeIndexConfigDto,
+    SemanticCodeIndexConfigureParams, SemanticCodeIndexModelsDto, SemanticCodeIndexRevokeParams,
+    SemanticCodeIndexSelectionDto, SkillSourceAddParams, SkillSourceConfigDto,
     SkillSourceEnablementDto, SkillSourceRemoveParams, SkillSourceSetEnablementParams,
+    ToolSearchConfigDto, ToolSearchConfigureParams, ToolSearchEmbeddingStatusDto,
+    ToolSearchModeDto,
 };
 use zeta_app_server_protocol::protocol::error::AppServerErrorName;
 use zeta_config::{
     ApprovalReviewModelSelection, ConfigCommandDisposition, ConfigCommandError,
     ConfigCommandRequest, ConfigRevision, LanguageServerConfig, LanguageServerId,
     LanguageServerModeConfig, McpCredentialBinding, McpServerConfig, McpServerEnablement,
-    McpServerId, McpTransportConfig, PreferencesUpdate, ResolvedConfigSnapshot, SkillSourceConfig,
-    SkillSourceEnablement, SkillSourceId, UserConfigCommand,
+    McpServerId, McpTransportConfig, PreferencesUpdate, ResolvedConfigSnapshot,
+    SemanticCodeIndexAutomaticContext, SemanticCodeIndexModelSelection, SemanticCodeIndexSelection,
+    SkillSourceConfig, SkillSourceEnablement, SkillSourceId, ToolSearchConfig,
+    ToolSearchModeConfig, UserConfigCommand,
 };
 use zeta_model_provider::{ModelId, ModelRef, ProviderId};
 use zeta_model_provider_config::ModelContextConfig;
 use zeta_model_provider_config::ModelProviderConfig;
 use zeta_protocol::Patch;
+
+use crate::tool_search_models::ToolSearchEmbeddingStatus;
+use crate::tool_search_models::resolve_tool_search;
 
 impl AppServer {
     pub(super) fn config_read(&self) -> Result<Value, RpcError> {
@@ -31,7 +41,41 @@ impl AppServer {
             .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?
             .read_snapshot()
             .map_err(config_error)?;
-        result(&config_read_result(snapshot))
+        result(&config_read_result(
+            snapshot,
+            self.active_workspace_trust_id().as_ref(),
+            self.tool_search_embedding_status(),
+        ))
+    }
+
+    pub(super) fn tool_search_configure(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: ToolSearchConfigureParams = decode(params)?;
+        let config = tool_search_config_from_dto(params.mode, params.embedding_model)?;
+        let store = self
+            .config
+            .clone()
+            .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?;
+        let snapshot = store.read_snapshot().map_err(config_error)?;
+        let resolution = resolve_tool_search(
+            &config,
+            &snapshot.values.providers,
+            self.semantic_model_provider.as_ref(),
+        );
+        if let ToolSearchEmbeddingStatus::Unavailable { reason, .. } = resolution.status {
+            log::warn!("Tool Search embedding readiness probe rejected configuration: {reason}");
+            return Err(RpcError::new(
+                -32092,
+                AppServerErrorName::ToolSearchUnavailable,
+            ));
+        }
+        let outcome = store
+            .apply(ConfigCommandRequest {
+                command_id: params.command_id,
+                expected_revision: ConfigRevision::new(params.expected_revision),
+                command: UserConfigCommand::ConfigureToolSearch { config },
+            })
+            .map_err(config_operation_error)?;
+        result(&config_command_result(outcome))
     }
 
     pub(super) fn config_update(&self, params: &Value) -> Result<Value, RpcError> {
@@ -55,6 +99,86 @@ impl AppServer {
         result(&config_command_result(outcome))
     }
 
+    pub(super) fn semantic_code_index_configure(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: SemanticCodeIndexConfigureParams = decode(params)?;
+        let store = self
+            .config
+            .clone()
+            .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?;
+        let outcome = store
+            .apply(ConfigCommandRequest {
+                command_id: params.command_id,
+                expected_revision: ConfigRevision::new(params.expected_revision),
+                command: UserConfigCommand::ConfigureSemanticCodeIndex {
+                    selection: semantic_selection_from_dto(params.selection)?,
+                    automatic_context: semantic_automatic_context_from_dto(
+                        params.automatic_context,
+                    ),
+                },
+            })
+            .map_err(config_operation_error)?;
+        if let Some(semantic) = self.code_index_semantic_service()
+            && let Err(error) = semantic.delete_index()
+        {
+            log::warn!("failed to clear replaced semantic code-index projection: {error}");
+        }
+        self.reconcile_semantic_code_index_runtime()
+            .map_err(|_| RpcError::new(-32092, AppServerErrorName::CodeIndexOperationFailed))?;
+        result(&config_command_result(outcome))
+    }
+
+    pub(super) fn semantic_code_index_authorize(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: SemanticCodeIndexAuthorizeParams = decode(params)?;
+        let workspace = self
+            .active_workspace_trust_id()
+            .ok_or_else(|| RpcError::new(-32090, AppServerErrorName::CodeIndexUnavailable))?;
+        self.validate_semantic_code_index_selection()
+            .map_err(|error| {
+                log::warn!("semantic code-index authorization readiness check failed: {error}");
+                RpcError::new(-32092, AppServerErrorName::CodeIndexOperationFailed)
+            })?;
+        let store = self
+            .config
+            .clone()
+            .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?;
+        let outcome = store
+            .apply(ConfigCommandRequest {
+                command_id: params.command_id,
+                expected_revision: ConfigRevision::new(params.expected_revision),
+                command: UserConfigCommand::AuthorizeSemanticCodeIndexEgress { workspace },
+            })
+            .map_err(config_operation_error)?;
+        self.reconcile_semantic_code_index_runtime()
+            .map_err(|_| RpcError::new(-32092, AppServerErrorName::CodeIndexOperationFailed))?;
+        result(&config_command_result(outcome))
+    }
+
+    pub(super) fn semantic_code_index_revoke(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: SemanticCodeIndexRevokeParams = decode(params)?;
+        let workspace = self
+            .active_workspace_trust_id()
+            .ok_or_else(|| RpcError::new(-32090, AppServerErrorName::CodeIndexUnavailable))?;
+        let store = self
+            .config
+            .clone()
+            .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?;
+        let outcome = store
+            .apply(ConfigCommandRequest {
+                command_id: params.command_id,
+                expected_revision: ConfigRevision::new(params.expected_revision),
+                command: UserConfigCommand::RevokeSemanticCodeIndexEgress { workspace },
+            })
+            .map_err(config_operation_error)?;
+        if let Some(semantic) = self.code_index_semantic_service()
+            && let Err(error) = semantic.delete_index()
+        {
+            log::warn!("failed to delete revoked semantic code-index projection: {error}");
+        }
+        self.reconcile_semantic_code_index_runtime()
+            .map_err(|_| RpcError::new(-32092, AppServerErrorName::CodeIndexOperationFailed))?;
+        result(&config_command_result(outcome))
+    }
+
     pub(super) fn provider_configure(&self, params: &Value) -> Result<Value, RpcError> {
         let params: ProviderConfigureParams = decode(params)?;
         let provider = provider_config_from_dto(params.config)?;
@@ -72,6 +196,8 @@ impl AppServer {
                 },
             })
             .map_err(config_operation_error)?;
+        self.reconcile_semantic_code_index_runtime()
+            .map_err(|_| RpcError::new(-32092, AppServerErrorName::CodeIndexOperationFailed))?;
         result(&config_command_result(outcome))
     }
 
@@ -259,7 +385,34 @@ pub(super) fn config_operation_error(error: ConfigCommandError) -> RpcError {
     }
 }
 
-fn config_read_result(snapshot: ResolvedConfigSnapshot) -> ConfigReadResult {
+fn config_read_result(
+    snapshot: ResolvedConfigSnapshot,
+    active_workspace: Option<&zeta_workspace::WorkspaceTrustId>,
+    tool_search_status: ToolSearchEmbeddingStatus,
+) -> ConfigReadResult {
+    let semantic_code_index = SemanticCodeIndexConfigDto {
+        selection: semantic_selection_dto(snapshot.values.semantic_code_index.selection.clone()),
+        automatic_context: semantic_automatic_context_dto(
+            snapshot.values.semantic_code_index.automatic_context,
+        ),
+        active_workspace_authorized: active_workspace.is_some_and(|workspace| {
+            snapshot
+                .values
+                .semantic_code_index
+                .authorized_remote_models(workspace, &snapshot.values.providers)
+                .is_some()
+        }),
+    };
+    let tool_search = ToolSearchConfigDto {
+        mode: tool_search_mode_dto(snapshot.values.tool_search.mode),
+        embedding_model: snapshot
+            .values
+            .tool_search
+            .embedding_model
+            .clone()
+            .map(model_ref_dto),
+        embedding_status: tool_search_status_dto(tool_search_status),
+    };
     ConfigReadResult {
         revision: snapshot.revision.get(),
         generation: snapshot.generation.get(),
@@ -306,6 +459,93 @@ fn config_read_result(snapshot: ResolvedConfigSnapshot) -> ConfigReadResult {
             .into_iter()
             .map(|(id, config)| (id.to_string(), language_server_config_dto(config)))
             .collect(),
+        tool_search,
+        semantic_code_index,
+    }
+}
+
+fn tool_search_mode_dto(mode: ToolSearchModeConfig) -> ToolSearchModeDto {
+    match mode {
+        ToolSearchModeConfig::Lexical => ToolSearchModeDto::Lexical,
+        ToolSearchModeConfig::HybridEmbedding => ToolSearchModeDto::HybridEmbedding,
+    }
+}
+
+fn tool_search_status_dto(status: ToolSearchEmbeddingStatus) -> ToolSearchEmbeddingStatusDto {
+    match status {
+        ToolSearchEmbeddingStatus::Disabled => ToolSearchEmbeddingStatusDto::Disabled,
+        ToolSearchEmbeddingStatus::Ready { model } => ToolSearchEmbeddingStatusDto::Ready {
+            model: model_ref_dto(model),
+        },
+        ToolSearchEmbeddingStatus::Unavailable { model, reason } => {
+            ToolSearchEmbeddingStatusDto::Unavailable {
+                model: model.map(model_ref_dto),
+                reason,
+            }
+        }
+    }
+}
+
+fn tool_search_config_from_dto(
+    mode: ToolSearchModeDto,
+    embedding_model: Option<ModelRefDto>,
+) -> Result<ToolSearchConfig, RpcError> {
+    Ok(ToolSearchConfig {
+        mode: match mode {
+            ToolSearchModeDto::Lexical => ToolSearchModeConfig::Lexical,
+            ToolSearchModeDto::HybridEmbedding => ToolSearchModeConfig::HybridEmbedding,
+        },
+        embedding_model: embedding_model.map(model_ref_from_dto).transpose()?,
+    })
+}
+
+fn semantic_selection_dto(selection: SemanticCodeIndexSelection) -> SemanticCodeIndexSelectionDto {
+    match selection {
+        SemanticCodeIndexSelection::Disabled => SemanticCodeIndexSelectionDto::Disabled,
+        SemanticCodeIndexSelection::Remote { models } => SemanticCodeIndexSelectionDto::Remote {
+            models: SemanticCodeIndexModelsDto {
+                embedding_model: model_ref_dto(models.embedding_model),
+                rerank_model: models.rerank_model.map(model_ref_dto),
+            },
+        },
+    }
+}
+
+fn semantic_selection_from_dto(
+    selection: SemanticCodeIndexSelectionDto,
+) -> Result<SemanticCodeIndexSelection, RpcError> {
+    match selection {
+        SemanticCodeIndexSelectionDto::Disabled => Ok(SemanticCodeIndexSelection::Disabled),
+        SemanticCodeIndexSelectionDto::Remote { models } => {
+            Ok(SemanticCodeIndexSelection::Remote {
+                models: SemanticCodeIndexModelSelection {
+                    embedding_model: model_ref_from_dto(models.embedding_model)?,
+                    rerank_model: models.rerank_model.map(model_ref_from_dto).transpose()?,
+                },
+            })
+        }
+    }
+}
+
+fn semantic_automatic_context_dto(
+    automatic_context: SemanticCodeIndexAutomaticContext,
+) -> SemanticCodeIndexAutomaticContextDto {
+    match automatic_context {
+        SemanticCodeIndexAutomaticContext::Off => SemanticCodeIndexAutomaticContextDto::Off,
+        SemanticCodeIndexAutomaticContext::FirstInvocation => {
+            SemanticCodeIndexAutomaticContextDto::FirstInvocation
+        }
+    }
+}
+
+fn semantic_automatic_context_from_dto(
+    automatic_context: SemanticCodeIndexAutomaticContextDto,
+) -> SemanticCodeIndexAutomaticContext {
+    match automatic_context {
+        SemanticCodeIndexAutomaticContextDto::Off => SemanticCodeIndexAutomaticContext::Off,
+        SemanticCodeIndexAutomaticContextDto::FirstInvocation => {
+            SemanticCodeIndexAutomaticContext::FirstInvocation
+        }
     }
 }
 

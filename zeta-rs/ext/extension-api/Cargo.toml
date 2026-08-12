@@ -1,0 +1,21 @@
+[package]
+name = "zeta-extension-api"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+name = "zeta_extension_api"
+path = "src/lib.rs"
+
+[dependencies]
+zeta-protocol = { workspace = true }
+zeta-tools = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

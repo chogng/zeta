@@ -2,9 +2,11 @@
 
 > 物理位置：`zeta-rs/skills/`
 > Rust crate：`zeta_skills`
-> 当前状态：Phase S0 与 S1 显式选择纵向切片已实现；S2–S4 Proposed。TUI 与 Desktop 已把
+> 当前状态：Phase S0、S1 显式选择与模型按需读取纵向切片已实现；S2–S4 其余资源读取仍为 Proposed。TUI 与 Desktop 已把
 > 可直接调用的 Skill 投影为统一斜杠面板中的 `/name`；`/skills` 只承担目录管理。
 > Crate 实现契约：[`zeta-rs/skills/README.md`](../zeta-rs/skills/README.md)
+> Runtime extension 实现契约：[`zeta-rs/ext/skills/README.md`](../zeta-rs/ext/skills/README.md)
+> 通用扩展生命周期：[`zeta-rs/ext/extension-api/README.md`](../zeta-rs/ext/extension-api/README.md)
 > Core architecture：[`core.md`](core.md)
 > Agent runtime：[`zeta-agent-runtime-architecture.md`](zeta-agent-runtime-architecture.md)
 > Config authority 与 runtime snapshot 接入：[`config.md`](config.md)
@@ -26,14 +28,15 @@ Skill 是按任务逐步加载的工作方法和参考资料，不是工具权�
 | 启动或刷新 Skill 目录 | 只读取名称、描述和来源等元数据 | 不把全部正文塞入上下文 |
 | 用户输入 `/commit` 等 Skill 命令 | 接受 Turn 时完整读取对应 `SKILL.md` | 斜杠面板只持有元数据和精确 `SkillRef` |
 | 用户打开 `/skills` | 浏览、启用、禁用和查看诊断 | 不从管理面板直接执行 Skill |
-| 系统自动匹配 Skill | 根据元数据和任务选择后再加载正文 | 不能仅凭文件内容自我激活 |
+| 模型按需选择 Skill | 模型先看到有界元数据目录，再调用 `skills-read` 加载正文 | 后端不做关键词分类，也不暴露本地路径 |
 | 正文引用参考资料 | 只在当前任务确实需要时读取 | 路径必须受来源目录约束 |
 | Skill 建议运行脚本或工具 | 转成普通工具请求 | 不授予文件、网络、凭据或沙箱绕过能力 |
 | Plugin 提供 Skill | 保留 Plugin、版本和内容摘要来源 | Plugin 启用不等于 Skill 自动执行 |
 
 ## 1. 结论
 
-`zeta-skills` 是 Zeta 的 Skill 发现、索引、解析、选择和渐进加载控制面。Skill 是一个以
+`zeta-skills` 是 Zeta 的 Skill 文件、catalog、解析和 exact activation 底层 authority；
+`zeta-skills-extension` 负责来源组合、选择策略、watcher 和向 Core 注入上下文。Skill 是一个以
 `SKILL.md` 为入口的指令目录，可以附带 references、scripts 和 assets。它帮助 Agent 判断“这类
 任务应采用什么工作流”，但本身不是可执行权限、tool implementation、MCP server 或 Plugin。
 
@@ -63,10 +66,11 @@ catalog generation。内置内容由 `zeta-rs/skills/assets/` 拥有，release s
 产品语义、触发边界和选择评测，不能把 catalog fixture 直接升级为产品能力。实现细节与 limits 由
 [`zeta-rs/skills/README.md`](../zeta-rs/skills/README.md) 维护。
 
-App Server 当前拥有 catalog runtime adapter：它组合 release built-in root、user config 中
+`zeta-skills-extension` 当前拥有 catalog runtime：它组合 release built-in root、user config 中
 明确 enabled 的绝对 source root 和 active Workspace 的 `.zeta/skills`，叠加 durable per-Skill
-enablement，缓存 immutable projection，并提供 `skills/list`、`skill/enablement/set` 与
-`skills/changed`。`zeta-file-watcher` 的
+enablement，缓存 immutable projection，并通过通用 contributor 提供 Turn activation 与 context
+fragment。App Server 只提供 `skills/list`、`skill/enablement/set` 与 `skills/changed` 协议投影。
+`zeta-file-watcher` 的
 invalidation 会触发完整重扫；只有 entry、diagnostic 或 enablement 的 consumer-visible projection
 变化才推进 runtime generation。共享的 `SkillName`、`SkillSourceId` 与 `SkillId` 已下沉到
 `zeta-protocol`，因此 config、catalog、App Server 与客户端不再靠 raw string 隐式绑定。
@@ -84,11 +88,11 @@ TUI `/skills` 提供 All/Enabled/Disabled/Manage/Errors tabs、搜索、左右�
 UserInput::Skill { skill: SkillRef }
 ```
 
-App Server 在接受 Turn 前从当前 enabled/compatible catalog 解析它，完整读取受控根中的
-`SKILL.md`，冻结 `SkillId + content digest + catalog generation + activation reason` 并持久化到
-`TurnAccepted`。Core 在每个 model safe point 通过 `SkillInstructionsProvider` 按 frozen digest
-接收外部 runtime 解析出的 `SkillInstruction`，再作为 Skill instruction layer 交给 context
-planner。客户端不能提交 raw path；文件缺失、换
+Core 在接受 Turn 前调用 extension registry；`zeta-skills-extension` 从当前 enabled/compatible
+catalog 解析显式 `SkillRef`，完整读取受控根中的 `SKILL.md`，冻结
+`SkillId + content digest + catalog generation + activation reason` 并持久化到 `TurnAccepted`。
+每个 model safe point，Core 再调用 `TurnInputContributor`，接收按 frozen digest 解析出的
+`PromptFragment` 并交给 context planner。客户端不能提交 raw path；文件缺失、换
 identity、hard link、越界 symlink 或 digest 变化都会失败即关闭，不会悄悄跟随新内容。
 
 Skill body 不复制进 Thread history；durable activation provenance 足以审计，恢复执行则要求原
@@ -101,8 +105,8 @@ Skill 文件；因此源文件删除不会破坏已完成命令的幂等重放�
 
 当前 runtime source composition 包含 built-in、user 和 active Workspace 的原生
 `.zeta/skills` source。Workspace config 中额外声明的 Skill source intent、Plugin contribution、
-reference/resource resolver 和 automatic activation 尚未接入；正文读取、compatibility gate 和
-explicit activation 已接入。
+reference/resource resolver 尚未接入；正文读取、compatibility gate、显式激活和模型按需读取已
+接入。
 
 仓库已有可复用边界：
 
@@ -180,25 +184,27 @@ Plugin manifest/config。独立 Skill 需要额外能力时只能产生明确 co
 ## 5. 目标依赖与组合
 
 ```text
-                   zeta-protocol
-                        ▲
-                        │ accepted SkillRef/UserInput values
-                        │
-                   zeta-skills
-      source / catalog / selector / loader / resolver / snapshot
-             ▲                 ▲                ▲
-             │ built-in/user   │ workspace      │ Plugin contribution
-             │                 │                │
-         config roots      App Server      zeta-plugins snapshot
-             │
-             └── zeta-file-identity supplies stable file identity
-                 and hard-link count to zeta-skills
-                              │
-                              ▼
-                 Core ContextAssembler
-                              │
-                              ▼
-                       ModelRequest
+config / Workspace / Plugin roots
+                │
+                ▼
+          zeta-skills
+  file / catalog / exact loader
+                │
+                ▼
+     zeta-skills-extension
+ source composition / watcher / selection / fragment contribution
+                │ implements
+                ▼
+       zeta-extension-api
+ activation + model-safe-point contracts
+                │ invoked by
+                ▼
+       Core ContextAssembler
+                │
+                ▼
+           ModelRequest
+
+App Server 只在组合根安装 extension，并把 Config、RPC DTO 和 `skills/changed` 接到对应端口。
 ```
 
 规则：
@@ -209,7 +215,8 @@ Plugin manifest/config。独立 Skill 需要额外能力时只能产生明确 co
   [`zeta-rs/file-identity/README.md`](../zeta-rs/file-identity/README.md)；
 - Skill source 以窄 `SkillSourceRoot`/file resolver port 注入；
 - Plugin manager 提供 immutable package root，Skill manager 仍重新校验 Skill format；
-- Core ContextAssembler 只接收激活 snapshot，不在构造 prompt 时重新扫描 filesystem；
+- Core ContextAssembler 只接收通用 `PromptFragment`，不依赖 Skill catalog 或 filesystem；
+- `zeta-skills-extension` 在 safe point 按 frozen digest 精确重读已激活正文，但不重新做选择；
 - Skill scripts 通过普通 Tool/exec port 执行，`zeta-skills` 不依赖
   `zeta-tool-executor`；
 - 只有 `SkillId`、`SkillRef`、选择 intent 等至少跨两个组件共享的稳定 value 才进入
@@ -271,8 +278,8 @@ Precedence 只用于候选排序，不用于静默覆盖：
 > built-in fallback
 ```
 
-两个不同 `SkillId` 即使 `name` 相同也同时存在，UI 必须显示 source。自动选择遇到同名且置信度
-接近时返回 ambiguity，不按目录扫描顺序取第一个。
+两个不同 `SkillId` 即使 `name` 相同也同时存在，UI 和模型目录都必须显示 source。模型调用
+`skills-read` 时提交 exact source，因此不按目录扫描顺序取同名条目。
 
 显式 Skill 可以和自动 Skill 同时激活，但去重按 exact `SkillId + digest`，不是 display name。
 
@@ -343,7 +350,7 @@ Watcher backend 无法启动时不会阻止 App Server 启动，调用方仍可�
 用户通过统一斜杠面板中的 `/name`，或直接通过 `session/request` `StartTurn` typed input 选择 exact
 `SkillRef`。显式选择：
 
-- 优先于自动匹配；
+- 由用户预先固定，不依赖模型是否决定读取某个 Skill；
 - 仍要通过 enablement、availability、compatibility 和 trust policy；
 - 若 pinned digest 已变化，返回 `SkillContentChanged`，不能悄悄跟随新内容；
 - 若 source 不再存在，historical display 仍保留 ID/digest，但新 Turn 不能激活；
@@ -361,9 +368,27 @@ UserInput::Skill {
 Core、TUI 和 Desktop 共享同一 `SkillRef` contract。TUI 与 Desktop 的斜杠目录只加载 metadata，
 真正接受 Turn 时才由 App Server 加载完整 `SKILL.md`。
 
-### 8.2 自动选择
+### 8.2 模型按需选择（已实现）
 
-自动选择是候选检索，不是把所有 Skill body 注入模型：
+每次模型调用的 Skill 层会收到一个最多 8 KiB 的 `<available-skills>` 目录。目录只包含当前
+enabled、compatible Skill 的稳定 source、name 与截断后的 description，不包含正文或本地路径。
+模型判断某个 Skill 适用时，使用目录中的 exact `source + name` 调用 `skills-read`；该工具通过
+`SkillRuntime` 的受控 catalog 完整读取并校验 `SKILL.md`，把正文与 content digest 作为普通工具
+结果返回。工具结果进入 durable Turn history，并参与下一次模型调用。
+
+这条路径没有后端关键词分类器：模型负责语义判断，runtime 负责目录边界、enablement、
+compatibility、exact identity 与文件安全。手动选择与模型选择复用同一个 catalog/loader，但持久化
+形态不同：手动选择在 `TurnAccepted.activated_skills` 中预先冻结；模型选择发生在 tool loop 中，
+由 durable Tool Result 保存已读取内容。
+
+`zeta-extension-api::ReadOnlyToolContributor` 是通用接入面，`SkillReadTool` 属于
+`zeta-skills-extension`，App Server 只把 executor 适配到已有 Extension ToolPort 与策略管线。
+因此该能力不依赖受信任 Workspace 的 shell/file tool，也不要求产品端了解 Skill 读取协议。
+
+### 8.3 后端自动候选检索（未实现，也不是主路径）
+
+如果未来 Skill 数量大到元数据目录也不能有效容纳，可以增加仅用于压缩候选集的检索层；它不是
+当前主选择机制，也不能替模型决定激活。候选检索仍不能把所有 Skill body 注入模型：
 
 ```text
 enabled catalog
@@ -374,8 +399,8 @@ enabled catalog
 → activate selected Skill
 ```
 
-第一版可以使用 lexical/keyword matcher；后续 embedding 或 model router 必须可测、可解释并受
-候选数/延迟预算限制。
+候选检索可以使用 lexical/keyword matcher；后续 embedding 必须可测、可解释并受候选数/延迟
+预算限制。检索结果仍进入同一个 metadata catalog，最终由模型调用 `skills-read`。
 
 规则：
 
@@ -383,7 +408,7 @@ enabled catalog
 - 低置信度时不自动激活；
 - 自动 Skill 数量有上限；
 - 互斥或顺序依赖在没有 accepted contract 前不通过自由文本猜测；
-- 自动选择结果必须记录 Skill ID、digest、reason 和 catalog generation；
+- 候选检索结果不得被记录为“已激活”；只有成功读取才产生 Tool Result；
 - 用户明确说不使用某 Skill 时，当前 Turn 不得重新自动加入；
 - Skill 不能通过 description 要求自己在所有任务激活。
 
@@ -605,8 +630,8 @@ Skill catalog 是可重建 projection，不是 authority。Authority 分布为�
 - current Turn selection：typed UserInput/command。
 
 Thread history 当前在 `TurnAccepted.activated_skills` 保留显式 activation 的 stable identity、
-digest、catalog generation 与 reason。自动 activation 复用同一 durable value，但 selector 仍属
-S4，尚未实现。
+digest、catalog generation 与 reason。模型按需选择不伪造该 pre-Turn activation：`skills-read`
+成功结果通过标准 Tool Call/Result 持久化；后端 automatic selector 仍未实现。
 
 无论是否进入 Thread event，每次 model invocation 的 diagnostic/provenance snapshot 都应记录：
 
@@ -716,7 +741,7 @@ CatalogStale
 | 每 source Skill 数 | 有界，超限产生 source diagnostic |
 | frontmatter bytes | 小型固定上限 |
 | `SKILL.md` bytes | 与 context budget 联动，硬上限独立存在 |
-| activated automatic Skills | 小数量上限 |
+| 模型可读取的 Skill 正文 | 由正常 Tool Result 与上下文预算约束 |
 | reference depth | 1 为推荐，硬上限不超过少量层级 |
 | loaded reference bytes | per invocation 总预算 |
 | file count/tree depth | 防目录/归档资源耗尽 |
@@ -787,6 +812,17 @@ catalog/selection/activation 拆分；新 trait 必须有职责和实现约束 d
 当前限制：同名 Skill 或与 local/server command 同名的 Skill 不投影为无歧义的 `/name`；调用这类
 Skill 需要未来带来源限定的选择交互。CLI 没有独立可视化目录浏览器，但 typed protocol 入口不受影响。
 
+### 阶段 S1.5：模型按需读取（当前状态）
+
+- 每个模型 safe point 注入 metadata-only `<available-skills>`，固定上限 8 KiB；
+- `ReadOnlyToolContributor` 把 `skills-read` 接入共享 Tool registry/policy/runtime；
+- exact source/name、enablement、compatibility 与 content digest 由 `SkillRuntime` 校验；
+- 成功读取通过标准 durable Tool Call/Result 进入下一次模型调用；
+- 后端不实现 keyword classifier，也不把模型选择伪装为 pre-Turn activation。
+
+完成条件：模型只看到目录元数据，正文必须经 exact read 才进入上下文；restricted Workspace 下仍
+可使用受控的进程内 Skill reader，且 App Server 不拥有 Skill 选择或文件加载逻辑。
+
 ### 阶段 S2：参考资料、资源与脚本
 
 - rooted file resolver 和 Resource integration；
@@ -805,14 +841,15 @@ Skill 需要未来带来源限定的选择交互。CLI 没有独立可视化目�
 
 完成条件：Skill 不能按名称碰撞绑定错误工具，Plugin update 不改变 in-flight invocation。
 
-### 阶段 S4：自动选择
+### 阶段 S4：大目录候选检索
 
-- bounded lexical retrieval；
+- 仅在元数据目录规模需要时增加 bounded lexical retrieval；
 - threshold、ambiguity 和 explicit opt-out；
-- activation explanation 与 quality evaluation；
-- 有证据后再评审 embedding/model router。
+- 候选解释与 quality evaluation；
+- 检索只缩小模型可见目录，不直接激活 Skill；有证据后再评审 embedding retrieval。
 
-完成条件：自动选择有稳定离线评测，低置信度不激活，context 不随 catalog 数量线性增长。
+完成条件：候选检索有稳定离线评测，低置信度时保留“不推荐候选”，context 不随 catalog 数量
+线性增长，最终选择仍由模型显式调用 `skills-read`。
 
 ## 20. 验证门
 

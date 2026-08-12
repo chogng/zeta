@@ -80,7 +80,8 @@ contract tests。
 
 ## 当前限制与演进
 
-当前实现消费 version `2` history record，并提供完整恢复与 append validator；snapshot、Turn
+当前实现消费 version `3` history record，并提供完整恢复与 append validator；version 3 覆盖 Agent
+context seed、delegation、message/result facts 和自动 Skill activation command snapshot。snapshot、Turn
 projection、UI history page、compaction 和 event migration registry 不属于本 crate。App Server
 当前从 Core projection 生成 bounded Turn window；若未来需要 bounded recovery，必须先建立可独立
 验证的 Turn projection/index，不能把任意 event 片段误当成可独立 reducer 输入。

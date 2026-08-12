@@ -1,10 +1,27 @@
+use super::CodeIndexSemanticModels;
 use super::code_index_runtime::CodeIndexRuntime;
 use super::fs_watcher::FileSystemWatcher;
 use super::git_runtime::{GitRuntime, GitWatcher};
+use super::multi_agent_tools::MultiAgentToolService;
+use super::semantic_index_job::AppServerSemanticIndexMetrics;
+use super::semantic_index_job::SemanticIndexJobController;
 use super::workspace_customizations::WorkspaceCustomizations;
 use super::{AppServer, AppServerThreadUpdates, RpcError};
+use crate::code_retrieval_context::CodeRetrievalContextSource;
+use crate::code_retrieval_tool::CodeRetrievalTool;
+use crate::dynamic_tools::DynamicToolCompositionError;
+use crate::dynamic_tools::compose_dynamic_tools;
+use crate::local_tools::append_local_tool;
 use crate::local_tools::compose_local_tools;
-use crate::tool_composition::{ReloadableToolPorts, ToolPort, combine_tool_ports};
+use crate::tool_composition::ReloadableToolPorts;
+use crate::tool_composition::ToolPort;
+use crate::tool_composition::ToolSearchOptions;
+use crate::tool_composition::combine_tool_ports_at_generation_with_search;
+use crate::tool_search_models::ToolSearchEmbeddingStatus;
+use crate::tool_search_models::resolve_tool_search;
+use sha2::Digest;
+use sha2::Sha256;
+use std::collections::BTreeMap;
 use std::fmt;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, RwLock};
@@ -12,11 +29,34 @@ use zeta_app_server_protocol::protocol::error::AppServerErrorName;
 use zeta_code_index::CodeIndexStorage;
 use zeta_code_index_cloud::CloudCodeIndexController;
 use zeta_code_index_cloud::CloudCodeIndexStorage;
+use zeta_code_index_semantic::CodeIndexEmbeddingModelId;
+use zeta_code_index_semantic::CodeIndexSemanticService;
+use zeta_code_index_semantic::CodeIndexSemanticStorage;
+use zeta_code_index_semantic::CodeIndexVectorStore;
+use zeta_code_index_semantic::SqliteCodeIndexVectorStore;
 use zeta_config::ConfigStore;
-use zeta_core::{InterruptTurnRequest, SequenceExpectation, ThreadController, TurnExecutor};
+use zeta_config::SemanticCodeIndexModelSelection;
+use zeta_config::ToolSearchConfig;
+use zeta_core::{
+    InterruptTurnRequest, MultiAgentCoordinator, SequenceExpectation, SessionCoordinator,
+    ThreadController, TurnExecutor,
+};
 use zeta_file_system::{LocalFileSystem, WorkspaceFileSystem};
+use zeta_model_provider::EmbeddingInvoker;
+use zeta_model_provider::EmbeddingRequest;
+use zeta_model_provider::EmbeddingResponse;
+use zeta_model_provider::EmbeddingRuntimeRequest;
+use zeta_model_provider::ModelProviderError;
+use zeta_model_provider::RerankInvoker;
+use zeta_model_provider::RerankRequest;
+use zeta_model_provider::RerankResponse;
+use zeta_model_provider::RerankRuntimeRequest;
+use zeta_model_provider::SemanticModelProvider;
+use zeta_model_provider_config::ModelProviderConfig;
+use zeta_protocol::ProviderId;
 use zeta_protocol::{CommandId, TurnStatus};
 use zeta_search::SearchService;
+use zeta_tools::ToolRegistryGeneration;
 use zeta_workspace::{
     WorkspaceAuthorization, WorkspaceCapability, WorkspaceRoot, WorkspaceTrustDecision,
 };
@@ -29,6 +69,8 @@ pub(super) struct WorkspaceRuntime {
     pub(super) git: Option<Arc<GitRuntime>>,
     pub(super) workspace_search: Option<Arc<SearchService>>,
     pub(super) code_index: Option<Arc<CodeIndexRuntime>>,
+    pub(super) code_index_semantic: Option<Arc<CodeIndexSemanticService>>,
+    pub(super) code_index_semantic_job: Option<Arc<SemanticIndexJobController>>,
     pub(super) cloud_code_index: Option<Arc<CloudCodeIndexController>>,
     pub(super) _customizations: Option<Arc<WorkspaceCustomizations>>,
     pub(super) terminals: Option<Arc<crate::terminal_service::TerminalService>>,
@@ -45,6 +87,8 @@ impl WorkspaceRuntime {
             git: None,
             workspace_search: None,
             code_index: None,
+            code_index_semantic: None,
+            code_index_semantic_job: None,
             cloud_code_index: None,
             _customizations: None,
             terminals: None,
@@ -64,10 +108,124 @@ pub(crate) struct WorkspaceRuntimeControl {
     runtime: Arc<RwLock<WorkspaceRuntime>>,
     tools: Arc<WorkspaceToolPorts>,
     threads: Arc<ThreadController>,
+    multi_agent: Arc<MultiAgentCoordinator>,
+    sessions: Arc<SessionCoordinator>,
     updates: Arc<super::update_broker::UpdateBroker>,
+    config: Option<Arc<ConfigStore>>,
+    code_index_semantic_storage_root: Option<PathBuf>,
+    code_index_semantic_models: Option<CodeIndexSemanticModels>,
+    semantic_model_provider: Option<Arc<dyn SemanticModelProvider>>,
 }
 
 impl WorkspaceRuntimeControl {
+    pub(crate) fn reconcile_semantic_code_index_runtime(
+        &self,
+    ) -> Result<(), WorkspaceRuntimeError> {
+        let _authority = self.authority_gate.lock().map_err(|_| {
+            WorkspaceRuntimeError::Failed("Workspace authority gate poisoned".into())
+        })?;
+        let (authorization, code_index, cloud, customizations, previous_watcher, previous_job) = {
+            let mut runtime = self
+                .runtime
+                .write()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            let Some(authorization) = runtime.authorization.as_ref().cloned() else {
+                return Ok(());
+            };
+            if authorization.decision() == WorkspaceTrustDecision::Restricted {
+                return Ok(());
+            }
+            let Some(code_index) = runtime.code_index.clone() else {
+                return Ok(());
+            };
+            let Some(customizations) = runtime._customizations.clone() else {
+                return Ok(());
+            };
+            let previous_watcher = runtime._file_system_watcher.take();
+            let previous_job = runtime.code_index_semantic_job.take();
+            runtime.code_index_semantic = None;
+            (
+                authorization,
+                code_index,
+                runtime.cloud_code_index.clone(),
+                customizations,
+                previous_watcher,
+                previous_job,
+            )
+        };
+        drop(previous_watcher);
+        drop(previous_job);
+        self.tools.replace_local(None)?;
+
+        let semantic = open_code_index_semantic_runtime(
+            &code_index,
+            self.code_index_semantic_models.as_ref(),
+            self.semantic_model_provider.as_ref(),
+            self.config.as_ref(),
+            self.code_index_semantic_storage_root.as_ref(),
+        );
+        let semantic_job = semantic.as_ref().and_then(|service| {
+            match SemanticIndexJobController::start(Arc::clone(service)) {
+                Ok(job) => Some(job),
+                Err(error) => {
+                    log::warn!("semantic code-index job is unavailable: {error}");
+                    None
+                }
+            }
+        });
+        let execution = authorization
+            .require(WorkspaceCapability::ExecuteProcess)
+            .map_err(|_| WorkspaceRuntimeError::TrustRequired)?;
+        let local = compose_local_tools(execution.clone())
+            .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
+        let local = append_local_tool(
+            local,
+            Arc::new(CodeRetrievalTool::new(
+                execution,
+                code_index.index(),
+                semantic.clone(),
+                cloud.clone(),
+            )),
+        );
+        let local =
+            append_multi_agent_tools(local, &self.multi_agent, &self.sessions, &self.runtime);
+        let watcher = FileSystemWatcher::start_with_observers(
+            authorization.root().clone(),
+            Arc::clone(&self.updates),
+            Arc::clone(&code_index),
+            semantic_job.clone(),
+            customizations,
+        )
+        .map_err(|error| {
+            WorkspaceRuntimeError::Failed(format!(
+                "failed to rebind semantic code-index watcher: {error}"
+            ))
+        })?;
+        let local_port = local
+            .tool_port()
+            .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
+        self.tools.replace_local(Some(local_port))?;
+        let context_source = Arc::new(CodeRetrievalContextSource::new(
+            code_index.index(),
+            semantic.clone(),
+            cloud.clone(),
+            self.config.clone(),
+            authorization.root().trust_id(),
+        ));
+        let mut runtime = self
+            .runtime
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        runtime.code_index_semantic = semantic;
+        runtime.code_index_semantic_job = semantic_job;
+        runtime._file_system_watcher = Some(watcher);
+        runtime.turn_executor = runtime
+            .turn_executor
+            .clone()
+            .with_context_source(context_source);
+        Ok(())
+    }
+
     pub(crate) fn reconcile_user_trust(
         &self,
         config: &zeta_config::ResolvedConfig,
@@ -97,18 +255,44 @@ impl WorkspaceRuntimeControl {
         }
 
         let root = authorization.root().clone();
-        let cloud_code_index = runtime.cloud_code_index.clone();
         authorization.revoke();
+        let cloud_code_index = runtime.cloud_code_index.clone();
+        let old_file_system_watcher = runtime._file_system_watcher.take();
+        let code_index = runtime.code_index.clone();
+        let customizations = runtime._customizations.clone();
         let terminals = runtime.terminals.take();
         let search = runtime.workspace_search.take();
         let git = runtime.git.take();
         let git_watcher = runtime._git_watcher.take();
         runtime.cloud_code_index = None;
+        runtime.code_index_semantic = None;
+        runtime.code_index_semantic_job = None;
         runtime.authorization = Some(WorkspaceAuthorization::new(
-            root,
+            root.clone(),
             WorkspaceTrustDecision::Restricted,
         ));
         drop(runtime);
+
+        drop(old_file_system_watcher);
+        let (restricted_watcher, watcher_error) = match (code_index, customizations) {
+            (Some(code_index), Some(customizations)) => {
+                match FileSystemWatcher::start_with_observers(
+                    root.clone(),
+                    Arc::clone(&self.updates),
+                    code_index,
+                    None,
+                    customizations,
+                ) {
+                    Ok(watcher) => (Some(watcher), None),
+                    Err(error) => (None, Some(error)),
+                }
+            }
+            _ => (None, None),
+        };
+        self.runtime
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            ._file_system_watcher = restricted_watcher;
 
         let tool_result = self.tools.replace_local(None);
         if let Some(terminals) = terminals {
@@ -126,7 +310,13 @@ impl WorkspaceRuntimeControl {
             log::warn!("cloud code-index deletion remains pending after trust revocation");
         }
         tool_result?;
-        interrupt_result
+        interrupt_result?;
+        if let Some(error) = watcher_error {
+            return Err(WorkspaceRuntimeError::Failed(format!(
+                "failed to restrict filesystem watcher: {error}"
+            )));
+        }
+        Ok(())
     }
 
     fn interrupt_active_turns(&self) -> Result<(), WorkspaceRuntimeError> {
@@ -208,49 +398,142 @@ impl WorkspaceSwitchTrustPolicy {
 }
 
 struct WorkspaceToolPortState {
+    dynamic: Option<ToolPort>,
+    extension: Option<ToolPort>,
     local: Option<ToolPort>,
     mcp: Option<ToolPort>,
+    search: ToolSearchOptions,
+    search_status: ToolSearchEmbeddingStatus,
+    registry_generation: ToolRegistryGeneration,
 }
 
 pub(crate) struct WorkspaceToolPorts {
     state: Mutex<WorkspaceToolPortState>,
     reloadable: Arc<ReloadableToolPorts>,
+    semantic_model_provider: Option<Arc<dyn SemanticModelProvider>>,
 }
 
 impl WorkspaceToolPorts {
-    fn new(mcp: Option<ToolPort>) -> Result<Arc<Self>, WorkspaceRuntimeError> {
-        let combined = combine_tool_ports(mcp.iter().cloned().collect())
-            .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
+    fn new(
+        mcp: Option<ToolPort>,
+        dynamic: Option<ToolPort>,
+        extension: Option<ToolPort>,
+        search_config: &ToolSearchConfig,
+        providers: &std::collections::BTreeMap<ProviderId, ModelProviderConfig>,
+        semantic_model_provider: Option<Arc<dyn SemanticModelProvider>>,
+    ) -> Result<Arc<Self>, WorkspaceRuntimeError> {
+        let search =
+            resolve_tool_search(search_config, providers, semantic_model_provider.as_ref());
+        let registry_generation = ToolRegistryGeneration::new(1);
+        let ports = extension
+            .iter()
+            .chain(dynamic.iter())
+            .chain(mcp.iter())
+            .cloned()
+            .collect();
+        let combined = combine_tool_ports_at_generation_with_search(
+            ports,
+            registry_generation,
+            search.options.clone(),
+        )
+        .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
         Ok(Arc::new(Self {
-            state: Mutex::new(WorkspaceToolPortState { local: None, mcp }),
+            state: Mutex::new(WorkspaceToolPortState {
+                dynamic,
+                extension,
+                local: None,
+                mcp,
+                search: search.options,
+                search_status: search.status,
+                registry_generation,
+            }),
             reloadable: ReloadableToolPorts::new(combined),
+            semantic_model_provider,
         }))
     }
 
     fn replace_local(&self, local: Option<ToolPort>) -> Result<(), WorkspaceRuntimeError> {
-        self.replace(|state| state.local = local)
+        self.replace(|state| {
+            state.local = local;
+            Ok(())
+        })
     }
 
-    pub(crate) fn replace_mcp(&self, mcp: Option<ToolPort>) -> Result<(), WorkspaceRuntimeError> {
-        self.replace(|state| state.mcp = mcp)
+    fn replace_dynamic(&self, dynamic: Option<ToolPort>) -> Result<(), WorkspaceRuntimeError> {
+        self.replace(|state| {
+            state.dynamic = dynamic;
+            Ok(())
+        })
+    }
+
+    fn replace_extension(&self, extension: Option<ToolPort>) -> Result<(), WorkspaceRuntimeError> {
+        self.replace(|state| {
+            state.extension = extension;
+            Ok(())
+        })
+    }
+
+    pub(crate) fn reconcile_user_config(
+        &self,
+        mcp: Option<ToolPort>,
+        search_config: &ToolSearchConfig,
+        providers: &std::collections::BTreeMap<ProviderId, ModelProviderConfig>,
+    ) -> Result<(), WorkspaceRuntimeError> {
+        let search = resolve_tool_search(
+            search_config,
+            providers,
+            self.semantic_model_provider.as_ref(),
+        );
+        self.replace(|state| {
+            state.mcp = mcp;
+            state.search = search.options;
+            state.search_status = search.status;
+            Ok(())
+        })
     }
 
     fn replace(
         &self,
-        update: impl FnOnce(&mut WorkspaceToolPortState),
+        update: impl FnOnce(&mut WorkspaceToolPortState) -> Result<(), WorkspaceRuntimeError>,
     ) -> Result<(), WorkspaceRuntimeError> {
         let mut state = self
             .state
             .lock()
             .map_err(|_| WorkspaceRuntimeError::Failed("Workspace tool state poisoned".into()))?;
         let mut next = WorkspaceToolPortState {
+            dynamic: state.dynamic.clone(),
+            extension: state.extension.clone(),
             local: state.local.clone(),
             mcp: state.mcp.clone(),
+            search: state.search.clone(),
+            search_status: state.search_status.clone(),
+            registry_generation: ToolRegistryGeneration::new(
+                state
+                    .registry_generation
+                    .get()
+                    .checked_add(1)
+                    .ok_or_else(|| {
+                        WorkspaceRuntimeError::Failed(
+                            "Workspace tool registry generation overflow".into(),
+                        )
+                    })?,
+            ),
         };
-        update(&mut next);
-        let ports = next.local.iter().chain(next.mcp.iter()).cloned().collect();
-        let combined = combine_tool_ports(ports)
-            .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
+        update(&mut next)?;
+        let ports = next
+            .extension
+            .iter()
+            .chain(next.dynamic.iter())
+            .chain(next.local.iter())
+            .chain(next.mcp.iter())
+            .cloned()
+            .collect();
+        let combined = combine_tool_ports_at_generation_with_search(
+            ports,
+            next.registry_generation,
+            next.search.clone(),
+        )
+        .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
         *state = next;
         self.reloadable.replace(combined);
         Ok(())
@@ -258,6 +541,14 @@ impl WorkspaceToolPorts {
 
     pub(crate) fn record_reconcile_failure(&self, error: impl Into<String>) {
         self.reloadable.record_reconcile_failure(error);
+    }
+
+    pub(crate) fn tool_search_status(&self) -> ToolSearchEmbeddingStatus {
+        self.state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .search_status
+            .clone()
     }
 }
 
@@ -285,6 +576,143 @@ impl fmt::Display for WorkspaceRuntimeError {
 impl std::error::Error for WorkspaceRuntimeError {}
 
 impl AppServer {
+    pub(crate) fn with_extension_tool_port(
+        mut self,
+        extension: Option<ToolPort>,
+    ) -> Result<Self, WorkspaceRuntimeError> {
+        let Some(extension) = extension else {
+            return Ok(self);
+        };
+        if self.extension_tool_port.is_some() {
+            return Err(WorkspaceRuntimeError::Failed(
+                "extension tools are already installed".into(),
+            ));
+        }
+        if let Some(tools) = self
+            .local_workspace_host
+            .as_ref()
+            .map(|host| Arc::clone(&host.tools))
+        {
+            tools.replace_extension(Some(extension.clone()))?;
+        } else {
+            let ports = std::iter::once(extension.clone())
+                .chain(self.dynamic_tool_port.iter().cloned())
+                .collect();
+            let combined = combine_tool_ports_at_generation_with_search(
+                ports,
+                ToolRegistryGeneration::new(1),
+                ToolSearchOptions::default(),
+            )
+            .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?
+            .expect("one extension ToolPort produces a combined runtime");
+            self = self.with_tool_service(combined.tools, combined.policy);
+        }
+        self.extension_tool_port = Some(extension);
+        Ok(self)
+    }
+
+    /// Installs client-hosted tools that execute through durable agent interactions.
+    ///
+    /// The definitions are validated and frozen before they enter the shared registry. A live
+    /// connection must separately declare `DynamicTool` interaction support, list the exact hosted
+    /// tool name, and subscribe to the target Thread before App Server can route an authorized
+    /// invocation to it.
+    pub fn with_dynamic_tools(
+        mut self,
+        specifications: Vec<zeta_protocol::DynamicToolSpec>,
+    ) -> Result<Self, DynamicToolCompositionError> {
+        if self.dynamic_tool_port.is_some() {
+            return Err(DynamicToolCompositionError::configuration(
+                "dynamic tools are already installed",
+            ));
+        }
+        let Some(composition) = compose_dynamic_tools(specifications)? else {
+            return Ok(self);
+        };
+        let port = ToolPort::dynamic(composition.tools, composition.policy);
+        if let Some(tools) = self
+            .local_workspace_host
+            .as_ref()
+            .map(|host| Arc::clone(&host.tools))
+        {
+            tools
+                .replace_dynamic(Some(port.clone()))
+                .map_err(|error| DynamicToolCompositionError::configuration(error.to_string()))?;
+        } else {
+            let ports = self
+                .extension_tool_port
+                .iter()
+                .cloned()
+                .chain(std::iter::once(port.clone()))
+                .collect();
+            let combined = combine_tool_ports_at_generation_with_search(
+                ports,
+                ToolRegistryGeneration::new(1),
+                ToolSearchOptions::default(),
+            )
+            .map_err(|error| DynamicToolCompositionError::configuration(error.to_string()))?
+            .expect("one dynamic ToolPort produces a combined runtime");
+            self = self.with_tool_service(combined.tools, combined.policy);
+        }
+        self.dynamic_tool_port = Some(port);
+        Ok(self)
+    }
+
+    pub(super) fn tool_search_embedding_status(&self) -> ToolSearchEmbeddingStatus {
+        self.local_workspace_host
+            .as_ref()
+            .map(|host| host.tools.tool_search_status())
+            .unwrap_or(ToolSearchEmbeddingStatus::Disabled)
+    }
+
+    pub(super) fn active_workspace_trust_id(&self) -> Option<zeta_workspace::WorkspaceTrustId> {
+        self.workspace_runtime
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .authorization
+            .as_ref()
+            .map(|authorization| authorization.root().trust_id())
+    }
+
+    pub(super) fn reconcile_semantic_code_index_runtime(
+        &self,
+    ) -> Result<(), WorkspaceRuntimeError> {
+        let Some(control) = self.workspace_runtime_control() else {
+            return Ok(());
+        };
+        control.reconcile_semantic_code_index_runtime()
+    }
+
+    pub(super) fn validate_semantic_code_index_selection(
+        &self,
+    ) -> Result<(), WorkspaceRuntimeError> {
+        if self.code_index_semantic_models.is_some() {
+            return Ok(());
+        }
+        let snapshot = self
+            .config
+            .as_ref()
+            .ok_or(WorkspaceRuntimeError::Unavailable)?
+            .read_snapshot()
+            .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
+        let models = snapshot
+            .values
+            .semantic_code_index
+            .selection
+            .remote_models()
+            .ok_or_else(|| {
+                WorkspaceRuntimeError::Failed(
+                    "semantic code-index models are not configured".into(),
+                )
+            })?;
+        let provider = self.semantic_model_provider.as_ref().ok_or_else(|| {
+            WorkspaceRuntimeError::Failed("semantic model provider runtime is not installed".into())
+        })?;
+        resolve_semantic_model_invokers(provider, models, &snapshot.values.providers)
+            .map(|_| ())
+            .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))
+    }
+
     pub(crate) fn with_local_workspace_host(
         mut self,
         mcp: Option<ToolPort>,
@@ -295,7 +723,23 @@ impl AppServer {
                 "local Workspace host is already installed".into(),
             ));
         }
-        let tools = WorkspaceToolPorts::new(mcp)?;
+        let (search_config, providers) = match &self.config {
+            Some(config) => {
+                let snapshot = config
+                    .read_snapshot()
+                    .map_err(|error| WorkspaceRuntimeError::Failed(error.0))?;
+                (snapshot.values.tool_search, snapshot.values.providers)
+            }
+            None => (ToolSearchConfig::default(), Default::default()),
+        };
+        let tools = WorkspaceToolPorts::new(
+            mcp,
+            self.dynamic_tool_port.clone(),
+            self.extension_tool_port.clone(),
+            &search_config,
+            &providers,
+            self.semantic_model_provider.clone(),
+        )?;
         let mut executor = TurnExecutor::new(
             self.sessions.threads().clone(),
             Arc::clone(&self.model),
@@ -305,9 +749,7 @@ impl AppServer {
         .with_thread_updates(Arc::new(AppServerThreadUpdates {
             updates: Arc::clone(&self.updates),
         }));
-        if let Some(skills) = &self.skills {
-            executor = executor.with_skill_instructions_provider(skills.clone());
-        }
+        executor = executor.with_extensions(Arc::clone(&self.agent_extensions));
         self.workspace_runtime
             .write()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -330,7 +772,13 @@ impl AppServer {
                 runtime: Arc::clone(&self.workspace_runtime),
                 tools: Arc::clone(&host.tools),
                 threads: self.sessions.threads().clone(),
+                multi_agent: Arc::clone(&self.multi_agent),
+                sessions: Arc::clone(&self.sessions),
                 updates: Arc::clone(&self.updates),
+                config: self.config.clone(),
+                code_index_semantic_storage_root: self.code_index_semantic_storage_root.clone(),
+                code_index_semantic_models: self.code_index_semantic_models.clone(),
+                semantic_model_provider: self.semantic_model_provider.clone(),
             })
     }
 
@@ -411,6 +859,7 @@ impl AppServer {
             workspace,
             Arc::clone(&self.updates),
             Arc::clone(&code_index),
+            None,
             customizations.clone(),
         )
         .map_err(|error| {
@@ -433,13 +882,16 @@ impl AppServer {
             git: None,
             workspace_search: None,
             code_index: Some(code_index),
+            code_index_semantic: None,
+            code_index_semantic_job: None,
             cloud_code_index: None,
             _customizations: Some(Arc::clone(&customizations)),
             terminals: None,
             turn_executor: current
                 .turn_executor
                 .clone()
-                .with_instructions_provider(customizations),
+                .with_instructions_provider(customizations)
+                .with_context_source(Arc::new(zeta_core::NoContextSource)),
         };
         let previous = std::mem::replace(&mut *current, next);
         drop(current);
@@ -457,6 +909,17 @@ impl AppServer {
         let file_system: Arc<dyn WorkspaceFileSystem> =
             Arc::new(LocalFileSystem::new(workspace.clone()));
         let code_index = self.open_code_index_runtime(workspace.clone())?;
+        let code_index_semantic = self.open_code_index_semantic(&code_index);
+        let code_index_semantic_job =
+            code_index_semantic.as_ref().and_then(
+                |service| match SemanticIndexJobController::start(Arc::clone(service)) {
+                    Ok(job) => Some(job),
+                    Err(error) => {
+                        log::warn!("semantic code-index job is unavailable: {error}");
+                        None
+                    }
+                },
+            );
         let cloud_code_index = self.open_cloud_code_index_controller(&code_index);
         let canonical_root = workspace.canonical_path().to_path_buf();
         let customizations = WorkspaceCustomizations::discover(&canonical_root);
@@ -471,6 +934,7 @@ impl AppServer {
             workspace.clone(),
             Arc::clone(&self.updates),
             Arc::clone(&code_index),
+            code_index_semantic_job.clone(),
             customizations.clone(),
         )
         .map_err(|error| {
@@ -478,7 +942,27 @@ impl AppServer {
                 "failed to initialize filesystem watcher: {error}"
             ))
         })?;
-        let local_port = ToolPort::local(local.tools, local.policy);
+        let retrieval_workspace = authorization
+            .require(WorkspaceCapability::ExecuteProcess)
+            .map_err(|_| WorkspaceRuntimeError::TrustRequired)?;
+        let local = append_local_tool(
+            local,
+            Arc::new(CodeRetrievalTool::new(
+                retrieval_workspace,
+                code_index.index(),
+                code_index_semantic.clone(),
+                cloud_code_index.clone(),
+            )),
+        );
+        let local = append_multi_agent_tools(
+            local,
+            &self.multi_agent,
+            &self.sessions,
+            &self.workspace_runtime,
+        );
+        let local_port = local
+            .tool_port()
+            .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
         let (existing_search, existing_terminals) = {
             let current = self
                 .workspace_runtime
@@ -490,7 +974,7 @@ impl AppServer {
             Arc::new(SearchService::new(workspace.clone(), local.ripgrep.clone()))
         });
         workspace_search.cancel_all();
-        workspace_search.switch_workspace(workspace);
+        workspace_search.switch_workspace(workspace.clone());
         let terminal_capability = authorization
             .require(WorkspaceCapability::ExecuteProcess)
             .map_err(|_| WorkspaceRuntimeError::TrustRequired)?;
@@ -516,6 +1000,13 @@ impl AppServer {
         };
         host.tools.replace_local(Some(local_port))?;
         self.bind_workspace_skills(&canonical_root)?;
+        let context_source = Arc::new(CodeRetrievalContextSource::new(
+            code_index.index(),
+            code_index_semantic.clone(),
+            cloud_code_index.clone(),
+            self.config.clone(),
+            workspace.trust_id(),
+        ));
         let mut current = self
             .workspace_runtime
             .write()
@@ -528,13 +1019,16 @@ impl AppServer {
             git: Some(Arc::clone(&git)),
             workspace_search: Some(Arc::clone(&workspace_search)),
             code_index: Some(code_index),
+            code_index_semantic,
+            code_index_semantic_job,
             cloud_code_index,
             _customizations: Some(Arc::clone(&customizations)),
             terminals: Some(Arc::clone(&terminals)),
             turn_executor: current
                 .turn_executor
                 .clone()
-                .with_instructions_provider(customizations),
+                .with_instructions_provider(customizations)
+                .with_context_source(context_source),
         };
         let previous = std::mem::replace(&mut *current, next);
         drop(current);
@@ -633,6 +1127,35 @@ impl AppServer {
             .code_index
             .clone()
             .ok_or_else(|| RpcError::new(-32090, AppServerErrorName::CodeIndexUnavailable))
+    }
+
+    fn open_code_index_semantic(
+        &self,
+        code_index: &Arc<CodeIndexRuntime>,
+    ) -> Option<Arc<CodeIndexSemanticService>> {
+        open_code_index_semantic_runtime(
+            code_index,
+            self.code_index_semantic_models.as_ref(),
+            self.semantic_model_provider.as_ref(),
+            self.config.as_ref(),
+            self.code_index_semantic_storage_root.as_ref(),
+        )
+    }
+
+    pub(crate) fn code_index_semantic_service(&self) -> Option<Arc<CodeIndexSemanticService>> {
+        self.workspace_runtime
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .code_index_semantic
+            .clone()
+    }
+
+    pub(super) fn code_index_semantic_job(&self) -> Option<Arc<SemanticIndexJobController>> {
+        self.workspace_runtime
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .code_index_semantic_job
+            .clone()
     }
 
     fn open_cloud_code_index_controller(
@@ -791,6 +1314,227 @@ impl AppServer {
     }
 }
 
+fn append_multi_agent_tools(
+    local: crate::local_tools::LocalToolComposition,
+    coordinator: &Arc<MultiAgentCoordinator>,
+    sessions: &Arc<SessionCoordinator>,
+    runtime: &Arc<RwLock<WorkspaceRuntime>>,
+) -> crate::local_tools::LocalToolComposition {
+    append_local_tool(
+        local,
+        Arc::new(MultiAgentToolService::new(
+            Arc::clone(coordinator),
+            Arc::clone(sessions),
+            Arc::downgrade(runtime),
+        )),
+    )
+}
+
+fn open_code_index_semantic_runtime(
+    code_index: &Arc<CodeIndexRuntime>,
+    fixed_models: Option<&CodeIndexSemanticModels>,
+    provider: Option<&Arc<dyn SemanticModelProvider>>,
+    config: Option<&Arc<ConfigStore>>,
+    storage_root: Option<&PathBuf>,
+) -> Option<Arc<CodeIndexSemanticService>> {
+    let configured_models;
+    let models = match fixed_models {
+        Some(models) => models,
+        None => {
+            configured_models =
+                resolve_configured_code_index_semantic_models(code_index, provider?, config?)?;
+            &configured_models
+        }
+    };
+    let trust_id = code_index.root().trust_id();
+    let digest = trust_id
+        .as_str()
+        .strip_prefix("sha256:")
+        .unwrap_or(trust_id.as_str());
+    let storage = storage_root.map_or(CodeIndexSemanticStorage::Memory, |root| {
+        CodeIndexSemanticStorage::Persistent(root.join(format!("{digest}.sqlite3")))
+    });
+    let store: Arc<dyn CodeIndexVectorStore> = match SqliteCodeIndexVectorStore::open(&storage) {
+        Ok(store) => Arc::new(store),
+        Err(error) => {
+            log::warn!("persistent semantic code-index is unavailable: {error}");
+            Arc::new(
+                SqliteCodeIndexVectorStore::open(&CodeIndexSemanticStorage::Memory)
+                    .expect("in-memory semantic store must open"),
+            )
+        }
+    };
+    let service = CodeIndexSemanticService::new(
+        code_index.index(),
+        models.model_id.clone(),
+        Arc::clone(&models.embedding),
+        store,
+    );
+    let service = match &models.rerank {
+        Some(rerank) => service.with_rerank(Arc::clone(rerank)),
+        None => service,
+    };
+    Some(Arc::new(
+        service.with_metrics(Arc::new(AppServerSemanticIndexMetrics)),
+    ))
+}
+
+fn resolve_configured_code_index_semantic_models(
+    code_index: &Arc<CodeIndexRuntime>,
+    provider: &Arc<dyn SemanticModelProvider>,
+    config: &Arc<ConfigStore>,
+) -> Option<CodeIndexSemanticModels> {
+    let snapshot = config.read_snapshot().ok()?;
+    let models = snapshot
+        .values
+        .semantic_code_index
+        .authorized_remote_models(&code_index.root().trust_id(), &snapshot.values.providers)?
+        .clone();
+    let invokers =
+        match resolve_semantic_model_invokers(provider, &models, &snapshot.values.providers) {
+            Ok(invokers) => invokers,
+            Err(error) => {
+                log::warn!("configured semantic code-index models are unavailable: {error}");
+                return None;
+            }
+        };
+    let identity =
+        serde_json::to_vec(&(models.embedding_model.clone(), invokers.embedding_config)).ok()?;
+    let model_id =
+        CodeIndexEmbeddingModelId::new(format!("semantic:sha256:{:x}", Sha256::digest(identity)))
+            .ok()?;
+    let consent = SemanticInvocationConsent {
+        config: Arc::clone(config),
+        workspace: code_index.root().trust_id(),
+        models: models.clone(),
+    };
+    let embedding: Arc<dyn EmbeddingInvoker> = Arc::new(ConsentBoundEmbeddingInvoker {
+        inner: invokers.embedding,
+        consent: consent.clone(),
+    });
+    let mut resolved = CodeIndexSemanticModels::new(model_id, embedding);
+    if let Some(rerank) = invokers.rerank {
+        resolved = resolved.with_rerank(Arc::new(ConsentBoundRerankInvoker {
+            inner: rerank,
+            consent,
+        }));
+    }
+    Some(resolved)
+}
+
+struct ResolvedSemanticModelInvokers {
+    embedding_config: ModelProviderConfig,
+    embedding: Arc<dyn EmbeddingInvoker>,
+    rerank: Option<Arc<dyn RerankInvoker>>,
+}
+
+fn resolve_semantic_model_invokers(
+    provider: &Arc<dyn SemanticModelProvider>,
+    models: &SemanticCodeIndexModelSelection,
+    providers: &BTreeMap<ProviderId, ModelProviderConfig>,
+) -> Result<ResolvedSemanticModelInvokers, ModelProviderError> {
+    let embedding_config = providers
+        .get(&models.embedding_model.provider)
+        .cloned()
+        .ok_or_else(|| {
+            ModelProviderError::Unavailable(format!(
+                "semantic embedding provider '{}' is not configured",
+                models.embedding_model.provider
+            ))
+        })?;
+    let embedding = provider.embedding_runtime(EmbeddingRuntimeRequest::new(
+        models.embedding_model.clone(),
+        embedding_config.clone(),
+    ))?;
+    let rerank = models
+        .rerank_model
+        .as_ref()
+        .map(|model| {
+            let config = providers.get(&model.provider).cloned().ok_or_else(|| {
+                ModelProviderError::Unavailable(format!(
+                    "semantic rerank provider '{}' is not configured",
+                    model.provider
+                ))
+            })?;
+            provider.rerank_runtime(RerankRuntimeRequest::new(model.clone(), config))
+        })
+        .transpose()?;
+    Ok(ResolvedSemanticModelInvokers {
+        embedding_config,
+        embedding,
+        rerank,
+    })
+}
+
+#[derive(Clone)]
+struct SemanticInvocationConsent {
+    config: Arc<ConfigStore>,
+    workspace: zeta_workspace::WorkspaceTrustId,
+    models: zeta_config::SemanticCodeIndexModelSelection,
+}
+
+impl SemanticInvocationConsent {
+    fn ensure_current(&self) -> Result<(), ModelProviderError> {
+        let snapshot = self
+            .config
+            .read_snapshot()
+            .map_err(|error| ModelProviderError::Unavailable(error.to_string()))?;
+        let authorized = snapshot
+            .values
+            .semantic_code_index
+            .authorized_remote_models(&self.workspace, &snapshot.values.providers);
+        if authorized == Some(&self.models) {
+            Ok(())
+        } else {
+            Err(ModelProviderError::Unavailable(
+                "semantic code-index source egress is no longer authorized".into(),
+            ))
+        }
+    }
+}
+
+struct ConsentBoundEmbeddingInvoker {
+    inner: Arc<dyn EmbeddingInvoker>,
+    consent: SemanticInvocationConsent,
+}
+
+impl EmbeddingInvoker for ConsentBoundEmbeddingInvoker {
+    fn embed(&self, request: &EmbeddingRequest) -> Result<EmbeddingResponse, ModelProviderError> {
+        self.consent.ensure_current()?;
+        self.inner.embed(request)
+    }
+
+    fn embed_with_cancellation(
+        &self,
+        request: &EmbeddingRequest,
+        cancellation: &zeta_async_utils::CancellationToken,
+    ) -> Result<EmbeddingResponse, ModelProviderError> {
+        self.consent.ensure_current()?;
+        self.inner.embed_with_cancellation(request, cancellation)
+    }
+}
+
+struct ConsentBoundRerankInvoker {
+    inner: Arc<dyn RerankInvoker>,
+    consent: SemanticInvocationConsent,
+}
+
+impl RerankInvoker for ConsentBoundRerankInvoker {
+    fn rerank(&self, request: &RerankRequest) -> Result<RerankResponse, ModelProviderError> {
+        self.consent.ensure_current()?;
+        self.inner.rerank(request)
+    }
+
+    fn rerank_with_cancellation(
+        &self,
+        request: &RerankRequest,
+        cancellation: &zeta_async_utils::CancellationToken,
+    ) -> Result<RerankResponse, ModelProviderError> {
+        self.consent.ensure_current()?;
+        self.inner.rerank_with_cancellation(request, cancellation)
+    }
+}
+
 fn retire_workspace_runtime(
     mut runtime: WorkspaceRuntime,
     retained_search: Option<&Arc<SearchService>>,
@@ -799,15 +1543,15 @@ fn retire_workspace_runtime(
     if let Some(authorization) = runtime.authorization.take() {
         authorization.revoke();
     }
-    if let Some(terminals) = runtime.terminals.take() {
-        if !retained_terminals.is_some_and(|retained| Arc::ptr_eq(retained, &terminals)) {
-            terminals.terminate_all();
-        }
+    if let Some(terminals) = runtime.terminals.take()
+        && !retained_terminals.is_some_and(|retained| Arc::ptr_eq(retained, &terminals))
+    {
+        terminals.terminate_all();
     }
-    if let Some(search) = runtime.workspace_search.take() {
-        if !retained_search.is_some_and(|retained| Arc::ptr_eq(retained, &search)) {
-            search.cancel_all();
-        }
+    if let Some(search) = runtime.workspace_search.take()
+        && !retained_search.is_some_and(|retained| Arc::ptr_eq(retained, &search))
+    {
+        search.cancel_all();
     }
 }
 

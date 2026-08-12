@@ -2,7 +2,7 @@ import "./media/settingsEditor.css";
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
 import { InputBox } from "../../../../base/browser/ui/inputbox/inputbox.js";
 import { ScrollableElement } from "../../../../base/browser/ui/scrollbar/scrollableElement.js";
-import { DisposableOwner, ResettableDisposableGroup } from "../../../../base/common/lifecycle.js";
+import { DisposableOwner, ResettableDisposableGroup, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
 import type { IDialogService } from "../../../../platform/dialogs/common/dialogs.js";
 import { ColorId, darkColorTheme, type IColorTheme, lightColorTheme } from "../../../../platform/theme/common/colorTheme.js";
@@ -13,6 +13,9 @@ import { WorkbenchConfiguration } from "../../../common/configuration.js";
 import { SystemColorThemePreference, WorkbenchThemesRegistry } from "../../../common/theme.js";
 import type { IUserThemeService } from "../../../common/userThemes.js";
 import type { ISettingsService } from "../../../services/preferences/common/settings.js";
+import type { ICodeIndexService } from "../../../../platform/codeIndex/common/codeIndexService.js";
+import type { IToolSearchService, ToolSearchEmbeddingStatus } from "../../../../platform/toolSearch/common/toolSearchService.js";
+import type { CodeIndexStatusResult, SemanticCodeIndexSelectionDto } from "../../../../../../generated/app-server/types.js";
 import { getSettingsSection, SettingsSections, type SettingsSectionDescriptor } from "../common/settingsSections.js";
 
 export interface SettingsEditorOptions {
@@ -22,6 +25,8 @@ export interface SettingsEditorOptions {
   readonly settingsService: ISettingsService;
   readonly themeService: IThemeService;
   readonly userThemeService: IUserThemeService;
+  readonly codeIndexService: ICodeIndexService;
+  readonly toolSearchService: IToolSearchService;
 }
 
 let nextSettingsEditorId = 1;
@@ -34,6 +39,8 @@ export class SettingsEditor extends DisposableOwner {
   private readonly settingsService: ISettingsService;
   private readonly themeService: IThemeService;
   private readonly userThemeService: IUserThemeService;
+  private readonly codeIndexService: ICodeIndexService;
+  private readonly toolSearchService: IToolSearchService;
   private readonly searchInput: InputBox;
   private readonly navigationItems = new Map<string, HTMLButtonElement>();
   private readonly navigationEmpty: HTMLParagraphElement;
@@ -54,6 +61,8 @@ export class SettingsEditor extends DisposableOwner {
     this.settingsService = options.settingsService;
     this.themeService = options.themeService;
     this.userThemeService = options.userThemeService;
+    this.codeIndexService = options.codeIndexService;
+    this.toolSearchService = options.toolSearchService;
     const editorId = `zeta-settings-editor-${nextSettingsEditorId++}`;
     this.element = options.ownerDocument.createElement("div");
     this.element.className = "zeta-settings-editor";
@@ -205,8 +214,288 @@ export class SettingsEditor extends DisposableOwner {
     this.sectionBindings.clear();
     this.sectionContent.replaceChildren();
     if (section.id === "appearance") this.renderAppearance();
+    if (section.id === "indexing") void this.renderIndexing();
     this.contentScrollable.scrollTo(0, 0);
     this.contentScrollable.layout();
+  }
+
+  private async renderIndexing(): Promise<void> {
+    this.sectionBindings.clear();
+    const document = this.element.ownerDocument;
+    const loading = document.createElement("p");
+    loading.className = "zeta-settings-message";
+    loading.textContent = "Loading search settings…";
+    this.sectionContent.replaceChildren(loading);
+    const loaded = await Promise.all([
+      this.codeIndexService.readConfig(),
+      this.toolSearchService.readConfig(),
+    ]).catch((error: unknown) => {
+      loading.textContent = error instanceof Error ? `Unable to load indexing settings: ${error.message}` : "Unable to load indexing settings.";
+      return undefined;
+    });
+    if (!loaded) return;
+    if (this.settingsService.activeSectionId !== "indexing") return;
+    const [codeConfig, toolConfig] = loaded;
+
+    const toolGroup = document.createElement("fieldset");
+    toolGroup.className = "zeta-indexing-setting";
+    const toolLegend = document.createElement("legend");
+    toolLegend.textContent = "Agent tool search";
+    const toolHint = document.createElement("p");
+    toolHint.className = "zeta-theme-setting-hint";
+    toolHint.textContent = "Lexical search keeps tool metadata local. Hybrid search sends tool names, descriptions, schemas, and the query to the selected embedding model, then merges that ranking with BM25.";
+    const toolEnabledLabel = document.createElement("label");
+    toolEnabledLabel.className = "zeta-indexing-toggle";
+    const toolEnabled = document.createElement("input");
+    toolEnabled.type = "checkbox";
+    toolEnabled.checked = toolConfig.mode === "hybridEmbedding";
+    toolEnabledLabel.append(toolEnabled, " Use hybrid embedding search");
+    const toolEmbedding = document.createElement("input");
+    toolEmbedding.className = "zeta-settings-text-input";
+    toolEmbedding.placeholder = "provider/model (for example ollama/nomic-embed-text)";
+    toolEmbedding.setAttribute("aria-label", "Tool Search embedding model");
+    toolEmbedding.value = toolConfig.embeddingModel ? formatModel(toolConfig.embeddingModel) : "";
+    toolEmbedding.disabled = !toolEnabled.checked;
+    const toolStatus = document.createElement("p");
+    toolStatus.className = "zeta-theme-setting-status";
+    toolStatus.setAttribute("role", "status");
+    toolStatus.textContent = toolSearchStatusMessage(toolConfig.embeddingStatus);
+    const toolActions = document.createElement("div");
+    toolActions.className = "zeta-theme-json-actions";
+    const toolSave = document.createElement("button");
+    toolSave.className = "zeta-theme-action";
+    toolSave.type = "button";
+    toolSave.textContent = "Save tool search";
+    this.sectionBindings.add(addDisposableListener(toolEnabled, "change", () => {
+      toolEmbedding.disabled = !toolEnabled.checked;
+    }));
+    this.sectionBindings.add(addDisposableListener(toolSave, "click", () => {
+      let embeddingModel = toolConfig.embeddingModel;
+      try {
+        if (toolEnabled.checked) embeddingModel = parseModel(toolEmbedding.value, "Tool Search embedding model");
+      } catch (error) {
+        toolStatus.textContent = error instanceof Error ? error.message : "Invalid Tool Search model.";
+        return;
+      }
+      toolGroup.disabled = true;
+      void this.toolSearchService.configure({
+        mode: toolEnabled.checked ? "hybridEmbedding" : "lexical",
+        embeddingModel: toolEnabled.checked ? embeddingModel : undefined,
+      }, toolConfig.revision).then(() => this.renderIndexing()).catch((error: unknown) => {
+        toolStatus.textContent = error instanceof Error ? `Unable to save: ${error.message}` : "Unable to save.";
+      }).finally(() => { toolGroup.disabled = false; });
+    }));
+    toolActions.append(toolSave);
+    toolGroup.append(toolLegend, toolHint, toolEnabledLabel, toolEmbedding, toolStatus, toolActions);
+
+    const group = document.createElement("fieldset");
+    group.className = "zeta-indexing-setting";
+    const legend = document.createElement("legend");
+    legend.textContent = "Semantic code search";
+    const hint = document.createElement("p");
+    hint.className = "zeta-theme-setting-hint";
+    hint.textContent = "Zeta keeps chunking, vectors, recall, fusion, and Agent results local. When enabled and authorized, bounded code chunks and search queries are sent to the selected model endpoint.";
+    const providerHeading = document.createElement("h4");
+    providerHeading.textContent = "Model endpoint";
+    const provider = document.createElement("input");
+    provider.className = "zeta-settings-text-input";
+    provider.placeholder = "ollama or openai-compatible";
+    provider.setAttribute("aria-label", "Semantic model provider");
+    const endpoint = document.createElement("input");
+    endpoint.className = "zeta-settings-text-input";
+    endpoint.placeholder = "http://localhost:11434/v1";
+    endpoint.setAttribute("aria-label", "Semantic model endpoint URL");
+    const configuredProvider = codeConfig.semanticCodeIndex.selection.type === "remote"
+      ? codeConfig.semanticCodeIndex.selection.models.embeddingModel.provider
+      : "ollama";
+    provider.value = configuredProvider;
+    endpoint.value = codeConfig.providers[configuredProvider]?.baseUrl ?? (configuredProvider === "ollama" ? "http://localhost:11434/v1" : "");
+    const providerActions = document.createElement("div");
+    providerActions.className = "zeta-theme-json-actions";
+    const providerSave = document.createElement("button");
+    providerSave.className = "zeta-theme-action";
+    providerSave.type = "button";
+    providerSave.textContent = "Save endpoint";
+    const enabledLabel = document.createElement("label");
+    enabledLabel.className = "zeta-indexing-toggle";
+    const enabled = document.createElement("input");
+    enabled.type = "checkbox";
+    enabled.checked = codeConfig.semanticCodeIndex.selection.type === "remote";
+    enabledLabel.append(enabled, " Use an embedding/rerank model endpoint");
+    const embedding = document.createElement("input");
+    embedding.className = "zeta-settings-text-input";
+    embedding.placeholder = "provider/model (for example ollama/nomic-embed-text)";
+    embedding.setAttribute("aria-label", "Embedding model");
+    const rerank = document.createElement("input");
+    rerank.className = "zeta-settings-text-input";
+    rerank.placeholder = "Optional openai-compatible/model reranker";
+    rerank.setAttribute("aria-label", "Rerank model");
+    if (codeConfig.semanticCodeIndex.selection.type === "remote") {
+      embedding.value = formatModel(codeConfig.semanticCodeIndex.selection.models.embeddingModel);
+      rerank.value = codeConfig.semanticCodeIndex.selection.models.rerankModel ? formatModel(codeConfig.semanticCodeIndex.selection.models.rerankModel) : "";
+    }
+    embedding.disabled = !enabled.checked;
+    rerank.disabled = !enabled.checked;
+    const automaticContextLabel = document.createElement("label");
+    automaticContextLabel.className = "zeta-indexing-toggle";
+    const automaticContext = document.createElement("input");
+    automaticContext.type = "checkbox";
+    automaticContext.checked = codeConfig.semanticCodeIndex.automaticContext === "firstInvocation";
+    automaticContext.disabled = !enabled.checked;
+    automaticContextLabel.append(automaticContext, " Automatically add verified code excerpts to the first Agent request");
+    const status = document.createElement("p");
+    status.className = "zeta-theme-setting-status";
+    status.setAttribute("role", "status");
+    status.textContent = codeConfig.semanticCodeIndex.activeWorkspaceAuthorized
+      ? "The active workspace is authorized for this exact model selection."
+      : "The active workspace is not authorized; no source text will be sent.";
+    const progress = document.createElement("p");
+    progress.className = "zeta-theme-setting-status";
+    progress.setAttribute("role", "status");
+    progress.textContent = "Semantic index status is loading…";
+    const jobActions = document.createElement("div");
+    jobActions.className = "zeta-theme-json-actions";
+    const cancelJob = document.createElement("button");
+    cancelJob.className = "zeta-theme-action";
+    cancelJob.type = "button";
+    cancelJob.textContent = "Cancel indexing";
+    const retryJob = document.createElement("button");
+    retryJob.className = "zeta-theme-action";
+    retryJob.type = "button";
+    retryJob.textContent = "Retry indexing";
+    const updateJobStatus = (indexStatus: CodeIndexStatusResult): void => {
+      progress.textContent = semanticIndexStatusMessage(indexStatus);
+      cancelJob.disabled = indexStatus.semantic.state !== "syncing";
+      retryJob.disabled = !codeConfig.semanticCodeIndex.activeWorkspaceAuthorized || indexStatus.semantic.state === "syncing";
+    };
+    let polling = true;
+    let timer: number | undefined;
+    const poll = (): void => {
+      void this.codeIndexService.status().then(indexStatus => {
+        if (!polling || this.settingsService.activeSectionId !== "indexing") return;
+        updateJobStatus(indexStatus);
+      }).catch(() => {
+        if (polling) progress.textContent = "Unable to read semantic index progress.";
+      }).finally(() => {
+        if (polling) timer = window.setTimeout(poll, 750);
+      });
+    };
+    this.sectionBindings.add(toDisposable(() => {
+      polling = false;
+      if (timer !== undefined) window.clearTimeout(timer);
+    }));
+    this.sectionBindings.add(addDisposableListener(cancelJob, "click", () => {
+      cancelJob.disabled = true;
+      void this.codeIndexService.cancel().then(updateJobStatus).catch(() => { progress.textContent = "Unable to cancel semantic indexing."; });
+    }));
+    this.sectionBindings.add(addDisposableListener(retryJob, "click", () => {
+      retryJob.disabled = true;
+      void this.codeIndexService.retry().then(updateJobStatus).catch(() => { progress.textContent = "Unable to retry semantic indexing."; });
+    }));
+    jobActions.append(cancelJob, retryJob);
+    poll();
+    this.sectionBindings.add(addDisposableListener(provider, "change", () => {
+      const configured = codeConfig.providers[provider.value.trim()];
+      endpoint.value = configured?.baseUrl ?? (provider.value.trim() === "ollama" ? "http://localhost:11434/v1" : "");
+    }));
+    this.sectionBindings.add(addDisposableListener(providerSave, "click", () => {
+      const providerId = provider.value.trim();
+      const baseUrl = endpoint.value.trim();
+      if (!providerId) {
+        status.textContent = "Model provider is required.";
+        return;
+      }
+      if (providerId === "openai") {
+        status.textContent = "OpenAI API-key storage is not available in this settings page yet. Use Ollama or an unauthenticated OpenAI-compatible endpoint.";
+        return;
+      }
+      if (!baseUrl) {
+        status.textContent = "Model endpoint URL is required.";
+        return;
+      }
+      group.disabled = true;
+      void this.codeIndexService.configureProvider({
+        provider: providerId,
+        baseUrl,
+        maxOutputTokens: null,
+        modelContext: {},
+      }, codeConfig.revision).then(() => this.renderIndexing()).catch((error: unknown) => {
+        status.textContent = error instanceof Error ? `Unable to save endpoint: ${error.message}` : "Unable to save endpoint.";
+      }).finally(() => { group.disabled = false; });
+    }));
+    providerActions.append(providerSave);
+    const actions = document.createElement("div");
+    actions.className = "zeta-theme-json-actions";
+    const save = document.createElement("button");
+    save.className = "zeta-theme-action";
+    save.type = "button";
+    save.textContent = "Save model selection";
+    const consent = document.createElement("button");
+    consent.className = "zeta-theme-action";
+    consent.type = "button";
+    consent.textContent = codeConfig.semanticCodeIndex.activeWorkspaceAuthorized ? "Revoke workspace access" : "Authorize active workspace";
+    consent.disabled = !enabled.checked;
+    this.sectionBindings.add(addDisposableListener(enabled, "change", () => {
+      embedding.disabled = !enabled.checked;
+      rerank.disabled = !enabled.checked;
+      automaticContext.disabled = !enabled.checked;
+      consent.disabled = !enabled.checked;
+    }));
+    this.sectionBindings.add(addDisposableListener(save, "click", () => {
+      let selection: SemanticCodeIndexSelectionDto = { type: "disabled" };
+      try {
+        if (enabled.checked) {
+          selection = {
+            type: "remote",
+            models: {
+              embeddingModel: parseModel(embedding.value, "Embedding model"),
+              rerankModel: rerank.value.trim() ? parseModel(rerank.value, "Rerank model") : null,
+            },
+          };
+        }
+      } catch (error) {
+        status.textContent = error instanceof Error ? error.message : "Invalid model selection.";
+        return;
+      }
+      group.disabled = true;
+      void this.codeIndexService.configure(selection, automaticContext.checked ? "firstInvocation" : "off", codeConfig.revision).then(() => this.renderIndexing()).catch((error: unknown) => {
+        status.textContent = error instanceof Error ? `Unable to save: ${error.message}` : "Unable to save.";
+      }).finally(() => { group.disabled = false; });
+    }));
+    this.sectionBindings.add(addDisposableListener(consent, "click", () => {
+      if (!codeConfig.semanticCodeIndex.activeWorkspaceAuthorized) {
+        void this.confirmSemanticCodeIndexAuthorization(group, status, codeConfig.revision);
+        return;
+      }
+      group.disabled = true;
+      void this.codeIndexService.revoke(codeConfig.revision).then(() => this.renderIndexing()).catch((error: unknown) => {
+        status.textContent = error instanceof Error ? `Unable to update authorization: ${error.message}` : "Unable to update authorization.";
+      }).finally(() => { group.disabled = false; });
+    }));
+    actions.append(save, consent);
+    group.append(legend, hint, providerHeading, provider, endpoint, providerActions, enabledLabel, embedding, rerank, automaticContextLabel, status, progress, jobActions, actions);
+    this.sectionContent.replaceChildren(toolGroup, group);
+    this.contentScrollable.layout();
+  }
+
+  private async confirmSemanticCodeIndexAuthorization(group: HTMLFieldSetElement, status: HTMLParagraphElement, revision: number): Promise<void> {
+    const confirmed = await this.dialogService.confirm({
+      title: "Authorize semantic code search?",
+      message: "Allow the selected model endpoint to process source-derived text from this workspace?",
+      detail: "Zeta sends bounded code chunks while building embeddings, search queries, and—when configured—recalled candidate text for reranking. Chunking, vector storage, recall, fusion, and final Agent results stay local. This permission is tied to this workspace, model selection, and endpoint, and can be revoked here.",
+      primaryButton: "Authorize workspace",
+      cancelButton: "Cancel",
+    });
+    if (!confirmed) return;
+    group.disabled = true;
+    try {
+      await this.codeIndexService.authorize(revision);
+      await this.renderIndexing();
+    } catch (error) {
+      status.textContent = error instanceof Error ? `Unable to update authorization: ${error.message}` : "Unable to update authorization.";
+    } finally {
+      group.disabled = false;
+    }
   }
 
   private renderAppearance(): void {
@@ -486,6 +775,53 @@ export class SettingsEditor extends DisposableOwner {
     });
   }
 
+}
+
+function toolSearchStatusMessage(status: ToolSearchEmbeddingStatus): string {
+  switch (status.type) {
+    case "disabled":
+      return "Local BM25 and Regex search are active; no tool metadata is sent to a model.";
+    case "ready":
+      return `Embedding search is ready with ${formatModel(status.model)}.`;
+    case "unavailable":
+      return `Embedding search is unavailable: ${status.reason}`;
+  }
+}
+
+function semanticIndexStatusMessage(status: CodeIndexStatusResult): string {
+  const semantic = status.semantic;
+  switch (semantic.state) {
+    case "unavailable":
+      return "Semantic indexing is unavailable until a model is configured and authorized.";
+    case "idle":
+      return "Semantic indexing has not started.";
+    case "syncing": {
+      const total = semantic.totalChunkCount;
+      const progress = total > 0 ? ` ${semantic.processedChunkCount}/${total} chunks` : "";
+      const retries = semantic.retryCount > 0 ? ` · ${semantic.retryCount} retries` : "";
+      return `Semantic indexing: ${semantic.phase ?? "preparing"}${progress}${retries}.`;
+    }
+    case "ready":
+      return `Semantic index is ready for generation ${semantic.publishedGeneration ?? status.generation}.`;
+    case "stale":
+      return "Semantic index is stale and waiting to catch up.";
+    case "cancelled":
+      return `Semantic indexing was cancelled after ${semantic.processedChunkCount} chunks; completed batches are cached.`;
+    case "failed":
+      return `Semantic indexing failed (${semantic.lastErrorCode ?? "unknown"}); completed batches are cached for retry.`;
+  }
+}
+
+function formatModel(model: { readonly provider: string; readonly model: string }): string {
+  return `${model.provider}/${model.model}`;
+}
+
+function parseModel(value: string, label: string): { provider: string; model: string } {
+  const separator = value.indexOf("/");
+  const provider = separator < 0 ? "" : value.slice(0, separator).trim();
+  const model = separator < 0 ? "" : value.slice(separator + 1).trim();
+  if (!provider || !model) throw new Error(`${label} must use provider/model.`);
+  return { provider, model };
 }
 
 interface ThemeOptionDescriptor {

@@ -1,4 +1,6 @@
 use crate::CoreError;
+use crate::multi_agent::validate_context_seed_digest;
+use crate::multi_agent::validate_delegation_result_digest;
 use crate::state::transition_turn_status;
 use sha2::Digest;
 use sha2::Sha256;
@@ -6,11 +8,20 @@ use std::collections::{BTreeMap, BTreeSet};
 use zeta_history::StoredEvent;
 use zeta_history::ThreadCommandReceipt;
 use zeta_history::supports_stored_event_schema_version;
+use zeta_protocol::AgentContextSeed;
+use zeta_protocol::AgentJoin;
+use zeta_protocol::AgentJoinId;
+use zeta_protocol::AgentJoinPolicy;
+use zeta_protocol::AgentJoinStatus;
+use zeta_protocol::AgentMessage;
+use zeta_protocol::AgentMessageId;
 use zeta_protocol::AgentRequest;
 use zeta_protocol::AgentResponse;
 use zeta_protocol::ContextCheckpoint;
 use zeta_protocol::ContextSourceDigest;
 use zeta_protocol::ContextSourceRange;
+use zeta_protocol::DelegationId;
+use zeta_protocol::DelegationResult;
 use zeta_protocol::FrozenSkillActivation;
 use zeta_protocol::ItemId;
 use zeta_protocol::ModelRef;
@@ -49,6 +60,14 @@ pub struct ThreadSnapshot {
     pub started_tool_calls: BTreeSet<ToolCallId>,
     pub tool_execution_starts: BTreeMap<ToolCallId, ToolExecutionStartSnapshot>,
     pub escalated_tool_calls: BTreeSet<ToolCallId>,
+    pub agent_context_seed: Option<AgentContextSeed>,
+    pub delegations: BTreeMap<DelegationId, DelegationSnapshot>,
+    pub agent_cancellations_received: BTreeSet<DelegationId>,
+    pub agent_joins: BTreeMap<AgentJoinId, AgentJoin>,
+    pub produced_delegation_results: BTreeMap<DelegationId, DelegationResult>,
+    pub received_delegation_results: BTreeMap<DelegationId, DelegationResult>,
+    pub sent_agent_messages: BTreeMap<AgentMessageId, AgentMessage>,
+    pub received_agent_messages: BTreeMap<AgentMessageId, AgentMessage>,
 }
 
 impl ThreadSnapshot {
@@ -153,6 +172,14 @@ pub struct ToolExecutionStartSnapshot {
     pub authority: zeta_protocol::ToolExecutionAuthority,
 }
 
+/// Durable parent-side projection for one child Agent delegation.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DelegationSnapshot {
+    pub seed: AgentContextSeed,
+    pub child_thread_id: Option<ThreadId>,
+    pub cancellation_requested: bool,
+}
+
 /// A durable interaction response retained for exact continuation after a process restart.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ResolvedTurnInteraction {
@@ -227,6 +254,14 @@ pub fn reduce_thread_event(
                     started_tool_calls: BTreeSet::new(),
                     tool_execution_starts: BTreeMap::new(),
                     escalated_tool_calls: BTreeSet::new(),
+                    agent_context_seed: None,
+                    delegations: BTreeMap::new(),
+                    agent_cancellations_received: BTreeSet::new(),
+                    agent_joins: BTreeMap::new(),
+                    produced_delegation_results: BTreeMap::new(),
+                    received_delegation_results: BTreeMap::new(),
+                    sent_agent_messages: BTreeMap::new(),
+                    received_agent_messages: BTreeMap::new(),
                     commands: {
                         require_no_command(envelope)?;
                         Vec::new()
@@ -252,6 +287,21 @@ pub fn reduce_thread_event(
             return Err(CoreError::Journal(
                 "Thread cannot be created more than once".into(),
             ));
+        }
+        ThreadEvent::AgentContextSeedCommitted { seed, .. } => {
+            require_no_command(envelope)?;
+            if snapshot.sequence != 1
+                || snapshot.agent_context_seed.is_some()
+                || seed.parent_thread_id == snapshot.thread_id
+                || seed.parent_sequence == 0
+            {
+                return Err(CoreError::Journal(
+                    "Agent context seed must be committed once immediately after child creation"
+                        .into(),
+                ));
+            }
+            validate_agent_context_seed(seed)?;
+            snapshot.agent_context_seed = Some(seed.as_ref().clone());
         }
         ThreadEvent::HistoryImported {
             source_thread_id,
@@ -297,10 +347,13 @@ pub fn reduce_thread_event(
             let matching_start = match &receipt.command {
                 ThreadCommand::StartTurn {
                     model: command_model,
+                    activated_skills: command_skills,
                     input,
                     ..
                 } => {
-                    command_model == model && turn_skill_activations_match(input, activated_skills)
+                    command_model == model
+                        && command_skills == activated_skills
+                        && turn_skill_activations_match(input, activated_skills)
                 }
                 ThreadCommand::StartShellTurn { .. } => {
                     model.is_none() && activated_skills.is_empty()
@@ -754,12 +807,388 @@ pub fn reduce_thread_event(
                 command.response_sequence = envelope.sequence;
             }
         }
+        ThreadEvent::DelegationRequested { seed, .. } => {
+            require_no_command(envelope)?;
+            validate_agent_context_seed(seed)?;
+            if seed.parent_thread_id != snapshot.thread_id
+                || seed.parent_sequence != snapshot.sequence
+            {
+                return Err(CoreError::Journal(
+                    "delegation seed must anchor the current parent Thread sequence".into(),
+                ));
+            }
+            let turn = find_turn(&snapshot, &seed.parent_turn_id)?;
+            if !matches!(
+                turn.status,
+                TurnStatus::Running
+                    | TurnStatus::WaitingForApproval
+                    | TurnStatus::WaitingForUserInput
+                    | TurnStatus::WaitingForCapability
+            ) {
+                return Err(CoreError::Journal(
+                    "delegation parent Turn must still be active".into(),
+                ));
+            }
+            if snapshot
+                .delegations
+                .insert(
+                    seed.delegation_id.clone(),
+                    DelegationSnapshot {
+                        seed: seed.as_ref().clone(),
+                        child_thread_id: None,
+                        cancellation_requested: false,
+                    },
+                )
+                .is_some()
+            {
+                return Err(CoreError::Journal(format!(
+                    "delegation already exists: {}",
+                    seed.delegation_id
+                )));
+            }
+        }
+        ThreadEvent::DelegationStarted {
+            delegation_id,
+            child_thread_id,
+            ..
+        } => {
+            require_no_command(envelope)?;
+            if child_thread_id == &snapshot.thread_id {
+                return Err(CoreError::Journal(
+                    "delegation child must be a different Thread".into(),
+                ));
+            }
+            let delegation = snapshot
+                .delegations
+                .get_mut(delegation_id)
+                .ok_or_else(|| CoreError::NotFound(delegation_id.to_string()))?;
+            if delegation.child_thread_id.is_some() {
+                return Err(CoreError::Journal(format!(
+                    "delegation already started: {delegation_id}"
+                )));
+            }
+            delegation.child_thread_id = Some(child_thread_id.clone());
+        }
+        ThreadEvent::DelegationCancellationRequested { delegation_id, .. } => {
+            require_no_command(envelope)?;
+            let delegation = snapshot
+                .delegations
+                .get_mut(delegation_id)
+                .ok_or_else(|| CoreError::NotFound(delegation_id.to_string()))?;
+            if delegation.cancellation_requested {
+                return Err(CoreError::Journal(format!(
+                    "delegation cancellation was already requested: {delegation_id}"
+                )));
+            }
+            delegation.cancellation_requested = true;
+        }
+        ThreadEvent::AgentCancellationReceived {
+            delegation_id,
+            parent_thread_id,
+            ..
+        } => {
+            require_no_command(envelope)?;
+            let seed = snapshot.agent_context_seed.as_ref().ok_or_else(|| {
+                CoreError::Journal("only an Agent child can receive tree cancellation".into())
+            })?;
+            if seed.delegation_id != *delegation_id
+                || seed.parent_thread_id != *parent_thread_id
+                || !snapshot
+                    .agent_cancellations_received
+                    .insert(delegation_id.clone())
+            {
+                return Err(CoreError::Journal(
+                    "Agent cancellation does not match the immutable child seed".into(),
+                ));
+            }
+        }
+        ThreadEvent::DelegationResultProduced { result, .. } => {
+            require_no_command(envelope)?;
+            let seed = snapshot.agent_context_seed.as_ref().ok_or_else(|| {
+                CoreError::Journal(
+                    "only an Agent child Thread can produce a delegation result".into(),
+                )
+            })?;
+            validate_delegation_result(&snapshot, result)?;
+            if result.delegation_id != seed.delegation_id
+                || result.child_thread_id != snapshot.thread_id
+            {
+                return Err(CoreError::Journal(
+                    "delegation result does not match the child context seed".into(),
+                ));
+            }
+            if snapshot
+                .produced_delegation_results
+                .insert(result.delegation_id.clone(), result.as_ref().clone())
+                .is_some()
+            {
+                return Err(CoreError::Journal(format!(
+                    "delegation result was already produced: {}",
+                    result.delegation_id
+                )));
+            }
+        }
+        ThreadEvent::DelegationResultReceived { result, .. } => {
+            require_no_command(envelope)?;
+            let delegation = snapshot
+                .delegations
+                .get(&result.delegation_id)
+                .ok_or_else(|| CoreError::NotFound(result.delegation_id.to_string()))?;
+            if delegation.child_thread_id.as_ref() != Some(&result.child_thread_id) {
+                return Err(CoreError::Journal(
+                    "delegation result child does not match the started delegation".into(),
+                ));
+            }
+            if snapshot
+                .received_delegation_results
+                .insert(result.delegation_id.clone(), result.as_ref().clone())
+                .is_some()
+            {
+                return Err(CoreError::Journal(format!(
+                    "delegation result was already received: {}",
+                    result.delegation_id
+                )));
+            }
+        }
+        ThreadEvent::AgentMessageSent { message, .. } => {
+            require_no_command(envelope)?;
+            validate_agent_message(message)?;
+            if message.sender_thread_id != snapshot.thread_id
+                || message.sender_sequence != snapshot.sequence
+            {
+                return Err(CoreError::Journal(
+                    "sent Agent message must anchor the current sender Thread sequence".into(),
+                ));
+            }
+            if snapshot
+                .sent_agent_messages
+                .insert(message.message_id.clone(), message.as_ref().clone())
+                .is_some()
+            {
+                return Err(CoreError::Journal(format!(
+                    "Agent message was already sent: {}",
+                    message.message_id
+                )));
+            }
+        }
+        ThreadEvent::AgentMessageReceived { message, .. } => {
+            require_no_command(envelope)?;
+            validate_agent_message(message)?;
+            if message.receiver_thread_id != snapshot.thread_id {
+                return Err(CoreError::Journal(
+                    "received Agent message targets another Thread".into(),
+                ));
+            }
+            if snapshot
+                .received_agent_messages
+                .insert(message.message_id.clone(), message.as_ref().clone())
+                .is_some()
+            {
+                return Err(CoreError::Journal(format!(
+                    "Agent message was already received: {}",
+                    message.message_id
+                )));
+            }
+        }
+        ThreadEvent::AgentJoinRequested { join, .. } => {
+            require_no_command(envelope)?;
+            validate_agent_join(&snapshot, join)?;
+            if snapshot
+                .agent_joins
+                .insert(join.join_id.clone(), join.as_ref().clone())
+                .is_some()
+            {
+                return Err(CoreError::Journal(format!(
+                    "Agent join already exists: {}",
+                    join.join_id
+                )));
+            }
+        }
+        ThreadEvent::AgentJoinSatisfied {
+            join_id,
+            satisfied_by,
+            ..
+        } => {
+            require_no_command(envelope)?;
+            let expected = {
+                let join = snapshot
+                    .agent_joins
+                    .get(join_id)
+                    .ok_or_else(|| CoreError::NotFound(join_id.to_string()))?;
+                if join.status != AgentJoinStatus::Waiting {
+                    return Err(CoreError::Journal(format!(
+                        "Agent join is already terminal: {join_id}"
+                    )));
+                }
+                satisfied_agent_join(&snapshot, join).ok_or_else(|| {
+                    CoreError::Journal(format!("Agent join is not yet satisfied: {join_id}"))
+                })?
+            };
+            if expected != *satisfied_by {
+                return Err(CoreError::Journal(
+                    "Agent join satisfaction does not match durable delegation results".into(),
+                ));
+            }
+            let join = snapshot
+                .agent_joins
+                .get_mut(join_id)
+                .expect("join was validated above");
+            join.status = AgentJoinStatus::Satisfied;
+            join.satisfied_by = satisfied_by.clone();
+        }
     }
     snapshot
         .event_digests
         .insert(envelope.sequence, event_digest(&envelope.event)?);
     snapshot.sequence = envelope.sequence;
     Ok(snapshot)
+}
+
+fn validate_agent_context_seed(seed: &AgentContextSeed) -> Result<(), CoreError> {
+    if seed.parent_sequence == 0
+        || seed.task.title.trim().is_empty()
+        || seed.task.instructions.trim().is_empty()
+        || seed.role.name.trim().is_empty()
+        || seed.role.instructions.trim().is_empty()
+        || seed.policy_ceiling.policy_revision.trim().is_empty()
+    {
+        return Err(CoreError::Journal(
+            "Agent context seed contains an empty required field".into(),
+        ));
+    }
+    if let zeta_protocol::AgentContextMode::ForkedPrefix {
+        selection: zeta_protocol::ForkedAgentContext::LastTurns { count },
+    } = seed.inheritance
+        && count == 0
+    {
+        return Err(CoreError::Journal(
+            "forked Agent context must select at least one Turn".into(),
+        ));
+    }
+    match &seed.inheritance {
+        zeta_protocol::AgentContextMode::Fresh if !seed.materialized_context.is_empty() => {
+            return Err(CoreError::Journal(
+                "Fresh Agent context cannot contain inherited material".into(),
+            ));
+        }
+        zeta_protocol::AgentContextMode::Selected { sources }
+            if sources.len() != seed.materialized_context.len()
+                || sources
+                    .iter()
+                    .zip(&seed.materialized_context)
+                    .any(|(source, materialized)| source != &materialized.source) =>
+        {
+            return Err(CoreError::Journal(
+                "Selected Agent sources do not match their materialized context".into(),
+            ));
+        }
+        zeta_protocol::AgentContextMode::Fresh
+        | zeta_protocol::AgentContextMode::Selected { .. }
+        | zeta_protocol::AgentContextMode::ForkedPrefix { .. } => {}
+    }
+    for materialized in &seed.materialized_context {
+        let encoded = serde_json::to_vec(&materialized.content).map_err(|error| {
+            CoreError::Journal(format!("cannot encode materialized Agent context: {error}"))
+        })?;
+        if zeta_protocol::ContentDigest::sha256(&encoded) != materialized.content_digest {
+            return Err(CoreError::Journal(
+                "materialized Agent context content digest does not match".into(),
+            ));
+        }
+    }
+    validate_context_seed_digest(seed)
+}
+
+fn validate_agent_join(snapshot: &ThreadSnapshot, join: &AgentJoin) -> Result<(), CoreError> {
+    if join.parent_thread_id != snapshot.thread_id
+        || join.status != AgentJoinStatus::Waiting
+        || !join.satisfied_by.is_empty()
+        || join.delegations.is_empty()
+    {
+        return Err(CoreError::Journal(
+            "Agent join must start as a non-empty waiting parent-side fact".into(),
+        ));
+    }
+    let mut unique = BTreeSet::new();
+    if join.delegations.iter().any(|delegation_id| {
+        !unique.insert(delegation_id.clone()) || !snapshot.delegations.contains_key(delegation_id)
+    }) {
+        return Err(CoreError::Journal(
+            "Agent join targets must be unique delegations owned by the parent".into(),
+        ));
+    }
+    match &join.policy {
+        AgentJoinPolicy::Quorum { count }
+            if *count == 0
+                || usize::try_from(*count).map_or(true, |count| count > unique.len()) =>
+        {
+            Err(CoreError::Journal(
+                "Agent join quorum must fit its frozen target set".into(),
+            ))
+        }
+        AgentJoinPolicy::Explicit { delegations } if delegations != &join.delegations => {
+            Err(CoreError::Journal(
+                "explicit Agent join policy must match its frozen target set".into(),
+            ))
+        }
+        AgentJoinPolicy::All
+        | AgentJoinPolicy::Any
+        | AgentJoinPolicy::Quorum { .. }
+        | AgentJoinPolicy::Explicit { .. } => Ok(()),
+    }
+}
+
+pub(crate) fn satisfied_agent_join(
+    snapshot: &ThreadSnapshot,
+    join: &AgentJoin,
+) -> Option<Vec<DelegationId>> {
+    let completed = join
+        .delegations
+        .iter()
+        .filter(|delegation_id| {
+            snapshot
+                .received_delegation_results
+                .contains_key(*delegation_id)
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    let required = match &join.policy {
+        AgentJoinPolicy::All | AgentJoinPolicy::Explicit { .. } => join.delegations.len(),
+        AgentJoinPolicy::Any => 1,
+        AgentJoinPolicy::Quorum { count } => usize::try_from(*count).ok()?,
+    };
+    (completed.len() >= required).then(|| completed.into_iter().take(required).collect())
+}
+
+fn validate_delegation_result(
+    snapshot: &ThreadSnapshot,
+    result: &DelegationResult,
+) -> Result<(), CoreError> {
+    if result.summary.trim().is_empty()
+        || result.source_range.start_sequence == 0
+        || result.source_range.start_sequence > result.source_range.end_sequence
+        || result.source_range.end_sequence > snapshot.sequence
+    {
+        return Err(CoreError::Journal(
+            "delegation result must contain a bounded summary and available source range".into(),
+        ));
+    }
+    validate_delegation_result_digest(result)
+}
+
+fn validate_agent_message(message: &AgentMessage) -> Result<(), CoreError> {
+    if message.sender_thread_id == message.receiver_thread_id || message.sender_sequence == 0 {
+        return Err(CoreError::Journal(
+            "Agent message must cross two Threads from an available sender sequence".into(),
+        ));
+    }
+    match &message.content {
+        zeta_protocol::AgentMessageContent::Instruction { text } if text.trim().is_empty() => Err(
+            CoreError::Journal("Agent instruction message must not be empty".into()),
+        ),
+        zeta_protocol::AgentMessageContent::Instruction { .. }
+        | zeta_protocol::AgentMessageContent::Result { .. } => Ok(()),
+    }
 }
 
 fn turn_skill_activations_match(
@@ -773,20 +1202,30 @@ fn turn_skill_activations_match(
         | zeta_protocol::UserInput::LocalImage { .. }
         | zeta_protocol::UserInput::Mention { .. } => None,
     });
-    selected.zip(activated_skills).all(|(selected, activated)| {
-        selected.id == activated.id
-            && activated.reason == zeta_protocol::SkillActivationReason::Explicit
-            && match &selected.version {
-                zeta_protocol::SkillVersionSelector::FollowLatest => true,
-                zeta_protocol::SkillVersionSelector::PinnedDigest { digest } => {
-                    digest == &activated.content_digest
+    selected
+        .zip(activated_skills.iter().filter(|activation| {
+            activation.reason == zeta_protocol::SkillActivationReason::Explicit
+        }))
+        .all(|(selected, activated)| {
+            selected.id == activated.id
+                && activated.reason == zeta_protocol::SkillActivationReason::Explicit
+                && match &selected.version {
+                    zeta_protocol::SkillVersionSelector::FollowLatest => true,
+                    zeta_protocol::SkillVersionSelector::PinnedDigest { digest } => {
+                        digest == &activated.content_digest
+                    }
                 }
-            }
-    }) && input
-        .iter()
-        .filter(|input| matches!(input, zeta_protocol::UserInput::Skill { .. }))
-        .count()
-        == activated_skills.len()
+        })
+        && input
+            .iter()
+            .filter(|input| matches!(input, zeta_protocol::UserInput::Skill { .. }))
+            .count()
+            == activated_skills
+                .iter()
+                .filter(|activation| {
+                    activation.reason == zeta_protocol::SkillActivationReason::Explicit
+                })
+                .count()
 }
 
 fn import_history(
@@ -993,15 +1432,16 @@ fn canonicalize_json(value: &mut serde_json::Value) {
 }
 
 pub(crate) fn validate_agent_request(request: &AgentRequest) -> Result<(), String> {
+    if let AgentRequest::DynamicTool { call } = request {
+        if !is_sha256_hex(&call.definition_digest) {
+            return Err("dynamic tool definition digest must be a SHA-256 hex digest".into());
+        }
+        return Ok(());
+    }
     let AgentRequest::Approval { request } = request else {
         return Ok(());
     };
-    if request.action_digest.len() != 64
-        || !request
-            .action_digest
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-    {
+    if !is_sha256_hex(&request.action_digest) {
         return Err("approval action digest must be a SHA-256 hex digest".into());
     }
     if request.policy_revision.trim().is_empty() {
@@ -1038,6 +1478,13 @@ pub(crate) fn validate_agent_request(request: &AgentRequest) -> Result<(), Strin
         return Err("approval capabilities must use canonical order".into());
     }
     Ok(())
+}
+
+fn is_sha256_hex(value: &str) -> bool {
+    value.len() == 64
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
 fn create_turn(

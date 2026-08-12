@@ -31,6 +31,7 @@ pub fn client_capabilities() -> ClientCapabilities {
                 AgentInteractionKind::Approval,
                 AgentInteractionKind::UserInput,
             ],
+            dynamic_tools: None,
         }),
         browser: None,
     }

@@ -15,6 +15,8 @@ use zeta_async_utils::CancellationToken;
 use zeta_client::ClientError;
 use zeta_client::OperationClient;
 use zeta_client::ZetaClient;
+use zeta_context_engine::ContextTokenMeasurementCapability;
+use zeta_context_engine::ContextTokenMeasurementOutcome;
 use zeta_http_client::UreqHttpClient;
 use zeta_model_provider_config::Model;
 use zeta_model_provider_config::ModelCatalogPolicy;
@@ -26,6 +28,8 @@ use zeta_model_provider_config::ProviderConfigRegistry;
 use zeta_model_provider_config::ProviderDefinition;
 use zeta_model_provider_config::ProviderId;
 use zeta_protocol::ModelRef;
+use zeta_secrets::SecretStore;
+use zeta_secrets::UnavailableSecretStore;
 
 #[derive(Clone)]
 pub struct Provider {
@@ -107,6 +111,25 @@ impl Provider {
         )
     }
 
+    pub fn input_token_measurement_capability(&self) -> ContextTokenMeasurementCapability {
+        self.adapter.input_token_measurement_capability()
+    }
+
+    pub fn measure_input_with_cancellation(
+        &self,
+        model_id: &ModelId,
+        request: &ModelRequest,
+        cancellation: &CancellationToken,
+    ) -> Result<ContextTokenMeasurementOutcome, ModelProviderError> {
+        let model = self.resolve_model(model_id)?;
+        self.adapter.measure_input(
+            model.id.as_str(),
+            request,
+            self.client.as_ref(),
+            cancellation,
+        )
+    }
+
     fn resolve_model(&self, model_id: &ModelId) -> Result<Model, ModelProviderError> {
         if let Some(model) = self
             .definition
@@ -132,6 +155,7 @@ impl Provider {
 pub struct ModelProviderRuntime {
     configs: ProviderConfigRegistry,
     client: Arc<dyn OperationClient>,
+    secrets: Arc<dyn SecretStore>,
 }
 
 impl ModelProviderRuntime {
@@ -143,7 +167,23 @@ impl ModelProviderRuntime {
     }
 
     pub fn with_client(configs: ProviderConfigRegistry, client: Arc<dyn OperationClient>) -> Self {
-        Self { configs, client }
+        Self {
+            configs,
+            client,
+            secrets: Arc::new(UnavailableSecretStore),
+        }
+    }
+
+    pub fn with_client_and_secrets(
+        configs: ProviderConfigRegistry,
+        client: Arc<dyn OperationClient>,
+        secrets: Arc<dyn SecretStore>,
+    ) -> Self {
+        Self {
+            configs,
+            client,
+            secrets,
+        }
     }
 
     pub fn builtin() -> Self {
@@ -201,6 +241,32 @@ fn production_client() -> Result<Arc<dyn OperationClient>, ClientError> {
     Ok(Arc::new(ZetaClient::new(Arc::new(transport))))
 }
 
+impl crate::SemanticModelProvider for ModelProviderRuntime {
+    fn embedding_runtime(
+        &self,
+        request: crate::EmbeddingRuntimeRequest,
+    ) -> Result<Arc<dyn crate::EmbeddingInvoker>, ModelProviderError> {
+        crate::semantic_runtime::SemanticRuntimeResolver {
+            configs: self.configs.clone(),
+            client: Arc::clone(&self.client),
+            secrets: Arc::clone(&self.secrets),
+        }
+        .embedding_runtime(request)
+    }
+
+    fn rerank_runtime(
+        &self,
+        request: crate::RerankRuntimeRequest,
+    ) -> Result<Arc<dyn crate::RerankInvoker>, ModelProviderError> {
+        crate::semantic_runtime::SemanticRuntimeResolver {
+            configs: self.configs.clone(),
+            client: Arc::clone(&self.client),
+            secrets: Arc::clone(&self.secrets),
+        }
+        .rerank_runtime(request)
+    }
+}
+
 impl Default for ModelProviderRuntime {
     fn default() -> Self {
         Self::builtin()
@@ -226,6 +292,32 @@ impl ModelRuntimeRequest {
 /// changes should affect a later invocation.
 pub trait ModelInvoker: Send + Sync {
     fn invoke(&self, request: &ModelRequest) -> Result<ModelResponse, ModelProviderError>;
+
+    /// Reports the cost category of this immutable model's input-token measurement contract.
+    fn input_token_measurement_capability(&self) -> ContextTokenMeasurementCapability {
+        ContextTokenMeasurementCapability::Unavailable
+    }
+
+    /// Measures one fully assembled request using a fresh compatibility cancellation scope.
+    fn measure_input(
+        &self,
+        request: &ModelRequest,
+    ) -> Result<ContextTokenMeasurementOutcome, ModelProviderError> {
+        self.measure_input_with_cancellation(request, &CancellationSource::new().token())
+    }
+
+    /// Measures input tokens within one caller-owned cancellation scope.
+    ///
+    /// Implementations that declare a local or remote capability must override this method and
+    /// measure the same canonical request snapshot that will be passed to invocation.
+    fn measure_input_with_cancellation(
+        &self,
+        _: &ModelRequest,
+        cancellation: &CancellationToken,
+    ) -> Result<ContextTokenMeasurementOutcome, ModelProviderError> {
+        check_cancellation(cancellation)?;
+        Ok(ContextTokenMeasurementOutcome::Unavailable)
+    }
 
     /// Invokes this immutable model snapshot within one caller-owned cancellation scope.
     ///
@@ -280,12 +372,33 @@ impl ModelInvoker for RegisteredModelInvoker {
         request: &ModelRequest,
         cancellation: &CancellationToken,
     ) -> Result<ModelResponse, ModelProviderError> {
+        let request = self.prepare_request(request);
+        self.provider
+            .complete_with_cancellation(&self.model.id, &request, cancellation)
+    }
+
+    fn input_token_measurement_capability(&self) -> ContextTokenMeasurementCapability {
+        self.provider.input_token_measurement_capability()
+    }
+
+    fn measure_input_with_cancellation(
+        &self,
+        request: &ModelRequest,
+        cancellation: &CancellationToken,
+    ) -> Result<ContextTokenMeasurementOutcome, ModelProviderError> {
+        let request = self.prepare_request(request);
+        self.provider
+            .measure_input_with_cancellation(&self.model.id, &request, cancellation)
+    }
+}
+
+impl RegisteredModelInvoker {
+    fn prepare_request(&self, request: &ModelRequest) -> ModelRequest {
         let mut request = request.clone();
         request.max_output_tokens = request
             .max_output_tokens
             .or(self.provider.config.max_output_tokens);
-        self.provider
-            .complete_with_cancellation(&self.model.id, &request, cancellation)
+        request
     }
 }
 

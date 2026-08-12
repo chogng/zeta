@@ -1,5 +1,6 @@
 use super::ContextTokenCount;
 use super::InstructionFragment;
+use crate::ContextEvidence;
 use std::fmt;
 use zeta_protocol::ContextCheckpoint;
 use zeta_protocol::ContextSourceRange;
@@ -43,6 +44,7 @@ pub(crate) enum ContextBudgetReport {
         tool_tokens: ContextTokenCount,
         current_turn_tokens: ContextTokenCount,
         history_tokens: ContextTokenCount,
+        evidence_tokens: ContextTokenCount,
         estimator_revision: &'static str,
     },
 }
@@ -58,11 +60,13 @@ impl ContextBudgetReport {
                 tool_tokens,
                 current_turn_tokens,
                 history_tokens,
+                evidence_tokens,
                 ..
             } => instruction_tokens
                 .saturating_add(*tool_tokens)
                 .saturating_add(*current_turn_tokens)
-                .saturating_add(*history_tokens),
+                .saturating_add(*history_tokens)
+                .saturating_add(*evidence_tokens),
         }
     }
 
@@ -80,32 +84,40 @@ impl ContextBudgetReport {
 #[derive(Clone, Debug)]
 pub(crate) struct ContextPlan {
     source_thread_sequence: u64,
+    current_turn_id: TurnId,
     instructions: Vec<InstructionFragment>,
     omitted_instructions: Vec<OmittedInstruction>,
     checkpoint: Option<ContextCheckpoint>,
     selected_items: Vec<ThreadItem>,
+    evidence: Vec<ContextEvidence>,
     tools: Vec<ToolDefinition>,
     budget: ContextBudgetReport,
 }
 
+pub(super) struct ContextPlanInput {
+    pub source_thread_sequence: u64,
+    pub current_turn_id: TurnId,
+    pub instructions: Vec<InstructionFragment>,
+    pub omitted_instructions: Vec<OmittedInstruction>,
+    pub checkpoint: Option<ContextCheckpoint>,
+    pub selected_items: Vec<ThreadItem>,
+    pub evidence: Vec<ContextEvidence>,
+    pub tools: Vec<ToolDefinition>,
+    pub budget: ContextBudgetReport,
+}
+
 impl ContextPlan {
-    pub(super) fn new(
-        source_thread_sequence: u64,
-        instructions: Vec<InstructionFragment>,
-        omitted_instructions: Vec<OmittedInstruction>,
-        checkpoint: Option<ContextCheckpoint>,
-        selected_items: Vec<ThreadItem>,
-        tools: Vec<ToolDefinition>,
-        budget: ContextBudgetReport,
-    ) -> Self {
+    pub(super) fn new(input: ContextPlanInput) -> Self {
         Self {
-            source_thread_sequence,
-            instructions,
-            omitted_instructions,
-            checkpoint,
-            selected_items,
-            tools,
-            budget,
+            source_thread_sequence: input.source_thread_sequence,
+            current_turn_id: input.current_turn_id,
+            instructions: input.instructions,
+            omitted_instructions: input.omitted_instructions,
+            checkpoint: input.checkpoint,
+            selected_items: input.selected_items,
+            evidence: input.evidence,
+            tools: input.tools,
+            budget: input.budget,
         }
     }
 
@@ -123,6 +135,14 @@ impl ContextPlan {
 
     pub(crate) fn selected_items(&self) -> &[ThreadItem] {
         &self.selected_items
+    }
+
+    pub(crate) fn current_turn_id(&self) -> &TurnId {
+        &self.current_turn_id
+    }
+
+    pub(crate) fn evidence(&self) -> &[ContextEvidence] {
+        &self.evidence
     }
 
     pub(crate) fn checkpoint(&self) -> Option<&ContextCheckpoint> {

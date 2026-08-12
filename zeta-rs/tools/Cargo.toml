@@ -11,6 +11,8 @@ name = "zeta_tools"
 path = "src/lib.rs"
 
 [dependencies]
+bm25 = { workspace = true }
+regex = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 zeta-async-utils = { workspace = true }

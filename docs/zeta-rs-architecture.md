@@ -44,8 +44,8 @@ zeta-rs/
 ├── file-search/          # workspace path fuzzy search + CLI
 ├── code-index/           # workspace-side chunk identity、local SQLite/FTS 与 revision-bound retrieval
 ├── code-index-cloud/     # explicit egress grants、cloud publication/deletion lifecycle 与 provider port
-├── code-index-service/   # cloud semantic embedding、vector recall、rerank 与 final ranking pipeline
-├── code-retrieval/       # local/cloud candidate fusion、dedupe、fallback、verification 与 context budget
+├── code-index-semantic/  # local embedding cache、vector recall、rerank 与来源内 final ranking
+├── code-retrieval/       # lexical/semantic/optional remote fusion、dedupe、fallback、verification 与 budget
 ├── slash-commands/       # headless catalog, input grammar and interaction state
 ├── slash-launcher/       # product-selected list composition, slash query and selection state
 ├── file-watcher/         # shared filesystem invalidation hints
@@ -66,6 +66,7 @@ zeta-rs/
 ├── session-store/        # Session persistence port + envelope
 ├── history/              # model-history + persisted Thread record domain types
 ├── thread-store/         # Thread persistence port + append/page validation
+├── context-engine/       # provider-neutral context budget、token measurement 与边界判定
 ├── core/                 # reducers, coordinators, execution policy and recovery
 ├── storage/              # SQLite Session/Thread authority adapters
 ├── rollout/              # local state repository + recovery composition（crate 名待清理）
@@ -142,15 +143,16 @@ local composition 的 registry 为空。provider query 契约要求云端 CodeIn
 recall/rerank/过滤/截断并返回 final relevance order。具体 contract 见
 [`code-index-cloud/README.md`](../zeta-rs/code-index-cloud/README.md)。
 
-`zeta-code-index-service` 当前拥有 provider-neutral 的云端语义管线：只接收 Workspace 复核后的
-`MaterializedChunk`，准备 embedding/rerank 输入，执行 exact-generation vector recall，并解释 rerank
-分数形成 final order。它没有 filesystem、scan、ignore 或 chunker authority；模型网络适配继续属于
-`zeta-model-provider`。具体 contract 见
-[`code-index-service/README.md`](../zeta-rs/code-index-service/README.md)。
+`zeta-code-index-semantic` 当前拥有本地语义 projection：只接收 Workspace 复核后的
+`MaterializedChunk`，准备 embedding/rerank 输入，在本地 SQLite 复用/持久化 vectors，执行
+exact-generation vector recall，并解释 rerank 分数形成来源内 final order。它没有 filesystem、scan、
+ignore、chunker 或远端服务 authority；模型网络适配继续属于 `zeta-model-provider`。具体 contract 见
+[`code-index-semantic/README.md`](../zeta-rs/code-index-semantic/README.md)。
 
-`zeta-code-retrieval` 当前拥有 local/cloud candidate fan-out、deterministic RRF、revision-bound identity
-dedupe、cloud failure fallback、current-source excerpt verification 与 content byte budget。它保留云端给出的排序，
-不执行或编排 embedding/rerank、不拥有 grant/network 或 Agent conversation state；App Server 按请求组合并通过
+`zeta-code-retrieval` 当前拥有 lexical/local-semantic/optional-remote candidate fan-out、deterministic
+RRF、revision-bound identity dedupe、可选来源 failure fallback、current-source excerpt verification 与
+content byte budget。它保留每个来源给出的排序，不执行 embedding/rerank、不拥有 grant/network 或
+Agent conversation state；App Server 按请求组合并通过
 `workspace/codeIndex/retrieve` 暴露结果。具体 contract 见
 [`code-retrieval/README.md`](../zeta-rs/code-retrieval/README.md)。
 

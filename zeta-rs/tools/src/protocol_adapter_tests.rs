@@ -1,4 +1,4 @@
-use super::{to_protocol_tool_definition, to_protocol_tool_result};
+use super::{from_protocol_tool_definition, to_protocol_tool_definition, to_protocol_tool_result};
 use crate::{
     FreeformFormat, ImageDetail, ToolContent, ToolDefinition, ToolInputSchema, ToolLoading,
     ToolName, ToolOutput, ToolOutputSchema, ToolSchemaMode,
@@ -23,6 +23,21 @@ fn protocol_adapter_preserves_strict_function_metadata() {
 
     assert_eq!(protocol.name.as_str(), "search");
     assert!(protocol.strict);
+}
+
+#[test]
+fn protocol_definition_adapter_keeps_host_loading_explicit() {
+    let protocol = zeta_protocol::ToolDefinition {
+        name: ToolName::new("search").unwrap(),
+        description: "Search indexed documents.".into(),
+        parameters: json!({"type": "object", "properties": {}}),
+        strict: true,
+    };
+
+    let host = from_protocol_tool_definition(&protocol, ToolLoading::Deferred).unwrap();
+
+    assert_eq!(host.loading(), ToolLoading::Deferred);
+    assert_eq!(host.schema_mode(), ToolSchemaMode::Strict);
 }
 
 #[test]

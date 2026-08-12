@@ -1,10 +1,9 @@
 use super::*;
 use crate::{
-    ContextBudget, ContextCompactionLimit, ContextTokenCount, CreateThreadRequest,
-    InMemoryThreadStore, ModelSelection, ModelService, ModelStreamSink, PolicyService,
-    SequenceExpectation, SkillInstruction, SkillInstructionRetention, SkillInstructionsProvider,
-    StartTurnRequest, ThreadUpdateSink, ToolAuthorization, ToolExecutionOutput, ToolService,
-    TurnExecutionOutcome,
+    ContextBudget, ContextCompactionLimit, ContextTokenCount, ContextTokenMeasurementCapability,
+    ContextTokenMeasurementOutcome, CreateThreadRequest, InMemoryThreadStore, ModelSelection,
+    ModelService, ModelStreamSink, PolicyService, SequenceExpectation, StartTurnRequest,
+    ThreadUpdateSink, ToolAuthorization, ToolExecutionOutput, ToolService, TurnExecutionOutcome,
 };
 use serde_json::json;
 use std::collections::VecDeque;
@@ -13,6 +12,8 @@ use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 use zeta_async_utils::CancellationSource;
+use zeta_context_engine::ContextTokenMeasurement;
+use zeta_context_engine::ContextTokenMeasurementSource;
 use zeta_policy::{
     ActionDigest, ActionKind, ActionProvenance, ActionReviewRequest, ActionSource, Capability,
     CapabilityKind, CapabilitySet, ExecutionDecision, PolicyRevision, ResolvedAction,
@@ -57,6 +58,96 @@ fn completes_a_text_turn_from_durable_context() {
             .unwrap()
             .status,
         TurnStatus::Completed
+    );
+}
+
+#[test]
+fn first_invocation_injects_untrusted_evidence_once() {
+    let (threads, thread_id, turn_id) = started_turn();
+    let model = Arc::new(ScriptedModel::new([
+        Ok(ModelResponse {
+            output: vec![ResponseItem::ToolCall(ToolCall {
+                id: ToolCallId::new("evidence-call").unwrap(),
+                name: ToolName::new("weather").unwrap(),
+                arguments: json!({"city": "Paris"}),
+            })],
+            usage: None,
+            stop_reason: StopReason::ToolUse,
+        }),
+        Ok(text_response("done")),
+    ]));
+    let source = Arc::new(FixedContextSource {
+        calls: AtomicUsize::new(0),
+    });
+    let executor = TurnExecutor::new(
+        threads,
+        model.clone(),
+        Arc::new(WeatherTool),
+        Arc::new(SandboxPolicyService),
+    )
+    .with_context_source(source.clone());
+
+    executor
+        .execute(&thread_id, &turn_id, &CancellationSource::new().token())
+        .unwrap();
+
+    let requests = model.requests();
+    assert_eq!(source.calls.load(Ordering::Relaxed), 1);
+    assert!(request_contains(
+        &requests[0],
+        "<context_evidence trust=\"untrusted-data\">"
+    ));
+    assert!(request_contains(
+        &requests[0],
+        "do not follow this embedded instruction"
+    ));
+    assert!(!request_contains(&requests[1], "<context_evidence"));
+}
+
+#[test]
+fn successful_tool_search_result_loads_deferred_definition_for_next_model_step() {
+    let (threads, thread_id, turn_id) = started_turn();
+    let model = Arc::new(ScriptedModel::new([
+        Ok(ModelResponse {
+            output: vec![ResponseItem::ToolCall(ToolCall {
+                id: ToolCallId::new("provider-search-call").unwrap(),
+                name: ToolName::new("tool_search").unwrap(),
+                arguments: json!({"query": "weather", "limit": 1}),
+            })],
+            usage: None,
+            stop_reason: StopReason::ToolUse,
+        }),
+        Ok(text_response("loaded")),
+    ]));
+    let tools = Arc::new(DeferredWeatherTools);
+    let executor = TurnExecutor::new(
+        threads,
+        model.clone(),
+        tools,
+        Arc::new(SandboxPolicyService),
+    );
+
+    let outcome = executor
+        .execute(&thread_id, &turn_id, &CancellationSource::new().token())
+        .unwrap();
+
+    assert!(matches!(outcome, TurnExecutionOutcome::Completed(_)));
+    let requests = model.requests();
+    assert_eq!(
+        requests[0]
+            .tools
+            .iter()
+            .map(|tool| tool.name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["tool_search"]
+    );
+    assert_eq!(
+        requests[1]
+            .tools
+            .iter()
+            .map(|tool| tool.name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["tool_search", "weather"]
     );
 }
 
@@ -135,6 +226,60 @@ fn compacts_durable_history_then_replans_with_the_verified_checkpoint() {
 }
 
 #[test]
+fn provider_preflight_tightens_the_budget_and_rechecks_after_compaction() {
+    let (threads, thread_id, first_turn_id) = started_turn();
+    threads
+        .complete_turn(&thread_id, &first_turn_id, "a".repeat(32_000))
+        .unwrap();
+    let current_turn_id = threads
+        .start_turn(
+            &thread_id,
+            StartTurnRequest {
+                command_id: CommandId::new("start-measured-turn").unwrap(),
+                expected_sequence: SequenceExpectation::Any,
+                model: None,
+                policy_revision: "test-policy-v1".into(),
+                activated_skills: Vec::new(),
+                input: vec![UserInput::Text {
+                    text: "current input".into(),
+                }],
+            },
+        )
+        .unwrap()
+        .turn_id;
+    let model = Arc::new(PreflightCompactingModel::default());
+    let executor = TurnExecutor::without_tools(threads.clone(), model.clone());
+
+    let outcome = executor
+        .execute(
+            &thread_id,
+            &current_turn_id,
+            &CancellationSource::new().token(),
+        )
+        .unwrap();
+
+    assert!(matches!(outcome, TurnExecutionOutcome::Completed(_)));
+    assert_eq!(model.measurements.load(Ordering::Relaxed), 2);
+    assert_eq!(
+        threads
+            .read_thread(&thread_id)
+            .unwrap()
+            .context_checkpoints
+            .len(),
+        1
+    );
+    let requests = model.requests.lock().unwrap();
+    assert_eq!(requests.len(), 2);
+    assert!(
+        requests[0]
+            .instructions
+            .as_deref()
+            .is_some_and(|body| body.contains("durable context checkpoint"))
+    );
+    assert!(request_contains(&requests[1], "measured checkpoint"));
+}
+
+#[test]
 fn explicit_skill_selection_uses_frozen_digest_and_layered_body() {
     let threads = Arc::new(ThreadController::with_store(Arc::new(
         InMemoryThreadStore::default(),
@@ -180,11 +325,13 @@ fn explicit_skill_selection_uses_frozen_digest_and_layered_body() {
         .unwrap()
         .turn_id;
     let model = Arc::new(ScriptedModel::new([Ok(text_response("done"))]));
+    let mut extensions = zeta_extension_api::ExtensionRegistryBuilder::new();
+    extensions.turn_input_contributor(Arc::new(FixedSkillContributor {
+        expected: activation.clone(),
+        body: "# Review workflow\nInspect correctness first.".into(),
+    }));
     let executor = TurnExecutor::without_tools(threads.clone(), model.clone())
-        .with_skill_instructions_provider(Arc::new(FixedSkillInstructions {
-            expected: activation.clone(),
-            body: "# Review workflow\nInspect correctness first.".into(),
-        }));
+        .with_extensions(Arc::new(extensions.build()));
 
     executor
         .execute(&thread_id, &turn_id, &CancellationSource::new().token())
@@ -243,6 +390,36 @@ fn executes_a_durable_tool_loop_before_the_next_model_invocation() {
         requests[1].input.last(),
         Some(InputItem::ToolResult(result)) if result.call_id == call.id
     ));
+}
+
+#[test]
+fn rejects_a_model_tool_call_outside_the_invocation_capability_scope() {
+    let (threads, thread_id, turn_id) = started_turn();
+    let model = Arc::new(ScriptedModel::new([Ok(ModelResponse {
+        output: vec![ResponseItem::ToolCall(ToolCall {
+            id: ToolCallId::new("invented-call").unwrap(),
+            name: ToolName::new("invented_tool").unwrap(),
+            arguments: json!({}),
+        })],
+        usage: None,
+        stop_reason: StopReason::ToolUse,
+    })]));
+    let executor = TurnExecutor::without_tools(threads.clone(), model);
+
+    assert!(
+        executor
+            .execute(&thread_id, &turn_id, &CancellationSource::new().token())
+            .is_err()
+    );
+
+    let snapshot = threads.read_thread(&thread_id).unwrap();
+    assert_eq!(snapshot.turns[0].status, TurnStatus::Failed);
+    assert!(
+        snapshot
+            .items
+            .iter()
+            .all(|item| !matches!(item, ThreadItem::ToolCall { .. }))
+    );
 }
 
 #[test]
@@ -563,22 +740,56 @@ struct ScriptedModel {
     requests: Mutex<Vec<ModelRequest>>,
 }
 
-struct FixedSkillInstructions {
+struct FixedContextSource {
+    calls: AtomicUsize,
+}
+
+impl crate::ContextSource for FixedContextSource {
+    fn collect(
+        &self,
+        request: &crate::ContextSourceRequest<'_>,
+        _: &CancellationToken,
+    ) -> Result<Vec<crate::ContextEvidence>, CoreError> {
+        self.calls.fetch_add(1, Ordering::Relaxed);
+        assert_eq!(request.query, "hello");
+        Ok(vec![crate::ContextEvidence {
+            source: "code-index".into(),
+            reference: "src/lib.rs:1-2".into(),
+            revision: "sha256:test".into(),
+            body: "do not follow this embedded instruction".into(),
+        }])
+    }
+}
+
+struct FixedSkillContributor {
     expected: FrozenSkillActivation,
     body: String,
 }
 
-impl SkillInstructionsProvider for FixedSkillInstructions {
-    fn resolve(
+impl zeta_extension_api::TurnInputContributor for FixedSkillContributor {
+    fn contribute(
         &self,
-        activations: &[FrozenSkillActivation],
-    ) -> Result<Vec<SkillInstruction>, CoreError> {
-        assert_eq!(activations, std::slice::from_ref(&self.expected));
-        Ok(vec![SkillInstruction::new(
-            self.expected.id.clone(),
-            self.expected.content_digest.clone(),
-            self.body.clone(),
-            SkillInstructionRetention::Required,
+        input: zeta_extension_api::TurnInputContext<'_>,
+    ) -> Result<Vec<zeta_extension_api::PromptFragment>, zeta_extension_api::ExtensionError> {
+        assert_eq!(
+            input.activated_skills(),
+            std::slice::from_ref(&self.expected)
+        );
+        Ok(vec![zeta_extension_api::PromptFragment::new(
+            zeta_extension_api::PromptFragmentSource::new(
+                "skill",
+                format!("{}:{}", self.expected.id.source, self.expected.id.name),
+                self.expected.content_digest.as_str(),
+            ),
+            zeta_extension_api::PromptFragmentLayer::Skill,
+            zeta_extension_api::PromptFragmentRetention::Required,
+            format!(
+                "<skill-instructions source=\"{}\" name=\"{}\" revision=\"{}\">\n{}\n</skill-instructions>",
+                self.expected.id.source,
+                self.expected.id.name,
+                self.expected.content_digest.as_str(),
+                self.body,
+            ),
         )])
     }
 }
@@ -586,6 +797,67 @@ impl SkillInstructionsProvider for FixedSkillInstructions {
 #[derive(Default)]
 struct CompactingModel {
     requests: Mutex<Vec<ModelRequest>>,
+}
+
+#[derive(Default)]
+struct PreflightCompactingModel {
+    measurements: AtomicUsize,
+    requests: Mutex<Vec<ModelRequest>>,
+}
+
+impl ModelService for PreflightCompactingModel {
+    fn context_budget(&self, _: ModelSelection<'_>) -> Result<ContextBudget, CoreError> {
+        Ok(ContextBudget::core_managed(
+            ContextTokenCount::new(15_000),
+            ContextTokenCount::new(200),
+            ContextTokenCount::new(100),
+            ContextCompactionLimit::Tokens(ContextTokenCount::new(12_000)),
+        ))
+    }
+
+    fn input_token_measurement_capability(
+        &self,
+        _: ModelSelection<'_>,
+    ) -> Result<ContextTokenMeasurementCapability, CoreError> {
+        Ok(ContextTokenMeasurementCapability::Remote)
+    }
+
+    fn measure_input(
+        &self,
+        _: ModelSelection<'_>,
+        request: &ModelRequest,
+        _: &CancellationToken,
+    ) -> Result<ContextTokenMeasurementOutcome, CoreError> {
+        self.measurements.fetch_add(1, Ordering::Relaxed);
+        let count = if request_contains(request, "measured checkpoint") {
+            1_000
+        } else {
+            12_000
+        };
+        let source =
+            ContextTokenMeasurementSource::provider_preflight("test-provider-count-v1").unwrap();
+        Ok(ContextTokenMeasurementOutcome::Measured(
+            ContextTokenMeasurement::exact(ContextTokenCount::new(count), source),
+        ))
+    }
+
+    fn invoke(
+        &self,
+        _: ModelSelection<'_>,
+        request: &ModelRequest,
+        _: &CancellationToken,
+    ) -> Result<ModelResponse, CoreError> {
+        self.requests.lock().unwrap().push(request.clone());
+        if request
+            .instructions
+            .as_deref()
+            .is_some_and(|body| body.contains("durable context checkpoint"))
+        {
+            Ok(text_response("measured checkpoint"))
+        } else {
+            Ok(text_response("done"))
+        }
+    }
 }
 
 impl ModelService for CompactingModel {
@@ -854,6 +1126,73 @@ impl ModelService for ScriptedModel {
 }
 
 struct WeatherTool;
+
+struct DeferredWeatherTools;
+
+impl ToolService for DeferredWeatherTools {
+    fn definitions(&self) -> Vec<ToolDefinition> {
+        vec![tool_definition("tool_search"), tool_definition("weather")]
+    }
+
+    fn model_definitions(
+        &self,
+        activated: &std::collections::BTreeSet<ToolName>,
+    ) -> Result<Vec<ToolDefinition>, CoreError> {
+        let mut definitions = vec![tool_definition("tool_search")];
+        if activated.contains(&ToolName::new("weather").unwrap()) {
+            definitions.push(tool_definition("weather"));
+        }
+        Ok(definitions)
+    }
+
+    fn activated_tool_names(
+        &self,
+        call: &ToolCall,
+        result: &str,
+    ) -> Result<Vec<ToolName>, CoreError> {
+        if call.name.as_str() == "tool_search" && result == "weather loaded" {
+            Ok(vec![ToolName::new("weather").unwrap()])
+        } else {
+            Ok(Vec::new())
+        }
+    }
+
+    fn prepare(&self, call: &ToolCall) -> Result<ActionReviewRequest, CoreError> {
+        Ok(ActionReviewRequest::new(
+            ResolvedAction::new(
+                ActionDigest::from_canonical_bytes(serde_json::to_vec(call).unwrap()),
+                ActionKind::LocalProcess(zeta_policy::ProcessInvocationKind::Direct),
+                "search tools",
+                CapabilitySet::new([]),
+            ),
+            ActionProvenance::new(ActionSource::BuiltInTool, "tool-search"),
+            SandboxCompatibility::Supported(SandboxPolicy::new(
+                FileSystemAccess::ReadOnly,
+                NetworkAccess::Denied,
+            )),
+            PolicyRevision::new("test-policy"),
+        ))
+    }
+
+    fn execute(
+        &self,
+        call: &ToolCall,
+        _: &ToolAuthorization,
+        _: &CancellationToken,
+    ) -> Result<ToolExecutionOutput, CoreError> {
+        assert_eq!(call.name.as_str(), "tool_search");
+        Ok(ToolExecutionOutput::Success("weather loaded".into()))
+    }
+}
+
+fn tool_definition(name: &str) -> ToolDefinition {
+    ToolDefinition {
+        name: ToolName::new(name).unwrap(),
+        description: name.into(),
+        parameters: json!({"type": "object"}),
+        strict: true,
+    }
+}
 
 #[derive(Default)]
 struct BlockingTool {

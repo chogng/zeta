@@ -12,13 +12,17 @@ export interface ModelRef {
 export type ThreadOrigin =
   | { readonly type: "root" }
   | { readonly type: "fork"; readonly parentThreadId: ThreadId; readonly parentSequence: number }
-  | { readonly type: "rewind"; readonly parentThreadId: ThreadId; readonly parentSequence: number; readonly beforeTurnId: string };
+  | { readonly type: "rewind"; readonly parentThreadId: ThreadId; readonly parentSequence: number; readonly beforeTurnId: string }
+  | { readonly type: "agentSpawn"; readonly parentThreadId: ThreadId; readonly parentSequence: number; readonly delegationId: string };
 export type SessionThreadStatus = "creating" | "active" | "archived";
+export type AgentThreadExecutionStatus = "idle" | "queued" | "running" | "waiting" | "completed" | "failed" | "cancelled";
 
 export interface SessionThread {
   readonly threadId: ThreadId;
   readonly origin: ThreadOrigin;
   readonly status: SessionThreadStatus;
+  readonly title?: string;
+  readonly executionStatus?: AgentThreadExecutionStatus;
 }
 
 export type SessionStatus = "active" | "completed" | "archived";

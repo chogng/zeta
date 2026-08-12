@@ -15,12 +15,30 @@ pub(crate) fn post_json(
     body: Value,
     cancellation: &CancellationToken,
 ) -> Result<Value, ApiError> {
+    post_json_to_path(
+        client,
+        target,
+        endpoint.relative_path(),
+        endpoint.headers(target),
+        body,
+        cancellation,
+    )
+}
+
+pub(crate) fn post_json_to_path(
+    client: &dyn OperationClient,
+    target: &ResolvedApiTarget,
+    relative_path: &str,
+    headers: Vec<zeta_http_client::HttpHeader>,
+    body: Value,
+    cancellation: &CancellationToken,
+) -> Result<Value, ApiError> {
     let body = serde_json::to_vec(&body)
         .map_err(|error| ApiError::InvalidRequest(format!("failed to encode API JSON: {error}")))?;
     let request = ClientRequest::new(
-        endpoint.method(),
-        target.endpoint(endpoint.relative_path())?,
-        endpoint.headers(target),
+        zeta_http_client::HttpMethod::Post,
+        target.endpoint(relative_path)?,
+        headers,
         body,
         target.retry_policy,
     )?;

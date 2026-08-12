@@ -10,6 +10,8 @@ import type { ISkillApi } from "../../skills/common/skillApi.js";
 import type { ITerminalProcessService } from "../../terminal/common/terminalProcessService.js";
 import type { ITypstApi } from "../../typst/common/typstApi.js";
 import type { IDocumentCollaborationApi } from "../../collaboration/common/documentCollaborationApi.js";
+import type { ICodeIndexApi } from "../../codeIndex/common/codeIndexApi.js";
+import type { IToolSearchApi } from "../../toolSearch/common/toolSearchApi.js";
 
 /** Transport-neutral capability set supplied by a renderer host at startup. */
 export interface IRendererHost {
@@ -30,4 +32,6 @@ export interface IRendererHost {
   readonly workspaceSearch: IWorkspaceSearchApi;
   readonly terminal: ITerminalProcessService;
   readonly events: IServerEventApi;
+  readonly codeIndex: ICodeIndexApi;
+  readonly toolSearch: IToolSearchApi;
 }

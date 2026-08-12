@@ -1,8 +1,21 @@
-use crate::{
-    ApiEndpoint, ApiError, ContentPart, ImageDetail, InputItem, MessageRole, ModelRequest,
-    ModelResponse, ModelUsage, OutputItem, ReasoningEffort, StopReason, ToolCall, ToolCallId,
-    ToolChoice, ToolDefinition, ToolName,
-};
+use crate::ApiEndpoint;
+use crate::ApiError;
+use crate::ContentPart;
+use crate::ImageDetail;
+use crate::InputItem;
+use crate::InputTokenCount;
+use crate::MessageRole;
+use crate::ModelRequest;
+use crate::ModelResponse;
+use crate::ModelUsage;
+use crate::OutputItem;
+use crate::ReasoningEffort;
+use crate::StopReason;
+use crate::ToolCall;
+use crate::ToolCallId;
+use crate::ToolChoice;
+use crate::ToolDefinition;
+use crate::ToolName;
 use serde_json::{Map, Value, json};
 use zeta_async_utils::CancellationToken;
 use zeta_client::{OperationClient, ResolvedApiTarget};
@@ -23,6 +36,47 @@ pub(crate) fn complete(
         cancellation,
     )?;
     parse_response(response)
+}
+
+pub(crate) fn count_input_tokens(
+    endpoint: ApiEndpoint,
+    target: &ResolvedApiTarget,
+    model: &str,
+    request: &ModelRequest,
+    client: &dyn OperationClient,
+    cancellation: &CancellationToken,
+) -> Result<InputTokenCount, ApiError> {
+    let response = crate::requests::post_json_to_path(
+        client,
+        target,
+        "responses/input_tokens",
+        endpoint.headers(target),
+        build_count_request(model, request)?,
+        cancellation,
+    )?;
+    let input_tokens = response
+        .get("input_tokens")
+        .and_then(Value::as_u64)
+        .ok_or_else(|| {
+            ApiError::InvalidResponse("Responses input-token count is missing input_tokens".into())
+        })?;
+    Ok(InputTokenCount::new(input_tokens))
+}
+
+fn build_count_request(model: &str, request: &ModelRequest) -> Result<Value, ApiError> {
+    let Value::Object(mut body) = build_request(model, request)? else {
+        unreachable!("Responses request builders always return an object");
+    };
+    for field in [
+        "stream",
+        "store",
+        "include",
+        "max_output_tokens",
+        "temperature",
+    ] {
+        body.remove(field);
+    }
+    Ok(Value::Object(body))
 }
 
 fn build_request(model: &str, request: &ModelRequest) -> Result<Value, ApiError> {

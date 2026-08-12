@@ -50,6 +50,13 @@ pub struct ClientCapabilities {
 pub struct AgentInteractionCapability {
     pub version: u32,
     pub kinds: Vec<zeta_protocol::AgentInteractionKind>,
+    /// Exact client-hosted dynamic tool names this connection can execute.
+    ///
+    /// This is ephemeral routing authority, not an executable registration. App Server still
+    /// accepts and validates definitions through its composition root.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub dynamic_tools: Option<Vec<zeta_protocol::ToolName>>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

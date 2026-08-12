@@ -2,13 +2,17 @@
 
 > 状态：核心纵向切片已实现。`ContextInput`、纯规划器、`ContextPlan`、每个已加载 Thread 的
 > `ContextManager`、持久化 checkpoint、模型压缩编排和 `ContextAssembler` 已接入
-> `TurnExecutor`。Skill 正文通过通用 `SkillInstructionsProvider` 在 invocation safe point 注入；
-> 精确 tokenizer、prompt cache/reference baseline、跨 Thread seed 与自动 Skill 选择仍是扩展点。
+> `TurnExecutor`。Skill 正文通过通用 `TurnInputContributor` 在 invocation safe point 注入；
+> 通用预算、精准/估算计量结果和边界判定已拆入 `zeta-context-engine`；OpenAI exact 与 Anthropic
+> estimated remote preflight 已接入，local tokenizer、prompt cache/reference baseline、跨 Thread
+> seed 与自动 Skill 选择仍是扩展点。
 >
 > Core 总体边界：[`core.md`](core.md)
 > Canonical Thread/Turn/Item contract：[`protocol.md`](protocol.md)
+> 通用 extension contract：[`zeta-rs/ext/extension-api/README.md`](../zeta-rs/ext/extension-api/README.md)
 > 多 Agent context inheritance：[`core-multi-agent.md`](core-multi-agent.md)
 > 内置模型提示词资产：[`zeta-prompts`](../zeta-rs/prompts/README.md)
+> 预算与 token 计量实现：[`zeta-context-engine`](../zeta-rs/context-engine/README.md)
 
 ## 快速理解
 
@@ -100,8 +104,8 @@ Thread event stream
 
 ## 4. 数据模型
 
-以下类型表达当前 Core-private 语义；live Config、provider client 和 mutable manager 都不会进入
-不可变规划输入。
+以下类型表达当前规划语义；`ContextBudget` 由通用 `zeta-context-engine` 提供，其余选择模型仍由
+Core 内部拥有。live Config、provider client 和 mutable manager 都不会进入不可变规划输入。
 
 ### 4.1 ContextInput
 
@@ -146,10 +150,11 @@ ContextPlan 必须可诊断：
 模型选择冻结在同一次 `ModelInvocationSnapshot`；策略版本和 Skill 激活来源冻结在 durable Turn，
 不复制进 `ContextPlan`。
 
-Skill 的发现、启用、匹配和入口解析不属于上下文系统。外部 runtime 根据 durable activation 解析出
-`SkillInstruction { id, revision, body, retention }`；Core 只校验 identity/revision 绑定，按 Skill
-layer、`Required / BestEffort` 预算语义注入。catalog generation、斜杠入口和
-explicit/automatic selection reason 不进入模型可见正文。
+Skill 的发现、启用、模型选择和入口解析不属于上下文系统。外部 runtime 根据 durable activation
+解析出 `PromptFragment { source, layer, retention, body }`，也可以贡献 metadata-only catalog
+fragment；Core 只校验 fragment provenance，按 Skill layer、`Required / BestEffort` 预算语义
+注入。模型随后通过普通 Tool Call/Result 按需读取 Skill 正文。catalog generation、斜杠入口和
+activation reason 不进入模型可见 Skill 正文。
 
 它不要求成为公共 wire model。测试和诊断可以使用 Core-private readable view。
 
@@ -218,7 +223,17 @@ determinism。`ContextManager` 只协调生命周期与缓存。
 当前 `ContextAssembler` 只接受 `ContextPlan`；Thread snapshot 的读取和选择由
 ContextManager/Planner 完成。
 
-### 5.4 内置提示词资产
+### 5.4 通用预算引擎
+
+[`zeta-context-engine`](../zeta-rs/context-engine/README.md) 只拥有模型无关的预算数学和 token 计量
+结果：它区分普通请求的压缩压力线与模型硬窗口，接受精准 preflight/本地 tokenizer 结果或带保守
+记账余量的估算，并返回 `Fits`、`NeedsCompaction` 或 `ExceedsContextWindow`。
+
+它不读取 Thread、不选择历史、不执行 provider 请求，也不消费响应 usage。Core planner 使用它解析
+预算边界，仍拥有 instruction precedence、完整语义单元选择和 compaction outcome。provider adapter
+只负责产生与所选模型匹配的计量结果，不能拥有另一套预算公式。
+
+### 5.5 内置提示词资产
 
 [`zeta-prompts`](../zeta-rs/prompts/README.md) 只拥有四类 Zeta 内置、模型可见的提示词资产：system、
 compaction、goals 和通用 review。它提供稳定的 asset ID、revision 与 compile-time body，但不决定
@@ -294,6 +309,11 @@ provider-neutral user `Message`，分别映射为 `ContentPart::Text` 与
 - compaction threshold；
 - tokenizer/estimate revision。
 
+预算计量与响应 usage 是两类事实：前者在调用前判断候选请求能否发送，后者在调用完成后记录实际
+消耗。精准计量可来自匹配模型的本地 tokenizer 或 provider preflight；provider preflight 本身不
+等于精准，准确度必须由 provider 契约独立声明。估算的 measured value 用于诊断，预算边界使用带
+策略余量的 accounted value；该余量不冒充 provider 承诺的数学硬上界。
+
 不得使用一个含义不明的 `max_tokens: Option<u32>` 同时表达 context window、output limit 和缺省。
 这些值使用独立 newtype/enum。
 
@@ -339,8 +359,10 @@ Core-managed plan 会把同一份 `reserved_output` 写入该次不可变 `Model
 不能静默删除当前输入、权限约束或未完成 Tool/Agent continuation。
 
 已知窗口可以来自内置 `ModelInfo`，也可以由 `ModelProviderConfig.model_context` 按模型 ID 配置；
-窗口未知时使用 `ContextBudget::ProviderManaged`，Core 不假装拥有可靠上限。当前 estimator 是带
-revision 的确定性 byte estimate，不等同于 provider tokenizer。
+窗口未知时使用 `ContextBudget::ProviderManaged`，Core 不假装拥有可靠上限。预算解析、精准/估算
+计量结果和统一边界判定已由 `zeta-context-engine` 提供；生产 planner 首轮仍使用带 revision 的
+确定性 byte estimate。最终 canonical request 在接近压力线或 compaction 后会调用已声明的 remote
+preflight：OpenAI Responses 为 exact，Anthropic Messages 为 estimated；本地 tokenizer 尚未接入。
 
 ## 8. 压缩
 
@@ -439,26 +461,37 @@ ContextManager 决定是否选入下一次 ContextPlan。
 ## 11. 目录与可见性
 
 ```text
-core/src/
-├─ context.rs
-├─ context/
-│  ├─ model.rs
-│  ├─ plan.rs
-│  ├─ assembler.rs
-│  ├─ budget.rs
-│  ├─ compaction.rs
-│  ├─ instructions.rs
-│  ├─ invocation.rs
-│  ├─ planner.rs
-│  ├─ skills.rs
-│  └─ *_tests.rs
-├─ context_manager.rs
-└─ context_manager_tests.rs
+zeta-rs/
+├─ context-engine/
+│  └─ src/
+│     ├─ budget.rs
+│     ├─ measurement.rs
+│     ├─ planner.rs
+│     └─ *_tests.rs
+└─ core/src/
+   ├─ context.rs
+   ├─ context/
+   │  ├─ model.rs
+   │  ├─ plan.rs
+   │  ├─ assembler.rs
+   │  ├─ compaction.rs
+   │  ├─ instructions.rs
+   │  ├─ invocation.rs
+   │  ├─ planner.rs
+   │  ├─ skills.rs
+   │  └─ *_tests.rs
+   ├─ context_manager.rs
+   └─ context_manager_tests.rs
 ```
 
-`context` 保存不可变 value 与纯算法；`context_manager` 保存 per-loaded-Thread 协调逻辑。两个模块
-默认 private。只有确有外部消费者时才从 `lib.rs` 导出窄 value/port，不能公开 cache、baseline、
-window mutable state 或 ContextManager 自身。
+`context-engine` 保存可跨产品和 provider 复用的预算 value 与纯判定；Core `context` 保存 Thread 内容
+选择和组装算法；`context_manager` 保存 per-loaded-Thread 协调逻辑。Core 两个模块默认 private。
+`ContextSource` 是 Core 的通用可选 evidence port：host 可在 Turn 第一次 model invocation 前返回带
+provenance 的 bounded evidence。Core 对已知窗口最多分配 input budget 的 1/8，并把内容作为 user-level
+`trust="untrusted-data"` 数据插在当前用户输入之前，不能提升为 system/workspace instructions。普通来源
+失败降级为空；Turn cancellation 继续传播。CodeIndex 自动召回默认关闭，由产品设置显式开启。
+只有确有外部消费者时才从 `lib.rs` 导出窄 value/port，不能公开 cache、baseline、window mutable
+state 或 ContextManager 自身。
 
 长期 ownership：
 
@@ -480,7 +513,9 @@ TurnExecutor
 | 通用 Skill 指令端口与预算行为 | ✅ 已实现 | 外部返回 `Required / BestEffort`；Core 不拥有 Skill 发现或选择 |
 | durable checkpoint、摘要生成、commit 后重规划 | ✅ 已实现 | 原始 event log 永不删除；压缩请求本身也受预算限制 |
 | 已知模型窗口的生产启用 | ✅ 已实现 | 可通过 `model_context` 配置；未知模型退回 provider-managed |
-| provider 精确 tokenizer/usage 校准 | 尚未完成 | 当前是 `deterministic-bytes-v1` estimate |
+| 通用预算与精准/估算计量契约 | ✅ 已实现 | `zeta-context-engine` 统一压力线、硬窗口和保守记账判定 |
+| provider input-token preflight | 部分具备 | OpenAI exact、Anthropic estimated 已接入；本地 tokenizer 与其他 provider 尚未完成 |
+| provider usage 校准 | 尚未完成 | usage 与调用前预算保持独立，尚未建立按模型隔离的校准数据 |
 | cache/reference baseline | 推迟 | 只有性能证据证明重复组装是瓶颈后才增加 |
 | Agent seed、跨 Thread 选择与 reference resources | 尚未完成 | 不能读取其他 live `ContextManager` |
 
@@ -512,6 +547,7 @@ TurnExecutor
 - Thread event stream 是唯一 history authority；
 - ContextManager 可丢失、可重建；
 - ContextAssembler 保持纯组装；
+- 模型无关预算公式和 token 计量结果属于 `zeta-context-engine`；
 - 选择、预算和 compaction 决策不进入 provider adapter；
 - checkpoint durable，但不删除原始 history；
 - 多 Agent 只通过 immutable seed 和 durable message/result 传递 context；

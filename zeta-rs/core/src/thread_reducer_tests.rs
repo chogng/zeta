@@ -20,6 +20,7 @@ fn envelope(sequence: u64, event: ThreadEvent) -> StoredEvent {
                 .expect("test ID is non-empty"),
             command: ThreadCommand::StartTurn {
                 model: None,
+                activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
                     text: "hello".into(),
                 }],
@@ -328,6 +329,7 @@ fn reducer_rebuilds_typed_command_receipt_and_all_durable_item_kinds() {
         command_id: CommandId::new("command_1").expect("test ID is non-empty"),
         command: ThreadCommand::StartTurn {
             model: None,
+            activated_skills: Vec::new(),
             input: vec![UserInput::Text {
                 text: "hello".into(),
             }],

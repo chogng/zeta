@@ -77,7 +77,21 @@ impl AppServer {
             .capabilities
             .agent_interactions
             .as_ref()
-            .is_some_and(|capability| capability.version != 1 || capability.kinds.is_empty())
+            .is_some_and(|capability| {
+                let supports_dynamic = capability
+                    .kinds
+                    .contains(&zeta_protocol::AgentInteractionKind::DynamicTool);
+                let dynamic_tools = capability.dynamic_tools.as_deref().unwrap_or_default();
+                let unique_dynamic_tools = dynamic_tools
+                    .iter()
+                    .collect::<std::collections::BTreeSet<_>>()
+                    .len()
+                    == dynamic_tools.len();
+                capability.version != 1
+                    || capability.kinds.is_empty()
+                    || !unique_dynamic_tools
+                    || supports_dynamic != !dynamic_tools.is_empty()
+            })
         {
             return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
         }
@@ -271,8 +285,10 @@ impl AppServer {
         params: &Value,
     ) -> Result<Value, RpcError> {
         let params: SessionUnsubscribeParams = decode(params)?;
-        self.updates
+        let lost_dynamic_tools = self
+            .updates
             .unsubscribe_session(connection.connection_id, &params.session_id);
+        self.cancel_lost_dynamic_tool_owners(lost_dynamic_tools);
         Ok(Value::Null)
     }
 
@@ -538,6 +554,11 @@ impl AppServer {
                 expected_sequence: SequenceExpectation::Exact(mutation.expected_sequence),
             })
             .map_err(core_error)?;
+        for (thread_id, _) in &thread_sequences {
+            self.multi_agent
+                .cancel_descendants(thread_id)
+                .map_err(core_error)?;
+        }
         self.notify_session_updates(&mutation.session_id, mutation.expected_sequence)?;
         for (thread_id, sequence) in thread_sequences {
             self.notify_thread_updates(&thread_id, sequence)?;
@@ -622,11 +643,12 @@ impl AppServer {
         params: &Value,
     ) -> Result<Value, RpcError> {
         let params: SessionThreadUnsubscribeParams = decode(params)?;
-        self.updates.unsubscribe_session_thread(
+        let lost_dynamic_tools = self.updates.unsubscribe_session_thread(
             connection.connection_id,
             &params.session_id,
             &params.thread_id,
         );
+        self.cancel_lost_dynamic_tool_owners(lost_dynamic_tools);
         Ok(Value::Null)
     }
 
@@ -724,26 +746,6 @@ impl AppServer {
             .map_err(|_| RpcError::new(-32000, AppServerErrorName::ServerOverloaded))?;
         let turn_executor = self.turn_executor_snapshot();
         let policy_revision = turn_executor.policy_revision();
-        let activated_skills = input
-            .iter()
-            .filter_map(|item| match item {
-                UserInput::Skill { skill } => Some(skill),
-                UserInput::Text { .. }
-                | UserInput::Image { .. }
-                | UserInput::LocalImage { .. }
-                | UserInput::Mention { .. } => None,
-            })
-            .map(|skill| {
-                let runtime = self
-                    .skills
-                    .as_ref()
-                    .ok_or_else(|| RpcError::new(-32050, AppServerErrorName::SkillsUnavailable))?;
-                runtime
-                    .activate_explicit(skill)
-                    .map_err(|_| RpcError::new(-32051, AppServerErrorName::SkillOperationFailed))
-            })
-            .map(|activated| activated.map(|skill| skill.activation().clone()))
-            .collect::<Result<Vec<_>, RpcError>>()?;
         let command_id = mutation.command_id.clone();
         let replay_input = input.clone();
         let start = self
@@ -756,7 +758,7 @@ impl AppServer {
                     expected_sequence: SequenceExpectation::Exact(mutation.expected_sequence),
                     model,
                     policy_revision,
-                    activated_skills,
+                    activated_skills: Vec::new(),
                     input,
                 },
             )
@@ -863,6 +865,22 @@ impl AppServer {
         turn_id: zeta_protocol::TurnId,
     ) -> Result<TurnInterruptResult, RpcError> {
         self.read_session_thread(&mutation.session_id, &thread_id)?;
+        let descendant_sequences = self
+            .sessions
+            .read_session(&mutation.session_id)
+            .map_err(core_error)?
+            .threads
+            .into_iter()
+            .filter(|membership| membership.membership.thread_id != thread_id)
+            .map(|membership| {
+                let descendant_id = membership.membership.thread_id;
+                self.sessions
+                    .threads()
+                    .read_thread(&descendant_id)
+                    .map(|snapshot| (descendant_id, snapshot.sequence))
+                    .map_err(core_error)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
         let interrupted = self
             .sessions
             .threads()
@@ -875,7 +893,13 @@ impl AppServer {
                 },
             )
             .map_err(core_error)?;
+        self.multi_agent
+            .cancel_descendants(&thread_id)
+            .map_err(core_error)?;
         self.notify_thread_updates(&thread_id, mutation.expected_sequence)?;
+        for (descendant_id, sequence) in descendant_sequences {
+            self.notify_thread_updates(&descendant_id, sequence)?;
+        }
         Ok(TurnInterruptResult {
             sequence: interrupted.sequence,
         })
@@ -923,8 +947,12 @@ impl AppServer {
                 AppServerErrorName::CoreOperationFailed,
             ));
         }
-        let approval_response = matches!(&response, zeta_protocol::AgentResponse::Approval { .. });
-        let resumes_tool = approval_response
+        let tool_execution_response = matches!(
+            &response,
+            zeta_protocol::AgentResponse::Approval { .. }
+                | zeta_protocol::AgentResponse::DynamicTool { .. }
+        );
+        let resumes_tool = tool_execution_response
             && before
                 .turns
                 .iter()
@@ -932,8 +960,14 @@ impl AppServer {
                 .and_then(|turn| turn.pending_interaction.as_ref())
                 .filter(|interaction| {
                     matches!(
-                        &interaction.request,
-                        zeta_protocol::AgentRequest::Approval { .. }
+                        (&interaction.request, &response),
+                        (
+                            zeta_protocol::AgentRequest::Approval { .. },
+                            zeta_protocol::AgentResponse::Approval { .. }
+                        ) | (
+                            zeta_protocol::AgentRequest::DynamicTool { .. },
+                            zeta_protocol::AgentResponse::DynamicTool { .. }
+                        )
                     )
                 })
                 .and_then(|interaction| interaction.item_id.as_ref())

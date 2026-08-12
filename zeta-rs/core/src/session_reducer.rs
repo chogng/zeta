@@ -1,10 +1,12 @@
 use crate::CoreError;
+use crate::multi_agent::validate_context_seed_digest;
 use zeta_protocol::{
-    ModelRef, Session, SessionCommand, SessionEvent, SessionId, SessionStatus, SessionThread,
-    SessionThreadStatus, ThreadId, ThreadOrigin,
+    AgentContextSeed, ModelRef, Session, SessionCommand, SessionEvent, SessionId, SessionStatus,
+    SessionThread, SessionThreadStatus, ThreadId, ThreadOrigin,
 };
 use zeta_session_store::{
-    CURRENT_SESSION_EVENT_SCHEMA_VERSION, SessionCommandReceipt, StoredSessionEvent,
+    CURRENT_SESSION_EVENT_SCHEMA_VERSION, MINIMUM_SUPPORTED_SESSION_EVENT_SCHEMA_VERSION,
+    SessionCommandReceipt, StoredSessionEvent,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -40,6 +42,7 @@ impl SessionSnapshot {
 pub struct SessionThreadSnapshot {
     pub membership: SessionThread,
     pub title: String,
+    pub agent_context_seed: Option<AgentContextSeed>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -64,7 +67,9 @@ pub fn reduce_session_event(
     snapshot: Option<SessionSnapshot>,
     envelope: &StoredSessionEvent,
 ) -> Result<SessionSnapshot, CoreError> {
-    if envelope.schema_version != CURRENT_SESSION_EVENT_SCHEMA_VERSION {
+    if !(MINIMUM_SUPPORTED_SESSION_EVENT_SCHEMA_VERSION..=CURRENT_SESSION_EVENT_SCHEMA_VERSION)
+        .contains(&envelope.schema_version)
+    {
         return Err(CoreError::Journal(format!(
             "unsupported Session event schema version {}",
             envelope.schema_version
@@ -238,6 +243,93 @@ pub fn reduce_session_event(
             snapshot.threads.push(SessionThreadSnapshot {
                 membership: thread.clone(),
                 title: title.clone(),
+                agent_context_seed: None,
+            });
+            snapshot.commands.push(SessionCommandSnapshot {
+                receipt: receipt.clone(),
+                result: SessionCommandResult::ThreadCreated {
+                    thread_id: thread.thread_id.clone(),
+                },
+                response_sequence: envelope.sequence,
+            });
+        }
+        SessionEvent::AgentThreadCreationPlanned {
+            thread,
+            title,
+            context_seed,
+            ..
+        } => {
+            validate_context_seed_digest(context_seed)?;
+            if snapshot.status != SessionStatus::Active {
+                return Err(CoreError::Journal(
+                    "Agent Threads can only be created in an active Session".into(),
+                ));
+            }
+            if thread.status != SessionThreadStatus::Creating {
+                return Err(CoreError::Journal(
+                    "a planned Agent Thread must start in creating status".into(),
+                ));
+            }
+            if snapshot
+                .threads
+                .iter()
+                .any(|existing| existing.membership.thread_id == thread.thread_id)
+            {
+                return Err(CoreError::Journal(format!(
+                    "Thread membership already exists: {}",
+                    thread.thread_id
+                )));
+            }
+            let receipt = require_new_session_command(&snapshot, envelope)?;
+            let ThreadOrigin::AgentSpawn {
+                parent_thread_id: origin_parent,
+                parent_sequence,
+                delegation_id: origin_delegation,
+            } = &thread.origin
+            else {
+                return Err(CoreError::Journal(
+                    "Agent Thread plan requires an AgentSpawn origin".into(),
+                ));
+            };
+            let SessionCommand::SpawnAgentThread {
+                parent_thread_id,
+                parent_turn_id,
+                delegation_id,
+                context_seed_digest,
+                title: command_title,
+            } = &receipt.command
+            else {
+                return Err(CoreError::Journal(
+                    "Agent Thread plan requires a matching spawn command".into(),
+                ));
+            };
+            if command_title != title
+                || parent_thread_id != origin_parent
+                || delegation_id != origin_delegation
+                || context_seed.parent_thread_id != *parent_thread_id
+                || context_seed.parent_turn_id != *parent_turn_id
+                || context_seed.parent_sequence != *parent_sequence
+                || context_seed.delegation_id != *delegation_id
+                || context_seed.digest != *context_seed_digest
+            {
+                return Err(CoreError::Journal(
+                    "Agent Thread command, origin, and context seed do not match".into(),
+                ));
+            }
+            let parent = snapshot
+                .threads
+                .iter()
+                .find(|candidate| candidate.membership.thread_id == *parent_thread_id)
+                .ok_or_else(|| CoreError::NotFound(parent_thread_id.to_string()))?;
+            if parent.membership.status != SessionThreadStatus::Active {
+                return Err(CoreError::Journal(
+                    "an Agent spawn parent must be an active Thread".into(),
+                ));
+            }
+            snapshot.threads.push(SessionThreadSnapshot {
+                membership: thread.clone(),
+                title: title.clone(),
+                agent_context_seed: Some(context_seed.as_ref().clone()),
             });
             snapshot.commands.push(SessionCommandSnapshot {
                 receipt: receipt.clone(),

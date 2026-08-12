@@ -144,6 +144,53 @@
   border: 0;
 }
 
+.zeta-indexing-setting {
+  display: flex;
+  max-width: 760px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.zeta-indexing-setting + .zeta-indexing-setting {
+  margin-top: 28px;
+}
+
+.zeta-indexing-setting legend {
+  padding: 0;
+  color: var(--zeta-foreground);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.zeta-indexing-toggle {
+  display: flex;
+  align-items: center;
+  color: var(--zeta-foreground);
+  gap: 8px;
+}
+
+.zeta-settings-text-input {
+  min-height: 32px;
+  padding: 5px 9px;
+  border: 1px solid var(--zeta-input-border);
+  border-radius: 4px;
+  outline: none;
+  color: var(--zeta-input-foreground);
+  background: var(--zeta-input-background);
+  font: inherit;
+}
+
+.zeta-settings-text-input:focus {
+  border-color: var(--zeta-focus-border);
+}
+
+.zeta-settings-message {
+  color: var(--zeta-description-foreground);
+}
+
 .zeta-theme-setting legend {
   margin: 0;
   padding: 0;

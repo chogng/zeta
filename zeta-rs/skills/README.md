@@ -9,9 +9,9 @@
 snapshot。显式选择后，`SkillCatalog::activate` 还会通过同一个受控 root 完整读取 exact
 `SKILL.md`，重新绑定 file identity 与 digest，并返回 `ActivatedSkill`。它仍不读取
 references/assets/scripts、不执行命令，也不拥有 config、watcher、App Server 或 Core
-integration。当前 App Server adapter、watcher、enablement overlay 与 model-safe-point reload
-属于 [`zeta-app-server`](../app-server/README.md)；adapter 只调用本 crate 的受控 API，不改变这里
-的 ownership。
+integration。共享 runtime、watcher、enablement overlay、activation contributor 与
+model-safe-point reload 属于 [`zeta-skills-extension`](../ext/skills/README.md)；App Server 只装配
+扩展并投影协议 DTO。
 
 Repository-owned built-in content 位于 [`assets/`](assets)，打包后位于
 `zeta-resources/skills/`。package host 通过
@@ -99,14 +99,14 @@ entries 按 exact `SkillId` 排序，同名不同 source 同时保留。refresh 
 digest、compatibility、availability 与 diagnostics 完全不变，会复用同一个 `Arc` snapshot 和
 generation。任何 consumer-visible 变化才发布下一 generation。
 
-当前 App Server 已通过窄 adapter 组合 built-in/user/active Workspace roots、订阅 watcher，并以
-`skills/list`/`skills/changed` 投影 catalog；per-Skill enablement 也由 config authority 与 adapter
-叠加。共享 identity 位于 `zeta-protocol`，本 crate 只 re-export，不能重新定义一套。
+当前 `zeta-skills-extension` 组合 built-in/user/active Workspace roots、订阅 watcher，并叠加
+per-Skill enablement；App Server 以 `skills/list`/`skills/changed` 投影其 snapshot。共享 identity
+位于 `zeta-protocol`，本 crate 只 re-export，不能重新定义一套。
 
 本 crate 已有显式 exact activation，但没有 automatic selector、rooted resource resolver 或
-safe-point scheduler。enablement/compatibility gate 和 safe-point reload 由 App Server adapter
-拥有；adapter 将 exact body 规范化为 Core 的 `SkillInstruction`，Core 不解释 catalog 或选择入口。
-后续能力应继续使用窄 adapter/module；如果
+safe-point scheduler。enablement/compatibility gate、显式选择汇合和 safe-point reload 由
+`zeta-skills-extension` 拥有；它通过通用 extension API 返回带 provenance 的 prompt fragment，
+Core 不解释 catalog 或选择入口。后续能力应继续扩展该 runtime；如果
 scanner 开始执行 script、读取 optional resource、解释 Plugin grant，或 catalog 反向依赖
 Core/App Server，表示 crate ownership 已经漂移。
 

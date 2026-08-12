@@ -371,6 +371,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "bm25"
+version = "2.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1cbd8ffdfb7b4c2ff038726178a780a94f90525ed0ad264c0afaa75dd8c18a64"
+dependencies = [
+ "cached",
+ "deunicode",
+ "fxhash",
+ "rust-stemmers",
+ "stop-words",
+ "unicode-segmentation",
+]
+
+[[package]]
 name = "bstr"
 version = "1.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -429,6 +443,39 @@ name = "bytes"
 version = "1.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
+
+[[package]]
+name = "cached"
+version = "0.56.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "801927ee168e17809ab8901d9f01f700cd7d8d6a6527997fee44e4b0327a253c"
+dependencies = [
+ "ahash",
+ "cached_proc_macro",
+ "cached_proc_macro_types",
+ "hashbrown 0.15.5",
+ "once_cell",
+ "thiserror 2.0.19",
+ "web-time",
+]
+
+[[package]]
+name = "cached_proc_macro"
+version = "0.25.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9225bdcf4e4a9a4c08bf16607908eb2fbf746828d5e0b5e019726dbf6571f201"
+dependencies = [
+ "darling 0.20.11",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+]
+
+[[package]]
+name = "cached_proc_macro_types"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ade8366b8bd5ba243f0a58f036cc0ca8a2f069cff1a2351ef1cac6b083e16fc0"
 
 [[package]]
 name = "calloop"
@@ -987,12 +1034,36 @@ checksum = "f27ae1dd37df86211c42e150270f82743308803d90a6f6e6651cd730d5e1732f"
 
 [[package]]
 name = "darling"
+version = "0.20.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fc7f46116c46ff9ab3eb1597a45688b6715c6e628b5c133e288e709a29bcb4ee"
+dependencies = [
+ "darling_core 0.20.11",
+ "darling_macro 0.20.11",
+]
+
+[[package]]
+name = "darling"
 version = "0.24.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "88490bf1b990d87eaaa7ac8aa887f629a08e7359765b4911faf63c3763347d23"
 dependencies = [
- "darling_core",
- "darling_macro",
+ "darling_core 0.24.0",
+ "darling_macro 0.24.0",
+]
+
+[[package]]
+name = "darling_core"
+version = "0.20.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0d00b9596d185e565c2207a0b01f8bd1a135483d02d9b7b0a54b11da8d53412e"
+dependencies = [
+ "fnv",
+ "ident_case",
+ "proc-macro2",
+ "quote",
+ "strsim",
+ "syn 2.0.119",
 ]
 
 [[package]]
@@ -1010,11 +1081,22 @@ dependencies = [
 
 [[package]]
 name = "darling_macro"
+version = "0.20.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fc34b93ccb385b40dc71c6fceac4b2ad23662c7eeb248cf10d529b7e055b6ead"
+dependencies = [
+ "darling_core 0.20.11",
+ "quote",
+ "syn 2.0.119",
+]
+
+[[package]]
+name = "darling_macro"
 version = "0.24.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "68f5792fa0d41cd2325ce0ffa64f0a340eaebd4971a3a0c5e1ffd2cc488a355e"
 dependencies = [
- "darling_core",
+ "darling_core 0.24.0",
  "quote",
  "syn 3.0.3",
 ]
@@ -1030,6 +1112,12 @@ name = "deranged"
 version = "0.5.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7cd812cc2bc1d69d4764bd80df88b4317eaef9e773c75226407d9bc0876b211c"
+
+[[package]]
+name = "deunicode"
+version = "1.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "abd57806937c9cc163efc8ea3910e00a62e2aeb0b8119f1793a978088f8f6b04"
 
 [[package]]
 name = "diff"
@@ -1511,6 +1599,15 @@ dependencies = [
  "memchr",
  "pin-project-lite",
  "slab",
+]
+
+[[package]]
+name = "fxhash"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c31b6d751ae2c7f11320402d34e41349dd1016f8d5d45e48c4312bc8625af50c"
+dependencies = [
+ "byteorder",
 ]
 
 [[package]]
@@ -2342,7 +2439,7 @@ version = "0.3.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2bf84e73fa6f27f299dec58e13223cf70db80da872eb921d4f6138342a0eabc8"
 dependencies = [
- "darling",
+ "darling 0.24.0",
  "indoc",
  "proc-macro2",
  "quote",
@@ -4511,6 +4608,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "rust-stemmers"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e46a2036019fdb888131db7a4c847a1063a7493f971ed94ea82c67eada63ca54"
+dependencies = [
+ "serde",
+ "serde_derive",
+]
+
+[[package]]
 name = "rust_decimal"
 version = "1.42.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5209,6 +5316,15 @@ name = "static_assertions"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
+
+[[package]]
+name = "stop-words"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "645a3d441ccf4bf47f2e4b7681461986681a6eeea9937d4c3bc9febd61d17c71"
+dependencies = [
+ "serde_json",
+]
 
 [[package]]
 name = "streaming-iterator"
@@ -7799,6 +7915,7 @@ dependencies = [
  "base64",
  "getrandom 0.2.17",
  "log",
+ "pollster",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -7807,18 +7924,22 @@ dependencies = [
  "zeta-agents",
  "zeta-app-server-protocol",
  "zeta-app-server-transport",
+ "zeta-apply-patch",
  "zeta-async-utils",
  "zeta-auto-review",
  "zeta-client",
  "zeta-code-index",
  "zeta-code-index-cloud",
+ "zeta-code-index-semantic",
  "zeta-code-retrieval",
  "zeta-collaboration",
  "zeta-config",
  "zeta-core",
  "zeta-diff",
+ "zeta-extension-api",
  "zeta-extensions",
  "zeta-file-system",
+ "zeta-file-system-tool",
  "zeta-file-watcher",
  "zeta-git",
  "zeta-install-context",
@@ -7836,6 +7957,7 @@ dependencies = [
  "zeta-search",
  "zeta-shell-command",
  "zeta-skills",
+ "zeta-skills-extension",
  "zeta-slash-commands",
  "zeta-syntax",
  "zeta-tools",
@@ -7964,11 +8086,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-code-index-service"
+name = "zeta-code-index-semantic"
 version = "0.1.0"
 dependencies = [
+ "rusqlite",
  "tempfile",
  "thiserror 2.0.19",
+ "zeta-api",
+ "zeta-async-utils",
  "zeta-code-index",
  "zeta-model-provider",
  "zeta-workspace",
@@ -7980,8 +8105,11 @@ version = "0.1.0"
 dependencies = [
  "tempfile",
  "thiserror 2.0.19",
+ "zeta-async-utils",
  "zeta-code-index",
  "zeta-code-index-cloud",
+ "zeta-code-index-semantic",
+ "zeta-model-provider",
  "zeta-workspace",
 ]
 
@@ -8037,6 +8165,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "zeta-context-engine"
+version = "0.1.0"
+
+[[package]]
 name = "zeta-core"
 version = "0.1.0"
 dependencies = [
@@ -8045,6 +8177,8 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "zeta-async-utils",
+ "zeta-context-engine",
+ "zeta-extension-api",
  "zeta-history",
  "zeta-policy",
  "zeta-prompts",
@@ -8090,6 +8224,15 @@ dependencies = [
  "zeta-protocol",
  "zeta-sandboxing",
  "zeta-workspace",
+]
+
+[[package]]
+name = "zeta-extension-api"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "zeta-protocol",
+ "zeta-tools",
 ]
 
 [[package]]
@@ -8350,9 +8493,11 @@ dependencies = [
  "zeta-api",
  "zeta-async-utils",
  "zeta-client",
+ "zeta-context-engine",
  "zeta-http-client",
  "zeta-model-provider-config",
  "zeta-protocol",
+ "zeta-secrets",
 ]
 
 [[package]]
@@ -8515,6 +8660,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "zeta-skills-extension"
+version = "0.1.0"
+dependencies = [
+ "pollster",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "zeta-async-utils",
+ "zeta-config",
+ "zeta-extension-api",
+ "zeta-file-watcher",
+ "zeta-protocol",
+ "zeta-skills",
+ "zeta-tools",
+]
+
+[[package]]
 name = "zeta-slash-commands"
 version = "0.1.0"
 dependencies = [
@@ -8597,6 +8760,8 @@ dependencies = [
 name = "zeta-tools"
 version = "0.1.0"
 dependencies = [
+ "bm25",
+ "regex",
  "serde_json",
  "sha2 0.10.9",
  "zeta-async-utils",

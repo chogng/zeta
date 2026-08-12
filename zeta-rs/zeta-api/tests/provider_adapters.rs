@@ -1,8 +1,8 @@
 use serde_json::{Value, json};
 use std::sync::Mutex;
 use zeta_api::{
-    ApiEndpoint, ApiProtocol, ModelRequest, ReasoningConfig, ReasoningEffort, StopReason,
-    ToolDefinition, ToolName,
+    ApiEndpoint, ApiProtocol, ModelRequest, ReasoningConfig, ReasoningEffort, SemanticApiEndpoint,
+    StopReason, ToolDefinition, ToolName,
 };
 use zeta_client::{ClientError, ClientRequest, ClientResponse, OperationClient, ResolvedApiTarget};
 use zeta_http_client::HttpHeader;
@@ -98,6 +98,30 @@ fn openai_responses_converts_tools_reasoning_and_tool_calls() {
 }
 
 #[test]
+fn openai_responses_counts_the_frozen_input_payload() {
+    let transport = CapturingTransport::new(json!({"input_tokens": 321}));
+    let mut request = tool_request();
+    request.max_output_tokens = Some(2_048);
+    request.temperature = Some(0.25);
+
+    let count = ApiEndpoint::OpenAiResponses
+        .count_input_tokens_with_client(&target(), "gpt-test", &request, &transport)
+        .unwrap();
+
+    let (endpoint, _, body) = transport.request.lock().unwrap().clone().unwrap();
+    assert_eq!(endpoint, "https://example.test/v1/responses/input_tokens");
+    assert_eq!(count.get(), 321);
+    assert_eq!(body["model"], "gpt-test");
+    assert_eq!(body["tools"][0]["name"], "weather");
+    assert_eq!(body["reasoning"]["effort"], "medium");
+    assert_eq!(body["tool_choice"], "auto");
+    assert_eq!(body["parallel_tool_calls"], true);
+    assert!(body.get("stream").is_none());
+    assert!(body.get("max_output_tokens").is_none());
+    assert!(body.get("temperature").is_none());
+}
+
+#[test]
 fn chat_completions_endpoint_converts_tools_and_text() {
     let transport = CapturingTransport::new(json!({
         "id": "chatcmpl_1",
@@ -163,6 +187,40 @@ fn anthropic_messages_converts_tools_and_tool_use() {
 }
 
 #[test]
+fn anthropic_messages_counts_the_frozen_input_payload() {
+    let transport = CapturingTransport::new(json!({"input_tokens": 144}));
+    let mut request = tool_request();
+    request.reasoning = None;
+    request.max_output_tokens = Some(2_048);
+    request.temperature = Some(0.25);
+    let target = ResolvedApiTarget::new(
+        "https://api.anthropic.com",
+        vec![HttpHeader::new("x-api-key", "secret")],
+    );
+
+    let count = ApiEndpoint::AnthropicMessages
+        .count_input_tokens_with_client(&target, "claude-test", &request, &transport)
+        .unwrap();
+
+    let (endpoint, headers, body) = transport.request.lock().unwrap().clone().unwrap();
+    assert_eq!(
+        endpoint,
+        "https://api.anthropic.com/v1/messages/count_tokens"
+    );
+    assert_eq!(count.get(), 144);
+    assert_eq!(body["model"], "claude-test");
+    assert_eq!(body["tools"][0]["name"], "weather");
+    assert_eq!(body["tool_choice"]["type"], "auto");
+    assert!(body.get("max_tokens").is_none());
+    assert!(body.get("temperature").is_none());
+    assert!(
+        headers
+            .iter()
+            .any(|header| { header.name().eq_ignore_ascii_case("anthropic-version") })
+    );
+}
+
+#[test]
 fn endpoint_families_report_their_underlying_protocol() {
     assert_eq!(
         ApiEndpoint::OpenAiResponses.protocol(),
@@ -176,6 +234,47 @@ fn endpoint_families_report_their_underlying_protocol() {
         ApiEndpoint::OpenAiChatCompletions.protocol(),
         ApiProtocol::OpenAiCompletions
     );
+}
+
+#[test]
+fn semantic_endpoints_restore_provider_results_to_input_order() {
+    let embeddings = CapturingTransport::new(json!({
+        "data": [
+            {"index": 1, "embedding": [0.0, 1.0]},
+            {"index": 0, "embedding": [1.0, 0.0]}
+        ]
+    }));
+    let vectors = SemanticApiEndpoint::OpenAiCompatible
+        .embed_with_client(
+            &target(),
+            "embed-v1",
+            &["first".into(), "second".into()],
+            &embeddings,
+        )
+        .unwrap();
+    assert_eq!(vectors, vec![vec![1.0, 0.0], vec![0.0, 1.0]]);
+    let (_, headers, body) = embeddings.request.lock().unwrap().clone().unwrap();
+    assert_eq!(body["input"], json!(["first", "second"]));
+    assert!(headers.iter().any(|header| {
+        header.name().eq_ignore_ascii_case("content-type") && header.value() == "application/json"
+    }));
+
+    let rerank = CapturingTransport::new(json!({
+        "results": [
+            {"index": 1, "relevance_score": 0.8},
+            {"index": 0, "score": 0.2}
+        ]
+    }));
+    let scores = SemanticApiEndpoint::OpenAiCompatible
+        .rerank_with_client(
+            &target(),
+            "rerank-v1",
+            "query",
+            &["first".into(), "second".into()],
+            &rerank,
+        )
+        .unwrap();
+    assert_eq!(scores, vec![0.2, 0.8]);
 }
 
 #[test]

@@ -11,7 +11,7 @@ members = [
     "zeta-rs/collaboration-server",
     "zeta-rs/code-index",
     "zeta-rs/code-index-cloud",
-    "zeta-rs/code-index-service",
+    "zeta-rs/code-index-semantic",
     "zeta-rs/code-retrieval",
     "zeta-rs/apply-patch",
     "zeta-rs/async-utils",
@@ -19,10 +19,13 @@ members = [
     "zeta-rs/bwrap",
     "zeta-code/cli",
     "zeta-rs/config",
+    "zeta-rs/context-engine",
     "zeta-rs/core",
     "zeta-rs/diff",
     "zeta-rs/extensions",
     "zeta-rs/editor-core",
+    "zeta-rs/ext/extension-api",
+    "zeta-rs/ext/skills",
     "zeta-rs/secrets",
     "zeta-rs/exec",
     "zeta-rs/file-icons",
@@ -108,6 +111,7 @@ version = "0.1.0"
 anyhow = "1"
 arboard = { version = "3", features = ["wayland-data-control"] }
 base64 = "0.22"
+bm25 = "2.3.2"
 bytemuck = { version = "1", features = ["derive"] }
 cc = "1"
 clap = "4"
@@ -137,6 +141,7 @@ ratex-parser = "0.1.14"
 ratex-svg = { version = "0.1.14", features = ["embed-fonts"] }
 ratex-types = "0.1.14"
 ratatui = "0.29.0"
+regex = "1"
 resvg = { version = "0.47", default-features = false }
 schemars = "1.2.1"
 semver = "1"
@@ -191,7 +196,7 @@ zeta-collaboration = { path = "zeta-rs/collaboration" }
 zeta-collaboration-server = { path = "zeta-rs/collaboration-server" }
 zeta-code-index = { path = "zeta-rs/code-index" }
 zeta-code-index-cloud = { path = "zeta-rs/code-index-cloud" }
-zeta-code-index-service = { path = "zeta-rs/code-index-service" }
+zeta-code-index-semantic = { path = "zeta-rs/code-index-semantic" }
 zeta-code-retrieval = { path = "zeta-rs/code-retrieval" }
 zeta-apply-patch = { path = "zeta-rs/apply-patch" }
 zeta-async-utils = { path = "zeta-rs/async-utils" }
@@ -200,10 +205,13 @@ zeta-bwrap = { path = "zeta-rs/bwrap" }
 zeta-api = { path = "zeta-rs/zeta-api" }
 zeta-client = { path = "zeta-rs/zeta-client" }
 zeta-config = { path = "zeta-rs/config" }
+zeta-context-engine = { path = "zeta-rs/context-engine" }
 zeta-core = { path = "zeta-rs/core" }
 zeta-diff = { path = "zeta-rs/diff" }
 zeta-editor = { path = "zeterm/editor" }
 zeta-editor-core = { path = "zeta-rs/editor-core" }
+zeta-extension-api = { path = "zeta-rs/ext/extension-api" }
+zeta-skills-extension = { path = "zeta-rs/ext/skills" }
 zeta-exec = { path = "zeta-rs/exec" }
 zeta-extensions = { path = "zeta-rs/extensions" }
 zeta-icons = { path = "zeterm/icons" }

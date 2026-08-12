@@ -35,6 +35,7 @@ request/response domain model。
 | `ApiEndpoint` | 指定 concrete endpoint family 并 dispatch codec | provider 或 model selection |
 | `ApiProtocol` | 暴露 endpoint 使用的 normalized protocol family | URL/provider 推断 |
 | `ApiEndpoint::complete_with_client` | 校验 canonical request，执行 unary encode/call/decode | retry、credential refresh |
+| `ApiEndpoint::count_input_tokens_with_client` | dispatch OpenAI Responses / Anthropic token-count codec | 准确度解释、调用频率、预算策略 |
 | `OpenAiResponsesSseDecoder` | Responses SSE event schema 与 terminal lifecycle | SSE byte framing、reconnect |
 | `AnthropicMessagesSseDecoder` | Messages content-block lifecycle 与 canonical delta | transport liveness、tool JSON accumulation |
 | `ApiError` | request、transport、status 与 response codec failure | provider selection error |
@@ -76,6 +77,12 @@ ApiEndpoint::complete_with_client(target, model, request, client)
       └─ serde_json::from_slice
          └─ parse_response
 ```
+
+Token preflight 使用相同 canonical `ModelRequest` 转换逻辑，但发送到
+`responses/input_tokens` 或 `v1/messages/count_tokens`，并只返回 `InputTokenCount`。本 crate 不把
+OpenAI 的 exact 契约或 Anthropic 的 estimate 契约编码进 wire value；准确度由
+`zeta-model-provider` adapter 声明。Chat Completions 没有标准 count endpoint，显式返回 unsupported
+request error。
 
 三套 codec 都处理 canonical messages、tools、tool choice、reasoning、usage 和 stop reason，但
 只共享 mechanical helpers；不能因为 JSON 外形相似就合并 protocol-specific semantics。

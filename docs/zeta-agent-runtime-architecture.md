@@ -33,7 +33,7 @@
 | 执行内核会异步化（tokio）吗？ | 不承诺；保留同步端口 + per-Thread OS 线程，流式经 sink 达成 | [R2](#42-r2同步执行内核流式经-sink) |
 | Turn 中途策略会漂移吗？ | 模型选择与 policy revision 都在 `TurnAccepted` 冻结；恢复遇到 revision 变化会 fail closed | [R1](#41-r1策略冻结-durable-化) |
 | 上下文溢出怎么办？ | 已由纯 planner 返回显式 overflow/compaction outcome；checkpoint durable commit 后才重规划 | [R3](#43-r3上下文系统裁剪落地) |
-| 多 Agent 什么时候做？ | 先冻结 protocol 契约（阶段 D），运行时 gate 在上下文系统之后（阶段 E） | [R4](#44-r4多-agent-契约冻结先行) |
+| 多 Agent 什么时候做？ | 阶段 D 契约和阶段 E 的 Fresh spawn/delivery 纵向切片已落地；join、取消树和 UI projection 继续按 gate 演进 | [R4](#44-r4多-agent-契约冻结先行) |
 
 ## 1. 重审结论
 
@@ -65,7 +65,7 @@
 | R2 | 端口演进为 async streaming（隐含运行时异步化） | **不承诺 tokio 迁移**：保留同步端口 + per-Thread OS 线程邮箱；真实流式经 wire-level SSE decoder → `ModelStreamSink`；App Server 补独立 outbound writer 线程 | 桌面级并发上限是几十个 Thread；同步代码对 durability 不变量更易验证；cancellation 已闭环；sink 契约已为流式预留。异步化收益不成比例 |
 | R3 | ContextManager 完整形态（cache / baseline / estimate）一步到位 | **裁剪落地**：纯函数 planner + `ContextPlan` 先行；ContextManager 只做薄协调（无 cache）；compaction checkpoint 的 durable schema 提前进 protocol | 纯函数可独立验证 precedence / budget / 配对 / 确定性；cache 失效是最难验对的部分，推迟到有真实性能证据 |
 | R4 | 多 Agent 按十步顺序整体落地 | **契约冻结与运行时分离**：先只冻结身份语义进 protocol（阶段 D）；coordinator 运行时 gate 在上下文系统完成之后（阶段 E） | context isolation 与 seed 依赖 `ContextPlan`；先冻结契约避免后续 protocol 破坏性变更 |
-| R5 | 文档以现在时描述未实现组件，差异只在"当前状态"小节标注 | 每个组件在其权威文档中挂**显式状态标记**（已实现/部分/仅设计/推迟），本文维护跨层状态总账 | `ContextManager`、`MultiAgentCoordinator`、两级快照在代码中零引用，但组件章节读起来像现状；这是当前最大的架构文档风险 |
+| R5 | 文档以现在时描述未实现组件，差异只在"当前状态"小节标注 | 每个组件在其权威文档中挂**显式状态标记**（已实现/部分/仅设计/推迟），本文维护跨层状态总账 | 重审当时 `ContextManager`、`MultiAgentCoordinator`、两级快照在代码中零引用，但组件章节读起来像现状；后续以状态总账消除这一风险 |
 
 ### 1.3 明确推迟的决策
 
@@ -105,15 +105,17 @@
 | --- | --- | --- | --- |
 | policy 冻结（durable policy revision binding） | 已实现 | A | `TurnAccepted.policy_revision`、`ToolScheduler` recovery checks |
 | `ModelInvocationSnapshot` | 部分 | B | selected model、`ContextPlan` 与 tools 已冻结；独立 provider/config/catalog revision 集合尚未建模 |
-| `ContextInput` / `ContextPlan` / 纯 planner / budget | 已实现 | B | [`core-context.md`](core-context.md) |
+| `ContextInput` / `ContextPlan` / 纯内容选择 planner | 已实现 | B | [`core-context.md`](core-context.md) |
+| 通用 context budget / token measurement 判定 | 已实现 | B | [`zeta-context-engine`](../zeta-rs/context-engine/README.md)；OpenAI exact 与 Anthropic estimated remote preflight 已接入，local tokenizer 尚未接入 |
 | `ContextManager`（薄协调，无 cache） | 已实现 | B | `core/src/context_manager.rs`、`loaded_thread.rs` |
 | compaction checkpoint schema + 压缩流程 | 已实现 | B | [`core-context.md`](core-context.md) §8 |
 | `ContextCompactionService` / `Clock` / `IdGenerator` / `CapabilityBroker` 端口 | 部分 | B / 按需 | model-backed compaction 已实现；其余仍按需设计 |
 | provider wire-level SSE streaming | 仅设计 | C | 本文 §4.2 |
 | App Server 独立 outbound writer 线程 | 仅设计 | C | 本文 §4.2 |
 | Desktop projection gap/resync | 仅设计 | C | [`zeta-desktop-architecture.md`](zeta-desktop-architecture.md) |
-| `DelegationId` / `AgentMessageId` / `ThreadOrigin::AgentSpawn` / seed schema | 仅设计 | D | [`core-multi-agent.md`](core-multi-agent.md) |
-| `MultiAgentCoordinator`、spawn saga、delivery、join、tree budget | 仅设计 | E | [`core-multi-agent.md`](core-multi-agent.md) |
+| `DelegationId` / `AgentMessageId` / `ThreadOrigin::AgentSpawn` / seed schema | 已实现 | D | [`core-multi-agent.md`](core-multi-agent.md) |
+| `MultiAgentCoordinator`、Fresh spawn saga、delivery、结构性 tree budget | 已实现 | E | [`core-multi-agent.md`](core-multi-agent.md) |
+| Selected/ForkedPrefix inheritance、durable join、cancellation tree、Agent-tree UI projection | 已实现 | E | [`core-multi-agent.md`](core-multi-agent.md) |
 | 并行工具计划、通用 deadline、声明式 retry、reconciliation | 仅设计 | E 之后按需 | [`core.md`](core.md) §11 |
 | 跨 Thread 长期记忆 | 推迟 | 单独 RFC | 本文 §1.3 |
 
@@ -237,8 +239,9 @@ snapshot + gap 重建。
 
 **阶段 B 核心纵向切片已落地：**
 
-1. `ContextInput` / `ContextPlan` 不可变类型 + 纯 `ContextPlanner`（precedence、budget、
-   Tool Call/Result 原子配对、checkpoint selection、显式 overflow outcome）；
+1. `ContextInput` / `ContextPlan` 不可变类型 + 纯 `ContextPlanner`（precedence、完整语义单元选择、
+   Tool Call/Result 原子配对、checkpoint selection、显式 overflow outcome），模型无关预算和计量
+   判定由 `zeta-context-engine` 提供；
 2. `ContextAssembler` 从 `ThreadSnapshot → ModelRequest` 过渡 API 改为
    `ContextPlan → ModelRequest` 纯组装；
 3. 薄 `ContextManager`：per-loaded-Thread、由 `LoadedThreadState` 持有、只做 sequence 校验
@@ -259,7 +262,7 @@ snapshot + gap 重建。
 
 领域权威是 [`core-multi-agent.md`](core-multi-agent.md)；本节只固定门槛。
 
-**阶段 D（契约冻结，无运行时）：** `DelegationId`、`AgentMessageId`、
+**阶段 D（契约冻结，已完成）：** `DelegationId`、`AgentMessageId`、
 `ThreadOrigin::AgentSpawn`、`AgentContextSeed` schema、delegation requested/started/terminal
 facts、`DelegationResult` Item 进入 canonical protocol，同步 Rust types / JSON Schema /
 generated TS / fixtures。目的：后续运行时开发不再产生破坏性 protocol 变更。
@@ -348,17 +351,19 @@ reader/writer 拆分、Desktop gap/resync。
 阶段 B 与 C 无强依赖，可由不同人并行；合入顺序建议 B 先行，避免流式测试对上下文管线改动
 重跑两轮。
 
-### 阶段 D｜多 Agent 契约冻结
+### 阶段 D｜多 Agent 契约冻结（已完成）
 
-范围：[§4.4](#44-r4多-agent-契约冻结先行) 的 protocol 变更，无运行时。
+范围：[§4.4](#44-r4多-agent-契约冻结先行) 的 protocol 变更。
 
 完成条件：Rust / schema / TS / fixtures 四处一致；contract test 覆盖新类型的
 serialize / deserialize / 拒绝非法值；不引入任何 Core 运行时依赖。
 
-### 阶段 E｜MultiAgentCoordinator
+### 阶段 E｜MultiAgentCoordinator（核心纵向切片已完成）
 
-范围：spawn saga、outbox/inbox delivery、durable join、Agent tree budget、cancellation
-tree、恢复。gate 条件见 §4.4。
+当前已完成 Fresh/Selected/ForkedPrefix spawn saga、outbox/inbox delivery、durable join、向下
+cancellation tree、结构性 Agent tree budget、恢复、Desktop tree projection 与可信 Workspace
+的模型工具接线。后续范围是 Agent definition 自动选择、跨产品 projection 与更完整的故障注入
+矩阵；gate 条件见 §4.4。
 
 完成条件：[`core-multi-agent.md`](core-multi-agent.md) §17 验证矩阵全量通过，其中 spawn
 的每个 durable boundary crash、duplicate delegation 拒绝、parent/child/sibling 隔离为必过

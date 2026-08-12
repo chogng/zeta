@@ -1,19 +1,23 @@
 use super::tool_scheduler::{ToolScheduler, ToolSchedulingProgress};
+use crate::context::ContextMeasurementDisposition;
+use crate::context::ContextMeasurementPolicy;
 use crate::context::ModelContextCompactionService;
 use crate::context::ModelInvocationPreparation;
-use crate::context::NoSkillInstructions;
-use crate::context::resolve_skill_instructions;
 use crate::policy_service::UnavailablePolicyService;
 use crate::thread_controller::CommitContextCheckpointRequest;
+use crate::thread_controller::PrepareModelInvocationRequest;
 use crate::{
     CompletedTurn, ContextAssembler, ContextCompactionRequest, ContextCompactionService, CoreError,
     HarnessInstructions, HarnessInstructionsProvider, ModelSelection, ModelService,
-    ModelStreamSink, NoThreadUpdates, NoTools, PolicyService, SkillInstructionsProvider,
-    ThreadController, ThreadUpdateSink, ToolService,
+    ModelStreamSink, NoThreadUpdates, NoTools, PolicyService, ThreadController, ThreadUpdateSink,
+    ToolService,
 };
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use zeta_async_utils::{Cancellation, CancellationReason, CancellationToken};
+use zeta_context_engine::ContextTokenMeasurementOutcome;
 use zeta_protocol::{
     ItemId, ModelResponse, ModelStreamEvent, ResponseItem, StableTurnError, StreamCursor,
     StreamInstanceId, ThreadCommand, ThreadId, ThreadItem, ThreadUpdate, ThreadUpdateEnvelope,
@@ -35,7 +39,8 @@ pub struct TurnExecutor {
     compaction: Arc<dyn ContextCompactionService>,
     updates: Arc<dyn ThreadUpdateSink>,
     instructions: Arc<dyn HarnessInstructionsProvider>,
-    skill_instructions: Arc<dyn SkillInstructionsProvider>,
+    context_source: Arc<dyn crate::ContextSource>,
+    extensions: Arc<zeta_extension_api::ExtensionRegistry>,
 }
 
 struct FixedHarnessInstructions {
@@ -53,6 +58,7 @@ pub enum TurnExecutionOutcome {
     Completed(CompletedTurn),
     ShellCompleted { sequence: u64 },
     WaitingForApproval,
+    WaitingForCapability,
 }
 
 impl TurnExecutor {
@@ -73,7 +79,8 @@ impl TurnExecutor {
             instructions: Arc::new(FixedHarnessInstructions {
                 snapshot: Arc::new(HarnessInstructions::default()),
             }),
-            skill_instructions: Arc::new(NoSkillInstructions),
+            context_source: Arc::new(crate::NoContextSource),
+            extensions: Arc::new(zeta_extension_api::ExtensionRegistry::default()),
         }
     }
 
@@ -109,6 +116,12 @@ impl TurnExecutor {
         self
     }
 
+    /// Installs an optional low-trust evidence source evaluated at the first model invocation.
+    pub fn with_context_source(mut self, context_source: Arc<dyn crate::ContextSource>) -> Self {
+        self.context_source = context_source;
+        self
+    }
+
     /// Overrides checkpoint generation while retaining Core-owned provenance and commit checks.
     pub fn with_context_compaction_service(
         mut self,
@@ -118,12 +131,12 @@ impl TurnExecutor {
         self
     }
 
-    /// Installs the external provider of exact model-facing Skill instructions.
-    pub fn with_skill_instructions_provider(
+    /// Installs the shared agent extension registry used at model-invocation safe points.
+    pub fn with_extensions(
         mut self,
-        skill_instructions: Arc<dyn SkillInstructionsProvider>,
+        extensions: Arc<zeta_extension_api::ExtensionRegistry>,
     ) -> Self {
-        self.skill_instructions = skill_instructions;
+        self.extensions = extensions;
         self
     }
 
@@ -231,13 +244,18 @@ impl TurnExecutor {
     ) -> Result<TurnExecutionOutcome, ExecutionFailure> {
         check_cancellation(cancellation)?;
         self.require_running_turn(thread_id, turn_id)?;
-        if matches!(
-            self.tool_scheduler()
-                .run_pending(thread_id, turn_id, cancellation)
-                .map_err(ExecutionFailure::service)?,
-            ToolSchedulingProgress::WaitingForApproval
-        ) {
-            return Ok(TurnExecutionOutcome::WaitingForApproval);
+        match self
+            .tool_scheduler()
+            .run_pending(thread_id, turn_id, cancellation)
+            .map_err(ExecutionFailure::service)?
+        {
+            ToolSchedulingProgress::Complete => {}
+            ToolSchedulingProgress::WaitingForApproval => {
+                return Ok(TurnExecutionOutcome::WaitingForApproval);
+            }
+            ToolSchedulingProgress::WaitingForCapability => {
+                return Ok(TurnExecutionOutcome::WaitingForCapability);
+            }
         }
         let sequence = self
             .threads
@@ -299,21 +317,32 @@ impl TurnExecutor {
     ) -> Result<TurnExecutionOutcome, ExecutionFailure> {
         check_cancellation(cancellation)?;
         self.require_running_turn(thread_id, turn_id)?;
-        if matches!(
-            self.tool_scheduler()
-                .run_pending(thread_id, turn_id, cancellation)
-                .map_err(ExecutionFailure::service)?,
-            ToolSchedulingProgress::WaitingForApproval
-        ) {
-            return Ok(TurnExecutionOutcome::WaitingForApproval);
+        match self
+            .tool_scheduler()
+            .run_pending(thread_id, turn_id, cancellation)
+            .map_err(ExecutionFailure::service)?
+        {
+            ToolSchedulingProgress::Complete => {}
+            ToolSchedulingProgress::WaitingForApproval => {
+                return Ok(TurnExecutionOutcome::WaitingForApproval);
+            }
+            ToolSchedulingProgress::WaitingForCapability => {
+                return Ok(TurnExecutionOutcome::WaitingForCapability);
+            }
         }
-        let tools = self.tools.definitions();
-
+        let mut measurement_policy = ContextMeasurementPolicy::default();
+        let mut first_invocation_evidence = None;
         loop {
             check_cancellation(cancellation)?;
             let snapshot = self
                 .threads
                 .read_thread(thread_id)
+                .map_err(ExecutionFailure::model)?;
+            let activated = activated_tool_names(self.tools.as_ref(), &snapshot.items, turn_id)
+                .map_err(ExecutionFailure::model)?;
+            let tools = self
+                .tools
+                .model_definitions(&activated)
                 .map_err(ExecutionFailure::model)?;
             let turn = snapshot
                 .turns
@@ -324,25 +353,60 @@ impl TurnExecutor {
                 Some(model) => ModelSelection::Session(model),
                 None => ModelSelection::ConfiguredDefault,
             };
-            let budget = self
+            let configured_budget = self
                 .model
                 .context_budget(model)
                 .map_err(ExecutionFailure::model)?;
+            let budget = measurement_policy.adjusted_budget(configured_budget);
             let instructions = self.instructions.snapshot();
-            let skill_instructions = resolve_skill_instructions(
-                self.skill_instructions.as_ref(),
-                &turn.activated_skills,
-            )
-            .map_err(ExecutionFailure::model)?;
+            let evidence = if is_first_model_invocation(&snapshot, turn_id) {
+                if first_invocation_evidence.is_none() {
+                    let query = current_turn_query(&snapshot, turn_id);
+                    first_invocation_evidence = Some(match query {
+                        Some(query) => match self.context_source.collect(
+                            &crate::ContextSourceRequest {
+                                session_id: &snapshot.session_id,
+                                thread_id,
+                                turn_id,
+                                query: &query,
+                            },
+                            cancellation,
+                        ) {
+                            Ok(evidence) => evidence,
+                            Err(CoreError::Cancelled(message)) => {
+                                return Err(ExecutionFailure::Cancelled(CoreError::Cancelled(
+                                    message,
+                                )));
+                            }
+                            Err(_) => Vec::new(),
+                        },
+                        None => Vec::new(),
+                    });
+                }
+                first_invocation_evidence.clone().unwrap_or_default()
+            } else {
+                Vec::new()
+            };
+            let extension_fragments = self
+                .extensions
+                .contribute_turn_input(zeta_extension_api::TurnInputContext::new(
+                    thread_id,
+                    turn_id,
+                    &turn.activated_skills,
+                ))
+                .map_err(|error| ExecutionFailure::model(CoreError::Context(error.to_string())))?;
             let invocation = match self
                 .threads
                 .prepare_model_invocation(
                     thread_id,
-                    turn_id,
-                    &instructions,
-                    &skill_instructions,
-                    tools.clone(),
-                    budget,
+                    PrepareModelInvocationRequest {
+                        turn_id,
+                        instructions: &instructions,
+                        extension_fragments,
+                        evidence,
+                        tools: tools.clone(),
+                        budget,
+                    },
                 )
                 .map_err(ExecutionFailure::model)?
             {
@@ -368,12 +432,40 @@ impl TurnExecutor {
                             },
                         )
                         .map_err(ExecutionFailure::persistence)?;
+                    measurement_policy.note_compaction();
                     continue;
                 }
             };
             let request = ContextAssembler::assemble(invocation.context())
                 .map_err(ExecutionFailure::model)?;
             let model = invocation.model().as_service_selection();
+            let estimated_input = invocation.context().budget().total_input();
+            let measurement_capability = self
+                .model
+                .input_token_measurement_capability(model)
+                .map_err(ExecutionFailure::service)?;
+            let should_measure = measurement_policy
+                .should_measure(configured_budget, estimated_input, measurement_capability)
+                .map_err(|error| ExecutionFailure::model(CoreError::Context(error.to_string())))?;
+            if should_measure {
+                match self
+                    .model
+                    .measure_input(model, &request, cancellation)
+                    .map_err(ExecutionFailure::service)?
+                {
+                    ContextTokenMeasurementOutcome::Unavailable => {}
+                    ContextTokenMeasurementOutcome::Measured(measurement) => {
+                        let disposition = measurement_policy
+                            .assess(configured_budget, estimated_input, measurement)
+                            .map_err(|error| {
+                                ExecutionFailure::model(CoreError::Context(error.to_string()))
+                            })?;
+                        if disposition == ContextMeasurementDisposition::Replan {
+                            continue;
+                        }
+                    }
+                }
+            }
             let mut transient_attempt = 0;
             let mut empty_attempt = false;
             let (response, mut stream) = loop {
@@ -415,8 +507,11 @@ impl TurnExecutor {
                     Err(error) => return Err(ExecutionFailure::service(error)),
                 }
             };
+            measurement_policy.finish_invocation();
 
             let tool_calls = response.tool_calls().cloned().collect::<Vec<_>>();
+            validate_model_tool_calls(&tool_calls, &request.tools)
+                .map_err(ExecutionFailure::model)?;
             self.record_reasoning(thread_id, turn_id, &response, &mut stream)?;
             let text = final_text(&response, &stream);
             if tool_calls.is_empty() {
@@ -446,11 +541,14 @@ impl TurnExecutor {
                 }
                 .map_err(ExecutionFailure::persistence)?;
             }
-            if matches!(
-                self.execute_tools(thread_id, turn_id, &tool_calls, cancellation)?,
-                ToolSchedulingProgress::WaitingForApproval
-            ) {
-                return Ok(TurnExecutionOutcome::WaitingForApproval);
+            match self.execute_tools(thread_id, turn_id, &tool_calls, cancellation)? {
+                ToolSchedulingProgress::Complete => {}
+                ToolSchedulingProgress::WaitingForApproval => {
+                    return Ok(TurnExecutionOutcome::WaitingForApproval);
+                }
+                ToolSchedulingProgress::WaitingForCapability => {
+                    return Ok(TurnExecutionOutcome::WaitingForCapability);
+                }
             }
         }
     }
@@ -539,6 +637,102 @@ impl TurnExecutor {
         )
         .with_thread_updates(self.updates.clone())
     }
+}
+
+fn is_first_model_invocation(snapshot: &crate::ThreadSnapshot, turn_id: &TurnId) -> bool {
+    !snapshot.items.iter().any(|item| {
+        item.turn_id() == turn_id
+            && matches!(
+                item,
+                zeta_protocol::ThreadItem::AgentMessage { .. }
+                    | zeta_protocol::ThreadItem::ToolCall { .. }
+                    | zeta_protocol::ThreadItem::ToolResult { .. }
+            )
+    })
+}
+
+fn current_turn_query(snapshot: &crate::ThreadSnapshot, turn_id: &TurnId) -> Option<String> {
+    let query = snapshot
+        .items
+        .iter()
+        .filter_map(|item| match item {
+            zeta_protocol::ThreadItem::UserMessage {
+                turn_id: item_turn,
+                text,
+                ..
+            } if item_turn == turn_id => Some(text.as_str()),
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    (!query.trim().is_empty()).then_some(query)
+}
+
+fn validate_model_tool_calls(
+    calls: &[ToolCall],
+    definitions: &[zeta_protocol::ToolDefinition],
+) -> Result<(), CoreError> {
+    let allowed = definitions
+        .iter()
+        .map(|definition| &definition.name)
+        .collect::<BTreeSet<_>>();
+    if let Some(call) = calls.iter().find(|call| !allowed.contains(&call.name)) {
+        return Err(CoreError::Policy(format!(
+            "model requested a Tool outside the current invocation capability scope: {}",
+            call.name
+        )));
+    }
+    Ok(())
+}
+
+fn activated_tool_names(
+    tools: &dyn ToolService,
+    items: &[ThreadItem],
+    turn_id: &TurnId,
+) -> Result<BTreeSet<zeta_protocol::ToolName>, CoreError> {
+    let mut calls = BTreeMap::new();
+    for item in items {
+        if let ThreadItem::ToolCall {
+            turn_id: item_turn_id,
+            tool_call_id,
+            name,
+            arguments_json,
+            ..
+        } = item
+            && item_turn_id == turn_id
+        {
+            let arguments = serde_json::from_str(arguments_json).map_err(|error| {
+                CoreError::Execution(format!(
+                    "durable Tool Call arguments could not be reconstructed: {error}"
+                ))
+            })?;
+            calls.insert(
+                tool_call_id.clone(),
+                ToolCall {
+                    id: tool_call_id.clone(),
+                    name: name.clone(),
+                    arguments,
+                },
+            );
+        }
+    }
+
+    let mut activated = BTreeSet::new();
+    for item in items {
+        if let ThreadItem::ToolResult {
+            turn_id: item_turn_id,
+            tool_call_id,
+            text,
+            is_error: false,
+            ..
+        } = item
+            && item_turn_id == turn_id
+            && let Some(call) = calls.get(tool_call_id)
+        {
+            activated.extend(tools.activated_tool_names(call, text)?);
+        }
+    }
+    Ok(activated)
 }
 
 struct InvocationStream {

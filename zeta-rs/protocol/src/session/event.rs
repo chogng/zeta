@@ -1,4 +1,8 @@
-use crate::{ModelRef, SessionId, SessionThread, ThreadId};
+use crate::AgentContextSeed;
+use crate::ModelRef;
+use crate::SessionId;
+use crate::SessionThread;
+use crate::ThreadId;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -27,6 +31,12 @@ pub enum SessionEvent {
         thread: SessionThread,
         title: String,
     },
+    AgentThreadCreationPlanned {
+        session_id: SessionId,
+        thread: SessionThread,
+        title: String,
+        context_seed: Box<AgentContextSeed>,
+    },
     ThreadAttached {
         session_id: SessionId,
         thread_id: ThreadId,
@@ -49,6 +59,7 @@ impl SessionEvent {
             Self::SessionCreated { session_id, .. }
             | Self::SessionModelChanged { session_id, .. }
             | Self::ThreadCreationPlanned { session_id, .. }
+            | Self::AgentThreadCreationPlanned { session_id, .. }
             | Self::ThreadAttached { session_id, .. }
             | Self::ThreadArchived { session_id, .. }
             | Self::SessionCompleted { session_id }

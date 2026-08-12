@@ -5,10 +5,16 @@
 //! headers belong to `zeta-model-provider`; this crate only selects a codec
 //! after the runtime has resolved those concerns.
 
-use crate::{ApiError, ModelRequest, ModelResponse, requests};
-use zeta_async_utils::{CancellationSource, CancellationToken};
-use zeta_client::{OperationClient, ResolvedApiTarget};
-use zeta_http_client::{HttpHeader, HttpMethod};
+use crate::ApiError;
+use crate::InputTokenCount;
+use crate::ModelRequest;
+use crate::ModelResponse;
+use crate::requests;
+use zeta_async_utils::CancellationSource;
+use zeta_async_utils::CancellationToken;
+use zeta_client::OperationClient;
+use zeta_client::ResolvedApiTarget;
+use zeta_http_client::HttpHeader;
 
 const ANTHROPIC_MESSAGES_API_VERSION: &str = "2023-06-01";
 
@@ -46,10 +52,6 @@ impl ApiEndpoint {
             Self::OpenAiChatCompletions => ApiProtocol::OpenAiCompletions,
             Self::AnthropicMessages => ApiProtocol::AnthropicMessages,
         }
-    }
-
-    pub(crate) fn method(self) -> HttpMethod {
-        HttpMethod::Post
     }
 
     pub(crate) fn relative_path(self) -> &'static str {
@@ -130,6 +132,58 @@ impl ApiEndpoint {
                 client,
                 cancellation,
             ),
+        }
+    }
+
+    /// Counts the input tokens for one normalized request through a supported provider preflight
+    /// endpoint.
+    pub fn count_input_tokens_with_client(
+        self,
+        target: &ResolvedApiTarget,
+        model: &str,
+        request: &ModelRequest,
+        client: &dyn OperationClient,
+    ) -> Result<InputTokenCount, ApiError> {
+        self.count_input_tokens_with_client_and_cancellation(
+            target,
+            model,
+            request,
+            client,
+            &CancellationSource::new().token(),
+        )
+    }
+
+    /// Counts input tokens while observing one caller-owned cancellation scope.
+    pub fn count_input_tokens_with_client_and_cancellation(
+        self,
+        target: &ResolvedApiTarget,
+        model: &str,
+        request: &ModelRequest,
+        client: &dyn OperationClient,
+        cancellation: &CancellationToken,
+    ) -> Result<InputTokenCount, ApiError> {
+        validate_request(model, request)?;
+        match self {
+            Self::OpenAiResponses => requests::openai_responses::count_input_tokens(
+                self,
+                target,
+                model,
+                request,
+                client,
+                cancellation,
+            ),
+            Self::AnthropicMessages => requests::anthropic_messages::count_input_tokens(
+                self,
+                target,
+                model,
+                request,
+                client,
+                cancellation,
+            ),
+            Self::OpenAiChatCompletions => Err(ApiError::InvalidRequest(
+                "OpenAI Chat Completions does not expose a standard input-token count endpoint"
+                    .into(),
+            )),
         }
     }
 }

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
+import type { ConfigReadResult, SemanticCodeIndexSelectionDto } from "../../../../../../../generated/app-server/types.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>", {
   pretendToBeVisual: true,
@@ -304,6 +305,159 @@ test("Settings service retains the active section across visibility changes", ()
   assert.equal(settings.activeSectionId, "editor");
   assert.deepEqual(selected, ["editor"]);
   assert.throws(() => settings.open(""), /must not be empty/);
+});
+
+test("Indexing settings save Tool Search and semantic model consent configuration", async () => {
+  using disposables = new DisposableStore();
+  const ownerDocument = browserEnvironment.window.document;
+  ownerDocument.body.replaceChildren();
+  const root = ownerDocument.createElement("div");
+  ownerDocument.body.append(root);
+  const settings = disposables.add(new SettingsService());
+  const configuration = disposables.add(new WorkbenchConfigurationService());
+  const config = {
+    revision: 4,
+    generation: 4,
+    preferredModel: null,
+    approvalReviewModel: { type: "automatic" },
+    providers: {
+      ollama: {
+        provider: "ollama",
+        baseUrl: "http://localhost:11434/v1",
+        maxOutputTokens: null,
+        modelContext: {},
+      },
+    },
+    mcpServers: {},
+    skillSources: {},
+    pluginRequests: {},
+    hooks: {},
+    languageServers: {},
+    toolSearch: {
+      mode: "hybridEmbedding",
+      embeddingModel: { provider: "ollama", model: "nomic-embed-text" },
+      embeddingStatus: {
+        type: "unavailable",
+        model: { provider: "ollama", model: "nomic-embed-text" },
+        reason: "connection refused",
+      },
+    },
+    semanticCodeIndex: {
+      automaticContext: "off",
+      selection: {
+        type: "remote",
+        models: {
+          embeddingModel: { provider: "ollama", model: "nomic-embed-text" },
+          rerankModel: null,
+        },
+      },
+      activeWorkspaceAuthorized: false,
+    },
+  } as const satisfies ConfigReadResult;
+  const configured: Array<{ mode: string; embeddingModel?: { provider: string; model: string }; revision: number }> = [];
+  const configuredProviders: Array<{ provider: string; baseUrl: string | null; revision: number }> = [];
+  const configuredSemantic: Array<{ selection: SemanticCodeIndexSelectionDto; automaticContext: string; revision: number }> = [];
+  let authorizations = 0;
+  disposables.add(new SettingsEditorContribution({
+    configurationService: configuration,
+    container: root,
+    dialogService: acceptingDialogService,
+    settingsService: settings,
+    themeService: disposables.add(new ThemeService(darkColorTheme)),
+    userThemeService: UnavailableUserThemeService,
+    codeIndexService: {
+      readConfig: async () => config,
+      configureProvider: async (next, revision) => {
+        configuredProviders.push({ provider: next.provider, baseUrl: next.baseUrl ?? null, revision });
+        return { revision: 4, generation: 4, disposition: "updated" };
+      },
+      configure: async (selection, automaticContext, revision) => {
+        configuredSemantic.push({ selection, automaticContext, revision });
+        return { revision: 4, generation: 4, disposition: "updated" };
+      },
+      authorize: async () => {
+        authorizations += 1;
+        return { revision: 4, generation: 4, disposition: "updated" };
+      },
+      revoke: async () => ({ revision: 4, generation: 4, disposition: "updated" }),
+      status: () => Promise.reject(new Error("Code index runtime is not exercised by this test.")),
+      cancel: () => Promise.reject(new Error("Code index runtime is not exercised by this test.")),
+      retry: () => Promise.reject(new Error("Code index runtime is not exercised by this test.")),
+    },
+    toolSearchService: {
+      readConfig: async () => ({ revision: 4, ...config.toolSearch }),
+      configure: async (next, revision) => { configured.push({ ...next, revision }); },
+    },
+  }));
+
+  settings.open("indexing");
+  await new Promise((resolve) => globalThis.setTimeout(resolve, 0));
+
+  assert.deepEqual(
+    [...root.querySelectorAll(".zeta-indexing-setting legend")].map((legend) => legend.textContent),
+    ["Agent tool search", "Semantic code search"],
+  );
+  assert.match(root.textContent ?? "", /Embedding search is unavailable: connection refused/);
+  const toolGroup = root.querySelectorAll<HTMLFieldSetElement>(".zeta-indexing-setting")[0];
+  assert.ok(toolGroup);
+  const input = toolGroup.querySelector<HTMLInputElement>(".zeta-settings-text-input");
+  assert.equal(input?.value, "ollama/nomic-embed-text");
+  input!.value = "ollama/mxbai-embed-large";
+  [...toolGroup.querySelectorAll<HTMLButtonElement>("button")]
+    .find((button) => button.textContent === "Save tool search")
+    ?.click();
+  await new Promise((resolve) => globalThis.setTimeout(resolve, 0));
+
+  assert.deepEqual(configured, [{
+    mode: "hybridEmbedding",
+    embeddingModel: { provider: "ollama", model: "mxbai-embed-large" },
+    revision: 4,
+  }]);
+
+  let semanticGroup = root.querySelectorAll<HTMLFieldSetElement>(".zeta-indexing-setting")[1];
+  assert.ok(semanticGroup);
+  const provider = semanticGroup.querySelector<HTMLInputElement>('[aria-label="Semantic model provider"]');
+  const endpoint = semanticGroup.querySelector<HTMLInputElement>('[aria-label="Semantic model endpoint URL"]');
+  assert.ok(provider);
+  assert.ok(endpoint);
+  provider.value = "openai-compatible";
+  endpoint.value = "https://models.example.test/v1";
+  [...semanticGroup.querySelectorAll<HTMLButtonElement>("button")]
+    .find((button) => button.textContent === "Save endpoint")
+    ?.click();
+  await new Promise((resolve) => globalThis.setTimeout(resolve, 0));
+  assert.deepEqual(configuredProviders, [{
+    provider: "openai-compatible",
+    baseUrl: "https://models.example.test/v1",
+    revision: 4,
+  }]);
+
+  semanticGroup = root.querySelectorAll<HTMLFieldSetElement>(".zeta-indexing-setting")[1]!;
+  const semanticEmbedding = semanticGroup.querySelector<HTMLInputElement>('[aria-label="Embedding model"]');
+  assert.ok(semanticEmbedding);
+  semanticEmbedding.value = "ollama/mxbai-embed-large";
+  [...semanticGroup.querySelectorAll<HTMLButtonElement>("button")]
+    .find((button) => button.textContent === "Save model selection")
+    ?.click();
+  await new Promise((resolve) => globalThis.setTimeout(resolve, 0));
+  assert.deepEqual(configuredSemantic, [{
+    selection: {
+      type: "remote",
+      models: {
+        embeddingModel: { provider: "ollama", model: "mxbai-embed-large" },
+        rerankModel: null,
+      },
+    },
+    automaticContext: "off",
+    revision: 4,
+  }]);
+
+  semanticGroup = root.querySelectorAll<HTMLFieldSetElement>(".zeta-indexing-setting")[1]!;
+  [...semanticGroup.querySelectorAll<HTMLButtonElement>("button")]
+    .find((button) => button.textContent === "Authorize active workspace")
+    ?.click();
+  await new Promise((resolve) => globalThis.setTimeout(resolve, 0));
+  assert.equal(authorizations, 1);
 });
 
 test("Zeta Settings titlebar action opens the window Settings service", async () => {

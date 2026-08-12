@@ -73,13 +73,17 @@ fn validate_skill_activations(
             | UserInput::Mention { .. } => None,
         })
         .collect::<Vec<_>>();
-    if selected.len() != activated_skills.len() {
+    let explicit = activated_skills
+        .iter()
+        .filter(|activation| activation.reason == SkillActivationReason::Explicit)
+        .collect::<Vec<_>>();
+    if selected.len() != explicit.len() {
         return Err(CoreError::InvalidInput(
             "every selected Skill must have one frozen activation".into(),
         ));
     }
-    for (selected, activated) in selected.into_iter().zip(activated_skills) {
-        if selected.id != activated.id || activated.reason != SkillActivationReason::Explicit {
+    for (selected, activated) in selected.into_iter().zip(explicit) {
+        if selected.id != activated.id {
             return Err(CoreError::InvalidInput(
                 "frozen Skill activation does not match its explicit selection".into(),
             ));

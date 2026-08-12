@@ -142,6 +142,8 @@ impl std::error::Error for McpToolAdapterError {}
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ProtocolToolAdapterError {
     FreeformToolsUnsupported,
+    Schema(ToolSchemaError),
+    Definition(ToolDefinitionError),
 }
 
 impl fmt::Display for ProtocolToolAdapterError {
@@ -153,8 +155,82 @@ impl fmt::Display for ProtocolToolAdapterError {
                     "canonical model tool definitions do not support freeform tools"
                 )
             }
+            Self::Schema(error) => write!(formatter, "invalid protocol tool schema: {error}"),
+            Self::Definition(error) => {
+                write!(formatter, "invalid protocol tool definition: {error}")
+            }
         }
     }
 }
 
 impl std::error::Error for ProtocolToolAdapterError {}
+
+/// Reports why a set of validated tool registrations cannot become one immutable snapshot.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ToolRegistryError {
+    DuplicateName(String),
+    ReservedName(String),
+    LoadingExposureMismatch { name: String },
+    EmptySearchMetadata,
+    SearchMetadataTooLarge { actual: usize, maximum: usize },
+}
+
+impl fmt::Display for ToolRegistryError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::DuplicateName(name) => {
+                write!(
+                    formatter,
+                    "tool registry contains duplicate model name '{name}'"
+                )
+            }
+            Self::ReservedName(name) => {
+                write!(
+                    formatter,
+                    "tool registry name '{name}' is reserved by the host"
+                )
+            }
+            Self::LoadingExposureMismatch { name } => write!(
+                formatter,
+                "tool '{name}' loading mode does not match its registry exposure"
+            ),
+            Self::EmptySearchMetadata => {
+                formatter.write_str("tool search metadata must not be empty")
+            }
+            Self::SearchMetadataTooLarge { actual, maximum } => write!(
+                formatter,
+                "tool search metadata is {actual} bytes, exceeding {maximum} bytes"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for ToolRegistryError {}
+
+/// Reports invalid bounded queries against one immutable tool registry snapshot.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ToolSearchError {
+    EmptyQuery,
+    QueryTooLarge { actual: usize, maximum: usize },
+    InvalidLimit { actual: usize, maximum: usize },
+    InvalidRegex(String),
+}
+
+impl fmt::Display for ToolSearchError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::EmptyQuery => formatter.write_str("tool search query must not be empty"),
+            Self::QueryTooLarge { actual, maximum } => write!(
+                formatter,
+                "tool search query is {actual} bytes, exceeding {maximum} bytes"
+            ),
+            Self::InvalidLimit { actual, maximum } => write!(
+                formatter,
+                "tool search limit {actual} must be between 1 and {maximum}"
+            ),
+            Self::InvalidRegex(error) => write!(formatter, "invalid tool search regex: {error}"),
+        }
+    }
+}
+
+impl std::error::Error for ToolSearchError {}

@@ -123,6 +123,175 @@ fn local_registry_accepts_shell_processes_but_rejects_ripgrep_workspace_escape_a
 }
 
 #[test]
+fn local_policy_runs_agent_coordination_without_an_external_approval() {
+    for tool_name in [
+        crate::server::multi_agent_tools::SPAWN_AGENT_TOOL_NAME,
+        crate::server::multi_agent_tools::SEND_AGENT_MESSAGE_TOOL_NAME,
+        crate::server::multi_agent_tools::WAIT_AGENT_TOOL_NAME,
+    ] {
+        let request = ActionReviewRequest::new(
+            ResolvedAction::new(
+                ActionDigest::from_canonical_bytes(tool_name.as_bytes()),
+                ActionKind::SystemOperation,
+                "coordinate child Agent",
+                CapabilitySet::new([]),
+            ),
+            ActionProvenance::new(ActionSource::BuiltInTool, tool_name),
+            SandboxCompatibility::NotApplicable {
+                reason: "durable Session/Thread mutation".into(),
+            },
+            PolicyRevision::new(LOCAL_POLICY_REVISION),
+        );
+
+        assert!(matches!(
+            LocalShellPolicy
+                .decide(&request, &CancellationSource::new().token())
+                .unwrap(),
+            ExecutionDecision::RunUnsandboxed { .. }
+        ));
+    }
+}
+
+#[test]
+fn executor_reviewer_materializes_workspace_paths_before_policy() {
+    let workspace = TestWorkspace::new();
+    fs::write(workspace.path().join("readable.txt"), "hello").unwrap();
+    let reviewer = LocalExecutorReviewer {
+        workspace: workspace.trusted(),
+        ripgrep: RipgrepExecutable::from_path(workspace.ripgrep()).unwrap(),
+    };
+    let read = ToolCall {
+        id: ToolCallId::new("file-system-read").unwrap(),
+        name: ToolName::new("file-system").unwrap(),
+        arguments: json!({"operation": "read", "path": "readable.txt"}),
+    };
+
+    let review = reviewer.prepare_file_system(&read).unwrap();
+    assert!(matches!(
+        LocalShellPolicy
+            .decide(&review, &CancellationSource::new().token())
+            .unwrap(),
+        ExecutionDecision::RunUnsandboxed { .. }
+    ));
+    assert!(
+        review
+            .action()
+            .required_capabilities()
+            .iter()
+            .any(|capability| capability.scope().ends_with("readable.txt"))
+    );
+
+    let patch = ToolCall {
+        id: ToolCallId::new("apply-patch").unwrap(),
+        name: ToolName::new("apply-patch").unwrap(),
+        arguments: json!({
+            "patch": "*** Begin Patch\n*** Add File: added.txt\n+hello\n*** End Patch"
+        }),
+    };
+    let review = reviewer.prepare_apply_patch(&patch).unwrap();
+    assert!(matches!(
+        LocalShellPolicy
+            .decide(&review, &CancellationSource::new().token())
+            .unwrap(),
+        ExecutionDecision::AskUser(_)
+    ));
+
+    let escaping = ToolCall {
+        id: ToolCallId::new("escaping-patch").unwrap(),
+        name: ToolName::new("apply-patch").unwrap(),
+        arguments: json!({
+            "patch": "*** Begin Patch\n*** Add File: ../outside.txt\n+bad\n*** End Patch"
+        }),
+    };
+    assert!(reviewer.prepare_apply_patch(&escaping).is_err());
+}
+
+#[test]
+fn local_tool_port_exposes_executor_tools_and_hides_migrated_legacy_names() {
+    let workspace = TestWorkspace::new();
+    let trusted = workspace.trusted();
+    let ripgrep = RipgrepExecutable::from_path(workspace.ripgrep()).unwrap();
+    let environment_id = zeta_tools::ToolEnvironmentId::new("local-workspace").unwrap();
+    let reviewer: Arc<dyn ToolExecutorReviewer> = Arc::new(LocalExecutorReviewer {
+        workspace: trusted.clone(),
+        ripgrep: ripgrep.clone(),
+    });
+    let shell =
+        LocalShellToolService::new(trusted.clone(), ripgrep.clone(), PassThroughBackend).unwrap();
+    let composition = LocalToolComposition {
+        tools: Arc::new(LocalToolSuite::new(shell, ripgrep.clone())),
+        policy: Arc::new(LocalShellPolicy),
+        ripgrep,
+        executors: vec![
+            LocalExecutorContribution {
+                executor: Arc::new(
+                    ShellCommandTool::new(
+                        environment_id.clone(),
+                        trusted.root().clone(),
+                        PassThroughBackend,
+                        CoreAuthorized,
+                        ShellCommandLimits {
+                            timeout: DEFAULT_TIMEOUT,
+                            max_output_bytes: DEFAULT_OUTPUT_BYTES,
+                        },
+                    )
+                    .unwrap(),
+                ),
+                environment_id: environment_id.clone(),
+                reviewer: Arc::clone(&reviewer),
+            },
+            LocalExecutorContribution {
+                executor: Arc::new(
+                    FileSystemTool::new(
+                        environment_id.clone(),
+                        Arc::new(LocalFileSystem::new(trusted.root().clone())),
+                        FileSystemLimits::default(),
+                    )
+                    .unwrap(),
+                ),
+                environment_id: environment_id.clone(),
+                reviewer: Arc::clone(&reviewer),
+            },
+            LocalExecutorContribution {
+                executor: Arc::new(
+                    ApplyPatchTool::new(
+                        environment_id.clone(),
+                        trusted.root().clone(),
+                        ApplyPatchLimits::default(),
+                    )
+                    .unwrap(),
+                ),
+                environment_id,
+                reviewer,
+            },
+        ],
+    };
+    let combined =
+        crate::tool_composition::combine_tool_ports(vec![composition.tool_port().unwrap()])
+            .unwrap()
+            .unwrap();
+
+    let visible = combined
+        .tools
+        .model_definitions(&std::collections::BTreeSet::new())
+        .unwrap()
+        .into_iter()
+        .map(|definition| definition.name.to_string())
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        visible,
+        vec![
+            "apply-patch",
+            "file-system",
+            "glob",
+            "grep",
+            "shell-command"
+        ]
+    );
+}
+
+#[test]
 fn local_suite_reads_and_edits_with_spec_errors() {
     let workspace = TestWorkspace::new();
     let ripgrep = RipgrepExecutable::from_path(workspace.ripgrep()).unwrap();

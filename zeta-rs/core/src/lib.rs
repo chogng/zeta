@@ -4,6 +4,7 @@ mod capabilities;
 mod context;
 mod context_manager;
 mod error;
+mod multi_agent;
 mod policy_service;
 mod services;
 mod session_coordinator;
@@ -20,24 +21,37 @@ pub use context::ContextCompactionRequest;
 pub use context::ContextCompactionResult;
 pub use context::ContextCompactionService;
 pub use context::ContextTokenCount;
+pub use context::ContextTokenMeasurementCapability;
+pub use context::ContextTokenMeasurementOutcome;
 pub use context::HarnessInstructions;
 pub use context::HarnessInstructionsProvider;
-pub use context::SkillInstruction;
-pub use context::SkillInstructionRetention;
-pub use context::SkillInstructionsProvider;
 pub use error::CoreError;
+pub use multi_agent::AgentTreeLimits;
+pub use multi_agent::CompleteDelegationRequest;
+pub use multi_agent::DeliveredAgentMessage;
+pub use multi_agent::JoinAgentsRequest;
+pub use multi_agent::JoinedAgents;
+pub use multi_agent::MultiAgentCoordinator;
+pub use multi_agent::SendAgentMessageRequest;
+pub use multi_agent::SpawnAgentRequest;
+pub use multi_agent::SpawnedAgent;
 pub use policy_service::{PolicyService, durable_approval_request};
 pub use services::AutoReviewedToolGrant;
+pub use services::ContextEvidence;
+pub use services::ContextSource;
+pub use services::ContextSourceRequest;
 pub use services::LeaseGuard;
 pub use services::ModelSelection;
 pub use services::ModelService;
 pub use services::ModelStreamSink;
+pub use services::NoContextSource;
 pub use services::NoThreadUpdates;
 pub use services::NoTools;
 pub use services::OneTimeToolGrant;
 pub use services::ThreadUpdateSink;
 pub use services::ToolAuthorization;
 pub use services::ToolExecutionFacts;
+pub use services::ToolExecutionIdentity;
 pub use services::ToolOutputSink;
 pub use services::ToolService;
 pub use services::WriterLease;
@@ -45,7 +59,7 @@ pub use session_coordinator::{
     ArchiveSessionThreadRequest, CommandDisposition, CreateSessionRequest, CreateSessionResult,
     CreateSessionThreadRequest, ForkSessionThreadRequest, InMemorySessionStore,
     RewindSessionThreadRequest, SequenceExpectation, SessionCoordinator, SessionLifecycleRequest,
-    SessionMutationResult, SessionThreadResult, SetSessionModelRequest,
+    SessionMutationResult, SessionThreadResult, SetSessionModelRequest, SpawnAgentThreadRequest,
 };
 pub use session_reducer::{
     SessionCommandResult, SessionCommandSnapshot, SessionSnapshot, SessionThreadSnapshot,
@@ -56,6 +70,7 @@ pub use state::ToolCallStatus;
 pub use thread_controller::CancelTurnInteractionRequest;
 pub use thread_controller::CancelledTurnInteraction;
 pub use thread_controller::CompletedTurn;
+pub use thread_controller::CreateAgentThreadRequest;
 pub use thread_controller::CreateRewoundThreadRequest;
 pub use thread_controller::CreateThreadRequest;
 pub use thread_controller::InMemoryThreadStore;
@@ -76,6 +91,7 @@ pub use thread_controller::StartTurnResult;
 pub use thread_controller::ThreadController;
 pub use thread_controller::ToolCallOutput;
 pub use thread_controller::{ShellTurnInvocation, StartShellTurnRequest, StartTurnRequest};
+pub use thread_reducer::DelegationSnapshot;
 pub use thread_reducer::ResolvedTurnInteraction;
 pub use thread_reducer::ThreadCommandResult;
 pub use thread_reducer::ThreadCommandSnapshot;

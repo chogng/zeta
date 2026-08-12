@@ -5,8 +5,10 @@ use thiserror::Error;
 pub enum CodeRetrievalError {
     #[error("code-retrieval query is invalid: {0}")]
     InvalidQuery(&'static str),
-    #[error("local and cloud retrieval sources belong to different workspace roots")]
+    #[error("code retrieval sources belong to different workspace roots")]
     RootMismatch,
     #[error("local code-index retrieval failed: {0}")]
     LocalIndex(#[from] zeta_code_index::CodeIndexError),
+    #[error("code retrieval was cancelled: {0}")]
+    Cancelled(String),
 }

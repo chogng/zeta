@@ -1,3 +1,5 @@
+use crate::ContextSeedDigest;
+use crate::DelegationId;
 use crate::ModelRef;
 use crate::ThreadId;
 use crate::TurnId;
@@ -31,6 +33,13 @@ pub enum SessionCommand {
     RewindThread {
         parent_thread_id: ThreadId,
         before_turn_id: TurnId,
+        title: String,
+    },
+    SpawnAgentThread {
+        parent_thread_id: ThreadId,
+        parent_turn_id: TurnId,
+        delegation_id: DelegationId,
+        context_seed_digest: ContextSeedDigest,
         title: String,
     },
     ArchiveThread {

@@ -18,6 +18,8 @@ use crate::protocol::code_index::CodeRetrievalHitDto;
 use crate::protocol::code_index::CodeRetrievalOriginDto;
 use crate::protocol::code_index::CodeRetrievalParams;
 use crate::protocol::code_index::CodeRetrievalResult;
+use crate::protocol::code_index::SemanticCodeIndexStateDto;
+use crate::protocol::code_index::SemanticCodeIndexStatusDto;
 use crate::protocol::collaboration::DocumentCollaborationOpenParams;
 use crate::protocol::collaboration::DocumentCollaborationOpenResult;
 use crate::protocol::collaboration::DocumentCollaborationPresence;
@@ -43,8 +45,12 @@ use crate::protocol::config::{
     McpServerUpsertParams, McpTransportDto, ModelContextConfigDto, ModelRefDto, PluginRequestDto,
     PluginRequestEnablementDto, PluginRequestRemoveParams, PluginRequestSetEnablementParams,
     PluginRequestUpsertParams, ProviderConfigDto, ProviderConfigureParams, ProviderRemoveParams,
-    SkillSourceAddParams, SkillSourceConfigDto, SkillSourceEnablementDto, SkillSourceRemoveParams,
-    SkillSourceSetEnablementParams,
+    SemanticCodeIndexAuthorizeParams, SemanticCodeIndexAutomaticContextDto,
+    SemanticCodeIndexConfigDto, SemanticCodeIndexConfigureParams, SemanticCodeIndexModelsDto,
+    SemanticCodeIndexRevokeParams, SemanticCodeIndexSelectionDto, SkillSourceAddParams,
+    SkillSourceConfigDto, SkillSourceEnablementDto, SkillSourceRemoveParams,
+    SkillSourceSetEnablementParams, ToolSearchConfigDto, ToolSearchConfigureParams,
+    ToolSearchEmbeddingStatusDto, ToolSearchModeDto,
 };
 use crate::protocol::diff::DiffComputeParams;
 use crate::protocol::diff::DiffComputeResult;
@@ -130,18 +136,23 @@ use ts_rs::{Config, TS};
 use zeta_protocol::AgentRequestEnvelope;
 use zeta_protocol::{
     ActionApprovalCapability, ActionApprovalCapabilityKind, ActionApprovalDecision,
-    ActionApprovalRequest, ActionApprovalResponse, AgentInteractionKind, AgentRequest,
-    AgentResponse, ContentDigest, ContextCheckpoint, ContextCheckpointId,
-    ContextCheckpointVerification, ContextSourceDigest, ContextSourceRange, DynamicToolCall,
-    DynamicToolOutput, DynamicToolResponse, FrozenSkillActivation, InteractionCancelReason,
+    ActionApprovalRequest, ActionApprovalResponse, AgentContextContent, AgentContextMode,
+    AgentContextSeed, AgentContextSource, AgentInteractionKind, AgentJoin, AgentJoinId,
+    AgentJoinPolicy, AgentJoinStatus, AgentMaterializedContext, AgentMessage, AgentMessageContent,
+    AgentMessageId, AgentMessageProvenance, AgentRequest, AgentResponse, AgentRoleSnapshot,
+    ContentDigest, ContextCheckpoint, ContextCheckpointId, ContextCheckpointVerification,
+    ContextSeedDigest, ContextSourceDigest, ContextSourceRange, DelegatedCapabilityScope,
+    DelegatedPolicyCeiling, DelegatedTask, DelegationArtifactRef, DelegationId, DelegationResult,
+    DelegationResultDigest, DelegationResultStatus, DynamicToolCall, DynamicToolOutput,
+    DynamicToolResponse, ForkedAgentContext, FrozenSkillActivation, InteractionCancelReason,
     InteractionDeadline, ItemDelta, PendingInteraction, PlanStep, PlanStepStatus, PlanUpdate,
     ProcessExecutionOutput, ProcessExitStatus, RequestUserInput, RequestUserInputResponse,
     SandboxDenialOutput, Session, SessionEvent, SessionStatus, SessionThread, SessionThreadStatus,
     SessionUpdate, SkillActivationReason, SkillId, SkillName, SkillRef, SkillSourceId,
     SkillVersionSelector, StableTurnError, StableTurnErrorCode, StreamCursor, Thread, ThreadEvent,
-    ThreadItem, ThreadOrigin, ThreadStatus, ThreadUpdate, ToolExecutionAuthority, ToolOutputStream,
-    ToolReplaySafety, Turn, TurnInteraction, TurnStatus, UserInputAnswer, UserInputOption,
-    UserInputQuestion,
+    ThreadItem, ThreadOrigin, ThreadSequenceRange, ThreadStatus, ThreadUpdate,
+    ToolExecutionAuthority, ToolOutputStream, ToolReplaySafety, Turn, TurnInteraction, TurnStatus,
+    UserInputAnswer, UserInputOption, UserInputQuestion,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -263,7 +274,7 @@ macro_rules! client_methods {
         pub(crate) enum ClientResultSchema {
             $(
                 #[serde(rename = $method)]
-                $variant($response),
+                $variant(Box<$response>),
             )+
         }
     };
@@ -357,6 +368,26 @@ client_methods! {
     },
     ConfigUpdate => "config/update" {
         params: ConfigUpdateParams,
+        response: ConfigCommandResult,
+        serialization: GlobalExclusive,
+    },
+    ToolSearchConfigure => "toolSearch/configure" {
+        params: ToolSearchConfigureParams,
+        response: ConfigCommandResult,
+        serialization: GlobalExclusive,
+    },
+    SemanticCodeIndexConfigure => "workspace/codeIndex/semantic/configure" {
+        params: SemanticCodeIndexConfigureParams,
+        response: ConfigCommandResult,
+        serialization: GlobalExclusive,
+    },
+    SemanticCodeIndexAuthorize => "workspace/codeIndex/semantic/authorize" {
+        params: SemanticCodeIndexAuthorizeParams,
+        response: ConfigCommandResult,
+        serialization: GlobalExclusive,
+    },
+    SemanticCodeIndexRevoke => "workspace/codeIndex/semantic/revoke" {
+        params: SemanticCodeIndexRevokeParams,
         response: ConfigCommandResult,
         serialization: GlobalExclusive,
     },
@@ -610,6 +641,16 @@ client_methods! {
         response: CodeIndexStatusResult,
         serialization: GlobalExclusive,
     },
+    SemanticCodeIndexCancel => "workspace/codeIndex/semantic/cancel" {
+        params: EmptyParams,
+        response: CodeIndexStatusResult,
+        serialization: None,
+    },
+    SemanticCodeIndexRetry => "workspace/codeIndex/semantic/retry" {
+        params: EmptyParams,
+        response: CodeIndexStatusResult,
+        serialization: None,
+    },
     CloudCodeIndexStatus => "workspace/codeIndex/cloud/status" {
         params: EmptyParams,
         response: CloudCodeIndexStatusResult,
@@ -769,6 +810,9 @@ typescript_bindings! {
     ToolCallId,
     ToolName,
     TurnId,
+    DelegationId,
+    AgentJoinId,
+    AgentMessageId,
     SchemaHash,
     ClientInfo,
     AgentInteractionCapability,
@@ -786,6 +830,10 @@ typescript_bindings! {
     DocumentCollaborationSubmitParams,
     DocumentCollaborationSubmitResult,
     ModelRefDto,
+    SemanticCodeIndexModelsDto,
+    SemanticCodeIndexSelectionDto,
+    SemanticCodeIndexAutomaticContextDto,
+    SemanticCodeIndexConfigDto,
     ApprovalReviewModelSelectionDto,
     ModelContextConfigDto,
     ProviderConfigDto,
@@ -809,6 +857,13 @@ typescript_bindings! {
     ConfigCommandDispositionDto,
     ConfigCommandResult,
     ConfigUpdateParams,
+    ToolSearchModeDto,
+    ToolSearchEmbeddingStatusDto,
+    ToolSearchConfigDto,
+    ToolSearchConfigureParams,
+    SemanticCodeIndexConfigureParams,
+    SemanticCodeIndexAuthorizeParams,
+    SemanticCodeIndexRevokeParams,
     LanguageServerConfigureParams,
     LanguageServerRemoveParams,
     ProviderConfigureParams,
@@ -829,6 +884,28 @@ typescript_bindings! {
     SkillSourceId,
     SkillId,
     ContentDigest,
+    DelegatedTask,
+    AgentRoleSnapshot,
+    AgentContextSource,
+    AgentContextContent,
+    AgentMaterializedContext,
+    ForkedAgentContext,
+    AgentContextMode,
+    DelegatedPolicyCeiling,
+    DelegatedCapabilityScope,
+    ContextSeedDigest,
+    AgentContextSeed,
+    ThreadSequenceRange,
+    DelegationResultStatus,
+    DelegationArtifactRef,
+    DelegationResultDigest,
+    DelegationResult,
+    AgentMessageProvenance,
+    AgentMessageContent,
+    AgentMessage,
+    AgentJoinPolicy,
+    AgentJoinStatus,
+    AgentJoin,
     SkillVersionSelector,
     SkillRef,
     SkillActivationReason,
@@ -1011,6 +1088,8 @@ typescript_bindings! {
     WorkspaceSearchCancelParams,
     CodeIndexStateDto,
     CodeIndexStatusResult,
+    SemanticCodeIndexStateDto,
+    SemanticCodeIndexStatusDto,
     CodeIndexSearchParams,
     CodeIndexChunkSpanDto,
     CodeIndexSearchHitDto,

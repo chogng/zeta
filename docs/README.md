@@ -30,7 +30,7 @@
 | 改执行内核（Turn/Thread/恢复/取消） | [`zeta-agent-runtime-architecture.md`](zeta-agent-runtime-architecture.md) → [`core.md`](core.md) |
 | 做上下文预算 / 压缩 | [`core-context.md`](core-context.md) + [`agent-harness-design.md`](agent-harness-design.md) §9–§11 |
 | 做多 Agent | [`core-multi-agent.md`](core-multi-agent.md)（gate 条件见其状态头） |
-| 开发工作区代码索引 / RAG | [`code-index.md`](code-index.md) → [`zeta-code-index` README](../zeta-rs/code-index/README.md) → [`zeta-code-index-cloud` README](../zeta-rs/code-index-cloud/README.md) → [`zeta-code-index-service` README](../zeta-rs/code-index-service/README.md) → [`zeta-code-retrieval` README](../zeta-rs/code-retrieval/README.md) |
+| 开发工作区代码索引 / RAG | [`code-index.md`](code-index.md) → [`zeta-code-index` README](../zeta-rs/code-index/README.md) → [`zeta-code-index-semantic` README](../zeta-rs/code-index-semantic/README.md) → [`zeta-code-retrieval` README](../zeta-rs/code-retrieval/README.md) → [`zeta-code-index-cloud` README](../zeta-rs/code-index-cloud/README.md) |
 | 设计 Instructions / Skills / Agents 或外部导入 | [`agent-customizations.md`](agent-customizations.md) → 对应 authority 文档 |
 | 加 / 改一个工具 | [`agent-tools-spec.md`](agent-tools-spec.md) → [`tools.md`](tools.md)（契约层） |
 | 改协议 / 加 App Server 方法 | [`protocol.md`](protocol.md) → [`zeta-app-server-api.md`](zeta-app-server-api.md) → [`app-server-client.md`](app-server-client.md) |
@@ -63,7 +63,7 @@
 | [`zeta-agent-runtime-architecture.md`](zeta-agent-runtime-architecture.md) | 设计 | 执行内核总体设计、组件状态总账、阶段 A–E |
 | [`core.md`](core.md) | 设计 | zeta-core 的 ownership、组件、端口、提交顺序 |
 | [`core-context.md`](core-context.md) | 设计 | ContextPlan / Manager / checkpoint / compaction 机制 |
-| [`core-multi-agent.md`](core-multi-agent.md) | 设计 | delegation / spawn / join / 隔离（仅设计，gate 见状态头） |
+| [`core-multi-agent.md`](core-multi-agent.md) | 设计 | delegation / Fresh spawn / delivery / 隔离（部分实现，缺口见状态头） |
 | [`agent-customizations.md`](agent-customizations.md) | 设计 | Instructions / Skills / Agents、`.zeta` 与外部导入边界 |
 | [`tools.md`](tools.md) | 设计 | 工具三层契约、registry snapshot |
 | [`exec.md`](exec.md) | 设计 | 进程执行 |

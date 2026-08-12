@@ -3,8 +3,9 @@
 > 本 README 拥有工作区代码索引的 crate 内部实现契约。跨 crate 的产品语义、隐私边界和演进决策由
 > [`docs/code-index.md`](../../docs/code-index.md) canonical 维护；App Server 的生命周期与 RPC
 > 适配见 [`zeta-rs/app-server/README.md`](../app-server/README.md)。显式云外发 grant 与 provider
-> lifecycle 由 [`zeta-code-index-cloud` README](../code-index-cloud/README.md) 拥有；local/cloud
-> candidate 编排由 [`zeta-code-retrieval` README](../code-retrieval/README.md) 拥有。
+> lifecycle 由 [`zeta-code-index-cloud` README](../code-index-cloud/README.md) 拥有；本地 semantic
+> projection 见 [`zeta-code-index-semantic` README](../code-index-semantic/README.md)，多来源 candidate
+> 编排由 [`zeta-code-retrieval` README](../code-retrieval/README.md) 拥有。
 
 ## 快速理解
 
@@ -37,7 +38,7 @@
 当前 crate 不负责：
 
 - 工作区 trust、profile 路径、watcher thread 或 RPC lifecycle；
-- embedding、向量数据库、云端同步、网络权限或数据外发策略；
+- embedding/rerank 模型调用、本地向量 projection、云端同步、网络权限或数据外发策略；
 - Editor buffer overlay、LSP semantic facts、模型 Tool 和 UI result projection。
 
 依赖方向固定为 `zeta-code-index → zeta-workspace + zeta-syntax`。如果本 crate 开始依赖 App
@@ -130,6 +131,6 @@ exact refresh、stale reference、ignore policy reconcile 与 bounded query。�
   UTF-8 文件使用 line/byte fallback。
 - Current limitation：未叠加未保存 Editor buffer；未实现 multi-root identity、主动 cache cleanup、
   可取消 full scan/progress。
-- Extension point：`zeta-code-index-cloud` 消费 `manifest` 和复核后的 materialization 来执行显式
-  grant；semantic recall/rerank 属于云端 CodeIndex 服务，本 crate 保持无网络、无 consent、
-  无 provider dependency。
+- Extension point：`zeta-code-index-semantic` 消费 `manifest` 和复核后的 chunks 做本地 dense recall；
+  `zeta-code-index-cloud` 消费相同 authority 做显式远端 grant。本 crate 保持无模型、无网络、无
+  consent、无 provider dependency。

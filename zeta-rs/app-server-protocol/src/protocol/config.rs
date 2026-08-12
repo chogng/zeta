@@ -14,6 +14,90 @@ pub struct ModelRefDto {
     pub model: String,
 }
 
+/// Model pair used by Zeta's local semantic code-index orchestration.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SemanticCodeIndexModelsDto {
+    pub embedding_model: ModelRefDto,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub rerank_model: Option<ModelRefDto>,
+}
+
+/// Product selection for semantic code indexing. Remote is explicit because it can send bounded
+/// code chunks and queries to the selected model provider after Workspace authorization.
+#[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    tag = "type"
+)]
+pub enum SemanticCodeIndexSelectionDto {
+    #[default]
+    Disabled,
+    Remote {
+        models: SemanticCodeIndexModelsDto,
+    },
+}
+
+/// Whether verified code evidence is automatically attached to an Agent Turn.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum SemanticCodeIndexAutomaticContextDto {
+    #[default]
+    Off,
+    FirstInvocation,
+}
+
+/// Current authorization state for the active Workspace and configured semantic model pair.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SemanticCodeIndexConfigDto {
+    pub selection: SemanticCodeIndexSelectionDto,
+    pub automatic_context: SemanticCodeIndexAutomaticContextDto,
+    pub active_workspace_authorized: bool,
+}
+
+/// User-selected retrieval mode for deferred Agent tools.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum ToolSearchModeDto {
+    #[default]
+    Lexical,
+    HybridEmbedding,
+}
+
+/// Runtime readiness of the optional Tool Search embedding path.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    tag = "type"
+)]
+pub enum ToolSearchEmbeddingStatusDto {
+    Disabled,
+    Ready {
+        model: ModelRefDto,
+    },
+    Unavailable {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        model: Option<ModelRefDto>,
+        reason: String,
+    },
+}
+
+/// Durable Tool Search preference plus the active App Server runtime status.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolSearchConfigDto {
+    pub mode: ToolSearchModeDto,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub embedding_model: Option<ModelRefDto>,
+    pub embedding_status: ToolSearchEmbeddingStatusDto,
+}
+
 /// User-facing selection for the model that reviews approval requests.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(
@@ -210,6 +294,55 @@ pub struct ConfigReadResult {
     pub plugin_requests: BTreeMap<String, PluginRequestDto>,
     pub hooks: BTreeMap<String, HookConfigDto>,
     pub language_servers: BTreeMap<String, LanguageServerConfigDto>,
+    pub tool_search: ToolSearchConfigDto,
+    pub semantic_code_index: SemanticCodeIndexConfigDto,
+}
+
+/// Selects lexical Tool Search or enables one exact embedding model after a readiness probe.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolSearchConfigureParams {
+    pub command_id: CommandId,
+    #[schemars(range(min = 0))]
+    #[ts(type = "number")]
+    pub expected_revision: u64,
+    pub mode: ToolSearchModeDto,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub embedding_model: Option<ModelRefDto>,
+}
+
+/// Replaces semantic model selection and revokes all previous source-egress grants when it changes.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SemanticCodeIndexConfigureParams {
+    pub command_id: CommandId,
+    #[schemars(range(min = 0))]
+    #[ts(type = "number")]
+    pub expected_revision: u64,
+    pub selection: SemanticCodeIndexSelectionDto,
+    #[serde(default)]
+    pub automatic_context: SemanticCodeIndexAutomaticContextDto,
+}
+
+/// Authorizes the exact active Workspace and current model pair to send source-derived text.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SemanticCodeIndexAuthorizeParams {
+    pub command_id: CommandId,
+    #[schemars(range(min = 0))]
+    #[ts(type = "number")]
+    pub expected_revision: u64,
+}
+
+/// Revokes source egress for the active Workspace and deletes its local semantic projection.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SemanticCodeIndexRevokeParams {
+    pub command_id: CommandId,
+    #[schemars(range(min = 0))]
+    #[ts(type = "number")]
+    pub expected_revision: u64,
 }
 
 /// Notification payload emitted after a durable Config authority commit.

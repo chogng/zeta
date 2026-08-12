@@ -17,9 +17,11 @@ use zeta_protocol::{
     ToolCallId, TurnId,
 };
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum ToolSchedulingProgress {
     Complete,
     WaitingForApproval,
+    WaitingForCapability,
 }
 
 pub(super) struct ToolScheduler {
@@ -75,6 +77,37 @@ impl ToolScheduler {
                 frozen_policy_revision,
                 cancellation,
             );
+
+            if snapshot.started_tool_calls.contains(&pending.call.id)
+                && let Some((request, response)) = resolved_execution_interaction(
+                    &snapshot.resolved_interactions,
+                    turn_id,
+                    &pending.item_id,
+                    &pending.call,
+                )
+            {
+                let output = self
+                    .tools
+                    .resolve_execution_interaction(&pending.call, request, response)?
+                    .ok_or_else(|| {
+                        CoreError::Execution(format!(
+                            "resolved execution interaction is not owned by tool {}",
+                            pending.call.name
+                        ))
+                    })?;
+                ToolExecutionOrchestrator::new(
+                    self.threads.as_ref(),
+                    self.tools.as_ref(),
+                    self.policy.as_ref(),
+                    self.updates.as_ref(),
+                )
+                .complete_execution_interaction(
+                    &execution,
+                    pending.call,
+                    output,
+                )?;
+                continue;
+            }
 
             if let Some((request_id, request, decision)) =
                 resolved_approval(&snapshot.resolved_interactions, turn_id, &pending.item_id)
@@ -148,11 +181,12 @@ impl ToolScheduler {
                                 pending.call.id,
                                 "tool execution outcome is unknown after process interruption; the exact call was not retried",
                             )?;
-                        } else if matches!(
-                            self.execute(&execution, pending.call, &reviewed, authorization)?,
-                            ToolSchedulingProgress::WaitingForApproval
-                        ) {
-                            return Ok(ToolSchedulingProgress::WaitingForApproval);
+                        } else {
+                            let progress =
+                                self.execute(&execution, pending.call, &reviewed, authorization)?;
+                            if progress != ToolSchedulingProgress::Complete {
+                                return Ok(progress);
+                            }
                         }
                     }
                 }
@@ -176,29 +210,25 @@ impl ToolScheduler {
                 .decide_for_turn(frozen_policy_revision, &reviewed, cancellation)?
             {
                 ExecutionDecision::RunSandboxed(sandbox) => {
-                    if matches!(
-                        self.execute(
-                            &execution,
-                            pending.call,
-                            &reviewed,
-                            ToolAuthorization::Sandboxed(sandbox),
-                        )?,
-                        ToolSchedulingProgress::WaitingForApproval
-                    ) {
-                        return Ok(ToolSchedulingProgress::WaitingForApproval);
+                    let progress = self.execute(
+                        &execution,
+                        pending.call,
+                        &reviewed,
+                        ToolAuthorization::Sandboxed(sandbox),
+                    )?;
+                    if progress != ToolSchedulingProgress::Complete {
+                        return Ok(progress);
                     }
                 }
                 ExecutionDecision::RunUnsandboxed { grant_id } => {
-                    if matches!(
-                        self.execute(
-                            &execution,
-                            pending.call,
-                            &reviewed,
-                            ToolAuthorization::UnsandboxedGrant { grant_id },
-                        )?,
-                        ToolSchedulingProgress::WaitingForApproval
-                    ) {
-                        return Ok(ToolSchedulingProgress::WaitingForApproval);
+                    let progress = self.execute(
+                        &execution,
+                        pending.call,
+                        &reviewed,
+                        ToolAuthorization::UnsandboxedGrant { grant_id },
+                    )?;
+                    if progress != ToolSchedulingProgress::Complete {
+                        return Ok(progress);
                     }
                 }
                 ExecutionDecision::RunAutoReviewed(grant) => {
@@ -214,11 +244,10 @@ impl ToolScheduler {
                     let authorization = ToolAuthorization::AutoReviewed(
                         AutoReviewedToolGrant::new(pending.call.id.clone(), grant),
                     );
-                    if matches!(
-                        self.execute(&execution, pending.call, &reviewed, authorization)?,
-                        ToolSchedulingProgress::WaitingForApproval
-                    ) {
-                        return Ok(ToolSchedulingProgress::WaitingForApproval);
+                    let progress =
+                        self.execute(&execution, pending.call, &reviewed, authorization)?;
+                    if progress != ToolSchedulingProgress::Complete {
+                        return Ok(progress);
                     }
                 }
                 ExecutionDecision::ReviseAction(revision) => {
@@ -299,13 +328,33 @@ impl ToolScheduler {
         reviewed: &zeta_policy::ActionReviewRequest,
         authorization: ToolAuthorization,
     ) -> Result<ToolSchedulingProgress, CoreError> {
-        let completion = ToolExecutionOrchestrator::new(
+        let orchestrator = ToolExecutionOrchestrator::new(
             self.threads.as_ref(),
             self.tools.as_ref(),
             self.policy.as_ref(),
             self.updates.as_ref(),
-        )
-        .execute(context, call, reviewed, authorization)?;
+        );
+        if let Some(request) = self.tools.execution_interaction(&call)? {
+            if !matches!(request, AgentRequest::DynamicTool { call: ref dynamic } if dynamic.call_id == call.id && dynamic.name == call.name)
+            {
+                return Err(CoreError::Policy(
+                    "tool execution interaction must preserve Tool Call identity".into(),
+                ));
+            }
+            orchestrator.start_execution_interaction(context, &call, reviewed, &authorization)?;
+            self.threads.request_turn_interaction(
+                context.thread_id(),
+                context.turn_id(),
+                RequestTurnInteraction {
+                    request_id: self.threads.next_interaction_request_id(),
+                    item_id: Some(context.item_id().clone()),
+                    request,
+                    deadline: None,
+                },
+            )?;
+            return Ok(ToolSchedulingProgress::WaitingForCapability);
+        }
+        let completion = orchestrator.execute(context, call, reviewed, authorization)?;
         match completion {
             ToolExecutionCompletion::Complete => Ok(ToolSchedulingProgress::Complete),
             ToolExecutionCompletion::PolicyRejected => {
@@ -404,6 +453,31 @@ fn resolved_approval<'a>(
         match (&resolved.interaction.request, &resolved.response) {
             (AgentRequest::Approval { request }, AgentResponse::Approval { response }) => {
                 Some((&resolved.interaction.request_id, request, response.decision))
+            }
+            _ => None,
+        }
+    })
+}
+
+fn resolved_execution_interaction<'a>(
+    resolved: &'a [crate::ResolvedTurnInteraction],
+    turn_id: &TurnId,
+    item_id: &ItemId,
+    call: &ToolCall,
+) -> Option<(&'a AgentRequest, &'a AgentResponse)> {
+    resolved.iter().rev().find_map(|resolved| {
+        if &resolved.turn_id != turn_id || resolved.interaction.item_id.as_ref() != Some(item_id) {
+            return None;
+        }
+        match (&resolved.interaction.request, &resolved.response) {
+            (
+                AgentRequest::DynamicTool { call: request },
+                response @ AgentResponse::DynamicTool { response: result },
+            ) if request.call_id == call.id
+                && request.name == call.name
+                && result.call_id == call.id =>
+            {
+                Some((&resolved.interaction.request, response))
             }
             _ => None,
         }

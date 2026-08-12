@@ -9,6 +9,10 @@ use zeta_config::{
     ConfigCommandRequest, ConfigRevision, PreferencesUpdate, ResolvedConfig, UserConfigCommand,
     WorkspaceConfigScope, WorkspaceConfigStore, WorkspaceId,
 };
+use zeta_model_provider::EmbeddingInvoker;
+use zeta_model_provider::EmbeddingRequest;
+use zeta_model_provider::EmbeddingResponse;
+use zeta_model_provider::EmbeddingVector;
 use zeta_model_provider::{ModelId, ModelInvoker, ModelProviderError, ProviderId};
 use zeta_model_provider_config::ModelContextConfig;
 use zeta_model_provider_config::ModelProviderConfig;
@@ -36,6 +40,44 @@ fn workspace_config_path(label: &str) -> PathBuf {
             .unwrap()
             .as_nanos()
     ))
+}
+
+struct LocalSemanticEmbedding;
+
+impl EmbeddingInvoker for LocalSemanticEmbedding {
+    fn embed(&self, request: &EmbeddingRequest) -> Result<EmbeddingResponse, ModelProviderError> {
+        EmbeddingResponse::new(
+            request
+                .inputs()
+                .iter()
+                .map(|_| EmbeddingVector::new(vec![1.0, 0.0]))
+                .collect::<Result<Vec<_>, _>>()?,
+        )
+    }
+}
+
+#[test]
+fn local_composition_installs_semantic_models_before_workspace_activation() {
+    let profile = tempfile::tempdir().unwrap();
+    let workspace = tempfile::tempdir().unwrap();
+    std::fs::create_dir(workspace.path().join(".git")).unwrap();
+    std::fs::write(workspace.path().join("lib.rs"), "pub fn indexed() {}\n").unwrap();
+    let models = CodeIndexSemanticModels::new(
+        zeta_code_index_semantic::CodeIndexEmbeddingModelId::new("local-test-v1").unwrap(),
+        Arc::new(LocalSemanticEmbedding),
+    );
+    let options = LocalAppServerOptions::new(profile.path())
+        .with_workspace_root(workspace.path())
+        .without_built_in_skills()
+        .with_session_state_mode(SessionStateMode::Ephemeral);
+
+    let server = open_local_app_server_with_code_index_providers(
+        options,
+        LocalCodeIndexProviders::new().with_semantic_models(models),
+    )
+    .unwrap();
+
+    assert!(server.code_index_semantic_service().is_some());
 }
 
 fn remove_config_files(path: &Path) {

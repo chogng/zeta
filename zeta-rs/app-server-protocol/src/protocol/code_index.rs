@@ -30,6 +30,42 @@ pub struct CodeIndexStatusResult {
     pub truncated_file_count: usize,
     pub file_limit_hit: bool,
     pub source_bytes_limit_hit: bool,
+    pub semantic: SemanticCodeIndexStatusDto,
+}
+
+/// Lifecycle state of the local semantic projection for the active Workspace.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum SemanticCodeIndexStateDto {
+    Unavailable,
+    Idle,
+    Syncing,
+    Ready,
+    Stale,
+    Cancelled,
+    Failed,
+}
+
+/// Content-free progress for a semantic projection built from the lexical generation.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SemanticCodeIndexStatusDto {
+    pub state: SemanticCodeIndexStateDto,
+    #[ts(type = "number | null")]
+    pub operation_id: Option<u64>,
+    #[ts(type = "number")]
+    pub target_generation: u64,
+    #[ts(type = "number | null")]
+    pub published_generation: Option<u64>,
+    pub phase: Option<String>,
+    pub total_chunk_count: usize,
+    pub processed_chunk_count: usize,
+    pub reused_embedding_count: usize,
+    pub embedded_chunk_count: usize,
+    pub completed_batch_count: usize,
+    pub total_batch_count: usize,
+    pub retry_count: usize,
+    pub last_error_code: Option<String>,
 }
 
 /// Performs one bounded literal lookup against the workspace-side code index.
@@ -89,6 +125,7 @@ pub struct CodeRetrievalParams {
 #[serde(rename_all = "camelCase")]
 pub enum CodeRetrievalOriginDto {
     LocalLexical,
+    LocalSemantic,
     CloudSemantic,
 }
 
@@ -96,6 +133,7 @@ pub enum CodeRetrievalOriginDto {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum CodeRetrievalDegradationDto {
+    LocalSemanticQueryFailed,
     CloudQueryFailed,
     CandidateVerificationFailed { discarded: usize },
     ContentBudgetExceeded { discarded: usize },

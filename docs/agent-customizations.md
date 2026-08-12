@@ -114,10 +114,10 @@ pub enum SkillInvocationPolicy {
 ```
 
 三个 artifact root 都使用固定原生布局：Instructions 和 Agents 是直接 `.md` 文件，Skills 是
-`<name>/SKILL.md` 目录。App Server 在 Workspace 激活时构造 catalog，并由同一 Workspace watcher
-把相关 invalidation 变成 refresh；模型调用只读取冻结的 `HarnessInstructions` snapshot，不在
-context assembly 时扫描文件。catalog 被读取不等于所有运行时能力已完成：当前只自动贡献 Global
-Instructions，Skill body 与 Agent definition 都不会因此自动执行。
+`<name>/SKILL.md` 目录。Workspace 激活时，App Server 只把可信 root 交给对应 runtime；
+`zeta-skills-extension` 拥有 Skill catalog 与 watcher refresh。模型调用不在 Core context assembly
+中扫描 catalog：Global Instructions 使用冻结的 `HarnessInstructions` snapshot；已激活 Skill 由
+extension 按 durable digest 精确加载正文。读取 catalog 本身仍不会激活 Skill 或执行 Agent definition。
 
 | Scope/source | 物理 owner | 是否经过 `zeta-agent-import` |
 | --- | --- | --- |
@@ -200,8 +200,9 @@ Instruction/Agent authority。在跨 authority prepare/publish 可用前，对�
 → ModelRequest
 ```
 
-运行时不读取 customization 文件，也不在组装模型请求时重新扫描目录。每次 model invocation 消费
-已经冻结的 snapshot；文件或配置变化只在下一个安全点生效。最终输入可以包含系统内置指令、作用域
+Core 不读取 customization 文件，也不在组装模型请求时扫描目录。每次 model invocation 消费已经
+冻结的 snapshot 或由 extension 根据 durable provenance 贡献的精确 fragment；文件或配置变化只在
+下一个安全点生效，且不能替换 in-flight Skill 的 digest。最终输入可以包含系统内置指令、作用域
 Instructions、Agent references、已激活 Skill 内容、用户消息和 Tool results，但它仍是
 `ModelRequest`，不是一个需要持久化的 Prompt artifact。
 
@@ -215,7 +216,7 @@ activation validation。
 | --- | --- | --- |
 | `.zeta/config.toml` Workspace intent | 已实现 | `zeta-config` / App Server local composition |
 | Skill built-in/user/Workspace catalog 与 enablement | 部分具备 | `zeta-skills`、`SkillRuntime::compose_sources` 与 [`skills.md`](skills.md) |
-| Skill activation snapshot 与通用 context injection | 已实现 | validated `SkillRef`、正文加载、safe-point freezing 与 `SkillInstructionsProvider` |
+| Skill activation snapshot 与通用 context injection | 已实现 | validated `SkillRef`、正文加载、safe-point freezing 与 extension contributors |
 | Codex/Claude known-path inspection | 已实现 | `zeta-agent-import::inspect_agent_paths` |
 | Workspace Instructions authority | 部分具备 | `zeta-instructions` + `WorkspaceCustomizations`；Global 注入已实现，其他选择策略未实现 |
 | Workspace Agents authority | 部分具备 | `zeta-agents` + `WorkspaceCustomizations`；catalog/refresh 已实现，list/selection/runtime 未实现 |

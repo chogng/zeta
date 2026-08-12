@@ -50,6 +50,7 @@ pub enum AppServerErrorName {
     TerminalOperationFailed,
     ConfigUnavailable,
     ConfigRevisionConflict,
+    ToolSearchUnavailable,
     SkillsUnavailable,
     SkillOperationFailed,
     SkillNotFound,

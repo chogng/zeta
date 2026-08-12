@@ -3,13 +3,17 @@
 mod endpoint;
 mod error;
 mod requests;
+mod semantic;
 mod sse;
+mod token_count;
 
 pub use endpoint::ApiEndpoint;
 pub use endpoint::ApiProtocol;
 pub use error::ApiError;
+pub use semantic::SemanticApiEndpoint;
 pub use sse::AnthropicMessagesSseDecoder;
 pub use sse::OpenAiResponsesSseDecoder;
+pub use token_count::InputTokenCount;
 pub use zeta_protocol::ContentPart;
 pub use zeta_protocol::ImageDetail;
 pub use zeta_protocol::InputItem;

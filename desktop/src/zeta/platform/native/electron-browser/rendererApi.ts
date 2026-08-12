@@ -19,6 +19,8 @@ import { ElectronTerminalProcessService } from "../../terminal/electron-browser/
 import { createUserThemeFilesApi } from "../../theme/electron-browser/userThemeFilesApi.js";
 import { createTypstApi } from "../../typst/electron-browser/typstApi.js";
 import { createWorkspaceContextApi } from "../../workspace/electron-browser/workspaceContextApi.js";
+import { createCodeIndexApi } from "../../codeIndex/electron-browser/codeIndexApi.js";
+import { createToolSearchApi } from "../../toolSearch/electron-browser/toolSearchApi.js";
 import type { ZetaElectronRendererApi } from "../common/rendererApi.js";
 import { createNativeHostApi } from "./nativeHostApi.js";
 
@@ -57,5 +59,7 @@ export function createElectronRendererApi(): ZetaElectronRendererApi {
     nativeMenubar: createNativeMenubarApi(),
     userThemes: createUserThemeFilesApi(),
     workspace: createWorkspaceContextApi(),
+    codeIndex: createCodeIndexApi(),
+    toolSearch: createToolSearchApi(),
   };
 }

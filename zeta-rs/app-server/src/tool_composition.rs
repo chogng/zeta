@@ -1,42 +1,372 @@
 use std::collections::BTreeMap;
-use std::sync::{Arc, Mutex, RwLock};
+use std::collections::BTreeSet;
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::RwLock;
 
 use zeta_async_utils::CancellationToken;
-use zeta_core::{CoreError, PolicyService, ToolAuthorization, ToolOutputSink, ToolService};
-use zeta_policy::{
-    ActionDigest, ActionReviewRequest, ActionSource, ExecutionDecision, ReviewEvidence,
-};
-use zeta_protocol::{ToolCall, ToolCallId, ToolDefinition, ToolExecutionOutput, ToolName};
+use zeta_config::ToolSearchModeConfig;
+use zeta_core::CoreError;
+use zeta_core::PolicyService;
+use zeta_core::ToolAuthorization;
+use zeta_core::ToolExecutionFacts;
+use zeta_core::ToolOutputSink;
+use zeta_core::ToolService;
+use zeta_model_provider::EmbeddingInvoker;
+use zeta_model_provider::EmbeddingRequest;
+use zeta_policy::ActionDigest;
+use zeta_policy::ActionKind;
+use zeta_policy::ActionProvenance;
+use zeta_policy::ActionReviewRequest;
+use zeta_policy::ActionSource;
+use zeta_policy::CapabilitySet;
+use zeta_policy::ExecutionDecision;
+use zeta_policy::GrantId;
+use zeta_policy::PolicyRevision;
+use zeta_policy::ResolvedAction;
+use zeta_policy::ReviewEvidence;
+use zeta_policy::SandboxCompatibility;
+use zeta_protocol::ToolCall;
+use zeta_protocol::ToolCallId;
+use zeta_protocol::ToolDefinition;
+use zeta_protocol::ToolExecutionOutput;
+use zeta_protocol::ToolName;
+use zeta_tools::TOOL_SEARCH_TOOL_NAME;
+use zeta_tools::ToolExposure;
+use zeta_tools::ToolLoading;
+use zeta_tools::ToolRegistryBuilder;
+use zeta_tools::ToolRegistryGeneration;
+use zeta_tools::ToolRegistryRegistration;
+use zeta_tools::ToolRegistrySnapshot;
+use zeta_tools::ToolRuntimeKey;
+use zeta_tools::ToolSearchLimit;
+use zeta_tools::ToolSearchMetadata;
+use zeta_tools::ToolSearchQuery;
+use zeta_tools::ToolSearchQuerySyntax;
+use zeta_tools::from_protocol_tool_definition;
+use zeta_tools::to_protocol_tool_definition;
+
+use crate::tool_executor_adapter::ToolExecutorReviewer;
+use crate::tool_executor_adapter::ToolExecutorRuntime;
+use crate::tool_search_embedding::ToolSearchEmbeddingRuntime;
+
+const TOOL_SEARCH_EMBEDDING_PROBE_TEXT: &str = "zeta tool search embedding readiness probe";
+const TOOL_SEARCH_POLICY_REVISION: &str = "tool-search-v1";
+
+#[derive(Clone)]
+pub(crate) struct ToolSearchOptions {
+    state: ToolSearchOptionState,
+}
+
+#[derive(Clone)]
+enum ToolSearchOptionState {
+    Lexical {
+        embedding_candidate: Option<Arc<dyn EmbeddingInvoker>>,
+    },
+    Hybrid {
+        embedding: Arc<dyn EmbeddingInvoker>,
+    },
+    Unavailable {
+        reason: Arc<str>,
+    },
+}
+
+impl ToolSearchOptions {
+    pub(crate) fn new() -> Self {
+        Self {
+            state: ToolSearchOptionState::Lexical {
+                embedding_candidate: None,
+            },
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn mode(&self) -> ToolSearchModeConfig {
+        match self.state {
+            ToolSearchOptionState::Lexical { .. } => ToolSearchModeConfig::Lexical,
+            ToolSearchOptionState::Hybrid { .. } | ToolSearchOptionState::Unavailable { .. } => {
+                ToolSearchModeConfig::HybridEmbedding
+            }
+        }
+    }
+
+    pub(crate) fn unavailable(reason: impl Into<String>) -> Self {
+        Self {
+            state: ToolSearchOptionState::Unavailable {
+                reason: Arc::from(reason.into()),
+            },
+        }
+    }
+
+    pub(crate) fn with_embedding(
+        mut self,
+        embedding: Arc<dyn EmbeddingInvoker>,
+    ) -> Result<Self, ToolCompositionError> {
+        match &mut self.state {
+            ToolSearchOptionState::Lexical {
+                embedding_candidate,
+            } => *embedding_candidate = Some(embedding),
+            ToolSearchOptionState::Hybrid { .. } | ToolSearchOptionState::Unavailable { .. } => {
+                return Err(ToolCompositionError(
+                    "tool-search embedding adapter must be installed before hybrid mode is enabled"
+                        .into(),
+                ));
+            }
+        }
+        Ok(self)
+    }
+
+    pub(crate) fn with_mode(
+        self,
+        mode: ToolSearchModeConfig,
+    ) -> Result<Self, ToolCompositionError> {
+        match (self.state, mode) {
+            (state @ ToolSearchOptionState::Lexical { .. }, ToolSearchModeConfig::Lexical)
+            | (
+                state @ ToolSearchOptionState::Hybrid { .. },
+                ToolSearchModeConfig::HybridEmbedding,
+            )
+            | (
+                state @ ToolSearchOptionState::Unavailable { .. },
+                ToolSearchModeConfig::HybridEmbedding,
+            ) => Ok(Self { state }),
+            (
+                ToolSearchOptionState::Lexical {
+                    embedding_candidate,
+                },
+                ToolSearchModeConfig::HybridEmbedding,
+            ) => {
+                let embedding = embedding_candidate.ok_or_else(|| {
+                    ToolCompositionError(
+                        "hybrid embedding tool search requires an installed embedding adapter"
+                            .into(),
+                    )
+                })?;
+                Self::probe_embedding(embedding.as_ref())?;
+                Ok(Self {
+                    state: ToolSearchOptionState::Hybrid { embedding },
+                })
+            }
+            (_, ToolSearchModeConfig::Lexical) => Ok(Self::new()),
+        }
+    }
+
+    fn runtime_state(&self, registry: Arc<ToolRegistrySnapshot>) -> ToolSearchRuntimeState {
+        match &self.state {
+            ToolSearchOptionState::Lexical { .. } => ToolSearchRuntimeState::Lexical,
+            ToolSearchOptionState::Hybrid { embedding } => ToolSearchRuntimeState::Hybrid(
+                ToolSearchEmbeddingRuntime::new(registry, Arc::clone(embedding)),
+            ),
+            ToolSearchOptionState::Unavailable { reason } => {
+                ToolSearchRuntimeState::Unavailable(Arc::clone(reason))
+            }
+        }
+    }
+
+    fn probe_embedding(embedding: &dyn EmbeddingInvoker) -> Result<(), ToolCompositionError> {
+        let request = EmbeddingRequest::new(vec![TOOL_SEARCH_EMBEDDING_PROBE_TEXT.into()])
+            .map_err(|error| ToolCompositionError(error.to_string()))?;
+        let response = embedding.embed(&request).map_err(|error| {
+            ToolCompositionError(format!(
+                "hybrid embedding tool-search readiness probe failed: {error}"
+            ))
+        })?;
+        if response.vectors().len() != 1 {
+            return Err(ToolCompositionError(format!(
+                "hybrid embedding tool-search readiness probe returned {} vectors instead of 1",
+                response.vectors().len()
+            )));
+        }
+        let magnitude = response.vectors()[0]
+            .values()
+            .iter()
+            .map(|value| value * value)
+            .sum::<f32>();
+        if magnitude == 0.0 {
+            return Err(ToolCompositionError(
+                "hybrid embedding tool-search readiness probe returned a zero vector".into(),
+            ));
+        }
+        Ok(())
+    }
+}
+
+impl Default for ToolSearchOptions {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum ToolPortKind {
+    Dynamic,
+    Extension,
     Local,
     Mcp,
+}
+
+impl ToolPortKind {
+    fn runtime_namespace(self) -> &'static str {
+        match self {
+            Self::Dynamic => "dynamic",
+            Self::Extension => "extension",
+            Self::Local => "local",
+            Self::Mcp => "mcp",
+        }
+    }
+
+    fn search_label(self) -> &'static str {
+        match self {
+            Self::Dynamic => "client-hosted dynamic tool",
+            Self::Extension => "host-installed extension tool",
+            Self::Local => "built-in workspace tool",
+            Self::Mcp => "MCP external tool",
+        }
+    }
 }
 
 #[derive(Clone)]
 pub(crate) struct ToolPort {
     kind: ToolPortKind,
-    tools: Arc<dyn ToolService>,
+    contributions: Vec<ToolContribution>,
     policy: Arc<dyn PolicyService>,
 }
 
 impl ToolPort {
+    pub(crate) fn dynamic(tools: Arc<dyn ToolService>, policy: Arc<dyn PolicyService>) -> Self {
+        Self::from_service(ToolPortKind::Dynamic, ToolExposure::Direct, tools, policy)
+    }
+
+    pub(crate) fn extension(
+        executors: Vec<Arc<dyn zeta_tools::ToolExecutor>>,
+        environment_id: zeta_tools::ToolEnvironmentId,
+        reviewer: Arc<dyn ToolExecutorReviewer>,
+        policy: Arc<dyn PolicyService>,
+    ) -> Result<Self, ToolCompositionError> {
+        let mut port = Self {
+            kind: ToolPortKind::Extension,
+            contributions: Vec::new(),
+            policy,
+        };
+        for executor in executors {
+            port = port.with_executor(executor, environment_id.clone(), Arc::clone(&reviewer))?;
+        }
+        Ok(port)
+    }
+
     pub(crate) fn local(tools: Arc<dyn ToolService>, policy: Arc<dyn PolicyService>) -> Self {
+        Self::from_service(ToolPortKind::Local, ToolExposure::Direct, tools, policy)
+    }
+
+    pub(crate) fn mcp(tools: Arc<dyn ToolService>, policy: Arc<dyn PolicyService>) -> Self {
+        Self::from_service(ToolPortKind::Mcp, ToolExposure::Deferred, tools, policy)
+    }
+
+    fn from_service(
+        kind: ToolPortKind,
+        exposure: ToolExposure,
+        tools: Arc<dyn ToolService>,
+        policy: Arc<dyn PolicyService>,
+    ) -> Self {
+        let search = ToolSearchMetadata::new(kind.search_label())
+            .expect("static App Server tool search metadata is valid");
+        let contributions = tools
+            .definitions()
+            .into_iter()
+            .map(|definition| ToolContribution {
+                definition,
+                exposure,
+                search: search.clone(),
+                runtime: ToolContributionRuntime::Service(Arc::clone(&tools)),
+            })
+            .collect();
         Self {
-            kind: ToolPortKind::Local,
-            tools,
+            kind,
+            contributions,
             policy,
         }
     }
 
-    pub(crate) fn mcp(tools: Arc<dyn ToolService>, policy: Arc<dyn PolicyService>) -> Self {
-        Self {
-            kind: ToolPortKind::Mcp,
-            tools,
-            policy,
+    pub(crate) fn with_executor(
+        mut self,
+        executor: Arc<dyn zeta_tools::ToolExecutor>,
+        environment_id: zeta_tools::ToolEnvironmentId,
+        reviewer: Arc<dyn ToolExecutorReviewer>,
+    ) -> Result<Self, ToolCompositionError> {
+        let host_definition = executor.definition();
+        let definition = to_protocol_tool_definition(&host_definition).map_err(|error| {
+            ToolCompositionError(format!(
+                "could not project executable tool '{}': {error}",
+                host_definition.name()
+            ))
+        })?;
+        let runtime = Arc::new(ToolExecutorRuntime::new(executor, environment_id, reviewer));
+        let contribution = ToolContribution {
+            definition,
+            exposure: runtime.executor().exposure(),
+            search: ToolSearchMetadata::new(self.kind.search_label())
+                .expect("static App Server tool search metadata is valid"),
+            runtime: ToolContributionRuntime::Executor(runtime),
+        };
+        if let Some(existing) = self
+            .contributions
+            .iter_mut()
+            .find(|existing| existing.definition.name == contribution.definition.name)
+        {
+            if existing.exposure != ToolExposure::Hidden {
+                return Err(ToolCompositionError(format!(
+                    "executable tool contribution duplicates visible tool {}",
+                    contribution.definition.name
+                )));
+            }
+            *existing = contribution;
+        } else {
+            self.contributions.push(contribution);
         }
+        Ok(self)
     }
+
+    /// Overrides how one named tool enters the model catalog without changing its runtime source.
+    pub(crate) fn with_tool_exposure(
+        mut self,
+        name: &ToolName,
+        exposure: ToolExposure,
+    ) -> Result<Self, ToolCompositionError> {
+        let contribution = self
+            .contributions
+            .iter_mut()
+            .find(|contribution| contribution.definition.name == *name)
+            .ok_or_else(|| {
+                ToolCompositionError(format!(
+                    "cannot set exposure for unavailable tool contribution: {name}"
+                ))
+            })?;
+        if let ToolContributionRuntime::Executor(runtime) = &contribution.runtime {
+            let expected_loading = runtime.executor().definition().loading();
+            let requested_loading = loading_for_exposure(exposure);
+            if expected_loading != requested_loading {
+                return Err(ToolCompositionError(format!(
+                    "executable tool {name} declares {expected_loading:?} loading and cannot use {exposure:?} exposure"
+                )));
+            }
+        }
+        contribution.exposure = exposure;
+        Ok(self)
+    }
+}
+
+#[derive(Clone)]
+struct ToolContribution {
+    definition: ToolDefinition,
+    exposure: ToolExposure,
+    search: ToolSearchMetadata,
+    runtime: ToolContributionRuntime,
+}
+
+#[derive(Clone)]
+enum ToolContributionRuntime {
+    Service(Arc<dyn ToolService>),
+    Executor(Arc<ToolExecutorRuntime>),
 }
 
 pub(crate) struct CombinedToolPorts {
@@ -129,6 +459,45 @@ impl ToolService for ReloadableToolService {
         self.ports.generation().tools.definitions()
     }
 
+    fn model_definitions(
+        &self,
+        activated: &BTreeSet<ToolName>,
+    ) -> Result<Vec<ToolDefinition>, CoreError> {
+        self.ports.generation().tools.model_definitions(activated)
+    }
+
+    fn activated_tool_names(
+        &self,
+        call: &ToolCall,
+        result: &str,
+    ) -> Result<Vec<ToolName>, CoreError> {
+        self.ports
+            .generation()
+            .tools
+            .activated_tool_names(call, result)
+    }
+
+    fn execution_interaction(
+        &self,
+        call: &ToolCall,
+    ) -> Result<Option<zeta_protocol::AgentRequest>, CoreError> {
+        self.bound_tools(call).execution_interaction(call)
+    }
+
+    fn resolve_execution_interaction(
+        &self,
+        call: &ToolCall,
+        request: &zeta_protocol::AgentRequest,
+        response: &zeta_protocol::AgentResponse,
+    ) -> Result<Option<ToolExecutionOutput>, CoreError> {
+        let tools = self.bound_tools(call);
+        let result = tools.resolve_execution_interaction(call, request, response);
+        if matches!(result, Ok(Some(_))) || result.is_err() {
+            self.release(call);
+        }
+        result
+    }
+
     fn prepare(&self, call: &ToolCall) -> Result<ActionReviewRequest, CoreError> {
         let generation = self.ports.generation();
         let request = generation.tools.prepare(call)?;
@@ -164,7 +533,7 @@ impl ToolService for ReloadableToolService {
     ) -> Result<ToolExecutionOutput, CoreError> {
         let tools = self.bound_tools(call);
         let result = tools.execute(call, authorization, cancellation);
-        self.release(call);
+        self.release_if_terminal(call, &result);
         result
     }
 
@@ -177,7 +546,35 @@ impl ToolService for ReloadableToolService {
     ) -> Result<ToolExecutionOutput, CoreError> {
         let tools = self.bound_tools(call);
         let result = tools.execute_streaming(call, authorization, cancellation, sink);
-        self.release(call);
+        self.release_if_terminal(call, &result);
+        result
+    }
+
+    fn execute_with_facts(
+        &self,
+        call: &ToolCall,
+        authorization: &ToolAuthorization,
+        cancellation: &CancellationToken,
+        facts: &ToolExecutionFacts,
+    ) -> Result<ToolExecutionOutput, CoreError> {
+        let tools = self.bound_tools(call);
+        let result = tools.execute_with_facts(call, authorization, cancellation, facts);
+        self.release_if_terminal(call, &result);
+        result
+    }
+
+    fn execute_streaming_with_facts(
+        &self,
+        call: &ToolCall,
+        authorization: &ToolAuthorization,
+        cancellation: &CancellationToken,
+        facts: &ToolExecutionFacts,
+        sink: &mut dyn ToolOutputSink,
+    ) -> Result<ToolExecutionOutput, CoreError> {
+        let tools = self.bound_tools(call);
+        let result =
+            tools.execute_streaming_with_facts(call, authorization, cancellation, facts, sink);
+        self.release_if_terminal(call, &result);
         result
     }
 }
@@ -206,6 +603,16 @@ impl ReloadableToolService {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .remove(&binding.action_digest);
+        }
+    }
+
+    fn release_if_terminal(
+        &self,
+        call: &ToolCall,
+        result: &Result<ToolExecutionOutput, CoreError>,
+    ) {
+        if !matches!(result, Ok(ToolExecutionOutput::SandboxDenied(_))) {
+            self.release(call);
         }
     }
 }
@@ -294,37 +701,75 @@ impl PolicyService for EmptyPolicyService {
     }
 }
 
+#[cfg(test)]
 pub(crate) fn combine_tool_ports(
     ports: Vec<ToolPort>,
+) -> Result<Option<CombinedToolPorts>, ToolCompositionError> {
+    combine_tool_ports_at_generation(ports, ToolRegistryGeneration::new(1))
+}
+
+#[cfg(test)]
+pub(crate) fn combine_tool_ports_at_generation(
+    ports: Vec<ToolPort>,
+    registry_generation: ToolRegistryGeneration,
+) -> Result<Option<CombinedToolPorts>, ToolCompositionError> {
+    combine_tool_ports_at_generation_with_search(
+        ports,
+        registry_generation,
+        ToolSearchOptions::default(),
+    )
+}
+
+pub(crate) fn combine_tool_ports_at_generation_with_search(
+    ports: Vec<ToolPort>,
+    registry_generation: ToolRegistryGeneration,
+    search_options: ToolSearchOptions,
 ) -> Result<Option<CombinedToolPorts>, ToolCompositionError> {
     if ports.is_empty() {
         return Ok(None);
     }
     let mut definitions = Vec::new();
-    let mut routes = BTreeMap::new();
+    let mut names = BTreeSet::new();
     let mut local_policy = None;
     let mut mcp_policy = None;
-    let mut services = Vec::new();
-    for port in ports {
-        let service_index = services.len();
-        for definition in port.tools.definitions() {
-            if routes
-                .insert(definition.name.clone(), service_index)
-                .is_some()
-            {
+    let mut dynamic_policy = None;
+    let mut extension_policy = None;
+    for (service_index, port) in ports.into_iter().enumerate() {
+        for contribution in port.contributions {
+            if !names.insert(contribution.definition.name.clone()) {
                 return Err(ToolCompositionError(format!(
                     "duplicate model tool name during App Server composition: {}",
-                    definition.name
+                    contribution.definition.name
                 )));
             }
-            definitions.push(definition);
+            definitions.push(CollectedToolDefinition {
+                contribution,
+                kind: port.kind,
+                service_index,
+            });
         }
         match port.kind {
+            ToolPortKind::Dynamic if dynamic_policy.is_none() => {
+                dynamic_policy = Some(Arc::clone(&port.policy));
+            }
+            ToolPortKind::Extension if extension_policy.is_none() => {
+                extension_policy = Some(Arc::clone(&port.policy));
+            }
             ToolPortKind::Local if local_policy.is_none() => {
                 local_policy = Some(Arc::clone(&port.policy));
             }
             ToolPortKind::Mcp if mcp_policy.is_none() => {
                 mcp_policy = Some(Arc::clone(&port.policy));
+            }
+            ToolPortKind::Dynamic => {
+                return Err(ToolCompositionError(
+                    "multiple dynamic tool policy ports are not supported".into(),
+                ));
+            }
+            ToolPortKind::Extension => {
+                return Err(ToolCompositionError(
+                    "multiple extension tool policy ports are not supported".into(),
+                ));
             }
             ToolPortKind::Local => {
                 return Err(ToolCompositionError(
@@ -337,47 +782,250 @@ pub(crate) fn combine_tool_ports(
                 ));
             }
         }
-        services.push(port.tools);
     }
+    let (registry, routes) = build_registry(registry_generation, &definitions)?;
+    let protocol_definitions = definitions
+        .into_iter()
+        .map(|collected| collected.contribution.definition)
+        .collect::<Vec<_>>();
+    let search = registry
+        .has_deferred_tools()
+        .then(|| ToolSearchRuntime::new(Arc::clone(&registry), &search_options));
+    let search_enabled = search.is_some();
     Ok(Some(CombinedToolPorts {
         tools: Arc::new(CompositeToolService {
-            definitions,
+            definitions: protocol_definitions,
             routes,
-            services,
+            registry,
+            search,
         }),
         policy: Arc::new(CompositePolicyService {
+            dynamic: dynamic_policy,
+            extension: extension_policy,
             local: local_policy,
             mcp: mcp_policy,
+            search_enabled,
         }),
     }))
 }
 
+struct CollectedToolDefinition {
+    contribution: ToolContribution,
+    kind: ToolPortKind,
+    service_index: usize,
+}
+
+fn build_registry(
+    generation: ToolRegistryGeneration,
+    definitions: &[CollectedToolDefinition],
+) -> Result<
+    (
+        Arc<ToolRegistrySnapshot>,
+        BTreeMap<ToolRuntimeKey, ToolContributionRuntime>,
+    ),
+    ToolCompositionError,
+> {
+    let mut builder = ToolRegistryBuilder::new(generation);
+    let mut routes = BTreeMap::new();
+    for collected in definitions {
+        let loading = loading_for_exposure(collected.contribution.exposure);
+        let host_definition =
+            from_protocol_tool_definition(&collected.contribution.definition, loading).map_err(
+                |error| {
+                    ToolCompositionError(format!(
+                        "could not validate model tool '{}': {error}",
+                        collected.contribution.definition.name
+                    ))
+                },
+            )?;
+        let runtime_key = ToolRuntimeKey::new(format!(
+            "{}:{}:{}",
+            collected.kind.runtime_namespace(),
+            collected.service_index,
+            collected.contribution.definition.name
+        ))
+        .map_err(|error| ToolCompositionError(error.to_string()))?;
+        if routes
+            .insert(runtime_key.clone(), collected.contribution.runtime.clone())
+            .is_some()
+        {
+            return Err(ToolCompositionError(format!(
+                "duplicate runtime route during App Server composition: {runtime_key}"
+            )));
+        }
+        builder
+            .register(
+                ToolRegistryRegistration::new(
+                    host_definition,
+                    runtime_key,
+                    collected.contribution.exposure,
+                    collected.contribution.search.clone(),
+                )
+                .map_err(|error| ToolCompositionError(error.to_string()))?,
+            )
+            .map_err(|error| ToolCompositionError(error.to_string()))?;
+    }
+    let registry = builder
+        .build()
+        .map(Arc::new)
+        .map_err(|error| ToolCompositionError(error.to_string()))?;
+    Ok((registry, routes))
+}
+
 struct CompositeToolService {
     definitions: Vec<ToolDefinition>,
-    routes: BTreeMap<ToolName, usize>,
-    services: Vec<Arc<dyn ToolService>>,
+    routes: BTreeMap<ToolRuntimeKey, ToolContributionRuntime>,
+    registry: Arc<ToolRegistrySnapshot>,
+    search: Option<ToolSearchRuntime>,
 }
 
 impl CompositeToolService {
-    fn service(&self, call: &ToolCall) -> Result<&Arc<dyn ToolService>, CoreError> {
+    fn runtime(
+        &self,
+        call: &ToolCall,
+    ) -> Result<(&zeta_tools::ToolBinding, &ToolContributionRuntime), CoreError> {
+        let binding = self
+            .registry
+            .resolve(&call.name)
+            .map(|entry| entry.binding())
+            .ok_or_else(|| CoreError::Policy(format!("tool is not available: {}", call.name)))?;
         self.routes
-            .get(&call.name)
-            .and_then(|index| self.services.get(*index))
-            .ok_or_else(|| CoreError::Policy(format!("tool is not available: {}", call.name)))
+            .get(binding.runtime_key())
+            .map(|runtime| (binding, runtime))
+            .ok_or_else(|| {
+                CoreError::Execution(format!(
+                    "tool binding {} has no runtime route in registry generation {}",
+                    binding.id(),
+                    binding.registry_generation()
+                ))
+            })
+    }
+}
+
+fn loading_for_exposure(exposure: ToolExposure) -> ToolLoading {
+    match exposure {
+        ToolExposure::Deferred => ToolLoading::Deferred,
+        ToolExposure::Direct | ToolExposure::DirectModelOnly | ToolExposure::Hidden => {
+            ToolLoading::Eager
+        }
     }
 }
 
 impl ToolService for CompositeToolService {
     fn definitions(&self) -> Vec<ToolDefinition> {
-        self.definitions.clone()
+        let mut definitions = self.definitions.clone();
+        if let Some(search) = &self.search {
+            definitions.push(search.definition().clone());
+        }
+        definitions
+    }
+
+    fn model_definitions(
+        &self,
+        activated: &BTreeSet<ToolName>,
+    ) -> Result<Vec<ToolDefinition>, CoreError> {
+        let by_name = self
+            .definitions
+            .iter()
+            .map(|definition| (definition.name.clone(), definition))
+            .collect::<BTreeMap<_, _>>();
+        let mut definitions = self
+            .registry
+            .model_definitions(activated)
+            .map(|definition| {
+                by_name
+                    .get(definition.name())
+                    .cloned()
+                    .cloned()
+                    .ok_or_else(|| {
+                        CoreError::Execution(format!(
+                            "registry model definition is unavailable: {}",
+                            definition.name()
+                        ))
+                    })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        if let Some(search) = &self.search {
+            definitions.push(search.definition().clone());
+        }
+        Ok(definitions)
+    }
+
+    fn activated_tool_names(
+        &self,
+        call: &ToolCall,
+        result: &str,
+    ) -> Result<Vec<ToolName>, CoreError> {
+        match &self.search {
+            Some(search) => search.activated_tool_names(call, result),
+            None => Ok(Vec::new()),
+        }
+    }
+
+    fn execution_interaction(
+        &self,
+        call: &ToolCall,
+    ) -> Result<Option<zeta_protocol::AgentRequest>, CoreError> {
+        if self
+            .search
+            .as_ref()
+            .is_some_and(|search| call.name == search.definition().name)
+        {
+            return Ok(None);
+        }
+        let (_, runtime) = self.runtime(call)?;
+        match runtime {
+            ToolContributionRuntime::Service(service) => service.execution_interaction(call),
+            ToolContributionRuntime::Executor(_) => Ok(None),
+        }
+    }
+
+    fn resolve_execution_interaction(
+        &self,
+        call: &ToolCall,
+        request: &zeta_protocol::AgentRequest,
+        response: &zeta_protocol::AgentResponse,
+    ) -> Result<Option<ToolExecutionOutput>, CoreError> {
+        if self
+            .search
+            .as_ref()
+            .is_some_and(|search| call.name == search.definition().name)
+        {
+            return Ok(None);
+        }
+        let (_, runtime) = self.runtime(call)?;
+        match runtime {
+            ToolContributionRuntime::Service(service) => {
+                service.resolve_execution_interaction(call, request, response)
+            }
+            ToolContributionRuntime::Executor(_) => Ok(None),
+        }
     }
 
     fn prepare(&self, call: &ToolCall) -> Result<ActionReviewRequest, CoreError> {
-        self.service(call)?.prepare(call)
+        if let Some(search) = &self.search
+            && call.name == search.definition().name
+        {
+            return search.prepare(call);
+        }
+        let (_, runtime) = self.runtime(call)?;
+        match runtime {
+            ToolContributionRuntime::Service(service) => service.prepare(call),
+            ToolContributionRuntime::Executor(executor) => executor.prepare(call),
+        }
     }
 
     fn review_evidence(&self, call: &ToolCall) -> Result<Vec<ReviewEvidence>, CoreError> {
-        self.service(call)?.review_evidence(call)
+        if let Some(search) = &self.search
+            && call.name == search.definition().name
+        {
+            return Ok(Vec::new());
+        }
+        let (_, runtime) = self.runtime(call)?;
+        match runtime {
+            ToolContributionRuntime::Service(service) => service.review_evidence(call),
+            ToolContributionRuntime::Executor(executor) => executor.evidence(call),
+        }
     }
 
     fn execute(
@@ -386,8 +1034,20 @@ impl ToolService for CompositeToolService {
         authorization: &ToolAuthorization,
         cancellation: &CancellationToken,
     ) -> Result<ToolExecutionOutput, CoreError> {
-        self.service(call)?
-            .execute(call, authorization, cancellation)
+        if let Some(search) = &self.search
+            && call.name == search.definition().name
+        {
+            return search.execute(call, authorization, cancellation);
+        }
+        let (_, runtime) = self.runtime(call)?;
+        match runtime {
+            ToolContributionRuntime::Service(service) => {
+                service.execute(call, authorization, cancellation)
+            }
+            ToolContributionRuntime::Executor(_) => Err(CoreError::Execution(
+                "ToolExecutor invocation requires durable execution facts".into(),
+            )),
+        }
     }
 
     fn execute_streaming(
@@ -397,26 +1057,112 @@ impl ToolService for CompositeToolService {
         cancellation: &CancellationToken,
         sink: &mut dyn ToolOutputSink,
     ) -> Result<ToolExecutionOutput, CoreError> {
-        self.service(call)?
-            .execute_streaming(call, authorization, cancellation, sink)
+        if let Some(search) = &self.search
+            && call.name == search.definition().name
+        {
+            return search.execute(call, authorization, cancellation);
+        }
+        let (_, runtime) = self.runtime(call)?;
+        match runtime {
+            ToolContributionRuntime::Service(service) => {
+                service.execute_streaming(call, authorization, cancellation, sink)
+            }
+            ToolContributionRuntime::Executor(_) => Err(CoreError::Execution(
+                "ToolExecutor invocation requires durable execution facts".into(),
+            )),
+        }
+    }
+
+    fn execute_with_facts(
+        &self,
+        call: &ToolCall,
+        authorization: &ToolAuthorization,
+        cancellation: &CancellationToken,
+        facts: &ToolExecutionFacts,
+    ) -> Result<ToolExecutionOutput, CoreError> {
+        if let Some(search) = &self.search
+            && call.name == search.definition().name
+        {
+            return search.execute(call, authorization, cancellation);
+        }
+        let (binding, runtime) = self.runtime(call)?;
+        match runtime {
+            ToolContributionRuntime::Service(service) => {
+                service.execute_with_facts(call, authorization, cancellation, facts)
+            }
+            ToolContributionRuntime::Executor(executor) => executor.execute(
+                binding,
+                call,
+                authorization,
+                cancellation,
+                facts,
+                &mut NoopToolOutputSink,
+            ),
+        }
+    }
+
+    fn execute_streaming_with_facts(
+        &self,
+        call: &ToolCall,
+        authorization: &ToolAuthorization,
+        cancellation: &CancellationToken,
+        facts: &ToolExecutionFacts,
+        sink: &mut dyn ToolOutputSink,
+    ) -> Result<ToolExecutionOutput, CoreError> {
+        if let Some(search) = &self.search
+            && call.name == search.definition().name
+        {
+            return search.execute(call, authorization, cancellation);
+        }
+        let (binding, runtime) = self.runtime(call)?;
+        match runtime {
+            ToolContributionRuntime::Service(service) => {
+                service.execute_streaming_with_facts(call, authorization, cancellation, facts, sink)
+            }
+            ToolContributionRuntime::Executor(executor) => {
+                executor.execute(binding, call, authorization, cancellation, facts, sink)
+            }
+        }
+    }
+}
+
+struct NoopToolOutputSink;
+
+impl ToolOutputSink for NoopToolOutputSink {
+    fn emit(&mut self, _: zeta_protocol::ToolOutputStream, _: String) -> Result<(), CoreError> {
+        Ok(())
     }
 }
 
 struct CompositePolicyService {
+    dynamic: Option<Arc<dyn PolicyService>>,
+    extension: Option<Arc<dyn PolicyService>>,
     local: Option<Arc<dyn PolicyService>>,
     mcp: Option<Arc<dyn PolicyService>>,
+    search_enabled: bool,
 }
 
 impl PolicyService for CompositePolicyService {
     fn revision(&self) -> String {
         format!(
-            "composite-policy-v1:local={}:mcp={}",
+            "composite-policy-v1:dynamic={}:extension={}:local={}:mcp={}:tool-search={}",
+            self.dynamic
+                .as_ref()
+                .map_or_else(|| "none".into(), |policy| policy.revision()),
+            self.extension
+                .as_ref()
+                .map_or_else(|| "none".into(), |policy| policy.revision()),
             self.local
                 .as_ref()
                 .map_or_else(|| "none".into(), |policy| policy.revision()),
             self.mcp
                 .as_ref()
-                .map_or_else(|| "none".into(), |policy| policy.revision())
+                .map_or_else(|| "none".into(), |policy| policy.revision()),
+            if self.search_enabled {
+                "enabled"
+            } else {
+                "disabled"
+            }
         )
     }
 
@@ -425,7 +1171,12 @@ impl PolicyService for CompositePolicyService {
         request: &ActionReviewRequest,
         cancellation: &CancellationToken,
     ) -> Result<ExecutionDecision, CoreError> {
+        if self.search_enabled && request.provenance().source_id() == TOOL_SEARCH_TOOL_NAME {
+            return decide_tool_search(request, cancellation);
+        }
         let policy = match request.provenance().source() {
+            ActionSource::DynamicTool => self.dynamic.as_ref(),
+            ActionSource::Plugin => self.extension.as_ref(),
             ActionSource::BuiltInTool => self.local.as_ref(),
             ActionSource::McpServer => self.mcp.as_ref(),
             _ => None,
@@ -435,6 +1186,260 @@ impl PolicyService for CompositePolicyService {
         })?;
         policy.decide(request, cancellation)
     }
+}
+
+#[derive(serde::Deserialize)]
+struct ToolSearchArguments {
+    query: String,
+    limit: Option<usize>,
+    #[serde(default)]
+    strategy: ToolSearchStrategy,
+}
+
+#[derive(Clone, Copy, Default, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum ToolSearchStrategy {
+    #[default]
+    Bm25,
+    Regex,
+}
+
+#[derive(serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+struct ToolSearchOutput {
+    registry_generation: u64,
+    tools: Vec<ToolSearchOutputMatch>,
+}
+
+#[derive(serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+struct ToolSearchOutputMatch {
+    name: ToolName,
+    description: String,
+    definition_digest: String,
+    score: u64,
+}
+
+struct ToolSearchRuntime {
+    registry: Arc<ToolRegistrySnapshot>,
+    definition: ToolDefinition,
+    state: ToolSearchRuntimeState,
+}
+
+enum ToolSearchRuntimeState {
+    Lexical,
+    Hybrid(ToolSearchEmbeddingRuntime),
+    Unavailable(Arc<str>),
+}
+
+impl ToolSearchRuntime {
+    fn new(registry: Arc<ToolRegistrySnapshot>, options: &ToolSearchOptions) -> Self {
+        Self {
+            state: options.runtime_state(Arc::clone(&registry)),
+            registry,
+            definition: tool_search_definition(),
+        }
+    }
+
+    fn definition(&self) -> &ToolDefinition {
+        &self.definition
+    }
+
+    fn query(&self, call: &ToolCall) -> Result<ToolSearchQuery, CoreError> {
+        if call.name != self.definition.name {
+            return Err(CoreError::Policy(format!(
+                "tool search cannot handle call for {}",
+                call.name
+            )));
+        }
+        let arguments = serde_json::from_value::<ToolSearchArguments>(call.arguments.clone())
+            .map_err(|error| {
+                CoreError::Policy(format!("invalid tool search arguments: {error}"))
+            })?;
+        let limit = arguments
+            .limit
+            .map(ToolSearchLimit::new)
+            .transpose()
+            .map_err(|error| CoreError::Policy(error.to_string()))?
+            .unwrap_or_default();
+        match arguments.strategy {
+            ToolSearchStrategy::Bm25 => ToolSearchQuery::new(arguments.query, limit),
+            ToolSearchStrategy::Regex => ToolSearchQuery::regex(arguments.query, limit),
+        }
+        .map_err(|error| CoreError::Policy(error.to_string()))
+    }
+
+    fn prepare(&self, call: &ToolCall) -> Result<ActionReviewRequest, CoreError> {
+        let query = self.query(call)?;
+        let canonical = serde_json::to_vec(&serde_json::json!({
+            "registry_generation": self.registry.generation().get(),
+            "query": query.text(),
+            "limit": query.limit().get(),
+            "strategy": match query.syntax() {
+                ToolSearchQuerySyntax::NaturalLanguage => "bm25",
+                ToolSearchQuerySyntax::Regex => "regex",
+            },
+        }))
+        .map_err(|error| CoreError::Policy(error.to_string()))?;
+        Ok(ActionReviewRequest::new(
+            ResolvedAction::new(
+                ActionDigest::from_canonical_bytes(canonical),
+                ActionKind::SystemOperation,
+                "search the current authorized tool registry",
+                CapabilitySet::new([]),
+            ),
+            ActionProvenance::new(ActionSource::BuiltInTool, TOOL_SEARCH_TOOL_NAME),
+            SandboxCompatibility::NotApplicable {
+                reason: "tool search reads only an immutable in-process registry".into(),
+            },
+            PolicyRevision::new(TOOL_SEARCH_POLICY_REVISION),
+        ))
+    }
+
+    fn execute(
+        &self,
+        call: &ToolCall,
+        authorization: &ToolAuthorization,
+        cancellation: &CancellationToken,
+    ) -> Result<ToolExecutionOutput, CoreError> {
+        cancellation
+            .check()
+            .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
+        if !matches!(authorization, ToolAuthorization::UnsandboxedGrant { .. }) {
+            return Err(CoreError::Policy(
+                "tool search requires the host's read-only registry grant".into(),
+            ));
+        }
+        let query = self.query(call)?;
+        let result = match (&self.state, query.syntax()) {
+            (ToolSearchRuntimeState::Hybrid(embedding), ToolSearchQuerySyntax::NaturalLanguage) => {
+                embedding.search(&query).map_err(|error| {
+                    CoreError::Execution(format!(
+                        "hybrid embedding tool search is unavailable: {error}"
+                    ))
+                })?
+            }
+            (
+                ToolSearchRuntimeState::Unavailable(reason),
+                ToolSearchQuerySyntax::NaturalLanguage,
+            ) => {
+                return Err(CoreError::Execution(format!(
+                    "hybrid embedding tool search is unavailable: {reason}"
+                )));
+            }
+            (ToolSearchRuntimeState::Lexical, ToolSearchQuerySyntax::NaturalLanguage)
+            | (_, ToolSearchQuerySyntax::Regex) => self.registry.search(&query),
+        };
+        let output = ToolSearchOutput {
+            registry_generation: result.registry_generation().get(),
+            tools: result
+                .matches()
+                .iter()
+                .map(|matched| ToolSearchOutputMatch {
+                    name: matched.loadable().definition().name().clone(),
+                    description: matched.loadable().definition().description().to_owned(),
+                    definition_digest: matched.loadable().binding().definition_digest().to_string(),
+                    score: matched.score().get(),
+                })
+                .collect(),
+        };
+        serde_json::to_string(&output)
+            .map(ToolExecutionOutput::Success)
+            .map_err(|error| CoreError::Execution(error.to_string()))
+    }
+
+    fn activated_tool_names(
+        &self,
+        call: &ToolCall,
+        result: &str,
+    ) -> Result<Vec<ToolName>, CoreError> {
+        if call.name != self.definition.name {
+            return Ok(Vec::new());
+        }
+        let output = serde_json::from_str::<ToolSearchOutput>(result).map_err(|error| {
+            CoreError::Execution(format!("invalid durable tool search result: {error}"))
+        })?;
+        if output.registry_generation != self.registry.generation().get() {
+            return Err(CoreError::Execution(format!(
+                "tool search result belongs to registry generation {}, current generation is {}",
+                output.registry_generation,
+                self.registry.generation()
+            )));
+        }
+        output
+            .tools
+            .into_iter()
+            .map(|matched| {
+                let entry = self.registry.resolve(&matched.name).ok_or_else(|| {
+                    CoreError::Execution(format!(
+                        "tool search returned unavailable tool {}",
+                        matched.name
+                    ))
+                })?;
+                if entry.exposure() != ToolExposure::Deferred
+                    || entry.binding().definition_digest().as_str() != matched.definition_digest
+                {
+                    return Err(CoreError::Execution(format!(
+                        "tool search binding validation failed for {}",
+                        matched.name
+                    )));
+                }
+                Ok(matched.name)
+            })
+            .collect()
+    }
+}
+
+fn tool_search_definition() -> ToolDefinition {
+    ToolDefinition {
+        name: ToolName::new(TOOL_SEARCH_TOOL_NAME).expect("static tool search name is valid"),
+        description: "Search the current authorized tool catalog for capabilities needed by the task. Matching tools are loaded for the next model step.".into(),
+        parameters: serde_json::json!({
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Natural-language description of the capability to load."
+                },
+                "limit": {
+                    "type": ["integer", "null"],
+                    "minimum": 1,
+                    "maximum": 32,
+                    "description": "Maximum matches to load. Use null for the default."
+                },
+                "strategy": {
+                    "type": "string",
+                    "enum": ["bm25", "regex"],
+                    "description": "Use bm25 for natural-language capability queries or regex for explicit catalog patterns."
+                }
+            },
+            "required": ["query", "limit", "strategy"],
+            "additionalProperties": false
+        }),
+        strict: true,
+    }
+}
+
+fn decide_tool_search(
+    request: &ActionReviewRequest,
+    cancellation: &CancellationToken,
+) -> Result<ExecutionDecision, CoreError> {
+    cancellation
+        .check()
+        .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
+    if request.policy_revision().as_str() != TOOL_SEARCH_POLICY_REVISION
+        || request.provenance().source() != &ActionSource::BuiltInTool
+        || request.provenance().source_id() != TOOL_SEARCH_TOOL_NAME
+        || request.action().kind() != &ActionKind::SystemOperation
+        || !request.action().required_capabilities().is_empty()
+    {
+        return Err(CoreError::Policy(
+            "tool search policy rejected an action outside its read-only registry contract".into(),
+        ));
+    }
+    Ok(ExecutionDecision::RunUnsandboxed {
+        grant_id: GrantId::new("tool-search-read-only"),
+    })
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

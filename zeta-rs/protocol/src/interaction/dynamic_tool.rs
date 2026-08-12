@@ -18,6 +18,11 @@ pub struct DynamicToolSpec {
 pub struct DynamicToolCall {
     pub call_id: ToolCallId,
     pub name: ToolName,
+    /// Digest of the exact model-visible definition that produced this call.
+    ///
+    /// Interaction owners must echo results only for this frozen definition. This prevents a
+    /// same-name tool installed after a restart or hot reload from claiming an older invocation.
+    pub definition_digest: String,
     #[ts(type = "unknown")]
     pub arguments: Value,
 }

@@ -1,10 +1,10 @@
-import type { ModelRef as ModelRefDto, Session as SessionDto } from "../../../../../../generated/app-server/types.js";
+import type { ModelRef as ModelRefDto, Session as SessionDto, SessionThreadProjection as SessionThreadProjectionDto, TurnStatus as TurnStatusDto } from "../../../../../../generated/app-server/types.js";
 import { Emitter } from "../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { createUuid } from "../../../../base/common/uuid.js";
 import type { IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
 import type { ISessionApi } from "../../../../platform/sessions/common/sessionApi.js";
-import type { IActiveSessionThread, IUntitledChatSession, IWorkbenchSessionService, ModelRef, Session, SessionId, ThreadId, WorkbenchSessionState } from "../common/sessionService.js";
+import type { AgentThreadExecutionStatus, IActiveSessionThread, IUntitledChatSession, IWorkbenchSessionService, ModelRef, Session, SessionId, ThreadId, WorkbenchSessionState } from "../common/sessionService.js";
 
 /** App Server-backed active Session selector for one workbench window. */
 export class WorkbenchSessionService extends DisposableOwner implements IWorkbenchSessionService {
@@ -133,7 +133,7 @@ export class WorkbenchSessionService extends DisposableOwner implements IWorkben
     this.setState("archiving");
     try {
       const result = await this.api.archive({ commandId: commandId("archive-session"), sessionId, expectedSequence: session.sequence });
-      this.replaceSession(toSession(result.session));
+      this.replaceSession(toSession(result.session, [], session));
       await this.unsubscribeSession(sessionId);
       if (this._active?.session.sessionId === sessionId) this._active = firstActiveThread(this._sessions);
       this.restoreAvailableSelection();
@@ -151,7 +151,7 @@ export class WorkbenchSessionService extends DisposableOwner implements IWorkben
     this.setState("stopping");
     try {
       const result = await this.api.stop({ commandId: commandId("stop-session"), sessionId, expectedSequence: session.sequence });
-      this.replaceSession(toSession(result.session));
+      this.replaceSession(toSession(result.session, [], session));
       await this.unsubscribeSession(sessionId);
       if (this._active?.session.sessionId === sessionId) this._active = firstActiveThread(this._sessions);
       this.restoreAvailableSelection();
@@ -168,7 +168,7 @@ export class WorkbenchSessionService extends DisposableOwner implements IWorkben
     if (!session) throw new Error(`Active Session is not available: ${sessionId}`);
     try {
       const result = await this.api.setModel({ commandId: commandId("session-model"), sessionId, expectedSequence: session.sequence, model });
-      const updated = toSession(result.session);
+      const updated = toSession(result.session, [], session);
       this.replaceSession(updated);
       if (this._active?.session.sessionId === sessionId) this._active = { session: updated, threadId: this._active.threadId };
       this._error = undefined;
@@ -203,7 +203,7 @@ export class WorkbenchSessionService extends DisposableOwner implements IWorkben
     this.setState("loading");
     try {
       const result = await this.api.list();
-      const sessions = result.sessions.map(toSession);
+      const sessions = result.sessions.map(session => toSession(session));
       this._sessions = await Promise.all(sessions.map(session => this.subscribeSession(session)));
       this._active = firstActiveThread(this._sessions);
       this.restoreAvailableSelection();
@@ -248,7 +248,7 @@ export class WorkbenchSessionService extends DisposableOwner implements IWorkben
     if (session.status !== "active") return session;
     const result = await this.api.subscribe({ sessionId: session.sessionId, afterSequence: session.sequence });
     this.subscribedSessionIds.add(session.sessionId);
-    const subscribed = toSession(result.session);
+    const subscribed = toSession(result.session, result.threadProjections, session);
     if (subscribed.sessionId !== session.sessionId) {
       await this.unsubscribeSession(session.sessionId);
       throw new Error(`Session subscription returned '${subscribed.sessionId}' for '${session.sessionId}'`);
@@ -283,7 +283,7 @@ export class WorkbenchSessionService extends DisposableOwner implements IWorkben
         }
         const result = await this.api.subscribe({ sessionId, afterSequence: current.sequence });
         this.subscribedSessionIds.add(sessionId);
-        const refreshed = toSession(result.session);
+        const refreshed = toSession(result.session, result.threadProjections, current);
         if (refreshed.sessionId !== sessionId) {
           throw new Error(`Session refresh returned '${refreshed.sessionId}' for '${sessionId}'`);
         }
@@ -311,15 +311,40 @@ export class WorkbenchSessionService extends DisposableOwner implements IWorkben
   }
 }
 
-function toSession(session: SessionDto): Session {
+function toSession(session: SessionDto, projections: readonly SessionThreadProjectionDto[] = [], previous?: Session): Session {
+  const projectionByThread = new Map(projections.map(projection => [projection.thread.threadId, projection.thread]));
   return {
     sessionId: session.sessionId,
     title: session.title,
     status: session.status,
     model: session.model ? toModelRef(session.model) : session.model,
     sequence: session.sequence,
-    threads: session.threads.map((thread) => ({ ...thread, origin: { ...thread.origin } })),
+    threads: session.threads.map((thread) => {
+      const projection = projectionByThread.get(thread.threadId);
+      const prior = previous?.threads.find(candidate => candidate.threadId === thread.threadId);
+      return {
+        ...thread,
+        origin: { ...thread.origin },
+        title: projection?.title ?? prior?.title,
+        executionStatus: projection ? executionStatus(projection.turns.at(-1)?.status) : prior?.executionStatus ?? "idle",
+      };
+    }),
   };
+}
+
+function executionStatus(status: TurnStatusDto | undefined): AgentThreadExecutionStatus {
+  switch (status) {
+    case "created": return "queued";
+    case "running":
+    case "cancelling": return "running";
+    case "waitingForApproval":
+    case "waitingForUserInput":
+    case "waitingForCapability": return "waiting";
+    case "completed": return "completed";
+    case "failed": return "failed";
+    case "interrupted": return "cancelled";
+    case undefined: return "idle";
+  }
 }
 
 function toModelRef(model: ModelRefDto): ModelRef { return { provider: model.provider, model: model.model }; }

@@ -14,6 +14,20 @@ use zeta_protocol::{
     TurnId, UserInput, UserInputQuestion,
 };
 
+struct OneShotActivation {
+    calls: Arc<AtomicU64>,
+}
+
+impl zeta_extension_api::SkillActivationContributor for OneShotActivation {
+    fn contribute(
+        &self,
+        _: zeta_extension_api::SkillActivationContext<'_>,
+    ) -> Result<Vec<zeta_protocol::FrozenSkillActivation>, zeta_extension_api::ExtensionError> {
+        self.calls.fetch_add(1, Ordering::Relaxed);
+        Ok(Vec::new())
+    }
+}
+
 static NEXT_THREAD: AtomicU64 = AtomicU64::new(1);
 
 fn start_request(key: &str) -> StartTurnRequest {
@@ -728,6 +742,51 @@ fn typed_command_rejects_reusing_an_id_with_different_input() {
 
     assert!(matches!(
         threads.start_turn(&thread, conflicting),
+        Err(CoreError::CommandConflict)
+    ));
+}
+
+#[test]
+fn replay_does_not_reinvoke_extension_activation() {
+    let threads = ThreadController::with_store(Arc::new(InMemoryThreadStore::default()));
+    let calls = Arc::new(AtomicU64::new(0));
+    let mut extensions = zeta_extension_api::ExtensionRegistryBuilder::new();
+    extensions.skill_activation_contributor(Arc::new(OneShotActivation {
+        calls: Arc::clone(&calls),
+    }));
+    threads
+        .install_extensions(Arc::new(extensions.build()))
+        .unwrap();
+    let thread = create_thread(&threads, "extension replay");
+
+    threads
+        .start_turn(&thread, start_request("extension-replay"))
+        .unwrap();
+    threads
+        .start_turn(&thread, start_request("extension-replay"))
+        .unwrap();
+
+    assert_eq!(calls.load(Ordering::Relaxed), 1);
+}
+
+#[test]
+fn replay_rejects_different_host_seeded_automatic_activations() {
+    let threads = ThreadController::with_store(Arc::new(InMemoryThreadStore::default()));
+    let thread = create_thread(&threads, "automatic activation replay");
+    let mut initial = start_request("automatic-activation-replay");
+    initial.activated_skills = vec![zeta_protocol::FrozenSkillActivation {
+        id: zeta_protocol::SkillId::new(
+            zeta_protocol::SkillSourceId::new("user:skill-source:test").unwrap(),
+            zeta_protocol::SkillName::new("review").unwrap(),
+        ),
+        content_digest: zeta_protocol::ContentDigest::sha256(b"review body"),
+        catalog_generation: 7,
+        reason: zeta_protocol::SkillActivationReason::Automatic,
+    }];
+    threads.start_turn(&thread, initial).unwrap();
+
+    assert!(matches!(
+        threads.start_turn(&thread, start_request("automatic-activation-replay")),
         Err(CoreError::CommandConflict)
     ));
 }

@@ -12,11 +12,14 @@ path = "src/lib.rs"
 
 [dependencies]
 thiserror = { workspace = true }
+zeta-async-utils = { workspace = true }
 zeta-code-index = { workspace = true }
 zeta-code-index-cloud = { workspace = true }
+zeta-code-index-semantic = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
+zeta-model-provider = { workspace = true }
 zeta-workspace = { workspace = true }
 
 [lints]

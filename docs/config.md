@@ -5,7 +5,7 @@
 > 当前状态：TOML User Config authority、SQLite revision/generation 与 exact command receipt、
 > Provider map、standalone MCP declaration、Skill source/per-Skill enablement、Workspace TOML
 > read-only document、exact Plugin request、declarative Hook、User Workspace trust decision 和
-> scoped resolution 已实现。
+> scoped resolution、Tool Search 词法/混合 embedding 模式选择已实现。
 > Local App Server 在 profile 下使用
 > `config.toml` 与 `state.sqlite3`，并在提交后原子切换未来的 model、Skill 与 MCP Tool safe point；
 > 已 prepare 的 Tool Call 保留旧 generation。Plugin contribution、grant 和完整环境组合仍是后续
@@ -127,6 +127,7 @@ ResolvedConfigSnapshot
 | Plugin request | User、Workspace | 只能请求 exact package/version 与 desired enablement，不能证明已安装、激活或授权 |
 | Skill source | User、Workspace | 必须经过 source containment、trust 和 compatibility 校验 |
 | Hook declaration | User、Workspace | 只声明 safe-point、tool matcher 与 process argv；执行仍需 trust、policy、approval 和 sandbox |
+| Tool Search mode/model | User | 默认纯本地 BM25/Regex；混合模式独立选择 exact embedding `ModelRef`，由 App Server 探活后启用 |
 | Sandbox/approval intent | User、Workspace、Session | 低信任 source 只能保持或收紧安全性 |
 | Workspace trust | User、organization policy、trusted host composition | Workspace document 无权自授信；User 缺失决策默认 Restricted |
 | System requirements | System/organization | 是约束，不是“最高优先级普通配置” |
@@ -143,6 +144,7 @@ pub struct UserConfigDocument {
     pub skills: SkillsConfig,
     pub plugins: PluginsConfig,
     pub hooks: HooksConfig,
+    pub tool_search: ToolSearchConfig,
     pub workspace_trust: WorkspaceTrustConfig,
 }
 
@@ -180,6 +182,24 @@ Provider 配置继续由 `zeta-model-provider-config` 定义。`zeta-config` 可
 `auto_compact_token_limit`。这些值只决定 Core 是否能使用确定性预算和 durable compaction，不
 改变 provider endpoint 或模型选择；窗口或阈值为零会在静态配置校验时被拒绝。目录和配置都无
 已知窗口时，Core 明确退回 provider-managed，不猜测默认窗口。
+
+Deferred Agent 工具检索只有两档 User intent：`toolSearch.mode = "lexical"`（默认）和
+`toolSearch.mode = "hybridEmbedding"`。混合模式还必须配置 `toolSearch.embeddingModel`；该
+`ModelRef` 与 CodeIndex 的 embedding/rerank 选择彼此独立，只共享 provider runtime 和 credential
+materialization。配置本身不保存模型实例、向量或 provider credential。
+
+`toolSearch/configure` 会在 durable commit 前解析模型并用固定文本完成 readiness probe。未配置
+provider、credential/runtime 或 probe 失败时返回 `ToolSearchUnavailable`，不会打开门禁。外部 TOML
+或启动恢复出的不可用 hybrid 配置不会拖垮 App Server；`config/read` 通过
+`toolSearch.embeddingStatus = unavailable` 暴露原因，但自然语言 Tool Search 会明确失败，不会
+偷偷切到 BM25。显式 Regex 仍在本地运行；用户显式改回 `lexical` 后，BM25 才重新成为自然语言
+检索路径。门禁通过后，实际 embedding 调用失败同样使该次 Tool Search 明确失败。
+
+Semantic CodeIndex 使用独立的 `semanticCodeIndex.selection` 和按 Workspace trust ID 保存的 source-egress
+grant。授权会冻结 embedding/rerank `ModelRef` 以及它们实际使用的 provider config；模型或 endpoint
+变化后 `activeWorkspaceAuthorized` 立即变为 false，App Server 卸载旧 semantic runtime。Desktop 的
+Indexing 设置页可保存 Ollama/unauthenticated OpenAI-compatible endpoint、模型选择并 authorize/revoke；
+普通聊天模型配置和 Workspace 文件读取权限都不会自动授予源码外发。
 
 自动审批模型是独立于主 Agent 模型的 User 配置：
 

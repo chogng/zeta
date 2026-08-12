@@ -2,6 +2,7 @@ use super::*;
 use base64::Engine;
 use std::io::Cursor;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -314,6 +315,53 @@ fn initialize_is_required_and_request_ids_are_connection_unique() {
         serde_json::json!({"jsonrpc":"2.0","id":1,"method":"session/list","params":{}}),
     );
     assert_eq!(duplicate["error"]["message"], "InvalidRequest");
+}
+
+#[test]
+fn dynamic_interaction_capability_requires_exact_hosted_tool_names() {
+    let server = server();
+    let mut connection = server.connection();
+    let missing_names = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":1,
+            "method":"initialize",
+            "params":{
+                "clientInfo":{"name":"test","version":"1"},
+                "capabilities":{
+                    "agentInteractions":{"version":1,"kinds":["dynamicTool"]}
+                }
+            }
+        }),
+    );
+    assert_eq!(missing_names["error"]["message"], "InvalidParams");
+
+    let mut connection = server.connection();
+    let accepted = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":1,
+            "method":"initialize",
+            "params":{
+                "clientInfo":{"name":"test","version":"1"},
+                "capabilities":{
+                    "agentInteractions":{
+                        "version":1,
+                        "kinds":["dynamicTool"],
+                        "dynamicTools":["client_lookup"]
+                    }
+                }
+            }
+        }),
+    );
+    assert_eq!(
+        accepted["result"]["capabilities"]["agentInteractions"],
+        true
+    );
 }
 
 #[test]
@@ -1302,6 +1350,129 @@ fn completed_turn_replays_without_invoking_the_model_twice() {
     }));
 }
 
+#[derive(Default)]
+struct SkillRecordingModel {
+    requests: Mutex<Vec<ModelRequest>>,
+}
+
+struct EmptySkillConfig;
+
+impl zeta_skills_extension::SkillConfigSnapshotProvider for EmptySkillConfig {
+    fn snapshot(&self) -> Result<zeta_config::SkillsConfig, String> {
+        Ok(zeta_config::SkillsConfig::default())
+    }
+}
+
+impl ModelService for SkillRecordingModel {
+    fn invoke(
+        &self,
+        _: zeta_core::ModelSelection<'_>,
+        request: &ModelRequest,
+        _: &CancellationToken,
+    ) -> Result<ModelResponse, CoreError> {
+        self.requests.lock().unwrap().push(request.clone());
+        Ok(ModelResponse {
+            output: vec![ResponseItem::Text("done".into())],
+            usage: None,
+            stop_reason: StopReason::Completed,
+        })
+    }
+}
+
+#[test]
+fn explicit_skill_flows_through_core_extension_lifecycle() {
+    let root = std::env::temp_dir().join(format!(
+        "zeta-app-server-extension-skill-{}-{}",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    let skill_root = root.join("skill-creator");
+    std::fs::create_dir_all(&skill_root).unwrap();
+    std::fs::write(
+        skill_root.join("SKILL.md"),
+        "---\nname: skill-creator\ndescription: Create skills\n---\n\nExtension instructions.\n",
+    )
+    .unwrap();
+    let model = Arc::new(SkillRecordingModel::default());
+    let server = server_with_model(model.clone())
+        .with_skill_runtime(
+            zeta_skills_extension::BuiltInSkillSource::Root(root.clone()),
+            Arc::new(EmptySkillConfig),
+        )
+        .unwrap();
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    let session = create_session(&server, &mut connection, 2, "skill-session");
+    let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
+    let thread = create_thread(&server, &mut connection, 3, "skill-thread", session_id, 1);
+    let thread_id = thread["result"]["value"]["threadId"].as_str().unwrap();
+
+    let started = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":4,"method":"session/request",
+            "params":{
+                "commandId":"skill-turn","sessionId":session_id,"expectedSequence":1,
+                "request":{
+                    "type":"startTurn","threadId":thread_id,
+                    "input":[
+                        {"type":"skill","skill":{
+                            "id":{"source":"builtin:skill-source:zeta-release","name":"skill-creator"},
+                            "version":{"type":"followLatest"}
+                        }},
+                        {"type":"text","text":"create one"}
+                    ]
+                }
+            }
+        }),
+    );
+
+    assert!(started["result"]["value"]["turnId"].is_string());
+    wait_for_latest_turn(&server, thread_id, TurnStatus::Completed);
+    let snapshot = server
+        .sessions()
+        .threads()
+        .read_thread(&zeta_protocol::ThreadId::new(thread_id).unwrap())
+        .unwrap();
+    assert_eq!(snapshot.turns[0].activated_skills.len(), 1);
+    let requests = model.requests.lock().unwrap();
+    assert!(
+        requests[0]
+            .tools
+            .iter()
+            .any(|tool| tool.name.as_str() == zeta_skills_extension::SKILLS_READ_TOOL_NAME)
+    );
+    assert!(requests[0].input.iter().any(|item| {
+        let InputItem::Message(message) = item else {
+            return false;
+        };
+        message.content.iter().any(|part| {
+            matches!(part, ContentPart::Text(text) if text.contains("<skill-instructions") && text.contains("Extension instructions."))
+        })
+    }));
+    assert!(requests[0].input.iter().any(|item| {
+        let InputItem::Message(message) = item else {
+            return false;
+        };
+        message.content.iter().any(|part| {
+            matches!(part, ContentPart::Text(text) if text.contains("<available-skills") && text.contains("name=\"skill-creator\""))
+        })
+    }));
+    assert!(
+        requests[0]
+            .tools
+            .iter()
+            .any(|tool| tool.name.as_str() == zeta_skills_extension::SKILLS_READ_TOOL_NAME)
+    );
+    drop(requests);
+    drop(server);
+    let _ = std::fs::remove_dir_all(root);
+}
+
 #[test]
 fn session_request_routes_typed_mutations_through_the_session_boundary() {
     let server = server();
@@ -1761,6 +1932,46 @@ fn config_updates_use_typed_command_ids() {
     let _ = std::fs::remove_file(&path);
     let _ = std::fs::remove_file(format!("{}-shm", path.display()));
     let _ = std::fs::remove_file(format!("{}-wal", path.display()));
+}
+
+#[test]
+fn tool_search_configure_rejects_an_unavailable_embedding_before_commit() {
+    let path = std::env::temp_dir().join(format!(
+        "zeta-app-server-tool-search-config-{}.sqlite3",
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    let server = server().with_config_store(Arc::new(ConfigStore::open(&path).unwrap()));
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+
+    let rejected = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":2,"method":"toolSearch/configure",
+            "params":{
+                "commandId":"enable-tool-search","expectedRevision":0,
+                "mode":"hybridEmbedding",
+                "embeddingModel":{"provider":"ollama","model":"nomic-embed-text"}
+            }
+        }),
+    );
+    assert_eq!(rejected["error"]["message"], "ToolSearchUnavailable");
+
+    let read = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"config/read","params":{}}),
+    );
+    assert_eq!(read["result"]["revision"], 0);
+    assert_eq!(read["result"]["toolSearch"]["mode"], "lexical");
+    assert_eq!(
+        read["result"]["toolSearch"]["embeddingStatus"]["type"],
+        "disabled"
+    );
 }
 
 #[test]

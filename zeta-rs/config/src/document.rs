@@ -1,13 +1,23 @@
-use crate::{
-    ConfigDiagnostic, ConfigError, ConfigProvenance, HooksConfig, LanguageServersConfig, McpConfig,
-    PluginsConfig, SkillsConfig, WorkspaceConfigIntent, WorkspaceTrustConfig,
-};
-use serde::{Deserialize, Serialize};
+use crate::ConfigDiagnostic;
+use crate::ConfigError;
+use crate::ConfigProvenance;
+use crate::HooksConfig;
+use crate::LanguageServersConfig;
+use crate::McpConfig;
+use crate::PluginsConfig;
+use crate::SemanticCodeIndexConfig;
+use crate::SkillsConfig;
+use crate::ToolSearchConfig;
+use crate::WorkspaceConfigIntent;
+use crate::WorkspaceTrustConfig;
+use serde::Deserialize;
+use serde::Serialize;
 use std::collections::BTreeMap;
-use zeta_model_provider_config::{
-    ModelProviderConfig, ProviderConfigError, ProviderConfigRegistry,
-};
-use zeta_protocol::{ModelRef, ProviderId};
+use zeta_model_provider_config::ModelProviderConfig;
+use zeta_model_provider_config::ProviderConfigError;
+use zeta_model_provider_config::ProviderConfigRegistry;
+use zeta_protocol::ModelRef;
+use zeta_protocol::ProviderId;
 
 /// User-selected model source for automatic approval review.
 ///
@@ -111,6 +121,10 @@ pub struct UserConfigDocument {
     #[serde(default)]
     pub language_servers: LanguageServersConfig,
     #[serde(default)]
+    pub tool_search: ToolSearchConfig,
+    #[serde(default)]
+    pub semantic_code_index: SemanticCodeIndexConfig,
+    #[serde(default)]
     pub workspace_trust: WorkspaceTrustConfig,
 }
 
@@ -143,6 +157,43 @@ impl UserConfigDocument {
                 model.provider
             )));
         }
+        if let Some(models) = self.semantic_code_index.selection.remote_models() {
+            for (role, model) in [
+                ("embedding", &models.embedding_model),
+                (
+                    "rerank",
+                    models
+                        .rerank_model
+                        .as_ref()
+                        .unwrap_or(&models.embedding_model),
+                ),
+            ] {
+                if role == "rerank" && models.rerank_model.is_none() {
+                    continue;
+                }
+                if !self.providers.contains_key(&model.provider) {
+                    return Err(ConfigError(format!(
+                        "semantic code-index {role} provider '{}' is not configured",
+                        model.provider
+                    )));
+                }
+            }
+        }
+        if self.tool_search.mode == crate::ToolSearchModeConfig::HybridEmbedding
+            && self.tool_search.embedding_model.is_none()
+        {
+            return Err(ConfigError(
+                "hybrid embedding Tool Search requires an embedding model".into(),
+            ));
+        }
+        if let Some(model) = &self.tool_search.embedding_model
+            && !self.providers.contains_key(&model.provider)
+        {
+            return Err(ConfigError(format!(
+                "Tool Search embedding provider '{}' is not configured",
+                model.provider
+            )));
+        }
         self.mcp.validate_for_namespace("user")?;
         self.skills.validate_for_namespace("user")?;
         self.plugins.validate()?;
@@ -166,6 +217,8 @@ pub struct ResolvedConfig {
     pub plugins: PluginsConfig,
     pub hooks: HooksConfig,
     pub language_servers: LanguageServersConfig,
+    pub tool_search: ToolSearchConfig,
+    pub semantic_code_index: SemanticCodeIndexConfig,
     pub workspace_trust: WorkspaceTrustConfig,
     pub workspace: Option<WorkspaceConfigIntent>,
 }
@@ -237,6 +290,8 @@ impl From<&UserConfigDocument> for ResolvedConfig {
             plugins: document.plugins.clone(),
             hooks: document.hooks.clone(),
             language_servers: document.language_servers.clone(),
+            tool_search: document.tool_search.clone(),
+            semantic_code_index: document.semantic_code_index.clone(),
             workspace_trust: document.workspace_trust.clone(),
             workspace: None,
         }

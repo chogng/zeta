@@ -27,6 +27,15 @@ use zeta_code_index_cloud::CloudCodeIndexQueryRequest;
 use zeta_code_index_cloud::CloudCodeIndexQueryResult;
 use zeta_code_index_cloud::CloudCodeIndexSelection;
 use zeta_code_index_cloud::CloudCodeIndexStorage;
+use zeta_code_index_semantic::CodeIndexEmbeddingModelId;
+use zeta_code_index_semantic::CodeIndexSemanticService;
+use zeta_code_index_semantic::CodeIndexVectorStore;
+use zeta_code_index_semantic::InMemoryCodeIndexVectorStore;
+use zeta_model_provider::EmbeddingInvoker;
+use zeta_model_provider::EmbeddingRequest;
+use zeta_model_provider::EmbeddingResponse;
+use zeta_model_provider::EmbeddingVector;
+use zeta_model_provider::ModelProviderError;
 use zeta_workspace::WorkspaceRoot;
 
 use crate::CodeRetrievalBudget;
@@ -40,6 +49,26 @@ struct QueryProvider {
     published: Mutex<Vec<ChunkReference>>,
     fail_query: AtomicBool,
     reverse_query_order: AtomicBool,
+}
+
+struct SemanticEmbedding;
+
+impl EmbeddingInvoker for SemanticEmbedding {
+    fn embed(&self, request: &EmbeddingRequest) -> Result<EmbeddingResponse, ModelProviderError> {
+        EmbeddingResponse::new(
+            request
+                .inputs()
+                .iter()
+                .map(|input| {
+                    if input.contains("semantic_target") || input.contains("meaning query") {
+                        EmbeddingVector::new(vec![1.0, 0.0])
+                    } else {
+                        EmbeddingVector::new(vec![0.0, 1.0])
+                    }
+                })
+                .collect::<Result<Vec<_>, _>>()?,
+        )
+    }
 }
 
 impl QueryProvider {
@@ -146,6 +175,31 @@ fn hybrid_retrieval_fuses_and_deduplicates_the_same_excerpt() {
             CodeRetrievalOrigin::CloudSemantic,
         ]
     );
+    assert!(result.degradations.is_empty());
+}
+
+#[test]
+fn local_semantic_retrieval_adds_dense_candidates_without_cloud() {
+    let workspace = workspace("pub fn semantic_target() {}\n");
+    std::fs::write(
+        workspace.path().join("other.rs"),
+        "pub fn unrelated_code() {}\n",
+    )
+    .expect("other source");
+    let index = index(&workspace);
+    index.rebuild().expect("rebuild");
+    let semantic = semantic_service(Arc::clone(&index));
+    semantic.sync().expect("semantic sync");
+    let service = CodeRetrievalService::local_semantic(index, semantic).expect("local semantic");
+
+    let result = service.retrieve(&query("meaning query")).expect("retrieve");
+
+    assert_eq!(result.hits.len(), 2);
+    assert_eq!(
+        result.hits[0].reference.relative_path,
+        std::path::Path::new("lib.rs")
+    );
+    assert_eq!(result.hits[0].origins, [CodeRetrievalOrigin::LocalSemantic]);
     assert!(result.degradations.is_empty());
 }
 
@@ -287,6 +341,17 @@ fn ready_cloud(
         .expect("authorize");
     controller.sync().expect("sync");
     controller
+}
+
+fn semantic_service(index: Arc<CodeIndex>) -> Arc<CodeIndexSemanticService> {
+    let embedding: Arc<dyn EmbeddingInvoker> = Arc::new(SemanticEmbedding);
+    let store: Arc<dyn CodeIndexVectorStore> = Arc::new(InMemoryCodeIndexVectorStore::default());
+    Arc::new(CodeIndexSemanticService::new(
+        index,
+        CodeIndexEmbeddingModelId::new("semantic-test-v1").expect("model id"),
+        embedding,
+        store,
+    ))
 }
 
 fn query(text: &str) -> CodeRetrievalQuery {

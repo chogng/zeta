@@ -465,6 +465,14 @@ fn snapshot(current_turn_id: TurnId, items: Vec<ThreadItem>) -> ThreadSnapshot {
         started_tool_calls: BTreeSet::new(),
         tool_execution_starts: BTreeMap::new(),
         escalated_tool_calls: BTreeSet::new(),
+        agent_context_seed: None,
+        delegations: BTreeMap::new(),
+        agent_cancellations_received: BTreeSet::new(),
+        agent_joins: BTreeMap::new(),
+        produced_delegation_results: BTreeMap::new(),
+        received_delegation_results: BTreeMap::new(),
+        sent_agent_messages: BTreeMap::new(),
+        received_agent_messages: BTreeMap::new(),
     }
 }
 

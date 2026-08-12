@@ -12,6 +12,8 @@ import { createViteDevSkillApi } from "../../skills/browser/skillApi.js";
 import { ViteDevTerminalProcessService } from "../../terminal/browser/viteDevTerminalProcessService.js";
 import { createViteDevTypstApi } from "../../typst/browser/typstApi.js";
 import { createViteDevDocumentCollaborationApi } from "../../collaboration/browser/documentCollaborationApi.js";
+import { createViteDevCodeIndexApi } from "../../codeIndex/browser/codeIndexApi.js";
+import { createViteDevToolSearchApi } from "../../toolSearch/browser/toolSearchApi.js";
 
 export interface ConnectedWebRendererApi {
   readonly api: IRendererHost;
@@ -56,5 +58,7 @@ function createRendererHost(connection: ViteDevAppServerConnection): IRendererHo
     workspaceSearch: createViteDevWorkspaceSearchApi(connection),
     terminal: new ViteDevTerminalProcessService(connection, appServer),
     events: createViteDevServerEventApi(connection),
+    codeIndex: createViteDevCodeIndexApi(connection),
+    toolSearch: createViteDevToolSearchApi(connection),
   };
 }

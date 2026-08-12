@@ -1,96 +1,85 @@
 # `zeta-code-retrieval`
 
-> 本 README 拥有代码召回编排的 crate 内部契约。部署模式、数据外发和跨 crate 产品语义由
-> [`docs/code-index.md`](../../docs/code-index.md) 统一维护；本地索引实现见
-> [`zeta-code-index` README](../code-index/README.md)，云授权与供应商生命周期见
-> [`zeta-code-index-cloud` README](../code-index-cloud/README.md)。
+> 本 README 拥有代码召回编排的 crate 内部契约。跨 crate 产品语义由
+> [`docs/code-index.md`](../../docs/code-index.md) canonical 维护；本地词法索引、本地语义索引和远端
+> provider 生命周期分别见 [`zeta-code-index`](../code-index/README.md)、
+> [`zeta-code-index-semantic`](../code-index-semantic/README.md) 和
+> [`zeta-code-index-cloud`](../code-index-cloud/README.md)。
 
 ## 快速理解
 
-`zeta-code-retrieval` 把本地词法候选与已授权的云端语义候选组合为一份可供 Agent 使用的代码片段。
-它负责跨来源 rank 融合、去重、降级和字节预算，但不扫描文件、不发起授权，也不执行或编排
-embedding/rerank。云端候选进入本 crate 前已由云端 CodeIndex 服务排好最终顺序。
+`zeta-code-retrieval` 把本地 FTS、本地 dense recall 和可选远端 provider 已排序候选融合成一份可供
+Agent 消费的代码片段。它不扫描、不生成 embedding、不拥有向量数据库，也不发起外发授权。
 
-| 场景 | 行为 | 失败后的结果 |
+| 部署 | 候选来源 | 可降级行为 |
 | --- | --- | --- |
-| 仅本地部署 | 只查询本地 FTS，并复核当前源文件 | 本地查询失败则整个调用失败 |
-| 已启用云部署 | 合并本地与 exact-generation 云候选 | 云查询失败时保留本地结果并报告降级 |
-| 两侧命中同一 chunk | 按 Workspace-owned `ChunkReference` 去重 | 返回一条结果并保留两个来源 |
-| 文件已变化或候选越界 | 重读源文件并校验 revision、range、line span 与 hash | 丢弃候选并报告数量 |
-| 内容超过预算 | 应用单条和总字节上限 | 丢弃超限候选并报告数量 |
+| lexical only | 本地 FTS | 本地索引失败则调用失败 |
+| local semantic | 本地 FTS + 本地向量召回 | 语义未同步或模型失败时保留 FTS，报告 `LocalSemanticQueryFailed` |
+| remote provider | 本地 FTS + 远端已排序候选 | 远端失败时保留本地结果，报告 `CloudQueryFailed` |
+| combined | 上述三者 | 两个可选语义来源独立降级 |
 
 ## 所有权
 
 | 能力 | Owner |
 | --- | --- |
-| 扫描、ignore、切块、FTS、源文件 revision 复核 | `zeta-code-index` |
-| 授权、供应商边界、发布、查询和删除生命周期 | `zeta-code-index-cloud` |
-| query 准备、embedding、vector recall、rerank、云候选排序/过滤/截断 | `zeta-code-index-service` |
-| embedding/rerank 模型 API 适配与调用 | `zeta-model-provider` |
-| 已排序来源间的 RRF、去重、回退和上下文字节预算 | `zeta-code-retrieval` |
-| Workspace trust、供应商构造、RPC 与 Agent 接入 | App Server |
+| scan、ignore、chunk identity、FTS、源 revision 复核 | `zeta-code-index` |
+| query embedding、本地向量持久化/召回、可选 rerank 与来源内排序 | `zeta-code-index-semantic` |
+| 远端 grant、publication、query 与 deletion lifecycle | `zeta-code-index-cloud` + concrete provider |
+| embedding/rerank transport adapter | `zeta-model-provider` |
+| 多来源 RRF、identity 去重、降级、materialization 与 byte budget | `zeta-code-retrieval` |
+| trust、provider/model 注入、watcher、RPC 与 Agent 接入 | App Server |
 
-依赖方向固定为 `zeta-code-retrieval → zeta-code-index-cloud → zeta-code-index`。本 crate 不得反向
-依赖 App Server protocol、Core conversation state、产品 UI 或具体网络客户端。
+依赖方向固定为 `zeta-code-retrieval → {zeta-code-index, zeta-code-index-semantic,
+zeta-code-index-cloud}`。本 crate 不得反向依赖 App Server protocol、Core conversation state、产品 UI
+或具体网络客户端。
 
 ## 关键接口与调用关系
 
 | Symbol | 可见性 | 职责 | 漂移信号 |
 | --- | --- | --- | --- |
-| `CodeRetrievalService` | public | 绑定同一 root 的本地索引和可选云控制器 | 开始拥有 Workspace watcher、授权状态或网络 credential |
-| `CodeRetrievalQuery` | public | 校验非空、8 KiB query 与最多 100 条结果 | 接受未设上限的调用 |
-| `CodeRetrievalBudget` | public | 固定单条与总 content bytes 上限 | 把 token 估算或模型调用塞入字节预算 |
-| `CodeRetrievalResult` | public | 返回复核后的 hits 与显式 degradations | 隐藏云回退或候选丢弃 |
-| `RetrievalDeployment` | private | 区分纯本地与混合部署 | 从查询参数临时扩大到云端 |
-| `FusedCandidate` | private | 累积同一 Workspace chunk 的 RRF score 与 origins | 保存或信任 provider 返回的正文 |
-| `add_ranked` | private | 保留每个来源已给出的顺序，计算 RRF 并合并来源 | 重新解释云端分数或在客户端重做 rerank |
+| `CodeRetrievalService` | public | 绑定相同 root 的必需 lexical 与可选 semantic/cloud 来源 | 开始拥有 watcher、credential 或模型调用 |
+| `CodeRetrievalQuery` | public | 校验非空、8 KiB query 与最多 100 条结果 | 接受无界输入 |
+| `CodeRetrievalBudget` | public | 固定单条与总 content byte 上限 | 拥有模型 token budget |
+| `CodeRetrievalResult` | public | 返回已复核 hits 与显式 degradations | 隐藏可选来源失败 |
+| `RetrievalDeployment` | private | 固定本次 service 可用来源 | 从请求参数动态扩大到远端 |
+| `add_ranked` | private | 按来源内 rank 计算 RRF 并合并相同 `ChunkReference` | 比较不同来源不可比的原始分数 |
 
 ```mermaid
 flowchart LR
-    Query["CodeRetrievalService::retrieve"] --> Local["CodeIndex::search"]
-    Query --> Cloud["CloudCodeIndexController::query"]
-    Local --> LocalOrder["local FTS canonical order"]
-    Cloud --> CloudOrder["cloud final relevance order"]
-    LocalOrder --> Fuse["add_ranked / cross-source RRF"]
-    CloudOrder --> Fuse
+    Query["CodeRetrievalService::retrieve"] --> FTS["CodeIndex::search"]
+    Query --> Dense["CodeIndexSemanticService::query"]
+    Query --> Remote["CloudCodeIndexController::query"]
+    FTS --> Fuse["RRF by source rank"]
+    Dense --> Fuse
+    Remote --> Fuse
     Fuse --> Dedup["ChunkReference dedupe"]
-    Dedup --> Verify["CodeIndex::materialize exact chunk"]
-    Verify --> Budget["CodeRetrievalBudget"]
-    Budget --> Result["CodeRetrievalResult"]
+    Dedup --> Verify["CodeIndex::materialize"]
+    Verify --> Budget["content byte budget"]
+    Budget --> Result["hits + degradations"]
 ```
 
-`CodeRetrievalService::local` 明确构造纯本地部署；`CodeRetrievalService::hybrid` 要求本地索引和
-`CloudCodeIndexController` 的 root identity 完全一致。App Server 按当前 durable deployment 选择构造
-方式，未授权云模式不会调用 provider，也不会产生伪造的云失败状态。
+`local_semantic`、`hybrid` 和 `local_semantic_with_cloud` 都验证 root identity。App Server 只在
+Trusted Workspace 且 host 注入语义模型时安装 local semantic；远端来源还必须有 durable grant。
 
 ## 执行与失败语义
 
-一次 `retrieve` 先把请求数量乘以四作为每个来源的候选上限，并再次限制为 100。本地
-`CodeIndex::search` 返回 FTS canonical order；云端 `CloudCodeIndexProvider::query` 返回完成语义召回、
-rerank、过滤和截断后的 final relevance order。本 crate 不重新排序任一来源，只按两个已排序列表
-的位置计算 rank constant 60 的 reciprocal rank fusion（RRF），也不比较 FTS 与模型原始分数。
+一次 `retrieve` 先将请求数量乘以四作为各来源候选上限，并限制为 100。每个来源已经拥有自己的排序：
+FTS 由 `zeta-code-index` 排序，本地 dense/rerank 由 `zeta-code-index-semantic` 排序，远端列表由 provider
+排序。本 crate 只使用列表位置执行 rank constant 60 的 reciprocal rank fusion，不重新解释模型分数。
 
-本地索引是必需来源。`CodeIndex::search` 失败时返回 `CodeRetrievalError::LocalIndex`。混合部署中的
-云查询是可降级来源；grant 不可用、remote generation stale、provider 失败或返回越界结果时，调用
-保留本地候选并加入 `CodeRetrievalDegradation::CloudQueryFailed`，不会把内部 provider 错误文本暴露
-给上层。
-
-融合后的候选正文始终由 `CodeIndex::materialize` 从当前 Workspace 文件重新读取。revision、chunk key、
-chunker version、UTF-8 byte range、line span 或 content hash 任一不匹配都会丢弃该候选；成功后才把
-reference 投影成上层 DTO。默认单条上限为 32 KiB，
-全部结果正文上限为 128 KiB；这两个上限按 UTF-8 bytes 计算。数量和字节预算都在返回前执行。
+本地 FTS 是必需来源。两个语义来源是可降级来源，失败只增加对应 degradation。融合后所有正文都由
+`CodeIndex::materialize` 从当前 Workspace 文件重读；revision、chunk key、range、line span 或 content
+hash 不匹配即丢弃。默认单条正文最多 32 KiB，总正文最多 128 KiB，均按 UTF-8 bytes 计算。
 
 ## 集成义务
 
-- App Server 必须先检查本地 `CodeIndexRuntime` 已存在可查询 generation；本 crate 不拥有该产品状态机。
-- 只有 durable deployment 不再是 `LocalOnly` 时，才能构造混合服务并调用云控制器。
-- 供应商只能返回已排序且曾由当前 Workspace generation 发布的 exact chunk references，正文仍以
-  Workspace 侧复核结果为准。
-- Agent context consumer 必须保留结果顺序和预算，不得再次拼接被丢弃的 provider content。
-- 云端 CodeIndex 服务可以通过 `zeta-model-provider` 调用 rerank 模型，但候选构造、调用时机、
-  排序、过滤和截断规则仍属于云端 CodeIndex，不属于 model provider 或本 crate。
+- App Server 必须先确认 `CodeIndexRuntime` 有可查询 generation。
+- semantic projection 必须在 lexical generation 更新后同步；查询旧 generation 会显式失败并降级。
+- 远端 provider 只能返回已发布的 exact chunk references；正文仍以 Workspace 重读结果为准。
+- Agent context consumer 必须保留结果顺序与预算，不得重新加入已丢弃内容。
+- 本 crate 不负责取得 embedding/rerank 文本外发同意；安装 remote model invoker 前必须由产品 host 完成。
 
-## 测试与修改影响
+## 验证、限制与扩展
 
 ```bash
 cargo test -p zeta-code-retrieval
@@ -98,16 +87,12 @@ cargo clippy -p zeta-code-retrieval --all-targets --no-deps
 bazel test //zeta-rs/code-retrieval:code-retrieval-unit-tests
 ```
 
-测试位于 sibling `retrieval_tests.rs`，覆盖纯本地复核、云端顺序保留、跨来源 RRF 去重、云失败回退、stale candidate
-丢弃和 content byte budget。修改 query/result limit、RRF 规则、degradation shape 或 excerpt identity 时，
-必须同时检查 App Server RPC tests、generated schema/types、`zeta-code-index-cloud` query validation 和
-[`docs/code-index.md`](../../docs/code-index.md)。
+测试位于 sibling `retrieval_tests.rs`，覆盖 lexical、本地 semantic、远端顺序、RRF 去重、可选来源失败
+回退、stale candidate 和 byte budget。修改 origin/degradation、limit、RRF 或 excerpt identity 时，必须
+同步 App Server RPC tests、generated schema/types 与 [`docs/code-index.md`](../../docs/code-index.md)。
 
-## 当前限制与扩展点
-
-- Current：同步执行本地与云查询；尚未引入异步并行、取消 checkpoint 或 latency telemetry。
-- Current：`zeta-code-index-service` 已实现 provider-neutral semantic pipeline；production model/vector/network
-  adapters 尚未接入 `CloudCodeIndexProvider`。
-- Current：只处理单个 `WorkspaceRoot` 的磁盘文件；未叠加 Editor 未保存 buffer。
-- Extension point：可以增加可观测耗时或批量 materialization；不得把云端查询内部的
-  embedding/rerank 编排、provider networking、grant lifecycle 或 Agent Session state 移入本 crate。
+- Current：同步串行查询来源；已在来源边界和 materialization 循环检查取消，并把取消传入本地 semantic
+  模型调用。cloud provider query 尚未接受 cancellation，retrieval 层也尚无独立 latency telemetry。
+- Current：仅消费磁盘 Workspace generation；Editor 未保存 buffer overlay 尚未接入。
+- Extension point：可增加并发和可观测性，但 embedding/rerank 编排留在 semantic/provider owner，grant
+  留在 cloud owner，Agent Session state 留在上层 consumer。

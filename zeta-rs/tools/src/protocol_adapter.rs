@@ -4,6 +4,31 @@ use crate::{
 };
 use zeta_protocol::{ContentPart, ToolCallId, ToolName};
 
+/// Converts the canonical model function contract into a validated host definition.
+///
+/// The caller selects loading because protocol definitions intentionally do not own host exposure
+/// policy. Execution provenance and binding identity are attached later by the registry builder.
+pub fn from_protocol_tool_definition(
+    definition: &zeta_protocol::ToolDefinition,
+    loading: crate::ToolLoading,
+) -> Result<ToolDefinition, ProtocolToolAdapterError> {
+    let input_schema = crate::ToolInputSchema::parse(definition.parameters.clone())
+        .map_err(ProtocolToolAdapterError::Schema)?;
+    ToolDefinition::function(
+        definition.name.clone(),
+        definition.description.clone(),
+        input_schema,
+        crate::ToolOutputSchema::Unspecified,
+        if definition.strict {
+            crate::ToolSchemaMode::Strict
+        } else {
+            crate::ToolSchemaMode::ProviderDefault
+        },
+        loading,
+    )
+    .map_err(ProtocolToolAdapterError::Definition)
+}
+
 /// Converts a host function definition into the current canonical model-tool contract.
 pub fn to_protocol_tool_definition(
     definition: &ToolDefinition,

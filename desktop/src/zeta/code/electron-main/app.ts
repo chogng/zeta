@@ -60,6 +60,8 @@ import { diffIpcRoutes } from "../../platform/diff/electron-main/diffIpcRoutes.j
 import { documentCollaborationIpcRoutes } from "../../platform/collaboration/electron-main/documentCollaborationIpcRoutes.js";
 import { syntaxIpcRoutes } from "../../platform/syntax/electron-main/syntaxIpcRoutes.js";
 import { gitIpcRoutes } from "../../platform/git/electron-main/gitIpcRoutes.js";
+import { codeIndexIpcRoutes } from "../../platform/codeIndex/electron-main/codeIndexIpcRoutes.js";
+import { toolSearchIpcRoutes } from "../../platform/toolSearch/electron-main/toolSearchIpcRoutes.js";
 import {
   KEYBINDINGS_RESOURCE_CHANGED_CHANNEL,
 } from "../../platform/keybinding/common/keybindingsResource.js";
@@ -401,6 +403,8 @@ export class ZetaApplication extends DisposableOwner {
       ...documentCollaborationIpcRoutes(supervisor),
       ...syntaxIpcRoutes(supervisor),
       ...gitIpcRoutes(supervisor),
+      ...codeIndexIpcRoutes(supervisor),
+      ...toolSearchIpcRoutes(supervisor),
       ...searchIpcRoutes(supervisor),
       ...terminalIpcRoutes(supervisor),
       ...browserViewIpcRoutes(browserViewMainService),

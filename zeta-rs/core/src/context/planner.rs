@@ -9,8 +9,10 @@ use super::InstructionFragment;
 use super::InstructionRetention;
 use super::OmittedInstruction;
 use super::compaction::estimate_compaction_input;
+use super::plan::ContextPlanInput;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+use zeta_context_engine::ResolvedContextBudget;
 use zeta_protocol::ContextCheckpoint;
 use zeta_protocol::ContextSourceRange;
 use zeta_protocol::ThreadItem;
@@ -77,41 +79,47 @@ impl ContextPlanner {
                 total.saturating_add(estimate_items(&group.items))
             })
             .saturating_add(estimate_checkpoint(checkpoint.as_ref()));
+        let all_evidence_tokens = estimate_evidence(input.evidence());
 
-        let Some(budget) = input.budget().limits() else {
-            let mut instructions = input.instructions().to_vec();
-            sort_instructions(&mut instructions);
-            let instruction_tokens = estimate_instructions(&instructions);
-            let estimated_input = instruction_tokens
-                .saturating_add(tool_tokens)
-                .saturating_add(current_turn_tokens)
-                .saturating_add(history_tokens);
-            let selected_items = groups
-                .iter()
-                .flat_map(|group| group.items.iter().cloned())
-                .collect();
-            return Ok(ContextPreparation::Ready(ContextPlan::new(
-                input.source_thread_sequence(),
-                instructions,
-                Vec::new(),
-                checkpoint,
-                selected_items,
-                input.tools().to_vec(),
-                ContextBudgetReport::ProviderManaged {
-                    estimated_input,
-                    estimator_revision: ESTIMATOR_REVISION,
-                },
-            )));
+        let budget = match input
+            .budget()
+            .resolve()
+            .map_err(|_| ContextPreparationError::InvalidBudget)?
+        {
+            ResolvedContextBudget::ProviderManaged => {
+                let mut instructions = input.instructions().to_vec();
+                sort_instructions(&mut instructions);
+                let instruction_tokens = estimate_instructions(&instructions);
+                let estimated_input = instruction_tokens
+                    .saturating_add(tool_tokens)
+                    .saturating_add(current_turn_tokens)
+                    .saturating_add(history_tokens)
+                    .saturating_add(all_evidence_tokens);
+                let selected_items = groups
+                    .iter()
+                    .flat_map(|group| group.items.iter().cloned())
+                    .collect();
+                return Ok(ContextPreparation::Ready(ContextPlan::new(
+                    ContextPlanInput {
+                        source_thread_sequence: input.source_thread_sequence(),
+                        current_turn_id: input.current_turn_id().clone(),
+                        instructions,
+                        omitted_instructions: Vec::new(),
+                        checkpoint,
+                        selected_items,
+                        evidence: input.evidence().to_vec(),
+                        tools: input.tools().to_vec(),
+                        budget: ContextBudgetReport::ProviderManaged {
+                            estimated_input,
+                            estimator_revision: ESTIMATOR_REVISION,
+                        },
+                    },
+                )));
+            }
+            ResolvedContextBudget::CoreManaged(budget) => budget,
         };
-        let maximum_input = budget
-            .maximum_input()
-            .ok_or(ContextPreparationError::InvalidBudget)?;
-        let maximum_compaction_input = budget
-            .maximum_compaction_input()
-            .ok_or(ContextPreparationError::InvalidBudget)?;
-        if maximum_input == ContextTokenCount::ZERO {
-            return Err(ContextPreparationError::InvalidBudget);
-        }
+        let maximum_input = budget.maximum_input();
+        let maximum_compaction_input = budget.maximum_compaction_input();
         if required_instruction_tokens > maximum_input {
             return Err(ContextPreparationError::MandatoryInstructionsTooLarge {
                 required: required_instruction_tokens,
@@ -142,6 +150,7 @@ impl ContextPlanner {
             tool_tokens,
             current_turn_tokens,
             history_tokens,
+            evidence_tokens: ContextTokenCount::ZERO,
             estimator_revision: ESTIMATOR_REVISION,
         };
         if history_tokens > after_current {
@@ -225,6 +234,18 @@ impl ContextPlanner {
             }
         }
         sort_instructions(&mut selected_instructions);
+        let evidence_limit = ContextTokenCount::new(maximum_input.get() / 8);
+        let mut evidence_remaining =
+            ContextTokenCount::new(remaining.get().min(evidence_limit.get()));
+        let mut selected_evidence = Vec::new();
+        for evidence in input.evidence() {
+            let cost = estimate_one_evidence(evidence);
+            if cost <= evidence_remaining {
+                selected_evidence.push(evidence.clone());
+                evidence_remaining = subtract(evidence_remaining, cost);
+            }
+        }
+        let evidence_tokens = estimate_evidence(&selected_evidence);
         let instruction_tokens = estimate_instructions(&selected_instructions);
         let final_report = ContextBudgetReport::CoreManaged {
             context_window: budget.context_window(),
@@ -235,6 +256,7 @@ impl ContextPlanner {
             tool_tokens,
             current_turn_tokens,
             history_tokens,
+            evidence_tokens,
             estimator_revision: ESTIMATOR_REVISION,
         };
         let selected_items = groups
@@ -242,13 +264,17 @@ impl ContextPlanner {
             .flat_map(|group| group.items.iter().cloned())
             .collect();
         Ok(ContextPreparation::Ready(ContextPlan::new(
-            input.source_thread_sequence(),
-            selected_instructions,
-            omitted_instructions,
-            checkpoint,
-            selected_items,
-            input.tools().to_vec(),
-            final_report,
+            ContextPlanInput {
+                source_thread_sequence: input.source_thread_sequence(),
+                current_turn_id: input.current_turn_id().clone(),
+                instructions: selected_instructions,
+                omitted_instructions,
+                checkpoint,
+                selected_items,
+                evidence: selected_evidence,
+                tools: input.tools().to_vec(),
+                budget: final_report,
+            },
         )))
     }
 }
@@ -267,6 +293,17 @@ fn validate_shape(input: &ContextInput) -> Result<(), ContextPreparationError> {
         {
             return Err(ContextPreparationError::UnsupportedContextShape(
                 "instruction provenance must include kind, identity, and revision".into(),
+            ));
+        }
+    }
+    for evidence in input.evidence() {
+        if evidence.source.trim().is_empty()
+            || evidence.reference.trim().is_empty()
+            || evidence.revision.trim().is_empty()
+            || evidence.body.trim().is_empty()
+        {
+            return Err(ContextPreparationError::UnsupportedContextShape(
+                "context evidence must include source, reference, revision, and body".into(),
             ));
         }
     }
@@ -469,6 +506,24 @@ fn estimate_instructions(instructions: &[InstructionFragment]) -> ContextTokenCo
 
 fn estimate_instruction(fragment: &InstructionFragment) -> ContextTokenCount {
     estimate_bytes(fragment.body().len(), TEXT_ITEM_OVERHEAD)
+}
+
+fn estimate_evidence(evidence: &[crate::ContextEvidence]) -> ContextTokenCount {
+    evidence
+        .iter()
+        .fold(ContextTokenCount::ZERO, |total, evidence| {
+            total.saturating_add(estimate_one_evidence(evidence))
+        })
+}
+
+fn estimate_one_evidence(evidence: &crate::ContextEvidence) -> ContextTokenCount {
+    estimate_bytes(
+        evidence.source.len()
+            + evidence.reference.len()
+            + evidence.revision.len()
+            + evidence.body.len(),
+        TEXT_ITEM_OVERHEAD.saturating_mul(2),
+    )
 }
 
 fn estimate_tools(tools: &[ToolDefinition]) -> ContextTokenCount {

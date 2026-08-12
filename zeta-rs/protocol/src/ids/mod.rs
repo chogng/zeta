@@ -45,8 +45,11 @@ macro_rules! identifier {
     };
 }
 
+mod agent_join_id;
+mod agent_message_id;
 mod command_id;
 mod context_checkpoint_id;
+mod delegation_id;
 mod item_id;
 mod request_id;
 mod session_id;
@@ -54,8 +57,11 @@ mod thread_id;
 mod tool_call_id;
 mod turn_id;
 
+pub use agent_join_id::AgentJoinId;
+pub use agent_message_id::AgentMessageId;
 pub use command_id::CommandId;
 pub use context_checkpoint_id::ContextCheckpointId;
+pub use delegation_id::DelegationId;
 pub use item_id::ItemId;
 pub use request_id::RequestId;
 pub use session_id::SessionId;
