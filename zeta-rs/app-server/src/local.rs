@@ -14,6 +14,7 @@ use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::Duration;
 use zeta_async_utils::CancellationToken;
+use zeta_client::OperationClient;
 use zeta_code_index_cloud::CloudCodeIndexProviderRegistry;
 use zeta_config::{
     ConfigStore, ResolvedConfig, ResolvedConfigSnapshot, WorkspaceConfigDocument,
@@ -136,7 +137,7 @@ fn platform_name() -> &'static str {
 }
 
 /// Filesystem and runtime inputs needed to open one local App Server.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone)]
 pub struct LocalAppServerOptions {
     pub profile_root: PathBuf,
     pub workspace: Option<LocalWorkspaceConfigOptions>,
@@ -144,6 +145,7 @@ pub struct LocalAppServerOptions {
     pub workspace_root: Option<PathBuf>,
     pub built_in_skills: BuiltInSkillRoot,
     pub session_state_mode: SessionStateMode,
+    model_operation_client: Option<Arc<dyn OperationClient>>,
 }
 
 impl LocalAppServerOptions {
@@ -155,6 +157,7 @@ impl LocalAppServerOptions {
             workspace_root: None,
             built_in_skills: BuiltInSkillRoot::AutoDetect,
             session_state_mode: SessionStateMode::Durable,
+            model_operation_client: None,
         }
     }
 
@@ -189,7 +192,52 @@ impl LocalAppServerOptions {
         self.session_state_mode = mode;
         self
     }
+
+    /// Replaces the production model operation client for this composition root.
+    ///
+    /// Embedded hosts and tests can use this to keep model transport offline while exercising the
+    /// complete App Server stack. Product hosts normally leave the lazy production client in use.
+    pub fn with_model_operation_client(mut self, client: Arc<dyn OperationClient>) -> Self {
+        self.model_operation_client = Some(client);
+        self
+    }
 }
+
+impl fmt::Debug for LocalAppServerOptions {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("LocalAppServerOptions")
+            .field("profile_root", &self.profile_root)
+            .field("workspace", &self.workspace)
+            .field("slash_commands", &self.slash_commands)
+            .field("workspace_root", &self.workspace_root)
+            .field("built_in_skills", &self.built_in_skills)
+            .field("session_state_mode", &self.session_state_mode)
+            .field(
+                "model_operation_client_injected",
+                &self.model_operation_client.is_some(),
+            )
+            .finish()
+    }
+}
+
+impl PartialEq for LocalAppServerOptions {
+    fn eq(&self, other: &Self) -> bool {
+        self.profile_root == other.profile_root
+            && self.workspace == other.workspace
+            && self.slash_commands == other.slash_commands
+            && self.workspace_root == other.workspace_root
+            && self.built_in_skills == other.built_in_skills
+            && self.session_state_mode == other.session_state_mode
+            && match (&self.model_operation_client, &other.model_operation_client) {
+                (Some(left), Some(right)) => Arc::ptr_eq(left, right),
+                (None, None) => true,
+                _ => false,
+            }
+    }
+}
+
+impl Eq for LocalAppServerOptions {}
 
 /// Selects the lifecycle of Session and Thread state in a local App Server.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -290,12 +338,14 @@ pub fn open_local_app_server_with_cloud_providers(
             .read()
             .map_err(|error| OpenAppServerError(error.0))?;
     }
+    let model_provider: Arc<dyn ModelProvider> = match options.model_operation_client.take() {
+        Some(client) => Arc::new(ModelProviderRuntime::builtin_with_client(client)),
+        None => Arc::new(ModelProviderRuntime::builtin()),
+    };
     let model = Arc::new(ConfigBackedModelService {
         config: config.clone(),
         workspace: workspace.clone(),
-        resolver: Arc::new(ModelProviderSnapshotResolver {
-            model_provider: Arc::new(ModelProviderRuntime::builtin()),
-        }),
+        resolver: Arc::new(ModelProviderSnapshotResolver { model_provider }),
     });
     let runtime_config = model
         .resolve_config(&user_config)

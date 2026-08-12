@@ -1,6 +1,7 @@
 //! Model-provider instantiation, transport configuration, and API adaptation.
 
 mod error;
+mod lazy_client;
 mod provider;
 mod providers;
 mod semantic_models;

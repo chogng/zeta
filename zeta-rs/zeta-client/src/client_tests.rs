@@ -69,7 +69,7 @@ fn idempotent_request_retries_a_retryable_http_status() {
     )
     .unwrap();
 
-    let response = ZetaClient::new(Arc::new(UreqHttpClient::new()))
+    let response = ZetaClient::new(Arc::new(UreqHttpClient::new().unwrap()))
         .execute(&request)
         .unwrap();
 

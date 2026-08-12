@@ -72,7 +72,7 @@ Core/store 继续拥有 Session/Thread durable state；需要进程内生命周�
 | `AppServer::with_tool_service` | 安装同一 server 内所有 Turn 使用的 Core Tool/Policy ports |
 | `open_local_app_server` | 按 SessionStateMode 选择 durable/in-memory coordinator，打开 config 并组合 provider-backed model |
 | `open_local_app_server_with_cloud_providers` | 在 Workspace 激活前注入 cloud code-index providers；默认入口使用空 registry |
-| `LocalAppServerOptions` | user profile root + SessionStateMode + optional config/runtime Workspace + validated slash catalog + built-in Skill root selection |
+| `LocalAppServerOptions` | user profile root + SessionStateMode + optional config/runtime Workspace + validated slash catalog + built-in Skill root selection + optional model operation client |
 | `SessionStateMode` | 明确选择 profile SQLite durable history 或 process-local ephemeral Session/Thread state |
 | `BuiltInSkillRoot` | auto-detected release root、explicit test/host root 或 unavailable 的自解释选择 |
 | `zeta_slash_commands::SlashCommandCatalog` | 委托共享 crate 校验动态命令并冻结 server-advertised snapshot；App Server 只拥有 composition |
@@ -92,6 +92,10 @@ in-process 路径都会使用同一个启动时解析结果：
 假设任意自定义 host 已经拥有 Tool registry。`rg` 安装候选来自
 [`zeta-install-context`](../install-context/README.md)，App Server 只负责把候选交给
 `RipgrepExecutable` 验证并组合成 Tool service。
+
+默认 local composition 使用 lazy production model client：启动、配置读取和模型目录展示不会加载
+system roots 或 proxy。Embedded test 可通过 `LocalAppServerOptions::with_model_operation_client`
+注入离线 client；真实 transport 初始化失败在第一次模型 operation 返回，不得让 App Server 启动 panic。
 
 local composition 会配置 `<profile>/code-index-cloud` 的 durable state 位置，但默认 provider registry
 为空，因此不会安装 cloud controller、广告 `cloudCodeIndex` 或创建网络请求。具体 host 只有在注入

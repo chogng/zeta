@@ -7809,6 +7809,7 @@ dependencies = [
  "zeta-app-server-transport",
  "zeta-async-utils",
  "zeta-auto-review",
+ "zeta-client",
  "zeta-code-index",
  "zeta-code-index-cloud",
  "zeta-code-retrieval",
@@ -7854,6 +7855,7 @@ dependencies = [
  "zeta-app-server-protocol",
  "zeta-app-server-transport",
  "zeta-async-utils",
+ "zeta-client",
  "zeta-core",
  "zeta-protocol",
 ]
@@ -8619,6 +8621,7 @@ dependencies = [
  "unicode-width 0.2.0",
  "zeta-app-server-client",
  "zeta-app-server-protocol",
+ "zeta-client",
  "zeta-diff",
  "zeta-file-search",
  "zeta-protocol",

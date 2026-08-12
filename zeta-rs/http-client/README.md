@@ -38,7 +38,7 @@ consumer 可以直接依赖本 crate；需要 operation retry 或 SSE framing �
 | Symbol | 职责 |
 | --- | --- |
 | `HttpClient` | `execute(&HttpRequest)` 一次；implementation 不得 retry |
-| `UreqHttpClient` | reusable synchronous production client |
+| `UreqHttpClient` | fallible、reusable synchronous production client；没有 panic-based `Default` |
 | `HttpMethod::{Get,Post}` | 当前支持的 method |
 | `HttpRequest` | validated HTTP(S) URL、headers 与 raw body |
 | `HttpResponse` | status、headers 与 bounded raw body |
@@ -67,7 +67,8 @@ consumer 可以直接依赖本 crate；需要 operation retry 或 SSE framing �
 `HttpClientConfig::default()` 当前使用环境 proxy、拒绝 redirect、30 秒 connect timeout、60 秒
 overall timeout、system roots、无 client identity、100/1 idle pool 和 10 MiB response limit。
 
-环境 proxy 与 bypass 在 `UreqHttpClient::with_config` 时快照，不在每个 request 重新读取。
+环境 proxy 与 bypass 在 `UreqHttpClient::new` / `with_config` 时快照，不在每个 request 重新读取。
+两者都返回 `Result`；system roots、proxy 或 TLS 初始化失败必须由 composition/invocation path 处理。
 
 ### 遥测
 
@@ -101,7 +102,7 @@ URL、header、certificate、request/response body 和 provider identity 不在 
 ## 构造调用图
 
 ```text
-UreqHttpClient::with_config(config)
+UreqHttpClient::new() / with_config(config) → Result
 ├─ build_tls_config
 │  ├─ system_root_store          [SystemRoots/SystemPlus]
 │  ├─ add_certificate_bundle     [SystemPlus/CustomOnly]
@@ -171,6 +172,9 @@ PEM/file loading、secret lookup 与 credential rotation 不属于本 crate；ca
 - `InvalidRequest`：例如非 HTTP(S) URL；
 - `InvalidConfiguration`：proxy/TLS/identity/limit 无效；
 - `Transport`：backend send/read/body-limit failure。
+
+Client construction 同样只返回这些 typed errors；本 crate 不提供会在系统证书或 proxy 初始化失败
+时 panic 的 `Default` 实现。
 
 当前 error taxonomy 不区分 DNS、connect、proxy、TLS 或 timeout phase。Backend error 被替换成
 sanitized crate-owned message，避免 URL、proxy credential、certificate 或 payload 泄漏。

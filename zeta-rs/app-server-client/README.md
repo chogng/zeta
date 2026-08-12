@@ -43,6 +43,7 @@ Session/Thread coordinator 的存储，不改变 Config、Workspace、Tool 或 p
 | `AppServerEvent::ConnectionClosed` | 明确的 shutdown、driver stop 或 protocol failure |
 | `AppServerClient<T>` | typed JSON-RPC client；method 与 DTO source 仍来自 protocol crate |
 | `InProcessClientOptions::with_session_state_mode` | 明确选择 profile durable history 或 process-local ephemeral Session/Thread state |
+| `InProcessClientOptions::with_model_operation_client` | embedded host/test 注入离线或自定义 model transport；不改变 protocol/model semantics |
 | `AppServerClient::request_session` | Session aggregate 的 canonical typed mutation request；所有 Session mutation 统一由此进入 |
 
 正常入口示意（`options`/`params` 由 host 与 protocol DTO 构造）：

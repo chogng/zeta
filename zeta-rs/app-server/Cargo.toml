@@ -29,6 +29,7 @@ zeta-code-index-cloud = { workspace = true }
 zeta-code-retrieval = { workspace = true }
 zeta-config = { workspace = true }
 zeta-core = { workspace = true }
+zeta-client = { workspace = true }
 zeta-diff = { workspace = true }
 zeta-extensions = { workspace = true }
 zeta-file-system = { workspace = true }

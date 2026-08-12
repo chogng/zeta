@@ -8,6 +8,7 @@ use crate::components::transcript::MessageRole;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use std::fs;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -17,6 +18,10 @@ use zeta_app_server_client::{
 use zeta_app_server_protocol::protocol::common::ClientInfo;
 use zeta_app_server_protocol::protocol::config::{ProviderConfigDto, ProviderConfigureParams};
 use zeta_app_server_protocol::protocol::skills::SkillEnablementDto;
+use zeta_client::ClientError;
+use zeta_client::ClientRequest;
+use zeta_client::ClientResponse;
+use zeta_client::OperationClient;
 use zeta_protocol::CommandId;
 
 #[test]
@@ -364,13 +369,26 @@ fn client() -> (AppServerClient<InProcessTransport>, PathBuf) {
             .as_nanos(),
         NEXT_STATE_ROOT.fetch_add(1, Ordering::Relaxed)
     ));
-    let client = start_in_process_client(InProcessClientOptions::new(
-        &state_root,
-        ClientInfo {
-            name: "zeta-tui-test".into(),
-            version: "1".into(),
-        },
-    ))
+    let client = start_in_process_client(
+        InProcessClientOptions::new(
+            &state_root,
+            ClientInfo {
+                name: "zeta-tui-test".into(),
+                version: "1".into(),
+            },
+        )
+        .with_model_operation_client(Arc::new(OfflineOperationClient)),
+    )
     .unwrap();
     (client, state_root)
+}
+
+struct OfflineOperationClient;
+
+impl OperationClient for OfflineOperationClient {
+    fn execute(&self, _: &ClientRequest) -> Result<ClientResponse, ClientError> {
+        Err(ClientError::Transport(
+            "model transport is disabled in TUI command tests".into(),
+        ))
+    }
 }

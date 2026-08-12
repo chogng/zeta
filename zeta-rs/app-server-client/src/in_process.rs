@@ -1,6 +1,7 @@
 use crate::AppServerClient;
 use crate::ClientError;
 use crate::JsonRpcTransport;
+use std::fmt;
 use std::path::PathBuf;
 use std::sync::Arc;
 use zeta_app_server::AppServer;
@@ -13,9 +14,10 @@ use zeta_app_server::open_local_app_server;
 use zeta_app_server_protocol::protocol::common::{ClientCapabilities, ClientInfo};
 use zeta_app_server_protocol::protocol::initialize::InitializeParams;
 use zeta_app_server_protocol::schema_hash;
+use zeta_client::OperationClient;
 
 /// Startup inputs for an embedded App Server connection.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone)]
 pub struct InProcessClientOptions {
     pub profile_root: PathBuf,
     pub workspace_root: Option<PathBuf>,
@@ -24,6 +26,7 @@ pub struct InProcessClientOptions {
     pub slash_commands: SlashCommandCatalog,
     pub built_in_skills: BuiltInSkillRoot,
     pub session_state_mode: SessionStateMode,
+    model_operation_client: Option<Arc<dyn OperationClient>>,
 }
 
 impl InProcessClientOptions {
@@ -36,6 +39,7 @@ impl InProcessClientOptions {
             slash_commands: SlashCommandCatalog::default(),
             built_in_skills: BuiltInSkillRoot::AutoDetect,
             session_state_mode: SessionStateMode::Durable,
+            model_operation_client: None,
         }
     }
 
@@ -70,7 +74,51 @@ impl InProcessClientOptions {
         self.session_state_mode = mode;
         self
     }
+
+    /// Replaces the production model operation client for this embedded composition.
+    pub fn with_model_operation_client(mut self, client: Arc<dyn OperationClient>) -> Self {
+        self.model_operation_client = Some(client);
+        self
+    }
 }
+
+impl fmt::Debug for InProcessClientOptions {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("InProcessClientOptions")
+            .field("profile_root", &self.profile_root)
+            .field("workspace_root", &self.workspace_root)
+            .field("client_info", &self.client_info)
+            .field("capabilities", &self.capabilities)
+            .field("slash_commands", &self.slash_commands)
+            .field("built_in_skills", &self.built_in_skills)
+            .field("session_state_mode", &self.session_state_mode)
+            .field(
+                "model_operation_client_injected",
+                &self.model_operation_client.is_some(),
+            )
+            .finish()
+    }
+}
+
+impl PartialEq for InProcessClientOptions {
+    fn eq(&self, other: &Self) -> bool {
+        self.profile_root == other.profile_root
+            && self.workspace_root == other.workspace_root
+            && self.client_info == other.client_info
+            && self.capabilities == other.capabilities
+            && self.slash_commands == other.slash_commands
+            && self.built_in_skills == other.built_in_skills
+            && self.session_state_mode == other.session_state_mode
+            && match (&self.model_operation_client, &other.model_operation_client) {
+                (Some(left), Some(right)) => Arc::ptr_eq(left, right),
+                (None, None) => true,
+                _ => false,
+            }
+    }
+}
+
+impl Eq for InProcessClientOptions {}
 
 /// In-memory transport that still exercises the versioned JSON-RPC dispatcher.
 pub struct InProcessTransport {
@@ -150,6 +198,9 @@ pub fn open_in_process_app_server(
     server_options.built_in_skills = options.built_in_skills;
     if let Some(workspace_root) = options.workspace_root {
         server_options = server_options.with_workspace_root(workspace_root);
+    }
+    if let Some(client) = options.model_operation_client {
+        server_options = server_options.with_model_operation_client(client);
     }
     let server = open_local_app_server(server_options)
         .map_err(|error| ClientError::Transport(error.to_string()))?;

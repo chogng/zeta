@@ -24,9 +24,12 @@ pub struct UreqHttpClient {
 }
 
 impl UreqHttpClient {
-    pub fn new() -> Self {
+    /// Builds the production client with the default transport policy.
+    ///
+    /// Loading platform roots and proxy configuration can fail in restricted hosts, so callers
+    /// must handle the result instead of assuming that process startup implies network access.
+    pub fn new() -> Result<Self, HttpClientError> {
         Self::with_config(HttpClientConfig::default())
-            .expect("the default HTTP client configuration must be valid")
     }
 
     pub fn with_config(config: HttpClientConfig) -> Result<Self, HttpClientError> {
@@ -225,12 +228,6 @@ fn add_certificate_bundle(
         })?;
     }
     Ok(())
-}
-
-impl Default for UreqHttpClient {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 impl HttpClient for UreqHttpClient {

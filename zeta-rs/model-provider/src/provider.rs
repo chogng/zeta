@@ -1,16 +1,30 @@
+use crate::ModelProviderError;
+use crate::lazy_client::LazyOperationClient;
+use crate::providers;
 use crate::providers::ProviderAdapter;
-use crate::{ModelProviderError, providers};
 use std::sync::Arc;
-use zeta_api::{
-    ApiProtocol, ContentPart, InputItem, ModelRequest, ModelResponse, OutputItem, StopReason,
-};
-use zeta_async_utils::{CancellationSource, CancellationToken};
-use zeta_client::{OperationClient, ZetaClient};
+use zeta_api::ApiProtocol;
+use zeta_api::ContentPart;
+use zeta_api::InputItem;
+use zeta_api::ModelRequest;
+use zeta_api::ModelResponse;
+use zeta_api::OutputItem;
+use zeta_api::StopReason;
+use zeta_async_utils::CancellationSource;
+use zeta_async_utils::CancellationToken;
+use zeta_client::ClientError;
+use zeta_client::OperationClient;
+use zeta_client::ZetaClient;
 use zeta_http_client::UreqHttpClient;
-use zeta_model_provider_config::{
-    Model, ModelCatalogPolicy, ModelId, ModelProviderConfig, NormalizedModelProviderConfig,
-    ProviderConfigError, ProviderConfigRegistry, ProviderDefinition, ProviderId,
-};
+use zeta_model_provider_config::Model;
+use zeta_model_provider_config::ModelCatalogPolicy;
+use zeta_model_provider_config::ModelId;
+use zeta_model_provider_config::ModelProviderConfig;
+use zeta_model_provider_config::NormalizedModelProviderConfig;
+use zeta_model_provider_config::ProviderConfigError;
+use zeta_model_provider_config::ProviderConfigRegistry;
+use zeta_model_provider_config::ProviderDefinition;
+use zeta_model_provider_config::ProviderId;
 use zeta_protocol::ModelRef;
 
 #[derive(Clone)]
@@ -124,7 +138,7 @@ impl ModelProviderRuntime {
     pub fn new(configs: ProviderConfigRegistry) -> Self {
         Self::with_client(
             configs,
-            Arc::new(ZetaClient::new(Arc::new(UreqHttpClient::new()))),
+            Arc::new(LazyOperationClient::new(production_client)),
         )
     }
 
@@ -180,6 +194,11 @@ impl ModelProviderRuntime {
             .clone();
         Provider::instantiate(definition, normalized, self.client.clone())
     }
+}
+
+fn production_client() -> Result<Arc<dyn OperationClient>, ClientError> {
+    let transport = UreqHttpClient::new()?;
+    Ok(Arc::new(ZetaClient::new(Arc::new(transport))))
 }
 
 impl Default for ModelProviderRuntime {

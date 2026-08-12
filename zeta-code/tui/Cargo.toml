@@ -35,5 +35,8 @@ signal-hook = { workspace = true }
 arboard = { workspace = true }
 image = { workspace = true, features = ["gif", "jpeg", "png", "webp"] }
 
+[dev-dependencies]
+zeta-client = { workspace = true }
+
 [lints]
 workspace = true

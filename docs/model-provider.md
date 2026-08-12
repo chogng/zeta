@@ -98,7 +98,7 @@ flowchart TD
 
 当前实现已经具备正确的基本方向：
 
-- `ModelProviderRuntime` 拥有配置 registry 和 transport；
+- `ModelProviderRuntime` 拥有配置 registry 和 lazy transport owner；
 - `Provider` 保存 normalized config、definition 和 adapter；
 - `ModelInvoker` 表达不可变 Provider/model selection；
 - `src/providers/` 按外部服务组织 runtime adapter；
@@ -119,9 +119,9 @@ zeta-api::Api::{OpenAi, DeepSeek, Google, ...}
 `model-provider::providers/` 保留唯一的 Provider runtime 选择，并把声明式 `ApiProfile` 映射为
 `ApiEndpoint`。
 
-`HttpClient` 和 `UreqHttpClient` 当前暂时定义在 `zeta-client`。目标是把 raw transport port 迁入
-`zeta-http-client`，runtime 持有共享 client；API codec 构造 opaque byte request，
-`zeta-client` 组合 retry/framing，底层保留 status/header/body transport evidence。
+`HttpClient` 和 `UreqHttpClient` 定义在 `zeta-http-client`。Runtime 持有共享 lazy operation client：
+App Server 启动不构造 socket/TLS backend，第一次真实 operation 才 fallibly 创建 transport；API codec
+构造 opaque byte request，`zeta-client` 组合 retry/framing，底层保留 status/header/body transport evidence。
 
 ## 4. 运行时解析流程
 

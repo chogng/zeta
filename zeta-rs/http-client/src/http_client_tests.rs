@@ -40,7 +40,7 @@ fn a_transport_attempt_does_not_retry_a_retryable_status() {
     )
     .unwrap();
 
-    let response = UreqHttpClient::new().execute(&request).unwrap();
+    let response = UreqHttpClient::new().unwrap().execute(&request).unwrap();
 
     assert_eq!(response.status(), 503);
     server.join().unwrap();

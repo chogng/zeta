@@ -18,7 +18,7 @@ concrete provider codec 和 runtime resolver 尚未接入。本 crate 仍只拥�
 | Symbol | 职责 | 生命周期 |
 | --- | --- | --- |
 | `ModelProvider` | `ModelRuntimeRequest → ModelInvoker` port | composition/invocation safe point |
-| `ModelProviderRuntime` | built-in concrete resolver | 持有 config registry + shared operation client |
+| `ModelProviderRuntime` | built-in concrete resolver | 持有 config registry + shared lazy operation client |
 | `ModelRuntimeRequest` | exact `ModelRef + ModelProviderConfig` | immutable selection request |
 | `ModelInvoker` | canonical `ModelRequest → ModelResponse` | one immutable provider/model snapshot |
 | `EmbeddingInvoker` | ordered text batch → finite equal-dimension vectors | one immutable embedding model snapshot |
@@ -36,6 +36,7 @@ invocation，不原地修改已经运行的 `RegisteredModelInvoker`。
 | Symbol | 可见性 | 当前职责 | 方向约束 |
 | --- | --- | --- | --- |
 | `ModelProviderRuntime::instantiate_normalized` | private method | definition lookup + `Provider::instantiate` | normalization success 后 provider 必须存在 |
+| `LazyOperationClient` | private struct | 第一次 operation 才创建 production HTTP client，并缓存结果 | App Server 启动和 config inspection 不接触 TLS/proxy |
 | `Provider::instantiate` | crate-private | enforce definition/config ID equality，materialize adapter | 不读取 mutable config/credential store |
 | `providers::instantiate` | crate-private function | exhaustive `ProviderAdapter` enum dispatch | provider selection 唯一 switch |
 | `ProviderAdapter` | crate-private trait | protocol + complete against `OperationClient` | 不暴露给 Core/public config |
@@ -66,7 +67,9 @@ RegisteredModelInvoker::invoke(request)
    ├─ resolve_model
    └─ ProviderAdapter::complete
       └─ zeta_api::ApiEndpoint::complete_with_client
-         └─ OperationClient
+         └─ LazyOperationClient
+            ├─ first operation: build fallible production client
+            └─ OperationClient
 ```
 
 `Provider::complete` 再次 resolve model，因此 direct Provider callers 与 bound invoker 使用相同
@@ -92,7 +95,7 @@ profile，但只有 configuration definition 可以决定 profile。
 | --- | --- |
 | invalid/unknown/mismatched config | `ModelProviderError::Config` |
 | listed-only unknown model | `ModelNotRegistered` |
-| wire/operation codec failure | `Api(ApiError)` |
+| wire/operation/transport initialization failure | `Api(ApiError)` |
 | explicitly unavailable host model | `Unavailable` |
 
 `AllowUnlisted` 只创建 `Model::new(id, id)` 作为 runtime selection，不证明 entitlement、capability 或
@@ -116,7 +119,8 @@ bazel test //zeta-rs/model-provider:model-provider-unit-tests
 ```
 
 测试使用注入的 `OperationClient` 捕获请求，覆盖 Responses/Chat/Anthropic 配置、结构化工具、
-自定义端点、默认值、供应商不匹配、目录策略、固定标头、取消传播和默认 HTTP 传输。
+自定义端点、默认值、供应商不匹配、目录策略、固定标头、取消传播和默认 HTTP 传输；lazy client
+测试另外断言构造前不访问 transport、只初始化一次，并把初始化失败作为普通 transport error 返回。
 
 当前 completion `ModelInvoker` 已有 concrete provider adapters；embedding/rerank 已有 canonical invoker、
 request/response validation 和 CodeIndex service consumer，但尚无 concrete provider codec/runtime resolver。
