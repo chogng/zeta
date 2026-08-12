@@ -67,6 +67,7 @@ where
                 .map(|input| match input {
                     ComposerInput::Text(text) => InputItem::Text { text },
                     ComposerInput::Image { url } => InputItem::Image { url },
+                    ComposerInput::Skill { skill } => InputItem::Skill { skill },
                 })
                 .collect(),
         },

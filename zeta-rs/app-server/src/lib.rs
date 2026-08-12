@@ -17,6 +17,7 @@ mod tool_composition;
 
 pub use local::OpenAppServerError;
 pub use local::open_local_app_server;
+pub use local::open_local_app_server_with_cloud_providers;
 pub use local::{
     BuiltInSkillRoot, LocalAppServerOptions, LocalWorkspaceConfigOptions, SessionStateMode,
 };

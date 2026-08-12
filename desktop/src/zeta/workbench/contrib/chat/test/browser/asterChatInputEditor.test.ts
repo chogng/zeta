@@ -55,6 +55,27 @@ test("Aster Chat input completes slash commands before submitting", async () => 
   dom.window.close();
 });
 
+test("Aster Chat input discovers dynamically projected Skill commands", async () => {
+  const dom = new JSDOM("<!doctype html><body><main></main></body>");
+  dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+  const container = requiredElement<HTMLElement>(dom.window.document, "main");
+  const catalog = new SlashCommandCatalog(DesktopSlashCommands, []);
+  using editor = new ChatInputEditor({ container, placeholder: "Ask Zeta", ariaLabel: "Chat message", slashCommands: catalog });
+  catalog.setSkillCommands([{
+    name: "commit",
+    description: "Draft a commit message",
+    source: "user",
+    skill: { id: { source: "user:skill-source:test", name: "commit" }, version: { type: "pinnedDigest", digest: "sha256:commit" } },
+  }]);
+  const input = requiredElement<HTMLTextAreaElement>(editor.element, ".aster-editor-input");
+
+  input.dispatchEvent(beforeInputEvent(dom.window, "/"));
+  await waitFor(() => completionLabels(editor.element).length === 3);
+
+  assert.deepEqual(completionLabels(editor.element), ["/new", "/history", "/commit"]);
+  dom.window.close();
+});
+
 test("Aster Chat input restores message behavior when the slash is deleted", async () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   dom.window.HTMLCanvasElement.prototype.getContext = () => null;

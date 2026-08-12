@@ -2,6 +2,7 @@
 
 mod capabilities;
 mod context;
+mod context_manager;
 mod error;
 mod policy_service;
 mod services;
@@ -13,7 +14,17 @@ mod thread_reducer;
 mod turn;
 
 pub(crate) use context::ContextAssembler;
+pub use context::ContextBudget;
+pub use context::ContextCompactionLimit;
+pub use context::ContextCompactionRequest;
+pub use context::ContextCompactionResult;
+pub use context::ContextCompactionService;
+pub use context::ContextTokenCount;
 pub use context::HarnessInstructions;
+pub use context::HarnessInstructionsProvider;
+pub use context::SkillInstruction;
+pub use context::SkillInstructionRetention;
+pub use context::SkillInstructionsProvider;
 pub use error::CoreError;
 pub use policy_service::{PolicyService, durable_approval_request};
 pub use services::AutoReviewedToolGrant;

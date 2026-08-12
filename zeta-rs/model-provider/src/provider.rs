@@ -262,7 +262,9 @@ impl ModelInvoker for RegisteredModelInvoker {
         cancellation: &CancellationToken,
     ) -> Result<ModelResponse, ModelProviderError> {
         let mut request = request.clone();
-        request.max_output_tokens = self.provider.config.max_output_tokens;
+        request.max_output_tokens = request
+            .max_output_tokens
+            .or(self.provider.config.max_output_tokens);
         self.provider
             .complete_with_cancellation(&self.model.id, &request, cancellation)
     }

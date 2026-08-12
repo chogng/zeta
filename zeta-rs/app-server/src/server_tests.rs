@@ -114,6 +114,7 @@ fn initialize_with_capabilities(
         }),
     );
     assert_eq!(response["result"]["capabilities"]["sessions"], true);
+    assert_eq!(response["result"]["capabilities"]["codeIndex"], false);
     assert_eq!(response["result"]["capabilities"]["typst"], true);
     assert_eq!(response["result"]["capabilities"]["updateReplay"], true);
 }
@@ -1006,6 +1007,10 @@ impl ToolService for ShellTestTool {
 struct ShellTestPolicy;
 
 impl PolicyService for ShellTestPolicy {
+    fn revision(&self) -> String {
+        "test-policy-v1".into()
+    }
+
     fn decide(
         &self,
         _: &ActionReviewRequest,
@@ -1617,6 +1622,61 @@ fn config_updates_use_typed_command_ids() {
 }
 
 #[test]
+fn provider_context_budget_metadata_round_trips_through_the_rpc() {
+    let path = std::env::temp_dir().join(format!(
+        "zeta-app-server-model-context-{}.sqlite3",
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    let server = server().with_config_store(Arc::new(ConfigStore::open(&path).unwrap()));
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+
+    let configured = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":2,"method":"provider/configure",
+            "params":{
+                "commandId":"configure-openai-context","expectedRevision":0,
+                "config":{
+                    "provider":"openai",
+                    "modelContext":{
+                        "gpt-5.6":{
+                            "contextWindow":200000,
+                            "autoCompactTokenLimit":150000
+                        }
+                    }
+                }
+            }
+        }),
+    );
+    assert_eq!(configured["result"]["revision"], 1);
+
+    let read = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"config/read","params":{}}),
+    );
+    assert_eq!(
+        read["result"]["providers"]["openai"]["modelContext"]["gpt-5.6"],
+        serde_json::json!({
+            "contextWindow": 200000,
+            "autoCompactTokenLimit": 150000
+        })
+    );
+
+    drop(connection);
+    drop(server);
+    let _ = std::fs::remove_file(&path);
+    let _ = std::fs::remove_file(path.with_extension("toml"));
+    let _ = std::fs::remove_file(format!("{}-shm", path.display()));
+    let _ = std::fs::remove_file(format!("{}-wal", path.display()));
+}
+
+#[test]
 fn interaction_resolution_uses_the_durable_request_identity() {
     let server = server();
     let mut connection = server.connection();
@@ -1642,6 +1702,8 @@ fn interaction_resolution_uses_the_durable_request_identity() {
                 command_id: CommandId::new("agent-turn").unwrap(),
                 expected_sequence: zeta_core::SequenceExpectation::Exact(1),
                 model: None,
+                policy_revision: "test-policy-v1".into(),
+                activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
                     text: "wait".into(),
                 }],
@@ -1733,6 +1795,8 @@ fn expired_interaction_is_cancelled_and_fails_the_turn() {
                 command_id: CommandId::new("deadline-turn").unwrap(),
                 expected_sequence: zeta_core::SequenceExpectation::Exact(1),
                 model: None,
+                policy_revision: "test-policy-v1".into(),
+                activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
                     text: "wait".into(),
                 }],
@@ -1819,6 +1883,8 @@ fn approval_interaction_resolves_through_the_typed_app_server_contract() {
                 command_id: CommandId::new("approval-turn").unwrap(),
                 expected_sequence: zeta_core::SequenceExpectation::Exact(1),
                 model: None,
+                policy_revision: "test-policy-v1".into(),
+                activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
                     text: "approve".into(),
                 }],
@@ -1930,6 +1996,8 @@ fn interaction_response_is_rejected_from_a_capable_non_owner_connection() {
                 command_id: CommandId::new("approval-turn-owner-check").unwrap(),
                 expected_sequence: zeta_core::SequenceExpectation::Exact(1),
                 model: None,
+                policy_revision: "test-policy-v1".into(),
+                activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
                     text: "approve".into(),
                 }],

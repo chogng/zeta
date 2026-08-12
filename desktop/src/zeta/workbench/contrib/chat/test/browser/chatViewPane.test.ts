@@ -6,7 +6,7 @@ import { toDisposable, type IDisposable } from "../../../../../base/common/lifec
 import type { IMenu, IMenuService } from "../../../../../platform/actions/common/menuService.js";
 import type { ICommandService } from "../../../../../platform/commands/common/commands.js";
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
-import type { IChatService, ModelCatalogEntry, SlashCommandDefinition, Thread, ThreadSubscription, ThreadUpdateEnvelope } from "../../../../services/chat/common/chatService.js";
+import type { IChatService, ModelCatalogEntry, SkillCommandDefinition, SlashCommandDefinition, Thread, ThreadSubscription, ThreadUpdateEnvelope } from "../../../../services/chat/common/chatService.js";
 import type { IWorkbenchLayoutService, WorkbenchPartId, WorkbenchPartVisibilityChangeEvent } from "../../../../services/layout/browser/layoutService.js";
 import type { IActiveSessionThread, IUntitledChatSession, IWorkbenchSessionService, ModelRef, Session, SessionId, ThreadId, WorkbenchSessionState } from "../../../../services/sessions/common/sessionService.js";
 
@@ -111,8 +111,10 @@ function unavailableChatService(): IChatService {
   return {
     onDidUpdateThread: neverEvent<ThreadUpdateEnvelope>(),
     onDidBecomeReady: neverEvent<void>(),
+    onDidChangeSkills: neverEvent<void>(),
     listModels: () => pending as Promise<readonly ModelCatalogEntry[]>,
     listSlashCommands: () => pending as Promise<readonly SlashCommandDefinition[]>,
+    listSkillCommands: () => pending as Promise<readonly SkillCommandDefinition[]>,
     readThread: (_sessionId: SessionId, _threadId: ThreadId) => pending as Promise<Thread>,
     subscribeThread: (_sessionId: SessionId, _threadId: ThreadId, _afterSequence: number) => pending as Promise<ThreadSubscription>,
     unsubscribeThread: (_sessionId: SessionId, _threadId: ThreadId) => pending as Promise<void>,

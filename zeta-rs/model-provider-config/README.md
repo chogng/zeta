@@ -11,7 +11,8 @@ credential、secret、connection pool 或 process-local adapter。
 
 | Symbol | 职责 | 关键语义 |
 | --- | --- | --- |
-| `ModelProviderConfig` | 用户/host 可配置值 | provider、optional base URL、optional max output tokens |
+| `ModelProviderConfig` | 用户/host 可配置值 | provider、base URL、max output 与 per-model context metadata |
+| `ModelContextConfig` | 单模型的 Core budget metadata | positive context window、optional auto-compact limit |
 | `ProviderDefinition` | provider-owned declaration | adapter identity、API profile、endpoint/catalog/defaults |
 | `NormalizedModelProviderConfig` | runtime-ready immutable config | provider/profile/base URL 已确定 |
 | `ProviderConfigRegistry` | definition authority | validate、register、merge、selection、normalize |
@@ -39,7 +40,7 @@ src/
 
 | Symbol | 可见性 | 当前职责 | 方向约束 |
 | --- | --- | --- | --- |
-| `ModelProviderConfig::validate_static` | public method | zero tokens 与 configured URL shape | 不依赖 registry或网络 |
+| `ModelProviderConfig::validate_static` | public method | zero output/context limits 与 configured URL shape | 不依赖 registry或网络 |
 | `ProviderDefinition::validate` | public method | name、default endpoint、defaults、catalog uniqueness | definition 自身必须独立有效 |
 | `ProviderConfigRegistry::register` | public method | validate + reject duplicate | built-in/plugin 定义走相同路径 |
 | `ProviderConfigRegistry::merge` | public method | prevalidate incoming + explicit conflict policy | merge 不能 partial apply |
@@ -68,6 +69,11 @@ ProviderConfigRegistry::normalize(config)
 │  └─ config value overrides provider default
 └─ NormalizedModelProviderConfig
 ```
+
+`model_context` 不进入 `NormalizedModelProviderConfig`，因为它不改变 transport endpoint。Local App
+Server 在冻结一次模型调用预算时，按 selected `ModelId` 读取该 map；配置值优先于 built-in
+`ModelInfo.context_window`。没有可信窗口时 Core 使用 provider-managed，不在本 crate 猜测模型
+规格。
 
 ```text
 ProviderConfigRegistry::merge(incoming, policy)
@@ -110,7 +116,7 @@ cargo test -p zeta-model-provider-config
 bazel test //zeta-rs/model-provider-config:model-provider-config-unit-tests
 ```
 
-测试覆盖 serde/schema、defaults、configured-only endpoint、invalid URL/tokens、merge semantics、
+测试覆盖 serde/schema、defaults、configured-only endpoint、invalid URL/output/context tokens、merge semantics、
 automatic review model、catalog gate、built-in completeness 与 provider mismatch。
 
 当前 URL validator 只接受具有非空 authority 的 HTTP(S) shape，不解析 credential、DNS、route 或

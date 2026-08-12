@@ -9,6 +9,7 @@
 > Renderer Command、MenuId 与 UI Action 组合系统：[`menu-system.md`](menu-system.md)
 > Chat 内 Session Inspector 的信息架构与 Plan 演进：[`chat-session-inspector.md`](chat-session-inspector.md)
 > 外部 Agent Skill 来源与加载边界：[`skills.md`](skills.md)
+> Agent 自定义对象、`.zeta` 与外部导入边界：[`agent-customizations.md`](agent-customizations.md)
 > TUI 明确不提供外部 Agent 导入入口：[`tui.md`](tui.md)
 > 三条公开产品线与宿主边界：[`product-lines.md`](product-lines.md)
 
@@ -150,12 +151,14 @@ Server 的 apply orchestration 仍是计划设计。TUI 不提供对应命令、
 
 底层解析、来源身份、安全校验和持久化仍由各 Rust 领域 authority 与 App Server typed
 contract 拥有，Renderer 不能直接扫描用户主目录或自行解释外部配置。
+Zeta 原生 Instructions/Skills/Agents、`.zeta` 命名空间以及 Import 与 source registration 的区别
+由 [`agent-customizations.md`](agent-customizations.md) 统一定义。
 
 | 外部内容 | Desktop 导入行为 | 权威 owner 与安全边界 |
 | --- | --- | --- |
 | Codex 的 `~/.agents/skills` 与 Claude 的 `~/.claude/skills` | 用户明确选择后注册为窄的只读外部来源 | Config authority 保存来源；Skill manager 校验 containment、格式、摘要和来源身份 |
 | 规则或 instruction 文件 | 预览并按明确映射导入；没有 canonical contract 时不可导入 | 对应 instruction/config 领域定义优先级，外部内容不能覆盖系统、开发者或产品策略 |
-| Sub-agent 定义 | 仅在 multi-agent 领域提供 typed import contract 后开放 | Multi-Agent authority 校验角色、工具请求和生命周期；Desktop 只呈现映射与诊断 |
+| Agent 定义 | 仅在 Agent definition authority 提供 typed import contract 后开放 | Agent/Multi-Agent authority 校验角色、工具请求和生命周期；Desktop 只呈现映射与诊断 |
 | MCP 声明 | 单独展示并要求用户确认，不因导入自动连接或获得凭据 | MCP/config authority 保存声明；连接、网络和凭据继续走各自授权 |
 | 认证文件、密钥、日志和历史记录 | ❌ 不导入 | Desktop 不读取 `~/.codex/auth.json`，也不把整个 `~/.codex` 或 `~/.claude` 注册为可浏览根 |
 
@@ -167,7 +170,7 @@ contract 拥有，Renderer 不能直接扫描用户主目录或自行解释外�
 该功能即使首版很小，也不能整体放入 `zeta-rs/utils`。外部目录识别、格式映射、敏感内容排除和
 配置 mutation 都属于产品领域语义；`zeta-agent-import` 拥有只读发现与计划模型，Desktop 只
 拥有交互，App Server 负责协调，各目标领域负责校验和落库。只有不理解 Codex、Claude、Skill、
-MCP 或 Sub-agent 的路径规范化、目录 containment 和文件 identity 原语可以复用
+MCP 或 Agent definition 的路径规范化、目录 containment 和文件 identity 原语可以复用
 `zeta-rs/utils/path-utils`、`zeta-rs/utils/path-uri` 等基础 crate。
 
 ## 3. 目录边界

@@ -1,4 +1,6 @@
 use crate::AgentResponse;
+use crate::ContextCheckpoint;
+use crate::FrozenSkillActivation;
 use crate::InteractionCancelReason;
 use crate::ModelRef;
 use crate::RequestId;
@@ -51,9 +53,17 @@ pub enum ThreadEvent {
         before_turn_id: TurnId,
         turns: Vec<Turn>,
     },
+    ContextCheckpointCommitted {
+        thread_id: ThreadId,
+        checkpoint: ContextCheckpoint,
+    },
     TurnAccepted {
         thread_id: ThreadId,
         turn_id: TurnId,
+        #[serde(default = "legacy_turn_policy_revision")]
+        policy_revision: String,
+        #[serde(default)]
+        activated_skills: Vec<FrozenSkillActivation>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional = nullable)]
         model: Option<ModelRef>,
@@ -120,11 +130,16 @@ pub enum ThreadEvent {
     },
 }
 
+fn legacy_turn_policy_revision() -> String {
+    "legacy-unversioned-policy".into()
+}
+
 impl ThreadEvent {
     pub fn kind(&self) -> &'static str {
         match self {
             Self::ThreadCreated { .. } => "thread.created",
             Self::HistoryImported { .. } => "thread.history_imported",
+            Self::ContextCheckpointCommitted { .. } => "context.checkpoint_committed",
             Self::TurnAccepted { .. } => "turn.accepted",
             Self::TurnStarted { .. } => "turn.started",
             Self::ItemCompleted { .. } => "item.completed",
@@ -144,6 +159,7 @@ impl ThreadEvent {
         match self {
             Self::ThreadCreated { thread_id, .. }
             | Self::HistoryImported { thread_id, .. }
+            | Self::ContextCheckpointCommitted { thread_id, .. }
             | Self::TurnAccepted { thread_id, .. }
             | Self::TurnStarted { thread_id, .. }
             | Self::ItemCompleted { thread_id, .. }

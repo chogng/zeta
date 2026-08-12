@@ -1,4 +1,3 @@
-use crate::file_revision;
 use crate::DirectoryEntry;
 use crate::FileContent;
 use crate::FileMetadata;
@@ -6,6 +5,7 @@ use crate::FileSystemError;
 use crate::FileType;
 use crate::FileWriteCondition;
 use crate::WorkspaceFileSystem;
+use crate::file_revision;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};

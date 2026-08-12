@@ -1,0 +1,8 @@
+.zeta-workbench-sidebar {
+  background: var(--sessions-muted-surface);
+}
+
+.zeta-workbench-sidebar > .zeta-workbench-part-content > .zeta-sessions-list {
+  min-height: 0;
+  flex: 1 1 auto;
+}

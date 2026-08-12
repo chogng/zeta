@@ -1,0 +1,59 @@
+.zeta-workbench-titlebar {
+  border-bottom: 1px solid var(--zeta-border);
+  background: color-mix(in srgb, var(--zeta-title-bar-background, var(--zeta-workbench-background)) 88%, var(--zeta-editor-background));
+}
+
+.zeta-workbench-titlebar > .zeta-workbench-part-content {
+  position: relative;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding: 0 16px;
+}
+
+.zeta-workbench-titlebar > .zeta-workbench-part-content::before {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--sessions-accent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--sessions-accent) 16%, transparent);
+  content: "";
+}
+
+.zeta-sessions-titlebar-title {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  color: var(--zeta-title-bar-foreground, var(--zeta-foreground));
+  font-size: 13px;
+  font-weight: var(--zeta-font-weight-semi-bold, 600);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zeta-sessions-titlebar-button { padding: 4px 9px; }
+
+.zeta-sessions-navigation-button {
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 5px;
+  color: var(--zeta-title-bar-foreground, var(--zeta-foreground));
+  background: transparent;
+  cursor: pointer;
+}
+
+.zeta-sessions-navigation-button:hover:not(:disabled) {
+  background: var(--zeta-list-hover-background);
+}
+
+.zeta-sessions-navigation-button:focus-visible {
+  outline: 2px solid var(--zeta-focus-border);
+  outline-offset: -1px;
+}
+
+.zeta-sessions-navigation-button:disabled {
+  opacity: .35;
+  cursor: default;
+}

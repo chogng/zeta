@@ -2,7 +2,7 @@
 
 > 状态：Accepted（2026-08-03 整体重审修订，替代此前 Proposed 版本）
 > 审查基线：`0df46ca9ff870489b58ebe6a3cbd0b1b8192928a` 加当前工作区改动
-> 最后重审：2026-08-03
+> 最后状态核对：2026-08-12
 > 适用范围：Session、Thread 执行控制、Agent loop、工具执行、上下文、流式、Provider
 > 切换和多 Agent 演进
 >
@@ -28,11 +28,11 @@
 
 | 审计问题 | 当前结论 | 深入阅读 |
 | --- | --- | --- |
-| 哪些已经落地，哪些还是纸面设计？ | 单 Agent 顺序执行闭环已实现；上下文管理、两级快照、真实流式、多 Agent 均为仅设计/部分 | [组件状态总账](#2-组件状态总账) |
+| 哪些已经落地，哪些还是纸面设计？ | 单 Agent 顺序执行、durable policy binding 与上下文纵向切片已实现；真实流式、多 Agent 和完整运行时快照仍为部分/仅设计 | [组件状态总账](#2-组件状态总账) |
 | Session 和 Thread 谁是执行边界？ | Session 聚合任务；每个 Thread 独立排序、执行、恢复和持久化 | [分层与执行链](#3-分层与执行链) |
 | 执行内核会异步化（tokio）吗？ | 不承诺；保留同步端口 + per-Thread OS 线程，流式经 sink 达成 | [R2](#42-r2同步执行内核流式经-sink) |
-| Turn 中途策略会漂移吗？ | 模型选择已冻结；policy 冻结当前缺失，修订为 durable fact | [R1](#41-r1policy-冻结-durable-化) |
-| 上下文溢出怎么办？ | 当前每次调用回放全部历史，无显式 outcome；阶段 B 落地预算与压缩 | [R3](#43-r3上下文系统裁剪落地) |
+| Turn 中途策略会漂移吗？ | 模型选择与 policy revision 都在 `TurnAccepted` 冻结；恢复遇到 revision 变化会 fail closed | [R1](#41-r1策略冻结-durable-化) |
+| 上下文溢出怎么办？ | 已由纯 planner 返回显式 overflow/compaction outcome；checkpoint durable commit 后才重规划 | [R3](#43-r3上下文系统裁剪落地) |
 | 多 Agent 什么时候做？ | 先冻结 protocol 契约（阶段 D），运行时 gate 在上下文系统之后（阶段 E） | [R4](#44-r4多-agent-契约冻结先行) |
 
 ## 1. 重审结论
@@ -94,7 +94,7 @@
 | ToolScheduler：durable one-time approval、sandbox escalation、rejection circuit breaker | 已实现 | `core/src/turn/tool_scheduler.rs` |
 | Tool unknown-outcome 基线（start marker / escalation marker，不自动重放） | 已实现 | `core/src/turn/tool_scheduler.rs`、`thread_reducer.rs` |
 | 模型选择冻结（`TurnAccepted` 携带 model） | 已实现 | `core/src/thread_controller.rs` |
-| `ContextAssembler`（`ThreadSnapshot` → `ModelRequest`，过渡 API） | 已实现（过渡） | `core/src/context/assembler.rs` |
+| `ContextAssembler`（`ContextPlan` → `ModelRequest`） | 已实现 | `core/src/context/assembler.rs` |
 | `ModelService` / `ModelStreamSink` 契约 | 已实现（同步桥接：默认 stream 只回放 final response） | `core/src/services.rs` |
 | 取消链路 session/request InterruptTurn → mailbox cancel → token → model/tool | 已实现 | [`core.md`](core.md) §7.3 |
 | App Server 可唤醒 outbound 通知源（`ConnectionNotifications`） | 部分 | `app-server/src/server.rs`；stdio 主循环仍在每个请求处理后才 drain |
@@ -103,12 +103,12 @@
 
 | 组件 | 状态 | 归属阶段 | 权威文档 |
 | --- | --- | --- | --- |
-| policy 冻结（durable policy revision binding） | 仅设计（R1 修订版） | A | 本文 §4.1 |
-| `ModelInvocationSnapshot` | 仅设计 | B | [`core.md`](core.md) §8 |
-| `ContextInput` / `ContextPlan` / 纯 planner / budget | 仅设计 | B | [`core-context.md`](core-context.md) |
-| `ContextManager`（薄协调，无 cache） | 仅设计（R3 裁剪版） | B | [`core-context.md`](core-context.md) |
-| compaction checkpoint schema + 压缩流程 | 仅设计 | B | [`core-context.md`](core-context.md) §8 |
-| `CompactionService` / `Clock` / `IdGenerator` / `CapabilityBroker` 端口 | 仅设计 | B / 按需 | [`core.md`](core.md) §6 |
+| policy 冻结（durable policy revision binding） | 已实现 | A | `TurnAccepted.policy_revision`、`ToolScheduler` recovery checks |
+| `ModelInvocationSnapshot` | 部分 | B | selected model、`ContextPlan` 与 tools 已冻结；独立 provider/config/catalog revision 集合尚未建模 |
+| `ContextInput` / `ContextPlan` / 纯 planner / budget | 已实现 | B | [`core-context.md`](core-context.md) |
+| `ContextManager`（薄协调，无 cache） | 已实现 | B | `core/src/context_manager.rs`、`loaded_thread.rs` |
+| compaction checkpoint schema + 压缩流程 | 已实现 | B | [`core-context.md`](core-context.md) §8 |
+| `ContextCompactionService` / `Clock` / `IdGenerator` / `CapabilityBroker` 端口 | 部分 | B / 按需 | model-backed compaction 已实现；其余仍按需设计 |
 | provider wire-level SSE streaming | 仅设计 | C | 本文 §4.2 |
 | App Server 独立 outbound writer 线程 | 仅设计 | C | 本文 §4.2 |
 | Desktop projection gap/resync | 仅设计 | C | [`zeta-desktop-architecture.md`](zeta-desktop-architecture.md) |
@@ -167,16 +167,17 @@ Session 的三种语义必须区分（详见 [`protocol.md`](protocol.md)）：�
 
 ## 4. 修订决策详细设计
 
-### 4.1 R1：policy 冻结 durable 化
+### 4.1 R1：策略冻结 durable 化
 
-**问题。** 原设计的 `TurnPolicySnapshot` 是进程内不可变结构，"整个 Turn 生命周期有效"。但
+**原问题。** 原设计的 `TurnPolicySnapshot` 是进程内不可变结构，"整个 Turn 生命周期有效"。但
 Turn 可以跨进程重启恢复（waiting approval、resumable tool continuation），进程内快照在恢复
 后不存在；当前实现在每次 pending call 审查时从 live `PolicyService` 读取最新策略。结果是：
 配置在 Turn 中途放宽后，恢复的 Turn 会在更宽的策略下继续——这违反"安全策略不能在 Turn
 中途静默放宽"的固定决策。已有的缓解只覆盖局部：one-time approval 与 escalation 绑定了
 `action_digest + policy_revision`，但未绑定 Turn 级策略环境。
 
-**修订设计。**
+**当前实现。** 下列 durable revision binding 已接入 protocol、reducer、projection、scheduler
+和 recovery；更宽的 execution limits/agent role snapshot 仍不是当前公共结构。
 
 - `TurnAccepted` 事件增加 `policy_revision` 字段（protocol 变更，进入
   [`protocol.md`](protocol.md) 阶段 P2/P3 的同一批 schema 同步）；
@@ -234,26 +235,25 @@ snapshot + gap 重建。
 
 领域权威是 [`core-context.md`](core-context.md)；本节只固定裁剪范围与顺序。
 
-**阶段 B 落地：**
+**阶段 B 核心纵向切片已落地：**
 
 1. `ContextInput` / `ContextPlan` 不可变类型 + 纯 `ContextPlanner`（precedence、budget、
-   Tool Call/Result 原子配对、checkpoint selection、五类显式 overflow outcome）；
+   Tool Call/Result 原子配对、checkpoint selection、显式 overflow outcome）；
 2. `ContextAssembler` 从 `ThreadSnapshot → ModelRequest` 过渡 API 改为
    `ContextPlan → ModelRequest` 纯组装；
-3. 薄 `ContextManager`：per-loaded-Thread、由 `LoadedThreadState` 持有、只做 revision 校验
+3. 薄 `ContextManager`：per-loaded-Thread、由 `LoadedThreadState` 持有、只做 sequence 校验
    与 prepare 协调，**无 cache / baseline / token estimate**；
 4. compaction checkpoint durable schema 进入 protocol 与 store envelope（与 R1 的 protocol
    变更同批规划，避免两次 schema bump）；
-5. compaction 流程：`NeedsCompaction` → `CompactionService` 端口 → 验证 provenance/digest →
+5. compaction 流程：`NeedsCompaction` → `ContextCompactionService` 端口 → 验证 provenance/digest →
    durable commit checkpoint → 失效重建。Summary model I/O 不持有 Thread writer。
 
-**明确不做（推迟）：** `cached_plan`、`reference_baseline`、`TokenEstimate` 缓存。触发条件
+**明确未做（推迟）：** `cached_plan`、`reference_baseline`、`TokenEstimate` 缓存。触发条件
 见 §1.3。
 
-`ModelInvocationSnapshot` 在此阶段随 `ContextPlan` 一起成形：resolved model +
-`ContextPlan` + tools + 输出/推理设置 + revision 集合，进程内不可变即可（它的输入均为
-durable fact 或冻结 revision，恢复时可确定性重建，无需自身持久化——这与 R1 的 policy
-冻结不同）。
+`ModelInvocationSnapshot` 当前随 `ContextPlan` 一起冻结 selected model、上下文计划与工具；
+输出/推理设置和独立 provider/config/catalog revision 集合尚未建模。它是可从 durable fact 与
+安全点快照重建的进程内值，无需自身持久化——这与 R1 的 policy 冻结不同。
 
 ### 4.4 R4：多 Agent 契约冻结先行
 
@@ -326,11 +326,11 @@ durable history 重新构造 context 并创建新的 invocation snapshot；运�
 完成条件：
 
 - 相同 `ContextInput` 产生字节级等价 `ContextPlan`；
-- 五类 overflow 显式 outcome，当前输入 / 权限约束 / 未完成 Tool continuation 永不被静默
+- overflow 产生显式 outcome，当前输入 / 权限约束 / 未完成 Tool continuation 永不被静默
   删除；
-- Tool Call/Result 与 delegation group 原子保留；
-- compaction checkpoint 前后 crash 注入：原始 event log 完整、corrupt checkpoint 回退原始
-  history；
+- Tool Call/Result 原子保留；delegation group 在阶段 D protocol 类型落地后启用同一规则；
+- compaction checkpoint 前后 crash 注入：原始 event log 完整；corrupt checkpoint replay
+  fail closed，且不删除可供显式修复的原始 history；
 - ContextManager 丢弃后从 durable facts 重建等价 plan。
 
 ### 阶段 C｜真实流式

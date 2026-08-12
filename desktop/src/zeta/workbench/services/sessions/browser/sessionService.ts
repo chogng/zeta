@@ -2,6 +2,7 @@ import type { ModelRef as ModelRefDto, Session as SessionDto } from "../../../..
 import { Emitter } from "../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { createUuid } from "../../../../base/common/uuid.js";
+import type { IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
 import type { ISessionApi } from "../../../../platform/sessions/common/sessionApi.js";
 import type { IActiveSessionThread, IUntitledChatSession, IWorkbenchSessionService, ModelRef, Session, SessionId, ThreadId, WorkbenchSessionState } from "../common/sessionService.js";
 
@@ -16,12 +17,31 @@ export class WorkbenchSessionService extends DisposableOwner implements IWorkben
   private _state: WorkbenchSessionState = "loading";
   private _error: string | undefined;
   private initializePromise: Promise<void> | undefined;
+  private readonly subscribedSessionIds = new Set<SessionId>();
+  private readonly pendingSessionSequences = new Map<SessionId, number>();
+  private readonly refreshes = new Map<SessionId, Promise<void>>();
 
   readonly onDidChange = this._onDidChange.event;
 
-  constructor(api: ISessionApi | { readonly session: ISessionApi }) {
+  constructor(api: ISessionApi | { readonly session: ISessionApi; readonly events?: IServerEventApi }) {
     super();
     this.api = "session" in api ? api.session : api;
+    const events = "session" in api ? api.events : undefined;
+    if (events) {
+      const subscription = events.subscribe(event => {
+        if (event.method !== "session/update") return;
+        this.acceptSessionUpdate(event.params.sessionId, event.params.durableSequence);
+      });
+      this.defer(() => subscription.dispose());
+    }
+    this.defer(() => {
+      for (const sessionId of this.subscribedSessionIds) {
+        void this.api.unsubscribe({ sessionId }).catch(error => console.error(`Failed to unsubscribe Session '${sessionId}'`, error));
+      }
+      this.subscribedSessionIds.clear();
+      this.pendingSessionSequences.clear();
+      this.refreshes.clear();
+    });
   }
 
   get sessions(): readonly Session[] { return this._sessions; }
@@ -113,7 +133,8 @@ export class WorkbenchSessionService extends DisposableOwner implements IWorkben
     this.setState("archiving");
     try {
       const result = await this.api.archive({ commandId: commandId("archive-session"), sessionId, expectedSequence: session.sequence });
-      this._sessions = this._sessions.map((candidate) => candidate.sessionId === sessionId ? toSession(result.session) : candidate);
+      this.replaceSession(toSession(result.session));
+      await this.unsubscribeSession(sessionId);
       if (this._active?.session.sessionId === sessionId) this._active = firstActiveThread(this._sessions);
       this.restoreAvailableSelection();
       this.setState("ready");
@@ -130,7 +151,8 @@ export class WorkbenchSessionService extends DisposableOwner implements IWorkben
     this.setState("stopping");
     try {
       const result = await this.api.stop({ commandId: commandId("stop-session"), sessionId, expectedSequence: session.sequence });
-      this._sessions = this._sessions.map((candidate) => candidate.sessionId === sessionId ? toSession(result.session) : candidate);
+      this.replaceSession(toSession(result.session));
+      await this.unsubscribeSession(sessionId);
       if (this._active?.session.sessionId === sessionId) this._active = firstActiveThread(this._sessions);
       this.restoreAvailableSelection();
       this.setState("ready");
@@ -147,7 +169,7 @@ export class WorkbenchSessionService extends DisposableOwner implements IWorkben
     try {
       const result = await this.api.setModel({ commandId: commandId("session-model"), sessionId, expectedSequence: session.sequence, model });
       const updated = toSession(result.session);
-      this._sessions = this._sessions.map((candidate) => candidate.sessionId === sessionId ? updated : candidate);
+      this.replaceSession(updated);
       if (this._active?.session.sessionId === sessionId) this._active = { session: updated, threadId: this._active.threadId };
       this._error = undefined;
       this._onDidChange.fire();
@@ -165,7 +187,12 @@ export class WorkbenchSessionService extends DisposableOwner implements IWorkben
       const result = model && !sameModel(thread.session.model, model)
         ? await this.api.setModel({ commandId: commandId("session-model"), sessionId: thread.session.sessionId, expectedSequence: thread.session.sequence, model })
         : thread;
-      return { session: toSession(result.session), threadId: thread.threadId };
+      const session = toSession(result.session);
+      const subscribed = await this.subscribeSession(session);
+      if (!subscribed.threads.some(candidate => candidate.threadId === thread.threadId && candidate.status === "active")) {
+        throw new Error(`Created Thread is missing from subscribed Session snapshot: ${thread.threadId}`);
+      }
+      return { session: subscribed, threadId: thread.threadId };
     } catch (error) {
       this.setError(error);
       throw error;
@@ -176,7 +203,8 @@ export class WorkbenchSessionService extends DisposableOwner implements IWorkben
     this.setState("loading");
     try {
       const result = await this.api.list();
-      this._sessions = result.sessions.map(toSession);
+      const sessions = result.sessions.map(toSession);
+      this._sessions = await Promise.all(sessions.map(session => this.subscribeSession(session)));
       this._active = firstActiveThread(this._sessions);
       this.restoreAvailableSelection();
       this.setState("ready");
@@ -215,6 +243,72 @@ export class WorkbenchSessionService extends DisposableOwner implements IWorkben
     this._activeUntitledSessionId = undefined;
     this.setState("ready");
   }
+
+  private async subscribeSession(session: Session): Promise<Session> {
+    if (session.status !== "active") return session;
+    const result = await this.api.subscribe({ sessionId: session.sessionId, afterSequence: session.sequence });
+    this.subscribedSessionIds.add(session.sessionId);
+    const subscribed = toSession(result.session);
+    if (subscribed.sessionId !== session.sessionId) {
+      await this.unsubscribeSession(session.sessionId);
+      throw new Error(`Session subscription returned '${subscribed.sessionId}' for '${session.sessionId}'`);
+    }
+    if (subscribed.status !== "active") await this.unsubscribeSession(session.sessionId);
+    return subscribed;
+  }
+
+  private async unsubscribeSession(sessionId: SessionId): Promise<void> {
+    if (!this.subscribedSessionIds.delete(sessionId)) return;
+    this.pendingSessionSequences.delete(sessionId);
+    await this.api.unsubscribe({ sessionId });
+  }
+
+  private acceptSessionUpdate(sessionId: SessionId, durableSequence: number): void {
+    const session = this._sessions.find(candidate => candidate.sessionId === sessionId);
+    if (!session || durableSequence <= session.sequence) return;
+    this.pendingSessionSequences.set(sessionId, Math.max(durableSequence, this.pendingSessionSequences.get(sessionId) ?? 0));
+    if (this.refreshes.has(sessionId)) return;
+    const refresh = this.refreshSessionUntilCurrent(sessionId).finally(() => this.refreshes.delete(sessionId));
+    this.refreshes.set(sessionId, refresh);
+  }
+
+  private async refreshSessionUntilCurrent(sessionId: SessionId): Promise<void> {
+    try {
+      while (true) {
+        const expectedSequence = this.pendingSessionSequences.get(sessionId);
+        const current = this._sessions.find(candidate => candidate.sessionId === sessionId);
+        if (expectedSequence === undefined || !current || current.sequence >= expectedSequence) {
+          this.pendingSessionSequences.delete(sessionId);
+          return;
+        }
+        const result = await this.api.subscribe({ sessionId, afterSequence: current.sequence });
+        this.subscribedSessionIds.add(sessionId);
+        const refreshed = toSession(result.session);
+        if (refreshed.sessionId !== sessionId) {
+          throw new Error(`Session refresh returned '${refreshed.sessionId}' for '${sessionId}'`);
+        }
+        if (refreshed.sequence <= current.sequence && refreshed.sequence < expectedSequence) {
+          throw new Error(`Session subscription did not advance '${sessionId}' beyond sequence ${current.sequence}`);
+        }
+        this.replaceSession(refreshed);
+        if (this._active?.session.sessionId === sessionId) {
+          this._active = refreshed.status === "active"
+            ? activeThread(refreshed, this._active.threadId) ?? firstActiveThread(this._sessions)
+            : firstActiveThread(this._sessions);
+        }
+        this.restoreAvailableSelection();
+        this._error = undefined;
+        this._onDidChange.fire();
+        if (refreshed.status !== "active") await this.unsubscribeSession(sessionId);
+      }
+    } catch (error) {
+      this.setError(error);
+    }
+  }
+
+  private replaceSession(session: Session): void {
+    this._sessions = this._sessions.map(candidate => candidate.sessionId === session.sessionId ? session : candidate);
+  }
 }
 
 function toSession(session: SessionDto): Session {
@@ -237,6 +331,12 @@ function firstActiveThread(sessions: readonly Session[]): IActiveSessionThread |
     if (thread) return { session, threadId: thread.threadId };
   }
   return undefined;
+}
+
+function activeThread(session: Session, threadId: ThreadId): IActiveSessionThread | undefined {
+  return session.threads.some(thread => thread.threadId === threadId && thread.status === "active")
+    ? { session, threadId }
+    : undefined;
 }
 
 function commandId(kind: string): string { return `desktop-${kind}-${createUuid()}`; }

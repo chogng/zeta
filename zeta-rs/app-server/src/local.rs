@@ -14,13 +14,16 @@ use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::Duration;
 use zeta_async_utils::CancellationToken;
+use zeta_code_index_cloud::CloudCodeIndexProviderRegistry;
 use zeta_config::{
     ConfigStore, ResolvedConfig, ResolvedConfigSnapshot, WorkspaceConfigDocument,
     WorkspaceConfigInput, WorkspaceConfigRevision, WorkspaceConfigScope, WorkspaceConfigStore,
     WorkspaceId, resolve_scoped_config,
 };
+use zeta_core::ContextBudget;
+use zeta_core::ContextCompactionLimit;
+use zeta_core::ContextTokenCount;
 use zeta_core::CoreError;
-use zeta_core::HarnessInstructions;
 use zeta_core::InMemorySessionStore;
 use zeta_core::InMemoryThreadStore;
 use zeta_core::ModelSelection;
@@ -33,21 +36,14 @@ use zeta_model_provider::{
     ModelInvoker, ModelProvider, ModelProviderRuntime, ModelRuntimeRequest, UnavailableModel,
 };
 use zeta_model_provider_config::ProviderConfigRegistry;
-use zeta_prompts::SYSTEM_PROMPT;
+use zeta_protocol::ContextWindow;
 use zeta_rollout::LocalStateRepository;
 
-const MAX_WORKSPACE_INSTRUCTIONS_BYTES: usize = 32 * 1024;
 const MAX_GIT_STATUS_LINES: usize = 40;
+const DEFAULT_MODEL_OUTPUT_RESERVATION_TOKENS: u32 = 4_096;
+const MODEL_CONTEXT_SAFETY_MARGIN_TOKENS: u32 = 1_024;
 
-pub(crate) fn harness_instructions(workspace_root: &Path) -> HarnessInstructions {
-    HarnessInstructions::new(
-        SYSTEM_PROMPT.body(),
-        render_environment(workspace_root),
-        read_workspace_instructions(workspace_root),
-    )
-}
-
-fn render_environment(workspace_root: &Path) -> String {
+pub(crate) fn render_environment(workspace_root: &Path) -> String {
     let is_git_repo = command_output(
         workspace_root,
         "git",
@@ -96,18 +92,6 @@ fn render_environment(workspace_root: &Path) -> String {
         status.unwrap_or_else(|| "(none)".into()),
         commits.unwrap_or_else(|| "(none)".into()),
     )
-}
-
-fn read_workspace_instructions(workspace_root: &Path) -> Option<String> {
-    let path = workspace_root.join("AGENTS.md");
-    let mut bytes = std::fs::read(path).ok()?;
-    let truncated = bytes.len() > MAX_WORKSPACE_INSTRUCTIONS_BYTES;
-    bytes.truncate(MAX_WORKSPACE_INSTRUCTIONS_BYTES);
-    let mut text = String::from_utf8_lossy(&bytes).into_owned();
-    if truncated {
-        text.push_str("\n[... AGENTS.md truncated at 32768 bytes ...]");
-    }
-    Some(text)
 }
 
 fn truncate_lines(text: &str, maximum_lines: usize) -> String {
@@ -254,7 +238,15 @@ impl std::error::Error for OpenAppServerError {}
 
 /// Opens the authoritative local composition root used by in-process and stdio clients.
 pub fn open_local_app_server(
+    options: LocalAppServerOptions,
+) -> Result<AppServer, OpenAppServerError> {
+    open_local_app_server_with_cloud_providers(options, CloudCodeIndexProviderRegistry::default())
+}
+
+/// Opens a local composition with explicit cloud code-index provider adapters.
+pub fn open_local_app_server_with_cloud_providers(
     mut options: LocalAppServerOptions,
+    cloud_code_index_providers: CloudCodeIndexProviderRegistry,
 ) -> Result<AppServer, OpenAppServerError> {
     if options.workspace.is_none()
         && let Some(workspace_root) = &options.workspace_root
@@ -317,6 +309,9 @@ pub fn open_local_app_server(
         .with_model_catalog(model)
         .with_config_store(Arc::clone(&config))
         .with_slash_command_catalog(options.slash_commands)
+        .with_code_index_storage_root(options.profile_root.join("code-index"))
+        .with_cloud_code_index_storage_root(options.profile_root.join("code-index-cloud"))
+        .with_cloud_code_index_providers(cloud_code_index_providers)
         .with_extension_roots(extension_roots)
         .with_skill_runtime(built_in_skill_root, skill_config)
         .map_err(OpenAppServerError)?;
@@ -534,19 +529,17 @@ struct ConfigBackedModelService {
 }
 
 impl ModelService for ConfigBackedModelService {
+    fn context_budget(&self, selection: ModelSelection<'_>) -> Result<ContextBudget, CoreError> {
+        context_budget_for_config(&self.config_for_selection(selection)?)
+    }
+
     fn invoke(
         &self,
         selection: ModelSelection<'_>,
         request: &zeta_protocol::ModelRequest,
         cancellation: &CancellationToken,
     ) -> Result<zeta_protocol::ModelResponse, CoreError> {
-        let user = self.config.read_snapshot().map_err(|error| {
-            CoreError::Model(format!("failed to read model config: {}", error.0))
-        })?;
-        let mut config = self.resolve_config(&user)?;
-        if let ModelSelection::Session(model) = selection {
-            config.preferred_model = Some(model.clone());
-        }
+        let config = self.config_for_selection(selection)?;
         ProviderModelService::new(self.resolver.resolve(&config)).invoke(
             ModelSelection::ConfiguredDefault,
             request,
@@ -613,6 +606,20 @@ impl ModelCatalog for ConfigBackedModelService {
 }
 
 impl ConfigBackedModelService {
+    fn config_for_selection(
+        &self,
+        selection: ModelSelection<'_>,
+    ) -> Result<ResolvedConfig, CoreError> {
+        let user = self.config.read_snapshot().map_err(|error| {
+            CoreError::Model(format!("failed to read model config: {}", error.0))
+        })?;
+        let mut config = self.resolve_config(&user)?;
+        if let ModelSelection::Session(model) = selection {
+            config.preferred_model = Some(model.clone());
+        }
+        Ok(config)
+    }
+
     fn resolved_config(&self) -> Result<ResolvedConfig, CoreError> {
         let user = self.config.read_snapshot().map_err(|error| {
             CoreError::Model(format!("failed to read model config: {}", error.0))
@@ -640,6 +647,62 @@ impl ConfigBackedModelService {
             CoreError::Model(format!("failed to resolve Workspace config: {}", error.0))
         })
     }
+}
+
+fn context_budget_for_config(config: &ResolvedConfig) -> Result<ContextBudget, CoreError> {
+    let Some(model_ref) = config.preferred_model.as_ref() else {
+        return Ok(ContextBudget::provider_managed());
+    };
+    let Some(provider_config) = config.providers.get(&model_ref.provider) else {
+        return Ok(ContextBudget::provider_managed());
+    };
+    let registry = ProviderConfigRegistry::builtin();
+    let Some(definition) = registry.get(&model_ref.provider) else {
+        return Ok(ContextBudget::provider_managed());
+    };
+    let catalog_model = definition
+        .models
+        .iter()
+        .find(|model| model.id == model_ref.model);
+    let configured_context = provider_config.model_context.get(&model_ref.model);
+    let (context_window, auto_compact_token_limit) = match configured_context {
+        Some(context) => {
+            let default_limit = context.context_window.saturating_mul(9) / 10;
+            (
+                context.context_window,
+                Some(
+                    context
+                        .auto_compact_token_limit
+                        .map_or(default_limit, |configured| configured.min(default_limit)),
+                ),
+            )
+        }
+        None => {
+            let Some(model) = catalog_model else {
+                return Ok(ContextBudget::provider_managed());
+            };
+            let ContextWindow::Known(context_window) = model.context_window else {
+                return Ok(ContextBudget::provider_managed());
+            };
+            (context_window, model.effective_auto_compact_token_limit())
+        }
+    };
+    let normalized = registry
+        .normalize_for(provider_config, &model_ref.provider)
+        .map_err(|error| CoreError::Model(error.to_string()))?;
+    let reserved_output = normalized
+        .max_output_tokens
+        .unwrap_or(DEFAULT_MODEL_OUTPUT_RESERVATION_TOKENS);
+    let compaction_limit = auto_compact_token_limit
+        .map_or(ContextCompactionLimit::ContextWindow, |tokens| {
+            ContextCompactionLimit::Tokens(ContextTokenCount::new(tokens))
+        });
+    Ok(ContextBudget::core_managed(
+        ContextTokenCount::new(context_window),
+        ContextTokenCount::new(reserved_output),
+        ContextTokenCount::new(MODEL_CONTEXT_SAFETY_MARGIN_TOKENS),
+        compaction_limit,
+    ))
 }
 
 struct WorkspaceConfigTracker {

@@ -7,12 +7,14 @@ use std::path::{Path, PathBuf};
 pub enum SkillSourceKind {
     BuiltIn,
     User,
+    Workspace,
 }
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum SkillTrust {
     BuiltInVerified,
     UserManaged,
+    WorkspaceManaged,
 }
 
 /// Consumer-visible Skill source provenance without its private host root.
@@ -63,6 +65,15 @@ impl SkillSourceRoot {
             id,
             SkillSourceKind::User,
             SkillTrust::UserManaged,
+            root.as_ref(),
+        )
+    }
+
+    pub fn workspace(id: SkillSourceId, root: impl AsRef<Path>) -> Result<Self, SkillError> {
+        Self::new(
+            id,
+            SkillSourceKind::Workspace,
+            SkillTrust::WorkspaceManaged,
             root.as_ref(),
         )
     }

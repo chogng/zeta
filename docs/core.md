@@ -67,13 +67,18 @@ Agent 生命周期能够成为 authority 的前提。
 - provider-independent `ModelService`；
 - `TextDelta` / `ReasoningDelta` Core streaming contract；
 - `TurnExecutor` 的顺序 model → tool → model 循环；
-- 从 durable `ThreadSnapshot` 派生有序 text/image 请求的基础 `ContextAssembler`。
+- durable Turn policy revision binding 与 recovery fail-closed；
+- `ContextInput` / `ContextPlan`、纯 planner、per-loaded-Thread `ContextManager`、
+  `ContextPlan → ModelRequest` 的 `ContextAssembler`；
+- durable context checkpoint、model-backed compaction、commit 后重规划与当前
+  `ModelInvocationSnapshot` 纵向切片。
 
 尚未完成：
 
 - provider wire-level streaming 与 App Server 独立 outbound worker；
-- `TurnPolicySnapshot` / `ModelInvocationSnapshot` 的完整闭环；
-- `ContextManager`、instruction precedence、context budget 与 compaction；
+- 完整 `TurnPolicySnapshot` 中除 revision 外的 execution limit/agent role 集合，以及
+  `ModelInvocationSnapshot` 的独立 provider/config/catalog revision 集合；
+- provider 精确 tokenizer/usage 校准、prompt cache/reference baseline 与跨 Thread context seed；
 - 并行 Tool、通用 deadline、声明式 retry 与 reconciliation；
 - durable multi-Agent delegation、跨 Thread message/result 与 Agent tree resource budget；
 - 所有 durable boundary 的 fault injection。
@@ -290,19 +295,19 @@ projection、写 store 或提前发布 committed update。
 Turn 就继续执行。安全边界应由可取消的 token/cost/deadline policy 和 durable usage accounting
 表达，不能使用 approval 或 recovery 后会重置的进程内计数器。
 
-### 5.5 ContextManager 与 ContextAssembler（ContextAssembler 已实现（过渡）；其余仅设计）
+### 5.5 ContextManager 与 ContextAssembler（核心纵向切片已实现）
 
 两者必须分开：
 
-- `ContextManager`：每个 loaded Thread 一个，负责 context 生命周期、选择、预算、window、
-  baseline、checkpoint 和 compaction 决策；
+- `ContextManager`：每个 loaded Thread 一个，协调 sequence 检查与 prepare；当前不持有 cache、
+  baseline 或 token estimate；
 - `ContextAssembler`：无状态纯组件，把已经确定的 `ContextPlan` 组装成
   provider-neutral `ModelRequest`；
 - `ContextPlan`：一次 invocation 的不可变派生结果；
 - durable Thread history：唯一权威历史。
 
-ContextManager 可以缓存按 `ThreadSequence`、policy revision 和 model capability revision
-索引的派生视图，但不能维护第二份 canonical transcript。完整契约见
+未来若有性能证据，ContextManager 可以缓存按 `ThreadSequence`、policy revision 和 model
+capability revision 索引的派生视图，但不能维护第二份 canonical transcript。完整契约见
 [`core-context.md`](core-context.md)。
 
 ### 5.6 MultiAgentCoordinator（仅设计）
@@ -374,7 +379,7 @@ zeta-core → Desktop / CLI / TUI
 | `ThreadUpdateSink` | 已实现 | committed/transient update 发布 | App Server subscription hub |
 | `ToolOutputSink` | 已实现 | Tool Call transient output | App Server/host |
 | `CapabilityBroker` | 仅设计 | Turn-scoped capability 解析 | App Server/host |
-| `CompactionService` | 仅设计（阶段 B） | 生成候选 summary | model/host adapter |
+| `ContextCompactionService` | 已实现 | 从不可变 source 生成有界候选 summary | Core contract + model-backed adapter |
 | `Clock` | 仅设计 | deadline 与可测试时间 | host |
 | `IdGenerator` | 仅设计 | 稳定 operation identity | host |
 
@@ -466,8 +471,9 @@ outcome 处理，exact call 不自动重放。
 
 ## 8. 模型调用与流式处理
 
-一个 Turn 固定（快照层当前为**仅设计**；policy 冻结已修订为 durable fact，见
-[`zeta-agent-runtime-architecture.md` R1](zeta-agent-runtime-architecture.md#41-r1policy-冻结-durable-化)——
+一个 Turn 固定（durable policy revision binding 已实现；完整 execution limits/agent role
+快照仍为**部分**，见
+[`zeta-agent-runtime-architecture.md` R1](zeta-agent-runtime-architecture.md#41-r1策略冻结-durable-化)——
 `TurnAccepted` 持久化 policy revision，进程内 `TurnPolicySnapshot` 只是冻结 fact 的派生
 视图。模型选择已通过 `TurnAccepted` 携带 model 实现冻结）：
 
@@ -478,7 +484,8 @@ pub struct TurnPolicySnapshot {
 }
 ```
 
-每次 provider 调用固定：
+每次 provider 调用当前固定 selected model、`ContextPlan` 与 tools；独立
+provider/config/catalog revision 集合仍是扩展点：
 
 ```rust
 pub struct ModelInvocationSnapshot {
@@ -487,9 +494,9 @@ pub struct ModelInvocationSnapshot {
 }
 ```
 
-`ModelService` 目标契约必须：
+`ModelService` 契约必须：
 
-- async 且可取消；
+- 可取消；当前端口保持同步，真实 wire streaming 通过 sink 扩展；
 - 输入 canonical request/snapshot，而不是 prompt `String`；
 - 输出 typed stream event 与 typed terminal response；
 - 区分 refusal、overflow、rate limit、authentication、transport 与 invalid response；
@@ -809,8 +816,9 @@ Fault-injection tests：
 1. 将现有 Session/Thread 大文件按 aggregate 拆入目标目录（阶段 A）；
 2. 已引入 `LoadedThreadState`、显式 incarnation、idle eviction、FIFO mutation gate 和有界
    execution mailbox；
-3. 落地 `TurnPolicySnapshot` / `ModelInvocationSnapshot`；
-4. 引入独立 `context/` 与 `context_manager/`，完成 budget/compaction；
+3. 已落地 durable policy revision binding 与 `ModelInvocationSnapshot` 核心纵向切片；完整
+   policy/provider revision 集合按真实需求扩展；
+4. 已引入独立 `context/` 与 `context_manager`，完成纯 budget planner、checkpoint 与 compaction；
 5. 扩展现有 ToolScheduler：已完成 durable one-time approval、safe sandbox escalation、顺序
    Tool 与 UnknownOutcome 基线，后续增加并行计划、deadline、声明式 retry、reconciliation 与
    resource conflict；

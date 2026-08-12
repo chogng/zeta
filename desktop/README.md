@@ -202,9 +202,10 @@ opaque-origin sandbox iframe。解析器输出不能直接写入 DOM 或 iframe�
 
 Workbench 静态装配按 host 分层：`workbench.common.main.ts` 加载 Browser 与 Electron
 共享的 contribution，`workbench.web.main.ts` 与 `workbench.desktop.main.ts` 只加载各自
-host 的 adapter 和 contribution。三个产品入口在 host main 之外继续独立选择 legacy editor runtime、
-Gama 或两者，并通过 `sessions/browser/*WorkbenchSession.ts` 选择 Code、Academic
-或 Complete 的初始布局；新增功能时不得从共享 `Workbench` 构造实现反向导入产品或 host 入口。
+host 的 adapter 和 contribution。产品入口在 host main 之外独立选择 editor bundle 与不可变的
+`WorkbenchSession` 初始 composition；可选的专用 Sessions renderer 由
+`ProductConfiguration.dedicatedSessions` 和产品自己的 `SessionsProfile` 装配。新增功能时不得从
+共享 `Workbench` 构造实现反向导入产品或 Sessions 入口。
 
 当前链接只允许 HTTP、HTTPS 和页内 fragment，并交由宿主处理；图片只允许内嵌的 PNG、
 JPEG、GIF 与 WebP。语法高亮、Markdown 插件、Mermaid、KaTeX 和工作区相对资源映射尚未实现。

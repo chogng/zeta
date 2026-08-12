@@ -2,20 +2,26 @@
 
 > 本文拥有 Slash Commands 的跨产品语义、运行时边界与当前接入状态。Rust 实现细节由
 > [`zeta-slash-commands` README](../zeta-rs/slash-commands/README.md) 拥有；App Server wire snapshot
-> 由 [`zeta-app-server-api.md`](zeta-app-server-api.md) 拥有。
+> 由 [`zeta-app-server-api.md`](zeta-app-server-api.md) 拥有。Slash Command 与
+> Instructions/Skills/Agents artifact 的关系由
+> [`agent-customizations.md`](agent-customizations.md) 统一定义。
 
 ## 快速理解
 
-Slash Commands 是一个无渲染产品能力，不是 TUI feature，也不是用户 config。App Server 在
+Slash Commands 是调用入口和补全投影，不是第四种 Agent 自定义 artifact，也不是用户 config。
+App Server 当前在
 `initialize.slashCommands` 发布 server commands；每个 client 再与自身真正可执行的 local commands
 合并。命令定义、名称冲突、输入 grammar、匹配与选择都先于 renderer，只有行布局、DOM/WGPU/Ratatui
 绘制和平台输入事件留在三种 renderer。
 
 | Surface | Catalog 来源 | Core/adapter | Renderer owner |
 | --- | --- | --- | --- |
-| TUI | built-ins + initialize snapshot | 直接使用 `zeta-slash-commands` | Ratatui popup |
+| TUI | built-ins + initialize snapshot + enabled Skill metadata | 直接使用 `zeta-slash-commands`；Skill target 保存在 client binding | Ratatui popup |
 | Native zeta-ui | local `/model` + initialize snapshot | 直接使用 `zeta-slash-commands`；Native 另拥有 model picker | WGPU composer interaction rows |
-| Desktop Chat | Workbench actions + initialize snapshot | canonical generated `SlashCommandDefinition` + separate action binding | Alpha completion widget；textarea/legacy editor runtime 可复用同一 catalog |
+| Desktop Chat | Workbench actions + initialize snapshot + enabled Skill metadata | canonical generated `SlashCommandDefinition` + separate action/Skill binding | Alpha completion widget；textarea/legacy editor runtime 可复用同一 catalog |
+
+TUI 与 Desktop 已把用户可调用 Skill 以 `/name` 投影到同一补全菜单。启动与刷新只读取 Skill
+metadata；entry 绑定 exact pinned `SkillRef`，不会把 Skill 正文复制成 command definition。
 
 ## 所有权与执行
 
@@ -29,24 +35,29 @@ App Server composition
   → activation
       local  → client product command
       server → unchanged /name text in session/request StartTurn.input
+      skill  → exact SkillRef + unchanged /name text in session/request StartTurn.input
 ```
 
-`SlashCommandDefinition` 是三端唯一的 Slash Command model。`origin`、Workbench `actionId` 和 TUI
-dispatcher identity 都是与 model 分离的 client binding，不能包装成另一种 Slash Command。
+`SlashCommandDefinition` 是三端共享的 Slash Command catalog entry model，不是被调用对象的领域
+model。`origin`、Workbench `actionId`、TUI dispatcher identity 和 Skill `SkillRef` 都是与 entry
+分离的 client binding，不能包装成另一种 Slash Command。Skill authority 继续拥有 enablement、
+compatibility 和 activation validation。
 
 App Server 不执行 server-advertised Slash Command；它只声明 discoverability 与参数能力。Local command
 必须存在真实 client execution path，否则不能进入 catalog。Desktop 的 `/new`、`/history` 属于
 Workbench command mapping；Native 的 `/model` 属于 Session model selector；TUI 的 `/theme` 属于
 device-local presentation preference：无参数时打开由 `features/theme` 拥有的固定 Zeta Code
 Theme Pane，带 ID 时静默直接切换；Theme Pane 不启用搜索，通用 Selection Pane 则以显式
-`Space search` 进入搜索模式。其他 built-ins 属于 TUI coordination。任意 local/server 同名都拒绝整份合并结果，不按
-客户端优先级静默覆盖。
+`Space search` 进入搜索模式。其他 built-ins 属于 TUI coordination。任意 local/server 同名都拒绝
+整份合并结果，不按客户端优先级静默覆盖。Skill 是动态投影：只有 enabled、compatible、名称唯一且
+不与 local/server command 冲突的 entry 才进入 `/name`；冲突项保留在 `/skills` 管理与诊断目录，
+不会覆盖已有命令或任意选择一个 source。
 
 ## Config 边界
 
-`slashCommands` 不进入通用 config，也不由 slash command view 读取 config。它是 connection 初始化时
-冻结的 capability snapshot。未来若 config 决定某类命令是否可用，应由 composition 根据 config 生成
-下一条 connection 的 snapshot；已初始化 client 不观察中途变化。
+`initialize.slashCommands` 不进入通用 config，也不由 slash command view 读取 config。它是 connection
+初始化时冻结的 server capability snapshot。Skill command 是 client 从 `skills/list` metadata 生成的
+动态 projection；`skills/changed` 会使客户端重建这部分 catalog，不修改 server snapshot。
 
 ## 当前限制
 

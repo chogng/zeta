@@ -222,13 +222,13 @@ impl App {
                     thread_id: thread_id.clone(),
                 }),
             },
-            SelectionActions::Skills(actions) => match actions.get(item_id)? {
+            SelectionActions::Skills(actions) => match actions.get(item_id)?.clone() {
                 SkillSelectionAction::SetEnablement {
                     skill_id,
                     enablement,
                 } => Some(AppCommand::SetSkillEnablement {
-                    skill_id: skill_id.clone(),
-                    enablement: *enablement,
+                    skill_id,
+                    enablement,
                 }),
             },
             SelectionActions::Theme(actions) => match actions.get(item_id)? {
@@ -278,6 +278,15 @@ impl App {
         }
         let outcome = self.interaction_pane.activate_slash_command(index)?;
         self.handle_interaction_pane_outcome(outcome)
+    }
+
+    pub(crate) fn replace_slash_commands(
+        &mut self,
+        slash_commands: SlashCommandCatalog,
+        skill_commands: BTreeMap<String, zeta_protocol::SkillRef>,
+    ) {
+        self.interaction_pane
+            .replace_slash_commands(slash_commands, skill_commands);
     }
 
     #[cfg(test)]
@@ -608,6 +617,7 @@ impl App {
                 self.status = Status::Working;
                 Some(AppCommand::SubmitTurn(submission))
             }
+            (SlashCommandOrigin::Skill, _) => None,
             (SlashCommandOrigin::Local, Some(_)) => {
                 Some(AppCommand::ExecuteProductCommand(invocation))
             }

@@ -320,6 +320,16 @@
         "GitOperationFailed",
         "DiffOperationFailed",
         "SyntaxAnalysisFailed",
+        "CodeIndexUnavailable",
+        "CodeIndexNotReady",
+        "CodeIndexOperationFailed",
+        "CodeRetrievalOperationFailed",
+        "CloudCodeIndexUnavailable",
+        "CloudCodeIndexInvalidGrant",
+        "CloudCodeIndexConsentConflict",
+        "CloudCodeIndexEgressLimitExceeded",
+        "CloudCodeIndexProviderUnavailable",
+        "CloudCodeIndexOperationFailed",
         "SearchUnavailable",
         "SearchNotFound",
         "SearchNotOwner",
@@ -1481,6 +1491,150 @@
           "properties": {
             "method": {
               "type": "string",
+              "const": "workspace/codeIndex/status"
+            },
+            "params": {
+              "$ref": "#/$defs/EmptyParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "workspace/codeIndex/search"
+            },
+            "params": {
+              "$ref": "#/$defs/CodeIndexSearchParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "workspace/codeIndex/retrieve"
+            },
+            "params": {
+              "$ref": "#/$defs/CodeRetrievalParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "workspace/codeIndex/rebuild"
+            },
+            "params": {
+              "$ref": "#/$defs/EmptyParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "workspace/codeIndex/cloud/status"
+            },
+            "params": {
+              "$ref": "#/$defs/EmptyParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "workspace/codeIndex/cloud/preview"
+            },
+            "params": {
+              "$ref": "#/$defs/CloudCodeIndexPreviewParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "workspace/codeIndex/cloud/authorize"
+            },
+            "params": {
+              "$ref": "#/$defs/CloudCodeIndexAuthorizeParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "workspace/codeIndex/cloud/sync"
+            },
+            "params": {
+              "$ref": "#/$defs/EmptyParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "workspace/codeIndex/cloud/revoke"
+            },
+            "params": {
+              "$ref": "#/$defs/EmptyParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
               "const": "terminal/profile/list"
             },
             "params": {
@@ -2605,6 +2759,150 @@
           "properties": {
             "method": {
               "type": "string",
+              "const": "workspace/codeIndex/status"
+            },
+            "result": {
+              "$ref": "#/$defs/CodeIndexStatusResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "workspace/codeIndex/search"
+            },
+            "result": {
+              "$ref": "#/$defs/CodeIndexSearchResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "workspace/codeIndex/retrieve"
+            },
+            "result": {
+              "$ref": "#/$defs/CodeRetrievalResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "workspace/codeIndex/rebuild"
+            },
+            "result": {
+              "$ref": "#/$defs/CodeIndexStatusResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "workspace/codeIndex/cloud/status"
+            },
+            "result": {
+              "$ref": "#/$defs/CloudCodeIndexStatusResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "workspace/codeIndex/cloud/preview"
+            },
+            "result": {
+              "$ref": "#/$defs/CloudCodeIndexPreviewResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "workspace/codeIndex/cloud/authorize"
+            },
+            "result": {
+              "$ref": "#/$defs/CloudCodeIndexStatusResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "workspace/codeIndex/cloud/sync"
+            },
+            "result": {
+              "$ref": "#/$defs/CloudCodeIndexStatusResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "workspace/codeIndex/cloud/revoke"
+            },
+            "result": {
+              "$ref": "#/$defs/CloudCodeIndexStatusResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
               "const": "terminal/profile/list"
             },
             "result": {
@@ -2696,6 +2994,573 @@
             "result"
           ]
         }
+      ]
+    },
+    "CloudCodeIndexAuthorizeParams": {
+      "description": "Persists one explicit cloud destination, selection, and byte ceiling.",
+      "type": "object",
+      "properties": {
+        "grant": {
+          "$ref": "#/$defs/CloudCodeIndexGrantDto"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "grant"
+      ]
+    },
+    "CloudCodeIndexDestinationDto": {
+      "description": "Non-secret remote provider namespace chosen by the user.",
+      "type": "object",
+      "properties": {
+        "collection": {
+          "type": "string"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "tenant": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "provider",
+        "tenant",
+        "collection"
+      ]
+    },
+    "CloudCodeIndexGrantDto": {
+      "description": "Root-bound cloud source-egress grant projected through the App Server.",
+      "type": "object",
+      "properties": {
+        "destination": {
+          "$ref": "#/$defs/CloudCodeIndexDestinationDto"
+        },
+        "grantId": {
+          "type": "string"
+        },
+        "maxEgressBytes": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 1
+        },
+        "selection": {
+          "$ref": "#/$defs/CloudCodeIndexSelectionDto"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "grantId",
+        "destination",
+        "selection",
+        "maxEgressBytes"
+      ]
+    },
+    "CloudCodeIndexPreviewParams": {
+      "description": "Computes the current source-content egress shape without persisting consent or networking.",
+      "type": "object",
+      "properties": {
+        "maxEgressBytes": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 1
+        },
+        "selection": {
+          "$ref": "#/$defs/CloudCodeIndexSelectionDto"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "selection",
+        "maxEgressBytes"
+      ]
+    },
+    "CloudCodeIndexPreviewResult": {
+      "description": "Bounded local preview of the Workspace-produced chunks eligible for publication.",
+      "type": "object",
+      "properties": {
+        "chunkCount": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "egressBytes": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "fileCount": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "localGeneration": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "uploadUnitCount": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "withinLimit": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "localGeneration",
+        "fileCount",
+        "chunkCount",
+        "uploadUnitCount",
+        "egressBytes",
+        "withinLimit"
+      ]
+    },
+    "CloudCodeIndexSelectionDto": {
+      "description": "Workspace-relative source selection covered by a preview or grant.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "entireIndex"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "prefixes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "type": {
+              "type": "string",
+              "const": "pathPrefixes"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "prefixes"
+          ]
+        }
+      ]
+    },
+    "CloudCodeIndexStateDto": {
+      "description": "Durable publication/deletion phase of the selected cloud deployment.",
+      "type": "string",
+      "enum": [
+        "localOnly",
+        "granted",
+        "syncing",
+        "ready",
+        "stale",
+        "revoking",
+        "failed"
+      ]
+    },
+    "CloudCodeIndexStatusResult": {
+      "description": "Current cloud deployment and local/remote generation relationship.",
+      "type": "object",
+      "properties": {
+        "deploymentMode": {
+          "$ref": "#/$defs/CodeIndexDeploymentModeDto"
+        },
+        "grant": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CloudCodeIndexGrantDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "localGeneration": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "remoteGeneration": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "rootId": {
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/$defs/CloudCodeIndexStateDto"
+        },
+        "syncedLocalGeneration": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "deploymentMode",
+        "state",
+        "rootId",
+        "localGeneration"
+      ]
+    },
+    "CodeIndexChunkSpanDto": {
+      "description": "Exact UTF-8 byte and zero-based line coverage of one indexed chunk.",
+      "type": "object",
+      "properties": {
+        "endByte": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "endLineExclusive": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "startByte": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "startLine": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "startByte",
+        "endByte",
+        "startLine",
+        "endLineExclusive"
+      ]
+    },
+    "CodeIndexDeploymentModeDto": {
+      "description": "User-visible code-index deployment choice.",
+      "type": "string",
+      "enum": [
+        "localOnly",
+        "cloud"
+      ]
+    },
+    "CodeIndexSearchHitDto": {
+      "description": "One revision-bound lexical match from the local code index.",
+      "type": "object",
+      "properties": {
+        "chunkKey": {
+          "type": "string"
+        },
+        "content": {
+          "type": "string"
+        },
+        "contentHash": {
+          "type": "string"
+        },
+        "language": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "score": {
+          "type": "number",
+          "format": "double"
+        },
+        "sourceRevision": {
+          "type": "string"
+        },
+        "span": {
+          "$ref": "#/$defs/CodeIndexChunkSpanDto"
+        }
+      },
+      "required": [
+        "path",
+        "language",
+        "sourceRevision",
+        "chunkKey",
+        "contentHash",
+        "span",
+        "content",
+        "score"
+      ]
+    },
+    "CodeIndexSearchParams": {
+      "description": "Performs one bounded literal lookup against the workspace-side code index.",
+      "type": "object",
+      "properties": {
+        "maxResults": {
+          "type": "integer",
+          "format": "uint",
+          "maximum": 100,
+          "minimum": 1
+        },
+        "query": {
+          "type": "string",
+          "maxLength": 8192,
+          "minLength": 1
+        }
+      },
+      "required": [
+        "query",
+        "maxResults"
+      ]
+    },
+    "CodeIndexSearchResult": {
+      "description": "Bounded code-index matches paired with the generation that served them.",
+      "type": "object",
+      "properties": {
+        "hits": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CodeIndexSearchHitDto"
+          }
+        },
+        "status": {
+          "$ref": "#/$defs/CodeIndexStatusResult"
+        }
+      },
+      "required": [
+        "status",
+        "hits"
+      ]
+    },
+    "CodeIndexStateDto": {
+      "description": "Lifecycle state of the workspace-side code-index projection.",
+      "type": "string",
+      "enum": [
+        "empty",
+        "indexing",
+        "ready",
+        "stale",
+        "failed"
+      ]
+    },
+    "CodeIndexStatusResult": {
+      "description": "Published counters for the current or most recent usable code-index generation.",
+      "type": "object",
+      "properties": {
+        "fileLimitHit": {
+          "type": "boolean"
+        },
+        "generation": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "indexedChunkCount": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "indexedFileCount": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "indexedSourceBytes": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "rootId": {
+          "type": "string"
+        },
+        "skippedFileCount": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "sourceBytesLimitHit": {
+          "type": "boolean"
+        },
+        "state": {
+          "$ref": "#/$defs/CodeIndexStateDto"
+        },
+        "truncatedFileCount": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "state",
+        "rootId",
+        "generation",
+        "indexedFileCount",
+        "indexedChunkCount",
+        "indexedSourceBytes",
+        "skippedFileCount",
+        "truncatedFileCount",
+        "fileLimitHit",
+        "sourceBytesLimitHit"
+      ]
+    },
+    "CodeRetrievalDegradationDto": {
+      "description": "Non-fatal loss reported while preserving usable retrieval results.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "cloudQueryFailed"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "discarded": {
+              "type": "integer",
+              "format": "uint",
+              "minimum": 0
+            },
+            "type": {
+              "type": "string",
+              "const": "candidateVerificationFailed"
+            }
+          },
+          "required": [
+            "type",
+            "discarded"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "discarded": {
+              "type": "integer",
+              "format": "uint",
+              "minimum": 0
+            },
+            "type": {
+              "type": "string",
+              "const": "contentBudgetExceeded"
+            }
+          },
+          "required": [
+            "type",
+            "discarded"
+          ]
+        }
+      ]
+    },
+    "CodeRetrievalHitDto": {
+      "description": "One deduplicated, current-source-verified retrieval hit.",
+      "type": "object",
+      "properties": {
+        "content": {
+          "type": "string"
+        },
+        "contentHash": {
+          "type": "string"
+        },
+        "language": {
+          "type": "string"
+        },
+        "origins": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CodeRetrievalOriginDto"
+          }
+        },
+        "path": {
+          "type": "string"
+        },
+        "rrfScore": {
+          "type": "number",
+          "format": "double"
+        },
+        "sourceRevision": {
+          "type": "string"
+        },
+        "span": {
+          "$ref": "#/$defs/CodeIndexChunkSpanDto"
+        }
+      },
+      "required": [
+        "path",
+        "language",
+        "sourceRevision",
+        "contentHash",
+        "span",
+        "content",
+        "rrfScore",
+        "origins"
+      ]
+    },
+    "CodeRetrievalOriginDto": {
+      "description": "Candidate source that contributed to one fused retrieval hit.",
+      "type": "string",
+      "enum": [
+        "localLexical",
+        "cloudSemantic"
+      ]
+    },
+    "CodeRetrievalParams": {
+      "description": "Performs one bounded retrieval across every source enabled for the workspace.",
+      "type": "object",
+      "properties": {
+        "maxResults": {
+          "type": "integer",
+          "format": "uint",
+          "maximum": 100,
+          "minimum": 1
+        },
+        "query": {
+          "type": "string",
+          "maxLength": 8192,
+          "minLength": 1
+        }
+      },
+      "required": [
+        "query",
+        "maxResults"
+      ]
+    },
+    "CodeRetrievalResult": {
+      "description": "Fused code excerpts and explicit degradation facts paired with local index status.",
+      "type": "object",
+      "properties": {
+        "degradations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CodeRetrievalDegradationDto"
+          }
+        },
+        "hits": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CodeRetrievalHitDto"
+          }
+        },
+        "status": {
+          "$ref": "#/$defs/CodeIndexStatusResult"
+        }
+      },
+      "required": [
+        "status",
+        "hits",
+        "degradations"
       ]
     },
     "CommandId": {
@@ -2866,6 +3731,112 @@
       "required": [
         "commandId",
         "expectedRevision"
+      ]
+    },
+    "ContentDigest": {
+      "description": "Exact SHA-256 identity of one immutable content byte sequence.",
+      "type": "string"
+    },
+    "ContextCheckpoint": {
+      "description": "Verified durable summary of one exact prefix of Thread history.",
+      "type": "object",
+      "properties": {
+        "checkpointId": {
+          "$ref": "#/$defs/ContextCheckpointId"
+        },
+        "contextPolicyRevision": {
+          "type": "string"
+        },
+        "covered": {
+          "$ref": "#/$defs/ContextSourceRange"
+        },
+        "createdAtUnixMs": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "generatorModel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "promptRevision": {
+          "type": "string"
+        },
+        "referencedItems": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ItemId"
+          }
+        },
+        "schemaRevision": {
+          "type": "string"
+        },
+        "sourceDigest": {
+          "$ref": "#/$defs/ContextSourceDigest"
+        },
+        "sourceThreadId": {
+          "$ref": "#/$defs/ThreadId"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "verification": {
+          "$ref": "#/$defs/ContextCheckpointVerification"
+        }
+      },
+      "required": [
+        "checkpointId",
+        "sourceThreadId",
+        "covered",
+        "referencedItems",
+        "sourceDigest",
+        "summary",
+        "schemaRevision",
+        "promptRevision",
+        "contextPolicyRevision",
+        "createdAtUnixMs",
+        "verification"
+      ]
+    },
+    "ContextCheckpointId": {
+      "description": "Stable identity for one durable context-compaction checkpoint.",
+      "type": "string",
+      "minLength": 1
+    },
+    "ContextCheckpointVerification": {
+      "type": "string",
+      "enum": [
+        "verified"
+      ]
+    },
+    "ContextSourceDigest": {
+      "description": "SHA-256 digest of the canonical source facts covered by a checkpoint.",
+      "type": "string"
+    },
+    "ContextSourceRange": {
+      "description": "Inclusive durable Thread sequence range summarized by one checkpoint.",
+      "type": "object",
+      "properties": {
+        "endSequence": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "startSequence": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "startSequence",
+        "endSequence"
       ]
     },
     "DiffComputeParams": {
@@ -3552,6 +4523,33 @@
       "enum": [
         "builtIn",
         "user"
+      ]
+    },
+    "FrozenSkillActivation": {
+      "description": "Durable exact Skill provenance frozen before a Turn is accepted.",
+      "type": "object",
+      "properties": {
+        "catalogGeneration": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "contentDigest": {
+          "$ref": "#/$defs/ContentDigest"
+        },
+        "id": {
+          "$ref": "#/$defs/SkillId"
+        },
+        "reason": {
+          "$ref": "#/$defs/SkillActivationReason"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "contentDigest",
+        "catalogGeneration",
+        "reason"
       ]
     },
     "FsChanged": {
@@ -4451,6 +5449,22 @@
             "type",
             "url"
           ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "skill": {
+              "$ref": "#/$defs/SkillRef"
+            },
+            "type": {
+              "type": "string",
+              "const": "skill"
+            }
+          },
+          "required": [
+            "type",
+            "skill"
+          ]
         }
       ]
     },
@@ -4936,6 +5950,28 @@
         "displayName"
       ]
     },
+    "ModelContextConfigDto": {
+      "description": "Model-specific context limits used by Core's deterministic budget planner.",
+      "type": "object",
+      "properties": {
+        "autoCompactTokenLimit": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "contextWindow": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "contextWindow"
+      ]
+    },
     "ModelId": {
       "type": "string"
     },
@@ -5242,6 +6278,12 @@
           "format": "uint32",
           "minimum": 0
         },
+        "modelContext": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/ModelContextConfigDto"
+          }
+        },
         "provider": {
           "type": "string",
           "minLength": 1
@@ -5467,6 +6509,12 @@
         "agentInteractions": {
           "type": "boolean"
         },
+        "cloudCodeIndex": {
+          "type": "boolean"
+        },
+        "codeIndex": {
+          "type": "boolean"
+        },
         "documentCollaboration": {
           "type": "boolean"
         },
@@ -5514,6 +6562,8 @@
         "fileSystem",
         "git",
         "workspaceSearch",
+        "codeIndex",
+        "cloudCodeIndex",
         "terminal",
         "typst",
         "updateReplay",
@@ -6519,6 +7569,13 @@
         "update"
       ]
     },
+    "SkillActivationReason": {
+      "type": "string",
+      "enum": [
+        "explicit",
+        "automatic"
+      ]
+    },
     "SkillCatalogReloadDto": {
       "type": "string",
       "enum": [
@@ -6604,7 +7661,7 @@
           "$ref": "#/$defs/SkillCompatibilityDto"
         },
         "contentDigest": {
-          "type": "string"
+          "$ref": "#/$defs/ContentDigest"
         },
         "description": {
           "type": "string"
@@ -6692,6 +7749,23 @@
       "description": "Agent Skills-compatible name, unique within one Skill source.",
       "type": "string"
     },
+    "SkillRef": {
+      "description": "Catalog-owned Skill selection that never exposes a host filesystem path.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/SkillId"
+        },
+        "version": {
+          "$ref": "#/$defs/SkillVersionSelector"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "version"
+      ]
+    },
     "SkillSetEnablementParams": {
       "type": "object",
       "properties": {
@@ -6777,7 +7851,8 @@
       "type": "string",
       "enum": [
         "builtIn",
-        "user"
+        "user",
+        "workspace"
       ]
     },
     "SkillSourceRemoveParams": {
@@ -6828,6 +7903,39 @@
         "expectedRevision",
         "sourceId",
         "enablement"
+      ]
+    },
+    "SkillVersionSelector": {
+      "description": "Selects whether a new activation follows the current catalog or requires exact bytes.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "followLatest"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "digest": {
+              "$ref": "#/$defs/ContentDigest"
+            },
+            "type": {
+              "type": "string",
+              "const": "pinnedDigest"
+            }
+          },
+          "required": [
+            "type",
+            "digest"
+          ]
+        }
       ]
     },
     "SkillsChanged": {
@@ -7583,6 +8691,33 @@
         {
           "type": "object",
           "properties": {
+            "checkpoint": {
+              "$ref": "#/$defs/ContextCheckpoint"
+            },
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "type": {
+              "type": "string",
+              "const": "contextCheckpointCommitted"
+            }
+          },
+          "required": [
+            "type",
+            "threadId",
+            "checkpoint"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "activatedSkills": {
+              "type": "array",
+              "default": [],
+              "items": {
+                "$ref": "#/$defs/FrozenSkillActivation"
+              }
+            },
             "model": {
               "anyOf": [
                 {
@@ -7592,6 +8727,10 @@
                   "type": "null"
                 }
               ]
+            },
+            "policyRevision": {
+              "type": "string",
+              "default": "legacy-unversioned-policy"
             },
             "threadId": {
               "$ref": "#/$defs/ThreadId"

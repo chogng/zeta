@@ -1,0 +1,47 @@
+.zeta-workbench-auxiliarybar {
+  border-left: 1px solid var(--zeta-border);
+  background: var(--sessions-muted-surface);
+}
+
+.zeta-workbench-auxiliarybar > .zeta-workbench-part-content {
+  gap: 18px;
+  padding: 22px 18px;
+  overflow: auto;
+}
+
+.zeta-workbench-auxiliarybar > .zeta-workbench-part-content > h2 {
+  margin: 0;
+  color: var(--zeta-section-header-foreground, var(--zeta-foreground));
+  font-size: 11px;
+  font-weight: var(--zeta-font-weight-semi-bold, 600);
+  letter-spacing: .075em;
+  text-transform: uppercase;
+}
+
+.zeta-sessions-context-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 5px;
+  margin: 0;
+}
+
+.zeta-sessions-context-list dt {
+  color: var(--zeta-description-foreground, var(--zeta-foreground));
+  font-size: 11px;
+}
+
+.zeta-sessions-context-list dd {
+  margin: 0 0 10px;
+  overflow: hidden;
+  color: var(--zeta-foreground);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zeta-sessions-context-empty {
+  margin: 0;
+  color: var(--zeta-description-foreground, var(--zeta-foreground));
+  font-size: 12px;
+  line-height: 1.5;
+}

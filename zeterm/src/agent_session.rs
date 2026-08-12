@@ -640,7 +640,11 @@ fn write_file(
         return Err(anyhow!("{} is read-only", path.display()));
     }
     client
-        .write_file(FsWriteFileParams { path, content })
+        .write_file(FsWriteFileParams {
+            path,
+            content,
+            expected_revision: None,
+        })
         .map(|result| disk_version(result.metadata))
         .map_err(client_error)
 }

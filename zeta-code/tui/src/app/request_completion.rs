@@ -2,11 +2,15 @@ use super::ActiveConversation;
 use super::App;
 use super::AppEvent;
 use super::dispatch::ProductCommandOutput;
+use super::skill_slash_command_registry;
 use crate::components::composer::ComposerSubmission;
+use crate::components::composer::SlashCommandCatalog;
 use crate::features::config;
 use crate::features::interactions::InteractionResponse;
 use crate::features::sessions::ConversationChange;
 use crate::features::sessions::ConversationTranscript;
+use crate::features::skills;
+use crate::features::skills::SkillSelectionView;
 use crate::features::thread::ActiveTurnUpdate;
 use crate::features::thread::ThreadRequestScope;
 use crate::features::thread::ThreadSubscription;
@@ -17,9 +21,14 @@ use crate::features::thread::read_thread;
 use crate::features::thread::recover_active_turn;
 use crate::features::thread::resolve_interaction;
 use crate::features::thread::submit_prompt;
+use std::collections::BTreeMap;
 use zeta_app_server_client::AppServerRequestHandle;
 use zeta_app_server_client::ClientError;
+use zeta_app_server_protocol::protocol::skills::SkillCatalogReloadDto;
+use zeta_app_server_protocol::protocol::skills::SkillListParams;
+use zeta_app_server_protocol::protocol::slash_commands::SlashCommandDefinition;
 use zeta_app_server_protocol::protocol::turn::TurnStartResult;
+use zeta_protocol::SkillRef;
 use zeta_protocol::Thread;
 #[cfg(test)]
 use zeta_protocol::Turn;
@@ -36,6 +45,7 @@ pub(super) enum RequestCompletion {
         command: String,
         result: Result<config::PreferredModelUpdate, String>,
     },
+    SkillsRefreshed(Result<SkillRequestCompletion, String>),
     InteractionResolved(Result<Thread, ClientError>),
     ThreadRefreshed(Result<Thread, ClientError>),
     TurnInterrupted(Result<Thread, ClientError>),
@@ -52,6 +62,30 @@ pub(super) struct ConversationRequestCompletion {
 pub(super) struct ProductCommandCompletion {
     output: ProductCommandOutput,
     switched: Option<(ThreadSubscription, ThreadSwitch)>,
+}
+
+pub(super) struct SkillRequestCompletion {
+    slash_commands: SlashCommandCatalog,
+    skill_commands: BTreeMap<String, SkillRef>,
+    view: SkillSelectionView,
+}
+
+pub(super) fn refresh_skills_and_registry(
+    mut client: AppServerRequestHandle,
+    server_slash_commands: Vec<SlashCommandDefinition>,
+) -> Result<SkillRequestCompletion, String> {
+    let catalog = client
+        .list_skills(SkillListParams {
+            reload: SkillCatalogReloadDto::Cached,
+        })
+        .map_err(|error| error.to_string())?;
+    let registry = skill_slash_command_registry(&server_slash_commands, &catalog)
+        .map_err(|error| error.to_string())?;
+    Ok(SkillRequestCompletion {
+        slash_commands: registry.catalog,
+        skill_commands: registry.skills,
+        view: skills::skills_selection_view(&catalog),
+    })
 }
 
 pub(super) fn resolve_interaction_and_read(
@@ -213,6 +247,17 @@ pub(super) fn apply_request_completion(
         RequestCompletion::PreferredModelUpdated {
             result: Err(error), ..
         } => app.update(AppEvent::FailureReported(error)),
+        RequestCompletion::SkillsRefreshed(Ok(refresh)) => {
+            app.replace_slash_commands(refresh.slash_commands, refresh.skill_commands);
+            if app.skills_view_is_active() {
+                app.update(AppEvent::SkillsViewReplaced(refresh.view));
+            }
+        }
+        RequestCompletion::SkillsRefreshed(Err(error)) => {
+            if app.skills_view_is_active() {
+                app.update(AppEvent::FailureReported(error));
+            }
+        }
         RequestCompletion::TurnStarted(Ok((start, snapshot))) => {
             conversation.set_thread_sequence(snapshot.sequence.max(start.sequence));
             thread_subscription.confirm_sequence(snapshot.sequence);

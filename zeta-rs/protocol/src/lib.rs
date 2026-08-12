@@ -17,7 +17,8 @@ mod turn;
 pub use config::{ApprovalMode, Patch, Personality, SandboxMode, Theme, WebSearchMode};
 pub use error::{StableTurnError, StableTurnErrorCode};
 pub use ids::{
-    CommandId, InvalidIdentifier, ItemId, RequestId, SessionId, ThreadId, ToolCallId, TurnId,
+    CommandId, ContextCheckpointId, InvalidIdentifier, ItemId, RequestId, SessionId, ThreadId,
+    ToolCallId, TurnId,
 };
 pub use interaction::{
     ActionApprovalCapability, ActionApprovalCapabilityKind, ActionApprovalDecision,
@@ -38,11 +39,16 @@ pub use session::{
     Session, SessionCommand, SessionEvent, SessionStatus, SessionThread, SessionThreadStatus,
     SessionUpdate, SessionUpdateEnvelope, ThreadOrigin,
 };
-pub use skill::{InvalidSkillName, InvalidSkillSourceId, SkillId, SkillName, SkillSourceId};
+pub use skill::{
+    ContentDigest, FrozenSkillActivation, InvalidContentDigest, InvalidSkillName,
+    InvalidSkillSourceId, SkillActivationReason, SkillId, SkillName, SkillRef, SkillSourceId,
+    SkillVersionSelector,
+};
 pub use stream::{StreamCursor, StreamInstanceId};
 pub use thread::{
-    ItemDelta, Thread, ThreadCommand, ThreadEvent, ThreadStatus, ThreadUpdate,
-    ThreadUpdateEnvelope, ToolExecutionAuthority, ToolOutputStream,
+    ContextCheckpoint, ContextCheckpointVerification, ContextSourceDigest, ContextSourceRange,
+    InvalidContextSourceDigest, ItemDelta, Thread, ThreadCommand, ThreadEvent, ThreadStatus,
+    ThreadUpdate, ThreadUpdateEnvelope, ToolExecutionAuthority, ToolOutputStream,
 };
 pub use tool_execution::{
     ProcessExecutionOutput, ProcessExitStatus, SandboxDenialOutput, ToolExecutionOutput,

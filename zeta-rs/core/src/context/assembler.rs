@@ -1,31 +1,26 @@
-use crate::{CoreError, HarnessInstructions, ThreadSnapshot};
+use super::ContextPlan;
+use super::InstructionLayer;
+use crate::CoreError;
 use std::collections::BTreeMap;
 use zeta_protocol::{
     ContentPart, ImageDetail, InputItem, Message, MessageRole, ModelRequest, ThreadItem, ToolCall,
-    ToolChoice, ToolDefinition, ToolResult, TurnId,
+    ToolChoice, ToolResult, TurnId,
 };
 
-/// Derives one provider-independent model request from durable Thread history.
+/// Assembles one provider-independent model request from an immutable context plan.
 pub(crate) struct ContextAssembler;
 
 impl ContextAssembler {
-    pub(crate) fn assemble(
-        snapshot: &ThreadSnapshot,
-        tools: Vec<ToolDefinition>,
-        instructions: &HarnessInstructions,
-    ) -> Result<ModelRequest, CoreError> {
-        let mut input = Vec::new();
+    pub(crate) fn assemble(plan: &ContextPlan) -> Result<ModelRequest, CoreError> {
+        validate_diagnostics(plan)?;
+        let mut input = workspace_instruction_message(plan)
+            .into_iter()
+            .collect::<Vec<_>>();
+        input.extend(checkpoint_message(plan));
         let mut tool_names = BTreeMap::new();
         let mut active_user_turn = None;
 
-        if let Some(workspace_message) = instructions.workspace_message() {
-            input.push(InputItem::Message(Message::text(
-                MessageRole::User,
-                workspace_message,
-            )));
-        }
-
-        for item in &snapshot.items {
+        for item in plan.selected_items() {
             match item {
                 ThreadItem::UserMessage { turn_id, text, .. } => {
                     append_user_content(
@@ -107,22 +102,79 @@ impl ContextAssembler {
             ));
         }
 
-        let tool_choice = if tools.is_empty() {
+        let tool_choice = if plan.tools().is_empty() {
             ToolChoice::None
         } else {
             ToolChoice::Auto
         };
         Ok(ModelRequest {
-            instructions: instructions.model_instructions(),
+            instructions: resolved_instructions(plan),
             input,
-            tools,
+            tools: plan.tools().to_vec(),
             tool_choice,
             parallel_tool_calls: true,
             reasoning: None,
-            max_output_tokens: None,
+            max_output_tokens: plan.budget().max_output_tokens(),
             temperature: None,
         })
     }
+}
+
+fn validate_diagnostics(plan: &ContextPlan) -> Result<(), CoreError> {
+    if plan.budget().total_input() == super::ContextTokenCount::ZERO {
+        return Err(CoreError::Context(
+            "context plan diagnostics reported an empty model input".into(),
+        ));
+    }
+    for omission in plan.omitted_instructions() {
+        if omission.source_identity().trim().is_empty() {
+            return Err(CoreError::Context(
+                "omitted instruction diagnostics contain an empty source identity".into(),
+            ));
+        }
+        match omission.reason() {
+            super::plan::InstructionOmissionReason::BudgetPressure => {}
+        }
+    }
+    Ok(())
+}
+
+fn checkpoint_message(plan: &ContextPlan) -> Option<InputItem> {
+    plan.checkpoint().map(|checkpoint| {
+        InputItem::Message(Message::text(
+            MessageRole::User,
+            format!(
+                "<context_checkpoint id=\"{}\" source_digest=\"{}\">\n{}\n</context_checkpoint>",
+                checkpoint.checkpoint_id,
+                checkpoint.source_digest.as_str(),
+                checkpoint.summary.trim()
+            ),
+        ))
+    })
+}
+
+fn resolved_instructions(plan: &ContextPlan) -> Option<String> {
+    let body = plan
+        .instructions()
+        .iter()
+        .filter(|fragment| fragment.layer() < InstructionLayer::Workspace)
+        .map(|fragment| fragment.body().trim())
+        .filter(|body| !body.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n\n");
+    (!body.is_empty()).then_some(body)
+}
+
+fn workspace_instruction_message(plan: &ContextPlan) -> Option<InputItem> {
+    let body = plan
+        .instructions()
+        .iter()
+        .filter(|fragment| fragment.layer() >= InstructionLayer::Workspace)
+        .map(|fragment| fragment.body().trim())
+        .filter(|body| !body.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n\n");
+    (!body.is_empty()).then(|| InputItem::Message(Message::text(MessageRole::User, body)))
 }
 
 fn append_user_content(

@@ -1,65 +1,73 @@
 import "./media/sessionsPart.css";
-import type {
-  IWorkbenchSessionService,
-} from "../../../workbench/services/sessions/common/sessionService.js";
+import { Dimension } from "../../../base/browser/geometry.js";
+import type { ICommandService } from "../../../platform/commands/common/commands.js";
+import type { IContextMenuService } from "../../../platform/contextview/browser/contextMenu.js";
+import type { IContextViewService } from "../../../platform/contextview/browser/contextView.js";
+import type { IChatService } from "../../../workbench/services/chat/common/chatService.js";
+import type { IWorkbenchSessionService } from "../../../workbench/services/sessions/common/sessionService.js";
 import { WorkbenchPart } from "../../../workbench/browser/part.js";
+import type { SessionsViewSelection } from "../../services/view/common/sessionsViewService.js";
+import { SessionsChatView } from "../common/sessionsChatView.js";
 
-/**
- * Optional runtime status surface for the Sessions product layer.
- *
- * The regular Workbench does not mount this Part. Product-specific initial
- * Workbench composition is declared by the WorkbenchSession profiles; this
- * Part remains an optional session/thread status projection rather than a
- * second layout owner.
- */
+export interface SessionsPartOptions {
+  readonly ownerDocument: Document;
+  readonly sessionService: IWorkbenchSessionService;
+  readonly chatService: IChatService;
+  readonly contextMenuService: IContextMenuService;
+  readonly contextViewService: IContextViewService;
+  readonly commandService: ICommandService;
+  readonly activateSelection: (selection: SessionsViewSelection) => void;
+  readonly closeSelection: (selection: SessionsViewSelection) => void;
+}
+
+/** Passive primary Part that renders the visible Sessions supplied by its owner. */
 export class SessionsPart extends WorkbenchPart {
-  private readonly label: HTMLSpanElement;
-  private readonly sessionService: IWorkbenchSessionService;
+  private readonly chat: SessionsChatView;
+  private readonly heading: HTMLHeadingElement;
+  private readonly description: HTMLParagraphElement;
 
-  override get minimumHeight(): number { return 36; }
-  override get maximumHeight(): number { return 36; }
+  override get minimumWidth(): number { return 420; }
 
-  constructor(
-    ownerDocument: Document,
-    sessionService: IWorkbenchSessionService,
-  ) {
-    super("sessions", ownerDocument);
-    this.sessionService = sessionService;
-    this.label = ownerDocument.createElement("span");
-    this.label.className = "zeta-sessions-label";
-    this.contentElement.append(this.label);
-    this.own(sessionService.onDidChange(() => this.render()));
-    this.render();
+  constructor(options: SessionsPartOptions) {
+    super("sessions", options.ownerDocument);
+    const ownerDocument = options.ownerDocument;
+    const header = ownerDocument.createElement("div");
+    header.className = "zeta-sessions-surface-header";
+    this.heading = ownerDocument.createElement("h1");
+    this.description = ownerDocument.createElement("p");
+    header.append(this.heading, this.description);
+    this.chat = this.own(new SessionsChatView({
+      ownerDocument,
+      chatService: options.chatService,
+      sessionService: options.sessionService,
+      contextMenuService: options.contextMenuService,
+      contextViewService: options.contextViewService,
+      commandService: options.commandService,
+      activateSelection: options.activateSelection,
+      closeSelection: options.closeSelection,
+    }));
+    this.contentElement.append(header, this.chat.element);
+    this.updateVisibleSelections([], undefined);
   }
 
-  private render(): void {
-    this.label.removeAttribute("title");
-    const active = this.sessionService.active;
-    if (active) {
-      this.label.textContent = active.session.title;
-      return;
+  focus(): void { this.chat.focus(); }
+
+  updateVisibleSelections(selections: readonly SessionsViewSelection[], active: SessionsViewSelection | undefined): void {
+    if (active?.kind === "session") {
+      this.heading.textContent = active.active.session.title.trim() || "Agent session";
+      this.description.textContent = `Active thread ${active.active.threadId}`;
+    } else if (active?.kind === "untitled") {
+      this.heading.textContent = active.session.title.trim() || "New code session";
+      this.description.textContent = "This draft becomes a durable Session when the first message is sent.";
+    } else {
+      this.heading.textContent = "Agent sessions";
+      this.description.textContent = "Plan, implement, and review work in a focused agent workspace.";
     }
-    switch (this.sessionService.state) {
-      case "loading":
-        this.label.textContent = "Loading sessions…";
-        break;
-      case "creating":
-        this.label.textContent = "Creating session…";
-        break;
-      case "archiving":
-        this.label.textContent = "Closing session\u2026";
-        break;
-      case "stopping":
-        this.label.textContent = "Stopping session\u2026";
-        break;
-      case "error":
-        this.label.textContent = "Session unavailable";
-        this.label.title =
-          this.sessionService.error ?? "Session unavailable";
-        break;
-      case "ready":
-        this.label.textContent = "No session";
-        break;
-    }
+    this.chat.updateVisibleSelections(selections, active);
+  }
+
+  override layout(dimension: Dimension): void {
+    const bounds = this.chat.element.getBoundingClientRect();
+    this.chat.layout(new Dimension(bounds.width || dimension.width, bounds.height || dimension.height));
   }
 }

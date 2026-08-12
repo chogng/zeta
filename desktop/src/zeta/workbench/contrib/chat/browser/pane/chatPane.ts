@@ -5,6 +5,7 @@ import type { IContextViewService } from "../../../../../platform/contextview/br
 import type { IChatService } from "../../../../services/chat/common/chatService.js";
 import type { IActiveSessionThread, IUntitledChatSession, IWorkbenchSessionService, SessionId, ThreadId } from "../../../../services/sessions/common/sessionService.js";
 import type { ChatInputDelegate } from "../input/chatInput.js";
+import type { SkillReference } from "../../../../../platform/skills/common/skillApi.js";
 import { ChatInputPart } from "../input/chatInputPart.js";
 import { ChatListWidget } from "../list/chatListWidget.js";
 import { ChatPaneModel, type ChatPaneSelection } from "./chatPaneModel.js";
@@ -27,7 +28,7 @@ export class ChatPane extends DisposableOwner {
     this.model = this.own(new ChatPaneModel(chatService, selection, sessionService));
     this.listWidget = this.own(new ChatListWidget(ownerDocument));
     const inputDelegate: ChatInputDelegate = {
-      send: (text) => this.send(text),
+      send: (text, skills) => this.send(text, skills),
       executeCommand: (invocation) => commandService.executeCommand(invocation.commandId, invocation.argumentsText),
       interrupt: () => this.model.interrupt(),
       selectModel: (model) => this.model.selectModel(model),
@@ -87,11 +88,11 @@ export class ChatPane extends DisposableOwner {
     this.inputPart.focus();
   }
 
-  private async send(text: string): Promise<void> {
+  private async send(text: string, skills?: readonly SkillReference[]): Promise<void> {
     this.submittedMessage = true;
     this.updateConversationState();
     try {
-      await this.model.send(text);
+      await this.model.send(text, skills);
     } catch (error) {
       if (this.model.items.length === 0) {
         this.submittedMessage = false;
@@ -112,6 +113,7 @@ export class ChatPane extends DisposableOwner {
       canInterrupt: this.model.canInterrupt,
       models: this.model.models,
       slashCommands: this.model.slashCommands,
+      skillCommands: this.model.skillCommands,
       selectedModel: this.model.selectedModel,
       interaction: this.model.interaction,
     });

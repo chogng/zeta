@@ -56,9 +56,14 @@ fn committed(event: &ThreadEvent, turn_id: &TurnId) -> Option<TurnUpdate> {
         ThreadEvent::TurnInterrupted { turn_id, .. } => (turn_id, "Turn interrupted"),
         ThreadEvent::ThreadCreated { .. }
         | ThreadEvent::HistoryImported { .. }
+        | ThreadEvent::ContextCheckpointCommitted { .. }
         | ThreadEvent::InteractionRequested { .. } => {
             return None;
         }
     };
     (event_turn == turn_id).then(|| TurnUpdate::Progress(message.into()))
 }
+
+#[cfg(test)]
+#[path = "progress_tests.rs"]
+mod tests;

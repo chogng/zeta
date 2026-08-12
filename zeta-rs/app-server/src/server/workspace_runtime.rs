@@ -1,13 +1,17 @@
+use super::code_index_runtime::CodeIndexRuntime;
 use super::fs_watcher::FileSystemWatcher;
 use super::git_runtime::{GitRuntime, GitWatcher};
+use super::workspace_customizations::WorkspaceCustomizations;
 use super::{AppServer, AppServerThreadUpdates, RpcError};
-use crate::local::harness_instructions;
 use crate::local_tools::compose_local_tools;
 use crate::tool_composition::{ReloadableToolPorts, ToolPort, combine_tool_ports};
 use std::fmt;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, RwLock};
 use zeta_app_server_protocol::protocol::error::AppServerErrorName;
+use zeta_code_index::CodeIndexStorage;
+use zeta_code_index_cloud::CloudCodeIndexController;
+use zeta_code_index_cloud::CloudCodeIndexStorage;
 use zeta_config::ConfigStore;
 use zeta_core::{InterruptTurnRequest, SequenceExpectation, ThreadController, TurnExecutor};
 use zeta_file_system::{LocalFileSystem, WorkspaceFileSystem};
@@ -24,6 +28,9 @@ pub(super) struct WorkspaceRuntime {
     pub(super) _git_watcher: Option<GitWatcher>,
     pub(super) git: Option<Arc<GitRuntime>>,
     pub(super) workspace_search: Option<Arc<SearchService>>,
+    pub(super) code_index: Option<Arc<CodeIndexRuntime>>,
+    pub(super) cloud_code_index: Option<Arc<CloudCodeIndexController>>,
+    pub(super) _customizations: Option<Arc<WorkspaceCustomizations>>,
     pub(super) terminals: Option<Arc<crate::terminal_service::TerminalService>>,
     pub(super) turn_executor: TurnExecutor,
 }
@@ -37,6 +44,9 @@ impl WorkspaceRuntime {
             _git_watcher: None,
             git: None,
             workspace_search: None,
+            code_index: None,
+            cloud_code_index: None,
+            _customizations: None,
             terminals: None,
             turn_executor,
         }
@@ -86,19 +96,21 @@ impl WorkspaceRuntimeControl {
             return Ok(());
         }
 
-        self.tools.replace_local(None)?;
         let root = authorization.root().clone();
+        let cloud_code_index = runtime.cloud_code_index.clone();
         authorization.revoke();
         let terminals = runtime.terminals.take();
         let search = runtime.workspace_search.take();
         let git = runtime.git.take();
         let git_watcher = runtime._git_watcher.take();
+        runtime.cloud_code_index = None;
         runtime.authorization = Some(WorkspaceAuthorization::new(
             root,
             WorkspaceTrustDecision::Restricted,
         ));
         drop(runtime);
 
+        let tool_result = self.tools.replace_local(None);
         if let Some(terminals) = terminals {
             terminals.terminate_all();
         }
@@ -107,8 +119,14 @@ impl WorkspaceRuntimeControl {
         }
         drop(git_watcher);
         drop(git);
-        self.interrupt_active_turns()?;
-        Ok(())
+        let interrupt_result = self.interrupt_active_turns();
+        if let Some(controller) = cloud_code_index
+            && controller.revoke().is_err()
+        {
+            log::warn!("cloud code-index deletion remains pending after trust revocation");
+        }
+        tool_result?;
+        interrupt_result
     }
 
     fn interrupt_active_turns(&self) -> Result<(), WorkspaceRuntimeError> {
@@ -278,7 +296,7 @@ impl AppServer {
             ));
         }
         let tools = WorkspaceToolPorts::new(mcp)?;
-        let executor = TurnExecutor::new(
+        let mut executor = TurnExecutor::new(
             self.sessions.threads().clone(),
             Arc::clone(&self.model),
             tools.reloadable.tools(),
@@ -287,6 +305,9 @@ impl AppServer {
         .with_thread_updates(Arc::new(AppServerThreadUpdates {
             updates: Arc::clone(&self.updates),
         }));
+        if let Some(skills) = &self.skills {
+            executor = executor.with_skill_instructions_provider(skills.clone());
+        }
         self.workspace_runtime
             .write()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -380,16 +401,26 @@ impl AppServer {
     ) -> Result<PathBuf, WorkspaceRuntimeError> {
         let workspace = authorization.root().clone();
         let canonical_root = workspace.canonical_path().to_path_buf();
+        self.revoke_cloud_index_for_restricted_root(&workspace);
         let file_system: Arc<dyn WorkspaceFileSystem> =
             Arc::new(LocalFileSystem::new(workspace.clone()));
-        let file_system_watcher = FileSystemWatcher::start(workspace, Arc::clone(&self.updates))
-            .map_err(|error| {
-                WorkspaceRuntimeError::Failed(format!(
-                    "failed to initialize filesystem watcher: {error}"
-                ))
-            })?;
+        let code_index = self.open_code_index_runtime(workspace.clone())?;
+        self.retry_persisted_cloud_index_deletion(&code_index);
+        let customizations = WorkspaceCustomizations::discover(&canonical_root);
+        let file_system_watcher = FileSystemWatcher::start_with_observers(
+            workspace,
+            Arc::clone(&self.updates),
+            Arc::clone(&code_index),
+            customizations.clone(),
+        )
+        .map_err(|error| {
+            WorkspaceRuntimeError::Failed(format!(
+                "failed to initialize filesystem watcher: {error}"
+            ))
+        })?;
 
         host.tools.replace_local(None)?;
+        self.bind_workspace_skills(&canonical_root)?;
         let mut current = self
             .workspace_runtime
             .write()
@@ -401,11 +432,14 @@ impl AppServer {
             _git_watcher: None,
             git: None,
             workspace_search: None,
+            code_index: Some(code_index),
+            cloud_code_index: None,
+            _customizations: Some(Arc::clone(&customizations)),
             terminals: None,
             turn_executor: current
                 .turn_executor
                 .clone()
-                .with_instructions(Arc::new(harness_instructions(&canonical_root))),
+                .with_instructions_provider(customizations),
         };
         let previous = std::mem::replace(&mut *current, next);
         drop(current);
@@ -422,6 +456,10 @@ impl AppServer {
         let workspace = authorization.root().clone();
         let file_system: Arc<dyn WorkspaceFileSystem> =
             Arc::new(LocalFileSystem::new(workspace.clone()));
+        let code_index = self.open_code_index_runtime(workspace.clone())?;
+        let cloud_code_index = self.open_cloud_code_index_controller(&code_index);
+        let canonical_root = workspace.canonical_path().to_path_buf();
+        let customizations = WorkspaceCustomizations::discover(&canonical_root);
         let repository_mutation = authorization
             .require(WorkspaceCapability::MutateRepository)
             .map_err(|_| WorkspaceRuntimeError::TrustRequired)?;
@@ -429,16 +467,18 @@ impl AppServer {
             GitRuntime::new(repository_mutation, Arc::clone(&self.updates)).map_err(|_| {
                 WorkspaceRuntimeError::Failed("failed to initialize Git runtime".into())
             })?;
-        let file_system_watcher =
-            FileSystemWatcher::start(workspace.clone(), Arc::clone(&self.updates)).map_err(
-                |error| {
-                    WorkspaceRuntimeError::Failed(format!(
-                        "failed to initialize filesystem watcher: {error}"
-                    ))
-                },
-            )?;
+        let file_system_watcher = FileSystemWatcher::start_with_observers(
+            workspace.clone(),
+            Arc::clone(&self.updates),
+            Arc::clone(&code_index),
+            customizations.clone(),
+        )
+        .map_err(|error| {
+            WorkspaceRuntimeError::Failed(format!(
+                "failed to initialize filesystem watcher: {error}"
+            ))
+        })?;
         let local_port = ToolPort::local(local.tools, local.policy);
-        let canonical_root = workspace.canonical_path().to_path_buf();
         let (existing_search, existing_terminals) = {
             let current = self
                 .workspace_runtime
@@ -475,6 +515,7 @@ impl AppServer {
             ),
         };
         host.tools.replace_local(Some(local_port))?;
+        self.bind_workspace_skills(&canonical_root)?;
         let mut current = self
             .workspace_runtime
             .write()
@@ -486,11 +527,14 @@ impl AppServer {
             _git_watcher: None,
             git: Some(Arc::clone(&git)),
             workspace_search: Some(Arc::clone(&workspace_search)),
+            code_index: Some(code_index),
+            cloud_code_index,
+            _customizations: Some(Arc::clone(&customizations)),
             terminals: Some(Arc::clone(&terminals)),
             turn_executor: current
                 .turn_executor
                 .clone()
-                .with_instructions(Arc::new(harness_instructions(&canonical_root))),
+                .with_instructions_provider(customizations),
         };
         let previous = std::mem::replace(&mut *current, next);
         drop(current);
@@ -502,6 +546,23 @@ impl AppServer {
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         runtime._git_watcher = Some(git_watcher);
         Ok(canonical_root)
+    }
+
+    fn bind_workspace_skills(
+        &self,
+        workspace_root: &std::path::Path,
+    ) -> Result<(), WorkspaceRuntimeError> {
+        let Some(skills) = &self.skills else {
+            return Ok(());
+        };
+        skills
+            .bind_workspace_root(workspace_root.to_path_buf())
+            .map(|_| ())
+            .map_err(|error| {
+                WorkspaceRuntimeError::Failed(format!(
+                    "failed to bind Workspace Skill source: {error}"
+                ))
+            })
     }
 
     fn workspace_authority_is_current(&self, authorization: &WorkspaceAuthorization) -> bool {
@@ -517,7 +578,7 @@ impl AppServer {
             })
     }
 
-    pub(super) fn workspace_features(&self) -> (bool, bool, bool, bool) {
+    pub(super) fn workspace_features(&self) -> (bool, bool, bool, bool, bool, bool) {
         let runtime = self
             .workspace_runtime
             .read()
@@ -527,8 +588,127 @@ impl AppServer {
             switchable || runtime.file_system.is_some(),
             switchable || runtime.git.is_some(),
             switchable || runtime.workspace_search.is_some(),
+            switchable || runtime.code_index.is_some(),
+            (switchable && !self.cloud_code_index_providers.is_empty())
+                || runtime.cloud_code_index.is_some(),
             switchable || runtime.terminals.is_some(),
         )
+    }
+
+    fn open_code_index_runtime(
+        &self,
+        workspace: WorkspaceRoot,
+    ) -> Result<Arc<CodeIndexRuntime>, WorkspaceRuntimeError> {
+        let trust_id = workspace.trust_id();
+        let digest = trust_id
+            .as_str()
+            .strip_prefix("sha256:")
+            .unwrap_or(trust_id.as_str());
+        let storage = self.code_index_storage_root.as_ref().map_or(
+            CodeIndexStorage::Memory,
+            |storage_root| {
+                CodeIndexStorage::Persistent(storage_root.join(format!("{digest}.sqlite3")))
+            },
+        );
+        match CodeIndexRuntime::open(workspace.clone(), storage) {
+            Ok(runtime) => Ok(runtime),
+            Err(persistent_error) if self.code_index_storage_root.is_some() => {
+                log::warn!(
+                    "persistent code-index cache is unavailable; using memory projection: {persistent_error}"
+                );
+                CodeIndexRuntime::open(workspace, CodeIndexStorage::Memory).map_err(|error| {
+                    WorkspaceRuntimeError::Failed(format!("failed to open code index: {error}"))
+                })
+            }
+            Err(error) => Err(WorkspaceRuntimeError::Failed(format!(
+                "failed to open code index: {error}"
+            ))),
+        }
+    }
+
+    pub(super) fn code_index_service(&self) -> Result<Arc<CodeIndexRuntime>, RpcError> {
+        self.workspace_runtime
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .code_index
+            .clone()
+            .ok_or_else(|| RpcError::new(-32090, AppServerErrorName::CodeIndexUnavailable))
+    }
+
+    fn open_cloud_code_index_controller(
+        &self,
+        code_index: &Arc<CodeIndexRuntime>,
+    ) -> Option<Arc<CloudCodeIndexController>> {
+        if self.cloud_code_index_providers.is_empty() {
+            return None;
+        }
+        let trust_id = code_index.root().trust_id();
+        let digest = trust_id
+            .as_str()
+            .strip_prefix("sha256:")
+            .unwrap_or(trust_id.as_str());
+        let storage = self
+            .cloud_code_index_storage_root
+            .as_ref()
+            .map_or(CloudCodeIndexStorage::Memory, |root| {
+                CloudCodeIndexStorage::Persistent(root.join(format!("{digest}.sqlite3")))
+            });
+        match CloudCodeIndexController::open(
+            code_index.index(),
+            self.cloud_code_index_providers.clone(),
+            storage,
+        ) {
+            Ok(controller) => Some(controller),
+            Err(error) => {
+                log::warn!("cloud code-index authority is unavailable: {error}");
+                None
+            }
+        }
+    }
+
+    fn revoke_cloud_index_for_restricted_root(&self, workspace: &WorkspaceRoot) {
+        let mut runtime = self
+            .workspace_runtime
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let same_root = runtime
+            .authorization
+            .as_ref()
+            .is_some_and(|authorization| authorization.root() == workspace);
+        let controller = if same_root {
+            if let Some(authorization) = runtime.authorization.as_ref() {
+                authorization.revoke();
+            }
+            runtime.cloud_code_index.take()
+        } else {
+            None
+        };
+        drop(runtime);
+        if let Some(controller) = controller
+            && controller.revoke().is_err()
+        {
+            log::warn!("cloud code-index deletion remains pending after trust revocation");
+        }
+    }
+
+    fn retry_persisted_cloud_index_deletion(&self, code_index: &Arc<CodeIndexRuntime>) {
+        let Some(controller) = self.open_cloud_code_index_controller(code_index) else {
+            return;
+        };
+        if controller.revoke().is_err() {
+            log::warn!("cloud code-index deletion remains pending while Workspace is restricted");
+        }
+    }
+
+    pub(super) fn cloud_code_index_service(
+        &self,
+    ) -> Result<Arc<CloudCodeIndexController>, RpcError> {
+        self.workspace_runtime
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .cloud_code_index
+            .clone()
+            .ok_or_else(|| RpcError::new(-32093, AppServerErrorName::CloudCodeIndexUnavailable))
     }
 
     pub(super) fn file_system_service(&self) -> Result<Arc<dyn WorkspaceFileSystem>, RpcError> {

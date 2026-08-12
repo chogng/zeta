@@ -18,12 +18,12 @@ export const NoWorkbenchPartFrameInsets: WorkbenchPartFrameInsets = {
 };
 
 /** Adapts one Workbench Part to the generic Grid view contract. */
-export class WorkbenchPartView {
+export class WorkbenchPartView<TPartId extends string = WorkbenchPartId> {
   readonly frame: HTMLDivElement;
   private frameInsets = NoWorkbenchPartFrameInsets;
 
   constructor(
-    readonly partId: WorkbenchPartId,
+    readonly partId: TPartId,
     readonly part: WorkbenchPart,
   ) {
     const frame = part.element.ownerDocument.createElement("div");
@@ -83,7 +83,7 @@ export class WorkbenchPartView {
     this.frame.style.paddingLeft = `${insets.left}px`;
   }
 
-  toJSON(): WorkbenchPartId {
+  toJSON(): TPartId {
     return this.partId;
   }
 }

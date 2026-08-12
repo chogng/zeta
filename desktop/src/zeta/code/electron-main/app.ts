@@ -80,6 +80,7 @@ import {
 import { NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL } from "../../platform/native/common/nativeHost.js";
 import { searchIpcRoutes } from "../../platform/search/electron-main/searchIpcRoutes.js";
 import { sessionIpcRoutes } from "../../platform/sessions/electron-main/sessionIpcRoutes.js";
+import { skillIpcRoutes } from "../../platform/skills/electron-main/skillIpcRoutes.js";
 import { sessionsWindowIpcRoutes } from "../../sessions/electron-main/sessionsWindowIpc.js";
 import {
   StateService,
@@ -392,6 +393,7 @@ export class ZetaApplication extends DisposableOwner {
     const ipcRoutes = [
       ...appServerIpcRoutes(supervisor),
       ...sessionIpcRoutes(supervisor),
+      ...skillIpcRoutes(supervisor),
       ...typstIpcRoutes(supervisor),
       ...fileIpcRoutes(supervisor),
       ...extensionIpcRoutes(supervisor),
@@ -541,6 +543,7 @@ export class ZetaApplication extends DisposableOwner {
       [
         ...appServerIpcRoutes(supervisor),
         ...sessionIpcRoutes(supervisor),
+        ...skillIpcRoutes(supervisor),
         ...sessionsWindowIpcRoutes({
           openSessionsWindow: () => this.openSessionsWindow(supervisor),
           returnToWorkbench: () => this.returnToMainWindow(window),

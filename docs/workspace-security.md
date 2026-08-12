@@ -2,7 +2,9 @@
 
 > 本文拥有跨 crate 的工作区身份、目录作用域和信任语义。Rust 精确契约由
 > [`zeta-rs/workspace/README.md`](../zeta-rs/workspace/README.md) 与
-> [`zeta-rs/add-dir/README.md`](../zeta-rs/add-dir/README.md) 分别维护。
+> [`zeta-rs/add-dir/README.md`](../zeta-rs/add-dir/README.md) 分别维护。Agent 自定义 artifact 与
+> 外部 Import/source registration 的生命周期由
+> [`agent-customizations.md`](agent-customizations.md) 维护。
 
 ## 快速理解
 
@@ -78,7 +80,7 @@ App Server 负责在 safe point 解析每个 root 的 capability 与 trust、协
 | `/cd` | ✅ | 以新主目录重新解析 | 加载新主目录的完整项目配置 | 直到再次切换 |
 
 目标配置激活必须与文件访问授权分离。命令行或会话添加的目录可以按 allowlist 贡献 Skills、
-Subagents、`enabledPlugins` 和 `extraKnownMarketplaces`；Hook、大部分 permission、output style、
+Agent definitions、`enabledPlugins` 和 `extraKnownMarketplaces`；Hook、大部分 permission、output style、
 command、`CLAUDE.md`、`.claude/rules/` 与 `CLAUDE.local.md` 默认不生效。Host compatibility
 switch 可以允许最后三类 instruction，但它不能扩大 Files 权限。持久 `additionalDirectories`
 始终是 file-access-only，不执行任何附加目录配置发现。

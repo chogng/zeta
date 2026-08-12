@@ -8,6 +8,7 @@ import { createViteDevGitApi } from "../../git/browser/gitApi.js";
 import type { IRendererHost } from "../../renderer/common/rendererHost.js";
 import { createViteDevWorkspaceSearchApi } from "../../search/browser/searchApi.js";
 import { createViteDevModelApi, createViteDevSessionApi, createViteDevThreadApi, createViteDevTurnApi } from "../../sessions/browser/sessionApi.js";
+import { createViteDevSkillApi } from "../../skills/browser/skillApi.js";
 import { ViteDevTerminalProcessService } from "../../terminal/browser/viteDevTerminalProcessService.js";
 import { createViteDevTypstApi } from "../../typst/browser/typstApi.js";
 import { createViteDevDocumentCollaborationApi } from "../../collaboration/browser/documentCollaborationApi.js";
@@ -43,6 +44,7 @@ function createRendererHost(connection: ViteDevAppServerConnection): IRendererHo
     model: createViteDevModelApi(connection),
     thread: createViteDevThreadApi(connection),
     turn: createViteDevTurnApi(connection),
+    skills: createViteDevSkillApi(connection),
     typst: createViteDevTypstApi(connection),
     documentCollaboration: createViteDevDocumentCollaborationApi(connection),
     resource,

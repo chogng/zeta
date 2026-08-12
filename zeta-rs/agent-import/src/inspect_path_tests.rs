@@ -74,6 +74,10 @@ fn discovers_claude_project_items_with_review_categories() {
             && candidate.review() == ImportReviewCategory::Configuration
     }));
     assert!(inspection.candidates().iter().any(|candidate| {
+        candidate.kind() == ImportItemKind::Agents
+            && candidate.review() == ImportReviewCategory::Configuration
+    }));
+    assert!(inspection.candidates().iter().any(|candidate| {
         candidate.kind() == ImportItemKind::McpServers
             && candidate.review() == ImportReviewCategory::Connection
     }));

@@ -7,7 +7,7 @@ mod service;
 mod types;
 
 pub use error::FileSystemError;
-pub use find_up::{find_nearest_ancestor_with_markers, FindUpErrorPolicy};
+pub use find_up::{FindUpErrorPolicy, find_nearest_ancestor_with_markers};
 pub use local::LocalFileSystem;
 pub use service::WorkspaceFileSystem;
 pub use types::file_revision;

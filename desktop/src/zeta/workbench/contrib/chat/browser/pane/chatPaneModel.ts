@@ -1,6 +1,7 @@
 import { Emitter, type Event } from "../../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
-import type { AgentResponse, IChatService, ModelCatalogEntry, SlashCommandDefinition, Thread, ThreadItem, ThreadUpdateEnvelope, Turn, TurnInteraction } from "../../../../services/chat/common/chatService.js";
+import type { AgentResponse, IChatService, ModelCatalogEntry, SkillCommandDefinition, SlashCommandDefinition, Thread, ThreadItem, ThreadUpdateEnvelope, Turn, TurnInteraction } from "../../../../services/chat/common/chatService.js";
+import type { SkillReference } from "../../../../../platform/skills/common/skillApi.js";
 import type { IActiveSessionThread, IUntitledChatSession, IWorkbenchSessionService, ModelRef, SessionId, ThreadId } from "../../../../services/sessions/common/sessionService.js";
 import { chatListItem, type IChatListItem } from "../list/chatListItems.js";
 
@@ -42,6 +43,7 @@ export class ChatPaneModel extends DisposableOwner {
   private streamSequence = 0;
   private _models: readonly ModelCatalogEntry[] = [];
   private _slashCommands: readonly SlashCommandDefinition[] = [];
+  private _skillCommands: readonly SkillCommandDefinition[] = [];
 
   readonly onDidChange: Event<void> = this._onDidChange.event;
 
@@ -52,6 +54,7 @@ export class ChatPaneModel extends DisposableOwner {
     this.selection = selection;
     this.own(chatService.onDidUpdateThread((update) => this.acceptUpdate(update)));
     this.own(chatService.onDidBecomeReady(() => void this.reconnect()));
+    this.own(chatService.onDidChangeSkills(() => void this.loadSkillCommands()));
     this.defer(() => {
       this.disposed = true;
       this.generation++;
@@ -93,6 +96,10 @@ export class ChatPaneModel extends DisposableOwner {
 
   get slashCommands(): readonly SlashCommandDefinition[] {
     return this._slashCommands;
+  }
+
+  get skillCommands(): readonly SkillCommandDefinition[] {
+    return this._skillCommands;
   }
 
   get selectedModel(): ModelRef | undefined {
@@ -161,7 +168,7 @@ export class ChatPaneModel extends DisposableOwner {
     await this.sessionService.setModel(this.selection.active.session.sessionId, model);
   }
 
-  async send(text: string): Promise<void> {
+  async send(text: string, skills?: readonly SkillReference[]): Promise<void> {
     const input = text.trim();
     if (!input) return;
     try {
@@ -179,6 +186,7 @@ export class ChatPaneModel extends DisposableOwner {
         threadId: active.threadId,
         expectedSequence: thread.sequence,
         text: input,
+        skills,
       });
       await this.refreshThread();
       this.setState("ready");
@@ -247,10 +255,20 @@ export class ChatPaneModel extends DisposableOwner {
   }
 
   private async loadCatalogs(): Promise<void> {
-    const [models, slashCommands] = await Promise.allSettled([this.chatService.listModels(), this.chatService.listSlashCommands()]);
+    const [models, slashCommands, skillCommands] = await Promise.allSettled([this.chatService.listModels(), this.chatService.listSlashCommands(), this.chatService.listSkillCommands()]);
     this._models = models.status === "fulfilled" ? models.value : [];
     this._slashCommands = slashCommands.status === "fulfilled" ? slashCommands.value : [];
+    this._skillCommands = skillCommands.status === "fulfilled" ? skillCommands.value : [];
     this._onDidChange.fire();
+  }
+
+  private async loadSkillCommands(): Promise<void> {
+    try {
+      this._skillCommands = await this.chatService.listSkillCommands();
+      this._onDidChange.fire();
+    } catch {
+      // Keep the last valid catalog when a transient refresh fails.
+    }
   }
 
   private async subscribe(active: IActiveSessionThread): Promise<void> {

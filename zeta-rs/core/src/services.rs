@@ -1,3 +1,4 @@
+use crate::ContextBudget;
 use crate::CoreError;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
@@ -49,6 +50,15 @@ pub enum ModelSelection<'a> {
 /// Thread state or mutable product configuration. Implementations should observe `cancellation`
 /// before beginning expensive work and at every safe checkpoint supported by their transport.
 pub trait ModelService: Send + Sync {
+    /// Returns the immutable context budget for the selected model invocation.
+    ///
+    /// Implementations should return a Core-managed budget only when the model window and product
+    /// output reservation are known. Unknown or unlisted models retain provider-managed overflow
+    /// behavior rather than receiving a fabricated context limit.
+    fn context_budget(&self, _: ModelSelection<'_>) -> Result<ContextBudget, CoreError> {
+        Ok(ContextBudget::provider_managed())
+    }
+
     fn invoke(
         &self,
         selection: ModelSelection<'_>,

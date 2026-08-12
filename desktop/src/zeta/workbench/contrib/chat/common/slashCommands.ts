@@ -1,11 +1,13 @@
-import type { SlashCommandDefinition } from "../../../services/chat/common/chatService.js";
+import type { SkillCommandDefinition, SlashCommandDefinition } from "../../../services/chat/common/chatService.js";
+import type { SkillReference } from "../../../../platform/skills/common/skillApi.js";
 import { NEW_CHAT_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID } from "./chat.js";
 
 const SLASH_COMMAND_NAME = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 
 export type SlashCommandBinding =
   | { readonly origin: "local"; readonly actionId: string }
-  | { readonly origin: "server" };
+  | { readonly origin: "server" }
+  | { readonly origin: "skill"; readonly skill: SkillReference; readonly source: string };
 
 export type SlashCommandInput =
   | { readonly kind: "message"; readonly text: string }
@@ -27,6 +29,8 @@ interface CatalogEntry {
 /** Owns the current validated Slash Commands snapshot shared by parsing and completion. */
 export class SlashCommandCatalog {
   private readonly local: readonly LocalSlashCommandRegistration[];
+  private server: readonly SlashCommandDefinition[] = Object.freeze([]);
+  private skills: readonly SkillCommandDefinition[] = Object.freeze([]);
   private entriesByName: ReadonlyMap<string, CatalogEntry> = new Map();
   private _commands: readonly SlashCommandDefinition[] = Object.freeze([]);
 
@@ -40,6 +44,16 @@ export class SlashCommandCatalog {
   }
 
   setServerCommands(server: readonly SlashCommandDefinition[]): void {
+    this.server = Object.freeze([...server]);
+    this.rebuild();
+  }
+
+  setSkillCommands(skills: readonly SkillCommandDefinition[]): void {
+    this.skills = Object.freeze([...skills]);
+    this.rebuild();
+  }
+
+  private rebuild(): void {
     const entriesByName = new Map<string, CatalogEntry>();
     const commands: SlashCommandDefinition[] = [];
     const append = (command: SlashCommandDefinition, binding: SlashCommandBinding, aliases: readonly string[] = []): void => {
@@ -57,7 +71,14 @@ export class SlashCommandCatalog {
       if (!local.actionId.trim()) throw new TypeError(`Local Slash Command /${local.definition.name} requires an action ID`);
       append(local.definition, Object.freeze({ origin: "local", actionId: local.actionId }), local.aliases);
     }
-    for (const command of server) append(command, Object.freeze({ origin: "server" }));
+    for (const command of this.server) append(command, Object.freeze({ origin: "server" }));
+    for (const skill of this.skills) {
+      if (entriesByName.has(skill.name)) continue;
+      append(
+        { name: skill.name, description: skill.description, argumentMode: "optional" },
+        Object.freeze({ origin: "skill", skill: skill.skill, source: skill.source }),
+      );
+    }
     this.entriesByName = entriesByName;
     this._commands = Object.freeze(commands);
   }

@@ -28,6 +28,7 @@ pub(super) struct ToolExecutionContext<'a> {
     thread_id: &'a ThreadId,
     turn_id: &'a TurnId,
     item_id: &'a ItemId,
+    frozen_policy_revision: &'a str,
     cancellation: &'a CancellationToken,
 }
 
@@ -36,12 +37,14 @@ impl<'a> ToolExecutionContext<'a> {
         thread_id: &'a ThreadId,
         turn_id: &'a TurnId,
         item_id: &'a ItemId,
+        frozen_policy_revision: &'a str,
         cancellation: &'a CancellationToken,
     ) -> Self {
         Self {
             thread_id,
             turn_id,
             item_id,
+            frozen_policy_revision,
             cancellation,
         }
     }
@@ -272,7 +275,11 @@ impl<'a> ToolExecutionOrchestrator<'a> {
                 denial_reason.clone(),
                 denial_output,
             ));
-        let decision = match self.policy.decide(&second_review, context.cancellation) {
+        let decision = match self.policy.decide_for_turn(
+            context.frozen_policy_revision,
+            &second_review,
+            context.cancellation,
+        ) {
             Ok(decision) => decision,
             Err(error @ CoreError::Cancelled(_)) => return Err(error),
             Err(error) => {

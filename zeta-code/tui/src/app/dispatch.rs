@@ -312,19 +312,21 @@ fn apply_conversation_change(app: &mut App, change: ConversationChange, snapshot
 }
 
 fn text_arguments(arguments: &[ComposerInput]) -> Result<String, CommandExecutionError> {
-    if arguments
-        .iter()
-        .any(|argument| matches!(argument, ComposerInput::Image { .. }))
-    {
+    if arguments.iter().any(|argument| {
+        matches!(
+            argument,
+            ComposerInput::Image { .. } | ComposerInput::Skill { .. }
+        )
+    }) {
         return Err(CommandExecutionError(
-            "product commands do not accept image arguments".into(),
+            "product commands do not accept image arguments or Skill selections".into(),
         ));
     }
     Ok(arguments
         .iter()
         .filter_map(|argument| match argument {
             ComposerInput::Text(text) => Some(text.as_str()),
-            ComposerInput::Image { .. } => None,
+            ComposerInput::Image { .. } | ComposerInput::Skill { .. } => None,
         })
         .collect::<Vec<_>>()
         .join(" ")

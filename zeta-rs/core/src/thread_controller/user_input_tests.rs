@@ -27,9 +27,12 @@ fn rejects_mismatched_image_mime_type() {
 #[test]
 fn rejects_local_paths_at_the_core_boundary() {
     assert!(matches!(
-        validate(&[UserInput::LocalImage {
-            path: "/tmp/image.png".into(),
-        }]),
+        validate(
+            &[UserInput::LocalImage {
+                path: "/tmp/image.png".into(),
+            }],
+            &[],
+        ),
         Err(CoreError::InvalidInput(_))
     ));
 }

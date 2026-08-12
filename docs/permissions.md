@@ -4,6 +4,8 @@
 > 不变量的权威文档。
 >
 > 文档状态：当前契约 + 明确的当前限制 + 计划演进。
+> Agent 自定义 artifact、外部 Import 与只读 source registration 的领域边界见
+> [`agent-customizations.md`](agent-customizations.md)。
 
 ## 快速理解
 

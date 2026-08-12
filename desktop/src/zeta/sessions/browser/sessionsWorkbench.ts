@@ -1,10 +1,16 @@
 import "./media/sessionsWorkbench.css";
+import "./actions/sessionsChatActions.js";
 import { DisposableOwner } from "../../base/common/lifecycle.js";
 import type { ProductConfiguration } from "../../product/common/product.js";
+import type { IConfigurationApi } from "../../platform/configuration/common/configuration.js";
+import type { IKeybindingsResourceApi } from "../../platform/keybinding/common/keybindingsResource.js";
 import type { IRendererHost } from "../../platform/renderer/common/rendererHost.js";
+import { IStorageService } from "../../platform/storage/common/storage.js";
+import type { WorkbenchContextMenuServiceFactory } from "../../workbench/services/contextmenu/common/contextMenuService.js";
+import { BrowserStorageService } from "../../workbench/services/storage/browser/storageService.js";
 import type { SessionsProfile } from "../common/sessionsProfile.js";
 import type { ISessionsWindowApi } from "../common/sessionsWindow.js";
-import { CodeSessionsWorkbench } from "./code/codeSessionsWorkbench.js";
+import { CodeSessionsWorkbench, type CodeSessionsWorkbenchOptions } from "./code/codeSessionsWorkbench.js";
 import { SessionsRuntime } from "./common/sessionsRuntime.js";
 import { bindSessionsTheme } from "./common/sessionsTheme.js";
 
@@ -13,6 +19,9 @@ export interface SessionsWorkbenchOptions {
   readonly profile: SessionsProfile;
   readonly api: IRendererHost;
   readonly sessionsWindowApi?: ISessionsWindowApi;
+  readonly configurationApi?: IConfigurationApi;
+  readonly keybindingsResourceApi?: IKeybindingsResourceApi;
+  readonly createContextMenuService: WorkbenchContextMenuServiceFactory;
   readonly container: HTMLElement | null;
 }
 
@@ -27,19 +36,38 @@ export class SessionsWorkbench extends DisposableOwner {
     }
     const container = options.container;
     if (!container) throw new Error("Sessions renderer requires an #app container");
+    const ownerWindow = container.ownerDocument.defaultView;
+    if (!ownerWindow) throw new Error("Sessions renderer requires an owner window");
     this.own(bindSessionsTheme(container));
     const runtime = this.own(new SessionsRuntime(options.api));
-    const sessions = this.createCodeSessions(options.profile, runtime, options.sessionsWindowApi, container.ownerDocument);
+    const storage = this.own(new BrowserStorageService({
+      ownerWindow,
+      applicationId: options.product.storageNamespace,
+      workspaceId: "sessions",
+      profileId: options.profile.id,
+    }));
+    runtime.services.set(IStorageService, storage);
+    const sessions = this.createCodeSessions({
+      ownerDocument: container.ownerDocument,
+      profile: options.profile,
+      runtime,
+      sessionsWindowApi: options.sessionsWindowApi,
+      configurationApi: options.configurationApi,
+      keybindingsResourceApi: options.keybindingsResourceApi,
+      createContextMenuService: options.createContextMenuService,
+      storageService: storage,
+    });
     this.element = sessions.element;
     container.replaceChildren(this.element);
+    sessions.layout();
     this.defer(() => this.element.remove());
   }
 
-  private createCodeSessions(profile: SessionsProfile, runtime: SessionsRuntime, sessionsWindowApi: ISessionsWindowApi | undefined, ownerDocument: Document): CodeSessionsWorkbench {
-    if (profile.id !== "code-sessions") {
-      throw new TypeError(`Unsupported Code Sessions profile '${profile.id}'`);
+  private createCodeSessions(options: CodeSessionsWorkbenchOptions): CodeSessionsWorkbench {
+    if (options.profile.id !== "code-sessions") {
+      throw new TypeError(`Unsupported Code Sessions profile '${options.profile.id}'`);
     }
-    return this.own(new CodeSessionsWorkbench(ownerDocument, profile, runtime, sessionsWindowApi));
+    return this.own(new CodeSessionsWorkbench(options));
   }
 }
 

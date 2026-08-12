@@ -9,7 +9,14 @@ use crate::protocol::slash_commands::{SlashCommandArgumentModeDto, SlashCommandD
 use crate::protocol::turn::InputItem;
 use crate::rpc::{JsonRpcFailure, JsonRpcId, JsonRpcNotification, JsonRpcRequest, JsonRpcSuccess};
 use std::collections::BTreeSet;
-use zeta_protocol::{Patch, SessionEvent, ThreadEvent};
+use zeta_protocol::ContentDigest;
+use zeta_protocol::Patch;
+use zeta_protocol::SessionEvent;
+use zeta_protocol::SkillId;
+use zeta_protocol::SkillName;
+use zeta_protocol::SkillRef;
+use zeta_protocol::SkillSourceId;
+use zeta_protocol::ThreadEvent;
 
 #[test]
 fn registry_method_and_notification_names_are_unique() {
@@ -72,6 +79,10 @@ fn registry_method_and_notification_names_are_unique() {
     assert!(methods.contains("workspace/search/start"));
     assert!(methods.contains("workspace/search/read"));
     assert!(methods.contains("workspace/search/cancel"));
+    assert!(methods.contains("workspace/codeIndex/status"));
+    assert!(methods.contains("workspace/codeIndex/search"));
+    assert!(methods.contains("workspace/codeIndex/retrieve"));
+    assert!(methods.contains("workspace/codeIndex/rebuild"));
     assert!(methods.contains("terminal/profile/list"));
     assert!(methods.contains("terminal/create"));
     assert!(methods.contains("terminal/write"));
@@ -89,7 +100,7 @@ fn registry_method_and_notification_names_are_unique() {
 }
 
 #[test]
-fn turn_input_items_preserve_ordered_text_and_image_shapes() {
+fn turn_input_items_preserve_ordered_text_image_and_skill_shapes() {
     let input = vec![
         InputItem::Text {
             text: "describe".into(),
@@ -97,13 +108,35 @@ fn turn_input_items_preserve_ordered_text_and_image_shapes() {
         InputItem::Image {
             url: "https://example.test/image.png".into(),
         },
+        InputItem::Skill {
+            skill: SkillRef::pinned(
+                SkillId::new(
+                    SkillSourceId::new("user:skill-source:personal").unwrap(),
+                    SkillName::new("review").unwrap(),
+                ),
+                ContentDigest::sha256(b"skill"),
+            ),
+        },
     ];
 
     assert_eq!(
         serde_json::to_value(input).unwrap(),
         serde_json::json!([
             {"type": "text", "text": "describe"},
-            {"type": "image", "url": "https://example.test/image.png"}
+            {"type": "image", "url": "https://example.test/image.png"},
+            {
+                "type": "skill",
+                "skill": {
+                    "id": {
+                        "source": "user:skill-source:personal",
+                        "name": "review"
+                    },
+                    "version": {
+                        "type": "pinnedDigest",
+                        "digest": "sha256:9c53c074d7ac6a2728b638ac1f376c5fa9eb8f71603017c3ea638c2fd40548df"
+                    }
+                }
+            }
         ])
     );
 }
@@ -226,6 +259,8 @@ fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
     assert!(typescript.contains("{ \"type\": \"approval\", response: ActionApprovalResponse, }"));
     assert!(typescript.contains("expectedRevision: number"));
     assert!(typescript.contains("export type ProviderConfigDto ="));
+    assert!(typescript.contains("export type ModelContextConfigDto ="));
+    assert!(typescript.contains("modelContext?: { [key in string]: ModelContextConfigDto }"));
     assert!(typescript.contains(r#""provider/configure": { method: "provider/configure" }"#));
     assert!(typescript.contains("export type McpServerConfigDto ="));
     assert!(typescript.contains("credentialRef: string"));
@@ -238,6 +273,11 @@ fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
     assert!(typescript.contains(r#""hook/upsert": { method: "hook/upsert" }"#));
     assert!(typescript.contains("export type SkillName = string;"));
     assert!(typescript.contains("export type SkillSourceId = string;"));
+    assert!(typescript.contains("export type ContentDigest = string;"));
+    assert!(typescript.contains("export type SkillRef ="));
+    assert!(typescript.contains("export type FrozenSkillActivation ="));
+    assert!(typescript.contains("export type ContextCheckpoint ="));
+    assert!(typescript.contains(r#"{ "type": "skill", skill: SkillRef, }"#));
     assert!(typescript.contains(r#""skills/list": { method: "skills/list" }"#));
     assert!(typescript.contains(r#""skills/changed": { method: "skills/changed" }"#));
     assert!(typescript.contains(r#""git/statusChanged": { method: "git/statusChanged" }"#));
@@ -273,7 +313,7 @@ fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
     assert!(!typescript.contains(r#""turn/start": { method: "turn/start" }"#));
     assert!(!typescript.contains(r#""turn/shell/start": { method: "turn/shell/start" }"#));
     assert!(typescript.contains(
-        r#"export type InputItem = { "type": "text", text: string, } | { "type": "image", url: string, };"#
+        r#"export type InputItem = { "type": "text", text: string, } | { "type": "image", url: string, } | { "type": "skill", skill: SkillRef, };"#
     ));
     assert!(!typescript.contains("InputItemKind"));
     assert!(typescript.contains(r#"{ "type": "userImage""#));
@@ -293,6 +333,30 @@ fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
     assert!(
         typescript.contains(r#""workspace/search/start": { method: "workspace/search/start" }"#)
     );
+    assert!(
+        typescript
+            .contains(r#""workspace/codeIndex/search": { method: "workspace/codeIndex/search" }"#)
+    );
+    assert!(
+        typescript.contains(
+            r#""workspace/codeIndex/retrieve": { method: "workspace/codeIndex/retrieve" }"#
+        )
+    );
+    assert!(typescript.contains(
+        r#""workspace/codeIndex/cloud/status": { method: "workspace/codeIndex/cloud/status" }"#
+    ));
+    assert!(typescript.contains(
+        r#""workspace/codeIndex/cloud/preview": { method: "workspace/codeIndex/cloud/preview" }"#
+    ));
+    assert!(typescript.contains(
+        r#""workspace/codeIndex/cloud/authorize": { method: "workspace/codeIndex/cloud/authorize" }"#
+    ));
+    assert!(typescript.contains(
+        r#""workspace/codeIndex/cloud/sync": { method: "workspace/codeIndex/cloud/sync" }"#
+    ));
+    assert!(typescript.contains(
+        r#""workspace/codeIndex/cloud/revoke": { method: "workspace/codeIndex/cloud/revoke" }"#
+    ));
     assert!(typescript.contains(r#""terminal/profile/list": { method: "terminal/profile/list" }"#));
     assert!(typescript.contains(r#""terminal/create": { method: "terminal/create" }"#));
     assert!(typescript.contains(r#""terminal/read": { method: "terminal/read" }"#));
@@ -304,6 +368,18 @@ fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
     assert!(typescript.contains("export type TerminalCommandStatusEvent ="));
     assert!(typescript.contains("export type TerminalReadResult ="));
     assert!(typescript.contains("export type WorkspaceSearchMatch ="));
+    assert!(typescript.contains("export type CodeIndexStatusResult ="));
+    assert!(typescript.contains("export type CodeIndexSearchResult ="));
+    assert!(typescript.contains("export type CodeRetrievalResult ="));
+    assert!(typescript.contains("rrfScore: number"));
+    assert!(
+        typescript.contains("export type CodeIndexDeploymentModeDto = \"localOnly\" | \"cloud\";")
+    );
+    assert!(!typescript.contains("CloudCodeIndexModeDto"));
+    assert!(!typescript.contains("cloudManaged"));
+    assert!(typescript.contains("export type CloudCodeIndexSelectionDto ="));
+    assert!(typescript.contains("export type CloudCodeIndexStatusResult ="));
+    assert!(typescript.contains("syncedLocalGeneration: number | null"));
     assert!(typescript.contains("export type TypstCompileResult ="));
     assert!(typescript.contains(r#""status": "success""#));
     assert!(typescript.contains("export type TurnInteraction ="));
@@ -334,6 +410,11 @@ fn dto_driven_schema_contains_registered_rpc_envelopes() {
     assert!(definitions.contains_key("TypstCompileResult"));
     assert!(definitions.contains_key("WorkspaceSearchStartParams"));
     assert!(definitions.contains_key("WorkspaceSearchReadResult"));
+    assert!(definitions.contains_key("CodeIndexStatusResult"));
+    assert!(definitions.contains_key("CodeIndexSearchParams"));
+    assert!(definitions.contains_key("CodeIndexSearchResult"));
+    assert!(definitions.contains_key("CodeRetrievalParams"));
+    assert!(definitions.contains_key("CodeRetrievalResult"));
     assert!(definitions.contains_key("TerminalProfile"));
     assert!(definitions.contains_key("TerminalProfileSelection"));
     assert!(definitions.contains_key("TerminalProfileListResult"));

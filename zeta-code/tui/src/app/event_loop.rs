@@ -3,6 +3,7 @@ use super::App;
 use super::AppCommand;
 use super::AppEvent;
 use super::Status;
+use super::TuiSlashCommandRegistry;
 use super::dispatch::execute_product_command;
 use super::frame;
 use super::request_completion::RequestCompletion;
@@ -11,8 +12,10 @@ use super::request_completion::apply_thread_snapshot;
 use super::request_completion::finish_conversation_request;
 use super::request_completion::finish_product_command_request;
 use super::request_completion::interrupt_and_read;
+use super::request_completion::refresh_skills_and_registry;
 use super::request_completion::resolve_interaction_and_read;
 use super::request_completion::start_turn_and_read;
+use super::skill_slash_command_registry;
 use super::slash_command_registry;
 use crate::TuiError;
 use crate::TuiExit;
@@ -39,6 +42,8 @@ use crossterm::event::MouseButton;
 use crossterm::event::MouseEventKind;
 use std::collections::VecDeque;
 use zeta_app_server_client::AppServerSession;
+use zeta_app_server_protocol::protocol::skills::SkillCatalogReloadDto;
+use zeta_app_server_protocol::protocol::skills::SkillListParams;
 
 pub(crate) fn run(mut session: AppServerSession, options: TuiOptions) -> Result<TuiExit, TuiError> {
     let result = run_session(&mut session, options);
@@ -57,7 +62,17 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
         thread_title,
         workspace_root,
     } = options;
-    let slash_commands = slash_command_registry(&client.initialization()?.slash_commands)?;
+    let server_slash_commands = client.initialization()?.slash_commands.clone();
+    let slash_registry = client
+        .list_skills(SkillListParams {
+            reload: SkillCatalogReloadDto::Cached,
+        })
+        .ok()
+        .and_then(|catalog| skill_slash_command_registry(&server_slash_commands, &catalog).ok())
+        .unwrap_or(TuiSlashCommandRegistry {
+            catalog: slash_command_registry(&server_slash_commands)?,
+            skills: Default::default(),
+        });
     let mut conversation = ActiveConversation::start(&mut client, thread_title)?;
     let mut active_turn = None;
     let (mut thread_subscription, initial_thread) = ThreadSubscription::start(
@@ -69,7 +84,9 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
     let mut terminal = terminal::TerminalSession::open()?;
     crate::ui::configure(terminal.background_color());
     let mut file_search = FileSearchManager::new(workspace_root.clone());
-    let mut app = App::for_workspace_with_slash_commands(&workspace_root, slash_commands);
+    let mut app =
+        App::for_workspace_with_slash_commands(&workspace_root, slash_registry.catalog.clone());
+    app.replace_slash_commands(slash_registry.catalog, slash_registry.skills);
     apply_thread_snapshot(&mut app, &mut active_turn, initial_thread);
     if let Ok(config) = client.read_config() {
         app.update(AppEvent::ConfigSnapshotReceived(config));
@@ -562,18 +579,15 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                 }
             }
             if pending_request.is_none() && skills_refresh_requested {
-                let mut request_client = client.clone();
+                let request_client = client.clone();
+                let server_slash_commands = server_slash_commands.clone();
                 pending_request = spawn_request(
                     "zeta-tui-refresh-skills",
                     move || {
-                        RequestCompletion::Presentation(
-                            skills::load_selection(
-                                &mut request_client,
-                                zeta_app_server_protocol::protocol::skills::SkillCatalogReloadDto::Cached,
-                            )
-                            .map(AppEvent::SkillsViewReplaced)
-                            .map_err(|error| error.to_string()),
-                        )
+                        RequestCompletion::SkillsRefreshed(refresh_skills_and_registry(
+                            request_client,
+                            server_slash_commands,
+                        ))
                     },
                     &mut app,
                 );
@@ -653,7 +667,7 @@ fn refresh_server_event(
             }
             ServerRefresh::default()
         }
-        client::ClientEvent::SkillsChanged if app.skills_view_is_active() => ServerRefresh {
+        client::ClientEvent::SkillsChanged => ServerRefresh {
             skills: true,
             ..ServerRefresh::default()
         },
@@ -690,7 +704,6 @@ fn refresh_server_event(
                 }
             }
         }
-        client::ClientEvent::SkillsChanged => ServerRefresh::default(),
     }
 }
 

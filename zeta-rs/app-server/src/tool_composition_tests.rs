@@ -69,6 +69,10 @@ impl ToolService for FakeTools {
 struct AskPolicy;
 
 impl PolicyService for AskPolicy {
+    fn revision(&self) -> String {
+        "test-policy-v1".into()
+    }
+
     fn decide(
         &self,
         request: &ActionReviewRequest,

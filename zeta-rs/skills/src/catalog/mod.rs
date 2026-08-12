@@ -13,8 +13,8 @@ use std::sync::Arc;
 /// Owner of controlled source handles and the latest immutable metadata-only projection.
 #[derive(Debug)]
 pub struct SkillCatalog {
-    sources: Vec<SkillSourceRoot>,
-    snapshot: Arc<SkillCatalogSnapshot>,
+    pub(crate) sources: Vec<SkillSourceRoot>,
+    pub(crate) snapshot: Arc<SkillCatalogSnapshot>,
 }
 
 impl SkillCatalog {

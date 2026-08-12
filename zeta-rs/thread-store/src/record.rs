@@ -1,7 +1,8 @@
 use serde::{Deserialize, Serialize};
 use zeta_protocol::{CommandId, ThreadCommand, ThreadEvent, ThreadId};
 
-pub const CURRENT_STORED_EVENT_SCHEMA_VERSION: u32 = 1;
+pub const CURRENT_STORED_EVENT_SCHEMA_VERSION: u32 = 2;
+pub const MINIMUM_SUPPORTED_EVENT_SCHEMA_VERSION: u32 = 1;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct EventId(pub String);

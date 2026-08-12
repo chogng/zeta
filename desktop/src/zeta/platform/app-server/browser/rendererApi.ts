@@ -8,6 +8,7 @@ import type { IRendererHost } from "../../renderer/common/rendererHost.js";
 import { unavailableOperation, WebAppServerUnavailableError } from "../../renderer/browser/disconnectedHost.js";
 import { createDisconnectedWorkspaceSearchApi } from "../../search/browser/searchApi.js";
 import { createDisconnectedModelApi, createDisconnectedSessionApi, createDisconnectedThreadApi, createDisconnectedTurnApi } from "../../sessions/browser/sessionApi.js";
+import { createDisconnectedSkillApi } from "../../skills/browser/skillApi.js";
 import { DisconnectedTerminalProcessService } from "../../terminal/browser/disconnectedTerminalProcessService.js";
 import { createDisconnectedTypstApi } from "../../typst/browser/typstApi.js";
 import { createDisconnectedDocumentCollaborationApi } from "../../collaboration/browser/documentCollaborationApi.js";
@@ -23,6 +24,7 @@ export function createDisconnectedRendererApi(): IRendererHost {
     model: createDisconnectedModelApi(unavailableOperation),
     thread: createDisconnectedThreadApi(unavailableOperation),
     turn: createDisconnectedTurnApi(unavailableOperation),
+    skills: createDisconnectedSkillApi(unavailableOperation),
     typst: createDisconnectedTypstApi(unavailableOperation),
     documentCollaboration: createDisconnectedDocumentCollaborationApi(unavailableOperation),
     resource: createDisconnectedResourceApi(unavailableOperation),

@@ -1,9 +1,23 @@
 use super::*;
 use crate::local::ProviderModelService;
 use crate::local_tools::LocalToolComposition;
+use std::num::NonZeroU64;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use zeta_async_utils::CancellationToken;
+use zeta_code_index_cloud::CloudCodeIndexCapabilities;
+use zeta_code_index_cloud::CloudCodeIndexDeletionSupport;
+use zeta_code_index_cloud::CloudCodeIndexDestination;
+use zeta_code_index_cloud::CloudCodeIndexGrant;
+use zeta_code_index_cloud::CloudCodeIndexGrantId;
+use zeta_code_index_cloud::CloudCodeIndexProvider;
+use zeta_code_index_cloud::CloudCodeIndexProviderError;
+use zeta_code_index_cloud::CloudCodeIndexProviderId;
+use zeta_code_index_cloud::CloudCodeIndexProviderRegistry;
+use zeta_code_index_cloud::CloudCodeIndexPublication;
+use zeta_code_index_cloud::CloudCodeIndexPublicationRequest;
+use zeta_code_index_cloud::CloudCodeIndexSelection;
+use zeta_code_index_cloud::CloudCodeIndexState;
 use zeta_config::{
     ConfigCommandRequest, ConfigRevision, ConfigStore, UserConfigCommand, WorkspaceTrustSetting,
 };
@@ -110,7 +124,11 @@ fn workspace_switch_rpc_requires_a_local_workspace_host() {
 #[test]
 fn restricted_workspace_installs_only_non_executable_services() {
     let workspace = TestWorkspace::new("restricted", "readable.txt");
+    let provider = Arc::new(TrustRevocationProvider::new());
+    let provider_trait: Arc<dyn CloudCodeIndexProvider> = provider;
+    let providers = CloudCodeIndexProviderRegistry::new([provider_trait]).unwrap();
     let server = server()
+        .with_cloud_code_index_providers(providers)
         .with_local_workspace_host(None, WorkspaceSwitchTrustPolicy::Restricted)
         .unwrap();
 
@@ -119,9 +137,47 @@ fn restricted_workspace_installs_only_non_executable_services() {
         Ok(workspace.root().canonical_path().to_path_buf())
     );
     assert!(server.file_system_service().is_ok());
+    assert!(server.code_index_service().is_ok());
+    assert!(server.cloud_code_index_service().is_err());
     assert!(server.git_runtime_service().is_err());
     assert!(server.workspace_search_service().is_err());
     assert!(server.terminal_service().is_err());
+}
+
+#[test]
+fn workspace_activation_binds_native_skill_source() {
+    let workspace = TestWorkspace::new("workspace-skills", "readable.txt");
+    let skill_root = workspace.path.join(".zeta/skills/review-workspace");
+    std::fs::create_dir_all(&skill_root).unwrap();
+    std::fs::write(
+        skill_root.join("SKILL.md"),
+        "---\nname: review-workspace\ndescription: Review this Workspace\n---\n\nReview instructions.\n",
+    )
+    .unwrap();
+    let server = server()
+        .with_skill_runtime(
+            crate::server::skills_runtime::BuiltInSkillSource::Omitted,
+            Arc::new(EmptySkillConfig),
+        )
+        .unwrap()
+        .with_local_workspace_host(None, WorkspaceSwitchTrustPolicy::Restricted)
+        .unwrap();
+
+    server
+        .switch_local_workspace_root(workspace.path.clone())
+        .unwrap();
+
+    let snapshot = server
+        .skills
+        .as_ref()
+        .unwrap()
+        .list(crate::server::skills_runtime::SkillCatalogReload::Cached)
+        .unwrap();
+    assert_eq!(snapshot.entries.len(), 1);
+    assert_eq!(
+        snapshot.entries[0].catalog_entry.source().kind(),
+        zeta_skills::SkillSourceKind::Workspace
+    );
 }
 
 #[test]
@@ -214,6 +270,8 @@ fn user_config_revocation_removes_executable_services_but_keeps_file_access() {
                 command_id: CommandId::new("start-revocation-turn").unwrap(),
                 expected_sequence: SequenceExpectation::Exact(1),
                 model: None,
+                policy_revision: "test-policy-v1".into(),
+                activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
                     text: "must be interrupted".into(),
                 }],
@@ -246,6 +304,7 @@ fn user_config_revocation_removes_executable_services_but_keeps_file_access() {
             .unwrap(),
         b"config-revocation"
     );
+    assert!(server.code_index_service().is_ok());
     assert!(server.git_runtime_service().is_err());
     assert!(server.workspace_search_service().is_err());
     assert!(server.terminal_service().is_err());
@@ -273,6 +332,122 @@ fn user_config_revocation_removes_executable_services_but_keeps_file_access() {
             .definitions()
             .is_empty()
     );
+}
+
+#[test]
+fn user_config_revocation_deletes_cloud_grant_and_removes_cloud_runtime() {
+    let workspace = TestWorkspace::new("cloud-revocation", "source.rs");
+    let root = workspace.root();
+    let config = Arc::new(ConfigStore::open(workspace.path.join("trust.sqlite3")).unwrap());
+    let trusted = config
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("trust-cloud-workspace").unwrap(),
+            expected_revision: ConfigRevision::INITIAL,
+            command: UserConfigCommand::SetWorkspaceTrust {
+                workspace: root.trust_id(),
+                setting: WorkspaceTrustSetting::Trusted,
+            },
+        })
+        .unwrap();
+    let provider = Arc::new(TrustRevocationProvider::new());
+    let provider_trait: Arc<dyn CloudCodeIndexProvider> = provider.clone();
+    let providers = CloudCodeIndexProviderRegistry::new([provider_trait]).unwrap();
+    let server = server()
+        .with_cloud_code_index_providers(providers)
+        .with_local_workspace_host(
+            None,
+            WorkspaceSwitchTrustPolicy::UserConfig(Arc::clone(&config)),
+        )
+        .unwrap();
+    server
+        .switch_local_workspace_root(workspace.path.clone())
+        .unwrap();
+    let Ok(code_index) = server.code_index_service() else {
+        panic!("local code index should be installed in a trusted workspace");
+    };
+    code_index.rebuild().unwrap();
+    let Ok(controller) = server.cloud_code_index_service() else {
+        panic!("cloud code-index controller should be installed in a trusted workspace");
+    };
+    let grant = CloudCodeIndexGrant {
+        id: CloudCodeIndexGrantId::new("trust-revocation-grant").unwrap(),
+        root_id: controller.root_id().as_str().to_owned(),
+        destination: CloudCodeIndexDestination::new(
+            CloudCodeIndexProviderId::new("trust-revocation").unwrap(),
+            "tenant-a",
+            "workspace-index",
+        )
+        .unwrap(),
+        selection: CloudCodeIndexSelection::EntireIndex,
+        max_egress_bytes: NonZeroU64::new(1024 * 1024).unwrap(),
+    };
+    assert_eq!(
+        controller.authorize(grant).unwrap().state,
+        CloudCodeIndexState::Granted
+    );
+
+    config
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("restrict-cloud-workspace").unwrap(),
+            expected_revision: trusted.revision,
+            command: UserConfigCommand::SetWorkspaceTrust {
+                workspace: root.trust_id(),
+                setting: WorkspaceTrustSetting::Restricted,
+            },
+        })
+        .unwrap();
+    server
+        .workspace_runtime_control()
+        .unwrap()
+        .reconcile_user_trust(&config.read_snapshot().unwrap().values)
+        .unwrap();
+
+    assert!(server.cloud_code_index_service().is_err());
+    assert_eq!(provider.deletions.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn restricted_activation_retries_a_persisted_pending_cloud_deletion() {
+    let workspace = TestWorkspace::new("pending-cloud-deletion", "source.rs");
+    let storage = tempfile::tempdir().unwrap();
+    let provider = Arc::new(TrustRevocationProvider::new());
+    let provider_trait: Arc<dyn CloudCodeIndexProvider> = provider.clone();
+    let providers = CloudCodeIndexProviderRegistry::new([provider_trait]).unwrap();
+    let first_server = server()
+        .with_cloud_code_index_storage_root(storage.path())
+        .with_cloud_code_index_providers(providers)
+        .with_local_workspace_host(None, host_trust())
+        .unwrap();
+    first_server
+        .switch_local_workspace_root(workspace.path.clone())
+        .unwrap();
+    let Ok(code_index) = first_server.code_index_service() else {
+        panic!("local code index should be installed");
+    };
+    code_index.rebuild().unwrap();
+    let Ok(controller) = first_server.cloud_code_index_service() else {
+        panic!("cloud controller should be installed");
+    };
+    controller.authorize(cloud_grant(&controller)).unwrap();
+    provider.fail_deletions.store(true, Ordering::SeqCst);
+    assert!(controller.revoke().is_err());
+    drop(controller);
+    drop(first_server);
+
+    provider.fail_deletions.store(false, Ordering::SeqCst);
+    let provider_trait: Arc<dyn CloudCodeIndexProvider> = provider.clone();
+    let providers = CloudCodeIndexProviderRegistry::new([provider_trait]).unwrap();
+    let restricted_server = server()
+        .with_cloud_code_index_storage_root(storage.path())
+        .with_cloud_code_index_providers(providers)
+        .with_local_workspace_host(None, WorkspaceSwitchTrustPolicy::Restricted)
+        .unwrap();
+    restricted_server
+        .switch_local_workspace_root(workspace.path.clone())
+        .unwrap();
+
+    assert!(restricted_server.cloud_code_index_service().is_err());
+    assert_eq!(provider.deletions.load(Ordering::SeqCst), 2);
 }
 
 #[test]
@@ -312,6 +487,8 @@ fn active_turn_blocks_workspace_switch_without_changing_authority() {
                 command_id: CommandId::new("start-turn").unwrap(),
                 expected_sequence: SequenceExpectation::Exact(1),
                 model: None,
+                policy_revision: "test-policy-v1".into(),
+                activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
                     text: "stay in the first Workspace".into(),
                 }],
@@ -365,7 +542,91 @@ fn host_trust() -> WorkspaceSwitchTrustPolicy {
 
 struct RejectPolicy;
 
+struct EmptySkillConfig;
+
+struct TrustRevocationProvider {
+    id: CloudCodeIndexProviderId,
+    deletions: AtomicUsize,
+    fail_deletions: AtomicBool,
+}
+
+impl TrustRevocationProvider {
+    fn new() -> Self {
+        Self {
+            id: CloudCodeIndexProviderId::new("trust-revocation").unwrap(),
+            deletions: AtomicUsize::new(0),
+            fail_deletions: AtomicBool::new(false),
+        }
+    }
+}
+
+impl CloudCodeIndexProvider for TrustRevocationProvider {
+    fn id(&self) -> &CloudCodeIndexProviderId {
+        &self.id
+    }
+
+    fn capabilities(&self) -> CloudCodeIndexCapabilities {
+        CloudCodeIndexCapabilities {
+            deletion: CloudCodeIndexDeletionSupport::IdempotentGrantDeletion,
+        }
+    }
+
+    fn publish(
+        &self,
+        _request: CloudCodeIndexPublicationRequest,
+    ) -> Result<CloudCodeIndexPublication, CloudCodeIndexProviderError> {
+        Ok(CloudCodeIndexPublication {
+            remote_generation: "workspace-projection-ready".into(),
+        })
+    }
+
+    fn query(
+        &self,
+        _request: zeta_code_index_cloud::CloudCodeIndexQueryRequest,
+    ) -> Result<zeta_code_index_cloud::CloudCodeIndexQueryResult, CloudCodeIndexProviderError> {
+        Err(CloudCodeIndexProviderError::new("query not configured"))
+    }
+
+    fn delete_grant(
+        &self,
+        _grant: &CloudCodeIndexGrant,
+    ) -> Result<(), CloudCodeIndexProviderError> {
+        self.deletions.fetch_add(1, Ordering::SeqCst);
+        if self.fail_deletions.load(Ordering::SeqCst) {
+            return Err(CloudCodeIndexProviderError::new("delete failed"));
+        }
+        Ok(())
+    }
+}
+
+fn cloud_grant(
+    controller: &zeta_code_index_cloud::CloudCodeIndexController,
+) -> CloudCodeIndexGrant {
+    CloudCodeIndexGrant {
+        id: CloudCodeIndexGrantId::new("pending-deletion-grant").unwrap(),
+        root_id: controller.root_id().as_str().to_owned(),
+        destination: CloudCodeIndexDestination::new(
+            CloudCodeIndexProviderId::new("trust-revocation").unwrap(),
+            "tenant-a",
+            "workspace-index",
+        )
+        .unwrap(),
+        selection: CloudCodeIndexSelection::EntireIndex,
+        max_egress_bytes: NonZeroU64::new(1024 * 1024).unwrap(),
+    }
+}
+
+impl crate::server::skills_runtime::SkillConfigSnapshotProvider for EmptySkillConfig {
+    fn snapshot(&self) -> Result<zeta_config::SkillsConfig, String> {
+        Ok(zeta_config::SkillsConfig::default())
+    }
+}
+
 impl PolicyService for RejectPolicy {
+    fn revision(&self) -> String {
+        "test-policy-v1".into()
+    }
+
     fn decide(
         &self,
         _: &ActionReviewRequest,

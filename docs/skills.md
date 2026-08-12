@@ -2,11 +2,13 @@
 
 > 物理位置：`zeta-rs/skills/`
 > Rust crate：`zeta_skills`
-> 当前状态：Phase S0 与 catalog runtime slice 已实现；activation 及 S1–S4 其余部分 Proposed
+> 当前状态：Phase S0 与 S1 显式选择纵向切片已实现；S2–S4 Proposed。TUI 与 Desktop 已把
+> 可直接调用的 Skill 投影为统一斜杠面板中的 `/name`；`/skills` 只承担目录管理。
 > Crate 实现契约：[`zeta-rs/skills/README.md`](../zeta-rs/skills/README.md)
 > Core architecture：[`core.md`](core.md)
 > Agent runtime：[`zeta-agent-runtime-architecture.md`](zeta-agent-runtime-architecture.md)
 > Config authority 与 runtime snapshot 接入：[`config.md`](config.md)
+> Instructions/Skills/Agents 领域划分与外部导入：[`agent-customizations.md`](agent-customizations.md)
 > Plugin 分发边界：[`plugins.md`](plugins.md)
 > MCP runtime：[`mcp.md`](mcp.md)
 
@@ -22,7 +24,8 @@ Skill 是按任务逐步加载的工作方法和参考资料，不是工具权�
 | 发生的事情 | 加载什么 | 安全边界 |
 | --- | --- | --- |
 | 启动或刷新 Skill 目录 | 只读取名称、描述和来源等元数据 | 不把全部正文塞入上下文 |
-| 用户显式选择 Skill | 完整读取对应 `SKILL.md` | 仍低于系统和开发者指令 |
+| 用户输入 `/commit` 等 Skill 命令 | 接受 Turn 时完整读取对应 `SKILL.md` | 斜杠面板只持有元数据和精确 `SkillRef` |
+| 用户打开 `/skills` | 浏览、启用、禁用和查看诊断 | 不从管理面板直接执行 Skill |
 | 系统自动匹配 Skill | 根据元数据和任务选择后再加载正文 | 不能仅凭文件内容自我激活 |
 | 正文引用参考资料 | 只在当前任务确实需要时读取 | 路径必须受来源目录约束 |
 | Skill 建议运行脚本或工具 | 转成普通工具请求 | 不授予文件、网络、凭据或沙箱绕过能力 |
@@ -52,7 +55,7 @@ Skill 内容是带来源的外部 instruction：
 
 ## 2. 当前仓库状态
 
-当前 `zeta-skills` 已实现 S0 format/catalog：built-in/user controlled root、bounded
+当前 `zeta-skills` 已实现 S0 format/catalog：built-in/user/Workspace controlled root、bounded
 frontmatter parse、metadata-only scan、完整 `SKILL.md` digest、isolated diagnostic 和 immutable
 catalog generation。内置内容由 `zeta-rs/skills/assets/` 拥有，release staging 将其复制到
 `zeta-resources/skills/`，`zeta-install-context` 提供 directory candidate，host 再构造
@@ -60,44 +63,51 @@ catalog generation。内置内容由 `zeta-rs/skills/assets/` 拥有，release s
 产品语义、触发边界和选择评测，不能把 catalog fixture 直接升级为产品能力。实现细节与 limits 由
 [`zeta-rs/skills/README.md`](../zeta-rs/skills/README.md) 维护。
 
-App Server 当前拥有 catalog runtime adapter：它组合 release built-in root 与 user config 中
-明确 enabled 的绝对 source root，叠加 durable per-Skill enablement，缓存 immutable projection，
-并提供 `skills/list`、`skill/enablement/set` 与 `skills/changed`。`zeta-file-watcher` 的
+App Server 当前拥有 catalog runtime adapter：它组合 release built-in root、user config 中
+明确 enabled 的绝对 source root 和 active Workspace 的 `.zeta/skills`，叠加 durable per-Skill
+enablement，缓存 immutable projection，并提供 `skills/list`、`skill/enablement/set` 与
+`skills/changed`。`zeta-file-watcher` 的
 invalidation 会触发完整重扫；只有 entry、diagnostic 或 enablement 的 consumer-visible projection
 变化才推进 runtime generation。共享的 `SkillName`、`SkillSourceId` 与 `SkillId` 已下沉到
 `zeta-protocol`，因此 config、catalog、App Server 与客户端不再靠 raw string 隐式绑定。
 
-TUI `/skills` 消费同一 typed catalog，提供 All/Enabled/Disabled/Errors tabs、搜索、左右切页、
-上下选择和 `Space` 启用/禁用。该动作只改变后续 catalog eligibility，不等于把正文注入当前
-Turn。
+TUI 与 Desktop 消费同一 typed catalog，并把 enabled、compatible、名称无歧义且不与已有命令
+冲突的 Skill 直接投影为 `/name`。选择 `/commit` 后，客户端保留用户可见的 `/commit …` 文本，
+同时提交 exact pinned `SkillRef`；目录发现阶段不读取正文。`skills/changed` 会刷新动态命令列表。
 
-当前仍没有 Skill activation manager。protocol 中唯一已实现的选择相关 value 是：
+TUI `/skills` 提供 All/Enabled/Disabled/Manage/Errors tabs、搜索、左右切页和上下选择；只有 Manage
+中的动作修改后续 catalog eligibility。它是管理入口，不是日常执行 Skill 的二级 picker。
+
+当前显式激活链已经接通。协议输入为：
 
 ```rust
-UserInput::Skill { name: String, path: String }
+UserInput::Skill { skill: SkillRef }
 ```
 
-它证明用户输入层已经预留显式 Skill 选择，但 `name + raw path` 不是长期安全 identity：
+App Server 在接受 Turn 前从当前 enabled/compatible catalog 解析它，完整读取受控根中的
+`SKILL.md`，冻结 `SkillId + content digest + catalog generation + activation reason` 并持久化到
+`TurnAccepted`。Core 在每个 model safe point 通过 `SkillInstructionsProvider` 按 frozen digest
+接收外部 runtime 解析出的 `SkillInstruction`，再作为 Skill instruction layer 交给 context
+planner。客户端不能提交 raw path；文件缺失、换
+identity、hard link、越界 symlink 或 digest 变化都会失败即关闭，不会悄悄跟随新内容。
 
-- path 暴露客户端/host filesystem 细节；
-- 没有 source、digest、version 或 workspace scope；
-- 重放时 path 可能已经指向不同内容；
-- 客户端可以构造 catalog 外路径；
-- 同名 Skill 无法稳定消歧。
+Skill body 不复制进 Thread history；durable activation provenance 足以审计，恢复执行则要求原
+source 仍能提供 exact bytes。已经开始的 Turn 即使随后被 catalog disable，仍按冻结 snapshot
+完成；内容改变则停止，而不是替换 in-flight 指令。
 
-因此长期应将其演进为 validated `SkillRef`/`SkillSelection`，由 Skill manager 解析，不允许 Agent
-runtime 或 App Server 直接读取用户提交的裸路径。当前 catalog toggle 也不是显式 activation：
-已经运行的 invocation 没有 Skill snapshot，正文加载、safe-point freezing 与 context assembly
-仍属于 S1。
+上述 exact-byte 要求适用于尚需继续执行的 Turn。重复提交已经 accepted 的同一 `commandId` 时，
+App Server 先按 durable command receipt 校验输入并返回原 Turn 结果，不重新读取当前 catalog 或
+Skill 文件；因此源文件删除不会破坏已完成命令的幂等重放。
 
-当前 runtime source composition 只包含 built-in 与 user source。Workspace config 中的 Skill
-source intent、Plugin contribution、compatibility enforcement、正文读取和 explicit/automatic
-activation 尚未接入。
+当前 runtime source composition 包含 built-in、user 和 active Workspace 的原生
+`.zeta/skills` source。Workspace config 中额外声明的 Skill source intent、Plugin contribution、
+reference/resource resolver 和 automatic activation 尚未接入；正文读取、compatibility gate 和
+explicit activation 已接入。
 
 仓库已有可复用边界：
 
 - `zeta-protocol` 的 UserInput、Resource、ToolName 和 provider-independent model contract；
-- 计划中的 Core ContextAssembler 与 `ModelInvocationSnapshot`；
+- Core `ContextAssembler`、`ModelInvocationSnapshot` 与 durable checkpoint pipeline；
 - App Server 的 typed command、Resource store 和 generated client contract；
 - Plugin manager 计划提供 immutable Skill contribution root；
 - 目标 `zeta-tool-executor` / `zeta-sandboxing` 负责脚本执行，而不是 Skill loader；产品层
@@ -233,7 +243,7 @@ wire `SkillRef` 通过显式 version selector 区分两种用户意图：
 ```rust
 pub enum SkillVersionSelector {
     FollowLatest,
-    Pinned(ContentDigest),
+    PinnedDigest { digest: ContentDigest },
 }
 ```
 
@@ -318,8 +328,9 @@ availability 或 diagnostic 变化才递增 generation。
 `RescanRequired` 传递 subscriber 自己的 watched roots。其 backend/ref-count/path fallback contract
 由 [`zeta-rs/file-watcher/README.md`](../zeta-rs/file-watcher/README.md) 维护。
 
-Watcher 仍只发 invalidation hint。当前 App Server adapter 订阅 built-in/user roots 与 user
-config authority path；收到普通 change、backend error 或 overflow 后都调用
+Watcher 仍只发 invalidation hint。当前 App Server adapter 订阅 built-in/user roots、active
+Workspace 的 `.zeta` metadata root 与 user config authority path；收到普通 change、backend error
+或 overflow 后都调用
 `SkillCatalog::refresh` 重新扫描/校验，再按可见 projection 决定是否发布 `skills/changed`。
 Watcher backend 无法启动时不会阻止 App Server 启动，调用方仍可用
 `skills/list { reload: "refresh" }` 显式重扫；当前没有对外 watcher-health projection。
@@ -329,7 +340,8 @@ Watcher backend 无法启动时不会阻止 App Server 启动，调用方仍可�
 
 ### 8.1 显式选择
 
-用户通过 Skill picker、slash mention 或 `session/request` `StartTurn` typed input 选择 exact `SkillRef`。显式选择：
+用户通过统一斜杠面板中的 `/name`，或直接通过 `session/request` `StartTurn` typed input 选择 exact
+`SkillRef`。显式选择：
 
 - 优先于自动匹配；
 - 仍要通过 enablement、availability、compatibility 和 trust policy；
@@ -337,7 +349,7 @@ Watcher backend 无法启动时不会阻止 App Server 启动，调用方仍可�
 - 若 source 不再存在，historical display 仍保留 ID/digest，但新 Turn 不能激活；
 - 不允许客户端提供 catalog 外 absolute path。
 
-当前 `UserInput::Skill { name, path }` 应迁移为类似：
+当前 wire shape 已迁移为：
 
 ```text
 UserInput::Skill {
@@ -345,8 +357,9 @@ UserInput::Skill {
 }
 ```
 
-具体 serde shape 需在实现 vertical slice 时同步 protocol、App Server schema、Desktop、CLI、TUI
-和 contract fixtures，开发期不保留双入口。
+旧 `name + path` serde shape 会被拒绝，不保留双入口。App Server schema、generated TypeScript、
+Core、TUI 和 Desktop 共享同一 `SkillRef` contract。TUI 与 Desktop 的斜杠目录只加载 metadata，
+真正接受 Turn 时才由 App Server 加载完整 `SKILL.md`。
 
 ### 8.2 自动选择
 
@@ -420,7 +433,7 @@ Core ContextAssembler 使用明确层级：
 1. system safety / platform policy
 2. Zeta developer/product instructions
 3. workspace policy and active Turn constraints
-4. activated Skill instructions（带 source + digest 边界）
+4. Skill instructions（带 source + digest 边界）
 5. user input
 6. retrieved references/resources/tool results（不可信数据）
 ```
@@ -433,9 +446,12 @@ filesystem enumeration order。
 - exact Skill ID；
 - source kind；
 - digest；
-- activation reason：explicit/automatic/dependency；
 - bounded body；
-- 冲突/compatibility warning。
+- `Required / BestEffort` context retention。
+
+catalog generation、activation reason、斜杠或 picker 等入口信息留在 durable provenance 和外部
+selection/runtime，不写入模型可见 Skill 正文。外部 adapter 负责把具体选择策略映射为
+`Required / BestEffort`；Core 不解释 Skill 是显式还是自动选中的。
 
 Core ContextAssembler 应用总 token budget。超限时：
 
@@ -588,8 +604,9 @@ Skill catalog 是可重建 projection，不是 authority。Authority 分布为�
 - User/workspace Skill：显式 configured source；
 - current Turn selection：typed UserInput/command。
 
-Thread history至少应保留用户显式选择的 stable Skill identity；是否把自动 activation 作为
-canonical durable fact，需要在真实 Agent vertical slice 中按恢复/审计需求评审。
+Thread history 当前在 `TurnAccepted.activated_skills` 保留显式 activation 的 stable identity、
+digest、catalog generation 与 reason。自动 activation 复用同一 durable value，但 selector 仍属
+S4，尚未实现。
 
 无论是否进入 Thread event，每次 model invocation 的 diagnostic/provenance snapshot 都应记录：
 
@@ -608,15 +625,13 @@ stored identity/digest；重新执行必须重新授权/解析，不能假定旧
 
 ## 15. App Server API 与客户端
 
-目标 surface：
-
-| Method | 语义 |
-| --- | --- |
-| `skill/list` | 读取 metadata-only catalog snapshot |
-| `skill/read` | 读取 entry metadata/diagnostics，不默认返回完整 body |
-| `skill/content/read` | 通过 Resource/分块读取受控内容 |
-| `skill/reload` | 显式使 source stale 并触发 rescan |
-| `session/request` StartTurn Skill input | 选择 exact `SkillRef` |
+| Method | 语义 | 状态 |
+| --- | --- | --- |
+| `skills/list` | 读取 metadata-only catalog；`refresh` 请求重扫 | ✅ 已实现 |
+| `skill/enablement/set` | 按 exact `SkillId` 修改 future eligibility | ✅ 已实现 |
+| `session/request` StartTurn Skill input | 选择 exact `SkillRef` | ✅ 已实现 |
+| `skill/read` | 读取 entry metadata/diagnostics，不默认返回完整 body | Proposed |
+| `skill/content/read` | 通过 Resource/分块读取受控内容 | Proposed |
 
 Skill install/remove 不属于 Skill manager：
 
@@ -624,8 +639,9 @@ Skill install/remove 不属于 Skill manager：
 - user/workspace standalone Skill 通过明确的 source/config 或将来 artifact import 管理；
 - 客户端不能向 `skill/read` 传 arbitrary filesystem path。
 
-Client picker 展示 name、description、source、version/digest 摘要、compatibility、availability 和
-trust；同名 Skill 不合并。自动激活结果在 Turn/status 中可解释，但 UI 不需要显示 Skill 正文。
+客户端斜杠面板展示 name 和 description，并在独立管理界面展示 source、version/digest 摘要、
+compatibility、availability 和 trust。同名 Skill 不静默合并；名称有歧义或与已有命令冲突时不投影
+为无来源限定的 `/name`。自动激活结果在 Turn/status 中可解释，但 UI 不需要显示 Skill 正文。
 
 ### 15.1 外部 Agent Skill 导入（仅限 Desktop）
 
@@ -661,7 +677,7 @@ TUI 的长期非职责见 [`tui.md`](tui.md#11-featureszeta-功能的垂直切�
 
 附加目录激活不是 Import。`zeta-add-dir` 已拥有 directory source 与 contribution policy 的纯
 领域 contract；未来由启动参数或会话命令加入的目录，可以在授权有效期内投影明确 allowlist 中的
-Skills 与 Subagents；持久 `additionalDirectories` 只授予文件访问，不能发现或激活任何 Skill。
+Skills 与 Agent definitions；持久 `additionalDirectories` 只授予文件访问，不能发现或激活任何 Skill。
 该临时投影可以复用 `zeta-agent-import` 的安全路径 inspection，但不写入 Config、不产生
 imported source，也不把附加目录提升为 Workspace。完整语义与 `/cd` 的区别见
 [`workspace-security.md`](workspace-security.md#工作目录附加目录与-cd)。
@@ -748,7 +764,7 @@ catalog/selection/activation 拆分；新 trait 必须有职责和实现约束 d
 ### 阶段 S0：format、目录与运行时 browser（当前状态）
 
 - Agent Skills frontmatter/parser/validator；
-- BuiltIn + controlled user source；
+- BuiltIn + controlled user + native Workspace source；
 - metadata-only scan、digest 和 immutable catalog；
 - path/size/cycle security fixtures；
 - App Server `skills/list`、`skills/changed` 与 watcher refresh；
@@ -757,15 +773,19 @@ catalog/selection/activation 拆分；新 trait 必须有职责和实现约束 d
 完成条件：启动不会加载所有 Skill body，坏 entry 不会逃出 root 或拖垮整个 catalog；source
 变化与 enablement 变化只发布新的 metadata projection。
 
-### 阶段 S1：显式选择纵向切片
+### 阶段 S1：显式选择纵向切片（核心、TUI 与 Desktop 已实现）
 
-- 在 current `SkillId` 基础上增加 `SkillRef`/version contract；
-- 迁移 `UserInput::Skill { name, path }`；
-- 激活时完整加载 `SKILL.md`；
+- `SkillRef`/version contract 与 raw path rejection；
+- 激活时完整、安全地加载 `SKILL.md` 并冻结 digest；
+- `TurnAccepted` durable provenance 与 recovery fail-closed；
 - Core ContextAssembler layering、budget 和 provenance；
-- Desktop/CLI/TUI picker 使用同一 App Server contract。
+- App Server/generated contract，以及 TUI/Desktop 统一斜杠面板中的直接 Skill 命令；
+- TUI `/skills` 目录管理和 enablement mutation。
 
 完成条件：客户端不能通过 raw path 激活 catalog 外文件，已开始 invocation 使用 frozen digest。
+
+当前限制：同名 Skill 或与 local/server command 同名的 Skill 不投影为无歧义的 `/name`；调用这类
+Skill 需要未来带来源限定的选择交互。CLI 没有独立可视化目录浏览器，但 typed protocol 入口不受影响。
 
 ### 阶段 S2：参考资料、资源与脚本
 

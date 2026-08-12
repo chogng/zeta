@@ -1,15 +1,34 @@
 .zeta-workbench-sessions {
-  border-bottom: 1px solid var(--zeta-border);
-  background: var(--zeta-editor-background);
+  min-width: 0;
+  min-height: 0;
+  background:
+    radial-gradient(circle at 78% -8%, color-mix(in srgb, var(--sessions-accent) 13%, transparent), transparent 34%),
+    var(--zeta-editor-background);
 }
 
-.zeta-workbench-sessions .zeta-workbench-part-content {
-  flex-direction: row;
-  align-items: center;
-  padding: 0 16px;
+.zeta-workbench-sessions > .zeta-workbench-part-content {
+  gap: 16px;
+  padding: 22px;
 }
 
-.zeta-sessions-label {
-  color: var(--zeta-description-foreground);
+.zeta-sessions-surface-header { flex: 0 0 auto; }
+
+.zeta-sessions-surface-header h1 {
+  margin: 0 0 5px;
+  font-size: 17px;
+  font-weight: 680;
+  letter-spacing: -.012em;
+}
+
+.zeta-sessions-surface-header p {
+  max-width: 640px;
+  margin: 0;
+  color: var(--zeta-description-foreground, var(--zeta-foreground));
   font-size: 12px;
+  line-height: 1.55;
+}
+
+.zeta-workbench-sessions > .zeta-workbench-part-content > .zeta-sessions-chat-view {
+  min-height: 0;
+  flex: 1 1 auto;
 }

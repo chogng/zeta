@@ -1,3 +1,4 @@
+use crate::SkillRef;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -13,6 +14,6 @@ pub enum UserInput {
     Text { text: String },
     Image { url: String },
     LocalImage { path: String },
-    Skill { name: String, path: String },
+    Skill { skill: SkillRef },
     Mention { name: String, path: String },
 }

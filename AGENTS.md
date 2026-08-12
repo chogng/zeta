@@ -1,3 +1,5 @@
+`../vscode` and `../codex` and `../zed` and `../warp` and `../pi`
+
 # Communication
 
 - When comparing responsibilities, capabilities, implementation status, or design options, prefer
@@ -11,6 +13,9 @@
 ## Learnings
 
 - 在把新能力接入 `native` 前，先按依赖方向判断其是否属于通用框架机制。帧调度、失效等级、retained presentation、Scene fragment 生命周期和局部重建策略应优先由 `zui` 提供后端无关契约；`native` 只保留产品状态映射、平台事件适配和具体 Part/Overlay 组合，不得因接入方便复制或拥有框架运行时。
+- 当用户讨论专化 Workbench、Sessions 或其他产品前端概念时，不要因为 IDE 当前打开的是 `zeta-code/tui` 文件就默认把目标定位到 TUI；应先在前端 Renderer/Workbench 范围定位同名能力，只有明确提到终端、Ratatui 或 `zeta-code` 时才转向 TUI。
+* 设计检索链路时，必须把 Workspace authority、模型接入与检索编排分开：所有源码扫描、ignore、读取、切块、revision 与 chunk identity 都由 Workspace 侧 CodeIndex 拥有，云端只能消费 Workspace 已授权并复核的精确 chunks，不能读取整文件后重新切块；`model-provider` 只统一调用 embedding/rerank 模型；云端 CodeIndex 服务负责准备模型输入、向量检索、调用 rerank，并依据模型分数排序、过滤和截断；跨来源结果融合才属于 retrieval 层。不得因为模型返回向量或相关性分数，就把索引策略或排序所有权归给 `model-provider` 或客户端 retrieval。
+- 设计 Skill 的日常显式入口时，应把可调用 Skill 直接投影为统一斜杠面板中的动态命令（如 `/commit`）；`/skills` 只承担浏览、启用、诊断等管理职责。Skill 列表只加载元数据，完整 `SKILL.md` 仍在选中或自动激活后按需加载。
 
 ## Product ownership
 

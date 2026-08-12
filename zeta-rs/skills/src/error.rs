@@ -4,6 +4,9 @@ use std::fmt;
 pub enum SkillErrorKind {
     SourceUnavailable,
     DuplicateSource,
+    SkillNotFound,
+    ContentChanged,
+    InvalidContent,
 }
 
 /// Sanitized catalog setup failure.

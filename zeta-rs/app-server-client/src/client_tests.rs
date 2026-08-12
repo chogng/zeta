@@ -292,10 +292,12 @@ fn in_process_client_routes_syntax_analysis_to_the_server() {
         .expect("syntax analysis succeeds");
 
     assert_eq!(result.revision, 9);
-    assert!(result
-        .folding_ranges
-        .iter()
-        .any(|range| { range.range.start.line_index == 0 && range.range.end.line_index == 1 }));
+    assert!(
+        result
+            .folding_ranges
+            .iter()
+            .any(|range| { range.range.start.line_index == 0 && range.range.end.line_index == 1 })
+    );
 }
 
 #[test]
@@ -492,15 +494,17 @@ fn embedded_skill_catalog_lists_built_ins_and_persists_enablement() {
     let disabled = client.list_skills(SkillListParams::default()).unwrap();
     assert_eq!(disabled.generation, listed.generation + 1);
     assert_eq!(disabled.skills[0].enablement, SkillEnablementDto::Disabled);
-    assert!(client
-        .drain_notifications()
-        .unwrap()
-        .iter()
-        .any(|notification| matches!(
-            notification,
-            ServerNotification::SkillsChanged(changed)
-                if changed.generation == disabled.generation
-        )));
+    assert!(
+        client
+            .drain_notifications()
+            .unwrap()
+            .iter()
+            .any(|notification| matches!(
+                notification,
+                ServerNotification::SkillsChanged(changed)
+                    if changed.generation == disabled.generation
+            ))
+    );
 
     drop(client);
     let _ = fs::remove_dir_all(state_root);

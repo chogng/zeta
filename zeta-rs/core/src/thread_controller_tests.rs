@@ -1,4 +1,5 @@
 use super::*;
+use crate::thread_controller::CommitContextCheckpointRequest;
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex, mpsc};
@@ -7,9 +8,9 @@ use std::time::Duration;
 use zeta_protocol::{
     ActionApprovalCapability, ActionApprovalCapabilityKind, ActionApprovalDecision,
     ActionApprovalRequest, ActionApprovalResponse, AgentRequest, AgentResponse, CommandId,
-    InteractionDeadline, RequestId, RequestUserInput, RequestUserInputResponse, SessionId,
-    StableTurnError, StableTurnErrorCode, ThreadEvent, ThreadId, ThreadItem, ToolName, TurnId,
-    UserInput, UserInputQuestion,
+    ContextSourceRange, InteractionDeadline, RequestId, RequestUserInput, RequestUserInputResponse,
+    SessionId, StableTurnError, StableTurnErrorCode, ThreadEvent, ThreadId, ThreadItem, ToolName,
+    TurnId, UserInput, UserInputQuestion,
 };
 use zeta_thread_store::StoredEvent;
 
@@ -20,6 +21,8 @@ fn start_request(key: &str) -> StartTurnRequest {
         command_id: CommandId::new(key).expect("test ID is non-empty"),
         expected_sequence: SequenceExpectation::Any,
         model: None,
+        policy_revision: "test-policy-v1".into(),
+        activated_skills: Vec::new(),
         input: vec![UserInput::Text {
             text: "hello".into(),
         }],
@@ -203,6 +206,86 @@ fn failed_writes_do_not_expose_uncommitted_projection_changes() {
             .is_err()
     );
     assert!(threads.read_thread(&thread).unwrap().turns.is_empty());
+}
+
+#[test]
+fn context_checkpoint_is_durable_before_projection_and_recovers_exactly() {
+    let store = Arc::new(InMemoryThreadStore::default());
+    let threads = ThreadController::with_store(store.clone());
+    let thread = create_thread(&threads, "checkpoint");
+    let turn = start_turn(&threads, &thread, "checkpoint-turn");
+    threads
+        .complete_turn(&thread, &turn, "answer".into())
+        .unwrap();
+    let source = threads.read_thread(&thread).unwrap();
+    let checkpoint = threads
+        .commit_context_checkpoint(
+            &thread,
+            checkpoint_request(source.sequence, source.sequence),
+        )
+        .unwrap();
+
+    assert_eq!(
+        store.events().last().unwrap().event.kind(),
+        "context.checkpoint_committed"
+    );
+    assert_eq!(
+        threads.read_thread(&thread).unwrap().context_checkpoints,
+        vec![checkpoint.clone()]
+    );
+    let recovered = ThreadController::with_store(store)
+        .recover_thread(&thread)
+        .unwrap();
+    assert_eq!(recovered.context_checkpoints, vec![checkpoint]);
+}
+
+#[test]
+fn failed_checkpoint_commit_does_not_expose_an_uncommitted_summary() {
+    let store = Arc::new(ToggleStore {
+        reject_writes: AtomicBool::new(false),
+    });
+    let threads = ThreadController::with_store(store.clone());
+    let thread = create_thread(&threads, "checkpoint-failure");
+    let turn = start_turn(&threads, &thread, "checkpoint-failure-turn");
+    threads
+        .complete_turn(&thread, &turn, "answer".into())
+        .unwrap();
+    let source_sequence = threads.read_thread(&thread).unwrap().sequence;
+    store.reject_writes.store(true, Ordering::Relaxed);
+
+    assert!(
+        threads
+            .commit_context_checkpoint(
+                &thread,
+                checkpoint_request(source_sequence, source_sequence),
+            )
+            .is_err()
+    );
+    assert!(
+        threads
+            .read_thread(&thread)
+            .unwrap()
+            .context_checkpoints
+            .is_empty()
+    );
+}
+
+fn checkpoint_request(
+    source_thread_sequence: u64,
+    covered_end_sequence: u64,
+) -> CommitContextCheckpointRequest {
+    CommitContextCheckpointRequest {
+        source_thread_sequence,
+        covered: ContextSourceRange {
+            start_sequence: 1,
+            end_sequence: covered_end_sequence,
+        },
+        summary: "durable summary".into(),
+        schema_revision: "context-checkpoint-v1".into(),
+        prompt_revision: "compaction-v2".into(),
+        context_policy_revision: "context-policy-v1".into(),
+        generator_model: None,
+    }
 }
 
 #[test]
@@ -585,6 +668,7 @@ fn shell_turn_atomically_persists_its_exact_command_and_tool_call() {
     let request = || StartShellTurnRequest {
         command_id: CommandId::new("shell-start").unwrap(),
         expected_sequence: SequenceExpectation::Any,
+        policy_revision: "test-policy-v1".into(),
         invocation: ShellTurnInvocation {
             command: "cargo test -p zeta-core".into(),
             shell_program: "/bin/sh".into(),
@@ -635,6 +719,8 @@ fn typed_command_rejects_reusing_an_id_with_different_input() {
         command_id: CommandId::new("conflict").expect("test ID is non-empty"),
         expected_sequence: SequenceExpectation::Any,
         model: None,
+        policy_revision: "test-policy-v1".into(),
+        activated_skills: Vec::new(),
         input: vec![UserInput::Text {
             text: "different".into(),
         }],
@@ -785,6 +871,8 @@ fn start_turn_persists_ordered_text_and_image_items() {
                 command_id: CommandId::new("image-turn").expect("test ID is non-empty"),
                 expected_sequence: SequenceExpectation::Any,
                 model: None,
+                policy_revision: "test-policy-v1".into(),
+                activated_skills: Vec::new(),
                 input: vec![
                     UserInput::Text {
                         text: "describe".into(),

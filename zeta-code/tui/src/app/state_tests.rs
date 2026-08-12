@@ -24,8 +24,13 @@ use std::path::Path;
 use std::time::Duration;
 use std::time::Instant;
 use std::time::{SystemTime, UNIX_EPOCH};
+use zeta_protocol::ContentDigest;
 use zeta_protocol::ItemId;
 use zeta_protocol::SessionId;
+use zeta_protocol::SkillId;
+use zeta_protocol::SkillName;
+use zeta_protocol::SkillRef;
+use zeta_protocol::SkillSourceId;
 use zeta_protocol::Thread;
 use zeta_protocol::ThreadId;
 use zeta_protocol::ThreadItem;
@@ -413,6 +418,49 @@ fn runtime_command_registry_drives_popup_and_submission_consistently() {
     assert_eq!(app.status(), &Status::Working);
     assert_eq!(app.messages()[0].role, MessageRole::User);
     assert_eq!(app.messages()[0].text, "/diagnose logs");
+    let _ = fs::remove_dir_all(workspace);
+}
+
+#[test]
+fn direct_skill_slash_command_submits_exact_skill_ref_with_visible_intent() {
+    let workspace = temporary_workspace("direct-skill-command");
+    let skill = SkillRef::pinned(
+        SkillId::new(
+            SkillSourceId::new("user:skill-source:test").unwrap(),
+            SkillName::new("commit").unwrap(),
+        ),
+        ContentDigest::sha256(b"commit skill"),
+    );
+    let registry = SlashCommandCatalog::with_local_server_and_skills(
+        built_in_slash_command_definitions(),
+        std::iter::empty(),
+        [SlashCommandDefinition {
+            name: "commit".into(),
+            description: "draft a commit message".into(),
+            argument_mode: SlashCommandArgumentMode::Optional,
+        }],
+    )
+    .unwrap();
+    let mut app = App::for_workspace_with_slash_commands(&workspace, registry.clone());
+    app.replace_slash_commands(
+        registry,
+        [("commit".into(), skill.clone())].into_iter().collect(),
+    );
+    app.insert_text("/commit staged changes");
+
+    let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    assert_eq!(
+        action,
+        Some(AppCommand::SubmitTurn(ComposerSubmission {
+            display_text: "/commit staged changes".into(),
+            input: vec![
+                ComposerInput::Skill { skill },
+                ComposerInput::Text("/commit staged changes".into()),
+            ],
+        }))
+    );
+    assert_eq!(app.messages()[0].text, "/commit staged changes");
     let _ = fs::remove_dir_all(workspace);
 }
 

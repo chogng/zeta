@@ -72,8 +72,9 @@ fn skill_list_result(snapshot: &SkillRuntimeSnapshot) -> SkillListResult {
                     source_kind: match catalog.source().kind() {
                         SkillSourceKind::BuiltIn => SkillSourceKindDto::BuiltIn,
                         SkillSourceKind::User => SkillSourceKindDto::User,
+                        SkillSourceKind::Workspace => SkillSourceKindDto::Workspace,
                     },
-                    content_digest: catalog.content_digest().to_string(),
+                    content_digest: catalog.content_digest().clone(),
                     enablement: enablement_dto(entry.enablement),
                     compatibility: match catalog.compatibility() {
                         SkillCompatibility::Compatible => SkillCompatibilityDto::Compatible,

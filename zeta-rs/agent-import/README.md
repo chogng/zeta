@@ -5,7 +5,9 @@
 >
 > 产品交互与长期演进由
 > [`docs/zeta-desktop-architecture.md`](../../docs/zeta-desktop-architecture.md#22-外部-agent-配置导入仅限-desktop)
-> 拥有；Skill 来源与激活语义由 [`docs/skills.md`](../../docs/skills.md) 拥有。
+> 拥有；Zeta 原生 Instructions/Skills/Agents、`.zeta` 命名空间和 Import/source registration
+> 边界由 [`docs/agent-customizations.md`](../../docs/agent-customizations.md) 拥有；Skill 来源与激活
+> 语义由 [`docs/skills.md`](../../docs/skills.md) 拥有。
 
 `zeta-agent-import` 只识别 Codex 和 Claude 已知的用户级、项目级配置位置，并生成仅元数据
 （metadata-only）的 `AgentPathInspection`。当前实现不读取候选正文、不递归扫描未知目录、不修改
@@ -27,7 +29,8 @@ Zeta 配置，也不导入认证、会话、日志或历史记录。
 - App Server 方法、配置 revision 或导入应用流程；
 - Config、Skill、MCP、Plugin 或 Multi-Agent 内容 schema；
 - 内容信任、工具批准、脚本执行、网络连接或凭据解析；
-- `CODEX_HOME`、`CLAUDE_CONFIG_DIR` 等宿主环境解析。
+- `CODEX_HOME`、`CLAUDE_CONFIG_DIR` 等宿主环境解析；
+- `.zeta/{instructions,skills,agents}` 的原生发现、加载或 runtime activation。
 
 生产代码依赖 [`zeta-utils-path`](../utils/path-utils/README.md) 的 host canonical containment
 primitive，测试使用 workspace `tempfile`。它不得反向依赖
@@ -82,7 +85,7 @@ body、source provenance、enablement 与执行语义的产品契约；发现这
 | `ImportItemKind` | `ImportReviewCategory` | 原因 |
 | --- | --- | --- |
 | `Instructions`、`Skills`、`InstructionRules` | `Content` | 包含将进入模型上下文的外部指令 |
-| `Settings`、`Subagents` | `Configuration` | 需要目标领域映射，不能按原格式直接生效 |
+| `Settings`、`Agents` | `Configuration` | 需要目标领域映射，不能按原格式直接生效 |
 | `McpServers` | `Connection` | 可能引入进程、网络、header 或重新登录要求 |
 | `ExecutionRules` | `ExecutionPolicy` | 可能改变命令是否提示、允许或阻止 |
 
@@ -168,17 +171,17 @@ Desktop/App Server 接入时必须：
 当前没有 App Server DTO 或 inspection identity。任何 wire contract 都应传 source-qualified identity
 和受控相对路径，不应直接把 `source_path()` 序列化给 Renderer。
 
-### 7.1 应用到 Zeta Config
+### 7.1 应用到目标权威
 
-Import 的最终目的不是保留一份外部配置副本，而是把用户选中的内容转换成 Zeta 自己的 typed
-desired state。依赖方向保持为：
+Import 的最终目的不是让 Zeta runtime 直接解释外部格式，而是把用户选中的内容转换成目标
+authority 能重新校验的 typed fragment。App Server adapter 根据条目路由到 Config、Instruction、
+Skill、Agent 或其他 authority；本 crate 不拥有这些领域的 canonical schema。依赖方向保持为：
 
 ```text
-zeta-agent-import → normalized preview fragment
-                         ↓
-              App Server import adapter
-                         ↓
-          zeta-config typed command / target authority
+external source
+  → zeta-agent-import normalized preview fragment
+  → App Server import adapter
+  → target authority typed command / prepare-publish contract
 ```
 
 `zeta-agent-import` 不依赖 `zeta-config`，也不直接构造 `UserConfigCommand`。App Server adapter 同时
@@ -192,26 +195,36 @@ commit。
 | `McpServers` | `UpsertMcpServer` | Config command 已有；导入时默认不连接，credential 必须剥离并单独绑定 |
 | Settings 内的 Plugin request | `UpsertPluginRequest` | Config command 已有；只接受可解析的 exact package/version request，不代表安装或激活 |
 | Settings 内的 Hook | `UpsertHook` | Config command 已有；导入后保持 disabled，执行仍需 trust、policy、approval 与 sandbox |
-| `Instructions`、`InstructionRules` | 受来源约束的 content/Skill artifact | 目标模型尚未完成，不能把原始文件塞入普通 Config |
-| `Subagents` | Zeta Agent/Subagent definition authority | 目标模型尚未完成 |
+| `Instructions`、`InstructionRules` | Zeta Instruction authority | 目标模型尚未完成，不能把原始文件塞入普通 Config |
+| `Agents` | Zeta Agent definition authority | 目标模型尚未完成 |
 | `Settings` 其他字段 | 对应 Zeta typed field-by-field mapping | 不支持项必须显示为 skipped/unsupported，禁止 raw passthrough |
 | `ExecutionRules` | Policy migration review | 不能生成长期 approval，也不能自动转换为 Hook |
 
 一次 Import 可能同时修改 Skill、MCP、Plugin 与 Hook section，因此 apply 必须先构造完整 plan。
 Config 子批次使用 expected-revision 约束：
 重新校验 source identity/digest，验证全部 typed mutation，成功时一次推进 Config revision，任一项
-失败则不提交任何 Config 项。`Instructions` 与 `Subagents` 等非 Config target 尚未完成；在对应
+失败则不提交任何 Config 项。`Instructions` 与 `Agents` 等非 Config target 尚未完成；在对应
 authority 可以 prepare/publish 前，它们必须保持 unsupported，不能伪装成同一 Config transaction。
 当前 Config 只有逐 command mutation；atomic import batch、跨 authority prepare/publish、import
 receipt、provenance 与 remove/rollback contract 尚未实现。
 
 `zeta-add-dir` 与 Import workflow 是两条不同的 host path。前者授予附加目录的持续文件访问，并可能
-按 directory origin 临时投影 allowlisted Skills、Subagents 或 Plugin declaration；后者让用户
+按 directory origin 临时投影 allowlisted Skills、Agent definitions 或 Plugin declaration；后者让用户
 预览、选择并迁移外部 Agent 配置，不授予持续文件访问。未来两条路径可以复用本 crate 的
 source-specific inspection/parser，但不能复用 authority、lifecycle 或 apply decision。持久
 `additionalDirectories` 是 file-access-only，不能仅因目录可访问就调用本 crate 自动发现配置。
 本 crate 不依赖 `zeta-add-dir`；App Server adapter 负责把 allowlisted inspection projection
 映射到对应的 contribution policy。
+
+原生加载是第四条独立路径：Workspace `.zeta/{instructions,skills,agents}`、Zeta user root、
+built-in resources 和 Plugin contribution 由各目标 authority 直接发现，不经过本 crate。若
+Instruction/Skill/Agent loader 开始扫描 `.codex`、`.agents` 或 `.claude`，或者本 crate 开始加载
+`.zeta` 并构造 runtime snapshot，都表示 compatibility boundary 已经漂移。
+
+Import 与 source registration 也不能画等号。Import 生成由 Zeta authority 独立管理的 artifact；
+source registration 保存一个可撤销的窄只读来源，当前只对 standalone Skill source 具备 Config
+desired-state 基础。两者可以复用 discovery/parser，但由目标 authority 决定 persistence、refresh
+和 removal semantics。
 
 ## 8. 常见修改及影响面
 
@@ -262,7 +275,7 @@ failure fixture；当前测试尚未覆盖所有 `AgentImportError` 分支，这
 - **Current**：Codex/Claude 已知路径的 metadata-only 检查、根目录/候选校验、确定性 inspection、
   diagnostic 与私有路径 `Debug` 隐藏。
 - **Current limitation**：不解析正文，不能生成按条目选择的转换 diff，也不能识别设置文件内嵌
-  的 hook、Plugin、MCP 或 Sub-agent 声明。
+  的 hook、Plugin、MCP 或 Agent definition 声明。
 - **Current limitation**：user constructor 只识别默认 home layout；自定义 `CODEX_HOME`、
   `CLAUDE_CONFIG_DIR` 或独立外部 source root 尚无公共构造契约。
 - **Current limitation**：没有 stable inspection identity、TOCTOU revalidation 或 App Server wire

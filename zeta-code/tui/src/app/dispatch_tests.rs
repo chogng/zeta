@@ -180,7 +180,8 @@ fn skills_view_toggles_catalog_entries_by_enablement() {
     );
     assert_eq!(enabled.visible_items()[0].label(), "skill-creator");
 
-    app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
     let action = app
         .handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
         .unwrap();
@@ -196,8 +197,7 @@ fn skills_view_toggles_catalog_entries_by_enablement() {
 
     let view = crate::features::skills::set_enablement(&mut client, skill_id, enablement).unwrap();
     app.update(AppEvent::SkillsViewReplaced(view));
-    app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
-    app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE));
     let disabled = app.selection_view().unwrap();
     assert_eq!(
         disabled.tabs()[disabled.active_tab_index()].label(),
@@ -222,6 +222,7 @@ fn model_command_updates_and_clears_preferred_model_with_config_revision() {
                 provider: "test".into(),
                 base_url: None,
                 max_output_tokens: None,
+                model_context: Default::default(),
             },
         })
         .unwrap();

@@ -1,5 +1,6 @@
-use super::{decode, result, AppServer, ConnectionState, RpcError};
 use super::operations::resource_rpc_error;
+use super::{AppServer, ConnectionState, RpcError, decode, result};
+use crate::resource_store::MAX_RESOURCE_BYTES;
 use serde_json::Value;
 use std::time::Duration;
 use zeta_app_server_protocol::protocol::error::AppServerErrorName;
@@ -9,12 +10,11 @@ use zeta_app_server_protocol::protocol::fs::{
     FsReadFileParams, FsReadFileResult, FsWriteFileParams, FsWriteFileResult,
 };
 use zeta_app_server_protocol::protocol::resources::ResourceMetadataResult;
-use zeta_file_system::file_revision;
 use zeta_file_system::FileMetadata;
 use zeta_file_system::FileSystemError;
 use zeta_file_system::FileType;
 use zeta_file_system::FileWriteCondition;
-use crate::resource_store::MAX_RESOURCE_BYTES;
+use zeta_file_system::file_revision;
 
 const MAX_EDITOR_FILE_BYTES: usize = 10 * 1024 * 1024;
 const BINARY_PREVIEW_RESOURCE_TTL: Duration = Duration::from_secs(300);

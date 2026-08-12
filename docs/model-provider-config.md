@@ -55,6 +55,7 @@ zeta-http-client      负责底层网络传输
 - base URL normalization 规则；
 - 静态 seed models 和 model catalog policy；
 - 非敏感调用默认值，例如最大输出 token；
+- 用户按模型 ID 提供的 context window 与 automatic compaction threshold；
 - 用户 `ModelProviderConfig`；
 - definition、用户配置和 override 的确定性 merge；
 - 静态 validation、JSON Schema 和配置错误。
@@ -76,6 +77,7 @@ zeta-http-client      负责底层网络传输
 当前 crate 已有：
 
 - `ModelProviderConfig`；
+- `ModelContextConfig`；
 - `NormalizedModelProviderConfig`；
 - `ProviderDefinition`；
 - `ApiProfile`（definition 的显式默认 API profile）；

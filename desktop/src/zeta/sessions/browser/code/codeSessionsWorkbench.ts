@@ -1,54 +1,100 @@
-import { addDisposableListener } from "../../../base/browser/dom.js";
+import { bindResizableLayout } from "../../../base/browser/ui/resizable/resizable.js";
 import { DisposableOwner } from "../../../base/common/lifecycle.js";
+import { BrowserLayoutService } from "../../../platform/layout/browser/layoutService.js";
+import type { IConfigurationApi } from "../../../platform/configuration/common/configuration.js";
+import type { IKeybindingsResourceApi } from "../../../platform/keybinding/common/keybindingsResource.js";
+import type { IStorageService } from "../../../platform/storage/common/storage.js";
+import type { WorkbenchPart } from "../../../workbench/browser/part.js";
+import { WorkbenchInteractionServices } from "../../../workbench/browser/workbenchInteractionServices.js";
+import { WorkbenchConfigurationService } from "../../../workbench/services/configuration/browser/configurationService.js";
+import type { WorkbenchContextMenuServiceFactory } from "../../../workbench/services/contextmenu/common/contextMenuService.js";
 import type { ISessionsWindowApi } from "../../common/sessionsWindow.js";
-import { returnToWorkbench } from "../common/sessionNavigation.js";
-import { SessionChatSurface } from "../common/sessionChatSurface.js";
-import { SessionsList } from "../common/sessionsList.js";
-import type { SessionsRuntime } from "../common/sessionsRuntime.js";
 import type { SessionsProfile } from "../../common/sessionsProfile.js";
+import { SessionsWorkbenchLayout } from "../layout.js";
+import { ISessionsLayoutService, type SessionsPartId } from "../../services/layout/common/sessionsLayoutService.js";
+import { returnToWorkbench } from "../common/sessionNavigation.js";
+import type { SessionsRuntime } from "../common/sessionsRuntime.js";
+import { SessionsAuxiliarybarPart } from "../parts/sessionsAuxiliarybarPart.js";
+import { SessionsPart } from "../parts/sessionsPart.js";
+import { SessionsSidebarPart } from "../parts/sessionsSidebarPart.js";
+import { SessionsTitlebarPart } from "../parts/sessionsTitlebarPart.js";
 
-/** VS Code-inspired fixed agent-session workbench for the Code product. */
+export interface CodeSessionsWorkbenchOptions {
+  readonly ownerDocument: Document;
+  readonly profile: SessionsProfile;
+  readonly runtime: SessionsRuntime;
+  readonly sessionsWindowApi?: ISessionsWindowApi;
+  readonly configurationApi?: IConfigurationApi;
+  readonly keybindingsResourceApi?: IKeybindingsResourceApi;
+  readonly createContextMenuService: WorkbenchContextMenuServiceFactory;
+  readonly storageService: IStorageService;
+}
+
+/** Fixed, VS Code-inspired Workbench composition for Code agent Sessions. */
 export class CodeSessionsWorkbench extends DisposableOwner {
   readonly element: HTMLElement;
+  private readonly layoutService: BrowserLayoutService;
 
-  constructor(ownerDocument: Document, profile: SessionsProfile, runtime: SessionsRuntime, sessionsWindowApi: ISessionsWindowApi | undefined) {
+  constructor(options: CodeSessionsWorkbenchOptions) {
     super();
+    const ownerDocument = options.ownerDocument;
+    const profile = options.profile;
+    const runtime = options.runtime;
     this.element = ownerDocument.createElement("main");
     this.element.className = "zeta-sessions-window zeta-code-sessions-window";
-    const header = ownerDocument.createElement("header");
-    header.className = "zeta-sessions-titlebar";
-    const returnButton = ownerDocument.createElement("button");
-    returnButton.type = "button";
-    returnButton.className = "zeta-sessions-titlebar-button";
-    returnButton.textContent = "Workbench";
-    const title = ownerDocument.createElement("div");
-    title.className = "zeta-sessions-titlebar-title";
-    title.textContent = profile.label;
-    const newSession = ownerDocument.createElement("button");
-    newSession.type = "button";
-    newSession.className = "zeta-sessions-button";
-    newSession.textContent = "New session";
-    header.append(returnButton, title, newSession);
-    const body = ownerDocument.createElement("div");
-    body.className = "zeta-code-sessions-layout";
-    const navigation = this.own(new SessionsList(ownerDocument, runtime.sessions, "Sessions", "New session"));
-    const primary = ownerDocument.createElement("section");
-    primary.className = "zeta-code-sessions-primary";
-    const primaryHeading = ownerDocument.createElement("div");
-    primaryHeading.className = "zeta-sessions-surface-header";
-    primaryHeading.innerHTML = "<h1>Agent session</h1><p>Plan, implement, and review work without changing the regular Workbench.</p>";
-    const chat = this.own(new SessionChatSurface(ownerDocument, runtime.sessions, runtime.chat, "Ask the coding agent to investigate, implement, or review…", "New code session", "Turn a task into an executable plan", "Describe the outcome, constraints, or a file to inspect. The agent thread stays focused here while your tools remain in Workbench."));
-    primary.append(primaryHeading, chat.element);
-    const context = ownerDocument.createElement("aside");
-    context.className = "zeta-code-sessions-context";
-    context.innerHTML = "<h2>Context</h2><p>Keep the workspace, changes, and terminal in the regular Workbench. This window is focused on the active agent session.</p><ul><li>Choose or create a session on the left.</li><li>Use the center pane for the agent thread.</li><li>Return to Workbench to inspect files and run tools.</li></ul>";
-    body.append(navigation.element, primary, context);
-    this.element.append(header, body);
-    this.own(addDisposableListener(returnButton, "click", () => returnToWorkbench(profile.workbenchRelativePath, sessionsWindowApi)));
-    this.own(addDisposableListener(newSession, "click", () => {
-      runtime.sessions.createUntitledSession("New code session");
-      chat.focus();
+    let layout: SessionsWorkbenchLayout | undefined;
+    let sessionsPart: SessionsPart | undefined;
+    const layoutService = this.own(new BrowserLayoutService({
+      root: this.element,
+      getContainerOffset: () => layout?.mainContainerOffset ?? { top: 0, quickInputTop: 0 },
+      focus: () => sessionsPart?.focus(),
     }));
+    this.layoutService = layoutService;
+    const configurationService = this.own(new WorkbenchConfigurationService({ api: options.configurationApi }));
+    const interactionServices = this.own(new WorkbenchInteractionServices({
+      services: runtime.services,
+      ownerDocument,
+      layoutService,
+      configurationService,
+      keybindingsResourceApi: options.keybindingsResourceApi,
+      createContextMenuService: options.createContextMenuService,
+    }));
+    const titlebar = this.own(new SessionsTitlebarPart(ownerDocument, profile, runtime.view, {
+      returnToWorkbench: () => returnToWorkbench(profile.workbenchRelativePath, options.sessionsWindowApi),
+      focusSessions: () => sessionsPart?.focus(),
+    }));
+    const sidebar = this.own(new SessionsSidebarPart(ownerDocument, runtime.sessions, runtime.view));
+    sessionsPart = this.own(new SessionsPart({
+      ownerDocument,
+      sessionService: runtime.sessions,
+      chatService: runtime.chat,
+      contextMenuService: interactionServices.contextMenuService,
+      contextViewService: interactionServices.contextViewService,
+      commandService: interactionServices.commandService,
+      activateSelection: selection => runtime.view.activateSelection(selection),
+      closeSelection: selection => runtime.view.closeVisibleSelection(selection),
+    }));
+    const updateSessionsPart = (): void => sessionsPart?.updateVisibleSelections(runtime.view.visibleSelections, runtime.view.activeSelection);
+    this.own(runtime.view.onDidChange(updateSessionsPart));
+    updateSessionsPart();
+    const auxiliarybar = this.own(new SessionsAuxiliarybarPart(ownerDocument, runtime.sessions, runtime.view));
+    const parts = new Map<SessionsPartId, WorkbenchPart>([
+      ["titlebar", titlebar],
+      ["sidebar", sidebar],
+      ["sessions", sessionsPart],
+      ["auxiliarybar", auxiliarybar],
+    ]);
+    layout = this.own(new SessionsWorkbenchLayout(this.element, parts, {
+      initialDimension: layoutService.mainContainerDimension,
+      storageService: options.storageService,
+    }));
+    runtime.services.set(ISessionsLayoutService, layout);
+    this.own(bindResizableLayout(layoutService.onDidLayoutMainContainer, layout));
     void runtime.initialize();
+  }
+
+  /** Measures the connected Sessions host and lays out its fixed Part grid. */
+  layout(): void {
+    this.layoutService.layout();
   }
 }

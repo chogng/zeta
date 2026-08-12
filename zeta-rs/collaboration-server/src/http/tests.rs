@@ -1,5 +1,5 @@
-use super::serve_listener;
 use super::HttpRuntime;
+use super::serve_listener;
 use crate::CollaborationServerOptions;
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -8,9 +8,9 @@ use std::io::Write;
 use std::net::SocketAddr;
 use std::net::TcpListener;
 use std::net::TcpStream;
+use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 use std::thread;
 use tempfile::TempDir;
 use zeta_collaboration::SqliteDocumentCollaborationRooms;

@@ -6,6 +6,7 @@ mod error;
 mod providers;
 mod registry;
 
+pub use config::ModelContextConfig;
 pub use config::ModelProviderConfig;
 pub use config::NormalizedModelProviderConfig;
 pub use definition::ApiProfile;

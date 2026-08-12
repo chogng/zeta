@@ -2,6 +2,7 @@ use crate::protocol::common::CommandId;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
+use zeta_protocol::ContentDigest;
 use zeta_protocol::SkillId;
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -24,6 +25,7 @@ pub enum SkillEnablementDto {
 pub enum SkillSourceKindDto {
     BuiltIn,
     User,
+    Workspace,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -43,7 +45,7 @@ pub struct SkillDto {
     pub id: SkillId,
     pub description: String,
     pub source_kind: SkillSourceKindDto,
-    pub content_digest: String,
+    pub content_digest: ContentDigest,
     pub enablement: SkillEnablementDto,
     pub compatibility: SkillCompatibilityDto,
 }

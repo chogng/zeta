@@ -1,7 +1,7 @@
 use super::*;
 
 #[test]
-fn content_identities_validate_during_deserialization() {
-    assert!(ContentDigest::new(format!("sha256:{}", "0".repeat(64))).is_ok());
-    assert!(ContentDigest::new(format!("sha256:{}", "A".repeat(64))).is_err());
+fn catalog_generations_are_monotonic() {
+    assert_eq!(SkillCatalogGeneration::INITIAL.get(), 1);
+    assert_eq!(SkillCatalogGeneration::INITIAL.next().get(), 2);
 }

@@ -1,5 +1,6 @@
 //! Transport-independent App Server business contract.
 
+pub mod code_index;
 pub mod collaboration;
 pub mod common;
 pub mod config;

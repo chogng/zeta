@@ -11,7 +11,7 @@
 | 提示词类别 | 当前资产 | 注入时机 owner | 当前状态 |
 |---|---|---|---|
 | System | `SYSTEM_PROMPT` | Agent invocation/context caller | 已具备资产，尚未由 Core 自动注入 |
-| Compaction | `COMPACTION_PROMPT` | Compaction orchestration | 已具备资产，压缩流程尚未完成 |
+| Compaction | `COMPACTION_PROMPT` | Core `ContextCompactionService` | ✅ 已接入 durable checkpoint 流程 |
 | Goals | `GOALS_PROMPT` + `render_goals_prompt` | Goal lifecycle caller | 已具备模板和类型化渲染，目标模型尚未完成 |
 | Review | `REVIEW_PROMPT` | Review caller | 已具备通用 review 资产 |
 

@@ -48,9 +48,10 @@ export class ChatInputPart extends DisposableOwner {
   private readonly input: IChatInputEditor;
   private readonly inputToolbar: WorkbenchToolBar;
   private readonly slashCommands = new SlashCommandCatalog(DesktopSlashCommands, []);
-  private state: ChatInputState = { phase: "loading", canInterrupt: false, models: [], slashCommands: [] };
+  private state: ChatInputState = { phase: "loading", canInterrupt: false, models: [], slashCommands: [], skillCommands: [] };
   private toolbarState: ChatInputToolbarState = { canSubmit: false, canInterrupt: false, inputKind: "message", models: [] };
   private serverSlashCommands: ChatInputState["slashCommands"] = [];
+  private skillCommands: ChatInputState["skillCommands"] = [];
   private mode: ChatInputMode = "agent";
 
   constructor(ownerDocument: Document, delegate: ChatInputDelegate, contextMenuService: IContextMenuService, contextViewService: IContextViewService) {
@@ -95,7 +96,8 @@ export class ChatInputPart extends DisposableOwner {
         this.submit(value, this.delegate.executeCommand({ commandId: input.binding.actionId, argumentsText: input.argumentsText }));
         return;
       }
-      this.submit(value, this.delegate.send(value));
+      const skills = input.kind === "command" && input.binding.origin === "skill" ? [input.binding.skill] : undefined;
+      this.submit(value, this.delegate.send(value, skills));
     }));
     this.own(this.input.onDidChange(() => {
       this.status.textContent = this.statusText(this.state);
@@ -129,6 +131,10 @@ export class ChatInputPart extends DisposableOwner {
     if (this.serverSlashCommands !== state.slashCommands) {
       this.slashCommands.setServerCommands(state.slashCommands);
       this.serverSlashCommands = state.slashCommands;
+    }
+    if (this.skillCommands !== state.skillCommands) {
+      this.slashCommands.setSkillCommands(state.skillCommands);
+      this.skillCommands = state.skillCommands;
     }
     this.state = state;
     this.status.textContent = this.statusText(state);

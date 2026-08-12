@@ -4,6 +4,8 @@ use zeta_model_provider_config::{ModelId, ProviderConfigError, ProviderId};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ModelProviderError {
+    InvalidRequest(&'static str),
+    InvalidResponse(&'static str),
     Config(ProviderConfigError),
     ModelNotRegistered {
         provider: ProviderId,
@@ -17,6 +19,10 @@ pub enum ModelProviderError {
 impl fmt::Display for ModelProviderError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::InvalidRequest(message) => write!(formatter, "invalid model request: {message}"),
+            Self::InvalidResponse(message) => {
+                write!(formatter, "invalid model response: {message}")
+            }
             Self::Config(error) => error.fmt(formatter),
             Self::ModelNotRegistered { provider, model } => write!(
                 formatter,

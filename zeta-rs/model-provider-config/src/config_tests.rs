@@ -1,5 +1,6 @@
 use super::*;
 use serde_json::json;
+use std::collections::BTreeMap;
 
 fn provider_id(value: &str) -> ProviderId {
     ProviderId::new(value).unwrap()
@@ -29,6 +30,13 @@ fn model_provider_config_is_serializable_and_has_a_schema() {
         provider: provider_id("openai"),
         base_url: Some("https://example.test/v1".into()),
         max_output_tokens: Some(2048),
+        model_context: BTreeMap::from([(
+            ModelId::new("gpt-test").unwrap(),
+            ModelContextConfig {
+                context_window: 16_384,
+                auto_compact_token_limit: Some(12_000),
+            },
+        )]),
     };
 
     let value = serde_json::to_value(&config).unwrap();
@@ -37,7 +45,13 @@ fn model_provider_config_is_serializable_and_has_a_schema() {
         json!({
             "provider": "openai",
             "baseUrl": "https://example.test/v1",
-            "maxOutputTokens": 2048
+            "maxOutputTokens": 2048,
+            "modelContext": {
+                "gpt-test": {
+                    "contextWindow": 16384,
+                    "autoCompactTokenLimit": 12000
+                }
+            }
         })
     );
     assert_eq!(
@@ -139,6 +153,7 @@ fn configured_endpoint_is_required_and_overrides_are_normalized() {
             provider: provider_id("custom"),
             base_url: Some(" https://runtime.test/v1/ ".into()),
             max_output_tokens: Some(512),
+            model_context: BTreeMap::new(),
         })
         .unwrap();
     assert_eq!(normalized.base_url, "https://runtime.test/v1");
@@ -150,6 +165,7 @@ fn static_validation_rejects_invalid_urls_and_zero_token_limits() {
         provider: provider_id("custom"),
         base_url: Some("file:///tmp/provider".into()),
         max_output_tokens: None,
+        model_context: BTreeMap::new(),
     };
     assert!(matches!(
         invalid_url.validate_static(),
@@ -160,10 +176,36 @@ fn static_validation_rejects_invalid_urls_and_zero_token_limits() {
         provider: provider_id("custom"),
         base_url: None,
         max_output_tokens: Some(0),
+        model_context: BTreeMap::new(),
     };
     assert_eq!(
         invalid_tokens.validate_static().unwrap_err(),
         ProviderConfigError::InvalidMaxOutputTokens(provider_id("custom"))
+    );
+}
+
+#[test]
+fn static_validation_rejects_zero_model_context_limits() {
+    let model = ModelId::new("model").unwrap();
+    let config = ModelProviderConfig {
+        provider: provider_id("custom"),
+        base_url: None,
+        max_output_tokens: None,
+        model_context: BTreeMap::from([(
+            model.clone(),
+            ModelContextConfig {
+                context_window: 0,
+                auto_compact_token_limit: None,
+            },
+        )]),
+    };
+
+    assert_eq!(
+        config.validate_static().unwrap_err(),
+        ProviderConfigError::InvalidModelContext {
+            provider: provider_id("custom"),
+            model,
+        }
     );
 }
 

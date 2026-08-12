@@ -7,12 +7,18 @@ use zeta_config::{ConfigChange, SkillEnablement, SkillSourceEnablement, SkillsCo
 use zeta_file_watcher::DebouncedWatchReceiver;
 use zeta_file_watcher::FileWatcher;
 use zeta_file_watcher::FileWatcherBackend;
+use zeta_file_watcher::FileWatcherEvent;
 use zeta_file_watcher::WatchPath;
+use zeta_protocol::FrozenSkillActivation;
+use zeta_protocol::SkillActivationReason;
+use zeta_protocol::SkillRef;
 use zeta_skills::{
-    SkillCatalog, SkillCatalogEntry, SkillDiagnosticCode, SkillSourceId, SkillSourceRoot,
+    ActivatedSkill, SkillCatalog, SkillCatalogEntry, SkillCompatibility, SkillDiagnosticCode,
+    SkillSourceId, SkillSourceRoot,
 };
 
 const BUILT_IN_SOURCE_ID: &str = "builtin:skill-source:zeta-release";
+const WORKSPACE_SOURCE_ID: &str = "workspace:skill-source:.zeta";
 const ALIASED_PATH_POLL_INTERVAL: Duration = Duration::from_millis(100);
 
 /// Supplies the latest resolved user Skill configuration to the App Server-owned runtime.
@@ -63,6 +69,7 @@ pub(crate) struct SkillRuntimeSnapshot {
 pub(crate) struct SkillRuntime {
     built_in_source: BuiltInSkillSource,
     config: Arc<dyn SkillConfigSnapshotProvider>,
+    workspace_root: Mutex<Option<PathBuf>>,
     state: Mutex<SkillRuntimeState>,
     updates: Arc<UpdateBroker>,
 }
@@ -95,6 +102,7 @@ struct SourceComposition {
 enum SourceKind {
     BuiltIn,
     User,
+    Workspace,
 }
 
 impl SkillRuntime {
@@ -104,7 +112,7 @@ impl SkillRuntime {
         updates: Arc<UpdateBroker>,
     ) -> Result<Arc<Self>, String> {
         let skills_config = config.snapshot()?;
-        let composition = compose_sources(&built_in_source, &skills_config)?;
+        let composition = compose_sources(&built_in_source, &skills_config, None)?;
         let catalog = SkillCatalog::discover(composition.roots)
             .map_err(|error| format!("failed to discover Skill catalog: {error}"))?;
         let snapshot = Arc::new(project_snapshot(
@@ -116,6 +124,7 @@ impl SkillRuntime {
         Ok(Arc::new(Self {
             built_in_source,
             config,
+            workspace_root: Mutex::new(None),
             state: Mutex::new(SkillRuntimeState {
                 source_fingerprint: composition.fingerprint,
                 catalog,
@@ -132,6 +141,48 @@ impl SkillRuntime {
         self.reconcile(reload)
     }
 
+    pub(crate) fn activate_explicit(&self, selected: &SkillRef) -> Result<ActivatedSkill, String> {
+        self.reconcile(SkillCatalogReload::Refresh)?;
+        let state = self
+            .state
+            .lock()
+            .map_err(|_| "Skill runtime lock poisoned".to_string())?;
+        let entry = state
+            .snapshot
+            .entries
+            .iter()
+            .find(|entry| entry.catalog_entry.id() == &selected.id)
+            .ok_or_else(|| format!("Skill '{}' is not available", selected.id.name))?;
+        if entry.enablement != SkillEnablement::Enabled {
+            return Err(format!("Skill '{}' is disabled", selected.id.name));
+        }
+        if !matches!(
+            entry.catalog_entry.compatibility(),
+            SkillCompatibility::Compatible
+        ) {
+            return Err(format!("Skill '{}' is not compatible", selected.id.name));
+        }
+        state
+            .catalog
+            .activate(selected, SkillActivationReason::Explicit)
+            .map_err(|error| error.to_string())
+    }
+
+    fn load_frozen(&self, frozen: &FrozenSkillActivation) -> Result<ActivatedSkill, String> {
+        self.reconcile(SkillCatalogReload::Refresh)?;
+        let state = self
+            .state
+            .lock()
+            .map_err(|_| "Skill runtime lock poisoned".to_string())?;
+        state
+            .catalog
+            .activate(
+                &SkillRef::pinned(frozen.id.clone(), frozen.content_digest.clone()),
+                frozen.reason,
+            )
+            .map_err(|error| error.to_string())
+    }
+
     pub(crate) fn watched_paths(&self) -> Vec<PathBuf> {
         let state = self
             .state
@@ -142,9 +193,47 @@ impl SkillRuntime {
             .iter()
             .map(|source| source.root.clone())
             .collect::<Vec<_>>();
+        drop(state);
+        if let Some(workspace_root) = self
+            .workspace_root
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .as_ref()
+        {
+            let metadata_root = workspace_root.join(".zeta");
+            paths.push(if metadata_root.is_dir() {
+                metadata_root
+            } else {
+                workspace_root.clone()
+            });
+        }
         paths.sort();
         paths.dedup();
         paths
+    }
+
+    /// Rebinds the native `.zeta/skills` source for the active Workspace.
+    pub(crate) fn bind_workspace_root(
+        &self,
+        workspace_root: PathBuf,
+    ) -> Result<Arc<SkillRuntimeSnapshot>, String> {
+        let previous = {
+            let mut current = self
+                .workspace_root
+                .lock()
+                .map_err(|_| "Workspace Skill source lock poisoned".to_string())?;
+            current.replace(workspace_root)
+        };
+        match self.reconcile(SkillCatalogReload::Refresh) {
+            Ok(snapshot) => Ok(snapshot),
+            Err(error) => {
+                *self
+                    .workspace_root
+                    .lock()
+                    .map_err(|_| "Workspace Skill source lock poisoned".to_string())? = previous;
+                Err(error)
+            }
+        }
     }
 
     pub(super) fn start_watching(self: &Arc<Self>) -> SkillWatcher {
@@ -167,7 +256,16 @@ impl SkillRuntime {
 
     fn reconcile(&self, reload: SkillCatalogReload) -> Result<Arc<SkillRuntimeSnapshot>, String> {
         let skills_config = self.config.snapshot()?;
-        let composition = compose_sources(&self.built_in_source, &skills_config)?;
+        let workspace_root = self
+            .workspace_root
+            .lock()
+            .map_err(|_| "Workspace Skill source lock poisoned".to_string())?
+            .clone();
+        let composition = compose_sources(
+            &self.built_in_source,
+            &skills_config,
+            workspace_root.as_deref(),
+        )?;
         let mut state = self
             .state
             .lock()
@@ -201,6 +299,35 @@ impl SkillRuntime {
         drop(state);
         self.updates.publish_skills_changed(snapshot.generation);
         Ok(snapshot)
+    }
+}
+
+impl zeta_core::SkillInstructionsProvider for SkillRuntime {
+    fn resolve(
+        &self,
+        activations: &[FrozenSkillActivation],
+    ) -> Result<Vec<zeta_core::SkillInstruction>, zeta_core::CoreError> {
+        activations
+            .iter()
+            .map(|frozen| {
+                let activated = self
+                    .load_frozen(frozen)
+                    .map_err(zeta_core::CoreError::Context)?;
+                Ok(zeta_core::SkillInstruction::new(
+                    frozen.id.clone(),
+                    frozen.content_digest.clone(),
+                    activated.body(),
+                    match frozen.reason {
+                        SkillActivationReason::Explicit => {
+                            zeta_core::SkillInstructionRetention::Required
+                        }
+                        SkillActivationReason::Automatic => {
+                            zeta_core::SkillInstructionRetention::BestEffort
+                        }
+                    },
+                ))
+            })
+            .collect()
     }
 }
 
@@ -251,48 +378,78 @@ fn watch_skill_sources(
             tokio::select! {
                 _ = &mut shutdown => break,
                 _ = config_poll.tick() => {
-                    let Some(changes) = &config_changes else {
-                        continue;
-                    };
-                    if changes.try_iter().count() == 0 {
-                        continue;
-                    }
                     let Some(skill_runtime) = runtime.upgrade() else {
                         break;
                     };
-                    let _ = skill_runtime.list(SkillCatalogReload::Cached);
+                    if config_changes
+                        .as_ref()
+                        .is_some_and(|changes| changes.try_iter().count() > 0)
+                    {
+                        let _ = skill_runtime.list(SkillCatalogReload::Cached);
+                    }
                     let next_paths = skill_runtime.watched_paths();
-                    if next_paths != watched_paths {
-                        if let Ok(next_registration) =
+                    if next_paths != watched_paths
+                        && let Ok(next_registration) =
                             subscriber.register_paths(watch_paths(&next_paths))
-                        {
-                            registration = next_registration;
-                            watched_paths = next_paths;
-                        }
+                    {
+                        registration = next_registration;
+                        watched_paths = next_paths;
+                        let _ = skill_runtime.list(SkillCatalogReload::Refresh);
                     }
                 }
                 event = receiver.recv() => {
-                    if event.is_none() {
+                    let Some(event) = event else {
                         break;
-                    }
+                    };
                     let Some(skill_runtime) = runtime.upgrade() else {
                         break;
                     };
-                    let _ = skill_runtime.list(SkillCatalogReload::Refresh);
+                    if event_affects_catalog(&skill_runtime, &event) {
+                        let _ = skill_runtime.list(SkillCatalogReload::Refresh);
+                    }
                     let next_paths = skill_runtime.watched_paths();
-                    if next_paths != watched_paths {
-                        if let Ok(next_registration) =
+                    if next_paths != watched_paths
+                        && let Ok(next_registration) =
                             subscriber.register_paths(watch_paths(&next_paths))
-                        {
-                            registration = next_registration;
-                            watched_paths = next_paths;
-                        }
+                    {
+                        registration = next_registration;
+                        watched_paths = next_paths;
+                        let _ = skill_runtime.list(SkillCatalogReload::Refresh);
                     }
                 }
             }
         }
         drop(registration);
     });
+}
+
+fn event_affects_catalog(runtime: &SkillRuntime, event: &FileWatcherEvent) -> bool {
+    let FileWatcherEvent::PathsChanged { paths } = event else {
+        return true;
+    };
+    let state = runtime
+        .state
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let mut catalog_roots = state
+        .source_fingerprint
+        .iter()
+        .map(|source| source.root.clone())
+        .collect::<Vec<_>>();
+    drop(state);
+    if let Some(workspace_root) = runtime
+        .workspace_root
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .as_ref()
+    {
+        catalog_roots.push(workspace_root.join(".zeta/skills"));
+    }
+    paths.iter().any(|changed| {
+        catalog_roots
+            .iter()
+            .any(|root| changed.starts_with(root) || root.starts_with(changed))
+    })
 }
 
 fn watch_paths(paths: &[PathBuf]) -> Vec<WatchPath> {
@@ -322,15 +479,18 @@ fn watcher_backend(paths: &[PathBuf]) -> FileWatcherBackend {
 fn compose_sources(
     built_in_source: &BuiltInSkillSource,
     config: &SkillsConfig,
+    workspace_root: Option<&std::path::Path>,
 ) -> Result<SourceComposition, String> {
     let mut fingerprint = Vec::new();
     let mut roots = Vec::new();
     let mut diagnostics = Vec::new();
     let built_in_id = SkillSourceId::new(BUILT_IN_SOURCE_ID)
         .expect("the repository built-in Skill source ID is valid");
+    let workspace_id = SkillSourceId::new(WORKSPACE_SOURCE_ID)
+        .expect("the native Workspace Skill source ID is valid");
     match built_in_source {
         BuiltInSkillSource::Root(root) => add_source(
-            built_in_id,
+            built_in_id.clone(),
             root.clone(),
             SourceKind::BuiltIn,
             &mut fingerprint,
@@ -348,6 +508,13 @@ fn compose_sources(
         .values()
         .filter(|source| source.enablement == SkillSourceEnablement::Enabled)
     {
+        if source.id == built_in_id || source.id == workspace_id {
+            diagnostics.push(source_unavailable_diagnostic(
+                &source.id,
+                "native Skill source identities cannot be registered as user sources",
+            ));
+            continue;
+        }
         let root = PathBuf::from(&source.root_reference);
         if !root.is_absolute() {
             diagnostics.push(source_unavailable_diagnostic(
@@ -364,6 +531,24 @@ fn compose_sources(
             &mut roots,
             &mut diagnostics,
         );
+    }
+    if let Some(workspace_root) = workspace_root {
+        let root = workspace_root.join(".zeta/skills");
+        match std::fs::symlink_metadata(&root) {
+            Ok(_) => add_source(
+                workspace_id.clone(),
+                root,
+                SourceKind::Workspace,
+                &mut fingerprint,
+                &mut roots,
+                &mut diagnostics,
+            ),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(_) => diagnostics.push(source_unavailable_diagnostic(
+                &workspace_id,
+                "the native Workspace Skill source cannot be inspected",
+            )),
+        }
     }
     fingerprint.sort_by(|left, right| left.id.cmp(&right.id));
     Ok(SourceComposition {
@@ -384,6 +569,7 @@ fn add_source(
     let source = match kind {
         SourceKind::BuiltIn => SkillSourceRoot::built_in(id.clone(), &root),
         SourceKind::User => SkillSourceRoot::user(id.clone(), &root),
+        SourceKind::Workspace => SkillSourceRoot::workspace(id.clone(), &root),
     };
     match source {
         Ok(source) => {

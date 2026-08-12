@@ -6,7 +6,7 @@ use zeta_app_server_protocol::protocol::config::{
     ConfigReadResult, ConfigUpdateParams, LanguageServerConfigDto, LanguageServerConfigureParams,
     LanguageServerModeDto, LanguageServerRemoveParams, McpCredentialBindingDto, McpServerConfigDto,
     McpServerEnablementDto, McpServerRemoveParams, McpServerSetEnablementParams,
-    McpServerUpsertParams, McpTransportDto, ModelRefDto, ProviderConfigDto,
+    McpServerUpsertParams, McpTransportDto, ModelContextConfigDto, ModelRefDto, ProviderConfigDto,
     ProviderConfigureParams, ProviderRemoveParams, SkillSourceAddParams, SkillSourceConfigDto,
     SkillSourceEnablementDto, SkillSourceRemoveParams, SkillSourceSetEnablementParams,
 };
@@ -19,6 +19,7 @@ use zeta_config::{
     SkillSourceEnablement, SkillSourceId, UserConfigCommand,
 };
 use zeta_model_provider::{ModelId, ModelRef, ProviderId};
+use zeta_model_provider_config::ModelContextConfig;
 use zeta_model_provider_config::ModelProviderConfig;
 use zeta_protocol::Patch;
 
@@ -410,15 +411,43 @@ fn provider_config_dto(config: ModelProviderConfig) -> ProviderConfigDto {
         provider: config.provider.to_string(),
         base_url: config.base_url,
         max_output_tokens: config.max_output_tokens,
+        model_context: config
+            .model_context
+            .into_iter()
+            .map(|(model, context)| {
+                (
+                    model.to_string(),
+                    ModelContextConfigDto {
+                        context_window: context.context_window,
+                        auto_compact_token_limit: context.auto_compact_token_limit,
+                    },
+                )
+            })
+            .collect(),
     }
 }
 
 fn provider_config_from_dto(config: ProviderConfigDto) -> Result<ModelProviderConfig, RpcError> {
+    let model_context = config
+        .model_context
+        .into_iter()
+        .map(|(model, context)| {
+            Ok((
+                ModelId::new(model)
+                    .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?,
+                ModelContextConfig {
+                    context_window: context.context_window,
+                    auto_compact_token_limit: context.auto_compact_token_limit,
+                },
+            ))
+        })
+        .collect::<Result<_, RpcError>>()?;
     Ok(ModelProviderConfig {
         provider: ProviderId::new(config.provider)
             .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?,
         base_url: config.base_url,
         max_output_tokens: config.max_output_tokens,
+        model_context,
     })
 }
 

@@ -20,6 +20,16 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
   const sessionsPage = await sessionPagePromise;
   await sessionsPage.waitForLoadState("domcontentloaded");
   await expect(sessionsPage.locator(".zeta-code-sessions-window")).toBeVisible();
+  await expect(sessionsPage.locator("[data-part='titlebar']")).toBeVisible();
+  await expect(sessionsPage.locator("[data-part='sidebar']")).toBeVisible();
+  await expect(sessionsPage.locator("[data-part='sessions']")).toBeVisible();
+  await expect(sessionsPage.locator("[data-part='auxiliarybar']")).toBeVisible();
+  await expect(sessionsPage.locator(".zeta-chat-input-part")).toBeVisible();
+  await sessionsPage.locator(".zeta-sessions-titlebar-new-session").click();
+  await expect(sessionsPage.locator(".zeta-sessions-chat-slot")).toHaveCount(2);
+  await expect(sessionsPage.locator(".zeta-sessions-chat-slot.active")).toHaveCount(1);
+  await sessionsPage.locator(".zeta-sessions-chat-slot-close").last().click();
+  await expect(sessionsPage.locator(".zeta-sessions-chat-slot")).toHaveCount(1);
   await expect.poll(() => application.windows().length).toBe(2);
 
   const sessionWindowState = await application.evaluate(({ BrowserWindow }) => {

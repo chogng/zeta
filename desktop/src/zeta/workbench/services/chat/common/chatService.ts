@@ -1,6 +1,7 @@
 import type { Event } from "../../../../base/common/event.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 import type { ModelRef, SessionId, ThreadId } from "../../sessions/common/sessionService.js";
+import type { SkillReference } from "../../../../platform/skills/common/skillApi.js";
 
 export interface ModelCatalogEntry {
   readonly model: ModelRef;
@@ -11,6 +12,13 @@ export interface SlashCommandDefinition {
   readonly name: string;
   readonly description: string;
   readonly argumentMode: "none" | "optional";
+}
+
+export interface SkillCommandDefinition {
+  readonly name: string;
+  readonly description: string;
+  readonly source: string;
+  readonly skill: SkillReference;
 }
 
 export type ThreadItem =
@@ -92,7 +100,7 @@ export interface ThreadSubscription {
   readonly updates: readonly ThreadUpdateEnvelope[];
 }
 
-export interface StartTurnOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly text: string }
+export interface StartTurnOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly text: string; readonly skills?: readonly SkillReference[] }
 export interface InterruptTurnOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly turnId: string; readonly expectedSequence: number }
 export interface ResolveInteractionOptions extends InterruptTurnOptions { readonly requestId: string; readonly response: AgentResponse }
 
@@ -100,8 +108,10 @@ export interface ResolveInteractionOptions extends InterruptTurnOptions { readon
 export interface IChatService {
   readonly onDidUpdateThread: Event<ThreadUpdateEnvelope>;
   readonly onDidBecomeReady: Event<void>;
+  readonly onDidChangeSkills: Event<void>;
   listModels(): Promise<readonly ModelCatalogEntry[]>;
   listSlashCommands(): Promise<readonly SlashCommandDefinition[]>;
+  listSkillCommands(): Promise<readonly SkillCommandDefinition[]>;
   readThread(sessionId: SessionId, threadId: ThreadId): Promise<Thread>;
   subscribeThread(sessionId: SessionId, threadId: ThreadId, afterSequence: number): Promise<ThreadSubscription>;
   unsubscribeThread(sessionId: SessionId, threadId: ThreadId): Promise<void>;

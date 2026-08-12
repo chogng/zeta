@@ -30,6 +30,9 @@ Tool、approval policy 或 persistence。
   原子文本插入；
 - `/` 打开 command popup，支持 cursor-aware prefix filtering、循环选择、保留已有参数尾部的
   Tab completion、Esc dismiss 与左键单击可见命令；
+- enabled、compatible、名称无歧义且不与已有命令冲突的 Skill 直接显示为 `/name`；提交时保留
+  `/name …` 用户文本并附加 exact pinned `SkillRef`，完整 `SKILL.md` 只在 App Server 接受 Turn
+  后按需加载；`skills/changed` 会刷新这部分动态命令；
 - `/resume`、`/thread`、`/archive-thread`、`/rewind`、`/clear`、`/files`、`/fork`、`/model`、`/theme` 与 `/new` 可解析 inline arguments，并在执行前展开
   large-paste placeholder；product command 明确拒绝 image arguments；
 - command popup 只注册已有真实执行流的 built-ins：`/status`、`/skills`、`/mcp`、`/resume`、
@@ -39,9 +42,9 @@ Tool、approval policy 或 persistence。
   surface；Space 进入搜索模式，左右键或 Tab/BackTab 循环切页、上下键循环选择，以及 Esc/Ctrl-C
   返回 composer；
 - `/skills` 通过 typed `skills/list` 打开同一 interaction surface，提供
-  All/Enabled/Disabled/Errors tabs、数量、搜索和 source-qualified metadata；`Enter` 通过
-  revision-checked `skill/enablement/set` 切换所选 Skill，`skills/changed` 会刷新仍在前台的页面；
-  该页面不把 enablement 冒充为正文 activation；
+  All/Enabled/Disabled/Manage/Errors tabs、数量、搜索和 source-qualified metadata；只有 Manage
+  tab 的动作通过 revision-checked `skill/enablement/set` 修改 enablement；该页面是目录管理入口，
+  不直接激活 Skill；
 - `/rewind` 或主界面 500 ms 内连续按两次 Esc 打开可搜索的历史消息 checkpoint Pane；Enter
   通过 typed `session/request` 的 `RewindThread` operation，创建具有 Rewind lineage 的子 Thread，只导入所选消息之前的
   terminal Turns。原 Thread 保持不变，TUI 切换订阅并以 `/rewind <turn-id>` 记录结果；
@@ -348,10 +351,11 @@ Built-in command 进入 `app::dispatch::execute_product_command`：dispatcher �
 `ActiveConversation` 调用 typed Session/Thread API，只返回 `ProductCommandOutput`；主循环不在
 dispatcher 内等待 RPC。查询命令读取 authoritative config，`/model` 通过 expected revision
 mutation 更新 preferred model。`/help` 和 `/skills` 复用 generic interaction selection surface；关闭
-它们会恢复一直保留的 composer。`/skills` 映射 App Server 的 immutable catalog snapshot；
-`Enter` 产生 source-qualified `SkillId` enablement intent，成功写入 config 后重新读取页面。
-catalog/file watcher 变化通过 `skills/changed` 触发同一刷新路径。TUI 不读取 Skill filesystem，
-也没有正文 activation/context injection action。没有对应 typed contract 的产品命令不进入
+它们会恢复一直保留的 composer。`/skills` 映射 App Server 的 immutable catalog snapshot；Manage
+tab 的 `Enter` 产生 source-qualified `SkillId` enablement intent，成功写入 config 后重新读取页面。
+catalog/file watcher 变化通过 `skills/changed` 同时刷新管理页面和动态 Skill commands。TUI 不读取
+Skill filesystem；`/name` 只提交 typed `SkillRef`，正文 activation/context injection 仍由 App
+Server 与 Core 拥有。没有对应 typed contract 的产品命令不进入
 registry，不显示占位提示，也不转成普通 prompt 冒充成功。
 
 ## 快照→ UI 映射

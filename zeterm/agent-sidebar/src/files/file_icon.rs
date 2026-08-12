@@ -1,5 +1,5 @@
-use zeta_icons::icons;
 use zeta_icons::Icon;
+use zeta_icons::icons;
 use zeta_ui::TreeItemExpansion;
 
 /// Selects the native semantic icon for one visible file-tree item.

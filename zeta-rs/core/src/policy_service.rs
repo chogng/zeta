@@ -14,6 +14,28 @@ use zeta_protocol::{
 /// Implementations must return only the final decision produced for the supplied immutable policy
 /// request. `AskUser` remains a request for durable interaction; it is never authorization.
 pub trait PolicyService: Send + Sync {
+    /// Returns the current immutable policy-environment revision at a Turn safe point.
+    fn revision(&self) -> String;
+
+    /// Evaluates under a Turn's durable policy ceiling.
+    ///
+    /// A changed policy environment fails closed by default. Implementations that can prove a
+    /// newer revision is no wider may override this method and apply the stricter decision.
+    fn decide_for_turn(
+        &self,
+        frozen_revision: &str,
+        request: &ActionReviewRequest,
+        cancellation: &CancellationToken,
+    ) -> Result<ExecutionDecision, CoreError> {
+        let current_revision = self.revision();
+        if current_revision != frozen_revision {
+            return Err(CoreError::Policy(format!(
+                "Turn policy revision changed from {frozen_revision} to {current_revision}; continuation requires explicit authorization"
+            )));
+        }
+        self.decide(request, cancellation)
+    }
+
     fn decide(
         &self,
         request: &ActionReviewRequest,
@@ -22,6 +44,10 @@ pub trait PolicyService: Send + Sync {
 }
 
 impl<C: ActionClassifier> PolicyService for PolicyEngine<C> {
+    fn revision(&self) -> String {
+        PolicyEngine::revision(self).as_str().to_owned()
+    }
+
     fn decide(
         &self,
         request: &ActionReviewRequest,
@@ -35,6 +61,10 @@ impl<C: ActionClassifier> PolicyService for PolicyEngine<C> {
 pub(crate) struct UnavailablePolicyService;
 
 impl PolicyService for UnavailablePolicyService {
+    fn revision(&self) -> String {
+        "unavailable-policy-v1".into()
+    }
+
     fn decide(
         &self,
         _: &ActionReviewRequest,

@@ -29,9 +29,13 @@ JSONL / in-process caller
    ├─ optional WorkspaceFileSystem + filesystem watcher
    ├─ optional GitRuntime → zeta-file-watcher + GitService → zeta-git
    ├─ optional SearchService → zeta-search
+   ├─ optional CodeIndexRuntime → zeta-code-index + filesystem watcher
+   ├─ optional CloudCodeIndexController → zeta-code-index-cloud + host provider registry
+   ├─ request-scoped CodeRetrievalService → local/cloud RRF + verification + content budget
    ├─ optional TerminalService → zeta-utils-pty
    ├─ reloadable MCP Tool generation → zeta-mcp
    ├─ SkillRuntime → zeta-skills + zeta-file-watcher
+   ├─ WorkspaceCustomizations → zeta-instructions + zeta-agents
    ├─ connection-owned ResourceStore
    └─ UpdateBroker → session/update, session/thread/update, config/changed, skills/changed, git/statusChanged, fs/changed
 ```
@@ -62,8 +66,12 @@ Core/store 继续拥有 Session/Thread durable state；需要进程内生命周�
 | `AppServer::with_file_system_watcher` | 监听可信 workspace root 并发布相对路径 invalidation hint |
 | `AppServer::with_git_root` | 冻结 workspace root，开启 Git status/mutation、watcher 与 revision notification |
 | `AppServer::with_workspace_search` | 注入 workspace root 与冻结的 ripgrep executable，构造外部内容搜索服务 |
+| `AppServer::with_code_index_storage_root` | 配置按 root identity 分隔的 persistent index cache |
+| `AppServer::with_cloud_code_index_providers` | 注入冻结的 provider registry；空 registry 不广告 cloud capability |
+| `AppServer::with_cloud_code_index_storage_root` | local composition 配置按 root identity 分隔的 durable grant/deletion state |
 | `AppServer::with_tool_service` | 安装同一 server 内所有 Turn 使用的 Core Tool/Policy ports |
 | `open_local_app_server` | 按 SessionStateMode 选择 durable/in-memory coordinator，打开 config 并组合 provider-backed model |
+| `open_local_app_server_with_cloud_providers` | 在 Workspace 激活前注入 cloud code-index providers；默认入口使用空 registry |
 | `LocalAppServerOptions` | user profile root + SessionStateMode + optional config/runtime Workspace + validated slash catalog + built-in Skill root selection |
 | `SessionStateMode` | 明确选择 profile SQLite durable history 或 process-local ephemeral Session/Thread state |
 | `BuiltInSkillRoot` | auto-detected release root、explicit test/host root 或 unavailable 的自解释选择 |
@@ -76,13 +84,18 @@ Policy port 的 executor。`open_local_app_server` 会从 user config snapshot �
 的 unauthenticated MCP server，并把 catalog 与本地工具组合；Config commit 会在后台构建新
 generation 并只切换未来的 prepare。已 prepare 的调用继续绑定原 Tool/Policy generation，直到
 execute 完成。每次 MCP tool call 仍必须经过 durable one-time approval。它仅在调用方通过
-`LocalAppServerOptions::with_workspace_root` 提供统一 Workspace 根时同时组合 filesystem 与
-workspace search、Git SCM、connection-owned Terminal runtime、只读 `rg` registry；Zeta CLI 的 stdio 与
+`LocalAppServerOptions::with_workspace_root` 提供统一 Workspace 根时同时组合 filesystem、
+`.zeta` 自定义 catalog、Workspace code index、Workspace search、Git SCM、connection-owned Terminal runtime、
+只读 `rg` registry；Zeta CLI 的 stdio 与
 in-process 路径都会使用同一个启动时解析结果：
 `ZETA_WORKSPACE_ROOT` 优先，否则使用当前目录。不能因为 protocol 暴露 approval interaction 就
 假设任意自定义 host 已经拥有 Tool registry。`rg` 安装候选来自
 [`zeta-install-context`](../install-context/README.md)，App Server 只负责把候选交给
 `RipgrepExecutable` 验证并组合成 Tool service。
+
+local composition 会配置 `<profile>/code-index-cloud` 的 durable state 位置，但默认 provider registry
+为空，因此不会安装 cloud controller、广告 `cloudCodeIndex` 或创建网络请求。具体 host 只有在注入
+接受 Workspace-owned exact chunks 且满足幂等 grant deletion 的 provider 后，才能启用云能力。
 
 Tab 关闭的停止语义属于本层适配，而不是 `zeta-protocol` 的新 command：前端通过
 `session/request` 的 `Stop` operation 到达 Session mutation dispatcher，后者调用 Core 的
@@ -101,13 +114,18 @@ src/
 │       ├── config_runtime.rs      # Config commit → config/changed fanout
 │       ├── skill_operations.rs    # Skill catalog/enablement DTO conversion and error mapping
 │       ├── skills_runtime.rs       # source composition、catalog cache、watcher、projection
+│       ├── start_turn.rs           # durable command replay before mutable model/Skill resolution
+│       ├── workspace_customizations.rs # Instruction/Agent catalogs + reloadable harness snapshot
 │       ├── fs_operations.rs       # root-relative filesystem DTO conversion/error mapping
-│       ├── fs_watcher.rs          # root watcher、相对路径投影与 fs/changed 发布
+│       ├── fs_watcher.rs          # root watcher、内部 observer、相对路径投影与 fs/changed 发布
 │       ├── git_operations.rs      # Git RPC decode 与稳定错误映射
 │       ├── git_runtime.rs         # status projection/revision、watcher、去重与通知
 │       ├── interaction_runtime.rs # pending interaction deadline enforcement
 │       ├── notification_queue.rs  # bounded per-connection queue + wake/close semantics
 │       ├── search_operations.rs   # search RPC decode、ownership 与稳定错误映射
+│       ├── code_index_operations.rs # status/search/rebuild DTO 与 error mapping
+│       ├── code_index_runtime.rs  # generation lifecycle、watcher reconcile 与 stale gate
+│       ├── cloud_code_index_operations.rs # preview/grant/sync/revoke DTO 与稳定错误映射
 │       ├── terminal_operations.rs # terminal RPC decode、ownership 与稳定错误映射
 │       └── update_broker.rs       # per-connection subscription/cursor/fanout
 ├── local.rs                       # local composition, session backend selection + model safe point
@@ -138,10 +156,13 @@ src/
 | `UpdateBroker` | private | subscription、durable cursor、weak queue fanout | 不持有 connection/session runtime authority |
 | `UpdateBroker::publish_thread_update` | private | committed 按 durable cursor；transient 直接给 subscriber | 两类 cursor semantics 不得混合 |
 | `InteractionDeadlineWatcher` | crate-private | 在 workspace mutation gate 下重检 durable pending request，持久化 `DeadlineElapsed` cancellation 并失败 Turn | 不选择 UI、不解释 approval policy、不修改 reducer |
-| `SkillRuntime` | crate-private | 组合 built-in/user roots、缓存 metadata projection、叠加 config enablement | 不读取正文、不执行 Skill、不拥有 config durability |
+| `SkillRuntime` | crate-private | 组合 roots、缓存 metadata projection、叠加 enablement，并把 exact Skill body 适配为 Core 的通用 `SkillInstruction` | 不执行 Skill 脚本、不拥有 config durability 或 instruction precedence |
+| `start_turn::replayed_result` | private | 用 durable command receipt 校验重复 `StartTurn` 输入并返回原 Turn 结果 | 重放不重新读取 model config 或 Skill 文件；不同输入返回 `CommandConflict` |
 | `SkillConfigSnapshotProvider` | crate-private trait | 给 runtime 最新 `SkillsConfig` 与 commit signal | implementation 不把客户端 path 直接升级为 trusted root |
-| `compose_sources` | private | enabled user absolute root + release root → validated `SkillSourceRoot` | Workspace/Plugin source 尚不在当前 composition |
+| `compose_sources` | private | release root + enabled user absolute roots + `.zeta/skills` → validated `SkillSourceRoot` | Plugin source 尚不在当前 composition |
 | `watch_skill_sources` | private | watcher invalidation 后完整 reconcile 并更新 watched path registration | watch event 不是文件事实，不直接推进 generation |
+| `WorkspaceCustomizations` | crate-private | 发现/刷新 `.zeta/instructions` 与 `.zeta/agents`，发布 future-invocation harness snapshot | 不执行 Agent、不激活 Skill、不解析外部生态格式 |
+| `WorkspaceFileChangeSink` | crate-private trait | 在 `fs/changed` 发布前把 projected invalidation 交给内部 runtime owner | callback 不把 watcher event 当作文件事实 |
 | `notification<T>` | private | canonical update → JSON-RPC notification | method 来自 `ServerNotificationMethod` |
 | `ResourceStore::resource` | private | cleanup + owner check | 所有 read/release 必须经过这里 |
 | `ResourceStore::cleanup` | private | lazy TTL eviction | resource 不持久化 |
@@ -153,6 +174,11 @@ src/
 | `file_type` in `fs_operations` | private | foundation file kind → protocol DTO | wire enum 只由 protocol crate 定义 |
 | `search_operations::{search_query, search_page}` | private | `WorkspaceSearch*` DTO 与 `zeta-search` 领域类型之间的显式转换 | 不复制查询校验、rg argv、job state 或 parsing |
 | `SearchService` | external crate | 持有 active workspace、frozen rg 和 owner-bound job map | App Server 不把 connection/DTO/UI 语义写入该 crate |
+| `CodeIndexRuntime` | crate-private | 串行 rebuild/refresh，投影 lifecycle，并在返回前 materialize | 不拥有 scan/chunk/schema，也不创建网络请求 |
+| `CodeIndexRefreshWorker` | private | 单 wake + merged paths/rescan priority 的后台刷新 | 不阻塞 filesystem notification thread，不建立无界 event queue |
+| `code_index_operations::project_status` | private | runtime state + last usable snapshot → stable protocol status | 不暴露 SQLite/internal error text |
+| `CloudCodeIndexController` | external crate | root-bound grant、publication/deletion lifecycle 与 provider port | App Server 不复制 consent state 或允许 provider 直接读 Workspace |
+| `cloud_code_index_operations::project_status` | private | cloud lifecycle + grant → stable protocol DTO | 不回传 credential、绝对路径或 provider error text |
 | `TerminalService` | crate-private | 持有 `ExecuteProcess` 的 `TrustedWorkspace`、Tokio runtime、PTY session map 与 1 MiB output ring | 不从 client path 自行授予 process authority |
 | `TerminalEnvironment` | crate-private | 二次过滤 host environment、规范化 Windows key、固定 `TERM`/`COLORTERM`/`TERM_PROGRAM` | 不继承凭据或接受 client mutation |
 | `TerminalProfileCatalog` | crate-private | 冻结可信 Shell Profile、program 与 `TerminalEnvironment` | external DTO 不暴露 executable/args/environment |
@@ -323,15 +349,16 @@ ConfigStore::open_with_paths(profile_root/state.sqlite3, profile_root/config.tom
 Workspace authority
 ├─ host-configured initial root → HostConfiguration capability
 └─ client workspace/switch → latest WorkspaceTrustConfig lookup
-   ├─ missing / Restricted → filesystem + watcher only
-   └─ Trusted → ExplicitUserDecision capability
+   ├─ missing / Restricted → filesystem + watcher + local code index + customizations
+   └─ Trusted → ExplicitUserDecision capability + optional cloud controller when providers exist
 
 ConfigChange trust revocation
 ├─ revoke shared capability lease
+├─ persist cloud Revoking + request idempotent provider deletion + remove cloud controller
 ├─ remove local Tool / Git / search / terminal ports
 ├─ terminate PTY and search processes
 ├─ interrupt active Turns
-└─ retain restricted filesystem + watcher
+└─ retain restricted filesystem + watcher + local code index + customizations
 
 optional WorkspaceConfigStore
 └─ WorkspaceConfigTracker::read preflight
@@ -341,7 +368,15 @@ ConfigBackedModelService
    └─ SkillRuntime::new(...)
       ├─ release built-in root
       ├─ enabled user Skill source roots
-      └─ SkillWatcher(source events + ConfigChange)
+      ├─ active Workspace `.zeta/skills`
+      └─ SkillWatcher(source events + ConfigChange + Workspace binding)
+
+Workspace activation
+└─ WorkspaceCustomizations::discover
+   ├─ InstructionCatalog(.zeta/instructions)
+   │  └─ Global content → HarnessInstructionsProvider
+   ├─ AgentDefinitionCatalog(.zeta/agents)
+   └─ FileSystemWatcher invalidation → bounded catalog refresh
 
 local tools + enabled user MCP declarations
 ├─ materialize absolute stdio executable / unauthenticated HTTP endpoint
@@ -388,6 +423,16 @@ skill/enablement/set
 ├─ require exact discovered SkillId
 ├─ ConfigStore::apply(SetSkillEnablement)
 └─ reconcile → publish skills/changed when projection changes
+
+session/request StartTurn { SkillRef }
+├─ start_turn::replayed_result
+│  └─ existing command → validate exact input and return durable result without mutable reads
+└─ new command
+   ├─ SkillRuntime::activate_explicit
+   │  ├─ require enabled + compatible catalog entry
+   │  └─ SkillCatalog::activate → exact body + frozen digest/generation/reason
+   ├─ ThreadEvent::TurnAccepted persists FrozenSkillActivation
+   └─ TurnExecutor safe point → SkillInstructionsProvider::resolve frozen digest → ContextPlan
 ```
 
 Watcher 订阅当前 source roots；Config authority 通过 commit channel（包括 TOML 外部编辑与
@@ -396,9 +441,12 @@ SQLite cross-connection change）触发配置 reconcile。change、overflow 或 
 notification。Watcher 启动失败时 local App Server 仍可用，显式
 `skills/list { reload: "refresh" }` 是恢复路径。
 
-当前只组合 built-in 与 user source。Workspace/Plugin source、正文 activation、context assembly
-和 invocation safe-point freezing 尚未实现；禁用只影响 catalog eligibility，不能改变已经运行的
-Turn。
+当前组合 built-in、user 与 active Workspace `.zeta/skills` source。显式正文 activation、durable
+provenance、通用 `SkillInstruction` context injection 和 invocation safe-point reload 已实现；禁用只影响 future Turn
+eligibility，不能改变已经冻结的 Turn。Plugin source、reference/resource resolver、automatic
+selection 尚未实现。TUI 与 Desktop 已从 metadata-only catalog 生成直接 `/name` Skill command，
+而 `/skills` 只承担管理；正文变化或 source 消失会使恢复/后续 safe point 失败即
+关闭，不会用新 bytes 替换 frozen digest。
 
 MCP runtime 当前只在 `open_local_app_server` safe point 构造。`enabled` 是建立连接/启动 server
 的显式用户 intent；它不批准任何 tool call。stdio command 必须是存在的 absolute executable，
@@ -462,6 +510,14 @@ Resource 不跨重启恢复，也不能被另一 connection 读取或 release。
 | resource ownership/bounds | corresponding stable resource error |
 | missing filesystem authority | `FileSystemUnavailable` |
 | filesystem path/I/O failure | `FileSystemOperationFailed` |
+| missing / initial code index | `CodeIndexUnavailable` / `CodeIndexNotReady` |
+| index I/O、SQLite 或 stale materialization | `CodeIndexOperationFailed` |
+| missing cloud controller | `CloudCodeIndexUnavailable` |
+| invalid/conflicting cloud grant | `CloudCodeIndexInvalidGrant` / `CloudCodeIndexConsentConflict` |
+| cloud byte ceiling exceeded | `CloudCodeIndexEgressLimitExceeded` |
+| missing capability/deletion guarantee | `CloudCodeIndexProviderUnavailable` |
+| cloud persistence/publication/deletion failure | `CloudCodeIndexOperationFailed` |
+| retrieval local failure / source mismatch | `CodeRetrievalOperationFailed` |
 | missing search backend | `SearchUnavailable` |
 | unknown/cross-connection search job | `SearchNotFound` / `SearchNotOwner` |
 | search job capacity exhausted | `SearchBusy` |
@@ -514,7 +570,9 @@ MCP worker bridge、exact provenance/approval policy、local/MCP 路由与 colli
 Config commit/cross-connection notification、future Tool generation replacement 与 prepared-call
 generation retention，以及
 可信 Terminal Profile、真实 PTY create/write/read/exit、Terminal owner/error/ring limits，
-Skill built-in/user composition、enablement overlay、watcher refresh 与 `skills/changed`。
+Skill 内置/用户/工作区来源组合、启用状态叠加、监听器刷新、精确激活、摘要变化失败即关闭、
+删除源文件后的 command receipt 重放与 `skills/changed`；工作区定制覆盖全局指令注入、Agent 目录刷新和
+`AGENTS.md` 非原生来源隔离。
 Git 覆盖 workspace projection、runtime stream identity、revision 去重、`git/statusChanged`、
 text diff、local branch list/switch、path mutation 与 commit。Filesystem 覆盖有界原子写入、权限保留、root containment、
 相对路径 `fs/changed` 与 watcher overflow rescan。

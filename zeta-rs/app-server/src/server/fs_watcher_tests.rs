@@ -42,3 +42,38 @@ fn watcher_overflow_becomes_a_root_scoped_rescan_hint() {
 
     assert_eq!(projected, Some(FsChanged::RescanRequired));
 }
+
+#[test]
+fn code_index_refresh_queue_coalesces_paths_and_rescan_dominates() {
+    let mut pending = PendingCodeIndexRefresh::None;
+    pending.merge(FileWatcherEvent::PathsChanged {
+        paths: vec![PathBuf::from("b.rs"), PathBuf::from("a.rs")],
+    });
+    pending.merge(FileWatcherEvent::PathsChanged {
+        paths: vec![PathBuf::from("c.rs"), PathBuf::from("a.rs")],
+    });
+    assert_eq!(
+        pending.take_event(),
+        Some(FileWatcherEvent::PathsChanged {
+            paths: vec![
+                PathBuf::from("a.rs"),
+                PathBuf::from("b.rs"),
+                PathBuf::from("c.rs")
+            ],
+        })
+    );
+
+    pending.merge(FileWatcherEvent::PathsChanged {
+        paths: vec![PathBuf::from("before.rs")],
+    });
+    pending.merge(FileWatcherEvent::RescanRequired {
+        watched_paths: vec![PathBuf::from("workspace")],
+    });
+    pending.merge(FileWatcherEvent::PathsChanged {
+        paths: vec![PathBuf::from("after.rs")],
+    });
+    assert!(matches!(
+        pending.take_event(),
+        Some(FileWatcherEvent::RescanRequired { .. })
+    ));
+}

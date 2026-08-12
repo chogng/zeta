@@ -1,4 +1,5 @@
 use super::*;
+use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::{Condvar, Mutex};
 use std::thread;
@@ -9,6 +10,7 @@ use zeta_config::{
     WorkspaceConfigScope, WorkspaceConfigStore, WorkspaceId,
 };
 use zeta_model_provider::{ModelId, ModelInvoker, ModelProviderError, ProviderId};
+use zeta_model_provider_config::ModelContextConfig;
 use zeta_model_provider_config::ModelProviderConfig;
 use zeta_protocol::{
     CommandId, ModelRef, ModelRequest, ModelResponse, Patch, ResponseItem, StopReason,
@@ -48,6 +50,36 @@ fn model_ref(model: &str) -> ModelRef {
         ProviderId::new("test").unwrap(),
         ModelId::new(model).unwrap(),
     )
+}
+
+#[test]
+fn configured_model_context_enables_core_managed_compaction() {
+    let provider = ProviderId::new("openai").unwrap();
+    let model = ModelId::new("gpt-5.6").unwrap();
+    let mut provider_config = ModelProviderConfig::new(provider.clone());
+    provider_config.max_output_tokens = Some(2_048);
+    provider_config.model_context = BTreeMap::from([(
+        model.clone(),
+        ModelContextConfig {
+            context_window: 20_000,
+            auto_compact_token_limit: Some(15_000),
+        },
+    )]);
+    let config = ResolvedConfig {
+        preferred_model: Some(ModelRef::new(provider.clone(), model)),
+        providers: BTreeMap::from([(provider, provider_config)]),
+        ..ResolvedConfig::default()
+    };
+
+    assert_eq!(
+        context_budget_for_config(&config).unwrap(),
+        ContextBudget::core_managed(
+            ContextTokenCount::new(20_000),
+            ContextTokenCount::new(2_048),
+            ContextTokenCount::new(MODEL_CONTEXT_SAFETY_MARGIN_TOKENS),
+            ContextCompactionLimit::Tokens(ContextTokenCount::new(15_000)),
+        )
+    );
 }
 
 fn configure_test_provider(config: &ConfigStore, revision: ConfigRevision) -> ConfigRevision {

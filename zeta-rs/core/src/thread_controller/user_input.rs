@@ -1,6 +1,9 @@
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
+use zeta_protocol::FrozenSkillActivation;
 use zeta_protocol::ItemId;
+use zeta_protocol::SkillActivationReason;
+use zeta_protocol::SkillVersionSelector;
 use zeta_protocol::ThreadItem;
 use zeta_protocol::TurnId;
 use zeta_protocol::UserInput;
@@ -16,34 +19,80 @@ pub(super) enum ValidatedUserInput<'a> {
     Image(&'a str),
 }
 
-pub(super) fn validate(input: &[UserInput]) -> Result<Vec<ValidatedUserInput<'_>>, CoreError> {
+pub(super) fn validate<'a>(
+    input: &'a [UserInput],
+    activated_skills: &[FrozenSkillActivation],
+) -> Result<Vec<ValidatedUserInput<'a>>, CoreError> {
     if input.is_empty() {
         return Err(CoreError::InvalidInput(
             "Turn input must contain at least one item".into(),
         ));
     }
 
-    input
+    let validated = input
         .iter()
-        .map(|input| match input {
+        .filter_map(|input| match input {
             UserInput::Text { text } if !text.trim().is_empty() => {
-                Ok(ValidatedUserInput::Text(text))
+                Some(Ok(ValidatedUserInput::Text(text)))
             }
-            UserInput::Text { .. } => Err(CoreError::InvalidInput(
+            UserInput::Text { .. } => Some(Err(CoreError::InvalidInput(
                 "Turn text input must not be empty".into(),
-            )),
+            ))),
             UserInput::Image { url } => {
-                validate_image_url(url)?;
-                Ok(ValidatedUserInput::Image(url))
+                Some(validate_image_url(url).map(|()| ValidatedUserInput::Image(url)))
             }
-            UserInput::LocalImage { .. } | UserInput::Skill { .. } | UserInput::Mention { .. } => {
-                Err(CoreError::InvalidInput(
+            UserInput::Skill { .. } => None,
+            UserInput::LocalImage { .. } | UserInput::Mention { .. } => {
+                Some(Err(CoreError::InvalidInput(
                     "this Thread controller currently accepts text and normalized image URLs only"
                         .into(),
-                ))
+                )))
             }
         })
-        .collect()
+        .collect::<Result<Vec<_>, _>>()?;
+    validate_skill_activations(input, activated_skills)?;
+    if validated.is_empty() {
+        return Err(CoreError::InvalidInput(
+            "Turn input must include text or an image in addition to any Skill selection".into(),
+        ));
+    }
+    Ok(validated)
+}
+
+fn validate_skill_activations(
+    input: &[UserInput],
+    activated_skills: &[FrozenSkillActivation],
+) -> Result<(), CoreError> {
+    let selected = input
+        .iter()
+        .filter_map(|input| match input {
+            UserInput::Skill { skill } => Some(skill),
+            UserInput::Text { .. }
+            | UserInput::Image { .. }
+            | UserInput::LocalImage { .. }
+            | UserInput::Mention { .. } => None,
+        })
+        .collect::<Vec<_>>();
+    if selected.len() != activated_skills.len() {
+        return Err(CoreError::InvalidInput(
+            "every selected Skill must have one frozen activation".into(),
+        ));
+    }
+    for (selected, activated) in selected.into_iter().zip(activated_skills) {
+        if selected.id != activated.id || activated.reason != SkillActivationReason::Explicit {
+            return Err(CoreError::InvalidInput(
+                "frozen Skill activation does not match its explicit selection".into(),
+            ));
+        }
+        if let SkillVersionSelector::PinnedDigest { digest } = &selected.version
+            && digest != &activated.content_digest
+        {
+            return Err(CoreError::InvalidInput(
+                "frozen Skill activation does not match its pinned digest".into(),
+            ));
+        }
+    }
+    Ok(())
 }
 
 pub(super) fn thread_items(

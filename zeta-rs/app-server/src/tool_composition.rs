@@ -215,6 +215,10 @@ struct ReloadablePolicyService {
 }
 
 impl PolicyService for ReloadablePolicyService {
+    fn revision(&self) -> String {
+        self.ports.generation().policy.revision()
+    }
+
     fn decide(
         &self,
         request: &ActionReviewRequest,
@@ -275,6 +279,10 @@ impl ToolService for EmptyToolService {
 struct EmptyPolicyService;
 
 impl PolicyService for EmptyPolicyService {
+    fn revision(&self) -> String {
+        "empty-policy-v1".into()
+    }
+
     fn decide(
         &self,
         _: &ActionReviewRequest,
@@ -400,6 +408,18 @@ struct CompositePolicyService {
 }
 
 impl PolicyService for CompositePolicyService {
+    fn revision(&self) -> String {
+        format!(
+            "composite-policy-v1:local={}:mcp={}",
+            self.local
+                .as_ref()
+                .map_or_else(|| "none".into(), |policy| policy.revision()),
+            self.mcp
+                .as_ref()
+                .map_or_else(|| "none".into(), |policy| policy.revision())
+        )
+    }
+
     fn decide(
         &self,
         request: &ActionReviewRequest,

@@ -296,8 +296,10 @@ fn user_input_supports_text_images_skills_and_mentions() {
             url: "https://example.test/image.png".into(),
         },
         UserInput::Skill {
-            name: "review".into(),
-            path: "/skills/review/SKILL.md".into(),
+            skill: crate::SkillRef::follow_latest(crate::SkillId::new(
+                crate::SkillSourceId::new("user:skill-source:personal").unwrap(),
+                crate::SkillName::new("review").unwrap(),
+            )),
         },
         UserInput::Mention {
             name: "issues".into(),
@@ -306,6 +308,18 @@ fn user_input_supports_text_images_skills_and_mentions() {
     ];
 
     assert_eq!(input.len(), 4);
+}
+
+#[test]
+fn legacy_raw_path_skill_input_is_rejected() {
+    assert!(
+        serde_json::from_value::<UserInput>(serde_json::json!({
+            "type": "skill",
+            "name": "review",
+            "path": "/tmp/outside/SKILL.md"
+        }))
+        .is_err()
+    );
 }
 
 #[test]

@@ -531,6 +531,7 @@ fn provider_entries_validate_their_key_and_static_settings() {
                     provider: provider_id("anthropic"),
                     base_url: Some("file:///tmp/provider".into()),
                     max_output_tokens: Some(0),
+                    model_context: BTreeMap::new(),
                 },
             },
         })

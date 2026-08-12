@@ -1,6 +1,5 @@
 import "./style.js";
 import type { FsChanged } from "../../../../generated/app-server/types.js";
-import { setHoverDelegate } from "../../base/browser/ui/hover/hoverDelegate.js";
 import { bindResizableLayout } from "../../base/browser/ui/resizable/resizable.js";
 import {
   type IDisposable,
@@ -18,21 +17,7 @@ import type { IRendererHost } from "../../platform/renderer/common/rendererHost.
 import type {
   INativeHostApi,
 } from "../../platform/native/common/nativeHost.js";
-import {
-  IMenuService,
-  MenuService,
-} from "../../platform/actions/common/menuService.js";
 import { MenuId } from "../../platform/actions/common/actions.js";
-import {
-  ICommandService,
-} from "../../platform/commands/common/commands.js";
-import {
-  IQuickInputService,
-} from "../../platform/quickinput/common/quickInput.js";
-import {
-  IContextKeyService,
-  ContextKeyService,
-} from "../../platform/contextkey/common/contextkey.js";
 import {
   type IConfigurationApi,
   IConfigurationService,
@@ -42,30 +27,10 @@ import { BrowserLayoutService } from "../../platform/layout/browser/layoutServic
 import { ILayoutService } from "../../platform/layout/common/layoutService.js";
 import "../../platform/layout/browser/zIndexRegistry.js";
 import {
-  IContextMenuService,
-} from "../../platform/contextview/browser/contextMenu.js";
-import {
-  IContextViewService,
-} from "../../platform/contextview/browser/contextView.js";
-import {
-  BrowserContextViewService,
-} from "../../platform/contextview/browser/contextViewService.js";
-import { HoverService } from "../../platform/hover/browser/hoverService.js";
-import { IHoverService } from "../../platform/hover/common/hoverService.js";
-import {
   InstantiationService,
   ServiceCollection,
 } from "../../platform/instantiation/common/instantiation.js";
-import {
-  IKeybindingService,
-} from "../../platform/keybinding/common/keybinding.js";
-import {
-  type IKeybindingsResourceApi,
-  IKeybindingsResourceService,
-} from "../../platform/keybinding/common/keybindingsResource.js";
-import {
-  IKeyboardLayoutService,
-} from "../../platform/keyboardLayout/common/keyboardLayout.js";
+import type { IKeybindingsResourceApi } from "../../platform/keybinding/common/keybindingsResource.js";
 import {
   BrowserDialogHandler,
 } from "../../platform/dialogs/browser/browserDialogHandler.js";
@@ -113,15 +78,6 @@ import {
   StatusbarService,
 } from "../services/statusbar/browser/statusbar.js";
 import {
-  BrowserKeyboardLayoutService,
-} from "../services/keybinding/browser/keyboardLayoutService.js";
-import {
-  WorkbenchKeybindingService,
-} from "../services/keybinding/browser/keybindingService.js";
-import {
-  WorkbenchKeybindingsResourceService,
-} from "../services/keybinding/browser/keybindingsResourceService.js";
-import {
   WorkspaceContextService,
 } from "../services/workspaces/browser/workspaceContextService.js";
 import {
@@ -147,14 +103,6 @@ import type {
 import {
   DialogService,
 } from "../services/dialogs/common/dialogService.js";
-import {
-  CommandService,
-} from "../services/commands/common/commandService.js";
-import {
-  WorkbenchQuickInputService,
-} from "../services/quickinput/browser/quickInputService.js";
-import { ISettingsService } from "../services/preferences/common/settings.js";
-import { SettingsService } from "../services/preferences/common/settingsService.js";
 import {
   bindWorkbenchContextKeys,
   bindWorkbenchPartVisibilityContextKeys,
@@ -195,6 +143,7 @@ import { IUntitledTextEditorService } from "../services/untitled/common/untitled
 import { BrowserWorkingCopyService } from "../services/workingCopy/browser/browserWorkingCopyService.js";
 import { IWorkingCopyService } from "../services/workingCopy/common/workingCopyService.js";
 import { createWorkbenchSession, type WorkbenchSession } from "./workbenchSession.js";
+import { WorkbenchInteractionServices } from "./workbenchInteractionServices.js";
 
 /** Host-specific inputs required to construct a workbench. */
 export interface IStartWorkbenchOptions {
@@ -319,7 +268,7 @@ export class Workbench extends DisposableOwner {
     services.set(ITerminalService, terminalService);
     const gitService = this.own(new GitService({ api: api.git, appServerApi: api.appServer, eventApi: api.events }));
     services.set(IGitService, gitService);
-    const chatService = this.own(new ChatService({ modelApi: api.model, threadApi: api.thread, turnApi: api.turn, appServerApi: api.appServer, eventApi: api.events }));
+    const chatService = this.own(new ChatService({ modelApi: api.model, threadApi: api.thread, turnApi: api.turn, skillApi: api.skills, appServerApi: api.appServer, eventApi: api.events }));
     services.set(IChatService, chatService);
     const workbenchState = workspaceContext.getWorkbenchState();
     const workbenchWindow = this.own(new WorkbenchWindow({
@@ -402,10 +351,20 @@ export class Workbench extends DisposableOwner {
       IWorkbenchDialogHandler,
       new BrowserDialogHandler(workbenchRoot),
     );
-    const commands = this.own(new CommandService(services));
-    services.set(ICommandService, commands);
-    const contextKeys = this.own(new ContextKeyService());
-    services.set(IContextKeyService, contextKeys);
+    const interactionServices = this.own(new WorkbenchInteractionServices({
+      services,
+      ownerDocument,
+      layoutService,
+      configurationService: configuration,
+      keybindingsResourceApi,
+      statusbarService,
+      createContextMenuService,
+    }));
+    const commands = interactionServices.commandService;
+    const contextKeys = interactionServices.contextKeyService;
+    const menus = interactionServices.menuService;
+    const contextViews = interactionServices.contextViewService;
+    const contextMenus = interactionServices.contextMenuService;
     const accessibilityService = this.own(nativeHostApi
       ? new NativeAccessibilityService({
         ownerDocument,
@@ -426,59 +385,9 @@ export class Workbench extends DisposableOwner {
       contextKeyService: contextKeys,
     }));
     services.set(IViewDescriptorService, viewDescriptors);
-    const sessionService = this.own(new WorkbenchSessionService(api.session));
+    const sessionService = this.own(new WorkbenchSessionService({ session: api.session, events: api.events }));
     services.set(IWorkbenchSessionService, sessionService);
-    const keyboardLayout = this.own(new BrowserKeyboardLayoutService({
-      navigator: ownerDocument.defaultView?.navigator ?? navigator,
-    }));
-    services.set(IKeyboardLayoutService, keyboardLayout);
-    const keybindingsResource = this.own(
-      new WorkbenchKeybindingsResourceService({
-        api: keybindingsResourceApi,
-      }),
-    );
-    services.set(IKeybindingsResourceService, keybindingsResource);
-    const keybindings = this.own(new WorkbenchKeybindingService({
-      ownerDocument,
-      commandService: commands,
-      contextKeyService: contextKeys,
-      keyboardLayoutService: keyboardLayout,
-      statusbarService,
-    }));
-    services.set(IKeybindingService, keybindings);
-    void configuration.reload().catch((error: unknown) => {
-      console.error("Failed to initialize configuration", error);
-    });
-    void keybindingsResource.reload().catch((error: unknown) => {
-      console.error("Failed to initialize keybindings resource", error);
-    });
-    const menus = new MenuService(commands, contextKeys);
-    services.set(IMenuService, menus);
-    const contextViews = this.own(
-      new BrowserContextViewService(layoutService.activeContainer, layoutService),
-    );
-    services.set(IContextViewService, contextViews);
-    const quickInput = this.own(new WorkbenchQuickInputService({
-      container: layoutService.activeContainer,
-      contextKeyService: contextKeys,
-      layoutService,
-    }));
-    services.set(IQuickInputService, quickInput);
-    const settings = this.own(new SettingsService());
-    services.set(ISettingsService, settings);
-    const contextMenus = this.own(createContextMenuService({
-      menuService: menus,
-      keybindingService: keybindings,
-      contextViewService: contextViews,
-    }));
-    services.set(IContextMenuService, contextMenus);
-    const hoverService = this.own(new HoverService(
-      configuration,
-      contextViews,
-      contextMenus,
-    ));
-    services.set(IHoverService, hoverService);
-    this.own(setHoverDelegate(hoverService));
+    const keybindings = interactionServices.keybindingService;
     const contributions = this.own(
       WorkbenchContributionsRegistry.createHost(services),
     );

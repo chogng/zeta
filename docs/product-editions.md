@@ -5,10 +5,10 @@
 
 ## 当前构建变体
 
-| Electron 构建变体 | `ZETA_PRODUCT` | Workbench 入口 | Sessions 入口 | Renderer 输出 |
+| Electron 构建变体 | `ZETA_PRODUCT` | Workbench 入口 | Dedicated Sessions | Renderer 输出 |
 | --- | --- | --- | --- | --- |
 | Zeta Code | `code` | `workbench-code` | `sessions-code` | `desktop/dist/renderer/code` |
-| Zeta Academic | `academic` | `workbench-academic` | `sessions-academic` | `desktop/dist/renderer/academic` |
+| Zeta Academic | `academic` | `workbench-academic` | ❌ 未提供 | `desktop/dist/renderer/academic` |
 
 两个产品位于同一仓库、共享 Workbench 基础设施和 Rust App Server，但各自拥有
 `applicationId`、`userDataFolderName`、renderer storage namespace 与 App Server profile
@@ -17,9 +17,9 @@ root。Electron Main 在持久化服务启动前设置这些路径，因此两�
 
 ## Dedicated Sessions
 
-Sessions 是独立页面，不是给 `workbench/browser/layout*` 增加产品分支。普通 Workbench
-入口只注册一个 Titlebar action，页面导航到同产品的 sibling Sessions HTML；Electron Main
-把 Workbench 与 Sessions HTML 一起加入 trusted IPC allowlist。
+Code Sessions 是独立页面，不是给 `workbench/browser/layout*` 增加产品分支。Code 的普通
+Workbench 入口只注册一个 Titlebar action，Browser 页面导航到 sibling Sessions HTML；
+Electron Main 创建独立 Sessions 窗口，并把对应 HTML 加入 trusted IPC allowlist。
 
 ```text
 regular Workbench titlebar
@@ -36,12 +36,13 @@ regular Workbench page
 
 | Sessions workbench | 固定布局 | 当前能力 |
 | --- | --- | --- |
-| Code | 会话列表 / Agent 主区域 / 开发上下文 | 持久 Session/Thread、真实 Chat/Agent 回合、返回普通 Workbench 查看工作区与工具 |
-| Academic | 研究会话与文献库 / 阅读-浏览-草稿中心区 / 写作 Agent | PDF、BibTeX、RIS 的本地导入；PDF 阅读；main-owned 原生研究浏览器；草稿到 Agent 的写作请求 |
+| Code | Titlebar / Sessions Sidebar / 多 Session Grid / Auxiliary Bar | 持久 Session/Thread、完整 ChatPane、草稿延迟持久化、活动叶节点与 Back/Forward、返回普通 Workbench |
+| Academic | ❌ 未实现 | Academic 当前只提供普通 Workbench；不得把未来研究工作台描述为现有能力 |
 
-Academic 的导入文件当前只保留在打开的 Sessions renderer 页中。持久文献库、Zotero 数据库同步、
-完整 BibTeX/RIS metadata/citation parser 与文献索引属于后续 Academic domain 服务，不能偷偷
-放进 Workbench layout 或 generic session storage。
+Code Sessions 的 Renderer 实现、状态 owner、执行路径、失败语义和扩展点见
+[`desktop/src/zeta/sessions/README.md`](../desktop/src/zeta/sessions/README.md)。Academic 若未来
+增加专用研究工作台，必须先新增明确的 product capability 与独立 renderer 入口；PDF、文献库、
+Zotero 同步和引用索引等领域能力不得提前放进 Workbench layout 或 generic Session storage。
 
 ## 编辑器与默认 Workbench
 
@@ -60,6 +61,6 @@ corepack pnpm --dir desktop build:code
 corepack pnpm --dir desktop build:academic
 ```
 
-每次构建必须产生同产品的 Browser 与 Electron Workbench/Sessions HTML。发布包只收录一个
-产品 renderer 目录；Main 检测到零个或多个完整产品入口（Workbench 加 Sessions）时会拒绝启动，
-避免安装身份依赖用户可控的环境变量。
+每次构建必须产生该产品的 Browser 与 Electron Workbench HTML；只有声明
+`dedicatedSessions` 的 Code 还必须产生 Browser 与 Electron Sessions HTML。发布包只收录一个
+产品 renderer 目录；Main 会校验该产品声明的完整入口集合，避免安装身份依赖用户可控的环境变量。

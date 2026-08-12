@@ -1,0 +1,67 @@
+.zeta-sessions-list {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  gap: 12px;
+  padding: 17px 14px 14px;
+  background: var(--sessions-muted-surface);
+}
+
+.zeta-sessions-list h2 {
+  margin: 0;
+  color: var(--zeta-section-header-foreground, var(--zeta-foreground));
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .075em;
+  text-transform: uppercase;
+}
+
+.zeta-sessions-list-items {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 3px;
+  overflow: auto;
+  padding-top: 3px;
+}
+
+.zeta-sessions-list-item {
+  display: flex;
+  min-width: 0;
+  min-height: 34px;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  overflow: hidden;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--zeta-foreground);
+  background: transparent;
+  cursor: pointer;
+  font-size: 12px;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zeta-sessions-list-item:hover { background: var(--zeta-list-hover-background); }
+
+.zeta-sessions-list-item.selected {
+  border-color: color-mix(in srgb, var(--sessions-accent) 28%, transparent);
+  color: var(--zeta-list-active-selection-foreground, var(--zeta-foreground));
+  background: var(--zeta-list-active-selection-background);
+}
+
+.zeta-sessions-list-item:focus-visible {
+  outline: 2px solid var(--zeta-focus-border);
+  outline-offset: 2px;
+}
+
+.zeta-sessions-empty {
+  margin: 8px 2px;
+  color: var(--zeta-description-foreground, var(--zeta-foreground));
+  font-size: 12px;
+  line-height: 1.45;
+}

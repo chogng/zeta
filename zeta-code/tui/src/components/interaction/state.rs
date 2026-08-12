@@ -12,7 +12,9 @@ use crate::components::selection::SelectionItemId;
 use crate::components::selection::SelectionViewModel;
 use crate::components::selection::SelectionViewState;
 use crossterm::event::KeyEvent;
+use std::collections::BTreeMap;
 use zeta_file_search::PathSearchSnapshot;
+use zeta_protocol::SkillRef;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum InteractionPaneOutcome {
@@ -94,6 +96,15 @@ impl InteractionPane {
 
     pub(crate) fn attach_image_bytes(&mut self, bytes: Vec<u8>) -> Result<(), String> {
         self.composer.attach_image_bytes(bytes)
+    }
+
+    pub(crate) fn replace_slash_commands(
+        &mut self,
+        slash_commands: SlashCommandCatalog,
+        skill_commands: BTreeMap<String, SkillRef>,
+    ) {
+        self.composer
+            .replace_slash_commands(slash_commands, skill_commands);
     }
 
     pub(crate) fn text(&self) -> &str {

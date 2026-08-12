@@ -525,6 +525,7 @@ test("an empty Session list opens an untitled session and persists it on its fir
     tabs[0]?.id,
   );
 
+  pane.dispose();
   dom.window.close();
 });
 
@@ -1035,11 +1036,53 @@ interface FakeOptions {
     readonly threadId: string;
   };
   readonly thread?: () => Thread;
+  readonly skills?: readonly {
+    readonly id: { readonly source: string; readonly name: string };
+    readonly description: string;
+    readonly contentDigest: string;
+    readonly enabled: boolean;
+    readonly compatible: boolean;
+  }[];
 }
 
 function createChatService(api: IRendererHost): ChatService {
-  return new ChatService({ modelApi: api.model, threadApi: api.thread, turnApi: api.turn, appServerApi: api.appServer, eventApi: api.events });
+  return new ChatService({ modelApi: api.model, threadApi: api.thread, turnApi: api.turn, skillApi: api.skills, appServerApi: api.appServer, eventApi: api.events });
 }
+
+test("Chat service projects unique enabled Skills and submits the exact pinned reference", async () => {
+  const commit = {
+    id: { source: "user:skill-source:test", name: "commit" },
+    description: "Draft a commit message",
+    contentDigest: "sha256:commit",
+    enabled: true,
+    compatible: true,
+  };
+  const fake = fakeApi({ skills: [
+    commit,
+    { ...commit, id: { source: "workspace:disabled-commit", name: "commit" }, enabled: false },
+    { ...commit, id: { source: "workspace:one", name: "duplicate" } },
+    { ...commit, id: { source: "workspace:two", name: "duplicate" } },
+    { ...commit, id: { source: "workspace:disabled", name: "disabled" }, enabled: false },
+  ] });
+  using chat = createChatService(fake.api);
+
+  const commands = await chat.listSkillCommands();
+
+  assert.deepEqual(commands, [{
+    name: "commit",
+    description: "Draft a commit message",
+    source: "user:skill-source:test",
+    skill: {
+      id: { source: "user:skill-source:test", name: "commit" },
+      version: { type: "pinnedDigest", digest: "sha256:commit" },
+    },
+  }]);
+  await chat.startTurn({ sessionId: "session-1", threadId: "thread-1", expectedSequence: 1, text: "/commit staged changes", skills: [commands[0]!.skill] });
+  assert.deepEqual(fake.turnStartRequests[0]?.input, [
+    { type: "skill", skill: commands[0]!.skill },
+    { type: "text", text: "/commit staged changes" },
+  ]);
+});
 
 function testLayoutService(auxiliaryBarVisible = true): IWorkbenchLayoutService {
   const visibility = new Emitter<WorkbenchPartVisibilityChangeEvent>();
@@ -1078,6 +1121,10 @@ function fakeApi(options: FakeOptions = {}): {
   const setModelRequests: SessionOperationInput<"setModel">[] = [];
   const turnStartRequests: SessionOperationInput<"startTurn">[] = [];
   const currentThread = () => options.thread?.() ?? thread();
+  const currentSession = (sessionId: string): Session => options.sessions?.find(candidate => candidate.sessionId === sessionId)
+    ?? (options.createThread?.session.sessionId === sessionId ? options.createThread.session : undefined)
+    ?? (options.createSession?.sessionId === sessionId ? options.createSession : undefined)
+    ?? session(sessionId);
   const api = {
     appServer: {
       getConnectionState: async () => "ready" as const,
@@ -1086,6 +1133,15 @@ function fakeApi(options: FakeOptions = {}): {
     },
     session: {
       list: async () => ({ sessions: [...(options.sessions ?? [])] }),
+      read: async ({ sessionId }: { sessionId: string }) => ({
+        session: currentSession(sessionId),
+      }),
+      subscribe: async ({ sessionId }: { sessionId: string }) => ({
+        session: currentSession(sessionId),
+        updates: [],
+        threadProjections: [],
+      }),
+      unsubscribe: async () => undefined,
       create: async (params: SessionCreateParams) => {
         createSessionRequests.push(params);
         if (options.createSessionError) throw options.createSessionError;
@@ -1132,6 +1188,9 @@ function fakeApi(options: FakeOptions = {}): {
     },
     model: {
       list: async () => ({ models: [] }),
+    },
+    skills: {
+      list: async () => ({ generation: 1, skills: options.skills ?? [] }),
     },
     thread: {
       read: async () => ({ thread: currentThread() }),

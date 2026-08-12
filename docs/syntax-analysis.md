@@ -24,7 +24,8 @@
 | Alpha Rust token | 后续 Alpha 编辑器内 provider | 尚未完成 |
 | App Server syntax RPC | 无 | ❌；不属于远程产品服务 |
 | completion、type、definition/reference、rename | `zeta-lsp` + language server，经编辑器 language feature 接入 | 部分具备 |
-| workspace symbol index | 后续 workspace index | 尚未完成；不属于单个 editor document |
+| workspace code chunk index | `zeta-code-index` 消费 `zeta-syntax` declaration facts | ✅ 本地 lexical retrieval；不是统一 semantic symbol graph |
+| workspace semantic symbol/reference index | 后续 LSP/index capability | 尚未完成；不属于单个 editor document |
 
 ## 一次 CodeEditor 编辑
 
@@ -92,7 +93,8 @@ source line number 读取同一份 editor-owned token；Changes Pane 不知道 p
 
 1. Alpha 按真实产品需要增加 editor-local Rust provider。
 2. outline 和 parse diagnostics 只有出现具体 UI consumer 后才扩展编辑器公开 contract。
-3. workspace index 只在真实 Files/Search consumer 建立后作为独立能力设计。
+3. 当前 `zeta-code-index` 已作为独立 workspace capability 消费 declaration ranges；后续 semantic
+   symbol/reference graph 仍等待真实 LSP/Files consumer，不能回填到 editor-local parser lifecycle。
 
 长期不变量是：产品层暴露编辑器，不暴露 parser RPC；编辑器拥有文档内语言能力，
 `zeta-syntax` 拥有底层 syntax 算法，LSP/compiler 拥有跨文件语义事实。

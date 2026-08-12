@@ -15,7 +15,7 @@
 | canonical `SlashCommandDefinition` 的名称、描述、冲突校验与稳定顺序 | 命令实际执行与授权 |
 | `SlashCommandInput` 的 `/` 查询、补全范围和参数解析 | composer 文本存储、键盘或鼠标事件 |
 | `SlashCommandsState` 的匹配、选择与 dismiss 状态 | Ratatui、WGPU、DOM 或 Alpha Editor 绘制与滚动几何 |
-| 与 model 分离的 server/local catalog binding | App Server 初始化、IPC 或 Renderer lifecycle |
+| 与 model 分离的 server/local/Skill contribution kind | `SkillRef`、App Server 初始化、IPC 或 Renderer lifecycle |
 
 本 crate 依赖 `zeta-app-server-protocol` 以直接复用 canonical wire definition。App Server、TUI 和
 native 可以依赖本 crate；本 crate 禁止反向依赖这些消费者。
@@ -24,6 +24,8 @@ native 可以依赖本 crate；本 crate 禁止反向依赖这些消费者。
 
 - `SlashCommandCatalog::new` 构造 server-only snapshot；
 - `SlashCommandCatalog::with_local_and_server` 按 local、server 顺序合并并拒绝任何重名；
+- `SlashCommandCatalog::with_local_server_and_skills` 在同一 snapshot 末尾追加 Skill command definition，
+  并保留独立 `Skill` origin；调用方继续拥有 exact `SkillRef` binding；
 - `SlashCommandInput` 对同一 catalog 提供 query、completion、invocation 与 command element range；
 - `SlashCommandsState` 保存当前输入对应的匹配、选择与 dismiss 状态；viewport、可见范围与滚动由各 renderer 保存；
 - `SlashCommandsView` 是 renderer 只读 projection，不允许渲染过程改变状态。
@@ -44,7 +46,7 @@ hyphen；空描述、非法名称和跨来源冲突都使整份 catalog 构造�
 调用关系：
 
 ```text
-SlashCommandCatalog::{new,with_local_and_server}
+SlashCommandCatalog::{new,with_local_and_server,with_local_server_and_skills}
   → append_commands → validate_command
 
 SlashCommandsState::sync_input

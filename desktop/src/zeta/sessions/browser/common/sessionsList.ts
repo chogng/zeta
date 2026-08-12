@@ -1,8 +1,11 @@
+import "./sessionsControls.css";
+import "./sessionsList.css";
 import { addDisposableListener } from "../../../base/browser/dom.js";
 import { DisposableOwner, ResettableDisposableGroup } from "../../../base/common/lifecycle.js";
+import type { ISessionsViewService } from "../../services/view/common/sessionsViewService.js";
 import type { IWorkbenchSessionService } from "../../../workbench/services/sessions/common/sessionService.js";
 
-/** Session picker shared by the Code and Academic dedicated workbenches. */
+/** Session picker owned by the dedicated Sessions Workbench sidebar. */
 export class SessionsList extends DisposableOwner {
   readonly element: HTMLElement;
   private readonly heading: HTMLHeadingElement;
@@ -10,10 +13,12 @@ export class SessionsList extends DisposableOwner {
   private readonly list: HTMLDivElement;
   private readonly itemListeners = this.own(new ResettableDisposableGroup());
   private readonly sessionService: IWorkbenchSessionService;
+  private readonly viewService: ISessionsViewService;
 
-  constructor(ownerDocument: Document, sessionService: IWorkbenchSessionService, title: string, newSessionLabel: string) {
+  constructor(ownerDocument: Document, sessionService: IWorkbenchSessionService, viewService: ISessionsViewService, title: string, newSessionLabel: string) {
     super();
     this.sessionService = sessionService;
+    this.viewService = viewService;
     this.element = ownerDocument.createElement("section");
     this.element.className = "zeta-sessions-list";
     this.heading = ownerDocument.createElement("h2");
@@ -25,31 +30,44 @@ export class SessionsList extends DisposableOwner {
     this.list = ownerDocument.createElement("div");
     this.list.className = "zeta-sessions-list-items";
     this.element.append(this.heading, this.newSessionButton, this.list);
-    this.own(addDisposableListener(this.newSessionButton, "click", () => sessionService.createUntitledSession(newSessionLabel)));
-    this.own(sessionService.onDidChange(() => this.render()));
+    this.own(addDisposableListener(this.newSessionButton, "click", () => viewService.openNewSession(newSessionLabel)));
+    this.own(viewService.onDidChange(() => this.render()));
     this.render();
+  }
+
+  focus(): void {
+    const firstItem = this.list.querySelector<HTMLButtonElement>("button");
+    if (firstItem) firstItem.focus();
+    else this.newSessionButton.focus();
   }
 
   private render(): void {
     this.itemListeners.clear();
     const ownerDocument = this.element.ownerDocument;
     const items: HTMLElement[] = [];
+    const activeSelection = this.viewService.activeSelection;
     for (const session of this.sessionService.untitledSessions) {
-      const button = sessionButton(ownerDocument, session.title || "New Session", this.sessionService.activeUntitledSession?.untitledSessionId === session.untitledSessionId);
-      this.itemListeners.add(addDisposableListener(button, "click", () => this.sessionService.selectUntitledSession(session.untitledSessionId)));
+      const selected = activeSelection?.kind === "untitled" && activeSelection.session.untitledSessionId === session.untitledSessionId;
+      const button = sessionButton(ownerDocument, session.title || "New Session", selected);
+      this.itemListeners.add(addDisposableListener(button, "click", () => this.viewService.openUntitledSession(session.untitledSessionId)));
       items.push(button);
     }
     for (const session of this.sessionService.sessions) {
-      const thread = session.threads.find((candidate) => candidate.status === "active");
+      const current = activeSelection?.kind === "session" && activeSelection.active.session.sessionId === session.sessionId ? activeSelection.active : undefined;
+      const thread = current
+        ? session.threads.find(candidate => candidate.threadId === current.threadId && candidate.status === "active")
+        : session.threads.find(candidate => candidate.status === "active" && candidate.origin.type === "root") ?? session.threads.find(candidate => candidate.status === "active");
       if (!thread || session.status !== "active") continue;
-      const button = sessionButton(ownerDocument, session.title || "Untitled Session", this.sessionService.active?.session.sessionId === session.sessionId && this.sessionService.active.threadId === thread.threadId);
-      this.itemListeners.add(addDisposableListener(button, "click", () => this.sessionService.selectThread(session.sessionId, thread.threadId)));
+      const button = sessionButton(ownerDocument, session.title || "Untitled Session", current !== undefined);
+      this.itemListeners.add(addDisposableListener(button, "click", () => this.viewService.openSession(session.sessionId, thread.threadId)));
       items.push(button);
     }
     if (items.length === 0) {
       const empty = ownerDocument.createElement("p");
       empty.className = "zeta-sessions-empty";
-      empty.textContent = this.sessionService.state === "loading" ? "Loading sessions…" : "Create a session to begin.";
+      empty.textContent = this.sessionService.state === "loading"
+        ? "Loading sessions…"
+        : this.sessionService.error ?? "Create a session to begin.";
       items.push(empty);
     }
     this.list.replaceChildren(...items);

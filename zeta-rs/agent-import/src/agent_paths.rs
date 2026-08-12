@@ -37,7 +37,7 @@ const CODEX_USER: &[AgentPath] = &[
     ),
     directory(
         ".codex/agents",
-        ImportItemKind::Subagents,
+        ImportItemKind::Agents,
         ImportReviewCategory::Configuration,
     ),
     directory(
@@ -70,7 +70,7 @@ const CODEX_PROJECT: &[AgentPath] = &[
     ),
     directory(
         ".codex/agents",
-        ImportItemKind::Subagents,
+        ImportItemKind::Agents,
         ImportReviewCategory::Configuration,
     ),
     directory(
@@ -98,7 +98,7 @@ const CLAUDE_USER: &[AgentPath] = &[
     ),
     directory(
         ".claude/agents",
-        ImportItemKind::Subagents,
+        ImportItemKind::Agents,
         ImportReviewCategory::Configuration,
     ),
     directory(
@@ -141,7 +141,7 @@ const CLAUDE_PROJECT: &[AgentPath] = &[
     ),
     directory(
         ".claude/agents",
-        ImportItemKind::Subagents,
+        ImportItemKind::Agents,
         ImportReviewCategory::Configuration,
     ),
     directory(

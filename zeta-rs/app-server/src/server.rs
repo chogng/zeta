@@ -26,6 +26,10 @@ use zeta_file_system::WorkspaceFileSystem;
 use zeta_protocol::ThreadUpdateEnvelope;
 use zeta_typst::TypstCompiler;
 
+mod cloud_code_index_operations;
+mod code_index_operations;
+mod code_index_runtime;
+mod code_retrieval_operations;
 mod collaboration_operations;
 mod collaboration_runtime;
 mod config_operations;
@@ -43,9 +47,11 @@ mod operations;
 mod search_operations;
 mod skill_operations;
 pub(crate) mod skills_runtime;
+mod start_turn;
 mod syntax_operations;
 mod terminal_operations;
 mod update_broker;
+mod workspace_customizations;
 mod workspace_operations;
 mod workspace_runtime;
 
@@ -69,6 +75,9 @@ pub struct AppServer {
     pub(super) workspace_authority_gate: Arc<Mutex<()>>,
     workspace_runtime: Arc<RwLock<WorkspaceRuntime>>,
     local_workspace_host: Option<LocalWorkspaceHost>,
+    code_index_storage_root: Option<std::path::PathBuf>,
+    cloud_code_index_storage_root: Option<std::path::PathBuf>,
+    cloud_code_index_providers: zeta_code_index_cloud::CloudCodeIndexProviderRegistry,
     pub(super) typst: TypstCompiler,
     pub(super) slash_commands: SlashCommandCatalog,
     pub(super) skills: Option<Arc<SkillRuntime>>,
@@ -141,6 +150,10 @@ impl AppServer {
             workspace_authority_gate,
             workspace_runtime: Arc::new(RwLock::new(WorkspaceRuntime::empty(turn_executor))),
             local_workspace_host: None,
+            code_index_storage_root: None,
+            cloud_code_index_storage_root: None,
+            cloud_code_index_providers:
+                zeta_code_index_cloud::CloudCodeIndexProviderRegistry::default(),
             typst: TypstCompiler::new(),
             slash_commands: SlashCommandCatalog::default(),
             skills: None,
@@ -205,6 +218,12 @@ impl AppServer {
     ) -> Result<Self, String> {
         let runtime = SkillRuntime::new(built_in_source, config, Arc::clone(&self.updates))?;
         self._skill_watcher = Some(runtime.start_watching());
+        let executor = self
+            .workspace_runtime_mut()
+            .turn_executor
+            .clone()
+            .with_skill_instructions_provider(runtime.clone());
+        self.workspace_runtime_mut().turn_executor = executor;
         self.skills = Some(runtime);
         Ok(self)
     }
@@ -216,6 +235,31 @@ impl AppServer {
 
     pub fn with_extension_roots(mut self, roots: Vec<ExtensionRoot>) -> Self {
         self.extensions = Mutex::new(ExtensionCatalog::new(roots));
+        self
+    }
+
+    pub(crate) fn with_code_index_storage_root(
+        mut self,
+        storage_root: impl Into<std::path::PathBuf>,
+    ) -> Self {
+        self.code_index_storage_root = Some(storage_root.into());
+        self
+    }
+
+    pub(crate) fn with_cloud_code_index_storage_root(
+        mut self,
+        storage_root: impl Into<std::path::PathBuf>,
+    ) -> Self {
+        self.cloud_code_index_storage_root = Some(storage_root.into());
+        self
+    }
+
+    /// Installs policy- and credential-bound cloud code-index provider adapters for this host.
+    pub fn with_cloud_code_index_providers(
+        mut self,
+        providers: zeta_code_index_cloud::CloudCodeIndexProviderRegistry,
+    ) -> Self {
+        self.cloud_code_index_providers = providers;
         self
     }
 
@@ -275,7 +319,7 @@ impl AppServer {
         tools: Arc<dyn ToolService>,
         policy: Arc<dyn PolicyService>,
     ) -> Self {
-        let executor = TurnExecutor::new(
+        let mut executor = TurnExecutor::new(
             self.sessions.threads().clone(),
             self.model.clone(),
             tools,
@@ -284,6 +328,9 @@ impl AppServer {
         .with_thread_updates(Arc::new(AppServerThreadUpdates {
             updates: self.updates.clone(),
         }));
+        if let Some(skills) = &self.skills {
+            executor = executor.with_skill_instructions_provider(skills.clone());
+        }
         self.workspace_runtime_mut().turn_executor = executor;
         self
     }
@@ -523,6 +570,23 @@ impl AppServer {
             }
             Some(ClientMethod::WorkspaceSearchCancel) => {
                 self.workspace_search_cancel(connection, &request.params)
+            }
+            Some(ClientMethod::CodeIndexStatus) => self.code_index_status(&request.params),
+            Some(ClientMethod::CodeIndexSearch) => self.code_index_search(&request.params),
+            Some(ClientMethod::CodeIndexRetrieve) => self.code_retrieve(&request.params),
+            Some(ClientMethod::CodeIndexRebuild) => self.code_index_rebuild(&request.params),
+            Some(ClientMethod::CloudCodeIndexStatus) => {
+                self.cloud_code_index_status(&request.params)
+            }
+            Some(ClientMethod::CloudCodeIndexPreview) => {
+                self.cloud_code_index_preview(&request.params)
+            }
+            Some(ClientMethod::CloudCodeIndexAuthorize) => {
+                self.cloud_code_index_authorize(&request.params)
+            }
+            Some(ClientMethod::CloudCodeIndexSync) => self.cloud_code_index_sync(&request.params),
+            Some(ClientMethod::CloudCodeIndexRevoke) => {
+                self.cloud_code_index_revoke(&request.params)
             }
             Some(ClientMethod::TerminalProfileList) => self.terminal_profile_list(&request.params),
             Some(ClientMethod::TerminalCreate) => self.terminal_create(connection, &request.params),

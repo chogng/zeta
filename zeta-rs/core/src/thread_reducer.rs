@@ -1,8 +1,15 @@
 use crate::CoreError;
 use crate::state::transition_turn_status;
+use sha2::Digest;
+use sha2::Sha256;
 use std::collections::{BTreeMap, BTreeSet};
 use zeta_protocol::AgentRequest;
 use zeta_protocol::AgentResponse;
+use zeta_protocol::ContextCheckpoint;
+use zeta_protocol::ContextSourceDigest;
+use zeta_protocol::ContextSourceRange;
+use zeta_protocol::FrozenSkillActivation;
+use zeta_protocol::ItemId;
 use zeta_protocol::ModelRef;
 use zeta_protocol::RequestId;
 use zeta_protocol::SessionId;
@@ -18,7 +25,10 @@ use zeta_protocol::Turn;
 use zeta_protocol::TurnId;
 use zeta_protocol::TurnInteraction;
 use zeta_protocol::TurnStatus;
-use zeta_thread_store::{CURRENT_STORED_EVENT_SCHEMA_VERSION, StoredEvent, ThreadCommandReceipt};
+use zeta_thread_store::CURRENT_STORED_EVENT_SCHEMA_VERSION;
+use zeta_thread_store::MINIMUM_SUPPORTED_EVENT_SCHEMA_VERSION;
+use zeta_thread_store::StoredEvent;
+use zeta_thread_store::ThreadCommandReceipt;
 
 #[path = "thread_reducer_approval.rs"]
 mod approval;
@@ -31,6 +41,9 @@ pub struct ThreadSnapshot {
     pub sequence: u64,
     pub turns: Vec<TurnSnapshot>,
     pub items: Vec<ThreadItem>,
+    pub context_checkpoints: Vec<ContextCheckpoint>,
+    pub item_sequences: BTreeMap<ItemId, u64>,
+    pub event_digests: BTreeMap<u64, String>,
     pub commands: Vec<ThreadCommandSnapshot>,
     pub seen_interaction_ids: BTreeSet<RequestId>,
     pub resolved_interactions: Vec<ResolvedTurnInteraction>,
@@ -40,6 +53,29 @@ pub struct ThreadSnapshot {
 }
 
 impl ThreadSnapshot {
+    pub fn context_source_digest(
+        &self,
+        range: ContextSourceRange,
+    ) -> Result<ContextSourceDigest, CoreError> {
+        if range.start_sequence == 0 || range.start_sequence > range.end_sequence {
+            return Err(CoreError::Context(
+                "context source range must be a non-empty inclusive sequence range".into(),
+            ));
+        }
+        let mut hasher = Sha256::new();
+        for sequence in range.start_sequence..=range.end_sequence {
+            let digest = self.event_digests.get(&sequence).ok_or_else(|| {
+                CoreError::Context(format!(
+                    "context source range references unavailable Thread sequence {sequence}"
+                ))
+            })?;
+            hasher.update(sequence.to_be_bytes());
+            hasher.update(digest.as_bytes());
+        }
+        ContextSourceDigest::new(format!("sha256:{:x}", hasher.finalize()))
+            .map_err(|error| CoreError::Context(error.to_string()))
+    }
+
     /// Builds the canonical public Thread projection without exposing command receipts.
     pub fn public_thread(&self) -> Thread {
         Thread {
@@ -105,6 +141,8 @@ pub struct TurnSnapshot {
     pub turn_id: TurnId,
     pub status: TurnStatus,
     pub model: Option<ModelRef>,
+    pub policy_revision: String,
+    pub activated_skills: Vec<FrozenSkillActivation>,
     pub failure: Option<StableTurnError>,
     pub pending_interaction: Option<TurnInteraction>,
 }
@@ -154,7 +192,9 @@ pub fn reduce_thread_event(
     snapshot: Option<ThreadSnapshot>,
     envelope: &StoredEvent,
 ) -> Result<ThreadSnapshot, CoreError> {
-    if envelope.schema_version != CURRENT_STORED_EVENT_SCHEMA_VERSION {
+    if !(MINIMUM_SUPPORTED_EVENT_SCHEMA_VERSION..=CURRENT_STORED_EVENT_SCHEMA_VERSION)
+        .contains(&envelope.schema_version)
+    {
         return Err(CoreError::Journal(format!(
             "unsupported Thread event schema version {}",
             envelope.schema_version
@@ -172,23 +212,30 @@ pub fn reduce_thread_event(
                 session_id,
                 title,
                 thread_id,
-            } => Ok(ThreadSnapshot {
-                session_id: session_id.clone(),
-                thread_id: thread_id.clone(),
-                title: title.clone(),
-                sequence: envelope.sequence,
-                turns: Vec::new(),
-                items: Vec::new(),
-                seen_interaction_ids: BTreeSet::new(),
-                resolved_interactions: Vec::new(),
-                started_tool_calls: BTreeSet::new(),
-                tool_execution_starts: BTreeMap::new(),
-                escalated_tool_calls: BTreeSet::new(),
-                commands: {
-                    require_no_command(envelope)?;
-                    Vec::new()
-                },
-            }),
+            } => {
+                let mut event_digests = BTreeMap::new();
+                event_digests.insert(envelope.sequence, event_digest(&envelope.event)?);
+                Ok(ThreadSnapshot {
+                    session_id: session_id.clone(),
+                    thread_id: thread_id.clone(),
+                    title: title.clone(),
+                    sequence: envelope.sequence,
+                    turns: Vec::new(),
+                    items: Vec::new(),
+                    context_checkpoints: Vec::new(),
+                    item_sequences: BTreeMap::new(),
+                    event_digests,
+                    seen_interaction_ids: BTreeSet::new(),
+                    resolved_interactions: Vec::new(),
+                    started_tool_calls: BTreeSet::new(),
+                    tool_execution_starts: BTreeMap::new(),
+                    escalated_tool_calls: BTreeSet::new(),
+                    commands: {
+                        require_no_command(envelope)?;
+                        Vec::new()
+                    },
+                })
+            }
             _ => Err(CoreError::Journal(
                 "first Thread event must create the Thread".into(),
             )),
@@ -217,18 +264,50 @@ pub fn reduce_thread_event(
         } => {
             require_no_command(envelope)?;
             import_history(&mut snapshot, source_thread_id, before_turn_id, turns)?;
+            for item in &snapshot.items {
+                snapshot
+                    .item_sequences
+                    .insert(item.item_id().clone(), envelope.sequence);
+            }
         }
-        ThreadEvent::TurnAccepted { turn_id, model, .. } => {
-            create_turn(&mut snapshot, turn_id, model.clone())?;
+        ThreadEvent::ContextCheckpointCommitted { checkpoint, .. } => {
+            require_no_command(envelope)?;
+            validate_context_checkpoint(&snapshot, checkpoint)?;
+            snapshot.context_checkpoints.push(checkpoint.clone());
+        }
+        ThreadEvent::TurnAccepted {
+            turn_id,
+            model,
+            policy_revision,
+            activated_skills,
+            ..
+        } => {
+            if policy_revision.trim().is_empty() {
+                return Err(CoreError::Journal(
+                    "Turn policy revision must not be empty".into(),
+                ));
+            }
+            create_turn(
+                &mut snapshot,
+                turn_id,
+                model.clone(),
+                policy_revision.clone(),
+                activated_skills.clone(),
+            )?;
             let receipt = envelope.command.clone().ok_or_else(|| {
                 CoreError::Journal("Turn acceptance requires a command receipt".into())
             })?;
             let matching_start = match &receipt.command {
                 ThreadCommand::StartTurn {
                     model: command_model,
+                    input,
                     ..
-                } => command_model == model,
-                ThreadCommand::StartShellTurn { .. } => model.is_none(),
+                } => {
+                    command_model == model && turn_skill_activations_match(input, activated_skills)
+                }
+                ThreadCommand::StartShellTurn { .. } => {
+                    model.is_none() && activated_skills.is_empty()
+                }
                 _ => false,
             };
             if !matching_start {
@@ -355,6 +434,9 @@ pub fn reduce_thread_event(
                 | ThreadItem::Plan { .. } => {}
             }
             snapshot.items.push(item.clone());
+            snapshot
+                .item_sequences
+                .insert(item.item_id().clone(), envelope.sequence);
         }
         ThreadEvent::InteractionRequested {
             turn_id,
@@ -676,8 +758,38 @@ pub fn reduce_thread_event(
             }
         }
     }
+    snapshot
+        .event_digests
+        .insert(envelope.sequence, event_digest(&envelope.event)?);
     snapshot.sequence = envelope.sequence;
     Ok(snapshot)
+}
+
+fn turn_skill_activations_match(
+    input: &[zeta_protocol::UserInput],
+    activated_skills: &[FrozenSkillActivation],
+) -> bool {
+    let selected = input.iter().filter_map(|input| match input {
+        zeta_protocol::UserInput::Skill { skill } => Some(skill),
+        zeta_protocol::UserInput::Text { .. }
+        | zeta_protocol::UserInput::Image { .. }
+        | zeta_protocol::UserInput::LocalImage { .. }
+        | zeta_protocol::UserInput::Mention { .. } => None,
+    });
+    selected.zip(activated_skills).all(|(selected, activated)| {
+        selected.id == activated.id
+            && activated.reason == zeta_protocol::SkillActivationReason::Explicit
+            && match &selected.version {
+                zeta_protocol::SkillVersionSelector::FollowLatest => true,
+                zeta_protocol::SkillVersionSelector::PinnedDigest { digest } => {
+                    digest == &activated.content_digest
+                }
+            }
+    }) && input
+        .iter()
+        .filter(|input| matches!(input, zeta_protocol::UserInput::Skill { .. }))
+        .count()
+        == activated_skills.len()
 }
 
 fn import_history(
@@ -770,6 +882,8 @@ fn import_history(
             turn_id: turn.turn_id.clone(),
             status: turn.status,
             model: turn.model.clone(),
+            policy_revision: "imported-history-policy".into(),
+            activated_skills: Vec::new(),
             failure: turn.error.clone(),
             pending_interaction: None,
         })
@@ -779,6 +893,106 @@ fn import_history(
         .flat_map(|turn| turn.items.iter().cloned())
         .collect();
     Ok(())
+}
+
+fn validate_context_checkpoint(
+    snapshot: &ThreadSnapshot,
+    checkpoint: &ContextCheckpoint,
+) -> Result<(), CoreError> {
+    if checkpoint.source_thread_id != snapshot.thread_id {
+        return Err(CoreError::Journal(
+            "context checkpoint source Thread does not match its event stream".into(),
+        ));
+    }
+    if checkpoint.covered.start_sequence != 1
+        || checkpoint.covered.end_sequence < checkpoint.covered.start_sequence
+        || checkpoint.covered.end_sequence > snapshot.sequence
+    {
+        return Err(CoreError::Journal(
+            "context checkpoint must cover an available non-empty Thread prefix".into(),
+        ));
+    }
+    if checkpoint.summary.trim().is_empty()
+        || checkpoint.schema_revision.trim().is_empty()
+        || checkpoint.prompt_revision.trim().is_empty()
+        || checkpoint.context_policy_revision.trim().is_empty()
+    {
+        return Err(CoreError::Journal(
+            "context checkpoint summary and revision identities must not be empty".into(),
+        ));
+    }
+    if snapshot
+        .context_checkpoints
+        .iter()
+        .any(|existing| existing.checkpoint_id == checkpoint.checkpoint_id)
+        || snapshot
+            .context_checkpoints
+            .last()
+            .is_some_and(|existing| existing.covered.end_sequence > checkpoint.covered.end_sequence)
+    {
+        return Err(CoreError::Journal(
+            "context checkpoints must have unique identities and not retreat the durable prefix"
+                .into(),
+        ));
+    }
+
+    let expected_items = snapshot
+        .items
+        .iter()
+        .filter(|item| {
+            snapshot
+                .item_sequences
+                .get(item.item_id())
+                .is_some_and(|sequence| *sequence <= checkpoint.covered.end_sequence)
+        })
+        .map(|item| item.item_id().clone())
+        .collect::<Vec<_>>();
+    if checkpoint.referenced_items != expected_items {
+        return Err(CoreError::Journal(
+            "context checkpoint Item provenance does not match its covered Thread prefix".into(),
+        ));
+    }
+
+    let expected_digest = snapshot.context_source_digest(checkpoint.covered)?;
+    if checkpoint.source_digest != expected_digest {
+        return Err(CoreError::Journal(
+            "context checkpoint source digest does not match its covered Thread prefix".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn event_digest(event: &ThreadEvent) -> Result<String, CoreError> {
+    let mut value = serde_json::to_value(event).map_err(|error| {
+        CoreError::Journal(format!("failed to serialize Thread event: {error}"))
+    })?;
+    canonicalize_json(&mut value);
+    let encoded = serde_json::to_vec(&value).map_err(|error| {
+        CoreError::Journal(format!("failed to encode canonical Thread event: {error}"))
+    })?;
+    Ok(format!("sha256:{:x}", Sha256::digest(encoded)))
+}
+
+fn canonicalize_json(value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::Array(values) => {
+            for value in values {
+                canonicalize_json(value);
+            }
+        }
+        serde_json::Value::Object(object) => {
+            let mut entries = std::mem::take(object).into_iter().collect::<Vec<_>>();
+            for (_, value) in &mut entries {
+                canonicalize_json(value);
+            }
+            entries.sort_by(|left, right| left.0.cmp(&right.0));
+            object.extend(entries);
+        }
+        serde_json::Value::Null
+        | serde_json::Value::Bool(_)
+        | serde_json::Value::Number(_)
+        | serde_json::Value::String(_) => {}
+    }
 }
 
 pub(crate) fn validate_agent_request(request: &AgentRequest) -> Result<(), String> {
@@ -833,6 +1047,8 @@ fn create_turn(
     snapshot: &mut ThreadSnapshot,
     turn_id: &TurnId,
     model: Option<ModelRef>,
+    policy_revision: String,
+    activated_skills: Vec<FrozenSkillActivation>,
 ) -> Result<(), CoreError> {
     if snapshot.turns.iter().any(|turn| turn.turn_id == *turn_id) {
         return Err(CoreError::Journal(format!(
@@ -843,6 +1059,8 @@ fn create_turn(
         turn_id: turn_id.clone(),
         status: TurnStatus::Created,
         model,
+        policy_revision,
+        activated_skills,
         failure: None,
         pending_interaction: None,
     });

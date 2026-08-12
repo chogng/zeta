@@ -8,7 +8,9 @@ use super::mentions::Mentions;
 use super::pending_pastes::PendingPastes;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
+use std::collections::BTreeMap;
 use zeta_file_search::PathSearchSnapshot;
+use zeta_protocol::SkillRef;
 use zeta_slash_commands::{
     SlashCommandCatalog, SlashCommandDefinition, SlashCommandInvocation as ParsedSlashCommand,
     SlashCommandOrigin, SlashCommandsState, SlashCommandsView,
@@ -28,6 +30,7 @@ pub(crate) enum ComposerOutcome {
 pub(crate) enum ComposerInput {
     Text(String),
     Image { url: String },
+    Skill { skill: SkillRef },
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -57,7 +60,7 @@ impl SlashCommandInvocation {
             Some(ComposerInput::Text(text)) => {
                 *text = format!("{command_text} {text}");
             }
-            Some(ComposerInput::Image { .. }) | None => {
+            Some(ComposerInput::Image { .. }) | Some(ComposerInput::Skill { .. }) | None => {
                 self.arguments.insert(0, ComposerInput::Text(command_text));
             }
         }
@@ -85,6 +88,7 @@ pub(crate) struct ChatComposer {
     history: Vec<String>,
     history_index: Option<usize>,
     history_draft: String,
+    skill_commands: BTreeMap<String, SkillRef>,
 }
 
 impl ChatComposer {
@@ -104,6 +108,7 @@ impl ChatComposer {
             history: Vec::new(),
             history_index: None,
             history_draft: String::new(),
+            skill_commands: BTreeMap::new(),
         }
     }
 
@@ -253,6 +258,16 @@ impl ChatComposer {
         completed
     }
 
+    pub(crate) fn replace_slash_commands(
+        &mut self,
+        slash_commands: SlashCommandCatalog,
+        skill_commands: BTreeMap<String, SkillRef>,
+    ) {
+        self.slash_commands.set_catalog(slash_commands);
+        self.skill_commands = skill_commands;
+        self.sync_after_text_change();
+    }
+
     fn submit(&mut self) -> ComposerOutcome {
         let Some(submission) = self.prepare_submission() else {
             return ComposerOutcome::Consumed;
@@ -267,6 +282,12 @@ impl ChatComposer {
         let command = self.slash_commands.invocation(&submission.display_text);
         self.clear();
         match command {
+            Some(command) if command.origin == SlashCommandOrigin::Skill => {
+                match into_skill_submission(submission, command, &self.skill_commands) {
+                    Ok(submission) => ComposerOutcome::Submit(submission),
+                    Err(submission) => ComposerOutcome::Submit(submission),
+                }
+            }
             Some(command) => match into_command_invocation(submission, command) {
                 Ok(invocation) => ComposerOutcome::Command(invocation),
                 Err(submission) => ComposerOutcome::Submit(submission),
@@ -439,6 +460,18 @@ fn into_command_invocation(
         display_arguments: submission.display_text[parsed.arguments_range].to_owned(),
         arguments: submission.input,
     })
+}
+
+fn into_skill_submission(
+    mut submission: ComposerSubmission,
+    parsed: ParsedSlashCommand,
+    skill_commands: &BTreeMap<String, SkillRef>,
+) -> Result<ComposerSubmission, ComposerSubmission> {
+    let Some(skill) = skill_commands.get(&parsed.command.name).cloned() else {
+        return Err(submission);
+    };
+    submission.input.insert(0, ComposerInput::Skill { skill });
+    Ok(submission)
 }
 
 fn push_text_input(input: &mut Vec<ComposerInput>, text: &mut String) {

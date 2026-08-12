@@ -31,14 +31,14 @@
 
 | 环节 | 可用 harness 需要 | Zeta 现状 |
 | --- | --- | --- |
-| System prompt | 每次调用注入身份、策略、工具指导、环境 | ❌ `ContextAssembler` 输出 `instructions: None`；`SYSTEM_PROMPT` 是无人消费的死资产 |
-| 环境上下文 | cwd、平台、日期、git 状态、项目指令 | ❌ 完全没有 |
+| System prompt | 每次调用注入身份、策略、工具指导、环境 | 部分：`SYSTEM_PROMPT` 已经通过 `HarnessInstructions` 和 `ContextPlan` 注入；per-profile 工具指导仍未完成 |
+| 环境上下文 | cwd、平台、日期、git 状态、项目指令 | ✅ Local Workspace host 在 model safe point 提供环境与 `.zeta/instructions` snapshot |
 | 工具面 | 读/搜/改/执行闭环 | ❌ 只接了 `shell-command`；`file-system-tool`（仅 read/list/metadata）、`apply-patch`、`file-search` 是孤立 crate |
 | 模型失败弹性 | 429/5xx 退避重试、溢出压缩重试、空响应处理 | ❌ 模型一报错 Turn 即 fail；`ApiError` 只有 `HttpStatus(u16)` 无分类 |
 | Steering | 运行中排队注入用户消息 | 部分：reducer 已允许向 Running Turn 追加 Item、executor 每轮重读 snapshot；缺 `turn/steer` 命令 |
 | 工具结果限幅 | 模型侧截断 + 保留头尾 | 部分：shell 有 256 KiB 执行上限，但无模型输入预算 |
-| 上下文预算 | 窗口估算、溢出显式处理 | 部分：`ModelInfo.context_window` / `effective_auto_compact_token_limit()` 已存在但无消费者；全量回放历史 |
-| 压缩 | 阈值触发、durable checkpoint | ❌ `COMPACTION_PROMPT` 存在但流程未实现 |
+| 上下文预算 | 窗口估算、溢出显式处理 | ✅ 已知/配置窗口走确定性预算；未知窗口明确退回 provider-managed |
+| 压缩 | 阈值触发、durable checkpoint | ✅ `COMPACTION_PROMPT`、source digest、原子 commit、恢复校验与 commit 后重规划已接通 |
 | Prompt cache | 前缀稳定 + 断点标注 | ❌ 只解析 `cache_read_input_tokens`，不写 `cache_control` |
 | 多 Tool Call/响应 | 模型一次响应多个调用 | ❌ `parallel_tool_calls` 硬编码 `false` |
 | 计划工具 | 长任务显式计划状态 | 部分：`ThreadItem::Plan` 存在，无工具产生它，assembler 跳过它 |
@@ -55,7 +55,7 @@ ModelRequest
 │  ├─ Skill 清单                           （名称+一行描述，预算上限内，会话稳定）
 │  └─ 环境快照                             （字段见 §4.2，Thread 首 Turn 冻结）
 ├─ input
-│  ├─ [0] 工作区指令 message               （AGENTS.md 链，§4.3，会话内稳定）
+│  ├─ [0] 工作区指令 message               （Global `.zeta/instructions`，§4.3，调用内冻结）
 │  ├─ [1..] durable history                （append-only，语义单元完整，
 │  │                                        可含 checkpoint summary 替代更早历史）
 │  └─ [last] 当前 Turn 输入 / steering 消息（+ append-only reminder 块）
@@ -100,11 +100,11 @@ loop:
 | 身份与策略 | 身份、指令优先级、注入防护、工作行为 | 随产品版本 | `zeta-prompts` `SYSTEM_PROMPT`（已存在） |
 | 工具指导 + 输出风格 | 工具组合惯例、验证纪律、简洁度、路径引用格式 | 随 tool profile | `zeta-prompts` 新模板；正文已写好，见 [`agent-tools-spec.md` 附录 A](agent-tools-spec.md#附录-a系统提示词扩写正文) |
 | 环境快照 | 见 §4.2 | Thread 首 Turn 冻结；压缩边界刷新 | host 提供 `AgentEnvironmentSnapshot`，Core 渲染 |
-| 工作区指令 | AGENTS.md 链 | 会话内稳定 | `input[0]` 独立 message |
+| 工作区指令 | Global `.zeta/instructions` | model invocation 内冻结；文件变化影响后续调用 | `input[0]` 独立 message |
 
-参照系：Claude Code 环境块在 system、项目指令随首条消息、动态信息用 `<system-reminder>`
-append；Codex 把 AGENTS.md 合并进 instructions、环境作首条消息。共同点是**静态与动态严格
-分离**——这决定缓存命中率，比放 system 还是首条消息更重要。
+外部产品如何组织项目指令只是参照系；Zeta 的原生 artifact、目录和加载策略由
+[`agent-customizations.md`](agent-customizations.md) 定义。共同点是**静态与动态严格分离**——
+这决定缓存命中率，比放 system 还是首条消息更重要。
 
 ### 4.2 环境快照：精确字段
 
@@ -128,19 +128,21 @@ This snapshot was taken at session start and does not update. Run commands
 冻结纪律：Thread 首 Turn 采集一次写死；压缩重建窗口是唯一例行刷新点；需要新鲜状态时模型
 自己调工具。**不逐 Turn 刷新**——那会击穿全部缓存。
 
-### 4.3 AGENTS.md 发现与注入
+### 4.3 Workspace Instruction 发现与注入
 
-- 发现：workspace root 的 `AGENTS.md`（唯一 v1 来源；不向 root 之上查找）；
-- 注入：`input[0]` 一条 user message，包裹标注"来自 AGENTS.md 的工作区指令，优先级低于
-  系统与安全策略"；
-- 大小：总上限 32 KiB，超出截断并标注；
-- 嵌套 AGENTS.md（子目录）：v1.5 —— 首次触碰该子目录文件时以 reminder 惰性注入，
-  就近者语义优先（文本中声明）；
-- 文件不存在：省略 `input[0]`，不放占位符。
+- 发现：只读取 workspace root 的 `.zeta/instructions/*.md` 原生文件；`AGENTS.md` 和其他生态
+  格式必须经 `zeta-agent-import`，native loader 不兼容扫描；
+- 注入：当前只把 `load: global` 条目渲染为 `input[0]` user message，并标注其优先级低于
+  system 与安全策略；
+- 大小：每个文件最多 32 KiB、直接条目最多 128，非法条目产生隔离 diagnostic；
+- `load: contextual` / `on-demand`：catalog 已保留类型化策略，但资源匹配和显式选择尚未实现；
+- 目录不存在或没有合法 Global 条目：省略 `input[0]`，不放占位符；
+- 文件变化：Workspace watcher 触发 catalog refresh；已经组装的 model request 不变，后续
+  model invocation 从 `HarnessInstructionsProvider` 读取新 snapshot。
 
 ### 4.4 动态注入：append-only reminder
 
-运行时事件（策略变化、文件被外部修改、计划停滞、惰性注入的嵌套 AGENTS.md、检索到的 MCP
+运行时事件（策略变化、文件被外部修改、计划停滞、按需 Instruction、检索到的 MCP
 工具定义）以 `<system-reminder>` 文本块附着在**新增**内容上进入历史，永不回改已有消息。
 reminder 声明自己是背景信息而非用户指令。这是 Skill 激活、hook 输出、审批结果回填的统一
 入口。
@@ -287,46 +289,47 @@ turn/steer { command_id, expected_sequence, turn_id, input: Vec<UserInput> }
 
 ### 9.3 预算来源与 usage 校准
 
-- 窗口与阈值：`ModelInfo.context_window` 与 `effective_auto_compact_token_limit()`
-  （= min(90% 窗口, 配置值)）**已存在于 protocol**，models-manager 负责填充；`Unknown`
-  时回退保守默认（128k 窗口）；
-- 估算：本地粗估（≈ bytes/4）给初值；每次 `ModelResponse.usage.input_tokens` 回填真实
-  值，对估算系数做 EMA 校准。不引入本地精确 tokenizer；
-- usage 按 Thread durable 记账（同时服务 §7.3 的 Turn 资源上限与 runtime 文档要求的
-  执行限额）。
+当前实现：
+
+- 窗口与阈值来自 `ModelInfo`，或用户按模型 ID 配置的
+  `ModelProviderConfig.model_context`；自动压缩阈值不超过窗口的 90%；
+- `ContextWindow::Unknown` 不猜 128k，而是明确使用 `ContextBudget::ProviderManaged`；
+- `deterministic-bytes-v1` 以 bytes/4 加结构开销做确定性估算，并在诊断中记录 revision。
+
+usage 按 Thread 持久化和基于 provider usage 的 EMA 校准尚未实现；在此之前不能把粗估写成精确
+tokenizer 保证。
 
 ## 10. 压缩
 
 ### 10.1 触发
 
-- **自动**：估算占用 ≥ `effective_auto_compact_token_limit` → 下一个安全点先压缩再继续；
-- **手动**：`/compact`，可带用户提示（"保留 X 相关内容"附加进压缩指令）；
-- **溢出恢复**：provider 返回 `ContextOverflow` → 压缩 → 重试 1 次 → 仍溢出显式失败。
+- **自动（已实现）**：估算历史超过 Core-managed input budget → 下一个 model safe point 先压缩、
+  durable commit，再从新 snapshot 重规划；
+- **手动（Proposed）**：`/compact` 与用户保留提示尚未实现；
+- **溢出恢复（Proposed）**：provider `ContextOverflow` 的压缩后单次重试仍依赖稳定错误分类。
 
 ### 10.2 流程与精确规则
 
 机制（checkpoint schema、digest、失效回退）归 [`core-context.md`](core-context.md) §8。
-策略参数：
+当前规则：
 
-- **tail 选择**：从最新 Turn 向前，按**完整 Turn 单元**纳入（用户输入 + 该 Turn 全部
-  Item，不拆分），直到 tail 预算（默认 20k tokens）用尽；进行中的当前 Turn 无条件完整
-  保留；checkpoint 覆盖 `[stream 起点, tail 起点)`；
-- **压缩调用**：独立模型调用，输入为被吸收段全文 + `COMPACTION_PROMPT`（现有六段结构够
-  用）+ 可选用户提示；summary 上限 4k tokens，超限视为压缩失败；
-- **文件重注入**：从被吸收段收集 read_file/edit 触及的路径，按（新近度，频次）排序取前
-  5 个，重建窗口时重新读取（每个 ≤ 2000 行）以 reminder 注入，标注"压缩后重读快照"；文件
-  已不存在则跳过。这是压缩质量的关键——summary 必然丢代码细节，热文件原文回填显著降低
-  "重新摸索"成本；
-- **失败路径**：压缩调用失败（含 §7.1 重试后）→ 若未超硬限则本轮放弃压缩继续执行，记
-  警告；已超硬限 → Turn fail（`context_overflow`）。
+- **tail 选择**：从最新 Turn 向前按完整 Turn 单元保留；当前 Turn 无条件保留，checkpoint 只
+  覆盖 durable 前缀；
+- **压缩调用**：独立模型调用使用被吸收前缀、上一个 checkpoint 和 `COMPACTION_PROMPT`；不带
+  tools，summary target 在剩余预算内有界；
+- **分批处理**：压缩请求本身也必须装入同一模型窗口。过长前缀分批提交 checkpoint；若单个
+  新 Turn 连同 compaction envelope 都无法装入，则返回 `CompactionSourceTooLarge`，不循环重试；
+- **失败路径**：空 summary、Tool Call、超目标 summary、source digest/Item/range 不一致或 store
+  commit 失败都会失败即关闭；未 commit 的 summary 不进入 projection。
+
+热文件重注入和用户定向压缩属于 Proposed，当前不会在压缩过程中重新读取 Workspace 文件。
 
 ### 10.3 窗口重建
 
 ```text
-instructions（环境快照在此刷新）
-+ input[0] 工作区指令（始终显式保留）
+instructions（下一个 model safe point 重新冻结）
++ 工作区指令（mandatory fragment）
 + checkpoint summary
-+ 文件重注入 reminder
 + tail 原文
 ```
 
@@ -360,11 +363,11 @@ instructions（环境快照在此刷新）
   App Server 展开，展开后的正文作为 durable UserMessage 进入 Turn 输入；消息内保留
   `<command-name>` 标注供模型识别来源。不在模型侧解析斜杠语法。
 - **Skills**（`zeta-rs/skills` 已有 runtime；发现/信任归 [`skills.md`](skills.md)）：
-  - v1：Skill 清单（名称 + 一行描述）进 instructions 尾部，预算上限 2k tokens，超出截断
-    并标注；激活 = 用户 slash command 或显式请求 → SKILL.md 正文以 reminder 注入
-    （§4.4），within 其记录的来源与 capability 限制；
-  - v2（推迟）：模型自主激活的 `skill` 工具，需要 per-skill capability 审查接入
-    `zeta-policy` 后再做。
+  - v1 已实现：用户提交 exact `SkillRef`，App Server 冻结 digest/generation/reason，Core 在每个
+    model safe point 重载 exact `SKILL.md`，以 `ActivatedSkill` instruction layer 注入；raw path
+    输入被拒绝；
+  - 自动候选检索（推迟）：只注入被 selector 激活的 Skill，不能把整个 catalog 正文或清单随
+    catalog 数量线性塞进 prompt。
 
 ## 13. Provider 差异矩阵
 
@@ -423,13 +426,13 @@ harness 的每层都直接影响成功率与 token 成本；没有评测回路�
 
 | 里程碑 | 内容 | 关键改动点 | 前置接线 |
 | --- | --- | --- | --- |
-| M0 提示词接线 | instructions 注入（SYSTEM_PROMPT + 工具指导 + 环境快照）；AGENTS.md → `input[0]`；tools-spec 附录 A 正文移入 `zeta-prompts` 模板并 bump revision | `ContextAssembler`、host 环境快照 | 无 |
+| M0（部分完成）提示词接线 | SYSTEM_PROMPT、环境快照和 Global `.zeta/instructions` 已注入；工具指导仍待完成 | `ContextAssembler`、host 环境快照、`WorkspaceCustomizations` | 无 |
 | M1 工具最小闭环 | 七件套 + profile + `parallel_tool_calls`；评测 T1/T2 建立 | `local_tools.rs`、`file-system-tool` 扩展、rg/file-search 封装、apply_patch 接入 | 家族→profile 映射进 `model-provider-config` |
 | M2 失败弹性 + steering | §7 重试/分类/失控防护；`turn/steer` | executor 重试层、`ApiError` 分类、SteerTurn command | protocol schema 同步（与阶段 A 的 R1 同批） |
-| M3 限幅/预算/压缩 | §9 限幅与 usage 记账；§10 压缩全流程；T4 评测 | ContextPlan 选入路径、checkpoint（阶段 B）、usage 持久化 | `ModelInfo.context_window` 由 models-manager 填充 |
+| M3（部分完成）限幅/预算/压缩 | ContextPlan、配置窗口与 durable compaction 已完成；逐工具限幅、usage 记账和 T4 仍待完成 | ContextPlan 选入路径、checkpoint、usage 持久化 | 无；窗口未知时 provider-managed |
 | M4 缓存 | §11.3 断点注入；前缀稳定回归断言 | `anthropic_messages`、组装快照测试 | 无 |
 | M5 MCP 策略 | §6 阈值平铺/检索式 | MCP registry snapshot 之上的策略层 | 无 |
-| M6 Skills/slash | §12 v1 | App Server 展开、Skill 清单注入 | 无 |
+| M6（部分完成）Skills/slash | slash 与 explicit SkillRef 已接通；自动 selector 与 Desktop picker 待完成 | App Server 展开、frozen activation、ActivatedSkill layer | 无 |
 
 M0+M1（+M2 弹性子集）合起来构成"接入模型即可 coding"的最小闭环，其**文件级实施计划**见
 [`agent-harness-implementation-plan.md`](agent-harness-implementation-plan.md)。

@@ -84,7 +84,7 @@ pub enum ImportItemKind {
     Instructions,
     Settings,
     Skills,
-    Subagents,
+    Agents,
     InstructionRules,
     ExecutionRules,
     McpServers,

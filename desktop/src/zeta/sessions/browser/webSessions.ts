@@ -2,6 +2,7 @@ import { installBaseUiStyles } from "../../base/browser/ui/styles.js";
 import { DisposableStore, type IDisposable } from "../../base/common/lifecycle.js";
 import type { ProductConfiguration } from "../../product/common/product.js";
 import { createDisconnectedRendererApi } from "../../platform/app-server/browser/rendererApi.js";
+import { createBrowserWorkbenchContextMenuService } from "../../workbench/services/contextmenu/browser/contextMenuService.js";
 import type { SessionsProfile } from "../common/sessionsProfile.js";
 import { startSessionsWorkbench } from "./sessionsWorkbench.js";
 
@@ -14,6 +15,7 @@ export function startBrowserSessions(product: ProductConfiguration, profile: Ses
     product,
     profile,
     api: host?.api ?? createDisconnectedRendererApi(),
+    createContextMenuService: createBrowserWorkbenchContextMenuService,
     container: host?.container ?? document.querySelector<HTMLElement>("#app"),
   }));
   window.addEventListener("pagehide", () => sessions.dispose(), { once: true });

@@ -651,6 +651,43 @@ fn resolved_approval_survives_recovery_as_a_resumable_continuation() {
     ));
 }
 
+#[test]
+fn recovered_tool_continuation_fails_closed_after_policy_revision_changes() {
+    let fixture = fixture();
+    let recovered = Arc::new(ThreadController::with_store(fixture.store.clone()));
+    recovered.recover_thread(&fixture.thread_id).unwrap();
+
+    let result = ToolScheduler::new(
+        recovered.clone(),
+        fixture.tools.clone(),
+        Arc::new(ChangedPolicy),
+    )
+    .run_pending(
+        &fixture.thread_id,
+        &fixture.turn_id,
+        &CancellationSource::new().token(),
+    );
+    let error = match result {
+        Ok(_) => panic!("recovered continuation must reject a changed policy revision"),
+        Err(error) => error,
+    };
+
+    assert!(
+        matches!(error, CoreError::Policy(message) if message.contains("changed from test-policy-v1 to test-policy-v2"))
+    );
+    assert!(fixture.tools.authorizations.lock().unwrap().is_empty());
+    assert!(
+        recovered
+            .read_thread(&fixture.thread_id)
+            .unwrap()
+            .turns
+            .last()
+            .unwrap()
+            .pending_interaction
+            .is_none()
+    );
+}
+
 struct Fixture {
     store: Arc<InMemoryThreadStore>,
     threads: Arc<ThreadController>,
@@ -668,6 +705,7 @@ fn fixture() -> Fixture {
 fn fixture_with(tools: Arc<ReviewTool>, policy: Arc<dyn PolicyService>) -> Fixture {
     let store = Arc::new(InMemoryThreadStore::default());
     let threads = Arc::new(ThreadController::with_store(store.clone()));
+    let policy_revision = policy.revision();
     let thread_id = ThreadId::new("thread").unwrap();
     threads
         .create_thread(CreateThreadRequest {
@@ -683,6 +721,8 @@ fn fixture_with(tools: Arc<ReviewTool>, policy: Arc<dyn PolicyService>) -> Fixtu
                 command_id: CommandId::new("start").unwrap(),
                 expected_sequence: SequenceExpectation::Any,
                 model: None,
+                policy_revision,
+                activated_skills: Vec::new(),
                 input: vec![UserInput::Text { text: "run".into() }],
             },
         )
@@ -800,7 +840,27 @@ impl ToolService for ReviewTool {
 
 struct AskPolicy;
 
+struct ChangedPolicy;
+
+impl PolicyService for ChangedPolicy {
+    fn revision(&self) -> String {
+        "test-policy-v2".into()
+    }
+
+    fn decide(
+        &self,
+        _: &ActionReviewRequest,
+        _: &CancellationToken,
+    ) -> Result<ExecutionDecision, CoreError> {
+        panic!("revision mismatch must fail before evaluating the changed policy")
+    }
+}
+
 impl PolicyService for AskPolicy {
+    fn revision(&self) -> String {
+        "test-policy-v1".into()
+    }
+
     fn decide(
         &self,
         request: &ActionReviewRequest,

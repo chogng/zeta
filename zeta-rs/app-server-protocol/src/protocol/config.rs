@@ -39,6 +39,18 @@ pub struct ProviderConfigDto {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub max_output_tokens: Option<u32>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub model_context: BTreeMap<String, ModelContextConfigDto>,
+}
+
+/// Model-specific context limits used by Core's deterministic budget planner.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelContextConfigDto {
+    pub context_window: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub auto_compact_token_limit: Option<u32>,
 }
 
 /// Non-secret credential binding for a standalone MCP server declaration.

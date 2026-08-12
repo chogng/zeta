@@ -2,12 +2,17 @@
 members = [
     "zeta-rs/add-dir",
     "zeta-rs/agent-import",
+    "zeta-rs/agents",
     "zeta-rs/app-server",
     "zeta-rs/app-server-client",
     "zeta-rs/app-server-protocol",
     "zeta-rs/app-server-transport",
     "zeta-rs/collaboration",
     "zeta-rs/collaboration-server",
+    "zeta-rs/code-index",
+    "zeta-rs/code-index-cloud",
+    "zeta-rs/code-index-service",
+    "zeta-rs/code-retrieval",
     "zeta-rs/apply-patch",
     "zeta-rs/async-utils",
     "zeta-rs/auto-review",
@@ -29,6 +34,7 @@ members = [
     "zeta-rs/git",
     "zeta-rs/http-client",
     "zeta-rs/install-context",
+    "zeta-rs/instructions",
     "zeta-rs/language-server-catalog",
     "zeta-rs/language-server-distribution",
     "zeta-rs/language-service",
@@ -172,6 +178,7 @@ windows-sys = "0.59"
 zeroize = "1"
 zeta-add-dir = { path = "zeta-rs/add-dir" }
 zeta-agent-import = { path = "zeta-rs/agent-import" }
+zeta-agents = { path = "zeta-rs/agents" }
 zeta-agent-sidebar = { path = "zeterm/agent-sidebar" }
 zeta-commands = { path = "zeterm/commands" }
 zeta-app-server = { path = "zeta-rs/app-server" }
@@ -180,6 +187,10 @@ zeta-app-server-protocol = { path = "zeta-rs/app-server-protocol" }
 zeta-app-server-transport = { path = "zeta-rs/app-server-transport" }
 zeta-collaboration = { path = "zeta-rs/collaboration" }
 zeta-collaboration-server = { path = "zeta-rs/collaboration-server" }
+zeta-code-index = { path = "zeta-rs/code-index" }
+zeta-code-index-cloud = { path = "zeta-rs/code-index-cloud" }
+zeta-code-index-service = { path = "zeta-rs/code-index-service" }
+zeta-code-retrieval = { path = "zeta-rs/code-retrieval" }
 zeta-apply-patch = { path = "zeta-rs/apply-patch" }
 zeta-async-utils = { path = "zeta-rs/async-utils" }
 zeta-auto-review = { path = "zeta-rs/auto-review" }
@@ -204,6 +215,7 @@ zeta-file-watcher = { path = "zeta-rs/file-watcher" }
 zeta-git = { path = "zeta-rs/git" }
 zeta-http-client = { path = "zeta-rs/http-client" }
 zeta-install-context = { path = "zeta-rs/install-context" }
+zeta-instructions = { path = "zeta-rs/instructions" }
 zeta-keybinding = { path = "zeterm/keybinding" }
 zeta-composer = { path = "zeterm/composer" }
 zeta-layout = { path = "zeterm/layout" }

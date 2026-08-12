@@ -6,6 +6,7 @@ import type { ISyntaxApi } from "../../syntax/common/syntaxApi.js";
 import type { IGitApi } from "../../git/common/gitApi.js";
 import type { IWorkspaceSearchApi } from "../../search/common/searchApi.js";
 import type { IModelApi, ISessionApi, IThreadApi, ITurnApi } from "../../sessions/common/sessionApi.js";
+import type { ISkillApi } from "../../skills/common/skillApi.js";
 import type { ITerminalProcessService } from "../../terminal/common/terminalProcessService.js";
 import type { ITypstApi } from "../../typst/common/typstApi.js";
 import type { IDocumentCollaborationApi } from "../../collaboration/common/documentCollaborationApi.js";
@@ -17,6 +18,7 @@ export interface IRendererHost {
   readonly model: IModelApi;
   readonly thread: IThreadApi;
   readonly turn: ITurnApi;
+  readonly skills: ISkillApi;
   readonly typst: ITypstApi;
   readonly documentCollaboration: IDocumentCollaborationApi;
   readonly resource: IResourceApi;

@@ -1,9 +1,15 @@
 use super::tool_scheduler::{ToolScheduler, ToolSchedulingProgress};
+use crate::context::ModelContextCompactionService;
+use crate::context::ModelInvocationPreparation;
+use crate::context::NoSkillInstructions;
+use crate::context::resolve_skill_instructions;
 use crate::policy_service::UnavailablePolicyService;
+use crate::thread_controller::CommitContextCheckpointRequest;
 use crate::{
-    CompletedTurn, ContextAssembler, CoreError, HarnessInstructions, ModelSelection, ModelService,
-    ModelStreamSink, NoThreadUpdates, NoTools, PolicyService, ThreadController, ThreadUpdateSink,
-    ToolService,
+    CompletedTurn, ContextAssembler, ContextCompactionRequest, ContextCompactionService, CoreError,
+    HarnessInstructions, HarnessInstructionsProvider, ModelSelection, ModelService,
+    ModelStreamSink, NoThreadUpdates, NoTools, PolicyService, SkillInstructionsProvider,
+    ThreadController, ThreadUpdateSink, ToolService,
 };
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -26,8 +32,20 @@ pub struct TurnExecutor {
     model: Arc<dyn ModelService>,
     tools: Arc<dyn ToolService>,
     policy: Arc<dyn PolicyService>,
+    compaction: Arc<dyn ContextCompactionService>,
     updates: Arc<dyn ThreadUpdateSink>,
-    instructions: Arc<HarnessInstructions>,
+    instructions: Arc<dyn HarnessInstructionsProvider>,
+    skill_instructions: Arc<dyn SkillInstructionsProvider>,
+}
+
+struct FixedHarnessInstructions {
+    snapshot: Arc<HarnessInstructions>,
+}
+
+impl HarnessInstructionsProvider for FixedHarnessInstructions {
+    fn snapshot(&self) -> Arc<HarnessInstructions> {
+        Arc::clone(&self.snapshot)
+    }
 }
 
 /// Terminal result of one executor run.
@@ -44,13 +62,18 @@ impl TurnExecutor {
         tools: Arc<dyn ToolService>,
         policy: Arc<dyn PolicyService>,
     ) -> Self {
+        let compaction = Arc::new(ModelContextCompactionService::new(model.clone()));
         Self {
             threads,
             model,
             tools,
             policy,
+            compaction,
             updates: Arc::new(NoThreadUpdates),
-            instructions: Arc::new(HarnessInstructions::default()),
+            instructions: Arc::new(FixedHarnessInstructions {
+                snapshot: Arc::new(HarnessInstructions::default()),
+            }),
+            skill_instructions: Arc::new(NoSkillInstructions),
         }
     }
 
@@ -71,8 +94,41 @@ impl TurnExecutor {
 
     /// Uses immutable prompt additions captured by the host for this Workspace runtime.
     pub fn with_instructions(mut self, instructions: Arc<HarnessInstructions>) -> Self {
+        self.instructions = Arc::new(FixedHarnessInstructions {
+            snapshot: instructions,
+        });
+        self
+    }
+
+    /// Resolves Instruction snapshots at model-invocation boundaries.
+    pub fn with_instructions_provider(
+        mut self,
+        instructions: Arc<dyn HarnessInstructionsProvider>,
+    ) -> Self {
         self.instructions = instructions;
         self
+    }
+
+    /// Overrides checkpoint generation while retaining Core-owned provenance and commit checks.
+    pub fn with_context_compaction_service(
+        mut self,
+        compaction: Arc<dyn ContextCompactionService>,
+    ) -> Self {
+        self.compaction = compaction;
+        self
+    }
+
+    /// Installs the external provider of exact model-facing Skill instructions.
+    pub fn with_skill_instructions_provider(
+        mut self,
+        skill_instructions: Arc<dyn SkillInstructionsProvider>,
+    ) -> Self {
+        self.skill_instructions = skill_instructions;
+        self
+    }
+
+    pub fn policy_revision(&self) -> String {
+        self.policy.revision()
     }
 
     /// Enqueues one Turn on its Thread-owned execution mailbox and returns after acceptance.
@@ -259,8 +315,6 @@ impl TurnExecutor {
                 .threads
                 .read_thread(thread_id)
                 .map_err(ExecutionFailure::model)?;
-            let request = ContextAssembler::assemble(&snapshot, tools.clone(), &self.instructions)
-                .map_err(ExecutionFailure::model)?;
             let turn = snapshot
                 .turns
                 .iter()
@@ -270,16 +324,66 @@ impl TurnExecutor {
                 Some(model) => ModelSelection::Session(model),
                 None => ModelSelection::ConfiguredDefault,
             };
+            let budget = self
+                .model
+                .context_budget(model)
+                .map_err(ExecutionFailure::model)?;
+            let instructions = self.instructions.snapshot();
+            let skill_instructions = resolve_skill_instructions(
+                self.skill_instructions.as_ref(),
+                &turn.activated_skills,
+            )
+            .map_err(ExecutionFailure::model)?;
+            let invocation = match self
+                .threads
+                .prepare_model_invocation(
+                    thread_id,
+                    turn_id,
+                    &instructions,
+                    &skill_instructions,
+                    tools.clone(),
+                    budget,
+                )
+                .map_err(ExecutionFailure::model)?
+            {
+                ModelInvocationPreparation::Ready(invocation) => invocation,
+                ModelInvocationPreparation::NeedsCompaction { model, plan } => {
+                    let request = ContextCompactionRequest::from_plan(&plan, &model);
+                    let result = self
+                        .compaction
+                        .compact(&request, cancellation)
+                        .map_err(ExecutionFailure::model)?;
+                    check_cancellation(cancellation)?;
+                    self.threads
+                        .commit_context_checkpoint(
+                            thread_id,
+                            CommitContextCheckpointRequest {
+                                source_thread_sequence: request.source_thread_sequence(),
+                                covered: request.covered(),
+                                summary: result.summary().into(),
+                                schema_revision: result.schema_revision().into(),
+                                prompt_revision: result.prompt_revision().into(),
+                                context_policy_revision: result.context_policy_revision().into(),
+                                generator_model: request.generator_model().cloned(),
+                            },
+                        )
+                        .map_err(ExecutionFailure::persistence)?;
+                    continue;
+                }
+            };
+            let request = ContextAssembler::assemble(invocation.context())
+                .map_err(ExecutionFailure::model)?;
+            let model = invocation.model().as_service_selection();
             let mut transient_attempt = 0;
             let mut empty_attempt = false;
             let (response, mut stream) = loop {
                 let mut stream = InvocationStream::new(
                     self.threads.clone(),
                     self.updates.clone(),
-                    snapshot.session_id.clone(),
-                    thread_id.clone(),
-                    turn_id.clone(),
-                    snapshot.sequence,
+                    invocation.session_id().clone(),
+                    invocation.thread_id().clone(),
+                    invocation.turn_id().clone(),
+                    invocation.context().source_thread_sequence(),
                     cancellation.clone(),
                 );
                 match self

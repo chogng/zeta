@@ -1,3 +1,23 @@
+use crate::protocol::code_index::CloudCodeIndexAuthorizeParams;
+use crate::protocol::code_index::CloudCodeIndexDestinationDto;
+use crate::protocol::code_index::CloudCodeIndexGrantDto;
+use crate::protocol::code_index::CloudCodeIndexPreviewParams;
+use crate::protocol::code_index::CloudCodeIndexPreviewResult;
+use crate::protocol::code_index::CloudCodeIndexSelectionDto;
+use crate::protocol::code_index::CloudCodeIndexStateDto;
+use crate::protocol::code_index::CloudCodeIndexStatusResult;
+use crate::protocol::code_index::CodeIndexChunkSpanDto;
+use crate::protocol::code_index::CodeIndexDeploymentModeDto;
+use crate::protocol::code_index::CodeIndexSearchHitDto;
+use crate::protocol::code_index::CodeIndexSearchParams;
+use crate::protocol::code_index::CodeIndexSearchResult;
+use crate::protocol::code_index::CodeIndexStateDto;
+use crate::protocol::code_index::CodeIndexStatusResult;
+use crate::protocol::code_index::CodeRetrievalDegradationDto;
+use crate::protocol::code_index::CodeRetrievalHitDto;
+use crate::protocol::code_index::CodeRetrievalOriginDto;
+use crate::protocol::code_index::CodeRetrievalParams;
+use crate::protocol::code_index::CodeRetrievalResult;
 use crate::protocol::collaboration::DocumentCollaborationOpenParams;
 use crate::protocol::collaboration::DocumentCollaborationOpenResult;
 use crate::protocol::collaboration::DocumentCollaborationPresence;
@@ -20,7 +40,7 @@ use crate::protocol::config::{
     HookUpsertParams, LanguageServerConfigDto, LanguageServerConfigureParams,
     LanguageServerModeDto, LanguageServerRemoveParams, McpCredentialBindingDto, McpServerConfigDto,
     McpServerEnablementDto, McpServerRemoveParams, McpServerSetEnablementParams,
-    McpServerUpsertParams, McpTransportDto, ModelRefDto, PluginRequestDto,
+    McpServerUpsertParams, McpTransportDto, ModelContextConfigDto, ModelRefDto, PluginRequestDto,
     PluginRequestEnablementDto, PluginRequestRemoveParams, PluginRequestSetEnablementParams,
     PluginRequestUpsertParams, ProviderConfigDto, ProviderConfigureParams, ProviderRemoveParams,
     SkillSourceAddParams, SkillSourceConfigDto, SkillSourceEnablementDto, SkillSourceRemoveParams,
@@ -110,13 +130,15 @@ use zeta_protocol::AgentRequestEnvelope;
 use zeta_protocol::{
     ActionApprovalCapability, ActionApprovalCapabilityKind, ActionApprovalDecision,
     ActionApprovalRequest, ActionApprovalResponse, AgentInteractionKind, AgentRequest,
-    AgentResponse, DynamicToolCall, DynamicToolOutput, DynamicToolResponse,
-    InteractionCancelReason, InteractionDeadline, ItemDelta, PendingInteraction, PlanStep,
-    PlanStepStatus, PlanUpdate, ProcessExecutionOutput, ProcessExitStatus, RequestUserInput,
-    RequestUserInputResponse, SandboxDenialOutput, Session, SessionEvent, SessionStatus,
-    SessionThread, SessionThreadStatus, SessionUpdate, SkillId, SkillName, SkillSourceId,
-    StableTurnError, StableTurnErrorCode, StreamCursor, Thread, ThreadEvent, ThreadItem,
-    ThreadOrigin, ThreadStatus, ThreadUpdate, ToolExecutionAuthority, ToolOutputStream,
+    AgentResponse, ContentDigest, ContextCheckpoint, ContextCheckpointId,
+    ContextCheckpointVerification, ContextSourceDigest, ContextSourceRange, DynamicToolCall,
+    DynamicToolOutput, DynamicToolResponse, FrozenSkillActivation, InteractionCancelReason,
+    InteractionDeadline, ItemDelta, PendingInteraction, PlanStep, PlanStepStatus, PlanUpdate,
+    ProcessExecutionOutput, ProcessExitStatus, RequestUserInput, RequestUserInputResponse,
+    SandboxDenialOutput, Session, SessionEvent, SessionStatus, SessionThread, SessionThreadStatus,
+    SessionUpdate, SkillActivationReason, SkillId, SkillName, SkillRef, SkillSourceId,
+    SkillVersionSelector, StableTurnError, StableTurnErrorCode, StreamCursor, Thread, ThreadEvent,
+    ThreadItem, ThreadOrigin, ThreadStatus, ThreadUpdate, ToolExecutionAuthority, ToolOutputStream,
     ToolReplaySafety, Turn, TurnInteraction, TurnStatus, UserInputAnswer, UserInputOption,
     UserInputQuestion,
 };
@@ -567,6 +589,51 @@ client_methods! {
         response: (),
         serialization: None,
     },
+    CodeIndexStatus => "workspace/codeIndex/status" {
+        params: EmptyParams,
+        response: CodeIndexStatusResult,
+        serialization: GlobalSharedRead,
+    },
+    CodeIndexSearch => "workspace/codeIndex/search" {
+        params: CodeIndexSearchParams,
+        response: CodeIndexSearchResult,
+        serialization: GlobalSharedRead,
+    },
+    CodeIndexRetrieve => "workspace/codeIndex/retrieve" {
+        params: CodeRetrievalParams,
+        response: CodeRetrievalResult,
+        serialization: GlobalSharedRead,
+    },
+    CodeIndexRebuild => "workspace/codeIndex/rebuild" {
+        params: EmptyParams,
+        response: CodeIndexStatusResult,
+        serialization: GlobalExclusive,
+    },
+    CloudCodeIndexStatus => "workspace/codeIndex/cloud/status" {
+        params: EmptyParams,
+        response: CloudCodeIndexStatusResult,
+        serialization: GlobalSharedRead,
+    },
+    CloudCodeIndexPreview => "workspace/codeIndex/cloud/preview" {
+        params: CloudCodeIndexPreviewParams,
+        response: CloudCodeIndexPreviewResult,
+        serialization: GlobalSharedRead,
+    },
+    CloudCodeIndexAuthorize => "workspace/codeIndex/cloud/authorize" {
+        params: CloudCodeIndexAuthorizeParams,
+        response: CloudCodeIndexStatusResult,
+        serialization: GlobalExclusive,
+    },
+    CloudCodeIndexSync => "workspace/codeIndex/cloud/sync" {
+        params: EmptyParams,
+        response: CloudCodeIndexStatusResult,
+        serialization: GlobalExclusive,
+    },
+    CloudCodeIndexRevoke => "workspace/codeIndex/cloud/revoke" {
+        params: EmptyParams,
+        response: CloudCodeIndexStatusResult,
+        serialization: GlobalExclusive,
+    },
     TerminalProfileList => "terminal/profile/list" {
         params: EmptyParams,
         response: TerminalProfileListResult,
@@ -719,6 +786,7 @@ typescript_bindings! {
     DocumentCollaborationSubmitResult,
     ModelRefDto,
     ApprovalReviewModelSelectionDto,
+    ModelContextConfigDto,
     ProviderConfigDto,
     McpCredentialBindingDto,
     McpServerEnablementDto,
@@ -759,6 +827,11 @@ typescript_bindings! {
     SkillName,
     SkillSourceId,
     SkillId,
+    ContentDigest,
+    SkillVersionSelector,
+    SkillRef,
+    SkillActivationReason,
+    FrozenSkillActivation,
     SkillCatalogReloadDto,
     SkillEnablementDto,
     SkillSourceKindDto,
@@ -847,6 +920,11 @@ typescript_bindings! {
     ProcessExecutionOutput,
     ToolReplaySafety,
     SandboxDenialOutput,
+    ContextCheckpointId,
+    ContextSourceRange,
+    ContextSourceDigest,
+    ContextCheckpointVerification,
+    ContextCheckpoint,
     ThreadEvent,
     PlanStepStatus,
     PlanStep,
@@ -928,6 +1006,26 @@ typescript_bindings! {
     WorkspaceSearchMatch,
     WorkspaceSearchReadResult,
     WorkspaceSearchCancelParams,
+    CodeIndexStateDto,
+    CodeIndexStatusResult,
+    CodeIndexSearchParams,
+    CodeIndexChunkSpanDto,
+    CodeIndexSearchHitDto,
+    CodeIndexSearchResult,
+    CodeRetrievalParams,
+    CodeRetrievalOriginDto,
+    CodeRetrievalDegradationDto,
+    CodeRetrievalHitDto,
+    CodeRetrievalResult,
+    CodeIndexDeploymentModeDto,
+    CloudCodeIndexStateDto,
+    CloudCodeIndexSelectionDto,
+    CloudCodeIndexDestinationDto,
+    CloudCodeIndexGrantDto,
+    CloudCodeIndexPreviewParams,
+    CloudCodeIndexPreviewResult,
+    CloudCodeIndexAuthorizeParams,
+    CloudCodeIndexStatusResult,
     TerminalProfile,
     TerminalProfileListResult,
     TerminalProfileSelection,

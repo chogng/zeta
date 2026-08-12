@@ -1,9 +1,9 @@
-use crate::file_revision;
 use crate::DirectoryEntry;
 use crate::FileContent;
 use crate::FileMetadata;
 use crate::FileSystemError;
 use crate::FileWriteCondition;
+use crate::file_revision;
 use std::path::Path;
 
 /// Workspace-scoped filesystem access used by both client adapters and Agent tools.

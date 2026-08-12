@@ -1,5 +1,7 @@
 use super::*;
 use zeta_protocol::CommandId;
+use zeta_protocol::ContextCheckpointId;
+use zeta_protocol::ContextCheckpointVerification;
 use zeta_protocol::ItemId;
 use zeta_protocol::StableTurnErrorCode;
 use zeta_protocol::ThreadCommand;
@@ -55,6 +57,8 @@ fn reducer_rebuilds_a_failed_turn_with_stable_error_details() {
             ThreadEvent::TurnAccepted {
                 thread_id: ThreadId::new("thread_1").expect("test ID is non-empty"),
                 turn_id: TurnId::new("turn_1").expect("test ID is non-empty"),
+                policy_revision: "test-policy-v1".into(),
+                activated_skills: Vec::new(),
                 model: None,
             },
         ),
@@ -92,6 +96,159 @@ fn reducer_rebuilds_a_failed_turn_with_stable_error_details() {
 }
 
 #[test]
+fn reducer_replays_schema_v1_turns_with_legacy_policy_and_no_skills() {
+    let thread = reduce_thread_event(
+        None,
+        &envelope(
+            1,
+            ThreadEvent::ThreadCreated {
+                session_id: zeta_protocol::SessionId::new("session_1").unwrap(),
+                thread_id: ThreadId::new("thread_1").unwrap(),
+                title: "legacy".into(),
+            },
+        ),
+    )
+    .unwrap();
+    let event = serde_json::from_value::<ThreadEvent>(serde_json::json!({
+        "type": "turnAccepted",
+        "threadId": "thread_1",
+        "turnId": "turn_1"
+    }))
+    .unwrap();
+    let mut accepted = envelope(2, event);
+    accepted.schema_version = 1;
+
+    let rebuilt = reduce_thread_event(Some(thread), &accepted).unwrap();
+
+    assert_eq!(
+        rebuilt.turns[0].policy_revision,
+        "legacy-unversioned-policy"
+    );
+    assert!(rebuilt.turns[0].activated_skills.is_empty());
+}
+
+#[test]
+fn reducer_verifies_and_rebuilds_a_context_checkpoint() {
+    let events = [
+        envelope(
+            1,
+            ThreadEvent::ThreadCreated {
+                session_id: zeta_protocol::SessionId::new("session_1").unwrap(),
+                thread_id: ThreadId::new("thread_1").unwrap(),
+                title: "test".into(),
+            },
+        ),
+        envelope(
+            2,
+            ThreadEvent::TurnAccepted {
+                thread_id: ThreadId::new("thread_1").unwrap(),
+                turn_id: TurnId::new("turn_1").unwrap(),
+                policy_revision: "test-policy-v1".into(),
+                activated_skills: Vec::new(),
+                model: None,
+            },
+        ),
+        envelope(
+            3,
+            ThreadEvent::ItemCompleted {
+                thread_id: ThreadId::new("thread_1").unwrap(),
+                turn_id: TurnId::new("turn_1").unwrap(),
+                item: ThreadItem::UserMessage {
+                    item_id: ItemId::new("item_1").unwrap(),
+                    turn_id: TurnId::new("turn_1").unwrap(),
+                    text: "hello".into(),
+                },
+            },
+        ),
+        envelope(
+            4,
+            ThreadEvent::TurnStarted {
+                thread_id: ThreadId::new("thread_1").unwrap(),
+                turn_id: TurnId::new("turn_1").unwrap(),
+            },
+        ),
+        envelope(
+            5,
+            ThreadEvent::ItemCompleted {
+                thread_id: ThreadId::new("thread_1").unwrap(),
+                turn_id: TurnId::new("turn_1").unwrap(),
+                item: ThreadItem::AgentMessage {
+                    item_id: ItemId::new("item_2").unwrap(),
+                    turn_id: TurnId::new("turn_1").unwrap(),
+                    text: "answer".into(),
+                },
+            },
+        ),
+        envelope(
+            6,
+            ThreadEvent::TurnCompleted {
+                thread_id: ThreadId::new("thread_1").unwrap(),
+                turn_id: TurnId::new("turn_1").unwrap(),
+            },
+        ),
+    ];
+    let snapshot = events
+        .iter()
+        .try_fold(None, |snapshot, event| {
+            reduce_thread_event(snapshot, event).map(Some)
+        })
+        .unwrap()
+        .unwrap();
+    let covered = ContextSourceRange {
+        start_sequence: 1,
+        end_sequence: snapshot.sequence,
+    };
+    let checkpoint = ContextCheckpoint {
+        checkpoint_id: ContextCheckpointId::new("checkpoint_1").unwrap(),
+        source_thread_id: snapshot.thread_id.clone(),
+        covered,
+        referenced_items: snapshot
+            .items
+            .iter()
+            .map(|item| item.item_id().clone())
+            .collect(),
+        source_digest: snapshot.context_source_digest(covered).unwrap(),
+        summary: "durable summary".into(),
+        schema_revision: "context-checkpoint-v1".into(),
+        prompt_revision: "compaction-v2".into(),
+        context_policy_revision: "context-policy-v1".into(),
+        generator_model: None,
+        created_at_unix_ms: 7,
+        verification: ContextCheckpointVerification::Verified,
+    };
+
+    let rebuilt = reduce_thread_event(
+        Some(snapshot.clone()),
+        &envelope(
+            7,
+            ThreadEvent::ContextCheckpointCommitted {
+                thread_id: snapshot.thread_id.clone(),
+                checkpoint: checkpoint.clone(),
+            },
+        ),
+    )
+    .unwrap();
+    assert_eq!(rebuilt.context_checkpoints, vec![checkpoint.clone()]);
+
+    let mut corrupt = checkpoint;
+    corrupt.summary = "rewritten summary".into();
+    corrupt.source_digest = ContextSourceDigest::new(format!("sha256:{}", "0".repeat(64))).unwrap();
+    assert!(
+        reduce_thread_event(
+            Some(snapshot.clone()),
+            &envelope(
+                7,
+                ThreadEvent::ContextCheckpointCommitted {
+                    thread_id: snapshot.thread_id,
+                    checkpoint: corrupt,
+                },
+            ),
+        )
+        .is_err()
+    );
+}
+
+#[test]
 fn reducer_rejects_sequence_gaps_and_illegal_transitions() {
     let thread = reduce_thread_event(
         None,
@@ -114,6 +271,8 @@ fn reducer_rejects_sequence_gaps_and_illegal_transitions() {
                 ThreadEvent::TurnAccepted {
                     thread_id: ThreadId::new("thread_1").expect("test ID is non-empty"),
                     turn_id: TurnId::new("turn_1").expect("test ID is non-empty"),
+                    policy_revision: "test-policy-v1".into(),
+                    activated_skills: Vec::new(),
                     model: None
                 }
             )
@@ -128,6 +287,8 @@ fn reducer_rejects_sequence_gaps_and_illegal_transitions() {
             ThreadEvent::TurnAccepted {
                 thread_id: ThreadId::new("thread_1").expect("test ID is non-empty"),
                 turn_id: TurnId::new("turn_1").expect("test ID is non-empty"),
+                policy_revision: "test-policy-v1".into(),
+                activated_skills: Vec::new(),
                 model: None,
             },
         ),
@@ -155,6 +316,8 @@ fn reducer_rebuilds_typed_command_receipt_and_all_durable_item_kinds() {
         ThreadEvent::TurnAccepted {
             thread_id: ThreadId::new("thread_1").expect("test ID is non-empty"),
             turn_id: TurnId::new("turn_1").expect("test ID is non-empty"),
+            policy_revision: "test-policy-v1".into(),
+            activated_skills: Vec::new(),
             model: None,
         },
     );
@@ -286,6 +449,8 @@ fn reducer_rejects_a_tool_result_without_its_tool_call() {
             ThreadEvent::TurnAccepted {
                 thread_id: ThreadId::new("thread_1").expect("test ID is non-empty"),
                 turn_id: TurnId::new("turn_1").expect("test ID is non-empty"),
+                policy_revision: "test-policy-v1".into(),
+                activated_skills: Vec::new(),
                 model: None,
             },
         ),
@@ -390,6 +555,8 @@ fn started_sandboxed_tool_snapshot() -> ThreadSnapshot {
             ThreadEvent::TurnAccepted {
                 thread_id: ThreadId::new("thread_1").unwrap(),
                 turn_id: TurnId::new("turn_1").unwrap(),
+                policy_revision: "test-policy-v1".into(),
+                activated_skills: Vec::new(),
                 model: None,
             },
         ),

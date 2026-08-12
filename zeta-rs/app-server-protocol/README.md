@@ -54,6 +54,7 @@ zeta-rs/app-server-protocol/
 │   │   ├── config.rs
 │   │   ├── resources.rs
 │   │   ├── search.rs
+│   │   ├── code_index.rs
 │   │   ├── terminal.rs
 │   │   └── error.rs
 │   ├── rpc.rs                # generic JSON-RPC 2.0 envelopes
@@ -83,8 +84,8 @@ zeta-rs/app-server-protocol/
 
 方法注册表当前覆盖初始化、Session 生命周期/聚合订阅、canonical `session/request` mutation、
 带 Session scope 的 Thread 读取/订阅、模型目录、配置/供应商/MCP/Skill/Plugin request/Hook declaration 修改、
-Turn 与 Resource
-metadata/read/release、filesystem metadata/read/write，以及 workspace search start/read/cancel。
+Turn 与 Resource metadata/read/release、filesystem metadata/read/write、workspace search start/read/cancel、
+workspace code-index status/search/rebuild，以及 cloud code-index status/preview/authorize/sync/revoke。
 Notification 包含 `session/update`、Session-owned child 的 `session/thread/update`、owner-directed
 `agent/request`、`skills/changed`、`git/statusChanged` 与 `fs/changed`；Terminal 当前使用
 profile/list 与 create/write/resize/read/close 的有界 pull
@@ -198,7 +199,11 @@ dispatcher 的 executable metadata，不能被误写成已经落实的并发保�
 - `AgentRequestEnvelope` 携带 Session/Thread/Turn aggregate context 和 full durable request，但不携带
   connection owner；`ClientCapabilities.agentInteractions.kinds` 必须与可产生的 response kind 一致。
 - `SessionRequest::StartTurn.input` 是有序、非空的 tagged union：`text { text }` 或
-  `image { url }`；图片在进入 wire contract 前必须已经从本地路径规范化为 HTTP(S)/data URL。
+  `image { url }` 或 `skill { skill: SkillRef }`；图片在进入 wire contract 前必须已经从本地路径
+  规范化为 HTTP(S)/data URL，Skill 只能携带 source-qualified ID 与 version selector，不能携带
+  raw filesystem path。
+- `ProviderConfigDto.model_context` 是按模型 ID 索引的 context-window metadata，供 Core 决定
+  是否启用 deterministic budget/compaction；它不改变 endpoint normalization。
 - `InitializeResult.slash_commands` 是 server composition 在 handshake 时冻结的完整动态命令
   snapshot；每项声明 canonical name、description 与 inline argument mode。动态命令提交仍是
   普通 ordered Turn input，不引入第二套 command RPC。

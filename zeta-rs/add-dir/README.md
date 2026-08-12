@@ -4,7 +4,9 @@
 > 跨 crate 产品语义由
 > [`docs/workspace-security.md`](../../docs/workspace-security.md#工作目录附加目录与-cd) 维护；
 > 单 root identity 与 trust token 由
-> [`zeta-rs/workspace/README.md`](../workspace/README.md) 维护。
+> [`zeta-rs/workspace/README.md`](../workspace/README.md) 维护；Instructions/Skills/Agents artifact 与
+> Import/source registration 的边界由
+> [`docs/agent-customizations.md`](../../docs/agent-customizations.md) 维护。
 
 `zeta-add-dir` 把“当前项目是什么”与“还允许访问哪些目录”分开。一个
 `DirectoryAccessScope` 始终只有一个主工作目录；`AdditionalDirectory` 只扩大文件访问，不会
@@ -31,7 +33,7 @@ source 不会撤销其他 source 仍然提供的访问。
 - 同一 root 的多个 `AdditionalDirectorySource` 生命周期；
 - idempotent add/remove mutation result；
 - 从 active source 与 `AdditionalInstructionsPolicy` 解析 contribution policy；
-- Skills、Subagents、Plugin declaration 与 instruction file 的精确 allowlist。
+- Skills、Agent definitions、Plugin declaration 与 instruction file 的精确 allowlist。
 
 当前 crate 不负责：
 
@@ -65,7 +67,7 @@ source。相同 root 同时来自 session 与 Config 时，session source 允许
 | Policy | 允许的 contribution |
 | --- | --- |
 | `FileAccessOnly` | 无 |
-| `AllowlistedProjectContributions` | Skills、Subagents、`enabledPlugins`、`extraKnownMarketplaces` |
+| `AllowlistedProjectContributions` | Skills、Agent definitions、`enabledPlugins`、`extraKnownMarketplaces` |
 | `AllowlistedProjectContributionsWithInstructions` | 上述内容，加 project/local instruction 与 instruction rules |
 
 Policy 描述“允许发现什么”，不是“已经加载、批准或执行”。Skill manager、Plugin authority 和

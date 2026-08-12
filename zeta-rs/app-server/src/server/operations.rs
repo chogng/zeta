@@ -83,7 +83,8 @@ impl AppServer {
             params.capabilities.agent_interactions,
         );
         connection.initialized = true;
-        let (file_system, git, workspace_search, terminal) = self.workspace_features();
+        let (file_system, git, workspace_search, code_index, cloud_code_index, terminal) =
+            self.workspace_features();
         let extensions = self
             .extensions
             .lock()
@@ -105,6 +106,8 @@ impl AppServer {
                 file_system,
                 git,
                 workspace_search,
+                code_index,
+                cloud_code_index,
                 terminal,
                 typst: true,
                 update_replay: true,
@@ -662,7 +665,17 @@ impl AppServer {
         thread_id: zeta_protocol::ThreadId,
         input: Vec<InputItem>,
     ) -> Result<TurnStartResult, RpcError> {
-        let thread_before = self.read_session_thread(&mutation.session_id, &thread_id)?;
+        let thread_before = self
+            .sessions
+            .threads()
+            .read_thread(&thread_id)
+            .map_err(core_error)?;
+        if thread_before.session_id != mutation.session_id {
+            return Err(RpcError::new(
+                -32010,
+                AppServerErrorName::CoreOperationFailed,
+            ));
+        }
         let session = self
             .sessions
             .read_session(&mutation.session_id)
@@ -672,6 +685,19 @@ impl AppServer {
                 -32010,
                 AppServerErrorName::CoreOperationFailed,
             ));
+        }
+        let input = input
+            .into_iter()
+            .map(|item| match item {
+                InputItem::Text { text } => UserInput::Text { text },
+                InputItem::Image { url } => UserInput::Image { url },
+                InputItem::Skill { skill } => UserInput::Skill { skill },
+            })
+            .collect::<Vec<_>>();
+        if let Some(replayed) =
+            super::start_turn::replayed_result(&thread_before, &mutation.command_id, &input)?
+        {
+            return Ok(replayed);
         }
         let model = match session.model {
             Some(model) => Some(model),
@@ -684,6 +710,30 @@ impl AppServer {
             .workspace_authority_gate
             .lock()
             .map_err(|_| RpcError::new(-32000, AppServerErrorName::ServerOverloaded))?;
+        let turn_executor = self.turn_executor_snapshot();
+        let policy_revision = turn_executor.policy_revision();
+        let activated_skills = input
+            .iter()
+            .filter_map(|item| match item {
+                UserInput::Skill { skill } => Some(skill),
+                UserInput::Text { .. }
+                | UserInput::Image { .. }
+                | UserInput::LocalImage { .. }
+                | UserInput::Mention { .. } => None,
+            })
+            .map(|skill| {
+                let runtime = self
+                    .skills
+                    .as_ref()
+                    .ok_or_else(|| RpcError::new(-32050, AppServerErrorName::SkillsUnavailable))?;
+                runtime
+                    .activate_explicit(skill)
+                    .map_err(|_| RpcError::new(-32051, AppServerErrorName::SkillOperationFailed))
+            })
+            .map(|activated| activated.map(|skill| skill.activation().clone()))
+            .collect::<Result<Vec<_>, RpcError>>()?;
+        let command_id = mutation.command_id.clone();
+        let replay_input = input.clone();
         let start = self
             .sessions
             .start_turn(
@@ -693,44 +743,24 @@ impl AppServer {
                     command_id: mutation.command_id,
                     expected_sequence: SequenceExpectation::Exact(mutation.expected_sequence),
                     model,
-                    input: input
-                        .into_iter()
-                        .map(|item| match item {
-                            InputItem::Text { text } => UserInput::Text { text },
-                            InputItem::Image { url } => UserInput::Image { url },
-                        })
-                        .collect(),
+                    policy_revision,
+                    activated_skills,
+                    input,
                 },
             )
             .map_err(core_error)?;
         let turn_id = start.turn_id;
         if start.disposition == StartTurnDisposition::Replayed {
-            let turn = thread_before
-                .turns
-                .iter()
-                .find(|turn| turn.turn_id == turn_id)
-                .ok_or_else(|| RpcError::new(-32000, AppServerErrorName::InternalError))?;
-            return match turn.status {
-                TurnStatus::Created
-                | TurnStatus::Running
-                | TurnStatus::WaitingForApproval
-                | TurnStatus::WaitingForUserInput
-                | TurnStatus::WaitingForCapability
-                | TurnStatus::Completed => Ok(TurnStartResult {
-                    turn_id,
-                    sequence: start.sequence,
-                }),
-                TurnStatus::Failed | TurnStatus::Interrupted => Err(RpcError::new(
-                    -32010,
-                    AppServerErrorName::CoreOperationFailed,
-                )),
-                TurnStatus::Cancelling => {
-                    Err(RpcError::new(-32000, AppServerErrorName::ServerOverloaded))
-                }
-            };
+            let snapshot = self
+                .sessions
+                .threads()
+                .read_thread(&thread_id)
+                .map_err(core_error)?;
+            return super::start_turn::replayed_result(&snapshot, &command_id, &replay_input)?
+                .ok_or_else(|| RpcError::new(-32000, AppServerErrorName::InternalError));
         }
         self.notify_thread_updates(&thread_id, mutation.expected_sequence)?;
-        self.turn_executor_snapshot()
+        turn_executor
             .start(&thread_id, &turn_id)
             .map_err(core_error)?;
         Ok(TurnStartResult {
@@ -759,6 +789,8 @@ impl AppServer {
                 AppServerErrorName::CoreOperationFailed,
             ));
         }
+        let turn_executor = self.turn_executor_snapshot();
+        let policy_revision = turn_executor.policy_revision();
         let start = self
             .sessions
             .start_shell_turn(
@@ -767,6 +799,7 @@ impl AppServer {
                 StartShellTurnRequest {
                     command_id: mutation.command_id,
                     expected_sequence: SequenceExpectation::Exact(mutation.expected_sequence),
+                    policy_revision,
                     invocation: ShellTurnInvocation {
                         command,
                         shell_program: "/bin/sh".into(),
@@ -802,7 +835,7 @@ impl AppServer {
             };
         }
         self.notify_thread_updates(&thread_id, mutation.expected_sequence)?;
-        self.turn_executor_snapshot()
+        turn_executor
             .start_shell(&thread_id, &turn_id)
             .map_err(core_error)?;
         Ok(TurnStartResult {

@@ -1,6 +1,6 @@
 use super::*;
 use crate::AdditionalDirectoryContribution::{
-    EnabledPlugins, InstructionRules, ProjectInstructions, Skills,
+    AgentDefinitions, EnabledPlugins, InstructionRules, ProjectInstructions, Skills,
 };
 
 #[test]
@@ -90,6 +90,7 @@ fn transient_sources_expose_only_named_contributions() {
 
     let default_policy = directory.contribution_policy(AdditionalInstructionsPolicy::Exclude);
     assert!(default_policy.allows(Skills));
+    assert!(default_policy.allows(AgentDefinitions));
     assert!(default_policy.allows(EnabledPlugins));
     assert!(!default_policy.allows(ProjectInstructions));
 

@@ -16,6 +16,24 @@ fn source_root_debug_output_does_not_expose_the_host_path() {
     let _ = fs::remove_dir(&root);
 }
 
+#[test]
+fn workspace_source_preserves_workspace_provenance() {
+    let root = std::env::temp_dir().join(format!(
+        "zeta-workspace-skill-source-{}",
+        std::process::id()
+    ));
+    fs::create_dir_all(&root).unwrap();
+    let source = SkillSourceRoot::workspace(
+        SkillSourceId::new("workspace:skill-source:.zeta").unwrap(),
+        &root,
+    )
+    .unwrap();
+
+    assert_eq!(source.view().kind(), SkillSourceKind::Workspace);
+    assert_eq!(source.view().trust(), SkillTrust::WorkspaceManaged);
+    let _ = fs::remove_dir(&root);
+}
+
 #[cfg(unix)]
 #[test]
 fn source_root_rejects_symbolic_links() {

@@ -62,8 +62,19 @@ impl ToolScheduler {
             let Some(pending) = next_pending_call(&snapshot.items, turn_id)? else {
                 return Ok(ToolSchedulingProgress::Complete);
             };
-            let execution =
-                ToolExecutionContext::new(thread_id, turn_id, &pending.item_id, cancellation);
+            let frozen_policy_revision = snapshot
+                .turns
+                .iter()
+                .find(|turn| &turn.turn_id == turn_id)
+                .map(|turn| turn.policy_revision.as_str())
+                .ok_or_else(|| CoreError::NotFound(turn_id.to_string()))?;
+            let execution = ToolExecutionContext::new(
+                thread_id,
+                turn_id,
+                &pending.item_id,
+                frozen_policy_revision,
+                cancellation,
+            );
 
             if let Some((request_id, request, decision)) =
                 resolved_approval(&snapshot.resolved_interactions, turn_id, &pending.item_id)
@@ -160,7 +171,10 @@ impl ToolScheduler {
 
             let reviewed =
                 self.prepare_review(&snapshot, turn_id, &pending.item_id, &pending.call)?;
-            match self.policy.decide(&reviewed, cancellation)? {
+            match self
+                .policy
+                .decide_for_turn(frozen_policy_revision, &reviewed, cancellation)?
+            {
                 ExecutionDecision::RunSandboxed(sandbox) => {
                     if matches!(
                         self.execute(

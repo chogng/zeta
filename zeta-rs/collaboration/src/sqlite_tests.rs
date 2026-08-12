@@ -57,9 +57,11 @@ fn sqlite_rooms_make_submit_retries_idempotent() {
         .submit(submit(&room_id, "client-a", 1, 0, "first"))
         .unwrap();
     assert_eq!(first, retry);
-    assert!(rooms
-        .submit(submit(&room_id, "client-a", 1, 0, "different"))
-        .is_err());
+    assert!(
+        rooms
+            .submit(submit(&room_id, "client-a", 1, 0, "different"))
+            .is_err()
+    );
 }
 
 #[test]
@@ -99,10 +101,12 @@ fn sqlite_rooms_persist_member_roles_credentials_and_audit_history() {
             .collect::<Vec<_>>(),
         vec!["Owner", "Viewer"]
     );
-    assert!(rooms
-        .list_members(&room_id, &viewer)
-        .unwrap_err()
-        .contains("owners"));
+    assert!(
+        rooms
+            .list_members(&room_id, &viewer)
+            .unwrap_err()
+            .contains("owners")
+    );
     let joined = rooms
         .open_as(
             &viewer,
@@ -110,17 +114,21 @@ fn sqlite_rooms_persist_member_roles_credentials_and_audit_history() {
         )
         .unwrap();
     assert_eq!(joined.snapshot.version, 0);
-    assert!(rooms
-        .submit_as(
-            &viewer,
-            submit(&room_id, "client-viewer", 1, 0, "viewer-change")
-        )
-        .unwrap_err()
-        .contains("read-only"));
-    assert!(rooms
-        .audit_events(&room_id, &viewer)
-        .unwrap_err()
-        .contains("owners"));
+    assert!(
+        rooms
+            .submit_as(
+                &viewer,
+                submit(&room_id, "client-viewer", 1, 0, "viewer-change")
+            )
+            .unwrap_err()
+            .contains("read-only")
+    );
+    assert!(
+        rooms
+            .audit_events(&room_id, &viewer)
+            .unwrap_err()
+            .contains("owners")
+    );
     assert_eq!(
         rooms
             .update_presence_as(&viewer, &room_id, "viewer-client", Some(selection()))
@@ -162,10 +170,12 @@ fn sqlite_rooms_persist_member_roles_credentials_and_audit_history() {
     let rotated = rooms
         .rotate_member_access_token(&room_id, &owner, &editor_invite.principal_id)
         .unwrap();
-    assert!(rooms
-        .principal_for_access_token(&room_id, &editor_invite.access_token)
-        .unwrap()
-        .is_none());
+    assert!(
+        rooms
+            .principal_for_access_token(&room_id, &editor_invite.access_token)
+            .unwrap()
+            .is_none()
+    );
     assert_eq!(
         rooms
             .principal_for_access_token(&room_id, &rotated.access_token)
@@ -173,10 +183,12 @@ fn sqlite_rooms_persist_member_roles_credentials_and_audit_history() {
         Some(editor.clone())
     );
     rooms.revoke_member(&room_id, &owner, &editor.id).unwrap();
-    assert!(rooms
-        .revoke_member(&room_id, &owner, &owner.id)
-        .unwrap_err()
-        .contains("cannot revoke themselves"));
+    assert!(
+        rooms
+            .revoke_member(&room_id, &owner, &owner.id)
+            .unwrap_err()
+            .contains("cannot revoke themselves")
+    );
     assert_eq!(
         rooms
             .list_members(&room_id, &owner)
@@ -186,13 +198,15 @@ fn sqlite_rooms_persist_member_roles_credentials_and_audit_history() {
             .collect::<Vec<_>>(),
         vec!["Owner", "Viewer"]
     );
-    assert!(rooms
-        .open_as(
-            &editor,
-            open_params(Some(room_id.clone()), "client-editor", document("ignored"))
-        )
-        .unwrap_err()
-        .contains("not a room member"));
+    assert!(
+        rooms
+            .open_as(
+                &editor,
+                open_params(Some(room_id.clone()), "client-editor", document("ignored"))
+            )
+            .unwrap_err()
+            .contains("not a room member")
+    );
 
     let events = rooms.audit_events(&room_id, &owner).unwrap();
     assert_eq!(
@@ -209,9 +223,11 @@ fn sqlite_rooms_persist_member_roles_credentials_and_audit_history() {
             "member.revoked"
         ]
     );
-    assert!(events
-        .windows(2)
-        .all(|events| events[0].event_id < events[1].event_id));
+    assert!(
+        events
+            .windows(2)
+            .all(|events| events[0].event_id < events[1].event_id)
+    );
 }
 
 #[test]

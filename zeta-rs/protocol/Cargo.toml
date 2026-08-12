@@ -14,6 +14,7 @@ path = "src/lib.rs"
 schemars = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+sha2 = { workspace = true }
 ts-rs = { workspace = true }
 
 [lints]

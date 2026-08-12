@@ -1,8 +1,10 @@
 use super::*;
 use crate::{
-    CreateThreadRequest, InMemoryThreadStore, ModelSelection, ModelService, ModelStreamSink,
-    PolicyService, SequenceExpectation, StartTurnRequest, ThreadUpdateSink, ToolAuthorization,
-    ToolExecutionOutput, ToolService, TurnExecutionOutcome,
+    ContextBudget, ContextCompactionLimit, ContextTokenCount, CreateThreadRequest,
+    InMemoryThreadStore, ModelSelection, ModelService, ModelStreamSink, PolicyService,
+    SequenceExpectation, SkillInstruction, SkillInstructionRetention, SkillInstructionsProvider,
+    StartTurnRequest, ThreadUpdateSink, ToolAuthorization, ToolExecutionOutput, ToolService,
+    TurnExecutionOutcome,
 };
 use serde_json::json;
 use std::collections::VecDeque;
@@ -17,9 +19,10 @@ use zeta_policy::{
     SandboxCompatibility,
 };
 use zeta_protocol::{
-    CommandId, ContentPart, InputItem, ModelRequest, ModelResponse, ModelStreamEvent, ResponseItem,
-    SessionId, StopReason, ThreadId, ThreadItem, ThreadUpdate, ThreadUpdateEnvelope, ToolCallId,
-    ToolDefinition, ToolName, TurnStatus, UserInput,
+    CommandId, ContentDigest, ContentPart, FrozenSkillActivation, InputItem, ModelRequest,
+    ModelResponse, ModelStreamEvent, ResponseItem, SessionId, SkillActivationReason, SkillId,
+    SkillName, SkillRef, SkillSourceId, StopReason, ThreadId, ThreadItem, ThreadUpdate,
+    ThreadUpdateEnvelope, ToolCallId, ToolDefinition, ToolName, TurnStatus, UserInput,
 };
 use zeta_sandboxing::{FileSystemAccess, NetworkAccess, SandboxPolicy};
 
@@ -54,6 +57,148 @@ fn completes_a_text_turn_from_durable_context() {
             .unwrap()
             .status,
         TurnStatus::Completed
+    );
+}
+
+#[test]
+fn compacts_durable_history_then_replans_with_the_verified_checkpoint() {
+    let (threads, thread_id, first_turn_id) = started_turn();
+    threads
+        .complete_turn(&thread_id, &first_turn_id, "a".repeat(2_000))
+        .unwrap();
+    for index in 0..3 {
+        let turn_id = threads
+            .start_turn(
+                &thread_id,
+                StartTurnRequest {
+                    command_id: CommandId::new(format!("history-{index}")).unwrap(),
+                    expected_sequence: SequenceExpectation::Any,
+                    model: None,
+                    policy_revision: "test-policy-v1".into(),
+                    activated_skills: Vec::new(),
+                    input: vec![UserInput::Text {
+                        text: format!("history input {index}"),
+                    }],
+                },
+            )
+            .unwrap()
+            .turn_id;
+        threads
+            .complete_turn(&thread_id, &turn_id, "history".repeat(286))
+            .unwrap();
+    }
+    let current_turn_id = threads
+        .start_turn(
+            &thread_id,
+            StartTurnRequest {
+                command_id: CommandId::new("start-after-history").unwrap(),
+                expected_sequence: SequenceExpectation::Any,
+                model: None,
+                policy_revision: "test-policy-v1".into(),
+                activated_skills: Vec::new(),
+                input: vec![UserInput::Text {
+                    text: "current input".into(),
+                }],
+            },
+        )
+        .unwrap()
+        .turn_id;
+    let model = Arc::new(CompactingModel::default());
+    let executor = TurnExecutor::without_tools(threads.clone(), model.clone());
+
+    let outcome = executor
+        .execute(
+            &thread_id,
+            &current_turn_id,
+            &CancellationSource::new().token(),
+        )
+        .unwrap();
+
+    assert!(matches!(outcome, TurnExecutionOutcome::Completed(_)));
+    let snapshot = threads.read_thread(&thread_id).unwrap();
+    assert_eq!(snapshot.context_checkpoints.len(), 1);
+    assert_eq!(
+        snapshot.context_checkpoints[0].summary,
+        "bounded checkpoint"
+    );
+    let requests = model.requests.lock().unwrap();
+    assert_eq!(requests.len(), 2);
+    assert!(
+        requests[0]
+            .instructions
+            .as_deref()
+            .is_some_and(|body| body.contains("durable context checkpoint"))
+    );
+    assert!(request_contains(&requests[1], "bounded checkpoint"));
+    assert!(!request_contains(&requests[1], &"a".repeat(600)));
+    assert_eq!(requests[1].max_output_tokens, Some(200));
+}
+
+#[test]
+fn explicit_skill_selection_uses_frozen_digest_and_layered_body() {
+    let threads = Arc::new(ThreadController::with_store(Arc::new(
+        InMemoryThreadStore::default(),
+    )));
+    let thread_id = ThreadId::new("skill-thread").unwrap();
+    threads
+        .create_thread(CreateThreadRequest {
+            session_id: SessionId::new("session").unwrap(),
+            thread_id: thread_id.clone(),
+            title: "skill".into(),
+        })
+        .unwrap();
+    let skill_id = SkillId::new(
+        SkillSourceId::new("user:skill-source:test").unwrap(),
+        SkillName::new("review").unwrap(),
+    );
+    let digest = ContentDigest::sha256(b"skill body");
+    let activation = FrozenSkillActivation {
+        id: skill_id.clone(),
+        content_digest: digest.clone(),
+        catalog_generation: 7,
+        reason: SkillActivationReason::Explicit,
+    };
+    let turn_id = threads
+        .start_turn(
+            &thread_id,
+            StartTurnRequest {
+                command_id: CommandId::new("skill-start").unwrap(),
+                expected_sequence: SequenceExpectation::Any,
+                model: None,
+                policy_revision: "test-policy-v1".into(),
+                activated_skills: vec![activation.clone()],
+                input: vec![
+                    UserInput::Skill {
+                        skill: SkillRef::pinned(skill_id, digest.clone()),
+                    },
+                    UserInput::Text {
+                        text: "review this".into(),
+                    },
+                ],
+            },
+        )
+        .unwrap()
+        .turn_id;
+    let model = Arc::new(ScriptedModel::new([Ok(text_response("done"))]));
+    let executor = TurnExecutor::without_tools(threads.clone(), model.clone())
+        .with_skill_instructions_provider(Arc::new(FixedSkillInstructions {
+            expected: activation.clone(),
+            body: "# Review workflow\nInspect correctness first.".into(),
+        }));
+
+    executor
+        .execute(&thread_id, &turn_id, &CancellationSource::new().token())
+        .unwrap();
+
+    let request = &model.requests()[0];
+    assert!(request_contains(request, "Inspect correctness first."));
+    assert!(request_contains(request, digest.as_str()));
+    assert!(request_contains(request, "<skill-instructions"));
+    assert!(!request_contains(request, "reason=\"explicit\""));
+    assert!(!request_contains(request, "catalog-generation"));
+    assert_eq!(
+        threads.read_thread(&thread_id).unwrap().turns[0].activated_skills,
+        vec![activation]
     );
 }
 
@@ -98,6 +243,33 @@ fn executes_a_durable_tool_loop_before_the_next_model_invocation() {
         requests[1].input.last(),
         Some(InputItem::ToolResult(result)) if result.call_id == call.id
     ));
+}
+
+#[test]
+fn reloadable_instructions_change_only_at_model_invocation_boundaries() {
+    let (threads, thread_id, turn_id) = started_turn();
+    let instructions = Arc::new(MutableInstructions::new("first instructions"));
+    let model = Arc::new(InstructionRefreshingModel {
+        instructions: Arc::clone(&instructions),
+        requests: Mutex::new(Vec::new()),
+    });
+    let executor = TurnExecutor::new(
+        threads,
+        model.clone(),
+        Arc::new(WeatherTool),
+        Arc::new(SandboxPolicyService),
+    )
+    .with_instructions_provider(instructions);
+
+    executor
+        .execute(&thread_id, &turn_id, &CancellationSource::new().token())
+        .unwrap();
+
+    let requests = model.requests.lock().unwrap();
+    assert_eq!(requests.len(), 2);
+    assert!(request_contains(&requests[0], "first instructions"));
+    assert!(!request_contains(&requests[0], "second instructions"));
+    assert!(request_contains(&requests[1], "second instructions"));
 }
 
 #[test]
@@ -294,6 +466,8 @@ fn per_thread_mailboxes_run_independently_and_interrupt_the_active_turn() {
                 command_id: CommandId::new("fast-start").unwrap(),
                 expected_sequence: SequenceExpectation::Any,
                 model: None,
+                policy_revision: "test-policy-v1".into(),
+                activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
                     text: "fast".into(),
                 }],
@@ -389,9 +563,123 @@ struct ScriptedModel {
     requests: Mutex<Vec<ModelRequest>>,
 }
 
+struct FixedSkillInstructions {
+    expected: FrozenSkillActivation,
+    body: String,
+}
+
+impl SkillInstructionsProvider for FixedSkillInstructions {
+    fn resolve(
+        &self,
+        activations: &[FrozenSkillActivation],
+    ) -> Result<Vec<SkillInstruction>, CoreError> {
+        assert_eq!(activations, std::slice::from_ref(&self.expected));
+        Ok(vec![SkillInstruction::new(
+            self.expected.id.clone(),
+            self.expected.content_digest.clone(),
+            self.body.clone(),
+            SkillInstructionRetention::Required,
+        )])
+    }
+}
+
+#[derive(Default)]
+struct CompactingModel {
+    requests: Mutex<Vec<ModelRequest>>,
+}
+
+impl ModelService for CompactingModel {
+    fn context_budget(&self, _: ModelSelection<'_>) -> Result<ContextBudget, CoreError> {
+        Ok(ContextBudget::core_managed(
+            ContextTokenCount::new(2_100),
+            ContextTokenCount::new(200),
+            ContextTokenCount::new(100),
+            ContextCompactionLimit::ContextWindow,
+        ))
+    }
+
+    fn invoke(
+        &self,
+        _: ModelSelection<'_>,
+        request: &ModelRequest,
+        _: &CancellationToken,
+    ) -> Result<ModelResponse, CoreError> {
+        self.requests.lock().unwrap().push(request.clone());
+        if request
+            .instructions
+            .as_deref()
+            .is_some_and(|body| body.contains("durable context checkpoint"))
+        {
+            Ok(text_response("bounded checkpoint"))
+        } else {
+            Ok(text_response("done"))
+        }
+    }
+}
+
 struct LongRunningToolModel {
     tool_rounds: usize,
     invocations: AtomicUsize,
+}
+
+struct MutableInstructions {
+    current: Mutex<Arc<HarnessInstructions>>,
+}
+
+impl MutableInstructions {
+    fn new(content: &str) -> Self {
+        Self {
+            current: Mutex::new(Arc::new(HarnessInstructions::new(
+                "system",
+                "environment",
+                Some(content.into()),
+            ))),
+        }
+    }
+
+    fn replace(&self, content: &str) {
+        *self.current.lock().unwrap() = Arc::new(HarnessInstructions::new(
+            "system",
+            "environment",
+            Some(content.into()),
+        ));
+    }
+}
+
+impl HarnessInstructionsProvider for MutableInstructions {
+    fn snapshot(&self) -> Arc<HarnessInstructions> {
+        Arc::clone(&self.current.lock().unwrap())
+    }
+}
+
+struct InstructionRefreshingModel {
+    instructions: Arc<MutableInstructions>,
+    requests: Mutex<Vec<ModelRequest>>,
+}
+
+impl ModelService for InstructionRefreshingModel {
+    fn invoke(
+        &self,
+        _: ModelSelection<'_>,
+        request: &ModelRequest,
+        _: &CancellationToken,
+    ) -> Result<ModelResponse, CoreError> {
+        let mut requests = self.requests.lock().unwrap();
+        requests.push(request.clone());
+        if requests.len() == 1 {
+            self.instructions.replace("second instructions");
+            return Ok(ModelResponse {
+                output: vec![ResponseItem::ToolCall(ToolCall {
+                    id: ToolCallId::new("refresh_instructions").unwrap(),
+                    name: ToolName::new("weather").unwrap(),
+                    arguments: json!({"city": "Paris"}),
+                })],
+                usage: None,
+                stop_reason: StopReason::ToolUse,
+            });
+        }
+        Ok(text_response("done"))
+    }
 }
 
 impl LongRunningToolModel {
@@ -675,6 +963,10 @@ impl ToolService for WeatherTool {
 struct SandboxPolicyService;
 
 impl PolicyService for SandboxPolicyService {
+    fn revision(&self) -> String {
+        "test-policy-v1".into()
+    }
+
     fn decide(
         &self,
         request: &ActionReviewRequest,
@@ -706,6 +998,8 @@ fn started_turn() -> (Arc<ThreadController>, ThreadId, TurnId) {
                 command_id: CommandId::new("start").unwrap(),
                 expected_sequence: SequenceExpectation::Any,
                 model: None,
+                policy_revision: "test-policy-v1".into(),
+                activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
                     text: "hello".into(),
                 }],
@@ -722,6 +1016,16 @@ fn text_response(text: &str) -> ModelResponse {
         usage: None,
         stop_reason: StopReason::Completed,
     }
+}
+
+fn request_contains(request: &ModelRequest, expected: &str) -> bool {
+    request.input.iter().any(|input| match input {
+        InputItem::Message(message) => message
+            .content
+            .iter()
+            .any(|content| matches!(content, ContentPart::Text(text) if text.contains(expected))),
+        InputItem::ToolResult(_) => false,
+    })
 }
 
 fn wait_for_turn_status(

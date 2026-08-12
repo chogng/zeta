@@ -56,3 +56,17 @@ fn catalog_rejects_invalid_duplicate_and_blank_definitions() {
         "slash command 'blank' must have a description"
     );
 }
+
+#[test]
+fn skill_definitions_keep_a_distinct_dispatch_origin() {
+    let catalog = SlashCommandCatalog::with_local_server_and_skills(
+        [command("status")],
+        [command("diagnose")],
+        [command("commit")],
+    )
+    .unwrap();
+
+    assert_eq!(catalog.origin("status"), Some(SlashCommandOrigin::Local));
+    assert_eq!(catalog.origin("diagnose"), Some(SlashCommandOrigin::Server));
+    assert_eq!(catalog.origin("commit"), Some(SlashCommandOrigin::Skill));
+}

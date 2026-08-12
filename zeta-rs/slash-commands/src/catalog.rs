@@ -8,6 +8,7 @@ use crate::SlashCommandDefinition;
 pub enum SlashCommandOrigin {
     Local,
     Server,
+    Skill,
 }
 
 /// Immutable validated Slash Commands snapshot.
@@ -33,6 +34,18 @@ impl SlashCommandCatalog {
         local: impl IntoIterator<Item = SlashCommandDefinition>,
         server: impl IntoIterator<Item = SlashCommandDefinition>,
     ) -> Result<Self, SlashCommandCatalogError> {
+        Self::with_local_server_and_skills(local, server, std::iter::empty())
+    }
+
+    /// Merges local actions, server commands, and directly invocable Skill projections.
+    ///
+    /// Skill identity remains in the client binding that supplied each definition; this catalog
+    /// owns only validation, matching, and the contribution kind used during dispatch.
+    pub fn with_local_server_and_skills(
+        local: impl IntoIterator<Item = SlashCommandDefinition>,
+        server: impl IntoIterator<Item = SlashCommandDefinition>,
+        skills: impl IntoIterator<Item = SlashCommandDefinition>,
+    ) -> Result<Self, SlashCommandCatalogError> {
         let mut names = BTreeSet::new();
         let mut commands = Vec::new();
         let mut origins = BTreeMap::new();
@@ -49,6 +62,13 @@ impl SlashCommandCatalog {
             &mut origins,
             server,
             SlashCommandOrigin::Server,
+        )?;
+        append_commands(
+            &mut commands,
+            &mut names,
+            &mut origins,
+            skills,
+            SlashCommandOrigin::Skill,
         )?;
         Ok(Self { commands, origins })
     }

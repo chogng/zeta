@@ -272,6 +272,10 @@ impl<B: SandboxBackend> ToolService for LocalShellToolService<B> {
 struct LocalShellPolicy;
 
 impl PolicyService for LocalShellPolicy {
+    fn revision(&self) -> String {
+        LOCAL_POLICY_REVISION.into()
+    }
+
     fn decide(
         &self,
         request: &ActionReviewRequest,

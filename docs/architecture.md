@@ -74,6 +74,7 @@ flowchart TD
 | 会话系统 | 一次工作如何被识别、恢复和持续保存？ | Session、Thread、Turn、事件顺序与持久化事务 | Session、Thread、Store 与 rollout 是否存在重复权威 | [`core.md`](core.md)、[`protocol.md`](protocol.md) |
 | 上下文系统 | 当前模型究竟能看到什么？ | 上下文选择、预算、压缩、恢复和每个 Thread 的上下文状态 | 持久事实、模型输入和 UI 展示状态是否混为一体 | [`core-context.md`](core-context.md) |
 | Agent 运行时 | 模型输出如何推进一次 Turn？ | Agent 生命周期、模型回合、工具回合、取消与多 Agent 协调 | 调度、上下文、工具和持久化是否有唯一协调者 | [`agent-harness-design.md`](agent-harness-design.md)、[`core-multi-agent.md`](core-multi-agent.md)、[`zeta-agent-runtime-architecture.md`](zeta-agent-runtime-architecture.md) |
+| Agent 自定义系统 | Agent 长期遵循什么、如何复用工作方法、使用哪种执行配置？ | Instructions、Skills、Agents、`.zeta` 原生命名空间与外部导入边界 | Prompt/Task/Slash Command 是否被误建模为 artifact，外部格式是否污染原生 authority | [`agent-customizations.md`](agent-customizations.md) |
 
 ### 3.2 能力、决策与执行
 

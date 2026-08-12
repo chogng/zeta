@@ -14,6 +14,7 @@
 > Plugin 控制面：[`plugins.md`](plugins.md)  
 > MCP runtime：[`mcp.md`](mcp.md)  
 > Skill runtime：[`skills.md`](skills.md)  
+> Agent 自定义对象与外部导入边界：[`agent-customizations.md`](agent-customizations.md)
 > Direct-provider credential：[`model-provider.md`](model-provider.md#6-provider-credential-与-subscription-backend)  
 > Interactive login：[`login.md`](login.md)
 > Secret persistence：[`secrets.md`](secrets.md)
@@ -175,6 +176,10 @@ pub extra: HashMap<String, serde_json::Value>
 
 Provider 配置继续由 `zeta-model-provider-config` 定义。`zeta-config` 可以保存
 `BTreeMap<ProviderId, ModelProviderConfig>`，但不重新定义 Provider normalization 或 runtime。
+`ModelProviderConfig.model_context` 以 `ModelId` 为 key 保存可选的 `context_window` 与
+`auto_compact_token_limit`。这些值只决定 Core 是否能使用确定性预算和 durable compaction，不
+改变 provider endpoint 或模型选择；窗口或阈值为零会在静态配置校验时被拒绝。目录和配置都无
+已知窗口时，Core 明确退回 provider-managed，不猜测默认窗口。
 
 自动审批模型是独立于主 Agent 模型的 User 配置：
 
@@ -424,7 +429,7 @@ resolved sources
 | Skill Source | `skill/source/add`、`skill/source/remove`、`skill/source/enablement/set` | Config authority 的 Skill section（已实现 desired config） |
 | Skill Catalog | `skills/list`、`skill/enablement/set` | App Server metadata projection + Config authority per-Skill overlay（已实现 built-in/user） |
 | Hook Config | `hook/upsert`、`hook/remove`、`hook/enablement/set` | Config authority 的 Hook declaration（已实现；不执行） |
-| Agent Import Apply | `agent/import/preview`、`agent/import/apply` | App Server 将用户选择的 normalized fragments 原子映射到多个 Config section（Proposed） |
+| Agent Import Apply | `agent/import/preview`、`agent/import/apply` | App Server 将用户选择的 normalized fragments 路由到 Config 与目标 artifact authorities（Proposed） |
 
 所有 durable mutation 使用 `CommandId`、对应 authority 的 expected revision、payload conflict
 检查和 exact typed response replay。Runtime connect/disconnect 不占用 Config、Session 或 Thread
@@ -434,9 +439,11 @@ revision。
 
 ### 10.1 外部 Agent Import 与 Config
 
-[`zeta-agent-import`](../zeta-rs/agent-import/README.md) 当前只做 metadata-only inspection；它不依赖
-`zeta-config`。未来 App Server import adapter 同时消费 inspection/parser output 与 Config typed
-command，把用户确认的外部内容转换为 Zeta desired state：
+Agent 自定义对象与导入/source registration 的 canonical 边界见
+[`agent-customizations.md`](agent-customizations.md)。[`zeta-agent-import`](../zeta-rs/agent-import/README.md)
+当前只做 metadata-only inspection；它不依赖 `zeta-config`。未来 App Server import adapter 同时
+消费 inspection/parser output 与目标领域 typed command，把用户确认的外部内容转换为 Zeta
+desired state：
 
 | 外部内容 | Config 或目标 authority | Apply 约束 |
 | --- | --- | --- |
@@ -444,8 +451,8 @@ command，把用户确认的外部内容转换为 Zeta desired state：
 | MCP declaration | `UpsertMcpServer` | credential 不进入 Config；初始连接与 approval 分离 |
 | Plugin request | `UpsertPluginRequest` | 必须解析成 exact package/version；不表示 installed/active |
 | Hook declaration | `UpsertHook` | 默认 disabled；执行 authority 不属于 Import 或 Config |
-| Instructions | content/Skill artifact authority | canonical target 尚未完成前不得 raw passthrough |
-| Subagents | Agent/Subagent definition authority | 不属于普通 Config document |
+| Instructions | Instruction authority | canonical target 尚未完成前不得 raw passthrough |
+| Agents | Agent definition authority | 不属于普通 Config document |
 | Execution rules | Policy review | 不生成 durable approval，不自动改写成 Hook |
 
 Import apply 不能循环调用多个独立 RPC 后接受 partial success。Config 部分的目标 contract 是一个
@@ -454,7 +461,7 @@ Import apply 不能循环调用多个独立 RPC 后接受 partial success。Conf
 并生成 exact import receipt。Conflict、unsupported field 或任一 Config mutation failure 都使
 Config 子批次不提交。
 
-Instructions 与 Subagents 等非 Config artifact 必须交给各自 authority；canonical target 尚未完成
+Instructions 与 Agents 等非 Config artifact 必须交给各自 authority；canonical target 尚未完成
 前，Import 必须将其标记为 unsupported，而不是强塞进 Config transaction。
 
 Config 保存 normalized desired state 与必要 provenance reference，不保存外部原始文件、secret、
@@ -571,7 +578,7 @@ Workspace Config → grant or secret authority
 - 已开始的 Turn/model invocation 不被后续配置变化静默修改；
 - 所有新 test module 使用 sibling `*_tests.rs`。
 
-## 15. TOML authority、SQLite state 与 profile 边界
+## 15. TOML 权威、SQLite 状态与配置档案边界
 
 本地 host 解析一个用户级 `profile_root`。`ZETA_PROFILE_ROOT` 显式覆盖；未设置时使用操作系统
 的用户 state 目录。切换 workspace 不会切换用户 Config/Session/Thread authority。

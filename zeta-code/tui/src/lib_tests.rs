@@ -2,17 +2,26 @@ use super::app::App;
 use super::app::AppEvent;
 use super::app::Status;
 use crate::app::apply_active_turn_snapshot;
-use crate::app::slash_command_registry;
+use crate::app::skill_slash_command_registry;
 use crate::components::transcript::MessageRole;
 use crate::features::thread::present_turn_error;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
+use zeta_app_server_protocol::protocol::skills::SkillCompatibilityDto;
+use zeta_app_server_protocol::protocol::skills::SkillDto;
+use zeta_app_server_protocol::protocol::skills::SkillEnablementDto;
+use zeta_app_server_protocol::protocol::skills::SkillListResult;
+use zeta_app_server_protocol::protocol::skills::SkillSourceKindDto;
 use zeta_app_server_protocol::protocol::slash_commands::{
     SlashCommandArgumentModeDto, SlashCommandDefinition,
 };
+use zeta_protocol::ContentDigest;
 use zeta_protocol::ItemId;
 use zeta_protocol::SessionId;
+use zeta_protocol::SkillId;
+use zeta_protocol::SkillName;
+use zeta_protocol::SkillSourceId;
 use zeta_protocol::StableTurnError;
 use zeta_protocol::Thread;
 use zeta_protocol::ThreadId;
@@ -149,30 +158,79 @@ fn persistence_failure_explains_that_the_response_was_not_saved() {
 
 #[test]
 fn server_slash_commands_become_the_tui_runtime_registry() {
-    let registry = slash_command_registry(&[SlashCommandDefinition {
-        name: "diagnose".into(),
-        description: "inspect the current workspace".into(),
-        argument_mode: SlashCommandArgumentModeDto::Optional,
-    }])
+    let registry = skill_slash_command_registry(
+        &[SlashCommandDefinition {
+            name: "diagnose".into(),
+            description: "inspect the current workspace".into(),
+            argument_mode: SlashCommandArgumentModeDto::Optional,
+        }],
+        &empty_skill_catalog(),
+    )
     .unwrap();
 
-    assert!(registry.command_named("diagnose").is_some());
+    assert!(registry.catalog.command_named("diagnose").is_some());
 }
 
 #[test]
 fn server_slash_commands_cannot_shadow_local_builtins() {
-    let error = slash_command_registry(&[SlashCommandDefinition {
-        name: "quit".into(),
-        description: "replace local quit".into(),
-        argument_mode: SlashCommandArgumentModeDto::None,
-    }])
-    .unwrap_err();
+    let Err(error) = skill_slash_command_registry(
+        &[SlashCommandDefinition {
+            name: "quit".into(),
+            description: "replace local quit".into(),
+            argument_mode: SlashCommandArgumentModeDto::None,
+        }],
+        &empty_skill_catalog(),
+    ) else {
+        panic!("server slash commands must not shadow local built-ins");
+    };
 
     assert!(matches!(
         error,
         zeta_app_server_client::ClientError::Protocol(message)
             if message.contains("duplicate slash command name 'quit'")
     ));
+}
+
+#[test]
+fn enabled_unique_skills_become_direct_slash_commands() {
+    let skill_id = SkillId::new(
+        SkillSourceId::new("user:skill-source:test").unwrap(),
+        SkillName::new("commit").unwrap(),
+    );
+    let digest = ContentDigest::sha256(b"commit skill");
+    let registry = crate::app::skill_slash_command_registry(
+        &[],
+        &SkillListResult {
+            generation: 1,
+            skills: vec![SkillDto {
+                id: skill_id.clone(),
+                description: "draft a commit message".into(),
+                source_kind: SkillSourceKindDto::User,
+                content_digest: digest.clone(),
+                enablement: SkillEnablementDto::Enabled,
+                compatibility: SkillCompatibilityDto::Compatible,
+            }],
+            diagnostics: vec![],
+        },
+    )
+    .unwrap();
+
+    assert_eq!(
+        registry.catalog.origin("commit"),
+        Some(zeta_slash_commands::SlashCommandOrigin::Skill)
+    );
+    assert_eq!(
+        registry.skills.get("commit"),
+        Some(&zeta_protocol::SkillRef::pinned(skill_id, digest))
+    );
+}
+
+fn empty_skill_catalog() -> SkillListResult {
+    SkillListResult {
+        generation: 1,
+        skills: Vec::new(),
+        diagnostics: Vec::new(),
+    }
 }
 
 fn working_app() -> App {

@@ -1,10 +1,18 @@
+use crate::ContextBudget;
 use crate::CoreError;
+use crate::HarnessInstructions;
 use crate::SequenceExpectation;
 use crate::ThreadCommandResult;
 use crate::ThreadEventBatch;
 use crate::ThreadSnapshot;
 use crate::ThreadStore;
 use crate::WriterLease;
+use crate::context::ContextInput;
+use crate::context::ContextPreparation;
+use crate::context::FrozenModelSelection;
+use crate::context::ModelInvocationPreparation;
+use crate::context::ModelInvocationSnapshot;
+use crate::context::SkillInstruction;
 use crate::reduce_thread_event;
 use crate::thread_reducer::validate_agent_request;
 use std::collections::BTreeMap;
@@ -15,6 +23,11 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use zeta_protocol::AgentRequest;
 use zeta_protocol::AgentResponse;
 use zeta_protocol::CommandId;
+use zeta_protocol::ContextCheckpoint;
+use zeta_protocol::ContextCheckpointId;
+use zeta_protocol::ContextCheckpointVerification;
+use zeta_protocol::ContextSourceRange;
+use zeta_protocol::FrozenSkillActivation;
 use zeta_protocol::InteractionCancelReason;
 use zeta_protocol::InteractionDeadline;
 use zeta_protocol::ItemId;
@@ -29,6 +42,7 @@ use zeta_protocol::ThreadItem;
 use zeta_protocol::ThreadUpdate;
 use zeta_protocol::ThreadUpdateEnvelope;
 use zeta_protocol::ToolCallId;
+use zeta_protocol::ToolDefinition;
 use zeta_protocol::ToolName;
 use zeta_protocol::TurnId;
 use zeta_protocol::TurnInteraction;
@@ -48,6 +62,8 @@ pub struct StartTurnRequest {
     pub command_id: CommandId,
     pub expected_sequence: SequenceExpectation,
     pub model: Option<ModelRef>,
+    pub policy_revision: String,
+    pub activated_skills: Vec<FrozenSkillActivation>,
     pub input: Vec<UserInput>,
 }
 
@@ -62,6 +78,7 @@ pub struct ShellTurnInvocation {
 pub struct StartShellTurnRequest {
     pub command_id: CommandId,
     pub expected_sequence: SequenceExpectation,
+    pub policy_revision: String,
     pub invocation: ShellTurnInvocation,
 }
 
@@ -181,6 +198,16 @@ pub struct RecordToolResultRequest {
 pub struct RecordedToolResult {
     pub item: ThreadItem,
     pub sequence: u64,
+}
+
+pub(crate) struct CommitContextCheckpointRequest {
+    pub(crate) source_thread_sequence: u64,
+    pub(crate) covered: ContextSourceRange,
+    pub(crate) summary: String,
+    pub(crate) schema_revision: String,
+    pub(crate) prompt_revision: String,
+    pub(crate) context_policy_revision: String,
+    pub(crate) generator_model: Option<ModelRef>,
 }
 
 pub(crate) struct RecordToolExecutionStart {
@@ -333,8 +360,9 @@ impl ThreadController {
         thread_id: &ThreadId,
         request: StartTurnRequest,
     ) -> Result<StartTurnResult, CoreError> {
-        let validated_input = user_input::validate(&request.input)?;
+        let validated_input = user_input::validate(&request.input, &request.activated_skills)?;
         validate_command_id(&request.command_id)?;
+        validate_policy_revision(&request.policy_revision)?;
         let command = ThreadCommand::StartTurn {
             model: request.model.clone(),
             input: request.input.clone(),
@@ -369,6 +397,8 @@ impl ThreadController {
             events.push(ThreadEvent::TurnAccepted {
                 thread_id: thread_id.clone(),
                 turn_id: turn_id.clone(),
+                policy_revision: request.policy_revision.clone(),
+                activated_skills: request.activated_skills.clone(),
                 model: request.model.clone(),
             });
             events.extend(
@@ -412,6 +442,7 @@ impl ThreadController {
         request: StartShellTurnRequest,
     ) -> Result<StartTurnResult, CoreError> {
         validate_command_id(&request.command_id)?;
+        validate_policy_revision(&request.policy_revision)?;
         let command_text = request.invocation.command.trim();
         if command_text.is_empty() {
             return Err(CoreError::InvalidInput(
@@ -474,6 +505,8 @@ impl ThreadController {
                 ThreadEvent::TurnAccepted {
                     thread_id: thread_id.clone(),
                     turn_id: turn_id.clone(),
+                    policy_revision: request.policy_revision.clone(),
+                    activated_skills: Vec::new(),
                     model: None,
                 },
                 ThreadEvent::ItemCompleted {
@@ -791,6 +824,119 @@ impl ThreadController {
         self.with_loaded_thread(thread_id, |loaded| Ok(loaded.snapshot.clone()))
     }
 
+    pub(crate) fn commit_context_checkpoint(
+        &self,
+        thread_id: &ThreadId,
+        request: CommitContextCheckpointRequest,
+    ) -> Result<ContextCheckpoint, CoreError> {
+        if request.summary.trim().is_empty()
+            || request.schema_revision.trim().is_empty()
+            || request.prompt_revision.trim().is_empty()
+            || request.context_policy_revision.trim().is_empty()
+        {
+            return Err(CoreError::InvalidInput(
+                "context checkpoint summary and revision identities must not be empty".into(),
+            ));
+        }
+        self.mutate_thread(thread_id, |snapshot| {
+            if snapshot.sequence != request.source_thread_sequence {
+                return Err(CoreError::ThreadStore(ThreadStoreError::SequenceConflict {
+                    expected: request.source_thread_sequence,
+                    actual: snapshot.sequence,
+                }));
+            }
+            let checkpoint = ContextCheckpoint {
+                checkpoint_id: ContextCheckpointId::new(self.next_identifier("context-checkpoint"))
+                    .expect("generated context checkpoint ID is non-empty"),
+                source_thread_id: snapshot.thread_id.clone(),
+                covered: request.covered,
+                referenced_items: snapshot
+                    .items
+                    .iter()
+                    .filter(|item| {
+                        snapshot
+                            .item_sequences
+                            .get(item.item_id())
+                            .is_some_and(|sequence| *sequence <= request.covered.end_sequence)
+                    })
+                    .map(|item| item.item_id().clone())
+                    .collect(),
+                source_digest: snapshot.context_source_digest(request.covered)?,
+                summary: request.summary,
+                schema_revision: request.schema_revision,
+                prompt_revision: request.prompt_revision,
+                context_policy_revision: request.context_policy_revision,
+                generator_model: request.generator_model,
+                created_at_unix_ms: u64::try_from(self.timestamp()?.0).map_err(|_| {
+                    CoreError::Journal("context checkpoint timestamp exceeds u64".into())
+                })?,
+                verification: ContextCheckpointVerification::Verified,
+            };
+            self.record_batch(
+                snapshot,
+                vec![ThreadEvent::ContextCheckpointCommitted {
+                    thread_id: thread_id.clone(),
+                    checkpoint: checkpoint.clone(),
+                }],
+            )?;
+            Ok(checkpoint)
+        })
+    }
+
+    pub(crate) fn prepare_model_invocation(
+        &self,
+        thread_id: &ThreadId,
+        turn_id: &TurnId,
+        instructions: &HarnessInstructions,
+        skill_instructions: &[SkillInstruction],
+        tools: Vec<ToolDefinition>,
+        budget: ContextBudget,
+    ) -> Result<ModelInvocationPreparation, CoreError> {
+        self.with_loaded_thread(thread_id, |loaded| {
+            let turn = loaded
+                .snapshot
+                .turns
+                .iter()
+                .find(|turn| &turn.turn_id == turn_id)
+                .ok_or_else(|| CoreError::NotFound(turn_id.to_string()))?;
+            let model = match &turn.model {
+                Some(model) => FrozenModelSelection::Selected(model.clone()),
+                None => FrozenModelSelection::ConfiguredDefault,
+            };
+            let mut instruction_fragments = instructions.context_fragments();
+            instruction_fragments.extend(
+                skill_instructions
+                    .iter()
+                    .map(SkillInstruction::context_fragment),
+            );
+            let input = ContextInput::new(
+                &loaded.snapshot,
+                turn_id.clone(),
+                instruction_fragments,
+                tools,
+                budget,
+            );
+            match loaded
+                .context
+                .prepare(&input)
+                .map_err(|error| CoreError::Context(error.to_string()))?
+            {
+                ContextPreparation::Ready(context) => Ok(ModelInvocationPreparation::Ready(
+                    ModelInvocationSnapshot::new(
+                        loaded.snapshot.session_id.clone(),
+                        loaded.snapshot.thread_id.clone(),
+                        turn_id.clone(),
+                        model,
+                        context,
+                    ),
+                )),
+                ContextPreparation::NeedsCompaction(plan) => {
+                    Ok(ModelInvocationPreparation::NeedsCompaction { model, plan })
+                }
+            }
+        })
+    }
+
     /// Returns the in-memory projections currently loaded by this manager.
     pub fn list_threads(&self) -> Result<Vec<ThreadSnapshot>, CoreError> {
         self.loaded_threads.loaded_snapshots()
@@ -1046,6 +1192,16 @@ fn validate_command_id(command_id: &CommandId) -> Result<(), CoreError> {
     if command_id.as_str().trim().is_empty() {
         Err(CoreError::InvalidInput(
             "command ID must be non-empty".into(),
+        ))
+    } else {
+        Ok(())
+    }
+}
+
+fn validate_policy_revision(policy_revision: &str) -> Result<(), CoreError> {
+    if policy_revision.trim().is_empty() {
+        Err(CoreError::InvalidInput(
+            "Turn policy revision must be non-empty".into(),
         ))
     } else {
         Ok(())

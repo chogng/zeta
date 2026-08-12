@@ -1,6 +1,6 @@
 # Coding 最小闭环实施计划（M0+M1+基础弹性）
 
-> 状态：Planned（2026-08-03）
+> 状态：部分完成（2026-08-12；WI1 的 Workspace Instruction 纵向切片已完成）
 > 目标：完成后**接入任意已配置的模型即可执行真实 coding 任务**——理解仓库、搜代码、
 > 读代码、改代码、跑命令、要审批、被打断。
 > 规格依据：[`agent-harness-design.md`](agent-harness-design.md)（行为策略）、
@@ -13,7 +13,7 @@
 
 | 工作项 | 内容 |
 | --- | --- |
-| WI1 | 提示词接线：instructions 注入 + 环境快照 + AGENTS.md |
+| WI1 | 提示词接线：instructions 注入 + 环境快照 + Global `.zeta/instructions` |
 | WI2 | read_file / write_file / edit 三工具 |
 | WI3 | grep / glob 两工具（均基于已管理的 ripgrep） |
 | WI4 | 本地工具组合改造：单工具 → 多工具套件分发 |
@@ -22,7 +22,7 @@
 
 **明确不做**（后续里程碑，不阻塞"能 coding"）：`apply_patch` 与 ToolProfile 机制（v0 单
 profile 用 edit，接 OpenAI 系时补）、`update_plan`、MCP 阈值策略、压缩、prompt cache、
-`turn/steer`、嵌套 AGENTS.md。
+`turn/steer`、Contextual/OnDemand Instruction 选择。
 
 ## 1. WI1 提示词接线
 
@@ -42,7 +42,7 @@ profile 用 edit，接 OpenAI 系时补）、`update_plan`、MCP 阈值策略、
   HarnessInstructions {
       system_body: String,          // SYSTEM_PROMPT body（含工具指导与输出风格）
       environment: String,          // 渲染后的 <environment> 块
-      workspace_instructions: Option<String>,  // AGENTS.md 正文（≤32 KiB，超出截断标注）
+      workspace_instructions: Option<String>,  // 已校验的 Global Workspace Instructions
   }
   ```
 
@@ -54,26 +54,27 @@ profile 用 edit，接 OpenAI 系时补）、`update_plan`、MCP 阈值策略、
   - `workspace_instructions` 存在时作为 `input[0]` user message，正文包裹
     "工作区指令，优先级低于系统与安全策略"标注（文案照 harness §4.3）；
   - `parallel_tool_calls: true`（WI5，顺手在此改）。
-- `src/turn/executor.rs`：`TurnExecutor` 增加
-  `with_instructions(Arc<HarnessInstructions>)` builder；未设置时用空 environment 的默认
-  值（向后兼容现有测试）；`execute_steps` 调 assemble 时传入。
-- `lib.rs`：导出 `HarnessInstructions`（host 构造它）。
+- `src/turn/executor.rs`：`TurnExecutor` 保留固定 `with_instructions` builder，并新增
+  `with_instructions_provider`；每次 model invocation 先取得不可变 snapshot，再调用 assembler。
+- `lib.rs`：导出 `HarnessInstructions` 与 `HarnessInstructionsProvider`。
 
 ### 1.3 `zeta-rs/app-server`
 
-- `src/local.rs`（workspace runtime 组装处）：新增环境采集函数——cwd、platform、
+- `src/local.rs`：环境采集函数提供 cwd、platform、
   OS 版本（`uname -r` 级）、shell、日期（天级）、`git branch --show-current` /
   `git status --porcelain`（≤40 行）/ `git log --oneline -5`，git 命令失败按非 git 仓库
-  处理；读 workspace root 的 `AGENTS.md`；构造 `HarnessInstructions` 注入 `TurnExecutor`。
-  采集只在 workspace runtime 创建时执行一次（冻结纪律）。
+  处理；`server/workspace_customizations.rs` 读取 `.zeta/instructions` 和 `.zeta/agents`，构造
+  `HarnessInstructions` snapshot 并接入 Workspace watcher。环境只在 workspace runtime 创建时
+  采集一次；Instruction 文件变化只影响后续 model invocation。
 
 ### 1.4 验收
 
-- assembler 单测：instructions 注入、`input[0]` 存在/缺省两分支、AGENTS.md 截断标注；
+- assembler 与 catalog 单测：instructions 注入、`input[0]` 存在/缺省、格式/大小限制与非 Global
+  条目不自动注入；
 - **字节稳定测试**：同一 snapshot 连续 assemble 两次，序列化结果逐字节相等（M4 缓存回归
   的基线，现在就建）；
-- 手动冒烟：CLI 连本地 App Server + 真实 provider，问"这个仓库是干什么的"，模型应引用
-  AGENTS.md 与 git 状态回答。
+- 手动冒烟：CLI 连本地 App Server + 真实 provider，模型应遵循合法 Global Workspace
+  Instruction，并能使用环境中的 git 状态回答。
 
 ## 2. WI2 read_file / write_file / edit
 

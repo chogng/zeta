@@ -313,6 +313,10 @@ struct McpApprovalPolicy {
 }
 
 impl PolicyService for McpApprovalPolicy {
+    fn revision(&self) -> String {
+        MCP_POLICY_REVISION.into()
+    }
+
     fn decide(
         &self,
         request: &ActionReviewRequest,

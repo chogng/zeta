@@ -140,6 +140,8 @@ notification contract，不能拥有隐藏业务接口。JSONL/stdio、WebSocket
     "resources": true,
     "fileSystem": true,
     "workspaceSearch": true,
+    "codeIndex": true,
+    "cloudCodeIndex": false,
     "terminal": true,
     "typst": true,
     "updateReplay": true
@@ -208,6 +210,15 @@ inline argument parsing；提交仍通过 `session/request` 的 `StartTurn.input
 | `workspace/search/start` | connection + workspace | 启动有界内容搜索 |
 | `workspace/search/read` | connection + search job | 按游标读取最多 200 条结果 |
 | `workspace/search/cancel` | connection + search job | 取消并释放搜索 |
+| `workspace/codeIndex/status` | workspace | 读取本地 index lifecycle 与 generation counters |
+| `workspace/codeIndex/search` | workspace | 返回有界、revision-bound 的本地 lexical chunks |
+| `workspace/codeIndex/retrieve` | workspace | 融合已启用召回源，返回复核、去重、受预算约束的 excerpts |
+| `workspace/codeIndex/rebuild` | workspace | 同步执行一次 full reconcile |
+| `workspace/codeIndex/cloud/status` | workspace | 读取 selected deployment、grant 与 local/remote generation state |
+| `workspace/codeIndex/cloud/preview` | workspace | 本地计算 proposed scope 的 chunk 外发单位与 bytes，不授权、不触网 |
+| `workspace/codeIndex/cloud/authorize` | workspace | 持久化 root-bound destination/scope/byte grant |
+| `workspace/codeIndex/cloud/sync` | workspace | 按 grant 复核 source revision 后调用 provider publication |
+| `workspace/codeIndex/cloud/revoke` | workspace | 先持久化 Revoking，再请求 provider 幂等删除 |
 | `terminal/profile/list` | workspace | 列出 App Server 冻结的可信 Shell Profile |
 | `terminal/create` | connection + workspace | 在可信 workspace root 启动 PTY |
 | `terminal/write` | connection + Terminal | 写入有界 UTF-8 输入 batch |
@@ -289,6 +300,43 @@ number、单行 preview 和 UTF-16 match ranges。
 `SearchNotFound`、`SearchNotOwner` 与 `SearchBusy` error name。执行失败作为 terminal
 read result 的脱敏 `error` 返回。完整 ownership 与当前 UI 限制见
 [`search.md`](search.md)。
+
+### Workspace 代码索引
+
+`initialize.capabilities.codeIndex` 表示 local composition 可以在当前 workspace authority 内建立
+本地代码索引。`workspace/codeIndex/status` 返回 `empty/indexing/ready/stale/failed` 和 published
+generation counters；`workspace/codeIndex/search` 接受最多 8 KiB query 与 1–100 个结果上限，
+返回 root-relative path、language、source revision、chunk key/hash、UTF-8 byte/line span、当前
+验证过的 content 与 lexical score。初始 generation 尚未发布时返回 `CodeIndexNotReady`。
+
+`workspace/codeIndex/retrieve` 使用相同 query/result 数量上限；内部始终按 Workspace chunk key
+校验和去重，但返回面只投影 revision-bound excerpt、RRF score、`localLexical/cloudSemantic` origins
+和显式 degradations。未授权
+云能力时它只使用本地 FTS；已启用云能力时只查询 durable state 中 exact ready remote generation。
+cloud provider 返回完成 semantic recall/rerank/过滤/截断后的 final order，App Server 不使用模型分数
+重新排序。cloud query failure 会保留 local hits 并返回 `cloudQueryFailed`；复核失败或 content budget 丢弃也会
+返回计数，不把 provider candidate body 当作 source authority。
+
+`workspace/codeIndex/rebuild` 是 global-exclusive、同步 manual reconcile；通常由 watcher-driven
+runtime 自动维护，不应在每次查询前调用。该能力不创建 embedding/network 请求，也不等价于产品
+文字/正则搜索。完整 chunking、持久化、stale gate 与隐私边界见
+[`code-index.md`](code-index.md)。
+
+`initialize.capabilities.cloudCodeIndex` 表示 host 已注入非空 provider registry；未激活或受限
+Workspace 即使支持该方法，也没有 active cloud controller，调用会返回
+`CloudCodeIndexUnavailable`。云端只有一种 publication contract：上传 Workspace 已切块并复核的
+exact chunks；provider 不得读取完整 source 后重新切块。客户端必须先用
+`workspace/codeIndex/cloud/preview` 展示 file/chunk/unit/byte shape，再用 authorize 固定
+provider、tenant、collection、path scope 和 `maxEgressBytes`；该 ceiling 计算 source-content bytes，
+不包含 transport metadata overhead，authorize 本身不上传。旧 `mode` 字段按未知字段拒绝，不能把
+旧 `managed` consent 静默解释为新的 chunk-only grant。
+
+同一 root 同时只允许一个 grant。destination、scope 或 byte ceiling 变化必须先 revoke；
+每次 sync 都重检 byte ceiling 和 source revision。状态为
+`localOnly/granted/syncing/ready/stale/revoking/failed`。revoke 在 provider call 前持久化
+`revoking`，删除失败保留 pending grant供幂等重试；Workspace 信任撤销也会自动触发删除并移除
+cloud runtime。默认 local composition 没有 concrete provider，所以示例 capability 为 false，当前
+不会发起云网络请求。
 
 ### 集成终端
 
@@ -497,6 +545,10 @@ request、declarative Hook 与 language-server mode/path preference。Plugin req
 Hook 的 `enabled` 也不表示 process 已获准或已经执行。两者的 runtime/lifecycle projection 必须由
 后续独立领域 API 返回，不能从 Config desired state 推断。
 
+Provider DTO 的 `modelContext` 以模型 ID 映射 `contextWindow` 和可选
+`autoCompactTokenLimit`，用于 Core context budget。它是非 secret declarative metadata；零值在
+配置 mutation 时被拒绝，未知窗口不会在 App Server 内被替换成猜测值。
+
 `skills/list` 返回 source-qualified `SkillId`、description、source kind、content digest、
 compatibility、effective enablement 和 isolated diagnostics。`reload: "cached"` 可复用当前
 projection；`reload: "refresh"` 要求 server 重扫受控 roots。`skill/enablement/set` 必须携带
@@ -504,6 +556,11 @@ config `expectedRevision` 与 exact discovered `SkillId`，结果使用标准 co
 enablement 或 filesystem/config invalidation 导致可见 projection 变化时发布
 `skills/changed`；notification 是重新 list 的提示，不包含 catalog body，也不表示 Skill 已注入
 正在运行的 Turn。
+
+`session/request` 的 StartTurn input 可以携带 `Skill { skill: SkillRef }`。App Server 只接受当前
+catalog 中 enabled 且 compatible 的 exact Skill，随后冻结 digest、catalog generation 与
+activation reason；客户端 raw path 没有 wire 入口。正文不会出现在 `skills/list`，而是在执行
+safe point 从受控 source 按 frozen digest 重载。
 
 Resource bytes 使用标准 RFC 4648 Base64；`decodedLength` 是原始 byte 数，单 chunk 最大
 262,144 bytes。客户端用 `decodedLength` 推进 offset，并在结束后校验 size 与 SHA-256。

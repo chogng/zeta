@@ -14,6 +14,7 @@ import { createKeybindingsResourceApi } from "../../keybinding/electron-browser/
 import { createNativeMenubarApi } from "../../menubar/electron-browser/nativeMenubarApi.js";
 import { createWorkspaceSearchApi } from "../../search/electron-browser/searchApi.js";
 import { createModelApi, createSessionApi, createThreadApi, createTurnApi } from "../../sessions/electron-browser/sessionApi.js";
+import { createSkillApi } from "../../skills/electron-browser/skillApi.js";
 import { ElectronTerminalProcessService } from "../../terminal/electron-browser/electronTerminalProcessService.js";
 import { createUserThemeFilesApi } from "../../theme/electron-browser/userThemeFilesApi.js";
 import { createTypstApi } from "../../typst/electron-browser/typstApi.js";
@@ -37,6 +38,7 @@ export function createElectronRendererApi(): ZetaElectronRendererApi {
     model: createModelApi(),
     thread: createThreadApi(),
     turn: createTurnApi(),
+    skills: createSkillApi(),
     typst: createTypstApi(),
     documentCollaboration: createDocumentCollaborationApi(),
     resource,

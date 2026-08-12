@@ -1,16 +1,129 @@
+use super::code_index_runtime::CodeIndexRuntime;
 use super::update_broker::UpdateBroker;
+use std::collections::BTreeSet;
 use std::fmt;
+use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::mpsc::SyncSender;
 use std::thread::JoinHandle;
 use std::time::Duration;
 use zeta_app_server_protocol::protocol::fs::FsChanged;
-use zeta_file_watcher::{
-    DebouncedWatchReceiver, FileWatcher, FileWatcherBackend, FileWatcherEvent, WatchPath,
-};
+use zeta_file_watcher::DebouncedWatchReceiver;
+use zeta_file_watcher::FileWatcher;
+use zeta_file_watcher::FileWatcherBackend;
+use zeta_file_watcher::FileWatcherEvent;
+use zeta_file_watcher::WatchPath;
 use zeta_workspace::WorkspaceRoot;
 
 const FILE_SYSTEM_WATCH_DEBOUNCE: Duration = Duration::from_millis(75);
 const ALIASED_PATH_POLL_INTERVAL: Duration = Duration::from_millis(100);
+
+/// Receives projected Workspace filesystem invalidations before client publication.
+///
+/// Implementations must keep the callback bounded because it runs on the watcher thread.
+pub(crate) trait WorkspaceFileChangeSink: Send + Sync {
+    fn files_changed(&self, changed: &FsChanged);
+}
+
+enum FileSystemWatcherObservers {
+    None,
+    WorkspaceRuntime {
+        code_index: Arc<CodeIndexRuntime>,
+        changes: Arc<dyn WorkspaceFileChangeSink>,
+    },
+}
+
+#[derive(Default)]
+enum PendingCodeIndexRefresh {
+    #[default]
+    None,
+    Paths(BTreeSet<PathBuf>),
+    Rebuild,
+}
+
+impl PendingCodeIndexRefresh {
+    fn merge(&mut self, event: FileWatcherEvent) {
+        match event {
+            FileWatcherEvent::RescanRequired { .. } => *self = Self::Rebuild,
+            FileWatcherEvent::PathsChanged { paths } => match self {
+                Self::None => *self = Self::Paths(paths.into_iter().collect()),
+                Self::Paths(pending) => pending.extend(paths),
+                Self::Rebuild => {}
+            },
+        }
+    }
+
+    fn take_event(&mut self) -> Option<FileWatcherEvent> {
+        match std::mem::take(self) {
+            Self::None => None,
+            Self::Paths(paths) => Some(FileWatcherEvent::PathsChanged {
+                paths: paths.into_iter().collect(),
+            }),
+            Self::Rebuild => Some(FileWatcherEvent::RescanRequired {
+                watched_paths: Vec::new(),
+            }),
+        }
+    }
+}
+
+struct CodeIndexRefreshWorker {
+    pending: Arc<Mutex<PendingCodeIndexRefresh>>,
+    wake: Option<SyncSender<()>>,
+    thread: Option<JoinHandle<()>>,
+}
+
+impl CodeIndexRefreshWorker {
+    fn start(runtime: Arc<CodeIndexRuntime>) -> Result<Self, String> {
+        let pending = Arc::new(Mutex::new(PendingCodeIndexRefresh::None));
+        let (wake, receiver) = std::sync::mpsc::sync_channel(1);
+        let worker_runtime = Arc::clone(&runtime);
+        let worker_pending = Arc::clone(&pending);
+        let thread = std::thread::Builder::new()
+            .name("zeta-code-index-refresh".into())
+            .spawn(move || {
+                while receiver.recv().is_ok() {
+                    let event = worker_pending
+                        .lock()
+                        .unwrap_or_else(|poisoned| poisoned.into_inner())
+                        .take_event();
+                    if let Some(event) = event {
+                        worker_runtime.apply_watcher_event(&event);
+                    }
+                }
+            })
+            .map_err(|error| format!("failed to initialize code-index refresh worker: {error}"))?;
+        Ok(Self {
+            pending,
+            wake: Some(wake),
+            thread: Some(thread),
+        })
+    }
+
+    fn schedule(&self, event: FileWatcherEvent) {
+        self.pending
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .merge(event);
+        if let Some(wake) = &self.wake {
+            match wake.try_send(()) {
+                Ok(()) | Err(std::sync::mpsc::TrySendError::Full(())) => {}
+                Err(std::sync::mpsc::TrySendError::Disconnected(())) => {
+                    log::warn!("code-index refresh worker stopped unexpectedly");
+                }
+            }
+        }
+    }
+}
+
+impl Drop for CodeIndexRefreshWorker {
+    fn drop(&mut self) {
+        self.wake.take();
+        if let Some(thread) = self.thread.take() {
+            let _ = thread.join();
+        }
+    }
+}
 
 #[derive(Default)]
 pub(super) struct FileSystemWatcher {
@@ -23,11 +136,35 @@ impl FileSystemWatcher {
         workspace: WorkspaceRoot,
         updates: Arc<UpdateBroker>,
     ) -> Result<Self, FileSystemWatcherError> {
+        Self::start_inner(workspace, updates, FileSystemWatcherObservers::None)
+    }
+
+    pub(super) fn start_with_observers(
+        workspace: WorkspaceRoot,
+        updates: Arc<UpdateBroker>,
+        code_index: Arc<CodeIndexRuntime>,
+        changes: Arc<dyn WorkspaceFileChangeSink>,
+    ) -> Result<Self, FileSystemWatcherError> {
+        Self::start_inner(
+            workspace,
+            updates,
+            FileSystemWatcherObservers::WorkspaceRuntime {
+                code_index,
+                changes,
+            },
+        )
+    }
+
+    fn start_inner(
+        workspace: WorkspaceRoot,
+        updates: Arc<UpdateBroker>,
+        observers: FileSystemWatcherObservers,
+    ) -> Result<Self, FileSystemWatcherError> {
         let (shutdown, shutdown_rx) = tokio::sync::oneshot::channel();
         let (startup, startup_rx) = std::sync::mpsc::sync_channel(1);
         let thread = std::thread::Builder::new()
             .name("zeta-file-system-watcher".into())
-            .spawn(move || watch_workspace(workspace, updates, shutdown_rx, startup))
+            .spawn(move || watch_workspace(workspace, updates, observers, shutdown_rx, startup))
             .map_err(|error| FileSystemWatcherError(error.to_string()))?;
         match startup_rx.recv_timeout(Duration::from_secs(5)) {
             Ok(Ok(())) => {}
@@ -76,9 +213,17 @@ impl Drop for FileSystemWatcher {
 fn watch_workspace(
     workspace: WorkspaceRoot,
     updates: Arc<UpdateBroker>,
+    observers: FileSystemWatcherObservers,
     mut shutdown: tokio::sync::oneshot::Receiver<()>,
     startup: std::sync::mpsc::SyncSender<Result<(), String>>,
 ) {
+    let (code_index, changes) = match observers {
+        FileSystemWatcherObservers::None => (None, None),
+        FileSystemWatcherObservers::WorkspaceRuntime {
+            code_index,
+            changes,
+        } => (Some(code_index), Some(changes)),
+    };
     let Ok(tokio_runtime) = tokio::runtime::Builder::new_current_thread()
         .enable_time()
         .build()
@@ -117,6 +262,24 @@ fn watch_workspace(
                 return;
             }
         };
+        let code_index_worker = match code_index {
+            Some(code_index) => match CodeIndexRefreshWorker::start(code_index) {
+                Ok(worker) => Some(worker),
+                Err(error) => {
+                    let _ = startup.send(Err(error));
+                    return;
+                }
+            },
+            None => None,
+        };
+        if let Some(changes) = &changes {
+            changes.files_changed(&FsChanged::RescanRequired);
+        }
+        if let Some(code_index_worker) = &code_index_worker {
+            code_index_worker.schedule(FileWatcherEvent::RescanRequired {
+                watched_paths: vec![workspace.canonical_path().to_path_buf()],
+            });
+        }
         if startup.send(Ok(())).is_err() {
             return;
         }
@@ -128,7 +291,13 @@ fn watch_workspace(
                     let Some(event) = event else {
                         break;
                     };
+                    if let Some(code_index_worker) = &code_index_worker {
+                        code_index_worker.schedule(event.clone());
+                    }
                     if let Some(changed) = project_event(&workspace, event) {
+                        if let Some(changes) = &changes {
+                            changes.files_changed(&changed);
+                        }
                         updates.publish_fs_changed(changed);
                     }
                 }

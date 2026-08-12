@@ -1,6 +1,5 @@
 use crate::components::pane::PaneViewModel;
 use crate::components::search_box::SearchBoxModel;
-use crate::components::selection::SelectionActivationMode;
 use crate::components::selection::SelectionItem;
 use crate::components::selection::SelectionItemId;
 use crate::components::selection::SelectionTab;
@@ -32,17 +31,6 @@ pub(crate) fn skills_selection_view(catalog: &SkillListResult) -> SkillSelection
         .enumerate()
         .map(|(index, skill)| {
             let item_id = SelectionItemId::new(format!("skill-{index}"));
-            let enablement = match skill.enablement {
-                SkillEnablementDto::Disabled => SkillEnablementDto::Enabled,
-                SkillEnablementDto::Enabled => SkillEnablementDto::Disabled,
-            };
-            actions.insert(
-                item_id.clone(),
-                SkillSelectionAction::SetEnablement {
-                    skill_id: skill.id.clone(),
-                    enablement,
-                },
-            );
             SelectionItem::new(skill.id.name.as_str())
                 .with_id(item_id)
                 .with_description(format!(
@@ -50,7 +38,7 @@ pub(crate) fn skills_selection_view(catalog: &SkillListResult) -> SkillSelection
                     enablement_label(skill.enablement),
                     source_kind_label(skill.source_kind),
                     skill.id.source,
-                    skill.description
+                    skill.description,
                 ))
         })
         .collect::<Vec<_>>();
@@ -74,6 +62,33 @@ pub(crate) fn skills_selection_view(catalog: &SkillListResult) -> SkillSelection
                 .with_description(&diagnostic.message)
         })
         .collect::<Vec<_>>();
+    let manage = catalog
+        .skills
+        .iter()
+        .enumerate()
+        .map(|(index, skill)| {
+            let item_id = SelectionItemId::new(format!("manage-skill-{index}"));
+            let enablement = match skill.enablement {
+                SkillEnablementDto::Disabled => SkillEnablementDto::Enabled,
+                SkillEnablementDto::Enabled => SkillEnablementDto::Disabled,
+            };
+            actions.insert(
+                item_id.clone(),
+                SkillSelectionAction::SetEnablement {
+                    skill_id: skill.id.clone(),
+                    enablement,
+                },
+            );
+            SelectionItem::new(skill.id.name.as_str())
+                .with_id(item_id)
+                .with_description(format!(
+                    "{} → {}  ·  {}",
+                    enablement_label(skill.enablement),
+                    enablement_label(enablement),
+                    skill.id.source,
+                ))
+        })
+        .collect::<Vec<_>>();
     let enabled_count = enabled.len();
     let disabled_count = disabled.len();
     let error_count = errors.len();
@@ -86,13 +101,13 @@ pub(crate) fn skills_selection_view(catalog: &SkillListResult) -> SkillSelection
                     SelectionTab::new(format!("All ({})", all.len()), all),
                     SelectionTab::new(format!("Enabled ({enabled_count})"), enabled),
                     SelectionTab::new(format!("Disabled ({disabled_count})"), disabled),
+                    SelectionTab::new("Manage", manage),
                     SelectionTab::new(format!("Errors ({error_count})"), errors),
                 ],
             )
-            .with_activation_mode(SelectionActivationMode::Enter)
             .with_search(SearchBoxModel::new("Search available skills"))
             .with_empty_message("No matching skills"),
-            "Space search  ·  ←/→ tabs  ·  ↑/↓ select  ·  Enter toggle  ·  Esc back",
+            "Space search  ·  ←/→ tabs  ·  ↑/↓ select  ·  Manage tab changes enablement  ·  Esc back",
         ),
         actions,
     }
@@ -102,6 +117,7 @@ fn source_kind_label(kind: SkillSourceKindDto) -> &'static str {
     match kind {
         SkillSourceKindDto::BuiltIn => "built-in",
         SkillSourceKindDto::User => "user",
+        SkillSourceKindDto::Workspace => "workspace",
     }
 }
 

@@ -64,6 +64,7 @@ fn provider_config_with_endpoint(
         provider: provider_id(provider),
         base_url: Some(base_url.into()),
         max_output_tokens: None,
+        model_context: Default::default(),
     }
 }
 
@@ -276,6 +277,28 @@ fn anthropic_runtime_uses_messages_shape_and_declarative_defaults() {
     assert!(headers.iter().all(|header| header.name() != "x-api-key"));
     assert_eq!(request["model"], "claude-test");
     assert_eq!(request["max_tokens"], 1024);
+}
+
+#[test]
+fn request_output_limit_overrides_the_provider_default() {
+    let transport = Arc::new(CapturingTransport::new(json!({
+        "id": "msg_1",
+        "content": [{ "type": "text", "text": "Compacted" }],
+        "stop_reason": "end_turn"
+    })));
+    let runtime = ModelProviderRuntime::builtin_with_client(transport.clone());
+    let model = runtime
+        .build_model(
+            &provider_config("anthropic"),
+            &model_ref("anthropic", "claude-test"),
+        )
+        .unwrap();
+    let mut request = ModelRequest::text("compact this context");
+    request.max_output_tokens = Some(128);
+
+    assert_eq!(model.invoke(&request).unwrap().text(), "Compacted");
+    let (_, _, request) = transport.request.lock().unwrap().clone().unwrap();
+    assert_eq!(request["max_tokens"], 128);
 }
 
 #[test]

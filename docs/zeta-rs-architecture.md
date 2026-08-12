@@ -2,6 +2,8 @@
 
 > 当前基线：[Zeta 长期架构](zeta-code-architecture-codex-style-v2.md) 与
 > [App Server API](zeta-app-server-api.md)。
+> Agent 自定义对象与外部生态反腐化层见
+> [`agent-customizations.md`](agent-customizations.md)。
 > 各 crate 的当前 public/private interface、调用图与修改路径以对应 README 为准。
 
 ## 快速理解
@@ -35,11 +37,15 @@ Desktop UI、Electron IPC、`zeta-code` 的 TUI 宿主和第三方网页 UI 不�
 ```text
 zeta-rs/
 ├── protocol/             # canonical shared domain contract
-├── agent-import/         # Codex/Claude known-path discovery + metadata-only import plan
+├── agent-import/         # external Agent ecosystem discovery + metadata-only import plan
 ├── tools/                # target host-side tool types, interfaces and pure adapters
 ├── shell-command/        # concrete approved-process executor
 ├── file-system/          # concrete read-only filesystem executor
 ├── file-search/          # workspace path fuzzy search + CLI
+├── code-index/           # workspace-side chunk identity、local SQLite/FTS 与 revision-bound retrieval
+├── code-index-cloud/     # explicit egress grants、cloud publication/deletion lifecycle 与 provider port
+├── code-index-service/   # cloud semantic embedding、vector recall、rerank 与 final ranking pipeline
+├── code-retrieval/       # local/cloud candidate fusion、dedupe、fallback、verification 与 context budget
 ├── slash-commands/       # headless catalog, input grammar and interaction state
 ├── file-watcher/         # shared filesystem invalidation hints
 ├── git/                  # bounded Git repository operations and structured parsing
@@ -114,6 +120,31 @@ syntax token、folding range、document symbol 和 parse diagnostic snapshot。�
 Rust `zeta-editor` 内部组合的底层分析 crate，不是 App Server 产品 API。跨编辑器
 所有权与演进阶段见 [`syntax-analysis.md`](syntax-analysis.md)，当前 API 和修改路径见
 [`syntax/README.md`](../zeta-rs/syntax/README.md)。
+
+`zeta-code-index` 当前拥有授权 `WorkspaceRoot` 内的 ignore-aware scan、syntax-assisted/fallback
+chunking、stable revision/chunk identity、local SQLite generation 与 FTS5 retrieval。它消费
+`zeta-syntax` declaration facts，但不把 workspace lifecycle 下沉给 parser；App Server 拥有 watcher、
+profile placement 和 RPC state。跨层隐私与云端边界见 [`code-index.md`](code-index.md)，实现契约见
+[`code-index/README.md`](../zeta-rs/code-index/README.md)。
+
+`zeta-code-index-cloud` 当前拥有 chunk-only 云投影的 root-bound consent、精确 preview、
+byte/path scope、provider capability、durable publication/deletion lifecycle。它只消费
+`zeta-code-index` 复核后的 exact chunks，不允许 provider 读取完整 source 后重新切块，也不实现 credential/network/provider 本身；默认
+local composition 的 registry 为空。provider query 契约要求云端 CodeIndex 完成 embedding/vector
+recall/rerank/过滤/截断并返回 final relevance order。具体 contract 见
+[`code-index-cloud/README.md`](../zeta-rs/code-index-cloud/README.md)。
+
+`zeta-code-index-service` 当前拥有 provider-neutral 的云端语义管线：只接收 Workspace 复核后的
+`MaterializedChunk`，准备 embedding/rerank 输入，执行 exact-generation vector recall，并解释 rerank
+分数形成 final order。它没有 filesystem、scan、ignore 或 chunker authority；模型网络适配继续属于
+`zeta-model-provider`。具体 contract 见
+[`code-index-service/README.md`](../zeta-rs/code-index-service/README.md)。
+
+`zeta-code-retrieval` 当前拥有 local/cloud candidate fan-out、deterministic RRF、revision-bound identity
+dedupe、cloud failure fallback、current-source excerpt verification 与 content byte budget。它保留云端给出的排序，
+不执行或编排 embedding/rerank、不拥有 grant/network 或 Agent conversation state；App Server 按请求组合并通过
+`workspace/codeIndex/retrieve` 暴露结果。具体 contract 见
+[`code-retrieval/README.md`](../zeta-rs/code-retrieval/README.md)。
 
 `zeta-theme` 当前嵌入 Desktop registry 生成的语言中立 manifest，严格解析同一用户主题 JSON，
 解析 alias/transform/default graph，并从 device-local `configuration.json` 与 `themes/*.json`

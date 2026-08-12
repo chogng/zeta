@@ -1,16 +1,18 @@
-import type { AgentResponse as AgentResponseDto, Thread as ThreadDto, ThreadUpdateEnvelope as ThreadUpdateEnvelopeDto } from "../../../../../../generated/app-server/types.js";
+import type { AgentResponse as AgentResponseDto, InputItem, SkillRef as SkillRefDto, Thread as ThreadDto, ThreadUpdateEnvelope as ThreadUpdateEnvelopeDto } from "../../../../../../generated/app-server/types.js";
 import { Emitter } from "../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { createUuid } from "../../../../base/common/uuid.js";
 import type { IAppServerApi, IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
 import type { IModelApi, IThreadApi, ITurnApi } from "../../../../platform/sessions/common/sessionApi.js";
+import type { ISkillApi } from "../../../../platform/skills/common/skillApi.js";
 import type { SessionId, ThreadId } from "../../sessions/common/sessionService.js";
-import type { IChatService, InterruptTurnOptions, ModelCatalogEntry, ResolveInteractionOptions, SlashCommandDefinition, StartTurnOptions, Thread, ThreadSubscription, ThreadUpdateEnvelope } from "../common/chatService.js";
+import type { IChatService, InterruptTurnOptions, ModelCatalogEntry, ResolveInteractionOptions, SkillCommandDefinition, SlashCommandDefinition, StartTurnOptions, Thread, ThreadSubscription, ThreadUpdateEnvelope } from "../common/chatService.js";
 
 export interface ChatServiceOptions {
   readonly modelApi: IModelApi;
   readonly threadApi: IThreadApi;
   readonly turnApi: ITurnApi;
+  readonly skillApi: ISkillApi;
   readonly appServerApi: IAppServerApi;
   readonly eventApi: IServerEventApi;
 }
@@ -19,14 +21,17 @@ export interface ChatServiceOptions {
 export class ChatService extends DisposableOwner implements IChatService {
   private readonly _onDidUpdateThread = this.own(new Emitter<ThreadUpdateEnvelope>());
   private readonly _onDidBecomeReady = this.own(new Emitter<void>());
+  private readonly _onDidChangeSkills = this.own(new Emitter<void>());
 
   readonly onDidUpdateThread = this._onDidUpdateThread.event;
   readonly onDidBecomeReady = this._onDidBecomeReady.event;
+  readonly onDidChangeSkills = this._onDidChangeSkills.event;
 
   constructor(private readonly options: ChatServiceOptions) {
     super();
     const events = options.eventApi.subscribe((event) => {
       if (event.method === "session/thread/update") this._onDidUpdateThread.fire(toThreadUpdate(event.params));
+      if (event.method === "skills/changed") this._onDidChangeSkills.fire();
     });
     this.defer(() => events.dispose());
     const connection = options.appServerApi.onConnectionState((state) => {
@@ -45,6 +50,20 @@ export class ChatService extends DisposableOwner implements IChatService {
     return commands.map((command) => ({ ...command }));
   }
 
+  async listSkillCommands(): Promise<readonly SkillCommandDefinition[]> {
+    const catalog = await this.options.skillApi.list("cached");
+    const counts = new Map<string, number>();
+    for (const skill of catalog.skills.filter(skill => skill.enabled && skill.compatible)) counts.set(skill.id.name, (counts.get(skill.id.name) ?? 0) + 1);
+    return catalog.skills
+      .filter(skill => skill.enabled && skill.compatible && counts.get(skill.id.name) === 1)
+      .map(skill => ({
+        name: skill.id.name,
+        description: skill.description,
+        source: skill.id.source,
+        skill: { id: { ...skill.id }, version: { type: "pinnedDigest", digest: skill.contentDigest } },
+      }));
+  }
+
   async readThread(sessionId: SessionId, threadId: ThreadId): Promise<Thread> {
     return toThread((await this.options.threadApi.read({ sessionId, threadId })).thread);
   }
@@ -59,7 +78,11 @@ export class ChatService extends DisposableOwner implements IChatService {
   }
 
   async startTurn(options: StartTurnOptions): Promise<void> {
-    await this.options.turnApi.start({ commandId: commandId("turn"), sessionId: options.sessionId, threadId: options.threadId, expectedSequence: options.expectedSequence, input: [{ type: "text", text: options.text }] });
+    const input: InputItem[] = [
+      ...(options.skills ?? []).map(skill => ({ type: "skill" as const, skill: skill as SkillRefDto })),
+      { type: "text", text: options.text },
+    ];
+    await this.options.turnApi.start({ commandId: commandId("turn"), sessionId: options.sessionId, threadId: options.threadId, expectedSequence: options.expectedSequence, input });
   }
 
   async interruptTurn(options: InterruptTurnOptions): Promise<void> {

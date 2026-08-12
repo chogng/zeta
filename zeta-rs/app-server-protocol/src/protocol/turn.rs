@@ -2,6 +2,7 @@ use crate::protocol::common::TurnId;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
+use zeta_protocol::SkillRef;
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(
@@ -12,6 +13,7 @@ use ts_rs::TS;
 pub enum InputItem {
     Text { text: String },
     Image { url: String },
+    Skill { skill: SkillRef },
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

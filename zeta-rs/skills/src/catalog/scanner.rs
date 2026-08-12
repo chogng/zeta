@@ -349,7 +349,8 @@ fn scan_skill_file(
 
     Ok(ScannedSkillFile {
         frontmatter,
-        digest: ContentDigest::from_hasher(hasher),
+        digest: ContentDigest::new(format!("sha256:{:x}", hasher.finalize()))
+            .expect("SHA-256 output is a valid content digest"),
     })
 }
 

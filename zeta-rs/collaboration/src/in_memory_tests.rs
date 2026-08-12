@@ -64,10 +64,12 @@ fn collaboration_authorities_reject_invalid_document_and_transaction_envelopes()
         transaction: r#"{"format":"zeta.document.transaction","version":1,"transaction":{"steps":[{"kind":"unknown"}],"addToHistory":true,"selectionSet":false,"storedMarksSet":false,"metadata":[]}}"#.into(),
         document: document("first"),
     };
-    assert!(rooms
-        .submit(invalid_transaction)
-        .unwrap_err()
-        .contains("unknown Gama step kind"));
+    assert!(
+        rooms
+            .submit(invalid_transaction)
+            .unwrap_err()
+            .contains("unknown Gama step kind")
+    );
 }
 
 #[test]
@@ -158,7 +160,9 @@ fn accepted_version(result: &DocumentCollaborationSubmitResult) -> u64 {
 fn assert_room_id(room_id: &str) {
     assert_eq!(room_id.len(), "gama-".len() + 32);
     assert!(room_id.starts_with("gama-"));
-    assert!(room_id["gama-".len()..]
-        .bytes()
-        .all(|byte| byte.is_ascii_hexdigit()));
+    assert!(
+        room_id["gama-".len()..]
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit())
+    );
 }

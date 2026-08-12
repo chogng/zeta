@@ -1,4 +1,8 @@
-use crate::{CoreError, ThreadSnapshot, ThreadStore, reduce_thread_event};
+use crate::CoreError;
+use crate::ThreadSnapshot;
+use crate::ThreadStore;
+use crate::context_manager::ContextManager;
+use crate::reduce_thread_event;
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
@@ -11,6 +15,7 @@ pub(super) struct ThreadIncarnationId(u64);
 pub(super) struct LoadedThreadState {
     pub(super) incarnation: ThreadIncarnationId,
     pub(super) snapshot: ThreadSnapshot,
+    pub(super) context: ContextManager,
 }
 
 pub(super) struct ThreadSlot {
@@ -94,6 +99,7 @@ impl LoadedThreads {
         LoadedThreadState {
             incarnation: self.next_incarnation(),
             snapshot,
+            context: ContextManager::default(),
         }
     }
 

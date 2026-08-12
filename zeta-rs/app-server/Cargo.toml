@@ -13,15 +13,20 @@ path = "src/lib.rs"
 [dependencies]
 base64 = { workspace = true }
 getrandom = { workspace = true }
+log = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "sync", "time"] }
 zeta-app-server-protocol = { workspace = true }
 zeta-app-server-transport = { workspace = true }
+zeta-agents = { workspace = true }
 zeta-async-utils = { workspace = true }
 zeta-auto-review = { workspace = true }
 zeta-collaboration = { workspace = true }
+zeta-code-index = { workspace = true }
+zeta-code-index-cloud = { workspace = true }
+zeta-code-retrieval = { workspace = true }
 zeta-config = { workspace = true }
 zeta-core = { workspace = true }
 zeta-diff = { workspace = true }
@@ -30,6 +35,7 @@ zeta-file-system = { workspace = true }
 zeta-file-watcher = { workspace = true }
 zeta-git = { workspace = true }
 zeta-install-context = { workspace = true }
+zeta-instructions = { workspace = true }
 zeta-model-provider = { workspace = true }
 zeta-model-provider-config = { workspace = true }
 zeta-mcp = { workspace = true }

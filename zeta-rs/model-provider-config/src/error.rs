@@ -15,6 +15,10 @@ pub enum ProviderConfigError {
         base_url: String,
     },
     InvalidMaxOutputTokens(ProviderId),
+    InvalidModelContext {
+        provider: ProviderId,
+        model: ModelId,
+    },
     ModelNotRegistered {
         provider: ProviderId,
         model: ModelId,
@@ -47,6 +51,10 @@ impl fmt::Display for ProviderConfigError {
             Self::InvalidMaxOutputTokens(provider) => write!(
                 formatter,
                 "provider '{provider}' max output tokens must be greater than zero"
+            ),
+            Self::InvalidModelContext { provider, model } => write!(
+                formatter,
+                "model '{model}' for provider '{provider}' must have a positive context window and automatic compaction limit"
             ),
             Self::ModelNotRegistered { provider, model } => write!(
                 formatter,

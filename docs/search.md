@@ -40,7 +40,8 @@ Desktop Search contrib 只拥有查询表单、取消时机、增量结果投影
 | wire DTO、method registry、schema 与 TypeScript bindings | `zeta-app-server-protocol` | ✅ |
 | 文件路径 fuzzy match | `zeta-file-search` | ✅，与内容搜索无依赖 |
 | 点击结果后读取文件并打开编辑器 | Files / Editor vertical | 尚未完成 |
-| replace、索引、multi-root 和 watcher 驱动的结果失效 | 未确定 | 尚未完成 |
+| 独立 workspace code index | `zeta-code-index` + App Server | ✅ 本地 lexical chunk retrieval；不作为当前 SearchView backend |
+| replace、multi-root 和 watcher 驱动的产品搜索失效 | 未确定 | 尚未完成 |
 
 ## 端到端流程
 
@@ -112,11 +113,13 @@ SearchViewPane
 使 `src/lib.rs` 能明确归属于主目录或某个附加目录，并避免不同 root 的同名 path 碰撞。Glob、
 ignore 与 containment 也必须逐 root 计算，不能先把多个绝对目录拼成一个伪 Workspace。
 
-如果未来数据表明大型仓库的进程启动或重复扫描成为瓶颈，可以在 `zeta-search` 内评估
-Rust-owned index。索引必须
-先定义 watcher、一致性、ignore 语义、持久化和隐私边界；当前 `searchId` 不承诺索引实现，也
-不应泄漏 backend 类型。只有 transport 获得有界 backpressure 后，才考虑用 notification
-替代 pull。
+当前已经存在独立的 [`zeta-code-index`](../zeta-rs/code-index/README.md)，它在 workspace side
+完成 ignore-aware chunking、持久化 generation 与 FTS5 retrieval；跨系统边界见
+[`code-index.md`](code-index.md)。它服务 revision-bound chunk retrieval，不替换本页的逐行文字/
+正则产品搜索。是否把 SearchView 迁移到索引 backend 必须先证明 regex、glob、UTF-16 range、
+connection-owned cancel 和结果完整性语义等价；当前 `searchId` 不承诺 backend 类型。
+
+只有 transport 获得有界 backpressure 后，才考虑用 notification 替代 pull。
 
 长期不变项是：Renderer 不获得任意进程或磁盘权限；workspace 授权在 Rust 可信边界重复校验；
 结果传输有明确上限；job 不跨 connection 泄漏；产品搜索与模型 Tool 保持独立 contract。

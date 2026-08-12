@@ -1,7 +1,23 @@
+use super::super::ContextBudget;
+use super::super::ContextCompactionLimit;
+use super::super::ContextInput;
+use super::super::ContextPlanner;
+use super::super::ContextPreparation;
+use super::super::ContextTokenCount;
 use super::*;
-use crate::{ThreadCommandSnapshot, TurnSnapshot};
+use crate::HarnessInstructions;
+use crate::ThreadCommandSnapshot;
+use crate::ThreadSnapshot;
+use crate::TurnSnapshot;
 use std::collections::{BTreeMap, BTreeSet};
-use zeta_protocol::{ItemId, SessionId, ThreadId, ToolCallId, ToolName, TurnId, TurnStatus};
+use zeta_protocol::ItemId;
+use zeta_protocol::SessionId;
+use zeta_protocol::ThreadId;
+use zeta_protocol::ToolCallId;
+use zeta_protocol::ToolDefinition;
+use zeta_protocol::ToolName;
+use zeta_protocol::TurnId;
+use zeta_protocol::TurnStatus;
 
 #[test]
 fn assembles_messages_and_paired_tool_results_from_durable_items() {
@@ -32,8 +48,7 @@ fn assembles_messages_and_paired_tool_results_from_durable_items() {
         ],
     );
 
-    let request =
-        ContextAssembler::assemble(&snapshot, Vec::new(), &HarnessInstructions::default()).unwrap();
+    let request = assemble(&snapshot, Vec::new(), &HarnessInstructions::default()).unwrap();
 
     assert_eq!(request.input.len(), 3);
     let InputItem::Message(message) = &request.input[1] else {
@@ -73,8 +88,7 @@ fn groups_ordered_text_and_images_from_one_user_turn() {
         ],
     );
 
-    let request =
-        ContextAssembler::assemble(&snapshot, Vec::new(), &HarnessInstructions::default()).unwrap();
+    let request = assemble(&snapshot, Vec::new(), &HarnessInstructions::default()).unwrap();
 
     assert_eq!(request.input.len(), 1);
     let InputItem::Message(message) = &request.input[0] else {
@@ -109,7 +123,7 @@ fn rejects_invalid_durable_tool_arguments() {
     );
 
     assert!(matches!(
-        ContextAssembler::assemble(&snapshot, Vec::new(), &HarnessInstructions::default()),
+        assemble(&snapshot, Vec::new(), &HarnessInstructions::default()),
         Err(CoreError::Context(_))
     ));
 }
@@ -131,20 +145,25 @@ fn injects_instructions_and_workspace_message_before_durable_history() {
         Some("follow the workspace rules".into()),
     );
 
-    let request = ContextAssembler::assemble(&snapshot, Vec::new(), &instructions).unwrap();
+    let request = assemble(&snapshot, Vec::new(), &instructions).unwrap();
 
-    assert_eq!(
-        request.instructions.as_deref(),
-        Some("system body\n\n<environment>\ntoday: 2026-08-03\n</environment>")
-    );
+    let resolved = request.instructions.as_deref().unwrap();
+    assert!(resolved.starts_with("system body\n\n<environment>"));
     assert!(request.parallel_tool_calls);
     let InputItem::Message(message) = &request.input[0] else {
-        panic!("workspace instructions must be the first input message");
+        panic!("Workspace instructions must be the first input message");
     };
     assert!(matches!(message.role, MessageRole::User));
     assert!(
-        matches!(&message.content[0], ContentPart::Text(text) if text.contains("Workspace instructions from AGENTS.md"))
+        matches!(&message.content[0], ContentPart::Text(text) if text.contains("Global Workspace Instructions from .zeta/instructions"))
     );
+    assert!(
+        matches!(&message.content[0], ContentPart::Text(text) if text.ends_with("follow the workspace rules\n</workspace-instructions>"))
+    );
+    let InputItem::Message(message) = &request.input[1] else {
+        panic!("durable user input must follow Workspace instructions");
+    };
+    assert!(matches!(&message.content[0], ContentPart::Text(text) if text == "hello"));
 }
 
 #[test]
@@ -159,13 +178,76 @@ fn repeated_assembly_is_byte_stable() {
         }],
     );
     let instructions = HarnessInstructions::new("system", "environment", None);
-    let first = ContextAssembler::assemble(&snapshot, Vec::new(), &instructions).unwrap();
-    let second = ContextAssembler::assemble(&snapshot, Vec::new(), &instructions).unwrap();
+    let first = assemble(&snapshot, Vec::new(), &instructions).unwrap();
+    let second = assemble(&snapshot, Vec::new(), &instructions).unwrap();
 
     assert_eq!(
         format!("{first:?}").as_bytes(),
         format!("{second:?}").as_bytes()
     );
+}
+
+#[test]
+fn core_managed_budget_freezes_the_request_output_limit() {
+    let turn_id = id::<TurnId>("turn");
+    let snapshot = snapshot(
+        turn_id.clone(),
+        vec![ThreadItem::UserMessage {
+            item_id: id("user"),
+            turn_id: turn_id.clone(),
+            text: "bounded".into(),
+        }],
+    );
+    let input = ContextInput::new(
+        &snapshot,
+        turn_id,
+        Vec::new(),
+        Vec::new(),
+        ContextBudget::core_managed(
+            ContextTokenCount::new(1_000),
+            ContextTokenCount::new(128),
+            ContextTokenCount::new(32),
+            ContextCompactionLimit::ContextWindow,
+        ),
+    );
+    let ContextPreparation::Ready(plan) = ContextPlanner::prepare(&input).unwrap() else {
+        panic!("bounded context must fit");
+    };
+
+    let request = ContextAssembler::assemble(&plan).unwrap();
+
+    assert_eq!(request.max_output_tokens, Some(128));
+}
+
+fn assemble(
+    snapshot: &ThreadSnapshot,
+    tools: Vec<ToolDefinition>,
+    instructions: &HarnessInstructions,
+) -> Result<ModelRequest, CoreError> {
+    let current_turn_id = snapshot
+        .turns
+        .last()
+        .expect("test snapshot has one current Turn")
+        .turn_id
+        .clone();
+    let input = ContextInput::new(
+        snapshot,
+        current_turn_id,
+        instructions.context_fragments(),
+        tools,
+        ContextBudget::provider_managed(),
+    );
+    let plan = match ContextPlanner::prepare(&input)
+        .map_err(|error| CoreError::Context(error.to_string()))?
+    {
+        ContextPreparation::Ready(plan) => plan,
+        ContextPreparation::NeedsCompaction(_) => {
+            return Err(CoreError::Context(
+                "provider-managed test context unexpectedly requested compaction".into(),
+            ));
+        }
+    };
+    ContextAssembler::assemble(&plan)
 }
 
 fn snapshot(turn_id: TurnId, items: Vec<ThreadItem>) -> ThreadSnapshot {
@@ -178,10 +260,15 @@ fn snapshot(turn_id: TurnId, items: Vec<ThreadItem>) -> ThreadSnapshot {
             turn_id,
             status: TurnStatus::Running,
             model: None,
+            policy_revision: "test-policy-v1".into(),
+            activated_skills: Vec::new(),
             failure: None,
             pending_interaction: None,
         }],
         items,
+        context_checkpoints: Vec::new(),
+        item_sequences: BTreeMap::new(),
+        event_digests: BTreeMap::new(),
         commands: Vec::<ThreadCommandSnapshot>::new(),
         seen_interaction_ids: BTreeSet::new(),
         resolved_interactions: Vec::new(),

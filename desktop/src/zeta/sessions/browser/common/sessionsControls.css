@@ -1,0 +1,39 @@
+.zeta-sessions-button {
+  min-height: 28px;
+  padding: 5px 10px;
+  border: 1px solid var(--zeta-border);
+  border-radius: 6px;
+  color: var(--zeta-button-foreground, var(--zeta-foreground));
+  background: var(--zeta-button-background, var(--zeta-input-background));
+  box-shadow: 0 1px 1px color-mix(in srgb, var(--zeta-widget-shadow) 30%, transparent);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: var(--zeta-font-weight-semi-bold, 600);
+}
+
+.zeta-sessions-button:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--zeta-focus-border) 58%, var(--zeta-border));
+  background: var(--zeta-button-hover-background, var(--zeta-list-hover-background));
+}
+
+.zeta-sessions-button:focus-visible {
+  outline: 2px solid var(--zeta-focus-border);
+  outline-offset: 2px;
+}
+
+.zeta-sessions-button:disabled {
+  opacity: .42;
+  cursor: default;
+}
+
+.zeta-sessions-primary-button {
+  border-color: var(--sessions-accent);
+  color: var(--zeta-button-primary-foreground);
+  background: var(--sessions-accent);
+}
+
+.zeta-sessions-primary-button:hover:not(:disabled) {
+  background: var(--zeta-button-primary-hover-background, var(--sessions-accent-strong));
+}
+
+.zeta-sessions-primary-button:active { transform: translateY(1px); }

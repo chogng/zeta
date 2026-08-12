@@ -1,0 +1,107 @@
+.zeta-sessions-chat-view {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+.zeta-sessions-chat-grid {
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  --zeta-sash-hover-background: var(--sessions-accent);
+}
+
+.zeta-sessions-chat-slot {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  flex-direction: column;
+  border: 1px solid var(--zeta-border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--zeta-editor-background) 96%, var(--zeta-workbench-background));
+  box-shadow: 0 12px 30px color-mix(in srgb, var(--zeta-widget-shadow) 40%, transparent);
+}
+
+.zeta-sessions-chat-slot.active {
+  border-color: color-mix(in srgb, var(--sessions-accent) 55%, var(--zeta-border));
+}
+
+.zeta-sessions-chat-slot-header {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px 0 12px;
+  border-bottom: 1px solid var(--zeta-border);
+  background: color-mix(in srgb, var(--zeta-editor-background) 88%, var(--zeta-workbench-background));
+}
+
+.zeta-sessions-chat-slot-title,
+.zeta-sessions-chat-slot-close {
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+}
+
+.zeta-sessions-chat-slot-title {
+  min-width: 0;
+  overflow: hidden;
+  flex: 1 1 auto;
+  padding: 7px 0;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zeta-sessions-chat-slot-close {
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  border-radius: 6px;
+  color: var(--zeta-description-foreground);
+  font-size: 18px;
+  line-height: 1;
+}
+
+.zeta-sessions-chat-slot-title:hover,
+.zeta-sessions-chat-slot-close:hover {
+  background: var(--zeta-list-hover-background);
+}
+
+.zeta-sessions-chat-slot-title:focus-visible,
+.zeta-sessions-chat-slot-close:focus-visible {
+  outline: 1px solid var(--sessions-accent);
+  outline-offset: -1px;
+}
+
+.zeta-sessions-chat-slot > .zeta-chat {
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.zeta-sessions-chat-view-empty {
+  display: grid;
+  max-width: 480px;
+  align-content: center;
+  gap: 8px;
+  margin: auto;
+  padding: 40px;
+}
+
+.zeta-sessions-chat-view-empty h2 {
+  margin: 0;
+  font-size: 24px;
+  letter-spacing: -.025em;
+}
+
+.zeta-sessions-chat-view-empty p {
+  margin: 0;
+  color: var(--zeta-description-foreground);
+  font-size: 13px;
+  line-height: 1.55;
+}

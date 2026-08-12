@@ -33,6 +33,8 @@ pub struct ServerCapabilities {
     pub file_system: bool,
     pub git: bool,
     pub workspace_search: bool,
+    pub code_index: bool,
+    pub cloud_code_index: bool,
     pub terminal: bool,
     pub typst: bool,
     pub update_replay: bool,

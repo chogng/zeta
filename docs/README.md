@@ -30,6 +30,8 @@
 | 改执行内核（Turn/Thread/恢复/取消） | [`zeta-agent-runtime-architecture.md`](zeta-agent-runtime-architecture.md) → [`core.md`](core.md) |
 | 做上下文预算 / 压缩 | [`core-context.md`](core-context.md) + [`agent-harness-design.md`](agent-harness-design.md) §9–§11 |
 | 做多 Agent | [`core-multi-agent.md`](core-multi-agent.md)（gate 条件见其状态头） |
+| 开发工作区代码索引 / RAG | [`code-index.md`](code-index.md) → [`zeta-code-index` README](../zeta-rs/code-index/README.md) → [`zeta-code-index-cloud` README](../zeta-rs/code-index-cloud/README.md) → [`zeta-code-index-service` README](../zeta-rs/code-index-service/README.md) → [`zeta-code-retrieval` README](../zeta-rs/code-retrieval/README.md) |
+| 设计 Instructions / Skills / Agents 或外部导入 | [`agent-customizations.md`](agent-customizations.md) → 对应 authority 文档 |
 | 加 / 改一个工具 | [`agent-tools-spec.md`](agent-tools-spec.md) → [`tools.md`](tools.md)（契约层） |
 | 改协议 / 加 App Server 方法 | [`protocol.md`](protocol.md) → [`zeta-app-server-api.md`](zeta-app-server-api.md) → [`app-server-client.md`](app-server-client.md) |
 | 权限 / 审批 / 沙箱 | [`permissions.md`](permissions.md) → [`auto-review.md`](auto-review.md) → [`sandboxing.md`](sandboxing.md) |
@@ -62,9 +64,10 @@
 | [`core.md`](core.md) | 设计 | zeta-core 的 ownership、组件、端口、提交顺序 |
 | [`core-context.md`](core-context.md) | 设计 | ContextPlan / Manager / checkpoint / compaction 机制 |
 | [`core-multi-agent.md`](core-multi-agent.md) | 设计 | delegation / spawn / join / 隔离（仅设计，gate 见状态头） |
+| [`agent-customizations.md`](agent-customizations.md) | 设计 | Instructions / Skills / Agents、`.zeta` 与外部导入边界 |
 | [`tools.md`](tools.md) | 设计 | 工具三层契约、registry snapshot |
 | [`exec.md`](exec.md) | 设计 | 进程执行 |
-| [`skills.md`](skills.md) / [`plugins.md`](plugins.md) / [`slash-commands.md`](slash-commands.md) | 设计 | 扩展来源：Skill / Plugin / 斜杠命令 |
+| [`skills.md`](skills.md) / [`plugins.md`](plugins.md) / [`slash-commands.md`](slash-commands.md) | 设计 | Skill / Plugin 与斜杠调用入口 |
 | [`mcp.md`](mcp.md) / [`mcp-server.md`](mcp-server.md) | 设计 | MCP 客户端 / Zeta 作为 MCP server |
 
 ### 协议与 API
@@ -95,6 +98,7 @@
 [`workbench-pane-composite-design.md`](workbench-pane-composite-design.md)、
 [`design-tokens.md`](design-tokens.md)、[`theme-authoring-template.md`](theme-authoring-template.md)（模板）、
 [`menu-system.md`](menu-system.md)、[`icons.md`](icons.md)、[`search.md`](search.md)、
+[`code-index.md`](code-index.md)、
 [`syntax-analysis.md`](syntax-analysis.md)、[`lsp.md`](lsp.md)、
 [`tui.md`](tui.md)、
 [`chat-session-inspector.md`](chat-session-inspector.md)、[`pdf.md`](pdf.md)、[`typst.md`](typst.md)

@@ -1,15 +1,17 @@
 # `zeta-skills`
 
-> 本 README 是 Skill S0 format、受控 source 与 metadata-only catalog 的当前实现契约。
-> 跨 crate 的选择、激活、context、Plugin/MCP 组合与后续阶段由
+> 本 README 是 Skill S0 catalog 与 S1 exact activation 的当前实现契约。
+> 跨 crate 的选择语义、context、Plugin/MCP 组合与后续阶段由
 > [`docs/skills.md`](../../docs/skills.md) 维护。
 
-`zeta-skills` 当前实现 Phase S0：验证 built-in/user source root，流式读取并严格校验
-Agent Skills `SKILL.md` frontmatter，计算完整文件 SHA-256 digest，并发布 deterministic、
-immutable catalog snapshot。它不激活正文、不读取 references/assets/scripts、不执行命令，也不
-拥有 config、watcher、App Server 或 Core integration。当前 App Server adapter、watcher 和
-enablement overlay 属于 [`zeta-app-server`](../app-server/README.md)；该 adapter 只调用本 crate
-的受控 source/catalog API，不改变这里的 ownership。
+`zeta-skills` 验证 built-in/user/Workspace source root，流式读取并严格校验 Agent Skills
+`SKILL.md` frontmatter，计算完整文件 SHA-256 digest，并发布 deterministic、immutable catalog
+snapshot。显式选择后，`SkillCatalog::activate` 还会通过同一个受控 root 完整读取 exact
+`SKILL.md`，重新绑定 file identity 与 digest，并返回 `ActivatedSkill`。它仍不读取
+references/assets/scripts、不执行命令，也不拥有 config、watcher、App Server 或 Core
+integration。当前 App Server adapter、watcher、enablement overlay 与 model-safe-point reload
+属于 [`zeta-app-server`](../app-server/README.md)；adapter 只调用本 crate 的受控 API，不改变这里
+的 ownership。
 
 Repository-owned built-in content 位于 [`assets/`](assets)，打包后位于
 `zeta-resources/skills/`。package host 通过
@@ -30,10 +32,12 @@ Catalog scanner 通过 [`zeta-file-identity`](../file-identity/README.md) 从已
 | --- | --- | --- |
 | `zeta_protocol::SkillName` | Agent Skills 的 lowercase ASCII、数字、单连字符、1–64 字符 identity | display alias、Unicode normalization |
 | `zeta_protocol::{SkillSourceId, SkillId}` | 跨 config/catalog/App Server 的 source-qualified stable identity | raw host path、版本选择 |
-| `SkillSourceRoot` | host 注入并验证的 built-in/user real directory handle | config resolution、安装、immutability |
+| `SkillSourceRoot` | host 注入并验证的 built-in/user/Workspace real directory handle | config resolution、安装、immutability |
 | `SkillCatalog::discover` | 对受控 roots 做首次 bounded metadata scan | arbitrary path search、recursive source search |
 | `SkillCatalog::refresh` | 重扫并仅在 visible projection 改变时 bump generation | filesystem watching、safe-point scheduling |
 | `SkillCatalogSnapshot::list/read` | deterministic metadata-only read API | `SKILL.md` body/content API |
+| `SkillCatalog::activate` | 解析 `SkillRef`、校验 pinned digest 并从受控 root 读取 exact body | enablement、compatibility、Turn 持久化 |
+| `ActivatedSkill` | 将完整 body 与 `FrozenSkillActivation` provenance 绑定 | Core instruction precedence、工具授权 |
 | `SkillDiagnostic` | 隔离单 entry/source discovery failure | secret/body/private root 回传 |
 
 `SkillSourceRoot` 的 canonical host path 是 private implementation state，其 `Debug` 输出也会隐藏
@@ -50,6 +54,15 @@ SkillCatalog::discover / refresh
         → scan_skill_file             # stream hash；只 capture bounded frontmatter
         → format::parse_frontmatter   # YAML shape + Agent Skills field validation
   → SkillCatalogSnapshot::new
+
+SkillCatalog::activate
+  → snapshot.read(exact SkillId)
+  → resolve validated SkillSourceRoot
+  → activation::load_exact_body
+    → reject directory/manifest symlink、hard link、special/oversized file
+    → compare opened file identity before/after read
+    → compare complete SHA-256 with selected/catalog digest
+  → ActivatedSkill { FrozenSkillActivation, body }
 ```
 
 关键 limits：
@@ -64,9 +77,11 @@ SkillCatalog::discover / refresh
 | metadata entries | 64 |
 
 `scan_skill_file` 对完整 `SKILL.md` bytes 流式 SHA-256，但最多只保留 16 KiB frontmatter；
-Markdown body 不进入 catalog entry、diagnostic 或 snapshot debug projection。扫描前后检查
+Markdown body 不进入 catalog entry、diagnostic 或 snapshot debug projection。只有
+`SkillCatalog::activate` 会在请求时把不超过 1 MiB 的 exact body 返回给调用方。扫描和激活都在
+读取前后检查
 file identity、length、regular/single-link type；directory、manifest symlink 和 hard-linked
-manifest 被拒绝。S0 不递归读取 optional directories，所以 scripts/references/assets 既不会被
+manifest 被拒绝。当前不递归读取 optional directories，所以 scripts/references/assets 既不会被
 加载，也不会产生副作用。
 
 `format::validate_yaml_resource_shape` 在 `serde_yaml` 前限制 bytes/lines/line length/indent/flow
@@ -84,13 +99,16 @@ entries 按 exact `SkillId` 排序，同名不同 source 同时保留。refresh 
 digest、compatibility、availability 与 diagnostics 完全不变，会复用同一个 `Arc` snapshot 和
 generation。任何 consumer-visible 变化才发布下一 generation。
 
-当前 App Server 已通过窄 adapter 组合 built-in/user roots、订阅 watcher，并以
+当前 App Server 已通过窄 adapter 组合 built-in/user/active Workspace roots、订阅 watcher，并以
 `skills/list`/`skills/changed` 投影 catalog；per-Skill enablement 也由 config authority 与 adapter
 叠加。共享 identity 位于 `zeta-protocol`，本 crate 只 re-export，不能重新定义一套。
 
-本 crate 仍没有显式 activation、rooted resource resolver 或 safe-point scheduler。接入这些能力
-应继续使用窄 adapter/module；如果 scanner 开始执行 script、读取 optional resource、解释 Plugin
-grant，或 catalog 反向依赖 Core/App Server，表示 crate ownership 已经漂移。
+本 crate 已有显式 exact activation，但没有 automatic selector、rooted resource resolver 或
+safe-point scheduler。enablement/compatibility gate 和 safe-point reload 由 App Server adapter
+拥有；adapter 将 exact body 规范化为 Core 的 `SkillInstruction`，Core 不解释 catalog 或选择入口。
+后续能力应继续使用窄 adapter/module；如果
+scanner 开始执行 script、读取 optional resource、解释 Plugin grant，或 catalog 反向依赖
+Core/App Server，表示 crate ownership 已经漂移。
 
 ## 验证
 
@@ -102,5 +120,5 @@ bazel test //zeta-rs/skills:skills-unit-tests
 ```
 
 tests 覆盖 identity/frontmatter contract、alias/depth/size bounds、metadata-only body exclusion、
-source-qualified ordering/read、坏 entry 隔离、symlink/hardlink、digest refresh、no-op generation
-与 private root diagnostic boundary。
+source-qualified ordering/read、坏 entry 隔离、symlink/hardlink、digest refresh、no-op generation、
+follow-latest freeze、pinned digest mismatch、文件替换 race 与 private root diagnostic boundary。

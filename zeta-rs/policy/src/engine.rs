@@ -42,6 +42,10 @@ impl<C: ActionClassifier> PolicyEngine<C> {
         self
     }
 
+    pub fn revision(&self) -> &PolicyRevision {
+        &self.revision
+    }
+
     pub fn decide(
         &self,
         request: &ActionReviewRequest,

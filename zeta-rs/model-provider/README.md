@@ -8,6 +8,11 @@
 `Arc<dyn ModelInvoker>`。它选择 provider runtime 和 API profile；wire codec 属于 `zeta-api`，
 operation retry/framing 属于 `zeta-client`，socket/TLS/proxy 属于 `zeta-http-client`。
 
+当前 `EmbeddingInvoker` / `RerankInvoker` 已定义 canonical、有序、provider-neutral 调用契约；
+concrete provider codec 和 runtime resolver 尚未接入。本 crate 仍只拥有模型 API 选择、请求适配和执行。
+它不决定代码如何切块、查询哪个向量索引、准备哪些 rerank 候选，也不拥有排序、过滤或截断
+策略；这些属于调用模型的 CodeIndex 服务。
+
 ## 公共契约
 
 | Symbol | 职责 | 生命周期 |
@@ -16,6 +21,8 @@ operation retry/framing 属于 `zeta-client`，socket/TLS/proxy 属于 `zeta-htt
 | `ModelProviderRuntime` | built-in concrete resolver | 持有 config registry + shared operation client |
 | `ModelRuntimeRequest` | exact `ModelRef + ModelProviderConfig` | immutable selection request |
 | `ModelInvoker` | canonical `ModelRequest → ModelResponse` | one immutable provider/model snapshot |
+| `EmbeddingInvoker` | ordered text batch → finite equal-dimension vectors | one immutable embedding model snapshot |
+| `RerankInvoker` | query + ordered documents → ordered finite scores | one immutable rerank model snapshot |
 | `Provider` | normalized provider runtime | definition、config、private adapter、client |
 | `UnavailableModel` | explicit failing invoker | host 无法配置 model 时 fail closed |
 | `EchoModel` | deterministic test/local fixture | 不是 production model |
@@ -54,7 +61,7 @@ ModelProviderRuntime::runtime(ModelRuntimeRequest)
 
 RegisteredModelInvoker::invoke(request)
 ├─ clone canonical ModelRequest
-├─ apply normalized max_output_tokens
+├─ apply normalized max_output_tokens when the request has no explicit limit
 └─ Provider::complete
    ├─ resolve_model
    └─ ProviderAdapter::complete
@@ -111,7 +118,10 @@ bazel test //zeta-rs/model-provider:model-provider-unit-tests
 测试使用注入的 `OperationClient` 捕获请求，覆盖 Responses/Chat/Anthropic 配置、结构化工具、
 自定义端点、默认值、供应商不匹配、目录策略、固定标头、取消传播和默认 HTTP 传输。
 
-当前 invocation 是同步 unary；credential materialization、subscription backend、streaming 与动态
+当前 completion `ModelInvoker` 已有 concrete provider adapters；embedding/rerank 已有 canonical invoker、
+request/response validation 和 CodeIndex service consumer，但尚无 concrete provider codec/runtime resolver。
+当前 invocation 是同步 unary；
+credential materialization、subscription backend、streaming 与动态
 catalog 的长期设计仍在系统文档中演进。新增能力应保持 invoker immutable、profile explicit、
 provider adapter private，以及 config/codec/operation/network 四层分离。
 

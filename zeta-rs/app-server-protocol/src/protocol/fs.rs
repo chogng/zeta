@@ -1,8 +1,8 @@
+use crate::protocol::resources::ResourceMetadataResult;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use ts_rs::TS;
-use crate::protocol::resources::ResourceMetadataResult;
 
 /// Stable filesystem entry kind exposed to clients.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
