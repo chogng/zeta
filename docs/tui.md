@@ -1,8 +1,8 @@
-# TUI 架构与演进方案
+# `zeta code` TUI 架构与产品支持边界
 
 > 物理位置：`zeta-code/tui/`
 > 宿主：`zeta-code/cli/`
-> 文档所有权：本文是 TUI 跨 crate ownership、长期不变量与演进顺序的 canonical 文档。
+> 文档所有权：本文是 TUI 跨 crate ownership、长期不变量、产品支持边界与已接受架构迁移顺序的 canonical 文档。
 > 当前实现接口与事件循环：[`zeta-code/tui/README.md`](../zeta-code/tui/README.md)
 > 产品接口基线：[`zeta-app-server-api.md`](zeta-app-server-api.md)  
 > App Server 启动与连接基线：[`app-server-client.md`](app-server-client.md)  
@@ -43,8 +43,15 @@ Zeta 的产品 authority、typed contract 和 crate dependency direction 仍由�
 | 本文的 ownership 与长期不变量 | Accepted architecture baseline | 本文 |
 | independent request driver、wakeable event pump | Current | [`app-server-client.md`](app-server-client.md) 与 crate README |
 | 非阻塞 request completion dispatch、有界 transient data plane、Session/Thread/interaction 垂直切片 | Current | [`zeta-code/tui/README.md`](../zeta-code/tui/README.md) |
-| Markdown/diff/table、selection/copy、reconnect 与尚无 contract 的 feature | Proposed / Potential | 本文的演进阶段 |
-| 尚无产品 contract 的 feature | Potential；不构成实现承诺 | 对应领域与 App Server API 文档 |
+| plain-text transcript、必要 popup mouse hit 与 embedded session | Current product support boundary | 本文与 crate README |
+| 尚无 `zeta code` 产品要求或 canonical contract 的 feature | 非目标或 Potential；不构成实现承诺 | 对应产品线、领域与 App Server API 文档 |
+
+本文只为已经接受的 `zeta code` 能力规定架构与迁移顺序。“某能力在 TUI 中不存在”不自动产生
+产品 backlog。Native Agent Timeline 的 Markdown、table、selection、折叠与虚拟化由
+[`zeterm/docs/native-agent-console.md`](../zeterm/docs/native-agent-console.md) 规划，具体 Native
+Markdown 组件由 [`zeterm/markdown`](../zeterm/markdown/README.md) 拥有；TUI 不追求与其 feature
+parity。Vim、remote selector/reconnect、通用 structured Mention 和 durable blob 只有在产品文档
+接受需求并确定 canonical owner 后，才可能成为某条产品线的实施项。
 
 Zeta 已经在 TUI 外部拥有：
 
@@ -160,7 +167,7 @@ TUI 不得保存或推导：
 TUI semantic/presentation state 只能由主事件循环写入。后台 task、transport callback、host
 adapter 和 renderer 只能产生 event 或完成结果，不能直接修改共享 feature state。
 
-单写者不表示所有工作都在主线程同步执行。RPC、文件搜索、Markdown layout 和其他昂贵工作应
+单写者不表示所有工作都在主线程同步执行。RPC、文件搜索、大型 transcript projection 和其他昂贵工作应
 异步执行，但其结果必须重新进入有序 event loop，并由当前 state owner 判断是否仍然有效。
 
 ### 状态分类
@@ -205,8 +212,8 @@ Rust struct/enum/function 和一致约定是默认方案；只有多个真实调
 
 用户意图、退出、interrupt、写请求结果、committed update、错误和 subscription lifecycle
 属于有序控制面；token delta、process output 和 tool progress 等高频事件进入按 aggregate
-隔离的 bounded 数据面。所有 lag、overflow、cursor gap、identity mismatch 和 reconnect 路径
-必须定义 resync contract，不能只记录 warning 后继续猜测状态。
+隔离的 bounded 数据面。所有 lag、overflow、cursor gap、identity mismatch 和已经实现的
+connection recovery 路径必须定义 resync contract，不能只记录 warning 后继续猜测状态。
 
 ### 内部优先
 
@@ -509,7 +516,7 @@ value；但不能调用领域接口或保存 canonical aggregate。
 | --- | --- | --- |
 | `interaction/` | composer 与 temporary view stack 的焦点、push/pop 和 routing | feature catalog、RPC、Thread lifecycle |
 | `composer/` | draft、Unicode cursor、attachments、paste bindings、slash parsing | Turn start、config mutation、App Server client |
-| `transcript/` | visible row、wrapping、scroll、Markdown/diff/table layout | canonical Thread snapshot、sequence、transient cursor |
+| `transcript/` | plain-text visible row、wrapping 与 scroll | canonical Thread snapshot、sequence、transient cursor；不复制 Native Markdown/diff/table 组件 |
 | `selection/` | tabs、query、filtered indices、selection 和通用列表渲染 | Session/Skill identity 的业务 action |
 
 `features/thread/update.rs` 完成 committed/transient item 合并并暴露有稳定 identity 的可见
@@ -719,7 +726,7 @@ TerminalEvent / ClientResult / ServerNotification
 不要把所有类型压成一个包含任意闭包、JSON 或字符串 method 的总线。原始 key event 应先由
 当前焦点和 keymap 转换为用户意图，再进入业务 command。
 
-单个 event-loop iteration 应有界，长请求、resource 读取和昂贵 Markdown layout 不得阻塞
+单个 event-loop iteration 应有界，长请求、resource 读取和大型 transcript projection 不得阻塞
 terminal event pump。重绘可以合并，但 committed update、输入和退出事件不能因为 frame
 throttle 丢失。
 
@@ -785,9 +792,9 @@ buffer overflow、receiver lag 或 cursor gap 立即把对应 projection 标为�
 
 当前实现的三层上限是 App Server 每 connection 4096 条 notification、共享 client 1024 条 event、
 TUI EventPump 1024 条 runtime event；App Server 满载时先清 transient，control-only overflow 关闭
-connection。Thread projection 每个 transient row 限 256 KiB、最多 1024 个 identity。TUI 尚未有
-自动 reconnect，因此 connection overflow 会显示 failure 并要求重启；这与已有 cursor-gap
-snapshot resync 是两个不同恢复层级。
+connection。Thread projection 每个 transient row 限 256 KiB、最多 1024 个 identity。当前 TUI
+产品支持边界不包含自动 reconnect；connection overflow 会显示 failure 并要求重启。这与已有
+cursor-gap snapshot resync 是两个不同恢复层级，不能把前者写成已承诺的 TUI 恢复阶段。
 
 ### 13.3 展示映射
 
@@ -877,7 +884,7 @@ intent 和 result event，不维护一份跨领域 operation enum。view 产生 
 禁止新增含义模糊的 `runtime`、`service`、`common` 或 `platform` 聚合层。共享代码必须根据
 其真正职责进入 feature、component、ui、client、terminal 或某个窄 host module。
 
-## 16. 当前实现与目标差距
+## 16. 当前实现与产品支持边界
 
 当前 `zeta-code/tui/src/` 已完成第一阶段物理 ownership 重排，并迁到 owned session/event
 contract：
@@ -1009,7 +1016,7 @@ lib_tests.rs
 - `ChatComposer` 协调提交、popup keys、range completion application 与 structured local
   command dispatch；`zeta-slash-commands` 拥有 slash grammar、catalog、matches、selection 与
   dismiss，Ratatui popup renderer 根据自身 viewport 投影可见范围，`TextArea` 只拥有 UTF-8
-  编辑状态、原子 command element 和未来 Vim keymap 边界；
+  编辑状态、原子 command element 和局部 keymap 扩展边界；当前没有 Vim 产品要求；
 - bracketed paste 使用独立事件路径；超过 1000 个 Unicode scalar value 的内容由 `PendingPastes`
   绑定到 `TextArea` 原子占位符，并在提交前展开；
 - 粘贴 PNG/JPEG/GIF/WEBP 本地文件路径会由 `Attachments` 立即读取并绑定为 `[Image #N]`
@@ -1026,29 +1033,29 @@ lib_tests.rs
 - 所有写请求通过 `client::new_command_id` 分配 typed `CommandId`，不再在 crate root 复制
   command ID 拼装逻辑。
 
-当前仍未完成的边界：
+当前产品支持边界与非目标：
 
-- transcript 仍使用 plain-text wrapping；Markdown/diff/table、折叠、文本选择/copy 和稳定
-  resize/reflow cache 尚未完成；
-- Mouse 只覆盖 slash/file-mention popup 的左键命中；hover、滚轮和其他 surface 未接通；Vim
-  mode/motion/operator 尚未实现；
-- TUI 没有 remote connection selector 或自动 reconnect；durable/transient gap 已有 resync，但
-  connection close 后仍需用户重启；
-- workspace mention 只插入文本路径，不是结构化 app/plugin Mention；login、compact、service
-  tier、usage、review 等缺少 canonical contract 的 surface 不注册；
-- 图片输入已形成“本地路径/系统 clipboard → data URL → `UserImage` → provider image block”
-  的 vertical slice；native clipboard 在远程 SSH/tmux 环境尚无 terminal-mediated fallback，
-  data URL 也会放大 command receipt、Thread store 与 snapshot，长期仍需 resource/blob 引用
-  contract；
-- status line 已有 model/workspace/Git，但 usage 与稳定 item/order 配置 contract 尚未提供；
+- transcript 采用 bounded plain-text wrapping 和键盘滚动。Native Agent Timeline 的 Markdown、
+  table、selection、折叠与虚拟化属于 `zeterm`，不是 TUI 的“尚未完成”；
+- Mouse 只覆盖 slash/file-mention popup 的必要左键命中。完整 pointer/selection 交互不属于当前
+  `zeta code` 要求；Vim mode/motion/operator 也没有被产品文档接受；
+- 当前入口消费 embedded `AppServerSession`，不提供 remote selector 或自动 reconnect。若未来接受
+  远程产品需求，connection/recovery contract 必须先进入 `zeta-app-server-client`；
+- workspace mention 当前只插入原子文本路径。通用 app/plugin Mention、login、compact、service
+  tier、usage、review 等没有已接受 contract 的 surface 不注册；
+- 图片输入已形成“本地路径/系统 clipboard → data URL → `UserImage` → provider image block”纵切。
+  data URL 的持久化成本属于共享附件/storage 边界；TUI 不建立私有 blob store，只有共享 contract
+  被接受后才消费；
+- status line 已有 model/workspace/Git；usage 与稳定 item/order 没有 typed contract，因此不是通过
+  transcript 推导的 TUI 缺口；
 - Config surface 可读 provider、MCP、Skill source、Plugin request、Hook、language server 状态；
   当前只有已有 typed mutation 的 model/MCP/Skill 可修改，TUI 不接管 Desktop-only 外部 Agent
   导入或凭据配置。
 
-新增能力继续以 canonical contract 和垂直 feature 为前提，不能把上述限制绕成 `App` 或 Native
-里的第二套 owner。
+新增能力必须先证明是 `zeta code` 产品要求，再按 canonical contract 和垂直 feature 接入；不能
+因为 Native 已有 richer component，或某能力技术上可实现，就把它复制成 TUI backlog。
 
-## 17. 演进顺序
+## 17. 已接受的架构迁移顺序
 
 当前阶段状态：
 
@@ -1067,7 +1074,6 @@ lib_tests.rs
 | Thread transient merge、cursor recovery 与 bounded data plane | Current |
 | Session/Thread picker、archive 与恢复 | Current |
 | owner-directed approval / user input / deadline | Current |
-| Markdown/diff/table、selection/copy 与 reconnect | 尚未完成 |
 
 ### 阶段零：固定行为与性能基线
 
@@ -1109,13 +1115,13 @@ README 中记录。
 
 1. 使用 `session/subscribe` 和 `session/thread/subscribe`；（Current）
 2. 实现 durable gap、duplicate、aggregate mismatch 和 resync；（active Thread snapshot
-   resync 为 Current；connection reconnect 尚未完成）
+   resync 为 Current）
 3. 实现 transient cursor、runtime switch、gap reset 和 committed snapshot 替换；（Current）
 4. 把稳定 `CommandId` 生命周期集中到 `client/command_id.rs`；（Current）
-5. 增加 reconnect 后重新订阅，禁止自动重放结果未知的新副作用。
 
 退出条件：Turn 执行期间输入和 redraw 不被 request completion 阻塞；duplicate、gap、lag、
-disconnect 和 runtime 切换都有确定的恢复测试；结果未知的写入不会被当成失败后新命令重放。
+connection close 和 runtime 切换都有确定结果；当前 embedded client 不会把结果未知的写入当成
+失败后新命令重放。Remote reconnect 不在本阶段范围内。
 
 ### 阶段三：核心交互
 
@@ -1123,8 +1129,7 @@ disconnect 和 runtime 切换都有确定的恢复测试；结果未知的写入
 2. 完成 Thread create/fork/rewind/switch/archive；（Current）
 3. 让 Turn start/interrupt 全部经过 `features/thread/request.rs`；（Current）
 4. 让 Thread projection 与 `components/transcript/` 展示完整 ThreadItem；（Current）
-5. 在对应 component 内完成 scroll 与 composer history；（Current）resize/reflow cache、selection
-   与 copy 尚未完成。
+5. 在对应 component 内完成当前产品要求的 scroll 与 composer history；（Current）
 
 退出条件：active Thread state 只有一个 TUI owner；完整 typed Item lifecycle 可呈现；transient
 流量不会决定 durable terminal state；render 不推进 semantic state。
@@ -1157,7 +1162,7 @@ Skill、workspace file browser、Git status、approval 与 user input 已按该�
 - `features/thread` 测试覆盖连续 update、重复 delivery、durable gap、runtime 切换、
   transient/committed 合并和 resync；
 - feature request 测试使用 fake/mock typed client 验证 payload、稳定 CommandId 和错误映射；
-- component 测试覆盖 Unicode width、Markdown、resize、局部交互和纯渲染；
+- component 测试覆盖 Unicode width、plain-text wrapping、resize、局部交互和纯渲染；
 - client 测试覆盖 event pump、pending completion 和 subscription transport lifecycle；
 - terminal 测试覆盖部分初始化失败与 Drop 恢复；
 - feature 测试覆盖 key intent → command → result event → view state；

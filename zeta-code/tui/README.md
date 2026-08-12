@@ -88,18 +88,29 @@ Tool、approval policy 或 persistence。
   后依次回退 `COLORFGBG` 和 Dark。结果在会话内缓存，后续打开 Theme Pane 不重复查询；
 - basic Unicode-aware wrapped-row estimation、显式 transcript scroll 和默认 follow-latest。
 
-当前主要限制集中在 presentation depth 和尚无 canonical contract 的产品面：transcript 仍是
-plain-text wrapping，没有 Markdown/diff/table layout、文本选择/copy 或折叠；Mouse support 只覆盖
-slash/file-mention popup 左键命中，不包含 hover、滚轮或其他 surface；Vim
-mode/motion/operator 尚未实现。file mention 仍只是 workspace-relative 文本路径，不是结构化
-`app://`/`plugin://` Mention。系统剪贴板图片依赖本机 backend，远程 SSH/tmux 尚无
-terminal-mediated fallback；data URL 仍会放大 durable history，等待 resource/blob contract。
+## 产品支持边界
 
-TUI 不提供 remote connection selector、自动重连、usage 或 status-line item/order 配置；usage 必须
-等待 typed snapshot，不能从 transcript 推导。缺少 typed backend contract 的 login、compact、
-service tier 等命令不会进入 registry。Config 页面能读取 provider、MCP、Skill source、Plugin
-request、Hook 与 language-server 状态，但只有当前已有 typed mutation 的 model/MCP/Skill 项可在
-TUI 修改；它不会复制 Desktop-only 的外部 Agent 导入或凭据配置流程。
+`zeta code` 是键盘优先、低带宽的终端产品，不以复刻 `zeterm` Native rich UI 为完成条件。
+transcript 当前采用 plain-text wrapping；Native Agent Timeline 的 Markdown block、table、selection、
+折叠与虚拟化由
+[`native-agent-console.md`](../../zeterm/docs/native-agent-console.md) 和
+[`zeta-markdown`](../../zeterm/markdown/README.md) 拥有，不构成 TUI backlog。TUI 的 Mouse support
+只服务 slash/file-mention popup 的必要左键命中；完整 pointer/selection 交互属于 Native UI。
+`TextArea` 保留局部 keymap 扩展边界，但 Vim mode/motion/operator 不是当前 `zeta code` 产品要求。
+
+TUI 当前只连接 CLI 提供的 embedded `AppServerSession`，不提供 remote connection selector 或自动
+reconnect；这是一条明确支持边界，不是未完成的 TUI 恢复阶段。若未来产品要求远程运行，必须先由
+`zeta-app-server-client` 接受 connection/recovery contract，TUI 只消费其 typed state，不能自建
+transport retry。workspace mention 当前插入 workspace-relative 原子文本路径；通用
+`app://`/`plugin://` Mention 尚无已接受产品契约，也不是 TUI 自行扩展的领域模型。
+
+图片 data URL 会放大 command receipt、Thread store 与 snapshot；这是共享附件持久化边界，不能在
+TUI 内用私有 blob store 规避。只有共享 backend 接受 durable resource/blob contract 后，TUI 才能
+作为客户端接入。usage 和 status-line item/order 同样必须等待已接受的 typed snapshot/config
+contract，不能从 transcript 推导。缺少 typed backend contract 的 login、compact、service tier 等
+命令不会进入 registry。Config 页面能读取 provider、MCP、Skill source、Plugin request、Hook 与
+language-server 状态，但只有当前已有 typed mutation 的 model/MCP/Skill 项可在 TUI 修改；它不会
+复制 Desktop-only 的外部 Agent 导入或凭据配置流程。
 
 从 repository root 启动当前 embedded TUI：
 
@@ -211,7 +222,7 @@ src/
 | `zeta_slash_commands::{SlashCommandInput,SlashCommandCatalog}` | shared public types | 统一输入 grammar，并合并 built-in 与 server metadata | TUI 不重新校验名称、不执行 App Server operation |
 | `SlashCommandInvocation` | crate-private | command identity、trimmed display arguments 与有序 text/image argument items | 不执行 RPC |
 | `features::sessions::ActiveConversation` | crate-private | 当前 Session/Thread identity、sequence 与 typed create/fork/resume/rewind/archive lifecycle | 不解析 composer text、不更新 `App`、不拥有 App Server |
-| `TextArea` | private | UTF-8 buffer、byte-safe cursor、原子元素 insert/delete/movement；Vim 的扩展 owner | 不保存 paste payload，不解释 Enter submission 或 slash command |
+| `TextArea` | private | UTF-8 buffer、byte-safe cursor、原子元素 insert/delete/movement 与局部 keymap 扩展边界 | 不保存 paste payload，不解释 Enter submission 或 slash command；当前不承诺 Vim mode |
 | `features::thread::submit_prompt` | private | 从显式 `ThreadRequestScope` build typed `session/request` `StartTurn` operation 并返回 typed result | 不引用或更新 `App`、不手写 method string/JSON |
 | `app::request_completion::apply_thread_snapshot` | private | 安装 canonical snapshot、恢复最新 nonterminal Turn 并协调 presentation mapping | 不 drain notification；snapshot 是 authoritative UI source |
 | `features::thread::interrupt_turn` | private | 从显式 scope 执行 typed Turn interrupt 并返回结果 | 不引用或更新 `App` |
@@ -303,8 +314,8 @@ PNG bytes；`App` 再把 bytes 交给 `Attachments`，因此系统剪贴板和�
 占位符绑定、删除和提交语义。active Turn 期间该快捷键被忽略。
 
 该实现会让 data URL 进入 command receipt 与 durable Thread history，snapshot/store 体积随图片
-增长；当前 16 MiB 上限是保护边界，不是长期附件存储方案。后续应由 resource/blob contract
-替代大对象内联。
+增长；当前 16 MiB 上限是保护边界。若产品接受 durable resource/blob 能力，长期替代方案必须由
+共享 backend/storage/protocol 拥有，TUI 只能消费该 contract，不能建立私有附件 authority。
 
 `ChatComposer` 只解析光标下 whitespace-delimited `@token`；event loop 从 `App` 读取当前
 query 并同步给 `FileSearchManager`。manager 为 active token 保持一个 `PathSearchHandle`，后台 walker 使用
@@ -458,7 +469,8 @@ follow-latest。`estimated_wrapped_rows` 使用
 - `app::frame::draw` 或 component view 修改 state、subscription 或发 RPC：view 与 coordination 耦合；
 - retry 逻辑生成新 CommandId 却重用同一 intent：idempotency semantic 被破坏；
 - 把 `TerminalSession`、RPC connection 和 product `Session` 命名/生命周期混为一谈；
-- docs 中把 planned Markdown/approval/streaming 写成当前能力。
+- docs 中把 `zeterm` rich presentation roadmap 或尚未接受的共享 contract 写成 TUI backlog；
+- docs 中把 planned approval/streaming 写成当前能力。
 
 ## 同步修改关系
 
@@ -472,7 +484,7 @@ follow-latest。`estimated_wrapped_rows` 使用
 | Composer behavior | `accepts_input`、paste/key handling、cursor width、app tests |
 | Incremental notifications | `features/thread` sequence/cursor state、gap/resync、client event pump、snapshot fallback |
 
-## 测试、限制与演进
+## 测试与支持边界
 
 ```text
 cargo test -p zeta-tui
@@ -499,6 +511,8 @@ restore；还覆盖 request task 非阻塞 completion、request intent 保序、
 workspace directory/preview 和 interaction deadline。
 
 Render tests 使用 Ratatui `TestBackend` 固定 empty/error surface，transcript component tests
-固定 row estimation；命令行状态测试是通过依据，没有截图/像素基线。当前仍缺完整 fake-transport
-`run` event-loop integration 与 reconnect trace replay；Markdown/diff/table、selection/copy 和远程
-宿主能力按 [`docs/tui.md`](../../docs/tui.md#17-演进顺序) 的 owner/contract 条件继续演进。
+固定 row estimation；命令行状态测试是通过依据，没有截图/像素基线。完整 fake-transport `run`
+event-loop integration 可以继续加强当前 embedded 路径，但 remote reconnect trace、Native
+Markdown/diff/table、selection/copy 和完整 pointer parity 都不是当前 TUI 验收项。产品要求与
+owner 判断以 [`docs/tui.md`](../../docs/tui.md#17-已接受的架构迁移顺序) 和
+[`docs/product-lines.md`](../../docs/product-lines.md) 为准。
