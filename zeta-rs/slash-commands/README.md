@@ -3,10 +3,13 @@
 > 本文拥有无渲染 Slash Commands 核心的实现契约。跨客户端产品语义见
 > [`docs/slash-commands.md`](../../docs/slash-commands.md)；wire snapshot 见
 > [`docs/zeta-app-server-api.md`](../../docs/zeta-app-server-api.md)。TUI、native 与 Desktop
-> 分别拥有自己的渲染适配器。
+> 分别拥有自己的渲染适配器。通用斜杠启动面板的多列表组合由
+> [`zeta-slash-launcher`](../slash-launcher/README.md) 拥有。
 
 `zeta-slash-commands` 为 App Server、TUI 和 zeta-ui/native 提供同一套 catalog 校验、输入语法、
 匹配、选择、补全与提交解析。它不渲染 UI、不执行命令，也不拥有 App Server composition。
+这里的选择状态只针对真实 Slash Command catalog；它不负责把 Skills、命令和其他产品列表组合成
+通用斜杠面板。
 
 ## 1. 边界与依赖
 

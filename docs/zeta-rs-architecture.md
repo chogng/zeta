@@ -47,6 +47,7 @@ zeta-rs/
 ├── code-index-service/   # cloud semantic embedding、vector recall、rerank 与 final ranking pipeline
 ├── code-retrieval/       # local/cloud candidate fusion、dedupe、fallback、verification 与 context budget
 ├── slash-commands/       # headless catalog, input grammar and interaction state
+├── slash-launcher/       # product-selected list composition, slash query and selection state
 ├── file-watcher/         # shared filesystem invalidation hints
 ├── git/                  # bounded Git repository operations and structured parsing
 ├── diff/                 # shared bounded line/inline diff mapping for Native and TUI
@@ -114,6 +115,12 @@ local/server origin、输入 grammar、匹配、选择、dismiss、滚动、补�
 命令、不读取 config，也不依赖任何 renderer。Desktop 通过 generated protocol types 与共享
 conformance fixture 保持语义一致。跨产品边界见 [`slash-commands.md`](slash-commands.md)，当前 API
 和失败语义见 [`slash-commands/README.md`](../zeta-rs/slash-commands/README.md)。
+
+`zeta-slash-launcher` 当前拥有产品选择列表的无渲染组合、首个 `/query` token、跨列表匹配、选择和
+dismiss 状态。它不认识 Slash Command、Skill、业务 target、handler、protocol 或 renderer；产品把
+各领域对象投影成列表，并用返回的 `(list_id, item_id)` 解析自己的 typed binding。当前三个产品尚未
+迁移到该 crate。跨产品分层见 [`slash-commands.md`](slash-commands.md)，实现契约见
+[`slash-launcher/README.md`](../zeta-rs/slash-launcher/README.md)。
 
 `zeta-syntax` 当前拥有 Rust、JSON、JSONC 与 Shell 文档的有界增量 tree-sitter parse、revision binding，以及
 syntax token、folding range、document symbol 和 parse diagnostic snapshot。它不读取文件、

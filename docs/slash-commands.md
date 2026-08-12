@@ -1,20 +1,49 @@
-# Slash Commands 架构
+# Slash Commands 与 Slash Launcher 架构
 
 > 本文拥有 Slash Commands 的跨产品语义、运行时边界与当前接入状态。Rust 实现细节由
-> [`zeta-slash-commands` README](../zeta-rs/slash-commands/README.md) 拥有；App Server wire snapshot
+> [`zeta-slash-commands` README](../zeta-rs/slash-commands/README.md) 拥有；通用斜杠启动面板
+> （Slash Launcher）的实现契约由
+> [`zeta-slash-launcher` README](../zeta-rs/slash-launcher/README.md) 拥有；App Server wire snapshot
 > 由 [`zeta-app-server-api.md`](zeta-app-server-api.md) 拥有。Slash Command 与
 > Instructions/Skills/Agents artifact 的关系由
 > [`agent-customizations.md`](agent-customizations.md) 统一定义。
 
 ## 快速理解
 
-Slash Commands 是调用入口和补全投影，不是第四种 Agent 自定义 artifact，也不是用户 config。
-App Server 当前在
-`initialize.slashCommands` 发布 server commands；每个 client 再与自身真正可执行的 local commands
-合并。命令定义、名称冲突、输入 grammar、匹配与选择都先于 renderer，只有行布局、DOM/WGPU/Ratatui
-绘制和平台输入事件留在三种 renderer。
+Slash Command 是一种真正可调用的命令；斜杠启动面板只是用户输入 `/` 后出现的快速选择器。面板
+可以展示命令、Skills 或其他产品列表，选中什么由列表来源解释，不能因为它们出现在同一个面板里
+就都变成 Slash Command。
 
-| Surface | Catalog 来源 | Core/adapter | Renderer owner |
+| 用户看到或产品要做的事 | 正确抽象 | 谁决定内容 |
+| --- | --- | --- |
+| 输入 `/` 后出现快速选择面板 | Slash Launcher | 产品选择并组合列表 |
+| TUI 展示可执行 `/command` | Slash Command list | `zeta-code` 的命令 adapter |
+| Desktop 展示可调用 Skills | Skill list | Desktop 的 Skill adapter |
+| zeterm 同时展示命令、Skills 或其他动作 | 多列表 Launcher | zeterm 选择所需列表及顺序 |
+| 选中一项后真正执行或注入上下文 | 来源自己的 typed binding | 对应产品/领域 owner |
+
+App Server 当前在 `initialize.slashCommands` 发布 server commands；每个 client 再与自身真正可执行的
+local commands 合并。命令定义、名称冲突、补全和提交解析属于 Slash Commands；列表组合、跨来源
+匹配和面板选择属于 Slash Launcher；行布局、DOM/WGPU/Ratatui 绘制和平台输入事件仍留在各 renderer。
+
+## Launcher 分层
+
+`zeta-slash-launcher` 只接受产品构造的 `SlashLauncherList`，并返回稳定的
+`(list_id, item_id)` 选择。它不依赖 `zeta-slash-commands` 或 `zeta-skills`，因此产品可以自由选择：
+
+- TUI 只传 Slash Command list；
+- Desktop 只传 Skill list；
+- zeterm 或未来产品按需拼接多个列表；
+- 新列表通过产品 adapter 加入，不修改 Launcher 的领域模型。
+
+选中项的业务 target、执行 handler、Skill 上下文注入和授权都留在列表来源。Launcher 不允许按展示
+名称猜测业务对象，也不拥有 App Server protocol。
+
+**当前状态**：通用 crate、列表组合、查询和选择状态已经实现；三种产品尚未迁移到该 crate。下面
+表格描述的是迁移前的现有 Slash Command 接入，不能据此把 Skill projection 当作 Launcher 的长期
+抽象。
+
+| 现有 Surface | Catalog 来源 | Core/adapter | Renderer owner |
 | --- | --- | --- | --- |
 | TUI | built-ins + initialize snapshot + enabled Skill metadata | 直接使用 `zeta-slash-commands`；Skill target 保存在 client binding | Ratatui popup |
 | Native zeta-ui | local `/model` + initialize snapshot | 直接使用 `zeta-slash-commands`；Native 另拥有 model picker | WGPU composer interaction rows |

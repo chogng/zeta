@@ -67,7 +67,7 @@
 | [`agent-customizations.md`](agent-customizations.md) | 设计 | Instructions / Skills / Agents、`.zeta` 与外部导入边界 |
 | [`tools.md`](tools.md) | 设计 | 工具三层契约、registry snapshot |
 | [`exec.md`](exec.md) | 设计 | 进程执行 |
-| [`skills.md`](skills.md) / [`plugins.md`](plugins.md) / [`slash-commands.md`](slash-commands.md) | 设计 | Skill / Plugin 与斜杠调用入口 |
+| [`skills.md`](skills.md) / [`plugins.md`](plugins.md) / [`slash-commands.md`](slash-commands.md) | 设计 | Skill / Plugin、Slash Command 与斜杠启动面板边界 |
 | [`mcp.md`](mcp.md) / [`mcp-server.md`](mcp-server.md) | 设计 | MCP 客户端 / Zeta 作为 MCP server |
 
 ### 协议与 API

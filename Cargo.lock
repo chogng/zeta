@@ -8522,6 +8522,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "zeta-slash-launcher"
+version = "0.1.0"
+
+[[package]]
 name = "zeta-storage"
 version = "0.1.0"
 dependencies = [
