@@ -27,7 +27,7 @@ export interface CollaborationContributionOptions {
   readonly onRevokeMember: (principalId: string) => Promise<void>;
 }
 
-/** Browser contribution that exposes Gama collaboration without owning document state or transport. */
+/** Browser contribution that exposes document collaboration without owning state or transport. */
 export class CollaborationContribution extends DisposableOwner {
   readonly element: HTMLDivElement;
   private readonly toolbar: ToolBar;
@@ -326,6 +326,6 @@ function createAction(id: string, label: string, tooltip: string, enabled: boole
 
 const emptyCollaborationContextMenuProvider: IContextMenuProvider = {
   showContextMenu(): never {
-    throw new Error("Gama collaboration toolbar does not define secondary actions");
+    throw new Error("Document collaboration toolbar does not define secondary actions");
   },
 };

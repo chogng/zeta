@@ -2,26 +2,22 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import test from "node:test";
+import { findDesktopRoot } from "./testPaths.js";
 
-const editorRoot = resolve(import.meta.dirname, "../../../..", "src/zeta/editor");
-const gamaRoot = join(editorRoot, "gama");
+const editorRoot = resolve(findDesktopRoot(import.meta.dirname), "src/zeta/editor");
 
-test("editor exposes Alpha and Gama as its only editor domains", () => {
-  assert.deepEqual(directoryNames(editorRoot), ["alpha", "gama"]);
-  assert.equal(statSafe(join(editorRoot, "common")), false);
-  assert.equal(statSafe(join(editorRoot, "core")), false);
-  assert.equal(statSafe(join(editorRoot, "textEditorWidget")), false);
-  assert.equal(statSafe(gamaRoot), true);
-  assert.deepEqual(directoryNames(gamaRoot), ["browser", "common", "contrib", "test"]);
-  assert.deepEqual(directoryNames(join(gamaRoot, "common")), ["commands", "core", "model", "services"]);
-  assert.deepEqual(directoryNames(join(gamaRoot, "browser")), ["media", "services", "widget"]);
-  assert.equal(statSafe(join(gamaRoot, "contrib", "academic")), true);
-  assert.equal(statSafe(join(gamaRoot, "academic")), false);
-  assert.equal(statSafe(join(gamaRoot, "editor.all.ts")), true);
-  assert.deepEqual(collectFiles(gamaRoot).filter(file => /[\\/]index\.ts$/u.test(file)), []);
+test("editor exposes one flat VS Code-shaped domain for both engines", () => {
+  assert.deepEqual(directoryNames(editorRoot), ["browser", "common", "contrib", "test"]);
+  assert.deepEqual(directoryNames(join(editorRoot, "common")), ["commands", "core", "cursor", "diff", "languages", "model", "services", "tokens", "viewLayout", "viewModel"]);
+  assert.deepEqual(directoryNames(join(editorRoot, "browser")), ["input", "language", "media", "services", "view", "widget"]);
+  assert.equal(statSafe(join(editorRoot, "contrib", "academic")), true);
+  assert.equal(statSafe(join(editorRoot, "alpha")), false);
+  assert.equal(statSafe(join(editorRoot, "gama")), false);
+  assert.equal(statSafe(join(editorRoot, "editor.academic.all.ts")), true);
+  assert.deepEqual(collectFiles(editorRoot).filter(file => /[\\/]index\.ts$/u.test(file)), []);
 });
 
-test("Gama follows VS Code editor common/browser/contrib ownership", () => {
+test("document editing follows VS Code editor common/browser/contrib ownership", () => {
   for (const file of [
     "common/core/documentSelection.ts",
     "common/model/documentModel.ts",
@@ -29,8 +25,8 @@ test("Gama follows VS Code editor common/browser/contrib ownership", () => {
     "common/commands/documentCommands.ts",
     "browser/services/documentWorkingCopy.ts",
     "browser/services/browserDocumentModelService.ts",
-    "browser/editorInput.ts",
-    "browser/editorPane.ts",
+    "browser/documentEditorInput.ts",
+    "browser/documentEditorPane.ts",
     "browser/editorWidget.ts",
     "browser/services/editorProfile.ts",
     "browser/widget/textEditorWidget.ts",
@@ -44,23 +40,22 @@ test("Gama follows VS Code editor common/browser/contrib ownership", () => {
     "browser/services/appServerDocumentCollaborationService.ts",
     "contrib/academic/browser/profile.ts",
     "contrib/academic/browser/academicEditor.contribution.ts",
-  ]) assert.equal(statSafe(join(gamaRoot, file)), true, file);
-  assert.equal(statSafe(join(gamaRoot, "contrib", "collaboration", "common", "session.ts")), false);
-  assert.equal(statSafe(join(gamaRoot, "contrib", "editor.contribution.ts")), false);
-  for (const file of collectFiles(join(gamaRoot, "common"))) {
+  ]) assert.equal(statSafe(join(editorRoot, file)), true, file);
+  assert.equal(statSafe(join(editorRoot, "contrib", "collaboration", "common", "session.ts")), false);
+  for (const file of collectFiles(join(editorRoot, "common"))) {
     if (!file.endsWith(".ts")) continue;
     const source = readFileSync(file, "utf8");
-    assert.doesNotMatch(source, /from\s+["'][^"']*(?:editor\/alpha|workbench|electron)[^"']*["']/u, relative(gamaRoot, file));
+    assert.doesNotMatch(source, /from\s+["'][^"']*(?:workbench|electron)[^"']*["']/u, relative(editorRoot, file));
   }
 });
 
-test("Gama keeps textBlock semantics and uses Alpha only through the embedded-editor seam", () => {
-  const schema = readFileSync(join(gamaRoot, "common/model/documentSchema.ts"), "utf8");
-  const pane = readFileSync(join(gamaRoot, "browser/editorPane.ts"), "utf8");
-  const editor = readFileSync(join(gamaRoot, "browser/editorWidget.ts"), "utf8");
-  const formatting = readFileSync(join(gamaRoot, "contrib/formatting/browser/formattingContribution.ts"), "utf8");
-  const widget = readFileSync(join(gamaRoot, "browser/widget/textEditorWidget.ts"), "utf8");
-  const editorAll = readFileSync(join(gamaRoot, "editor.all.ts"), "utf8");
+test("document editing keeps textBlock semantics behind the embedded-editor seam", () => {
+  const schema = readFileSync(join(editorRoot, "common/model/documentSchema.ts"), "utf8");
+  const pane = readFileSync(join(editorRoot, "browser/documentEditorPane.ts"), "utf8");
+  const editor = readFileSync(join(editorRoot, "browser/editorWidget.ts"), "utf8");
+  const formatting = readFileSync(join(editorRoot, "contrib/formatting/browser/formattingContribution.ts"), "utf8");
+  const widget = readFileSync(join(editorRoot, "browser/widget/textEditorWidget.ts"), "utf8");
+  const editorAll = readFileSync(join(editorRoot, "editor.academic.all.ts"), "utf8");
   assert.match(schema, /textBlock:/u);
   assert.doesNotMatch(schema, /codeBlock/u);
   assert.match(pane, /export class EditorPane/u);
@@ -74,8 +69,8 @@ test("Gama keeps textBlock semantics and uses Alpha only through the embedded-ed
   assert.match(editor, /new TextEditorWidget\(/u);
   assert.doesNotMatch(widget, /editor\/alpha\/browser\/embeddedTextEditor/u);
   assert.match(formatting, /new ToolBar\(/u);
-  const collaborationService = readFileSync(join(gamaRoot, "common/services/documentCollaborationService.ts"), "utf8");
-  const collaborationWidget = readFileSync(join(gamaRoot, "browser/editorWidget.ts"), "utf8");
+  const collaborationService = readFileSync(join(editorRoot, "common/services/documentCollaborationService.ts"), "utf8");
+  const collaborationWidget = readFileSync(join(editorRoot, "browser/editorWidget.ts"), "utf8");
   assert.match(collaborationService, /export interface IDocumentCollaborationService/u);
   assert.doesNotMatch(collaborationService, /from\s+["'][^"']*(?:platform|workbench|electron|generated)[^"']*["']/u);
   assert.match(collaborationWidget, /CollaborationContribution/u);
@@ -91,9 +86,10 @@ function directoryNames(directory: string): string[] {
     .sort();
 }
 
-test("editor domains do not repeat their directory name in internal TypeScript symbols", () => {
-  assertNoDomainPrefixedSymbols(join(editorRoot, "alpha"), "Alpha");
-  assertNoDomainPrefixedSymbols(gamaRoot, "Gama");
+test("flat editor paths do not reintroduce Alpha or Gama directories", () => {
+  for (const file of collectFiles(editorRoot)) {
+    assert.doesNotMatch(relative(editorRoot, file), /(?:^|[\\/])(?:alpha|gama)(?:[\\/]|$)/u);
+  }
 });
 
 function collectFiles(directory: string): string[] {
@@ -111,13 +107,5 @@ function statSafe(file: string): boolean {
     return statSync(file).isDirectory() || statSync(file).isFile();
   } catch {
     return false;
-  }
-}
-
-function assertNoDomainPrefixedSymbols(root: string, domain: string): void {
-  const expression = new RegExp(`\\b${domain}[A-Z][A-Za-z0-9_]*\\b`, "u");
-  for (const file of collectFiles(root)) {
-    if (!file.endsWith(".ts")) continue;
-    assert.doesNotMatch(readFileSync(file, "utf8"), expression, relative(root, file));
   }
 }

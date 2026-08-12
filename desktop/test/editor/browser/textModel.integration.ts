@@ -1,9 +1,10 @@
-import { URI } from "../../src/zeta/base/common/uri.js";
-import { EditorPane } from "../../src/zeta/editor/browser/codeEditorPane.js";
-import { createBrowserEditorPart } from "../../src/zeta/editor/browser/browserEditorPart.js";
-import { BrowserTextModelService } from "../../src/zeta/editor/browser/services/browserTextModelService.js";
-import { BrowserTextResourceStore } from "../../src/zeta/editor/browser/services/browserTextResourceStore.js";
-import { TextModel } from "../../src/zeta/editor/editor.main.js";
+import { URI } from "../../../src/zeta/base/common/uri.js";
+import { EditorPane } from "../../../src/zeta/editor/browser/codeEditorPane.js";
+import { createBrowserEditorPart } from "../../../src/zeta/editor/browser/browserEditorPart.js";
+import { BrowserTextModelService } from "../../../src/zeta/editor/browser/services/browserTextModelService.js";
+import { BrowserTextResourceStore } from "../../../src/zeta/editor/browser/services/browserTextResourceStore.js";
+import { TextModel } from "../../../src/zeta/editor/editor.api.js";
+import "../../../src/zeta/editor/editor.code.all.js";
 import { MemoryTextFiles } from "./memoryTextFiles.js";
 
 interface IntegrationHarness {
@@ -17,12 +18,12 @@ interface IntegrationHarness {
 
 declare global {
   interface Window {
-    zetaAlphaIntegration: IntegrationHarness;
+    zetaTextModelIntegration: IntegrationHarness;
   }
 }
 
-const root = requiredElement("#alpha-root");
-const resource = URI.parse("inmemory://alpha/alpha.rs");
+const root = requiredElement("#editor-root");
+const resource = URI.parse("inmemory://editor/main.rs");
 const files = new MemoryTextFiles(resource, "fn main() {\n  answer();\n}\n");
 const resourceStore = new BrowserTextResourceStore(files);
 const models = new BrowserTextModelService(resourceStore);
@@ -52,13 +53,13 @@ const pane = new EditorPane(resourceStore, {
     },
   },
 });
-const apiModel = new TextModel("alpha-api");
+const apiModel = new TextModel("editor-api");
 
 pane.create(root);
 pane.layout({ width: 900, height: 420 });
-await pane.setInput({ resource, label: "alpha.rs" }, new AbortController().signal);
+await pane.setInput({ resource, label: "main.rs" }, new AbortController().signal);
 
-window.zetaAlphaIntegration = {
+window.zetaTextModelIntegration = {
   apiText: apiModel.getText(),
   getValue: () => pane.getValue(),
   save: () => pane.save(),
@@ -74,6 +75,6 @@ window.zetaAlphaIntegration = {
 
 function requiredElement(selector: string): HTMLElement {
   const element = document.querySelector<HTMLElement>(selector);
-  if (!element) throw new Error(`Missing Alpha integration root '${selector}'`);
+  if (!element) throw new Error(`Missing editor integration root '${selector}'`);
   return element;
 }

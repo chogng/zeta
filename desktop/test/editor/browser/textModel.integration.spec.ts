@@ -11,34 +11,34 @@ test.beforeEach(async ({ page }) => {
 
 test.afterEach(async ({ page }) => {
   await page.evaluate(() => {
-    window.zetaAlphaIntegration?.dispose();
+    window.zetaTextModelIntegration?.dispose();
   }).catch(() => undefined);
   expect(pageErrors.get(page) ?? []).toEqual([]);
 });
 
-test("Alpha public API and browser pane type, undo, save, and start a browser worker", async ({ page }) => {
+test("text-model editor public API, pane, undo, save, and browser worker", async ({ page }) => {
   const workers: string[] = [];
   page.on("worker", worker => workers.push(worker.url()));
-  await page.goto("/alpha.html");
+  await page.goto("/textModel.html");
   await expect(page.locator(".zeta-alpha-editor")).toBeVisible();
-  await expect.poll(() => page.evaluate(() => window.zetaAlphaIntegration.apiText)).toBe("alpha-api");
+  await expect.poll(() => page.evaluate(() => window.zetaTextModelIntegration.apiText)).toBe("editor-api");
 
   const input = page.locator(".zeta-alpha-editor-input");
   await input.focus();
   await page.keyboard.press("Control+Home");
   await page.keyboard.type("/* integrated */ ");
-  await expect.poll(() => page.evaluate(() => window.zetaAlphaIntegration.getValue())).toBe("/* integrated */ fn main() {\n  answer();\n}\n");
+  await expect.poll(() => page.evaluate(() => window.zetaTextModelIntegration.getValue())).toBe("/* integrated */ fn main() {\n  answer();\n}\n");
 
   await page.keyboard.press("ControlOrMeta+z");
-  await expect.poll(() => page.evaluate(() => window.zetaAlphaIntegration.getValue())).toBe("fn main() {\n  answer();\n}\n");
-  await page.evaluate(() => window.zetaAlphaIntegration.save());
-  await expect.poll(() => page.evaluate(() => window.zetaAlphaIntegration.getSavedText())).toBe("fn main() {\n  answer();\n}\n");
+  await expect.poll(() => page.evaluate(() => window.zetaTextModelIntegration.getValue())).toBe("fn main() {\n  answer();\n}\n");
+  await page.evaluate(() => window.zetaTextModelIntegration.save());
+  await expect.poll(() => page.evaluate(() => window.zetaTextModelIntegration.getSavedText())).toBe("fn main() {\n  answer();\n}\n");
   await expect.poll(() => workers.length).toBeGreaterThan(0);
 });
 
-test("Alpha projects revision-bound Rust syntax tokens, diagnostics, folding, and symbols", async ({ page }) => {
-  await page.goto("/alpha.html");
-  await expect.poll(() => page.evaluate(() => window.zetaAlphaIntegration.getSyntaxAnalysisCount())).toBeGreaterThan(0);
+test("text-model editor projects revision-bound Rust syntax, diagnostics, folding, and symbols", async ({ page }) => {
+  await page.goto("/textModel.html");
+  await expect.poll(() => page.evaluate(() => window.zetaTextModelIntegration.getSyntaxAnalysisCount())).toBeGreaterThan(0);
   await expect(page.locator(".zeta-alpha-editor-token.token-keyword")).toHaveText("fn");
   await expect(page.locator(".zeta-alpha-editor-diagnostic-marker.error")).toHaveCount(1);
 
@@ -48,8 +48,8 @@ test("Alpha projects revision-bound Rust syntax tokens, diagnostics, folding, an
   await expect(page.locator(".zeta-alpha-editor-goto-symbol-item")).toHaveText("main");
 });
 
-test("Alpha public distribution has the editor accessibility contract", async ({ page }) => {
-  await page.goto("/alpha.html");
+test("text-model editor has the accessibility contract", async ({ page }) => {
+  await page.goto("/textModel.html");
   const editor = page.locator(".zeta-alpha-editor");
   const input = page.locator(".zeta-alpha-editor-input");
   await expect(editor).toHaveAttribute("role", "region");

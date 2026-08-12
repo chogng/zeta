@@ -9,7 +9,7 @@ import { type ILanguageFeaturesService } from "../common/services/languageServic
 import { type EditorInput } from "../../workbench/browser/parts/editor/editorInput.js";
 import { type IEditorPane } from "../../workbench/browser/parts/editor/editorPane.js";
 import { EditorPaneVisibility } from "../../workbench/browser/parts/editor/editorPane.js";
-import { ALPHA_EDITOR_ID, alphaLanguageForInput } from "./codeEditorInput.js";
+import { CODE_EDITOR_ID, languageForEditorInput } from "./codeEditorInput.js";
 import { type ITextResourceStore } from "../common/services/textResourceStore.js";
 import { EditorPart, type EditorPartOptions } from "./editorPart.js";
 import { type ITextModelService, type TextModelReference } from "../common/services/textModelService.js";
@@ -53,9 +53,9 @@ export interface EditorPaneOptions {
   readonly onSave?: () => Promise<void | boolean>;
 }
 
-/** Workbench pane that composes Alpha's native model, input, view, and language services. */
+/** Workbench pane that composes the text model, input, view, and language services. */
 export class EditorPane extends DisposableOwner implements IEditorPane {
-  readonly id = ALPHA_EDITOR_ID;
+  readonly id = CODE_EDITOR_ID;
   private readonly part = this.own(new DisposableSlot<EditorPanePart>());
   private readonly workingCopySlot = this.own(new DisposableSlot<IWorkingCopy>());
   private readonly modelService: ITextModelService;
@@ -71,11 +71,11 @@ export class EditorPane extends DisposableOwner implements IEditorPane {
     super();
     if (!resourceStore || typeof resourceStore.resolve !== "function" || typeof resourceStore.save !== "function" || typeof resourceStore.onDidChange !== "function") {
       this.dispose();
-      throw new TypeError("Alpha editor pane requires an Alpha text resource store");
+      throw new TypeError("Code editor pane requires a text resource store");
     }
     if (!options || !options.modelService || typeof options.modelService.acquire !== "function") {
       this.dispose();
-      throw new TypeError("Alpha editor pane requires an Alpha text model service");
+      throw new TypeError("Code editor pane requires a text model service");
     }
     this.modelService = options.modelService;
     this.createPart = options.createPart ?? (partOptions => new EditorPart(partOptions));
@@ -95,15 +95,15 @@ export class EditorPane extends DisposableOwner implements IEditorPane {
 
   async setInput(input: EditorInput, signal: AbortSignal): Promise<void> {
     const container = this.requireContainer();
-    throwIfCancelled(signal, "Alpha editor input loading was cancelled");
+    throwIfCancelled(signal, "Code editor input loading was cancelled");
     const modelReference = await this.modelService.acquire(input, signal);
     let part: EditorPanePart | undefined;
     try {
-      throwIfCancelled(signal, "Alpha editor input loading was cancelled");
+      throwIfCancelled(signal, "Code editor input loading was cancelled");
       part = this.createPart({
         container,
         input,
-        languageId: alphaLanguageForInput(input, this.options.languageFeaturesService),
+        languageId: languageForEditorInput(input, this.options.languageFeaturesService),
         modelReference,
         textMateService: this.options.textMateService,
         languageFeaturesService: this.options.languageFeaturesService,
@@ -121,7 +121,7 @@ export class EditorPane extends DisposableOwner implements IEditorPane {
           : () => modelReference.save(new AbortController().signal),
         onRevert: () => modelReference.revert(new AbortController().signal),
       });
-      throwIfCancelled(signal, "Alpha editor input loading was cancelled");
+      throwIfCancelled(signal, "Code editor input loading was cancelled");
     } catch (error) {
       part?.dispose();
       if (!part) modelReference.dispose();
@@ -225,7 +225,7 @@ class EditorWorkingCopy extends DisposableOwner implements IWorkingCopy {
   }
 
   save(signal: AbortSignal): Promise<void> {
-    throwIfCancelled(signal, "Alpha working-copy save was cancelled");
+    throwIfCancelled(signal, "Code editor working-copy save was cancelled");
     if (this.resource.scheme === "untitled") return this.saveUntitledDocument();
     return this.reference.save(signal);
   }
@@ -241,6 +241,6 @@ class EditorWorkingCopy extends DisposableOwner implements IWorkingCopy {
   private async saveUntitledDocument(): Promise<void> {
     const result = await this.saveUntitled?.();
     if (result === false) return;
-    if (!this.saveUntitled) throw new Error("Untitled Alpha editor has no save handler");
+    if (!this.saveUntitled) throw new Error("Untitled code editor has no save handler");
   }
 }

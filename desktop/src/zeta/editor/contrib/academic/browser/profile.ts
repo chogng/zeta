@@ -5,12 +5,12 @@ import { createReferenceIndexPlugin } from "../../citation/common/references.js"
 import { nodeViews as profileNodeViews } from "./nodeViews.js";
 import { createAcademicDocumentSchema, createEmptyAcademicDocument } from "../common/schema.js";
 import type { EditorProfile } from "../../../browser/services/editorProfile.js";
-import { GAMA_EDITOR_ID } from "../../../browser/documentEditorInput.js";
+import { DOCUMENT_EDITOR_ID } from "../../../browser/documentEditorInput.js";
 
-/** Academic's Gama profile; shared editing semantics remain in Gama browser/common. */
+/** Academic profile; shared document editing semantics remain in editor browser/common. */
 export const academicProfile: EditorProfile = Object.freeze({
   id: "academic",
-  editorId: GAMA_EDITOR_ID,
+  editorId: DOCUMENT_EDITOR_ID,
   editorName: "Structured Editor",
   collaborationSchemaId: "gama-academic-v1",
   input: Object.freeze({

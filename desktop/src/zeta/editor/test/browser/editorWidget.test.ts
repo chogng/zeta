@@ -7,7 +7,7 @@ import { DisposableOwner } from "../../../base/common/lifecycle.js";
 import { URI } from "../../../base/common/uri.js";
 import type { IFileChangeEvent } from "../../../platform/files/common/files.js";
 import { TextFileSaveConflictError, type ITextFileService, type ResolvedTextFileContent, type TextFileResolveRequest, type TextFileSaveRequest } from "../../../workbench/services/textfile/common/textFileService.js";
-import { GAMA_EDITOR_ID } from "../../browser/documentEditorInput.js";
+import { DOCUMENT_EDITOR_ID } from "../../browser/documentEditorInput.js";
 import { EditorPane } from "../../browser/documentEditorPane.js";
 import { nodeViews as profileNodeViews } from "../../contrib/academic/browser/nodeViews.js";
 import { inlineNodeViews as citationInlineNodeViews, nodeViews as citationNodeViews } from "../../contrib/citation/browser/nodeViews.js";
@@ -19,6 +19,8 @@ import { createDocumentDecoration, DocumentDecorationSet } from "../../common/mo
 import { createDocumentPlugin, DocumentPluginKey } from "../../common/model/documentPlugin.js";
 import { DOCUMENT_FRAGMENT_CLIPBOARD_MIME, serializeDocument } from "../../common/model/documentSerialization.js";
 import { createDefaultDocumentSchema } from "../../common/model/documentSchema.js";
+
+await import("../../contrib/documentEditor.contribution.js");
 
 function documentAction(parent: ParentNode, actionId: string): HTMLButtonElement {
   const button = parent.querySelector<HTMLButtonElement>(`[data-action-id='${actionId}'] button`);
@@ -40,7 +42,7 @@ test("Gama editor migrates plain text and edits a structured paragraph", async (
     label: "paper",
   }, new AbortController().signal);
 
-  assert.equal(pane.id, GAMA_EDITOR_ID);
+  assert.equal(pane.id, DOCUMENT_EDITOR_ID);
   assert.equal(parent.querySelectorAll("textarea").length, 2);
   assert.deepEqual([...parent.querySelectorAll<HTMLTextAreaElement>("textarea")].map(textarea => textarea.getAttribute("aria-label")), ["Paragraph", "Paragraph"]);
   const first = parent.querySelector<HTMLTextAreaElement>("textarea");
@@ -1553,7 +1555,7 @@ test("Gama restores serialized blocks and releases its model", async () => {
   assert.equal(parent.querySelector("[data-editor-kind='text-block']")?.textContent, "");
   assert.equal(parent.querySelector<HTMLTextAreaElement>("textarea")?.value, "const value = 1;");
   assert.equal(parent.querySelector<HTMLElement>(".zeta-structured-format-toolbar")?.dataset.context, "code");
-  assert.equal(parent.querySelector<HTMLElement>(".zeta-structured-format-code-context")?.textContent, "Code block · Alpha");
+  assert.equal(parent.querySelector<HTMLElement>(".zeta-structured-format-code-context")?.textContent, "Code block · Text editor");
   assert.equal(parent.querySelector<HTMLElement>(".zeta-structured-format-typography-controls")?.hidden, true);
   pane.clearInput();
   assert.throws(() => pane.getDocument(), /no active model/);
@@ -1607,6 +1609,7 @@ test("EmbeddedTextEditorFactory creates a line editor surface", async () => {
   Object.defineProperty(globalThis, "document", { configurable: true, value: environment.window.document });
   Object.defineProperty(globalThis, "Node", { configurable: true, value: environment.window.Node });
   try {
+    await import("../../contrib/codeEditorPart.contribution.js");
     const { EmbeddedTextEditorFactory } = await import("../../browser/embeddedTextEditor.js");
     using editor = new EmbeddedTextEditorFactory().create({
       resource: URI.parse("untitled:test/code"),

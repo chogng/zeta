@@ -6,7 +6,7 @@ import { assertDefined } from "../../base/common/types.js";
 import { type IEditorPane } from "../../workbench/browser/parts/editor/editorPane.js";
 import { EditorPaneVisibility } from "../../workbench/browser/parts/editor/editorPane.js";
 import { type EditorInput } from "../../workbench/browser/parts/editor/editorInput.js";
-import { isAlphaDiffEditorInput, ALPHA_DIFF_EDITOR_ID } from "./diffEditorInput.js";
+import { DIFF_EDITOR_ID, isDiffEditorInput } from "./diffEditorInput.js";
 import { type ITextResourceStore } from "../common/services/textResourceStore.js";
 import { DiffModel } from "../common/diff/diffModel.js";
 import { type IDiffComputationService } from "../common/diff/diffComputationService.js";
@@ -19,9 +19,9 @@ export interface DiffEditorPaneOptions {
   readonly createComputationService: () => IDiffComputationService;
 }
 
-/** Workbench pane that acquires two Alpha text references for a read-only comparison. */
+/** Workbench pane that acquires two text references for a read-only comparison. */
 export class DiffEditorPane extends DisposableOwner implements IEditorPane {
-  readonly id = ALPHA_DIFF_EDITOR_ID;
+  readonly id = DIFF_EDITOR_ID;
   private readonly session = this.own(new DisposableSlot<DiffEditorPaneSession>());
   private readonly modelService: ITextModelService;
   private container: HTMLDivElement | undefined;
@@ -31,15 +31,15 @@ export class DiffEditorPane extends DisposableOwner implements IEditorPane {
     super();
     if (!resourceStore || typeof resourceStore.resolve !== "function") {
       this.dispose();
-      throw new TypeError("Alpha diff editor pane requires an Alpha text resource store");
+      throw new TypeError("Diff editor pane requires a text resource store");
     }
     if (!options || typeof options !== "object" || typeof options.createComputationService !== "function") {
       this.dispose();
-      throw new TypeError("Alpha diff editor pane requires the Rust diff computation service");
+      throw new TypeError("Diff editor pane requires the Rust diff computation service");
     }
     if (!options.modelService || typeof options.modelService.acquire !== "function") {
       this.dispose();
-      throw new TypeError("Alpha diff editor pane requires an Alpha text model service");
+      throw new TypeError("Diff editor pane requires a text model service");
     }
     this.modelService = options.modelService;
   }
@@ -57,20 +57,20 @@ export class DiffEditorPane extends DisposableOwner implements IEditorPane {
   }
 
   async setInput(input: EditorInput, signal: AbortSignal): Promise<void> {
-    if (!isAlphaDiffEditorInput(input)) {
-      throw new TypeError("Alpha diff editor pane requires an Alpha diff editor input");
+    if (!isDiffEditorInput(input)) {
+      throw new TypeError("Diff editor pane requires a diff editor input");
     }
     const container = this.requireContainer();
-    throwIfCancelled(signal, "Alpha diff editor input loading was cancelled");
+    throwIfCancelled(signal, "Diff editor input loading was cancelled");
     const original = await this.modelService.acquire(input.original, signal);
     let modified: TextModelReference | undefined;
     let next: DiffEditorPaneSession | undefined;
     try {
-      throwIfCancelled(signal, "Alpha diff editor input loading was cancelled");
+      throwIfCancelled(signal, "Diff editor input loading was cancelled");
       modified = await this.modelService.acquire(input.modified, signal);
-      throwIfCancelled(signal, "Alpha diff editor input loading was cancelled");
+      throwIfCancelled(signal, "Diff editor input loading was cancelled");
       next = new DiffEditorPaneSession(container, original, modified, input.original.label, input.modified.label, this.options.createComputationService);
-      throwIfCancelled(signal, "Alpha diff editor input loading was cancelled");
+      throwIfCancelled(signal, "Diff editor input loading was cancelled");
     } catch (error) {
       next?.dispose();
       if (!next) {
@@ -103,7 +103,7 @@ export class DiffEditorPane extends DisposableOwner implements IEditorPane {
   }
 
   private requireContainer(): HTMLDivElement {
-    assertDefined(this.container, new ReferenceError("Alpha diff editor pane has not been created"));
+    assertDefined(this.container, new ReferenceError("Diff editor pane has not been created"));
     return this.container;
   }
 }
@@ -117,7 +117,7 @@ class DiffEditorPaneSession extends DisposableOwner {
     this.own(modified);
     const computationService = createComputationService();
     if (!computationService || typeof computationService.compute !== "function") {
-      throw new TypeError("Alpha diff editor pane factory returned an invalid Rust diff computation service");
+      throw new TypeError("Diff editor pane factory returned an invalid Rust diff computation service");
     }
     this.own(computationService);
     const model = this.own(new DiffModel({

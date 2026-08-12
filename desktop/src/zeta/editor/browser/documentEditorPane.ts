@@ -11,17 +11,17 @@ import { BrowserDocumentModelService } from "./services/browserDocumentModelServ
 import type { DocumentNode } from "../common/model/document.js";
 import type { DocumentSelection } from "../common/core/documentSelection.js";
 import type { DocumentOutline } from "../common/model/documentOutline.js";
-import { GAMA_EDITOR_ID } from "./documentEditorInput.js";
+import { DOCUMENT_EDITOR_ID } from "./documentEditorInput.js";
 import { EditorWidget, type EditorWidgetOptions } from "./editorWidget.js";
 
-/** Workbench-only services that complement one Gama editor. */
+/** Workbench-only services that complement one document editor. */
 export interface EditorPaneOptions extends EditorWidgetOptions {
   readonly workingCopyService?: IWorkingCopyService;
 }
 
-/** Workbench pane that hosts one Gama structured editor. */
+/** Workbench pane that hosts one structured document editor. */
 export class EditorPane extends DisposableOwner implements IEditorPane {
-  readonly id = GAMA_EDITOR_ID;
+  readonly id = DOCUMENT_EDITOR_ID;
 
   private readonly editor: EditorWidget;
   private container: HTMLDivElement | undefined;
@@ -39,7 +39,7 @@ export class EditorPane extends DisposableOwner implements IEditorPane {
   }
 
   create(parent: HTMLElement): void {
-    if (this.container) throw new ReferenceError("Gama editor pane has already been created");
+    if (this.container) throw new ReferenceError("Document editor pane has already been created");
     const container = parent.ownerDocument.createElement("div");
     container.className = "zeta-structured-editor-pane";
     parent.append(container);
@@ -95,7 +95,7 @@ export class EditorPane extends DisposableOwner implements IEditorPane {
     return this.editor.getDocument();
   }
 
-  /** Returns the current structured-document selection of the hosted Gama editor. */
+  /** Returns the current structured-document selection of the hosted editor. */
   getDocumentSelection(): DocumentSelection | undefined {
     return this.editor.getDocumentSelection();
   }
@@ -115,7 +115,7 @@ export class EditorPane extends DisposableOwner implements IEditorPane {
   }
 
   private requireContainer(): HTMLDivElement {
-    assertDefined(this.container, new ReferenceError("Gama editor pane has not been created"));
+    assertDefined(this.container, new ReferenceError("Document editor pane has not been created"));
     return this.container;
   }
 }

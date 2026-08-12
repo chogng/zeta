@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import test from "node:test";
+import { findDesktopRoot } from "./testPaths.js";
 
-const sourceDesktopRoot = resolve(import.meta.dirname, "../..");
-const desktopRoot = existsSync(resolve(sourceDesktopRoot, "src")) ? sourceDesktopRoot : resolve(import.meta.dirname, "../../../..");
+const desktopRoot = findDesktopRoot(import.meta.dirname);
 const editorRoot = resolve(desktopRoot, "src/zeta/editor");
 
 test("Editor keeps explicit feature files without index barrels", () => {
@@ -91,8 +91,47 @@ test("Product entries statically select their editor contribution bundles", () =
 
   const codeEntry = readFileSync(resolve(editorRoot, "../code/browser/workbench/workbench-code.ts"), "utf8");
   const academicEntry = readFileSync(resolve(editorRoot, "../code/browser/workbench/workbench-academic.ts"), "utf8");
+  const electronCodeEntry = readFileSync(resolve(editorRoot, "../code/electron-browser/workbench/workbench-code.ts"), "utf8");
+  const electronAcademicEntry = readFileSync(resolve(editorRoot, "../code/electron-browser/workbench/workbench-academic.ts"), "utf8");
   assert.match(codeEntry, /editor\/editor\.code\.all/u);
+  assert.doesNotMatch(codeEntry, /editor\/editor\.academic\.all/u);
   assert.match(academicEntry, /editor\/editor\.academic\.all/u);
+  assert.doesNotMatch(academicEntry, /editor\/editor\.code\.all/u);
+  assert.match(electronCodeEntry, /editor\/editor\.code\.all/u);
+  assert.doesNotMatch(electronCodeEntry, /editor\/editor\.academic\.all/u);
+  assert.match(electronAcademicEntry, /editor\/editor\.academic\.all/u);
+  assert.doesNotMatch(electronAcademicEntry, /editor\/editor\.code\.all/u);
+});
+
+test("Editor engines delegate optional feature composition to product bundles", () => {
+  const textHost = readFileSync(join(editorRoot, "browser/editorPart.ts"), "utf8");
+  const textContribution = readFileSync(join(editorRoot, "contrib/codeEditorPart.contribution.ts"), "utf8");
+  const findContribution = readFileSync(join(editorRoot, "contrib/find/browser/find.contribution.ts"), "utf8");
+  const documentHost = readFileSync(join(editorRoot, "browser/editorWidget.ts"), "utf8");
+  const documentContribution = readFileSync(join(editorRoot, "contrib/documentEditor.contribution.ts"), "utf8");
+  const codePaneContribution = readFileSync(join(editorRoot, "contrib/editor.contribution.ts"), "utf8");
+  const academicPaneContribution = readFileSync(join(editorRoot, "contrib/academic/browser/academicEditor.contribution.ts"), "utf8");
+  const codeBundle = readFileSync(join(editorRoot, "editor.code.all.ts"), "utf8");
+  const academicBundle = readFileSync(join(editorRoot, "editor.academic.all.ts"), "utf8");
+  assert.doesNotMatch(textHost, /from\s+["'][^"']*\/contrib\/(?:find|folding|hover|format|rename|codeAction|collaboration|formatting)\//u);
+  assert.match(textHost, /registerEditorPartFactory/u);
+  assert.match(textContribution, /registerEditorPartFactory/u);
+  assert.doesNotMatch(textContribution, /FindController/u);
+  assert.match(findContribution, /registerEditorContribution/u);
+  assert.match(codeBundle, /find\/browser\/find\.contribution/u);
+  assert.match(academicBundle, /find\/browser\/find\.contribution/u);
+  assert.doesNotMatch(codePaneContribution, /codeEditorPart\.contribution/u);
+  assert.doesNotMatch(documentHost, /from\s+["'][^"']*\/contrib\/(?:formatting|collaboration)\/browser\//u);
+  assert.match(documentHost, /getEditorContributions/u);
+  assert.doesNotMatch(documentHost, /registerDocumentEditorContributionFactory/u);
+  assert.match(documentContribution, /registerEditorContribution/u);
+  assert.match(documentContribution, /FormattingContribution/u);
+  assert.match(documentContribution, /CollaborationContribution/u);
+  assert.doesNotMatch(academicPaneContribution, /codeEditorPart\.contribution/u);
+  assert.doesNotMatch(academicPaneContribution, /documentEditor\.contribution/u);
+  assert.match(codeBundle, /codeEditorPart\.contribution/u);
+  assert.match(academicBundle, /codeEditorPart\.contribution/u);
+  assert.match(academicBundle, /documentEditor\.contribution/u);
 });
 
 function collectFiles(directory: string): string[] {

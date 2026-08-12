@@ -22,7 +22,7 @@ for (const [name, value] of Object.entries({
 const { DiffEditorPane } = await import("../../browser/diffEditorPane.js");
 const { BrowserTextModelService } = await import("../../browser/services/browserTextModelService.js");
 const { BrowserTextResourceStore } = await import("../../browser/services/browserTextResourceStore.js");
-const { createAlphaDiffEditorInput } = await import("../../browser/diffEditorInput.js");
+const { createDiffEditorInput } = await import("../../browser/diffEditorInput.js");
 
 test("Alpha diff pane rejects a missing Rust diff computation service", () => {
   assert.throws(() => new DiffEditorPane(new BrowserTextResourceStore(new BootstrapTextFiles()), undefined as never), /requires the Rust diff computation service/);
@@ -40,7 +40,7 @@ test("Alpha diff pane acquires both models, lays out the review view, and releas
   });
   pane.create(parent);
   pane.layout({ width: 640, height: 480 });
-  await pane.setInput(createAlphaDiffEditorInput(
+  await pane.setInput(createDiffEditorInput(
     { resource: URI.file("C:\\project\\before.ts"), initialText: "const oldValue = 1;", label: "before.ts" },
     { resource: URI.file("C:\\project\\after.ts"), initialText: "const newValue = 2;", label: "after.ts" },
   ), new AbortController().signal);

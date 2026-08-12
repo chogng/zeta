@@ -6,10 +6,10 @@ import type { EditorInput } from "../../../workbench/browser/parts/editor/editor
 import { EditorPaneMatch } from "../../../workbench/browser/parts/editor/editorPane.js";
 import type { EditorWidgetOptions } from "../editorWidget.js";
 import type { EditorPaneOptions } from "../documentEditorPane.js";
-import { matchGamaEditor, type EditorInputMatcher } from "../documentEditorInput.js";
+import { matchDocumentEditor, type EditorInputMatcher } from "../documentEditorInput.js";
 import type { IDocumentCollaborationService } from "../../common/services/documentCollaborationService.js";
 
-/** Product-neutral schema and browser composition for one Gama document kind. */
+/** Product-neutral schema and browser composition for one document kind. */
 export interface EditorProfile {
   readonly id: string;
   readonly editorId: string;
@@ -35,17 +35,17 @@ export interface EditorRuntimeOptions {
 }
 
 /** Selects the first profile that claims one Workbench input. */
-export function findGamaEditorProfile(input: EditorInput, profiles: readonly EditorProfile[]): EditorProfile | undefined {
-  return profiles.find(profile => matchGamaEditor(input, profile.input) !== EditorPaneMatch.None);
+export function findEditorProfile(input: EditorInput, profiles: readonly EditorProfile[]): EditorProfile | undefined {
+  return profiles.find(profile => matchDocumentEditor(input, profile.input) !== EditorPaneMatch.None);
 }
 
 /** Produces the editor-pane match used by a profile registry contribution. */
-export function matchGamaEditorProfiles(input: EditorInput, profiles: readonly EditorProfile[]): EditorPaneMatch {
-  return findGamaEditorProfile(input, profiles) ? EditorPaneMatch.Default : EditorPaneMatch.None;
+export function matchEditorProfiles(input: EditorInput, profiles: readonly EditorProfile[]): EditorPaneMatch {
+  return findEditorProfile(input, profiles) ? EditorPaneMatch.Default : EditorPaneMatch.None;
 }
 
 /** Materializes one profile into pane options while keeping Workbench services at the composition root. */
-export function createGamaEditorPaneOptions(profile: EditorProfile, runtime: EditorRuntimeOptions = {}): EditorPaneOptions {
+export function createDocumentEditorPaneOptions(profile: EditorProfile, runtime: EditorRuntimeOptions = {}): EditorPaneOptions {
   const schema = profile.createSchema();
   return {
     ...runtime,

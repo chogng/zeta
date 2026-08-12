@@ -8,8 +8,6 @@
     "build:desktop:code": "corepack pnpm --dir desktop build:code",
     "build:desktop:academic": "corepack pnpm --dir desktop build:academic",
     "build:desktop:complete": "corepack pnpm --dir desktop build:complete",
-    "test:desktop:alpha": "corepack pnpm --dir desktop test:alpha",
-    "test:desktop:gama": "corepack pnpm --dir desktop test:gama",
     "test:desktop:editor": "corepack pnpm --dir desktop test:editor",
     "test:desktop:smoke": "corepack pnpm --dir desktop test:smoke:desktop",
     "test:desktop:smoke:ui": "corepack pnpm --dir desktop test:smoke:ui",

@@ -32,7 +32,7 @@ export interface FormattingContributionOptions {
 }
 
 /**
- * Gama's optional persistent document-formatting contribution.
+ * Optional persistent document-formatting contribution.
  *
  * The contribution composes the shared ToolBar for runnable commands with
  * native selects for typography values. Its host supplies only formatting
@@ -54,7 +54,7 @@ export class FormattingContribution extends DisposableOwner {
     element.className = "zeta-structured-format-toolbar";
     element.hidden = true;
     element.setAttribute("role", "group");
-    element.setAttribute("aria-label", "Gama document formatting");
+    element.setAttribute("aria-label", "Document formatting");
     this.element = element;
     this.defer(() => element.remove());
 
@@ -117,7 +117,7 @@ export class FormattingContribution extends DisposableOwner {
 
     const codeContext = options.ownerDocument.createElement("div");
     codeContext.className = "zeta-structured-format-code-context";
-    codeContext.textContent = "Code block · Alpha";
+    codeContext.textContent = "Code block · Text editor";
     codeContext.setAttribute("role", "status");
     this.codeContext = codeContext;
 
@@ -190,6 +190,6 @@ function setSelectValue(select: HTMLSelectElement, value: string): void {
 
 const emptyFormattingContextMenuProvider: IContextMenuProvider = {
   showContextMenu(): never {
-    throw new Error("Gama formatting toolbars do not define secondary actions");
+    throw new Error("Document formatting toolbars do not define secondary actions");
   },
 };

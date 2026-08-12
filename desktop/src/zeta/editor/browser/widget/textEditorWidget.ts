@@ -4,10 +4,10 @@ import { DisposableOwner } from "../../../base/common/lifecycle.js";
 import type { EmbeddedTextEditorOptions, IEmbeddedTextEditor, IEmbeddedTextEditorFactory } from "../../../workbench/browser/parts/editor/embeddedTextEditor.js";
 
 /**
- * A Gama `textBlock` projection backed by Alpha's line-oriented editor.
+ * A document `textBlock` projection backed by the line-oriented editor.
  *
- * Gama retains the block identity and document transactions. This widget only
- * hosts the embedded line editor and reports its text snapshot to Gama.
+ * The document model retains block identity and transactions. This widget only
+ * hosts the embedded line editor and reports its text snapshot to the owner.
  */
 export class TextEditorWidget extends DisposableOwner implements IEmbeddedTextEditor {
   private readonly editor: IEmbeddedTextEditor;

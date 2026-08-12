@@ -18,6 +18,7 @@ for (const [name, value] of Object.entries({
   Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
+await import("../../contrib/codeEditorPart.contribution.js");
 const { EditorPart } = await import("../../browser/editorPart.js");
 
 test.after(() => browserEnvironment.window.close());

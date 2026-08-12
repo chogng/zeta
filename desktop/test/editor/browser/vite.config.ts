@@ -9,7 +9,8 @@ export default defineConfig({
     emptyOutDir: true,
     rollupOptions: {
       input: {
-        alpha: resolve(import.meta.dirname, "alpha.html"),
+        textModel: resolve(import.meta.dirname, "textModel.html"),
+        documentModel: resolve(import.meta.dirname, "documentModel.html"),
       },
     },
   },

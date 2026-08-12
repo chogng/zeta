@@ -2,14 +2,14 @@ import type { DocumentNode } from "../../../common/model/document.js";
 import { type DocumentMarkSpec, type DocumentNodeSpec, DocumentSchema, createDefaultDocumentSchema } from "../../../common/model/documentSchema.js";
 import { BIBLIOGRAPHY_NODE_TYPE, bibliographyNodeSpec, CITATION_NODE_TYPE, citationNodeSpec, REFERENCE_NODE_TYPE, referenceNodeSpec } from "../../citation/common/schema.js";
 
-/** Node types owned by Gama's Academic document profile. */
+/** Node types owned by the Academic document profile. */
 export const ACADEMIC_NODE_TYPES = Object.freeze({
   title: "title",
   abstract: "abstract",
   section: "section",
 });
 
-/** Creates the Academic schema while retaining Gama's default document nodes. */
+/** Creates the Academic schema while retaining the default document nodes. */
 export function createAcademicDocumentSchema(): DocumentSchema {
   const defaults = createDefaultDocumentSchema();
   const nodes: Record<string, DocumentNodeSpec> = {};

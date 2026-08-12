@@ -434,7 +434,7 @@ TextModelReference
   → bracket/comment/lines/find/quickAccess/hover/format/rename/readOnly/save
 ```
 
-`browser/browserEditorPart.ts` 只提供 TextMate grammar readiness、syntax Worker 和 completion Worker；它不能把 Workbench 类型传入 `common`。`contrib/editor.contribution.ts` 只负责 pane 注册和强制 adapter 注入；根级 `editor.code.all.ts` 是 Code 产品入口导入的 contribution bundle，`editor.all.ts` 仅提供完整集合。新 contribution 若需要跨宿主能力，必须先扩展 `common/services` contract，再在这里装配 browser adapter。
+`browser/browserEditorPart.ts` 只提供 TextMate grammar readiness、syntax Worker 和 completion Worker；它不能把 Workbench 类型传入 `common`。`browser/editorContribution.ts` 提供 feature group 的静态注册契约，`contrib/codeEditorPart.contribution.ts` 组合默认 line-editor runtime，单项能力由自己的 `*.contribution.ts` 安装。`contrib/editor.contribution.ts` 只负责 pane 注册和强制 adapter 注入；根级 `editor.code.all.ts` 是 Code 产品入口导入的显式 capability list，`editor.all.ts` 仅提供完整集合。新 contribution 若需要跨宿主能力，必须先扩展 `common/services` contract，再在这里装配 browser adapter。
 
 ### 5.3 当前仍保留的宿主边界
 

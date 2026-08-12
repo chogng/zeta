@@ -15,7 +15,9 @@ output/
 # Desktop build products
 desktop/node_modules/
 desktop/dist/
+desktop/test/editor/browser/dist/
 desktop/.tmp/
+desktop/debug.log
 node_modules/
 .pnpm-store/
 desktop/generated/app-server/

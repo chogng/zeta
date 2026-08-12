@@ -1,26 +1,27 @@
-import { URI } from "../../src/zeta/base/common/uri.js";
-import { Emitter, type Event } from "../../src/zeta/base/common/event.js";
-import { DisposableOwner } from "../../src/zeta/base/common/lifecycle.js";
-import { EmbeddedTextEditorFactory } from "../../src/zeta/editor/browser/embeddedTextEditor.js";
-import { createDefaultDocumentSchema } from "../../src/zeta/editor/editor.main.js";
-import { createTextNode } from "../../src/zeta/editor/editor.main.js";
-import { DocumentModel } from "../../src/zeta/editor/editor.main.js";
-import { EditorPane } from "../../src/zeta/editor/browser/documentEditorPane.js";
-import type { DocumentNode } from "../../src/zeta/editor/common/model/document.js";
-import { serializeDocument } from "../../src/zeta/editor/common/model/documentSerialization.js";
-import type { DocumentSchema } from "../../src/zeta/editor/common/model/documentSchema.js";
-import type { DocumentCollaborationConnection } from "../../src/zeta/editor/common/services/documentCollaborationService.js";
-import type { DocumentCollaborationInvite } from "../../src/zeta/editor/common/services/documentCollaborationService.js";
-import type { DocumentCollaborationMember } from "../../src/zeta/editor/common/services/documentCollaborationService.js";
-import type { DocumentCollaborationOpenInput } from "../../src/zeta/editor/common/services/documentCollaborationService.js";
-import type { DocumentCollaborationPresence } from "../../src/zeta/editor/common/services/documentCollaborationService.js";
-import type { DocumentCollaborationRoomRole } from "../../src/zeta/editor/common/services/documentCollaborationService.js";
-import type { DocumentSelection } from "../../src/zeta/editor/common/core/documentSelection.js";
-import type { DocumentCollaborationSnapshot } from "../../src/zeta/editor/common/services/documentCollaborationService.js";
-import type { DocumentCollaborationRemoteEnvelope } from "../../src/zeta/editor/contrib/collaboration/common/protocol.js";
-import type { DocumentCollaborationEnvelope } from "../../src/zeta/editor/contrib/collaboration/common/protocol.js";
-import type { DocumentCollaborationSubmitOutcome } from "../../src/zeta/editor/common/services/documentCollaborationService.js";
-import type { IDocumentCollaborationService } from "../../src/zeta/editor/common/services/documentCollaborationService.js";
+import { URI } from "../../../src/zeta/base/common/uri.js";
+import { Emitter, type Event } from "../../../src/zeta/base/common/event.js";
+import { DisposableOwner } from "../../../src/zeta/base/common/lifecycle.js";
+import { EmbeddedTextEditorFactory } from "../../../src/zeta/editor/browser/embeddedTextEditor.js";
+import { createDefaultDocumentSchema } from "../../../src/zeta/editor/editor.api.js";
+import { createTextNode } from "../../../src/zeta/editor/editor.api.js";
+import { DocumentModel } from "../../../src/zeta/editor/editor.api.js";
+import "../../../src/zeta/editor/editor.academic.all.js";
+import { EditorPane } from "../../../src/zeta/editor/browser/documentEditorPane.js";
+import type { DocumentNode } from "../../../src/zeta/editor/common/model/document.js";
+import { serializeDocument } from "../../../src/zeta/editor/common/model/documentSerialization.js";
+import type { DocumentSchema } from "../../../src/zeta/editor/common/model/documentSchema.js";
+import type { DocumentCollaborationConnection } from "../../../src/zeta/editor/common/services/documentCollaborationService.js";
+import type { DocumentCollaborationInvite } from "../../../src/zeta/editor/common/services/documentCollaborationService.js";
+import type { DocumentCollaborationMember } from "../../../src/zeta/editor/common/services/documentCollaborationService.js";
+import type { DocumentCollaborationOpenInput } from "../../../src/zeta/editor/common/services/documentCollaborationService.js";
+import type { DocumentCollaborationPresence } from "../../../src/zeta/editor/common/services/documentCollaborationService.js";
+import type { DocumentCollaborationRoomRole } from "../../../src/zeta/editor/common/services/documentCollaborationService.js";
+import type { DocumentSelection } from "../../../src/zeta/editor/common/core/documentSelection.js";
+import type { DocumentCollaborationSnapshot } from "../../../src/zeta/editor/common/services/documentCollaborationService.js";
+import type { DocumentCollaborationRemoteEnvelope } from "../../../src/zeta/editor/contrib/collaboration/common/protocol.js";
+import type { DocumentCollaborationEnvelope } from "../../../src/zeta/editor/contrib/collaboration/common/protocol.js";
+import type { DocumentCollaborationSubmitOutcome } from "../../../src/zeta/editor/common/services/documentCollaborationService.js";
+import type { IDocumentCollaborationService } from "../../../src/zeta/editor/common/services/documentCollaborationService.js";
 import { MemoryTextFiles } from "./memoryTextFiles.js";
 
 interface IntegrationHarness {
@@ -36,13 +37,13 @@ interface IntegrationHarness {
 
 declare global {
   interface Window {
-    zetaGamaIntegration: IntegrationHarness;
+    zetaDocumentModelIntegration: IntegrationHarness;
   }
 }
 
 class BrowserDocumentCollaborationService extends DisposableOwner implements IDocumentCollaborationService {
   async open(input: DocumentCollaborationOpenInput, _signal: AbortSignal): Promise<DocumentCollaborationConnection> {
-    return new BrowserDocumentCollaborationConnection(input.schema, input.clientId, input.document, input.roomId ?? "gama-browser-room", input.target?.kind === "remote");
+    return new BrowserDocumentCollaborationConnection(input.schema, input.clientId, input.document, input.roomId ?? "editor-browser-room", input.target?.kind === "remote");
   }
 }
 
@@ -86,7 +87,7 @@ class BrowserDocumentCollaborationConnection extends DisposableOwner implements 
 
   async createInvite(displayName: string, role: DocumentCollaborationRoomRole, _signal: AbortSignal): Promise<DocumentCollaborationInvite> {
     if (!this.canManageMembers) throw new Error("This collaboration member cannot create room invitations");
-    return Object.freeze({ roomId: this.roomId, principalId: "browser-member", displayName, role, accessToken: "gama-browser-member-token" });
+    return Object.freeze({ roomId: this.roomId, principalId: "browser-member", displayName, role, accessToken: "editor-browser-member-token" });
   }
 
   async listMembers(_signal: AbortSignal): Promise<readonly DocumentCollaborationMember[]> {
@@ -99,7 +100,7 @@ class BrowserDocumentCollaborationConnection extends DisposableOwner implements 
 
   async rotateMemberAccessToken(principalId: string, _signal: AbortSignal): Promise<DocumentCollaborationInvite> {
     if (!this.canManageMembers) throw new Error("This collaboration member cannot manage room credentials");
-    return Object.freeze({ roomId: this.roomId, principalId, displayName: principalId === "browser-owner" ? "Browser owner" : "Writer", role: principalId === "browser-owner" ? "owner" : "editor", accessToken: "gama-browser-rotated-token" });
+    return Object.freeze({ roomId: this.roomId, principalId, displayName: principalId === "browser-owner" ? "Browser owner" : "Writer", role: principalId === "browser-owner" ? "owner" : "editor", accessToken: "editor-browser-rotated-token" });
   }
 
   async revokeMember(_principalId: string, _signal: AbortSignal): Promise<void> {
@@ -108,28 +109,28 @@ class BrowserDocumentCollaborationConnection extends DisposableOwner implements 
 }
 
 const schema = createDefaultDocumentSchema();
-const apiDocument = schema.createDocument([schema.createNode("paragraph", { content: [schema.createText("gama-api")] })]);
+const apiDocument = schema.createDocument([schema.createNode("paragraph", { content: [schema.createText("editor-api")] })]);
 const apiModel = new DocumentModel(schema, apiDocument);
-const textBlockResource = URI.parse("inmemory://gama/gama-text-block.zeta-academic");
-const structuredResource = URI.parse("inmemory://gama/gama-structured.zeta-academic");
+const textBlockResource = URI.parse("inmemory://editor/text-block.zeta-academic");
+const structuredResource = URI.parse("inmemory://editor/document.zeta-academic");
 const textBlockDocument = schema.createDocument([schema.createNode("textBlock", {
   attrs: { language: "typescript" },
-  content: [createTextNode("gama-text", "const gama = 1;")],
-  id: "gama-text-block",
-})], "gama-text-document");
+  content: [createTextNode("editor-text", "const editor = 1;")],
+  id: "editor-text-block",
+})], "editor-text-document");
 const textBlockFiles = new MemoryTextFiles(textBlockResource, serializeDocument(textBlockDocument, schema));
 const structuredFiles = new MemoryTextFiles(structuredResource, "Title\nBody");
 const textBlockPane = new EditorPane(textBlockFiles, { embeddedTextEditorFactory: new EmbeddedTextEditorFactory() });
 const structuredPane = new EditorPane(structuredFiles, { documentCollaborationService: new BrowserDocumentCollaborationService() });
 
-textBlockPane.create(requiredElement("#gama-text-block"));
-structuredPane.create(requiredElement("#gama-structured"));
+textBlockPane.create(requiredElement("#text-block"));
+structuredPane.create(requiredElement("#document-editor"));
 textBlockPane.layout({ width: 900, height: 300 });
 structuredPane.layout({ width: 900, height: 300 });
 await textBlockPane.setInput({ resource: textBlockResource, label: "snippet.ts" }, new AbortController().signal);
 await structuredPane.setInput({ resource: structuredResource, label: "paper" }, new AbortController().signal);
 
-window.zetaGamaIntegration = {
+window.zetaDocumentModelIntegration = {
   apiDocumentType: apiModel.document.type,
   getTextBlockText: () => textBlockPane.getDocument().content[0]?.content[0]?.text,
   getStructuredBlockTexts: () => structuredPane.getDocument().content.map(block => block.content.find(child => child.text !== undefined)?.text ?? ""),
@@ -148,6 +149,6 @@ window.zetaGamaIntegration = {
 
 function requiredElement(selector: string): HTMLElement {
   const element = document.querySelector<HTMLElement>(selector);
-  if (!element) throw new Error(`Missing Gama integration root '${selector}'`);
+  if (!element) throw new Error(`Missing editor integration root '${selector}'`);
   return element;
 }

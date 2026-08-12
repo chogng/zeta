@@ -2,43 +2,41 @@ import assert from "node:assert/strict";
 import { readFileSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import test from "node:test";
+import { findDesktopRoot } from "./testPaths.js";
 
-const editorRoot = resolve(import.meta.dirname, "../../../..", "src/zeta/editor");
+const editorRoot = resolve(findDesktopRoot(import.meta.dirname), "src/zeta/editor");
 
-test("Alpha and Gama expose VS Code-shaped public editor entrypoints", () => {
-  const alpha = join(editorRoot, "alpha");
-  const gama = join(editorRoot, "gama");
-  for (const entrypoint of ["editor.api.ts", "editor.all.ts", "editor.main.ts", "editor.worker.start.ts"]) {
-    assert.equal(exists(join(alpha, entrypoint)), true, `alpha/${entrypoint}`);
+test("flat editor exposes VS Code-shaped public entrypoints and product bundles", () => {
+  for (const entrypoint of ["editor.api.ts", "editor.code.all.ts", "editor.academic.all.ts", "editor.all.ts", "editor.main.ts", "editor.worker.start.ts"]) {
+    assert.equal(exists(join(editorRoot, entrypoint)), true, entrypoint);
   }
-  for (const entrypoint of ["editor.api.ts", "editor.all.ts", "editor.main.ts", "editor.worker.start.ts"]) {
-    assert.equal(exists(join(gama, entrypoint)), true, `gama/${entrypoint}`);
-  }
+  assert.equal(exists(join(editorRoot, "alpha")), false, "alpha directory");
+  assert.equal(exists(join(editorRoot, "gama")), false, "gama directory");
 });
 
 test("public editor entrypoints retain distinct API, contribution, main, and worker roles", () => {
-  const alpha = join(editorRoot, "alpha");
-  const gama = join(editorRoot, "gama");
-  const alphaApi = readFileSync(join(alpha, "editor.api.ts"), "utf8");
-  const alphaMain = readFileSync(join(alpha, "editor.main.ts"), "utf8");
-  const alphaWorker = readFileSync(join(alpha, "editor.worker.start.ts"), "utf8");
-  const gamaApi = readFileSync(join(gama, "editor.api.ts"), "utf8");
-  const gamaMain = readFileSync(join(gama, "editor.main.ts"), "utf8");
-  const gamaWorker = readFileSync(join(gama, "editor.worker.start.ts"), "utf8");
-  const analysisWorker = readFileSync(join(alpha, "browser/language/syntaxWorkerMain.ts"), "utf8");
-  const completionWorker = readFileSync(join(alpha, "browser/language/languageCompletionWorkerMain.ts"), "utf8");
-  assert.match(alphaApi, /TextModel/u);
-  assert.doesNotMatch(alphaApi, /workbench|browser|contrib/u);
-  assert.match(gamaApi, /DocumentModel/u);
-  assert.doesNotMatch(gamaApi, /workbench|browser|contrib/u);
-  for (const main of [alphaMain, gamaMain]) {
-    assert.match(main, /import "\.\/editor\.all\.js"/u);
-    assert.match(main, /export \* from "\.\/editor\.api\.js"/u);
-  }
-  assert.match(alphaWorker, /export function start/u);
-  assert.match(gamaWorker, /export function start/u);
-  assert.match(analysisWorker, /editor\.worker\.start/u);
-  assert.match(completionWorker, /editor\.worker\.start/u);
+  const api = readFileSync(join(editorRoot, "editor.api.ts"), "utf8");
+  const codeBundle = readFileSync(join(editorRoot, "editor.code.all.ts"), "utf8");
+  const academicBundle = readFileSync(join(editorRoot, "editor.academic.all.ts"), "utf8");
+  const all = readFileSync(join(editorRoot, "editor.all.ts"), "utf8");
+  const main = readFileSync(join(editorRoot, "editor.main.ts"), "utf8");
+  const worker = readFileSync(join(editorRoot, "editor.worker.start.ts"), "utf8");
+  const analysisWorker = readFileSync(join(editorRoot, "browser/language/syntaxWorkerMain.ts"), "utf8");
+  const completionWorker = readFileSync(join(editorRoot, "browser/language/languageCompletionWorkerMain.ts"), "utf8");
+  assert.match(api, /TextModel/u);
+  assert.match(api, /DocumentModel/u);
+  assert.doesNotMatch(api, /workbench|browser|contrib/u);
+  assert.match(codeBundle, /contrib\/editor\.contribution/u);
+  assert.doesNotMatch(codeBundle, /contrib\/academic/u);
+  assert.match(academicBundle, /contrib\/academic\/browser\/academicEditor\.contribution/u);
+  assert.doesNotMatch(academicBundle, /contrib\/editor\.contribution/u);
+  assert.match(all, /editor\.code\.all/u);
+  assert.match(all, /editor\.academic\.all/u);
+  assert.match(main, /import "\.\/editor\.all\.js"/u);
+  assert.match(main, /export \* from "\.\/editor\.api\.js"/u);
+  assert.match(worker, /export function start/u);
+  assert.match(analysisWorker, /languageWorker\.start/u);
+  assert.match(completionWorker, /languageWorker\.start/u);
 });
 
 function exists(file: string): boolean {

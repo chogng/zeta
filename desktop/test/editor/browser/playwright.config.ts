@@ -2,8 +2,8 @@ import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
   testDir: ".",
-  testMatch: "alpha.integration.spec.ts",
-  outputDir: "../../output/playwright/alpha-results",
+  testMatch: "*.integration.spec.ts",
+  outputDir: "../../../output/playwright/editor-results",
   fullyParallel: false,
   workers: 1,
   use: { baseURL: "http://127.0.0.1:5185" },
@@ -12,10 +12,10 @@ export default defineConfig({
     { name: "firefox", use: { browserName: "firefox" } },
   ],
   webServer: {
-    command: "pnpm exec vite --config vite.config.ts",
-    url: "http://127.0.0.1:5185/alpha.html",
+    command: "node ../../../node_modules/vite/bin/vite.js --config vite.config.ts",
+    url: "http://127.0.0.1:5185/textModel.html",
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
   },
-  reporter: [["list"], ["html", { outputFolder: "../../output/playwright/alpha-report", open: "never" }]],
+  reporter: [["list"], ["html", { outputFolder: "../../../output/playwright/editor-report", open: "never" }]],
 });

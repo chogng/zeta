@@ -20,13 +20,11 @@
 新增测试时先选择拥有被验证 contract 的最窄源码模块，再按真实运行时选择 `common`、`browser`、`node`、`electron-browser` 或 `electron-main`。只有没有单一源码 owner 的全仓库约束才进入 `test/architecture`；跨多个用户操作的场景才进入 `test/smoke`。
 # Test layout
 
-Editor tests follow VS Code's two-layer layout, with no shared editor runtime suite:
+Editor tests follow VS Code's two-layer layout with one shared editor browser suite:
 
 | Layer | Location | Purpose |
 | --- | --- | --- |
 | Editor unit | `src/zeta/editor/test` and editor contribution `test` folders | Text/document model, command, controller, persistence, and projection contracts in Node/jsdom |
-| Alpha browser | `test/alpha` | Alpha public API, pane, input, undo, save, worker, and accessibility contracts independently in Chromium and Firefox |
+| Editor browser | `test/editor/browser` | Text/document model mount points, product bundles, pane, input, save, worker, embedded editor, and accessibility contracts in Chromium and Firefox |
 | Editor architecture | `test/architecture/editor-architecture.test.ts` | Flat `common/browser/contrib/test` ownership, product bundles, and synchronous-layer dependency rules |
-| Gama browser | `test/gama` | Gama public API, structured editing, `textBlock` seam, and accessibility contracts independently in Chromium and Firefox |
-
-Run `pnpm test:alpha` or `pnpm test:gama`; each command runs only its named editor's unit and browser tests.
+Run `pnpm test:editor`; it runs the editor unit tests and the single browser integration suite.

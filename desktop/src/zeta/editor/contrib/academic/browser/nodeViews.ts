@@ -1,7 +1,7 @@
 import { ACADEMIC_NODE_TYPES } from "../common/schema.js";
 import type { NodeViewContext, NodeViewFactory } from "../../../browser/editorWidget.js";
 
-/** Browser projections for Academic wrapper nodes; child editing stays Gama-owned. */
+/** Browser projections for Academic wrapper nodes; child editing stays editor-owned. */
 export const nodeViews: Readonly<Record<string, NodeViewFactory>> = Object.freeze({
   [ACADEMIC_NODE_TYPES.title]: context => createWrapper(context, "header", "title", "Document title"),
   [ACADEMIC_NODE_TYPES.abstract]: context => createWrapper(context, "section", "abstract", "Abstract"),

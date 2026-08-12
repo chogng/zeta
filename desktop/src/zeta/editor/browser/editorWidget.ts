@@ -20,9 +20,8 @@ import { createDefaultDocumentSchema, type DocumentSchema, type DocumentTextStyl
 import { DOCUMENT_FRAGMENT_CLIPBOARD_MIME, deserializeDocumentFragment, serializeDocumentFragment } from "../common/model/documentSerialization.js";
 import { allSelection, nodeSelection, textSelection, type DocumentSelection, type TextSelection } from "../common/core/documentSelection.js";
 import { DocumentTransaction } from "../common/model/documentTransaction.js";
+import { getEditorContributions, type DocumentCollaborationContribution, type DocumentCollaborationStartResult, type DocumentFormattingContribution } from "./editorContribution.js";
 import { DocumentOutlineNavigator } from "./widget/documentOutlineNavigator.js";
-import { FormattingContribution, type FormattingDocumentAction } from "../contrib/formatting/browser/formattingContribution.js";
-import { CollaborationContribution, type CollaborationStartResult } from "../contrib/collaboration/browser/collaborationContribution.js";
 import { DocumentCollaborationController } from "../contrib/collaboration/common/controller.js";
 import { createDocumentFragmentFromHtml } from "../contrib/clipboard/browser/htmlDocumentFragment.js";
 import { TextEditorWidget } from "./widget/textEditorWidget.js";
@@ -52,9 +51,9 @@ export interface EditorWidgetOptions {
   /** Adds profile-owned commands to the shared block toolbar. */
   readonly toolbarActions?: readonly EditorToolbarAction[];
   readonly nodeViews?: Readonly<Record<string, NodeViewFactory>>;
-  /** Optional room transport exposed through Gama's separate collaboration contribution. */
+  /** Optional room transport exposed through the collaboration contribution. */
   readonly documentCollaborationService?: IDocumentCollaborationService;
-  /** Stable server-side schema compatibility identity for this Gama profile. */
+  /** Stable server-side schema compatibility identity for this editor profile. */
   readonly collaborationSchemaId?: string;
 }
 
@@ -96,7 +95,7 @@ export interface EditorToolbarAction {
   readonly run: (context: EditorToolbarActionContext) => DocumentCommand | undefined;
 }
 
-const DEFAULT_DOCUMENT_ACTIONS: readonly FormattingDocumentAction[] = [
+const DEFAULT_DOCUMENT_ACTIONS: readonly { readonly id: string; readonly label: string }[] = [
   { id: "paragraph", label: "Paragraph" },
   { id: "heading", label: "Heading" },
   { id: "blockquote", label: "Blockquote" },
@@ -115,11 +114,11 @@ const DEFAULT_DOCUMENT_ACTIONS: readonly FormattingDocumentAction[] = [
 type CommandFocusBehavior = "focus-editor" | "preserve-focus";
 
 /**
- * One browser editor for a Gama structured document.
+ * One browser editor projected over a structured document model.
  *
  * The editor owns the structured model, working copy, DOM projection, and
  * block-level input. `EditorPane` owns Workbench pane lifecycle, while
- * `TextEditorWidget` owns only an embedded Alpha-backed `textBlock` surface.
+ * `TextEditorWidget` owns only an embedded text-model surface.
  */
 export class EditorWidget extends DisposableOwner {
 
@@ -133,8 +132,8 @@ export class EditorWidget extends DisposableOwner {
   private readonly nodeViewSlots = new Map<string, { readonly type: string; readonly view: NodeView }>();
   private container: HTMLDivElement | undefined;
   private layoutContainer: HTMLDivElement | undefined;
-  private formattingContribution: FormattingContribution | undefined;
-  private collaborationContribution: CollaborationContribution | undefined;
+  private formattingContribution: DocumentFormattingContribution | undefined;
+  private collaborationContribution: DocumentCollaborationContribution | undefined;
   private outlineNavigator: DocumentOutlineNavigator | undefined;
   private input: EditorInput | undefined;
   private activeBlockId: string | undefined;
@@ -152,7 +151,7 @@ export class EditorWidget extends DisposableOwner {
     super();
     if (!modelService || typeof modelService.acquire !== "function") {
       this.dispose();
-      throw new TypeError("Gama editor requires a document model service");
+      throw new TypeError("Document editor requires a document model service");
     }
     this.schema = options.schema ?? createDefaultDocumentSchema();
     this.defer(() => this.cancelCollaborationStart());
@@ -161,24 +160,34 @@ export class EditorWidget extends DisposableOwner {
   }
 
   create(parent: HTMLElement): void {
-    if (this.container) throw new ReferenceError("Gama editor has already been created");
-    const collaborationContribution = this.own(new CollaborationContribution({
-      ownerDocument: parent.ownerDocument,
-      onStart: (roomId, target) => this.startCollaboration(roomId, target),
-      onStop: () => this.stopCollaboration(),
-      onInvite: (displayName, role) => this.createCollaborationInvite(displayName, role),
-      onListMembers: () => this.listCollaborationMembers(),
-      onRotateMemberAccessToken: principalId => this.rotateCollaborationMemberAccessToken(principalId),
-      onRevokeMember: principalId => this.revokeCollaborationMember(principalId),
-    }));
-    const formattingContribution = this.own(new FormattingContribution({
-      ownerDocument: parent.ownerDocument,
-      documentActions: [...DEFAULT_DOCUMENT_ACTIONS, ...(this.options.toolbarActions?.map(action => ({ id: action.id, label: action.label })) ?? [])],
-      onToggleMark: markType => this.handleTextMarkAction(markType),
-      onSetTextStyle: attrs => this.handleTextStyleAction(attrs),
-      onClearTextStyle: () => this.handleClearTextStyleAction(),
-      onRunDocumentAction: actionId => this.handleToolbarAction(actionId),
-    }));
+    if (this.container) throw new ReferenceError("Document editor has already been created");
+    let formattingContribution: DocumentFormattingContribution | undefined;
+    let collaborationContribution: DocumentCollaborationContribution | undefined;
+    for (const contribution of getEditorContributions()) {
+      contribution.install({
+        kind: "document",
+        ownerDocument: parent.ownerDocument,
+        documentActions: [...DEFAULT_DOCUMENT_ACTIONS, ...(this.options.toolbarActions?.map(action => ({ id: action.id, label: action.label })) ?? [])],
+        onToggleMark: markType => this.handleTextMarkAction(markType),
+        onSetTextStyle: attrs => this.handleTextStyleAction(attrs),
+        onClearTextStyle: () => this.handleClearTextStyleAction(),
+        onRunDocumentAction: actionId => this.handleToolbarAction(actionId),
+        onStartCollaboration: (roomId, target) => this.startCollaboration(roomId, target),
+        onStopCollaboration: () => this.stopCollaboration(),
+        onInviteCollaborator: (displayName, role) => this.createCollaborationInvite(displayName, role),
+        onListCollaborators: () => this.listCollaborationMembers(),
+        onRotateCollaboratorAccessToken: principalId => this.rotateCollaborationMemberAccessToken(principalId),
+        onRevokeCollaborator: principalId => this.revokeCollaborationMember(principalId),
+        setFormattingContribution: value => {
+          if (formattingContribution) throw new Error("Document formatting contribution is already installed");
+          formattingContribution = this.own(value);
+        },
+        setCollaborationContribution: value => {
+          if (collaborationContribution) throw new Error("Document collaboration contribution is already installed");
+          collaborationContribution = this.own(value);
+        },
+      });
+    }
     const container = parent.ownerDocument.createElement("div");
     container.className = "zeta-text-editor-widget-pane";
     const layoutContainer = parent.ownerDocument.createElement("div");
@@ -186,8 +195,8 @@ export class EditorWidget extends DisposableOwner {
     const outlineNavigator = this.options.outlineNavigator ? new DocumentOutlineNavigator({ ownerDocument: parent.ownerDocument, onSelect: nodeId => this.revealOutlineNode(nodeId) }) : undefined;
     if (outlineNavigator) layoutContainer.append(outlineNavigator.element);
     layoutContainer.append(container);
-    parent.append(collaborationContribution.element, formattingContribution.element, layoutContainer);
-    collaborationContribution.setState(this.options.documentCollaborationService ? "inactive" : "unavailable");
+    parent.append(...[collaborationContribution?.element, formattingContribution?.element, layoutContainer].filter((element): element is HTMLElement => element !== undefined));
+    collaborationContribution?.setState(this.options.documentCollaborationService ? "inactive" : "unavailable");
     this.collaborationContribution = collaborationContribution;
     this.formattingContribution = formattingContribution;
     this.container = container;
@@ -198,9 +207,9 @@ export class EditorWidget extends DisposableOwner {
     this.defer(() => {
       parent.ownerDocument.removeEventListener("selectionchange", onSelectionChange);
       outlineNavigator?.dispose();
-      collaborationContribution.element.remove();
+      collaborationContribution?.element.remove();
       this.collaborationContribution = undefined;
-      formattingContribution.element.remove();
+      formattingContribution?.element.remove();
       this.formattingContribution = undefined;
       this.layoutContainer = undefined;
       container.remove();
@@ -212,7 +221,7 @@ export class EditorWidget extends DisposableOwner {
   async setInput(input: EditorInput, signal: AbortSignal): Promise<void> {
     const container = this.requireContainer();
     this.cancelCollaborationStart();
-    throwIfCancelled(signal, "Gama editor input loading was cancelled");
+    throwIfCancelled(signal, "Document editor input loading was cancelled");
     const modelReference = await this.modelService.acquire({
       resource: input.resource,
       initialText: input.initialText,
@@ -223,7 +232,7 @@ export class EditorWidget extends DisposableOwner {
     }, signal);
     if (signal.aborted) {
       modelReference.dispose();
-      throwIfCancelled(signal, "Gama editor input loading was cancelled");
+      throwIfCancelled(signal, "Document editor input loading was cancelled");
     }
     const model = modelReference.model;
     this.collaborationStateListenerSlot.clear();
@@ -399,7 +408,7 @@ export class EditorWidget extends DisposableOwner {
         refreshed.view.element.dataset.nodeId = node.id;
         return refreshed.view.element;
       }
-      const created = normalizeGamaNodeView(nodeView(context), node.type);
+      const created = normalizeNodeView(nodeView(context), node.type);
       if (created.dispose || created.update) this.nodeViewSlots.set(node.id, { type: node.type, view: created });
       created.element.dataset.nodeId = node.id;
       return created.element;
@@ -683,7 +692,7 @@ export class EditorWidget extends DisposableOwner {
       const inlineElement = inlineFactory
         ? inlineFactory({ node: child, model, ownerDocument: editor.ownerDocument, select: () => this.selectInlineNode(model, node.id, child.id, editor) })
         : createFallbackInlineNode(editor.ownerDocument, child);
-      if (!inlineElement || inlineElement.nodeType !== 1) throw new TypeError(`Gama inline node view '${child.type}' must return an HTMLElement`);
+      if (!inlineElement || inlineElement.nodeType !== 1) throw new TypeError(`Inline node view '${child.type}' must return an HTMLElement`);
       inlineElement.dataset.inlineNodeId = child.id;
       inlineElement.dataset.inlineNodeType = child.type;
       inlineElement.addEventListener("click", event => {
@@ -1429,19 +1438,19 @@ export class EditorWidget extends DisposableOwner {
 
   private requireContainer(): HTMLDivElement {
     const container = this.container;
-    assertDefined(container, new ReferenceError("Gama editor has not been created"));
+    assertDefined(container, new ReferenceError("Document editor has not been created"));
     return container;
   }
 
   private requireModel(): DocumentModel {
     const model = this.modelReferenceSlot.value?.model;
-    assertDefined(model, new ReferenceError("Gama editor has no active model"));
+    assertDefined(model, new ReferenceError("Document editor has no active model"));
     return model;
   }
 
-  private async startCollaboration(roomId: string | undefined, target: DocumentCollaborationTarget): Promise<CollaborationStartResult> {
+  private async startCollaboration(roomId: string | undefined, target: DocumentCollaborationTarget): Promise<DocumentCollaborationStartResult> {
     const service = this.options.documentCollaborationService;
-    if (!service) throw new Error("Gama collaboration is unavailable in this renderer");
+    if (!service) throw new Error("Document collaboration is unavailable in this renderer");
     const model = this.requireModel();
     const input = this.requireInput();
     this.cancelCollaborationStart();
@@ -1462,7 +1471,7 @@ export class EditorWidget extends DisposableOwner {
       }, start.signal);
       if (start.signal.aborted || this.modelReferenceSlot.value?.model !== model) {
         connection.dispose();
-        throw new Error("Opening a Gama collaboration room was cancelled");
+        throw new Error("Opening a document collaboration room was cancelled");
       }
       const controller = new DocumentCollaborationController(model, connection);
       this.collaborationControllerSlot.replace(controller);
@@ -1494,25 +1503,25 @@ export class EditorWidget extends DisposableOwner {
 
   private createCollaborationInvite(displayName: string, role: DocumentCollaborationRoomRole): Promise<DocumentCollaborationInvite> {
     const controller = this.collaborationControllerSlot.value;
-    if (!controller) return Promise.reject(new Error("Gama collaboration is not connected"));
+    if (!controller) return Promise.reject(new Error("Document collaboration is not connected"));
     return controller.createInvite(displayName, role);
   }
 
   private listCollaborationMembers(): Promise<readonly DocumentCollaborationMember[]> {
     const controller = this.collaborationControllerSlot.value;
-    if (!controller) return Promise.reject(new Error("Gama collaboration is not connected"));
+    if (!controller) return Promise.reject(new Error("Document collaboration is not connected"));
     return controller.listMembers();
   }
 
   private rotateCollaborationMemberAccessToken(principalId: string): Promise<DocumentCollaborationInvite> {
     const controller = this.collaborationControllerSlot.value;
-    if (!controller) return Promise.reject(new Error("Gama collaboration is not connected"));
+    if (!controller) return Promise.reject(new Error("Document collaboration is not connected"));
     return controller.rotateMemberAccessToken(principalId);
   }
 
   private revokeCollaborationMember(principalId: string): Promise<void> {
     const controller = this.collaborationControllerSlot.value;
-    if (!controller) return Promise.reject(new Error("Gama collaboration is not connected"));
+    if (!controller) return Promise.reject(new Error("Document collaboration is not connected"));
     return controller.revokeMember(principalId);
   }
 
@@ -1529,7 +1538,7 @@ export class EditorWidget extends DisposableOwner {
 
   private requireInput(): EditorInput {
     const input = this.input;
-    assertDefined(input, new ReferenceError("Gama editor has no active input"));
+    assertDefined(input, new ReferenceError("Document editor has no active input"));
     return input;
   }
 
@@ -1606,16 +1615,16 @@ function findNode(document: DocumentNode, id: string): DocumentNode | undefined 
   return undefined;
 }
 
-function normalizeGamaNodeView(value: HTMLElement | NodeView, nodeType: string): NodeView {
-  if (!value || typeof value !== "object") throw new TypeError(`Gama node view '${nodeType}' must return an HTMLElement or node view handle`);
+function normalizeNodeView(value: HTMLElement | NodeView, nodeType: string): NodeView {
+  if (!value || typeof value !== "object") throw new TypeError(`Node view '${nodeType}' must return an HTMLElement or node view handle`);
   if ("nodeType" in value) {
-    if (value.nodeType !== 1) throw new TypeError(`Gama node view '${nodeType}' must return an HTMLElement`);
+    if (value.nodeType !== 1) throw new TypeError(`Node view '${nodeType}' must return an HTMLElement`);
     return { element: value as HTMLElement };
   }
-  if (!("element" in value) || !value.element || value.element.nodeType !== 1) throw new TypeError(`Gama node view '${nodeType}' must return an HTMLElement or node view handle`);
+  if (!("element" in value) || !value.element || value.element.nodeType !== 1) throw new TypeError(`Node view '${nodeType}' must return an HTMLElement or node view handle`);
   const handle = value as NodeView;
-  if (handle.update !== undefined && typeof handle.update !== "function") throw new TypeError(`Gama node view '${nodeType}' update must be a function`);
-  if (handle.dispose !== undefined && typeof handle.dispose !== "function") throw new TypeError(`Gama node view '${nodeType}' dispose must be a function`);
+  if (handle.update !== undefined && typeof handle.update !== "function") throw new TypeError(`Node view '${nodeType}' update must be a function`);
+  if (handle.dispose !== undefined && typeof handle.dispose !== "function") throw new TypeError(`Node view '${nodeType}' dispose must be a function`);
   return handle;
 }
 

@@ -19,6 +19,7 @@ for (const [name, value] of Object.entries({
   Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
+await import("../../contrib/codeEditorPart.contribution.js");
 const { EditorPane } = await import("../../browser/codeEditorPane.js");
 const { BrowserTextModelService } = await import("../../browser/services/browserTextModelService.js");
 const { BrowserTextResourceStore } = await import("../../browser/services/browserTextResourceStore.js");
