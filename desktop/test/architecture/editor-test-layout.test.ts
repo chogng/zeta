@@ -33,7 +33,7 @@ test("editor browser integration is flat and named after concrete model mount po
   assert.match(textModelIntegration, /axe-playwright/u);
   assert.match(documentModelIntegration, /axe-playwright/u);
   assert.match(config, /name:\s*"chromium"/u);
-  assert.match(config, /name:\s*"firefox"/u);
+  assert.doesNotMatch(config, /firefox/u);
 });
 
 test("browser integrations import the stable API and only their product bundle", () => {
