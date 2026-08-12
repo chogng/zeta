@@ -11,8 +11,10 @@ name = "zeta_mcp_extension"
 path = "src/lib.rs"
 
 [dependencies]
+serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["rt", "sync"] }
+url = { workspace = true }
 zeta-async-utils = { workspace = true }
 zeta-config = { workspace = true }
 zeta-connectors = { workspace = true }
@@ -20,6 +22,7 @@ zeta-connectors-extension = { workspace = true }
 zeta-core = { workspace = true }
 zeta-mcp = { workspace = true }
 zeta-policy = { workspace = true }
+zeta-plugins = { workspace = true }
 zeta-protocol = { workspace = true }
 zeta-rmcp-client = { workspace = true }
 zeta-secrets = { workspace = true }
@@ -27,3 +30,6 @@ zeta-tools = { workspace = true }
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+tempfile = { workspace = true }

@@ -13,6 +13,7 @@ import { DisconnectedTerminalProcessService } from "../../terminal/browser/disco
 import { createDisconnectedTypstApi } from "../../typst/browser/typstApi.js";
 import { createDisconnectedDocumentCollaborationApi } from "../../collaboration/browser/documentCollaborationApi.js";
 import { createDisconnectedCodeIndexApi } from "../../codeIndex/browser/codeIndexApi.js";
+import { createDisconnectedConnectorApi } from "../../connectors/browser/connectorApi.js";
 import { createDisconnectedToolSearchApi } from "../../toolSearch/browser/toolSearchApi.js";
 import { createDisconnectedLanguageApi } from "../../language/browser/languageApi.js";
 
@@ -41,6 +42,7 @@ export function createDisconnectedRendererApi(): IRendererHost {
     terminal: new DisconnectedTerminalProcessService(unavailableOperation, appServer),
     events: createDisconnectedServerEventApi(),
     codeIndex: createDisconnectedCodeIndexApi(unavailableOperation),
+    connectors: createDisconnectedConnectorApi(unavailableOperation),
     toolSearch: createDisconnectedToolSearchApi(unavailableOperation),
   };
 }

@@ -13,6 +13,7 @@ import { ViteDevTerminalProcessService } from "../../terminal/browser/viteDevTer
 import { createViteDevTypstApi } from "../../typst/browser/typstApi.js";
 import { createViteDevDocumentCollaborationApi } from "../../collaboration/browser/documentCollaborationApi.js";
 import { createViteDevCodeIndexApi } from "../../codeIndex/browser/codeIndexApi.js";
+import { createViteDevConnectorApi } from "../../connectors/browser/connectorApi.js";
 import { createViteDevToolSearchApi } from "../../toolSearch/browser/toolSearchApi.js";
 import { createViteDevLanguageApi } from "../../language/browser/languageApi.js";
 
@@ -61,6 +62,7 @@ function createRendererHost(connection: ViteDevAppServerConnection): IRendererHo
     terminal: new ViteDevTerminalProcessService(connection, appServer),
     events: createViteDevServerEventApi(connection),
     codeIndex: createViteDevCodeIndexApi(connection),
+    connectors: createViteDevConnectorApi(connection),
     toolSearch: createViteDevToolSearchApi(connection),
   };
 }

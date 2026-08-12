@@ -1744,6 +1744,22 @@
           "properties": {
             "method": {
               "type": "string",
+              "const": "skill/resource/open"
+            },
+            "params": {
+              "$ref": "#/$defs/SkillResourceOpenParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
               "const": "extensions/list"
             },
             "params": {
@@ -3304,6 +3320,22 @@
             },
             "result": {
               "$ref": "#/$defs/ConfigCommandResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "skill/resource/open"
+            },
+            "result": {
+              "$ref": "#/$defs/SkillResourceOpenResult"
             }
           },
           "required": [
@@ -10620,6 +10652,58 @@
       "required": [
         "id",
         "version"
+      ]
+    },
+    "SkillResourceKindDto": {
+      "type": "string",
+      "enum": [
+        "instructions",
+        "reference",
+        "script",
+        "asset",
+        "agentMetadata",
+        "other"
+      ]
+    },
+    "SkillResourceOpenParams": {
+      "description": "Opens one inert package resource from an exact Skill revision.\n\n`path` remains package-relative. The server revalidates both the Skill digest and the rooted\nresource path before publishing bytes into the connection-owned Resource store.",
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "maxLength": 1024,
+          "minLength": 1
+        },
+        "skillContentDigest": {
+          "$ref": "#/$defs/ContentDigest"
+        },
+        "skillId": {
+          "$ref": "#/$defs/SkillId"
+        }
+      },
+      "required": [
+        "skillId",
+        "skillContentDigest",
+        "path"
+      ]
+    },
+    "SkillResourceOpenResult": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/SkillResourceKindDto"
+        },
+        "path": {
+          "type": "string"
+        },
+        "resource": {
+          "$ref": "#/$defs/ResourceMetadataResult"
+        }
+      },
+      "required": [
+        "path",
+        "kind",
+        "resource"
       ]
     },
     "SkillSetEnablementParams": {

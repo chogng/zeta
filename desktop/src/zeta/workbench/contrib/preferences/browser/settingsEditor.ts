@@ -15,8 +15,10 @@ import type { IUserThemeService } from "../../../common/userThemes.js";
 import type { ISettingsService } from "../../../services/preferences/common/settings.js";
 import type { ICodeIndexService } from "../../../../platform/codeIndex/common/codeIndexService.js";
 import type { IToolSearchService, ToolSearchEmbeddingStatus } from "../../../../platform/toolSearch/common/toolSearchService.js";
+import type { IConnectorService } from "../../../../platform/connectors/common/connectorService.js";
 import type { CodeIndexStatusResult, SemanticCodeIndexSelectionDto } from "../../../../../../generated/app-server/types.js";
 import { getSettingsSection, SettingsSections, type SettingsSectionDescriptor } from "../common/settingsSections.js";
+import { ConnectorSettingsPane } from "./connectorSettings.js";
 
 export interface SettingsEditorOptions {
   readonly ownerDocument: Document;
@@ -27,6 +29,7 @@ export interface SettingsEditorOptions {
   readonly userThemeService: IUserThemeService;
   readonly codeIndexService: ICodeIndexService;
   readonly toolSearchService: IToolSearchService;
+  readonly connectorService: IConnectorService;
 }
 
 let nextSettingsEditorId = 1;
@@ -41,6 +44,7 @@ export class SettingsEditor extends DisposableOwner {
   private readonly userThemeService: IUserThemeService;
   private readonly codeIndexService: ICodeIndexService;
   private readonly toolSearchService: IToolSearchService;
+  private readonly connectorService: IConnectorService;
   private readonly searchInput: InputBox;
   private readonly navigationItems = new Map<string, HTMLButtonElement>();
   private readonly navigationEmpty: HTMLParagraphElement;
@@ -63,6 +67,7 @@ export class SettingsEditor extends DisposableOwner {
     this.userThemeService = options.userThemeService;
     this.codeIndexService = options.codeIndexService;
     this.toolSearchService = options.toolSearchService;
+    this.connectorService = options.connectorService;
     const editorId = `zeta-settings-editor-${nextSettingsEditorId++}`;
     this.element = options.ownerDocument.createElement("div");
     this.element.className = "zeta-settings-editor";
@@ -214,9 +219,16 @@ export class SettingsEditor extends DisposableOwner {
     this.sectionBindings.clear();
     this.sectionContent.replaceChildren();
     if (section.id === "appearance") this.renderAppearance();
+    if (section.id === "connectors") this.renderConnectors();
     if (section.id === "indexing") void this.renderIndexing();
     this.contentScrollable.scrollTo(0, 0);
     this.contentScrollable.layout();
+  }
+
+  private renderConnectors(): void {
+    const pane = new ConnectorSettingsPane(this.element.ownerDocument, this.connectorService);
+    this.sectionBindings.add(pane);
+    this.sectionContent.replaceChildren(pane.element);
   }
 
   private async renderIndexing(): Promise<void> {

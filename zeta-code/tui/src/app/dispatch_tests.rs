@@ -89,7 +89,7 @@ fn new_fork_and_resume_change_the_active_typed_conversation() {
 }
 
 #[test]
-fn status_config_mcp_skills_and_help_return_real_surfaces() {
+fn status_config_mcp_connectors_skills_and_help_return_real_surfaces() {
     let (mut client, state_root) = client();
     let mut conversation = ActiveConversation::start(&mut client, "commands".into()).unwrap();
     let mut app = App::new();
@@ -119,6 +119,16 @@ fn status_config_mcp_skills_and_help_return_real_surfaces() {
     assert_eq!(app.selection_view().unwrap().title(), "MCP servers");
     assert!(app.selection_view().unwrap().search().is_some());
     app.update(AppEvent::SelectionViewClosed);
+
+    conversation.execute(
+        &mut client,
+        invocation(TuiSlashCommandAction::Connectors, ""),
+        &mut app,
+    );
+    assert_eq!(app.selection_view().unwrap().title(), "Connectors");
+    assert!(app.selection_view().unwrap().search().is_some());
+    app.update(AppEvent::SelectionViewClosed);
+
     conversation.execute(
         &mut client,
         invocation(TuiSlashCommandAction::Skills, ""),

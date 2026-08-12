@@ -755,6 +755,9 @@ impl AppServer {
             Some(ClientMethod::HookSetEnablement) => self.hook_set_enablement(&request.params),
             Some(ClientMethod::SkillList) => self.skill_list(&request.params),
             Some(ClientMethod::SkillSetEnablement) => self.skill_set_enablement(&request.params),
+            Some(ClientMethod::SkillResourceOpen) => {
+                self.skill_resource_open(connection, &request.params)
+            }
             Some(ClientMethod::ExtensionList) => self.extension_list(&request.params),
             Some(ClientMethod::ExtensionResourceOpen) => {
                 self.extension_resource_open(connection, &request.params)

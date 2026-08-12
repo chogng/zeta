@@ -1,14 +1,20 @@
 use super::config_operations::{config_command_result, config_operation_error};
-use super::{AppServer, RpcError, decode, result};
+use super::operations::resource_rpc_error;
+use super::{AppServer, ConnectionState, RpcError, decode, result};
 use serde_json::Value;
+use std::time::Duration;
 use zeta_app_server_protocol::protocol::config::ConfigCommandResult;
 use zeta_app_server_protocol::protocol::error::AppServerErrorName;
+use zeta_app_server_protocol::protocol::resources::ResourceMetadataResult;
 use zeta_app_server_protocol::protocol::skills::{
     SkillCatalogReloadDto, SkillCompatibilityDto, SkillDiagnosticCodeDto, SkillDiagnosticDto,
-    SkillDto, SkillEnablementDto, SkillListParams, SkillListResult, SkillSetEnablementParams,
-    SkillSourceKindDto,
+    SkillDto, SkillEnablementDto, SkillListParams, SkillListResult, SkillResourceKindDto,
+    SkillResourceOpenParams, SkillResourceOpenResult, SkillSetEnablementParams, SkillSourceKindDto,
 };
 use zeta_config::{ConfigCommandRequest, ConfigRevision, SkillEnablement, UserConfigCommand};
+use zeta_protocol::SkillRef;
+use zeta_skills::SkillResourceKind;
+use zeta_skills::SkillResourcePath;
 use zeta_skills_extension::SkillCatalogReload;
 use zeta_skills_extension::SkillCompatibility;
 use zeta_skills_extension::SkillDiagnosticCode;
@@ -60,6 +66,89 @@ impl AppServer {
             .map_err(skills_failed)?;
         result::<ConfigCommandResult>(&config_command_result(outcome))
     }
+
+    pub(super) fn skill_resource_open(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: SkillResourceOpenParams = decode(params)?;
+        let path = SkillResourcePath::new(&params.path)
+            .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+        let runtime = self.skills.as_ref().ok_or_else(skills_unavailable)?;
+        let selected = SkillRef::pinned(params.skill_id, params.skill_content_digest);
+        let resource = runtime
+            .read_resource(&selected, &path)
+            .map_err(skills_failed)?;
+        let kind = skill_resource_kind_dto(resource.kind());
+        let path = resource.path().display();
+        let mime_type = skill_resource_mime_type(resource.path(), resource.bytes());
+        let metadata = self
+            .resources
+            .lock()
+            .map_err(|_| RpcError::new(-32000, AppServerErrorName::ServerOverloaded))?
+            .create(
+                connection.connection_id,
+                mime_type,
+                resource.bytes().to_vec(),
+                Duration::from_secs(300),
+            )
+            .map_err(resource_rpc_error)?;
+        result(&SkillResourceOpenResult {
+            path,
+            kind,
+            resource: ResourceMetadataResult {
+                resource_id: metadata.resource_id,
+                mime_type: metadata.mime_type,
+                size: metadata.size,
+                sha256: metadata.sha256,
+            },
+        })
+    }
+}
+
+fn skill_resource_kind_dto(kind: SkillResourceKind) -> SkillResourceKindDto {
+    match kind {
+        SkillResourceKind::Instructions => SkillResourceKindDto::Instructions,
+        SkillResourceKind::Reference => SkillResourceKindDto::Reference,
+        SkillResourceKind::Script => SkillResourceKindDto::Script,
+        SkillResourceKind::Asset => SkillResourceKindDto::Asset,
+        SkillResourceKind::AgentMetadata => SkillResourceKindDto::AgentMetadata,
+        SkillResourceKind::Other => SkillResourceKindDto::Other,
+    }
+}
+
+fn skill_resource_mime_type(path: &SkillResourcePath, bytes: &[u8]) -> String {
+    let extension = path
+        .as_path()
+        .extension()
+        .and_then(|value| value.to_str())
+        .map(str::to_ascii_lowercase);
+    let mime_type = match extension.as_deref() {
+        Some("png") if bytes.starts_with(b"\x89PNG\r\n\x1a\n") => "image/png",
+        Some("jpg" | "jpeg") if bytes.starts_with(&[0xff, 0xd8, 0xff]) => "image/jpeg",
+        Some("gif") if bytes.starts_with(b"GIF87a") || bytes.starts_with(b"GIF89a") => "image/gif",
+        Some("webp")
+            if bytes.len() >= 12
+                && bytes.starts_with(b"RIFF")
+                && bytes.get(8..12) == Some(b"WEBP") =>
+        {
+            "image/webp"
+        }
+        Some("pdf") if bytes.starts_with(b"%PDF-") => "application/pdf",
+        Some("md" | "markdown") if std::str::from_utf8(bytes).is_ok() => {
+            "text/markdown; charset=utf-8"
+        }
+        Some(
+            "txt" | "json" | "yaml" | "yml" | "toml" | "csv" | "rs" | "py" | "sh" | "ts" | "tsx"
+            | "js" | "jsx",
+        ) if std::str::from_utf8(bytes).is_ok() => "text/plain; charset=utf-8",
+        // Active content is intentionally not advertised as previewable. A future Renderer adapter
+        // must sanitize or sandbox it before assigning an active media type.
+        Some("svg" | "html" | "htm") => "application/octet-stream",
+        _ => "application/octet-stream",
+    };
+    mime_type.into()
 }
 
 fn skill_list_result(snapshot: &SkillRuntimeSnapshot) -> SkillListResult {
@@ -133,3 +222,7 @@ fn skills_unavailable() -> RpcError {
 fn skills_failed(_: String) -> RpcError {
     RpcError::new(-32051, AppServerErrorName::SkillOperationFailed)
 }
+
+#[cfg(test)]
+#[path = "skill_operations_tests.rs"]
+mod tests;

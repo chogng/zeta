@@ -279,6 +279,7 @@ fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
     assert!(typescript.contains("export type ContextCheckpoint ="));
     assert!(typescript.contains(r#"{ "type": "skill", skill: SkillRef, }"#));
     assert!(typescript.contains(r#""skills/list": { method: "skills/list" }"#));
+    assert!(typescript.contains(r#""skill/resource/open": { method: "skill/resource/open" }"#));
     assert!(typescript.contains(r#""skills/changed": { method: "skills/changed" }"#));
     assert!(typescript.contains(r#""git/statusChanged": { method: "git/statusChanged" }"#));
     assert!(!typescript.contains("preferredModel: string"));

@@ -20,6 +20,7 @@ import { createUserThemeFilesApi } from "../../theme/electron-browser/userThemeF
 import { createTypstApi } from "../../typst/electron-browser/typstApi.js";
 import { createWorkspaceContextApi } from "../../workspace/electron-browser/workspaceContextApi.js";
 import { createCodeIndexApi } from "../../codeIndex/electron-browser/codeIndexApi.js";
+import { createConnectorApi } from "../../connectors/electron-browser/connectorApi.js";
 import { createToolSearchApi } from "../../toolSearch/electron-browser/toolSearchApi.js";
 import type { ZetaElectronRendererApi } from "../common/rendererApi.js";
 import { createNativeHostApi } from "./nativeHostApi.js";
@@ -62,6 +63,7 @@ export function createElectronRendererApi(): ZetaElectronRendererApi {
     userThemes: createUserThemeFilesApi(),
     workspace: createWorkspaceContextApi(),
     codeIndex: createCodeIndexApi(),
+    connectors: createConnectorApi(),
     toolSearch: createToolSearchApi(),
   };
 }

@@ -17,7 +17,8 @@ use zeta_app_server_protocol::protocol::session::{
     SessionThreadReadParams,
 };
 use zeta_app_server_protocol::protocol::skills::{
-    SkillCatalogReloadDto, SkillEnablementDto, SkillListParams, SkillSetEnablementParams,
+    SkillCatalogReloadDto, SkillEnablementDto, SkillListParams, SkillResourceOpenParams,
+    SkillSetEnablementParams,
 };
 use zeta_app_server_protocol::protocol::slash_commands::{
     SlashCommandArgumentModeDto, SlashCommandDefinition,
@@ -463,6 +464,9 @@ fn embedded_skill_catalog_lists_built_ins_and_persists_enablement() {
     let state_root = unique_directory("skills-state");
     let skills_root = unique_directory("skills-root");
     write_skill(&skills_root, "skill-creator", "Create or update a Skill");
+    let asset = b"\x89PNG\r\n\x1a\nclient-fixture";
+    fs::create_dir_all(skills_root.join("skill-creator/assets")).unwrap();
+    fs::write(skills_root.join("skill-creator/assets/icon.png"), asset).unwrap();
     let mut client = start_in_process_client(
         InProcessClientOptions::new(
             &state_root,
@@ -483,6 +487,28 @@ fn embedded_skill_catalog_lists_built_ins_and_persists_enablement() {
     assert_eq!(listed.skills.len(), 1);
     assert_eq!(listed.skills[0].id.name.as_str(), "skill-creator");
     assert_eq!(listed.skills[0].enablement, SkillEnablementDto::Enabled);
+
+    let opened = client
+        .open_skill_resource(SkillResourceOpenParams {
+            skill_id: listed.skills[0].id.clone(),
+            skill_content_digest: listed.skills[0].content_digest.clone(),
+            path: "assets/icon.png".into(),
+        })
+        .unwrap();
+    assert_eq!(
+        opened.kind,
+        zeta_app_server_protocol::protocol::skills::SkillResourceKindDto::Asset
+    );
+    assert_eq!(opened.resource.mime_type, "image/png");
+    let resource = client
+        .read_resource(ResourceReadParams {
+            resource_id: opened.resource.resource_id,
+            offset: 0,
+            max_bytes: 262_144,
+        })
+        .unwrap();
+    assert_eq!(resource.decoded_length, asset.len());
+    assert!(resource.eof);
 
     let revision = client.read_config().unwrap().revision;
     client

@@ -10,6 +10,8 @@ use crate::components::selection::SelectionViewModel;
 use crate::components::selection::SelectionViewState;
 use crate::components::transcript::Message;
 use crate::components::transcript::TranscriptScroll;
+use crate::features::connectors::ConnectorSelectionAction;
+use crate::features::connectors::ConnectorSelectionView;
 use crate::features::interactions::InteractionSelectionOutcome;
 use crate::features::interactions::InteractionSelectionState;
 use crate::features::interactions::InteractionSelectionView;
@@ -72,6 +74,7 @@ pub(crate) struct App {
 enum SelectionActions {
     ReadOnly,
     Interaction(InteractionSelectionState),
+    Connectors(BTreeMap<SelectionItemId, ConnectorSelectionAction>),
     Mcp(BTreeMap<SelectionItemId, McpSelectionAction>),
     Files(BTreeMap<SelectionItemId, FileSelectionAction>),
     Model(BTreeMap<SelectionItemId, ModelSelectionAction>),
@@ -185,6 +188,13 @@ impl App {
         match self.selection_actions.last()? {
             SelectionActions::ReadOnly => None,
             SelectionActions::Interaction(_) => None,
+            SelectionActions::Connectors(actions) => match actions.get(item_id)? {
+                ConnectorSelectionAction::Disconnect { connector_id } => {
+                    Some(AppCommand::DisconnectConnector {
+                        connector_id: connector_id.clone(),
+                    })
+                }
+            },
             SelectionActions::Mcp(actions) => match actions.get(item_id)? {
                 McpSelectionAction::SetEnablement {
                     server_id,
@@ -380,6 +390,29 @@ impl App {
             .push(SelectionActions::Mcp(view.actions));
     }
 
+    fn show_connector_view(&mut self, view: ConnectorSelectionView) {
+        self.interaction_pane.show_selection_view(view.model);
+        self.selection_actions
+            .push(SelectionActions::Connectors(view.actions));
+    }
+
+    fn replace_connector_view(&mut self, view: ConnectorSelectionView) {
+        self.interaction_pane.replace_selection_view(view.model);
+        match self.selection_actions.last_mut() {
+            Some(actions) => *actions = SelectionActions::Connectors(view.actions),
+            None => self
+                .selection_actions
+                .push(SelectionActions::Connectors(view.actions)),
+        }
+    }
+
+    pub(crate) fn connector_view_open(&self) -> bool {
+        matches!(
+            self.selection_actions.last(),
+            Some(SelectionActions::Connectors(_))
+        )
+    }
+
     fn show_file_view(&mut self, view: FileSelectionView) {
         self.interaction_pane.show_selection_view(view.model);
         self.selection_actions
@@ -557,6 +590,8 @@ impl App {
                 self.status = Status::Ready;
             }
             AppEvent::InteractionViewOpened(view) => self.show_interaction_view(view),
+            AppEvent::ConnectorViewOpened(view) => self.show_connector_view(view),
+            AppEvent::ConnectorViewReplaced(view) => self.replace_connector_view(view),
             AppEvent::McpViewOpened(view) => self.show_mcp_view(view),
             AppEvent::McpViewReplaced(view) => self.replace_mcp_view(view),
             AppEvent::ModelViewOpened(view) => self.show_model_view(view),

@@ -57,6 +57,11 @@ export const SettingsSections = [
     description: "Manage installed plugins and plugin behavior.",
   },
   {
+    id: "connectors",
+    label: "Connectors",
+    description: "Connect external accounts whose capabilities are provided by plugins.",
+  },
+  {
     id: "rules",
     label: "Rules",
     description: "Configure the instructions and rules agents follow.",

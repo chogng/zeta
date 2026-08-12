@@ -16,6 +16,9 @@ use zeta_app_server_protocol::protocol::config::{
     McpServerUpsertParams, ProviderConfigureParams, ProviderRemoveParams, SkillSourceAddParams,
     SkillSourceRemoveParams, SkillSourceSetEnablementParams,
 };
+use zeta_app_server_protocol::protocol::connectors::ConnectorDisconnectParams;
+use zeta_app_server_protocol::protocol::connectors::ConnectorDisconnectResultDto;
+use zeta_app_server_protocol::protocol::connectors::ConnectorListResult;
 use zeta_app_server_protocol::protocol::diff::DiffComputeParams;
 use zeta_app_server_protocol::protocol::diff::DiffComputeResult;
 use zeta_app_server_protocol::protocol::document::{TypstCompileParams, TypstCompileResult};
@@ -46,7 +49,8 @@ use zeta_app_server_protocol::protocol::session::{
     SessionThreadSubscribeResult, SessionThreadUnsubscribeParams, SessionUnsubscribeParams,
 };
 use zeta_app_server_protocol::protocol::skills::{
-    SkillListParams, SkillListResult, SkillSetEnablementParams,
+    SkillListParams, SkillListResult, SkillResourceOpenParams, SkillResourceOpenResult,
+    SkillSetEnablementParams,
 };
 use zeta_app_server_protocol::protocol::syntax::SyntaxAnalyzeParams;
 use zeta_app_server_protocol::protocol::syntax::SyntaxAnalyzeResult;
@@ -270,6 +274,17 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         self.call(ClientMethod::ConfigRead, EmptyParams {})
     }
 
+    pub fn list_connectors(&mut self) -> Result<ConnectorListResult, ClientError> {
+        self.call(ClientMethod::ConnectorList, EmptyParams {})
+    }
+
+    pub fn disconnect_connector(
+        &mut self,
+        params: ConnectorDisconnectParams,
+    ) -> Result<ConnectorDisconnectResultDto, ClientError> {
+        self.call(ClientMethod::ConnectorDisconnect, params)
+    }
+
     pub fn list_models(&mut self) -> Result<ModelListResult, ClientError> {
         self.call(ClientMethod::ModelList, EmptyParams {})
     }
@@ -360,6 +375,13 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         params: SkillSetEnablementParams,
     ) -> Result<ConfigCommandResult, ClientError> {
         self.call(ClientMethod::SkillSetEnablement, params)
+    }
+
+    pub fn open_skill_resource(
+        &mut self,
+        params: SkillResourceOpenParams,
+    ) -> Result<SkillResourceOpenResult, ClientError> {
+        self.call(ClientMethod::SkillResourceOpen, params)
     }
 
     pub fn compile_typst(

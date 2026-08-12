@@ -10,6 +10,7 @@ pub(crate) enum ClientEvent {
     AgentRequest(Box<AgentRequestEnvelope>),
     Failed(String),
     GitStatusChanged(GitStatusResult),
+    ConnectorsChanged,
     SkillsChanged,
     ThreadUpdated(Box<ThreadUpdateEnvelope>),
 }
@@ -21,6 +22,9 @@ pub(crate) fn map_event(event: AppServerEvent) -> Option<ClientEvent> {
         }
         AppServerEvent::Notification(ServerNotification::SkillsChanged(_)) => {
             Some(ClientEvent::SkillsChanged)
+        }
+        AppServerEvent::Notification(ServerNotification::ConnectorsChanged(_)) => {
+            Some(ClientEvent::ConnectorsChanged)
         }
         AppServerEvent::Notification(ServerNotification::GitStatusChanged(changed)) => {
             Some(ClientEvent::GitStatusChanged(changed.status))

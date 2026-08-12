@@ -345,6 +345,7 @@ fn thread_snapshot() -> Thread {
                     tool_call_id: ToolCallId::new("call_1").unwrap(),
                     name: ToolName::new("read_file").unwrap(),
                     arguments_json: r#"{"path":"src/lib.rs"}"#.into(),
+                    binding: None,
                 },
                 ThreadItem::ToolResult {
                     item_id: ItemId::new("item_tool_result").unwrap(),

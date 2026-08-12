@@ -8243,6 +8243,7 @@ dependencies = [
  "zeta-model-provider",
  "zeta-model-provider-config",
  "zeta-models-manager",
+ "zeta-plugins",
  "zeta-policy",
  "zeta-prompts",
  "zeta-protocol",
@@ -8472,10 +8473,13 @@ dependencies = [
 name = "zeta-connectors-extension"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
+ "getrandom 0.2.17",
  "rusqlite",
  "serde_json",
  "sha2 0.10.9",
  "tempfile",
+ "url",
  "zeta-connectors",
  "zeta-plugins",
  "zeta-secrets",
@@ -8791,14 +8795,18 @@ dependencies = [
 name = "zeta-mcp-extension"
 version = "0.1.0"
 dependencies = [
+ "serde",
  "serde_json",
+ "tempfile",
  "tokio",
+ "url",
  "zeta-async-utils",
  "zeta-config",
  "zeta-connectors",
  "zeta-connectors-extension",
  "zeta-core",
  "zeta-mcp",
+ "zeta-plugins",
  "zeta-policy",
  "zeta-protocol",
  "zeta-rmcp-client",
@@ -8979,6 +8987,9 @@ dependencies = [
 name = "zeta-secrets"
 version = "0.1.0"
 dependencies = [
+ "getrandom 0.2.17",
+ "sha2 0.10.9",
+ "tempfile",
  "zeroize",
 ]
 

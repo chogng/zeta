@@ -27,6 +27,34 @@ pub trait ConnectorMcpRuntimeProvider: Send + Sync {
         definition: &ConnectorDefinition,
         credential: SecretValue,
     ) -> Result<McpServerTransport, ConnectorMcpRuntimeError>;
+
+    /// Materializes active Plugin MCP contributions that do not require a Connector account.
+    ///
+    /// Providers that only bind Connector-backed servers retain the empty default. Returned
+    /// declarations must already satisfy package, permission, credential, and transport policy.
+    fn standalone_servers(&self) -> Result<Vec<StandaloneMcpServer>, ConnectorMcpRuntimeError> {
+        Ok(Vec::new())
+    }
+}
+
+/// One runtime-ready standalone Plugin MCP contribution.
+pub struct StandaloneMcpServer {
+    definition: McpServerDefinition,
+}
+
+impl StandaloneMcpServer {
+    /// Wraps a host-materialized definition for publication by the shared composition layer.
+    pub fn new(definition: McpServerDefinition) -> Self {
+        Self { definition }
+    }
+
+    pub fn definition(&self) -> &McpServerDefinition {
+        &self.definition
+    }
+
+    pub fn into_definition(self) -> McpServerDefinition {
+        self.definition
+    }
 }
 
 /// Sanitized failure from a product/plugin Connector MCP materializer.

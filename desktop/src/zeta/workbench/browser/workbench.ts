@@ -140,6 +140,8 @@ import { IChatService } from "../services/chat/common/chatService.js";
 import { ICodeIndexService } from "../../platform/codeIndex/common/codeIndexService.js";
 import { AppServerCodeIndexService } from "../services/codeIndex/browser/appServerCodeIndexService.js";
 import { IToolSearchService } from "../../platform/toolSearch/common/toolSearchService.js";
+import { IConnectorService } from "../../platform/connectors/common/connectorService.js";
+import { AppServerConnectorService } from "../services/connectors/browser/appServerConnectorService.js";
 import { AppServerToolSearchService } from "../services/toolSearch/browser/appServerToolSearchService.js";
 import { AccessibleViewInformationService, IAccessibleViewInformationService } from "../services/accessibility/common/accessibleViewInformationService.js";
 import { NativeAccessibilityService } from "../services/accessibility/electron-browser/accessibilityService.js";
@@ -297,6 +299,7 @@ export class Workbench extends DisposableOwner {
     const chatService = this.own(new ChatService({ modelApi: api.model, threadApi: api.thread, turnApi: api.turn, skillApi: api.skills, appServerApi: api.appServer, eventApi: api.events }));
     services.set(IChatService, chatService);
     services.set(ICodeIndexService, new AppServerCodeIndexService(api.codeIndex));
+    services.set(IConnectorService, this.own(new AppServerConnectorService(api.connectors, api.events)));
     services.set(IToolSearchService, new AppServerToolSearchService(api.toolSearch));
     const workbenchState = workspaceContext.getWorkbenchState();
     const workbenchWindow = this.own(new WorkbenchWindow({

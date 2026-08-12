@@ -11,6 +11,7 @@ import { IUserThemeService } from "../../../common/userThemes.js";
 import { ISettingsService } from "../../../services/preferences/common/settings.js";
 import { ICodeIndexService } from "../../../../platform/codeIndex/common/codeIndexService.js";
 import { IToolSearchService } from "../../../../platform/toolSearch/common/toolSearchService.js";
+import { IConnectorService } from "../../../../platform/connectors/common/connectorService.js";
 import { SettingsEditorContribution } from "./settingsEditor.contribution.js";
 
 export const OpenSettingsCommandId = "workbench.action.openSettings";
@@ -59,6 +60,7 @@ registerWorkbenchContribution(
     themeService: accessor.get(IThemeService),
     userThemeService: accessor.get(IUserThemeService),
     codeIndexService: accessor.get(ICodeIndexService),
+    connectorService: accessor.get(IConnectorService),
     toolSearchService: accessor.get(IToolSearchService),
   }),
 );

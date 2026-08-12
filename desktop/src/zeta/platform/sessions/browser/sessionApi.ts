@@ -72,7 +72,7 @@ export function createViteDevThreadApi(connection: ViteDevAppServerConnection): 
 
 export function createViteDevTurnApi(connection: ViteDevAppServerConnection): ITurnApi {
   return {
-    start: (params) => viteDevRequest(connection, "session/request", sessionRequest({ commandId: params.commandId, sessionId: params.sessionId, expectedSequence: params.expectedSequence }, { type: "startTurn", threadId: params.threadId, input: params.input })).then(turnStartResult),
+    start: (params) => viteDevRequest(connection, "session/request", sessionRequest({ commandId: params.commandId, sessionId: params.sessionId, expectedSequence: params.expectedSequence }, { type: "startTurn", threadId: params.threadId, approvalMode: params.approvalMode, input: params.input })).then(turnStartResult),
     interrupt: (params) => viteDevRequest(connection, "session/request", sessionRequest(params, { type: "interruptTurn", threadId: params.threadId, turnId: params.turnId })).then(turnInterruptResult),
     resolveInteraction: (params) => viteDevRequest(connection, "session/request", sessionRequest(params, { type: "resolveInteraction", threadId: params.threadId, turnId: params.turnId, requestId: params.requestId, response: params.response })).then(turnInteractionResolveResult),
   };

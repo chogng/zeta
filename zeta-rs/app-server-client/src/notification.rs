@@ -4,6 +4,7 @@ use serde_json::Value;
 use zeta_app_server_protocol::protocol::collaboration::DocumentCollaborationPresenceSnapshot;
 use zeta_app_server_protocol::protocol::collaboration::DocumentCollaborationUpdate;
 use zeta_app_server_protocol::protocol::notification::ConfigChanged;
+use zeta_app_server_protocol::protocol::notification::ConnectorsChanged;
 use zeta_app_server_protocol::protocol::notification::FsChanged;
 use zeta_app_server_protocol::protocol::notification::GitStatusChanged;
 use zeta_app_server_protocol::protocol::notification::SessionUpdateEnvelope;
@@ -21,6 +22,7 @@ pub enum ServerNotification {
     SessionUpdate(SessionUpdateEnvelope),
     SessionThreadUpdate(Box<ThreadUpdateEnvelope>),
     ConfigChanged(ConfigChanged),
+    ConnectorsChanged(ConnectorsChanged),
     SkillsChanged(SkillsChanged),
     GitStatusChanged(GitStatusChanged),
     FsChanged(FsChanged),
@@ -54,6 +56,9 @@ pub(crate) fn decode(raw: &str) -> Result<ServerNotification, ClientError> {
             .map(ServerNotification::SessionThreadUpdate),
         Some(ServerNotificationMethod::ConfigChanged) => {
             decode_params(envelope.params).map(ServerNotification::ConfigChanged)
+        }
+        Some(ServerNotificationMethod::ConnectorsChanged) => {
+            decode_params(envelope.params).map(ServerNotification::ConnectorsChanged)
         }
         Some(ServerNotificationMethod::SkillsChanged) => {
             decode_params(envelope.params).map(ServerNotification::SkillsChanged)

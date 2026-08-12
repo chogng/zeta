@@ -12,6 +12,7 @@ fn builtins_follow_enum_presentation_order() {
             ("resume", TuiSlashCommandAction::Resume),
             ("thread", TuiSlashCommandAction::Thread),
             ("archive-thread", TuiSlashCommandAction::ArchiveThread),
+            ("connectors", TuiSlashCommandAction::Connectors),
             ("archive-session", TuiSlashCommandAction::ArchiveSession),
             ("rewind", TuiSlashCommandAction::Rewind),
             ("clear", TuiSlashCommandAction::Clear),
@@ -28,7 +29,7 @@ fn builtins_follow_enum_presentation_order() {
             ("exit", TuiSlashCommandAction::Exit),
         ]
     );
-    assert_eq!(built_in_slash_command_definitions().len(), 20);
+    assert_eq!(built_in_slash_command_definitions().len(), 21);
 }
 
 #[test]

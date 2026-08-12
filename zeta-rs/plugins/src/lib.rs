@@ -4,6 +4,7 @@
 //! deterministic local package digests, and local-development discovery. Installation authority,
 //! activation, grants, credentials, and Skill or MCP runtime behavior are not implemented here.
 
+mod activation;
 mod discovery;
 mod error;
 mod identity;
@@ -11,6 +12,7 @@ mod manifest;
 mod package;
 mod path;
 
+pub use activation::PluginActivationSnapshot;
 pub use discovery::project_local_plugin_discovery;
 pub use error::{PluginError, PluginErrorKind};
 pub use identity::{
@@ -25,7 +27,7 @@ pub use manifest::{
     SkillContribution, WorkspaceAccess, ZetaVersionRequirement,
 };
 pub use package::{
-    LocalPluginCatalog, LocalPluginPackage, PackageFileStats, PluginPackageSource,
-    PluginPackageStore,
+    InstalledPluginPackage, LocalPluginCatalog, LocalPluginPackage, PackageFileStats,
+    PluginPackageSource, PluginPackageStore,
 };
 pub use path::{InvalidPluginPath, PluginPath};

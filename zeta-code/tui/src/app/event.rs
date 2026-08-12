@@ -1,5 +1,6 @@
 use crate::components::pane::PaneViewModel;
 use crate::components::selection::SelectionViewModel;
+use crate::features::connectors::ConnectorSelectionView;
 use crate::features::interactions::InteractionSelectionView;
 use crate::features::mcp::McpSelectionView;
 use crate::features::models::ModelSelectionView;
@@ -22,6 +23,8 @@ pub(crate) enum AppEvent {
     CommandStarted(String),
     CommandCompleted { command: String, result: String },
     ConfigSnapshotReceived(ConfigReadResult),
+    ConnectorViewOpened(ConnectorSelectionView),
+    ConnectorViewReplaced(ConnectorSelectionView),
     FailureReported(String),
     FileSearchSnapshotReceived(PathSearchSnapshot),
     FileViewOpened(FileSelectionView),

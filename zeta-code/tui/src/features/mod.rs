@@ -1,4 +1,5 @@
 pub(crate) mod config;
+pub(crate) mod connectors;
 pub(crate) mod interactions;
 pub(crate) mod mcp;
 pub(crate) mod models;

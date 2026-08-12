@@ -157,7 +157,12 @@ impl SkillRuntime {
         self.activate_available(selected, SkillActivationReason::Automatic)
     }
 
-    pub(crate) fn read_model_resource(
+    /// Reads one inert package resource from an enabled, compatible Skill pinned to an exact
+    /// `SKILL.md` digest.
+    ///
+    /// Hosts may materialize the returned bytes into their ordinary resource store. This method
+    /// never infers a media type, executes scripts, or grants write/publish authority.
+    pub fn read_resource(
         &self,
         selected: &SkillRef,
         path: &SkillResourcePath,
@@ -186,6 +191,14 @@ impl SkillRuntime {
             .catalog
             .read_resource(selected, path)
             .map_err(|error| error.to_string())
+    }
+
+    pub(crate) fn read_model_resource(
+        &self,
+        selected: &SkillRef,
+        path: &SkillResourcePath,
+    ) -> Result<SkillResource, String> {
+        self.read_resource(selected, path)
     }
 
     fn activate_available(

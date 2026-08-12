@@ -3,6 +3,7 @@ use super::decode;
 use zeta_app_server_protocol::protocol::collaboration::DocumentCollaborationPresenceSnapshot;
 use zeta_app_server_protocol::protocol::collaboration::DocumentCollaborationUpdate;
 use zeta_app_server_protocol::protocol::config::ConfigChanged;
+use zeta_app_server_protocol::protocol::connectors::ConnectorsChanged;
 use zeta_app_server_protocol::protocol::fs::FsChanged;
 use zeta_app_server_protocol::protocol::git::{GitChangeStatusDto, GitHeadDto};
 
@@ -196,5 +197,22 @@ fn decodes_config_changed_notification() {
             revision: 3,
             generation: 2,
         })
+    );
+}
+
+#[test]
+fn decodes_connectors_changed_notification() {
+    let notification = decode(
+        r#"{
+            "jsonrpc": "2.0",
+            "method": "connector/changed",
+            "params": {"generation": 7}
+        }"#,
+    )
+    .expect("Connector notification decodes");
+
+    assert_eq!(
+        notification,
+        ServerNotification::ConnectorsChanged(ConnectorsChanged { generation: 7 })
     );
 }

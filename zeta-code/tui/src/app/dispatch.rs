@@ -129,6 +129,11 @@ impl ActiveConversation {
                     .events
                     .push(AppEvent::McpViewOpened(mcp::load_selection(client)?));
             }
+            TuiSlashCommandAction::Connectors => {
+                output.events.push(AppEvent::ConnectorViewOpened(
+                    crate::features::connectors::load_selection(client)?,
+                ));
+            }
             TuiSlashCommandAction::Resume => {
                 if arguments.is_empty() {
                     output

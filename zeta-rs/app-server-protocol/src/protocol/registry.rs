@@ -132,8 +132,9 @@ use crate::protocol::session::{
 };
 use crate::protocol::skills::{
     SkillCatalogReloadDto, SkillCompatibilityDto, SkillDiagnosticCodeDto, SkillDiagnosticDto,
-    SkillDto, SkillEnablementDto, SkillListParams, SkillListResult, SkillSetEnablementParams,
-    SkillSourceKindDto, SkillsChanged,
+    SkillDto, SkillEnablementDto, SkillListParams, SkillListResult, SkillResourceKindDto,
+    SkillResourceOpenParams, SkillResourceOpenResult, SkillSetEnablementParams, SkillSourceKindDto,
+    SkillsChanged,
 };
 use crate::protocol::slash_commands::{SlashCommandArgumentModeDto, SlashCommandDefinition};
 use crate::protocol::syntax::SyntaxAnalyzeParams;
@@ -162,6 +163,11 @@ use schemars::JsonSchema;
 use ts_rs::{Config, TS};
 use zeta_protocol::AgentRequestEnvelope;
 use zeta_protocol::ApprovalMode;
+use zeta_protocol::ContentPart;
+use zeta_protocol::ImageDetail;
+use zeta_protocol::ToolCallBinding;
+use zeta_protocol::ToolCallCaller;
+use zeta_protocol::ToolSourceProvenance;
 use zeta_protocol::{
     ActionApprovalCapability, ActionApprovalCapabilityKind, ActionApprovalDecision,
     ActionApprovalRequest, ActionApprovalResponse, AgentContextContent, AgentContextMode,
@@ -523,6 +529,11 @@ client_methods! {
         params: SkillSetEnablementParams,
         response: ConfigCommandResult,
         serialization: GlobalExclusive,
+    },
+    SkillResourceOpen => "skill/resource/open" {
+        params: SkillResourceOpenParams,
+        response: SkillResourceOpenResult,
+        serialization: ResourceExclusive,
     },
     ExtensionList => "extensions/list" {
         params: ExtensionListParams,
@@ -1028,6 +1039,9 @@ typescript_bindings! {
     SkillDiagnosticDto,
     SkillListParams,
     SkillListResult,
+    SkillResourceKindDto,
+    SkillResourceOpenParams,
+    SkillResourceOpenResult,
     SkillSetEnablementParams,
     SkillsChanged,
     ExtensionCatalogReloadDto,
@@ -1102,6 +1116,11 @@ typescript_bindings! {
     DynamicToolResponse,
     DynamicToolOutput,
     ThreadItem,
+    ToolCallBinding,
+    ToolSourceProvenance,
+    ToolCallCaller,
+    ContentPart,
+    ImageDetail,
     Turn,
     Thread,
     ToolExecutionAuthority,

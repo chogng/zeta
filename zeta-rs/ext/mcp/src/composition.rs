@@ -33,6 +33,7 @@ use crate::connector::ConnectorMcpRuntimeProvider;
 use crate::connector::materialize_connector_servers;
 use crate::runtime::McpRuntimeOwner;
 use crate::runtime::McpRuntimeOwnerError;
+use crate::updates::McpCatalogUpdates;
 
 const MCP_POLICY_REVISION: &str = "mcp-user-approval-v1";
 
@@ -78,6 +79,55 @@ pub fn compose_mcp_tools(
     start_mcp_tools(definitions, authorities, catalog_generation, None).map(Some)
 }
 
+/// Resolves enabled MCP declarations and publishes tool-list invalidations to the host.
+pub fn compose_mcp_tools_with_updates(
+    config: &ResolvedConfig,
+    generation: ConfigGeneration,
+    updates: McpCatalogUpdates,
+) -> Result<Option<McpToolComposition>, McpToolCompositionError> {
+    let (definitions, authorities) = materialize_servers(config)?;
+    if definitions.is_empty() {
+        return Ok(None);
+    }
+    let catalog_generation = generation
+        .get()
+        .checked_add(1)
+        .ok_or_else(|| McpToolCompositionError("MCP catalog generation overflow".into()))?;
+    start_mcp_tools_with_updates(
+        definitions,
+        authorities,
+        catalog_generation,
+        None,
+        Some(updates),
+    )
+    .map(Some)
+}
+
+/// Resolves enabled MCP declarations at one host-owned reconcile generation.
+pub fn compose_mcp_tools_at_generation_with_updates(
+    config: &ResolvedConfig,
+    catalog_generation: u64,
+    updates: McpCatalogUpdates,
+) -> Result<Option<McpToolComposition>, McpToolCompositionError> {
+    if catalog_generation == 0 {
+        return Err(McpToolCompositionError(
+            "MCP catalog generation must be non-zero".into(),
+        ));
+    }
+    let (definitions, authorities) = materialize_servers(config)?;
+    if definitions.is_empty() {
+        return Ok(None);
+    }
+    start_mcp_tools_with_updates(
+        definitions,
+        authorities,
+        catalog_generation,
+        None,
+        Some(updates),
+    )
+    .map(Some)
+}
+
 /// Composes user-configured MCP servers with the exact ready Connector authority projection.
 ///
 /// `catalog_generation` is owned by the host reconcile loop and must advance whenever either its
@@ -96,6 +146,7 @@ pub fn compose_mcp_tools_with_connectors(
         ));
     }
     let (mut definitions, mut authorities) = materialize_servers(config)?;
+    materialize_standalone_plugin_servers(provider.as_ref(), &mut definitions, &mut authorities)?;
     let connectors =
         materialize_connector_servers(connector_authority, secrets.as_ref(), provider.as_ref())?;
     for server in connectors.authorities.keys() {
@@ -113,16 +164,107 @@ pub fn compose_mcp_tools_with_connectors(
     start_mcp_tools(definitions, authorities, catalog_generation, None).map(Some)
 }
 
+/// Composes Config and ready Connector MCP servers with host-visible catalog invalidations.
+pub fn compose_mcp_tools_with_connectors_and_updates(
+    config: &ResolvedConfig,
+    catalog_generation: u64,
+    connector_authority: ConnectorAuthority,
+    secrets: Arc<dyn SecretStore>,
+    provider: Arc<dyn ConnectorMcpRuntimeProvider>,
+    updates: McpCatalogUpdates,
+) -> Result<Option<McpToolComposition>, McpToolCompositionError> {
+    if catalog_generation == 0 {
+        return Err(McpToolCompositionError(
+            "MCP catalog generation must be non-zero".into(),
+        ));
+    }
+    let (mut definitions, mut authorities) = materialize_servers(config)?;
+    materialize_standalone_plugin_servers(provider.as_ref(), &mut definitions, &mut authorities)?;
+    let connectors =
+        materialize_connector_servers(connector_authority, secrets.as_ref(), provider.as_ref())?;
+    for server in connectors.authorities.keys() {
+        if authorities.contains_key(server) {
+            return Err(McpToolCompositionError(format!(
+                "MCP server identity is declared by Config and a Connector: {server}"
+            )));
+        }
+    }
+    definitions.extend(connectors.definitions);
+    authorities.extend(connectors.authorities);
+    if definitions.is_empty() {
+        return Ok(None);
+    }
+    start_mcp_tools_with_updates(
+        definitions,
+        authorities,
+        catalog_generation,
+        None,
+        Some(updates),
+    )
+    .map(Some)
+}
+
+fn materialize_standalone_plugin_servers(
+    provider: &dyn ConnectorMcpRuntimeProvider,
+    definitions: &mut Vec<McpServerDefinition>,
+    authorities: &mut BTreeMap<McpServerId, McpInvocationAuthority>,
+) -> Result<(), McpToolCompositionError> {
+    for standalone in provider
+        .standalone_servers()
+        .map_err(|error| McpToolCompositionError::new(error.to_string()))?
+    {
+        let definition = standalone.into_definition();
+        let server_id = definition.id().clone();
+        let display_name = definition.display_name().to_string();
+        let transport = match definition.transport() {
+            McpServerTransport::Stdio(command) => McpInvocationTransport::Stdio {
+                executable: command.program().to_string_lossy().into_owned(),
+            },
+            McpServerTransport::StreamableHttp(_) => McpInvocationTransport::StreamableHttp,
+        };
+        if authorities
+            .insert(
+                server_id,
+                McpInvocationAuthority {
+                    display_name,
+                    transport,
+                    connector_fence: None,
+                },
+            )
+            .is_some()
+        {
+            return Err(McpToolCompositionError::new(
+                "MCP server identity is declared by Config and a Plugin",
+            ));
+        }
+        definitions.push(definition);
+    }
+    Ok(())
+}
+
 fn start_mcp_tools(
     definitions: Vec<McpServerDefinition>,
     authorities: BTreeMap<McpServerId, McpInvocationAuthority>,
     catalog_generation: u64,
     factory: Option<Arc<dyn McpSessionFactory>>,
 ) -> Result<McpToolComposition, McpToolCompositionError> {
-    let options = McpRuntimeOptions::new("zeta-app-server", env!("CARGO_PKG_VERSION"))
+    start_mcp_tools_with_updates(definitions, authorities, catalog_generation, factory, None)
+}
+
+fn start_mcp_tools_with_updates(
+    definitions: Vec<McpServerDefinition>,
+    authorities: BTreeMap<McpServerId, McpInvocationAuthority>,
+    catalog_generation: u64,
+    factory: Option<Arc<dyn McpSessionFactory>>,
+    updates: Option<McpCatalogUpdates>,
+) -> Result<McpToolComposition, McpToolCompositionError> {
+    let mut options = McpRuntimeOptions::new("zeta-app-server", env!("CARGO_PKG_VERSION"))
         .with_startup_policy(McpStartupPolicy::RequireAll)
         .with_catalog_generation(catalog_generation)
         .with_first_connection_generation(catalog_generation);
+    if let Some(updates) = updates {
+        options = options.with_client_host(updates.client_host());
+    }
     let owner = match factory {
         Some(factory) => McpRuntimeOwner::start_with_factory(definitions, options, factory),
         None => McpRuntimeOwner::start(definitions, options),

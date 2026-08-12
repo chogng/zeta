@@ -11,8 +11,11 @@ name = "zeta_connectors_extension"
 path = "src/lib.rs"
 
 [dependencies]
+base64 = { workspace = true }
+getrandom = { workspace = true }
 rusqlite = { workspace = true }
 sha2 = { workspace = true }
+url = { workspace = true }
 zeta-connectors = { workspace = true }
 zeta-plugins = { workspace = true }
 zeta-secrets = { workspace = true }

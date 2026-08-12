@@ -7,6 +7,7 @@ import type { IUserThemeService } from "../../../common/userThemes.js";
 import type { ISettingsService } from "../../../services/preferences/common/settings.js";
 import type { ICodeIndexService } from "../../../../platform/codeIndex/common/codeIndexService.js";
 import type { IToolSearchService } from "../../../../platform/toolSearch/common/toolSearchService.js";
+import type { IConnectorService } from "../../../../platform/connectors/common/connectorService.js";
 import { SettingsEditor } from "./settingsEditor.js";
 
 export interface SettingsEditorContributionOptions {
@@ -17,6 +18,7 @@ export interface SettingsEditorContributionOptions {
   readonly themeService: IThemeService;
   readonly userThemeService: IUserThemeService;
   readonly codeIndexService?: ICodeIndexService;
+  readonly connectorService?: IConnectorService;
   readonly toolSearchService?: IToolSearchService;
 }
 
@@ -35,6 +37,7 @@ export class SettingsEditorContribution extends DisposableOwner {
       themeService: options.themeService,
       userThemeService: options.userThemeService,
       codeIndexService: options.codeIndexService ?? unavailableCodeIndexService,
+      connectorService: options.connectorService ?? unavailableConnectorService,
       toolSearchService: options.toolSearchService ?? unavailableToolSearchService,
     }));
     this.modalEditor = this.own(new ModalEditorPart({
@@ -78,4 +81,11 @@ const unavailableCodeIndexService: ICodeIndexService = {
 const unavailableToolSearchService: IToolSearchService = {
   readConfig: () => Promise.reject(new Error("Tool Search settings are unavailable.")),
   configure: () => Promise.reject(new Error("Tool Search settings are unavailable.")),
+};
+
+const unavailableConnectorService: IConnectorService = {
+  onDidChange: () => ({ dispose() {}, [Symbol.dispose]() {} }),
+  list: () => Promise.reject(new Error("Connectors are unavailable.")),
+  connectApiToken: () => Promise.reject(new Error("Connectors are unavailable.")),
+  disconnect: () => Promise.reject(new Error("Connectors are unavailable.")),
 };

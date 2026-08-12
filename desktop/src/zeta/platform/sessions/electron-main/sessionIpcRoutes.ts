@@ -91,7 +91,7 @@ export function sessionIpcRoutes(supervisor: AppServerSupervisor): readonly IpcR
     route({
       channel: "zeta:turn:start",
       validate: turnStartParams,
-      invoke: (params) => supervisor.request(APP_SERVER_METHODS["session/request"], sessionRequest({ commandId: params.commandId, sessionId: params.sessionId, expectedSequence: params.expectedSequence }, { type: "startTurn", threadId: params.threadId, input: params.input })).then(turnStartResult),
+      invoke: (params) => supervisor.request(APP_SERVER_METHODS["session/request"], sessionRequest({ commandId: params.commandId, sessionId: params.sessionId, expectedSequence: params.expectedSequence }, { type: "startTurn", threadId: params.threadId, approvalMode: params.approvalMode, input: params.input })).then(turnStartResult),
     }),
     route({
       channel: "zeta:turn:interrupt",
@@ -220,7 +220,7 @@ function threadUnsubscribeParams(value: unknown): SessionThreadUnsubscribeParams
 }
 
 function turnStartParams(value: unknown): SessionOperationInput<"startTurn"> {
-  const params = record(value, ["commandId", "sessionId", "threadId", "expectedSequence", "input"]);
+  const params = record(value, ["commandId", "sessionId", "threadId", "expectedSequence", "approvalMode", "input"]);
   if (!Array.isArray(params.input) || params.input.length === 0) {
     throw new Error("input must be a non-empty array");
   }
@@ -229,6 +229,7 @@ function turnStartParams(value: unknown): SessionOperationInput<"startTurn"> {
     sessionId: nonEmptyString(params.sessionId, "sessionId"),
     threadId: nonEmptyString(params.threadId, "threadId"),
     expectedSequence: nonNegativeInteger(params.expectedSequence, "expectedSequence"),
+    approvalMode: stringEnum(params.approvalMode, "approvalMode", ["askPermissions", "autoReview", "bypassPermissions"] as const),
     input: params.input.map((value, index) => {
       const item = record(value, ["type", "text"]);
       if (item.type !== "text") throw new Error(`input[${index}].type must be text`);

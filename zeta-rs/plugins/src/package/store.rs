@@ -9,6 +9,66 @@ use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 
+/// Immutable package object selected for one Plugin activation generation.
+#[derive(Clone, Debug)]
+pub struct InstalledPluginPackage {
+    package: LocalPluginPackage,
+    object_root: PathBuf,
+}
+
+impl InstalledPluginPackage {
+    pub fn manifest(&self) -> &crate::PluginManifest {
+        self.package.manifest()
+    }
+
+    pub fn package_digest(&self) -> &PluginPackageDigest {
+        self.package.package_digest()
+    }
+
+    pub fn package(&self) -> &LocalPluginPackage {
+        &self.package
+    }
+
+    /// Resolves one validated regular file inside this immutable object.
+    pub fn resolve_file(&self, path: &crate::PluginPath) -> Result<PathBuf, PluginError> {
+        let candidate = self.object_root.join(path.to_platform_path());
+        let canonical = candidate.canonicalize().map_err(store_io)?;
+        if !canonical.starts_with(&self.object_root)
+            || !fs::symlink_metadata(&candidate)
+                .map_err(store_io)?
+                .is_file()
+        {
+            return Err(PluginError::new(
+                PluginErrorKind::PackageUnsafe,
+                "installed Plugin file escaped its immutable object",
+            ));
+        }
+        Ok(canonical)
+    }
+
+    /// Reads one bounded UTF-8 definition file from this immutable object.
+    pub fn read_utf8_file(
+        &self,
+        path: &crate::PluginPath,
+        maximum_bytes: u64,
+    ) -> Result<String, PluginError> {
+        let file = self.resolve_file(path)?;
+        let metadata = fs::metadata(&file).map_err(store_io)?;
+        if metadata.len() > maximum_bytes {
+            return Err(PluginError::new(
+                PluginErrorKind::ContributionInvalid,
+                "installed Plugin definition exceeds its size limit",
+            ));
+        }
+        fs::read_to_string(file).map_err(|_| {
+            PluginError::new(
+                PluginErrorKind::ContributionInvalid,
+                "installed Plugin definition is not valid UTF-8",
+            )
+        })
+    }
+}
+
 /// Immutable content-addressed store for validated local Plugin packages.
 ///
 /// Installation copies into a unique staging directory, validates the copy, and then atomically
@@ -23,6 +83,7 @@ impl PluginPackageStore {
         let root = root.as_ref().to_path_buf();
         fs::create_dir_all(root.join("objects")).map_err(store_io)?;
         fs::create_dir_all(root.join("staging")).map_err(store_io)?;
+        let root = root.canonicalize().map_err(store_io)?;
         sync_directory(&root)?;
         Ok(Self { root })
     }
@@ -90,6 +151,18 @@ impl PluginPackageStore {
             ));
         }
         Ok(package)
+    }
+
+    /// Loads one exact immutable package object for activation consumers.
+    pub fn activate(
+        &self,
+        installed: &InstalledPluginRef,
+    ) -> Result<InstalledPluginPackage, PluginError> {
+        let package = self.read(installed)?;
+        Ok(InstalledPluginPackage {
+            package,
+            object_root: self.object_path(&installed.digest),
+        })
     }
 
     fn object_path(&self, digest: &PluginPackageDigest) -> PathBuf {

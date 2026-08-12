@@ -5,8 +5,9 @@
 > Plugin/discovery 集成：[`zeta-rs/ext/connectors/`](../zeta-rs/ext/connectors/README.md)。
 > Plugin 分发边界：[`plugins.md`](plugins.md)。MCP 调用边界：[`mcp.md`](mcp.md)。
 > 当前状态：Connector domain、SQLite authority、API-token connect/disconnect、App Server 协议、
-> 注入式 ready MCP composition、model-safe-point registry replacement 与 in-flight dispatch drain 已实现。
-> Plugin activation、OAuth、生产 `SecretStore` backend 和产品 UI 尚未完成。
+> package-rooted Plugin activation、ready/standalone MCP composition、模型安全点 registry replacement、
+> in-flight dispatch drain、显式文件 `SecretStore`、OAuth PKCE 状态机和产品连接入口已实现。
+> 具体 OAuth provider、浏览器回调接线、refresh/远端 revoke 与 OS keyring 仍是扩展点。
 
 ## 快速理解
 
@@ -89,12 +90,12 @@ adapter；不得成为 `ConnectorId`、connection generation 或本地 runtime r
 
 当前 API-token 路径为：
 
-1. `ConnectorCatalog::from_packages` 把已校验 Plugin package 投影为带 package digest 的 `ConnectorDefinition`；仅持有 manifest 的调用方可使用较弱的 `from_manifests` 投影。
+1. `PluginActivationSnapshot::resolve` 将 exact installed package 固定为不可变激活快照；`ConnectorCatalog::from_activation` 从该快照投影带 package digest 的 `ConnectorDefinition`。
 2. App Server 通过 `connector/list` 返回不含 credential reference 的状态；`connector/connect/apiToken` 接收一次性 secret DTO。
 3. `ConnectorCredentialService` 先提交 `Connecting`，再把 token 写入 `SecretStore`，最后向 `ConnectorAuthority` 提交只含 account 与 opaque reference 的 `Connected`。
 4. SQLite authority 在一个事务中追加状态事件与 retry receipt；重复 command ID 只重放完全相同的请求。
-5. 本地 composition root 订阅 Config 与 Connector generation；ready entry 经 `ConnectorMcpRuntimeProvider` materialize 后替换 MCP tool port。
-6. 每个 Connector MCP call 在 prepare 和真正 dispatch 前复核 connector ID、connection generation 与 definition digest；disconnect 提交和 dispatch 使用同一 authority lock 线性化。
+5. 本地 composition root 从激活快照自动构造 package-rooted MCP provider，并订阅 Config、Connector generation 与 MCP `tools/list_changed`；完整启动下一代 runtime 后替换 MCP tool port。
+6. 每个 Connector MCP call 在 prepare 和真正 dispatch 前复核 connector ID、connection generation 与 definition digest；disconnect 提交和 dispatch 使用同一 authority lock 线性化，已开始调用先排空，后续调用被拒绝。
 
 ```mermaid
 flowchart TD
@@ -109,8 +110,11 @@ flowchart TD
     D["connector/disconnect"] --> F
 ```
 
-OAuth browser/device flow、refresh/revoke provider adapter、生产钥匙串 backend、Plugin activation 自动注入
-和 Renderer/TUI 连接界面仍是 Proposed；当前代码不能把这些能力描述为已交付产品体验。
+当前 `ConnectorOAuthService` 已实现随机 state、PKCE S256、exact redirect、一次性 callback、超时与
+stale-generation 防护，并把 provider 交换后的 secret 交给既有 credential authority。它是通用机制，
+不是某个服务已经可用的 OAuth 产品流程：具体 provider、浏览器 callback host、refresh 与远端 revoke
+尚未接入。Desktop Settings 已提供列表、API-token 连接与断开；TUI 提供 `/connectors` 列表、刷新与
+断开，并有意不把 secret 输入放入 composer/history。
 
 ## 4. 身份、凭据与 generation
 
@@ -143,15 +147,20 @@ connection generation；任何状态变化都必须同时推进 snapshot generat
 | Plugin manifest → Connector domain projection | ✅ 已实现 |
 | disconnected discovery / connected ready binding projection | ✅ 已实现 |
 | SQLite connection authority + exact retry receipts | ✅ 已实现 |
-| definition/package digest 变化触发 reauthorization | ✅ 重启恢复路径已实现；live Plugin activation 尚未完成 |
+| definition/package digest 变化触发 reauthorization | ✅ 重启恢复路径已实现；live Plugin activation 更新仍待 authority 接入 |
 | API-token connect/disconnect + local secret cleanup | ✅ 已实现 |
-| OAuth、refresh、远端 revoke | 尚未完成 |
+| OAuth state/PKCE/exchange 编排 | ✅ 已实现通用 provider port；具体 provider/浏览器回调尚未接入 |
+| refresh、远端 revoke | 尚未完成 |
 | `zeta-secrets` memory/unavailable backend | ✅ 已实现 |
-| 生产 OS keyring / explicit-file backend | 尚未完成 |
+| 显式文件 backend | ✅ 已实现并作为本地默认 Connector persistence |
+| OS keyring backend | 尚未完成 |
 | App Server list/connect/disconnect + changed notification | ✅ 已实现 |
-| Renderer/TUI UI 与 browser interaction | 尚未完成 |
+| Desktop API-token UI；TUI 列表/断开/通知刷新 | ✅ 已实现 |
+| OAuth browser interaction；TUI secret 输入 | 尚未完成 |
 | ready binding → `zeta-mcp-extension` composition + dispatch fence | ✅ 已实现（host-injected provider） |
-| Plugin activation 自动构造 Connector/MCP runtime provider | 尚未完成 |
+| exact Plugin activation → Connector/MCP runtime provider | ✅ 已实现；live install/enable authority 尚未完成 |
+| MCP `tools/list_changed` → safe-point rebuild | ✅ 已实现 |
 
-下一阶段应由 Plugin activation 输出 exact package-rooted MCP materializer，并补生产 secret backend 与具体
-OAuth provider；它们复用现有 authority/App Server/MCP fence，不再创建第二套 Connector 状态机。
+下一阶段只补具体服务适配和 lifecycle authority：OAuth provider/browser callback、refresh/revoke、OS
+keyring，以及 Plugin install/enable 的 live activation 切换。它们必须复用现有 authority、SecretStore、
+App Server safe point 和 MCP dispatch fence，不得创建第二套 Connector 状态机。

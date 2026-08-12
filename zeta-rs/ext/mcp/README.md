@@ -14,6 +14,11 @@ also reads the exact ready Connector snapshot, loads each opaque credential thro
 `SecretStore`, and delegates Plugin-specific transport construction to
 `ConnectorMcpRuntimeProvider`. Config/Connector server-ID collisions fail closed.
 
+`PluginConnectorMcpRuntimeProvider::from_activation` is the current package-rooted implementation.
+It reads strict bounded JSON from exact installed objects, enforces manifest process/network and
+credential-slot ceilings, and materializes both Connector-backed and credential-free standalone
+Plugin MCP contributions. `StandaloneMcpServer` is the provider-facing publication contract.
+
 `materialize_connector_servers` binds every resulting server to `ConnectorInvocationFence`.
 `McpToolService::review_request` rejects stale connections before approval, while
 `McpToolService::execute` calls `ConnectorAuthority::with_authorized_invocation` immediately around
@@ -21,6 +26,11 @@ the actual MCP dispatch. This prevents an old prepared call from starting after 
 The authority lock may delay disconnect until an already-dispatched call returns; weakening that
 linearization requires a replacement contract, not a best-effort state check.
 
+`McpCatalogUpdates` translates runtime `tools/list_changed` notifications into host reconcile
+hints. App Server constructs the complete next runtime, then atomically replaces future model safe
+points; prepared calls retain their old `ToolService` generation until completion.
+
 Standalone Config credential references remain unsupported and fail before session startup.
-Plugin activation must still implement a concrete `ConnectorMcpRuntimeProvider`; OAuth and
-production secret persistence are outside this crate.
+OAuth and secret persistence are outside this crate; a concrete OAuth provider/browser callback and
+OS keyring backend remain unavailable even though Connector PKCE orchestration and explicit-file
+secret persistence exist in their owning crates.

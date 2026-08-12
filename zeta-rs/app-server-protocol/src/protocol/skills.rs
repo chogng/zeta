@@ -1,4 +1,5 @@
 use crate::protocol::common::CommandId;
+use crate::protocol::resources::ResourceMetadataResult;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -98,6 +99,38 @@ pub struct SkillSetEnablementParams {
     pub expected_revision: u64,
     pub skill_id: SkillId,
     pub enablement: SkillEnablementDto,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum SkillResourceKindDto {
+    Instructions,
+    Reference,
+    Script,
+    Asset,
+    AgentMetadata,
+    Other,
+}
+
+/// Opens one inert package resource from an exact Skill revision.
+///
+/// `path` remains package-relative. The server revalidates both the Skill digest and the rooted
+/// resource path before publishing bytes into the connection-owned Resource store.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillResourceOpenParams {
+    pub skill_id: SkillId,
+    pub skill_content_digest: ContentDigest,
+    #[schemars(length(min = 1, max = 1024))]
+    pub path: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillResourceOpenResult {
+    pub path: String,
+    pub kind: SkillResourceKindDto,
+    pub resource: ResourceMetadataResult,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

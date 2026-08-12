@@ -3,6 +3,7 @@
 mod auth;
 mod authority;
 mod command;
+mod oauth;
 mod projection;
 
 pub use auth::ConnectorApiTokenConnectRequest;
@@ -20,6 +21,17 @@ pub use command::ConnectorCommandDisposition;
 pub use command::ConnectorCommandId;
 pub use command::ConnectorCommandRequest;
 pub use command::ConnectorCommandResult;
+pub use oauth::ConnectorOAuthAuthorization;
+pub use oauth::ConnectorOAuthChallenge;
+pub use oauth::ConnectorOAuthCompleteRequest;
+pub use oauth::ConnectorOAuthCredential;
+pub use oauth::ConnectorOAuthError;
+pub use oauth::ConnectorOAuthErrorKind;
+pub use oauth::ConnectorOAuthExchangeRequest;
+pub use oauth::ConnectorOAuthFlowId;
+pub use oauth::ConnectorOAuthProvider;
+pub use oauth::ConnectorOAuthService;
+pub use oauth::ConnectorOAuthStartRequest;
 pub use projection::ConnectorCatalog;
 pub use projection::ConnectorCatalogError;
 

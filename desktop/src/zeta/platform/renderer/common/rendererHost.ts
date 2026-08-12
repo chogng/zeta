@@ -11,6 +11,7 @@ import type { ITerminalProcessService } from "../../terminal/common/terminalProc
 import type { ITypstApi } from "../../typst/common/typstApi.js";
 import type { IDocumentCollaborationApi } from "../../collaboration/common/documentCollaborationApi.js";
 import type { ICodeIndexApi } from "../../codeIndex/common/codeIndexApi.js";
+import type { IConnectorApi } from "../../connectors/common/connectorApi.js";
 import type { IToolSearchApi } from "../../toolSearch/common/toolSearchApi.js";
 import type { ILanguageApi } from "../../language/common/languageApi.js";
 
@@ -35,5 +36,6 @@ export interface IRendererHost {
   readonly terminal: ITerminalProcessService;
   readonly events: IServerEventApi;
   readonly codeIndex: ICodeIndexApi;
+  readonly connectors: IConnectorApi;
   readonly toolSearch: IToolSearchApi;
 }

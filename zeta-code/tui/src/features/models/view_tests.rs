@@ -54,5 +54,15 @@ fn empty_config() -> ConfigReadResult {
         plugin_requests: BTreeMap::new(),
         hooks: BTreeMap::new(),
         language_servers: BTreeMap::new(),
+        tool_search: zeta_app_server_protocol::protocol::config::ToolSearchConfigDto {
+            mode: zeta_app_server_protocol::protocol::config::ToolSearchModeDto::Lexical,
+            embedding_model: None,
+            embedding_status: zeta_app_server_protocol::protocol::config::ToolSearchEmbeddingStatusDto::Disabled,
+        },
+        semantic_code_index: zeta_app_server_protocol::protocol::config::SemanticCodeIndexConfigDto {
+            selection: zeta_app_server_protocol::protocol::config::SemanticCodeIndexSelectionDto::Disabled,
+            automatic_context: zeta_app_server_protocol::protocol::config::SemanticCodeIndexAutomaticContextDto::Off,
+            active_workspace_authorized: false,
+        },
     }
 }

@@ -16,6 +16,7 @@ request signing 和 Provider header materialization 均属于消费它的 domain
 | `DeleteSecretOutcome` | exact delete result | 区分 `Deleted` 与 `NotFound` |
 | `MemorySecretStore` | process-local ephemeral backend | replacement、delete、drop 时 zeroize stored bytes |
 | `UnavailableSecretStore` | explicit fail-closed backend | 所有操作返回 `BackendUnavailable` |
+| `FileSecretStore` | explicit opt-in durable backend | hashed filenames、私有权限、有界读取、同步 staging 与 replace |
 | `SecretStoreError` | sanitized error | message 不能包含 secret/header/raw backend response |
 | `SecretStoreErrorKind` | stable caller classification | unavailable、access denied、backend failure |
 
@@ -32,6 +33,9 @@ Key schema 由调用 domain 拥有，本 crate 只验证基本安全 shape。
 | `unavailable` | private function | 三个 unavailable operations 共用稳定错误 |
 | `Drop for SecretValue` | impl | zeroize caller-owned secret buffer |
 | `Drop for MemorySecretStore` | impl | zeroize map 中所有 surviving values |
+| `key_filename` | private function | domain-separated SHA-256 key → non-PII filename |
+| `promote_file` | private platform function | synced staging → destination replacement |
+| `cleanup_staging_files` | private function | open 时清理同 namespace 的 stale `.tmp-*` 文件 |
 
 ```text
 store(key, SecretValue)
@@ -71,12 +75,15 @@ cargo test -p zeta-secrets
 bazel test //zeta-rs/secrets:secrets-unit-tests
 ```
 
-当前测试覆盖 round-trip/replace/delete、Debug redaction、key validation 和 unavailable error。
+当前测试覆盖 memory/file round-trip、replace/delete、Debug redaction、key validation、unavailable error、
+Unix 0700/0600 权限、stale staging cleanup、key filename 隐藏与 1 MiB 上限。
 新增 backend 时必须补 error/log/debug negative tests，并证明 replacement/delete/drop 的 secret
 buffer 处理。
 
 ## 当前限制与演进
 
-当前只有 memory 与 unavailable backend。OS keyring、encrypted file、migration、rotation metadata
-均尚未实现。它们应作为 sibling private module 接入同一 `SecretStore` contract；不要为 backend
-能力扩大 `SecretValue` 的复制、序列化或日志接口。
+当前具有 memory、unavailable 与显式文件 backend。`FileSecretStore` 适合 host 明确选择的私有产品
+目录：Unix 使用 0700/0600 与原子 rename；未实现等价 ACL 的非 Unix host 在 `open` 时明确返回
+`BackendUnavailable`，不会静默写入普通文件。OS keyring、加密文件、跨进程锁、migration 与 rotation
+metadata 尚未实现。它们应作为 sibling private module 接入同一 `SecretStore` contract；
+不要为 backend 能力扩大 `SecretValue` 的复制、序列化或日志接口。

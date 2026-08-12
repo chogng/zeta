@@ -4,6 +4,7 @@ use zeta_app_server_client::{AppServerEvent, ConnectionCloseReason, ServerNotifi
 use zeta_app_server_protocol::protocol::collaboration::DocumentCollaborationPresence;
 use zeta_app_server_protocol::protocol::collaboration::DocumentCollaborationPresenceSnapshot;
 use zeta_app_server_protocol::protocol::collaboration::DocumentCollaborationUpdate;
+use zeta_app_server_protocol::protocol::connectors::ConnectorsChanged;
 use zeta_app_server_protocol::protocol::git::{GitHeadDto, GitStatusChanged, GitStatusResult};
 use zeta_app_server_protocol::protocol::notification::{SkillsChanged, ThreadUpdateEnvelope};
 use zeta_protocol::{SessionId, StreamInstanceId, ThreadEvent, ThreadId, ThreadUpdate};
@@ -15,6 +16,16 @@ fn skills_changed_is_mapped_without_exposing_the_wire_notification() {
             ServerNotification::SkillsChanged(SkillsChanged { generation: 7 })
         )),
         Some(ClientEvent::SkillsChanged)
+    );
+}
+
+#[test]
+fn connectors_changed_requests_a_connector_catalog_refresh() {
+    assert_eq!(
+        map_event(AppServerEvent::Notification(
+            ServerNotification::ConnectorsChanged(ConnectorsChanged { generation: 9 })
+        )),
+        Some(ClientEvent::ConnectorsChanged)
     );
 }
 

@@ -45,6 +45,8 @@ Session/Thread coordinator 的存储，不改变 Config、Workspace、Tool 或 p
 | `InProcessClientOptions::with_session_state_mode` | 明确选择 profile durable history 或 process-local ephemeral Session/Thread state |
 | `InProcessClientOptions::with_model_operation_client` | embedded host/test 注入离线或自定义 model transport；不改变 protocol/model semantics |
 | `AppServerClient::request_session` | Session aggregate 的 canonical typed mutation request；所有 Session mutation 统一由此进入 |
+| `AppServerClient::open_skill_resource` | 以 exact Skill digest 打开 package resource；bytes 仍由 connection-owned Resource API 分块读取 |
+| `ServerNotification::ConnectorsChanged` | `connector/changed` 的 typed generation invalidation；consumer 收到后重新 list |
 
 正常入口示意（`options`/`params` 由 host 与 protocol DTO 构造）：
 

@@ -36,7 +36,7 @@ JSONL / in-process caller
    ├─ request-scoped CodeRetrievalService → lexical/semantic/remote RRF + verification + budget
    ├─ optional TerminalService → zeta-utils-pty
    ├─ reloadable MCP Tool generation → zeta-mcp-extension → zeta-mcp
-   ├─ optional ConnectorCredentialService → list/connect/disconnect + ready MCP reconcile
+   ├─ ConnectorCredentialService → list/connect/disconnect + ready MCP reconcile
    ├─ client-hosted dynamic tools → durable Agent interaction owner
    ├─ read-only/capability ToolExecutor contributions → zeta-extension-api
    ├─ optional Web Search executor → zeta-web-search-extension
@@ -87,6 +87,8 @@ Core/store 继续拥有 Session/Thread durable state；需要进程内生命周�
 | `open_local_app_server_with_code_index_providers` | 在 Workspace 激活前同时注入本地 semantic models 与可选 cloud providers |
 | `LocalAppServerOptions` | user profile root + SessionStateMode + optional Workspace/Connector runtime + validated slash catalog + built-in Skill root selection + optional model operation client |
 | `LocalConnectorRuntime` | Connector credential service + shared SecretStore + Plugin-specific MCP materializer |
+| `LocalAppServerOptions::with_plugin_activation` | 从 exact activation 构造 package-rooted Connector/MCP runtime |
+| `LocalConnectorRuntime::from_plugin_activation` | activation → Connector catalog + SQLite authority + Plugin MCP provider |
 | `SessionStateMode` | 明确选择 profile SQLite durable history 或 process-local ephemeral Session/Thread state |
 | `BuiltInSkillRoot` | auto-detected release root、explicit test/host root 或 unavailable 的自解释选择 |
 | `zeta_slash_commands::SlashCommandCatalog` | 委托共享 crate 校验动态命令并冻结 server-advertised snapshot；App Server 只拥有 composition |
@@ -95,9 +97,11 @@ Core/store 继续拥有 Session/Thread durable state；需要进程内生命周�
 
 `AppServer::new` 默认用 `TurnExecutor::without_tools`。`with_tool_service` 才会替换为有 Tool 和
 Policy port 的 executor。`open_local_app_server` 会从 user config snapshot 连接明确 `enabled`
-的 unauthenticated MCP server，并把 catalog 与本地工具组合；host 注入 `LocalConnectorRuntime` 后，
-同一 composition 还会 materialize ready Connector MCP declaration。Config 或 Connector commit 会在后台构建新
-generation；每次 model invocation 同时冻结可见 definitions 和响应后的 binder，因此 watcher 在模型
+的 unauthenticated MCP server，并把 catalog 与本地工具组合。Host 可用
+`LocalAppServerOptions::with_plugin_activation` 注入 exact activation；它会自动构造 Connector catalog、
+SQLite authority 与 package-rooted Plugin MCP provider。没有注入时，local composition 使用空 activation
+和 `<profile>/secrets` 的 `FileSecretStore`，因此 `connector/list` 仍可用但目录为空。Config、Connector
+或 MCP list-changed hint 会在后台构建新 generation；每次 model invocation 同时冻结可见 definitions 和响应后的 binder，因此 watcher 在模型
 响应前发布新 registry 也不会把旧响应劫持到同名新工具。已绑定调用继续持有原 Tool/Policy generation，
 直到 execute 排空；Connector-bound call 在 dispatch 前额外复核 live connection generation/digest，
 disconnect 会等待已经 dispatch 的调用结束。每次 MCP tool
@@ -166,8 +170,7 @@ src/
 │       ├── config_runtime.rs      # Config commit → config/changed fanout
 │       ├── connector_operations.rs # list/API-token connect/disconnect DTO adapter
 │       ├── connector_runtime.rs   # authority generation → connector/changed fanout
-│       ├── skill_operations.rs    # Skill catalog/enablement DTO conversion and error mapping
-│       ├── skill_operations.rs     # Skill runtime snapshot → protocol DTO
+│       ├── skill_operations.rs    # Skill catalog/enablement/resource DTO conversion and error mapping
 │       ├── start_turn.rs           # durable command replay before mutable model/Skill resolution
 │       ├── workspace_customizations.rs # Instruction/Agent catalogs + reloadable harness snapshot
 │       ├── fs_operations.rs       # root-relative filesystem DTO conversion/error mapping
@@ -452,7 +455,7 @@ local tools + enabled user MCP declarations
 
 Plugin request + Hook declaration
 └─ config/read + typed mutation only
-   ├─ Plugin install/activation manager 尚未实现
+   ├─ Plugin install/enable authority 与 live activation manager 尚未实现
    └─ Hook execution/policy runtime 尚未实现
 
 Language-server preference
@@ -490,6 +493,11 @@ skill/enablement/set
 ├─ ConfigStore::apply(SetSkillEnablement)
 └─ reconcile → publish skills/changed when projection changes
 
+skill/resource/open { SkillId, SKILL.md digest, package-relative path }
+├─ SkillRuntime::read_resource → exact digest/root/file-identity validation
+├─ conservative MIME projection; active HTML/SVG remains application/octet-stream
+└─ ResourceStore::create(connection owner, bytes, TTL)
+
 session/request StartTurn { SkillRef }
 ├─ start_turn::replayed_result
 │  └─ existing command → validate exact input and return durable result without mutable reads
@@ -509,9 +517,10 @@ notification。Watcher 启动失败时 local App Server 仍可用，显式
 activation、durable provenance、通用 prompt fragment injection 和 invocation safe-point reload
 已实现；其 `ReadOnlyToolContributor` 现在把统一的 `skills-read` 作为普通 `ToolExecutor` 投影进
 共享 registry，由模型按 metadata 中的 exact source/name 按需加载正文，再用 pinned Skill digest
-读取单个有界 package-relative UTF-8 文件。禁用只影响 future Turn
-eligibility，不能改变已经冻结的 Turn。Plugin source 和大目录候选检索的更高层决策尚未实现；
-binary asset 的 MIME/artifact materialization 与 script execution adapter 尚未完成。TUI 与 Desktop 已从
+读取单个有界 package-relative UTF-8 文件。Binary resource 通过 `skill/resource/open` 进入现有
+connection-owned Resource store，并使用保守的 MIME/signature 校验；active HTML/SVG 不会被声明为
+可直接 preview。禁用只影响 future Turn eligibility，不能改变已经冻结的 Turn。Plugin source 和
+大目录候选检索的更高层决策、Renderer preview 与 script execution adapter 尚未实现。TUI 与 Desktop 已从
 metadata-only catalog 生成直接 `/name` Skill command，
 而 `/skills` 只承担管理；正文变化或 source 消失会使恢复/后续 safe point 失败即
 关闭，不会用新 bytes 替换 frozen digest。
@@ -522,7 +531,8 @@ MCP runtime 在 `open_local_app_server` 构造初始 generation；后台 `ToolCo
 批准任何 tool call。stdio command 必须是存在的 absolute executable，独立 Config HTTP 当前只接受
 unauthenticated endpoint，credential reference 会使 composition 明确失败；注入的 Connector runtime
 可在 ready account 下 materialize credential-bearing transport。Workspace MCP intent 仍保持 pending
-trust，不会接入。`tools/list_changed` 当前只会让旧 runtime fail closed，尚未触发独立 reconcile。
+trust，不会接入。`tools/list_changed` 通过 `McpCatalogUpdates` 触发同一 host reconcile；重建失败保留
+旧 generation 并记录诊断，不发布半成品 catalog。
 启动与重建采用 `RequireAll`，任一 enabled server 无法 initialize 时保留旧 generation 并记录诊断，
 不会静默发布不完整 catalog。
 

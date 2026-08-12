@@ -4,8 +4,8 @@
 > Rust crate：`zeta_mcp`
 > Low-level client 当前实现：[`zeta-rs/rmcp-client/`](../zeta-rs/rmcp-client/README.md)，
 > Rust crate：`zeta_rmcp_client`
-> 当前状态：low-level client、tools-only product runtime、Config/Connector hot composition、
-> App Server/Core tools vertical slice 与 Connector disconnect dispatch fence 已实现
+> 当前状态：low-level client、tools-only product runtime、Config/Connector/Plugin hot composition、
+> `tools/list_changed` rebuild、App Server/Core tools vertical slice 与 Connector disconnect dispatch fence 已实现
 > Core architecture：[`core.md`](core.md)
 > Agent runtime：[`zeta-agent-runtime-architecture.md`](zeta-agent-runtime-architecture.md)
 > Tool shared contract 与纯转换：[`tools.md`](tools.md)
@@ -43,8 +43,9 @@ initialize、原始 tools API 和 stdio/Streamable HTTP transport；Current `zet
 runtime 负责多 server 启动、provider-neutral tool catalog/binding、分页/大小限制、调用路由、
 取消与失效标记。Current App Server adapter 将 user config 与 ready Connector snapshot 接入 Core
 `ToolService`、逐次用户 approval 和 durable result，并在两类 generation 变化时重建 tool port。
-Connector API-token materialization 已实现；独立 Config credential reference、OAuth、resources、prompts、
-reconnect/health 与 interaction delivery 仍是 Proposed。
+Connector API-token materialization、package-rooted Plugin MCP 和通用 Connector OAuth PKCE 编排已实现；
+独立 Config credential reference、具体 OAuth provider/browser flow、resources、prompts、reconnect/health
+与 interaction delivery 仍是 Proposed。
 
 方向相反的 `zeta-mcp-server` 通过 App Server 将 Zeta Agent 暴露给外部 MCP Host。两者不共享
 runtime ownership，也不互相依赖；具体边界见 [`mcp-server.md`](mcp-server.md)。
@@ -103,8 +104,8 @@ flowchart TD
 - `compose_mcp_tools_with_connectors` 已通过 host-injected `ConnectorMcpRuntimeProvider` 读取 ready
   Connector credential，并用 exact connector ID / connection generation / definition digest 在 prepare
   与 dispatch 前 fail closed；本地 reconcile loop 同时订阅 Config 与 Connector authority；
-- 当前没有独立 Config credential materialization、OAuth、自动 reconnect/health state machine、
-  MCP list-changed 自动 rebuild、workspace/Plugin trust activation、resource/prompt product
+- 当前没有独立 Config credential materialization、具体 OAuth provider/browser flow、自动 reconnect/health state machine、
+  workspace Plugin install/enable authority、resource/prompt product
   adapter、progress/elicitation delivery 或跨重启 remote request 恢复。
 
 因此 low-level protocol/transport、独立 tools-only runtime 和窄 App Server/Core tools slice
@@ -553,8 +554,9 @@ secret、PID、request ID、OAuth verifier、SSE cursor 和 live session ID 不�
 当前 App Server 在启动安全点读取已启用的用户声明和 ready Connector snapshot，并由后台 reconcile
 同时订阅 Config 与 Connector generation。新 MCP runtime 完整启动后才原子发布到 future model safe
 point；模型可见 definitions 和响应 binder 属于同一冻结 generation，旧 generation 由已绑定调用持有到
-排空。Connector list/API-token connect/disconnect 与 changed notification 已有 typed RPC；独立 MCP
-runtime/catalog/auth/diagnostic RPC 仍未实现，`tools/list_changed` 也尚未触发自动重建。
+排空。Connector list/API-token connect/disconnect 与 changed notification 已有 typed RPC；MCP
+`tools/list_changed` 会触发同一 reconcile 并只在完整启动成功后发布下一代。独立 MCP
+runtime/catalog/auth/diagnostic RPC 仍未实现。
 
 计划中的 App Server 接口面分为：
 
@@ -646,7 +648,8 @@ security 和 identity。resources/prompts/auth/reconnect 落地时按独立 owne
 - ✅ frozen tool binding、argument shape/output size validation 与 protocol cancellation；
 - ✅ 接入 Core Turn tool loop、逐次 approval、durable Tool Call/Result 和 UnknownOutcome；
 - Config/Connector hot rebuild、model-safe-point binding 与 old-generation drain 已接入；
-- sandbox/process supervisor、`tools/list_changed` rebuild 与 interaction delivery 尚未接入。
+- ✅ `tools/list_changed` 进入 host reconcile，并在模型安全点替换 catalog；
+- sandbox/process supervisor 与 interaction delivery 尚未接入。
 
 完成条件：server crash、取消和 Thread recovery 不会静默重放有副作用调用。
 
@@ -662,7 +665,8 @@ security 和 identity。resources/prompts/auth/reconnect 落地时按独立 owne
 ### 阶段 M3：Streamable HTTP + OAuth（基础传输部分具备）
 
 - ✅ RMCP reqwest Streamable HTTP connector 支持 unauthenticated/bearer session；
-- session resume/reconnect、protected resource metadata、PKCE、credential reference 和 revoke；
+- ✅ Connector OAuth 通用 state/PKCE/exact redirect/one-shot exchange 编排；
+- session resume/reconnect、protected resource metadata、具体 provider/browser callback、refresh 和 revoke；
 - 完整 endpoint/origin/redirect/egress policy 与 App Server credential materialization。
 
 完成条件：token 不进入 config/log/event，断线不被误判为取消或成功。

@@ -195,6 +195,7 @@ inline argument parsing；提交仍通过 `session/request` 的 `StartTurn.input
 | `hook/upsert` / `hook/remove` / `hook/enablement/set` | config | 修改 declarative Hook；不执行 process |
 | `skills/list` | global Skill catalog | 读取 cached projection 或请求完整 refresh |
 | `skill/enablement/set` | config + Skill catalog | revision-checked 启用/禁用 exact `SkillId` |
+| `skill/resource/open` | Skill runtime + Resource | 将 digest-pinned package resource materialize 为 connection-owned resource |
 | `resource/metadata` | Resource | 读取元数据 |
 | `resource/read` | Resource | 分块读取 |
 | `resource/release` | Resource | 释放 connection-owned resource |
@@ -597,6 +598,12 @@ enablement 或 filesystem/config invalidation 导致可见 projection 变化时�
 catalog 中 enabled 且 compatible 的 exact Skill，随后冻结 digest、catalog generation 与
 activation reason；客户端 raw path 没有 wire 入口。正文不会出现在 `skills/list`，而是在执行
 safe point 从受控 source 按 frozen digest 重载。
+
+`skill/resource/open` 接受 exact `SkillId`、`skillContentDigest` 与 package-relative `path`。服务端
+重新验证当前 enablement、compatibility、Skill digest、source containment 和文件 identity，再将有界
+bytes 写入当前 connection 的 Resource store。图片/PDF MIME 只有在扩展名与文件签名匹配时发布；
+HTML/SVG 等 active content 返回 `application/octet-stream`。后续读取和释放统一使用
+`resource/read`、`resource/metadata` 与 `resource/release`。
 
 Resource bytes 使用标准 RFC 4648 Base64；`decodedLength` 是原始 byte 数，单 chunk 最大
 262,144 bytes。客户端用 `decodedLength` 推进 offset，并在结束后校验 size 与 SHA-256。

@@ -102,6 +102,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
     let mut queued_actions = VecDeque::new();
     let mut thread_refresh_requested = false;
     let mut skills_refresh_requested = false;
+    let mut connectors_refresh_requested = false;
     if let Err(error) = terminal.draw(|terminal_frame| frame::draw(terminal_frame, &app)) {
         let _ = pump.shutdown();
         return Err(error.into());
@@ -119,6 +120,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     );
                     thread_refresh_requested |= refresh.thread;
                     skills_refresh_requested |= refresh.skills;
+                    connectors_refresh_requested |= refresh.connectors;
                     None
                 }
                 client::RuntimeEvent::Tick => None,
@@ -499,6 +501,25 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             );
                         }
                     }
+                    AppCommand::DisconnectConnector { connector_id } => {
+                        if pending_request.is_none() {
+                            let mut request_client = client.clone();
+                            pending_request = spawn_request(
+                                "zeta-tui-disconnect-connector",
+                                move || {
+                                    RequestCompletion::Presentation(
+                                        crate::features::connectors::disconnect(
+                                            &mut request_client,
+                                            connector_id,
+                                        )
+                                        .map(AppEvent::ConnectorViewReplaced)
+                                        .map_err(|error| error.to_string()),
+                                    )
+                                },
+                                &mut app,
+                            );
+                        }
+                    }
                     AppCommand::SetMcpEnablement {
                         server_id,
                         enablement,
@@ -656,6 +677,23 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     skills_refresh_requested = false;
                 }
             }
+            if pending_request.is_none() && connectors_refresh_requested {
+                let mut request_client = client.clone();
+                pending_request = spawn_request(
+                    "zeta-tui-refresh-connectors",
+                    move || {
+                        RequestCompletion::Presentation(
+                            crate::features::connectors::load_selection(&mut request_client)
+                                .map(AppEvent::ConnectorViewReplaced)
+                                .map_err(|error| error.to_string()),
+                        )
+                    },
+                    &mut app,
+                );
+                if pending_request.is_some() {
+                    connectors_refresh_requested = false;
+                }
+            }
             terminal.draw(|terminal_frame| frame::draw(terminal_frame, &app))?;
         }
     })();
@@ -707,6 +745,7 @@ fn uses_request_task(action: &AppCommand) -> bool {
 
 #[derive(Default)]
 struct ServerRefresh {
+    connectors: bool,
     thread: bool,
     skills: bool,
 }
@@ -733,6 +772,10 @@ fn refresh_server_event(
         }
         client::ClientEvent::SkillsChanged => ServerRefresh {
             skills: true,
+            ..ServerRefresh::default()
+        },
+        client::ClientEvent::ConnectorsChanged => ServerRefresh {
+            connectors: app.connector_view_open(),
             ..ServerRefresh::default()
         },
         client::ClientEvent::Failed(error) => {

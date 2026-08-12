@@ -70,6 +70,45 @@ impl ConnectorCredentialService {
         &self.authority
     }
 
+    pub(crate) fn begin_connect_attempt(
+        &self,
+        command_id: &ConnectorCommandId,
+        expected_generation: ConnectorSnapshotGeneration,
+        connector_id: ConnectorId,
+        connection_generation: ConnectorConnectionGeneration,
+    ) -> Result<ConnectorCommandResult, ConnectorCredentialServiceError> {
+        self.authority
+            .apply(ConnectorCommandRequest {
+                command_id: phase_command_id(command_id, "begin")?,
+                expected_generation,
+                connector_id,
+                command: ConnectorAuthorityCommand::BeginConnect {
+                    generation: connection_generation,
+                },
+            })
+            .map_err(Into::into)
+    }
+
+    pub(crate) fn mark_connect_unavailable(
+        &self,
+        command_id: &ConnectorCommandId,
+        expected_generation: ConnectorSnapshotGeneration,
+        connector_id: ConnectorId,
+        connection_generation: ConnectorConnectionGeneration,
+    ) -> Result<ConnectorCommandResult, ConnectorCredentialServiceError> {
+        self.authority
+            .apply(ConnectorCommandRequest {
+                command_id: phase_command_id(command_id, "unavailable")?,
+                expected_generation,
+                connector_id,
+                command: ConnectorAuthorityCommand::MarkUnavailable {
+                    generation: connection_generation,
+                    reason: "OAuth connection failed".into(),
+                },
+            })
+            .map_err(Into::into)
+    }
+
     /// Stores an API token and publishes a connected account under two retry-safe authority steps.
     pub fn connect_api_token(
         &self,
@@ -90,14 +129,12 @@ impl ConnectorCredentialService {
             credential_reference,
             request.connection_generation,
         )?;
-        let begin = self.authority.apply(ConnectorCommandRequest {
-            command_id: phase_command_id(&request.command_id, "begin")?,
-            expected_generation: request.expected_generation,
-            connector_id: request.connector_id.clone(),
-            command: ConnectorAuthorityCommand::BeginConnect {
-                generation: request.connection_generation,
-            },
-        })?;
+        let begin = self.begin_connect_attempt(
+            &request.command_id,
+            request.expected_generation,
+            request.connector_id.clone(),
+            request.connection_generation,
+        )?;
         let complete_command_id = phase_command_id(&request.command_id, "complete")?;
         if begin.disposition == ConnectorCommandDisposition::Replayed {
             let current = self.authority.snapshot();
@@ -277,7 +314,7 @@ impl From<ConnectorError> for ConnectorCredentialServiceError {
     }
 }
 
-fn phase_command_id(
+pub(crate) fn phase_command_id(
     parent: &ConnectorCommandId,
     phase: &str,
 ) -> Result<ConnectorCommandId, ConnectorCredentialServiceError> {

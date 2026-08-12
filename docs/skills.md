@@ -2,7 +2,7 @@
 
 > 物理位置：`zeta-rs/skills/`
 > Rust crate：`zeta_skills`
-> 当前状态：Phase S0、S1 显式选择、模型按需读取、通用 package resource 与有界文本模型切片已实现；binary asset materialization、script execution adapter 与 S3–S4 仍为 Proposed。TUI 与 Desktop 已把
+> 当前状态：Phase S0、S1 显式选择、模型按需读取、通用 package resource、有界文本模型切片与 binary asset Resource materialization 已实现；Renderer preview、script execution adapter 与 S3–S4 仍为 Proposed。TUI 与 Desktop 已把
 > 可直接调用的 Skill 投影为统一斜杠面板中的 `/name`；`/skills` 只承担目录管理。
 > Crate 实现契约：[`zeta-rs/skills/README.md`](../zeta-rs/skills/README.md)
 > Runtime extension 实现契约：[`zeta-rs/ext/skills/README.md`](../zeta-rs/ext/skills/README.md)
@@ -69,7 +69,8 @@ catalog generation。内置内容由 `zeta-rs/skills/assets/` 拥有，release s
 `zeta-skills-extension` 当前拥有 catalog runtime：它组合 release built-in root、user config 中
 明确 enabled 的绝对 source root 和 active Workspace 的 `.zeta/skills`，叠加 durable per-Skill
 enablement，缓存 immutable projection，并通过通用 contributor 提供 Turn activation 与 context
-fragment。App Server 只提供 `skills/list`、`skill/enablement/set` 与 `skills/changed` 协议投影。
+fragment。App Server 提供 `skills/list`、`skill/enablement/set`、digest-pinned
+`skill/resource/open` 与 `skills/changed` 协议投影。
 `zeta-file-watcher` 的
 invalidation 会触发完整重扫；只有 entry、diagnostic 或 enablement 的 consumer-visible projection
 变化才推进 runtime generation。共享的 `SkillName`、`SkillSourceId` 与 `SkillId` 已下沉到
@@ -104,9 +105,9 @@ App Server 先按 durable command receipt 校验输入并返回原 Turn 结果�
 Skill 文件；因此源文件删除不会破坏已完成命令的幂等重放。
 
 当前 runtime source composition 包含 built-in、user 和 active Workspace 的原生
-`.zeta/skills` source。Workspace config 中额外声明的 Skill source intent、Plugin contribution、
-binary asset materialization 与 script execution adapter 尚未接入；正文读取、通用 package
-resource resolver、有界 UTF-8 模型读取、compatibility gate、显式激活和模型按需读取已接入。
+`.zeta/skills` source。Workspace config 中额外声明的 Skill source intent、Plugin contribution 与
+script execution adapter 尚未接入；正文读取、通用 package resource resolver、有界 UTF-8 模型
+读取、binary asset Resource materialization、compatibility gate、显式激活和模型按需读取已接入。
 
 仓库已有可复用边界：
 
@@ -564,6 +565,13 @@ Assets 是模板、图片或静态数据：
 - 模板展开后的结果是新 artifact，不反向修改 immutable Skill；
 - HTML/SVG 等 active content 在 UI preview 中必须 sanitize/sandbox。
 
+当前 App Server 的 `skill/resource/open` 要求 exact `SkillId + SKILL.md digest + package-relative
+path`，重新经过 `SkillRuntime::read_resource` 的 enablement、compatibility、root containment 与
+digest 校验，再把 bytes 写入 connection-owned `ResourceStore`。PNG/JPEG/GIF/WebP/PDF 只有在扩展名
+与文件签名同时匹配时才投影对应 MIME；HTML/SVG 强制投影为 `application/octet-stream`。客户端随后
+沿用 `resource/metadata`、`resource/read` 与 `resource/release`，不能从该接口执行 script 或写回
+Skill package。Renderer 的 sandboxed/sanitized preview 仍未实现。
+
 ## 12. 兼容性
 
 Agent Skills `compatibility` 是自由文本，不能作为 machine-enforced permission。Zeta 处理为：
@@ -661,8 +669,8 @@ stored identity/digest；重新执行必须重新授权/解析，不能假定旧
 | `skills/list` | 读取 metadata-only catalog；`refresh` 请求重扫 | ✅ 已实现 |
 | `skill/enablement/set` | 按 exact `SkillId` 修改 future eligibility | ✅ 已实现 |
 | `session/request` StartTurn Skill input | 选择 exact `SkillRef` | ✅ 已实现 |
+| `skill/resource/open` | 将 digest-pinned package resource materialize 到 connection-owned Resource store | ✅ 已实现 |
 | `skill/read` | 读取 entry metadata/diagnostics，不默认返回完整 body | Proposed |
-| `skill/content/read` | 通过 Resource/分块读取受控内容 | Proposed |
 
 Skill install/remove 不属于 Skill manager：
 
@@ -831,11 +839,12 @@ Skill 需要未来带来源限定的选择交互。CLI 没有独立可视化目�
 完成条件：模型只看到目录元数据，正文必须经 exact read 才进入上下文；restricted Workspace 下仍
 可使用受控的进程内 Skill reader，且 App Server 不拥有 Skill 选择或文件加载逻辑。
 
-### 阶段 S2：资源与脚本（通用资源读取与文本模型切片已实现）
+### 阶段 S2：资源与脚本（资源读取、文本切片与 binary materialization 已实现）
 
 - ✅ rooted package resource reader、kind/digest/bytes 与统一模型工具接入；
 - ✅ 模型工具只把 UTF-8 资源作为文本返回，binary asset 明确拒绝注入文本上下文；
-- assets 的 MIME/preview/Resource integration；
+- ✅ assets 的安全 MIME 投影与 connection-owned Resource integration；
+- Renderer 的 sanitized/sandboxed preview；
 - scripts 只通过 exec/tool/approval/sandbox；
 - reference cycle、MIME 和 active-content policy。
 

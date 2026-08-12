@@ -11,6 +11,7 @@ use zeta_connectors::ConnectorRuntimeBinding;
 use zeta_connectors::ConnectorSnapshot;
 use zeta_connectors::ConnectorSnapshotGeneration;
 use zeta_plugins::LocalPluginPackage;
+use zeta_plugins::PluginActivationSnapshot;
 use zeta_plugins::PluginId;
 use zeta_plugins::PluginManifest;
 use zeta_tools::CapabilityDiscoveryId;
@@ -28,6 +29,20 @@ pub struct ConnectorCatalog {
 }
 
 impl ConnectorCatalog {
+    /// Projects exact packages selected by one immutable Plugin activation generation.
+    pub fn from_activation(
+        activation: &PluginActivationSnapshot,
+    ) -> Result<Self, ConnectorCatalogError> {
+        let generation = ConnectorSnapshotGeneration::new(activation.generation());
+        Self::from_packages(
+            generation,
+            activation
+                .packages()
+                .iter()
+                .map(|package| package.package()),
+        )
+    }
+
     /// Projects validated Plugin connector declarations without connecting accounts or starting MCP.
     pub fn from_manifests<'a>(
         generation: ConnectorSnapshotGeneration,

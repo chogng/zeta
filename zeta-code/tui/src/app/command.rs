@@ -17,6 +17,9 @@ pub(crate) enum AppCommand {
     Interrupt,
     Suspend,
     CopyLastResponse,
+    DisconnectConnector {
+        connector_id: String,
+    },
     ExportTranscript {
         requested_path: Option<PathBuf>,
     },

@@ -3,7 +3,7 @@
 > - 物理位置：`zeta-rs/secrets/`
 > - Rust crate：`zeta_secrets`
 > - 层次：host secret persistence primitive
-> - 当前实现：typed key/value、`load/store/delete` port、ephemeral memory backend、unavailable backend
+> - 当前实现：typed key/value、`load/store/delete` port、ephemeral memory、unavailable 与显式文件 backend
 > - Crate 实现、安全义务与测试：[`zeta-rs/secrets/README.md`](../zeta-rs/secrets/README.md)
 > - Direct-provider credential：[`model-provider.md`](model-provider.md#6-provider-credential-与-subscription-backend)
 > - Interactive login control plane：[`login.md`](login.md)
@@ -170,7 +170,9 @@ zeta-rs/secrets/
     ├── value.rs
     ├── store.rs
     ├── memory.rs
+    ├── file.rs
     ├── secrets_tests.rs
+    ├── file_tests.rs
     └── backend/
         ├── mod.rs
         ├── keyring.rs
@@ -178,7 +180,8 @@ zeta-rs/secrets/
         └── backend_tests.rs
 ```
 
-`backend/` 在实现第一个完整生产 backend 时再创建，不预建空模块。
+当前显式文件实现位于 `src/file.rs`，保持为现有 module layout 的 sibling；只有多个平台 backend
+需要共同私有基础设施时才引入 `backend/` 层级。
 
 ## 8. 依赖方向
 
@@ -226,6 +229,8 @@ Desktop renderer ──▶ SecretStore
 4. secrets 只保存 opaque bytes，不理解 token 或 account。
 5. Config 只保存 reference，不保存 secret。
 6. API/client/Core 不读取 secret store。
-7. 生产 backend 未完整实现前，显式返回 unavailable，不静默使用普通明文文件。
+7. 本地 Connector composition 使用私有、原子替换的显式文件 backend；其他 host 若未明确选择安全
+   backend，仍返回 unavailable，不静默降级到普通配置文件。当前该 backend 只在能强制 0700/0600
+   权限的 Unix host 启用；Windows ACL adapter 完成前明确 fail closed。
 8. Zeta App Server 不读取 `SecretStore`，也不拥有 OAuth state/token；ChatGPT/Codex 的凭据归
    upstream Codex App Server。

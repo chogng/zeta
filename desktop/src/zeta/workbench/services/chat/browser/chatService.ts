@@ -82,7 +82,7 @@ export class ChatService extends DisposableOwner implements IChatService {
       ...(options.skills ?? []).map(skill => ({ type: "skill" as const, skill: skill as SkillRefDto })),
       { type: "text", text: options.text },
     ];
-    await this.options.turnApi.start({ commandId: commandId("turn"), sessionId: options.sessionId, threadId: options.threadId, expectedSequence: options.expectedSequence, input });
+    await this.options.turnApi.start({ commandId: commandId("turn"), sessionId: options.sessionId, threadId: options.threadId, expectedSequence: options.expectedSequence, approvalMode: "askPermissions", input });
   }
 
   async interruptTurn(options: InterruptTurnOptions): Promise<void> {
