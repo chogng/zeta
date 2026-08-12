@@ -6,8 +6,8 @@
 > Plugin 分发边界：[`plugins.md`](plugins.md)。MCP 调用边界：[`mcp.md`](mcp.md)。
 > 当前状态：Connector domain、SQLite authority、API-token connect/disconnect、App Server 协议、
 > package-rooted Plugin activation、ready/standalone MCP composition、模型安全点 registry replacement、
-> in-flight dispatch drain、显式文件 `SecretStore`、OAuth PKCE 状态机和产品连接入口已实现。
-> 具体 OAuth provider、浏览器回调接线、refresh/远端 revoke 与 OS keyring 仍是扩展点。
+> in-flight dispatch drain、OS keyring 与显式文件 `SecretStore`、OAuth PKCE 状态机和产品连接入口已实现。
+> 具体 OAuth provider、浏览器回调接线与 refresh/远端 revoke 仍是扩展点。
 
 ## 快速理解
 
@@ -152,8 +152,8 @@ connection generation；任何状态变化都必须同时推进 snapshot generat
 | OAuth state/PKCE/exchange 编排 | ✅ 已实现通用 provider port；具体 provider/浏览器回调尚未接入 |
 | refresh、远端 revoke | 尚未完成 |
 | `zeta-secrets` memory/unavailable backend | ✅ 已实现 |
-| 显式文件 backend | ✅ 已实现并作为本地默认 Connector persistence |
-| OS keyring backend | 尚未完成 |
+| OS keyring backend | ✅ 已实现并作为本地默认 Connector persistence |
+| 显式文件 backend | ✅ 已实现，保持 explicit opt-in，不作为自动 fallback |
 | App Server list/connect/disconnect + changed notification | ✅ 已实现 |
 | Desktop API-token UI；TUI 列表/断开/通知刷新 | ✅ 已实现 |
 | OAuth browser interaction；TUI secret 输入 | 尚未完成 |
@@ -161,6 +161,6 @@ connection generation；任何状态变化都必须同时推进 snapshot generat
 | exact Plugin activation → Connector/MCP runtime provider | ✅ 已实现；live install/enable authority 尚未完成 |
 | MCP `tools/list_changed` → safe-point rebuild | ✅ 已实现 |
 
-下一阶段只补具体服务适配和 lifecycle authority：OAuth provider/browser callback、refresh/revoke、OS
-keyring，以及 Plugin install/enable 的 live activation 切换。它们必须复用现有 authority、SecretStore、
+下一阶段只补具体服务适配和 lifecycle authority：OAuth provider/browser callback、refresh/revoke，
+以及 Plugin install/enable 的 live activation 切换。它们必须复用现有 authority、SecretStore、
 App Server safe point 和 MCP dispatch fence，不得创建第二套 Connector 状态机。

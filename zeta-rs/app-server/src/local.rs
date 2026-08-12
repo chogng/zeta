@@ -34,6 +34,7 @@ use zeta_core::SessionCoordinator;
 use zeta_core::ThreadController;
 use zeta_extensions::ExtensionRoot;
 use zeta_install_context::InstallContext;
+use zeta_keyring_store::KeyringSecretStore;
 use zeta_mcp_extension::ConnectorMcpRuntimeProvider;
 use zeta_mcp_extension::McpCatalogUpdateSubscription;
 use zeta_mcp_extension::McpCatalogUpdates;
@@ -57,7 +58,6 @@ use zeta_models_manager::ModelsManager;
 use zeta_plugins::PluginActivationSnapshot;
 use zeta_protocol::ContextWindow;
 use zeta_rollout::LocalStateRepository;
-use zeta_secrets::FileSecretStore;
 use zeta_secrets::SecretStore;
 use zeta_skills_extension::BuiltInSkillSource;
 use zeta_skills_extension::SkillConfigSnapshotProvider;
@@ -496,7 +496,7 @@ pub fn open_local_app_server_with_code_index_providers(
             let activation = PluginActivationSnapshot::empty(1)
                 .map_err(|error| OpenAppServerError(error.to_string()))?;
             let secrets = Arc::new(
-                FileSecretStore::open(options.profile_root.join("secrets"))
+                KeyringSecretStore::for_profile(&options.profile_root)
                     .map_err(|error| OpenAppServerError(error.to_string()))?,
             );
             Some(LocalConnectorRuntime::from_plugin_activation(

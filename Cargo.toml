@@ -43,6 +43,7 @@ members = [
     "zeta-rs/http-client",
     "zeta-rs/install-context",
     "zeta-rs/instructions",
+    "zeta-rs/keyring-store",
     "zeta-rs/language-server-catalog",
     "zeta-rs/language-server-distribution",
     "zeta-rs/language-service",
@@ -129,6 +130,7 @@ image = { version = "0.25.10", default-features = false }
 ignore = "0.4"
 lazy_static = "1"
 libc = "0.2"
+keyring = { version = "3.6", default-features = false }
 log = "0.4"
 lsp-types = "0.97"
 hf-chat-template = { version = "1.0.0", features = ["strftime"] }
@@ -239,6 +241,7 @@ zeta-history = { path = "zeta-rs/history" }
 zeta-http-client = { path = "zeta-rs/http-client" }
 zeta-install-context = { path = "zeta-rs/install-context" }
 zeta-instructions = { path = "zeta-rs/instructions" }
+zeta-keyring-store = { path = "zeta-rs/keyring-store" }
 zeta-keybinding = { path = "zeterm/keybinding" }
 zeta-composer = { path = "zeterm/composer" }
 zeta-layout = { path = "zeterm/layout" }

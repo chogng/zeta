@@ -31,6 +31,6 @@ hints. App Server constructs the complete next runtime, then atomically replaces
 points; prepared calls retain their old `ToolService` generation until completion.
 
 Standalone Config credential references remain unsupported and fail before session startup.
-OAuth and secret persistence are outside this crate; a concrete OAuth provider/browser callback and
-OS keyring backend remain unavailable even though Connector PKCE orchestration and explicit-file
-secret persistence exist in their owning crates.
+OAuth and secret persistence are outside this crate. Connector PKCE orchestration and OS keyring /
+explicit-file persistence exist in their owning crates; concrete OAuth providers, browser callback
+wiring, refresh, and remote revoke remain unavailable.

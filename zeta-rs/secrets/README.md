@@ -1,7 +1,8 @@
 # `zeta-secrets`
 
 > 本 README 解释 opaque secret value、store port 与 backend obligation。跨系统 credential
-> ownership 和 backend policy 见 [`docs/secrets.md`](../../docs/secrets.md)。
+> ownership 和 backend policy 见 [`docs/secrets.md`](../../docs/secrets.md)。OS keyring 实现契约见
+> [`zeta-keyring-store`](../keyring-store/README.md)。
 
 `zeta-secrets` 只保存 opaque bytes。OAuth、token refresh、account metadata、credential scope、
 request signing 和 Provider header materialization 均属于消费它的 domain runtime。
@@ -84,6 +85,6 @@ buffer 处理。
 
 当前具有 memory、unavailable 与显式文件 backend。`FileSecretStore` 适合 host 明确选择的私有产品
 目录：Unix 使用 0700/0600 与原子 rename；未实现等价 ACL 的非 Unix host 在 `open` 时明确返回
-`BackendUnavailable`，不会静默写入普通文件。OS keyring、加密文件、跨进程锁、migration 与 rotation
-metadata 尚未实现。它们应作为 sibling private module 接入同一 `SecretStore` contract；
-不要为 backend 能力扩大 `SecretValue` 的复制、序列化或日志接口。
+`BackendUnavailable`，不会静默写入普通文件。OS keyring 位于独立 `zeta-keyring-store` 并实现同一
+`SecretStore` contract；加密文件、跨进程锁、migration 与 rotation metadata 尚未实现。后续 backend
+不得扩大 `SecretValue` 的复制、序列化或日志接口。

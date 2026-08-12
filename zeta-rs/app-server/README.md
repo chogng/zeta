@@ -100,7 +100,8 @@ Policy port 的 executor。`open_local_app_server` 会从 user config snapshot �
 的 unauthenticated MCP server，并把 catalog 与本地工具组合。Host 可用
 `LocalAppServerOptions::with_plugin_activation` 注入 exact activation；它会自动构造 Connector catalog、
 SQLite authority 与 package-rooted Plugin MCP provider。没有注入时，local composition 使用空 activation
-和 `<profile>/secrets` 的 `FileSecretStore`，因此 `connector/list` 仍可用但目录为空。Config、Connector
+和按 profile 隔离的 `KeyringSecretStore`，因此 `connector/list` 仍可用但目录为空。Keyring operation
+失败会 fail closed，不自动降级到文件副本；host 仍可通过显式 runtime 注入 `FileSecretStore`。Config、Connector
 或 MCP list-changed hint 会在后台构建新 generation；每次 model invocation 同时冻结可见 definitions 和响应后的 binder，因此 watcher 在模型
 响应前发布新 registry 也不会把旧响应劫持到同名新工具。已绑定调用继续持有原 Tool/Policy generation，
 直到 execute 排空；Connector-bound call 在 dispatch 前额外复核 live connection generation/digest，
