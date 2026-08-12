@@ -62,10 +62,15 @@ zeta-session-store
   ├─ SessionCommandReceipt
   └─ SessionStore
 
-zeta-thread-store
+zeta-history
   ├─ StoredEvent
   ├─ ThreadCommandReceipt
-  └─ ThreadStore
+  └─ persisted Thread record schema/version
+
+zeta-thread-store
+  ├─ ThreadEventBatch
+  ├─ ThreadHistoryQuery / ThreadHistoryPage
+  └─ ThreadStore + append/page validation
 
 zeta-core
   ├─ SessionCoordinator + Session reducer
@@ -104,11 +109,18 @@ zeta-app-server
 protocol
   ↑
   ├─ session-store
+  ├─ history
   ├─ thread-store
   ├─ core
   └─ app-server-protocol
 
-session-store + thread-store + core
+history
+  ↑
+  ├─ thread-store
+  ├─ core
+  └─ rollout-trace
+
+history + session-store + thread-store + core
   ↑
 storage
 
@@ -116,11 +128,11 @@ core + rollout + app-server-protocol
   ↑
 app-server
 
-core + storage + session-store + thread-store
+core + storage + history + session-store + thread-store
   ↑
 rollout
 
-session-store + thread-store
+history + session-store + thread-store
   ↑
 rollout-trace
 ```
@@ -156,7 +168,8 @@ Session 与 Thread storage adapter 只负责：
 不再提供第二种单文件 `RolloutLog` API，也不读取旧 kind/payload、旧 schema 或隐式 Session
 数据。当前开发数据不符合新格式时明确失败或由开发者清空，不在领域代码中加入 upcast。
 
-`zeta-rollout` 是这套权威历史的本地组合层：它同时打开 typed SessionStore、ThreadStore 与
+`zeta-history` 只定义 persisted Thread record 及其版本兼容区间；它没有 Store、文件或数据库
+API。`zeta-rollout` 是这套权威历史的本地组合层：它同时打开 typed SessionStore、ThreadStore 与
 writer lease，并且保证恢复顺序为 Thread 在前、Session 在后。它不复制 event framing 或 reducer。
 `zeta-rollout-trace` 只依赖两个 store port，将某个 Session 的 topology stream 和其计划的各
 Thread stream 导出为只读 artifact。trace 保留每个 aggregate 自己的 sequence，绝不发明全局

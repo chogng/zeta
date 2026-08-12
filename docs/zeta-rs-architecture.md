@@ -15,7 +15,7 @@
 | --- | --- | --- |
 | 哪些状态由 Rust 权威拥有？ | Session、Thread、Turn、工具生命周期、配置与持久化事实 | [核心](#4-核心) |
 | Desktop、`zeta-code` 和其他 Agent 客户端如何调用？ | 统一经过 App Server API，不链接 Core、Store 或 Provider | [对外接口](#8-app-server) |
-| protocol、Core 和 storage 有什么区别？ | 分别拥有共享语义、状态协调和物理持久化机制 | [Protocol 边界](#3-protocol-边界) |
+| protocol、history、Core 和 storage 有什么区别？ | 分别拥有共享事实、持久化记录形状、状态协调和物理读写 | [Protocol 边界](#3-protocol-边界)、[存储](#5-存储端口与物理存储) |
 | 为什么有这么多 crate？ | 按可独立验证的责任拆分，不按功能名称堆成通用 service | [Workspace 边界](#2-workspace-边界) |
 | 具体函数和修改路径在哪里？ | 进入对应 crate README，系统文档不复制私有实现 | [文档规范](documentation-guidelines.md) |
 
@@ -25,7 +25,7 @@
 
 - Session、Thread、Turn、ThreadItem 的 reducer、命令与恢复；
 - Agent/model/tool 执行编排；
-- typed SessionStore/ThreadStore 与共享 event-stream adapter；
+- persisted Thread history contract、typed SessionStore/ThreadStore 与 SQLite adapter；
 - Config、Credential、sandbox 与 resource；
 - App Server、client、transport；
 - Rust、TypeScript 与 JSON Schema contract tests。
@@ -63,7 +63,8 @@ zeta-rs/
 ├── install-context/      # runtime install method, package layout and resource candidates
 ├── apply-patch/          # concrete validated write executor
 ├── session-store/        # Session persistence port + envelope
-├── thread-store/         # Thread persistence port + envelope
+├── history/              # model-history + persisted Thread record domain types
+├── thread-store/         # Thread persistence port + append/page validation
 ├── core/                 # reducers, coordinators, execution policy and recovery
 ├── storage/              # SQLite Session/Thread authority adapters
 ├── rollout/              # local state repository + recovery composition（crate 名待清理）
@@ -280,9 +281,15 @@ Thread 的执行历史。不同 Thread 可并行，不受 Session sequence 阻�
 
 ## 5. 存储端口与物理存储
 
-`zeta-session-store` 和 `zeta-thread-store` 分别拥有 storage-neutral trait、stored envelope、
-typed command receipt 与 atomic batch validator。Core 依赖这些 port，不依赖本地文件实现。
-实现细节分别见 [`session-store/README.md`](../zeta-rs/session-store/README.md) 与
+`zeta-history` 拥有模型历史中已经落地的 persisted Thread record：`StoredEvent`、exact
+`ThreadCommandReceipt`、event ID、时间戳和 schema version。它是纯数据 contract，不提供 Store，
+也不建立第二份 history authority。具体契约见
+[`history/README.md`](../zeta-rs/history/README.md)。
+
+`zeta-session-store` 仍拥有 Session envelope；`zeta-thread-store` 拥有 storage-neutral Thread
+Store trait、分页/追加请求、atomic batch validator 与错误。Core 依赖 history 类型和这些 port，
+不依赖本地文件实现。Store 细节分别见
+[`session-store/README.md`](../zeta-rs/session-store/README.md) 与
 [`thread-store/README.md`](../zeta-rs/thread-store/README.md)。
 
 `zeta-storage` 当前提供 `SqliteSessionStore` 与 `SqliteThreadStore`。两者打开同一

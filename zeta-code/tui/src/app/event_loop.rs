@@ -31,6 +31,7 @@ use crate::features::theme as theme_feature;
 use crate::features::thread::ThreadRequestScope;
 use crate::features::thread::ThreadSubscription;
 use crate::features::thread::ThreadUpdateDisposition;
+use crate::features::thread::read_older_thread_history;
 use crate::features::thread::read_thread_history;
 use crate::features::workspace_files::FileSearchManager;
 use crate::host;
@@ -42,6 +43,7 @@ use crossterm::event::MouseButton;
 use crossterm::event::MouseEventKind;
 use std::collections::VecDeque;
 use zeta_app_server_client::AppServerSession;
+use zeta_app_server_protocol::protocol::session::ThreadSnapshotHistory;
 use zeta_app_server_protocol::protocol::skills::SkillCatalogReloadDto;
 use zeta_app_server_protocol::protocol::skills::SkillListParams;
 
@@ -268,20 +270,21 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     }
                     AppCommand::Suspend => terminal.suspend()?,
                     AppCommand::LoadOlderHistory => {
-                        if pending_request.is_none() {
-                            thread_subscription.expand_history();
+                        if pending_request.is_none()
+                            && let Some(ThreadSnapshotHistory::Before { turn_id, .. }) =
+                                thread_subscription.older_history()
+                        {
                             let mut request_client = client.clone();
                             let session_id = conversation.session_id().clone();
                             let thread_id = conversation.thread_id().clone();
-                            let history = thread_subscription.history();
                             pending_request = spawn_request(
                                 "zeta-tui-load-older-history",
                                 move || {
-                                    RequestCompletion::ThreadRefreshed(read_thread_history(
+                                    RequestCompletion::ThreadHistoryPage(read_older_thread_history(
                                         &mut request_client,
                                         &session_id,
                                         &thread_id,
-                                        history,
+                                        turn_id,
                                     ))
                                 },
                                 &mut app,

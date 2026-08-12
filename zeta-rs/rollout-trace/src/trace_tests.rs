@@ -1,6 +1,10 @@
 use super::*;
 use std::fs;
 use std::time::{SystemTime, UNIX_EPOCH};
+use zeta_history::CURRENT_STORED_EVENT_SCHEMA_VERSION;
+use zeta_history::EventId;
+use zeta_history::StoredEvent;
+use zeta_history::Timestamp;
 use zeta_protocol::{
     SessionEvent, SessionId, SessionThread, SessionThreadStatus, ThreadEvent, ThreadId,
     ThreadOrigin,
@@ -10,9 +14,7 @@ use zeta_session_store::{
     CURRENT_SESSION_EVENT_SCHEMA_VERSION, SessionEventBatch, SessionEventId, SessionTimestamp,
     StoredSessionEvent,
 };
-use zeta_thread_store::{
-    CURRENT_STORED_EVENT_SCHEMA_VERSION, EventId, StoredEvent, ThreadEventBatch, Timestamp,
-};
+use zeta_thread_store::ThreadEventBatch;
 
 fn temporary_root() -> std::path::PathBuf {
     std::env::temp_dir().join(format!(

@@ -77,7 +77,8 @@ Tool、approval policy 或 persistence。
   Esc 关闭，但可 Ctrl-C interrupt；deadline 由 App Server 执行并投影为稳定 Turn failure；
 - composer 保存最近 100 条纯文本提交，Up/Down 可召回并恢复原 draft；transcript 支持
   PageUp/PageDown 与 Ctrl-Home/Ctrl-End。初始 Thread snapshot 只读取最近 50 个 Turn，Ctrl-Home
-  每次扩展 50 个 Turn 的连续历史窗口；
+  通过 App Server 的 durable Turn cursor 请求更早的 50 个 Turn，并在 presentation projection 中
+  合并页面；TUI 不保存 Thread history；
 - `/copy` 或 Ctrl-O 把最后一条 Agent response 写入系统剪贴板；`/export [relative-path]` 以
   Markdown 导出当前已加载的 transcript history window，路径限制在 workspace 内且绝不覆盖已有文件；
 - 顶部显示低干扰的运行状态；composer 上方右对齐显示 preferred model、workspace 与 typed Git
@@ -218,7 +219,7 @@ src/
 | `client::RequestTask<T>` | crate-private | 在独立 worker 执行一个 typed request 并以单槽 completion 非阻塞回投 | 不修改 `App`、不解释领域结果 |
 | `app::request_completion` | private module | 校验 request scope、安装 subscription/snapshot 并把 typed completion 映射为 `AppEvent` | 不执行 renderer、不复制 reducer |
 | `client::map_event` / `ClientEvent` | crate-private | 把共享 connection event 映射为 agent request、skills/Git changed、Thread update 与 connection failure | 不保存 transport、不应用 projection |
-| `ThreadSubscription` | crate-private | 分开维护 durable sequence、stream-instance cursor 与连续 history Turn window，分类 duplicate/gap/runtime switch 并请求 bounded snapshot resync | 不应用 `ThreadEvent` reducer、不保存 transient projection |
+| `ThreadSubscription` | crate-private | 分开维护 durable sequence、stream-instance cursor 与 history Turn cursor，分类 duplicate/gap/runtime switch，消费 bounded snapshot 和 older-page resync | 不应用 `ThreadEvent` reducer、不保存 Thread history 或 transient projection |
 | `features::interactions` | crate-private | full agent request → approval/user-input view state → exact typed response | 不决定 policy、不选择 owner、不支持未声明的 dynamic Tool |
 | `InteractionPane` | crate-private | 保留 composer、拥有 temporary view stack，并把 key/paste 路由到 active view 或 composer | 不保存 Plugin/Session 等产品 feature 状态 |
 | `components::selection::SelectionViewState` | crate-private | 可配置 tabs/search/titled preview、Space search mode、过滤索引、候选 presentation highlight、选择与循环导航 | 不执行 action、不依赖产品 ID 或 App Server |

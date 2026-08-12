@@ -9376,6 +9376,29 @@
             "type",
             "turnLimit"
           ]
+        },
+        {
+          "description": "Selects a bounded page of Turns older than the supplied durable Turn identity.",
+          "type": "object",
+          "properties": {
+            "turnId": {
+              "$ref": "#/$defs/TurnId"
+            },
+            "turnLimit": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            },
+            "type": {
+              "type": "string",
+              "const": "before"
+            }
+          },
+          "required": [
+            "type",
+            "turnId",
+            "turnLimit"
+          ]
         }
       ]
     },

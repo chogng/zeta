@@ -1,8 +1,9 @@
 # `zeta-storage`
 
-> 本 README 负责 SQLite 物理存储契约。Session/Thread envelope、batch validator 与 trait 分别由
-> [`zeta-session-store`](../session-store/README.md) 和
-> [`zeta-thread-store`](../thread-store/README.md) 拥有；跨 crate 恢复顺序见
+> 本 README 负责 SQLite 物理存储契约。Session envelope 由
+> [`zeta-session-store`](../session-store/README.md) 拥有，Thread record 由
+> [`zeta-history`](../history/README.md) 拥有，batch validator 与 trait 见
+> [`zeta-thread-store`](../thread-store/README.md)；跨 crate 恢复顺序见
 > [`zeta-rollout`](../rollout/README.md)。
 
 `zeta-storage` 是本地 Session/Thread authority 的 SQLite adapter。它不定义领域 event、

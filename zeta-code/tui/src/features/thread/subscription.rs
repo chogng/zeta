@@ -6,6 +6,7 @@ use zeta_app_server_protocol::protocol::session::MAX_THREAD_SNAPSHOT_TURNS;
 use zeta_app_server_protocol::protocol::session::SessionThreadReadParams;
 use zeta_app_server_protocol::protocol::session::SessionThreadSubscribeParams;
 use zeta_app_server_protocol::protocol::session::SessionThreadUnsubscribeParams;
+use zeta_app_server_protocol::protocol::session::ThreadHistoryBoundary;
 use zeta_app_server_protocol::protocol::session::ThreadSnapshotHistory;
 use zeta_protocol::SessionId;
 use zeta_protocol::StreamInstanceId;
@@ -23,6 +24,8 @@ pub(crate) struct ThreadSubscription {
     thread_id: ThreadId,
     confirmed_sequence: u64,
     history_turn_limit: u32,
+    oldest_turn_id: Option<zeta_protocol::TurnId>,
+    has_older_turns: bool,
     stream_sequences: BTreeMap<StreamInstanceId, u64>,
 }
 
@@ -67,26 +70,28 @@ impl ThreadSubscription {
         validate_snapshot_scope(&result.thread, session_id, thread_id)?;
         validate_update_scopes(&result.updates, session_id, thread_id)?;
 
-        let snapshot = if result
+        let (snapshot, boundary) = if result
             .updates
             .iter()
             .any(|update| update.durable_sequence > result.thread.sequence)
         {
-            client
-                .read_session_thread(SessionThreadReadParams {
-                    session_id: session_id.clone(),
-                    thread_id: thread_id.clone(),
-                    history: Some(ThreadSnapshotHistory::Latest {
-                        turn_limit: HISTORY_PAGE_TURNS,
-                    }),
-                })?
-                .thread
+            let read = client.read_session_thread(SessionThreadReadParams {
+                session_id: session_id.clone(),
+                thread_id: thread_id.clone(),
+                history: Some(ThreadSnapshotHistory::Latest {
+                    turn_limit: HISTORY_PAGE_TURNS,
+                }),
+            })?;
+            (read.thread, read.history)
         } else {
-            result.thread
+            (result.thread, result.history)
         };
         validate_snapshot_scope(&snapshot, session_id, thread_id)?;
 
-        Ok((Self::from_snapshot(&snapshot, HISTORY_PAGE_TURNS), snapshot))
+        Ok((
+            Self::from_snapshot_with_boundary(&snapshot, HISTORY_PAGE_TURNS, boundary),
+            snapshot,
+        ))
     }
 
     pub(crate) fn switch<T>(
@@ -99,15 +104,18 @@ impl ThreadSubscription {
         T: JsonRpcTransport,
     {
         if self.session_id == *session_id && self.thread_id == *thread_id {
-            let snapshot = client
-                .read_session_thread(SessionThreadReadParams {
-                    session_id: session_id.clone(),
-                    thread_id: thread_id.clone(),
-                    history: Some(self.history()),
-                })
-                .map(|result| result.thread)?;
+            let result = client.read_session_thread(SessionThreadReadParams {
+                session_id: session_id.clone(),
+                thread_id: thread_id.clone(),
+                history: Some(self.history()),
+            })?;
+            let snapshot = result.thread;
             validate_snapshot_scope(&snapshot, session_id, thread_id)?;
-            *self = Self::from_snapshot(&snapshot, self.history_turn_limit);
+            *self = Self::from_snapshot_with_boundary(
+                &snapshot,
+                self.history_turn_limit,
+                result.history,
+            );
             return Ok(ThreadSwitch::Complete { snapshot });
         }
 
@@ -179,6 +187,33 @@ impl ThreadSubscription {
         }
     }
 
+    pub(crate) fn older_history(&self) -> Option<ThreadSnapshotHistory> {
+        self.has_older_turns
+            .then(|| self.oldest_turn_id.clone())
+            .flatten()
+            .map(|turn_id| ThreadSnapshotHistory::Before {
+                turn_id,
+                turn_limit: HISTORY_PAGE_TURNS,
+            })
+    }
+
+    pub(crate) fn apply_history_page(
+        &mut self,
+        snapshot: &Thread,
+        boundary: Option<ThreadHistoryBoundary>,
+    ) {
+        self.history_turn_limit = self
+            .history_turn_limit
+            .saturating_add(snapshot.turns.len() as u32)
+            .min(MAX_THREAD_SNAPSHOT_TURNS);
+        self.oldest_turn_id = boundary
+            .as_ref()
+            .and_then(|history| history.oldest_turn_id.clone())
+            .or_else(|| snapshot.turns.first().map(|turn| turn.turn_id.clone()));
+        self.has_older_turns = boundary.is_some_and(|history| history.has_older_turns);
+    }
+
+    #[cfg(test)]
     pub(crate) fn expand_history(&mut self) {
         self.history_turn_limit = self
             .history_turn_limit
@@ -186,12 +221,27 @@ impl ThreadSubscription {
             .min(MAX_THREAD_SNAPSHOT_TURNS);
     }
 
+    #[cfg(test)]
     fn from_snapshot(snapshot: &Thread, history_turn_limit: u32) -> Self {
+        Self::from_snapshot_with_boundary(snapshot, history_turn_limit, None)
+    }
+
+    fn from_snapshot_with_boundary(
+        snapshot: &Thread,
+        history_turn_limit: u32,
+        boundary: Option<ThreadHistoryBoundary>,
+    ) -> Self {
+        let oldest_turn_id = boundary
+            .as_ref()
+            .and_then(|history| history.oldest_turn_id.clone())
+            .or_else(|| snapshot.turns.first().map(|turn| turn.turn_id.clone()));
         Self {
             session_id: snapshot.session_id.clone(),
             thread_id: snapshot.thread_id.clone(),
             confirmed_sequence: snapshot.sequence,
             history_turn_limit,
+            oldest_turn_id,
+            has_older_turns: boundary.is_some_and(|history| history.has_older_turns),
             stream_sequences: BTreeMap::new(),
         }
     }

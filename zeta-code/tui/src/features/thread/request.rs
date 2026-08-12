@@ -4,6 +4,7 @@ use crate::components::composer::ComposerSubmission;
 use zeta_app_server_client::AppServerClient;
 use zeta_app_server_client::ClientError;
 use zeta_app_server_client::JsonRpcTransport;
+use zeta_app_server_protocol::protocol::session::ThreadHistoryBoundary;
 use zeta_app_server_protocol::protocol::session::ThreadSnapshotHistory;
 use zeta_app_server_protocol::protocol::session::{
     SessionRequest, SessionRequestParams, SessionRequestResult, SessionThreadReadParams,
@@ -114,6 +115,34 @@ where
             history: Some(history),
         })
         .map(|result| result.thread)
+}
+
+pub(crate) struct OlderThreadHistoryPage {
+    pub(crate) thread: Thread,
+    pub(crate) boundary: Option<ThreadHistoryBoundary>,
+}
+
+pub(crate) fn read_older_thread_history<T>(
+    client: &mut AppServerClient<T>,
+    session_id: &SessionId,
+    thread_id: &ThreadId,
+    turn_id: zeta_protocol::TurnId,
+) -> Result<OlderThreadHistoryPage, ClientError>
+where
+    T: JsonRpcTransport,
+{
+    let result = client.read_session_thread(SessionThreadReadParams {
+        session_id: session_id.clone(),
+        thread_id: thread_id.clone(),
+        history: Some(ThreadSnapshotHistory::Before {
+            turn_id,
+            turn_limit: 50,
+        }),
+    })?;
+    Ok(OlderThreadHistoryPage {
+        thread: result.thread,
+        boundary: result.history,
+    })
 }
 
 pub(crate) fn interrupt_turn<T>(

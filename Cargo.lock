@@ -8043,6 +8043,7 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "zeta-async-utils",
+ "zeta-history",
  "zeta-policy",
  "zeta-prompts",
  "zeta-protocol",
@@ -8164,6 +8165,15 @@ dependencies = [
  "pretty_assertions",
  "tokio",
  "zeta-diff",
+]
+
+[[package]]
+name = "zeta-history"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "zeta-protocol",
 ]
 
 [[package]]
@@ -8428,6 +8438,7 @@ name = "zeta-rollout-trace"
 version = "0.1.0"
 dependencies = [
  "serde",
+ "zeta-history",
  "zeta-protocol",
  "zeta-rollout",
  "zeta-session-store",
@@ -8518,6 +8529,7 @@ dependencies = [
  "serde",
  "serde_json",
  "zeta-core",
+ "zeta-history",
  "zeta-protocol",
  "zeta-session-store",
  "zeta-thread-store",
@@ -8571,7 +8583,7 @@ dependencies = [
 name = "zeta-thread-store"
 version = "0.1.0"
 dependencies = [
- "serde",
+ "zeta-history",
  "zeta-protocol",
 ]
 

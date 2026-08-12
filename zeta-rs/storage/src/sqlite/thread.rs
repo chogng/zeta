@@ -2,11 +2,17 @@ use super::connection::{from_sql_integer, open, sql_error, to_sql_integer};
 use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
+use zeta_history::StoredEvent;
+use zeta_history::supports_stored_event_schema_version;
 use zeta_protocol::ThreadId;
-use zeta_thread_store::{
-    AppendBatchResult, StoredEvent, ThreadEventBatch, ThreadStore, ThreadStoreError,
-    validate_append_batch,
-};
+use zeta_thread_store::AppendBatchResult;
+use zeta_thread_store::ThreadEventBatch;
+use zeta_thread_store::ThreadHistoryPage;
+use zeta_thread_store::ThreadHistoryQuery;
+use zeta_thread_store::ThreadStore;
+use zeta_thread_store::ThreadStoreError;
+use zeta_thread_store::validate_append_batch;
+use zeta_thread_store::validate_history_query;
 
 /// SQLite implementation of the authoritative typed Thread event store.
 pub struct SqliteThreadStore {
@@ -66,6 +72,86 @@ impl ThreadStore for SqliteThreadStore {
             .collect::<Result<_, _>>()?;
         validate_loaded(thread_id, &events)?;
         Ok(events)
+    }
+
+    fn load_history_page(
+        &self,
+        thread_id: &ThreadId,
+        query: ThreadHistoryQuery,
+    ) -> Result<ThreadHistoryPage, ThreadStoreError> {
+        validate_history_query(query)?;
+        let connection = self.connection()?;
+        let limit = i64::try_from(query.limit).map_err(|_| {
+            ThreadStoreError::InvalidQuery("history page limit is too large".into())
+        })?;
+        let mut statement = if query.before_sequence.is_some() {
+            connection
+                .prepare(
+                    "SELECT sequence, envelope_json FROM thread_events
+                     WHERE thread_id = ?1 AND sequence < ?2
+                     ORDER BY sequence DESC LIMIT ?3",
+                )
+                .map_err(storage_error)?
+        } else {
+            connection
+                .prepare(
+                    "SELECT sequence, envelope_json FROM thread_events
+                     WHERE thread_id = ?1
+                     ORDER BY sequence DESC LIMIT ?2",
+                )
+                .map_err(storage_error)?
+        };
+        let mut rows = if let Some(before_sequence) = query.before_sequence {
+            statement
+                .query(params![
+                    thread_id.as_str(),
+                    to_sql_integer(before_sequence).map_err(ThreadStoreError::Storage)?,
+                    limit,
+                ])
+                .map_err(storage_error)?
+        } else {
+            statement
+                .query(params![thread_id.as_str(), limit])
+                .map_err(storage_error)?
+        };
+        let mut events = Vec::new();
+        while let Some(row) = rows.next().map_err(storage_error)? {
+            let sequence = from_sql_integer(row.get::<_, i64>(0).map_err(storage_error)?)
+                .map_err(ThreadStoreError::Storage)?;
+            let envelope = row.get::<_, String>(1).map_err(storage_error)?;
+            let event = serde_json::from_str::<StoredEvent>(&envelope)
+                .map_err(|error| ThreadStoreError::Storage(error.to_string()))?;
+            if event.sequence != sequence {
+                return Err(ThreadStoreError::Storage(
+                    "history page row sequence disagrees with its envelope".into(),
+                ));
+            }
+            events.push(event);
+        }
+        events.reverse();
+        validate_history_page(thread_id, &events)?;
+        let next_before_sequence = if let Some(first) = events.first().map(|event| event.sequence) {
+            let has_older = connection
+                .query_row(
+                    "SELECT EXISTS(
+                         SELECT 1 FROM thread_events
+                         WHERE thread_id = ?1 AND sequence < ?2
+                     )",
+                    params![
+                        thread_id.as_str(),
+                        to_sql_integer(first).map_err(ThreadStoreError::Storage)?
+                    ],
+                    |row| row.get::<_, i64>(0),
+                )
+                .map_err(storage_error)?;
+            (has_older != 0).then_some(first)
+        } else {
+            None
+        };
+        Ok(ThreadHistoryPage {
+            events,
+            next_before_sequence,
+        })
     }
 
     fn append_batch(
@@ -183,19 +269,64 @@ impl SqliteThreadStore {
 }
 
 fn validate_loaded(thread_id: &ThreadId, events: &[StoredEvent]) -> Result<(), ThreadStoreError> {
-    if events.is_empty() {
-        return Ok(());
+    validate_history_records(thread_id, events, HistoryRangeStart::Beginning)
+}
+
+fn validate_history_page(
+    thread_id: &ThreadId,
+    events: &[StoredEvent],
+) -> Result<(), ThreadStoreError> {
+    validate_history_records(thread_id, events, HistoryRangeStart::Page)
+}
+
+#[derive(Clone, Copy)]
+enum HistoryRangeStart {
+    Beginning,
+    Page,
+}
+
+fn validate_history_records(
+    thread_id: &ThreadId,
+    events: &[StoredEvent],
+    range_start: HistoryRangeStart,
+) -> Result<(), ThreadStoreError> {
+    let mut previous_sequence: Option<u64> = None;
+    for (index, event) in events.iter().enumerate() {
+        if &event.thread_id != thread_id || event.event.thread_id() != thread_id {
+            return Err(ThreadStoreError::Storage(
+                "Thread history contains an event for another Thread".into(),
+            ));
+        }
+        if !supports_stored_event_schema_version(event.schema_version) {
+            return Err(ThreadStoreError::Storage(
+                "Thread history contains an unsupported event schema".into(),
+            ));
+        }
+        let expected_sequence = match previous_sequence {
+            None => match range_start {
+                HistoryRangeStart::Beginning => 1,
+                HistoryRangeStart::Page => event.sequence,
+            },
+            Some(previous) => previous.checked_add(1).ok_or_else(|| {
+                ThreadStoreError::Storage("Thread history sequence overflowed".into())
+            })?,
+        };
+        if event.sequence != expected_sequence {
+            return Err(ThreadStoreError::Storage(
+                "Thread history records are not contiguous and ordered".into(),
+            ));
+        }
+        if events[..index]
+            .iter()
+            .any(|existing| existing.event_id == event.event_id)
+        {
+            return Err(ThreadStoreError::Storage(
+                "Thread history contains duplicate event IDs".into(),
+            ));
+        }
+        previous_sequence = Some(event.sequence);
     }
-    validate_append_batch(
-        &ThreadEventBatch {
-            batch_id: "sqlite-recovery".into(),
-            thread_id: thread_id.clone(),
-            expected_sequence: 0,
-            events: events.to_vec(),
-        },
-        0,
-    )
-    .map(|_| ())
+    Ok(())
 }
 
 fn storage_error(error: impl std::fmt::Display) -> ThreadStoreError {

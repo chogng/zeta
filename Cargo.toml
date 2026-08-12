@@ -32,6 +32,7 @@ members = [
     "zeta-rs/file-system-tool",
     "zeta-rs/file-watcher",
     "zeta-rs/git",
+    "zeta-rs/history",
     "zeta-rs/http-client",
     "zeta-rs/install-context",
     "zeta-rs/instructions",
@@ -213,6 +214,7 @@ zeta-file-system = { path = "zeta-rs/file-system" }
 zeta-file-system-tool = { path = "zeta-rs/file-system-tool" }
 zeta-file-watcher = { path = "zeta-rs/file-watcher" }
 zeta-git = { path = "zeta-rs/git" }
+zeta-history = { path = "zeta-rs/history" }
 zeta-http-client = { path = "zeta-rs/http-client" }
 zeta-install-context = { path = "zeta-rs/install-context" }
 zeta-instructions = { path = "zeta-rs/instructions" }

@@ -3,6 +3,9 @@ use crate::state::transition_turn_status;
 use sha2::Digest;
 use sha2::Sha256;
 use std::collections::{BTreeMap, BTreeSet};
+use zeta_history::StoredEvent;
+use zeta_history::ThreadCommandReceipt;
+use zeta_history::supports_stored_event_schema_version;
 use zeta_protocol::AgentRequest;
 use zeta_protocol::AgentResponse;
 use zeta_protocol::ContextCheckpoint;
@@ -25,10 +28,6 @@ use zeta_protocol::Turn;
 use zeta_protocol::TurnId;
 use zeta_protocol::TurnInteraction;
 use zeta_protocol::TurnStatus;
-use zeta_thread_store::CURRENT_STORED_EVENT_SCHEMA_VERSION;
-use zeta_thread_store::MINIMUM_SUPPORTED_EVENT_SCHEMA_VERSION;
-use zeta_thread_store::StoredEvent;
-use zeta_thread_store::ThreadCommandReceipt;
 
 #[path = "thread_reducer_approval.rs"]
 mod approval;
@@ -192,9 +191,7 @@ pub fn reduce_thread_event(
     snapshot: Option<ThreadSnapshot>,
     envelope: &StoredEvent,
 ) -> Result<ThreadSnapshot, CoreError> {
-    if !(MINIMUM_SUPPORTED_EVENT_SCHEMA_VERSION..=CURRENT_STORED_EVENT_SCHEMA_VERSION)
-        .contains(&envelope.schema_version)
-    {
+    if !supports_stored_event_schema_version(envelope.schema_version) {
         return Err(CoreError::Journal(format!(
             "unsupported Thread event schema version {}",
             envelope.schema_version

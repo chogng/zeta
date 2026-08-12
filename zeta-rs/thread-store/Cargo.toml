@@ -11,7 +11,7 @@ name = "zeta_thread_store"
 path = "src/lib.rs"
 
 [dependencies]
-serde = { workspace = true }
+zeta-history = { workspace = true }
 zeta-protocol = { workspace = true }
 
 [lints]

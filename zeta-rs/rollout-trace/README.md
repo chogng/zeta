@@ -1,7 +1,7 @@
 # `zeta-rollout-trace`
 
 > 本 README 解释 read-only trace capture。Durable source contract 见
-> [`zeta-session-store`](../session-store/README.md) 与
+> [`zeta-history`](../history/README.md)、[`zeta-session-store`](../session-store/README.md) 与
 > [`zeta-thread-store`](../thread-store/README.md)；跨系统 durability/privacy 方向见
 > [`docs/zeta-rs-architecture.md`](../../docs/zeta-rs-architecture.md)。
 
@@ -15,7 +15,7 @@
 | --- | --- | --- |
 | `capture_session_trace` | public function | 读取 Session，再按 `ThreadCreationPlanned` 读取 child Thread |
 | `RolloutTrace` | public struct | format version、Session ID、Session events、Thread traces |
-| `ThreadRolloutTrace` | public struct | 一个 planned Thread 的 ID 与原始 stored events |
+| `ThreadRolloutTrace` | public struct | 一个 planned Thread 的 ID 与原始 `zeta_history::StoredEvent` |
 | `ROLLOUT_TRACE_FORMAT_VERSION` | public constant | self-contained trace artifact version，当前为 `1` |
 | `RolloutTraceError` | public enum | Session missing 或 source store failure |
 | `seen_thread_ids` | private local set | 保持首次计划顺序并去重重复 planned event |

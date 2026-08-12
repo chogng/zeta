@@ -48,6 +48,35 @@ fn canonical_snapshot_replaces_optimistic_projection_and_preserves_identity() {
 }
 
 #[test]
+fn older_history_page_is_merged_before_the_loaded_snapshot() {
+    let mut state = ThreadFeatureState::default();
+    let current = thread_snapshot();
+    state.update(ThreadPresentationEvent::SnapshotReceived(current.clone()));
+    let older_turn_id = TurnId::new("turn_0").unwrap();
+    state.update(ThreadPresentationEvent::HistoryPageReceived(Thread {
+        turns: vec![Turn {
+            turn_id: older_turn_id.clone(),
+            status: TurnStatus::Completed,
+            model: None,
+            items: vec![ThreadItem::UserMessage {
+                item_id: ItemId::new("older_item").unwrap(),
+                turn_id: older_turn_id,
+                text: "older prompt".into(),
+            }],
+            pending_interaction: None,
+            error: None,
+        }],
+        ..current
+    }));
+
+    let snapshot = state.snapshot().unwrap();
+    assert_eq!(snapshot.turns.len(), 2);
+    assert_eq!(snapshot.turns[0].turn_id.as_str(), "turn_0");
+    assert_eq!(snapshot.turns[1].turn_id.as_str(), "turn_1");
+    assert_eq!(state.messages()[0].text, "older prompt");
+}
+
+#[test]
 fn transient_deltas_update_identity_stable_transcript_rows() {
     let mut state = ThreadFeatureState::default();
     state.update(ThreadPresentationEvent::SnapshotReceived(Thread {

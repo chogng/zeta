@@ -1,9 +1,10 @@
 use crate::RolloutTraceError;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
+use zeta_history::StoredEvent;
 use zeta_protocol::{SessionEvent, SessionId, ThreadId};
 use zeta_session_store::{SessionStore, StoredSessionEvent};
-use zeta_thread_store::{StoredEvent, ThreadStore};
+use zeta_thread_store::ThreadStore;
 
 /// Version of the self-contained trace artifact format.
 pub const ROLLOUT_TRACE_FORMAT_VERSION: u32 = 1;

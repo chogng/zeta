@@ -12,6 +12,7 @@ use crate::features::sessions::ConversationTranscript;
 use crate::features::skills;
 use crate::features::skills::SkillSelectionView;
 use crate::features::thread::ActiveTurnUpdate;
+use crate::features::thread::OlderThreadHistoryPage;
 use crate::features::thread::ThreadRequestScope;
 use crate::features::thread::ThreadSubscription;
 use crate::features::thread::ThreadSwitch;
@@ -49,6 +50,7 @@ pub(super) enum RequestCompletion {
     SkillsRefreshed(Result<SkillRequestCompletion, String>),
     InteractionResolved(Result<Thread, ClientError>),
     ThreadRefreshed(Result<Thread, ClientError>),
+    ThreadHistoryPage(Result<OlderThreadHistoryPage, ClientError>),
     TurnInterrupted(Result<Thread, ClientError>),
     TurnStarted(Result<(TurnStartResult, Thread), ClientError>),
 }
@@ -298,6 +300,27 @@ pub(super) fn apply_request_completion(
             conversation.set_thread_sequence(snapshot.sequence);
             thread_subscription.confirm_sequence(snapshot.sequence);
             apply_thread_snapshot(app, active_turn, snapshot);
+        }
+        RequestCompletion::ThreadHistoryPage(Ok(page)) => {
+            if page.thread.session_id != *conversation.session_id()
+                || page.thread.thread_id != *conversation.thread_id()
+            {
+                app.update(AppEvent::FailureReported(format!(
+                    "session/thread/read returned history for {}/{}; expected {}/{}",
+                    page.thread.session_id,
+                    page.thread.thread_id,
+                    conversation.session_id(),
+                    conversation.thread_id()
+                )));
+                return;
+            }
+            conversation.set_thread_sequence(page.thread.sequence);
+            thread_subscription.confirm_sequence(page.thread.sequence);
+            thread_subscription.apply_history_page(&page.thread, page.boundary);
+            app.update(AppEvent::ThreadHistoryPageReceived(page.thread));
+        }
+        RequestCompletion::ThreadHistoryPage(Err(error)) => {
+            app.update(AppEvent::FailureReported(error.to_string()));
         }
         RequestCompletion::ThreadRefreshed(Err(error)) => {
             app.update(AppEvent::FailureReported(error.to_string()));

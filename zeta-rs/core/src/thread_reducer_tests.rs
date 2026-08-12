@@ -1,4 +1,8 @@
 use super::*;
+use zeta_history::CURRENT_STORED_EVENT_SCHEMA_VERSION;
+use zeta_history::EventId;
+use zeta_history::ThreadCommandReceipt;
+use zeta_history::Timestamp;
 use zeta_protocol::CommandId;
 use zeta_protocol::ContextCheckpointId;
 use zeta_protocol::ContextCheckpointVerification;
@@ -8,7 +12,6 @@ use zeta_protocol::ThreadCommand;
 use zeta_protocol::ToolCallId;
 use zeta_protocol::ToolName;
 use zeta_protocol::UserInput;
-use zeta_thread_store::{EventId, ThreadCommandReceipt, Timestamp};
 
 fn envelope(sequence: u64, event: ThreadEvent) -> StoredEvent {
     let command = match &event {

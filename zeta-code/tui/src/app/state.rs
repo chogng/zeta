@@ -561,6 +561,9 @@ impl App {
             AppEvent::ThreadSnapshotReceived(thread) => self
                 .thread
                 .update(ThreadPresentationEvent::SnapshotReceived(thread)),
+            AppEvent::ThreadHistoryPageReceived(thread) => self
+                .thread
+                .update(ThreadPresentationEvent::HistoryPageReceived(thread)),
             AppEvent::TransientThreadStreamReset => {
                 self.thread
                     .update(ThreadPresentationEvent::TransientStreamReset);

@@ -91,7 +91,6 @@ pub use zeta_protocol::{
     ToolReplaySafety,
 };
 pub use zeta_thread_store::AppendBatchResult;
-pub use zeta_thread_store::StoredEvent;
 pub use zeta_thread_store::ThreadEventBatch;
 pub use zeta_thread_store::ThreadStore;
 pub use zeta_thread_store::ThreadStoreError;

@@ -1022,6 +1022,34 @@ fn thread_read_returns_a_bounded_latest_history_window() {
         first["result"]["value"]["turnId"]
     );
 
+    let older_page = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":7_1,"method":"session/thread/read",
+            "params":{
+                "sessionId":session_id,"threadId":thread_id,
+                "history":{
+                    "type":"before",
+                    "turnId":second["result"]["value"]["turnId"],
+                    "turnLimit":1
+                }
+            }
+        }),
+    );
+    assert_eq!(
+        older_page["result"]["thread"]["turns"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(
+        older_page["result"]["thread"]["turns"][0]["turnId"],
+        first["result"]["value"]["turnId"]
+    );
+    assert_eq!(older_page["result"]["history"]["hasOlderTurns"], false);
+
     let subscription = call(
         &server,
         &mut connection,

@@ -30,6 +30,9 @@ impl ThreadFeatureState {
                 self.transient.clear();
                 self.snapshot = Some(snapshot);
             }
+            ThreadPresentationEvent::HistoryPageReceived(page) => {
+                self.merge_history_page(page);
+            }
             ThreadPresentationEvent::TransientStreamReset => {
                 self.transient.remove_from(&mut self.messages);
             }
@@ -78,6 +81,35 @@ impl ThreadFeatureState {
 
     fn push_message(&mut self, role: MessageRole, text: String) {
         self.messages.push(Message::plain(role, text));
+    }
+
+    fn merge_history_page(&mut self, page: Thread) {
+        let Some(current) = self.snapshot.as_ref() else {
+            self.messages = project_messages(&page);
+            self.snapshot = Some(page);
+            self.transient.clear();
+            return;
+        };
+        if current.session_id != page.session_id || current.thread_id != page.thread_id {
+            return;
+        }
+        let mut merged = current.clone();
+        let mut turns = page.turns;
+        turns.extend(current.turns.iter().cloned());
+        let mut deduplicated = Vec::with_capacity(turns.len());
+        for turn in turns {
+            if deduplicated
+                .iter()
+                .all(|existing: &zeta_protocol::Turn| existing.turn_id != turn.turn_id)
+            {
+                deduplicated.push(turn);
+            }
+        }
+        merged.sequence = merged.sequence.max(page.sequence);
+        merged.turns = deduplicated;
+        self.messages = project_messages(&merged);
+        self.transient.clear();
+        self.snapshot = Some(merged);
     }
 
     #[cfg(test)]

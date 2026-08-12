@@ -349,6 +349,7 @@ message、join、tree budget 和 recovery。
 允许：
 
 - `zeta-core → zeta-protocol`；
+- `zeta-core → zeta-history`，构造与回放 persisted Thread record；
 - `zeta-core → zeta-tools`；
 - `zeta-core → zeta-session-store`；
 - `zeta-core → zeta-thread-store`；
@@ -382,6 +383,9 @@ zeta-core → Desktop / CLI / TUI
 | `ContextCompactionService` | 已实现 | 从不可变 source 生成有界候选 summary | Core contract + model-backed adapter |
 | `Clock` | 仅设计 | deadline 与可测试时间 | host |
 | `IdGenerator` | 仅设计 | 稳定 operation identity | host |
+
+`zeta-history` 不是服务端口：它只提供 `StoredEvent`、command receipt 和可读 schema range 等纯
+数据契约。Core 直接消费这些类型，I/O 仍只经过 `ThreadStore`。
 
 当前端口均为同步调用 + `CancellationToken` 协作取消；执行内核不承诺 async 化，理由与重新
 评审条件见

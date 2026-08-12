@@ -63,7 +63,7 @@ serde / serde_json / schemars / ts-rs
                    ▲
        ┌───────────┼────────────┬──────────────┐
        │           │            │              │
-   zeta-core   store ports   zeta-api   app-server-protocol
+   zeta-core  history/store  zeta-api   app-server-protocol
        ▲                        ▲              ▲
        │                        │              │
   agent/execution          providers      clients
@@ -75,7 +75,8 @@ serde / serde_json / schemars / ts-rs
 | --- | --- | --- |
 | `zeta-core` | reducer 输入、projection、execution intent | actor message、policy、effect、recovery |
 | `zeta-session-store` | 持久化 `SessionEvent` | sequence、timestamp、receipt envelope |
-| `zeta-thread-store` | 持久化 `ThreadEvent` | batch、schema version、event ID |
+| `zeta-history` | 为 `ThreadEvent` 定义 persisted record envelope | Store、SQLite、reducer、UI history |
+| `zeta-thread-store` | 追加和分页 `zeta_history::StoredEvent` | record serde shape、SQLite、reducer |
 | `zeta-api` | canonical model value 与 provider wire 互转 | HTTP DTO、header、endpoint |
 | `zeta-model-provider` | model catalog 与 invocation request/response | transport、credential、retry |
 | `zeta-app-server-protocol` | 机械复用 canonical view/update | JSON-RPC params、result、method registry |
@@ -222,7 +223,8 @@ Command
 ```
 
 Event 不携带 storage sequence、timestamp、schema version、event ID 或 command receipt。
-这些由 `zeta-session-store` / `zeta-thread-store` 的 stored envelope 添加。
+Session stored envelope 由 `zeta-session-store` 定义；Thread persisted record 由
+`zeta-history` 定义。Core 构造 record，Store 只校验并提交。
 
 必须保持：
 

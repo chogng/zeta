@@ -1,22 +1,23 @@
 # `zeta-thread-store`
 
-> 本 README 解释 Thread durability port、stored envelope 和 batch validation。Canonical Thread
-> lifecycle 见 [`docs/protocol.md`](../../docs/protocol.md)，Core execution/recovery 见
+> 本 README 解释 Thread durability port、分页和 batch validation。Persisted record 格式由
+> [`zeta-history`](../history/README.md) 拥有；Canonical Thread lifecycle 见
+> [`docs/protocol.md`](../../docs/protocol.md)，Core execution/recovery 见
 > [`docs/core.md`](../../docs/core.md)。
 
-`zeta-thread-store` 定义 storage-neutral authoritative Thread history。它只持久化
-`zeta_protocol::ThreadEvent` 与 exact `ThreadCommandReceipt`；`ThreadUpdate`、token delta、
-actor state、RPC payload 和 Session membership 不进入该 stream。
+`zeta-thread-store` 定义 storage-neutral authoritative Thread history port。它接收
+`zeta_history::StoredEvent`，负责查询、分页、原子追加契约与错误；record 本身的 serde shape、
+receipt 和 schema version 不再由本 crate 定义。`ThreadUpdate`、token delta、actor state、RPC
+payload 和 Session membership 不进入该 stream。
 
 ## 公共契约
 
 | Symbol | 职责 | 关键约束 |
 | --- | --- | --- |
-| `ThreadStore` | `list_thread_ids / load / append_batch` port | per-Thread sequence 与 atomic batch |
+| `ThreadStore` | `list_thread_ids / load / load_history_page / append_batch` port | per-Thread sequence、bounded history cursor 与 atomic batch |
 | `ThreadEventBatch` | exact append intent | thread ID、expected sequence、ordered events |
 | `AppendBatchResult` | committed batch 摘要 | committed sequence 与 event count |
-| `StoredEvent` | storage-owned Thread envelope | schema、event ID、sequence、timestamp、optional command |
-| `ThreadCommandReceipt` | accepted `ThreadCommand` exact copy | 支持 idempotent replay 与 payload conflict |
+| `zeta_history::StoredEvent` | Store 接收和返回的 Thread history record | 类型 owner 是 `zeta-history`，Store 不复制它 |
 | `ThreadStoreError` | stable store error | invalid batch、sequence conflict、storage failure |
 
 Session membership/lineage 由 `zeta-session-store` 独立保存：
@@ -33,8 +34,7 @@ ThreadStore   → Turn / ThreadItem / interaction / Tool lifecycle
 | Symbol | 当前职责 | 方向约束 |
 | --- | --- | --- |
 | `validate_append_batch` | backend-independent append validation | 所有 implementation 必须在 durable write 前调用等价逻辑 |
-| `CURRENT_STORED_EVENT_SCHEMA_VERSION` | 新 Thread event version | reader migration 与 new-write version 必须区分 |
-| `StoredEvent::thread_id` | 提供 envelope identity borrow | 不从 inner event 重新推断 aggregate |
+| `zeta_history::CURRENT_STORED_EVENT_SCHEMA_VERSION` | append validator 接受的新记录版本 | reader migration 与 new-write version 必须区分 |
 
 ```text
 ThreadStore::append_batch
@@ -80,6 +80,7 @@ contract tests。
 
 ## 当前限制与演进
 
-当前实现提供 version `1` envelope 与 append validator，没有 snapshot、compaction、event migration
-registry 或 partial-history query。未来可以增加这些能力，但 `ThreadStore::load` 的 authoritative
-ordering、exact command receipt 与 per-Thread atomic append 仍是长期不变量。
+当前实现消费 version `2` history record、提供 append validator 与按 exclusive sequence cursor 的 bounded
+history page；snapshot、compaction、event migration registry 仍不属于本 crate。`load_history_page`
+只返回 authoritative event stream 的有序窗口，不建立第二份 history authority；`ThreadStore::load`
+的完整恢复、exact command receipt 与 per-Thread atomic append 仍是长期不变量。

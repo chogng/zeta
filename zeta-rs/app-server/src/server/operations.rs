@@ -1116,18 +1116,36 @@ fn bounded_thread_snapshot(
     mut thread: zeta_protocol::Thread,
     history: Option<ThreadSnapshotHistory>,
 ) -> Result<(zeta_protocol::Thread, Option<ThreadHistoryBoundary>), RpcError> {
-    let Some(ThreadSnapshotHistory::Latest { turn_limit }) = history else {
+    let Some(history) = history else {
         return Ok((thread, None));
+    };
+    let (start, end, turn_limit) = match history {
+        ThreadSnapshotHistory::Latest { turn_limit } => {
+            let retained = usize::try_from(turn_limit).unwrap_or(usize::MAX);
+            (
+                thread.turns.len().saturating_sub(retained),
+                thread.turns.len(),
+                turn_limit,
+            )
+        }
+        ThreadSnapshotHistory::Before {
+            turn_id,
+            turn_limit,
+        } => {
+            let end = thread
+                .turns
+                .iter()
+                .position(|turn| turn.turn_id == turn_id)
+                .ok_or_else(|| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+            let retained = usize::try_from(turn_limit).unwrap_or(usize::MAX);
+            (end.saturating_sub(retained), end, turn_limit)
+        }
     };
     if turn_limit == 0 || turn_limit > MAX_THREAD_SNAPSHOT_TURNS {
         return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
     }
-    let retained = usize::try_from(turn_limit).unwrap_or(usize::MAX);
-    let first_retained = thread.turns.len().saturating_sub(retained);
-    let has_older_turns = first_retained > 0;
-    if has_older_turns {
-        thread.turns.drain(..first_retained);
-    }
+    let has_older_turns = start > 0;
+    thread.turns = thread.turns[start..end].to_vec();
     let oldest_turn_id = thread.turns.first().map(|turn| turn.turn_id.clone());
     Ok((
         thread,

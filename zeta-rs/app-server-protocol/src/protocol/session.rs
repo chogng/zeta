@@ -130,7 +130,14 @@ pub const MAX_THREAD_SNAPSHOT_TURNS: u32 = 100_000;
     rename_all_fields = "camelCase"
 )]
 pub enum ThreadSnapshotHistory {
-    Latest { turn_limit: u32 },
+    Latest {
+        turn_limit: u32,
+    },
+    /// Selects a bounded page of Turns older than the supplied durable Turn identity.
+    Before {
+        turn_id: TurnId,
+        turn_limit: u32,
+    },
 }
 
 /// Describes whether a bounded Thread snapshot has older durable Turns available.

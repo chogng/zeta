@@ -8,6 +8,7 @@ use zeta_app_server_client::AppServerClient;
 use zeta_app_server_client::ClientError;
 use zeta_app_server_client::JsonRpcTransport;
 use zeta_app_server_protocol::protocol::session::MAX_THREAD_SNAPSHOT_TURNS;
+use zeta_app_server_protocol::protocol::session::ThreadHistoryBoundary;
 use zeta_app_server_protocol::protocol::session::ThreadSnapshotHistory;
 use zeta_protocol::SessionId;
 use zeta_protocol::StreamCursor;
@@ -77,6 +78,28 @@ fn history_window_never_exceeds_the_server_limit() {
         ThreadSnapshotHistory::Latest {
             turn_limit: MAX_THREAD_SNAPSHOT_TURNS
         }
+    );
+}
+
+#[test]
+fn older_history_uses_the_server_turn_cursor() {
+    let snapshot = thread("session-1", "thread-1", 4);
+    let oldest_turn_id = zeta_protocol::TurnId::new("turn-50").unwrap();
+    let subscription = ThreadSubscription::from_snapshot_with_boundary(
+        &snapshot,
+        HISTORY_PAGE_TURNS,
+        Some(ThreadHistoryBoundary {
+            has_older_turns: true,
+            oldest_turn_id: Some(oldest_turn_id.clone()),
+        }),
+    );
+
+    assert_eq!(
+        subscription.older_history(),
+        Some(ThreadSnapshotHistory::Before {
+            turn_id: oldest_turn_id,
+            turn_limit: HISTORY_PAGE_TURNS,
+        })
     );
 }
 

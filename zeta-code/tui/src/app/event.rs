@@ -43,6 +43,7 @@ pub(crate) enum AppEvent {
     ThemeViewClosed,
     ThemeViewOpened(ThemeSelectionView),
     ThreadSnapshotReceived(Thread),
+    ThreadHistoryPageReceived(Thread),
     TransientThreadStreamReset,
     TransientThreadUpdateReceived(Box<ThreadUpdateEnvelope>),
     TranscriptCleared,

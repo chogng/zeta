@@ -15,6 +15,7 @@ rusqlite = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 zeta-core = { workspace = true }
+zeta-history = { workspace = true }
 zeta-protocol = { workspace = true }
 zeta-session-store = { workspace = true }
 zeta-thread-store = { workspace = true }

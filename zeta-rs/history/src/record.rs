@@ -1,12 +1,27 @@
-use serde::{Deserialize, Serialize};
-use zeta_protocol::{CommandId, ThreadCommand, ThreadEvent, ThreadId};
+use serde::Deserialize;
+use serde::Serialize;
+use zeta_protocol::CommandId;
+use zeta_protocol::ThreadCommand;
+use zeta_protocol::ThreadEvent;
+use zeta_protocol::ThreadId;
 
+/// Schema version written for newly persisted Thread history records.
 pub const CURRENT_STORED_EVENT_SCHEMA_VERSION: u32 = 2;
+
+/// Oldest Thread history record schema accepted during recovery.
 pub const MINIMUM_SUPPORTED_EVENT_SCHEMA_VERSION: u32 = 1;
 
+/// Returns whether a persisted Thread history record can be replayed by this build.
+pub const fn supports_stored_event_schema_version(schema_version: u32) -> bool {
+    schema_version >= MINIMUM_SUPPORTED_EVENT_SCHEMA_VERSION
+        && schema_version <= CURRENT_STORED_EVENT_SCHEMA_VERSION
+}
+
+/// Stable identity of one persisted Thread history record.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct EventId(pub String);
 
+/// Unix timestamp in nanoseconds attached to a persisted Thread history record.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct Timestamp(pub u128);
 
@@ -18,11 +33,11 @@ pub struct ThreadCommandReceipt {
     pub command: ThreadCommand,
 }
 
-/// Storage-owned envelope for an event persisted in a thread rollout.
+/// Canonical persisted envelope for one durable Thread fact.
 ///
-/// Only durable `zeta_protocol::ThreadEvent` values can enter this envelope. Implementations of
-/// `ThreadStore` add ordering, timestamps, schema versions, and idempotency metadata at the
-/// persistence boundary; live `ThreadUpdate` values are never stored here.
+/// Only durable [`ThreadEvent`] values can enter this envelope. Core constructs the record when a
+/// command is accepted; a Thread Store validates and persists the exact value. Live updates, token
+/// deltas, storage transactions, and query cursors do not belong to this data contract.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StoredEvent {
