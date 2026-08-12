@@ -9,6 +9,7 @@ use crate::ToolRegistryGeneration;
 use crate::ToolRuntimeKey;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+use zeta_protocol::ToolSourceProvenance;
 
 mod search;
 
@@ -57,6 +58,7 @@ pub struct ToolRegistryRegistration {
     runtime_key: ToolRuntimeKey,
     exposure: ToolExposure,
     search: ToolSearchMetadata,
+    source_chain: Vec<ToolSourceProvenance>,
 }
 
 impl ToolRegistryRegistration {
@@ -83,7 +85,13 @@ impl ToolRegistryRegistration {
             runtime_key,
             exposure,
             search,
+            source_chain: Vec::new(),
         })
+    }
+
+    pub fn with_source_chain(mut self, source_chain: Vec<ToolSourceProvenance>) -> Self {
+        self.source_chain = source_chain;
+        self
     }
 }
 
@@ -169,7 +177,8 @@ impl ToolRegistryBuilder {
                     name,
                     registration.definition.digest(),
                     registration.runtime_key,
-                );
+                )
+                .with_source_chain(registration.source_chain);
                 RegisteredTool {
                     definition: registration.definition,
                     binding,

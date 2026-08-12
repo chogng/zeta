@@ -36,6 +36,7 @@ zeta-client = { workspace = true }
 zeta-diff = { workspace = true }
 zeta-extensions = { workspace = true }
 zeta-extension-api = { workspace = true }
+zeta-mcp-extension = { workspace = true }
 zeta-file-system = { workspace = true }
 zeta-file-system-tool = { workspace = true }
 zeta-file-watcher = { workspace = true }
@@ -46,12 +47,10 @@ zeta-language-server-catalog = { workspace = true }
 zeta-language-service = { workspace = true }
 zeta-model-provider = { workspace = true }
 zeta-model-provider-config = { workspace = true }
-zeta-mcp = { workspace = true }
 zeta-policy = { workspace = true }
 zeta-prompts = { workspace = true }
 zeta-protocol = { workspace = true }
 zeta-rollout = { workspace = true }
-zeta-rmcp-client = { workspace = true }
 zeta-sandboxing = { workspace = true }
 zeta-workspace = { workspace = true }
 zeta-search = { workspace = true }
@@ -61,6 +60,7 @@ zeta-skills = { workspace = true }
 zeta-skills-extension = { workspace = true }
 zeta-syntax = { workspace = true }
 zeta-tools = { workspace = true }
+zeta-web-search-extension = { workspace = true }
 zeta-typst = { workspace = true }
 zeta-utils-pty = { workspace = true }
 

@@ -826,6 +826,22 @@ impl AppServer {
         }
         let turn_executor = self.turn_executor_snapshot();
         let policy_revision = turn_executor.policy_revision();
+        let tool_call_id =
+            zeta_protocol::ToolCallId::new(format!("shell-turn-{}", mutation.command_id))
+                .expect("validated command identity produces a valid Tool Call ID");
+        let shell_call = zeta_protocol::ToolCall {
+            id: tool_call_id.clone(),
+            name: zeta_protocol::ToolName::new("shell-command")
+                .expect("static shell-command name is valid"),
+            arguments: serde_json::json!({
+                "program": "/bin/sh",
+                "arguments": ["-lc", command],
+                "working_directory": working_directory,
+            }),
+        };
+        let binding = turn_executor
+            .bind_tool_call(&shell_call, zeta_protocol::ToolCallCaller::Direct)
+            .map_err(core_error)?;
         let start = self
             .sessions
             .start_shell_turn(
@@ -836,6 +852,8 @@ impl AppServer {
                     expected_sequence: SequenceExpectation::Exact(mutation.expected_sequence),
                     policy_revision,
                     approval_mode,
+                    tool_call_id,
+                    binding,
                     invocation: ShellTurnInvocation {
                         command,
                         shell_program: "/bin/sh".into(),

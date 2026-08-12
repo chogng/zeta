@@ -62,6 +62,65 @@ pub enum TurnExecutionOutcome {
 }
 
 impl TurnExecutor {
+    /// Freezes the exact durable binding for a host-created Tool Call.
+    pub fn bind_tool_call(
+        &self,
+        call: &ToolCall,
+        caller: zeta_protocol::ToolCallCaller,
+    ) -> Result<zeta_protocol::ToolCallBinding, CoreError> {
+        self.tools
+            .bind_call(call, caller)?
+            .ok_or_else(|| CoreError::Execution("tool service did not return a binding".into()))
+    }
+
+    /// Creates and durably commits one code-mode nested call through the ordinary scheduler path.
+    ///
+    /// The code runtime supplies only stable cell/runtime identities and canonical arguments. Core
+    /// allocates the nested Tool Call identity, freezes the ordinary binding, and records the call;
+    /// approval, execution, cancellation, and uncertain-outcome handling remain unchanged.
+    pub fn record_code_mode_nested_call(
+        &self,
+        thread_id: &ThreadId,
+        turn_id: &TurnId,
+        parent_tool_call_id: &zeta_protocol::ToolCallId,
+        cell_id: impl Into<String>,
+        runtime_call_id: impl Into<String>,
+        name: zeta_protocol::ToolName,
+        arguments: serde_json::Value,
+    ) -> Result<zeta_protocol::ToolCallId, CoreError> {
+        let runtime_call_id = runtime_call_id.into();
+        let call_id = zeta_protocol::ToolCallId::new(format!(
+            "code-{}-{}",
+            parent_tool_call_id, runtime_call_id
+        ))
+        .map_err(|error| CoreError::InvalidInput(error.to_string()))?;
+        let call = ToolCall {
+            id: call_id.clone(),
+            name: name.clone(),
+            arguments,
+        };
+        let binding = self.bind_tool_call(
+            &call,
+            zeta_protocol::ToolCallCaller::CodeMode {
+                parent_tool_call_id: parent_tool_call_id.clone(),
+                cell_id: cell_id.into(),
+                runtime_call_id,
+            },
+        )?;
+        self.threads.record_tool_call(
+            thread_id,
+            turn_id,
+            crate::RecordToolCallRequest {
+                tool_call_id: Some(call_id.clone()),
+                name,
+                arguments_json: serde_json::to_string(&call.arguments)
+                    .map_err(|error| CoreError::Context(error.to_string()))?,
+                binding: Some(binding),
+            },
+        )?;
+        Ok(call_id)
+    }
+
     pub fn new(
         threads: Arc<ThreadController>,
         model: Arc<dyn ModelService>,
@@ -620,8 +679,18 @@ impl TurnExecutor {
         cancellation: &CancellationToken,
     ) -> Result<ToolSchedulingProgress, ExecutionFailure> {
         for call in calls {
+            let binding = self
+                .tools
+                .bind_call(call, zeta_protocol::ToolCallCaller::Direct)
+                .map_err(ExecutionFailure::service)?
+                .ok_or_else(|| {
+                    ExecutionFailure::service(CoreError::Execution(format!(
+                        "tool service did not freeze a durable binding for {}",
+                        call.name
+                    )))
+                })?;
             self.threads
-                .record_model_tool_call(thread_id, turn_id, call)
+                .record_model_tool_call(thread_id, turn_id, call, binding)
                 .map_err(ExecutionFailure::persistence)?;
         }
         self.tool_scheduler()

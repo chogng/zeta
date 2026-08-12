@@ -2,6 +2,7 @@
 
 mod endpoint;
 mod error;
+mod input_token_count_endpoint;
 mod requests;
 mod semantic;
 mod sse;
@@ -10,6 +11,7 @@ mod token_count;
 pub use endpoint::ApiEndpoint;
 pub use endpoint::ApiProtocol;
 pub use error::ApiError;
+pub use input_token_count_endpoint::InputTokenCountEndpoint;
 pub use semantic::SemanticApiEndpoint;
 pub use sse::AnthropicMessagesSseDecoder;
 pub use sse::OpenAiResponsesSseDecoder;

@@ -88,6 +88,69 @@ fn registry_applies_endpoint_and_token_defaults_during_normalization() {
 }
 
 #[test]
+fn token_count_targets_and_model_support_are_normalized_explicitly() {
+    let registry = ProviderConfigRegistry::builtin();
+    let openai = registry
+        .normalize(&ModelProviderConfig {
+            provider: provider_id("openai"),
+            base_url: Some("https://proxy.test/v1".into()),
+            max_output_tokens: None,
+            model_context: BTreeMap::new(),
+        })
+        .unwrap();
+    let google = registry
+        .normalize(&ModelProviderConfig::new(provider_id("google")))
+        .unwrap();
+    let google_override = registry
+        .normalize(&ModelProviderConfig {
+            provider: provider_id("google"),
+            base_url: Some("https://proxy.test/v1/openai".into()),
+            max_output_tokens: None,
+            model_context: BTreeMap::new(),
+        })
+        .unwrap();
+    let kimi = registry
+        .normalize(&ModelProviderConfig::new(provider_id("kimi")))
+        .unwrap();
+
+    assert_eq!(
+        openai.input_token_count.unwrap().base_url,
+        "https://proxy.test/v1"
+    );
+    assert_eq!(
+        google.input_token_count.unwrap().base_url,
+        "https://generativelanguage.googleapis.com/v1beta"
+    );
+    assert!(google_override.input_token_count.is_none());
+    let kimi = kimi.input_token_count.unwrap();
+    assert!(kimi.supports(&ModelId::new("kimi-k2.6").unwrap()));
+    assert!(!kimi.supports(&ModelId::new("unlisted-kimi-model").unwrap()));
+}
+
+#[test]
+fn token_count_definitions_reject_invalid_targets_and_duplicate_models() {
+    let invalid_target = definition("invalid-target", EndpointPolicy::ConfiguredOnly)
+        .with_input_token_count(InputTokenCountDefinition::provider_default(
+            InputTokenCountProfile::GoogleGenerateContent,
+            "file:///tmp/tokenizer",
+        ));
+    let duplicate_models = definition("duplicate-models", EndpointPolicy::ConfiguredOnly)
+        .with_input_token_count(
+            InputTokenCountDefinition::invocation_base(InputTokenCountProfile::KimiChatCompletions)
+                .with_models([ModelId::new("same").unwrap(), ModelId::new("same").unwrap()]),
+        );
+
+    assert!(matches!(
+        ProviderConfigRegistry::from_definitions([invalid_target]),
+        Err(ProviderConfigError::InvalidBaseUrl { .. })
+    ));
+    assert!(matches!(
+        ProviderConfigRegistry::from_definitions([duplicate_models]),
+        Err(ProviderConfigError::InvalidProvider { .. })
+    ));
+}
+
+#[test]
 fn automatic_review_uses_the_provider_default_or_active_model() {
     let builtins = ProviderConfigRegistry::builtin();
     assert_eq!(

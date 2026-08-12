@@ -65,6 +65,20 @@ impl ToolScheduler {
             let Some(pending) = next_pending_call(&snapshot.items, turn_id)? else {
                 return Ok(ToolSchedulingProgress::Complete);
             };
+            if let Err(error) = self
+                .tools
+                .validate_call_binding(&pending.call, pending.binding.as_ref())
+            {
+                let message = if snapshot.started_tool_calls.contains(&pending.call.id) {
+                    format!(
+                        "tool execution outcome is unknown after its durable binding became unavailable: {error}"
+                    )
+                } else {
+                    format!("durable tool binding is unavailable: {error}")
+                };
+                self.record_failure(thread_id, turn_id, pending.call.id, message)?;
+                continue;
+            }
             let frozen_policy_revision = snapshot
                 .turns
                 .iter()
@@ -419,6 +433,7 @@ impl ToolScheduler {
 struct PendingToolCall {
     item_id: ItemId,
     call: ToolCall,
+    binding: Option<zeta_protocol::ToolCallBinding>,
 }
 
 fn next_pending_call(
@@ -432,6 +447,7 @@ fn next_pending_call(
             tool_call_id,
             name,
             arguments_json,
+            binding,
         } = item
         else {
             continue;
@@ -462,6 +478,7 @@ fn next_pending_call(
                 name: name.clone(),
                 arguments,
             },
+            binding: binding.clone(),
         }));
     }
     Ok(None)

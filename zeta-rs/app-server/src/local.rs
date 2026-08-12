@@ -1,7 +1,6 @@
 use crate::AppServer;
 use crate::CodeIndexSemanticModels;
 use crate::SlashCommandCatalog;
-use crate::mcp_tools::compose_mcp_tools;
 use crate::model_catalog::ModelCatalog;
 use crate::server::WorkspaceSwitchTrustPolicy;
 use crate::server::WorkspaceToolPorts;
@@ -35,9 +34,17 @@ use zeta_core::SessionCoordinator;
 use zeta_core::ThreadController;
 use zeta_extensions::ExtensionRoot;
 use zeta_install_context::InstallContext;
-use zeta_model_provider::{
-    ModelInvoker, ModelProvider, ModelProviderRuntime, ModelRuntimeRequest, UnavailableModel,
-};
+use zeta_mcp_extension::compose_mcp_tools;
+use zeta_model_provider::HttpTokenizerAssetDownloader;
+use zeta_model_provider::HuggingFaceTokenizerAssetDiscoverer;
+use zeta_model_provider::ManagedLocalTokenizerService;
+use zeta_model_provider::MemoryTokenizerCapacity;
+use zeta_model_provider::ModelInvoker;
+use zeta_model_provider::ModelProvider;
+use zeta_model_provider::ModelProviderRuntime;
+use zeta_model_provider::ModelRuntimeRequest;
+use zeta_model_provider::TokenizerAssetCatalog;
+use zeta_model_provider::UnavailableModel;
 use zeta_model_provider_config::ProviderConfigRegistry;
 use zeta_protocol::ContextWindow;
 use zeta_rollout::LocalStateRepository;
@@ -150,6 +157,7 @@ pub struct LocalAppServerOptions {
     pub built_in_skills: BuiltInSkillRoot,
     pub session_state_mode: SessionStateMode,
     model_operation_client: Option<Arc<dyn OperationClient>>,
+    web_search_backend: Option<Arc<dyn zeta_web_search_extension::WebSearchBackend>>,
 }
 
 impl LocalAppServerOptions {
@@ -162,6 +170,7 @@ impl LocalAppServerOptions {
             built_in_skills: BuiltInSkillRoot::AutoDetect,
             session_state_mode: SessionStateMode::Durable,
             model_operation_client: None,
+            web_search_backend: None,
         }
     }
 
@@ -205,6 +214,18 @@ impl LocalAppServerOptions {
         self.model_operation_client = Some(client);
         self
     }
+
+    /// Installs the opt-in capability-bearing Web Search extension.
+    ///
+    /// Without an injected backend the `web_search` tool is absent. The backend's network and
+    /// credential scopes are still reviewed by the ordinary extension policy before each call.
+    pub fn with_web_search_backend(
+        mut self,
+        backend: Arc<dyn zeta_web_search_extension::WebSearchBackend>,
+    ) -> Self {
+        self.web_search_backend = Some(backend);
+        self
+    }
 }
 
 impl fmt::Debug for LocalAppServerOptions {
@@ -221,6 +242,10 @@ impl fmt::Debug for LocalAppServerOptions {
                 "model_operation_client_injected",
                 &self.model_operation_client.is_some(),
             )
+            .field(
+                "web_search_backend_injected",
+                &self.web_search_backend.is_some(),
+            )
             .finish()
     }
 }
@@ -234,6 +259,11 @@ impl PartialEq for LocalAppServerOptions {
             && self.built_in_skills == other.built_in_skills
             && self.session_state_mode == other.session_state_mode
             && match (&self.model_operation_client, &other.model_operation_client) {
+                (Some(left), Some(right)) => Arc::ptr_eq(left, right),
+                (None, None) => true,
+                _ => false,
+            }
+            && match (&self.web_search_backend, &other.web_search_backend) {
                 (Some(left), Some(right)) => Arc::ptr_eq(left, right),
                 (None, None) => true,
                 _ => false,
@@ -378,10 +408,27 @@ pub fn open_local_app_server_with_code_index_providers(
             .read()
             .map_err(|error| OpenAppServerError(error.0))?;
     }
+    let tokenizer_downloader = Arc::new(HttpTokenizerAssetDownloader::production());
+    let local_tokenizers = Arc::new(
+        ManagedLocalTokenizerService::new(
+            options.profile_root.join("cache/model-tokenizers"),
+            TokenizerAssetCatalog::new(),
+            tokenizer_downloader.clone(),
+            MemoryTokenizerCapacity::default(),
+        )
+        .map(|service| {
+            service.with_discoverer(Arc::new(HuggingFaceTokenizerAssetDiscoverer::new(
+                tokenizer_downloader,
+            )))
+        })
+        .map_err(|error| OpenAppServerError(error.to_string()))?,
+    );
     let model_provider = match options.model_operation_client.take() {
-        Some(client) => Arc::new(ModelProviderRuntime::builtin_with_client(client)),
-        None => Arc::new(ModelProviderRuntime::builtin()),
-    };
+        Some(client) => ModelProviderRuntime::builtin_with_client(client),
+        None => ModelProviderRuntime::builtin(),
+    }
+    .with_local_tokenizers(local_tokenizers);
+    let model_provider = Arc::new(model_provider);
     let model = Arc::new(ConfigBackedModelService {
         config: config.clone(),
         workspace: workspace.clone(),
@@ -413,7 +460,11 @@ pub fn open_local_app_server_with_code_index_providers(
         .with_cloud_code_index_storage_root(options.profile_root.join("code-index-cloud"))
         .with_cloud_code_index_providers(providers.cloud)
         .with_extension_roots(extension_roots)
-        .with_skill_runtime(built_in_skill_root, skill_config)
+        .with_skill_runtime(
+            built_in_skill_root,
+            skill_config,
+            options.web_search_backend.take(),
+        )
         .map_err(OpenAppServerError)?;
     if let Some(models) = providers.semantic_models {
         server = server.with_code_index_semantic_models(models);

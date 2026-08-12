@@ -78,7 +78,7 @@ Agent 生命周期能够成为 authority 的前提。
 - provider wire-level streaming 与 App Server 独立 outbound worker；
 - 完整 `TurnPolicySnapshot` 中除 revision 外的 execution limit/agent role 集合，以及
   `ModelInvocationSnapshot` 的独立 provider/config/catalog revision 集合；
-- provider 精确 tokenizer 生产 adapter、usage 校准、prompt cache/reference baseline 与跨 Thread
+- 其余 provider/local tokenizer adapter、usage 校准、prompt cache/reference baseline 与跨 Thread
   context seed；
 - 并行 Tool、通用 deadline、声明式 retry 与 reconciliation；
 - durable multi-Agent delegation、跨 Thread message/result 与 Agent tree resource budget；

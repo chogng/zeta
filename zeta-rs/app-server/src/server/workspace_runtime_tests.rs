@@ -242,6 +242,7 @@ fn workspace_activation_binds_native_skill_source() {
         .with_skill_runtime(
             zeta_skills_extension::BuiltInSkillSource::Omitted,
             Arc::new(EmptySkillConfig),
+            None,
         )
         .unwrap()
         .with_local_workspace_host(None, WorkspaceSwitchTrustPolicy::Restricted)

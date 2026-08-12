@@ -19,6 +19,10 @@ use zeta_model_provider_config::ModelProviderConfig;
 use zeta_protocol::{
     CommandId, ModelRef, ModelRequest, ModelResponse, Patch, ResponseItem, StopReason,
 };
+use zeta_web_search_extension::WebSearchBackend;
+use zeta_web_search_extension::WebSearchError;
+use zeta_web_search_extension::WebSearchRequest;
+use zeta_web_search_extension::WebSearchResponse;
 
 fn config_path(label: &str) -> PathBuf {
     std::env::temp_dir().join(format!(
@@ -78,6 +82,66 @@ fn local_composition_installs_semantic_models_before_workspace_activation() {
     .unwrap();
 
     assert!(server.code_index_semantic_service().is_some());
+}
+
+struct UnusedSearchBackend;
+
+impl WebSearchBackend for UnusedSearchBackend {
+    fn service_name(&self) -> &str {
+        "test search"
+    }
+
+    fn network_scopes(&self) -> Vec<String> {
+        vec!["search.example.com".into()]
+    }
+
+    fn credential_reference(&self) -> Option<String> {
+        None
+    }
+
+    fn search(
+        &self,
+        _: &WebSearchRequest,
+        _: &zeta_async_utils::CancellationToken,
+    ) -> Result<WebSearchResponse, WebSearchError> {
+        panic!("composition test does not execute search")
+    }
+}
+
+#[test]
+fn local_web_search_is_absent_by_default_and_registered_when_injected() {
+    let profile = tempfile::tempdir().unwrap();
+    let default_server = open_local_app_server(
+        LocalAppServerOptions::new(profile.path())
+            .without_built_in_skills()
+            .with_session_state_mode(SessionStateMode::Ephemeral),
+    )
+    .unwrap();
+    assert!(
+        default_server
+            .local_workspace_tool_ports()
+            .unwrap()
+            .definitions()
+            .iter()
+            .all(|definition| definition.name.as_str() != "web_search")
+    );
+
+    let injected_profile = tempfile::tempdir().unwrap();
+    let injected_server = open_local_app_server(
+        LocalAppServerOptions::new(injected_profile.path())
+            .without_built_in_skills()
+            .with_session_state_mode(SessionStateMode::Ephemeral)
+            .with_web_search_backend(Arc::new(UnusedSearchBackend)),
+    )
+    .unwrap();
+    assert!(
+        injected_server
+            .local_workspace_tool_ports()
+            .unwrap()
+            .definitions()
+            .iter()
+            .any(|definition| definition.name.as_str() == "web_search")
+    );
 }
 
 fn remove_config_files(path: &Path) {

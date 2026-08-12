@@ -1,9 +1,19 @@
-use crate::{
-    ClientIdentityPolicy, HttpClientConfig, HttpClientError, HttpRequest, HttpResponse,
-    ProxyBypass, ProxyPolicy, RedirectPolicy, Timeout, TlsPolicy,
-};
+use crate::ClientIdentityPolicy;
+use crate::HttpClientConfig;
+use crate::HttpClientError;
+use crate::HttpRequest;
+use crate::HttpResponse;
+use crate::ProxyBypass;
+use crate::ProxyPolicy;
+use crate::RedirectPolicy;
+use crate::Timeout;
+use crate::TlsPolicy;
 use std::io::Read;
 use std::sync::Arc;
+use std::sync::OnceLock;
+
+type SystemRootLoader =
+    Arc<dyn Fn() -> Result<rustls::RootCertStore, HttpClientError> + Send + Sync>;
 
 /// Executes a fully constructed HTTP request once.
 ///
@@ -17,50 +27,124 @@ pub trait HttpClient: Send + Sync {
 
 /// The production synchronous HTTP client backed by one reusable `ureq` agent.
 pub struct UreqHttpClient {
-    direct_agent: ureq::Agent,
-    proxy_agent: Option<ureq::Agent>,
+    config: HttpClientConfig,
+    http_direct_agent: ureq::Agent,
+    http_proxy_agent: Option<ureq::Agent>,
+    proxy_url: Option<String>,
     proxy_bypass: ProxyBypass,
     response_body_limit: usize,
+    system_root_loader: SystemRootLoader,
+    secure_tls_config: OnceLock<Result<Arc<rustls::ClientConfig>, HttpClientError>>,
+    https_direct_agent: OnceLock<Result<ureq::Agent, HttpClientError>>,
+    https_proxy_agent: OnceLock<Result<ureq::Agent, HttpClientError>>,
 }
 
 impl UreqHttpClient {
     /// Builds the production client with the default transport policy.
     ///
-    /// Loading platform roots and proxy configuration can fail in restricted hosts, so callers
-    /// must handle the result instead of assuming that process startup implies network access.
+    /// Static proxy, custom-certificate, and client-identity configuration is validated here.
+    /// Platform certificate roots are loaded lazily on the first HTTPS request so an HTTP-only
+    /// client remains usable in offline or restricted hosts.
     pub fn new() -> Result<Self, HttpClientError> {
         Self::with_config(HttpClientConfig::default())
     }
 
     pub fn with_config(config: HttpClientConfig) -> Result<Self, HttpClientError> {
-        let tls_config = build_tls_config(&config)?;
-        let direct_agent = build_agent(&config, tls_config.clone(), None)?;
+        Self::with_config_and_root_loader(config, Arc::new(system_root_store))
+    }
+
+    fn with_config_and_root_loader(
+        config: HttpClientConfig,
+        system_root_loader: SystemRootLoader,
+    ) -> Result<Self, HttpClientError> {
+        let http_tls_config = build_tls_config(&config, SystemRoots::Skip, &system_root_loader)?;
+        let http_direct_agent = build_agent(&config, http_tls_config.clone(), None)?;
         let (proxy_url, proxy_bypass) = resolve_proxy(config.proxy());
-        let proxy_agent = proxy_url
+        let http_proxy_agent = proxy_url
             .as_deref()
-            .map(|proxy_url| build_agent(&config, tls_config, Some(proxy_url)))
+            .map(|proxy_url| build_agent(&config, http_tls_config, Some(proxy_url)))
             .transpose()?;
+        let response_body_limit = config.response_body_limit().bytes().get();
 
         Ok(Self {
-            direct_agent,
-            proxy_agent,
+            config,
+            http_direct_agent,
+            http_proxy_agent,
+            proxy_url,
             proxy_bypass,
-            response_body_limit: config.response_body_limit().bytes().get(),
+            response_body_limit,
+            system_root_loader,
+            secure_tls_config: OnceLock::new(),
+            https_direct_agent: OnceLock::new(),
+            https_proxy_agent: OnceLock::new(),
         })
     }
 
-    fn agent_for(&self, request: &HttpRequest) -> &ureq::Agent {
-        let Some(proxy_agent) = self.proxy_agent.as_ref() else {
-            return &self.direct_agent;
+    #[cfg(test)]
+    pub(crate) fn with_test_system_root_loader(
+        config: HttpClientConfig,
+        loader: impl Fn() -> Result<rustls::RootCertStore, HttpClientError> + Send + Sync + 'static,
+    ) -> Result<Self, HttpClientError> {
+        Self::with_config_and_root_loader(config, Arc::new(loader))
+    }
+
+    fn agent_for(&self, request: &HttpRequest) -> Result<&ureq::Agent, HttpClientError> {
+        let use_proxy = self.uses_proxy(request);
+        let proxy_requires_tls = use_proxy
+            && self
+                .proxy_url
+                .as_deref()
+                .is_some_and(|url| url.starts_with("https://"));
+        let request_requires_tls = request.url().starts_with("https://")
+            || matches!(self.config.redirects(), RedirectPolicy::Follow { .. });
+        if !request_requires_tls && !proxy_requires_tls {
+            return if use_proxy {
+                Ok(self
+                    .http_proxy_agent
+                    .as_ref()
+                    .expect("a selected proxy always has an agent"))
+            } else {
+                Ok(&self.http_direct_agent)
+            };
+        }
+
+        if use_proxy {
+            self.https_proxy_agent
+                .get_or_init(|| {
+                    build_agent(
+                        &self.config,
+                        self.secure_tls_config()?,
+                        self.proxy_url.as_deref(),
+                    )
+                })
+                .as_ref()
+                .map_err(Clone::clone)
+        } else {
+            self.https_direct_agent
+                .get_or_init(|| build_agent(&self.config, self.secure_tls_config()?, None))
+                .as_ref()
+                .map_err(Clone::clone)
+        }
+    }
+
+    fn uses_proxy(&self, request: &HttpRequest) -> bool {
+        if self.proxy_url.is_none() {
+            return false;
         };
         let Some((host, port)) = request_authority(request.url()) else {
-            return proxy_agent;
+            return true;
         };
-        if self.proxy_bypass.matches(host, port) {
-            &self.direct_agent
-        } else {
-            proxy_agent
-        }
+        !self.proxy_bypass.matches(host, port)
+    }
+
+    fn secure_tls_config(&self) -> Result<Arc<rustls::ClientConfig>, HttpClientError> {
+        self.secure_tls_config
+            .get_or_init(|| {
+                build_tls_config(&self.config, SystemRoots::Load, &self.system_root_loader)
+            })
+            .as_ref()
+            .cloned()
+            .map_err(Clone::clone)
     }
 }
 
@@ -166,9 +250,14 @@ fn request_authority(url: &str) -> Option<(&str, Option<u16>)> {
 
 fn build_tls_config(
     config: &HttpClientConfig,
+    system_roots: SystemRoots,
+    system_root_loader: &SystemRootLoader,
 ) -> Result<Arc<rustls::ClientConfig>, HttpClientError> {
     let mut roots = match config.tls() {
-        TlsPolicy::SystemRoots | TlsPolicy::SystemPlus(_) => system_root_store()?,
+        TlsPolicy::SystemRoots | TlsPolicy::SystemPlus(_) => match system_roots {
+            SystemRoots::Load => system_root_loader()?,
+            SystemRoots::Skip => rustls::RootCertStore::empty(),
+        },
         TlsPolicy::CustomOnly(_) => rustls::RootCertStore::empty(),
     };
     match config.tls() {
@@ -202,6 +291,12 @@ fn build_tls_config(
     Ok(Arc::new(tls_config))
 }
 
+#[derive(Clone, Copy)]
+enum SystemRoots {
+    Load,
+    Skip,
+}
+
 fn system_root_store() -> Result<rustls::RootCertStore, HttpClientError> {
     let native_certificates = rustls_native_certs::load_native_certs().map_err(|_| {
         HttpClientError::InvalidConfiguration("failed to load system certificate roots".into())
@@ -233,7 +328,7 @@ fn add_certificate_bundle(
 impl HttpClient for UreqHttpClient {
     fn execute(&self, request: &HttpRequest) -> Result<HttpResponse, HttpClientError> {
         let mut request_builder = self
-            .agent_for(request)
+            .agent_for(request)?
             .request(request.method().as_str(), request.url());
         for header in request.headers() {
             request_builder = request_builder.set(header.name(), header.value());

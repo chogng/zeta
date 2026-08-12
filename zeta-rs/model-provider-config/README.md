@@ -18,6 +18,8 @@ credential、secret、connection pool 或 process-local adapter。
 | `ProviderConfigRegistry` | definition authority | validate、register、merge、selection、normalize |
 | `ProviderAdapter` | serializable adapter identity | 不是 runtime trait/object |
 | `ApiProfile` | declarative wire profile | runtime 显式解析为 `zeta-api::ApiEndpoint` |
+| `InputTokenCountDefinition` | provider-owned preflight declaration | profile、target 与明确 model policy |
+| `NormalizedInputTokenCountConfig` | runtime-ready count snapshot | 已解析 base URL；不包含 client 或准确度策略 |
 | `EndpointPolicy` | provider default 或 configured-only | 不执行 DNS/network validation |
 | `ModelCatalogPolicy` | listed-only 或 allow-unlisted | 只表达 static catalog gate |
 | `ApprovalReviewModelDefault` | automatic review default | active model 或 provider-declared model |
@@ -32,6 +34,7 @@ schema 没有第二份手写来源。
 src/
 ├── config.rs       # user config、normalized config、URL helpers
 ├── definition.rs   # provider declaration 与 validation
+├── input_token_count.rs # count profile、target、model policy 与 normalized snapshot
 ├── registry.rs     # registration、merge、selection、normalization
 ├── providers/      # one private built-in definition per provider
 ├── error.rs
@@ -42,6 +45,7 @@ src/
 | --- | --- | --- | --- |
 | `ModelProviderConfig::validate_static` | public method | zero output/context limits 与 configured URL shape | 不依赖 registry或网络 |
 | `ProviderDefinition::validate` | public method | name、default endpoint、defaults、catalog uniqueness | definition 自身必须独立有效 |
+| `InputTokenCountDefinition::validate` | crate-private method | count URL、non-empty/unique model list | 不探测远端 model availability |
 | `ProviderConfigRegistry::register` | public method | validate + reject duplicate | built-in/plugin 定义走相同路径 |
 | `ProviderConfigRegistry::merge` | public method | prevalidate incoming + explicit conflict policy | merge 不能 partial apply |
 | `ProviderConfigRegistry::normalize` | public method | config + definition → normalized snapshot | endpoint/default/profile precedence 在此唯一实现 |
@@ -67,6 +71,10 @@ ProviderConfigRegistry::normalize(config)
 ├─ is_http_url
 ├─ choose max_output_tokens
 │  └─ config value overrides provider default
+├─ normalize input token count
+│  ├─ InvocationBase → normalized invocation base
+│  ├─ ProviderDefault + no override → declared count base
+│  └─ ProviderDefault + endpoint override → disabled
 └─ NormalizedModelProviderConfig
 ```
 
@@ -87,9 +95,15 @@ Merge 必须 preflight 后一次 extend；在循环中边验证边插入会造�
 ## 内置供应商定义
 
 每个 `providers/<name>.rs::definition()` 返回一个完整 `ProviderDefinition`。例如 OpenAI 选择
-`OpenAiResponses` 与 provider default URL；Anthropic 选择 `AnthropicMessages` 并声明默认 max
-tokens。Provider matrix 和官方依据由系统文档维护，本 README 只固定 definition construction
-pattern。
+`OpenAiResponses` 与同 base 的 count profile；Google invocation 使用 compatible base，但
+`countTokens` 使用单独声明的 native base；Anthropic 选择 `AnthropicMessages` 并声明默认 max
+tokens。Kimi、Google 和 Z.AI 的 count model list 是 definition 数据，不由 runtime 按 ID 前缀猜测。
+Provider matrix 和官方依据由系统文档维护，本 README 只固定 definition construction pattern。
+
+`InputTokenCountTarget::InvocationBase` 会跟随显式 endpoint override，适合 count 与 invocation 同一
+service surface 的 provider。`ProviderDefault` 只在 invocation 也使用 provider 默认 endpoint 时启用；
+一旦用户配置代理或私有 endpoint，normalization 会关闭该 count binding，避免把同一请求绕过代理发到
+官方服务。
 
 新增 provider 时同步：
 
@@ -105,6 +119,7 @@ pattern。
 - config crate 依赖 `zeta-api`/HTTP/secret：runtime state 下沉；
 - `ProviderAdapter` 直接存 trait object：declaration 不再 serializable；
 - runtime 根据 provider name 猜 API profile：显式 declaration 被绕过；
+- runtime 根据 model ID 前缀或 invocation URL 拼 count endpoint：显式 count declaration 被绕过；
 - normalization 追加 `/responses` 等 route：endpoint/profile ownership 混淆；
 - allow-unlisted 被描述为远端可用：static evidence 被夸大；
 - merge conflict 造成 partial registry mutation：config snapshot 不再原子。

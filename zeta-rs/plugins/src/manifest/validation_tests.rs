@@ -20,6 +20,14 @@ fn valid_manifest() -> Value {
             "mcpServers": [
                 { "id": "review", "definition": "mcp/review-server.json" }
             ],
+            "connectors": [
+                {
+                    "id": "review-account",
+                    "displayName": "Acme Review",
+                    "description": "Connect an Acme Review account.",
+                    "mcpServer": "review"
+                }
+            ],
             "assets": [
                 { "id": "icon", "path": "assets/icon.png" }
             ]
@@ -33,7 +41,7 @@ fn valid_manifest() -> Value {
             {
                 "name": "api-token",
                 "kind": "secretText",
-                "requiredFor": ["mcp:review"]
+                "requiredFor": ["mcp:review", "connector:review-account"]
             }
         ],
         "metadata": {
@@ -62,6 +70,10 @@ fn strict_v1_manifest_parses_typed_security_fields() {
     assert_eq!(
         manifest.credential_slots[0].required_for[0].to_string(),
         "mcp:review"
+    );
+    assert_eq!(
+        manifest.credential_slots[0].required_for[1].to_string(),
+        "connector:review-account"
     );
     assert!(matches!(
         manifest.permissions[2],
@@ -126,6 +138,16 @@ fn credential_requirements_must_reference_declared_contributions() {
     let error = parse(&manifest).unwrap_err();
 
     assert!(error.to_string().contains("missing contribution"));
+}
+
+#[test]
+fn connector_must_reference_a_declared_mcp_server() {
+    let mut manifest = valid_manifest();
+    manifest["contributions"]["connectors"][0]["mcpServer"] = json!("missing");
+
+    let error = parse(&manifest).unwrap_err();
+
+    assert!(error.to_string().contains("missing MCP server"));
 }
 
 #[test]

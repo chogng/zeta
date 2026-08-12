@@ -2,14 +2,14 @@
 
 > 计划物理位置：`zeta-rs/tools/`  
 > Rust crate：`zeta_tools`  
-> 当前状态：T1 主链完成，T2 MCP/dynamic 主链完成，T3 的 Tool Search 与 host read-only extension
-> 接入完成。`zeta-tools` 已提供受限 schema、host definition、protocol/dynamic/MCP adapter、output、
-> binding、invocation、`ToolExecutor`、不可变 `ToolRegistrySnapshot`、Direct/Deferred/Hidden exposure、
-> 默认 BM25/Regex Tool Search 和可选 embedding 混合召回。App Server 已把 local、MCP、dynamic 与
-> extension contribution 放进同一 registry/runtime-key/policy 链；Core 根据同 generation 的 durable
-> `tool_search` 结果在下一模型步骤加载精确定义。仍未完成的是 Tool Call durable source/digest、
-> Plugin/Connector 安装发现、code mode、完整图片精度适配，以及 dynamic owner 断连后的持久化重启
-> 端到端 fixture。
+> 当前状态：T1 主链完成，T2 MCP/dynamic 主链完成；MCP host runtime 已提取到 `ext/mcp`。T3 的
+> Tool Search、capability-bearing extension、Connector catalog/lifecycle、Plugin catalog projection 与
+> typed discovery request 已接入共享契约；`ext/web-search` 已提供默认关闭、宿主注入 backend 后才注册的
+> `web_search` 工具。Tool Call 已持久化 registry
+> generation、definition digest、source chain 与 direct/code-mode caller；Tool Result 已能持久化结构化
+> 图片内容。Code Mode 当前完成冻结 registry 投影和 durable nested-call bridge，尚无 cell/runtime host；
+> Plugin local content store 已落地，但安装 authority、activation、grant，以及 dynamic owner 断连后的持久化重启
+> 端到端 fixture 仍未完成。
 > Canonical value 与 durable Tool Item：[`protocol.md`](protocol.md)  
 > Core 调度、approval 与恢复：[`core.md`](core.md)  
 > MCP client runtime：[`mcp.md`](mcp.md)  
@@ -28,7 +28,7 @@
 | 工具名称就是执行身份吗？ | 不是；稳定身份还包含来源、绑定和快照 generation | [身份、来源与绑定](#5-身份来源与绑定) |
 | Agent 当前能看到哪些工具？ | 由不可变注册表快照和暴露范围决定，运行中不会被静默改写 | [注册表与快照](#7-注册表与快照) |
 | 谁决定工具能不能执行？ | 权限系统决定授权；Core 调度；工具执行器落实调用 | [当前本地工具来源](#41-当前本地工具来源运行时) |
-| 当前完成到哪里？ | 统一 registry/executor/search、MCP/dynamic 和 read-only extension 主链已落地；安装发现、code mode 与 durable provenance 仍待完成 | [当前仓库审计](#2-当前仓库审计) |
+| 当前完成到哪里？ | 统一 registry/executor/search、durable provenance 和结构化图片主链已落地；Plugin 安装 authority 与 Code Mode runtime 尚未完成 | [当前仓库审计](#2-当前仓库审计) |
 
 ## 1. 结论
 
@@ -99,25 +99,35 @@ Core durable Tool Call / Tool Result lifecycle
 - `zeta-shell-command`、`zeta-file-system` 与 `zeta-apply-patch` 各自提供独立 executor；App Server
   已用 `ToolExecutorRuntime` 把它们接入 durable facts、policy authority、streaming output 与统一
   registry，旧 read/write/edit 名称只保留 hidden migration route；
-- `zeta-mcp` 的 tools-only catalog/binding runtime 与 App Server/Core adapter 已进入共享
+- `zeta-mcp` 的 tools-only catalog/binding runtime 与 `zeta-mcp-extension` 的 host/Core adapter 已进入共享
   registry/search projection；client-hosted dynamic tool 已进入同一 approval、durable interaction、
   exact owner 与 unknown-outcome 链；
-- `zeta-extension-api::ReadOnlyToolContributor` 产生的 host executor 已进入同一 registry/policy/runtime，
-  当前 `skills-read` 走这条路径；Plugin package discovery、install/enable/connect API 仍处于 Proposed；
+- `zeta-extension-api::ReadOnlyToolContributor` 和显式声明 network/credential scope 的
+  `CapabilityToolContributor` 已进入同一 registry/policy/runtime；当前 `skills-read` 走前者，
+  `web_search` 走后者并要求 exact one-time approval。`zeta-plugins` 已把验证后的本地 catalog 投影为不可执行的 discovery
+  snapshot，`zeta-tools` 已定义 generation-bound install/enable/connect request；`zeta-plugins` 已能把
+  local package stage、复验并原子 promote 到 content-addressed store，实际安装 authority 仍处于 Proposed；
 - App Server 以 frozen `ToolBinding` 的 runtime key 执行，不再在执行阶段按 live tool name 猜 source
   service；hot reload 只影响未来 prepare safe point，已准备调用保留原 generation 和 policy。
+- Core 在 durable Tool Call 中保存 registry generation、definition digest、source chain 和 caller；恢复
+  时 exact binding 不匹配会失败关闭，不会按同名新工具重放。Shell Turn 和 Code Mode nested call 也走
+  同一绑定入口；
+- Tool Executor、MCP 和 dynamic output 已转换为结构化 `ContentPart`，durable Tool Result 保留可选
+  content，旧纯文本记录继续兼容读取；模型调用边界会再次按 provider capability 清理 `Original`。
 
 当前剩余问题集中在尚未收口的跨边界能力，而不是再增加一套 registry：
 
-- `zeta-protocol::ToolDefinition` 有意只覆盖 model request 的最小 function schema；source、binding、
-  loading、exposure 和 runtime authority 由 host registry 持有，但 durable Tool Call 还没有记录
-  source/digest provenance；
 - dynamic owner 断连已经 fail closed，但还缺“持久化后重启恢复”的完整 App Server fixture；
-- Plugin/Connector 还缺 typed discovery 与 install/enable/connect lifecycle，不能用 executable registry
-  反向代替 package authority；
+- Plugin/Connector 已有 catalog-only typed discovery，Plugin manifest 可声明一个 Connector 到其 MCP
+  contribution 的绑定，`zeta-connectors-extension` 已分离 account connection state 与 package/runtime identity；
+  local package store 也已落地。仍缺真正的 OAuth/connect/revoke authority、用户确认交互和 activation，
+  不能用 executable registry 反向代替 package authority；
+- `zeta-web-search-extension` 已有 bounded request、executor、JSON HTTP backend 与 App Server opt-in 安装口；
+  当前没有默认生产 Search provider 或 credential UI，宿主未注入 backend 时工具完全不可用；
 - provider adapter 可能分别决定 namespace flattening、strict schema 和 image detail fallback；
 - tool search、Plugin discovery 和 install request 容易被混成一个有隐式副作用的“发现服务”；
-- code mode 若直接持有 executor，会绕过普通 tool 的 approval、durable commit 和 tracing。
+- Code Mode 已有确定性投影和 durable nested-call bridge，但还缺 exec/wait、cell lifecycle、host transport
+  与 broker；runtime 若直接持有 executor，仍会绕过普通 tool 的 approval、durable commit 和 tracing。
 
 后续扩展必须继续经过现有 `zeta-tools` 窄共享契约和 App Server composition root，不能在 Plugin、
 Connector、code mode 或 provider adapter 内另建可执行 registry。
@@ -357,7 +367,7 @@ execution provenance    = McpServerId + exact remote tool name + catalog generat
 
 ### 5.3 Durable 来源
 
-process-local `ToolBindingId` 不能单独用于 crash recovery。长期 Tool Call durable fact 应能保存：
+process-local `ToolBindingId` 不能单独用于 crash recovery。当前 Tool Call durable fact 保存：
 
 ```text
 exposed ToolName
@@ -366,8 +376,9 @@ exposed ToolName
 + registry/catalog generation provenance
 ```
 
-具体字段进入 protocol 前必须先完成 store/schema/App Server migration。恢复时若 exact source
-generation 已不存在：
+`ToolCallBinding` 已进入 protocol，history schema revision 已同步提升。Core 在记录 model、Shell 或
+Code Mode nested call 前先冻结该值，App Server reloadable service 同时保留对应 registry/policy
+generation。恢复时若 exact source generation 已不存在：
 
 - 未开始执行的调用变成稳定 `Unavailable`；
 - 已开始且副作用 outcome 不确定的调用进入 Core `UnknownOutcome`；
@@ -1055,7 +1066,8 @@ permissions 和 credential slots 必须在真正 install/enable command 前由 P
 
 ### 13.3 面向 Agent 的辅助程序工具
 
-可以提供两个明确的 built-in helper：
+当前已实现的是 generation-bound discovery snapshot、client capability filtering 和 typed request；
+这些值本身不能成为 `ToolDefinition`。以下两个 Agent helper 仍是下一阶段接线：
 
 ```text
 list_available_plugins_to_install
@@ -1141,6 +1153,12 @@ model emits code-mode execute call
 
 outer call 与 nested calls 的 transcript 展示可以由客户端折叠，但 durable facts 不能只保留一段
 opaque code output，使内部副作用不可恢复。
+
+当前实现已完成 `CodeModeProjection::from_registry` 的稳定命名、排序和 collision check，并由
+`TurnExecutor::record_code_mode_nested_call` 为 nested call 写入普通 durable Tool Call。caller 记录
+parent call、cell ID 和 runtime call ID；测试随后使用普通 `ToolScheduler` 完成同一个调用。exec/wait、
+cell host、异步 broker、yield/terminate 和 runtime crash recovery 尚未实现，因此当前不能宣称 Code
+Mode 可供模型实际执行代码。
 
 ### 14.4 结果结构
 
@@ -1446,16 +1464,17 @@ mod tests;
 
 完成条件：registry 更新不能劫持 in-flight call，stale binding 被明确拒绝。
 
-### 阶段 T2：MCP 与动态适配器（MCP/dynamic 主链完成，durable provenance 继续收紧）
+### 阶段 T2：MCP 与动态适配器（MCP/dynamic 与 durable provenance 主链完成）
 
 - ✅ `zeta-mcp` 输出 `McpToolProjection` 并建立 immutable catalog/binding；
 - ✅ 接通 MCP schema/name/result conversion 与调用取消；
 - ✅ MCP App Server/Core adapter 接入逐次 approval、durable commit 和 unknown outcome；
+- ✅ MCP host integration 从 App Server 私有模块提取到 `zeta-rs/ext/mcp`；App Server 仅组合和 safe-point replacement；
 - ✅ dynamic definition 进入共享 registry，execution 经过 approval、durable interaction 与 Tool Result commit；
 - ✅ dynamic request 固定 definition digest、call id、name 与 arguments；同名新定义不能认领旧 response；
 - ✅ 多连接 delivery 还按 initialize capability 的 exact dynamic tool name 选 owner；
 - ✅ 已投递 dynamic owner 断连/退订后不重新分配，按 unknown outcome 且不重试收口；
-- 尚未完成：Tool Call durable provenance 增加 source/digest；
+- ✅ Tool Call durable provenance 保存 registry generation、definition digest、source chain 与 caller；
 - 部分具备：MCP transport-lost 已覆盖；dynamic owner-disconnect 已覆盖 broker/Core continuation，
   仍需补持久化重启的完整端到端 fixture。
 
@@ -1466,11 +1485,18 @@ mod tests;
 - ✅ deferred exposure 和 deterministic search index；
 - ✅ host tool-search vertical slice；
 - ✅ Core 根据 successful durable search result 在下一 model step 增量暴露定义；
-- ✅ `ReadOnlyToolContributor` 产出的 host extension executor 进入共享 registry/policy/runtime（当前包括 `skills-read`）；
+- ✅ `ReadOnlyToolContributor` 产出的 host extension executor 进入共享 registry/policy/runtime（当前包括统一的 `skills-read`）；
+- ✅ `CapabilityToolContributor` 冻结 exact network/credential scope，并通过普通一次性 approval 执行；
+- ✅ `ext/web-search` 提供 eager `web_search`、可注入 backend 和默认关闭门禁；
+- ✅ `ext/connectors` 分离 Connector account lifecycle、discovery projection 与 ready MCP binding；
 - ✅ enabled connector/MCP catalog 与 local/dynamic/extension port 做统一 collision check；
-- 尚未完成：Plugin/Connector discovery projection；
-- 尚未完成：typed install/enable/connect request；
-- 尚未完成：通用 client capability filtering；dynamic owner 的 exact tool-name filtering 已完成。
+- ✅ Plugin/Connector catalog-only discovery value、generation-bound snapshot 与 local Plugin projection；
+- ✅ typed install/enable/connect request 和通用 client capability filtering；
+- ✅ local Plugin package store 已完成 staging、copy-time identity check、digest 复验和 content-addressed
+  atomic promotion；
+- 尚未完成：Connector OAuth/connect/revoke、默认生产 Web Search provider、Agent helper、用户确认
+  interaction 与 Plugin 安装/启用 authority；dynamic owner 的 exact
+  tool-name filtering 已完成。
 
 完成条件：search 只返回当前 registry 工具，Plugin discovery 不产生可执行 binding，install 无隐式
 grant。
@@ -1489,21 +1515,22 @@ ranking 只证明 gate、document embedding、cosine ranking 和 hybrid merge �
 
 ### 阶段 T4：代码模式
 
-- code-mode definition projection、naming/collision table；
-- nested call 重新进入普通 ToolInvocation path；
-- structured/MCP/image result adapter；
-- cell yield/cancel/uncertain outcome；
-- durable outer/nested call correlation。
+- ✅ code-mode definition projection、naming/collision table；
+- ✅ nested call 写入 durable binding 并重新进入普通 ToolScheduler path；
+- ✅ structured/MCP/image result adapter；
+- 尚未完成：exec/wait host、cell lifecycle、yield/cancel/uncertain outcome；
+- 部分具备：nested binding 已保存 outer call identity，outer call 自身的 durable runtime lifecycle 尚未完成。
 
 完成条件：code mode 的任意 nested side effect 都可审批、可审计、可取消，并具有准确恢复语义。
 
 ### 阶段 T5：图片精度与供应商能力收敛
 
-- 统一 `ImageDetailSelection/Decision`；
-- model capability snapshot 接入；
-- OpenAI/Anthropic adapter 只编码 effective detail；
-- MCP/dynamic/code-mode output 统一 sanitize；
-- downgrade diagnostic 和 image safety fixtures。
+- ✅ 统一 `ImageDetailSelection/Decision`；
+- ✅ model invocation 最终 capability gate；
+- ✅ provider adapter 只接收 effective detail；
+- ✅ Tool Executor/MCP/dynamic output 统一转为 durable structured content 并 sanitize；
+- 部分具备：downgrade decision fixture 已有；data URL byte/pixel/MIME 限制和跨 provider 端到端
+  wire fixture 尚未完成。
 
 完成条件：unsupported `Original` 不会到达 provider wire，且调用方能解释实际使用的 detail。
 

@@ -37,12 +37,14 @@ fn assembles_messages_and_paired_tool_results_from_durable_items() {
                 tool_call_id: call_id.clone(),
                 name: ToolName::new("weather").unwrap(),
                 arguments_json: r#"{"city":"Paris"}"#.into(),
+                binding: None,
             },
             ThreadItem::ToolResult {
                 item_id: id("result"),
                 turn_id,
                 tool_call_id: call_id.clone(),
                 text: "sunny".into(),
+                content: None,
                 is_error: false,
             },
         ],
@@ -61,6 +63,48 @@ fn assembles_messages_and_paired_tool_results_from_durable_items() {
     };
     assert_eq!(result.name.as_str(), "weather");
     assert_eq!(request.tool_choice, ToolChoice::None);
+}
+
+#[test]
+fn preserves_structured_tool_result_images_for_the_next_model_request() {
+    let turn_id = id::<TurnId>("turn");
+    let call_id = id::<ToolCallId>("call");
+    let image_url = "data:image/png;base64,iVBORw0KGgpwYXlsb2Fk";
+    let snapshot = snapshot(
+        turn_id.clone(),
+        vec![
+            ThreadItem::ToolCall {
+                item_id: id("tool"),
+                turn_id: turn_id.clone(),
+                tool_call_id: call_id.clone(),
+                name: ToolName::new("screenshot").unwrap(),
+                arguments_json: "{}".into(),
+                binding: None,
+            },
+            ThreadItem::ToolResult {
+                item_id: id("result"),
+                turn_id,
+                tool_call_id: call_id,
+                text: "[image]".into(),
+                content: Some(vec![ContentPart::ImageUrl {
+                    url: image_url.into(),
+                    detail: ImageDetail::High,
+                }]),
+                is_error: false,
+            },
+        ],
+    );
+
+    let request = assemble(&snapshot, Vec::new(), &HarnessInstructions::default()).unwrap();
+
+    assert!(matches!(
+        request.input.last(),
+        Some(InputItem::ToolResult(ToolResult { content, .. }))
+            if content == &vec![ContentPart::ImageUrl {
+                url: image_url.into(),
+                detail: ImageDetail::High,
+            }]
+    ));
 }
 
 #[test]
@@ -119,6 +163,7 @@ fn rejects_invalid_durable_tool_arguments() {
             tool_call_id: id("call"),
             name: ToolName::new("weather").unwrap(),
             arguments_json: "{".into(),
+            binding: None,
         }],
     );
 

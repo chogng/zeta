@@ -2,7 +2,6 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use serde_json::json;
 use zeta_async_utils::CancellationToken;
 use zeta_core::CoreError;
 use zeta_core::ToolAuthorization;
@@ -10,6 +9,7 @@ use zeta_core::ToolExecutionFacts;
 use zeta_core::ToolOutputSink;
 use zeta_policy::ActionReviewRequest;
 use zeta_policy::ReviewEvidence;
+use zeta_protocol::ContentPart;
 use zeta_protocol::ToolCall;
 use zeta_protocol::ToolCallId;
 use zeta_protocol::ToolExecutionOutput;
@@ -195,19 +195,16 @@ fn returned_output(
         .map(|content| match content {
             ToolContent::Text(text) => {
                 sink.emit(ToolOutputStream::Stdout, text.clone())?;
-                Ok(json!({"type": "text", "text": text}))
+                Ok(ContentPart::Text(text.clone()))
             }
-            ToolContent::Image { url, detail } => Ok(json!({
-                "type": "image_url",
-                "url": url,
-                "detail": format!("{detail:?}").to_ascii_lowercase(),
-            })),
+            ToolContent::Image { url, detail } => Ok(ContentPart::ImageUrl {
+                url: url.clone(),
+                detail: (*detail).into(),
+            }),
         })
         .collect::<Result<Vec<_>, CoreError>>()?;
-    let serialized = serde_json::to_string(&json!({"content": content}))
-        .map_err(|error| CoreError::Execution(error.to_string()))?;
     Ok(match output.status() {
-        ToolOutputStatus::Success => ToolExecutionOutput::Success(serialized),
-        ToolOutputStatus::Error => ToolExecutionOutput::Failure(serialized),
+        ToolOutputStatus::Success => ToolExecutionOutput::SuccessContent(content),
+        ToolOutputStatus::Error => ToolExecutionOutput::FailureContent(content),
     })
 }

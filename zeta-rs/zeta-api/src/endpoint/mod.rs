@@ -188,7 +188,7 @@ impl ApiEndpoint {
     }
 }
 
-fn validate_request(model: &str, request: &ModelRequest) -> Result<(), ApiError> {
+pub(crate) fn validate_request(model: &str, request: &ModelRequest) -> Result<(), ApiError> {
     if model.trim().is_empty() {
         return Err(ApiError::InvalidRequest("model must not be empty".into()));
     }

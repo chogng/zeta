@@ -92,6 +92,8 @@ pub struct ModelCapabilities {
     pub reasoning: CapabilitySupport,
     pub parallel_tool_calls: CapabilitySupport,
     pub personality: CapabilitySupport,
+    #[serde(default = "unknown_capability_support")]
+    pub image_detail_original: CapabilitySupport,
 }
 
 impl ModelCapabilities {
@@ -100,7 +102,12 @@ impl ModelCapabilities {
         reasoning: CapabilitySupport::Unknown,
         parallel_tool_calls: CapabilitySupport::Unknown,
         personality: CapabilitySupport::Unknown,
+        image_detail_original: CapabilitySupport::Unknown,
     };
+}
+
+fn unknown_capability_support() -> CapabilitySupport {
+    CapabilitySupport::Unknown
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

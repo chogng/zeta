@@ -30,6 +30,7 @@ use zeta_protocol::AgentRequest;
 use zeta_protocol::AgentResponse;
 use zeta_protocol::ApprovalMode;
 use zeta_protocol::CommandId;
+use zeta_protocol::ContentPart;
 use zeta_protocol::ContextCheckpoint;
 use zeta_protocol::ContextCheckpointId;
 use zeta_protocol::ContextCheckpointVerification;
@@ -49,6 +50,7 @@ use zeta_protocol::ThreadId;
 use zeta_protocol::ThreadItem;
 use zeta_protocol::ThreadUpdate;
 use zeta_protocol::ThreadUpdateEnvelope;
+use zeta_protocol::ToolCallBinding;
 use zeta_protocol::ToolCallId;
 use zeta_protocol::ToolDefinition;
 use zeta_protocol::ToolName;
@@ -101,6 +103,8 @@ pub struct StartShellTurnRequest {
     pub expected_sequence: SequenceExpectation,
     pub policy_revision: String,
     pub approval_mode: ApprovalMode,
+    pub tool_call_id: ToolCallId,
+    pub binding: ToolCallBinding,
     pub invocation: ShellTurnInvocation,
 }
 
@@ -197,8 +201,10 @@ pub struct CompletedTurn {
 }
 
 pub struct RecordToolCallRequest {
+    pub tool_call_id: Option<ToolCallId>,
     pub name: ToolName,
     pub arguments_json: String,
+    pub binding: Option<ToolCallBinding>,
 }
 
 pub struct RecordedToolCall {
@@ -210,6 +216,8 @@ pub struct RecordedToolCall {
 pub enum ToolCallOutput {
     Success(String),
     Failure(String),
+    SuccessContent(Vec<ContentPart>),
+    FailureContent(Vec<ContentPart>),
 }
 
 pub struct RecordToolResultRequest {
@@ -586,8 +594,6 @@ impl ThreadController {
             validate_thread_expectation(request.expected_sequence, snapshot.sequence)?;
             let turn_id =
                 TurnId::new(self.next_identifier("turn")).expect("generated Turn ID is non-empty");
-            let tool_call_id = ToolCallId::new(self.next_identifier("tool-call"))
-                .expect("generated Tool Call ID is non-empty");
             let arguments_json = serde_json::to_string(&serde_json::json!({
                 "program": request.invocation.shell_program,
                 "arguments": ["-lc", request.invocation.command],
@@ -598,9 +604,10 @@ impl ThreadController {
                 item_id: ItemId::new(self.next_identifier("item"))
                     .expect("generated Item ID is non-empty"),
                 turn_id: turn_id.clone(),
-                tool_call_id,
+                tool_call_id: request.tool_call_id.clone(),
                 name: ToolName::new("shell-command").expect("built-in shell-command name is valid"),
                 arguments_json,
+                binding: Some(request.binding.clone()),
             };
             let events = vec![
                 ThreadEvent::TurnAccepted {
@@ -782,8 +789,10 @@ impl ThreadController {
         turn_id: &TurnId,
         request: RecordToolCallRequest,
     ) -> Result<RecordedToolCall, CoreError> {
-        let tool_call_id = ToolCallId::new(self.next_identifier("tool"))
-            .expect("generated tool call ID is non-empty");
+        let tool_call_id = request.tool_call_id.unwrap_or_else(|| {
+            ToolCallId::new(self.next_identifier("tool"))
+                .expect("generated tool call ID is non-empty")
+        });
         let item = ThreadItem::ToolCall {
             item_id: ItemId::new(self.next_identifier("item"))
                 .expect("generated Item ID is non-empty"),
@@ -791,6 +800,7 @@ impl ThreadController {
             tool_call_id: tool_call_id.clone(),
             name: request.name,
             arguments_json: request.arguments_json,
+            binding: request.binding,
         };
         let sequence = self.record_item(thread_id, turn_id, item.clone())?;
         Ok(RecordedToolCall {
@@ -806,9 +816,15 @@ impl ThreadController {
         turn_id: &TurnId,
         request: RecordToolResultRequest,
     ) -> Result<RecordedToolResult, CoreError> {
-        let (text, is_error) = match request.output {
-            ToolCallOutput::Success(text) => (text, false),
-            ToolCallOutput::Failure(text) => (text, true),
+        let (text, content, is_error) = match request.output {
+            ToolCallOutput::Success(text) => (text, None, false),
+            ToolCallOutput::Failure(text) => (text, None, true),
+            ToolCallOutput::SuccessContent(content) => {
+                (tool_content_preview(&content), Some(content), false)
+            }
+            ToolCallOutput::FailureContent(content) => {
+                (tool_content_preview(&content), Some(content), true)
+            }
         };
         let item = ThreadItem::ToolResult {
             item_id: ItemId::new(self.next_identifier("item"))
@@ -816,6 +832,7 @@ impl ThreadController {
             turn_id: turn_id.clone(),
             tool_call_id: request.tool_call_id,
             text,
+            content,
             is_error,
         };
         let sequence = self.record_item(thread_id, turn_id, item.clone())?;
@@ -1291,6 +1308,17 @@ impl ThreadController {
             .as_nanos();
         format!("{prefix}_{timestamp:032x}_{ordinal:016x}")
     }
+}
+
+fn tool_content_preview(content: &[ContentPart]) -> String {
+    content
+        .iter()
+        .map(|part| match part {
+            ContentPart::Text(text) => text.as_str(),
+            ContentPart::ImageUrl { .. } => "[image]",
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 fn validate_command_id(command_id: &CommandId) -> Result<(), CoreError> {

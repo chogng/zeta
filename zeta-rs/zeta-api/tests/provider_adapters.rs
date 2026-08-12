@@ -1,8 +1,8 @@
 use serde_json::{Value, json};
 use std::sync::Mutex;
 use zeta_api::{
-    ApiEndpoint, ApiProtocol, ModelRequest, ReasoningConfig, ReasoningEffort, SemanticApiEndpoint,
-    StopReason, ToolDefinition, ToolName,
+    ApiEndpoint, ApiProtocol, InputTokenCountEndpoint, ModelRequest, ReasoningConfig,
+    ReasoningEffort, SemanticApiEndpoint, StopReason, ToolDefinition, ToolName,
 };
 use zeta_client::{ClientError, ClientRequest, ClientResponse, OperationClient, ResolvedApiTarget};
 use zeta_http_client::HttpHeader;
@@ -218,6 +218,93 @@ fn anthropic_messages_counts_the_frozen_input_payload() {
             .iter()
             .any(|header| { header.name().eq_ignore_ascii_case("anthropic-version") })
     );
+}
+
+#[test]
+fn gemini_count_tokens_encodes_the_native_generate_content_request() {
+    let transport = CapturingTransport::new(json!({"totalTokens": 233}));
+    let mut request = tool_request();
+    request.reasoning = None;
+    let target = ResolvedApiTarget::new(
+        "https://generativelanguage.googleapis.com/v1beta",
+        vec![HttpHeader::new("x-goog-api-client", "zeta/0.1")],
+    );
+
+    let count = InputTokenCountEndpoint::GoogleGenerateContent
+        .count_with_client(&target, "gemini-test", &request, &transport)
+        .unwrap();
+
+    let (endpoint, _, body) = transport.request.lock().unwrap().clone().unwrap();
+    let generate = &body["generateContentRequest"];
+    assert_eq!(
+        endpoint,
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-test:countTokens"
+    );
+    assert_eq!(count.get(), 233);
+    assert_eq!(generate["model"], "models/gemini-test");
+    assert_eq!(
+        generate["systemInstruction"]["parts"][0]["text"],
+        "Use tools when needed."
+    );
+    assert_eq!(generate["contents"][0]["role"], "user");
+    assert_eq!(
+        generate["tools"][0]["functionDeclarations"][0]["name"],
+        "weather"
+    );
+    assert_eq!(
+        generate["toolConfig"]["functionCallingConfig"]["mode"],
+        "AUTO"
+    );
+}
+
+#[test]
+fn kimi_estimate_tokens_sends_only_the_documented_input_fields() {
+    let transport = CapturingTransport::new(json!({"data": {"total_tokens": 87}}));
+    let mut request = ModelRequest::text("hello");
+    request.max_output_tokens = Some(512);
+    request.temperature = Some(0.5);
+
+    let count = InputTokenCountEndpoint::KimiChatCompletions
+        .count_with_client(&target(), "kimi-k2.6", &request, &transport)
+        .unwrap();
+
+    let (endpoint, _, body) = transport.request.lock().unwrap().clone().unwrap();
+    assert_eq!(
+        endpoint,
+        "https://example.test/v1/tokenizers/estimate-token-count"
+    );
+    assert_eq!(count.get(), 87);
+    assert_eq!(body["model"], "kimi-k2.6");
+    assert_eq!(body["messages"][0]["content"], "hello");
+    assert!(body.get("stream").is_none());
+    assert!(body.get("max_tokens").is_none());
+    assert!(body.get("temperature").is_none());
+}
+
+#[test]
+fn zai_tokenizer_preserves_tools_but_removes_generation_fields() {
+    let transport = CapturingTransport::new(json!({
+        "usage": {
+            "prompt_tokens": 120,
+            "image_tokens": 24,
+            "total_tokens": 144
+        }
+    }));
+    let mut request = tool_request();
+    request.reasoning = None;
+    request.max_output_tokens = Some(512);
+
+    let count = InputTokenCountEndpoint::ZaiChatCompletions
+        .count_with_client(&target(), "glm-5.1", &request, &transport)
+        .unwrap();
+
+    let (endpoint, _, body) = transport.request.lock().unwrap().clone().unwrap();
+    assert_eq!(endpoint, "https://example.test/v1/tokenizer");
+    assert_eq!(count.get(), 144);
+    assert_eq!(body["tools"][0]["function"]["name"], "weather");
+    assert!(body["tools"][0]["function"].get("strict").is_none());
+    assert!(body.get("tool_choice").is_none());
+    assert!(body.get("max_tokens").is_none());
 }
 
 #[test]

@@ -41,7 +41,7 @@ provider 协调层提取执行 trait，预算引擎仍只消费计量结果。
 | 可用能力 | 构造方式 | 预算使用值 | 典型来源 |
 | --- | --- | --- | --- |
 | provider 调用前预检 | `provider_preflight(revision)` + 独立 accuracy | 精确值或保守值 | OpenAI/Anthropic count API |
-| 与所选模型匹配的本地 tokenizer | `ContextTokenMeasurement::exact` + `local_tokenizer(revision)` | 精确值 | 本地 tokenizer registry |
+| 与所选模型匹配的本地 tokenizer | `local_tokenizer(revision)` + 独立 accuracy | 精确值或保守值 | 本地 tokenizer registry |
 | 无精准计数能力 | `ContextTokenMeasurement::estimated` | 保守记账值 | `deterministic-bytes-v1` 等 estimator |
 
 `ContextTokenMeasurement` 必须针对最终候选请求，而不是只数消息正文。调用方负责包含 instructions、
@@ -94,8 +94,8 @@ ContextBudget + ContextTokenMeasurement
 
 ## 4. 接入与失败语义
 
-调用方按能力选择计量来源，优先级是“匹配模型的精准本地 tokenizer 或 provider 预检，其次是带
-保守记账余量的估算”。本 crate 不规定预检调用频率：本地计数可以每次调用；有额外网络往返的 provider
+调用方按能力选择计量来源，统一优先级是“provider 官方预检、匹配模型的本地整请求计数、Core
+保守估算”。本 crate 不规定预检调用频率：本地计数可以每次调用；有额外网络往返的 provider
 预检通常由上层只在接近压力线、估算不确定或重试恢复时启用。无论采用哪种节奏，最终计量结果都
 进入同一个 `ContextBudgetPlanner`，不会形成 provider 专用预算算法。
 
@@ -123,12 +123,15 @@ cargo test -p zeta-core context
 - **Current**：预算类型已从 `zeta-core` 移入本 crate，Core 通过公共 `resolve` 契约消费压力线与硬上限。
 - **Current**：精准计数、保守估算和统一判定 value contract 已实现，并由无运行时依赖的单测覆盖。
 - **Current**：OpenAI Responses `/responses/input_tokens` 已作为 exact remote preflight 接入；
-  Anthropic Messages `/v1/messages/count_tokens` 已作为 estimated remote preflight 接入，并使用
-  `max(32, ceil(count / 100))` 的保守记账余量。
+  Anthropic Messages、Google `countTokens`、Kimi estimate 与 Z.AI tokenizer 已作为 estimated remote
+  preflight 接入，并使用 `max(32, ceil(count / 100))` 的保守记账余量。
 - **Current**：Core 对本地计数每次执行；remote preflight 只在距压力线 10%/至少 4096 tokens、
   compaction 后复核时执行，计量发现低估后收紧容量并重新规划。
-- **Current limitation**：本地 tokenizer registry 尚未接入，其他 provider 默认明确返回 unavailable；
-  Core 内容选择仍以 `deterministic-bytes-v1` 作为首轮 planner estimate。
+- **Current**：`zeta-model-tokenizer` 已提供按完整 `ModelRef` 绑定、双资产 revision/digest 固定、
+  `hf-chat-template` 执行、按需下载/磁盘缓存/内存 LRU；Provider runtime 统一消费本地计数。本地结果
+  因远端可能追加 envelope 而记为 estimated，并使用 2%/至少 64 tokens 的保守余量。
+- **Current limitation**：Hugging Face 公共 `owner/repo` 已支持自动发现；其他 provider/model 仍需
+  固定资产清单。无法处理的请求返回 unavailable，Core 仍以 `deterministic-bytes-v1` 作为首轮估算。
 - **Current limitation**：usage 校准与计量缓存尚未实现。
 - **Extension point**：真实 adapter 落地后，可以增加“何时请求远端预检”的上层策略；该策略不得
   改变本 crate 的预算公式，也不得让 usage 与调用前计量共用同一类型。

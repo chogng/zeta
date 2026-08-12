@@ -88,3 +88,50 @@ pub trait TurnInputContributor: Send + Sync {
 pub trait ReadOnlyToolContributor: Send + Sync {
     fn contribute(&self) -> Result<Vec<Arc<dyn ToolExecutor>>, ExtensionError>;
 }
+
+/// Exact external authority declared by a capability-bearing extension tool.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ExtensionToolAuthority {
+    /// Sends read-only requests to explicit network scopes without mutating the remote service.
+    ExternalRead {
+        service: String,
+        network_scopes: Vec<String>,
+        credential_reference: Option<String>,
+    },
+}
+
+/// One executable extension tool paired with the authority its host policy must review.
+pub struct CapabilityToolContribution {
+    executor: Arc<dyn ToolExecutor>,
+    authority: ExtensionToolAuthority,
+}
+
+impl CapabilityToolContribution {
+    pub fn new(executor: Arc<dyn ToolExecutor>, authority: ExtensionToolAuthority) -> Self {
+        Self {
+            executor,
+            authority,
+        }
+    }
+
+    pub fn executor(&self) -> &Arc<dyn ToolExecutor> {
+        &self.executor
+    }
+
+    pub fn authority(&self) -> &ExtensionToolAuthority {
+        &self.authority
+    }
+
+    pub fn into_parts(self) -> (Arc<dyn ToolExecutor>, ExtensionToolAuthority) {
+        (self.executor, self.authority)
+    }
+}
+
+/// Contributes tools that need explicit host-reviewed network or credential authority.
+///
+/// Implementations must declare every external scope before registration. The host freezes the
+/// declaration with the Tool Call, asks policy for authority, and only then invokes the executor.
+/// This contract does not itself grant network or credential access.
+pub trait CapabilityToolContributor: Send + Sync {
+    fn contribute(&self) -> Result<Vec<CapabilityToolContribution>, ExtensionError>;
+}

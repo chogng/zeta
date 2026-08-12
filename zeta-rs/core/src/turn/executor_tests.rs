@@ -62,6 +62,71 @@ fn completes_a_text_turn_from_durable_context() {
 }
 
 #[test]
+fn code_mode_nested_call_is_durable_and_reenters_the_ordinary_scheduler() {
+    let (threads, thread_id, turn_id) = started_turn();
+    let model = Arc::new(ScriptedModel::new([]));
+    let executor = TurnExecutor::new(
+        threads.clone(),
+        model,
+        Arc::new(WeatherTool),
+        Arc::new(SandboxPolicyService),
+    );
+
+    let nested_id = executor
+        .record_code_mode_nested_call(
+            &thread_id,
+            &turn_id,
+            &ToolCallId::new("outer").unwrap(),
+            "cell-1",
+            "runtime-1",
+            ToolName::new("weather").unwrap(),
+            json!({"city": "Paris"}),
+        )
+        .unwrap();
+    let call = threads
+        .read_thread(&thread_id)
+        .unwrap()
+        .items
+        .into_iter()
+        .find(|item| {
+            matches!(item, ThreadItem::ToolCall { tool_call_id, .. } if tool_call_id == &nested_id)
+        })
+        .unwrap();
+    assert!(matches!(
+        call,
+        ThreadItem::ToolCall {
+            binding: Some(zeta_protocol::ToolCallBinding {
+                caller: zeta_protocol::ToolCallCaller::CodeMode { ref cell_id, .. },
+                ..
+            }),
+            ..
+        } if cell_id == "cell-1"
+    ));
+
+    executor
+        .tool_scheduler()
+        .run_pending(&thread_id, &turn_id, &CancellationSource::new().token())
+        .unwrap();
+
+    assert!(
+        threads
+            .read_thread(&thread_id)
+            .unwrap()
+            .items
+            .iter()
+            .any(|item| matches!(
+                item,
+                ThreadItem::ToolResult {
+                    tool_call_id,
+                    text,
+                    is_error: false,
+                    ..
+                } if tool_call_id == &nested_id && text == "sunny"
+            ))
+    );
+}
+
+#[test]
 fn first_invocation_injects_untrusted_evidence_once() {
     let (threads, thread_id, turn_id) = started_turn();
     let model = Arc::new(ScriptedModel::new([
@@ -241,6 +306,7 @@ fn provider_preflight_tightens_the_budget_and_rechecks_after_compaction() {
                 expected_sequence: SequenceExpectation::Any,
                 model: None,
                 policy_revision: "test-policy-v1".into(),
+                approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
                     text: "current input".into(),

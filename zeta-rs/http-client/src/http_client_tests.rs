@@ -2,6 +2,8 @@ use super::*;
 use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::num::NonZeroUsize;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 
 #[test]
@@ -44,6 +46,76 @@ fn a_transport_attempt_does_not_retry_a_retryable_status() {
 
     assert_eq!(response.status(), 503);
     server.join().unwrap();
+}
+
+#[test]
+fn plain_http_does_not_load_system_certificate_roots() {
+    let root_loads = Arc::new(AtomicUsize::new(0));
+    let observed_root_loads = root_loads.clone();
+    let client = UreqHttpClient::with_test_system_root_loader(
+        HttpClientConfig::new().with_proxy_policy(ProxyPolicy::Direct),
+        move || {
+            observed_root_loads.fetch_add(1, Ordering::Relaxed);
+            Err(HttpClientError::InvalidConfiguration(
+                "fixture system roots unavailable".into(),
+            ))
+        },
+    )
+    .unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = std::thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        read_headers(&mut stream);
+        write!(
+            stream,
+            "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok"
+        )
+        .unwrap();
+    });
+    let request = HttpRequest::new(
+        HttpMethod::Get,
+        format!("http://{address}/offline"),
+        Vec::new(),
+        Vec::new(),
+    )
+    .unwrap();
+
+    assert_eq!(client.execute(&request).unwrap().body(), b"ok");
+    assert_eq!(root_loads.load(Ordering::Relaxed), 0);
+    server.join().unwrap();
+}
+
+#[test]
+fn https_loads_system_certificate_roots_lazily_and_caches_the_failure() {
+    let root_loads = Arc::new(AtomicUsize::new(0));
+    let observed_root_loads = root_loads.clone();
+    let client = UreqHttpClient::with_test_system_root_loader(
+        HttpClientConfig::new().with_proxy_policy(ProxyPolicy::Direct),
+        move || {
+            observed_root_loads.fetch_add(1, Ordering::Relaxed);
+            Err(HttpClientError::InvalidConfiguration(
+                "fixture system roots unavailable".into(),
+            ))
+        },
+    )
+    .unwrap();
+    let request = HttpRequest::new(
+        HttpMethod::Get,
+        "https://127.0.0.1:1/offline",
+        Vec::new(),
+        Vec::new(),
+    )
+    .unwrap();
+
+    for _ in 0..2 {
+        assert!(matches!(
+            client.execute(&request),
+            Err(HttpClientError::InvalidConfiguration(message))
+                if message == "fixture system roots unavailable"
+        ));
+    }
+    assert_eq!(root_loads.load(Ordering::Relaxed), 1);
 }
 
 #[test]

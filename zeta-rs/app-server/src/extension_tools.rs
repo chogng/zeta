@@ -6,12 +6,14 @@ use zeta_async_utils::CancellationToken;
 use zeta_core::CoreError;
 use zeta_core::PolicyService;
 use zeta_extension_api::ExtensionRegistry;
+use zeta_extension_api::ExtensionToolAuthority;
 use zeta_policy::ActionDigest;
 use zeta_policy::ActionKind;
 use zeta_policy::ActionProvenance;
 use zeta_policy::ActionReviewPhase;
 use zeta_policy::ActionReviewRequest;
 use zeta_policy::ActionSource;
+use zeta_policy::ApprovalRequest;
 use zeta_policy::Capability;
 use zeta_policy::CapabilityKind;
 use zeta_policy::CapabilitySet;
@@ -31,53 +33,87 @@ use crate::tool_composition::ToolPort;
 use crate::tool_executor_adapter::PreparedToolExecution;
 use crate::tool_executor_adapter::ToolExecutorReviewer;
 
-const EXTENSION_TOOL_POLICY_REVISION: &str = "host-read-only-extension-v1";
+const EXTENSION_TOOL_POLICY_REVISION: &str = "host-extension-authority-v2";
 
 pub(crate) fn compose_extension_tools(
     registry: &ExtensionRegistry,
 ) -> Result<Option<ToolPort>, ExtensionToolCompositionError> {
-    let executors = registry
+    let read_only_executors = registry
         .contribute_read_only_tools()
         .map_err(|error| ExtensionToolCompositionError(error.to_string()))?;
-    if executors.is_empty() {
-        return Ok(None);
-    }
-    let definitions = executors
+    let capability_tools = registry
+        .contribute_capability_tools()
+        .map_err(|error| ExtensionToolCompositionError(error.to_string()))?;
+    let mut registrations = read_only_executors
         .iter()
         .map(|executor| {
-            let definition = executor.definition();
-            (definition.name().clone(), definition)
+            (
+                executor.definition().name().clone(),
+                ExtensionToolRegistration {
+                    definition: executor.definition(),
+                    authority: RegisteredExtensionAuthority::ReadOnlyLocal,
+                },
+            )
         })
         .collect::<BTreeMap<_, _>>();
-    if definitions.len() != executors.len() {
+    if registrations.len() != read_only_executors.len() {
         return Err(ExtensionToolCompositionError(
             "extension tool names must be unique".into(),
         ));
     }
-    let definitions = Arc::new(definitions);
+    for contribution in &capability_tools {
+        let definition = contribution.executor().definition();
+        if registrations
+            .insert(
+                definition.name().clone(),
+                ExtensionToolRegistration {
+                    definition,
+                    authority: RegisteredExtensionAuthority::Capability(
+                        contribution.authority().clone(),
+                    ),
+                },
+            )
+            .is_some()
+        {
+            return Err(ExtensionToolCompositionError(
+                "extension tool names must be unique across authority classes".into(),
+            ));
+        }
+    }
+    let mut executors = read_only_executors;
+    executors.extend(
+        capability_tools
+            .into_iter()
+            .map(|contribution| contribution.into_parts().0),
+    );
+    if executors.is_empty() {
+        return Ok(None);
+    }
+    let registrations = Arc::new(registrations);
     let environment_id = ToolEnvironmentId::new("host-extensions")
         .map_err(|error| ExtensionToolCompositionError(error.to_string()))?;
     ToolPort::extension(
         executors,
         environment_id,
         Arc::new(ExtensionToolReviewer {
-            definitions: Arc::clone(&definitions),
+            registrations: Arc::clone(&registrations),
         }),
-        Arc::new(ExtensionToolPolicy { definitions }),
+        Arc::new(ExtensionToolPolicy { registrations }),
     )
     .map(Some)
     .map_err(|error| ExtensionToolCompositionError(error.to_string()))
 }
 
 struct ExtensionToolReviewer {
-    definitions: Arc<BTreeMap<ToolName, ToolDefinition>>,
+    registrations: Arc<BTreeMap<ToolName, ExtensionToolRegistration>>,
 }
 
 impl ToolExecutorReviewer for ExtensionToolReviewer {
     fn prepare(&self, call: &ToolCall) -> Result<PreparedToolExecution, CoreError> {
-        let definition = self.definitions.get(&call.name).ok_or_else(|| {
+        let registration = self.registrations.get(&call.name).ok_or_else(|| {
             CoreError::Policy(format!("extension tool is not available: {}", call.name))
         })?;
+        let definition = &registration.definition;
         let payload = match definition.invocation() {
             ToolInvocationKind::Function { .. } => {
                 if !call.arguments.is_object() {
@@ -101,19 +137,20 @@ impl ToolExecutorReviewer for ExtensionToolReviewer {
         let canonical = serde_json::to_vec(&json!({
             "tool": call.name.as_str(),
             "definition_digest": definition.digest().as_str(),
+            "authority": authority_digest_value(&registration.authority),
             "arguments": call.arguments,
         }))
         .map_err(|error| CoreError::Policy(error.to_string()))?;
         let review = ActionReviewRequest::new(
             ResolvedAction::new(
                 ActionDigest::from_canonical_bytes(canonical),
-                ActionKind::SystemOperation,
-                format!("run host-installed read-only extension tool '{}'", call.name),
-                extension_capabilities(&call.name),
+                extension_action_kind(&registration.authority),
+                extension_summary(&call.name, &registration.authority),
+                extension_capabilities(&call.name, &registration.authority),
             ),
             ActionProvenance::new(ActionSource::Plugin, call.name.as_str()),
             SandboxCompatibility::NotApplicable {
-                reason: "the host extension executes in process and is constrained to the read-only extension contract".into(),
+                reason: extension_sandbox_reason(&registration.authority),
             },
             PolicyRevision::new(EXTENSION_TOOL_POLICY_REVISION),
         );
@@ -122,7 +159,7 @@ impl ToolExecutorReviewer for ExtensionToolReviewer {
 }
 
 struct ExtensionToolPolicy {
-    definitions: Arc<BTreeMap<ToolName, ToolDefinition>>,
+    registrations: Arc<BTreeMap<ToolName, ExtensionToolRegistration>>,
 }
 
 impl PolicyService for ExtensionToolPolicy {
@@ -139,14 +176,19 @@ impl PolicyService for ExtensionToolPolicy {
             .check()
             .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
         let tool_name = ToolName::new(request.provenance().source_id()).ok();
+        let registration = tool_name
+            .as_ref()
+            .and_then(|name| self.registrations.get(name));
         let capabilities = tool_name
             .as_ref()
-            .filter(|name| self.definitions.contains_key(*name))
-            .map(extension_capabilities);
+            .zip(registration)
+            .map(|(name, registration)| extension_capabilities(name, &registration.authority));
         if request.policy_revision().as_str() != EXTENSION_TOOL_POLICY_REVISION
             || request.provenance().source() != &ActionSource::Plugin
             || capabilities.as_ref() != Some(request.action().required_capabilities())
-            || request.action().kind() != &ActionKind::SystemOperation
+            || registration.is_none_or(|registration| {
+                request.action().kind() != &extension_action_kind(&registration.authority)
+            })
             || !matches!(request.phase(), ActionReviewPhase::Initial)
             || !matches!(
                 request.sandbox(),
@@ -154,23 +196,110 @@ impl PolicyService for ExtensionToolPolicy {
             )
         {
             return Err(CoreError::Policy(
-                "extension tool policy rejected an action outside its read-only contract".into(),
+                "extension tool policy rejected an action outside its declared authority".into(),
             ));
         }
-        Ok(ExecutionDecision::RunUnsandboxed {
-            grant_id: GrantId::new(format!(
-                "host-read-only-extension:{}",
-                request.provenance().source_id()
-            )),
-        })
+        match &registration
+            .expect("validated extension registration")
+            .authority
+        {
+            RegisteredExtensionAuthority::ReadOnlyLocal => Ok(ExecutionDecision::RunUnsandboxed {
+                grant_id: GrantId::new(format!(
+                    "host-read-only-extension:{}",
+                    request.provenance().source_id()
+                )),
+            }),
+            RegisteredExtensionAuthority::Capability(_) => {
+                Ok(ExecutionDecision::AskUser(ApprovalRequest::new(
+                    request.action().digest().clone(),
+                    request.action().required_capabilities().clone(),
+                    "extension tool requires exact one-time external access approval",
+                )))
+            }
+        }
     }
 }
 
-fn extension_capabilities(name: &ToolName) -> CapabilitySet {
-    CapabilitySet::new([Capability::new(
-        CapabilityKind::FileRead,
-        format!("extension-tool:{}", name.as_str()),
-    )])
+#[derive(Clone)]
+struct ExtensionToolRegistration {
+    definition: ToolDefinition,
+    authority: RegisteredExtensionAuthority,
+}
+
+#[derive(Clone)]
+enum RegisteredExtensionAuthority {
+    ReadOnlyLocal,
+    Capability(ExtensionToolAuthority),
+}
+
+fn extension_capabilities(
+    name: &ToolName,
+    authority: &RegisteredExtensionAuthority,
+) -> CapabilitySet {
+    match authority {
+        RegisteredExtensionAuthority::ReadOnlyLocal => CapabilitySet::new([Capability::new(
+            CapabilityKind::FileRead,
+            format!("extension-tool:{}", name.as_str()),
+        )]),
+        RegisteredExtensionAuthority::Capability(ExtensionToolAuthority::ExternalRead {
+            network_scopes,
+            credential_reference,
+            ..
+        }) => {
+            CapabilitySet::new(
+                network_scopes
+                    .iter()
+                    .map(|scope| Capability::new(CapabilityKind::Network, scope))
+                    .chain(credential_reference.iter().map(|credential| {
+                        Capability::new(CapabilityKind::CredentialUse, credential)
+                    })),
+            )
+        }
+    }
+}
+
+fn extension_action_kind(authority: &RegisteredExtensionAuthority) -> ActionKind {
+    match authority {
+        RegisteredExtensionAuthority::ReadOnlyLocal => ActionKind::SystemOperation,
+        RegisteredExtensionAuthority::Capability(ExtensionToolAuthority::ExternalRead {
+            ..
+        }) => ActionKind::NetworkRequest,
+    }
+}
+
+fn extension_summary(name: &ToolName, authority: &RegisteredExtensionAuthority) -> String {
+    match authority {
+        RegisteredExtensionAuthority::ReadOnlyLocal => {
+            format!("run host-installed read-only extension tool '{name}'")
+        }
+        RegisteredExtensionAuthority::Capability(ExtensionToolAuthority::ExternalRead {
+            service,
+            ..
+        }) => format!("query {service} through extension tool '{name}'"),
+    }
+}
+
+fn extension_sandbox_reason(authority: &RegisteredExtensionAuthority) -> String {
+    match authority {
+        RegisteredExtensionAuthority::ReadOnlyLocal => "the host extension executes in process and is constrained to the read-only extension contract".into(),
+        RegisteredExtensionAuthority::Capability(_) => "external network access cannot be enforced by the local process sandbox".into(),
+    }
+}
+
+fn authority_digest_value(authority: &RegisteredExtensionAuthority) -> serde_json::Value {
+    match authority {
+        RegisteredExtensionAuthority::ReadOnlyLocal => json!({"type": "read_only_local"}),
+        RegisteredExtensionAuthority::Capability(ExtensionToolAuthority::ExternalRead {
+            service,
+            network_scopes,
+            credential_reference,
+        }) => json!({
+            "type": "external_read",
+            "service": service,
+            "network_scopes": network_scopes,
+            "credential_reference": credential_reference,
+        }),
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

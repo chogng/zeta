@@ -4,6 +4,9 @@ mod contributors;
 mod fragment;
 mod registry;
 
+pub use contributors::CapabilityToolContribution;
+pub use contributors::CapabilityToolContributor;
+pub use contributors::ExtensionToolAuthority;
 pub use contributors::ReadOnlyToolContributor;
 pub use contributors::SkillActivationContext;
 pub use contributors::SkillActivationContributor;

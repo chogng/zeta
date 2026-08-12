@@ -3,6 +3,7 @@
 mod config;
 mod definition;
 mod error;
+mod input_token_count;
 mod providers;
 mod registry;
 
@@ -18,6 +19,11 @@ pub use definition::ProviderAdapter;
 pub use definition::ProviderDefaults;
 pub use definition::ProviderDefinition;
 pub use error::ProviderConfigError;
+pub use input_token_count::InputTokenCountDefinition;
+pub use input_token_count::InputTokenCountModelPolicy;
+pub use input_token_count::InputTokenCountProfile;
+pub use input_token_count::InputTokenCountTarget;
+pub use input_token_count::NormalizedInputTokenCountConfig;
 pub use registry::ProviderConfigRegistry;
 pub use registry::RegistryMergePolicy;
 pub use zeta_protocol::Model;

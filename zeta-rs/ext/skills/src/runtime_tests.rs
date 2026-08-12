@@ -280,7 +280,8 @@ fn skills_read_tool_loads_exact_enabled_skill_body_for_the_model() {
         binding,
         ToolPayload::FunctionArguments(serde_json::json!({
             "source": "builtin:skill-source:zeta-release",
-            "name": "review"
+            "name": "review",
+            "target": {"type": "instructions"}
         })),
         ToolExecutionContext::new(
             ToolEnvironmentId::new("agent-extension").unwrap(),
@@ -329,6 +330,192 @@ fn skills_read_tool_rejects_disabled_or_unknown_catalog_identity() {
         };
         assert!(!text.contains(root.to_string_lossy().as_ref()));
     }
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn skills_read_tool_uses_pinned_identity_for_text_package_resources() {
+    let root = test_directory("skills-read-resource");
+    write_skill(&root, "review", "Review code");
+    fs::create_dir_all(root.join("review/references/guides")).unwrap();
+    fs::write(
+        root.join("review/references/guides/checks.md"),
+        "Check race conditions.\n",
+    )
+    .unwrap();
+    let skill_body = fs::read(root.join("review/SKILL.md")).unwrap();
+    let skill_digest = zeta_protocol::ContentDigest::sha256(&skill_body);
+    let runtime = runtime(
+        BuiltInSkillSource::Root(root.clone()),
+        Arc::new(TestConfig::new()),
+    );
+    let mut builder = ExtensionRegistryBuilder::new();
+    crate::install(&mut builder, runtime);
+    let executor = builder
+        .build()
+        .contribute_read_only_tools()
+        .unwrap()
+        .remove(0);
+    let definition = executor.definition();
+    let binding = ToolBinding::new(
+        ToolRegistryGeneration::new(1),
+        ToolBindingId::new("skills-read-resource-binding").unwrap(),
+        definition.name().clone(),
+        definition.digest(),
+        ToolRuntimeKey::new("extension:skills-read-resource").unwrap(),
+    );
+    let invocation = zeta_tools::ToolInvocation::new(
+        ToolOperationId::new("skills-read-resource-operation").unwrap(),
+        zeta_protocol::ToolCallId::new("reference-call").unwrap(),
+        TurnId::new("turn").unwrap(),
+        binding,
+        ToolPayload::FunctionArguments(serde_json::json!({
+            "source": "builtin:skill-source:zeta-release",
+            "name": "review",
+            "target": {
+                "type": "resource",
+                "skill_content_digest": skill_digest.as_str(),
+                "path": "references/guides/checks.md"
+            }
+        })),
+        ToolExecutionContext::new(
+            ToolEnvironmentId::new("agent-extension").unwrap(),
+            zeta_async_utils::CancellationSource::new().token(),
+            ToolRuntimeAuthority::Unrestricted,
+        ),
+    );
+
+    let outcome = pollster::block_on(executor.execute(invocation));
+
+    let ToolExecutionOutcome::Returned(output) = outcome else {
+        panic!("skills-read resource did not return a model-visible output");
+    };
+    assert_eq!(output.status(), zeta_tools::ToolOutputStatus::Success);
+    let zeta_tools::ToolContent::Text(text) = &output.content()[0] else {
+        panic!("skills-read resource did not return text");
+    };
+    assert!(text.contains("Check race conditions."));
+    assert!(text.contains("references/guides/checks.md"));
+    assert!(text.contains("resource_content_digest"));
+    assert!(!text.contains(root.to_string_lossy().as_ref()));
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn skills_read_tool_rejects_binary_resources_without_exposing_bytes_as_text() {
+    let root = test_directory("skills-read-binary-resource");
+    write_skill(&root, "review", "Review code");
+    fs::create_dir_all(root.join("review/assets")).unwrap();
+    fs::write(root.join("review/assets/template.bin"), [0, 159, 146, 150]).unwrap();
+    let skill_body = fs::read(root.join("review/SKILL.md")).unwrap();
+    let skill_digest = zeta_protocol::ContentDigest::sha256(&skill_body);
+    let runtime = runtime(
+        BuiltInSkillSource::Root(root.clone()),
+        Arc::new(TestConfig::new()),
+    );
+    let mut builder = ExtensionRegistryBuilder::new();
+    crate::install(&mut builder, runtime);
+    let executor = builder
+        .build()
+        .contribute_read_only_tools()
+        .unwrap()
+        .remove(0);
+    let definition = executor.definition();
+    let binding = ToolBinding::new(
+        ToolRegistryGeneration::new(1),
+        ToolBindingId::new("skills-read-binary-binding").unwrap(),
+        definition.name().clone(),
+        definition.digest(),
+        ToolRuntimeKey::new("extension:skills-read-binary").unwrap(),
+    );
+    let invocation = zeta_tools::ToolInvocation::new(
+        ToolOperationId::new("skills-read-binary-operation").unwrap(),
+        zeta_protocol::ToolCallId::new("binary-call").unwrap(),
+        TurnId::new("turn").unwrap(),
+        binding,
+        ToolPayload::FunctionArguments(serde_json::json!({
+            "source": "builtin:skill-source:zeta-release",
+            "name": "review",
+            "target": {
+                "type": "resource",
+                "skill_content_digest": skill_digest.as_str(),
+                "path": "assets/template.bin"
+            }
+        })),
+        ToolExecutionContext::new(
+            ToolEnvironmentId::new("agent-extension").unwrap(),
+            zeta_async_utils::CancellationSource::new().token(),
+            ToolRuntimeAuthority::Unrestricted,
+        ),
+    );
+
+    let outcome = pollster::block_on(executor.execute(invocation));
+
+    let ToolExecutionOutcome::Returned(output) = outcome else {
+        panic!("skills-read binary resource did not return a model-visible output");
+    };
+    assert_eq!(output.status(), zeta_tools::ToolOutputStatus::Error);
+    let zeta_tools::ToolContent::Text(text) = &output.content()[0] else {
+        panic!("skills-read binary resource error was not text");
+    };
+    assert!(text.contains("binary"));
+    assert!(text.contains("assets/template.bin"));
+    assert!(!text.contains(root.to_string_lossy().as_ref()));
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn skills_read_tool_keeps_skill_md_on_the_instruction_target() {
+    let root = test_directory("skills-read-instructions-target");
+    write_skill(&root, "review", "Review code");
+    let skill_body = fs::read(root.join("review/SKILL.md")).unwrap();
+    let skill_digest = zeta_protocol::ContentDigest::sha256(&skill_body);
+    let runtime = runtime(
+        BuiltInSkillSource::Root(root.clone()),
+        Arc::new(TestConfig::new()),
+    );
+    let mut builder = ExtensionRegistryBuilder::new();
+    crate::install(&mut builder, runtime);
+    let executor = builder
+        .build()
+        .contribute_read_only_tools()
+        .unwrap()
+        .remove(0);
+    let definition = executor.definition();
+    let binding = ToolBinding::new(
+        ToolRegistryGeneration::new(1),
+        ToolBindingId::new("skills-read-instructions-target-binding").unwrap(),
+        definition.name().clone(),
+        definition.digest(),
+        ToolRuntimeKey::new("extension:skills-read-instructions-target").unwrap(),
+    );
+    let invocation = zeta_tools::ToolInvocation::new(
+        ToolOperationId::new("skills-read-instructions-target-operation").unwrap(),
+        zeta_protocol::ToolCallId::new("instructions-target-call").unwrap(),
+        TurnId::new("turn").unwrap(),
+        binding,
+        ToolPayload::FunctionArguments(serde_json::json!({
+            "source": "builtin:skill-source:zeta-release",
+            "name": "review",
+            "target": {
+                "type": "resource",
+                "skill_content_digest": skill_digest.as_str(),
+                "path": "SKILL.md"
+            }
+        })),
+        ToolExecutionContext::new(
+            ToolEnvironmentId::new("agent-extension").unwrap(),
+            zeta_async_utils::CancellationSource::new().token(),
+            ToolRuntimeAuthority::Unrestricted,
+        ),
+    );
+
+    let outcome = pollster::block_on(executor.execute(invocation));
+
+    let ToolExecutionOutcome::NotStarted(error) = outcome else {
+        panic!("SKILL.md resource target should be rejected before execution");
+    };
+    assert!(error.message().contains("instructions target"));
     let _ = fs::remove_dir_all(root);
 }
 
@@ -407,7 +594,8 @@ fn execute_skill_read(executor: &dyn zeta_tools::ToolExecutor, name: &str) -> To
         binding,
         ToolPayload::FunctionArguments(serde_json::json!({
             "source": "builtin:skill-source:zeta-release",
-            "name": name
+            "name": name,
+            "target": {"type": "instructions"}
         })),
         ToolExecutionContext::new(
             ToolEnvironmentId::new("agent-extension").unwrap(),

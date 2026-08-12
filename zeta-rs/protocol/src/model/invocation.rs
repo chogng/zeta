@@ -1,6 +1,8 @@
 use crate::{ReasoningEffort, ToolCallId, ToolName};
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use ts_rs::TS;
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -13,6 +15,57 @@ pub struct ModelRequest {
     pub reasoning: Option<ReasoningConfig>,
     pub max_output_tokens: Option<u32>,
     pub temperature: Option<f32>,
+}
+
+impl ModelRequest {
+    /// Applies the last provider-capability gate to every image before wire encoding.
+    ///
+    /// The returned decisions are suitable for bounded diagnostics; image URLs and bytes are not
+    /// copied into them.
+    pub fn sanitize_image_details(
+        &mut self,
+        supports_original: bool,
+    ) -> Vec<crate::ImageDetailDecision> {
+        let mut decisions = Vec::new();
+        for item in &mut self.input {
+            match item {
+                InputItem::Message(message) => {
+                    sanitize_content(&mut message.content, supports_original, &mut decisions)
+                }
+                InputItem::ToolResult(result) => {
+                    sanitize_content(&mut result.content, supports_original, &mut decisions)
+                }
+            }
+        }
+        decisions
+    }
+}
+
+fn sanitize_content(
+    content: &mut [ContentPart],
+    supports_original: bool,
+    decisions: &mut Vec<crate::ImageDetailDecision>,
+) {
+    for part in content {
+        let ContentPart::ImageUrl { detail, .. } = part else {
+            continue;
+        };
+        let requested = *detail;
+        let (effective, reason) = if requested == ImageDetail::Original && !supports_original {
+            (
+                ImageDetail::Auto,
+                crate::ImageDetailDecisionReason::OriginalUnsupportedDowngraded,
+            )
+        } else {
+            (requested, crate::ImageDetailDecisionReason::Supported)
+        };
+        *detail = effective;
+        decisions.push(crate::ImageDetailDecision {
+            requested,
+            effective,
+            reason,
+        });
+    }
 }
 
 impl ModelRequest {
@@ -68,7 +121,7 @@ pub enum MessageRole {
     Assistant,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(
     tag = "type",
     rename_all = "camelCase",
@@ -79,13 +132,30 @@ pub enum ContentPart {
     ImageUrl { url: String, detail: ImageDetail },
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum ImageDetail {
     Auto,
     Low,
     High,
     Original,
+}
+
+/// Stable explanation for a final model-request image detail decision.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ImageDetailDecisionReason {
+    Supported,
+    OriginalUnsupportedDowngraded,
+}
+
+/// Observable result of the final model-request image detail gate.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImageDetailDecision {
+    pub requested: ImageDetail,
+    pub effective: ImageDetail,
+    pub reason: ImageDetailDecisionReason,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]

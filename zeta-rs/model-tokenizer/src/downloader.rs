@@ -1,0 +1,89 @@
+use crate::LocalTokenizerError;
+use crate::RemoteTokenizerAsset;
+use std::sync::Arc;
+use std::sync::OnceLock;
+use zeta_http_client::HttpClient;
+use zeta_http_client::HttpClientConfig;
+use zeta_http_client::HttpMethod;
+use zeta_http_client::HttpRequest;
+use zeta_http_client::RedirectPolicy;
+use zeta_http_client::ResponseBodyLimit;
+use zeta_http_client::UreqHttpClient;
+
+/// Downloads one immutable asset without owning cache paths, retries, or publication.
+pub trait TokenizerAssetDownloader: Send + Sync {
+    fn fetch(&self, url: &str) -> Result<Vec<u8>, LocalTokenizerError>;
+
+    fn download(&self, asset: &RemoteTokenizerAsset) -> Result<Vec<u8>, LocalTokenizerError> {
+        if let Some(bytes) = asset.inline_bytes() {
+            Ok(bytes.to_vec())
+        } else {
+            self.fetch(asset.url())
+        }
+    }
+}
+
+/// Production downloader backed by Zeta's shared bounded HTTP transport contract.
+pub struct HttpTokenizerAssetDownloader {
+    client: OnceLock<Result<Arc<dyn HttpClient>, String>>,
+    factory: Arc<dyn Fn() -> Result<Arc<dyn HttpClient>, String> + Send + Sync>,
+}
+
+impl HttpTokenizerAssetDownloader {
+    pub fn new(client: Arc<dyn HttpClient>) -> Self {
+        let initialized = OnceLock::new();
+        let _ = initialized.set(Ok(client));
+        Self {
+            client: initialized,
+            factory: Arc::new(|| Err("fixed tokenizer HTTP client was not initialized".into())),
+        }
+    }
+
+    pub fn production() -> Self {
+        Self {
+            client: OnceLock::new(),
+            factory: Arc::new(production_http_client),
+        }
+    }
+
+    fn client(&self) -> Result<&Arc<dyn HttpClient>, LocalTokenizerError> {
+        self.client
+            .get_or_init(|| (self.factory)())
+            .as_ref()
+            .map_err(|message| LocalTokenizerError::Download(message.clone()))
+    }
+}
+
+impl TokenizerAssetDownloader for HttpTokenizerAssetDownloader {
+    fn fetch(&self, url: &str) -> Result<Vec<u8>, LocalTokenizerError> {
+        let request = HttpRequest::new(HttpMethod::Get, url, Vec::new(), Vec::new())
+            .map_err(|error| LocalTokenizerError::Download(error.to_string()))?;
+        let response = self
+            .client()?
+            .execute(&request)
+            .map_err(|error| LocalTokenizerError::Download(error.to_string()))?;
+        if !response.is_success() {
+            return Err(LocalTokenizerError::DownloadStatus {
+                url: url.into(),
+                status: response.status(),
+            });
+        }
+        Ok(response.body().to_vec())
+    }
+}
+
+fn production_http_client() -> Result<Arc<dyn HttpClient>, String> {
+    let redirects = std::num::NonZeroU8::new(5).expect("five is non-zero");
+    let response_limit =
+        std::num::NonZeroUsize::new(128 * 1024 * 1024).expect("128 MiB is non-zero");
+    let config = HttpClientConfig::new()
+        .with_redirect_policy(RedirectPolicy::Follow {
+            max_hops: redirects,
+        })
+        .with_response_body_limit(
+            ResponseBodyLimit::new(response_limit).map_err(|error| error.to_string())?,
+        );
+    UreqHttpClient::with_config(config)
+        .map(|client| Arc::new(client) as Arc<dyn HttpClient>)
+        .map_err(|error| error.to_string())
+}

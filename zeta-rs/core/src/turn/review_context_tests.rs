@@ -26,6 +26,7 @@ fn attaches_only_the_current_user_intent_and_bounded_host_evidence() {
             tool_call_id: ToolCallId::new("call").unwrap(),
             name: ToolName::new("shell").unwrap(),
             arguments_json: "{}".into(),
+            binding: None,
         },
     ];
     let evidence = ReviewEvidence::new(

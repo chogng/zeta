@@ -38,6 +38,7 @@ fn timeline_groups_shell_result_under_its_tool_call() {
                     turn_id: TurnId::new("turn").unwrap(),
                     tool_call_id: ToolCallId::new("call").unwrap(),
                     text: r#"{"exit_code":0,"stdout":"42 passed\n","stderr":"","stdout_truncated":false,"stderr_truncated":false}"#.to_owned(),
+                    content: None,
                     is_error: false,
                 },
             ],

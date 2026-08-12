@@ -6,7 +6,8 @@
 `zeta-api` 在 canonical `zeta-protocol` model values 与具体模型 API wire format 之间转换。
 它当前实现 OpenAI Responses、OpenAI-compatible Chat Completions 和 Anthropic Messages 的
 unary request/response codec，并实现 OpenAI Responses 与 Anthropic Messages 的 SSE event
-decoder。
+decoder。独立 input-token codec 覆盖 OpenAI Responses、Anthropic Messages、Gemini
+`countTokens`、Kimi estimate 和 Z.AI tokenizer。
 
 它不选择 provider、model 或 credential，不拥有 base URL，也不执行 socket、retry 或 SSE
 framing。
@@ -36,6 +37,7 @@ request/response domain model。
 | `ApiProtocol` | 暴露 endpoint 使用的 normalized protocol family | URL/provider 推断 |
 | `ApiEndpoint::complete_with_client` | 校验 canonical request，执行 unary encode/call/decode | retry、credential refresh |
 | `ApiEndpoint::count_input_tokens_with_client` | dispatch OpenAI Responses / Anthropic token-count codec | 准确度解释、调用频率、预算策略 |
+| `InputTokenCountEndpoint` | dispatch concrete provider preflight codec | model eligibility、exact/estimated 判断、保守余量 |
 | `OpenAiResponsesSseDecoder` | Responses SSE event schema 与 terminal lifecycle | SSE byte framing、reconnect |
 | `AnthropicMessagesSseDecoder` | Messages content-block lifecycle 与 canonical delta | transport liveness、tool JSON accumulation |
 | `ApiError` | request、transport、status 与 response codec failure | provider selection error |
@@ -53,6 +55,7 @@ compatible profile 也不能据此假设 cache、usage、error 或 streaming 语
 | `validate_request` | private | 拒绝空 model/input 与零 max tokens | 在任何 transport 调用前执行 |
 | `requests::post_json` | crate-private | JSON serialization、`ClientRequest`、status 与 JSON parse | 不选择 retry policy或 codec |
 | `requests::*::complete` | crate-private | 对应 endpoint 的 build/call/parse pipeline | endpoint dispatch 的唯一 codec target |
+| `requests::{google_count_tokens,kimi_estimate_tokens,zai_tokenizer}` | crate-private | provider count request/response JSON | 不声明准确度或调用频率 |
 | `requests::*::build_request` | private | canonical input → endpoint JSON | 不读取 provider config |
 | `requests::*::parse_response` | private | endpoint JSON → canonical output/usage/stop reason | malformed response fail closed |
 | `OpenAiResponsesSseDecoder::decode_event` | private | event type dispatch、delta extraction、terminal transition | 不解释 raw SSE bytes |
@@ -78,11 +81,12 @@ ApiEndpoint::complete_with_client(target, model, request, client)
          └─ parse_response
 ```
 
-Token preflight 使用相同 canonical `ModelRequest` 转换逻辑，但发送到
-`responses/input_tokens` 或 `v1/messages/count_tokens`，并只返回 `InputTokenCount`。本 crate 不把
-OpenAI 的 exact 契约或 Anthropic 的 estimate 契约编码进 wire value；准确度由
-`zeta-model-provider` adapter 声明。Chat Completions 没有标准 count endpoint，显式返回 unsupported
-request error。
+Token preflight 使用相同 canonical `ModelRequest`，发送到 profile 声明的 concrete count endpoint，
+并只返回 `InputTokenCount`。OpenAI/Anthropic count 复用对应 invocation builder；Kimi/Z.AI 从 Chat
+Completions builder 中只保留各自文档允许的 input 字段；Gemini 把 canonical request 显式转换为
+native `generateContentRequest`。本 crate 不把 exact/estimated 契约编码进 wire value；准确度由
+`zeta-model-provider` adapter 声明。普通 Chat Completions 没有标准 count endpoint，不能把任意
+compatible provider 自动当作可计量。
 
 三套 codec 都处理 canonical messages、tools、tool choice、reasoning、usage 和 stop reason，但
 只共享 mechanical helpers；不能因为 JSON 外形相似就合并 protocol-specific semantics。

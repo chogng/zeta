@@ -1,6 +1,7 @@
 use crate::{
     ToolBindingId, ToolDefinitionDigest, ToolName, ToolRegistryGeneration, ToolRuntimeKey,
 };
+use zeta_protocol::ToolSourceProvenance;
 
 /// Resolves a model-visible name in one frozen registry snapshot to one concrete host runtime.
 ///
@@ -12,6 +13,7 @@ pub struct ToolBinding {
     id: ToolBindingId,
     exposed_name: ToolName,
     definition_digest: ToolDefinitionDigest,
+    source_chain: Vec<ToolSourceProvenance>,
     runtime_key: ToolRuntimeKey,
 }
 
@@ -28,8 +30,14 @@ impl ToolBinding {
             id,
             exposed_name,
             definition_digest,
+            source_chain: Vec::new(),
             runtime_key,
         }
+    }
+
+    pub fn with_source_chain(mut self, source_chain: Vec<ToolSourceProvenance>) -> Self {
+        self.source_chain = source_chain;
+        self
     }
 
     pub fn registry_generation(&self) -> ToolRegistryGeneration {
@@ -46,6 +54,10 @@ impl ToolBinding {
 
     pub fn definition_digest(&self) -> &ToolDefinitionDigest {
         &self.definition_digest
+    }
+
+    pub fn source_chain(&self) -> &[ToolSourceProvenance] {
+        &self.source_chain
     }
 
     pub fn runtime_key(&self) -> &ToolRuntimeKey {

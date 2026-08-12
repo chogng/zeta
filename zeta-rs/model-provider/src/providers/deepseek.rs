@@ -1,8 +1,13 @@
-use super::{ProviderAdapter, api_endpoint};
+use super::ProviderAdapter;
+use super::api_endpoint;
 use crate::ModelProviderError;
-use zeta_api::{ApiEndpoint, ApiProtocol, ModelRequest, ModelResponse};
+use zeta_api::ApiEndpoint;
+use zeta_api::ApiProtocol;
+use zeta_api::ModelRequest;
+use zeta_api::ModelResponse;
 use zeta_async_utils::CancellationToken;
-use zeta_client::{OperationClient, ResolvedApiTarget};
+use zeta_client::OperationClient;
+use zeta_client::ResolvedApiTarget;
 use zeta_model_provider_config::NormalizedModelProviderConfig;
 
 pub(crate) struct DeepSeekAdapter {

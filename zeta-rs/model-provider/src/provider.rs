@@ -27,6 +27,9 @@ use zeta_model_provider_config::ProviderConfigError;
 use zeta_model_provider_config::ProviderConfigRegistry;
 use zeta_model_provider_config::ProviderDefinition;
 use zeta_model_provider_config::ProviderId;
+use zeta_model_tokenizer::LocalTokenizerRegistry;
+use zeta_model_tokenizer::LocalTokenizerService;
+use zeta_protocol::CapabilitySupport;
 use zeta_protocol::ModelRef;
 use zeta_secrets::SecretStore;
 use zeta_secrets::UnavailableSecretStore;
@@ -37,6 +40,7 @@ pub struct Provider {
     config: NormalizedModelProviderConfig,
     adapter: Arc<dyn ProviderAdapter>,
     client: Arc<dyn OperationClient>,
+    local_counter: providers::measurement::LocalInputTokenCounter,
 }
 
 impl Provider {
@@ -44,6 +48,7 @@ impl Provider {
         definition: ProviderDefinition,
         config: NormalizedModelProviderConfig,
         client: Arc<dyn OperationClient>,
+        local_tokenizers: Arc<dyn LocalTokenizerService>,
     ) -> Result<Self, ModelProviderError> {
         if definition.id != config.provider {
             return Err(ProviderConfigError::ProviderMismatch {
@@ -53,11 +58,16 @@ impl Provider {
             .into());
         }
         let adapter = providers::instantiate(definition.adapter, &config);
+        let local_counter = providers::measurement::LocalInputTokenCounter::new(
+            config.provider.clone(),
+            local_tokenizers,
+        );
         Ok(Self {
             definition,
             config,
             adapter,
             client,
+            local_counter,
         })
     }
 
@@ -103,16 +113,33 @@ impl Provider {
         cancellation: &CancellationToken,
     ) -> Result<ModelResponse, ModelProviderError> {
         let model = self.resolve_model(model_id)?;
+        let mut request = request.clone();
+        let supports_original =
+            model.capabilities.image_detail_original == CapabilitySupport::Supported;
+        let _image_detail_decisions = request.sanitize_image_details(supports_original);
         self.adapter.complete(
             model.id.as_str(),
-            request,
+            &request,
             self.client.as_ref(),
             cancellation,
         )
     }
 
-    pub fn input_token_measurement_capability(&self) -> ContextTokenMeasurementCapability {
-        self.adapter.input_token_measurement_capability()
+    pub fn input_token_measurement_capability(
+        &self,
+        model_id: &ModelId,
+    ) -> Result<ContextTokenMeasurementCapability, ModelProviderError> {
+        let model = self.resolve_model(model_id)?;
+        let provider = self
+            .adapter
+            .input_token_measurement_capability(model.id.as_str());
+        if provider != ContextTokenMeasurementCapability::Unavailable {
+            Ok(provider)
+        } else if self.local_counter.supports(model.id.as_str()) {
+            Ok(ContextTokenMeasurementCapability::Local)
+        } else {
+            Ok(ContextTokenMeasurementCapability::Unavailable)
+        }
     }
 
     pub fn measure_input_with_cancellation(
@@ -122,12 +149,31 @@ impl Provider {
         cancellation: &CancellationToken,
     ) -> Result<ContextTokenMeasurementOutcome, ModelProviderError> {
         let model = self.resolve_model(model_id)?;
-        self.adapter.measure_input(
+        let provider = self.adapter.measure_input(
             model.id.as_str(),
             request,
             self.client.as_ref(),
             cancellation,
-        )
+        );
+        match provider {
+            Ok(ContextTokenMeasurementOutcome::Measured(measurement)) => {
+                return Ok(ContextTokenMeasurementOutcome::Measured(measurement));
+            }
+            Err(ModelProviderError::Cancelled(message)) => {
+                return Err(ModelProviderError::Cancelled(message));
+            }
+            Ok(ContextTokenMeasurementOutcome::Unavailable) | Err(_) => {}
+        }
+        match self
+            .local_counter
+            .count(model.id.as_str(), request, cancellation)
+        {
+            Ok(outcome) => Ok(outcome),
+            Err(ModelProviderError::Cancelled(message)) => {
+                Err(ModelProviderError::Cancelled(message))
+            }
+            Err(_) => Ok(ContextTokenMeasurementOutcome::Unavailable),
+        }
     }
 
     fn resolve_model(&self, model_id: &ModelId) -> Result<Model, ModelProviderError> {
@@ -156,6 +202,7 @@ pub struct ModelProviderRuntime {
     configs: ProviderConfigRegistry,
     client: Arc<dyn OperationClient>,
     secrets: Arc<dyn SecretStore>,
+    local_tokenizers: Arc<dyn LocalTokenizerService>,
 }
 
 impl ModelProviderRuntime {
@@ -171,6 +218,7 @@ impl ModelProviderRuntime {
             configs,
             client,
             secrets: Arc::new(UnavailableSecretStore),
+            local_tokenizers: Arc::new(LocalTokenizerRegistry::new()),
         }
     }
 
@@ -183,7 +231,20 @@ impl ModelProviderRuntime {
             configs,
             client,
             secrets,
+            local_tokenizers: Arc::new(LocalTokenizerRegistry::new()),
         }
+    }
+
+    /// Installs the read-only local tokenizer service used by provider/model adapters.
+    ///
+    /// The host must finish loading and validating model bindings before composition. Existing
+    /// model invokers remain immutable and retain the service snapshot they were created with.
+    pub fn with_local_tokenizers(
+        mut self,
+        local_tokenizers: Arc<dyn LocalTokenizerService>,
+    ) -> Self {
+        self.local_tokenizers = local_tokenizers;
+        self
     }
 
     pub fn builtin() -> Self {
@@ -232,7 +293,12 @@ impl ModelProviderRuntime {
             .get(&normalized.provider)
             .expect("normalization only succeeds for registered providers")
             .clone();
-        Provider::instantiate(definition, normalized, self.client.clone())
+        Provider::instantiate(
+            definition,
+            normalized,
+            self.client.clone(),
+            self.local_tokenizers.clone(),
+        )
     }
 }
 
@@ -378,7 +444,9 @@ impl ModelInvoker for RegisteredModelInvoker {
     }
 
     fn input_token_measurement_capability(&self) -> ContextTokenMeasurementCapability {
-        self.provider.input_token_measurement_capability()
+        self.provider
+            .input_token_measurement_capability(&self.model.id)
+            .unwrap_or(ContextTokenMeasurementCapability::Unavailable)
     }
 
     fn measure_input_with_cancellation(

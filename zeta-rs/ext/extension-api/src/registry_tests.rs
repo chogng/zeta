@@ -1,5 +1,8 @@
+use crate::CapabilityToolContribution;
+use crate::CapabilityToolContributor;
 use crate::ExtensionError;
 use crate::ExtensionRegistryBuilder;
+use crate::ExtensionToolAuthority;
 use crate::PromptFragment;
 use crate::ReadOnlyToolContributor;
 use crate::SkillActivationContext;
@@ -102,6 +105,39 @@ fn duplicate_read_only_tool_names_from_extensions_are_rejected() {
         error
             .to_string()
             .contains("multiple extensions contributed")
+    );
+}
+
+struct FixedCapabilityContributor;
+
+impl CapabilityToolContributor for FixedCapabilityContributor {
+    fn contribute(&self) -> Result<Vec<CapabilityToolContribution>, ExtensionError> {
+        Ok(vec![CapabilityToolContribution::new(
+            Arc::new(FixedExecutor),
+            ExtensionToolAuthority::ExternalRead {
+                service: "search".into(),
+                network_scopes: vec!["search.example.com".into()],
+                credential_reference: None,
+            },
+        )])
+    }
+}
+
+#[test]
+fn capability_tool_contributions_preserve_declared_authority() {
+    let mut builder = ExtensionRegistryBuilder::new();
+    builder.capability_tool_contributor(Arc::new(FixedCapabilityContributor));
+
+    let tools = builder.build().contribute_capability_tools().unwrap();
+
+    assert_eq!(tools.len(), 1);
+    assert_eq!(
+        tools[0].authority(),
+        &ExtensionToolAuthority::ExternalRead {
+            service: "search".into(),
+            network_scopes: vec!["search.example.com".into()],
+            credential_reference: None,
+        }
     );
 }
 

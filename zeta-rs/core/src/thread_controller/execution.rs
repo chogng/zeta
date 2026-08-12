@@ -4,7 +4,8 @@ use super::{
 };
 use crate::CoreError;
 use zeta_protocol::{
-    ItemId, RequestId, StreamInstanceId, ThreadEvent, ThreadId, ThreadItem, ToolCall, TurnId,
+    ItemId, RequestId, StreamInstanceId, ThreadEvent, ThreadId, ThreadItem, ToolCall,
+    ToolCallBinding, TurnId,
 };
 
 impl ThreadController {
@@ -30,6 +31,7 @@ impl ThreadController {
         thread_id: &ThreadId,
         turn_id: &TurnId,
         call: &ToolCall,
+        binding: ToolCallBinding,
     ) -> Result<RecordedToolCall, CoreError> {
         let item = ThreadItem::ToolCall {
             item_id: ItemId::new(self.next_identifier("item"))
@@ -39,6 +41,7 @@ impl ThreadController {
             name: call.name.clone(),
             arguments_json: serde_json::to_string(&call.arguments)
                 .map_err(|error| CoreError::Context(error.to_string()))?,
+            binding: Some(binding),
         };
         let sequence = self.record_item(thread_id, turn_id, item.clone())?;
         Ok(RecordedToolCall {

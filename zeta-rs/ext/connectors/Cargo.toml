@@ -1,0 +1,21 @@
+[package]
+name = "zeta-connectors-extension"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+name = "zeta_connectors_extension"
+path = "src/lib.rs"
+
+[dependencies]
+zeta-plugins = { workspace = true }
+zeta-tools = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

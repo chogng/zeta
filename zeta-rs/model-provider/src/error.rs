@@ -15,6 +15,7 @@ pub enum ModelProviderError {
     Api(ApiError),
     Credential(String),
     Cancelled(String),
+    Tokenization(String),
     Unavailable(String),
 }
 
@@ -35,6 +36,9 @@ impl fmt::Display for ModelProviderError {
                 write!(formatter, "provider credential unavailable: {message}")
             }
             Self::Cancelled(message) => write!(formatter, "model invocation cancelled: {message}"),
+            Self::Tokenization(message) => {
+                write!(formatter, "local tokenization failed: {message}")
+            }
             Self::Unavailable(message) => formatter.write_str(message),
         }
     }
@@ -60,6 +64,12 @@ impl From<ApiError> for ModelProviderError {
             ApiError::Cancelled(message) => Self::Cancelled(message),
             error => Self::Api(error),
         }
+    }
+}
+
+impl From<zeta_model_tokenizer::LocalTokenizerError> for ModelProviderError {
+    fn from(error: zeta_model_tokenizer::LocalTokenizerError) -> Self {
+        Self::Tokenization(error.to_string())
     }
 }
 

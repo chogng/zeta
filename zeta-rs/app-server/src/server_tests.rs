@@ -1147,7 +1147,20 @@ struct ShellTestTool;
 
 impl ToolService for ShellTestTool {
     fn definitions(&self) -> Vec<ToolDefinition> {
-        Vec::new()
+        vec![ToolDefinition {
+            name: zeta_protocol::ToolName::new("shell-command").unwrap(),
+            description: "run a test shell command".into(),
+            parameters: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "program": {"type": "string"},
+                    "arguments": {"type": "array"},
+                    "working_directory": {"type": "string"}
+                },
+                "required": ["program", "arguments", "working_directory"]
+            }),
+            strict: true,
+        }]
     }
 
     fn prepare(&self, call: &ToolCall) -> Result<ActionReviewRequest, CoreError> {
@@ -1263,8 +1276,11 @@ fn shell_turn_runs_without_a_model_and_publishes_typed_output() {
     assert!(snapshot.items.iter().any(|item| {
         matches!(
             item,
-            zeta_protocol::ThreadItem::ToolCall { name, .. }
-                if name.as_str() == "shell-command"
+            zeta_protocol::ThreadItem::ToolCall {
+                name,
+                binding: Some(binding),
+                ..
+            } if name.as_str() == "shell-command" && binding.caller == zeta_protocol::ToolCallCaller::Direct
         )
     }));
     assert!(snapshot.items.iter().any(|item| {
@@ -1401,6 +1417,7 @@ fn explicit_skill_flows_through_core_extension_lifecycle() {
         .with_skill_runtime(
             zeta_skills_extension::BuiltInSkillSource::Root(root.clone()),
             Arc::new(EmptySkillConfig),
+            None,
         )
         .unwrap();
     let mut connection = server.connection();
@@ -1445,6 +1462,14 @@ fn explicit_skill_flows_through_core_extension_lifecycle() {
             .tools
             .iter()
             .any(|tool| tool.name.as_str() == zeta_skills_extension::SKILLS_READ_TOOL_NAME)
+    );
+    assert_eq!(
+        requests[0]
+            .tools
+            .iter()
+            .filter(|tool| tool.name.as_str() == zeta_skills_extension::SKILLS_READ_TOOL_NAME)
+            .count(),
+        1
     );
     assert!(requests[0].input.iter().any(|item| {
         let InputItem::Message(message) = item else {

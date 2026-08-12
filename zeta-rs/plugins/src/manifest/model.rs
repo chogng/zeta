@@ -222,6 +222,8 @@ pub struct PluginContributions {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub mcp_servers: Vec<McpServerContribution>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub connectors: Vec<ConnectorContribution>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub assets: Vec<AssetContribution>,
 }
 
@@ -237,6 +239,16 @@ pub struct SkillContribution {
 pub struct McpServerContribution {
     pub id: ManifestLocalId,
     pub definition: PluginPath,
+}
+
+/// User-connectable external product surface backed by one MCP contribution in this package.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ConnectorContribution {
+    pub id: ManifestLocalId,
+    pub display_name: String,
+    pub description: String,
+    pub mcp_server: ManifestLocalId,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -338,6 +350,7 @@ pub enum CredentialKind {
 pub enum ContributionKind {
     Skill,
     Mcp,
+    Connector,
     Asset,
 }
 
@@ -346,6 +359,7 @@ impl ContributionKind {
         match self {
             Self::Skill => "skill",
             Self::Mcp => "mcp",
+            Self::Connector => "connector",
             Self::Asset => "asset",
         }
     }
@@ -377,6 +391,7 @@ impl FromStr for ContributionReference {
         let kind = match kind {
             "skill" => ContributionKind::Skill,
             "mcp" => ContributionKind::Mcp,
+            "connector" => ContributionKind::Connector,
             "asset" => ContributionKind::Asset,
             _ => return Err(InvalidContributionReference),
         };
@@ -411,7 +426,7 @@ pub struct InvalidContributionReference;
 impl fmt::Display for InvalidContributionReference {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
-            .write_str("contribution reference must use 'skill:<id>', 'mcp:<id>', or 'asset:<id>'")
+            .write_str("contribution reference must use 'skill:<id>', 'mcp:<id>', 'connector:<id>', or 'asset:<id>'")
     }
 }
 

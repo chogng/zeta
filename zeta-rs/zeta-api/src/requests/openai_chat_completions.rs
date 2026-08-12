@@ -25,7 +25,7 @@ pub(crate) fn complete(
     parse_response(response)
 }
 
-fn build_request(model: &str, request: &ModelRequest) -> Result<Value, ApiError> {
+pub(crate) fn build_request(model: &str, request: &ModelRequest) -> Result<Value, ApiError> {
     let mut messages = Vec::new();
     if let Some(instructions) = &request.instructions {
         messages.push(json!({"role": "system", "content": instructions}));

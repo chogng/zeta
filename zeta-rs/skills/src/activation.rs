@@ -78,7 +78,7 @@ impl SkillCatalog {
     }
 }
 
-fn load_exact_body(
+pub(crate) fn load_exact_body(
     source_root: &std::path::Path,
     skill_name: &str,
     expected_digest: &ContentDigest,

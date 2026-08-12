@@ -167,6 +167,8 @@ impl<'a> ToolExecutionOrchestrator<'a> {
         let output = match output {
             ToolExecutionOutput::Success(text) => ToolCallOutput::Success(text),
             ToolExecutionOutput::Failure(text) => ToolCallOutput::Failure(text),
+            ToolExecutionOutput::SuccessContent(content) => ToolCallOutput::SuccessContent(content),
+            ToolExecutionOutput::FailureContent(content) => ToolCallOutput::FailureContent(content),
             ToolExecutionOutput::OutcomeUnknown(reason) => ToolCallOutput::Failure(format!(
                 "dynamic tool execution outcome is unknown: {reason}"
             )),
@@ -212,6 +214,12 @@ impl<'a> ToolExecutionOrchestrator<'a> {
         let output = match self.execute_service(context, &call, &authorization) {
             Ok(ToolExecutionOutput::Success(text)) => ToolCallOutput::Success(text),
             Ok(ToolExecutionOutput::Failure(text)) => ToolCallOutput::Failure(text),
+            Ok(ToolExecutionOutput::SuccessContent(content)) => {
+                ToolCallOutput::SuccessContent(content)
+            }
+            Ok(ToolExecutionOutput::FailureContent(content)) => {
+                ToolCallOutput::FailureContent(content)
+            }
             Ok(ToolExecutionOutput::OutcomeUnknown(reason)) => ToolCallOutput::Failure(format!(
                 "approved outside-sandbox retry outcome is unknown: {reason}"
             )),
@@ -252,6 +260,14 @@ impl<'a> ToolExecutionOrchestrator<'a> {
             }),
             Ok(ToolExecutionOutput::Failure(text)) => Ok(ToolAttempt::Commit {
                 output: ToolCallOutput::Failure(text),
+                completion: ToolExecutionCompletion::Complete,
+            }),
+            Ok(ToolExecutionOutput::SuccessContent(content)) => Ok(ToolAttempt::Commit {
+                output: ToolCallOutput::SuccessContent(content),
+                completion: ToolExecutionCompletion::Complete,
+            }),
+            Ok(ToolExecutionOutput::FailureContent(content)) => Ok(ToolAttempt::Commit {
+                output: ToolCallOutput::FailureContent(content),
                 completion: ToolExecutionCompletion::Complete,
             }),
             Ok(ToolExecutionOutput::OutcomeUnknown(reason)) => Ok(ToolAttempt::Commit {
@@ -457,6 +473,12 @@ impl<'a> ToolExecutionOrchestrator<'a> {
         let output = match self.execute_service(context, call, &authorization) {
             Ok(ToolExecutionOutput::Success(text)) => ToolCallOutput::Success(text),
             Ok(ToolExecutionOutput::Failure(text)) => ToolCallOutput::Failure(text),
+            Ok(ToolExecutionOutput::SuccessContent(content)) => {
+                ToolCallOutput::SuccessContent(content)
+            }
+            Ok(ToolExecutionOutput::FailureContent(content)) => {
+                ToolCallOutput::FailureContent(content)
+            }
             Ok(ToolExecutionOutput::OutcomeUnknown(reason)) => ToolCallOutput::Failure(format!(
                 "outside-sandbox retry outcome is unknown: {reason}"
             )),

@@ -351,6 +351,7 @@ fn thread_snapshot() -> Thread {
                     turn_id: turn_id.clone(),
                     tool_call_id: ToolCallId::new("call_1").unwrap(),
                     text: "file contents".into(),
+                    content: None,
                     is_error: false,
                 },
                 ThreadItem::AgentMessage {

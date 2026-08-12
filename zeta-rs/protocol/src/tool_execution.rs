@@ -1,3 +1,4 @@
+use crate::ContentPart;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -119,6 +120,8 @@ impl SandboxDenialOutput {
 pub enum ToolExecutionOutput {
     Success(String),
     Failure(String),
+    SuccessContent(Vec<ContentPart>),
+    FailureContent(Vec<ContentPart>),
     SandboxDenied(SandboxDenialOutput),
     OutcomeUnknown(String),
 }

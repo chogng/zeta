@@ -74,7 +74,8 @@ fn dynamic_tool_requires_approval_then_round_trips_the_frozen_call() {
         .unwrap();
     assert!(matches!(
         output,
-        Some(ToolExecutionOutput::Success(text)) if text.contains("found")
+        Some(ToolExecutionOutput::SuccessContent(content))
+            if content == vec![zeta_protocol::ContentPart::Text("found".into())]
     ));
 }
 

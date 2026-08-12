@@ -27,7 +27,7 @@ struct RuntimeStartup {
     bindings: BTreeMap<ToolName, McpToolBinding>,
 }
 
-/// Synchronous App Server handle for one continuously driven async MCP runtime.
+/// Synchronous extension handle for one continuously driven async MCP runtime.
 ///
 /// The worker thread owns the Tokio runtime and all live MCP sessions. Callers may block on the
 /// response channel, while cancellation remains independently wakeable on the worker.
@@ -233,5 +233,5 @@ impl std::fmt::Display for McpRuntimeOwnerError {
 impl std::error::Error for McpRuntimeOwnerError {}
 
 #[cfg(test)]
-#[path = "mcp_runtime_tests.rs"]
+#[path = "runtime_tests.rs"]
 mod tests;

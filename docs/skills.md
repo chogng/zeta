@@ -2,7 +2,7 @@
 
 > 物理位置：`zeta-rs/skills/`
 > Rust crate：`zeta_skills`
-> 当前状态：Phase S0、S1 显式选择与模型按需读取纵向切片已实现；S2–S4 其余资源读取仍为 Proposed。TUI 与 Desktop 已把
+> 当前状态：Phase S0、S1 显式选择、模型按需读取、通用 package resource 与有界文本模型切片已实现；binary asset materialization、script execution adapter 与 S3–S4 仍为 Proposed。TUI 与 Desktop 已把
 > 可直接调用的 Skill 投影为统一斜杠面板中的 `/name`；`/skills` 只承担目录管理。
 > Crate 实现契约：[`zeta-rs/skills/README.md`](../zeta-rs/skills/README.md)
 > Runtime extension 实现契约：[`zeta-rs/ext/skills/README.md`](../zeta-rs/ext/skills/README.md)
@@ -105,8 +105,8 @@ Skill 文件；因此源文件删除不会破坏已完成命令的幂等重放�
 
 当前 runtime source composition 包含 built-in、user 和 active Workspace 的原生
 `.zeta/skills` source。Workspace config 中额外声明的 Skill source intent、Plugin contribution、
-reference/resource resolver 尚未接入；正文读取、compatibility gate、显式激活和模型按需读取已
-接入。
+binary asset materialization 与 script execution adapter 尚未接入；正文读取、通用 package
+resource resolver、有界 UTF-8 模型读取、compatibility gate、显式激活和模型按需读取已接入。
 
 仓库已有可复用边界：
 
@@ -490,7 +490,12 @@ Core ContextAssembler 应用总 token budget。超限时：
 
 ### 11.1 文件解析器
 
-所有 Skill 文件通过 rooted resolver：
+当前 package 文件通过 `SkillCatalog::read_resource` 和 `SkillResourcePath` 的 rooted contract；
+它绑定 pinned `SKILL.md` digest，允许 Skill root 下非空无 traversal 的相对路径，拒绝 symlink、
+hard link、special file、越界路径和超过 256 KiB 的内容，并返回原始 bytes 与内容摘要。
+`SkillResourceKind` 只标识 reference/script/asset 等用途，不切换 resolver，也不授予执行权限。
+
+跨 host/provider 抽象仍可使用同一读取语义：
 
 ```rust
 /// Resolves bounded, read-only files beneath one validated Skill root.
@@ -505,19 +510,20 @@ pub trait SkillFileResolver: Send + Sync {
 }
 ```
 
-request 使用 `SkillRelativePath`、`SkillFileKind` 和具名 size policy，不使用 raw `PathBuf` 或
+request 使用 `SkillResourcePath`、`SkillResourceKind` 和具名 size policy，不使用 raw `PathBuf` 或
 `allow_large: bool`。
 
-相对引用从 Skill root 解析。按 Agent Skills guidance，文档应避免深层 reference chain；Zeta
-另外施加最大 reference depth 和 visited-set，检测循环。
+相对路径始终从 Skill package root 解析，调用方传完整路径，例如 `references/api.md` 或
+`scripts/check.py`。当前每次调用只读一个文件，不递归展开文件中的链接，因此不会产生 runtime
+resource cycle。未来若增加自动递归解析，必须再引入明确 depth budget 和 visited-set。
 
 ### 11.2 参考资料
 
 - 作为不可信 data/context 读取，不提升 instruction precedence；
 - 只有当前任务需要时加载；
-- 保留 source path、digest 和 MIME；
+- lower layer 保留相对 path、kind、digest 与 bytes；模型工具只接受 UTF-8 text；
 - Markdown 中的外部 URL 不自动 fetch；
-- reference 再引用的文件仍通过同一 resolver 和 depth budget；
+- reference 再引用的文件必须由模型再次显式调用统一的 `skills-read` resource target；
 - 超大表格/文档通过 Resource store 分块，而不是塞入单个 model message。
 
 ### 11.3 脚本
@@ -818,15 +824,18 @@ Skill 需要未来带来源限定的选择交互。CLI 没有独立可视化目�
 - `ReadOnlyToolContributor` 把 `skills-read` 接入共享 Tool registry/policy/runtime；
 - exact source/name、enablement、compatibility 与 content digest 由 `SkillRuntime` 校验；
 - 成功读取通过标准 durable Tool Call/Result 进入下一次模型调用；
+- 同一个 `skills-read` 使用 tagged target 区分完整说明与 package resource；resource target 必须提交
+  exact source/name + pinned Skill digest 和完整 package-relative path；
 - 后端不实现 keyword classifier，也不把模型选择伪装为 pre-Turn activation。
 
 完成条件：模型只看到目录元数据，正文必须经 exact read 才进入上下文；restricted Workspace 下仍
 可使用受控的进程内 Skill reader，且 App Server 不拥有 Skill 选择或文件加载逻辑。
 
-### 阶段 S2：参考资料、资源与脚本
+### 阶段 S2：资源与脚本（通用资源读取与文本模型切片已实现）
 
-- rooted file resolver 和 Resource integration；
-- 按需 references/assets；
+- ✅ rooted package resource reader、kind/digest/bytes 与统一模型工具接入；
+- ✅ 模型工具只把 UTF-8 资源作为文本返回，binary asset 明确拒绝注入文本上下文；
+- assets 的 MIME/preview/Resource integration；
 - scripts 只通过 exec/tool/approval/sandbox；
 - reference cycle、MIME 和 active-content policy。
 

@@ -4,8 +4,11 @@ use super::compose_extension_tools;
 use crate::tool_composition::combine_tool_ports;
 use serde_json::json;
 use zeta_async_utils::CancellationSource;
+use zeta_extension_api::CapabilityToolContribution;
+use zeta_extension_api::CapabilityToolContributor;
 use zeta_extension_api::ExtensionError;
 use zeta_extension_api::ExtensionRegistryBuilder;
+use zeta_extension_api::ExtensionToolAuthority;
 use zeta_extension_api::ReadOnlyToolContributor;
 use zeta_policy::ExecutionDecision;
 use zeta_protocol::ToolCall;
@@ -93,5 +96,62 @@ fn read_only_extension_contributors_enter_the_shared_registry_and_policy() {
             .policy
             .decide(&review, &CancellationSource::new().token()),
         Ok(ExecutionDecision::RunUnsandboxed { .. })
+    ));
+}
+
+struct NetworkContributor;
+
+impl CapabilityToolContributor for NetworkContributor {
+    fn contribute(&self) -> Result<Vec<CapabilityToolContribution>, ExtensionError> {
+        Ok(vec![CapabilityToolContribution::new(
+            Arc::new(ReadOnlyExtensionTool {
+                definition: ToolDefinition::function(
+                    ToolName::new("web_search").unwrap(),
+                    "Search an external index.",
+                    ToolInputSchema::parse(json!({
+                        "type": "object",
+                        "properties": {"q": {"type": "string"}},
+                        "required": ["q"]
+                    }))
+                    .unwrap(),
+                    ToolOutputSchema::Unspecified,
+                    ToolSchemaMode::Strict,
+                    ToolLoading::Eager,
+                )
+                .unwrap(),
+            }),
+            ExtensionToolAuthority::ExternalRead {
+                service: "test search".into(),
+                network_scopes: vec!["search.example.com".into()],
+                credential_reference: Some("secret:test-search".into()),
+            },
+        )])
+    }
+}
+
+#[test]
+fn capability_extension_tools_freeze_scopes_and_require_user_approval() {
+    let mut builder = ExtensionRegistryBuilder::new();
+    builder.capability_tool_contributor(Arc::new(NetworkContributor));
+    let port = compose_extension_tools(&builder.build()).unwrap().unwrap();
+    let combined = combine_tool_ports(vec![port]).unwrap().unwrap();
+    let call = ToolCall {
+        id: ToolCallId::new("call-network").unwrap(),
+        name: zeta_protocol::ToolName::new("web_search").unwrap(),
+        arguments: json!({"q": "zeta"}),
+    };
+
+    let review = combined.tools.prepare(&call).unwrap();
+
+    assert_eq!(
+        review.action().kind(),
+        &zeta_policy::ActionKind::NetworkRequest
+    );
+    assert_eq!(review.action().required_capabilities().iter().count(), 2);
+    assert!(matches!(
+        combined
+            .policy
+            .decide(&review, &CancellationSource::new().token()),
+        Ok(ExecutionDecision::AskUser(_))
     ));
 }

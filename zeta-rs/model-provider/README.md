@@ -19,10 +19,11 @@ config resolver。本 crate 仍只拥有模型 API 选择、credential materiali
 | Symbol | 职责 | 生命周期 |
 | --- | --- | --- |
 | `ModelProvider` | `ModelRuntimeRequest → ModelInvoker` port | composition/invocation safe point |
-| `ModelProviderRuntime` | built-in concrete resolver | 持有 config registry + shared lazy operation client |
+| `ModelProviderRuntime` | built-in concrete resolver | 持有 config registry、shared lazy operation client 和可选 local tokenizer service |
 | `ModelRuntimeRequest` | exact `ModelRef + ModelProviderConfig` | immutable selection request |
 | `ModelInvoker` | canonical `ModelRequest → ModelResponse` | one immutable provider/model snapshot |
 | `ModelInvoker::{input_token_measurement_capability,measure_input_with_cancellation}` | frozen request 的 tokenizer/preflight port | 与 invocation 相同 immutable snapshot |
+| re-exported `LocalTokenizerBinding` / `LocalTokenizerRegistry` | 宿主安装资产后的通用本地 tokenizer 接口 | composition safe point 构建后注入 runtime |
 | `EmbeddingInvoker` | ordered text batch → finite equal-dimension vectors | one immutable embedding model snapshot |
 | `RerankInvoker` | query + ordered documents → ordered finite scores | one immutable rerank model snapshot |
 | `SemanticModelProvider` | exact model/config → embedding 或 rerank invoker | provider transport/credential boundary |
@@ -43,6 +44,7 @@ invocation，不原地修改已经运行的 `RegisteredModelInvoker`。
 | `Provider::instantiate` | crate-private | enforce definition/config ID equality，materialize adapter | 不读取 mutable config/credential store |
 | `providers::instantiate` | crate-private function | exhaustive `ProviderAdapter` enum dispatch | provider selection 唯一 switch |
 | `ProviderAdapter` | crate-private trait | protocol + explicit token measurement capability + complete | 不按 model ID 或 URL 猜能力 |
+| `LocalInputTokenCounter` | crate-private struct | 官方预检不可用时把整份请求交给本地计数服务 | 不下载资产、不按 provider 猜 tokenizer revision |
 | `api_endpoint` | private function | `ApiProfile → zeta_api::ApiEndpoint` | 按 profile，不按 provider name 猜 |
 | provider `*Adapter::new` | crate-private | normalized base URL + fixed headers + endpoint | one immutable runtime snapshot |
 | `Provider::resolve_model` | private method | listed lookup 或 allow-unlisted synthetic model | 不做远端 catalog request |
@@ -77,8 +79,11 @@ RegisteredModelInvoker::invoke(request)
 
 `RegisteredModelInvoker::measure_input_with_cancellation` 复用同一个 `prepare_request`，因此 provider
 默认 `max_output_tokens` 与最终 invocation 一致；adapter 再把 canonical input 编成 count endpoint
-接受的 wire shape。OpenAI Responses 声明 remote/exact，Anthropic Messages 声明 remote/estimated；
-OpenAI-compatible、Google 当前兼容 profile 和其他未声明 adapter 一律返回 unavailable。
+接受的 wire shape。`ProviderInputTokenCounter` 只 materialize config 已声明且 model policy 允许的
+profile/target，adapter 不按 model ID 或 URL 猜能力。OpenAI Responses 声明 remote/exact；Anthropic、
+Google、Kimi 与 Z.AI 声明 remote/estimated。`Provider` 统一执行“官方预检 → 本地整请求计数 →
+unavailable”的优先级；因此任何 provider 只要注入精确 `ModelRef` binding 都能使用 local/estimated，
+不再由各 adapter 复制本地选择逻辑。
 
 `Provider::complete` 再次 resolve model，因此 direct Provider callers 与 bound invoker 使用相同
 catalog policy。
@@ -141,8 +146,14 @@ credential 设置 UI、subscription backend、streaming 与动态 catalog 的长
 provider adapter private，以及 config/codec/operation/network 四层分离。
 
 当前 input-token preflight 已贯穿 `ModelInvoker → ProviderAdapter → zeta-api → OperationClient` 的
-caller-owned cancellation。Anthropic 的额外 1%/至少 32 tokens 只是 Zeta 的保守预算策略，不是
-provider 承诺的硬上界。本地 tokenizer registry 和 Google native `countTokens` codec 尚未实现。
+caller-owned cancellation。所有 estimated endpoint 使用额外 1%/至少 32 tokens 的保守记账余量；这
+只是 Zeta 的预算策略，不是 provider 承诺的硬上界。Google 对不能无损映射到 native request 的远程
+图片返回 unavailable；Kimi 当前带 tools/reasoning 的请求返回 unavailable；Z.AI 当前带 Tool
+Call/Result 历史的请求返回 unavailable。DeepSeek/Hugging Face 的本地 tokenizer adapter 已实现，
+使用 2%/至少 64 tokens 的保守余量；宿主通过 `ModelProviderRuntime::with_local_tokenizers` 注入已经
+验证的 registry 或 manager。App Server 当前为 Hugging Face 公共 `owner/repo` 注入按需发现、下载、
+磁盘缓存和内存 LRU；其他 provider/model 仍需宿主提供固定资产清单。官方预检或本地计数的非取消
+错误不会中止真实模型调用，而是继续降级到下一计量来源。
 
 `RegisteredModelInvoker::invoke_with_cancellation` 把 caller token 逐层传给 private
 `ProviderAdapter::complete` 和 `OperationClient::execute_with_cancellation`。取消是独立的

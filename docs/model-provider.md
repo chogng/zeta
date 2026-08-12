@@ -165,6 +165,28 @@ Provider 名称不能等同于 API 协议。同一 Provider 可以选择多个�
 | Ollama | native Chat NDJSON、OpenAI-compatible Chat |
 | DeepSeek | OpenAI Chat、Anthropic-compatible endpoint |
 
+### 5.1 Input-token 计量矩阵
+
+这里的“支持”只表示调用前 budget measurement，不是调用完成后的 response usage。所有 remote
+binding 都由 `ProviderDefinition.input_token_count` 明确声明 profile、target 和 model policy；未声明
+时 fail closed，不能因为 Chat Completions 外形兼容就推断存在 count endpoint。
+
+| Provider | 官方计量面 | 当前 Zeta 状态 | 边界 |
+| --- | --- | --- | --- |
+| OpenAI | [`POST /responses/input_tokens`](https://developers.openai.com/api/reference/resources/responses/subresources/input_tokens) | ✅ exact remote | 与 Responses request 同 codec；直接读取 `input_tokens` |
+| Anthropic | [`POST /v1/messages/count_tokens`](https://docs.anthropic.com/en/api/messages-count-tokens) | 部分具备：estimated remote | provider preflight 后按 1%/至少 32 tokens 保守记账 |
+| Google | [`models.countTokens`](https://ai.google.dev/api/tokens) | 部分具备：estimated remote | native `generateContentRequest`；当前 invocation 是 OpenAI-compatible，且仅声明 model 可用 |
+| Kimi | [`estimate-token-count`](https://platform.kimi.ai/docs/api/estimate) | 部分具备：estimated remote | 文档 schema 只有 model/messages；带 tools/reasoning 的当前请求退回 unavailable |
+| Z.AI | [`POST /tokenizer`](https://docs.z.ai/api-reference/tools/tokenizer) | 部分具备：estimated remote | 使用 `usage.total_tokens`，支持 tools；带 Tool Call/Result 历史暂退 unavailable |
+| xAI | [`tokenize-text`](https://docs.x.ai/developers/rest-api-reference/inference/other) | ❌ full-request preflight unavailable | 只 tokenize 裸文本；[billing FAQ](https://docs.x.ai/developers/faq/billing) 说明 inference 还会加入预定义 tokens |
+| Qwen | [text generation](https://help.aliyun.com/en/model-studio/text-generation) | ❌ preflight unavailable | chat template 会增加控制 token，不能按裸文本计数 |
+| DeepSeek | [token usage / offline tokenizer](https://api-docs.deepseek.com/quick_start/token_usage) | 部分具备：local/estimated | 已接入完整 `ModelRef` binding、请求级模板渲染与 tokenizer runtime；当前仍需宿主提供固定资产清单 |
+| Ollama | [API usage fields](https://github.com/ollama/ollama/blob/main/docs/api.md) | ❌ preflight unavailable | `prompt_eval_count` 是调用完成后的 usage |
+| Hugging Face Router | [per-model tokenizer API](https://huggingface.co/docs/tokenizers/main/api/tokenizer) | 部分具备：local/estimated | 公共 `owner/repo` 首次使用时解析 immutable commit，按需下载并校验 `tokenizer.json`、`tokenizer_config.json` 与 standalone template；重启复用磁盘缓存 |
+| MiniMax | [Chat API](https://platform.minimaxi.com/docs/api-reference/text-post) | ❌ verified preflight unavailable | 当前官方文档只确认 response usage |
+| MiMo | [Responses API](https://mimo.mi.com/docs/en-US/api/chat/responses) | ❌ verified preflight unavailable | 当前官方文档只确认 response `usage.input_tokens` |
+| Generic OpenAI-compatible | 无统一标准 | ❌ unavailable | 必须由具体 provider definition 显式增加 count profile |
+
 目标调用形态：
 
 ```rust
@@ -183,7 +205,7 @@ let binding = ApiBinding::OpenAiChat {
 - profile 变化必须是显式配置或 built-in definition 变化；
 - 已有配置不能静默迁移到另一正式 API。
 
-### 5.1 OpenAI 服务接口面不是 OpenAI-compatible 配置档案
+### 5.2 OpenAI 服务接口面不是 OpenAI-compatible 配置档案
 
 公开 OpenAI Platform API 与 ChatGPT/Codex service 都可能使用 `responses`、`models` 或 realtime
 这样的相对 path，但它们的 base URL、credential、可用 operation 和 wire 差异不能由 path 推断。

@@ -867,16 +867,17 @@ fn fixture_with_approval_mode(
         .unwrap()
         .turn_id;
     let call_id = ToolCallId::new("call-1").unwrap();
+    let call = ToolCall {
+        id: call_id.clone(),
+        name: ToolName::new("reviewed").unwrap(),
+        arguments: json!({"value": 1}),
+    };
+    let binding = tools
+        .bind_call(&call, zeta_protocol::ToolCallCaller::Direct)
+        .unwrap()
+        .unwrap();
     threads
-        .record_model_tool_call(
-            &thread_id,
-            &turn_id,
-            &ToolCall {
-                id: call_id.clone(),
-                name: ToolName::new("reviewed").unwrap(),
-                arguments: json!({"value": 1}),
-            },
-        )
+        .record_model_tool_call(&thread_id, &turn_id, &call, binding)
         .unwrap();
     let scheduler = ToolScheduler::new(threads.clone(), tools.clone(), policy);
     Fixture {
@@ -948,7 +949,17 @@ impl Default for ReviewTool {
 
 impl ToolService for ReviewTool {
     fn definitions(&self) -> Vec<ToolDefinition> {
-        Vec::new()
+        vec![ToolDefinition {
+            name: ToolName::new("reviewed").unwrap(),
+            description: "reviewed test tool".into(),
+            parameters: json!({
+                "type": "object",
+                "properties": {"value": {"type": "integer"}},
+                "required": ["value"],
+                "additionalProperties": false
+            }),
+            strict: true,
+        }]
     }
 
     fn prepare(&self, call: &ToolCall) -> Result<ActionReviewRequest, CoreError> {

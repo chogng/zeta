@@ -2,6 +2,8 @@ use crate::ContextBudget;
 use crate::ContextTokenMeasurementCapability;
 use crate::ContextTokenMeasurementOutcome;
 use crate::CoreError;
+use sha2::Digest;
+use sha2::Sha256;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 use zeta_async_utils::CancellationToken;
@@ -20,10 +22,13 @@ use zeta_protocol::SessionId;
 use zeta_protocol::ThreadId;
 use zeta_protocol::ThreadUpdateEnvelope;
 use zeta_protocol::ToolCall;
+use zeta_protocol::ToolCallBinding;
+use zeta_protocol::ToolCallCaller;
 use zeta_protocol::ToolCallId;
 use zeta_protocol::ToolDefinition;
 use zeta_protocol::ToolExecutionOutput;
 use zeta_protocol::ToolOutputStream;
+use zeta_protocol::ToolSourceProvenance;
 use zeta_protocol::TurnId;
 use zeta_sandboxing::SandboxPolicy;
 
@@ -306,6 +311,69 @@ impl OneTimeToolGrant {
 /// never mutate Thread state directly.
 pub trait ToolService: Send + Sync {
     fn definitions(&self) -> Vec<ToolDefinition>;
+
+    /// Freezes the exact host definition and stable source chain selected for a model Tool Call.
+    ///
+    /// The default bridge hashes the canonical protocol definition at generation zero. A
+    /// generation-bound registry must override this method with its exact definition digest and
+    /// stable source chain before Core commits the call.
+    fn bind_call(
+        &self,
+        call: &ToolCall,
+        caller: ToolCallCaller,
+    ) -> Result<Option<ToolCallBinding>, CoreError> {
+        let definition = self
+            .definitions()
+            .into_iter()
+            .find(|definition| definition.name == call.name)
+            .ok_or_else(|| {
+                CoreError::Execution(format!("tool definition is unavailable: {}", call.name))
+            })?;
+        let canonical = serde_json::to_vec(&definition)
+            .map_err(|error| CoreError::Execution(error.to_string()))?;
+        let source_chain = self.source_provenance(&call.name);
+        Ok(Some(ToolCallBinding {
+            registry_incarnation: None,
+            registry_generation: 0,
+            definition_digest: format!("sha256:{:x}", Sha256::digest(canonical)),
+            source_chain: if source_chain.is_empty() {
+                vec![ToolSourceProvenance::System {
+                    id: "tool-service".into(),
+                }]
+            } else {
+                source_chain
+            },
+            caller,
+        }))
+    }
+
+    /// Verifies that a durable call still maps to the exact frozen definition and source chain.
+    ///
+    /// Implementations must not silently accept a same-named tool from a newer generation.
+    fn validate_call_binding(
+        &self,
+        call: &ToolCall,
+        binding: Option<&ToolCallBinding>,
+    ) -> Result<(), CoreError> {
+        let Some(binding) = binding else {
+            return Ok(());
+        };
+        let expected = self
+            .bind_call(call, binding.caller.clone())?
+            .ok_or_else(|| CoreError::Execution("tool binding is unavailable".into()))?;
+        if &expected != binding {
+            return Err(CoreError::Execution(format!(
+                "tool {} no longer matches its durable definition and source binding",
+                call.name
+            )));
+        }
+        Ok(())
+    }
+
+    /// Returns a stable, secret-free source chain for a callable tool definition.
+    fn source_provenance(&self, _: &zeta_protocol::ToolName) -> Vec<ToolSourceProvenance> {
+        Vec::new()
+    }
 
     /// Selects the exact definitions visible to the next model invocation.
     ///

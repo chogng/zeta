@@ -8,15 +8,14 @@ use zeta_api::ModelResponse;
 use zeta_async_utils::CancellationToken;
 use zeta_client::OperationClient;
 use zeta_client::ResolvedApiTarget;
-use zeta_context_engine::ContextTokenCount;
-use zeta_context_engine::ContextTokenMeasurement;
 use zeta_context_engine::ContextTokenMeasurementCapability;
 use zeta_context_engine::ContextTokenMeasurementOutcome;
-use zeta_context_engine::ContextTokenMeasurementSource;
+use zeta_model_provider_config::InputTokenCountProfile;
 use zeta_model_provider_config::NormalizedModelProviderConfig;
 
 pub(crate) struct AnthropicAdapter {
     target: ResolvedApiTarget,
+    token_counter: Option<super::measurement::ProviderInputTokenCounter>,
     endpoint: ApiEndpoint,
 }
 
@@ -24,6 +23,11 @@ impl AnthropicAdapter {
     pub(crate) fn new(config: &NormalizedModelProviderConfig) -> Self {
         Self {
             target: ResolvedApiTarget::new(config.base_url.clone(), Vec::new()),
+            token_counter: super::measurement::ProviderInputTokenCounter::from_config(
+                config,
+                Vec::new(),
+                InputTokenCountProfile::AnthropicMessages,
+            ),
             endpoint: api_endpoint(config.api_profile),
         }
     }
@@ -34,12 +38,15 @@ impl ProviderAdapter for AnthropicAdapter {
         self.endpoint.protocol()
     }
 
-    fn input_token_measurement_capability(&self) -> ContextTokenMeasurementCapability {
-        match self.endpoint {
-            ApiEndpoint::AnthropicMessages => ContextTokenMeasurementCapability::Remote,
-            ApiEndpoint::OpenAiResponses | ApiEndpoint::OpenAiChatCompletions => {
-                ContextTokenMeasurementCapability::Unavailable
-            }
+    fn input_token_measurement_capability(&self, model: &str) -> ContextTokenMeasurementCapability {
+        if self
+            .token_counter
+            .as_ref()
+            .is_some_and(|counter| counter.supports(model))
+        {
+            ContextTokenMeasurementCapability::Remote
+        } else {
+            ContextTokenMeasurementCapability::Unavailable
         }
     }
 
@@ -50,29 +57,15 @@ impl ProviderAdapter for AnthropicAdapter {
         client: &dyn OperationClient,
         cancellation: &CancellationToken,
     ) -> Result<ContextTokenMeasurementOutcome, ModelProviderError> {
-        if self.endpoint != ApiEndpoint::AnthropicMessages {
+        let Some(counter) = self
+            .token_counter
+            .as_ref()
+            .filter(|counter| counter.supports(model))
+        else {
             return Ok(ContextTokenMeasurementOutcome::Unavailable);
-        }
-        let count = self
-            .endpoint
-            .count_input_tokens_with_client_and_cancellation(
-                &self.target,
-                model,
-                request,
-                client,
-                cancellation,
-            )?;
-        let count = u32::try_from(count.get()).map_err(|_| {
-            ModelProviderError::InvalidResponse("input token count exceeds supported range")
-        })?;
-        let expected = ContextTokenCount::new(count);
-        let uncertainty = ContextTokenCount::new(count.div_ceil(100).max(32));
-        let conservative_input = expected.saturating_add(uncertainty);
-        let source = ContextTokenMeasurementSource::provider_preflight("anthropic-count-tokens-v1")
-            .expect("measurement source revision is constant and non-empty");
-        let measurement = ContextTokenMeasurement::estimated(expected, conservative_input, source)
-            .expect("the Anthropic uncertainty policy cannot lower the reported count");
-        Ok(ContextTokenMeasurementOutcome::Measured(measurement))
+        };
+        let count = counter.count(model, request, client, cancellation)?;
+        super::measurement::estimated_provider_measurement(count, "anthropic-count-tokens-v1")
     }
 
     fn complete(

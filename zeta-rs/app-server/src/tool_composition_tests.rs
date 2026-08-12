@@ -663,6 +663,61 @@ fn routes_tool_and_policy_by_frozen_definition_and_provenance() {
 }
 
 #[test]
+fn durable_binding_rejects_same_named_tool_from_a_new_generation() {
+    let initial = combine_tool_ports_at_generation(
+        vec![ToolPort::local(
+            Arc::new(FakeTools::new(
+                "shared_tool",
+                ActionSource::BuiltInTool,
+                "initial",
+            )),
+            Arc::new(AskPolicy),
+        )],
+        zeta_tools::ToolRegistryGeneration::new(3),
+    )
+    .unwrap()
+    .unwrap();
+    let call = ToolCall {
+        id: zeta_protocol::ToolCallId::new("durable-call").unwrap(),
+        name: ToolName::new("shared_tool").unwrap(),
+        arguments: serde_json::json!({}),
+    };
+    let binding = initial
+        .tools
+        .bind_call(&call, zeta_protocol::ToolCallCaller::Direct)
+        .unwrap()
+        .unwrap();
+    assert_eq!(binding.registry_generation, 3);
+    initial
+        .tools
+        .validate_call_binding(&call, Some(&binding))
+        .unwrap();
+
+    let replacement = combine_tool_ports_at_generation(
+        vec![ToolPort::local(
+            Arc::new(FakeTools::new(
+                "shared_tool",
+                ActionSource::BuiltInTool,
+                "replacement",
+            )),
+            Arc::new(AskPolicy),
+        )],
+        zeta_tools::ToolRegistryGeneration::new(4),
+    )
+    .unwrap()
+    .unwrap();
+
+    assert!(
+        replacement
+            .tools
+            .validate_call_binding(&call, Some(&binding))
+            .unwrap_err()
+            .to_string()
+            .contains("no longer matches")
+    );
+}
+
+#[test]
 fn rejects_duplicate_model_tool_names() {
     let result = combine_tool_ports(vec![
         ToolPort::local(
@@ -751,6 +806,102 @@ fn reload_switches_future_calls_but_preserves_prepared_call_generation() {
             .unwrap(),
         ToolExecutionOutput::Success("replacement".into())
     );
+}
+
+#[test]
+fn reload_after_durable_binding_but_before_prepare_keeps_original_generation() {
+    let initial = combine_tool_ports(vec![ToolPort::local(
+        Arc::new(FakeTools::new(
+            "shared_tool",
+            ActionSource::BuiltInTool,
+            "initial",
+        )),
+        Arc::new(AskPolicy),
+    )])
+    .unwrap();
+    let reloadable = ReloadableToolPorts::new(initial);
+    let tools = reloadable.tools();
+    let call = ToolCall {
+        id: zeta_protocol::ToolCallId::new("bound-before-prepare").unwrap(),
+        name: ToolName::new("shared_tool").unwrap(),
+        arguments: serde_json::json!({}),
+    };
+    let binding = tools
+        .bind_call(&call, zeta_protocol::ToolCallCaller::Direct)
+        .unwrap()
+        .unwrap();
+
+    reloadable.replace(
+        combine_tool_ports(vec![ToolPort::local(
+            Arc::new(FakeTools::new(
+                "shared_tool",
+                ActionSource::BuiltInTool,
+                "replacement",
+            )),
+            Arc::new(AskPolicy),
+        )])
+        .unwrap(),
+    );
+
+    tools
+        .validate_call_binding(&call, Some(&binding))
+        .expect("in-flight binding must retain the original generation");
+    let review = tools.prepare(&call).unwrap();
+    assert_eq!(review.provenance().source_id(), "initial");
+    assert_eq!(
+        tools
+            .execute(
+                &call,
+                &ToolAuthorization::UnsandboxedGrant {
+                    grant_id: GrantId::new("test"),
+                },
+                &zeta_async_utils::CancellationSource::new().token(),
+            )
+            .unwrap(),
+        ToolExecutionOutput::Success("initial".into())
+    );
+}
+
+#[test]
+fn durable_binding_from_another_process_incarnation_fails_closed() {
+    let combined = combine_tool_ports(vec![ToolPort::local(
+        Arc::new(FakeTools::new(
+            "shared_tool",
+            ActionSource::BuiltInTool,
+            "initial",
+        )),
+        Arc::new(AskPolicy),
+    )])
+    .unwrap();
+    let first = ReloadableToolPorts::new(combined);
+    let call = ToolCall {
+        id: zeta_protocol::ToolCallId::new("restart-call").unwrap(),
+        name: ToolName::new("shared_tool").unwrap(),
+        arguments: serde_json::json!({}),
+    };
+    let binding = first
+        .tools()
+        .bind_call(&call, zeta_protocol::ToolCallCaller::Direct)
+        .unwrap()
+        .unwrap();
+
+    let recovered = ReloadableToolPorts::new(
+        combine_tool_ports(vec![ToolPort::local(
+            Arc::new(FakeTools::new(
+                "shared_tool",
+                ActionSource::BuiltInTool,
+                "initial",
+            )),
+            Arc::new(AskPolicy),
+        )])
+        .unwrap(),
+    );
+    let error = recovered
+        .tools()
+        .validate_call_binding(&call, Some(&binding))
+        .unwrap_err();
+
+    assert!(error.to_string().contains("registry incarnation"));
 }
 
 #[test]

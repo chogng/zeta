@@ -16,6 +16,10 @@ use zeta_model_provider_config::{
     ApiProfile, EndpointPolicy, ModelCatalogPolicy, ModelProviderConfig, ProviderAdapter,
     ProviderConfigError, ProviderConfigRegistry, ProviderDefinition,
 };
+use zeta_model_tokenizer::LocalTokenCount;
+use zeta_model_tokenizer::LocalTokenizationOutcome;
+use zeta_model_tokenizer::LocalTokenizerError;
+use zeta_model_tokenizer::LocalTokenizerService;
 
 struct CapturingTransport {
     request: Mutex<Option<(String, Vec<HttpHeader>, Value)>>,
@@ -40,6 +44,16 @@ impl OperationClient for CapturingTransport {
         let response = serde_json::to_vec(&self.response)
             .map_err(|_| ClientError::InvalidResponse("test response did not encode".into()))?;
         Ok(ClientResponse::new(200, Vec::new(), response))
+    }
+}
+
+struct FailingTransport;
+
+impl OperationClient for FailingTransport {
+    fn execute(&self, _: &ClientRequest) -> Result<ClientResponse, ClientError> {
+        Err(ClientError::Transport(
+            "fixture count endpoint failure".into(),
+        ))
     }
 }
 
@@ -210,6 +224,65 @@ fn openai_runtime_exposes_exact_remote_input_measurement() {
 }
 
 #[test]
+fn provider_preflight_takes_priority_over_an_available_local_counter() {
+    let transport = Arc::new(CapturingTransport::new(json!({"input_tokens": 321})));
+    let local_tokenizers = Arc::new(FixedLocalTokenizer {
+        model: model_ref("openai", "gpt-5.6"),
+        tokens: 99,
+    });
+    let runtime = ModelProviderRuntime::builtin_with_client(transport)
+        .with_local_tokenizers(local_tokenizers);
+    let model = runtime
+        .build_model(
+            &provider_config_with_endpoint("openai", "https://example.test/v1"),
+            &model_ref("openai", "gpt-5.6"),
+        )
+        .unwrap();
+
+    assert_eq!(
+        model.input_token_measurement_capability(),
+        ContextTokenMeasurementCapability::Remote
+    );
+    let ContextTokenMeasurementOutcome::Measured(measurement) =
+        model.measure_input(&ModelRequest::text("hello")).unwrap()
+    else {
+        panic!("expected the provider preflight result");
+    };
+    assert_eq!(measurement.measured_input().get(), 321);
+    assert_eq!(
+        measurement.source().kind(),
+        zeta_context_engine::ContextTokenMeasurementSourceKind::ProviderPreflight
+    );
+}
+
+#[test]
+fn provider_preflight_failure_falls_back_to_the_local_counter() {
+    let local_tokenizers = Arc::new(FixedLocalTokenizer {
+        model: model_ref("openai", "gpt-5.6"),
+        tokens: 99,
+    });
+    let runtime = ModelProviderRuntime::builtin_with_client(Arc::new(FailingTransport))
+        .with_local_tokenizers(local_tokenizers);
+    let model = runtime
+        .build_model(
+            &provider_config_with_endpoint("openai", "https://example.test/v1"),
+            &model_ref("openai", "gpt-5.6"),
+        )
+        .unwrap();
+
+    let ContextTokenMeasurementOutcome::Measured(measurement) =
+        model.measure_input(&ModelRequest::text("hello")).unwrap()
+    else {
+        panic!("the local tokenizer should cover provider preflight failures");
+    };
+    assert_eq!(measurement.measured_input().get(), 99);
+    assert_eq!(
+        measurement.source().kind(),
+        zeta_context_engine::ContextTokenMeasurementSourceKind::LocalTokenizer
+    );
+}
+
+#[test]
 fn model_provider_resolves_runtime_from_declarative_config() {
     let transport = Arc::new(CapturingTransport::new(completion_response(
         "Unified runtime",
@@ -228,6 +301,112 @@ fn model_provider_resolves_runtime_from_declarative_config() {
     let (endpoint, _, request) = transport.request.lock().unwrap().clone().unwrap();
     assert_eq!(endpoint, "https://example.test/v1/chat/completions");
     assert_eq!(request["model"], "deepseek-v4-pro");
+}
+
+#[test]
+fn deepseek_uses_only_an_exact_model_binding_for_local_measurement() {
+    let transport = Arc::new(CapturingTransport::new(completion_response("unused")));
+    let local_tokenizers = Arc::new(FixedLocalTokenizer {
+        model: model_ref("deepseek", "deepseek-chat"),
+        tokens: 120,
+    });
+    let runtime = ModelProviderRuntime::builtin_with_client(transport)
+        .with_local_tokenizers(local_tokenizers);
+    let bound = runtime
+        .build_model(
+            &provider_config("deepseek"),
+            &model_ref("deepseek", "deepseek-chat"),
+        )
+        .unwrap();
+
+    assert_eq!(
+        bound.input_token_measurement_capability(),
+        ContextTokenMeasurementCapability::Local
+    );
+    let ContextTokenMeasurementOutcome::Measured(measurement) =
+        bound.measure_input(&ModelRequest::text("hello")).unwrap()
+    else {
+        panic!("bound DeepSeek model should use the local tokenizer");
+    };
+    assert_eq!(measurement.measured_input().get(), 120);
+    assert_eq!(measurement.accounted_input().get(), 184);
+    assert_eq!(
+        measurement.accuracy(),
+        ContextTokenMeasurementAccuracy::Estimated
+    );
+    assert_eq!(
+        measurement.source().kind(),
+        zeta_context_engine::ContextTokenMeasurementSourceKind::LocalTokenizer
+    );
+
+    let unbound = runtime
+        .build_model(
+            &provider_config("deepseek"),
+            &model_ref("deepseek", "deepseek-reasoner"),
+        )
+        .unwrap();
+    assert_eq!(
+        unbound.input_token_measurement_capability(),
+        ContextTokenMeasurementCapability::Unavailable
+    );
+}
+
+#[test]
+fn huggingface_uses_the_same_model_bound_local_tokenizer_port() {
+    let transport = Arc::new(CapturingTransport::new(completion_response("unused")));
+    let local_tokenizers = Arc::new(FixedLocalTokenizer {
+        model: model_ref("huggingface", "org/model"),
+        tokens: 80,
+    });
+    let runtime = ModelProviderRuntime::builtin_with_client(transport)
+        .with_local_tokenizers(local_tokenizers);
+    let model = runtime
+        .build_model(
+            &provider_config("huggingface"),
+            &model_ref("huggingface", "org/model"),
+        )
+        .unwrap();
+
+    assert_eq!(
+        model.input_token_measurement_capability(),
+        ContextTokenMeasurementCapability::Local
+    );
+    let ContextTokenMeasurementOutcome::Measured(measurement) =
+        model.measure_input(&ModelRequest::text("hello")).unwrap()
+    else {
+        panic!("bound Hugging Face model should use the local tokenizer");
+    };
+    assert_eq!(measurement.measured_input().get(), 80);
+    assert_eq!(measurement.accounted_input().get(), 144);
+    assert_eq!(
+        measurement.accuracy(),
+        ContextTokenMeasurementAccuracy::Estimated
+    );
+}
+
+struct FixedLocalTokenizer {
+    model: ModelRef,
+    tokens: u32,
+}
+
+impl LocalTokenizerService for FixedLocalTokenizer {
+    fn supports(&self, model: &ModelRef) -> bool {
+        model == &self.model
+    }
+
+    fn count_input_tokens(
+        &self,
+        model: &ModelRef,
+        _: &ModelRequest,
+    ) -> Result<LocalTokenizationOutcome, LocalTokenizerError> {
+        if !self.supports(model) {
+            return Ok(LocalTokenizationOutcome::UnsupportedRequest);
+        }
+        Ok(LocalTokenizationOutcome::Count(LocalTokenCount::new(
+            self.tokens,
+            "fixture-tokenizer-and-template-revision",
+        )?))
+    }
 }
 
 #[test]
@@ -346,12 +525,85 @@ fn anthropic_runtime_exposes_conservative_remote_input_measurement() {
 }
 
 #[test]
-fn google_compatible_runtime_does_not_claim_native_token_counting() {
-    let runtime = ModelProviderRuntime::builtin();
+fn google_runtime_uses_native_count_tokens_as_a_conservative_measurement() {
+    let transport = Arc::new(CapturingTransport::new(json!({"totalTokens": 100})));
+    let runtime = ModelProviderRuntime::builtin_with_client(transport.clone());
     let model = runtime
         .build_model(
             &provider_config("google"),
-            &model_ref("google", "gemini-test"),
+            &model_ref("google", "gemini-3.6-flash"),
+        )
+        .unwrap();
+
+    assert_eq!(
+        model.input_token_measurement_capability(),
+        ContextTokenMeasurementCapability::Remote
+    );
+    let ContextTokenMeasurementOutcome::Measured(measurement) =
+        model.measure_input(&ModelRequest::text("hello")).unwrap()
+    else {
+        panic!("expected a provider measurement");
+    };
+    assert_eq!(measurement.measured_input().get(), 100);
+    assert_eq!(measurement.accounted_input().get(), 132);
+    assert_eq!(
+        measurement.accuracy(),
+        ContextTokenMeasurementAccuracy::Estimated
+    );
+    let (endpoint, _, body) = transport.request.lock().unwrap().clone().unwrap();
+    assert_eq!(
+        endpoint,
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:countTokens"
+    );
+    assert_eq!(
+        body["generateContentRequest"]["model"],
+        "models/gemini-3.6-flash"
+    );
+}
+
+#[test]
+fn provider_measurement_capability_is_model_specific() {
+    let runtime = ModelProviderRuntime::builtin();
+    let google_model = runtime
+        .build_model(
+            &provider_config("google"),
+            &model_ref("google", "unlisted-gemini-model"),
+        )
+        .unwrap();
+    let kimi_model = runtime
+        .build_model(
+            &provider_config("kimi"),
+            &model_ref("kimi", "unlisted-kimi-model"),
+        )
+        .unwrap();
+    let zai_model = runtime
+        .build_model(
+            &provider_config("zai"),
+            &model_ref("zai", "unlisted-glm-model"),
+        )
+        .unwrap();
+
+    assert_eq!(
+        google_model.input_token_measurement_capability(),
+        ContextTokenMeasurementCapability::Unavailable
+    );
+    assert_eq!(
+        kimi_model.input_token_measurement_capability(),
+        ContextTokenMeasurementCapability::Unavailable
+    );
+    assert_eq!(
+        zai_model.input_token_measurement_capability(),
+        ContextTokenMeasurementCapability::Unavailable
+    );
+}
+
+#[test]
+fn google_custom_invocation_endpoint_does_not_guess_a_native_count_url() {
+    let runtime = ModelProviderRuntime::builtin();
+    let model = runtime
+        .build_model(
+            &provider_config_with_endpoint("google", "https://proxy.test/v1/openai"),
+            &model_ref("google", "gemini-3.6-flash"),
         )
         .unwrap();
 
@@ -359,10 +611,60 @@ fn google_compatible_runtime_does_not_claim_native_token_counting() {
         model.input_token_measurement_capability(),
         ContextTokenMeasurementCapability::Unavailable
     );
+}
+
+#[test]
+fn kimi_runtime_exposes_the_documented_remote_estimate() {
+    let transport = Arc::new(CapturingTransport::new(
+        json!({"data": {"total_tokens": 200}}),
+    ));
+    let runtime = ModelProviderRuntime::builtin_with_client(transport.clone());
+    let model = runtime
+        .build_model(&provider_config("kimi"), &model_ref("kimi", "kimi-k2.6"))
+        .unwrap();
+
     assert_eq!(
-        model.measure_input(&ModelRequest::text("hello")).unwrap(),
-        ContextTokenMeasurementOutcome::Unavailable
+        model.input_token_measurement_capability(),
+        ContextTokenMeasurementCapability::Remote
     );
+    let ContextTokenMeasurementOutcome::Measured(measurement) =
+        model.measure_input(&ModelRequest::text("hello")).unwrap()
+    else {
+        panic!("expected a provider measurement");
+    };
+    assert_eq!(measurement.measured_input().get(), 200);
+    assert_eq!(measurement.accounted_input().get(), 232);
+    let (endpoint, _, body) = transport.request.lock().unwrap().clone().unwrap();
+    assert_eq!(
+        endpoint,
+        "https://api.moonshot.ai/v1/tokenizers/estimate-token-count"
+    );
+    assert_eq!(body["messages"][0]["content"], "hello");
+}
+
+#[test]
+fn zai_runtime_exposes_the_documented_remote_tokenizer() {
+    let transport = Arc::new(CapturingTransport::new(
+        json!({"usage": {"prompt_tokens": 300, "total_tokens": 300}}),
+    ));
+    let runtime = ModelProviderRuntime::builtin_with_client(transport.clone());
+    let model = runtime
+        .build_model(&provider_config("zai"), &model_ref("zai", "glm-5.1"))
+        .unwrap();
+
+    assert_eq!(
+        model.input_token_measurement_capability(),
+        ContextTokenMeasurementCapability::Remote
+    );
+    let ContextTokenMeasurementOutcome::Measured(measurement) =
+        model.measure_input(&ModelRequest::text("hello")).unwrap()
+    else {
+        panic!("expected a provider measurement");
+    };
+    assert_eq!(measurement.measured_input().get(), 300);
+    assert_eq!(measurement.accounted_input().get(), 332);
+    let (endpoint, _, _) = transport.request.lock().unwrap().clone().unwrap();
+    assert_eq!(endpoint, "https://api.z.ai/api/paas/v4/tokenizer");
 }
 
 #[test]
@@ -404,6 +706,62 @@ fn builtin_runtime_instantiates_provider_protocols() {
             .protocol(),
         ApiProtocol::AnthropicMessages
     );
+}
+
+#[test]
+fn final_image_detail_gate_uses_model_capability_not_protocol_family() {
+    let openai_transport = Arc::new(CapturingTransport::new(responses_response("ok")));
+    let openai_runtime = ModelProviderRuntime::builtin_with_client(openai_transport.clone());
+    let openai_model = openai_runtime
+        .build_model(&provider_config("openai"), &model_ref("openai", "gpt-5.6"))
+        .unwrap();
+    let request = request_with_original_image();
+    openai_model.invoke(&request).unwrap();
+    let (_, _, body) = openai_transport.request.lock().unwrap().clone().unwrap();
+    assert_eq!(body["input"][0]["content"][0]["detail"], "original");
+
+    let custom_definition = ProviderDefinition::new(
+        provider_id("custom-responses"),
+        "Custom Responses",
+        ProviderAdapter::OpenAiCompatible,
+        ApiProfile::OpenAiResponses,
+        EndpointPolicy::ConfiguredOnly,
+        ModelCatalogPolicy::AllowUnlisted,
+    );
+    let custom_transport = Arc::new(CapturingTransport::new(responses_response("ok")));
+    let custom_runtime = ModelProviderRuntime::with_client(
+        ProviderConfigRegistry::from_definitions([custom_definition]).unwrap(),
+        custom_transport.clone(),
+    );
+    let custom_model = custom_runtime
+        .build_model(
+            &provider_config_with_endpoint("custom-responses", "https://example.test/v1"),
+            &model_ref("custom-responses", "unknown-model"),
+        )
+        .unwrap();
+    custom_model.invoke(&request).unwrap();
+    let (_, _, body) = custom_transport.request.lock().unwrap().clone().unwrap();
+    assert_eq!(body["input"][0]["content"][0]["detail"], "auto");
+}
+
+fn request_with_original_image() -> ModelRequest {
+    ModelRequest {
+        instructions: None,
+        input: vec![zeta_api::InputItem::Message(zeta_api::Message {
+            role: zeta_api::MessageRole::User,
+            content: vec![zeta_api::ContentPart::ImageUrl {
+                url: "data:image/png;base64,AA==".into(),
+                detail: zeta_api::ImageDetail::Original,
+            }],
+            tool_calls: Vec::new(),
+        })],
+        tools: Vec::new(),
+        tool_choice: zeta_api::ToolChoice::None,
+        parallel_tool_calls: false,
+        reasoning: None,
+        max_output_tokens: None,
+        temperature: None,
+    }
 }
 
 #[test]

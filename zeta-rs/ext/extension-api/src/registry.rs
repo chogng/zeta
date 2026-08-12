@@ -1,3 +1,5 @@
+use crate::CapabilityToolContribution;
+use crate::CapabilityToolContributor;
 use crate::PromptFragment;
 use crate::ReadOnlyToolContributor;
 use crate::SkillActivationContext;
@@ -29,6 +31,7 @@ impl std::error::Error for ExtensionError {}
 
 #[derive(Default)]
 pub struct ExtensionRegistryBuilder {
+    capability_tools: Vec<Arc<dyn CapabilityToolContributor>>,
     read_only_tools: Vec<Arc<dyn ReadOnlyToolContributor>>,
     skill_activation: Vec<Arc<dyn SkillActivationContributor>>,
     turn_input: Vec<Arc<dyn TurnInputContributor>>,
@@ -55,6 +58,14 @@ impl ExtensionRegistryBuilder {
         self
     }
 
+    pub fn capability_tool_contributor(
+        &mut self,
+        contributor: Arc<dyn CapabilityToolContributor>,
+    ) -> &mut Self {
+        self.capability_tools.push(contributor);
+        self
+    }
+
     pub fn turn_input_contributor(
         &mut self,
         contributor: Arc<dyn TurnInputContributor>,
@@ -65,6 +76,7 @@ impl ExtensionRegistryBuilder {
 
     pub fn build(self) -> ExtensionRegistry {
         ExtensionRegistry {
+            capability_tools: self.capability_tools,
             read_only_tools: self.read_only_tools,
             skill_activation: self.skill_activation,
             turn_input: self.turn_input,
@@ -74,12 +86,33 @@ impl ExtensionRegistryBuilder {
 
 #[derive(Default)]
 pub struct ExtensionRegistry {
+    capability_tools: Vec<Arc<dyn CapabilityToolContributor>>,
     read_only_tools: Vec<Arc<dyn ReadOnlyToolContributor>>,
     skill_activation: Vec<Arc<dyn SkillActivationContributor>>,
     turn_input: Vec<Arc<dyn TurnInputContributor>>,
 }
 
 impl ExtensionRegistry {
+    pub fn contribute_capability_tools(
+        &self,
+    ) -> Result<Vec<CapabilityToolContribution>, ExtensionError> {
+        let mut tools = Vec::new();
+        let mut names = BTreeSet::new();
+        for contributor in &self.capability_tools {
+            for contribution in contributor.contribute()? {
+                let definition = contribution.executor().definition();
+                if !names.insert(definition.name().clone()) {
+                    return Err(ExtensionError::new(format!(
+                        "multiple extensions contributed capability tool '{}'",
+                        definition.name()
+                    )));
+                }
+                tools.push(contribution);
+            }
+        }
+        Ok(tools)
+    }
+
     pub fn contribute_read_only_tools(&self) -> Result<Vec<Arc<dyn ToolExecutor>>, ExtensionError> {
         let mut tools = Vec::new();
         let mut names = BTreeSet::new();

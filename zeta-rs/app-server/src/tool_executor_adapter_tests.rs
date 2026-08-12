@@ -47,6 +47,7 @@ use super::ToolExecutorRuntime;
 struct RecordingExecutor {
     definition: ToolDefinition,
     saw_frozen_binding: Arc<AtomicBool>,
+    content: Vec<ToolContent>,
 }
 
 impl ToolExecutor for RecordingExecutor {
@@ -62,7 +63,7 @@ impl ToolExecutor for RecordingExecutor {
             Ordering::SeqCst,
         );
         Box::pin(future::ready(ToolExecutionOutcome::Returned(
-            ToolOutput::success(vec![ToolContent::Text("executor-result".into())]),
+            ToolOutput::success(self.content.clone()),
         )))
     }
 }
@@ -130,6 +131,7 @@ fn executor_runtime_preserves_registry_binding_environment_and_output() {
         Arc::new(RecordingExecutor {
             definition,
             saw_frozen_binding: Arc::clone(&observed),
+            content: vec![ToolContent::Text("executor-result".into())],
         }),
         ToolEnvironmentId::new("workspace-7").unwrap(),
         Arc::new(UnusedReviewer),
@@ -158,10 +160,71 @@ fn executor_runtime_preserves_registry_binding_environment_and_output() {
     assert!(observed.load(Ordering::SeqCst));
     assert!(matches!(
         output,
-        ToolExecutionOutput::Success(text) if text.contains("executor-result")
+        ToolExecutionOutput::SuccessContent(content)
+            if content == vec![zeta_protocol::ContentPart::Text("executor-result".into())]
     ));
     assert_eq!(
         sink.values,
         vec![(ToolOutputStream::Stdout, "executor-result".into())]
     );
+}
+
+#[test]
+fn executor_runtime_preserves_original_image_detail_until_model_capability_gate() {
+    let definition = ToolDefinition::function(
+        ToolName::new("image-tool").unwrap(),
+        "image tool",
+        ToolInputSchema::parse(serde_json::json!({"type": "object"})).unwrap(),
+        ToolOutputSchema::Unspecified,
+        ToolSchemaMode::ProviderDefault,
+        ToolLoading::Eager,
+    )
+    .unwrap();
+    let binding = ToolBinding::new(
+        ToolRegistryGeneration::new(8),
+        ToolBindingId::new("binding-8").unwrap(),
+        definition.name().clone(),
+        definition.digest(),
+        ToolRuntimeKey::new("executor:8").unwrap(),
+    );
+    let runtime = ToolExecutorRuntime::new(
+        Arc::new(RecordingExecutor {
+            definition,
+            saw_frozen_binding: Arc::new(AtomicBool::new(false)),
+            content: vec![ToolContent::Image {
+                url: "data:image/png;base64,AA==".into(),
+                detail: zeta_tools::ImageDetail::Original,
+            }],
+        }),
+        ToolEnvironmentId::new("workspace-7").unwrap(),
+        Arc::new(UnusedReviewer),
+    );
+    let call = ToolCall {
+        id: ToolCallId::new("call-8").unwrap(),
+        name: ToolName::new("image-tool").unwrap(),
+        arguments: serde_json::json!({}),
+    };
+    runtime.prepare(&call).unwrap();
+
+    let output = runtime
+        .execute_for_turn(
+            &binding,
+            &call,
+            &ToolAuthorization::UnsandboxedGrant {
+                grant_id: GrantId::new("test"),
+            },
+            &CancellationSource::new().token(),
+            &TurnId::new("turn-8").unwrap(),
+            &mut RecordingSink::default(),
+        )
+        .unwrap();
+
+    assert!(matches!(
+        output,
+        ToolExecutionOutput::SuccessContent(content)
+            if content == vec![zeta_protocol::ContentPart::ImageUrl {
+                url: "data:image/png;base64,AA==".into(),
+                detail: zeta_protocol::ImageDetail::Original,
+            }]
+    ));
 }

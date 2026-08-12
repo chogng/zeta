@@ -68,7 +68,10 @@ consumer 可以直接依赖本 crate；需要 operation retry 或 SSE framing �
 overall timeout、system roots、无 client identity、100/1 idle pool 和 10 MiB response limit。
 
 环境 proxy 与 bypass 在 `UreqHttpClient::new` / `with_config` 时快照，不在每个 request 重新读取。
-两者都返回 `Result`；system roots、proxy 或 TLS 初始化失败必须由 composition/invocation path 处理。
+两者都返回 `Result`；proxy、自定义证书与 mTLS 静态材料在构造时校验。System roots 在第一次实际
+HTTPS request（或 HTTPS proxy route）时惰性加载并缓存结果，因此拒绝 redirect 的纯 HTTP/loopback
+不依赖 host certificate store；允许 redirect 的 HTTP route 会预备 TLS，因为目标可能升级到 HTTPS。
+加载失败由该次需要 TLS 的 invocation path 处理。
 
 ### 遥测
 
@@ -86,8 +89,9 @@ URL、header、certificate、request/response body 和 provider identity 不在 
 
 | Symbol | 可见性 | 当前职责 | 方向约束 |
 | --- | --- | --- | --- |
-| `UreqHttpClient::{direct_agent,proxy_agent}` | private fields | 分离 direct/proxied reusable pools | backend type 不进入 public API |
-| `UreqHttpClient::agent_for` | private method | 根据 request authority + bypass 选择 agent | caller 不手选 route |
+| `UreqHttpClient::{http_direct_agent,http_proxy_agent}` | private fields | 不依赖 system roots 的 HTTP direct/proxied reusable pools | backend type 不进入 public API |
+| `UreqHttpClient::{secure_tls_config,https_direct_agent,https_proxy_agent}` | private fields | 首次 HTTPS route 时加载 roots 并惰性构造 reusable pool | 成功或失败都由 `OnceLock` 缓存 |
+| `UreqHttpClient::agent_for` | private method | 根据 scheme、proxy scheme、authority 与 bypass 选择/准备 agent | caller 不手选 route |
 | `resolve_proxy` | private | materialize proxy URL 与 bypass snapshot | `Direct` 不能受环境影响 |
 | `proxy_url_from_environment` | private | 固定优先级读取 proxy env | 只在 client 构造时调用 |
 | `build_agent` | private | 应用 proxy、redirect、timeouts、pool、TLS | 每个 request 不重新 build agent |
@@ -103,15 +107,19 @@ URL、header、certificate、request/response body 和 provider identity 不在 
 
 ```text
 UreqHttpClient::new() / with_config(config) → Result
-├─ build_tls_config
-│  ├─ system_root_store          [SystemRoots/SystemPlus]
+├─ build_tls_config(SystemRoots::Skip)
 │  ├─ add_certificate_bundle     [SystemPlus/CustomOnly]
 │  └─ ClientIdentity::private_key [mTLS]
-├─ build_agent(config, tls, None)
+├─ build HTTP agent(config, tls, None)
 ├─ resolve_proxy
 │  ├─ proxy_url_from_environment [FromEnvironment]
 │  └─ ProxyBypass::from_environment
-└─ build_agent(config, tls, proxy_url) [when proxy exists]
+└─ build HTTP proxy agent(config, tls, proxy_url) [when proxy exists]
+
+first HTTPS request / HTTPS proxy route
+├─ build_tls_config(SystemRoots::Load)
+│  └─ system_root_store          [SystemRoots/SystemPlus]
+└─ build and cache HTTPS direct/proxy agent
 ```
 
 一份 client 对应一份不可变 config generation。配置、certificate 或 proxy 变化应创建新 client；
@@ -155,7 +163,7 @@ ALL_PROXY → all_proxy → HTTPS_PROXY → https_proxy → HTTP_PROXY → http_
 
 TLS 使用 rustls：
 
-- `SystemRoots` 加载 host roots；
+- `SystemRoots` 在首次 HTTPS route 加载 host roots；
 - `SystemPlus` 在 system roots 上增加 DER CA；
 - `CustomOnly` 只使用 supplied DER CA；
 - optional mTLS key 接受 PKCS#1、PKCS#8 或 SEC1 DER；
@@ -211,6 +219,7 @@ bazel test //zeta-rs/http-client:http-client-unit-tests
 - invalid URL/config；
 - one-attempt、non-2xx preservation 与 redirect rejection；
 - bypass domain/IP/port matching 和 direct route；
+- 纯 HTTP 不加载 system roots，HTTPS 惰性加载并缓存失败；
 - custom trust/mTLS invalid material；
 - response body hard limit 与 `limit + 1` headroom；
 - telemetry 只发出 safe facts。

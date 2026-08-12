@@ -11,6 +11,7 @@ mod session;
 mod skill;
 mod stream;
 mod thread;
+mod tool_binding;
 mod tool_execution;
 mod tool_name;
 mod turn;
@@ -31,10 +32,11 @@ pub use interaction::{
 };
 pub use item::{PlanStep, PlanStepStatus, PlanUpdate, ThreadItem};
 pub use model::{
-    CapabilitySupport, ContentPart, ContextWindow, ImageDetail, InputItem, InvalidModelIdentity,
-    Message, MessageRole, Model, ModelCapabilities, ModelId, ModelInfo, ModelPreset, ModelRef,
-    ModelRequest, ModelResponse, ModelStreamEvent, ModelUsage, ProviderId, ReasoningConfig,
-    ReasoningEffort, ResponseItem, StopReason, ToolCall, ToolChoice, ToolDefinition, ToolResult,
+    CapabilitySupport, ContentPart, ContextWindow, ImageDetail, ImageDetailDecision,
+    ImageDetailDecisionReason, InputItem, InvalidModelIdentity, Message, MessageRole, Model,
+    ModelCapabilities, ModelId, ModelInfo, ModelPreset, ModelRef, ModelRequest, ModelResponse,
+    ModelStreamEvent, ModelUsage, ProviderId, ReasoningConfig, ReasoningEffort, ResponseItem,
+    StopReason, ToolCall, ToolChoice, ToolDefinition, ToolResult,
 };
 pub use multi_agent::{
     AgentContextContent, AgentContextMode, AgentContextSeed, AgentContextSource, AgentJoin,
@@ -59,6 +61,7 @@ pub use thread::{
     InvalidContextSourceDigest, ItemDelta, Thread, ThreadCommand, ThreadEvent, ThreadStatus,
     ThreadUpdate, ThreadUpdateEnvelope, ToolExecutionAuthority, ToolOutputStream,
 };
+pub use tool_binding::{ToolCallBinding, ToolCallCaller, ToolSourceProvenance};
 pub use tool_execution::{
     ProcessExecutionOutput, ProcessExitStatus, SandboxDenialOutput, ToolExecutionOutput,
     ToolReplaySafety,

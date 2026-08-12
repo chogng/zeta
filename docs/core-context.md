@@ -3,9 +3,10 @@
 > 状态：核心纵向切片已实现。`ContextInput`、纯规划器、`ContextPlan`、每个已加载 Thread 的
 > `ContextManager`、持久化 checkpoint、模型压缩编排和 `ContextAssembler` 已接入
 > `TurnExecutor`。Skill 正文通过通用 `TurnInputContributor` 在 invocation safe point 注入；
-> 通用预算、精准/估算计量结果和边界判定已拆入 `zeta-context-engine`；OpenAI exact 与 Anthropic
-> estimated remote preflight 已接入，local tokenizer、prompt cache/reference baseline、跨 Thread
-> seed 与自动 Skill 选择仍是扩展点。
+> 通用预算、精准/估算计量结果和边界判定已拆入 `zeta-context-engine`；OpenAI exact，以及
+> Anthropic、Google、Kimi、Z.AI estimated remote preflight 已接入，DeepSeek/Hugging Face local
+> tokenizer adapter 已接入；Hugging Face 公共模型支持按需发现、下载和缓存，其他 provider 的固定
+> 资产目录、prompt cache/reference baseline、跨 Thread seed 与自动 Skill 选择仍是扩展点。
 >
 > Core 总体边界：[`core.md`](core.md)
 > Canonical Thread/Turn/Item contract：[`protocol.md`](protocol.md)
@@ -361,8 +362,10 @@ Core-managed plan 会把同一份 `reserved_output` 写入该次不可变 `Model
 已知窗口可以来自内置 `ModelInfo`，也可以由 `ModelProviderConfig.model_context` 按模型 ID 配置；
 窗口未知时使用 `ContextBudget::ProviderManaged`，Core 不假装拥有可靠上限。预算解析、精准/估算
 计量结果和统一边界判定已由 `zeta-context-engine` 提供；生产 planner 首轮仍使用带 revision 的
-确定性 byte estimate。最终 canonical request 在接近压力线或 compaction 后会调用已声明的 remote
-preflight：OpenAI Responses 为 exact，Anthropic Messages 为 estimated；本地 tokenizer 尚未接入。
+确定性 byte estimate。最终 canonical request 会按“官方 preflight → 匹配模型的本地整请求计数 →
+Core 保守估算”降级：OpenAI Responses 为 exact；Anthropic、Google native `countTokens`、Kimi
+estimate 与 Z.AI tokenizer 为 estimated remote；本地 `hf-chat-template + tokenizers` 结果为
+estimated。只有 provider definition 明确声明且 model policy 允许的 binding 才会触发远程计量。
 
 ## 8. 压缩
 
@@ -514,7 +517,8 @@ TurnExecutor
 | durable checkpoint、摘要生成、commit 后重规划 | ✅ 已实现 | 原始 event log 永不删除；压缩请求本身也受预算限制 |
 | 已知模型窗口的生产启用 | ✅ 已实现 | 可通过 `model_context` 配置；未知模型退回 provider-managed |
 | 通用预算与精准/估算计量契约 | ✅ 已实现 | `zeta-context-engine` 统一压力线、硬窗口和保守记账判定 |
-| provider input-token preflight | 部分具备 | OpenAI exact、Anthropic estimated 已接入；本地 tokenizer 与其他 provider 尚未完成 |
+| provider input-token preflight | 部分具备 | OpenAI exact；Anthropic、Google、Kimi、Z.AI estimated；官方接口失败时降级到本地或 Core 估算 |
+| 请求级本地 token 计数 | 部分具备 | HF 公共模型按需发现/下载/缓存；其他 provider 需固定资产清单；多模态 processor 尚未接入 |
 | provider usage 校准 | 尚未完成 | usage 与调用前预算保持独立，尚未建立按模型隔离的校准数据 |
 | cache/reference baseline | 推迟 | 只有性能证据证明重复组装是瓶颈后才增加 |
 | Agent seed、跨 Thread 选择与 reference resources | 尚未完成 | 不能读取其他 live `ContextManager` |

@@ -79,6 +79,7 @@ impl ContextAssembler {
                 ThreadItem::ToolResult {
                     tool_call_id,
                     text,
+                    content,
                     is_error,
                     ..
                 } => {
@@ -91,7 +92,9 @@ impl ContextAssembler {
                     input.push(InputItem::ToolResult(ToolResult {
                         call_id: tool_call_id.clone(),
                         name,
-                        content: vec![ContentPart::Text(text.clone())],
+                        content: content
+                            .clone()
+                            .unwrap_or_else(|| vec![ContentPart::Text(text.clone())]),
                         is_error: *is_error,
                     }));
                 }

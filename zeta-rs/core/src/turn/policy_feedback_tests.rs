@@ -16,6 +16,7 @@ fn opens_after_three_consecutive_reviewer_rejections() {
             turn_id: turn_id.clone(),
             tool_call_id: ToolCallId::new(format!("call-{index}")).unwrap(),
             text: text.clone(),
+            content: None,
             is_error: true,
         })
         .collect::<Vec<_>>();
@@ -36,6 +37,7 @@ fn ordinary_tool_result_resets_the_consecutive_counter() {
         turn_id: turn_id.clone(),
         tool_call_id: ToolCallId::new(format!("call-{index}")).unwrap(),
         text,
+        content: None,
         is_error: true,
     };
     let items = vec![

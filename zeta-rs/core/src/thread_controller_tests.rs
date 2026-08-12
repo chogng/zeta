@@ -10,8 +10,8 @@ use zeta_protocol::{
     ActionApprovalCapability, ActionApprovalCapabilityKind, ActionApprovalDecision,
     ActionApprovalRequest, ActionApprovalResponse, AgentRequest, AgentResponse, CommandId,
     ContextSourceRange, InteractionDeadline, RequestId, RequestUserInput, RequestUserInputResponse,
-    SessionId, StableTurnError, StableTurnErrorCode, ThreadEvent, ThreadId, ThreadItem, ToolName,
-    TurnId, UserInput, UserInputQuestion,
+    SessionId, StableTurnError, StableTurnErrorCode, ThreadEvent, ThreadId, ThreadItem, ToolCallId,
+    ToolName, TurnId, UserInput, UserInputQuestion,
 };
 
 struct OneShotActivation {
@@ -685,6 +685,16 @@ fn shell_turn_atomically_persists_its_exact_command_and_tool_call() {
         expected_sequence: SequenceExpectation::Any,
         policy_revision: "test-policy-v1".into(),
         approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+        tool_call_id: ToolCallId::new("shell-turn-shell-start").unwrap(),
+        binding: zeta_protocol::ToolCallBinding {
+            registry_incarnation: None,
+            registry_generation: 1,
+            definition_digest: "shell-definition".into(),
+            source_chain: vec![zeta_protocol::ToolSourceProvenance::Product {
+                component: "test".into(),
+            }],
+            caller: zeta_protocol::ToolCallCaller::Direct,
+        },
         invocation: ShellTurnInvocation {
             command: "cargo test -p zeta-core".into(),
             shell_program: "/bin/sh".into(),
@@ -708,6 +718,7 @@ fn shell_turn_atomically_persists_its_exact_command_and_tool_call() {
         turn_id,
         name,
         arguments_json,
+        binding,
         ..
     } = &snapshot.items[0]
     else {
@@ -715,6 +726,10 @@ fn shell_turn_atomically_persists_its_exact_command_and_tool_call() {
     };
     assert_eq!(turn_id, &created.turn_id);
     assert_eq!(name.as_str(), "shell-command");
+    assert_eq!(
+        binding.as_ref().map(|binding| binding.registry_generation),
+        Some(1)
+    );
     let arguments: serde_json::Value = serde_json::from_str(arguments_json).unwrap();
     assert_eq!(arguments["program"], "/bin/sh");
     assert_eq!(
@@ -897,8 +912,10 @@ fn durable_projection_contains_messages_tools_and_session_identity() {
             &thread,
             &turn,
             RecordToolCallRequest {
+                tool_call_id: None,
                 name: ToolName::new("search").expect("test tool name is valid"),
                 arguments_json: r#"{"query":"zeta"}"#.into(),
+                binding: None,
             },
         )
         .unwrap();

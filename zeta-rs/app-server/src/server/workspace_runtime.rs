@@ -415,6 +415,11 @@ pub(crate) struct WorkspaceToolPorts {
 }
 
 impl WorkspaceToolPorts {
+    #[cfg(test)]
+    pub(crate) fn definitions(&self) -> Vec<zeta_protocol::ToolDefinition> {
+        self.reloadable.tools().definitions()
+    }
+
     fn new(
         mcp: Option<ToolPort>,
         dynamic: Option<ToolPort>,

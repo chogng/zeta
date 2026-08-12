@@ -1,6 +1,7 @@
 use crate::config::{is_http_url, normalize_base_url};
 use crate::{
-    ApprovalReviewModelDefault, EndpointPolicy, ModelCatalogPolicy, ModelProviderConfig,
+    ApprovalReviewModelDefault, BaseUrlNormalization, EndpointPolicy, InputTokenCountTarget,
+    ModelCatalogPolicy, ModelProviderConfig, NormalizedInputTokenCountConfig,
     NormalizedModelProviderConfig, ProviderConfigError, ProviderDefinition, ProviderId, providers,
 };
 use std::collections::BTreeMap;
@@ -142,10 +143,27 @@ impl ProviderConfigRegistry {
                 base_url,
             });
         }
+        let input_token_count = definition.input_token_count.as_ref().and_then(|count| {
+            let count_base_url = match &count.target {
+                InputTokenCountTarget::InvocationBase => base_url.clone(),
+                InputTokenCountTarget::ProviderDefault { base_url }
+                    if configured_base_url.is_none() =>
+                {
+                    normalize_base_url(base_url, BaseUrlNormalization::TrimAndRemoveTrailingSlash)
+                }
+                InputTokenCountTarget::ProviderDefault { .. } => return None,
+            };
+            Some(NormalizedInputTokenCountConfig {
+                profile: count.profile,
+                base_url: count_base_url,
+                models: count.models.clone(),
+            })
+        });
         Ok(NormalizedModelProviderConfig {
             provider: config.provider.clone(),
             api_profile: definition.api_profile,
             base_url,
+            input_token_count,
             max_output_tokens: config
                 .max_output_tokens
                 .or(definition.defaults.max_output_tokens),

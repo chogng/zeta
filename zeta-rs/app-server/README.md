@@ -35,9 +35,10 @@ JSONL / in-process caller
    ├─ optional CloudCodeIndexController → zeta-code-index-cloud + host provider registry
    ├─ request-scoped CodeRetrievalService → lexical/semantic/remote RRF + verification + budget
    ├─ optional TerminalService → zeta-utils-pty
-   ├─ reloadable MCP Tool generation → zeta-mcp
+   ├─ reloadable MCP Tool generation → zeta-mcp-extension → zeta-mcp
    ├─ client-hosted dynamic tools → durable Agent interaction owner
-   ├─ read-only extension ToolExecutor contributions → zeta-extension-api
+   ├─ read-only/capability ToolExecutor contributions → zeta-extension-api
+   ├─ optional Web Search executor → zeta-web-search-extension
    ├─ trusted Workspace Agent tools → spawn_agent / send_agent_message / wait_agent
    ├─ Skill RPC/config/event adapters → zeta-skills-extension
    │                                  → zeta-skills + zeta-file-watcher
@@ -94,7 +95,7 @@ Policy port 的 executor。`open_local_app_server` 会从 user config snapshot �
 的 unauthenticated MCP server，并把 catalog 与本地工具组合；Config commit 会在后台构建新
 generation 并只切换未来的 prepare。已 prepare 的调用继续绑定原 Tool/Policy generation，直到
 execute 完成。每次 MCP tool call 仍必须经过 durable one-time approval。Host 安装的 read-only
-extension executor（当前包括 `skills-read`）和 client-hosted dynamic tools 也进入同一个 registry，
+extension executor（当前包括统一的 `skills-read`）和 client-hosted dynamic tools 也进入同一个 registry，
 不得绕过 binding、policy 或 durable result commit。它仅在调用方通过
 `LocalAppServerOptions::with_workspace_root` 提供统一 Workspace 根时同时组合 filesystem、
 `.zeta` 自定义 catalog、Workspace code index、Workspace search、Git SCM、connection-owned Terminal runtime、
@@ -104,6 +105,12 @@ in-process 路径都会使用同一个启动时解析结果：
 假设任意自定义 host 已经拥有 Tool registry。`rg` 安装候选来自
 [`zeta-install-context`](../install-context/README.md)，App Server 只负责把候选交给
 `RipgrepExecutable` 验证并组合成 Tool service。
+
+Web Search 默认不注册。Embedding Tool Search 只负责在当前 registry 中找工具，与外部网页检索无关。
+Host 只有通过 `LocalAppServerOptions::with_web_search_backend` 注入
+`zeta-web-search-extension::WebSearchBackend` 后，`web_search` 才进入 eager tool set；其 endpoint host
+和 optional credential reference 会冻结到 action digest，并要求 exact one-time approval。共享扩展仅
+提供 provider-neutral contract 与 JSON HTTP adapter，不硬编码 Codex 私有 Search endpoint。
 
 默认 local composition 使用 lazy production model client：启动、配置读取和模型目录展示不会加载
 system roots 或 proxy。Embedded test 可通过 `LocalAppServerOptions::with_model_operation_client`
@@ -169,10 +176,8 @@ src/
 │       └── update_broker.rs       # per-connection subscription/cursor/fanout
 ├── local.rs                       # local composition, session backend selection + model safe point
 ├── local_tools.rs                 # frozen rg registry + Core Tool/Policy adapters
-├── mcp_runtime.rs                 # continuously driven Tokio worker + synchronous Core bridge
-├── mcp_tools.rs                   # Config materialization + MCP Tool/Policy adapters
 ├── dynamic_tools.rs               # dynamic spec validation + durable interaction Tool adapter
-├── extension_tools.rs             # ReadOnlyToolContributor → reviewed ToolExecutor port
+├── extension_tools.rs             # read-only/capability contributors → reviewed ToolExecutor port
 ├── tool_executor_adapter.rs       # frozen payload/binding → ToolExecutor invocation
 ├── tool_composition.rs            # local/MCP/dynamic/extension routing + generation-safe replacement
 ├── review.rs                      # review-only provider adapter
@@ -232,14 +237,14 @@ src/
 | `compose_local_tools` | crate-private | 要求 root-bound `ExecuteProcess` capability、解析安装候选、冻结 rg、选择 native sandbox | containment、trust 或 discovery 失败时不降级成 unrestricted |
 | `LocalShellToolService::materialize` | private | parse call、约束 workspace 参数、冻结 rg executable | policy review 前不启动进程 |
 | `LocalReadOnlyPolicy::decide` | private | 只接受 exact revision/provenance/capability/sandbox | 不产生 unsandboxed grant |
-| `McpRuntimeOwner` | crate-private | worker thread 持有 Tokio runtime 和 live `McpRuntime` | Core thread 不嵌套 `block_on` |
-| `McpToolService::review_request` | private | exact binding/arguments/generation → MCP action digest | remote annotation 不授予只读信任 |
-| `McpApprovalPolicy::decide` | private | 只接受已知 user MCP provenance 并返回 one-time approval | 不自动批准远端副作用 |
+| `zeta_mcp_extension::McpRuntimeOwner` | ext/mcp private | worker thread 持有 Tokio runtime 和 live `McpRuntime` | Core thread 不嵌套 `block_on` |
+| `zeta_mcp_extension::McpToolService::review_request` | ext/mcp private | exact binding/arguments/generation → MCP action digest | remote annotation 不授予只读信任 |
+| `zeta_mcp_extension::McpApprovalPolicy::decide` | ext/mcp private | 只接受已知 user MCP provenance 并返回 one-time approval | 不自动批准远端副作用 |
 | `CompositeToolService` | private | frozen binding/runtime key → local、MCP、dynamic、extension runtime | duplicate name 在 composition 时失败，不按 live name 猜 executor |
 | `CompositePolicyService` | private | trusted `ActionSource` → owning policy | 不依靠 trial-and-error policy fallback |
 | `ReloadableToolPorts` | crate-private | 原子替换未来 Tool generation，并为 prepared call 固定 service/policy | reconcile failure 保留上一份可用 runtime |
 | `DynamicToolService` | private | exact spec digest + arguments → durable `AgentRequest::DynamicTool`，并校验 owner response | 同名新定义不能认领旧 interaction |
-| `ExtensionToolReviewer` | private | host-installed read-only executor → frozen payload 与 exact Plugin provenance | extension contributor 不直接获得未审查执行权 |
+| `ExtensionToolReviewer` | private | host-installed executor + declared authority → frozen payload 与 exact Plugin provenance | capability contributor 不直接获得网络或 credential authority |
 | `ModelSnapshotResolver` | private trait | frozen config → immutable invoker | implementation 不持有 mutable config view |
 | `zeta_slash_commands::SlashCommandCatalog::new` | shared public constructor | 校验 lowercase ASCII/interior-hyphen name、非空描述与唯一性 | App Server 不复制 grammar、不执行命令、不引用 client-local commands |
 | `ProviderReviewModel::request` | private | system/input/schema → tool-disabled zero-temperature request | reviewer 不获得 Tool capability |
@@ -491,10 +496,12 @@ notification。Watcher 启动失败时 local App Server 仍可用，显式
 
 `zeta-skills-extension` 当前组合 built-in、user 与 active Workspace `.zeta/skills` source。显式正文
 activation、durable provenance、通用 prompt fragment injection 和 invocation safe-point reload
-已实现；其 `ReadOnlyToolContributor` 现在把 `skills-read` 作为普通 `ToolExecutor` 投影进共享 registry，
-由模型按 metadata 中的 exact source/name 按需加载正文。禁用只影响 future Turn
-eligibility，不能改变已经冻结的 Turn。Plugin source、reference/resource resolver、automatic
-selection 的更高层决策尚未实现。TUI 与 Desktop 已从 metadata-only catalog 生成直接 `/name` Skill command，
+已实现；其 `ReadOnlyToolContributor` 现在把统一的 `skills-read` 作为普通 `ToolExecutor` 投影进
+共享 registry，由模型按 metadata 中的 exact source/name 按需加载正文，再用 pinned Skill digest
+读取单个有界 package-relative UTF-8 文件。禁用只影响 future Turn
+eligibility，不能改变已经冻结的 Turn。Plugin source 和大目录候选检索的更高层决策尚未实现；
+binary asset 的 MIME/artifact materialization 与 script execution adapter 尚未完成。TUI 与 Desktop 已从
+metadata-only catalog 生成直接 `/name` Skill command，
 而 `/skills` 只承担管理；正文变化或 source 消失会使恢复/后续 safe point 失败即
 关闭，不会用新 bytes 替换 frozen digest。
 
@@ -645,9 +652,12 @@ local tool 的参数白名单、discovery、取消与输出限制由
 终端清理；尚无异步多连接调度器、序列化范围强制、持久化资源或完整网络服务
 生命周期。MCP desired config 的热更新和未来 Tool catalog replacement 已实现；当前仍没有凭据
 具体化、stdio 进程沙箱、对外 runtime health/diagnostic API、progress/elicitation delivery 或
-image result 的原生 Core content path；MCP image 暂时编码进 bounded JSON text result。演进这些
-能力时应保留 protocol registry唯一性、Core/store authority、snapshot + durable gap 和
-per-invocation config safe point。
+完整的 Plugin 安装/启用 authority。MCP 与 dynamic image result 已进入 canonical
+`ContentPart`，Core 会把结构化内容写入 durable `ToolResult`，并在最终模型请求处按 model
+capability 统一处理 image detail；旧 transcript 的纯 text shape 仍可读取。Reloadable Tool service
+会在调用落盘前冻结 generation、definition digest、source chain 和 process incarnation；重启后的
+历史调用当前选择失败关闭，而不是按同名 live tool 重放。演进这些能力时应保留 protocol registry
+唯一性、Core/store authority、snapshot + durable gap 和 per-invocation config safe point。
 
 ## Static extension resources
 

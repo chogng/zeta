@@ -296,8 +296,9 @@ turn/steer { command_id, expected_sequence, turn_id, input: Vec<UserInput> }
 - `ContextWindow::Unknown` 不猜 128k，而是明确使用 `ContextBudget::ProviderManaged`；
 - `zeta-context-engine` 已统一压力线、模型硬窗口、精准计量与带保守记账余量的估算结果；
 - 生产 planner 仍由 `deterministic-bytes-v1` 以 bytes/4 加结构开销做确定性估算，并在诊断中记录
-  revision；最终 request 接近压力线或 compaction 后会调用 OpenAI exact / Anthropic estimated
-  remote preflight，本地 tokenizer adapter 尚未接入。
+  revision；最终 request 接近压力线或 compaction 后会调用声明式 model binding 对应的 remote
+  preflight：OpenAI exact，Anthropic、Google、Kimi、Z.AI estimated；本地 tokenizer adapter 尚未
+  接入。
 
 usage 按 Thread 持久化和基于 provider usage 的 EMA 校准尚未实现；在此之前不能把粗估写成精确
 tokenizer 保证。

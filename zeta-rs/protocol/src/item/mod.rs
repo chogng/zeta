@@ -2,7 +2,7 @@ mod plan;
 
 pub use plan::{PlanStep, PlanStepStatus, PlanUpdate};
 
-use crate::{ItemId, ToolCallId, ToolName, TurnId};
+use crate::{ContentPart, ItemId, ToolCallBinding, ToolCallId, ToolName, TurnId};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -46,12 +46,16 @@ pub enum ThreadItem {
         tool_call_id: ToolCallId,
         name: ToolName,
         arguments_json: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        binding: Option<ToolCallBinding>,
     },
     ToolResult {
         item_id: ItemId,
         turn_id: TurnId,
         tool_call_id: ToolCallId,
         text: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        content: Option<Vec<ContentPart>>,
         is_error: bool,
     },
 }

@@ -106,7 +106,7 @@
 | policy 冻结（durable policy revision binding） | 已实现 | A | `TurnAccepted.policy_revision`、`ToolScheduler` recovery checks |
 | `ModelInvocationSnapshot` | 部分 | B | selected model、`ContextPlan` 与 tools 已冻结；独立 provider/config/catalog revision 集合尚未建模 |
 | `ContextInput` / `ContextPlan` / 纯内容选择 planner | 已实现 | B | [`core-context.md`](core-context.md) |
-| 通用 context budget / token measurement 判定 | 已实现 | B | [`zeta-context-engine`](../zeta-rs/context-engine/README.md)；OpenAI exact 与 Anthropic estimated remote preflight 已接入，local tokenizer 尚未接入 |
+| 通用 context budget / token measurement 判定 | 已实现 | B | [`zeta-context-engine`](../zeta-rs/context-engine/README.md)；OpenAI exact，Anthropic/Google/Kimi/Z.AI estimated remote preflight 已接入，local tokenizer 尚未接入 |
 | `ContextManager`（薄协调，无 cache） | 已实现 | B | `core/src/context_manager.rs`、`loaded_thread.rs` |
 | compaction checkpoint schema + 压缩流程 | 已实现 | B | [`core-context.md`](core-context.md) §8 |
 | `ContextCompactionService` / `Clock` / `IdGenerator` / `CapabilityBroker` 端口 | 部分 | B / 按需 | model-backed compaction 已实现；其余仍按需设计 |

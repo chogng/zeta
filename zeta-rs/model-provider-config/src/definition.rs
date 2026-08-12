@@ -1,5 +1,8 @@
+use crate::InputTokenCountDefinition;
+use crate::ModelId;
+use crate::ProviderConfigError;
+use crate::ProviderId;
 use crate::config::{is_http_url, normalize_base_url};
-use crate::{ModelId, ProviderConfigError, ProviderId};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
@@ -99,6 +102,8 @@ pub struct ProviderDefinition {
     pub models: Vec<Model>,
     #[serde(default)]
     pub defaults: ProviderDefaults,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input_token_count: Option<InputTokenCountDefinition>,
     #[serde(default)]
     pub base_url_normalization: BaseUrlNormalization,
 }
@@ -121,6 +126,7 @@ impl ProviderDefinition {
             model_catalog_policy,
             models: Vec::new(),
             defaults: ProviderDefaults::default(),
+            input_token_count: None,
             base_url_normalization: BaseUrlNormalization::default(),
         }
     }
@@ -143,6 +149,11 @@ impl ProviderDefinition {
         self
     }
 
+    pub fn with_input_token_count(mut self, definition: InputTokenCountDefinition) -> Self {
+        self.input_token_count = Some(definition);
+        self
+    }
+
     pub fn with_base_url_normalization(mut self, rule: BaseUrlNormalization) -> Self {
         self.base_url_normalization = rule;
         self
@@ -162,6 +173,9 @@ impl ProviderDefinition {
         }
         if self.defaults.max_output_tokens == Some(0) {
             return Err(ProviderConfigError::InvalidMaxOutputTokens(self.id.clone()));
+        }
+        if let Some(input_token_count) = &self.input_token_count {
+            input_token_count.validate(&self.id)?;
         }
         if let ApprovalReviewModelDefault::Model { model } = &self.defaults.approval_review_model
             && self.model_catalog_policy == ModelCatalogPolicy::ListedOnly

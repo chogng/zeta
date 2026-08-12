@@ -27,6 +27,7 @@ impl PluginManifest {
         }
         if self.contributions.skills.is_empty()
             && self.contributions.mcp_servers.is_empty()
+            && self.contributions.connectors.is_empty()
             && self.contributions.assets.is_empty()
         {
             return invalid("plugin manifest must declare at least one contribution");
@@ -47,6 +48,13 @@ impl PluginManifest {
                 .map(|contribution| &contribution.id),
         )?;
         unique_ids(
+            "connector",
+            self.contributions
+                .connectors
+                .iter()
+                .map(|contribution| &contribution.id),
+        )?;
+        unique_ids(
             "asset",
             self.contributions
                 .assets
@@ -59,6 +67,26 @@ impl PluginManifest {
         )?;
 
         let available = contribution_references(self);
+        let mcp_servers = self
+            .contributions
+            .mcp_servers
+            .iter()
+            .map(|server| &server.id)
+            .collect::<BTreeSet<_>>();
+        for connector in &self.contributions.connectors {
+            validate_plain_text(
+                &connector.display_name,
+                "connector displayName",
+                MAX_DISPLAY_NAME_BYTES,
+            )?;
+            validate_description(&connector.description)?;
+            if !mcp_servers.contains(&connector.mcp_server) {
+                return invalid(format!(
+                    "connector '{}' references missing MCP server '{}'",
+                    connector.id, connector.mcp_server
+                ));
+            }
+        }
         for slot in &self.credential_slots {
             let mut required = BTreeSet::new();
             for reference in &slot.required_for {
@@ -126,6 +154,16 @@ fn contribution_references(manifest: &PluginManifest) -> BTreeSet<ContributionRe
             kind: ContributionKind::Skill,
             id: item.id.clone(),
         })
+        .chain(
+            manifest
+                .contributions
+                .connectors
+                .iter()
+                .map(|item| ContributionReference {
+                    kind: ContributionKind::Connector,
+                    id: item.id.clone(),
+                }),
+        )
         .chain(
             manifest
                 .contributions

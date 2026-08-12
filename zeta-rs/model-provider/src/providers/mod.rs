@@ -17,6 +17,7 @@ mod deepseek;
 mod google;
 mod huggingface;
 mod kimi;
+pub(crate) mod measurement;
 mod mimo;
 mod minimax;
 mod ollama;
@@ -35,7 +36,7 @@ pub(crate) trait ProviderAdapter: Send + Sync {
     fn protocol(&self) -> ApiProtocol;
 
     /// Reports whether this immutable adapter can measure canonical input locally or remotely.
-    fn input_token_measurement_capability(&self) -> ContextTokenMeasurementCapability {
+    fn input_token_measurement_capability(&self, _: &str) -> ContextTokenMeasurementCapability {
         ContextTokenMeasurementCapability::Unavailable
     }
 

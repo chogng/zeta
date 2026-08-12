@@ -186,6 +186,7 @@ fn reports_distinct_mandatory_tool_current_and_shape_failures() {
             turn_id: turn_id.clone(),
             tool_call_id: id("missing-call"),
             text: "result".into(),
+            content: None,
             is_error: false,
         }],
     );

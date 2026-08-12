@@ -5,11 +5,14 @@
 //! remain with Core, source runtimes, and provider adapters respectively.
 
 mod binding;
+mod code_mode;
 mod definition;
+mod discovery;
 mod dynamic;
 mod error;
 mod execution;
 mod identity;
+mod image_detail;
 mod mcp;
 mod output;
 mod protocol_adapter;
@@ -17,9 +20,18 @@ mod registry;
 mod schema;
 
 pub use binding::ToolBinding;
+pub use code_mode::{
+    CodeModeNestedCall, CodeModeProjection, CodeModeProjectionError, CodeModeToolBinding,
+    CodeModeToolDefinition, CodeModeToolName,
+};
 pub use definition::{
     FreeformFormat, ToolDefinition, ToolDefinitionDigest, ToolInvocationKind, ToolLoading,
     ToolOutputSchema, ToolSchemaMode,
+};
+pub use discovery::{
+    CapabilityDiscoveryId, CapabilityDiscoveryRequest, CapabilityDiscoverySnapshot,
+    DiscoverableCapability, DiscoverableConnectorInfo, DiscoverableContributionKinds,
+    DiscoverablePluginInfo, DiscoveryAction, DiscoveryClientCapabilities, DiscoveryValueError,
 };
 pub use dynamic::from_dynamic_tool_spec;
 pub use error::{
@@ -34,6 +46,10 @@ pub use execution::{
 pub use identity::{
     ToolBindingId, ToolEnvironmentId, ToolIdentityError, ToolOperationId, ToolRegistryGeneration,
     ToolRuntimeKey,
+};
+pub use image_detail::{
+    ImageDetailCapabilities, ImageDetailDecision, ImageDetailDecisionReason, ImageDetailSelection,
+    ImageSourceDetailPolicy, normalize_image_detail,
 };
 pub use mcp::{McpOutputSchemaProjection, McpToolProjection, from_mcp_tool_projection};
 pub use output::{ToolContent, ToolOutput, ToolOutputStatus};

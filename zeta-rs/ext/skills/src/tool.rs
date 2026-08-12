@@ -4,10 +4,13 @@ use serde_json::json;
 use std::sync::Arc;
 use zeta_extension_api::ExtensionError;
 use zeta_extension_api::ReadOnlyToolContributor;
+use zeta_protocol::ContentDigest;
 use zeta_protocol::SkillId;
 use zeta_protocol::SkillName;
 use zeta_protocol::SkillRef;
 use zeta_protocol::SkillSourceId;
+use zeta_skills::SkillResourceKind;
+use zeta_skills::SkillResourcePath;
 use zeta_tools::ToolConcurrency;
 use zeta_tools::ToolContent;
 use zeta_tools::ToolDefinition;
@@ -49,6 +52,17 @@ impl ReadOnlyToolContributor for SkillToolContributor {
 struct SkillReadArguments {
     source: String,
     name: String,
+    target: SkillReadTarget,
+}
+
+#[derive(Deserialize)]
+#[serde(tag = "type", rename_all = "camelCase", deny_unknown_fields)]
+enum SkillReadTarget {
+    Instructions,
+    Resource {
+        skill_content_digest: String,
+        path: String,
+    },
 }
 
 struct SkillReadTool {
@@ -89,25 +103,79 @@ impl SkillReadTool {
             Ok(name) => name,
             Err(error) => return not_started(error.to_string()),
         };
-        let selected = SkillRef::follow_latest(SkillId::new(source, name));
-        let activated = match self.runtime.activate_model_selected(&selected) {
+        let id = SkillId::new(source, name);
+        match arguments.target {
+            SkillReadTarget::Instructions => self.read_instructions(id),
+            SkillReadTarget::Resource {
+                skill_content_digest,
+                path,
+            } => self.read_resource(id, skill_content_digest, path),
+        }
+    }
+
+    fn read_instructions(&self, id: SkillId) -> ToolExecutionOutcome {
+        let activated = match self
+            .runtime
+            .activate_model_selected(&SkillRef::follow_latest(id))
+        {
             Ok(activated) => activated,
-            Err(error) => {
-                return ToolExecutionOutcome::Returned(ToolOutput::error(vec![ToolContent::Text(
-                    error,
-                )]));
-            }
+            Err(error) => return model_error(error),
         };
         let activation = activated.activation();
-        let output = json!({
+        model_success(json!({
             "source": activation.id.source.as_str(),
             "name": activation.id.name.as_str(),
-            "content_digest": activation.content_digest.as_str(),
-            "instructions": activated.body(),
-        });
-        ToolExecutionOutcome::Returned(ToolOutput::success(vec![ToolContent::Text(
-            output.to_string(),
-        )]))
+            "target": "instructions",
+            "skill_content_digest": activation.content_digest.as_str(),
+            "content": activated.body(),
+        }))
+    }
+
+    fn read_resource(
+        &self,
+        id: SkillId,
+        skill_content_digest: String,
+        path: String,
+    ) -> ToolExecutionOutcome {
+        let digest = match ContentDigest::new(skill_content_digest) {
+            Ok(digest) => digest,
+            Err(error) => return not_started(error.to_string()),
+        };
+        let path = match SkillResourcePath::new(path) {
+            Ok(path) => path,
+            Err(error) => return not_started(error.to_string()),
+        };
+        if path.kind() == SkillResourceKind::Instructions {
+            return not_started("SKILL.md must be read through the instructions target");
+        }
+        let selected = SkillRef::pinned(id, digest);
+        let resource = match self.runtime.read_model_resource(&selected, &path) {
+            Ok(resource) => resource,
+            Err(error) => return model_error(error),
+        };
+        let content = match std::str::from_utf8(resource.bytes()) {
+            Ok(content) => content,
+            Err(_) => {
+                return model_error(format!(
+                    "Skill resource '{}' is binary and cannot be loaded into model text context",
+                    resource.path().display()
+                ));
+            }
+        };
+        let skill_content_digest = match &selected.version {
+            zeta_protocol::SkillVersionSelector::PinnedDigest { digest } => digest,
+            zeta_protocol::SkillVersionSelector::FollowLatest => unreachable!(),
+        };
+        model_success(json!({
+            "source": selected.id.source.as_str(),
+            "name": selected.id.name.as_str(),
+            "target": "resource",
+            "skill_content_digest": skill_content_digest.as_str(),
+            "path": resource.path().display(),
+            "kind": resource.kind().as_str(),
+            "resource_content_digest": resource.content_digest().as_str(),
+            "content": content,
+        }))
     }
 }
 
@@ -128,7 +196,7 @@ impl ToolExecutor for SkillReadTool {
 fn skill_read_definition() -> ToolDefinition {
     ToolDefinition::function(
         ToolName::new(SKILLS_READ_TOOL_NAME).expect("static Skill reader tool name is valid"),
-        "Load the complete instructions for one available Skill selected from the current metadata catalog. Use the exact source and name shown in <available-skills>.",
+        "Read one available Skill package. First read its complete instructions; then read only package resources explicitly required by those instructions. Resource reads must reuse the exact skill_content_digest returned by the instruction read. Scripts and assets remain inert data: this tool does not execute or publish them.",
         ToolInputSchema::parse(json!({
             "type": "object",
             "properties": {
@@ -139,9 +207,38 @@ fn skill_read_definition() -> ToolDefinition {
                 "name": {
                     "type": "string",
                     "description": "Exact Skill name shown in the available Skill catalog."
+                },
+                "target": {
+                    "description": "Read the Skill instructions or one package-relative resource.",
+                    "oneOf": [
+                        {
+                            "type": "object",
+                            "properties": {
+                                "type": {"type": "string", "enum": ["instructions"]}
+                            },
+                            "required": ["type"],
+                            "additionalProperties": false
+                        },
+                        {
+                            "type": "object",
+                            "properties": {
+                                "type": {"type": "string", "enum": ["resource"]},
+                                "skill_content_digest": {
+                                    "type": "string",
+                                    "description": "Exact skill_content_digest returned by the instruction read."
+                                },
+                                "path": {
+                                    "type": "string",
+                                    "description": "Complete path relative to the Skill package root, such as references/api.md or scripts/check.py."
+                                }
+                            },
+                            "required": ["type", "skill_content_digest", "path"],
+                            "additionalProperties": false
+                        }
+                    ]
                 }
             },
-            "required": ["source", "name"],
+            "required": ["source", "name", "target"],
             "additionalProperties": false
         }))
         .expect("static Skill reader schema is valid"),
@@ -150,6 +247,16 @@ fn skill_read_definition() -> ToolDefinition {
         ToolLoading::Eager,
     )
     .expect("static Skill reader definition is valid")
+}
+
+fn model_success(value: serde_json::Value) -> ToolExecutionOutcome {
+    ToolExecutionOutcome::Returned(ToolOutput::success(vec![ToolContent::Text(
+        value.to_string(),
+    )]))
+}
+
+fn model_error(message: impl Into<String>) -> ToolExecutionOutcome {
+    ToolExecutionOutcome::Returned(ToolOutput::error(vec![ToolContent::Text(message.into())]))
 }
 
 fn not_started(message: impl Into<String>) -> ToolExecutionOutcome {

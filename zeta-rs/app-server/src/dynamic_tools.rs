@@ -23,12 +23,15 @@ use zeta_policy::ResolvedAction;
 use zeta_policy::SandboxCompatibility;
 use zeta_protocol::AgentRequest;
 use zeta_protocol::AgentResponse;
+use zeta_protocol::ContentPart;
 use zeta_protocol::DynamicToolCall;
 use zeta_protocol::DynamicToolSpec;
+use zeta_protocol::ImageDetail;
 use zeta_protocol::ToolCall;
 use zeta_protocol::ToolDefinition;
 use zeta_protocol::ToolExecutionOutput;
 use zeta_protocol::ToolName;
+use zeta_protocol::ToolSourceProvenance;
 use zeta_tools::from_dynamic_tool_spec;
 use zeta_tools::to_protocol_tool_definition;
 
@@ -113,6 +116,17 @@ impl ToolService for DynamicToolService {
         self.definitions.clone()
     }
 
+    fn source_provenance(&self, name: &ToolName) -> Vec<ToolSourceProvenance> {
+        self.bindings
+            .contains_key(name)
+            .then(|| {
+                vec![ToolSourceProvenance::Dynamic {
+                    name: name.to_string(),
+                }]
+            })
+            .unwrap_or_default()
+    }
+
     fn execution_interaction(&self, call: &ToolCall) -> Result<Option<AgentRequest>, CoreError> {
         let binding = self.binding(&call.name)?;
         Ok(Some(AgentRequest::DynamicTool {
@@ -151,12 +165,21 @@ impl ToolService for DynamicToolService {
                 "dynamic tool response does not match the frozen Tool Call binding".into(),
             ));
         }
-        let serialized = serde_json::to_string(&json!({"content": response.content}))
-            .map_err(|error| CoreError::Execution(error.to_string()))?;
+        let content = response
+            .content
+            .iter()
+            .map(|part| match part {
+                zeta_protocol::DynamicToolOutput::Text { text } => ContentPart::Text(text.clone()),
+                zeta_protocol::DynamicToolOutput::Image { data_url } => ContentPart::ImageUrl {
+                    url: data_url.clone(),
+                    detail: ImageDetail::Auto,
+                },
+            })
+            .collect();
         Ok(Some(if response.success {
-            ToolExecutionOutput::Success(serialized)
+            ToolExecutionOutput::SuccessContent(content)
         } else {
-            ToolExecutionOutput::Failure(serialized)
+            ToolExecutionOutput::FailureContent(content)
         }))
     }
 

@@ -1,4 +1,9 @@
 use crate::ImageDetail;
+use crate::ImageDetailCapabilities;
+use crate::ImageDetailDecision;
+use crate::ImageDetailSelection;
+use crate::ImageSourceDetailPolicy;
+use crate::normalize_image_detail;
 
 /// The model-visible success classification returned by an executable tool.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -42,6 +47,31 @@ impl ToolOutput {
 
     pub fn content(&self) -> &[ToolContent] {
         &self.content
+    }
+
+    /// Applies the final model-capability image gate to every image in this output.
+    pub fn sanitize_image_detail(
+        &mut self,
+        capabilities: ImageDetailCapabilities,
+        source_policy: ImageSourceDetailPolicy,
+    ) -> Vec<ImageDetailDecision> {
+        let mut decisions = Vec::new();
+        for content in &mut self.content {
+            let ToolContent::Image { detail, .. } = content else {
+                continue;
+            };
+            let decision = normalize_image_detail(
+                ImageDetailSelection::Explicit(*detail),
+                capabilities,
+                source_policy,
+            );
+            *detail = match decision.effective {
+                ImageDetailSelection::ProviderDefault => ImageDetail::Auto,
+                ImageDetailSelection::Explicit(detail) => detail,
+            };
+            decisions.push(decision);
+        }
+        decisions
     }
 }
 

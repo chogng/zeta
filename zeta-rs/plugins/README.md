@@ -4,9 +4,11 @@
 > 契约。跨 crate 的安装、activation、权限和运行时演进由
 > [`docs/plugins.md`](../../docs/plugins.md) 维护。
 
-`zeta-plugins` 当前实现 PL0：严格解析 declarative Plugin v1 package，验证 package-relative
-path 与本地文件树，计算确定性 SHA-256 digest，并提供只读 local-development catalog。它不安装、
-启用或执行 Plugin，不保存 grant/credential，也不解析 `SKILL.md` 或 MCP JSON-RPC。
+`zeta-plugins` 当前完成 PL0，并实现 PL1 的第一段 package-store vertical slice：严格解析 declarative
+Plugin v1 package，验证 package-relative path 与本地文件树，计算确定性 SHA-256 digest，提供只读
+local-development catalog，并能把一个已验证本地包复制、复验后原子提升到 content-addressed object
+store。它不写 authority record、不启用或执行 Plugin，不保存 grant/credential，也不解析
+`SKILL.md` 或 MCP JSON-RPC。
 
 ## 公共契约
 
@@ -19,6 +21,8 @@ path 与本地文件树，计算确定性 SHA-256 digest，并提供只读 local
 | `PluginManifest::from_json` | strict JSON/schema/semantic validation | contribution content parsing |
 | `LocalPluginPackage::load` | 验证一个 exact root、digest 和所有 contribution path | copy/install/immutability |
 | `LocalPluginCatalog::discover` | 读取一个 package 或目录下的直接 package children | recursive marketplace search |
+| `PluginPackageStore::install_local` | stage、复制、复验 digest 并原子 promote immutable object | enablement、grant、activation |
+| `PluginPackageStore::read` | 按 exact installed ref 重新验证 object | authority lookup、版本选择 |
 
 `PluginManifest` 的 serde `Deserialize` 与 `from_json` 使用同一 semantic validation，不存在绕过
 schema version、duplicate ID、credential reference 或 permission invariant 的反序列化入口。
@@ -61,6 +65,23 @@ LocalPluginPackage::load
    └─ unique_location
 ```
 
+安装存储路径是：
+
+```text
+PluginPackageStore::install_local
+├─ create unique staging root
+├─ copy_package_tree
+│  └─ reject changed link/special-file/file identity
+├─ LocalPluginPackage::load(staging)
+├─ compare exact id/version/digest with source snapshot
+├─ sync_directory_tree
+└─ rename staging → objects/<sha256>
+```
+
+object 已存在时操作是幂等的，但仍重新加载并验证；source 在首次 validation 后被修改会失败，且不会
+promote partial object。这个 store 当前只接受 explicit local-development package，built-in release 和
+remote archive 由未来各自的 source/trust adapter 处理。
+
 Digest 与 source root 无关，对 normalized relative path 和每个 regular file 的 bytes 敏感。
 当前 ingestion limits：
 
@@ -86,6 +107,8 @@ Digest 与 source root 无关，对 normalized relative path 和每个 regular f
 | `digest::hash_file` | bytes 与 file-identity stability | digest fixtures、TOCTOU assumptions |
 | `validate_contribution_paths` | contribution type、existence、containment | Skill/MCP consumer contract |
 | `reject_duplicate_exact_versions` | local catalog exact-version uniqueness | future resolver semantics |
+| `PluginPackageStore::install_local` | staging/revalidation/atomic promotion boundary | authority commit、store recovery tests |
+| `copy_package_tree` | copy-time entry and file-identity checks | archive ingestion、platform link semantics |
 
 出现以下变化表示 ownership 漂移：
 
@@ -104,8 +127,8 @@ contribution 与 exact-version conflict。任何失败都不返回 partial packa
 filesystem。error message 只包含稳定 identity、relative path 与 sanitized 原因。
 
 `LocalPluginPackage` 捕获的是已验证的 local-development snapshot identity，source directory
-仍可被外部修改。runtime consumer 不能把它当 immutable root；PL1 必须复制到 content-addressed
-store、重新验证并从 immutable object root 绑定 contribution。
+仍可被外部修改。runtime consumer 不能把它当 immutable root；必须先通过 `PluginPackageStore`
+复制、重新验证并从 content-addressed object root 绑定 contribution。
 
 ## 验证
 
@@ -121,7 +144,8 @@ bazel test //zeta-rs/plugins:plugins-unit-tests
 
 ## 当前限制与扩展点
 
-PL1 的 content store、authority command/recovery、profile enablement、grant、activation snapshot
-尚未实现；PL2+ 的 MCP activation、registry、signature、update、rollback 和 GC 也尚未实现。
-这些能力应在新的 private `package/authority/resolution` modules 中接入，不扩大 PL0 loader 为
-隐式有副作用的 manager。
+PL1 的 local content store 已实现；authority command/recovery、profile enablement、grant、activation
+snapshot 尚未实现。当前 object directory 的只读性由“不暴露可写路径 + digest revalidation”保证，
+尚未施加平台级 immutable flag，也没有 orphan staging startup recovery。PL2+ 的 MCP activation、
+registry、signature、update、rollback 和 GC 也尚未实现。这些能力应在新的 private
+`authority/resolution` modules 中接入，不扩大 loader/store 为隐式 enable manager。

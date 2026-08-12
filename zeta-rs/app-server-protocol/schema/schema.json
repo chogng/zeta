@@ -4860,6 +4860,42 @@
       "description": "Exact SHA-256 identity of one immutable content byte sequence.",
       "type": "string"
     },
+    "ContentPart": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "text"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "detail": {
+              "$ref": "#/$defs/ImageDetail"
+            },
+            "type": {
+              "type": "string",
+              "const": "imageUrl"
+            },
+            "url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "url",
+            "detail"
+          ]
+        }
+      ]
+    },
     "ContextCheckpoint": {
       "description": "Verified durable summary of one exact prefix of Thread history.",
       "type": "object",
@@ -6755,6 +6791,15 @@
         "commandId",
         "expectedRevision",
         "hook"
+      ]
+    },
+    "ImageDetail": {
+      "type": "string",
+      "enum": [
+        "auto",
+        "low",
+        "high",
+        "original"
       ]
     },
     "InitializeParams": {
@@ -11819,6 +11864,16 @@
             "argumentsJson": {
               "type": "string"
             },
+            "binding": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ToolCallBinding"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "itemId": {
               "$ref": "#/$defs/ItemId"
             },
@@ -11848,6 +11903,15 @@
         {
           "type": "object",
           "properties": {
+            "content": {
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "$ref": "#/$defs/ContentPart"
+              }
+            },
             "isError": {
               "type": "boolean"
             },
@@ -12191,6 +12255,82 @@
         "update"
       ]
     },
+    "ToolCallBinding": {
+      "description": "Durable binding between one Tool Call and the exact definition/source generation it selected.\n\nRuntime keys are intentionally absent. Recovery must compare this value with an available\nimmutable source snapshot and fail closed when the exact binding can no longer be restored.",
+      "type": "object",
+      "properties": {
+        "caller": {
+          "$ref": "#/$defs/ToolCallCaller"
+        },
+        "definitionDigest": {
+          "type": "string"
+        },
+        "registryGeneration": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "registryIncarnation": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sourceChain": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ToolSourceProvenance"
+          }
+        }
+      },
+      "required": [
+        "registryGeneration",
+        "definitionDigest",
+        "sourceChain",
+        "caller"
+      ]
+    },
+    "ToolCallCaller": {
+      "description": "Identifies how the model-visible Tool Call reached the ordinary tool scheduler.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "direct"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "cellId": {
+              "type": "string"
+            },
+            "parentToolCallId": {
+              "$ref": "#/$defs/ToolCallId"
+            },
+            "runtimeCallId": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "codeMode"
+            }
+          },
+          "required": [
+            "type",
+            "parentToolCallId",
+            "cellId",
+            "runtimeCallId"
+          ]
+        }
+      ]
+    },
     "ToolCallId": {
       "description": "Stable identity for one model-requested tool call and its eventual result.",
       "type": "string",
@@ -12415,6 +12555,135 @@
       "enum": [
         "lexical",
         "hybridEmbedding"
+      ]
+    },
+    "ToolSourceProvenance": {
+      "description": "One stable, secret-free hop in the source chain of a durable Tool Call binding.\n\nHosts append hops in distribution-to-execution order. Mutable process identities, credentials,\nsession handles, and filesystem paths must never be stored here.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "component": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "product"
+            }
+          },
+          "required": [
+            "type",
+            "component"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "contributionId": {
+              "type": "string"
+            },
+            "packageDigest": {
+              "type": "string"
+            },
+            "pluginId": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "plugin"
+            },
+            "version": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "pluginId",
+            "version",
+            "packageDigest",
+            "contributionId"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "catalogGeneration": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "connectionGeneration": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "remoteName": {
+              "type": "string"
+            },
+            "serverId": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "mcp"
+            }
+          },
+          "required": [
+            "type",
+            "serverId",
+            "remoteName",
+            "catalogGeneration",
+            "connectionGeneration"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "dynamic"
+            }
+          },
+          "required": [
+            "type",
+            "name"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "extension"
+            }
+          },
+          "required": [
+            "type",
+            "id"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "system"
+            }
+          },
+          "required": [
+            "type",
+            "id"
+          ]
+        }
       ]
     },
     "Turn": {

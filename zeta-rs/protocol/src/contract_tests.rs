@@ -416,6 +416,109 @@ fn tool_contract_uses_validated_names_and_call_identifiers() {
 }
 
 #[test]
+fn durable_tool_call_binding_preserves_source_generation_and_caller() {
+    let item = ThreadItem::ToolCall {
+        item_id: ItemId::new("item_1").unwrap(),
+        turn_id: TurnId::new("turn_1").unwrap(),
+        tool_call_id: ToolCallId::new("tool_1").unwrap(),
+        name: ToolName::new("search").unwrap(),
+        arguments_json: "{}".into(),
+        binding: Some(crate::ToolCallBinding {
+            registry_incarnation: Some("process-1".into()),
+            registry_generation: 9,
+            definition_digest: "sha256:definition".into(),
+            source_chain: vec![crate::ToolSourceProvenance::Mcp {
+                server_id: "github".into(),
+                remote_name: "search".into(),
+                catalog_generation: 4,
+                connection_generation: 2,
+            }],
+            caller: crate::ToolCallCaller::CodeMode {
+                parent_tool_call_id: ToolCallId::new("outer_1").unwrap(),
+                cell_id: "cell_1".into(),
+                runtime_call_id: "nested_1".into(),
+            },
+        }),
+    };
+    let value = serde_json::to_value(item).unwrap();
+
+    assert_eq!(value["binding"]["registryGeneration"], 9);
+    assert_eq!(value["binding"]["sourceChain"][0]["type"], "mcp");
+    assert_eq!(value["binding"]["caller"]["type"], "codeMode");
+}
+
+#[test]
+fn durable_tool_result_preserves_structured_image_content_and_reads_legacy_text() {
+    let item = ThreadItem::ToolResult {
+        item_id: ItemId::new("item_1").unwrap(),
+        turn_id: TurnId::new("turn_1").unwrap(),
+        tool_call_id: ToolCallId::new("tool_1").unwrap(),
+        text: "[image]".into(),
+        content: Some(vec![ContentPart::ImageUrl {
+            url: "data:image/png;base64,AA==".into(),
+            detail: ImageDetail::High,
+        }]),
+        is_error: false,
+    };
+    let value = serde_json::to_value(&item).unwrap();
+    assert_eq!(value["content"][0]["type"], "imageUrl");
+    assert_eq!(value["content"][0]["detail"], "high");
+
+    let legacy = json!({
+        "type": "toolResult",
+        "itemId": "item_2",
+        "turnId": "turn_1",
+        "toolCallId": "tool_1",
+        "text": "legacy",
+        "isError": false
+    });
+    assert!(matches!(
+        serde_json::from_value::<ThreadItem>(legacy).unwrap(),
+        ThreadItem::ToolResult { content: None, text, .. } if text == "legacy"
+    ));
+}
+
+#[test]
+fn model_request_final_gate_sanitizes_message_and_tool_result_images() {
+    let mut request = ModelRequest {
+        instructions: None,
+        input: vec![
+            InputItem::Message(Message {
+                role: MessageRole::User,
+                content: vec![ContentPart::ImageUrl {
+                    url: "data:image/png;base64,AA==".into(),
+                    detail: ImageDetail::Original,
+                }],
+                tool_calls: Vec::new(),
+            }),
+            InputItem::ToolResult(ToolResult {
+                call_id: ToolCallId::new("tool_1").unwrap(),
+                name: ToolName::new("image").unwrap(),
+                content: vec![ContentPart::ImageUrl {
+                    url: "data:image/png;base64,AA==".into(),
+                    detail: ImageDetail::Original,
+                }],
+                is_error: false,
+            }),
+        ],
+        tools: Vec::new(),
+        tool_choice: ToolChoice::Auto,
+        parallel_tool_calls: false,
+        reasoning: None,
+        max_output_tokens: None,
+        temperature: None,
+    };
+
+    let decisions = request.sanitize_image_details(false);
+
+    assert_eq!(decisions.len(), 2);
+    assert!(decisions.iter().all(|decision| {
+        decision.effective == ImageDetail::Auto
+            && decision.reason == ImageDetailDecisionReason::OriginalUnsupportedDowngraded
+    }));
+}
+
+#[test]
 fn model_metadata_caps_auto_compaction_at_ninety_percent_of_context() {
     let mut model = ModelInfo::new(ModelId::new("zeta-large").unwrap(), "Zeta Large");
     model.context_window = ContextWindow::Known(100_000);

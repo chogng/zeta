@@ -4,23 +4,28 @@
 //! deterministic local package digests, and local-development discovery. Installation authority,
 //! activation, grants, credentials, and Skill or MCP runtime behavior are not implemented here.
 
+mod discovery;
 mod error;
 mod identity;
 mod manifest;
 mod package;
 mod path;
 
+pub use discovery::project_local_plugin_discovery;
 pub use error::{PluginError, PluginErrorKind};
 pub use identity::{
     InstalledPluginRef, InvalidPluginId, InvalidPluginPackageDigest, InvalidPluginVersion,
     PluginId, PluginPackageDigest, PluginVersion,
 };
 pub use manifest::{
-    AssetContribution, ContributionKind, ContributionReference, CredentialKind, CredentialSlot,
-    InvalidContributionReference, InvalidManifestLocalId, InvalidNetworkHost,
-    InvalidVersionRequirement, ManifestLocalId, McpServerContribution, NetworkHost, Permission,
-    PluginCompatibility, PluginContributions, PluginManifest, SkillContribution, WorkspaceAccess,
-    ZetaVersionRequirement,
+    AssetContribution, ConnectorContribution, ContributionKind, ContributionReference,
+    CredentialKind, CredentialSlot, InvalidContributionReference, InvalidManifestLocalId,
+    InvalidNetworkHost, InvalidVersionRequirement, ManifestLocalId, McpServerContribution,
+    NetworkHost, Permission, PluginCompatibility, PluginContributions, PluginManifest,
+    SkillContribution, WorkspaceAccess, ZetaVersionRequirement,
 };
-pub use package::{LocalPluginCatalog, LocalPluginPackage, PackageFileStats, PluginPackageSource};
+pub use package::{
+    LocalPluginCatalog, LocalPluginPackage, PackageFileStats, PluginPackageSource,
+    PluginPackageStore,
+};
 pub use path::{InvalidPluginPath, PluginPath};

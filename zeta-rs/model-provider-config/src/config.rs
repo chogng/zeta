@@ -1,4 +1,7 @@
-use crate::{ApiProfile, BaseUrlNormalization, ProviderConfigError};
+use crate::ApiProfile;
+use crate::BaseUrlNormalization;
+use crate::NormalizedInputTokenCountConfig;
+use crate::ProviderConfigError;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -72,6 +75,8 @@ pub struct NormalizedModelProviderConfig {
     pub provider: ProviderId,
     pub api_profile: ApiProfile,
     pub base_url: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input_token_count: Option<NormalizedInputTokenCountConfig>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_output_tokens: Option<u32>,
 }

@@ -2,7 +2,9 @@
 
 > 物理位置：`zeta-rs/plugins/`
 > Rust crate：`zeta_plugins`
-> 当前状态：PL0 已实现；PL1–PL4 Proposed
+> 当前状态：PL0 已实现并支持 Connector → MCP contribution 的声明校验；PL1 的 local
+> content-addressed store 已实现，authority/activation 尚未完成；Connector lifecycle projection 已提取到
+> `zeta-rs/ext/connectors`，OAuth/connect/revoke 仍未实现；PL2–PL4 Proposed
 > 当前 crate 实现契约：[`zeta-rs/plugins/README.md`](../zeta-rs/plugins/README.md)
 > MCP runtime：[`mcp.md`](mcp.md)
 > Skill runtime：[`skills.md`](skills.md)
@@ -67,13 +69,14 @@ Agent runtime
 ## 2. 当前仓库审计
 
 当前已创建 `zeta-plugins`，实现 strict v1 manifest、Plugin identity/SemVer、portable
-package-relative path、本地 package 安全校验、确定性 digest 和只读 local-development
-discovery。实现细节、limits 与 failure semantics 由 crate
+package-relative path、本地 package 安全校验、确定性 digest、只读 local-development discovery，
+以及 stage-copy-revalidate-atomic-promote 的 local content-addressed store。实现细节、limits 与
+failure semantics 由 crate
 [`README`](../zeta-rs/plugins/README.md) 维护。
 
 User/Workspace TOML 与 App Server 已能表达 exact Plugin request 和 desired enablement，但它们
-只是 `zeta-config` intent。Plugin store、authority、activation、grant、runtime injection 与
-package lifecycle API 尚未实现。`docs/tui.md` 也明确要求 Plugin domain projection 进入 canonical
+只是 `zeta-config` intent。Package store 已能安全保存 immutable object；installed authority、
+activation、grant、runtime injection 与 package lifecycle API 尚未实现。`docs/tui.md` 也明确要求 Plugin domain projection 进入 canonical
 App Server contract 后，TUI 才能增加管理 feature。TUI 已有可复用的 interaction view stack 与
 tabs/search/selection presentation primitive，但当前没有 Plugin view model 或 `/plugins` command；
 这些 UI 基础设施不改变本节的 backend gate。
@@ -539,6 +542,12 @@ Uninstall：
 server、内置 host adapter 或将来的其他稳定 port 实现；一个 Plugin 也可以贡献 connector 所需的
 MCP declaration 和展示 metadata，但二者 identity/lifecycle 仍然不同。
 
+当前 v1 manifest 已允许 `contributions.connectors[]` 用 manifest-local ID 引用同包的一个
+`mcpServers[]`。`zeta-connectors-extension::ConnectorCatalog` 将该声明投影为 disconnected discovery，
+只有 credential owner 提供 `ConnectedAccount` 后才发布 ready MCP server ID。这个纵向切片不执行
+OAuth、不保存 secret value，也不自行启动 MCP；后两项分别属于 Connector auth owner 与
+`zeta-mcp-extension`。
+
 | 概念 | Identity/lifecycle | 例子 |
 | --- | --- | --- |
 | Plugin | package ID + version + digest；install/update/uninstall | 一组 GitHub 扩展贡献 |
@@ -675,16 +684,16 @@ zeta-rs/plugins/src/
   fixtures 随对应 source 一起加入；
 - 只读 local package list/read projection；App Server `plugin/list/read` 尚未接入。
 
-当前完成条件：任何 contribution path 都不能逃出已验证 local snapshot root，且该 mutable
-local root 不会被发布给 runtime。content-addressed immutable runtime root 属于 PL1。
+当前完成条件：任何 contribution path 都不能逃出已验证 local snapshot root；安装时必须复制到
+content-addressed object、重新验证 exact digest，再原子 promote。mutable local root 不会被发布给 runtime。
 
-### 阶段 PL1：权威+激活
+### 阶段 PL1：权威+激活（content store 部分完成）
 
-- content-addressed store；
+- ✅ local content-addressed store：unique staging、copy-time validation、digest revalidation、atomic promote；
 - install/enable/disable/grant typed commands；
 - activation snapshot generation；
 - Skill contribution vertical slice；
-- crash-safe staging/promote/authority commit。
+- 部分具备：staging/promote 已落地；authority commit 与 startup orphan recovery 尚未完成。
 
 完成条件：失败激活不改变上一 generation，重启可恢复唯一 active package set。
 

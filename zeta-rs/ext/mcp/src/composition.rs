@@ -18,11 +18,14 @@ use zeta_policy::{
     ActionSource, ApprovalRequest, Capability, CapabilityKind, CapabilitySet, ExecutionDecision,
     PolicyRevision, ResolvedAction, SandboxCompatibility,
 };
+use zeta_protocol::ContentPart;
+use zeta_protocol::ToolSourceProvenance;
 use zeta_protocol::{ToolCall, ToolDefinition, ToolExecutionOutput, ToolName};
 use zeta_rmcp_client::{StdioServerCommand, StreamableHttpServer};
 use zeta_tools::{ToolContent, ToolOutput, ToolOutputStatus};
 
-use crate::mcp_runtime::{McpRuntimeOwner, McpRuntimeOwnerError};
+use crate::runtime::McpRuntimeOwner;
+use crate::runtime::McpRuntimeOwnerError;
 
 const MCP_POLICY_REVISION: &str = "mcp-user-approval-v1";
 
@@ -38,12 +41,13 @@ struct McpInvocationAuthority {
     transport: McpInvocationTransport,
 }
 
-pub(crate) struct McpToolComposition {
-    pub(crate) tools: Arc<dyn ToolService>,
-    pub(crate) policy: Arc<dyn PolicyService>,
+pub struct McpToolComposition {
+    pub tools: Arc<dyn ToolService>,
+    pub policy: Arc<dyn PolicyService>,
 }
 
-pub(crate) fn compose_mcp_tools(
+/// Resolves enabled MCP declarations into one live tool service and its exact approval policy.
+pub fn compose_mcp_tools(
     config: &ResolvedConfig,
     generation: ConfigGeneration,
 ) -> Result<Option<McpToolComposition>, McpToolCompositionError> {
@@ -252,6 +256,20 @@ impl ToolService for McpToolService {
         self.owner.definitions().to_vec()
     }
 
+    fn source_provenance(&self, name: &ToolName) -> Vec<ToolSourceProvenance> {
+        self.owner
+            .resolve(name)
+            .map(|binding| {
+                vec![ToolSourceProvenance::Mcp {
+                    server_id: binding.remote().server().to_string(),
+                    remote_name: binding.remote().remote_name().to_owned(),
+                    catalog_generation: binding.catalog_generation(),
+                    connection_generation: binding.connection_generation(),
+                }]
+            })
+            .unwrap_or_default()
+    }
+
     fn prepare(&self, call: &ToolCall) -> Result<ActionReviewRequest, CoreError> {
         self.review_request(call)
     }
@@ -298,19 +316,16 @@ fn protocol_execution_output(output: ToolOutput) -> Result<ToolExecutionOutput, 
         .content()
         .iter()
         .map(|content| match content {
-            ToolContent::Text(text) => json!({"type": "text", "text": text}),
-            ToolContent::Image { url, detail } => json!({
-                "type": "image_url",
-                "url": url,
-                "detail": format!("{detail:?}").to_ascii_lowercase(),
-            }),
+            ToolContent::Text(text) => ContentPart::Text(text.clone()),
+            ToolContent::Image { url, detail } => ContentPart::ImageUrl {
+                url: url.clone(),
+                detail: (*detail).into(),
+            },
         })
         .collect::<Vec<_>>();
-    let serialized = serde_json::to_string(&json!({"content": content}))
-        .map_err(|error| CoreError::Execution(error.to_string()))?;
     Ok(match output.status() {
-        ToolOutputStatus::Success => ToolExecutionOutput::Success(serialized),
-        ToolOutputStatus::Error => ToolExecutionOutput::Failure(serialized),
+        ToolOutputStatus::Success => ToolExecutionOutput::SuccessContent(content),
+        ToolOutputStatus::Error => ToolExecutionOutput::FailureContent(content),
     })
 }
 
@@ -355,7 +370,7 @@ impl PolicyService for McpApprovalPolicy {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct McpToolCompositionError(String);
+pub struct McpToolCompositionError(String);
 
 impl McpToolCompositionError {
     fn runtime(error: McpRuntimeOwnerError) -> Self {
@@ -372,5 +387,5 @@ impl std::fmt::Display for McpToolCompositionError {
 impl std::error::Error for McpToolCompositionError {}
 
 #[cfg(test)]
-#[path = "mcp_tools_tests.rs"]
+#[path = "composition_tests.rs"]
 mod tests;

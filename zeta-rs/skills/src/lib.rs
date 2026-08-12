@@ -1,8 +1,8 @@
 //! Bounded discovery and metadata-only catalogs for Agent Skills.
 //!
 //! This crate owns controlled Skill source roots, Agent Skills frontmatter validation, exact
-//! `SKILL.md` digests, isolated diagnostics, and immutable catalog generations. It does not
-//! activate Skill instructions, read referenced resources, execute scripts, or own configuration.
+//! `SKILL.md` digests, isolated diagnostics, immutable catalog generations, exact activation, and
+//! bounded package resources. It does not execute scripts or own configuration.
 
 mod activation;
 mod catalog;
@@ -11,6 +11,7 @@ mod diagnostic;
 mod error;
 mod format;
 mod identity;
+mod resource;
 mod source;
 
 pub use activation::ActivatedSkill;
@@ -21,6 +22,9 @@ pub use compatibility::SkillCompatibility;
 pub use diagnostic::{SkillDiagnostic, SkillDiagnosticCode};
 pub use error::{SkillError, SkillErrorKind};
 pub use identity::SkillCatalogGeneration;
+pub use resource::SkillResource;
+pub use resource::SkillResourceKind;
+pub use resource::SkillResourcePath;
 pub use source::{SkillSourceKind, SkillSourceRoot, SkillSourceView, SkillTrust};
 pub use zeta_protocol::{
     ContentDigest, InvalidContentDigest, InvalidSkillName, InvalidSkillSourceId, SkillId,

@@ -3,7 +3,8 @@
 > - 物理位置：`zeta-rs/model-provider-config/`
 > - Rust crate：`zeta_model_provider_config`
 > - 层次：声明配置层
-> - 当前状态：基础实现已包含声明式默认 `ApiProfile`；多 profile allow-list 与用户 override 仍待实现
+> - 当前状态：基础实现已包含声明式默认 `ApiProfile` 和独立 input-token count binding；invocation
+>   多 profile allow-list 与用户 override 仍待实现
 > - Crate 实现与修改路径：[`zeta-rs/model-provider-config/README.md`](../zeta-rs/model-provider-config/README.md)
 > - Provider runtime：[`model-provider.md`](model-provider.md)
 > - API 协议层：[`zeta-api.md`](zeta-api.md)
@@ -52,6 +53,7 @@ zeta-http-client      负责底层网络传输
 - 默认 base URL 或“必须由用户配置”的 endpoint policy；
 - runtime adapter identity；
 - 允许选择的 API profile 及默认 profile；
+- input-token count profile、独立 target 与 model eligibility policy；
 - base URL normalization 规则；
 - 静态 seed models 和 model catalog policy；
 - 非敏感调用默认值，例如最大输出 token；
@@ -81,6 +83,7 @@ zeta-http-client      负责底层网络传输
 - `NormalizedModelProviderConfig`；
 - `ProviderDefinition`；
 - `ApiProfile`（definition 的显式默认 API profile）；
+- `InputTokenCountDefinition` 与 normalized count target/model policy；
 - `ProviderConfigRegistry`；
 - `ProviderAdapter`；
 - `EndpointPolicy`；
@@ -95,6 +98,7 @@ zeta-http-client      负责底层网络传输
 | `ProviderAdapter` 同时近似 Provider 名称和 runtime 实现 | 容易与 `zeta-api::Api` 再建一套分派 | 明确它是 runtime adapter identity，API endpoint 由 runtime 选择 |
 | `EndpointPolicy` 只描述 base URL | 名称容易被理解为 `/messages` 等协议 endpoint | 改称或文档化为 `BaseUrlPolicy` 语义 |
 | definition 目前只有一个 `api_profile` | 无法表达 Google、xAI、Ollama 等多个正式 API profile | 扩展为 typed default/allowed API profile policy |
+| count binding 已独立声明 profile/target/models | invocation 与 count 可能不共享 base path | 保持 definition 显式，禁止 runtime 剥 URL 或猜 model 前缀 |
 | 静态 models 同时参与运行时可用性判断 | 容易与 models manager catalog 重复 | 仅作为 seed metadata 和 fallback evidence |
 
 迁移期间可以保留现有类型名，但新代码不能继续扩大这些歧义。
@@ -110,6 +114,7 @@ pub struct ProviderDefinition {
     pub runtime_adapter: RuntimeAdapterKind,
     pub base_url: BaseUrlPolicy,
     pub api_profiles: ApiProfilePolicy,
+    pub input_token_count: Option<InputTokenCountDefinition>,
     pub model_catalog_policy: ModelCatalogPolicy,
     pub seed_models: Vec<Model>,
     pub defaults: ProviderDefaults,

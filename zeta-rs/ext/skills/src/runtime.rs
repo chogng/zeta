@@ -14,6 +14,8 @@ use zeta_skills::SkillCatalog;
 use zeta_skills::SkillCatalogEntry;
 use zeta_skills::SkillCompatibility;
 use zeta_skills::SkillDiagnosticCode;
+use zeta_skills::SkillResource;
+use zeta_skills::SkillResourcePath;
 use zeta_skills::SkillSourceId;
 use zeta_skills::SkillSourceRoot;
 
@@ -153,6 +155,37 @@ impl SkillRuntime {
         selected: &SkillRef,
     ) -> Result<ActivatedSkill, String> {
         self.activate_available(selected, SkillActivationReason::Automatic)
+    }
+
+    pub(crate) fn read_model_resource(
+        &self,
+        selected: &SkillRef,
+        path: &SkillResourcePath,
+    ) -> Result<SkillResource, String> {
+        self.reconcile(SkillCatalogReload::Refresh)?;
+        let state = self
+            .state
+            .lock()
+            .map_err(|_| "Skill runtime lock poisoned".to_string())?;
+        let entry = state
+            .snapshot
+            .entries
+            .iter()
+            .find(|entry| entry.catalog_entry.id() == &selected.id)
+            .ok_or_else(|| format!("Skill '{}' is not available", selected.id.name))?;
+        if entry.enablement != SkillEnablement::Enabled {
+            return Err(format!("Skill '{}' is disabled", selected.id.name));
+        }
+        if !matches!(
+            entry.catalog_entry.compatibility(),
+            SkillCompatibility::Compatible
+        ) {
+            return Err(format!("Skill '{}' is not compatible", selected.id.name));
+        }
+        state
+            .catalog
+            .read_resource(selected, path)
+            .map_err(|error| error.to_string())
     }
 
     fn activate_available(

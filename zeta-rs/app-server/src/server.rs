@@ -335,10 +335,14 @@ impl AppServer {
         mut self,
         built_in_source: zeta_skills_extension::BuiltInSkillSource,
         config: Arc<dyn SkillConfigSnapshotProvider>,
+        web_search_backend: Option<Arc<dyn zeta_web_search_extension::WebSearchBackend>>,
     ) -> Result<Self, String> {
         let runtime = SkillRuntime::new(built_in_source, config, self.updates.clone())?;
         let mut builder = zeta_extension_api::ExtensionRegistryBuilder::new();
         zeta_skills_extension::install(&mut builder, Arc::clone(&runtime));
+        if let Some(backend) = web_search_backend {
+            zeta_web_search_extension::install(&mut builder, backend);
+        }
         let agent_extensions = Arc::new(builder.build());
         let extension_tool_port =
             crate::extension_tools::compose_extension_tools(agent_extensions.as_ref())

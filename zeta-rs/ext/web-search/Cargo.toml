@@ -1,0 +1,28 @@
+[package]
+name = "zeta-web-search-extension"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+name = "zeta_web_search_extension"
+path = "src/lib.rs"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+url = { workspace = true }
+zeta-async-utils = { workspace = true }
+zeta-client = { workspace = true }
+zeta-extension-api = { workspace = true }
+zeta-http-client = { workspace = true }
+zeta-tools = { workspace = true }
+
+[dev-dependencies]
+pollster = { workspace = true }
+zeta-protocol = { workspace = true }
+
+[lints]
+workspace = true

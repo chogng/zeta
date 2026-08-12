@@ -25,7 +25,10 @@ members = [
     "zeta-rs/extensions",
     "zeta-rs/editor-core",
     "zeta-rs/ext/extension-api",
+    "zeta-rs/ext/connectors",
+    "zeta-rs/ext/mcp",
     "zeta-rs/ext/skills",
+    "zeta-rs/ext/web-search",
     "zeta-rs/secrets",
     "zeta-rs/exec",
     "zeta-rs/file-icons",
@@ -46,6 +49,7 @@ members = [
     "zeta-rs/lsp",
     "zeta-rs/model-provider",
     "zeta-rs/model-provider-config",
+    "zeta-rs/model-tokenizer",
     "zeta-rs/mcp",
     "zeta-rs/mcp-server",
     "zeta-rs/policy",
@@ -125,6 +129,7 @@ lazy_static = "1"
 libc = "0.2"
 log = "0.4"
 lsp-types = "0.97"
+hf-chat-template = { version = "1.0.0", features = ["strftime"] }
 # Recursive workspace watches must use FSEvents on macOS; kqueue holds one file
 # descriptor per watched entry and exhausts the process limit on large workspaces.
 notify = { version = "8.2.0", default-features = false, features = ["macos_fsevent"] }
@@ -166,6 +171,7 @@ typst-pdf = "=0.15.1"
 tokio = "1"
 thiserror = "2"
 tempfile = "3"
+tokenizers = { version = "0.23.1", default-features = false, features = ["fancy-regex"] }
 toml = "0.9"
 tree-sitter = "0.26.11"
 tree-sitter-bash = "0.25.1"
@@ -211,7 +217,10 @@ zeta-diff = { path = "zeta-rs/diff" }
 zeta-editor = { path = "zeterm/editor" }
 zeta-editor-core = { path = "zeta-rs/editor-core" }
 zeta-extension-api = { path = "zeta-rs/ext/extension-api" }
+zeta-connectors-extension = { path = "zeta-rs/ext/connectors" }
+zeta-mcp-extension = { path = "zeta-rs/ext/mcp" }
 zeta-skills-extension = { path = "zeta-rs/ext/skills" }
+zeta-web-search-extension = { path = "zeta-rs/ext/web-search" }
 zeta-exec = { path = "zeta-rs/exec" }
 zeta-extensions = { path = "zeta-rs/extensions" }
 zeta-icons = { path = "zeterm/icons" }
@@ -241,6 +250,7 @@ zeta-mcp = { path = "zeta-rs/mcp" }
 zeta-mcp-server = { path = "zeta-rs/mcp-server" }
 zeta-model-provider = { path = "zeta-rs/model-provider" }
 zeta-model-provider-config = { path = "zeta-rs/model-provider-config" }
+zeta-model-tokenizer = { path = "zeta-rs/model-tokenizer" }
 zeta-policy = { path = "zeta-rs/policy" }
 zeta-plugins = { path = "zeta-rs/plugins" }
 zeta-prompts = { path = "zeta-rs/prompts" }
