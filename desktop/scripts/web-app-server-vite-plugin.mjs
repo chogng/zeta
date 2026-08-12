@@ -10,7 +10,7 @@ export const WEB_APP_SERVER_DISCONNECT_EVENT = "zeta:app-server:disconnect";
 export const WEB_APP_SERVER_FRAME_EVENT = "zeta:app-server:frame";
 export const WEB_APP_SERVER_CLOSED_EVENT = "zeta:app-server:closed";
 
-const MAX_FRAME_BYTES = 1_048_576;
+const MAX_FRAME_BYTES = 320 * 1024 * 1024;
 const MAX_STDERR_BYTES = 65_536;
 const MAX_PENDING_WRITES = 128;
 

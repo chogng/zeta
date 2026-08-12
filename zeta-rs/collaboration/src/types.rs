@@ -106,7 +106,7 @@ pub struct DocumentCollaborationAuditEvent {
 #[serde(rename_all = "camelCase")]
 pub struct DocumentCollaborationPresence {
     pub client_id: String,
-    /// Serialized Gama selection, validated as a bounded selection envelope by the authority.
+    /// Serialized Document Engine selection, validated as a bounded selection envelope by the authority.
     pub selection: String,
 }
 
@@ -151,7 +151,7 @@ pub struct DocumentCollaborationPresenceReadParams {
     pub room_id: String,
 }
 
-/// One server-ordered opaque Gama transaction.
+/// One server-ordered opaque Document Engine transaction.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct DocumentCollaborationUpdate {
@@ -163,7 +163,7 @@ pub struct DocumentCollaborationUpdate {
     pub base_version: u64,
     #[ts(type = "number")]
     pub version: u64,
-    /// Serialized Gama transaction. The renderer validates it against its schema before use.
+    /// Serialized Document Engine transaction. The renderer validates it against its schema before use.
     pub transaction: String,
 }
 

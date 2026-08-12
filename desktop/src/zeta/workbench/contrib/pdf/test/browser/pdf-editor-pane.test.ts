@@ -111,6 +111,9 @@ test("workspace PDF loader reads only through the binary file contract", async (
     readFile: async () => { throw new Error("PDF loader must not request text"); },
     readFileBytes: async (requested) => ({ resource: requested, bytes: new Uint8Array([37, 80, 68, 70]), revision: "pdf-revision" }),
     writeFile: async () => { throw new Error("PDF loader is read-only"); },
+    createFile: async () => { throw new Error("PDF loader is read-only"); },
+    rename: async () => { throw new Error("PDF loader is read-only"); },
+    delete: async () => { throw new Error("PDF loader is read-only"); },
   } satisfies IFileService);
 
   assert.deepEqual(await loader.load(input("paper.pdf"), new AbortController().signal), new Uint8Array([37, 80, 68, 70]));

@@ -10,6 +10,7 @@ import { createTextMateSyntaxWorkerFactory } from "./textMateSyntaxWorkerClient.
 export class BrowserTextMateService extends DisposableOwner implements ITextMateService {
   readonly grammars = this.own(new BrowserTextMateGrammarService());
   readonly scopeTheme: TextMateScopeThemeSource;
+  readonly mutableScopeTheme: TextMateScopeThemeModel | undefined;
   readonly syntaxWorkerFactory: SyntaxWorkerFactory;
 
   constructor(contributions: readonly TextMateGrammarDefinition[] = [], scopeTheme?: TextMateScopeThemeSource) {
@@ -22,7 +23,8 @@ export class BrowserTextMateService extends DisposableOwner implements ITextMate
       if (scopeTheme !== undefined && !isThemeSource(scopeTheme)) {
         throw new TypeError("Browser TextMate scope theme must be a theme source");
       }
-      this.scopeTheme = scopeTheme ?? this.own(new TextMateScopeThemeModel());
+      this.mutableScopeTheme = scopeTheme === undefined ? this.own(new TextMateScopeThemeModel()) : undefined;
+      this.scopeTheme = scopeTheme ?? this.mutableScopeTheme!;
       this.syntaxWorkerFactory = createTextMateSyntaxWorkerFactory(this.grammars, this.scopeTheme);
       for (const contribution of contributions) this.grammars.registerGrammar(contribution);
     } catch (error) {

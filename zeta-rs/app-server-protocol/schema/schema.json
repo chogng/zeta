@@ -888,6 +888,7 @@
         "InvalidResourceOffset",
         "FileSystemUnavailable",
         "FileSystemOperationFailed",
+        "FileSystemNotFound",
         "FileSystemRevisionConflict",
         "GitUnavailable",
         "GitNotRepository",
@@ -904,6 +905,8 @@
         "CloudCodeIndexEgressLimitExceeded",
         "CloudCodeIndexProviderUnavailable",
         "CloudCodeIndexOperationFailed",
+        "LanguageServiceUnavailable",
+        "LanguageRequestFailed",
         "SearchUnavailable",
         "SearchNotFound",
         "SearchNotOwner",
@@ -1874,10 +1877,170 @@
           "properties": {
             "method": {
               "type": "string",
+              "const": "language/locations"
+            },
+            "params": {
+              "$ref": "#/$defs/LanguageLocationsParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "language/hierarchy"
+            },
+            "params": {
+              "$ref": "#/$defs/LanguageHierarchyParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "language/workspaceSymbols"
+            },
+            "params": {
+              "$ref": "#/$defs/LanguageWorkspaceSymbolsParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "language/prepareRename"
+            },
+            "params": {
+              "$ref": "#/$defs/LanguagePrepareRenameParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "language/rename"
+            },
+            "params": {
+              "$ref": "#/$defs/LanguageRenameParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "language/codeActions"
+            },
+            "params": {
+              "$ref": "#/$defs/LanguageCodeActionsParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "language/resolveCodeAction"
+            },
+            "params": {
+              "$ref": "#/$defs/LanguageResolveCodeActionParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
               "const": "fs/writeFile"
             },
             "params": {
               "$ref": "#/$defs/FsWriteFileParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "fs/createFile"
+            },
+            "params": {
+              "$ref": "#/$defs/FsCreateFileParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "fs/rename"
+            },
+            "params": {
+              "$ref": "#/$defs/FsRenameParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "fs/delete"
+            },
+            "params": {
+              "$ref": "#/$defs/FsDeleteParams"
             }
           },
           "required": [
@@ -3238,10 +3401,170 @@
           "properties": {
             "method": {
               "type": "string",
+              "const": "language/locations"
+            },
+            "result": {
+              "$ref": "#/$defs/LanguageLocationsResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "language/hierarchy"
+            },
+            "result": {
+              "$ref": "#/$defs/LanguageHierarchyResultDto"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "language/workspaceSymbols"
+            },
+            "result": {
+              "$ref": "#/$defs/LanguageWorkspaceSymbolsResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "language/prepareRename"
+            },
+            "result": {
+              "$ref": "#/$defs/LanguagePrepareRenameResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "language/rename"
+            },
+            "result": {
+              "$ref": "#/$defs/LanguageWorkspaceEditDto"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "language/codeActions"
+            },
+            "result": {
+              "$ref": "#/$defs/LanguageCodeActionsResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "language/resolveCodeAction"
+            },
+            "result": {
+              "$ref": "#/$defs/LanguageCodeActionDto"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
               "const": "fs/writeFile"
             },
             "result": {
               "$ref": "#/$defs/FsWriteFileResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "fs/createFile"
+            },
+            "result": {
+              "$ref": "#/$defs/FsGetMetadataResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "fs/rename"
+            },
+            "result": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "fs/delete"
+            },
+            "result": {
+              "type": "null"
             }
           },
           "required": [
@@ -4900,7 +5223,7 @@
       ]
     },
     "DiffRangeDto": {
-      "description": "One changed inline region expressed in Alpha's zero-based UTF-16 columns.",
+      "description": "One changed inline region expressed in the editor's zero-based UTF-16 columns.",
       "type": "object",
       "properties": {
         "endColumn": {
@@ -4987,7 +5310,7 @@
           "type": "string"
         },
         "selection": {
-          "description": "Serialized Gama selection, validated as a bounded selection envelope by the authority.",
+          "description": "Serialized Document Engine selection, validated as a bounded selection envelope by the authority.",
           "type": "string"
         }
       },
@@ -5179,7 +5502,7 @@
       ]
     },
     "DocumentCollaborationUpdate": {
-      "description": "One server-ordered opaque Gama transaction.",
+      "description": "One server-ordered opaque Document Engine transaction.",
       "type": "object",
       "properties": {
         "baseVersion": {
@@ -5199,7 +5522,7 @@
           "minimum": 0
         },
         "transaction": {
-          "description": "Serialized Gama transaction. The renderer validates it against its schema before use.",
+          "description": "Serialized Document Engine transaction. The renderer validates it against its schema before use.",
           "type": "string"
         },
         "version": {
@@ -5564,6 +5887,59 @@
         }
       ]
     },
+    "FsCreateFileParams": {
+      "description": "Creates one empty workspace file.",
+      "type": "object",
+      "properties": {
+        "existing": {
+          "$ref": "#/$defs/FsExistingTargetBehavior"
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "existing"
+      ]
+    },
+    "FsDeleteMode": {
+      "description": "Scope of one delete operation.",
+      "type": "string",
+      "enum": [
+        "fileOrEmptyDirectory",
+        "recursive"
+      ]
+    },
+    "FsDeleteParams": {
+      "description": "Deletes one workspace file or directory.",
+      "type": "object",
+      "properties": {
+        "missing": {
+          "$ref": "#/$defs/FsMissingTargetBehavior"
+        },
+        "mode": {
+          "$ref": "#/$defs/FsDeleteMode"
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "missing",
+        "mode"
+      ]
+    },
+    "FsExistingTargetBehavior": {
+      "description": "Behavior when a create or rename target already exists.",
+      "type": "string",
+      "enum": [
+        "error",
+        "overwrite",
+        "ignore"
+      ]
+    },
     "FsFileType": {
       "description": "Stable filesystem entry kind exposed to clients.",
       "type": "string",
@@ -5614,6 +5990,14 @@
         "fileType",
         "sizeBytes",
         "readonly"
+      ]
+    },
+    "FsMissingTargetBehavior": {
+      "description": "Behavior when a delete target does not exist.",
+      "type": "string",
+      "enum": [
+        "error",
+        "ignore"
       ]
     },
     "FsReadBinaryFileParams": {
@@ -5715,6 +6099,26 @@
       "required": [
         "content",
         "revision"
+      ]
+    },
+    "FsRenameParams": {
+      "description": "Renames one workspace file or directory.",
+      "type": "object",
+      "properties": {
+        "existing": {
+          "$ref": "#/$defs/FsExistingTargetBehavior"
+        },
+        "source": {
+          "type": "string"
+        },
+        "target": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "source",
+        "target",
+        "existing"
       ]
     },
     "FsWriteFileParams": {
@@ -6645,6 +7049,479 @@
         "2.0"
       ]
     },
+    "LanguageCodeActionDiagnosticDto": {
+      "description": "Diagnostic context submitted with a code-action request.",
+      "type": "object",
+      "properties": {
+        "code": true,
+        "message": {
+          "type": "string"
+        },
+        "range": {
+          "$ref": "#/$defs/LanguageRangeDto"
+        },
+        "severity": {
+          "$ref": "#/$defs/LanguageDiagnosticSeverityDto"
+        },
+        "source": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "range",
+        "severity",
+        "message"
+      ]
+    },
+    "LanguageCodeActionDto": {
+      "description": "One code action. `provider_data` must be returned unchanged for resolution.",
+      "type": "object",
+      "properties": {
+        "disabledReason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "edit": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LanguageWorkspaceEditDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "isPreferred": {
+          "type": "boolean"
+        },
+        "kind": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "providerData": true,
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "title",
+        "isPreferred",
+        "providerData"
+      ]
+    },
+    "LanguageCodeActionsParams": {
+      "description": "Code-action request against one exact source snapshot and selection.",
+      "type": "object",
+      "properties": {
+        "diagnostics": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LanguageCodeActionDiagnosticDto"
+          }
+        },
+        "document": {
+          "$ref": "#/$defs/LanguageDocumentDto"
+        },
+        "only": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "range": {
+          "$ref": "#/$defs/LanguageRangeDto"
+        }
+      },
+      "required": [
+        "document",
+        "range",
+        "diagnostics",
+        "only"
+      ]
+    },
+    "LanguageCodeActionsResult": {
+      "type": "object",
+      "properties": {
+        "actions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LanguageCodeActionDto"
+          }
+        }
+      },
+      "required": [
+        "actions"
+      ]
+    },
+    "LanguageDiagnosticSeverityDto": {
+      "type": "string",
+      "enum": [
+        "error",
+        "warning",
+        "information",
+        "hint"
+      ]
+    },
+    "LanguageDocumentDto": {
+      "description": "Authoritative source snapshot submitted before one language request.",
+      "type": "object",
+      "properties": {
+        "languageId": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "text": {
+          "type": "string",
+          "maxLength": 10485760
+        }
+      },
+      "required": [
+        "path",
+        "languageId",
+        "revision",
+        "text"
+      ]
+    },
+    "LanguageHierarchyEntryDto": {
+      "description": "One hierarchy result and optional call-site ranges.",
+      "type": "object",
+      "properties": {
+        "fromPath": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "fromRanges": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LanguageRangeDto"
+          }
+        },
+        "item": {
+          "$ref": "#/$defs/LanguageHierarchyItemDto"
+        }
+      },
+      "required": [
+        "item",
+        "fromRanges"
+      ]
+    },
+    "LanguageHierarchyItemDto": {
+      "description": "One hierarchy symbol, including opaque server data required for follow-up requests.",
+      "type": "object",
+      "properties": {
+        "data": true,
+        "detail": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "range": {
+          "$ref": "#/$defs/LanguageRangeDto"
+        },
+        "selectionRange": {
+          "$ref": "#/$defs/LanguageRangeDto"
+        },
+        "symbolKind": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "name",
+        "symbolKind",
+        "path",
+        "range",
+        "selectionRange"
+      ]
+    },
+    "LanguageHierarchyKindDto": {
+      "description": "Call- or type-hierarchy operation requested by an editor.",
+      "type": "string",
+      "enum": [
+        "prepareCall",
+        "incomingCalls",
+        "outgoingCalls",
+        "prepareType",
+        "supertypes",
+        "subtypes"
+      ]
+    },
+    "LanguageHierarchyParams": {
+      "description": "Hierarchy request against exactly one submitted document revision.",
+      "type": "object",
+      "properties": {
+        "document": {
+          "$ref": "#/$defs/LanguageDocumentDto"
+        },
+        "item": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LanguageHierarchyItemDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "kind": {
+          "$ref": "#/$defs/LanguageHierarchyKindDto"
+        },
+        "position": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LanguagePositionDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "document",
+        "kind"
+      ]
+    },
+    "LanguageHierarchyResultDto": {
+      "description": "Fresh hierarchy entries for exactly one source document revision.",
+      "type": "object",
+      "properties": {
+        "entries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LanguageHierarchyEntryDto"
+          }
+        },
+        "revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "revision",
+        "entries"
+      ]
+    },
+    "LanguageLocationDto": {
+      "description": "One workspace-relative target returned in editor-native UTF-16 coordinates.",
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "range": {
+          "$ref": "#/$defs/LanguageRangeDto"
+        },
+        "selectionRange": {
+          "$ref": "#/$defs/LanguageRangeDto"
+        }
+      },
+      "required": [
+        "path",
+        "range",
+        "selectionRange"
+      ]
+    },
+    "LanguageLocationKindDto": {
+      "description": "Cross-file language operation requested for one source position.",
+      "type": "string",
+      "enum": [
+        "declaration",
+        "definition",
+        "implementation",
+        "typeDefinition",
+        "references"
+      ]
+    },
+    "LanguageLocationsParams": {
+      "description": "Cross-file request against exactly one submitted document revision.",
+      "type": "object",
+      "properties": {
+        "document": {
+          "$ref": "#/$defs/LanguageDocumentDto"
+        },
+        "includeDeclaration": {
+          "type": "boolean",
+          "default": false
+        },
+        "kind": {
+          "$ref": "#/$defs/LanguageLocationKindDto"
+        },
+        "position": {
+          "$ref": "#/$defs/LanguagePositionDto"
+        }
+      },
+      "required": [
+        "document",
+        "position",
+        "kind"
+      ]
+    },
+    "LanguageLocationsResult": {
+      "description": "Fresh cross-file targets for exactly one source document revision.",
+      "type": "object",
+      "properties": {
+        "locations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LanguageLocationDto"
+          }
+        },
+        "revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "revision",
+        "locations"
+      ]
+    },
+    "LanguagePositionDto": {
+      "description": "One zero-based UTF-16 editor position.",
+      "type": "object",
+      "properties": {
+        "columnIndex": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "lineIndex": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "lineIndex",
+        "columnIndex"
+      ]
+    },
+    "LanguagePrepareRenameParams": {
+      "description": "Prepare-rename request against one exact source snapshot.",
+      "type": "object",
+      "properties": {
+        "document": {
+          "$ref": "#/$defs/LanguageDocumentDto"
+        },
+        "position": {
+          "$ref": "#/$defs/LanguagePositionDto"
+        }
+      },
+      "required": [
+        "document",
+        "position"
+      ]
+    },
+    "LanguagePrepareRenameResult": {
+      "type": "object",
+      "properties": {
+        "preparation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LanguageRenamePreparationDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "LanguageRangeDto": {
+      "description": "One ordered, end-exclusive UTF-16 editor range.",
+      "type": "object",
+      "properties": {
+        "end": {
+          "$ref": "#/$defs/LanguagePositionDto"
+        },
+        "start": {
+          "$ref": "#/$defs/LanguagePositionDto"
+        }
+      },
+      "required": [
+        "start",
+        "end"
+      ]
+    },
+    "LanguageRenameParams": {
+      "description": "Workspace rename request against one exact source snapshot.",
+      "type": "object",
+      "properties": {
+        "document": {
+          "$ref": "#/$defs/LanguageDocumentDto"
+        },
+        "newName": {
+          "type": "string",
+          "maxLength": 1024,
+          "minLength": 1
+        },
+        "position": {
+          "$ref": "#/$defs/LanguagePositionDto"
+        }
+      },
+      "required": [
+        "document",
+        "position",
+        "newName"
+      ]
+    },
+    "LanguageRenamePreparationDto": {
+      "description": "Rename target range and initial input text, or `None` when unavailable.",
+      "type": "object",
+      "properties": {
+        "placeholder": {
+          "type": "string"
+        },
+        "range": {
+          "$ref": "#/$defs/LanguageRangeDto"
+        }
+      },
+      "required": [
+        "range",
+        "placeholder"
+      ]
+    },
+    "LanguageResolveCodeActionParams": {
+      "description": "Resolve request for one action returned by the same language server.",
+      "type": "object",
+      "properties": {
+        "document": {
+          "$ref": "#/$defs/LanguageDocumentDto"
+        },
+        "providerData": true
+      },
+      "required": [
+        "document",
+        "providerData"
+      ]
+    },
     "LanguageServerConfigDto": {
       "description": "Runtime-free language-server preference exposed through the App Server contract.",
       "type": "object",
@@ -6720,6 +7597,213 @@
         "commandId",
         "expectedRevision",
         "serverId"
+      ]
+    },
+    "LanguageTextDocumentEditDto": {
+      "description": "Text replacements for one exact workspace content baseline.",
+      "type": "object",
+      "properties": {
+        "edits": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LanguageTextEditDto"
+          }
+        },
+        "expectedText": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "expectedText",
+        "edits"
+      ]
+    },
+    "LanguageTextEditDto": {
+      "description": "One UTF-16 text replacement.",
+      "type": "object",
+      "properties": {
+        "newText": {
+          "type": "string"
+        },
+        "range": {
+          "$ref": "#/$defs/LanguageRangeDto"
+        }
+      },
+      "required": [
+        "range",
+        "newText"
+      ]
+    },
+    "LanguageWorkspaceEditDto": {
+      "description": "Ordered workspace edit spanning text documents and workspace resources.",
+      "type": "object",
+      "properties": {
+        "entries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LanguageWorkspaceEditEntryDto"
+          }
+        }
+      },
+      "required": [
+        "entries"
+      ]
+    },
+    "LanguageWorkspaceEditEntryDto": {
+      "description": "One ordered text or resource operation returned by a language server.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "document": {
+              "$ref": "#/$defs/LanguageTextDocumentEditDto"
+            },
+            "kind": {
+              "type": "string",
+              "const": "textDocument"
+            }
+          },
+          "required": [
+            "kind",
+            "document"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "existing": {
+              "$ref": "#/$defs/FsExistingTargetBehavior"
+            },
+            "kind": {
+              "type": "string",
+              "const": "create"
+            },
+            "path": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "path",
+            "existing"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "existing": {
+              "$ref": "#/$defs/FsExistingTargetBehavior"
+            },
+            "kind": {
+              "type": "string",
+              "const": "rename"
+            },
+            "source": {
+              "type": "string"
+            },
+            "target": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "source",
+            "target",
+            "existing"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "delete"
+            },
+            "missing": {
+              "$ref": "#/$defs/FsMissingTargetBehavior"
+            },
+            "mode": {
+              "$ref": "#/$defs/FsDeleteMode"
+            },
+            "path": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "path",
+            "missing",
+            "mode"
+          ]
+        }
+      ]
+    },
+    "LanguageWorkspaceSymbolDto": {
+      "description": "One project-wide symbol with an exact workspace location.",
+      "type": "object",
+      "properties": {
+        "containerName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "range": {
+          "$ref": "#/$defs/LanguageRangeDto"
+        },
+        "symbolKind": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "name",
+        "symbolKind",
+        "path",
+        "range"
+      ]
+    },
+    "LanguageWorkspaceSymbolsParams": {
+      "description": "Project-wide symbol search for one language-server family.",
+      "type": "object",
+      "properties": {
+        "languageId": {
+          "type": "string"
+        },
+        "query": {
+          "type": "string",
+          "maxLength": 1024
+        }
+      },
+      "required": [
+        "languageId",
+        "query"
+      ]
+    },
+    "LanguageWorkspaceSymbolsResult": {
+      "description": "Bounded project-wide symbol result.",
+      "type": "object",
+      "properties": {
+        "symbols": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LanguageWorkspaceSymbolDto"
+          }
+        }
+      },
+      "required": [
+        "symbols"
       ]
     },
     "McpCredentialBindingDto": {
@@ -9438,7 +10522,7 @@
       ]
     },
     "SyntaxPositionDto": {
-      "description": "One zero-based UTF-16 position, matching Alpha's text-model coordinate system.",
+      "description": "One zero-based UTF-16 position, matching the editor text-model coordinate system.",
       "type": "object",
       "properties": {
         "columnIndex": {

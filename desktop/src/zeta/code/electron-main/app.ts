@@ -59,6 +59,7 @@ import { extensionIpcRoutes } from "../../platform/extensions/electron-main/exte
 import { diffIpcRoutes } from "../../platform/diff/electron-main/diffIpcRoutes.js";
 import { documentCollaborationIpcRoutes } from "../../platform/collaboration/electron-main/documentCollaborationIpcRoutes.js";
 import { syntaxIpcRoutes } from "../../platform/syntax/electron-main/syntaxIpcRoutes.js";
+import { languageIpcRoutes } from "../../platform/language/electron-main/languageIpcRoutes.js";
 import { gitIpcRoutes } from "../../platform/git/electron-main/gitIpcRoutes.js";
 import { codeIndexIpcRoutes } from "../../platform/codeIndex/electron-main/codeIndexIpcRoutes.js";
 import { toolSearchIpcRoutes } from "../../platform/toolSearch/electron-main/toolSearchIpcRoutes.js";
@@ -402,6 +403,7 @@ export class ZetaApplication extends DisposableOwner {
       ...diffIpcRoutes(supervisor),
       ...documentCollaborationIpcRoutes(supervisor),
       ...syntaxIpcRoutes(supervisor),
+      ...languageIpcRoutes(supervisor),
       ...gitIpcRoutes(supervisor),
       ...codeIndexIpcRoutes(supervisor),
       ...toolSearchIpcRoutes(supervisor),

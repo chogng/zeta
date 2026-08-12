@@ -7944,6 +7944,8 @@ dependencies = [
  "zeta-git",
  "zeta-install-context",
  "zeta-instructions",
+ "zeta-language-server-catalog",
+ "zeta-language-service",
  "zeta-linux-sandbox",
  "zeta-mcp",
  "zeta-model-provider",
@@ -8399,6 +8401,7 @@ dependencies = [
 name = "zeta-language-service"
 version = "0.1.0"
 dependencies = [
+ "serde_json",
  "tempfile",
  "thiserror 2.0.19",
  "tokio",

@@ -114,7 +114,7 @@ function assertOptions(model: TextModel, configuration: ResolvedLanguageConfigur
   if (typeof options !== "object" || options === null) throw new TypeError("Language Enter options must be an object");
   const lexicalContext = options.lexicalContext;
   if (!lexicalContext) return;
-  if (lexicalContext.textModel !== model || lexicalContext.languageId !== configuration.languageId || typeof lexicalContext.getStructuralLineContent !== "function") {
+  if (lexicalContext.textModel !== model || !lexicalContext.supportsLanguageId(configuration.languageId) || typeof lexicalContext.getStructuralLineContent !== "function") {
     throw new TypeError("Language Enter lexical context must match its model and language");
   }
 }

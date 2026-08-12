@@ -227,6 +227,23 @@ impl LanguageServerDocumentRouter {
             .client)
     }
 
+    /// Returns the initialized client registered for one language without requiring an open document.
+    pub fn client_for_language(
+        &self,
+        language_id: &str,
+    ) -> Result<&LanguageServerClient, LanguageServerRouterError> {
+        let server_name = self.language_routes.get(language_id).ok_or_else(|| {
+            LanguageServerRouterError::LanguageNotRegistered {
+                language_id: language_id.into(),
+            }
+        })?;
+        Ok(&self
+            .servers
+            .get(server_name)
+            .expect("language route always names a registered server")
+            .client)
+    }
+
     pub async fn replace_server(
         &mut self,
         name: &LanguageServerName,

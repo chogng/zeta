@@ -23,6 +23,8 @@ registerEditorPane({
       syntaxApi: options.syntaxApi,
       workingCopyService: options.workingCopyService,
       onSave: options.onSave,
+      onOpenLocation: options.onOpenLocation,
+      onApplyWorkspaceEdit: options.onApplyWorkspaceEdit,
     });
   },
 });

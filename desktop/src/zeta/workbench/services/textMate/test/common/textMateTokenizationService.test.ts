@@ -103,7 +103,7 @@ test("TextMate grammar metadata reaches runtime configuration and token projecti
     tokenTypes: { "variable.other.demo": "string" },
     balancedBracketScopes: ["*"],
     unbalancedBracketScopes: ["string.quoted"],
-    loadGrammar: () => demoGrammar(),
+    loadGrammar: () => metadataGrammar(),
   });
   const definition = registry.currentSnapshot.getDefinitionForLanguage("demo")!;
   assert.deepEqual(definition.embeddedLanguages, { "meta.embedded.demo": "javascript" });
@@ -111,9 +111,12 @@ test("TextMate grammar metadata reaches runtime configuration and token projecti
   assert.deepEqual(definition.balancedBracketScopes, ["*"]);
   assert.deepEqual(definition.unbalancedBracketScopes, ["string.quoted"]);
   using tokenization = new TextMateTokenizationService(registry, onigLib);
-  using model = new TextModel("value");
+  using model = new TextModel("embedded value \"quoted\"");
 
-  assert.equal((await tokenization.tokenize("demo", model.createSnapshot(), new AbortController().signal))!.tokens[0]!.tokenType, "string");
+  const tokens = (await tokenization.tokenize("demo", model.createSnapshot(), new AbortController().signal))!.tokens;
+  assert.equal(tokens.find(token => token.languageId === "javascript")?.languageId, "javascript");
+  assert.equal(tokens.find(token => token.tokenType === "string" && token.languageId === undefined)?.tokenType, "string");
+  assert.equal(tokens.find(token => model.getTextInRange(token.range).includes("quoted"))?.balancedBrackets, false);
 });
 
 test("TextMate runtime loads registered injection grammars", async () => {
@@ -254,6 +257,18 @@ function injectionGrammar(): string {
     scopeName: "source.demo.todo",
     injectionSelector: "L:comment.block.demo",
     patterns: [{ match: "\\bTODO\\b", name: "keyword.other.todo.demo" }],
+    repository: {},
+  });
+}
+
+function metadataGrammar(): string {
+  return JSON.stringify({
+    scopeName: "source.demo",
+    patterns: [
+      { match: "embedded", name: "meta.embedded.demo" },
+      { match: "value", name: "variable.other.demo" },
+      { begin: "\"", end: "\"", name: "string.quoted.demo" },
+    ],
     repository: {},
   });
 }

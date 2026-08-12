@@ -21,3 +21,75 @@
 .aster-editor-peek-view-body {
   padding: 8px;
 }
+
+.aster-editor-language-locations {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.aster-editor-language-location {
+  padding: 5px 8px;
+  color: var(--zeta-editor-foreground);
+  font: inherit;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: 2px;
+}
+
+.aster-editor-language-location:hover,
+.aster-editor-language-location:focus-visible {
+  background: var(--zeta-list-hover-background);
+  outline: 1px solid var(--zeta-focus-border);
+}
+
+.aster-editor-language-hierarchy,
+.aster-editor-language-hierarchy-children {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.aster-editor-language-hierarchy-children {
+  padding-left: 14px;
+  color: var(--zeta-description-foreground);
+}
+
+.aster-editor-language-hierarchy-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.aster-editor-language-hierarchy-item,
+.aster-editor-language-hierarchy-expand {
+  padding: 4px 7px;
+  color: var(--zeta-editor-foreground);
+  font: inherit;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: 2px;
+}
+
+.aster-editor-language-hierarchy-item {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.aster-editor-language-hierarchy-expand {
+  color: var(--zeta-description-foreground);
+  font-size: 11px;
+}
+
+.aster-editor-language-hierarchy-item:hover,
+.aster-editor-language-hierarchy-item:focus-visible,
+.aster-editor-language-hierarchy-expand:hover,
+.aster-editor-language-hierarchy-expand:focus-visible {
+  background: var(--zeta-list-hover-background);
+  outline: 1px solid var(--zeta-focus-border);
+}

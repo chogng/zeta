@@ -1,11 +1,14 @@
 export interface TextMateResolvedTokenStyle {
   readonly tokenType: string;
   readonly modifiers?: readonly string[];
+  readonly foreground?: string;
+  readonly background?: string;
+  readonly fontStyle?: readonly ("italic" | "bold" | "underline" | "strikethrough")[];
 }
 
 export type TextMateScopeResolver = (scopes: readonly string[]) => TextMateResolvedTokenStyle | undefined;
 
-/** Maps conventional TextMate scopes onto Alpha's stable semantic vocabulary. */
+/** Maps conventional TextMate scopes onto Aster's stable semantic vocabulary. */
 export const defaultTextMateScopeResolver: TextMateScopeResolver = scopes => {
   for (let index = scopes.length - 1; index >= 0; index -= 1) {
     const scope = scopes[index]!;

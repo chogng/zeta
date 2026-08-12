@@ -23,6 +23,7 @@ import type { TextResourceLanguageResolver } from "../../../../platform/language
 import type { IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";
 import type { IEditorPane } from "./editorPane.js";
 import { EditorPaneRegistry, EditorPanes } from "./editorRegistry.js";
+import type { IWorkspaceEditService } from "../../../services/language/common/workspaceEditService.js";
 
 export { EditorOpenSupersededError } from "./editorGroup.js";
 
@@ -64,6 +65,7 @@ export interface IEditorPartOptions {
   readonly documentCollaborationApi?: IDocumentCollaborationApi;
   readonly serverEvents?: IServerEventApi;
   readonly workingCopyService?: IWorkingCopyService;
+  readonly workspaceEditService?: IWorkspaceEditService;
   readonly registry?: EditorPaneRegistry;
   readonly titleActions?: {
     readonly menuService: IMenuService;
@@ -106,6 +108,8 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
       documentCollaborationApi: options.documentCollaborationApi,
       serverEvents: options.serverEvents,
       workingCopyService: options.workingCopyService,
+      onOpenLocation: location => this.openEditor({ resource: location.resource }, { selection: location.selectionRange ?? location.range }).then(() => undefined),
+      onApplyWorkspaceEdit: options.workspaceEditService ? edit => options.workspaceEditService!.apply(edit).then(() => undefined) : undefined,
       titleActions: options.titleActions,
       ...(options.saveAsResource ? {
         onSave: (group: IEditorGroup, input: EditorInput, pane: IEditorPane) => this.saveEditor(group, input, pane),

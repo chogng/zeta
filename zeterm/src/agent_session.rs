@@ -1279,7 +1279,7 @@ impl NativeApp {
 
     pub(crate) fn open_language_definition(
         &mut self,
-        target: zeta_language_service::LanguageDefinitionTarget,
+        target: zeta_language_service::LanguageLocationTarget,
     ) {
         let Some(session) = self.agent_session.as_ref() else {
             return;
@@ -1292,8 +1292,8 @@ impl NativeApp {
                         .active()
                         .map(|tab| tab.document().text())
                         .unwrap_or_default(),
-                    target.row,
-                    target.character,
+                    target.selection_range.start.row,
+                    target.selection_range.start.character,
                     target.encoding,
                 ) {
                     self.file_editor_host

@@ -47,6 +47,10 @@ export interface IFileWriteResult {
   readonly revision: string;
 }
 
+export type FileExistingTargetBehavior = "error" | "overwrite" | "ignore";
+export type FileMissingTargetBehavior = "error" | "ignore";
+export type FileDeleteMode = "fileOrEmptyDirectory" | "recursive";
+
 /** The file changed after a caller read its revision, so its write was rejected. */
 export class FileRevisionConflictError extends Error {
   constructor(readonly resource: URI) {
@@ -75,6 +79,16 @@ export interface IFileService {
   readFile(resource: URI): Promise<IFileContent>;
   readFileBytes(resource: URI): Promise<IFileBytes>;
   writeFile(request: IFileWriteRequest): Promise<IFileWriteResult>;
+  createFile(resource: URI, existing: FileExistingTargetBehavior): Promise<IFileStat>;
+  rename(source: URI, target: URI, existing: FileExistingTargetBehavior): Promise<void>;
+  delete(resource: URI, missing: FileMissingTargetBehavior, mode: FileDeleteMode): Promise<void>;
+}
+
+export class FileNotFoundError extends Error {
+  constructor(readonly resource: URI) {
+    super(`File does not exist: ${resource.toString()}`);
+    this.name = "FileNotFoundError";
+  }
 }
 
 export const IFileService =

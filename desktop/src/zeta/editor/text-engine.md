@@ -64,10 +64,10 @@ class:
 | Text transactions, history, selections, decorations and versioned language results | `editor/common` | ✅ Aster's synchronous TypeScript authority; no Rust/WASM shadow document |
 | Rust file/language/workspace capability | frontend domain services over App Server | Asynchronous, revision-bound results only; never the keystroke hot path |
 | Language identities and composable editing rules | `editor/common` | `LanguageConfigurationRegistry`; comments/brackets/pairs are editor-domain contracts, not generic base primitives |
-| TextMate grammar loading and token production | `workbench/services/textMate` adapter over Aster syntax providers | 部分具备; bundled language grammars, file associations, language configuration, snippets, static discovery, and serializable scope-theme rules are wired; theme activation and full embedded-language/bracket-result projection remain open |
+| TextMate grammar loading and token production | `workbench/services/textMate` adapter over Aster syntax providers | ✅ Bundled grammars, file associations, language configuration, snippets, static discovery, active-theme token colors, embedded-language identity, and balanced-bracket projection are wired |
 
-The current `textfile` contract was extracted only after Aster, Aster, and
-Explorer established a real shared loading boundary. It now
+The current `textfile` contract was extracted only after the Text Engine, Document Engine, and Explorer
+established a real shared loading boundary. It now
 owns transport-only resolve/save operations and the opaque revision returned by
 the workspace file authority; Aster's baseline, dirty state and transaction
 semantics remain editor-owned. `fs/changed` invalidation is forwarded through
@@ -148,7 +148,7 @@ architectural drift signal and require extraction at that point.
 | Versioned language-isolated lexical line cache | ✅ | `LanguageLexicalSyntaxCache` / `LanguageLexicalLineScanner` |
 | Shared language provider-module lifecycle | ✅ | `LanguageProviderModuleRegistry` / `LanguageProviderModuleHost` / generic module wire |
 | Syntax provider-module activation barrier | ✅ | `SyntaxModuleWorkerClient` / `language.lexical` |
-| TextMate grammar provider and Worker seam | 部分具备 | `workbench/services/textMate`; JSON/JSONC extension resources, explicit host grammar contributions, catalog transport and Aster pane Worker selection are active |
+| TextMate grammar provider and Worker seam | ✅ | `workbench/services/textMate`; bundled and extension resources, active-theme token colors, embedded languages, bracket metadata, catalog transport and Aster pane Worker selection are active |
 | Versioned completion result, session, and widget | ✅ | `languageCompletions.ts` / `LanguageCompletionSessionController` / `CompletionWidget` |
 | Completion snippet tabstops, variables, choices, and navigation-refreshed regex transforms | ✅ | `languageCompletionSnippet.ts` / `languageCompletionSnippetTransform.ts` |
 | Completion provider registry, host, and input triggers | ✅ | `LanguageCompletionProviderRegistry` / `LanguageCompletionService` / `TextInputController` |
@@ -200,7 +200,7 @@ architectural drift signal and require extraction at that point.
 | CRLF/LF source line-ending preservation on save | ✅ | `ITextModelService` |
 | Workspace external-change invalidation, clean reload, and dirty-model conflict state | ✅ | `IFileService.onDidChangeFiles` / `ITextModelService` |
 | Conditional expected-revision writes and conflict projection | ✅ | `ITextModelService` → `ITextFileService` → `IFileService` → App Server |
-| Backup recovery | 尚未完成 | A recovery/backup policy is a Workbench product concern, not Aster model state |
+| Backup recovery | ✅ | Workbench owns workspace-scoped IndexedDB backups and restores dirty Text/Document working copies without moving persistence into either model |
 
 `TextPosition` names both indices explicitly and counts UTF-16 code units so
 conversion to JavaScript strings and browser selections is deterministic.
@@ -323,7 +323,7 @@ gain parser-grade folding, syntax token presentation, parser diagnostics, and Ct
 symbols. The wrapper keeps Aster's version gate and result stores authoritative; unsupported or
 oversized documents delegate to the existing Worker/TextMate/lexical path, while registered richer
 symbol providers take precedence over parser symbols. Rust remains outside text mutation,
-selection, input, and rendering ownership. The legacy editor runtime has no ownership in this path
+selection, input, and rendering ownership. No second editor runtime participates in this path
 and receives no parallel syntax integration.
 
 `SyntaxProviderRegistry` selects the first matching token provider
@@ -1355,15 +1355,12 @@ source strings until the snapshot itself becomes unreachable; those external
 retained sources are not included in `getStatistics`. Truly incremental copying
 remains a future optimization for unusually large documents.
 
-The next implementation stages are:
+The remaining optional optimization and release-verification work is:
 
 1. incremental piece-tree compaction for unusually large documents; Aster browser models already defer whole-tree maintenance, while non-wrapped line-width and initial wrapped-line measurement yield after a bounded first slice;
 2. composition clause projection work; mobile remains out of scope;
-3. TextMate extension-resource discovery; serializable scope-theme selector composition is complete;
-4. desktop platform acceptance verification (macOS VoiceOver, then Windows); mobile remains out of scope;
-5. extend parser-grade syntax coverage beyond JavaScript/JSX, TypeScript/TSX, JSON, JSONC, Rust, and Shell; inline-advance layout, native browser-driven wrapping, and continuous updates for transformed snippet mirrors while typing remain separate work;
-6. migrate remaining legacy editor runtime-only tools through Aster's public contracts, then
-   remove the retired legacy editor runtime editor without importing its ownership into Aster.
+3. desktop platform acceptance verification (macOS VoiceOver, then Windows); mobile remains out of scope;
+4. extend parser-grade syntax coverage beyond JavaScript/JSX, TypeScript/TSX, JSON, JSONC, Rust, and Shell; inline-advance layout, native browser-driven wrapping, and continuous updates for transformed snippet mirrors while typing remain separate work;
 
 Tests under `test/common/` cover normalization, coordinates, atomic edits, failure
 atomicity, events, disposal, immutable snapshots, history budgets,

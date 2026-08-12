@@ -12,6 +12,10 @@ const result = spawnSync(process.execPath, [
   "dist/test/src/zeta/workbench/contrib/codeEditor/**/test/**/*.test.js",
   "dist/test/src/zeta/workbench/contrib/documentEditor/**/test/**/*.test.js",
   "dist/test/src/zeta/workbench/services/documentCollaboration/**/test/**/*.test.js",
+  "dist/test/src/zeta/workbench/services/language/**/test/**/*.test.js",
+  "dist/test/src/zeta/workbench/services/textMate/**/test/**/*.test.js",
+  "dist/test/src/zeta/workbench/services/textfile/**/test/**/*.test.js",
+  "dist/test/src/zeta/workbench/services/workingCopy/**/test/**/*.test.js",
 ], {
   cwd: desktopDirectory,
   stdio: "inherit",

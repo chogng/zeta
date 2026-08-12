@@ -11,6 +11,7 @@ name = "zeta_language_service"
 path = "src/lib.rs"
 
 [dependencies]
+serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "sync", "time"] }
 url = { workspace = true }

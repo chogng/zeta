@@ -6,7 +6,7 @@ use zeta_lsp::LanguageServerCommand;
 
 use crate::{
     BASH_LANGUAGE_SERVER_ID, JSON_LANGUAGE_SERVER_ID, LanguageServerCatalogError,
-    LanguageServerDefinition, RUST_ANALYZER_SERVER_ID,
+    LanguageServerDefinition, RUST_ANALYZER_SERVER_ID, TYPESCRIPT_LANGUAGE_SERVER_ID,
 };
 
 /// Supplies frozen executable candidates without granting authority to start them.
@@ -149,6 +149,7 @@ pub struct LanguageServerCatalog {
     rust_analyzer: LanguageServerPreference,
     json_language_server: LanguageServerPreference,
     bash_language_server: LanguageServerPreference,
+    typescript_language_server: LanguageServerPreference,
 }
 
 impl LanguageServerCatalog {
@@ -166,6 +167,11 @@ impl LanguageServerCatalog {
 
     pub fn with_bash_language_server(mut self, preference: LanguageServerPreference) -> Self {
         self.bash_language_server = preference;
+        self
+    }
+
+    pub fn with_typescript_language_server(mut self, preference: LanguageServerPreference) -> Self {
+        self.typescript_language_server = preference;
         self
     }
 
@@ -200,6 +206,14 @@ impl LanguageServerCatalog {
             workspace_root,
             &mut definitions,
         )?;
+        let typescript_state = self.resolve_builtin(
+            BuiltinServer::typescript(),
+            &self.typescript_language_server,
+            executable_candidates,
+            execution_policy,
+            workspace_root,
+            &mut definitions,
+        )?;
         Ok(LanguageServerCatalogResolution {
             definitions,
             entries: vec![
@@ -207,6 +221,11 @@ impl LanguageServerCatalog {
                     name: RUST_ANALYZER_SERVER_ID,
                     mode: self.rust_analyzer.mode,
                     state: rust_state,
+                },
+                LanguageServerCatalogEntry {
+                    name: TYPESCRIPT_LANGUAGE_SERVER_ID,
+                    mode: self.typescript_language_server.mode,
+                    state: typescript_state,
                 },
                 LanguageServerCatalogEntry {
                     name: JSON_LANGUAGE_SERVER_ID,
@@ -293,6 +312,20 @@ impl BuiltinServer {
             executable: BASH_LANGUAGE_SERVER_ID,
             language_ids: &["shellscript"],
             arguments: &["start"],
+        }
+    }
+
+    const fn typescript() -> Self {
+        Self {
+            identity: TYPESCRIPT_LANGUAGE_SERVER_ID,
+            executable: TYPESCRIPT_LANGUAGE_SERVER_ID,
+            language_ids: &[
+                "javascript",
+                "javascriptreact",
+                "typescript",
+                "typescriptreact",
+            ],
+            arguments: &["--stdio"],
         }
     }
 }

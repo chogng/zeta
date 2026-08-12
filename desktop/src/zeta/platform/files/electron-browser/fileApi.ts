@@ -9,5 +9,8 @@ export function createFileApi(): IFileApi {
     readFile: (params) => invoke<FsReadFileResult>("zeta:fs:read-file", params),
     readBinaryFile: (params) => invoke<FsReadBinaryFileResult>("zeta:fs:read-binary-file", params),
     writeFile: (params) => invoke<FsWriteFileResult>("zeta:fs:write-file", params),
+    createFile: (params) => invoke<FsGetMetadataResult>("zeta:fs:create-file", params),
+    rename: (params) => invoke<void>("zeta:fs:rename", params),
+    delete: (params) => invoke<void>("zeta:fs:delete", params),
   };
 }

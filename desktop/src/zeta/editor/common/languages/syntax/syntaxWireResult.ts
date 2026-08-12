@@ -125,6 +125,9 @@ function encodeItem(lane: SyntaxLane, item: SyntaxWireItem): unknown {
       range: encodeRange(token.range, "Language token wire range"),
       tokenType: token.tokenType,
       modifiers: Object.freeze([...token.modifiers]),
+      ...(token.languageId === undefined ? {} : { languageId: token.languageId }),
+      ...(token.balancedBrackets === undefined ? {} : { balancedBrackets: token.balancedBrackets }),
+      ...(token.presentation === undefined ? {} : { presentation: token.presentation }),
     });
   }
   const diagnostic = item as LanguageDiagnostic;
@@ -147,6 +150,9 @@ function decodeItem(lane: SyntaxLane, value: unknown): SyntaxWireItem {
       range: decodeRange(value.range, "Language token wire range"),
       tokenType: decodeString(value.tokenType, "Language token wire type"),
       modifiers: value.modifiers.map(modifier => decodeString(modifier, "Language token wire modifier")),
+      ...(value.languageId === undefined ? {} : { languageId: decodeString(value.languageId, "Language token wire embedded language ID") }),
+      ...(value.balancedBrackets === undefined ? {} : { balancedBrackets: decodeExcludedBrackets(value.balancedBrackets) }),
+      ...(value.presentation === undefined ? {} : { presentation: decodePresentation(value.presentation) }),
     };
   }
   const code = decodeDiagnosticCode(value.code);
@@ -158,6 +164,20 @@ function decodeItem(lane: SyntaxLane, value: unknown): SyntaxWireItem {
     ...(code === undefined ? {} : { code }),
     ...(source === undefined ? {} : { source }),
   };
+}
+
+function decodeExcludedBrackets(value: unknown): false {
+  if (value !== false) throw new TypeError("Language token wire balanced-bracket metadata must be false");
+  return false;
+}
+
+function decodePresentation(value: unknown): NonNullable<LanguageToken["presentation"]> {
+  assertRecord(value, "Language token wire presentation");
+  const foreground = value.foreground === undefined ? undefined : decodeString(value.foreground, "Language token wire foreground");
+  const background = value.background === undefined ? undefined : decodeString(value.background, "Language token wire background");
+  if (value.fontStyle !== undefined && !Array.isArray(value.fontStyle)) throw new TypeError("Language token wire font style must be an array");
+  const fontStyle = value.fontStyle === undefined ? undefined : value.fontStyle.map(style => decodeString(style, "Language token wire font style")) as NonNullable<LanguageToken["presentation"]>["fontStyle"];
+  return { ...(foreground === undefined ? {} : { foreground }), ...(background === undefined ? {} : { background }), ...(fontStyle === undefined ? {} : { fontStyle }) };
 }
 
 function shiftItem(lane: SyntaxLane, item: SyntaxWireItem, lineDelta: number): SyntaxWireItem {

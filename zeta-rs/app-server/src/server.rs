@@ -47,6 +47,8 @@ mod git_operations;
 mod git_runtime;
 mod interaction_runtime;
 pub(crate) mod multi_agent_tools;
+mod language_operations;
+mod language_runtime;
 mod notification_queue;
 mod operations;
 mod search_operations;
@@ -104,6 +106,7 @@ pub struct AppServer {
     pub(super) collaboration: Mutex<collaboration_runtime::DocumentCollaborationStore>,
     pub(super) extensions: Mutex<ExtensionCatalog>,
     pub(super) config: Option<Arc<ConfigStore>>,
+    language: Mutex<language_runtime::AppServerLanguageRuntime>,
     pub(super) workspace_authority_gate: Arc<Mutex<()>>,
     workspace_runtime: Arc<RwLock<WorkspaceRuntime>>,
     local_workspace_host: Option<LocalWorkspaceHost>,
@@ -196,6 +199,7 @@ impl AppServer {
             collaboration: Mutex::new(collaboration_runtime::DocumentCollaborationStore::default()),
             extensions: Mutex::new(ExtensionCatalog::default()),
             config: None,
+            language: Mutex::new(language_runtime::AppServerLanguageRuntime::default()),
             workspace_authority_gate,
             workspace_runtime: Arc::new(RwLock::new(WorkspaceRuntime::empty(turn_executor))),
             local_workspace_host: None,
@@ -724,7 +728,23 @@ impl AppServer {
             }
             Some(ClientMethod::DiffCompute) => self.diff_compute(&request.params),
             Some(ClientMethod::SyntaxAnalyze) => self.syntax_analyze(&request.params),
+            Some(ClientMethod::LanguageLocations) => self.language_locations(&request.params),
+            Some(ClientMethod::LanguageHierarchy) => self.language_hierarchy(&request.params),
+            Some(ClientMethod::LanguageWorkspaceSymbols) => {
+                self.language_workspace_symbols(&request.params)
+            }
+            Some(ClientMethod::LanguagePrepareRename) => {
+                self.language_prepare_rename(&request.params)
+            }
+            Some(ClientMethod::LanguageRename) => self.language_rename(&request.params),
+            Some(ClientMethod::LanguageCodeActions) => self.language_code_actions(&request.params),
+            Some(ClientMethod::LanguageResolveCodeAction) => {
+                self.language_resolve_code_action(&request.params)
+            }
             Some(ClientMethod::FsWriteFile) => self.fs_write_file(&request.params),
+            Some(ClientMethod::FsCreateFile) => self.fs_create_file(&request.params),
+            Some(ClientMethod::FsRename) => self.fs_rename(&request.params),
+            Some(ClientMethod::FsDelete) => self.fs_delete(&request.params),
             Some(ClientMethod::GitStatus) => self.git_status(),
             Some(ClientMethod::GitTextDiff) => self.git_text_diff(),
             Some(ClientMethod::GitBranchList) => self.git_branch_list(),

@@ -19,6 +19,9 @@ import type { IEmbeddedTextEditorFactory } from "../../../../editor/browser/widg
 import type { IWorkingCopyService, IWorkingCopy } from "../../../services/workingCopy/common/workingCopyService.js";
 import type { IDocumentCollaborationApi } from "../../../../platform/collaboration/common/documentCollaborationApi.js";
 import type { IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
+import type { TextRange } from "../../../../editor/common/core/text.js";
+import type { LanguageLocation } from "../../../../editor/contrib/gotoSymbol/common/languageNavigation.js";
+import type { LanguageWorkspaceEdit } from "../../../../editor/common/languages/languageWorkspaceEdit.js";
 
 export enum EditorPaneVisibility {
   Hidden,
@@ -44,6 +47,8 @@ export interface IEditorPane extends IDisposable {
   layout(dimension: IDimension): void;
   setVisible(visibility: EditorPaneVisibility): void;
   focus(): void;
+  /** Reveals an editor-owned text range when this pane supports text navigation. */
+  revealRange?(range: TextRange): void;
   /** Persists the active editor's current resource when that editor is writable. */
   save?(): Promise<void>;
   /** Serializes and persists the active document to a new resource when supported. */
@@ -66,6 +71,8 @@ export interface EditorPaneCreationOptions {
   readonly serverEvents?: IServerEventApi;
   readonly workingCopyService?: IWorkingCopyService;
   readonly onSave?: () => Promise<void | boolean>;
+  readonly onOpenLocation?: (location: LanguageLocation) => void | Promise<void>;
+  readonly onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit) => void | Promise<void>;
 }
 
 export enum EditorPaneMatch {

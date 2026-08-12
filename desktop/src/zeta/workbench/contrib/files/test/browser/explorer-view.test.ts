@@ -66,6 +66,9 @@ test("ExplorerViewPane renders, expands, and opens workspace files", async () =>
     writeFile: async (_request) => {
       throw new Error("Explorer must delegate file writes to the selected editor");
     },
+    createFile: async () => { throw new Error("Explorer must not create files in this test"); },
+    rename: async () => { throw new Error("Explorer must not rename files in this test"); },
+    delete: async () => { throw new Error("Explorer must not delete files in this test"); },
   };
   using workspaceContextService = new WorkspaceContextService({
     id: "workspace",

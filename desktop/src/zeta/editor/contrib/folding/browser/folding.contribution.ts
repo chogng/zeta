@@ -13,16 +13,13 @@ registerEditorContribution({
   configure: context => {
     const folding = context.own(new EditorFoldingModel(context.model));
     const hiddenRanges = context.own(new EditorHiddenRangeModel(context.model, folding));
-    const rustSyntaxFacts = context.getOptionalCapability(TextEditorCapability.rustSyntaxFacts);
+    const largeFile = context.model.largeFile.tooLargeForTokenization;
+    const rustSyntaxFacts = largeFile ? undefined : context.getOptionalCapability(TextEditorCapability.rustSyntaxFacts);
     let syntaxFolding: RustSyntaxFoldingService | undefined;
-    const update = () => folding.setProviderRanges(mergeEditorFoldingRanges(
-      syntaxFolding?.ranges ?? [],
-      computeEditorLanguageFoldingRanges(context.model, context.languageId, context.configurations),
-      computeEditorIndentFoldingRanges(context.model),
-    ));
+    const update = () => folding.setProviderRanges(largeFile ? [] : mergeEditorFoldingRanges(syntaxFolding?.ranges ?? [], computeEditorLanguageFoldingRanges(context.model, context.languageId, context.configurations), computeEditorIndentFoldingRanges(context.model)));
     if (rustSyntaxFacts) syntaxFolding = context.own(new RustSyntaxFoldingService(context.model, context.languageId, rustSyntaxFacts, update, context.onLanguageError));
     update();
-    context.own(context.model.onDidChange(update));
+    if (!largeFile) context.own(context.model.onDidChange(update));
     context.provideCapability(TextEditorCapability.folding, folding);
     context.setLineProjection({ visibilitySource: hiddenRanges, gutterDecoration: new FoldingDecorationProvider(folding) });
   },

@@ -70,10 +70,10 @@ function renderTokenizedLine(lineText: string, startColumn: number, endColumn: n
     const tokenEnd = Math.min(endColumn, token.endColumn);
     if (tokenEnd <= tokenStart) continue;
     if (column < tokenStart) parts.push(escapeHtml(lineText.slice(column, tokenStart)));
-    const color = colors.get(token.presentation);
+    const color = token.syntaxPresentation?.foreground ?? (token.presentation ? colors.get(token.presentation) : undefined);
     const style = color ? ` style="color: ${escapeHtml(color)}"` : "";
     const modifiers = token.modifiers?.join(" ") ?? "";
-    parts.push(`<span class="aster-editor-token ${token.presentation}${modifiers ? ` ${modifiers}` : ""}"${style}>${escapeHtml(lineText.slice(tokenStart, tokenEnd))}</span>`);
+    parts.push(`<span class="aster-editor-token${token.presentation ? ` ${token.presentation}` : ""}${modifiers ? ` ${modifiers}` : ""}"${style}>${escapeHtml(lineText.slice(tokenStart, tokenEnd))}</span>`);
     column = tokenEnd;
   }
   if (column < endColumn) parts.push(escapeHtml(lineText.slice(column, endColumn)));

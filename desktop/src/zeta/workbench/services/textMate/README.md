@@ -1,10 +1,10 @@
 # Zeta TextMate adapter
 
-`workbench/services/textMate` adapts TextMate grammars to Alpha's versioned Syntax
-provider contract. It is a Workbench service adapter for the Alpha product, not
+`workbench/services/textMate` adapts TextMate grammars to Aster's versioned Syntax
+provider contract. It is a Workbench service adapter for Aster editors, not
 part of `base`, and it
 does not own workspace files, extension manifests, product color tokens,
-documents, or the Alpha view. It does own the serializable scope-to-semantic
+documents, or the Aster view. It does own the serializable scope-to-semantic
 theme projection needed inside its Worker. Its browser boundary owns only
 caller-supplied grammar loaders and Worker composition; extension package files
 belong to the extension resource layer.
@@ -17,18 +17,18 @@ belong to the extension resource layer.
 | Transferable grammar catalogs and materialization | `TextMateGrammarCatalogModel` / `materializeTextMateGrammarCatalog` | ✅ |
 | Atomic Worker catalog state and side-channel transport | `TextMateGrammarCatalogStore` / catalog wire | ✅ |
 | TextMate runtime and incremental line-state cache | `TextMateTokenizationService` | ✅ |
-| Scope-to-Alpha token vocabulary mapping | `TextMateScopeResolver` | ✅, replaceable |
+| Scope-to-Aster token vocabulary mapping | `TextMateScopeResolver` | ✅, replaceable |
 | Revisioned selector rules and Worker theme transport | `TextMateScopeThemeModel` / scope-theme wire | ✅ |
-| Alpha Syntax provider/module adaptation | `createTextMateSyntaxProvider` / `createTextMateSyntaxModule` | ✅ |
+| Aster Syntax provider/module adaptation | `createTextMateSyntaxProvider` / `createTextMateSyntaxModule` | ✅ |
 | Catalog-gated Syntax Worker composition | `TextMateSyntaxModuleWorkerClient` / `browser/textMateSyntaxWorkerMain.ts` | ✅ |
 | Browser Worker Oniguruma WASM loading | `browser/textMateOniguruma.ts` | ✅ |
 | Grammar contribution-to-catalog lifecycle | `TextMateGrammarService` | ✅ |
 | Workbench service composition and lifecycle | `ITextMateService` / `BrowserTextMateService` | ✅ |
-| Declarative language, configuration, snippet, grammar, and theme resources | `extensions` / `AppServerExtensionService` | 部分具备：manifest projection is active; theme activation is separate |
+| Declarative language, configuration, snippet, grammar, and theme resources | `extensions` / `AppServerExtensionService` | ✅ manifest projection and active-theme token-color projection |
 | External extension-manifest loading | `AppServerExtensionService` | Static declarative contributions only; extension JavaScript is never executed |
 
-`workbench/services/textMate/common` may depend on Alpha's public Syntax and text
-contracts because it adapts into that domain. Alpha and `base` must not import
+`workbench/services/textMate/common` may depend on Aster's public Syntax and text
+contracts because it adapts into that domain. Aster and `base` must not import
 TextMate runtime types. `workbench/services/textMate/browser` is the only layer that knows
 the `onig.wasm` asset URL or uses `fetch`.
 
@@ -67,11 +67,11 @@ the package and serves its bounded grammar resources through the extension API;
 the browser TextMate service only receives validated loaders. Neither common code
 nor the dedicated Worker reads product or workspace files. Workbench constructs one
 `BrowserTextMateService`, registers it as
-`ITextMateService`, and passes it to Alpha panes. `AppServerExtensionService`
+`ITextMateService`, and passes it to Aster panes. `AppServerExtensionService`
 then projects Rust-discovered static grammar contributions into the same
 registry. The service owns the shared grammar catalog and scope theme; each
-Alpha editor part creates and disposes only its dedicated TextMate Syntax Worker.
-Unsupported languages still fall back to Alpha's lexical provider.
+Aster editor part creates and disposes only its dedicated TextMate Syntax Worker.
+Unsupported languages still fall back to Aster's lexical provider.
 
 Direct `createBrowserEditorPart` callers may omit the service and get a
 private `BrowserTextMateService`; that compatibility path is session-owned and
@@ -83,15 +83,15 @@ does not change Workbench ownership.
 2. A `vscode-textmate.Registry` loads the requested root grammar and its
    injections against that exact snapshot.
 3. Lines tokenize in order with immutable `StateStack` input/output state.
-4. The scope resolver maps named scopes to Alpha token types.
+4. The scope resolver maps named scopes to Aster token types and exact token presentation.
 5. Relative line tokens aggregate into an immutable `LanguageTokenResult`.
-6. `createTextMateSyntaxProvider` publishes the result through Alpha's
+6. `createTextMateSyntaxProvider` publishes the result through Aster's
    request-version and application gates.
 
 The default resolver maps conventional comment, string, regexp, number,
 operator, keyword, function, type, parameter, variable, tag, property,
 constant, punctuation, and invalid scopes. `TextMateScopeThemeModel` adds
-ordered, serializable selectors with overrides limited to Alpha's stable
+ordered, serializable selectors with overrides limited to Aster's stable
 semantic token-type and modifier vocabulary. It
 supports comma unions, outer-to-inner scope sequences, segment wildcards, and
 scope exclusions. Last matching rule wins before the stable fallback resolver.
@@ -99,20 +99,20 @@ The renderer mirrors each revision through `TextMateScopeThemeWireClient`; the
 Worker atomically replaces its model, drops cached token styles, and performs
 the next syntax request with the new rules.
 
-TextMate uses `tokenPriority: 100`; Alpha's deterministic lexical fallback uses
+TextMate uses `tokenPriority: 100`; Aster's deterministic lexical fallback uses
 the default priority `0`. The TextMate provider intentionally declares `*` and
 returns `undefined` when the current catalog has no root grammar for a language.
-Alpha tries token providers in descending priority, so unsupported languages,
+Aster tries token providers in descending priority, so unsupported languages,
 provider omissions, and isolated failures continue to the lexical fallback.
 Equal priorities preserve registration order.
 
 ## Worker catalog path
 
 `TextMateGrammarCatalogWireClient` sends complete validated catalog revisions
-over the same structural port used by Alpha's Syntax and provider-module
+over the same structural port used by Aster's Syntax and provider-module
 protocols. `TextMateGrammarCatalogWireServer` atomically builds a new registry
 before swapping the Worker-side store. Stale or malformed revisions poison the
-catalog client and invalidate that Worker so Alpha's coordinator can rebuild it
+catalog client and invalidate that Worker so Aster's coordinator can rebuild it
 from the catalog source's current revision.
 
 `TextMateSyntaxModuleWorkerClient` serializes catalog and scope-theme updates
@@ -128,7 +128,7 @@ The service owns one latest tokenization document per loaded language. It compar
 old and new line arrays, reuses the unchanged prefix, and rescans from the first
 changed line until an unchanged suffix line has the same TextMate input
 `StateStack`. The remaining suffix is then reused without tokenization.
-`synchronizeDocument` eagerly applies the same path when Alpha's Worker mirror
+`synchronizeDocument` eagerly applies the same path when Aster's Worker mirror
 publishes a model transaction.
 
 A grammar registry revision creates a new runtime generation. Requests already
@@ -144,11 +144,11 @@ requests therefore cannot reuse state produced by an older grammar revision.
   between every line;
 - a TextMate `stoppedEarly` result rejects the provider instead of publishing a
   structurally incomplete state stack;
-- resolver output is validated before it enters Alpha;
+- resolver output is validated before it enters Aster;
 - service disposal does not dispose the caller's grammar registry or
   Oniguruma promise.
 
-Alpha's Syntax host isolates provider failure and keeps its versioned store
+Aster's Syntax host isolates provider failure and keeps its versioned store
 unchanged or publishes the host's empty fallback according to the existing
 lane contract.
 
@@ -158,20 +158,19 @@ lane contract.
   SQL, TypeScript, XML, YAML, and four self-contained default themes. Rust still owns discovery
   and bounded resource reads; this adapter does not scan arbitrary directories;
 - `embeddedLanguages`, `tokenTypes`, `balancedBracketScopes`, and
-  `unbalancedBracketScopes` are validated and transported into the `vscode-textmate` runtime.
-  `tokenTypes` also projects to Alpha semantic token types. Embedded-language ranges and bracket
-  balance are not yet fields on Alpha's public `LanguageToken` result;
-- extension `themes` are parsed into a versioned catalog. Their VS Code color-token overrides and
-  token-color rules are not yet compiled into a selectable Workbench `IColorTheme` or a complete
-  platform color-theme selection flow;
+  `unbalancedBracketScopes` are validated, transported into `vscode-textmate`, and projected as
+  Aster `LanguageToken` language/bracket metadata for embedded editing and bracket matching;
+- extension `themes` are parsed into a versioned catalog. The active Workbench color scheme selects
+  the matching extension theme and projects its token colors, including exact foreground,
+  background, and font styles, into the TextMate scope theme;
 - `configurationDefaults`, `semanticTokenScopes`, extension JavaScript, and LSP declarations are
   intentionally ignored by this declarative loader. LSP providers must enter through the separate
-  Alpha language-provider contract;
+  Aster language-provider contract;
 - the cache aggregates a complete renderer token array after line reuse;
 - `BrowserTextMateService` owns the grammar registry and matching Worker
   factory; `AppServerExtensionService` supplies declarative package loaders and
-  Workbench injects the service into product Alpha panes;
-- Alpha editor parts schedule a new syntax request when the catalog or scope theme changes;
+  Workbench injects the service into Aster panes;
+- Aster editor parts schedule a new syntax request when the catalog or scope theme changes;
   other consumers must still make that scheduling decision explicitly.
 
 Tests under `test/common` load the real `vscode-oniguruma` WASM binary and a
@@ -180,6 +179,7 @@ strings, scope mapping, one-line suffix reuse, multiline convergence,
 same-version grammar replacement, cancellation, ownership, malformed loaders,
 provider priority/fallback, catalog materialization, atomic replacement,
 structured-clone catalog/theme updates, stale-client poisoning, dynamic Worker
-catalog/theme changes, and end-to-end Alpha Syntax requests. A standalone Vite build checks
+catalog/theme changes, embedded-language/bracket metadata, active-theme projection, exact token
+presentation, and end-to-end Aster Syntax requests. A standalone Vite build checks
 the complete browser Worker and emitted WASM asset. The real bundled JSON
 grammar is also tokenized through the common service in the Node test realm.

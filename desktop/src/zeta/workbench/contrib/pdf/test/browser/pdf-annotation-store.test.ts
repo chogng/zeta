@@ -69,4 +69,8 @@ class TestFileService implements IFileService {
       revision: "after",
     };
   }
+
+  async createFile(): Promise<never> { throw new Error("PDF annotation tests do not create empty files"); }
+  async rename(): Promise<never> { throw new Error("PDF annotation tests do not rename files"); }
+  async delete(): Promise<never> { throw new Error("PDF annotation tests do not delete files"); }
 }

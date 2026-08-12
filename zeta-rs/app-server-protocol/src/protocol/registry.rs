@@ -73,9 +73,11 @@ use crate::protocol::extensions::ExtensionResourceOpenParams;
 use crate::protocol::extensions::ExtensionResourceOpenResult;
 use crate::protocol::extensions::ExtensionSourceKindDto;
 use crate::protocol::fs::{
-    FsChanged, FsFileType, FsGetMetadataParams, FsGetMetadataResult, FsReadBinaryFileParams,
-    FsReadBinaryFileResult, FsReadDirectoryEntry, FsReadDirectoryParams, FsReadDirectoryResult,
-    FsReadFileParams, FsReadFileResult, FsWriteFileParams, FsWriteFileResult,
+    FsChanged, FsCreateFileParams, FsDeleteMode, FsDeleteParams, FsExistingTargetBehavior,
+    FsFileType, FsGetMetadataParams, FsGetMetadataResult, FsMissingTargetBehavior,
+    FsReadBinaryFileParams, FsReadBinaryFileResult, FsReadDirectoryEntry, FsReadDirectoryParams,
+    FsReadDirectoryResult, FsReadFileParams, FsReadFileResult, FsRenameParams, FsWriteFileParams,
+    FsWriteFileResult,
 };
 use crate::protocol::git::{
     GitBranchDto, GitBranchListResult, GitBranchSwitchParams, GitChangeStatusDto, GitCommitParams,
@@ -84,6 +86,18 @@ use crate::protocol::git::{
     GitSubmoduleStateDto, GitTextDiffDto, GitTextDiffResult, GitUpstreamDto,
 };
 use crate::protocol::initialize::{InitializeParams, InitializeResult, ServerCapabilities};
+use crate::protocol::language::{
+    LanguageCodeActionDiagnosticDto, LanguageCodeActionDto, LanguageCodeActionsParams,
+    LanguageCodeActionsResult, LanguageDiagnosticSeverityDto, LanguageDocumentDto,
+    LanguageHierarchyEntryDto, LanguageHierarchyItemDto, LanguageHierarchyKindDto,
+    LanguageHierarchyParams, LanguageHierarchyResultDto, LanguageLocationDto,
+    LanguageLocationKindDto, LanguageLocationsParams, LanguageLocationsResult, LanguagePositionDto,
+    LanguagePrepareRenameParams, LanguagePrepareRenameResult, LanguageRangeDto,
+    LanguageRenameParams, LanguageRenamePreparationDto, LanguageResolveCodeActionParams,
+    LanguageTextDocumentEditDto, LanguageTextEditDto, LanguageWorkspaceEditDto,
+    LanguageWorkspaceEditEntryDto, LanguageWorkspaceSymbolDto, LanguageWorkspaceSymbolsParams,
+    LanguageWorkspaceSymbolsResult,
+};
 use crate::protocol::model::{ModelCatalogEntry, ModelListResult};
 use crate::protocol::notification::{SessionUpdateEnvelope, ThreadUpdateEnvelope};
 use crate::protocol::resources::{
@@ -541,9 +555,59 @@ client_methods! {
         response: SyntaxAnalyzeResult,
         serialization: GlobalSharedRead,
     },
+    LanguageLocations => "language/locations" {
+        params: LanguageLocationsParams,
+        response: LanguageLocationsResult,
+        serialization: GlobalSharedRead,
+    },
+    LanguageHierarchy => "language/hierarchy" {
+        params: LanguageHierarchyParams,
+        response: LanguageHierarchyResultDto,
+        serialization: GlobalSharedRead,
+    },
+    LanguageWorkspaceSymbols => "language/workspaceSymbols" {
+        params: LanguageWorkspaceSymbolsParams,
+        response: LanguageWorkspaceSymbolsResult,
+        serialization: GlobalSharedRead,
+    },
+    LanguagePrepareRename => "language/prepareRename" {
+        params: LanguagePrepareRenameParams,
+        response: LanguagePrepareRenameResult,
+        serialization: GlobalSharedRead,
+    },
+    LanguageRename => "language/rename" {
+        params: LanguageRenameParams,
+        response: LanguageWorkspaceEditDto,
+        serialization: GlobalSharedRead,
+    },
+    LanguageCodeActions => "language/codeActions" {
+        params: LanguageCodeActionsParams,
+        response: LanguageCodeActionsResult,
+        serialization: GlobalSharedRead,
+    },
+    LanguageResolveCodeAction => "language/resolveCodeAction" {
+        params: LanguageResolveCodeActionParams,
+        response: LanguageCodeActionDto,
+        serialization: GlobalSharedRead,
+    },
     FsWriteFile => "fs/writeFile" {
         params: FsWriteFileParams,
         response: FsWriteFileResult,
+        serialization: GlobalExclusive,
+    },
+    FsCreateFile => "fs/createFile" {
+        params: FsCreateFileParams,
+        response: FsGetMetadataResult,
+        serialization: GlobalExclusive,
+    },
+    FsRename => "fs/rename" {
+        params: FsRenameParams,
+        response: (),
+        serialization: GlobalExclusive,
+    },
+    FsDelete => "fs/delete" {
+        params: FsDeleteParams,
+        response: (),
         serialization: GlobalExclusive,
     },
     GitStatus => "git/status" {
@@ -1055,8 +1119,43 @@ typescript_bindings! {
     SyntaxDiagnosticDto,
     SyntaxAnalyzeParams,
     SyntaxAnalyzeResult,
+    LanguageLocationKindDto,
+    LanguagePositionDto,
+    LanguageRangeDto,
+    LanguageDocumentDto,
+    LanguageLocationsParams,
+    LanguageLocationDto,
+    LanguageLocationsResult,
+    LanguageHierarchyKindDto,
+    LanguageHierarchyItemDto,
+    LanguageHierarchyParams,
+    LanguageHierarchyEntryDto,
+    LanguageHierarchyResultDto,
+    LanguageWorkspaceSymbolsParams,
+    LanguageWorkspaceSymbolDto,
+    LanguageWorkspaceSymbolsResult,
+    LanguagePrepareRenameParams,
+    LanguageRenamePreparationDto,
+    LanguagePrepareRenameResult,
+    LanguageRenameParams,
+    LanguageTextEditDto,
+    LanguageTextDocumentEditDto,
+    LanguageWorkspaceEditDto,
+    LanguageWorkspaceEditEntryDto,
+    LanguageDiagnosticSeverityDto,
+    LanguageCodeActionDiagnosticDto,
+    LanguageCodeActionsParams,
+    LanguageCodeActionDto,
+    LanguageCodeActionsResult,
+    LanguageResolveCodeActionParams,
     FsWriteFileParams,
     FsWriteFileResult,
+    FsExistingTargetBehavior,
+    FsMissingTargetBehavior,
+    FsDeleteMode,
+    FsCreateFileParams,
+    FsRenameParams,
+    FsDeleteParams,
     FsChanged,
     GitChangeStatusDto,
     GitUpstreamDto,

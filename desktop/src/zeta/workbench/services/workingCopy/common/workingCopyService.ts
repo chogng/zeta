@@ -11,10 +11,19 @@ import { createServiceIdentifier } from "../../../../platform/instantiation/comm
  */
 export interface IWorkingCopy extends IDisposable {
   readonly resource: URI;
+  readonly backupKind: "text" | "structuredDocument";
+  readonly backupLanguageId?: string;
+  readonly backupContentType?: string;
+  readonly backupLabel?: string;
   readonly isDirty: boolean;
   readonly hasExternalChange: boolean;
   readonly onDidChangeDirty: Event<void>;
   readonly onDidChangeExternalChange: Event<void>;
+  readonly onDidChangeContent: Event<void>;
+  /** Current serialized editor-domain content used for crash recovery. */
+  backup(): string;
+  /** Replaces current content with a crash backup while retaining the persisted baseline. */
+  restoreBackup(content: string): void;
   save(signal: AbortSignal): Promise<void>;
   saveAs(resource: URI, signal: AbortSignal): Promise<void>;
   revert(signal: AbortSignal): Promise<void>;
@@ -31,6 +40,7 @@ export interface IWorkingCopyService extends IDisposable {
   readonly onDidUnregister: Event<IWorkingCopy>;
   register(workingCopy: IWorkingCopy): IDisposable;
   get(resource: URI): readonly IWorkingCopy[];
+  getAll(): readonly IWorkingCopy[];
 }
 
 export const IWorkingCopyService = createServiceIdentifier<IWorkingCopyService>("workingCopyService");

@@ -51,7 +51,7 @@ VS Code 的官方源码组织说明了这些 editor 边界：`vs/editor` 不应�
 | `contrib/<feature>/{common,browser}` | ✅ 保留 | 每个贡献点都要有清晰的 feature owner、装配入口和测试边界 |
 | 全局 Service Identifier 和大量隐式 DI | 部分采用 | 只在跨宿主、可替换的 Editor contract 使用；普通依赖优先显式传入 |
 | Workbench 服务直接参与编辑器实现 | ❌ 不采用 | 由 browser/workbench adapter 转换为 Aster-owned contract |
-| legacy editor runtime/VS Code 兼容类型作为模型权威 | ❌ 不采用 | 兼容层只能位于 adapter，不能反向定义 Aster model |
+| 旧 Alpha/Gama/VS Code 兼容类型作为模型权威 | ❌ 不采用 | 旧 runtime 已删除；不得以兼容名义反向定义 Aster model |
 | Rust/IPC 参与每次输入 | ❌ 不采用 | Rust 是异步计算和持久化能力提供者 |
 
 ## 2. 分层与所有权

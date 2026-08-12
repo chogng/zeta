@@ -9,6 +9,7 @@ import { type UnicodeHighlight } from "./unicodeHighlighter/common/unicodeHighli
 import { type RustSyntaxFactsService } from "../browser/services/rustSyntaxFactsService.js";
 import { type SyntaxService } from "../common/languages/syntax/syntaxService.js";
 import { type SemanticTokenSource } from "../browser/view/semanticTokenPresentation.js";
+import { type LanguageLexicalContextSource } from "../common/languages/languageLexicalContext.js";
 
 /** Typed identities for shared runtime objects consumed by independently selected text-editor contributions. */
 export const TextEditorCapability = Object.freeze({
@@ -17,6 +18,7 @@ export const TextEditorCapability = Object.freeze({
   diagnosticDecorations: capability<TextDecorationCollection<LanguageDiagnostic>>("editor.capability.diagnosticDecorations"),
   documentSymbolProviders: capability<readonly LanguageDocumentSymbolProvider[]>("editor.capability.documentSymbolProviders"),
   folding: capability<EditorFoldingModel>("editor.capability.folding"),
+  languageLexicalContext: capability<LanguageLexicalContextSource>("editor.capability.languageLexicalContext"),
   occurrenceDecorations: capability<TextDecorationCollection<void>>("editor.capability.occurrenceDecorations"),
   rustSyntaxFacts: capability<RustSyntaxFactsService | undefined>("editor.capability.rustSyntaxFacts"),
   searchDecorations: capability<TextDecorationCollection<void>>("editor.capability.searchDecorations"),

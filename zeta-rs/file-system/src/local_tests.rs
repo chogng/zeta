@@ -124,6 +124,46 @@ fn rejects_unsafe_or_oversized_write_targets() {
     ));
 }
 
+#[test]
+fn creates_renames_overwrites_and_deletes_workspace_files() {
+    let workspace = TestWorkspace::new();
+    fs::write(workspace.path.join("source.txt"), "source").unwrap();
+    fs::write(workspace.path.join("target.txt"), "target").unwrap();
+    let file_system = workspace.file_system();
+
+    file_system
+        .create_file(Path::new("created.txt"), ExistingTargetBehavior::Error)
+        .unwrap();
+    file_system
+        .rename(
+            Path::new("source.txt"),
+            Path::new("target.txt"),
+            ExistingTargetBehavior::Overwrite,
+        )
+        .unwrap();
+    file_system
+        .delete(
+            Path::new("created.txt"),
+            MissingTargetBehavior::Error,
+            FileDeleteMode::FileOrEmptyDirectory,
+        )
+        .unwrap();
+    file_system
+        .delete(
+            Path::new("created.txt"),
+            MissingTargetBehavior::Ignore,
+            FileDeleteMode::FileOrEmptyDirectory,
+        )
+        .unwrap();
+
+    assert_eq!(
+        fs::read_to_string(workspace.path.join("target.txt")).unwrap(),
+        "source"
+    );
+    assert!(!workspace.path.join("source.txt").exists());
+    assert!(!workspace.path.join("created.txt").exists());
+}
+
 #[cfg(unix)]
 #[test]
 fn preserves_existing_file_permissions_during_replacement() {

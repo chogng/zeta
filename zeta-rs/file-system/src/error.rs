@@ -11,6 +11,8 @@ pub enum FileSystemError {
     WriteLimitExceeded { maximum_bytes: usize },
     RevisionConflict(PathBuf),
     ReadOnly(PathBuf),
+    AlreadyExists(PathBuf),
+    NotFound(PathBuf),
     Io(String),
 }
 
@@ -51,6 +53,12 @@ impl fmt::Display for FileSystemError {
             }
             Self::ReadOnly(path) => {
                 write!(formatter, "path is read-only: {}", path.display())
+            }
+            Self::AlreadyExists(path) => {
+                write!(formatter, "path already exists: {}", path.display())
+            }
+            Self::NotFound(path) => {
+                write!(formatter, "path does not exist: {}", path.display())
             }
             Self::Io(message) => formatter.write_str(message),
         }

@@ -1,6 +1,6 @@
 # zeta-collaboration-server
 
-`zeta-collaboration-server` is the small remote product host for durable Gama
+`zeta-collaboration-server` is the small remote product host for durable Document Engine
 collaboration. It owns bearer authentication, browser-origin policy, HTTP
 framing, long-poll delivery, connection limits, and SQLite lifecycle. Ordered
 room semantics remain in [`zeta-collaboration`](../collaboration/README.md).
@@ -18,7 +18,7 @@ cargo run -p zeta-collaboration-server -- 127.0.0.1:8421 /srv/zeta/collaboration
 ```
 
 `ZETA_COLLABORATION_ALLOWED_ORIGIN` is a comma-separated allowlist. It must
-include the exact browser origin serving Gama. The desktop toolbar asks for the
+include the exact browser origin serving the Document Engine. The desktop toolbar asks for the
 public HTTPS origin and bearer token, then creates or joins a room ID.
 
 The host exposes:
@@ -53,7 +53,7 @@ capability. Room access is enforced through persistent identities and roles;
 issued tokens are stored only as SHA-256 hashes and are returned once when
 created or rotated. Owner-visible audit events record room creation, member
 invitation/revocation, credential rotation, and accepted submissions. The host
-validates wire bounds, Gama envelopes, generic node/mark/selection structure,
+validates wire bounds, Document Engine envelopes, generic node/mark/selection structure,
 and known core transaction kinds; the active browser profile validates its own
 profile-specific schema. Do not expose this endpoint directly to untrusted
 networks without TLS, a strong secret, and an origin allowlist.

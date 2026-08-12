@@ -17,10 +17,12 @@ use zeta_lsp::{
 use crate::projection::project_diagnostic;
 use crate::restart::{RestartDecision, ServerRestartTracker};
 use crate::{
-    LanguageCompletions, LanguageDefinitions, LanguageDiagnostics, LanguageDocumentPosition,
-    LanguageDocumentRevision, LanguageHover, LanguageRequestId, LanguageRequestKind,
-    LanguageServerDefinition, LanguageServiceConfiguration, LanguageServiceDocument,
-    LanguageServiceEnablement, LanguageServiceError,
+    LanguageCodeActions, LanguageCompletions, LanguageDiagnostic, LanguageDiagnostics,
+    LanguageDocumentPosition, LanguageDocumentRevision, LanguageHierarchyItem,
+    LanguageHierarchyResult, LanguageHover, LanguageLocationRange, LanguageLocations,
+    LanguageRenamePreparation, LanguageRequestId, LanguageRequestKind, LanguageServerDefinition,
+    LanguageServiceConfiguration, LanguageServiceDocument, LanguageServiceEnablement,
+    LanguageServiceError, LanguageWorkspaceEditResult, LanguageWorkspaceSymbols,
 };
 
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(15);
@@ -74,7 +76,12 @@ pub enum LanguageServiceEvent {
     },
     Hover(LanguageHover),
     Completions(LanguageCompletions),
-    Definitions(LanguageDefinitions),
+    Locations(LanguageLocations),
+    Hierarchy(LanguageHierarchyResult),
+    WorkspaceSymbols(LanguageWorkspaceSymbols),
+    RenamePreparation(LanguageRenamePreparation),
+    WorkspaceEdit(LanguageWorkspaceEditResult),
+    CodeActions(LanguageCodeActions),
     RequestFailed {
         request_id: LanguageRequestId,
         kind: LanguageRequestKind,
@@ -221,6 +228,224 @@ impl LanguageService {
         })
     }
 
+    pub fn request_declaration(
+        &self,
+        path: impl Into<PathBuf>,
+        revision: LanguageDocumentRevision,
+        position: LanguageDocumentPosition,
+    ) -> Result<LanguageRequestId, LanguageServiceError> {
+        self.queue_request(PendingLanguageRequest::Declaration {
+            id: self.next_request_id(),
+            path: path.into(),
+            revision,
+            position,
+        })
+    }
+
+    pub fn request_implementation(
+        &self,
+        path: impl Into<PathBuf>,
+        revision: LanguageDocumentRevision,
+        position: LanguageDocumentPosition,
+    ) -> Result<LanguageRequestId, LanguageServiceError> {
+        self.queue_request(PendingLanguageRequest::Implementation {
+            id: self.next_request_id(),
+            path: path.into(),
+            revision,
+            position,
+        })
+    }
+
+    pub fn request_type_definition(
+        &self,
+        path: impl Into<PathBuf>,
+        revision: LanguageDocumentRevision,
+        position: LanguageDocumentPosition,
+    ) -> Result<LanguageRequestId, LanguageServiceError> {
+        self.queue_request(PendingLanguageRequest::TypeDefinition {
+            id: self.next_request_id(),
+            path: path.into(),
+            revision,
+            position,
+        })
+    }
+
+    pub fn request_references(
+        &self,
+        path: impl Into<PathBuf>,
+        revision: LanguageDocumentRevision,
+        position: LanguageDocumentPosition,
+        include_declaration: bool,
+    ) -> Result<LanguageRequestId, LanguageServiceError> {
+        self.queue_request(PendingLanguageRequest::References {
+            id: self.next_request_id(),
+            path: path.into(),
+            revision,
+            position,
+            include_declaration,
+        })
+    }
+
+    pub fn request_prepare_call_hierarchy(
+        &self,
+        path: impl Into<PathBuf>,
+        revision: LanguageDocumentRevision,
+        position: LanguageDocumentPosition,
+    ) -> Result<LanguageRequestId, LanguageServiceError> {
+        self.queue_request(PendingLanguageRequest::PrepareCallHierarchy {
+            id: self.next_request_id(),
+            path: path.into(),
+            revision,
+            position,
+        })
+    }
+
+    pub fn request_incoming_calls(
+        &self,
+        path: impl Into<PathBuf>,
+        revision: LanguageDocumentRevision,
+        item: LanguageHierarchyItem,
+    ) -> Result<LanguageRequestId, LanguageServiceError> {
+        self.queue_request(PendingLanguageRequest::IncomingCalls {
+            id: self.next_request_id(),
+            path: path.into(),
+            revision,
+            item,
+        })
+    }
+
+    pub fn request_outgoing_calls(
+        &self,
+        path: impl Into<PathBuf>,
+        revision: LanguageDocumentRevision,
+        item: LanguageHierarchyItem,
+    ) -> Result<LanguageRequestId, LanguageServiceError> {
+        self.queue_request(PendingLanguageRequest::OutgoingCalls {
+            id: self.next_request_id(),
+            path: path.into(),
+            revision,
+            item,
+        })
+    }
+
+    pub fn request_prepare_type_hierarchy(
+        &self,
+        path: impl Into<PathBuf>,
+        revision: LanguageDocumentRevision,
+        position: LanguageDocumentPosition,
+    ) -> Result<LanguageRequestId, LanguageServiceError> {
+        self.queue_request(PendingLanguageRequest::PrepareTypeHierarchy {
+            id: self.next_request_id(),
+            path: path.into(),
+            revision,
+            position,
+        })
+    }
+
+    pub fn request_supertypes(
+        &self,
+        path: impl Into<PathBuf>,
+        revision: LanguageDocumentRevision,
+        item: LanguageHierarchyItem,
+    ) -> Result<LanguageRequestId, LanguageServiceError> {
+        self.queue_request(PendingLanguageRequest::Supertypes {
+            id: self.next_request_id(),
+            path: path.into(),
+            revision,
+            item,
+        })
+    }
+
+    pub fn request_subtypes(
+        &self,
+        path: impl Into<PathBuf>,
+        revision: LanguageDocumentRevision,
+        item: LanguageHierarchyItem,
+    ) -> Result<LanguageRequestId, LanguageServiceError> {
+        self.queue_request(PendingLanguageRequest::Subtypes {
+            id: self.next_request_id(),
+            path: path.into(),
+            revision,
+            item,
+        })
+    }
+
+    pub fn request_workspace_symbols(
+        &self,
+        language_id: impl Into<String>,
+        query: impl Into<String>,
+    ) -> Result<LanguageRequestId, LanguageServiceError> {
+        let id = self.next_request_id();
+        self.send(SupervisorCommand::WorkspaceSymbols {
+            id,
+            language_id: language_id.into(),
+            query: query.into(),
+        })?;
+        Ok(id)
+    }
+
+    pub fn request_prepare_rename(
+        &self,
+        path: impl Into<PathBuf>,
+        revision: LanguageDocumentRevision,
+        position: LanguageDocumentPosition,
+    ) -> Result<LanguageRequestId, LanguageServiceError> {
+        self.queue_request(PendingLanguageRequest::PrepareRename {
+            id: self.next_request_id(),
+            path: path.into(),
+            revision,
+            position,
+        })
+    }
+
+    pub fn request_rename(
+        &self,
+        path: impl Into<PathBuf>,
+        revision: LanguageDocumentRevision,
+        position: LanguageDocumentPosition,
+        new_name: impl Into<String>,
+    ) -> Result<LanguageRequestId, LanguageServiceError> {
+        self.queue_request(PendingLanguageRequest::Rename {
+            id: self.next_request_id(),
+            path: path.into(),
+            revision,
+            position,
+            new_name: new_name.into(),
+        })
+    }
+
+    pub fn request_code_actions(
+        &self,
+        path: impl Into<PathBuf>,
+        revision: LanguageDocumentRevision,
+        range: LanguageLocationRange,
+        diagnostics: Vec<LanguageDiagnostic>,
+        only: Vec<String>,
+    ) -> Result<LanguageRequestId, LanguageServiceError> {
+        self.queue_request(PendingLanguageRequest::CodeActions {
+            id: self.next_request_id(),
+            path: path.into(),
+            revision,
+            range,
+            diagnostics,
+            only,
+        })
+    }
+
+    pub fn request_resolve_code_action(
+        &self,
+        path: impl Into<PathBuf>,
+        revision: LanguageDocumentRevision,
+        provider_data: serde_json::Value,
+    ) -> Result<LanguageRequestId, LanguageServiceError> {
+        self.queue_request(PendingLanguageRequest::ResolveCodeAction {
+            id: self.next_request_id(),
+            path: path.into(),
+            revision,
+            provider_data,
+        })
+    }
+
     pub fn shutdown(mut self) -> Result<(), LanguageServiceError> {
         let (completion, response) = std_mpsc::sync_channel(1);
         self.send(SupervisorCommand::Shutdown { completion })?;
@@ -288,6 +513,19 @@ enum SupervisorCommand {
         server_epoch: u64,
     },
     LanguageRequest(PendingLanguageRequest),
+    WorkspaceSymbols {
+        id: LanguageRequestId,
+        language_id: String,
+        query: String,
+    },
+    WorkspaceSymbolsCompleted {
+        id: LanguageRequestId,
+        query: String,
+        server: LanguageServerName,
+        generation: u64,
+        server_epoch: u64,
+        result: Result<LanguageWorkspaceSymbols, String>,
+    },
     LanguageRequestCompleted {
         server: LanguageServerName,
         generation: u64,
@@ -412,6 +650,30 @@ impl Supervisor {
                 SupervisorCommand::RetryServer { .. } => {}
                 SupervisorCommand::LanguageRequest(request) => {
                     self.begin_language_request(request);
+                }
+                SupervisorCommand::WorkspaceSymbols {
+                    id,
+                    language_id,
+                    query,
+                } => {
+                    self.begin_workspace_symbols(id, language_id, query);
+                }
+                SupervisorCommand::WorkspaceSymbolsCompleted {
+                    id,
+                    query,
+                    server,
+                    generation,
+                    server_epoch,
+                    result,
+                } => {
+                    self.complete_workspace_symbols(
+                        id,
+                        query,
+                        server,
+                        generation,
+                        server_epoch,
+                        result,
+                    );
                 }
                 SupervisorCommand::LanguageRequestCompleted {
                     server,

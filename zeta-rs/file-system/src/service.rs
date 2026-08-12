@@ -1,8 +1,11 @@
 use crate::DirectoryEntry;
+use crate::ExistingTargetBehavior;
 use crate::FileContent;
+use crate::FileDeleteMode;
 use crate::FileMetadata;
 use crate::FileSystemError;
 use crate::FileWriteCondition;
+use crate::MissingTargetBehavior;
 use crate::file_revision;
 use std::path::Path;
 
@@ -60,4 +63,27 @@ pub trait WorkspaceFileSystem: Send + Sync {
 
     /// Lists the direct children of one existing directory.
     fn read_directory(&self, path: &Path) -> Result<Vec<DirectoryEntry>, FileSystemError>;
+
+    /// Creates an empty file according to the explicit existing-target behavior.
+    fn create_file(
+        &self,
+        path: &Path,
+        existing: ExistingTargetBehavior,
+    ) -> Result<FileMetadata, FileSystemError>;
+
+    /// Renames one workspace resource according to the explicit destination behavior.
+    fn rename(
+        &self,
+        source: &Path,
+        target: &Path,
+        existing: ExistingTargetBehavior,
+    ) -> Result<(), FileSystemError>;
+
+    /// Deletes one workspace resource according to the explicit missing-target behavior and scope.
+    fn delete(
+        &self,
+        path: &Path,
+        missing: MissingTargetBehavior,
+        mode: FileDeleteMode,
+    ) -> Result<(), FileSystemError>;
 }

@@ -3,7 +3,7 @@ import { SymbolIconsController } from "./symbolIconsController.js";
 import { TextEditorCapability } from "../../textEditorCapabilities.js";
 
 registerEditorContribution({ id: "editor.contrib.symbolIcons", install: context => {
-  if (context.kind !== "text") return;
+  if (context.kind !== "text" || context.model.largeFile.tooLargeForTokenization) return;
   const service = context.own(context.languageFeaturesService.createDocumentSymbolService(context.model, { fallbackProviders: context.getOptionalCapability(TextEditorCapability.documentSymbolProviders) ?? [] }));
   context.own(new SymbolIconsController(context.viewport, service, context.languageId, context.onLanguageError));
 } });

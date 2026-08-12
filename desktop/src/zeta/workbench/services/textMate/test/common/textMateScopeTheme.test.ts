@@ -16,6 +16,11 @@ test("Scope themes apply last matching rules before the stable fallback", () => 
   assert.deepEqual(resolver(["source.demo", "keyword.control.demo"]), { tokenType: "keyword", modifiers: [] });
 });
 
+test("Scope themes retain exact foreground, background, and font style presentation", () => {
+  const resolver = createTextMateScopeThemeResolver({ revision: 1, rules: [{ selector: "comment", foreground: "#6A9955", background: "#10101080", fontStyle: ["italic", "underline"] }] });
+  assert.deepEqual(resolver(["source.demo", "comment.line.demo"]), { tokenType: "comment", modifiers: [], foreground: "#6A9955", background: "#10101080", fontStyle: ["italic", "underline"] });
+});
+
 test("Scope selector matching supports comma unions, segment wildcards, and exclusions", () => {
   assert.equal(matchesTextMateScopeSelector("comment, string.*", ["source.demo", "string.quoted.demo"]), true);
   assert.equal(matchesTextMateScopeSelector("source.demo string -string.regexp", ["source.demo", "string.quoted.demo"]), true);

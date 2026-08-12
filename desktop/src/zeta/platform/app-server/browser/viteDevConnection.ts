@@ -11,7 +11,7 @@ export const WEB_APP_SERVER_CLOSED_EVENT = "zeta:app-server:closed";
 
 const DEFAULT_CONNECT_TIMEOUT = 10_000;
 const DEFAULT_REQUEST_TIMEOUT = 30_000;
-const MAX_FRAME_BYTES = 1_048_576;
+const MAX_FRAME_BYTES = 320 * 1024 * 1024;
 
 export interface ViteDevHotContext {
   on(event: string, listener: (payload: unknown) => void): void;

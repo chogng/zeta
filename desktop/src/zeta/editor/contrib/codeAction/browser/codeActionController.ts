@@ -1,6 +1,7 @@
 import "./media/codeAction.css";
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
 import { DisposableOwner, ResettableDisposableGroup } from "../../../../base/common/lifecycle.js";
+import { type URI } from "../../../../base/common/uri.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { createEditorEditCommand } from "../../../common/commands/editorCommand.js";
 import { TextRange } from "../../../common/core/text.js";
@@ -8,6 +9,7 @@ import { type LanguageDiagnostic } from "../../../common/languages/languageResul
 import { TextDecorationCollection } from "../../../common/model/decorationCollection.js";
 import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 import { type CodeActionService, type LanguageCodeAction } from "../common/codeAction.js";
+import { type LanguageWorkspaceEdit } from "../../../common/languages/languageWorkspaceEdit.js";
 
 /** Owns the editor-local code-action picker and routes selected edits through cursor commands. */
 export class CodeActionController extends DisposableOwner {
@@ -18,7 +20,7 @@ export class CodeActionController extends DisposableOwner {
   private actionRange: TextRange | undefined;
   private actionDiagnostics: readonly LanguageDiagnostic[] = [];
 
-  constructor(private readonly input: HTMLTextAreaElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: CodeActionService, private readonly diagnostics: TextDecorationCollection<LanguageDiagnostic>, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Aster code action failed", error)) {
+  constructor(private readonly input: HTMLTextAreaElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: CodeActionService, private readonly diagnostics: TextDecorationCollection<LanguageDiagnostic>, private readonly languageId: string, private readonly resource: URI, private readonly applyWorkspaceEdit: ((edit: LanguageWorkspaceEdit) => void | Promise<void>) | undefined, private readonly onError: (error: unknown) => void = error => console.error("Editor code action failed", error)) {
     super();
     if (viewport.textModel !== selections.textModel || diagnostics.textModel !== selections.textModel) throw new TypeError("Aster code action dependencies must share one text model");
     const ownerDocument = viewport.element.ownerDocument;
@@ -90,8 +92,14 @@ export class CodeActionController extends DisposableOwner {
         this.close();
         return;
       }
-      const command = createEditorEditCommand(this.viewport.textModel, this.selections.selections, resolved.edit.edits);
-      if (command) this.selections.execute(command);
+      if (this.applyWorkspaceEdit) {
+        await this.applyWorkspaceEdit(resolved.edit);
+      } else {
+        const documentEdit = resolved.edit.entries.find(edit => edit.kind === "textDocument" && edit.resource.toString() === this.resource.toString());
+        if (resolved.edit.entries.length !== 1 || !documentEdit || documentEdit.kind !== "textDocument") throw new Error("This editor host cannot apply a multi-resource code action");
+        const command = createEditorEditCommand(this.viewport.textModel, this.selections.selections, documentEdit.edits);
+        if (command) this.selections.execute(command);
+      }
       this.close();
     } catch (error) {
       this.onError(error);

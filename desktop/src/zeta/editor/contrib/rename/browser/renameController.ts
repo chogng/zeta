@@ -2,10 +2,12 @@ import "./media/rename.css";
 import { registerEditorContribution } from "../../../browser/editorContribution.js";
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { type URI } from "../../../../base/common/uri.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { createEditorEditCommand } from "../../../common/commands/editorCommand.js";
 import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 import { type RenameService } from "../common/rename.js";
+import { type LanguageWorkspaceEdit } from "../../../common/languages/languageWorkspaceEdit.js";
 
 /** Owns the local rename input and applies provider edits through the cursor command contract. */
 export class RenameController extends DisposableOwner {
@@ -14,7 +16,7 @@ export class RenameController extends DisposableOwner {
   private readonly status: HTMLSpanElement;
   private request: AbortController | undefined;
 
-  constructor(private readonly editorInput: HTMLTextAreaElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: RenameService, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Aster rename failed", error)) {
+  constructor(private readonly editorInput: HTMLTextAreaElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: RenameService, private readonly languageId: string, private readonly resource: URI, private readonly applyWorkspaceEdit: ((edit: LanguageWorkspaceEdit) => void | Promise<void>) | undefined, private readonly onError: (error: unknown) => void = error => console.error("Editor rename failed", error)) {
     super();
     if (viewport.textModel !== selections.textModel) throw new TypeError("Aster rename dependencies must share one text model");
     const ownerDocument = viewport.element.ownerDocument;
@@ -86,8 +88,14 @@ export class RenameController extends DisposableOwner {
       const active = this.selections.selections.primary.active;
       const edit = await this.service.provideRenameEdits(this.languageId, active, newName, request.signal);
       if (request.signal.aborted) return;
-      const command = createEditorEditCommand(this.viewport.textModel, this.selections.selections, edit.edits);
-      if (command) this.selections.execute(command);
+      if (this.applyWorkspaceEdit) {
+        await this.applyWorkspaceEdit(edit);
+      } else {
+        const documentEdit = edit.entries.find(candidate => candidate.kind === "textDocument" && candidate.resource.toString() === this.resource.toString());
+        if (edit.entries.length !== 1 || !documentEdit || documentEdit.kind !== "textDocument") throw new Error("This editor host cannot apply a multi-resource rename");
+        const command = createEditorEditCommand(this.viewport.textModel, this.selections.selections, documentEdit.edits);
+        if (command) this.selections.execute(command);
+      }
       this.close();
     } catch (error) {
       if (!request.signal.aborted) this.onError(error);
@@ -108,6 +116,6 @@ export class RenameController extends DisposableOwner {
 
 registerEditorContribution({ id: "editor.contrib.rename", install: context => {
   if (context.kind !== "text") return;
-  const service = context.own(context.languageFeaturesService.createRenameService(context.model));
-  context.own(new RenameController(context.textInput.element, context.viewport, context.selections, service, context.languageId, context.onLanguageError));
+  const service = context.own(context.languageFeaturesService.createRenameService(context.model, context.options.input.resource));
+  context.own(new RenameController(context.textInput.element, context.viewport, context.selections, service, context.languageId, context.options.input.resource, context.options.onApplyWorkspaceEdit, context.onLanguageError));
 } });

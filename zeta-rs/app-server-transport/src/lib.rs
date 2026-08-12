@@ -2,7 +2,12 @@
 
 use std::io::{self, BufRead, Write};
 
-pub const DEFAULT_MAX_MESSAGE_BYTES: usize = 1_048_576;
+/// Maximum JSONL frame size shared by both ends of the local App Server transport.
+///
+/// An editor file is capped at 50 MiB before serialization, while JSON escaping can
+/// expand one UTF-8 byte to six wire bytes. Keep the transport bound large enough
+/// to carry that validated payload without making framing unbounded.
+pub const DEFAULT_MAX_MESSAGE_BYTES: usize = 320 * 1024 * 1024;
 
 /// A JSON Lines transport whose read and write operations enforce the negotiated message limit.
 pub struct JsonlTransport<R, W> {

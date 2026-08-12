@@ -18,11 +18,15 @@ import { type EditorTextDirection } from "../../../../editor/browser/view/editor
 import { type EditorLineWrapping } from "../../../../editor/browser/view/visualLineProjection.js";
 import { type IWorkingCopy, type IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";
 import { type ISyntaxApi } from "../../../../platform/syntax/common/syntaxApi.js";
+import { type TextRange } from "../../../../editor/common/core/text.js";
+import { type LanguageLocation } from "../../../../editor/contrib/gotoSymbol/common/languageNavigation.js";
+import { type LanguageWorkspaceEdit } from "../../../../editor/common/languages/languageWorkspaceEdit.js";
 
 export interface EditorPanePart extends IDisposable {
   layout(dimension: IDimension): void;
   focus(): void;
   getValue(): string;
+  revealRange?(range: TextRange): void;
   announceAccessibilityStatus?(message: string): void;
   readonly isDirty?: boolean;
   readonly hasExternalChange?: boolean;
@@ -49,6 +53,8 @@ export interface EditorPaneOptions {
   readonly onOpenLink?: (target: string) => void | Promise<void>;
   readonly onShowContextMenu?: EditorPartOptions["onShowContextMenu"];
   readonly onExecuteEditorCommand?: EditorPartOptions["onExecuteEditorCommand"];
+  readonly onOpenLocation?: (location: LanguageLocation) => void | Promise<void>;
+  readonly onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit) => void | Promise<void>;
   readonly placeholder?: string;
   readonly showUnicodeHighlights?: boolean;
   readonly fontZoom?: EditorPartOptions["fontZoom"];
@@ -118,6 +124,8 @@ export class CodeEditorPane extends DisposableOwner implements IEditorPane {
         onOpenLink: this.options.onOpenLink,
         onShowContextMenu: this.options.onShowContextMenu,
         onExecuteEditorCommand: this.options.onExecuteEditorCommand,
+        onOpenLocation: this.options.onOpenLocation,
+        onApplyWorkspaceEdit: this.options.onApplyWorkspaceEdit,
         placeholder: this.options.placeholder,
         showUnicodeHighlights: this.options.showUnicodeHighlights,
         fontZoom: this.options.fontZoom,
@@ -137,7 +145,7 @@ export class CodeEditorPane extends DisposableOwner implements IEditorPane {
     this.workingCopySlot.replace(new EditorWorkingCopy(
       modelReference,
       this.resourceStore,
-      input.resource,
+      input,
       this.options.workingCopyService,
       input.resource.scheme === "untitled" ? this.options.onSave : undefined,
     ));
@@ -196,6 +204,10 @@ export class CodeEditorPane extends DisposableOwner implements IEditorPane {
     await this.part.value?.revert?.();
   }
 
+  revealRange(range: TextRange): void {
+    this.part.value?.revealRange?.(range);
+  }
+
   private handleSaveKeydown(event: KeyboardEvent): void {
     if (event.defaultPrevented || event.isComposing || event.getModifierState("AltGraph")) return;
     if ((!event.ctrlKey && !event.metaKey) || event.shiftKey || event.altKey || event.key.toLowerCase() !== "s") return;
@@ -225,20 +237,29 @@ function reportSaveError(error: unknown): void {
 
 class EditorWorkingCopy extends DisposableOwner implements IWorkingCopy {
   readonly resource: URI;
+  readonly backupKind = "text" as const;
+  readonly backupLanguageId: string | undefined;
+  readonly backupContentType: string | undefined;
+  readonly backupLabel: string | undefined;
   readonly onDidChangeDirty: IWorkingCopy["onDidChangeDirty"];
   readonly onDidChangeExternalChange: IWorkingCopy["onDidChangeExternalChange"];
+  readonly onDidChangeContent: IWorkingCopy["onDidChangeContent"];
 
   constructor(
     private readonly reference: TextModelReference,
     private readonly resourceStore: ITextResourceStore,
-    resource: URI,
+    input: EditorInput,
     workingCopyService: IWorkingCopyService | undefined,
     private readonly saveUntitled: (() => Promise<void | boolean>) | undefined,
   ) {
     super();
-    this.resource = resource;
+    this.resource = input.resource;
+    this.backupLanguageId = input.languageId;
+    this.backupContentType = input.contentType;
+    this.backupLabel = input.label;
     this.onDidChangeDirty = reference.onDidChangeDirty;
     this.onDidChangeExternalChange = reference.onDidChangeExternalChange;
+    this.onDidChangeContent = listener => reference.model.onDidChange(() => listener());
     if (workingCopyService) this.own(workingCopyService.register(this));
   }
 
@@ -248,6 +269,14 @@ class EditorWorkingCopy extends DisposableOwner implements IWorkingCopy {
 
   get hasExternalChange(): boolean {
     return this.reference.hasExternalChange;
+  }
+
+  backup(): string {
+    return this.reference.model.getText();
+  }
+
+  restoreBackup(content: string): void {
+    this.reference.model.reset(content);
   }
 
   save(signal: AbortSignal): Promise<void> {

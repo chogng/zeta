@@ -9,7 +9,7 @@ the binary once per realm, initializes `vscode-oniguruma`, and exposes only the
 `createBrowserTextMateTokenizationService` combines that runtime with a
 caller-owned grammar snapshot source. The returned service is caller-owned.
 Neither runtime helper loads extension manifests, grammar resources, themes,
-or Alpha models.
+or Aster models.
 
 `BrowserTextMateGrammarService` is the browser-side grammar boundary. It does not
 discover files or import product grammar assets. `BrowserTextMateService` accepts caller-owned

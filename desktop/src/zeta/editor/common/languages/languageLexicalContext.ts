@@ -5,12 +5,21 @@ import { createLanguageLexicalLineScanner } from "./languageLexicalConfiguration
 import { type LanguageLexicalBracketEvent, type LanguageLexicalLineResult, type LanguageLexicalLineScanner, type LanguageLexicalState } from "./languageLexicalLineScanner.js";
 import { type TextModelChange, type TextPosition } from "../core/text.js";
 import { type TextModel } from "../model/textModel.js";
+import { type LanguageToken } from "../tokens/languageTokens.js";
+
+export interface LanguageTokenizationSource {
+  readonly textModel: TextModel;
+  readonly modelVersion: number;
+  getLineTokens(lineIndex: number): readonly LanguageToken[];
+}
 
 export interface LanguageLexicalContextSource {
   readonly textModel: TextModel;
   readonly languageId: string;
   getStructuralLineContent(lineIndex: number, startColumn?: number, endColumn?: number): string;
   getTokenTypeAt(position: TextPosition): string | undefined;
+  getLanguageIdAt(position: TextPosition): string;
+  supportsLanguageId(languageId: string): boolean;
 }
 
 /** Extends lexical context with bracket events whose columns remain in source text coordinates. */
@@ -94,6 +103,15 @@ export class LanguageLexicalContextIndex extends DisposableOwner implements Lang
     return undefined;
   }
 
+  getLanguageIdAt(position: TextPosition): string {
+    this.textModel.offsetAt(position);
+    return this.languageId;
+  }
+
+  supportsLanguageId(languageId: string): boolean {
+    return languageId === this.languageId;
+  }
+
   getStructuralBracketEvents(lineIndex: number): readonly LanguageLexicalBracketEvent[] {
     this.ensureAlive();
     assertLineIndex(this.textModel, lineIndex);
@@ -126,6 +144,81 @@ export class LanguageLexicalContextIndex extends DisposableOwner implements Lang
   private ensureAlive(): void {
     if (this.disposed) throw new ReferenceError("LanguageLexicalContextIndex is already disposed");
   }
+}
+
+/** Uses grammar tokens when current and falls back to the deterministic lexical index. */
+export class TokenAwareLanguageLexicalContext implements LanguageStructuralBracketSource {
+  readonly textModel;
+  readonly languageId;
+
+  constructor(private readonly fallback: LanguageStructuralBracketSource, private readonly tokenization: LanguageTokenizationSource, private readonly configurations: LanguageConfigurationSource) {
+    this.textModel = fallback.textModel;
+    this.languageId = fallback.languageId;
+    if (tokenization.textModel !== fallback.textModel) throw new TypeError("Token-aware lexical context requires one text model");
+  }
+
+  getStructuralLineContent(lineIndex: number, startColumn = 0, endColumn?: number): string {
+    const line = this.textModel.getLineContent(lineIndex);
+    const resolvedEnd = endColumn ?? line.length;
+    if (this.tokenization.modelVersion !== this.textModel.version) return this.fallback.getStructuralLineContent(lineIndex, startColumn, resolvedEnd);
+    let result = line.slice(startColumn, resolvedEnd);
+    for (const token of this.tokenization.getLineTokens(lineIndex)) {
+      if (!excludedFromStructure(token) || token.range.end.columnIndex <= startColumn || token.range.start.columnIndex >= resolvedEnd) continue;
+      const from = Math.max(startColumn, token.range.start.columnIndex) - startColumn;
+      const to = Math.min(resolvedEnd, token.range.end.columnIndex) - startColumn;
+      result = result.slice(0, from) + " ".repeat(to - from) + result.slice(to);
+    }
+    return result;
+  }
+
+  getTokenTypeAt(position: TextPosition): string | undefined {
+    const token = this.tokenAt(position);
+    return token?.tokenType ?? this.fallback.getTokenTypeAt(position);
+  }
+
+  getLanguageIdAt(position: TextPosition): string {
+    return this.tokenAt(position)?.languageId ?? this.languageId;
+  }
+
+  supportsLanguageId(_languageId: string): boolean {
+    return true;
+  }
+
+  getStructuralBracketEvents(lineIndex: number): readonly LanguageLexicalBracketEvent[] {
+    if (this.tokenization.modelVersion !== this.textModel.version) return this.fallback.getStructuralBracketEvents(lineIndex);
+    const tokens = this.tokenization.getLineTokens(lineIndex);
+    const embedded = tokens.filter(token => token.languageId !== undefined && token.languageId !== this.languageId);
+    const events = this.fallback.getStructuralBracketEvents(lineIndex).filter(event => !tokens.some(token => (excludedFromStructure(token) || token.languageId !== undefined && token.languageId !== this.languageId) && contains(token, event.startColumn, event.endColumn)));
+    const line = this.textModel.getLineContent(lineIndex);
+    for (const token of embedded) {
+      if (excludedFromStructure(token)) continue;
+      const languageId = token.languageId!;
+      const pairs = this.configurations.getLanguageConfiguration(languageId).brackets;
+      const candidates = pairs.flatMap(pair => [{ token: pair.open, matchingToken: pair.close, action: "open" as const }, { token: pair.close, matchingToken: pair.open, action: "close" as const }]).sort((left, right) => right.token.length - left.token.length);
+      let column = token.range.start.columnIndex;
+      while (column < token.range.end.columnIndex) {
+        const candidate = candidates.find(value => line.startsWith(value.token, column) && column + value.token.length <= token.range.end.columnIndex);
+        if (!candidate) { column += 1; continue; }
+        events.push(Object.freeze({ kind: "bracket", action: candidate.action, startColumn: column, endColumn: column + candidate.token.length, token: candidate.token, matchingToken: candidate.matchingToken }));
+        column += candidate.token.length;
+      }
+    }
+    return Object.freeze(events.sort((left, right) => left.startColumn - right.startColumn || left.endColumn - right.endColumn));
+  }
+
+  private tokenAt(position: TextPosition) {
+    this.textModel.offsetAt(position);
+    if (this.tokenization.modelVersion !== this.textModel.version) return undefined;
+    return this.tokenization.getLineTokens(position.lineIndex).find(token => token.range.start.columnIndex <= position.columnIndex && position.columnIndex < token.range.end.columnIndex);
+  }
+}
+
+function excludedFromStructure(token: LanguageToken): boolean {
+  return token.balancedBrackets === false || token.tokenType === "string" || token.tokenType === "comment" || token.tokenType === "regexp";
+}
+
+function contains(token: LanguageToken, startColumn: number, endColumn: number): boolean {
+  return token.range.start.columnIndex <= startColumn && token.range.end.columnIndex >= endColumn;
 }
 
 function structuralBracketTokens(configuration: ResolvedLanguageConfiguration): readonly string[] {

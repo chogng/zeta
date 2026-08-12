@@ -15,7 +15,7 @@ Aster 是 Zeta 唯一的可组装编辑器内核，源码保持在一个扁平�
 
 Aster 是整个内核的品牌，不是某一个 engine 的别名。两个 engine 只称为 Text Engine 与 Document Engine；`TextModel` 与 `DocumentModel` 不互相继承，也不通过一个带大量可选方法的万能 model 接口合并。可共享能力必须依赖小而完整的 capability contract；schema validation、transaction、selection mapping、IME commit 和 model lifecycle 仍属于对应 engine，不能变成任意开关 contribution。
 
-legacy editor runtime 不再是产品模型或公共接口的定义者，只保留为显式选择的兼容 editor 和工具能力参照。后续迁移仍必须先形成可独立测试的 Zeta contract，再让上层依赖它，最后删除 legacy runtime 中对应的所有权。
+Aster 是当前唯一的产品 editor runtime。旧 Alpha/Gama editor ID、DOM class、目录和兼容 pane 已删除；架构与测试不得再以兼容为理由重新引入第二套编辑状态。
 
 ## 所有权
 
@@ -26,14 +26,14 @@ legacy editor runtime 不再是产品模型或公共接口的定义者，只保�
 | `editor/contrib` | 行式与结构化 feature 已按能力组织 | 命令、controller、可移除投影、schema、citation 和 collaboration；不得注册 pane、拥有第二套 model 或读取产品 ID |
 | `editor.*.all.ts` | editor 能力静态装配已具备 | Code、Academic 与完整 editor contribution 清单；不得注册 Workbench pane/input |
 | `workbench/contrib/{codeEditor,documentEditor,academic}` | 产品宿主适配已具备 | pane/input、文件与 working-copy 接线、Academic profile、embedded factory 和产品注册；不得实现编辑事务或视图内部行为 |
-| `workbench/services/textMate` | 部分具备 | grammar revision registry、真实 TextMate/Oniguruma runtime、增量行状态缓存、Aster provider/module adapter、版本化 catalog/theme wire 与独立 browser Worker、JSON/JSONC 资源、caller-resolved session contribution 与声明式 scope-theme selector 已完成；extension resource discovery 尚未完成 |
-| Document service | 部分具备 | `IFileService` 将 App Server `fs/changed` 映射为工作区失效事件，`ITextFileService` 转发；Aster 模型服务提供 dirty、快照保存、显式 revert、CRLF/LF 保留、干净模型重载与脏模型外改状态；URI revision/CAS、恢复仍未完成 |
+| `workbench/services/textMate` | 已具备 | grammar revision registry、真实 TextMate/Oniguruma runtime、增量行状态缓存、Aster provider/module adapter、版本化 catalog/theme wire、独立 browser Worker、声明式扩展资源、活动主题 token color、embedded language 与 bracket metadata 均已接通 |
+| Document service | 已具备 | `IFileService` 将 App Server `fs/changed` 映射为工作区失效事件，`ITextFileService` 转发；Aster 模型服务提供 dirty、快照保存、显式 revert、CRLF/LF 保留、干净模型重载、脏模型外改状态与 expected-revision/CAS；Workbench 提供 workspace-scoped IndexedDB working-copy 恢复 |
 | Selection/decorations | 基础具备 | selection、实例控制器、tracked range、decoration collection |
-| Language model | 部分具备 | 版本化请求、取消、过期拒绝、worker 重建、token/diagnostic/completion store、analysis/completion provider host、catalog/module activation/resolve/incremental multi-lane wire、增量词法分析、session/accept、semantic-token 行索引/DOM 投影、六级 lexical bracket colorization 及四级 diagnostic underline/native message tooltip 已完成；rich diagnostic、AST 与语言服务器级增量分析尚未完成 |
+| Language model | 已具备 Code 主路径 | 版本化 token/diagnostic/completion、TextMate 与 parser facts、跨文件 definition/declaration/references/implementation/type definition、Peek、workspace symbols、call/type hierarchy、rename、code action 与有序 WorkspaceEdit 均接通 App Server；更广的语言覆盖由 language-server catalog 演进，不再复制 editor contract |
 | Browser view | 部分具备 | common viewport、虚拟行 DOM、字体行宽、gutter、selection/caret、基础 decoration、hit-test、active-position reveal、至多 160 行的有界 density minimap（WebGL 优先、DOM 回退、click/drag scroll）、diagnostic severity marker、可见行缩进参考线已完成；富交互与主题细化尚未完成 |
 | Input controller | 部分具备 | IME 内核事务、pointer selection、Alt+Shift 列选择、键盘导航、textarea 编辑、completion 键盘/鼠标接受、Ctrl+Space invoke、trigger character 与 incomplete refresh、plain/syntax-marked safe HTML 选区与空选区整行 copy/cut/paste、单个显式文本文件 clipboard paste/drop、前端本地 MIME paste provider 与内置 `text/uri-list`、基础 composition DOM event 已完成；Android/macOS 特化仍未完成 |
 | Accessibility | 部分具备 | editor label、聚焦 textarea 的文本/主选区镜像、multi-selection `aria-description`、completion/listbox ARIA、dialog state 与 cursor/selection/save live-region announcements、forced-colors focus/selection/caret/diagnostic 语义已具备；完整 screen-reader navigation 与平台辅助输入仍待真实平台验证 |
-| legacy editor runtime adapter | 兼容 | 保留显式选择的既有编辑能力，不定义 Aster contract |
+| Large-file policy | 已具备 | 模型创建时固定判断 20 MiB/30 万行 tokenization、50 MiB synchronization、256M text-unit heap 阈值；保留编辑/滚动/查找/保存，关闭或限制全量后台 token、diagnostic、folding、CodeLens、Inlay Hint、symbol、occurrence 与 bracket colorization |
 | Workbench Editor Part | 已有独立实现 | tabs、pane 生命周期、可见性和产品 contribution |
 
 `src/zeta/base` 继续保持领域无关。编辑器位置、文档版本、selection 和
@@ -91,8 +91,7 @@ Aster viewport / input
 ITextFileService.save → IFileService.writeFile → App Server
 ```
 
-legacy editor runtime 仍可通过显式 `preferredEditorId` 打开，但不与 Aster model 双向绑定，避免两个 undo
-stack、两个版本序列和不明确的事务边界。
+`preferredEditorId` 只是 Workbench 在 code、document、diff、PDF 等现有 pane 间做显式选择的通用机制，不再承载旧 editor 兼容入口。
 
 ## 目标数据流
 
@@ -110,9 +109,6 @@ Viewport + Layout model
 Input controller ←──────→ Native DOM renderer
 ```
 
-legacy editor runtime compatibility editor 不在 Aster 目标数据流内。仍需保留的工具能力必须通过 Aster 的
-公开 contract 实现；legacy editor runtime 不能持有 Aster 的权威版本、dirty state 或产品持久化语义。
-
 ## 长期不变量
 
 - 一个文档在一个 renderer realm 中只有一个权威 `TextModel`。
@@ -123,8 +119,7 @@ legacy editor runtime compatibility editor 不在 Aster 目标数据流内。仍
 - IME composition 在提交前不是普通编辑事务，取消 composition 不得污染
   history。
 - accessibility 是 view/input contract 的组成部分，不是渲染完成后的补丁。
-- legacy editor runtime 特有类型不得越过 adapter 进入 Aster editor、document 或
-  Workbench 公共接口。
+- 旧 Alpha/Gama identity、DOM vocabulary 和 runtime 类型不得重新进入 editor、document 或 Workbench 公共接口。
 
 ## 分阶段实施
 
@@ -1045,9 +1040,9 @@ token 数组；若要进一步消除 renderer 端整数组分配，需要后续�
 | --- | --- | --- |
 | event、lifecycle、URI、resource collection | `base` | ✅ 复用现有领域无关基座；禁止 editor 反向依赖 |
 | 原始资源 I/O 与粗粒度失效 | `platform/files` | ✅ App Server-backed UTF-8 read/write 与 `fs/changed` projection |
-| load/save 传输、共享文档引用与 Aster dirty/revert/conflict policy | `workbench/services/textfile/common` / `BrowserTextModelService` | ✅ 首个 file-backed Aster consumer 已建立；CAS、备份恢复仍未完成 |
+| load/save 传输、共享文档引用与 Aster dirty/revert/conflict policy | `workbench/services/textfile/common` / `BrowserTextModelService` | ✅ CAS 与 workspace-scoped working-copy 备份恢复均已接通 |
 | 文本事务、selection、decoration、language result | `editor/common` | ✅ editor 领域所有权 |
-| TextMate grammar/runtime 与 token provider | 独立 `workbench/services/textMate` adapter | 部分具备；runtime/provider/browser WASM、产品 JSON/JSONC 资源与 caller-resolved session contribution 已完成，extension resource discovery 仍待完成 |
+| TextMate grammar/runtime 与 token provider | 独立 `workbench/services/textMate` adapter | ✅ runtime/provider/browser WASM、内置资源、声明式 extension discovery、活动主题、embedded language 与 bracket metadata 已接通 |
 
 因此 Current 36 不为 token delta 新造 service，也不提前创建没有保存、冲突或 grammar
 consumer 的空壳 service。Current 43 在 Analysis provider 成为真实 consumer 后才抽取
@@ -1080,9 +1075,9 @@ Analysis Worker entry 不再直接把 lexical provider 无条件注册进 provid
 module 协议。
 
 这条 module seam 是 `workbench/services/textMate` adapter 的接入点。Current 37 落地时
-TextMate grammar、scope 解析和 runtime 依赖尚未实现；Current 43 已在 Aster/`base`
-之外建立该 adapter，但产品 grammar resource 接线仍未完成。同样，
-`workbench/services/textfile/common` 已由 Aster、Aster 与 Explorer 的
+TextMate grammar、scope 解析和 runtime 依赖后来由 Current 43–46 在 Aster/`base`
+之外建立，并已接通产品 grammar 资源与 extension discovery。同样，
+`workbench/services/textfile/common` 已由 Text Engine、Document Engine 与 Explorer 的
 共享 loading/save 边界证明需要。它只转发 I/O 与粗粒度 invalidation；Aster 保持 dirty、
 revert、共享模型引用和外改 policy，不能反向塞入 `TextModel` 或 `base`。
 
@@ -1219,8 +1214,8 @@ revision。
 | Tabs/Spaces/tabSize | Aster editor instance | 值对象即可，尚不需要 service |
 | indentation/on-enter language rules | `LanguageConfigurationRegistry` | ✅ 已有多个 input/Worker composition root |
 | 持久化 editor setting | future Workbench settings service | 尚未完成；未来只映射为实例 options |
-| TextFile resolve/save 与 invalidation；Aster dirty/conflict | `workbench/services/textfile` / `BrowserTextModelService` | ✅，不与 Enter command 耦合；CAS/恢复仍待独立 document contract |
-| TextMate grammar/runtime | `workbench/services/textMate` adapter | Current 43 部分具备；不得进入 Enter 或 `base` |
+| TextFile resolve/save 与 invalidation；Aster dirty/conflict | `workbench/services/textfile` / `BrowserTextModelService` | ✅，不与 Enter command 耦合；CAS 与 workspace-scoped recovery 已接通 |
+| TextMate grammar/runtime | `workbench/services/textMate` adapter | ✅；不得进入 Enter 或 `base` |
 
 Current 41 初始 matcher 使用 model 原始行文本，尚未像 VS Code 的
 `IndentationContextProcessor` 一样移除 string/comment token 中的 bracket-looking
@@ -1300,7 +1295,7 @@ comment/string/regexp/number/operator/keyword/function/type/parameter/variable/t
 property/constant/punctuation/invalid vocabulary。`TextMateScopeThemeModel` 现在提供
 可 structured-clone 的 revisioned selector rule，覆盖 token type 和 modifier；Renderer
 通过独立 theme wire 更新 Worker，Worker 清空仅样式 cache 后由下一请求重算。embedded
-language identity 仍未实现。`createTextMateAnalysisProvider` 把结果转为 Aster
+language identity、balanced/unbalanced bracket metadata 与 exact scope styling 已接通。`createTextMateAnalysisProvider` 把结果转为 Aster
 `LanguageTokenResult`，`createTextMateAnalysisModule` 再接入现有 module activation
 协议。
 
@@ -1322,9 +1317,9 @@ namespace/default 两种形式；该差异不泄漏给调用方。
 | Aster provider/module integration | `workbench/services/textMate/common` | ✅ |
 | Oniguruma WASM URL/fetch | `workbench/services/textMate/browser` | ✅ |
 | baseline structural diagnostics | `aster.lexical` | ✅，继续独立 |
-| grammar resource/extension manifest loading | product extension/resource layer | caller-resolved session contributions 已具备；manifest discovery 尚未完成 |
-| scope-theme selector、token type 与 modifier projection | TextMate/theme adapter | ✅；embedded language 仍未完成 |
-| URI、文件保存、dirty/conflict | platform/textfile / `BrowserTextModelService` | ✅，不得混入 TextMate；CAS/恢复仍独立演进 |
+| grammar resource/extension manifest loading | product extension/resource layer | ✅ App Server extension discovery 与声明式资源投影已接通；不执行 extension JavaScript |
+| scope-theme selector、token type、modifier 与 embedded-language projection | TextMate/theme adapter | ✅ |
+| URI、文件保存、dirty/conflict | platform/textfile / `BrowserTextModelService` | ✅，不得混入 TextMate；CAS/恢复已接通 |
 
 真实 WASM 测试覆盖跨行 string/comment state、单行编辑只重扫一行、多行状态变化扫描到
 suffix convergence、同 model version grammar revision 替换、scope validation、
@@ -1385,7 +1380,7 @@ revision。`textMateAnalysisWorkerMain.ts` 是独立 composition root，拥有�
 | deterministic fallback/diagnostics | `aster.lexical` |
 | WASM fetch/init | `workbench/services/textMate/browser` |
 
-这种组合保持依赖为 `textmate/browser → textmate/common → alpha/common → base`；
+这种组合保持依赖为 `textmate/browser → textmate/common → editor/common → base`；
 Aster 原有 Worker 不 import TextMate，`base` 也不增加任何 editor identity。
 
 真实 structured-clone 测试证明 initial catalog 在首请求前落地、TextMate 优先、
@@ -1394,9 +1389,8 @@ stale revision poison client，以及 registry snapshot 到 wire catalog 的 mat
 独立 Vite build 同时产出 TextMate Worker chunk 与 466,610-byte Oniguruma WASM。
 
 Current 44 落地时还缺真实 grammar resource owner 和产品层消费者。Current 45 已补入
-首批内置 grammar 与 catalog service；`createBrowserEditorPart` 选择
-Aster pane 的 Worker factory 并调度 catalog 变化后的 model token request。外部
-extension resource discovery 仍未完成。catalog change 本身不隐式遍历或重算所有
+首批内置 grammar 与 catalog service，后续 extension service 也已接通声明式资源 discovery；`createBrowserEditorPart` 选择
+Aster pane 的 Worker factory 并调度 catalog 变化后的 model token request。catalog change 本身不隐式遍历或重算所有
 文档，这个调度责任不得偷偷进入通用 catalog model。
 
 ### Current 45：TextMate grammar service 与首批真实资源
@@ -1413,8 +1407,8 @@ Current 45 建立了独立的 editor-domain 服务边界：
 | grammar contribution、异步装载和 catalog 发布 | `TextMateGrammarService` | ✅ `workbench/services/textMate/common` |
 | 产品内置 grammar asset import | `BrowserTextMateGrammarService` | ✅ `workbench/services/textMate/browser` |
 | catalog 传输和 tokenization | TextMate dedicated Worker | ✅ 继续无文件权限 |
-| extension manifest 与外部 grammar resource | future extension layer | caller-resolved session contribution ✅；manifest/resource discovery 尚未完成 |
-| TextFile resolve/save/invalidation；Aster dirty/save/revert/conflict | `textfile` / `BrowserTextModelService` | ✅，未与 grammar service 混合；CAS/恢复仍未完成 |
+| extension manifest 与外部 grammar resource | extension service | ✅ 声明式 manifest/resource discovery；不执行 extension JavaScript |
+| TextFile resolve/save/invalidation；Aster dirty/save/revert/conflict | `textfile` / `BrowserTextModelService` | ✅，未与 grammar service 混合；CAS/working-copy 恢复已完成 |
 
 `TextMateGrammarService` 拥有 registration 和 `TextMateGrammarCatalogModel`。每次贡献变化
 都会捕获 immutable registry snapshot；较新 revision 会取消较旧 materialization，只有最新且
@@ -1441,12 +1435,11 @@ revision 变化时为打开文档请求重分析；Current 46 已补齐这两个
 
 Aster 已从独立内核演进为由真实 `IEditorPane` 宿主的编辑器能力，但仍保持“Workbench 负责资源与宿主、
 编辑器域负责模型和交互语义”的单向依赖。Code 与 Academic 产品通过 Workbench contribution 注册 Aster 为
-普通文本的 `Default` editor；legacy editor runtime 保留为 `Optional` compatibility editor，并可通过显式
-`preferredEditorId` 选择。
+普通文本的默认 editor；document、diff 和 PDF 继续通过各自明确的 pane descriptor 参与选择。
 
 `IEditorPart.openEditor` 是产品调用面，`EditorPaneRegistry` 是实现选择边界，`IEditorPane` 是
 被选实现的生命周期 contract。产品调用方不选择 parser、analysis service 或 transport；descriptor
-可以把 Aster、legacy editor runtime 或后续实现绑定到同一资源输入，App Server 不知道最终选择了哪个 editor。
+只绑定当前受支持的 code、document、diff、PDF 等资源视图，App Server 不知道最终选择了哪个 pane。
 
 | 能力 | 当前所有者 | 状态 |
 | --- | --- | --- |
@@ -1459,13 +1452,12 @@ Aster 已从独立内核演进为由真实 `IEditorPane` 宿主的编辑器能�
 | original/modified 版本 gate、diff result 与前端计算取消 | `DiffModel` / `IDiffComputationService` | ✅ common model；browser Worker 为当前实现 |
 | JSON/JSONC TextMate 与 Analysis Worker | `workbench/services/textMate` (`ITextMateService`) | ✅ 产品 Aster pane 已选择 |
 | Completion Worker | `createBrowserEditorPart` | ✅ 产品 Aster pane 已选择 |
-| dirty、save/revert、CRLF/LF、粗粒度外改重载与冲突状态 | `BrowserTextModelService` | ✅；编码、CAS、备份恢复仍未完成 |
+| dirty、save/revert、CRLF/LF、粗粒度外改重载与冲突状态 | `BrowserTextModelService` | ✅；CAS 与 Workbench 备份恢复已完成，非 UTF-8 编码仍是单独能力 |
 
 打开资源时，`ExplorerViewPane` 只提交 `{ resource, label }`；它不再预读文件或伪造
 `initialText`。`EditorPart` 选定 descriptor 后把 `ITextFileService` 注入 pane。
 Aster pane 先通过 `BrowserTextModelService.acquire` 获取引用：已有资源模型保持权威，
-新资源才调用 TextFile resolve。最后一个引用释放时模型销毁。legacy editor runtime 使用相同内容
-服务但保留自己的临时模型池；Aster 也通过同一服务解析内容。TextFile service
+新资源才调用 TextFile resolve。最后一个引用释放时模型销毁。TextFile service
 不吸收任何编辑器的 transaction、undo 或 selection 类型。
 
 `TextModel` 本身只接受一个领域无关的可取消 maintenance scheduler；没有注入时保持
@@ -1481,17 +1473,12 @@ Aster pane 先通过 `BrowserTextModelService.acquire` 获取引用：已有资�
 Aster 内部契约见
 [`desktop/src/zeta/editor/text-engine.md`](../desktop/src/zeta/editor/text-engine.md)。
 
-当前内置 grammar catalog 与 Analysis Worker 都跟随一个 Aster session 生命周期。
-这是有意的阶段性所有权：静态 JSON/JSONC grammar 尚未形成跨 pane 的贡献消费者，
-提前把 TextMate 注册进共享 Workbench 会让未选择 Aster 的产品也依赖编辑器专用域。
-未来 extension contribution host 出现后，可由选择 Aster 的产品 composition root
-共享 `ITextMateGrammarService`；每个文档的 Analysis Worker 仍由其 model coordinator
-独立拥有，避免故障域和增量 mirror 互相污染。
+Grammar catalog 由共享 Workbench `ITextMateService` 拥有，声明式 extension resource contribution
+会更新其 revision；每个文档的 Analysis Worker 仍由其 model coordinator 独立拥有，避免故障域和增量 mirror 互相污染。
 
 本阶段明确没有把 TextFile、TextMate 或 document identity 下沉到 `base`。当前 host
 已具备原子写入与粗粒度变更通知，Aster 因而拥有 dirty/save/revert 和外改 policy；
-expected-revision write、备份与编码恢复仍需作为新的 cross-editor document contract
-演进，不能把现有 pre-write baseline check 描述为 CAS。
+expected-revision write、workspace-scoped working-copy 备份恢复已经接通；非 UTF-8 编码恢复仍是独立能力。
 
 ### Proposed 3：语言边界
 
@@ -1509,11 +1496,6 @@ hit-test、pointer selection、keyboard navigation、普通 textarea 编辑、
 decoration 与 versioned language result 沿 language boundary 演进。
 每增加一种输入路径，都必须生成同一种 Zeta transaction。
 
-### Potential：移除 legacy editor runtime
-
-只有原生 renderer、输入、accessibility、language projection 和 diff
-达到产品要求后才删除 legacy editor runtime。删除是能力完成的结果，不是单独里程碑。
-
 ## 评估与迁移门槛
 
 | 阶段 | 必须证明 |
@@ -1525,4 +1507,4 @@ decoration 与 versioned language result 沿 language boundary 演进。
 | Input | 主流 IME、clipboard、dead key、组合取消和浏览器差异 |
 | Accessibility | screen reader 导航、ARIA、键盘完整操作和高对比度 |
 
-legacy editor runtime 对应层只能在这些证据通过后从“委托”改为“已由 Zeta 拥有”。
+这些证据决定现有能力能否从“部分具备”升级为“已具备”；它们不再对应任何旧 runtime 迁移状态。

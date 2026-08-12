@@ -28,14 +28,18 @@ class FakeWorkingCopy extends DisposableOwner implements IWorkingCopy {
   private readonly externalChangeEmitter = this.own(new Emitter<void>());
   readonly onDidChangeDirty = this.dirtyEmitter.event;
   readonly onDidChangeExternalChange = this.externalChangeEmitter.event;
+  readonly onDidChangeContent = this.dirtyEmitter.event;
   readonly isDirty = false;
   readonly hasExternalChange = false;
+  readonly backupKind = "text" as const;
 
   constructor(readonly resource: URI) {
     super();
   }
 
   async save(_signal: AbortSignal): Promise<void> {}
+  backup(): string { return ""; }
+  restoreBackup(): void {}
   async saveAs(_resource: URI, _signal: AbortSignal): Promise<void> {}
   async revert(_signal: AbortSignal): Promise<void> {}
 }

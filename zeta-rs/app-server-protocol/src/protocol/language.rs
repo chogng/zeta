@@ -1,0 +1,295 @@
+use crate::protocol::fs::{FsDeleteMode, FsExistingTargetBehavior, FsMissingTargetBehavior};
+use schemars::JsonSchema;
+use serde::Deserialize;
+use serde::Serialize;
+use serde_json::Value;
+use std::path::PathBuf;
+use ts_rs::TS;
+
+/// Cross-file language operation requested for one source position.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum LanguageLocationKindDto {
+    Declaration,
+    Definition,
+    Implementation,
+    TypeDefinition,
+    References,
+}
+
+/// One zero-based UTF-16 editor position.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguagePositionDto {
+    pub line_index: u32,
+    pub column_index: u32,
+}
+
+/// One ordered, end-exclusive UTF-16 editor range.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageRangeDto {
+    pub start: LanguagePositionDto,
+    pub end: LanguagePositionDto,
+}
+
+/// Authoritative source snapshot submitted before one language request.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageDocumentDto {
+    pub path: PathBuf,
+    pub language_id: String,
+    #[ts(type = "number")]
+    pub revision: u64,
+    #[schemars(length(max = 10_485_760))]
+    pub text: String,
+}
+
+/// Cross-file request against exactly one submitted document revision.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageLocationsParams {
+    pub document: LanguageDocumentDto,
+    pub position: LanguagePositionDto,
+    pub kind: LanguageLocationKindDto,
+    #[serde(default)]
+    pub include_declaration: bool,
+}
+
+/// One workspace-relative target returned in editor-native UTF-16 coordinates.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageLocationDto {
+    pub path: PathBuf,
+    pub range: LanguageRangeDto,
+    pub selection_range: LanguageRangeDto,
+}
+
+/// Fresh cross-file targets for exactly one source document revision.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageLocationsResult {
+    #[ts(type = "number")]
+    pub revision: u64,
+    pub locations: Vec<LanguageLocationDto>,
+}
+
+/// Call- or type-hierarchy operation requested by an editor.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum LanguageHierarchyKindDto {
+    PrepareCall,
+    IncomingCalls,
+    OutgoingCalls,
+    PrepareType,
+    Supertypes,
+    Subtypes,
+}
+
+/// One hierarchy symbol, including opaque server data required for follow-up requests.
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageHierarchyItemDto {
+    pub name: String,
+    pub symbol_kind: u32,
+    pub detail: Option<String>,
+    pub path: PathBuf,
+    pub range: LanguageRangeDto,
+    pub selection_range: LanguageRangeDto,
+    #[ts(type = "unknown")]
+    pub data: Option<Value>,
+}
+
+/// Hierarchy request against exactly one submitted document revision.
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageHierarchyParams {
+    pub document: LanguageDocumentDto,
+    pub kind: LanguageHierarchyKindDto,
+    pub position: Option<LanguagePositionDto>,
+    pub item: Option<LanguageHierarchyItemDto>,
+}
+
+/// One hierarchy result and optional call-site ranges.
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageHierarchyEntryDto {
+    pub item: LanguageHierarchyItemDto,
+    pub from_path: Option<PathBuf>,
+    pub from_ranges: Vec<LanguageRangeDto>,
+}
+
+/// Fresh hierarchy entries for exactly one source document revision.
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageHierarchyResultDto {
+    #[ts(type = "number")]
+    pub revision: u64,
+    pub entries: Vec<LanguageHierarchyEntryDto>,
+}
+
+/// Project-wide symbol search for one language-server family.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageWorkspaceSymbolsParams {
+    pub language_id: String,
+    #[schemars(length(max = 1024))]
+    pub query: String,
+}
+
+/// One project-wide symbol with an exact workspace location.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageWorkspaceSymbolDto {
+    pub name: String,
+    pub symbol_kind: u32,
+    pub container_name: Option<String>,
+    pub path: PathBuf,
+    pub range: LanguageRangeDto,
+}
+
+/// Bounded project-wide symbol result.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageWorkspaceSymbolsResult {
+    pub symbols: Vec<LanguageWorkspaceSymbolDto>,
+}
+
+/// Prepare-rename request against one exact source snapshot.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguagePrepareRenameParams {
+    pub document: LanguageDocumentDto,
+    pub position: LanguagePositionDto,
+}
+
+/// Rename target range and initial input text, or `None` when unavailable.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageRenamePreparationDto {
+    pub range: LanguageRangeDto,
+    pub placeholder: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguagePrepareRenameResult {
+    pub preparation: Option<LanguageRenamePreparationDto>,
+}
+
+/// Workspace rename request against one exact source snapshot.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageRenameParams {
+    pub document: LanguageDocumentDto,
+    pub position: LanguagePositionDto,
+    #[schemars(length(min = 1, max = 1024))]
+    pub new_name: String,
+}
+
+/// One UTF-16 text replacement.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageTextEditDto {
+    pub range: LanguageRangeDto,
+    pub new_text: String,
+}
+
+/// Text replacements for one exact workspace content baseline.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageTextDocumentEditDto {
+    pub path: PathBuf,
+    pub expected_text: String,
+    pub edits: Vec<LanguageTextEditDto>,
+}
+
+/// One ordered text or resource operation returned by a language server.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", tag = "kind")]
+#[ts(tag = "kind")]
+pub enum LanguageWorkspaceEditEntryDto {
+    TextDocument {
+        document: LanguageTextDocumentEditDto,
+    },
+    Create {
+        path: PathBuf,
+        existing: FsExistingTargetBehavior,
+    },
+    Rename {
+        source: PathBuf,
+        target: PathBuf,
+        existing: FsExistingTargetBehavior,
+    },
+    Delete {
+        path: PathBuf,
+        missing: FsMissingTargetBehavior,
+        mode: FsDeleteMode,
+    },
+}
+
+/// Ordered workspace edit spanning text documents and workspace resources.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageWorkspaceEditDto {
+    pub entries: Vec<LanguageWorkspaceEditEntryDto>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum LanguageDiagnosticSeverityDto {
+    Error,
+    Warning,
+    Information,
+    Hint,
+}
+
+/// Diagnostic context submitted with a code-action request.
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageCodeActionDiagnosticDto {
+    pub range: LanguageRangeDto,
+    pub severity: LanguageDiagnosticSeverityDto,
+    pub message: String,
+    #[ts(type = "unknown")]
+    pub code: Option<Value>,
+    pub source: Option<String>,
+}
+
+/// Code-action request against one exact source snapshot and selection.
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageCodeActionsParams {
+    pub document: LanguageDocumentDto,
+    pub range: LanguageRangeDto,
+    pub diagnostics: Vec<LanguageCodeActionDiagnosticDto>,
+    pub only: Vec<String>,
+}
+
+/// One code action. `provider_data` must be returned unchanged for resolution.
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageCodeActionDto {
+    pub title: String,
+    pub kind: Option<String>,
+    pub is_preferred: bool,
+    pub disabled_reason: Option<String>,
+    pub edit: Option<LanguageWorkspaceEditDto>,
+    #[ts(type = "unknown")]
+    pub provider_data: Value,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageCodeActionsResult {
+    pub actions: Vec<LanguageCodeActionDto>,
+}
+
+/// Resolve request for one action returned by the same language server.
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageResolveCodeActionParams {
+    pub document: LanguageDocumentDto,
+    #[ts(type = "unknown")]
+    pub provider_data: Value,
+}

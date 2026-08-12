@@ -30,6 +30,28 @@ pub enum FileWriteCondition {
     ExpectedRevision(String),
 }
 
+/// Behavior when a create or rename target already exists.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ExistingTargetBehavior {
+    Error,
+    Overwrite,
+    Ignore,
+}
+
+/// Behavior when a delete target does not exist.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MissingTargetBehavior {
+    Error,
+    Ignore,
+}
+
+/// Scope of one delete operation.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum FileDeleteMode {
+    FileOrEmptyDirectory,
+    Recursive,
+}
+
 /// Produces the stable opaque revision for one exact sequence of file bytes.
 pub fn file_revision(bytes: &[u8]) -> String {
     let digest = Sha256::digest(bytes);

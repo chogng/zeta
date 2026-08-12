@@ -17,7 +17,7 @@ pub enum SyntaxLanguageDto {
     Typescriptreact,
 }
 
-/// One zero-based UTF-16 position, matching Alpha's text-model coordinate system.
+/// One zero-based UTF-16 position, matching the editor text-model coordinate system.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct SyntaxPositionDto {

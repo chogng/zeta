@@ -13,6 +13,8 @@ pub const RUST_ANALYZER_SERVER_ID: &str = "rust-analyzer";
 pub const JSON_LANGUAGE_SERVER_ID: &str = "vscode-json-language-server";
 /// Stable built-in identity for the Bash and shell-script language server.
 pub const BASH_LANGUAGE_SERVER_ID: &str = "bash-language-server";
+/// Stable built-in identity for JavaScript and TypeScript language intelligence.
+pub const TYPESCRIPT_LANGUAGE_SERVER_ID: &str = "typescript-language-server";
 
 pub use definition::LanguageServerDefinition;
 pub use error::LanguageServerCatalogError;

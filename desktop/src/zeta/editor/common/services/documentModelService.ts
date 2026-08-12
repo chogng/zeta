@@ -19,11 +19,16 @@ export interface DocumentModelInput {
 /** A lifetime-bound structured document model with its persistence state. */
 export interface DocumentModelReference extends IDisposable {
   readonly resource: URI;
+  readonly backupKind: "structuredDocument";
+  readonly backupContentType?: string;
   readonly model: DocumentModel;
   readonly isDirty: boolean;
   readonly hasExternalChange: boolean;
   readonly onDidChangeDirty: Event<void>;
   readonly onDidChangeExternalChange: Event<void>;
+  readonly onDidChangeContent: Event<void>;
+  backup(): string;
+  restoreBackup(content: string): void;
   save(signal: AbortSignal): Promise<void>;
   saveAs(resource: URI, signal: AbortSignal): Promise<void>;
   revert(signal: AbortSignal): Promise<void>;

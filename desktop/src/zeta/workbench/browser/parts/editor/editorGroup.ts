@@ -23,6 +23,8 @@ import type { IEditorTabDragAndDrop, EditorTabDropPosition } from "./editorTabDr
 import { EditorGroupWatermark } from "./editorGroupWatermark.js";
 import { editorInputKey, type EditorTabDescriptor } from "./editorTabsControl.js";
 import { EditorTitleControl, type EditorTitleActions } from "./editorTitleControl.js";
+import type { LanguageLocation } from "../../../../editor/contrib/gotoSymbol/common/languageNavigation.js";
+import type { LanguageWorkspaceEdit } from "../../../../editor/common/languages/languageWorkspaceEdit.js";
 
 /** Operations and state owned independently by one EditorGroup. */
 export interface IEditorGroup {
@@ -60,6 +62,8 @@ export interface EditorGroupOptions {
   readonly serverEvents?: IServerEventApi;
   readonly workingCopyService?: IWorkingCopyService;
   readonly onSave?: (group: IEditorGroup, input: EditorInput, pane: IEditorPane) => Promise<boolean>;
+  readonly onOpenLocation?: (location: LanguageLocation) => void | Promise<void>;
+  readonly onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit) => void | Promise<void>;
   readonly titleActions?: EditorTitleActions;
   readonly onDidActivate?: () => void;
   readonly dragAndDrop?: IEditorTabDragAndDrop;
@@ -92,6 +96,8 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
   private readonly serverEvents: IServerEventApi | undefined;
   private readonly workingCopyService: IWorkingCopyService | undefined;
   private readonly onSave: ((group: IEditorGroup, input: EditorInput, pane: IEditorPane) => Promise<boolean>) | undefined;
+  private readonly onOpenLocation: ((location: LanguageLocation) => void | Promise<void>) | undefined;
+  private readonly onApplyWorkspaceEdit: ((edit: LanguageWorkspaceEdit) => void | Promise<void>) | undefined;
   private readonly titleControl: EditorTitleControl;
   private readonly watermarkElement: HTMLElement;
   private readonly entries: EditorGroupEntry[] = [];
@@ -116,6 +122,8 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
     this.serverEvents = options.serverEvents;
     this.workingCopyService = options.workingCopyService;
     this.onSave = options.onSave;
+    this.onOpenLocation = options.onOpenLocation;
+    this.onApplyWorkspaceEdit = options.onApplyWorkspaceEdit;
     this.element = options.ownerDocument.createElement("section");
     this.element.className = "zeta-editor-group";
     this.element.setAttribute("aria-label", "Editor group");
@@ -212,6 +220,7 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
       existing.input = input;
       this.moveEntry(existing, options.index);
       this.activateEntry(existing, false);
+      applyEditorOpenOptions(existing.paneInstance.pane, options);
       return existing.paneInstance.pane;
     }
 
@@ -229,6 +238,8 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
       documentCollaborationApi: this.documentCollaborationApi,
       serverEvents: this.serverEvents,
       workingCopyService: this.workingCopyService,
+      onOpenLocation: this.onOpenLocation,
+      onApplyWorkspaceEdit: this.onApplyWorkspaceEdit,
       ...(this.onSave ? {
         onSave: () => {
           if (!createdPane) return Promise.reject(new Error("Editor save is unavailable"));
@@ -291,6 +302,7 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
     }
     this.ordinaryContent = undefined;
     this.activateEntry(entry, false);
+    applyEditorOpenOptions(pane, options);
     return pane;
   }
 
@@ -477,6 +489,10 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
     this.pendingPane = undefined;
     pending?.dispose();
   }
+}
+
+function applyEditorOpenOptions(pane: IEditorPane, options: EditorOpenOptions): void {
+  if (options.selection) pane.revealRange?.(options.selection);
 }
 
 let editorPaneId = 0;

@@ -11,4 +11,7 @@ pub use find_up::{FindUpErrorPolicy, find_nearest_ancestor_with_markers};
 pub use local::LocalFileSystem;
 pub use service::WorkspaceFileSystem;
 pub use types::file_revision;
-pub use types::{DirectoryEntry, FileContent, FileMetadata, FileType, FileWriteCondition};
+pub use types::{
+    DirectoryEntry, ExistingTargetBehavior, FileContent, FileDeleteMode, FileMetadata, FileType,
+    FileWriteCondition, MissingTargetBehavior,
+};

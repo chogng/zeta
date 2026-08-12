@@ -108,6 +108,57 @@ pub struct FsWriteFileResult {
     pub revision: String,
 }
 
+/// Behavior when a create or rename target already exists.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum FsExistingTargetBehavior {
+    Error,
+    Overwrite,
+    Ignore,
+}
+
+/// Behavior when a delete target does not exist.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum FsMissingTargetBehavior {
+    Error,
+    Ignore,
+}
+
+/// Scope of one delete operation.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum FsDeleteMode {
+    FileOrEmptyDirectory,
+    Recursive,
+}
+
+/// Creates one empty workspace file.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct FsCreateFileParams {
+    pub path: PathBuf,
+    pub existing: FsExistingTargetBehavior,
+}
+
+/// Renames one workspace file or directory.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct FsRenameParams {
+    pub source: PathBuf,
+    pub target: PathBuf,
+    pub existing: FsExistingTargetBehavior,
+}
+
+/// Deletes one workspace file or directory.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct FsDeleteParams {
+    pub path: PathBuf,
+    pub missing: FsMissingTargetBehavior,
+    pub mode: FsDeleteMode,
+}
+
 /// Coarse workspace filesystem invalidation published by `fs/changed`.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", tag = "type")]

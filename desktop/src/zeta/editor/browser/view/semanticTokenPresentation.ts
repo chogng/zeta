@@ -29,9 +29,10 @@ export enum SemanticTokenModifier {
 export interface ResolvedSemanticToken {
   readonly startColumn: number;
   readonly endColumn: number;
-  readonly presentation: SemanticTokenPresentation;
+  readonly presentation?: SemanticTokenPresentation;
   /** Stable browser-only modifiers; unknown backend modifiers are excluded. */
   readonly modifiers?: readonly SemanticTokenModifier[];
+  readonly syntaxPresentation?: LanguageToken["presentation"];
 }
 
 export interface BracketColorizationSpan {
@@ -150,8 +151,9 @@ export function projectAsterSemanticTokenLine(
     }
     const tokenElement = ownerDocument.createElement("span");
     tokenElement.className = "aster-editor-token";
-    if (token) tokenElement.classList.add(token.presentation);
+    if (token?.presentation) tokenElement.classList.add(token.presentation);
     for (const modifier of token?.modifiers ?? []) tokenElement.classList.add(modifier);
+    if (token?.syntaxPresentation) applySyntaxPresentation(tokenElement, token.syntaxPresentation);
     if (bracket) tokenElement.classList.add(`aster-editor-bracket-level-${bracket.level}`);
     tokenElement.textContent = lineText.slice(startColumn, endColumn);
     fragment.append(tokenElement);
@@ -190,6 +192,7 @@ export function snapshotAsterSemanticTokenLines(source: SemanticTokenSource): Re
       endColumn: token.endColumn,
       presentation: token.presentation,
       ...(token.modifiers && token.modifiers.length > 0 ? { modifiers: Object.freeze([...token.modifiers]) } : {}),
+      ...(token.syntaxPresentation === undefined ? {} : { syntaxPresentation: token.syntaxPresentation }),
     })));
     validateLineTokens(source.textModel.getLineContent(line.lineIndex), tokens);
     result.set(line.lineIndex, tokens);
@@ -200,7 +203,7 @@ export function snapshotAsterSemanticTokenLines(source: SemanticTokenSource): Re
 function validateLineTokens(lineText: string, tokens: readonly ResolvedSemanticToken[]): void {
   let previousEnd = 0;
   for (const token of tokens) {
-    validatePresentation(token.presentation);
+    if (token.presentation !== undefined) validatePresentation(token.presentation);
     validateModifiers(token.modifiers);
     if (!Number.isSafeInteger(token.startColumn) || !Number.isSafeInteger(token.endColumn)) {
       throw new RangeError("Aster semantic token columns must be safe integers");
@@ -232,17 +235,27 @@ function resolveLineTokens(tokens: readonly LanguageToken[], resolvePresentation
   const resolved: ResolvedSemanticToken[] = [];
   for (const token of tokens) {
     const presentation = resolvePresentation(token);
-    if (presentation === undefined) continue;
-    validatePresentation(presentation);
+    if (presentation === undefined && token.presentation === undefined) continue;
+    if (presentation !== undefined) validatePresentation(presentation);
     const modifiers = resolveAsterSemanticTokenModifiers(token);
     resolved.push(Object.freeze({
       startColumn: token.range.start.columnIndex,
       endColumn: token.range.end.columnIndex,
-      presentation,
+      ...(presentation === undefined ? {} : { presentation }),
       ...(modifiers.length > 0 ? { modifiers } : {}),
+      ...(token.presentation === undefined ? {} : { syntaxPresentation: token.presentation }),
     }));
   }
   return Object.freeze(resolved);
+}
+
+function applySyntaxPresentation(element: HTMLElement, presentation: NonNullable<LanguageToken["presentation"]>): void {
+  if (presentation.foreground !== undefined) element.style.color = presentation.foreground;
+  if (presentation.background !== undefined) element.style.backgroundColor = presentation.background;
+  if (presentation.fontStyle?.includes("italic")) element.style.fontStyle = "italic";
+  if (presentation.fontStyle?.includes("bold")) element.style.fontWeight = "bold";
+  const decorations = presentation.fontStyle?.filter(style => style === "underline" || style === "strikethrough").map(style => style === "strikethrough" ? "line-through" : style) ?? [];
+  if (decorations.length > 0) element.style.textDecorationLine = decorations.join(" ");
 }
 
 /** Maps standard LSP modifier names to Aster's closed browser presentation set. */

@@ -1,4 +1,5 @@
 import type { URI } from "../../../../base/common/uri.js";
+import type { TextRange } from "../../../../editor/common/core/text.js";
 
 /**
  * A resource requested by the Workbench editor host.
@@ -27,4 +28,6 @@ export interface EditorOpenOptions {
   readonly preferredEditorId?: string;
   /** Inserts or moves the editor to this zero-based tab index. */
   readonly index?: number;
+  /** Selects and reveals this range after the target pane becomes active. */
+  readonly selection?: TextRange;
 }

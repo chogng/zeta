@@ -1,5 +1,5 @@
 import type { ViteDevAppServerConnection } from "../../app-server/browser/viteDevConnection.js";
-import { viteDevRequest } from "../../app-server/browser/viteDevRequest.js";
+import { viteDevRequest, voidResult } from "../../app-server/browser/viteDevRequest.js";
 import type { UnavailableOperation } from "../../renderer/browser/disconnectedHost.js";
 import type { IFileApi } from "../common/fileApi.js";
 
@@ -10,6 +10,9 @@ export function createDisconnectedFileApi(unavailable: UnavailableOperation): IF
     readFile: () => unavailable("fs.readFile"),
     readBinaryFile: () => unavailable("fs.readBinaryFile"),
     writeFile: () => unavailable("fs.writeFile"),
+    createFile: () => unavailable("fs.createFile"),
+    rename: () => unavailable("fs.rename"),
+    delete: () => unavailable("fs.delete"),
   };
 }
 
@@ -20,5 +23,8 @@ export function createViteDevFileApi(connection: ViteDevAppServerConnection): IF
     readFile: (params) => viteDevRequest(connection, "fs/readFile", params),
     readBinaryFile: (params) => viteDevRequest(connection, "fs/readBinaryFile", params),
     writeFile: (params) => viteDevRequest(connection, "fs/writeFile", params),
+    createFile: (params) => viteDevRequest(connection, "fs/createFile", params),
+    rename: (params) => voidResult(viteDevRequest(connection, "fs/rename", params)),
+    delete: (params) => voidResult(viteDevRequest(connection, "fs/delete", params)),
   };
 }

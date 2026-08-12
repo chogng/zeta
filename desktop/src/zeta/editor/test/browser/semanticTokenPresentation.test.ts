@@ -35,6 +35,18 @@ test("Semantic token modifiers use Aster's closed presentation vocabulary", () =
   dom.window.close();
 });
 
+test("syntax token presentation applies exact theme styling without a semantic class", () => {
+  const dom = new JSDOM("<!doctype html><body><code></code></body>");
+  const element = requiredElement<HTMLElement>(dom.window.document, "code");
+  projectAsterSemanticTokenLine(element, "note", [{ startColumn: 0, endColumn: 4, syntaxPresentation: { foreground: "#6A9955", background: "#10101080", fontStyle: ["italic", "bold", "underline"] } }]);
+  const rendered = requiredElement<HTMLElement>(element, ".aster-editor-token");
+  assert.equal(rendered.style.color, "rgb(106, 153, 85)");
+  assert.equal(rendered.style.fontStyle, "italic");
+  assert.equal(rendered.style.fontWeight, "bold");
+  assert.equal(rendered.style.textDecorationLine, "underline");
+  dom.window.close();
+});
+
 test("Semantic token source resolves immutable named lines without owning common state", () => {
   using model = new TextModel("const value");
   using store = createLanguageTokenStore(model);

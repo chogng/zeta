@@ -1243,6 +1243,21 @@ impl AppServer {
             .ok_or_else(|| RpcError::new(-32040, AppServerErrorName::FileSystemUnavailable))
     }
 
+    pub(super) fn language_workspace_root(&self) -> Result<WorkspaceRoot, RpcError> {
+        let runtime = self
+            .workspace_runtime
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let authorization = runtime
+            .authorization
+            .as_ref()
+            .ok_or_else(|| RpcError::new(-32040, AppServerErrorName::LanguageServiceUnavailable))?;
+        authorization
+            .require(WorkspaceCapability::ExecuteProcess)
+            .map_err(|_| RpcError::new(-32043, AppServerErrorName::WorkspaceTrustRequired))?;
+        Ok(authorization.root().clone())
+    }
+
     pub(super) fn git_runtime_service(&self) -> Result<Arc<GitRuntime>, RpcError> {
         self.workspace_runtime
             .read()

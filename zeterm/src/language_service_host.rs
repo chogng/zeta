@@ -10,11 +10,12 @@ use zeta_install_context::InstallContext;
 use zeta_language_server_catalog::{
     BASH_LANGUAGE_SERVER_ID, JSON_LANGUAGE_SERVER_ID, LanguageServerCatalog,
     LanguageServerExecutionPolicy, LanguageServerPreference, RUST_ANALYZER_SERVER_ID,
+    TYPESCRIPT_LANGUAGE_SERVER_ID,
 };
 use zeta_language_service::{
-    LanguageCompletions, LanguageDefinitions, LanguageDocumentPosition, LanguageDocumentRevision,
-    LanguageHover, LanguageRequestId, LanguageRequestKind, LanguageServerState, LanguageService,
-    LanguageServiceConfiguration, LanguageServiceDocument, LanguageServiceEvent,
+    LanguageCompletions, LanguageDocumentPosition, LanguageDocumentRevision, LanguageHover,
+    LanguageLocations, LanguageRequestId, LanguageRequestKind, LanguageServerState,
+    LanguageService, LanguageServiceConfiguration, LanguageServiceDocument, LanguageServiceEvent,
     LanguageServiceEventSink,
 };
 use zeta_winit::EventLoopProxy;
@@ -43,7 +44,7 @@ pub(crate) struct NativeLanguageService {
     server_states: HashMap<String, LanguageServerState>,
     hover: Option<LanguageHover>,
     completions: Option<LanguageCompletions>,
-    definitions: Option<LanguageDefinitions>,
+    definitions: Option<LanguageLocations>,
     request_error: Option<String>,
     pending_requests: PendingLanguageRequests,
     event_proxy: EventLoopProxy<NativeEvent>,
@@ -189,7 +190,7 @@ impl NativeLanguageService {
         })
     }
 
-    pub(crate) fn take_definitions(&mut self) -> Option<LanguageDefinitions> {
+    pub(crate) fn take_definitions(&mut self) -> Option<LanguageLocations> {
         self.definitions.take()
     }
 
@@ -243,6 +244,29 @@ impl NativeLanguageService {
                 self.definitions = None;
                 service.request_definition(path, revision, position)
             }
+            LanguageRequestKind::Declaration => {
+                service.request_declaration(path, revision, position)
+            }
+            LanguageRequestKind::Implementation => {
+                service.request_implementation(path, revision, position)
+            }
+            LanguageRequestKind::TypeDefinition => {
+                service.request_type_definition(path, revision, position)
+            }
+            LanguageRequestKind::References => {
+                service.request_references(path, revision, position, true)
+            }
+            LanguageRequestKind::PrepareCallHierarchy
+            | LanguageRequestKind::IncomingCalls
+            | LanguageRequestKind::OutgoingCalls
+            | LanguageRequestKind::PrepareTypeHierarchy
+            | LanguageRequestKind::Supertypes
+            | LanguageRequestKind::Subtypes
+            | LanguageRequestKind::WorkspaceSymbols
+            | LanguageRequestKind::PrepareRename
+            | LanguageRequestKind::Rename
+            | LanguageRequestKind::CodeActions
+            | LanguageRequestKind::ResolveCodeAction => return,
         };
         match result {
             Ok(request_id) => self.pending_requests.set(kind, request_id),
@@ -342,16 +366,38 @@ impl NativeLanguageService {
                 self.completions = Some(completions);
                 self.request_error = None;
             }
-            LanguageServiceEvent::Definitions(definitions) => {
+            LanguageServiceEvent::Locations(definitions) => {
+                let request_kind = match definitions.kind {
+                    zeta_language_service::LanguageLocationKind::Declaration => {
+                        LanguageRequestKind::Declaration
+                    }
+                    zeta_language_service::LanguageLocationKind::Definition => {
+                        LanguageRequestKind::Definition
+                    }
+                    zeta_language_service::LanguageLocationKind::Implementation => {
+                        LanguageRequestKind::Implementation
+                    }
+                    zeta_language_service::LanguageLocationKind::TypeDefinition => {
+                        LanguageRequestKind::TypeDefinition
+                    }
+                    zeta_language_service::LanguageLocationKind::Reference => {
+                        LanguageRequestKind::References
+                    }
+                };
                 if !self
                     .pending_requests
-                    .complete(LanguageRequestKind::Definition, definitions.request_id)
+                    .complete(request_kind, definitions.request_id)
                 {
                     return;
                 }
                 self.definitions = Some(definitions);
                 self.request_error = None;
             }
+            LanguageServiceEvent::Hierarchy(_)
+            | LanguageServiceEvent::WorkspaceSymbols(_)
+            | LanguageServiceEvent::RenamePreparation(_)
+            | LanguageServiceEvent::WorkspaceEdit(_)
+            | LanguageServiceEvent::CodeActions(_) => {}
             LanguageServiceEvent::RequestFailed {
                 request_id,
                 kind,
@@ -427,7 +473,22 @@ impl PendingLanguageRequests {
         match kind {
             LanguageRequestKind::Hover => &mut self.hover,
             LanguageRequestKind::Completion => &mut self.completion,
-            LanguageRequestKind::Definition => &mut self.definition,
+            LanguageRequestKind::Declaration
+            | LanguageRequestKind::Definition
+            | LanguageRequestKind::Implementation
+            | LanguageRequestKind::TypeDefinition
+            | LanguageRequestKind::References => &mut self.definition,
+            LanguageRequestKind::PrepareCallHierarchy
+            | LanguageRequestKind::IncomingCalls
+            | LanguageRequestKind::OutgoingCalls
+            | LanguageRequestKind::PrepareTypeHierarchy
+            | LanguageRequestKind::Supertypes
+            | LanguageRequestKind::Subtypes
+            | LanguageRequestKind::WorkspaceSymbols
+            | LanguageRequestKind::PrepareRename
+            | LanguageRequestKind::Rename
+            | LanguageRequestKind::CodeActions
+            | LanguageRequestKind::ResolveCodeAction => &mut self.definition,
         }
     }
 }
@@ -469,6 +530,10 @@ fn catalog_from_configuration(configuration: &ConfigReadResult) -> LanguageServe
     LanguageServerCatalog::new(server_preference(configuration, RUST_ANALYZER_SERVER_ID))
         .with_json_language_server(server_preference(configuration, JSON_LANGUAGE_SERVER_ID))
         .with_bash_language_server(server_preference(configuration, BASH_LANGUAGE_SERVER_ID))
+        .with_typescript_language_server(server_preference(
+            configuration,
+            TYPESCRIPT_LANGUAGE_SERVER_ID,
+        ))
 }
 
 fn server_preference(

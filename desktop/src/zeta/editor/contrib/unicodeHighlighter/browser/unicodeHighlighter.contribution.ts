@@ -11,6 +11,6 @@ registerEditorContribution({ id: "editor.contrib.unicodeHighlighter", configure:
   context.provideCapability(TextEditorCapability.unicodeDecorations, decorations);
   context.addDecorationSource(createAsterDecorationSource(decorations, () => DecorationPresentation.UnicodeHighlight, decoration => `${decoration.metadata.kind} Unicode character U+${decoration.metadata.character.codePointAt(0)!.toString(16).toUpperCase()}`));
 }, install: context => {
-  if (context.kind !== "text" || context.options.showUnicodeHighlights === false) return;
+  if (context.kind !== "text" || context.options.showUnicodeHighlights === false || context.model.largeFile.tooLargeForTokenization) return;
   context.own(new UnicodeHighlighterController(context.model, context.getCapability(TextEditorCapability.unicodeDecorations)));
 } });

@@ -14,6 +14,7 @@ import { createDisconnectedTypstApi } from "../../typst/browser/typstApi.js";
 import { createDisconnectedDocumentCollaborationApi } from "../../collaboration/browser/documentCollaborationApi.js";
 import { createDisconnectedCodeIndexApi } from "../../codeIndex/browser/codeIndexApi.js";
 import { createDisconnectedToolSearchApi } from "../../toolSearch/browser/toolSearchApi.js";
+import { createDisconnectedLanguageApi } from "../../language/browser/languageApi.js";
 
 export { WebAppServerUnavailableError };
 
@@ -34,6 +35,7 @@ export function createDisconnectedRendererApi(): IRendererHost {
     fs: createDisconnectedFileApi(unavailableOperation),
     diff: createDisconnectedDiffApi(unavailableOperation),
     syntax: createDisconnectedSyntaxApi(unavailableOperation),
+    language: createDisconnectedLanguageApi(unavailableOperation),
     git: createDisconnectedGitApi(unavailableOperation),
     workspaceSearch: createDisconnectedWorkspaceSearchApi(unavailableOperation),
     terminal: new DisconnectedTerminalProcessService(unavailableOperation, appServer),

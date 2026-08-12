@@ -30,7 +30,7 @@ export class LanguageEditingAdapter extends DisposableOwner implements TextInput
   }
 
   createTypeCommand(selections: TextSelectionSet, text: string): TextInputLanguageTypeCommand | undefined {
-    const result = createLanguagePairTypeCommand(this.textModel, selections, text, this.configuration, { autoClosingTrust: this.autoClosingTracker, lexicalContext: this.lexicalContext });
+    const result = createLanguagePairTypeCommand(this.textModel, selections, text, this.configurationAt(selections.primary.active), { autoClosingTrust: this.autoClosingTracker, lexicalContext: this.lexicalContext });
     if (!result) return undefined;
     return Object.freeze({
       command: result.command,
@@ -42,15 +42,15 @@ export class LanguageEditingAdapter extends DisposableOwner implements TextInput
   }
 
   createEnterCommand(selections: TextSelectionSet): EditorEditCommand {
-    return createLanguageEnterCommand(this.textModel, selections, this.configuration, { indentation: this.indentation, lexicalContext: this.lexicalContext });
+    return createLanguageEnterCommand(this.textModel, selections, this.configurationAt(selections.primary.active), { indentation: this.indentation, lexicalContext: this.lexicalContext });
   }
 
   createBackspaceCommand(selections: TextSelectionSet): EditorEditCommand | undefined {
-    return createLanguagePairBackspaceCommand(this.textModel, selections, this.configuration, this.autoClosingTracker);
+    return createLanguagePairBackspaceCommand(this.textModel, selections, this.configurationAt(selections.primary.active), this.autoClosingTracker);
   }
 
-  private get configuration() {
-    return this.configurations.getLanguageConfiguration(this.languageId);
+  private configurationAt(position: TextSelectionSet["primary"]["active"]) {
+    return this.configurations.getLanguageConfiguration(this.lexicalContext.getLanguageIdAt(position));
   }
 }
 

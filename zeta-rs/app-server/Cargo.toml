@@ -42,6 +42,8 @@ zeta-file-watcher = { workspace = true }
 zeta-git = { workspace = true }
 zeta-install-context = { workspace = true }
 zeta-instructions = { workspace = true }
+zeta-language-server-catalog = { workspace = true }
+zeta-language-service = { workspace = true }
 zeta-model-provider = { workspace = true }
 zeta-model-provider-config = { workspace = true }
 zeta-mcp = { workspace = true }

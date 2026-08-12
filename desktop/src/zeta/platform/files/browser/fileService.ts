@@ -4,7 +4,7 @@ import type { IResourceApi } from "../../app-server/common/appServerApi.js";
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { DisposableOwner } from "../../../base/common/lifecycle.js";
 import { URI } from "../../../base/common/uri.js";
-import { FileKind, FileRevisionConflictError, type IFileBytes, type IFileChangeEvent, type IFileContent, type IFileEntry, type IFileService, type IFileStat, type IFileWriteRequest, type IFileWriteResult } from "../common/files.js";
+import { FileKind, FileNotFoundError, FileRevisionConflictError, type FileDeleteMode, type FileExistingTargetBehavior, type FileMissingTargetBehavior, type IFileBytes, type IFileChangeEvent, type IFileContent, type IFileEntry, type IFileService, type IFileStat, type IFileWriteRequest, type IFileWriteResult } from "../common/files.js";
 import type { IWorkspaceContextService } from "../../workspace/common/workspace.js";
 
 /** Narrow App Server surface consumed by the browser file-service adapter. */
@@ -14,6 +14,9 @@ export interface IFileSystemApi {
   readFile(params: FsReadFileParams): Promise<FsReadFileResult>;
   readBinaryFile(params: FsReadBinaryFileParams): Promise<FsReadBinaryFileResult>;
   writeFile(params: FsWriteFileParams): Promise<FsWriteFileResult>;
+  createFile(params: import("../../../../../generated/app-server/types.js").FsCreateFileParams): Promise<FsGetMetadataResult>;
+  rename(params: import("../../../../../generated/app-server/types.js").FsRenameParams): Promise<void>;
+  delete(params: import("../../../../../generated/app-server/types.js").FsDeleteParams): Promise<void>;
 }
 
 export interface BrowserFileServiceOptions {
@@ -43,9 +46,9 @@ export class BrowserFileService extends DisposableOwner implements IFileService 
   }
 
   async stat(resource: URI): Promise<IFileStat> {
-    const result = await this.api.getMetadata({
-      path: this.relativePath(resource),
-    });
+    let result;
+    try { result = await this.api.getMetadata({ path: this.relativePath(resource) }); }
+    catch (error) { if (isFileNotFound(error)) throw new FileNotFoundError(resource); throw error; }
     return {
       resource,
       kind: fileKind(result.fileType),
@@ -108,6 +111,19 @@ export class BrowserFileService extends DisposableOwner implements IFileService 
     }
   }
 
+  async createFile(resource: URI, existing: FileExistingTargetBehavior): Promise<IFileStat> {
+    const result = await this.api.createFile({ path: this.relativePath(resource), existing });
+    return { resource, kind: fileKind(result.fileType), sizeBytes: result.sizeBytes, readonly: result.readonly, modifiedAtMillis: result.modifiedAtMillis ?? undefined };
+  }
+
+  rename(source: URI, target: URI, existing: FileExistingTargetBehavior): Promise<void> {
+    return this.api.rename({ source: this.relativePath(source), target: this.relativePath(target), existing });
+  }
+
+  delete(resource: URI, missing: FileMissingTargetBehavior, mode: FileDeleteMode): Promise<void> {
+    return this.api.delete({ path: this.relativePath(resource), missing, mode });
+  }
+
   private relativePath(resource: URI): string {
     const folders = this.workspaceContextService.getWorkspace().folders;
     if (folders.length !== 1) {
@@ -147,7 +163,7 @@ export class BrowserFileService extends DisposableOwner implements IFileService 
       this.fileChanges.fire(Object.freeze({ resources: undefined }));
       return;
     }
-    const resources = change.paths.map(path => resourceFromWorkspacePath(folders[0].uri, path));
+    const resources = change.paths.map(path => workspaceResourceFromPath(folders[0].uri, path));
     if (resources.some(resource => resource === undefined)) {
       this.fileChanges.fire(Object.freeze({ resources: undefined }));
       return;
@@ -160,6 +176,10 @@ export class BrowserFileService extends DisposableOwner implements IFileService 
 
 function isRevisionConflict(error: unknown): boolean {
   return error instanceof Error && error.message === "FileSystemRevisionConflict";
+}
+
+function isFileNotFound(error: unknown): boolean {
+  return error instanceof Error && error.message === "FileSystemNotFound";
 }
 
 const MAX_RESOURCE_READ_BYTES = 262_144;
@@ -218,7 +238,9 @@ function childResource(parent: URI, name: string): URI {
   return parent.withPath(`${base}/${encodeURIComponent(name)}`);
 }
 
-function resourceFromWorkspacePath(root: URI, path: string): URI | undefined {
+/** Resolves one slash-separated protocol path beneath a workspace root. */
+export function workspaceResourceFromPath(root: URI, path: string): URI | undefined {
+  if (root.scheme !== "file") return undefined;
   const segments = path.replaceAll("\\", "/").split("/");
   if (segments.length === 0 || segments.some(segment => segment.length === 0 || segment === "." || segment === "..")) return undefined;
   const rootPath = root.path.endsWith("/") ? root.path.slice(0, -1) : root.path;

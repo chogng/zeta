@@ -25,8 +25,8 @@ export class LanguageFeatureProviderRegistry<TProvider extends LanguageFeaturePr
   }
 
   getProviders(languageId: string): readonly TProvider[] {
-    assertLanguageId(languageId);
-    return Object.freeze([...this.providers.values()].filter(provider => matchesLanguage(provider, languageId)));
+    if (languageId !== "*") assertLanguageId(languageId);
+    return Object.freeze([...this.providers.values()].filter(provider => languageId === "*" ? provider.languageIds.includes("*") : matchesLanguage(provider, languageId)));
   }
 
 }

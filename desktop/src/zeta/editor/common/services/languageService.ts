@@ -25,6 +25,10 @@ import { ParameterHintsService, type LanguageParameterHintsProvider } from "../.
 import { RenameService, type LanguageRenameProvider } from "../../contrib/rename/common/rename.js";
 import { ColorService, type LanguageColorProvider } from "../../contrib/colorPicker/common/color.js";
 import { LanguageFeatureProviderRegistry } from "../languages/languageFeatureRegistry.js";
+import { LanguageNavigationService, type LanguageDeclarationProvider, type LanguageDefinitionProvider, type LanguageImplementationProvider, type LanguageReferenceProvider, type LanguageTypeDefinitionProvider } from "../../contrib/gotoSymbol/common/languageNavigation.js";
+import { type URI } from "../../../base/common/uri.js";
+import { WorkspaceSymbolService, type LanguageWorkspaceSymbolProvider } from "../languages/workspaceSymbols.js";
+import { LanguageHierarchyService, type LanguageCallHierarchyProvider, type LanguageTypeHierarchyProvider } from "../../contrib/callHierarchy/common/languageHierarchy.js";
 
 /** Language provider boundary consumed by browser and host adapters. */
 export interface ILanguageFeaturesService extends IDisposable {
@@ -47,9 +51,17 @@ export interface ILanguageFeaturesService extends IDisposable {
   registerParameterHintsProvider(provider: LanguageParameterHintsProvider): IDisposable;
   registerRenameProvider(provider: LanguageRenameProvider): IDisposable;
   registerColorProvider(provider: LanguageColorProvider): IDisposable;
+  registerDefinitionProvider(provider: LanguageDefinitionProvider): IDisposable;
+  registerDeclarationProvider(provider: LanguageDeclarationProvider): IDisposable;
+  registerImplementationProvider(provider: LanguageImplementationProvider): IDisposable;
+  registerTypeDefinitionProvider(provider: LanguageTypeDefinitionProvider): IDisposable;
+  registerReferenceProvider(provider: LanguageReferenceProvider): IDisposable;
+  registerWorkspaceSymbolProvider(provider: LanguageWorkspaceSymbolProvider): IDisposable;
+  registerCallHierarchyProvider(provider: LanguageCallHierarchyProvider): IDisposable;
+  registerTypeHierarchyProvider(provider: LanguageTypeHierarchyProvider): IDisposable;
   createSyntaxService(model: TextModel, options?: SyntaxFeaturesOptions): SyntaxService;
   createCompletionService(model: TextModel, options?: LanguageCompletionFeaturesOptions): LanguageCompletionService;
-  createCodeActionService(model: TextModel): CodeActionService;
+  createCodeActionService(model: TextModel, resource: URI): CodeActionService;
   createCodeLensService(model: TextModel): CodeLensService;
   createDocumentSymbolService(model: TextModel, options?: DocumentSymbolServiceOptions): DocumentSymbolService;
   createFormatService(model: TextModel): FormatService;
@@ -60,8 +72,11 @@ export interface ILanguageFeaturesService extends IDisposable {
   createLinkedEditingService(model: TextModel): LinkedEditingService;
   createLinkService(model: TextModel): LinkService;
   createParameterHintsService(model: TextModel): ParameterHintsService;
-  createRenameService(model: TextModel): RenameService;
+  createRenameService(model: TextModel, resource: URI): RenameService;
   createColorService(model: TextModel): ColorService;
+  createLanguageNavigationService(model: TextModel, resource: URI): LanguageNavigationService;
+  createWorkspaceSymbolService(): WorkspaceSymbolService;
+  createLanguageHierarchyService(model: TextModel, resource: URI): LanguageHierarchyService;
 }
 
 export interface SyntaxFeaturesOptions {
@@ -91,6 +106,14 @@ export class LanguageFeaturesService extends DisposableOwner implements ILanguag
   private readonly parameterHintsProviders: LanguageFeatureProviderRegistry<LanguageParameterHintsProvider>;
   private readonly renameProviders: LanguageFeatureProviderRegistry<LanguageRenameProvider>;
   private readonly colorProviders: LanguageFeatureProviderRegistry<LanguageColorProvider>;
+  private readonly definitionProviders: LanguageFeatureProviderRegistry<LanguageDefinitionProvider>;
+  private readonly declarationProviders: LanguageFeatureProviderRegistry<LanguageDeclarationProvider>;
+  private readonly implementationProviders: LanguageFeatureProviderRegistry<LanguageImplementationProvider>;
+  private readonly typeDefinitionProviders: LanguageFeatureProviderRegistry<LanguageTypeDefinitionProvider>;
+  private readonly referenceProviders: LanguageFeatureProviderRegistry<LanguageReferenceProvider>;
+  private readonly workspaceSymbolProviders: LanguageFeatureProviderRegistry<LanguageWorkspaceSymbolProvider>;
+  private readonly callHierarchyProviders: LanguageFeatureProviderRegistry<LanguageCallHierarchyProvider>;
+  private readonly typeHierarchyProviders: LanguageFeatureProviderRegistry<LanguageTypeHierarchyProvider>;
 
   constructor() {
     super();
@@ -114,6 +137,14 @@ export class LanguageFeaturesService extends DisposableOwner implements ILanguag
     this.parameterHintsProviders = this.own(new LanguageFeatureProviderRegistry());
     this.renameProviders = this.own(new LanguageFeatureProviderRegistry());
     this.colorProviders = this.own(new LanguageFeatureProviderRegistry());
+    this.definitionProviders = this.own(new LanguageFeatureProviderRegistry());
+    this.declarationProviders = this.own(new LanguageFeatureProviderRegistry());
+    this.implementationProviders = this.own(new LanguageFeatureProviderRegistry());
+    this.typeDefinitionProviders = this.own(new LanguageFeatureProviderRegistry());
+    this.referenceProviders = this.own(new LanguageFeatureProviderRegistry());
+    this.workspaceSymbolProviders = this.own(new LanguageFeatureProviderRegistry());
+    this.callHierarchyProviders = this.own(new LanguageFeatureProviderRegistry());
+    this.typeHierarchyProviders = this.own(new LanguageFeatureProviderRegistry());
   }
 
   registerLanguage(description: LanguageDescription, options: LanguageRegistrationOptions = {}): IDisposable {
@@ -184,6 +215,33 @@ export class LanguageFeaturesService extends DisposableOwner implements ILanguag
     return this.colorProviders.register(provider);
   }
 
+  registerDefinitionProvider(provider: LanguageDefinitionProvider): IDisposable {
+    return this.definitionProviders.register(provider);
+  }
+
+  registerDeclarationProvider(provider: LanguageDeclarationProvider): IDisposable {
+    return this.declarationProviders.register(provider);
+  }
+
+  registerImplementationProvider(provider: LanguageImplementationProvider): IDisposable {
+    return this.implementationProviders.register(provider);
+  }
+
+  registerTypeDefinitionProvider(provider: LanguageTypeDefinitionProvider): IDisposable {
+    return this.typeDefinitionProviders.register(provider);
+  }
+
+  registerReferenceProvider(provider: LanguageReferenceProvider): IDisposable {
+    return this.referenceProviders.register(provider);
+  }
+
+  registerWorkspaceSymbolProvider(provider: LanguageWorkspaceSymbolProvider): IDisposable {
+    return this.workspaceSymbolProviders.register(provider);
+  }
+
+  registerCallHierarchyProvider(provider: LanguageCallHierarchyProvider): IDisposable { return this.callHierarchyProviders.register(provider); }
+  registerTypeHierarchyProvider(provider: LanguageTypeHierarchyProvider): IDisposable { return this.typeHierarchyProviders.register(provider); }
+
   createSyntaxService(model: TextModel, options: SyntaxFeaturesOptions = {}): SyntaxService {
     return new SyntaxService(model, this.syntaxProviders, {
       ...(options.workerFactory ? { workerFactory: options.workerFactory } : {}),
@@ -197,8 +255,8 @@ export class LanguageFeaturesService extends DisposableOwner implements ILanguag
     });
   }
 
-  createCodeActionService(model: TextModel): CodeActionService {
-    return new CodeActionService(model, this.codeActionProviders);
+  createCodeActionService(model: TextModel, resource: URI): CodeActionService {
+    return new CodeActionService(model, resource, this.codeActionProviders);
   }
 
   createCodeLensService(model: TextModel): CodeLensService {
@@ -241,11 +299,29 @@ export class LanguageFeaturesService extends DisposableOwner implements ILanguag
     return new ParameterHintsService(model, this.parameterHintsProviders);
   }
 
-  createRenameService(model: TextModel): RenameService {
-    return new RenameService(model, this.renameProviders);
+  createRenameService(model: TextModel, resource: URI): RenameService {
+    return new RenameService(model, resource, this.renameProviders);
   }
 
   createColorService(model: TextModel): ColorService {
     return new ColorService(model, this.colorProviders);
+  }
+
+  createLanguageNavigationService(model: TextModel, resource: URI): LanguageNavigationService {
+    return new LanguageNavigationService(model, resource, {
+      definitions: this.definitionProviders,
+      declarations: this.declarationProviders,
+      implementations: this.implementationProviders,
+      typeDefinitions: this.typeDefinitionProviders,
+      references: this.referenceProviders,
+    });
+  }
+
+  createWorkspaceSymbolService(): WorkspaceSymbolService {
+    return new WorkspaceSymbolService(this.workspaceSymbolProviders);
+  }
+
+  createLanguageHierarchyService(model: TextModel, resource: URI): LanguageHierarchyService {
+    return new LanguageHierarchyService(model, resource, this.callHierarchyProviders, this.typeHierarchyProviders);
   }
 }

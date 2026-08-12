@@ -10,7 +10,7 @@ import { type TextInputController } from "../browser/input/textInputController.j
 import { LanguageFeaturesService } from "../common/services/languageService.js";
 import { EditorSelectionController } from "../common/cursor/editorSelectionController.js";
 import { TextSelection, TextSelectionSet } from "../common/core/selection.js";
-import { TextPosition } from "../common/core/text.js";
+import { TextPosition, type TextRange } from "../common/core/text.js";
 import { registerEditorPartFactory, type EditorPartOptions, type IEditorPartRuntime } from "../browser/editorPart.js";
 import { getEditorContributions, type EditorCapability } from "../browser/editorContribution.js";
 import { type DecorationSource } from "../browser/view/decorationPresentation.js";
@@ -202,6 +202,13 @@ class ContributedEditorPart extends DisposableOwner implements IEditorPartRuntim
   setValue(value: string): void {
     if (this.getValue() === value) return;
     this.modelReference.model.reset(value);
+  }
+
+  revealRange(range: TextRange): void {
+    this.viewport.textModel.offsetAt(range.start);
+    this.viewport.textModel.offsetAt(range.end);
+    this.selections.setSelections(TextSelectionSet.single(TextSelection.from(range.start, range.end)));
+    this.viewport.revealPosition(range.start);
   }
 
   get isDirty(): boolean {

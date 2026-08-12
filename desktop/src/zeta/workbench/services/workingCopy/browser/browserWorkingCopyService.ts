@@ -3,7 +3,7 @@ import { DisposableOwner, toDisposable } from "../../../../base/common/lifecycle
 import { type URI } from "../../../../base/common/uri.js";
 import { type IWorkingCopy, type IWorkingCopyService } from "../common/workingCopyService.js";
 
-/** Browser registry for Alpha, Gama, and future editor-domain working copies. */
+/** Browser registry for editor-domain working copies. */
 export class BrowserWorkingCopyService extends DisposableOwner implements IWorkingCopyService {
   private readonly copies = new Map<string, Set<IWorkingCopy>>();
   private readonly _onDidRegister = this.own(new Emitter<IWorkingCopy>());
@@ -37,6 +37,10 @@ export class BrowserWorkingCopyService extends DisposableOwner implements IWorki
     return [...this.copies.get(resource.toString()) ?? []];
   }
 
+  getAll(): readonly IWorkingCopy[] {
+    return [...this.copies.values()].flatMap(copies => [...copies]);
+  }
+
   override dispose(): void {
     this.copies.clear();
     super.dispose();
@@ -47,7 +51,7 @@ function validateWorkingCopy(workingCopy: IWorkingCopy): void {
   if (!workingCopy || typeof workingCopy !== "object" || !workingCopy.resource || typeof workingCopy.resource.toString !== "function") {
     throw new TypeError("Working copy registration requires a resource");
   }
-  if (typeof workingCopy.save !== "function" || typeof workingCopy.saveAs !== "function" || typeof workingCopy.revert !== "function") {
-    throw new TypeError("Working copy registration requires save, saveAs, and revert operations");
+  if (typeof workingCopy.onDidChangeContent !== "function" || typeof workingCopy.backup !== "function" || typeof workingCopy.restoreBackup !== "function" || typeof workingCopy.save !== "function" || typeof workingCopy.saveAs !== "function" || typeof workingCopy.revert !== "function") {
+    throw new TypeError("Working copy registration requires content events, backup restoration, save, saveAs, and revert operations");
   }
 }

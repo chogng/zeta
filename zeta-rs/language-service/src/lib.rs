@@ -20,9 +20,15 @@ pub use diagnostics::{
 pub use document::{LanguageDocumentRevision, LanguageServiceDocument};
 pub use error::LanguageServiceError;
 pub use requests::{
-    LanguageCompletionItem, LanguageCompletions, LanguageDefinitionTarget, LanguageDefinitions,
-    LanguageDocumentPosition, LanguageHover, LanguagePositionEncoding, LanguageRequestId,
-    LanguageRequestKind, LanguageTextEdit,
+    LanguageCodeAction, LanguageCodeActions, LanguageCompletionItem, LanguageCompletions,
+    LanguageDeleteMode, LanguageDocumentPosition, LanguageExistingTargetBehavior,
+    LanguageHierarchyEntry, LanguageHierarchyItem, LanguageHierarchyKind, LanguageHierarchyResult,
+    LanguageHover, LanguageLocationKind, LanguageLocationPosition, LanguageLocationRange,
+    LanguageLocationTarget, LanguageLocations, LanguageMissingTargetBehavior,
+    LanguagePositionEncoding, LanguageRenamePreparation, LanguageRequestId, LanguageRequestKind,
+    LanguageTextEdit, LanguageWorkspaceDocumentEdit, LanguageWorkspaceEdit,
+    LanguageWorkspaceEditEntry, LanguageWorkspaceEditResult, LanguageWorkspaceSymbol,
+    LanguageWorkspaceSymbols, LanguageWorkspaceTextEdit,
 };
 pub use restart::LanguageServerRestartPolicy;
 pub use service::{

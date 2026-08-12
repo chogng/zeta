@@ -13,6 +13,8 @@ import {
 } from "../../../../../../base/common/keybindings.js";
 import { DisposableOwner } from "../../../../../../base/common/lifecycle.js";
 import { URI } from "../../../../../../base/common/uri.js";
+import { TextPosition, TextRange } from "../../../../../../editor/common/core/text.js";
+import type { LanguageLocation } from "../../../../../../editor/contrib/gotoSymbol/common/languageNavigation.js";
 import type {
   CommandId,
 } from "../../../../../../platform/commands/common/commands.js";
@@ -215,6 +217,36 @@ test("EditorPart saves the active pane through the editor contract", async () =>
   await editor.saveActiveEditor();
 
   assert.equal(pane.saveCount, 1);
+  editor.dispose();
+  dom.window.close();
+});
+
+test("EditorPart opens cross-resource language targets and reveals their selection", async () => {
+  const dom = new JSDOM("<!doctype html><body></body>");
+  const registry = new EditorPaneRegistry();
+  const panes: TestEditorPane[] = [];
+  let openLocation: ((location: LanguageLocation) => void | Promise<void>) | undefined;
+  registry.register({
+    id: "zeta.editor.navigation-test",
+    name: "Navigation Test",
+    canOpen: () => EditorPaneMatch.Default,
+    create: options => {
+      openLocation = options.onOpenLocation!;
+      return trackPane(panes, "zeta.editor.navigation-test");
+    },
+  });
+  const editor = new EditorPart(dom.window.document, { registry });
+  await editor.openEditor(input("C:\\project\\main.ts"));
+  const target = URI.file("C:\\project\\target.ts");
+  const range = TextRange.from(TextPosition.at(4, 1), TextPosition.at(4, 8));
+
+  await openLocation!({ resource: target, range });
+
+  assert.equal(editor.activeInput?.resource.toString(), target.toString());
+  assert.deepEqual(panes[1]?.revealedRanges, [range]);
+  const narrower = TextRange.from(TextPosition.at(4, 3), TextPosition.at(4, 7));
+  await openLocation!({ resource: target, range, selectionRange: narrower });
+  assert.deepEqual(panes[1]?.revealedRanges, [range, narrower]);
   editor.dispose();
   dom.window.close();
 });
@@ -516,6 +548,7 @@ class TestEditorPane extends DisposableOwner implements IEditorPane {
   focusCount = 0;
   saveCount = 0;
   disposed = false;
+  readonly revealedRanges: TextRange[] = [];
 
   constructor(readonly id: string) {
     super();
@@ -554,6 +587,10 @@ class TestEditorPane extends DisposableOwner implements IEditorPane {
 
   focus(): void {
     this.focusCount += 1;
+  }
+
+  revealRange(range: TextRange): void {
+    this.revealedRanges.push(range);
   }
 
   async save(): Promise<void> {

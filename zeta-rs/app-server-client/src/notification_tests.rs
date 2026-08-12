@@ -103,7 +103,7 @@ fn decodes_document_collaboration_update_notification() {
             "jsonrpc": "2.0",
             "method": "document/collaboration/update",
             "params": {
-                "roomId": "gama-room",
+                "roomId": "document-room",
                 "clientId": "client-a",
                 "sequence": 1,
                 "baseVersion": 0,
@@ -117,7 +117,7 @@ fn decodes_document_collaboration_update_notification() {
     assert_eq!(
         notification,
         ServerNotification::DocumentCollaborationUpdate(DocumentCollaborationUpdate {
-            room_id: "gama-room".into(),
+            room_id: "document-room".into(),
             client_id: "client-a".into(),
             sequence: 1,
             base_version: 0,
@@ -134,7 +134,7 @@ fn decodes_document_collaboration_presence_notification() {
             "jsonrpc": "2.0",
             "method": "document/collaboration/presence",
             "params": {
-                "roomId": "gama-room",
+                "roomId": "document-room",
                 "generation": 3,
                 "presences": [{"clientId": "client-a", "selection": "anchor=0"}]
             }
@@ -145,7 +145,7 @@ fn decodes_document_collaboration_presence_notification() {
     assert_eq!(
         notification,
         ServerNotification::DocumentCollaborationPresence(DocumentCollaborationPresenceSnapshot {
-            room_id: "gama-room".into(),
+            room_id: "document-room".into(),
             generation: 3,
             presences: vec![
                 zeta_app_server_protocol::protocol::collaboration::DocumentCollaborationPresence {

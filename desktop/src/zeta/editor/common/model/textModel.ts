@@ -5,6 +5,7 @@ import { PieceTreeTextBuffer } from "./pieceTreeTextBuffer/pieceTreeTextBuffer.j
 import { normalizeTextLineEndings, TextEditHistoryGroup, TextEditHistoryMergeMode, TextModelChangeReason, TextPosition, TextRange, TextLength, type ISingleEditOperation, type TextEdit, type TextModelChange, type TextModelContentChange, type TextSnapshot } from "../core/text.js";
 import { TextModelHistory, type TextModelHistoryEntry } from "./editStack.js";
 import { TrackedRangeCollection, type TrackedRange, type TrackedRangeStickiness } from "./trackedRange.js";
+import { classifyTextModelSize, type TextModelLargeFilePolicy } from "./textModelLargeFile.js";
 
 interface OffsetEdit extends OffsetTextEdit {}
 
@@ -62,6 +63,7 @@ export class TextModel extends DisposableOwner {
   private readonly maintenance: TextModelMaintenanceOptions | undefined;
   private readonly pendingMaintenance = this.own(new DisposableSlot<IDisposable>());
   private buffer: PieceTreeTextBuffer;
+  readonly largeFile: TextModelLargeFilePolicy;
   private nextTransactionId = 1;
   private _version = 1;
   private disposed = false;
@@ -85,9 +87,8 @@ export class TextModel extends DisposableOwner {
       historyTransactionLimit,
       historyTextUnitLimit,
     );
-    this.buffer = new PieceTreeTextBuffer(
-      normalizeTextLineEndings(initialText),
-    );
+    this.buffer = new PieceTreeTextBuffer(normalizeTextLineEndings(initialText));
+    this.largeFile = classifyTextModelSize(this.buffer.length, this.buffer.lineCount);
     this.defer(() => {
       this.disposed = true;
       this.history.dispose();

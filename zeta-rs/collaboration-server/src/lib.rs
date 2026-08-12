@@ -1,4 +1,4 @@
-//! Authenticated HTTP host for durable Gama collaboration rooms.
+//! Authenticated HTTP host for durable Document Engine collaboration rooms.
 //!
 //! The host owns HTTP authentication, origin policy, long-poll delivery and
 //! SQLite lifecycle. Ordered room semantics remain in `zeta-collaboration`.

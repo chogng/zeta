@@ -4,10 +4,12 @@ import { createToggleBlockCommentCommand } from "../common/blockCommentCommands.
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { type LanguageConfigurationSource } from "../../../common/languages/languageConfiguration.js";
 import { type EditorViewport } from "../../../browser/view/editorViewport.js";
+import { type LanguageLexicalContextSource } from "../../../common/languages/languageLexicalContext.js";
 
 export interface BlockCommentControllerOptions {
   readonly languageId: string;
   readonly configurations: LanguageConfigurationSource;
+  readonly lexicalContext?: LanguageLexicalContextSource;
 }
 
 /** Routes the platform block-comment shortcut through Aster's local command model. */
@@ -34,7 +36,8 @@ export class BlockCommentController extends DisposableOwner {
   private handleKeydown(event: KeyboardEvent): void {
     if (event.defaultPrevented || event.isComposing || event.getModifierState("AltGraph")) return;
     if (event.ctrlKey || event.metaKey || !event.shiftKey || !event.altKey || event.key.toLowerCase() !== "a") return;
-    const blockComment = this.options.configurations.getLanguageConfiguration(this.options.languageId).comments.blockComment;
+    const languageId = this.options.lexicalContext?.getLanguageIdAt(this.selections.selections.primary.active) ?? this.options.languageId;
+    const blockComment = this.options.configurations.getLanguageConfiguration(languageId).comments.blockComment;
     if (!blockComment) return;
     stopEvent(event);
     this.selections.execute(createToggleBlockCommentCommand(

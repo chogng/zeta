@@ -11,6 +11,7 @@ import { TextFileSaveConflictError } from "../../textfile/common/textFileService
 import type { ITextFileService } from "../../textfile/common/textFileService.js";
 import type { IWorkingCopy } from "../../workingCopy/common/workingCopyService.js";
 import type { IWorkingCopyService } from "../../workingCopy/common/workingCopyService.js";
+import { ACADEMIC_DOCUMENT_CONTENT_TYPE } from "../../../../product/common/documentTypes.js";
 
 export interface DocumentWorkingCopyOptions {
   readonly resource: URI;
@@ -37,8 +38,11 @@ export class DocumentWorkingCopy extends DisposableOwner implements IWorkingCopy
   private externalChange = false;
 
   readonly resource: URI;
+  readonly backupKind = "structuredDocument" as const;
+  readonly backupContentType = ACADEMIC_DOCUMENT_CONTENT_TYPE;
   readonly onDidChangeDirty = this.dirtyEmitter.event;
   readonly onDidChangeExternalChange = this.externalChangeEmitter.event;
+  readonly onDidChangeContent = (listener: () => void) => this.options.model.onDidChange(() => listener());
 
   constructor(private readonly options: DocumentWorkingCopyOptions) {
     super();
@@ -66,6 +70,14 @@ export class DocumentWorkingCopy extends DisposableOwner implements IWorkingCopy
 
   get hasExternalChange(): boolean {
     return this.externalChange;
+  }
+
+  backup(): string {
+    return serializeDocument(this.options.model.document, this.schema);
+  }
+
+  restoreBackup(content: string): void {
+    this.options.model.reset(parseDocument(content, this.schema, this.options.createEmptyDocument));
   }
 
   async save(signal: AbortSignal): Promise<void> {

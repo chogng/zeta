@@ -14,7 +14,7 @@ fn in_memory_rooms_order_updates_and_replay_stale_clients() {
         .open(DocumentCollaborationOpenParams {
             room_id: None,
             client_id: "client-a".into(),
-            schema_id: "gama-v1".into(),
+            schema_id: "aster-document-v1".into(),
             document,
         })
         .unwrap();
@@ -50,7 +50,7 @@ fn collaboration_authorities_reject_invalid_document_and_transaction_envelopes()
     let invalid_document = rooms.open(DocumentCollaborationOpenParams {
         room_id: None,
         client_id: "client-a".into(),
-        schema_id: "gama-v1".into(),
+        schema_id: "aster-document-v1".into(),
         document: "{}".into(),
     });
     assert!(invalid_document.unwrap_err().contains("zeta.document v1"));
@@ -68,7 +68,7 @@ fn collaboration_authorities_reject_invalid_document_and_transaction_envelopes()
         rooms
             .submit(invalid_transaction)
             .unwrap_err()
-            .contains("unknown Gama step kind")
+            .contains("unknown Document Engine step kind")
     );
 }
 
@@ -111,7 +111,7 @@ fn open_room(rooms: &mut InMemoryDocumentCollaborationRooms) -> String {
         .open(DocumentCollaborationOpenParams {
             room_id: None,
             client_id: "client-a".into(),
-            schema_id: "gama-v1".into(),
+            schema_id: "aster-document-v1".into(),
             document: document("initial"),
         })
         .unwrap()
@@ -158,10 +158,10 @@ fn accepted_version(result: &DocumentCollaborationSubmitResult) -> u64 {
 }
 
 fn assert_room_id(room_id: &str) {
-    assert_eq!(room_id.len(), "gama-".len() + 32);
-    assert!(room_id.starts_with("gama-"));
+    assert_eq!(room_id.len(), "document-".len() + 32);
+    assert!(room_id.starts_with("document-"));
     assert!(
-        room_id["gama-".len()..]
+        room_id["document-".len()..]
             .bytes()
             .all(|byte| byte.is_ascii_hexdigit())
     );

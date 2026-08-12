@@ -4,11 +4,13 @@ import { type EditorSelectionController } from "../../../common/cursor/editorSel
 import { createToggleLineCommentCommand } from "../common/lineCommentCommands.js";
 import { type LanguageConfigurationSource } from "../../../common/languages/languageConfiguration.js";
 import { type EditorViewport } from "../../../browser/view/editorViewport.js";
+import { type LanguageLexicalContextSource } from "../../../common/languages/languageLexicalContext.js";
 
 export interface LineCommentControllerOptions {
   readonly languageId: string;
   readonly configurations: LanguageConfigurationSource;
   readonly insertSpace?: boolean;
+  readonly lexicalContext?: LanguageLexicalContextSource;
 }
 
 /** Routes the platform line-comment shortcut through Aster's local command model. */
@@ -35,7 +37,8 @@ export class LineCommentController extends DisposableOwner {
   private handleKeydown(event: KeyboardEvent): void {
     if (event.defaultPrevented || event.isComposing || event.getModifierState("AltGraph")) return;
     if ((!event.ctrlKey && !event.metaKey) || event.shiftKey || event.altKey || event.key !== "/") return;
-    const lineComment = this.options.configurations.getLanguageConfiguration(this.options.languageId).comments.lineComment;
+    const languageId = this.options.lexicalContext?.getLanguageIdAt(this.selections.selections.primary.active) ?? this.options.languageId;
+    const lineComment = this.options.configurations.getLanguageConfiguration(languageId).comments.lineComment;
     if (!lineComment) return;
     stopEvent(event);
     this.selections.execute(createToggleLineCommentCommand(

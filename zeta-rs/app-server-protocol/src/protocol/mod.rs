@@ -11,6 +11,7 @@ pub mod extensions;
 pub mod fs;
 pub mod git;
 pub mod initialize;
+pub mod language;
 pub mod model;
 pub mod notification;
 pub mod registry;

@@ -4,7 +4,7 @@ import { DisposableOwner, type IDisposable } from "../../base/common/lifecycle.j
 import { type ISyntaxApi } from "../../platform/syntax/common/syntaxApi.js";
 import { type EditorResourceInput } from "../common/editorResource.js";
 import { type EditorSelectionController } from "../common/cursor/editorSelectionController.js";
-import { type TextPosition } from "../common/core/text.js";
+import { type TextPosition, type TextRange } from "../common/core/text.js";
 import { type LanguageCompletionWorkerFactory } from "../common/languages/completion/languageCompletionService.js";
 import { type SyntaxWorkerFactory } from "../common/languages/syntax/syntaxService.js";
 import { type ILanguageFeaturesService } from "../common/services/languageService.js";
@@ -15,6 +15,8 @@ import { type CodeEditorWidget } from "./widget/codeEditor/codeEditorWidget.js";
 import { type EditorHitTarget } from "./view/pointerHitTest.js";
 import { type EditorTextDirection, type EditorViewport, type EditorViewportPresentation } from "./view/editorViewport.js";
 import { type EditorLineWrapping } from "./view/visualLineProjection.js";
+import { type LanguageLocation } from "../contrib/gotoSymbol/common/languageNavigation.js";
+import { type LanguageWorkspaceEdit } from "../common/languages/languageWorkspaceEdit.js";
 
 export interface EditorContextMenuRequest {
   readonly position: TextPosition;
@@ -53,6 +55,10 @@ export interface EditorPartOptions {
   readonly onShowContextMenu?: (request: EditorContextMenuRequest) => void | Promise<void>;
   /** Host-owned execution for provider commands such as code lenses. */
   readonly onExecuteEditorCommand?: (id: string, args: readonly unknown[] | undefined) => void | Promise<void>;
+  /** Host-owned cross-resource navigation; same-resource reveal remains editor-owned. */
+  readonly onOpenLocation?: (location: LanguageLocation) => void | Promise<void>;
+  /** Host-owned multi-resource edit transaction. */
+  readonly onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit) => void | Promise<void>;
   readonly placeholder?: string;
   readonly showUnicodeHighlights?: boolean;
   readonly fontZoom?: { readonly initialScale?: number };
@@ -70,6 +76,7 @@ export interface IEditorPartRuntime extends IDisposable {
   focus(): void;
   getValue(): string;
   setValue(value: string): void;
+  revealRange(range: TextRange): void;
   readonly isDirty: boolean;
   readonly hasExternalChange: boolean;
   save(): Promise<void>;
@@ -122,6 +129,7 @@ export class EditorPart extends DisposableOwner implements IEditorPartRuntime {
   focus(): void { this.runtime.focus(); }
   getValue(): string { return this.runtime.getValue(); }
   setValue(value: string): void { this.runtime.setValue(value); }
+  revealRange(range: TextRange): void { this.runtime.revealRange(range); }
   get isDirty(): boolean { return this.runtime.isDirty; }
   get hasExternalChange(): boolean { return this.runtime.hasExternalChange; }
   save(): Promise<void> { return this.runtime.save(); }

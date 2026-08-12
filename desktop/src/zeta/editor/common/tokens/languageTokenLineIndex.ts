@@ -25,6 +25,9 @@ interface RelativeLanguageToken {
   readonly endColumn: number;
   readonly tokenType: string;
   readonly modifiers: readonly string[];
+  readonly languageId?: LanguageToken["languageId"];
+  readonly balancedBrackets?: LanguageToken["balancedBrackets"];
+  readonly presentation?: LanguageToken["presentation"];
 }
 
 interface LanguageTokenLinePayload {
@@ -305,6 +308,9 @@ function createLinePayload(tokens: readonly LanguageToken[]): LanguageTokenLineP
       endColumn: token.range.end.columnIndex,
       tokenType: token.tokenType,
       modifiers: token.modifiers,
+      ...(token.languageId === undefined ? {} : { languageId: token.languageId }),
+      ...(token.balancedBrackets === undefined ? {} : { balancedBrackets: token.balancedBrackets }),
+      ...(token.presentation === undefined ? {} : { presentation: token.presentation }),
     }))),
   });
 }
@@ -318,6 +324,9 @@ function createLineState(lineIndex: number, payload: LanguageTokenLinePayload): 
         range: TextRange.from(TextPosition.at(lineIndex, token.startColumn), TextPosition.at(lineIndex, token.endColumn)),
         tokenType: token.tokenType,
         modifiers: token.modifiers,
+        ...(token.languageId === undefined ? {} : { languageId: token.languageId }),
+        ...(token.balancedBrackets === undefined ? {} : { balancedBrackets: token.balancedBrackets }),
+        ...(token.presentation === undefined ? {} : { presentation: token.presentation }),
       })));
       return materializedTokens;
     },
@@ -347,8 +356,15 @@ function lineMatchesResult(payload: LanguageTokenLinePayload, lineIndex: number,
       token.range.start.columnIndex === relative.startColumn &&
       token.range.end.columnIndex === relative.endColumn &&
       token.tokenType === relative.tokenType &&
-      arraysEqual(token.modifiers, relative.modifiers);
+      arraysEqual(token.modifiers, relative.modifiers) &&
+      token.languageId === relative.languageId &&
+      token.balancedBrackets === relative.balancedBrackets &&
+      presentationsEqual(token.presentation, relative.presentation);
   });
+}
+
+function presentationsEqual(left: LanguageToken["presentation"], right: LanguageToken["presentation"]): boolean {
+  return left?.foreground === right?.foreground && left?.background === right?.background && arraysEqual(left?.fontStyle ?? [], right?.fontStyle ?? []);
 }
 
 function arraysEqual(left: readonly string[], right: readonly string[]): boolean {

@@ -12,6 +12,7 @@ import type { ITypstApi } from "../../typst/common/typstApi.js";
 import type { IDocumentCollaborationApi } from "../../collaboration/common/documentCollaborationApi.js";
 import type { ICodeIndexApi } from "../../codeIndex/common/codeIndexApi.js";
 import type { IToolSearchApi } from "../../toolSearch/common/toolSearchApi.js";
+import type { ILanguageApi } from "../../language/common/languageApi.js";
 
 /** Transport-neutral capability set supplied by a renderer host at startup. */
 export interface IRendererHost {
@@ -28,6 +29,7 @@ export interface IRendererHost {
   readonly fs: IFileApi;
   readonly diff: IDiffApi;
   readonly syntax: ISyntaxApi;
+  readonly language: ILanguageApi;
   readonly git: IGitApi;
   readonly workspaceSearch: IWorkspaceSearchApi;
   readonly terminal: ITerminalProcessService;

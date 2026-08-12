@@ -202,7 +202,7 @@ function assertOptions(model: TextModel, configuration: ResolvedLanguageConfigur
   const lexicalContext = options.lexicalContext;
   if (lexicalContext && (
     lexicalContext.textModel !== model ||
-    lexicalContext.languageId !== configuration.languageId ||
+    !lexicalContext.supportsLanguageId(configuration.languageId) ||
     typeof lexicalContext.getTokenTypeAt !== "function"
   )) {
     throw new TypeError("Language pair lexical context must match its model and language");

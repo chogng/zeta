@@ -22,7 +22,7 @@ pub enum DiffRowKindDto {
     Modified,
 }
 
-/// One changed inline region expressed in Alpha's zero-based UTF-16 columns.
+/// One changed inline region expressed in the editor's zero-based UTF-16 columns.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct DiffRangeDto {

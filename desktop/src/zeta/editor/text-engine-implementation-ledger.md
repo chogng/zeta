@@ -42,7 +42,7 @@
 
 | 文件 | 职责 |
 | --- | --- |
-| `textModel.ts` | Piece Tree 之上的同步文档权威：文本、版本、原子 transaction、history、snapshot、change event。 |
+| `textModel.ts` / `textModelLargeFile.ts` | Piece Tree 之上的同步文档权威与固定大文件策略：文本、版本、原子 transaction、history、snapshot、change event；昂贵 feature 只读取 policy，不复制阈值。 |
 | `pieceTreeTextBuffer/{pieceTreeTextBuffer,pieceTreeBase,pieceTreeSnapshot}.ts` | 文本存储、节点统计和 snapshot segment 读取；不改变 `TextModel` contract。正确性测试位于 `test/common/model/pieceTreeTextBuffer/pieceTreeTextBuffer.test.ts`。 |
 | `editStack.ts` / `historyCoalescing.ts` | 文档 undo/redo、typing merge 和 history budget。 |
 | `textModelSearch.ts` | literal、regex、whole-word、wrap 和 version-pinned search。 |
@@ -104,9 +104,10 @@
 | `gotoError` | `contrib/gotoError/common/diagnosticDecorations.ts`、`browser/gotoError.ts`、`browser/languageDiagnosticPresentation.ts` + `browser/view/diagnosticOverviewMarkers.ts` | diagnostic decoration、navigation 和语言诊断 presentation；通用 overview marker 聚合归 viewport。 |
 | `hover` | `contrib/hover/{common,browser}/*` | provider hover 与 diagnostic hover widget。 |
 | `documentSymbols` / `gotoSymbol` | `contrib/documentSymbols/common/documentSymbols.ts`、`contrib/gotoSymbol/{common,browser}/*` | versioned symbol provider、flatten/query 和 symbol quick navigation。 |
+| cross-file navigation / hierarchy | `contrib/gotoSymbol/common/languageNavigation.ts`、`browser/languageNavigationController.ts`、`contrib/callHierarchy/*` | definition/declaration/reference/implementation/type-definition、Peek、call/type hierarchy；只消费 URI/range provider contract。 |
 | `links` | `contrib/links/{common,browser}/*` | deduplicated links、pointer target；open 始终交给 host callback。 |
-| `codeAction` | `contrib/codeAction/{common,browser}/*` | result/resolve/picker/workspace edit；command 执行不归 service。 |
-| `format` / `rename` | 各 feature 的 common/browser 文件 | provider request、freshness、input 和 canonical edit application。 |
+| `codeAction` | `contrib/codeAction/{common,browser}/*` | result/resolve/picker；有序跨文件 WorkspaceEdit 交给 Workbench service 原子应用。 |
+| `format` / `rename` | 各 feature 的 common/browser 文件 | provider request、freshness、input；rename 可返回跨文件 text/create/rename/delete edit。 |
 | `inlayHints` / `inlineCompletions` / `parameterHints` | 各 feature 的 common/browser 文件 | inline projection、ghost text、signature help 和 key routing。 |
 | `linkedEditing` | `contrib/linkedEditing/{common,browser}/*` | provider ranges 通过 tracked range 和 model transaction 同步。 |
 | `codelens` | `contrib/codelens/{common,browser}/*` | versioned lens、resolve、inline button；host owns command execution。 |
@@ -156,6 +157,8 @@ contrib/browser -> contrib/common + browser/view/input + host callbacks
 Workbench/Electron -> browser adapters -> Aster contracts
 Rust App Server -> browser adapter -> Aster async service contract
 ```
+
+Workbench 侧 `services/language/browser/appServerLanguageProviders.ts` 是 generated DTO 的终点；它把 App Server 的跨文件 location、workspace symbol、hierarchy、rename 与 code action 映射为 editor contract。`BrowserWorkspaceEditService` 负责全量 preflight、ordered file operation、打开模型 dirty 语义、关闭资源持久化与失败回滚。工作区 Quick Access 属于 Workbench contrib，不回流 editor-local `quickAccess`。
 
 禁止的方向：
 

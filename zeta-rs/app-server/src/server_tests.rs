@@ -135,17 +135,17 @@ fn document_collaboration_orders_updates_and_returns_rebase_history() {
             "jsonrpc":"2.0",
             "id":2,
             "method":"document/collaboration/open",
-            "params":{"clientId":"client-a","schemaId":"gama-v1","document":document}
+            "params":{"clientId":"client-a","schemaId":"aster-document-v1","document":document}
         }),
     );
     let room_id = opened["result"]["snapshot"]["roomId"]
         .as_str()
         .expect("opening a room must return its identifier")
         .to_string();
-    assert_eq!(room_id.len(), "gama-".len() + 32);
-    assert!(room_id.starts_with("gama-"));
+    assert_eq!(room_id.len(), "document-".len() + 32);
+    assert!(room_id.starts_with("document-"));
     assert!(
-        room_id["gama-".len()..]
+        room_id["document-".len()..]
             .bytes()
             .all(|byte| byte.is_ascii_hexdigit())
     );
@@ -157,7 +157,7 @@ fn document_collaboration_orders_updates_and_returns_rebase_history() {
             "jsonrpc":"2.0",
             "id":2,
             "method":"document/collaboration/open",
-            "params":{"roomId":room_id,"clientId":"client-b","schemaId":"gama-v1","document":"{}"}
+            "params":{"roomId":room_id,"clientId":"client-b","schemaId":"aster-document-v1","document":"{}"}
         }),
     );
     assert_eq!(joined["result"]["snapshot"]["document"], document);

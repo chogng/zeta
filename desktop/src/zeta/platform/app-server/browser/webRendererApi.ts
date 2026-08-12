@@ -14,6 +14,7 @@ import { createViteDevTypstApi } from "../../typst/browser/typstApi.js";
 import { createViteDevDocumentCollaborationApi } from "../../collaboration/browser/documentCollaborationApi.js";
 import { createViteDevCodeIndexApi } from "../../codeIndex/browser/codeIndexApi.js";
 import { createViteDevToolSearchApi } from "../../toolSearch/browser/toolSearchApi.js";
+import { createViteDevLanguageApi } from "../../language/browser/languageApi.js";
 
 export interface ConnectedWebRendererApi {
   readonly api: IRendererHost;
@@ -54,6 +55,7 @@ function createRendererHost(connection: ViteDevAppServerConnection): IRendererHo
     fs: createViteDevFileApi(connection),
     diff: createViteDevDiffApi(connection),
     syntax: createViteDevSyntaxApi(connection),
+    language: createViteDevLanguageApi(connection),
     git: createViteDevGitApi(connection),
     workspaceSearch: createViteDevWorkspaceSearchApi(connection),
     terminal: new ViteDevTerminalProcessService(connection, appServer),

@@ -59,6 +59,7 @@ import {
 import { type IAnyWorkspaceIdentifier, IWorkspaceContextService, workbenchStateFromWorkspaceIdentifier } from "../../platform/workspace/common/workspace.js";
 import { WorkbenchConfiguration } from "../common/configuration.js";
 import {
+  type WorkbenchContributionHost,
   WorkbenchContributionsRegistry,
   WorkbenchPhase,
 } from "../common/contributions.js";
@@ -146,6 +147,15 @@ import { BrowserUntitledTextEditorService } from "../services/untitled/browser/b
 import { IUntitledTextEditorService } from "../services/untitled/common/untitledTextEditorService.js";
 import { BrowserWorkingCopyService } from "../services/workingCopy/browser/browserWorkingCopyService.js";
 import { IWorkingCopyService } from "../services/workingCopy/common/workingCopyService.js";
+import { IndexedDbWorkingCopyBackupService } from "../services/workingCopy/browser/indexedDbWorkingCopyBackupService.js";
+import { WorkingCopyBackupTracker } from "../services/workingCopy/browser/workingCopyBackupTracker.js";
+import { IWorkingCopyBackupService, type WorkingCopyBackup } from "../services/workingCopy/common/workingCopyBackupService.js";
+import { projectExtensionTokenTheme } from "../services/textMate/common/textMateThemeProjection.js";
+import { BrowserWorkspaceEditService } from "../services/language/browser/browserWorkspaceEditService.js";
+import { IWorkspaceEditService } from "../services/language/common/workspaceEditService.js";
+import { getBrowserTextModelService } from "../../editor/browser/services/browserTextModelService.js";
+import { getBrowserTextResourceStore } from "../contrib/codeEditor/browser/browserTextResourceStore.js";
+import { AppServerLanguageProviders } from "../services/language/browser/appServerLanguageProviders.js";
 import { createWorkbenchSession, type WorkbenchSession } from "./workbenchSession.js";
 import { WorkbenchInteractionServices } from "./workbenchInteractionServices.js";
 
@@ -196,11 +206,16 @@ export function startWorkbench({
 /** Owns the renderer workbench, its parts, commands, and runtime layout. */
 export class Workbench extends DisposableOwner {
   readonly session: WorkbenchSession;
+  /** Resolves after dirty working copies are restored and AfterRestored contributions are active. */
+  readonly whenRestored: Promise<void>;
   private readonly workspaceContext: WorkspaceContextService;
   private readonly storage: BrowserStorageService;
   private readonly editor: EditorPart;
+  private readonly workingCopyBackups: IndexedDbWorkingCopyBackupService;
+  private readonly workingCopyBackupTracker: WorkingCopyBackupTracker;
   private readonly workbenchWindow: WorkbenchWindow;
   private workspaceSwitchQueue: Promise<void> = Promise.resolve();
+  private disposed = false;
 
   constructor(
     product: ProductConfiguration,
@@ -257,10 +272,17 @@ export class Workbench extends DisposableOwner {
     services.set(IUntitledTextEditorService, untitledTextEditorService);
     const workingCopyService = this.own(new BrowserWorkingCopyService());
     services.set(IWorkingCopyService, workingCopyService);
+    const workingCopyBackups = this.own(new IndexedDbWorkingCopyBackupService(workspace.id));
+    this.workingCopyBackups = workingCopyBackups;
+    services.set(IWorkingCopyBackupService, workingCopyBackups);
+    const textResourceStore = getBrowserTextResourceStore(textFileService);
+    const workspaceEditService = this.own(new BrowserWorkspaceEditService(getBrowserTextModelService(textResourceStore), workingCopyService, fileService));
+    services.set(IWorkspaceEditService, workspaceEditService);
     const textMateService = this.own(new BrowserTextMateService());
     services.set(ITextMateService, textMateService);
     const languageFeaturesService = this.own(new LanguageFeaturesService());
     services.set(ILanguageFeaturesService, languageFeaturesService);
+    this.own(new AppServerLanguageProviders(languageFeaturesService, api.language, workspaceContext));
     const extensionService = this.own(new AppServerExtensionService({ api: api.extensions, textMateService, languageFeaturesService }));
     services.set(IExtensionService, extensionService);
     void extensionService.start().catch(error => console.error("Declarative extension activation failed", error));
@@ -303,6 +325,11 @@ export class Workbench extends DisposableOwner {
     if (!ownerWindow) {
       throw new Error("Workbench requires an owner window");
     }
+    const workingCopyBackupTracker = this.own(new WorkingCopyBackupTracker(workingCopyService, workingCopyBackups, ownerWindow));
+    this.workingCopyBackupTracker = workingCopyBackupTracker;
+    const pageHideBackup = () => { void workingCopyBackupTracker.flush(); };
+    ownerWindow.addEventListener("pagehide", pageHideBackup);
+    this.defer(() => ownerWindow.removeEventListener("pagehide", pageHideBackup));
     const storage = this.own(new BrowserStorageService({
       ownerWindow,
       applicationId: product.storageNamespace,
@@ -319,6 +346,15 @@ export class Workbench extends DisposableOwner {
       ),
     ));
     services.set(IThemeService, themeService);
+    let textMateThemeRevision = 0;
+    const updateTextMateTheme = (): void => {
+      const model = textMateService.mutableScopeTheme;
+      if (!model) return;
+      try { model.replace(projectExtensionTokenTheme(extensionService.themes.currentCatalog, themeService.getColorTheme().colorScheme, ++textMateThemeRevision)); }
+      catch (error) { console.error("Failed to apply extension token theme", error); }
+    };
+    this.own(extensionService.themes.onDidChange(() => updateTextMateTheme()));
+    this.own(themeService.onDidColorThemeChange(() => updateTextMateTheme()));
     services.set(IUserThemeService, userThemeService ?? UnavailableUserThemeService);
     services.set(
       IFileIconThemeService,
@@ -435,6 +471,7 @@ export class Workbench extends DisposableOwner {
       documentCollaborationApi: api.documentCollaboration,
       serverEvents: api.events,
       workingCopyService,
+      workspaceEditService,
       saveAsResource: nativeHostApi
         ? async (defaultName) => {
           const filePath = await nativeHostApi.saveFile({ defaultName });
@@ -645,18 +682,43 @@ export class Workbench extends DisposableOwner {
         openPanelComposite(compositeId);
       },
     ));
+    this.defer(() => { this.disposed = true; });
     void sessionService.initialize();
     contributions.advance(WorkbenchPhase.BlockRestore);
     layoutService.layout();
-    contributions.advance(WorkbenchPhase.AfterRestored);
-    const eventuallyTimer = globalThis.setTimeout(
-      () => contributions.advance(WorkbenchPhase.Eventually),
-      2_000,
-    );
-    this.defer(() => globalThis.clearTimeout(eventuallyTimer));
+    this.whenRestored = this.completeStartupRestoration(workingCopyBackups, editor, contributions);
     this.defer(() => {
       void storage.flush(WillSaveStateReason.SHUTDOWN);
     });
+  }
+
+  private async completeStartupRestoration(backups: IWorkingCopyBackupService, editor: EditorPart, contributions: WorkbenchContributionHost): Promise<void> {
+    await this.restoreWorkingCopyBackups(backups, editor);
+    if (this.disposed) return;
+    contributions.advance(WorkbenchPhase.AfterRestored);
+    const eventuallyTimer = globalThis.setTimeout(() => contributions.advance(WorkbenchPhase.Eventually), 2_000);
+    this.defer(() => globalThis.clearTimeout(eventuallyTimer));
+  }
+
+  private async restoreWorkingCopyBackups(backups: IWorkingCopyBackupService, editor: EditorPart): Promise<void> {
+    let pending: readonly WorkingCopyBackup[];
+    try { pending = await backups.list(); }
+    catch (error) { console.error("Failed to list working-copy backups", error); return; }
+    for (const backup of pending) {
+      try {
+        let pane;
+        try {
+          pane = await editor.openEditor({ resource: backup.resource, ...(backup.languageId ? { languageId: backup.languageId } : {}), ...(backup.contentType ? { contentType: backup.contentType } : {}), ...(backup.label ? { label: backup.label } : {}) });
+        } catch {
+          pane = await editor.openEditor({ resource: backup.resource, initialText: "", ...(backup.languageId ? { languageId: backup.languageId } : {}), ...(backup.contentType ? { contentType: backup.contentType } : {}), ...(backup.label ? { label: backup.label } : {}) });
+        }
+        const workingCopy = pane.workingCopy;
+        if (!workingCopy || workingCopy.backupKind !== backup.kind) throw new Error(`Restored editor does not support ${backup.kind} backups`);
+        workingCopy.restoreBackup(backup.content);
+      } catch (error) {
+        console.error(`Failed to restore working-copy backup '${backup.resource.toString()}'`, error);
+      }
+    }
   }
 
   /** Applies a host-authoritative workspace replacement without rebuilding the Workbench. */
@@ -668,15 +730,19 @@ export class Workbench extends DisposableOwner {
 
   private async doUpdateWorkspace(workspace: IAnyWorkspaceIdentifier): Promise<void> {
     if (this.workspaceContext.getWorkspace().id === workspace.id) return;
+    await this.workingCopyBackupTracker.flush();
     for (const group of this.editor.groups) {
       for (const input of [...group.inputs]) group.closeEditor(input);
     }
+    await this.workingCopyBackupTracker.flush();
+    this.workingCopyBackups.switchWorkspace(workspace.id);
     await this.storage.flush(WillSaveStateReason.WORKSPACE_CHANGE);
     this.storage.switchWorkspace(workspace.id);
     this.workbenchWindow.setWorkbenchState(
       workbenchStateFromWorkspaceIdentifier(workspace),
     );
     this.workspaceContext.updateWorkspace(workspace);
+    await this.restoreWorkingCopyBackups(this.workingCopyBackups, this.editor);
   }
 }
 

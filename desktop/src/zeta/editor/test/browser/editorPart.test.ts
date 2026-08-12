@@ -171,6 +171,26 @@ test("Aster editor part applies selected before-save contributions through expli
   dom.window.close();
 });
 
+test("Code editor keeps large files editable while disabling full-document background features", () => {
+  const dom = new JSDOM("<!doctype html><body><main></main></body>");
+  dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+  const container = dom.window.document.querySelector<HTMLElement>("main")!;
+  const model = new TextModel("\n".repeat(300_000));
+  const reference = modelReference(URI.file("C:\\project\\large.ts"), model);
+  const editorPart = new EditorPart({ container, input: { resource: reference.resource, label: "large.ts" }, languageId: "typescript", modelReference: reference });
+  try {
+    editorPart.layout({ width: 500, height: 40 });
+    assert.equal(model.largeFile.tooLargeForTokenization, true, "large-file policy");
+    assert.equal(container.querySelectorAll(".aster-editor-token").length, 0, "background tokens");
+    assert.equal(container.querySelectorAll(".aster-editor-fold-toggle:not([hidden])").length, 0, "folding scan");
+    editorPart.textInput.element.dispatchEvent(new dom.window.InputEvent("beforeinput", { bubbles: true, cancelable: true, data: "x", inputType: "insertText" }));
+    assert.equal(editorPart.getValue().startsWith("x\n"), true, "basic editing");
+  } finally {
+    editorPart.dispose();
+    dom.window.close();
+  }
+});
+
 function modelReference(resource: URI, model: TextModel): TextModelReference {
   let disposed = false;
   const dispose = (): void => {

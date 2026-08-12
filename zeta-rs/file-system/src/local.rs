@@ -1,9 +1,12 @@
 use crate::DirectoryEntry;
+use crate::ExistingTargetBehavior;
 use crate::FileContent;
+use crate::FileDeleteMode;
 use crate::FileMetadata;
 use crate::FileSystemError;
 use crate::FileType;
 use crate::FileWriteCondition;
+use crate::MissingTargetBehavior;
 use crate::WorkspaceFileSystem;
 use crate::file_revision;
 use std::fs::File;
@@ -29,9 +32,16 @@ impl LocalFileSystem {
     }
 
     fn resolve_existing(&self, path: &Path) -> Result<PathBuf, FileSystemError> {
-        self.workspace
-            .resolve_existing(path)
-            .map_err(|_| FileSystemError::InvalidPath(path.to_path_buf()))
+        match self.workspace.resolve_existing(path) {
+            Ok(resolved) => Ok(resolved),
+            Err(_) => match self.workspace.resolve_for_write(path) {
+                Ok(candidate) if candidate.try_exists().map_err(io_error)? => {
+                    Err(FileSystemError::InvalidPath(path.to_path_buf()))
+                }
+                Ok(_) => Err(FileSystemError::NotFound(path.to_path_buf())),
+                Err(_) => Err(FileSystemError::InvalidPath(path.to_path_buf())),
+            },
+        }
     }
 
     fn resolve_for_write(&self, path: &Path) -> Result<PathBuf, FileSystemError> {
@@ -170,6 +180,123 @@ impl WorkspaceFileSystem for LocalFileSystem {
             .collect::<Result<Vec<_>, FileSystemError>>()?;
         entries.sort_by(|left, right| left.name.cmp(&right.name));
         Ok(entries)
+    }
+
+    fn create_file(
+        &self,
+        path: &Path,
+        existing: ExistingTargetBehavior,
+    ) -> Result<FileMetadata, FileSystemError> {
+        let _guard = self
+            .write_lock
+            .lock()
+            .map_err(|_| FileSystemError::Io("workspace write lock is poisoned".into()))?;
+        let resolved = self.resolve_for_write(path)?;
+        if resolved.exists() {
+            return match existing {
+                ExistingTargetBehavior::Error => {
+                    Err(FileSystemError::AlreadyExists(path.to_path_buf()))
+                }
+                ExistingTargetBehavior::Ignore => metadata(&resolved),
+                ExistingTargetBehavior::Overwrite => self.write_file_inner(path, &[], 1),
+            };
+        }
+        self.write_file_inner(path, &[], 1)
+    }
+
+    fn rename(
+        &self,
+        source: &Path,
+        target: &Path,
+        existing: ExistingTargetBehavior,
+    ) -> Result<(), FileSystemError> {
+        let _guard = self
+            .write_lock
+            .lock()
+            .map_err(|_| FileSystemError::Io("workspace write lock is poisoned".into()))?;
+        let source_path = self.resolve_existing(source)?;
+        let target_path = self.resolve_for_write(target)?;
+        if source_path == target_path {
+            return Ok(());
+        }
+        if target_path.exists() {
+            match existing {
+                ExistingTargetBehavior::Error => {
+                    return Err(FileSystemError::AlreadyExists(target.to_path_buf()));
+                }
+                ExistingTargetBehavior::Ignore => return Ok(()),
+                ExistingTargetBehavior::Overwrite => {
+                    let backup = rename_backup_path(&target_path)?;
+                    std::fs::rename(&target_path, &backup).map_err(io_error)?;
+                    if let Err(error) = std::fs::rename(&source_path, &target_path) {
+                        let _ = std::fs::rename(&backup, &target_path);
+                        return Err(io_error(error));
+                    }
+                    let _ = remove_resource(&backup, FileDeleteMode::Recursive);
+                    return Ok(());
+                }
+            }
+        }
+        let parent = target_path
+            .parent()
+            .ok_or_else(|| FileSystemError::InvalidPath(target.to_path_buf()))?;
+        if !parent.is_dir() {
+            return Err(FileSystemError::NotDirectory(
+                target.parent().unwrap_or(Path::new("")).to_path_buf(),
+            ));
+        }
+        std::fs::rename(source_path, target_path).map_err(io_error)
+    }
+
+    fn delete(
+        &self,
+        path: &Path,
+        missing: MissingTargetBehavior,
+        mode: FileDeleteMode,
+    ) -> Result<(), FileSystemError> {
+        let _guard = self
+            .write_lock
+            .lock()
+            .map_err(|_| FileSystemError::Io("workspace write lock is poisoned".into()))?;
+        let candidate = self.resolve_for_write(path)?;
+        if !candidate.exists() {
+            return match missing {
+                MissingTargetBehavior::Error => Err(FileSystemError::NotFound(path.to_path_buf())),
+                MissingTargetBehavior::Ignore => Ok(()),
+            };
+        }
+        let resolved = self.resolve_existing(path)?;
+        remove_resource(&resolved, mode)
+    }
+}
+
+fn rename_backup_path(target: &Path) -> Result<PathBuf, FileSystemError> {
+    let parent = target
+        .parent()
+        .ok_or_else(|| FileSystemError::InvalidPath(target.to_path_buf()))?;
+    for sequence in 0..1_024u32 {
+        let candidate = parent.join(format!(
+            ".zeta-rename-backup-{}-{sequence}",
+            std::process::id()
+        ));
+        if !candidate.exists() {
+            return Ok(candidate);
+        }
+    }
+    Err(FileSystemError::Io(
+        "could not allocate a workspace rename backup path".into(),
+    ))
+}
+
+fn remove_resource(path: &Path, mode: FileDeleteMode) -> Result<(), FileSystemError> {
+    let metadata = std::fs::symlink_metadata(path).map_err(io_error)?;
+    if metadata.file_type().is_dir() {
+        match mode {
+            FileDeleteMode::FileOrEmptyDirectory => std::fs::remove_dir(path).map_err(io_error),
+            FileDeleteMode::Recursive => std::fs::remove_dir_all(path).map_err(io_error),
+        }
+    } else {
+        std::fs::remove_file(path).map_err(io_error)
     }
 }
 

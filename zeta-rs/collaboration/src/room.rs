@@ -70,7 +70,9 @@ pub(crate) fn validate_transaction(value: &str) -> Result<(), String> {
         || !body.get("storedMarksSet").is_some_and(Value::is_boolean)
         || !body.get("metadata").is_some_and(Value::is_array)
     {
-        return Err("transaction must contain the required Gama transaction fields".into());
+        return Err(
+            "transaction must contain the required Document Engine transaction fields".into(),
+        );
     }
     let steps = body
         .get("steps")
@@ -144,15 +146,15 @@ pub(crate) fn replay_submit_result(
 }
 
 pub(crate) fn random_room_id() -> Result<String, String> {
-    random_identifier("gama-", 16)
+    random_identifier("document-", 16)
 }
 
 pub(crate) fn random_access_token() -> Result<String, String> {
-    random_identifier("gama-access-", 32)
+    random_identifier("document-access-", 32)
 }
 
 pub(crate) fn random_principal_id() -> Result<String, String> {
-    random_identifier("gama-member-", 16)
+    random_identifier("document-member-", 16)
 }
 
 fn random_identifier(prefix: &str, bytes: usize) -> Result<String, String> {
@@ -261,7 +263,7 @@ fn validate_transaction_step(value: &Value) -> Result<(), String> {
             validate_non_empty_string(step.get("type"), "setNodeType type")?;
             validate_attributes(step.get("attrs"), "setNodeType attrs")?;
         }
-        _ => return Err("transaction contains an unknown Gama step kind".into()),
+        _ => return Err("transaction contains an unknown Document Engine step kind".into()),
     }
     Ok(())
 }

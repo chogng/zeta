@@ -5,9 +5,14 @@ import { defaultTextMateScopeResolver, type TextMateResolvedTokenStyle, type Tex
 /** A transferable semantic presentation rule matched against one TextMate scope selector. */
 export interface TextMateScopeThemeRule {
   readonly selector: string;
-  readonly tokenType: string;
+  readonly tokenType?: string;
   readonly modifiers?: readonly string[];
+  readonly foreground?: string;
+  readonly background?: string;
+  readonly fontStyle?: readonly TextMateTokenFontStyle[];
 }
+
+export type TextMateTokenFontStyle = "italic" | "bold" | "underline" | "strikethrough";
 
 /** Immutable, revisioned theme data that can safely cross the Renderer/Worker boundary. */
 export interface TextMateScopeTheme {
@@ -76,7 +81,8 @@ export function createTextMateScopeThemeResolver(theme: TextMateScopeTheme): Tex
     for (let index = normalized.rules.length - 1; index >= 0; index -= 1) {
       const rule = normalized.rules[index]!;
       if (matchesTextMateScopeSelector(rule.selector, scopes)) {
-        return Object.freeze({ tokenType: rule.tokenType, modifiers: rule.modifiers ?? EMPTY_MODIFIERS });
+        const fallback = defaultTextMateScopeResolver(scopes);
+        return Object.freeze({ tokenType: rule.tokenType ?? fallback?.tokenType ?? "source", modifiers: rule.modifiers ?? fallback?.modifiers ?? EMPTY_MODIFIERS, ...(rule.foreground === undefined ? {} : { foreground: rule.foreground }), ...(rule.background === undefined ? {} : { background: rule.background }), ...(rule.fontStyle === undefined ? {} : { fontStyle: rule.fontStyle }) });
       }
     }
     return defaultTextMateScopeResolver(scopes);
@@ -118,9 +124,28 @@ function normalizeRule(value: TextMateScopeThemeRule): TextMateScopeThemeRule {
   if (!selector.split(",").some(part => part.trim().length > 0)) {
     throw new TypeError("TextMate scope theme selector must contain a selector");
   }
-  const tokenType = normalizeTokenType(value.tokenType);
+  const tokenType = value.tokenType === undefined ? undefined : normalizeTokenType(value.tokenType);
   const modifiers = value.modifiers === undefined ? undefined : normalizeModifiers(value.modifiers);
-  return Object.freeze({ selector, tokenType, ...(modifiers === undefined ? {} : { modifiers }) });
+  const foreground = value.foreground === undefined ? undefined : normalizeColor(value.foreground, "TextMate scope theme foreground");
+  const background = value.background === undefined ? undefined : normalizeColor(value.background, "TextMate scope theme background");
+  const fontStyle = value.fontStyle === undefined ? undefined : normalizeFontStyles(value.fontStyle);
+  if (tokenType === undefined && modifiers === undefined && foreground === undefined && background === undefined && fontStyle === undefined) throw new TypeError("TextMate scope theme rule must define a token type or presentation");
+  return Object.freeze({ selector, ...(tokenType === undefined ? {} : { tokenType }), ...(modifiers === undefined ? {} : { modifiers }), ...(foreground === undefined ? {} : { foreground }), ...(background === undefined ? {} : { background }), ...(fontStyle === undefined ? {} : { fontStyle }) });
+}
+
+function normalizeColor(value: unknown, owner: string): string {
+  if (typeof value !== "string" || !/^#[0-9a-f]{3,4}(?:[0-9a-f]{3,4})?$/iu.test(value)) throw new TypeError(`${owner} must be a hexadecimal color`);
+  return value;
+}
+
+function normalizeFontStyles(value: readonly TextMateTokenFontStyle[]): readonly TextMateTokenFontStyle[] {
+  if (!Array.isArray(value)) throw new TypeError("TextMate scope theme font style must be an array");
+  const styles = value.map(style => {
+    if (style !== "italic" && style !== "bold" && style !== "underline" && style !== "strikethrough") throw new TypeError(`Unsupported TextMate scope theme font style '${String(style)}'`);
+    return style;
+  });
+  if (new Set(styles).size !== styles.length) throw new RangeError("TextMate scope theme font styles must be unique");
+  return Object.freeze(styles);
 }
 
 function normalizeModifiers(value: readonly string[]): readonly string[] {

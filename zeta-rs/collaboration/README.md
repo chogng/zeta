@@ -1,6 +1,6 @@
 # zeta-collaboration
 
-`zeta-collaboration` owns the backend-neutral authority for ordered Gama
+`zeta-collaboration` owns the backend-neutral authority for ordered Document Engine
 structured-document rooms. It does not own HTTP, App Server JSON-RPC,
 Workbench state, sessions, users, or document-schema semantics.
 
@@ -13,7 +13,7 @@ events, and cross-process presence leases.
 
 ## Contract
 
-- `open` creates an unpredictable `gama-` room ID or joins an existing room
+- `open` creates an unpredictable `document-` room ID or joins an existing room
   only when its schema compatibility ID matches.
 - `submit` validates bounded JSON-object envelopes, assigns a monotonic
   JavaScript-safe version, and returns `Accepted`, bounded rebase history, or
@@ -38,10 +38,10 @@ needs an explicit future protocol for expiring client identities; deleting
 those rows without such a contract would break idempotency.
 
 The crate validates the versioned JSON envelope, bounded generic node/mark/
-selection structure, and the known core Gama transaction kinds, not each
-profile's full Gama schema.
+selection structure, and the known core Document Engine transaction kinds, not each
+profile's full document schema.
 `RemoteDocumentCollaborationService` decodes every server value through the
-active Gama schema before it can reach a `DocumentModel`. A Rust schema
+active Document Engine schema before it can reach a `DocumentModel`. A Rust schema
 authority belongs here only once the schema is independently represented in
 the backend rather than copied from the browser.
 

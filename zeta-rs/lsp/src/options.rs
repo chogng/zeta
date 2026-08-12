@@ -2,9 +2,13 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use lsp_types::{
-    ClientCapabilities, ClientInfo, GeneralClientCapabilities, PositionEncodingKind,
-    PublishDiagnosticsClientCapabilities, TextDocumentClientCapabilities,
-    TextDocumentSyncClientCapabilities, Uri, WorkspaceClientCapabilities, WorkspaceFolder,
+    CallHierarchyClientCapabilities, ClientCapabilities, ClientInfo,
+    CodeActionCapabilityResolveSupport, CodeActionClientCapabilities, FailureHandlingKind,
+    GeneralClientCapabilities, PositionEncodingKind, PublishDiagnosticsClientCapabilities,
+    RenameClientCapabilities, ResourceOperationKind, TextDocumentClientCapabilities,
+    TextDocumentSyncClientCapabilities, TypeHierarchyClientCapabilities, Uri,
+    WorkspaceClientCapabilities, WorkspaceEditClientCapabilities, WorkspaceFolder,
+    WorkspaceSymbolClientCapabilities,
 };
 use serde_json::Value;
 
@@ -115,6 +119,21 @@ fn default_client_capabilities() -> ClientCapabilities {
         workspace: Some(WorkspaceClientCapabilities {
             configuration: Some(true),
             workspace_folders: Some(true),
+            symbol: Some(WorkspaceSymbolClientCapabilities {
+                dynamic_registration: Some(false),
+                ..Default::default()
+            }),
+            workspace_edit: Some(WorkspaceEditClientCapabilities {
+                document_changes: Some(true),
+                resource_operations: Some(vec![
+                    ResourceOperationKind::Create,
+                    ResourceOperationKind::Rename,
+                    ResourceOperationKind::Delete,
+                ]),
+                failure_handling: Some(FailureHandlingKind::Undo),
+                normalizes_line_endings: Some(true),
+                ..Default::default()
+            }),
             ..Default::default()
         }),
         text_document: Some(TextDocumentClientCapabilities {
@@ -125,6 +144,29 @@ fn default_client_capabilities() -> ClientCapabilities {
                 did_save: Some(true),
             }),
             publish_diagnostics: Some(PublishDiagnosticsClientCapabilities::default()),
+            call_hierarchy: Some(CallHierarchyClientCapabilities {
+                dynamic_registration: Some(false),
+            }),
+            type_hierarchy: Some(TypeHierarchyClientCapabilities {
+                dynamic_registration: Some(false),
+            }),
+            rename: Some(RenameClientCapabilities {
+                dynamic_registration: Some(false),
+                prepare_support: Some(true),
+                honors_change_annotations: Some(false),
+                ..Default::default()
+            }),
+            code_action: Some(CodeActionClientCapabilities {
+                dynamic_registration: Some(false),
+                is_preferred_support: Some(true),
+                disabled_support: Some(true),
+                data_support: Some(true),
+                resolve_support: Some(CodeActionCapabilityResolveSupport {
+                    properties: vec!["edit".into()],
+                }),
+                honors_change_annotations: Some(false),
+                ..Default::default()
+            }),
             ..Default::default()
         }),
         general: Some(GeneralClientCapabilities {

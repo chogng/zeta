@@ -47,6 +47,9 @@ class BrowserDocumentModelReference extends DisposableOwner implements DocumentM
   readonly model;
   readonly onDidChangeDirty;
   readonly onDidChangeExternalChange;
+  readonly onDidChangeContent;
+  readonly backupKind;
+  readonly backupContentType;
 
   constructor(model: DocumentModel, private readonly workingCopy: DocumentWorkingCopy) {
     super();
@@ -55,6 +58,9 @@ class BrowserDocumentModelReference extends DisposableOwner implements DocumentM
     this.resource = workingCopy.resource;
     this.onDidChangeDirty = workingCopy.onDidChangeDirty;
     this.onDidChangeExternalChange = workingCopy.onDidChangeExternalChange;
+    this.onDidChangeContent = workingCopy.onDidChangeContent;
+    this.backupKind = workingCopy.backupKind;
+    this.backupContentType = workingCopy.backupContentType;
   }
 
   get isDirty(): boolean {
@@ -63,6 +69,14 @@ class BrowserDocumentModelReference extends DisposableOwner implements DocumentM
 
   get hasExternalChange(): boolean {
     return this.workingCopy.hasExternalChange;
+  }
+
+  backup(): string {
+    return this.workingCopy.backup();
+  }
+
+  restoreBackup(content: string): void {
+    this.workingCopy.restoreBackup(content);
   }
 
   save(signal: AbortSignal): Promise<void> {

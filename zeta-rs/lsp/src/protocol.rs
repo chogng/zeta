@@ -7,7 +7,7 @@ use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncReadExt, AsyncWrite, AsyncWr
 use crate::LanguageServerError;
 
 pub(crate) const DEFAULT_MAX_HEADER_BYTES: usize = 16 * 1024;
-pub(crate) const DEFAULT_MAX_MESSAGE_BYTES: usize = 4 * 1024 * 1024;
+pub(crate) const DEFAULT_MAX_MESSAGE_BYTES: usize = 64 * 1024 * 1024;
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct RpcErrorObject {

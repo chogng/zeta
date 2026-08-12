@@ -70,6 +70,9 @@ test("BrowserFileService maps wire entries back to resource URIs", async () => {
           revision: "revision-write",
         };
       },
+      createFile: async ({ path }) => ({ fileType: "file", sizeBytes: path.length - path.length, readonly: false, modifiedAtMillis: null }),
+      rename: async () => {},
+      delete: async () => {},
     },
     resourceApi: {
       metadata: async () => { throw new Error("not used"); },
@@ -132,6 +135,9 @@ test("BrowserFileService maps App Server revision conflicts to the file contract
       readFile: async () => { throw new Error("unavailable"); },
       readBinaryFile: async () => { throw new Error("unavailable"); },
       writeFile: async () => { throw new Error("FileSystemRevisionConflict"); },
+      createFile: async () => { throw new Error("unavailable"); },
+      rename: async () => { throw new Error("unavailable"); },
+      delete: async () => { throw new Error("unavailable"); },
     },
   });
 
@@ -158,6 +164,9 @@ test("BrowserFileService reads connection-owned binary resources in bounded chun
         revision: "revision-large",
       }),
       writeFile: async () => { throw new Error("not used"); },
+      createFile: async () => { throw new Error("not used"); },
+      rename: async () => { throw new Error("not used"); },
+      delete: async () => { throw new Error("not used"); },
     },
     resourceApi: {
       metadata: async () => { throw new Error("not used"); },
@@ -208,6 +217,9 @@ function unavailableFileApi() {
     readFile: async () => { throw new Error("unavailable"); },
     readBinaryFile: async () => { throw new Error("unavailable"); },
     writeFile: async () => { throw new Error("unavailable"); },
+    createFile: async () => { throw new Error("unavailable"); },
+    rename: async () => { throw new Error("unavailable"); },
+    delete: async () => { throw new Error("unavailable"); },
   };
 }
 

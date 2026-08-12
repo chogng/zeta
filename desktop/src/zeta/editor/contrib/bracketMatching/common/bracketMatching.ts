@@ -1,9 +1,9 @@
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
-import { type LanguageConfigurationSource, type ResolvedLanguageConfiguration } from "../../../common/languages/languageConfiguration.js";
-import { assertLanguageId } from "../../../common/languages/languageId.js";
-import { createLanguageLexicalLineScanner } from "../../../common/languages/languageLexicalConfiguration.js";
-import { type LanguageLexicalBracketEvent, type LanguageLexicalLineResult, type LanguageLexicalLineScanner, type LanguageLexicalState } from "../../../common/languages/languageLexicalLineScanner.js";
-import { type TextModelChange, TextPosition, TextRange } from "../../../common/core/text.js";
+import { type LanguageStructuralBracketSource } from "../../../common/languages/languageLexicalContext.js";
+import { LanguageLexicalContextIndex } from "../../../common/languages/languageLexicalContext.js";
+import { type LanguageConfigurationSource } from "../../../common/languages/languageConfiguration.js";
+import { type LanguageLexicalBracketEvent } from "../../../common/languages/languageLexicalLineScanner.js";
+import { TextPosition, TextRange } from "../../../common/core/text.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 
 export interface LanguageBracketMatch {
@@ -22,31 +22,37 @@ interface BracketLocation {
 
 /** Finds configured structural bracket pairs while excluding lexical string/comment spans. */
 export class LanguageBracketMatcher extends DisposableOwner {
+  readonly textModel: TextModel;
   private readonly maxScanLineCount: number;
-  private configuration: ResolvedLanguageConfiguration | undefined;
-  private scanner: LanguageLexicalLineScanner | undefined;
-  private lineResults: LanguageLexicalLineResult[] = [];
   private disposed = false;
 
   constructor(
-    readonly textModel: TextModel,
-    readonly languageId: string,
-    private readonly configurations: LanguageConfigurationSource,
-    options: LanguageBracketMatcherOptions = {},
+    textModel: TextModel,
+    brackets: LanguageStructuralBracketSource,
+    options?: LanguageBracketMatcherOptions,
+  );
+  constructor(
+    textModel: TextModel,
+    languageId: string,
+    configurations: LanguageConfigurationSource,
+    options?: LanguageBracketMatcherOptions,
+  );
+  constructor(
+    textModel: TextModel,
+    bracketsOrLanguageId: LanguageStructuralBracketSource | string,
+    configurationsOrOptions: LanguageConfigurationSource | LanguageBracketMatcherOptions = {},
+    legacyOptions: LanguageBracketMatcherOptions = {},
   ) {
     super();
     try {
-      assertLanguageId(languageId);
-      if (!configurations || typeof configurations.getLanguageConfiguration !== "function") {
-        throw new TypeError("Language bracket matcher requires language configurations");
-      }
+      this.textModel = textModel;
+      const brackets = typeof bracketsOrLanguageId === "string" ? this.own(new LanguageLexicalContextIndex(textModel, bracketsOrLanguageId, configurationsOrOptions as LanguageConfigurationSource)) : bracketsOrLanguageId;
+      const options = typeof bracketsOrLanguageId === "string" ? legacyOptions : configurationsOrOptions as LanguageBracketMatcherOptions;
+      this.brackets = brackets;
+      if (brackets.textModel !== textModel) throw new TypeError("Language bracket matcher requires a structural source for its text model");
       this.maxScanLineCount = readMaxScanLineCount(options.maxScanLineCount);
-      this.own(textModel.onDidChange(change => this.acceptModelChange(change)));
       this.defer(() => {
         this.disposed = true;
-        this.configuration = undefined;
-        this.scanner = undefined;
-        this.lineResults = [];
       });
     } catch (error) {
       this.dispose();
@@ -121,32 +127,10 @@ export class LanguageBracketMatcher extends DisposableOwner {
   }
 
   private bracketEventsAt(lineIndex: number): readonly BracketLocation[] {
-    return Object.freeze(this.ensureLine(lineIndex).events.flatMap(event => event.kind === "bracket"
-      ? [Object.freeze({ lineIndex, event })]
-      : []));
+    return Object.freeze(this.brackets.getStructuralBracketEvents(lineIndex).map(event => Object.freeze({ lineIndex, event })));
   }
 
-  private ensureLine(lineIndex: number): LanguageLexicalLineResult {
-    const configuration = this.configurations.getLanguageConfiguration(this.languageId);
-    if (configuration !== this.configuration) {
-      this.configuration = configuration;
-      this.scanner = createLanguageLexicalLineScanner(this.languageId, configuration);
-      this.lineResults = [];
-    }
-    let state: LanguageLexicalState = this.lineResults.at(-1)?.outputState ?? "normal";
-    while (this.lineResults.length <= lineIndex) {
-      const currentLineIndex = this.lineResults.length;
-      const result = this.scanner!.scan(this.textModel.getLineContent(currentLineIndex), state);
-      this.lineResults.push(result);
-      state = result.outputState;
-    }
-    return this.lineResults[lineIndex]!;
-  }
-
-  private acceptModelChange(change: TextModelChange): void {
-    const firstChangedLine = Math.min(...change.changes.map(contentChange => contentChange.range.start.lineIndex));
-    this.lineResults.length = Math.min(this.lineResults.length, firstChangedLine);
-  }
+  private readonly brackets: LanguageStructuralBracketSource;
 
   private ensureAlive(): void {
     if (this.disposed) throw new ReferenceError("Language bracket matcher is already disposed");

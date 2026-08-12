@@ -6,7 +6,7 @@ import {
   toDisposable,
 } from "../../../base/common/lifecycle.js";
 
-export const DEFAULT_MAX_JSONL_FRAME_BYTES = 1_048_576;
+export const DEFAULT_MAX_JSONL_FRAME_BYTES = 320 * 1024 * 1024;
 export const DEFAULT_MAX_STDERR_BYTES = 65_536;
 export const DEFAULT_MAX_PENDING_WRITES = 128;
 

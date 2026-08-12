@@ -1,6 +1,6 @@
-import { APP_SERVER_METHODS, type FsGetMetadataParams, type FsReadBinaryFileParams, type FsReadDirectoryParams, type FsReadFileParams, type FsWriteFileParams } from "../../../../../generated/app-server/types.js";
+import { APP_SERVER_METHODS, type FsCreateFileParams, type FsDeleteParams, type FsGetMetadataParams, type FsReadBinaryFileParams, type FsReadDirectoryParams, type FsReadFileParams, type FsRenameParams, type FsWriteFileParams } from "../../../../../generated/app-server/types.js";
 import type { AppServerSupervisor } from "../../app-server/electron-main/app-server-supervisor.js";
-import { record, string } from "../../ipc/electron-main/ipcValidation.js";
+import { record, string, stringEnum } from "../../ipc/electron-main/ipcValidation.js";
 import type { IpcRoute } from "../../ipc/electron-main/trustedIpcRouter.js";
 import { relativeWorkspacePath } from "../../workspace/electron-main/workspacePathValidation.js";
 
@@ -32,6 +32,9 @@ export function fileIpcRoutes(supervisor: AppServerSupervisor): readonly IpcRout
       validate: fsWriteFileParams,
       invoke: (params) => supervisor.request(APP_SERVER_METHODS["fs/writeFile"], params),
     }),
+    route({ channel: "zeta:fs:create-file", validate: fsCreateFileParams, invoke: params => supervisor.request(APP_SERVER_METHODS["fs/createFile"], params) }),
+    route({ channel: "zeta:fs:rename", validate: fsRenameParams, invoke: params => supervisor.request(APP_SERVER_METHODS["fs/rename"], params) }),
+    route({ channel: "zeta:fs:delete", validate: fsDeleteParams, invoke: params => supervisor.request(APP_SERVER_METHODS["fs/delete"], params) }),
   ];
 }
 
@@ -67,4 +70,19 @@ function fsWriteFileParams(value: unknown): FsWriteFileParams {
     content: string(params.content, "content"),
     ...(params.expectedRevision === undefined ? {} : { expectedRevision: string(params.expectedRevision, "expectedRevision") }),
   };
+}
+
+function fsCreateFileParams(value: unknown): FsCreateFileParams {
+  const params = record(value, ["path", "existing"]);
+  return { path: relativeWorkspacePath(params.path), existing: stringEnum(params.existing, "existing", ["error", "overwrite", "ignore"] as const) };
+}
+
+function fsRenameParams(value: unknown): FsRenameParams {
+  const params = record(value, ["source", "target", "existing"]);
+  return { source: relativeWorkspacePath(params.source), target: relativeWorkspacePath(params.target), existing: stringEnum(params.existing, "existing", ["error", "overwrite", "ignore"] as const) };
+}
+
+function fsDeleteParams(value: unknown): FsDeleteParams {
+  const params = record(value, ["path", "missing", "mode"]);
+  return { path: relativeWorkspacePath(params.path), missing: stringEnum(params.missing, "missing", ["error", "ignore"] as const), mode: stringEnum(params.mode, "mode", ["fileOrEmptyDirectory", "recursive"] as const) };
 }

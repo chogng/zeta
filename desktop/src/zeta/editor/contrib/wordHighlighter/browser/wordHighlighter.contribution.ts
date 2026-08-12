@@ -9,7 +9,7 @@ registerEditorContribution({ id: "editor.contrib.wordHighlighter", configure: co
   context.provideCapability(TextEditorCapability.occurrenceDecorations, decorations);
   context.addDecorationSource(createAsterDecorationSource(decorations, () => DecorationPresentation.OccurrenceHighlight));
 }, install: context => {
-  if (context.kind !== "text") return;
+  if (context.kind !== "text" || context.model.largeFile.tooLargeForTokenization) return;
   context.own(new OccurrenceHighlightController(context.selections, context.getCapability(TextEditorCapability.occurrenceDecorations), {
     wordPattern: () => context.configurations.getLanguageConfiguration(context.languageId).wordPattern,
   }));

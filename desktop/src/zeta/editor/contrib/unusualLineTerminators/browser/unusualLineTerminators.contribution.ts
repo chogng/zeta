@@ -9,6 +9,6 @@ registerEditorContribution({ id: "editor.contrib.unusualLineTerminators", config
   context.provideCapability(TextEditorCapability.unusualLineTerminatorDecorations, decorations);
   context.addDecorationSource(createAsterDecorationSource(decorations, () => DecorationPresentation.UnusualLineTerminator, () => "Unusual line terminator"));
 }, install: context => {
-  if (context.kind !== "text") return;
+  if (context.kind !== "text" || context.model.largeFile.tooLargeForTokenization) return;
   context.own(new UnusualLineTerminatorsController(context.model, context.getCapability(TextEditorCapability.unusualLineTerminatorDecorations)));
 } });
