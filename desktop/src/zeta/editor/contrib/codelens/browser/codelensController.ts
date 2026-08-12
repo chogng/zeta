@@ -10,7 +10,7 @@ export class CodeLensController extends DisposableOwner {
   private lenses: readonly LanguageCodeLens[] = [];
   private request: AbortController | undefined;
 
-  constructor(private readonly viewport: EditorViewport, private readonly service: CodeLensService, private readonly languageId: string, private readonly onExecuteCommand?: ExecuteCodeLensCommand, private readonly onError: (error: unknown) => void = error => console.error("Alpha code lens failed", error)) {
+  constructor(private readonly viewport: EditorViewport, private readonly service: CodeLensService, private readonly languageId: string, private readonly onExecuteCommand?: ExecuteCodeLensCommand, private readonly onError: (error: unknown) => void = error => console.error("Aster code lens failed", error)) {
     super();
     this.own(viewport.onDidChangeLayout(() => this.render()));
     this.own(viewport.textModel.onDidChange(() => void this.refresh()));
@@ -33,14 +33,14 @@ export class CodeLensController extends DisposableOwner {
   }
 
   private render(): void {
-    for (const element of [...this.viewport.element.querySelectorAll<HTMLElement>(".zeta-alpha-editor-codelens")]) element.remove();
+    for (const element of [...this.viewport.element.querySelectorAll<HTMLElement>(".aster-editor-codelens")]) element.remove();
     const scroll = this.viewport.viewportLayout.scrollPosition;
     for (const lens of this.lenses) {
       const command = lens.command;
       if (!command) continue;
       const element = this.viewport.element.ownerDocument.createElement("button");
       element.type = "button";
-      element.className = "zeta-alpha-editor-codelens";
+      element.className = "aster-editor-codelens";
       element.textContent = command.title;
       const coordinates = this.viewport.getPositionContentCoordinates(lens.range.start);
       element.style.left = `${Math.max(4, coordinates.left - scroll.left)}px`;

@@ -110,7 +110,7 @@ for (const [name, value] of Object.entries({
 }
 
 const { EditorViewport } = await import("../../../../browser/view/editorViewport.js");
-const { ALPHA_EDITOR_CLIPBOARD_MIME, ALPHA_EDITOR_HTML_CLIPBOARD_MIME, ClipboardLineEnding } = await import("../../browser/clipboardController.js");
+const { EDITOR_CLIPBOARD_MIME, EDITOR_HTML_CLIPBOARD_MIME, ClipboardLineEnding } = await import("../../browser/clipboardController.js");
 const { EditorClipboardPasteMode, EditorEmptySelectionClipboardPolicy } = await import("../../common/clipboard.js");
 const { SemanticTokenPresentation } = await import("../../../../browser/view/semanticTokenPresentation.js");
 const { TextInputController } = await import("../../../../browser/input/textInputController.js");
@@ -142,9 +142,9 @@ test("Clipboard copies, distributes paste, cuts, and restores isolated history",
   input.element.dispatchEvent(copy);
   assert.equal(copy.defaultPrevented, true);
   assert.equal(copiedData.getData("text/plain"), "one\nthree");
-  assert.equal(copiedData.getData(ALPHA_EDITOR_HTML_CLIPBOARD_MIME), "<pre><code>one\nthree</code></pre>");
+  assert.equal(copiedData.getData(EDITOR_HTML_CLIPBOARD_MIME), "<pre><code>one\nthree</code></pre>");
   assert.deepEqual(
-    JSON.parse(copiedData.getData(ALPHA_EDITOR_CLIPBOARD_MIME)),
+    JSON.parse(copiedData.getData(EDITOR_CLIPBOARD_MIME)),
     {
       version: 2,
       selectionTexts: ["one", "three"],
@@ -218,7 +218,7 @@ test("Clipboard repeats external text and copies an empty selection as a line", 
 
   const externalData = new MemoryClipboardData();
   externalData.setData("text/plain", "X\r\nY");
-  externalData.setData(ALPHA_EDITOR_CLIPBOARD_MIME, JSON.stringify({
+  externalData.setData(EDITOR_CLIPBOARD_MIME, JSON.stringify({
     version: 1,
     selectionTexts: ["wrong count"],
   }));
@@ -279,7 +279,7 @@ test("Clipboard round-trips complete lines and preserves target columns", () => 
   input.element.dispatchEvent(clipboardEvent(dom.window, "copy", lineData));
   assert.equal(lineData.getData("text/plain"), "one\nthree\n");
   assert.deepEqual(
-    JSON.parse(lineData.getData(ALPHA_EDITOR_CLIPBOARD_MIME)),
+    JSON.parse(lineData.getData(EDITOR_CLIPBOARD_MIME)),
     {
       version: 2,
       selectionTexts: ["one\n", "three\n"],
@@ -360,7 +360,7 @@ test("Mixed line and selection metadata falls back to selection paste", () => {
   const data = new MemoryClipboardData();
   input.element.dispatchEvent(clipboardEvent(dom.window, "copy", data));
   assert.deepEqual(
-    JSON.parse(data.getData(ALPHA_EDITOR_CLIPBOARD_MIME)).pasteModes,
+    JSON.parse(data.getData(EDITOR_CLIPBOARD_MIME)).pasteModes,
     [EditorClipboardPasteMode.Line, EditorClipboardPasteMode.Selection],
   );
 
@@ -432,11 +432,11 @@ test("Clipboard copies escaped HTML and safely falls back to external HTML text"
 
   const copied = new MemoryClipboardData();
   input.element.dispatchEvent(clipboardEvent(dom.window, "copy", copied));
-  assert.equal(copied.getData(ALPHA_EDITOR_HTML_CLIPBOARD_MIME), "<pre><code>if (a &lt; b &amp;&amp; c &gt; d) {}</code></pre>");
+  assert.equal(copied.getData(EDITOR_HTML_CLIPBOARD_MIME), "<pre><code>if (a &lt; b &amp;&amp; c &gt; d) {}</code></pre>");
 
   selections.setSelections(TextSelectionSet.single(caret(0, model.getLineContent(0).length)));
   const external = new MemoryClipboardData();
-  external.setData(ALPHA_EDITOR_HTML_CLIPBOARD_MIME, "<div>first &amp; second</div><div><strong>third</strong><br>fourth</div><script>ignored()</script>");
+  external.setData(EDITOR_HTML_CLIPBOARD_MIME, "<div>first &amp; second</div><div><strong>third</strong><br>fourth</div><script>ignored()</script>");
   const paste = clipboardEvent(dom.window, "paste", external);
   input.element.dispatchEvent(paste);
   assert.equal(paste.defaultPrevented, true);
@@ -485,16 +485,16 @@ test("Clipboard preserves current semantic token markup in portable HTML", () =>
   input.element.dispatchEvent(clipboardEvent(dom.window, "copy", copied));
   assert.equal(copied.getData("text/plain"), "const value\nnext");
   assert.equal(
-    copied.getData(ALPHA_EDITOR_HTML_CLIPBOARD_MIME),
-    '<pre><code><span class="zeta-alpha-editor-token token-keyword" style="color: rgb(1, 2, 3)">const</span> value\n<span class="zeta-alpha-editor-token token-keyword" style="color: rgb(1, 2, 3)">next</span></code></pre>',
+    copied.getData(EDITOR_HTML_CLIPBOARD_MIME),
+    '<pre><code><span class="aster-editor-token token-keyword" style="color: rgb(1, 2, 3)">const</span> value\n<span class="aster-editor-token token-keyword" style="color: rgb(1, 2, 3)">next</span></code></pre>',
   );
 
   selections.setSelections(TextSelectionSet.single(caret(1, 2)));
   const lineCopied = new MemoryClipboardData();
   input.element.dispatchEvent(clipboardEvent(dom.window, "copy", lineCopied));
   assert.equal(
-    lineCopied.getData(ALPHA_EDITOR_HTML_CLIPBOARD_MIME),
-    '<pre><code><span class="zeta-alpha-editor-token token-keyword" style="color: rgb(1, 2, 3)">next</span>\n</code></pre>',
+    lineCopied.getData(EDITOR_HTML_CLIPBOARD_MIME),
+    '<pre><code><span class="aster-editor-token token-keyword" style="color: rgb(1, 2, 3)">next</span>\n</code></pre>',
   );
 
   dom.window.close();

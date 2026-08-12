@@ -22,7 +22,7 @@ for (const [name, value] of Object.entries({
 }
 
 const { EditorViewport } = await import("../../../../browser/view/editorViewport.js");
-const { GotoLineController, isAlphaGotoLineChord } = await import("../../browser/quickAccessController.js");
+const { GotoLineController, isAsterGotoLineChord } = await import("../../browser/quickAccessController.js");
 
 test("Go to Line previews locally, accepts a line and column, and cancels without changing selections", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
@@ -69,7 +69,7 @@ test("Go to Line uses Command+G on macOS", () => {
   editorInput.dispatchEvent(open);
   assert.equal(open.defaultPrevented, true);
   assert.equal(controller.visible, true);
-  assert.equal(isAlphaGotoLineChord(keydown(dom.window, "g", { ctrlKey: true }), OperatingSystem.Macintosh), false);
+  assert.equal(isAsterGotoLineChord(keydown(dom.window, "g", { ctrlKey: true }), OperatingSystem.Macintosh), false);
   dom.window.close();
 });
 

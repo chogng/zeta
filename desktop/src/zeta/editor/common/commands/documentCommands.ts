@@ -654,7 +654,7 @@ function createPasteCrossBlockTextCommand(schema: DocumentSchema, document: Docu
   return { transaction, focus: { blockId: focusBlockId, ...(point ? { point } : {}) } };
 }
 
-/** Inserts a Gama fragment at a text selection while remapping pasted node identities. */
+/** Inserts a Aster fragment at a text selection while remapping pasted node identities. */
 export function createInsertFragmentCommand(schema: DocumentSchema, document: DocumentNode, blockId: DocumentNodeId, selection: DocumentSelection, fragment: DocumentFragment): DocumentCommand | undefined {
   if (fragment.content.length === 0) return undefined;
   if (selection.kind === "all") return createReplaceDocumentFragmentCommand(schema, document, fragment);

@@ -1464,7 +1464,7 @@ export class EditorWidget extends DisposableOwner {
       const connection = await service.open({
         ...(roomId === undefined ? {} : { roomId }),
         clientId: createCollaborationClientId(input.resource),
-        schemaId: this.options.collaborationSchemaId ?? "gama-default-v1",
+        schemaId: this.options.collaborationSchemaId ?? "aster-document-v1",
         schema: model.schema,
         document: model.document,
         target,
@@ -1557,9 +1557,9 @@ function createFallbackInlineNode(ownerDocument: Document, node: DocumentNode): 
 
 function createCollaborationClientId(resource: URI): string {
   const identifier = globalThis.crypto?.randomUUID?.();
-  if (identifier) return `gama-${identifier}`;
+  if (identifier) return `aster-${identifier}`;
   const suffix = `${Date.now().toString(36)}${Math.random().toString(36).replace(/[^a-z0-9]/g, "")}`;
-  return `gama-${resource.path.length.toString(36)}-${suffix}`;
+  return `aster-${resource.path.length.toString(36)}-${suffix}`;
 }
 
 function editableBlockAriaLabel(node: DocumentNode): string {

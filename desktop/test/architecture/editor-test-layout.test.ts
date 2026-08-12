@@ -9,7 +9,7 @@ const editorRoot = join(desktopRoot, "src/zeta/editor");
 const browserIntegrationRoot = join(desktopRoot, "test/editor/browser");
 const desktopPackage = JSON.parse(readFileSync(join(desktopRoot, "package.json"), "utf8")) as { scripts?: Record<string, string> };
 
-test("editor unit tests follow the flat common, browser, and contrib layout", () => {
+test("Aster unit tests follow the flat editor common, browser, and contrib layout", () => {
   assert.equal(exists(join(desktopRoot, "test/monaco")), false);
   assert.equal(exists(join(desktopRoot, "test/editor/run-unit.mjs")), true);
   assert.equal(exists(join(editorRoot, "test/common/textModel.test.ts")), true);
@@ -19,7 +19,7 @@ test("editor unit tests follow the flat common, browser, and contrib layout", ()
   assert.equal(exists(join(editorRoot, "test/browser/editorWidget.test.ts")), true);
 });
 
-test("editor browser integration is flat and named after concrete model mount points", () => {
+test("Aster browser integration is flat and named after concrete model mount points", () => {
   for (const file of ["textModel.html", "textModel.integration.ts", "textModel.integration.spec.ts", "documentModel.html", "documentModel.integration.ts", "documentModel.integration.spec.ts", "memoryTextFiles.ts", "playwright.config.ts", "vite.config.ts"]) {
     assert.equal(exists(join(browserIntegrationRoot, file)), true, file);
   }

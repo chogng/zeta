@@ -15,7 +15,7 @@ const PRESENTATION_PRIORITY = new Map<DecorationPresentation, number>([
 ]);
 
 /** Condenses diagnostic decoration spans into one highest-severity marker per logical line. */
-export function createAlphaDiagnosticOverviewMarkers(decorations: readonly ResolvedDecoration[], lineCount: number): readonly DiagnosticOverviewMarker[] {
+export function createAsterDiagnosticOverviewMarkers(decorations: readonly ResolvedDecoration[], lineCount: number): readonly DiagnosticOverviewMarker[] {
   if (!Number.isSafeInteger(lineCount) || lineCount < 1) throw new RangeError("Diagnostic overview requires a positive line count");
   const byLine = new Map<number, ResolvedDecoration[]>();
   for (const decoration of decorations) {

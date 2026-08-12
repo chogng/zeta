@@ -1,4 +1,4 @@
-.zeta-alpha-editor-completion {
+.aster-editor-completion {
   position: absolute;
   z-index: 6;
   display: none;
@@ -15,11 +15,11 @@
   box-shadow: 0 4px 12px var(--zeta-widget-shadow);
 }
 
-.zeta-alpha-editor-completion.visible {
+.aster-editor-completion.visible {
   display: block;
 }
 
-.zeta-alpha-editor-completion-option {
+.aster-editor-completion-option {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) minmax(0, auto);
   gap: 8px;
@@ -30,40 +30,40 @@
   cursor: default;
 }
 
-.zeta-alpha-editor-completion-option.focused {
+.aster-editor-completion-option.focused {
   color: var(--zeta-list-active-selection-foreground);
   background: var(--zeta-list-active-selection-background);
 }
 
-.zeta-alpha-editor-completion-kind {
+.aster-editor-completion-kind {
   min-width: 64px;
   color: var(--zeta-description-foreground);
   font-size: 0.85em;
 }
 
-.zeta-alpha-editor-completion-option.focused
-  .zeta-alpha-editor-completion-kind {
+.aster-editor-completion-option.focused
+  .aster-editor-completion-kind {
   color: inherit;
 }
 
-.zeta-alpha-editor-completion-label,
-.zeta-alpha-editor-completion-detail {
+.aster-editor-completion-label,
+.aster-editor-completion-detail {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.zeta-alpha-editor-completion-detail {
+.aster-editor-completion-detail {
   color: var(--zeta-description-foreground);
   font-size: 0.9em;
 }
 
-.zeta-alpha-editor-completion-option.resolving
-  .zeta-alpha-editor-completion-detail::after {
+.aster-editor-completion-option.resolving
+  .aster-editor-completion-detail::after {
   content: " …";
 }
 
-.zeta-alpha-editor-completion-documentation {
+.aster-editor-completion-documentation {
   grid-column: 2 / -1;
   overflow: hidden;
   color: inherit;
@@ -72,7 +72,7 @@
   white-space: pre-wrap;
 }
 
-.zeta-alpha-editor-completion-option.focused
-  .zeta-alpha-editor-completion-detail {
+.aster-editor-completion-option.focused
+  .aster-editor-completion-detail {
   color: inherit;
 }

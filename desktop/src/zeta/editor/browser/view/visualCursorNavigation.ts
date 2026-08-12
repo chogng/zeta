@@ -24,7 +24,7 @@ export interface VisualCursorGeometry {
 }
 
 /** Navigates selections by browser-measured wrapped visual rows. */
-export function navigateAlphaVisualCursors(model: TextModel, projection: EditorVisualLineProjection, selections: TextSelectionSet, request: VisualCursorNavigationRequest, measureTextWidth: (text: string) => number, geometry?: VisualCursorGeometry): VisualCursorNavigationResult {
+export function navigateAsterVisualCursors(model: TextModel, projection: EditorVisualLineProjection, selections: TextSelectionSet, request: VisualCursorNavigationRequest, measureTextWidth: (text: string) => number, geometry?: VisualCursorGeometry): VisualCursorNavigationResult {
   validateRequest(model, projection, selections, request, measureTextWidth);
   const preferredHorizontalOffsets = resolvePreferredHorizontalOffsets(
     model,

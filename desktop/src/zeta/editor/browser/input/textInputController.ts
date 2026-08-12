@@ -50,7 +50,7 @@ export interface TextInputCompletionRequests {
 }
 
 /**
- * Owns Alpha's hidden textarea and non-composition beforeinput editing.
+ * Owns Aster's hidden textarea and non-composition beforeinput editing.
  */
 export class TextInputController extends DisposableOwner {
   readonly element: HTMLTextAreaElement;
@@ -89,24 +89,24 @@ export class TextInputController extends DisposableOwner {
       )
     ) {
       this.dispose();
-      throw new TypeError("Alpha text input dependencies must share one text model and completion result store");
+      throw new TypeError("Aster text input dependencies must share one text model and completion result store");
     }
     if (
       options.completion?.requests?.onRequestError !== undefined &&
       typeof options.completion.requests.onRequestError !== "function"
     ) {
       this.dispose();
-      throw new TypeError("Alpha completion request error handler must be a function");
+      throw new TypeError("Aster completion request error handler must be a function");
     }
     if (options.language) {
       assertLanguageId(options.language.languageId);
       if (!options.language.configurations || typeof options.language.configurations.getLanguageConfiguration !== "function") {
         this.dispose();
-        throw new TypeError("Alpha text input language requires a configuration source");
+        throw new TypeError("Aster text input language requires a configuration source");
       }
       if (options.completion?.requests && options.completion.requests.languageId !== options.language.languageId) {
         this.dispose();
-        throw new TypeError("Alpha text input language and completion request identities must match");
+        throw new TypeError("Aster text input language and completion request identities must match");
       }
       if (options.language.lexicalContext && (
         options.language.lexicalContext.textModel !== viewport.textModel ||
@@ -115,7 +115,7 @@ export class TextInputController extends DisposableOwner {
         typeof options.language.lexicalContext.getTokenTypeAt !== "function"
       )) {
         this.dispose();
-        throw new TypeError("Alpha text input lexical context must match its model and language");
+        throw new TypeError("Aster text input lexical context must match its model and language");
       }
     }
     this.completionSession = options.completion?.session;
@@ -142,7 +142,7 @@ export class TextInputController extends DisposableOwner {
       : undefined;
     const ownerDocument = viewport.element.ownerDocument;
     this.element = ownerDocument.createElement("textarea");
-    this.element.className = "zeta-alpha-editor-input";
+    this.element.className = "aster-editor-input";
     this.element.tabIndex = -1;
     this.element.spellcheck = false;
     this.element.readOnly = selectionController.readOnly;
@@ -150,7 +150,7 @@ export class TextInputController extends DisposableOwner {
     this.element.dir = viewport.editorTextDirection;
     this.element.autocomplete = "off";
     this.element.setAttribute("autocapitalize", "off");
-    this.element.setAttribute("aria-label", options.ariaLabel ?? "Alpha editor input");
+    this.element.setAttribute("aria-label", options.ariaLabel ?? "Aster editor input");
     this.element.setAttribute("aria-multiline", "true");
     this.element.setAttribute("aria-roledescription", "code editor");
     this.element.setAttribute("aria-readonly", String(selectionController.readOnly));
@@ -620,9 +620,9 @@ export class TextInputController extends DisposableOwner {
     try {
       const handler = this.completionRequests?.onRequestError;
       if (handler) handler(error);
-      else console.error("Alpha completion request failed", error);
+      else console.error("Aster completion request failed", error);
     } catch (reportingError) {
-      console.error("Alpha completion request and error handler both failed", new AggregateError([error, reportingError]));
+      console.error("Aster completion request and error handler both failed", new AggregateError([error, reportingError]));
     }
   }
 }

@@ -3,7 +3,7 @@ import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { EditorLineWrapping } from "../../../browser/view/visualLineProjection.js";
 import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 
-/** Owns the transient Alt+Z word-wrap toggle for one Alpha viewport. */
+/** Owns the transient Alt+Z word-wrap toggle for one Aster viewport. */
 export class WordWrapController extends DisposableOwner {
   constructor(
     input: HTMLTextAreaElement,

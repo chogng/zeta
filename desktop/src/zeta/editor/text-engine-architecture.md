@@ -1,18 +1,18 @@
-# Alpha Editor：VS Code Editor 基线的文件级架构与迁移手册
+# Aster Text Engine：VS Code Editor 基线的文件级架构与迁移手册
 
 > 文档所有权：`desktop/src/zeta/editor` 中的行式文本 engine。
 >
-> 本文是 Alpha 行式文本 engine 的开发架构文档和文件迁移清单。它规定文件命名、职责、依赖方向、当前实现状态和后续迁移顺序；统一目录与装配边界见 [`README.md`](./README.md)，行为细节、测试证据和已知限制见 [`text-engine.md`](./text-engine.md)。
+> 本文是 Aster 行式文本 engine 的开发架构文档和文件迁移清单。它规定文件命名、职责、依赖方向、当前实现状态和后续迁移顺序；统一目录与装配边界见 [`README.md`](./README.md)，行为细节、测试证据和已知限制见 [`text-engine.md`](./text-engine.md)。
 >
-> 状态：Current implementation + Proposed target。`Current` 表示当前代码和测试已经支持；`Partial` 表示能力存在但职责或文件位置仍需调整；`Planned` 表示目标已确定但尚未实现；`Non-goal` 表示明确不由 Alpha editor 拥有。
+> 状态：Current implementation + Proposed target。`Current` 表示当前代码和测试已经支持；`Partial` 表示能力存在但职责或文件位置仍需调整；`Planned` 表示目标已确定但尚未实现；`Non-goal` 表示明确不由 Aster editor 拥有。
 
 > 实施台账：本文件保留迁移目标和 VS Code 对照表；当前实现、实际装配入口、测试证据和限制以 [`text-engine-implementation-ledger.md`](./text-engine-implementation-ledger.md) 为准。目标表中的旧 `Planned`/`Partial` 标记不覆盖台账中已经落地的实现。
 
 ## 快速理解
 
-Alpha 使用 VS Code editor 的成熟分区作为起点，但不复制 VS Code 的历史依赖关系。VS Code 官方将 editor 分成 `common`、`browser` 和可选的 `contrib`：`common` 与 `browser` 构成不依赖 Workbench 的编辑器核心，`contrib` 是可以独立装配或移除的编辑器功能。Alpha 采用同样的产品边界，再加入严格的 model/view-model/runtime 依赖规则，以及 Rust App Server 的异步能力边界。
+Aster 使用 VS Code editor 的成熟分区作为起点，但不复制 VS Code 的历史依赖关系。VS Code 官方将 editor 分成 `common`、`browser` 和可选的 `contrib`：`common` 与 `browser` 构成不依赖 Workbench 的编辑器核心，`contrib` 是可以独立装配或移除的编辑器功能。Aster 采用同样的产品边界，再加入严格的 model/view-model/runtime 依赖规则，以及 Rust App Server 的异步能力边界。
 
-Alpha 的同步权威只有 Renderer 内的 TypeScript model：输入、事务、selection、undo/redo、tracked range、decoration 和视图投影必须在当前事件循环内完成。Rust 只通过前端服务契约提供 diff、语言、文件、搜索和其他异步能力；它不能成为键盘输入或 IME 的远程依赖。
+Aster 的同步权威只有 Renderer 内的 TypeScript model：输入、事务、selection、undo/redo、tracked range、decoration 和视图投影必须在当前事件循环内完成。Rust 只通过前端服务契约提供 diff、语言、文件、搜索和其他异步能力；它不能成为键盘输入或 IME 的远程依赖。
 
 ```text
 common/core
@@ -29,9 +29,9 @@ browser/view + browser/input + browser/services
 Workbench host / App Server adapters / optional contributions
 ```
 
-## 1. VS Code 基线与 Alpha 的取舍
+## 1. VS Code 基线与 Aster 的取舍
 
-VS Code 的官方源码组织说明了这些 editor 边界：`vs/editor` 不应依赖 Node 或 Electron；`vs/editor/common` 与 `vs/editor/browser` 构成核心；`vs/editor/contrib` 是可选的编辑器能力；Workbench 负责宿主和产品级组合。当前基线以 VS Code `main` 分支的目录为参考，不把 VS Code 的源码当作 Alpha 的运行时依赖。
+VS Code 的官方源码组织说明了这些 editor 边界：`vs/editor` 不应依赖 Node 或 Electron；`vs/editor/common` 与 `vs/editor/browser` 构成核心；`vs/editor/contrib` 是可选的编辑器能力；Workbench 负责宿主和产品级组合。当前基线以 VS Code `main` 分支的目录为参考，不把 VS Code 的源码当作 Aster 的运行时依赖。
 
 - [VS Code Source Code Organization](https://github.com/microsoft/vscode/wiki/source-code-organization)
 - [VS Code `src/vs/editor/common`](https://github.com/microsoft/vscode/tree/main/src/vs/editor/common)
@@ -40,18 +40,18 @@ VS Code 的官方源码组织说明了这些 editor 边界：`vs/editor` 不应�
 
 ### 文件命名规则
 
-- Alpha 中存在直接对应的 VS Code contrib 入口时，文件使用 VS Code 的 feature basename，例如 `gotoError.ts`、`indentation.ts` 和 `folding.ts`。
-- 没有一一对应的 Alpha 投影或 adapter 不强行伪装成 VS Code 文件：`diagnosticOverviewRuler.ts` 表示诊断 overview-ruler 投影，`languageDiagnosticPresentation.ts` 表示语言诊断 presentation，`decorationCollection.ts` 表示 Alpha 自己的 decoration owner collection。
+- Aster 中存在直接对应的 VS Code contrib 入口时，文件使用 VS Code 的 feature basename，例如 `gotoError.ts`、`indentation.ts` 和 `folding.ts`。
+- 没有一一对应的 Aster 投影或 adapter 不强行伪装成 VS Code 文件：`diagnosticOverviewRuler.ts` 表示诊断 overview-ruler 投影，`languageDiagnosticPresentation.ts` 表示语言诊断 presentation，`decorationCollection.ts` 表示 Aster 自己的 decoration owner collection。
 - `*Controller.ts` 只在文件确实只拥有一个 browser controller 时保留；它不是所有 contrib 入口的统一后缀。功能入口、纯计算模块和具体 UI 控制器必须按各自职责命名。
 
-| VS Code 设计 | Alpha 采用方式 | 需要改变的地方 |
+| VS Code 设计 | Aster 采用方式 | 需要改变的地方 |
 | --- | --- | --- |
-| `common` / `browser` runtime split | ✅ 保留 | Alpha 进一步禁止 common 依赖 Workbench transport |
+| `common` / `browser` runtime split | ✅ 保留 | Aster 进一步禁止 common 依赖 Workbench transport |
 | `model`、`cursor`、`viewModel` 的职责分区 | ✅ 保留 | 以依赖图而不是历史文件位置作为最终标准 |
 | `contrib/<feature>/{common,browser}` | ✅ 保留 | 每个贡献点都要有清晰的 feature owner、装配入口和测试边界 |
 | 全局 Service Identifier 和大量隐式 DI | 部分采用 | 只在跨宿主、可替换的 Editor contract 使用；普通依赖优先显式传入 |
-| Workbench 服务直接参与编辑器实现 | ❌ 不采用 | 由 browser/workbench adapter 转换为 Alpha-owned contract |
-| legacy editor runtime/VS Code 兼容类型作为模型权威 | ❌ 不采用 | 兼容层只能位于 adapter，不能反向定义 Alpha model |
+| Workbench 服务直接参与编辑器实现 | ❌ 不采用 | 由 browser/workbench adapter 转换为 Aster-owned contract |
+| legacy editor runtime/VS Code 兼容类型作为模型权威 | ❌ 不采用 | 兼容层只能位于 adapter，不能反向定义 Aster model |
 | Rust/IPC 参与每次输入 | ❌ 不采用 | Rust 是异步计算和持久化能力提供者 |
 
 ## 2. 分层与所有权
@@ -79,7 +79,7 @@ VS Code 的官方源码组织说明了这些 editor 边界：`vs/editor` 不应�
 
 ### 2.2 `common/model`
 
-`model` 是 Alpha 的同步文档内核。当前打开的 [decorationCollection.ts](./common/model/decorationCollection.ts) 属于此层：它拥有 decoration collection 和 tracked range 的关系，但不拥有 CSS、DOM 或语言语义。
+`model` 是 Aster 的同步文档内核。当前打开的 [decorationCollection.ts](./common/model/decorationCollection.ts) 属于此层：它拥有 decoration collection 和 tracked range 的关系，但不拥有 CSS、DOM 或语言语义。
 
 | 目标文件 | 职责 | 关键 owner |
 | --- | --- | --- |
@@ -97,34 +97,34 @@ VS Code 的官方源码组织说明了这些 editor 边界：`vs/editor` 不应�
 
 #### 2.2.1 与 VS Code `common/model` 的基线对照
 
-当前 `../vscode/src/vs/editor/common/model` 基线包含 43 个文件。Alpha 不把这棵目录
+当前 `../vscode/src/vs/editor/common/model` 基线包含 43 个文件。Aster 不把这棵目录
 当作需要逐文件复制的运行时依赖，而是把它作为能力索引和命名基线。下面按职责族合并
 文件；“当前（职责迁移）”表示能力已经存在，但 canonical owner 不在同一个相对路径；
 “部分具备”只表示原基线中的部分语义或性能特征尚未覆盖。
 
-| VS Code model 基线 | Alpha canonical owner | 状态 | 对齐结论 |
+| VS Code model 基线 | Aster canonical owner | 状态 | 对齐结论 |
 | --- | --- | --- | --- |
-| `textModel.ts` | `common/model/textModel.ts` | 当前 | 文本、版本、原子 transaction、snapshot、同步 change event 和文档 history 由 Alpha 自己定义；不引入 VS Code public model 类型。 |
-| `pieceTreeTextBuffer/pieceTreeBase.ts`、`rbTreeBase.ts` | `common/model/pieceTreeTextBuffer/pieceTreeBase.ts` | 当前（文件名对齐） | Alpha 使用确定性 treap，而不是 VS Code 的 red-black tree；文件名用于对照，底层树算法仍由 Alpha 自己实现。 |
-| `pieceTreeTextBuffer/pieceTreeTextBuffer.ts` | `common/model/pieceTreeTextBuffer/pieceTreeTextBuffer.ts` | 当前（文件名对齐） | replace、行计数、snapshot 和阈值驱动的 compaction 已由 Alpha storage owner 承担。 |
-| `pieceTreeTextBuffer/pieceTreeTextBufferBuilder.ts` | 暂无直接 owner | 尚未采用 | 当前 `TextModel` 从规范化字符串构造；只有资源读取契约引入 streaming/builder 后，才建立对应 Alpha contract。 |
+| `textModel.ts` | `common/model/textModel.ts` | 当前 | 文本、版本、原子 transaction、snapshot、同步 change event 和文档 history 由 Aster 自己定义；不引入 VS Code public model 类型。 |
+| `pieceTreeTextBuffer/pieceTreeBase.ts`、`rbTreeBase.ts` | `common/model/pieceTreeTextBuffer/pieceTreeBase.ts` | 当前（文件名对齐） | Aster 使用确定性 treap，而不是 VS Code 的 red-black tree；文件名用于对照，底层树算法仍由 Aster 自己实现。 |
+| `pieceTreeTextBuffer/pieceTreeTextBuffer.ts` | `common/model/pieceTreeTextBuffer/pieceTreeTextBuffer.ts` | 当前（文件名对齐） | replace、行计数、snapshot 和阈值驱动的 compaction 已由 Aster storage owner 承担。 |
+| `pieceTreeTextBuffer/pieceTreeTextBufferBuilder.ts` | 暂无直接 owner | 尚未采用 | 当前 `TextModel` 从规范化字符串构造；只有资源读取契约引入 streaming/builder 后，才建立对应 Aster contract。 |
 | `textModelSearch.ts` | `common/model/textModelSearch.ts` | 当前 | literal、regex、whole-word、wrap 和 version-pinned search 保持在 model query 层。 |
-| `editStack.ts` | `common/model/editStack.ts`、`historyCoalescing.ts` | 当前（文件名对齐） | 文档 undo/redo、typing merge 和 history budget 属于 Alpha model；editor-instance selection undo 仍在 cursor/contrib。 |
+| `editStack.ts` | `common/model/editStack.ts`、`historyCoalescing.ts` | 当前（文件名对齐） | 文档 undo/redo、typing merge 和 history budget 属于 Aster model；editor-instance selection undo 仍在 cursor/contrib。 |
 | `intervalTree.ts` | `common/model/trackedRange.ts`、`decorationCollection.ts` | 部分具备 | tracked range 和 decoration 的语义契约已具备；当前索引是 collection 内的 `Map`，尚未提供 interval-tree 级别的大量 range 更新性能。 |
 | `decorationProvider.ts` | `common/model/decorationCollection.ts`、`browser/view/*` | 当前（职责迁移） | model 只保存 range 和 caller metadata；CSS、severity、geometry 和 DOM presentation 留在对应 view/feature owner。 |
 | `guidesTextModelPart.ts` | `contrib/folding/*`、`contrib/indentation/*` | 当前（职责迁移） | guides、folding ranges 和 hidden-line projection 是 feature/view-model 能力，不进入通用 TextModel part。 |
 | `indentationGuesser.ts` | `common/core/misc/indentation.ts`、`contrib/indentation/*` | 当前（职责迁移） | 纯缩进算法和 editor presentation 分开；不为 VS Code 文件名建立空 model helper。 |
 | `mirrorTextModel.ts` | `common/languages/languageWorkerDocumentMirror.ts` | 当前（职责迁移） | Worker mirror 是语言运行时边界，不是同步 TextModel 的第二个 owner。 |
-| `fixedArray.ts`、`prefixSumComputer.ts`、`textModelStringEdit.ts`、`textModelText.ts`、`utils.ts` | `common/core/{edits,ranges,text,*}`、`common/tokens/*` | 当前（职责迁移） | 纯算法按调用者职责进入 core/text/ranges/tokens；Alpha 不保留泛化的 model utility bucket。 |
-| `textModelPart.ts` | `contrib/tokenization/common/tokenizationTextModelPart.ts`、`common/languages/*` 等显式 feature contract | 当前（职责迁移） | Alpha 不建立一个拥有所有 model part 生命周期的通用基类；各 feature 明确拥有自己的 state、listener 和 dispose。 |
+| `fixedArray.ts`、`prefixSumComputer.ts`、`textModelStringEdit.ts`、`textModelText.ts`、`utils.ts` | `common/core/{edits,ranges,text,*}`、`common/tokens/*` | 当前（职责迁移） | 纯算法按调用者职责进入 core/text/ranges/tokens；Aster 不保留泛化的 model utility bucket。 |
+| `textModelPart.ts` | `contrib/tokenization/common/tokenizationTextModelPart.ts`、`common/languages/*` 等显式 feature contract | 当前（职责迁移） | Aster 不建立一个拥有所有 model part 生命周期的通用基类；各 feature 明确拥有自己的 state、listener 和 dispose。 |
 | `textModelTokens.ts` | `common/tokens/*`、`contrib/tokenization/*`、`common/languages/syntax/*` | 部分具备 | 版本化 token result、按行 sparse index 和 tokenization model-part contract 已具备；VS Code 的全部 background tokenizer/state backend 尚未一一覆盖。 |
-| `tokens/{abstractSyntaxTokenBackend,annotations,tokenizationFontDecorationsProvider,tokenizationTextModelPart,tokenizerSyntaxTokenBackend}.ts` | `common/tokens/*`、`contrib/tokenization/*`、TextMate/syntax adapters | 部分具备 | token 生产由 Alpha language/provider contract 决定；不得为了文件对齐把 Workbench tokenizer 或第三方 runtime 直接放进 model。 |
-| `tokens/treeSitter/*` | `zeta-rs/syntax`、`platform/syntax`、`browser/services/rustSyntaxFactsService.ts` | 部分具备 | Rust owns bounded Tree-sitter parsing and UTF-16 DTO projection; Alpha consumes revision-bound token, diagnostic, symbol, and folding facts for JavaScript/JSX, TypeScript/TSX, JSON, JSONC, Rust, and Shell through existing result stores and contribs. Broader language coverage remains future work. |
-| `bracketPairsTextModelPart/*` | `contrib/bracketMatching/common/*`、`common/languages/languageLexical*`、对应 browser presentation | 当前（职责迁移） | lexical bracket matching、colorization、navigation、pair editing 已有独立 feature owner；Alpha 当前没有 model-resident incremental bracket-pair tree。 |
+| `tokens/{abstractSyntaxTokenBackend,annotations,tokenizationFontDecorationsProvider,tokenizationTextModelPart,tokenizerSyntaxTokenBackend}.ts` | `common/tokens/*`、`contrib/tokenization/*`、TextMate/syntax adapters | 部分具备 | token 生产由 Aster language/provider contract 决定；不得为了文件对齐把 Workbench tokenizer 或第三方 runtime 直接放进 model。 |
+| `tokens/treeSitter/*` | `zeta-rs/syntax`、`platform/syntax`、`browser/services/rustSyntaxFactsService.ts` | 部分具备 | Rust owns bounded Tree-sitter parsing and UTF-16 DTO projection; Aster consumes revision-bound token, diagnostic, symbol, and folding facts for JavaScript/JSX, TypeScript/TSX, JSON, JSONC, Rust, and Shell through existing result stores and contribs. Broader language coverage remains future work. |
+| `bracketPairsTextModelPart/*` | `contrib/bracketMatching/common/*`、`common/languages/languageLexical*`、对应 browser presentation | 当前（职责迁移） | lexical bracket matching、colorization、navigation、pair editing 已有独立 feature owner；Aster 当前没有 model-resident incremental bracket-pair tree。 |
 
-这张表的用途是保持“可搜索的语义对齐”，不是承诺 Alpha 复刻 VS Code 的内部数据结构。
-因此，VS Code 新增文件时，先判断它属于现有 Alpha owner、需要新增后端无关 contract、
-还是明确不属于 Alpha；不能仅因基线出现同名文件就在 `common/model` 增加副本。
+这张表的用途是保持“可搜索的语义对齐”，不是承诺 Aster 复刻 VS Code 的内部数据结构。
+因此，VS Code 新增文件时，先判断它属于现有 Aster owner、需要新增后端无关 contract、
+还是明确不属于 Aster；不能仅因基线出现同名文件就在 `common/model` 增加副本。
 
 #### 2.2.2 Model 能力审计结论
 
@@ -183,7 +183,7 @@ range 索引、增量 bracket/token backend 和 parser-grade provider 的能力�
 
 ### 2.5 `common/viewLayout` 与 `common/viewModel`
 
-Alpha 已将原来的 `common/view` 拆成 `viewLayout` 与 `viewModel`；后续新增的纯布局/投影算法必须继续落在这两个目录，不得回建 `common/view`：
+Aster 已将原来的 `common/view` 拆成 `viewLayout` 与 `viewModel`；后续新增的纯布局/投影算法必须继续落在这两个目录，不得回建 `common/view`：
 
 | 当前文件 | 目标文件 | 目标职责 |
 | --- | --- | --- |
@@ -201,7 +201,7 @@ Alpha 已将原来的 `common/view` 拆成 `viewLayout` 与 `viewModel`；后续
 
 ### 2.6 `common/services`
 
-`common/services` 只放 Alpha editor 自己的前端契约。它不能直接暴露 Workbench transport 或 generated Rust DTO。
+`common/services` 只放 Aster editor 自己的前端契约。它不能直接暴露 Workbench transport 或 generated Rust DTO。
 
 | 目标文件 | 职责 | 当前状态 |
 | --- | --- | --- |
@@ -214,7 +214,7 @@ Alpha 已将原来的 `common/view` 拆成 `viewLayout` 与 `viewModel`；后续
 
 ### 2.7 `common/languages` 与 `common/tokens`
 
-当前 `language/common` 是一个完整的 Alpha language 子系统，但文件位置还没有对齐 VS Code editor 的 common language/tokens 分区。目标拆分如下：
+当前 `language/common` 是一个完整的 Aster language 子系统，但文件位置还没有对齐 VS Code editor 的 common language/tokens 分区。目标拆分如下：
 
 | 当前范围 | 目标范围 | 说明 |
 | --- | --- | --- |
@@ -227,7 +227,7 @@ Alpha 已将原来的 `common/view` 拆成 `viewLayout` 与 `viewModel`；后续
 | `language/browser/*Worker*` | `browser/language/*Worker*` | browser Worker lifecycle 和 port adapter |
 | `language/browser/semanticTokenPresentation.ts` | `browser/view/semanticTokenPresentation.ts` | token 到 CSS/presentation 的投影 |
 
-语言 provider 的异步实现可以由 Worker 或 Rust adapter 提供，但 result store 必须在 Alpha common 侧完成版本校验；过期结果不能重新写入当前 model。
+语言 provider 的异步实现可以由 Worker 或 Rust adapter 提供，但 result store 必须在 Aster common 侧完成版本校验；过期结果不能重新写入当前 model。
 
 ### 2.8 `common/diff`
 
@@ -238,11 +238,11 @@ Alpha 已将原来的 `common/view` 拆成 `viewLayout` 与 `viewModel`；后续
 | `common/diff/lineDiff.ts` | line hunk、row、range 的 0-based UTF-16 domain types |
 | `common/diff/diffComputationService.ts` | `IDiffComputationService` contract |
 | `common/diff/diffModel.ts` | original/modified model 与 diff result 的生命周期 |
-| `browser/services/rustDiffComputationService.ts` | Rust protocol 到 Alpha domain 的机械适配 |
+| `browser/services/rustDiffComputationService.ts` | Rust protocol 到 Aster domain 的机械适配 |
 
 ## 3. `contrib` 的统一结构
 
-每个 Alpha contribution 都必须使用下面的目录形状；不因为当前只有一个文件就把它放回 `common` 根目录：
+每个 Aster contribution 都必须使用下面的目录形状；不因为当前只有一个文件就把它放回 `common` 根目录：
 
 ```text
 contrib/<feature>/
@@ -265,11 +265,11 @@ contrib/<feature>/
 
 ## 4. VS Code `contrib` 全量迁移目录
 
-下面的清单覆盖 VS Code 当前 `src/vs/editor/contrib` 目录，而不是只列 Alpha 当前已经实现的功能。目标文件名尽量保持 VS Code 语义；`Alpha` 前缀只用于明确的产品 presentation 或 runtime adapter。
+下面的清单覆盖 VS Code 当前 `src/vs/editor/contrib` 目录，而不是只列 Aster 当前已经实现的功能。目标文件名尽量保持 VS Code 语义；`Aster` 前缀只用于明确的产品 presentation 或 runtime adapter。
 
 ### 4.1 编辑输入、选择和文本操作
 
-| VS Code contrib | Alpha 目标文件 | 当前 Alpha 映射 | 状态 | 职责边界 |
+| VS Code contrib | Aster 目标文件 | 当前 Aster 映射 | 状态 | 职责边界 |
 | --- | --- | --- | --- | --- |
 | `anchorSelect` | `contrib/anchorSelect/browser/anchorSelectController.ts` | `contrib/anchorSelect/browser/anchorSelectController.ts` | Current | 锚点选择和扩展范围，不进入 model |
 | `caretOperations` | `common/cursor/caretOperations.ts` | `common/cursor/caretOperations.ts`、`cursorNavigation.ts`、`cursorInsertion.ts` | Current | caret 相邻位置、行边界和可见位置计算 |
@@ -291,33 +291,33 @@ contrib/<feature>/
 
 ### 4.2 查找、语言和代码理解
 
-| VS Code contrib | Alpha 目标文件 | 当前 Alpha 映射 | 状态 | 职责边界 |
+| VS Code contrib | Aster 目标文件 | 当前 Aster 映射 | 状态 | 职责边界 |
 | --- | --- | --- | --- | --- |
 | `bracketMatching` | `contrib/bracketMatching/common/*`、`browser/*` | 同名 contrib | Current | lexical bracket matching、pair editing、enter、colorization 和 marker presentation |
 | `folding` | `contrib/folding/browser/foldingModel.ts`、`foldingRanges.ts`、`hiddenRangeModel.ts` | 同名 contrib | Current | ranges、hidden lines、tracked fold state 和 gutter |
 | `semanticTokens` | `contrib/semanticTokens/common/semanticTokens.ts`、`browser/semanticTokenPresentation.ts` | `contrib/semanticTokens/common/semanticTokens.ts`、`browser/semanticTokenPresentation.ts` | Current | token result、line index、version gate 和 renderer projection |
-| `tokenization` | `contrib/tokenization/common/tokenizationTextModelPart.ts`、`browser/tokenizationController.ts` | `contrib/tokenization/{common,browser}/*`、Alpha syntax/TextMate adapters | Current | token production、line state 和 token invalidation |
+| `tokenization` | `contrib/tokenization/common/tokenizationTextModelPart.ts`、`browser/tokenizationController.ts` | `contrib/tokenization/{common,browser}/*`、Aster syntax/TextMate adapters | Current | token production、line state 和 token invalidation |
 | `wordHighlighter` | `contrib/wordHighlighter/common/wordHighlighter.ts`、`browser/wordHighlighterController.ts` | 同名 contrib | Current | word occurrence query、decoration owner 和 presentation |
 | `find` | `contrib/find/browser/findController.ts`、`common/model/textModelSearch.ts` | 同名 contrib + model search | Current | search model、find widget、replace、selection scope |
 | `gotoError` | `contrib/gotoError/common/diagnosticDecorations.ts`、`browser/gotoError.ts`、`browser/diagnosticOverviewRuler.ts`、`browser/languageDiagnosticPresentation.ts` | 同名 contrib | Current | diagnostic decoration、navigation、overview、severity ordering |
-| `gotoSymbol` | `contrib/gotoSymbol/common/gotoSymbol.ts` | `contrib/gotoSymbol/{common,browser}/*`、Alpha language service factory | Current | provider-backed symbol navigation；不与 goto line 混合 |
-| `documentSymbols` | `contrib/documentSymbols/common/documentSymbols.ts` | `contrib/documentSymbols/common/documentSymbols.ts`、Alpha language service factory | Current | versioned document symbol result、outline/quick navigation contract |
+| `gotoSymbol` | `contrib/gotoSymbol/common/gotoSymbol.ts` | `contrib/gotoSymbol/{common,browser}/*`、Aster language service factory | Current | provider-backed symbol navigation；不与 goto line 混合 |
+| `documentSymbols` | `contrib/documentSymbols/common/documentSymbols.ts` | `contrib/documentSymbols/common/documentSymbols.ts`、Aster language service factory | Current | versioned document symbol result、outline/quick navigation contract |
 | `hover` | `contrib/hover/{common/hover.ts,browser/{hoverController,diagnosticHoverController}.ts}` | 同名 contrib | Current | 通用 hover provider、diagnostic hover、anchor、content widget |
 | `links` | `contrib/links/browser/linksController.ts` | `contrib/links/{common,browser}/*` | Current | link detection、hover、open action；外部打开交给 host |
-| `codeAction` | `contrib/codeAction/common/codeAction.ts` | `contrib/codeAction/{common,browser}/*`、Alpha language service factory | Current | provider result、resolve、apply edit |
+| `codeAction` | `contrib/codeAction/common/codeAction.ts` | `contrib/codeAction/{common,browser}/*`、Aster language service factory | Current | provider result、resolve、apply edit |
 | `format` | `contrib/format/{common/formatCommands.ts,browser/formatController.ts}` | 同名 contrib | Current | format/range/on-type format 的 edit application |
 | `rename` | `contrib/rename/{common/rename.ts,browser/renameController.ts}` | 同名 contrib | Current | rename input、provider freshness、workspace edit |
-| `inlayHints` | `contrib/inlayHints/common/inlayHints.ts` | `contrib/inlayHints/{common,browser}/*`、Alpha language service factory | Current | versioned inline hint result和view projection contract |
-| `inlineCompletions` | `contrib/inlineCompletions/common/inlineCompletions.ts` | `contrib/inlineCompletions/{common,browser}/*`、Alpha language service factory | Current | ghost text、request freshness、accept/reject contract |
-| `parameterHints` | `contrib/parameterHints/common/parameterHints.ts` | `contrib/parameterHints/{common,browser}/*`、Alpha language service factory | Current | signature help 的 request/session/widget contract |
+| `inlayHints` | `contrib/inlayHints/common/inlayHints.ts` | `contrib/inlayHints/{common,browser}/*`、Aster language service factory | Current | versioned inline hint result和view projection contract |
+| `inlineCompletions` | `contrib/inlineCompletions/common/inlineCompletions.ts` | `contrib/inlineCompletions/{common,browser}/*`、Aster language service factory | Current | ghost text、request freshness、accept/reject contract |
+| `parameterHints` | `contrib/parameterHints/common/parameterHints.ts` | `contrib/parameterHints/{common,browser}/*`、Aster language service factory | Current | signature help 的 request/session/widget contract |
 | `suggest` | `contrib/suggest/{common/suggestModel.ts,browser/suggestWidget.ts}` | 同名 contrib | Current | trigger、filter、resolve、accept、incomplete refresh |
-| `linkedEditing` | `contrib/linkedEditing/common/linkedEditing.ts` | `contrib/linkedEditing/{common,browser}/*`、Alpha language service factory | Current | linked ranges 和同步 edit；必须使用 model transaction |
+| `linkedEditing` | `contrib/linkedEditing/common/linkedEditing.ts` | `contrib/linkedEditing/{common,browser}/*`、Aster language service factory | Current | linked ranges 和同步 edit；必须使用 model transaction |
 | `colorPicker` | `contrib/colorPicker/common/color.ts`、`browser/colorPickerController.ts` | `contrib/colorPicker/{common,browser}/*` | Current | color range provider 与 editor color widget |
-| `codelens` | `contrib/codelens/common/codelens.ts` | `contrib/codelens/{common,browser}/*`、Alpha language service factory | Current | versioned code lens、resolve 和 inline presentation |
+| `codelens` | `contrib/codelens/common/codelens.ts` | `contrib/codelens/{common,browser}/*`、Aster language service factory | Current | versioned code lens、resolve 和 inline presentation |
 
 ### 4.3 视图、导航和编辑器辅助 UI
 
-| VS Code contrib | Alpha 目标文件 | 当前 Alpha 映射 | 状态 | 职责边界 |
+| VS Code contrib | Aster 目标文件 | 当前 Aster 映射 | 状态 | 职责边界 |
 | --- | --- | --- | --- | --- |
 | `editorState` | `contrib/editorState/common/editorState.ts`、`browser/editorStateController.ts` | `contrib/editorState/{common,browser}/*`、part 装配 | Current | editor focus、model、selection、scroll 的可观察状态 |
 | `contextmenu` | `contrib/contextmenu/browser/contextMenuController.ts` | `contrib/contextmenu/browser/contextMenuController.ts`；host callback 可选 | Partial | context menu action 组合；不定义 command 语义 |
@@ -327,7 +327,7 @@ contrib/<feature>/
 | `gpu` | `contrib/gpu/browser/gpuRenderer.ts` | `contrib/gpu/browser/gpuRenderer.ts` + viewport minimap | Current | GPU renderer capability；不得让 viewModel 依赖 WebGL |
 | `longLinesHelper` | `contrib/longLinesHelper/browser/longLinesHelper.ts` | `contrib/longLinesHelper/browser/longLinesHelper.ts`、viewport budgets | Current | long-line policy、measurement budget 和 degrade strategy |
 | `middleScroll` | `contrib/middleScroll/browser/middleScrollController.ts` | `contrib/middleScroll/browser/middleScrollController.ts` | Current | middle-button scroll，不污染普通 pointer selection |
-| `quickAccess` | `contrib/quickAccess/browser/quickAccessController.ts` | 同名 contrib；当前实现 Go to Line/Column | Current | editor-local quick access；Workbench global quick open 不归 Alpha |
+| `quickAccess` | `contrib/quickAccess/browser/quickAccessController.ts` | 同名 contrib；当前实现 Go to Line/Column | Current | editor-local quick access；Workbench global quick open 不归 Aster |
 | `peekView` | `contrib/peekView/browser/peekViewWidget.ts` | `contrib/peekView/browser/peekViewWidget.ts`；宿主按需创建 | Current | anchored preview surface 和生命周期 |
 | `placeholderText` | `contrib/placeholderText/browser/placeholderTextController.ts` | `contrib/placeholderText/browser/placeholderTextController.ts`；part 可选装配 | Current | empty model 的 presentation placeholder |
 | `readOnlyMessage` | `contrib/readOnlyMessage/browser/readOnlyMessageController.ts` | 同名 contrib | Current | 用户可见的 readonly feedback，不参与权限判定 |
@@ -341,7 +341,7 @@ contrib/<feature>/
 | `inlineProgress` | `contrib/inlineProgress/browser/inlineProgressController.ts` | `contrib/inlineProgress/browser/inlineProgressController.ts` | Current | provider request 的 inline progress presentation |
 | `zoneWidget` | `contrib/zoneWidget/browser/zoneWidget.ts` | `contrib/zoneWidget/browser/zoneWidget.ts`；宿主按需创建 | Current | model range 附近的可交互 widget 容器 |
 
-## 5. Alpha 当前文件到目标文件的迁移表
+## 5. Aster 当前文件到目标文件的迁移表
 
 | 当前路径 | 目标路径 | 迁移动作 | 状态 |
 | --- | --- | --- | --- |
@@ -366,7 +366,7 @@ contrib/<feature>/
 | `browser/diff/rustDiffComputationService.ts` | `browser/services/rustDiffComputationService.ts` | runtime adapter 归服务层 | Current |
 | `browser/browserTextModelService.ts` | `browser/services/browserTextModelService.ts` | 与 resource store 一起归位 | Current |
 
-### 5.1 当前实现台账：按文件阅读 Alpha 的入口
+### 5.1 当前实现台账：按文件阅读 Aster 的入口
 
 下面是实现代码的 canonical 阅读顺序。表中的“入口”是应该首先打开的文件；同一目录下的辅助文件不能绕过入口自行定义第二套语义。
 
@@ -392,10 +392,10 @@ contrib/<feature>/
 | languages/completion | `common/languages/completion/*.ts` | completion provider、catalog/resolve wire、completion result 和 word provider | snippet 实现位于 `contrib/snippet/common`，completion 只消费 parser contract |
 | languages/results | `common/languages/{languageResults,languageResultStore,languageRequestCoordinator}.ts` | diagnostic 结果、版本化 store、request identity/stale result gate | token value 已从这里迁到 `common/tokens` |
 | tokens | `common/tokens/{languageTokens,languageTokenLineIndex}.ts` | token value、delta、normalizer、按行索引 | 不渲染 CSS；presentation 由 browser/view 负责 |
-| services | `common/services/{languageService,textModelService,textResourceStore}.ts` | Alpha-owned provider factory、model reference、resource resolve/save/change contract | 不导出 Workbench transport 或 generated DTO |
+| services | `common/services/{languageService,textModelService,textResourceStore}.ts` | Aster-owned provider factory、model reference、resource resolve/save/change contract | 不导出 Workbench transport 或 generated DTO |
 | browser/view | `browser/view/*.ts` | DOM viewport、rendered line、geometry、minimap、semantic token 和 decoration presentation | view 只能读取 model/viewModel snapshot；CSS 由 view owner 管理 |
 | browser/input | `browser/input/{textInputController,compositionController,keyboardNavigationController,pointerSelectionController,pointerAutoScroll,pointerMultiCursor}.ts` | textarea、IME、键盘和 pointer navigation、输入事件适配 | 输入热路径不等待 IPC/RPC |
-| browser/services | `browser/services/{browserTextModelService,browserTextResourceStore,rustDiffComputationService}.ts` | Workbench textfile、Rust App Server 与 Alpha contract 的薄适配 | 强制 transport 缺失时显式报错，不做 production fallback |
+| browser/services | `browser/services/{browserTextModelService,browserTextResourceStore,rustDiffComputationService}.ts` | Workbench textfile、Rust App Server 与 Aster contract 的薄适配 | 强制 transport 缺失时显式报错，不做 production fallback |
 | contrib/editing | `contrib/{clipboard,comment,dropOrPasteInto,linesOperations,transpose,wordWrap,insertFinalNewLine}/` | 每个功能自己拥有 common command、browser controller、presentation 和 tests | 新增功能不得回填 browser 根目录 |
 | contrib/language UX | `contrib/{bracketMatching,folding,gotoError,hover,suggest,snippet,format,rename}/` | 语言驱动的编辑、诊断、hover、completion、format 和 rename | provider contract 在 common；DOM/widget 在 browser |
 | contrib/query contracts | `contrib/{documentSymbols,gotoSymbol,links,codeAction,inlayHints,inlineCompletions,parameterHints,linkedEditing,codelens}/common/` | provider request/result、版本 freshness、resolve 和 edit contract | 没有浏览器 UI 时仍必须保持可测试的 common contract；不得创建空 controller |
@@ -409,18 +409,18 @@ producer, synchronization, and presentation owners stay separate:
 | Responsibility | Canonical owner | Contract | Must not own |
 | --- | --- | --- | --- |
 | Parser-derived tokens, diagnostics, symbols, and fold ranges | `zeta-rs/app-server` `syntax/analyze` | bounded revision-bound UTF-16 DTOs | DOM, editor state, decorations, or worker lifecycle |
-| Snapshot synchronization, provider priority/fallback, result freshness, and wire deltas | Alpha `common/languages/syntax/*` | `SyntaxService`, `SyntaxWorker`, `SyntaxProvider` | parser implementation, App Server transport, or product file access |
+| Snapshot synchronization, provider priority/fallback, result freshness, and wire deltas | Aster `common/languages/syntax/*` | `SyntaxService`, `SyntaxWorker`, `SyntaxProvider` | parser implementation, App Server transport, or product file access |
 | TextMate grammar tokenization | `workbench/services/textMate` | `TextMateSyntaxWorker` contributes a high-priority `SyntaxProvider` | document model, diagnostics UI, or App Server syntax facts |
-| Token spans, markers, symbol navigation, and folding presentation | Alpha `common/tokens` plus the matching `contrib` | versioned stores consumed by the respective contrib | parser state or cross-editor part state |
-| Structured-document editing | Gama | `textBlock` may use Alpha only through `IEmbeddedTextEditor` | Alpha syntax runtime, TextMate worker, or code-editor part state |
+| Token spans, markers, symbol navigation, and folding presentation | Aster `common/tokens` plus the matching `contrib` | versioned stores consumed by the respective contrib | parser state or cross-editor part state |
+| Structured-document editing | Aster | `textBlock` may use Aster only through `IEmbeddedTextEditor` | Aster syntax runtime, TextMate worker, or code-editor part state |
 
 The Rust adapter is optional and bounded. Unsupported languages and oversized
 documents fall back to the frontend provider chain; a failed Rust request does
 not make the token or diagnostic stores publish a stale result. This keeps
-interactive UI work in Alpha while moving parser-grade, backend-neutral facts
+interactive UI work in Aster while moving parser-grade, backend-neutral facts
 to `zeta-rs`.
 
-### 5.2 当前已装配的 Alpha editor part
+### 5.2 当前已装配的 Aster editor part
 
 `browser/editorPart.ts` 是单个 editor instance 的装配入口，顺序固定为：
 
@@ -438,23 +438,23 @@ TextModelReference
 
 ### 5.3 当前仍保留的宿主边界
 
-本节只记录真实未完成的产品接入，不把已经落地的 Alpha controller 再写成 Planned。详细文件职责和装配情况见实现台账：
+本节只记录真实未完成的产品接入，不把已经落地的 Aster controller 再写成 Planned。详细文件职责和装配情况见实现台账：
 
-| 能力 | Alpha 当前实现 | 仍由宿主决定的部分 |
+| 能力 | Aster 当前实现 | 仍由宿主决定的部分 |
 | --- | --- | --- |
 | contextmenu | hit-test、selection、model version 和 request contract | Workbench 菜单 action、菜单服务和右键后的产品命令集合 |
 | links | provider link detection、hover target 和生命周期 | 外部 URI 打开、权限和工作区安全策略 |
 | codeAction / codelens | provider result、resolve、inline presentation 和 edit/command contract | picker 的产品 action、命令注册和 workspace command 执行 |
 | floatingMenu / peekView / zoneWidget | 可复用的 editor-local surface、定位和 dispose 生命周期 | 具体 action、内容来源、持久化和 pane/workbench 组合 |
-| Rust-backed language/file capabilities | Alpha frontend contract 和 browser adapter | App Server transport、权限、超时和错误上报策略 |
+| Rust-backed language/file capabilities | Aster frontend contract 和 browser adapter | App Server transport、权限、超时和错误上报策略 |
 
-这些边界不阻塞 Alpha 编辑器本身；它们是明确的 host callback 或 adapter contract，而不是空目录或 fallback。
+这些边界不阻塞 Aster 编辑器本身；它们是明确的 host callback 或 adapter contract，而不是空目录或 fallback。
 
 ## 6. 迁移顺序
 
 ### Phase 0：冻结设计契约
 
-Current：本文、`README.md` 和 `docs/editor-architecture.md` 共同描述 Alpha 当前所有权。
+Current：本文、`README.md` 和 `docs/editor-architecture.md` 共同描述 Aster 当前所有权。
 
 完成标准：
 
@@ -482,7 +482,7 @@ Current：本文、`README.md` 和 `docs/editor-architecture.md` 共同描述 Al
 1. 新增 `ITextResourceStore`。Current：`common/services/textResourceStore.ts` + `browser/services/browserTextResourceStore.ts`。
 2. `BrowserTextResourceStore` 适配 Workbench `ITextFileService`。
 3. `BrowserTextModelService` 只负责 model cache、baseline、dirty 和 conflict。
-4. Rust diff/language/file adapters 只实现 Alpha-owned frontend contract。
+4. Rust diff/language/file adapters 只实现 Aster-owned frontend contract。
 5. 删除 production fallback；缺少强制 transport 时显式失败。
 
 ### Phase 4：迁移已有 contrib（Current，新增能力继续按同一规则进入）
@@ -517,7 +517,7 @@ P2/P3 功能必须先有稳定的 language/service contract；不能为了填满
 
 ### Phase 6：依赖约束和验收
 
-增加 Alpha 专用依赖检查，至少阻止：
+增加 Aster 专用依赖检查，至少阻止：
 
 ```text
 common/core      → common/model
@@ -530,7 +530,7 @@ contrib/common   → browser / Workbench
 每个迁移切片必须通过：
 
 - `pnpm typecheck:renderer`
-- Alpha common/browser focused tests
+- Aster common/browser focused tests
 - contribution common/browser tests
 - `git diff --check`
 - source path stale-reference scan
@@ -540,8 +540,8 @@ contrib/common   → browser / Workbench
 ### 7.1 命名
 
 - VS Code 有明确语义的 feature，优先使用同名目录：`folding`、`find`、`semanticTokens`、`wordHighlighter`。
-- Editor common contract 使用领域名，不使用 `Alpha` 前缀；例如 `TextModel`、`EditorViewportModel`、`LanguageTokenResult`。
-- Browser 产品 presentation 或 adapter 只在运行时语义确实需要时使用 `Browser` 前缀；不再使用表示开发阶段的 `Alpha` 前缀，例如 `BrowserTextResourceStore`。
+- Editor common contract 使用领域名，不使用 `Aster` 前缀；例如 `TextModel`、`EditorViewportModel`、`LanguageTokenResult`。
+- Browser 产品 presentation 或 adapter 只在运行时语义确实需要时使用 `Browser` 前缀；不再使用表示开发阶段的 `Aster` 前缀，例如 `BrowserTextResourceStore`。
 - Rust adapter 文件必须显式包含 `Rust` 或 `AppServer`，避免把 transport 名称隐藏在 generic service 中。
 - 不新增 `index.ts` barrel；使用明确 import path。
 
@@ -564,9 +564,9 @@ contrib/find/
 
 修改 `model` 时必须检查 transaction、version、history、tracked range、decoration 和 language snapshot；修改 `viewModel` 时必须检查 projection、folding、viewport 和 hit-test；修改 contrib 时必须检查对应 command、controller、presentation、registration 和 test。
 
-## 8. 不迁移到 Alpha editor 的内容
+## 8. 不迁移到 Aster editor 的内容
 
-下列内容不属于 Alpha editor common，也不因为 VS Code 有对应目录就搬进来：
+下列内容不属于 Aster editor common，也不因为 VS Code 有对应目录就搬进来：
 
 - Workbench tab、group、explorer、chat、session 和 workspace orchestration。
 - Electron main/preload、Node 文件系统和 App Server generated DTO。
@@ -576,14 +576,14 @@ contrib/find/
 
 ## 9. 当前验收标准
 
-Alpha editor 达到目标架构前，必须同时满足：
+Aster editor 达到目标架构前，必须同时满足：
 
 | 验收项 | 标准 |
 | --- | --- |
 | 行为 | 编辑、selection、undo、IME、folding、diff 不因文件迁移改变语义 |
 | 依赖 | common/editor 层不反向依赖 Workbench、DOM 或 Rust DTO |
 | 运行时 | Renderer 输入热路径无 IPC/RPC 阻塞，无 production fallback |
-| 可替换性 | Rust、Worker、Workbench 文件服务都通过 Alpha contract 接入 |
+| 可替换性 | Rust、Worker、Workbench 文件服务都通过 Aster contract 接入 |
 | 可测试性 | common 算法不需要 DOM；browser controller 有独立 JSDOM/集成测试 |
 | 文档 | 每个 Current/Partial/Planned 状态都能指向真实文件或明确迁移任务 |
 | 文件结构 | feature 文件名、目录名和 VS Code editor 语义保持可搜索的一致性 |

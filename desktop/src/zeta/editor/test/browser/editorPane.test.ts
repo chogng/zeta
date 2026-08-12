@@ -27,7 +27,7 @@ const { EditorTextDirection } = await import("../../browser/view/editorViewport.
 
 test.after(() => browserEnvironment.window.close());
 
-test("Alpha editor pane loads, lays out, focuses, hides, and clears one editor part", async () => {
+test("Aster editor pane loads, lays out, focuses, hides, and clears one editor part", async () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   dom.window.HTMLCanvasElement.prototype.getContext = () => null;
   const parent = dom.window.document.querySelector<HTMLElement>("main")!;
@@ -44,11 +44,11 @@ test("Alpha editor pane loads, lays out, focuses, hides, and clears one editor p
   }, new AbortController().signal);
 
   assert.equal(pane.getValue(), "const alpha = 1;");
-  assert.equal(parent.querySelectorAll(".zeta-alpha-editor-pane").length, 1);
-  assert.equal(parent.querySelectorAll(".zeta-alpha-editor").length, 1);
-  assert.equal(parent.querySelector<HTMLElement>(".zeta-alpha-editor")?.dir, "rtl");
+  assert.equal(parent.querySelectorAll(".aster-editor-pane").length, 1);
+  assert.equal(parent.querySelectorAll(".aster-editor").length, 1);
+  assert.equal(parent.querySelector<HTMLElement>(".aster-editor")?.dir, "rtl");
   pane.focus();
-  assert.equal(dom.window.document.activeElement?.classList.contains("zeta-alpha-editor-input"), true);
+  assert.equal(dom.window.document.activeElement?.classList.contains("aster-editor-input"), true);
   assert.equal((dom.window.document.activeElement as HTMLTextAreaElement).dir, "rtl");
   pane.setVisible(EditorPaneVisibility.Hidden);
   assert.equal((parent.firstElementChild as HTMLElement).hidden, true);
@@ -57,13 +57,13 @@ test("Alpha editor pane loads, lays out, focuses, hides, and clears one editor p
 
   pane.clearInput();
   assert.equal(pane.getValue(), "");
-  assert.equal(parent.querySelectorAll(".zeta-alpha-editor").length, 0);
+  assert.equal(parent.querySelectorAll(".aster-editor").length, 0);
   pane.dispose();
   assert.equal(parent.children.length, 0);
   dom.window.close();
 });
 
-test("Alpha editor pane releases a load cancelled before content resolution", async () => {
+test("Aster editor pane releases a load cancelled before content resolution", async () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   dom.window.HTMLCanvasElement.prototype.getContext = () => null;
   const parent = dom.window.document.querySelector<HTMLElement>("main")!;
@@ -84,12 +84,12 @@ test("Alpha editor pane releases a load cancelled before content resolution", as
   });
 
   await assert.rejects(opening, error => (error as Error).name === "CancellationError");
-  assert.equal(parent.querySelectorAll(".zeta-alpha-editor").length, 0);
+  assert.equal(parent.querySelectorAll(".aster-editor").length, 0);
   pane.dispose();
   dom.window.close();
 });
 
-test("Alpha editor pane saves and reverts its shared model reference", async () => {
+test("Aster editor pane saves and reverts its shared model reference", async () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   dom.window.HTMLCanvasElement.prototype.getContext = () => null;
   const parent = dom.window.document.querySelector<HTMLElement>("main")!;

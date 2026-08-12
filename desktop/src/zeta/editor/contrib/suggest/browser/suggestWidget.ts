@@ -8,7 +8,7 @@ import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 
 let nextCompletionWidgetId = 1;
 
-/** Projects one common completion session into Alpha-owned browser UI. */
+/** Projects one common completion session into Aster-owned browser UI. */
 export class CompletionWidget extends DisposableOwner {
   readonly element: HTMLDivElement;
   private readonly widgetId: string;
@@ -29,13 +29,13 @@ export class CompletionWidget extends DisposableOwner {
         viewport.textModel !== selectionController.textModel ||
         viewport.textModel !== session.textModel
       ) {
-        throw new TypeError("Alpha completion widget dependencies must share one text model");
+        throw new TypeError("Aster completion widget dependencies must share one text model");
       }
     } catch (error) {
       this.dispose();
       throw error;
     }
-    this.widgetId = `zeta-alpha-completion-${nextCompletionWidgetId++}`;
+    this.widgetId = `aster-completion-${nextCompletionWidgetId++}`;
     this.previousAriaAutocomplete = inputElement.getAttribute("aria-autocomplete");
     this.previousAriaControls = inputElement.getAttribute("aria-controls");
     this.previousAriaHasPopup = inputElement.getAttribute("aria-haspopup");
@@ -43,7 +43,7 @@ export class CompletionWidget extends DisposableOwner {
     const ownerDocument = viewport.element.ownerDocument;
     this.element = ownerDocument.createElement("div");
     this.element.id = this.widgetId;
-    this.element.className = "zeta-alpha-editor-completion";
+    this.element.className = "aster-editor-completion";
     this.element.setAttribute("role", "listbox");
     this.element.hidden = true;
     inputElement.setAttribute("aria-autocomplete", "none");
@@ -141,23 +141,23 @@ export class CompletionWidget extends DisposableOwner {
       const focused = index === state.selectedIndex;
       const resolving = focused && state.detailsStatus === LanguageCompletionDetailsStatus.Loading;
       option.id = `${this.widgetId}-option-${index}`;
-      option.className = "zeta-alpha-editor-completion-option";
+      option.className = "aster-editor-completion-option";
       option.classList.toggle("focused", focused);
       option.classList.toggle("resolving", resolving);
       option.dataset.completionIndex = String(index);
       option.setAttribute("role", "option");
       option.setAttribute("aria-selected", String(focused));
       if (resolving) option.setAttribute("aria-busy", "true");
-      kind.className = "zeta-alpha-editor-completion-kind";
+      kind.className = "aster-editor-completion-kind";
       kind.setAttribute("aria-hidden", "true");
       kind.textContent = completionKindLabel(item.kind);
-      label.className = "zeta-alpha-editor-completion-label";
+      label.className = "aster-editor-completion-label";
       label.textContent = item.label;
-      detail.className = "zeta-alpha-editor-completion-detail";
+      detail.className = "aster-editor-completion-detail";
       detail.textContent = focused ? state.details.detail ?? "" : item.detail ?? "";
       option.append(kind, label, detail);
       if (focused && state.details.documentation !== undefined) {
-        documentation.className = "zeta-alpha-editor-completion-documentation";
+        documentation.className = "aster-editor-completion-documentation";
         documentation.textContent = state.details.documentation;
         option.append(documentation);
       }
@@ -191,7 +191,7 @@ export class CompletionWidget extends DisposableOwner {
     const target = event.target;
     const ElementConstructor = this.element.ownerDocument.defaultView?.Element;
     if (!ElementConstructor || !(target instanceof ElementConstructor)) return undefined;
-    const option = (target as Element).closest<HTMLElement>(".zeta-alpha-editor-completion-option");
+    const option = (target as Element).closest<HTMLElement>(".aster-editor-completion-option");
     if (!option || !this.element.contains(option)) return undefined;
     const index = Number(option.dataset.completionIndex);
     return Number.isSafeInteger(index) ? index : undefined;

@@ -11,7 +11,7 @@ export type DocumentCollaborationTarget =
   | { readonly kind: "appServer" }
   | { readonly kind: "remote"; readonly endpoint: string; readonly bearerToken: string };
 
-/** Inputs needed to create or join one server-ordered Gama collaboration room. */
+/** Inputs needed to create or join one server-ordered Aster collaboration room. */
 export interface DocumentCollaborationOpenInput {
   readonly roomId?: string;
   readonly clientId: string;
@@ -85,7 +85,7 @@ export interface DocumentCollaborationConnection extends IDisposable {
   revokeMember(principalId: string, signal: AbortSignal): Promise<void>;
 }
 
-/** Opens Gama collaboration rooms and turns transport payloads into schema-valid domain values. */
+/** Opens Aster collaboration rooms and turns transport payloads into schema-valid domain values. */
 export interface IDocumentCollaborationService extends IDisposable {
   open(input: DocumentCollaborationOpenInput, signal: AbortSignal): Promise<DocumentCollaborationConnection>;
 }

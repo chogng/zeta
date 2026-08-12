@@ -1,6 +1,6 @@
-# Alpha Editor 实现台账
+# Aster Text Engine 实现台账
 
-本文件是 [`text-engine-architecture.md`](./text-engine-architecture.md) 的实现台账。统一扁平目录和产品装配边界见 [`README.md`](./README.md)。本文件按 VS Code `src/vs/editor/contrib` 的 feature 名称列出 Alpha 当前的 canonical 文件、职责、装配入口和边界。新代码必须先找到一行 owner，再决定文件位置。这里的 `Current` 指已有可调用实现，`Partial` 指实现存在但仍有明确的产品边界，不能把 `Planned` 写成“目录已经创建”。
+本文件是 [`text-engine-architecture.md`](./text-engine-architecture.md) 的实现台账。统一扁平目录和产品装配边界见 [`README.md`](./README.md)。本文件按 VS Code `src/vs/editor/contrib` 的 feature 名称列出 Aster 当前的 canonical 文件、职责、装配入口和边界。新代码必须先找到一行 owner，再决定文件位置。这里的 `Current` 指已有可调用实现，`Partial` 指实现存在但仍有明确的产品边界，不能把 `Planned` 写成“目录已经创建”。
 
 ## 1. 装配入口
 
@@ -11,11 +11,11 @@
 | `browser/codeEditorInput.ts` | Workbench `EditorInput` 匹配和语言 identity adapter；不进入同步 model/core。 |
 | `browser/diffEditorInput.ts` | Workbench 双资源 diff input 和 synthetic tab identity；不创建 diff model，也不计算 diff。 |
 | `browser/browserEditorPart.ts` | TextMate grammar readiness、syntax Worker 和 completion Worker 的 browser adapter。 |
-| `editor.api.ts` | DOM-free 的统一程序化 API；其中 Alpha text-model 导出不加载 Workbench、DOM 或 contribution。 |
+| `editor.api.ts` | DOM-free 的统一程序化 API；其中 Aster text-model 导出不加载 Workbench、DOM 或 contribution。 |
 | `editor.code.all.ts` | Code 产品的 contribution bundle；加载 code/diff pane contribution。 |
 | `editor.main.ts` | 完整入口；组合 `editor.all.ts` 与 `editor.api.ts`。 |
 | `browser/language/languageWorker.start.ts` | dedicated language worker 的统一启动协议；syntax 与 completion worker 使用它建立 canonical wire port。 |
-| `contrib/editor.contribution.ts` | 注册 Alpha code/diff pane，并强制注入 Workbench text-file 与 Rust diff adapter；生产环境不提供 fallback。 |
+| `contrib/editor.contribution.ts` | 注册 Aster code/diff pane，并强制注入 Workbench text-file 与 Rust diff adapter；生产环境不提供 fallback。 |
 | `browser/widget/codeEditor/codeEditorWidget.ts` | 组合 viewport、输入、键盘导航和 pointer selection；不拥有语言功能或可选 drop/paste contrib。 |
 | `browser/input/{pointerSelectionController,pointerAutoScroll,pointerMultiCursor}.ts` | 浏览器基础 pointer selection、拖动自动滚动与修饰键多光标；由 `CodeEditorWidget` 装配，不属于可选 contrib。 |
 | `browser/widget/diffEditor/diffEditorWidget.ts` | 消费 `common/diff/diffModel.ts` 的只读 side-by-side projection；不计算 diff。 |
@@ -67,9 +67,9 @@
 | results | `common/languages/languageResults.ts`、`languageResultStore.ts`、`languageRequestCoordinator.ts` | diagnostic value、versioned store 和 stale-result gate。 |
 | token | `common/tokens/languageTokens.ts`、`languageTokenLineIndex.ts` | token value/delta/normalization 和 sparse line index。 |
 | tokenization contrib | `contrib/tokenization/common/tokenizationTextModelPart.ts`、`browser/tokenizationController.ts` | 将 token index 作为独立 model part 暴露给 browser/view；不生产 token。 |
-| semantic tokens contrib | `contrib/semanticTokens/common/semanticTokens.ts`、`browser/semanticTokenPresentation.ts` | 规定 token source contract；presentation 只转换成稳定的 Alpha CSS vocabulary。 |
+| semantic tokens contrib | `contrib/semanticTokens/common/semanticTokens.ts`、`browser/semanticTokenPresentation.ts` | 规定 token source contract；presentation 只转换成稳定的 Aster CSS vocabulary。 |
 | frontend service | `common/services/languageService.ts` | provider registry、feature factory 和 per-model service；不暴露 Workbench transport 或 generated Rust DTO。 |
-| runtime adapter | `browser/services/browserTextResourceStore.ts`、`browser/services/browserTextModelService.ts`、`browser/services/rustDiffComputationService.ts`、`browser/services/rustSyntaxFactsService.ts` | Workbench text file / Rust App Server 到 Alpha contract 的薄适配；Rust syntax facts 只经 revision gate 进入 token、diagnostic、symbol 和 folding consumer。 |
+| runtime adapter | `browser/services/browserTextResourceStore.ts`、`browser/services/browserTextModelService.ts`、`browser/services/rustDiffComputationService.ts`、`browser/services/rustSyntaxFactsService.ts` | Workbench text file / Rust App Server 到 Aster contract 的薄适配；Rust syntax facts 只经 revision gate 进入 token、diagnostic、symbol 和 folding consumer。 |
 
 ## 4. 已装配的编辑 contrib
 
@@ -149,8 +149,8 @@ common/core -> common/model -> common/services / common/languages / common/token
 browser/view -> common model snapshots + viewModel projections
 contrib/common -> common/core/model/services
 contrib/browser -> contrib/common + browser/view/input + host callbacks
-Workbench/Electron -> browser adapters -> Alpha contracts
-Rust App Server -> browser adapter -> Alpha async service contract
+Workbench/Electron -> browser adapters -> Aster contracts
+Rust App Server -> browser adapter -> Aster async service contract
 ```
 
 禁止的方向：
@@ -162,8 +162,8 @@ Rust App Server -> browser adapter -> Alpha async service contract
 
 ## 6. 当前验证清单
 
-- Alpha 目录没有 `index.ts` barrel。
-- Renderer TypeScript 检查已经通过 Alpha 新增代码；App Server Session mutation 已统一走 canonical `session/request`，Thread 读取与订阅使用 Session-scoped RPC。
+- Aster 目录没有 `index.ts` barrel。
+- Renderer TypeScript 检查已经通过 Aster 新增代码；App Server Session mutation 已统一走 canonical `session/request`，Thread 读取与订阅使用 Session-scoped RPC。
 - 每个新增 common feature 至少有可独立运行的纯函数边界；已补 smart-select、Unicode highlighter、sticky-scroll 和 tokenization model-part tests。
 - 新增 UI style 由对应 feature 的 `browser/media/*.css` 持有；Workbench host 不通过深层 selector 覆盖 editor internals。
 - Rust diff 仍是生产强依赖：`browser/services/rustDiffComputationService.ts` 缺少 App Server transport 时显式失败，不存在 production fallback。

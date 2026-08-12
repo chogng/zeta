@@ -1,6 +1,6 @@
 import { type DocumentTransaction } from "../../../common/model/documentTransaction.js";
 
-/** One ordered client submission to a Gama collaboration authority. */
+/** One ordered client submission to a Aster collaboration authority. */
 export interface DocumentCollaborationEnvelope {
   readonly clientId: string;
   readonly sequence: number;

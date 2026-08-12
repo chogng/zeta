@@ -47,7 +47,7 @@ export class DiffEditorPane extends DisposableOwner implements IEditorPane {
   create(parent: HTMLElement): void {
     if (this.container) throw new ReferenceError("DiffEditorPane has already been created");
     const container = parent.ownerDocument.createElement("div");
-    container.className = "zeta-alpha-diff-editor-pane";
+    container.className = "aster-diff-editor-pane";
     parent.append(container);
     this.container = container;
     this.defer(() => {

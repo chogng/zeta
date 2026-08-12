@@ -19,7 +19,7 @@ const { EditorViewport } = await import("../../browser/view/editorViewport.js");
 
 test.after(() => browserEnvironment.window.close());
 
-test("Alpha viewport resize observations use the scrollable client area", () => {
+test("Aster viewport resize observations use the scrollable client area", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   dom.window.HTMLCanvasElement.prototype.getContext = () => null;
   let resizeListener: ResizeObserverCallback | undefined;
@@ -45,12 +45,12 @@ test("Alpha viewport resize observations use the scrollable client area", () => 
   assert.deepEqual(viewport.viewportLayout.viewportSize, { width: 383, height: 62 });
   assert.equal(viewport.element.classList.contains("horizontally-scrollable"), false);
   assert.equal(viewport.element.classList.contains("vertically-scrollable"), false);
-  assert.equal(requiredElement<HTMLElement>(viewport.element, ".zeta-alpha-editor-content").style.width, "383px");
-  assert.equal(requiredElement<HTMLElement>(viewport.element, ".zeta-alpha-editor-content").style.height, "62px");
+  assert.equal(requiredElement<HTMLElement>(viewport.element, ".aster-editor-content").style.width, "383px");
+  assert.equal(requiredElement<HTMLElement>(viewport.element, ".aster-editor-content").style.height, "62px");
   dom.window.close();
 });
 
-test("Alpha viewport enables scrollbars only for model-backed overflow", () => {
+test("Aster viewport enables scrollbars only for model-backed overflow", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   dom.window.HTMLCanvasElement.prototype.getContext = () => null;
   const container = requiredElement(dom.window.document, "main");

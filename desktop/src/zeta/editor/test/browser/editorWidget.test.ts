@@ -24,11 +24,11 @@ await import("../../contrib/documentEditor.contribution.js");
 
 function documentAction(parent: ParentNode, actionId: string): HTMLButtonElement {
   const button = parent.querySelector<HTMLButtonElement>(`[data-action-id='${actionId}'] button`);
-  assert.ok(button, `Missing Gama document action '${actionId}'`);
+  assert.ok(button, `Missing Aster document action '${actionId}'`);
   return button;
 }
 
-test("Gama editor migrates plain text and edits a structured paragraph", async () => {
+test("Aster editor migrates plain text and edits a structured paragraph", async () => {
   const environment = new JSDOM("<!doctype html><body></body>");
   const files = new MemoryTextFiles("Title\nBody");
   const parent = environment.window.document.createElement("main");
@@ -77,7 +77,7 @@ test("DocumentWorkingCopy clears dirty state after an untitled save succeeds", a
   environment.window.close();
 });
 
-test("Gama refuses a stale conditional save even before a file-change notification arrives", async () => {
+test("Aster refuses a stale conditional save even before a file-change notification arrives", async () => {
   const environment = new JSDOM("<!doctype html><body></body>");
   const files = new MemoryTextFiles("Initial");
   const parent = environment.window.document.createElement("main");
@@ -97,9 +97,9 @@ test("Gama refuses a stale conditional save even before a file-change notificati
   environment.window.close();
 });
 
-test("Gama routes block keyboard commands through Gama", async () => {
+test("Aster routes block keyboard commands through Aster", async () => {
   const environment = new JSDOM("<!doctype html><body></body>");
-  const files = new MemoryTextFiles("Hello\nWorld\nGama");
+  const files = new MemoryTextFiles("Hello\nWorld\nAster");
   const parent = environment.window.document.createElement("main");
   environment.window.document.body.append(parent);
   using pane = new EditorPane(files);
@@ -119,7 +119,7 @@ test("Gama routes block keyboard commands through Gama", async () => {
   fields[0]!.focus();
   fields[0]!.setSelectionRange(2, 2);
   assert.equal(dispatchKey(fields[0]!, "Enter").defaultPrevented, true);
-  assert.deepEqual(blockTexts(), ["He", "llo", "World", "Gama"]);
+  assert.deepEqual(blockTexts(), ["He", "llo", "World", "Aster"]);
   fields = textareas();
   assert.equal(environment.window.document.activeElement, fields[1]);
   assert.equal(fields[1]!.selectionStart, 0);
@@ -127,31 +127,31 @@ test("Gama routes block keyboard commands through Gama", async () => {
   fields[1]!.focus();
   fields[1]!.setSelectionRange(fields[1]!.value.length, fields[1]!.value.length);
   assert.equal(dispatchKey(fields[1]!, "Delete").defaultPrevented, true);
-  assert.deepEqual(blockTexts(), ["He", "lloWorld", "Gama"]);
+  assert.deepEqual(blockTexts(), ["He", "lloWorld", "Aster"]);
 
   fields = textareas();
   fields[1]!.focus();
   fields[1]!.setSelectionRange(0, 0);
   assert.equal(dispatchKey(fields[1]!, "Backspace").defaultPrevented, true);
-  assert.deepEqual(blockTexts(), ["HelloWorld", "Gama"]);
+  assert.deepEqual(blockTexts(), ["HelloWorld", "Aster"]);
 
   fields = textareas();
   fields[0]!.focus();
   assert.equal(dispatchKey(fields[0]!, "Enter", { ctrlKey: true }).defaultPrevented, true);
-  assert.deepEqual(blockTexts(), ["HelloWorld", "", "Gama"]);
+  assert.deepEqual(blockTexts(), ["HelloWorld", "", "Aster"]);
   fields = textareas();
   assert.equal(environment.window.document.activeElement, fields[1]);
 
   assert.equal(dispatchKey(fields[1]!, "ArrowDown", { altKey: true }).defaultPrevented, true);
-  assert.deepEqual(blockTexts(), ["HelloWorld", "Gama", ""]);
+  assert.deepEqual(blockTexts(), ["HelloWorld", "Aster", ""]);
   fields = textareas();
   assert.equal(environment.window.document.activeElement, fields[2]);
   assert.equal(dispatchKey(fields[2]!, "ArrowUp", { altKey: true }).defaultPrevented, true);
-  assert.deepEqual(blockTexts(), ["HelloWorld", "", "Gama"]);
+  assert.deepEqual(blockTexts(), ["HelloWorld", "", "Aster"]);
   environment.window.close();
 });
 
-test("Gama projects plugin decorations onto rich text runs", async () => {
+test("Aster projects plugin decorations onto rich text runs", async () => {
   const environment = new JSDOM("<!doctype html><body></body>");
   const files = new MemoryTextFiles("Hello");
   const parent = environment.window.document.createElement("main");
@@ -182,7 +182,7 @@ test("Gama projects plugin decorations onto rich text runs", async () => {
   environment.window.close();
 });
 
-test("Gama commits textarea composition as one Gama transaction", async () => {
+test("Aster commits textarea composition as one Aster transaction", async () => {
   const environment = new JSDOM("<!doctype html><body></body>");
   const files = new MemoryTextFiles("Hello");
   const parent = environment.window.document.createElement("main");
@@ -211,7 +211,7 @@ test("Gama commits textarea composition as one Gama transaction", async () => {
   environment.window.close();
 });
 
-test("Gama accepts a schema and custom node view without changing Gama common nodes", async () => {
+test("Aster accepts a schema and custom node view without changing Aster common nodes", async () => {
   const environment = new JSDOM("<!doctype html><body></body>");
   const schema = createDefaultDocumentSchema();
   const paragraph = schema.createNode("paragraph", { id: "custom-paragraph", content: [schema.createText("Inside callout", { id: "custom-text" })] });
@@ -258,7 +258,7 @@ test("Gama accepts a schema and custom node view without changing Gama common no
   environment.window.close();
 });
 
-test("Gama projects Academic wrappers while editing Gama child blocks", async () => {
+test("Aster projects Academic wrappers while editing Aster child blocks", async () => {
   const environment = new JSDOM("<!doctype html><body></body>");
   const schema = createAcademicDocumentSchema();
   const document = schema.createDocument([
@@ -306,7 +306,7 @@ test("Gama projects Academic wrappers while editing Gama child blocks", async ()
   environment.window.close();
 });
 
-test("Gama renders and deletes Academic citation inline nodes", async () => {
+test("Aster renders and deletes Academic citation inline nodes", async () => {
   const environment = new JSDOM("<!doctype html><body></body>");
   const schema = createAcademicDocumentSchema();
   const citation = schema.createNode("citation", { id: "browser-citation", attrs: { key: "smith-2024", label: "[Smith 2024]" } });
@@ -335,7 +335,7 @@ test("Gama renders and deletes Academic citation inline nodes", async () => {
   environment.window.close();
 });
 
-test("Gama exposes Academic citation insertion as a toolbar action", async () => {
+test("Aster exposes Academic citation insertion as a toolbar action", async () => {
   const environment = new JSDOM("<!doctype html><body></body>");
   const prompts = ["smith-2024", "[Smith 2024]"];
   Object.defineProperty(environment.window, "prompt", { configurable: true, value: () => prompts.shift() ?? null });
@@ -362,7 +362,7 @@ test("Gama exposes Academic citation insertion as a toolbar action", async () =>
   environment.window.close();
 });
 
-test("Gama renders resolved citations and bibliography references", async () => {
+test("Aster renders resolved citations and bibliography references", async () => {
   const environment = new JSDOM("<!doctype html><body></body>");
   const schema = createAcademicDocumentSchema();
   const citation = schema.createNode("citation", { id: "resolved-citation", attrs: { key: "smith-2024" } });
@@ -391,7 +391,7 @@ test("Gama renders resolved citations and bibliography references", async () => 
   environment.window.close();
 });
 
-test("Gama exposes reference insertion as a citation toolbar action", async () => {
+test("Aster exposes reference insertion as a citation toolbar action", async () => {
   const environment = new JSDOM("<!doctype html><body></body>");
   const prompts = ["smith-2024", "Smith, 2024"];
   Object.defineProperty(environment.window, "prompt", { configurable: true, value: () => prompts.shift() ?? null });
@@ -417,7 +417,7 @@ test("Gama exposes reference insertion as a citation toolbar action", async () =
   environment.window.close();
 });
 
-test("Gama uses the Academic empty document through revert", async () => {
+test("Aster uses the Academic empty document through revert", async () => {
   const environment = new JSDOM("<!doctype html><body></body>");
   const schema = createAcademicDocumentSchema();
   const parent = environment.window.document.createElement("main");
@@ -448,7 +448,7 @@ test("Gama uses the Academic empty document through revert", async () => {
   environment.window.close();
 });
 
-test("Gama projects read-only inputs without accepting model mutations", async () => {
+test("Aster projects read-only inputs without accepting model mutations", async () => {
   const environment = new JSDOM("<!doctype html><body></body>");
   const parent = environment.window.document.createElement("main");
   const pane = new EditorPane(new MemoryTextFiles("Hello"));
@@ -471,7 +471,7 @@ test("Gama projects read-only inputs without accepting model mutations", async (
   environment.window.close();
 });
 
-test("Gama routes text undo and redo through Gama history", async () => {
+test("Aster routes text undo and redo through Aster history", async () => {
   const environment = new JSDOM("<!doctype html><body></body>");
   const files = new MemoryTextFiles("Hello");
   const parent = environment.window.document.createElement("main");
@@ -507,7 +507,7 @@ test("Gama routes text undo and redo through Gama history", async () => {
   environment.window.close();
 });
 
-test("Gama creates a hard break with Shift+Enter", async () => {
+test("Aster creates a hard break with Shift+Enter", async () => {
   const environment = new JSDOM("<!doctype html><body></body>");
   const files = new MemoryTextFiles("Hello");
   const parent = environment.window.document.createElement("main");
@@ -529,7 +529,7 @@ test("Gama creates a hard break with Shift+Enter", async () => {
   environment.window.close();
 });
 
-test("Gama deletes a selection spanning a hard break", async () => {
+test("Aster deletes a selection spanning a hard break", async () => {
   const environment = new JSDOM("<!doctype html><body></body>");
   const files = new MemoryTextFiles(JSON.stringify({
     format: "zeta.document",
@@ -575,7 +575,7 @@ test("Gama deletes a selection spanning a hard break", async () => {
   environment.window.close();
 });
 
-test("Gama renders semantic lists and splits list items", async () => {
+test("Aster renders semantic lists and splits list items", async () => {
   const environment = new JSDOM("<!doctype html><body></body>");
   const files = new MemoryTextFiles(JSON.stringify({
     format: "zeta.document",
@@ -627,7 +627,7 @@ test("Gama renders semantic lists and splits list items", async () => {
   environment.window.close();
 });
 
-test("Gama indents and outdents list items with Tab", async () => {
+test("Aster indents and outdents list items with Tab", async () => {
   const environment = new JSDOM("<!doctype html><body></body>");
   const files = new MemoryTextFiles(JSON.stringify({
     format: "zeta.document",
@@ -672,7 +672,7 @@ test("Gama indents and outdents list items with Tab", async () => {
   environment.window.close();
 });
 
-test("Gama exits an empty list item on the second Enter", async () => {
+test("Aster exits an empty list item on the second Enter", async () => {
   const environment = new JSDOM("<!doctype html><body></body>");
   const files = new MemoryTextFiles(JSON.stringify({
     format: "zeta.document",
@@ -702,7 +702,7 @@ test("Gama exits an empty list item on the second Enter", async () => {
   environment.window.close();
 });
 
-test("Gama exposes a block toolbar for block and list formats", async () => {
+test("Aster exposes a block toolbar for block and list formats", async () => {
   const environment = new JSDOM("<!doctype html><body></body>");
   const files = new MemoryTextFiles("Hello");
   const parent = environment.window.document.createElement("main");
@@ -739,7 +739,7 @@ test("Gama exposes a block toolbar for block and list formats", async () => {
   environment.window.close();
 });
 
-test("Gama formats selected text with persistent typography marks", async () => {
+test("Aster formats selected text with persistent typography marks", async () => {
   const environment = new JSDOM("<!doctype html><body></body>");
   const parent = environment.window.document.createElement("main");
   environment.window.document.body.append(parent);
@@ -788,7 +788,7 @@ test("Gama formats selected text with persistent typography marks", async () => 
   environment.window.close();
 });
 
-test("Gama toggles blockquotes and inserts horizontal rules", async () => {
+test("Aster toggles blockquotes and inserts horizontal rules", async () => {
   const environment = new JSDOM("<!doctype html><body></body>");
   const files = new MemoryTextFiles("Quoted");
   const parent = environment.window.document.createElement("main");
@@ -816,7 +816,7 @@ test("Gama toggles blockquotes and inserts horizontal rules", async () => {
   environment.window.close();
 });
 
-test("Gama navigates table cells with Tab and exposes row and column operations", async () => {
+test("Aster navigates table cells with Tab and exposes row and column operations", async () => {
   const environment = new JSDOM("<!doctype html><body></body>");
   const files = new MemoryTextFiles("Hello");
   const parent = environment.window.document.createElement("main");
@@ -873,7 +873,7 @@ test("Gama navigates table cells with Tab and exposes row and column operations"
   environment.window.close();
 });
 
-test("Gama renders inline image nodes in the rich surface", async () => {
+test("Aster renders inline image nodes in the rich surface", async () => {
   const environment = new JSDOM("<!doctype html><body></body>");
   const files = new MemoryTextFiles(JSON.stringify({
     format: "zeta.document",
@@ -922,7 +922,7 @@ test("Gama renders inline image nodes in the rich surface", async () => {
   environment.window.close();
 });
 
-test("Gama turns an image clipboard paste into an image node", async () => {
+test("Aster turns an image clipboard paste into an image node", async () => {
   const environment = new JSDOM("<!doctype html><body></body>");
   const files = new MemoryTextFiles("Before");
   const parent = environment.window.document.createElement("main");
@@ -947,7 +947,7 @@ test("Gama turns an image clipboard paste into an image node", async () => {
   environment.window.close();
 });
 
-test("Gama inserts a pasted image at a rich-text selection", async () => {
+test("Aster inserts a pasted image at a rich-text selection", async () => {
   const environment = new JSDOM("<!doctype html><body></body>");
   const files = new MemoryTextFiles(JSON.stringify({
     format: "zeta.document",
@@ -1018,7 +1018,7 @@ test("Gama inserts a pasted image at a rich-text selection", async () => {
   environment.window.close();
 });
 
-test("Gama renders and edits marked inline runs", async () => {
+test("Aster renders and edits marked inline runs", async () => {
   const environment = new JSDOM("<!doctype html><body></body>");
   const files = new MemoryTextFiles(JSON.stringify({
     format: "zeta.document",
@@ -1090,7 +1090,7 @@ test("Gama renders and edits marked inline runs", async () => {
   environment.window.close();
 });
 
-test("Gama carries collapsed mark toggles into later input", async () => {
+test("Aster carries collapsed mark toggles into later input", async () => {
   const environment = new JSDOM("<!doctype html><body></body>");
   const parent = environment.window.document.createElement("main");
   environment.window.document.body.append(parent);
@@ -1135,7 +1135,7 @@ test("Gama carries collapsed mark toggles into later input", async () => {
   environment.window.close();
 });
 
-test("Gama applies, updates, and removes link marks", async () => {
+test("Aster applies, updates, and removes link marks", async () => {
   const environment = new JSDOM("<!doctype html><body></body>");
   let promptValue = " https://example.test ";
   Object.defineProperty(environment.window, "prompt", { configurable: true, value: () => promptValue });
@@ -1201,7 +1201,7 @@ test("Gama applies, updates, and removes link marks", async () => {
   environment.window.close();
 });
 
-test("Gama routes rich-text copy and cut through Gama", async () => {
+test("Aster routes rich-text copy and cut through Aster", async () => {
   const environment = new JSDOM("<!doctype html><body></body>");
   const files = new MemoryTextFiles(JSON.stringify({
     format: "zeta.document",
@@ -1287,7 +1287,7 @@ test("Gama routes rich-text copy and cut through Gama", async () => {
   environment.window.close();
 });
 
-test("Gama pastes external HTML through a schema-valid structured fragment", async () => {
+test("Aster pastes external HTML through a schema-valid structured fragment", async () => {
   const environment = new JSDOM("<!doctype html><body></body>");
   const files = new MemoryTextFiles(JSON.stringify({
     format: "zeta.document",
@@ -1348,7 +1348,7 @@ test("Gama pastes external HTML through a schema-valid structured fragment", asy
   environment.window.close();
 });
 
-test("Gama handles whole-document select all, copy, and cut", async () => {
+test("Aster handles whole-document select all, copy, and cut", async () => {
   const environment = new JSDOM("<!doctype html><body></body>");
   const files = new MemoryTextFiles(JSON.stringify({
     format: "zeta.document",
@@ -1406,7 +1406,7 @@ test("Gama handles whole-document select all, copy, and cut", async () => {
   environment.window.close();
 });
 
-test("Gama replaces a rich-text selection spanning sibling blocks", async () => {
+test("Aster replaces a rich-text selection spanning sibling blocks", async () => {
   const environment = new JSDOM("<!doctype html><body></body>");
   const files = new MemoryTextFiles(JSON.stringify({
     format: "zeta.document",
@@ -1479,7 +1479,7 @@ test("Gama replaces a rich-text selection spanning sibling blocks", async () => 
   environment.window.close();
 });
 
-test("Gama pastes multiline text as structured blocks", async () => {
+test("Aster pastes multiline text as structured blocks", async () => {
   const environment = new JSDOM("<!doctype html><body></body>");
   const files = new MemoryTextFiles(JSON.stringify({
     format: "zeta.document",
@@ -1526,7 +1526,7 @@ test("Gama pastes multiline text as structured blocks", async () => {
   environment.window.close();
 });
 
-test("Gama restores serialized blocks and releases its model", async () => {
+test("Aster restores serialized blocks and releases its model", async () => {
   const environment = new JSDOM("<!doctype html><body></body>");
   const files = new MemoryTextFiles(JSON.stringify({
     format: "zeta.document",
@@ -1562,7 +1562,7 @@ test("Gama restores serialized blocks and releases its model", async () => {
   environment.window.close();
 });
 
-test("Gama delegates text blocks to an embedded line editor", async () => {
+test("Aster delegates text blocks to an embedded line editor", async () => {
   const environment = new JSDOM("<!doctype html><body></body>");
   const files = new MemoryTextFiles(JSON.stringify({
     format: "zeta.document",
@@ -1619,7 +1619,7 @@ test("EmbeddedTextEditorFactory creates a line editor surface", async () => {
     });
     editor.create(parent);
     await new Promise(resolve => setTimeout(resolve, 25));
-    assert.ok(parent.querySelector(".zeta-alpha-editor"));
+    assert.ok(parent.querySelector(".aster-editor"));
     assert.equal(editor.getValue(), "const value = 1;");
   } finally {
     Object.defineProperty(globalThis, "window", { configurable: true, value: previousWindow });
@@ -1632,7 +1632,7 @@ test("EmbeddedTextEditorFactory creates a line editor surface", async () => {
 async function waitFor(predicate: () => boolean, timeout = 500): Promise<void> {
   const deadline = Date.now() + timeout;
   while (!predicate()) {
-    if (Date.now() >= deadline) throw new Error("Timed out waiting for Gama browser state");
+    if (Date.now() >= deadline) throw new Error("Timed out waiting for Aster browser state");
     await new Promise(resolve => setTimeout(resolve, 1));
   }
 }

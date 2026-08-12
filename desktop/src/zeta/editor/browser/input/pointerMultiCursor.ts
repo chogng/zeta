@@ -13,18 +13,18 @@ export interface PointerModifierState {
   readonly shiftKey: boolean;
 }
 
-export function readAlphaPointerMultiCursorModifier(value: PointerMultiCursorModifier | undefined): PointerMultiCursorModifier {
+export function readAsterPointerMultiCursorModifier(value: PointerMultiCursorModifier | undefined): PointerMultiCursorModifier {
   const resolved = value ?? PointerMultiCursorModifier.Alt;
   if (
     resolved !== PointerMultiCursorModifier.Alt &&
     resolved !== PointerMultiCursorModifier.ControlOrMeta
   ) {
-    throw new TypeError("Unknown Alpha pointer multi-cursor modifier");
+    throw new TypeError("Unknown Aster pointer multi-cursor modifier");
   }
   return resolved;
 }
 
-export function isAlphaPointerMultiCursorGesture(state: PointerModifierState, modifier: PointerMultiCursorModifier): boolean {
+export function isAsterPointerMultiCursorGesture(state: PointerModifierState, modifier: PointerMultiCursorModifier): boolean {
   if (state.shiftKey) return false;
   if (modifier === PointerMultiCursorModifier.Alt) {
     return state.altKey && !state.ctrlKey && !state.metaKey;
@@ -39,7 +39,7 @@ export function isAlphaPointerMultiCursorGesture(state: PointerModifierState, mo
  * the only selection. Dragging from that selection replaces it. Landing on
  * another identical range deduplicates and makes that range primary.
  */
-export function combineAlphaPointerSelection(base: TextSelectionSet, active: TextSelection, toggleCandidateIndex: number | undefined): TextSelectionSet {
+export function combineAsterPointerSelection(base: TextSelectionSet, active: TextSelection, toggleCandidateIndex: number | undefined): TextSelectionSet {
   validateToggleCandidate(base, toggleCandidateIndex);
   if (
     toggleCandidateIndex !== undefined &&
@@ -77,7 +77,7 @@ export function combineAlphaPointerSelection(base: TextSelectionSet, active: Tex
   );
 }
 
-export function findAlphaPointerToggleCandidate(base: TextSelectionSet, selection: TextSelection): number | undefined {
+export function findAsterPointerToggleCandidate(base: TextSelectionSet, selection: TextSelection): number | undefined {
   const index = base.selections.findIndex(candidate =>
     selectionsHaveSameRange(candidate, selection)
   );

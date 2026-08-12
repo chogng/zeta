@@ -2,10 +2,8 @@ import { URI } from "../../base/common/uri.js";
 import { type EditorInput } from "../../workbench/browser/parts/editor/editorInput.js";
 import { EditorPaneMatch } from "../../workbench/browser/parts/editor/editorPane.js";
 
-/** Persisted compatibility ID for the canonical diff editor. */
-export const DIFF_EDITOR_ID = "zeta.editor.alpha-diff";
-/** Persisted compatibility content type for explicit diff inputs. */
-export const DIFF_EDITOR_CONTENT_TYPE = "application/vnd.zeta.alpha-diff";
+export const DIFF_EDITOR_ID = "aster.editor.diff";
+export const DIFF_EDITOR_CONTENT_TYPE = "application/vnd.aster.editor-diff";
 
 /** One Workbench input that compares two ordinary text-resource editor inputs. */
 export interface DiffEditorInput extends EditorInput {

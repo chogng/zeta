@@ -4,7 +4,7 @@ import type { DocumentCollaborationOpenInput } from "../../common/services/docum
 import type { IDocumentCollaborationService } from "../../common/services/documentCollaborationService.js";
 import { RemoteDocumentCollaborationService } from "./remoteDocumentCollaborationService.js";
 
-/** Routes Gama collaboration to the local App Server or an explicit remote host. */
+/** Routes Aster collaboration to the local App Server or an explicit remote host. */
 export class DocumentCollaborationService extends DisposableOwner implements IDocumentCollaborationService {
   private readonly remote = this.own(new RemoteDocumentCollaborationService());
 
@@ -15,7 +15,7 @@ export class DocumentCollaborationService extends DisposableOwner implements IDo
 
   open(input: DocumentCollaborationOpenInput, signal: AbortSignal): Promise<DocumentCollaborationConnection> {
     if (input.target?.kind === "remote") return this.remote.open(input, signal);
-    if (!this.appServer) return Promise.reject(new Error("This Gama renderer has no local App Server collaboration transport"));
+    if (!this.appServer) return Promise.reject(new Error("This Aster renderer has no local App Server collaboration transport"));
     return this.appServer.open(input, signal);
   }
 }

@@ -1,5 +1,5 @@
 /**
- * Stable text primitive barrel for Alpha consumers.
+ * Stable text primitive barrel for Aster consumers.
  *
  * The implementations live in focused modules so coordinate values, edit
  * descriptions, and committed model changes have separate ownership while

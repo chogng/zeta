@@ -12,7 +12,7 @@ export class AnchorSelectController extends DisposableOwner {
 
   constructor(private readonly input: HTMLTextAreaElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly wordPattern?: () => RegExp | undefined) {
     super();
-    if (viewport.textModel !== selections.textModel) throw new TypeError("Alpha anchor selection dependencies must share a text model");
+    if (viewport.textModel !== selections.textModel) throw new TypeError("Aster anchor selection dependencies must share a text model");
     this.own(addDisposableListener(input, "keydown", event => this.handleKeydown(event), true));
     this.own(selections.onDidChange(() => {
       if (this.anchor && !this.selections.selections.primary.range.containsPosition(this.anchor)) this.anchor = undefined;

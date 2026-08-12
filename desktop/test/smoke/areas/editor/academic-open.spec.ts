@@ -34,7 +34,7 @@ test("Academic opens the document engine and saves its structured document throu
   await fontSize.selectOption("18");
   await expect(fontSize).toHaveValue("18");
 
-  const input = group.content.locator(".zeta-document-text-block .zeta-alpha-editor-input");
+  const input = group.content.locator(".zeta-document-text-block .aster-editor-input");
   await expect(input).toBeAttached();
   await input.focus();
   await input.press(process.platform === "darwin" ? "Meta+A" : "Control+A");

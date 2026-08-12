@@ -15,7 +15,7 @@ export class BracketMatchController extends DisposableOwner {
     super();
     try {
       if (selections.textModel !== matcher.textModel || selections.textModel !== decorations.textModel) {
-        throw new TypeError("Alpha bracket matching dependencies must share one text model");
+        throw new TypeError("Aster bracket matching dependencies must share one text model");
       }
       this.own(selections.onDidChange(() => this.update()));
       this.own(matcher.textModel.onDidChange(() => this.update()));

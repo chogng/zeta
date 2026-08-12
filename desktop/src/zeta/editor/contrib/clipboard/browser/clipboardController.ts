@@ -10,14 +10,14 @@ import { type TextSelectionSet } from "../../../common/core/selection.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 import { type SemanticTokenSource } from "../../../browser/view/semanticTokenPresentation.js";
-import { createAlphaSyntaxClipboardHtml } from "./syntaxClipboardHtml.js";
-import { ALPHA_TEXT_FILE_TRANSFER_MAX_BYTES, selectAlphaTextFileTransfer } from "../../dropOrPasteInto/browser/textFileTransfer.js";
-import { captureAlphaClipboardTextTransfer, normalizeAlphaClipboardPasteProviders, provideAlphaClipboardPaste, type ClipboardPasteProvider } from "./clipboardPasteProvider.js";
-import { createAlphaBrowserClipboardSystemTextReader, type ClipboardSystemTextReader } from "./clipboardSystemText.js";
-import { createAlphaBrowserClipboardRichTextReader, createAlphaBrowserClipboardRichTextWriter, type ClipboardRichTextItem, type ClipboardRichTextReader, type ClipboardRichTextWriter } from "./clipboardRichText.js";
+import { createAsterSyntaxClipboardHtml } from "./syntaxClipboardHtml.js";
+import { TEXT_FILE_TRANSFER_MAX_BYTES, selectTextFileTransfer } from "../../dropOrPasteInto/browser/textFileTransfer.js";
+import { captureAsterClipboardTextTransfer, normalizeAsterClipboardPasteProviders, provideAsterClipboardPaste, type ClipboardPasteProvider } from "./clipboardPasteProvider.js";
+import { createAsterBrowserClipboardSystemTextReader, type ClipboardSystemTextReader } from "./clipboardSystemText.js";
+import { createAsterBrowserClipboardRichTextReader, createAsterBrowserClipboardRichTextWriter, type ClipboardRichTextItem, type ClipboardRichTextReader, type ClipboardRichTextWriter } from "./clipboardRichText.js";
 
-export const ALPHA_EDITOR_CLIPBOARD_MIME = "application/x-zeta-alpha-editor";
-export const ALPHA_EDITOR_HTML_CLIPBOARD_MIME = "text/html";
+export const EDITOR_CLIPBOARD_MIME = "application/x-aster-editor";
+export const EDITOR_HTML_CLIPBOARD_MIME = "text/html";
 
 export enum ClipboardLineEnding {
   LF = "\n",
@@ -56,7 +56,7 @@ interface ClipboardPasteData {
 }
 
 /**
- * Routes native clipboard events through Alpha's selection-aware commands.
+ * Routes native clipboard events through Aster's selection-aware commands.
  */
 export class ClipboardController extends DisposableOwner {
   private readonly lineEnding: ClipboardLineEnding;
@@ -80,28 +80,28 @@ export class ClipboardController extends DisposableOwner {
     if (viewport.textModel !== selectionController.textModel) {
       this.dispose();
       throw new TypeError(
-        "Alpha clipboard and selection controllers must share one text model",
+        "Aster clipboard and selection controllers must share one text model",
       );
     }
     if (options.semanticTokens && options.semanticTokens.textModel !== viewport.textModel) {
       this.dispose();
-      throw new TypeError("Alpha clipboard semantic tokens must share the viewport text model");
+      throw new TypeError("Aster clipboard semantic tokens must share the viewport text model");
     }
     if (options.isEditingAllowed !== undefined && typeof options.isEditingAllowed !== "function") {
       this.dispose();
-      throw new TypeError("Alpha clipboard edit gate must be a function");
+      throw new TypeError("Aster clipboard edit gate must be a function");
     }
     if (options.systemTextReader !== undefined && typeof options.systemTextReader.readText !== "function") {
       this.dispose();
-      throw new TypeError("Alpha clipboard system text reader must provide readText");
+      throw new TypeError("Aster clipboard system text reader must provide readText");
     }
     if (options.richTextReader !== undefined && typeof options.richTextReader.readText !== "function") {
       this.dispose();
-      throw new TypeError("Alpha clipboard rich text reader must provide readText");
+      throw new TypeError("Aster clipboard rich text reader must provide readText");
     }
     if (options.richTextWriter !== undefined && typeof options.richTextWriter.writeText !== "function") {
       this.dispose();
-      throw new TypeError("Alpha clipboard rich text writer must provide writeText");
+      throw new TypeError("Aster clipboard rich text writer must provide writeText");
     }
     this.lineEnding = readLineEnding(options.lineEnding);
     this.emptySelectionPolicy = readEmptySelectionPolicy(
@@ -109,10 +109,10 @@ export class ClipboardController extends DisposableOwner {
     );
     this.semanticTokens = options.semanticTokens;
     this.isEditingAllowed = options.isEditingAllowed ?? (() => true);
-    this.pasteProviders = normalizeAlphaClipboardPasteProviders(options.pasteProviders);
-    this.systemTextReader = options.systemTextReader ?? createAlphaBrowserClipboardSystemTextReader(element.ownerDocument);
-    this.richTextReader = options.richTextReader ?? createAlphaBrowserClipboardRichTextReader(element.ownerDocument);
-    this.richTextWriter = options.richTextWriter ?? createAlphaBrowserClipboardRichTextWriter(element.ownerDocument);
+    this.pasteProviders = normalizeAsterClipboardPasteProviders(options.pasteProviders);
+    this.systemTextReader = options.systemTextReader ?? createAsterBrowserClipboardSystemTextReader(element.ownerDocument);
+    this.richTextReader = options.richTextReader ?? createAsterBrowserClipboardRichTextReader(element.ownerDocument);
+    this.richTextWriter = options.richTextWriter ?? createAsterBrowserClipboardRichTextWriter(element.ownerDocument);
     this.defer(() => {
       this.disposed = true;
       this.asynchronousPasteRequest += 1;
@@ -206,7 +206,7 @@ export class ClipboardController extends DisposableOwner {
   }
 
   private pasteTextFile(event: ClipboardEvent): boolean {
-    const file = selectAlphaTextFileTransfer(event.clipboardData?.files ?? []);
+    const file = selectTextFileTransfer(event.clipboardData?.files ?? []);
     if (!file) return false;
     const model = this.viewport.textModel;
     const expectedVersion = model.version;
@@ -217,7 +217,7 @@ export class ClipboardController extends DisposableOwner {
       if (
         this.disposed ||
         request !== this.asynchronousPasteRequest ||
-        text.length > ALPHA_TEXT_FILE_TRANSFER_MAX_BYTES ||
+        text.length > TEXT_FILE_TRANSFER_MAX_BYTES ||
         !this.isEditingAllowed() ||
         model.version !== expectedVersion ||
         !selectionSetsEqual(this.selectionController.selections, expectedSelections)
@@ -239,9 +239,9 @@ export class ClipboardController extends DisposableOwner {
     const expectedVersion = model.version;
     const expectedSelections = this.selectionController.selections;
     const request = ++this.asynchronousPasteRequest;
-    const transfer = captureAlphaClipboardTextTransfer(clipboardData);
+    const transfer = captureAsterClipboardTextTransfer(clipboardData);
     stopEvent(event);
-    void provideAlphaClipboardPaste(this.pasteProviders, transfer).then(text => {
+    void provideAsterClipboardPaste(this.pasteProviders, transfer).then(text => {
       if (
         text === undefined ||
         this.disposed ||
@@ -295,7 +295,7 @@ export class ClipboardController extends DisposableOwner {
     const request = ++this.asynchronousPasteRequest;
     stopEvent(event);
     void Promise.resolve(reader.readText()).then(item => {
-      const text = item?.plainText ?? (item?.html ? readAlphaHtmlText(item.html, this.element.ownerDocument) : "");
+      const text = item?.plainText ?? (item?.html ? readEditorHtmlText(item.html, this.element.ownerDocument) : "");
       if (text.length === 0 || this.disposed || request !== this.asynchronousPasteRequest || !this.isEditingAllowed() || model.version !== expectedVersion || !selectionSetsEqual(this.selectionController.selections, expectedSelections)) return;
       this.selectionController.execute(createPasteTextCommand(model, expectedSelections, text));
       this.afterEdit();
@@ -351,14 +351,14 @@ export class ClipboardController extends DisposableOwner {
     };
     try {
       clipboardData.setData(
-        ALPHA_EDITOR_CLIPBOARD_MIME,
+        EDITOR_CLIPBOARD_MIME,
         JSON.stringify(metadata),
       );
     } catch {
       // Plain text remains portable when a browser rejects custom MIME data.
     }
     try {
-      clipboardData.setData(ALPHA_EDITOR_HTML_CLIPBOARD_MIME, payload.html);
+      clipboardData.setData(EDITOR_HTML_CLIPBOARD_MIME, payload.html);
     } catch {
       // Plain text remains authoritative when a browser rejects HTML clipboard data.
     }
@@ -368,7 +368,7 @@ export class ClipboardController extends DisposableOwner {
   private createClipboardPayload(entries: readonly EditorClipboardEntry[]): Required<ClipboardRichTextItem> {
     return Object.freeze({
       plainText: joinClipboardEntries(entries, this.lineEnding),
-      html: createAlphaSyntaxClipboardHtml(
+      html: createAsterSyntaxClipboardHtml(
         entries,
         this.lineEnding,
         this.semanticTokens,
@@ -401,7 +401,7 @@ function readLineEnding(lineEnding: ClipboardLineEnding | undefined): ClipboardL
     isWindows ? ClipboardLineEnding.CRLF : ClipboardLineEnding.LF
   );
   if (!Object.values(ClipboardLineEnding).includes(resolved)) {
-    throw new TypeError("Unknown Alpha clipboard line ending");
+    throw new TypeError("Unknown Aster clipboard line ending");
   }
   return resolved;
 }
@@ -409,7 +409,7 @@ function readLineEnding(lineEnding: ClipboardLineEnding | undefined): ClipboardL
 function readEmptySelectionPolicy(policy: EditorEmptySelectionClipboardPolicy | undefined): EditorEmptySelectionClipboardPolicy {
   const resolved = policy ?? EditorEmptySelectionClipboardPolicy.Line;
   if (!Object.values(EditorEmptySelectionClipboardPolicy).includes(resolved)) {
-    throw new TypeError("Unknown Alpha empty-selection clipboard policy");
+    throw new TypeError("Unknown Aster empty-selection clipboard policy");
   }
   return resolved;
 }
@@ -445,7 +445,7 @@ function readClipboardText(clipboardData: DataTransfer, ownerDocument: Document)
     // A browser may expose only a rich clipboard representation.
   }
   try {
-    return readAlphaHtmlText(clipboardData.getData(ALPHA_EDITOR_HTML_CLIPBOARD_MIME), ownerDocument);
+    return readEditorHtmlText(clipboardData.getData(EDITOR_HTML_CLIPBOARD_MIME), ownerDocument);
   } catch {
     return "";
   }
@@ -461,8 +461,8 @@ function selectionSetsEqual(left: TextSelectionSet, right: TextSelectionSet): bo
     });
 }
 
-/** Reduces untrusted HTML to inert deterministic text for Alpha paste and drop paths. */
-export function readAlphaHtmlText(html: string, ownerDocument: Document): string {
+/** Reduces untrusted HTML to inert deterministic text for Aster paste and drop paths. */
+export function readEditorHtmlText(html: string, ownerDocument: Document): string {
   if (html.length === 0) return "";
   const template = ownerDocument.createElement("template");
   template.innerHTML = html;
@@ -502,7 +502,7 @@ const HTML_CLIPBOARD_BLOCK_ELEMENTS = new Set([
 function readClipboardMetadata(clipboardData: DataTransfer, selectionCount: number): ClipboardPasteData | undefined {
   let parsed: unknown;
   try {
-    const raw = clipboardData.getData(ALPHA_EDITOR_CLIPBOARD_MIME);
+    const raw = clipboardData.getData(EDITOR_CLIPBOARD_MIME);
     if (!raw) return undefined;
     parsed = JSON.parse(raw);
   } catch {

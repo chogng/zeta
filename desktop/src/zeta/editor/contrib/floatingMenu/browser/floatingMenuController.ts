@@ -9,11 +9,11 @@ export interface FloatingMenuAction { readonly label: string; readonly run: () =
 export class FloatingMenuController extends DisposableOwner {
   private readonly element: HTMLDivElement;
 
-  constructor(private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, actions: readonly FloatingMenuAction[] = [], private readonly onError: (error: unknown) => void = error => console.error("Alpha floating menu failed", error)) {
+  constructor(private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, actions: readonly FloatingMenuAction[] = [], private readonly onError: (error: unknown) => void = error => console.error("Aster floating menu failed", error)) {
     super();
-    if (viewport.textModel !== selections.textModel) throw new TypeError("Alpha floating menu dependencies must share a text model");
+    if (viewport.textModel !== selections.textModel) throw new TypeError("Aster floating menu dependencies must share a text model");
     this.element = viewport.element.ownerDocument.createElement("div");
-    this.element.className = "zeta-alpha-editor-floating-menu";
+    this.element.className = "aster-editor-floating-menu";
     this.element.hidden = true;
     viewport.element.append(this.element);
     this.defer(() => this.element.remove());

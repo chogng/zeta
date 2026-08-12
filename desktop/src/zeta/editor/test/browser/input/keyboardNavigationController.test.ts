@@ -3,7 +3,7 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import { OperatingSystem } from "../../../../base/common/platform.js";
 import { type TextMeasurer } from "../../../browser/view/fontMetrics.js";
-import { resolveAlphaKeyboardNavigation } from "../../../browser/input/keyboardNavigationController.js";
+import { resolveAsterKeyboardNavigation } from "../../../browser/input/keyboardNavigationController.js";
 import { EditorCursorNavigationCommand, EditorCursorNavigationMode } from "../../../common/cursor/cursorNavigation.js";
 import { EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
@@ -24,64 +24,64 @@ class FixedTextMeasurer implements TextMeasurer {
 }
 
 test("Keyboard navigation resolves Windows/Linux and macOS chords", () => {
-  assert.deepEqual(resolveAlphaKeyboardNavigation(
+  assert.deepEqual(resolveAsterKeyboardNavigation(
     key("ArrowLeft"),
     OperatingSystem.Windows,
   ), {
     command: EditorCursorNavigationCommand.CharacterLeft,
     mode: EditorCursorNavigationMode.Move,
   });
-  assert.deepEqual(resolveAlphaKeyboardNavigation(
+  assert.deepEqual(resolveAsterKeyboardNavigation(
     key("End", { shiftKey: true }),
     OperatingSystem.Linux,
   ), {
     command: EditorCursorNavigationCommand.LineEnd,
     mode: EditorCursorNavigationMode.Extend,
   });
-  assert.deepEqual(resolveAlphaKeyboardNavigation(
+  assert.deepEqual(resolveAsterKeyboardNavigation(
     key("ArrowRight", { ctrlKey: true }),
     OperatingSystem.Windows,
   ), {
     command: EditorCursorNavigationCommand.WordRight,
     mode: EditorCursorNavigationMode.Move,
   });
-  assert.deepEqual(resolveAlphaKeyboardNavigation(
+  assert.deepEqual(resolveAsterKeyboardNavigation(
     key("Home", { ctrlKey: true, shiftKey: true }),
     OperatingSystem.Windows,
   ), {
     command: EditorCursorNavigationCommand.DocumentStart,
     mode: EditorCursorNavigationMode.Extend,
   });
-  assert.deepEqual(resolveAlphaKeyboardNavigation(
+  assert.deepEqual(resolveAsterKeyboardNavigation(
     key("ArrowLeft", { altKey: true, shiftKey: true }),
     OperatingSystem.Macintosh,
   ), {
     command: EditorCursorNavigationCommand.WordLeft,
     mode: EditorCursorNavigationMode.Extend,
   });
-  assert.deepEqual(resolveAlphaKeyboardNavigation(
+  assert.deepEqual(resolveAsterKeyboardNavigation(
     key("ArrowRight", { metaKey: true }),
     OperatingSystem.Macintosh,
   ), {
     command: EditorCursorNavigationCommand.LineEnd,
     mode: EditorCursorNavigationMode.Move,
   });
-  assert.deepEqual(resolveAlphaKeyboardNavigation(
+  assert.deepEqual(resolveAsterKeyboardNavigation(
     key("ArrowDown", { metaKey: true }),
     OperatingSystem.Macintosh,
   ), {
     command: EditorCursorNavigationCommand.DocumentEnd,
     mode: EditorCursorNavigationMode.Move,
   });
-  assert.equal(resolveAlphaKeyboardNavigation(
+  assert.equal(resolveAsterKeyboardNavigation(
     key("ArrowLeft", { altKey: true }),
     OperatingSystem.Windows,
   ), undefined);
-  assert.equal(resolveAlphaKeyboardNavigation(
+  assert.equal(resolveAsterKeyboardNavigation(
     key("ArrowLeft", { isComposing: true }),
     OperatingSystem.Windows,
   ), undefined);
-  assert.equal(resolveAlphaKeyboardNavigation(
+  assert.equal(resolveAsterKeyboardNavigation(
     key("ArrowLeft", { altGraphKey: true }),
     OperatingSystem.Windows,
   ), undefined);
@@ -296,7 +296,7 @@ test("Keyboard controller rejects cross-model wiring and invalid OS options", ()
       ownSelections,
       { operatingSystem: "plan9" as OperatingSystem },
     ),
-    /Unknown Alpha keyboard operating system/,
+    /Unknown Aster keyboard operating system/,
   );
 
   dom.window.close();

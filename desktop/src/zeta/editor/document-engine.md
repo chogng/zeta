@@ -1,8 +1,8 @@
-# Gama Editor
+# Aster Document Engine
 
-> 文件级目录映射、Alpha/VS Code 对照和装配边界见 [`document-engine-architecture.md`](./document-engine-architecture.md)。统一目录与产品装配边界见 [`README.md`](./README.md)。本文记录实现契约、当前行为、测试证据和已知限制。
+> 文件级目录映射、Aster/VS Code 对照和装配边界见 [`document-engine-architecture.md`](./document-engine-architecture.md)。统一目录与产品装配边界见 [`README.md`](./README.md)。本文记录实现契约、当前行为、测试证据和已知限制。
 
-Gama owns the structured-document domain. Its `common` layer is DOM-free and does not depend on Workbench, Electron, Alpha, or an external editor runtime. `EditorPane` is the Workbench pane, `EditorWidget` owns the structured-document browser surface, and `TextEditorWidget` is only the embedded Alpha-backed editor for one `textBlock`.
+Aster's Document Engine owns the structured-document domain. Its `common` layer is DOM-free and does not depend on Workbench, Electron, the Text Engine, or an external editor runtime. `EditorPane` is the Workbench pane, `EditorWidget` owns the structured-document browser surface, and `TextEditorWidget` is only the embedded Aster text editor for one `textBlock`.
 
 The current core provides:
 
@@ -24,7 +24,7 @@ The current core provides:
   structural commands and the browser toolbar;
 - schema-validated block-type transactions and the `contrib/formatting` toolbar for
   paragraph, heading, bullet-list, and ordered-list formats;
-- persistent `textStyle` marks for selected text: the Gama formatting contribution
+- persistent `textStyle` marks for selected text: the Aster formatting contribution
   composes the shared `ToolBar` with font-family and font-size controls, merges
   independent typography attributes, and preserves the model selection while a
   native select owns browser focus;
@@ -43,7 +43,7 @@ The current core provides:
 - profile-owned inline atomic nodes through `inlineNodeViews` and generic
   insertion commands; the `contrib/citation` capability supplies `citation`
   atoms, bibliography/reference nodes, reference resolution, and its toolbar
-  actions without adding citation semantics to Gama common;
+  actions without adding citation semantics to Aster common;
 - inline `NodeSelection` for images: clicking an image projects a selected DOM
   state, Backspace/Delete removes it through a common command, and undo restores
   both the image and its node selection;
@@ -87,7 +87,7 @@ The current core provides:
 - `DocumentCollaborationController` binds that state machine to one
   `DocumentModel`, applies ordered remote updates/rebases, and stops on a
   snapshot resync that would discard local intent;
-- `IDocumentCollaborationService` is the Gama-owned transport seam;
+- `IDocumentCollaborationService` is the Aster-owned transport seam;
   `DocumentCollaborationService` routes an explicit target to either the
   process-local `AppServerDocumentCollaborationService` or the authenticated
   long-polling `RemoteDocumentCollaborationService`. The separate toolbar
@@ -120,9 +120,9 @@ The current core provides:
   structural boundaries, including nested blocks and table cells;
 - versioned JSON serialization and strict deserialization.
 
-The Gama document model is deliberately separate from Alpha's line-oriented
-`TextModel`. `BrowserDocumentModelService` resolves one `DocumentModelReference`; `EditorPane` hosts the corresponding `EditorWidget`; `DocumentWorkingCopy` adapts Gama serialization, dirty/revert/conflict state, expected-revision persistence, and untitled Save As to the shared Workbench working-copy contract.
-Alpha's corresponding editor surface is a `codeBlock`; Gama deliberately names the document node `textBlock`. It is a Gama-owned block whose content is zero or one plain `text` child. It is a text block in Gama's document model, not an embedded Alpha document; its language is a block attribute. The browser widget may project that text through the shared `IEmbeddedTextEditor` boundary, and `EmbeddedTextEditorFactory` supplies the implementation backed by Alpha's `CodeEditorWidget`. Gama owns the block identity and transactions; Alpha never depends on Gama document types. Gama common remains independent of Alpha and can fall back to its own text surface when no factory is supplied.
+The Aster document model is deliberately separate from Aster's line-oriented
+`TextModel`. `BrowserDocumentModelService` resolves one `DocumentModelReference`; `EditorPane` hosts the corresponding `EditorWidget`; `DocumentWorkingCopy` adapts Aster serialization, dirty/revert/conflict state, expected-revision persistence, and untitled Save As to the shared Workbench working-copy contract.
+The Text Engine's corresponding editor surface is a `codeBlock`; the Document Engine deliberately names its document node `textBlock`. It is a document-owned block whose content is zero or one plain `text` child, not an embedded text document; its language is a block attribute. The browser widget may project that text through the shared `IEmbeddedTextEditor` boundary, and `EmbeddedTextEditorFactory` supplies the implementation backed by Aster's `CodeEditorWidget`. The Document Engine owns block identity and transactions; the Text Engine never depends on document types. Document common remains independent of the Text Engine and can fall back to its own text surface when no factory is supplied.
 `DocumentSchema` validates custom top-node definitions as well as the default
 `doc` schema; transaction application never assumes that the root is named
 `doc`.
@@ -150,9 +150,9 @@ boundary for a profile's canonical new-document shape; the same factory is
 used by `DocumentWorkingCopy` during empty-resource revert/reload, while
 non-empty plain text still follows the generic paragraph migration path.
 `EditorProfile` groups the profile matcher, schema factory, empty-document
-factory, node views, toolbar actions, and plugins. `createGamaEditorPaneOptions`
+factory, node views, toolbar actions, and plugins. `createDocumentEditorPaneOptions`
 materializes that group while the Workbench composition root injects text-file,
-working-copy, and embedded line-editor services. The Academic Gama contribution selects
+working-copy, and embedded line-editor services. The Academic Aster contribution selects
 from a profile list, so adding another structured document kind does not require
 moving profile-specific schema or matching logic into the common pane.
 Each profile also owns a stable `editorId`; profiles with different schemas must
@@ -250,10 +250,10 @@ node can still map or drop ranges without relying on DOM lifetime.
 
 | Area | Status | Current boundary |
 | --- | --- | --- |
-| Cross-device durable collaboration | ✅ 当前 | `zeta-collaboration-server` owns an authenticated, CORS-restricted, SQLite-backed remote room authority. Gama connects through an explicit server origin and room credential; it does not need an App Server or a session. Long-poll transport retries transient network/5xx failures from its last confirmed version, and a second host sharing the SQLite database observes external writes within 250 ms. Deploy behind TLS and configure the renderer origin. |
-| Collaboration authorization and semantic server validation | ✅ 当前 | The deployment token is a bootstrap owner identity. Each room persists `owner`/`editor`/`viewer` membership; owners list active members, issue and rotate room-scoped credentials, and revoke other members, while the server retains immutable security audit events and rejects owner self-revocation. The remote open contract projects `viewer` as `canEdit: false` and only owners as `canManageMembers: true`, so the Gama widget becomes read-only before it can create optimistic local edits and exposes invitation/member-management actions only to remote owners. Rust rejects malformed/bounded document and transaction envelopes and every unknown Gama core step. The active Gama profile remains the canonical validator for profile-defined node and mark semantics; the backend must not copy browser profile schemas. |
+| Cross-device durable collaboration | ✅ 当前 | `zeta-collaboration-server` owns an authenticated, CORS-restricted, SQLite-backed remote room authority. Aster connects through an explicit server origin and room credential; it does not need an App Server or a session. Long-poll transport retries transient network/5xx failures from its last confirmed version, and a second host sharing the SQLite database observes external writes within 250 ms. Deploy behind TLS and configure the renderer origin. |
+| Collaboration authorization and semantic server validation | ✅ 当前 | The deployment token is a bootstrap owner identity. Each room persists `owner`/`editor`/`viewer` membership; owners list active members, issue and rotate room-scoped credentials, and revoke other members, while the server retains immutable security audit events and rejects owner self-revocation. The remote open contract projects `viewer` as `canEdit: false` and only owners as `canManageMembers: true`, so the Aster widget becomes read-only before it can create optimistic local edits and exposes invitation/member-management actions only to remote owners. Rust rejects malformed/bounded document and transaction envelopes and every unknown Aster core step. The active Aster profile remains the canonical validator for profile-defined node and mark semantics; the backend must not copy browser profile schemas. |
 | Presence and remote selections | ✅ 当前 | Remote rooms carry a separate ephemeral selection stream with a 60-second lease; App Server rooms publish the same selection snapshot over their typed notification channel. Both project colored, non-editable text-range highlights. |
-| Selective author undo/redo | 部分具备 | A local undo/redo is submitted as a normal ordered transaction, so connected peers receive it. `rebaseDocumentHistory` preserves local text and structural branches through acknowledged remote updates and projection-consistent in-flight/buffered rebases. If a branch cannot be replayed without overwriting a remote replacement or deleted target, Gama drops that branch rather than applying a stale inverse. |
+| Selective author undo/redo | 部分具备 | A local undo/redo is submitted as a normal ordered transaction, so connected peers receive it. `rebaseDocumentHistory` preserves local text and structural branches through acknowledged remote updates and projection-consistent in-flight/buffered rebases. If a branch cannot be replayed without overwriting a remote replacement or deleted target, Aster drops that branch rather than applying a stale inverse. |
 | Rich content pasted from other applications | ✅ 当前 | `contrib/clipboard/browser/htmlDocumentFragment.ts` converts a restricted HTML vocabulary into a schema-validated fragment; scripts, event attributes, unsafe URLs, styles, and unknown DOM state never enter the document model. |
 | Browser worker bootstrap | ✅ 当前 | `editor.worker.start.ts` owns the dedicated-worker structured-clone port and resource lifecycle without pulling worker globals into `editor.api.ts`. It is the canonical entrypoint for a concrete collaboration, layout, or analysis worker; the current browser projection does not speculate by moving synchronous document mutations off-thread. |
 

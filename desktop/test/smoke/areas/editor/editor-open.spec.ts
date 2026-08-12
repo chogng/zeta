@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { expect, test } from "../../../automation/test.js";
 
-test("App Server workspace files open in Alpha and save through the editor region", async ({ target, testWorkspace, workbench }) => {
+test("App Server workspace files open in Aster and save through the editor region", async ({ target, testWorkspace, workbench }) => {
   test.skip(
     target.kind !== "electron" || target.appServerMode !== "required" || target.product !== "code",
     "This scenario requires the Code Electron App Server product",
@@ -18,9 +18,9 @@ test("App Server workspace files open in Alpha and save through the editor regio
   const group = workbench.editors.groupAt(0);
   await expect(group.tabs).toHaveCount(1);
   await expect(group.tabs.first()).toContainText("main.ts");
-  await expect(group.content.locator(".zeta-alpha-editor")).toBeVisible();
+  await expect(group.content.locator(".aster-editor")).toBeVisible();
 
-  const input = group.content.locator(".zeta-alpha-editor-input");
+  const input = group.content.locator(".aster-editor-input");
   await expect(input).toBeAttached();
   await input.focus();
   await input.press(process.platform === "darwin" ? "Meta+A" : "Control+A");
@@ -29,11 +29,11 @@ test("App Server workspace files open in Alpha and save through the editor regio
 
   await expect.poll(
     () => readFile(testWorkspace.file, "utf8"),
-    { timeout: 15_000, message: "Alpha save reaches the App Server workspace" },
+    { timeout: 15_000, message: "Aster save reaches the App Server workspace" },
   ).toBe("const value = 2;");
 });
 
-test("Code consumes App Server Rust syntax facts in Alpha", async ({ target, workbench }) => {
+test("Code consumes App Server Rust syntax facts in Aster", async ({ target, workbench }) => {
   test.skip(
     target.kind !== "electron" || target.appServerMode !== "required" || target.product !== "code",
     "This scenario requires the Code Electron App Server product",
@@ -46,13 +46,13 @@ test("Code consumes App Server Rust syntax facts in Alpha", async ({ target, wor
   await fileRow.click();
 
   const group = workbench.editors.groupAt(0);
-  await expect(group.content.locator(".zeta-alpha-editor")).toBeVisible();
-  await expect(group.content.locator(".zeta-alpha-editor-token.token-keyword")).toContainText("fn");
+  await expect(group.content.locator(".aster-editor")).toBeVisible();
+  await expect(group.content.locator(".aster-editor-token.token-keyword")).toContainText("fn");
 
-  const input = group.content.locator(".zeta-alpha-editor-input");
+  const input = group.content.locator(".aster-editor-input");
   await input.focus();
   await input.press(process.platform === "darwin" ? "Meta+Shift+O" : "Control+Shift+O");
-  await expect(group.content.locator(".zeta-alpha-editor-goto-symbol-item")).toContainText("main");
+  await expect(group.content.locator(".aster-editor-goto-symbol-item")).toContainText("main");
 });
 
 test("Code renders workspace PDFs and persists review annotations", async ({ target, testWorkspace, workbench }) => {

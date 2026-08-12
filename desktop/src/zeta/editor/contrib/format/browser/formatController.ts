@@ -9,16 +9,16 @@ export interface FormatControllerOptions {
   readonly onError?: (error: unknown) => void;
 }
 
-/** Routes the editor format shortcut into the Alpha formatting service and command layer. */
+/** Routes the editor format shortcut into the Aster formatting service and command layer. */
 export class FormatController extends DisposableOwner {
   private readonly options: LanguageFormattingOptions;
   private readonly onError: (error: unknown) => void;
 
   constructor(private readonly input: HTMLTextAreaElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: FormatService, private readonly languageId: string, options: FormatControllerOptions = {}) {
     super();
-    if (viewport.textModel !== selections.textModel) throw new TypeError("Alpha format dependencies must share one text model");
+    if (viewport.textModel !== selections.textModel) throw new TypeError("Aster format dependencies must share one text model");
     this.options = options.formattingOptions ?? { tabSize: 4, insertSpaces: true };
-    this.onError = options.onError ?? (error => console.error("Alpha formatting failed", error));
+    this.onError = options.onError ?? (error => console.error("Aster formatting failed", error));
     this.own(addDisposableListener(input, "keydown", event => {
       if (event.defaultPrevented || event.isComposing || event.altKey || (!event.ctrlKey && !event.metaKey) || !event.shiftKey || event.key.toLowerCase() !== "i") return;
       stopEvent(event);

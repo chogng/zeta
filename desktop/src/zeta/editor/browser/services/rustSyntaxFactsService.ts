@@ -17,7 +17,7 @@ interface CachedSyntaxFacts {
 }
 
 /**
- * Shares one revision-bound Rust syntax request between Alpha consumers.
+ * Shares one revision-bound Rust syntax request between Aster consumers.
  *
  * This browser adapter owns no editor state: callers retain their own result stores and use the
  * projected facts only while the captured snapshot remains current.
@@ -36,7 +36,7 @@ export class RustSyntaxFactsService extends DisposableOwner {
 
   async analyze(languageId: string, snapshot: TextSnapshot, signal: AbortSignal): Promise<SyntaxAnalyzeResult | undefined> {
     this.ensureAlive();
-    const language = syntaxLanguageForAlphaLanguage(languageId);
+    const language = syntaxLanguageForAsterLanguage(languageId);
     if (!language) return undefined;
     const text = snapshot.getText();
     if (new TextEncoder().encode(text).byteLength > MAX_SYNTAX_INPUT_BYTES) return undefined;
@@ -52,7 +52,7 @@ export class RustSyntaxFactsService extends DisposableOwner {
     }
     const result = await raceCancellation(cached.promise, signal, "Rust syntax request was cancelled");
     if (result.revision !== snapshot.version) {
-      throw new Error("Rust syntax result does not match the requested Alpha model revision");
+      throw new Error("Rust syntax result does not match the requested Aster model revision");
     }
     return result;
   }
@@ -62,7 +62,7 @@ export class RustSyntaxFactsService extends DisposableOwner {
   }
 }
 
-/** Runs parser facts through Alpha's existing token and diagnostic result gates. */
+/** Runs parser facts through Aster's existing token and diagnostic result gates. */
 export class RustSyntaxWorker implements SyntaxWorker, LanguageWorkerModelSynchronizer, LanguageWorkerResultSettler {
   constructor(private readonly facts: RustSyntaxFactsService, private readonly fallback: SyntaxWorker) {}
 
@@ -111,7 +111,7 @@ export class RustSyntaxDocumentSymbolProvider implements LanguageDocumentSymbolP
   }
 }
 
-export function syntaxLanguageForAlphaLanguage(languageId: string): "javascript" | "javascriptreact" | "json" | "jsonc" | "rust" | "shell" | "typescript" | "typescriptreact" | undefined {
+export function syntaxLanguageForAsterLanguage(languageId: string): "javascript" | "javascriptreact" | "json" | "jsonc" | "rust" | "shell" | "typescript" | "typescriptreact" | undefined {
   switch (languageId) {
     case "javascript": return "javascript";
     case "javascriptreact": return "javascriptreact";
@@ -217,7 +217,7 @@ function projectRange(range: SyntaxTokenDto["range"], lines: readonly string[]):
 
 function projectPosition(position: { readonly lineIndex: number; readonly columnIndex: number }, lines: readonly string[]): TextPosition {
   if (!Number.isSafeInteger(position.lineIndex) || !Number.isSafeInteger(position.columnIndex) || position.lineIndex < 0 || position.columnIndex < 0 || position.lineIndex >= lines.length || position.columnIndex > lines[position.lineIndex]!.length) {
-    throw new RangeError("Rust syntax range is outside its Alpha snapshot");
+    throw new RangeError("Rust syntax range is outside its Aster snapshot");
   }
   return TextPosition.at(position.lineIndex, position.columnIndex);
 }
@@ -226,13 +226,13 @@ function snapshotLines(snapshot: TextSnapshot): readonly string[] {
   const text = snapshot.getText();
   const lines = text.split("\n");
   if (text.length !== snapshot.length || lines.length !== snapshot.lineCount) {
-    throw new Error("Alpha syntax snapshot metadata is inconsistent");
+    throw new Error("Aster syntax snapshot metadata is inconsistent");
   }
   return Object.freeze(lines);
 }
 
 function assertMatchingRevision(result: SyntaxAnalyzeResult, snapshot: TextSnapshot): void {
   if (result.revision !== snapshot.version) {
-    throw new Error("Rust syntax result does not match the requested Alpha snapshot");
+    throw new Error("Rust syntax result does not match the requested Aster snapshot");
   }
 }

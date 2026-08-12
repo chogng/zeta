@@ -24,7 +24,7 @@ for (const [name, value] of Object.entries({
 }
 
 const { EditorViewport } = await import("../../../../browser/view/editorViewport.js");
-const { DecorationPresentation, createAlphaDecorationSource } = await import("../../../../browser/view/decorationPresentation.js");
+const { DecorationPresentation, createAsterDecorationSource } = await import("../../../../browser/view/decorationPresentation.js");
 const { FindController } = await import("../../browser/findController.js");
 
 test.after(() => browserEnvironment.window.close());
@@ -39,14 +39,14 @@ test("find opens from the editor shortcut, highlights matches, navigates, and re
   assert.equal(open.defaultPrevented, true);
   assert.equal(fixture.find.visible, true);
   assert.equal(fixture.find.searchInput.value, "alpha");
-  assert.equal(fixture.find.element.querySelector(".zeta-alpha-editor-find-result")?.textContent, "1 of 2");
-  assert.equal(fixture.viewport.element.querySelectorAll(".zeta-alpha-editor-decoration.search-match").length, 2);
+  assert.equal(fixture.find.element.querySelector(".aster-editor-find-result")?.textContent, "1 of 2");
+  assert.equal(fixture.viewport.element.querySelectorAll(".aster-editor-decoration.search-match").length, 2);
   assert.equal(fixture.dom.window.document.activeElement, fixture.find.searchInput);
 
   fixture.find.searchInput.dispatchEvent(keyboardEvent(fixture.dom.window, "Enter"));
   assert.deepEqual(fixture.selections.selections.primary.range.start, TextPosition.at(0, 11));
   assert.deepEqual(fixture.selections.selections.primary.range.end, TextPosition.at(0, 16));
-  assert.equal(fixture.find.element.querySelector(".zeta-alpha-editor-find-result")?.textContent, "2 of 2");
+  assert.equal(fixture.find.element.querySelector(".aster-editor-find-result")?.textContent, "2 of 2");
 
   fixture.find.searchInput.dispatchEvent(keyboardEvent(fixture.dom.window, "Escape"));
   assert.equal(fixture.find.visible, false);
@@ -55,7 +55,7 @@ test("find opens from the editor shortcut, highlights matches, navigates, and re
 });
 
 test("find options project checked classes and report invalid regular expressions", () => {
-  const fixture = createFixture("Alpha alpha alphabet");
+  const fixture = createFixture("Aster alpha alphabet");
   using resources = fixture;
   fixture.find.open();
   setInputValue(fixture.find.searchInput, "alpha");
@@ -74,7 +74,7 @@ test("find options project checked classes and report invalid regular expression
   setInputValue(fixture.find.searchInput, "(");
   assert.equal(regularExpression.classList.contains("checked"), true);
   assert.equal(fixture.find.searchInput.getAttribute("aria-invalid"), "true");
-  assert.equal(fixture.find.element.querySelector(".zeta-alpha-editor-find-result")?.textContent, "Invalid expression");
+  assert.equal(fixture.find.element.querySelector(".aster-editor-find-result")?.textContent, "Invalid expression");
   assert.equal(fixture.decorations.size, 0);
 });
 
@@ -125,7 +125,7 @@ test("replace current and replace all use isolated undo transactions", () => {
   fixture.find.replaceInput.value = "long";
 
   assert.equal(openReplace.defaultPrevented, true);
-  assert.equal(fixture.find.replaceInput.closest(".zeta-alpha-editor-replace-row")?.hasAttribute("hidden"), false);
+  assert.equal(fixture.find.replaceInput.closest(".aster-editor-replace-row")?.hasAttribute("hidden"), false);
   requiredElement<HTMLButtonElement>(fixture.find.element, '[aria-label="Replace current match"]').click();
   assert.equal(fixture.model.getText(), "long a a");
 
@@ -161,7 +161,7 @@ function createFixture(text: string, anchor = TextPosition.at(0, 0), active = an
     lineHeight: 20,
     textMeasurer: new FixedTextMeasurer(),
     selectionController: selections,
-    decorationSources: [createAlphaDecorationSource(decorations, () => DecorationPresentation.SearchMatch)],
+    decorationSources: [createAsterDecorationSource(decorations, () => DecorationPresentation.SearchMatch)],
   });
   viewport.layout({ width: 600, height: 120 });
   const editorInput = dom.window.document.createElement("textarea") as unknown as HTMLTextAreaElement;

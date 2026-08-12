@@ -16,7 +16,7 @@ export class FoldingDecorationProvider extends DisposableOwner {
   }
 
   project(element: HTMLButtonElement, logicalLineIndex: number, firstForLogicalLine: boolean): void {
-    projectAlphaFoldingDecoration(
+    projectAsterFoldingDecoration(
       element,
       logicalLineIndex,
       firstForLogicalLine
@@ -26,17 +26,17 @@ export class FoldingDecorationProvider extends DisposableOwner {
   }
 }
 
-/** Creates the folding gutter control attached to an Alpha rendered line. */
-export function createAlphaFoldingDecoration(ownerDocument: Document): HTMLButtonElement {
+/** Creates the folding gutter control attached to an Aster rendered line. */
+export function createAsterFoldingDecoration(ownerDocument: Document): HTMLButtonElement {
   const element = ownerDocument.createElement("button");
-  element.className = "zeta-alpha-editor-fold-toggle";
+  element.className = "aster-editor-fold-toggle";
   element.type = "button";
   element.hidden = true;
   return element;
 }
 
 /** Projects one folding region's semantic state onto its gutter control. */
-export function projectAlphaFoldingDecoration(element: HTMLButtonElement, logicalLineIndex: number, region: EditorFoldingRegion | undefined): void {
+export function projectAsterFoldingDecoration(element: HTMLButtonElement, logicalLineIndex: number, region: EditorFoldingRegion | undefined): void {
   element.hidden = !region;
   if (!region) {
     delete element.dataset.logicalLineIndex;

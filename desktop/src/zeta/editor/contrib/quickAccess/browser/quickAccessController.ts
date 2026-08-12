@@ -2,7 +2,7 @@ import "./media/gotoLineWidget.css";
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { operatingSystem, OperatingSystem } from "../../../../base/common/platform.js";
-import { parseAlphaGotoLocation, type GotoLocationParseResult } from "../../../common/commands/gotoLocation.js";
+import { parseAsterGotoLocation, type GotoLocationParseResult } from "../../../common/commands/gotoLocation.js";
 import { EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
 import { type EditorScrollPosition } from "../../../common/viewLayout/editorViewportModel.js";
@@ -12,7 +12,7 @@ export interface GotoLineControllerOptions {
   readonly operatingSystem?: OperatingSystem;
 }
 
-/** Owns Alpha's local Go to Line/Column dialog and platform G shortcut. */
+/** Owns Aster's local Go to Line/Column dialog and platform G shortcut. */
 export class GotoLineController extends DisposableOwner {
   readonly element: HTMLDivElement;
   readonly input: HTMLInputElement;
@@ -29,23 +29,23 @@ export class GotoLineController extends DisposableOwner {
     this.targetOperatingSystem = options.operatingSystem ?? operatingSystem;
     if (viewport.textModel !== selections.textModel) {
       this.dispose();
-      throw new TypeError("Alpha Go to Line dependencies must share one text model");
+      throw new TypeError("Aster Go to Line dependencies must share one text model");
     }
     const ownerDocument = viewport.element.ownerDocument;
     this.element = ownerDocument.createElement("div");
-    this.element.className = "zeta-alpha-editor-goto-line-widget";
+    this.element.className = "aster-editor-goto-line-widget";
     this.element.hidden = true;
     this.element.setAttribute("role", "dialog");
     this.element.setAttribute("aria-label", "Go to Line or Column");
     this.input = ownerDocument.createElement("input");
-    this.input.className = "zeta-alpha-editor-goto-line-input";
+    this.input.className = "aster-editor-goto-line-input";
     this.input.type = "text";
     this.input.placeholder = "Line[:Column]";
     this.input.setAttribute("aria-label", "Line number and optional column");
     this.input.autocomplete = "off";
     this.input.spellcheck = false;
     this.status = ownerDocument.createElement("span");
-    this.status.className = "zeta-alpha-editor-goto-line-status";
+    this.status.className = "aster-editor-goto-line-status";
     this.status.setAttribute("aria-live", "polite");
     this.element.append(this.input, this.status);
     viewport.element.append(this.element);
@@ -89,7 +89,7 @@ export class GotoLineController extends DisposableOwner {
 
   private handleEditorKeydown(event: KeyboardEvent): void {
     if (event.defaultPrevented || event.isComposing || event.getModifierState("AltGraph")) return;
-    if (!isAlphaGotoLineChord(event, this.targetOperatingSystem)) return;
+    if (!isAsterGotoLineChord(event, this.targetOperatingSystem)) return;
     stopEvent(event);
     this.open();
   }
@@ -120,7 +120,7 @@ export class GotoLineController extends DisposableOwner {
   }
 
   private readResult(): GotoLocationParseResult {
-    return parseAlphaGotoLocation(this.viewport.textModel, this.input.value);
+    return parseAsterGotoLocation(this.viewport.textModel, this.input.value);
   }
 
   private position(): void {
@@ -134,7 +134,7 @@ export class GotoLineController extends DisposableOwner {
 }
 
 /** Identifies Ctrl+G on Windows/Linux and Command+G on macOS. */
-export function isAlphaGotoLineChord(event: Pick<KeyboardEvent, "key" | "ctrlKey" | "shiftKey" | "altKey" | "metaKey">, targetOperatingSystem: OperatingSystem): boolean {
+export function isAsterGotoLineChord(event: Pick<KeyboardEvent, "key" | "ctrlKey" | "shiftKey" | "altKey" | "metaKey">, targetOperatingSystem: OperatingSystem): boolean {
   if (event.shiftKey || event.altKey || event.key.toLowerCase() !== "g") return false;
   return targetOperatingSystem === OperatingSystem.Macintosh
     ? event.metaKey && !event.ctrlKey

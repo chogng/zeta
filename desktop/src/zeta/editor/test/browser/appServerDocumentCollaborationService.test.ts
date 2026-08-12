@@ -19,13 +19,13 @@ import { textSelection } from "../../common/core/documentSelection.js";
 import { serializeDocumentTransaction } from "../../common/model/documentTransactionSerialization.js";
 import type { DocumentCollaborationRemoteEnvelope } from "../../contrib/collaboration/common/protocol.js";
 
-test("Gama App Server collaboration adapter uses JSON-safe ordered versions and delivers room updates", async () => {
+test("Aster App Server collaboration adapter uses JSON-safe ordered versions and delivers room updates", async () => {
   const schema = createDefaultDocumentSchema();
   const document = createDocument(schema);
   const events = new FakeServerEvents();
   const api = new FakeDocumentCollaborationApi();
   using service = new AppServerDocumentCollaborationService(api, events);
-  using connection = await service.open({ clientId: "client-a", schemaId: "gama-default-v1", schema, document }, new AbortController().signal);
+  using connection = await service.open({ clientId: "client-a", schemaId: "aster-document-v1", schema, document }, new AbortController().signal);
 
   assert.equal(connection.roomId, "room-a");
   assert.equal(connection.canEdit, true);

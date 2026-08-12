@@ -18,12 +18,12 @@ test.afterEach(async ({ page }) => {
 
 test("document-model editor API, structured editing, and embedded text block run in real browsers", async ({ page }) => {
   await page.goto("/documentModel.html");
-  await expect(page.locator("#text-block .zeta-alpha-editor")).toBeVisible();
+  await expect(page.locator("#text-block .aster-editor")).toBeVisible();
   await expect(page.locator("#text-block .zeta-structured-format-toolbar")).toHaveAttribute("data-context", "code");
   await expect(page.locator("#text-block .zeta-structured-format-code-context")).toHaveText("Code block · Text editor");
   await expect.poll(() => page.evaluate(() => window.zetaDocumentModelIntegration.apiDocumentType)).toBe("doc");
 
-  const textBlockInput = page.locator("#text-block .zeta-alpha-editor-input");
+  const textBlockInput = page.locator("#text-block .aster-editor-input");
   await textBlockInput.focus();
   await page.keyboard.press("Control+Home");
   await page.keyboard.type("// bridge\n");

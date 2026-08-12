@@ -1,5 +1,5 @@
-/** Largest explicit clipboard text file Alpha will read into one document edit. */
-export const ALPHA_TEXT_FILE_TRANSFER_MAX_BYTES = 5 * 1024 * 1024;
+/** Largest explicit clipboard text file Aster will read into one document edit. */
+export const TEXT_FILE_TRANSFER_MAX_BYTES = 5 * 1024 * 1024;
 
 /** Browser file capability accepted only after a user supplies it through a transfer. */
 export interface TextFileTransfer {
@@ -15,11 +15,11 @@ export interface TextFileTransfer {
  * Binary files, unknown empty-MIME extensions, multi-file transfers, and oversized
  * files are deliberately left to the host rather than being decoded into the editor.
  */
-export function selectAlphaTextFileTransfer(files: Iterable<TextFileTransfer>): TextFileTransfer | undefined {
+export function selectTextFileTransfer(files: Iterable<TextFileTransfer>): TextFileTransfer | undefined {
   const values = [...files];
   if (values.length !== 1) return undefined;
   const file = values[0]!;
-  if (!Number.isSafeInteger(file.size) || file.size < 0 || file.size > ALPHA_TEXT_FILE_TRANSFER_MAX_BYTES) return undefined;
+  if (!Number.isSafeInteger(file.size) || file.size < 0 || file.size > TEXT_FILE_TRANSFER_MAX_BYTES) return undefined;
   if (typeof file.name !== "string" || typeof file.type !== "string" || typeof file.text !== "function") return undefined;
   return isTextualMimeType(file.type) || isKnownTextExtension(file.name) ? file : undefined;
 }

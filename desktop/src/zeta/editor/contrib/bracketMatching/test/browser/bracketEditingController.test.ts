@@ -25,7 +25,7 @@ for (const [name, value] of Object.entries({
 const { EditorViewport } = await import("../../../../browser/view/editorViewport.js");
 const { BracketEditingController } = await import("../../browser/bracketEditingController.js");
 
-test("Remove-brackets shortcut mutates through an isolated Alpha transaction", () => {
+test("Remove-brackets shortcut mutates through an isolated Aster transaction", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   const container = dom.window.document.querySelector<HTMLElement>("main")!;
   using model = new TextModel("(value)");

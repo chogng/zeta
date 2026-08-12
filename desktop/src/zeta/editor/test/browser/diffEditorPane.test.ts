@@ -24,11 +24,11 @@ const { BrowserTextModelService } = await import("../../browser/services/browser
 const { BrowserTextResourceStore } = await import("../../browser/services/browserTextResourceStore.js");
 const { createDiffEditorInput } = await import("../../browser/diffEditorInput.js");
 
-test("Alpha diff pane rejects a missing Rust diff computation service", () => {
+test("Aster diff pane rejects a missing Rust diff computation service", () => {
   assert.throws(() => new DiffEditorPane(new BrowserTextResourceStore(new BootstrapTextFiles()), undefined as never), /requires the Rust diff computation service/);
 });
 
-test("Alpha diff pane acquires both models, lays out the review view, and releases both references", async () => {
+test("Aster diff pane acquires both models, lays out the review view, and releases both references", async () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   const parent = requiredElement<HTMLElement>(dom.window.document, "main");
   const textFiles = new BootstrapTextFiles();
@@ -45,15 +45,15 @@ test("Alpha diff pane acquires both models, lays out the review view, and releas
     { resource: URI.file("C:\\project\\after.ts"), initialText: "const newValue = 2;", label: "after.ts" },
   ), new AbortController().signal);
 
-  assert.equal(parent.querySelectorAll(".zeta-alpha-diff-editor-pane").length, 1);
-  assert.equal(parent.querySelectorAll(".zeta-alpha-diff-editor").length, 1);
-  assert.match(parent.querySelector(".zeta-alpha-diff-editor")?.getAttribute("aria-label") ?? "", /before\.ts/);
+  assert.equal(parent.querySelectorAll(".aster-diff-editor-pane").length, 1);
+  assert.equal(parent.querySelectorAll(".aster-diff-editor").length, 1);
+  assert.match(parent.querySelector(".aster-diff-editor")?.getAttribute("aria-label") ?? "", /before\.ts/);
   pane.focus();
-  assert.equal(dom.window.document.activeElement?.classList.contains("zeta-alpha-diff-editor"), true);
+  assert.equal(dom.window.document.activeElement?.classList.contains("aster-diff-editor"), true);
   pane.setVisible(EditorPaneVisibility.Hidden);
   assert.equal((parent.firstElementChild as HTMLElement).hidden, true);
   pane.clearInput();
-  assert.equal(parent.querySelectorAll(".zeta-alpha-diff-editor").length, 0);
+  assert.equal(parent.querySelectorAll(".aster-diff-editor").length, 0);
   pane.dispose();
   assert.equal(parent.children.length, 0);
   dom.window.close();

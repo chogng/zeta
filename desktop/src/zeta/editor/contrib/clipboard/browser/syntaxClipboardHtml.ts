@@ -3,13 +3,13 @@ import { type TextPosition } from "../../../common/core/text.js";
 import { SemanticTokenPresentation, type SemanticTokenSource } from "../../../browser/view/semanticTokenPresentation.js";
 
 /**
- * Creates portable preformatted HTML for an Alpha clipboard operation.
+ * Creates portable preformatted HTML for an Aster clipboard operation.
  *
  * Plain text remains authoritative for paste. Syntax markup is a best-effort
  * representation of the current, version-bound browser token source and never
  * changes the copied characters.
  */
-export function createAlphaSyntaxClipboardHtml(entries: readonly EditorClipboardEntry[], lineEnding: "\n" | "\r\n", tokens: SemanticTokenSource | undefined, ownerDocument: Document): string {
+export function createAsterSyntaxClipboardHtml(entries: readonly EditorClipboardEntry[], lineEnding: "\n" | "\r\n", tokens: SemanticTokenSource | undefined, ownerDocument: Document): string {
   const included = entries.filter(entry => entry.text.length > 0);
   const contents = included.map(entry => renderClipboardEntry(entry, tokens, ownerDocument));
   const separators = included.map((entry, index) => index === 0 || included[index - 1]!.pasteMode === EditorClipboardPasteMode.Line ? "" : "\n");
@@ -73,7 +73,7 @@ function renderTokenizedLine(lineText: string, startColumn: number, endColumn: n
     const color = colors.get(token.presentation);
     const style = color ? ` style="color: ${escapeHtml(color)}"` : "";
     const modifiers = token.modifiers?.join(" ") ?? "";
-    parts.push(`<span class="zeta-alpha-editor-token ${token.presentation}${modifiers ? ` ${modifiers}` : ""}"${style}>${escapeHtml(lineText.slice(tokenStart, tokenEnd))}</span>`);
+    parts.push(`<span class="aster-editor-token ${token.presentation}${modifiers ? ` ${modifiers}` : ""}"${style}>${escapeHtml(lineText.slice(tokenStart, tokenEnd))}</span>`);
     column = tokenEnd;
   }
   if (column < endColumn) parts.push(escapeHtml(lineText.slice(column, endColumn)));

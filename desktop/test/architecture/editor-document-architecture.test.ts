@@ -86,7 +86,7 @@ function directoryNames(directory: string): string[] {
     .sort();
 }
 
-test("flat editor paths do not reintroduce Alpha or Gama directories", () => {
+test("flat editor paths do not reintroduce retired engine directories", () => {
   for (const file of collectFiles(editorRoot)) {
     assert.doesNotMatch(relative(editorRoot, file), /(?:^|[\\/])(?:alpha|gama)(?:[\\/]|$)/u);
   }

@@ -1,2 +1,2 @@
-export { SemanticTokenModifier, SemanticTokenPresentation, createAlphaSemanticTokenSource, projectAlphaSemanticTokenLine, resolveAlphaSemanticTokenModifiers, resolveAlphaSemanticTokenPresentation, snapshotAlphaSemanticTokenLines } from "../../../browser/view/semanticTokenPresentation.js";
+export { SemanticTokenModifier, SemanticTokenPresentation, createAsterSemanticTokenSource, projectAsterSemanticTokenLine, resolveAsterSemanticTokenModifiers, resolveAsterSemanticTokenPresentation, snapshotAsterSemanticTokenLines } from "../../../browser/view/semanticTokenPresentation.js";
 export type { BracketColorizationSpan, ResolvedSemanticToken, SemanticTokenLine, SemanticTokenResolver, SemanticTokenSource } from "../../../browser/view/semanticTokenPresentation.js";

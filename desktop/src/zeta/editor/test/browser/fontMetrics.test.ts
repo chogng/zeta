@@ -20,7 +20,7 @@ test("DomTextMeasurer resolves computed spacing and tab stops", () => {
   );
   const reference = dom.window.document.querySelector("div");
   assert.ok(reference);
-  reference.style.fontFamily = "Alpha Mono";
+  reference.style.fontFamily = "Aster Mono";
   reference.style.fontSize = "10px";
   reference.style.fontWeight = "400";
   reference.style.letterSpacing = "1px";

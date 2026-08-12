@@ -22,7 +22,7 @@ for (const [name, value] of Object.entries({
 }
 
 const { EditorViewport } = await import("../../../../browser/view/editorViewport.js");
-const { LineJoinController, isAlphaJoinLinesChord } = await import("../../browser/lineJoinController.js");
+const { LineJoinController, isAsterJoinLinesChord } = await import("../../browser/lineJoinController.js");
 
 test("Join-lines shortcut runs locally and leaves unrelated chords alone", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
@@ -60,7 +60,7 @@ test("Join-lines uses Command+J on macOS", () => {
   input.dispatchEvent(join);
   assert.equal(join.defaultPrevented, true);
   assert.equal(model.getText(), "first second");
-  assert.equal(isAlphaJoinLinesChord(keydown(dom.window, "j", { ctrlKey: true }), OperatingSystem.Macintosh), false);
+  assert.equal(isAsterJoinLinesChord(keydown(dom.window, "j", { ctrlKey: true }), OperatingSystem.Macintosh), false);
   dom.window.close();
 });
 

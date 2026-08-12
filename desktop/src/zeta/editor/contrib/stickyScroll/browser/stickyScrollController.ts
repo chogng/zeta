@@ -11,9 +11,9 @@ export class StickyScrollController extends DisposableOwner {
 
   constructor(private readonly viewport: EditorViewport, private readonly folding: EditorFoldingModel) {
     super();
-    if (folding.model !== viewport.textModel) throw new TypeError("Alpha sticky scroll dependencies must share a text model");
+    if (folding.model !== viewport.textModel) throw new TypeError("Aster sticky scroll dependencies must share a text model");
     this.element = viewport.element.ownerDocument.createElement("div");
-    this.element.className = "zeta-alpha-editor-sticky-scroll";
+    this.element.className = "aster-editor-sticky-scroll";
     this.element.setAttribute("aria-label", "Sticky section headers");
     viewport.element.append(this.element);
     this.defer(() => this.element.remove());
@@ -31,7 +31,7 @@ export class StickyScrollController extends DisposableOwner {
     this.element.replaceChildren(...entries.map(entry => {
       const button = this.element.ownerDocument.createElement("button");
       button.type = "button";
-      button.className = "zeta-alpha-editor-sticky-scroll-item";
+      button.className = "aster-editor-sticky-scroll-item";
       button.style.paddingLeft = `${8 + entry.depth * 12}px`;
       button.textContent = entry.label || `Line ${entry.lineIndex + 1}`;
       button.title = `Reveal line ${entry.lineIndex + 1}`;

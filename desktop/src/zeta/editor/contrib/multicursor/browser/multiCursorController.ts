@@ -9,7 +9,7 @@ export interface MultiCursorControllerOptions {
   readonly operatingSystem?: OperatingSystem;
 }
 
-/** Routes platform-specific add-cursor-above/below chords through Alpha common state. */
+/** Routes platform-specific add-cursor-above/below chords through Aster common state. */
 export class MultiCursorController extends DisposableOwner {
   private readonly targetOperatingSystem: OperatingSystem;
 
@@ -23,7 +23,7 @@ export class MultiCursorController extends DisposableOwner {
     try {
       this.targetOperatingSystem = readOperatingSystem(options.operatingSystem);
       if (viewport.textModel !== selections.textModel) {
-        throw new TypeError("Alpha multi-cursor dependencies must share one text model");
+        throw new TypeError("Aster multi-cursor dependencies must share one text model");
       }
       this.own(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));
     } catch (error) {
@@ -42,7 +42,7 @@ export class MultiCursorController extends DisposableOwner {
       this.viewport.revealPosition(next.primary.active);
       return;
     }
-    const direction = resolveAlphaAdjacentCursorDirection(event, this.targetOperatingSystem);
+    const direction = resolveAsterAdjacentCursorDirection(event, this.targetOperatingSystem);
     if (!direction) return;
     stopEvent(event);
     const next = addAdjacentLineCursors(this.viewport.textModel, this.selections.selections, direction);
@@ -52,7 +52,7 @@ export class MultiCursorController extends DisposableOwner {
 }
 
 /** Resolves the non-conflicting VS Code add-cursor chord for a host platform. */
-export function resolveAlphaAdjacentCursorDirection(event: Pick<KeyboardEvent, "key" | "ctrlKey" | "shiftKey" | "altKey" | "metaKey">, targetOperatingSystem: OperatingSystem): EditorCursorInsertionDirection | undefined {
+export function resolveAsterAdjacentCursorDirection(event: Pick<KeyboardEvent, "key" | "ctrlKey" | "shiftKey" | "altKey" | "metaKey">, targetOperatingSystem: OperatingSystem): EditorCursorInsertionDirection | undefined {
   const direction = event.key === "ArrowUp"
     ? EditorCursorInsertionDirection.Above
     : event.key === "ArrowDown"
@@ -71,7 +71,7 @@ export function resolveAlphaAdjacentCursorDirection(event: Pick<KeyboardEvent, "
 function readOperatingSystem(value: OperatingSystem | undefined): OperatingSystem {
   const resolved = value ?? operatingSystem;
   if (!Object.values(OperatingSystem).includes(resolved)) {
-    throw new TypeError("Unknown Alpha multi-cursor operating system");
+    throw new TypeError("Unknown Aster multi-cursor operating system");
   }
   return resolved;
 }

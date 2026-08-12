@@ -73,12 +73,36 @@ test("Flat editor layout keeps both engine owners and product bundles", () => {
   assert.equal(existsSync(join(editorRoot, "gama")), false, "gama directory");
 });
 
+test("Aster source does not retain retired engine compatibility identifiers", () => {
+  const sourceRoot = resolve(desktopRoot, "src/zeta");
+  const legacyCompatibilityPattern = /zeta-(?:alpha|gama)|zeta\.editor\.(?:alpha|gama)|application\/(?:x-|vnd\.)?zeta(?:[-.](?:alpha|gama))|--(?:alpha|gama)-editor-|(?:ALPHA|GAMA)_EDITOR_ID/u;
+  for (const file of collectFiles(sourceRoot)) {
+    if (!/\.(?:css|md|ts)$/u.test(file)) continue;
+    assert.doesNotMatch(readFileSync(file, "utf8"), legacyCompatibilityPattern, relative(sourceRoot, file));
+  }
+});
+
+test("Aster owns its public protocol and DOM vocabulary without renaming the editor domain", () => {
+  const api = readFileSync(join(editorRoot, "editor.api.ts"), "utf8");
+  const codeInput = readFileSync(join(editorRoot, "browser/codeEditorInput.ts"), "utf8");
+  const documentInput = readFileSync(join(editorRoot, "browser/documentEditorInput.ts"), "utf8");
+  const diffInput = readFileSync(join(editorRoot, "browser/diffEditorInput.ts"), "utf8");
+  const viewport = readFileSync(join(editorRoot, "browser/view/editorViewport.ts"), "utf8");
+  assert.match(api, /Stable DOM-free Aster API/u);
+  assert.match(codeInput, /aster\.editor\.code/u);
+  assert.match(documentInput, /aster\.editor\.document/u);
+  assert.match(diffInput, /aster\.editor\.diff/u);
+  assert.match(diffInput, /application\/vnd\.aster\.editor-diff/u);
+  assert.match(viewport, /aster-editor/u);
+  assert.equal(existsSync(resolve(editorRoot, "../aster")), false, "parallel aster directory");
+});
+
 test("Text engine PieceTree tests follow VS Code's common model layout", () => {
   assert.equal(statSafe(join(editorRoot, "test/common/model/pieceTreeTextBuffer/pieceTreeTextBuffer.test.ts")), true);
   assert.equal(statSafe(join(editorRoot, "test/common/pieceTreeTextBuffer.test.ts")), false);
 });
 
-test("Product entries statically select their editor contribution bundles", () => {
+test("Product entries statically select their Aster contribution bundles", () => {
   const codeBundle = readFileSync(join(editorRoot, "editor.code.all.ts"), "utf8");
   const academicBundle = readFileSync(join(editorRoot, "editor.academic.all.ts"), "utf8");
   const completeBundle = readFileSync(join(editorRoot, "editor.all.ts"), "utf8");

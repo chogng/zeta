@@ -1,4 +1,4 @@
-.zeta-alpha-editor-rename {
+.aster-editor-rename {
   position: absolute;
   z-index: 9;
   display: flex;
@@ -11,14 +11,14 @@
   box-shadow: 0 4px 14px var(--zeta-editor-widget-shadow);
 }
 
-.zeta-alpha-editor-rename-input {
+.aster-editor-rename-input {
   min-width: 220px;
   color: var(--zeta-editor-foreground);
   background: var(--zeta-editor-input-background, var(--zeta-editor-background));
   border: 1px solid var(--zeta-editor-border);
 }
 
-.zeta-alpha-editor-rename-status {
+.aster-editor-rename-status {
   color: var(--zeta-editor-description-foreground, var(--zeta-editor-foreground));
   font-size: 12px;
 }

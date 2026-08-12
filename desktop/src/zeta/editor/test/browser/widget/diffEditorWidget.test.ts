@@ -32,23 +32,23 @@ test("DiffEditorWidget presents side-by-side changed lines and inline ranges", a
   using editor = new DiffEditorWidget({ container, model, lineHeight: 20 });
   editor.layout({ width: 400, height: 80 });
 
-  const rows = [...editor.element.querySelectorAll<HTMLElement>(".zeta-alpha-diff-row")];
+  const rows = [...editor.element.querySelectorAll<HTMLElement>(".aster-diff-editor-row")];
   assert.equal(rows.length, 4);
   assert.equal(rows[0]?.classList.contains("unchanged"), true);
   assert.equal(rows[1]?.classList.contains("modified"), true);
-  assert.equal(rows[1]?.querySelector(".zeta-alpha-diff-cell.original")?.textContent, "2old value");
-  assert.equal(rows[1]?.querySelector(".zeta-alpha-diff-cell.modified")?.textContent, "2new value");
-  assert.equal(rows[1]?.querySelectorAll(".zeta-alpha-diff-inline.removed").length, 1);
-  assert.equal(rows[1]?.querySelectorAll(".zeta-alpha-diff-inline.added").length, 1);
+  assert.equal(rows[1]?.querySelector(".aster-diff-editor-cell.original")?.textContent, "2old value");
+  assert.equal(rows[1]?.querySelector(".aster-diff-editor-cell.modified")?.textContent, "2new value");
+  assert.equal(rows[1]?.querySelectorAll(".aster-diff-editor-inline.removed").length, 1);
+  assert.equal(rows[1]?.querySelectorAll(".aster-diff-editor-inline.added").length, 1);
   assert.equal(editor.nextChange(), 1);
   assert.equal(editor.currentChangeRow, 1);
-  assert.equal(editor.element.querySelector(".zeta-alpha-diff-row.active")?.classList.contains("modified"), true);
+  assert.equal(editor.element.querySelector(".aster-diff-editor-row.active")?.classList.contains("modified"), true);
   assert.equal(editor.previousChange(), 2);
   const next = new dom.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "F7" });
   editor.element.dispatchEvent(next);
   assert.equal(next.defaultPrevented, true);
   assert.equal(editor.currentChangeRow, 1);
-  assert.match(editor.element.querySelector(".zeta-alpha-diff-editor-accessibility-status")?.textContent ?? "", /Change 1 of 2/);
+  assert.match(editor.element.querySelector(".aster-diff-editor-accessibility-status")?.textContent ?? "", /Change 1 of 2/);
   dom.window.close();
 });
 
@@ -63,9 +63,9 @@ test("DiffEditorWidget refreshes on either source model and virtualizes diff row
   using editor = new DiffEditorWidget({ container, model, lineHeight: 20, overscanRowCount: 1 });
   editor.layout({ width: 400, height: 40 });
 
-  assert.equal(editor.element.querySelectorAll(".zeta-alpha-diff-row").length, 3);
+  assert.equal(editor.element.querySelectorAll(".aster-diff-editor-row").length, 3);
   editor.revealModifiedLine(80);
-  const firstVisibleRow = editor.element.querySelector<HTMLElement>(".zeta-alpha-diff-row");
+  const firstVisibleRow = editor.element.querySelector<HTMLElement>(".aster-diff-editor-row");
   assert.equal(firstVisibleRow?.style.height, "20px");
   assert.ok(editor.element.scrollTop > 0);
 
@@ -77,7 +77,7 @@ test("DiffEditorWidget refreshes on either source model and virtualizes diff row
   assert.equal(editor.diff?.rows.length, 100);
   editor.element.scrollTop = 0;
   editor.element.dispatchEvent(new dom.window.Event("scroll"));
-  assert.equal(editor.element.querySelector(".zeta-alpha-diff-row")?.classList.contains("modified"), true);
+  assert.equal(editor.element.querySelector(".aster-diff-editor-row")?.classList.contains("modified"), true);
   dom.window.close();
 });
 

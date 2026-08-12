@@ -18,7 +18,7 @@ export interface VisualRangeRectangle<T> {
 }
 
 /** @internal */
-export function createAlphaVisualRangeRectangles<T>(model: TextModel, entries: readonly VisualRangeGeometryEntry<T>[], projection: EditorVisualLineProjection, renderLines: EditorLineRange, textLeft: number, measurer: TextMeasurer, emptyRangeRendering = EmptyRangeRendering.Ignore): readonly VisualRangeRectangle<T>[] {
+export function createAsterVisualRangeRectangles<T>(model: TextModel, entries: readonly VisualRangeGeometryEntry<T>[], projection: EditorVisualLineProjection, renderLines: EditorLineRange, textLeft: number, measurer: TextMeasurer, emptyRangeRendering = EmptyRangeRendering.Ignore): readonly VisualRangeRectangle<T>[] {
   if (projection.modelVersion !== model.version) {
     throw new Error("Visual range geometry requires the current text model projection");
   }

@@ -22,7 +22,7 @@ export enum EmptyRangeRendering {
 }
 
 /** @internal */
-export function createAlphaRangeRectangles<T>(
+export function createAsterRangeRectangles<T>(
   model: TextModel,
   entries: readonly RangeGeometryEntry<T>[],
   renderLines: EditorLineRange,

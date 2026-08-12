@@ -2,7 +2,7 @@ import { type TextSelectionSet } from "../../common/core/selection.js";
 import { type TextModel } from "../../common/model/textModel.js";
 import { type EditorLineRange } from "../../common/viewLayout/editorViewportModel.js";
 import { type TextMeasurer } from "./fontMetrics.js";
-import { createAlphaRangeRectangles } from "./rangeGeometry.js";
+import { createAsterRangeRectangles } from "./rangeGeometry.js";
 
 export interface SelectionRectangle {
   readonly selectionIndex: number;
@@ -24,7 +24,7 @@ export interface SelectionGeometry {
 }
 
 /** @internal */
-export function createAlphaSelectionGeometry(
+export function createAsterSelectionGeometry(
   model: TextModel,
   selectionSet: TextSelectionSet,
   renderLines: EditorLineRange,
@@ -54,7 +54,7 @@ export function createAlphaSelectionGeometry(
       }));
     }
   }
-  const selections = createAlphaRangeRectangles(
+  const selections = createAsterRangeRectangles(
     model,
     selectionSet.selections.map((selection, selectionIndex) => ({
       range: selection.range,

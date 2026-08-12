@@ -17,7 +17,7 @@ interface ActiveComposition {
 }
 
 /**
- * Maps textarea composition events to one protected Alpha composition session.
+ * Maps textarea composition events to one protected Aster composition session.
  */
 export class CompositionController extends DisposableOwner {
   private readonly _onDidChange = this.own(new Emitter<boolean>());
@@ -35,7 +35,7 @@ export class CompositionController extends DisposableOwner {
     if (viewport.textModel !== selectionController.textModel) {
       this.dispose();
       throw new TypeError(
-        "Alpha composition and selection controllers must share one text model",
+        "Aster composition and selection controllers must share one text model",
       );
     }
     this.initialReadOnly = element.readOnly;

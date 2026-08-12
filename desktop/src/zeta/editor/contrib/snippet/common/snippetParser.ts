@@ -24,7 +24,7 @@ export interface LanguageCompletionSnippetTransformOccurrence {
   readonly transform: LanguageCompletionSnippetTransform;
 }
 
-/** Immutable expansion of Alpha's supported completion snippet grammar. */
+/** Immutable expansion of Aster's supported completion snippet grammar. */
 export interface LanguageCompletionSnippet {
   readonly text: string;
   readonly placeholderGroups: readonly LanguageCompletionSnippetPlaceholderGroup[];

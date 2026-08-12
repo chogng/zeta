@@ -49,7 +49,7 @@ test("Rust diff adapter accepts Rust-projected UTF-16 columns for Unicode", asyn
   }]);
 });
 
-test("Rust diff adapter preserves Alpha's trailing empty line", async () => {
+test("Rust diff adapter preserves Aster's trailing empty line", async () => {
   const api: IDiffApi = {
     compute: async () => ({
       rows: [

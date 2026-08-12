@@ -9,7 +9,7 @@ export interface TransposeControllerOptions {
   readonly operatingSystem?: OperatingSystem;
 }
 
-/** Routes VS Code's macOS Ctrl+T transpose chord through Alpha's common command. */
+/** Routes VS Code's macOS Ctrl+T transpose chord through Aster's common command. */
 export class TransposeController extends DisposableOwner {
   private readonly targetOperatingSystem: OperatingSystem;
 
@@ -23,7 +23,7 @@ export class TransposeController extends DisposableOwner {
     try {
       this.targetOperatingSystem = readOperatingSystem(options.operatingSystem);
       if (viewport.textModel !== selections.textModel) {
-        throw new TypeError("Alpha transpose dependencies must share one text model");
+        throw new TypeError("Aster transpose dependencies must share one text model");
       }
       this.own(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));
     } catch (error) {
@@ -46,7 +46,7 @@ export class TransposeController extends DisposableOwner {
 function readOperatingSystem(value: OperatingSystem | undefined): OperatingSystem {
   const resolved = value ?? operatingSystem;
   if (!Object.values(OperatingSystem).includes(resolved)) {
-    throw new TypeError("Unknown Alpha transpose operating system");
+    throw new TypeError("Unknown Aster transpose operating system");
   }
   return resolved;
 }

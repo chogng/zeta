@@ -10,7 +10,7 @@ export interface DocumentMark {
   readonly attrs: DocumentAttributes;
 }
 
-/** Immutable tree node used by Gama's document model and serializers. */
+/** Immutable tree node used by Aster's document model and serializers. */
 export interface DocumentNode {
   readonly id: DocumentNodeId;
   readonly type: string;

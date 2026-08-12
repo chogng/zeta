@@ -11,7 +11,7 @@ export class UnicodeHighlighterController extends DisposableOwner {
 
   constructor(private readonly model: TextModel, readonly decorations: TextDecorationCollection<UnicodeHighlight>) {
     super();
-    if (decorations.textModel !== model) throw new TypeError("Alpha Unicode highlighter dependencies must share a text model");
+    if (decorations.textModel !== model) throw new TypeError("Aster Unicode highlighter dependencies must share a text model");
     this.own(model.onDidChange(() => this.update()));
     this.update();
   }

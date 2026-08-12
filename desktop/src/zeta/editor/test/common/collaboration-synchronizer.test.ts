@@ -11,7 +11,7 @@ function createDocument(schema: DocumentSchema) {
   return schema.createDocument([schema.createNode("paragraph", { id: "paragraph-1", content: [schema.createText("Hello", { id: "text-1" })] })], "document-1");
 }
 
-test("Gama collaboration synchronizer keeps canonical and optimistic snapshots separate", () => {
+test("Aster collaboration synchronizer keeps canonical and optimistic snapshots separate", () => {
   const schema = createDefaultDocumentSchema();
   using synchronizer = new DocumentCollaborationSynchronizer({ schema, document: createDocument(schema), clientId: "client-a", version: 1 });
   const kinds: string[] = [];
@@ -56,7 +56,7 @@ test("Gama collaboration synchronizer keeps canonical and optimistic snapshots s
   assert.deepEqual(kinds, ["local", "remote", "local", "acknowledged"]);
 });
 
-test("Gama collaboration synchronizer buffers typing while one ordered update is in flight", () => {
+test("Aster collaboration synchronizer buffers typing while one ordered update is in flight", () => {
   const schema = createDefaultDocumentSchema();
   using synchronizer = new DocumentCollaborationSynchronizer({ schema, document: createDocument(schema), clientId: "client-a" });
 
@@ -75,7 +75,7 @@ test("Gama collaboration synchronizer buffers typing while one ordered update is
   assert.equal(synchronizer.document.content[0]?.content[0]?.text, "ABHello");
 });
 
-test("Gama collaboration synchronizer envelopes round-trip local and remote transaction versions", () => {
+test("Aster collaboration synchronizer envelopes round-trip local and remote transaction versions", () => {
   const schema = createDefaultDocumentSchema();
   using synchronizer = new DocumentCollaborationSynchronizer({ schema, document: createDocument(schema), clientId: "client-a", version: 3 });
   const local = synchronizer.dispatchLocal(new DocumentTransaction().replaceText("text-1", 0, 0, "L"));
@@ -93,7 +93,7 @@ test("Gama collaboration synchronizer envelopes round-trip local and remote tran
   assert.throws(() => deserializeDocumentCollaborationEnvelope("{\"format\":\"zeta.document.collaboration\",\"version\":99}", schema), DocumentSerializationError);
 });
 
-test("Gama collaboration synchronizer rejects stale updates and local echoes", () => {
+test("Aster collaboration synchronizer rejects stale updates and local echoes", () => {
   const schema = createDefaultDocumentSchema();
   using synchronizer = new DocumentCollaborationSynchronizer({ schema, document: createDocument(schema), clientId: "client-a", version: 4 });
 
@@ -103,7 +103,7 @@ test("Gama collaboration synchronizer rejects stale updates and local echoes", (
   assert.equal(synchronizer.document.content[0]?.content[0]?.text, "Hello");
 });
 
-test("Gama collaboration synchronizer reports dropped pending steps after remote deletion", () => {
+test("Aster collaboration synchronizer reports dropped pending steps after remote deletion", () => {
   const schema = createDefaultDocumentSchema();
   const document = schema.createDocument([
     schema.createNode("paragraph", { id: "paragraph-1", content: [schema.createText("One", { id: "text-1" })] }),

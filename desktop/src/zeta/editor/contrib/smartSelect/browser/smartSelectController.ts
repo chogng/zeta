@@ -11,7 +11,7 @@ export class SmartSelectController extends DisposableOwner {
 
   constructor(private readonly input: HTMLTextAreaElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly wordPattern?: () => RegExp | undefined) {
     super();
-    if (viewport.textModel !== selections.textModel) throw new TypeError("Alpha smart select dependencies must share a text model");
+    if (viewport.textModel !== selections.textModel) throw new TypeError("Aster smart select dependencies must share a text model");
     this.own(addDisposableListener(input, "keydown", event => this.handleKeydown(event), true));
     this.own(selections.onDidChange(change => {
       if (change.reason !== "explicit" && change.reason !== "cursorOperation") this.history.length = 0;

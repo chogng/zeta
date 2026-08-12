@@ -1,6 +1,6 @@
-# Alpha Editor browser layer
+# Aster Editor browser layer
 
-This directory owns Alpha's native browser projection of contracts from
+This directory owns Aster's native browser projection of contracts from
 `../common/`. It may import `base/common`, `base/browser`, and editor common contracts.
 Neither `editor/common` nor `base` may import this layer.
 
@@ -24,7 +24,7 @@ screen readers a standard multiline text surface while the authoritative text,
 transactions, and multi-selection state remain in `editor/common`. The mirror
 is released on blur and deliberately pauses for IME composition, whose
 short-lived textarea value is required for candidate-selection semantics.
-Native selection changes flow back into one primary Alpha selection only when
+Native selection changes flow back into one primary Aster selection only when
 they differ from the already mirrored primary selection, so synchronization
 does not collapse ordinary editor multi-cursor state.
 When multiple selections exist, the textarea retains the primary native range
@@ -38,7 +38,7 @@ Workbench parts may host the browser editor and own its external box, but must
 not reach through its component internals. Visual rules follow
 [`docs/ui-styling-ownership.md`](../../../../../docs/ui-styling-ownership.md).
 
-Gama is a sibling structured-editor domain. Alpha browser code must not import Gama or expose its document types through the line-editor contracts.
+Aster is a sibling structured-editor domain. Aster browser code must not import Aster or expose its document types through the line-editor contracts.
 
 ## Current implementation
 
@@ -65,12 +65,12 @@ independently scrolling editor instances. Its caller owns a `DiffModel`, which
 observes caller-owned original and modified `TextModel` values and accepts only
 results pinned to their current versions. Electron/Web App Server hosts use
 `RustDiffComputationService`, which adapts the bounded Rust Myers projection,
-hunk ranges, and grapheme-safe inline ranges to Alpha's UTF-16 model. A host
+hunk ranges, and grapheme-safe inline ranges to Aster's UTF-16 model. A host
 without the Rust diff transport fails explicitly when it tries to construct
-the Alpha diff pane. The widget owns one virtualized scroll surface and
+the Aster diff pane. The widget owns one virtualized scroll surface and
 side-by-side DOM rows, but owns neither text nor computation. Editing,
 selection history,
-syntax processing, and model persistence stay with ordinary Alpha editor
+syntax processing, and model persistence stay with ordinary Aster editor
 parts. `nextChange`/`previousChange` and F7/Shift+F7 wrap over changed rows,
 add the component-owned `.active` state, and announce the original/modified
 location through the diff view's live region.
@@ -81,7 +81,7 @@ view; it neither turns the synthetic URI into a text model nor owns either
 model's save/revert lifecycle.
 
 Document views also own an optional `EditorMinimap` overlay. Its bounded
-`createAlphaMinimapRows` projection samples no more than 160 density rows and
+`createMinimapRows` projection samples no more than 160 density rows and
 retains no document text. When WebGL is available, `GpuMinimapRenderer`
 draws that bounded density projection at device resolution; its context-loss and
 unsupported-browser path retains the existing DOM row projection. The minimap is
@@ -127,7 +127,7 @@ visual projection accepts a feature-neutral `EditorLineVisibilitySource`; the
 browser `VisibleLineProjection` composes that source with soft wrapping.
 The folding contribution owns range data, fold state, hidden-line derivation,
 commands, and folding presentation styles. `EditorFoldingModel` owns tracked
-physical-line fold regions. Alpha supplies
+physical-line fold regions. Aster supplies
 both indentation-derived ranges and synchronous lexical ranges for `{}`, `[]`,
 cross-line block comments, and configured named regions; their deterministic
 merge keeps only nested or disjoint spans. User-created manual ranges persist
@@ -164,14 +164,14 @@ the controller's primary active line through `.active`, multi-line selected
 ranges as overlay rectangles, and every active edge as a caret. The controller
 remains caller-owned.
 
-`createAlphaSelectionGeometry` is the DOM-independent browser geometry seam.
+`createAsterSelectionGeometry` is the DOM-independent browser geometry seam.
 It preserves anchor/active direction and primary-selection identity while
 clipping output to the current render range. Horizontal positions are measured
 from line prefixes using the active `TextMeasurer`. A selected line break
 occupies one measured space cell so an end-exclusive multi-line range remains
 visible even when the following endpoint is at column zero.
 
-`createAlphaDecorationSource` adapts one caller-owned
+`createAsterDecorationSource` adapts one caller-owned
 `TextDecorationCollection<TMetadata>` without interpreting metadata in common
 code. Its resolver explicitly maps each snapshot to `search-match`,
 `error-underline`, `warning-underline`, or no browser presentation. The
@@ -183,7 +183,7 @@ caller metadata resolvers.
 
 `LanguageDiagnosticDecorationBridge` converts one current-version diagnostic
 store into a caller-owned generic decoration collection.
-`createAlphaLanguageDiagnosticSource` then maps every normalized severity to a
+`createAsterLanguageDiagnosticSource` then maps every normalized severity to a
 component-owned underline. Error and Warning use their severity tokens;
 Information uses the focus token and Hint uses a dotted description-token
 underline. The projection retains an optional native tooltip with diagnostic
@@ -198,16 +198,16 @@ the next or previous current-version diagnostic, wrapping at either end. Every
 move also announces the selected severity, source/code when present, and message
 through the viewport live region.
 
-`createAlphaSemanticTokenSource` adapts one caller-owned
-`LanguageTokenLineIndex` to Alpha's closed browser presentation vocabulary.
+`createAsterSemanticTokenSource` adapts one caller-owned
+`LanguageTokenLineIndex` to Aster's closed browser presentation vocabulary.
 Unknown worker token types are omitted by default; custom language resolvers
-may inspect token modifiers but must still return a named Alpha presentation,
+may inspect token modifiers but must still return a named Aster presentation,
 never an arbitrary CSS class. `getLineTokens` resolves one indexed line on
 demand. The viewport resolves only its target virtual range before replacing
 any row, so offscreen lines do not invoke the resolver and a resolver failure
 cannot partially update the visible window.
 
-`projectAlphaSemanticTokenLine` validates each line snapshot before mutation,
+`projectAsterSemanticTokenLine` validates each line snapshot before mutation,
 then creates text nodes and component-owned spans without parsing HTML. Joined
 DOM text must equal the model line exactly. Same-version token replacement
 rerenders visible line content without rebuilding rows; model invalidation
@@ -254,7 +254,7 @@ selection. `media/findWidget.css` owns the dialog geometry and its `.visible`
 and `.checked` interaction states, while ARIA attributes expose the equivalent
 accessible state.
 
-`GotoLineController` owns Alpha's Ctrl+G (Command+G on macOS) line/column dialog. Its common
+`GotoLineController` owns Aster's Ctrl+G (Command+G on macOS) line/column dialog. Its common
 parser supports one-based `line[:column]`, backward negative values, and `::`
 UTF-16 offsets; while the dialog is open it previews by revealing the parsed
 position without mutating selections. Enter commits one collapsed primary
@@ -344,7 +344,7 @@ and wire servers. The browser requires the `language.word` module; the client
 waits for its activation before sending the first completion request. Passing the factory through
 `LanguageCompletionService.workerFactory` is explicit—the service's default
 remains the in-process provider host. `createBrowserEditorPart`
-activates this Worker path for product Alpha panes.
+activates this Worker path for product Aster panes.
 
 The wire carries only versioned plain DTOs. Completion positions and ranges are
 reconstructed as realm-local common values before result application.
@@ -408,20 +408,20 @@ The browser adapter does not own lexical state or scan policy.
 waits for its grammar catalog, and schedules new syntax work when the catalog
 changes.
 
-Selection and decoration projection share `createAlphaRangeRectangles`, so
+Selection and decoration projection share `createAsterRangeRectangles`, so
 end-exclusive ranges, selected line breaks, prefix measurement, and render-line
 clipping have one implementation. Presentation sources are resolved before the
 existing decoration DOM is reset; an invalid presentation therefore fails
 without partially replacing the current decoration layer.
 
 `EditorViewport.getTargetAtClientPoint` converts a PointerEvent-compatible
-client point into one immutable Alpha hit target without changing selection.
+client point into one immutable Aster hit target without changing selection.
 `Gutter`, `Text`, `EmptyContent`, and `AfterLines` remain distinct so a future
 input controller can choose behavior explicitly. The browser bounds establish
 viewport coordinates; fixed line height and current scroll state establish the
 line, while sticky gutter geometry remains independent of horizontal scroll.
 
-`hitTestAlphaEditorPoint` resolves horizontal text positions at adjacent caret
+`hitTestAsterEditorPoint` resolves horizontal text positions at adjacent caret
 midpoints. It uses grapheme boundaries when `Intl.Segmenter` is available and
 falls back to Unicode code points, so emoji and combining sequences are not
 split into arbitrary UTF-16 interiors. Prefix widths use the same
@@ -445,7 +445,7 @@ menu composition and display to its host.
 Alt+Shift primary drag is the explicit column-selection gesture. It delegates
 to the common `createEditorColumnSelectionSet`, producing one same-column
 selection per physical row and preserving short rows as collapsed selections;
-Alpha does not synthesize virtual trailing whitespace. The gesture is distinct
+Aster does not synthesize virtual trailing whitespace. The gesture is distinct
 from the configured additive multi-cursor modifier, which never consumes Shift.
 
 `PointerSelectionControllerOptions.multiCursorModifier` selects exact
@@ -505,7 +505,7 @@ through common auto-close or selection-surround commands. The controller owns
 one common `LanguageAutoClosingTracker` for its editor instance and records
 only actions whose expected model version committed. A matching closer is
 overtyped without a model transaction, and Backspace removes both sides of an
-empty pair, only when that tracker confirms the closer came from Alpha's
+empty pair, only when that tracker confirms the closer came from Aster's
 auto-close transaction. Matching user-authored text retains ordinary typing
 and Backspace semantics. The configuration is resolved on each input event, so
 priority changes take effect without rebuilding DOM. Browser code owns only
@@ -522,7 +522,7 @@ contribution owns rule matching.
 
 The session also derives folding from the same resolved configuration. Structural
 brackets and multi-line comments remain lexical folds; `foldingMarkers` adds
-language-owned named regions. Alpha's built-ins recognize `// #region` and
+language-owned named regions. Aster's built-ins recognize `// #region` and
 `// #endregion` for ECMAScript, JSONC, and Rust. Marker patterns are common
 configuration, so browser code only projects and toggles the resulting folding
 model; a contribution must include its comment delimiter to avoid treating
@@ -550,7 +550,7 @@ pair typing uses token identity for auto-closing `notIn`; neither command
 imports browser or Worker state.
 
 `ClipboardController` listens on that textarea for copy, cut, and paste.
-It writes `text/plain`, safe preformatted `text/html`, and versioned Alpha
+It writes `text/plain`, safe preformatted `text/html`, and versioned Aster
 metadata carrying text in stable selection order. When the session has a
 current semantic-token source, its fixed presentation vocabulary and resolved
 theme colors are included in the HTML only; unavailable or stale tokens fall
@@ -562,7 +562,7 @@ isolated common commands, then reveal the primary caret.
 Platform clipboard line endings are explicit and incoming text is normalized
 by the common command.
 
-When neither text nor Alpha metadata exists, one user-supplied browser `File`
+When neither text nor Aster metadata exists, one user-supplied browser `File`
 may be read asynchronously and pasted as text. The adapter accepts only a
 plausibly textual MIME type or known text extension up to 5 MiB; it never
 opens an arbitrary local path. The same policy applies to a viewport drop at
@@ -579,7 +579,7 @@ which pastes non-comment `text/uri-list` entries in source order. As with text
 files, asynchronous provider output must still match the captured model version
 and selections before it becomes an isolated paste command.
 
-When a paste event contains no text, Alpha metadata, recognized text file, or
+When a paste event contains no text, Aster metadata, recognized text file, or
 matching provider, `ClipboardController` starts the browser Async
 Clipboard rich reader before its plain-text fallback during the same user
 gesture. Its delayed result uses the identical revision and selection gate as
@@ -620,7 +620,7 @@ session closed is ignored.
 
 The component reuses `base/browser/dom` for disposable events and DOM reset,
 `base/browser/geometry` for host measurement, and `base/common/lifecycle` for
-ownership. Its `.zeta-alpha-editor` root and internal line classes are styled
+ownership. Its `.aster-editor` root and internal line classes are styled
 only by `media/editorViewport.css`; Workbench hosts may size the root and
 explicitly select `focusOutlineOwner: "host"` when their direct control owns
 one surrounding focus indicator, but must not override internal rows or focus
@@ -658,7 +658,7 @@ first line slice, leaves later logical lines as one-row placeholders, and
 finishes their wrap measurement through cancellable idle slices before atomically
 publishing the complete projection. Parser-grade folding ranges,
 IME clause segmentation and mobile composition variants,
-semantic-token delta presentation beyond Alpha's closed modifier vocabulary,
+semantic-token delta presentation beyond Aster's closed modifier vocabulary,
 TextMate extension-resource discovery, native browser-driven
 wrapping, and empirical cross-platform screen-reader acceptance remain future
 work. Mixed-run BiDi uses `domTextGeometry.ts` to obtain browser `Range`

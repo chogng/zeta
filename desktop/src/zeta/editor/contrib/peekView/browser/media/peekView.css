@@ -1,4 +1,4 @@
-.zeta-alpha-editor-peek-view {
+.aster-editor-peek-view {
   position: absolute;
   right: 8px;
   left: 8px;
@@ -11,13 +11,13 @@
   box-shadow: 0 6px 18px var(--zeta-widget-shadow);
 }
 
-.zeta-alpha-editor-peek-view-header {
+.aster-editor-peek-view-header {
   padding: 4px 8px;
   color: var(--zeta-description-foreground);
   font-size: 11px;
   border-bottom: 1px solid var(--zeta-widget-border);
 }
 
-.zeta-alpha-editor-peek-view-body {
+.aster-editor-peek-view-body {
   padding: 8px;
 }

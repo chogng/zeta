@@ -1,8 +1,7 @@
 import { type EditorInput } from "../../workbench/browser/parts/editor/editorInput.js";
 import { EditorPaneMatch } from "../../workbench/browser/parts/editor/editorPane.js";
 
-/** Persisted compatibility ID for the canonical document editor. */
-export const DOCUMENT_EDITOR_ID = "zeta.editor.gama";
+export const DOCUMENT_EDITOR_ID = "aster.editor.document";
 
 export interface EditorInputMatcher {
   readonly contentTypes?: readonly string[];

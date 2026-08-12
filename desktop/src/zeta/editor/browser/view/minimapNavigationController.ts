@@ -3,7 +3,7 @@ import { DisposableOwner } from "../../../base/common/lifecycle.js";
 import { type EditorScrollPosition, type EditorViewportLayout } from "../../common/viewLayout/editorViewportModel.js";
 
 /**
- * Owns pointer navigation for one rendered Alpha minimap.
+ * Owns pointer navigation for one rendered Aster minimap.
  *
  * This controller does not own the viewport or its model. It maps a primary
  * pointer's vertical position to canonical scroll state and continues that

@@ -22,9 +22,9 @@ for (const [name, value] of Object.entries({
 }
 
 const { EditorViewport } = await import("../../../../browser/view/editorViewport.js");
-const { MultiCursorController, resolveAlphaAdjacentCursorDirection } = await import("../../browser/multiCursorController.js");
+const { MultiCursorController, resolveAsterAdjacentCursorDirection } = await import("../../browser/multiCursorController.js");
 
-test("Multi-cursor shortcut adds a logical adjacent caret through Alpha common state", () => {
+test("Multi-cursor shortcut adds a logical adjacent caret through Aster common state", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   const container = dom.window.document.querySelector<HTMLElement>("main")!;
   using model = new TextModel("zero\none\ntwo");
@@ -69,19 +69,19 @@ test("Multi-cursor shortcut replaces selected rows with line-end carets", () => 
 });
 
 test("Multi-cursor chord selection follows platform-specific non-conflicting bindings", () => {
-  assert.equal(resolveAlphaAdjacentCursorDirection(
+  assert.equal(resolveAsterAdjacentCursorDirection(
     keydown(browserEnvironment.window, "ArrowUp", { ctrlKey: true, altKey: true }),
     OperatingSystem.Windows,
   ), "above");
-  assert.equal(resolveAlphaAdjacentCursorDirection(
+  assert.equal(resolveAsterAdjacentCursorDirection(
     keydown(browserEnvironment.window, "ArrowDown", { metaKey: true, altKey: true }),
     OperatingSystem.Macintosh,
   ), "below");
-  assert.equal(resolveAlphaAdjacentCursorDirection(
+  assert.equal(resolveAsterAdjacentCursorDirection(
     keydown(browserEnvironment.window, "ArrowUp", { shiftKey: true, altKey: true }),
     OperatingSystem.Linux,
   ), undefined);
-  assert.equal(resolveAlphaAdjacentCursorDirection(
+  assert.equal(resolveAsterAdjacentCursorDirection(
     keydown(browserEnvironment.window, "ArrowUp", { ctrlKey: true, shiftKey: true, altKey: true }),
     OperatingSystem.Linux,
   ), "above");

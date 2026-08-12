@@ -1,4 +1,4 @@
-.zeta-alpha-editor-fold-toggle {
+.aster-editor-fold-toggle {
   position: absolute;
   top: 0;
   left: 0;
@@ -15,19 +15,19 @@
   border: 0;
 }
 
-.zeta-alpha-editor-fold-toggle:hover,
-.zeta-alpha-editor-fold-toggle:focus-visible {
+.aster-editor-fold-toggle:hover,
+.aster-editor-fold-toggle:focus-visible {
   color: var(--zeta-editor-foreground);
   background: var(--zeta-button-hover-background);
 }
 
-.zeta-alpha-editor-fold-toggle:focus-visible {
+.aster-editor-fold-toggle:focus-visible {
   outline: 1px solid var(--zeta-focus-border);
   outline-offset: -1px;
 }
 
 @media (forced-colors: active) {
-  .zeta-alpha-editor-fold-toggle:focus-visible {
+  .aster-editor-fold-toggle:focus-visible {
     outline-color: Highlight;
   }
 }

@@ -1,4 +1,4 @@
-.zeta-alpha-diff-editor {
+.aster-diff-editor {
   position: relative;
   box-sizing: border-box;
   width: 100%;
@@ -13,17 +13,17 @@
   outline: none;
 }
 
-.zeta-alpha-diff-editor:focus-visible {
+.aster-diff-editor:focus-visible {
   outline: 1px solid var(--zeta-focus-border);
   outline-offset: -1px;
 }
 
-.zeta-alpha-diff-editor-content {
+.aster-diff-editor-content {
   position: relative;
   min-width: 100%;
 }
 
-.zeta-alpha-diff-editor-rows {
+.aster-diff-editor-rows {
   position: absolute;
   top: 0;
   left: 0;
@@ -31,43 +31,43 @@
   will-change: transform;
 }
 
-.zeta-alpha-diff-row {
+.aster-diff-editor-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   min-width: 100%;
 }
 
-.zeta-alpha-diff-row.active {
+.aster-diff-editor-row.active {
   outline: 1px solid var(--zeta-focus-border);
   outline-offset: -1px;
 }
 
-.zeta-alpha-diff-cell {
+.aster-diff-editor-cell {
   box-sizing: border-box;
   min-width: 0;
   overflow: hidden;
   text-overflow: clip;
 }
 
-.zeta-alpha-diff-cell.original {
+.aster-diff-editor-cell.original {
   border-right: 1px solid var(--zeta-widget-border);
 }
 
-.zeta-alpha-diff-cell.removed,
-.zeta-alpha-diff-row.modified .zeta-alpha-diff-cell.original {
-  background: var(--zeta-diff-editor-removed-line-background);
+.aster-diff-editor-cell.removed,
+.aster-diff-editor-row.modified .aster-diff-editor-cell.original {
+  background: var(--aster-diff-editor-removed-line-background);
 }
 
-.zeta-alpha-diff-cell.added,
-.zeta-alpha-diff-row.modified .zeta-alpha-diff-cell.modified {
-  background: var(--zeta-diff-editor-inserted-line-background);
+.aster-diff-editor-cell.added,
+.aster-diff-editor-row.modified .aster-diff-editor-cell.modified {
+  background: var(--aster-diff-editor-inserted-line-background);
 }
 
-.zeta-alpha-diff-cell.missing {
-  background: var(--zeta-diff-editor-missing-line-background);
+.aster-diff-editor-cell.missing {
+  background: var(--aster-diff-editor-missing-line-background);
 }
 
-.zeta-alpha-diff-line-number {
+.aster-diff-editor-line-number {
   display: inline-block;
   box-sizing: border-box;
   width: 52px;
@@ -77,19 +77,19 @@
   user-select: none;
 }
 
-.zeta-alpha-diff-line-content {
+.aster-diff-editor-line-content {
   display: inline;
 }
 
-.zeta-alpha-diff-inline.removed {
-  background: var(--zeta-diff-editor-removed-text-background);
+.aster-diff-editor-inline.removed {
+  background: var(--aster-diff-editor-removed-text-background);
 }
 
-.zeta-alpha-diff-inline.added {
-  background: var(--zeta-diff-editor-inserted-text-background);
+.aster-diff-editor-inline.added {
+  background: var(--aster-diff-editor-inserted-text-background);
 }
 
-.zeta-alpha-diff-editor-accessibility-status {
+.aster-diff-editor-accessibility-status {
   position: absolute;
   width: 1px;
   height: 1px;

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { PointerMultiCursorModifier, combineAlphaPointerSelection, isAlphaPointerMultiCursorGesture, readAlphaPointerMultiCursorModifier } from "../../../browser/input/pointerMultiCursor.js";
+import { PointerMultiCursorModifier, combineAsterPointerSelection, isAsterPointerMultiCursorGesture, readAsterPointerMultiCursorModifier } from "../../../browser/input/pointerMultiCursor.js";
 import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
 import { TextPosition } from "../../../common/core/text.js";
 
@@ -12,30 +12,30 @@ test("Pointer multi-cursor modifiers require their exact configured chord", () =
     shiftKey = false,
   ) => ({ altKey, ctrlKey, metaKey, shiftKey });
 
-  assert.equal(isAlphaPointerMultiCursorGesture(
+  assert.equal(isAsterPointerMultiCursorGesture(
     state(true, false, false),
     PointerMultiCursorModifier.Alt,
   ), true);
-  assert.equal(isAlphaPointerMultiCursorGesture(
+  assert.equal(isAsterPointerMultiCursorGesture(
     state(true, false, false, true),
     PointerMultiCursorModifier.Alt,
   ), false);
-  assert.equal(isAlphaPointerMultiCursorGesture(
+  assert.equal(isAsterPointerMultiCursorGesture(
     state(true, true, false),
     PointerMultiCursorModifier.Alt,
   ), false);
-  assert.equal(isAlphaPointerMultiCursorGesture(
+  assert.equal(isAsterPointerMultiCursorGesture(
     state(false, true, false),
     PointerMultiCursorModifier.ControlOrMeta,
   ), true);
-  assert.equal(isAlphaPointerMultiCursorGesture(
+  assert.equal(isAsterPointerMultiCursorGesture(
     state(false, false, true),
     PointerMultiCursorModifier.ControlOrMeta,
   ), true);
-  assert.equal(readAlphaPointerMultiCursorModifier(undefined), PointerMultiCursorModifier.Alt);
+  assert.equal(readAsterPointerMultiCursorModifier(undefined), PointerMultiCursorModifier.Alt);
   assert.throws(
-    () => readAlphaPointerMultiCursorModifier("shift" as PointerMultiCursorModifier),
-    /Unknown Alpha pointer multi-cursor modifier/,
+    () => readAsterPointerMultiCursorModifier("shift" as PointerMultiCursorModifier),
+    /Unknown Aster pointer multi-cursor modifier/,
   );
 });
 
@@ -46,20 +46,20 @@ test("Pointer multi-cursor combination adds, toggles, and deduplicates", () => {
   const base = TextSelectionSet.withPrimary([first, second], 1);
 
   assert.deepEqual(
-    combineAlphaPointerSelection(base, third, undefined),
+    combineAsterPointerSelection(base, third, undefined),
     TextSelectionSet.withPrimary([first, second, third], 2),
   );
   assert.deepEqual(
-    combineAlphaPointerSelection(base, first, 0),
+    combineAsterPointerSelection(base, first, 0),
     TextSelectionSet.single(second),
   );
   assert.equal(
-    combineAlphaPointerSelection(TextSelectionSet.single(first), first, 0)
+    combineAsterPointerSelection(TextSelectionSet.single(first), first, 0)
       .selections.length,
     1,
   );
   assert.deepEqual(
-    combineAlphaPointerSelection(base, second, 0),
+    combineAsterPointerSelection(base, second, 0),
     TextSelectionSet.single(second),
   );
 });
@@ -75,11 +75,11 @@ test("Pointer multi-cursor combination replaces overlapping ranges", () => {
   const base = TextSelectionSet.withPrimary([first, inside, outside], 2);
 
   assert.deepEqual(
-    combineAlphaPointerSelection(base, active, undefined),
+    combineAsterPointerSelection(base, active, undefined),
     TextSelectionSet.withPrimary([outside, active], 1),
   );
   assert.throws(
-    () => combineAlphaPointerSelection(base, active, 3),
+    () => combineAsterPointerSelection(base, active, 3),
     /outside the selection set/,
   );
 });

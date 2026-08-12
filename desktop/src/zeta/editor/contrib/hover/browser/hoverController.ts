@@ -14,7 +14,7 @@ export class HoverController extends DisposableOwner {
   constructor(private readonly viewport: EditorViewport, private readonly service: HoverService, private readonly languageId: string) {
     super();
     this.element = viewport.element.ownerDocument.createElement("div");
-    this.element.className = "zeta-alpha-editor-hover";
+    this.element.className = "aster-editor-hover";
     this.element.hidden = true;
     this.element.setAttribute("role", "tooltip");
     viewport.element.append(this.element);
@@ -53,7 +53,7 @@ export class HoverController extends DisposableOwner {
   private render(hover: LanguageHover, position: TextPosition): void {
     this.element.replaceChildren(...hover.contents.map(content => {
       const node = this.element.ownerDocument.createElement("div");
-      node.className = "zeta-alpha-editor-hover-content";
+      node.className = "aster-editor-hover-content";
       node.textContent = typeof content === "string" ? content : content.value;
       return node;
     }));

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { type TextMeasurer } from "../../browser/view/fontMetrics.js";
-import { createAlphaSelectionGeometry } from "../../browser/view/selectionGeometry.js";
+import { createAsterSelectionGeometry } from "../../browser/view/selectionGeometry.js";
 import { TextSelection, TextSelectionSet } from "../../common/core/selection.js";
 import { TextPosition } from "../../common/core/text.js";
 import { TextModel } from "../../common/model/textModel.js";
@@ -17,7 +17,7 @@ test("Selection geometry preserves direction, multiple carets, and newlines", ()
     TextSelection.collapsedAt(TextPosition.at(2, 1)),
   ], 0);
 
-  const geometry = createAlphaSelectionGeometry(
+  const geometry = createAsterSelectionGeometry(
     model,
     selections,
     { startLineIndex: 0, endLineIndexExclusive: 3 },
@@ -53,7 +53,7 @@ test("Selection geometry preserves direction, multiple carets, and newlines", ()
 
 test("Selection ending at column zero renders only the selected newline", () => {
   using model = new TextModel("abcd\nefgh");
-  const geometry = createAlphaSelectionGeometry(
+  const geometry = createAsterSelectionGeometry(
     model,
     TextSelectionSet.single(TextSelection.from(
       TextPosition.at(0, 2),

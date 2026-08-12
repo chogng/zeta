@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { type TextMeasurer } from "../../browser/view/fontMetrics.js";
-import { SemanticTokenPresentation, createAlphaSemanticTokenSource } from "../../browser/view/semanticTokenPresentation.js";
+import { SemanticTokenPresentation, createAsterSemanticTokenSource } from "../../browser/view/semanticTokenPresentation.js";
 import { LanguageResultAcceptance } from "../../common/languages/languageResultStore.js";
 import { LanguageTokenLineIndex } from "../../common/tokens/languageTokenLineIndex.js";
 import { createLanguageTokenStore, type LanguageToken } from "../../common/languages/languageResults.js";
@@ -38,7 +38,7 @@ test("Viewport projects tokens only for virtualized lines and preserves overlapp
     token(10, 0, 4, "number"),
   ]);
   using index = new LanguageTokenLineIndex(store);
-  const source = createAlphaSemanticTokenSource(index);
+  const source = createAsterSemanticTokenSource(index);
   using viewport = new EditorViewport({
     container,
     model,
@@ -52,12 +52,12 @@ test("Viewport projects tokens only for virtualized lines and preserves overlapp
   assert.deepEqual(renderedTokenLines(viewport.element), ["0"]);
   viewport.scrollTo({ left: 0, top: 40 });
   const line3 = requiredLine(viewport.element, 3);
-  const line3Token = requiredElement(line3, ".zeta-alpha-editor-token");
+  const line3Token = requiredElement(line3, ".aster-editor-token");
   assert.deepEqual(renderedTokenLines(viewport.element), ["3"]);
 
   viewport.scrollTo({ left: 0, top: 60 });
   assert.equal(requiredLine(viewport.element, 3), line3);
-  assert.equal(requiredElement(line3, ".zeta-alpha-editor-token"), line3Token);
+  assert.equal(requiredElement(line3, ".aster-editor-token"), line3Token);
   assert.equal(viewport.element.querySelector('[data-line-index="10"]'), null);
   dom.window.close();
 });
@@ -69,7 +69,7 @@ test("Same-version token replacement rerenders visible text and model edits clea
   using store = createLanguageTokenStore(model);
   acceptTokens(store, model, 1, [token(0, 0, 5, "string")]);
   using index = new LanguageTokenLineIndex(store);
-  const source = createAlphaSemanticTokenSource(index);
+  const source = createAsterSemanticTokenSource(index);
   using viewport = new EditorViewport({
     container,
     model,
@@ -78,18 +78,18 @@ test("Same-version token replacement rerenders visible text and model edits clea
     semanticTokenSource: source,
   });
   viewport.layout({ width: 200, height: 20 });
-  const textElement = requiredElement<HTMLElement>(requiredLine(viewport.element, 0), ".zeta-alpha-editor-line-text");
+  const textElement = requiredElement<HTMLElement>(requiredLine(viewport.element, 0), ".aster-editor-line-text");
   assert.equal(textElement.textContent, "<tag> value");
   assert.equal(textElement.querySelector("tag"), null);
-  assert.equal(requiredElement(textElement, ".zeta-alpha-editor-token").classList.contains(SemanticTokenPresentation.String), true);
+  assert.equal(requiredElement(textElement, ".aster-editor-token").classList.contains(SemanticTokenPresentation.String), true);
 
   acceptTokens(store, model, 2, [token(0, 6, 11, "variable")]);
   assert.equal(textElement.textContent, "<tag> value");
-  assert.deepEqual([...textElement.querySelectorAll(".zeta-alpha-editor-token")].map(element => ({
+  assert.deepEqual([...textElement.querySelectorAll(".aster-editor-token")].map(element => ({
     className: element.className,
     text: element.textContent,
   })), [{
-    className: "zeta-alpha-editor-token token-variable",
+    className: "aster-editor-token token-variable",
     text: "value",
   }]);
 
@@ -99,7 +99,7 @@ test("Same-version token replacement rerenders visible text and model edits clea
   }]);
   assert.equal(store.result, undefined);
   assert.equal(textElement.textContent, "X<tag> value");
-  assert.equal(textElement.querySelector(".zeta-alpha-editor-token"), null);
+  assert.equal(textElement.querySelector(".aster-editor-token"), null);
   dom.window.close();
 });
 
@@ -115,7 +115,7 @@ test("Viewport clips semantic token spans to every soft-wrapped text fragment", 
     model,
     lineHeight: 20,
     textMeasurer: new FixedTextMeasurer(),
-    semanticTokenSource: createAlphaSemanticTokenSource(index),
+    semanticTokenSource: createAsterSemanticTokenSource(index),
     lineWrapping: EditorLineWrapping.On,
   });
   viewport.layout({ width: 70, height: 60 });
@@ -143,8 +143,8 @@ test("Viewport rejects cross-model token sources and owns none of their common s
   using otherStore = createLanguageTokenStore(otherModel);
   using index = new LanguageTokenLineIndex(store);
   using otherIndex = new LanguageTokenLineIndex(otherStore);
-  const source = createAlphaSemanticTokenSource(index);
-  const otherSource = createAlphaSemanticTokenSource(otherIndex);
+  const source = createAsterSemanticTokenSource(index);
+  const otherSource = createAsterSemanticTokenSource(otherIndex);
 
   assert.throws(() => new EditorViewport({
     container,
@@ -180,7 +180,7 @@ test("Viewport resolves semantic tokens only for virtualized lines", () => {
   acceptTokens(store, model, 1, Array.from({ length: 1_000 }, (_, lineIndex) => token(lineIndex, 0, 4, "keyword")));
   using index = new LanguageTokenLineIndex(store);
   let resolverCalls = 0;
-  const source = createAlphaSemanticTokenSource(index, () => {
+  const source = createAsterSemanticTokenSource(index, () => {
     resolverCalls += 1;
     return SemanticTokenPresentation.Keyword;
   });
@@ -232,13 +232,13 @@ function lines(count: number): string[] {
 }
 
 function renderedTokenLines(root: ParentNode): string[] {
-  return [...root.querySelectorAll(".zeta-alpha-editor-token")].map(element => (
+  return [...root.querySelectorAll(".aster-editor-token")].map(element => (
     (element.parentElement?.parentElement as HTMLElement).dataset.lineIndex!
   ));
 }
 
 function lineTokenFragments(root: ParentNode): { readonly lineIndex: string | undefined; readonly text: string | null }[] {
-  return [...root.querySelectorAll<HTMLElement>(".zeta-alpha-editor-token")].map(element => ({
+  return [...root.querySelectorAll<HTMLElement>(".aster-editor-token")].map(element => ({
     lineIndex: element.parentElement?.parentElement?.dataset.lineIndex,
     text: element.textContent,
   }));

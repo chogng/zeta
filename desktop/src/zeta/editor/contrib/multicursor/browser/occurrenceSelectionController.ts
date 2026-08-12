@@ -8,7 +8,7 @@ export interface OccurrenceSelectionControllerOptions {
   readonly wordPattern?: () => RegExp | undefined;
 }
 
-/** Routes VS Code-compatible occurrence-selection shortcuts through Alpha's common model. */
+/** Routes VS Code-compatible occurrence-selection shortcuts through Aster's common model. */
 export class OccurrenceSelectionController extends DisposableOwner {
   constructor(
     input: HTMLTextAreaElement,
@@ -19,10 +19,10 @@ export class OccurrenceSelectionController extends DisposableOwner {
     super();
     try {
       if (viewport.textModel !== selections.textModel) {
-        throw new TypeError("Alpha occurrence selection dependencies must share one text model");
+        throw new TypeError("Aster occurrence selection dependencies must share one text model");
       }
       if (options.wordPattern !== undefined && typeof options.wordPattern !== "function") {
-        throw new TypeError("Alpha occurrence word pattern resolver must be a function");
+        throw new TypeError("Aster occurrence word pattern resolver must be a function");
       }
       this.wordPattern = options.wordPattern;
       this.own(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));

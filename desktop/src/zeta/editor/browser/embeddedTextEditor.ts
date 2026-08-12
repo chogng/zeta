@@ -9,13 +9,13 @@ import { BrowserTextModelService } from "./services/browserTextModelService.js";
 import { EditorPane } from "./codeEditorPane.js";
 import { EditorPart } from "./editorPart.js";
 
-/** Options shared by Alpha CodeEditorWidget projections mounted in TextEditorWidget textBlock nodes. */
+/** Options shared by Aster CodeEditorWidget projections mounted in TextEditorWidget textBlock nodes. */
 export interface EmbeddedTextEditorFactoryOptions {
   readonly textMateService?: ITextMateService;
   readonly languageFeaturesService?: ILanguageFeaturesService;
 }
 
-/** Creates Alpha line editors for TextEditorWidget textBlock projections. */
+/** Creates Aster line editors for TextEditorWidget textBlock projections. */
 export class EmbeddedTextEditorFactory implements IEmbeddedTextEditorFactory {
   constructor(private readonly options: EmbeddedTextEditorFactoryOptions = {}) {}
 
@@ -65,14 +65,14 @@ class EmbeddedTextEditor extends DisposableOwner implements IEmbeddedTextEditor 
   }
 
   create(parent: HTMLElement): void {
-    if (this.started) throw new ReferenceError("Alpha embedded editor has already been created");
+    if (this.started) throw new ReferenceError("Aster embedded editor has already been created");
     this.started = true;
     this.parent = parent;
     this.pane.create(parent);
     const controller = new AbortController();
     this.defer(() => controller.abort());
     void this.pane.setInput(this.input, controller.signal).catch(error => {
-      if (!controller.signal.aborted) console.error("Alpha embedded editor failed to initialize", error);
+      if (!controller.signal.aborted) console.error("Aster embedded editor failed to initialize", error);
     });
   }
 

@@ -16,21 +16,21 @@ import { type EditorVisualLineProjection } from "../../common/viewModel/modelLin
 import { type EditorLineRange, type EditorScrollPosition, type EditorViewportChange, type EditorViewportLayout, EditorViewportModel } from "../../common/viewLayout/editorViewportModel.js";
 import { type DecorationSource, type ResolvedDecoration } from "./decorationPresentation.js";
 import { DecorationLineIndex } from "./decorationLineIndex.js";
-import { createAlphaDiagnosticOverviewMarkers } from "../../contrib/gotoError/browser/diagnosticOverviewRuler.js";
+import { createAsterDiagnosticOverviewMarkers } from "../../contrib/gotoError/browser/diagnosticOverviewRuler.js";
 import { DomTextMeasurer, type TextMeasurer } from "./fontMetrics.js";
 import { FoldingDecorationProvider } from "../../contrib/folding/browser/foldingDecorations.js";
 import { type BracketColorizationSource } from "../../contrib/bracketMatching/browser/bracketColorizationPresentation.js";
 import { LineWidthIndex } from "../../contrib/longLinesHelper/browser/longLinesHelper.js";
-import { createAlphaIndentationGuides } from "../../contrib/indentation/browser/indentation.js";
+import { createAsterIndentationGuides } from "../../contrib/indentation/browser/indentation.js";
 import { GpuMinimapRenderer } from "../../contrib/gpu/browser/gpuRenderer.js";
 import { MinimapNavigationController } from "./minimapNavigationController.js";
-import { createAlphaMinimapRows } from "./minimapProjection.js";
-import { type ClientPoint, type EditorHitTarget, EditorHitTargetKind, hitTestAlphaVisualEditorPoint } from "./pointerHitTest.js";
-import { getAlphaDomTextCaretLeft, getAlphaDomTextOffsetAtClientPoint } from "./domTextGeometry.js";
-import { createAlphaRenderedLine, type RenderedLine } from "./renderedLine.js";
-import { projectAlphaSemanticTokenLine, type ResolvedSemanticToken, type SemanticTokenSource } from "./semanticTokenPresentation.js";
+import { createMinimapRows } from "./minimapProjection.js";
+import { type ClientPoint, type EditorHitTarget, EditorHitTargetKind, hitTestAsterVisualEditorPoint } from "./pointerHitTest.js";
+import { getAsterDomTextCaretLeft, getAsterDomTextOffsetAtClientPoint } from "./domTextGeometry.js";
+import { createAsterRenderedLine, type RenderedLine } from "./renderedLine.js";
+import { projectAsterSemanticTokenLine, type ResolvedSemanticToken, type SemanticTokenSource } from "./semanticTokenPresentation.js";
 import { type BracketColorizationSpan } from "./semanticTokenPresentation.js";
-import { projectAlphaCompositionOverlay, projectAlphaDecorationOverlays, projectAlphaSelectionOverlays, type ActiveLineHighlight, type ViewportOverlayContext } from "./viewportOverlayPresentation.js";
+import { projectAsterCompositionOverlay, projectAsterDecorationOverlays, projectAsterSelectionOverlays, type ActiveLineHighlight, type ViewportOverlayContext } from "./viewportOverlayPresentation.js";
 import { EditorLineWrapping, VisualLineProjection } from "./visualLineProjection.js";
 import { VisibleLineProjection } from "./visibleLineProjection.js";
 import { getTextGraphemeBoundaries } from "../../common/core/textSegmentation.js";
@@ -41,7 +41,7 @@ const MINIMAP_WIDTH = 56;
 
 export type EditorViewportPresentation = "document" | "embedded";
 
-/** Chooses which component renders the visible focus outline for an Alpha viewport. */
+/** Chooses which component renders the visible focus outline for an Aster viewport. */
 export type EditorFocusOutlineOwner = "editor" | "host";
 
 /** Controls whether the viewport projects current-line presentation DOM. */
@@ -60,7 +60,7 @@ export enum EditorMinimap {
   Off = "off",
 }
 
-/** Controls the browser paragraph direction used to shape Alpha's rendered text. */
+/** Controls the browser paragraph direction used to shape Aster's rendered text. */
 export enum EditorTextDirection {
   Auto = "auto",
   LeftToRight = "ltr",
@@ -100,7 +100,7 @@ export interface EditorContentPosition {
 }
 
 /**
- * Read-only browser projection of one Alpha text model.
+ * Read-only browser projection of one Aster text model.
  *
  * The common viewport owns layout math. This component owns the scroll host,
  * virtual line DOM, measurement inputs, and their lifecycle.
@@ -179,36 +179,36 @@ export class EditorViewport extends DisposableOwner {
     try {
       this.indentation = resolveEditorIndentationOptions(options.indentation);
       if (!Object.values(EditorMinimap).includes(this.minimap)) {
-        throw new TypeError("Unknown Alpha editor minimap mode");
+        throw new TypeError("Unknown Aster editor minimap mode");
       }
       if (!Object.values(EditorTextDirection).includes(this.textDirection)) {
-        throw new TypeError("Unknown Alpha editor text direction");
+        throw new TypeError("Unknown Aster editor text direction");
       }
       if (this.focusOutlineOwner !== "editor" && this.focusOutlineOwner !== "host") {
-        throw new TypeError("Unknown Alpha editor focus outline owner");
+        throw new TypeError("Unknown Aster editor focus outline owner");
       }
       if (this.activeLineHighlight !== "on" && this.activeLineHighlight !== "off") {
-        throw new TypeError("Unknown Alpha editor active-line highlight");
+        throw new TypeError("Unknown Aster editor active-line highlight");
       }
       if (this.selectionController && this.selectionController.textModel !== this.model) {
         throw new TypeError(
-          "Alpha viewport and selection controller must share one text model",
+          "Aster viewport and selection controller must share one text model",
         );
       }
       if (this.semanticTokenSource && this.semanticTokenSource.textModel !== this.model) {
-        throw new TypeError("Alpha viewport and semantic token source must share one text model");
+        throw new TypeError("Aster viewport and semantic token source must share one text model");
       }
       if (this.bracketColorizationSource && this.bracketColorizationSource.textModel !== this.model) {
-        throw new TypeError("Alpha viewport and bracket colorization source must share one text model");
+        throw new TypeError("Aster viewport and bracket colorization source must share one text model");
       }
       if (options.foldingModel && options.foldingModel.model !== this.model) {
-        throw new TypeError("Alpha viewport and folding model must share one text model");
+        throw new TypeError("Aster viewport and folding model must share one text model");
       }
       if (options.hiddenRangeModel && options.hiddenRangeModel.model !== this.model) {
-        throw new TypeError("Alpha viewport and hidden range model must share one text model");
+        throw new TypeError("Aster viewport and hidden range model must share one text model");
       }
       if (options.foldingModel && !options.hiddenRangeModel) {
-        throw new TypeError("Alpha viewport folding requires a hidden range model");
+        throw new TypeError("Aster viewport folding requires a hidden range model");
       }
     } catch (error) {
       this.dispose();
@@ -219,33 +219,33 @@ export class EditorViewport extends DisposableOwner {
       ...(options.decorationSources ?? []),
     ]);
 
-    this.element.className = "zeta-alpha-editor";
-    this.element.classList.add(`zeta-alpha-editor-${this.presentation}`);
-    this.element.classList.add(`zeta-alpha-editor-focus-owner-${this.focusOutlineOwner}`);
-    this.element.classList.add(`zeta-alpha-editor-direction-${this.textDirection}`);
-    this.element.style.setProperty("--alpha-editor-padding-left", `${this.padding.left}px`);
-    this.element.style.setProperty("--alpha-editor-padding-right", `${this.padding.right}px`);
+    this.element.className = "aster-editor";
+    this.element.classList.add(`aster-editor-${this.presentation}`);
+    this.element.classList.add(`aster-editor-focus-owner-${this.focusOutlineOwner}`);
+    this.element.classList.add(`aster-editor-direction-${this.textDirection}`);
+    this.element.style.setProperty("--aster-editor-padding-left", `${this.padding.left}px`);
+    this.element.style.setProperty("--aster-editor-padding-right", `${this.padding.right}px`);
     this.element.dir = this.textDirection;
     this.element.classList.toggle("word-wrapped", this.softWrapping);
     this.element.tabIndex = 0;
     this.element.setAttribute("role", "region");
-    this.element.setAttribute("aria-label", options.ariaLabel ?? "Alpha editor");
-    this.contentElement.className = "zeta-alpha-editor-content";
-    this.linesElement.className = "zeta-alpha-editor-lines";
+    this.element.setAttribute("aria-label", options.ariaLabel ?? "Aster editor");
+    this.contentElement.className = "aster-editor-content";
+    this.linesElement.className = "aster-editor-lines";
     this.textMetricsElement.className =
-      "zeta-alpha-editor-text-metrics";
+      "aster-editor-text-metrics";
     this.textMetricsElement.setAttribute("aria-hidden", "true");
-    this.accessibilityStatusElement.className = "zeta-alpha-editor-accessibility-status";
+    this.accessibilityStatusElement.className = "aster-editor-accessibility-status";
     this.accessibilityStatusElement.setAttribute("aria-live", "polite");
     this.accessibilityStatusElement.setAttribute("aria-atomic", "true");
-    this.overviewRulerElement.className = "zeta-alpha-editor-overview-ruler";
+    this.overviewRulerElement.className = "aster-editor-overview-ruler";
     this.overviewRulerElement.setAttribute("aria-hidden", "true");
-    this.minimapElement.className = "zeta-alpha-editor-minimap";
+    this.minimapElement.className = "aster-editor-minimap";
     this.minimapElement.hidden = this.minimap === EditorMinimap.Off;
     this.minimapElement.setAttribute("aria-hidden", "true");
-    this.minimapCanvasElement.className = "zeta-alpha-editor-minimap-gpu";
+    this.minimapCanvasElement.className = "aster-editor-minimap-gpu";
     this.minimapCanvasElement.setAttribute("aria-hidden", "true");
-    this.minimapViewportElement.className = "zeta-alpha-editor-minimap-viewport";
+    this.minimapViewportElement.className = "aster-editor-minimap-viewport";
     this.minimapElement.append(this.minimapCanvasElement, this.minimapViewportElement);
     this.contentElement.append(this.linesElement);
     this.element.append(this.contentElement, this.overviewRulerElement, this.minimapElement, this.textMetricsElement, this.accessibilityStatusElement);
@@ -396,7 +396,7 @@ export class EditorViewport extends DisposableOwner {
   /** Changes only this viewport's visual row projection; document text is unaffected. */
   setLineWrapping(lineWrapping: EditorLineWrapping): EditorViewportLayout {
     if (!Object.values(EditorLineWrapping).includes(lineWrapping)) {
-      throw new TypeError("Unknown Alpha editor line wrapping mode");
+      throw new TypeError("Unknown Aster editor line wrapping mode");
     }
     const nextSoftWrapping = lineWrapping === EditorLineWrapping.On;
     if (nextSoftWrapping === this.softWrapping) return this.viewport.layout;
@@ -430,7 +430,7 @@ export class EditorViewport extends DisposableOwner {
   /** Announces one editor status message through the viewport's live region. */
   announceAccessibilityStatus(message: string): void {
     if (typeof message !== "string" || message.trim().length === 0) {
-      throw new TypeError("Alpha accessibility status must be a non-empty string");
+      throw new TypeError("Aster accessibility status must be a non-empty string");
     }
     this.accessibilityStatusElement.textContent = message.trim();
   }
@@ -515,7 +515,7 @@ export class EditorViewport extends DisposableOwner {
 
   /** Resolves the nearest browser-shaped cursor on one currently rendered visual line. */
   getNearestPositionAtVisualHorizontalOffset(visualLineIndex: number, horizontalOffset: number): TextPosition | undefined {
-    if (!Number.isFinite(horizontalOffset)) throw new RangeError("Alpha visual cursor horizontal offset must be finite");
+    if (!Number.isFinite(horizontalOffset)) throw new RangeError("Aster visual cursor horizontal offset must be finite");
     if (this.textDirection === EditorTextDirection.LeftToRight) return undefined;
     const visualLine = this.visualProjection.lineAt(visualLineIndex);
     const line = this.renderedLines.get(visualLineIndex);
@@ -525,7 +525,7 @@ export class EditorViewport extends DisposableOwner {
     let nearestColumn: number | undefined;
     let nearestDistance = Number.POSITIVE_INFINITY;
     for (const column of getTextGraphemeBoundaries(text)) {
-      const left = getAlphaDomTextCaretLeft(line.textElement, column, line.element);
+      const left = getAsterDomTextCaretLeft(line.textElement, column, line.element);
       if (left === undefined) return undefined;
       const distance = Math.abs(left - horizontalOffset);
       if (distance < nearestDistance) {
@@ -586,7 +586,7 @@ export class EditorViewport extends DisposableOwner {
   }
 
   private hitTestViewportPoint(left: number, top: number): EditorHitTarget | undefined {
-    return hitTestAlphaVisualEditorPoint(
+    return hitTestAsterVisualEditorPoint(
       this.model,
       this.visualProjection,
       this.viewport.layout,
@@ -602,7 +602,7 @@ export class EditorViewport extends DisposableOwner {
 
   private getDomTargetAtClientPoint(point: ClientPoint): EditorHitTarget | undefined {
     for (const [visualLineIndex, renderedLine] of this.renderedLines) {
-      const offset = getAlphaDomTextOffsetAtClientPoint(
+      const offset = getAsterDomTextOffsetAtClientPoint(
         renderedLine.textElement,
         point.clientX,
         point.clientY,
@@ -622,7 +622,7 @@ export class EditorViewport extends DisposableOwner {
     if (this.textDirection === EditorTextDirection.LeftToRight) return undefined;
     const line = this.renderedLines.get(visualLineIndex);
     return line && Number.isSafeInteger(offset) && offset >= 0 && offset <= line.textElement.textContent?.length
-      ? getAlphaDomTextCaretLeft(line.textElement, offset, line.element)
+      ? getAsterDomTextCaretLeft(line.textElement, offset, line.element)
       : undefined;
   }
 
@@ -659,7 +659,7 @@ export class EditorViewport extends DisposableOwner {
     this.element.classList.toggle("horizontally-scrollable", layout.maximumScrollPosition.left > 0);
     this.element.classList.toggle("vertically-scrollable", layout.maximumScrollPosition.top > 0);
     this.element.style.setProperty(
-      "--alpha-editor-gutter-width",
+      "--aster-editor-gutter-width",
       `${this.gutterWidth}px`,
     );
     this.contentElement.style.width = `${layout.contentSize.width}px`;
@@ -698,7 +698,7 @@ export class EditorViewport extends DisposableOwner {
       const visualLine = visualProjection.lineAt(visualLineIndex);
       if (!visualLine) throw new Error("Viewport render range exceeds the visual line projection");
       const existing = this.renderedLines.get(visualLineIndex);
-      const line = existing ?? createAlphaRenderedLine(ownerDocument, visualLineIndex);
+      const line = existing ?? createAsterRenderedLine(ownerDocument, visualLineIndex);
       line.element.dataset.logicalLineIndex = String(visualLine.logicalLineIndex);
       if (!existing || this.renderedVisualProjectionRevision !== visualProjectionRevision) {
         line.numberElement.textContent = visualLine.firstForLogicalLine
@@ -742,7 +742,7 @@ export class EditorViewport extends DisposableOwner {
     const fullText = this.model.getLineContent(visualLine.logicalLineIndex);
     const text = fullText.slice(visualLine.startColumn, visualLine.endColumn);
     const brackets = this.bracketColorizationSource?.getLineBrackets(visualLine.logicalLineIndex) ?? [];
-    projectAlphaSemanticTokenLine(
+    projectAsterSemanticTokenLine(
       line.textElement,
       text,
       clipSemanticTokens(tokens, visualLine.startColumn, visualLine.endColumn),
@@ -757,9 +757,9 @@ export class EditorViewport extends DisposableOwner {
       line.indentationElement.replaceChildren();
       if (!visualLine?.firstForLogicalLine) continue;
       const text = this.model.getLineContent(visualLine.logicalLineIndex);
-      for (const guide of createAlphaIndentationGuides(text, this.indentation.tabSize)) {
+      for (const guide of createAsterIndentationGuides(text, this.indentation.tabSize)) {
         const element = this.element.ownerDocument.createElement("span");
-        element.className = "zeta-alpha-editor-indent-guide";
+        element.className = "aster-editor-indent-guide";
         element.dataset.indentLevel = String(guide.level);
         element.style.left = `${this.textLeft + this.textMeasurer.measureLineWidth(text.slice(0, guide.columnIndex)) - 1}px`;
         line.indentationElement.append(element);
@@ -783,7 +783,7 @@ export class EditorViewport extends DisposableOwner {
   }
 
   private projectSelections(layout: EditorViewportLayout): void {
-    projectAlphaSelectionOverlays(this.overlayContext(layout), this.selectionController);
+    projectAsterSelectionOverlays(this.overlayContext(layout), this.selectionController);
   }
 
   private updateAccessibilityStatus(): void {
@@ -807,11 +807,11 @@ export class EditorViewport extends DisposableOwner {
   }
 
   private projectDecorations(layout: EditorViewportLayout): void {
-    projectAlphaDecorationOverlays(this.overlayContext(layout), this.resolveVisibleDecorations(layout));
+    projectAsterDecorationOverlays(this.overlayContext(layout), this.resolveVisibleDecorations(layout));
   }
 
   private projectComposition(layout: EditorViewportLayout): void {
-    projectAlphaCompositionOverlay(this.overlayContext(layout), this.compositionRange?.range);
+    projectAsterCompositionOverlay(this.overlayContext(layout), this.compositionRange?.range);
   }
 
   private overlayContext(layout: EditorViewportLayout): ViewportOverlayContext {
@@ -842,14 +842,14 @@ export class EditorViewport extends DisposableOwner {
     this.overviewRulerElement.style.top = `${layout.scrollPosition.top}px`;
     this.overviewRulerElement.style.height = `${layout.viewportSize.height}px`;
     if (this.renderedOverviewRevision === this.overviewRevision) return;
-    const markers = createAlphaDiagnosticOverviewMarkers(
+    const markers = createAsterDiagnosticOverviewMarkers(
       this.decorationSources.flatMap(source => this.decorationSnapshots.get(source) ?? []),
       this.model.lineCount,
     );
     const fragment = this.element.ownerDocument.createDocumentFragment();
     for (const marker of markers) {
       const element = this.element.ownerDocument.createElement("span");
-      element.className = "zeta-alpha-editor-overview-marker";
+      element.className = "aster-editor-overview-marker";
       element.classList.add(marker.presentation);
       element.style.top = `${marker.startLineIndex / this.model.lineCount * 100}%`;
       element.style.height = `${Math.max(1, (marker.endLineIndexExclusive - marker.startLineIndex) / this.model.lineCount * 100)}%`;
@@ -871,26 +871,26 @@ export class EditorViewport extends DisposableOwner {
     this.minimapViewportElement.style.height = `${Math.max(2, layout.viewportSize.height / contentHeight * 100)}%`;
     if (this.renderedMinimapRevision === this.minimapRevision) return;
     const fragment = this.element.ownerDocument.createDocumentFragment();
-    const rows = createAlphaMinimapRows(this.model);
+    const rows = createMinimapRows(this.model);
     const gpuRenderer = this.minimapGpuRenderer;
     if (gpuRenderer?.isAvailable) {
       gpuRenderer.setRows(rows, this.model.lineCount);
     } else {
       for (const row of rows) {
         const marker = this.element.ownerDocument.createElement("span");
-        marker.className = "zeta-alpha-editor-minimap-row";
+        marker.className = "aster-editor-minimap-row";
         marker.style.top = `${row.startLineIndex / this.model.lineCount * 100}%`;
         marker.style.height = `${Math.max(1, (row.endLineIndexExclusive - row.startLineIndex) / this.model.lineCount * 100)}%`;
         marker.style.width = `${Math.max(8, row.density * 100)}%`;
         fragment.append(marker);
       }
     }
-    for (const marker of createAlphaDiagnosticOverviewMarkers(
+    for (const marker of createAsterDiagnosticOverviewMarkers(
       this.decorationSources.flatMap(source => this.decorationSnapshots.get(source) ?? []),
       this.model.lineCount,
     )) {
       const element = this.element.ownerDocument.createElement("span");
-      element.className = "zeta-alpha-editor-minimap-diagnostic-marker";
+      element.className = "aster-editor-minimap-diagnostic-marker";
       element.classList.add(marker.presentation);
       element.style.top = `${marker.startLineIndex / this.model.lineCount * 100}%`;
       element.style.height = `${Math.max(1, (marker.endLineIndexExclusive - marker.startLineIndex) / this.model.lineCount * 100)}%`;
@@ -937,7 +937,7 @@ function validateClientPoint(point: ClientPoint): void {
     !Number.isFinite(point.clientY)
   ) {
     throw new RangeError(
-      "Alpha client point must contain finite coordinates",
+      "Aster client point must contain finite coordinates",
     );
   }
 }
@@ -953,7 +953,7 @@ function resolveEditorViewportPadding(padding: EditorViewportPadding | undefined
 
 function nonNegativePaddingValue(value: number, side: keyof EditorViewportPadding): number {
   if (!Number.isFinite(value) || value < 0) {
-    throw new RangeError(`Alpha editor padding.${side} must be non-negative and finite`);
+    throw new RangeError(`Aster editor padding.${side} must be non-negative and finite`);
   }
   return value;
 }

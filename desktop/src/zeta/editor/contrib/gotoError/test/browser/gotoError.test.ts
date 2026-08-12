@@ -29,7 +29,7 @@ test("F8 navigates current diagnostics in both directions", () => {
   using controller = new DiagnosticNavigationController(input, viewport, selections, diagnostics);
   const next = key(dom.window, false); input.dispatchEvent(next);
   assert.equal(next.defaultPrevented, true); assert.deepEqual(selections.selections.primary.range, TextRange.from(TextPosition.at(0, 1), TextPosition.at(0, 2)));
-  assert.equal(viewport.element.querySelector(".zeta-alpha-editor-accessibility-status")?.textContent, "warning: first");
+  assert.equal(viewport.element.querySelector(".aster-editor-accessibility-status")?.textContent, "warning: first");
   input.dispatchEvent(key(dom.window, false));
   assert.deepEqual(selections.selections.primary.range, TextRange.from(TextPosition.at(2, 1), TextPosition.at(2, 3)));
   const previous = key(dom.window, true);

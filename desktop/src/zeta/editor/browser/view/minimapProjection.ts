@@ -1,4 +1,4 @@
-/** Minimal document access required to derive Alpha's bounded minimap density rows. */
+/** Minimal document access required to derive Aster's bounded minimap density rows. */
 export interface MinimapTextSource {
   readonly lineCount: number;
   getLineContent(lineIndex: number): string;
@@ -11,7 +11,7 @@ export interface MinimapRow {
   readonly density: number;
 }
 
-export const ALPHA_MINIMAP_MAX_ROWS = 160;
+export const MINIMAP_MAX_ROWS = 160;
 
 /**
  * Projects a document into a bounded density strip without retaining its text.
@@ -20,12 +20,12 @@ export const ALPHA_MINIMAP_MAX_ROWS = 160;
  * redraw work bounded even for very large files. The minimap is a navigation
  * preview, not a syntax or exact-glyph layout surface.
  */
-export function createAlphaMinimapRows(source: MinimapTextSource, maximumRows = ALPHA_MINIMAP_MAX_ROWS): readonly MinimapRow[] {
+export function createMinimapRows(source: MinimapTextSource, maximumRows = MINIMAP_MAX_ROWS): readonly MinimapRow[] {
   if (!source || !Number.isSafeInteger(source.lineCount) || source.lineCount < 1 || typeof source.getLineContent !== "function") {
-    throw new TypeError("Alpha minimap requires a non-empty text source");
+    throw new TypeError("Aster minimap requires a non-empty text source");
   }
   if (!Number.isSafeInteger(maximumRows) || maximumRows < 1) {
-    throw new RangeError("Alpha minimap maximum rows must be a positive safe integer");
+    throw new RangeError("Aster minimap maximum rows must be a positive safe integer");
   }
   const rowCount = Math.min(source.lineCount, maximumRows);
   const sampled = Array.from({ length: rowCount }, (_, rowIndex) => {
@@ -53,7 +53,7 @@ function sampledContentLength(source: MinimapTextSource, startLineIndex: number,
   for (let sampleIndex = 0; sampleIndex < samples; sampleIndex += 1) {
     const lineIndex = startLineIndex + Math.floor(sampleIndex * lineCount / samples);
     const text = source.getLineContent(lineIndex);
-    if (typeof text !== "string") throw new TypeError("Alpha minimap text source returned non-text content");
+    if (typeof text !== "string") throw new TypeError("Aster minimap text source returned non-text content");
     maximum = Math.max(maximum, [...text.trimEnd()].length);
   }
   return maximum;

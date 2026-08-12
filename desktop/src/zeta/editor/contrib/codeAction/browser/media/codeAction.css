@@ -1,4 +1,4 @@
-.zeta-alpha-editor-code-action {
+.aster-editor-code-action {
   position: absolute;
   z-index: 9;
   min-width: 240px;
@@ -10,7 +10,7 @@
   box-shadow: 0 4px 14px var(--zeta-editor-widget-shadow);
 }
 
-.zeta-alpha-editor-code-action button {
+.aster-editor-code-action button {
   display: block;
   width: 100%;
   padding: 5px 8px;
@@ -21,13 +21,13 @@
   border-radius: 3px;
 }
 
-.zeta-alpha-editor-code-action button:hover,
-.zeta-alpha-editor-code-action button:focus-visible {
+.aster-editor-code-action button:hover,
+.aster-editor-code-action button:focus-visible {
   background: var(--zeta-editor-list-hover-background);
   outline: none;
 }
 
-.zeta-alpha-editor-code-action button:disabled {
+.aster-editor-code-action button:disabled {
   color: var(--zeta-editor-description-foreground, var(--zeta-editor-foreground));
   opacity: 0.65;
 }

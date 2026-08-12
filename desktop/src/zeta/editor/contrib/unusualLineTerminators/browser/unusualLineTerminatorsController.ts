@@ -11,7 +11,7 @@ export class UnusualLineTerminatorsController extends DisposableOwner {
 
   constructor(private readonly model: TextModel, readonly decorations: TextDecorationCollection<void>) {
     super();
-    if (decorations.textModel !== model) throw new TypeError("Alpha unusual line terminator dependencies must share a text model");
+    if (decorations.textModel !== model) throw new TypeError("Aster unusual line terminator dependencies must share a text model");
     this.own(model.onDidChange(() => this.update()));
     this.update();
   }

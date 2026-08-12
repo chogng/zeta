@@ -11,7 +11,7 @@ import { getWordSelectionRange } from "../../common/cursor/wordBoundary.js";
 import { type EditorViewport } from "../view/editorViewport.js";
 import { PointerAutoScroller } from "./pointerAutoScroll.js";
 import { EditorHitTargetKind, type EditorHitTarget } from "../view/pointerHitTest.js";
-import { PointerMultiCursorModifier, combineAlphaPointerSelection, findAlphaPointerToggleCandidate, isAlphaPointerMultiCursorGesture, readAlphaPointerMultiCursorModifier } from "./pointerMultiCursor.js";
+import { PointerMultiCursorModifier, combineAsterPointerSelection, findAsterPointerToggleCandidate, isAsterPointerMultiCursorGesture, readAsterPointerMultiCursorModifier } from "./pointerMultiCursor.js";
 
 enum PointerSelectionKind {
   Character = "character",
@@ -49,7 +49,7 @@ export interface PointerSelectionControllerOptions {
 }
 
 /**
- * Browser pointer policy for one Alpha viewport and selection controller.
+ * Browser pointer policy for one Aster viewport and selection controller.
  *
  * The adapter owns pointer listeners and capture only. Text and selections
  * remain owned by the supplied common-layer controller.
@@ -69,11 +69,11 @@ export class PointerSelectionController extends DisposableOwner {
   ) {
     super();
     try {
-      this.multiCursorModifier = readAlphaPointerMultiCursorModifier(
+      this.multiCursorModifier = readAsterPointerMultiCursorModifier(
         options.multiCursorModifier,
       );
       if (options.wordPattern !== undefined && typeof options.wordPattern !== "function") {
-        throw new TypeError("Alpha pointer word pattern resolver must be a function");
+        throw new TypeError("Aster pointer word pattern resolver must be a function");
       }
       this.wordPattern = options.wordPattern;
     } catch (error) {
@@ -83,7 +83,7 @@ export class PointerSelectionController extends DisposableOwner {
     if (viewport.textModel !== selectionController.textModel) {
       this.dispose();
       throw new TypeError(
-        "Alpha pointer and selection controllers must share one text model",
+        "Aster pointer and selection controllers must share one text model",
       );
     }
     this.own(addDisposableListener(
@@ -103,7 +103,7 @@ export class PointerSelectionController extends DisposableOwner {
     this.viewport.element.focus({ preventScroll: true });
     this.stopPointerSelection();
     const pointerId = readPointerId(event);
-    const addSelection = isAlphaPointerMultiCursorGesture(
+    const addSelection = isAsterPointerMultiCursorGesture(
       event,
       this.multiCursorModifier,
     );
@@ -256,7 +256,7 @@ export class PointerSelectionController extends DisposableOwner {
         direction: selection.direction,
       })),
       primaryIndex: base.primaryIndex,
-      toggleCandidateIndex: findAlphaPointerToggleCandidate(
+      toggleCandidateIndex: findAsterPointerToggleCandidate(
         base,
         initialSelection,
       ),
@@ -319,7 +319,7 @@ export class PointerSelectionController extends DisposableOwner {
       return;
     }
     const base = trackedSelectionSet(additional);
-    this.selectionController.setSelections(combineAlphaPointerSelection(
+    this.selectionController.setSelections(combineAsterPointerSelection(
       base,
       selection,
       additional.toggleCandidateIndex,

@@ -13,7 +13,7 @@ function createDocument(schema: DocumentSchema) {
   ], "document-1");
 }
 
-test("Gama collaboration rebases text offsets and selections through remote insertion", () => {
+test("Aster collaboration rebases text offsets and selections through remote insertion", () => {
   const schema = createDefaultDocumentSchema();
   const base = createDocument(schema);
   const local = new DocumentTransaction()
@@ -30,7 +30,7 @@ test("Gama collaboration rebases text offsets and selections through remote inse
   assert.deepEqual(result.droppedSteps, []);
 });
 
-test("Gama collaboration shifts structural insertion indices through remote siblings", () => {
+test("Aster collaboration shifts structural insertion indices through remote siblings", () => {
   const schema = createDefaultDocumentSchema();
   const base = createDocument(schema);
   const localNode = schema.createNode("paragraph", { id: "paragraph-local", content: [schema.createText("Local", { id: "text-local" })] });
@@ -45,7 +45,7 @@ test("Gama collaboration shifts structural insertion indices through remote sibl
   assert.equal(result.transaction.steps[0]?.kind === "insertNode" ? result.transaction.steps[0].index : -1, 2);
 });
 
-test("Gama collaboration drops local steps whose targets were deleted remotely", () => {
+test("Aster collaboration drops local steps whose targets were deleted remotely", () => {
   const schema = createDefaultDocumentSchema();
   const base = createDocument(schema);
   const local = new DocumentTransaction().setNodeAttributes("paragraph-2", { alignment: "center" });
@@ -58,7 +58,7 @@ test("Gama collaboration drops local steps whose targets were deleted remotely",
   assert.deepEqual(result.droppedSteps, local.steps);
 });
 
-test("Gama collaboration preserves local transaction dependencies and local node selection", () => {
+test("Aster collaboration preserves local transaction dependencies and local node selection", () => {
   const schema = createDefaultDocumentSchema();
   const base = createDocument(schema);
   const localNode = schema.createNode("paragraph", { id: "paragraph-local", content: [schema.createText("Local", { id: "text-local" })] });
@@ -75,7 +75,7 @@ test("Gama collaboration preserves local transaction dependencies and local node
   assert.equal(result.transaction.steps.length, 2);
 });
 
-test("Gama collaboration maps non-overlapping replacements after a remote replacement", () => {
+test("Aster collaboration maps non-overlapping replacements after a remote replacement", () => {
   const schema = createDefaultDocumentSchema();
   const base = schema.createDocument([schema.createNode("paragraph", { id: "paragraph-1", content: [schema.createText("Hello", { id: "text-1" })] })], "document-1");
   const local = new DocumentTransaction().replaceText("text-1", 2, 3, "X");
@@ -87,7 +87,7 @@ test("Gama collaboration maps non-overlapping replacements after a remote replac
   assert.deepEqual(result.transaction.steps, [{ kind: "replaceText", nodeId: "text-1", from: 7, to: 8, text: "X" }]);
 });
 
-test("Gama collaboration rebases both undo and redo branches without removing remote text", () => {
+test("Aster collaboration rebases both undo and redo branches without removing remote text", () => {
   const schema = createDefaultDocumentSchema();
   using model = new DocumentModel(schema, createDocument(schema));
   model.dispatch(new DocumentTransaction().replaceText("text-1", 0, 0, "A"));
@@ -111,7 +111,7 @@ test("Gama collaboration rebases both undo and redo branches without removing re
   assert.equal(model.document.content[0]?.content[0]?.text, "BHello");
 });
 
-test("Gama collaboration replays structural history without moving an acknowledged remote block", () => {
+test("Aster collaboration replays structural history without moving an acknowledged remote block", () => {
   const schema = createDefaultDocumentSchema();
   const base = createDocument(schema);
   using model = new DocumentModel(schema, base);
@@ -130,7 +130,7 @@ test("Gama collaboration replays structural history without moving an acknowledg
   assert.deepEqual(model.document.content.map(node => node.id), ["paragraph-1", "paragraph-local", "paragraph-remote", "paragraph-2"]);
 });
 
-test("Gama collaboration drops a history branch that would overwrite a remote replacement", () => {
+test("Aster collaboration drops a history branch that would overwrite a remote replacement", () => {
   const schema = createDefaultDocumentSchema();
   using model = new DocumentModel(schema, createDocument(schema));
   model.dispatch(new DocumentTransaction().replaceText("text-1", 0, 1, "A"));
@@ -143,7 +143,7 @@ test("Gama collaboration drops a history branch that would overwrite a remote re
   assert.equal(model.canRedo, false);
 });
 
-test("Gama collaboration drops structural history that would delete remote block content", () => {
+test("Aster collaboration drops structural history that would delete remote block content", () => {
   const schema = createDefaultDocumentSchema();
   using model = new DocumentModel(schema, createDocument(schema));
   const local = schema.createNode("paragraph", { id: "paragraph-local", content: [schema.createText("Local", { id: "text-local" })] });

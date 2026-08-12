@@ -4,7 +4,7 @@ import type { DocumentSchema } from "./documentSchema.js";
 import type { DocumentSelection } from "../core/documentSelection.js";
 import type { DocumentTransaction } from "./documentTransaction.js";
 
-/** Origins that a document plugin can observe when Gama advances its state. */
+/** Origins that a document plugin can observe when Aster advances its state. */
 export type DocumentPluginChangeOrigin = "user" | "remote" | "undo" | "redo" | "reset";
 
 /** Stable identity used to retrieve one plugin's state from a document model. */
@@ -64,7 +64,7 @@ export interface DocumentPluginState<T> {
   applySelection?(value: T, context: DocumentPluginSelectionContext): T;
 }
 
-/** A common-state extension that is updated atomically with Gama document changes. */
+/** A common-state extension that is updated atomically with Aster document changes. */
 export interface DocumentPlugin<T> {
   readonly key: DocumentPluginKey<T>;
   readonly state: DocumentPluginState<T>;
@@ -77,7 +77,7 @@ export interface DocumentPluginOptions<T = unknown> {
   readonly decorations?: (state: T, context: DocumentPluginDecorationContext<T>) => DocumentDecorationSet | undefined;
 }
 
-/** Creates a validated immutable plugin descriptor for a Gama document model. */
+/** Creates a validated immutable plugin descriptor for a Aster document model. */
 export function createDocumentPlugin<T>(key: DocumentPluginKey<T>, state: DocumentPluginState<T>, options: DocumentPluginOptions<T> = {}): DocumentPlugin<T> {
   if (!key || typeof key.name !== "string") throw new TypeError("Document plugins require a plugin key");
   if (!state || typeof state.init !== "function" || typeof state.apply !== "function") throw new TypeError(`Document plugin '${key.name}' requires init and apply state functions`);

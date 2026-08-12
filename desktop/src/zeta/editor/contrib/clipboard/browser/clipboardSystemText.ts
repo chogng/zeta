@@ -10,7 +10,7 @@ export interface ClipboardSystemTextReader {
  * Creates the browser adapter only when the owning window exposes the
  * permission-gated Async Clipboard text read API.
  */
-export function createAlphaBrowserClipboardSystemTextReader(ownerDocument: Document): ClipboardSystemTextReader | undefined {
+export function createAsterBrowserClipboardSystemTextReader(ownerDocument: Document): ClipboardSystemTextReader | undefined {
   const clipboard = ownerDocument.defaultView?.navigator.clipboard;
   return clipboard && typeof clipboard.readText === "function"
     ? Object.freeze({ readText: () => clipboard.readText() })

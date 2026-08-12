@@ -54,7 +54,7 @@ test("Completion widget projects named options, focus, ARIA, and content coordin
     completion("console", "console", LanguageCompletionItemKind.Variable, "global", true),
   ]);
   const widget = input.completionWidget!;
-  const options = [...widget.element.querySelectorAll<HTMLElement>(".zeta-alpha-editor-completion-option")];
+  const options = [...widget.element.querySelectorAll<HTMLElement>(".aster-editor-completion-option")];
 
   assert.equal(widget.visible, true);
   assert.equal(widget.element.hidden, false);
@@ -124,7 +124,7 @@ test("Typing a declared completion commit character accepts it atomically before
   assert.equal(fixture.model.getText(), "con");
 });
 
-test("Completion snippets route Tab, Shift+Tab, and Escape through Alpha placeholder navigation", () => {
+test("Completion snippets route Tab, Shift+Tab, and Escape through Aster placeholder navigation", () => {
   const fixture = createFixture("fn");
   using resources = fixture;
   fixture.selections.setSelections(TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 2))));
@@ -291,8 +291,8 @@ test("Completion widget projects resolved details only for the focused option", 
 
   assert.deepEqual(requests, ["console"]);
   assert.equal(fixture.session.state!.detailsStatus, LanguageCompletionDetailsStatus.Complete);
-  assert.equal(selected.querySelector(".zeta-alpha-editor-completion-detail")!.textContent, "resolved detail");
-  assert.equal(selected.querySelector(".zeta-alpha-editor-completion-documentation")!.textContent, "Resolved documentation");
+  assert.equal(selected.querySelector(".aster-editor-completion-detail")!.textContent, "resolved detail");
+  assert.equal(selected.querySelector(".aster-editor-completion-documentation")!.textContent, "Resolved documentation");
   assert.equal(selected.classList.contains("resolving"), false);
   assert.equal(selected.getAttribute("aria-busy"), null);
 });

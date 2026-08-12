@@ -14,12 +14,12 @@ export class ColorPickerController extends DisposableOwner {
   private request: AbortController | undefined;
   private colors: readonly LanguageColorInformation[] = [];
 
-  constructor(private readonly editorInput: HTMLTextAreaElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: ColorService, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Alpha color picker failed", error)) {
+  constructor(private readonly editorInput: HTMLTextAreaElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: ColorService, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Aster color picker failed", error)) {
     super();
-    if (viewport.textModel !== selections.textModel) throw new TypeError("Alpha color picker dependencies must share a text model");
+    if (viewport.textModel !== selections.textModel) throw new TypeError("Aster color picker dependencies must share a text model");
     const document = viewport.element.ownerDocument;
     this.element = document.createElement("div");
-    this.element.className = "zeta-alpha-editor-color-picker";
+    this.element.className = "aster-editor-color-picker";
     this.element.hidden = true;
     this.input = document.createElement("input");
     this.input.type = "color";

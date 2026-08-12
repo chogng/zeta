@@ -6,7 +6,7 @@ import type { DocumentModel } from "../model/documentModel.js";
 import type { DocumentPlugin } from "../model/documentPlugin.js";
 import type { DocumentSchema } from "../model/documentSchema.js";
 
-/** Inputs required to acquire one structured Gama document model. */
+/** Inputs required to acquire one structured Aster document model. */
 export interface DocumentModelInput {
   readonly resource: URI;
   readonly initialText?: string;

@@ -15,7 +15,7 @@ interface OpenMarkerFold {
 }
 
 /**
- * Computes synchronous structural fold ranges from Alpha's configured lexical scanner.
+ * Computes synchronous structural fold ranges from Aster's configured lexical scanner.
  *
  * Brace, bracket, multi-line block-comment, and configured named region markers
  * participate. Parentheses are intentionally excluded: multi-line argument lists

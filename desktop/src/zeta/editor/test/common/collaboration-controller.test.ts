@@ -18,7 +18,7 @@ import { DocumentCollaborationController } from "../../contrib/collaboration/com
 import type { DocumentCollaborationEnvelope } from "../../contrib/collaboration/common/protocol.js";
 import type { DocumentCollaborationRemoteEnvelope } from "../../contrib/collaboration/common/protocol.js";
 
-test("Gama collaboration submits only the in-flight snapshot while later typing is buffered", async () => {
+test("Aster collaboration submits only the in-flight snapshot while later typing is buffered", async () => {
   const schema = createDefaultDocumentSchema();
   const document = createDocument(schema);
   using model = new DocumentModel(schema, document);
@@ -46,7 +46,7 @@ test("Gama collaboration submits only the in-flight snapshot while later typing 
   assert.equal(controller.state, "connected");
 });
 
-test("Gama collaboration shares an author's undo and redo as ordered transactions", async () => {
+test("Aster collaboration shares an author's undo and redo as ordered transactions", async () => {
   const schema = createDefaultDocumentSchema();
   const document = createDocument(schema);
   using model = new DocumentModel(schema, document);
@@ -76,7 +76,7 @@ test("Gama collaboration shares an author's undo and redo as ordered transaction
   assert.equal(controller.state, "connected");
 });
 
-test("Gama collaboration preserves a local author's history through an acknowledged remote edit", async () => {
+test("Aster collaboration preserves a local author's history through an acknowledged remote edit", async () => {
   const schema = createDefaultDocumentSchema();
   const document = createDocument(schema);
   using model = new DocumentModel(schema, document);
@@ -120,7 +120,7 @@ test("Gama collaboration preserves a local author's history through an acknowled
   assert.equal(controller.state, "connected");
 });
 
-test("Gama collaboration preserves local history when a remote update rebases in-flight typing", async () => {
+test("Aster collaboration preserves local history when a remote update rebases in-flight typing", async () => {
   const schema = createDefaultDocumentSchema();
   const document = createDocument(schema);
   using model = new DocumentModel(schema, document);
@@ -151,7 +151,7 @@ test("Gama collaboration preserves local history when a remote update rebases in
   assert.equal(controller.state, "connected");
 });
 
-test("Gama collaboration publishes local selections without versioning them and exposes remote selections", async () => {
+test("Aster collaboration publishes local selections without versioning them and exposes remote selections", async () => {
   const schema = createDefaultDocumentSchema();
   const document = createDocument(schema);
   using model = new DocumentModel(schema, document);
@@ -188,7 +188,7 @@ class FakeDocumentCollaborationConnection extends DisposableOwner implements Doc
   private readonly presenceEmitter = this.own(new Emitter<readonly DocumentCollaborationPresence[]>());
   private readonly failureEmitter = this.own(new Emitter<Error>());
 
-  readonly roomId = "gama-test-room";
+  readonly roomId = "aster-test-room";
   readonly clientId = "client-a";
   readonly principalId = undefined;
   readonly canEdit = true;

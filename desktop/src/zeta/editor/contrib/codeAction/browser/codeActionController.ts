@@ -18,12 +18,12 @@ export class CodeActionController extends DisposableOwner {
   private actionRange: TextRange | undefined;
   private actionDiagnostics: readonly LanguageDiagnostic[] = [];
 
-  constructor(private readonly input: HTMLTextAreaElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: CodeActionService, private readonly diagnostics: TextDecorationCollection<LanguageDiagnostic>, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Alpha code action failed", error)) {
+  constructor(private readonly input: HTMLTextAreaElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: CodeActionService, private readonly diagnostics: TextDecorationCollection<LanguageDiagnostic>, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Aster code action failed", error)) {
     super();
-    if (viewport.textModel !== selections.textModel || diagnostics.textModel !== selections.textModel) throw new TypeError("Alpha code action dependencies must share one text model");
+    if (viewport.textModel !== selections.textModel || diagnostics.textModel !== selections.textModel) throw new TypeError("Aster code action dependencies must share one text model");
     const ownerDocument = viewport.element.ownerDocument;
     this.element = ownerDocument.createElement("div");
-    this.element.className = "zeta-alpha-editor-code-action";
+    this.element.className = "aster-editor-code-action";
     this.element.hidden = true;
     this.element.setAttribute("role", "menu");
     viewport.element.append(this.element);

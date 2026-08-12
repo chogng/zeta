@@ -82,7 +82,7 @@ test("Textarea composition commits one revision and positions the IME input", ()
   input.element.setSelectionRange(1, 2, "backward");
   input.element.dispatchEvent(compositionEvent(dom.window, "compositionupdate", "ni"));
   const firstUnderline = viewport.element.querySelector<HTMLElement>(
-    ".zeta-alpha-editor-composition",
+    ".aster-editor-composition",
   );
   assert.ok(firstUnderline);
   assert.deepEqual({
@@ -113,7 +113,7 @@ test("Textarea composition commits one revision and positions the IME input", ()
     rootClass: viewport.element.classList.contains("composing"),
     inputValue: input.element.value,
     underlineCount: viewport.element.querySelectorAll(
-      ".zeta-alpha-editor-composition",
+      ".aster-editor-composition",
     ).length,
     states,
   }, {
@@ -269,7 +269,7 @@ test("IME coordination, multi-cursor rejection, and external invalidation are sa
       selection: selections.selections.primary,
       top: input.element.style.top,
       underlines: [...viewport.element.querySelectorAll<HTMLElement>(
-        ".zeta-alpha-editor-composition",
+        ".aster-editor-composition",
       )].map(element => ({
         left: element.style.left,
         width: element.style.width,
@@ -291,7 +291,7 @@ test("IME coordination, multi-cursor rejection, and external invalidation are sa
     assert.equal(input.compositionController.composing, false);
     assert.equal(viewport.element.classList.contains("composing"), false);
     assert.equal(viewport.element.querySelectorAll(
-      ".zeta-alpha-editor-composition",
+      ".aster-editor-composition",
     ).length, 0);
     input.element.dispatchEvent(compositionEvent(dom.window, "compositionupdate", "ignored"));
     input.element.dispatchEvent(compositionEvent(dom.window, "compositionend", "ignored"));

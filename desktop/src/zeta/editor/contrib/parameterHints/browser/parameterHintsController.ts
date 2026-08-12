@@ -10,10 +10,10 @@ export class ParameterHintsController extends DisposableOwner {
   private readonly element: HTMLDivElement;
   private request: AbortController | undefined;
 
-  constructor(private readonly input: HTMLTextAreaElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: ParameterHintsService, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Alpha parameter hints failed", error)) {
+  constructor(private readonly input: HTMLTextAreaElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: ParameterHintsService, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Aster parameter hints failed", error)) {
     super();
     this.element = viewport.element.ownerDocument.createElement("div");
-    this.element.className = "zeta-alpha-editor-parameter-hints";
+    this.element.className = "aster-editor-parameter-hints";
     this.element.hidden = true;
     this.element.setAttribute("role", "dialog");
     this.element.setAttribute("aria-label", "Parameter hints");
@@ -50,7 +50,7 @@ export class ParameterHintsController extends DisposableOwner {
   private render(hints: LanguageParameterHints): void {
     this.element.replaceChildren(...hints.signatures.map((signature, index) => {
       const node = this.element.ownerDocument.createElement("div");
-      node.className = `zeta-alpha-editor-parameter-hints-signature${hints.activeSignature === index ? " active" : ""}`;
+      node.className = `aster-editor-parameter-hints-signature${hints.activeSignature === index ? " active" : ""}`;
       node.textContent = signature.label;
       if (signature.documentation) node.title = signature.documentation;
       return node;

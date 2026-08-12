@@ -14,7 +14,7 @@ import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 const DISPLAY_RESULT_LIMIT = 999;
 const REPLACE_ALL_RESULT_LIMIT = 100_000;
 
-/** Owns Alpha's browser find/replace widget, shortcuts, match navigation, and search decorations. */
+/** Owns Aster's browser find/replace widget, shortcuts, match navigation, and search decorations. */
 export class FindController extends DisposableOwner {
   readonly element: HTMLDivElement;
   readonly searchInput: HTMLInputElement;
@@ -45,28 +45,28 @@ export class FindController extends DisposableOwner {
     super();
     if (viewport.textModel !== selections.textModel || viewport.textModel !== decorations.textModel) {
       this.dispose();
-      throw new TypeError("Alpha find dependencies must share one text model");
+      throw new TypeError("Aster find dependencies must share one text model");
     }
     const ownerDocument = viewport.element.ownerDocument;
     this.element = ownerDocument.createElement("div");
-    this.element.className = "zeta-alpha-editor-find-widget";
+    this.element.className = "aster-editor-find-widget";
     this.element.hidden = true;
     this.element.setAttribute("role", "dialog");
     this.element.setAttribute("aria-label", "Find and replace");
 
     const findRow = ownerDocument.createElement("div");
-    findRow.className = "zeta-alpha-editor-find-row";
+    findRow.className = "aster-editor-find-row";
     this.replaceToggle = createButton(ownerDocument, "Toggle replace", "›");
-    this.replaceToggle.classList.add("zeta-alpha-editor-find-replace-toggle");
+    this.replaceToggle.classList.add("aster-editor-find-replace-toggle");
     this.searchInput = ownerDocument.createElement("input");
-    this.searchInput.className = "zeta-alpha-editor-find-input";
+    this.searchInput.className = "aster-editor-find-input";
     this.searchInput.type = "text";
     this.searchInput.placeholder = "Find";
     this.searchInput.setAttribute("aria-label", "Find");
     this.searchInput.autocomplete = "off";
     this.searchInput.spellcheck = false;
     this.resultLabel = ownerDocument.createElement("span");
-    this.resultLabel.className = "zeta-alpha-editor-find-result";
+    this.resultLabel.className = "aster-editor-find-result";
     this.resultLabel.setAttribute("aria-live", "polite");
     this.matchCaseButton = createToggleButton(ownerDocument, "Match case", "Aa");
     this.wholeWordButton = createToggleButton(ownerDocument, "Match whole word", "W");
@@ -78,12 +78,12 @@ export class FindController extends DisposableOwner {
     findRow.append(this.replaceToggle, this.searchInput, this.resultLabel, this.matchCaseButton, this.wholeWordButton, this.regularExpressionButton, this.findInSelectionButton, previousButton, nextButton, closeButton);
 
     this.replaceRow = ownerDocument.createElement("div");
-    this.replaceRow.className = "zeta-alpha-editor-replace-row";
+    this.replaceRow.className = "aster-editor-replace-row";
     this.replaceRow.hidden = true;
     const replaceSpacer = ownerDocument.createElement("span");
-    replaceSpacer.className = "zeta-alpha-editor-replace-spacer";
+    replaceSpacer.className = "aster-editor-replace-spacer";
     this.replaceInput = ownerDocument.createElement("input");
-    this.replaceInput.className = "zeta-alpha-editor-find-input";
+    this.replaceInput.className = "aster-editor-find-input";
     this.replaceInput.type = "text";
     this.replaceInput.placeholder = "Replace";
     this.replaceInput.setAttribute("aria-label", "Replace");
@@ -390,7 +390,7 @@ export class FindController extends DisposableOwner {
 
 function createButton(ownerDocument: Document, label: string, text: string): HTMLButtonElement {
   const button = ownerDocument.createElement("button");
-  button.className = "zeta-alpha-editor-find-button";
+  button.className = "aster-editor-find-button";
   button.type = "button";
   button.title = label;
   button.setAttribute("aria-label", label);

@@ -1,10 +1,10 @@
-# Editor
+# Aster
 
-> 本文拥有 Renderer editor 模块的实现和修改契约。跨 Workbench、文件、语言服务与 Rust App Server 的系统边界见 [`docs/editor-architecture.md`](../../../../docs/editor-architecture.md)。文本内核和结构化文档内核的详细行为分别见 [`text-engine.md`](./text-engine.md) 与 [`document-engine.md`](./document-engine.md)。
+> Aster 是 Zeta 的可组装编辑器内核，类似 Monaco 在 VS Code 架构中的位置；`editor/` 只是它的扁平领域目录，不是第二个品牌或额外架构层。跨 Workbench、文件、语言服务与 Rust App Server 的系统边界见 [`docs/editor-architecture.md`](../../../../docs/editor-architecture.md)。Text Engine 和 Document Engine 的详细行为分别见 [`text-engine.md`](./text-engine.md) 与 [`document-engine.md`](./document-engine.md)。
 
 ## 快速理解
 
-Editor 采用与 VS Code `src/vs/editor` 一致的扁平职责分区：`common` 保存 DOM-free 模型与算法，`browser` 保存 DOM 投影和宿主适配，`contrib` 保存可装配能力，`test` 保存内核级回归测试。Editor 不再形成 Alpha/Gama 两套目录或产品入口；真正不同的底层对象分别由 `TextModel` 和 `DocumentModel` 表达。
+Aster 采用与 VS Code `src/vs/editor` 一致的扁平职责分区：`common` 保存 DOM-free 模型与算法，`browser` 保存 DOM 投影和宿主适配，`contrib` 保存可装配能力，`test` 保存内核级回归测试。Aster 只有一个源码域和一套公开入口；真正不同的底层对象分别由 `TextModel` 和 `DocumentModel` 表达。
 
 | 产品或调用方式 | 加载入口 | 得到的能力 |
 | --- | --- | --- |
@@ -23,7 +23,7 @@ Editor 采用与 VS Code `src/vs/editor` 一致的扁平职责分区：`common` 
 | `common/cursor`、`common/viewModel`、`common/viewLayout` | 文本内核与 `base/common` | 行式编辑器实例状态和纯布局投影 | DOM 和产品判断 |
 | `browser` | `common`、`base/browser` 和显式前端 service contract | code/document/diff widget、输入、viewport、pane、contribution registry 与 service adapter | 产品版本选择、具体 feature controller |
 | `contrib/<feature>` | 对应 engine 的最小 contract | 可移除的编辑能力及其命令、状态和投影 | 第二套 model、产品级 `if code/academic` |
-| `editor.*.all.ts` | contribution entry | 静态产品装配 | 模型或功能实现 |
+| `aster.*.all.ts` | contribution entry | 静态产品装配 | 模型或功能实现 |
 
 依赖必须保持 `contrib/browser → browser/common → common → base` 的方向。`src/zeta/base` 不得反向引用 editor。结构化文档可以通过 Workbench-owned `IEmbeddedTextEditor` contract 使用 `CodeEditorWidget`，但 `DocumentModel` 不得依赖 `TextModel`，`TextModel` 也不得依赖 document schema。
 
@@ -70,7 +70,7 @@ editor.main.ts ────────────→ editor.all.ts + editor.ap
 | `TextModel` | 行式文本 mutation、version、history、snapshot | cursor、tracked range、language result version gate、text-engine tests |
 | `DocumentModel` | 结构化 transaction、selection mapping、plugin state、history | schema、serialization、collaboration rebase、document-engine tests |
 | `CodeEditorWidget` | 行式 DOM projection 与必需 input/navigation surface | viewport、accessibility、embedded adapter、contributed controllers |
-| `registerEditorContribution` | 所有 editor capability 的进程级静态注册 | `editor.*.all.ts`、text/document 挂载点和 contribution 顺序 |
+| `registerEditorContribution` | 所有 Aster capability 的进程级静态注册 | `aster.*.all.ts`、text/document 挂载点和 contribution 顺序 |
 | `EditorWidget` | 结构化节点、marks、selection 与 node-view lifecycle | schema profile、clipboard、collaboration decoration |
 | `EditorProfile` | schema、empty document、node view、toolbar、plugin 和 collaboration schema ID 的稳定组合 | Academic bundle、持久格式兼容性、协作房间兼容性 |
 | `registerEditorPane` | Workbench pane descriptor 注册 | bundle import、editor ID 唯一性、pane matching 顺序 |
@@ -83,7 +83,7 @@ editor.main.ts ────────────→ editor.all.ts + editor.ap
 - 异步语言、diff、文件和协作结果必须按 model version 或服务器版本拒绝过期结果。
 - Academic schema 与 `collaborationSchemaId` 是持久兼容边界；改变节点语义时必须同步迁移、serialization 测试和 collaboration 测试。
 - Product bundle 是构建时静态选择，不提供运行时卸载 contribution 的承诺。
-- 现有 `Alpha*`、`Gama*` editor ID 和 CSS class 可作为兼容 vocabulary 保留；目录所有权和新公共抽象不得继续使用它们区分产品。
+- Aster 自有的公开入口、editor ID、content type 和 DOM vocabulary 必须使用 `aster` 品牌；Workbench 通用 editor part 与主题语义 token 仍由各自 owner 命名。不得重新引入 Alpha/Gama 兼容标识。
 
 ## 测试与修改影响
 
@@ -91,4 +91,4 @@ editor.main.ts ────────────→ editor.all.ts + editor.ap
 - `test:editor:browser` 在同一浏览器 suite 内验证 text/document model 挂载点、输入、布局、embedded editor 和可访问性集成。
 - `test/architecture/editor-architecture.test.ts` 验证扁平目录、禁止的同步层依赖、两个 engine owner 和产品 bundle。
 
-修改 product composition 时至少运行架构测试和两个 Renderer 类型检查目标；修改 model、input、serialization 或 schema 时运行对应 engine 的 unit/browser suite。浏览器集成测试应在统一 editor 测试入口下按具体 model 挂载点命名，不再以 Alpha/Gama 表达架构所有权。
+修改 product composition 时至少运行架构测试和两个 Renderer 类型检查目标；修改 model、input、serialization 或 schema 时运行对应 engine 的 unit/browser suite。浏览器集成测试应在统一 Aster 测试入口下按具体 model 挂载点命名，不再以历史 engine 代号表达架构所有权。

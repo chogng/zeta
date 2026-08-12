@@ -6,10 +6,10 @@ export interface DocumentMarkSpec {
   readonly validateAttributes?: (attrs: DocumentAttributes) => void;
 }
 
-/** Font families that Gama stores as semantic document text styles. */
+/** Font families that Aster stores as semantic document text styles. */
 export type DocumentTextStyleFontFamily = "sans" | "serif" | "monospace";
 
-/** Persistent typography attributes applied by Gama's document-formatting controls. */
+/** Persistent typography attributes applied by Aster's document-formatting controls. */
 export interface DocumentTextStyleAttributes {
   readonly fontFamily?: DocumentTextStyleFontFamily;
   readonly fontSize?: number;
@@ -55,7 +55,7 @@ export interface CreateNodeOptions {
 
 const DEFAULT_TOP_NODE_TYPE = "doc";
 
-/** Schema and content validator for Gama's structured document tree. */
+/** Schema and content validator for Aster's structured document tree. */
 export class DocumentSchema {
   readonly topNodeType: string;
   private readonly nodeSpecs: ReadonlyMap<string, DocumentNodeSpec>;

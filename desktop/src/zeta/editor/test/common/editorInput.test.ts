@@ -6,8 +6,8 @@ import { EditorPaneMatch } from "../../../workbench/browser/parts/editor/editorP
 import { DIFF_EDITOR_ID, createDiffEditorInput, matchDiffEditor } from "../../browser/diffEditorInput.js";
 import { CODE_EDITOR_ID, languageForEditorInput, matchCodeEditor } from "../../browser/codeEditorInput.js";
 
-test("Alpha is the default text editor with canonical language IDs", () => {
-  assert.equal(CODE_EDITOR_ID, "zeta.editor.alpha");
+test("Aster is the default text editor with canonical language IDs", () => {
+  assert.equal(CODE_EDITOR_ID, "aster.editor.code");
   assert.equal(matchCodeEditor({ resource: URI.file("C:\\project\\view.tsx") }), EditorPaneMatch.Default);
   assert.equal(languageForEditorInput({ resource: URI.file("C:\\project\\view.tsx") }), "typescriptreact");
   assert.equal(languageForEditorInput({ resource: URI.file("C:\\project\\settings.jsonc") }), "jsonc");
@@ -16,19 +16,19 @@ test("Alpha is the default text editor with canonical language IDs", () => {
   assert.equal(matchCodeEditor({ resource: URI.file("C:\\project\\binary.bin") }), EditorPaneMatch.None);
 });
 
-test("Alpha excludes structured Academic documents", () => {
+test("Aster excludes structured Academic documents", () => {
   assert.equal(matchCodeEditor({
     resource: URI.file("C:\\papers\\research.zeta-paper"),
     contentType: ACADEMIC_DOCUMENT_CONTENT_TYPE,
   }), EditorPaneMatch.None);
 });
 
-test("Alpha diff inputs have one stable tab identity and select only the diff pane", () => {
+test("Aster diff inputs have one stable tab identity and select only the diff pane", () => {
   const original = { resource: URI.file("C:\\project\\before.ts"), label: "before.ts" };
   const modified = { resource: URI.file("C:\\project\\after.ts"), label: "after.ts" };
   const input = createDiffEditorInput(original, modified, "Review changes");
 
-  assert.equal(DIFF_EDITOR_ID, "zeta.editor.alpha-diff");
+  assert.equal(DIFF_EDITOR_ID, "aster.editor.diff");
   assert.equal(input.label, "Review changes");
   assert.equal(input.readOnly, true);
   assert.equal(matchDiffEditor(input), EditorPaneMatch.Default);

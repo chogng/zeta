@@ -51,13 +51,13 @@ export class DiffEditorWidget extends DisposableOwner {
     this.contentElement = ownerDocument.createElement("div");
     this.rowsElement = ownerDocument.createElement("div");
     this.accessibilityStatusElement = ownerDocument.createElement("div");
-    this.element.className = "zeta-alpha-diff-editor";
+    this.element.className = "aster-diff-editor";
     this.element.tabIndex = 0;
     this.element.setAttribute("role", "region");
     this.element.setAttribute("aria-label", `Side-by-side diff editor. Original: ${options.originalAriaLabel ?? "Original"}. Modified: ${options.modifiedAriaLabel ?? "Modified"}.`);
-    this.contentElement.className = "zeta-alpha-diff-editor-content";
-    this.rowsElement.className = "zeta-alpha-diff-editor-rows";
-    this.accessibilityStatusElement.className = "zeta-alpha-diff-editor-accessibility-status";
+    this.contentElement.className = "aster-diff-editor-content";
+    this.rowsElement.className = "aster-diff-editor-rows";
+    this.accessibilityStatusElement.className = "aster-diff-editor-accessibility-status";
     this.accessibilityStatusElement.setAttribute("aria-live", "polite");
     this.accessibilityStatusElement.setAttribute("aria-atomic", "true");
     this.contentElement.append(this.rowsElement);
@@ -128,12 +128,12 @@ export class DiffEditorWidget extends DisposableOwner {
 
   private revealLine(side: "originalLineIndex" | "modifiedLineIndex", lineIndex: number): void {
     if (!Number.isSafeInteger(lineIndex) || lineIndex < 0) {
-      throw new RangeError("Alpha diff line index must be a non-negative safe integer");
+      throw new RangeError("Aster diff line index must be a non-negative safe integer");
     }
     const diff = this.currentDiff;
     if (!diff) throw new Error("Diff results are not ready");
     const rowIndex = diff.rows.findIndex(row => row[side] === lineIndex);
-    if (rowIndex < 0) throw new RangeError("Alpha diff line index is outside its source model");
+    if (rowIndex < 0) throw new RangeError("Aster diff line index is outside its source model");
     this.revealRow(rowIndex);
   }
 
@@ -198,7 +198,7 @@ export class DiffEditorWidget extends DisposableOwner {
 
 function createDiffRow(ownerDocument: Document, row: LineDiffRow, original: DiffModel["original"], modified: DiffModel["modified"], lineHeight: number, active: boolean): HTMLDivElement {
   const element = ownerDocument.createElement("div");
-  element.className = `zeta-alpha-diff-row ${row.kind}`;
+  element.className = `aster-diff-editor-row ${row.kind}`;
   element.classList.toggle("active", active);
   element.style.height = `${lineHeight}px`;
   element.style.lineHeight = `${lineHeight}px`;
@@ -217,12 +217,12 @@ function diffRowLocation(row: LineDiffRow): string {
 
 function createDiffCell(ownerDocument: Document, side: "original" | "modified", kind: LineDiffKind, lineIndex: number | undefined, text: string | undefined, changes: readonly DiffRange[]): HTMLDivElement {
   const cell = ownerDocument.createElement("div");
-  cell.className = `zeta-alpha-diff-cell ${side}`;
+  cell.className = `aster-diff-editor-cell ${side}`;
   const number = ownerDocument.createElement("span");
-  number.className = "zeta-alpha-diff-line-number";
+  number.className = "aster-diff-editor-line-number";
   number.textContent = lineIndex === undefined ? "" : String(lineIndex + 1);
   const content = ownerDocument.createElement("span");
-  content.className = "zeta-alpha-diff-line-content";
+  content.className = "aster-diff-editor-line-content";
   if (text === undefined) {
     cell.classList.add("missing");
   } else {
@@ -241,7 +241,7 @@ function projectDiffText(ownerDocument: Document, target: HTMLElement, text: str
   for (const change of changes) {
     fragment.append(text.slice(previousEnd, change.startColumn));
     const changed = ownerDocument.createElement("span");
-    changed.className = `zeta-alpha-diff-inline ${changedKind}`;
+    changed.className = `aster-diff-editor-inline ${changedKind}`;
     changed.textContent = text.slice(change.startColumn, change.endColumn);
     fragment.append(changed);
     previousEnd = change.endColumn;

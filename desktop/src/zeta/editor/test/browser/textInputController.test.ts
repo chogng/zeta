@@ -201,7 +201,7 @@ test("Textarea keyboard fallback routes undo and redo without browser history in
   dom.window.close();
 });
 
-test("Textarea routes browser soft-line deletion through Alpha commands", () => {
+test("Textarea routes browser soft-line deletion through Aster commands", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   const container = dom.window.document.querySelector("main");
   assert.ok(container);

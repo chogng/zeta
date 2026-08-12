@@ -6,15 +6,18 @@ import { findDesktopRoot } from "./testPaths.js";
 
 const editorRoot = resolve(findDesktopRoot(import.meta.dirname), "src/zeta/editor");
 
-test("flat editor exposes VS Code-shaped public entrypoints and product bundles", () => {
+test("flat Aster domain exposes public entrypoints and product bundles", () => {
   for (const entrypoint of ["editor.api.ts", "editor.code.all.ts", "editor.academic.all.ts", "editor.all.ts", "editor.main.ts", "editor.worker.start.ts"]) {
     assert.equal(exists(join(editorRoot, entrypoint)), true, entrypoint);
   }
   assert.equal(exists(join(editorRoot, "alpha")), false, "alpha directory");
   assert.equal(exists(join(editorRoot, "gama")), false, "gama directory");
+  for (const retiredEntrypoint of ["aster.api.ts", "aster.code.all.ts", "aster.academic.all.ts", "aster.all.ts", "aster.main.ts", "aster.worker.start.ts"]) {
+    assert.equal(exists(join(editorRoot, retiredEntrypoint)), false, retiredEntrypoint);
+  }
 });
 
-test("public editor entrypoints retain distinct API, contribution, main, and worker roles", () => {
+test("public Aster entrypoints retain distinct API, contribution, main, and worker roles", () => {
   const api = readFileSync(join(editorRoot, "editor.api.ts"), "utf8");
   const codeBundle = readFileSync(join(editorRoot, "editor.code.all.ts"), "utf8");
   const academicBundle = readFileSync(join(editorRoot, "editor.academic.all.ts"), "utf8");
@@ -34,6 +37,7 @@ test("public editor entrypoints retain distinct API, contribution, main, and wor
   assert.match(all, /editor\.academic\.all/u);
   assert.match(main, /import "\.\/editor\.all\.js"/u);
   assert.match(main, /export \* from "\.\/editor\.api\.js"/u);
+  assert.match(worker, /AsterWorkerPort/u);
   assert.match(worker, /export function start/u);
   assert.match(analysisWorker, /languageWorker\.start/u);
   assert.match(completionWorker, /languageWorker\.start/u);

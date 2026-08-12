@@ -5,7 +5,7 @@ import { expandLineSelections } from "../contrib/lineSelection/browser/lineSelec
 import { TextSelection, TextSelectionSet } from "../common/core/selection.js";
 import { type EditorViewport } from "./view/editorViewport.js";
 
-/** Routes synchronous document-wide editing shortcuts into Alpha commands. */
+/** Routes synchronous document-wide editing shortcuts into Aster commands. */
 export class EditingCommandController extends DisposableOwner {
   constructor(
     input: HTMLTextAreaElement,
@@ -15,7 +15,7 @@ export class EditingCommandController extends DisposableOwner {
     super();
     if (viewport.textModel !== selections.textModel) {
       this.dispose();
-      throw new TypeError("Alpha editing command dependencies must share one text model");
+      throw new TypeError("Aster editing command dependencies must share one text model");
     }
     this.own(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));
   }

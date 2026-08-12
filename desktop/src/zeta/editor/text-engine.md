@@ -1,4 +1,4 @@
-# Alpha Editor
+# Aster Text Engine
 
 > 文件级架构、VS Code editor 对照表和全量 `contrib` 迁移清单见 [`text-engine-architecture.md`](./text-engine-architecture.md)。本文记录实现契约、当前行为、测试证据和已知限制。
 
@@ -10,10 +10,10 @@
 > Rust document-core 的跨运行时分层与迁移阶段见
 > [`docs/editor-core.md`](../../../../docs/editor-core.md)。
 
-Alpha owns the editor-domain primitives and is the product's default plain-text
-editor. Its common text model remains independent of external editor runtimes, the DOM,
+Aster's Text Engine owns the line-oriented editor-domain primitives and is the product's default plain-text
+editing engine. Its common text model remains independent of external editor runtimes, the DOM,
 workbench tabs, files, persistence, and external language runtimes; browser composition
-consumes platform capabilities only through named service contracts. Alpha defines the
+consumes platform capabilities only through named service contracts. Aster defines the
 canonical Zeta line-oriented text-model contract.
 
 ## Runtime layering and base dependencies
@@ -23,8 +23,8 @@ canonical Zeta line-oriented text-model contract.
 | `common/` | `base/common` | DOM-free editor identities, text, history, selection, decoration, composition transactions, and pure layout/view-model math |
 | `browser/` | `base/common`, `base/browser`, `common`, `contrib` | DOM projection, textarea/input events, viewport observation, font measurement, accessibility, and browser adapters |
 | `contrib/folding/browser/` | `base/common`, `base/browser`, `common`, `browser/view` | Code-folding range providers, tracked fold state, fold commands, gutter presentation, and folded visual-row projection |
-| `common/languages` + `common/tokens` | `base/common`, `common/core`, `common/model` | Alpha language configuration, provider contracts, syntax/completion wire, versioned results, token index and lexical editing; no DOM or Workbench |
-| `common/model/documentModel.ts` + structured browser owners | Gama structured-document contracts and browser host | Structured-editor integration only; `DocumentModel` does not depend on `TextModel` |
+| `common/languages` + `common/tokens` | `base/common`, `common/core`, `common/model` | Aster language configuration, provider contracts, syntax/completion wire, versioned results, token index and lexical editing; no DOM or Workbench |
+| `common/model/documentModel.ts` + structured browser owners | Aster structured-document contracts and browser host | Structured-editor integration only; `DocumentModel` does not depend on `TextModel` |
 | Workbench contributions | editor public contracts and platform services | Pane registration, product composition, and document/workspace wiring |
 
 The dependency direction is intentionally one-way: editor layers should reuse
@@ -37,7 +37,7 @@ Text positions, model versions, selections, decorations, viewport semantics,
 and editor instance identity remain editor-owned even when implemented on base
 primitives.
 
-Language capability is deliberately outside Alpha's core ownership. The
+Language capability is deliberately outside Aster's core ownership. The
 `ILanguageFeaturesService` contract in
 `common/services/languageService.ts` (Workbench's
 `workbench/services/language/common/languageFeaturesService.ts` is only a DI wrapper)
@@ -49,7 +49,7 @@ Rust-backed provider.
 
 ### Service extraction boundary
 
-Service extraction follows a real cross-module owner, not the size of an Alpha
+Service extraction follows a real cross-module owner, not the size of an Aster
 class:
 
 | Concern | Owner | Current decision |
@@ -57,27 +57,27 @@ class:
 | Events, lifecycle, URI identity, resource collections | `base/common` | Reuse existing primitives; editor semantics must not flow back into base |
 | Raw resource I/O | `platform/files` | `IFileService` owns workspace reads, opaque content revisions, and App-Server-backed conditional UTF-8 writes |
 | Text resource loading and save transport | `workbench/services/textfile/common` | ✅ `ITextFileService.resolve/save`; it deliberately does not own a live editor model |
-| Syntax token production | `workbench/services/textMate` and Alpha syntax providers | ✅ Bundled language packages are declarative resources loaded through the Workbench TextMate service; Alpha owns the displayed token result and its versioned stores |
-| Parser-derived syntax facts | `zeta-rs/syntax` via `platform/syntax` | ✅ Rust owns bounded parse/tree traversal and UTF-16 projection; Alpha consumes revision-bound tokens, parser diagnostics, document symbols, and folding for JavaScript/JSX, TypeScript/TSX, JSON, JSONC, Rust, and Shell while other languages retain TextMate/lexical/indent fallback |
-| Shared URI-to-Alpha-model references, saved baseline and dirty state | `ITextModelService` | ✅ editor-owned; Alpha owns LF-normalized baseline comparison, serialized snapshot saves and explicit reverts |
-| Shared Workbench persistence lifecycle | `IWorkingCopyService` + `EditorWorkingCopy` | ✅ Workbench indexes the copy; Alpha retains model, line-ending, and conflict semantics |
-| Text transactions, history, selections, decorations and versioned language results | `editor/common` | ✅ Alpha's synchronous TypeScript authority; no Rust/WASM shadow document |
+| Syntax token production | `workbench/services/textMate` and Aster syntax providers | ✅ Bundled language packages are declarative resources loaded through the Workbench TextMate service; Aster owns the displayed token result and its versioned stores |
+| Parser-derived syntax facts | `zeta-rs/syntax` via `platform/syntax` | ✅ Rust owns bounded parse/tree traversal and UTF-16 projection; Aster consumes revision-bound tokens, parser diagnostics, document symbols, and folding for JavaScript/JSX, TypeScript/TSX, JSON, JSONC, Rust, and Shell while other languages retain TextMate/lexical/indent fallback |
+| Shared URI-to-Aster-model references, saved baseline and dirty state | `ITextModelService` | ✅ editor-owned; Aster owns LF-normalized baseline comparison, serialized snapshot saves and explicit reverts |
+| Shared Workbench persistence lifecycle | `IWorkingCopyService` + `EditorWorkingCopy` | ✅ Workbench indexes the copy; Aster retains model, line-ending, and conflict semantics |
+| Text transactions, history, selections, decorations and versioned language results | `editor/common` | ✅ Aster's synchronous TypeScript authority; no Rust/WASM shadow document |
 | Rust file/language/workspace capability | frontend domain services over App Server | Asynchronous, revision-bound results only; never the keystroke hot path |
 | Language identities and composable editing rules | `editor/common` | `LanguageConfigurationRegistry`; comments/brackets/pairs are editor-domain contracts, not generic base primitives |
-| TextMate grammar loading and token production | `workbench/services/textMate` adapter over Alpha syntax providers | 部分具备; bundled language grammars, file associations, language configuration, snippets, static discovery, and serializable scope-theme rules are wired; theme activation and full embedded-language/bracket-result projection remain open |
+| TextMate grammar loading and token production | `workbench/services/textMate` adapter over Aster syntax providers | 部分具备; bundled language grammars, file associations, language configuration, snippets, static discovery, and serializable scope-theme rules are wired; theme activation and full embedded-language/bracket-result projection remain open |
 
-The current `textfile` contract was extracted only after Alpha, Gama, and
+The current `textfile` contract was extracted only after Aster, Aster, and
 Explorer established a real shared loading boundary. It now
 owns transport-only resolve/save operations and the opaque revision returned by
-the workspace file authority; Alpha's baseline, dirty state and transaction
+the workspace file authority; Aster's baseline, dirty state and transaction
 semantics remain editor-owned. `fs/changed` invalidation is forwarded through
-this boundary: Alpha reloads a clean shared model and marks a dirty model
+this boundary: Aster reloads a clean shared model and marks a dirty model
 externally changed while retaining its local edits. A save includes the revision
 resolved with its baseline, so a stale write is rejected by the file authority
 instead of relying on a renderer-side read-before-write race.
-The TextMate service was extracted only after Alpha's Syntax provider/module
+The TextMate service was extracted only after Aster's Syntax provider/module
 path became its real consumer. Conversely, file loading or grammar-runtime imports appearing inside
-`TextModel`, `LanguageTokenLineIndex`, or Alpha browser components are an
+`TextModel`, `LanguageTokenLineIndex`, or Aster browser components are an
 architectural drift signal and require extraction at that point.
 
 ## Current implementation
@@ -132,13 +132,13 @@ architectural drift signal and require extraction at that point.
 | Adjacent single/multi-cursor typing and deletion coalescing | ✅ | `TextEditHistoryGroup` |
 | Single-selection IME composition transaction lifecycle | ✅ | `EditorCompositionSession` |
 | Domain-neutral decoration collections | ✅ | `TextDecorationCollection` |
-| Named browser decoration presentation | ✅ | `createAlphaDecorationSource` / `EditorViewport` |
+| Named browser decoration presentation | ✅ | `createAsterDecorationSource` / `EditorViewport` |
 | Versioned cancellable language request gate | ✅ | `LanguageRequestCoordinator` |
 | Versioned token and diagnostic result stores | ✅ | `VersionedLanguageResultStore` / `languageResults.ts` |
 | Versioned diagnostic decoration bridge | ✅ | `LanguageDiagnosticDecorationBridge` |
 | Diagnostic browser presentation | ✅ | Error/Warning/Information/Hint underlines, rich gutter hover, overview ruler, and highest-severity gutter marker |
 | Next/previous diagnostic navigation and live announcement | ✅ | `DiagnosticNavigationController` (F8 / Shift+F8) |
-| Semantic-token line index, closed modifier styling, and browser projection | ✅ | `LanguageTokenLineIndex` / `createAlphaSemanticTokenSource` |
+| Semantic-token line index, closed modifier styling, and browser projection | ✅ | `LanguageTokenLineIndex` / `createAsterSemanticTokenSource` |
 | Confirmed-delta token line reuse and visible-line resolution | ✅ | `LanguageTokenLineIndex` / `SemanticTokenSource.getLineTokens` |
 | Multi-splice syntax delta and relative suffix payload reuse | ✅ | `syntaxItemDelta.ts` / `LanguageTokenLineIndex` |
 | Shared token/diagnostic Worker transport | ✅ | `SyntaxService` / `syntaxWireCodec` / `createSyntaxWorkerFactory` |
@@ -148,7 +148,7 @@ architectural drift signal and require extraction at that point.
 | Versioned language-isolated lexical line cache | ✅ | `LanguageLexicalSyntaxCache` / `LanguageLexicalLineScanner` |
 | Shared language provider-module lifecycle | ✅ | `LanguageProviderModuleRegistry` / `LanguageProviderModuleHost` / generic module wire |
 | Syntax provider-module activation barrier | ✅ | `SyntaxModuleWorkerClient` / `language.lexical` |
-| TextMate grammar provider and Worker seam | 部分具备 | `workbench/services/textMate`; JSON/JSONC extension resources, explicit host grammar contributions, catalog transport and Alpha pane Worker selection are active |
+| TextMate grammar provider and Worker seam | 部分具备 | `workbench/services/textMate`; JSON/JSONC extension resources, explicit host grammar contributions, catalog transport and Aster pane Worker selection are active |
 | Versioned completion result, session, and widget | ✅ | `languageCompletions.ts` / `LanguageCompletionSessionController` / `CompletionWidget` |
 | Completion snippet tabstops, variables, choices, and navigation-refreshed regex transforms | ✅ | `languageCompletionSnippet.ts` / `languageCompletionSnippetTransform.ts` |
 | Completion provider registry, host, and input triggers | ✅ | `LanguageCompletionProviderRegistry` / `LanguageCompletionService` / `TextInputController` |
@@ -171,14 +171,14 @@ architectural drift signal and require extraction at that point.
 | Canonical browser CodeEditor composition | ✅ | `browser/widget/codeEditor/CodeEditorWidget`; owns viewport, native input, and keyboard/pointer navigation while model and selections remain caller-owned; optional text drop is mounted by the full-editor contribution composition |
 | Computed-font measurement and incremental line widths | ✅ | `DomTextMeasurer` / `LineWidthIndex` |
 | Virtual line-number gutter | ✅ | `browser/EditorViewport` |
-| Multi-selection and caret geometry/DOM projection | ✅ | `createAlphaSelectionGeometry` / `EditorViewport` |
+| Multi-selection and caret geometry/DOM projection | ✅ | `createAsterSelectionGeometry` / `EditorViewport` |
 | Focused caret blinking with reduced-motion fallback | ✅ | `media/editorViewport.css` |
-| Pointer client-coordinate hit testing | ✅ | `hitTestAlphaEditorPoint` / `getTargetAtClientPoint` |
+| Pointer client-coordinate hit testing | ✅ | `hitTestAsterEditorPoint` / `getTargetAtClientPoint` |
 | Pointer character/word/line click and drag selection | ✅ | `PointerSelectionController` |
 | Context-menu selection preservation | ✅ | `PointerSelectionController` |
 | Pointer drag autoscroll | ✅ | `PointerAutoScroller` |
 | Configurable modifier-based pointer multi-cursor | ✅ | `pointerMultiCursor.ts` |
-| Platform-aware physical/visual-row keyboard navigation and reveal | ✅ | `KeyboardNavigationController` / `navigateAlphaVisualCursors` |
+| Platform-aware physical/visual-row keyboard navigation and reveal | ✅ | `KeyboardNavigationController` / `navigateAsterVisualCursors` |
 | Hidden textarea ordinary text editing and history | ✅ | `TextInputController` |
 | Per-input read-only edit gate with selection/navigation retained | ✅ | `EditorSelectionController` / `EditorInput.readOnly` |
 | Language-aware auto-close, surround, overtype, and paired Backspace | ✅ | `contrib/bracketMatching/common/pairEditing.ts` / `TextInputControllerOptions.language` |
@@ -193,30 +193,30 @@ architectural drift signal and require extraction at that point.
 | Tracked multi-line composition underline | ✅ | `EditorCompositionSession.currentRange` / `EditorViewport` |
 | Focused accessible text/primary-selection mirror, multi-selection description, status announcements, and forced-colors semantics | ✅ | `TextInputController` / `EditorViewport` / `SaveController` |
 | macOS desktop IME/VoiceOver DOM contract | ✅ | `CompositionController` / `TextInputController`; empirical VoiceOver walkthrough remains a release verification task |
-| Mobile IME variants and cross-platform assistive-technology acceptance | 不在 Alpha 桌面完成范围 | Mobile is explicitly out of scope; Windows validation is separate release verification |
+| Mobile IME variants and cross-platform assistive-technology acceptance | 不在 Aster 桌面完成范围 | Mobile is explicitly out of scope; Windows validation is separate release verification |
 | File and bootstrap loading | ✅ | `ITextFileService` / `ITextModelService` |
 | Dirty state and serialized snapshot saving | ✅ | `ITextModelService` / `SaveController` |
 | Explicit file-system revert | ✅ | `TextModelReference.revert` / `EditorPane.revert` |
 | CRLF/LF source line-ending preservation on save | ✅ | `ITextModelService` |
 | Workspace external-change invalidation, clean reload, and dirty-model conflict state | ✅ | `IFileService.onDidChangeFiles` / `ITextModelService` |
 | Conditional expected-revision writes and conflict projection | ✅ | `ITextModelService` → `ITextFileService` → `IFileService` → App Server |
-| Backup recovery | 尚未完成 | A recovery/backup policy is a Workbench product concern, not Alpha model state |
+| Backup recovery | 尚未完成 | A recovery/backup policy is a Workbench product concern, not Aster model state |
 
 `TextPosition` names both indices explicitly and counts UTF-16 code units so
 conversion to JavaScript strings and browser selections is deterministic.
 `TextRange` is ordered and end-exclusive. Input text normalizes CRLF, CR,
 Unicode line separator, and paragraph separator to LF before it enters the
-model. Alpha records whether loaded or reverted content uses CRLF and restores
+model. Aster records whether loaded or reverted content uses CRLF and restores
 that convention on save; all other input is written as LF. Mixed line endings
 and encoding policy remain document-layer concerns. Coarse workspace change
-events reload clean Alpha models; dirty models retain local content, expose
+events reload clean Aster models; dirty models retain local content, expose
 `hasExternalChange`, and announce the conflict to assistive technology. The
 resolved opaque revision is the canonical save-time guard; watcher invalidation
 only provides earlier conflict feedback.
 
 When focused, `TextInputController` mirrors the normalized model into its
 native textarea with the primary selection's offsets and direction. Native
-selection changes then update Alpha's primary selection if they truly differ;
+selection changes then update Aster's primary selection if they truly differ;
 ordinary programmatic synchronization leaves multi-cursor state intact. The
 mirror is intentionally suspended during IME composition and released on blur.
 
@@ -300,7 +300,7 @@ sparse lines. Each line keeps immutable line-relative token payloads; unchanged
 lines with stable indices reuse their public line object, while shifted suffix
 lines reuse the payload and lazily materialize absolute `TextRange` values only
 when queried. It owns neither the store nor model.
-The browser source maps token types through a closed Alpha presentation enum;
+The browser source maps token types through a closed Aster presentation enum;
 unknown worker strings are omitted rather than becoming CSS classes. Line DOM
 is segmented exclusively with text nodes and named spans, with exact source
 text verified before replacement. Semantic colors are registered through the
@@ -314,13 +314,13 @@ later requests reference it, while model transactions send one incremental
 sync shared by both lanes.
 
 Browser editor parts create their syntax worker directly from the editor-local provider factory.
-Bundled language packages use declarative TextMate grammars where a grammar is present; Alpha's
+Bundled language packages use declarative TextMate grammars where a grammar is present; Aster's
 deterministic lexical provider remains the editor-owned baseline for unsupported or unavailable
 grammar roots. `platform/syntax` exposes a separate, bounded App Server syntax capability.
 `RustSyntaxFactsService` shares one current revision request between parser folding, the token and
 diagnostic lanes, and document-symbol fallback providers. JavaScript/JSX, TypeScript/TSX, JSON, JSONC, Rust, and Shell therefore
 gain parser-grade folding, syntax token presentation, parser diagnostics, and Ctrl/Cmd+Shift+O
-symbols. The wrapper keeps Alpha's version gate and result stores authoritative; unsupported or
+symbols. The wrapper keeps Aster's version gate and result stores authoritative; unsupported or
 oversized documents delegate to the existing Worker/TextMate/lexical path, while registered richer
 symbol providers take precedence over parser symbols. Rust remains outside text mutation,
 selection, input, and rendering ownership. The legacy editor runtime has no ownership in this path
@@ -472,7 +472,7 @@ deterministic, bounded `language.word` lexical provider is available through the
 named `language.word` module and is activated by the browser client handshake,
 rather than being registered unconditionally. The service defaults to the
 in-process host, so a caller must deliberately opt into the Worker factory.
-`createBrowserEditorPart` makes that selection for product Alpha panes while
+`createBrowserEditorPart` makes that selection for product Aster panes while
 direct/test editor parts retain the local provider.
 
 After the first full snapshot, `LanguageWorkerWireClient` implements
@@ -482,7 +482,7 @@ versioned offset/length/text changes, and later requests reference the mirrored
 version without carrying document text. A missing version clears the client
 mirror state so the next request recovers with a full snapshot.
 
-The Worker server owns a `LanguageWorkerDocumentMirror` backed by Alpha's Piece
+The Worker server owns a `LanguageWorkerDocumentMirror` backed by Aster's Piece
 Tree. It validates a complete transaction before applying changes in reverse
 offset order and captures an immutable snapshot for each request, so later
 synchronization cannot mutate an older request's text. A rejected sync clears
@@ -598,7 +598,7 @@ or rendering policy.
 
 `EditorViewportModel` is the DOM-free layout boundary for a fixed-line-height
 view. The browser layer supplies viewport size, measured content width, line
-height, and requested scroll coordinates. Alpha owns clamping, content extent,
+height, and requested scroll coordinates. Aster owns clamping, content extent,
 visible line ranges, and overscanned render ranges. Layout snapshots are
 immutable and carry the authoritative model version; every text transaction
 therefore invalidates a renderer projection even when the line count does not
@@ -618,7 +618,7 @@ the viewport never owns the shared `TextModel`.
 `DomTextMeasurer` reads the line layer's computed font, letter spacing,
 tab size, and horizontal padding. Canvas measures shaped text segments and
 font fallback; tab characters advance to measured space-based stops.
-`LineWidthIndex` takes one bounded synchronous first slice for an Alpha
+`LineWidthIndex` takes one bounded synchronous first slice for an Aster
 viewport, then refines remaining non-wrapped line widths in cancellable idle
 slices. The measured maximum is an explicit lower bound until that scan
 completes; it is never presented as an exact full-model value. An edit during a
@@ -648,7 +648,7 @@ visible. `.active` is the component-owned active-line visual state, while
 `.primary` identifies the primary caret for later presentation; neither relies
 on an ARIA-based selector.
 
-`createAlphaDecorationSource<TMetadata>` is the explicit boundary from opaque
+`createAsterDecorationSource<TMetadata>` is the explicit boundary from opaque
 common decoration metadata to browser presentation. A caller-provided resolver
 selects `SearchMatch`, `ErrorUnderline`, `WarningUnderline`, or omits the
 decoration from this renderer. `EditorViewport` observes multiple sources
@@ -664,7 +664,7 @@ replacement, clear, and model invalidation become atomic collection
 replacement; the bridge never owns the store or model. Because the store's
 model listener predates the bridge-owned collection, a text transaction clears
 diagnostics before tracked ranges can emit a misleading movement event.
-`createAlphaLanguageDiagnosticSource` maps every normalized severity to a
+`createAsterLanguageDiagnosticSource` maps every normalized severity to a
 named underline presentation and a diagnostic hover message. Error and Warning use
 their severity tokens; Information uses the focus token and Hint uses the
 description token with a dotted underline. The viewport projects the highest
@@ -672,7 +672,7 @@ severity on each visible logical line as a gutter marker and joins that line's
 messages in `DiagnosticHoverController`'s component-owned rich hover.
 Overview-ruler presentation remains a separate browser extension.
 
-Selection and decoration ranges share `createAlphaRangeRectangles`; prefix
+Selection and decoration ranges share `createAsterRangeRectangles`; prefix
 measurement, end-exclusive multi-line ranges, selected newline cells, and
 render-range clipping therefore cannot drift between the two projections.
 The diagnostic adapter does not add arbitrary caller CSS classes. Browser
@@ -721,7 +721,7 @@ semantic tokens, scroll virtualization, and vertical navigation. The viewport
 now exposes an explicit browser paragraph-direction input (`auto`, `ltr`, or
 `rtl`) and applies it to both rendered text and its accessible textarea, so
 Chromium owns Unicode shaping instead of `TextModel`. `domTextGeometry.ts`
-maps Alpha's UTF-16 source offsets across semantic-token spans to browser
+maps Aster's UTF-16 source offsets across semantic-token spans to browser
 `Range` rectangles and caret positions. In automatic/RTL direction, rendered
 selection/caret, decorations, composition anchors, pointer hit testing, and
 wrapped vertical cursor movement use that geometry when the browser supplies
@@ -802,7 +802,7 @@ cancelling the pointer, blur, and disposal all stop further frames.
 During an additive gesture, the adapter owns temporary tracked copies of the
 original selection set in addition to the active anchor. It reconstructs their
 direction, order, and primary identity after synchronous model transactions,
-then applies `combineAlphaPointerSelection`. These resources share the drag
+then applies `combineAsterPointerSelection`. These resources share the drag
 lifecycle and do not change common-layer selection ownership.
 
 `KeyboardNavigationController` maps local keydown events to those common
@@ -966,24 +966,24 @@ language configuration registry.
 therefore remain separate undo steps instead of joining adjacent typing.
 
 `ClipboardController` writes portable `text/plain`, safe preformatted
-`text/html`, and versioned Alpha metadata for multi-selection distribution.
+`text/html`, and versioned Aster metadata for multi-selection distribution.
 When a current `SemanticTokenSource` is present, its closed presentation
 vocabulary and resolved browser theme colors annotate the HTML copy only;
 plain text remains authoritative and unavailable/stale tokens produce escaped
-preformatted HTML. Matching Alpha metadata pastes one text per selection;
+preformatted HTML. Matching Aster metadata pastes one text per selection;
 external text and invalid metadata paste the same text at every selection. When
 `text/plain` is absent, the browser adapter extracts deterministic text from
 inert HTML without rendering it or accepting script/style content. Clipboard
 output uses an explicit platform line-ending policy and model input remains
 LF-normalized.
 
-If no text representation is available, Alpha may asynchronously read one
+If no text representation is available, Aster may asynchronously read one
 clipboard `File` that has a textual MIME type or known text extension and is at
 most 5 MiB. It never opens a file-system path. The result must retain the
 captured model version and all selection anchor/active positions before it can
 be submitted as an isolated paste command; otherwise it is discarded.
 
-`EditorInput.readOnly` configures one non-mutating Alpha editor instance. The
+`EditorInput.readOnly` configures one non-mutating Aster editor instance. The
 instance still owns selection, navigation, copy, rendering, and external model
 observation, while `EditorSelectionController` rejects execute/undo/redo and
 composition entry before any browser command can reach `TextModel`.
@@ -993,7 +993,7 @@ composition entry before any browser command can reach `TextModel`.
 `getEditorClipboardEntries` resolves each collapsed caret to complete-line text
 and a cut range that owns the appropriate following or preceding LF.
 `createClipboardCutCommand` merges overlapping/duplicate ranges and maps every
-source caret through the resulting deletion. Version 2 Alpha metadata records
+source caret through the resulting deletion. Version 2 Aster metadata records
 line paste mode. `createLinePasteCommand` inserts at target line starts,
 preserves original columns, and groups multiple target carets on one line into
 one ordered insertion. Mixed modes safely fall back to ordinary selection
@@ -1003,7 +1003,7 @@ an immutable event-time textual MIME snapshot; it is frontend-local, evaluates
 providers in explicit order, and discards asynchronous output when the captured
 model version or selections no longer match. `UriListPasteProvider` is the
 built-in `text/uri-list` adapter and excludes comment lines. When a native
-paste event provides neither text nor Alpha metadata, a recognized text file,
+paste event provides neither text nor Aster metadata, a recognized text file,
 or a matching local provider, `ClipboardController` invokes the browser
 Async Clipboard rich reader before its plain-text fallback within that paste
 gesture. Its result uses the same captured model version and selection gate,
@@ -1036,7 +1036,7 @@ cancellation signals, while an extra end after closure is ignored.
 only while its protected revision is active. The Viewport converts it to an
 owned temporary `TrackedRange`, so synchronous model events cannot make
 projection read stale positions. A separate per-line composition layer reuses
-`createAlphaRangeRectangles` for measured tabs, multi-line clipping, and newline
+`createAsterRangeRectangles` for measured tabs, multi-line clipping, and newline
 cells. Component-owned `.composing` CSS draws the underline and every commit,
 cancel, invalidation, or disposal clears the temporary layer and handle.
 
@@ -1096,7 +1096,7 @@ Result / ModelChanged / Cleared event
 LanguageDiagnosticDecorationBridge
   owns a generic collection and clears before tracked-range movement
           ↓
-createAlphaLanguageDiagnosticSource
+createAsterLanguageDiagnosticSource
   maps only Error/Warning to component-owned named presentations
 
 EditorSelectionController.execute
@@ -1169,7 +1169,7 @@ EditorViewportModel.setContentWidth
 
 EditorSelectionController
           ↓
-createAlphaSelectionGeometry
+createAsterSelectionGeometry
   preserves direction, primary identity, and selected line breaks
           ↓
 EditorViewport overlay + gutter state
@@ -1177,10 +1177,10 @@ EditorViewport overlay + gutter state
 
 TextDecorationCollection<TMetadata>
           ↓
-createAlphaDecorationSource resolver
+createAsterDecorationSource resolver
   maps opaque metadata to one named browser presentation
           ↓
-createAlphaRangeRectangles
+createAsterRangeRectangles
   shares range/newline/clipping geometry with selections
           ↓
 EditorViewport decoration layer
@@ -1191,7 +1191,7 @@ clientX / clientY
 EditorViewport root bounds + scroll state
   converts client coordinates to fixed-line viewport coordinates
           ↓
-hitTestAlphaEditorPoint
+hitTestAsterEditorPoint
   distinguishes gutter/content/after-lines and measures caret midpoints
           ↓
 EditorHitTarget
@@ -1213,12 +1213,12 @@ configured Alt or ControlOrMeta gesture
 temporary tracked base selections
   preserve order, direction, and primary identity through model edits
           ↓
-combineAlphaPointerSelection
+combineAsterPointerSelection
   toggles, deduplicates, removes overlaps, and appends the active primary
 
 outside client point
           ↓
-getAlphaPointerAutoScrollVelocity
+getAsterPointerAutoScrollVelocity
   maps each overflow axis to a bounded pixels-per-second velocity
           ↓
 PointerAutoScroller + base/browser/AnimationFrameScheduler
@@ -1347,7 +1347,7 @@ stored-text budgets, and threshold-driven compaction reclaims dead current
 storage.
 
 `TextModel` keeps synchronous compaction as its framework-neutral default.
-Alpha's browser `BrowserTextModelService` supplies a cancellable idle scheduler,
+Aster's browser `BrowserTextModelService` supplies a cancellable idle scheduler,
 so its file-backed models never join an edit transaction solely to reclaim
 piece-tree storage. One idle callback still compacts the live tree as an
 O(document length) operation. Snapshots intentionally retain their captured
@@ -1357,13 +1357,13 @@ remains a future optimization for unusually large documents.
 
 The next implementation stages are:
 
-1. incremental piece-tree compaction for unusually large documents; Alpha browser models already defer whole-tree maintenance, while non-wrapped line-width and initial wrapped-line measurement yield after a bounded first slice;
+1. incremental piece-tree compaction for unusually large documents; Aster browser models already defer whole-tree maintenance, while non-wrapped line-width and initial wrapped-line measurement yield after a bounded first slice;
 2. composition clause projection work; mobile remains out of scope;
 3. TextMate extension-resource discovery; serializable scope-theme selector composition is complete;
 4. desktop platform acceptance verification (macOS VoiceOver, then Windows); mobile remains out of scope;
 5. extend parser-grade syntax coverage beyond JavaScript/JSX, TypeScript/TSX, JSON, JSONC, Rust, and Shell; inline-advance layout, native browser-driven wrapping, and continuous updates for transformed snippet mirrors while typing remain separate work;
-6. migrate remaining legacy editor runtime-only tools through Alpha's public contracts, then
-   remove the retired legacy editor runtime editor without importing its ownership into Alpha.
+6. migrate remaining legacy editor runtime-only tools through Aster's public contracts, then
+   remove the retired legacy editor runtime editor without importing its ownership into Aster.
 
 Tests under `test/common/` cover normalization, coordinates, atomic edits, failure
 atomicity, events, disposal, immutable snapshots, history budgets,
@@ -1505,7 +1505,7 @@ Edit-command and text-input tests cover normalized typing, multiple selections,
 grapheme and cross-line deletion, converged carets, history restoration,
 textarea focus, beforeinput routing, Tab, undo/redo, unsupported composition
 events, cross-model rejection, reveal, and disposal.
-Clipboard tests cover plain text, Alpha multi-selection metadata, distributed
+Clipboard tests cover plain text, Aster multi-selection metadata, distributed
 and repeated paste, invalid metadata fallback, cut, isolated undo,
 empty-selection policy, complete-line source ranges, final/only-line cut,
 duplicate and overlapping cut merge, same-line target grouping, mixed-mode

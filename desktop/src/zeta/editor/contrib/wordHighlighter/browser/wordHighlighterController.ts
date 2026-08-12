@@ -20,10 +20,10 @@ export class OccurrenceHighlightController extends DisposableOwner {
     super();
     try {
       if (selections.textModel !== decorations.textModel) {
-        throw new TypeError("Alpha occurrence highlighting dependencies must share one text model");
+        throw new TypeError("Aster occurrence highlighting dependencies must share one text model");
       }
       if (options.wordPattern !== undefined && typeof options.wordPattern !== "function") {
-        throw new TypeError("Alpha occurrence highlight word pattern resolver must be a function");
+        throw new TypeError("Aster occurrence highlight word pattern resolver must be a function");
       }
       this.wordPattern = options.wordPattern;
       this.own(selections.onDidChange(() => this.update()));

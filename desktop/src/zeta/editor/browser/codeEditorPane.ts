@@ -84,7 +84,7 @@ export class EditorPane extends DisposableOwner implements IEditorPane {
   create(parent: HTMLElement): void {
     if (this.container) throw new ReferenceError("EditorPane has already been created");
     const container = parent.ownerDocument.createElement("div");
-    container.className = "zeta-alpha-editor-pane";
+    container.className = "aster-editor-pane";
     parent.append(container);
     this.container = container;
     this.defer(() => {

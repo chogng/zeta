@@ -1,7 +1,7 @@
 import { type LanguageBracketColorizationIndex } from "../common/bracketColorization.js";
 import { type BracketColorizationSpan } from "../../../browser/view/semanticTokenPresentation.js";
 
-/** Adapts common lexical bracket nesting colors into Alpha's closed DOM vocabulary. */
+/** Adapts common lexical bracket nesting colors into Aster's closed DOM vocabulary. */
 export class BracketColorizationSource {
   constructor(private readonly index: LanguageBracketColorizationIndex) {}
 

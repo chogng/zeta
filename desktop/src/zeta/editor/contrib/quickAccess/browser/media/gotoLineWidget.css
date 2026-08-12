@@ -1,4 +1,4 @@
-.zeta-alpha-editor-goto-line-widget {
+.aster-editor-goto-line-widget {
   position: absolute;
   z-index: 7;
   display: none;
@@ -14,11 +14,11 @@
   box-shadow: 0 4px 12px var(--zeta-widget-shadow);
 }
 
-.zeta-alpha-editor-goto-line-widget.visible {
+.aster-editor-goto-line-widget.visible {
   display: grid;
 }
 
-.zeta-alpha-editor-goto-line-input {
+.aster-editor-goto-line-input {
   box-sizing: border-box;
   min-width: 0;
   height: 24px;
@@ -30,15 +30,15 @@
   outline: none;
 }
 
-.zeta-alpha-editor-goto-line-input:focus {
+.aster-editor-goto-line-input:focus {
   border-color: var(--zeta-focus-border);
 }
 
-.zeta-alpha-editor-goto-line-input.invalid {
+.aster-editor-goto-line-input.invalid {
   border-color: var(--zeta-error-foreground);
 }
 
-.zeta-alpha-editor-goto-line-status {
+.aster-editor-goto-line-status {
   overflow: hidden;
   color: var(--zeta-description-foreground);
   font-size: 11px;

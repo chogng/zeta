@@ -1,4 +1,4 @@
-.zeta-alpha-editor-read-only-message {
+.aster-editor-read-only-message {
   position: absolute;
   z-index: 8;
   right: 8px;
@@ -15,6 +15,6 @@
   box-shadow: 0 4px 12px var(--zeta-widget-shadow);
 }
 
-.zeta-alpha-editor-read-only-message.visible {
+.aster-editor-read-only-message.visible {
   display: block;
 }

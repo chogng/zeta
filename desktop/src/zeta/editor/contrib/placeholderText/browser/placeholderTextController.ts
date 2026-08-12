@@ -9,9 +9,9 @@ export class PlaceholderTextController extends DisposableOwner {
 
   constructor(private readonly viewport: EditorViewport, placeholder: string) {
     super();
-    if (typeof placeholder !== "string" || placeholder.trim().length === 0) throw new TypeError("Alpha placeholder text must be non-empty");
+    if (typeof placeholder !== "string" || placeholder.trim().length === 0) throw new TypeError("Aster placeholder text must be non-empty");
     this.element = viewport.element.ownerDocument.createElement("div");
-    this.element.className = "zeta-alpha-editor-placeholder-text";
+    this.element.className = "aster-editor-placeholder-text";
     this.element.textContent = placeholder;
     this.element.setAttribute("aria-hidden", "true");
     viewport.element.append(this.element);

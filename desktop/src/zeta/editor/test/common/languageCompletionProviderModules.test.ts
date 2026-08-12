@@ -7,23 +7,23 @@ test("Provider module activation registers and removes one atomic provider batch
   using providers = new LanguageCompletionProviderRegistry();
   using modules = new LanguageCompletionProviderModuleRegistry();
   using registration = modules.register({
-    id: "alpha.typescript",
-    load: () => [provider("alpha.member"), provider("alpha.keyword")],
+    id: "aster.typescript",
+    load: () => [provider("aster.member"), provider("aster.keyword")],
   });
   using host = new LanguageCompletionProviderModuleHost(modules, providers);
   const revisions: number[] = [];
   using listener = providers.onDidChangeProviderCatalog(catalog => revisions.push(catalog.revision));
 
-  assert.deepEqual(await host.setActivation("alpha.typescript", LanguageCompletionProviderModuleState.Active), {
-    moduleId: "alpha.typescript",
+  assert.deepEqual(await host.setActivation("aster.typescript", LanguageCompletionProviderModuleState.Active), {
+    moduleId: "aster.typescript",
     state: LanguageCompletionProviderModuleState.Active,
     changed: true,
   });
-  assert.deepEqual(providers.providerCatalog.providers.map(entry => entry.id), ["alpha.member", "alpha.keyword"]);
+  assert.deepEqual(providers.providerCatalog.providers.map(entry => entry.id), ["aster.member", "aster.keyword"]);
   assert.deepEqual(revisions, [1]);
-  assert.equal((await host.setActivation("alpha.typescript", LanguageCompletionProviderModuleState.Active)).changed, false);
+  assert.equal((await host.setActivation("aster.typescript", LanguageCompletionProviderModuleState.Active)).changed, false);
 
-  assert.equal((await host.setActivation("alpha.typescript", LanguageCompletionProviderModuleState.Inactive)).changed, true);
+  assert.equal((await host.setActivation("aster.typescript", LanguageCompletionProviderModuleState.Inactive)).changed, true);
   assert.deepEqual(providers.providerCatalog.providers, []);
   assert.deepEqual(revisions, [1, 2]);
 });
@@ -54,15 +54,15 @@ test("Concurrent activation serializes one module load", async () => {
 
 test("Failed module batches and modules removed during load leave no providers", async () => {
   using providers = new LanguageCompletionProviderRegistry();
-  using collision = providers.register(provider("alpha.existing"));
+  using collision = providers.register(provider("aster.existing"));
   using modules = new LanguageCompletionProviderModuleRegistry();
   using collisionModule = modules.register({
-    id: "alpha.collision",
-    load: () => [provider("alpha.new"), provider("alpha.existing")],
+    id: "aster.collision",
+    load: () => [provider("aster.new"), provider("aster.existing")],
   });
   let finishLoad: ((value: readonly LanguageCompletionProvider[]) => void) | undefined;
   const removable = modules.register({
-    id: "alpha.removable",
+    id: "aster.removable",
     load: () => new Promise(resolve => {
       finishLoad = resolve;
     }),
@@ -70,17 +70,17 @@ test("Failed module batches and modules removed during load leave no providers",
   using host = new LanguageCompletionProviderModuleHost(modules, providers);
 
   await assert.rejects(
-    host.setActivation("alpha.collision", LanguageCompletionProviderModuleState.Active),
+    host.setActivation("aster.collision", LanguageCompletionProviderModuleState.Active),
     /already registered/,
   );
-  assert.deepEqual(providers.providerCatalog.providers.map(entry => entry.id), ["alpha.existing"]);
+  assert.deepEqual(providers.providerCatalog.providers.map(entry => entry.id), ["aster.existing"]);
 
-  const loading = host.setActivation("alpha.removable", LanguageCompletionProviderModuleState.Active);
+  const loading = host.setActivation("aster.removable", LanguageCompletionProviderModuleState.Active);
   await new Promise<void>(resolve => setImmediate(resolve));
   removable.dispose();
-  finishLoad!([provider("alpha.late")]);
+  finishLoad!([provider("aster.late")]);
   await assert.rejects(loading, /removed while loading/);
-  assert.deepEqual(providers.providerCatalog.providers.map(entry => entry.id), ["alpha.existing"]);
+  assert.deepEqual(providers.providerCatalog.providers.map(entry => entry.id), ["aster.existing"]);
 });
 
 test("Removing a module releases its active providers", async () => {
@@ -118,7 +118,7 @@ test("Provider module catalogs are immutable, revisioned, and unambiguous", () =
   const revisions: number[] = [];
   using listener = modules.onDidChangeModuleCatalog(catalog => revisions.push(catalog.revision));
   using first = modules.register({ id: "language.word", load: () => [provider("language.word")] });
-  const second = modules.register({ id: "alpha.typescript", load: () => [provider("alpha.typescript")] });
+  const second = modules.register({ id: "aster.typescript", load: () => [provider("aster.typescript")] });
   second.dispose();
 
   assert.deepEqual(revisions, [1, 2, 3]);

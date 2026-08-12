@@ -53,7 +53,7 @@
   padding: 5px;
   border: 1px solid var(--zeta-border);
   color: inherit;
-  background: var(--zeta-editor-background);
+  background: var(--aster-editor-background);
 }
 
 .zeta-chat-input-container {

@@ -20,7 +20,7 @@ export class SaveController extends DisposableOwner {
     super();
     if (!options || typeof options.save !== "function") {
       this.dispose();
-      throw new TypeError("Alpha save controller requires a save operation");
+      throw new TypeError("Aster save controller requires a save operation");
     }
     this.save = options.save;
     this.beforeSave = options.beforeSave ?? (() => {});
@@ -49,5 +49,5 @@ export class SaveController extends DisposableOwner {
 }
 
 function reportSaveError(error: unknown): void {
-  console.error("Alpha editor save failed", error);
+  console.error("Aster editor save failed", error);
 }

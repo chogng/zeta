@@ -192,7 +192,7 @@ export class LineWidthIndex extends DisposableOwner {
       this.model.getLineContent(lineIndex),
     );
     if (!Number.isFinite(width) || width < 0) {
-      throw new RangeError("Alpha line width must be finite and non-negative");
+      throw new RangeError("Aster line width must be finite and non-negative");
     }
     return width;
   }
@@ -205,7 +205,7 @@ export class LineWidthIndex extends DisposableOwner {
   private removeWidth(width: number): void {
     const count = this.widthCounts.get(width);
     if (count === undefined) {
-      throw new Error("Alpha line width index is inconsistent");
+      throw new Error("Aster line width index is inconsistent");
     }
     if (count === 1) this.widthCounts.delete(width);
     else this.widthCounts.set(width, count - 1);
@@ -215,15 +215,15 @@ export class LineWidthIndex extends DisposableOwner {
 function readInitialMeasurement(value: LineWidthInitialMeasurementOptions | undefined): ResolvedInitialMeasurement | undefined {
   if (value === undefined) return undefined;
   if (!value || typeof value.schedule !== "function") {
-    throw new TypeError("Alpha initial line measurement requires a scheduler");
+    throw new TypeError("Aster initial line measurement requires a scheduler");
   }
   const initialLineCount = value.initialLineCount ?? 512;
   const linesPerSlice = value.linesPerSlice ?? initialLineCount;
   if (!Number.isSafeInteger(initialLineCount) || initialLineCount <= 0) {
-    throw new RangeError("Alpha initial line measurement count must be a positive safe integer");
+    throw new RangeError("Aster initial line measurement count must be a positive safe integer");
   }
   if (!Number.isSafeInteger(linesPerSlice) || linesPerSlice <= 0) {
-    throw new RangeError("Alpha line measurement slice size must be a positive safe integer");
+    throw new RangeError("Aster line measurement slice size must be a positive safe integer");
   }
   return Object.freeze({ initialLineCount, linesPerSlice, schedule: value.schedule });
 }

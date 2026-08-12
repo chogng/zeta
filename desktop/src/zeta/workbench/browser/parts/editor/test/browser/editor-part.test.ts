@@ -73,9 +73,9 @@ test.after(() => browserEnvironment.window.close());
 test("editor registry resolves defaults and explicit Open With choices", () => {
   const registry = new EditorPaneRegistry();
   const alpha = descriptor(
-    "zeta.editor.alpha",
+    "aster.editor.code",
     ".ts",
-    () => new TestEditorPane("zeta.editor.alpha"),
+    () => new TestEditorPane("aster.editor.code"),
   );
   const textEditorWidget = descriptor(
     "zeta.editor.textEditorWidget",
@@ -95,7 +95,7 @@ test("editor registry resolves defaults and explicit Open With choices", () => {
   ]);
   assert.equal(
     registry.resolve(markdown, {
-      preferredEditorId: "zeta.editor.alpha",
+      preferredEditorId: "aster.editor.code",
     }),
     alpha,
   );
@@ -162,9 +162,9 @@ test("EditorPart shows command shortcuts until an editor opens", async () => {
   const dom = new JSDOM("<!doctype html><body></body>");
   const registry = new EditorPaneRegistry();
   registry.register(descriptor(
-    "zeta.editor.alpha",
+    "aster.editor.code",
     ".ts",
-    () => new TestEditorPane("zeta.editor.alpha"),
+    () => new TestEditorPane("aster.editor.code"),
   ));
   const keybindings = new TestKeybindingService();
   keybindings.set(
@@ -224,9 +224,9 @@ test("EditorPart retains tabs and switches loaded panes", async () => {
   const registry = new EditorPaneRegistry();
   const panes: TestEditorPane[] = [];
   registry.register(descriptor(
-    "zeta.editor.alpha",
+    "aster.editor.code",
     ".ts",
-    () => trackPane(panes, "zeta.editor.alpha"),
+    () => trackPane(panes, "aster.editor.code"),
   ));
   registry.register(descriptor(
     "zeta.editor.textEditorWidget",
@@ -247,7 +247,7 @@ test("EditorPart retains tabs and switches loaded panes", async () => {
     editor.element.querySelector(
       ".zeta-editor-pane-host:not([hidden])",
     )?.textContent,
-    "zeta.editor.alpha",
+    "aster.editor.code",
   );
   assert.deepEqual(panes[0]?.visibilities, [
     EditorPaneVisibility.Hidden,
@@ -362,9 +362,9 @@ test("Editor title toolbar splits the active group and owns More Actions", async
   const registry = new EditorPaneRegistry();
   const panes: TestEditorPane[] = [];
   registry.register(descriptor(
-    "zeta.editor.alpha",
+    "aster.editor.code",
     ".ts",
-    () => trackPane(panes, "zeta.editor.alpha"),
+    () => trackPane(panes, "aster.editor.code"),
   ));
   const services = new ServiceCollection();
   using contextKeys = new ContextKeyService();

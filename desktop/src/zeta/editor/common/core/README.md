@@ -1,6 +1,6 @@
-# Alpha editor core
+# Aster editor core
 
-`core/` is Alpha's DOM-free editor algebra. It is the TypeScript equivalent of
+`core/` is Aster's DOM-free editor algebra. It is the TypeScript equivalent of
 the operational part of VS Code's `src/vs/editor/common/core`, adapted to
 Zeta's explicit zero-based UTF-16 coordinates and LF-normalized text contract.
 The directory is intentionally broad: cursor math, text coordinates, edit
@@ -30,7 +30,7 @@ the mutable document or undo stack. Browser projection, language services,
 workbench state, and file transport may depend on `core/`, while `core/` must
 not depend on any of them.
 
-`text.ts` is the stable text primitive barrel retained for existing Alpha
+`text.ts` is the stable text primitive barrel retained for existing Aster
 callers. The core has no directory `index.ts` barrels: new code imports the
 focused module that owns the value or operation it consumes. This keeps module
 boundaries explicit and avoids making a broad aggregate dependency part of the

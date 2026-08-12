@@ -5,8 +5,8 @@ import { type EditorSelectionController } from "../../../common/cursor/editorSel
 import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
 import { type TextPosition } from "../../../common/core/text.js";
 import { type EditorViewport } from "../../../browser/view/editorViewport.js";
-import { readAlphaHtmlText } from "../../clipboard/browser/clipboardController.js";
-import { ALPHA_TEXT_FILE_TRANSFER_MAX_BYTES, selectAlphaTextFileTransfer } from "./textFileTransfer.js";
+import { readEditorHtmlText } from "../../clipboard/browser/clipboardController.js";
+import { TEXT_FILE_TRANSFER_MAX_BYTES, selectTextFileTransfer } from "./textFileTransfer.js";
 
 /** Routes external plain-text drops into one insertion at the viewport hit target. */
 export class TextDropController extends DisposableOwner {
@@ -17,7 +17,7 @@ export class TextDropController extends DisposableOwner {
     super();
     if (viewport.textModel !== selections.textModel) {
       this.dispose();
-      throw new TypeError("Alpha text drop dependencies must share one text model");
+      throw new TypeError("Aster text drop dependencies must share one text model");
     }
     this.own(addDisposableListener<DragEvent>(viewport.element, "dragover", event => this.handleDragOver(event)));
     this.own(addDisposableListener<DragEvent>(viewport.element, "drop", event => this.handleDrop(event)));
@@ -29,7 +29,7 @@ export class TextDropController extends DisposableOwner {
 
   private handleDragOver(event: DragEvent): void {
     if (this.selections.readOnly || event.defaultPrevented) return;
-    if (!containsText(event.dataTransfer) && !selectAlphaTextFileTransfer(event.dataTransfer?.files ?? [])) return;
+    if (!containsText(event.dataTransfer) && !selectTextFileTransfer(event.dataTransfer?.files ?? [])) return;
     event.preventDefault();
     if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
   }
@@ -54,7 +54,7 @@ export class TextDropController extends DisposableOwner {
   }
 
   private dropTextFile(event: DragEvent, position: TextPosition): void {
-    const file = selectAlphaTextFileTransfer(event.dataTransfer?.files ?? []);
+    const file = selectTextFileTransfer(event.dataTransfer?.files ?? []);
     if (!file) return;
     const model = this.viewport.textModel;
     const expectedVersion = model.version;
@@ -65,7 +65,7 @@ export class TextDropController extends DisposableOwner {
       if (
         this.disposed ||
         request !== this.fileDropRequest ||
-        text.length > ALPHA_TEXT_FILE_TRANSFER_MAX_BYTES ||
+        text.length > TEXT_FILE_TRANSFER_MAX_BYTES ||
         model.version !== expectedVersion
       ) {
         return;
@@ -97,7 +97,7 @@ function readDropText(dataTransfer: DataTransfer | null, ownerDocument: Document
     // Rich text remains an inert text fallback when browsers omit plain text.
   }
   try {
-    return readAlphaHtmlText(dataTransfer.getData("text/html"), ownerDocument);
+    return readEditorHtmlText(dataTransfer.getData("text/html"), ownerDocument);
   } catch {
     return "";
   }

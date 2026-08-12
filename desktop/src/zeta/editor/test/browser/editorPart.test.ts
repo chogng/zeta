@@ -23,7 +23,7 @@ const { EditorPart } = await import("../../browser/editorPart.js");
 
 test.after(() => browserEnvironment.window.close());
 
-test("Alpha editor part composes native input, local language syntax, and presentation", async () => {
+test("Aster editor part composes native input, local language syntax, and presentation", async () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   dom.window.HTMLCanvasElement.prototype.getContext = () => null;
   const container = dom.window.document.querySelector<HTMLElement>("main")!;
@@ -41,14 +41,14 @@ test("Alpha editor part composes native input, local language syntax, and presen
     onLanguageError: error => errors.push(error),
   });
   editorPart.layout({ width: 500, height: 240 });
-  await waitFor(() => container.querySelectorAll(".zeta-alpha-editor-token.token-string").length > 0);
-  await waitFor(() => container.querySelectorAll(".zeta-alpha-editor-decoration.warning-underline").length > 0);
+  await waitFor(() => container.querySelectorAll(".aster-editor-token.token-string").length > 0);
+  await waitFor(() => container.querySelectorAll(".aster-editor-decoration.warning-underline").length > 0);
 
-  assert.equal(container.querySelectorAll(".zeta-alpha-editor").length, 1);
-  assert.equal(container.querySelectorAll(".zeta-alpha-editor-input").length, 1);
-  assert.equal(container.querySelectorAll(".zeta-alpha-editor-token.token-string").length > 0, true);
-  assert.equal(container.querySelectorAll(".zeta-alpha-editor-bracket-level-1").length > 0, true);
-  assert.equal(container.querySelectorAll(".zeta-alpha-editor-decoration.warning-underline").length > 0, true);
+  assert.equal(container.querySelectorAll(".aster-editor").length, 1);
+  assert.equal(container.querySelectorAll(".aster-editor-input").length, 1);
+  assert.equal(container.querySelectorAll(".aster-editor-token.token-string").length > 0, true);
+  assert.equal(container.querySelectorAll(".aster-editor-bracket-level-1").length > 0, true);
+  assert.equal(container.querySelectorAll(".aster-editor-decoration.warning-underline").length > 0, true);
   assert.deepEqual(errors, []);
 
   editorPart.textInput.element.dispatchEvent(new dom.window.InputEvent("beforeinput", {
@@ -68,7 +68,7 @@ test("Alpha editor part composes native input, local language syntax, and presen
   dom.window.close();
 });
 
-test("Alpha editor part derives indentation folds and projects their gutter controls", () => {
+test("Aster editor part derives indentation folds and projects their gutter controls", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   dom.window.HTMLCanvasElement.prototype.getContext = () => null;
   const container = dom.window.document.querySelector<HTMLElement>("main")!;
@@ -85,16 +85,16 @@ test("Alpha editor part derives indentation folds and projects their gutter cont
   });
   editorPart.layout({ width: 500, height: 120 });
 
-  const foldToggle = container.querySelector<HTMLButtonElement>(".zeta-alpha-editor-fold-toggle");
+  const foldToggle = container.querySelector<HTMLButtonElement>(".aster-editor-fold-toggle");
   assert.ok(foldToggle);
   foldToggle.dispatchEvent(new dom.window.MouseEvent("pointerdown", { bubbles: true, cancelable: true }));
-  assert.deepEqual([...container.querySelectorAll<HTMLElement>(".zeta-alpha-editor-line")].map(line => line.dataset.logicalLineIndex), ["0", "2"]);
+  assert.deepEqual([...container.querySelectorAll<HTMLElement>(".aster-editor-line")].map(line => line.dataset.logicalLineIndex), ["0", "2"]);
 
   editorPart.dispose();
   dom.window.close();
 });
 
-test("Alpha editor part honors a read-only input without disabling selection infrastructure", () => {
+test("Aster editor part honors a read-only input without disabling selection infrastructure", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   dom.window.HTMLCanvasElement.prototype.getContext = () => null;
   const container = dom.window.document.querySelector<HTMLElement>("main")!;
@@ -125,7 +125,7 @@ test("Alpha editor part honors a read-only input without disabling selection inf
   dom.window.close();
 });
 
-test("Alpha editor part mounts text drop as an optional full-editor contribution", () => {
+test("Aster editor part mounts text drop as an optional full-editor contribution", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   dom.window.HTMLCanvasElement.prototype.getContext = () => null;
   const container = dom.window.document.querySelector<HTMLElement>("main")!;
@@ -149,7 +149,7 @@ test("Alpha editor part mounts text drop as an optional full-editor contribution
   dom.window.close();
 });
 
-test("Alpha editor part announces save completion and forwards failures", async () => {
+test("Aster editor part announces save completion and forwards failures", async () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   dom.window.HTMLCanvasElement.prototype.getContext = () => null;
   const container = dom.window.document.querySelector<HTMLElement>("main")!;
@@ -174,7 +174,7 @@ test("Alpha editor part announces save completion and forwards failures", async 
     ctrlKey: true,
     key: "s",
   }));
-  await waitFor(() => container.querySelector(".zeta-alpha-editor-accessibility-status")?.textContent === "Saved");
+  await waitFor(() => container.querySelector(".aster-editor-accessibility-status")?.textContent === "Saved");
 
   fail = true;
   editorPart.textInput.element.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
@@ -183,7 +183,7 @@ test("Alpha editor part announces save completion and forwards failures", async 
     ctrlKey: true,
     key: "s",
   }));
-  await waitFor(() => container.querySelector(".zeta-alpha-editor-accessibility-status")?.textContent === "Save failed: conflict");
+  await waitFor(() => container.querySelector(".aster-editor-accessibility-status")?.textContent === "Save failed: conflict");
   assert.equal(errors.length, 1);
 
   editorPart.dispose();
@@ -261,5 +261,5 @@ async function waitFor(predicate: () => boolean): Promise<void> {
     if (predicate()) return;
     await nextTask();
   }
-  assert.fail("Timed out waiting for Alpha editor projection");
+  assert.fail("Timed out waiting for Aster editor projection");
 }

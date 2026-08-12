@@ -5,8 +5,8 @@ import { type TextModel } from "../../common/model/textModel.js";
 import { type EditorVisualLineProjection } from "../../common/viewModel/modelLineProjection.js";
 import { type EditorLineRange } from "../../common/viewLayout/editorViewportModel.js";
 import { type TextMeasurer } from "./fontMetrics.js";
-import { EmptyRangeRendering, createAlphaRangeRectangles } from "./rangeGeometry.js";
-import { createAlphaVisualRangeRectangles } from "./visualRangeGeometry.js";
+import { EmptyRangeRendering, createAsterRangeRectangles } from "./rangeGeometry.js";
+import { createAsterVisualRangeRectangles } from "./visualRangeGeometry.js";
 
 export enum DecorationPresentation {
   SearchMatch = "search-match",
@@ -57,7 +57,7 @@ export interface VisualDecorationRectangle {
  * Returning `undefined` from `resolvePresentation` omits a decoration from
  * this renderer without changing the common collection.
  */
-export function createAlphaDecorationSource<TMetadata>(
+export function createAsterDecorationSource<TMetadata>(
   collection: TextDecorationCollection<TMetadata>,
   resolvePresentation: (
     decoration: TextDecorationSnapshot<TMetadata>,
@@ -77,7 +77,7 @@ export function createAlphaDecorationSource<TMetadata>(
         validatePresentation(presentation);
         const hoverText = resolveHoverText?.(decoration);
         if (hoverText !== undefined && (typeof hoverText !== "string" || hoverText.trim().length === 0)) {
-          throw new TypeError("Alpha decoration hover text must be non-empty text");
+          throw new TypeError("Aster decoration hover text must be non-empty text");
         }
         resolved.push(Object.freeze({
           id: decoration.id,
@@ -92,14 +92,14 @@ export function createAlphaDecorationSource<TMetadata>(
 }
 
 /** @internal */
-export function createAlphaDecorationRectangles(
+export function createAsterDecorationRectangles(
   model: TextModel,
   decorations: readonly ResolvedDecoration[],
   renderLines: EditorLineRange,
   textLeft: number,
   measurer: TextMeasurer,
 ): readonly DecorationRectangle[] {
-  return Object.freeze(createAlphaRangeRectangles(
+  return Object.freeze(createAsterRangeRectangles(
     model,
     decorations.map(decoration => ({
       range: decoration.range,
@@ -120,8 +120,8 @@ export function createAlphaDecorationRectangles(
 }
 
 /** @internal */
-export function createAlphaVisualDecorationRectangles(model: TextModel, decorations: readonly ResolvedDecoration[], projection: EditorVisualLineProjection, renderLines: EditorLineRange, textLeft: number, measurer: TextMeasurer): readonly VisualDecorationRectangle[] {
-  return Object.freeze(createAlphaVisualRangeRectangles(
+export function createAsterVisualDecorationRectangles(model: TextModel, decorations: readonly ResolvedDecoration[], projection: EditorVisualLineProjection, renderLines: EditorLineRange, textLeft: number, measurer: TextMeasurer): readonly VisualDecorationRectangle[] {
+  return Object.freeze(createAsterVisualRangeRectangles(
     model,
     decorations.map(decoration => ({
       range: decoration.range,
@@ -156,6 +156,6 @@ function validatePresentation(
     && presentation !== DecorationPresentation.UnicodeHighlight
     && presentation !== DecorationPresentation.UnusualLineTerminator
   ) {
-    throw new TypeError(`Unknown Alpha decoration presentation '${presentation}'`);
+    throw new TypeError(`Unknown Aster decoration presentation '${presentation}'`);
   }
 }

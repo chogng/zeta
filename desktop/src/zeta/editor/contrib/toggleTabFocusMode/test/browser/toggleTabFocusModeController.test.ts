@@ -20,7 +20,7 @@ for (const [name, value] of Object.entries({
 const { EditorViewport } = await import("../../../../browser/view/editorViewport.js");
 const { ToggleTabFocusModeController } = await import("../../browser/toggleTabFocusModeController.js");
 
-test("Tab focus mode exposes state through Alpha-owned data and an accessibility announcement", () => {
+test("Tab focus mode exposes state through Aster-owned data and an accessibility announcement", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   const container = dom.window.document.querySelector<HTMLElement>("main")!;
   using model = new TextModel("text");
@@ -39,7 +39,7 @@ test("Tab focus mode exposes state through Alpha-owned data and an accessibility
   assert.equal(controller.isEnabled, true);
   assert.equal(viewport.element.dataset.tabFocusMode, "true");
   assert.equal(viewport.element.classList.contains("tab-focus-mode"), true);
-  assert.equal(viewport.element.querySelector(".zeta-alpha-editor-accessibility-status")?.textContent, "Tab moves focus out of the editor");
+  assert.equal(viewport.element.querySelector(".aster-editor-accessibility-status")?.textContent, "Tab moves focus out of the editor");
   assert.equal(viewport.element.hasAttribute("aria-pressed"), false);
   dom.window.close();
 });

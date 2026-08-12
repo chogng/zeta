@@ -12,7 +12,7 @@ export class LinksController extends DisposableOwner {
   private activeLink: LanguageLink | undefined;
   private hoverPosition: TextPosition | undefined;
 
-  constructor(private readonly viewport: EditorViewport, private readonly service: LinkService, private readonly languageId: string, private readonly onOpenLink: (target: string) => void | Promise<void>, private readonly onError: (error: unknown) => void = error => console.error("Alpha link opening failed", error)) {
+  constructor(private readonly viewport: EditorViewport, private readonly service: LinkService, private readonly languageId: string, private readonly onOpenLink: (target: string) => void | Promise<void>, private readonly onError: (error: unknown) => void = error => console.error("Aster link opening failed", error)) {
     super();
     this.own(addDisposableListener<PointerEvent>(viewport.element, "pointermove", event => this.update(event)));
     this.own(addDisposableListener(viewport.element, "pointerleave", () => this.clear()));
@@ -32,7 +32,7 @@ export class LinksController extends DisposableOwner {
     }
     this.hoverPosition = target.position;
     this.activeLink = this.links.find(link => link.range.containsPosition(target.position));
-    this.viewport.element.classList.toggle("zeta-alpha-editor-link-target", this.activeLink !== undefined);
+    this.viewport.element.classList.toggle("aster-editor-link-target", this.activeLink !== undefined);
     if (this.links.length > 0) return;
     this.request?.abort();
     const request = this.request = new AbortController();
@@ -47,7 +47,7 @@ export class LinksController extends DisposableOwner {
       this.activeLink = this.hoverPosition
         ? this.links.find(link => link.range.containsPosition(this.hoverPosition!))
         : undefined;
-      this.viewport.element.classList.toggle("zeta-alpha-editor-link-target", this.activeLink !== undefined);
+      this.viewport.element.classList.toggle("aster-editor-link-target", this.activeLink !== undefined);
     } catch (error) {
       if (!request.signal.aborted) this.onError(error);
     }
@@ -67,6 +67,6 @@ export class LinksController extends DisposableOwner {
     this.links = [];
     this.activeLink = undefined;
     this.hoverPosition = undefined;
-    this.viewport.element.classList.remove("zeta-alpha-editor-link-target");
+    this.viewport.element.classList.remove("aster-editor-link-target");
   }
 }

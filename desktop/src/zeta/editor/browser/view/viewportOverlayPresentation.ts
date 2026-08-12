@@ -4,12 +4,12 @@ import { type TextRange } from "../../common/core/text.js";
 import { type TextModel } from "../../common/model/textModel.js";
 import { type EditorVisualLineProjection } from "../../common/viewModel/modelLineProjection.js";
 import { type EditorLineRange } from "../../common/viewLayout/editorViewportModel.js";
-import { DecorationPresentation, createAlphaVisualDecorationRectangles, type ResolvedDecoration } from "./decorationPresentation.js";
+import { DecorationPresentation, createAsterVisualDecorationRectangles, type ResolvedDecoration } from "./decorationPresentation.js";
 import { type TextMeasurer } from "./fontMetrics.js";
-import { getAlphaDomTextCaretLeft, getAlphaDomTextRangeRectangles } from "./domTextGeometry.js";
+import { getAsterDomTextCaretLeft, getAsterDomTextRangeRectangles } from "./domTextGeometry.js";
 import { type RenderedLine } from "./renderedLine.js";
-import { createAlphaVisualRangeRectangles } from "./visualRangeGeometry.js";
-import { createAlphaVisualSelectionGeometry } from "./visualSelectionGeometry.js";
+import { createAsterVisualRangeRectangles } from "./visualRangeGeometry.js";
+import { createAsterVisualSelectionGeometry } from "./visualSelectionGeometry.js";
 
 const DIAGNOSTIC_PRESENTATION_PRIORITY = new Map<ResolvedDecoration["presentation"], number>([
   [DecorationPresentation.ErrorUnderline, 4],
@@ -35,7 +35,7 @@ export interface ViewportOverlayContext {
   readonly activeLineHighlight: ActiveLineHighlight;
 }
 
-export function projectAlphaSelectionOverlays(context: ViewportOverlayContext, controller: EditorSelectionController | undefined): void {
+export function projectAsterSelectionOverlays(context: ViewportOverlayContext, controller: EditorSelectionController | undefined): void {
   const activeLineIndex = controller?.selections.primary.active.lineIndex;
   for (const [visualLineIndex, line] of context.renderedLines) {
     reset(line.selectionElement);
@@ -48,14 +48,14 @@ export function projectAlphaSelectionOverlays(context: ViewportOverlayContext, c
   const domGeometry = context.useDomTextGeometry
     ? createDomSelectionGeometry(context, controller.selections)
     : undefined;
-  const geometry = createAlphaVisualSelectionGeometry(context.model, controller.selections, context.visualLineProjection, context.renderLines, context.textLeft, context.textMeasurer);
+  const geometry = createAsterVisualSelectionGeometry(context.model, controller.selections, context.visualLineProjection, context.renderLines, context.textLeft, context.textMeasurer);
   const ownerDocument = context.ownerDocument;
   for (const rectangle of geometry.selections) {
     if (domGeometry?.selectionIndexes.has(rectangle.selectionIndex)) continue;
     const line = context.renderedLines.get(rectangle.visualLineIndex);
     if (!line) continue;
     const element = ownerDocument.createElement("div");
-    element.className = "zeta-alpha-editor-selection";
+    element.className = "aster-editor-selection";
     element.dataset.selectionIndex = String(rectangle.selectionIndex);
     element.style.left = `${rectangle.left}px`;
     element.style.width = `${rectangle.width}px`;
@@ -65,7 +65,7 @@ export function projectAlphaSelectionOverlays(context: ViewportOverlayContext, c
     const line = context.renderedLines.get(rectangle.visualLineIndex);
     if (!line) continue;
     const element = ownerDocument.createElement("div");
-    element.className = "zeta-alpha-editor-selection";
+    element.className = "aster-editor-selection";
     element.dataset.selectionIndex = String(rectangle.selectionIndex);
     element.style.left = `${rectangle.left}px`;
     element.style.width = `${rectangle.width}px`;
@@ -76,7 +76,7 @@ export function projectAlphaSelectionOverlays(context: ViewportOverlayContext, c
     const line = context.renderedLines.get(rectangle.visualLineIndex);
     if (!line) continue;
     const element = ownerDocument.createElement("div");
-    element.className = "zeta-alpha-editor-caret";
+    element.className = "aster-editor-caret";
     element.classList.toggle("primary", rectangle.primary);
     element.dataset.selectionIndex = String(rectangle.selectionIndex);
     element.style.left = `${rectangle.left}px`;
@@ -86,7 +86,7 @@ export function projectAlphaSelectionOverlays(context: ViewportOverlayContext, c
     const line = context.renderedLines.get(rectangle.visualLineIndex);
     if (!line) continue;
     const element = ownerDocument.createElement("div");
-    element.className = "zeta-alpha-editor-caret";
+    element.className = "aster-editor-caret";
     element.classList.toggle("primary", rectangle.primary);
     element.dataset.selectionIndex = String(rectangle.selectionIndex);
     element.style.left = `${rectangle.left}px`;
@@ -135,7 +135,7 @@ function createDomSelectionGeometry(context: ViewportOverlayContext, selections:
     if (!visualLine || !renderedLine) continue;
     const offset = selection.active.columnIndex - visualLine.startColumn;
     if (!isCurrentDomTextOffset(renderedLine.textElement, offset)) continue;
-    const left = getAlphaDomTextCaretLeft(
+    const left = getAsterDomTextCaretLeft(
       renderedLine.textElement,
       offset,
       renderedLine.element,
@@ -182,7 +182,7 @@ function domRangeRectanglesForRange(context: ViewportOverlayContext, range: Text
     const startOffset = startColumn - visualLine.startColumn;
     const endOffset = endColumn - visualLine.startColumn;
     if (!isCurrentDomTextOffset(renderedLine.textElement, startOffset) || !isCurrentDomTextOffset(renderedLine.textElement, endOffset)) return undefined;
-    const rectangles = getAlphaDomTextRangeRectangles(
+    const rectangles = getAsterDomTextRangeRectangles(
       renderedLine.textElement,
       startOffset,
       endOffset,
@@ -202,8 +202,8 @@ function isCurrentDomTextOffset(element: HTMLElement, offset: number): boolean {
   return Number.isSafeInteger(offset) && offset >= 0 && offset <= element.textContent?.length;
 }
 
-export function projectAlphaDecorationOverlays(context: ViewportOverlayContext, decorations: readonly ResolvedDecoration[]): void {
-  const rectangles = createAlphaVisualDecorationRectangles(context.model, decorations, context.visualLineProjection, context.renderLines, context.textLeft, context.textMeasurer);
+export function projectAsterDecorationOverlays(context: ViewportOverlayContext, decorations: readonly ResolvedDecoration[]): void {
+  const rectangles = createAsterVisualDecorationRectangles(context.model, decorations, context.visualLineProjection, context.renderLines, context.textLeft, context.textMeasurer);
   const domRectangles = context.useDomTextGeometry
     ? new Map(decorations.map(decoration => [decoration.id, domRangeRectanglesForRange(context, decoration.range)] as const))
     : undefined;
@@ -214,7 +214,7 @@ export function projectAlphaDecorationOverlays(context: ViewportOverlayContext, 
     const line = context.renderedLines.get(rectangle.visualLineIndex);
     if (!line) continue;
     const element = ownerDocument.createElement("div");
-    element.className = "zeta-alpha-editor-decoration";
+    element.className = "aster-editor-decoration";
     element.classList.add(rectangle.presentation);
     element.dataset.decorationId = String(rectangle.id);
     if (rectangle.hoverText !== undefined) element.title = rectangle.hoverText;
@@ -229,7 +229,7 @@ export function projectAlphaDecorationOverlays(context: ViewportOverlayContext, 
       const line = context.renderedLines.get(rectangle.visualLineIndex);
       if (!line) continue;
       const element = ownerDocument.createElement("div");
-      element.className = "zeta-alpha-editor-decoration";
+      element.className = "aster-editor-decoration";
       element.classList.add(decoration.presentation);
       element.dataset.decorationId = String(decoration.id);
       if (decoration.hoverText !== undefined) element.title = decoration.hoverText;
@@ -291,17 +291,17 @@ function diagnosticMarkerClass(presentation: ResolvedDecoration["presentation"])
   }
 }
 
-export function projectAlphaCompositionOverlay(context: ViewportOverlayContext, range: TextRange | undefined): void {
+export function projectAsterCompositionOverlay(context: ViewportOverlayContext, range: TextRange | undefined): void {
   for (const line of context.renderedLines.values()) reset(line.compositionElement);
   if (!range) return;
   const domRectangles = context.useDomTextGeometry ? domRangeRectanglesForRange(context, range) : undefined;
-  const rectangles = domRectangles ?? createAlphaVisualRangeRectangles(context.model, [{ range, value: undefined }], context.visualLineProjection, context.renderLines, context.textLeft, context.textMeasurer);
+  const rectangles = domRectangles ?? createAsterVisualRangeRectangles(context.model, [{ range, value: undefined }], context.visualLineProjection, context.renderLines, context.textLeft, context.textMeasurer);
   const ownerDocument = context.ownerDocument;
   for (const rectangle of rectangles) {
     const line = context.renderedLines.get(rectangle.visualLineIndex);
     if (!line) continue;
     const element = ownerDocument.createElement("div");
-    element.className = "zeta-alpha-editor-composition";
+    element.className = "aster-editor-composition";
     element.style.left = `${rectangle.left}px`;
     element.style.width = `${rectangle.width}px`;
     line.compositionElement.append(element);

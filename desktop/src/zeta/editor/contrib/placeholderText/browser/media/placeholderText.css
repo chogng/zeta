@@ -1,4 +1,4 @@
-.zeta-alpha-editor-placeholder-text {
+.aster-editor-placeholder-text {
   position: absolute;
   z-index: 7;
   color: var(--zeta-description-foreground);
@@ -6,6 +6,6 @@
   white-space: pre-wrap;
 }
 
-.zeta-alpha-editor-embedded .zeta-alpha-editor-placeholder-text {
+.aster-editor-embedded .aster-editor-placeholder-text {
   color: var(--zeta-input-placeholder-foreground);
 }

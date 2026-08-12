@@ -2,7 +2,7 @@ import { addDisposableListener } from "../../../../base/browser/dom.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 
-/** Owns Alpha's non-modal diagnostic hover over projected gutter markers. */
+/** Owns Aster's non-modal diagnostic hover over projected gutter markers. */
 export class DiagnosticHoverController extends DisposableOwner {
   private readonly element: HTMLDivElement;
   private activeMarker: HTMLElement | undefined;
@@ -11,7 +11,7 @@ export class DiagnosticHoverController extends DisposableOwner {
     super();
     const ownerDocument = viewport.element.ownerDocument;
     this.element = ownerDocument.createElement("div");
-    this.element.className = "zeta-alpha-editor-diagnostic-hover";
+    this.element.className = "aster-editor-diagnostic-hover";
     this.element.hidden = true;
     this.element.setAttribute("role", "tooltip");
     (ownerDocument.body ?? viewport.element).append(this.element);
@@ -54,5 +54,5 @@ function markerForTarget(target: EventTarget | null): HTMLElement | undefined {
   const element = node.nodeType === node.ELEMENT_NODE
     ? node as HTMLElement
     : node.parentElement;
-  return element?.closest<HTMLElement>(".zeta-alpha-editor-diagnostic-marker") ?? undefined;
+  return element?.closest<HTMLElement>(".aster-editor-diagnostic-marker") ?? undefined;
 }

@@ -7,7 +7,7 @@ import { type EditorInput } from "../../workbench/browser/parts/editor/editorInp
 import { type TextModelReference } from "../common/services/textModelService.js";
 import { CodeEditorWidget } from "../browser/widget/codeEditor/codeEditorWidget.js";
 import { type EditorViewport } from "../browser/view/editorViewport.js";
-import { DecorationPresentation, createAlphaDecorationSource } from "../browser/view/decorationPresentation.js";
+import { DecorationPresentation, createAsterDecorationSource } from "../browser/view/decorationPresentation.js";
 import { TextDropController } from "../contrib/dropOrPasteInto/browser/textDropController.js";
 import { CursorUndoController } from "../contrib/cursorUndo/browser/cursorUndoController.js";
 import { DiagnosticNavigationController } from "../contrib/gotoError/browser/gotoError.js";
@@ -37,9 +37,9 @@ import { LineOperationsController } from "../contrib/linesOperations/browser/lin
 import { MultiCursorController } from "../contrib/multicursor/browser/multiCursorController.js";
 import { OccurrenceSelectionController } from "../contrib/multicursor/browser/occurrenceSelectionController.js";
 import { OccurrenceHighlightController } from "../contrib/wordHighlighter/browser/wordHighlighterController.js";
-import { createAlphaLanguageDiagnosticSource } from "../contrib/gotoError/browser/languageDiagnosticPresentation.js";
+import { createAsterLanguageDiagnosticSource } from "../contrib/gotoError/browser/languageDiagnosticPresentation.js";
 import { SaveController } from "../browser/saveController.js";
-import { createAlphaSemanticTokenSource } from "../contrib/semanticTokens/browser/semanticTokenPresentation.js";
+import { createAsterSemanticTokenSource } from "../contrib/semanticTokens/browser/semanticTokenPresentation.js";
 import { type TextInputController } from "../browser/input/textInputController.js";
 import { TransposeController } from "../contrib/transpose/browser/transposeController.js";
 import { WordWrapController } from "../contrib/wordWrap/browser/wordWrapController.js";
@@ -196,7 +196,7 @@ class ContributedEditorPart extends DisposableOwner implements IEditorPartRuntim
           snippetVariables: createSnippetVariables(options.input),
         },
       ));
-      const semanticTokens = createAlphaSemanticTokenSource(tokenization);
+      const semanticTokens = createAsterSemanticTokenSource(tokenization);
       const ariaLabel = editorLabel(options.input);
 
       this.codeEditor = this.own(new CodeEditorWidget({
@@ -210,12 +210,12 @@ class ContributedEditorPart extends DisposableOwner implements IEditorPartRuntim
           foldingModel: folding,
           hiddenRangeModel: hiddenRanges,
           decorationSources: [
-            createAlphaLanguageDiagnosticSource(diagnostics.decorations),
-            createAlphaDecorationSource(searchDecorations, () => DecorationPresentation.SearchMatch),
-            createAlphaDecorationSource(occurrenceDecorations, () => DecorationPresentation.OccurrenceHighlight),
-            createAlphaDecorationSource(bracketDecorations, () => DecorationPresentation.BracketMatch),
-            createAlphaDecorationSource(unicodeDecorations, () => DecorationPresentation.UnicodeHighlight, decoration => `${decoration.metadata.kind} Unicode character U+${decoration.metadata.character.codePointAt(0)!.toString(16).toUpperCase()}`),
-            createAlphaDecorationSource(unusualLineTerminatorDecorations, () => DecorationPresentation.UnusualLineTerminator, () => "Unusual line terminator"),
+            createAsterLanguageDiagnosticSource(diagnostics.decorations),
+            createAsterDecorationSource(searchDecorations, () => DecorationPresentation.SearchMatch),
+            createAsterDecorationSource(occurrenceDecorations, () => DecorationPresentation.OccurrenceHighlight),
+            createAsterDecorationSource(bracketDecorations, () => DecorationPresentation.BracketMatch),
+            createAsterDecorationSource(unicodeDecorations, () => DecorationPresentation.UnicodeHighlight, decoration => `${decoration.metadata.kind} Unicode character U+${decoration.metadata.character.codePointAt(0)!.toString(16).toUpperCase()}`),
+            createAsterDecorationSource(unusualLineTerminatorDecorations, () => DecorationPresentation.UnusualLineTerminator, () => "Unusual line terminator"),
           ],
           semanticTokenSource: semanticTokens,
           bracketColorizationSource: new BracketColorizationSource(bracketColorizations),

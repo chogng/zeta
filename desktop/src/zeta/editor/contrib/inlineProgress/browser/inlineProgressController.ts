@@ -10,7 +10,7 @@ export class InlineProgressController extends DisposableOwner {
   constructor(private readonly viewport: EditorViewport) {
     super();
     this.element = viewport.element.ownerDocument.createElement("div");
-    this.element.className = "zeta-alpha-editor-inline-progress";
+    this.element.className = "aster-editor-inline-progress";
     this.element.hidden = true;
     this.element.setAttribute("role", "status");
     this.element.setAttribute("aria-live", "polite");
@@ -19,7 +19,7 @@ export class InlineProgressController extends DisposableOwner {
   }
 
   async run<T>(label: string, task: Promise<T>): Promise<T> {
-    if (typeof label !== "string" || label.trim().length === 0) throw new TypeError("Alpha inline progress label must be non-empty");
+    if (typeof label !== "string" || label.trim().length === 0) throw new TypeError("Aster inline progress label must be non-empty");
     const token = ++this.active;
     this.element.textContent = label.trim();
     this.element.hidden = false;

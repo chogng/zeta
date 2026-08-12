@@ -1,4 +1,4 @@
-.zeta-alpha-editor-parameter-hints {
+.aster-editor-parameter-hints {
   position: absolute;
   z-index: 8;
   max-width: min(480px, calc(100% - 16px));
@@ -10,6 +10,6 @@
   box-shadow: 0 4px 14px var(--zeta-editor-widget-shadow);
 }
 
-.zeta-alpha-editor-parameter-hints-signature.active {
+.aster-editor-parameter-hints-signature.active {
   font-weight: 600;
 }

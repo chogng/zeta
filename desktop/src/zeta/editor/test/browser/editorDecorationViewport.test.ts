@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { DecorationPresentation, createAlphaDecorationSource } from "../../browser/view/decorationPresentation.js";
+import { DecorationPresentation, createAsterDecorationSource } from "../../browser/view/decorationPresentation.js";
 import { type TextMeasurer } from "../../browser/view/fontMetrics.js";
-import { createAlphaLanguageDiagnosticSource, resolveAlphaLanguageDiagnosticPresentation } from "../../contrib/gotoError/browser/languageDiagnosticPresentation.js";
+import { createAsterLanguageDiagnosticSource, resolveAsterLanguageDiagnosticPresentation } from "../../contrib/gotoError/browser/languageDiagnosticPresentation.js";
 import { TextDecorationCollection } from "../../common/model/decorationCollection.js";
 import { LanguageDiagnosticDecorationBridge } from "../../contrib/gotoError/common/diagnosticDecorations.js";
 import { LanguageResultAcceptance } from "../../common/languages/languageResultStore.js";
@@ -51,14 +51,14 @@ test("Decoration sources project, update, and follow tracked model ranges", () =
     metadata: "error",
   });
   let matchResolutionCount = 0;
-  const matchSource = createAlphaDecorationSource(
+  const matchSource = createAsterDecorationSource(
     matches,
     () => {
       matchResolutionCount += 1;
       return DecorationPresentation.SearchMatch;
     },
   );
-  const diagnosticSource = createAlphaDecorationSource(
+  const diagnosticSource = createAsterDecorationSource(
     diagnostics,
     decoration => decoration.metadata === "error"
       ? DecorationPresentation.ErrorUnderline
@@ -101,14 +101,14 @@ test("Decoration sources project, update, and follow tracked model ranges", () =
     width: "20px",
   }]);
   const errorMarker = requiredElement<HTMLElement>(
-    requiredElement<HTMLElement>(viewport.element, '.zeta-alpha-editor-line[data-logical-line-index="2"]'),
-    ".zeta-alpha-editor-diagnostic-marker",
+    requiredElement<HTMLElement>(viewport.element, '.aster-editor-line[data-logical-line-index="2"]'),
+    ".aster-editor-diagnostic-marker",
   );
   assert.equal(errorMarker.hidden, false);
   assert.equal(errorMarker.classList.contains("error"), true);
-  const errorOverview = requiredElement<HTMLElement>(viewport.element, ".zeta-alpha-editor-overview-marker");
+  const errorOverview = requiredElement<HTMLElement>(viewport.element, ".aster-editor-overview-marker");
   assert.equal(errorOverview.classList.contains(DecorationPresentation.ErrorUnderline), true);
-  const errorMinimap = requiredElement<HTMLElement>(viewport.element, ".zeta-alpha-editor-minimap-diagnostic-marker");
+  const errorMinimap = requiredElement<HTMLElement>(viewport.element, ".aster-editor-minimap-diagnostic-marker");
   assert.equal(errorMinimap.classList.contains(DecorationPresentation.ErrorUnderline), true);
   assert.equal(errorMinimap.style.top, "66.66666666666666%");
 
@@ -119,7 +119,7 @@ test("Decoration sources project, update, and follow tracked model ranges", () =
   });
   const warning = requiredElement<HTMLElement>(
     viewport.element,
-    `.zeta-alpha-editor-decoration[data-decoration-id="${diagnosticId}"]`,
+    `.aster-editor-decoration[data-decoration-id="${diagnosticId}"]`,
   );
   assert.equal(
     warning.classList.contains(DecorationPresentation.WarningUnderline),
@@ -129,14 +129,14 @@ test("Decoration sources project, update, and follow tracked model ranges", () =
   assert.equal(warning.style.left, "48px");
   assert.equal(warning.style.width, "20px");
   const warningMarker = requiredElement<HTMLElement>(
-    requiredElement<HTMLElement>(viewport.element, '.zeta-alpha-editor-line[data-logical-line-index="1"]'),
-    ".zeta-alpha-editor-diagnostic-marker",
+    requiredElement<HTMLElement>(viewport.element, '.aster-editor-line[data-logical-line-index="1"]'),
+    ".aster-editor-diagnostic-marker",
   );
   assert.equal(warningMarker.hidden, false);
   assert.equal(warningMarker.classList.contains("warning"), true);
-  const warningOverview = requiredElement<HTMLElement>(viewport.element, ".zeta-alpha-editor-overview-marker");
+  const warningOverview = requiredElement<HTMLElement>(viewport.element, ".aster-editor-overview-marker");
   assert.equal(warningOverview.classList.contains(DecorationPresentation.WarningUnderline), true);
-  const warningMinimap = requiredElement<HTMLElement>(viewport.element, ".zeta-alpha-editor-minimap-diagnostic-marker");
+  const warningMinimap = requiredElement<HTMLElement>(viewport.element, ".aster-editor-minimap-diagnostic-marker");
   assert.equal(warningMinimap.classList.contains(DecorationPresentation.WarningUnderline), true);
   assert.equal(warningMinimap.style.top, "33.33333333333333%");
   assert.equal(matchResolutionCount, 1);
@@ -179,10 +179,10 @@ test("Decoration overlays use browser range rectangles for RTL text", () => {
     lineHeight: 20,
     textMeasurer: new FixedTextMeasurer(),
     textDirection: EditorTextDirection.RightToLeft,
-    decorationSources: [createAlphaDecorationSource(decorations, () => DecorationPresentation.SearchMatch)],
+    decorationSources: [createAsterDecorationSource(decorations, () => DecorationPresentation.SearchMatch)],
   });
   viewport.layout({ width: 200, height: 40 });
-  const line = requiredElement<HTMLElement>(viewport.element, ".zeta-alpha-editor-line");
+  const line = requiredElement<HTMLElement>(viewport.element, ".aster-editor-line");
   Object.defineProperty(line, "getBoundingClientRect", {
     configurable: true,
     value: () => testRectangle(100, 0, 200),
@@ -227,7 +227,7 @@ test("Decoration overlays split at soft-wrapped visual line boundaries", () => {
     model,
     lineHeight: 20,
     textMeasurer: new FixedTextMeasurer(),
-    decorationSources: [createAlphaDecorationSource(
+    decorationSources: [createAsterDecorationSource(
       decorations,
       () => DecorationPresentation.SearchMatch,
     )],
@@ -262,7 +262,7 @@ test("Versioned diagnostics project named severity underlines and invalidate", (
   using model = new TextModel("abcd\nefgh\nijkl\nmnop");
   using store = createLanguageDiagnosticStore(model);
   using bridge = new LanguageDiagnosticDecorationBridge(store);
-  const source = createAlphaLanguageDiagnosticSource(bridge.decorations);
+  const source = createAsterLanguageDiagnosticSource(bridge.decorations);
   const viewport = new EditorViewport({
     container,
     model,
@@ -325,17 +325,17 @@ test("Versioned diagnostics project named severity underlines and invalidate", (
     title: "hint",
   }]);
   assert.equal(
-    resolveAlphaLanguageDiagnosticPresentation(
+    resolveAsterLanguageDiagnosticPresentation(
       LanguageDiagnosticSeverity.Information,
     ),
     DecorationPresentation.InformationUnderline,
   );
   assert.equal(
-    resolveAlphaLanguageDiagnosticPresentation(LanguageDiagnosticSeverity.Hint),
+    resolveAsterLanguageDiagnosticPresentation(LanguageDiagnosticSeverity.Hint),
     DecorationPresentation.HintUnderline,
   );
   assert.throws(
-    () => resolveAlphaLanguageDiagnosticPresentation(
+    () => resolveAsterLanguageDiagnosticPresentation(
       "fatal" as LanguageDiagnosticSeverity,
     ),
     /Unknown language diagnostic severity/,
@@ -376,7 +376,7 @@ function requiredElement<T extends Element = HTMLElement>(
 
 function decorationElements(container: ParentNode): HTMLElement[] {
   return [...container.querySelectorAll<HTMLElement>(
-    ".zeta-alpha-editor-decoration",
+    ".aster-editor-decoration",
   )];
 }
 

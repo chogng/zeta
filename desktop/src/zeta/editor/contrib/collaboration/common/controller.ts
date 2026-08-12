@@ -28,7 +28,7 @@ export interface DocumentCollaborationPresenceChange {
   readonly presences: readonly DocumentCollaborationPresence[];
 }
 
-/** Binds one Gama document model to a server-ordered collaboration connection. */
+/** Binds one Aster document model to a server-ordered collaboration connection. */
 export class DocumentCollaborationController extends DisposableOwner {
   private readonly stateEmitter = this.own(new Emitter<DocumentCollaborationStateChange>());
   private readonly presenceEmitter = this.own(new Emitter<DocumentCollaborationPresenceChange>());
@@ -97,25 +97,25 @@ export class DocumentCollaborationController extends DisposableOwner {
   }
 
   createInvite(displayName: string, role: DocumentCollaborationRoomRole): Promise<DocumentCollaborationInvite> {
-    if (this.disposed) return Promise.reject(new ReferenceError("Gama collaboration controller is disposed"));
+    if (this.disposed) return Promise.reject(new ReferenceError("Aster collaboration controller is disposed"));
     if (!this.connection.canManageMembers) return Promise.reject(new Error("This collaboration member cannot create room invitations"));
     return this.connection.createInvite(displayName, role, new AbortController().signal);
   }
 
   listMembers(): Promise<readonly DocumentCollaborationMember[]> {
-    if (this.disposed) return Promise.reject(new ReferenceError("Gama collaboration controller is disposed"));
+    if (this.disposed) return Promise.reject(new ReferenceError("Aster collaboration controller is disposed"));
     if (!this.connection.canManageMembers) return Promise.reject(new Error("This collaboration member cannot inspect room members"));
     return this.connection.listMembers(new AbortController().signal);
   }
 
   rotateMemberAccessToken(principalId: string): Promise<DocumentCollaborationInvite> {
-    if (this.disposed) return Promise.reject(new ReferenceError("Gama collaboration controller is disposed"));
+    if (this.disposed) return Promise.reject(new ReferenceError("Aster collaboration controller is disposed"));
     if (!this.connection.canManageMembers) return Promise.reject(new Error("This collaboration member cannot manage room credentials"));
     return this.connection.rotateMemberAccessToken(principalId, new AbortController().signal);
   }
 
   revokeMember(principalId: string): Promise<void> {
-    if (this.disposed) return Promise.reject(new ReferenceError("Gama collaboration controller is disposed"));
+    if (this.disposed) return Promise.reject(new ReferenceError("Aster collaboration controller is disposed"));
     if (!this.connection.canManageMembers) return Promise.reject(new Error("This collaboration member cannot manage room credentials"));
     return this.connection.revokeMember(principalId, new AbortController().signal);
   }

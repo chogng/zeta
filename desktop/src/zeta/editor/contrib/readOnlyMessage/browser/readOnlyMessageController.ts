@@ -24,15 +24,15 @@ export class ReadOnlyMessageController extends DisposableOwner {
     this.durationMs = options.durationMs ?? 2_400;
     if (typeof message !== "string" || message.trim().length === 0) {
       this.dispose();
-      throw new TypeError("Alpha read-only message must not be empty");
+      throw new TypeError("Aster read-only message must not be empty");
     }
     if (!Number.isSafeInteger(this.durationMs) || this.durationMs < 0) {
       this.dispose();
-      throw new RangeError("Alpha read-only message duration must be a non-negative safe integer");
+      throw new RangeError("Aster read-only message duration must be a non-negative safe integer");
     }
     const ownerDocument = viewport.element.ownerDocument;
     this.element = ownerDocument.createElement("div");
-    this.element.className = "zeta-alpha-editor-read-only-message";
+    this.element.className = "aster-editor-read-only-message";
     this.element.hidden = true;
     this.element.textContent = message;
     this.element.setAttribute("role", "status");

@@ -4,7 +4,7 @@ import { LineDiffKind, type LineDiffRow } from "../../../common/diff/lineDiff.js
 import { type DiffModel } from "../../../common/diff/diffModel.js";
 import { type DiffEditorWidget } from "../../../browser/widget/diffEditor/diffEditorWidget.js";
 
-/** Adds compact changed-hunk navigation to the Alpha diff editor without touching diff computation. */
+/** Adds compact changed-hunk navigation to the Aster diff editor without touching diff computation. */
 export class DiffEditorBreadcrumbsController extends DisposableOwner {
   private readonly element: HTMLElement;
 
@@ -12,7 +12,7 @@ export class DiffEditorBreadcrumbsController extends DisposableOwner {
     super();
     const document = editor.element.ownerDocument;
     this.element = document.createElement("nav");
-    this.element.className = "zeta-alpha-diff-editor-breadcrumbs";
+    this.element.className = "aster-diff-editor-breadcrumbs";
     this.element.setAttribute("aria-label", "Diff changes");
     editor.element.append(this.element);
     this.defer(() => this.element.remove());
@@ -29,7 +29,7 @@ export class DiffEditorBreadcrumbsController extends DisposableOwner {
   private createItem(row: LineDiffRow, rowIndex: number): HTMLButtonElement {
     const button = this.element.ownerDocument.createElement("button");
     button.type = "button";
-    button.className = "zeta-alpha-diff-editor-breadcrumb";
+    button.className = "aster-diff-editor-breadcrumb";
     button.textContent = `${row.modifiedLineIndex === undefined ? "—" : row.modifiedLineIndex + 1}`;
     button.title = `Reveal change ${rowIndex + 1}`;
     button.addEventListener("click", () => {

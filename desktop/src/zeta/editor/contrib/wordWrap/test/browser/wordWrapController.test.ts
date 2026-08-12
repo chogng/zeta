@@ -21,7 +21,7 @@ const { EditorViewport } = await import("../../../../browser/view/editorViewport
 const { EditorLineWrapping } = await import("../../../../browser/view/visualLineProjection.js");
 const { WordWrapController } = await import("../../browser/wordWrapController.js");
 
-test("Word-wrap shortcut switches Alpha's visual projection without editing text", () => {
+test("Word-wrap shortcut switches Aster's visual projection without editing text", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   const container = dom.window.document.querySelector<HTMLElement>("main")!;
   using model = new TextModel("abcdef");

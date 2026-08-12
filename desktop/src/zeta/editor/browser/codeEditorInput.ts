@@ -4,8 +4,7 @@ import { EditorPaneMatch } from "../../workbench/browser/parts/editor/editorPane
 import { isTextResourceLanguageInput, resolveTextResourceLanguageId, type TextResourceLanguageResolver } from "../../platform/language/common/textResourceLanguage.js";
 import { isDiffEditorInput } from "./diffEditorInput.js";
 
-/** Persisted compatibility ID for the canonical text editor. */
-export const CODE_EDITOR_ID = "zeta.editor.alpha";
+export const CODE_EDITOR_ID = "aster.editor.code";
 
 /** Selects the canonical editor for plain-text resources. */
 export function matchCodeEditor(input: EditorInput): EditorPaneMatch {
