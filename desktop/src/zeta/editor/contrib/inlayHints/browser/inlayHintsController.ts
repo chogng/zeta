@@ -1,4 +1,5 @@
 import "./media/inlayHints.css";
+import { registerEditorContribution } from "../../../browser/editorContribution.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { TextPosition, TextRange } from "../../../common/core/text.js";
 import { type InlayHintsService, type LanguageInlayHint } from "../common/inlayHints.js";
@@ -51,3 +52,9 @@ export class InlayHintsController extends DisposableOwner {
     this.request = undefined;
   }
 }
+
+registerEditorContribution({ id: "editor.contrib.inlayHints", install: context => {
+  if (context.kind !== "text") return;
+  const service = context.own(context.languageFeaturesService.createInlayHintsService(context.model));
+  context.own(new InlayHintsController(context.viewport, service, context.languageId, context.onLanguageError));
+} });

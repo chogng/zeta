@@ -1,3 +1,4 @@
+/** Canonical indentation configuration shared by engine layout and editing contributions. */
 export enum EditorIndentationKind {
   Tabs = "tabs",
   Spaces = "spaces",

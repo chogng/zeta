@@ -22,6 +22,7 @@ for (const [name, value] of Object.entries({
 
 const { EditorViewport } = await import("../../browser/view/editorViewport.js");
 const { EditingCommandController } = await import("../../browser/editingCommandController.js");
+const { LineSelectionController } = await import("../../contrib/lineSelection/browser/lineSelectionController.js");
 const { TextInputController } = await import("../../browser/input/textInputController.js");
 
 test.after(() => browserEnvironment.window.close());
@@ -58,7 +59,7 @@ test("editing shortcuts expand each selection by its next physical line", () => 
   using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
   viewport.layout({ width: 400, height: 100 });
   using input = new TextInputController(viewport, selections);
-  using commands = new EditingCommandController(input.element, viewport, selections);
+  using commands = new LineSelectionController(input.element, viewport, selections);
 
   const first = keyboardEvent(dom.window, "l", { ctrlKey: true });
   input.element.dispatchEvent(first);

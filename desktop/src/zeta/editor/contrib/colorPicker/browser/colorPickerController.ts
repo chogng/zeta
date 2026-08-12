@@ -1,4 +1,5 @@
 import "./media/colorPicker.css";
+import { registerEditorContribution } from "../../../browser/editorContribution.js";
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { RGBA8 } from "../../../common/core/misc/rgba.js";
@@ -80,3 +81,9 @@ export class ColorPickerController extends DisposableOwner {
 
 function rgbToHex(color: RGBA8): string { return `#${[color.r, color.g, color.b].map(value => value.toString(16).padStart(2, "0")).join("")}`; }
 function hexToRgb(value: string): RGBA8 { const normalized = value.replace(/^#/, ""); if (!/^[0-9a-f]{6}$/iu.test(normalized)) throw new TypeError("Color picker returned an invalid color"); return new RGBA8(Number.parseInt(normalized.slice(0, 2), 16), Number.parseInt(normalized.slice(2, 4), 16), Number.parseInt(normalized.slice(4, 6), 16), 255); }
+
+registerEditorContribution({ id: "editor.contrib.colorPicker", install: context => {
+  if (context.kind !== "text") return;
+  const service = context.own(context.languageFeaturesService.createColorService(context.model));
+  context.own(new ColorPickerController(context.textInput.element, context.viewport, context.selections, service, context.languageId, context.onLanguageError));
+} });

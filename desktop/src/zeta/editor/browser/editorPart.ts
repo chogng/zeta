@@ -9,7 +9,7 @@ import { type LanguageCompletionWorkerFactory } from "../common/languages/comple
 import { type SyntaxWorkerFactory } from "../common/languages/syntax/syntaxService.js";
 import { type ILanguageFeaturesService } from "../common/services/languageService.js";
 import { type TextModelReference } from "../common/services/textModelService.js";
-import { type EditorIndentationOptions } from "../contrib/indentation/common/indentation.js";
+import { type EditorIndentationOptions } from "../common/editorIndentation.js";
 import { type TextInputController } from "./input/textInputController.js";
 import { type CodeEditorWidget } from "./widget/codeEditor/codeEditorWidget.js";
 import { type EditorHitTarget } from "./view/pointerHitTest.js";
@@ -38,7 +38,6 @@ export interface EditorPartOptions {
   readonly onDidChangeLanguageSupport?: Event<void>;
   readonly whenLanguageSupportReady?: () => Promise<unknown>;
   readonly onLanguageError?: (error: unknown) => void;
-  readonly onSaveError?: (error: unknown) => void;
   readonly onSave?: () => Promise<void | boolean>;
   readonly onRevert?: () => Promise<void>;
   readonly indentation?: EditorIndentationOptions;
@@ -66,6 +65,7 @@ export interface IEditorPartRuntime extends IDisposable {
   readonly viewport: EditorViewport;
   readonly selections: EditorSelectionController;
   readonly textInput: TextInputController;
+  announceAccessibilityStatus(message: string): void;
   layout(dimension: IDimension): void;
   focus(): void;
   getValue(): string;
@@ -118,6 +118,7 @@ export class EditorPart extends DisposableOwner implements IEditorPartRuntime {
   }
 
   layout(dimension: IDimension): void { this.runtime.layout(dimension); }
+  announceAccessibilityStatus(message: string): void { this.runtime.announceAccessibilityStatus(message); }
   focus(): void { this.runtime.focus(); }
   getValue(): string { return this.runtime.getValue(); }
   setValue(value: string): void { this.runtime.setValue(value); }

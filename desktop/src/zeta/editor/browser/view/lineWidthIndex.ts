@@ -1,8 +1,8 @@
-import { Emitter, type Event } from "../../../../base/common/event.js";
-import { DisposableOwner, DisposableSlot, type IDisposable } from "../../../../base/common/lifecycle.js";
-import { type TextModelChange } from "../../../common/core/text.js";
-import { type TextModel } from "../../../common/model/textModel.js";
-import { type TextMeasurer } from "../../../browser/view/fontMetrics.js";
+import { Emitter, type Event } from "../../../base/common/event.js";
+import { DisposableOwner, DisposableSlot, type IDisposable } from "../../../base/common/lifecycle.js";
+import { type TextModelChange } from "../../common/core/text.js";
+import { type TextModel } from "../../common/model/textModel.js";
+import { type TextMeasurer } from "./fontMetrics.js";
 
 interface AffectedLineGroup {
   readonly oldStartLineIndex: number;
@@ -40,7 +40,7 @@ interface ResolvedInitialMeasurement {
   readonly schedule: LineWidthMeasurementScheduler;
 }
 
-/** @internal */
+/** Viewport-owned width index used to bound horizontal layout work. */
 export class LineWidthIndex extends DisposableOwner {
   private widths: number[] = [];
   private readonly widthCounts = new Map<number, number>();

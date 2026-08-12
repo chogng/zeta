@@ -12,7 +12,7 @@ language providers, grammars, diagnostics, or completion services.
 Browser-owned responsibilities include:
 
 - viewport observation and DOM virtualization;
-- textarea, keyboard, clipboard, drag/drop, and composition-event adapters;
+- textarea, keyboard, pointer, and composition-event adapters;
 - font and glyph measurement;
 - DOM selection, focus, scrolling, and pointer projection;
 - ARIA and screen-reader surfaces;
@@ -46,10 +46,11 @@ Aster is a sibling structured-editor domain. Aster browser code must not import 
 embedded widgets. It owns one `EditorViewport`, one `TextInputController`, keyboard and
 pointer navigation. Its caller retains the shared `TextModel` and the editor-local
 `EditorSelectionController`, so disposing a widget never disposes document state and multiple
-editors may safely project the same model. `EditorPart` adds language, folding, diagnostic,
-save, command, and optional text-drop controllers around this surface; product widgets must
+editors may safely project the same model. `EditorPart` establishes language, projection, and
+typed capability runtime around this surface; independently selected contributions add folding,
+diagnostics, commands, clipboard, Suggest, placeholder, and text-drop behavior. Workbench owns save command routing. Product widgets must
 consume the `CodeEditorWidget` rather than assembling viewport and native-input internals
-themselves. `CodeEditorWidget` also owns optional placeholder composition, while viewport
+themselves. `CodeEditorWidget` exposes only a registration seam for optional placeholder composition, while viewport
 padding is canonical editor geometry shared by row projection, hit testing, scrolling, and
 placeholder placement.
 
@@ -98,7 +99,7 @@ syntax result. Arbitrary caller decoration markers and syntax-color minimaps
 remain outside this browser contract.
 
 `EditorViewport` also projects indentation guides only for visible first
-fragments of logical lines. `contrib/indentation/browser/indentation.ts`
+fragments of logical lines. `browser/view/indentationGuides.ts`
 identifies complete
 visual indentation units from leading tabs/spaces, while `TextMeasurer`
 places each guide at the same coordinate system as carets and selections.

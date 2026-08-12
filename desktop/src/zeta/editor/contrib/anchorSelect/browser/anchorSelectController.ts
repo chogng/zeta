@@ -1,4 +1,5 @@
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
+import { registerEditorContribution } from "../../../browser/editorContribution.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { EditorCursorNavigationCommand, EditorCursorNavigationMode, navigateEditorCursors } from "../../../common/cursor/cursorNavigation.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
@@ -47,6 +48,14 @@ export class AnchorSelectController extends DisposableOwner {
     }
   }
 }
+
+registerEditorContribution({
+  id: "editor.contrib.anchorSelect",
+  install: context => {
+    if (context.kind !== "text") return;
+    context.own(new AnchorSelectController(context.textInput.element, context.viewport, context.selections, () => context.configurations.getLanguageConfiguration(context.languageId).wordPattern));
+  },
+});
 
 function anchorNavigationCommand(event: KeyboardEvent): EditorCursorNavigationCommand {
   switch (event.key) {

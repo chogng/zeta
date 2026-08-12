@@ -9,6 +9,7 @@ import { LanguageCompletionInsertTextFormat, LanguageCompletionItemKind, createL
 import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
 import { TextPosition, TextRange } from "../../../../common/core/text.js";
 import { TextModel } from "../../../../common/model/textModel.js";
+import "../../browser/suggestWidget.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({

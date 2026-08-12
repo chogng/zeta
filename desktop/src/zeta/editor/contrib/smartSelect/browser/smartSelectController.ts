@@ -1,4 +1,5 @@
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
+import { registerEditorContribution } from "../../../browser/editorContribution.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { type TextSelectionSet } from "../../../common/core/selection.js";
@@ -33,3 +34,11 @@ export class SmartSelectController extends DisposableOwner {
     }
   }
 }
+
+registerEditorContribution({
+  id: "editor.contrib.smartSelect",
+  install: context => {
+    if (context.kind !== "text") return;
+    context.own(new SmartSelectController(context.textInput.element, context.viewport, context.selections, () => context.configurations.getLanguageConfiguration(context.languageId).wordPattern));
+  },
+});

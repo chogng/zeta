@@ -1,4 +1,5 @@
 import "./media/middleScroll.css";
+import { registerEditorContribution } from "../../../browser/editorContribution.js";
 import { addDisposableListener } from "../../../../base/browser/dom.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type EditorViewport } from "../../../browser/view/editorViewport.js";
@@ -28,3 +29,11 @@ export class MiddleScrollController extends DisposableOwner {
     this.defer(() => { this.active = undefined; viewport.element.classList.remove("middle-scrolling"); });
   }
 }
+
+registerEditorContribution({
+  id: "editor.contrib.middleScroll",
+  install: context => {
+    if (context.kind !== "text") return;
+    context.own(new MiddleScrollController(context.viewport));
+  },
+});

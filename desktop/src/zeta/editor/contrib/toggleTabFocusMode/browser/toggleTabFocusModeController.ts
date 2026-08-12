@@ -1,4 +1,5 @@
 import "./media/toggleTabFocusMode.css";
+import { registerEditorContribution } from "../../../browser/editorContribution.js";
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type EditorViewport } from "../../../browser/view/editorViewport.js";
@@ -36,3 +37,11 @@ export class ToggleTabFocusModeController extends DisposableOwner {
     this.viewport.element.dataset.tabFocusMode = String(this.enabled);
   }
 }
+
+registerEditorContribution({
+  id: "editor.contrib.toggleTabFocusMode",
+  install: context => {
+    if (context.kind !== "text") return;
+    context.own(new ToggleTabFocusModeController(context.textInput.element, context.viewport));
+  },
+});

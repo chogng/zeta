@@ -15,7 +15,7 @@
   background: transparent;
 }
 
-.zeta-menubar .zeta-menubar-item > span {
+.zeta-menubar .zeta-menubar-item .zeta-button-label {
   display: none;
 }
 

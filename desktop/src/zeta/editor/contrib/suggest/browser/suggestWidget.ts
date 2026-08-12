@@ -5,6 +5,7 @@ import { type EditorSelectionController } from "../../../common/cursor/editorSel
 import { LanguageCompletionDetailsStatus, type LanguageCompletionSessionState, LanguageCompletionSessionController } from "../common/suggestModel.js";
 import { LanguageCompletionItemKind } from "../../../common/languages/completion/languageCompletions.js";
 import { type EditorViewport } from "../../../browser/view/editorViewport.js";
+import { registerTextInputCompletionViewFactory, type TextInputCompletionSession } from "../../../browser/input/textInputController.js";
 
 let nextCompletionWidgetId = 1;
 
@@ -197,6 +198,8 @@ export class CompletionWidget extends DisposableOwner {
     return Number.isSafeInteger(index) ? index : undefined;
   }
 }
+
+registerTextInputCompletionViewFactory((element, viewport, selections, session) => new CompletionWidget(element, viewport, selections, session as LanguageCompletionSessionController));
 
 function completionKindLabel(kind: LanguageCompletionItemKind): string {
   switch (kind) {

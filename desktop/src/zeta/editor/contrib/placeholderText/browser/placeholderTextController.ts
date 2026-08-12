@@ -1,6 +1,7 @@
 import "./media/placeholderText.css";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type EditorViewport } from "../../../browser/view/editorViewport.js";
+import { registerCodeEditorPlaceholderFactory } from "../../../browser/widget/codeEditor/codeEditorWidget.js";
 import { TextPosition } from "../../../common/core/text.js";
 
 /** Presents a non-editable hint when the shared model is empty. */
@@ -31,3 +32,5 @@ export class PlaceholderTextController extends DisposableOwner {
     this.element.style.lineHeight = `${position.height}px`;
   }
 }
+
+registerCodeEditorPlaceholderFactory((viewport, placeholder) => new PlaceholderTextController(viewport, placeholder));

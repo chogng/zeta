@@ -1,4 +1,5 @@
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
+import { registerEditorContribution } from "../../../browser/editorContribution.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { EditorLineWrapping } from "../../../browser/view/visualLineProjection.js";
 import { type EditorViewport } from "../../../browser/view/editorViewport.js";
@@ -22,3 +23,8 @@ export class WordWrapController extends DisposableOwner {
       : EditorLineWrapping.On);
   }
 }
+
+registerEditorContribution({ id: "editor.contrib.wordWrap", install: context => {
+  if (context.kind !== "text") return;
+  context.own(new WordWrapController(context.textInput.element, context.viewport));
+} });

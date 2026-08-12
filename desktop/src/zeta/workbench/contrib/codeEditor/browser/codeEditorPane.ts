@@ -1,4 +1,5 @@
 import "./media/editorPane.css";
+import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
 import { type IDimension } from "../../../../base/browser/geometry.js";
 import { throwIfCancelled } from "../../../../base/common/cancellation.js";
 import { DisposableOwner, DisposableSlot, type IDisposable } from "../../../../base/common/lifecycle.js";
@@ -22,6 +23,7 @@ export interface EditorPanePart extends IDisposable {
   layout(dimension: IDimension): void;
   focus(): void;
   getValue(): string;
+  announceAccessibilityStatus?(message: string): void;
   readonly isDirty?: boolean;
   readonly hasExternalChange?: boolean;
   save?(): Promise<void>;
@@ -51,6 +53,7 @@ export interface EditorPaneOptions {
   readonly showUnicodeHighlights?: boolean;
   readonly fontZoom?: EditorPartOptions["fontZoom"];
   readonly onSave?: () => Promise<void | boolean>;
+  readonly onSaveError?: (error: unknown) => void;
 }
 
 /** Workbench pane that composes the text model, input, view, and language services. */
@@ -62,6 +65,7 @@ export class CodeEditorPane extends DisposableOwner implements IEditorPane {
   private readonly createPart: (options: EditorPanePartOptions) => EditorPanePart;
   private container: HTMLDivElement | undefined;
   private dimension: IDimension = { width: 0, height: 0 };
+  private saving = false;
 
   get workingCopy(): IWorkingCopy | undefined {
     return this.workingCopySlot.value;
@@ -87,6 +91,7 @@ export class CodeEditorPane extends DisposableOwner implements IEditorPane {
     container.className = "aster-editor-pane";
     parent.append(container);
     this.container = container;
+    this.own(addDisposableListener<KeyboardEvent>(container, "keydown", event => this.handleSaveKeydown(event)));
     this.defer(() => {
       container.remove();
       this.container = undefined;
@@ -191,10 +196,31 @@ export class CodeEditorPane extends DisposableOwner implements IEditorPane {
     await this.part.value?.revert?.();
   }
 
+  private handleSaveKeydown(event: KeyboardEvent): void {
+    if (event.defaultPrevented || event.isComposing || event.getModifierState("AltGraph")) return;
+    if ((!event.ctrlKey && !event.metaKey) || event.shiftKey || event.altKey || event.key.toLowerCase() !== "s") return;
+    stopEvent(event);
+    if (this.saving) return;
+    this.saving = true;
+    void this.save().then(() => {
+      this.part.value?.announceAccessibilityStatus?.("Saved");
+    }).catch(error => {
+      const message = error instanceof Error && error.message.trim().length > 0 ? error.message.trim() : "unknown error";
+      this.part.value?.announceAccessibilityStatus?.(`Save failed: ${message}`);
+      (this.options.onSaveError ?? reportSaveError)(error);
+    }).finally(() => {
+      this.saving = false;
+    });
+  }
+
   private requireContainer(): HTMLDivElement {
     assertDefined(this.container, new ReferenceError("EditorPane has not been created"));
     return this.container;
   }
+}
+
+function reportSaveError(error: unknown): void {
+  console.error("Code editor save failed", error);
 }
 
 class EditorWorkingCopy extends DisposableOwner implements IWorkingCopy {

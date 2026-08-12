@@ -1,4 +1,4 @@
-import { type MinimapRow } from "../../../browser/view/minimapProjection.js";
+import { type MinimapRow } from "./minimapProjection.js";
 
 const VERTEX_SHADER_SOURCE = `
   attribute vec2 position;

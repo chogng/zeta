@@ -1,4 +1,5 @@
 import "./media/inlineProgress.css";
+import { registerEditorContribution } from "../../../browser/editorContribution.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 
@@ -26,3 +27,11 @@ export class InlineProgressController extends DisposableOwner {
     try { return await task; } finally { if (token === this.active) this.element.hidden = true; }
   }
 }
+
+registerEditorContribution({
+  id: "editor.contrib.inlineProgress",
+  install: context => {
+    if (context.kind !== "text") return;
+    context.own(new InlineProgressController(context.viewport));
+  },
+});

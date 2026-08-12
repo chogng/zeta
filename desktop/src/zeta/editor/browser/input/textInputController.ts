@@ -1,35 +1,37 @@
 import { addDisposableListener, stopEvent } from "../../../base/browser/dom.js";
-import { DisposableOwner } from "../../../base/common/lifecycle.js";
+import { DisposableOwner, type IDisposable } from "../../../base/common/lifecycle.js";
 import { createBackspaceCommand, createDeleteForwardCommand, createDeleteToLineEndCommand, createDeleteToLineStartCommand } from "../../common/cursor/cursorDeleteOperations.js";
 import { createDeleteWordBackwardCommand, createDeleteWordForwardCommand } from "../../common/cursor/cursorWordOperations.js";
 import { createTypeTextCommand } from "../../common/cursor/cursorTypeOperations.js";
-import { resolveEditorIndentationOptions, type EditorIndentationOptions, type ResolvedEditorIndentationOptions } from "../../contrib/indentation/common/indentation.js";
 import { type EditorEditCommand } from "../../common/commands/editorEditCommand.js";
 import { type EditorSelectionController } from "../../common/cursor/editorSelectionController.js";
-import { LanguageAutoClosingTracker } from "../../contrib/bracketMatching/common/autoClosingTracker.js";
-import { type LanguageConfigurationSource, type ResolvedLanguageConfiguration } from "../../common/languages/languageConfiguration.js";
-import { type LanguageCompletionSessionController } from "../../contrib/suggest/common/suggestModel.js";
 import { type LanguageCompletionService } from "../../common/languages/completion/languageCompletionService.js";
+import { type LanguageCompletionResult } from "../../common/languages/completion/languageCompletions.js";
+import { type VersionedLanguageResultStore } from "../../common/languages/languageResultStore.js";
+import { type LanguageConfigurationSource } from "../../common/languages/languageConfiguration.js";
+import { type LanguageLexicalContextSource } from "../../common/languages/languageLexicalContext.js";
 import { createLanguageCompletionIncompleteRefreshContext, createLanguageCompletionInvokeContext, type LanguageCompletionContext } from "../../common/languages/completion/languageCompletionProviders.js";
-import { assertLanguageId } from "../../common/languages/languageId.js";
-import { createLanguageEnterCommand } from "../../contrib/bracketMatching/common/enter.js";
-import { LanguageLexicalContextIndex, type LanguageLexicalContextSource } from "../../common/languages/languageLexicalContext.js";
-import { createLanguagePairBackspaceCommand, createLanguagePairTypeCommand, type LanguagePairTypeCommand } from "../../contrib/bracketMatching/common/pairEditing.js";
 import { createOvertypeTextCommand } from "../../common/cursor/cursorOvertype.js";
 import { type TextModelChange } from "../../common/core/text.js";
 import { TextSelection, TextSelectionSet } from "../../common/core/selection.js";
 import { type EditorViewport } from "../view/editorViewport.js";
-import { ClipboardController, type ClipboardControllerOptions } from "../../contrib/clipboard/browser/clipboardController.js";
-import { UriListPasteProvider } from "../../contrib/clipboard/browser/clipboardPasteProvider.js";
-import { CompletionWidget } from "../../contrib/suggest/browser/suggestWidget.js";
 import { CompositionController } from "./compositionController.js";
 
 export interface TextInputControllerOptions {
   readonly ariaLabel?: string;
-  readonly clipboard?: ClipboardControllerOptions;
+  /** Compatibility seam for explicitly selected clipboard adapters. */
+  readonly clipboard?: unknown;
   readonly completion?: TextInputCompletionOptions;
-  readonly indentation?: EditorIndentationOptions;
+  /** Compatibility seams implemented by the optional language-editing contribution. */
+  readonly indentation?: TextInputIndentationOptions;
   readonly language?: TextInputLanguageOptions;
+  readonly languageEditing?: TextInputLanguageEditingAdapter;
+  readonly wordPattern?: () => RegExp | undefined;
+}
+
+export interface TextInputIndentationOptions {
+  readonly kind?: "tabs" | "spaces";
+  readonly tabSize?: number;
 }
 
 export interface TextInputLanguageOptions {
@@ -38,9 +40,75 @@ export interface TextInputLanguageOptions {
   readonly lexicalContext?: LanguageLexicalContextSource;
 }
 
+export type TextInputClipboardFactory = (element: HTMLTextAreaElement, viewport: EditorViewport, selections: EditorSelectionController, options: unknown, isEditingAllowed: () => boolean) => IDisposable;
+
+let clipboardFactory: TextInputClipboardFactory | undefined;
+
+/** Registers the optional clipboard adapter without introducing a browser-to-contrib dependency. */
+export function registerTextInputClipboardFactory(factory: TextInputClipboardFactory): void {
+  if (typeof factory !== "function") throw new TypeError("Text input clipboard factory must be a function");
+  if (clipboardFactory && clipboardFactory !== factory) throw new Error("Text input clipboard factory is already registered");
+  clipboardFactory = factory;
+}
+
+export interface TextInputLanguageTypeCommand {
+  readonly command: EditorEditCommand;
+  readonly insertedText: boolean;
+  afterExecute?(change: TextModelChange): void;
+}
+
+/** Optional language-aware editing seam implemented by bracket and indentation contributions. */
+export interface TextInputLanguageEditingAdapter extends IDisposable {
+  readonly textModel: import("../../common/model/textModel.js").TextModel;
+  createTypeCommand(selections: TextSelectionSet, text: string): TextInputLanguageTypeCommand | undefined;
+  createEnterCommand(selections: TextSelectionSet): EditorEditCommand | undefined;
+  createBackspaceCommand(selections: TextSelectionSet): EditorEditCommand | undefined;
+}
+
+export type TextInputLanguageEditingFactory = (model: import("../../common/model/textModel.js").TextModel, selections: EditorSelectionController, language: TextInputLanguageOptions, indentation: TextInputIndentationOptions | undefined) => TextInputLanguageEditingAdapter;
+
+let languageEditingFactory: TextInputLanguageEditingFactory | undefined;
+
+/** Registers optional language-aware editing without a browser-to-contrib dependency. */
+export function registerTextInputLanguageEditingFactory(factory: TextInputLanguageEditingFactory): void {
+  if (typeof factory !== "function") throw new TypeError("Text input language editing factory must be a function");
+  if (languageEditingFactory && languageEditingFactory !== factory) throw new Error("Text input language editing factory is already registered");
+  languageEditingFactory = factory;
+}
+
 export interface TextInputCompletionOptions {
-  readonly session: LanguageCompletionSessionController;
+  readonly session: TextInputCompletionSession;
   readonly requests?: TextInputCompletionRequests;
+}
+
+/** Structural completion session contract consumed by native text input. */
+export interface TextInputCompletionSession {
+  readonly textModel: import("../../common/model/textModel.js").TextModel;
+  readonly resultStore: VersionedLanguageResultStore<LanguageCompletionResult>;
+  readonly state: { readonly isIncomplete: boolean } | undefined;
+  acceptSelectedWithCommitCharacter(commitCharacter?: string): boolean;
+  cancel(): boolean;
+  cancelSnippetPlaceholderNavigation(): boolean;
+  selectNextSnippetChoice(): boolean;
+  selectPreviousSnippetChoice(): boolean;
+  selectNextSnippetPlaceholder(): boolean;
+  selectPreviousSnippetPlaceholder(): boolean;
+}
+
+export interface TextInputCompletionView extends IDisposable {
+  readonly element: HTMLElement;
+  readonly visible: boolean;
+}
+
+export type TextInputCompletionViewFactory = (element: HTMLTextAreaElement, viewport: EditorViewport, selections: EditorSelectionController, session: TextInputCompletionSession) => TextInputCompletionView;
+
+let completionViewFactory: TextInputCompletionViewFactory | undefined;
+
+/** Registers the optional Suggest presentation without coupling native input to that contrib. */
+export function registerTextInputCompletionViewFactory(factory: TextInputCompletionViewFactory): void {
+  if (typeof factory !== "function") throw new TypeError("Text input completion view factory must be a function");
+  if (completionViewFactory && completionViewFactory !== factory) throw new Error("Text input completion view factory is already registered");
+  completionViewFactory = factory;
 }
 
 export interface TextInputCompletionRequests {
@@ -55,13 +123,11 @@ export interface TextInputCompletionRequests {
 export class TextInputController extends DisposableOwner {
   readonly element: HTMLTextAreaElement;
   readonly compositionController: CompositionController;
-  readonly completionWidget: CompletionWidget | undefined;
-  private readonly completionSession: LanguageCompletionSessionController | undefined;
+  readonly completionWidget: TextInputCompletionView | undefined;
+  private readonly completionSession: TextInputCompletionSession | undefined;
   private readonly completionRequests: TextInputCompletionRequests | undefined;
-  private readonly language: TextInputLanguageOptions | undefined;
-  private readonly indentation: ResolvedEditorIndentationOptions;
-  private readonly languageLexicalContext: LanguageLexicalContextSource | undefined;
-  private readonly autoClosingTracker: LanguageAutoClosingTracker | undefined;
+  private readonly languageEditing: TextInputLanguageEditingAdapter | undefined;
+  private readonly wordPattern: (() => RegExp | undefined) | undefined;
   private completionRequest: AbortController | undefined;
   private completionIsIncomplete = false;
   private overtype = false;
@@ -74,6 +140,7 @@ export class TextInputController extends DisposableOwner {
     options: TextInputControllerOptions = {},
   ) {
     super();
+    validateIndentationOptions(options.indentation);
     if (
       viewport.textModel !== selectionController.textModel ||
       (
@@ -98,25 +165,13 @@ export class TextInputController extends DisposableOwner {
       this.dispose();
       throw new TypeError("Aster completion request error handler must be a function");
     }
-    if (options.language) {
-      assertLanguageId(options.language.languageId);
-      if (!options.language.configurations || typeof options.language.configurations.getLanguageConfiguration !== "function") {
-        this.dispose();
-        throw new TypeError("Aster text input language requires a configuration source");
-      }
-      if (options.completion?.requests && options.completion.requests.languageId !== options.language.languageId) {
-        this.dispose();
-        throw new TypeError("Aster text input language and completion request identities must match");
-      }
-      if (options.language.lexicalContext && (
-        options.language.lexicalContext.textModel !== viewport.textModel ||
-        options.language.lexicalContext.languageId !== options.language.languageId ||
-        typeof options.language.lexicalContext.getStructuralLineContent !== "function" ||
-        typeof options.language.lexicalContext.getTokenTypeAt !== "function"
-      )) {
-        this.dispose();
-        throw new TypeError("Aster text input lexical context must match its model and language");
-      }
+    if (options.languageEditing && options.languageEditing.textModel !== viewport.textModel) {
+      this.dispose();
+      throw new TypeError("Aster text input language editing must share its text model");
+    }
+    if (options.language && options.completion?.requests && options.completion.requests.languageId !== options.language.languageId) {
+      this.dispose();
+      throw new TypeError("Aster text input language and completion request identities must match");
     }
     this.completionSession = options.completion?.session;
     this.completionRequests = options.completion?.requests;
@@ -127,19 +182,12 @@ export class TextInputController extends DisposableOwner {
         if (change.result) this.completionIsIncomplete = change.result.value.isIncomplete;
       }));
     }
-    this.language = options.language;
-    try {
-      this.indentation = resolveEditorIndentationOptions(options.indentation);
-    } catch (error) {
+    if (options.language && !languageEditingFactory) {
       this.dispose();
-      throw error;
+      throw new Error("Text input language options require the language-editing contribution");
     }
-    this.languageLexicalContext = options.language
-      ? options.language.lexicalContext ?? this.own(new LanguageLexicalContextIndex(viewport.textModel, options.language.languageId, options.language.configurations))
-      : undefined;
-    this.autoClosingTracker = options.language
-      ? this.own(new LanguageAutoClosingTracker(viewport.textModel, selectionController))
-      : undefined;
+    this.languageEditing = options.languageEditing ? this.own(options.languageEditing) : options.language ? this.own(languageEditingFactory!(viewport.textModel, selectionController, options.language, options.indentation)) : undefined;
+    this.wordPattern = options.wordPattern ?? (options.language ? () => options.language!.configurations.getLanguageConfiguration(options.language!.languageId).wordPattern : undefined);
     const ownerDocument = viewport.element.ownerDocument;
     this.element = ownerDocument.createElement("textarea");
     this.element.className = "aster-editor-input";
@@ -154,29 +202,20 @@ export class TextInputController extends DisposableOwner {
     this.element.setAttribute("aria-multiline", "true");
     this.element.setAttribute("aria-roledescription", "code editor");
     this.element.setAttribute("aria-readonly", String(selectionController.readOnly));
-    this.completionWidget = this.completionSession
-      ? this.own(new CompletionWidget(
-        this.element,
-        viewport,
-        selectionController,
-        this.completionSession,
-      ))
-      : undefined;
+    if (this.completionSession && !completionViewFactory) {
+      this.dispose();
+      throw new Error("Text input completion requires the Suggest contribution");
+    }
+    this.completionWidget = this.completionSession ? this.own(completionViewFactory!(this.element, viewport, selectionController, this.completionSession)) : undefined;
     this.compositionController = this.own(new CompositionController(
       this.element,
       viewport,
       selectionController,
     ));
-    this.own(new ClipboardController(
-      this.element,
-      viewport,
-      selectionController,
-      {
-        ...options.clipboard,
-        isEditingAllowed: () => !this.compositionController.composing && (options.clipboard?.isEditingAllowed?.() ?? true),
-        pasteProviders: [UriListPasteProvider, ...(options.clipboard?.pasteProviders ?? [])],
-      },
-    ));
+    if (options.clipboard !== undefined) {
+      if (!clipboardFactory) throw new Error("Text input clipboard options require the clipboard contribution");
+      this.own(clipboardFactory(this.element, viewport, selectionController, options.clipboard, () => !this.compositionController.composing));
+    }
     viewport.element.append(this.element);
     this.defer(() => {
       this.disposed = true;
@@ -239,7 +278,7 @@ export class TextInputController extends DisposableOwner {
     const refreshIncomplete = this.readCompletionIsIncomplete();
     let insertedText: string | undefined;
     let command: EditorEditCommand | undefined;
-    let pairCommand: LanguagePairTypeCommand | undefined;
+    let languageTypeCommand: TextInputLanguageTypeCommand | undefined;
     switch (event.inputType) {
       case "insertText":
       case "insertReplacementText":
@@ -252,31 +291,19 @@ export class TextInputController extends DisposableOwner {
           return;
         }
         {
-          pairCommand = this.language
-            ? createLanguagePairTypeCommand(this.viewport.textModel, this.selectionController.selections, event.data, this.readLanguageConfiguration(), {
-              autoClosingTrust: this.autoClosingTracker,
-              lexicalContext: this.languageLexicalContext,
-            })
-            : undefined;
-          insertedText = pairCommand?.didInsertText === false ? undefined : event.data;
-          command = pairCommand?.command ?? (this.overtype
+          languageTypeCommand = this.languageEditing?.createTypeCommand(this.selectionController.selections, event.data);
+          insertedText = languageTypeCommand?.insertedText === false ? undefined : event.data;
+          command = languageTypeCommand?.command ?? (this.overtype
             ? createOvertypeTextCommand(this.viewport.textModel, this.selectionController.selections, event.data)
             : createTypeTextCommand(this.viewport.textModel, this.selectionController.selections, event.data));
         }
         break;
       case "insertLineBreak":
       case "insertParagraph":
-        command = this.language
-          ? createLanguageEnterCommand(this.viewport.textModel, this.selectionController.selections, this.readLanguageConfiguration(), {
-            indentation: this.indentation,
-            lexicalContext: this.languageLexicalContext,
-          })
-          : createTypeTextCommand(this.viewport.textModel, this.selectionController.selections, "\n");
+        command = this.languageEditing?.createEnterCommand(this.selectionController.selections) ?? createTypeTextCommand(this.viewport.textModel, this.selectionController.selections, "\n");
         break;
       case "deleteContentBackward":
-        command = (this.language
-          ? createLanguagePairBackspaceCommand(this.viewport.textModel, this.selectionController.selections, this.readLanguageConfiguration(), this.autoClosingTracker)
-          : undefined) ?? createBackspaceCommand(
+        command = this.languageEditing?.createBackspaceCommand(this.selectionController.selections) ?? createBackspaceCommand(
           this.viewport.textModel,
           this.selectionController.selections,
         );
@@ -327,9 +354,7 @@ export class TextInputController extends DisposableOwner {
     stopEvent(event);
     this.resetInput();
     const change = this.execute(command);
-    if (change && pairCommand?.autoClosingActions.length) {
-      this.autoClosingTracker?.record(pairCommand.autoClosingActions, change.version);
-    }
+    if (change) languageTypeCommand?.afterExecute?.(change);
     if (insertedText !== undefined) {
       this.requestAfterInsert(insertedText, refreshIncomplete);
     } else if (change && refreshIncomplete) {
@@ -608,12 +633,8 @@ export class TextInputController extends DisposableOwner {
     }
   }
 
-  private readLanguageConfiguration(): ResolvedLanguageConfiguration {
-    return this.language!.configurations.getLanguageConfiguration(this.language!.languageId);
-  }
-
   private get currentWordPattern(): RegExp | undefined {
-    return this.language ? this.readLanguageConfiguration().wordPattern : undefined;
+    return this.wordPattern?.();
   }
 
   private reportCompletionRequestError(error: unknown): void {
@@ -625,6 +646,13 @@ export class TextInputController extends DisposableOwner {
       console.error("Aster completion request and error handler both failed", new AggregateError([error, reportingError]));
     }
   }
+}
+
+function validateIndentationOptions(options: TextInputIndentationOptions | undefined): void {
+  if (options === undefined) return;
+  if (typeof options !== "object" || options === null) throw new TypeError("Editor indentation options must be an object");
+  if (options.kind !== undefined && options.kind !== "tabs" && options.kind !== "spaces") throw new TypeError("Unknown editor indentation kind");
+  if (options.tabSize !== undefined && (!Number.isSafeInteger(options.tabSize) || options.tabSize < 1 || options.tabSize > 32)) throw new RangeError("Editor tab size must be a safe integer between 1 and 32");
 }
 
 function isUndoKeybinding(event: Pick<KeyboardEvent, "key" | "ctrlKey" | "shiftKey" | "altKey" | "metaKey">): boolean {

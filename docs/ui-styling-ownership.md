@@ -41,12 +41,13 @@
 
 | 控件 | 当前职责 | 状态视觉 owner |
 | --- | --- | --- |
-| `ActionBar` | action 排列、方向键导航、roving tabindex、item shell；可显式启用 toggled 高亮上下文 | 不自动决定业务 selected/checked 视觉 |
-| `Button` | button DOM、hover、focus-visible、disabled，以及 `.checked` 与 `aria-pressed` 的并行状态投影 | checked 的具体皮肤由使用上下文决定 |
+| `ActionBar` | action 排列、方向键导航、roving tabindex、item shell；可显式启用 toggled 高亮上下文 | 不自动决定业务 selected/checked 视觉；Workbench 全局皮肤统一提供横向 action hover |
+| `Button` | button DOM、focus-visible、disabled，以及 `.checked` 与 `aria-pressed` 的并行状态投影 | 不默认提供 hover 背景；hover 与 checked 的具体皮肤由 presentation context 决定 |
 | `Switch` | track/thumb 结构、on/off、hover、focus、pressed、disabled 的内部 presentation | 宿主只提供状态与命名变体，不穿透覆盖内部 track/thumb |
 | `ContextView` | 浮层挂载、锚点定位、视口内翻转和裁剪，以及通用浮层外壳 | 下拉框、提示、选择器和菜单各自的内容结构与交互状态 |
-| `ToolBar` | primary/secondary action 编排、icon action 尺寸、More Actions、可选 toggled 高亮 | Button 的状态投影仍归 `Button` |
-| `WorkbenchToolBar` | 把 platform action representation 适配到 base `ToolBar`；actions 仍由调用方提供 | 视觉仍归 base `ToolBar`/`Button` |
+| `ToolBar` | primary/secondary action 编排、22px icon action 尺寸、More Actions、可选 toggled 高亮 | Button 负责状态投影；所在 presentation context 决定 hover 皮肤 |
+| `DropdownWithPrimaryActionViewItem` | primary 与 dropdown 的组合 DOM、连续几何、内部键盘导航 | Workbench 全局 ActionBar 皮肤为整个 split action 提供 hover；产品只提供 actions 和 menu 数据 |
+| `WorkbenchToolBar` | 把 platform action representation 适配到 base `ToolBar`；actions 仍由调用方提供 | 横向 action hover 归 Workbench 全局皮肤，其余视觉仍归 base `ToolBar`/`Button` |
 | `MenuWorkbenchToolBar` | 从 `MenuId` 解析并刷新 `WorkbenchToolBar` actions | Menu 来源不改变 toolbar ARIA 与视觉 owner |
 | `TabList` | `tablist/tab` ARIA、`aria-selected`、激活回调、`.checked` 状态投影，以及标准 tab 的选中背景 | `tablist.css` |
 | `CompositeBar` | View Container 切换，以及 `icon`/`label` 两种 presentation | presentation 专属的几何与前景色；不重定义标准 tab 选中背景 |
@@ -62,7 +63,8 @@
 
 | 状态 | 判定 owner | 样式 owner | Host 可以做什么 |
 | --- | --- | --- | --- |
-| `hover` / `focus-visible` / `disabled` | 原生交互 primitive | primitive CSS | 选择 primitive；不得重写内部状态 |
+| `hover` | 原生 pointer 状态 | presentation context；Workbench 横向 ActionBar 由全局 Workbench 皮肤统一处理 | 选择 presentation；不得在具体 Part 或 contribution 中重写内部 action |
+| `focus-visible` / `disabled` | 原生交互 primitive | primitive CSS | 选择 primitive；不得重写内部状态 |
 | menu 当前项 | `Menu` 统一投射鼠标与键盘焦点为 `.focused` | `menu.css` | 提供 actions；不得用调用方 selector 重建菜单焦点态 |
 | tab `selected` / `active` | `TabList` 投影状态 | `TabList` 默认皮肤；有独立语义的组合控件通过自己的 token 覆盖 | 选择 presentation variant，不能复用 ActionBar token |
 | toggle `checked` / `pressed` | command/action model | 控件并行投影 `.checked` 与 ARIA；具体 composed control CSS 决定皮肤 | 提供 checked 值或显式启用 toggled 高亮；不得在 Part 中猜状态 |
@@ -180,13 +182,13 @@ Panel 不拥有 tab 的 active 下划线，也不拥有 active/hover 背景。�
 
 ## Titlebar 规范
 
-Titlebar 是 Workbench Part，不是一个巨型 toolbar。它负责窗口拖拽区、左中右区域编排、应用菜单与窗口控件的占位；其中嵌入的 Button、ToolBar、ActionBar 仍保留各自状态所有权。
+Titlebar 是 Workbench Part，不是一个巨型 toolbar。它负责窗口拖拽区、左中右区域编排、应用菜单与窗口控件的占位；其中嵌入的 Button、ToolBar、ActionBar 仍保留各自状态所有权，横向 ActionBar 的 hover 由 Workbench 全局皮肤统一提供。
 
 | Titlebar 内容 | Owner | Titlebar 可以负责 | Titlebar 不负责 |
 | --- | --- | --- | --- |
 | 窗口级网格、拖拽区、左右区域 | `TitlebarPart` | 高度、排列、间距、背景、边界 | 子控件 active/hover 状态 |
 | 应用菜单 | `MenubarControl` | Titlebar 只放置其 root | 菜单 item 内部状态 |
-| 通用图标命令 | `ToolBar` + `Button` | toolbar root 的位置 | button hover/focus/disabled |
+| 通用图标命令 | `ToolBar` + `Button` + Workbench 全局 ActionBar 皮肤 | toolbar root 的位置 | action hover、button focus/disabled |
 | 窗口控制按钮 | Electron/native integration | 预留布局与主题投影 | 模拟通用 Workbench action 状态 |
 
 Titlebar 可以给直接托管的公共组件 root 设置适配当前背景所需的继承色，但不应改变组件内部状态规则。如果某种前景色必须在不同背景下变化，优先注册语义 token 或公开 presentation，而不是新增深层 selector。

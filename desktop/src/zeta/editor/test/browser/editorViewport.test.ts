@@ -5,6 +5,7 @@ import { type TextMeasurer } from "../../browser/view/fontMetrics.js";
 import { EditorSelectionController } from "../../common/cursor/editorSelectionController.js";
 import { EditorFoldingModel } from "../../contrib/folding/browser/foldingModel.js";
 import { EditorHiddenRangeModel } from "../../contrib/folding/browser/hiddenRangeModel.js";
+import { FoldingDecorationProvider } from "../../contrib/folding/browser/foldingDecorations.js";
 import { TextSelection, TextSelectionSet } from "../../common/core/selection.js";
 import { TextPosition, TextRange } from "../../common/core/text.js";
 import { TextModel } from "../../common/model/textModel.js";
@@ -457,8 +458,8 @@ test("Folding model removes folded physical rows from the viewport projection", 
     model,
     lineHeight: 20,
     textMeasurer: fixedTextMeasurer(),
-    foldingModel: folding,
-    hiddenRangeModel: hiddenRanges,
+    lineVisibilitySource: hiddenRanges,
+    lineGutterDecoration: new FoldingDecorationProvider(folding),
   });
   viewport.layout({ width: 300, height: 20 });
   const initialToggle = requiredElement<HTMLButtonElement>(viewport.element, ".aster-editor-fold-toggle");

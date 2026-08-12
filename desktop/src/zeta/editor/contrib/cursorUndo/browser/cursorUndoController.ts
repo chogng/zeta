@@ -1,4 +1,5 @@
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
+import { registerEditorContribution } from "../../../browser/editorContribution.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { operatingSystem, OperatingSystem } from "../../../../base/common/platform.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
@@ -32,6 +33,11 @@ export class CursorUndoController extends DisposableOwner {
     this.viewport.revealPosition(this.selections.selections.primary.active);
   }
 }
+
+registerEditorContribution({ id: "editor.contrib.cursorUndo", install: context => {
+  if (context.kind !== "text") return;
+  context.own(new CursorUndoController(context.textInput.element, context.viewport, context.selections));
+} });
 
 /** Resolves Aster's cursor-only undo shortcut without accepting unrelated modifiers. */
 export function isCursorUndoChord(event: Pick<KeyboardEvent, "key" | "ctrlKey" | "shiftKey" | "altKey" | "metaKey">, targetOperatingSystem: OperatingSystem): boolean {

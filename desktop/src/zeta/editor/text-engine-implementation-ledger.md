@@ -6,21 +6,24 @@
 
 | 入口 | 职责 |
 | --- | --- |
-| `browser/editorPart.ts` | 一个编辑器实例的唯一装配点；创建 model reference、selection、folding、syntax/token、completion、viewport、input 和 contrib controllers。 |
+| `browser/editorPart.ts` | 产品无关的 editor runtime facade；把实例创建委托给已加载的 capability bundle。 |
+| `contrib/codeEditorPart.contribution.ts` | 创建 selection、viewport/input、空 typed capability map 和两阶段 contribution 装配上下文；只直接安装基础 editing command controller。 |
 | `workbench/contrib/codeEditor/browser/codeEditorPane.ts` | Workbench pane 生命周期；只把 host 的 resource/model contract 传给 part，不实现编辑语义。 |
 | `workbench/contrib/codeEditor/browser/codeEditorInput.ts` | Workbench `EditorInput` 匹配和语言 identity adapter；不进入同步 model/core。 |
 | `workbench/contrib/codeEditor/browser/diffEditorInput.ts` | Workbench 双资源 diff input 和 synthetic tab identity；不创建 diff model，也不计算 diff。 |
 | `workbench/contrib/codeEditor/browser/browserEditorPart.ts` | TextMate grammar readiness、syntax Worker 和 completion Worker 的 Workbench browser adapter。 |
 | `editor.api.ts` | DOM-free 的统一程序化 API；其中 Aster text-model 导出不加载 Workbench、DOM 或 contribution。 |
-| `editor.code.all.ts` | Code 产品的 editor capability bundle；不加载 code/diff pane contribution。 |
+| `editor.all.ts` | Code 与 Academic 共同验证的标准 editor profile；静态导入共同 contribution。 |
+| `editor.code.all.ts` | Code 产品入口；当前只加载标准 profile，不复制共同清单。 |
+| `editor.academic.all.ts` | Academic 产品入口；在标准 profile 上追加 document engine contribution。 |
 | `editor.main.ts` | 完整入口；组合 `editor.all.ts` 与 `editor.api.ts`。 |
 | `browser/language/languageWorker.start.ts` | dedicated language worker 的统一启动协议；syntax 与 completion worker 使用它建立 canonical wire port。 |
 | `workbench/contrib/codeEditor/browser/codeEditor.contribution.ts` | 注册 Aster code/diff pane，并注入 Workbench text-file、TextMate 与 Rust adapter；生产环境不提供 fallback。 |
-| `browser/widget/codeEditor/codeEditorWidget.ts` | 组合 viewport、输入、键盘导航和 pointer selection；不拥有语言功能或可选 drop/paste contrib。 |
+| `browser/widget/codeEditor/codeEditorWidget.ts` | 组合 viewport、基础输入、键盘导航和 pointer selection；不创建语言分析、Suggest、Clipboard、placeholder 或 drop/paste contrib。 |
 | `browser/input/{pointerSelectionController,pointerAutoScroll,pointerMultiCursor}.ts` | 浏览器基础 pointer selection、拖动自动滚动与修饰键多光标；由 `CodeEditorWidget` 装配，不属于可选 contrib。 |
 | `browser/widget/diffEditor/diffEditorWidget.ts` | 消费 `common/diff/diffModel.ts` 的只读 side-by-side projection；不计算 diff。 |
 
-`codeEditorPart.contribution.ts` 只直接装配需要共享私有 runtime state 的控制器。只依赖 `TextEditorContributionContext` 的能力必须拥有独立 `*.contribution.ts`，当前已拆分 `find`、`anchorSelect`、`smartSelect`、`inPlaceReplace`、`contextmenu`、`fontZoom`、`middleScroll`、`toggleTabFocusMode`、`message`、`inlineProgress` 与 `quickAccess`；产品 bundle 可以逐项选择它们。
+`codeEditorPart.contribution.ts` 只直接装配 engine runtime：selection、viewport/input、基础 editing command 与 contribution 生命周期。简单 controller 在自己的 browser 主文件末尾注册；需要 configure phase、共享 capability、输入 adapter 或多个对象编排的功能保留独立 `*.contribution.ts`。`languageAnalysis` 创建 syntax、diagnostic 和 token model parts，`tokenization`、`gotoError`、`bracketMatching` 再选择各自的 viewport/input 投影，`suggest`、`clipboard` 与 `placeholderText` 通过 feature-neutral 注册 seam 安装输入/UI adapter。共享对象通过 `TextEditorCapability` typed lookup 获取，不允许让 `browser/editorContribution.ts` 反向依赖具体 feature。只加载 `codeEditorPart.contribution.ts` 时只创建 model/selection/viewport/input 基础表面。正式产品由 `editor.all.ts` 标准 profile 与少量产品扩展组成，不承诺任意子集组合。`Ctrl/Cmd+S` 与保存错误/成功呈现归 Workbench Pane，Editor contribution 只能注册显式 before-save hook。
 
 ## 2. 公共同步内核
 
@@ -98,7 +101,7 @@
 | `folding` | `contrib/folding/browser/*` | provider/indent ranges、tracked fold state、hidden lines、gutter presentation。 |
 | `find` | `contrib/find/browser/findController.ts` + `common/model/textModelSearch.ts` | search/replace widget 和 selection scope；regex semantics 留在 model query。 |
 | `wordHighlighter` | `contrib/wordHighlighter/{common,browser}/*` | current word occurrence query、decoration owner、renderer presentation。 |
-| `gotoError` | `contrib/gotoError/common/diagnosticDecorations.ts`、`browser/gotoError.ts`、`browser/diagnosticOverviewRuler.ts`、`browser/languageDiagnosticPresentation.ts` | diagnostic decoration、navigation、overview ruler、hover data。 |
+| `gotoError` | `contrib/gotoError/common/diagnosticDecorations.ts`、`browser/gotoError.ts`、`browser/languageDiagnosticPresentation.ts` + `browser/view/diagnosticOverviewMarkers.ts` | diagnostic decoration、navigation 和语言诊断 presentation；通用 overview marker 聚合归 viewport。 |
 | `hover` | `contrib/hover/{common,browser}/*` | provider hover 与 diagnostic hover widget。 |
 | `documentSymbols` / `gotoSymbol` | `contrib/documentSymbols/common/documentSymbols.ts`、`contrib/gotoSymbol/{common,browser}/*` | versioned symbol provider、flatten/query 和 symbol quick navigation。 |
 | `links` | `contrib/links/{common,browser}/*` | deduplicated links、pointer target；open 始终交给 host callback。 |
@@ -118,7 +121,7 @@
 | `diffEditorBreadcrumbs` | `contrib/diffEditorBreadcrumbs/browser/diffEditorBreadcrumbs.ts` | diff hunk 索引和 reveal；不参与 Rust diff computation。 |
 | `floatingMenu` | `contrib/floatingMenu/browser/floatingMenuController.ts` | selection anchor 的可选动作菜单；action callback 属于调用方。 |
 | `fontZoom` | `contrib/fontZoom/browser/fontZoomController.ts` | per-editor zoom、line height 和 font measurement invalidation。 |
-| `gpu` / `longLinesHelper` | `contrib/gpu/browser/gpuRenderer.ts`、`contrib/longLinesHelper/browser/longLinesHelper.ts` | capability/measurement budget；viewModel 不依赖 WebGL。 |
+| minimap GPU / line width | `browser/view/gpuMinimapRenderer.ts`、`browser/view/lineWidthIndex.ts` | viewport 基础投影和 measurement budget；它们不是可卸载的 command contrib，viewModel 不依赖 WebGL。 |
 | `middleScroll` | `contrib/middleScroll/browser/middleScrollController.ts` | middle-button panning，独立于 pointer selection。 |
 | `quickAccess` / `readOnlyMessage` | 各 feature 的 browser 文件 | editor-local go-to-line 与 readonly feedback，不拥有 Workbench global quick open/permission。 |
 | `peekView` / `zoneWidget` | `contrib/peekView/browser/peekViewWidget.ts`、`contrib/zoneWidget/browser/zoneWidget.ts` | anchored transient surface 和其生命周期/布局容器。 |
@@ -134,14 +137,13 @@
 ```text
 TextModelReference
   -> EditorSelectionController
-  -> FoldingModel / HiddenRangeModel
-  -> SyntaxService
-  -> TokenizationTextModelPart / SemanticTokens
-  -> Language completion + snippet session
+  -> contribution configure phase
+       -> optional SyntaxService / tokenization / diagnostics
+       -> optional folding / decorations / input adapters
   -> CodeEditorWidget(view + input)
-  -> synchronous editing contributions
-  -> language UX contributions
-  -> transient view/UI contributions
+  -> contribution install phase
+       -> synchronous editing controllers
+       -> language UX and transient UI
 ```
 
 允许的方向：

@@ -1,4 +1,5 @@
 import "./media/linkedEditing.css";
+import { registerEditorContribution } from "../../../browser/editorContribution.js";
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
 import { DisposableOwner, ResettableDisposableGroup } from "../../../../base/common/lifecycle.js";
 import { createEditorEditCommand } from "../../../common/commands/editorCommand.js";
@@ -77,3 +78,9 @@ export class LinkedEditingController extends DisposableOwner {
 
   private clear(): void { this.request?.abort(); this.request = undefined; this.ranges.clear(); this.trackedRanges = []; this.active = false; this.viewport.element.classList.remove("linked-editing-active"); }
 }
+
+registerEditorContribution({ id: "editor.contrib.linkedEditing", install: context => {
+  if (context.kind !== "text") return;
+  const service = context.own(context.languageFeaturesService.createLinkedEditingService(context.model));
+  context.own(new LinkedEditingController(context.textInput.element, context.viewport, context.selections, service, context.languageId, context.onLanguageError));
+} });

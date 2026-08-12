@@ -28,7 +28,8 @@
 .zeta-toolbar .zeta-action-view-item.icon > .zeta-button {
   width: var(--zeta-toolbar-action-size);
   min-width: var(--zeta-toolbar-action-size);
-  padding: 4px;
+  border: 0;
+  padding: 3px;
 }
 
 .zeta-toolbar .zeta-action-view-item.icon .zeta-button-label,

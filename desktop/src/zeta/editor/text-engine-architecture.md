@@ -41,7 +41,7 @@ VS Code 的官方源码组织说明了这些 editor 边界：`vs/editor` 不应�
 ### 文件命名规则
 
 - Aster 中存在直接对应的 VS Code contrib 入口时，文件使用 VS Code 的 feature basename，例如 `gotoError.ts`、`indentation.ts` 和 `folding.ts`。
-- 没有一一对应的 Aster 投影或 adapter 不强行伪装成 VS Code 文件：`diagnosticOverviewRuler.ts` 表示诊断 overview-ruler 投影，`languageDiagnosticPresentation.ts` 表示语言诊断 presentation，`decorationCollection.ts` 表示 Aster 自己的 decoration owner collection。
+- 没有一一对应的 Aster 投影或 adapter 不强行伪装成 VS Code 文件：`diagnosticOverviewMarkers.ts` 表示 viewport-owned overview marker 聚合，`languageDiagnosticPresentation.ts` 表示语言诊断 presentation，`decorationCollection.ts` 表示 Aster 自己的 decoration owner collection。
 - `*Controller.ts` 只在文件确实只拥有一个 browser controller 时保留；它不是所有 contrib 入口的统一后缀。功能入口、纯计算模块和具体 UI 控制器必须按各自职责命名。
 
 | VS Code 设计 | Aster 采用方式 | 需要改变的地方 |
@@ -251,7 +251,7 @@ contrib/<feature>/
   test/common/            common contract tests
   test/browser/           browser/controller tests
   browser/media/          feature-owned CSS only when needed
-  <feature>.contribution.ts  optional registration entry point
+  <feature>.contribution.ts  optional complex assembly entry point
 ```
 
 规则：
@@ -260,7 +260,7 @@ contrib/<feature>/
 2. `browser` 可以组合 `common`、`model`、`viewModel` 和 frontend service，但不能修改 model 的隐含事务规则。
 3. 每个 contribution 自己拥有 command、controller、presentation 和生命周期；共享的纯算法才进入 `common`。
 4. contribution 不得通过深层 CSS selector 改写别的 component 的内部状态。
-5. 不新增目录 `index.ts` barrel；贡献点通过明确的 `.contribution.ts` 或宿主显式 import 装配。
+5. 不新增目录 `index.ts` barrel；简单功能在 browser 主文件中注册，需要 `configure`、能力注入或多对象编排时才建立 `.contribution.ts`。
 6. 任何需要跨宿主复用的能力必须先定义 frontend-owned contract，再提供 browser/Rust/Workbench adapter。
 
 ## 4. VS Code `contrib` 全量迁移目录
@@ -279,7 +279,7 @@ contrib/<feature>/
 | `wordPartOperations` | `common/cursor/wordPartOperations.ts` | `common/cursor/wordPartOperations.ts`、`cursorWordOperations.ts`、`core/wordHelper.ts` | Current | camelCase、subword 和语言无关 word part |
 | `lineSelection` | `contrib/lineSelection/browser/lineSelection.ts` | `contrib/lineSelection/browser/lineSelection.ts` | Current | 物理行选择扩展 |
 | `linesOperations` | `contrib/linesOperations/browser/linesOperations.ts`、`lineOperationsController.ts` | 同名 contrib | Current | indent、duplicate、move、delete、copy line groups |
-| `indentation` | `contrib/indentation/common/indentation.ts`、`browser/indentation.ts` | 同名 contrib | Current | indentation calculation 与 guides presentation |
+| `indentation` | `common/editorIndentation.ts`、`browser/view/indentationGuides.ts` | engine configuration + viewport projection | Current（职责归位） | indentation calculation 与 guides presentation 是基础 engine contract；line indentation command 仍在 contrib |
 | `comment` | `contrib/comment/common/{blockCommentCommands,lineCommentCommands}.ts`、browser controllers | 同名 contrib | Current | comment language contract、toggle command 和 selection presentation |
 | `clipboard` | `contrib/clipboard/common/clipboard.ts`、browser clipboard 系列 | 同名 contrib | Current | copy/cut/paste、selection metadata、safe HTML 和 line policy |
 | pointer selection | `browser/input/{pointerSelectionController,pointerAutoScroll,pointerMultiCursor}.ts` | `CodeEditorWidget` | Current | 基础 pointer selection、拖动自动滚动与修饰键多光标；不是 contrib，也不处理外部 drop |
@@ -299,7 +299,7 @@ contrib/<feature>/
 | `tokenization` | `contrib/tokenization/common/tokenizationTextModelPart.ts`、`browser/tokenizationController.ts` | `contrib/tokenization/{common,browser}/*`、Aster syntax/TextMate adapters | Current | token production、line state 和 token invalidation |
 | `wordHighlighter` | `contrib/wordHighlighter/common/wordHighlighter.ts`、`browser/wordHighlighterController.ts` | 同名 contrib | Current | word occurrence query、decoration owner 和 presentation |
 | `find` | `contrib/find/browser/findController.ts`、`common/model/textModelSearch.ts` | 同名 contrib + model search | Current | search model、find widget、replace、selection scope |
-| `gotoError` | `contrib/gotoError/common/diagnosticDecorations.ts`、`browser/gotoError.ts`、`browser/diagnosticOverviewRuler.ts`、`browser/languageDiagnosticPresentation.ts` | 同名 contrib | Current | diagnostic decoration、navigation、overview、severity ordering |
+| `gotoError` | `contrib/gotoError/common/diagnosticDecorations.ts`、`browser/gotoError.ts`、`browser/languageDiagnosticPresentation.ts` + `browser/view/diagnosticOverviewMarkers.ts` | 同名 contrib + viewport aggregation | Current | diagnostic decoration、navigation、overview、severity ordering |
 | `gotoSymbol` | `contrib/gotoSymbol/common/gotoSymbol.ts` | `contrib/gotoSymbol/{common,browser}/*`、Aster language service factory | Current | provider-backed symbol navigation；不与 goto line 混合 |
 | `documentSymbols` | `contrib/documentSymbols/common/documentSymbols.ts` | `contrib/documentSymbols/common/documentSymbols.ts`、Aster language service factory | Current | versioned document symbol result、outline/quick navigation contract |
 | `hover` | `contrib/hover/{common/hover.ts,browser/{hoverController,diagnosticHoverController}.ts}` | 同名 contrib | Current | 通用 hover provider、diagnostic hover、anchor、content widget |
@@ -324,8 +324,8 @@ contrib/<feature>/
 | `diffEditorBreadcrumbs` | `contrib/diffEditorBreadcrumbs/browser/diffEditorBreadcrumbs.ts` | Rust diff model + `DiffEditorPane` 装配 | Current | diff editor 当前 hunk/文件导航，不参与 diff 计算 |
 | `floatingMenu` | `contrib/floatingMenu/browser/floatingMenuController.ts` | `contrib/floatingMenu/browser/floatingMenuController.ts`；宿主按 action 注入 | Current | selection/hover anchor 的 transient menu |
 | `fontZoom` | `contrib/fontZoom/browser/fontZoomController.ts` | `contrib/fontZoom/browser/fontZoomController.ts` + `EditorViewport.refreshFontMetrics` | Current | editor font zoom state 与 measurement invalidation |
-| `gpu` | `contrib/gpu/browser/gpuRenderer.ts` | `contrib/gpu/browser/gpuRenderer.ts` + viewport minimap | Current | GPU renderer capability；不得让 viewModel 依赖 WebGL |
-| `longLinesHelper` | `contrib/longLinesHelper/browser/longLinesHelper.ts` | `contrib/longLinesHelper/browser/longLinesHelper.ts`、viewport budgets | Current | long-line policy、measurement budget 和 degrade strategy |
+| `gpu` | `browser/view/gpuMinimapRenderer.ts` | viewport minimap | Current（职责归位） | GPU 是 viewport 的可降级实现细节；不得让 viewModel 依赖 WebGL |
+| `longLinesHelper` | `browser/view/lineWidthIndex.ts` | viewport budgets | Current（职责归位） | line measurement 是 viewport 基础算法，不伪装成可卸载 command contrib |
 | `middleScroll` | `contrib/middleScroll/browser/middleScrollController.ts` | `contrib/middleScroll/browser/middleScrollController.ts` | Current | middle-button scroll，不污染普通 pointer selection |
 | `quickAccess` | `contrib/quickAccess/browser/quickAccessController.ts` | 同名 contrib；当前实现 Go to Line/Column | Current | editor-local quick access；Workbench global quick open 不归 Aster |
 | `peekView` | `contrib/peekView/browser/peekViewWidget.ts` | `contrib/peekView/browser/peekViewWidget.ts`；宿主按需创建 | Current | anchored preview surface 和生命周期 |
@@ -435,7 +435,7 @@ TextModelReference
   → bracket/comment/lines/find/quickAccess/hover/format/rename/readOnly/save
 ```
 
-`workbench/contrib/codeEditor/browser/browserEditorPart.ts` 提供 TextMate grammar readiness、syntax Worker 和 completion Worker；它只能通过 editor-owned options/contract 注入能力。`browser/editorContribution.ts` 提供 feature group 的静态注册契约，`contrib/codeEditorPart.contribution.ts` 组合默认 line-editor runtime，单项能力由自己的 `*.contribution.ts` 安装。`workbench/contrib/codeEditor/browser/codeEditor.contribution.ts` 只负责 pane 注册和强制 adapter 注入；根级 `editor.code.all.ts` 是 Code 产品入口导入的显式 capability list，`editor.all.ts` 仅提供完整 editor 能力集合。新 contribution 若需要跨宿主能力，必须先扩展 editor common/browser contract，再由 Workbench adapter 注入。
+`workbench/contrib/codeEditor/browser/browserEditorPart.ts` 提供 TextMate grammar readiness、syntax Worker 和 completion Worker；它只能通过 editor-owned options/contract 注入能力。`browser/editorContribution.ts` 提供 feature-neutral 静态注册与 typed capability lookup，不能 import 具体 contrib。`contrib/codeEditorPart.contribution.ts` 只建立 line-editor engine runtime 与共享 capability map；简单 controller 由功能主文件注册，复杂装配才保留独立 `.contribution.ts`。`workbench/contrib/codeEditor/browser/codeEditor.contribution.ts` 负责 pane 注册和强制 adapter 注入，Code Pane 还拥有 `Ctrl/Cmd+S` 保存命令。根级 `editor.all.ts` 是共同验证的标准 profile，`editor.code.all.ts` 与 `editor.academic.all.ts` 只能追加产品差异；不承诺任意 contribution 子集都是受支持组合。新 contribution 若需要共享 editor runtime 对象，应新增窄 `TextEditorCapability<T>`；若需要宿主能力，则先扩展 editor-facing callback/service contract，再由 Workbench adapter 注入。
 
 ### 5.3 当前仍保留的宿主边界
 

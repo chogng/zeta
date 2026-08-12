@@ -8,9 +8,9 @@ Aster 采用与 VS Code `src/vs/editor` 一致的扁平职责分区：`common` �
 
 | 产品或调用方式 | 加载入口 | 得到的能力 |
 | --- | --- | --- |
-| Code editor 能力 | `editor.code.all.ts` | 行式编辑内核与 Code 所选 editor contribution；不注册 Workbench pane |
-| Academic editor 能力 | `editor.academic.all.ts` | 结构化文档 schema、citation、collaboration 与嵌入式行编辑能力；不注册 Workbench pane |
-| 完整 editor 能力集 | `editor.all.ts` | Code 与 Academic 两组 editor contribution |
+| 标准 editor 能力 | `editor.all.ts` | 两个产品共同验证的行式编辑能力；不注册 Workbench pane |
+| Code editor 能力 | `editor.code.all.ts` | 标准能力；当前没有额外 editor contribution |
+| Academic editor 能力 | `editor.academic.all.ts` | 标准能力加结构化文档 engine contribution；不注册 Workbench pane |
 | DOM-free 程序化调用 | `editor.api.ts` | `TextModel`、`DocumentModel`、schema、transaction 和坐标值对象；不注册 pane |
 | 完整程序化入口 | `editor.main.ts` | `editor.all.ts` 与 `editor.api.ts` 的组合 |
 
@@ -32,7 +32,7 @@ Aster 采用与 VS Code `src/vs/editor` 一致的扁平职责分区：`common` �
 
 ### 行式文本 engine
 
-`TextModel` 是纯文本、版本、transaction、undo/redo、tracked range 和 snapshot 的唯一同步权威。`CodeEditorWidget` 与 `EditorPart` 投影它，但不拥有共享 model。`browser/editorContribution.ts` 保存 bundle 静态注册的 feature group；`contrib/codeEditorPart.contribution.ts` 提供不可缺少的 Code/embedded text runtime，`find`、`quickAccess`、`smartSelect`、`fontZoom` 等可选控制器由各自 `*.contribution.ts` 注册，并由 bundle 显式选择。Editor-owned `BrowserTextModelService` 管理 model reference、dirty/conflict 和保存语义；Workbench 只用 `BrowserTextResourceStore` 注入文件 I/O。
+`TextModel` 是纯文本、版本、transaction、undo/redo、tracked range 和 snapshot 的唯一同步权威。`CodeEditorWidget` 与 `EditorPart` 投影它，但不拥有共享 model。`browser/editorContribution.ts` 保存 feature-neutral 注册表；`contrib/codeEditorPart.contribution.ts` 只建立不可缺少的 Code/embedded text runtime 与 typed capability map。简单功能由 browser 主文件就地注册；只有能力注入、两阶段配置或多对象编排才使用独立 `*.contribution.ts`。Editor-owned `BrowserTextModelService` 管理 model reference、dirty/conflict 和保存语义；Workbench 用 `BrowserTextResourceStore` 注入文件 I/O，并拥有保存快捷键、结果呈现和 Pane 生命周期。
 
 ### 结构化文档 engine
 
@@ -48,15 +48,16 @@ Contribution 必须满足以下条件：
 - 依赖 engine contract，而不是读取产品 ID；
 - schema-bearing 能力通过 `EditorProfile` 稳定组合，不能在打开文档后任意开关；
 - 不隐式 import 另一个产品 bundle；跨 engine 适配只能 import 所需实现。
+- 正式产品只承诺 `editor.all.ts` 及其 Code/Academic 扩展组合，不承诺任意 contribution 子集都能组成受支持的产品。
 
 因此 transaction、selection mapping、IME commit、schema validation 和 model lifecycle 属于 engine；find、folding、suggest、citation toolbar 与 collaboration projection 等属于 contribution 或 profile composition。
 
 ## 入口与调用路径
 
 ```text
-Code product entry ───────┬→ editor.code.all.ts ─────────────→ editor capability registration
+Code product entry ───────┬→ editor.code.all.ts → editor.all.ts ─────────→ standard capability registration
                           └→ workbench/contrib/codeEditor ───→ code/diff pane + input registration
-Academic product entry ───┬→ editor.academic.all.ts ─────────→ editor capability registration
+Academic product entry ───┬→ editor.academic.all.ts → editor.all.ts + document contribution
                           └→ workbench/contrib/academic ──────→ profile + document pane registration
                                                                └→ embedded CodeEditorWidget factory
 
@@ -64,7 +65,7 @@ editor.api.ts ─────────────→ TextModel / DocumentMod
 editor.main.ts ────────────→ editor.all.ts + editor.api.ts
 ```
 
-产品入口是唯一产品选择点：它同时选择一个 `editor.*.all.ts` 能力 bundle 和对应的 Workbench contribution。新增版本应在产品入口组合已有能力与宿主适配；不得在 widget、model 或 feature controller 内增加产品分支。
+产品入口是唯一产品选择点：`editor.all.ts` 固定标准能力，`editor.code.all.ts` 和 `editor.academic.all.ts` 只表达产品差异，并与对应 Workbench contribution 配对。新增版本应从少量经过验证的 profile 扩展；不得在 widget、model 或 feature controller 内增加产品分支，也不得复制整份标准能力清单。
 
 ## 关键实现符号
 

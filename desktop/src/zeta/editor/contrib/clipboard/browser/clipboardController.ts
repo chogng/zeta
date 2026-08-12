@@ -15,6 +15,8 @@ import { TEXT_FILE_TRANSFER_MAX_BYTES, selectTextFileTransfer } from "../../drop
 import { captureAsterClipboardTextTransfer, normalizeAsterClipboardPasteProviders, provideAsterClipboardPaste, type ClipboardPasteProvider } from "./clipboardPasteProvider.js";
 import { createAsterBrowserClipboardSystemTextReader, type ClipboardSystemTextReader } from "./clipboardSystemText.js";
 import { createAsterBrowserClipboardRichTextReader, createAsterBrowserClipboardRichTextWriter, type ClipboardRichTextItem, type ClipboardRichTextReader, type ClipboardRichTextWriter } from "./clipboardRichText.js";
+import { registerTextInputClipboardFactory } from "../../../browser/input/textInputController.js";
+import { UriListPasteProvider } from "./clipboardPasteProvider.js";
 
 export const EDITOR_CLIPBOARD_MIME = "application/x-aster-editor";
 export const EDITOR_HTML_CLIPBOARD_MIME = "text/html";
@@ -384,6 +386,15 @@ export class ClipboardController extends DisposableOwner {
     );
   }
 }
+
+registerTextInputClipboardFactory((element, viewport, selections, options, isEditingAllowed) => {
+  const clipboardOptions = options as ClipboardControllerOptions;
+  return new ClipboardController(element, viewport, selections, {
+    ...clipboardOptions,
+    isEditingAllowed: () => isEditingAllowed() && (clipboardOptions.isEditingAllowed?.() ?? true),
+    pasteProviders: [UriListPasteProvider, ...(clipboardOptions.pasteProviders ?? [])],
+  });
+});
 
 function createMetadataPasteCommand(model: TextModel, selections: TextSelectionSet, data: ClipboardPasteData): EditorEditCommand {
   return data.modes.every(mode => mode === EditorClipboardPasteMode.Line) &&

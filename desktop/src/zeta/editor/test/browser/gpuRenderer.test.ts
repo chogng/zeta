@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { GpuMinimapRenderer } from "../../contrib/gpu/browser/gpuRenderer.js";
+import { GpuMinimapRenderer } from "../../browser/view/gpuMinimapRenderer.js";
 
 test("GPU minimap renders bounded density rows at device resolution and can yield to a fallback", () => {
   const calls: string[] = [];

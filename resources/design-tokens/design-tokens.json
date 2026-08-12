@@ -3006,7 +3006,7 @@
       "cssVariable": "--zeta-toolbar-action-size",
       "owner": "platform.ui",
       "description": "Default square toolbar action size.",
-      "value": "24px"
+      "value": "22px"
     },
     {
       "id": "scrollbar.size",

@@ -18,7 +18,7 @@ for (const [name, value] of Object.entries({
   Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-await import("../../contrib/codeEditorPart.contribution.js");
+await import("../../editor.code.all.js");
 const { EditorPart } = await import("../../browser/editorPart.js");
 
 test.after(() => browserEnvironment.window.close());
@@ -149,42 +149,23 @@ test("Aster editor part mounts text drop as an optional full-editor contribution
   dom.window.close();
 });
 
-test("Aster editor part announces save completion and forwards failures", async () => {
+test("Aster editor part applies selected before-save contributions through explicit save", async () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   dom.window.HTMLCanvasElement.prototype.getContext = () => null;
   const container = dom.window.document.querySelector<HTMLElement>("main")!;
   const model = new TextModel("alpha");
   const reference = modelReference(URI.file("C:\\project\\save.txt"), model);
-  const errors: unknown[] = [];
-  let fail = false;
+  let savedText = "";
   const editorPart = new EditorPart({
     container,
     input: { resource: reference.resource, label: "save.txt" },
     languageId: "plaintext",
     modelReference: reference,
-    onSave: async () => {
-      if (fail) throw new Error("conflict");
-    },
-    onSaveError: error => errors.push(error),
+    insertFinalNewLine: true,
+    onSave: async () => { savedText = model.getText(); },
   });
-
-  editorPart.textInput.element.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
-    bubbles: true,
-    cancelable: true,
-    ctrlKey: true,
-    key: "s",
-  }));
-  await waitFor(() => container.querySelector(".aster-editor-accessibility-status")?.textContent === "Saved");
-
-  fail = true;
-  editorPart.textInput.element.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
-    bubbles: true,
-    cancelable: true,
-    ctrlKey: true,
-    key: "s",
-  }));
-  await waitFor(() => container.querySelector(".aster-editor-accessibility-status")?.textContent === "Save failed: conflict");
-  assert.equal(errors.length, 1);
+  await editorPart.save();
+  assert.equal(savedText, "alpha\n");
 
   editorPart.dispose();
   dom.window.close();

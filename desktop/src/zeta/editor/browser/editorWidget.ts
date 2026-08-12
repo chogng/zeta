@@ -162,7 +162,7 @@ export class EditorWidget extends DisposableOwner {
     let formattingContribution: DocumentFormattingContribution | undefined;
     let collaborationContribution: DocumentCollaborationContribution | undefined;
     for (const contribution of getEditorContributions()) {
-      contribution.install({
+      contribution.install?.({
         kind: "document",
         ownerDocument: parent.ownerDocument,
         documentActions: [...DEFAULT_DOCUMENT_ACTIONS, ...(this.options.toolbarActions?.map(action => ({ id: action.id, label: action.label })) ?? [])],

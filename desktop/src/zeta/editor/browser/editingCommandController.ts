@@ -1,7 +1,6 @@
 import { addDisposableListener, stopEvent } from "../../base/browser/dom.js";
 import { DisposableOwner } from "../../base/common/lifecycle.js";
 import { type EditorSelectionController } from "../common/cursor/editorSelectionController.js";
-import { expandLineSelections } from "../contrib/lineSelection/browser/lineSelection.js";
 import { TextSelection, TextSelectionSet } from "../common/core/selection.js";
 import { type EditorViewport } from "./view/editorViewport.js";
 
@@ -27,13 +26,6 @@ export class EditingCommandController extends DisposableOwner {
       const end = this.viewport.textModel.positionAt(this.viewport.textModel.createSnapshot().length);
       this.selections.setSelections(TextSelectionSet.single(TextSelection.from(this.viewport.textModel.positionAt(0), end)));
       this.viewport.revealPosition(end);
-      return;
-    }
-    if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "l") {
-      stopEvent(event);
-      const next = expandLineSelections(this.viewport.textModel, this.selections.selections);
-      this.selections.setSelections(next);
-      this.viewport.revealPosition(next.primary.active);
       return;
     }
   }

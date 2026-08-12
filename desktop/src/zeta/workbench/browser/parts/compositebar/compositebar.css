@@ -12,7 +12,9 @@
 }
 
 .zeta-composite-bar-overflow {
-  flex: 0 0 24px;
+  display: flex;
+  align-items: center;
+  flex: 0 0 var(--zeta-toolbar-action-size);
 }
 
 .zeta-composite-bar-overflow.hidden {
@@ -20,11 +22,11 @@
 }
 
 .zeta-composite-bar-overflow > .zeta-button {
-  width: 24px;
-  min-width: 24px;
-  height: 24px;
-  min-height: 24px;
-  padding: 4px;
+  width: var(--zeta-toolbar-action-size);
+  min-width: var(--zeta-toolbar-action-size);
+  height: var(--zeta-toolbar-action-size);
+  min-height: var(--zeta-toolbar-action-size);
+  padding: 3px;
   border: 0;
   color: var(--zeta-composite-bar-inactive-foreground);
 }

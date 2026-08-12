@@ -1,26 +1,32 @@
 import "./media/folding.css";
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { type EditorLineGutterDecoration } from "../../../browser/view/lineGutterDecoration.js";
 import { type EditorFoldingModel } from "./foldingModel.js";
 import { type EditorFoldingRegion } from "./foldingRanges.js";
 
 /** Owns folding gutter presentation and mirrors every fold-state change. */
-export class FoldingDecorationProvider extends DisposableOwner {
+export class FoldingDecorationProvider extends DisposableOwner implements EditorLineGutterDecoration {
   private readonly changeEmitter = this.own(new Emitter<void>());
 
   readonly onDidChange: Event<void> = this.changeEmitter.event;
 
-  constructor(private readonly folding: EditorFoldingModel | undefined) {
+  constructor(private readonly folding: EditorFoldingModel) {
     super();
-    if (folding) this.own(folding.onDidChange(() => this.changeEmitter.fire()));
+    this.own(folding.onDidChange(() => this.changeEmitter.fire()));
   }
 
-  project(element: HTMLButtonElement, logicalLineIndex: number, firstForLogicalLine: boolean): void {
+  create(ownerDocument: Document): HTMLElement {
+    return createAsterFoldingDecoration(ownerDocument);
+  }
+
+  project(element: HTMLElement, logicalLineIndex: number, firstForLogicalLine: boolean): void {
+    if (!(element instanceof element.ownerDocument.defaultView!.HTMLButtonElement)) throw new TypeError("Folding gutter requires a button element");
     projectAsterFoldingDecoration(
       element,
       logicalLineIndex,
       firstForLogicalLine
-        ? this.folding?.regions.find(region => region.startLineIndex === logicalLineIndex)
+        ? this.folding.regions.find(region => region.startLineIndex === logicalLineIndex)
         : undefined,
     );
   }

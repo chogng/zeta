@@ -1,4 +1,5 @@
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
+import { registerEditorContribution } from "../../../browser/editorContribution.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { createEditorEditCommand } from "../../../common/commands/editorCommand.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
@@ -36,6 +37,14 @@ export class InPlaceReplaceController extends DisposableOwner {
     return true;
   }
 }
+
+registerEditorContribution({
+  id: "editor.contrib.inPlaceReplace",
+  install: context => {
+    if (context.kind !== "text") return;
+    context.own(new InPlaceReplaceController(context.textInput.element, context.viewport, context.selections));
+  },
+});
 
 function findOccurrence(source: string, value: string, direction: 1 | -1, anchor: number): { readonly start: number; readonly end: number } | undefined {
   if (direction > 0) {

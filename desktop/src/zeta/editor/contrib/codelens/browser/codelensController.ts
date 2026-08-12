@@ -1,4 +1,5 @@
 import "./media/codelens.css";
+import { registerEditorContribution } from "../../../browser/editorContribution.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 import { type CodeLensService, type LanguageCodeLens } from "../common/codelens.js";
@@ -54,3 +55,9 @@ export class CodeLensController extends DisposableOwner {
     }
   }
 }
+
+registerEditorContribution({ id: "editor.contrib.codelens", install: context => {
+  if (context.kind !== "text") return;
+  const service = context.own(context.languageFeaturesService.createCodeLensService(context.model));
+  context.own(new CodeLensController(context.viewport, service, context.languageId, context.options.onExecuteEditorCommand, context.onLanguageError));
+} });

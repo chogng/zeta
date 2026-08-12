@@ -1,4 +1,5 @@
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
+import { registerEditorContribution } from "../../../browser/editorContribution.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { createPasteTextCommand } from "../../../common/cursor/cursorTypeOperations.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
@@ -81,6 +82,11 @@ export class TextDropController extends DisposableOwner {
     });
   }
 }
+
+registerEditorContribution({ id: "editor.contrib.dropOrPasteInto", install: context => {
+  if (context.kind !== "text") return;
+  context.own(new TextDropController(context.viewport, context.selections));
+} });
 
 function containsText(dataTransfer: DataTransfer | null): boolean {
   if (!dataTransfer) return false;

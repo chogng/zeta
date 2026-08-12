@@ -85,17 +85,25 @@ test("Terminal profile menu launches the selected shell profile", async () => {
   });
   const commandPromptProfile = { profileId: "cmd", title: "Command Prompt", isDefault: true };
   const powerShellProfile = { profileId: "pwsh", title: "PowerShell", isDefault: false };
+  const unavailableProfile = titleActions.element.querySelector<HTMLButtonElement>(".zeta-dropdown-with-primary-dropdown > .zeta-button");
+  assert.ok(unavailableProfile);
+  assert.equal(unavailableProfile.disabled, true);
   titleActions.setProfiles([commandPromptProfile, powerShellProfile]);
   ownerDocument.body.append(titleActions.element);
 
   const toolbar = titleActions.element;
   assert.equal(toolbar.getAttribute("role"), "toolbar");
   assert.equal(toolbar.classList.contains("highlight-toggled"), true);
-  const profile = toolbar.querySelector<HTMLButtonElement>(".zeta-terminal-profile-action .zeta-button");
+  const splitNewTerminal = toolbar.querySelector<HTMLElement>(".zeta-dropdown-with-primary-action-view-item");
+  const profile = splitNewTerminal?.querySelector<HTMLButtonElement>(".zeta-dropdown-with-primary-dropdown > .zeta-button");
+  assert.ok(splitNewTerminal);
   assert.ok(profile);
+  assert.equal(profile.disabled, false);
   assert.equal(profile.querySelector(".zeta-button-label")?.textContent, "Select Terminal Profile");
   assert.equal(profile.getAttribute("aria-label"), "Select Terminal Profile");
   assert.ok(profile.querySelector("svg.zeta-icon"));
+  assert.equal(toolbar.querySelectorAll("[data-action-id='zeta.terminal.new']").length, 1);
+  assert.equal(toolbar.querySelector("[data-action-id='zeta.terminal.newWithProfile']"), null);
   const newTerminal = [...toolbar.querySelectorAll("button")].find((button) => button.textContent === "New Terminal");
   assert.ok(newTerminal);
   const closePanel = [...toolbar.querySelectorAll("button")].find((button) => button.textContent === "Close Panel");
@@ -168,7 +176,7 @@ test("Terminal profile menu launches the selected shell profile", async () => {
   assert.equal(toolbar.textContent?.includes("Kill Terminal"), false);
   titleActions.setActiveInstance(activeInstance, "list");
 
-  const currentProfile = toolbar.querySelector<HTMLButtonElement>(".zeta-terminal-profile-action .zeta-button");
+  const currentProfile = toolbar.querySelector<HTMLButtonElement>(".zeta-dropdown-with-primary-dropdown > .zeta-button");
   assert.ok(currentProfile);
   currentProfile.click();
   assert.equal(currentProfile.getAttribute("aria-haspopup"), "menu");

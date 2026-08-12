@@ -1,4 +1,5 @@
 import "./media/parameterHints.css";
+import { registerEditorContribution } from "../../../browser/editorContribution.js";
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type ParameterHintsService, type LanguageParameterHints } from "../common/parameterHints.js";
@@ -75,3 +76,9 @@ export class ParameterHintsController extends DisposableOwner {
     this.element.replaceChildren();
   }
 }
+
+registerEditorContribution({ id: "editor.contrib.parameterHints", install: context => {
+  if (context.kind !== "text") return;
+  const service = context.own(context.languageFeaturesService.createParameterHintsService(context.model));
+  context.own(new ParameterHintsController(context.textInput.element, context.viewport, context.selections, service, context.languageId, context.onLanguageError));
+} });

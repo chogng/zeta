@@ -13,32 +13,6 @@
   max-width: 170px;
 }
 
-.zeta-terminal-new-action {
-  margin-right: -2px;
-}
-
-.zeta-terminal-new-action .zeta-button {
-  border-radius: 4px 0 0 4px;
-}
-
-.zeta-terminal-profile-action .zeta-button {
-  width: 18px;
-  min-width: 18px;
-  height: var(--zeta-toolbar-action-size);
-  min-height: var(--zeta-toolbar-action-size);
-  padding: 4px 2px;
-  border-radius: 0 4px 4px 0;
-}
-
-.zeta-terminal-profile-action .zeta-button-label {
-  display: none;
-}
-
-.zeta-terminal-profile-action .zeta-dropdown-menu-indicator .zeta-icon {
-  width: 14px;
-  height: 14px;
-}
-
 .zeta-terminal-status {
   flex: 0 0 auto;
   padding: 4px 8px;

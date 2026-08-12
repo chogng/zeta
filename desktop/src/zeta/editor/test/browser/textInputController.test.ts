@@ -3,7 +3,7 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import { OperatingSystem } from "../../../base/common/platform.js";
 import { type TextMeasurer } from "../../browser/view/fontMetrics.js";
-import { EditorIndentationKind } from "../../contrib/indentation/common/indentation.js";
+import { EditorIndentationKind } from "../../common/editorIndentation.js";
 import { EditorSelectionController } from "../../common/cursor/editorSelectionController.js";
 import { registerBuiltinLanguageConfigurations } from "../../common/languages/languageBuiltinConfigurations.js";
 import { LanguageConfigurationRegistry, LanguageIndentAction } from "../../common/languages/languageConfiguration.js";
@@ -11,6 +11,7 @@ import { LanguageLexicalContextIndex } from "../../common/languages/languageLexi
 import { TextSelection, TextSelectionSet } from "../../common/core/selection.js";
 import { TextPosition, TextRange } from "../../common/core/text.js";
 import { TextModel } from "../../common/model/textModel.js";
+import "../../contrib/bracketMatching/browser/languageEditingAdapter.js";
 
 class FixedTextMeasurer implements TextMeasurer {
   readonly horizontalPadding = 24;

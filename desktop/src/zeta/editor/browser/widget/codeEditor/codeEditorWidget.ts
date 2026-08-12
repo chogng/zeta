@@ -6,7 +6,7 @@ import { EditorViewport, type EditorViewportOptions } from "../../view/editorVie
 import { KeyboardNavigationController, type KeyboardNavigationControllerOptions } from "../../input/keyboardNavigationController.js";
 import { PointerSelectionController, type PointerSelectionControllerOptions } from "../../input/pointerSelectionController.js";
 import { TextInputController, type TextInputControllerOptions } from "../../input/textInputController.js";
-import { PlaceholderTextController } from "../../../contrib/placeholderText/browser/placeholderTextController.js";
+import { type IDisposable } from "../../../../base/common/lifecycle.js";
 
 export type CodeEditorWidgetViewportOptions = Omit<EditorViewportOptions, "container" | "model" | "lineHeight" | "ariaLabel" | "selectionController">;
 
@@ -16,6 +16,7 @@ export interface CodeEditorWidgetOptions {
   readonly selectionController: EditorSelectionController;
   readonly lineHeight: number;
   readonly ariaLabel?: string;
+  /** Compatibility seam for hosts that explicitly register placeholder presentation. */
   readonly placeholder?: string;
   readonly viewport?: CodeEditorWidgetViewportOptions;
   readonly textInput?: Omit<TextInputControllerOptions, "ariaLabel">;
@@ -50,7 +51,10 @@ export class CodeEditorWidget extends DisposableOwner {
         ...options.textInput,
         ariaLabel: options.ariaLabel,
       }));
-      if (options.placeholder) this.own(new PlaceholderTextController(this.viewport, options.placeholder));
+      if (options.placeholder) {
+        if (!placeholderFactory) throw new Error("Code editor placeholder requires the placeholder contribution");
+        this.own(placeholderFactory(this.viewport, options.placeholder));
+      }
       this.own(new KeyboardNavigationController(this.viewport, options.selectionController, options.keyboardNavigation));
       this.own(new PointerSelectionController(this.viewport, options.selectionController, options.pointerSelection));
     } catch (error) {
@@ -70,6 +74,17 @@ export class CodeEditorWidget extends DisposableOwner {
   focus(): void {
     this.textInput.focus();
   }
+}
+
+export type CodeEditorPlaceholderFactory = (viewport: EditorViewport, placeholder: string) => IDisposable;
+
+let placeholderFactory: CodeEditorPlaceholderFactory | undefined;
+
+/** Registers optional placeholder presentation without a widget-to-contrib dependency. */
+export function registerCodeEditorPlaceholderFactory(factory: CodeEditorPlaceholderFactory): void {
+  if (typeof factory !== "function") throw new TypeError("Code editor placeholder factory must be a function");
+  if (placeholderFactory && placeholderFactory !== factory) throw new Error("Code editor placeholder factory is already registered");
+  placeholderFactory = factory;
 }
 
 function validateOptions(options: CodeEditorWidgetOptions): void {

@@ -116,7 +116,7 @@
   height: var(--zeta-toolbar-action-size);
   min-height: var(--zeta-toolbar-action-size);
   flex: 0 0 var(--zeta-toolbar-action-size);
-  padding: 4px;
+  padding: 3px;
   border: 0;
   color: inherit;
   background: transparent;

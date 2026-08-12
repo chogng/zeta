@@ -428,7 +428,7 @@ test("Clipboard copies escaped HTML and safely falls back to external HTML text"
     textMeasurer: new FixedTextMeasurer(),
     selectionController: selections,
   });
-  using input = new TextInputController(viewport, selections);
+  using input = new TextInputController(viewport, selections, { clipboard: {} });
 
   const copied = new MemoryClipboardData();
   input.element.dispatchEvent(clipboardEvent(dom.window, "copy", copied));
@@ -513,7 +513,7 @@ test("Clipboard reads one user-provided text file only while its revision and se
     textMeasurer: new FixedTextMeasurer(),
     selectionController: selections,
   });
-  using input = new TextInputController(viewport, selections);
+  using input = new TextInputController(viewport, selections, { clipboard: {} });
   const file = new DeferredTextFile("snippet.rs");
   const data = new MemoryClipboardData();
   data.files = [file as unknown as File];
@@ -696,7 +696,7 @@ test("Clipboard preserves an active IME composition by rejecting mutable clipboa
     textMeasurer: new FixedTextMeasurer(),
     selectionController: selections,
   });
-  using input = new TextInputController(viewport, selections);
+  using input = new TextInputController(viewport, selections, { clipboard: {} });
   input.element.dispatchEvent(compositionEvent(dom.window, "compositionstart", ""));
   assert.equal(input.compositionController.composing, true);
 

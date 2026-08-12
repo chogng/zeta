@@ -1609,8 +1609,8 @@ test("EmbeddedTextEditorFactory creates a line editor surface", async () => {
   Object.defineProperty(globalThis, "document", { configurable: true, value: environment.window.document });
   Object.defineProperty(globalThis, "Node", { configurable: true, value: environment.window.Node });
   try {
-    await import("../../../../../editor/contrib/codeEditorPart.contribution.js");
-  const { EmbeddedTextEditorFactory } = await import("../../../codeEditor/browser/embeddedTextEditor.js");
+    await import("../../../../../editor/editor.code.all.js");
+    const { EmbeddedTextEditorFactory } = await import("../../../codeEditor/browser/embeddedTextEditor.js");
     using editor = new EmbeddedTextEditorFactory().create({
       resource: URI.parse("untitled:test/code"),
       label: "code",

@@ -63,6 +63,64 @@ test("toolbar submenu items retain toolbar button semantics", async () => {
   Reflect.deleteProperty(globalThis, "window");
 });
 
+test("DropdownWithPrimaryActionViewItem presents one split toolbar item", async () => {
+  const dom = new JSDOM("<!doctype html><body></body>");
+  const [
+    { DropdownWithPrimaryActionViewItem },
+    { ToolBar },
+  ] = await Promise.all([
+    import("../../../../platform/actions/browser/dropdownWithPrimaryActionViewItem.js"),
+    import("../../../../base/browser/ui/toolbar/toolbar.js"),
+  ]);
+  let shownOptions: import("../../../../base/browser/contextmenu.js").IActionContextMenuOptions | undefined;
+  const contextMenuProvider = {
+    showContextMenu(options: import("../../../../base/browser/contextmenu.js").IActionContextMenuOptions) {
+      shownOptions = options;
+    },
+  };
+  let primaryRuns = 0;
+  const primaryAction = { ...testAction("new"), run: () => primaryRuns++ };
+  const dropdownAction = testAction("select-profile");
+  using toolbar = new ToolBar({
+    contextMenuProvider,
+    ownerDocument: dom.window.document,
+    actionViewItemProvider: (item, options) => new DropdownWithPrimaryActionViewItem(item, dropdownAction, [testAction("cmd")], contextMenuProvider, options),
+  });
+  toolbar.setActions([primaryAction]);
+  dom.window.document.body.append(toolbar.element);
+
+  const splitItem = toolbar.element.querySelector<HTMLElement>(".zeta-dropdown-with-primary-action-view-item");
+  const primaryButton = splitItem?.querySelector<HTMLButtonElement>(".zeta-dropdown-with-primary-primary > .zeta-button");
+  const dropdownButton = splitItem?.querySelector<HTMLButtonElement>(".zeta-dropdown-with-primary-dropdown > .zeta-button");
+  assert.ok(splitItem);
+  assert.ok(primaryButton);
+  assert.ok(dropdownButton);
+  assert.equal(toolbar.element.querySelectorAll(":scope > .zeta-action-view-item").length, 1);
+  assert.equal(primaryButton.tabIndex, 0);
+  assert.equal(dropdownButton.tabIndex, -1);
+
+  primaryButton.click();
+  assert.equal(primaryRuns, 1);
+  primaryButton.focus();
+  primaryButton.dispatchEvent(new dom.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "ArrowRight" }));
+  assert.equal(dom.window.document.activeElement, dropdownButton);
+  assert.equal(primaryButton.tabIndex, -1);
+  assert.equal(dropdownButton.tabIndex, 0);
+  dropdownButton.dispatchEvent(new dom.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "ArrowLeft" }));
+  assert.equal(dom.window.document.activeElement, primaryButton);
+
+  dropdownButton.click();
+  assert.equal(shownOptions?.anchor, dropdownButton);
+  assert.deepEqual(shownOptions?.actions.map(({ id }) => id), ["cmd"]);
+  assert.equal(dropdownButton.getAttribute("aria-expanded"), "true");
+  assert.equal(splitItem.classList.contains("active"), true);
+  shownOptions?.onHide?.(false);
+  assert.equal(dropdownButton.getAttribute("aria-expanded"), "false");
+  assert.equal(splitItem.classList.contains("active"), false);
+
+  dom.window.close();
+});
+
 test("workbench toolbar adapts manually supplied platform menu actions", async () => {
   const dom = new JSDOM("<!doctype html><body></body>");
   Object.defineProperty(globalThis, "window", {

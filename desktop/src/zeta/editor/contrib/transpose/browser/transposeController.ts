@@ -1,4 +1,5 @@
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
+import { registerEditorContribution } from "../../../browser/editorContribution.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { operatingSystem, OperatingSystem } from "../../../../base/common/platform.js";
 import { createTransposeCharactersCommand } from "../../../common/cursor/cursorTranspose.js";
@@ -42,6 +43,11 @@ export class TransposeController extends DisposableOwner {
     this.viewport.revealPosition(this.selections.selections.primary.active);
   }
 }
+
+registerEditorContribution({ id: "editor.contrib.transpose", install: context => {
+  if (context.kind !== "text") return;
+  context.own(new TransposeController(context.textInput.element, context.viewport, context.selections));
+} });
 
 function readOperatingSystem(value: OperatingSystem | undefined): OperatingSystem {
   const resolved = value ?? operatingSystem;

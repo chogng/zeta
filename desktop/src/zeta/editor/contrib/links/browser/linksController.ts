@@ -1,4 +1,5 @@
 import "./media/links.css";
+import { registerEditorContribution } from "../../../browser/editorContribution.js";
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type LinkService, type LanguageLink } from "../common/links.js";
@@ -70,3 +71,9 @@ export class LinksController extends DisposableOwner {
     this.viewport.element.classList.remove("aster-editor-link-target");
   }
 }
+
+registerEditorContribution({ id: "editor.contrib.links", install: context => {
+  if (context.kind !== "text" || !context.options.onOpenLink) return;
+  const service = context.own(context.languageFeaturesService.createLinkService(context.model));
+  context.own(new LinksController(context.viewport, service, context.languageId, context.options.onOpenLink, context.onLanguageError));
+} });

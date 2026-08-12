@@ -41,9 +41,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.zeta-action-label:hover {
-  background: var(--zeta-button-hover-background);
-}
 .zeta-action-label:focus-visible {
   outline: 1px solid var(--zeta-focus-border);
   outline-offset: -1px;

@@ -1,27 +1,65 @@
 import { type IDisposable } from "../../base/common/lifecycle.js";
 import { type EditorSelectionController } from "../common/cursor/editorSelectionController.js";
 import { type LanguageConfigurationSource } from "../common/languages/languageConfiguration.js";
-import { type TextDecorationCollection } from "../common/model/decorationCollection.js";
+import { type TextModel } from "../common/model/textModel.js";
 import { type DocumentTextStyleAttributes } from "../common/model/documentSchema.js";
+import { type ILanguageFeaturesService } from "../common/services/languageService.js";
 import { type DocumentCollaborationInvite } from "../common/services/documentCollaborationService.js";
 import { type DocumentCollaborationMember } from "../common/services/documentCollaborationService.js";
 import { type DocumentCollaborationRoomRole } from "../common/services/documentCollaborationService.js";
 import { type DocumentCollaborationTarget } from "../common/services/documentCollaborationService.js";
 import { type EditorPartOptions } from "./editorPart.js";
-import { type TextInputController } from "./input/textInputController.js";
+import { type TextInputCompletionOptions, type TextInputController, type TextInputLanguageEditingAdapter } from "./input/textInputController.js";
 import { type EditorViewport } from "./view/editorViewport.js";
+import { type DecorationSource } from "./view/decorationPresentation.js";
+import { type EditorLineGutterDecoration } from "./view/lineGutterDecoration.js";
+import { type EditorLineVisibilitySource } from "../common/viewModel/modelLineProjection.js";
+import { type LanguageLexicalContextSource } from "../common/languages/languageLexicalContext.js";
+import { type BracketColorizationSource, type SemanticTokenSource } from "./view/semanticTokenPresentation.js";
 
 /** Stable text-model mount point exposed to optional editor contributions. */
+export interface EditorCapability<T> {
+  readonly id: string;
+  readonly _value?: T;
+}
+
+/** Pre-widget assembly seam for contributions that supply model projection inputs. */
+export interface TextEditorContributionConfigurationContext {
+  readonly kind: "text";
+  readonly options: EditorPartOptions;
+  readonly model: TextModel;
+  readonly languageId: string;
+  readonly languageFeaturesService: ILanguageFeaturesService;
+  readonly configurations: LanguageConfigurationSource;
+  readonly selections: EditorSelectionController;
+  readonly onLanguageError: (error: unknown) => void;
+  readonly getCapability: <T>(capability: EditorCapability<T>) => T;
+  readonly getOptionalCapability: <T>(capability: EditorCapability<T>) => T | undefined;
+  readonly provideCapability: <T>(capability: EditorCapability<T>, value: T) => void;
+  readonly addDecorationSource: (source: DecorationSource) => void;
+  readonly setLineProjection: (projection: { readonly visibilitySource: EditorLineVisibilitySource; readonly gutterDecoration?: EditorLineGutterDecoration }) => void;
+  readonly setSemanticTokenSource: (source: SemanticTokenSource) => void;
+  readonly setBracketColorizationSource: (source: BracketColorizationSource) => void;
+  readonly setLanguageLexicalContext: (source: LanguageLexicalContextSource) => void;
+  readonly setTextInputCompletion: (completion: TextInputCompletionOptions) => void;
+  readonly setTextInputLanguageEditing: (adapter: TextInputLanguageEditingAdapter) => void;
+  readonly own: <T extends IDisposable>(value: T) => T;
+}
+
 export interface TextEditorContributionContext {
   readonly kind: "text";
   readonly options: EditorPartOptions;
+  readonly model: TextModel;
   readonly languageId: string;
+  readonly languageFeaturesService: ILanguageFeaturesService;
   readonly configurations: LanguageConfigurationSource;
   readonly textInput: TextInputController;
   readonly viewport: EditorViewport;
   readonly selections: EditorSelectionController;
-  readonly searchDecorations: TextDecorationCollection<void>;
-  readonly occurrenceDecorations: TextDecorationCollection<void>;
+  readonly onLanguageError: (error: unknown) => void;
+  readonly getCapability: <T>(capability: EditorCapability<T>) => T;
+  readonly getOptionalCapability: <T>(capability: EditorCapability<T>) => T | undefined;
+  readonly registerBeforeSave: (hook: () => void | Promise<void>) => IDisposable;
   readonly own: <T extends IDisposable>(value: T) => T;
 }
 
@@ -75,7 +113,8 @@ export type EditorContributionContext = TextEditorContributionContext | Document
 /** Installs one statically selected capability at its supported editor mount point. */
 export interface EditorContribution {
   readonly id: string;
-  install(context: EditorContributionContext): void;
+  configure?(context: TextEditorContributionConfigurationContext): void;
+  install?(context: EditorContributionContext): void;
 }
 
 const contributions: EditorContribution[] = [];
@@ -83,7 +122,7 @@ const contributionIds = new Set<string>();
 
 /** Registers one flat editor contribution through a product bundle side effect. */
 export function registerEditorContribution(contribution: EditorContribution): void {
-  if (!contribution || !contribution.id?.trim() || typeof contribution.install !== "function") throw new TypeError("Editor contribution is invalid");
+  if (!contribution || !contribution.id?.trim() || (typeof contribution.configure !== "function" && typeof contribution.install !== "function")) throw new TypeError("Editor contribution is invalid");
   if (contributionIds.has(contribution.id)) throw new RangeError(`Duplicate editor contribution '${contribution.id}'`);
   contributionIds.add(contribution.id);
   contributions.push(contribution);

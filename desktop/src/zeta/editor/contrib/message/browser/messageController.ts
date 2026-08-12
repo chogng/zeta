@@ -1,4 +1,5 @@
 import "./media/message.css";
+import { registerEditorContribution } from "../../../browser/editorContribution.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 
@@ -30,3 +31,11 @@ export class MessageController extends DisposableOwner {
 
   hide(): void { if (this.timer) clearTimeout(this.timer); this.timer = undefined; this.element.hidden = true; }
 }
+
+registerEditorContribution({
+  id: "editor.contrib.message",
+  install: context => {
+    if (context.kind !== "text") return;
+    context.own(new MessageController(context.viewport));
+  },
+});

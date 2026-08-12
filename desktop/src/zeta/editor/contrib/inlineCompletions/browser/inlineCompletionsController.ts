@@ -1,4 +1,5 @@
 import "./media/inlineCompletions.css";
+import { registerEditorContribution } from "../../../browser/editorContribution.js";
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { createEditorEditCommand } from "../../../common/commands/editorCommand.js";
@@ -84,3 +85,9 @@ export class InlineCompletionsController extends DisposableOwner {
     this.element.textContent = "";
   }
 }
+
+registerEditorContribution({ id: "editor.contrib.inlineCompletions", install: context => {
+  if (context.kind !== "text") return;
+  const service = context.own(context.languageFeaturesService.createInlineCompletionsService(context.model));
+  context.own(new InlineCompletionsController(context.textInput.element, context.viewport, context.selections, service, context.languageId, context.onLanguageError));
+} });

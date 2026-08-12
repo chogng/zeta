@@ -6,9 +6,8 @@ import { type Event } from "../../../base/common/event.js";
 import { type ISize } from "../../../base/common/layout.js";
 import { DisposableOwner } from "../../../base/common/lifecycle.js";
 import { type EditorSelectionController } from "../../common/cursor/editorSelectionController.js";
-import { resolveEditorIndentationOptions, type EditorIndentationOptions, type ResolvedEditorIndentationOptions } from "../../contrib/indentation/common/indentation.js";
-import { type EditorHiddenRangeModel } from "../../contrib/folding/browser/hiddenRangeModel.js";
-import { type EditorFoldingModel } from "../../contrib/folding/browser/foldingModel.js";
+import { resolveEditorIndentationOptions, type EditorIndentationOptions, type ResolvedEditorIndentationOptions } from "../../common/editorIndentation.js";
+import { type EditorLineVisibilitySource } from "../../common/viewModel/modelLineProjection.js";
 import { TextPosition, type TextRange } from "../../common/core/text.js";
 import { type TextModel } from "../../common/model/textModel.js";
 import { TrackedRangeStickiness, type TrackedRange } from "../../common/model/trackedRange.js";
@@ -16,24 +15,22 @@ import { type EditorVisualLineProjection } from "../../common/viewModel/modelLin
 import { type EditorLineRange, type EditorScrollPosition, type EditorViewportChange, type EditorViewportLayout, EditorViewportModel } from "../../common/viewLayout/editorViewportModel.js";
 import { type DecorationSource, type ResolvedDecoration } from "./decorationPresentation.js";
 import { DecorationLineIndex } from "./decorationLineIndex.js";
-import { createAsterDiagnosticOverviewMarkers } from "../../contrib/gotoError/browser/diagnosticOverviewRuler.js";
+import { createAsterDiagnosticOverviewMarkers } from "./diagnosticOverviewMarkers.js";
 import { DomTextMeasurer, type TextMeasurer } from "./fontMetrics.js";
-import { FoldingDecorationProvider } from "../../contrib/folding/browser/foldingDecorations.js";
-import { type BracketColorizationSource } from "../../contrib/bracketMatching/browser/bracketColorizationPresentation.js";
-import { LineWidthIndex } from "../../contrib/longLinesHelper/browser/longLinesHelper.js";
-import { createAsterIndentationGuides } from "../../contrib/indentation/browser/indentation.js";
-import { GpuMinimapRenderer } from "../../contrib/gpu/browser/gpuRenderer.js";
+import { LineWidthIndex } from "./lineWidthIndex.js";
+import { createAsterIndentationGuides } from "./indentationGuides.js";
+import { GpuMinimapRenderer } from "./gpuMinimapRenderer.js";
 import { MinimapNavigationController } from "./minimapNavigationController.js";
 import { createMinimapRows } from "./minimapProjection.js";
 import { type ClientPoint, type EditorHitTarget, EditorHitTargetKind, hitTestAsterVisualEditorPoint } from "./pointerHitTest.js";
 import { getAsterDomTextCaretLeft, getAsterDomTextOffsetAtClientPoint } from "./domTextGeometry.js";
 import { createAsterRenderedLine, type RenderedLine } from "./renderedLine.js";
-import { projectAsterSemanticTokenLine, type ResolvedSemanticToken, type SemanticTokenSource } from "./semanticTokenPresentation.js";
-import { type BracketColorizationSpan } from "./semanticTokenPresentation.js";
+import { projectAsterSemanticTokenLine, type BracketColorizationSource, type BracketColorizationSpan, type ResolvedSemanticToken, type SemanticTokenSource } from "./semanticTokenPresentation.js";
 import { projectAsterCompositionOverlay, projectAsterDecorationOverlays, projectAsterSelectionOverlays, type ActiveLineHighlight, type ViewportOverlayContext } from "./viewportOverlayPresentation.js";
 import { EditorLineWrapping, VisualLineProjection } from "./visualLineProjection.js";
 import { VisibleLineProjection } from "./visibleLineProjection.js";
 import { getTextGraphemeBoundaries } from "../../common/core/textSegmentation.js";
+import { type EditorLineGutterDecoration } from "./lineGutterDecoration.js";
 
 const GUTTER_HORIZONTAL_PADDING = 16;
 const OVERVIEW_RULER_WIDTH = 6;
@@ -79,8 +76,8 @@ export interface EditorViewportOptions {
   readonly decorationSources?: readonly DecorationSource[];
   readonly semanticTokenSource?: SemanticTokenSource;
   readonly bracketColorizationSource?: BracketColorizationSource;
-  readonly foldingModel?: EditorFoldingModel;
-  readonly hiddenRangeModel?: EditorHiddenRangeModel;
+  readonly lineVisibilitySource?: EditorLineVisibilitySource;
+  readonly lineGutterDecoration?: EditorLineGutterDecoration;
   readonly presentation?: EditorViewportPresentation;
   /** `host` delegates the visible focus outline to the viewport's direct host. */
   readonly focusOutlineOwner?: EditorFocusOutlineOwner;
@@ -123,7 +120,7 @@ export class EditorViewport extends DisposableOwner {
   private readonly lineWidths: LineWidthIndex;
   private readonly visualLineProjection: VisualLineProjection;
   private readonly visibleLineProjection: VisibleLineProjection;
-  private readonly foldingDecorations: FoldingDecorationProvider;
+  private readonly lineGutterDecoration: EditorLineGutterDecoration | undefined;
   private readonly selectionController: EditorSelectionController | undefined;
   private readonly decorationSources: readonly DecorationSource[];
   private readonly semanticTokenSource: SemanticTokenSource | undefined;
@@ -201,20 +198,11 @@ export class EditorViewport extends DisposableOwner {
       if (this.bracketColorizationSource && this.bracketColorizationSource.textModel !== this.model) {
         throw new TypeError("Aster viewport and bracket colorization source must share one text model");
       }
-      if (options.foldingModel && options.foldingModel.model !== this.model) {
-        throw new TypeError("Aster viewport and folding model must share one text model");
-      }
-      if (options.hiddenRangeModel && options.hiddenRangeModel.model !== this.model) {
-        throw new TypeError("Aster viewport and hidden range model must share one text model");
-      }
-      if (options.foldingModel && !options.hiddenRangeModel) {
-        throw new TypeError("Aster viewport folding requires a hidden range model");
-      }
     } catch (error) {
       this.dispose();
       throw error;
     }
-    this.foldingDecorations = this.own(new FoldingDecorationProvider(options.foldingModel));
+    this.lineGutterDecoration = options.lineGutterDecoration ? this.own(options.lineGutterDecoration) : undefined;
     this.decorationSources = Object.freeze([
       ...(options.decorationSources ?? []),
     ]);
@@ -288,7 +276,7 @@ export class EditorViewport extends DisposableOwner {
     ));
     this.visibleLineProjection = this.own(new VisibleLineProjection(
       this.visualLineProjection,
-      options.hiddenRangeModel,
+      options.lineVisibilitySource,
     ));
     const viewport = this.own(new EditorViewportModel(this.model, {
       lineHeight: options.lineHeight,
@@ -299,7 +287,7 @@ export class EditorViewport extends DisposableOwner {
     this.viewport = viewport;
     this.onDidChangeLayout = viewport.onDidChange;
     this.own(this.visibleLineProjection.onDidChange(() => this.project(viewport.layout)));
-    this.own(this.foldingDecorations.onDidChange(() => this.project(viewport.layout)));
+    if (this.lineGutterDecoration) this.own(this.lineGutterDecoration.onDidChange(() => this.project(viewport.layout)));
     viewport.setContentWidth(this.measuredContentWidth);
 
     this.own(viewport.onDidChange(({ layout }) => this.project(layout)));
@@ -698,13 +686,13 @@ export class EditorViewport extends DisposableOwner {
       const visualLine = visualProjection.lineAt(visualLineIndex);
       if (!visualLine) throw new Error("Viewport render range exceeds the visual line projection");
       const existing = this.renderedLines.get(visualLineIndex);
-      const line = existing ?? createAsterRenderedLine(ownerDocument, visualLineIndex);
+      const line = existing ?? createAsterRenderedLine(ownerDocument, visualLineIndex, this.lineGutterDecoration);
       line.element.dataset.logicalLineIndex = String(visualLine.logicalLineIndex);
       if (!existing || this.renderedVisualProjectionRevision !== visualProjectionRevision) {
         line.numberElement.textContent = visualLine.firstForLogicalLine
           ? String(visualLine.logicalLineIndex + 1)
           : "";
-        this.foldingDecorations.project(line.foldingElement, visualLine.logicalLineIndex, visualLine.firstForLogicalLine);
+        this.lineGutterDecoration?.project(line.featureGutterElement, visualLine.logicalLineIndex, visualLine.firstForLogicalLine);
       }
       if (
         !existing ||

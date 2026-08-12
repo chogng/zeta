@@ -1,6 +1,6 @@
 import { reset } from "../../../base/browser/dom.js";
 import { type Event } from "../../../base/common/event.js";
-import { type SemanticTokensModelPart } from "../../contrib/semanticTokens/common/semanticTokens.js";
+import { type IDisposable } from "../../../base/common/lifecycle.js";
 import { type LanguageToken } from "../../common/tokens/languageTokens.js";
 import { type TextModel } from "../../common/model/textModel.js";
 
@@ -52,6 +52,20 @@ export interface SemanticTokenSource {
   getLineTokens(lineIndex: number): readonly ResolvedSemanticToken[];
 }
 
+/** Feature-neutral bracket projection consumed by the browser viewport. */
+export interface BracketColorizationSource {
+  readonly textModel: TextModel;
+  getLineBrackets(lineIndex: number): readonly BracketColorizationSpan[];
+}
+
+/** Minimal token model contract adapted by the browser projection. */
+export interface SemanticTokenModelSource {
+  readonly textModel: TextModel;
+  readonly onDidChange: (listener: (...args: any[]) => void) => IDisposable;
+  readonly lines: readonly { readonly lineIndex: number; readonly tokens: readonly LanguageToken[] }[];
+  getLineTokens(lineIndex: number): readonly LanguageToken[];
+}
+
 export type SemanticTokenResolver = (token: LanguageToken) => SemanticTokenPresentation | undefined;
 
 /**
@@ -61,7 +75,7 @@ export type SemanticTokenResolver = (token: LanguageToken) => SemanticTokenPrese
  * Worker token type strings never become DOM classes directly.
  */
 export function createAsterSemanticTokenSource(
-  index: SemanticTokensModelPart,
+  index: SemanticTokenModelSource,
   resolvePresentation: SemanticTokenResolver = resolveAsterSemanticTokenPresentation,
 ): SemanticTokenSource {
   if (typeof resolvePresentation !== "function") {

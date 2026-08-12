@@ -1,4 +1,4 @@
-import { DecorationPresentation, type ResolvedDecoration } from "../../../browser/view/decorationPresentation.js";
+import { DecorationPresentation, type ResolvedDecoration } from "./decorationPresentation.js";
 
 export interface DiagnosticOverviewMarker {
   readonly startLineIndex: number;

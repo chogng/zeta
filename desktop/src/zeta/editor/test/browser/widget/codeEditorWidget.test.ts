@@ -21,6 +21,7 @@ for (const [name, value] of Object.entries({
 }
 
 const { CodeEditorWidget } = await import("../../../browser/widget/codeEditor/codeEditorWidget.js");
+const { PlaceholderTextController } = await import("../../../contrib/placeholderText/browser/placeholderTextController.js");
 
 test.after(() => browserEnvironment.window.close());
 
@@ -57,9 +58,9 @@ test("CodeEditorWidget owns padding, placeholder, and current-line presentation 
     model,
     selectionController: selections,
     lineHeight: 20,
-    placeholder: "Ask Zeta",
     viewport: { presentation: "embedded", padding: { top: 20, right: 20, bottom: 20, left: 20 } },
   });
+  using placeholder = new PlaceholderTextController(editor.viewport, "Ask Zeta");
 
   editor.layout({ width: 320, height: 40 });
 

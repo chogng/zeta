@@ -19,7 +19,7 @@ for (const [name, value] of Object.entries({
   Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-await import("../../../../../editor/contrib/codeEditorPart.contribution.js");
+await import("../../../../../editor/editor.code.all.js");
 const { CodeEditorPane: EditorPane } = await import("../../browser/codeEditorPane.js");
 const { BrowserTextModelService } = await import("../../../../../editor/browser/services/browserTextModelService.js");
 const { BrowserTextResourceStore } = await import("../../browser/browserTextResourceStore.js");
@@ -125,9 +125,36 @@ test("Aster editor pane saves and reverts its shared model reference", async () 
   dom.window.close();
 });
 
+test("Workbench owns the code editor save shortcut and reports failures", async () => {
+  const dom = new JSDOM("<!doctype html><body><main></main></body>");
+  dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+  const parent = dom.window.document.querySelector<HTMLElement>("main")!;
+  const textFiles = new ImmediateTextFiles("alpha");
+  const resourceStore = new BrowserTextResourceStore(textFiles);
+  using models = new BrowserTextModelService(resourceStore);
+  const errors: unknown[] = [];
+  const pane = new EditorPane(resourceStore, { modelService: models, onSaveError: error => errors.push(error) });
+  pane.create(parent);
+  await pane.setInput({ resource: URI.file("C:\\project\\save.ts") }, new AbortController().signal);
+
+  const input = parent.querySelector<HTMLTextAreaElement>(".aster-editor-input")!;
+  input.dispatchEvent(new dom.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, ctrlKey: true, key: "s" }));
+  await waitFor(() => textFiles.savedTexts.length === 1);
+  assert.equal(parent.querySelector(".aster-editor-accessibility-status")?.textContent, "Saved");
+
+  textFiles.failSave = true;
+  input.dispatchEvent(new dom.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, ctrlKey: true, key: "s" }));
+  await waitFor(() => errors.length === 1);
+  assert.equal(parent.querySelector(".aster-editor-accessibility-status")?.textContent, "Save failed: conflict");
+
+  pane.dispose();
+  dom.window.close();
+});
+
 class ImmediateTextFiles implements ITextFileService {
   readonly savedTexts: string[] = [];
   readonly onDidChangeFiles = inertFileChanges;
+  failSave = false;
   private revision = 1;
 
   constructor(private text: string) {}
@@ -142,6 +169,7 @@ class ImmediateTextFiles implements ITextFileService {
   }
 
   async save(request: { readonly text: string }): Promise<{ readonly revision: string | undefined }> {
+    if (this.failSave) throw new Error("conflict");
     this.savedTexts.push(request.text);
     this.text = request.text;
     this.revision += 1;
@@ -155,6 +183,14 @@ class ImmediateTextFiles implements ITextFileService {
 
   private currentRevision(): string {
     return `revision-${this.revision}`;
+  }
+}
+
+async function waitFor(predicate: () => boolean, timeout = 500): Promise<void> {
+  const deadline = Date.now() + timeout;
+  while (!predicate()) {
+    if (Date.now() >= deadline) throw new Error("Timed out waiting for Workbench editor state");
+    await new Promise(resolve => setTimeout(resolve, 1));
   }
 }
 

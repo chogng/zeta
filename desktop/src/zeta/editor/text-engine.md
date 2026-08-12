@@ -164,7 +164,7 @@ architectural drift signal and require extraction at that point.
 | Version-pinned, cancellable diff model with Rust-backed computation and grapheme-safe inline ranges | ✅ | `common/diff/DiffModel` / `IDiffComputationService` / `browser/services/rustDiffComputationService.ts` |
 | Virtualized side-by-side review view | ✅ | `browser/widget/diffEditor/DiffEditorWidget` |
 | Workbench original/modified diff input and pane lifecycle | ✅ | `DiffEditorInput` / `DiffEditorPane` |
-| Visible-line indentation guides | ✅ | `contrib/indentation/browser/indentation.ts` / `EditorViewport` |
+| Visible-line indentation guides | ✅ | `browser/view/indentationGuides.ts` / `EditorViewport` |
 | Parser/indentation/lexical/named-region/manual folding, visible-row projection, gutter toggle, recursive/level fold chords, collapse-all and expand-all | ✅ | `browser/services/rustSyntaxFoldingService.ts` adds revision-bound parser folds for JavaScript/JSX, TypeScript/TSX, JSON, JSONC, Rust, and Shell; `contrib/folding/browser/{foldingRanges,syntaxRangeProvider,indentRangeProvider,foldingModel,hiddenRangeModel,foldingDecorations,folding}` retains lexical, marker, indentation, and manual fallback |
 | Transient Alt+Z word-wrap toggle | ✅ | `EditorViewport` / `WordWrapController` |
 | Read-only virtual line DOM projection | ✅ | `browser/EditorViewport` |
@@ -182,7 +182,7 @@ architectural drift signal and require extraction at that point.
 | Hidden textarea ordinary text editing and history | ✅ | `TextInputController` |
 | Per-input read-only edit gate with selection/navigation retained | ✅ | `EditorSelectionController` / `EditorInput.readOnly` |
 | Language-aware auto-close, surround, overtype, and paired Backspace | ✅ | `contrib/bracketMatching/common/pairEditing.ts` / `TextInputControllerOptions.language` |
-| Language-aware Enter and editor-owned indentation | ✅ | `contrib/bracketMatching/common/enter.ts` / `contrib/indentation/common/indentation.ts` |
+| Language-aware Enter and editor-owned indentation | ✅ | `contrib/bracketMatching/common/enter.ts` / `common/editorIndentation.ts` |
 | Synchronous lexical input context and auto-closing `notIn` | ✅ | `LanguageLexicalContextIndex` / `LanguageLexicalContextSource` |
 | Plain-text and syntax-marked safe HTML selection copy, cut, and paste, including Async Clipboard fallback | ✅ | `ClipboardController` / `clipboardRichText.ts` / `syntaxClipboardHtml.ts` |
 | User-supplied single-text-file clipboard paste | ✅ | `ClipboardController` / `textFileTransfer.ts` |
@@ -191,11 +191,11 @@ architectural drift signal and require extraction at that point.
 | Plain-text and user-supplied single-text-file drop at the viewport hit target | ✅ | `TextDropController` / `textFileTransfer.ts` |
 | Desktop-style textarea composition and candidate anchor | ✅ | `CompositionController` |
 | Tracked multi-line composition underline | ✅ | `EditorCompositionSession.currentRange` / `EditorViewport` |
-| Focused accessible text/primary-selection mirror, multi-selection description, status announcements, and forced-colors semantics | ✅ | `TextInputController` / `EditorViewport` / `SaveController` |
+| Focused accessible text/primary-selection mirror, multi-selection description, status announcements, and forced-colors semantics | ✅ | `TextInputController` / `EditorViewport`; Workbench Pane reports save status through the runtime seam |
 | macOS desktop IME/VoiceOver DOM contract | ✅ | `CompositionController` / `TextInputController`; empirical VoiceOver walkthrough remains a release verification task |
 | Mobile IME variants and cross-platform assistive-technology acceptance | 不在 Aster 桌面完成范围 | Mobile is explicitly out of scope; Windows validation is separate release verification |
 | File and bootstrap loading | ✅ | `ITextFileService` / `ITextModelService` |
-| Dirty state and serialized snapshot saving | ✅ | `ITextModelService` / `SaveController` |
+| Dirty state and serialized snapshot saving | ✅ | `ITextModelService`; Workbench owns the save command and calls `EditorPart.save()` |
 | Explicit file-system revert | ✅ | `TextModelReference.revert` / `EditorPane.revert` |
 | CRLF/LF source line-ending preservation on save | ✅ | `ITextModelService` |
 | Workspace external-change invalidation, clean reload, and dirty-model conflict state | ✅ | `IFileService.onDidChangeFiles` / `ITextModelService` |

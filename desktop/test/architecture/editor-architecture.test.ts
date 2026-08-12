@@ -52,9 +52,9 @@ test("Flat editor layout keeps both engine owners and product bundles", () => {
     "common/cursor/editorSelectionController.ts",
     "common/services/languageService.ts",
     "contrib/gotoError/browser/gotoError.ts",
-    "contrib/indentation/browser/indentation.ts",
-    "contrib/gpu/browser/gpuRenderer.ts",
-    "contrib/longLinesHelper/browser/longLinesHelper.ts",
+    "browser/view/indentationGuides.ts",
+    "browser/view/gpuMinimapRenderer.ts",
+    "browser/view/lineWidthIndex.ts",
     "contrib/tokenization/common/tokenizationTextModelPart.ts",
     "contrib/semanticTokens/common/semanticTokens.ts",
     "common/editorResource.ts",
@@ -75,7 +75,7 @@ test("Flat editor layout keeps both engine owners and product bundles", () => {
     "browser/browserEditorSession.ts",
     "common/model/decoration.ts",
     "contrib/gotoError/browser/gotoErrorController.ts",
-    "contrib/indentation/browser/indentationGuides.ts",
+    "contrib/indentation/browser/indentation.ts",
   ];
   for (const file of removedLegacyNames) assert.equal(statSafe(join(editorRoot, file)), false, file);
   assert.equal(existsSync(join(editorRoot, "alpha")), false, "alpha directory");
@@ -114,13 +114,15 @@ test("Text engine PieceTree tests follow VS Code's common model layout", () => {
 test("Product entries statically select their Aster contribution bundles", () => {
   const codeBundle = readFileSync(join(editorRoot, "editor.code.all.ts"), "utf8");
   const academicBundle = readFileSync(join(editorRoot, "editor.academic.all.ts"), "utf8");
-  const completeBundle = readFileSync(join(editorRoot, "editor.all.ts"), "utf8");
-  assert.match(codeBundle, /contrib\/codeEditorPart\.contribution/u);
+  const standardBundle = readFileSync(join(editorRoot, "editor.all.ts"), "utf8");
+  assert.match(codeBundle, /editor\.all/u);
+  assert.doesNotMatch(codeBundle, /contrib\//u);
   assert.doesNotMatch(codeBundle, /contrib\/academic/u);
+  assert.match(academicBundle, /editor\.all/u);
   assert.match(academicBundle, /contrib\/documentEditor\.contribution/u);
   assert.doesNotMatch(academicBundle, /workbench|academicEditor\.contribution/u);
-  assert.match(completeBundle, /editor\.code\.all/u);
-  assert.match(completeBundle, /editor\.academic\.all/u);
+  assert.match(standardBundle, /contrib\/codeEditorPart\.contribution/u);
+  assert.doesNotMatch(standardBundle, /editor\.(?:code|academic)\.all/u);
 
   const codeEntry = readFileSync(resolve(editorRoot, "../code/browser/workbench/workbench-code.ts"), "utf8");
   const academicEntry = readFileSync(resolve(editorRoot, "../code/browser/workbench/workbench-academic.ts"), "utf8");
@@ -144,24 +146,38 @@ test("Editor engines delegate optional feature composition to product bundles", 
   const textHost = readFileSync(join(editorRoot, "browser/editorPart.ts"), "utf8");
   const textContribution = readFileSync(join(editorRoot, "contrib/codeEditorPart.contribution.ts"), "utf8");
   const findContribution = readFileSync(join(editorRoot, "contrib/find/browser/find.contribution.ts"), "utf8");
-  const quickAccessContribution = readFileSync(join(editorRoot, "contrib/quickAccess/browser/quickAccess.contribution.ts"), "utf8");
+  const quickAccessContribution = readFileSync(join(editorRoot, "contrib/quickAccess/browser/quickAccessController.ts"), "utf8");
   const documentHost = readFileSync(join(editorRoot, "browser/editorWidget.ts"), "utf8");
   const documentContribution = readFileSync(join(editorRoot, "contrib/documentEditor.contribution.ts"), "utf8");
   const codePaneContribution = readFileSync(join(workbenchRoot, "contrib/codeEditor/browser/codeEditor.contribution.ts"), "utf8");
   const academicPaneContribution = readFileSync(join(workbenchRoot, "contrib/academic/browser/academicEditor.contribution.ts"), "utf8");
   const codeBundle = readFileSync(join(editorRoot, "editor.code.all.ts"), "utf8");
   const academicBundle = readFileSync(join(editorRoot, "editor.academic.all.ts"), "utf8");
+  const standardBundle = readFileSync(join(editorRoot, "editor.all.ts"), "utf8");
+  const editorContributionRegistry = readFileSync(join(editorRoot, "browser/editorContribution.ts"), "utf8");
+  const optionalControllerPattern = /(?:AnchorSelect|BlockComment|BracketEditing|BracketMatch|BracketNavigation|CodeAction|CodeLens|ColorPicker|ContextMenu|CursorUndo|DiagnosticHover|DiagnosticNavigation|EditorState|Folding|FontZoom|Format|GotoLine|GotoSymbol|Hover|InPlaceReplace|InlayHints|InlineCompletions|InlineProgress|LineComment|LineJoin|LineOperations|LinkedEditing|Links|Message|MiddleScroll|MultiCursor|OccurrenceHighlight|OccurrenceSelection|ParameterHints|ReadOnlyMessage|Rename|SectionHeaders|SmartSelect|StickyScroll|SymbolIcons|TextDrop|ToggleTabFocusMode|Tokenization|Transpose|UnicodeHighlighter|UnusualLineTerminators|WordWrap)Controller/u;
   assert.doesNotMatch(textHost, /from\s+["'][^"']*\/contrib\/(?:find|folding|hover|format|rename|codeAction|collaboration|formatting)\//u);
   assert.match(textHost, /registerEditorPartFactory/u);
   assert.match(textContribution, /registerEditorPartFactory/u);
   assert.doesNotMatch(textContribution, /FindController/u);
-  assert.doesNotMatch(textContribution, /AnchorSelectController|ContextMenuController|FontZoomController|GotoLineController|InPlaceReplaceController|InlineProgressController|MessageController|MiddleScrollController|SmartSelectController|ToggleTabFocusModeController/u);
+  assert.doesNotMatch(textContribution, optionalControllerPattern);
+  assert.match(textContribution, /EditingCommandController/u);
+  assert.doesNotMatch(textContribution, /LanguageCompletionSessionController|RustSyntaxFactsService|LanguageDiagnosticDecorationBridge|TokenizationTextModelPart|TextDecorationCollection|LanguageBracketMatcher/u);
+  const textInput = readFileSync(join(editorRoot, "browser/input/textInputController.ts"), "utf8");
+  const codeEditorWidget = readFileSync(join(editorRoot, "browser/widget/codeEditor/codeEditorWidget.ts"), "utf8");
+  assert.doesNotMatch(textInput, /from\s+["'][^"']*\/contrib\//u);
+  assert.doesNotMatch(codeEditorWidget, /from\s+["'][^"']*\/contrib\//u);
+  assert.doesNotMatch(editorContributionRegistry, /from\s+["'][^"']*\/contrib\//u);
   assert.match(findContribution, /registerEditorContribution/u);
   assert.match(quickAccessContribution, /registerEditorContribution/u);
-  assert.match(codeBundle, /find\/browser\/find\.contribution/u);
-  assert.match(codeBundle, /quickAccess\/browser\/quickAccess\.contribution/u);
-  assert.match(academicBundle, /find\/browser\/find\.contribution/u);
-  assert.match(academicBundle, /quickAccess\/browser\/quickAccess\.contribution/u);
+  assert.match(standardBundle, /find\/browser\/find\.contribution/u);
+  assert.match(standardBundle, /quickAccess\/browser\/quickAccessController/u);
+  for (const contribution of ["bracketMatching", "clipboard", "codeAction", "comment", "folding", "gotoSymbol", "hover", "languageAnalysis", "multicursor", "placeholderText", "suggest", "tokenization", "unicodeHighlighter", "wordHighlighter"]) {
+    assert.match(standardBundle, new RegExp(`contrib/${contribution}/browser/[^"']+\\.contribution`, "u"), contribution);
+  }
+  for (const contribution of ["dropOrPasteInto", "format", "quickAccess", "rename"]) assert.match(standardBundle, new RegExp(`contrib/${contribution}/browser/[^"']+Controller`, "u"), contribution);
+  assert.doesNotMatch(codeBundle, /contrib\//u);
+  assert.match(academicBundle, /documentEditor\.contribution/u);
   assert.doesNotMatch(codePaneContribution, /codeEditorPart\.contribution/u);
   assert.doesNotMatch(documentHost, /from\s+["'][^"']*\/contrib\/(?:formatting|collaboration)\/browser\//u);
   assert.match(documentHost, /getEditorContributions/u);
@@ -171,9 +187,14 @@ test("Editor engines delegate optional feature composition to product bundles", 
   assert.match(documentContribution, /CollaborationContribution/u);
   assert.doesNotMatch(academicPaneContribution, /codeEditorPart\.contribution/u);
   assert.doesNotMatch(academicPaneContribution, /documentEditor\.contribution/u);
-  assert.match(codeBundle, /codeEditorPart\.contribution/u);
-  assert.match(academicBundle, /codeEditorPart\.contribution/u);
+  assert.match(standardBundle, /codeEditorPart\.contribution/u);
   assert.match(academicBundle, /documentEditor\.contribution/u);
+});
+
+test("Standard profile avoids mechanical contribution wrappers", () => {
+  for (const feature of ["anchorSelect", "codelens", "colorPicker", "contextmenu", "cursorUndo", "dropOrPasteInto", "editorState", "fontZoom", "format", "inlayHints", "inlineCompletions", "inlineProgress", "inPlaceReplace", "lineSelection", "linkedEditing", "links", "message", "middleScroll", "parameterHints", "quickAccess", "readOnlyMessage", "rename", "smartSelect", "toggleTabFocusMode", "transpose", "wordWrap"]) {
+    assert.deepEqual(collectFiles(join(editorRoot, "contrib", feature)).filter(file => file.endsWith(".contribution.ts")), [], feature);
+  }
 });
 
 function collectFiles(directory: string): string[] {

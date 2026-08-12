@@ -8,6 +8,8 @@ import { EditorSelectionController } from "../../../../../editor/common/cursor/e
 import { LanguageCompletionService } from "../../../../../editor/common/languages/completion/languageCompletionService.js";
 import { LanguageCompletionProviderRegistry } from "../../../../../editor/common/languages/completion/languageCompletionProviders.js";
 import { LanguageCompletionSessionController } from "../../../../../editor/contrib/suggest/common/suggestModel.js";
+import "../../../../../editor/contrib/suggest/browser/suggestWidget.js";
+import "../../../../../editor/contrib/placeholderText/browser/placeholderTextController.js";
 import { TextSelection, TextSelectionSet } from "../../../../../editor/common/core/selection.js";
 import { TextPosition, TextRange } from "../../../../../editor/common/core/text.js";
 import { TextModel } from "../../../../../editor/common/model/textModel.js";

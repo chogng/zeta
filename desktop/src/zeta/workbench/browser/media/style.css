@@ -211,6 +211,13 @@ button, input, select, textarea { font: inherit; }
   background: var(--zeta-selection-background);
 }
 
+.zeta-workbench :where(.zeta-action-bar:not(.vertical) > .zeta-action-view-item > .zeta-button:not(:disabled):hover),
+.zeta-workbench :where(.zeta-action-bar:not(.vertical) > .zeta-action-view-item > .zeta-action-label:not(:disabled):hover),
+.zeta-workbench :where(.zeta-action-bar:not(.vertical) > .zeta-dropdown-with-primary-action-view-item:not(.disabled):hover),
+.zeta-workbench :where(.zeta-action-bar:not(.vertical) > .zeta-dropdown-with-primary-action-view-item.active) {
+  background: var(--zeta-toolbar-hover-background);
+}
+
 .zeta-workbench.zeta-reduce-motion *,
 .zeta-workbench.zeta-reduce-motion *::before,
 .zeta-workbench.zeta-reduce-motion *::after {

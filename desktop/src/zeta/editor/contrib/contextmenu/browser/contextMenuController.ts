@@ -1,4 +1,5 @@
 import { addDisposableListener } from "../../../../base/browser/dom.js";
+import { registerEditorContribution } from "../../../browser/editorContribution.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type TextPosition } from "../../../common/core/text.js";
 import { type EditorHitTarget } from "../../../browser/view/pointerHitTest.js";
@@ -23,3 +24,11 @@ export class ContextMenuController extends DisposableOwner {
     }));
   }
 }
+
+registerEditorContribution({
+  id: "editor.contrib.contextMenu",
+  install: context => {
+    if (context.kind !== "text" || !context.options.onShowContextMenu) return;
+    context.own(new ContextMenuController(context.viewport, context.options.onShowContextMenu, context.options.onLanguageError));
+  },
+});

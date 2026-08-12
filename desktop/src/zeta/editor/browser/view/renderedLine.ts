@@ -1,9 +1,9 @@
-import { createAsterFoldingDecoration } from "../../contrib/folding/browser/foldingDecorations.js";
+import { type EditorLineGutterDecoration } from "./lineGutterDecoration.js";
 
 export interface RenderedLine {
   readonly element: HTMLDivElement;
   readonly numberElement: HTMLSpanElement;
-  readonly foldingElement: HTMLButtonElement;
+  readonly featureGutterElement: HTMLElement;
   readonly diagnosticElement: HTMLSpanElement;
   readonly textElement: HTMLSpanElement;
   readonly indentationElement: HTMLDivElement;
@@ -13,10 +13,11 @@ export interface RenderedLine {
 }
 
 /** Creates one reusable virtual-line DOM subtree owned by Aster. */
-export function createAsterRenderedLine(ownerDocument: Document, lineIndex: number): RenderedLine {
+export function createAsterRenderedLine(ownerDocument: Document, lineIndex: number, gutterDecoration: EditorLineGutterDecoration | undefined): RenderedLine {
   const element = ownerDocument.createElement("div");
   const numberElement = ownerDocument.createElement("span");
-  const foldingElement = createAsterFoldingDecoration(ownerDocument);
+  const featureGutterElement = gutterDecoration?.create(ownerDocument) ?? ownerDocument.createElement("span");
+  if (!gutterDecoration) featureGutterElement.hidden = true;
   const diagnosticElement = ownerDocument.createElement("span");
   const textElement = ownerDocument.createElement("span");
   const indentationElement = ownerDocument.createElement("div");
@@ -39,11 +40,11 @@ export function createAsterRenderedLine(ownerDocument: Document, lineIndex: numb
   compositionElement.setAttribute("aria-hidden", "true");
   selectionElement.className = "aster-editor-line-selections";
   selectionElement.setAttribute("aria-hidden", "true");
-  element.append(indentationElement, decorationElement, selectionElement, compositionElement, foldingElement, diagnosticElement, numberElement, textElement);
+  element.append(indentationElement, decorationElement, selectionElement, compositionElement, featureGutterElement, diagnosticElement, numberElement, textElement);
   return {
     element,
     numberElement,
-    foldingElement,
+    featureGutterElement,
     diagnosticElement,
     textElement,
     indentationElement,
