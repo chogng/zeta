@@ -8,6 +8,10 @@ use crate::components::selection::SelectionItemId;
 use crate::components::selection::SelectionViewModel;
 use crate::components::selection::SelectionViewState;
 use crate::components::transcript::Message;
+use crate::components::transcript::TranscriptScroll;
+use crate::features::interactions::InteractionSelectionOutcome;
+use crate::features::interactions::InteractionSelectionState;
+use crate::features::interactions::InteractionSelectionView;
 use crate::features::mcp::McpSelectionAction;
 use crate::features::mcp::McpSelectionView;
 use crate::features::models::ModelSelectionAction;
@@ -16,6 +20,8 @@ use crate::features::rewind::RewindSelectionAction;
 use crate::features::rewind::RewindSelectionView;
 use crate::features::sessions::SessionSelectionAction;
 use crate::features::sessions::SessionSelectionView;
+use crate::features::sessions::ThreadSelectionAction;
+use crate::features::sessions::ThreadSelectionView;
 use crate::features::skills::{SkillSelectionAction, SkillSelectionView};
 use crate::features::status_line::StatusLineModel;
 use crate::features::theme::ThemeSelectionAction;
@@ -23,6 +29,8 @@ use crate::features::theme::ThemeSelectionView;
 use crate::features::thread::ThreadFeatureState;
 use crate::features::thread::ThreadPresentationEvent;
 use crate::features::thread::TurnActivity;
+use crate::features::workspace_files::FileSelectionAction;
+use crate::features::workspace_files::FileSelectionView;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
@@ -49,6 +57,7 @@ pub(crate) enum Status {
 pub(crate) struct App {
     interaction_pane: InteractionPane,
     thread: ThreadFeatureState,
+    transcript_scroll: TranscriptScroll,
     selection_actions: Vec<SelectionActions>,
     last_root_escape: Option<Instant>,
     status: Status,
@@ -58,10 +67,13 @@ pub(crate) struct App {
 #[derive(Debug)]
 enum SelectionActions {
     ReadOnly,
+    Interaction(InteractionSelectionState),
     Mcp(BTreeMap<SelectionItemId, McpSelectionAction>),
+    Files(BTreeMap<SelectionItemId, FileSelectionAction>),
     Model(BTreeMap<SelectionItemId, ModelSelectionAction>),
     Rewind(BTreeMap<SelectionItemId, RewindSelectionAction>),
     Sessions(BTreeMap<SelectionItemId, SessionSelectionAction>),
+    Threads(BTreeMap<SelectionItemId, ThreadSelectionAction>),
     Skills(BTreeMap<SelectionItemId, SkillSelectionAction>),
     Theme(BTreeMap<SelectionItemId, ThemeSelectionAction>),
 }
@@ -72,6 +84,7 @@ impl App {
         Self {
             interaction_pane: InteractionPane::new(),
             thread: ThreadFeatureState::default(),
+            transcript_scroll: TranscriptScroll::default(),
             selection_actions: Vec::new(),
             last_root_escape: None,
             status: Status::Ready,
@@ -94,6 +107,7 @@ impl App {
         Self {
             interaction_pane: InteractionPane::with_slash_commands(slash_commands),
             thread: ThreadFeatureState::default(),
+            transcript_scroll: TranscriptScroll::default(),
             selection_actions: Vec::new(),
             last_root_escape: None,
             status: Status::Ready,
@@ -134,6 +148,9 @@ impl App {
             InteractionPaneOutcome::ActivateSelectionItem(item_id) => {
                 self.activate_selection_item(&item_id)
             }
+            InteractionPaneOutcome::ActivateSelectionFreeForm { item_id, value } => {
+                self.activate_selection_free_form(&item_id, value)
+            }
             InteractionPaneOutcome::Command(command) => self.handle_slash_command(command),
             InteractionPaneOutcome::Submit(submission) => {
                 self.thread.update(ThreadPresentationEvent::UserSubmitted(
@@ -151,9 +168,14 @@ impl App {
         }
     }
 
-    fn activate_selection_item(&self, item_id: &SelectionItemId) -> Option<AppCommand> {
+    fn activate_selection_item(&mut self, item_id: &SelectionItemId) -> Option<AppCommand> {
+        if let Some(SelectionActions::Interaction(state)) = self.selection_actions.last_mut() {
+            let outcome = state.activate_item(item_id)?;
+            return self.apply_interaction_selection_outcome(outcome);
+        }
         match self.selection_actions.last()? {
             SelectionActions::ReadOnly => None,
+            SelectionActions::Interaction(_) => None,
             SelectionActions::Mcp(actions) => match actions.get(item_id)? {
                 McpSelectionAction::SetEnablement {
                     server_id,
@@ -162,6 +184,14 @@ impl App {
                     server_id: server_id.clone(),
                     enablement: *enablement,
                 }),
+            },
+            SelectionActions::Files(actions) => match actions.get(item_id)? {
+                FileSelectionAction::OpenDirectory { path } => {
+                    Some(AppCommand::OpenWorkspaceDirectory { path: path.clone() })
+                }
+                FileSelectionAction::PreviewFile { path } => {
+                    Some(AppCommand::PreviewWorkspaceFile { path: path.clone() })
+                }
             },
             SelectionActions::Model(actions) => match actions.get(item_id)? {
                 ModelSelectionAction::Select { preference } => {
@@ -184,6 +214,14 @@ impl App {
                     session_id: session_id.clone(),
                 }),
             },
+            SelectionActions::Threads(actions) => match actions.get(item_id)? {
+                ThreadSelectionAction::Archive { thread_id } => Some(AppCommand::ArchiveThread {
+                    thread_id: thread_id.clone(),
+                }),
+                ThreadSelectionAction::Switch { thread_id } => Some(AppCommand::SwitchThread {
+                    thread_id: thread_id.clone(),
+                }),
+            },
             SelectionActions::Skills(actions) => match actions.get(item_id)? {
                 SkillSelectionAction::SetEnablement {
                     skill_id,
@@ -204,6 +242,33 @@ impl App {
                 }
                 ThemeSelectionAction::OpenCustomThemes => Some(AppCommand::OpenCustomThemePane),
             },
+        }
+    }
+
+    fn activate_selection_free_form(
+        &mut self,
+        item_id: &SelectionItemId,
+        value: String,
+    ) -> Option<AppCommand> {
+        let Some(SelectionActions::Interaction(state)) = self.selection_actions.last_mut() else {
+            return None;
+        };
+        let outcome = state.activate_free_form(item_id, value)?;
+        self.apply_interaction_selection_outcome(outcome)
+    }
+
+    fn apply_interaction_selection_outcome(
+        &mut self,
+        outcome: InteractionSelectionOutcome,
+    ) -> Option<AppCommand> {
+        match outcome {
+            InteractionSelectionOutcome::Continue(model) => {
+                self.interaction_pane.replace_selection_view(model);
+                None
+            }
+            InteractionSelectionOutcome::Resolve(response) => {
+                Some(AppCommand::ResolveInteraction(response))
+            }
         }
     }
 
@@ -270,6 +335,12 @@ impl App {
         self.selection_actions.push(SelectionActions::ReadOnly);
     }
 
+    fn show_interaction_view(&mut self, view: InteractionSelectionView) {
+        self.interaction_pane.show_selection_view(view.model);
+        self.selection_actions
+            .push(SelectionActions::Interaction(view.state));
+    }
+
     fn show_skills_view(&mut self, view: SkillSelectionView) {
         self.interaction_pane.show_selection_view(view.model);
         self.selection_actions
@@ -280,6 +351,12 @@ impl App {
         self.interaction_pane.show_selection_view(view.model);
         self.selection_actions
             .push(SelectionActions::Mcp(view.actions));
+    }
+
+    fn show_file_view(&mut self, view: FileSelectionView) {
+        self.interaction_pane.show_selection_view(view.model);
+        self.selection_actions
+            .push(SelectionActions::Files(view.actions));
     }
 
     fn replace_mcp_view(&mut self, view: McpSelectionView) {
@@ -308,6 +385,12 @@ impl App {
         self.interaction_pane.show_selection_view(view.model);
         self.selection_actions
             .push(SelectionActions::Sessions(view.actions));
+    }
+
+    fn show_thread_view(&mut self, view: ThreadSelectionView) {
+        self.interaction_pane.show_selection_view(view.model);
+        self.selection_actions
+            .push(SelectionActions::Threads(view.actions));
     }
 
     fn close_selection_view(&mut self) {
@@ -368,6 +451,10 @@ impl App {
         self.thread.messages()
     }
 
+    pub(crate) fn transcript_scroll(&self) -> &TranscriptScroll {
+        &self.transcript_scroll
+    }
+
     pub(crate) fn status(&self) -> &Status {
         &self.status
     }
@@ -378,6 +465,10 @@ impl App {
 
     pub(crate) fn accepts_input(&self) -> bool {
         matches!(&self.status, Status::Ready | Status::Error)
+            || matches!(
+                self.selection_actions.last(),
+                Some(SelectionActions::Interaction(_))
+            )
     }
 
     pub(crate) fn update(&mut self, event: AppEvent) {
@@ -402,6 +493,8 @@ impl App {
             AppEvent::FileSearchSnapshotReceived(snapshot) => {
                 self.interaction_pane.apply_file_search_snapshot(snapshot);
             }
+            AppEvent::FileViewOpened(view) => self.show_file_view(view),
+            AppEvent::GitStatusReceived(status) => self.status_line.apply_git_status(&status),
             AppEvent::InterruptFailed(error) => {
                 self.thread
                     .update(ThreadPresentationEvent::FailureReported(format!(
@@ -414,11 +507,13 @@ impl App {
                     .update(ThreadPresentationEvent::NoticeReceived(notice));
                 self.status = Status::Ready;
             }
+            AppEvent::InteractionViewOpened(view) => self.show_interaction_view(view),
             AppEvent::McpViewOpened(view) => self.show_mcp_view(view),
             AppEvent::McpViewReplaced(view) => self.replace_mcp_view(view),
             AppEvent::ModelViewOpened(view) => self.show_model_view(view),
             AppEvent::RewindViewOpened(view) => self.show_rewind_view(view),
             AppEvent::SessionViewOpened(view) => self.show_session_view(view),
+            AppEvent::ThreadViewOpened(view) => self.show_thread_view(view),
             AppEvent::SelectionViewClosed => self.close_selection_view(),
             AppEvent::SelectionViewOpened(model) => self.show_selection_view(model),
             AppEvent::SkillsViewOpened(view) => self.show_skills_view(view),
@@ -428,8 +523,16 @@ impl App {
             AppEvent::ThreadSnapshotReceived(thread) => self
                 .thread
                 .update(ThreadPresentationEvent::SnapshotReceived(thread)),
+            AppEvent::TransientThreadStreamReset => {
+                self.thread
+                    .update(ThreadPresentationEvent::TransientStreamReset);
+            }
+            AppEvent::TransientThreadUpdateReceived(update) => self
+                .thread
+                .update(ThreadPresentationEvent::TransientUpdateReceived(update)),
             AppEvent::TranscriptCleared => {
                 self.thread.update(ThreadPresentationEvent::Cleared);
+                self.transcript_scroll.follow_latest();
                 self.status = Status::Ready;
             }
             AppEvent::TurnActivityChanged(activity) => {
@@ -452,6 +555,9 @@ impl App {
     }
 
     fn handle_global_key(&mut self, key: KeyEvent, now: Instant) -> Option<AppCommand> {
+        if self.selection_view().is_none() && self.transcript_scroll.handle_key(key) {
+            return None;
+        }
         if key.code == KeyCode::Esc
             && key.modifiers.is_empty()
             && key.kind == KeyEventKind::Press

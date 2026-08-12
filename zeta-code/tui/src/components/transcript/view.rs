@@ -1,6 +1,7 @@
 use super::CommandStatus;
 use super::Message;
 use super::MessageRole;
+use super::TranscriptScroll;
 use super::row::estimated_wrapped_rows;
 use crate::components::welcome;
 use crate::ui::accent;
@@ -23,6 +24,7 @@ pub(crate) fn draw(
     frame: &mut Frame<'_>,
     area: Rect,
     messages: &[Message],
+    scroll: &TranscriptScroll,
     presentation_highlight: Color,
 ) {
     let content_area = horizontal_margin(area, 2);
@@ -39,10 +41,11 @@ pub(crate) fn draw(
         .sum::<usize>();
     let lines = message_lines(messages);
     let history = Paragraph::new(lines).wrap(Wrap { trim: false });
-    let scroll = history_rows
-        .saturating_sub(history_height)
-        .min(u16::MAX as usize) as u16;
-    frame.render_widget(history.scroll((scroll, 0)), content_area);
+    let bottom_offset = history_rows.saturating_sub(history_height);
+    frame.render_widget(
+        history.scroll((scroll.paragraph_offset(bottom_offset), 0)),
+        content_area,
+    );
 }
 
 fn message_lines(messages: &[Message]) -> Vec<Line<'_>> {
@@ -74,6 +77,10 @@ fn message_lines(messages: &[Message]) -> Vec<Line<'_>> {
         let (marker, color) = match message.role {
             MessageRole::User => ("›", accent()),
             MessageRole::Agent => ("◆", success()),
+            MessageRole::Reasoning => ("◇", muted()),
+            MessageRole::Plan => ("≡", accent()),
+            MessageRole::Tool => ("⚙", warning()),
+            MessageRole::ToolError => ("×", danger()),
             MessageRole::Notice => ("•", warning()),
             MessageRole::Error => ("×", danger()),
             MessageRole::Command => unreachable!("command messages render as a grouped surface"),
@@ -85,6 +92,12 @@ fn message_lines(messages: &[Message]) -> Vec<Line<'_>> {
             ),
             Span::raw(&message.text),
         ]));
+        if let Some(detail) = &message.detail {
+            lines.push(Line::from(vec![
+                Span::styled("└─ ", Style::default().fg(muted())),
+                Span::styled(detail, Style::default().fg(muted())),
+            ]));
+        }
         lines.push(Line::default());
     }
     lines

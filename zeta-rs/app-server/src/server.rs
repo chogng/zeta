@@ -37,6 +37,8 @@ mod fs_operations;
 mod fs_watcher;
 mod git_operations;
 mod git_runtime;
+mod interaction_runtime;
+mod notification_queue;
 mod operations;
 mod search_operations;
 mod skill_operations;
@@ -47,7 +49,9 @@ mod update_broker;
 mod workspace_operations;
 mod workspace_runtime;
 
-use update_broker::{NotificationListener, NotificationQueue, UpdateBroker};
+use notification_queue::NotificationListener;
+use notification_queue::NotificationQueue;
+use update_broker::UpdateBroker;
 use workspace_runtime::{LocalWorkspaceHost, WorkspaceRuntime};
 pub(crate) use workspace_runtime::{
     WorkspaceRuntimeControl, WorkspaceSwitchTrustPolicy, WorkspaceToolPorts,
@@ -71,6 +75,7 @@ pub struct AppServer {
     _skill_watcher: Option<SkillWatcher>,
     _config_watcher: Option<config_runtime::ConfigWatcher>,
     _tool_config_watcher: Option<crate::local::ToolConfigWatcher>,
+    _interaction_deadline_watcher: interaction_runtime::InteractionDeadlineWatcher,
     updates: Arc<UpdateBroker>,
 }
 
@@ -114,6 +119,12 @@ impl ConnectionNotifications {
 impl AppServer {
     pub fn new(sessions: Arc<SessionCoordinator>, model: Arc<dyn ModelService>) -> Self {
         let updates = Arc::new(UpdateBroker::default());
+        let workspace_authority_gate = Arc::new(Mutex::new(()));
+        let interaction_deadline_watcher = interaction_runtime::InteractionDeadlineWatcher::start(
+            sessions.threads().clone(),
+            updates.clone(),
+            workspace_authority_gate.clone(),
+        );
         let turn_executor = TurnExecutor::without_tools(sessions.threads().clone(), model.clone())
             .with_thread_updates(Arc::new(AppServerThreadUpdates {
                 updates: updates.clone(),
@@ -127,7 +138,7 @@ impl AppServer {
             collaboration: Mutex::new(collaboration_runtime::DocumentCollaborationStore::default()),
             extensions: Mutex::new(ExtensionCatalog::default()),
             config: None,
-            workspace_authority_gate: Arc::new(Mutex::new(())),
+            workspace_authority_gate,
             workspace_runtime: Arc::new(RwLock::new(WorkspaceRuntime::empty(turn_executor))),
             local_workspace_host: None,
             typst: TypstCompiler::new(),
@@ -136,6 +147,7 @@ impl AppServer {
             _skill_watcher: None,
             _config_watcher: None,
             _tool_config_watcher: None,
+            _interaction_deadline_watcher: interaction_deadline_watcher,
             updates,
         }
     }

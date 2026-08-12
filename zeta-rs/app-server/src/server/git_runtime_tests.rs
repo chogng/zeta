@@ -1,5 +1,6 @@
 use super::GitRuntime;
-use crate::server::update_broker::{NotificationQueue, UpdateBroker};
+use crate::server::notification_queue::NotificationQueue;
+use crate::server::update_broker::UpdateBroker;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Arc;

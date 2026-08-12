@@ -18,6 +18,7 @@ use zeta_protocol::ThreadId;
 use zeta_protocol::TurnId;
 
 /// Mutable product Session/Thread selection used by one TUI conversation.
+#[derive(Clone)]
 pub(crate) struct ActiveConversation {
     session: Session,
     thread_id: ThreadId,
@@ -30,7 +31,6 @@ pub(crate) enum NewConversationKind {
 }
 
 pub(crate) struct ConversationChange {
-    pub(crate) snapshot: Thread,
     pub(crate) notice: String,
     pub(crate) transcript: ConversationTranscript,
 }
@@ -72,6 +72,137 @@ impl ActiveConversation {
         self.thread_sequence = sequence;
     }
 
+    pub(crate) fn switch_thread<T>(
+        &mut self,
+        client: &mut AppServerClient<T>,
+        thread_id: ThreadId,
+    ) -> Result<ConversationChange, SessionsError>
+    where
+        T: JsonRpcTransport,
+    {
+        let session = client
+            .read_session(SessionReadParams {
+                session_id: self.session.session_id.clone(),
+            })?
+            .session;
+        if !session
+            .threads
+            .iter()
+            .any(|thread| thread.thread_id == thread_id)
+        {
+            return Err(SessionsError(format!(
+                "thread {thread_id} does not belong to session {}",
+                session.session_id
+            )));
+        }
+        let snapshot = client
+            .read_session_thread(SessionThreadReadParams {
+                session_id: session.session_id.clone(),
+                thread_id: thread_id.clone(),
+            })?
+            .thread;
+        self.session = session;
+        self.thread_id = thread_id;
+        self.thread_sequence = snapshot.sequence;
+        Ok(ConversationChange {
+            notice: format!("Opened thread {}.", self.thread_id),
+            transcript: ConversationTranscript::Replace,
+        })
+    }
+
+    pub(crate) fn archive_thread<T>(
+        &mut self,
+        client: &mut AppServerClient<T>,
+        thread_id: ThreadId,
+    ) -> Result<ConversationChange, SessionsError>
+    where
+        T: JsonRpcTransport,
+    {
+        self.session = client
+            .read_session(SessionReadParams {
+                session_id: self.session.session_id.clone(),
+            })?
+            .session;
+        let archived_current = thread_id == self.thread_id;
+        let result = client.request_session(SessionRequestParams {
+            command_id: new_command_id("archive-thread"),
+            session_id: self.session.session_id.clone(),
+            expected_sequence: self.session.sequence,
+            request: SessionRequest::ArchiveThread {
+                thread_id: thread_id.clone(),
+            },
+        })?;
+        self.session = expect_session_result(result)?.session;
+        if archived_current {
+            if let Some(next_thread_id) = self
+                .session
+                .threads
+                .iter()
+                .rev()
+                .find(|thread| thread.status == SessionThreadStatus::Active)
+                .map(|thread| thread.thread_id.clone())
+            {
+                self.thread_id = next_thread_id;
+            } else {
+                let created = client
+                    .request_session(SessionRequestParams {
+                        command_id: new_command_id("replacement-thread"),
+                        session_id: self.session.session_id.clone(),
+                        expected_sequence: self.session.sequence,
+                        request: SessionRequest::CreateThread {
+                            title: "TUI conversation".into(),
+                        },
+                    })
+                    .and_then(expect_thread_result)?;
+                self.session = created.session;
+                self.thread_id = created.thread_id;
+            }
+        }
+        let snapshot = client
+            .read_session_thread(SessionThreadReadParams {
+                session_id: self.session.session_id.clone(),
+                thread_id: self.thread_id.clone(),
+            })?
+            .thread;
+        self.thread_sequence = snapshot.sequence;
+        Ok(ConversationChange {
+            notice: format!("Archived thread {thread_id}."),
+            transcript: ConversationTranscript::Replace,
+        })
+    }
+
+    pub(crate) fn archive_session_and_replace<T>(
+        &mut self,
+        client: &mut AppServerClient<T>,
+    ) -> Result<ConversationChange, SessionsError>
+    where
+        T: JsonRpcTransport,
+    {
+        self.session = client
+            .read_session(SessionReadParams {
+                session_id: self.session.session_id.clone(),
+            })?
+            .session;
+        let archived_id = self.session.session_id.clone();
+        client
+            .request_session(SessionRequestParams {
+                command_id: new_command_id("archive-session"),
+                session_id: archived_id.clone(),
+                expected_sequence: self.session.sequence,
+                request: SessionRequest::Archive,
+            })
+            .and_then(expect_session_result)?;
+        let (conversation, _) = create_conversation(client, "TUI conversation".into())?;
+        *self = conversation;
+        Ok(ConversationChange {
+            notice: format!(
+                "Archived session {archived_id}; started session {}.",
+                self.session.session_id
+            ),
+            transcript: ConversationTranscript::Clear,
+        })
+    }
+
     pub(crate) fn replace_with_new<T>(
         &mut self,
         client: &mut AppServerClient<T>,
@@ -90,10 +221,9 @@ impl ActiveConversation {
         } else {
             arguments.to_owned()
         };
-        let (conversation, snapshot) = create_conversation(client, title)?;
+        let (conversation, _) = create_conversation(client, title)?;
         *self = conversation;
         Ok(ConversationChange {
-            snapshot,
             notice: format!(
                 "Started session {} on thread {}.",
                 self.session.session_id, self.thread_id
@@ -136,7 +266,6 @@ impl ActiveConversation {
         self.thread_id = result.thread_id;
         self.thread_sequence = snapshot.sequence;
         Ok(ConversationChange {
-            snapshot,
             notice: format!("Forked to thread {}.", self.thread_id),
             transcript: ConversationTranscript::Replace,
         })
@@ -174,7 +303,6 @@ impl ActiveConversation {
         self.thread_id = result.thread_id;
         self.thread_sequence = snapshot.sequence;
         Ok(ConversationChange {
-            snapshot,
             notice: format!("Rewound before: {checkpoint_label}"),
             transcript: ConversationTranscript::Replace,
         })
@@ -235,7 +363,6 @@ impl ActiveConversation {
         self.thread_id = thread_id;
         self.thread_sequence = snapshot.sequence;
         Ok(ResumeOutcome::Changed(ConversationChange {
-            snapshot,
             notice: format!(
                 "Resumed session {} on thread {}.",
                 self.session.session_id, self.thread_id
@@ -285,6 +412,17 @@ fn expect_thread_result(result: SessionRequestResult) -> Result<SessionThreadRes
         SessionRequestResult::Thread(result) => Ok(result),
         other => Err(ClientError::Protocol(format!(
             "session request returned {other:?} for a Thread operation"
+        ))),
+    }
+}
+
+fn expect_session_result(
+    result: SessionRequestResult,
+) -> Result<zeta_app_server_protocol::protocol::session::SessionResult, ClientError> {
+    match result {
+        SessionRequestResult::Session(result) => Ok(result),
+        other => Err(ClientError::Protocol(format!(
+            "session request returned {other:?} for a Session operation"
         ))),
     }
 }

@@ -14,6 +14,27 @@ use zeta_app_server_client::AppServerSession;
 use zeta_app_server_client::ClientError;
 use zeta_app_server_client::ShutdownError;
 use zeta_app_server_client::TakeEventsError;
+use zeta_app_server_protocol::protocol::common::AgentInteractionCapability;
+use zeta_app_server_protocol::protocol::common::ClientCapabilities;
+use zeta_protocol::AgentInteractionKind;
+
+/// Declares the connection-local App Server capabilities required by the TUI.
+///
+/// The CLI host passes this value during `initialize` so App Server can select this connection as
+/// the ephemeral owner for approval and structured user-input requests on subscribed Threads.
+pub fn client_capabilities() -> ClientCapabilities {
+    ClientCapabilities {
+        notifications: Some(true),
+        agent_interactions: Some(AgentInteractionCapability {
+            version: 1,
+            kinds: vec![
+                AgentInteractionKind::Approval,
+                AgentInteractionKind::UserInput,
+            ],
+        }),
+        browser: None,
+    }
+}
 
 /// Startup values owned by the CLI host rather than by the terminal UI.
 #[derive(Clone, Debug, Eq, PartialEq)]

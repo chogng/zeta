@@ -22,6 +22,8 @@ use zeta_policy::{
     CapabilityKind, CapabilitySet, ExecutionDecision, PolicyRevision, ProcessInvocationKind,
     ResolvedAction, SandboxCompatibility,
 };
+use zeta_protocol::InteractionDeadline;
+use zeta_protocol::StableTurnErrorCode;
 use zeta_protocol::{
     ActionApprovalCapability, ActionApprovalCapabilityKind, ActionApprovalRequest, AgentRequest,
     CommandId, ContentPart, InputItem, ModelId, ModelRef, ModelRequest, ModelResponse, ProviderId,
@@ -93,6 +95,14 @@ fn call(
 }
 
 fn initialize(server: &AppServer, connection: &mut ConnectionState) {
+    initialize_with_capabilities(server, connection, serde_json::json!({}));
+}
+
+fn initialize_with_capabilities(
+    server: &AppServer,
+    connection: &mut ConnectionState,
+    capabilities: serde_json::Value,
+) {
     let response = call(
         server,
         connection,
@@ -100,7 +110,7 @@ fn initialize(server: &AppServer, connection: &mut ConnectionState) {
             "jsonrpc":"2.0",
             "id":1,
             "method":"initialize",
-            "params":{"clientInfo":{"name":"test","version":"1"},"capabilities":{}}
+            "params":{"clientInfo":{"name":"test","version":"1"},"capabilities":capabilities}
         }),
     );
     assert_eq!(response["result"]["capabilities"]["sessions"], true);
@@ -162,7 +172,11 @@ fn document_collaboration_orders_updates_and_returns_rebase_history() {
     assert_eq!(presence["result"]["generation"], 1);
     assert_eq!(presence["result"]["presences"][0]["clientId"], "client-a");
     let notifications = server.drain_notifications(&mut second);
-    assert!(notifications.iter().any(|notification| notification.contains("document/collaboration/presence")));
+    assert!(
+        notifications
+            .iter()
+            .any(|notification| notification.contains("document/collaboration/presence"))
+    );
     let read_presence = call(
         &server,
         &mut second,
@@ -173,7 +187,10 @@ fn document_collaboration_orders_updates_and_returns_rebase_history() {
             "params":{"roomId":room_id}
         }),
     );
-    assert_eq!(read_presence["result"]["presences"][0]["clientId"], "client-a");
+    assert_eq!(
+        read_presence["result"]["presences"][0]["clientId"],
+        "client-a"
+    );
     let accepted = call(
         &server,
         &mut first,
@@ -1603,7 +1620,13 @@ fn config_updates_use_typed_command_ids() {
 fn interaction_resolution_uses_the_durable_request_identity() {
     let server = server();
     let mut connection = server.connection();
-    initialize(&server, &mut connection);
+    initialize_with_capabilities(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "agentInteractions":{"version":1,"kinds":["userInput"]}
+        }),
+    );
     let session = create_session(&server, &mut connection, 2, "session");
     let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
     let thread = create_thread(&server, &mut connection, 3, "thread", session_id, 1);
@@ -1644,12 +1667,30 @@ fn interaction_resolution_uses_the_durable_request_identity() {
         )
         .unwrap();
 
-    let resolved = call(
+    let subscribed = call(
         &server,
         &mut connection,
         serde_json::json!({
             "jsonrpc":"2.0",
             "id":4,
+            "method":"session/thread/subscribe",
+            "params":{"sessionId":session_id,"threadId":thread_id,"afterSequence":0}
+        }),
+    );
+    assert!(subscribed["result"]["thread"].is_object());
+    let notifications = server.drain_notifications(&mut connection);
+    assert!(
+        notifications
+            .iter()
+            .any(|notification| notification.contains("\"method\":\"agent/request\""))
+    );
+
+    let resolved = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":5,
             "method":"session/request",
             "params":{
                 "commandId":"resolve-input-1",
@@ -1667,10 +1708,102 @@ fn interaction_resolution_uses_the_durable_request_identity() {
 }
 
 #[test]
+fn expired_interaction_is_cancelled_and_fails_the_turn() {
+    let server = server();
+    let mut connection = server.connection();
+    initialize_with_capabilities(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "agentInteractions":{"version":1,"kinds":["userInput"]}
+        }),
+    );
+    let session = create_session(&server, &mut connection, 2, "session");
+    let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
+    let thread = create_thread(&server, &mut connection, 3, "thread", session_id, 1);
+    let thread_id = thread["result"]["value"]["threadId"].as_str().unwrap();
+    let thread_id = zeta_protocol::ThreadId::new(thread_id).unwrap();
+    let session_id = zeta_protocol::SessionId::new(session_id).unwrap();
+    let started = server
+        .sessions()
+        .threads()
+        .start_turn(
+            &thread_id,
+            StartTurnRequest {
+                command_id: CommandId::new("deadline-turn").unwrap(),
+                expected_sequence: zeta_core::SequenceExpectation::Exact(1),
+                model: None,
+                input: vec![UserInput::Text {
+                    text: "wait".into(),
+                }],
+            },
+        )
+        .unwrap();
+    let expires_at_unix_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64
+        + 100;
+    server
+        .sessions()
+        .threads()
+        .request_turn_interaction(
+            &thread_id,
+            &started.turn_id,
+            RequestTurnInteraction {
+                request_id: RequestId::new("deadline-input").unwrap(),
+                item_id: None,
+                request: AgentRequest::UserInput {
+                    request: RequestUserInput {
+                        questions: Vec::new(),
+                    },
+                },
+                deadline: Some(InteractionDeadline { expires_at_unix_ms }),
+            },
+        )
+        .unwrap();
+    let subscribed = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":4,
+            "method":"session/thread/subscribe",
+            "params":{"sessionId":session_id,"threadId":thread_id,"afterSequence":0}
+        }),
+    );
+    assert!(subscribed["result"]["thread"].is_object());
+
+    let deadline = Instant::now() + Duration::from_secs(2);
+    loop {
+        let snapshot = server.sessions().threads().read_thread(&thread_id).unwrap();
+        if snapshot.turns[0].status == TurnStatus::Failed {
+            assert!(snapshot.turns[0].pending_interaction.is_none());
+            assert_eq!(
+                snapshot.turns[0].failure.as_ref().unwrap().code,
+                StableTurnErrorCode::InteractionDeadlineElapsed
+            );
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "interaction deadline watcher did not close the Turn"
+        );
+        thread::sleep(Duration::from_millis(10));
+    }
+}
+
+#[test]
 fn approval_interaction_resolves_through_the_typed_app_server_contract() {
     let server = server();
     let mut connection = server.connection();
-    initialize(&server, &mut connection);
+    initialize_with_capabilities(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "agentInteractions":{"version":1,"kinds":["approval"]}
+        }),
+    );
     let session = create_session(&server, &mut connection, 2, "session");
     let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
     let thread = create_thread(&server, &mut connection, 3, "thread", session_id, 1);
@@ -1718,12 +1851,30 @@ fn approval_interaction_resolves_through_the_typed_app_server_contract() {
         )
         .unwrap();
 
-    let resolved = call(
+    let subscribed = call(
         &server,
         &mut connection,
         serde_json::json!({
             "jsonrpc":"2.0",
             "id":4,
+            "method":"session/thread/subscribe",
+            "params":{"sessionId":session_id,"threadId":thread_id,"afterSequence":0}
+        }),
+    );
+    assert!(subscribed["result"]["thread"].is_object());
+    let notifications = server.drain_notifications(&mut connection);
+    assert!(
+        notifications
+            .iter()
+            .any(|notification| notification.contains("\"method\":\"agent/request\""))
+    );
+
+    let resolved = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":5,
             "method":"session/request",
             "params":{
                 "commandId":"resolve-approval-1",
@@ -1752,6 +1903,121 @@ fn approval_interaction_resolves_through_the_typed_app_server_contract() {
             }
         }
     ));
+}
+
+#[test]
+fn interaction_response_is_rejected_from_a_capable_non_owner_connection() {
+    let server = server();
+    let mut owner = server.connection();
+    let mut other = server.connection();
+    let capabilities = serde_json::json!({
+        "agentInteractions":{"version":1,"kinds":["approval"]}
+    });
+    initialize_with_capabilities(&server, &mut owner, capabilities.clone());
+    initialize_with_capabilities(&server, &mut other, capabilities);
+    let session = create_session(&server, &mut owner, 2, "session");
+    let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
+    let thread = create_thread(&server, &mut owner, 3, "thread", session_id, 1);
+    let thread_id = thread["result"]["value"]["threadId"].as_str().unwrap();
+    let thread_id = zeta_protocol::ThreadId::new(thread_id).unwrap();
+    let session_id = zeta_protocol::SessionId::new(session_id).unwrap();
+    let started = server
+        .sessions()
+        .threads()
+        .start_turn(
+            &thread_id,
+            StartTurnRequest {
+                command_id: CommandId::new("approval-turn-owner-check").unwrap(),
+                expected_sequence: zeta_core::SequenceExpectation::Exact(1),
+                model: None,
+                input: vec![UserInput::Text {
+                    text: "approve".into(),
+                }],
+            },
+        )
+        .unwrap();
+    server
+        .sessions()
+        .threads()
+        .request_turn_interaction(
+            &thread_id,
+            &started.turn_id,
+            RequestTurnInteraction {
+                request_id: RequestId::new("approval-owner-check").unwrap(),
+                item_id: None,
+                request: AgentRequest::Approval {
+                    request: ActionApprovalRequest {
+                        action_digest: "b".repeat(64),
+                        policy_revision: "policy-1".into(),
+                        capabilities: vec![ActionApprovalCapability {
+                            kind: ActionApprovalCapabilityKind::Network,
+                            scope: "api.example.com".into(),
+                        }],
+                        reason: "network requires approval".into(),
+                        sandbox_denial: None,
+                    },
+                },
+                deadline: None,
+            },
+        )
+        .unwrap();
+
+    for connection in [&mut owner, &mut other] {
+        let subscribed = call(
+            &server,
+            connection,
+            serde_json::json!({
+                "jsonrpc":"2.0",
+                "id":4,
+                "method":"session/thread/subscribe",
+                "params":{"sessionId":session_id,"threadId":thread_id,"afterSequence":0}
+            }),
+        );
+        assert!(subscribed["result"]["thread"].is_object());
+    }
+    assert!(
+        server
+            .drain_notifications(&mut owner)
+            .iter()
+            .any(|notification| notification.contains("\"method\":\"agent/request\""))
+    );
+    assert!(
+        !server
+            .drain_notifications(&mut other)
+            .iter()
+            .any(|notification| notification.contains("\"method\":\"agent/request\""))
+    );
+
+    let rejected = call(
+        &server,
+        &mut other,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":5,
+            "method":"session/request",
+            "params":{
+                "commandId":"resolve-approval-from-other",
+                "sessionId":session_id,
+                "expectedSequence":5,
+                "request":{"type":"resolveInteraction","threadId":thread_id,"turnId":started.turn_id,"requestId":"approval-owner-check","response":{
+                    "type":"approval",
+                    "response":{"decision":"approveOnce"}
+                }}
+            }
+        }),
+    );
+
+    assert_eq!(rejected["error"]["message"], "AgentInteractionNotOwner");
+    assert!(
+        server
+            .sessions()
+            .threads()
+            .read_thread(&thread_id)
+            .unwrap()
+            .turns[0]
+            .pending_interaction
+            .is_some()
+    );
 }
 
 #[test]
@@ -1883,7 +2149,10 @@ fn filesystem_rpc_lists_and_describes_workspace_paths() {
     assert_eq!(created["result"]["metadata"]["sizeBytes"], 3);
     assert_eq!(stale["error"]["code"], -32042);
     assert_eq!(stale["error"]["message"], "FileSystemRevisionConflict");
-    assert_eq!(binary["result"]["resource"]["mimeType"], "application/octet-stream");
+    assert_eq!(
+        binary["result"]["resource"]["mimeType"],
+        "application/octet-stream"
+    );
     assert_eq!(binary["result"]["resource"]["size"], 9);
     assert!(binary["result"]["revision"].is_string());
     assert_eq!(binary_data["result"]["dataBase64"], "JVBERi0xLjcK");

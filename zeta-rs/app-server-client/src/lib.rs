@@ -24,6 +24,7 @@ use zeta_app_server_protocol::protocol::fs::{
     FsReadDirectoryParams, FsReadDirectoryResult, FsReadFileParams, FsReadFileResult,
     FsWriteFileParams, FsWriteFileResult,
 };
+use zeta_app_server_protocol::protocol::git::GitStatusResult;
 use zeta_app_server_protocol::protocol::git::{
     GitBranchListResult, GitBranchSwitchParams, GitOperationResult, GitTextDiffResult,
 };
@@ -173,6 +174,10 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
 
     pub fn git_text_diff(&mut self) -> Result<GitTextDiffResult, ClientError> {
         self.call(ClientMethod::GitTextDiff, EmptyParams {})
+    }
+
+    pub fn git_status(&mut self) -> Result<GitStatusResult, ClientError> {
+        self.call(ClientMethod::GitStatus, EmptyParams {})
     }
 
     pub fn compute_diff(

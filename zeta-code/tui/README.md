@@ -8,9 +8,9 @@
 > 三条产品线与宿主边界见 [`docs/product-lines.md`](../../docs/product-lines.md)。
 
 `zeta-tui` 是 `zeta code` 产品线的 TUI 实现。它当前是 `AppServerSession` 上的 presentation
-shell：从 owned session 取得 cloneable typed request handle 与独立 `AppServerEvents`，创建一个 Session/Thread，接受文本、
-本地图片路径与系统剪贴板图片输入，订阅 active Thread、启动或中断 Turn，并用 canonical
-Thread snapshot 驱动 Ratatui 呈现。
+shell：从 owned session 取得 cloneable typed request handle 与独立 `AppServerEvents`，创建或切换
+Session/Thread，接受文本、本地图片路径与系统剪贴板图片输入，订阅 active Thread、启动或中断
+Turn，并用 canonical Thread snapshot 加有界 transient projection 驱动 Ratatui 呈现。
 
 它不拥有 Agent runtime、Session/Thread reducer、App Server connection composition、model、
 Tool、approval policy 或 persistence。
@@ -30,10 +30,11 @@ Tool、approval policy 或 persistence。
   原子文本插入；
 - `/` 打开 command popup，支持 cursor-aware prefix filtering、循环选择、保留已有参数尾部的
   Tab completion、Esc dismiss 与左键单击可见命令；
-- `/resume`、`/rewind`、`/clear`、`/fork`、`/model`、`/theme` 与 `/new` 可解析 inline arguments，并在执行前展开
+- `/resume`、`/thread`、`/archive-thread`、`/rewind`、`/clear`、`/files`、`/fork`、`/model`、`/theme` 与 `/new` 可解析 inline arguments，并在执行前展开
   large-paste placeholder；product command 明确拒绝 image arguments；
-- command popup 只注册已有真实执行流的 built-ins：`/status`、`/skills`、`/mcp`、`/resume`、`/rewind`、
-  `/clear`、`/config`、`/fork`、`/help`、`/model`、`/theme`、`/new`、`/quit` 与 `/exit`；
+- command popup 只注册已有真实执行流的 built-ins：`/status`、`/skills`、`/mcp`、`/resume`、
+  `/thread`、`/archive-thread`、`/archive-session`、`/rewind`、`/clear`、`/config`、`/files`、
+  `/fork`、`/help`、`/model`、`/theme`、`/new`、`/quit` 与 `/exit`；
 - `/help` 使用保留 composer 的 interaction view stack 打开 Commands/Keys 双 Tab selection
   surface；Space 进入搜索模式，左右键或 Tab/BackTab 循环切页、上下键循环选择，以及 Esc/Ctrl-C
   返回 composer；
@@ -44,8 +45,13 @@ Tool、approval policy 或 persistence。
 - `/rewind` 或主界面 500 ms 内连续按两次 Esc 打开可搜索的历史消息 checkpoint Pane；Enter
   通过 typed `session/request` 的 `RewindThread` operation，创建具有 Rewind lineage 的子 Thread，只导入所选消息之前的
   terminal Turns。原 Thread 保持不变，TUI 切换订阅并以 `/rewind <turn-id>` 记录结果；
-- Session/Thread 命令调用 typed `session/request`、`session/thread/read`、list API 并切换当前 Thread context；配置命令调用
-  `config/read`，`/model` 使用 expected revision 更新 preferred model；
+- `/resume` 提供 Session picker；`/thread` 在 active/archived tabs 中切换当前 Thread；
+  `/archive-thread` 归档目标并在必要时选择或创建 replacement Thread；`/archive-session` 归档当前
+  Session 并建立 replacement Session。所有 mutation 都通过 typed `session/request`，随后在后台
+  切换 subscription；
+- `/files` 只通过 App Server `fs/readDirectory`/`fs/readFile` 浏览 workspace，目录优先、支持父目录
+  和 UTF-8 preview；preview 限 64 KiB/200 行，不直接访问宿主 filesystem；
+- 配置命令调用 `config/read`，`/model` 使用 expected revision 更新 preferred model；
 - 启动时读取 client 保存的 `initialize.slashCommands` snapshot，通过
   [`zeta-slash-commands`](../../zeta-rs/slash-commands/README.md) 与 built-ins 做防冲突合并；
   server-advertised command 保留 `/name`、inline text/image/large-paste 参数并作为普通 Turn
@@ -54,12 +60,20 @@ Tool、approval policy 或 persistence。
 - 启动及 `/new`、`/fork`、`/resume`、`/rewind` 后维护 active Thread subscription；typed update 按
   Session/Thread scope 和 durable sequence 过滤，并通过 `session/thread/read` 触发权威 snapshot
   resync，不在 TUI 内复制 Thread reducer；
-- `AppServerEvents` 与 terminal input 由独立 event source 主动唤醒单写者 loop；active Turn
-  不再使用 25 ms `session/thread/read` polling fallback；
-- 以无外框 transcript 显示 latest completed Agent message、友好 failure、interruption 与
-  waiting/cancelling state；
-- 顶部显示低干扰的运行状态；composer 上方右对齐显示 preferred model 与 workspace，并按宽度
-  依次使用短值或省略号；composer 只使用上下两条浅灰分隔线，footer 只包含下一步操作；
+- `AppServerEvents` 与 terminal input 由独立、有界 event source 主动唤醒单写者 loop；typed request
+  由 `RequestTask` 在后台执行，完成结果回到 event loop，排队的用户 intent 不会静默丢失；active
+  Turn 不再使用 25 ms `session/thread/read` polling fallback；
+- transcript 投影完整显示 user text/image、所有 agent message、reasoning、plan、ToolCall 与
+  ToolResult；`ItemDelta`、`PlanUpdated` 与 `ToolOutputDelta` 按 stream instance/cursor 增量更新，
+  gap 会清除不可信 transient row 并读取权威 snapshot；单个 transient row 限 256 KiB、最多保留
+  1024 个 transient identity；
+- owner-directed `agent/request` 支持 approval（approve once/decline）和多问题 user input；只有
+  App Server 选中的、声明对应 capability 且订阅该 Thread 的 connection 能 resolve。交互不可用
+  Esc 关闭，但可 Ctrl-C interrupt；deadline 由 App Server 执行并投影为稳定 Turn failure；
+- composer 保存最近 100 条纯文本提交，Up/Down 可召回并恢复原 draft；transcript 支持
+  PageUp/PageDown 与 Ctrl-Home/Ctrl-End；
+- 顶部显示低干扰的运行状态；composer 上方右对齐显示 preferred model、workspace 与 typed Git
+  branch/dirty state，并按宽度降级；composer 只使用上下两条浅灰分隔线，footer 只包含下一步操作；
 - Ctrl-C 或 Ctrl-D（空输入）在 idle 时退出，active 时请求 interrupt；单次 Esc 在根界面保持
   inert，连续两次 Esc 打开 Rewind Pane；
 - Unix `SIGINT`/`SIGTERM` 进入同一个 event loop 退出路径，确保 watcher 重启和 host termination
@@ -72,23 +86,20 @@ Tool、approval policy 或 persistence。
   不启用搜索，Enter 原子保存、立即重绘并关闭整个 Theme flow 返回主界面，失败时保留 Pane；成功时以状态圆点、`/theme <id>` 和以 `└─` 归属且与命令文字对齐的 `Theme set to …` transcript 记录执行结果，`/theme <id>` 保留直接切换；
   Auto 在 terminal raw mode 建立后查询一次 OSC 11 实际背景 RGB，据此选择 Light/Dark；查询超时
   后依次回退 `COLORFGBG` 和 Dark。结果在会话内缓存，后续打开 Theme Pane 不重复查询；
-- basic Unicode-aware wrapped-row estimation 和自动滚动到底部。
+- basic Unicode-aware wrapped-row estimation、显式 transcript scroll 和默认 follow-latest。
 
-当前没有 Session browser、Thread navigation、Markdown、stream delta render、Tool transcript、
-approval/user-input response UI、resize-specific state 或 remote connection selector。Mouse
-support 当前覆盖 slash 与 file mention popup 左键命中，不包含 hover、滚轮或其他 surface；
-缺少 typed backend contract 的 login、plugins、hooks、compact、service tier 等
-命令不会进入 registry。Vim mode/motion/operator 目前只有明确的组件所有权，尚未实现。file
-mention 只插入 workspace-relative 文本路径，不是 `app://`/`plugin://`
-结构化 Mention，也不会读取文件内容。系统剪贴板图片依赖本机 clipboard backend；远程 SSH/
-tmux 会话尚无 terminal-mediated image clipboard fallback。
-status line 当前没有 Git、usage 或用户自定义 item/order；Git 后续应通过 `zeta-git` 的公开
-异步接口进入更新路径，usage 必须等待 App Server typed snapshot 提供，不能从 transcript
-推导。完整边界见 [`docs/tui.md` 的 status line 规划](../../docs/tui.md#111-status_line接口结果的展示模型)。
-App Server notification 已独立唤醒 loop，但 typed request method 当前仍在单写者线程同步等待
-配对 response；异常缓慢的 control-plane request 仍可能短暂阻塞输入，后续需要 typed
-completion event，不能用恢复 notification polling 规避。
-系统文档中的这些内容是演进方向，不是已实现功能。
+当前主要限制集中在 presentation depth 和尚无 canonical contract 的产品面：transcript 仍是
+plain-text wrapping，没有 Markdown/diff/table layout、文本选择/copy 或折叠；Mouse support 只覆盖
+slash/file-mention popup 左键命中，不包含 hover、滚轮或其他 surface；Vim
+mode/motion/operator 尚未实现。file mention 仍只是 workspace-relative 文本路径，不是结构化
+`app://`/`plugin://` Mention。系统剪贴板图片依赖本机 backend，远程 SSH/tmux 尚无
+terminal-mediated fallback；data URL 仍会放大 durable history，等待 resource/blob contract。
+
+TUI 不提供 remote connection selector、自动重连、usage 或 status-line item/order 配置；usage 必须
+等待 typed snapshot，不能从 transcript 推导。缺少 typed backend contract 的 login、compact、
+service tier 等命令不会进入 registry。Config 页面能读取 provider、MCP、Skill source、Plugin
+request、Hook 与 language-server 状态，但只有当前已有 typed mutation 的 model/MCP/Skill 项可在
+TUI 修改；它不会复制 Desktop-only 的外部 Agent 导入或凭据配置流程。
 
 从 repository root 启动当前 embedded TUI：
 
@@ -171,19 +182,22 @@ src/
 | `AppEvent` | crate-private | config、clipboard、file search、Thread/Turn 与 product command 的已完成事实 | 只能由 `App::update` 改变 presentation state |
 | `TurnActivity` | crate-private | canonical Turn status 到 Working/waiting/Cancelling presentation state 的窄映射 | 不复制完整 Turn reducer |
 | `ThreadFeatureState` | crate-private | active canonical `Thread` snapshot、transcript projection 与本地 optimistic/diagnostic overlay | 下一份 snapshot 替换 projection；不执行 RPC、不复制 product reducer |
-| `ThreadPresentationEvent` | crate-private | snapshot/user/notice/failure/interrupted/clear 的 feature-local事实 | 只改变 active Thread presentation owner |
+| `ThreadPresentationEvent` | crate-private | snapshot/transient/reset/user/notice/failure/interrupted/clear 的 feature-local 事实 | 只改变 active Thread presentation owner |
 | `components::transcript::{Message,MessageRole,draw}` | crate-private | 定义 transcript-facing 展示值，并渲染 role chrome、empty state、wrapping 与 bottom scroll | 不依赖 feature/`App`、不保存 Thread/sequence、不处理输入 |
 | `ui::layout` | private module | 跨 surface 复用的纯 geometry | 不读取 App/feature、不调用 terminal 或 RPC |
 | `ui::theme` | private module | 将 `zeta-theme::ThemeSnapshot` 的明确子集投影到终端能力 | 不复制完整 Desktop token catalog、不拥有用户文件加载、不定义产品状态 |
 | `Status` | crate-private | Ready/Working/waiting/Cancelling/Error display state | 只能由 canonical snapshot/result驱动 |
-| `StatusLineModel` | crate-private | 直接把 config/workspace 接口结果变成长短展示值并执行宽度降级 | 不查询接口、不保存领域 authority、不渲染 |
+| `StatusLineModel` | crate-private | 把 config/workspace/Git typed result 变成长短展示值并执行宽度降级 | 不查询接口、不保存领域 authority、不渲染 |
 | `App::update` | crate-private | 将一个 `AppEvent` 应用到唯一 presentation state owner | 不执行 I/O、不访问 runtime resource |
 | `App::handle_key` | crate-private | 先委托局部输入，再处理未消费的全局键 | 不直接调用 client |
 | `App::activate_slash_command` | crate-private | 将鼠标命中的 command index 委托给 composer 并复用 command dispatch | 不计算 terminal geometry |
 | `App::quit_or_interrupt` | private | active state interrupt；idle/error quit | Cancelling 不重复发送 interrupt |
-| `client::EventPump` | crate-private | 独立等待 terminal input、Unix termination signal 与 `AppServerEvents`，把三者汇入单写者 loop | 不应用 UI state、不执行领域 request |
-| `client::map_event` / `ClientEvent` | crate-private | 把共享 connection event 映射为 skills changed、Thread update 与 connection failure | 不保存 transport、不应用 projection |
-| `ThreadSubscription` | crate-private | 维护 active Session/Thread scope 与最后确认的 snapshot sequence；新 update 只请求 snapshot resync | 不应用 `ThreadEvent` reducer、不保存 transient projection |
+| `client::EventPump` | crate-private | 独立等待 terminal input、Unix termination signal 与 `AppServerEvents`，通过 1024 项有界队列汇入单写者 loop | Tick 可合并；control/input 不静默丢失；不应用 UI state |
+| `client::RequestTask<T>` | crate-private | 在独立 worker 执行一个 typed request 并以单槽 completion 非阻塞回投 | 不修改 `App`、不解释领域结果 |
+| `app::request_completion` | private module | 校验 request scope、安装 subscription/snapshot 并把 typed completion 映射为 `AppEvent` | 不执行 renderer、不复制 reducer |
+| `client::map_event` / `ClientEvent` | crate-private | 把共享 connection event 映射为 agent request、skills/Git changed、Thread update 与 connection failure | 不保存 transport、不应用 projection |
+| `ThreadSubscription` | crate-private | 分开维护 durable sequence 与 stream-instance cursor，分类 duplicate/gap/runtime switch 并请求 snapshot resync | 不应用 `ThreadEvent` reducer、不保存 transient projection |
+| `features::interactions` | crate-private | full agent request → approval/user-input view state → exact typed response | 不决定 policy、不选择 owner、不支持未声明的 dynamic Tool |
 | `InteractionPane` | crate-private | 保留 composer、拥有 temporary view stack，并把 key/paste 路由到 active view 或 composer | 不保存 Plugin/Session 等产品 feature 状态 |
 | `components::selection::SelectionViewState` | crate-private | 可配置 tabs/search/titled preview、Space search mode、过滤索引、候选 presentation highlight、选择与循环导航 | 不执行 action、不依赖产品 ID 或 App Server |
 | `components::selection::draw` | crate-private | generic title/tabs/search/items、可配置间距的水平分隔 preview、caption/footer Ratatui surface | 只读 selection state、不解释产品 action |
@@ -196,12 +210,12 @@ src/
 | `zeta_slash_commands::SlashCommandsState` | shared public type | 拥有 cursor query、matches、selection、dismissal 与 completion | TUI 不保存第二份 Slash query/selection authority；可见范围与滚动仍由 Ratatui renderer 负责 |
 | `zeta_slash_commands::{SlashCommandInput,SlashCommandCatalog}` | shared public types | 统一输入 grammar，并合并 built-in 与 server metadata | TUI 不重新校验名称、不执行 App Server operation |
 | `SlashCommandInvocation` | crate-private | command identity、trimmed display arguments 与有序 text/image argument items | 不执行 RPC |
-| `features::sessions::ActiveConversation` | crate-private | 当前 Session/Thread identity、sequence 与 typed create/fork/resume/rewind lifecycle | 不解析 composer text、不更新 `App`、不拥有 App Server |
+| `features::sessions::ActiveConversation` | crate-private | 当前 Session/Thread identity、sequence 与 typed create/fork/resume/rewind/archive lifecycle | 不解析 composer text、不更新 `App`、不拥有 App Server |
 | `TextArea` | private | UTF-8 buffer、byte-safe cursor、原子元素 insert/delete/movement；Vim 的扩展 owner | 不保存 paste payload，不解释 Enter submission 或 slash command |
 | `features::thread::submit_prompt` | private | 从显式 `ThreadRequestScope` build typed `session/request` `StartTurn` operation 并返回 typed result | 不引用或更新 `App`、不手写 method string/JSON |
-| `app::event_loop::refresh_turn` | private | `session/thread/read`、校验 scope、更新 local sequence 并协调 active Turn mapping | 不 drain notification；snapshot 是 authoritative UI source |
+| `app::request_completion::apply_thread_snapshot` | private | 安装 canonical snapshot、恢复最新 nonterminal Turn 并协调 presentation mapping | 不 drain notification；snapshot 是 authoritative UI source |
 | `features::thread::interrupt_turn` | private | 从显式 scope 执行 typed Turn interrupt 并返回结果 | 不引用或更新 `App` |
-| `app::apply_active_turn_snapshot` | crate-private | canonical Turn presentation outcome → `AppEvent` | 不从 log/text 猜 terminal state |
+| `app::apply_active_turn_snapshot` | test-visible | canonical Turn presentation outcome → `AppEvent` | 不从 log/text 猜 terminal state |
 | `present_turn_error` | private | stable Turn error code → user-facing recovery message | 不显示 Rust Debug/provider secret |
 | `client::new_command_id` | private | process ID + wall-clock nanos 分配 `CommandId` | 一次逻辑 command 一个新 ID |
 | `app::frame::draw` | crate-private | frame 分区并协调 feature/component renderer | 不改变 App state |
@@ -228,15 +242,17 @@ run(session, options)
 ├─ EventPump::start → terminal source + App Server source
 ├─ FileSearchManager::new
 ├─ App::for_workspace → StatusLineModel::for_workspace
-├─ client.read_config → AppEvent::ConfigSnapshotReceived → App::update
+├─ client.read_config / git_status → AppEvent → App::update
 └─ loop
    ├─ EventPump::recv
    │  ├─ terminal event → input routing
    │  └─ App Server event → typed notification mapping
    ├─ App::mention_query → FileSearchManager::{update_query,stop}
    ├─ FileSearchManager::poll → AppEvent::FileSearchSnapshotReceived → App::update
-   ├─ skills changed → skills refresh
-   ├─ newer active Thread update → one session/thread/read snapshot resync
+   ├─ RequestTask::poll → request completion → app::request_completion → App::update
+   ├─ skills changed → queued background skills refresh
+   ├─ newer active Thread durable update → queued session/thread/read snapshot resync
+   ├─ transient update → cursor validation → bounded Thread projection
    ├─ TerminalSession::draw → app::frame::draw
    └─ terminal event
       ├─ key → App::handle_key
@@ -245,8 +261,8 @@ run(session, options)
       │  │  └─ no active view → ChatComposer → TextArea
       │  ├─ ReadClipboardImage → clipboard::read_image → AppEvent → App::update
       │  ├─ Quit → return
-      │  ├─ SubmitTurn → submit_prompt
-      │  └─ Interrupt → refresh + interrupt_turn
+      │  ├─ SubmitTurn → RequestTask(submit_prompt + canonical read)
+      │  └─ Interrupt → RequestTask(interrupt_turn + canonical read)
       ├─ left mouse down → app::frame::{mention_index_at,slash_command_index_at}
       │  ├─ mention hit → App::activate_mention → atomic path completion
       │  └─ slash hit → App::activate_slash_command → existing command dispatch
@@ -262,8 +278,11 @@ Session create 和 Thread create 使用独立 `CommandId`。Turn start/interrupt
 terminal session。
 
 创建后通过 `session/thread/read`/`session/thread/subscribe` 返回的 canonical snapshot 设置 initial sequence，
-不存在硬编码的初始 sequence。切换 active Thread 时先更换 subscription，再以返回 snapshot
-替换 presentation projection。
+不存在硬编码的初始 sequence。所有可能等待 App Server 的 product command、Turn mutation、文件
+浏览和配置 mutation 都在 `RequestTask` 中执行；同一时刻只 dispatch 一个 request task，后续用户
+intent 保序排队，Quit 和纯本地 theme/clipboard 操作不被阻塞。Thread/Session 变更在后台先建立新
+subscription，再把新 `ActiveConversation`、`ThreadSubscription` 与 snapshot 作为一个 completion
+安装；旧 scope completion 不能直接修改 `App`。
 
 `Event::Paste` 与普通 key editing 使用不同入口。`PendingPastes` 先把 CRLF/CR 规范化为 LF，
 再以 Rust `char`（Unicode scalar value）数量判断大小：不超过 1000 时直接写入 `TextArea`；超过阈值时写入
@@ -314,9 +333,10 @@ popup query；补全返回 `SlashCommandCompletion { range, replacement }`，因
 普通 prompt。Catalog 可以合并已校验的 dynamic metadata，并拒绝非法名称、空描述和 built-in
 冲突；App Server 在 initialize snapshot 中提供 host-composed dynamic command source。
 
-Built-in command 进入 `ActiveConversation::execute`：Session/Thread lifecycle 使用 typed
-Session/Thread API，查询命令读取 authoritative config，`/model` 通过 expected revision mutation
-更新 preferred model。`/help` 和 `/skills` 复用 generic interaction selection surface；关闭
+Built-in command 进入 `app::dispatch::execute_product_command`：dispatcher 从 clone 的
+`ActiveConversation` 调用 typed Session/Thread API，只返回 `ProductCommandOutput`；主循环不在
+dispatcher 内等待 RPC。查询命令读取 authoritative config，`/model` 通过 expected revision
+mutation 更新 preferred model。`/help` 和 `/skills` 复用 generic interaction selection surface；关闭
 它们会恢复一直保留的 composer。`/skills` 映射 App Server 的 immutable catalog snapshot；
 `Enter` 产生 source-qualified `SkillId` enablement intent，成功写入 config 后重新读取页面。
 catalog/file watcher 变化通过 `skills/changed` 触发同一刷新路径。TUI 不读取 Skill filesystem，
@@ -330,24 +350,25 @@ registry，不显示占位提示，也不转成普通 prompt 冒充成功。
 | Canonical `TurnStatus` | UI effect |
 | --- | --- |
 | `Created` / `Running` | `Status::Working` |
-| `WaitingForApproval` | waiting status；仍可 interrupt |
-| `WaitingForUserInput` | waiting status；当前不能 resolve |
+| `WaitingForApproval` | waiting status；owner-directed approval Pane；仍可 interrupt |
+| `WaitingForUserInput` | waiting status；owner-directed multi-question Pane；仍可 interrupt |
 | `WaitingForCapability` | waiting status；当前不能 resolve |
 | `Cancelling` | `Status::Cancelling`，抑制重复 interrupt |
-| `Completed` | 取该 Turn 最后一个 `AgentMessage`，返回 Ready |
+| `Completed` | canonical transcript 已包含该 Turn 所有 Item；返回 Ready |
 | `Failed` | 显示 stable Turn error，清除 active turn |
 | `Interrupted` | 添加 notice，返回 Ready |
 
-Completed Turn 没有 Agent message 会被显示为 error。已知 stable Turn error 由
+Completed Turn 没有 Agent message 会被显示为 error。已知 stable Turn error（包括 interaction
+deadline）由
 `present_turn_error` 映射成面向用户的恢复提示，错误详情只在 transcript 出现一次；footer 只说明
-可以 retry 或退出。Reasoning、Plan、ToolCall、ToolResult 与多个 Agent message 当前不呈现在
-transcript；UI 只取最后一个 Agent message。
+可以 retry 或退出。`features/thread/projection.rs` 按 canonical Item 顺序投影所有 user/agent、
+reasoning、plan 与 Tool row；它不从展示内容判断 Turn terminal state。
 
-`refresh_turn` 每次成功 read 都用 snapshot sequence 覆盖 local expected sequence。
 `client::map_event` 保留 typed `ThreadUpdateEnvelope`；`ThreadSubscription` 验证 active
-Session/Thread scope，并在 durable sequence 新于最后确认 snapshot 时触发一次 `session/thread/read`。
-重复、旧 scope update 不覆盖当前 state。当前 transient delta 不进入本地 reducer；snapshot
-read 只由新 durable update 或显式 interrupt/resync 触发。
+Session/Thread scope，durable sequence 新于最后确认 snapshot 时触发一次后台
+`session/thread/read`。transient cursor 在每个 stream instance 内必须连续；duplicate 被忽略，
+gap/runtime switch 会移除旧 transient row 并 resync。canonical snapshot 替换全部 projection，
+transient 永远不决定 completed/failed/interrupted。
 
 ## 键盘状态机
 
@@ -409,7 +430,7 @@ acquisition flag、reverse cleanup 和 `session_tests.rs` 的 partial-failure ca
 
 1. expandable、无外框的 transcript；空会话显示由 `components::welcome` 拥有的 responsive
    Welcome Banner，宽终端使用双栏，窄终端降级为单栏；
-2. 一行右对齐 status line，显示现有接口提供的 model/workspace context；
+2. 一行右对齐 status line，显示现有接口提供的 model/workspace/Git context；
 3. 三行 composer：上下浅灰水平线，中间一行以浅灰 `❯` 开始；
 4. 一行 recovery/help footer。
 
@@ -421,7 +442,9 @@ temporary view active 时 status line 不占行。普通 composer 模式下，st
 Selection surface 当前包含顶部分隔线、可配置上下间距的标题、可换行 Tabs、搜索框、可滚动窗口和 view-local
 footer；关闭后恢复一直保留的 composer state。
 
-Transcript marker 使用 role-specific color，正文是 plain text。`estimated_wrapped_rows` 使用
+Transcript marker 使用 user/agent/reasoning/plan/tool/error 等 role-specific color，正文和 Tool
+detail 仍是 plain text。PageUp/PageDown 按五行移动，Ctrl-Home/End 到首尾；新提交默认恢复
+follow-latest。`estimated_wrapped_rows` 使用
 `unicode_width::UnicodeWidthStr`，把 label width 计入首行，然后计算 bottom scroll。它是估算，
 不处理完整 grapheme/reflow/Markdown layout。
 
@@ -463,20 +486,19 @@ structured text/image/paste arguments、popup render/mouse hit testing 与 local
 Thread notification decode、active scope/sequence resync 判定、
 并覆盖游标/编辑、在游标处粘贴、大段粘贴占位符展开/绑定/删除、退出/中断、
 keyboard semantics、duplicate interrupt suppression、图片路径识别/占位符删除重编号/结构化提交、input lock、
-canonical Thread snapshot 替换 optimistic transcript、snapshot identity/sequence 保留、
-非 message item 过滤、response lifecycle/error/interrupted transitions、interaction view 的
+canonical Thread snapshot 替换 optimistic transcript、snapshot identity/sequence 保留、完整
+ThreadItem projection、transient identity/UTF-8/容量上限、stream duplicate/gap/runtime switch、
+response lifecycle/error/interrupted transitions、interaction view 的
 composer 保留、tabs wrap/左右循环切换、
-搜索过滤/选择修复/Esc-Ctrl-C dismissal、selection render，以及 snapshot
+approval 与多问题 option/free-form user input、blocked Esc/Ctrl-C semantics、搜索过滤/选择修复、
+selection render，以及 snapshot
 terminal/wait/resume mapping，以及 transcript chrome、error 去重、role
-label/Unicode/zero-width wrapping，以及 status-line 长短值降级、Unicode-safe truncation 和
+label/Unicode/zero-width wrapping、scroll/history，以及 status-line Git/长短值降级、Unicode-safe truncation 和
 composer 上方的右对齐渲染，以及 terminal mode acquisition failure、逆序 rollback 与幂等
-restore。
+restore；还覆盖 request task 非阻塞 completion、request intent 保序、Session/Thread picker/archive、
+workspace directory/preview 和 interaction deadline。
 
 Render tests 使用 Ratatui `TestBackend` 固定 empty/error surface，transcript component tests
-固定 row estimation；但还没有完整 snapshot/golden terminal test，`run` 也没有完整的 fake
-transport event-loop integration test。
-按系统文档的阶段零固定行为与性能基线后，下一阶段优先级是 request completion 的非阻塞
-command dispatch、transient item merge、interaction resolve UI 和 richer
-transcript。具体 owner、数据面可靠性和退出条件由
-[`docs/tui.md`](../../docs/tui.md#17-演进顺序) 统一定义；本 README 在每个切片落地后更新当前
-symbol、调用路径和限制。
+固定 row estimation；命令行状态测试是通过依据，没有截图/像素基线。当前仍缺完整 fake-transport
+`run` event-loop integration 与 reconnect trace replay；Markdown/diff/table、selection/copy 和远程
+宿主能力按 [`docs/tui.md`](../../docs/tui.md#17-演进顺序) 的 owner/contract 条件继续演进。

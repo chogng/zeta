@@ -3,27 +3,32 @@ use super::App;
 use super::AppCommand;
 use super::AppEvent;
 use super::Status;
+use super::dispatch::execute_product_command;
 use super::frame;
+use super::request_completion::RequestCompletion;
+use super::request_completion::apply_request_completion;
+use super::request_completion::apply_thread_snapshot;
+use super::request_completion::finish_conversation_request;
+use super::request_completion::finish_product_command_request;
+use super::request_completion::interrupt_and_read;
+use super::request_completion::resolve_interaction_and_read;
+use super::request_completion::start_turn_and_read;
 use super::slash_command_registry;
 use crate::TuiError;
 use crate::TuiExit;
 use crate::TuiOptions;
 use crate::client;
-use crate::components::composer::ComposerSubmission;
 use crate::features::config;
+use crate::features::interactions;
 use crate::features::mcp;
 use crate::features::rewind;
 use crate::features::sessions::ResumeOutcome;
 use crate::features::skills;
 use crate::features::theme as theme_feature;
-use crate::features::thread::ActiveTurnUpdate;
 use crate::features::thread::ThreadRequestScope;
 use crate::features::thread::ThreadSubscription;
-use crate::features::thread::ThreadSwitch;
-use crate::features::thread::evaluate_active_turn;
-use crate::features::thread::interrupt_turn as request_interrupt_turn;
+use crate::features::thread::ThreadUpdateDisposition;
 use crate::features::thread::read_thread;
-use crate::features::thread::submit_prompt as request_submit_prompt;
 use crate::features::workspace_files::FileSearchManager;
 use crate::host;
 use crate::terminal;
@@ -32,18 +37,8 @@ use crossterm::event::Event;
 use crossterm::event::KeyEventKind;
 use crossterm::event::MouseButton;
 use crossterm::event::MouseEventKind;
-use zeta_app_server_client::AppServerClient;
+use std::collections::VecDeque;
 use zeta_app_server_client::AppServerSession;
-use zeta_app_server_client::JsonRpcTransport;
-#[cfg(test)]
-use zeta_protocol::Turn;
-use zeta_protocol::TurnId;
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum ThreadRefresh {
-    Applied { sequence: u64 },
-    Failed,
-}
 
 pub(crate) fn run(mut session: AppServerSession, options: TuiOptions) -> Result<TuiExit, TuiError> {
     let result = run_session(&mut session, options);
@@ -75,12 +70,19 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
     crate::ui::configure(terminal.background_color());
     let mut file_search = FileSearchManager::new(workspace_root.clone());
     let mut app = App::for_workspace_with_slash_commands(&workspace_root, slash_commands);
-    app.update(AppEvent::ThreadSnapshotReceived(initial_thread));
+    apply_thread_snapshot(&mut app, &mut active_turn, initial_thread);
     if let Ok(config) = client.read_config() {
         app.update(AppEvent::ConfigSnapshotReceived(config));
     }
+    if let Ok(status) = client.git_status() {
+        app.update(AppEvent::GitStatusReceived(status));
+    }
 
     let pump = client::EventPump::start(events)?;
+    let mut pending_request: Option<client::RequestTask<RequestCompletion>> = None;
+    let mut queued_actions = VecDeque::new();
+    let mut thread_refresh_requested = false;
+    let mut skills_refresh_requested = false;
     if let Err(error) = terminal.draw(|terminal_frame| frame::draw(terminal_frame, &app)) {
         let _ = pump.shutdown();
         return Err(error.into());
@@ -89,14 +91,15 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
         loop {
             let action = match pump.recv()? {
                 client::RuntimeEvent::Client(event) => {
-                    refresh_server_event(
+                    let refresh = refresh_server_event(
                         event,
-                        &mut client,
                         &mut conversation,
                         &mut active_turn,
                         &mut thread_subscription,
                         &mut app,
                     );
+                    thread_refresh_requested |= refresh.thread;
+                    skills_refresh_requested |= refresh.skills;
                     None
                 }
                 client::RuntimeEvent::Tick => None,
@@ -133,6 +136,28 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                 },
             };
 
+            if let Some(task) = pending_request.as_mut() {
+                match task.poll() {
+                    Ok(Some(completion)) => {
+                        pending_request = None;
+                        apply_request_completion(
+                            completion,
+                            &mut conversation,
+                            &mut active_turn,
+                            &mut thread_subscription,
+                            &mut app,
+                        );
+                    }
+                    Ok(None) => {}
+                    Err(error) => {
+                        pending_request = None;
+                        app.update(AppEvent::FailureReported(error.to_string()));
+                    }
+                }
+            }
+
+            let action = schedule_action(action, pending_request.is_some(), &mut queued_actions);
+
             sync_file_search_query(&app, &mut file_search);
             for snapshot in file_search.poll() {
                 app.update(AppEvent::FileSearchSnapshotReceived(snapshot));
@@ -141,56 +166,53 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
             if let Some(action) = action {
                 match action {
                     AppCommand::ExecuteProductCommand(invocation) => {
-                        let previous_thread_id = conversation.thread_id().clone();
-                        conversation.execute(&mut client, invocation, &mut app);
-                        if conversation.thread_id() != &previous_thread_id {
-                            active_turn = None;
-                            match thread_subscription.switch(
-                                &mut client,
-                                conversation.session_id(),
-                                conversation.thread_id(),
-                            ) {
-                                Ok(ThreadSwitch::Complete { snapshot }) => {
-                                    conversation.set_thread_sequence(snapshot.sequence);
-                                    app.update(AppEvent::ThreadSnapshotReceived(snapshot));
-                                }
-                                Ok(ThreadSwitch::StaleSubscription { snapshot, error }) => {
-                                    conversation.set_thread_sequence(snapshot.sequence);
-                                    app.update(AppEvent::ThreadSnapshotReceived(snapshot));
-                                    app.update(AppEvent::FailureReported(format!(
-                                        "switched Thread, but could not unsubscribe the previous \
-                                     Thread: {error}"
-                                    )));
-                                }
-                                Err(error) => {
-                                    app.update(AppEvent::FailureReported(error.to_string()));
-                                }
-                            }
+                        if pending_request.is_none() {
+                            let mut request_client = client.clone();
+                            let next_conversation = conversation.clone();
+                            let next_subscription = thread_subscription.clone();
+                            pending_request = spawn_request(
+                                "zeta-tui-product-command",
+                                move || {
+                                    RequestCompletion::ProductCommand(
+                                        execute_product_command(
+                                            next_conversation,
+                                            &mut request_client,
+                                            invocation,
+                                        )
+                                        .and_then(
+                                            |output| {
+                                                finish_product_command_request(
+                                                    &mut request_client,
+                                                    next_subscription,
+                                                    output,
+                                                )
+                                            },
+                                        ),
+                                    )
+                                },
+                                &mut app,
+                            );
                         }
                     }
                     AppCommand::Quit => return Ok(TuiExit::UserRequested),
                     AppCommand::Interrupt => {
-                        let refresh = refresh_turn(
-                            &mut client,
-                            &mut conversation,
-                            &mut active_turn,
-                            &mut app,
-                        );
-                        if let ThreadRefresh::Applied { sequence } = refresh {
-                            thread_subscription.confirm_sequence(sequence);
-                        }
                         if let Some(turn_id) = active_turn.clone()
                             && !matches!(app.status(), Status::Error)
                         {
-                            let refresh = interrupt_turn(
-                                &mut client,
-                                &mut conversation,
-                                &turn_id,
-                                &mut active_turn,
-                                &mut app,
-                            );
-                            if let ThreadRefresh::Applied { sequence } = refresh {
-                                thread_subscription.confirm_sequence(sequence);
+                            if pending_request.is_none() {
+                                let request_client = client.clone();
+                                let scope = thread_request_scope(&conversation);
+                                pending_request = spawn_request(
+                                    "zeta-tui-interrupt-turn",
+                                    move || {
+                                        RequestCompletion::TurnInterrupted(interrupt_and_read(
+                                            request_client,
+                                            scope,
+                                            turn_id,
+                                        ))
+                                    },
+                                    &mut app,
+                                );
                             }
                         } else if !matches!(app.status(), Status::Ready) {
                             app.update(AppEvent::InterruptFailed(
@@ -208,13 +230,63 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                         Err(error) => app.update(AppEvent::FailureReported(error)),
                     },
                     AppCommand::OpenRewindPane => {
-                        match rewind::load_selection(
-                            &mut client,
-                            conversation.session_id(),
-                            conversation.thread_id(),
-                        ) {
-                            Ok(view) => app.update(AppEvent::RewindViewOpened(view)),
-                            Err(error) => app.update(AppEvent::FailureReported(error.to_string())),
+                        if pending_request.is_none() {
+                            let mut request_client = client.clone();
+                            let session_id = conversation.session_id().clone();
+                            let thread_id = conversation.thread_id().clone();
+                            pending_request = spawn_request(
+                                "zeta-tui-load-rewind",
+                                move || {
+                                    RequestCompletion::Presentation(
+                                        rewind::load_selection(
+                                            &mut request_client,
+                                            &session_id,
+                                            &thread_id,
+                                        )
+                                        .map(AppEvent::RewindViewOpened)
+                                        .map_err(|error| error.to_string()),
+                                    )
+                                },
+                                &mut app,
+                            );
+                        }
+                    }
+                    AppCommand::OpenWorkspaceDirectory { path } => {
+                        if pending_request.is_none() {
+                            let mut request_client = client.clone();
+                            pending_request = spawn_request(
+                                "zeta-tui-read-directory",
+                                move || {
+                                    RequestCompletion::Presentation(
+                                        crate::features::workspace_files::load_directory(
+                                            &mut request_client,
+                                            path,
+                                        )
+                                        .map(AppEvent::FileViewOpened)
+                                        .map_err(|error| error.to_string()),
+                                    )
+                                },
+                                &mut app,
+                            );
+                        }
+                    }
+                    AppCommand::PreviewWorkspaceFile { path } => {
+                        if pending_request.is_none() {
+                            let mut request_client = client.clone();
+                            pending_request = spawn_request(
+                                "zeta-tui-read-file-preview",
+                                move || {
+                                    RequestCompletion::Presentation(
+                                        crate::features::workspace_files::load_file_preview(
+                                            &mut request_client,
+                                            path,
+                                        )
+                                        .map(AppEvent::SelectionViewOpened)
+                                        .map_err(|error| error.to_string()),
+                                    )
+                                },
+                                &mut app,
+                            );
                         }
                     }
                     AppCommand::RewindToCheckpoint {
@@ -223,104 +295,180 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     } => {
                         let command = format!("/rewind {before_turn_id}");
                         app.update(AppEvent::CommandStarted(command.clone()));
-                        match conversation.rewind_active_thread(
-                            &mut client,
-                            before_turn_id,
-                            &checkpoint_label,
-                        ) {
-                            Ok(change) => {
-                                app.update(AppEvent::SelectionViewClosed);
-                                app.update(AppEvent::ThreadSnapshotReceived(change.snapshot));
-                                active_turn = None;
-                                match thread_subscription.switch(
-                                    &mut client,
-                                    conversation.session_id(),
-                                    conversation.thread_id(),
-                                ) {
-                                    Ok(ThreadSwitch::Complete { snapshot }) => {
-                                        conversation.set_thread_sequence(snapshot.sequence);
-                                        app.update(AppEvent::ThreadSnapshotReceived(snapshot));
-                                    }
-                                    Ok(ThreadSwitch::StaleSubscription { snapshot, error }) => {
-                                        conversation.set_thread_sequence(snapshot.sequence);
-                                        app.update(AppEvent::ThreadSnapshotReceived(snapshot));
-                                        app.update(AppEvent::FailureReported(format!(
-                                            "rewound Thread, but could not unsubscribe the previous \
-                                             Thread: {error}"
-                                        )));
-                                    }
-                                    Err(error) => {
-                                        app.update(AppEvent::FailureReported(error.to_string()));
-                                    }
-                                }
-                                app.update(AppEvent::CommandCompleted {
+                        if pending_request.is_none() {
+                            let mut request_client = client.clone();
+                            let mut next_conversation = conversation.clone();
+                            let next_subscription = thread_subscription.clone();
+                            pending_request = spawn_request(
+                                "zeta-tui-rewind-thread",
+                                move || RequestCompletion::ConversationChanged {
                                     command,
-                                    result: change.notice,
-                                });
-                            }
-                            Err(error) => app.update(AppEvent::FailureReported(error.to_string())),
+                                    result: next_conversation
+                                        .rewind_active_thread(
+                                            &mut request_client,
+                                            before_turn_id,
+                                            &checkpoint_label,
+                                        )
+                                        .map_err(|error| error.to_string())
+                                        .and_then(|change| {
+                                            finish_conversation_request(
+                                                &mut request_client,
+                                                next_conversation,
+                                                next_subscription,
+                                                change,
+                                            )
+                                        }),
+                                },
+                                &mut app,
+                            );
                         }
                     }
                     AppCommand::ResumeSession { session_id } => {
                         let command = format!("/resume {session_id}");
                         app.update(AppEvent::CommandStarted(command.clone()));
-                        match conversation.resume_session(&mut client, &session_id) {
-                            Ok(ResumeOutcome::Changed(change)) => {
-                                app.update(AppEvent::SelectionViewClosed);
-                                app.update(AppEvent::ThreadSnapshotReceived(change.snapshot));
-                                active_turn = None;
-                                match thread_subscription.switch(
-                                    &mut client,
-                                    conversation.session_id(),
-                                    conversation.thread_id(),
-                                ) {
-                                    Ok(ThreadSwitch::Complete { snapshot }) => {
-                                        conversation.set_thread_sequence(snapshot.sequence);
-                                        app.update(AppEvent::ThreadSnapshotReceived(snapshot));
-                                    }
-                                    Ok(ThreadSwitch::StaleSubscription { snapshot, error }) => {
-                                        conversation.set_thread_sequence(snapshot.sequence);
-                                        app.update(AppEvent::ThreadSnapshotReceived(snapshot));
-                                        app.update(AppEvent::FailureReported(format!(
-                                            "resumed Thread, but could not unsubscribe the previous \
-                                             Thread: {error}"
-                                        )));
-                                    }
-                                    Err(error) => {
-                                        app.update(AppEvent::FailureReported(error.to_string()));
-                                    }
-                                }
-                                app.update(AppEvent::CommandCompleted {
+                        if pending_request.is_none() {
+                            let mut request_client = client.clone();
+                            let mut next_conversation = conversation.clone();
+                            let next_subscription = thread_subscription.clone();
+                            pending_request = spawn_request(
+                                "zeta-tui-resume-session",
+                                move || RequestCompletion::ConversationChanged {
                                     command,
-                                    result: change.notice,
-                                });
-                            }
-                            Ok(ResumeOutcome::Listed(_)) => app.update(AppEvent::FailureReported(
-                                "resume selection did not identify a session".into(),
-                            )),
-                            Err(error) => app.update(AppEvent::FailureReported(error.to_string())),
+                                    result: next_conversation
+                                        .resume_session(&mut request_client, &session_id)
+                                        .map_err(|error| error.to_string())
+                                        .and_then(|outcome| match outcome {
+                                            ResumeOutcome::Changed(change) => {
+                                                finish_conversation_request(
+                                                    &mut request_client,
+                                                    next_conversation,
+                                                    next_subscription,
+                                                    change,
+                                                )
+                                            }
+                                            ResumeOutcome::Listed(_) => {
+                                                Err("resume selection did not identify a session"
+                                                    .into())
+                                            }
+                                        }),
+                                },
+                                &mut app,
+                            );
+                        }
+                    }
+                    AppCommand::SwitchThread { thread_id } => {
+                        let command = format!("/thread {thread_id}");
+                        app.update(AppEvent::CommandStarted(command.clone()));
+                        if pending_request.is_none() {
+                            let mut request_client = client.clone();
+                            let mut next_conversation = conversation.clone();
+                            let next_subscription = thread_subscription.clone();
+                            pending_request = spawn_request(
+                                "zeta-tui-switch-thread",
+                                move || RequestCompletion::ConversationChanged {
+                                    command,
+                                    result: next_conversation
+                                        .switch_thread(&mut request_client, thread_id)
+                                        .map_err(|error| error.to_string())
+                                        .and_then(|change| {
+                                            finish_conversation_request(
+                                                &mut request_client,
+                                                next_conversation,
+                                                next_subscription,
+                                                change,
+                                            )
+                                        }),
+                                },
+                                &mut app,
+                            );
+                        }
+                    }
+                    AppCommand::ArchiveThread { thread_id } => {
+                        let command = format!("/archive-thread {thread_id}");
+                        app.update(AppEvent::CommandStarted(command.clone()));
+                        if pending_request.is_none() {
+                            let mut request_client = client.clone();
+                            let mut next_conversation = conversation.clone();
+                            let next_subscription = thread_subscription.clone();
+                            pending_request = spawn_request(
+                                "zeta-tui-archive-thread",
+                                move || RequestCompletion::ConversationChanged {
+                                    command,
+                                    result: next_conversation
+                                        .archive_thread(&mut request_client, thread_id)
+                                        .map_err(|error| error.to_string())
+                                        .and_then(|change| {
+                                            finish_conversation_request(
+                                                &mut request_client,
+                                                next_conversation,
+                                                next_subscription,
+                                                change,
+                                            )
+                                        }),
+                                },
+                                &mut app,
+                            );
+                        }
+                    }
+                    AppCommand::ResolveInteraction(response) => {
+                        if pending_request.is_none() {
+                            let request_client = client.clone();
+                            let scope = thread_request_scope(&conversation);
+                            pending_request = spawn_request(
+                                "zeta-tui-resolve-interaction",
+                                move || {
+                                    RequestCompletion::InteractionResolved(
+                                        resolve_interaction_and_read(
+                                            request_client,
+                                            scope,
+                                            response,
+                                        ),
+                                    )
+                                },
+                                &mut app,
+                            );
                         }
                     }
                     AppCommand::SetMcpEnablement {
                         server_id,
                         enablement,
-                    } => match mcp::set_enablement(&mut client, server_id, enablement) {
-                        Ok(view) => app.update(AppEvent::McpViewReplaced(view)),
-                        Err(error) => app.update(AppEvent::FailureReported(error.to_string())),
-                    },
+                    } => {
+                        if pending_request.is_none() {
+                            let mut request_client = client.clone();
+                            pending_request = spawn_request(
+                                "zeta-tui-set-mcp-enablement",
+                                move || {
+                                    RequestCompletion::Presentation(
+                                        mcp::set_enablement(
+                                            &mut request_client,
+                                            server_id,
+                                            enablement,
+                                        )
+                                        .map(AppEvent::McpViewReplaced)
+                                        .map_err(|error| error.to_string()),
+                                    )
+                                },
+                                &mut app,
+                            );
+                        }
+                    }
                     AppCommand::SetPreferredModel { preference } => {
                         let command = format!("/model {preference}");
                         app.update(AppEvent::CommandStarted(command.clone()));
-                        match config::set_preferred_model(&mut client, &preference) {
-                            Ok(update) => {
-                                app.update(AppEvent::ConfigSnapshotReceived(update.config));
-                                app.update(AppEvent::CommandCompleted {
+                        if pending_request.is_none() {
+                            let mut request_client = client.clone();
+                            pending_request = spawn_request(
+                                "zeta-tui-set-preferred-model",
+                                move || RequestCompletion::PreferredModelUpdated {
                                     command,
-                                    result: update.notice,
-                                });
-                                app.update(AppEvent::SelectionViewClosed);
-                            }
-                            Err(error) => app.update(AppEvent::FailureReported(error.to_string())),
+                                    result: config::set_preferred_model(
+                                        &mut request_client,
+                                        &preference,
+                                    )
+                                    .map_err(|error| error.to_string()),
+                                },
+                                &mut app,
+                            );
                         }
                     }
                     AppCommand::SetCustomTheme { preference } => {
@@ -354,15 +502,83 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     AppCommand::SetSkillEnablement {
                         skill_id,
                         enablement,
-                    } => match skills::set_enablement(&mut client, skill_id, enablement) {
-                        Ok(view) => app.update(AppEvent::SkillsViewReplaced(view)),
-                        Err(error) => app.update(AppEvent::FailureReported(error.to_string())),
-                    },
+                    } => {
+                        if pending_request.is_none() {
+                            let mut request_client = client.clone();
+                            pending_request = spawn_request(
+                                "zeta-tui-set-skill-enablement",
+                                move || {
+                                    RequestCompletion::Presentation(
+                                        skills::set_enablement(
+                                            &mut request_client,
+                                            skill_id,
+                                            enablement,
+                                        )
+                                        .map(AppEvent::SkillsViewReplaced)
+                                        .map_err(|error| error.to_string()),
+                                    )
+                                },
+                                &mut app,
+                            );
+                        }
+                    }
                     AppCommand::SubmitTurn(prompt) => {
                         terminal.draw(|terminal_frame| frame::draw(terminal_frame, &app))?;
-                        active_turn =
-                            submit_prompt(&mut client, &mut conversation, prompt, &mut app);
+                        if pending_request.is_none() {
+                            let request_client = client.clone();
+                            let scope = thread_request_scope(&conversation);
+                            pending_request = spawn_request(
+                                "zeta-tui-start-turn",
+                                move || {
+                                    RequestCompletion::TurnStarted(start_turn_and_read(
+                                        request_client,
+                                        scope,
+                                        prompt,
+                                    ))
+                                },
+                                &mut app,
+                            );
+                        }
                     }
+                }
+            }
+            if pending_request.is_none() && thread_refresh_requested {
+                let mut request_client = client.clone();
+                let session_id = conversation.session_id().clone();
+                let thread_id = conversation.thread_id().clone();
+                pending_request = spawn_request(
+                    "zeta-tui-refresh-thread",
+                    move || {
+                        RequestCompletion::ThreadRefreshed(read_thread(
+                            &mut request_client,
+                            &session_id,
+                            &thread_id,
+                        ))
+                    },
+                    &mut app,
+                );
+                if pending_request.is_some() {
+                    thread_refresh_requested = false;
+                }
+            }
+            if pending_request.is_none() && skills_refresh_requested {
+                let mut request_client = client.clone();
+                pending_request = spawn_request(
+                    "zeta-tui-refresh-skills",
+                    move || {
+                        RequestCompletion::Presentation(
+                            skills::load_selection(
+                                &mut request_client,
+                                zeta_app_server_protocol::protocol::skills::SkillCatalogReloadDto::Cached,
+                            )
+                            .map(AppEvent::SkillsViewReplaced)
+                            .map_err(|error| error.to_string()),
+                        )
+                    },
+                    &mut app,
+                );
+                if pending_request.is_some() {
+                    skills_refresh_requested = false;
                 }
             }
             terminal.draw(|terminal_frame| frame::draw(terminal_frame, &app))?;
@@ -376,142 +592,121 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
     }
 }
 
-fn refresh_server_event<T>(
+fn schedule_action(
+    action: Option<AppCommand>,
+    request_pending: bool,
+    queued: &mut VecDeque<AppCommand>,
+) -> Option<AppCommand> {
+    if request_pending {
+        return match action {
+            Some(action) if uses_request_task(&action) => {
+                queued.push_back(action);
+                None
+            }
+            action => action,
+        };
+    }
+    if let Some(next) = queued.pop_front() {
+        if let Some(action) = action {
+            queued.push_back(action);
+        }
+        Some(next)
+    } else {
+        action
+    }
+}
+
+fn uses_request_task(action: &AppCommand) -> bool {
+    !matches!(
+        action,
+        AppCommand::Quit
+            | AppCommand::ReadClipboardImage
+            | AppCommand::OpenCustomThemePane
+            | AppCommand::SetCustomTheme { .. }
+            | AppCommand::SetTheme { .. }
+    )
+}
+
+#[derive(Default)]
+struct ServerRefresh {
+    thread: bool,
+    skills: bool,
+}
+
+fn refresh_server_event(
     event: client::ClientEvent,
-    client: &mut AppServerClient<T>,
     conversation: &mut ActiveConversation,
     active_turn: &mut Option<zeta_protocol::TurnId>,
     thread_subscription: &mut ThreadSubscription,
     app: &mut App,
-) where
-    T: JsonRpcTransport,
-{
-    let refresh_thread_snapshot = match event {
-        client::ClientEvent::SkillsChanged if app.skills_view_is_active() => {
-            match skills::load_selection(
-                client,
-                zeta_app_server_protocol::protocol::skills::SkillCatalogReloadDto::Cached,
-            ) {
-                Ok(view) => app.update(AppEvent::SkillsViewReplaced(view)),
-                Err(error) => app.update(AppEvent::FailureReported(error.to_string())),
+) -> ServerRefresh {
+    match event {
+        client::ClientEvent::AgentRequest(request) => {
+            if request.session_id == *conversation.session_id()
+                && request.thread_id == *conversation.thread_id()
+            {
+                *active_turn = Some(request.turn_id.clone());
+                match interactions::interaction_selection_view(*request) {
+                    Ok(view) => app.update(AppEvent::InteractionViewOpened(view)),
+                    Err(error) => app.update(AppEvent::FailureReported(error)),
+                }
             }
-            false
+            ServerRefresh::default()
         }
+        client::ClientEvent::SkillsChanged if app.skills_view_is_active() => ServerRefresh {
+            skills: true,
+            ..ServerRefresh::default()
+        },
         client::ClientEvent::Failed(error) => {
             app.update(AppEvent::FailureReported(error));
-            false
+            ServerRefresh::default()
+        }
+        client::ClientEvent::GitStatusChanged(status) => {
+            app.update(AppEvent::GitStatusReceived(status));
+            ServerRefresh::default()
         }
         client::ClientEvent::ThreadUpdated(update) => {
-            thread_subscription.requires_snapshot(&update)
+            match thread_subscription.classify_update(&update) {
+                ThreadUpdateDisposition::ApplyTransient => {
+                    app.update(AppEvent::TransientThreadUpdateReceived(update));
+                    ServerRefresh::default()
+                }
+                ThreadUpdateDisposition::ApplyTransientAfterReset => {
+                    app.update(AppEvent::TransientThreadStreamReset);
+                    app.update(AppEvent::TransientThreadUpdateReceived(update));
+                    ServerRefresh::default()
+                }
+                ThreadUpdateDisposition::Ignore => ServerRefresh::default(),
+                ThreadUpdateDisposition::RefreshSnapshot => ServerRefresh {
+                    thread: true,
+                    ..ServerRefresh::default()
+                },
+                ThreadUpdateDisposition::ResetTransientAndRefreshSnapshot => {
+                    app.update(AppEvent::TransientThreadStreamReset);
+                    ServerRefresh {
+                        thread: true,
+                        ..ServerRefresh::default()
+                    }
+                }
+            }
         }
-        client::ClientEvent::SkillsChanged => false,
-    };
-    if refresh_thread_snapshot
-        && let ThreadRefresh::Applied { sequence } =
-            refresh_turn(client, conversation, active_turn, app)
-    {
-        thread_subscription.confirm_sequence(sequence);
+        client::ClientEvent::SkillsChanged => ServerRefresh::default(),
     }
 }
 
-fn submit_prompt<T>(
-    client: &mut AppServerClient<T>,
-    conversation: &mut ActiveConversation,
-    submission: ComposerSubmission,
+fn spawn_request(
+    name: &'static str,
+    request: impl FnOnce() -> RequestCompletion + Send + 'static,
     app: &mut App,
-) -> Option<TurnId>
-where
-    T: JsonRpcTransport,
-{
-    match request_submit_prompt(client, thread_request_scope(conversation), submission) {
-        Ok(start) => {
-            conversation.set_thread_sequence(start.sequence);
-            Some(start.turn_id)
-        }
+) -> Option<client::RequestTask<RequestCompletion>> {
+    match client::RequestTask::spawn(name, request) {
+        Ok(task) => Some(task),
         Err(error) => {
-            app.update(AppEvent::FailureReported(error.to_string()));
+            app.update(AppEvent::FailureReported(format!(
+                "could not start background request: {error}"
+            )));
             None
         }
-    }
-}
-
-fn refresh_turn<T>(
-    client: &mut AppServerClient<T>,
-    conversation: &mut ActiveConversation,
-    active_turn: &mut Option<TurnId>,
-    app: &mut App,
-) -> ThreadRefresh
-where
-    T: JsonRpcTransport,
-{
-    match read_thread(client, conversation.session_id(), conversation.thread_id()) {
-        Ok(snapshot) => {
-            if snapshot.session_id != *conversation.session_id()
-                || snapshot.thread_id != *conversation.thread_id()
-            {
-                app.update(AppEvent::FailureReported(format!(
-                    "session/thread/read returned snapshot for {}/{}; expected {}/{}",
-                    snapshot.session_id,
-                    snapshot.thread_id,
-                    conversation.session_id(),
-                    conversation.thread_id()
-                )));
-                return ThreadRefresh::Failed;
-            }
-            conversation.set_thread_sequence(snapshot.sequence);
-            let sequence = snapshot.sequence;
-            let active_turn_update = evaluate_active_turn(active_turn, &snapshot.turns);
-            app.update(AppEvent::ThreadSnapshotReceived(snapshot));
-            apply_active_turn_update(app, active_turn_update);
-            ThreadRefresh::Applied { sequence }
-        }
-        Err(error) => {
-            app.update(AppEvent::FailureReported(error.to_string()));
-            ThreadRefresh::Failed
-        }
-    }
-}
-
-fn interrupt_turn<T>(
-    client: &mut AppServerClient<T>,
-    conversation: &mut ActiveConversation,
-    turn_id: &TurnId,
-    active_turn: &mut Option<TurnId>,
-    app: &mut App,
-) -> ThreadRefresh
-where
-    T: JsonRpcTransport,
-{
-    match request_interrupt_turn(client, thread_request_scope(conversation), turn_id) {
-        Ok(result) => {
-            conversation.set_thread_sequence(result.sequence);
-            refresh_turn(client, conversation, active_turn, app)
-        }
-        Err(error) => {
-            app.update(AppEvent::InterruptFailed(error.to_string()));
-            ThreadRefresh::Failed
-        }
-    }
-}
-
-#[cfg(test)]
-pub(crate) fn apply_active_turn_snapshot(
-    app: &mut App,
-    active_turn: &mut Option<TurnId>,
-    turns: &[Turn],
-) {
-    apply_active_turn_update(app, evaluate_active_turn(active_turn, turns));
-}
-
-fn apply_active_turn_update(app: &mut App, update: ActiveTurnUpdate) {
-    match update {
-        ActiveTurnUpdate::ActivityChanged(activity) => {
-            app.update(AppEvent::TurnActivityChanged(activity));
-        }
-        ActiveTurnUpdate::Completed => app.update(AppEvent::TurnCompleted),
-        ActiveTurnUpdate::Failed(error) => app.update(AppEvent::FailureReported(error)),
-        ActiveTurnUpdate::Interrupted => app.update(AppEvent::TurnInterrupted),
-        ActiveTurnUpdate::Unchanged => {}
     }
 }
 
@@ -530,3 +725,7 @@ fn sync_file_search_query(app: &App, file_search: &mut FileSearchManager) {
         file_search.stop();
     }
 }
+
+#[cfg(test)]
+#[path = "event_loop_tests.rs"]
+mod tests;

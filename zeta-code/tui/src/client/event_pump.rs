@@ -3,7 +3,11 @@ use crossterm::event::{self, Event};
 use std::io;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
+use std::sync::mpsc;
+use std::sync::mpsc::Receiver;
+use std::sync::mpsc::RecvTimeoutError;
+use std::sync::mpsc::SyncSender;
+use std::sync::mpsc::TrySendError;
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 use zeta_app_server_client::AppServerEvents;
@@ -14,6 +18,8 @@ use signal_hook::SigId;
 use signal_hook::consts::{SIGINT, SIGTERM};
 
 const TERMINAL_POLL_INTERVAL: Duration = Duration::from_millis(25);
+const EVENT_QUEUE_CAPACITY: usize = 1_024;
+const EVENT_SEND_RETRY: Duration = Duration::from_millis(1);
 
 pub(crate) enum RuntimeEvent {
     Terminal(Event),
@@ -34,7 +40,7 @@ pub(crate) struct EventPump {
 
 impl EventPump {
     pub(crate) fn start(events: AppServerEvents) -> Result<Self, io::Error> {
-        let (sender, receiver) = mpsc::channel();
+        let (sender, receiver) = mpsc::sync_channel(EVENT_QUEUE_CAPACITY);
         let stop = Arc::new(AtomicBool::new(false));
         let termination_requested = Arc::new(AtomicBool::new(false));
         #[cfg(unix)]
@@ -48,28 +54,53 @@ impl EventPump {
             .spawn(move || {
                 while !terminal_stop.load(Ordering::Acquire) {
                     if let Some(event) = termination_event(&terminal_termination_requested) {
-                        let _ = terminal_sender.send(event);
+                        let _ = send_event(
+                            &terminal_sender,
+                            event,
+                            &terminal_stop,
+                            EventOverflow::Wait,
+                        );
                         return;
                     }
                     match event::poll(TERMINAL_POLL_INTERVAL) {
                         Ok(true) => match event::read() {
                             Ok(event) => {
-                                if terminal_sender.send(RuntimeEvent::Terminal(event)).is_err() {
+                                if !send_event(
+                                    &terminal_sender,
+                                    RuntimeEvent::Terminal(event),
+                                    &terminal_stop,
+                                    EventOverflow::Wait,
+                                ) {
                                     return;
                                 }
                             }
                             Err(error) => {
-                                let _ = terminal_sender.send(RuntimeEvent::TerminalFailed(error));
+                                let _ = send_event(
+                                    &terminal_sender,
+                                    RuntimeEvent::TerminalFailed(error),
+                                    &terminal_stop,
+                                    EventOverflow::Wait,
+                                );
                                 return;
                             }
                         },
                         Ok(false) => {
-                            if terminal_sender.send(RuntimeEvent::Tick).is_err() {
+                            if !send_event(
+                                &terminal_sender,
+                                RuntimeEvent::Tick,
+                                &terminal_stop,
+                                EventOverflow::Drop,
+                            ) {
                                 return;
                             }
                         }
                         Err(error) => {
-                            let _ = terminal_sender.send(RuntimeEvent::TerminalFailed(error));
+                            let _ = send_event(
+                                &terminal_sender,
+                                RuntimeEvent::TerminalFailed(error),
+                                &terminal_stop,
+                                EventOverflow::Wait,
+                            );
                             return;
                         }
                     }
@@ -85,7 +116,12 @@ impl EventPump {
                     match events.recv_timeout(TERMINAL_POLL_INTERVAL) {
                         Ok(event) => {
                             if let Some(event) = map_event(event)
-                                && client_sender.send(RuntimeEvent::Client(event)).is_err()
+                                && !send_event(
+                                    &client_sender,
+                                    RuntimeEvent::Client(event),
+                                    &client_stop,
+                                    EventOverflow::Wait,
+                                )
                             {
                                 return;
                             }
@@ -123,6 +159,34 @@ impl EventPump {
         self.stop.store(true, Ordering::Release);
         join(&mut self.terminal, "terminal event pump")?;
         join(&mut self.client, "App Server event pump")
+    }
+}
+
+#[derive(Clone, Copy)]
+enum EventOverflow {
+    Drop,
+    Wait,
+}
+
+fn send_event(
+    sender: &SyncSender<RuntimeEvent>,
+    mut event: RuntimeEvent,
+    stop: &AtomicBool,
+    overflow: EventOverflow,
+) -> bool {
+    loop {
+        match sender.try_send(event) {
+            Ok(()) => return true,
+            Err(TrySendError::Disconnected(_)) => return false,
+            Err(TrySendError::Full(_)) if matches!(overflow, EventOverflow::Drop) => return true,
+            Err(TrySendError::Full(returned)) => {
+                if stop.load(Ordering::Acquire) {
+                    return false;
+                }
+                event = returned;
+                thread::sleep(EVENT_SEND_RETRY);
+            }
+        }
     }
 }
 

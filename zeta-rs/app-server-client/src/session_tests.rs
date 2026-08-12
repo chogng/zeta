@@ -1,5 +1,6 @@
 use super::*;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use std::time::{Duration, Instant};
 use zeta_app_server_protocol::protocol::common::{ClientCapabilities, ClientInfo};
 use zeta_app_server_protocol::protocol::session::{
@@ -16,6 +17,23 @@ use zeta_protocol::{
     CommandId, ContentPart, InputItem as ModelInputItem, ModelRequest, ModelResponse, ResponseItem,
     StopReason, ThreadEvent, ThreadUpdate,
 };
+
+#[test]
+fn closing_session_does_not_block_on_a_full_event_channel() {
+    let (sender, _receiver) = std::sync::mpsc::sync_channel(1);
+    sender
+        .send(AppServerEvent::ConnectionClosed(
+            ConnectionCloseReason::DriverStopped,
+        ))
+        .unwrap();
+    let closing = AtomicBool::new(true);
+
+    assert!(!send_event(
+        &sender,
+        AppServerEvent::ConnectionClosed(ConnectionCloseReason::Shutdown),
+        &closing,
+    ));
+}
 
 #[test]
 fn embedded_session_delivers_idle_notifications_without_a_polling_request() {

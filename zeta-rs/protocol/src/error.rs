@@ -26,6 +26,14 @@ impl StableTurnError {
             retryable: true,
         }
     }
+
+    pub fn interaction_deadline_elapsed() -> Self {
+        Self {
+            code: StableTurnErrorCode::InteractionDeadlineElapsed,
+            message: "Interaction deadline elapsed before a response was received".into(),
+            retryable: true,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -33,4 +41,5 @@ impl StableTurnError {
 pub enum StableTurnErrorCode {
     ModelInvocationFailed,
     CompletionPersistenceFailed,
+    InteractionDeadlineElapsed,
 }

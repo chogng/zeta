@@ -1,10 +1,49 @@
-use super::decode;
 use super::ServerNotification;
-use zeta_app_server_protocol::protocol::config::ConfigChanged;
-use zeta_app_server_protocol::protocol::collaboration::DocumentCollaborationUpdate;
+use super::decode;
 use zeta_app_server_protocol::protocol::collaboration::DocumentCollaborationPresenceSnapshot;
+use zeta_app_server_protocol::protocol::collaboration::DocumentCollaborationUpdate;
+use zeta_app_server_protocol::protocol::config::ConfigChanged;
 use zeta_app_server_protocol::protocol::fs::FsChanged;
 use zeta_app_server_protocol::protocol::git::{GitChangeStatusDto, GitHeadDto};
+
+#[test]
+fn decodes_owner_directed_agent_request_notification() {
+    let notification = decode(
+        r#"{
+            "jsonrpc": "2.0",
+            "method": "agent/request",
+            "params": {
+                "sessionId": "session-1",
+                "threadId": "thread-1",
+                "turnId": "turn-1",
+                "interaction": {
+                    "requestId": "approval-1",
+                    "itemId": null,
+                    "request": {
+                        "type": "approval",
+                        "request": {
+                            "actionDigest": "digest",
+                            "policyRevision": "policy-1",
+                            "capabilities": [{"kind":"network","scope":"api.example.test"}],
+                            "reason": "connect to the service"
+                        }
+                    },
+                    "deadline": null
+                }
+            }
+        }"#,
+    )
+    .expect("agent request notification decodes");
+
+    let ServerNotification::AgentRequest(request) = notification else {
+        panic!("expected owner-directed Agent request");
+    };
+    assert_eq!(request.interaction.request_id.as_str(), "approval-1");
+    assert!(matches!(
+        request.interaction.request,
+        zeta_protocol::AgentRequest::Approval { .. }
+    ));
+}
 
 #[test]
 fn decodes_git_status_changed_notification() {
@@ -108,10 +147,12 @@ fn decodes_document_collaboration_presence_notification() {
         ServerNotification::DocumentCollaborationPresence(DocumentCollaborationPresenceSnapshot {
             room_id: "gama-room".into(),
             generation: 3,
-            presences: vec![zeta_app_server_protocol::protocol::collaboration::DocumentCollaborationPresence {
-                client_id: "client-a".into(),
-                selection: "anchor=0".into(),
-            }],
+            presences: vec![
+                zeta_app_server_protocol::protocol::collaboration::DocumentCollaborationPresence {
+                    client_id: "client-a".into(),
+                    selection: "anchor=0".into(),
+                }
+            ],
         })
     );
 }

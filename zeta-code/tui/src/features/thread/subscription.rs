@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use zeta_app_server_client::AppServerClient;
 use zeta_app_server_client::ClientError;
 use zeta_app_server_client::JsonRpcTransport;
@@ -5,6 +6,7 @@ use zeta_app_server_protocol::protocol::session::SessionThreadReadParams;
 use zeta_app_server_protocol::protocol::session::SessionThreadSubscribeParams;
 use zeta_app_server_protocol::protocol::session::SessionThreadUnsubscribeParams;
 use zeta_protocol::SessionId;
+use zeta_protocol::StreamInstanceId;
 use zeta_protocol::Thread;
 use zeta_protocol::ThreadId;
 use zeta_protocol::ThreadUpdateEnvelope;
@@ -13,11 +15,21 @@ use zeta_protocol::ThreadUpdateEnvelope;
 ///
 /// It does not apply Thread events locally. A newer durable sequence asks the caller to read a
 /// fresh authoritative snapshot, which keeps the product reducer in Core.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct ThreadSubscription {
     session_id: SessionId,
     thread_id: ThreadId,
     confirmed_sequence: u64,
+    stream_sequences: BTreeMap<StreamInstanceId, u64>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum ThreadUpdateDisposition {
+    ApplyTransient,
+    ApplyTransientAfterReset,
+    Ignore,
+    RefreshSnapshot,
+    ResetTransientAndRefreshSnapshot,
 }
 
 pub(crate) enum ThreadSwitch {
@@ -101,14 +113,52 @@ impl ThreadSubscription {
         }
     }
 
-    pub(crate) fn requires_snapshot(&self, update: &ThreadUpdateEnvelope) -> bool {
-        update.thread_id == self.thread_id
-            && (update.session_id != self.session_id
-                || update.durable_sequence > self.confirmed_sequence)
+    pub(crate) fn classify_update(
+        &mut self,
+        update: &ThreadUpdateEnvelope,
+    ) -> ThreadUpdateDisposition {
+        if update.thread_id != self.thread_id {
+            return ThreadUpdateDisposition::Ignore;
+        }
+        if update.session_id != self.session_id || update.durable_sequence > self.confirmed_sequence
+        {
+            return ThreadUpdateDisposition::RefreshSnapshot;
+        }
+        if update.durable_sequence < self.confirmed_sequence
+            || matches!(update.update, zeta_protocol::ThreadUpdate::Committed { .. })
+        {
+            return ThreadUpdateDisposition::Ignore;
+        }
+        let Some(cursor) = &update.stream_cursor else {
+            return ThreadUpdateDisposition::Ignore;
+        };
+        if let Some(sequence) = self.stream_sequences.get_mut(&cursor.stream_instance_id) {
+            if cursor.sequence <= *sequence {
+                return ThreadUpdateDisposition::Ignore;
+            }
+            let continuous = cursor.sequence == sequence.saturating_add(1);
+            *sequence = cursor.sequence;
+            return if continuous {
+                ThreadUpdateDisposition::ApplyTransient
+            } else {
+                ThreadUpdateDisposition::ResetTransientAndRefreshSnapshot
+            };
+        }
+
+        self.stream_sequences.clear();
+        self.stream_sequences
+            .insert(cursor.stream_instance_id.clone(), cursor.sequence);
+        if cursor.sequence == 1 {
+            ThreadUpdateDisposition::ApplyTransientAfterReset
+        } else {
+            ThreadUpdateDisposition::ResetTransientAndRefreshSnapshot
+        }
     }
 
     pub(crate) fn confirm_sequence(&mut self, sequence: u64) {
-        self.confirmed_sequence = self.confirmed_sequence.max(sequence);
+        if sequence > self.confirmed_sequence {
+            self.confirmed_sequence = sequence;
+        }
     }
 
     fn from_snapshot(snapshot: &Thread) -> Self {
@@ -116,6 +166,7 @@ impl ThreadSubscription {
             session_id: snapshot.session_id.clone(),
             thread_id: snapshot.thread_id.clone(),
             confirmed_sequence: snapshot.sequence,
+            stream_sequences: BTreeMap::new(),
         }
     }
 }

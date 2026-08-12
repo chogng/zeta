@@ -184,6 +184,28 @@ fn enter_and_space_activate_actionable_items() {
 }
 
 #[test]
+fn free_form_selection_accepts_text_immediately_and_submits_with_control_enter() {
+    let item_id = SelectionItemId::new("free-form-answer");
+    let mut state = SelectionViewState::new(
+        SelectionViewModel::new("Question", vec![SelectionTab::new("Answers", Vec::new())])
+            .with_free_form("Type an answer", item_id.clone()),
+    );
+
+    for character in "custom".chars() {
+        state.handle_key(key(KeyCode::Char(character)));
+    }
+
+    assert_eq!(state.query(), "custom");
+    assert_eq!(
+        state.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::CONTROL)),
+        SelectionInputOutcome::ActivateFreeForm {
+            item_id,
+            value: "custom".into(),
+        }
+    );
+}
+
+#[test]
 fn space_enters_search_before_becoming_search_text() {
     let mut read_only = state();
 

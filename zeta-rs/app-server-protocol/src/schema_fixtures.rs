@@ -82,6 +82,7 @@ fn registry_method_and_notification_names_are_unique() {
     assert!(methods.contains("hook/upsert"));
     assert!(notifications.contains("session/update"));
     assert!(notifications.contains("session/thread/update"));
+    assert!(notifications.contains("agent/request"));
     assert!(!notifications.contains("thread/update"));
     assert!(notifications.contains("git/statusChanged"));
     assert!(notifications.contains("fs/changed"));

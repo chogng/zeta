@@ -2,7 +2,12 @@ use crate::in_process::{InProcessClientOptions, open_in_process_app_server};
 use crate::{AppServerClient, ClientError, JsonRpcTransport, ServerNotification, notification};
 use std::fmt;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{self, Receiver, RecvTimeoutError, SyncSender, TryRecvError};
+use std::sync::mpsc;
+use std::sync::mpsc::Receiver;
+use std::sync::mpsc::RecvTimeoutError;
+use std::sync::mpsc::SyncSender;
+use std::sync::mpsc::TryRecvError;
+use std::sync::mpsc::TrySendError;
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
@@ -11,6 +16,8 @@ use zeta_app_server_protocol::protocol::initialize::InitializeParams;
 use zeta_app_server_protocol::schema_hash;
 
 const REQUEST_QUEUE_CAPACITY: usize = 64;
+const EVENT_QUEUE_CAPACITY: usize = 1_024;
+const EVENT_SEND_RETRY: Duration = Duration::from_millis(1);
 
 /// A cloneable request transport backed by an owned App Server session driver.
 #[derive(Clone)]
@@ -104,7 +111,7 @@ impl AppServerSession {
         let notifications = Arc::new(server.connection_notifications(&connection));
         let delivery = Arc::new(Mutex::new(()));
         let (commands, requests) = mpsc::sync_channel(REQUEST_QUEUE_CAPACITY);
-        let (event_sender, event_receiver) = mpsc::channel();
+        let (event_sender, event_receiver) = mpsc::sync_channel(EVENT_QUEUE_CAPACITY);
         let closing = Arc::new(AtomicBool::new(false));
 
         let driver_notifications = Arc::clone(&notifications);
@@ -289,7 +296,7 @@ fn pump_notifications(
     notifications: Arc<ConnectionNotifications>,
     delivery: Arc<Mutex<()>>,
     commands: SyncSender<DriverCommand>,
-    events: mpsc::Sender<AppServerEvent>,
+    events: mpsc::SyncSender<AppServerEvent>,
     closing: Arc<AtomicBool>,
 ) {
     while notifications.wait() {
@@ -299,7 +306,7 @@ fn pump_notifications(
                 let reason = ConnectionCloseReason::ProtocolFailure(
                     "notification delivery lock poisoned".into(),
                 );
-                let _ = events.send(AppServerEvent::ConnectionClosed(reason));
+                let _ = send_event(&events, AppServerEvent::ConnectionClosed(reason), &closing);
                 let _ = commands.send(DriverCommand::Shutdown);
                 notifications.close();
                 return;
@@ -308,10 +315,11 @@ fn pump_notifications(
         for raw in raw_notifications {
             match notification::decode(&raw) {
                 Ok(notification) => {
-                    if events
-                        .send(AppServerEvent::Notification(notification))
-                        .is_err()
-                    {
+                    if !send_event(
+                        &events,
+                        AppServerEvent::Notification(notification),
+                        &closing,
+                    ) {
                         let _ = commands.send(DriverCommand::Shutdown);
                         notifications.close();
                         return;
@@ -319,7 +327,7 @@ fn pump_notifications(
                 }
                 Err(error) => {
                     let reason = ConnectionCloseReason::ProtocolFailure(error.to_string());
-                    let _ = events.send(AppServerEvent::ConnectionClosed(reason));
+                    let _ = send_event(&events, AppServerEvent::ConnectionClosed(reason), &closing);
                     let _ = commands.send(DriverCommand::Shutdown);
                     notifications.close();
                     return;
@@ -331,9 +339,28 @@ fn pump_notifications(
     let reason = if closing.load(Ordering::Acquire) {
         ConnectionCloseReason::Shutdown
     } else {
+        let _ = commands.try_send(DriverCommand::Shutdown);
         ConnectionCloseReason::DriverStopped
     };
-    let _ = events.send(AppServerEvent::ConnectionClosed(reason));
+    let _ = send_event(&events, AppServerEvent::ConnectionClosed(reason), &closing);
+}
+
+fn send_event(
+    events: &SyncSender<AppServerEvent>,
+    mut event: AppServerEvent,
+    closing: &AtomicBool,
+) -> bool {
+    loop {
+        match events.try_send(event) {
+            Ok(()) => return true,
+            Err(TrySendError::Disconnected(_)) => return false,
+            Err(TrySendError::Full(_)) if closing.load(Ordering::Acquire) => return false,
+            Err(TrySendError::Full(returned)) => {
+                event = returned;
+                thread::sleep(EVENT_SEND_RETRY);
+            }
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

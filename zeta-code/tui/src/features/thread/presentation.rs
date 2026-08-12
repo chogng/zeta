@@ -73,6 +73,24 @@ pub(crate) fn evaluate_active_turn(
     }
 }
 
+pub(crate) fn recover_active_turn(turns: &[Turn]) -> Option<TurnId> {
+    turns
+        .iter()
+        .rev()
+        .find(|turn| {
+            matches!(
+                turn.status,
+                TurnStatus::Created
+                    | TurnStatus::Running
+                    | TurnStatus::WaitingForApproval
+                    | TurnStatus::WaitingForUserInput
+                    | TurnStatus::WaitingForCapability
+                    | TurnStatus::Cancelling
+            )
+        })
+        .map(|turn| turn.turn_id.clone())
+}
+
 pub(crate) fn present_turn_error(error: &StableTurnError) -> String {
     match error.code {
         StableTurnErrorCode::ModelInvocationFailed => {
@@ -83,5 +101,14 @@ pub(crate) fn present_turn_error(error: &StableTurnError) -> String {
         StableTurnErrorCode::CompletionPersistenceFailed => {
             "Zeta generated a response but couldn't save it. Please try again.".into()
         }
+        StableTurnErrorCode::InteractionDeadlineElapsed => {
+            "The approval or input request expired before it received a response. Please try the \
+             request again."
+                .into()
+        }
     }
 }
+
+#[cfg(test)]
+#[path = "presentation_tests.rs"]
+mod tests;

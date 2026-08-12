@@ -1,7 +1,7 @@
 # 产品协议
 
 > 物理位置：`zeta-rs/protocol/`  
-> 当前状态：Session-first canonical contract 基础已落地，Agent 执行相关契约部分完成  
+> 当前状态：Session-first canonical contract 与 Agent interaction delivery/deadline 已落地
 > Crate 类型、helper 与同步修改关系：[`zeta-rs/protocol/README.md`](../zeta-rs/protocol/README.md)
 > 上层接口：[Zeta App Server API](zeta-app-server-api.md)  
 > 执行计划：[Zeta Agent 执行架构与演进方案](zeta-agent-runtime-architecture.md)
@@ -144,9 +144,9 @@ Session sequence 与 Thread sequence 是两个 aggregate 的 revision，不是 I
 - `Completed`、`Failed`、`Interrupted`。
 
 其中 `WaitingForUserInput` 与 `WaitingForCapability` 已有 durable interaction event、Core reducer
-和 recovery 支持；它们不能再被解释成单纯预留 enum。请求投递到某条 App Server connection 的
-owner selection、deadline timer 和 disconnect policy 仍属于后续异步执行工作，不能因为
-canonical state 已存在而误称为完整的 Server → Client interaction 服务。
+和 recovery 支持；它们不能再被解释成单纯预留 enum。App Server 已按 initialize capability +
+Session-owned Thread subscription 选择 ephemeral owner，通过 `agent/request` 主动投递，并执行
+断连重选和 durable deadline cancellation；这些 runtime state 仍不属于 canonical Thread。
 
 ### 3.4 ThreadItem
 
@@ -275,8 +275,9 @@ InteractionCancelled { requestId, reason }
 ```
 
 `InteractionRequested` 将 Running Turn 转为对应 waiting status，resolved/cancelled 关闭同一个
-pending interaction 并返回 Running。`ResolveUserInput` / `ResolveDynamicTool` 是 client 发起的
-retry-safe Thread command，必须带 exact `RequestId`；它们不是 Agent request 自身。
+pending interaction并返回 Running。App Server 的 canonical `SessionRequest::ResolveInteraction`
+是 client 发起的 retry-safe aggregate command，必须带 exact `RequestId`；它不是 Agent request
+自身。
 
 完整生命周期必须明确：
 
@@ -294,9 +295,9 @@ delivery assignment；断开时只能重新选择并重投递，或追加 `Inter
 reason: OwnerDisconnected }`，不得让 durable Turn 永远停在 waiting。deadline 同样是 durable
 absolute instant，但 timer 和超时 policy 属于执行控制层。
 
-当前已完成 canonical contract、Core reducer/recovery、以及 `session/request` 的 `ResolveInteraction` typed
-App Server command；完整的 Agent loop、connection owner selection、主动 delivery 与 deadline
-timer 尚未实现。因此这不是完整的 Server → Client request service。
+当前已完成 canonical contract、Core reducer/recovery、`session/request::ResolveInteraction`、
+initialize capability、connection owner selection、`agent/request` 主动 delivery、断连重选与
+deadline timer。具体 host 只声明它实际支持的 interaction kind；未声明 kind 不会被错误投递。
 
 ## 5. Sequence、Cursor 与 ID
 
@@ -582,7 +583,7 @@ zeta-rs/protocol/
 
 完成条件：无效 ID 无法通过公开 constructor 或 deserialize 创建，公共 API 可被显式审计。
 
-### 阶段 P2：补齐异步 Turn 交互契约（进行中）
+### 阶段 P2：补齐异步 Turn 交互契约（完成）
 
 该阶段必须与 `zeta-agent`、Core 和 App Server 的 vertical slice 同步完成：
 
@@ -591,14 +592,13 @@ zeta-rs/protocol/
 - 已增加 `InteractionRequested` / `InteractionResolved` / `InteractionCancelled` facts 与
   `TurnInteraction` snapshot；
 - 已让 waiting Turn status 可由 durable event 重建，recovery 保留仍可行动的 wait；
-- 已接通带 `RequestId` 的 `ResolveUserInput` / `ResolveDynamicTool` 与
-  `session/request` 的 `ResolveInteraction`；
-- 仍需 Agent 执行层把 request 产生、owner selection、主动 delivery、timeout 与 disconnect
-  policy 组成真实的 Server → Client vertical slice；
+- 已接通带 `RequestId` 的 `session/request::ResolveInteraction`；
+- App Server 已把 request、initialize capability、owner selection、主动 delivery、deadline 与
+  disconnect re-selection 组成真实的 Server → Client vertical slice；
 - 保证 Agent request 与 Thread command 不混为一类。
 
-当前子阶段完成条件已满足：进程在等待用户/工具响应时重启，能恢复为明确 waiting 状态，不留下
-永久 Running。P2 完整完成仍要求 owner/delivery/timer 的 async vertical slice。
+完成条件已满足：进程等待响应时可恢复明确 waiting 状态；full request 只投递给 selected owner；
+断连可重选；deadline 形成 durable cancellation + stable Turn failure。
 
 ### 阶段 P3：收敛模型/工具契约
 

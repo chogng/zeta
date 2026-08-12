@@ -115,6 +115,27 @@
         "decision"
       ]
     },
+    "AgentInteractionCapability": {
+      "description": "Agent interaction kinds that one client connection can present and resolve.\n\nApp Server uses this declaration only for ephemeral owner selection. It never persists the\nconnection capability in Session or Thread state, and clients must still subscribe to the\ntarget Thread before they can become an interaction owner.",
+      "type": "object",
+      "properties": {
+        "kinds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AgentInteractionKind"
+          }
+        },
+        "version": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "version",
+        "kinds"
+      ]
+    },
     "AgentInteractionKind": {
       "type": "string",
       "enum": [
@@ -173,6 +194,30 @@
             "call"
           ]
         }
+      ]
+    },
+    "AgentRequestEnvelope": {
+      "description": "Delivery-ready view of a durable Turn interaction.\n\nThis envelope deliberately carries aggregate context but not a connection owner; App Server\nowns routing to a live connection and must reselect or cancel on disconnect.",
+      "type": "object",
+      "properties": {
+        "interaction": {
+          "$ref": "#/$defs/TurnInteraction"
+        },
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "threadId": {
+          "$ref": "#/$defs/ThreadId"
+        },
+        "turnId": {
+          "$ref": "#/$defs/TurnId"
+        }
+      },
+      "required": [
+        "sessionId",
+        "threadId",
+        "turnId",
+        "interaction"
       ]
     },
     "AgentResponse": {
@@ -260,6 +305,8 @@
         "AlreadyInitialized",
         "CommandConflict",
         "CoreOperationFailed",
+        "AgentInteractionNotOwner",
+        "AgentInteractionExpired",
         "ResourceNotFound",
         "ResourceNotOwner",
         "ResourceTooLarge",
@@ -355,6 +402,17 @@
     "ClientCapabilities": {
       "type": "object",
       "properties": {
+        "agentInteractions": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AgentInteractionCapability"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "browser": {
           "anyOf": [
             {
@@ -4321,6 +4379,7 @@
         "capabilities": {
           "$ref": "#/$defs/ClientCapabilities",
           "default": {
+            "agentInteractions": null,
             "browser": null,
             "notifications": null
           }
@@ -5405,6 +5464,9 @@
     "ServerCapabilities": {
       "type": "object",
       "properties": {
+        "agentInteractions": {
+          "type": "boolean"
+        },
         "documentCollaboration": {
           "type": "boolean"
         },
@@ -5443,6 +5505,7 @@
         }
       },
       "required": [
+        "agentInteractions",
         "documentCollaboration",
         "sessions",
         "threads",
@@ -5474,6 +5537,22 @@
     },
     "ServerNotificationSchema": {
       "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "agent/request"
+            },
+            "params": {
+              "$ref": "#/$defs/AgentRequestEnvelope"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
         {
           "type": "object",
           "properties": {
@@ -6815,7 +6894,8 @@
       "type": "string",
       "enum": [
         "modelInvocationFailed",
-        "completionPersistenceFailed"
+        "completionPersistenceFailed",
+        "interactionDeadlineElapsed"
       ]
     },
     "StreamCursor": {

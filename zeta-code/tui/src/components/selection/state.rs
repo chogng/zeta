@@ -20,6 +20,12 @@ pub(crate) enum SelectionActivationMode {
     EnterOrSpace,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum SelectionDismissal {
+    Allowed,
+    Blocked,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct SelectionItem {
     id: Option<SelectionItemId>,
@@ -114,8 +120,10 @@ pub(crate) struct SelectionViewModel {
     title: String,
     tabs: Vec<SelectionTab>,
     search: Option<SearchBoxModel>,
+    free_form_action: Option<SelectionItemId>,
     empty_message: String,
     activation_mode: SelectionActivationMode,
+    dismissal: SelectionDismissal,
     show_tabs: bool,
     selection_enabled: bool,
     initial_selected: usize,
@@ -133,8 +141,10 @@ impl SelectionViewModel {
             title: title.into(),
             tabs,
             search: None,
+            free_form_action: None,
             empty_message: "No matching items".into(),
             activation_mode: SelectionActivationMode::Enter,
+            dismissal: SelectionDismissal::Allowed,
             show_tabs: true,
             selection_enabled: true,
             initial_selected: 0,
@@ -145,6 +155,11 @@ impl SelectionViewModel {
 
     pub(crate) fn with_activation_mode(mut self, mode: SelectionActivationMode) -> Self {
         self.activation_mode = mode;
+        self
+    }
+
+    pub(crate) fn with_dismissal(mut self, dismissal: SelectionDismissal) -> Self {
+        self.dismissal = dismissal;
         self
     }
 
@@ -178,6 +193,16 @@ impl SelectionViewModel {
         self
     }
 
+    pub(crate) fn with_free_form(
+        mut self,
+        placeholder: impl Into<String>,
+        action: SelectionItemId,
+    ) -> Self {
+        self.search = Some(SearchBoxModel::new(placeholder).initially_active());
+        self.free_form_action = Some(action);
+        self
+    }
+
     pub(crate) fn with_empty_message(mut self, message: impl Into<String>) -> Self {
         self.empty_message = message.into();
         self
@@ -187,8 +212,13 @@ impl SelectionViewModel {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum SelectionInputOutcome {
     Activate(SelectionItemId),
+    ActivateFreeForm {
+        item_id: SelectionItemId,
+        value: String,
+    },
     Consumed,
     Dismiss,
+    Unhandled,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -321,8 +351,17 @@ impl SelectionViewState {
     }
 
     pub(crate) fn handle_key(&mut self, key: KeyEvent) -> SelectionInputOutcome {
+        if key.modifiers == KeyModifiers::CONTROL && key.code == KeyCode::Enter {
+            if let Some(outcome) = self.free_form_outcome() {
+                return outcome;
+            }
+            return SelectionInputOutcome::Consumed;
+        }
         if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
-            return SelectionInputOutcome::Dismiss;
+            return match self.model.dismissal {
+                SelectionDismissal::Allowed => SelectionInputOutcome::Dismiss,
+                SelectionDismissal::Blocked => SelectionInputOutcome::Unhandled,
+            };
         }
         if key.modifiers.contains(KeyModifiers::CONTROL)
             || key.modifiers.contains(KeyModifiers::ALT)
@@ -342,7 +381,12 @@ impl SelectionViewState {
         }
 
         match key.code {
-            KeyCode::Esc => return SelectionInputOutcome::Dismiss,
+            KeyCode::Esc => {
+                return match self.model.dismissal {
+                    SelectionDismissal::Allowed => SelectionInputOutcome::Dismiss,
+                    SelectionDismissal::Blocked => SelectionInputOutcome::Consumed,
+                };
+            }
             KeyCode::Left | KeyCode::BackTab => self.switch_tab(TabDirection::Previous),
             KeyCode::Right | KeyCode::Tab => self.switch_tab(TabDirection::Next),
             KeyCode::Up => self.move_selection(SelectionDirection::Previous),
@@ -352,6 +396,9 @@ impl SelectionViewState {
             KeyCode::Enter => {
                 if let Some(id) = self.selected_item_id() {
                     return SelectionInputOutcome::Activate(id);
+                }
+                if let Some(outcome) = self.free_form_outcome() {
+                    return outcome;
                 }
             }
             KeyCode::Char(' ') => {
@@ -377,6 +424,17 @@ impl SelectionViewState {
 
     fn active_tab(&self) -> &SelectionTab {
         &self.model.tabs[self.active_tab]
+    }
+
+    fn free_form_outcome(&self) -> Option<SelectionInputOutcome> {
+        let value = self.query().trim();
+        if value.is_empty() {
+            return None;
+        }
+        Some(SelectionInputOutcome::ActivateFreeForm {
+            item_id: self.model.free_form_action.clone()?,
+            value: value.to_owned(),
+        })
     }
 
     fn selected_item_id(&self) -> Option<SelectionItemId> {

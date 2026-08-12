@@ -26,6 +26,7 @@ Session/Thread coordinator 的存储，不改变 Config、Workspace、Tool 或 p
 | cloneable request handle | ✅ | 仅 `T: Clone` 时可克隆 |
 | 独立 wakeable event stream | ✅ | ❌，通过 `drain_notifications` 读取 |
 | 空闲/长 Turn notification | ✅ | 需要 consumer polling |
+| 有界 event/backpressure | ✅，1024 项 event channel | 由 consumer drain cadence 决定 |
 | 显式 connection shutdown/task join | ✅ | 由 host 管理 |
 | remote backend | 尚未完成 | ❌ |
 
@@ -98,7 +99,7 @@ App Server background update
 ├─ UpdateBroker → NotificationQueue::push/extend
 ├─ condition variable wake
 ├─ notification pump → typed decode
-└─ AppServerEvents
+└─ bounded AppServerEvents (1024)
 ```
 
 Connection driver 在 request response completion 发送之前持有 delivery barrier；event pump
@@ -111,17 +112,20 @@ Connection driver 在 request response completion 发送之前持有 delivery ba
 - server failure：保留 code/message 为 `ClientError::Server`；
 - known notification decode 失败：event stream 发送 `ProtocolFailure` 并关闭 connection；
 - event receiver 被 drop：pump 关闭 connection，surviving client clone 的后续 request 失败；
+- event channel 满时 pump 背压 App Server 的 4096 项 connection queue；该 queue 先清可重建
+  transient，control-only overflow 关闭 connection，不静默丢 durable/control fact；
 - 正常退出必须调用 `shutdown`；`Drop` 只做 best-effort signal，不等待 task；
 - `shutdown` 后仍存在的 client clone 不延长 connection 生命周期。
 
-当前 event channel 无界，以避免静默丢失 durable update。按 aggregate bounded data plane、
-`Lagged`/resync policy 与 remote reconnect 尚未实现，不能把这些 Proposed 能力写成 Current。
+当前 event channel 已有界；transient purge 依赖 consumer 的 stream cursor gap → snapshot resync。
+显式 `Lagged` event 与 remote reconnect 尚未实现，connection/control overflow 后 consumer 仍需按
+`ConnectionClosed` 处理恢复。
 
 ## 内部所有权与漂移信号
 
 - `session::drive_connection` 唯一拥有 `ConnectionState` 与 request dispatch；
 - `session::pump_notifications` 唯一解码 session outbound notification；
-- `server::update_broker::NotificationQueue`（App Server crate）拥有 wake/close queue primitive；
+- `server::notification_queue::NotificationQueue`（App Server crate）拥有 wake/close queue primitive；
 - `AppServerClient::call` 拥有 request ID、JSON-RPC pairing 与 typed result decode；
 - `in_process::initialize_client` 只服务 embedded startup。
 
@@ -152,6 +156,6 @@ cargo test --manifest-path Cargo.toml -p zeta-tui
 cargo test --manifest-path Cargo.toml -p zeta-cli
 ```
 
-Session tests覆盖空闲连接 notification、Turn completion event、显式 shutdown、最终
-`ConnectionClosed` 与 surviving clone rejection。Contract tests继续覆盖 JSON-RPC pairing、schema gate、
-canonical Session mutation、Skill watcher 和同步 client surface。
+Session tests覆盖空闲连接 notification、Turn completion event、有界 channel 关闭不死锁、显式
+shutdown、最终 `ConnectionClosed` 与 surviving clone rejection。Contract tests继续覆盖 JSON-RPC
+pairing、schema gate、canonical Session mutation、Agent request、Skill watcher 和同步 client surface。

@@ -5,6 +5,7 @@ mod view;
 
 pub(crate) use preview::SelectionPreview;
 pub(crate) use state::SelectionActivationMode;
+pub(crate) use state::SelectionDismissal;
 pub(crate) use state::SelectionInputOutcome;
 pub(crate) use state::SelectionItem;
 pub(crate) use state::SelectionItemId;

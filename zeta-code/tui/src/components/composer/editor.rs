@@ -216,6 +216,11 @@ impl TextArea {
         self.next_element_id = 0;
     }
 
+    pub(super) fn replace_text(&mut self, text: &str) {
+        self.clear();
+        self.insert_text(text);
+    }
+
     fn backspace(&mut self) {
         if let Some(range) = self
             .elements

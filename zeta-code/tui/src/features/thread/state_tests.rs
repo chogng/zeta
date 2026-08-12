@@ -8,6 +8,10 @@ use zeta_protocol::Thread;
 use zeta_protocol::ThreadId;
 use zeta_protocol::ThreadItem;
 use zeta_protocol::ThreadStatus;
+use zeta_protocol::ThreadUpdate;
+use zeta_protocol::ThreadUpdateEnvelope;
+use zeta_protocol::ToolCallId;
+use zeta_protocol::ToolName;
 use zeta_protocol::Turn;
 use zeta_protocol::TurnId;
 use zeta_protocol::TurnStatus;
@@ -28,9 +32,141 @@ fn canonical_snapshot_replaces_optimistic_projection_and_preserves_identity() {
             .collect::<Vec<_>>(),
         vec![
             (MessageRole::User, "canonical prompt"),
+            (MessageRole::Reasoning, "inspect the code"),
             (MessageRole::User, "[Image]"),
+            (MessageRole::Plan, "1. inspect\n2. change"),
+            (MessageRole::Tool, "Tool · read_file"),
+            (MessageRole::Tool, "Tool result · read_file"),
             (MessageRole::Agent, "canonical response"),
         ]
+    );
+    assert_eq!(
+        state.messages()[4].detail.as_deref(),
+        Some("{\n  \"path\": \"src/lib.rs\"\n}")
+    );
+    assert_eq!(state.messages()[5].detail.as_deref(), Some("file contents"));
+}
+
+#[test]
+fn transient_deltas_update_identity_stable_transcript_rows() {
+    let mut state = ThreadFeatureState::default();
+    state.update(ThreadPresentationEvent::SnapshotReceived(Thread {
+        turns: Vec::new(),
+        ..thread_snapshot()
+    }));
+    let turn_id = TurnId::new("turn_stream").unwrap();
+    let item_id = ItemId::new("item_stream").unwrap();
+    state.update(ThreadPresentationEvent::TransientUpdateReceived(Box::new(
+        transient(ThreadUpdate::ItemStarted {
+            turn_id: turn_id.clone(),
+            item: ThreadItem::AgentMessage {
+                item_id: item_id.clone(),
+                turn_id: turn_id.clone(),
+                text: String::new(),
+            },
+        }),
+    )));
+    for text in ["hel", "lo"] {
+        state.update(ThreadPresentationEvent::TransientUpdateReceived(Box::new(
+            transient(ThreadUpdate::ItemDelta {
+                turn_id: turn_id.clone(),
+                item_id: item_id.clone(),
+                delta: zeta_protocol::ItemDelta::AgentMessage { text: text.into() },
+            }),
+        )));
+    }
+
+    assert_eq!(state.messages().len(), 1);
+    assert_eq!(state.messages()[0].role, MessageRole::Agent);
+    assert_eq!(state.messages()[0].text, "hello");
+}
+
+#[test]
+fn transient_projection_bounds_each_message_without_splitting_utf8() {
+    let mut state = ThreadFeatureState::default();
+    state.update(ThreadPresentationEvent::SnapshotReceived(Thread {
+        turns: Vec::new(),
+        ..thread_snapshot()
+    }));
+    let turn_id = TurnId::new("turn_stream").unwrap();
+    let item_id = ItemId::new("item_stream").unwrap();
+    state.update(ThreadPresentationEvent::TransientUpdateReceived(Box::new(
+        transient(ThreadUpdate::ItemDelta {
+            turn_id,
+            item_id,
+            delta: zeta_protocol::ItemDelta::AgentMessage {
+                text: "界".repeat(100_000),
+            },
+        }),
+    )));
+
+    let text = &state.messages()[0].text;
+    assert!(text.len() <= 256 * 1024);
+    assert!(text.ends_with("… transient output truncated …"));
+    assert!(std::str::from_utf8(text.as_bytes()).is_ok());
+}
+
+#[test]
+fn transient_projection_bounds_identity_cardinality() {
+    let mut state = ThreadFeatureState::default();
+    state.update(ThreadPresentationEvent::SnapshotReceived(Thread {
+        turns: Vec::new(),
+        ..thread_snapshot()
+    }));
+    let turn_id = TurnId::new("turn_stream").unwrap();
+    for index in 0..1_100 {
+        state.update(ThreadPresentationEvent::TransientUpdateReceived(Box::new(
+            transient(ThreadUpdate::ItemDelta {
+                turn_id: turn_id.clone(),
+                item_id: ItemId::new(format!("item_{index}")).unwrap(),
+                delta: zeta_protocol::ItemDelta::AgentMessage { text: "x".into() },
+            }),
+        )));
+    }
+
+    assert_eq!(state.messages().len(), 1_024);
+    assert_eq!(
+        state.messages()[0].source_id.as_deref(),
+        Some("item:item_76")
+    );
+}
+
+#[test]
+fn transient_stream_reset_removes_only_transient_rows() {
+    let mut state = ThreadFeatureState::default();
+    state.update(ThreadPresentationEvent::SnapshotReceived(thread_snapshot()));
+    state.update(ThreadPresentationEvent::NoticeReceived(
+        "local notice".into(),
+    ));
+    state.update(ThreadPresentationEvent::TransientUpdateReceived(Box::new(
+        transient(ThreadUpdate::ItemDelta {
+            turn_id: TurnId::new("turn_stream").unwrap(),
+            item_id: ItemId::new("item_stream").unwrap(),
+            delta: zeta_protocol::ItemDelta::AgentMessage {
+                text: "temporary".into(),
+            },
+        }),
+    )));
+
+    state.update(ThreadPresentationEvent::TransientStreamReset);
+
+    assert!(
+        state
+            .messages()
+            .iter()
+            .all(|message| message.text != "temporary")
+    );
+    assert!(
+        state
+            .messages()
+            .iter()
+            .any(|message| message.text == "canonical response")
+    );
+    assert!(
+        state
+            .messages()
+            .iter()
+            .any(|message| message.text == "local notice")
     );
 }
 
@@ -115,12 +251,31 @@ fn thread_snapshot() -> Thread {
                 ThreadItem::Reasoning {
                     item_id: ItemId::new("item_2").unwrap(),
                     turn_id: turn_id.clone(),
-                    text: "not currently rendered".into(),
+                    text: "inspect the code".into(),
                 },
                 ThreadItem::UserImage {
                     item_id: ItemId::new("item_3").unwrap(),
                     turn_id: turn_id.clone(),
                     url: "data:image/png;base64,cG5n".into(),
+                },
+                ThreadItem::Plan {
+                    item_id: ItemId::new("item_plan").unwrap(),
+                    turn_id: turn_id.clone(),
+                    text: "1. inspect\n2. change".into(),
+                },
+                ThreadItem::ToolCall {
+                    item_id: ItemId::new("item_tool_call").unwrap(),
+                    turn_id: turn_id.clone(),
+                    tool_call_id: ToolCallId::new("call_1").unwrap(),
+                    name: ToolName::new("read_file").unwrap(),
+                    arguments_json: r#"{"path":"src/lib.rs"}"#.into(),
+                },
+                ThreadItem::ToolResult {
+                    item_id: ItemId::new("item_tool_result").unwrap(),
+                    turn_id: turn_id.clone(),
+                    tool_call_id: ToolCallId::new("call_1").unwrap(),
+                    text: "file contents".into(),
+                    is_error: false,
                 },
                 ThreadItem::AgentMessage {
                     item_id: ItemId::new("item_4").unwrap(),
@@ -131,5 +286,15 @@ fn thread_snapshot() -> Thread {
             pending_interaction: None,
             error: None,
         }],
+    }
+}
+
+fn transient(update: ThreadUpdate) -> ThreadUpdateEnvelope {
+    ThreadUpdateEnvelope {
+        session_id: SessionId::new("session_1").unwrap(),
+        thread_id: ThreadId::new("thread_1").unwrap(),
+        durable_sequence: 7,
+        stream_cursor: None,
+        update,
     }
 }

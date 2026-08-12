@@ -39,10 +39,11 @@ Zeta 的产品 authority、typed contract 和 crate dependency direction 仍由�
 
 | 内容 | 状态 | Canonical owner |
 | --- | --- | --- |
-| 当前 wakeable event loop、typed Thread subscription、snapshot resync 与已有交互 | Current | [`zeta-code/tui/README.md`](../zeta-code/tui/README.md) |
+| 当前 wakeable event loop、typed Thread subscription、snapshot/transient resync 与交互 | Current | [`zeta-code/tui/README.md`](../zeta-code/tui/README.md) |
 | 本文的 ownership 与长期不变量 | Accepted architecture baseline | 本文 |
 | independent request driver、wakeable event pump | Current | [`app-server-client.md`](app-server-client.md) 与 crate README |
-| 非阻塞 request completion dispatch、transient data plane 与剩余 feature | Proposed | 本文的演进阶段 |
+| 非阻塞 request completion dispatch、有界 transient data plane、Session/Thread/interaction 垂直切片 | Current | [`zeta-code/tui/README.md`](../zeta-code/tui/README.md) |
+| Markdown/diff/table、selection/copy、reconnect 与尚无 contract 的 feature | Proposed / Potential | 本文的演进阶段 |
 | 尚无产品 contract 的 feature | Potential；不构成实现承诺 | 对应领域与 App Server API 文档 |
 
 Zeta 已经在 TUI 外部拥有：
@@ -83,9 +84,10 @@ zeta-cli
   → zeta-core
 ```
 
-本地只读能力不必绕行 App Server：workspace file search 直接调用 `zeta-file-search`，未来
-Git 状态直接调用 `zeta-git`。原则不是“所有数据经过一个 facade”，而是“每个 feature 直接
-消费事实 owner 已经提供的 public typed interface”。
+本地只读能力不必统一绕行 App Server：composer 的 workspace path mention 直接调用
+`zeta-file-search`；需要 workspace authority、跨进程一致性或 watcher revision 的目录浏览与 Git
+状态通过 typed App Server filesystem/Git contract。原则不是“所有数据经过一个 facade”，而是
+“每个 feature 消费事实 owner 已提供的 public typed interface”。
 
 进程内模式只是一种 transport 优化。TUI 仍然经过 initialize、typed request/response、
 dispatcher 和 notification decode，不得直接依赖 Core、Storage、Exec、Sandbox 或 Model
@@ -436,11 +438,11 @@ pending request 至少记录 result route、scope、generation、cancellation st
 取消只表示 TUI 不再接受结果；除非 typed contract 明确支持取消，不能假定远端副作用没有发生。
 写请求在结果未知时不得自动生成新 `CommandId` 重放。
 
-共享 client 已用 bounded request channel、per-request completion 与独立 wakeable
-`AppServerEvents` 替换 TUI 的 `round_trip + drain_notifications` 路径。TUI 不再轮询
-notification；下一步是把仍在主 loop 同步等待的 typed completion 也变成内部 result event，
-使异常缓慢的 control-plane request 期间仍能处理键盘和重绘。TUI 不能通过直连 Core、读取
-日志或私有 transport method 绕过。
+共享 client 使用 bounded request/event channel、per-request completion 与独立 wakeable
+`AppServerEvents` 替换 TUI 的 `round_trip + drain_notifications` 路径。TUI 的
+`client::RequestTask` 执行 typed request，`app::request_completion` 在单写者 loop 校验 scope 并
+安装结果；用户 request intent 在单槽执行器前保序排队，Quit 和纯本地操作仍可立即处理。TUI
+不能通过直连 Core、读取日志或私有 transport method 绕过。
 
 ## 7. `features/thread/`：active Thread 的唯一 TUI 所有者
 
@@ -590,27 +592,29 @@ owner 的公开 typed interface，`view.rs` 组装 component。没有请求的 f
 | Feature | 职责 |
 | --- | --- |
 | `thread` | active Thread snapshot/update、Turn start/interrupt、transient merge 与页面组装 |
-| `sessions` | list、create、resume、complete、archive Session |
+| `sessions` | Session list/create/resume/archive 与 Thread create/fork/rewind/switch/archive |
+| `interactions` | owner-directed approval 与 structured user-input view/response mapping |
 | `config` | typed config read/update UI |
 | `skills` | typed catalog、enablement intent 和 selection row model |
-| `workspace_files` | 通过 `zeta-file-search` 查询并产生 composer completion |
+| `workspace_files` | `zeta-file-search` mention completion + typed filesystem browser/preview |
 | `status_line` | 汇集既有接口结果并执行 item 排列、降级与渲染 |
 
 resources 等已经有 typed contract、但尚未开始 TUI 工作的能力不提前出现在目录树中；开始
 实现时再按同一文件契约添加 feature。
 
-以下能力不能仅因为 Codex TUI 已经存在就提前创建：
+approval、request-user-input 与 MCP 已在 canonical contract 完整后作为垂直切片接入；TUI 只声明
+实际支持的 interaction kind，App Server 选择唯一 owner，deadline/cancellation 不由 view 决定。
+以下能力仍不能仅因为其他产品存在就提前创建：
 
-- approval 与 request-user-input；
 - plugins、connectors 和 account/login surface；
-- MCP、hooks、goals、usage 和 review；
+- hooks、goals、usage 和 review；
 - feedback、updates 和 visualization；
 - sub-agent 或 side conversation 导航。
 
 这些能力必须先进入 Zeta canonical domain 和 App Server API，具备 typed
 request/response/notification、顺序、取消、错误与恢复语义，然后 TUI 才添加对应垂直切片。
-例如 approval 在 App Server 尚未提供 server-to-client request 和 typed response 前，TUI
-不能靠检查 ToolCall 名称或 arguments JSON 自行弹窗并决定策略。
+未来 interaction kind 也必须先扩展同一个 capability/owner/request/response/deadline contract；
+TUI 不能靠检查 ToolCall 名称或 arguments JSON 自行弹窗并决定策略。
 
 外部 Agent 配置导入是明确的 Desktop-only 产品边界，不属于上述“等待 canonical contract
 后再进入 TUI”的潜在功能。TUI 不提供 `/add-dir`、`/import-agent`、目录选择器或等价的
@@ -636,7 +640,7 @@ Git、配置或 Thread。
 | --- | --- | --- | --- |
 | preferred model | `AppServerClient::read_config` | 把 `ConfigReadResult::preferred_model` 映射为长/短文案 | 已实现 |
 | workspace | `TuiOptions::workspace_root` | 保留完整路径和 basename 两种展示值 | 已实现 |
-| Git branch/state | `zeta-git` public async interface | 在 update path 请求 snapshot，映射所需字段 | 尚未接入 |
+| Git branch/state | App Server `git/status` + `git/statusChanged`，其 owner 调用 `zeta-git` | startup/read 与 notification 映射 branch/dirty/count | 已实现 |
 | Thread/Turn/usage | App Server typed snapshot/update | 消费 contract 已提供的字段，不从 transcript 推导 | contract 尚未提供完整 usage |
 | connection/runtime state | `client/` 与 `app/` 本地状态 | 映射为 presentation item | 规划中 |
 
@@ -661,9 +665,8 @@ overflow policy；配置持久化必须先进入 typed config contract，不能�
 stale 语义。任何新 item 都应先回答“哪个 crate/interface 拥有这个事实”，再添加展示映射和
 宽度测试。
 
-当前实现已经由 `features/status_line/model.rs` 拥有 model 与宽度降级，
-`features/status_line/view.rs` 只负责右对齐渲染。这是上述边界的首个垂直切片，不代表 Git、
-usage 或可配置 item 已经完成。
+当前实现由 `features/status_line/model.rs` 拥有 model、Git projection 与宽度降级，
+`features/status_line/view.rs` 只负责右对齐渲染。usage 和可配置 item/order 仍未完成。
 
 ## 12. `host/`：窄宿主能力
 
@@ -768,7 +771,7 @@ coalesced frame request
 | --- | --- | --- |
 | 退出、用户提交、interrupt、approval response | Must deliver / ordered | 最高控制优先级，不被后台流量饿死 |
 | committed update、command completion、fatal error | Ordered lossless | 进入控制面；不得被 frame throttle 合并掉 |
-| assistant/process text delta | Ordered lossless + batch | 可批处理相邻 delta，不得无语义丢弃 |
+| assistant/process text delta | Ordered + recoverable gap | 正常路径连续应用；overflow 可丢 transient，但必须由 cursor gap 清除 projection 并 resync |
 | tool/progress preview | Latest wins / coalescable | 允许保留最新 revision |
 | draw request | Coalescable | 多次请求合并为一次 frame |
 | resize | Latest wins | 保留最新尺寸并触发必要 reflow |
@@ -780,6 +783,12 @@ completion 是控制面 barrier：应用 completion 前必须消费或明确作�
 buffer overflow、receiver lag 或 cursor gap 立即把对应 projection 标为需要 resync，不能静默
 丢弃 Must-deliver 语义。
 
+当前实现的三层上限是 App Server 每 connection 4096 条 notification、共享 client 1024 条 event、
+TUI EventPump 1024 条 runtime event；App Server 满载时先清 transient，control-only overflow 关闭
+connection。Thread projection 每个 transient row 限 256 KiB、最多 1024 个 identity。TUI 尚未有
+自动 reconnect，因此 connection overflow 会显示 failure 并要求重启；这与已有 cursor-gap
+snapshot resync 是两个不同恢复层级。
+
 ### 13.3 展示映射
 
 TUI 不应长期保存原始 transport envelope。protocol crate 已经提供稳定 canonical
@@ -789,7 +798,7 @@ presentation mapping：
 - wire object 字段庞大或变化频繁，而界面只需要稳定子集；
 - Desktop/TUI 等多个前端确实共享同一种 presentation semantic；
 - replay、脱敏 trace 或多种 render mode 需要稳定 identity/revision；
-- server request 需要转换成不会泄漏 transport 细节的交互模型。
+- server-originated agent request 需要转换成不会泄漏 transport 细节的交互模型。
 
 不机械包装稳定 ID、简单 enum 或已经 canonical 的产品 value。mapping 只能降低耦合，不能
 成为第二套领域模型或兼容私有 wire DTO 的长期层。
@@ -808,8 +817,8 @@ pub fn run(
 `run` 从已经初始化的 `AppServerSession` 获得 request handle 与 event stream，并在退出路径
 显式调用 `shutdown()`、等待 background driver join。它不接受启动参数后自行选择 transport，
 也不接受生命周期不明确的裸 transport/client。当前 Rust host 保持同步入口，connection
-notification 与 terminal input 已由独立 source 唤醒；typed request completion 仍同步返回，
-后续需要进入 app event loop 的 typed completion event。
+notification 与 terminal input 已由独立 source 唤醒；共享 typed method 保持同步返回，但 TUI
+通过 `RequestTask → app::request_completion` 将等待和结果应用分开。
 
 入口建议使用 enum 表达，避免含义不明的 bool 或 `Option`：
 
@@ -883,6 +892,7 @@ app/
 ├── event_loop.rs
 ├── frame/
 ├── help.rs
+├── request_completion.rs
 ├── state.rs
 └── state_tests.rs
 client/
@@ -890,6 +900,7 @@ client/
 ├── command_id.rs
 ├── event_pump.rs
 ├── notification.rs
+├── request_task.rs
 └── *_tests.rs
 components/
 ├── mod.rs
@@ -900,11 +911,13 @@ components/
 features/
 ├── mod.rs
 ├── config/
+├── interactions.rs + interactions/
 ├── sessions/
 ├── skills/
 ├── status_line/
 ├── thread/
 │   ├── presentation.rs
+│   ├── projection.rs
 │   ├── request.rs
 │   ├── state.rs
 │   ├── subscription.rs
@@ -933,15 +946,22 @@ lib_tests.rs
   `AppEvent` 进入 `App::update`，`FileSearchManager` 由 event loop 持有；
 - `client/event_pump.rs` 独立等待 terminal 与 `AppServerEvents`，并把两者汇入单写者 loop；
   `client/notification.rs` 把共享 connection event 映射成 typed `ClientEvent`，保留
-  `skills/changed`、`ThreadUpdateEnvelope` 和 connection failure；
+  `agent/request`、`skills/changed`、Git、`ThreadUpdateEnvelope` 和 connection failure；event
+  channel 有界，Tick 可丢弃而 input/control 不静默丢失；
+- `client/RequestTask` 在 worker 执行 typed request，`app/request_completion.rs` 校验 scope 并把
+  completion 安装到单写者 state；同一 request slot 前的用户 intent 保序排队，全部 product
+  command、Turn mutation、文件浏览与 subscription switch 均不在 draw/input 线程等待；
 - `features/thread/ThreadSubscription` 在启动和 active Thread 切换时调用 typed
   `session/thread/subscribe`/`session/thread/unsubscribe`，验证 Session/Thread scope，并用最后确认的 snapshot
-  sequence 丢弃重复或旧 scope update；
+  sequence 丢弃重复或旧 scope update；stream instance/cursor 单独排序 transient，gap/runtime
+  switch 清除不可信 row 并请求 snapshot；
 - newer durable sequence（包括 gap）只触发 `session/thread/read` resync；TUI 不执行 `ThreadEvent`
   reducer。`refresh_turn` 不再二次 drain notification，因此不会吞掉订阅事件；
 - `features/thread/ThreadFeatureState` 已成为 active Thread snapshot 与当前 transcript projection
   的唯一 TUI owner；本地 optimistic user message、notice 与 failure 也通过 feature event
   进入同一 owner，下一份 canonical snapshot 会替换 projection；
+- `features/thread/projection.rs` 显示完整 ThreadItem，并有界保存最多 1024 个 transient identity、
+  每个 row 256 KiB；`components/transcript` 只负责 role/detail layout 和 scroll；
 - `components/transcript` 已拥有 transcript row wrapping、role chrome、empty state 与只读
   Ratatui view，以及 component-facing `Message`/`MessageRole`；它不依赖 feature、`App` 或保存
   canonical Thread；
@@ -949,8 +969,11 @@ lib_tests.rs
   request module 不引用或更新 `App`。event loop 把结果转换为 `AppEvent`，presentation module
   只把 canonical Turn snapshot 分类为可展示 outcome；
 - `features/sessions/ActiveConversation` 拥有当前 product Session/Thread identity 与 sequence，
-  create/fork/resume 返回 snapshot/notice outcome，不直接写 `App`；`app/dispatch.rs` 只解释
-  slash intent 并应用结果；
+  create/fork/rewind/resume/switch/archive 返回 conversation change/notice，不直接写 `App`；新的
+  canonical snapshot 由后台 subscription completion 安装。Session picker、Thread active/archived
+  tabs 与 replacement lifecycle 由同一 feature 拥有；
+- `features/interactions` 把 owner-directed full request 转成 approval 或多问题 user-input Pane，
+  只返回 exact typed response；owner selection、deadline 与 cancellation 留在 App Server；
 - `features/config/request.rs` 与 `features/skills/request.rs` 分别拥有已有 typed config/MCP/model
   与 Skill catalog/enablement 调用，App 不再内联这些领域 payload；
 - `components/selection` 已同时拥有 generic tabs/query/filter/selection state、输入 outcome 与
@@ -980,8 +1003,8 @@ lib_tests.rs
   只向上占用 transcript 空间；
 - `TerminalModeGuard` 在任一 mode 获取失败时按逆序恢复已经获取的 terminal mode，显式
   restore 和 Drop 共享幂等清理路径；
-- `StatusLineModel` 直接映射 typed `config/read` 与 `TuiOptions::workspace_root` 的结果；
-  `features/status_line/view.rs` 只读取模型，并按可用宽度从完整 model/workspace 降级到短值
+- `StatusLineModel` 直接映射 typed config/Git result 与 `TuiOptions::workspace_root`；
+  `features/status_line/view.rs` 只读取模型，并按可用宽度从完整 model/workspace/Git 降级到短值
   或省略号；
 - `ChatComposer` 协调提交、popup keys、range completion application 与 structured local
   command dispatch；`zeta-slash-commands` 拥有 slash grammar、catalog、matches、selection 与
@@ -1005,38 +1028,25 @@ lib_tests.rs
 
 当前仍未完成的边界：
 
-- 每次启动创建新的 Session 和 root Thread；`/new`、`/clear`、`/fork` 与
-  `/resume <session-id>` 可以切换当前 Thread context，但尚无 picker/browser；
-- `ThreadFeatureState` 已保存完整 canonical Thread snapshot，但 transcript projection 当前只展示
-  user text、user image placeholder 与 agent text；reasoning、plan、tool call/result 尚未进入
-  richer transcript item model；
-- 共享 client 已交付 owned `AppServerSession`、cloneable request handle、独立可唤醒
-  `AppServerEvents`、request/event driver 与显式 shutdown；typed request method 当前仍同步
-  等待配对 response，特别慢的 control-plane request 后续应转成 typed completion event；
-- subscription 已处理 active scope、新 durable sequence 与 gap 的 snapshot resync，但 transient
-  Item delta/plan 仍不渲染，也没有 per-Thread bounded data plane 或 stream cursor recovery；
-- active Turn polling fallback 已移除；durable Thread update 主动唤醒 loop 并触发 snapshot
-  resync；
-- 没有 archive UI、resume picker 或多 Thread navigation surface；interrupt、exact-ID resume
-  与当前 Thread fork 已接通 typed API；
-- local slash popup 已接入 `zeta-slash-commands` 的 validated catalog/state、cursor-aware prefix filtering、保留 argument
-  tail 的 range completion、keyboard/mouse selection、原子 command token，以及 inline
-  text/image/large-paste arguments；popup 不铺设独立背景，透明继承当前 TUI 主题 surface，选中项使用候选 highlight 色粗体且不添加行首标记；App Server 的 `initialize.slashCommands` snapshot 会在创建
-  Session 前合并进 catalog，非法名称、空描述、重复项和 built-in shadowing 都会使启动失败；
-  dynamic command 恢复完整 `/name` 与 ordered arguments 后作为普通 Turn input 提交。
-  Built-in command adapter 只保留真实执行流：Session/Thread lifecycle、status/config/MCP/Skill 查询、
-  revision-checked model selection、interactive help 与退出；缺少 backend contract 的命令不显示。
-  workspace file mention popup 也支持
-  keyboard/mouse selection，两者之外的 mouse surface 尚未接通；结构化 app/plugin Mention
-  仍无 catalog 与执行流；
+- transcript 仍使用 plain-text wrapping；Markdown/diff/table、折叠、文本选择/copy 和稳定
+  resize/reflow cache 尚未完成；
+- Mouse 只覆盖 slash/file-mention popup 的左键命中；hover、滚轮和其他 surface 未接通；Vim
+  mode/motion/operator 尚未实现；
+- TUI 没有 remote connection selector 或自动 reconnect；durable/transient gap 已有 resync，但
+  connection close 后仍需用户重启；
+- workspace mention 只插入文本路径，不是结构化 app/plugin Mention；login、compact、service
+  tier、usage、review 等缺少 canonical contract 的 surface 不注册；
 - 图片输入已形成“本地路径/系统 clipboard → data URL → `UserImage` → provider image block”
   的 vertical slice；native clipboard 在远程 SSH/tmux 环境尚无 terminal-mediated fallback，
   data URL 也会放大 command receipt、Thread store 与 snapshot，长期仍需 resource/blob 引用
   contract；
-- status line 当前只有 model/workspace 两项；尚无 Git、usage、稳定 item 配置 contract 或
-  background refresh。
+- status line 已有 model/workspace/Git，但 usage 与稳定 item/order 配置 contract 尚未提供；
+- Config surface 可读 provider、MCP、Skill source、Plugin request、Hook、language server 状态；
+  当前只有已有 typed mutation 的 model/MCP/Skill 可修改，TUI 不接管 Desktop-only 外部 Agent
+  导入或凭据配置。
 
-这些限制可以作为 bootstrap 阶段存在，但不应在其上继续堆叠 feature。
+新增能力继续以 canonical contract 和垂直 feature 为前提，不能把上述限制绕成 `App` 或 Native
+里的第二套 owner。
 
 ## 17. 演进顺序
 
@@ -1049,12 +1059,15 @@ lib_tests.rs
 | runtime file-search worker 与 `App` state 分离 | Current |
 | typed notification 适配、active Thread subscription 与 snapshot gap/resync | Current |
 | independent request driver 与 wakeable notification pump | Current |
-| request completion 的非阻塞 app command dispatch | 尚未完成 |
+| request completion 的非阻塞 app command dispatch | Current |
 | canonical `features/thread` snapshot 与 transcript projection owner | Current |
 | `components/transcript` 与 `ui` layout/theme 原语 | Current |
 | `components/selection` state/view 边界 | Current |
 | composer/interaction component 物理边界 | Current |
-| Thread transient merge、cursor recovery 与 bounded data plane | 尚未完成 |
+| Thread transient merge、cursor recovery 与 bounded data plane | Current |
+| Session/Thread picker、archive 与恢复 | Current |
+| owner-directed approval / user input / deadline | Current |
+| Markdown/diff/table、selection/copy 与 reconnect | 尚未完成 |
 
 ### 阶段零：固定行为与性能基线
 
@@ -1078,10 +1091,10 @@ README 中记录。
 2. 将纯 TUI state/event/command 移入 `app/`；（Current）
 3. 将 notification adapter、`CommandId` 与 subscription tracking 移入明确 owner；
    （wakeable event pump、notification adapter、`CommandId` 与 Thread subscription tracking
-   为 Current；request completion 的 app-level 非阻塞调度尚未完成）
+   以及 request completion 的 app-level 非阻塞调度均为 Current）
 4. 建立 `features/thread/`，用 canonical Thread snapshot 替换扁平 message authority；
    （snapshot/projection owner、typed request、durable sequence/gap snapshot resync 为 Current；
-   transient merge 和完整 Turn intent 尚未完成）
+   transient merge 和完整 ThreadItem projection 也为 Current）
 5. 把 bootstrap `toppane/` 与各 presentation surface 按职责迁入
    `components/transcript/`、`components/interaction/`、`components/selection/` 和
    `components/composer/`；（Current；旧 `toppane/` 与顶层 `render/` 已移除）
@@ -1094,10 +1107,10 @@ README 中记录。
 
 ### 阶段二：订阅与恢复
 
-1. 使用 `session/subscribe` 和 `session/thread/subscribe`；（active Thread 为 Current；Session 页面未开始）
+1. 使用 `session/subscribe` 和 `session/thread/subscribe`；（Current）
 2. 实现 durable gap、duplicate、aggregate mismatch 和 resync；（active Thread snapshot
-   resync 为 Current；reconnect/runtime 切换尚未完成）
-3. 实现 transient cursor 和 committed Item 替换；
+   resync 为 Current；connection reconnect 尚未完成）
+3. 实现 transient cursor、runtime switch、gap reset 和 committed snapshot 替换；（Current）
 4. 把稳定 `CommandId` 生命周期集中到 `client/command_id.rs`；（Current）
 5. 增加 reconnect 后重新订阅，禁止自动重放结果未知的新副作用。
 
@@ -1106,18 +1119,20 @@ disconnect 和 runtime 切换都有确定的恢复测试；结果未知的写入
 
 ### 阶段三：核心交互
 
-1. 在 `features/sessions/` 完成 Session list/resume；
-2. 在 `features/thread/` 完成 Thread create/fork/switch/archive；
-3. 让 Turn start/interrupt 全部经过 `features/thread/command.rs` 和 `request.rs`；
-4. 让 `components/transcript/` 展示完整 ThreadItem；
-5. 在对应 component 内完成 resize/reflow、scroll、selection、copy 和 composer history。
+1. 在 `features/sessions/` 完成 Session list/resume/archive；（Current）
+2. 完成 Thread create/fork/rewind/switch/archive；（Current）
+3. 让 Turn start/interrupt 全部经过 `features/thread/request.rs`；（Current）
+4. 让 Thread projection 与 `components/transcript/` 展示完整 ThreadItem；（Current）
+5. 在对应 component 内完成 scroll 与 composer history；（Current）resize/reflow cache、selection
+   与 copy 尚未完成。
 
 退出条件：active Thread state 只有一个 TUI owner；完整 typed Item lifecycle 可呈现；transient
 流量不会决定 durable terminal state；render 不推进 semantic state。
 
 ### 阶段四：垂直功能
 
-按已接受的 App Server contract 逐个添加 config、resources、approval 等 feature。每个 feature
+按已接受的 App Server contract 逐个添加 config、resources、approval 等 feature。config、MCP、
+Skill、workspace file browser、Git status、approval 与 user input 已按该规则接入；每个后续 feature
 同时交付 state、typed command、view、错误/恢复行为和测试，不采用先建一个全局
 `services/` 再逐步塞逻辑的方式。
 

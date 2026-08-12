@@ -17,6 +17,10 @@ use zeta_file_search::PathSearchSnapshot;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum InteractionPaneOutcome {
     ActivateSelectionItem(SelectionItemId),
+    ActivateSelectionFreeForm {
+        item_id: SelectionItemId,
+        value: String,
+    },
     Command(SlashCommandInvocation),
     Consumed,
     Submit(ComposerSubmission),
@@ -61,11 +65,15 @@ impl InteractionPane {
                 SelectionInputOutcome::Activate(item_id) => {
                     InteractionPaneOutcome::ActivateSelectionItem(item_id)
                 }
+                SelectionInputOutcome::ActivateFreeForm { item_id, value } => {
+                    InteractionPaneOutcome::ActivateSelectionFreeForm { item_id, value }
+                }
                 SelectionInputOutcome::Consumed => InteractionPaneOutcome::Consumed,
                 SelectionInputOutcome::Dismiss => {
                     self.views.pop();
                     InteractionPaneOutcome::ViewDismissed
                 }
+                SelectionInputOutcome::Unhandled => InteractionPaneOutcome::Unhandled,
             };
         }
         map_composer_outcome(self.composer.handle_key(key))

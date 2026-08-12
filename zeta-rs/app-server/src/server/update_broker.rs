@@ -1,10 +1,13 @@
+use crate::server::notification_queue::NotificationQueue;
+use crate::server::notification_queue::NotificationQueueHandle;
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
-use std::sync::{Arc, Condvar, Mutex, Weak};
-use zeta_app_server_protocol::protocol::collaboration::DocumentCollaborationUpdate;
+use std::sync::Mutex;
 use zeta_app_server_protocol::protocol::collaboration::DocumentCollaborationPresenceSnapshot;
+use zeta_app_server_protocol::protocol::collaboration::DocumentCollaborationUpdate;
+use zeta_app_server_protocol::protocol::common::AgentInteractionCapability;
 use zeta_app_server_protocol::protocol::config::ConfigChanged;
 use zeta_app_server_protocol::protocol::fs::FsChanged;
 use zeta_app_server_protocol::protocol::git::{GitStatusChanged, GitStatusResult};
@@ -12,119 +15,39 @@ use zeta_app_server_protocol::protocol::registry::ServerNotificationMethod;
 use zeta_app_server_protocol::protocol::skills::SkillsChanged;
 use zeta_app_server_protocol::rpc::JsonRpcNotification;
 use zeta_config::ConfigChange;
+use zeta_protocol::AgentRequestEnvelope;
+use zeta_protocol::RequestId;
 use zeta_protocol::SessionEvent;
 use zeta_protocol::SessionId;
 use zeta_protocol::SessionUpdate;
 use zeta_protocol::SessionUpdateEnvelope;
+use zeta_protocol::ThreadEvent;
 use zeta_protocol::ThreadId;
 use zeta_protocol::ThreadUpdate;
 use zeta_protocol::ThreadUpdateEnvelope;
 
-#[derive(Clone, Debug, Default)]
-pub(super) struct NotificationQueue {
-    inner: Arc<NotificationQueueInner>,
+pub(super) fn unix_time_millis() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis()
+        .min(u128::from(u64::MAX)) as u64
 }
 
-#[derive(Debug, Default)]
-struct NotificationQueueInner {
-    state: Mutex<NotificationQueueState>,
-    changed: Condvar,
-}
-
-#[derive(Debug, Default)]
-struct NotificationQueueState {
-    values: Vec<Value>,
-    closed: bool,
-}
-
-pub(crate) struct NotificationListener {
-    queue: NotificationQueue,
-}
-
-impl NotificationQueue {
-    fn downgrade(&self) -> Weak<NotificationQueueInner> {
-        Arc::downgrade(&self.inner)
-    }
-
-    fn from_inner(inner: Arc<NotificationQueueInner>) -> Self {
-        Self { inner }
-    }
-
-    pub(super) fn listener(&self) -> NotificationListener {
-        NotificationListener {
-            queue: self.clone(),
-        }
-    }
-
-    pub(super) fn push(&self, value: Value) {
-        self.extend([value]);
-    }
-
-    pub(super) fn extend(&self, values: impl IntoIterator<Item = Value>) {
-        if let Ok(mut state) = self.inner.state.lock() {
-            let was_empty = state.values.is_empty();
-            state.values.extend(values);
-            if was_empty && !state.values.is_empty() {
-                self.inner.changed.notify_all();
-            }
-        }
-    }
-
-    pub(super) fn drain(&self) -> Vec<Value> {
-        self.inner
-            .state
-            .lock()
-            .map(|mut state| std::mem::take(&mut state.values))
-            .unwrap_or_default()
-    }
-
-    pub(super) fn close(&self) {
-        if let Ok(mut state) = self.inner.state.lock() {
-            state.closed = true;
-            self.inner.changed.notify_all();
-        }
-    }
-
-    #[cfg(test)]
-    fn len(&self) -> usize {
-        self.inner
-            .state
-            .lock()
-            .map(|state| state.values.len())
-            .unwrap_or_default()
-    }
-}
-
-impl NotificationListener {
-    pub(crate) fn wait(&self) -> bool {
-        let Ok(mut state) = self.queue.inner.state.lock() else {
-            return false;
-        };
-        while state.values.is_empty() && !state.closed {
-            let Ok(next) = self.queue.inner.changed.wait(state) else {
-                return false;
-            };
-            state = next;
-        }
-        !state.values.is_empty()
-    }
-
-    pub(crate) fn drain(&self) -> Vec<Value> {
-        self.queue.drain()
-    }
-
-    pub(crate) fn close(&self) {
-        self.queue.close();
-    }
+pub(super) struct UpdateBroker {
+    state: Mutex<BrokerState>,
 }
 
 #[derive(Default)]
-pub(super) struct UpdateBroker {
-    subscribers: Mutex<BTreeMap<u64, Subscriber>>,
+struct BrokerState {
+    subscribers: BTreeMap<u64, Subscriber>,
+    interaction_assignments: BTreeMap<RequestId, u64>,
+    pending_interactions: BTreeMap<RequestId, AgentRequestEnvelope>,
 }
 
 struct Subscriber {
-    queue: Weak<NotificationQueueInner>,
+    queue: NotificationQueueHandle,
+    agent_interactions: Option<AgentInteractionCapability>,
     collaboration_rooms: BTreeSet<String>,
     sessions: BTreeMap<SessionId, u64>,
     threads: BTreeMap<ThreadId, ThreadSubscription>,
@@ -136,13 +59,22 @@ struct ThreadSubscription {
     session_owners: BTreeSet<SessionId>,
 }
 
+impl Default for UpdateBroker {
+    fn default() -> Self {
+        Self {
+            state: Mutex::new(BrokerState::default()),
+        }
+    }
+}
+
 impl UpdateBroker {
     pub(super) fn register(&self, connection_id: u64, queue: &NotificationQueue) {
-        if let Ok(mut subscribers) = self.subscribers.lock() {
-            subscribers.insert(
+        if let Ok(mut state) = self.state.lock() {
+            state.subscribers.insert(
                 connection_id,
                 Subscriber {
                     queue: queue.downgrade(),
+                    agent_interactions: None,
                     collaboration_rooms: BTreeSet::new(),
                     sessions: BTreeMap::new(),
                     threads: BTreeMap::new(),
@@ -152,8 +84,85 @@ impl UpdateBroker {
     }
 
     pub(super) fn unregister(&self, connection_id: u64) {
-        if let Ok(mut subscribers) = self.subscribers.lock() {
-            subscribers.remove(&connection_id);
+        if let Ok(mut state) = self.state.lock() {
+            state.subscribers.remove(&connection_id);
+            state
+                .interaction_assignments
+                .retain(|_, owner| *owner != connection_id);
+            reconcile_interaction_assignments(&mut state);
+        }
+    }
+
+    pub(super) fn set_agent_interaction_capability(
+        &self,
+        connection_id: u64,
+        capability: Option<AgentInteractionCapability>,
+    ) {
+        if let Ok(mut state) = self.state.lock()
+            && let Some(subscriber) = state.subscribers.get_mut(&connection_id)
+        {
+            subscriber.agent_interactions = capability;
+            reconcile_interaction_assignments(&mut state);
+        }
+    }
+
+    pub(super) fn offer_agent_request(&self, request: AgentRequestEnvelope) {
+        if let Ok(mut state) = self.state.lock() {
+            state
+                .pending_interactions
+                .insert(request.interaction.request_id.clone(), request);
+            reconcile_interaction_assignments(&mut state);
+        }
+    }
+
+    pub(super) fn is_agent_interaction_owner(
+        &self,
+        connection_id: u64,
+        request_id: &RequestId,
+    ) -> bool {
+        self.state
+            .lock()
+            .ok()
+            .and_then(|state| state.interaction_assignments.get(request_id).copied())
+            == Some(connection_id)
+    }
+
+    pub(super) fn is_agent_interaction_expired(
+        &self,
+        request_id: &RequestId,
+        now_unix_ms: u64,
+    ) -> bool {
+        self.state
+            .lock()
+            .ok()
+            .and_then(|state| state.pending_interactions.get(request_id).cloned())
+            .and_then(|request| request.interaction.deadline)
+            .is_some_and(|deadline| deadline.expires_at_unix_ms <= now_unix_ms)
+    }
+
+    pub(super) fn expired_agent_requests(&self, now_unix_ms: u64) -> Vec<AgentRequestEnvelope> {
+        self.state
+            .lock()
+            .map(|state| {
+                state
+                    .pending_interactions
+                    .values()
+                    .filter(|request| {
+                        request
+                            .interaction
+                            .deadline
+                            .is_some_and(|deadline| deadline.expires_at_unix_ms <= now_unix_ms)
+                    })
+                    .cloned()
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    pub(super) fn retire_agent_request(&self, request_id: &RequestId) {
+        if let Ok(mut state) = self.state.lock() {
+            state.pending_interactions.remove(request_id);
+            state.interaction_assignments.remove(request_id);
         }
     }
 
@@ -163,43 +172,41 @@ impl UpdateBroker {
         session_id: SessionId,
         sequence: u64,
     ) {
-        if let Ok(mut subscribers) = self.subscribers.lock()
-            && let Some(subscriber) = subscribers.get_mut(&connection_id)
+        if let Ok(mut state) = self.state.lock()
+            && let Some(subscriber) = state.subscribers.get_mut(&connection_id)
         {
             subscriber.sessions.insert(session_id, sequence);
+            reconcile_interaction_assignments(&mut state);
         }
     }
 
     pub(super) fn unsubscribe_session(&self, connection_id: u64, session_id: &SessionId) {
-        if let Ok(mut subscribers) = self.subscribers.lock()
-            && let Some(subscriber) = subscribers.get_mut(&connection_id)
+        if let Ok(mut state) = self.state.lock()
+            && let Some(subscriber) = state.subscribers.get_mut(&connection_id)
         {
             subscriber.sessions.remove(session_id);
             subscriber.threads.retain(|_, subscription| {
                 subscription.session_owners.remove(session_id);
                 !subscription.session_owners.is_empty()
             });
+            reconcile_interaction_assignments(&mut state);
         }
     }
 
     pub(super) fn subscribe_document_collaboration(&self, connection_id: u64, room_id: String) {
-        if let Ok(mut subscribers) = self.subscribers.lock()
-            && let Some(subscriber) = subscribers.get_mut(&connection_id)
+        if let Ok(mut state) = self.state.lock()
+            && let Some(subscriber) = state.subscribers.get_mut(&connection_id)
         {
             subscriber.collaboration_rooms.insert(room_id);
         }
     }
 
     pub(super) fn publish_document_collaboration(&self, update: DocumentCollaborationUpdate) {
-        let Ok(mut subscribers) = self.subscribers.lock() else {
+        let Ok(mut state) = self.state.lock() else {
             return;
         };
-        subscribers.retain(|_, subscriber| {
-            let Some(queue) = subscriber
-                .queue
-                .upgrade()
-                .map(NotificationQueue::from_inner)
-            else {
+        state.subscribers.retain(|_, subscriber| {
+            let Some(queue) = subscriber.queue.upgrade() else {
                 return false;
             };
             if subscriber.collaboration_rooms.contains(&update.room_id) {
@@ -216,15 +223,11 @@ impl UpdateBroker {
         &self,
         snapshot: DocumentCollaborationPresenceSnapshot,
     ) {
-        let Ok(mut subscribers) = self.subscribers.lock() else {
+        let Ok(mut state) = self.state.lock() else {
             return;
         };
-        subscribers.retain(|_, subscriber| {
-            let Some(queue) = subscriber
-                .queue
-                .upgrade()
-                .map(NotificationQueue::from_inner)
-            else {
+        state.subscribers.retain(|_, subscriber| {
+            let Some(queue) = subscriber.queue.upgrade() else {
                 return false;
             };
             if subscriber.collaboration_rooms.contains(&snapshot.room_id) {
@@ -244,12 +247,13 @@ impl UpdateBroker {
         thread_id: ThreadId,
         sequence: u64,
     ) {
-        if let Ok(mut subscribers) = self.subscribers.lock()
-            && let Some(subscriber) = subscribers.get_mut(&connection_id)
+        if let Ok(mut state) = self.state.lock()
+            && let Some(subscriber) = state.subscribers.get_mut(&connection_id)
         {
             let subscription = subscriber.threads.entry(thread_id).or_default();
             subscription.sequence = subscription.sequence.max(sequence);
             subscription.session_owners.insert(session_id);
+            reconcile_interaction_assignments(&mut state);
         }
     }
 
@@ -259,8 +263,8 @@ impl UpdateBroker {
         session_id: &SessionId,
         thread_id: &ThreadId,
     ) {
-        if let Ok(mut subscribers) = self.subscribers.lock()
-            && let Some(subscriber) = subscribers.get_mut(&connection_id)
+        if let Ok(mut state) = self.state.lock()
+            && let Some(subscriber) = state.subscribers.get_mut(&connection_id)
         {
             if let Some(subscription) = subscriber.threads.get_mut(thread_id) {
                 subscription.session_owners.remove(session_id);
@@ -268,6 +272,7 @@ impl UpdateBroker {
                     subscriber.threads.remove(thread_id);
                 }
             }
+            reconcile_interaction_assignments(&mut state);
         }
     }
 
@@ -276,15 +281,11 @@ impl UpdateBroker {
         session_id: &SessionId,
         updates: &[SessionUpdateEnvelope],
     ) {
-        let Ok(mut subscribers) = self.subscribers.lock() else {
+        let Ok(mut state) = self.state.lock() else {
             return;
         };
-        subscribers.retain(|_, subscriber| {
-            let Some(queue) = subscriber
-                .queue
-                .upgrade()
-                .map(NotificationQueue::from_inner)
-            else {
+        state.subscribers.retain(|_, subscriber| {
+            let Some(queue) = subscriber.queue.upgrade() else {
                 return false;
             };
             for update in updates {
@@ -331,18 +332,45 @@ impl UpdateBroker {
             queue.extend(pending);
             true
         });
+        reconcile_interaction_assignments(&mut state);
     }
 
     pub(super) fn publish_thread(&self, thread_id: &ThreadId, updates: &[ThreadUpdateEnvelope]) {
-        let Ok(mut subscribers) = self.subscribers.lock() else {
+        let Ok(mut state) = self.state.lock() else {
             return;
         };
-        subscribers.retain(|_, subscriber| {
-            let Some(queue) = subscriber
-                .queue
-                .upgrade()
-                .map(NotificationQueue::from_inner)
-            else {
+        for update in updates {
+            let ThreadUpdate::Committed { event } = &update.update else {
+                continue;
+            };
+            match event {
+                ThreadEvent::InteractionRequested {
+                    turn_id,
+                    interaction,
+                    ..
+                } => {
+                    state.pending_interactions.insert(
+                        interaction.request_id.clone(),
+                        AgentRequestEnvelope {
+                            session_id: update.session_id.clone(),
+                            thread_id: update.thread_id.clone(),
+                            turn_id: turn_id.clone(),
+                            interaction: interaction.clone(),
+                        },
+                    );
+                }
+                ThreadEvent::InteractionResolved { request_id, .. } => {
+                    state.pending_interactions.remove(request_id);
+                }
+                ThreadEvent::InteractionCancelled { request_id, .. } => {
+                    state.pending_interactions.remove(request_id);
+                    state.interaction_assignments.remove(request_id);
+                }
+                _ => {}
+            }
+        }
+        state.subscribers.retain(|_, subscriber| {
+            let Some(queue) = subscriber.queue.upgrade() else {
                 return false;
             };
             let Some(subscription) = subscriber.threads.get_mut(thread_id) else {
@@ -361,6 +389,7 @@ impl UpdateBroker {
             }
             true
         });
+        reconcile_interaction_assignments(&mut state);
     }
 
     pub(super) fn publish_thread_update(&self, update: ThreadUpdateEnvelope) {
@@ -376,15 +405,11 @@ impl UpdateBroker {
     }
 
     pub(super) fn publish_skills_changed(&self, generation: u64) {
-        let Ok(mut subscribers) = self.subscribers.lock() else {
+        let Ok(mut state) = self.state.lock() else {
             return;
         };
-        subscribers.retain(|_, subscriber| {
-            let Some(queue) = subscriber
-                .queue
-                .upgrade()
-                .map(NotificationQueue::from_inner)
-            else {
+        state.subscribers.retain(|_, subscriber| {
+            let Some(queue) = subscriber.queue.upgrade() else {
                 return false;
             };
             queue.push(notification(
@@ -396,15 +421,11 @@ impl UpdateBroker {
     }
 
     pub(super) fn publish_config_changed(&self, change: ConfigChange) {
-        let Ok(mut subscribers) = self.subscribers.lock() else {
+        let Ok(mut state) = self.state.lock() else {
             return;
         };
-        subscribers.retain(|_, subscriber| {
-            let Some(queue) = subscriber
-                .queue
-                .upgrade()
-                .map(NotificationQueue::from_inner)
-            else {
+        state.subscribers.retain(|_, subscriber| {
+            let Some(queue) = subscriber.queue.upgrade() else {
                 return false;
             };
             queue.push(notification(
@@ -419,15 +440,11 @@ impl UpdateBroker {
     }
 
     pub(super) fn publish_git_status_changed(&self, status: GitStatusResult) {
-        let Ok(mut subscribers) = self.subscribers.lock() else {
+        let Ok(mut state) = self.state.lock() else {
             return;
         };
-        subscribers.retain(|_, subscriber| {
-            let Some(queue) = subscriber
-                .queue
-                .upgrade()
-                .map(NotificationQueue::from_inner)
-            else {
+        state.subscribers.retain(|_, subscriber| {
+            let Some(queue) = subscriber.queue.upgrade() else {
                 return false;
             };
             queue.push(notification(
@@ -441,15 +458,11 @@ impl UpdateBroker {
     }
 
     pub(super) fn publish_fs_changed(&self, changed: FsChanged) {
-        let Ok(mut subscribers) = self.subscribers.lock() else {
+        let Ok(mut state) = self.state.lock() else {
             return;
         };
-        subscribers.retain(|_, subscriber| {
-            let Some(queue) = subscriber
-                .queue
-                .upgrade()
-                .map(NotificationQueue::from_inner)
-            else {
+        state.subscribers.retain(|_, subscriber| {
+            let Some(queue) = subscriber.queue.upgrade() else {
                 return false;
             };
             queue.push(notification(ServerNotificationMethod::FsChanged, &changed));
@@ -458,15 +471,11 @@ impl UpdateBroker {
     }
 
     fn publish_thread_transient(&self, update: &ThreadUpdateEnvelope) {
-        let Ok(mut subscribers) = self.subscribers.lock() else {
+        let Ok(mut state) = self.state.lock() else {
             return;
         };
-        subscribers.retain(|_, subscriber| {
-            let Some(queue) = subscriber
-                .queue
-                .upgrade()
-                .map(NotificationQueue::from_inner)
-            else {
+        state.subscribers.retain(|_, subscriber| {
+            let Some(queue) = subscriber.queue.upgrade() else {
                 return false;
             };
             let Some(subscription) = subscriber.threads.get(&update.thread_id) else {
@@ -481,6 +490,71 @@ impl UpdateBroker {
             true
         });
     }
+}
+
+fn reconcile_interaction_assignments(state: &mut BrokerState) {
+    let invalid_assignments = state
+        .interaction_assignments
+        .iter()
+        .filter_map(|(request_id, connection_id)| {
+            let request = state.pending_interactions.get(request_id)?;
+            let valid = state
+                .subscribers
+                .get(connection_id)
+                .is_some_and(|subscriber| interaction_owner_matches(subscriber, request));
+            (!valid).then_some(request_id.clone())
+        })
+        .collect::<Vec<_>>();
+    for request_id in invalid_assignments {
+        state.interaction_assignments.remove(&request_id);
+    }
+
+    let unassigned = state
+        .pending_interactions
+        .keys()
+        .filter(|request_id| !state.interaction_assignments.contains_key(*request_id))
+        .cloned()
+        .collect::<Vec<_>>();
+    for request_id in unassigned {
+        let Some(request) = state.pending_interactions.get(&request_id) else {
+            continue;
+        };
+        let owner = state
+            .subscribers
+            .iter()
+            .find_map(|(connection_id, subscriber)| {
+                interaction_owner_matches(subscriber, request)
+                    .then(|| subscriber.queue.upgrade())
+                    .flatten()
+                    .map(|queue| (*connection_id, queue))
+            });
+        if let Some((connection_id, queue)) = owner {
+            queue.push(notification(
+                ServerNotificationMethod::AgentRequest,
+                request,
+            ));
+            state
+                .interaction_assignments
+                .insert(request_id, connection_id);
+        }
+    }
+}
+
+fn interaction_owner_matches(subscriber: &Subscriber, request: &AgentRequestEnvelope) -> bool {
+    let supports_kind = subscriber
+        .agent_interactions
+        .as_ref()
+        .is_some_and(|capability| {
+            capability.version == 1
+                && capability
+                    .kinds
+                    .contains(&request.interaction.request.kind())
+        });
+    supports_kind
+        && subscriber
+            .threads
+            .get(&request.thread_id)
+            .is_some_and(|subscription| subscription.session_owners.contains(&request.session_id))
 }
 
 fn subscribe_session_thread_locked(

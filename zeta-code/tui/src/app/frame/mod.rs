@@ -28,7 +28,13 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
         .and_then(|view| view.presentation_highlight())
         .unwrap_or_else(highlight);
 
-    transcript::draw(frame, areas.history, app.messages(), presentation_highlight);
+    transcript::draw(
+        frame,
+        areas.history,
+        app.messages(),
+        app.transcript_scroll(),
+        presentation_highlight,
+    );
     if let Some(view) = app.selection_pane() {
         let pane_areas = pane::areas(areas.interaction);
         selection::draw(frame, pane_areas.body, view.body());

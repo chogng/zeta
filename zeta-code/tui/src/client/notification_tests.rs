@@ -46,7 +46,7 @@ fn thread_update_preserves_typed_scope_and_sequence() {
 }
 
 #[test]
-fn git_status_change_is_explicitly_ignored_until_the_tui_owns_git_state() {
+fn git_status_change_updates_tui_owned_status_projection() {
     let changed = GitStatusChanged {
         status: GitStatusResult {
             stream_instance_id: StreamInstanceId::new("git-stream").unwrap(),
@@ -59,12 +59,13 @@ fn git_status_change_is_explicitly_ignored_until_the_tui_owns_git_state() {
         },
     };
 
-    assert_eq!(
-        map_event(AppServerEvent::Notification(
-            ServerNotification::GitStatusChanged(changed)
-        )),
-        None
-    );
+    let Some(ClientEvent::GitStatusChanged(status)) = map_event(AppServerEvent::Notification(
+        ServerNotification::GitStatusChanged(changed),
+    )) else {
+        panic!("Git status notification should be mapped");
+    };
+    assert_eq!(status.revision, 1);
+    assert!(matches!(status.head, GitHeadDto::Unborn { name } if name == "main"));
 }
 
 #[test]

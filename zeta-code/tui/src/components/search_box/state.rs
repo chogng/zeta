@@ -7,13 +7,20 @@ pub(crate) const SEARCH_BOX_HEIGHT: u16 = 3;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct SearchBoxModel {
     placeholder: String,
+    initially_active: bool,
 }
 
 impl SearchBoxModel {
     pub(crate) fn new(placeholder: impl Into<String>) -> Self {
         Self {
             placeholder: placeholder.into(),
+            initially_active: false,
         }
+    }
+
+    pub(crate) fn initially_active(mut self) -> Self {
+        self.initially_active = true;
+        self
     }
 }
 
@@ -34,9 +41,9 @@ pub(crate) struct SearchBoxState {
 impl SearchBoxState {
     pub(crate) fn new(model: SearchBoxModel) -> Self {
         Self {
+            input_active: model.initially_active,
             model,
             query: String::new(),
-            input_active: false,
         }
     }
 

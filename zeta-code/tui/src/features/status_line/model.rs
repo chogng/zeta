@@ -2,6 +2,8 @@ use std::path::Path;
 use unicode_width::UnicodeWidthChar;
 use unicode_width::UnicodeWidthStr;
 use zeta_app_server_protocol::protocol::config::ConfigReadResult;
+use zeta_app_server_protocol::protocol::git::GitHeadDto;
+use zeta_app_server_protocol::protocol::git::GitStatusResult;
 
 const SEPARATOR: &str = " · ";
 
@@ -18,6 +20,7 @@ struct DisplayValue {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct StatusLineModel {
     preferred_model: Option<DisplayValue>,
+    git: Option<DisplayValue>,
     workspace: DisplayValue,
 }
 
@@ -31,6 +34,7 @@ impl StatusLineModel {
             .unwrap_or_else(|| full.clone());
         Self {
             preferred_model: None,
+            git: None,
             workspace: DisplayValue { full, compact },
         }
     }
@@ -42,13 +46,56 @@ impl StatusLineModel {
         });
     }
 
+    pub(crate) fn apply_git_status(&mut self, status: &GitStatusResult) {
+        let identity = match &status.head {
+            GitHeadDto::Branch { name, .. } | GitHeadDto::Unborn { name } => name.clone(),
+            GitHeadDto::Detached { object_id } => {
+                format!("detached@{}", object_id.chars().take(8).collect::<String>())
+            }
+        };
+        let change_count = status.changes.len();
+        self.git = Some(DisplayValue {
+            full: if change_count == 0 {
+                format!("git:{identity}")
+            } else {
+                format!("git:{identity} ({change_count} changes)")
+            },
+            compact: format!("{identity}{}", if change_count == 0 { "" } else { "*" }),
+        });
+    }
+
     pub(crate) fn text_for_width(&self, width: usize) -> String {
         if width == 0 {
             return String::new();
         }
 
         let mut candidates = Vec::new();
-        if let Some(model) = &self.preferred_model {
+        if let (Some(model), Some(git)) = (&self.preferred_model, &self.git) {
+            push_candidate(
+                &mut candidates,
+                [
+                    model.full.as_str(),
+                    git.full.as_str(),
+                    self.workspace.full.as_str(),
+                ]
+                .join(SEPARATOR),
+            );
+            push_candidate(
+                &mut candidates,
+                [
+                    model.compact.as_str(),
+                    git.compact.as_str(),
+                    self.workspace.compact.as_str(),
+                ]
+                .join(SEPARATOR),
+            );
+            push_candidate(
+                &mut candidates,
+                [model.compact.as_str(), git.compact.as_str()].join(SEPARATOR),
+            );
+            push_candidate(&mut candidates, model.compact.clone());
+            push_candidate(&mut candidates, git.compact.clone());
+        } else if let Some(model) = &self.preferred_model {
             push_candidate(
                 &mut candidates,
                 format!("{}{SEPARATOR}{}", model.full, self.workspace.full),
@@ -63,6 +110,17 @@ impl StatusLineModel {
             );
             push_candidate(&mut candidates, model.full.clone());
             push_candidate(&mut candidates, model.compact.clone());
+        } else if let Some(git) = &self.git {
+            push_candidate(
+                &mut candidates,
+                format!("{}{SEPARATOR}{}", git.full, self.workspace.full),
+            );
+            push_candidate(
+                &mut candidates,
+                format!("{}{SEPARATOR}{}", git.compact, self.workspace.compact),
+            );
+            push_candidate(&mut candidates, git.full.clone());
+            push_candidate(&mut candidates, git.compact.clone());
         } else {
             push_candidate(&mut candidates, self.workspace.full.clone());
             push_candidate(&mut candidates, self.workspace.compact.clone());
@@ -79,6 +137,7 @@ impl StatusLineModel {
             .preferred_model
             .as_ref()
             .map(|model| model.compact.as_str())
+            .or_else(|| self.git.as_ref().map(|git| git.compact.as_str()))
             .unwrap_or(self.workspace.compact.as_str());
         truncate_with_ellipsis(fallback, width)
     }

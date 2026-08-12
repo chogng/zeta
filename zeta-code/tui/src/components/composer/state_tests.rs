@@ -173,3 +173,25 @@ fn forwarded_dynamic_command_restores_command_text_before_structured_arguments()
         Some(&ComposerInput::Text("logs".into()))
     );
 }
+
+#[test]
+fn up_and_down_recall_plain_submissions_and_restore_the_current_draft() {
+    let mut composer = ChatComposer::new();
+    for prompt in ["first", "second"] {
+        composer.insert_text(prompt);
+        assert!(matches!(
+            composer.handle_key(key(KeyCode::Enter)),
+            ComposerOutcome::Submit(_)
+        ));
+    }
+    composer.insert_text("draft");
+
+    composer.handle_key(key(KeyCode::Up));
+    assert_eq!(composer.text(), "second");
+    composer.handle_key(key(KeyCode::Up));
+    assert_eq!(composer.text(), "first");
+    composer.handle_key(key(KeyCode::Down));
+    assert_eq!(composer.text(), "second");
+    composer.handle_key(key(KeyCode::Down));
+    assert_eq!(composer.text(), "draft");
+}

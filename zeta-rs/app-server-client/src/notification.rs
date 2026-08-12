@@ -9,11 +9,13 @@ use zeta_app_server_protocol::protocol::notification::GitStatusChanged;
 use zeta_app_server_protocol::protocol::notification::SessionUpdateEnvelope;
 use zeta_app_server_protocol::protocol::notification::SkillsChanged;
 use zeta_app_server_protocol::protocol::notification::ThreadUpdateEnvelope;
-use zeta_app_server_protocol::protocol::registry::server_notification_method;
 use zeta_app_server_protocol::protocol::registry::ServerNotificationMethod;
+use zeta_app_server_protocol::protocol::registry::server_notification_method;
+use zeta_protocol::AgentRequestEnvelope;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ServerNotification {
+    AgentRequest(AgentRequestEnvelope),
     DocumentCollaborationUpdate(DocumentCollaborationUpdate),
     DocumentCollaborationPresence(DocumentCollaborationPresenceSnapshot),
     SessionUpdate(SessionUpdateEnvelope),
@@ -35,10 +37,15 @@ pub(crate) fn decode(raw: &str) -> Result<ServerNotification, ClientError> {
     let envelope: NotificationEnvelope =
         serde_json::from_str(raw).map_err(|error| ClientError::Protocol(error.to_string()))?;
     match server_notification_method(&envelope.method) {
-        Some(ServerNotificationMethod::DocumentCollaborationUpdate) => decode_params(envelope.params)
-            .map(ServerNotification::DocumentCollaborationUpdate),
-        Some(ServerNotificationMethod::DocumentCollaborationPresence) => decode_params(envelope.params)
-            .map(ServerNotification::DocumentCollaborationPresence),
+        Some(ServerNotificationMethod::AgentRequest) => {
+            decode_params(envelope.params).map(ServerNotification::AgentRequest)
+        }
+        Some(ServerNotificationMethod::DocumentCollaborationUpdate) => {
+            decode_params(envelope.params).map(ServerNotification::DocumentCollaborationUpdate)
+        }
+        Some(ServerNotificationMethod::DocumentCollaborationPresence) => {
+            decode_params(envelope.params).map(ServerNotification::DocumentCollaborationPresence)
+        }
         Some(ServerNotificationMethod::SessionUpdate) => {
             decode_params(envelope.params).map(ServerNotification::SessionUpdate)
         }

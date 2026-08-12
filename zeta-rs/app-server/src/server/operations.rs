@@ -32,8 +32,9 @@ use zeta_core::{
     ForkSessionThreadRequest, InterruptTurnRequest, ResolveTurnInteractionRequest,
     RewindSessionThreadRequest, SequenceExpectation, SessionLifecycleRequest,
     SetSessionModelRequest, ShellTurnInvocation, StartShellTurnRequest, StartTurnDisposition,
-    StartTurnRequest, TurnStatus,
+    StartTurnRequest, ThreadSnapshot, TurnStatus,
 };
+use zeta_protocol::AgentRequestEnvelope;
 use zeta_protocol::ModelRef;
 use zeta_protocol::SessionStatus;
 use zeta_protocol::UserInput;
@@ -69,6 +70,18 @@ impl AppServer {
         {
             return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
         }
+        if params
+            .capabilities
+            .agent_interactions
+            .as_ref()
+            .is_some_and(|capability| capability.version != 1 || capability.kinds.is_empty())
+        {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        self.updates.set_agent_interaction_capability(
+            connection.connection_id,
+            params.capabilities.agent_interactions,
+        );
         connection.initialized = true;
         let (file_system, git, workspace_search, terminal) = self.workspace_features();
         let extensions = self
@@ -83,6 +96,7 @@ impl AppServer {
             },
             schema_hash: SchemaHash(schema_hash()),
             capabilities: ServerCapabilities {
+                agent_interactions: true,
                 document_collaboration: true,
                 sessions: true,
                 threads: true,
@@ -198,19 +212,23 @@ impl AppServer {
             .sessions
             .session_updates_after(&params.session_id, params.after_sequence)
             .map_err(core_error)?;
-        let thread_projections = session
+        let thread_snapshots = session
             .threads
             .iter()
             .map(|membership| {
-                let thread = self
-                    .sessions
+                self.sessions
                     .threads()
                     .read_thread(&membership.membership.thread_id)
-                    .map_err(core_error)?;
+                    .map_err(core_error)
+            })
+            .collect::<Result<Vec<_>, RpcError>>()?;
+        let thread_projections = thread_snapshots
+            .iter()
+            .map(|thread| {
                 let updates = self
                     .sessions
                     .threads()
-                    .thread_updates_after(&membership.membership.thread_id, 0)
+                    .thread_updates_after(&thread.thread_id, 0)
                     .map_err(core_error)?;
                 Ok(SessionThreadProjection {
                     thread: thread.public_thread(),
@@ -230,6 +248,9 @@ impl AppServer {
                 projection.thread.thread_id.clone(),
                 projection.thread.sequence,
             );
+        }
+        for snapshot in &thread_snapshots {
+            self.offer_pending_interactions(snapshot);
         }
         result(&SessionSubscribeResult {
             session: session.public_session(),
@@ -335,7 +356,12 @@ impl AppServer {
                 response,
             } => result(&SessionRequestResult::Interaction(
                 self.resolve_turn_interaction_request(
-                    mutation, thread_id, turn_id, request_id, response,
+                    connection.connection_id,
+                    mutation,
+                    thread_id,
+                    turn_id,
+                    request_id,
+                    response,
                 )?,
             )),
         }
@@ -546,8 +572,10 @@ impl AppServer {
 
     pub(super) fn session_thread_read(&self, params: &Value) -> Result<Value, RpcError> {
         let params: SessionThreadReadParams = decode(params)?;
-        let thread = self.read_session_thread(&params.session_id, &params.thread_id)?;
-        result(&SessionThreadReadResult { thread })
+        let snapshot = self.read_session_thread_snapshot(&params.session_id, &params.thread_id)?;
+        result(&SessionThreadReadResult {
+            thread: snapshot.public_thread(),
+        })
     }
 
     pub(super) fn session_thread_subscribe(
@@ -556,7 +584,8 @@ impl AppServer {
         params: &Value,
     ) -> Result<Value, RpcError> {
         let params: SessionThreadSubscribeParams = decode(params)?;
-        let thread = self.read_session_thread(&params.session_id, &params.thread_id)?;
+        let snapshot = self.read_session_thread_snapshot(&params.session_id, &params.thread_id)?;
+        let thread = snapshot.public_thread();
         let updates = self
             .sessions
             .threads()
@@ -568,6 +597,7 @@ impl AppServer {
             params.thread_id,
             thread.sequence,
         );
+        self.offer_pending_interactions(&snapshot);
         result(&SessionThreadSubscribeResult { thread, updates })
     }
 
@@ -590,6 +620,15 @@ impl AppServer {
         session_id: &zeta_protocol::SessionId,
         thread_id: &zeta_protocol::ThreadId,
     ) -> Result<zeta_protocol::Thread, RpcError> {
+        self.read_session_thread_snapshot(session_id, thread_id)
+            .map(|thread| thread.public_thread())
+    }
+
+    fn read_session_thread_snapshot(
+        &self,
+        session_id: &zeta_protocol::SessionId,
+        thread_id: &zeta_protocol::ThreadId,
+    ) -> Result<ThreadSnapshot, RpcError> {
         let thread = self
             .sessions
             .threads()
@@ -601,7 +640,20 @@ impl AppServer {
                 AppServerErrorName::CoreOperationFailed,
             ));
         }
-        Ok(thread.public_thread())
+        Ok(thread)
+    }
+
+    fn offer_pending_interactions(&self, thread: &ThreadSnapshot) {
+        for turn in &thread.turns {
+            if let Some(interaction) = &turn.pending_interaction {
+                self.updates.offer_agent_request(AgentRequestEnvelope {
+                    session_id: thread.session_id.clone(),
+                    thread_id: thread.thread_id.clone(),
+                    turn_id: turn.turn_id.clone(),
+                    interaction: interaction.clone(),
+                });
+            }
+        }
     }
 
     fn start_turn_request(
@@ -786,16 +838,35 @@ impl AppServer {
 
     fn resolve_turn_interaction_request(
         &self,
+        connection_id: u64,
         mutation: SessionMutation,
         thread_id: zeta_protocol::ThreadId,
         turn_id: zeta_protocol::TurnId,
         request_id: zeta_protocol::RequestId,
         response: zeta_protocol::AgentResponse,
     ) -> Result<TurnInteractionResolveResult, RpcError> {
+        if !self
+            .updates
+            .is_agent_interaction_owner(connection_id, &request_id)
+        {
+            return Err(RpcError::new(
+                -32030,
+                AppServerErrorName::AgentInteractionNotOwner,
+            ));
+        }
         let _workspace_authority = self
             .workspace_authority_gate
             .lock()
             .map_err(|_| RpcError::new(-32000, AppServerErrorName::ServerOverloaded))?;
+        if self
+            .updates
+            .is_agent_interaction_expired(&request_id, super::update_broker::unix_time_millis())
+        {
+            return Err(RpcError::new(
+                -32031,
+                AppServerErrorName::AgentInteractionExpired,
+            ));
+        }
         let before = self
             .sessions
             .threads()

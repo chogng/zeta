@@ -8,6 +8,7 @@ use crate::protocol::collaboration::DocumentCollaborationSnapshot;
 use crate::protocol::collaboration::DocumentCollaborationSubmitParams;
 use crate::protocol::collaboration::DocumentCollaborationSubmitResult;
 use crate::protocol::collaboration::DocumentCollaborationUpdate;
+use crate::protocol::common::AgentInteractionCapability;
 use crate::protocol::common::{
     BrowserCapability, ClientCapabilities, ClientInfo, CommandId, EmptyParams, ItemId, RequestId,
     SchemaHash, ServerInfo, SessionId, StreamInstanceId, ThreadId, ToolCallId, ToolName, TurnId,
@@ -105,6 +106,7 @@ use crate::protocol::turn::{
 use crate::protocol::workspace::{WorkspaceSwitchParams, WorkspaceSwitchResult};
 use schemars::JsonSchema;
 use ts_rs::{Config, TS};
+use zeta_protocol::AgentRequestEnvelope;
 use zeta_protocol::{
     ActionApprovalCapability, ActionApprovalCapabilityKind, ActionApprovalDecision,
     ActionApprovalRequest, ActionApprovalResponse, AgentInteractionKind, AgentRequest,
@@ -648,6 +650,9 @@ macro_rules! server_notifications {
 }
 
 server_notifications! {
+    AgentRequest => "agent/request" {
+        params: AgentRequestEnvelope,
+    },
     DocumentCollaborationUpdate => "document/collaboration/update" {
         params: DocumentCollaborationUpdate,
     },
@@ -698,6 +703,7 @@ typescript_bindings! {
     TurnId,
     SchemaHash,
     ClientInfo,
+    AgentInteractionCapability,
     BrowserCapability,
     ClientCapabilities,
     ServerInfo,
@@ -818,6 +824,7 @@ typescript_bindings! {
     ActionApprovalResponse,
     AgentInteractionKind,
     AgentRequest,
+    AgentRequestEnvelope,
     AgentResponse,
     TurnInteraction,
     PendingInteraction,

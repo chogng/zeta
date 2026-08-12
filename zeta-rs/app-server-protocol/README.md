@@ -85,8 +85,9 @@ zeta-rs/app-server-protocol/
 带 Session scope 的 Thread 读取/订阅、模型目录、配置/供应商/MCP/Skill/Plugin request/Hook declaration 修改、
 Turn 与 Resource
 metadata/read/release、filesystem metadata/read/write，以及 workspace search start/read/cancel。
-Notification 包含 `session/update`、Session-owned child 的 `session/thread/update`、`skills/changed`、`git/statusChanged` 与
-`fs/changed`；Terminal 当前使用 profile/list 与 create/write/resize/read/close 的有界 pull
+Notification 包含 `session/update`、Session-owned child 的 `session/thread/update`、owner-directed
+`agent/request`、`skills/changed`、`git/statusChanged` 与 `fs/changed`；Terminal 当前使用
+profile/list 与 create/write/resize/read/close 的有界 pull
 contract，不伪装成主动 notification stream。
 
 `SessionSubscribeResult` 是产品宿主的 aggregate port：`session/subscribe` 返回 Session snapshot、
@@ -96,6 +97,14 @@ connection-local update delivery。需要单独读取或追赶一个 child Threa
 `SessionRequestParams` / `SessionRequest` 是 mutation 的 canonical Session contract：公共请求统一
 携带 `CommandId`、Session sequence 和 typed operation，结果通过 `SessionRequestResult` 的 tagged
 union 返回。旧的独立 Session/Thread/Turn mutation methods 不在 registry 中。
+
+`ClientCapabilities.agentInteractions` 用 version + explicit kinds 声明 connection 能实际处理的
+Agent interaction；当前 App Server version 为 1。普通 Thread snapshot 只公开
+`PendingInteraction` metadata，full `TurnInteraction` 仅通过 `agent/request` 发送给一个同时满足
+capability 和 Session-owned Thread subscription 的 connection。响应继续使用 canonical
+`SessionRequest::ResolveInteraction` + exact `RequestId`；非 owner/过期响应分别返回稳定
+`AgentInteractionNotOwner` / `AgentInteractionExpired`。owner、重选和 timer 都是 App Server runtime
+状态，不进入 DTO；deadline/cancel reason 则是 durable canonical fact。
 Git 注册 `git/status`、`git/textDiff`、`git/branch/list` query，以及
 branch/switch、stage/unstage/discardWorktree/commit/fetch/pull/push global-exclusive mutation；
 status 带 revision 和 repository-relative `workspacePath`，投影变化通过 `git/statusChanged` 发送
@@ -186,6 +195,8 @@ dispatcher 的 executable metadata，不能被误写成已经落实的并发保�
 - Durable mutation params 带 `CommandId` 与 expected sequence/revision；JSON-RPC ID 不替代它。
 - `ConfigUpdateParams` 使用 `Patch<T>` 表达 missing/no-op、null/clear、value/set 三态。
 - `SessionRequest::ResolveInteraction` 使用 canonical `AgentResponse` 与 exact `RequestId`。
+- `AgentRequestEnvelope` 携带 Session/Thread/Turn aggregate context 和 full durable request，但不携带
+  connection owner；`ClientCapabilities.agentInteractions.kinds` 必须与可产生的 response kind 一致。
 - `SessionRequest::StartTurn.input` 是有序、非空的 tagged union：`text { text }` 或
   `image { url }`；图片在进入 wire contract 前必须已经从本地路径规范化为 HTTP(S)/data URL。
 - `InitializeResult.slash_commands` 是 server composition 在 handshake 时冻结的完整动态命令
@@ -270,7 +281,8 @@ bazel test //zeta-rs/app-server-protocol:app-server-protocol-unit-tests
 [`docs/typst.md`](../../docs/typst.md) 中的跨进程契约。
 
 测试验证 method/notification 唯一性、JSON-RPC 2.0 envelope、TypeScript model/patch shape、root
-schema coverage、config三态、MCP/Skill round trip、schema hash 和 checked-in fixtures exact match。
+schema coverage、agent interaction capability/request/error、config 三态、MCP/Skill round trip、schema
+hash 和 checked-in fixtures exact match。
 
 当前只有 JSON-RPC 2.0 artifact，schema compatibility 依赖 exact hash + synchronized client build；
 尚无 semantic protocol version、migration layer 或 multi-version server。未来增加 Protobuf 或

@@ -295,10 +295,12 @@ pub enum AppServerEvent {
 }
 ```
 
-当前 App Server API 包含 `session/update`、`session/thread/update` 与 metadata-only
-`skills/changed` notification，均由 `ServerNotification` typed enum 表达。`ServerRequest`
-是 approval/user-input 等双向交互落地后的目标 variant；`Lagged`/`Desynced` 是 bounded data
-plane 的目标 lifecycle event，在 protocol/queue contract 实现前不能提前声称可用。
+当前 App Server API 包含 `session/update`、`session/thread/update`、owner-directed
+`agent/request`、`skills/changed`、Git 与 filesystem notification，均由 `ServerNotification`
+typed enum 表达。approval/user-input 通过 `agent/request` + canonical
+`SessionRequest::ResolveInteraction` 完成，不在 client crate 建第二套 server-request envelope。
+显式 `Lagged`/`Desynced` lifecycle event 尚未提供；当前 transient overflow 通过 cursor gap 触发
+consumer snapshot resync，control-only overflow 关闭 connection。
 
 事件 driver 负责：
 
@@ -425,6 +427,8 @@ TUI 不再接收一个同步 `&mut AppServerClient<T>`，也不调用 `drain_not
 - `ConnectionNotifications` 在 server publish 时主动唤醒独立 event pump；
 - response completion 在同一 request 产生的 causal notification 交付前发送；
 - `AppServerEvents` 是单消费者 typed notification/connection lifecycle stream；
+- `AppServerEvents` channel 限 1024 项，背压到 App Server 4096 项 connection queue；transient
+  backlog 可清除，durable/control 不静默丢弃；
 - `shutdown` 拒绝后续请求、关闭 connection、唤醒 event pump 并 join 两个 background task；
 - CLI interactive/headless 路径使用同一个 `AppServerSession::start_embedded` composition；
 - `start_in_process_client` 已经体现“由共享 crate 创建本地 App Server”的正确方向；
@@ -441,22 +445,21 @@ TUI 不再接收一个同步 `&mut AppServerClient<T>`，也不调用 `drain_not
 - successful `InitializeResult` 保存在 `AppServerClient::initialization` snapshot 中，consumer
   可读取 server capabilities 与动态 slash catalog，而无需重复 handshake；
 - typed `list_skills` / `set_skill_enablement` method；
-- known notification typed decode，包括 `skills/changed`。
+- known notification typed decode，包括 `agent/request`、`skills/changed` 与 Git status。
 
 同步适配面与剩余工作：
 
 | 边界 | 状态 |
 | --- | --- |
 | `start_in_process_client` / generic `AppServerClient<T>` | MCP、rust-app 与 contract tests 的同步适配面；TUI/CLI 不再依赖 drain |
-| typed method 同步等待 completion | request driver 独立，但异常缓慢 request 的 UI completion dispatch 仍需迁移 |
-| event channel 当前无界 | durable notification 不会静默丢失；按 aggregate bounded data plane 与 `Lagged` policy 尚未落地 |
+| typed method 同步等待 completion | shared handle 保持同步 typed API；TUI 已用 `RequestTask` 把等待移出单写者 loop |
+| bounded event/data plane | Current：1024 event + 4096 server queue；显式 `Lagged` event 尚未提供 |
 | remote backend | 尚未实现；不能声称 reconnect/subscription restoration |
 | initialize gate 只存在于一个 helper | 裸 `AppServerClient::new` 可以在未初始化时发送业务请求 |
 | server error 被压成 code/string | 丢失 typed error name/data |
 
-因此 owned embedded session 的 request/event/shutdown 主路径已经完成；下一阶段集中在 bounded
-data plane、typed error、remote backend 与 consumer-side nonblocking completion routing，不再
-回退到 notification drain。
+因此 owned embedded session 的 request/event/shutdown 与有界交付主路径已经完成；下一阶段集中
+在 typed error、显式 lag lifecycle、remote backend/reconnect，不再回退到 notification drain。
 
 ## 11. 目标模块
 

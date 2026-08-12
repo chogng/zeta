@@ -8,8 +8,11 @@ use zeta_app_server_protocol::protocol::session::{
     SessionRequest, SessionRequestParams, SessionRequestResult, SessionThreadReadParams,
 };
 use zeta_app_server_protocol::protocol::turn::InputItem;
+use zeta_app_server_protocol::protocol::turn::TurnInteractionResolveResult;
 use zeta_app_server_protocol::protocol::turn::TurnInterruptResult;
 use zeta_app_server_protocol::protocol::turn::TurnStartResult;
+use zeta_protocol::AgentResponse;
+use zeta_protocol::RequestId;
 use zeta_protocol::SessionId;
 use zeta_protocol::Thread;
 use zeta_protocol::ThreadId;
@@ -33,6 +36,14 @@ impl ThreadRequestScope {
             thread_id: thread_id.clone(),
             expected_sequence,
         }
+    }
+
+    pub(crate) fn session_id(&self) -> &SessionId {
+        &self.session_id
+    }
+
+    pub(crate) fn thread_id(&self) -> &ThreadId {
+        &self.thread_id
     }
 }
 
@@ -103,6 +114,34 @@ where
         SessionRequestResult::TurnInterrupt(result) => Ok(result),
         other => Err(ClientError::Protocol(format!(
             "session request returned {other:?} for InterruptTurn"
+        ))),
+    }
+}
+
+pub(crate) fn resolve_interaction<T>(
+    client: &mut AppServerClient<T>,
+    scope: ThreadRequestScope,
+    turn_id: TurnId,
+    request_id: RequestId,
+    response: AgentResponse,
+) -> Result<TurnInteractionResolveResult, ClientError>
+where
+    T: JsonRpcTransport,
+{
+    match client.request_session(SessionRequestParams {
+        command_id: new_command_id("interaction"),
+        session_id: scope.session_id,
+        expected_sequence: scope.expected_sequence,
+        request: SessionRequest::ResolveInteraction {
+            thread_id: scope.thread_id,
+            turn_id,
+            request_id,
+            response,
+        },
+    })? {
+        SessionRequestResult::Interaction(result) => Ok(result),
+        other => Err(ClientError::Protocol(format!(
+            "session request returned {other:?} for ResolveInteraction"
         ))),
     }
 }

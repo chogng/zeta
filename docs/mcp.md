@@ -447,8 +447,9 @@ tool loop。第一版不声明 sampling capability。
 
 ### 10.3 询问（Elicitation）
 
-Elicitation 依赖 Zeta 的 typed Agent request/response delivery。完整 owner selection、deadline、
-disconnect 和 recovery vertical slice 完成前不声明 capability。
+Elicitation 依赖 Zeta 的 typed Agent request/response delivery。App Server owner selection、deadline、
+disconnect re-selection 和 durable recovery 已完成；MCP adapter 只有在下游 client/session 确实
+提供 form elicitation 时才声明并映射该 capability，不能仅因共享 contract 存在就启用。
 
 将来 adapter 必须把 MCP request ID 与 Zeta `RequestId` 分开关联。Zeta interaction 可以 durable，
 但 remote MCP connection/request 本身通常不能跨重启恢复；恢复后必须重新建立 server state 或

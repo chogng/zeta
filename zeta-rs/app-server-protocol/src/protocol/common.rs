@@ -34,7 +34,22 @@ pub struct ClientCapabilities {
     pub notifications: Option<bool>,
     #[serde(default)]
     #[ts(optional = nullable)]
+    pub agent_interactions: Option<AgentInteractionCapability>,
+    #[serde(default)]
+    #[ts(optional = nullable)]
     pub browser: Option<BrowserCapability>,
+}
+
+/// Agent interaction kinds that one client connection can present and resolve.
+///
+/// App Server uses this declaration only for ephemeral owner selection. It never persists the
+/// connection capability in Session or Thread state, and clients must still subscribe to the
+/// target Thread before they can become an interaction owner.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentInteractionCapability {
+    pub version: u32,
+    pub kinds: Vec<zeta_protocol::AgentInteractionKind>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

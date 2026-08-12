@@ -7,7 +7,7 @@ owner: zeta-rs
 consumers:
   - desktop
   - cli
-lastUpdated: 2026-07-25
+lastUpdated: 2026-08-12
 ```
 
 本文描述当前开发期的唯一 App Server 契约。项目不保留旧 wire API、旧 DTO 或旧持久化格式
@@ -433,15 +433,24 @@ interaction 的同一 request kind；相同 `commandId + typed payload` 会重�
 `requestId` 或 response kind 会被拒绝。该 method 解决已 durable 的 interaction，不用于创建
 新的 Agent request。
 
-当前同步 App Server 还没有实现 Server → Client request owner selection 或主动投递；未来 runtime
-必须将 connection ownership 作为短暂 delivery state，而不是写入 Thread snapshot 或 event。
+connection 在 initialize 时通过 `agentInteractions { version: 1, kinds: [...] }` 声明实际支持的
+interaction kind。App Server 只在声明 capability 且订阅该 Session-owned Thread 的 connection 中
+确定性选择一个 owner，并通过 `agent/request` 主动投递 full `AgentRequestEnvelope`；断连、退订或
+capability 变化会重选，ownership 始终是短暂 delivery state，不写入 Thread snapshot/event。
+非 owner resolve 返回 `AgentInteractionNotOwner`。
+
+可选 `InteractionDeadline` 是 durable absolute Unix millisecond instant。App Server runtime 在
+mutation gate 下重读 exact pending request，过期后持久化 `DeadlineElapsed` cancellation 并将 Turn
+失败为可重试 `InteractionDeadlineElapsed`；过期响应返回 `AgentInteractionExpired`。Core reducer
+只归约 durable fact，不运行 timer，TUI 也不拥有 deadline policy。
 
 ## 8. 更新流
 
-当前有六个 notification method：
+与 Session/Thread 交互相关的 notification method 包括：
 
 - `session/update`，payload 为 `SessionUpdateEnvelope`；
 - `session/thread/update`，payload 为 Session subscription 的 `ThreadUpdateEnvelope`；
+- `agent/request`，payload 为仅发送给 selected owner 的 full `AgentRequestEnvelope`；
 - `config/changed`，payload 为已提交的 Config `revision` 与 `generation`；
 - `skills/changed`，payload 为新的 catalog `generation`；
 - `git/statusChanged`，payload 为新的 workspace Git status；

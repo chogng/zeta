@@ -53,7 +53,18 @@ fn interactive() -> Result<(), String> {
             "interactive mode requires a TTY; use `zeta ask` or `zeta exec` instead".into(),
         );
     }
-    let session = in_process_session()?;
+    let session = AppServerSession::start_embedded(
+        InProcessClientOptions::new(
+            local_profile_root(),
+            ClientInfo {
+                name: "zeta-cli".into(),
+                version: env!("CARGO_PKG_VERSION").into(),
+            },
+        )
+        .with_capabilities(zeta_tui::client_capabilities())
+        .with_workspace_root(configured_workspace()?),
+    )
+    .map_err(|error| error.to_string())?;
     zeta_tui::run(session, zeta_tui::TuiOptions::new("TUI conversation"))
         .map(|_| ())
         .map_err(|error| error.to_string())

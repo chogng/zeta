@@ -1,9 +1,11 @@
 use super::ThreadPresentationEvent;
+use super::projection::TransientProjection;
+use super::projection::apply_transient;
+use super::projection::project_messages;
 use crate::components::transcript::CommandStatus;
 use crate::components::transcript::Message;
 use crate::components::transcript::MessageRole;
 use zeta_protocol::Thread;
-use zeta_protocol::ThreadItem;
 
 /// Owns the canonical active Thread snapshot and its current transcript projection.
 ///
@@ -13,6 +15,7 @@ use zeta_protocol::ThreadItem;
 pub(crate) struct ThreadFeatureState {
     snapshot: Option<Thread>,
     messages: Vec<Message>,
+    transient: TransientProjection,
 }
 
 impl ThreadFeatureState {
@@ -24,7 +27,14 @@ impl ThreadFeatureState {
         match event {
             ThreadPresentationEvent::SnapshotReceived(snapshot) => {
                 self.messages = project_messages(&snapshot);
+                self.transient.clear();
                 self.snapshot = Some(snapshot);
+            }
+            ThreadPresentationEvent::TransientStreamReset => {
+                self.transient.remove_from(&mut self.messages);
+            }
+            ThreadPresentationEvent::TransientUpdateReceived(update) => {
+                apply_transient(&mut self.messages, &mut self.transient, &update);
             }
             ThreadPresentationEvent::UserSubmitted(text) => {
                 self.push_message(MessageRole::User, text);
@@ -61,6 +71,7 @@ impl ThreadFeatureState {
             ThreadPresentationEvent::Cleared => {
                 self.snapshot = None;
                 self.messages.clear();
+                self.transient.clear();
             }
         }
     }
@@ -73,29 +84,6 @@ impl ThreadFeatureState {
     pub(super) fn snapshot(&self) -> Option<&Thread> {
         self.snapshot.as_ref()
     }
-}
-
-fn project_messages(thread: &Thread) -> Vec<Message> {
-    thread
-        .turns
-        .iter()
-        .flat_map(|turn| &turn.items)
-        .filter_map(|item| match item {
-            ThreadItem::UserMessage { text, .. } => {
-                Some(Message::plain(MessageRole::User, text.clone()))
-            }
-            ThreadItem::UserImage { .. } => {
-                Some(Message::plain(MessageRole::User, "[Image]".into()))
-            }
-            ThreadItem::AgentMessage { text, .. } => {
-                Some(Message::plain(MessageRole::Agent, text.clone()))
-            }
-            ThreadItem::Reasoning { .. }
-            | ThreadItem::Plan { .. }
-            | ThreadItem::ToolCall { .. }
-            | ThreadItem::ToolResult { .. } => None,
-        })
-        .collect()
 }
 
 #[cfg(test)]

@@ -14,6 +14,8 @@ use zeta_slash_commands::{
     SlashCommandOrigin, SlashCommandsState, SlashCommandsView,
 };
 
+const MAX_COMPOSER_HISTORY: usize = 100;
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum ComposerOutcome {
     Command(SlashCommandInvocation),
@@ -80,6 +82,9 @@ pub(crate) struct ChatComposer {
     mentions: Mentions,
     pending_pastes: PendingPastes,
     attachments: Attachments,
+    history: Vec<String>,
+    history_index: Option<usize>,
+    history_draft: String,
 }
 
 impl ChatComposer {
@@ -96,6 +101,9 @@ impl ChatComposer {
             mentions: Mentions::default(),
             pending_pastes: PendingPastes::default(),
             attachments: Attachments::default(),
+            history: Vec::new(),
+            history_index: None,
+            history_draft: String::new(),
         }
     }
 
@@ -160,9 +168,15 @@ impl ChatComposer {
         if key.code == KeyCode::Enter {
             return self.submit();
         }
+        match key.code {
+            KeyCode::Up => return self.previous_history(),
+            KeyCode::Down => return self.next_history(),
+            _ => {}
+        }
 
         match self.textarea.handle_key(key) {
             TextAreaOutcome::Consumed => {
+                self.reset_history_navigation();
                 self.sync_after_text_change();
                 ComposerOutcome::Consumed
             }
@@ -172,11 +186,13 @@ impl ChatComposer {
 
     #[cfg(test)]
     pub(crate) fn insert_text(&mut self, text: &str) {
+        self.reset_history_navigation();
         self.textarea.insert_text(text);
         self.sync_after_text_change();
     }
 
     pub(crate) fn handle_paste(&mut self, pasted: String) -> Result<(), String> {
+        self.reset_history_navigation();
         match self
             .attachments
             .try_attach_pasted_path(&mut self.textarea, &pasted)
@@ -192,6 +208,7 @@ impl ChatComposer {
     }
 
     pub(crate) fn attach_image_bytes(&mut self, bytes: Vec<u8>) -> Result<(), String> {
+        self.reset_history_navigation();
         self.attachments
             .attach_image_bytes(&mut self.textarea, bytes)?;
         self.sync_after_text_change();
@@ -240,6 +257,13 @@ impl ChatComposer {
         let Some(submission) = self.prepare_submission() else {
             return ComposerOutcome::Consumed;
         };
+        if submission
+            .input
+            .iter()
+            .all(|input| matches!(input, ComposerInput::Text(_)))
+        {
+            self.record_history(submission.display_text.clone());
+        }
         let command = self.slash_commands.invocation(&submission.display_text);
         self.clear();
         match command {
@@ -289,6 +313,7 @@ impl ChatComposer {
         self.mentions.clear();
         self.pending_pastes.clear();
         self.attachments.clear();
+        self.reset_history_navigation();
     }
 
     fn complete_slash_command(&mut self, command: &SlashCommandDefinition) -> bool {
@@ -331,6 +356,62 @@ impl ChatComposer {
         {
             self.slash_command_element = Some(self.textarea.mark_element(range));
         }
+    }
+
+    fn previous_history(&mut self) -> ComposerOutcome {
+        if self.history.is_empty() {
+            return ComposerOutcome::Consumed;
+        }
+        let index = match self.history_index {
+            Some(index) => index.saturating_sub(1),
+            None => {
+                self.history_draft = self.textarea.text().to_owned();
+                self.history.len() - 1
+            }
+        };
+        self.history_index = Some(index);
+        self.replace_with_history_entry(index);
+        ComposerOutcome::Consumed
+    }
+
+    fn next_history(&mut self) -> ComposerOutcome {
+        let Some(index) = self.history_index else {
+            return ComposerOutcome::Consumed;
+        };
+        if index + 1 < self.history.len() {
+            self.history_index = Some(index + 1);
+            self.replace_with_history_entry(index + 1);
+        } else {
+            self.history_index = None;
+            self.textarea.replace_text(&self.history_draft);
+            self.history_draft.clear();
+            self.sync_after_text_change();
+        }
+        ComposerOutcome::Consumed
+    }
+
+    fn replace_with_history_entry(&mut self, index: usize) {
+        self.textarea.replace_text(&self.history[index]);
+        self.pending_pastes.clear();
+        self.attachments.clear();
+        self.slash_command_element = None;
+        self.mentions.clear();
+        self.slash_commands.clear();
+        self.sync_after_text_change();
+    }
+
+    fn record_history(&mut self, entry: String) {
+        if self.history.last() != Some(&entry) {
+            self.history.push(entry);
+            if self.history.len() > MAX_COMPOSER_HISTORY {
+                self.history.remove(0);
+            }
+        }
+    }
+
+    fn reset_history_navigation(&mut self) {
+        self.history_index = None;
+        self.history_draft.clear();
     }
 }
 

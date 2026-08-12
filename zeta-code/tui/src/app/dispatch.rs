@@ -1,6 +1,5 @@
 //! Built-in product command dispatch for the active Session and Thread.
 
-use crate::app::App;
 use crate::app::AppEvent;
 use crate::app::help_selection_view;
 use crate::components::composer::ComposerInput;
@@ -13,19 +12,55 @@ use crate::features::rewind;
 use crate::features::sessions;
 use crate::features::sessions::ActiveConversation;
 use crate::features::sessions::ConversationChange;
-use crate::features::sessions::ConversationTranscript;
 use crate::features::sessions::NewConversationKind;
 use crate::features::sessions::ResumeOutcome;
+use crate::features::sessions::ThreadSelectionPurpose;
 use crate::features::skills::load_selection;
 use crate::features::status::status_view;
 use crate::features::theme::theme_selection_view;
 use crate::ui;
 use std::fmt;
-use zeta_app_server_client::{AppServerClient, ClientError, JsonRpcTransport};
+use zeta_app_server_client::AppServerClient;
+use zeta_app_server_client::ClientError;
+use zeta_app_server_client::JsonRpcTransport;
 use zeta_app_server_protocol::protocol::skills::SkillCatalogReloadDto;
 use zeta_protocol::TurnId;
 
+#[cfg(test)]
+use crate::app::App;
+#[cfg(test)]
+use crate::features::sessions::ConversationTranscript;
+#[cfg(test)]
+use crate::features::thread::read_thread;
+#[cfg(test)]
+use zeta_protocol::Thread;
+
+pub(crate) struct ProductCommandOutput {
+    pub(crate) conversation: ActiveConversation,
+    pub(crate) events: Vec<AppEvent>,
+    pub(crate) conversation_change: Option<ConversationChange>,
+}
+
+pub(crate) fn execute_product_command<T>(
+    mut conversation: ActiveConversation,
+    client: &mut AppServerClient<T>,
+    invocation: SlashCommandInvocation,
+) -> Result<ProductCommandOutput, String>
+where
+    T: JsonRpcTransport,
+{
+    conversation
+        .try_execute(client, invocation)
+        .map(|output| ProductCommandOutput {
+            conversation,
+            events: output.events,
+            conversation_change: output.conversation_change,
+        })
+        .map_err(|error| error.to_string())
+}
+
 impl ActiveConversation {
+    #[cfg(test)]
     pub(crate) fn execute<T>(
         &mut self,
         client: &mut AppServerClient<T>,
@@ -34,8 +69,20 @@ impl ActiveConversation {
     ) where
         T: JsonRpcTransport,
     {
-        if let Err(error) = self.try_execute(client, invocation, app) {
-            app.update(AppEvent::FailureReported(error.to_string()));
+        match execute_product_command(self.clone(), client, invocation) {
+            Ok(output) => {
+                *self = output.conversation;
+                for event in output.events {
+                    app.update(event);
+                }
+                if let Some(change) = output.conversation_change {
+                    match read_thread(client, self.session_id(), self.thread_id()) {
+                        Ok(snapshot) => apply_conversation_change(app, change, snapshot),
+                        Err(error) => app.update(AppEvent::FailureReported(error.to_string())),
+                    }
+                }
+            }
+            Err(error) => app.update(AppEvent::FailureReported(error)),
         }
     }
 
@@ -43,8 +90,7 @@ impl ActiveConversation {
         &mut self,
         client: &mut AppServerClient<T>,
         invocation: SlashCommandInvocation,
-        app: &mut App,
-    ) -> Result<(), CommandExecutionError>
+    ) -> Result<CommandOutput, CommandExecutionError>
     where
         T: JsonRpcTransport,
     {
@@ -56,215 +102,213 @@ impl ActiveConversation {
                 CommandExecutionError("server command reached the TUI-local dispatcher".into())
             })?;
         let arguments = text_arguments(&invocation.arguments)?;
+        let mut output = CommandOutput::default();
 
         match command {
-            TuiSlashCommandAction::Status => self.show_status(client, app),
-            TuiSlashCommandAction::Skills => show_skills(client, app),
-            TuiSlashCommandAction::Mcp => show_mcp(client, app),
-            TuiSlashCommandAction::Resume => self.resume(client, &arguments, app),
-            TuiSlashCommandAction::Rewind => self.rewind(client, &arguments, app),
+            TuiSlashCommandAction::Status => {
+                let config = client.read_config()?;
+                output
+                    .events
+                    .push(AppEvent::SelectionViewOpened(status_view(
+                        self.session_id().as_str(),
+                        self.thread_id().as_str(),
+                        self.thread_sequence(),
+                        &config::preferred_model(&config),
+                    )));
+            }
+            TuiSlashCommandAction::Skills => {
+                output
+                    .events
+                    .push(AppEvent::SkillsViewOpened(load_selection(
+                        client,
+                        SkillCatalogReloadDto::Refresh,
+                    )?));
+            }
+            TuiSlashCommandAction::Mcp => {
+                output
+                    .events
+                    .push(AppEvent::McpViewOpened(mcp::load_selection(client)?));
+            }
+            TuiSlashCommandAction::Resume => {
+                if arguments.is_empty() {
+                    output
+                        .events
+                        .push(AppEvent::SessionViewOpened(sessions::load_selection(
+                            client,
+                            self.session_id().as_str(),
+                        )?));
+                } else {
+                    match self
+                        .resume_session(client, &arguments)
+                        .map_err(session_error)?
+                    {
+                        ResumeOutcome::Listed(notice) => {
+                            output.events.push(AppEvent::ProductNotice(notice));
+                        }
+                        ResumeOutcome::Changed(change) => {
+                            output.conversation_change = Some(change);
+                        }
+                    }
+                }
+            }
+            TuiSlashCommandAction::Thread => {
+                if arguments.is_empty() {
+                    output.events.push(AppEvent::ThreadViewOpened(
+                        sessions::load_thread_selection(
+                            client,
+                            self.session_id(),
+                            self.thread_id(),
+                            ThreadSelectionPurpose::Switch,
+                        )?,
+                    ));
+                } else {
+                    let thread_id = zeta_protocol::ThreadId::new(&arguments).map_err(|error| {
+                        CommandExecutionError(format!("invalid thread ID '{arguments}': {error}"))
+                    })?;
+                    output.conversation_change = Some(
+                        self.switch_thread(client, thread_id)
+                            .map_err(session_error)?,
+                    );
+                }
+            }
+            TuiSlashCommandAction::ArchiveThread => {
+                if arguments.is_empty() {
+                    output.events.push(AppEvent::ThreadViewOpened(
+                        sessions::load_thread_selection(
+                            client,
+                            self.session_id(),
+                            self.thread_id(),
+                            ThreadSelectionPurpose::Archive,
+                        )?,
+                    ));
+                } else {
+                    let thread_id = zeta_protocol::ThreadId::new(&arguments).map_err(|error| {
+                        CommandExecutionError(format!("invalid thread ID '{arguments}': {error}"))
+                    })?;
+                    output.conversation_change = Some(
+                        self.archive_thread(client, thread_id)
+                            .map_err(session_error)?,
+                    );
+                }
+            }
+            TuiSlashCommandAction::ArchiveSession => {
+                output.conversation_change = Some(
+                    self.archive_session_and_replace(client)
+                        .map_err(session_error)?,
+                );
+            }
+            TuiSlashCommandAction::Rewind => {
+                if arguments.is_empty() {
+                    output
+                        .events
+                        .push(AppEvent::RewindViewOpened(rewind::load_selection(
+                            client,
+                            self.session_id(),
+                            self.thread_id(),
+                        )?));
+                } else {
+                    let before_turn_id = TurnId::new(&arguments).map_err(|error| {
+                        CommandExecutionError(format!(
+                            "invalid rewind checkpoint '{arguments}': {error}"
+                        ))
+                    })?;
+                    output.conversation_change = Some(
+                        self.rewind_active_thread(client, before_turn_id, &arguments)
+                            .map_err(session_error)?,
+                    );
+                }
+            }
             TuiSlashCommandAction::Clear | TuiSlashCommandAction::New => {
-                self.start_new(client, command, &arguments, app)
+                let kind = match command {
+                    TuiSlashCommandAction::Clear => NewConversationKind::Clear,
+                    TuiSlashCommandAction::New => NewConversationKind::New,
+                    _ => unreachable!("only new-chat commands reach this branch"),
+                };
+                output.conversation_change = Some(
+                    self.replace_with_new(client, kind, &arguments)
+                        .map_err(session_error)?,
+                );
             }
-            TuiSlashCommandAction::Config => show_config(client, app),
-            TuiSlashCommandAction::Fork => self.fork(client, &arguments, app),
+            TuiSlashCommandAction::Config => {
+                let config = client.read_config()?;
+                output
+                    .events
+                    .push(AppEvent::SelectionViewOpened(config::config_view(&config)));
+            }
+            TuiSlashCommandAction::Files => {
+                output.events.push(AppEvent::FileViewOpened(
+                    crate::features::workspace_files::load_directory(
+                        client,
+                        std::path::PathBuf::from(arguments),
+                    )?,
+                ));
+            }
+            TuiSlashCommandAction::Fork => {
+                output.conversation_change = Some(
+                    self.fork_active_thread(client, &arguments)
+                        .map_err(session_error)?,
+                );
+            }
             TuiSlashCommandAction::Help => {
-                app.update(AppEvent::SelectionViewOpened(help_selection_view()));
-                Ok(())
+                output
+                    .events
+                    .push(AppEvent::SelectionViewOpened(help_selection_view()));
             }
-            TuiSlashCommandAction::Model => set_or_show_model(client, &arguments, app),
-            TuiSlashCommandAction::Theme => set_or_show_theme(&arguments, app),
-            TuiSlashCommandAction::Quit | TuiSlashCommandAction::Exit => Err(
-                CommandExecutionError("exit command reached the product dispatcher".into()),
-            ),
+            TuiSlashCommandAction::Model => {
+                if arguments.is_empty() {
+                    output
+                        .events
+                        .push(AppEvent::ModelViewOpened(models::load_selection(client)?));
+                } else {
+                    let update = config::set_preferred_model(client, &arguments)
+                        .map_err(|error| CommandExecutionError(error.to_string()))?;
+                    output
+                        .events
+                        .push(AppEvent::ConfigSnapshotReceived(update.config));
+                    output.events.push(AppEvent::ProductNotice(update.notice));
+                }
+            }
+            TuiSlashCommandAction::Theme => {
+                if arguments.is_empty() {
+                    let catalog = ui::theme_catalog().map_err(CommandExecutionError)?;
+                    output
+                        .events
+                        .push(AppEvent::ThemeViewOpened(theme_selection_view(&catalog)));
+                } else {
+                    let command = format!("/theme {arguments}");
+                    let label = ui::select_theme(&arguments).map_err(CommandExecutionError)?;
+                    output
+                        .events
+                        .push(AppEvent::CommandStarted(command.clone()));
+                    output.events.push(AppEvent::CommandCompleted {
+                        command,
+                        result: format!("Theme set to {label}"),
+                    });
+                }
+            }
+            TuiSlashCommandAction::Quit | TuiSlashCommandAction::Exit => {
+                return Err(CommandExecutionError(
+                    "exit command reached the product dispatcher".into(),
+                ));
+            }
         }
-    }
-
-    fn show_status<T>(
-        &self,
-        client: &mut AppServerClient<T>,
-        app: &mut App,
-    ) -> Result<(), CommandExecutionError>
-    where
-        T: JsonRpcTransport,
-    {
-        let config = client.read_config()?;
-        app.update(AppEvent::SelectionViewOpened(status_view(
-            self.session_id().as_str(),
-            self.thread_id().as_str(),
-            self.thread_sequence(),
-            &config::preferred_model(&config),
-        )));
-        Ok(())
-    }
-
-    fn start_new<T>(
-        &mut self,
-        client: &mut AppServerClient<T>,
-        command: TuiSlashCommandAction,
-        arguments: &str,
-        app: &mut App,
-    ) -> Result<(), CommandExecutionError>
-    where
-        T: JsonRpcTransport,
-    {
-        let kind = match command {
-            TuiSlashCommandAction::Clear => NewConversationKind::Clear,
-            TuiSlashCommandAction::New => NewConversationKind::New,
-            _ => unreachable!("only new-chat commands call start_new"),
-        };
-        let change = self
-            .replace_with_new(client, kind, arguments)
-            .map_err(|error| CommandExecutionError(error.to_string()))?;
-        apply_conversation_change(app, change);
-        Ok(())
-    }
-
-    fn fork<T>(
-        &mut self,
-        client: &mut AppServerClient<T>,
-        arguments: &str,
-        app: &mut App,
-    ) -> Result<(), CommandExecutionError>
-    where
-        T: JsonRpcTransport,
-    {
-        let change = self
-            .fork_active_thread(client, arguments)
-            .map_err(|error| CommandExecutionError(error.to_string()))?;
-        apply_conversation_change(app, change);
-        Ok(())
-    }
-
-    fn resume<T>(
-        &mut self,
-        client: &mut AppServerClient<T>,
-        arguments: &str,
-        app: &mut App,
-    ) -> Result<(), CommandExecutionError>
-    where
-        T: JsonRpcTransport,
-    {
-        if arguments.is_empty() {
-            app.update(AppEvent::SessionViewOpened(sessions::load_selection(
-                client,
-                self.session_id().as_str(),
-            )?));
-            return Ok(());
-        }
-        match self
-            .resume_session(client, arguments)
-            .map_err(|error| CommandExecutionError(error.to_string()))?
-        {
-            ResumeOutcome::Listed(notice) => app.update(AppEvent::ProductNotice(notice)),
-            ResumeOutcome::Changed(change) => apply_conversation_change(app, change),
-        }
-        Ok(())
-    }
-
-    fn rewind<T>(
-        &mut self,
-        client: &mut AppServerClient<T>,
-        arguments: &str,
-        app: &mut App,
-    ) -> Result<(), CommandExecutionError>
-    where
-        T: JsonRpcTransport,
-    {
-        if arguments.is_empty() {
-            app.update(AppEvent::RewindViewOpened(rewind::load_selection(
-                client,
-                self.session_id(),
-                self.thread_id(),
-            )?));
-            return Ok(());
-        }
-        let before_turn_id = TurnId::new(arguments).map_err(|error| {
-            CommandExecutionError(format!("invalid rewind checkpoint '{arguments}': {error}"))
-        })?;
-        let change = self
-            .rewind_active_thread(client, before_turn_id, arguments)
-            .map_err(|error| CommandExecutionError(error.to_string()))?;
-        apply_conversation_change(app, change);
-        Ok(())
+        Ok(output)
     }
 }
 
-fn set_or_show_theme(arguments: &str, app: &mut App) -> Result<(), CommandExecutionError> {
-    if arguments.is_empty() {
-        let catalog = ui::theme_catalog().map_err(CommandExecutionError)?;
-        app.update(AppEvent::ThemeViewOpened(theme_selection_view(&catalog)));
-    } else {
-        let command = format!("/theme {arguments}");
-        app.update(AppEvent::CommandStarted(command.clone()));
-        let label = ui::select_theme(arguments).map_err(CommandExecutionError)?;
-        app.update(AppEvent::CommandCompleted {
-            command,
-            result: format!("Theme set to {label}"),
-        });
-    }
-    Ok(())
+#[derive(Default)]
+struct CommandOutput {
+    events: Vec<AppEvent>,
+    conversation_change: Option<ConversationChange>,
 }
 
-fn apply_conversation_change(app: &mut App, change: ConversationChange) {
+#[cfg(test)]
+fn apply_conversation_change(app: &mut App, change: ConversationChange, snapshot: Thread) {
     if matches!(change.transcript, ConversationTranscript::Clear) {
         app.update(AppEvent::TranscriptCleared);
     }
-    app.update(AppEvent::ThreadSnapshotReceived(change.snapshot));
+    app.update(AppEvent::ThreadSnapshotReceived(snapshot));
     app.update(AppEvent::ProductNotice(change.notice));
-}
-
-fn show_config<T>(
-    client: &mut AppServerClient<T>,
-    app: &mut App,
-) -> Result<(), CommandExecutionError>
-where
-    T: JsonRpcTransport,
-{
-    let config = client.read_config()?;
-    app.update(AppEvent::SelectionViewOpened(config::config_view(&config)));
-    Ok(())
-}
-
-fn show_mcp<T>(client: &mut AppServerClient<T>, app: &mut App) -> Result<(), CommandExecutionError>
-where
-    T: JsonRpcTransport,
-{
-    app.update(AppEvent::McpViewOpened(mcp::load_selection(client)?));
-    Ok(())
-}
-
-fn show_skills<T>(
-    client: &mut AppServerClient<T>,
-    app: &mut App,
-) -> Result<(), CommandExecutionError>
-where
-    T: JsonRpcTransport,
-{
-    app.update(AppEvent::SkillsViewOpened(load_selection(
-        client,
-        SkillCatalogReloadDto::Refresh,
-    )?));
-    Ok(())
-}
-
-fn set_or_show_model<T>(
-    client: &mut AppServerClient<T>,
-    arguments: &str,
-    app: &mut App,
-) -> Result<(), CommandExecutionError>
-where
-    T: JsonRpcTransport,
-{
-    if arguments.is_empty() {
-        app.update(AppEvent::ModelViewOpened(models::load_selection(client)?));
-        return Ok(());
-    }
-    let update = config::set_preferred_model(client, arguments)
-        .map_err(|error| CommandExecutionError(error.to_string()))?;
-    app.update(AppEvent::ConfigSnapshotReceived(update.config));
-    app.update(AppEvent::ProductNotice(update.notice));
-    Ok(())
 }
 
 fn text_arguments(arguments: &[ComposerInput]) -> Result<String, CommandExecutionError> {
@@ -286,6 +330,10 @@ fn text_arguments(arguments: &[ComposerInput]) -> Result<String, CommandExecutio
         .join(" ")
         .trim()
         .to_owned())
+}
+
+fn session_error(error: impl fmt::Display) -> CommandExecutionError {
+    CommandExecutionError(error.to_string())
 }
 
 #[derive(Debug)]

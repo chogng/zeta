@@ -105,6 +105,8 @@ src/
 │       ├── fs_watcher.rs          # root watcher、相对路径投影与 fs/changed 发布
 │       ├── git_operations.rs      # Git RPC decode 与稳定错误映射
 │       ├── git_runtime.rs         # status projection/revision、watcher、去重与通知
+│       ├── interaction_runtime.rs # pending interaction deadline enforcement
+│       ├── notification_queue.rs  # bounded per-connection queue + wake/close semantics
 │       ├── search_operations.rs   # search RPC decode、ownership 与稳定错误映射
 │       ├── terminal_operations.rs # terminal RPC decode、ownership 与稳定错误映射
 │       └── update_broker.rs       # per-connection subscription/cursor/fanout
@@ -135,6 +137,7 @@ src/
 | `AppServerThreadUpdates` | private sink | 将 TurnExecutor live/committed update 接入 broker | 不修改 canonical update |
 | `UpdateBroker` | private | subscription、durable cursor、weak queue fanout | 不持有 connection/session runtime authority |
 | `UpdateBroker::publish_thread_update` | private | committed 按 durable cursor；transient 直接给 subscriber | 两类 cursor semantics 不得混合 |
+| `InteractionDeadlineWatcher` | crate-private | 在 workspace mutation gate 下重检 durable pending request，持久化 `DeadlineElapsed` cancellation 并失败 Turn | 不选择 UI、不解释 approval policy、不修改 reducer |
 | `SkillRuntime` | crate-private | 组合 built-in/user roots、缓存 metadata projection、叠加 config enablement | 不读取正文、不执行 Skill、不拥有 config durability |
 | `SkillConfigSnapshotProvider` | crate-private trait | 给 runtime 最新 `SkillsConfig` 与 commit signal | implementation 不把客户端 path 直接升级为 trusted root |
 | `compose_sources` | private | enabled user absolute root + release root → validated `SkillSourceRoot` | Workspace/Plugin source 尚不在当前 composition |
@@ -260,12 +263,20 @@ start/interrupt 与 interaction resolve，并以 tagged `SessionRequestResult` �
 和历史无模型 Session 的默认值，不承担当前 Session 的模型切换。
 
 `session/request::ResolveInteraction` 使用 exact durable
-`RequestId`。当 response 是 Tool Call 对应的 approval，
+`RequestId`，且只接受 `UpdateBroker` 选出的、声明该 kind 并订阅 scope 的 connection；full request
+只通过 `agent/request` 投递，普通 Thread snapshot 保持 redacted。owner 断连或退订会确定性重选，
+非 owner 返回 `AgentInteractionNotOwner`，过期响应返回 `AgentInteractionExpired`。当 response 是 Tool Call 对应的 approval，
 且 Core 确实产生 `Resolved` disposition，App Server 再启动 executor 恢复 Tool path。这个判断依赖
 pending interaction 的 item binding，不能简化为“所有 approval 都 restart”。
 同一路径同时恢复执行前 approval 与带结构化 `sandboxDenial` 的 sandbox escalation approval；
 App Server 不解释或扩大授权，Core 会在恢复后重新校验 action、policy、capability 与 ToolCall
 binding，并保证升级重试最多启动一次。
+
+`InteractionDeadlineWatcher` 每 50 ms 检查 broker 已知的 pending request，并在同一个
+`workspace_authority_gate` 内重新读取 Core snapshot；只有 exact request 仍 pending 且 wall-clock
+deadline 已到时，才持久化 `InteractionCancelled(DeadlineElapsed)` 和稳定、可重试的
+`InteractionDeadlineElapsed` Turn failure。deadline policy 属于 App Server delivery/runtime，TUI
+只消费最终 snapshot；Core reducer 不运行 timer。
 
 ## 更新代理
 
@@ -283,11 +294,14 @@ transient Thread update
    └─ do not advance durable cursor
 ```
 
-`NotificationQueue::{push,extend}` 在空 queue 获得新值时唤醒 listener；
+`notification_queue::NotificationQueue::{push,extend}` 在空 queue 获得新值时唤醒 listener；每个 connection 最多保留
+4096 条通知。达到上限时先清除可重建的 transient Thread notification，使下一 cursor gap 触发
+snapshot resync；如果 4096 条都是 must-deliver control notification，则关闭 queue，让 client 走
+connection failure/recovery，而不是丢 control fact 或继续增长内存。
 `AppServer::close_connection` 显式 unregister subscriber 并唤醒 blocked listener。Connection
 若未显式 close，最后一个 strong owner drop 后 broker 仍会在下一次 publish 时通过
-`Weak::upgrade` 失败清除 subscriber。目前没有 queue length/backpressure limit，slow consumer
-可能积累内存，这是当前限制。
+`Weak::upgrade` 失败清除 subscriber。共享 embedded client 和 TUI event pump 也使用 1024 项有界
+channel，把 slow-consumer 背压传回该 queue。
 
 ## Local composition 与模型安全点
 
@@ -492,7 +506,8 @@ bazel test //zeta-rs/app-server:app-server-unit-tests
 [`docs/typst.md`](../../docs/typst.md)。
 
 测试覆盖初始化/请求 ID、Session 优先流程、命令重放/冲突、分叉谱系、Turn 重放/模型只调用一次、
-多连接更新、重连后的持久化缺口、连接拥有的资源、配置命令、交互/批准解决、
+多连接更新、重连后的持久化缺口、有界通知 overflow、连接拥有的资源、配置命令、owner-directed
+交互/批准解决、断连重选与 deadline、
 先响应后通知、模型配置安全点、
 Workspace override、review-only request、只读 `rg` definition/materialization/policy/execution，
 MCP worker bridge、exact provenance/approval policy、local/MCP 路由与 collision rejection、
@@ -510,7 +525,7 @@ local tool 的参数白名单、discovery、取消与输出限制由
 本 README 只拥有 App Server 组合与 Core port binding。
 
 当前 JSONL 服务仍使用同步循环；自有嵌入式连接已具备可唤醒通知来源，以及显式订阅、资源和
-终端清理；尚无异步多连接调度器、序列化范围强制、通知背压、持久化资源或完整网络服务
+终端清理；尚无异步多连接调度器、序列化范围强制、持久化资源或完整网络服务
 生命周期。MCP desired config 的热更新和未来 Tool catalog replacement 已实现；当前仍没有凭据
 具体化、stdio 进程沙箱、对外 runtime health/diagnostic API、progress/elicitation delivery 或
 image result 的原生 Core content path；MCP image 暂时编码进 bounded JSON text result。演进这些
