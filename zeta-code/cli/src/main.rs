@@ -24,8 +24,12 @@ use zeta_exec::ExecRunRequest;
 use zeta_exec::ExecRunner;
 use zeta_exec::HeadlessApprovalMode;
 use zeta_exec::JsonLinesExecEventSink;
+use zeta_install_context::InstallContext;
 use zeta_protocol::SessionId;
 use zeta_protocol::ThreadId;
+
+const PRODUCT_SERVICES_OVERRIDE: &str = "ZETA_PRODUCT_SERVICES_PATH";
+const BUNDLED_PRODUCT_SERVICES: &str = "product-services/product-services.json";
 
 fn main() {
     let mut arguments = env::args().skip(1);
@@ -123,7 +127,17 @@ fn with_product_services(
 }
 
 fn product_services_path() -> Option<PathBuf> {
-    env::var_os("ZETA_PRODUCT_SERVICES_PATH").map(PathBuf::from)
+    select_product_services_path(
+        env::var_os(PRODUCT_SERVICES_OVERRIDE).map(PathBuf::from),
+        InstallContext::current().bundled_resource(BUNDLED_PRODUCT_SERVICES),
+    )
+}
+
+fn select_product_services_path(
+    explicit: Option<PathBuf>,
+    bundled: Option<PathBuf>,
+) -> Option<PathBuf> {
+    explicit.or(bundled)
 }
 
 fn app_server_command(arguments: Vec<String>) -> Result<(), String> {

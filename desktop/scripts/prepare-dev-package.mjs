@@ -370,6 +370,7 @@ export async function assemblePackage(staging, target, platform, executables, ri
   await mkdir(vscodeLicenseDirectory, { recursive: true });
   await copyBuiltinSkills(join(resourcesDirectory, "skills"));
   await copyBuiltinExtensions(join(resourcesDirectory, "extensions"));
+  await copyRegularTree(join(repositoryRoot, "resources", "product-services"), join(resourcesDirectory, "product-services"), "product services");
   await copyExecutable(executables.zeta, join(binDirectory, zetaName), isWindows);
   await copyExecutable(ripgrep.executable, join(pathDirectory, rgName), isWindows);
   for (const name of ["LICENSE-MIT", "UNLICENSE"]) {
@@ -436,6 +437,8 @@ async function validatePackage(packageRoot, platform) {
   await requireFile(join(packageRoot, "zeta-resources", "licenses", "ripgrep", "LICENSE-MIT"));
   await requireFile(join(packageRoot, "zeta-resources", "licenses", "ripgrep", "UNLICENSE"));
   await requireFile(join(packageRoot, "zeta-resources", "licenses", "vscode", "LICENSE.txt"));
+  await requireFile(join(packageRoot, "zeta-resources", "product-services", "product-services.json"));
+  await requireFile(join(packageRoot, "zeta-resources", "product-services", "marketplace-root.json"));
   if (isWindows) {
     await requireFile(join(packageRoot, "zeta-resources", "zeta-command-runner.exe"));
     await requireFile(join(packageRoot, "zeta-resources", "zeta-windows-sandbox-setup.exe"));

@@ -32,6 +32,12 @@ fn package_layout_precedes_legacy_sibling_and_search_path_candidates() {
     )
     .unwrap();
     fs::create_dir(resources_directory.join("skills")).unwrap();
+    fs::create_dir(resources_directory.join("product-services")).unwrap();
+    fs::write(
+        resources_directory.join("product-services/product-services.json"),
+        b"{}",
+    )
+    .unwrap();
     let executable = binary_directory.join("zeta");
     let context = InstallContext::detect(
         Some(&executable),
@@ -69,6 +75,10 @@ fn package_layout_precedes_legacy_sibling_and_search_path_candidates() {
     );
     assert_eq!(context.bundled_resource_directory("bwrap"), None);
     assert_eq!(context.bundled_resource("skills"), None);
+    assert_eq!(
+        context.bundled_resource("product-services/product-services.json"),
+        Some(resources_directory.join("product-services/product-services.json"))
+    );
     let expected_bubblewrap_candidates = [
         resources_directory.join("bwrap"),
         search_directory.join("bwrap"),

@@ -26,6 +26,9 @@ fn completion_item_projection_preserves_utf16_and_snippet_semantics() {
             range: LanguageTextRange::new(4..7),
             new_text: "println!($0)".into(),
         }),
+        additional_text_edits: Vec::new(),
+        command: None,
+        provider_data: serde_json::Value::Null,
     };
 
     let dto = completion_item_to_dto("🦀pri", item).expect("completion DTO");

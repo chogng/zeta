@@ -24,7 +24,8 @@ approval、sandbox capability probe、下载、更新或安装 mutation。
     ├── bwrap              # Linux
     ├── zeta-command-runner.exe              # Windows
     ├── zeta-windows-sandbox-setup.exe        # Windows
-    └── skills/            # built-in Agent Skills
+    ├── skills/            # built-in Agent Skills
+    └── product-services/  # product Marketplace config + pinned public TUF root
 ```
 
 只有 executable 位于 `bin/`，且 package root 同时存在普通文件 `zeta-package.json`、
@@ -73,8 +74,10 @@ host composition
    │  └─ LinuxSandbox validation + capability probe + canonical identity freeze
    ├─ executable_candidates(WindowsCommandRunner / WindowsSandboxSetup)
    │  └─ WindowsSandbox validation + protocol probe + canonical identity freeze
-   └─ bundled_resource_directory("skills")
+   ├─ bundled_resource_directory("skills")
       └─ zeta-skills controlled BuiltIn source validation
+   └─ bundled_resource("product-services/product-services.json")
+      └─ zeta-cli → LocalProductServicesConfig trust validation
 ```
 
 如果该 crate 开始启动进程、解释 sandbox policy、下载资源或管理更新状态，说明 ownership 已经
