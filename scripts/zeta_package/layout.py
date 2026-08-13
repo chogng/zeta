@@ -46,15 +46,17 @@ def build_package_directory(
         skills_directory = staging / "zeta-resources" / "skills"
         extensions_directory = staging / "zeta-resources" / "extensions"
         license_directory = staging / "zeta-resources" / "licenses" / "ripgrep"
+        vscode_license_directory = staging / "zeta-resources" / "licenses" / "vscode"
         binary_directory.mkdir()
         path_directory.mkdir()
         license_directory.mkdir(parents=True)
+        vscode_license_directory.mkdir()
         copy_builtin_skills(
             repository_root / "zeta-rs" / "skills" / "assets",
             skills_directory,
         )
         copy_builtin_extensions(
-            repository_root / "resources" / "extensions",
+            repository_root / "extensions",
             extensions_directory,
         )
 
@@ -73,6 +75,10 @@ def build_package_directory(
                 repository_root / "third_party" / "ripgrep" / name,
                 license_directory / name,
             )
+        shutil.copyfile(
+            repository_root / "third_party" / "vscode" / "LICENSE.txt",
+            vscode_license_directory / "LICENSE.txt",
+        )
 
         bubblewrap_metadata = None
         if bubblewrap is not None:
@@ -196,6 +202,15 @@ def validate_package_directory(package: Path, spec: TargetSpec) -> None:
         )
         if not license_path.is_file():
             raise RuntimeError("Missing ripgrep license: {}".format(license_path))
+    vscode_license = (
+        package
+        / "zeta-resources"
+        / "licenses"
+        / "vscode"
+        / "LICENSE.txt"
+    )
+    if vscode_license.is_symlink() or not vscode_license.is_file():
+        raise RuntimeError("Missing VS Code extension license: {}".format(vscode_license))
     validate_builtin_skills(package / "zeta-resources" / "skills")
     validate_builtin_extensions(package / "zeta-resources" / "extensions")
     if spec.is_linux:
@@ -262,6 +277,8 @@ def copy_builtin_extensions(source: Path, destination: Path) -> None:
         for child in sorted(source.iterdir(), key=lambda path: path.name)
         if child.name not in ("README.md", "BUILD.bazel")
     ]
+    if not extension_entries:
+        raise RuntimeError("Built-in extension source is empty: {}".format(source))
     destination.mkdir(parents=True)
     for extension_directory in extension_entries:
         if extension_directory.is_symlink() or not extension_directory.is_dir():
@@ -330,9 +347,12 @@ def validate_builtin_skills(skills_directory: Path) -> None:
 def validate_builtin_extensions(extensions_directory: Path) -> None:
     if extensions_directory.is_symlink() or not extensions_directory.is_dir():
         raise RuntimeError("Package is missing built-in extensions")
-    for extension_directory in sorted(
+    extension_directories = sorted(
         extensions_directory.iterdir(), key=lambda path: path.name
-    ):
+    )
+    if not extension_directories:
+        raise RuntimeError("Package contains no built-in extensions")
+    for extension_directory in extension_directories:
         if (
             extension_directory.is_symlink()
             or not extension_directory.is_dir()

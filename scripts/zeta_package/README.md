@@ -17,11 +17,16 @@ notarization, installer formats, or update delivery.
     ├── zeta-windows-sandbox-setup.exe # Windows only
     ├── skills/
     │   └── skill-creator/SKILL.md
+    ├── extensions/
+    │   ├── css/package.json
+    │   ├── ...
+    │   └── yaml/package.json
     └── licenses/
         ├── bubblewrap/COPYING        # Linux only
-        └── ripgrep/
-            ├── LICENSE-MIT
-            └── UNLICENSE
+        ├── ripgrep/
+        │   ├── LICENSE-MIT
+        │   └── UNLICENSE
+        └── vscode/LICENSE.txt        # built-in Editor Extension resources
 ```
 
 The stable entry point is `scripts/build_zeta_package.py`. If `--zeta-bin` is
@@ -38,7 +43,13 @@ Repository-owned built-in Skills come from
 `zeta-rs/skills/assets/`; `layout.py` rejects linked or malformed Skill trees,
 stages them under `zeta-resources/skills/`, validates the complete package in a
 sibling temporary directory, and renames it into place. It never replaces an
-existing output directory.
+existing output directory. Repository-owned declarative Editor Extensions come from the root
+`extensions/` directory and are copied to `zeta-resources/extensions/` with the same regular,
+unlinked-tree restriction. Their canonical upstream license copy is
+`third_party/vscode/LICENSE.txt` (mirrored from the sibling VS Code source checkout) and is copied
+once to `zeta-resources/licenses/vscode/LICENSE.txt`. Runtime discovery and contribution semantics remain owned by
+[`zeta-extensions`](../../zeta-rs/extensions/README.md) and
+[`docs/editor-extensions.md`](../../docs/editor-extensions.md), not by the package builder.
 
 Desktop development uses the same locks and canonical layout through the Node
 assembler at `desktop/scripts/prepare-dev-package.mjs`. It builds the
@@ -69,8 +80,10 @@ helper to be built for the selected target.
 | Linux | `zeta-resources/bwrap` is required and validated |
 | Windows | Both AppContainer helpers are required and validated |
 
-Tests are offline and cover target-lock completeness, package layout, built-in
-Skill staging/link rejection, tar/zip member/source extraction, Linux and
+Tests are offline and cover target-lock completeness, package layout, all thirteen built-in
+Extension packages, their referenced resources, real file-template declarations, the packaged VS Code
+license text, built-in Skill/Extension staging and link
+rejection, tar/zip member/source extraction, Linux and
 Windows helper layouts, executable permissions, refusal to overwrite, and
 digest failure cleanup:
 

@@ -244,6 +244,20 @@ impl LanguageServerDocumentRouter {
             .client)
     }
 
+    /// Returns the initialized client for one registered server route.
+    pub fn client_for_server(
+        &self,
+        server_name: &LanguageServerName,
+    ) -> Result<&LanguageServerClient, LanguageServerRouterError> {
+        Ok(&self
+            .servers
+            .get(server_name)
+            .ok_or_else(|| LanguageServerRouterError::ServerNotRegistered {
+                server: server_name.clone(),
+            })?
+            .client)
+    }
+
     pub async fn replace_server(
         &mut self,
         name: &LanguageServerName,

@@ -44,15 +44,20 @@ existing decoration collection; stale revisions are hidden immediately after an
 edit. The Workbench-owned Problems panel enumerates the complete shared workspace
 repository, groups diagnostics by resource, filters by severity/message/file,
 and delegates row navigation to `IEditorPart`; it does not inspect editor DOM or
-own diagnostic production. The current App Server push-diagnostic producer only
-synchronizes open models, while other producers may publish any workspace
-resource. Pull/workspace diagnostics and semantic-token LSP adaptation remain
-future work. Formatting edits use the
-editor command/undo layer; parameter hints retain provider-selected active
+own diagnostic production. Document pull reports share the open-model revision
+gate; workspace reports are projected through App Server's Workspace filesystem
+authority and retain unopened resources in the same repository. Semantic tokens
+and the remaining LSP document features use editor-owned provider contracts.
+Formatting edits use the editor command/undo layer; parameter hints retain provider-selected active
 signatures and parameters; inlay hints remain non-mutating; linked ranges extend
 native input before commit so every synchronized change is one atomic undo step.
 Regardless of origin, revision gates, application semantics, and DOM projection
 stay editor-owned.
+
+Language-server log and show-message notifications are retained by the
+Workbench language status service. Logs and active progress appear in the
+Output panel, user-visible messages use the shared dialog service, and active
+work-done progress is summarized through the shared statusbar service.
 
 TextMate is a separate provider under `workbench/services/textMate`. The local
 lexical provider remains the deterministic fallback when no external

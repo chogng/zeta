@@ -124,6 +124,18 @@ test("Provider catalog normalization rejects ambiguous metadata atomically", () 
   }), /trigger characters must be unique/);
 });
 
+test("a provider group replaces itself without colliding with stable IDs", () => {
+  using registry = new LanguageCompletionProviderRegistry();
+  using group = registry.registerGroup([provider("demo", ["typescript"], [])]);
+  using external = registry.register(provider("external", ["typescript"], []));
+
+  assert.throws(() => group.replace([provider("external", ["typescript"], [])]), /already registered/);
+  assert.deepEqual(registry.getProviders("typescript", createLanguageCompletionInvokeContext()).map(candidate => candidate.id), ["demo", "external"]);
+
+  group.replace([provider("demo", ["javascript"], [])]);
+  assert.deepEqual(registry.getProviders("typescript", createLanguageCompletionInvokeContext()).map(candidate => candidate.id), ["external"]);
+});
+
 function provider(
   id: string,
   languageIds: readonly string[],

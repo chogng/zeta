@@ -139,6 +139,7 @@ impl AppServer {
                 typst: true,
                 update_replay: true,
                 extensions,
+                extension_host: self.extension_hosts.is_some(),
                 connectors: self.connectors.is_some(),
                 plugins: self.plugins.is_some(),
             },

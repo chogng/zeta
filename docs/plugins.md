@@ -8,13 +8,15 @@
 > `zeta-rs/ext/connectors`；App Server 已能从注入的 activation 自动接线 Connector 与 MCP，通用 OAuth
 > PKCE/device 状态机、App Server control plane、Desktop/TUI 产品入口与 GitHub providers 已实现；
 > TUF 远端 Marketplace、delegated publisher、完整离线缓存、revocation tombstone 与安全 ZIP ingestion
-> 已实现；PL4 Proposed
+> 已实现；PL4 的可执行 Editor Extension 安装/授权声明已实现，Host runtime 不由本 crate 拥有
 > 当前 crate 实现契约：[`zeta-rs/plugins/README.md`](../zeta-rs/plugins/README.md)
 > 远端分发实现契约：[`zeta-rs/plugin-marketplace/README.md`](../zeta-rs/plugin-marketplace/README.md)
 > Connector account/lifecycle：[`connectors.md`](connectors.md)
 > MCP runtime：[`mcp.md`](mcp.md)
 > Skill runtime：[`skills.md`](skills.md)
 > Config authority 与 runtime snapshot 接入：[`config.md`](config.md)
+> Editor Extension 双轨系统边界：[`editor-extensions.md`](editor-extensions.md)
+> 可执行 Host runtime 实现：[`zeta-rs/editor-extension-host/README.md`](../zeta-rs/editor-extension-host/README.md)
 
 ## 快速理解
 
@@ -33,7 +35,7 @@ Plugin 是经过校验和版本管理的扩展包，不是安装后便能执行�
 ## 1. 结论
 
 `zeta-plugins` 是 Zeta 的扩展分发、安装、解析、启用和版本管理控制面。Plugin 是一个不可变、
-可校验的包，可以贡献 Skill、Connector declaration、MCP server declaration 和静态资源；Plugin manager 将这些贡献
+可校验的包，可以贡献 Skill、Connector declaration、MCP server declaration、可执行 Editor Extension 声明和静态资源；Plugin manager 将这些贡献
 解析为带来源和 digest 的 activation snapshot，再由 App Server 注入对应 runtime。
 
 Plugin 不是：
@@ -52,11 +54,13 @@ flowchart TD
     P["Plugin activation snapshot"] --> S["SkillContribution → Skill runtime"]
     P --> C["ConnectorContribution → Connector runtime"]
     P --> M["McpServerContribution"]
+    P --> E["EditorExtensionContribution → executable Host RPC v1 program"]
     P --> A["StaticAssetContribution → Resource consumer"]
     C -. "references declaration" .-> M
     C -->|"connected"| B["Ready MCP binding"]
     M -->|"standalone activation"| R["MCP runtime"]
     M --> B
+    E --> H["zeta-editor-extension-host supervisor"]
     B --> R
     R --> T["Tool Registry / Core"]
 ```
@@ -64,6 +68,21 @@ flowchart TD
 Plugin 只负责声明控制面和 package lifecycle。Skill、Connector、MCP 和 Resource consumer 分别拥有自己的运行时
 语义；它们不是 Plugin manager 内部的 live 子对象。Plugin、Connector 与 MCP 的 canonical 关系由
 [`connectors.md`](connectors.md) 维护。
+
+静态 Editor Extension 是另一套边界：它从 host-selected roots 读取 `package.json` 和声明式
+language/TextMate/snippet/theme/debugger 资源，不使用 Plugin v1 manifest，也没有 Plugin 的
+install/enable/grant/runtime 语义。其 canonical 文档是
+[`editor-extensions.md`](editor-extensions.md)。未来若共享安装控制面，仍必须保留两种 manifest、
+activation 与权限语义的显式转换，不能把当前静态 catalog 误称为 Plugin runtime。
+
+Plugin v1 现在提供显式 `editorExtensions[]` bridge。每项指向包内一个可直接启动、自己实现 Zeta Host
+RPC v1 的程序；它不是由通用 Node/WASM runtime 加载的脚本。Plugin manager 只验证并授权声明，
+`zeta-editor-extension-host` supervisor 才拥有逐扩展进程隔离、RPC、crash recovery 和 provider
+lifecycle。静态 `package.json` catalog 不会被隐式转换成该 executable declaration。
+生产第三方执行还必须由产品注入能够实施 sandbox、memory/CPU/process hard limits 和 process-tree
+termination 的 platform launcher；没有该 launcher 时 Host capability 必须为 false，不能用
+`TrustedDevelopmentLauncher` 降级。该 v1 是 Zeta-native executable RPC，不是 VS Code/Node Extension
+Host。
 
 安装、启用、授权和调用是四个不同动作：
 
@@ -108,7 +127,8 @@ tabs/search/selection presentation primitive，但当前没有 Plugin view model
 因此第一版不应从“动态加载代码”开始，而应先完成一个 declarative package：
 
 ```text
-Plugin v1 contributions = Skills + Connectors + MCP server declarations + static assets
+Plugin v1 contributions = Skills + Connectors + MCP server declarations
+                        + executable Editor Extension declarations + static assets
 ```
 
 第三方 UI、native library、hooks、model provider adapter 和任意 App Server method registration
@@ -127,6 +147,7 @@ Plugin v1 contributions = Skills + Connectors + MCP server declarations + static
 - immutable `PluginActivationSnapshot` 和 generation；
 - package provenance、signature/trust result、revocation/blocked diagnostics；
 - enabled Plugin 向 Skill/Connector/MCP runtime 的 normalized contribution projection；
+- executable Editor Extension 的 exact program、Host RPC v1、activation trigger 与 capability ceiling 声明；
 - install/update/enable/disable/uninstall 的 typed command replay；
 - 不含秘密的 audit record 和 health projection。
 
@@ -134,6 +155,7 @@ Plugin v1 contributions = Skills + Connectors + MCP server declarations + static
 
 - Skill 的自动选择、prompt layering 或 context budget；
 - MCP JSON-RPC、process supervision、Connector connection/OAuth 或 tools/resources/prompts catalog；
+- Editor Extension Host RPC transport、process supervision、crash recovery 或 provider registry；
 - script、binary 或 MCP tool 的实际执行；
 - API token、OAuth token、cookie 或 private key；
 - OS sandbox、network enforcement 或 per-call approval 的最终实现；
@@ -227,10 +249,24 @@ slash-separated path；绝对路径、`..`、空 segment、NUL、平台 device p
     ],
     "assets": [
       { "id": "icon", "path": "assets/icon.png" }
+    ],
+    "editorExtensions": [
+      {
+        "id": "review-runtime",
+        "entrypoint": "bin/review-extension-host",
+        "runtimeApiVersion": 1,
+        "activationEvents": [
+          { "type": "onCommand", "id": "acme.review.run" },
+          { "type": "onLanguage", "id": "rust" },
+          { "type": "onDemand", "capability": "testProfileProvider" }
+        ],
+        "capabilities": ["command", "languageProvider", "testProfileProvider"]
+      }
     ]
   },
   "permissions": [
     { "type": "process", "executable": "bin/review-server" },
+    { "type": "process", "executable": "bin/review-extension-host" },
     { "type": "workspace", "access": "read" },
     { "type": "network", "hosts": ["api.example.com"] }
   ],
@@ -250,6 +286,21 @@ Manifest 必须 strict-parse：
   `(PluginId, version)` 指向不同内容；
 - manifest 只声明 credential slot，不包含 secret value；
 - permission 使用 tagged enum，不使用 `network: true`、`workspace: "all"` 一类含糊开关。
+
+`editorExtensions[]` 是 strict typed control-plane declaration：ID 与 entrypoint 各自唯一；entrypoint
+必须是包内 regular file，并有完全相同路径的 `process` permission；`runtimeApiVersion` 仅接受数值
+`1`；activation event 和 capability ceiling 都必须 non-empty、unique、bounded。v1 triggers 是
+`startup`、`onCommand`、`onLanguage`、`onDemand`、`onDebugType`、`onTaskType` 和
+`onTestProfile`。除 `startup` 外，trigger 不得请求 ceiling 中未声明的 capability。
+
+`workspaceContains` 当前故意不在 schema 中：安全实现必须由 Workspace authority 提供 bounded scanner
+与 ignore/trust 语义，不能让扩展程序自行扫描工作区，也不能让 Host 静默忽略一个看似有效的 trigger。
+
+exact `process` permission 只给 supervisor 一条 package-relative launch ceiling；provider invocation
+仍走已经启动的 RPC session，不会每次重新直接执行 entrypoint。regular-file/containment 校验不承诺该
+artifact 在当前 OS、CPU 或 ABI 上可运行，也不检查 Unix executable bit、Windows PE/扩展名或代码签名。
+当前 v1 没有 per-platform artifact selector；supervisor 必须在 activation 时检查 launchability 并对不兼容
+artifact fail closed。
 
 ### 5.3 身份
 
@@ -702,7 +753,7 @@ zeta-rs/plugins/src/
 
 ## 18. 分阶段实施
 
-### 阶段 PL0：清单+ local validation（当前状态）
+### 阶段 PL0：清单+ local validation（已完成）
 
 - 固定 v1 schema、identity、path 和 digest；
 - local development package discovery；
@@ -748,7 +799,14 @@ content-addressed object、重新验证 exact digest，再原子 promote。mutab
 
 ### 阶段 PL4：生态扩展评审
 
-只有具体需求有独立 threat model 和 stable port 后，才分别评审：
+当前已完成的窄边界：
+
+- ✅ Plugin manifest/immutable package 对可执行 Editor Extension program 的 strict declaration；
+- ✅ exact process permission、Host RPC API v1、activation/capability ceiling 与 regular-file 校验；
+- 委托 `zeta-editor-extension-host`：进程隔离、RPC、crash supervisor、provider lifecycle；
+- ❌ generic Node/WASM loader、VS Code Extension API compatibility 与 `workspaceContains` scanner。
+
+其余能力只有在具体需求有独立 threat model 和 stable port 后，才分别评审：
 
 - declarative hooks；
 - WASM capability component；
@@ -762,6 +820,7 @@ content-addressed object、重新验证 exact digest，再原子 promote。mutab
 除常规 Rust workspace 检查外，必须覆盖：
 
 - manifest unknown field、invalid ID/version、duplicate contribution；
+- Editor Extension runtime API、exact executable permission、activation/capability bound 与 entrypoint file type；
 - path traversal、symlink/hardlink、normalization collision 和 archive bomb；
 - digest/signature/revocation；
 - install 每个 durable boundary 的 crash recovery；

@@ -10,9 +10,12 @@ use zeta_app_server_protocol::protocol::collaboration::DocumentCollaborationUpda
 use zeta_app_server_protocol::protocol::common::AgentInteractionCapability;
 use zeta_app_server_protocol::protocol::config::ConfigChanged;
 use zeta_app_server_protocol::protocol::connectors::ConnectorsChanged;
+use zeta_app_server_protocol::protocol::extension_host::ExtensionHostChanged;
 use zeta_app_server_protocol::protocol::fs::FsChanged;
 use zeta_app_server_protocol::protocol::git::{GitStatusChanged, GitStatusResult};
 use zeta_app_server_protocol::protocol::language::LanguageDiagnosticsNotification;
+use zeta_app_server_protocol::protocol::language::LanguageServerMessageNotification;
+use zeta_app_server_protocol::protocol::language::LanguageServerProgressNotification;
 use zeta_app_server_protocol::protocol::plugins::PluginsChanged;
 use zeta_app_server_protocol::protocol::registry::ServerNotificationMethod;
 use zeta_app_server_protocol::protocol::skills::SkillsChanged;
@@ -494,6 +497,22 @@ impl UpdateBroker {
         });
     }
 
+    pub(super) fn publish_extension_host_changed(&self, generation: u64) {
+        let Ok(mut state) = self.state.lock() else {
+            return;
+        };
+        state.subscribers.retain(|_, subscriber| {
+            let Some(queue) = subscriber.queue.upgrade() else {
+                return false;
+            };
+            queue.push(notification(
+                ServerNotificationMethod::ExtensionHostChanged,
+                &ExtensionHostChanged { generation },
+            ));
+            true
+        });
+    }
+
     pub(super) fn publish_git_status_changed(&self, status: GitStatusResult) {
         let Ok(mut state) = self.state.lock() else {
             return;
@@ -540,6 +559,43 @@ impl UpdateBroker {
                 ServerNotificationMethod::LanguageDiagnostics,
                 &diagnostics,
             ));
+            true
+        });
+    }
+
+    pub(super) fn publish_language_server_message(
+        &self,
+        message: LanguageServerMessageNotification,
+    ) {
+        self.publish_language_notification(
+            ServerNotificationMethod::LanguageServerMessage,
+            &message,
+        );
+    }
+
+    pub(super) fn publish_language_server_progress(
+        &self,
+        progress: LanguageServerProgressNotification,
+    ) {
+        self.publish_language_notification(
+            ServerNotificationMethod::LanguageServerProgress,
+            &progress,
+        );
+    }
+
+    fn publish_language_notification<T: Serialize>(
+        &self,
+        method: ServerNotificationMethod,
+        params: &T,
+    ) {
+        let Ok(mut state) = self.state.lock() else {
+            return;
+        };
+        state.subscribers.retain(|_, subscriber| {
+            let Some(queue) = subscriber.queue.upgrade() else {
+                return false;
+            };
+            queue.push(notification(method, params));
             true
         });
     }

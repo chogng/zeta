@@ -1,6 +1,6 @@
 import { reset } from "../../../base/browser/dom.js";
 import { type Event } from "../../../base/common/event.js";
-import { type IDisposable } from "../../../base/common/lifecycle.js";
+import { combinedDisposable, type IDisposable } from "../../../base/common/lifecycle.js";
 import { type LanguageToken } from "../../common/tokens/languageTokens.js";
 import { type TextModel } from "../../common/model/textModel.js";
 
@@ -93,6 +93,22 @@ export function createAsterSemanticTokenSource(
       })));
     },
     getLineTokens: (lineIndex: number) => resolveLineTokens(index.getLineTokens(lineIndex), resolvePresentation),
+  });
+}
+
+/** Overlays server semantic classification on lexical tokens without losing uncovered syntax styling. */
+export function createOverlaySemanticTokenSource(base: SemanticTokenSource, overlay: SemanticTokenSource): SemanticTokenSource {
+  if (base.textModel !== overlay.textModel) throw new TypeError("Semantic-token overlay sources must share one text model");
+  const onDidChange: Event<void> = listener => combinedDisposable(base.onDidChange(listener), overlay.onDidChange(listener));
+  const getLineTokens = (lineIndex: number): readonly ResolvedSemanticToken[] => mergeResolvedLineTokens(base.getLineTokens(lineIndex), overlay.getLineTokens(lineIndex));
+  return Object.freeze({
+    textModel: base.textModel,
+    onDidChange,
+    get lines(): readonly SemanticTokenLine[] {
+      const lineIndexes = new Set([...base.lines.map(line => line.lineIndex), ...overlay.lines.map(line => line.lineIndex)]);
+      return Object.freeze([...lineIndexes].sort((left, right) => left - right).map(lineIndex => Object.freeze({ lineIndex, tokens: getLineTokens(lineIndex) })));
+    },
+    getLineTokens,
   });
 }
 
@@ -247,6 +263,29 @@ function resolveLineTokens(tokens: readonly LanguageToken[], resolvePresentation
     }));
   }
   return Object.freeze(resolved);
+}
+
+function mergeResolvedLineTokens(base: readonly ResolvedSemanticToken[], overlay: readonly ResolvedSemanticToken[]): readonly ResolvedSemanticToken[] {
+  if (overlay.length === 0) return base;
+  if (base.length === 0) return overlay;
+  const boundaries = [...new Set([...base.flatMap(token => [token.startColumn, token.endColumn]), ...overlay.flatMap(token => [token.startColumn, token.endColumn])])].sort((left, right) => left - right);
+  const result: ResolvedSemanticToken[] = [];
+  for (let index = 0; index + 1 < boundaries.length; index += 1) {
+    const startColumn = boundaries[index]!;
+    const endColumn = boundaries[index + 1]!;
+    const semantic = overlay.find(token => token.startColumn <= startColumn && token.endColumn >= endColumn);
+    const lexical = base.find(token => token.startColumn <= startColumn && token.endColumn >= endColumn);
+    const token = semantic ?? lexical;
+    if (!token) continue;
+    result.push(Object.freeze({
+      startColumn,
+      endColumn,
+      ...(token.presentation === undefined ? {} : { presentation: token.presentation }),
+      ...(token.modifiers === undefined ? {} : { modifiers: token.modifiers }),
+      ...(semantic || token.syntaxPresentation === undefined ? {} : { syntaxPresentation: token.syntaxPresentation }),
+    }));
+  }
+  return Object.freeze(result);
 }
 
 function applySyntaxPresentation(element: HTMLElement, presentation: NonNullable<LanguageToken["presentation"]>): void {

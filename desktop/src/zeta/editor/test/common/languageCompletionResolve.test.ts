@@ -75,7 +75,7 @@ test("Resolve output cannot mutate completion edit identity", async () => {
   using registry = new LanguageCompletionProviderRegistry();
   const errors: Array<{ readonly providerId: string; readonly error: unknown }> = [];
   using registration = registry.register(provider({
-    resolveData: undefined,
+    resolveData: { symbol: "console" },
     resolve: () => ({ insertText: "danger" }) as never,
   }));
   using service = new LanguageCompletionService(model, registry, {

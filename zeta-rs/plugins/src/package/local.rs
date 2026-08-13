@@ -215,6 +215,16 @@ fn validate_contribution_paths(
         require_contained(root, &server.definition)?;
         unique_location(&mut locations, &server.definition, "MCP server")?;
     }
+    for extension in &manifest.contributions.editor_extensions {
+        require_entry(
+            entries,
+            &extension.entrypoint,
+            ScannedEntryKind::File,
+            "Editor Extension entrypoint",
+        )?;
+        require_contained(root, &extension.entrypoint)?;
+        unique_location(&mut locations, &extension.entrypoint, "Editor Extension")?;
+    }
     for asset in &manifest.contributions.assets {
         if !entries.contains_key(&asset.path) {
             return Err(contribution_invalid(format!(

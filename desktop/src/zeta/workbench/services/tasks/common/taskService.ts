@@ -3,7 +3,7 @@ import { type IDisposable } from "../../../../base/common/lifecycle.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 import { type ITerminalInstance } from "../../terminal/common/terminal.js";
 
-export type WorkspaceTaskSource = "vscode" | "npm" | "pnpm" | "yarn" | "cargo";
+export type WorkspaceTaskSource = "vscode" | "npm" | "pnpm" | "yarn" | "cargo" | "extension";
 export type WorkspaceTaskGroup = "build" | "test" | "run" | "other";
 
 /** One explicitly selectable workspace command. Tasks are never executed during discovery. */
@@ -14,6 +14,26 @@ export interface IWorkspaceTask {
   readonly source: WorkspaceTaskSource;
   readonly group: WorkspaceTaskGroup;
   readonly detail?: string;
+}
+
+/** One task returned by a dynamic provider before TaskService assigns its canonical identity. */
+export interface TaskProviderTask {
+  readonly id: string;
+  readonly label: string;
+  readonly command: string;
+  readonly group: WorkspaceTaskGroup;
+  readonly detail?: string;
+}
+
+/** Dynamic task producer owned by one extension or other runtime caller. */
+export interface TaskProvider {
+  readonly id: string;
+  provideTasks(signal: AbortSignal): readonly TaskProviderTask[] | PromiseLike<readonly TaskProviderTask[]>;
+}
+
+/** One caller-owned provider set that can be atomically replaced. */
+export interface TaskProviderRegistration extends IDisposable {
+  replace(providers: readonly TaskProvider[]): void;
 }
 
 export type TaskRunStatus = "running" | "completed" | "succeeded" | "failed" | "canceled";
@@ -36,6 +56,8 @@ export interface ITaskService extends IDisposable {
   readonly onDidStartTask: Event<ITaskRun>;
   readonly onDidChangeTaskRun: Event<ITaskRun>;
 
+  registerTaskProvider(provider: TaskProvider): IDisposable;
+  registerTaskProviders(providers: readonly TaskProvider[]): TaskProviderRegistration;
   refresh(): Promise<readonly IWorkspaceTask[]>;
   run(task: IWorkspaceTask): Promise<ITaskRun>;
   terminate(run: ITaskRun): Promise<void>;

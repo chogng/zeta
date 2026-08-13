@@ -21,6 +21,8 @@ Marketplace install/update 先复制、复验并原子提升到 content-addresse
 | `PluginPackageDigest` | `sha256:<64 lowercase hex>` exact content identity | signature/trust |
 | `PluginPath` | portable ASCII、slash-separated package-relative path | host absolute path authority |
 | `PluginManifest::from_json` | strict JSON/schema/semantic validation | contribution content parsing |
+| `EditorExtensionContribution` | 声明 exact executable program、Host RPC API、activation triggers 与 capability ceiling | 启动/监管进程、provider registry、RPC transport |
+| `EditorExtensionActivationEvent` | 区分 startup/command/language/on-demand 等 bounded activation trigger | 把 provider kind 当成隐式 activation |
 | `LocalPluginPackage::load` | 验证一个 exact root、digest 和所有 contribution path | copy/install/immutability |
 | `LocalPluginCatalog::discover` | 读取一个 package 或目录下的直接 package children | recursive marketplace search |
 | `PluginMarketplace::open` | 校验 host 注册 catalog、无链接 package path 与 exact package digest | 网络下载、publisher 签名、客户端宿主路径 |
@@ -43,14 +45,49 @@ programmatic mutation 后必须再次调用 `PluginManifest::validate`。
 
 - `schemaVersion == 1`；
 - Plugin version 使用 SemVer；
-- Skill、MCP server、Connector 和 asset 都有稳定 manifest-local ID；
+- Skill、MCP server、Connector、asset 和可执行 Editor Extension 都有稳定 manifest-local ID；
 - Connector 必须引用同一个 manifest 中已声明的 MCP server contribution；
 - permission 是 `process/workspace/network` tagged value；
 - network v1 只接受 exact lowercase DNS/IP host，不接受 scheme、port 或 wildcard；
-- credential slot 只能引用已声明的 `skill:<id>`、`mcp:<id>` 或 `asset:<id>`；
+- credential slot 只能引用已声明的 `skill:<id>`、`mcp:<id>`、`connector:<id>`、
+  `asset:<id>` 或 `editorExtension:<id>`；
 - unknown field、duplicate contribution/slot/permission/host 和非 namespaced metadata 均失败；
 - Skill path 必须是包含 regular `SKILL.md` 的目录，MCP definition/process executable 必须是
-  regular file，asset 可以是 regular file 或目录。
+  regular file，asset 可以是 regular file 或目录；
+- `editorExtensions[]` 的 entrypoint 必须是包内 regular file，并有相同 `PluginPath` 的 exact
+  `process` permission；runtime API 仅接受数值 `1`，entrypoint 和 manifest-local ID 都必须唯一；
+- 每个 Editor Extension 的 `activationEvents` 与 capability ceiling 均为 non-empty、unique、bounded
+  typed set。command/language/debug/task/test activation selector 不能越过对应 capability ceiling。
+
+可执行声明示例：
+
+```json
+{
+  "id": "review-runtime",
+  "entrypoint": "bin/review-extension-host",
+  "runtimeApiVersion": 1,
+  "activationEvents": [
+    { "type": "onCommand", "id": "acme.review.run" },
+    { "type": "onLanguage", "id": "rust" },
+    { "type": "onDemand", "capability": "testProfileProvider" }
+  ],
+  "capabilities": ["command", "languageProvider", "testProfileProvider"]
+}
+```
+
+每个 entrypoint 都是包自己提供、可直接启动并实现 Zeta Host RPC v1 的程序；它不是交给通用
+Node/WASM loader 解释的脚本。`zeta-editor-extension-host` supervisor 负责逐扩展隔离启动和故障监管。
+`capabilities` 是 Extension Host 允许注册的最大 provider 集合，不代表这些 provider 已注册，也不代表
+某次有副作用的调用已获批准。activation event 只回答何时请求激活；`startup` 和
+`onDemand` 不会隐式增加 capability。`workspaceContains` 当前没有 Workspace-owned 的安全 scanner
+consumer，因此 manifest v1 会按 unknown event 拒绝；不能静默忽略或由扩展进程自行遍历磁盘。
+
+这里的 exact `process` permission 是“允许 supervisor 尝试启动这一条 package-relative path”的
+activation ceiling，不是每次 provider invocation 都直接执行 entrypoint，也不绕过 invocation lease、
+Workspace trust 或 broker policy。package ingestion 只证明 entrypoint 是包内 regular file；它不验证
+Unix executable bit、Windows PE/扩展名、CPU ABI、代码签名或跨平台可运行性。当前 schema 也没有
+per-platform artifact selector。supervisor 必须在目标平台 fail closed 地检查 launchability，失败时报告
+activation failure，不能把 regular-file validation 描述为可执行性保证。
 
 `PluginPath` 使用保守的跨平台子集 `[A-Za-z0-9._-]`。它拒绝 absolute path、反斜杠、空/`.`/`..`
 segment、Windows device name、非 ASCII 名称、超过 32 层或 1024 bytes 的路径。这是 PL0
@@ -115,7 +152,7 @@ Digest 与 source root 无关，对 normalized relative path 和每个 regular f
 | `PluginManifest::validate` | 跨字段 semantic invariants | credential/contribution fixtures |
 | `digest::walk_directory` | file count/type/link/path limits | package security tests、limits table |
 | `digest::hash_file` | bytes 与 file-identity stability | digest fixtures、TOCTOU assumptions |
-| `validate_contribution_paths` | contribution type、existence、containment | Skill/MCP consumer contract |
+| `validate_contribution_paths` | contribution type、existence、containment | Skill/MCP/Editor Extension consumer contract |
 | `reject_duplicate_exact_versions` | local catalog exact-version uniqueness | future resolver semantics |
 | `PluginPackageStore::install_local` | staging/revalidation/atomic promotion boundary | authority commit、store recovery tests |
 | `PluginActivationSnapshot::resolve` | exact package set 与 generation 的不可变发布边界 | profile resolver、consumer projection tests |
@@ -156,9 +193,9 @@ cargo clippy --manifest-path Cargo.toml \
 bazel test //zeta-rs/plugins:plugins-unit-tests
 ```
 
-当前测试覆盖严格/重复模式、身份/SemVer、凭据引用、权限、路径穿越/设备名/规范化、摘要确定性、
-缺失贡献、符号链接/硬链接、目录排序与读取、精确版本冲突，以及 Marketplace digest mismatch、
-staged update 和 rollback grant 边界。
+当前测试覆盖严格/重复模式、身份/SemVer、凭据引用、权限、Editor Extension v1 API/activation/
+capability/entrypoint、路径穿越/设备名/规范化、摘要确定性、缺失贡献、符号链接/硬链接、目录排序与
+读取、精确版本冲突，以及 Marketplace digest mismatch、staged update 和 rollback grant 边界。
 
 ## 当前限制与扩展点
 
@@ -172,3 +209,9 @@ profile authority 的只读可用性判断，不从 Workspace 自动安装或授
 publisher signature/revocation 与 GC authority 尚未实现；package-rooted MCP consumer
 已位于 `zeta-mcp-extension`，不能反向并入本 crate。这些能力应在新的 private
 `authority/resolution` modules 中接入，不扩大 loader/store 为隐式 enable manager。
+
+本 crate 当前只让可执行 Editor Extension 进入既有 Plugin package、digest、enable/grant 和 invocation
+fence 控制面；它不包含 Extension Host executable、RPC、crash supervisor、workspace trust broker 或
+provider runtime。即使 manifest 与 exact process permission 均有效，安装也不会启动 entrypoint；Host
+仍须在 dispatch 时复核 active generation/invocation lease，并把 capability ceiling 投影为拒绝默认的
+broker policy。

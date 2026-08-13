@@ -5,7 +5,9 @@
 //! descriptors and bounded resource bytes to their own transport and presentation layers.
 
 mod catalog;
+mod catalog_budget;
 mod diagnostic;
+mod package;
 mod resource;
 
 pub use catalog::ExtensionCatalog;

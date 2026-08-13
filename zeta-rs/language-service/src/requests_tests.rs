@@ -4,15 +4,20 @@ use zeta_lsp::lsp_types::{
     CallHierarchyIncomingCall, CallHierarchyItem, CallHierarchyOutgoingCall, CodeAction,
     CodeActionKind, CodeActionOrCommand, Command, CompletionItem, CompletionItemKind,
     CompletionResponse, CreateFile, DocumentChangeOperation, DocumentChanges,
+    DocumentDiagnosticReport, DocumentDiagnosticReportResult, FullDocumentDiagnosticReport,
     GotoDefinitionResponse, Hover, HoverContents, InlayHint, InlayHintKind, InlayHintLabel,
     InlayHintTooltip, InsertTextFormat, LinkedEditingRanges, Location, MarkedString, OneOf,
     OptionalVersionedTextDocumentIdentifier, ParameterInformation, ParameterLabel,
-    PositionEncodingKind, Range, ResourceOp, SignatureHelp, SignatureInformation,
-    SymbolInformation, SymbolKind, TextDocumentEdit, TextEdit, Uri, WorkspaceEdit,
+    PositionEncodingKind, Range, RelatedFullDocumentDiagnosticReport,
+    RelatedUnchangedDocumentDiagnosticReport, ResourceOp, SignatureHelp, SignatureInformation,
+    SymbolInformation, SymbolKind, TextDocumentEdit, TextEdit, UnchangedDocumentDiagnosticReport,
+    Uri, WorkspaceDiagnosticReport, WorkspaceDiagnosticReportResult,
+    WorkspaceDocumentDiagnosticReport, WorkspaceEdit, WorkspaceFullDocumentDiagnosticReport,
     WorkspaceSymbolResponse,
 };
 
 use super::*;
+use crate::workspace_diagnostics::project_workspace_diagnostics;
 
 #[test]
 fn request_position_uses_the_negotiated_encoding_without_splitting_unicode() {
@@ -34,6 +39,88 @@ fn request_position_uses_the_negotiated_encoding_without_splitting_unicode() {
             &PositionEncodingKind::UTF8
         ),
         None
+    );
+}
+
+#[test]
+fn pull_diagnostic_projection_distinguishes_full_and_unchanged_reports() {
+    let full = project_document_diagnostics(
+        LanguageRequestId::new(2),
+        PathBuf::from("main.rs"),
+        LanguageDocumentRevision::new(3),
+        "馃rust",
+        &PositionEncodingKind::UTF16,
+        DocumentDiagnosticReportResult::Report(DocumentDiagnosticReport::Full(
+            RelatedFullDocumentDiagnosticReport {
+                related_documents: None,
+                full_document_diagnostic_report: FullDocumentDiagnosticReport {
+                    result_id: Some("one".into()),
+                    items: vec![zeta_lsp::lsp_types::Diagnostic::new_simple(
+                        Range::new(Position::new(0, 2), Position::new(0, 6)),
+                        "broken".into(),
+                    )],
+                },
+            },
+        )),
+    )
+    .expect("full diagnostics");
+    let LanguagePulledDiagnosticReport::Full(diagnostics) = full.report else {
+        panic!("full report expected");
+    };
+    assert_eq!(diagnostics[0].range.byte_range(), 6..10);
+
+    let unchanged = project_document_diagnostics(
+        LanguageRequestId::new(3),
+        PathBuf::from("main.rs"),
+        LanguageDocumentRevision::new(3),
+        "馃rust",
+        &PositionEncodingKind::UTF16,
+        DocumentDiagnosticReportResult::Report(DocumentDiagnosticReport::Unchanged(
+            RelatedUnchangedDocumentDiagnosticReport {
+                related_documents: None,
+                unchanged_document_diagnostic_report: UnchangedDocumentDiagnosticReport {
+                    result_id: "one".into(),
+                },
+            },
+        )),
+    )
+    .expect("unchanged diagnostics");
+    assert_eq!(unchanged.report, LanguagePulledDiagnosticReport::Unchanged);
+}
+
+#[test]
+fn workspace_diagnostic_projection_retains_paths_and_server_coordinates() {
+    let uri = Uri::from_str("file:///C:/project/src/main.rs").unwrap();
+    let result = project_workspace_diagnostics(
+        LanguageRequestId::new(4),
+        "rust".into(),
+        &PositionEncodingKind::UTF16,
+        WorkspaceDiagnosticReportResult::Report(WorkspaceDiagnosticReport {
+            items: vec![WorkspaceDocumentDiagnosticReport::Full(
+                WorkspaceFullDocumentDiagnosticReport {
+                    uri,
+                    version: None,
+                    full_document_diagnostic_report: FullDocumentDiagnosticReport {
+                        result_id: None,
+                        items: vec![zeta_lsp::lsp_types::Diagnostic::new_simple(
+                            Range::new(Position::new(2, 1), Position::new(2, 5)),
+                            "broken".into(),
+                        )],
+                    },
+                },
+            )],
+        }),
+    )
+    .expect("workspace diagnostics");
+
+    assert!(result.supported);
+    assert_eq!(result.language_id, "rust");
+    assert_eq!(result.diagnostics.len(), 1);
+    assert_eq!(result.diagnostics[0].range.start.row, 2);
+    assert_eq!(result.diagnostics[0].range.end.character, 5);
+    assert_eq!(
+        result.diagnostics[0].encoding,
+        LanguagePositionEncoding::Utf16
     );
 }
 
@@ -476,6 +563,7 @@ fn hover_completion_and_definition_projection_remove_protocol_types() {
         LanguageDocumentPosition::new(0, 7),
         "println",
         &PositionEncodingKind::UTF8,
+        true,
         Some(CompletionResponse::Array(vec![CompletionItem {
             label: "println!".into(),
             detail: Some("macro".into()),
@@ -504,6 +592,7 @@ fn hover_completion_and_definition_projection_remove_protocol_types() {
         LanguageDocumentPosition::new(0, 3),
         "pri",
         &PositionEncodingKind::UTF8,
+        true,
         Some(CompletionResponse::Array(vec![CompletionItem {
             label: "println!".into(),
             kind: Some(CompletionItemKind::SNIPPET),
@@ -545,6 +634,7 @@ fn hover_completion_and_definition_projection_remove_protocol_types() {
         LanguageDocumentPosition::new(0, "🦀".len() as u32),
         "🦀value",
         &PositionEncodingKind::UTF16,
+        true,
         Some(CompletionResponse::Array(vec![CompletionItem {
             label: "::new()".into(),
             ..CompletionItem::default()
@@ -601,6 +691,7 @@ fn completion_projection_drops_editor_unsafe_items_and_normalizes_metadata() {
         LanguageDocumentPosition::new(1, 8),
         "first\nmessage.\nlast",
         &PositionEncodingKind::UTF8,
+        false,
         Some(CompletionResponse::Array(vec![
             CompletionItem {
                 label: "len".into(),
@@ -638,4 +729,43 @@ fn completion_projection_drops_editor_unsafe_items_and_normalizes_metadata() {
     assert_eq!(completions.items[0].detail, None);
     assert_eq!(completions.items[0].preselect, Some(true));
     assert_eq!(completions.items[1].preselect, Some(false));
+}
+
+#[test]
+fn completion_projection_keeps_safe_additional_edits_commands_and_resolve_payload() {
+    let completions = project_completions(
+        LanguageRequestId::new(8),
+        PathBuf::from("main.rs"),
+        LanguageDocumentRevision::new(4),
+        LanguageDocumentPosition::new(1, 4),
+        "use x;\nprin",
+        &PositionEncodingKind::UTF16,
+        true,
+        Some(CompletionResponse::Array(vec![CompletionItem {
+            label: "println".into(),
+            text_edit: Some(CompletionTextEdit::Edit(TextEdit::new(
+                Range::new(Position::new(1, 0), Position::new(1, 4)),
+                "println!()".into(),
+            ))),
+            additional_text_edits: Some(vec![TextEdit::new(
+                Range::new(Position::new(0, 0), Position::new(0, 0)),
+                "use std::println;\n".into(),
+            )]),
+            command: Some(Command::new("Finish".into(), "rust.finish".into(), None)),
+            data: Some(serde_json::json!({ "id": 7 })),
+            ..CompletionItem::default()
+        }])),
+    );
+
+    assert_eq!(completions.items.len(), 1);
+    assert_eq!(completions.items[0].additional_text_edits.len(), 1);
+    assert_eq!(
+        completions.items[0]
+            .command
+            .as_ref()
+            .map(|command| command.id.as_str()),
+        Some("rust.finish")
+    );
+    assert!(completions.can_resolve);
+    assert!(completions.items[0].provider_data.get("data").is_some());
 }

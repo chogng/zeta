@@ -7,7 +7,10 @@ use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use tokio::sync::mpsc;
-use zeta_lsp::lsp_types::{PublishDiagnosticsParams, Uri};
+use zeta_lsp::lsp_types::{
+    MessageType, NumberOrString, ProgressParamsValue, PublishDiagnosticsParams, Uri,
+    WorkDoneProgress,
+};
 use zeta_lsp::{
     EditorDocumentRevision, LanguageDocumentSnapshot, LanguageServerClient,
     LanguageServerDocumentRouter, LanguageServerEvent, LanguageServerHost, LanguageServerName,
@@ -17,14 +20,18 @@ use zeta_lsp::{
 use crate::projection::project_diagnostic;
 use crate::restart::{RestartDecision, ServerRestartTracker};
 use crate::{
-    LanguageCodeActions, LanguageCompletionTrigger, LanguageCompletions, LanguageDiagnostic,
-    LanguageDiagnostics, LanguageDocumentPosition, LanguageDocumentRevision,
+    LanguageCodeActions, LanguageCodeLens, LanguageCodeLenses, LanguageColor,
+    LanguageColorPresentations, LanguageCommand, LanguageCommandResult, LanguageCompletionDetails,
+    LanguageCompletionTrigger, LanguageCompletions, LanguageDiagnostic, LanguageDiagnostics,
+    LanguageDocumentColors, LanguageDocumentLink, LanguageDocumentLinks, LanguageDocumentPosition,
+    LanguageDocumentRevision, LanguageDocumentSymbols, LanguageFoldingRanges,
     LanguageFormattingEdits, LanguageFormattingOptions, LanguageHierarchyItem,
     LanguageHierarchyResult, LanguageHover, LanguageInlayHints, LanguageLinkedEditingRanges,
-    LanguageLocationRange, LanguageLocations, LanguageRenamePreparation, LanguageRequestId,
-    LanguageRequestKind, LanguageServerDefinition, LanguageServiceConfiguration,
-    LanguageServiceDocument, LanguageServiceEnablement, LanguageServiceError,
-    LanguageSignatureHelp, LanguageSignatureHelpTrigger, LanguageTextRange,
+    LanguageLocationRange, LanguageLocations, LanguagePulledDiagnostics, LanguageRenamePreparation,
+    LanguageRequestId, LanguageRequestKind, LanguageSemanticTokens, LanguageServerCapabilities,
+    LanguageServerDefinition, LanguageServiceConfiguration, LanguageServiceDocument,
+    LanguageServiceEnablement, LanguageServiceError, LanguageSignatureHelp,
+    LanguageSignatureHelpTrigger, LanguageTextRange, LanguageWorkspaceDiagnostics,
     LanguageWorkspaceEditResult, LanguageWorkspaceSymbols,
 };
 
@@ -32,6 +39,7 @@ const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(15);
 
 mod lifecycle;
 mod request_runtime;
+mod workspace_diagnostic_request;
 
 use request_runtime::{CompletedLanguageRequest, PendingLanguageRequest};
 
@@ -60,6 +68,26 @@ pub enum LanguageServiceDocumentOperation {
     Close,
 }
 
+/// Presentation-neutral severity for a language-server message.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum LanguageServerMessageSeverity {
+    Error,
+    Warning,
+    Information,
+    Log,
+}
+
+/// Product-visible work-done progress state for one server-owned token.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LanguageServerProgress {
+    pub server: String,
+    pub token: String,
+    pub title: Option<String>,
+    pub message: Option<String>,
+    pub percentage: Option<u32>,
+    pub done: bool,
+}
+
 /// Product-level events emitted after protocol details and stale results have been resolved.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum LanguageServiceEvent {
@@ -68,9 +96,17 @@ pub enum LanguageServiceEvent {
         state: LanguageServerState,
     },
     Diagnostics(LanguageDiagnostics),
+    PulledDiagnostics(LanguagePulledDiagnostics),
     ServerMessage {
         server: String,
+        severity: LanguageServerMessageSeverity,
+        show: bool,
         message: String,
+    },
+    ServerProgress(LanguageServerProgress),
+    CapabilitiesChanged {
+        server: String,
+        capabilities: LanguageServerCapabilities,
     },
     DocumentOperationFailed {
         path: PathBuf,
@@ -79,9 +115,12 @@ pub enum LanguageServiceEvent {
     },
     Hover(LanguageHover),
     Completions(LanguageCompletions),
+    CompletionDetails(LanguageCompletionDetails),
+    CommandResult(LanguageCommandResult),
     Locations(LanguageLocations),
     Hierarchy(LanguageHierarchyResult),
     WorkspaceSymbols(LanguageWorkspaceSymbols),
+    WorkspaceDiagnostics(LanguageWorkspaceDiagnostics),
     RenamePreparation(LanguageRenamePreparation),
     WorkspaceEdit(LanguageWorkspaceEditResult),
     CodeActions(LanguageCodeActions),
@@ -89,6 +128,13 @@ pub enum LanguageServiceEvent {
     SignatureHelp(LanguageSignatureHelp),
     InlayHints(LanguageInlayHints),
     LinkedEditingRanges(LanguageLinkedEditingRanges),
+    SemanticTokens(LanguageSemanticTokens),
+    DocumentSymbols(LanguageDocumentSymbols),
+    CodeLenses(LanguageCodeLenses),
+    DocumentLinks(LanguageDocumentLinks),
+    DocumentColors(LanguageDocumentColors),
+    ColorPresentations(LanguageColorPresentations),
+    FoldingRanges(LanguageFoldingRanges),
     RequestFailed {
         request_id: LanguageRequestId,
         kind: LanguageRequestKind,
@@ -220,6 +266,34 @@ impl LanguageService {
             revision,
             position,
             trigger,
+        })
+    }
+
+    pub fn request_resolve_completion(
+        &self,
+        path: impl Into<PathBuf>,
+        revision: LanguageDocumentRevision,
+        provider_data: serde_json::Value,
+    ) -> Result<LanguageRequestId, LanguageServiceError> {
+        self.queue_request(PendingLanguageRequest::ResolveCompletion {
+            id: self.next_request_id(),
+            path: path.into(),
+            revision,
+            provider_data,
+        })
+    }
+
+    pub fn request_execute_command(
+        &self,
+        path: impl Into<PathBuf>,
+        revision: LanguageDocumentRevision,
+        command: LanguageCommand,
+    ) -> Result<LanguageRequestId, LanguageServiceError> {
+        self.queue_request(PendingLanguageRequest::ExecuteCommand {
+            id: self.next_request_id(),
+            path: path.into(),
+            revision,
+            command,
         })
     }
 
@@ -393,6 +467,18 @@ impl LanguageService {
         Ok(id)
     }
 
+    pub fn request_workspace_diagnostics(
+        &self,
+        language_id: impl Into<String>,
+    ) -> Result<LanguageRequestId, LanguageServiceError> {
+        let id = self.next_request_id();
+        self.send(SupervisorCommand::WorkspaceDiagnostics {
+            id,
+            language_id: language_id.into(),
+        })?;
+        Ok(id)
+    }
+
     pub fn request_prepare_rename(
         &self,
         path: impl Into<PathBuf>,
@@ -529,6 +615,134 @@ impl LanguageService {
         })
     }
 
+    pub fn request_semantic_tokens(
+        &self,
+        path: impl Into<PathBuf>,
+        revision: LanguageDocumentRevision,
+    ) -> Result<LanguageRequestId, LanguageServiceError> {
+        self.queue_request(PendingLanguageRequest::SemanticTokens {
+            id: self.next_request_id(),
+            path: path.into(),
+            revision,
+        })
+    }
+
+    pub fn request_document_symbols(
+        &self,
+        path: impl Into<PathBuf>,
+        revision: LanguageDocumentRevision,
+    ) -> Result<LanguageRequestId, LanguageServiceError> {
+        self.queue_request(PendingLanguageRequest::DocumentSymbols {
+            id: self.next_request_id(),
+            path: path.into(),
+            revision,
+        })
+    }
+
+    pub fn request_code_lenses(
+        &self,
+        path: impl Into<PathBuf>,
+        revision: LanguageDocumentRevision,
+    ) -> Result<LanguageRequestId, LanguageServiceError> {
+        self.queue_request(PendingLanguageRequest::CodeLenses {
+            id: self.next_request_id(),
+            path: path.into(),
+            revision,
+        })
+    }
+
+    pub fn resolve_code_lens(
+        &self,
+        path: impl Into<PathBuf>,
+        revision: LanguageDocumentRevision,
+        lens: LanguageCodeLens,
+    ) -> Result<LanguageRequestId, LanguageServiceError> {
+        self.queue_request(PendingLanguageRequest::ResolveCodeLens {
+            id: self.next_request_id(),
+            path: path.into(),
+            revision,
+            lens,
+        })
+    }
+
+    pub fn request_document_links(
+        &self,
+        path: impl Into<PathBuf>,
+        revision: LanguageDocumentRevision,
+    ) -> Result<LanguageRequestId, LanguageServiceError> {
+        self.queue_request(PendingLanguageRequest::DocumentLinks {
+            id: self.next_request_id(),
+            path: path.into(),
+            revision,
+        })
+    }
+
+    pub fn resolve_document_link(
+        &self,
+        path: impl Into<PathBuf>,
+        revision: LanguageDocumentRevision,
+        link: LanguageDocumentLink,
+    ) -> Result<LanguageRequestId, LanguageServiceError> {
+        self.queue_request(PendingLanguageRequest::ResolveDocumentLink {
+            id: self.next_request_id(),
+            path: path.into(),
+            revision,
+            link,
+        })
+    }
+
+    pub fn request_document_colors(
+        &self,
+        path: impl Into<PathBuf>,
+        revision: LanguageDocumentRevision,
+    ) -> Result<LanguageRequestId, LanguageServiceError> {
+        self.queue_request(PendingLanguageRequest::DocumentColors {
+            id: self.next_request_id(),
+            path: path.into(),
+            revision,
+        })
+    }
+
+    pub fn request_color_presentations(
+        &self,
+        path: impl Into<PathBuf>,
+        revision: LanguageDocumentRevision,
+        range: LanguageTextRange,
+        color: LanguageColor,
+    ) -> Result<LanguageRequestId, LanguageServiceError> {
+        self.queue_request(PendingLanguageRequest::ColorPresentations {
+            id: self.next_request_id(),
+            path: path.into(),
+            revision,
+            range,
+            color,
+        })
+    }
+
+    pub fn request_folding_ranges(
+        &self,
+        path: impl Into<PathBuf>,
+        revision: LanguageDocumentRevision,
+    ) -> Result<LanguageRequestId, LanguageServiceError> {
+        self.queue_request(PendingLanguageRequest::FoldingRanges {
+            id: self.next_request_id(),
+            path: path.into(),
+            revision,
+        })
+    }
+
+    pub fn request_document_diagnostics(
+        &self,
+        path: impl Into<PathBuf>,
+        revision: LanguageDocumentRevision,
+    ) -> Result<LanguageRequestId, LanguageServiceError> {
+        self.queue_request(PendingLanguageRequest::DocumentDiagnostics {
+            id: self.next_request_id(),
+            path: path.into(),
+            revision,
+        })
+    }
+
     pub fn shutdown(mut self) -> Result<(), LanguageServiceError> {
         let (completion, response) = std_mpsc::sync_channel(1);
         self.send(SupervisorCommand::Shutdown { completion })?;
@@ -608,6 +822,18 @@ enum SupervisorCommand {
         generation: u64,
         server_epoch: u64,
         result: Result<LanguageWorkspaceSymbols, String>,
+    },
+    WorkspaceDiagnostics {
+        id: LanguageRequestId,
+        language_id: String,
+    },
+    WorkspaceDiagnosticsCompleted {
+        id: LanguageRequestId,
+        language_id: String,
+        server: LanguageServerName,
+        generation: u64,
+        server_epoch: u64,
+        result: Result<LanguageWorkspaceDiagnostics, String>,
     },
     LanguageRequestCompleted {
         server: LanguageServerName,
@@ -752,6 +978,26 @@ impl Supervisor {
                     self.complete_workspace_symbols(
                         id,
                         query,
+                        server,
+                        generation,
+                        server_epoch,
+                        result,
+                    );
+                }
+                SupervisorCommand::WorkspaceDiagnostics { id, language_id } => {
+                    self.begin_workspace_diagnostics(id, language_id);
+                }
+                SupervisorCommand::WorkspaceDiagnosticsCompleted {
+                    id,
+                    language_id,
+                    server,
+                    generation,
+                    server_epoch,
+                    result,
+                } => {
+                    self.complete_workspace_diagnostics(
+                        id,
+                        language_id,
                         server,
                         generation,
                         server_epoch,
@@ -948,17 +1194,46 @@ impl Supervisor {
                 self.publish_diagnostics(params);
             }
             (ManagedServerPhase::Ready, LanguageServerEvent::LogMessage(message)) => {
-                self.emit_server_message(server, message.message)
+                self.emit_server_message(server, message.typ, false, message.message)
             }
             (ManagedServerPhase::Ready, LanguageServerEvent::ShowMessage(message)) => {
-                self.emit_server_message(server, message.message)
+                self.emit_server_message(server, message.typ, true, message.message)
+            }
+            (ManagedServerPhase::Ready, LanguageServerEvent::DynamicCapabilitiesChanged(_)) => {
+                self.emit_server_capabilities(&server, server_epoch)
             }
             (ManagedServerPhase::Ready, LanguageServerEvent::ServerStderr(message)) => {
-                self.emit_server_message(server, message)
+                self.emit_server_message(server, MessageType::LOG, false, message)
             }
             (ManagedServerPhase::Ready, LanguageServerEvent::Telemetry(_))
+            | (ManagedServerPhase::Ready, LanguageServerEvent::WorkDoneProgressCreated(_))
             | (ManagedServerPhase::Ready, LanguageServerEvent::UnhandledNotification { .. })
             | (ManagedServerPhase::Ready, LanguageServerEvent::UnsupportedServerRequest { .. }) => {
+            }
+            (ManagedServerPhase::Ready, LanguageServerEvent::Progress(progress)) => {
+                let ProgressParamsValue::WorkDone(progress_value) = progress.value;
+                let (title, message, percentage, done) = match progress_value {
+                    WorkDoneProgress::Begin(progress) => (
+                        Some(progress.title),
+                        progress.message,
+                        progress.percentage,
+                        false,
+                    ),
+                    WorkDoneProgress::Report(progress) => {
+                        (None, progress.message, progress.percentage, false)
+                    }
+                    WorkDoneProgress::End(progress) => (None, progress.message, None, true),
+                };
+                self.emit(LanguageServiceEvent::ServerProgress(
+                    LanguageServerProgress {
+                        server: server.to_string(),
+                        token: progress_token(progress.token),
+                        title,
+                        message,
+                        percentage,
+                        done,
+                    },
+                ));
             }
             _ => {}
         }
@@ -1023,10 +1298,28 @@ impl Supervisor {
         });
     }
 
-    fn emit_server_message(&self, server: LanguageServerName, message: String) {
+    fn emit_server_message(
+        &self,
+        server: LanguageServerName,
+        message_type: MessageType,
+        show: bool,
+        message: String,
+    ) {
         self.emit(LanguageServiceEvent::ServerMessage {
             server: server.to_string(),
+            severity: language_server_message_severity(message_type),
+            show,
             message,
+        });
+    }
+
+    fn emit_server_capabilities(&self, server: &LanguageServerName, server_epoch: u64) {
+        let Ok(client) = self.router.client_for_server(server) else {
+            return;
+        };
+        self.emit(LanguageServiceEvent::CapabilitiesChanged {
+            server: server.to_string(),
+            capabilities: request_runtime::capability_snapshot(client, server_epoch),
         });
     }
 
@@ -1045,6 +1338,25 @@ impl Supervisor {
 
     fn emit(&self, event: LanguageServiceEvent) {
         self.events.on_event(event);
+    }
+}
+
+fn language_server_message_severity(message_type: MessageType) -> LanguageServerMessageSeverity {
+    if message_type == MessageType::ERROR {
+        LanguageServerMessageSeverity::Error
+    } else if message_type == MessageType::WARNING {
+        LanguageServerMessageSeverity::Warning
+    } else if message_type == MessageType::INFO {
+        LanguageServerMessageSeverity::Information
+    } else {
+        LanguageServerMessageSeverity::Log
+    }
+}
+
+fn progress_token(token: NumberOrString) -> String {
+    match token {
+        NumberOrString::Number(token) => token.to_string(),
+        NumberOrString::String(token) => token,
     }
 }
 

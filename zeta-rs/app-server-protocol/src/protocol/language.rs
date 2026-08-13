@@ -144,6 +144,37 @@ pub struct LanguageCompletionItemDto {
     pub insert_text_format: LanguageCompletionInsertTextFormatDto,
     pub range: LanguageRangeDto,
     pub insert_text: String,
+    pub additional_text_edits: Vec<LanguageTextEditDto>,
+    pub command: Option<LanguageCommandDto>,
+    #[ts(type = "unknown")]
+    pub provider_data: Option<Value>,
+}
+
+/// Deferred completion details requested for one exact document snapshot.
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageResolveCompletionParams {
+    pub document: LanguageDocumentDto,
+    #[ts(type = "unknown")]
+    pub provider_data: Value,
+}
+
+/// Presentation details added by `completionItem/resolve`.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageCompletionDetailsResult {
+    #[ts(type = "number")]
+    pub revision: u64,
+    pub detail: Option<String>,
+    pub documentation: Option<String>,
+}
+
+/// One language-server command attached to an accepted completion.
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageExecuteCommandParams {
+    pub document: LanguageDocumentDto,
+    pub command: LanguageCommandDto,
 }
 
 /// Fresh completion candidates for exactly one source document revision.
@@ -153,7 +184,56 @@ pub struct LanguageCompletionsResult {
     #[ts(type = "number")]
     pub revision: u64,
     pub is_incomplete: bool,
+    pub can_resolve: bool,
     pub items: Vec<LanguageCompletionItemDto>,
+}
+
+/// Pull diagnostics against exactly one submitted document revision.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageDocumentDiagnosticsParams {
+    pub document: LanguageDocumentDto,
+}
+
+/// Whether a pull request replaced diagnostics or confirmed the current report.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum LanguageDiagnosticReportKindDto {
+    Full,
+    Unchanged,
+}
+
+/// Fresh pull-diagnostic result for exactly one source document revision.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageDocumentDiagnosticsResult {
+    #[ts(type = "number")]
+    pub revision: u64,
+    pub kind: LanguageDiagnosticReportKindDto,
+    pub diagnostics: Vec<LanguageCodeActionDiagnosticDto>,
+}
+
+/// Requests one complete workspace diagnostic report for a language-server route.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageWorkspaceDiagnosticsParams {
+    pub language_id: String,
+}
+
+/// Diagnostics for one workspace-relative resource.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageWorkspaceDiagnosticSnapshotDto {
+    pub path: PathBuf,
+    pub diagnostics: Vec<LanguageCodeActionDiagnosticDto>,
+}
+
+/// Complete workspace diagnostic report from one language server.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageWorkspaceDiagnosticsResult {
+    pub supported: bool,
+    pub snapshots: Vec<LanguageWorkspaceDiagnosticSnapshotDto>,
 }
 
 /// Cross-file request against exactly one submitted document revision.
@@ -444,6 +524,188 @@ pub struct LanguageLinkedEditingRangesResult {
     pub word_pattern: Option<String>,
 }
 
+/// Full-document semantic-token request against one exact editor snapshot.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageSemanticTokensParams {
+    pub document: LanguageDocumentDto,
+}
+
+/// One semantic token in editor-native UTF-16 coordinates.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageSemanticTokenDto {
+    pub range: LanguageRangeDto,
+    pub token_type: String,
+    pub modifiers: Vec<String>,
+}
+
+/// Fresh semantic tokens and the opaque server result identity for one source revision.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageSemanticTokensResult {
+    #[ts(type = "number")]
+    pub revision: u64,
+    pub result_id: Option<String>,
+    pub tokens: Vec<LanguageSemanticTokenDto>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageDocumentFeaturesParams {
+    pub document: LanguageDocumentDto,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageDocumentSymbolDto {
+    pub name: String,
+    pub detail: Option<String>,
+    pub symbol_kind: u32,
+    pub range: LanguageRangeDto,
+    pub selection_range: LanguageRangeDto,
+    pub children: Vec<LanguageDocumentSymbolDto>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageDocumentSymbolsResult {
+    #[ts(type = "number")]
+    pub revision: u64,
+    pub symbols: Vec<LanguageDocumentSymbolDto>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageCommandDto {
+    pub id: String,
+    pub title: String,
+    #[ts(type = "Array<unknown>")]
+    pub arguments: Vec<Value>,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageCodeLensDto {
+    pub range: LanguageRangeDto,
+    pub command: Option<LanguageCommandDto>,
+    #[ts(type = "unknown")]
+    pub provider_data: Option<Value>,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageCodeLensesResult {
+    #[ts(type = "number")]
+    pub revision: u64,
+    pub lenses: Vec<LanguageCodeLensDto>,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageResolveCodeLensParams {
+    pub document: LanguageDocumentDto,
+    pub lens: LanguageCodeLensDto,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageDocumentLinkDto {
+    pub range: LanguageRangeDto,
+    pub target: Option<String>,
+    pub tooltip: Option<String>,
+    #[ts(type = "unknown")]
+    pub provider_data: Option<Value>,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageDocumentLinksResult {
+    #[ts(type = "number")]
+    pub revision: u64,
+    pub links: Vec<LanguageDocumentLinkDto>,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageResolveDocumentLinkParams {
+    pub document: LanguageDocumentDto,
+    pub link: LanguageDocumentLinkDto,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageColorDto {
+    pub red: u8,
+    pub green: u8,
+    pub blue: u8,
+    pub alpha: u8,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageDocumentColorDto {
+    pub range: LanguageRangeDto,
+    pub color: LanguageColorDto,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageDocumentColorsResult {
+    #[ts(type = "number")]
+    pub revision: u64,
+    pub colors: Vec<LanguageDocumentColorDto>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageColorPresentationsParams {
+    pub document: LanguageDocumentDto,
+    pub range: LanguageRangeDto,
+    pub color: LanguageColorDto,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageColorPresentationDto {
+    pub label: String,
+    pub text_edit: Option<LanguageTextEditDto>,
+    pub additional_text_edits: Vec<LanguageTextEditDto>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageColorPresentationsResult {
+    #[ts(type = "number")]
+    pub revision: u64,
+    pub presentations: Vec<LanguageColorPresentationDto>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum LanguageFoldingRangeKindDto {
+    Comment,
+    Imports,
+    Region,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageFoldingRangeDto {
+    pub start_line_index: u32,
+    pub end_line_index: u32,
+    pub kind: Option<LanguageFoldingRangeKindDto>,
+    pub collapsed_text: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageFoldingRangesResult {
+    #[ts(type = "number")]
+    pub revision: u64,
+    pub ranges: Vec<LanguageFoldingRangeDto>,
+}
+
 /// Text replacements for one exact workspace content baseline.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -513,6 +775,38 @@ pub struct LanguageDiagnosticsNotification {
     #[ts(type = "number")]
     pub revision: u64,
     pub diagnostics: Vec<LanguageCodeActionDiagnosticDto>,
+}
+
+/// Presentation severity retained from an LSP window message.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum LanguageServerMessageSeverityDto {
+    Error,
+    Warning,
+    Information,
+    Log,
+}
+
+/// One language-server log or user-visible message.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageServerMessageNotification {
+    pub server: String,
+    pub severity: LanguageServerMessageSeverityDto,
+    pub show: bool,
+    pub message: String,
+}
+
+/// Current work-done progress state for one server-owned token.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageServerProgressNotification {
+    pub server: String,
+    pub token: String,
+    pub title: Option<String>,
+    pub message: Option<String>,
+    pub percentage: Option<u32>,
+    pub done: bool,
 }
 
 /// Code-action request against one exact source snapshot and selection.

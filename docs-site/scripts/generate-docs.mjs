@@ -34,6 +34,7 @@ const groups = [
       "code-index",
       "syntax-analysis",
       "lsp",
+      "editor-extensions",
       "editor-architecture",
       "editor-core",
       "pdf",

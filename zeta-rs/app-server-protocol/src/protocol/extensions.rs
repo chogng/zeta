@@ -40,6 +40,7 @@ pub struct ExtensionDto {
     pub source_kind: ExtensionSourceKindDto,
     pub manifest_json: String,
     pub manifest_sha256: String,
+    pub package_sha256: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -70,6 +71,8 @@ pub struct ExtensionListResult {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ExtensionResourceOpenParams {
+    #[ts(type = "number")]
+    pub generation: u64,
     pub extension_id: String,
     pub path: String,
 }

@@ -1,15 +1,30 @@
 import { strict as assert } from "node:assert";
+import { createHash } from "node:crypto";
 import test from "node:test";
-import { toDisposable, type IDisposable } from "../../../../../base/common/lifecycle.js";
+import { toDisposable } from "../../../../../base/common/lifecycle.js";
 import type { ExtensionCatalog, ExtensionDescriptor, IExtensionApi } from "../../../../../platform/extensions/common/extensionApi.js";
 import { AppServerExtensionService } from "../../browser/appServerExtensionService.js";
 import { parseExtensionManifest } from "../../common/extensionService.js";
 import { parseJsonc } from "../../common/jsonc.js";
 import { parseExtensionSnippetFile } from "../../common/extensionSnippetProvider.js";
 import { ExtensionThemeRegistry, parseExtensionTheme } from "../../common/extensionTheme.js";
+import { ExtensionDebugAdapterRegistry } from "../../common/extensionDebugAdapter.js";
+import { DebugAdapterFactoriesRegistry } from "../../../debug/common/debugAdapterFactory.js";
 import type { ITextMateService } from "../../../textMate/common/textMateService.js";
 import type { TextMateGrammarDefinition } from "../../../textMate/common/textMateGrammarRegistry.js";
+import { TextMateGrammarService } from "../../../textMate/common/textMateGrammarService.js";
+import { LanguageFeaturesService } from "../../../language/common/languageFeaturesService.js";
+import { URI } from "../../../../../base/common/uri.js";
 
+const descriptorManifest = JSON.stringify({
+  name: "demo",
+  publisher: "zeta",
+  version: "1.0.0",
+  contributes: {
+    grammars: [{ language: "demo", scopeName: "source.demo", path: "./syntaxes/demo.tmLanguage.json" }],
+    debuggers: [{ type: "demo", label: "Demo Debug", debugAdapter: { program: "demo-adapter", args: ["--stdio"] } }],
+  },
+});
 const descriptor: ExtensionDescriptor = Object.freeze({
   id: "zeta.demo",
   name: "demo",
@@ -17,15 +32,9 @@ const descriptor: ExtensionDescriptor = Object.freeze({
   version: "1.0.0",
   displayName: "Demo",
   sourceKind: "builtIn",
-  manifestJson: JSON.stringify({
-    name: "demo",
-    publisher: "zeta",
-    version: "1.0.0",
-    contributes: {
-      grammars: [{ language: "demo", scopeName: "source.demo", path: "./syntaxes/demo.tmLanguage.json" }],
-    },
-  }),
-  manifestSha256: "sha256:test",
+  manifestJson: descriptorManifest,
+  manifestSha256: digestText(descriptorManifest),
+  packageSha256: `sha256:${"b".repeat(64)}`,
 });
 
 test("parses TextMate grammar contributions and normalizes package-relative paths", () => {
@@ -68,13 +77,40 @@ test("fails closed for invalid or escaping grammar contributions", () => {
   }), descriptor), /invalid/);
 });
 
+test("parses declarative debugger contributions and rejects duplicate adapter ownership", () => {
+  const manifest = parseExtensionManifest(JSON.stringify({
+    name: "demo",
+    publisher: "zeta",
+    version: "1.0.0",
+    contributes: { debuggers: [{ type: "demo", label: "Demo Debug", debugAdapter: { program: "demo-adapter", args: ["--stdio"] } }] },
+  }), descriptor);
+  assert.deepEqual(manifest.contributes.debuggers, [{ type: "demo", label: "Demo Debug", program: "demo-adapter", arguments: ["--stdio"] }]);
+
+  using registry = new ExtensionDebugAdapterRegistry();
+  registry.replace([{ extensionId: "zeta.demo", ...manifest.contributes.debuggers[0]! }]);
+  assert.equal(registry.get("demo")?.program, "demo-adapter");
+  assert.throws(() => registry.replace([{ extensionId: "zeta.demo", ...manifest.contributes.debuggers[0]! }, { extensionId: "other.demo", ...manifest.contributes.debuggers[0]! }]), /both/);
+});
+
+test("disposing a declarative Debug Adapter registry revokes its catalog", () => {
+  const registry = new ExtensionDebugAdapterRegistry();
+  const definition = Object.freeze({ extensionId: "zeta.demo", type: "demo", label: "Demo", program: "demo-adapter", arguments: Object.freeze([]) });
+  registry.replace([definition]);
+
+  registry.dispose();
+
+  assert.deepEqual(registry.definitions, []);
+  assert.equal(registry.get("demo"), undefined);
+  assert.throws(() => registry.replace([definition]), /disposed/);
+});
+
 test("preserves language, snippet, theme, and advanced TextMate metadata", () => {
   const manifest = parseExtensionManifest(JSON.stringify({
     name: "demo",
     publisher: "zeta",
     version: "1.0.0",
     contributes: {
-      languages: [{ id: "demo", extensions: [".demo"], configuration: "./language-configuration.json" }],
+      languages: [{ id: "demo", extensions: [".demo"], firstLine: "^#!.*\\bdemo", configuration: "./language-configuration.json" }],
       snippets: [{ language: ["demo"], path: "./snippets/demo.json" }],
       themes: [{ label: "Demo Dark", path: "./themes/demo.json", uiTheme: "vs-dark" }],
       grammars: [{
@@ -96,6 +132,7 @@ test("preserves language, snippet, theme, and advanced TextMate metadata", () =>
     filenames: [],
     filenamePatterns: [],
     mimetypes: [],
+    firstLine: "^#!.*\\bdemo",
     configuration: "language-configuration.json",
   });
   assert.deepEqual(manifest.contributes.snippets[0], { language: ["demo"], path: "snippets/demo.json" });
@@ -134,35 +171,205 @@ test("registers extension grammars transactionally and loads resources through t
   });
   const api: IExtensionApi = {
     list: async () => catalog,
-    readResource: async (extensionId, path) => {
-      assert.equal(extensionId, "zeta.demo");
-      assert.equal(path, "syntaxes/demo.tmLanguage.json");
+    readResource: async request => {
+      assert.equal(request.generation, 1);
+      assert.equal(request.extensionId, "zeta.demo");
+      assert.equal(request.path, "syntaxes/demo.tmLanguage.json");
       return new TextEncoder().encode('{"scopeName":"source.demo","patterns":[]}');
     },
   };
   const definitions: TextMateGrammarDefinition[] = [];
   let disposed = 0;
+  let batchDisposed = false;
   const textMateService = {
     grammars: {
-      registerGrammar: (definition: TextMateGrammarDefinition): IDisposable => {
-        definitions.push(definition);
-        return toDisposable(() => {
-          disposed += 1;
-          const index = definitions.indexOf(definition);
-          if (index >= 0) definitions.splice(index, 1);
-        });
+      registerGrammars: (initial: readonly TextMateGrammarDefinition[]) => {
+        definitions.splice(0, definitions.length, ...initial);
+        return {
+          replace: (replacement: readonly TextMateGrammarDefinition[]) => { definitions.splice(0, definitions.length, ...replacement); },
+          dispose: () => { if (!batchDisposed) { batchDisposed = true; disposed += 1; definitions.splice(0); } },
+          [Symbol.dispose]() { this.dispose(); },
+        };
       },
+      prepareGrammars: async (registration: { replace(values: readonly TextMateGrammarDefinition[]): void }, replacement: readonly TextMateGrammarDefinition[]) => ({ commit: () => { registration.replace(replacement); return {}; } }),
+      whenReady: async () => ({}),
     },
   } as unknown as ITextMateService;
   const service = new AppServerExtensionService({ api, textMateService });
+  assert.equal("replace" in service.themes, false);
+  assert.equal("replace" in service.fileTemplates, false);
+  assert.equal("replace" in service.debugAdapters, false);
+  assert.equal(Object.isFrozen(service.themes), true);
+  assert.equal(Object.isFrozen(service.fileTemplates), true);
+  assert.equal(Object.isFrozen(service.debugAdapters), true);
+
+  await service.start();
+  await service.reload();
+
+  assert.equal(service.currentCatalog.generation, catalog.generation);
+  assert.equal(service.currentCatalog.extensions[0]?.id, descriptor.id);
+  assert.equal(service.currentCatalog.extensions[0]?.packageSha256, descriptor.packageSha256);
+  assert.equal("manifestJson" in service.currentCatalog.extensions[0]!, false);
+  assert.equal(definitions.length, 1);
+  assert.equal(service.debugAdapters.get("demo")?.program, "demo-adapter");
+  assert.deepEqual(DebugAdapterFactoriesRegistry.get("demo")?.createDebugAdapter(), { program: "demo-adapter", arguments: ["--stdio"] });
+  assert.equal(await definitions[0]!.loadGrammar(), '{"scopeName":"source.demo","patterns":[]}');
+  service.dispose();
+  assert.equal(DebugAdapterFactoriesRegistry.get("demo"), undefined);
+  assert.equal(disposed, 1);
+});
+
+test("fails before registering when TextMate candidate preparation is unavailable", () => {
+  let registrations = 0;
+  const textMateService = {
+    grammars: {
+      registerGrammars: () => { registrations += 1; return { replace: () => {}, ...toDisposable(() => {}) }; },
+      whenReady: async () => ({}),
+    },
+  } as unknown as ITextMateService;
+  const api: IExtensionApi = { list: async () => emptyCatalog(1), readResource: async () => new Uint8Array() };
+
+  assert.throws(() => new AppServerExtensionService({ api, textMateService }), /requires a TextMate service/);
+  assert.equal(registrations, 0);
+});
+
+test("reads each generation-scoped resource once while preparing one catalog", async () => {
+  const themedDescriptor = descriptorWithManifest({
+      name: "demo",
+      publisher: "zeta",
+      version: "1.0.0",
+      contributes: { themes: [
+        { id: "first", label: "First", path: "themes/shared.json", uiTheme: "vs-dark" },
+        { id: "second", label: "Second", path: "themes/shared.json", uiTheme: "vs" },
+      ] },
+  });
+  let reads = 0;
+  const api: IExtensionApi = {
+    list: async () => Object.freeze({ generation: 7, extensions: Object.freeze([themedDescriptor]), diagnostics: Object.freeze([]) }),
+    readResource: async () => { reads += 1; return new TextEncoder().encode('{"colors":{},"tokenColors":[]}'); },
+  };
+  using service = new AppServerExtensionService({ api, textMateService: emptyTextMateService() });
 
   await service.start();
 
-  assert.equal(service.currentCatalog, catalog);
-  assert.equal(definitions.length, 1);
-  assert.equal(await definitions[0]!.loadGrammar(), '{"scopeName":"source.demo","patterns":[]}');
+  assert.equal(reads, 1);
+  assert.equal(service.themes.currentCatalog.themes.length, 2);
+});
+
+test("rejects a catalog whose canonical manifest digest does not match", async () => {
+  const api: IExtensionApi = {
+    list: async () => Object.freeze({ generation: 1, extensions: Object.freeze([Object.freeze({ ...descriptor, manifestSha256: `sha256:${"0".repeat(64)}` })]), diagnostics: Object.freeze([]) }),
+    readResource: async () => new Uint8Array(),
+  };
+  using service = new AppServerExtensionService({ api, textMateService: emptyTextMateService() });
+
+  await assert.rejects(service.start(), /manifest digest/);
+  assert.equal(service.currentCatalog.generation, 0);
+});
+
+test("coalesces concurrent reload requests into one queued follow-up refresh", async () => {
+  const first = deferred<ExtensionCatalog>();
+  let listCalls = 0;
+  const api: IExtensionApi = {
+    list: () => {
+      listCalls += 1;
+      return listCalls === 1 ? first.promise : Promise.resolve(emptyCatalog(2));
+    },
+    readResource: async () => new Uint8Array(),
+  };
+  using service = new AppServerExtensionService({ api, textMateService: emptyTextMateService() });
+
+  const starting = service.start();
+  const firstQueued = service.reload();
+  const secondQueued = service.reload();
+  assert.equal(starting, firstQueued);
+  assert.equal(starting, secondQueued);
+  assert.equal(listCalls, 1);
+
+  first.resolve(emptyCatalog(1));
+  await starting;
+
+  assert.equal(listCalls, 2);
+  assert.equal(service.currentCatalog.generation, 2);
+});
+
+test("dispose suppresses a queued reload and ignores the in-flight result", async () => {
+  const first = deferred<ExtensionCatalog>();
+  let listCalls = 0;
+  const api: IExtensionApi = {
+    list: () => {
+      listCalls += 1;
+      return first.promise;
+    },
+    readResource: async () => new Uint8Array(),
+  };
+  const service = new AppServerExtensionService({ api, textMateService: emptyTextMateService() });
+  const starting = service.start();
+  service.reload();
   service.dispose();
-  assert.equal(disposed, 1);
+
+  first.resolve(emptyCatalog(1));
+  await assert.doesNotReject(starting);
+  assert.equal(listCalls, 1);
+});
+
+test("preserves the last active catalog when refreshed grammar materialization fails", async () => {
+  const catalogs = [catalogWithGeneration(1), catalogWithGeneration(2)];
+  const api: IExtensionApi = {
+    list: async () => catalogs.shift()!,
+    readResource: async request => new TextEncoder().encode(request.generation === 1 ? '{"scopeName":"source.demo","patterns":[]}' : "not a grammar"),
+  };
+  using grammars = new TextMateGrammarService();
+  const service = new AppServerExtensionService({ api, textMateService: { grammars } as unknown as ITextMateService });
+  await service.start();
+  const previousCatalog = service.currentCatalog;
+
+  await assert.rejects(service.reload());
+
+  assert.equal(service.currentCatalog, previousCatalog);
+  assert.equal(grammars.currentCatalog.grammars[0]?.scopeName, "source.demo");
+  service.dispose();
+});
+
+test("publishes one coherent contribution generation to registry listeners", async () => {
+  const catalog: ExtensionCatalog = Object.freeze({
+    generation: 3,
+    extensions: Object.freeze([descriptorWithManifest({
+        name: "demo",
+        publisher: "zeta",
+        version: "1.0.0",
+        contributes: {
+          languages: [{ id: "demo", extensions: [".demo"] }],
+          themes: [{ id: "dark", label: "Demo Dark", path: "themes/dark.json", uiTheme: "vs-dark" }],
+          debuggers: [{ type: "demo", label: "Demo Debug", debugAdapter: { program: "demo-adapter" } }],
+        },
+    })]),
+    diagnostics: Object.freeze([]),
+  });
+  const api: IExtensionApi = {
+    list: async () => catalog,
+    readResource: async () => new TextEncoder().encode('{"colors":{},"tokenColors":[]}'),
+  };
+  using languages = new LanguageFeaturesService();
+  using service = new AppServerExtensionService({ api, textMateService: emptyTextMateService(), languageFeaturesService: languages });
+  const observations: Array<{ readonly themeCount: number; readonly adapterCount: number; readonly generation: number }> = [];
+  using listener = languages.languages.onDidChange(() => observations.push({
+    themeCount: service.themes.currentCatalog.themes.length,
+    adapterCount: service.debugAdapters.definitions.length,
+    generation: service.currentCatalog.generation,
+  }));
+
+  await service.start();
+
+  assert.deepEqual(observations, [{ themeCount: 1, adapterCount: 1, generation: 3 }]);
+});
+
+test("resolves extension language first-line patterns after file content is available", () => {
+  using languages = new LanguageFeaturesService();
+  using registration = languages.registerLanguage({ id: "demo", firstLine: "^#!.*\\bdemo" }, { priority: 100 });
+
+  assert.equal(languages.resolveLanguageId({ resource: URI.file("C:\\workspace\\script"), firstLine: "#!/usr/bin/env demo" }), "demo");
+  assert.equal(languages.resolveLanguageId({ resource: URI.file("C:\\workspace\\script"), firstLine: "#!/usr/bin/env python" }), undefined);
 });
 
 test("treats an in-flight load cancelled by disposal as normal shutdown", async () => {
@@ -171,7 +378,7 @@ test("treats an in-flight load cancelled by disposal as normal shutdown", async 
     list: () => new Promise((_resolve, reject) => { rejectList = reject; }),
     readResource: async () => new Uint8Array(),
   };
-  const textMateService = { grammars: { registerGrammar: () => toDisposable(() => {}) } } as unknown as ITextMateService;
+  const textMateService = { grammars: { registerGrammars: () => ({ replace: () => {}, ...toDisposable(() => {}) }), prepareGrammars: async (registration: { replace(values: readonly TextMateGrammarDefinition[]): void }, definitions: readonly TextMateGrammarDefinition[]) => ({ commit: () => { registration.replace(definitions); return {}; } }), whenReady: async () => ({}) } } as unknown as ITextMateService;
   const service = new AppServerExtensionService({ api, textMateService });
   const failures: unknown[] = [];
   using listener = service.onDidFail(failure => failures.push(failure.error));
@@ -183,3 +390,36 @@ test("treats an in-flight load cancelled by disposal as normal shutdown", async 
   await assert.doesNotReject(starting);
   assert.deepEqual(failures, []);
 });
+
+function catalogWithGeneration(generation: number): ExtensionCatalog {
+  return Object.freeze({ generation, extensions: Object.freeze([descriptor]), diagnostics: Object.freeze([]) });
+}
+
+function descriptorWithManifest(manifest: unknown): ExtensionDescriptor {
+  const manifestJson = JSON.stringify(manifest);
+  return Object.freeze({ ...descriptor, manifestJson, manifestSha256: digestText(manifestJson) });
+}
+
+function digestText(value: string): string {
+  return `sha256:${createHash("sha256").update(value).digest("hex")}`;
+}
+
+function emptyCatalog(generation: number): ExtensionCatalog {
+  return Object.freeze({ generation, extensions: Object.freeze([]), diagnostics: Object.freeze([]) });
+}
+
+function emptyTextMateService(): ITextMateService {
+  return {
+    grammars: {
+      registerGrammars: () => ({ replace: () => {}, ...toDisposable(() => {}) }),
+      prepareGrammars: async (registration: { replace(values: readonly TextMateGrammarDefinition[]): void }, definitions: readonly TextMateGrammarDefinition[]) => ({ commit: () => { registration.replace(definitions); return {}; } }),
+      whenReady: async () => ({}),
+    },
+  } as unknown as ITextMateService;
+}
+
+function deferred<T>(): { readonly promise: Promise<T>; readonly resolve: (value: T) => void } {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>(accept => { resolve = accept; });
+  return { promise, resolve };
+}

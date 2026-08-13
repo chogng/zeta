@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { Emitter, type Event } from "../../../../../base/common/event.js";
 import { DisposableOwner, toDisposable } from "../../../../../base/common/lifecycle.js";
-import { type ITaskRun, type ITaskService, type IWorkspaceTask, type TaskRunStatus } from "../../../../services/tasks/common/taskService.js";
+import { type ITaskRun, type ITaskService, type IWorkspaceTask, type TaskProvider, type TaskProviderRegistration, type TaskRunStatus } from "../../../../services/tasks/common/taskService.js";
 import { type ITerminalInstance } from "../../../../services/terminal/common/terminal.js";
 import { TestingService } from "../../browser/testingService.js";
 
@@ -30,6 +30,35 @@ test("TestingService exposes only test tasks and projects passed and failed runs
   assert.equal(all.length, 2);
 });
 
+test("TestingService owns dynamic Test Profile providers and maps profiles to test tasks", async () => {
+  using tasks = new FakeTaskService([task("unit", "Unit", "test"), task("build", "Build", "build")]);
+  using service = new TestingService(tasks);
+  const registration = service.registerTestProfileProviders([{ id: "demo.tests", provideTestProfiles: () => [{ id: "focused", label: "Focused", taskId: "unit", detail: "Extension profile" }] }]);
+
+  await service.refresh();
+  const profile = service.profiles.find(candidate => candidate.id === "extension-profile:demo.tests:focused")!;
+  assert.deepEqual(profile, { id: "extension-profile:demo.tests:focused", label: "Focused", source: "demo.tests", taskId: "unit", detail: "Extension profile" });
+  const run = await service.run(profile);
+  assert.equal(run.taskRun.task.id, "unit");
+
+  assert.throws(() => service.registerTestProfileProvider({ id: "demo.tests", provideTestProfiles: () => [] }), /already registered/);
+  registration.dispose();
+  assert.deepEqual(service.profiles.map(candidate => candidate.id), ["unit"]);
+  await assert.rejects(service.run(profile), /no longer present/);
+  await service.refresh();
+  assert.deepEqual(service.profiles.map(candidate => candidate.id), ["unit"]);
+});
+
+test("TestingService rejects profiles that do not reference a current test task", async () => {
+  using tasks = new FakeTaskService([task("unit", "Unit", "test")]);
+  using service = new TestingService(tasks);
+  using registration = service.registerTestProfileProvider({ id: "invalid", provideTestProfiles: () => [{ id: "missing", label: "Missing", taskId: "missing" }] });
+
+  await assert.rejects(service.refresh(), /unavailable test task/);
+
+  assert.deepEqual(service.profiles.map(candidate => candidate.id), ["unit"]);
+});
+
 function task(id: string, label: string, group: IWorkspaceTask["group"]): IWorkspaceTask {
   return Object.freeze({ id, label, group, command: `run ${id}`, source: "vscode" });
 }
@@ -45,6 +74,8 @@ class FakeTaskService extends DisposableOwner implements ITaskService {
   lastRun: ITaskRun | undefined;
   constructor(readonly tasks: readonly IWorkspaceTask[]) { super(); }
   get activeRuns(): readonly ITaskRun[] { return this.runs.filter(run => run.status === "running"); }
+  registerTaskProvider(_provider: TaskProvider) { return toDisposable(() => undefined); }
+  registerTaskProviders(_providers: readonly TaskProvider[]): TaskProviderRegistration { const registration = toDisposable(() => undefined) as TaskProviderRegistration; registration.replace = () => undefined; return registration; }
   async refresh() { return this.tasks; }
   async run(task: IWorkspaceTask): Promise<ITaskRun> { const run = this.own(new FakeTaskRun(task)); this.runs.push(run); this.lastRun = run; this.startEmitter.fire(run); return run; }
   async terminate(run: ITaskRun) { (run as FakeTaskRun).finish("canceled"); }

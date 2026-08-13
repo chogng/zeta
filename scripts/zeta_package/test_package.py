@@ -10,7 +10,11 @@ import zipfile
 from pathlib import Path
 
 from zeta_package.bubblewrap import load_source_lock, resolve_bubblewrap
-from zeta_package.layout import build_package_directory, copy_builtin_skills
+from zeta_package.layout import (
+    build_package_directory,
+    copy_builtin_extensions,
+    copy_builtin_skills,
+)
 from zeta_package.ripgrep import load_lock, resolve_ripgrep
 from zeta_package.targets import TARGETS
 from zeta_package.version import read_workspace_version
@@ -25,6 +29,22 @@ PRODUCTION_BUBBLEWRAP_LOCK = (
 
 
 class PackageTests(unittest.TestCase):
+    BUILT_IN_EXTENSIONS = [
+        "css",
+        "html",
+        "javascript",
+        "json",
+        "markdown-basics",
+        "python",
+        "rust",
+        "shellscript",
+        "sql",
+        "theme-defaults",
+        "typescript-basics",
+        "xml",
+        "yaml",
+    ]
+
     def test_production_lock_covers_every_package_target(self) -> None:
         lock = load_lock(PRODUCTION_LOCK)
 
@@ -75,6 +95,16 @@ class PackageTests(unittest.TestCase):
                 ).is_file()
             )
             self.assertEqual(
+                (REPOSITORY_ROOT / "third_party" / "vscode" / "LICENSE.txt").read_text(encoding="utf-8"),
+                (
+                    output
+                    / "zeta-resources"
+                    / "licenses"
+                    / "vscode"
+                    / "LICENSE.txt"
+                ).read_text(encoding="utf-8"),
+            )
+            self.assertEqual(
                 (
                     REPOSITORY_ROOT
                     / "zeta-rs"
@@ -102,7 +132,7 @@ class PackageTests(unittest.TestCase):
                         key=lambda path: path.name,
                     )
                 ],
-                ["json"],
+                self.BUILT_IN_EXTENSIONS,
             )
             self.assertIn(
                 '"name": "json"',
@@ -114,6 +144,8 @@ class PackageTests(unittest.TestCase):
                     / "package.json"
                 ).read_text(encoding="utf-8"),
             )
+
+            self.assert_extension_resources(output / "zeta-resources" / "extensions")
             metadata = json.loads(
                 (output / "zeta-package.json").read_text(encoding="utf-8")
             )
@@ -133,6 +165,65 @@ class PackageTests(unittest.TestCase):
                     zeta_binary,
                     ripgrep,
                 )
+
+    def assert_extension_resources(self, extensions: Path) -> None:
+        self.assertEqual(
+            self.BUILT_IN_EXTENSIONS,
+            sorted(path.name for path in extensions.iterdir()),
+        )
+        seen_ids = set()
+        file_templates = []
+        for package_name in self.BUILT_IN_EXTENSIONS:
+            package = extensions / package_name
+            manifest = json.loads((package / "package.json").read_text(encoding="utf-8"))
+            extension_id = "{}.{}".format(manifest["publisher"], manifest["name"])
+            self.assertNotIn(extension_id, seen_ids)
+            seen_ids.add(extension_id)
+            self.assertTrue(manifest["version"])
+            contributes = manifest.get("contributes", {})
+            for language in contributes.get("languages", []):
+                if "configuration" in language:
+                    self.assert_extension_resource(package, language["configuration"])
+            for contribution_name in ("grammars", "snippets", "themes"):
+                for contribution in contributes.get(contribution_name, []):
+                    self.assert_extension_resource(package, contribution["path"])
+                    if contribution_name == "snippets":
+                        snippet_path = package.joinpath(
+                            *contribution["path"][2:].split("/")
+                        )
+                        snippet_document = json.loads(
+                            snippet_path.read_text(encoding="utf-8")
+                        )
+                        languages = contribution["language"]
+                        if isinstance(languages, str):
+                            languages = [languages]
+                        for snippet_name, snippet in snippet_document.items():
+                            if snippet.get("isFileTemplate") is True:
+                                file_templates.extend(
+                                    (extension_id, language, snippet_name)
+                                    for language in languages
+                                )
+        self.assertEqual(
+            [
+                ("vscode.html", "html", "html doc"),
+                ("vscode.javascript", "javascript", "Class Definition"),
+                ("vscode.javascript", "javascriptreact", "Class Definition"),
+                ("vscode.typescript", "typescript", "Class Definition"),
+                ("vscode.typescript", "typescriptreact", "Class Definition"),
+            ],
+            sorted(file_templates),
+        )
+
+    def assert_extension_resource(self, package: Path, relative_path: str) -> None:
+        self.assertTrue(relative_path.startswith("./"))
+        normalized = relative_path[2:]
+        self.assertNotIn("\\", normalized)
+        self.assertNotIn("..", Path(normalized).parts)
+        resource = package.joinpath(*normalized.split("/"))
+        self.assertTrue(resource.is_file(), "missing extension resource: {}".format(resource))
+
+    def test_repository_builtin_extension_contract(self) -> None:
+        self.assert_extension_resources(REPOSITORY_ROOT / "extensions")
 
     def test_linux_package_contains_built_sandbox_resource_contract(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -289,6 +380,53 @@ class PackageTests(unittest.TestCase):
 
             with self.assertRaisesRegex(RuntimeError, "symbolic link"):
                 copy_builtin_skills(source, root / "destination")
+
+    def test_builtin_extension_copy_rejects_an_empty_source(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            source.mkdir()
+
+            with self.assertRaisesRegex(RuntimeError, "source is empty"):
+                copy_builtin_extensions(source, root / "destination")
+
+    def test_builtin_extension_copy_rejects_an_empty_package_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            (source / "demo").mkdir(parents=True)
+
+            with self.assertRaisesRegex(RuntimeError, "missing package.json"):
+                copy_builtin_extensions(source, root / "destination")
+
+    @unittest.skipIf(os.name == "nt", "creating symbolic links may require Windows privilege")
+    def test_builtin_extension_copy_rejects_a_symbolic_source_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            target = root / "source-target"
+            target.mkdir()
+            source = root / "source"
+            source.symlink_to(target, target_is_directory=True)
+
+            with self.assertRaisesRegex(RuntimeError, "source is not a real directory"):
+                copy_builtin_extensions(source, root / "destination")
+
+    @unittest.skipIf(os.name == "nt", "creating symbolic links may require Windows privilege")
+    def test_builtin_extension_copy_rejects_a_symbolic_package_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            source.mkdir()
+            extension = root / "demo-target"
+            extension.mkdir()
+            (extension / "package.json").write_text(
+                '{"name":"demo","publisher":"zeta","version":"1.0.0"}',
+                encoding="utf-8",
+            )
+            (source / "demo").symlink_to(extension, target_is_directory=True)
+
+            with self.assertRaisesRegex(RuntimeError, "Invalid built-in extension package"):
+                copy_builtin_extensions(source, root / "destination")
 
     def test_bubblewrap_source_digest_mismatch_aborts(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

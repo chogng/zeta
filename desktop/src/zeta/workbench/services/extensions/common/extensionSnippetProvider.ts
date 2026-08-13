@@ -12,6 +12,12 @@ export interface ExtensionSnippetDefinition {
   readonly isFileTemplate?: boolean;
 }
 
+/** Expands one file-template snippet to the initial text of an untitled editor. */
+export function materializeExtensionFileTemplate(snippet: ExtensionSnippetDefinition): string {
+  if (!snippet.isFileTemplate) throw new TypeError("Extension file template must declare isFileTemplate");
+  return parseLanguageCompletionSnippet(snippet.body, { allowUnresolvedVariables: true }).text;
+}
+
 /** Parses the VS Code declarative snippet-file shape without executing extension code. */
 export function parseExtensionSnippetFile(value: unknown, owner: string): readonly ExtensionSnippetDefinition[] {
   const snippets = record(value, owner);

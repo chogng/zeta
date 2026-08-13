@@ -41,6 +41,7 @@ zeta-client = { workspace = true }
 zeta-diff = { workspace = true }
 zeta-debug-adapter = { workspace = true }
 zeta-extensions = { workspace = true }
+zeta-editor-extension-host = { workspace = true }
 zeta-extension-api = { workspace = true }
 zeta-mcp-extension = { workspace = true }
 zeta-file-system = { workspace = true }

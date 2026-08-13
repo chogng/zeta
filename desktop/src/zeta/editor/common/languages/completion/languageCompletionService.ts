@@ -4,6 +4,7 @@ import { LanguageRequestCoordinator, type LanguageRequestOptions, type LanguageR
 import { LanguageResultAcceptance } from "../languageResultStore.js";
 import { createLanguageCompletionSnapshotNormalizer, createLanguageCompletionStore, normalizeLanguageCompletionItemDetails, normalizeLanguageCompletionResolveRequest, type LanguageCompletionItem, type LanguageCompletionItemDetails, type LanguageCompletionItemResolver, type LanguageCompletionResolveRequest, type LanguageCompletionResult, type LanguageCompletionResultNormalizer } from "./languageCompletions.js";
 import { assertLanguageCompletionRequest, createLanguageCompletionTriggerCharacterContext, languageCompletionProviderMatches, LanguageCompletionProviderRegistry, type LanguageCompletionProviderCatalog, type LanguageCompletionProviderCatalogSource, type LanguageCompletionProviderItem, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult, type LanguageCompletionRequest, type RegisteredLanguageCompletionProvider } from "./languageCompletionProviders.js";
+import { assertLanguageId } from "../languageId.js";
 import { type TextPosition } from "../../core/text.js";
 import { type TextModel } from "../../model/textModel.js";
 import { URI } from "../../../../base/common/uri.js";
@@ -168,6 +169,18 @@ export class LanguageCompletionService extends DisposableOwner implements Langua
     return normalizeLanguageCompletionItemDetails(details);
   }
 
+  async executeCompletionCommand(languageId: string, item: LanguageCompletionItem, signal: AbortSignal): Promise<void> {
+    this.ensureAlive();
+    assertLanguageId(languageId);
+    signal.throwIfAborted();
+    if (!item.command) return;
+    const provider = this.registry.getProvider(item.providerId);
+    if (!provider?.executeCompletionCommand) throw new ReferenceError(`Language completion provider '${item.providerId}' cannot execute completion commands`);
+    await provider.executeCompletionCommand(Object.freeze({ languageId, ...(this.resource ? { resource: this.resource } : {}), snapshot: this.model.createSnapshot(), command: item.command }), signal);
+    signal.throwIfAborted();
+    this.ensureAlive();
+  }
+
   private bindCatalogSource(source: LanguageCompletionProviderCatalogSource): void {
     this.catalogSource = source;
     this.catalog = source.providerCatalog;
@@ -303,10 +316,10 @@ export class LanguageCompletionProviderWorker implements LanguageCompletionWorke
       });
       const resolutions = provider.resolveCompletionItem === undefined
         ? Object.freeze([])
-        : Object.freeze(result.items.map((item, index) => Object.freeze({
+        : Object.freeze(result.items.flatMap((item, index) => value.items[index]!.resolveData === undefined ? [] : [Object.freeze({
           provider,
           item: createProviderResolveItem(item, value.items[index]!.resolveData),
-        })));
+        })]));
       return Object.freeze({ result, resolutions });
     } catch (error) {
       if (signal.aborted) throw error;
@@ -407,6 +420,7 @@ function createProviderResolveItem(item: LanguageCompletionItem, resolveData: un
     ...(item.preselect === undefined ? {} : { preselect: item.preselect }),
     ...(item.commitCharacters === undefined ? {} : { commitCharacters: item.commitCharacters }),
     ...(item.additionalTextEdits === undefined ? {} : { additionalTextEdits: item.additionalTextEdits }),
+    ...(item.command === undefined ? {} : { command: item.command }),
     ...(resolveData === undefined ? {} : { resolveData: structuredClone(resolveData) }),
   });
 }
@@ -427,7 +441,8 @@ function createCompletionResultItem(provider: RegisteredLanguageCompletionProvid
     ...(item.preselect === undefined ? {} : { preselect: item.preselect }),
     ...(item.commitCharacters === undefined ? {} : { commitCharacters: item.commitCharacters }),
     ...(item.additionalTextEdits === undefined ? {} : { additionalTextEdits: item.additionalTextEdits }),
-    ...(provider.resolveCompletionItem === undefined ? {} : { hasDeferredDetails: true }),
+    ...(item.command === undefined ? {} : { command: item.command }),
+    ...(provider.resolveCompletionItem === undefined || item.resolveData === undefined ? {} : { hasDeferredDetails: true }),
   };
 }
 

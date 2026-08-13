@@ -1280,7 +1280,7 @@ Aster 也不 import `vscode-textmate`、`vscode-oniguruma` 或 WASM。
 `scopeName`、可选 root `languageId`、injection targets 和延迟 loader 组成；注册、
 撤销都会产生新的 immutable snapshot，旧 snapshot 仍能完成已经开始的请求。
 loader 只返回 raw grammar 文本或对象，不接收 URI/`IFileService`。资源定位、extension
-manifest 与信任验证仍由未来 product composition root 负责，避免 token Worker
+manifest 与信任验证由当前 product composition root 负责，避免 token Worker
 反向拥有 platform I/O。
 
 `TextMateTokenizationService` 针对 snapshot 建立 `vscode-textmate.Registry`，通过注入
@@ -1395,7 +1395,10 @@ Aster pane 的 Worker factory 并调度 catalog 变化后的 model token request
 
 ### Current 45：TextMate grammar service 与首批真实资源
 
-仓库审计确认当前没有 extension host 或 grammar contribution service；现有
+VS Code/Node 兼容 Extension Host 当前仍不存在；Zeta-native executable Host RPC v1 的 runtime core
+已经实现，App Server/Workbench provider bridge 和 production enforcing launcher 的状态由
+[`editor-extensions.md`](editor-extensions.md) 维护。Current 45 落地前还没有 grammar contribution
+service；现有
 `IFileService` 的合同是“工作区文件读取”，并不拥有产品内置资源。因而真实 grammar
 不能硬编码进 Worker，也不能通过给 workspace file service 增加 TextMate 特例来读取。
 Current 45 建立了独立的 editor-domain 服务边界：
@@ -1405,9 +1408,9 @@ Current 45 建立了独立的 editor-domain 服务边界：
 | URI、事件、取消与生命周期原语 | `base/common` | ✅ 复用，保持领域无关 |
 | 工作区用户文件读取 | `platform/files` | ✅ 合同不变 |
 | grammar contribution、异步装载和 catalog 发布 | `TextMateGrammarService` | ✅ `workbench/services/textMate/common` |
-| 产品内置 grammar asset import | `BrowserTextMateGrammarService` | ✅ `workbench/services/textMate/browser` |
+| 产品内置 grammar 资源解析与贡献 | `AppServerExtensionService` | ✅ 通过 generation-bound extension API 接入 |
 | catalog 传输和 tokenization | TextMate dedicated Worker | ✅ 继续无文件权限 |
-| extension manifest 与外部 grammar resource | extension service | ✅ 声明式 manifest/resource discovery；不执行 extension JavaScript |
+| extension manifest 与外部 grammar resource | extension service | ✅ 不可变 generation-bound 声明式 discovery；不执行 extension JavaScript |
 | TextFile resolve/save/invalidation；Aster dirty/save/revert/conflict | `textfile` / `BrowserTextModelService` | ✅，未与 grammar service 混合；CAS/working-copy 恢复已完成 |
 
 `TextMateGrammarService` 拥有 registration 和 `TextMateGrammarCatalogModel`。每次贡献变化
@@ -1417,8 +1420,8 @@ Current 45 建立了独立的 editor-domain 服务边界：
 不会在 teardown 中启动新的 catalog 工作。
 
 首批产品资源从相邻 VS Code 源码树的 `extensions/json/syntaxes` 移入：
-`JSON.tmLanguage.json` 和 `JSONC.tmLanguage.json`。两者保留上游 revision/provenance，
-由 Vite `?raw` 仅在 browser 边界导入，再通过现有 catalog wire 传给 Worker。
+`JSON.tmLanguage.json` 和 `JSONC.tmLanguage.json`。两者当前位于根目录 `extensions/json/`，保留
+上游 revision/provenance，由 App Server extension resource API 读取，再通过现有 catalog wire 传给 Worker。
 `common` 不 import raw asset，Worker 不访问文件系统，`base` 不识别 grammar、scope 或
 language identity。
 
@@ -1428,8 +1431,8 @@ language identity。
 revision 变化时为打开文档请求重分析；Current 46 已补齐这两个真实消费者。
 
 测试覆盖 contribution 装载、latest-revision-wins、失败保持 last-good catalog、撤销后重发布，
-并使用真实 Oniguruma 对移入的 VS Code JSON grammar 执行 tokenization。Renderer TSC 同时
-验证 raw asset browser 边界。
+并使用真实 Oniguruma 对移入的 VS Code JSON grammar 执行 tokenization。扩展与打包测试同时
+验证 manifest 引用的真实资源仍存在。
 
 ### Current 46：Workbench TextFile 边界与 Aster 产品 Pane
 

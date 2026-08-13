@@ -84,6 +84,6 @@ function hexToRgb(value: string): RGBA8 { const normalized = value.replace(/^#/,
 
 registerEditorContribution({ id: "editor.contrib.colorPicker", install: context => {
   if (context.kind !== "text") return;
-  const service = context.own(context.languageFeaturesService.createColorService(context.model));
+  const service = context.own(context.languageFeaturesService.createColorService(context.model, context.options.input.resource));
   context.own(new ColorPickerController(context.textInput.element, context.viewport, context.selections, service, context.languageId, context.onLanguageError));
 } });

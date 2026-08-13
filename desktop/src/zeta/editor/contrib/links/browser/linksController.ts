@@ -74,6 +74,6 @@ export class LinksController extends DisposableOwner {
 
 registerEditorContribution({ id: "editor.contrib.links", install: context => {
   if (context.kind !== "text" || !context.options.onOpenLink) return;
-  const service = context.own(context.languageFeaturesService.createLinkService(context.model));
+  const service = context.own(context.languageFeaturesService.createLinkService(context.model, context.options.input.resource));
   context.own(new LinksController(context.viewport, service, context.languageId, context.options.onOpenLink, context.onLanguageError));
 } });

@@ -1,4 +1,4 @@
-import { APP_SERVER_METHODS, type LanguageCloseParams, type LanguageCodeActionDto, type LanguageCodeActionsParams, type LanguageCompletionsParams, type LanguageDocumentFormattingParams, type LanguageHierarchyItemDto, type LanguageHierarchyParams, type LanguageHoverParams, type LanguageInlayHintsParams, type LanguageLinkedEditingRangesParams, type LanguageLocationsParams, type LanguagePrepareRenameParams, type LanguageRangeFormattingParams, type LanguageRenameParams, type LanguageResolveCodeActionParams, type LanguageSignatureHelpParams, type LanguageSynchronizeParams, type LanguageWorkspaceSymbolsParams } from "../../../../../generated/app-server/types.js";
+import { APP_SERVER_METHODS, type LanguageCloseParams, type LanguageCodeActionDto, type LanguageCodeActionsParams, type LanguageCodeLensDto, type LanguageColorDto, type LanguageColorPresentationsParams, type LanguageCommandDto, type LanguageCompletionsParams, type LanguageDocumentDiagnosticsParams, type LanguageDocumentFeaturesParams, type LanguageDocumentFormattingParams, type LanguageDocumentLinkDto, type LanguageExecuteCommandParams, type LanguageHierarchyItemDto, type LanguageHierarchyParams, type LanguageHoverParams, type LanguageInlayHintsParams, type LanguageLinkedEditingRangesParams, type LanguageLocationsParams, type LanguagePrepareRenameParams, type LanguageRangeFormattingParams, type LanguageRenameParams, type LanguageResolveCodeActionParams, type LanguageResolveCodeLensParams, type LanguageResolveCompletionParams, type LanguageResolveDocumentLinkParams, type LanguageSemanticTokensParams, type LanguageSignatureHelpParams, type LanguageSynchronizeParams, type LanguageWorkspaceDiagnosticsParams, type LanguageWorkspaceSymbolsParams } from "../../../../../generated/app-server/types.js";
 import type { AppServerSupervisor } from "../../app-server/electron-main/app-server-supervisor.js";
 import { boolean, nonNegativeInteger, record, string } from "../../ipc/electron-main/ipcValidation.js";
 import type { IpcRoute } from "../../ipc/electron-main/trustedIpcRouter.js";
@@ -13,11 +13,24 @@ export function languageIpcRoutes(supervisor: AppServerSupervisor): readonly Ipc
     route({ channel: "zeta:language:close", validate: languageCloseParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/close"], params) }),
     route({ channel: "zeta:language:hover", validate: languageHoverParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/hover"], params) }),
     route({ channel: "zeta:language:completions", validate: languageCompletionsParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/completions"], params) }),
+    route({ channel: "zeta:language:resolveCompletion", validate: languageResolveCompletionParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/resolveCompletion"], params) }),
+    route({ channel: "zeta:language:executeCommand", validate: languageExecuteCommandParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/executeCommand"], params) }),
+    route({ channel: "zeta:language:documentDiagnostics", validate: languageDocumentDiagnosticsParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/documentDiagnostics"], params) }),
+    route({ channel: "zeta:language:workspaceDiagnostics", validate: languageWorkspaceDiagnosticsParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/workspaceDiagnostics"], params) }),
     route({ channel: "zeta:language:formatDocument", validate: languageDocumentFormattingParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/formatDocument"], params) }),
     route({ channel: "zeta:language:formatRange", validate: languageRangeFormattingParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/formatRange"], params) }),
     route({ channel: "zeta:language:signatureHelp", validate: languageSignatureHelpParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/signatureHelp"], params) }),
     route({ channel: "zeta:language:inlayHints", validate: languageInlayHintsParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/inlayHints"], params) }),
     route({ channel: "zeta:language:linkedEditingRanges", validate: languageLinkedEditingRangesParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/linkedEditingRanges"], params) }),
+    route({ channel: "zeta:language:semanticTokens", validate: languageSemanticTokensParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/semanticTokens"], params) }),
+    route({ channel: "zeta:language:documentSymbols", validate: languageDocumentFeaturesParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/documentSymbols"], params) }),
+    route({ channel: "zeta:language:codeLenses", validate: languageDocumentFeaturesParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/codeLenses"], params) }),
+    route({ channel: "zeta:language:resolveCodeLens", validate: languageResolveCodeLensParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/resolveCodeLens"], params) }),
+    route({ channel: "zeta:language:documentLinks", validate: languageDocumentFeaturesParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/documentLinks"], params) }),
+    route({ channel: "zeta:language:resolveDocumentLink", validate: languageResolveDocumentLinkParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/resolveDocumentLink"], params) }),
+    route({ channel: "zeta:language:documentColors", validate: languageDocumentFeaturesParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/documentColors"], params) }),
+    route({ channel: "zeta:language:colorPresentations", validate: languageColorPresentationsParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/colorPresentations"], params) }),
+    route({ channel: "zeta:language:foldingRanges", validate: languageDocumentFeaturesParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/foldingRanges"], params) }),
     route({ channel: "zeta:language:locations", validate: languageLocationsParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/locations"], params) }),
     route({ channel: "zeta:language:hierarchy", validate: languageHierarchyParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/hierarchy"], params) }),
     route({ channel: "zeta:language:workspaceSymbols", validate: languageWorkspaceSymbolsParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/workspaceSymbols"], params) }),
@@ -94,6 +107,80 @@ function languageInlayHintsParams(value: unknown): LanguageInlayHintsParams {
 function languageLinkedEditingRangesParams(value: unknown): LanguageLinkedEditingRangesParams {
   const params = record(value, ["document", "position"]);
   return { document: languageDocument(params.document), position: languagePosition(params.position, "position") };
+}
+
+function languageResolveCompletionParams(value: unknown): LanguageResolveCompletionParams {
+  const params = record(value, ["document", "providerData"]);
+  return { document: languageDocument(params.document), providerData: params.providerData };
+}
+
+function languageExecuteCommandParams(value: unknown): LanguageExecuteCommandParams {
+  const params = record(value, ["document", "command"]);
+  return { document: languageDocument(params.document), command: languageCommand(params.command, "command") };
+}
+
+function languageDocumentDiagnosticsParams(value: unknown): LanguageDocumentDiagnosticsParams {
+  const params = record(value, ["document"]);
+  return { document: languageDocument(params.document) };
+}
+
+function languageWorkspaceDiagnosticsParams(value: unknown): LanguageWorkspaceDiagnosticsParams {
+  const params = record(value, ["languageId"]);
+  return { languageId: string(params.languageId, "languageId") };
+}
+
+function languageSemanticTokensParams(value: unknown): LanguageSemanticTokensParams {
+  const params = record(value, ["document"]);
+  return { document: languageDocument(params.document) };
+}
+
+function languageDocumentFeaturesParams(value: unknown): LanguageDocumentFeaturesParams {
+  const params = record(value, ["document"]);
+  return { document: languageDocument(params.document) };
+}
+
+function languageResolveCodeLensParams(value: unknown): LanguageResolveCodeLensParams {
+  const params = record(value, ["document", "lens"]);
+  return { document: languageDocument(params.document), lens: languageCodeLens(params.lens) };
+}
+
+function languageResolveDocumentLinkParams(value: unknown): LanguageResolveDocumentLinkParams {
+  const params = record(value, ["document", "link"]);
+  return { document: languageDocument(params.document), link: languageDocumentLink(params.link) };
+}
+
+function languageColorPresentationsParams(value: unknown): LanguageColorPresentationsParams {
+  const params = record(value, ["document", "range", "color"]);
+  return { document: languageDocument(params.document), range: languageRange(params.range, "range"), color: languageColor(params.color) };
+}
+
+function languageCodeLens(value: unknown): LanguageCodeLensDto {
+  const lens = record(value, ["range", "command", "providerData"]);
+  const command = lens.command === null ? null : languageCommand(lens.command, "lens.command");
+  return { range: languageRange(lens.range, "lens.range"), command, providerData: lens.providerData };
+}
+
+function languageCommand(value: unknown, field: string): LanguageCommandDto {
+  const command = record(value, ["id", "title", "arguments"]);
+  if (!Array.isArray(command.arguments)) throw new Error(`${field}.arguments must be an array`);
+  return { id: string(command.id, `${field}.id`), title: string(command.title, `${field}.title`), arguments: command.arguments };
+}
+
+function languageDocumentLink(value: unknown): LanguageDocumentLinkDto {
+  const link = record(value, ["range", "target", "tooltip", "providerData"]);
+  if (link.target !== null && typeof link.target !== "string") throw new Error("link.target must be a string or null");
+  if (link.tooltip !== null && typeof link.tooltip !== "string") throw new Error("link.tooltip must be a string or null");
+  return { range: languageRange(link.range, "link.range"), target: link.target as string | null, tooltip: link.tooltip as string | null, providerData: link.providerData };
+}
+
+function languageColor(value: unknown): LanguageColorDto {
+  const color = record(value, ["red", "green", "blue", "alpha"]);
+  const component = (candidate: unknown, field: string): number => {
+    const parsed = nonNegativeInteger(candidate, field);
+    if (parsed > 255) throw new Error(`${field} must not exceed 255`);
+    return parsed;
+  };
+  return { red: component(color.red, "color.red"), green: component(color.green, "color.green"), blue: component(color.blue, "color.blue"), alpha: component(color.alpha, "color.alpha") };
 }
 
 function languageRenameParams(value: unknown): LanguageRenameParams {

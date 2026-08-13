@@ -16,6 +16,7 @@ export interface ExtensionLanguageContribution {
   readonly filenames: readonly string[];
   readonly filenamePatterns: readonly string[];
   readonly mimetypes: readonly string[];
+  readonly firstLine?: string;
   readonly configuration?: string;
 }
 
@@ -25,9 +26,17 @@ export interface ExtensionSnippetContribution {
 }
 
 export interface ExtensionThemeContribution {
+  readonly id?: string;
   readonly label: string;
   readonly path: string;
   readonly uiTheme?: string;
+}
+
+export interface ExtensionDebugAdapterContribution {
+  readonly type: string;
+  readonly label: string;
+  readonly program: string;
+  readonly arguments: readonly string[];
 }
 
 export interface ExtensionManifest {
@@ -40,6 +49,7 @@ export interface ExtensionManifest {
     readonly grammars: readonly ExtensionGrammarContribution[];
     readonly snippets: readonly ExtensionSnippetContribution[];
     readonly themes: readonly ExtensionThemeContribution[];
+    readonly debuggers: readonly ExtensionDebugAdapterContribution[];
   };
 }
 
@@ -60,9 +70,9 @@ export function parseExtensionManifest(manifestJson: string, descriptor: Extensi
     throw new TypeError(`Extension '${descriptor.id}' manifest is not valid JSON`);
   }
   const manifest = record(value, `Extension '${descriptor.id}' manifest`);
-  const name = requiredString(manifest.name, "name", 128);
-  const publisher = requiredString(manifest.publisher, "publisher", 128);
-  const version = requiredString(manifest.version, "version", 128);
+  const name = requiredString(manifest.name, "name", 256);
+  const publisher = requiredString(manifest.publisher, "publisher", 256);
+  const version = requiredString(manifest.version, "version", 256);
   if (name !== descriptor.name || publisher !== descriptor.publisher || version !== descriptor.version) {
     throw new TypeError(`Extension '${descriptor.id}' manifest identity does not match its catalog entry`);
   }
@@ -80,6 +90,7 @@ export function parseExtensionManifest(manifestJson: string, descriptor: Extensi
       grammars: Object.freeze(contributes.grammars === undefined ? [] : parseGrammars(contributes.grammars, descriptor.id)),
       snippets: Object.freeze(contributes.snippets === undefined ? [] : parseSnippets(contributes.snippets, descriptor.id)),
       themes: Object.freeze(contributes.themes === undefined ? [] : parseThemes(contributes.themes, descriptor.id)),
+      debuggers: Object.freeze(contributes.debuggers === undefined ? [] : parseDebuggers(contributes.debuggers, descriptor.id)),
     }),
   });
 }
@@ -96,6 +107,7 @@ function parseLanguages(value: unknown, extensionId: string): readonly Extension
       filenames: parseTextList(language.filenames, `Extension '${extensionId}' language ${index} filenames`, true),
       filenamePatterns: parseTextList(language.filenamePatterns, `Extension '${extensionId}' language ${index} filename patterns`, true),
       mimetypes: parseTextList(language.mimetypes, `Extension '${extensionId}' language ${index} MIME types`, true),
+      ...(language.firstLine === undefined ? {} : { firstLine: boundedText(language.firstLine, `Extension '${extensionId}' language ${index} first-line pattern`, 1024) }),
       ...(language.configuration === undefined ? {} : { configuration: normalizeResourcePath(language.configuration, `Extension '${extensionId}' language ${index} configuration`) }),
     });
   });
@@ -151,12 +163,39 @@ function parseThemes(value: unknown, extensionId: string): readonly ExtensionThe
   if (!Array.isArray(value)) throw new TypeError(`Extension '${extensionId}' theme contributions must be an array`);
   return value.map((candidate, index) => {
     const theme = record(candidate, `Extension '${extensionId}' theme ${index}`);
+    const uiTheme = theme.uiTheme === undefined ? undefined : extensionUiTheme(theme.uiTheme, `Extension '${extensionId}' theme ${index} uiTheme`);
     return Object.freeze({
+      ...(theme.id === undefined ? {} : { id: boundedText(theme.id, `Extension '${extensionId}' theme ${index} id`, 256) }),
       label: requiredString(theme.label, `Extension '${extensionId}' theme ${index} label`, 256),
       path: normalizeResourcePath(theme.path, `Extension '${extensionId}' theme ${index} path`),
-      ...(theme.uiTheme === undefined ? {} : { uiTheme: boundedText(theme.uiTheme, `Extension '${extensionId}' theme ${index} uiTheme`, 128) }),
+      ...(uiTheme === undefined ? {} : { uiTheme }),
     });
   });
+}
+
+function extensionUiTheme(value: unknown, owner: string): string {
+  const uiTheme = boundedText(value, owner, 32);
+  if (uiTheme !== "vs" && uiTheme !== "vs-dark" && uiTheme !== "hc-black" && uiTheme !== "hc-light") throw new TypeError(`${owner} is invalid`);
+  return uiTheme;
+}
+
+function parseDebuggers(value: unknown, extensionId: string): readonly ExtensionDebugAdapterContribution[] {
+  if (!Array.isArray(value)) throw new TypeError(`Extension '${extensionId}' debugger contributions must be an array`);
+  if (value.length > 64) throw new RangeError(`Extension '${extensionId}' cannot contribute more than 64 debuggers`);
+  const debuggers = value.map((candidate, index) => {
+    const debuggerContribution = record(candidate, `Extension '${extensionId}' debugger ${index}`);
+    const adapter = record(debuggerContribution.debugAdapter, `Extension '${extensionId}' debugger ${index} debugAdapter`);
+    const argumentsList = adapter.args === undefined ? [] : parseDebuggerArguments(adapter.args, extensionId, index);
+    return Object.freeze({ type: languageId(debuggerContribution.type, `Extension '${extensionId}' debugger ${index} type`), label: requiredString(debuggerContribution.label, `Extension '${extensionId}' debugger ${index} label`, 256), program: requiredString(adapter.program, `Extension '${extensionId}' debugger ${index} debugAdapter program`, 4096), arguments: Object.freeze(argumentsList) });
+  });
+  if (new Set(debuggers.map(debuggerContribution => debuggerContribution.type)).size !== debuggers.length) throw new RangeError(`Extension '${extensionId}' debugger types must be unique`);
+  return Object.freeze(debuggers);
+}
+
+function parseDebuggerArguments(value: unknown, extensionId: string, index: number): readonly string[] {
+  if (!Array.isArray(value)) throw new TypeError(`Extension '${extensionId}' debugger ${index} debugAdapter args must be an array`);
+  if (value.length > 128) throw new RangeError(`Extension '${extensionId}' debugger ${index} debugAdapter args cannot contain more than 128 values`);
+  return value.map((argument, argumentIndex) => boundedText(argument, `Extension '${extensionId}' debugger ${index} debugAdapter arg ${argumentIndex}`, 4096));
 }
 
 function parseScopeMap<T>(value: unknown, extensionId: string, index: number, field: string, parseValue: (value: unknown, owner: string, maximum?: number) => T, parseKey: (value: string, owner: string) => string = scopeNameValue): Readonly<Record<string, T>> {

@@ -38,6 +38,27 @@ fn create_package(root: &Path, id: &str, version: &str, asset: &str) {
     fs::write(root.join("bin/review-server"), "binary").unwrap();
 }
 
+fn declare_editor_extension(root: &Path, entrypoint: &str) {
+    let manifest_path = root.join(".zeta-plugin/plugin.json");
+    let mut value =
+        serde_json::from_str::<serde_json::Value>(&fs::read_to_string(&manifest_path).unwrap())
+            .unwrap();
+    value["contributions"]["editorExtensions"] = serde_json::json!([{
+        "id": "review-runtime",
+        "entrypoint": entrypoint,
+        "runtimeApiVersion": 1,
+        "activationEvents": [
+            {"type": "onCommand", "id": "acme.review.run"}
+        ],
+        "capabilities": ["command"]
+    }]);
+    value["permissions"]
+        .as_array_mut()
+        .unwrap()
+        .push(serde_json::json!({"type": "process", "executable": entrypoint}));
+    fs::write(manifest_path, serde_json::to_vec_pretty(&value).unwrap()).unwrap();
+}
+
 #[test]
 fn exact_local_package_loads_with_content_and_manifest_digests() {
     let directory = TestDirectory::new();
@@ -94,6 +115,28 @@ fn missing_or_wrong_type_contribution_fails_the_whole_package() {
 
     assert_eq!(error.kind(), PluginErrorKind::ContributionInvalid);
     assert!(error.to_string().contains("SKILL.md"));
+}
+
+#[test]
+fn editor_extension_entrypoint_must_be_a_regular_contained_package_file() {
+    let directory = TestDirectory::new();
+    create_package(directory.path(), "acme/review", "1.0.0", "icon");
+    declare_editor_extension(directory.path(), "extension/review-host");
+    fs::create_dir_all(directory.path().join("extension/review-host")).unwrap();
+
+    let error = LocalPluginPackage::load(directory.path()).unwrap_err();
+
+    assert_eq!(error.kind(), PluginErrorKind::ContributionInvalid);
+    assert!(error.to_string().contains("Editor Extension entrypoint"));
+
+    fs::remove_dir(directory.path().join("extension/review-host")).unwrap();
+    fs::write(
+        directory.path().join("extension/review-host"),
+        "host program",
+    )
+    .unwrap();
+    let package = LocalPluginPackage::load(directory.path()).unwrap();
+    assert_eq!(package.manifest().contributions.editor_extensions.len(), 1);
 }
 
 #[cfg(unix)]

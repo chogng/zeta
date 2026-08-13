@@ -6,6 +6,7 @@ use std::fmt;
 use std::str::FromStr;
 
 use super::MAX_MANIFEST_BYTES;
+use super::editor_extension::EditorExtensionContribution;
 
 const MAX_LOCAL_ID_BYTES: usize = 64;
 
@@ -225,6 +226,8 @@ pub struct PluginContributions {
     pub connectors: Vec<ConnectorContribution>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub assets: Vec<AssetContribution>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub editor_extensions: Vec<EditorExtensionContribution>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -352,6 +355,7 @@ pub enum ContributionKind {
     Mcp,
     Connector,
     Asset,
+    EditorExtension,
 }
 
 impl ContributionKind {
@@ -361,6 +365,7 @@ impl ContributionKind {
             Self::Mcp => "mcp",
             Self::Connector => "connector",
             Self::Asset => "asset",
+            Self::EditorExtension => "editorExtension",
         }
     }
 }
@@ -393,6 +398,7 @@ impl FromStr for ContributionReference {
             "mcp" => ContributionKind::Mcp,
             "connector" => ContributionKind::Connector,
             "asset" => ContributionKind::Asset,
+            "editorExtension" => ContributionKind::EditorExtension,
             _ => return Err(InvalidContributionReference),
         };
         let id = ManifestLocalId::new(id).map_err(|_| InvalidContributionReference)?;
@@ -425,8 +431,9 @@ pub struct InvalidContributionReference;
 
 impl fmt::Display for InvalidContributionReference {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter
-            .write_str("contribution reference must use 'skill:<id>', 'mcp:<id>', 'connector:<id>', or 'asset:<id>'")
+        formatter.write_str(
+            "contribution reference must use 'skill:<id>', 'mcp:<id>', 'connector:<id>', 'asset:<id>', or 'editorExtension:<id>'",
+        )
     }
 }
 

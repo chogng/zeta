@@ -134,6 +134,22 @@ pub(crate) fn method_not_found_bytes(
     .map_err(invalid_serialization)
 }
 
+pub(crate) fn invalid_params_bytes(
+    id: &Value,
+    message: &str,
+) -> Result<Vec<u8>, LanguageServerError> {
+    error_bytes(id, -32602, message)
+}
+
+fn error_bytes(id: &Value, code: i64, message: &str) -> Result<Vec<u8>, LanguageServerError> {
+    serde_json::to_vec(&ErrorEnvelope {
+        jsonrpc: "2.0",
+        id,
+        error: OutgoingError { code, message },
+    })
+    .map_err(invalid_serialization)
+}
+
 fn invalid_serialization(error: serde_json::Error) -> LanguageServerError {
     LanguageServerError::InvalidMessage(error.to_string())
 }

@@ -6,16 +6,17 @@ use serde_json::Value;
 use zeta_lsp::lsp_types::{
     CallHierarchyIncomingCall, CallHierarchyItem, CallHierarchyOutgoingCall, CodeAction,
     CodeActionOrCommand, CompletionItem, CompletionItemKind, CompletionResponse,
-    CompletionTextEdit, DocumentChangeOperation, DocumentChanges, Documentation,
-    GotoDefinitionResponse, Hover, HoverContents, InlayHint, InlayHintKind, InlayHintLabel,
-    InlayHintTooltip, InsertTextFormat, LanguageString, LinkedEditingRanges, Location,
-    MarkedString, MarkupContent, OneOf, ParameterLabel, Position, PositionEncodingKind,
-    PrepareRenameResponse, Range, ResourceOp, SignatureHelp, SymbolKind, TextDocumentEdit,
-    TextEdit, TypeHierarchyItem, Uri, WorkspaceEdit, WorkspaceSymbolResponse,
+    CompletionTextEdit, DocumentChangeOperation, DocumentChanges, DocumentDiagnosticReport,
+    DocumentDiagnosticReportResult, Documentation, GotoDefinitionResponse, Hover, HoverContents,
+    InlayHint, InlayHintKind, InlayHintLabel, InlayHintTooltip, InsertTextFormat, LanguageString,
+    LinkedEditingRanges, Location, MarkedString, MarkupContent, OneOf, ParameterLabel, Position,
+    PositionEncodingKind, PrepareRenameResponse, Range, ResourceOp, SignatureHelp, SymbolKind,
+    TextDocumentEdit, TextEdit, TypeHierarchyItem, Uri, WorkspaceEdit, WorkspaceSymbolResponse,
 };
 
-use crate::projection::{byte_offset_for_position, byte_range_for_lsp_range};
-use crate::{LanguageDocumentRevision, LanguageTextRange};
+use crate::document_features::LanguageCommand;
+use crate::projection::{byte_offset_for_position, byte_range_for_lsp_range, project_diagnostic};
+use crate::{LanguageDiagnostic, LanguageDocumentRevision, LanguageTextRange};
 
 const MAX_COMPLETION_ITEMS: usize = 200;
 const MAX_FORMATTING_EDITS: usize = 10_000;
@@ -40,6 +41,8 @@ impl LanguageRequestId {
 pub enum LanguageRequestKind {
     Hover,
     Completion,
+    ResolveCompletion,
+    ExecuteCommand,
     Declaration,
     Definition,
     Implementation,
@@ -61,6 +64,17 @@ pub enum LanguageRequestKind {
     SignatureHelp,
     InlayHints,
     LinkedEditingRanges,
+    SemanticTokens,
+    DocumentSymbols,
+    CodeLenses,
+    ResolveCodeLens,
+    DocumentLinks,
+    ResolveDocumentLink,
+    DocumentColors,
+    ColorPresentations,
+    FoldingRanges,
+    DocumentDiagnostics,
+    WorkspaceDiagnostics,
 }
 
 /// UTF-8 position inside one source row of an authoritative editor snapshot.
@@ -99,6 +113,28 @@ pub struct LanguageCompletionItem {
     pub commit_characters: Vec<String>,
     pub insert_text_format: LanguageCompletionInsertTextFormat,
     pub edit: Option<LanguageTextEdit>,
+    pub additional_text_edits: Vec<LanguageTextEdit>,
+    pub command: Option<LanguageCommand>,
+    pub provider_data: Value,
+}
+
+/// Deferred presentation details returned by `completionItem/resolve`.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LanguageCompletionDetails {
+    pub request_id: LanguageRequestId,
+    pub path: PathBuf,
+    pub revision: LanguageDocumentRevision,
+    pub detail: Option<String>,
+    pub documentation: Option<String>,
+}
+
+/// Result of a server-advertised workspace command attached to a completion candidate.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LanguageCommandResult {
+    pub request_id: LanguageRequestId,
+    pub path: PathBuf,
+    pub revision: LanguageDocumentRevision,
+    pub value: Value,
 }
 
 /// Presentation-neutral completion category understood by editor products.
@@ -243,7 +279,24 @@ pub struct LanguageCompletions {
     pub path: PathBuf,
     pub revision: LanguageDocumentRevision,
     pub is_incomplete: bool,
+    pub can_resolve: bool,
     pub items: Vec<LanguageCompletionItem>,
+}
+
+/// One pull-diagnostic report for the requested document.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum LanguagePulledDiagnosticReport {
+    Full(Vec<LanguageDiagnostic>),
+    Unchanged,
+}
+
+/// Result of a pull-diagnostic request bound to the exact editor snapshot.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LanguagePulledDiagnostics {
+    pub request_id: LanguageRequestId,
+    pub path: PathBuf,
+    pub revision: LanguageDocumentRevision,
+    pub report: LanguagePulledDiagnosticReport,
 }
 
 /// Encoding retained for a definition target whose text is not owned by this service.
@@ -517,6 +570,7 @@ pub(crate) fn project_completions(
     request_position: LanguageDocumentPosition,
     text: &str,
     encoding: &PositionEncodingKind,
+    can_resolve: bool,
     response: Option<CompletionResponse>,
 ) -> LanguageCompletions {
     let (is_incomplete, items) = match response {
@@ -545,6 +599,7 @@ pub(crate) fn project_completions(
         path,
         revision,
         is_incomplete,
+        can_resolve,
         items,
     }
 }
@@ -1475,21 +1530,24 @@ fn project_completion_item(
     if item.label.trim().is_empty() {
         return None;
     }
+    let provider_data = serde_json::to_value(&item).ok()?;
     let documentation = item.documentation.map(documentation_text).filter(non_blank);
-    let safe_side_effects = item
-        .additional_text_edits
-        .as_ref()
-        .is_none_or(Vec::is_empty)
-        && item.command.is_none();
-    if !safe_side_effects {
-        return None;
-    };
     let insert_text = item.insert_text.unwrap_or_else(|| item.label.clone());
     let edit = match item.text_edit {
         Some(edit) => completion_edit(edit, text, encoding),
         None => insertion_edit(request_position, text, &insert_text),
     }?;
     if !completion_edit_matches_request(&edit, request_position, text) {
+        return None;
+    }
+    let mut additional_text_edits = item
+        .additional_text_edits
+        .unwrap_or_default()
+        .into_iter()
+        .map(|edit| language_text_edit(edit, text, encoding))
+        .collect::<Option<Vec<_>>>()?;
+    additional_text_edits.sort_by_key(|edit| edit.range.byte_range().start);
+    if completion_edits_overlap(&edit, &additional_text_edits) {
         return None;
     }
     let mut commit_characters = Vec::new();
@@ -1513,7 +1571,92 @@ fn project_completion_item(
             LanguageCompletionInsertTextFormat::PlainText
         },
         edit: Some(edit),
+        additional_text_edits,
+        command: item.command.map(|command| LanguageCommand {
+            id: command.command,
+            title: command.title,
+            arguments: command.arguments.unwrap_or_default(),
+        }),
+        provider_data,
     })
+}
+
+pub(crate) fn project_resolved_completion(
+    request_id: LanguageRequestId,
+    path: PathBuf,
+    revision: LanguageDocumentRevision,
+    item: CompletionItem,
+) -> LanguageCompletionDetails {
+    LanguageCompletionDetails {
+        request_id,
+        path,
+        revision,
+        detail: item.detail.filter(non_blank),
+        documentation: item.documentation.map(documentation_text).filter(non_blank),
+    }
+}
+
+pub(crate) fn project_document_diagnostics(
+    request_id: LanguageRequestId,
+    path: PathBuf,
+    revision: LanguageDocumentRevision,
+    text: &str,
+    encoding: &PositionEncodingKind,
+    response: DocumentDiagnosticReportResult,
+) -> Result<LanguagePulledDiagnostics, String> {
+    let report = match response {
+        DocumentDiagnosticReportResult::Report(DocumentDiagnosticReport::Full(report)) => {
+            LanguagePulledDiagnosticReport::Full(
+                report
+                    .full_document_diagnostic_report
+                    .items
+                    .into_iter()
+                    .filter_map(|diagnostic| project_diagnostic(text, diagnostic, encoding))
+                    .collect(),
+            )
+        }
+        DocumentDiagnosticReportResult::Report(DocumentDiagnosticReport::Unchanged(_)) => {
+            LanguagePulledDiagnosticReport::Unchanged
+        }
+        DocumentDiagnosticReportResult::Partial(_) => {
+            return Err("document diagnostic partial result omitted its primary report".into());
+        }
+    };
+    Ok(LanguagePulledDiagnostics {
+        request_id,
+        path,
+        revision,
+        report,
+    })
+}
+
+pub(crate) fn protocol_completion_item(data: Value) -> Result<CompletionItem, String> {
+    serde_json::from_value(data)
+        .map_err(|error| format!("invalid completion resolve payload: {error}"))
+}
+
+fn language_text_edit(
+    edit: TextEdit,
+    text: &str,
+    encoding: &PositionEncodingKind,
+) -> Option<LanguageTextEdit> {
+    Some(LanguageTextEdit {
+        range: LanguageTextRange::new(byte_range_for_lsp_range(
+            text,
+            edit.range.start,
+            edit.range.end,
+            encoding,
+        )?),
+        new_text: edit.new_text,
+    })
+}
+
+fn completion_edits_overlap(primary: &LanguageTextEdit, additional: &[LanguageTextEdit]) -> bool {
+    let mut ranges = Vec::with_capacity(additional.len() + 1);
+    ranges.push(primary.range.byte_range());
+    ranges.extend(additional.iter().map(|edit| edit.range.byte_range()));
+    ranges.sort_by_key(|range| range.start);
+    ranges.windows(2).any(|pair| pair[1].start <= pair[0].end)
 }
 
 fn completion_edit_matches_request(
@@ -1672,7 +1815,7 @@ fn source_line(text: &str, requested: usize) -> Option<&str> {
     Some(line.strip_suffix('\r').unwrap_or(line))
 }
 
-fn file_path(uri: &Uri) -> Option<PathBuf> {
+pub(crate) fn file_path(uri: &Uri) -> Option<PathBuf> {
     let url = url::Url::parse(&uri.to_string()).ok()?;
     url.to_file_path().ok()
 }

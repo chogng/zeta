@@ -118,7 +118,7 @@ export class CodeEditorPane extends DisposableOwner implements IEditorPane {
       part = this.createPart({
         container,
         input,
-        languageId: languageForEditorInput(input, this.options.languageFeaturesService),
+        languageId: languageForEditorInput({ ...input, firstLine: modelReference.model.getLineContent(0) }, this.options.languageFeaturesService),
         modelReference,
         textMateService: this.options.textMateService,
         languageFeaturesService: this.options.languageFeaturesService,

@@ -17,8 +17,8 @@
 | `LanguageServerClient` | initialize 后的单服务器 session、类型化请求、文档同步、transport-close 事实和关闭 | server discovery、共享进程、重启策略 |
 | `LanguageServerCommand` | 保存宿主已经解析的 program、args、env 和 cwd | 验证 executable trust、安装或 sandbox |
 | `LanguageServerOptions` | client identity、workspace、capability、initialize options、host 和 deadline | 读取产品配置 |
-| `LanguageServerInitialization` | 冻结 server info、capability、position encoding 和 document sync policy | 随后动态扩展 capability |
-| `LanguageServerHost` | 快速接收事件，并按顺序回答 `workspace/configuration` | 直接修改 UI 或阻塞协议 driver |
+| `LanguageServerInitialization` | 冻结 server info、初始 capability、position encoding 和 document sync policy | 把随后动态注册伪装成 initialize 快照 |
+| `LanguageServerHost` | 快速接收事件，并按顺序回答 `workspace/configuration`，消费 progress/message/log 事件 | 直接修改 UI 或阻塞协议 driver |
 | `LanguageServerDocumentRouter` | 一个 language ID 到一个 initialized client 的路由、全文 snapshot 同步、replacement replay 与断连 route retirement | server discovery、重启判断或 backoff |
 | `LanguageDocumentSnapshot` | 绑定 URI、language ID、EditorHost revision 与完整 authoritative text | 从 filesystem 或 editor 自行取内容 |
 | `RoutedDocumentVersion` | 绑定 editor revision、server incarnation 与 LSP document version | 充当磁盘或 durable revision |
@@ -93,8 +93,9 @@ UTF-8。
 
 Transport 使用 LSP stdio 的 `Content-Length` framing。Header 最多 16 KiB，单条 JSON message
 最多 4 MiB；缺少或重复 `Content-Length`、非 JSON-RPC 2.0 envelope、非整数 client response ID
-和同时缺少 result/error 的 response 都会关闭当前 driver。服务端 request 目前只支持
-`workspace/configuration`；其他 request 返回 JSON-RPC `Method not found` 并产生
+和同时缺少 result/error 的 response 都会关闭当前 driver。服务端 request 目前支持
+`workspace/configuration`、`client/registerCapability`、`client/unregisterCapability` 和
+`window/workDoneProgress/create`；其他 request 返回 JSON-RPC `Method not found` 并产生
 `UnsupportedServerRequest` 事件。
 
 宿主必须：
@@ -140,9 +141,9 @@ Native position conversion；增加 server request 时必须先定义宿主 auth
 - Current：仅支持 stdio child 或 caller-provided async transport halves；
 - Current：宿主可注册 initialized client，以唯一 language route 同步全文 snapshot，并在显式
   replacement 时重放当前文档和重置 server version/incarnation；
-- Current：服务端 request 只实现 `workspace/configuration`；
-- 当前限制：没有动态 capability registration、workspace edit、progress、pull diagnostics、
-  semantic token delta 或 file-operation registration；
+- Current：服务端 request 已实现 `workspace/configuration`、动态 capability register/unregister 与 work-done progress token 创建；
+- Current：支持 diagnostic client capability、动态注册、typed document pull 与 typed workspace pull request；
+- 当前限制：没有 diagnostic refresh/result-id cache、workspace edit、semantic token delta 或 file-operation registration；
 - Current：`zeta-language-service` 已作为 product host 使用 router，负责显式启停、resolved definition、
   revision freshness 和 Native event-loop 接线；
 - Current：Native 通过独立 catalog 自动解析 PATH 中的 `rust-analyzer`；缺失时不启动 server；

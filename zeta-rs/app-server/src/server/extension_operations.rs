@@ -1,5 +1,9 @@
+use super::decode;
 use super::operations::resource_rpc_error;
-use super::{AppServer, ConnectionState, RpcError, decode, result};
+use super::result;
+use super::AppServer;
+use super::ConnectionState;
+use super::RpcError;
 use serde_json::Value;
 use std::time::Duration;
 use zeta_app_server_protocol::protocol::error::AppServerErrorName;
@@ -57,7 +61,7 @@ impl AppServer {
             .extensions
             .lock()
             .map_err(|_| RpcError::new(-32000, AppServerErrorName::ServerOverloaded))?
-            .open_resource(&params.extension_id, &params.path)
+            .open_resource(params.generation, &params.extension_id, &params.path)
             .map_err(extension_catalog_error)?;
         let metadata = self
             .resources
@@ -94,6 +98,7 @@ fn extension_descriptor(value: ExtensionDescriptor) -> ExtensionDto {
         },
         manifest_json: value.manifest_json,
         manifest_sha256: value.manifest_sha256,
+        package_sha256: value.package_sha256,
     }
 }
 
@@ -123,6 +128,9 @@ fn extension_diagnostic(value: ExtensionDiagnostic) -> ExtensionDiagnosticDto {
 
 fn extension_catalog_error(error: ExtensionCatalogError) -> RpcError {
     let message = match error {
+        ExtensionCatalogError::GenerationConflict => {
+            AppServerErrorName::ExtensionGenerationConflict
+        }
         ExtensionCatalogError::NotFound => AppServerErrorName::ExtensionNotFound,
         ExtensionCatalogError::InvalidPath => AppServerErrorName::ExtensionResourceInvalidPath,
         ExtensionCatalogError::ResourceNotFound => AppServerErrorName::ExtensionResourceNotFound,
@@ -131,3 +139,7 @@ fn extension_catalog_error(error: ExtensionCatalogError) -> RpcError {
     };
     RpcError::new(-32040, message)
 }
+
+#[cfg(test)]
+#[path = "extension_operations_tests.rs"]
+mod tests;

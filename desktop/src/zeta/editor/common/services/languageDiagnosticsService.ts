@@ -4,7 +4,7 @@ import { type URI } from "../../../base/common/uri.js";
 import { type LanguageDiagnostic } from "../languages/languageResults.js";
 import { type TextModel } from "../model/textModel.js";
 
-/** Current push diagnostics for one exact editor document revision. */
+/** Current diagnostics; revision `0` is reserved for unopened workspace resources. */
 export interface LanguageDiagnosticSnapshot {
   readonly resource: URI;
   readonly revision: number;

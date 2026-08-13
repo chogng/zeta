@@ -16,6 +16,7 @@ import type { IToolSearchApi } from "../../toolSearch/common/toolSearchApi.js";
 import type { ILanguageApi } from "../../language/common/languageApi.js";
 import type { IPluginApi } from "../../plugins/common/pluginApi.js";
 import type { IDebugAdapterProcessService } from "../../debug/common/debugAdapterProcessService.js";
+import type { IExtensionHostApi } from "../../extensionHost/common/extensionHostApi.js";
 
 /** Optional product capabilities contributed by a statically selected host bundle. */
 export interface RendererHostCapabilities {
@@ -47,6 +48,7 @@ export interface IRendererHost extends RendererHostCapabilities {
   readonly documentCollaboration: IDocumentCollaborationApi;
   readonly resource: IResourceApi;
   readonly extensions: IExtensionApi;
+  readonly extensionHost: IExtensionHostApi;
   readonly fs: IFileApi;
   readonly diff: IDiffApi;
   readonly syntax: ISyntaxApi;

@@ -44,6 +44,49 @@ test("TaskService discovers tasks, writes one terminal command, and tracks its e
   assert.equal(secondRun.status, "canceled");
 });
 
+test("TaskService atomically owns dynamic providers and merges their tasks on refresh", async () => {
+  const root = URI.file("C:\\project");
+  const files = new FakeFileService(root, { ".vscode/tasks.json": '{"version":"2.0.0","tasks":[{"label":"Build","command":"build","group":"build"}]}' });
+  const workspace: IWorkspaceContextService = { onDidChangeWorkspace: noEvent, getWorkspace: () => ({ id: "workspace", folders: [{ uri: root, name: "project", index: 0 }] }), getWorkbenchState: () => 2 };
+  using terminals = new FakeTerminalService();
+  using service = new TaskService(files, workspace, terminals);
+  const registration = service.registerTaskProviders([{ id: "demo.provider", provideTasks: () => [{ id: "verify", label: "Verify", command: "demo --verify", group: "test" }] }]);
+
+  assert.deepEqual((await service.refresh()).map(task => [task.id, task.source]), [["vscode:0:build", "vscode"], ["extension:demo.provider:verify", "extension"]]);
+  const revokedTask = service.tasks.find(task => task.source === "extension")!;
+  registration.replace([{ id: "demo.provider", provideTasks: () => [{ id: "run", label: "Run", command: "demo", group: "run" }] }]);
+  assert.deepEqual(service.tasks.map(task => task.id), ["vscode:0:build"]);
+  await assert.rejects(service.run(revokedTask), /no longer present/);
+  await service.refresh();
+  assert.deepEqual(service.tasks.map(task => task.id), ["vscode:0:build", "extension:demo.provider:run"]);
+
+  assert.throws(() => service.registerTaskProvider({ id: "demo.provider", provideTasks: () => [] }), /already registered/);
+  assert.deepEqual(service.tasks.map(task => task.id), ["vscode:0:build", "extension:demo.provider:run"]);
+  const disposedTask = service.tasks.find(task => task.source === "extension")!;
+  registration.dispose();
+  assert.deepEqual(service.tasks.map(task => task.id), ["vscode:0:build"]);
+  await assert.rejects(service.run(disposedTask), /no longer present/);
+  await service.refresh();
+  assert.deepEqual(service.tasks.map(task => task.id), ["vscode:0:build"]);
+});
+
+test("TaskService retains the last good task set when a provider refresh fails", async () => {
+  const root = URI.file("C:\\project");
+  const workspace: IWorkspaceContextService = { onDidChangeWorkspace: noEvent, getWorkspace: () => ({ id: "workspace", folders: [{ uri: root, name: "project", index: 0 }] }), getWorkbenchState: () => 2 };
+  using terminals = new FakeTerminalService();
+  using service = new TaskService(new FakeFileService(root, {}), workspace, terminals);
+  let fail = false;
+  using registration = service.registerTaskProvider({ id: "stable", provideTasks: () => { if (fail) throw new Error("provider failed"); return [{ id: "test", label: "Test", command: "test", group: "test" }]; } });
+  await service.refresh();
+  const previous = service.tasks;
+
+  fail = true;
+  await assert.rejects(service.refresh(), /provider failed/);
+
+  assert.equal(service.tasks, previous);
+  assert.deepEqual(service.tasks.map(task => task.id), ["extension:stable:test"]);
+});
+
 const noEvent = (() => toDisposable(() => undefined)) as Event<never>;
 
 class FakeFileService implements IFileService {

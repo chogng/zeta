@@ -21,6 +21,7 @@ test("App Server diagnostics service synchronizes, filters revisions, and closes
   using second = service.acquire(resource, "rust", model);
   await tick();
   assert.equal(api.synchronized.length, 1);
+  assert.equal(api.diagnosticPulls.length, 1);
   assert.equal(api.synchronized[0]!.document.path, "main.rs");
 
   events.fire({ method: "language/diagnostics", params: { path: "main.rs", revision: 1, diagnostics: [{ range: { start: { lineIndex: 0, columnIndex: 3 }, end: { lineIndex: 0, columnIndex: 7 } }, severity: "error", message: "broken", code: "E1", source: "fixture" }] } });
@@ -59,15 +60,30 @@ class FakeServerEvents implements IServerEventApi {
 class FakeLanguageApi implements ILanguageApi {
   readonly synchronized: Parameters<ILanguageApi["synchronize"]>[0][] = [];
   readonly closed: Parameters<ILanguageApi["close"]>[0][] = [];
+  readonly diagnosticPulls: Parameters<ILanguageApi["documentDiagnostics"]>[0][] = [];
+  workspaceReport: Awaited<ReturnType<ILanguageApi["workspaceDiagnostics"]>> = { supported: false, snapshots: [] };
   async synchronize(params: Parameters<ILanguageApi["synchronize"]>[0]): Promise<void> { this.synchronized.push(params); }
   async close(params: Parameters<ILanguageApi["close"]>[0]): Promise<void> { this.closed.push(params); }
   hover(): ReturnType<ILanguageApi["hover"]> { throw new Error("unused"); }
   completions(): ReturnType<ILanguageApi["completions"]> { throw new Error("unused"); }
+  resolveCompletion(): ReturnType<ILanguageApi["resolveCompletion"]> { throw new Error("unused"); }
+  executeCommand(): ReturnType<ILanguageApi["executeCommand"]> { throw new Error("unused"); }
+  async documentDiagnostics(params: Parameters<ILanguageApi["documentDiagnostics"]>[0]): ReturnType<ILanguageApi["documentDiagnostics"]> { this.diagnosticPulls.push(params); return { revision: params.document.revision, kind: "unchanged", diagnostics: [] }; }
+  async workspaceDiagnostics(): ReturnType<ILanguageApi["workspaceDiagnostics"]> { return this.workspaceReport; }
   formatDocument(): ReturnType<ILanguageApi["formatDocument"]> { throw new Error("unused"); }
   formatRange(): ReturnType<ILanguageApi["formatRange"]> { throw new Error("unused"); }
   signatureHelp(): ReturnType<ILanguageApi["signatureHelp"]> { throw new Error("unused"); }
   inlayHints(): ReturnType<ILanguageApi["inlayHints"]> { throw new Error("unused"); }
   linkedEditingRanges(): ReturnType<ILanguageApi["linkedEditingRanges"]> { throw new Error("unused"); }
+  semanticTokens(): ReturnType<ILanguageApi["semanticTokens"]> { throw new Error("unused"); }
+  documentSymbols(): ReturnType<ILanguageApi["documentSymbols"]> { throw new Error("unused"); }
+  codeLenses(): ReturnType<ILanguageApi["codeLenses"]> { throw new Error("unused"); }
+  resolveCodeLens(): ReturnType<ILanguageApi["resolveCodeLens"]> { throw new Error("unused"); }
+  documentLinks(): ReturnType<ILanguageApi["documentLinks"]> { throw new Error("unused"); }
+  resolveDocumentLink(): ReturnType<ILanguageApi["resolveDocumentLink"]> { throw new Error("unused"); }
+  documentColors(): ReturnType<ILanguageApi["documentColors"]> { throw new Error("unused"); }
+  colorPresentations(): ReturnType<ILanguageApi["colorPresentations"]> { throw new Error("unused"); }
+  foldingRanges(): ReturnType<ILanguageApi["foldingRanges"]> { throw new Error("unused"); }
   locations(): ReturnType<ILanguageApi["locations"]> { throw new Error("unused"); }
   hierarchy(): ReturnType<ILanguageApi["hierarchy"]> { throw new Error("unused"); }
   workspaceSymbols(): ReturnType<ILanguageApi["workspaceSymbols"]> { throw new Error("unused"); }
@@ -78,3 +94,22 @@ class FakeLanguageApi implements ILanguageApi {
 }
 
 async function tick(): Promise<void> { await new Promise(resolve => setTimeout(resolve, 0)); }
+
+test("App Server diagnostics service includes unopened workspace reports", async () => {
+  const events = new FakeServerEvents();
+  const api = new FakeLanguageApi();
+  api.workspaceReport = { supported: true, snapshots: [{ path: "src/unopened.rs", diagnostics: [{ range: { start: { lineIndex: 2, columnIndex: 1 }, end: { lineIndex: 2, columnIndex: 4 } }, severity: "warning", message: "workspace warning", code: null, source: "fixture" }] }] };
+  using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:\\project") });
+  using service = new AppServerLanguageDiagnosticsService(api, events, workspace);
+  await tick();
+  await tick();
+  const resource = URI.file("C:\\project\\src\\unopened.rs");
+  assert.equal(service.getDiagnostics(resource)?.revision, 0);
+  assert.equal(service.getDiagnostics(resource)?.diagnostics[0]?.message, "workspace warning");
+  assert.equal(service.getAllDiagnostics().length, 1);
+
+  using model = new TextModel("fn open() {}\n");
+  using acquisition = service.acquire(resource, "rust", model);
+  await tick();
+  assert.equal(service.getDiagnostics(resource), undefined);
+});

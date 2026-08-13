@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { SemanticTokenModifier, SemanticTokenPresentation, createAsterSemanticTokenSource, projectAsterSemanticTokenLine, resolveAsterSemanticTokenModifiers, resolveAsterSemanticTokenPresentation, type ResolvedSemanticToken } from "../../browser/view/semanticTokenPresentation.js";
+import { SemanticTokenModifier, SemanticTokenPresentation, createAsterSemanticTokenSource, createOverlaySemanticTokenSource, projectAsterSemanticTokenLine, resolveAsterSemanticTokenModifiers, resolveAsterSemanticTokenPresentation, type ResolvedSemanticToken } from "../../browser/view/semanticTokenPresentation.js";
 import { LanguageResultAcceptance } from "../../common/languages/languageResultStore.js";
 import { LanguageTokenLineIndex } from "../../common/tokens/languageTokenLineIndex.js";
 import { createLanguageTokenStore, type LanguageToken } from "../../common/languages/languageResults.js";
@@ -85,6 +85,37 @@ test("Semantic token source resolves immutable named lines without owning common
   index.dispose();
   assert.throws(() => source.lines, /already disposed/);
   assert.equal(store.result!.value.tokens.length, 2);
+});
+
+test("server semantic tokens replace intersecting syntax presentation and preserve uncovered syntax", () => {
+  using model = new TextModel("const value");
+  using lexicalStore = createLanguageTokenStore(model);
+  using semanticStore = createLanguageTokenStore(model);
+  lexicalStore.accept({
+    requestId: 1,
+    textModel: model,
+    modelVersion: model.version,
+    value: { tokens: [
+      { ...token(0, 0, 5, "keyword"), presentation: { foreground: "#111111" } },
+      { ...token(0, 6, 11, "variable"), presentation: { foreground: "#222222" } },
+    ] },
+  });
+  semanticStore.accept({ requestId: 1, textModel: model, modelVersion: model.version, value: { tokens: [token(0, 6, 11, "function", ["declaration"])] } });
+  using lexicalIndex = new LanguageTokenLineIndex(lexicalStore);
+  using semanticIndex = new LanguageTokenLineIndex(semanticStore);
+  const source = createOverlaySemanticTokenSource(createAsterSemanticTokenSource(lexicalIndex), createAsterSemanticTokenSource(semanticIndex));
+
+  assert.deepEqual(source.getLineTokens(0), [{
+    startColumn: 0,
+    endColumn: 5,
+    presentation: SemanticTokenPresentation.Keyword,
+    syntaxPresentation: { foreground: "#111111" },
+  }, {
+    startColumn: 6,
+    endColumn: 11,
+    presentation: SemanticTokenPresentation.Function,
+    modifiers: [SemanticTokenModifier.Declaration],
+  }]);
 });
 
 test("Semantic line projection is HTML-safe and preserves exact text", () => {

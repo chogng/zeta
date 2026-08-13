@@ -1,13 +1,18 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
-import { DisposableOwner, type IDisposable } from "../../../../base/common/lifecycle.js";
+import { DisposableOwner, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { FileKind, FileNotFoundError, type IFileService } from "../../../../platform/files/common/files.js";
 import { type IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import { type ITerminalCommandStatusEvent, type ITerminalInstance, type ITerminalService } from "../../terminal/common/terminal.js";
-import { type ITaskRun, type ITaskService, type IWorkspaceTask, type TaskRunStatus } from "../common/taskService.js";
+import { type ITaskRun, type ITaskService, type IWorkspaceTask, type TaskProvider, type TaskProviderRegistration, type TaskProviderTask, type TaskRunStatus } from "../common/taskService.js";
 import { cargoWorkspaceTasks, parsePackageTasks, parseWorkspaceTasks } from "../common/workspaceTasks.js";
 
 const TASK_TERMINAL_DIMENSIONS = Object.freeze({ rows: 24, cols: 80 });
+
+interface OwnedTaskProvider {
+  readonly owner: object;
+  readonly provider: TaskProvider;
+}
 
 /** Workspace task discovery and integrated-Terminal execution. */
 export class TaskService extends DisposableOwner implements ITaskService {
@@ -15,9 +20,12 @@ export class TaskService extends DisposableOwner implements ITaskService {
   private readonly startTaskEmitter = this.own(new Emitter<ITaskRun>());
   private readonly changeTaskRunEmitter = this.own(new Emitter<ITaskRun>());
   private readonly runs = new Set<TaskRun>();
+  private readonly providers = new Map<string, OwnedTaskProvider>();
   private currentTasks: readonly IWorkspaceTask[] = Object.freeze([]);
+  private activeRefresh: AbortController | undefined;
   private refreshGeneration = 0;
   private loaded = false;
+  private disposed = false;
   private _lastRun: TaskRun | undefined;
 
   readonly onDidChangeTasks: Event<readonly IWorkspaceTask[]> = this.changeTasksEmitter.event;
@@ -30,6 +38,7 @@ export class TaskService extends DisposableOwner implements ITaskService {
       if (this.loaded && affectsTaskConfiguration(event.resources)) void this.refresh().catch(reportTaskError);
     }));
     this.own(workspace.onDidChangeWorkspace(() => {
+      this.activeRefresh?.abort();
       this.refreshGeneration += 1;
       this.loaded = false;
       this.setTasks(Object.freeze([]));
@@ -37,6 +46,10 @@ export class TaskService extends DisposableOwner implements ITaskService {
     this.defer(() => {
       for (const run of this.runs) run.dispose();
       this.runs.clear();
+      this.disposed = true;
+      this.activeRefresh?.abort();
+      this.activeRefresh = undefined;
+      this.providers.clear();
     });
   }
 
@@ -44,37 +57,63 @@ export class TaskService extends DisposableOwner implements ITaskService {
   get activeRuns(): readonly ITaskRun[] { return [...this.runs].filter(run => run.status === "running"); }
   get lastRun(): ITaskRun | undefined { return this._lastRun; }
 
+  registerTaskProvider(provider: TaskProvider): IDisposable {
+    return this.registerTaskProviders([provider]);
+  }
+
+  registerTaskProviders(providers: readonly TaskProvider[]): TaskProviderRegistration {
+    this.ensureAlive();
+    const owner = Object.freeze({});
+    this.replaceProviders(owner, providers);
+    let disposed = false;
+    const registration = toDisposable(() => {
+      if (disposed) return;
+      disposed = true;
+      const removed = this.deleteProviderOwner(owner);
+      if (removed.length > 0) this.providersChanged(removed);
+    }) as TaskProviderRegistration;
+    registration.replace = replacement => {
+      if (disposed) throw new ReferenceError("Task provider registration is already disposed");
+      this.ensureAlive();
+      this.replaceProviders(owner, replacement);
+    };
+    return registration;
+  }
+
   async refresh(): Promise<readonly IWorkspaceTask[]> {
+    this.ensureAlive();
+    this.activeRefresh?.abort();
+    const controller = new AbortController();
+    this.activeRefresh = controller;
     const generation = ++this.refreshGeneration;
     const root = this.workspace.getWorkspace().folders[0]?.uri;
-    if (!root) {
+    const providerSnapshot = [...this.providers.values()].map(entry => entry.provider);
+    try {
+      const [discovered, providerGroups] = await Promise.all([root ? this.discoverWorkspaceTasks(root) : Promise.resolve(Object.freeze([])), Promise.all(providerSnapshot.map(provider => this.provideTasks(provider, controller.signal)))]);
+      const providerTasks = providerGroups.flat();
+      if (controller.signal.aborted || generation !== this.refreshGeneration || this.disposed) return this.currentTasks;
       this.loaded = true;
-      this.setTasks(Object.freeze([]));
+      this.setTasks(mergeTasks(discovered, providerTasks));
       return this.currentTasks;
+    } catch (error) {
+      if (controller.signal.aborted || generation !== this.refreshGeneration || this.disposed) return this.currentTasks;
+      throw error;
+    } finally {
+      if (this.activeRefresh === controller) this.activeRefresh = undefined;
     }
-    const discovered: IWorkspaceTask[] = [];
-    const tasksJson = await this.readOptional(childResource(root, ".vscode/tasks.json"));
-    if (tasksJson !== undefined) discovered.push(...parseWorkspaceTasks(tasksJson));
-    const packageJson = await this.readOptional(childResource(root, "package.json"));
-    if (packageJson !== undefined) discovered.push(...parsePackageTasks(packageJson, await this.packageManager(root)));
-    if (await this.exists(childResource(root, "Cargo.toml"))) discovered.push(...cargoWorkspaceTasks());
-    if (generation !== this.refreshGeneration) return this.currentTasks;
-    this.loaded = true;
-    this.setTasks(deduplicateTasks(discovered));
-    return this.currentTasks;
   }
 
   async run(task: IWorkspaceTask): Promise<ITaskRun> {
-    assertKnownTask(task, this.currentTasks);
-    const terminal = await this.terminalService.createTerminal({ dimensions: TASK_TERMINAL_DIMENSIONS, profile: { type: "default" }, title: `Task: ${task.label}` });
-    const run = this.own(new TaskRun(task, terminal, current => {
+    const currentTask = resolveKnownTask(task, this.currentTasks);
+    const terminal = await this.terminalService.createTerminal({ dimensions: TASK_TERMINAL_DIMENSIONS, profile: { type: "default" }, title: `Task: ${currentTask.label}` });
+    const run = this.own(new TaskRun(currentTask, terminal, current => {
       this.changeTaskRunEmitter.fire(current);
       if (current.status !== "running") this.runs.delete(current);
     }));
     this.runs.add(run);
     this._lastRun = run;
     this.startTaskEmitter.fire(run);
-    const command = substituteWorkspaceVariables(task.command, this.workspace.getWorkspace().folders[0]?.uri);
+    const command = substituteWorkspaceVariables(currentTask.command, this.workspace.getWorkspace().folders[0]?.uri);
     terminal.write(`${taskTerminalCommand(command, terminal.profile.profileId)}\r`);
     return run;
   }
@@ -91,10 +130,75 @@ export class TaskService extends DisposableOwner implements ITaskService {
     this.changeTasksEmitter.fire(tasks);
   }
 
+  private replaceProviders(owner: object, providers: readonly TaskProvider[]): void {
+    if (!Array.isArray(providers)) throw new TypeError("Task providers must be an array");
+    const normalized = providers.map(normalizeTaskProvider);
+    const ids = new Set<string>();
+    for (const provider of normalized) {
+      const existing = this.providers.get(provider.id);
+      if (ids.has(provider.id) || existing && existing.owner !== owner) throw new Error(`Task provider '${provider.id}' is already registered`);
+      ids.add(provider.id);
+    }
+    const changed = new Set(this.deleteProviderOwner(owner));
+    for (const provider of normalized) this.providers.set(provider.id, { owner, provider });
+    for (const provider of normalized) changed.add(provider.id);
+    if (changed.size > 0) this.providersChanged(changed);
+  }
+
+  private deleteProviderOwner(owner: object): readonly string[] {
+    const removed: string[] = [];
+    for (const [id, entry] of this.providers) {
+      if (entry.owner !== owner) continue;
+      this.providers.delete(id);
+      removed.push(id);
+    }
+    return removed;
+  }
+
+  private providersChanged(providerIds: ReadonlySet<string> | readonly string[]): void {
+    if (this.disposed) return;
+    const changedProviders = new Set(providerIds);
+    const refresh = this.loaded || this.activeRefresh !== undefined;
+    if (this.loaded) this.setTasks(Object.freeze(this.currentTasks.filter(task => {
+      const providerId = taskProviderId(task);
+      return providerId === undefined || !changedProviders.has(providerId);
+    })));
+    this.activeRefresh?.abort();
+    this.refreshGeneration += 1;
+    if (refresh) void this.refresh().catch(reportTaskError);
+  }
+
+  private async provideTasks(provider: TaskProvider, signal: AbortSignal): Promise<readonly IWorkspaceTask[]> {
+    const contributions = await provider.provideTasks(signal);
+    if (signal.aborted) return Object.freeze([]);
+    if (!Array.isArray(contributions)) throw new TypeError(`Task provider '${provider.id}' must return an array`);
+    const ids = new Set<string>();
+    return Object.freeze(contributions.map(contribution => {
+      const task = projectProviderTask(provider.id, contribution);
+      if (ids.has(task.id)) throw new Error(`Task provider '${provider.id}' returned duplicate task '${contribution.id}'`);
+      ids.add(task.id);
+      return task;
+    }));
+  }
+
+  private ensureAlive(): void {
+    if (this.disposed) throw new ReferenceError("TaskService is already disposed");
+  }
+
   private async packageManager(root: URI): Promise<"npm" | "pnpm" | "yarn"> {
     if (await this.exists(childResource(root, "pnpm-lock.yaml"))) return "pnpm";
     if (await this.exists(childResource(root, "yarn.lock"))) return "yarn";
     return "npm";
+  }
+
+  private async discoverWorkspaceTasks(root: URI): Promise<readonly IWorkspaceTask[]> {
+    const discovered: IWorkspaceTask[] = [];
+    const tasksJson = await this.readOptional(childResource(root, ".vscode/tasks.json"));
+    if (tasksJson !== undefined) discovered.push(...parseWorkspaceTasks(tasksJson));
+    const packageJson = await this.readOptional(childResource(root, "package.json"));
+    if (packageJson !== undefined) discovered.push(...parsePackageTasks(packageJson, await this.packageManager(root)));
+    if (await this.exists(childResource(root, "Cargo.toml"))) discovered.push(...cargoWorkspaceTasks());
+    return Object.freeze(discovered);
   }
 
   private async exists(resource: URI): Promise<boolean> {
@@ -106,6 +210,14 @@ export class TaskService extends DisposableOwner implements ITaskService {
     if (!await this.exists(resource)) return undefined;
     return (await this.fileService.readFile(resource)).content;
   }
+}
+
+function taskProviderId(task: IWorkspaceTask): string | undefined {
+  if (task.source !== "extension" || !task.id.startsWith("extension:")) return undefined;
+  const encoded = task.id.slice("extension:".length).split(":", 1)[0];
+  if (!encoded) return undefined;
+  try { return decodeURIComponent(encoded); }
+  catch { return undefined; }
 }
 
 class TaskRun extends DisposableOwner implements ITaskRun {
@@ -163,6 +275,37 @@ function deduplicateTasks(tasks: readonly IWorkspaceTask[]): readonly IWorkspace
   return Object.freeze([...unique.values()].sort((left, right) => taskOrder(left.group) - taskOrder(right.group) || left.label.localeCompare(right.label)));
 }
 
+function mergeTasks(discovered: readonly IWorkspaceTask[], provided: readonly IWorkspaceTask[]): readonly IWorkspaceTask[] {
+  const merged = new Map(deduplicateTasks(discovered).map(task => [task.id, task]));
+  for (const task of provided) {
+    if (merged.has(task.id)) throw new Error(`Workspace task '${task.id}' is already registered`);
+    merged.set(task.id, task);
+  }
+  return Object.freeze([...merged.values()].sort((left, right) => taskOrder(left.group) - taskOrder(right.group) || left.label.localeCompare(right.label)));
+}
+
+function normalizeTaskProvider(provider: TaskProvider): TaskProvider {
+  if (!provider || typeof provider !== "object") throw new TypeError("Task provider must be an object");
+  const id = normalizeText(provider.id, "Task provider ID", 256);
+  if (typeof provider.provideTasks !== "function") throw new TypeError(`Task provider '${id}' must implement provideTasks`);
+  return Object.freeze({ id, provideTasks: (signal: AbortSignal) => provider.provideTasks.call(provider, signal) });
+}
+
+function projectProviderTask(providerId: string, contribution: TaskProviderTask): IWorkspaceTask {
+  if (!contribution || typeof contribution !== "object") throw new TypeError(`Task provider '${providerId}' returned an invalid task`);
+  const id = normalizeText(contribution.id, `Task provider '${providerId}' task ID`, 256);
+  const label = normalizeText(contribution.label, `Task provider '${providerId}' task label`, 256);
+  const command = normalizeText(contribution.command, `Task provider '${providerId}' task command`, 32768, false);
+  if (!(["build", "test", "run", "other"] as const).includes(contribution.group)) throw new TypeError(`Task provider '${providerId}' task '${id}' has an invalid group`);
+  const detail = contribution.detail === undefined ? undefined : normalizeText(contribution.detail, `Task provider '${providerId}' task detail`, 4096, false);
+  return Object.freeze({ id: `extension:${encodeURIComponent(providerId)}:${encodeURIComponent(id)}`, label, command, source: "extension", group: contribution.group, ...(detail === undefined ? {} : { detail }) });
+}
+
+function normalizeText(value: string, owner: string, maximum: number, trim = true): string {
+  if (typeof value !== "string" || value.trim().length === 0 || value.length > maximum || value.includes("\0")) throw new TypeError(`${owner} must contain 1 to ${maximum} characters without NUL`);
+  return trim ? value.trim() : value;
+}
+
 function taskOrder(group: IWorkspaceTask["group"]): number {
   return group === "build" ? 0 : group === "test" ? 1 : group === "run" ? 2 : 3;
 }
@@ -171,9 +314,10 @@ function taskListsEqual(left: readonly IWorkspaceTask[], right: readonly IWorksp
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
-function assertKnownTask(task: IWorkspaceTask, tasks: readonly IWorkspaceTask[]): void {
+function resolveKnownTask(task: IWorkspaceTask, tasks: readonly IWorkspaceTask[]): IWorkspaceTask {
   const current = tasks.find(candidate => candidate.id === task.id);
   if (!current || current.command !== task.command) throw new Error("Task is no longer present in the current workspace configuration");
+  return current;
 }
 
 function substituteWorkspaceVariables(command: string, root: URI | undefined): string {

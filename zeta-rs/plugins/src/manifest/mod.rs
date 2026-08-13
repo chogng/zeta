@@ -1,6 +1,11 @@
+mod editor_extension;
 mod model;
 mod validation;
 
+pub use editor_extension::EditorExtensionActivationEvent;
+pub use editor_extension::EditorExtensionCapability;
+pub use editor_extension::EditorExtensionContribution;
+pub use editor_extension::EditorExtensionRuntimeApiVersion;
 pub use model::{
     AssetContribution, ConnectorContribution, ContributionKind, ContributionReference,
     CredentialKind, CredentialSlot, InvalidContributionReference, InvalidManifestLocalId,

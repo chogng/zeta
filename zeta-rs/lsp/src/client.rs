@@ -18,6 +18,7 @@ use tokio::io::{AsyncBufRead, AsyncReadExt, AsyncWrite, BufReader};
 use tokio::process::Child;
 use tokio::sync::Mutex;
 
+use crate::capability::DynamicCapabilityRegistry;
 use crate::document::OpenDocument;
 use crate::driver::{DriverCommand, DriverHandle, spawn_driver};
 use crate::raw_client::RawClient;
@@ -117,11 +118,13 @@ impl LanguageServerClient {
         W: AsyncWrite + Send + Unpin + 'static,
     {
         let intentional_stop = Arc::new(AtomicBool::new(false));
+        let dynamic_capabilities = DynamicCapabilityRegistry::default();
         let DriverHandle { commands, task } = spawn_driver(
             reader,
             writer,
             Arc::clone(&options.host),
             Arc::clone(&intentional_stop),
+            dynamic_capabilities.clone(),
         );
         let raw = RawClient::new(commands);
         #[allow(deprecated)]
@@ -185,6 +188,7 @@ impl LanguageServerClient {
             inner: Arc::new(ClientInner {
                 raw,
                 initialization,
+                dynamic_capabilities,
                 documents: Mutex::new(HashMap::new()),
                 process,
                 driver_task: Mutex::new(Some(task)),
@@ -197,6 +201,16 @@ impl LanguageServerClient {
 
     pub fn initialization(&self) -> &LanguageServerInitialization {
         &self.inner.initialization
+    }
+
+    /// Return the dynamic capability registrations retained for this server incarnation.
+    pub fn dynamic_capabilities(&self) -> crate::LanguageServerCapabilitySnapshot {
+        self.inner.dynamic_capabilities.snapshot()
+    }
+
+    /// Whether the current server incarnation dynamically registered a method.
+    pub fn supports_dynamic_method(&self, method: &str) -> bool {
+        self.inner.dynamic_capabilities.supports(method)
     }
 
     /// Send one typed LSP request using the negotiated normal-request deadline.
@@ -405,6 +419,7 @@ impl LanguageServerClient {
 struct ClientInner {
     raw: RawClient,
     initialization: LanguageServerInitialization,
+    dynamic_capabilities: DynamicCapabilityRegistry,
     documents: Mutex<HashMap<Uri, OpenDocument>>,
     process: Option<Arc<Mutex<Option<Child>>>>,
     driver_task: Mutex<Option<tokio::task::JoinHandle<()>>>,

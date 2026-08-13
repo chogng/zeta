@@ -161,11 +161,18 @@ import { getBrowserTextModelService } from "../../editor/browser/services/browse
 import { getBrowserTextResourceStore } from "../contrib/codeEditor/browser/browserTextResourceStore.js";
 import { AppServerLanguageProviders } from "../services/language/browser/appServerLanguageProviders.js";
 import { AppServerLanguageDiagnosticsService } from "../services/language/browser/appServerLanguageDiagnosticsService.js";
+import { AppServerLanguageServerStatusService } from "../services/language/browser/appServerLanguageServerStatusService.js";
+import { ILanguageServerStatusService } from "../services/language/common/languageServerStatusService.js";
 import { ILanguageDiagnosticsService } from "../services/language/common/languageDiagnosticsService.js";
 import { createWorkbenchSession, type WorkbenchSession } from "./workbenchSession.js";
 import { createEditorLineGutterDecorations } from "./parts/editor/editorGutterDecorations.js";
 import { installWorkbenchServiceContributions } from "./workbenchServiceContributions.js";
 import { WorkbenchInteractionServices } from "./workbenchInteractionServices.js";
+import { AppServerConnectionStateObserver } from "./appServerConnectionStateObserver.js";
+import { AppServerExtensionHostService } from "../services/extensionHost/browser/appServerExtensionHostService.js";
+import { IExtensionHostService } from "../services/extensionHost/common/extensionHostService.js";
+import { ITaskService } from "../services/tasks/common/taskService.js";
+import { ITestingService } from "../services/testing/common/testingService.js";
 
 /** Host-specific inputs required to construct a workbench. */
 export interface IStartWorkbenchOptions {
@@ -295,14 +302,14 @@ export class Workbench extends DisposableOwner {
     services.set(ILanguageDiagnosticsService, languageDiagnosticsService);
     const extensionService = this.own(new AppServerExtensionService({ api: api.extensions, textMateService, languageFeaturesService }));
     services.set(IExtensionService, extensionService);
-    void extensionService.start().catch(error => console.error("Declarative extension activation failed", error));
+    const extensionReady = extensionService.start();
+    void extensionReady.catch(error => console.error("Declarative extension activation failed", error));
     services.set(
       IWorkspaceSearchService,
       new BrowserWorkspaceSearchService(api.workspaceSearch),
     );
     const terminalService = this.own(new TerminalService(api.terminal));
     services.set(ITerminalService, terminalService);
-    installWorkbenchServiceContributions({ services, rendererHost: api, fileService, workspaceContext, terminalService, own: value => this.own(value) });
     const gitService = this.own(new GitService({ api: api.git, appServerApi: api.appServer, eventApi: api.events }));
     services.set(IGitService, gitService);
     const chatService = this.own(new ChatService({ modelApi: api.model, threadApi: api.thread, turnApi: api.turn, skillApi: api.skills, appServerApi: api.appServer, eventApi: api.events }));
@@ -351,6 +358,11 @@ export class Workbench extends DisposableOwner {
     this.workbenchWindow = workbenchWindow;
     this.storage = storage;
     services.set(IStorageService, storage);
+    installWorkbenchServiceContributions({ services, rendererHost: api, fileService, workspaceContext, terminalService, storageService: storage, own: value => this.own(value) });
+    const extensionHostService = this.own(new AppServerExtensionHostService({ api: api.extensionHost, languageFeatures: languageFeaturesService, tasks: services.get(ITaskService), testing: services.get(ITestingService) }));
+    services.set(IExtensionHostService, extensionHostService);
+    const extensionHostReady = extensionHostService.start();
+    void extensionHostReady.catch(error => console.error("Executable Extension Host activation failed", error));
     services.set(IAccessibleViewInformationService, this.own(new AccessibleViewInformationService(storage)));
     const themeService = this.own(new ThemeService(
       resolveWorkbenchColorTheme(
@@ -363,7 +375,8 @@ export class Workbench extends DisposableOwner {
     const updateTextMateTheme = (): void => {
       const model = textMateService.mutableScopeTheme;
       if (!model) return;
-      try { model.replace(projectExtensionTokenTheme(extensionService.themes.currentCatalog, themeService.getColorTheme().colorScheme, ++textMateThemeRevision)); }
+      const activeTheme = themeService.getColorTheme();
+      try { model.replace(projectExtensionTokenTheme(extensionService.themes.currentCatalog, activeTheme.colorScheme, ++textMateThemeRevision, activeTheme.id)); }
       catch (error) { console.error("Failed to apply extension token theme", error); }
     };
     this.own(extensionService.themes.onDidChange(() => updateTextMateTheme()));
@@ -373,11 +386,12 @@ export class Workbench extends DisposableOwner {
       IFileIconThemeService,
       this.own(new SetiFileIconThemeService(themeService)),
     );
-    this.own(new WorkbenchThemeController(
+    const workbenchThemeController = this.own(new WorkbenchThemeController(
       configuration,
       themeService,
       ownerWindow,
     ));
+    this.own(extensionService.onDidChange(() => workbenchThemeController.refresh()));
     this.own(bindColorTheme(themeService, workbenchRoot));
     const statusbarService = this.own(new StatusbarService());
     services.set(IStatusbarService, statusbarService);
@@ -388,20 +402,28 @@ export class Workbench extends DisposableOwner {
         alignment: StatusbarAlignment.Left,
       },
     ));
-    const connectionStateSubscription = api.appServer.onConnectionState(
-      (state) => connectionStatus.update(appServerStatusEntry(state)),
-    );
-    this.defer(() => connectionStateSubscription.dispose());
-    void Promise.resolve()
-      .then(() => api.appServer.getConnectionState())
-      .then((state) => connectionStatus.update(appServerStatusEntry(state)))
-      .catch((error: unknown) => {
+    let previousConnectionState: AppServerConnectionState | undefined;
+    const handleConnectionState = (state: AppServerConnectionState): void => {
+      connectionStatus.update(appServerStatusEntry(state));
+      const previous = previousConnectionState;
+      previousConnectionState = state;
+      if (state === "ready" && previous !== undefined && previous !== "ready") {
+        void extensionService.reload().catch(error => console.error("Declarative extension refresh after App Server recovery failed", error));
+      }
+    };
+    this.own(new AppServerConnectionStateObserver({
+      api: api.appServer,
+      onState: handleConnectionState,
+      onReadError: (error: unknown) => {
         console.error("Failed to read App Server connection state", error);
-        connectionStatus.update(appServerStatusEntry("crashed"));
-      });
+        handleConnectionState("crashed");
+      },
+    }));
     const dialogService = this.own(new DialogService());
     services.set(IDialogService, dialogService);
     services.set(IDialogsModel, dialogService.model);
+    const languageServerStatusService = this.own(new AppServerLanguageServerStatusService(api.events, dialogService, statusbarService));
+    services.set(ILanguageServerStatusService, languageServerStatusService);
     services.set(
       IWorkbenchDialogHandler,
       new BrowserDialogHandler(workbenchRoot),
@@ -701,13 +723,15 @@ export class Workbench extends DisposableOwner {
     void sessionService.initialize();
     contributions.advance(WorkbenchPhase.BlockRestore);
     layoutService.layout();
-    this.whenRestored = this.completeStartupRestoration(workingCopyBackups, editor, contributions);
+    this.whenRestored = this.completeStartupRestoration([extensionReady, extensionHostReady], workingCopyBackups, editor, contributions);
     this.defer(() => {
       void storage.flush(WillSaveStateReason.SHUTDOWN);
     });
   }
 
-  private async completeStartupRestoration(backups: IWorkingCopyBackupService, editor: EditorPart, contributions: WorkbenchContributionHost): Promise<void> {
+  private async completeStartupRestoration(extensionReady: readonly Promise<void>[], backups: IWorkingCopyBackupService, editor: EditorPart, contributions: WorkbenchContributionHost): Promise<void> {
+    await Promise.allSettled(extensionReady);
+    if (this.disposed) return;
     await this.restoreWorkingCopyBackups(backups, editor);
     if (this.disposed) return;
     contributions.advance(WorkbenchPhase.AfterRestored);

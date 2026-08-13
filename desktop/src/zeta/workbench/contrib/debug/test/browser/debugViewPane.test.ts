@@ -1,0 +1,116 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { JSDOM } from "jsdom";
+import { Emitter } from "../../../../../base/common/event.js";
+import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
+import { type IEditorPart } from "../../../../browser/parts/editor/editorPart.js";
+import { type DebugEvaluateContext, type DebugSessionState, type IDebugBreakpoint, type IDebugCompound, type IDebugConfiguration, type IDebugEvaluateResult, type IDebugScope, type IDebugService, type IDebugSession, type IDebugSource, type IDebugSourceContent, type IDebugStackFrame, type IDebugThread, type IDebugVariable } from "../../../../services/debug/common/debugService.js";
+
+test("Debug view switches sessions and renders threads, recursive variables, watches, source references, and REPL", async () => {
+  const browser = new JSDOM("<!doctype html><body></body>");
+  const installedGlobals = installDomGlobals(browser);
+  const opened: unknown[] = [];
+  const editor = { openEditor: async (input: Parameters<IEditorPart["openEditor"]>[0]) => { opened.push(input); return {}; } } as IEditorPart;
+  try {
+    const { DebugViewPane } = await import("../../browser/debugViewPane.js");
+    using debug = new FakeDebugService();
+    using view = new DebugViewPane({ id: "zeta.debug.test", title: "Debug", ownerDocument: browser.window.document }, debug, editor);
+    browser.window.document.body.append(view.element);
+    debug.activate(debug.sessions[0]!);
+    await waitFor(() => view.element.querySelectorAll(".zeta-debug-frame").length === 1);
+
+    assert.equal(view.element.querySelectorAll("select[aria-label='Active debug session'] option").length, 2);
+    assert.equal(view.element.querySelectorAll("select[aria-label='Debug thread'] option").length, 2);
+    assert.match(view.element.querySelector(".zeta-debug-watch-value")?.textContent ?? "", /answer = 42/);
+    assert.match(view.element.querySelectorAll(".zeta-debug-variable")[1]?.textContent ?? "", /parent/);
+
+    (view.element.querySelectorAll<HTMLButtonElement>(".zeta-debug-variable")[1]!).click();
+    await waitFor(() => [...view.element.querySelectorAll(".zeta-debug-variable")].some(element => /child = value/.test(element.textContent ?? "")));
+
+    (view.element.querySelector<HTMLButtonElement>(".zeta-debug-frame")!).click();
+    await waitFor(() => opened.length === 1);
+    const openedInput = opened[0] as Parameters<IEditorPart["openEditor"]>[0];
+    assert.equal(openedInput.resource.scheme, "debug-source");
+    assert.deepEqual({ ...openedInput, resource: undefined }, { resource: undefined, label: "generated.ts", contentType: "text/typescript", readOnly: true, initialText: "const generated = true;" });
+
+    const consoleInput = view.element.querySelector<HTMLInputElement>("input[aria-label='Debug console expression']")!;
+    consoleInput.value = "answer";
+    consoleInput.form!.dispatchEvent(new browser.window.Event("submit", { bubbles: true, cancelable: true }));
+    await waitFor(() => /42/.test(view.element.querySelector(".zeta-debug-output")?.textContent ?? ""));
+
+    const caught = view.element.querySelector<HTMLInputElement>("input[data-exception-filter='caught']")!;
+    caught.checked = true;
+    caught.dispatchEvent(new browser.window.Event("change", { bubbles: true }));
+    await waitFor(() => debug.exceptionBreakpoints.includes("caught"));
+  } finally {
+    for (const name of installedGlobals) Reflect.deleteProperty(globalThis, name);
+    browser.window.close();
+  }
+});
+
+class FakeDebugService extends DisposableOwner implements IDebugService {
+  private readonly configurationEmitter = this.own(new Emitter<readonly IDebugConfiguration[]>());
+  private readonly breakpointEmitter = this.own(new Emitter<readonly IDebugBreakpoint[]>());
+  private readonly watchEmitter = this.own(new Emitter<readonly string[]>());
+  private readonly exceptionEmitter = this.own(new Emitter<readonly string[]>());
+  private readonly sessionEmitter = this.own(new Emitter<IDebugSession | undefined>());
+  readonly configurations = Object.freeze([configuration("One")]);
+  readonly compounds: readonly IDebugCompound[] = Object.freeze([]);
+  readonly breakpoints: readonly IDebugBreakpoint[] = Object.freeze([]);
+  readonly watchExpressions = Object.freeze(["answer"]);
+  exceptionBreakpoints: readonly string[] = Object.freeze(["uncaught"]);
+  readonly sessions: readonly IDebugSession[];
+  session: IDebugSession | undefined;
+  readonly onDidChangeConfigurations = this.configurationEmitter.event;
+  readonly onDidChangeBreakpoints = this.breakpointEmitter.event;
+  readonly onDidChangeWatchExpressions = this.watchEmitter.event;
+  readonly onDidChangeExceptionBreakpoints = this.exceptionEmitter.event;
+  readonly onDidChangeSession = this.sessionEmitter.event;
+  constructor() { super(); this.sessions = Object.freeze([this.own(new FakeDebugSession("session-one", "One")), this.own(new FakeDebugSession("session-two", "Two"))]); }
+  async refresh() { return this.configurations; }
+  async start() { return this.sessions[0]!; }
+  async startCompound() { return this.sessions; }
+  setActiveSession(session: IDebugSession): void { this.activate(session); }
+  async restart(session = this.session) { return session!; }
+  async stop() {}
+  async stopAll() {}
+  toggleBreakpoint() {}
+  removeBreakpoint() {}
+  addWatchExpression() {}
+  removeWatchExpression() {}
+  async setExceptionBreakpoints(filters: readonly string[]) { this.exceptionBreakpoints = Object.freeze([...filters]); this.exceptionEmitter.fire(this.exceptionBreakpoints); }
+  activate(session: IDebugSession): void { this.session = session; this.sessionEmitter.fire(session); }
+}
+
+class FakeDebugSession extends DisposableOwner implements IDebugSession {
+  private readonly stateEmitter = this.own(new Emitter<DebugSessionState>());
+  private readonly outputEmitter = this.own(new Emitter<string>());
+  private selectedThread = 1;
+  readonly configuration: IDebugConfiguration;
+  readonly capabilities = Object.freeze({ supportsRestart: true, supportsTerminate: true, exceptionBreakpointFilters: Object.freeze([{ filter: "uncaught", label: "Uncaught", default: true }, { filter: "caught", label: "Caught", default: false }]) });
+  readonly state: DebugSessionState = "stopped";
+  readonly reason = "breakpoint";
+  readonly onDidChangeState = this.stateEmitter.event;
+  readonly onDidOutput = this.outputEmitter.event;
+  constructor(readonly id: string, name: string) { super(); this.configuration = configuration(name); }
+  get threadId() { return this.selectedThread; }
+  async continue() {}
+  async pause() {}
+  async stepOver() {}
+  async stepInto() {}
+  async stepOut() {}
+  async restart() {}
+  async threads(): Promise<readonly IDebugThread[]> { return Object.freeze([{ id: 1, name: "main" }, { id: 2, name: "worker" }]); }
+  selectThread(threadId: number): void { this.selectedThread = threadId; }
+  async stackTrace(): Promise<readonly IDebugStackFrame[]> { return Object.freeze([{ id: 10, name: "main", source: { name: "generated.ts", sourceReference: 33 }, lineNumber: 1, columnNumber: 1 }]); }
+  async scopes(): Promise<readonly IDebugScope[]> { return Object.freeze([{ name: "Locals", variablesReference: 20, expensive: false }]); }
+  async variables(reference: number): Promise<readonly IDebugVariable[]> { return reference === 20 ? Object.freeze([{ name: "parent", value: "Object", variablesReference: 21 }]) : Object.freeze([{ name: "child", value: "value", variablesReference: 0 }]); }
+  async evaluate(_expression: string, _frameId: number | undefined, _context: DebugEvaluateContext): Promise<IDebugEvaluateResult> { return { result: "42", type: "number", variablesReference: 0 }; }
+  async source(_source: IDebugSource): Promise<IDebugSourceContent> { return { content: "const generated = true;", mimeType: "text/typescript" }; }
+  async setExceptionBreakpoints() {}
+  async disconnect() {}
+}
+
+function configuration(name: string): IDebugConfiguration { return { id: name, name, type: "demo", request: "launch", adapter: { program: "adapter", arguments: [] }, arguments: {} }; }
+async function waitFor(predicate: () => boolean): Promise<void> { const deadline = Date.now() + 2_000; while (!predicate()) { if (Date.now() > deadline) throw new Error("Timed out waiting for Debug view"); await new Promise(resolve => setTimeout(resolve, 10)); } }
+function installDomGlobals(browser: JSDOM): readonly string[] { const globals = { window: browser.window, document: browser.window.document, Node: browser.window.Node, Element: browser.window.Element, HTMLElement: browser.window.HTMLElement, Event: browser.window.Event, MouseEvent: browser.window.MouseEvent, navigator: browser.window.navigator }; for (const [name, value] of Object.entries(globals)) Object.defineProperty(globalThis, name, { configurable: true, value }); return Object.keys(globals); }

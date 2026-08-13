@@ -29,7 +29,7 @@ export class WorkbenchThemeController extends DisposableOwner {
 
     this.own(configurationService.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration(WorkbenchConfiguration.colorTheme)) {
-        this.apply();
+        this.refresh();
       }
     }));
     const handleSystemSchemeChange = (): void => {
@@ -38,7 +38,7 @@ export class WorkbenchThemeController extends DisposableOwner {
           WorkbenchConfiguration.colorTheme,
         ) === SystemColorThemePreference
       ) {
-        this.apply();
+        this.refresh();
       }
     };
     this.systemDarkQuery.addEventListener(
@@ -51,13 +51,17 @@ export class WorkbenchThemeController extends DisposableOwner {
         handleSystemSchemeChange,
       );
     }));
-    this.apply();
+    this.refresh();
   }
 
-  private apply(): void {
-    this.themeService.setColorTheme(resolveWorkbenchColorTheme(
-      this.configurationService.getValue(WorkbenchConfiguration.colorTheme),
-      this.systemDarkQuery.matches,
-    ));
+  /** Re-resolves the persisted ID after dynamic theme contributions change. */
+  refresh(): void {
+    const preference = this.configurationService.getValue(WorkbenchConfiguration.colorTheme);
+    try {
+      this.themeService.setColorTheme(resolveWorkbenchColorTheme(preference, this.systemDarkQuery.matches));
+    } catch (error) {
+      if (preference === SystemColorThemePreference) throw error;
+      this.themeService.setColorTheme(resolveWorkbenchColorTheme(SystemColorThemePreference, this.systemDarkQuery.matches));
+    }
   }
 }

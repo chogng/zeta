@@ -957,10 +957,15 @@
         "WorkspaceSwitchFailed",
         "WorkspaceTrustRequired",
         "ExtensionsUnavailable",
+        "ExtensionGenerationConflict",
         "ExtensionNotFound",
         "ExtensionResourceNotFound",
         "ExtensionResourceInvalidPath",
-        "ExtensionOperationFailed"
+        "ExtensionOperationFailed",
+        "ExtensionHostUnavailable",
+        "ExtensionHostStale",
+        "ExtensionHostInvocationNotFound",
+        "ExtensionHostQuotaExceeded"
       ]
     },
     "ApprovalMode": {
@@ -2280,6 +2285,86 @@
           "properties": {
             "method": {
               "type": "string",
+              "const": "extensionHost/list"
+            },
+            "params": {
+              "$ref": "#/$defs/EmptyParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "extensionHost/reconcile"
+            },
+            "params": {
+              "$ref": "#/$defs/ExtensionHostReconcileParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "extensionHost/invoke/start"
+            },
+            "params": {
+              "$ref": "#/$defs/ExtensionHostInvokeStartParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "extensionHost/invoke/read"
+            },
+            "params": {
+              "$ref": "#/$defs/ExtensionHostInvokeReadParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "extensionHost/invoke/cancel"
+            },
+            "params": {
+              "$ref": "#/$defs/ExtensionHostInvokeCancelParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
               "const": "document/typst/compile"
             },
             "params": {
@@ -2584,6 +2669,70 @@
           "properties": {
             "method": {
               "type": "string",
+              "const": "language/resolveCompletion"
+            },
+            "params": {
+              "$ref": "#/$defs/LanguageResolveCompletionParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "language/executeCommand"
+            },
+            "params": {
+              "$ref": "#/$defs/LanguageExecuteCommandParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "language/documentDiagnostics"
+            },
+            "params": {
+              "$ref": "#/$defs/LanguageDocumentDiagnosticsParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "language/workspaceDiagnostics"
+            },
+            "params": {
+              "$ref": "#/$defs/LanguageWorkspaceDiagnosticsParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
               "const": "language/locations"
             },
             "params": {
@@ -2764,6 +2913,150 @@
             },
             "params": {
               "$ref": "#/$defs/LanguageLinkedEditingRangesParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "language/semanticTokens"
+            },
+            "params": {
+              "$ref": "#/$defs/LanguageSemanticTokensParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "language/documentSymbols"
+            },
+            "params": {
+              "$ref": "#/$defs/LanguageDocumentFeaturesParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "language/codeLenses"
+            },
+            "params": {
+              "$ref": "#/$defs/LanguageDocumentFeaturesParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "language/resolveCodeLens"
+            },
+            "params": {
+              "$ref": "#/$defs/LanguageResolveCodeLensParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "language/documentLinks"
+            },
+            "params": {
+              "$ref": "#/$defs/LanguageDocumentFeaturesParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "language/resolveDocumentLink"
+            },
+            "params": {
+              "$ref": "#/$defs/LanguageResolveDocumentLinkParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "language/documentColors"
+            },
+            "params": {
+              "$ref": "#/$defs/LanguageDocumentFeaturesParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "language/colorPresentations"
+            },
+            "params": {
+              "$ref": "#/$defs/LanguageColorPresentationsParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "language/foldingRanges"
+            },
+            "params": {
+              "$ref": "#/$defs/LanguageDocumentFeaturesParams"
             }
           },
           "required": [
@@ -4492,6 +4785,86 @@
           "properties": {
             "method": {
               "type": "string",
+              "const": "extensionHost/list"
+            },
+            "result": {
+              "$ref": "#/$defs/ExtensionHostSnapshotDto"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "extensionHost/reconcile"
+            },
+            "result": {
+              "$ref": "#/$defs/ExtensionHostSnapshotDto"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "extensionHost/invoke/start"
+            },
+            "result": {
+              "$ref": "#/$defs/ExtensionHostInvokeStartResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "extensionHost/invoke/read"
+            },
+            "result": {
+              "$ref": "#/$defs/ExtensionHostInvokeReadResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "extensionHost/invoke/cancel"
+            },
+            "result": {
+              "$ref": "#/$defs/ExtensionHostInvokeCancelResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
               "const": "document/typst/compile"
             },
             "result": {
@@ -4796,6 +5169,70 @@
           "properties": {
             "method": {
               "type": "string",
+              "const": "language/resolveCompletion"
+            },
+            "result": {
+              "$ref": "#/$defs/LanguageCompletionDetailsResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "language/executeCommand"
+            },
+            "result": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "language/documentDiagnostics"
+            },
+            "result": {
+              "$ref": "#/$defs/LanguageDocumentDiagnosticsResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "language/workspaceDiagnostics"
+            },
+            "result": {
+              "$ref": "#/$defs/LanguageWorkspaceDiagnosticsResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
               "const": "language/locations"
             },
             "result": {
@@ -4976,6 +5413,150 @@
             },
             "result": {
               "$ref": "#/$defs/LanguageLinkedEditingRangesResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "language/semanticTokens"
+            },
+            "result": {
+              "$ref": "#/$defs/LanguageSemanticTokensResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "language/documentSymbols"
+            },
+            "result": {
+              "$ref": "#/$defs/LanguageDocumentSymbolsResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "language/codeLenses"
+            },
+            "result": {
+              "$ref": "#/$defs/LanguageCodeLensesResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "language/resolveCodeLens"
+            },
+            "result": {
+              "$ref": "#/$defs/LanguageCodeLensesResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "language/documentLinks"
+            },
+            "result": {
+              "$ref": "#/$defs/LanguageDocumentLinksResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "language/resolveDocumentLink"
+            },
+            "result": {
+              "$ref": "#/$defs/LanguageDocumentLinksResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "language/documentColors"
+            },
+            "result": {
+              "$ref": "#/$defs/LanguageDocumentColorsResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "language/colorPresentations"
+            },
+            "result": {
+              "$ref": "#/$defs/LanguageColorPresentationsResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "language/foldingRanges"
+            },
+            "result": {
+              "$ref": "#/$defs/LanguageFoldingRangesResult"
             }
           },
           "required": [
@@ -8412,6 +8993,9 @@
         "name": {
           "type": "string"
         },
+        "packageSha256": {
+          "type": "string"
+        },
         "publisher": {
           "type": "string"
         },
@@ -8430,7 +9014,548 @@
         "displayName",
         "sourceKind",
         "manifestJson",
-        "manifestSha256"
+        "manifestSha256",
+        "packageSha256"
+      ]
+    },
+    "ExtensionHostCancellationReasonDto": {
+      "description": "Observable reason why an invocation reached the cancelled terminal state.",
+      "type": "string",
+      "enum": [
+        "caller",
+        "deadline",
+        "authorityRevoked",
+        "shutdown"
+      ]
+    },
+    "ExtensionHostChanged": {
+      "description": "Notification that a newer complete Extension Host fleet generation is available.",
+      "type": "object",
+      "properties": {
+        "generation": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 1
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "generation"
+      ]
+    },
+    "ExtensionHostExtensionDto": {
+      "description": "One exact package contribution and its current process lifecycle.",
+      "type": "object",
+      "properties": {
+        "activationGeneration": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 1
+        },
+        "failure": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExtensionHostFailureDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "id": {
+          "type": "string",
+          "maxLength": 256,
+          "minLength": 1
+        },
+        "incarnation": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "lifecycle": {
+          "$ref": "#/$defs/ExtensionHostLifecycleDto"
+        },
+        "packageDigest": {
+          "type": "string",
+          "maxLength": 71,
+          "minLength": 71
+        },
+        "registrations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ExtensionHostRegistrationDescriptorDto"
+          },
+          "maxItems": 2048
+        },
+        "runtimeApiVersion": {
+          "type": "integer",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 1
+        },
+        "version": {
+          "type": "string",
+          "maxLength": 128,
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "version",
+        "packageDigest",
+        "runtimeApiVersion",
+        "activationGeneration",
+        "lifecycle",
+        "registrations"
+      ]
+    },
+    "ExtensionHostFailureCodeDto": {
+      "description": "Stable failure categories shared by runtime health and invocation outcomes.",
+      "type": "string",
+      "enum": [
+        "authorityDenied",
+        "staleSnapshot",
+        "isolationUnavailable",
+        "launchFailed",
+        "handshakeFailed",
+        "activationFailed",
+        "registrationNotFound",
+        "operationNotSupported",
+        "cancelled",
+        "deadlineExceeded",
+        "quotaExceeded",
+        "hostExited",
+        "hostRestarted",
+        "outcomeIndeterminate",
+        "crashLoop",
+        "invalidProtocol",
+        "internal"
+      ]
+    },
+    "ExtensionHostFailureDto": {
+      "description": "Sanitized failure attached to one extension lifecycle snapshot.",
+      "type": "object",
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/ExtensionHostFailureCodeDto"
+        },
+        "incarnation": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "message": {
+          "type": "string",
+          "maxLength": 4096,
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "message"
+      ]
+    },
+    "ExtensionHostInvokeCancelDispositionDto": {
+      "type": "string",
+      "enum": [
+        "requested",
+        "alreadyTerminal"
+      ]
+    },
+    "ExtensionHostInvokeCancelParams": {
+      "description": "Requests cancellation of one connection-owned provider invocation.",
+      "type": "object",
+      "properties": {
+        "invocationId": {
+          "type": "string",
+          "maxLength": 256,
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "invocationId"
+      ]
+    },
+    "ExtensionHostInvokeCancelResult": {
+      "description": "Whether cancellation was newly requested or the session was already terminal.",
+      "type": "object",
+      "properties": {
+        "disposition": {
+          "$ref": "#/$defs/ExtensionHostInvokeCancelDispositionDto"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "disposition"
+      ]
+    },
+    "ExtensionHostInvokeReadParams": {
+      "description": "Reads one invocation state. A terminal read releases the connection-owned session.",
+      "type": "object",
+      "properties": {
+        "invocationId": {
+          "type": "string",
+          "maxLength": 256,
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "invocationId"
+      ]
+    },
+    "ExtensionHostInvokeReadResult": {
+      "description": "Non-blocking result of polling one provider invocation.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "pending"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "state"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "payload": true,
+            "state": {
+              "type": "string",
+              "const": "succeeded"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "state",
+            "payload"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "code": {
+              "$ref": "#/$defs/ExtensionHostFailureCodeDto"
+            },
+            "message": {
+              "type": "string",
+              "maxLength": 4096,
+              "minLength": 1
+            },
+            "state": {
+              "type": "string",
+              "const": "failed"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "state",
+            "code",
+            "message"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "reason": {
+              "$ref": "#/$defs/ExtensionHostCancellationReasonDto"
+            },
+            "state": {
+              "type": "string",
+              "const": "cancelled"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "state",
+            "reason"
+          ]
+        }
+      ]
+    },
+    "ExtensionHostInvokeStartParams": {
+      "description": "Starts one non-blocking provider invocation fenced to an exact runtime snapshot.",
+      "type": "object",
+      "properties": {
+        "activationGeneration": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 1
+        },
+        "deadlineUnixMillis": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 1
+        },
+        "extensionId": {
+          "type": "string",
+          "maxLength": 256,
+          "minLength": 1
+        },
+        "incarnation": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 1
+        },
+        "operation": {
+          "type": "string",
+          "maxLength": 128,
+          "minLength": 1
+        },
+        "payload": true,
+        "registrationId": {
+          "type": "string",
+          "maxLength": 256,
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "extensionId",
+        "registrationId",
+        "activationGeneration",
+        "incarnation",
+        "operation",
+        "payload",
+        "deadlineUnixMillis"
+      ]
+    },
+    "ExtensionHostInvokeStartResult": {
+      "description": "Opaque connection-owned identity allocated without waiting for the provider result.",
+      "type": "object",
+      "properties": {
+        "invocationId": {
+          "type": "string",
+          "maxLength": 256,
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "invocationId"
+      ]
+    },
+    "ExtensionHostLanguageProviderOperationDto": {
+      "description": "Language provider operations supported by the v1 invocation broker seam.",
+      "type": "string",
+      "enum": [
+        "completion",
+        "parameterHints",
+        "definition",
+        "hover",
+        "references",
+        "rename",
+        "formatting",
+        "codeAction",
+        "codeLens",
+        "documentSymbols",
+        "foldingRanges",
+        "documentLinks",
+        "documentColors",
+        "semanticTokens",
+        "inlayHints",
+        "linkedEditing"
+      ]
+    },
+    "ExtensionHostLifecycleDto": {
+      "description": "Observable state of one per-extension process supervised by App Server.",
+      "type": "string",
+      "enum": [
+        "stopped",
+        "starting",
+        "handshaking",
+        "ready",
+        "recovering",
+        "crashLoop",
+        "failed"
+      ]
+    },
+    "ExtensionHostReconcileModeDto": {
+      "description": "Selects whether reconciliation refreshes authority or retries failed runtimes as well.",
+      "type": "string",
+      "enum": [
+        "refresh",
+        "restartFailed"
+      ]
+    },
+    "ExtensionHostReconcileParams": {
+      "description": "Requests a complete reconciliation of the executable Editor Extension fleet.",
+      "type": "object",
+      "properties": {
+        "mode": {
+          "$ref": "#/$defs/ExtensionHostReconcileModeDto"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "mode"
+      ]
+    },
+    "ExtensionHostRegistrationDescriptorDto": {
+      "description": "One provider registration published atomically by an activated extension process.",
+      "type": "object",
+      "properties": {
+        "registrationId": {
+          "type": "string",
+          "maxLength": 256,
+          "minLength": 1
+        }
+      },
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "command": {
+              "type": "string",
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "kind": {
+              "type": "string",
+              "const": "command"
+            },
+            "title": {
+              "type": "string",
+              "maxLength": 512,
+              "minLength": 1
+            }
+          },
+          "required": [
+            "kind",
+            "command",
+            "title"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "languageProvider"
+            },
+            "languageIds": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 64,
+              "minItems": 1
+            },
+            "operations": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ExtensionHostLanguageProviderOperationDto"
+              },
+              "maxItems": 32,
+              "minItems": 1
+            }
+          },
+          "required": [
+            "kind",
+            "languageIds",
+            "operations"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "debuggerType": {
+              "type": "string",
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "kind": {
+              "type": "string",
+              "const": "debugAdapter"
+            }
+          },
+          "required": [
+            "kind",
+            "debuggerType"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "taskProvider"
+            },
+            "taskType": {
+              "type": "string",
+              "maxLength": 256,
+              "minLength": 1
+            }
+          },
+          "required": [
+            "kind",
+            "taskType"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "testProfileProvider"
+            },
+            "label": {
+              "type": "string",
+              "maxLength": 512,
+              "minLength": 1
+            },
+            "providerId": {
+              "type": "string",
+              "maxLength": 256,
+              "minLength": 1
+            }
+          },
+          "required": [
+            "kind",
+            "providerId",
+            "label"
+          ]
+        }
+      ],
+      "required": [
+        "registrationId"
+      ],
+      "unevaluatedProperties": false
+    },
+    "ExtensionHostSnapshotDto": {
+      "description": "Immutable projection of one complete executable Editor Extension fleet generation.",
+      "type": "object",
+      "properties": {
+        "extensions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ExtensionHostExtensionDto"
+          },
+          "maxItems": 128
+        },
+        "generation": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 1
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "generation",
+        "extensions"
       ]
     },
     "ExtensionListParams": {
@@ -8475,11 +9600,17 @@
         "extensionId": {
           "type": "string"
         },
+        "generation": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
         "path": {
           "type": "string"
         }
       },
       "required": [
+        "generation",
         "extensionId",
         "path"
       ]
@@ -9969,6 +11100,196 @@
         "actions"
       ]
     },
+    "LanguageCodeLensDto": {
+      "type": "object",
+      "properties": {
+        "command": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LanguageCommandDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "providerData": true,
+        "range": {
+          "$ref": "#/$defs/LanguageRangeDto"
+        }
+      },
+      "required": [
+        "range"
+      ]
+    },
+    "LanguageCodeLensesResult": {
+      "type": "object",
+      "properties": {
+        "lenses": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LanguageCodeLensDto"
+          }
+        },
+        "revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "revision",
+        "lenses"
+      ]
+    },
+    "LanguageColorDto": {
+      "type": "object",
+      "properties": {
+        "alpha": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "blue": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "green": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "red": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        }
+      },
+      "required": [
+        "red",
+        "green",
+        "blue",
+        "alpha"
+      ]
+    },
+    "LanguageColorPresentationDto": {
+      "type": "object",
+      "properties": {
+        "additionalTextEdits": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LanguageTextEditDto"
+          }
+        },
+        "label": {
+          "type": "string"
+        },
+        "textEdit": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LanguageTextEditDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "label",
+        "additionalTextEdits"
+      ]
+    },
+    "LanguageColorPresentationsParams": {
+      "type": "object",
+      "properties": {
+        "color": {
+          "$ref": "#/$defs/LanguageColorDto"
+        },
+        "document": {
+          "$ref": "#/$defs/LanguageDocumentDto"
+        },
+        "range": {
+          "$ref": "#/$defs/LanguageRangeDto"
+        }
+      },
+      "required": [
+        "document",
+        "range",
+        "color"
+      ]
+    },
+    "LanguageColorPresentationsResult": {
+      "type": "object",
+      "properties": {
+        "presentations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LanguageColorPresentationDto"
+          }
+        },
+        "revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "revision",
+        "presentations"
+      ]
+    },
+    "LanguageCommandDto": {
+      "type": "object",
+      "properties": {
+        "arguments": {
+          "type": "array",
+          "items": true
+        },
+        "id": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "arguments"
+      ]
+    },
+    "LanguageCompletionDetailsResult": {
+      "description": "Presentation details added by `completionItem/resolve`.",
+      "type": "object",
+      "properties": {
+        "detail": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "documentation": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "revision"
+      ]
+    },
     "LanguageCompletionInsertTextFormatDto": {
       "description": "Whether completion insertion text is literal text or snippet syntax.",
       "type": "string",
@@ -9981,6 +11302,22 @@
       "description": "One bounded completion candidate with one safe primary document edit.",
       "type": "object",
       "properties": {
+        "additionalTextEdits": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LanguageTextEditDto"
+          }
+        },
+        "command": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LanguageCommandDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "commitCharacters": {
           "type": "array",
           "items": {
@@ -10023,6 +11360,7 @@
             "null"
           ]
         },
+        "providerData": true,
         "range": {
           "$ref": "#/$defs/LanguageRangeDto"
         },
@@ -10039,7 +11377,8 @@
         "commitCharacters",
         "insertTextFormat",
         "range",
-        "insertText"
+        "insertText",
+        "additionalTextEdits"
       ]
     },
     "LanguageCompletionItemKindDto": {
@@ -10106,6 +11445,9 @@
       "description": "Fresh completion candidates for exactly one source document revision.",
       "type": "object",
       "properties": {
+        "canResolve": {
+          "type": "boolean"
+        },
         "isIncomplete": {
           "type": "boolean"
         },
@@ -10124,7 +11466,16 @@
       "required": [
         "revision",
         "isIncomplete",
+        "canResolve",
         "items"
+      ]
+    },
+    "LanguageDiagnosticReportKindDto": {
+      "description": "Whether a pull request replaced diagnostics or confirmed the current report.",
+      "type": "string",
+      "enum": [
+        "full",
+        "unchanged"
       ]
     },
     "LanguageDiagnosticSeverityDto": {
@@ -10161,6 +11512,78 @@
         "diagnostics"
       ]
     },
+    "LanguageDocumentColorDto": {
+      "type": "object",
+      "properties": {
+        "color": {
+          "$ref": "#/$defs/LanguageColorDto"
+        },
+        "range": {
+          "$ref": "#/$defs/LanguageRangeDto"
+        }
+      },
+      "required": [
+        "range",
+        "color"
+      ]
+    },
+    "LanguageDocumentColorsResult": {
+      "type": "object",
+      "properties": {
+        "colors": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LanguageDocumentColorDto"
+          }
+        },
+        "revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "revision",
+        "colors"
+      ]
+    },
+    "LanguageDocumentDiagnosticsParams": {
+      "description": "Pull diagnostics against exactly one submitted document revision.",
+      "type": "object",
+      "properties": {
+        "document": {
+          "$ref": "#/$defs/LanguageDocumentDto"
+        }
+      },
+      "required": [
+        "document"
+      ]
+    },
+    "LanguageDocumentDiagnosticsResult": {
+      "description": "Fresh pull-diagnostic result for exactly one source document revision.",
+      "type": "object",
+      "properties": {
+        "diagnostics": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LanguageCodeActionDiagnosticDto"
+          }
+        },
+        "kind": {
+          "$ref": "#/$defs/LanguageDiagnosticReportKindDto"
+        },
+        "revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "revision",
+        "kind",
+        "diagnostics"
+      ]
+    },
     "LanguageDocumentDto": {
       "description": "Authoritative source snapshot submitted before one language request.",
       "type": "object",
@@ -10188,6 +11611,17 @@
         "text"
       ]
     },
+    "LanguageDocumentFeaturesParams": {
+      "type": "object",
+      "properties": {
+        "document": {
+          "$ref": "#/$defs/LanguageDocumentDto"
+        }
+      },
+      "required": [
+        "document"
+      ]
+    },
     "LanguageDocumentFormattingParams": {
       "description": "Whole-document formatting against one exact editor snapshot.",
       "type": "object",
@@ -10202,6 +11636,187 @@
       "required": [
         "document",
         "options"
+      ]
+    },
+    "LanguageDocumentLinkDto": {
+      "type": "object",
+      "properties": {
+        "providerData": true,
+        "range": {
+          "$ref": "#/$defs/LanguageRangeDto"
+        },
+        "target": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tooltip": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "range"
+      ]
+    },
+    "LanguageDocumentLinksResult": {
+      "type": "object",
+      "properties": {
+        "links": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LanguageDocumentLinkDto"
+          }
+        },
+        "revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "revision",
+        "links"
+      ]
+    },
+    "LanguageDocumentSymbolDto": {
+      "type": "object",
+      "properties": {
+        "children": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LanguageDocumentSymbolDto"
+          }
+        },
+        "detail": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "range": {
+          "$ref": "#/$defs/LanguageRangeDto"
+        },
+        "selectionRange": {
+          "$ref": "#/$defs/LanguageRangeDto"
+        },
+        "symbolKind": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "name",
+        "symbolKind",
+        "range",
+        "selectionRange",
+        "children"
+      ]
+    },
+    "LanguageDocumentSymbolsResult": {
+      "type": "object",
+      "properties": {
+        "revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "symbols": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LanguageDocumentSymbolDto"
+          }
+        }
+      },
+      "required": [
+        "revision",
+        "symbols"
+      ]
+    },
+    "LanguageExecuteCommandParams": {
+      "description": "One language-server command attached to an accepted completion.",
+      "type": "object",
+      "properties": {
+        "command": {
+          "$ref": "#/$defs/LanguageCommandDto"
+        },
+        "document": {
+          "$ref": "#/$defs/LanguageDocumentDto"
+        }
+      },
+      "required": [
+        "document",
+        "command"
+      ]
+    },
+    "LanguageFoldingRangeDto": {
+      "type": "object",
+      "properties": {
+        "collapsedText": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "endLineIndex": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LanguageFoldingRangeKindDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "startLineIndex": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "startLineIndex",
+        "endLineIndex"
+      ]
+    },
+    "LanguageFoldingRangeKindDto": {
+      "type": "string",
+      "enum": [
+        "comment",
+        "imports",
+        "region"
+      ]
+    },
+    "LanguageFoldingRangesResult": {
+      "type": "object",
+      "properties": {
+        "ranges": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LanguageFoldingRangeDto"
+          }
+        },
+        "revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "revision",
+        "ranges"
       ]
     },
     "LanguageFormattingOptionsDto": {
@@ -10782,6 +12397,112 @@
         "providerData"
       ]
     },
+    "LanguageResolveCodeLensParams": {
+      "type": "object",
+      "properties": {
+        "document": {
+          "$ref": "#/$defs/LanguageDocumentDto"
+        },
+        "lens": {
+          "$ref": "#/$defs/LanguageCodeLensDto"
+        }
+      },
+      "required": [
+        "document",
+        "lens"
+      ]
+    },
+    "LanguageResolveCompletionParams": {
+      "description": "Deferred completion details requested for one exact document snapshot.",
+      "type": "object",
+      "properties": {
+        "document": {
+          "$ref": "#/$defs/LanguageDocumentDto"
+        },
+        "providerData": true
+      },
+      "required": [
+        "document",
+        "providerData"
+      ]
+    },
+    "LanguageResolveDocumentLinkParams": {
+      "type": "object",
+      "properties": {
+        "document": {
+          "$ref": "#/$defs/LanguageDocumentDto"
+        },
+        "link": {
+          "$ref": "#/$defs/LanguageDocumentLinkDto"
+        }
+      },
+      "required": [
+        "document",
+        "link"
+      ]
+    },
+    "LanguageSemanticTokenDto": {
+      "description": "One semantic token in editor-native UTF-16 coordinates.",
+      "type": "object",
+      "properties": {
+        "modifiers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "range": {
+          "$ref": "#/$defs/LanguageRangeDto"
+        },
+        "tokenType": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "range",
+        "tokenType",
+        "modifiers"
+      ]
+    },
+    "LanguageSemanticTokensParams": {
+      "description": "Full-document semantic-token request against one exact editor snapshot.",
+      "type": "object",
+      "properties": {
+        "document": {
+          "$ref": "#/$defs/LanguageDocumentDto"
+        }
+      },
+      "required": [
+        "document"
+      ]
+    },
+    "LanguageSemanticTokensResult": {
+      "description": "Fresh semantic tokens and the opaque server result identity for one source revision.",
+      "type": "object",
+      "properties": {
+        "resultId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "tokens": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LanguageSemanticTokenDto"
+          }
+        }
+      },
+      "required": [
+        "revision",
+        "tokens"
+      ]
+    },
     "LanguageServerConfigDto": {
       "description": "Runtime-free language-server preference exposed through the App Server contract.",
       "type": "object",
@@ -10827,6 +12548,40 @@
         "config"
       ]
     },
+    "LanguageServerMessageNotification": {
+      "description": "One language-server log or user-visible message.",
+      "type": "object",
+      "properties": {
+        "message": {
+          "type": "string"
+        },
+        "server": {
+          "type": "string"
+        },
+        "severity": {
+          "$ref": "#/$defs/LanguageServerMessageSeverityDto"
+        },
+        "show": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "server",
+        "severity",
+        "show",
+        "message"
+      ]
+    },
+    "LanguageServerMessageSeverityDto": {
+      "description": "Presentation severity retained from an LSP window message.",
+      "type": "string",
+      "enum": [
+        "error",
+        "warning",
+        "information",
+        "log"
+      ]
+    },
     "LanguageServerModeDto": {
       "description": "Durable user intent for one language server.",
       "type": "string",
@@ -10834,6 +12589,46 @@
         "disabled",
         "automatic",
         "enabled"
+      ]
+    },
+    "LanguageServerProgressNotification": {
+      "description": "Current work-done progress state for one server-owned token.",
+      "type": "object",
+      "properties": {
+        "done": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "percentage": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "server": {
+          "type": "string"
+        },
+        "title": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "token": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "server",
+        "token",
+        "done"
       ]
     },
     "LanguageServerRemoveParams": {
@@ -11005,6 +12800,56 @@
       "required": [
         "range",
         "newText"
+      ]
+    },
+    "LanguageWorkspaceDiagnosticSnapshotDto": {
+      "description": "Diagnostics for one workspace-relative resource.",
+      "type": "object",
+      "properties": {
+        "diagnostics": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LanguageCodeActionDiagnosticDto"
+          }
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "diagnostics"
+      ]
+    },
+    "LanguageWorkspaceDiagnosticsParams": {
+      "description": "Requests one complete workspace diagnostic report for a language-server route.",
+      "type": "object",
+      "properties": {
+        "languageId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "languageId"
+      ]
+    },
+    "LanguageWorkspaceDiagnosticsResult": {
+      "description": "Complete workspace diagnostic report from one language server.",
+      "type": "object",
+      "properties": {
+        "snapshots": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LanguageWorkspaceDiagnosticSnapshotDto"
+          }
+        },
+        "supported": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "supported",
+        "snapshots"
       ]
     },
     "LanguageWorkspaceEditDto": {
@@ -12436,6 +14281,9 @@
         "documentCollaboration": {
           "type": "boolean"
         },
+        "extensionHost": {
+          "type": "boolean"
+        },
         "extensions": {
           "type": "boolean"
         },
@@ -12491,6 +14339,7 @@
         "typst",
         "updateReplay",
         "extensions",
+        "extensionHost",
         "connectors",
         "plugins"
       ]
@@ -12661,6 +14510,22 @@
           "properties": {
             "method": {
               "type": "string",
+              "const": "extensionHost/changed"
+            },
+            "params": {
+              "$ref": "#/$defs/ExtensionHostChanged"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
               "const": "git/statusChanged"
             },
             "params": {
@@ -12697,6 +14562,38 @@
             },
             "params": {
               "$ref": "#/$defs/LanguageDiagnosticsNotification"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "language/serverMessage"
+            },
+            "params": {
+              "$ref": "#/$defs/LanguageServerMessageNotification"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "language/serverProgress"
+            },
+            "params": {
+              "$ref": "#/$defs/LanguageServerProgressNotification"
             }
           },
           "required": [

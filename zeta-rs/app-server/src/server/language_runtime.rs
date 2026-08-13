@@ -19,6 +19,7 @@ use zeta_language_server_catalog::LanguageServerPreference;
 use zeta_language_server_catalog::RUST_ANALYZER_SERVER_ID;
 use zeta_language_server_catalog::TYPESCRIPT_LANGUAGE_SERVER_ID;
 use zeta_language_service::LanguageRequestId;
+use zeta_language_service::LanguageServerMessageSeverity;
 use zeta_language_service::LanguageServerState;
 use zeta_language_service::LanguageService;
 use zeta_language_service::LanguageServiceConfiguration;
@@ -26,11 +27,12 @@ use zeta_language_service::LanguageServiceDocument;
 use zeta_language_service::LanguageServiceEvent;
 use zeta_language_service::LanguageServiceEventSink;
 
-use zeta_app_server_protocol::protocol::language::LanguageCodeActionDiagnosticDto;
-use zeta_app_server_protocol::protocol::language::LanguageDiagnosticSeverityDto;
 use zeta_app_server_protocol::protocol::language::LanguageDiagnosticsNotification;
+use zeta_app_server_protocol::protocol::language::LanguageServerMessageNotification;
+use zeta_app_server_protocol::protocol::language::LanguageServerMessageSeverityDto;
+use zeta_app_server_protocol::protocol::language::LanguageServerProgressNotification;
 
-use super::language_operations::byte_range_to_utf16;
+use super::language_operations::diagnostic_to_dto;
 use super::update_broker::UpdateBroker;
 
 const SERVER_START_TIMEOUT: Duration = Duration::from_secs(15);
@@ -45,6 +47,47 @@ impl LanguageServiceEventSink for AppServerLanguageEventSink {
     fn on_event(&self, event: LanguageServiceEvent) {
         if let LanguageServiceEvent::Diagnostics(diagnostics) = &event {
             self.diagnostics.publish(diagnostics);
+            return;
+        }
+        if let LanguageServiceEvent::ServerMessage {
+            server,
+            severity,
+            show,
+            message,
+        } = &event
+        {
+            self.diagnostics.updates.publish_language_server_message(
+                LanguageServerMessageNotification {
+                    server: server.clone(),
+                    severity: match severity {
+                        LanguageServerMessageSeverity::Error => {
+                            LanguageServerMessageSeverityDto::Error
+                        }
+                        LanguageServerMessageSeverity::Warning => {
+                            LanguageServerMessageSeverityDto::Warning
+                        }
+                        LanguageServerMessageSeverity::Information => {
+                            LanguageServerMessageSeverityDto::Information
+                        }
+                        LanguageServerMessageSeverity::Log => LanguageServerMessageSeverityDto::Log,
+                    },
+                    show: *show,
+                    message: message.clone(),
+                },
+            );
+            return;
+        }
+        if let LanguageServiceEvent::ServerProgress(progress) = &event {
+            self.diagnostics.updates.publish_language_server_progress(
+                LanguageServerProgressNotification {
+                    server: progress.server.clone(),
+                    token: progress.token.clone(),
+                    title: progress.title.clone(),
+                    message: progress.message.clone(),
+                    percentage: progress.percentage,
+                    done: progress.done,
+                },
+            );
             return;
         }
         let _ = self.sender.send(event);
@@ -78,28 +121,8 @@ impl LanguageDiagnosticPublisher {
         let diagnostics = diagnostics
             .diagnostics()
             .iter()
-            .filter_map(|diagnostic| {
-                Some(LanguageCodeActionDiagnosticDto {
-                    range: byte_range_to_utf16(&snapshot.text, diagnostic.range.byte_range())?,
-                    severity: match diagnostic.severity {
-                        zeta_language_service::LanguageDiagnosticSeverity::Error => {
-                            LanguageDiagnosticSeverityDto::Error
-                        }
-                        zeta_language_service::LanguageDiagnosticSeverity::Warning => {
-                            LanguageDiagnosticSeverityDto::Warning
-                        }
-                        zeta_language_service::LanguageDiagnosticSeverity::Information => {
-                            LanguageDiagnosticSeverityDto::Information
-                        }
-                        zeta_language_service::LanguageDiagnosticSeverity::Hint => {
-                            LanguageDiagnosticSeverityDto::Hint
-                        }
-                    },
-                    message: diagnostic.message.clone(),
-                    code: diagnostic.code.clone().map(serde_json::Value::String),
-                    source: diagnostic.source.clone(),
-                })
-            })
+            .cloned()
+            .filter_map(|diagnostic| diagnostic_to_dto(&snapshot.text, diagnostic))
             .collect();
         self.updates
             .publish_language_diagnostics(LanguageDiagnosticsNotification {
@@ -163,9 +186,14 @@ impl AppServerLanguageRuntime {
             let matches = match &event {
                 LanguageServiceEvent::Hover(result) => result.request_id == request_id,
                 LanguageServiceEvent::Completions(result) => result.request_id == request_id,
+                LanguageServiceEvent::CompletionDetails(result) => result.request_id == request_id,
+                LanguageServiceEvent::CommandResult(result) => result.request_id == request_id,
                 LanguageServiceEvent::Locations(result) => result.request_id == request_id,
                 LanguageServiceEvent::Hierarchy(result) => result.request_id == request_id,
                 LanguageServiceEvent::WorkspaceSymbols(result) => result.request_id == request_id,
+                LanguageServiceEvent::WorkspaceDiagnostics(result) => {
+                    result.request_id == request_id
+                }
                 LanguageServiceEvent::RenamePreparation(result) => result.request_id == request_id,
                 LanguageServiceEvent::WorkspaceEdit(result) => result.request_id == request_id,
                 LanguageServiceEvent::CodeActions(result) => result.request_id == request_id,
@@ -175,6 +203,14 @@ impl AppServerLanguageRuntime {
                 LanguageServiceEvent::LinkedEditingRanges(result) => {
                     result.request_id == request_id
                 }
+                LanguageServiceEvent::SemanticTokens(result) => result.request_id == request_id,
+                LanguageServiceEvent::DocumentSymbols(result) => result.request_id == request_id,
+                LanguageServiceEvent::CodeLenses(result) => result.request_id == request_id,
+                LanguageServiceEvent::DocumentLinks(result) => result.request_id == request_id,
+                LanguageServiceEvent::DocumentColors(result) => result.request_id == request_id,
+                LanguageServiceEvent::ColorPresentations(result) => result.request_id == request_id,
+                LanguageServiceEvent::FoldingRanges(result) => result.request_id == request_id,
+                LanguageServiceEvent::PulledDiagnostics(result) => result.request_id == request_id,
                 LanguageServiceEvent::RequestFailed {
                     request_id: failed, ..
                 } => *failed == request_id,

@@ -55,6 +55,43 @@ impl RecordingHost {
             self.event_received.notified().await;
         }
     }
+
+    async fn wait_for_dynamic_revision(&self, revision: u64) -> LanguageServerCapabilitySnapshot {
+        loop {
+            if let Some(snapshot) =
+                self.events
+                    .lock()
+                    .expect("events mutex")
+                    .iter()
+                    .find_map(|event| match event {
+                        LanguageServerEvent::DynamicCapabilitiesChanged(snapshot)
+                            if snapshot.revision == revision =>
+                        {
+                            Some(snapshot.clone())
+                        }
+                        _ => None,
+                    })
+            {
+                return snapshot;
+            }
+            self.event_received.notified().await;
+        }
+    }
+
+    async fn wait_for_progress(&self) {
+        loop {
+            if self
+                .events
+                .lock()
+                .expect("events mutex")
+                .iter()
+                .any(|event| matches!(event, LanguageServerEvent::Progress(_)))
+            {
+                return;
+            }
+            self.event_received.notified().await;
+        }
+    }
 }
 
 impl LanguageServerHost for RecordingHost {
@@ -361,6 +398,134 @@ async fn request_timeout_sends_protocol_cancellation() {
         error,
         LanguageServerError::Timeout { operation, .. } if operation == "textDocument/hover"
     ));
+    client.shutdown().await.expect("shutdown language server");
+    server.await.expect("server task");
+}
+
+#[tokio::test]
+async fn dynamic_capabilities_and_progress_are_scoped_to_one_client_incarnation() {
+    let (client_stream, server_stream) = tokio::io::duplex(32 * 1024);
+    let (client_reader, client_writer) = tokio::io::split(client_stream);
+    let (server_reader, server_writer) = tokio::io::split(server_stream);
+    let (unregister_tx, unregister_rx) = oneshot::channel();
+    let server = tokio::spawn(async move {
+        let mut reader = BufReader::new(server_reader);
+        let mut writer = server_writer;
+        let initialize = read_json(&mut reader).await;
+        assert_eq!(
+            initialize["params"]["capabilities"]["textDocument"]["hover"]["dynamicRegistration"],
+            true
+        );
+        respond(
+            &mut writer,
+            initialize["id"].clone(),
+            json!({ "capabilities": {} }),
+        )
+        .await;
+        assert_eq!(read_json(&mut reader).await["method"], "initialized");
+
+        write_json(
+            &mut writer,
+            json!({
+                "jsonrpc": "2.0",
+                "id": "register-hover",
+                "method": "client/registerCapability",
+                "params": {
+                    "registrations": [{
+                        "id": "hover-1",
+                        "method": "textDocument/hover",
+                        "registerOptions": { "documentSelector": [{ "language": "rust" }] }
+                    }]
+                }
+            }),
+        )
+        .await;
+        let registered = read_json(&mut reader).await;
+        assert_eq!(registered["id"], "register-hover");
+        assert!(registered["result"].is_null());
+
+        write_json(
+            &mut writer,
+            json!({
+                "jsonrpc": "2.0",
+                "id": "progress-create",
+                "method": "window/workDoneProgress/create",
+                "params": { "token": "indexing" }
+            }),
+        )
+        .await;
+        assert!(read_json(&mut reader).await["result"].is_null());
+        write_json(
+            &mut writer,
+            json!({
+                "jsonrpc": "2.0",
+                "method": "$/progress",
+                "params": {
+                    "token": "indexing",
+                    "value": { "kind": "begin", "title": "Indexing", "percentage": 10 }
+                }
+            }),
+        )
+        .await;
+
+        unregister_rx.await.expect("continue with unregister");
+        write_json(
+            &mut writer,
+            json!({
+                "jsonrpc": "2.0",
+                "id": "unregister-hover",
+                "method": "client/unregisterCapability",
+                "params": {
+                    "unregisterations": [{
+                        "id": "hover-1",
+                        "method": "textDocument/hover"
+                    }]
+                }
+            }),
+        )
+        .await;
+        assert!(read_json(&mut reader).await["result"].is_null());
+
+        write_json(
+            &mut writer,
+            json!({
+                "jsonrpc": "2.0",
+                "id": "unsupported-registration",
+                "method": "client/registerCapability",
+                "params": {
+                    "registrations": [{
+                        "id": "watch-files-1",
+                        "method": "workspace/didChangeWatchedFiles"
+                    }]
+                }
+            }),
+        )
+        .await;
+        let unsupported = read_json(&mut reader).await;
+        assert_eq!(unsupported["error"]["code"], -32602);
+
+        let shutdown = read_json(&mut reader).await;
+        respond(&mut writer, shutdown["id"].clone(), Value::Null).await;
+        assert_eq!(read_json(&mut reader).await["method"], "exit");
+    });
+
+    let host = Arc::new(RecordingHost::default());
+    let client = LanguageServerClient::connect(
+        BufReader::new(client_reader),
+        client_writer,
+        LanguageServerOptions::new("zeta-lsp-test", "0").with_host(host.clone()),
+    )
+    .await
+    .expect("initialize language server");
+    let registered = host.wait_for_dynamic_revision(1).await;
+    assert_eq!(registered.registrations.len(), 1);
+    assert!(client.supports_dynamic_method("textDocument/hover"));
+    assert_eq!(client.dynamic_capabilities(), registered);
+    host.wait_for_progress().await;
+    unregister_tx.send(()).expect("request unregister");
+    let unregistered = host.wait_for_dynamic_revision(2).await;
+    assert!(unregistered.registrations.is_empty());
+    assert!(!client.supports_dynamic_method("textDocument/hover"));
     client.shutdown().await.expect("shutdown language server");
     server.await.expect("server task");
 }

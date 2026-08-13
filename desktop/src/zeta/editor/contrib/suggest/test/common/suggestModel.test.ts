@@ -104,6 +104,24 @@ test("A declared commit character accepts completion and text as one isolated un
   assert.equal(selections.selections.primary.active.compareTo(TextPosition.at(0, 3)), 0);
 });
 
+test("Completion commands run after insertion against the updated model", async () => {
+  using model = new TextModel("con");
+  using selections = controllerAt(model, TextPosition.at(0, 3));
+  using store = createLanguageCompletionStore(model);
+  const accepted: Array<{ readonly text: string; readonly item: LanguageCompletionItem }> = [];
+  using session = new LanguageCompletionSessionController(store, selections, { onDidAccept: item => { accepted.push({ text: model.getText(), item }); } });
+  accept(store, model, 1, [{
+    ...completion("console", "console"),
+    command: { id: "server.afterInsert", title: "After insert", arguments: [{ value: 1 }] },
+  }]);
+
+  assert.equal(session.acceptSelected(), true);
+  await turn();
+
+  assert.equal(accepted[0]!.text, "console");
+  assert.equal(accepted[0]!.item.command?.id, "server.afterInsert");
+});
+
 test("Completion acceptance applies additional edits and maps the caret through preceding changes", () => {
   using model = new TextModel("xcon");
   using selections = controllerAt(model, TextPosition.at(0, 4));

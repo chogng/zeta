@@ -1,38 +1,54 @@
 //! Capability-gated request execution and revision-fresh result delivery.
 
 use super::*;
+use crate::document_features::{
+    project_code_lenses, project_color_presentations, project_document_colors,
+    project_document_links, project_document_symbols, project_folding_ranges, protocol_code_lens,
+    protocol_color, protocol_document_link, protocol_range,
+};
 use crate::requests::{
     project_call_hierarchy_items, project_code_actions, project_completions,
-    project_formatting_edits, project_hover, project_incoming_calls, project_inlay_hints,
-    project_linked_editing_ranges, project_locations, project_outgoing_calls, project_references,
-    project_rename_preparation, project_resolved_code_action, project_signature_help,
-    project_type_hierarchy_items, project_workspace_edit, project_workspace_symbols,
-    protocol_call_hierarchy_item, protocol_code_action, protocol_position,
+    project_document_diagnostics, project_formatting_edits, project_hover, project_incoming_calls,
+    project_inlay_hints, project_linked_editing_ranges, project_locations, project_outgoing_calls,
+    project_references, project_rename_preparation, project_resolved_code_action,
+    project_resolved_completion, project_signature_help, project_type_hierarchy_items,
+    project_workspace_edit, project_workspace_symbols, protocol_call_hierarchy_item,
+    protocol_code_action, protocol_completion_item, protocol_position,
     protocol_type_hierarchy_item,
 };
+use crate::semantic_tokens::{project_semantic_tokens, semantic_tokens_options};
 use crate::{
-    LanguageCompletionTrigger, LanguageDiagnostic, LanguageDiagnosticSeverity,
-    LanguageHierarchyItem, LanguageHierarchyKind, LanguageLocationKind,
-    LanguageSignatureHelpTrigger, LanguageTextRange,
+    LanguageCodeLens, LanguageCodeLenses, LanguageColor, LanguageColorPresentations,
+    LanguageCommand, LanguageCommandResult, LanguageCompletionDetails, LanguageCompletionTrigger,
+    LanguageDiagnostic, LanguageDiagnosticSeverity, LanguageDocumentColors, LanguageDocumentLink,
+    LanguageDocumentLinks, LanguageDocumentSymbols, LanguageFoldingRanges, LanguageHierarchyItem,
+    LanguageHierarchyKind, LanguageLocationKind, LanguagePulledDiagnosticReport,
+    LanguagePulledDiagnostics, LanguageSemanticTokens, LanguageServerCapabilities,
+    LanguageServerFeature, LanguageSignatureHelpTrigger, LanguageTextRange,
 };
 use zeta_lsp::lsp_types::request::{
     CallHierarchyIncomingCalls, CallHierarchyOutgoingCalls, CallHierarchyPrepare,
-    CodeActionRequest, CodeActionResolveRequest, Completion, Formatting, GotoDeclaration,
-    GotoDefinition, GotoImplementation, GotoTypeDefinition, HoverRequest, InlayHintRequest,
-    LinkedEditingRange, PrepareRenameRequest, RangeFormatting, References, Rename,
-    SignatureHelpRequest, TypeHierarchyPrepare, TypeHierarchySubtypes, TypeHierarchySupertypes,
-    WorkspaceSymbolRequest,
+    CodeActionRequest, CodeActionResolveRequest, CodeLensRequest, CodeLensResolve,
+    ColorPresentationRequest, Completion, DocumentColor, DocumentDiagnosticRequest,
+    DocumentLinkRequest, DocumentLinkResolve, DocumentSymbolRequest, FoldingRangeRequest,
+    Formatting, GotoDeclaration, GotoDefinition, GotoImplementation, GotoTypeDefinition,
+    HoverRequest, InlayHintRequest, LinkedEditingRange, PrepareRenameRequest, RangeFormatting,
+    References, Rename, ResolveCompletionItem, SemanticTokensFullRequest, SignatureHelpRequest,
+    TypeHierarchyPrepare, TypeHierarchySubtypes, TypeHierarchySupertypes, WorkspaceSymbolRequest,
 };
 use zeta_lsp::lsp_types::{
     CallHierarchyIncomingCallsParams, CallHierarchyOutgoingCallsParams, CallHierarchyPrepareParams,
     CallHierarchyServerCapability, CodeActionContext, CodeActionKind, CodeActionParams,
-    CodeActionProviderCapability, CodeActionTriggerKind, CompletionParams, CompletionTriggerKind,
-    DeclarationCapability, Diagnostic, DiagnosticSeverity, DocumentFormattingParams,
-    DocumentRangeFormattingParams, FormattingOptions, GotoDefinitionParams, HoverParams,
-    ImplementationProviderCapability, InlayHintParams, LinkedEditingRangeParams,
-    LinkedEditingRangeServerCapabilities, NumberOrString, OneOf, PartialResultParams,
-    PositionEncodingKind, ReferenceContext, ReferenceParams, RenameParams, SignatureHelpContext,
-    SignatureHelpParams, SignatureHelpTriggerKind, TextDocumentIdentifier,
+    CodeActionProviderCapability, CodeActionTriggerKind, CodeLensParams, ColorPresentationParams,
+    ColorProviderCapability, CompletionParams, CompletionTriggerKind, DeclarationCapability,
+    Diagnostic, DiagnosticSeverity, DocumentColorParams, DocumentDiagnosticParams,
+    DocumentFormattingParams, DocumentLinkParams, DocumentRangeFormattingParams,
+    DocumentSymbolParams, ExecuteCommandParams, FoldingRangeParams, FoldingRangeProviderCapability,
+    FormattingOptions, GotoDefinitionParams, HoverParams, ImplementationProviderCapability,
+    InlayHintParams, LinkedEditingRangeParams, LinkedEditingRangeServerCapabilities,
+    NumberOrString, OneOf, PartialResultParams, PositionEncodingKind, ReferenceContext,
+    ReferenceParams, RenameParams, SemanticTokensFullOptions, SemanticTokensParams,
+    SignatureHelpContext, SignatureHelpParams, SignatureHelpTriggerKind, TextDocumentIdentifier,
     TextDocumentPositionParams, TypeDefinitionProviderCapability, TypeHierarchyPrepareParams,
     TypeHierarchySubtypesParams, TypeHierarchySupertypesParams, WorkDoneProgressParams,
     WorkspaceSymbolParams,
@@ -51,6 +67,18 @@ pub(super) enum PendingLanguageRequest {
         revision: LanguageDocumentRevision,
         position: LanguageDocumentPosition,
         trigger: LanguageCompletionTrigger,
+    },
+    ResolveCompletion {
+        id: LanguageRequestId,
+        path: PathBuf,
+        revision: LanguageDocumentRevision,
+        provider_data: serde_json::Value,
+    },
+    ExecuteCommand {
+        id: LanguageRequestId,
+        path: PathBuf,
+        revision: LanguageDocumentRevision,
+        command: LanguageCommand,
     },
     Definition {
         id: LanguageRequestId,
@@ -178,6 +206,60 @@ pub(super) enum PendingLanguageRequest {
         revision: LanguageDocumentRevision,
         position: LanguageDocumentPosition,
     },
+    SemanticTokens {
+        id: LanguageRequestId,
+        path: PathBuf,
+        revision: LanguageDocumentRevision,
+    },
+    DocumentSymbols {
+        id: LanguageRequestId,
+        path: PathBuf,
+        revision: LanguageDocumentRevision,
+    },
+    CodeLenses {
+        id: LanguageRequestId,
+        path: PathBuf,
+        revision: LanguageDocumentRevision,
+    },
+    ResolveCodeLens {
+        id: LanguageRequestId,
+        path: PathBuf,
+        revision: LanguageDocumentRevision,
+        lens: LanguageCodeLens,
+    },
+    DocumentLinks {
+        id: LanguageRequestId,
+        path: PathBuf,
+        revision: LanguageDocumentRevision,
+    },
+    ResolveDocumentLink {
+        id: LanguageRequestId,
+        path: PathBuf,
+        revision: LanguageDocumentRevision,
+        link: LanguageDocumentLink,
+    },
+    DocumentColors {
+        id: LanguageRequestId,
+        path: PathBuf,
+        revision: LanguageDocumentRevision,
+    },
+    ColorPresentations {
+        id: LanguageRequestId,
+        path: PathBuf,
+        revision: LanguageDocumentRevision,
+        range: LanguageTextRange,
+        color: LanguageColor,
+    },
+    FoldingRanges {
+        id: LanguageRequestId,
+        path: PathBuf,
+        revision: LanguageDocumentRevision,
+    },
+    DocumentDiagnostics {
+        id: LanguageRequestId,
+        path: PathBuf,
+        revision: LanguageDocumentRevision,
+    },
 }
 
 impl PendingLanguageRequest {
@@ -185,6 +267,8 @@ impl PendingLanguageRequest {
         match self {
             Self::Hover { id, .. }
             | Self::Completion { id, .. }
+            | Self::ResolveCompletion { id, .. }
+            | Self::ExecuteCommand { id, .. }
             | Self::Declaration { id, .. }
             | Self::Definition { id, .. }
             | Self::Implementation { id, .. }
@@ -205,6 +289,16 @@ impl PendingLanguageRequest {
             Self::SignatureHelp { id, .. } => *id,
             Self::InlayHints { id, .. } => *id,
             Self::LinkedEditingRanges { id, .. } => *id,
+            Self::SemanticTokens { id, .. }
+            | Self::DocumentSymbols { id, .. }
+            | Self::CodeLenses { id, .. }
+            | Self::ResolveCodeLens { id, .. }
+            | Self::DocumentLinks { id, .. }
+            | Self::ResolveDocumentLink { id, .. }
+            | Self::DocumentColors { id, .. }
+            | Self::ColorPresentations { id, .. }
+            | Self::FoldingRanges { id, .. }
+            | Self::DocumentDiagnostics { id, .. } => *id,
         }
     }
 
@@ -212,6 +306,8 @@ impl PendingLanguageRequest {
         match self {
             Self::Hover { .. } => LanguageRequestKind::Hover,
             Self::Completion { .. } => LanguageRequestKind::Completion,
+            Self::ResolveCompletion { .. } => LanguageRequestKind::ResolveCompletion,
+            Self::ExecuteCommand { .. } => LanguageRequestKind::ExecuteCommand,
             Self::Declaration { .. } => LanguageRequestKind::Declaration,
             Self::Definition { .. } => LanguageRequestKind::Definition,
             Self::Implementation { .. } => LanguageRequestKind::Implementation,
@@ -232,6 +328,16 @@ impl PendingLanguageRequest {
             Self::SignatureHelp { .. } => LanguageRequestKind::SignatureHelp,
             Self::InlayHints { .. } => LanguageRequestKind::InlayHints,
             Self::LinkedEditingRanges { .. } => LanguageRequestKind::LinkedEditingRanges,
+            Self::SemanticTokens { .. } => LanguageRequestKind::SemanticTokens,
+            Self::DocumentSymbols { .. } => LanguageRequestKind::DocumentSymbols,
+            Self::CodeLenses { .. } => LanguageRequestKind::CodeLenses,
+            Self::ResolveCodeLens { .. } => LanguageRequestKind::ResolveCodeLens,
+            Self::DocumentLinks { .. } => LanguageRequestKind::DocumentLinks,
+            Self::ResolveDocumentLink { .. } => LanguageRequestKind::ResolveDocumentLink,
+            Self::DocumentColors { .. } => LanguageRequestKind::DocumentColors,
+            Self::ColorPresentations { .. } => LanguageRequestKind::ColorPresentations,
+            Self::FoldingRanges { .. } => LanguageRequestKind::FoldingRanges,
+            Self::DocumentDiagnostics { .. } => LanguageRequestKind::DocumentDiagnostics,
         }
     }
 
@@ -239,6 +345,8 @@ impl PendingLanguageRequest {
         match self {
             Self::Hover { path, .. }
             | Self::Completion { path, .. }
+            | Self::ResolveCompletion { path, .. }
+            | Self::ExecuteCommand { path, .. }
             | Self::Declaration { path, .. }
             | Self::Definition { path, .. }
             | Self::Implementation { path, .. }
@@ -259,6 +367,16 @@ impl PendingLanguageRequest {
             Self::SignatureHelp { path, .. } => path,
             Self::InlayHints { path, .. } => path,
             Self::LinkedEditingRanges { path, .. } => path,
+            Self::SemanticTokens { path, .. }
+            | Self::DocumentSymbols { path, .. }
+            | Self::CodeLenses { path, .. }
+            | Self::ResolveCodeLens { path, .. }
+            | Self::DocumentLinks { path, .. }
+            | Self::ResolveDocumentLink { path, .. }
+            | Self::DocumentColors { path, .. }
+            | Self::ColorPresentations { path, .. }
+            | Self::FoldingRanges { path, .. }
+            | Self::DocumentDiagnostics { path, .. } => path,
         }
     }
 
@@ -266,6 +384,8 @@ impl PendingLanguageRequest {
         match self {
             Self::Hover { revision, .. }
             | Self::Completion { revision, .. }
+            | Self::ResolveCompletion { revision, .. }
+            | Self::ExecuteCommand { revision, .. }
             | Self::Declaration { revision, .. }
             | Self::Definition { revision, .. }
             | Self::Implementation { revision, .. }
@@ -286,6 +406,16 @@ impl PendingLanguageRequest {
             Self::SignatureHelp { revision, .. } => *revision,
             Self::InlayHints { revision, .. } => *revision,
             Self::LinkedEditingRanges { revision, .. } => *revision,
+            Self::SemanticTokens { revision, .. }
+            | Self::DocumentSymbols { revision, .. }
+            | Self::CodeLenses { revision, .. }
+            | Self::ResolveCodeLens { revision, .. }
+            | Self::DocumentLinks { revision, .. }
+            | Self::ResolveDocumentLink { revision, .. }
+            | Self::DocumentColors { revision, .. }
+            | Self::ColorPresentations { revision, .. }
+            | Self::FoldingRanges { revision, .. }
+            | Self::DocumentDiagnostics { revision, .. } => *revision,
         }
     }
 
@@ -303,7 +433,9 @@ impl PendingLanguageRequest {
             Self::SignatureHelp { position, .. } => Some(*position),
             Self::LinkedEditingRanges { position, .. } => Some(*position),
             Self::PrepareRename { position, .. } | Self::Rename { position, .. } => Some(*position),
-            Self::IncomingCalls { .. }
+            Self::ResolveCompletion { .. }
+            | Self::ExecuteCommand { .. }
+            | Self::IncomingCalls { .. }
             | Self::OutgoingCalls { .. }
             | Self::Supertypes { .. }
             | Self::Subtypes { .. } => None,
@@ -312,6 +444,16 @@ impl PendingLanguageRequest {
             | Self::DocumentFormatting { .. }
             | Self::RangeFormatting { .. } => None,
             Self::InlayHints { .. } => None,
+            Self::SemanticTokens { .. }
+            | Self::DocumentSymbols { .. }
+            | Self::CodeLenses { .. }
+            | Self::ResolveCodeLens { .. }
+            | Self::DocumentLinks { .. }
+            | Self::ResolveDocumentLink { .. }
+            | Self::DocumentColors { .. }
+            | Self::ColorPresentations { .. }
+            | Self::FoldingRanges { .. }
+            | Self::DocumentDiagnostics { .. } => None,
         }
     }
 }
@@ -319,6 +461,8 @@ impl PendingLanguageRequest {
 pub(super) enum CompletedLanguageRequest {
     Hover(LanguageHover),
     Completions(LanguageCompletions),
+    CompletionDetails(LanguageCompletionDetails),
+    CommandResult(LanguageCommandResult),
     Locations(LanguageLocations),
     Hierarchy(LanguageHierarchyResult),
     RenamePreparation(LanguageRenamePreparation),
@@ -328,6 +472,14 @@ pub(super) enum CompletedLanguageRequest {
     SignatureHelp(LanguageSignatureHelp),
     InlayHints(LanguageInlayHints),
     LinkedEditingRanges(LanguageLinkedEditingRanges),
+    SemanticTokens(LanguageSemanticTokens),
+    DocumentSymbols(LanguageDocumentSymbols),
+    CodeLenses(LanguageCodeLenses),
+    DocumentLinks(LanguageDocumentLinks),
+    DocumentColors(LanguageDocumentColors),
+    ColorPresentations(LanguageColorPresentations),
+    FoldingRanges(LanguageFoldingRanges),
+    PulledDiagnostics(LanguagePulledDiagnostics),
     Empty {
         id: LanguageRequestId,
         kind: LanguageRequestKind,
@@ -348,6 +500,8 @@ impl CompletedLanguageRequest {
         match self {
             Self::Hover(result) => &result.path,
             Self::Completions(result) => &result.path,
+            Self::CompletionDetails(result) => &result.path,
+            Self::CommandResult(result) => &result.path,
             Self::Locations(result) => &result.source_path,
             Self::Hierarchy(result) => &result.source_path,
             Self::RenamePreparation(result) => &result.source_path,
@@ -357,6 +511,14 @@ impl CompletedLanguageRequest {
             Self::SignatureHelp(result) => &result.path,
             Self::InlayHints(result) => &result.path,
             Self::LinkedEditingRanges(result) => &result.path,
+            Self::SemanticTokens(result) => &result.path,
+            Self::DocumentSymbols(result) => &result.path,
+            Self::CodeLenses(result) => &result.path,
+            Self::DocumentLinks(result) => &result.path,
+            Self::DocumentColors(result) => &result.path,
+            Self::ColorPresentations(result) => &result.path,
+            Self::FoldingRanges(result) => &result.path,
+            Self::PulledDiagnostics(result) => &result.path,
             Self::Empty { path, .. } | Self::Failed { path, .. } => path,
         }
     }
@@ -365,6 +527,8 @@ impl CompletedLanguageRequest {
         match self {
             Self::Hover(result) => result.revision,
             Self::Completions(result) => result.revision,
+            Self::CompletionDetails(result) => result.revision,
+            Self::CommandResult(result) => result.revision,
             Self::Locations(result) => result.source_revision,
             Self::Hierarchy(result) => result.source_revision,
             Self::RenamePreparation(result) => result.source_revision,
@@ -374,6 +538,14 @@ impl CompletedLanguageRequest {
             Self::SignatureHelp(result) => result.revision,
             Self::InlayHints(result) => result.revision,
             Self::LinkedEditingRanges(result) => result.revision,
+            Self::SemanticTokens(result) => result.revision,
+            Self::DocumentSymbols(result) => result.revision,
+            Self::CodeLenses(result) => result.revision,
+            Self::DocumentLinks(result) => result.revision,
+            Self::DocumentColors(result) => result.revision,
+            Self::ColorPresentations(result) => result.revision,
+            Self::FoldingRanges(result) => result.revision,
+            Self::PulledDiagnostics(result) => result.revision,
             Self::Empty { revision, .. } | Self::Failed { revision, .. } => *revision,
         }
     }
@@ -470,6 +642,8 @@ impl Supervisor {
             Err(message) => {
                 self.emit(LanguageServiceEvent::ServerMessage {
                     server: server.to_string(),
+                    severity: LanguageServerMessageSeverity::Error,
+                    show: false,
                     message,
                 });
                 return;
@@ -487,6 +661,12 @@ impl Supervisor {
             }
             CompletedLanguageRequest::Completions(result) => {
                 self.emit(LanguageServiceEvent::Completions(result))
+            }
+            CompletedLanguageRequest::CompletionDetails(result) => {
+                self.emit(LanguageServiceEvent::CompletionDetails(result))
+            }
+            CompletedLanguageRequest::CommandResult(result) => {
+                self.emit(LanguageServiceEvent::CommandResult(result))
             }
             CompletedLanguageRequest::Locations(result) => {
                 self.emit(LanguageServiceEvent::Locations(result))
@@ -514,6 +694,37 @@ impl Supervisor {
             }
             CompletedLanguageRequest::LinkedEditingRanges(result) => {
                 self.emit(LanguageServiceEvent::LinkedEditingRanges(result))
+            }
+            CompletedLanguageRequest::SemanticTokens(result) => {
+                self.emit(LanguageServiceEvent::SemanticTokens(result))
+            }
+            CompletedLanguageRequest::DocumentSymbols(result) => {
+                self.emit(LanguageServiceEvent::DocumentSymbols(result))
+            }
+            CompletedLanguageRequest::CodeLenses(result) => {
+                self.emit(LanguageServiceEvent::CodeLenses(result))
+            }
+            CompletedLanguageRequest::DocumentLinks(result) => {
+                self.emit(LanguageServiceEvent::DocumentLinks(result))
+            }
+            CompletedLanguageRequest::DocumentColors(result) => {
+                self.emit(LanguageServiceEvent::DocumentColors(result))
+            }
+            CompletedLanguageRequest::ColorPresentations(result) => {
+                self.emit(LanguageServiceEvent::ColorPresentations(result))
+            }
+            CompletedLanguageRequest::FoldingRanges(result) => {
+                self.emit(LanguageServiceEvent::FoldingRanges(result))
+            }
+            CompletedLanguageRequest::PulledDiagnostics(result) => {
+                if let LanguagePulledDiagnosticReport::Full(diagnostics) = &result.report {
+                    self.emit(LanguageServiceEvent::Diagnostics(LanguageDiagnostics::new(
+                        result.path.clone(),
+                        result.revision,
+                        diagnostics.clone(),
+                    )));
+                }
+                self.emit(LanguageServiceEvent::PulledDiagnostics(result));
             }
             CompletedLanguageRequest::Empty {
                 id,
@@ -543,7 +754,10 @@ impl Supervisor {
         }
     }
 
-    fn server_for_language(&self, language_id: &str) -> Option<(LanguageServerName, u64)> {
+    pub(super) fn server_for_language(
+        &self,
+        language_id: &str,
+    ) -> Option<(LanguageServerName, u64)> {
         self.servers.iter().find_map(|(name, server)| {
             (server.phase == ManagedServerPhase::Ready
                 && server
@@ -604,6 +818,7 @@ async fn execute_request(
             trigger,
         } => {
             let text_document_position = text_document_position(uri, position)?;
+            let can_resolve = supports_request(&client, LanguageRequestKind::ResolveCompletion);
             let response = client
                 .request::<Completion>(CompletionParams {
                     text_document_position,
@@ -620,8 +835,49 @@ async fn execute_request(
                 request_position,
                 &text,
                 &encoding,
+                can_resolve,
                 response,
             )))
+        }
+        PendingLanguageRequest::ResolveCompletion {
+            id,
+            path,
+            revision,
+            provider_data,
+        } => {
+            let response = client
+                .request::<ResolveCompletionItem>(protocol_completion_item(provider_data)?)
+                .await
+                .map_err(|error| error.to_string())?;
+            Ok(CompletedLanguageRequest::CompletionDetails(
+                project_resolved_completion(id, path, revision, response),
+            ))
+        }
+        PendingLanguageRequest::ExecuteCommand {
+            id,
+            path,
+            revision,
+            command,
+        } => {
+            if !supports_command(&client, &command.id) {
+                return Err("language server did not advertise the requested command".into());
+            }
+            let response = client
+                .request::<zeta_lsp::lsp_types::request::ExecuteCommand>(ExecuteCommandParams {
+                    command: command.id,
+                    arguments: command.arguments,
+                    work_done_progress_params: WorkDoneProgressParams::default(),
+                })
+                .await
+                .map_err(|error| error.to_string())?;
+            Ok(CompletedLanguageRequest::CommandResult(
+                LanguageCommandResult {
+                    request_id: id,
+                    path,
+                    revision,
+                    value: response.unwrap_or(serde_json::Value::Null),
+                },
+            ))
         }
         PendingLanguageRequest::Definition {
             id, path, revision, ..
@@ -1099,6 +1355,173 @@ async fn execute_request(
                 revision,
             }))
         }
+        PendingLanguageRequest::SemanticTokens { id, path, revision } => {
+            let options = semantic_tokens_options(&client)
+                .ok_or_else(|| "language server does not advertise semantic tokens".to_owned())?;
+            let response = client
+                .request::<SemanticTokensFullRequest>(SemanticTokensParams {
+                    work_done_progress_params: WorkDoneProgressParams::default(),
+                    partial_result_params: PartialResultParams::default(),
+                    text_document: TextDocumentIdentifier::new(uri),
+                })
+                .await
+                .map_err(|error| error.to_string())?;
+            project_semantic_tokens(id, path, revision, &text, &encoding, &options, response)
+                .map(CompletedLanguageRequest::SemanticTokens)
+        }
+        PendingLanguageRequest::DocumentSymbols { id, path, revision } => {
+            let response = client
+                .request::<DocumentSymbolRequest>(DocumentSymbolParams {
+                    text_document: TextDocumentIdentifier::new(uri.clone()),
+                    work_done_progress_params: WorkDoneProgressParams::default(),
+                    partial_result_params: PartialResultParams::default(),
+                })
+                .await
+                .map_err(|error| error.to_string())?;
+            Ok(CompletedLanguageRequest::DocumentSymbols(
+                project_document_symbols(id, path, revision, &text, &uri, &encoding, response),
+            ))
+        }
+        PendingLanguageRequest::CodeLenses { id, path, revision } => {
+            let response = client
+                .request::<CodeLensRequest>(CodeLensParams {
+                    text_document: TextDocumentIdentifier::new(uri),
+                    work_done_progress_params: WorkDoneProgressParams::default(),
+                    partial_result_params: PartialResultParams::default(),
+                })
+                .await
+                .map_err(|error| error.to_string())?;
+            Ok(CompletedLanguageRequest::CodeLenses(project_code_lenses(
+                id,
+                path,
+                revision,
+                &text,
+                &encoding,
+                response.unwrap_or_default(),
+            )))
+        }
+        PendingLanguageRequest::ResolveCodeLens {
+            id,
+            path,
+            revision,
+            lens,
+        } => {
+            let lens = protocol_code_lens(lens, &text, &encoding)
+                .ok_or_else(|| "code lens is outside the document snapshot".to_owned())?;
+            let response = client
+                .request::<CodeLensResolve>(lens)
+                .await
+                .map_err(|error| error.to_string())?;
+            Ok(CompletedLanguageRequest::CodeLenses(project_code_lenses(
+                id,
+                path,
+                revision,
+                &text,
+                &encoding,
+                vec![response],
+            )))
+        }
+        PendingLanguageRequest::DocumentLinks { id, path, revision } => {
+            let response = client
+                .request::<DocumentLinkRequest>(DocumentLinkParams {
+                    text_document: TextDocumentIdentifier::new(uri),
+                    work_done_progress_params: WorkDoneProgressParams::default(),
+                    partial_result_params: PartialResultParams::default(),
+                })
+                .await
+                .map_err(|error| error.to_string())?;
+            Ok(CompletedLanguageRequest::DocumentLinks(
+                project_document_links(
+                    id,
+                    path,
+                    revision,
+                    &text,
+                    &encoding,
+                    response.unwrap_or_default(),
+                ),
+            ))
+        }
+        PendingLanguageRequest::ResolveDocumentLink {
+            id,
+            path,
+            revision,
+            link,
+        } => {
+            let link = protocol_document_link(link, &text, &encoding)
+                .ok_or_else(|| "document link is outside the document snapshot".to_owned())?;
+            let response = client
+                .request::<DocumentLinkResolve>(link)
+                .await
+                .map_err(|error| error.to_string())?;
+            Ok(CompletedLanguageRequest::DocumentLinks(
+                project_document_links(id, path, revision, &text, &encoding, vec![response]),
+            ))
+        }
+        PendingLanguageRequest::DocumentColors { id, path, revision } => {
+            let response = client
+                .request::<DocumentColor>(DocumentColorParams {
+                    text_document: TextDocumentIdentifier::new(uri),
+                    work_done_progress_params: WorkDoneProgressParams::default(),
+                    partial_result_params: PartialResultParams::default(),
+                })
+                .await
+                .map_err(|error| error.to_string())?;
+            Ok(CompletedLanguageRequest::DocumentColors(
+                project_document_colors(id, path, revision, &text, &encoding, response),
+            ))
+        }
+        PendingLanguageRequest::ColorPresentations {
+            id,
+            path,
+            revision,
+            range,
+            color,
+        } => {
+            let range = protocol_range(&text, range, &encoding).ok_or_else(|| {
+                "color presentation range is outside the document snapshot".to_owned()
+            })?;
+            let response = client
+                .request::<ColorPresentationRequest>(ColorPresentationParams {
+                    text_document: TextDocumentIdentifier::new(uri),
+                    color: protocol_color(color),
+                    range,
+                    work_done_progress_params: WorkDoneProgressParams::default(),
+                    partial_result_params: PartialResultParams::default(),
+                })
+                .await
+                .map_err(|error| error.to_string())?;
+            Ok(CompletedLanguageRequest::ColorPresentations(
+                project_color_presentations(id, path, revision, &text, &encoding, response),
+            ))
+        }
+        PendingLanguageRequest::FoldingRanges { id, path, revision } => {
+            let response = client
+                .request::<FoldingRangeRequest>(FoldingRangeParams {
+                    text_document: TextDocumentIdentifier::new(uri),
+                    work_done_progress_params: WorkDoneProgressParams::default(),
+                    partial_result_params: PartialResultParams::default(),
+                })
+                .await
+                .map_err(|error| error.to_string())?;
+            Ok(CompletedLanguageRequest::FoldingRanges(
+                project_folding_ranges(id, path, revision, &text, response.unwrap_or_default()),
+            ))
+        }
+        PendingLanguageRequest::DocumentDiagnostics { id, path, revision } => {
+            let response = client
+                .request::<DocumentDiagnosticRequest>(DocumentDiagnosticParams {
+                    text_document: TextDocumentIdentifier::new(uri),
+                    identifier: None,
+                    previous_result_id: None,
+                    work_done_progress_params: WorkDoneProgressParams::default(),
+                    partial_result_params: PartialResultParams::default(),
+                })
+                .await
+                .map_err(|error| error.to_string())?;
+            Ok(CompletedLanguageRequest::PulledDiagnostics(
+                project_document_diagnostics(id, path, revision, &text, &encoding, response)?,
+            ))
+        }
     }
 }
 
@@ -1303,6 +1726,8 @@ impl Supervisor {
             Err(message) => {
                 self.emit(LanguageServiceEvent::ServerMessage {
                     server: server.to_string(),
+                    severity: LanguageServerMessageSeverity::Error,
+                    show: false,
                     message,
                 });
                 self.emit(LanguageServiceEvent::WorkspaceSymbols(
@@ -1390,7 +1815,121 @@ where
     }
 }
 
-fn supports_request(client: &LanguageServerClient, kind: LanguageRequestKind) -> bool {
+pub(super) fn capability_snapshot(
+    client: &LanguageServerClient,
+    incarnation: u64,
+) -> LanguageServerCapabilities {
+    let candidates = [
+        (LanguageServerFeature::Hover, LanguageRequestKind::Hover),
+        (
+            LanguageServerFeature::Completion,
+            LanguageRequestKind::Completion,
+        ),
+        (
+            LanguageServerFeature::Declaration,
+            LanguageRequestKind::Declaration,
+        ),
+        (
+            LanguageServerFeature::Definition,
+            LanguageRequestKind::Definition,
+        ),
+        (
+            LanguageServerFeature::Implementation,
+            LanguageRequestKind::Implementation,
+        ),
+        (
+            LanguageServerFeature::TypeDefinition,
+            LanguageRequestKind::TypeDefinition,
+        ),
+        (
+            LanguageServerFeature::References,
+            LanguageRequestKind::References,
+        ),
+        (
+            LanguageServerFeature::CallHierarchy,
+            LanguageRequestKind::PrepareCallHierarchy,
+        ),
+        (
+            LanguageServerFeature::TypeHierarchy,
+            LanguageRequestKind::PrepareTypeHierarchy,
+        ),
+        (
+            LanguageServerFeature::WorkspaceSymbols,
+            LanguageRequestKind::WorkspaceSymbols,
+        ),
+        (LanguageServerFeature::Rename, LanguageRequestKind::Rename),
+        (
+            LanguageServerFeature::CodeActions,
+            LanguageRequestKind::CodeActions,
+        ),
+        (
+            LanguageServerFeature::DocumentFormatting,
+            LanguageRequestKind::DocumentFormatting,
+        ),
+        (
+            LanguageServerFeature::RangeFormatting,
+            LanguageRequestKind::RangeFormatting,
+        ),
+        (
+            LanguageServerFeature::SignatureHelp,
+            LanguageRequestKind::SignatureHelp,
+        ),
+        (
+            LanguageServerFeature::InlayHints,
+            LanguageRequestKind::InlayHints,
+        ),
+        (
+            LanguageServerFeature::LinkedEditingRanges,
+            LanguageRequestKind::LinkedEditingRanges,
+        ),
+        (
+            LanguageServerFeature::SemanticTokens,
+            LanguageRequestKind::SemanticTokens,
+        ),
+        (
+            LanguageServerFeature::DocumentSymbols,
+            LanguageRequestKind::DocumentSymbols,
+        ),
+        (
+            LanguageServerFeature::CodeLens,
+            LanguageRequestKind::CodeLenses,
+        ),
+        (
+            LanguageServerFeature::DocumentLinks,
+            LanguageRequestKind::DocumentLinks,
+        ),
+        (
+            LanguageServerFeature::DocumentColors,
+            LanguageRequestKind::DocumentColors,
+        ),
+        (
+            LanguageServerFeature::FoldingRanges,
+            LanguageRequestKind::FoldingRanges,
+        ),
+        (
+            LanguageServerFeature::PullDiagnostics,
+            LanguageRequestKind::DocumentDiagnostics,
+        ),
+        (
+            LanguageServerFeature::WorkspaceDiagnostics,
+            LanguageRequestKind::WorkspaceDiagnostics,
+        ),
+    ];
+    let features = candidates
+        .into_iter()
+        .filter_map(|(feature, kind)| supports_request(client, kind).then_some(feature))
+        .collect();
+    LanguageServerCapabilities {
+        incarnation,
+        dynamic_revision: client.dynamic_capabilities().revision,
+        features,
+    }
+}
+
+pub(super) fn supports_request(client: &LanguageServerClient, kind: LanguageRequestKind) -> bool {
+    if dynamically_supports_request(client, kind) {
+        return true;
+    }
     let capabilities = &client.initialization().capabilities;
     match kind {
         LanguageRequestKind::Hover => matches!(
@@ -1399,6 +1938,11 @@ fn supports_request(client: &LanguageServerClient, kind: LanguageRequestKind) ->
                 | Some(zeta_lsp::lsp_types::HoverProviderCapability::Options(_))
         ),
         LanguageRequestKind::Completion => capabilities.completion_provider.is_some(),
+        LanguageRequestKind::ResolveCompletion => capabilities
+            .completion_provider
+            .as_ref()
+            .is_some_and(|options| options.resolve_provider == Some(true)),
+        LanguageRequestKind::ExecuteCommand => capabilities.execute_command_provider.is_some(),
         LanguageRequestKind::Definition => matches!(
             capabilities.definition_provider,
             Some(OneOf::Left(true)) | Some(OneOf::Right(_))
@@ -1469,5 +2013,183 @@ fn supports_request(client: &LanguageServerClient, kind: LanguageRequestKind) ->
                 | Some(LinkedEditingRangeServerCapabilities::Options(_))
                 | Some(LinkedEditingRangeServerCapabilities::RegistrationOptions(_))
         ),
+        LanguageRequestKind::SemanticTokens => {
+            semantic_tokens_options(client).is_some_and(|options| {
+                matches!(
+                    options.full,
+                    Some(SemanticTokensFullOptions::Bool(true))
+                        | Some(SemanticTokensFullOptions::Delta { .. })
+                )
+            })
+        }
+        LanguageRequestKind::DocumentSymbols => matches!(
+            capabilities.document_symbol_provider,
+            Some(OneOf::Left(true)) | Some(OneOf::Right(_))
+        ),
+        LanguageRequestKind::CodeLenses => capabilities.code_lens_provider.is_some(),
+        LanguageRequestKind::ResolveCodeLens => capabilities
+            .code_lens_provider
+            .as_ref()
+            .is_some_and(|options| options.resolve_provider == Some(true)),
+        LanguageRequestKind::DocumentLinks => capabilities.document_link_provider.is_some(),
+        LanguageRequestKind::ResolveDocumentLink => capabilities
+            .document_link_provider
+            .as_ref()
+            .is_some_and(|options| options.resolve_provider == Some(true)),
+        LanguageRequestKind::DocumentColors | LanguageRequestKind::ColorPresentations => matches!(
+            capabilities.color_provider.as_ref(),
+            Some(ColorProviderCapability::Simple(true))
+                | Some(ColorProviderCapability::ColorProvider(_))
+                | Some(ColorProviderCapability::Options(_))
+        ),
+        LanguageRequestKind::FoldingRanges => matches!(
+            capabilities.folding_range_provider.as_ref(),
+            Some(FoldingRangeProviderCapability::Simple(true))
+                | Some(FoldingRangeProviderCapability::FoldingProvider(_))
+                | Some(FoldingRangeProviderCapability::Options(_))
+        ),
+        LanguageRequestKind::DocumentDiagnostics => capabilities.diagnostic_provider.is_some(),
+        LanguageRequestKind::WorkspaceDiagnostics => capabilities
+            .diagnostic_provider
+            .as_ref()
+            .is_some_and(workspace_diagnostics_supported),
     }
+}
+
+fn dynamically_supports_request(client: &LanguageServerClient, kind: LanguageRequestKind) -> bool {
+    let method = match kind {
+        LanguageRequestKind::Hover => "textDocument/hover",
+        LanguageRequestKind::Completion => "textDocument/completion",
+        LanguageRequestKind::ResolveCompletion => {
+            return dynamic_resolve_provider(client, "textDocument/completion");
+        }
+        LanguageRequestKind::ExecuteCommand => "workspace/executeCommand",
+        LanguageRequestKind::Declaration => "textDocument/declaration",
+        LanguageRequestKind::Definition => "textDocument/definition",
+        LanguageRequestKind::Implementation => "textDocument/implementation",
+        LanguageRequestKind::TypeDefinition => "textDocument/typeDefinition",
+        LanguageRequestKind::References => "textDocument/references",
+        LanguageRequestKind::PrepareCallHierarchy
+        | LanguageRequestKind::IncomingCalls
+        | LanguageRequestKind::OutgoingCalls => "textDocument/prepareCallHierarchy",
+        LanguageRequestKind::PrepareTypeHierarchy
+        | LanguageRequestKind::Supertypes
+        | LanguageRequestKind::Subtypes => "textDocument/prepareTypeHierarchy",
+        LanguageRequestKind::WorkspaceSymbols => "workspace/symbol",
+        LanguageRequestKind::PrepareRename | LanguageRequestKind::Rename => "textDocument/rename",
+        LanguageRequestKind::CodeActions => "textDocument/codeAction",
+        LanguageRequestKind::ResolveCodeAction => {
+            return client
+                .dynamic_capabilities()
+                .registrations
+                .iter()
+                .any(|registration| {
+                    registration.method == "textDocument/codeAction"
+                        && registration
+                            .register_options
+                            .as_ref()
+                            .and_then(|options| options.get("resolveProvider"))
+                            .and_then(serde_json::Value::as_bool)
+                            == Some(true)
+                });
+        }
+        LanguageRequestKind::DocumentFormatting => "textDocument/formatting",
+        LanguageRequestKind::RangeFormatting => "textDocument/rangeFormatting",
+        LanguageRequestKind::SignatureHelp => "textDocument/signatureHelp",
+        LanguageRequestKind::InlayHints => "textDocument/inlayHint",
+        LanguageRequestKind::LinkedEditingRanges => "textDocument/linkedEditingRange",
+        LanguageRequestKind::SemanticTokens => {
+            return semantic_tokens_options(client).is_some_and(|options| {
+                matches!(
+                    options.full,
+                    Some(SemanticTokensFullOptions::Bool(true))
+                        | Some(SemanticTokensFullOptions::Delta { .. })
+                )
+            });
+        }
+        LanguageRequestKind::DocumentSymbols => "textDocument/documentSymbol",
+        LanguageRequestKind::CodeLenses => "textDocument/codeLens",
+        LanguageRequestKind::ResolveCodeLens => {
+            return dynamic_resolve_provider(client, "textDocument/codeLens");
+        }
+        LanguageRequestKind::DocumentLinks => "textDocument/documentLink",
+        LanguageRequestKind::ResolveDocumentLink => {
+            return dynamic_resolve_provider(client, "textDocument/documentLink");
+        }
+        LanguageRequestKind::DocumentColors | LanguageRequestKind::ColorPresentations => {
+            "textDocument/documentColor"
+        }
+        LanguageRequestKind::FoldingRanges => "textDocument/foldingRange",
+        LanguageRequestKind::DocumentDiagnostics => "textDocument/diagnostic",
+        LanguageRequestKind::WorkspaceDiagnostics => {
+            return client
+                .dynamic_capabilities()
+                .registrations
+                .iter()
+                .any(|registration| {
+                    registration.method == "textDocument/diagnostic"
+                        && registration
+                            .register_options
+                            .as_ref()
+                            .and_then(|options| options.get("workspaceDiagnostics"))
+                            .and_then(serde_json::Value::as_bool)
+                            == Some(true)
+                });
+        }
+    };
+    client.supports_dynamic_method(method)
+}
+
+pub(super) fn workspace_diagnostics_supported(
+    capabilities: &zeta_lsp::lsp_types::DiagnosticServerCapabilities,
+) -> bool {
+    match capabilities {
+        zeta_lsp::lsp_types::DiagnosticServerCapabilities::Options(options) => {
+            options.workspace_diagnostics
+        }
+        zeta_lsp::lsp_types::DiagnosticServerCapabilities::RegistrationOptions(options) => {
+            options.diagnostic_options.workspace_diagnostics
+        }
+    }
+}
+
+fn dynamic_resolve_provider(client: &LanguageServerClient, method: &str) -> bool {
+    client
+        .dynamic_capabilities()
+        .registrations
+        .iter()
+        .any(|registration| {
+            registration.method == method
+                && registration
+                    .register_options
+                    .as_ref()
+                    .and_then(|options| options.get("resolveProvider"))
+                    .and_then(serde_json::Value::as_bool)
+                    == Some(true)
+        })
+}
+
+fn supports_command(client: &LanguageServerClient, command: &str) -> bool {
+    client
+        .initialization()
+        .capabilities
+        .execute_command_provider
+        .as_ref()
+        .is_some_and(|provider| {
+            provider
+                .commands
+                .iter()
+                .any(|candidate| candidate == command)
+        })
+        || client
+            .dynamic_capabilities()
+            .registrations
+            .iter()
+            .filter(|registration| registration.method == "workspace/executeCommand")
+            .filter_map(|registration| registration.register_options.as_ref())
+            .filter_map(|options| options.get("commands"))
+            .filter_map(serde_json::Value::as_array)
+            .flatten()
+            .filter_map(serde_json::Value::as_str)
+            .any(|candidate| candidate == command)
 }

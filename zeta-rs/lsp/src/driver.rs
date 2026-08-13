@@ -3,17 +3,19 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use lsp_types::{
-    ConfigurationParams, LogMessageParams, PublishDiagnosticsParams, ShowMessageParams,
+    ConfigurationParams, LogMessageParams, ProgressParams, PublishDiagnosticsParams,
+    RegistrationParams, ShowMessageParams, UnregistrationParams, WorkDoneProgressCreateParams,
 };
 use serde_json::Value;
 use tokio::io::{AsyncBufRead, AsyncWrite};
 use tokio::sync::{mpsc, oneshot};
 
+use crate::capability::DynamicCapabilityRegistry;
 use crate::event::{LanguageServerEvent, LanguageServerHost};
 use crate::protocol::{
     DEFAULT_MAX_HEADER_BYTES, DEFAULT_MAX_MESSAGE_BYTES, IncomingMessage, connection_closed_io,
-    method_not_found_bytes, notification_bytes, parse_message, read_frame, request_bytes,
-    result_bytes, write_frame,
+    invalid_params_bytes, method_not_found_bytes, notification_bytes, parse_message, read_frame,
+    request_bytes, result_bytes, write_frame,
 };
 use crate::{LanguageServerError, WorkspaceConfiguration};
 
@@ -45,6 +47,7 @@ pub(crate) fn spawn_driver<R, W>(
     writer: W,
     host: Arc<dyn LanguageServerHost>,
     intentional_stop: Arc<AtomicBool>,
+    dynamic_capabilities: DynamicCapabilityRegistry,
 ) -> DriverHandle
 where
     R: AsyncBufRead + Send + Unpin + 'static,
@@ -56,6 +59,7 @@ where
         writer,
         host,
         intentional_stop,
+        dynamic_capabilities,
         command_rx,
     ));
     DriverHandle {
@@ -69,6 +73,7 @@ async fn run_driver<R, W>(
     mut writer: W,
     host: Arc<dyn LanguageServerHost>,
     intentional_stop: Arc<AtomicBool>,
+    dynamic_capabilities: DynamicCapabilityRegistry,
     mut commands: mpsc::Receiver<DriverCommand>,
 ) where
     R: AsyncBufRead + Send + Unpin + 'static,
@@ -119,7 +124,7 @@ async fn run_driver<R, W>(
             message = incoming_rx.recv() => {
                 match message {
                     Some(Ok(message)) => {
-                        if handle_incoming(message, &mut writer, &host, &mut pending).await.is_err() {
+                        if handle_incoming(message, &mut writer, &host, &dynamic_capabilities, &mut pending).await.is_err() {
                             break Some("language server transport stopped while handling a server message".into());
                         }
                     }
@@ -219,6 +224,7 @@ async fn handle_incoming<W>(
     message: IncomingMessage,
     writer: &mut W,
     host: &Arc<dyn LanguageServerHost>,
+    dynamic_capabilities: &DynamicCapabilityRegistry,
     pending: &mut HashMap<i64, PendingRequest>,
 ) -> Result<(), ()>
 where
@@ -240,21 +246,67 @@ where
             host.on_event(notification_event(method, params));
         }
         IncomingMessage::Request { id, method, params } => {
-            let bytes = if method == "workspace/configuration" {
-                configuration_response(&id, params, host.as_ref())
-            } else {
-                host.on_event(LanguageServerEvent::UnsupportedServerRequest {
-                    method: method.clone(),
-                });
-                method_not_found_bytes(&id, &format!("method not supported: {method}"))
-            }
-            .map_err(|_| ())?;
+            let bytes =
+                server_request_response(&id, &method, params, host.as_ref(), dynamic_capabilities)
+                    .map_err(|_| ())?;
             write_frame(writer, &bytes, DEFAULT_MAX_MESSAGE_BYTES)
                 .await
                 .map_err(|_| ())?;
         }
     }
     Ok(())
+}
+
+fn server_request_response(
+    id: &Value,
+    method: &str,
+    params: Value,
+    host: &dyn LanguageServerHost,
+    dynamic_capabilities: &DynamicCapabilityRegistry,
+) -> Result<Vec<u8>, LanguageServerError> {
+    match method {
+        "workspace/configuration" => configuration_response(id, params, host),
+        "client/registerCapability" => {
+            let params = match serde_json::from_value::<RegistrationParams>(params) {
+                Ok(params) => params,
+                Err(error) => return invalid_params_bytes(id, &error.to_string()),
+            };
+            match dynamic_capabilities.register(params.registrations) {
+                Ok(snapshot) => {
+                    host.on_event(LanguageServerEvent::DynamicCapabilitiesChanged(snapshot));
+                    result_bytes(id, &Value::Null)
+                }
+                Err(message) => invalid_params_bytes(id, &message),
+            }
+        }
+        "client/unregisterCapability" => {
+            let params = match serde_json::from_value::<UnregistrationParams>(params) {
+                Ok(params) => params,
+                Err(error) => return invalid_params_bytes(id, &error.to_string()),
+            };
+            match dynamic_capabilities.unregister(params.unregisterations) {
+                Ok(snapshot) => {
+                    host.on_event(LanguageServerEvent::DynamicCapabilitiesChanged(snapshot));
+                    result_bytes(id, &Value::Null)
+                }
+                Err(message) => invalid_params_bytes(id, &message),
+            }
+        }
+        "window/workDoneProgress/create" => {
+            let params = match serde_json::from_value::<WorkDoneProgressCreateParams>(params) {
+                Ok(params) => params,
+                Err(error) => return invalid_params_bytes(id, &error.to_string()),
+            };
+            host.on_event(LanguageServerEvent::WorkDoneProgressCreated(params));
+            result_bytes(id, &Value::Null)
+        }
+        _ => {
+            host.on_event(LanguageServerEvent::UnsupportedServerRequest {
+                method: method.to_owned(),
+            });
+            method_not_found_bytes(id, &format!("method not supported: {method}"))
+        }
+    }
 }
 
 fn configuration_response(
@@ -289,6 +341,9 @@ fn notification_event(method: String, params: Value) -> LanguageServerEvent {
             .unwrap_or(LanguageServerEvent::UnhandledNotification { method, params }),
         "window/showMessage" => serde_json::from_value::<ShowMessageParams>(params.clone())
             .map(LanguageServerEvent::ShowMessage)
+            .unwrap_or(LanguageServerEvent::UnhandledNotification { method, params }),
+        "$/progress" => serde_json::from_value::<ProgressParams>(params.clone())
+            .map(LanguageServerEvent::Progress)
             .unwrap_or(LanguageServerEvent::UnhandledNotification { method, params }),
         "telemetry/event" => LanguageServerEvent::Telemetry(params),
         _ => LanguageServerEvent::UnhandledNotification { method, params },

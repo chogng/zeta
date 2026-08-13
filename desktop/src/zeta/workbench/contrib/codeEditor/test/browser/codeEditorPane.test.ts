@@ -5,6 +5,7 @@ import { URI } from "../../../../../base/common/uri.js";
 import { TextPosition, TextRange } from "../../../../../editor/common/core/text.js";
 import { EditorPaneVisibility } from "../../../../browser/parts/editor/editorPane.js";
 import { TextFileContentSource, type ITextFileService, type ResolvedTextFileContent, type TextFileResolveRequest } from "../../../../services/textfile/common/textFileService.js";
+import { LanguageFeaturesService } from "../../../../services/language/common/languageFeaturesService.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -121,6 +122,32 @@ test("Aster editor pane saves and reverts its shared model reference", async () 
   assert.equal(pane.isDirty, false);
 
   reference.dispose();
+  pane.dispose();
+  dom.window.close();
+});
+
+test("Aster editor pane resolves extension first-line languages after loading an unknown file", async () => {
+  const dom = new JSDOM("<!doctype html><body><main></main></body>");
+  const parent = dom.window.document.querySelector<HTMLElement>("main")!;
+  const textFiles = new ImmediateTextFiles("#!/usr/bin/env demo\nprint('ok')");
+  const resourceStore = new BrowserTextResourceStore(textFiles);
+  using models = new BrowserTextModelService(resourceStore);
+  using languages = new LanguageFeaturesService();
+  using registration = languages.registerLanguage({ id: "demo", firstLine: "#!.*\\bdemo" }, { priority: 100 });
+  let languageId: string | undefined;
+  const pane = new EditorPane(resourceStore, {
+    modelService: models,
+    languageFeaturesService: languages,
+    createPart: options => {
+      languageId = options.languageId;
+      return { layout: () => {}, focus: () => {}, getValue: () => "", dispose: () => {}, [Symbol.dispose]: () => {} };
+    },
+  });
+  pane.create(parent);
+
+  await pane.setInput({ resource: URI.file("C:\\project\\script.cgi") }, new AbortController().signal);
+
+  assert.equal(languageId, "demo");
   pane.dispose();
   dom.window.close();
 });

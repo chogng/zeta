@@ -121,6 +121,11 @@ export class AppServerSupervisor implements IDisposable {
     return this.session.slashCommands;
   }
 
+  get capabilities() {
+    if (this._state !== "ready" || !this.session) return undefined;
+    return this.session.capabilities;
+  }
+
   onStateChange(listener: StateListener): IDisposable {
     this.stateListeners.add(listener);
     return toDisposable(() => this.stateListeners.delete(listener));

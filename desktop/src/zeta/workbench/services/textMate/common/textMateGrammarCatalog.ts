@@ -3,6 +3,10 @@ import { Emitter, type Event } from "../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { assertLanguageId } from "../../../../editor/common/languages/languageId.js";
 import { type TextMateGrammarRegistrySnapshot, type TextMateGrammarTokenType } from "./textMateGrammarRegistry.js";
+import * as textMateNamespace from "vscode-textmate";
+
+const textMateRuntime = (textMateNamespace as unknown as { readonly default?: typeof textMateNamespace }).default ?? textMateNamespace;
+const { parseRawGrammar } = textMateRuntime;
 
 export interface TextMateGrammarCatalogEntry {
   readonly scopeName: string;
@@ -142,7 +146,8 @@ export async function materializeTextMateGrammarCatalog(snapshot: TextMateGramma
   const loading = Promise.all(snapshot.grammars.map(async definition => {
     const loaded = await definition.loadGrammar();
     signal.throwIfAborted();
-    if (typeof loaded !== "string" && loaded.scopeName !== definition.scopeName) {
+    const grammar = typeof loaded === "string" ? parseRawGrammar(loaded, definition.filePath) : loaded;
+    if (grammar.scopeName !== definition.scopeName) {
       throw new TypeError(`TextMate grammar '${definition.scopeName}' returned a different root scope`);
     }
     const content = typeof loaded === "string" ? loaded : JSON.stringify(loaded);

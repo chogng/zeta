@@ -11,7 +11,9 @@
   gap: 4px;
 }
 
-.zeta-debug-controls select {
+.zeta-debug-controls select,
+.zeta-debug-thread-select,
+.zeta-debug-input-form input {
   flex: 1 1 100%;
   min-width: 0;
   padding: 4px 6px;
@@ -35,7 +37,8 @@
 }
 
 .zeta-debug button:focus-visible,
-.zeta-debug select:focus-visible {
+.zeta-debug select:focus-visible,
+.zeta-debug input:focus-visible {
   outline: 1px solid var(--zeta-focus-border);
   outline-offset: -1px;
 }
@@ -69,13 +72,46 @@
 
 .zeta-debug-frame,
 .zeta-debug-variable,
-.zeta-debug-breakpoint {
+.zeta-debug-breakpoint,
+.zeta-debug-watch-value {
   flex: 1;
   min-width: 0;
   overflow: hidden;
   text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.zeta-debug-frame.selected {
+  background: var(--zeta-list-active-selection-background);
+}
+
+.zeta-debug-thread-select {
+  width: 100%;
+  margin-bottom: 6px;
+}
+
+.zeta-debug-input-form {
+  display: flex;
+  gap: 4px;
+  margin: -2px 0 6px;
+}
+
+.zeta-debug-input-form input {
+  flex: 1;
+  min-width: 0;
+}
+
+.zeta-debug-watch-value {
+  flex: 1;
+  padding: 4px 6px;
+}
+
+.zeta-debug-exceptions label {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 4px 3px;
 }
 
 .zeta-debug-output {

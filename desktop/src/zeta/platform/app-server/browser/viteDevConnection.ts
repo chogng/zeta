@@ -1,4 +1,4 @@
-import { APP_SERVER_METHODS, APP_SERVER_NOTIFICATIONS, APP_SERVER_SCHEMA_HASH, type AppServerMethod, type AppServerMethodDefinition, type InitializeResult, type MethodParams, type MethodResult, type ServerNotification } from "../../../../../generated/app-server/types.js";
+import { APP_SERVER_METHODS, APP_SERVER_NOTIFICATIONS, APP_SERVER_SCHEMA_HASH, type AppServerMethod, type AppServerMethodDefinition, type InitializeResult, type MethodParams, type MethodResult, type ServerCapabilities, type ServerNotification } from "../../../../../generated/app-server/types.js";
 import type { AppServerConnectionState } from "../common/appServerApi.js";
 import type { DisposableHandle } from "../../ipc/common/ipc.js";
 
@@ -56,6 +56,7 @@ export class ViteDevAppServerConnection {
   private nextRequestId = 1;
   private _state: AppServerConnectionState = "stopped";
   private _slashCommands: readonly InitializeResult["slashCommands"][number][] = [];
+  private _capabilities: ServerCapabilities | undefined;
   private metadata: ViteDevAppServerMetadata | undefined;
   private connectResolve: ((metadata: ViteDevAppServerMetadata) => void) | undefined;
   private connectReject: ((error: Error) => void) | undefined;
@@ -83,6 +84,10 @@ export class ViteDevAppServerConnection {
     return this._slashCommands;
   }
 
+  get capabilities(): ServerCapabilities | undefined {
+    return this._capabilities;
+  }
+
   async connect(): Promise<ViteDevAppServerMetadata> {
     if (this.disposed) throw new Error("Cannot connect a disposed Web App Server client");
     if (this._state !== "stopped") throw new Error(`Cannot connect Web App Server client from ${this._state}`);
@@ -100,7 +105,9 @@ export class ViteDevAppServerConnection {
         clientInfo: { name: this.options.clientName, version: this.options.clientVersion },
         capabilities: { notifications: true },
       }, this.options.connectTimeoutMs);
-      this._slashCommands = validateInitializeResult(initialized);
+      const initialization = validateInitializeResult(initialized);
+      this._slashCommands = initialization.slashCommands;
+      this._capabilities = initialization.capabilities;
       this.setState("ready");
       return metadata;
     } catch (error) {
@@ -297,7 +304,7 @@ function validateFramePayload(payload: unknown): string {
   return payload.frame;
 }
 
-function validateInitializeResult(value: InitializeResult): readonly InitializeResult["slashCommands"][number][] {
+function validateInitializeResult(value: InitializeResult): Pick<InitializeResult, "capabilities" | "slashCommands"> {
   const result = value as unknown;
   const serverInfo = isRecord(result) && isRecord(result.serverInfo) ? result.serverInfo : undefined;
   const serverName = serverInfo?.name;
@@ -306,14 +313,14 @@ function validateInitializeResult(value: InitializeResult): readonly InitializeR
     throw new Error(`Web App Server initialization identity or schema mismatch (received server ${describeValue(serverName)}, schema ${describeValue(schemaHash)})`);
   }
   const capabilities = isRecord(result) ? result.capabilities : undefined;
-  if (!isRecord(capabilities) || typeof capabilities.sessions !== "boolean" || typeof capabilities.threads !== "boolean" || typeof capabilities.turns !== "boolean") {
+  if (!isRecord(capabilities) || typeof capabilities.sessions !== "boolean" || typeof capabilities.threads !== "boolean" || typeof capabilities.turns !== "boolean" || typeof capabilities.extensionHost !== "boolean") {
     throw new Error("Web App Server initialize result is malformed");
   }
   const slashCommands = isRecord(result) ? result.slashCommands : undefined;
   if (!Array.isArray(slashCommands) || slashCommands.some((command) => !isRecord(command) || typeof command.name !== "string" || typeof command.description !== "string" || (command.argumentMode !== "none" && command.argumentMode !== "optional"))) {
     throw new Error("Web App Server initialize slash commands are malformed");
   }
-  return slashCommands as readonly InitializeResult["slashCommands"][number][];
+  return { capabilities: capabilities as unknown as ServerCapabilities, slashCommands: slashCommands as InitializeResult["slashCommands"] };
 }
 
 function disposable(dispose: () => void): DisposableHandle {

@@ -116,6 +116,7 @@ impl Supervisor {
             server.restart.mark_ready(Instant::now());
         }
         self.emit_server_state(&name, LanguageServerState::Ready);
+        self.emit_server_capabilities(&name, server_epoch);
         self.route_documents_for_server(&name).await;
     }
 
@@ -285,6 +286,8 @@ impl Supervisor {
         for failure in router.shutdown().await {
             self.emit(LanguageServiceEvent::ServerMessage {
                 server: failure.server.to_string(),
+                severity: LanguageServerMessageSeverity::Error,
+                show: false,
                 message: failure.message,
             });
         }

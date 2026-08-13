@@ -13,6 +13,7 @@ registerEditorContribution({
     const session = context.own(new LanguageCompletionSessionController(completions.results, context.selections, {
       resolver: completions,
       onResolveError: context.onLanguageError,
+      onDidAccept: item => completions.executeCompletionCommand(context.languageId, item, new AbortController().signal),
       snippetVariables: createSnippetVariables(context.options.input),
     }));
     context.setTextInputCompletion({

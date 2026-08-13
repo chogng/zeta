@@ -10,6 +10,7 @@ import { type RustSyntaxFactsService } from "../browser/services/rustSyntaxFacts
 import { type SyntaxService } from "../common/languages/syntax/syntaxService.js";
 import { type SemanticTokenSource } from "../browser/view/semanticTokenPresentation.js";
 import { type LanguageLexicalContextSource } from "../common/languages/languageLexicalContext.js";
+import { type SemanticTokensModelPart, type SemanticTokensService } from "./semanticTokens/common/semanticTokens.js";
 
 /** Typed identities for shared runtime objects consumed by independently selected text-editor contributions. */
 export const TextEditorCapability = Object.freeze({
@@ -23,6 +24,8 @@ export const TextEditorCapability = Object.freeze({
   rustSyntaxFacts: capability<RustSyntaxFactsService | undefined>("editor.capability.rustSyntaxFacts"),
   searchDecorations: capability<TextDecorationCollection<void>>("editor.capability.searchDecorations"),
   semanticTokenSource: capability<SemanticTokenSource>("editor.capability.semanticTokenSource"),
+  semanticTokens: capability<SemanticTokensService>("editor.capability.semanticTokens"),
+  semanticTokenOverlay: capability<SemanticTokensModelPart>("editor.capability.semanticTokenOverlay"),
   syntax: capability<SyntaxService>("editor.capability.syntax"),
   tokenization: capability<TokenizationTextModelPart>("editor.capability.tokenization"),
   unicodeDecorations: capability<TextDecorationCollection<UnicodeHighlight>>("editor.capability.unicodeDecorations"),

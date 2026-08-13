@@ -11,6 +11,7 @@ export interface LanguageDescription {
   readonly filenames?: readonly string[];
   readonly filenamePatterns?: readonly string[];
   readonly mimetypes?: readonly string[];
+  readonly firstLine?: string;
 }
 
 export interface LanguageRegistrationOptions {
@@ -21,8 +22,20 @@ export interface LanguageDescriptionChangeEvent {
   readonly languageId: string;
 }
 
-interface RegisteredLanguageDescription {
+export interface LanguageDescriptionContribution {
   readonly description: LanguageDescription;
+  readonly options?: LanguageRegistrationOptions;
+}
+
+/** One caller-owned set of language descriptions that can be replaced without self-conflicts. */
+export interface LanguageDescriptionRegistration extends IDisposable {
+  replace(contributions: readonly LanguageDescriptionContribution[]): void;
+}
+
+interface RegisteredLanguageDescription {
+  readonly owner: object;
+  readonly description: LanguageDescription;
+  readonly firstLinePattern?: RegExp;
   readonly priority: number;
   readonly order: number;
 }
@@ -45,23 +58,25 @@ export class LanguageRegistry extends DisposableOwner {
   }
 
   register(description: LanguageDescription, options: LanguageRegistrationOptions = {}): IDisposable {
+    return this.registerMany([{ description, options }]);
+  }
+
+  registerMany(contributions: readonly LanguageDescriptionContribution[]): LanguageDescriptionRegistration {
     this.ensureAlive();
-    const normalized = normalizeDescription(description);
-    const priority = normalizePriority(options);
-    const entry = Object.freeze({ description: normalized, priority, order: this.nextOrder++ });
-    const values = this.descriptions.get(normalized.id);
-    if (values) values.push(entry);
-    else this.descriptions.set(normalized.id, [entry]);
-    this.changeEmitter.fire(Object.freeze({ languageId: normalized.id }));
-    return toDisposable(() => {
-      const current = this.descriptions.get(normalized.id);
-      if (!current) return;
-      const index = current.indexOf(entry);
-      if (index < 0) return;
-      current.splice(index, 1);
-      if (current.length === 0) this.descriptions.delete(normalized.id);
-      if (!this.disposed) this.changeEmitter.fire(Object.freeze({ languageId: normalized.id }));
-    });
+    const owner = Object.freeze({});
+    this.replace(owner, contributions);
+    let disposed = false;
+    const registration = toDisposable(() => {
+      if (disposed) return;
+      disposed = true;
+      this.removeOwner(owner);
+    }) as LanguageDescriptionRegistration;
+    registration.replace = replacement => {
+      if (disposed) throw new ReferenceError("Language description registration is already disposed");
+      this.ensureAlive();
+      this.replace(owner, replacement);
+    };
+    return registration;
   }
 
   get(languageId: string): LanguageDescription | undefined {
@@ -76,10 +91,11 @@ export class LanguageRegistry extends DisposableOwner {
     const path = normalizePath(input.resource.path);
     const fileName = path.slice(path.lastIndexOf("/") + 1);
     const contentType = input.contentType?.toLowerCase();
+    const firstLine = normalizeFirstLineText(input.firstLine);
     let best: LanguageMatch | undefined;
     for (const entries of this.descriptions.values()) {
       for (const entry of entries) {
-        const match = matchDescription(entry, path, fileName, contentType);
+        const match = matchDescription(entry, path, fileName, contentType, firstLine);
         if (match && (!best || compareMatches(match, best) > 0)) best = match;
       }
     }
@@ -88,6 +104,44 @@ export class LanguageRegistry extends DisposableOwner {
 
   private ensureAlive(): void {
     if (this.disposed) throw new ReferenceError("LanguageRegistry is already disposed");
+  }
+
+  private replace(owner: object, contributions: readonly LanguageDescriptionContribution[]): void {
+    if (!Array.isArray(contributions)) throw new TypeError("Language description contributions must be an array");
+    const entries = contributions.map(contribution => {
+      if (typeof contribution !== "object" || contribution === null) throw new TypeError("Language description contribution must be an object");
+      const description = normalizeDescription(contribution.description);
+      return Object.freeze({ owner, description, ...(description.firstLine === undefined ? {} : { firstLinePattern: new RegExp(description.firstLine, "u") }), priority: normalizePriority(contribution.options ?? {}), order: this.nextOrder++ });
+    });
+    const affected = this.ownerLanguageIds(owner);
+    for (const entry of entries) affected.add(entry.description.id);
+    this.deleteOwner(owner);
+    for (const entry of entries) {
+      const values = this.descriptions.get(entry.description.id);
+      if (values) values.push(entry);
+      else this.descriptions.set(entry.description.id, [entry]);
+    }
+    for (const languageId of [...affected].sort()) this.changeEmitter.fire(Object.freeze({ languageId }));
+  }
+
+  private removeOwner(owner: object): void {
+    const affected = this.ownerLanguageIds(owner);
+    this.deleteOwner(owner);
+    if (!this.disposed) for (const languageId of [...affected].sort()) this.changeEmitter.fire(Object.freeze({ languageId }));
+  }
+
+  private deleteOwner(owner: object): void {
+    for (const [languageId, entries] of this.descriptions) {
+      const remaining = entries.filter(entry => entry.owner !== owner);
+      if (remaining.length === 0) this.descriptions.delete(languageId);
+      else if (remaining.length !== entries.length) this.descriptions.set(languageId, remaining);
+    }
+  }
+
+  private ownerLanguageIds(owner: object): Set<string> {
+    const languageIds = new Set<string>();
+    for (const [languageId, entries] of this.descriptions) if (entries.some(entry => entry.owner === owner)) languageIds.add(languageId);
+    return languageIds;
   }
 }
 
@@ -109,6 +163,7 @@ function normalizeDescription(description: LanguageDescription): LanguageDescrip
     filenames: normalizeTextList(description.filenames, "language filenames", true),
     filenamePatterns: normalizeTextList(description.filenamePatterns, "language filename patterns", true),
     mimetypes: normalizeTextList(description.mimetypes, "language MIME types", true),
+    ...(description.firstLine === undefined ? {} : { firstLine: normalizeFirstLinePattern(description.firstLine) }),
   });
 }
 
@@ -142,7 +197,7 @@ function normalizePath(path: string): string {
   return path.replace(/\\/gu, "/").toLowerCase();
 }
 
-function matchDescription(entry: RegisteredLanguageDescription, path: string, fileName: string, contentType: string | undefined): LanguageMatch | undefined {
+function matchDescription(entry: RegisteredLanguageDescription, path: string, fileName: string, contentType: string | undefined, firstLine: string | undefined): LanguageMatch | undefined {
   const description = entry.description;
   if (contentType && description.mimetypes?.includes(contentType)) {
     return match(entry, 4, contentType.length);
@@ -154,7 +209,24 @@ function matchDescription(entry: RegisteredLanguageDescription, path: string, fi
   if (pattern) return match(entry, 2, pattern.length);
   const extension = description.extensions?.filter(value => path.endsWith(value)).sort((left, right) => right.length - left.length)[0];
   if (extension) return match(entry, 1, extension.length);
+  if (firstLine !== undefined && entry.firstLinePattern?.test(firstLine)) return match(entry, 0, description.firstLine?.length ?? 0);
   return undefined;
+}
+
+function normalizeFirstLinePattern(value: string): string {
+  if (typeof value !== "string" || value.length === 0 || value.length > 1024 || /[\r\n]/u.test(value)) throw new TypeError("Language first-line pattern must be a bounded single-line regular expression");
+  const source = value.startsWith("^") ? value : `^(?:${value})`;
+  let pattern: RegExp;
+  try { pattern = new RegExp(source, "u"); }
+  catch { throw new TypeError("Language first-line pattern must be a valid regular expression"); }
+  if (pattern.test("")) throw new TypeError("Language first-line pattern must not match an empty line");
+  return source;
+}
+
+function normalizeFirstLineText(value: string | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  const withoutByteOrderMark = value.charCodeAt(0) === 0xFEFF ? value.slice(1) : value;
+  return withoutByteOrderMark.slice(0, 1000);
 }
 
 function match(entry: RegisteredLanguageDescription, rank: number, specificity: number): LanguageMatch {

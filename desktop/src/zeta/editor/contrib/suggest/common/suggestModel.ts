@@ -46,6 +46,7 @@ export interface LanguageCompletionSessionChange {
 export interface LanguageCompletionSessionOptions {
   readonly resolver?: LanguageCompletionItemResolver;
   readonly onResolveError?: (error: unknown) => void;
+  readonly onDidAccept?: (item: LanguageCompletionItem) => void | Promise<void>;
   /** Editor-context variables made available to accepted completion snippets. */
   readonly snippetVariables?: LanguageCompletionSnippetVariableResolver;
 }
@@ -61,6 +62,7 @@ export class LanguageCompletionSessionController extends DisposableOwner {
   private currentState: LanguageCompletionSessionState | undefined;
   private readonly resolver: LanguageCompletionItemResolver | undefined;
   private readonly onResolveError: (error: unknown) => void;
+  private readonly onDidAccept: ((item: LanguageCompletionItem) => void | Promise<void>) | undefined;
   private readonly snippetVariables: LanguageCompletionSnippetVariableResolver | undefined;
   private resolveController: AbortController | undefined;
   private snippetSession: LanguageCompletionSnippetSession | undefined;
@@ -85,11 +87,13 @@ export class LanguageCompletionSessionController extends DisposableOwner {
       if (options.onResolveError !== undefined && typeof options.onResolveError !== "function") {
         throw new TypeError("Language completion resolve error handler must be a function");
       }
+      if (options.onDidAccept !== undefined && typeof options.onDidAccept !== "function") throw new TypeError("Language completion accept handler must be a function");
       if (options.snippetVariables !== undefined && typeof options.snippetVariables.resolveVariable !== "function") {
         throw new TypeError("Language completion snippet variables require a resolver");
       }
       this.resolver = options.resolver;
       this.onResolveError = options.onResolveError ?? reportResolveError;
+      this.onDidAccept = options.onDidAccept;
       this.snippetVariables = options.snippetVariables;
       this.currentState = this.createState(store.result);
       this.own(store.onDidChange(change => {
@@ -197,6 +201,7 @@ export class LanguageCompletionSessionController extends DisposableOwner {
         insertion.text.length,
       );
     }
+    if (state.selectedItem.command && this.onDidAccept) void Promise.resolve().then(() => this.onDidAccept!(state.selectedItem)).catch(this.onResolveError);
     this.close(LanguageCompletionSessionChangeReason.Accepted);
     return true;
   }

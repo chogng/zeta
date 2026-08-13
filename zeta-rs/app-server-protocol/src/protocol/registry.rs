@@ -111,6 +111,25 @@ use crate::protocol::document::{
     TypstSourceRangeDto,
 };
 use crate::protocol::error::{AppServerError, AppServerErrorName};
+use crate::protocol::extension_host::ExtensionHostCancellationReasonDto;
+use crate::protocol::extension_host::ExtensionHostChanged;
+use crate::protocol::extension_host::ExtensionHostExtensionDto;
+use crate::protocol::extension_host::ExtensionHostFailureCodeDto;
+use crate::protocol::extension_host::ExtensionHostFailureDto;
+use crate::protocol::extension_host::ExtensionHostInvokeCancelDispositionDto;
+use crate::protocol::extension_host::ExtensionHostInvokeCancelParams;
+use crate::protocol::extension_host::ExtensionHostInvokeCancelResult;
+use crate::protocol::extension_host::ExtensionHostInvokeReadParams;
+use crate::protocol::extension_host::ExtensionHostInvokeReadResult;
+use crate::protocol::extension_host::ExtensionHostInvokeStartParams;
+use crate::protocol::extension_host::ExtensionHostInvokeStartResult;
+use crate::protocol::extension_host::ExtensionHostLanguageProviderOperationDto;
+use crate::protocol::extension_host::ExtensionHostLifecycleDto;
+use crate::protocol::extension_host::ExtensionHostReconcileModeDto;
+use crate::protocol::extension_host::ExtensionHostReconcileParams;
+use crate::protocol::extension_host::ExtensionHostRegistrationDescriptorDto;
+use crate::protocol::extension_host::ExtensionHostRegistrationKindDto;
+use crate::protocol::extension_host::ExtensionHostSnapshotDto;
 use crate::protocol::extensions::ExtensionCatalogReloadDto;
 use crate::protocol::extensions::ExtensionDiagnosticCodeDto;
 use crate::protocol::extensions::ExtensionDiagnosticDto;
@@ -136,10 +155,18 @@ use crate::protocol::git::{
 use crate::protocol::initialize::{InitializeParams, InitializeResult, ServerCapabilities};
 use crate::protocol::language::{
     LanguageCloseParams, LanguageCodeActionDiagnosticDto, LanguageCodeActionDto,
-    LanguageCodeActionsParams, LanguageCodeActionsResult, LanguageCompletionInsertTextFormatDto,
+    LanguageCodeActionsParams, LanguageCodeActionsResult, LanguageCodeLensDto,
+    LanguageCodeLensesResult, LanguageColorDto, LanguageColorPresentationDto,
+    LanguageColorPresentationsParams, LanguageColorPresentationsResult, LanguageCommandDto,
+    LanguageCompletionDetailsResult, LanguageCompletionInsertTextFormatDto,
     LanguageCompletionItemDto, LanguageCompletionItemKindDto, LanguageCompletionTriggerKindDto,
-    LanguageCompletionsParams, LanguageCompletionsResult, LanguageDiagnosticSeverityDto,
-    LanguageDiagnosticsNotification, LanguageDocumentDto, LanguageDocumentFormattingParams,
+    LanguageCompletionsParams, LanguageCompletionsResult, LanguageDiagnosticReportKindDto,
+    LanguageDiagnosticSeverityDto, LanguageDiagnosticsNotification, LanguageDocumentColorDto,
+    LanguageDocumentColorsResult, LanguageDocumentDiagnosticsParams,
+    LanguageDocumentDiagnosticsResult, LanguageDocumentDto, LanguageDocumentFeaturesParams,
+    LanguageDocumentFormattingParams, LanguageDocumentLinkDto, LanguageDocumentLinksResult,
+    LanguageDocumentSymbolDto, LanguageDocumentSymbolsResult, LanguageExecuteCommandParams,
+    LanguageFoldingRangeDto, LanguageFoldingRangeKindDto, LanguageFoldingRangesResult,
     LanguageFormattingOptionsDto, LanguageFormattingResult, LanguageHierarchyEntryDto,
     LanguageHierarchyItemDto, LanguageHierarchyKindDto, LanguageHierarchyParams,
     LanguageHierarchyResultDto, LanguageHoverParams, LanguageHoverResult, LanguageInlayHintDto,
@@ -149,10 +176,16 @@ use crate::protocol::language::{
     LanguageParameterInformationDto, LanguagePositionDto, LanguagePrepareRenameParams,
     LanguagePrepareRenameResult, LanguageRangeDto, LanguageRangeFormattingParams,
     LanguageRenameParams, LanguageRenamePreparationDto, LanguageResolveCodeActionParams,
+    LanguageResolveCodeLensParams, LanguageResolveCompletionParams,
+    LanguageResolveDocumentLinkParams, LanguageSemanticTokenDto, LanguageSemanticTokensParams,
+    LanguageSemanticTokensResult, LanguageServerMessageNotification,
+    LanguageServerMessageSeverityDto, LanguageServerProgressNotification,
     LanguageSignatureHelpParams, LanguageSignatureHelpResult, LanguageSignatureHelpTriggerKindDto,
     LanguageSignatureInformationDto, LanguageSynchronizeParams, LanguageTextDocumentEditDto,
-    LanguageTextEditDto, LanguageWorkspaceEditDto, LanguageWorkspaceEditEntryDto,
-    LanguageWorkspaceSymbolDto, LanguageWorkspaceSymbolsParams, LanguageWorkspaceSymbolsResult,
+    LanguageTextEditDto, LanguageWorkspaceDiagnosticSnapshotDto,
+    LanguageWorkspaceDiagnosticsParams, LanguageWorkspaceDiagnosticsResult,
+    LanguageWorkspaceEditDto, LanguageWorkspaceEditEntryDto, LanguageWorkspaceSymbolDto,
+    LanguageWorkspaceSymbolsParams, LanguageWorkspaceSymbolsResult,
 };
 use crate::protocol::model::{ModelCatalogEntry, ModelListResult};
 use crate::protocol::notification::{SessionUpdateEnvelope, ThreadUpdateEnvelope};
@@ -705,6 +738,31 @@ client_methods! {
         response: ExtensionResourceOpenResult,
         serialization: ResourceExclusive,
     },
+    ExtensionHostList => "extensionHost/list" {
+        params: EmptyParams,
+        response: ExtensionHostSnapshotDto,
+        serialization: GlobalSharedRead,
+    },
+    ExtensionHostReconcile => "extensionHost/reconcile" {
+        params: ExtensionHostReconcileParams,
+        response: ExtensionHostSnapshotDto,
+        serialization: GlobalExclusive,
+    },
+    ExtensionHostInvokeStart => "extensionHost/invoke/start" {
+        params: ExtensionHostInvokeStartParams,
+        response: ExtensionHostInvokeStartResult,
+        serialization: None,
+    },
+    ExtensionHostInvokeRead => "extensionHost/invoke/read" {
+        params: ExtensionHostInvokeReadParams,
+        response: ExtensionHostInvokeReadResult,
+        serialization: None,
+    },
+    ExtensionHostInvokeCancel => "extensionHost/invoke/cancel" {
+        params: ExtensionHostInvokeCancelParams,
+        response: ExtensionHostInvokeCancelResult,
+        serialization: None,
+    },
     TypstCompile => "document/typst/compile" {
         params: TypstCompileParams,
         response: TypstCompileResult,
@@ -800,6 +858,26 @@ client_methods! {
         response: LanguageCompletionsResult,
         serialization: GlobalSharedRead,
     },
+    LanguageResolveCompletion => "language/resolveCompletion" {
+        params: LanguageResolveCompletionParams,
+        response: LanguageCompletionDetailsResult,
+        serialization: GlobalSharedRead,
+    },
+    LanguageExecuteCommand => "language/executeCommand" {
+        params: LanguageExecuteCommandParams,
+        response: (),
+        serialization: GlobalSharedRead,
+    },
+    LanguageDocumentDiagnostics => "language/documentDiagnostics" {
+        params: LanguageDocumentDiagnosticsParams,
+        response: LanguageDocumentDiagnosticsResult,
+        serialization: GlobalSharedRead,
+    },
+    LanguageWorkspaceDiagnostics => "language/workspaceDiagnostics" {
+        params: LanguageWorkspaceDiagnosticsParams,
+        response: LanguageWorkspaceDiagnosticsResult,
+        serialization: GlobalSharedRead,
+    },
     LanguageLocations => "language/locations" {
         params: LanguageLocationsParams,
         response: LanguageLocationsResult,
@@ -858,6 +936,51 @@ client_methods! {
     LanguageLinkedEditingRanges => "language/linkedEditingRanges" {
         params: LanguageLinkedEditingRangesParams,
         response: LanguageLinkedEditingRangesResult,
+        serialization: GlobalSharedRead,
+    },
+    LanguageSemanticTokens => "language/semanticTokens" {
+        params: LanguageSemanticTokensParams,
+        response: LanguageSemanticTokensResult,
+        serialization: GlobalSharedRead,
+    },
+    LanguageDocumentSymbols => "language/documentSymbols" {
+        params: LanguageDocumentFeaturesParams,
+        response: LanguageDocumentSymbolsResult,
+        serialization: GlobalSharedRead,
+    },
+    LanguageCodeLenses => "language/codeLenses" {
+        params: LanguageDocumentFeaturesParams,
+        response: LanguageCodeLensesResult,
+        serialization: GlobalSharedRead,
+    },
+    LanguageResolveCodeLens => "language/resolveCodeLens" {
+        params: LanguageResolveCodeLensParams,
+        response: LanguageCodeLensesResult,
+        serialization: GlobalSharedRead,
+    },
+    LanguageDocumentLinks => "language/documentLinks" {
+        params: LanguageDocumentFeaturesParams,
+        response: LanguageDocumentLinksResult,
+        serialization: GlobalSharedRead,
+    },
+    LanguageResolveDocumentLink => "language/resolveDocumentLink" {
+        params: LanguageResolveDocumentLinkParams,
+        response: LanguageDocumentLinksResult,
+        serialization: GlobalSharedRead,
+    },
+    LanguageDocumentColors => "language/documentColors" {
+        params: LanguageDocumentFeaturesParams,
+        response: LanguageDocumentColorsResult,
+        serialization: GlobalSharedRead,
+    },
+    LanguageColorPresentations => "language/colorPresentations" {
+        params: LanguageColorPresentationsParams,
+        response: LanguageColorPresentationsResult,
+        serialization: GlobalSharedRead,
+    },
+    LanguageFoldingRanges => "language/foldingRanges" {
+        params: LanguageDocumentFeaturesParams,
+        response: LanguageFoldingRangesResult,
         serialization: GlobalSharedRead,
     },
     FsWriteFile => "fs/writeFile" {
@@ -1195,6 +1318,9 @@ server_notifications! {
     SkillsChanged => "skills/changed" {
         params: SkillsChanged,
     },
+    ExtensionHostChanged => "extensionHost/changed" {
+        params: ExtensionHostChanged,
+    },
     GitStatusChanged => "git/statusChanged" {
         params: GitStatusChanged,
     },
@@ -1203,6 +1329,12 @@ server_notifications! {
     },
     LanguageDiagnostics => "language/diagnostics" {
         params: LanguageDiagnosticsNotification,
+    },
+    LanguageServerMessage => "language/serverMessage" {
+        params: LanguageServerMessageNotification,
+    },
+    LanguageServerProgress => "language/serverProgress" {
+        params: LanguageServerProgressNotification,
     },
 }
 
@@ -1394,6 +1526,25 @@ typescript_bindings! {
     ExtensionListResult,
     ExtensionResourceOpenParams,
     ExtensionResourceOpenResult,
+    ExtensionHostReconcileModeDto,
+    ExtensionHostReconcileParams,
+    ExtensionHostSnapshotDto,
+    ExtensionHostExtensionDto,
+    ExtensionHostLifecycleDto,
+    ExtensionHostFailureCodeDto,
+    ExtensionHostFailureDto,
+    ExtensionHostRegistrationDescriptorDto,
+    ExtensionHostRegistrationKindDto,
+    ExtensionHostLanguageProviderOperationDto,
+    ExtensionHostInvokeStartParams,
+    ExtensionHostInvokeStartResult,
+    ExtensionHostInvokeReadParams,
+    ExtensionHostInvokeReadResult,
+    ExtensionHostInvokeCancelParams,
+    ExtensionHostInvokeCancelResult,
+    ExtensionHostInvokeCancelDispositionDto,
+    ExtensionHostCancellationReasonDto,
+    ExtensionHostChanged,
     SlashCommandArgumentModeDto,
     SlashCommandDefinition,
     ServerCapabilities,
@@ -1548,7 +1699,16 @@ typescript_bindings! {
     LanguageCompletionItemKindDto,
     LanguageCompletionInsertTextFormatDto,
     LanguageCompletionItemDto,
+    LanguageResolveCompletionParams,
+    LanguageCompletionDetailsResult,
+    LanguageExecuteCommandParams,
     LanguageCompletionsResult,
+    LanguageDocumentDiagnosticsParams,
+    LanguageDiagnosticReportKindDto,
+    LanguageDocumentDiagnosticsResult,
+    LanguageWorkspaceDiagnosticsParams,
+    LanguageWorkspaceDiagnosticSnapshotDto,
+    LanguageWorkspaceDiagnosticsResult,
     LanguageFormattingOptionsDto,
     LanguageDocumentFormattingParams,
     LanguageRangeFormattingParams,
@@ -1564,6 +1724,28 @@ typescript_bindings! {
     LanguageInlayHintsResult,
     LanguageLinkedEditingRangesParams,
     LanguageLinkedEditingRangesResult,
+    LanguageSemanticTokensParams,
+    LanguageSemanticTokenDto,
+    LanguageSemanticTokensResult,
+    LanguageDocumentFeaturesParams,
+    LanguageDocumentSymbolDto,
+    LanguageDocumentSymbolsResult,
+    LanguageCommandDto,
+    LanguageCodeLensDto,
+    LanguageCodeLensesResult,
+    LanguageResolveCodeLensParams,
+    LanguageDocumentLinkDto,
+    LanguageDocumentLinksResult,
+    LanguageResolveDocumentLinkParams,
+    LanguageColorDto,
+    LanguageDocumentColorDto,
+    LanguageDocumentColorsResult,
+    LanguageColorPresentationsParams,
+    LanguageColorPresentationDto,
+    LanguageColorPresentationsResult,
+    LanguageFoldingRangeKindDto,
+    LanguageFoldingRangeDto,
+    LanguageFoldingRangesResult,
     LanguageLocationsParams,
     LanguageLocationDto,
     LanguageLocationsResult,
@@ -1586,6 +1768,9 @@ typescript_bindings! {
     LanguageDiagnosticSeverityDto,
     LanguageCodeActionDiagnosticDto,
     LanguageDiagnosticsNotification,
+    LanguageServerMessageSeverityDto,
+    LanguageServerMessageNotification,
+    LanguageServerProgressNotification,
     LanguageCodeActionsParams,
     LanguageCodeActionDto,
     LanguageCodeActionsResult,

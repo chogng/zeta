@@ -3,14 +3,15 @@ import { type ExtensionThemeCatalog, type ExtensionThemeDefinition } from "../..
 import { type TextMateScopeTheme, type TextMateScopeThemeRule, type TextMateTokenFontStyle } from "./textMateScopeTheme.js";
 
 /** Selects the declarative extension theme matching the active Workbench color scheme. */
-export function projectExtensionTokenTheme(catalog: ExtensionThemeCatalog, colorScheme: ColorScheme, revision: number): TextMateScopeTheme {
-  const theme = selectTheme(catalog.themes, colorScheme);
-  return Object.freeze({ revision, rules: theme ? compileRules(theme) : Object.freeze([]) });
+export function projectExtensionTokenTheme(catalog: ExtensionThemeCatalog, colorScheme: ColorScheme, revision: number, activeThemeId?: string): TextMateScopeTheme {
+  const selected = activeThemeId === undefined ? selectTheme(catalog.themes, colorScheme) : catalog.themes.find(candidate => candidate.id === activeThemeId);
+  return Object.freeze({ revision, rules: selected ? compileRules(selected) : Object.freeze([]) });
 }
 
 function selectTheme(themes: readonly ExtensionThemeDefinition[], colorScheme: ColorScheme): ExtensionThemeDefinition | undefined {
   const expected = colorScheme === "dark" ? "vs-dark" : colorScheme === "light" ? "vs" : colorScheme === "high-contrast-dark" ? "hc-black" : "hc-light";
-  return themes.find(theme => theme.uiTheme === expected) ?? themes.find(theme => expected === "vs-dark" ? theme.uiTheme === "vs-dark" : theme.uiTheme === "vs");
+  const fallback = colorScheme === "dark" || colorScheme === "high-contrast-dark" ? "vs-dark" : "vs";
+  return themes.find(theme => theme.uiTheme === expected) ?? themes.find(theme => theme.uiTheme === fallback);
 }
 
 function compileRules(theme: ExtensionThemeDefinition): readonly TextMateScopeThemeRule[] {

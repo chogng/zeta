@@ -9038,6 +9038,7 @@ dependencies = [
  "zeta-core",
  "zeta-debug-adapter",
  "zeta-diff",
+ "zeta-editor-extension-host",
  "zeta-execpolicy",
  "zeta-extension-api",
  "zeta-extensions",
@@ -9384,6 +9385,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "zeta-editor-extension-host"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 2.0.19",
+]
+
+[[package]]
 name = "zeta-exec"
 version = "0.1.0"
 dependencies = [
@@ -9419,6 +9429,7 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "tempfile",
+ "zeta-file-identity",
 ]
 
 [[package]]

@@ -15,11 +15,24 @@ registerEditorContribution({
     const largeFile = context.model.largeFile.tooLargeForTokenization;
     const hiddenRanges = largeFile ? undefined : context.own(new EditorHiddenRangeModel(context.model, folding));
     const rustSyntaxFacts = largeFile ? undefined : context.getOptionalCapability(TextEditorCapability.rustSyntaxFacts);
+    const languageFolding = largeFile ? undefined : context.own(context.languageFeaturesService.createFoldingRangeService(context.model, context.options.input.resource));
     let syntaxFolding: RustSyntaxFoldingService | undefined;
-    const update = () => folding.setProviderRanges(largeFile ? [] : mergeEditorFoldingRanges(syntaxFolding?.ranges ?? [], computeEditorLanguageFoldingRanges(context.model, context.languageId, context.configurations), computeEditorIndentFoldingRanges(context.model)));
+    let serverRanges: readonly { readonly startLineIndex: number; readonly endLineIndex: number }[] = [];
+    let requestSerial = 0;
+    const update = () => folding.setProviderRanges(largeFile ? [] : mergeEditorFoldingRanges(serverRanges, syntaxFolding?.ranges ?? [], computeEditorLanguageFoldingRanges(context.model, context.languageId, context.configurations), computeEditorIndentFoldingRanges(context.model)));
+    const refresh = () => {
+      update();
+      if (!languageFolding) return;
+      const serial = ++requestSerial;
+      void languageFolding.provideFoldingRanges(context.languageId).then(ranges => {
+        if (serial !== requestSerial) return;
+        serverRanges = ranges;
+        update();
+      }, context.onLanguageError);
+    };
     if (rustSyntaxFacts) syntaxFolding = context.own(new RustSyntaxFoldingService(context.model, context.languageId, rustSyntaxFacts, update, context.onLanguageError));
-    update();
-    if (!largeFile) context.own(context.model.onDidChange(update));
+    refresh();
+    if (!largeFile) context.own(context.model.onDidChange(refresh));
     context.provideCapability(TextEditorCapability.folding, folding);
     if (hiddenRanges) {
       context.setLineProjection({ visibilitySource: hiddenRanges });

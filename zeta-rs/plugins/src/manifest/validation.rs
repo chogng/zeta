@@ -2,11 +2,20 @@ use std::collections::BTreeSet;
 
 use crate::{PluginError, PluginErrorKind};
 
-use super::{ContributionKind, ContributionReference, ManifestLocalId, Permission, PluginManifest};
+use super::ContributionKind;
+use super::ContributionReference;
+use super::EditorExtensionActivationEvent;
+use super::EditorExtensionContribution;
+use super::ManifestLocalId;
+use super::Permission;
+use super::PluginManifest;
 
 const SUPPORTED_SCHEMA_VERSION: u32 = 1;
 const MAX_DISPLAY_NAME_BYTES: usize = 200;
 const MAX_DESCRIPTION_BYTES: usize = 4096;
+const MAX_EDITOR_EXTENSION_CONTRIBUTIONS: usize = 64;
+const MAX_EDITOR_EXTENSION_ACTIVATION_EVENTS: usize = 64;
+const MAX_EDITOR_EXTENSION_ACTIVATION_SELECTOR_BYTES: usize = 128;
 const MAX_LICENSE_BYTES: usize = 256;
 
 impl PluginManifest {
@@ -29,6 +38,7 @@ impl PluginManifest {
             && self.contributions.mcp_servers.is_empty()
             && self.contributions.connectors.is_empty()
             && self.contributions.assets.is_empty()
+            && self.contributions.editor_extensions.is_empty()
         {
             return invalid("plugin manifest must declare at least one contribution");
         }
@@ -62,9 +72,17 @@ impl PluginManifest {
                 .map(|contribution| &contribution.id),
         )?;
         unique_ids(
+            "Editor Extension",
+            self.contributions
+                .editor_extensions
+                .iter()
+                .map(|contribution| &contribution.id),
+        )?;
+        unique_ids(
             "credential slot",
             self.credential_slots.iter().map(|slot| &slot.name),
         )?;
+        validate_editor_extensions(self)?;
 
         let available = contribution_references(self);
         let mcp_servers = self
@@ -132,6 +150,131 @@ impl PluginManifest {
     }
 }
 
+fn validate_editor_extensions(manifest: &PluginManifest) -> Result<(), PluginError> {
+    let extensions = &manifest.contributions.editor_extensions;
+    if extensions.len() > MAX_EDITOR_EXTENSION_CONTRIBUTIONS {
+        return invalid(format!(
+            "plugin manifest may declare at most {MAX_EDITOR_EXTENSION_CONTRIBUTIONS} Editor Extensions"
+        ));
+    }
+
+    let mut entrypoints = BTreeSet::new();
+    for extension in extensions {
+        if !entrypoints.insert(&extension.entrypoint) {
+            return invalid(format!(
+                "Editor Extension entrypoint '{}' is declared more than once",
+                extension.entrypoint
+            ));
+        }
+        if !manifest.permissions.iter().any(|permission| {
+            matches!(
+                permission,
+                Permission::Process { executable } if executable == &extension.entrypoint
+            )
+        }) {
+            return invalid(format!(
+                "Editor Extension '{}' entrypoint '{}' requires an exact process permission",
+                extension.id, extension.entrypoint
+            ));
+        }
+        validate_editor_extension(extension)?;
+    }
+    Ok(())
+}
+
+fn validate_editor_extension(extension: &EditorExtensionContribution) -> Result<(), PluginError> {
+    if extension.activation_events.is_empty() {
+        return invalid(format!(
+            "Editor Extension '{}' must declare at least one activation event",
+            extension.id
+        ));
+    }
+    if extension.activation_events.len() > MAX_EDITOR_EXTENSION_ACTIVATION_EVENTS {
+        return invalid(format!(
+            "Editor Extension '{}' may declare at most {MAX_EDITOR_EXTENSION_ACTIVATION_EVENTS} activation events",
+            extension.id
+        ));
+    }
+    if extension.capabilities.is_empty() {
+        return invalid(format!(
+            "Editor Extension '{}' must declare at least one capability",
+            extension.id
+        ));
+    }
+
+    let capabilities = extension
+        .capabilities
+        .iter()
+        .copied()
+        .collect::<BTreeSet<_>>();
+    if capabilities.len() != extension.capabilities.len() {
+        return invalid(format!(
+            "Editor Extension '{}' contains a duplicate capability",
+            extension.id
+        ));
+    }
+
+    let mut events = BTreeSet::new();
+    for event in &extension.activation_events {
+        if !events.insert(event) {
+            return invalid(format!(
+                "Editor Extension '{}' contains a duplicate activation event",
+                extension.id
+            ));
+        }
+        validate_activation_event(extension, event)?;
+        if let Some(required) = event.required_capability()
+            && !capabilities.contains(&required)
+        {
+            return invalid(format!(
+                "Editor Extension '{}' activation event requires undeclared capability '{required:?}'",
+                extension.id
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn validate_activation_event(
+    extension: &EditorExtensionContribution,
+    event: &EditorExtensionActivationEvent,
+) -> Result<(), PluginError> {
+    match event {
+        EditorExtensionActivationEvent::Startup
+        | EditorExtensionActivationEvent::OnDemand { .. } => Ok(()),
+        EditorExtensionActivationEvent::OnCommand { id }
+        | EditorExtensionActivationEvent::OnLanguage { id } => {
+            validate_activation_selector(id, &extension.id)
+        }
+        EditorExtensionActivationEvent::OnDebugType { debug_type } => {
+            validate_activation_selector(debug_type, &extension.id)
+        }
+        EditorExtensionActivationEvent::OnTaskType { task_type } => {
+            validate_activation_selector(task_type, &extension.id)
+        }
+        EditorExtensionActivationEvent::OnTestProfile { profile_id } => {
+            validate_activation_selector(profile_id, &extension.id)
+        }
+    }
+}
+
+fn validate_activation_selector(
+    selector: &str,
+    extension_id: &ManifestLocalId,
+) -> Result<(), PluginError> {
+    if selector.trim().is_empty()
+        || selector.len() > MAX_EDITOR_EXTENSION_ACTIVATION_SELECTOR_BYTES
+        || selector
+            .chars()
+            .any(|character| character.is_control() || character.is_whitespace())
+    {
+        return invalid(format!(
+            "Editor Extension '{extension_id}' activation selector must be non-empty, contain no whitespace, and be at most {MAX_EDITOR_EXTENSION_ACTIVATION_SELECTOR_BYTES} bytes"
+        ));
+    }
+    Ok(())
+}
+
 fn unique_ids<'a>(
     kind: &str,
     ids: impl IntoIterator<Item = &'a ManifestLocalId>,
@@ -181,6 +324,16 @@ fn contribution_references(manifest: &PluginManifest) -> BTreeSet<ContributionRe
                 .iter()
                 .map(|item| ContributionReference {
                     kind: ContributionKind::Asset,
+                    id: item.id.clone(),
+                }),
+        )
+        .chain(
+            manifest
+                .contributions
+                .editor_extensions
+                .iter()
+                .map(|item| ContributionReference {
+                    kind: ContributionKind::EditorExtension,
                     id: item.id.clone(),
                 }),
         )

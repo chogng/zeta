@@ -1,4 +1,9 @@
-use lsp_types::{ConfigurationItem, LogMessageParams, PublishDiagnosticsParams, ShowMessageParams};
+use lsp_types::{
+    ConfigurationItem, LogMessageParams, ProgressParams, PublishDiagnosticsParams,
+    ShowMessageParams, WorkDoneProgressCreateParams,
+};
+
+use crate::LanguageServerCapabilitySnapshot;
 
 /// A value returned for one `workspace/configuration` query item.
 #[derive(Clone, Debug, PartialEq)]
@@ -11,6 +16,9 @@ pub enum LanguageServerEvent {
     Diagnostics(PublishDiagnosticsParams),
     LogMessage(LogMessageParams),
     ShowMessage(ShowMessageParams),
+    DynamicCapabilitiesChanged(LanguageServerCapabilitySnapshot),
+    WorkDoneProgressCreated(WorkDoneProgressCreateParams),
+    Progress(ProgressParams),
     Telemetry(serde_json::Value),
     ServerStderr(String),
     /// The initialized protocol transport ended without a requested client shutdown.

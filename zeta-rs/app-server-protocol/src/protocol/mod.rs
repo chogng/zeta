@@ -10,6 +10,7 @@ pub mod debug;
 pub mod diff;
 pub mod document;
 pub mod error;
+pub mod extension_host;
 pub mod extensions;
 pub mod fs;
 pub mod git;

@@ -58,6 +58,10 @@ test("App Server hover and completion providers keep revision, resource, and ins
 
   const hoverResult = await hover.provideHover("rust", TextPosition.at(0, 1));
   await completions.request("rust", TextPosition.at(0, 3), createLanguageCompletionInvokeContext());
+  const completionResult = completions.results.result!;
+  const completionItem = completionResult.value.items[0]!;
+  const resolved = await completions.resolveCompletionItem({ completionRequestId: completionResult.requestId, modelVersion: completionResult.modelVersion, providerId: completionItem.providerId, itemId: completionItem.id }, new AbortController().signal);
+  await completions.executeCompletionCommand("rust", completionItem, new AbortController().signal);
   const hints = await parameterHints.provideParameterHints("rust", TextPosition.at(0, 3), { kind: "triggerCharacter", triggerCharacter: "(" });
   const inlays = await inlayHints.provideInlayHints("rust", TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 3)));
   const linked = await linkedEditing.provideLinkedEditingRanges("rust", TextPosition.at(0, 1));
@@ -67,6 +71,10 @@ test("App Server hover and completion providers keep revision, resource, and ins
   assert.equal(api.completionRequests[0]!.document.text, "pri");
   assert.equal(completions.results.result?.value.items[0]!.insertText, "println!($0)");
   assert.equal(completions.results.result?.value.items[0]!.range.end.columnIndex, 3);
+  assert.equal(completionItem.hasDeferredDetails, true);
+  assert.equal(completionItem.command?.id, "rust-analyzer.runSingle");
+  assert.equal(resolved.documentation, "Resolved completion docs");
+  assert.equal(api.executeCommandRequests[0]!.document.text, "pri");
   assert.equal(hints?.signatures[0]!.parameters[1]!.label, "value");
   assert.equal(api.signatureHelpRequests[0]!.triggerCharacter, "(");
   assert.equal(inlays[0]!.label, ": &str");
@@ -131,6 +139,7 @@ class FakeLanguageApi implements ILanguageApi {
   readonly workspaceSymbolLanguages: string[] = [];
   readonly hoverRequests: Parameters<ILanguageApi["hover"]>[0][] = [];
   readonly completionRequests: Parameters<ILanguageApi["completions"]>[0][] = [];
+  readonly executeCommandRequests: Parameters<ILanguageApi["executeCommand"]>[0][] = [];
   readonly documentFormattingRequests: Parameters<ILanguageApi["formatDocument"]>[0][] = [];
   readonly rangeFormattingRequests: Parameters<ILanguageApi["formatRange"]>[0][] = [];
   readonly signatureHelpRequests: Parameters<ILanguageApi["signatureHelp"]>[0][] = [];
@@ -145,8 +154,13 @@ class FakeLanguageApi implements ILanguageApi {
 
   async completions(params: Parameters<ILanguageApi["completions"]>[0]): ReturnType<ILanguageApi["completions"]> {
     this.completionRequests.push(params);
-    return { revision: params.document.revision, isIncomplete: false, items: [{ label: "println!", kind: "function", detail: "macro", documentation: "Prints text", filterText: null, sortText: "0", preselect: true, commitCharacters: ["("], insertTextFormat: "snippet", range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 0, columnIndex: 3 } }, insertText: "println!($0)" }] };
+    return { revision: params.document.revision, isIncomplete: false, canResolve: true, items: [{ label: "println!", kind: "function", detail: "macro", documentation: "Prints text", filterText: null, sortText: "0", preselect: true, commitCharacters: ["("], insertTextFormat: "snippet", range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 0, columnIndex: 3 } }, insertText: "println!($0)", additionalTextEdits: [], command: { id: "rust-analyzer.runSingle", title: "Run", arguments: [{ runnable: 1 }] }, providerData: { label: "println!" } }] };
   }
+
+  async resolveCompletion(params: Parameters<ILanguageApi["resolveCompletion"]>[0]): ReturnType<ILanguageApi["resolveCompletion"]> { return { revision: params.document.revision, detail: "resolved macro", documentation: "Resolved completion docs" }; }
+  async executeCommand(params: Parameters<ILanguageApi["executeCommand"]>[0]): Promise<void> { this.executeCommandRequests.push(params); }
+  async documentDiagnostics(params: Parameters<ILanguageApi["documentDiagnostics"]>[0]): ReturnType<ILanguageApi["documentDiagnostics"]> { return { revision: params.document.revision, kind: "unchanged", diagnostics: [] }; }
+  async workspaceDiagnostics(): ReturnType<ILanguageApi["workspaceDiagnostics"]> { return { supported: false, snapshots: [] }; }
 
   async formatDocument(params: Parameters<ILanguageApi["formatDocument"]>[0]): ReturnType<ILanguageApi["formatDocument"]> {
     this.documentFormattingRequests.push(params);
@@ -169,6 +183,17 @@ class FakeLanguageApi implements ILanguageApi {
   async linkedEditingRanges(params: Parameters<ILanguageApi["linkedEditingRanges"]>[0]): ReturnType<ILanguageApi["linkedEditingRanges"]> {
     return { revision: params.document.revision, ranges: [DTO_RANGE, { start: { lineIndex: 0, columnIndex: 8 }, end: { lineIndex: 0, columnIndex: 13 } }], wordPattern: "[A-Za-z]+" };
   }
+  async semanticTokens(params: Parameters<ILanguageApi["semanticTokens"]>[0]): ReturnType<ILanguageApi["semanticTokens"]> {
+    return { revision: params.document.revision, resultId: "1", tokens: [] };
+  }
+  async documentSymbols(params: Parameters<ILanguageApi["documentSymbols"]>[0]): ReturnType<ILanguageApi["documentSymbols"]> { return { revision: params.document.revision, symbols: [] }; }
+  async codeLenses(params: Parameters<ILanguageApi["codeLenses"]>[0]): ReturnType<ILanguageApi["codeLenses"]> { return { revision: params.document.revision, lenses: [] }; }
+  async resolveCodeLens(params: Parameters<ILanguageApi["resolveCodeLens"]>[0]): ReturnType<ILanguageApi["resolveCodeLens"]> { return { revision: params.document.revision, lenses: [params.lens] }; }
+  async documentLinks(params: Parameters<ILanguageApi["documentLinks"]>[0]): ReturnType<ILanguageApi["documentLinks"]> { return { revision: params.document.revision, links: [] }; }
+  async resolveDocumentLink(params: Parameters<ILanguageApi["resolveDocumentLink"]>[0]): ReturnType<ILanguageApi["resolveDocumentLink"]> { return { revision: params.document.revision, links: [params.link] }; }
+  async documentColors(params: Parameters<ILanguageApi["documentColors"]>[0]): ReturnType<ILanguageApi["documentColors"]> { return { revision: params.document.revision, colors: [] }; }
+  async colorPresentations(params: Parameters<ILanguageApi["colorPresentations"]>[0]): ReturnType<ILanguageApi["colorPresentations"]> { return { revision: params.document.revision, presentations: [] }; }
+  async foldingRanges(params: Parameters<ILanguageApi["foldingRanges"]>[0]): ReturnType<ILanguageApi["foldingRanges"]> { return { revision: params.document.revision, ranges: [] }; }
 
   async locations(params: Parameters<ILanguageApi["locations"]>[0]): ReturnType<ILanguageApi["locations"]> {
     this.locationRequests.push(params);

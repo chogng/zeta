@@ -17,6 +17,7 @@ import { createViteDevConnectorApi } from "../../connectors/browser/connectorApi
 import { createViteDevToolSearchApi } from "../../toolSearch/browser/toolSearchApi.js";
 import { createViteDevLanguageApi } from "../../language/browser/languageApi.js";
 import { createViteDevPluginApi } from "../../plugins/browser/pluginApi.js";
+import { createViteDevExtensionHostApi } from "../../extensionHost/browser/extensionHostApi.js";
 
 export type ViteDevRendererCapabilityContribution = (connection: ViteDevAppServerConnection, appServer: IRendererHost["appServer"]) => RendererHostCapabilities;
 
@@ -57,6 +58,7 @@ function createRendererHost(connection: ViteDevAppServerConnection, contribution
     documentCollaboration: createViteDevDocumentCollaborationApi(connection),
     resource,
     extensions: createViteDevExtensionApi(connection, resource),
+    extensionHost: createViteDevExtensionHostApi(connection),
     fs: createViteDevFileApi(connection),
     diff: createViteDevDiffApi(connection),
     syntax: createViteDevSyntaxApi(connection),

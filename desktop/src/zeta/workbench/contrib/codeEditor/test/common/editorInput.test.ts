@@ -13,7 +13,10 @@ test("Aster is the default text editor with canonical language IDs", () => {
   assert.equal(languageForEditorInput({ resource: URI.file("C:\\project\\settings.jsonc") }), "jsonc");
   assert.equal(matchCodeEditor({ resource: URI.parse("untitled:/Untitled-1") }), EditorPaneMatch.Default);
   assert.equal(languageForEditorInput({ resource: URI.parse("untitled:/Untitled-1"), languageId: "typescript" }), "typescript");
-  assert.equal(matchCodeEditor({ resource: URI.file("C:\\project\\binary.bin") }), EditorPaneMatch.None);
+  assert.equal(matchCodeEditor({ resource: URI.file("C:\\project\\script") }), EditorPaneMatch.Optional);
+  assert.equal(matchCodeEditor({ resource: URI.file("C:\\project\\script.cgi") }), EditorPaneMatch.Optional);
+  assert.equal(matchCodeEditor({ resource: URI.file("C:\\project\\.env") }), EditorPaneMatch.Optional);
+  assert.equal(matchCodeEditor({ resource: URI.file("C:\\project\\binary.bin") }), EditorPaneMatch.Optional);
 });
 
 test("Aster excludes structured Academic documents", () => {

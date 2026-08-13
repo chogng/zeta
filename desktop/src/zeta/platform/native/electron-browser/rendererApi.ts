@@ -29,6 +29,7 @@ import { createPluginApi } from "../../plugins/electron-browser/pluginApi.js";
 import type { IAppServerApi } from "../../app-server/common/appServerApi.js";
 import { mergeRendererHostCapabilities } from "../../renderer/common/rendererHost.js";
 import type { RendererHostCapabilities } from "../../renderer/common/rendererHost.js";
+import { createElectronExtensionHostApi } from "../../extensionHost/electron-browser/extensionHostApi.js";
 
 export type ElectronRendererCapabilityContribution = (appServer: IAppServerApi) => RendererHostCapabilities;
 
@@ -54,6 +55,7 @@ export function createElectronRendererApi(contributions: readonly ElectronRender
     documentCollaboration: createDocumentCollaborationApi(),
     resource,
     extensions: createElectronExtensionApi(resource),
+    extensionHost: createElectronExtensionHostApi(),
     fs: createFileApi(),
     diff: createDiffApi(),
     syntax: createSyntaxApi(),

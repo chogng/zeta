@@ -87,6 +87,17 @@ test("Language configuration validation is atomic and identities stay language-o
   assert.equal(initial.revision, 0);
 });
 
+test("a language configuration group replaces itself after validating the full candidate", () => {
+  using registry = new LanguageConfigurationRegistry();
+  using group = registry.registerMany([{ languageId: "demo", configuration: { comments: { lineComment: "//" } } }]);
+
+  assert.throws(() => group.replace([{ languageId: "demo", configuration: { comments: { lineComment: "" } } }]), /non-empty/);
+  assert.equal(registry.getLanguageConfiguration("demo").comments.lineComment, "//");
+
+  group.replace([{ languageId: "demo", configuration: { comments: { lineComment: "#" } } }]);
+  assert.equal(registry.getLanguageConfiguration("demo").comments.lineComment, "#");
+});
+
 test("Language configuration registration and registry lifecycles are independent", () => {
   const registry = new LanguageConfigurationRegistry();
   const registration = registry.register("typescript", {

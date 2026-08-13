@@ -68,6 +68,7 @@
 | [`tools.md`](tools.md) | 设计 | 工具三层契约、registry snapshot |
 | [`exec.md`](exec.md) | 设计 | 进程执行 |
 | [`plugins.md`](plugins.md) / [`connectors.md`](connectors.md) / [`skills.md`](skills.md) | 设计 | Plugin 扩展分发、Connector 外部账号连接与 Skill 指令运行时边界 |
+| [`editor-extensions.md`](editor-extensions.md) | 设计 | 声明式扩展与 Zeta 原生可执行 Host v1 的双轨边界、信任、生命周期和产品接入状态 |
 | [`mcp.md`](mcp.md) / [`mcp-server.md`](mcp-server.md) | 设计 | MCP 协议会话与能力调用、Connector ready binding，以及 Zeta 作为 MCP server |
 | [`slash-commands.md`](slash-commands.md) | 设计 | Slash Command 与统一斜杠启动面板边界 |
 
@@ -101,6 +102,7 @@
 [`menu-system.md`](menu-system.md)、[`icons.md`](icons.md)、[`search.md`](search.md)、
 [`code-index.md`](code-index.md)、
 [`syntax-analysis.md`](syntax-analysis.md)、[`lsp.md`](lsp.md)、
+[`editor-extensions.md`](editor-extensions.md)、
 [`tui.md`](tui.md)、
 [`chat-session-inspector.md`](chat-session-inspector.md)、[`pdf.md`](pdf.md)、[`typst.md`](typst.md)
 

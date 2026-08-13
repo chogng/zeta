@@ -48,7 +48,16 @@ export interface LanguageCompletionItem {
   readonly commitCharacters?: readonly string[];
   /** Additional non-overlapping edits applied with the primary completion replacement. */
   readonly additionalTextEdits?: readonly LanguageCompletionTextEdit[];
+  /** Server command executed after this candidate has been inserted. */
+  readonly command?: LanguageCompletionCommand;
   readonly hasDeferredDetails?: boolean;
+}
+
+/** One completion-owned server command. */
+export interface LanguageCompletionCommand {
+  readonly id: string;
+  readonly title: string;
+  readonly arguments: readonly unknown[];
 }
 
 /** One extra document replacement attached to a completion item. */
@@ -199,6 +208,7 @@ function normalizeLanguageCompletionResult(
       item.range,
       validateAdditionalRange,
     );
+    const command = normalizeCompletionCommand(item.command);
     if (item.hasDeferredDetails !== undefined && typeof item.hasDeferredDetails !== "boolean") {
       throw new TypeError("Language completion item hasDeferredDetails must be a boolean");
     }
@@ -223,6 +233,7 @@ function normalizeLanguageCompletionResult(
       ...(item.preselect === undefined ? {} : { preselect: item.preselect }),
       ...(commitCharacters === undefined ? {} : { commitCharacters }),
       ...(additionalTextEdits === undefined ? {} : { additionalTextEdits }),
+      ...(command === undefined ? {} : { command }),
       ...(item.hasDeferredDetails === undefined ? {} : { hasDeferredDetails: item.hasDeferredDetails }),
     });
   });
@@ -231,6 +242,17 @@ function normalizeLanguageCompletionResult(
     items: Object.freeze(items),
     isIncomplete: value.isIncomplete,
   });
+}
+
+function normalizeCompletionCommand(value: unknown): LanguageCompletionCommand | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== "object" || value === null || Array.isArray(value)) throw new TypeError("Language completion command must be an object");
+  const command = value as Record<string, unknown>;
+  if (Object.keys(command).some(key => key !== "id" && key !== "title" && key !== "arguments")) throw new TypeError("Language completion command contains unsupported fields");
+  assertIdentifier(command.id, "Language completion command ID");
+  assertNonEmptyText(command.title, "Language completion command title");
+  if (!Array.isArray(command.arguments)) throw new TypeError("Language completion command arguments must be an array");
+  return Object.freeze({ id: command.id, title: command.title, arguments: Object.freeze(structuredClone(command.arguments)) });
 }
 
 const EMPTY_DETAILS: LanguageCompletionItemDetails = Object.freeze({});

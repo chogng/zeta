@@ -76,10 +76,15 @@ pub enum AppServerErrorName {
     WorkspaceSwitchFailed,
     WorkspaceTrustRequired,
     ExtensionsUnavailable,
+    ExtensionGenerationConflict,
     ExtensionNotFound,
     ExtensionResourceNotFound,
     ExtensionResourceInvalidPath,
     ExtensionOperationFailed,
+    ExtensionHostUnavailable,
+    ExtensionHostStale,
+    ExtensionHostInvocationNotFound,
+    ExtensionHostQuotaExceeded,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

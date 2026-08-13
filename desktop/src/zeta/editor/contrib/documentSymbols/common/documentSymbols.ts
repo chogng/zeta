@@ -1,4 +1,5 @@
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { type URI } from "../../../../base/common/uri.js";
 import { type TextRange } from "../../../common/core/text.js";
 import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageFeatureRequest } from "../../../common/languages/languageFeatureRequest.js";
 import { LanguageFeatureProviderRegistry, type LanguageFeatureProviderMetadata } from "../../../common/languages/languageFeatureRegistry.js";
@@ -15,7 +16,9 @@ export interface LanguageDocumentSymbol {
   readonly children?: readonly LanguageDocumentSymbol[];
 }
 
-export interface LanguageDocumentSymbolRequest extends LanguageFeatureRequest {}
+export interface LanguageDocumentSymbolRequest extends LanguageFeatureRequest {
+  readonly resource?: URI;
+}
 
 export interface LanguageDocumentSymbolProvider extends LanguageFeatureProviderMetadata {
   provideDocumentSymbols(request: LanguageDocumentSymbolRequest, signal: AbortSignal): readonly LanguageDocumentSymbol[] | Promise<readonly LanguageDocumentSymbol[]>;
@@ -24,13 +27,14 @@ export interface LanguageDocumentSymbolProvider extends LanguageFeatureProviderM
 /** Contextual providers consulted only after the shared language registry has no symbols. */
 export interface DocumentSymbolServiceOptions {
   readonly fallbackProviders?: readonly LanguageDocumentSymbolProvider[];
+  readonly resource?: URI;
 }
 
 /** Provider-backed document symbol service used by outline and symbol navigation. */
 export class DocumentSymbolService extends DisposableOwner {
   private readonly fallbackProviders: readonly LanguageDocumentSymbolProvider[];
 
-  constructor(private readonly model: TextModel, private readonly providers: LanguageFeatureProviderRegistry<LanguageDocumentSymbolProvider>, options: DocumentSymbolServiceOptions = {}) {
+  constructor(private readonly model: TextModel, private readonly providers: LanguageFeatureProviderRegistry<LanguageDocumentSymbolProvider>, private readonly options: DocumentSymbolServiceOptions = {}) {
     super();
     this.fallbackProviders = normalizeFallbackProviders(options.fallbackProviders);
   }
@@ -40,7 +44,7 @@ export class DocumentSymbolService extends DisposableOwner {
   }
 
   async provideDocumentSymbols(languageId: string, signal: AbortSignal = new AbortController().signal): Promise<readonly LanguageDocumentSymbol[]> {
-    const request = createLanguageFeatureRequest(this.model, languageId, signal);
+    const request: LanguageDocumentSymbolRequest = Object.freeze({ ...createLanguageFeatureRequest(this.model, languageId, signal), ...(this.options.resource ? { resource: this.options.resource } : {}) });
     for (const provider of [...this.providers.getProviders(languageId), ...this.fallbackProviders.filter(provider => provider.languageIds.includes("*") || provider.languageIds.includes(languageId))]) {
       if (!isLanguageFeatureRequestCurrent(request)) return Object.freeze([]);
       const symbols = await provider.provideDocumentSymbols(request, signal);

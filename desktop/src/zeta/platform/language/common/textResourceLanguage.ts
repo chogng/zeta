@@ -3,6 +3,7 @@ import { type URI } from "../../../base/common/uri.js";
 export interface TextResourceLanguageInput {
   readonly resource: URI;
   readonly contentType?: string;
+  readonly firstLine?: string;
 }
 
 export interface TextResourceLanguageResolver {

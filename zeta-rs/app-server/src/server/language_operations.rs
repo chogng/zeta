@@ -10,14 +10,19 @@ use zeta_app_server_protocol::protocol::language::LanguageCloseParams;
 use zeta_app_server_protocol::protocol::language::LanguageCodeActionDto;
 use zeta_app_server_protocol::protocol::language::LanguageCodeActionsParams;
 use zeta_app_server_protocol::protocol::language::LanguageCodeActionsResult;
+use zeta_app_server_protocol::protocol::language::LanguageCompletionDetailsResult;
 use zeta_app_server_protocol::protocol::language::LanguageCompletionInsertTextFormatDto;
 use zeta_app_server_protocol::protocol::language::LanguageCompletionItemDto;
 use zeta_app_server_protocol::protocol::language::LanguageCompletionItemKindDto;
 use zeta_app_server_protocol::protocol::language::LanguageCompletionTriggerKindDto;
 use zeta_app_server_protocol::protocol::language::LanguageCompletionsParams;
 use zeta_app_server_protocol::protocol::language::LanguageCompletionsResult;
+use zeta_app_server_protocol::protocol::language::LanguageDiagnosticReportKindDto;
 use zeta_app_server_protocol::protocol::language::LanguageDiagnosticSeverityDto;
+use zeta_app_server_protocol::protocol::language::LanguageDocumentDiagnosticsParams;
+use zeta_app_server_protocol::protocol::language::LanguageDocumentDiagnosticsResult;
 use zeta_app_server_protocol::protocol::language::LanguageDocumentFormattingParams;
+use zeta_app_server_protocol::protocol::language::LanguageExecuteCommandParams;
 use zeta_app_server_protocol::protocol::language::LanguageFormattingOptionsDto;
 use zeta_app_server_protocol::protocol::language::LanguageFormattingResult;
 use zeta_app_server_protocol::protocol::language::LanguageHierarchyEntryDto;
@@ -46,6 +51,10 @@ use zeta_app_server_protocol::protocol::language::LanguageRangeFormattingParams;
 use zeta_app_server_protocol::protocol::language::LanguageRenameParams;
 use zeta_app_server_protocol::protocol::language::LanguageRenamePreparationDto;
 use zeta_app_server_protocol::protocol::language::LanguageResolveCodeActionParams;
+use zeta_app_server_protocol::protocol::language::LanguageResolveCompletionParams;
+use zeta_app_server_protocol::protocol::language::LanguageSemanticTokenDto;
+use zeta_app_server_protocol::protocol::language::LanguageSemanticTokensParams;
+use zeta_app_server_protocol::protocol::language::LanguageSemanticTokensResult;
 use zeta_app_server_protocol::protocol::language::LanguageSignatureHelpParams;
 use zeta_app_server_protocol::protocol::language::LanguageSignatureHelpResult;
 use zeta_app_server_protocol::protocol::language::LanguageSignatureHelpTriggerKindDto;
@@ -53,12 +62,16 @@ use zeta_app_server_protocol::protocol::language::LanguageSignatureInformationDt
 use zeta_app_server_protocol::protocol::language::LanguageSynchronizeParams;
 use zeta_app_server_protocol::protocol::language::LanguageTextDocumentEditDto;
 use zeta_app_server_protocol::protocol::language::LanguageTextEditDto;
+use zeta_app_server_protocol::protocol::language::LanguageWorkspaceDiagnosticSnapshotDto;
+use zeta_app_server_protocol::protocol::language::LanguageWorkspaceDiagnosticsParams;
+use zeta_app_server_protocol::protocol::language::LanguageWorkspaceDiagnosticsResult;
 use zeta_app_server_protocol::protocol::language::LanguageWorkspaceEditDto;
 use zeta_app_server_protocol::protocol::language::LanguageWorkspaceEditEntryDto;
 use zeta_app_server_protocol::protocol::language::LanguageWorkspaceSymbolDto;
 use zeta_app_server_protocol::protocol::language::LanguageWorkspaceSymbolsParams;
 use zeta_app_server_protocol::protocol::language::LanguageWorkspaceSymbolsResult;
 use zeta_language_service::LanguageCodeAction;
+use zeta_language_service::LanguageCommand;
 use zeta_language_service::LanguageCompletionInsertTextFormat;
 use zeta_language_service::LanguageCompletionItem;
 use zeta_language_service::LanguageCompletionItemKind;
@@ -75,6 +88,7 @@ use zeta_language_service::LanguageLocationPosition;
 use zeta_language_service::LanguageLocationRange;
 use zeta_language_service::LanguageLocationTarget;
 use zeta_language_service::LanguagePositionEncoding;
+use zeta_language_service::LanguagePulledDiagnosticReport;
 use zeta_language_service::LanguageServiceDocument;
 use zeta_language_service::LanguageServiceEvent;
 use zeta_language_service::LanguageSignatureHelpTrigger;
@@ -91,6 +105,32 @@ use super::decode;
 use super::result;
 
 const MAX_LANGUAGE_TARGET_BYTES: usize = 10 * 1024 * 1024;
+
+pub(super) fn diagnostic_to_dto(
+    text: &str,
+    diagnostic: LanguageDiagnostic,
+) -> Option<zeta_app_server_protocol::protocol::language::LanguageCodeActionDiagnosticDto> {
+    Some(
+        zeta_app_server_protocol::protocol::language::LanguageCodeActionDiagnosticDto {
+            range: byte_range_to_utf16(text, diagnostic.range.byte_range())?,
+            severity: diagnostic_severity_to_dto(diagnostic.severity),
+            message: diagnostic.message,
+            code: diagnostic.code.map(Value::String),
+            source: diagnostic.source,
+        },
+    )
+}
+
+fn diagnostic_severity_to_dto(
+    severity: LanguageDiagnosticSeverity,
+) -> LanguageDiagnosticSeverityDto {
+    match severity {
+        LanguageDiagnosticSeverity::Error => LanguageDiagnosticSeverityDto::Error,
+        LanguageDiagnosticSeverity::Warning => LanguageDiagnosticSeverityDto::Warning,
+        LanguageDiagnosticSeverity::Information => LanguageDiagnosticSeverityDto::Information,
+        LanguageDiagnosticSeverity::Hint => LanguageDiagnosticSeverityDto::Hint,
+    }
+}
 
 impl AppServer {
     pub(super) fn language_synchronize(&self, params: &Value) -> Result<Value, RpcError> {
@@ -115,6 +155,130 @@ impl AppServer {
             .close_document(&source_path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         result(&())
+    }
+
+    pub(super) fn language_document_diagnostics(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: LanguageDocumentDiagnosticsParams = decode(params)?;
+        let workspace = self.language_workspace_root()?;
+        let source_path = workspace
+            .resolve_existing(&params.document.path)
+            .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
+        let revision = LanguageDocumentRevision::new(params.document.revision);
+        let mut runtime =
+            self.prepare_document_runtime(&workspace, &source_path, &params.document)?;
+        let request_id = runtime
+            .service
+            .as_ref()
+            .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?
+            .request_document_diagnostics(&source_path, revision)
+            .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
+        let (kind, diagnostics) = match runtime
+            .wait_for_request(request_id)
+            .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?
+        {
+            LanguageServiceEvent::PulledDiagnostics(result) => match result.report {
+                LanguagePulledDiagnosticReport::Full(diagnostics) => {
+                    (LanguageDiagnosticReportKindDto::Full, diagnostics)
+                }
+                LanguagePulledDiagnosticReport::Unchanged => {
+                    (LanguageDiagnosticReportKindDto::Unchanged, Vec::new())
+                }
+            },
+            LanguageServiceEvent::RequestFailed { .. } => {
+                return Err(language_error(AppServerErrorName::LanguageRequestFailed));
+            }
+            _ => return Err(language_error(AppServerErrorName::LanguageRequestFailed)),
+        };
+        result(&LanguageDocumentDiagnosticsResult {
+            revision: params.document.revision,
+            kind,
+            diagnostics: diagnostics
+                .into_iter()
+                .filter_map(|diagnostic| diagnostic_to_dto(&params.document.text, diagnostic))
+                .collect(),
+        })
+    }
+
+    pub(super) fn language_workspace_diagnostics(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: LanguageWorkspaceDiagnosticsParams = decode(params)?;
+        let workspace = self.language_workspace_root()?;
+        let snapshot = self
+            .config
+            .as_ref()
+            .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?
+            .read_snapshot()
+            .map_err(|_| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
+        let language_id = language_service_id(&params.language_id);
+        let mut runtime = self
+            .language
+            .lock()
+            .map_err(|_| language_error(AppServerErrorName::ServerOverloaded))?;
+        let service = runtime
+            .ensure(
+                workspace.canonical_path(),
+                snapshot.generation.get(),
+                &snapshot.values.language_servers,
+                language_id,
+            )
+            .map_err(|_| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
+        let request_id = service
+            .request_workspace_diagnostics(language_id)
+            .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
+        let response = match runtime
+            .wait_for_request(request_id)
+            .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?
+        {
+            LanguageServiceEvent::WorkspaceDiagnostics(response) => response,
+            _ => return Err(language_error(AppServerErrorName::LanguageRequestFailed)),
+        };
+        if !response.supported {
+            return result(&LanguageWorkspaceDiagnosticsResult {
+                supported: false,
+                snapshots: Vec::new(),
+            });
+        }
+        let file_system = self.file_system_service()?;
+        let mut grouped = std::collections::BTreeMap::new();
+        for diagnostic in response.diagnostics {
+            let Some(relative) = diagnostic
+                .path
+                .strip_prefix(workspace.canonical_path())
+                .ok()
+                .map(Path::to_path_buf)
+            else {
+                continue;
+            };
+            let Ok(bytes) = file_system.read_file(&relative, MAX_LANGUAGE_TARGET_BYTES) else {
+                continue;
+            };
+            let Ok(text) = String::from_utf8(bytes) else {
+                continue;
+            };
+            let Some(range) = utf16_range(&text, diagnostic.range, diagnostic.encoding) else {
+                continue;
+            };
+            grouped.entry(relative).or_insert_with(Vec::new).push(
+                LanguageCodeActionDiagnosticDto {
+                    range,
+                    severity: diagnostic_severity_to_dto(diagnostic.severity),
+                    message: diagnostic.message,
+                    code: diagnostic.code.map(Value::String),
+                    source: diagnostic.source,
+                },
+            );
+        }
+        result(&LanguageWorkspaceDiagnosticsResult {
+            supported: true,
+            snapshots: grouped
+                .into_iter()
+                .map(
+                    |(path, diagnostics)| LanguageWorkspaceDiagnosticSnapshotDto {
+                        path,
+                        diagnostics,
+                    },
+                )
+                .collect(),
+        })
     }
 
     fn prepare_position_request(
@@ -142,7 +306,7 @@ impl AppServer {
         Ok((workspace, source_path, revision, position, runtime))
     }
 
-    fn prepare_document_runtime(
+    pub(super) fn prepare_document_runtime(
         &self,
         workspace: &zeta_workspace::WorkspaceRoot,
         source_path: &Path,
@@ -212,6 +376,67 @@ impl AppServer {
         })
     }
 
+    pub(super) fn language_resolve_completion(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: LanguageResolveCompletionParams = decode(params)?;
+        let workspace = self.language_workspace_root()?;
+        let source_path = workspace
+            .resolve_existing(&params.document.path)
+            .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
+        let revision = LanguageDocumentRevision::new(params.document.revision);
+        let mut runtime =
+            self.prepare_document_runtime(&workspace, &source_path, &params.document)?;
+        let request_id = runtime
+            .service
+            .as_ref()
+            .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?
+            .request_resolve_completion(&source_path, revision, params.provider_data)
+            .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
+        let details = match runtime
+            .wait_for_request(request_id)
+            .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?
+        {
+            LanguageServiceEvent::CompletionDetails(details) => details,
+            _ => return Err(language_error(AppServerErrorName::LanguageRequestFailed)),
+        };
+        result(&LanguageCompletionDetailsResult {
+            revision: details.revision.value(),
+            detail: details.detail,
+            documentation: details.documentation,
+        })
+    }
+
+    pub(super) fn language_execute_command(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: LanguageExecuteCommandParams = decode(params)?;
+        let workspace = self.language_workspace_root()?;
+        let source_path = workspace
+            .resolve_existing(&params.document.path)
+            .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
+        let revision = LanguageDocumentRevision::new(params.document.revision);
+        let mut runtime =
+            self.prepare_document_runtime(&workspace, &source_path, &params.document)?;
+        let request_id = runtime
+            .service
+            .as_ref()
+            .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?
+            .request_execute_command(
+                &source_path,
+                revision,
+                LanguageCommand {
+                    id: params.command.id,
+                    title: params.command.title,
+                    arguments: params.command.arguments,
+                },
+            )
+            .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
+        match runtime
+            .wait_for_request(request_id)
+            .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?
+        {
+            LanguageServiceEvent::CommandResult(_) => result(&()),
+            _ => Err(language_error(AppServerErrorName::LanguageRequestFailed)),
+        }
+    }
+
     pub(super) fn language_completions(&self, params: &Value) -> Result<Value, RpcError> {
         let params: LanguageCompletionsParams = decode(params)?;
         let (_, source_path, revision, position, mut runtime) =
@@ -233,6 +458,7 @@ impl AppServer {
                 return result(&LanguageCompletionsResult {
                     revision: params.document.revision,
                     is_incomplete: false,
+                    can_resolve: false,
                     items: Vec::new(),
                 });
             }
@@ -246,6 +472,7 @@ impl AppServer {
         result(&LanguageCompletionsResult {
             revision: params.document.revision,
             is_incomplete: completions.is_incomplete,
+            can_resolve: completions.can_resolve,
             items,
         })
     }
@@ -470,6 +697,48 @@ impl AppServer {
             revision: params.document.revision,
             ranges,
             word_pattern,
+        })
+    }
+
+    pub(super) fn language_semantic_tokens(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: LanguageSemanticTokensParams = decode(params)?;
+        let workspace = self.language_workspace_root()?;
+        let source_path = workspace
+            .resolve_existing(&params.document.path)
+            .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
+        let revision = LanguageDocumentRevision::new(params.document.revision);
+        let mut runtime =
+            self.prepare_document_runtime(&workspace, &source_path, &params.document)?;
+        let service = runtime
+            .service
+            .as_ref()
+            .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
+        let request_id = service
+            .request_semantic_tokens(&source_path, revision)
+            .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
+        let event = runtime
+            .wait_for_request(request_id)
+            .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
+        let (result_id, tokens) = match event {
+            LanguageServiceEvent::SemanticTokens(result) => (result.result_id, result.tokens),
+            LanguageServiceEvent::RequestFailed { .. } => (None, Vec::new()),
+            _ => return Err(language_error(AppServerErrorName::LanguageRequestFailed)),
+        };
+        let tokens = tokens
+            .into_iter()
+            .map(|token| {
+                Ok(LanguageSemanticTokenDto {
+                    range: byte_range_to_utf16(&params.document.text, token.range.byte_range())
+                        .ok_or_else(|| language_error(AppServerErrorName::LanguageRequestFailed))?,
+                    token_type: token.token_type,
+                    modifiers: token.modifiers,
+                })
+            })
+            .collect::<Result<Vec<_>, RpcError>>()?;
+        result(&LanguageSemanticTokensResult {
+            revision: params.document.revision,
+            result_id,
+            tokens,
         })
     }
 
@@ -944,6 +1213,24 @@ fn completion_item_to_dto(
         },
         range: byte_range_to_utf16(text, edit.range.byte_range())?,
         insert_text: edit.new_text,
+        additional_text_edits: item
+            .additional_text_edits
+            .into_iter()
+            .filter_map(|edit| {
+                Some(LanguageTextEditDto {
+                    range: byte_range_to_utf16(text, edit.range.byte_range())?,
+                    new_text: edit.new_text,
+                })
+            })
+            .collect(),
+        command: item.command.map(|command| {
+            zeta_app_server_protocol::protocol::language::LanguageCommandDto {
+                id: command.id,
+                title: command.title,
+                arguments: command.arguments,
+            }
+        }),
+        provider_data: Some(item.provider_data),
     })
 }
 
@@ -1272,7 +1559,10 @@ fn code_action_to_dto(
     })
 }
 
-fn utf8_byte_range(text: &str, range: LanguageRangeDto) -> Option<std::ops::Range<usize>> {
+pub(super) fn utf8_byte_range(
+    text: &str,
+    range: LanguageRangeDto,
+) -> Option<std::ops::Range<usize>> {
     let start = utf8_position(text, range.start)?;
     let end = utf8_position(text, range.end)?;
     let start = absolute_byte_offset(text, start)?;
@@ -1413,7 +1703,7 @@ fn source_line(text: &str, requested: u32) -> Option<&str> {
     Some(line.strip_suffix('\r').unwrap_or(line))
 }
 
-fn language_error(name: AppServerErrorName) -> RpcError {
+pub(super) fn language_error(name: AppServerErrorName) -> RpcError {
     RpcError::new(-32072, name)
 }
 

@@ -1,73 +1,129 @@
 # Declarative extension resources
 
+> This README owns the Workbench implementation contract for manifest parsing, contribution
+> preparation, and registration lifecycle. The cross-layer product behavior and trust model are
+> canonical in [`docs/editor-extensions.md`](../../../../../../docs/editor-extensions.md); Rust
+> filesystem catalog details are in
+> [`zeta-rs/extensions/README.md`](../../../../../../zeta-rs/extensions/README.md).
+
 This service is the Workbench composition boundary for static extension packages. Rust owns
-discovery and filesystem authority; the renderer receives validated manifest data and explicitly
-requested resource bytes; Workbench decides which declarative contributions become active.
-Extensions do not receive access to the editor model, editor DOM, Worker ports, or arbitrary
-TypeScript execution.
+discovery and immutable resource authority; runtime adapters convert transport DTOs; this service
+owns Workbench catalog types and decides which supported declarative contributions become active.
+It never executes extension JavaScript or gives extensions editor DOM, model, Worker-port, or host
+filesystem access.
 
 ## Ownership
 
 | Area | Owner | Current contract |
 | --- | --- | --- |
-| Trusted package roots and `package.json` discovery | `zeta-extensions::ExtensionCatalog` | Built-in and user roots; direct child packages only |
-| Manifest identity, resource containment, size limits, and SHA-256 | `zeta-extensions` | Invalid packages produce diagnostics; unsafe resource paths are rejected |
-| Renderer transport | `platform/extensions/*` | `IExtensionApi.list` and `IExtensionApi.readResource` |
-| Manifest contribution parsing | `parseExtensionManifest` | Validates identity and supported declarative fields |
-| Workbench lifecycle and registration | `AppServerExtensionService` | Loads a fresh catalog transactionally and reports failures |
-| TextMate grammar registry and Worker runtime | `workbench/services/textMate` | Receives loaders; never reads extension paths itself |
-| Editor semantics and presentation | Editor runtime | Consumes token results; never discovers extension packages |
+| Trusted roots, immutable package snapshot, digest and generation | `zeta-extensions::ExtensionCatalog` | Built-in first, profile second; direct child packages only |
+| Renderer transport and exact-shape normalization | `platform/extensions/*` | `IExtensionApi.list` and generation-bound `readResource` |
+| Workbench catalog/domain types | `common/extensionService.ts` | Does not expose generated DTO or manifest JSON |
+| Supported manifest parsing | `parseExtensionManifest` | Identity plus languages, grammars, snippets, themes, and debuggers |
+| Workbench lifecycle | `AppServerExtensionService` | Serialized/coalesced refresh with full candidate preparation and one event-barrier commit |
+| Grammar/Worker materialization | `workbench/services/textMate` | Latest complete catalog and independent failure event |
+| Language/configuration/completion | Aster language services | Caller-owned disposable registrations |
+| Declarative Debug Adapter lookup | `ExtensionDebugAdapterRegistry` | Unique debugger type to bounded command descriptor |
 
-## TextMate resources supplied by an extension
+## Supported contribution projection
 
-The first declarative slice is `contributes.grammars`. The extension package supplies:
-
-| Manifest field | Meaning | Consumer |
+| Contribution | Projection | Current limitation |
 | --- | --- | --- |
-| `contributes.grammars[].path` | Relative path to the raw JSON or plist grammar file | Rust resource store, then TextMate loader |
-| `scopeName` | Root grammar scope identity | TextMate registry |
-| `language` | Root grammar language ID | TextMate provider selection |
-| `injectTo` | Root scopes receiving an injection grammar | TextMate registry |
+| `languages` | Language identity, file/MIME/first-line associations | No manifest localization |
+| language `configuration` | Parsed JSONC to Aster language configuration | Only the existing Aster configuration vocabulary |
+| `snippets` | Prefix-bearing snippets become completion providers; file templates power `New File from Template` | Template bodies create language-tagged untitled editors |
+| `grammars` | Root/injection loader plus advanced embedded/token/bracket metadata | TextMate service owns later materialization |
+| `themes` | Strictly parsed versioned catalog, selectable Workbench color themes, and active TextMate token projection | `include` is rejected; manifest NLS placeholders use deterministic fallback labels |
+| `debuggers` | Unique type, label, adapter program, and args | Discovery only; no VS Code Debug Extension API |
 
-`package.json` itself is also extension-owned resource metadata, but Rust returns its validated
-descriptor and manifest JSON rather than letting the renderer open an arbitrary manifest path.
-Grammar files are read as bounded UTF-8 data and are materialized into the existing versioned
-TextMate catalog before the dedicated Worker sees them.
+`configurationDefaults`, `semanticTokenScopes`, extension JavaScript, LSP declarations, and dynamic
+UI are not activated by this loader.
 
-The following TextMate contribution fields are not silently ignored. They currently fail that
-extension activation and remain an explicit next step: `embeddedLanguages`, `tokenTypes`,
-`balancedBracketScopes`, and `unbalancedBracketScopes`. Supporting them requires extending the
-frontend grammar contract, the transferable catalog, and editor token projection together.
+Theme documents accept only the four supported `uiTheme` values, hexadecimal colors, and token
+settings composed of `foreground`, `background`, and supported `fontStyle` values. Unknown
+Workbench color token IDs remain catalog data but are ignored when compiling product color themes.
 
-## Execution path
+## Execution and refresh path
 
 ```text
-trusted extension roots
-  -> Rust ExtensionCatalog
-  -> extensions/list + extensions/resource/open
-  -> Electron/Vite IExtensionApi
-  -> AppServerExtensionService
-  -> TextMateGrammarService
-  -> versioned grammar catalog
-  -> dedicated TextMate Worker
+IExtensionApi.list("refresh")
+  -> adapt transport descriptors to Workbench candidates
+  -> parseExtensionManifest
+  -> load/parse language configurations, snippets, themes
+  -> prepare language, grammar, completion, file-template, theme, and debugger registrations
+  -> await the candidate TextMate grammar catalog
+  -> commit all domain registrations behind the synchronous event barrier
+  -> dispose previous registrations
 ```
 
-The service replaces registrations only after every manifest and registration in the new catalog
-has succeeded. A malformed package or unreadable grammar leaves the previous active catalog in
-place and emits `onDidFail`; it does not activate a partial extension.
+Only one runner loads at a time. Calls arriving during an active load set one queued refresh; all
+waiters resolve after the runner and that coalesced follow-up drain. Disposal prevents in-flight
+work from committing or emitting a regular failure and suppresses any queued follow-up.
 
-## Deliberate non-goals
+The Workbench composition root retains the initial `start()` promise and waits for it before
+restoring working-copy backups and advancing to `AfterRestored`. A transition from any non-`ready`
+App Server state to `ready` calls `reload()` and therefore uses the same queue. The transport API
+does not expose cancellation, so disposal suppresses commit and follow-up work but cannot physically
+abort an already dispatched RPC.
 
-This boundary does not execute extension JavaScript, load arbitrary URLs, treat a workspace folder
-as a trusted extension root, or move TextMate parsing into Rust. Rust supplies authoritative bytes
-and path validation; the browser-owned TextMate runtime remains responsible for parsing, injections,
-scope resolution, incremental tokenization, and Worker transport.
+Candidate resources and grammars are fully parsed before commit. Commit runs behind the shared
+synchronous event barrier: language, completion, file-template, Workbench-theme, extension-theme,
+debugger, grammar, and `IExtensionService` events are delivered only after every live owner holds
+the same candidate generation. A synchronous commit failure discards buffered candidate events and
+restores the previous generation.
 
-## Current status and next steps
+Candidate resources are always read with the candidate catalog generation. A Rust refresh therefore
+cannot make one parsed manifest load resource bytes from another generation. Generation conflict is
+reported as a failed candidate refresh; the service does not silently retry individual files against
+a newer catalog.
 
-Current: built-in/user static package discovery, manifest identity validation, safe resource reads,
-TextMate root/injection grammar registration, and explicit failure reporting are implemented.
+## Failure semantics
 
-Next: add declarative language associations/configuration, then decide whether embedded-language and
-bracket metadata should be represented in the editor token contract. Runtime extension hosts and
-arbitrary extension code are separate trust boundaries and are not implied by this service.
+Manifest, language configuration, snippet, theme, debugger, or candidate registration failure
+disposes the candidate store and retains the previous active Workbench catalog. `onDidFail` reports
+the candidate extension when known. A successful commit publishes `onDidChange` after replacing
+dependent registries.
+
+TextMate owns grammar parsing and catalog normalization. The extension service asks it to materialize
+the candidate before committing; a loader/parser failure is therefore also surfaced through
+`IExtensionService.onDidFail` and leaves the previous complete catalog active. Later Worker runtime
+failures remain TextMate-owned and must not move grammar parsing into this service.
+
+## Internal symbols and drift signals
+
+| Symbol | Responsibility | Modification impact |
+| --- | --- | --- |
+| `parseExtensionManifest` | Strict supported manifest subset and safe resource paths | Fixtures for every contribution and bundled manifests |
+| `AppServerExtensionService.loadAndRegister` | One candidate generation prepare/commit/rollback | Reload queue, last-good, dispose, TextMate readiness tests |
+| reload runner state | Coalesce concurrent refreshes and settle all waiters | Concurrency and disposal tests |
+| `loadLanguageConfiguration` / `loadSnippetFile` / `loadTheme` / `loadGrammar` | Generation-bound UTF-8 resource decoding | Invalid UTF-8, path, size, resource adapter tests |
+| `ExtensionThemeRegistry` / `WorkbenchThemesRegistry` | Parsed catalog and replaceable Workbench themes | Selection, fallback label, token projection tests |
+| `ExtensionFileTemplateRegistry` | Immutable queryable template catalog | Materialization and create-from-template command tests |
+| `ExtensionDebugAdapterRegistry` | Immutable unique-type command lookup | Debug fallback/duplicate tests |
+
+Transport DTO imports in the public `IExtensionService` contract, direct workspace/URL reads,
+extension-owned DOM callbacks, or contribution semantics implemented inside the Rust catalog are
+architecture drift.
+
+## Tests and current limitations
+
+Run:
+
+```text
+corepack pnpm --dir desktop test:extensions
+corepack pnpm --dir desktop typecheck:extensions
+corepack pnpm --dir desktop test:unit
+corepack pnpm --dir desktop typecheck:renderer
+corepack pnpm --dir desktop test:scripts
+```
+
+Tests cover strict manifest/resource normalization, all supported contribution shapes, language
+configuration/snippet/template/theme/debugger projection, repeat and queued reload, failure rollback,
+dispose during load, TextMate candidate readiness, and bounded resource chunk assembly. Packaging
+tests separately enumerate all bundled manifests and their referenced files.
+
+This declarative service has no Editor Extension installer, enablement database, signature
+authority, manifest NLS, or arbitrary extension runtime. Zeta's executable Host RPC v1 is a
+separate Plugin-authorized service under `workbench/services/extensionHost`; it is not an evolution
+of this loader and is not a VS Code/Node Extension Host. The two current boundaries and remaining
+product-integration limits are documented in `docs/editor-extensions.md`.

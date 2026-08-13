@@ -29,6 +29,15 @@ impl InstalledPluginPackage {
         &self.package
     }
 
+    /// Returns the root of this exact immutable package object for trusted runtime composition.
+    ///
+    /// Launchers may use this path to bind the extension process working directory or a sandbox
+    /// mount. Contributions must continue to resolve declared files through [`Self::resolve_file`]
+    /// or [`Self::resolve_directory`] and must not use this accessor to bypass path validation.
+    pub fn package_root(&self) -> &Path {
+        &self.object_root
+    }
+
     /// Resolves one validated regular file inside this immutable object.
     pub fn resolve_file(&self, path: &crate::PluginPath) -> Result<PathBuf, PluginError> {
         let candidate = self.object_root.join(path.to_platform_path());

@@ -4,6 +4,7 @@ import { type IFileService } from "../../platform/files/common/files.js";
 import { type IWorkspaceContextService } from "../../platform/workspace/common/workspace.js";
 import { type ServiceCollection } from "../../platform/instantiation/common/instantiation.js";
 import { type ITerminalService } from "../services/terminal/common/terminal.js";
+import { type IStorageService } from "../../platform/storage/common/storage.js";
 
 export interface WorkbenchServiceContributionContext {
   readonly services: ServiceCollection;
@@ -11,6 +12,7 @@ export interface WorkbenchServiceContributionContext {
   readonly fileService: IFileService;
   readonly workspaceContext: IWorkspaceContextService;
   readonly terminalService: ITerminalService;
+  readonly storageService: IStorageService;
   readonly own: <T extends IDisposable>(value: T) => T;
 }
 

@@ -9,6 +9,7 @@ import { registerEditorLineGutterDecorationFactory } from "../../../browser/part
 import { DebugBreakpointDecorationProvider } from "./debugBreakpointDecorations.js";
 import { registerWorkbenchServiceContribution } from "../../../browser/workbenchServiceContributions.js";
 import { DebugService } from "../../../services/debug/browser/debugService.js";
+import { ITaskService } from "../../../services/tasks/common/taskService.js";
 import "./debugActions.js";
 import "./media/debug.css";
 
@@ -18,5 +19,5 @@ export function registerDebugView(registry: WorkbenchViewRegistry = ViewsRegistr
 }
 
 registerDebugView();
-registerWorkbenchServiceContribution(context => context.services.set(IDebugService, context.own(new DebugService(context.fileService, context.workspaceContext, context.rendererHost.debugAdapter, context.terminalService))));
+registerWorkbenchServiceContribution(context => context.services.set(IDebugService, context.own(new DebugService(context.fileService, context.workspaceContext, context.rendererHost.debugAdapter, context.terminalService, context.storageService, context.services.get(ITaskService)))));
 registerEditorLineGutterDecorationFactory((resource, accessor) => resource.scheme === "file" ? new DebugBreakpointDecorationProvider(accessor.get(IDebugService), resource) : undefined);

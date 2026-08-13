@@ -36,10 +36,11 @@ pub use identity::{
 };
 pub use manifest::{
     AssetContribution, ConnectorContribution, ContributionKind, ContributionReference,
-    CredentialKind, CredentialSlot, InvalidContributionReference, InvalidManifestLocalId,
-    InvalidNetworkHost, InvalidVersionRequirement, ManifestLocalId, McpServerContribution,
-    NetworkHost, Permission, PluginCompatibility, PluginContributions, PluginManifest,
-    SkillContribution, WorkspaceAccess, ZetaVersionRequirement,
+    CredentialKind, CredentialSlot, EditorExtensionActivationEvent, EditorExtensionCapability,
+    EditorExtensionContribution, EditorExtensionRuntimeApiVersion, InvalidContributionReference,
+    InvalidManifestLocalId, InvalidNetworkHost, InvalidVersionRequirement, ManifestLocalId,
+    McpServerContribution, NetworkHost, Permission, PluginCompatibility, PluginContributions,
+    PluginManifest, SkillContribution, WorkspaceAccess, ZetaVersionRequirement,
 };
 pub use marketplace::PluginMarketplace;
 pub use marketplace::PluginMarketplaceId;

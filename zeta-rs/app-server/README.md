@@ -197,7 +197,7 @@ src/
 ├── tool_executor_adapter.rs       # frozen payload/binding → ToolExecutor invocation
 ├── tool_composition.rs            # local/MCP/dynamic/extension routing + generation-safe replacement
 ├── review.rs                      # review-only provider adapter
-├── resource_store.rs              # bounded in-memory connection-owned resources
+├── resource_store.rs              # per-resource/per-connection bounded in-memory resources
 ├── git_service.rs                 # workspace root + GitClient + synchronous RPC runtime bridge
 ├── terminal_environment.rs        # secret-excluding host environment、platform normalization 与 terminal identity
 ├── terminal_profiles.rs           # trusted Shell discovery、ID 与 frozen environment
@@ -581,6 +581,7 @@ Auto Review authorization decision 分别属于 `zeta-auto-review` 和 `zeta-act
 Resource 是 in-memory、connection-owned、TTL-bounded：
 
 - 单个 resource 最大 `MAX_RESOURCE_BYTES` = 16 MiB；
+- 每个 connection 同时最多 128 个 resource、合计最多 64 MiB；
 - read chunk 最大 `MAX_READ_CHUNK_BYTES` = 262,144 bytes；
 - `create_resource` 当前固定 TTL 为 300 秒；
 - ID 是 process-local monotonic hex string；
@@ -691,9 +692,14 @@ capability 统一处理 image detail；旧 transcript 的纯 text shape 仍可�
 历史调用当前选择失败关闭，而不是按同名 live tool 重放。演进这些能力时应保留 protocol registry
 唯一性、Core/store authority、snapshot + durable gap 和 per-invocation config safe point。
 
-## Static extension resources
+## Static extension 资源
 
-The reusable filesystem catalog is owned by [`zeta-extensions`](../extensions/README.md).
-This crate only resolves host roots, adapts catalog values to protocol DTOs, and stores opened
-bytes in the connection-owned `ResourceStore`. `zeterm` should depend on `zeta-extensions`
-directly; it should not depend on App Server or desktop transport code.
+跨层行为和信任边界由 [`docs/editor-extensions.md`](../../docs/editor-extensions.md) 维护，可复用包目录
+由 [`zeta-extensions`](../extensions/README.md) 拥有。本 crate 只按“内置目录优先、用户目录其次”的
+顺序组合主机根目录，把目录值适配为协议 DTO，并把打开的 bytes 放入 connection-owned
+`ResourceStore`。Renderer 调用方不能提交绝对主机路径。
+
+`extensions/list` 返回一个不可变目录代次。`extensions/resource/open` 绑定代次、扩展 ID 和包内相对
+路径；旧代请求明确失败，不会重新打开可变 package 文件。App Server 把目录诊断和错误映射到协议
+类别并拥有临时资源生命周期，但不解析 language、grammar、snippet、theme 或 debugger 贡献。未来
+Zeterm consumer 应直接依赖 `zeta-extensions`，不能导入 App Server 或 Desktop transport code。

@@ -314,17 +314,33 @@ async function copyBuiltinSkills(destination) {
   }
 }
 
-async function copyBuiltinExtensions(destination) {
-  const source = join(repositoryRoot, "extensions");
+export async function copyBuiltinExtensions(destination, source = join(repositoryRoot, "extensions")) {
+  const sourceMetadata = await lstat(source);
+  if (!sourceMetadata.isDirectory() || sourceMetadata.isSymbolicLink()) {
+    throw new Error(`Built-in extension source is not a real directory: ${source}`);
+  }
   const entries = (await readdir(source, { withFileTypes: true })).filter(
     (entry) => entry.name !== "README.md" && entry.name !== "BUILD.bazel",
   );
+  if (entries.length === 0) {
+    throw new Error("Built-in extension source is empty");
+  }
   await mkdir(destination, { recursive: true });
   for (const entry of entries) {
     if (!entry.isDirectory()) {
       throw new Error(`Invalid built-in extension package: ${entry.name}`);
     }
-    await stat(join(source, entry.name, "package.json"));
+    const manifest = join(source, entry.name, "package.json");
+    let manifestMetadata;
+    try {
+      manifestMetadata = await lstat(manifest);
+    } catch (error) {
+      if (error?.code === "ENOENT") throw new Error(`Built-in extension is missing package.json: ${entry.name}`, { cause: error });
+      throw error;
+    }
+    if (!manifestMetadata.isFile() || manifestMetadata.isSymbolicLink()) {
+      throw new Error(`Built-in extension package.json is not a regular file: ${entry.name}`);
+    }
     await copyRegularTree(join(source, entry.name), join(destination, entry.name), "extension package");
   }
 }
@@ -347,9 +363,11 @@ export async function assemblePackage(staging, target, platform, executables, ri
   const pathDirectory = join(staging, "zeta-path");
   const resourcesDirectory = join(staging, "zeta-resources");
   const ripgrepLicenseDirectory = join(resourcesDirectory, "licenses", "ripgrep");
+  const vscodeLicenseDirectory = join(resourcesDirectory, "licenses", "vscode");
   await mkdir(binDirectory, { recursive: true });
   await mkdir(pathDirectory, { recursive: true });
   await mkdir(ripgrepLicenseDirectory, { recursive: true });
+  await mkdir(vscodeLicenseDirectory, { recursive: true });
   await copyBuiltinSkills(join(resourcesDirectory, "skills"));
   await copyBuiltinExtensions(join(resourcesDirectory, "extensions"));
   await copyExecutable(executables.zeta, join(binDirectory, zetaName), isWindows);
@@ -357,6 +375,7 @@ export async function assemblePackage(staging, target, platform, executables, ri
   for (const name of ["LICENSE-MIT", "UNLICENSE"]) {
     await copyFile(join(repositoryRoot, "third_party", "ripgrep", name), join(ripgrepLicenseDirectory, name));
   }
+  await copyFile(join(repositoryRoot, "third_party", "vscode", "LICENSE.txt"), join(vscodeLicenseDirectory, "LICENSE.txt"));
 
   const components = {
     ripgrep: {
@@ -416,6 +435,7 @@ async function validatePackage(packageRoot, platform) {
   await requireFile(join(packageRoot, "zeta-path", isWindows ? "rg.exe" : "rg"));
   await requireFile(join(packageRoot, "zeta-resources", "licenses", "ripgrep", "LICENSE-MIT"));
   await requireFile(join(packageRoot, "zeta-resources", "licenses", "ripgrep", "UNLICENSE"));
+  await requireFile(join(packageRoot, "zeta-resources", "licenses", "vscode", "LICENSE.txt"));
   if (isWindows) {
     await requireFile(join(packageRoot, "zeta-resources", "zeta-command-runner.exe"));
     await requireFile(join(packageRoot, "zeta-resources", "zeta-windows-sandbox-setup.exe"));
@@ -425,6 +445,9 @@ async function validatePackage(packageRoot, platform) {
     await requireFile(join(packageRoot, "zeta-resources", "licenses", "bubblewrap", "COPYING"));
   }
   const extensionEntries = await readdir(join(packageRoot, "zeta-resources", "extensions"), { withFileTypes: true });
+  if (extensionEntries.length === 0) {
+    throw new Error("Package contains no built-in extensions");
+  }
   for (const extensionEntry of extensionEntries) {
     if (!extensionEntry.isDirectory()) {
       throw new Error(`Package contains an invalid built-in extension entry: ${extensionEntry.name}`);

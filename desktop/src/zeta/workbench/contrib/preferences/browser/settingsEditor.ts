@@ -173,6 +173,9 @@ export class SettingsEditor extends DisposableOwner {
         this.renderAppearance();
       }
     }));
+    this.own(WorkbenchThemesRegistry.onDidChange(() => {
+      if (this.settingsService.activeSectionId === "appearance") this.renderAppearance();
+    }));
     this.own(this.searchInput.onDidChange((value) => {
       this.filterNavigation(value);
     }));

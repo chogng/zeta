@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { Emitter } from "../../common/event.js";
+import { Emitter, runWithBufferedEvents } from "../../common/event.js";
 import type { IDisposable } from "../../common/lifecycle.js";
 
 test("Emitter delivers synchronously and subscriptions are disposable", () => {
@@ -106,5 +106,40 @@ test("Emitter reports listener errors and continues delivery", () => {
 
   failing.dispose();
   succeeding.dispose();
+  emitter.dispose();
+});
+
+test("runWithBufferedEvents publishes only after every state mutation completes", () => {
+  const first = new Emitter<void>();
+  const second = new Emitter<void>();
+  const state = { first: 0, second: 0 };
+  const observations: string[] = [];
+  first.event(() => observations.push(`${state.first}:${state.second}`));
+  second.event(() => observations.push(`${state.first}:${state.second}`));
+
+  runWithBufferedEvents(() => {
+    state.first = 1;
+    first.fire();
+    state.second = 1;
+    second.fire();
+    assert.deepEqual(observations, []);
+  });
+
+  assert.deepEqual(observations, ["1:1", "1:1"]);
+  first.dispose();
+  second.dispose();
+});
+
+test("runWithBufferedEvents discards notifications from failed mutations", () => {
+  const emitter = new Emitter<void>();
+  let calls = 0;
+  emitter.event(() => { calls += 1; });
+
+  assert.throws(() => runWithBufferedEvents(() => {
+    emitter.fire();
+    throw new Error("failed");
+  }), /failed/);
+
+  assert.equal(calls, 0);
   emitter.dispose();
 });

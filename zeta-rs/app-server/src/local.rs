@@ -1118,13 +1118,14 @@ fn resolve_built_in_skill_root(selection: BuiltInSkillRoot) -> BuiltInSkillSourc
 }
 
 fn resolve_extension_roots(profile_root: &std::path::Path) -> Vec<ExtensionRoot> {
-    let mut roots = vec![ExtensionRoot::user(profile_root.join("extensions"))];
+    let mut roots = Vec::new();
     if let Some(root) = InstallContext::current()
         .bundled_resource_directory("extensions")
         .or_else(development_extension_root)
     {
         roots.push(ExtensionRoot::built_in(root));
     }
+    roots.push(ExtensionRoot::user(profile_root.join("extensions")));
     roots
 }
 

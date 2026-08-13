@@ -1,5 +1,8 @@
 use super::*;
+use sha2::Digest;
+use sha2::Sha256;
 use std::fs;
+use std::fs::File;
 
 #[test]
 fn discovers_manifest_and_reads_a_grammar_resource() {
@@ -34,9 +37,20 @@ fn discovers_manifest_and_reads_a_grammar_resource() {
 
     assert_eq!(snapshot.extensions.len(), 1);
     assert_eq!(snapshot.extensions[0].id, "zeta.demo");
+    assert_eq!(
+        snapshot.extensions[0].manifest_sha256,
+        format!(
+            "sha256:{:x}",
+            Sha256::digest(snapshot.extensions[0].manifest_json.as_bytes())
+        )
+    );
     assert!(snapshot.diagnostics.is_empty());
     let resource = catalog
-        .open_resource("zeta.demo", "syntaxes/demo.tmLanguage.json")
+        .open_resource(
+            snapshot.generation,
+            "zeta.demo",
+            "syntaxes/demo.tmLanguage.json",
+        )
         .expect("grammar resource");
     assert_eq!(resource.mime_type, "application/json");
     assert_eq!(
@@ -75,10 +89,174 @@ fn rejects_paths_that_escape_the_package() {
     .expect("manifest");
 
     let mut catalog = ExtensionCatalog::new(vec![ExtensionRoot::user(root.path())]);
-    catalog.list(ExtensionCatalogReload::Refresh);
+    let snapshot = catalog.list(ExtensionCatalogReload::Refresh);
 
     assert_eq!(
-        catalog.open_resource("zeta.demo", "../package.json"),
+        catalog.open_resource(snapshot.generation, "zeta.demo", "../package.json"),
         Err(ExtensionCatalogError::InvalidPath)
     );
+}
+
+#[test]
+fn rejects_resource_reads_from_a_stale_catalog_generation() {
+    let root = tempfile::tempdir().expect("extension root");
+    let package = root.path().join("zeta.demo");
+    fs::create_dir_all(&package).expect("package directory");
+    fs::write(
+        package.join("package.json"),
+        r#"{"name":"demo","publisher":"zeta","version":"1.0.0"}"#,
+    )
+    .expect("manifest");
+    fs::write(package.join("resource.json"), b"{}").expect("resource");
+
+    let mut catalog = ExtensionCatalog::new(vec![ExtensionRoot::user(root.path())]);
+    let stale = catalog.list(ExtensionCatalogReload::Refresh);
+    let current = catalog.list(ExtensionCatalogReload::Refresh);
+
+    assert!(current.generation > stale.generation);
+    assert_eq!(
+        catalog.open_resource(stale.generation, "zeta.demo", "resource.json"),
+        Err(ExtensionCatalogError::GenerationConflict)
+    );
+    assert!(catalog
+        .open_resource(current.generation, "zeta.demo", "resource.json")
+        .is_ok());
+}
+
+#[test]
+fn freezes_package_resources_and_digest_until_refresh() {
+    let root = tempfile::tempdir().expect("extension root");
+    let package = write_package(root.path(), "1.0.0");
+    let resource_path = package.join("resource.json");
+    fs::write(&resource_path, br#"{"value":"old"}"#).expect("old resource");
+
+    let mut catalog = ExtensionCatalog::new(vec![ExtensionRoot::user(root.path())]);
+    let first = catalog.list(ExtensionCatalogReload::Refresh);
+    let first_digest = first.extensions[0].package_sha256.clone();
+    let unchanged = catalog.list(ExtensionCatalogReload::Refresh);
+    assert_eq!(unchanged.extensions[0].package_sha256, first_digest);
+    write_manifest(&package, "2.0.0");
+    fs::write(&resource_path, br#"{"value":"new"}"#).expect("new resource");
+
+    let frozen_manifest = catalog
+        .open_resource(unchanged.generation, "zeta.demo", "package.json")
+        .expect("frozen manifest");
+    assert_eq!(
+        frozen_manifest.bytes,
+        br#"{"name":"demo","publisher":"zeta","version":"1.0.0"}"#
+    );
+    let frozen = catalog
+        .open_resource(unchanged.generation, "zeta.demo", "resource.json")
+        .expect("frozen resource");
+    assert_eq!(frozen.bytes, br#"{"value":"old"}"#);
+
+    let second = catalog.list(ExtensionCatalogReload::Refresh);
+    assert_eq!(second.extensions[0].version, "2.0.0");
+    assert_ne!(second.extensions[0].package_sha256, first_digest);
+    let refreshed = catalog
+        .open_resource(second.generation, "zeta.demo", "resource.json")
+        .expect("refreshed resource");
+    assert_eq!(refreshed.bytes, br#"{"value":"new"}"#);
+    assert_eq!(
+        catalog.open_resource(unchanged.generation, "zeta.demo", "resource.json"),
+        Err(ExtensionCatalogError::GenerationConflict)
+    );
+}
+
+#[test]
+fn rejects_a_package_with_an_oversized_file() {
+    let root = tempfile::tempdir().expect("extension root");
+    let package = write_package(root.path(), "1.0.0");
+    let file = File::create(package.join("oversized.bin")).expect("oversized resource");
+    file.set_len(crate::package::MAX_PACKAGE_FILE_BYTES as u64 + 1)
+        .expect("oversized resource length");
+
+    let mut catalog = ExtensionCatalog::new(vec![ExtensionRoot::user(root.path())]);
+    let snapshot = catalog.list(ExtensionCatalogReload::Refresh);
+
+    assert!(snapshot.extensions.is_empty());
+    assert_eq!(snapshot.diagnostics.len(), 1);
+    assert_eq!(
+        snapshot.diagnostics[0].code,
+        ExtensionDiagnosticCode::ResourceTooLarge
+    );
+}
+
+#[cfg(any(unix, windows))]
+#[test]
+fn rejects_a_package_with_a_symbolic_link() {
+    let root = tempfile::tempdir().expect("extension root");
+    let package = write_package(root.path(), "1.0.0");
+    let outside = root.path().join("outside.json");
+    fs::write(&outside, b"{}").expect("outside resource");
+    if let Err(error) = create_file_symlink(&outside, &package.join("linked.json")) {
+        if cfg!(windows)
+            && (error.kind() == std::io::ErrorKind::PermissionDenied
+                || error.raw_os_error() == Some(1_314))
+        {
+            return;
+        }
+        panic!("resource symlink: {error}");
+    }
+
+    let mut catalog = ExtensionCatalog::new(vec![ExtensionRoot::user(root.path())]);
+    let snapshot = catalog.list(ExtensionCatalogReload::Refresh);
+
+    assert!(snapshot.extensions.is_empty());
+    assert_eq!(snapshot.diagnostics.len(), 1);
+    assert_eq!(
+        snapshot.diagnostics[0].code,
+        ExtensionDiagnosticCode::PathEscapesRoot
+    );
+}
+
+#[test]
+fn keeps_the_first_root_when_extension_ids_conflict() {
+    let built_in = tempfile::tempdir().expect("built-in extension root");
+    let user = tempfile::tempdir().expect("user extension root");
+    let _ = write_package(built_in.path(), "1.0.0");
+    let _ = write_package(user.path(), "2.0.0");
+
+    let mut catalog = ExtensionCatalog::new(vec![
+        ExtensionRoot::built_in(built_in.path()),
+        ExtensionRoot::user(user.path()),
+    ]);
+    let snapshot = catalog.list(ExtensionCatalogReload::Refresh);
+
+    assert_eq!(snapshot.extensions.len(), 1);
+    assert_eq!(snapshot.extensions[0].version, "1.0.0");
+    assert_eq!(
+        snapshot.extensions[0].source_kind,
+        ExtensionSourceKind::BuiltIn
+    );
+    assert_eq!(snapshot.diagnostics.len(), 1);
+    assert_eq!(
+        snapshot.diagnostics[0].code,
+        ExtensionDiagnosticCode::DuplicateExtension
+    );
+}
+
+fn write_package(root: &std::path::Path, version: &str) -> std::path::PathBuf {
+    let package = root.join("zeta.demo");
+    fs::create_dir_all(&package).expect("package directory");
+    write_manifest(&package, version);
+    package
+}
+
+fn write_manifest(package: &std::path::Path, version: &str) {
+    fs::write(
+        package.join("package.json"),
+        format!(r#"{{"name":"demo","publisher":"zeta","version":"{version}"}}"#),
+    )
+    .expect("manifest");
+}
+
+#[cfg(unix)]
+fn create_file_symlink(target: &std::path::Path, link: &std::path::Path) -> std::io::Result<()> {
+    std::os::unix::fs::symlink(target, link)
+}
+
+#[cfg(windows)]
+fn create_file_symlink(target: &std::path::Path, link: &std::path::Path) -> std::io::Result<()> {
+    std::os::windows::fs::symlink_file(target, link)
 }

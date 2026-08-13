@@ -10,18 +10,12 @@ export const WorkbenchConfiguration = Object.freeze({
     key: "workbench.colorTheme",
     defaultValue: defaultWorkbenchColorThemePreference,
     parse(value: unknown): string {
-      if (
-        typeof value !== "string" ||
-        (
-          value !== SystemColorThemePreference &&
-          !WorkbenchThemesRegistry.getColorTheme(value)
-        )
-      ) {
-        throw new TypeError(
-          `Unknown workbench color theme preference: ${String(value)}`,
-        );
-      }
+      if (typeof value !== "string" || !isColorThemePreference(value)) throw new TypeError(`Unknown workbench color theme preference: ${String(value)}`);
       return value;
     },
   }),
 });
+
+function isColorThemePreference(value: string): boolean {
+  return value === SystemColorThemePreference || WorkbenchThemesRegistry.getColorTheme(value) !== undefined || /^extension-[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(value);
+}

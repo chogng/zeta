@@ -1,7 +1,8 @@
 # 语言服务器系统
 
-> 状态：catalog、低层 LSP runtime 与产品级 language-service supervisor 已实现；Native 已接入
-> Rust、JSON/JSONC、Shell 的持久化 mode/path 设置、自动发现、热重配和 diagnostics presentation。
+> 状态：catalog、低层 LSP runtime 与产品级 language-service supervisor 已实现；Desktop/App Server
+> 已接入 revision-bound 语言请求与编辑器 provider，Native 仍保留既有 Rust、JSON/JSONC、Shell
+> 设置和 diagnostics presentation。
 > 本文拥有跨 crate 的语言能力语义、所有权和演进阶段；当前实现接口与修改路径由
 > [`zeta-lsp` README](../zeta-rs/lsp/README.md) 和
 > [`zeta-language-server-catalog` README](../zeta-rs/language-server-catalog/README.md)、
@@ -21,14 +22,17 @@ Automatic 或 Enabled。未配置的 server 默认 Disabled，不会自动拉起
 | --- | --- | --- |
 | 启动一个已解析的语言服务器命令 | ✅ 完成 initialize/initialized，冻结能力和位置编码 | `zeta-lsp` |
 | 打开、修改、保存和关闭文档 | ✅ Native 发送 editor revision/full text；协调层绑定 LSP version | `zeta-language-service` + `zeta-lsp` |
-| hover、completion、definition 等请求 | ✅ 产品 facade、capability/freshness gate、Native popup 与 definition navigation | `zeta-language-service` + Native |
-| push diagnostics | ✅ freshness 校验、Native event loop、编辑器波浪线与 hover detail 已接通 | `zeta-language-service` + `zeta-editor` + Native |
-| 日志和 show message | 部分具备；已进入 Native event loop | 产品级 message UI 尚未完成 |
+| hover、completion、definition 等请求 | ✅ 产品 facade、capability/freshness gate、Desktop 编辑器 provider；completion resolve/command 和多目标 Peek 已接通 | `zeta-language-service` + Desktop |
+| Semantic Tokens 与文档特性 | ✅ Semantic Tokens、Document Symbols、CodeLens、Document Links、Document Colors、Folding 已适配现有 Editor contract | `zeta-language-service` + Desktop |
+| push / document pull diagnostics | ✅ 共用 freshness 校验和 Problems 数据入口；pull full report 替换当前快照，unchanged report 保留已有结果 | `zeta-language-service` + App Server + Desktop |
+| workspace diagnostics | ✅ 调用 `workspace/diagnostic`，App Server 通过 Workspace authority 读取未打开文件并转换范围，Desktop 将完整结果写入同一 Problems repository | `zeta-language-service` + App Server + Desktop |
+| 日志、show message 与 work-done progress | ✅ Desktop 将日志投影到 Output/Language Servers，showMessage 使用 Workbench Dialog，活动进度显示在状态栏与 Output | App Server + Desktop Workbench |
 | 显式替换服务器并恢复文档 | ✅ 新实例重放成功后切换 route/incarnation | 宿主需暂存 replacement 早期事件 |
 | 配置与发现 Rust/JSON/Shell server | ✅ 独立 Settings draft、revision-safe mode/path、catalog 校验与热重配 | 扩展安装 provider/UI |
 | 意外退出、退避重启和 crash-loop | ✅ 断连 retirement、有限指数退避、状态展示和全文重放 | `zeta-language-service` + Native |
 | 安装、更新和选择其他 server | 部分具备；verified side-by-side installer 已完成，release provider/UI 尚缺 | distribution / config / Native |
-| 动态注册、workspace edit、pull diagnostics、LSP 3.18 新能力 | 尚未完成 | 后续按真实消费者逐项加入 |
+| 动态注册与 work-done progress | ✅ 按 server incarnation 隔离，静态与动态 capability 共同参与请求 gate | `zeta-lsp` + `zeta-language-service` |
+| workspace edit、LSP 3.18 新能力 | 尚未完成 | 后续按真实消费者逐项加入 |
 
 继续阅读：[一次操作](#1-一次操作)、[所有权](#2-所有权边界)、
 [失败语义](#3-可靠性与失败语义)、[当前状态](#4-当前实现与演进)。
@@ -115,7 +119,7 @@ Desktop 的 legacy editor runtime host 可以消费相同系统语义，但不�
 
 - 独立 `zeta-lsp` crate、Cargo/Bazel target 和 typed `lsp-types` public surface；
 - stdio child 与 caller-provided async transport；
-- initialize/initialized、workspace configuration、push diagnostics、日志和消息事件；
+- initialize/initialized、workspace configuration、动态 capability registration、work-done progress、push/document-pull diagnostics、日志和消息事件；
 - full/incremental document synchronization、save policy 和单调 version；
 - generic typed requests、deadline cancellation、shutdown/exit；
 - 唯一 language route、EditorHost revision binding、显式 server replacement 和全文 replay；
@@ -129,8 +133,11 @@ Desktop 的 legacy editor runtime host 可以消费相同系统语义，但不�
 - Native revision gate、CodeEditor severity squiggle/soft-wrap projection 与 hover detail；
 - transport-close detection、断连 route retirement、server epoch gate、有限指数退避与 crash-loop state；
 - Native Settings 的 Starting/Ready/BackingOff/CrashLoop/Failed/Stopped runtime projection；
-- hover/completion/navigation/hierarchy/rename/code-action/formatting/signature-help/inlay-hints/linked-editing product facade、
+- hover/completion/resolve/command/navigation/hierarchy/rename/code-action/formatting/signature-help/inlay-hints/linked-editing product facade、
   capability gate、三重 freshness gate、Renderer latest-request gate 与可见交互；
+- Semantic Tokens、Document Symbols、CodeLens、Document Links、Document Colors、Folding 的 revision-bound facade 与 Desktop Editor provider；
+- document/workspace pull diagnostics 的 capability gate、report projection、App Server route 与 Desktop Problems 数据接入；
+- 多 definition target 使用现有 Peek 列表选择，单目标直接导航；
 - Rust、JSON/JSONC、Shell 三项 built-in catalog definitions；
 - verified package staging、SHA-256、side-by-side update 与 receipt；
 - in-memory protocol vertical tests。
@@ -138,9 +145,8 @@ Desktop 的 legacy editor runtime host 可以消费相同系统语义，但不�
 ### 计划
 
 1. 把 workspace trust 的明确结果映射为 catalog execution policy。
-2. 接入 semantic tokens，并为多 definition target 建立 picker。
+2. 增加 pull diagnostics 的 result-id cache、partial-result progress 与 `workspace/diagnostic/refresh`。
 3. 为每个内置 server 增加可信 release metadata provider、archive limit、compatibility probe 和安装 UI。
-4. 有真实消费者后再增加 dynamic registration、progress 和 pull diagnostics。
 
 ### 潜在方向
 

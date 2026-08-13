@@ -1,15 +1,27 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { DisposableOwner, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { type ITaskRun, type ITaskService } from "../../tasks/common/taskService.js";
-import { type ITestProfile, type ITestRun, type ITestingService, type TestRunStatus } from "../common/testingService.js";
+import { type ITestProfile, type ITestRun, type ITestingService, type TestProfileContribution, type TestProfileProvider, type TestProfileProviderRegistration, type TestRunStatus } from "../common/testingService.js";
+
+interface OwnedTestProfileProvider {
+  readonly owner: object;
+  readonly provider: TestProfileProvider;
+}
 
 /** Projects test-group workspace tasks into a dedicated testing workflow. */
 export class TestingService extends DisposableOwner implements ITestingService {
   private readonly profilesEmitter = this.own(new Emitter<readonly ITestProfile[]>());
   private readonly startRunEmitter = this.own(new Emitter<ITestRun>());
   private readonly changeRunEmitter = this.own(new Emitter<ITestRun>());
+  private readonly providers = new Map<string, OwnedTestProfileProvider>();
   private currentProfiles: readonly ITestProfile[] = Object.freeze([]);
+  private providerProfiles: readonly ITestProfile[] = Object.freeze([]);
   private currentRuns: TestRun[] = [];
+  private activeProviderRefresh: AbortController | undefined;
+  private providerRefreshGeneration = 0;
+  private refreshingTasks = 0;
+  private loaded = false;
+  private disposed = false;
 
   readonly onDidChangeProfiles: Event<readonly ITestProfile[]> = this.profilesEmitter.event;
   readonly onDidStartRun: Event<ITestRun> = this.startRunEmitter.event;
@@ -17,8 +29,15 @@ export class TestingService extends DisposableOwner implements ITestingService {
 
   constructor(private readonly taskService: ITaskService) {
     super();
-    this.own(taskService.onDidChangeTasks(() => this.projectProfiles()));
+    this.own(taskService.onDidChangeTasks(() => {
+      this.projectProfiles();
+      if (this.loaded && this.refreshingTasks === 0 && !this.activeProviderRefresh) void this.refreshProviderProfiles().catch(reportTestingError);
+    }));
     this.defer(() => {
+      this.disposed = true;
+      this.activeProviderRefresh?.abort();
+      this.activeProviderRefresh = undefined;
+      this.providers.clear();
       for (const run of this.currentRuns) run.dispose();
       this.currentRuns = [];
     });
@@ -28,17 +47,43 @@ export class TestingService extends DisposableOwner implements ITestingService {
   get profiles(): readonly ITestProfile[] { return this.currentProfiles; }
   get runs(): readonly ITestRun[] { return this.currentRuns; }
 
+  registerTestProfileProvider(provider: TestProfileProvider): IDisposable {
+    return this.registerTestProfileProviders([provider]);
+  }
+
+  registerTestProfileProviders(providers: readonly TestProfileProvider[]): TestProfileProviderRegistration {
+    this.ensureAlive();
+    const owner = Object.freeze({});
+    this.replaceProviders(owner, providers);
+    let disposed = false;
+    const registration = toDisposable(() => {
+      if (disposed) return;
+      disposed = true;
+      const removed = this.deleteProviderOwner(owner);
+      if (removed.length > 0) this.providersChanged(removed);
+    }) as TestProfileProviderRegistration;
+    registration.replace = replacement => {
+      if (disposed) throw new ReferenceError("Test Profile provider registration is already disposed");
+      this.ensureAlive();
+      this.replaceProviders(owner, replacement);
+    };
+    return registration;
+  }
+
   async refresh(): Promise<readonly ITestProfile[]> {
-    await this.taskService.refresh();
-    this.projectProfiles();
-    return this.currentProfiles;
+    this.ensureAlive();
+    this.refreshingTasks += 1;
+    try { await this.taskService.refresh(); }
+    finally { this.refreshingTasks -= 1; }
+    return this.refreshProviderProfiles();
   }
 
   async run(profile: ITestProfile): Promise<ITestRun> {
-    const task = this.taskService.tasks.find(candidate => candidate.id === profile.id && candidate.group === "test");
+    const currentProfile = this.currentProfiles.find(candidate => candidate.id === profile.id);
+    const task = currentProfile ? this.taskService.tasks.find(candidate => candidate.id === currentProfile.taskId && candidate.group === "test") : undefined;
     if (!task) throw new Error("Test profile is no longer present in the current workspace");
     const taskRun = await this.taskService.run(task);
-    const run = this.own(new TestRun(profile, taskRun, current => this.changeRunEmitter.fire(current)));
+    const run = this.own(new TestRun(currentProfile!, taskRun, current => this.changeRunEmitter.fire(current)));
     this.currentRuns = [...this.currentRuns, run].slice(-50);
     this.startRunEmitter.fire(run);
     return run;
@@ -60,10 +105,92 @@ export class TestingService extends DisposableOwner implements ITestingService {
   }
 
   private projectProfiles(): void {
-    const profiles = Object.freeze(this.taskService.tasks.filter(task => task.group === "test").map(task => Object.freeze({ id: task.id, label: task.label, source: task.source, detail: task.detail ?? task.command })));
+    const tasks = new Map(this.taskService.tasks.filter(task => task.group === "test").map(task => [task.id, task]));
+    const taskProfiles = [...tasks.values()].map(task => Object.freeze({ id: task.id, label: task.label, source: task.source, taskId: task.id, detail: task.detail ?? task.command }));
+    const profiles = Object.freeze([...taskProfiles, ...this.providerProfiles.filter(profile => tasks.has(profile.taskId))]);
     if (JSON.stringify(profiles) === JSON.stringify(this.currentProfiles)) return;
     this.currentProfiles = profiles;
     this.profilesEmitter.fire(profiles);
+  }
+
+  private replaceProviders(owner: object, providers: readonly TestProfileProvider[]): void {
+    if (!Array.isArray(providers)) throw new TypeError("Test Profile providers must be an array");
+    const normalized = providers.map(normalizeTestProfileProvider);
+    const ids = new Set<string>();
+    for (const provider of normalized) {
+      const existing = this.providers.get(provider.id);
+      if (ids.has(provider.id) || existing && existing.owner !== owner) throw new Error(`Test Profile provider '${provider.id}' is already registered`);
+      ids.add(provider.id);
+    }
+    const changed = new Set(this.deleteProviderOwner(owner));
+    for (const provider of normalized) this.providers.set(provider.id, { owner, provider });
+    for (const provider of normalized) changed.add(provider.id);
+    if (changed.size > 0) this.providersChanged(changed);
+  }
+
+  private deleteProviderOwner(owner: object): readonly string[] {
+    const removed: string[] = [];
+    for (const [id, entry] of this.providers) {
+      if (entry.owner !== owner) continue;
+      this.providers.delete(id);
+      removed.push(id);
+    }
+    return removed;
+  }
+
+  private providersChanged(providerIds: ReadonlySet<string> | readonly string[]): void {
+    if (this.disposed) return;
+    const changedProviders = new Set(providerIds);
+    const refresh = this.loaded || this.activeProviderRefresh !== undefined;
+    this.providerProfiles = Object.freeze(this.providerProfiles.filter(profile => !changedProviders.has(profile.source)));
+    this.projectProfiles();
+    this.activeProviderRefresh?.abort();
+    this.providerRefreshGeneration += 1;
+    if (refresh) void this.refreshProviderProfiles().catch(reportTestingError);
+  }
+
+  private async refreshProviderProfiles(): Promise<readonly ITestProfile[]> {
+    this.ensureAlive();
+    this.activeProviderRefresh?.abort();
+    const controller = new AbortController();
+    this.activeProviderRefresh = controller;
+    const generation = ++this.providerRefreshGeneration;
+    const providers = [...this.providers.values()].map(entry => entry.provider);
+    try {
+      const providerProfiles = (await Promise.all(providers.map(provider => this.provideProfiles(provider, controller.signal)))).flat();
+      if (controller.signal.aborted || generation !== this.providerRefreshGeneration || this.disposed) return this.currentProfiles;
+      const ids = new Set(this.taskService.tasks.filter(task => task.group === "test").map(task => task.id));
+      for (const profile of providerProfiles) {
+        if (ids.has(profile.id)) throw new Error(`Test Profile '${profile.id}' is already registered`);
+        ids.add(profile.id);
+      }
+      this.providerProfiles = Object.freeze(providerProfiles);
+      this.loaded = true;
+      this.projectProfiles();
+      return this.currentProfiles;
+    } catch (error) {
+      if (controller.signal.aborted || generation !== this.providerRefreshGeneration || this.disposed) return this.currentProfiles;
+      throw error;
+    } finally {
+      if (this.activeProviderRefresh === controller) this.activeProviderRefresh = undefined;
+    }
+  }
+
+  private async provideProfiles(provider: TestProfileProvider, signal: AbortSignal): Promise<readonly ITestProfile[]> {
+    const contributions = await provider.provideTestProfiles(signal);
+    if (signal.aborted) return Object.freeze([]);
+    if (!Array.isArray(contributions)) throw new TypeError(`Test Profile provider '${provider.id}' must return an array`);
+    const ids = new Set<string>();
+    return Object.freeze(contributions.map(contribution => {
+      const profile = projectProviderProfile(provider.id, contribution, this.taskService);
+      if (ids.has(profile.id)) throw new Error(`Test Profile provider '${provider.id}' returned duplicate profile '${contribution.id}'`);
+      ids.add(profile.id);
+      return profile;
+    }));
+  }
+
+  private ensureAlive(): void {
+    if (this.disposed) throw new ReferenceError("TestingService is already disposed");
   }
 }
 
@@ -90,4 +217,30 @@ class TestRun extends DisposableOwner implements ITestRun {
 function projectTestStatus(status: ITaskRun["status"]): TestRunStatus {
   if (status === "succeeded") return "passed";
   return status;
+}
+
+function normalizeTestProfileProvider(provider: TestProfileProvider): TestProfileProvider {
+  if (!provider || typeof provider !== "object") throw new TypeError("Test Profile provider must be an object");
+  const id = normalizeText(provider.id, "Test Profile provider ID", 256);
+  if (typeof provider.provideTestProfiles !== "function") throw new TypeError(`Test Profile provider '${id}' must implement provideTestProfiles`);
+  return Object.freeze({ id, provideTestProfiles: (signal: AbortSignal) => provider.provideTestProfiles.call(provider, signal) });
+}
+
+function projectProviderProfile(providerId: string, contribution: TestProfileContribution, taskService: ITaskService): ITestProfile {
+  if (!contribution || typeof contribution !== "object") throw new TypeError(`Test Profile provider '${providerId}' returned an invalid profile`);
+  const id = normalizeText(contribution.id, `Test Profile provider '${providerId}' profile ID`, 256);
+  const label = normalizeText(contribution.label, `Test Profile provider '${providerId}' profile label`, 256);
+  const taskId = normalizeText(contribution.taskId, `Test Profile provider '${providerId}' task ID`, 1024);
+  if (!taskService.tasks.some(task => task.id === taskId && task.group === "test")) throw new Error(`Test Profile provider '${providerId}' references unavailable test task '${taskId}'`);
+  const detail = contribution.detail === undefined ? undefined : normalizeText(contribution.detail, `Test Profile provider '${providerId}' profile detail`, 4096, false);
+  return Object.freeze({ id: `extension-profile:${encodeURIComponent(providerId)}:${encodeURIComponent(id)}`, label, source: providerId, taskId, ...(detail === undefined ? {} : { detail }) });
+}
+
+function normalizeText(value: string, owner: string, maximum: number, trim = true): string {
+  if (typeof value !== "string" || value.trim().length === 0 || value.length > maximum || value.includes("\0")) throw new TypeError(`${owner} must contain 1 to ${maximum} characters without NUL`);
+  return trim ? value.trim() : value;
+}
+
+function reportTestingError(error: unknown): void {
+  console.error("Could not refresh Test Profiles", error);
 }

@@ -48,12 +48,15 @@ mod connector_runtime;
 mod debug_operations;
 mod diff_operations;
 mod extension_config_operations;
+mod extension_host_operations;
+mod extension_host_runtime;
 mod extension_operations;
 mod fs_operations;
 mod fs_watcher;
 mod git_operations;
 mod git_runtime;
 mod interaction_runtime;
+mod language_document_features;
 mod language_operations;
 mod language_runtime;
 pub(crate) mod multi_agent_tools;
@@ -124,6 +127,7 @@ pub struct AppServer {
     pub(super) connector_device_oauth:
         Option<Arc<zeta_connectors_extension::ConnectorDeviceOAuthService>>,
     pub(super) plugins: Option<zeta_plugins::PluginActivationAuthority>,
+    pub(super) extension_hosts: Option<extension_host_runtime::ExtensionHostRuntime>,
     pub(super) plugin_marketplaces: Option<zeta_plugins::PluginMarketplaceService>,
     plugin_skill_sources: Option<Arc<dyn zeta_skills_extension::DynamicSkillSourceProvider>>,
     language: Mutex<language_runtime::AppServerLanguageRuntime>,
@@ -231,6 +235,7 @@ impl AppServer {
             connector_oauth: None,
             connector_device_oauth: None,
             plugins: None,
+            extension_hosts: None,
             plugin_marketplaces: None,
             plugin_skill_sources: None,
             language: Mutex::new(language_runtime::AppServerLanguageRuntime::new(
@@ -300,6 +305,9 @@ impl AppServer {
         }
         if let Some(debug_adapters) = self.configured_debug_adapter_service() {
             debug_adapters.close_owner(connection.connection_id);
+        }
+        if let Some(extension_hosts) = &self.extension_hosts {
+            extension_hosts.close_owner(connection.connection_id);
         }
     }
 
@@ -412,6 +420,36 @@ impl AppServer {
         self.plugin_skill_sources = Some(skill_sources);
         self.plugins = Some(plugins);
         self
+    }
+
+    /// Enables executable Editor Extensions over one explicitly injected process launcher.
+    ///
+    /// Plugin authority must be installed first. Without this opt-in, App Server advertises no
+    /// executable Extension Host capability and never starts package code.
+    pub fn with_extension_host_runtime(
+        mut self,
+        launcher: Arc<dyn zeta_editor_extension_host::ExtensionHostLauncher>,
+        limits: zeta_editor_extension_host::ExtensionHostLimits,
+        restart_policy: zeta_editor_extension_host::RestartPolicy,
+    ) -> Result<Self, String> {
+        let plugins = self.plugins.clone().ok_or_else(|| {
+            "Plugin authority must be installed before Extension Host runtime".to_string()
+        })?;
+        let runtime = extension_host_runtime::ExtensionHostRuntime::start(
+            plugins,
+            launcher,
+            limits,
+            restart_policy,
+            Arc::clone(&self.updates),
+        )
+        .map_err(|error| error.to_string())?;
+        if let Some(workspace) = self.trusted_extension_workspace() {
+            runtime
+                .bind_workspace(workspace)
+                .map_err(|_| "failed to bind Extension Host workspace authority".to_string())?;
+        }
+        self.extension_hosts = Some(runtime);
+        Ok(self)
     }
 
     /// Installs host-registered Marketplace ingestion over the same Plugin authority.
@@ -915,6 +953,19 @@ impl AppServer {
             Some(ClientMethod::ExtensionResourceOpen) => {
                 self.extension_resource_open(connection, &request.params)
             }
+            Some(ClientMethod::ExtensionHostList) => self.extension_host_list(),
+            Some(ClientMethod::ExtensionHostReconcile) => {
+                self.extension_host_reconcile(&request.params)
+            }
+            Some(ClientMethod::ExtensionHostInvokeStart) => {
+                self.extension_host_invoke_start(connection, &request.params)
+            }
+            Some(ClientMethod::ExtensionHostInvokeRead) => {
+                self.extension_host_invoke_read(connection, &request.params)
+            }
+            Some(ClientMethod::ExtensionHostInvokeCancel) => {
+                self.extension_host_invoke_cancel(connection, &request.params)
+            }
             Some(ClientMethod::ResourceMetadata) => {
                 self.resource_metadata(connection, &request.params)
             }
@@ -949,6 +1000,18 @@ impl AppServer {
             Some(ClientMethod::LanguageClose) => self.language_close(&request.params),
             Some(ClientMethod::LanguageHover) => self.language_hover(&request.params),
             Some(ClientMethod::LanguageCompletions) => self.language_completions(&request.params),
+            Some(ClientMethod::LanguageResolveCompletion) => {
+                self.language_resolve_completion(&request.params)
+            }
+            Some(ClientMethod::LanguageExecuteCommand) => {
+                self.language_execute_command(&request.params)
+            }
+            Some(ClientMethod::LanguageDocumentDiagnostics) => {
+                self.language_document_diagnostics(&request.params)
+            }
+            Some(ClientMethod::LanguageWorkspaceDiagnostics) => {
+                self.language_workspace_diagnostics(&request.params)
+            }
             Some(ClientMethod::LanguageDocumentFormatting) => {
                 self.language_document_formatting(&request.params)
             }
@@ -961,6 +1024,31 @@ impl AppServer {
             Some(ClientMethod::LanguageInlayHints) => self.language_inlay_hints(&request.params),
             Some(ClientMethod::LanguageLinkedEditingRanges) => {
                 self.language_linked_editing_ranges(&request.params)
+            }
+            Some(ClientMethod::LanguageSemanticTokens) => {
+                self.language_semantic_tokens(&request.params)
+            }
+            Some(ClientMethod::LanguageDocumentSymbols) => {
+                self.language_document_symbols(&request.params)
+            }
+            Some(ClientMethod::LanguageCodeLenses) => self.language_code_lenses(&request.params),
+            Some(ClientMethod::LanguageResolveCodeLens) => {
+                self.language_resolve_code_lens(&request.params)
+            }
+            Some(ClientMethod::LanguageDocumentLinks) => {
+                self.language_document_links(&request.params)
+            }
+            Some(ClientMethod::LanguageResolveDocumentLink) => {
+                self.language_resolve_document_link(&request.params)
+            }
+            Some(ClientMethod::LanguageDocumentColors) => {
+                self.language_document_colors(&request.params)
+            }
+            Some(ClientMethod::LanguageColorPresentations) => {
+                self.language_color_presentations(&request.params)
+            }
+            Some(ClientMethod::LanguageFoldingRanges) => {
+                self.language_folding_ranges(&request.params)
             }
             Some(ClientMethod::LanguageLocations) => self.language_locations(&request.params),
             Some(ClientMethod::LanguageHierarchy) => self.language_hierarchy(&request.params),

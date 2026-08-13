@@ -120,6 +120,7 @@ pub(crate) struct WorkspaceRuntimeControl {
     code_index_semantic_storage_root: Option<PathBuf>,
     code_index_semantic_models: Option<CodeIndexSemanticModels>,
     semantic_model_provider: Option<Arc<dyn SemanticModelProvider>>,
+    extension_hosts: Option<super::extension_host_runtime::ExtensionHostRuntime>,
 }
 
 impl WorkspaceRuntimeControl {
@@ -330,6 +331,9 @@ impl WorkspaceRuntimeControl {
         }
 
         let root = authorization.root().clone();
+        if let Some(extension_hosts) = &self.extension_hosts {
+            extension_hosts.unbind_workspace();
+        }
         authorization.revoke();
         let cloud_code_index = runtime.cloud_code_index.clone();
         let old_file_system_watcher = runtime._file_system_watcher.take();
@@ -876,6 +880,7 @@ impl AppServer {
                 code_index_semantic_storage_root: self.code_index_semantic_storage_root.clone(),
                 code_index_semantic_models: self.code_index_semantic_models.clone(),
                 semantic_model_provider: self.semantic_model_provider.clone(),
+                extension_hosts: self.extension_hosts.clone(),
             })
     }
 
@@ -972,6 +977,9 @@ impl AppServer {
 
         host.tools.replace_local(None)?;
         self.bind_workspace_skills(&canonical_root)?;
+        if let Some(extension_hosts) = &self.extension_hosts {
+            extension_hosts.unbind_workspace();
+        }
         let mut current = self
             .workspace_runtime
             .write()
@@ -1128,6 +1136,12 @@ impl AppServer {
             self.config.clone(),
             workspace.trust_id(),
         ));
+        let extension_workspace = authorization
+            .require(WorkspaceCapability::ActivateWorkspaceExtension)
+            .map_err(|_| WorkspaceRuntimeError::TrustRequired)?;
+        if let Some(extension_hosts) = &self.extension_hosts {
+            extension_hosts.unbind_workspace();
+        }
         let mut current = self
             .workspace_runtime
             .write()
@@ -1160,6 +1174,11 @@ impl AppServer {
             Some(&terminals),
             Some(&debug_adapters),
         );
+        if let Some(extension_hosts) = &self.extension_hosts
+            && extension_hosts.bind_workspace(extension_workspace).is_err()
+        {
+            log::warn!("failed to bind executable Editor Extensions to the new workspace");
+        }
         let git_watcher = git.start_watching();
         let mut runtime = self
             .workspace_runtime
@@ -1215,6 +1234,16 @@ impl AppServer {
             switchable || runtime.terminals.is_some(),
             switchable || runtime.debug_adapters.is_some(),
         )
+    }
+
+    pub(super) fn trusted_extension_workspace(&self) -> Option<zeta_workspace::TrustedWorkspace> {
+        self.workspace_runtime
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .authorization
+            .as_ref()?
+            .require(WorkspaceCapability::ActivateWorkspaceExtension)
+            .ok()
     }
 
     fn open_code_index_runtime(

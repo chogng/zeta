@@ -30,6 +30,29 @@ fn valid_manifest() -> Value {
             ],
             "assets": [
                 { "id": "icon", "path": "assets/icon.png" }
+            ],
+            "editorExtensions": [
+                {
+                    "id": "review-runtime",
+                    "entrypoint": "bin/review-server",
+                    "runtimeApiVersion": 1,
+                    "activationEvents": [
+                        { "type": "startup" },
+                        { "type": "onCommand", "id": "acme.review.run" },
+                        { "type": "onLanguage", "id": "rust" },
+                        { "type": "onDemand", "capability": "debugAdapter" },
+                        { "type": "onDebugType", "debugType": "acme-review" },
+                        { "type": "onTaskType", "taskType": "acme-review" },
+                        { "type": "onTestProfile", "profileId": "acme-review" }
+                    ],
+                    "capabilities": [
+                        "command",
+                        "languageProvider",
+                        "debugAdapter",
+                        "taskProvider",
+                        "testProfileProvider"
+                    ]
+                }
             ]
         },
         "permissions": [
@@ -41,7 +64,11 @@ fn valid_manifest() -> Value {
             {
                 "name": "api-token",
                 "kind": "secretText",
-                "requiredFor": ["mcp:review", "connector:review-account"]
+                "requiredFor": [
+                    "mcp:review",
+                    "connector:review-account",
+                    "editorExtension:review-runtime"
+                ]
             }
         ],
         "metadata": {
@@ -75,10 +102,173 @@ fn strict_v1_manifest_parses_typed_security_fields() {
         manifest.credential_slots[0].required_for[1].to_string(),
         "connector:review-account"
     );
+    assert_eq!(
+        manifest.credential_slots[0].required_for[2].to_string(),
+        "editorExtension:review-runtime"
+    );
     assert!(matches!(
         manifest.permissions[2],
         crate::Permission::Network { .. }
     ));
+    let editor_extension = &manifest.contributions.editor_extensions[0];
+    assert_eq!(editor_extension.id.as_str(), "review-runtime");
+    assert_eq!(editor_extension.runtime_api_version.as_u16(), 1);
+    assert!(matches!(
+        editor_extension.activation_events[1],
+        crate::EditorExtensionActivationEvent::OnCommand { .. }
+    ));
+    assert_eq!(
+        editor_extension.capabilities[1],
+        crate::EditorExtensionCapability::LanguageProvider
+    );
+}
+
+#[test]
+fn editor_extension_runtime_api_and_process_permission_are_exact() {
+    let mut future_api = valid_manifest();
+    future_api["contributions"]["editorExtensions"][0]["runtimeApiVersion"] = json!(2);
+    assert!(
+        parse(&future_api)
+            .unwrap_err()
+            .to_string()
+            .contains("runtimeApiVersion 2")
+    );
+
+    let mut missing_permission = valid_manifest();
+    missing_permission["permissions"][0]["executable"] = json!("bin/other-host");
+    assert!(
+        parse(&missing_permission)
+            .unwrap_err()
+            .to_string()
+            .contains("exact process permission")
+    );
+}
+
+#[test]
+fn editor_extension_identity_and_entrypoint_are_unique() {
+    let extension = valid_manifest()["contributions"]["editorExtensions"][0].clone();
+
+    let mut duplicate_id = valid_manifest();
+    duplicate_id["contributions"]["editorExtensions"] = json!([
+        extension.clone(),
+        {
+            "id": "review-runtime",
+            "entrypoint": "bin/second-host",
+            "runtimeApiVersion": 1,
+            "activationEvents": [{"type": "startup"}],
+            "capabilities": ["command"]
+        }
+    ]);
+    assert!(
+        parse(&duplicate_id)
+            .unwrap_err()
+            .to_string()
+            .contains("duplicate Editor Extension")
+    );
+
+    let mut duplicate_entrypoint = valid_manifest();
+    duplicate_entrypoint["contributions"]["editorExtensions"] = json!([
+        extension,
+        {
+            "id": "second-runtime",
+            "entrypoint": "bin/review-server",
+            "runtimeApiVersion": 1,
+            "activationEvents": [{"type": "startup"}],
+            "capabilities": ["command"]
+        }
+    ]);
+    assert!(
+        parse(&duplicate_entrypoint)
+            .unwrap_err()
+            .to_string()
+            .contains("declared more than once")
+    );
+}
+
+#[test]
+fn editor_extension_activation_and_capability_sets_are_nonempty_unique_and_bounded() {
+    let mut empty_events = valid_manifest();
+    empty_events["contributions"]["editorExtensions"][0]["activationEvents"] = json!([]);
+    assert!(
+        parse(&empty_events)
+            .unwrap_err()
+            .to_string()
+            .contains("at least one activation")
+    );
+
+    let mut duplicate_events = valid_manifest();
+    duplicate_events["contributions"]["editorExtensions"][0]["activationEvents"] =
+        json!([{"type": "startup"}, {"type": "startup"}]);
+    assert!(
+        parse(&duplicate_events)
+            .unwrap_err()
+            .to_string()
+            .contains("duplicate activation")
+    );
+
+    let mut too_many_events = valid_manifest();
+    too_many_events["contributions"]["editorExtensions"][0]["activationEvents"] = Value::Array(
+        (0..65)
+            .map(|index| json!({"type": "onCommand", "id": format!("acme.command.{index}")}))
+            .collect(),
+    );
+    assert!(
+        parse(&too_many_events)
+            .unwrap_err()
+            .to_string()
+            .contains("at most 64")
+    );
+
+    let mut empty_capabilities = valid_manifest();
+    empty_capabilities["contributions"]["editorExtensions"][0]["capabilities"] = json!([]);
+    assert!(
+        parse(&empty_capabilities)
+            .unwrap_err()
+            .to_string()
+            .contains("at least one capability")
+    );
+
+    let mut duplicate_capabilities = valid_manifest();
+    duplicate_capabilities["contributions"]["editorExtensions"][0]["capabilities"] =
+        json!(["command", "command"]);
+    assert!(
+        parse(&duplicate_capabilities)
+            .unwrap_err()
+            .to_string()
+            .contains("duplicate capability")
+    );
+}
+
+#[test]
+fn editor_extension_activation_cannot_expand_its_capability_ceiling() {
+    let mut missing_capability = valid_manifest();
+    missing_capability["contributions"]["editorExtensions"][0]["capabilities"] = json!(["command"]);
+
+    let error = parse(&missing_capability).unwrap_err();
+
+    assert!(error.to_string().contains("undeclared capability"));
+}
+
+#[test]
+fn editor_extension_activation_selectors_are_bounded_and_unknown_triggers_are_rejected() {
+    let mut whitespace_selector = valid_manifest();
+    whitespace_selector["contributions"]["editorExtensions"][0]["activationEvents"] =
+        json!([{"type": "onCommand", "id": "acme invalid"}]);
+    whitespace_selector["contributions"]["editorExtensions"][0]["capabilities"] =
+        json!(["command"]);
+    assert!(
+        parse(&whitespace_selector)
+            .unwrap_err()
+            .to_string()
+            .contains("selector")
+    );
+
+    let mut unsupported_workspace_scan = valid_manifest();
+    unsupported_workspace_scan["contributions"]["editorExtensions"][0]["activationEvents"] =
+        json!([{"type": "workspaceContains", "pattern": "**/Cargo.toml"}]);
+    unsupported_workspace_scan["contributions"]["editorExtensions"][0]["capabilities"] =
+        json!(["command"]);
+    assert!(parse(&unsupported_workspace_scan).is_err());
 }
 
 #[test]

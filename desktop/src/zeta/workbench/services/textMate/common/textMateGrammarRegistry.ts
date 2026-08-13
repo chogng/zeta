@@ -40,10 +40,24 @@ export interface TextMateGrammarRegistrySnapshot {
   getInjections(scopeName: string): readonly string[];
 }
 
+/** One replaceable, caller-owned group of TextMate grammar contributions. */
+export interface TextMateGrammarRegistration extends IDisposable {
+  readonly currentSnapshot: TextMateGrammarRegistrySnapshot;
+  owns(snapshot: TextMateGrammarRegistrySnapshot): boolean;
+  prepare(definitions: readonly TextMateGrammarDefinition[]): PreparedTextMateGrammarReplacement;
+  replace(definitions: readonly TextMateGrammarDefinition[]): void;
+}
+
+/** A validated replacement bound to the registry revision on which it was prepared. */
+export interface PreparedTextMateGrammarReplacement {
+  readonly snapshot: TextMateGrammarRegistrySnapshot;
+  commit(): void;
+}
+
 /** Caller-owned TextMate grammar contributions with immutable revision snapshots. */
 export class TextMateGrammarRegistry extends DisposableOwner {
   private readonly changeEmitter = this.own(new Emitter<TextMateGrammarRegistrySnapshot>());
-  private readonly definitions = new Map<string, RegisteredTextMateGrammarDefinition>();
+  private readonly groups = new Map<object, readonly RegisteredTextMateGrammarDefinition[]>();
   private snapshot: TextMateGrammarRegistrySnapshot = createSnapshot(0, []);
   private disposed = false;
 
@@ -52,8 +66,8 @@ export class TextMateGrammarRegistry extends DisposableOwner {
   constructor() {
     super();
     this.defer(() => {
-      const changed = this.definitions.size > 0;
-      this.definitions.clear();
+      const changed = this.groups.size > 0;
+      this.groups.clear();
       if (changed) this.publish();
       this.disposed = true;
     });
@@ -65,31 +79,96 @@ export class TextMateGrammarRegistry extends DisposableOwner {
   }
 
   register(definition: TextMateGrammarDefinition): IDisposable {
+    return this.registerMany([definition]);
+  }
+
+  /** Registers a group that can later be replaced without colliding with its previous definitions. */
+  registerMany(definitions: readonly TextMateGrammarDefinition[]): TextMateGrammarRegistration {
     this.ensureAlive();
-    const registered = normalizeDefinition(definition);
-    if (this.definitions.has(registered.scopeName)) {
-      throw new RangeError(`TextMate grammar scope '${registered.scopeName}' is already registered`);
-    }
-    if (registered.languageId && [...this.definitions.values()].some(value => value.languageId === registered.languageId)) {
-      throw new RangeError(`TextMate language '${registered.languageId}' already has a root grammar`);
-    }
-    this.definitions.set(registered.scopeName, registered);
-    this.publish();
-    return toDisposable(() => {
-      if (this.definitions.get(registered.scopeName) !== registered) return;
-      this.definitions.delete(registered.scopeName);
+    const key = Object.freeze({});
+    const registered = normalizeDefinitions(definitions);
+    this.validateReplacement(key, registered);
+    if (registered.length > 0) {
+      this.groups.set(key, registered);
       this.publish();
-    });
+    }
+    let disposed = false;
+    const dispose = (): void => {
+      if (disposed) return;
+      disposed = true;
+      if (this.groups.delete(key) && !this.disposed) this.publish();
+    };
+    const registration = toDisposable(dispose) as TextMateGrammarRegistration;
+    Object.defineProperty(registration, "currentSnapshot", { enumerable: true, get: () => this.snapshot });
+    registration.owns = snapshot => snapshot === this.snapshot;
+    registration.prepare = (nextDefinitions): PreparedTextMateGrammarReplacement => {
+      if (disposed) throw new ReferenceError("TextMate grammar registration is already disposed");
+      this.ensureAlive();
+      const next = normalizeDefinitions(nextDefinitions);
+      this.validateReplacement(key, next);
+      const baseRevision = this.snapshot.revision;
+      const snapshot = createSnapshot(baseRevision + 1, this.replacementValues(key, next));
+      let committed = false;
+      return Object.freeze({
+        snapshot,
+        commit: (): void => {
+          if (committed) throw new ReferenceError("Prepared TextMate grammar replacement is already committed");
+          if (disposed) throw new ReferenceError("TextMate grammar registration is already disposed");
+          this.ensureAlive();
+          if (this.snapshot.revision !== baseRevision) throw new Error("TextMate grammar registry changed after replacement preparation");
+          this.validateReplacement(key, next);
+          committed = true;
+          if (next.length === 0) this.groups.delete(key);
+          else this.groups.set(key, next);
+          this.publish();
+        },
+      });
+    };
+    registration.replace = (nextDefinitions): void => registration.prepare(nextDefinitions).commit();
+    return registration;
   }
 
   private publish(): void {
-    this.snapshot = createSnapshot(this.snapshot.revision + 1, [...this.definitions.values()]);
+    this.snapshot = createSnapshot(this.snapshot.revision + 1, [...this.groups.values()].flat());
     this.changeEmitter.fire(this.snapshot);
+  }
+
+  private validateReplacement(key: object, replacement: readonly RegisteredTextMateGrammarDefinition[]): void {
+    const definitions = this.replacementValues(key, replacement);
+    const scopes = new Set<string>();
+    const languages = new Set<string>();
+    for (const definition of definitions) {
+      if (scopes.has(definition.scopeName)) throw new RangeError(`TextMate grammar scope '${definition.scopeName}' is already registered`);
+      scopes.add(definition.scopeName);
+      if (definition.languageId === undefined) continue;
+      if (languages.has(definition.languageId)) throw new RangeError(`TextMate language '${definition.languageId}' already has a root grammar`);
+      languages.add(definition.languageId);
+    }
+  }
+
+  private replacementValues(key: object, replacement: readonly RegisteredTextMateGrammarDefinition[]): readonly RegisteredTextMateGrammarDefinition[] {
+    const definitions: RegisteredTextMateGrammarDefinition[] = [];
+    let replaced = false;
+    for (const [candidate, values] of this.groups) {
+      if (candidate === key) {
+        definitions.push(...replacement);
+        replaced = true;
+      } else {
+        definitions.push(...values);
+      }
+    }
+    if (!replaced) definitions.push(...replacement);
+    return definitions;
   }
 
   private ensureAlive(): void {
     if (this.disposed) throw new ReferenceError("TextMateGrammarRegistry is already disposed");
   }
+}
+
+function normalizeDefinitions(definitions: readonly TextMateGrammarDefinition[]): readonly RegisteredTextMateGrammarDefinition[] {
+  if (!Array.isArray(definitions)) throw new TypeError("TextMate grammar definitions must be an array");
+  return Object.freeze(definitions.map(normalizeDefinition));
 }
 
 function normalizeDefinition(definition: TextMateGrammarDefinition): RegisteredTextMateGrammarDefinition {

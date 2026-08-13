@@ -3,7 +3,7 @@ import { Keybinding, logicalKey } from "../../../../base/common/keybindings.js";
 import { type ServicesAccessor } from "../../../../platform/instantiation/common/instantiation.js";
 import { IDebugService } from "../../../services/debug/common/debugService.js";
 import { IViewsService } from "../../../services/views/browser/viewsService.js";
-import { CONTINUE_DEBUG_COMMAND_ID, DEBUG_VIEW_ID, PAUSE_DEBUG_COMMAND_ID, START_DEBUG_COMMAND_ID, STEP_INTO_DEBUG_COMMAND_ID, STEP_OUT_DEBUG_COMMAND_ID, STEP_OVER_DEBUG_COMMAND_ID, STOP_DEBUG_COMMAND_ID } from "../common/debug.js";
+import { CONTINUE_DEBUG_COMMAND_ID, DEBUG_VIEW_ID, PAUSE_DEBUG_COMMAND_ID, RESTART_DEBUG_COMMAND_ID, START_DEBUG_COMMAND_ID, STEP_INTO_DEBUG_COMMAND_ID, STEP_OUT_DEBUG_COMMAND_ID, STEP_OVER_DEBUG_COMMAND_ID, STOP_ALL_DEBUG_COMMAND_ID, STOP_DEBUG_COMMAND_ID } from "../common/debug.js";
 
 registerAction2(class StartDebugAction extends Action2 {
   constructor() { super({ id: START_DEBUG_COMMAND_ID, title: "Start Debugging", f1: true, keybinding: { primary: Keybinding.single(logicalKey("F5")) }, menu: { id: MenuId.MenubarRunMenu, group: "1_debug", order: 1 } }); }
@@ -22,6 +22,16 @@ registerAction2(class StartDebugAction extends Action2 {
 registerAction2(class StopDebugAction extends Action2 {
   constructor() { super({ id: STOP_DEBUG_COMMAND_ID, title: "Stop Debugging", f1: true, keybinding: { primary: Keybinding.single(logicalKey("F5", { shiftKey: true })) }, menu: { id: MenuId.MenubarRunMenu, group: "1_debug", order: 2 } }); }
   override run(accessor: ServicesAccessor): void { void accessor.get(IDebugService).stop().catch(reportError); }
+});
+
+registerAction2(class RestartDebugAction extends Action2 {
+  constructor() { super({ id: RESTART_DEBUG_COMMAND_ID, title: "Restart Debugging", f1: true, keybinding: { primary: Keybinding.single(logicalKey("F5", { ctrlKey: true, shiftKey: true })) }, menu: { id: MenuId.MenubarRunMenu, group: "1_debug", order: 3 } }); }
+  override run(accessor: ServicesAccessor): void { void accessor.get(IDebugService).restart().catch(reportError); }
+});
+
+registerAction2(class StopAllDebugAction extends Action2 {
+  constructor() { super({ id: STOP_ALL_DEBUG_COMMAND_ID, title: "Stop All Debugging", f1: true, menu: { id: MenuId.MenubarRunMenu, group: "1_debug", order: 4 } }); }
+  override run(accessor: ServicesAccessor): void { void accessor.get(IDebugService).stopAll().catch(reportError); }
 });
 
 for (const [id, title, keybinding, operation] of [

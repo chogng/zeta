@@ -258,11 +258,6 @@ test("Plugin settings project layered authority and send exact-package commands"
 
 test("Appearance settings persist and dynamically render registered theme preferences", async () => {
   using disposables = new DisposableStore();
-  using themeRegistration = WorkbenchThemesRegistry.registerColorTheme(createColorTheme({
-    id: "zeta-test-aurora",
-    label: "Zeta Test Aurora",
-    colorScheme: ColorScheme.Dark,
-  }));
   const ownerDocument = browserEnvironment.window.document;
   ownerDocument.body.replaceChildren();
   const root = ownerDocument.createElement("div");
@@ -279,7 +274,14 @@ test("Appearance settings persist and dynamically render registered theme prefer
   }));
 
   settings.open("appearance");
-  const options = [...root.querySelectorAll<HTMLInputElement>("[data-theme-preference] input")];
+  let options = [...root.querySelectorAll<HTMLInputElement>("[data-theme-preference] input")];
+  assert.deepEqual(options.map((option) => option.value), ["system", "zeta-light", "zeta-dark"]);
+  using themeRegistration = WorkbenchThemesRegistry.registerColorTheme(createColorTheme({
+    id: "zeta-test-aurora",
+    label: "Zeta Test Aurora",
+    colorScheme: ColorScheme.Dark,
+  }));
+  options = [...root.querySelectorAll<HTMLInputElement>("[data-theme-preference] input")];
   assert.deepEqual(options.map((option) => option.value), [
     "system",
     "zeta-light",
@@ -304,6 +306,8 @@ test("Appearance settings persist and dynamically render registered theme prefer
   root.querySelector<HTMLInputElement>("[value='system']")?.click();
   await Promise.resolve();
   assert.equal(configuration.getValue(WorkbenchConfiguration.colorTheme), "system");
+  themeRegistration.dispose();
+  assert.equal(root.querySelector<HTMLInputElement>("[value='zeta-test-aurora']"), null);
 });
 
 test("Appearance edits the resolved Light JSON, previews it, and saves a new theme", async () => {
@@ -429,6 +433,7 @@ test("Indexing settings save Tool Search and semantic model consent configuratio
     pluginRequests: {},
     hooks: {},
     languageServers: {},
+    execPolicyRules: [],
     toolSearch: {
       mode: "hybridEmbedding",
       embeddingModel: { provider: "ollama", model: "nomic-embed-text" },

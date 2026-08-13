@@ -79,7 +79,7 @@ fn line_at(text: &str, requested: usize) -> Option<(usize, &str)> {
     None
 }
 
-fn severity(value: Option<DiagnosticSeverity>) -> LanguageDiagnosticSeverity {
+pub(super) fn severity(value: Option<DiagnosticSeverity>) -> LanguageDiagnosticSeverity {
     match value {
         Some(DiagnosticSeverity::ERROR) => LanguageDiagnosticSeverity::Error,
         Some(DiagnosticSeverity::WARNING) => LanguageDiagnosticSeverity::Warning,
@@ -90,7 +90,7 @@ fn severity(value: Option<DiagnosticSeverity>) -> LanguageDiagnosticSeverity {
     }
 }
 
-fn code_string(code: NumberOrString) -> String {
+pub(super) fn code_string(code: NumberOrString) -> String {
     match code {
         NumberOrString::Number(number) => number.to_string(),
         NumberOrString::String(code) => code,

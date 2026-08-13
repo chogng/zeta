@@ -10,7 +10,7 @@ import { workspaceRelativePath, workspaceResourceFromPath } from "../../../../pl
 import { type ILanguageApi } from "../../../../platform/language/common/languageApi.js";
 import { type IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import { type LanguageCodeActionDiagnosticDto, type LanguageDiagnosticsNotification } from "../../../../../../generated/app-server/types.js";
-import { isAppServerLanguageId } from "./appServerLanguageSupport.js";
+import { APP_SERVER_WORKSPACE_DIAGNOSTIC_LANGUAGE_IDS, isAppServerLanguageId } from "./appServerLanguageSupport.js";
 import { type ILanguageDiagnosticsService, type LanguageDiagnosticSnapshot } from "../common/languageDiagnosticsService.js";
 
 const MAX_LANGUAGE_DOCUMENT_BYTES = 10 * 1024 * 1024;
@@ -36,9 +36,12 @@ interface PublishedDiagnostics {
 export class AppServerLanguageDiagnosticsService extends DisposableOwner implements ILanguageDiagnosticsService {
   private readonly entries = new Map<string, LanguageDocumentEntry>();
   private readonly serverSnapshots = new Map<string, LanguageDiagnosticSnapshot>();
+  private readonly workspaceServerKeys = new Set<string>();
   private readonly publishedDiagnostics = new Map<number, PublishedDiagnostics>();
   private readonly changeEmitter = this.own(new Emitter<URI>());
   private nextPublisherId = 1;
+  private workspaceDiagnosticsQueued = false;
+  private alive = true;
   readonly onDidChangeDiagnostics = this.changeEmitter.event;
 
   constructor(private readonly api: ILanguageApi, events: IServerEventApi, private readonly workspace: IWorkspaceContextService) {
@@ -48,14 +51,17 @@ export class AppServerLanguageDiagnosticsService extends DisposableOwner impleme
     });
     this.defer(() => subscription.dispose());
     this.defer(() => {
+      this.alive = false;
       for (const entry of this.entries.values()) {
         if (entry.timer !== undefined) clearTimeout(entry.timer);
         entry.modelListener.dispose();
       }
       this.entries.clear();
       this.serverSnapshots.clear();
+      this.workspaceServerKeys.clear();
       this.publishedDiagnostics.clear();
     });
+    this.queueWorkspaceDiagnostics();
   }
 
   acquire(resource: URI, languageId: string, model: TextModel): IDisposable {
@@ -83,6 +89,10 @@ export class AppServerLanguageDiagnosticsService extends DisposableOwner impleme
       queue: Promise.resolve(),
     };
     entry.modelListener = model.onDidChange(() => this.schedule(entry, false));
+    if (this.workspaceServerKeys.delete(key)) {
+      this.serverSnapshots.delete(key);
+      this.changeEmitter.fire(resource);
+    }
     this.entries.set(key, entry);
     this.schedule(entry, true);
     return toDisposable(() => this.release(key, entry));
@@ -143,8 +153,64 @@ export class AppServerLanguageDiagnosticsService extends DisposableOwner impleme
     if (new TextEncoder().encode(text).byteLength > MAX_LANGUAGE_DOCUMENT_BYTES) return;
     entry.queue = entry.queue.catch(() => undefined).then(async () => {
       if (entry.references === 0 || this.entries.get(entry.resource.toString()) !== entry) return;
-      await this.api.synchronize({ document: { path: entry.path, languageId: entry.languageId, revision: snapshot.version, text } });
+      const document = { path: entry.path, languageId: entry.languageId, revision: snapshot.version, text };
+      await this.api.synchronize({ document });
+      try {
+        const report = await this.api.documentDiagnostics({ document });
+        if (report.kind === "full") this.acceptDiagnostics({ path: entry.path, revision: report.revision, diagnostics: report.diagnostics });
+      } catch (error) {
+        if (!isUnsupportedDiagnosticPull(error)) throw error;
+      }
+      this.queueWorkspaceDiagnostics();
     }).catch(reportLanguageSynchronizationError);
+  }
+
+  private queueWorkspaceDiagnostics(): void {
+    if (this.workspaceDiagnosticsQueued) return;
+    this.workspaceDiagnosticsQueued = true;
+    queueMicrotask(() => {
+      this.workspaceDiagnosticsQueued = false;
+      if (this.alive) void this.refreshWorkspaceDiagnostics();
+    });
+  }
+
+  private async refreshWorkspaceDiagnostics(): Promise<void> {
+    const next = new Map<string, LanguageDiagnosticSnapshot>();
+    let supported = false;
+    for (const languageId of APP_SERVER_WORKSPACE_DIAGNOSTIC_LANGUAGE_IDS) {
+      if (!this.alive) return;
+      try {
+        const report = await this.api.workspaceDiagnostics({ languageId });
+        if (!report.supported) continue;
+        supported = true;
+        for (const snapshot of report.snapshots) {
+          const resource = workspaceResourceFromPath(this.workspaceRoot(), snapshot.path);
+          if (!resource) continue;
+          const key = resource.toString();
+          const diagnostics = snapshot.diagnostics.flatMap(diagnostic => projectWorkspaceDiagnostic(diagnostic));
+          const combined = deduplicateDiagnostics([...(next.get(key)?.diagnostics ?? []), ...diagnostics]);
+          next.set(key, Object.freeze({ resource, revision: 0, diagnostics: Object.freeze(combined) }));
+        }
+      } catch (error) {
+        if (!isUnsupportedDiagnosticPull(error)) reportLanguageSynchronizationError(error);
+      }
+    }
+    if (!this.alive) return;
+    if (!supported) return;
+    const changed = new Map<string, URI>();
+    for (const key of this.workspaceServerKeys) {
+      const resource = this.serverSnapshots.get(key)?.resource;
+      if (resource) changed.set(key, resource);
+      this.serverSnapshots.delete(key);
+    }
+    this.workspaceServerKeys.clear();
+    for (const [key, snapshot] of next) {
+      if (this.entries.has(key)) continue;
+      this.serverSnapshots.set(key, snapshot);
+      this.workspaceServerKeys.add(key);
+      changed.set(key, snapshot.resource);
+    }
+    for (const resource of changed.values()) this.changeEmitter.fire(resource);
   }
 
   private release(key: string, entry: LanguageDocumentEntry): void {
@@ -161,6 +227,7 @@ export class AppServerLanguageDiagnosticsService extends DisposableOwner impleme
       if (entry.references > 0) return;
       await this.api.close({ path: entry.path });
       if (entry.references === 0 && this.entries.get(key) === entry) this.entries.delete(key);
+      this.queueWorkspaceDiagnostics();
     }).catch(reportLanguageSynchronizationError);
   }
 
@@ -173,7 +240,9 @@ export class AppServerLanguageDiagnosticsService extends DisposableOwner impleme
     const current = this.serverSnapshots.get(key);
     if (current && current.revision > notification.revision) return;
     const diagnostics = notification.diagnostics.flatMap(diagnostic => projectDiagnostic(diagnostic, entry.model));
+    if (current?.revision === notification.revision && equalDiagnostics(current.diagnostics, diagnostics)) return;
     this.serverSnapshots.set(key, Object.freeze({ resource, revision: notification.revision, diagnostics: Object.freeze(diagnostics) }));
+    this.workspaceServerKeys.delete(key);
     this.changeEmitter.fire(resource);
   }
 
@@ -201,6 +270,11 @@ export class AppServerLanguageDiagnosticsService extends DisposableOwner impleme
     if (folders.length !== 1) throw new Error("Language diagnostics require one workspace folder");
     return folders[0]!.uri;
   }
+}
+
+function isUnsupportedDiagnosticPull(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  return /language request failed|language service unavailable|does not advertise this capability|method not found/i.test(error.message);
 }
 
 function toDisposablePublisher(update: LanguageDiagnosticsPublisher["update"], dispose: () => void): LanguageDiagnosticsPublisher {
@@ -242,6 +316,19 @@ function projectDiagnostic(diagnostic: LanguageCodeActionDiagnosticDto, model: T
       ...(code === undefined ? {} : { code }),
       ...(source === undefined ? {} : { source }),
     })];
+  } catch {
+    return [];
+  }
+}
+
+function projectWorkspaceDiagnostic(diagnostic: LanguageCodeActionDiagnosticDto): readonly LanguageDiagnostic[] {
+  const message = diagnostic.message.trim();
+  if (!message) return [];
+  const source = diagnostic.source?.trim() || undefined;
+  const code = typeof diagnostic.code === "string" ? diagnostic.code.trim() || undefined : typeof diagnostic.code === "number" && Number.isFinite(diagnostic.code) ? diagnostic.code : undefined;
+  try {
+    const range = TextRange.from(TextPosition.at(diagnostic.range.start.lineIndex, diagnostic.range.start.columnIndex), TextPosition.at(diagnostic.range.end.lineIndex, diagnostic.range.end.columnIndex));
+    return [Object.freeze({ range, severity: diagnostic.severity as LanguageDiagnosticSeverity, message, ...(code === undefined ? {} : { code }), ...(source === undefined ? {} : { source }) })];
   } catch {
     return [];
   }

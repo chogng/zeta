@@ -56,6 +56,7 @@ import {
 } from "../../platform/contextview/electron-main/contextMenuIpc.js";
 import { fileIpcRoutes } from "../../platform/files/electron-main/fileIpcRoutes.js";
 import { extensionIpcRoutes } from "../../platform/extensions/electron-main/extensionIpcRoutes.js";
+import { extensionHostIpcRoutes } from "../../platform/extensionHost/electron-main/extensionHostIpcRoutes.js";
 import { diffIpcRoutes } from "../../platform/diff/electron-main/diffIpcRoutes.js";
 import { documentCollaborationIpcRoutes } from "../../platform/collaboration/electron-main/documentCollaborationIpcRoutes.js";
 import { syntaxIpcRoutes } from "../../platform/syntax/electron-main/syntaxIpcRoutes.js";
@@ -407,6 +408,7 @@ export class ZetaApplication extends DisposableOwner {
       ...typstIpcRoutes(supervisor),
       ...fileIpcRoutes(supervisor),
       ...extensionIpcRoutes(supervisor),
+      ...extensionHostIpcRoutes(supervisor),
       ...diffIpcRoutes(supervisor),
       ...documentCollaborationIpcRoutes(supervisor),
       ...syntaxIpcRoutes(supervisor),

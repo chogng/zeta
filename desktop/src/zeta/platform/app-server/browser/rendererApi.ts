@@ -17,6 +17,7 @@ import { createDisconnectedConnectorApi } from "../../connectors/browser/connect
 import { createDisconnectedToolSearchApi } from "../../toolSearch/browser/toolSearchApi.js";
 import { createDisconnectedLanguageApi } from "../../language/browser/languageApi.js";
 import { createDisconnectedPluginApi } from "../../plugins/browser/pluginApi.js";
+import { createDisconnectedExtensionHostApi } from "../../extensionHost/browser/extensionHostApi.js";
 
 export { WebAppServerUnavailableError };
 
@@ -34,6 +35,7 @@ export function createDisconnectedRendererApi(): IRendererHost {
     documentCollaboration: createDisconnectedDocumentCollaborationApi(unavailableOperation),
     resource: createDisconnectedResourceApi(unavailableOperation),
     extensions: createDisconnectedExtensionApi(unavailableOperation),
+    extensionHost: createDisconnectedExtensionHostApi(unavailableOperation),
     fs: createDisconnectedFileApi(unavailableOperation),
     diff: createDisconnectedDiffApi(unavailableOperation),
     syntax: createDisconnectedSyntaxApi(unavailableOperation),

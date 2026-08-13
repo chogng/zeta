@@ -29,6 +29,47 @@ interface EventDelivery<T> {
   readonly event: T;
 }
 
+interface BufferedEventDelivery {
+  deliver(): void;
+}
+
+let activeEventBuffer: BufferedEventDelivery[] | undefined;
+
+/**
+ * Defers synchronous event delivery until a related group of state mutations
+ * has completed. If the mutation throws, buffered events are discarded.
+ */
+export function runWithBufferedEvents<T>(mutation: () => T): T {
+  if (typeof mutation !== "function") throw new TypeError("Buffered event mutation must be a function");
+  const inherited = activeEventBuffer;
+  if (inherited) {
+    const savepoint = inherited.length;
+    try { return mutation(); }
+    catch (error) {
+      inherited.length = savepoint;
+      throw error;
+    }
+  }
+  const buffer: BufferedEventDelivery[] = [];
+  activeEventBuffer = buffer;
+  let result!: T;
+  let failure: unknown;
+  let failed = false;
+  try {
+    result = mutation();
+    if (typeof (result as { readonly then?: unknown } | undefined)?.then === "function") throw new TypeError("Buffered event mutations must be synchronous");
+  } catch (error) {
+    buffer.length = 0;
+    failure = error;
+    failed = true;
+  } finally {
+    activeEventBuffer = undefined;
+  }
+  if (failed) throw failure;
+  for (const delivery of buffer) delivery.deliver();
+  return result;
+}
+
 /**
  * A small synchronous event source with disposable listener registrations.
  *
@@ -66,9 +107,16 @@ export class Emitter<T> implements IDisposable {
 
   fire(event: T): void {
     if (this.disposed) return;
-    for (const registration of this.listeners) {
-      this.deliveryQueue.push({ registration, event });
+    const deliveries = [...this.listeners].map(registration => ({ registration, event }));
+    if (activeEventBuffer) {
+      activeEventBuffer.push({ deliver: () => this.enqueue(deliveries) });
+      return;
     }
+    this.enqueue(deliveries);
+  }
+
+  private enqueue(deliveries: readonly EventDelivery<T>[]): void {
+    this.deliveryQueue.push(...deliveries);
     if (this.delivering) return;
     this.delivering = true;
     try {

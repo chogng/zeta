@@ -1,6 +1,6 @@
 import { APP_SERVER_METHODS, type ExtensionListParams, type ExtensionResourceOpenParams } from "../../../../../generated/app-server/types.js";
 import type { AppServerSupervisor } from "../../app-server/electron-main/app-server-supervisor.js";
-import { nonEmptyString, record, string, stringEnum } from "../../ipc/electron-main/ipcValidation.js";
+import { nonEmptyString, nonNegativeInteger, record, string, stringEnum } from "../../ipc/electron-main/ipcValidation.js";
 import type { IpcRoute } from "../../ipc/electron-main/trustedIpcRouter.js";
 
 /** Exact-shape IPC routes for Rust-owned declarative extension resources. */
@@ -35,8 +35,9 @@ function extensionListParams(value: unknown): ExtensionListParams {
 }
 
 function extensionResourceOpenParams(value: unknown): ExtensionResourceOpenParams {
-  const params = record(value, ["extensionId", "path"]);
+  const params = record(value, ["extensionId", "generation", "path"]);
   return {
+    generation: nonNegativeInteger(params.generation, "generation"),
     extensionId: nonEmptyString(params.extensionId, "extensionId"),
     path: string(params.path, "path"),
   };

@@ -4,6 +4,7 @@
 //! delivery. Editors and product hosts retain file identity, presentation, configuration policy,
 //! server selection, restart policy, and user interaction.
 
+mod capability;
 mod client;
 mod command;
 mod document;
@@ -15,6 +16,7 @@ mod protocol;
 mod raw_client;
 mod router;
 
+pub use capability::{LanguageServerCapabilitySnapshot, LanguageServerDynamicRegistration};
 pub use client::{LanguageServerClient, LanguageServerInitialization};
 pub use command::LanguageServerCommand;
 pub use document::{

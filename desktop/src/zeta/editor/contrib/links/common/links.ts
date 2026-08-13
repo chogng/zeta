@@ -1,4 +1,5 @@
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { type URI } from "../../../../base/common/uri.js";
 import { type TextRange } from "../../../common/core/text.js";
 import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageFeatureRequest } from "../../../common/languages/languageFeatureRequest.js";
 import { LanguageFeatureProviderRegistry, type LanguageFeatureProviderMetadata } from "../../../common/languages/languageFeatureRegistry.js";
@@ -10,7 +11,9 @@ export interface LanguageLink {
   readonly tooltip?: string;
 }
 
-export interface LanguageLinkRequest extends LanguageFeatureRequest {}
+export interface LanguageLinkRequest extends LanguageFeatureRequest {
+  readonly resource?: URI;
+}
 
 export interface LanguageLinkProvider extends LanguageFeatureProviderMetadata {
   provideLinks(request: LanguageLinkRequest, signal: AbortSignal): readonly LanguageLink[] | Promise<readonly LanguageLink[]>;
@@ -18,12 +21,12 @@ export interface LanguageLinkProvider extends LanguageFeatureProviderMetadata {
 
 /** Provides link candidates; opening a target remains a host-owned operation. */
 export class LinkService extends DisposableOwner {
-  constructor(private readonly model: TextModel, private readonly providers: LanguageFeatureProviderRegistry<LanguageLinkProvider>) {
+  constructor(private readonly model: TextModel, private readonly providers: LanguageFeatureProviderRegistry<LanguageLinkProvider>, private readonly resource?: URI) {
     super();
   }
 
   async provideLinks(languageId: string, signal: AbortSignal = new AbortController().signal): Promise<readonly LanguageLink[]> {
-    const request = createLanguageFeatureRequest(this.model, languageId, signal);
+    const request: LanguageLinkRequest = Object.freeze({ ...createLanguageFeatureRequest(this.model, languageId, signal), ...(this.resource ? { resource: this.resource } : {}) });
     const links: LanguageLink[] = [];
     const seen = new Set<string>();
     for (const provider of this.providers.getProviders(languageId)) {

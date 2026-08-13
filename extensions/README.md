@@ -1,5 +1,10 @@
 # Built-in extensions
 
+> This README owns the repository package-set and distribution contract. The cross-layer runtime,
+> trust, refresh, and evolution contract is maintained in
+> [`docs/editor-extensions.md`](../docs/editor-extensions.md); the Rust catalog implementation is
+> documented in [`zeta-rs/extensions/README.md`](../zeta-rs/extensions/README.md).
+
 This directory contains static extension packages shipped with Zeta during development. Packaging
 places the same directory under `zeta-resources/extensions/`.
 
@@ -12,15 +17,21 @@ runtime or a workspace plugin directory.
 ## Source and distribution boundary
 
 This directory is a runtime input, not a download endpoint. Built-in packages committed here are
-copied into `zeta-resources/extensions/` during development and production packaging. Zeta and
-Zeterm read those trusted package directories through `zeta-extensions`; the applications do not
-authenticate to a Git repository to load built-in extensions.
+copied into `zeta-resources/extensions/` during development and production packaging. Zeta reads
+that trusted package directory through `zeta-extensions`; Zeterm is only a future consumer extension
+point. A running application does not authenticate to a Git repository to load built-in extensions.
 
 If the package set later moves to a shared `zeta-extension-packs` repository, that repository may
 be private and may own upstream pinning, license/notice preservation, validation, and CI builds.
 It must publish versioned extension artifacts for Zeta and Zeterm to consume during their build or
 release process. A running application must consume the packaged artifact or extracted extension
 directory, never Git credentials or an unversioned repository checkout.
+
+All thirteen packages are derived from `microsoft/vscode` and retain their package-level
+`NOTICE.md` provenance. The canonical upstream MIT license copy is
+[`third_party/vscode/LICENSE.txt`](../third_party/vscode/LICENSE.txt); both production and Desktop
+development packaging place it at `zeta-resources/licenses/vscode/LICENSE.txt` alongside the
+extension packages.
 
 User-installed extensions are a separate profile-level root. They require an explicit registry or
 release distribution mechanism and must not be mixed with these built-in resources.
@@ -37,20 +48,27 @@ The current declarative pack contains the following package directories:
   can flatten them deterministically.
 
 The manifest is the only source of contribution metadata. `AppServerExtensionService` receives
-Rust-validated package resources and projects languages/configuration/snippets/grammars into the
-editor language services;
-the browser TextMate runtime never imports package files directly. Theme documents are currently
-validated and exposed through the extension theme catalog. They are not yet converted into a
-selectable complete Workbench `IColorTheme`, so this is a catalog boundary rather than full VS
-Code theme activation.
+Rust-validated package resources and projects languages/configuration/snippets/grammars/themes/
+debuggers into their Workbench-owned registries; the browser TextMate runtime never imports package
+files directly. Theme documents register selectable Workbench color themes and provide the active
+TextMate token scope rules.
 
 Supported declarative fields are deliberately narrower than a VS Code extension host:
 
 | Contribution | Current state | Owner |
 | --- | --- | --- |
-| `languages`, file associations, `language-configuration.json` | ✅ loaded and registered | Editor language registry/configuration |
-| `snippets` | ✅ parsed and registered as language completion providers | Editor language completion |
+| `languages`, file/first-line associations, `language-configuration.json` | ✅ loaded and registered | Editor language registry/configuration |
+| `snippets` | ✅ 有 prefix 的 snippet 注册为 completion；file template 可通过 `New File from Template` 创建 untitled editor | Editor language completion / extension template registry |
 | `grammars` | ✅ loaded through Rust resource APIs and TextMate catalog snapshots | Workbench TextMate service |
-| `embeddedLanguages`, `tokenTypes`, bracket scope metadata | 部分具备：传给 `vscode-textmate`，`tokenTypes` 投影到 editor token 类型；embedded language 与 bracket 状态尚未成为公共结果字段 | TextMate adapter |
-| `themes` | 部分具备：严格解析、资源发现、版本化 catalog | Extension service; Workbench activation remains |
-| `configurationDefaults`, `semanticTokenScopes`, extension JavaScript, LSP server declarations | 尚未接入；不会被当成已执行的扩展代码 | 后续 Workbench/Rust language-service 适配 |
+| `embeddedLanguages`, `tokenTypes`, bracket scope metadata | ✅ validated, transported, and projected to Aster token language/type/bracket metadata | TextMate adapter |
+| `themes` | ✅ 严格解析、版本化 catalog、Workbench theme registration 和 active TextMate token projection | Extension/theme/TextMate services |
+| `debuggers` | ✅ 窄声明式 adapter command discovery；不提供 VS Code Debug Extension API | Extension registry / Debug service |
+| `configurationDefaults`, `semanticTokenScopes` | 尚未接入；bundled manifest 中的字段不会被投影 | 后续领域 adapter |
+| extension JavaScript, LSP server declarations | ❌ 不执行 | 独立信任与 runtime 评审 |
+
+User packages are read from the host-selected profile extension root, but the current Editor
+Extension system has no registry, download, enable/disable, signature, or grant authority. Built-in
+roots have precedence, so a profile package with the same extension ID is diagnosed and cannot
+silently replace product resources. Manifest `%...%` localization placeholders and complete
+Workbench theme labels fall back to the theme document or stable manifest identity when localization
+placeholders cannot be resolved.

@@ -1,6 +1,6 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { DisposableOwner, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
-import { type LanguageCompletionItem, type LanguageCompletionItemDetails, type LanguageCompletionResult } from "./languageCompletions.js";
+import { type LanguageCompletionCommand, type LanguageCompletionItem, type LanguageCompletionItemDetails, type LanguageCompletionResult } from "./languageCompletions.js";
 import { assertLanguageId, assertLanguageSelector } from "../languageId.js";
 import { type TextPosition, type TextSnapshot } from "../../core/text.js";
 import { type URI } from "../../../../base/common/uri.js";
@@ -48,6 +48,13 @@ export interface LanguageCompletionProviderResolveRequest {
   readonly item: LanguageCompletionProviderItem;
 }
 
+export interface LanguageCompletionProviderCommandRequest {
+  readonly languageId: string;
+  readonly resource?: URI;
+  readonly snapshot: TextSnapshot;
+  readonly command: LanguageCompletionCommand;
+}
+
 export interface LanguageCompletionProviderResult {
   readonly items: readonly LanguageCompletionProviderItem[];
   readonly isIncomplete: boolean;
@@ -59,6 +66,7 @@ export interface LanguageCompletionProvider {
   readonly triggerCharacters?: readonly string[];
   provideCompletions(request: LanguageCompletionProviderRequest, signal: AbortSignal): LanguageCompletionProviderResult | undefined | PromiseLike<LanguageCompletionProviderResult | undefined>;
   resolveCompletionItem?(request: LanguageCompletionProviderResolveRequest, signal: AbortSignal): LanguageCompletionItemDetails | undefined | PromiseLike<LanguageCompletionItemDetails | undefined>;
+  executeCompletionCommand?(request: LanguageCompletionProviderCommandRequest, signal: AbortSignal): void | PromiseLike<void>;
 }
 
 export interface LanguageCompletionProviderMetadata {
@@ -82,12 +90,23 @@ export interface LanguageCompletionProviderCatalogSource {
 export interface RegisteredLanguageCompletionProvider extends LanguageCompletionProviderMetadata {
   provideCompletions(request: LanguageCompletionProviderRequest, signal: AbortSignal): LanguageCompletionProviderResult | undefined | PromiseLike<LanguageCompletionProviderResult | undefined>;
   resolveCompletionItem?(request: LanguageCompletionProviderResolveRequest, signal: AbortSignal): LanguageCompletionItemDetails | undefined | PromiseLike<LanguageCompletionItemDetails | undefined>;
+  executeCompletionCommand?(request: LanguageCompletionProviderCommandRequest, signal: AbortSignal): void | PromiseLike<void>;
+}
+
+/** One caller-owned provider set that can be atomically replaced. */
+export interface LanguageCompletionProviderRegistration extends IDisposable {
+  replace(providers: readonly LanguageCompletionProvider[]): void;
+}
+
+interface OwnedLanguageCompletionProvider {
+  readonly owner: object;
+  readonly provider: RegisteredLanguageCompletionProvider;
 }
 
 /** Caller-owned registry with deterministic registration-order provider lookup. */
 export class LanguageCompletionProviderRegistry extends DisposableOwner implements LanguageCompletionProviderCatalogSource {
   private readonly catalogEmitter = this.own(new Emitter<LanguageCompletionProviderCatalog>());
-  private readonly providers = new Map<string, RegisteredLanguageCompletionProvider>();
+  private readonly providers = new Map<string, OwnedLanguageCompletionProvider>();
   private catalog: LanguageCompletionProviderCatalog = EMPTY_PROVIDER_CATALOG;
   private disposed = false;
 
@@ -111,26 +130,25 @@ export class LanguageCompletionProviderRegistry extends DisposableOwner implemen
     if (!Array.isArray(providers) || providers.length === 0) {
       throw new TypeError("Language completion provider batch must not be empty");
     }
-    const registered = providers.map(normalizeProvider);
-    const identities = new Set<string>();
-    for (const provider of registered) {
-      if (identities.has(provider.id) || this.providers.has(provider.id)) {
-        throw new RangeError(`Language completion provider '${provider.id}' is already registered`);
-      }
-      identities.add(provider.id);
-    }
-    for (const provider of registered) this.providers.set(provider.id, provider);
-    this.updateCatalog();
-    return toDisposable(() => {
-      let changed = false;
-      for (const provider of registered) {
-        if (this.providers.get(provider.id) === provider) {
-          this.providers.delete(provider.id);
-          changed = true;
-        }
-      }
-      if (changed) this.updateCatalog();
-    });
+    return this.registerGroup(providers);
+  }
+
+  registerGroup(providers: readonly LanguageCompletionProvider[]): LanguageCompletionProviderRegistration {
+    this.ensureAlive();
+    const owner = Object.freeze({});
+    this.replace(owner, providers);
+    let disposed = false;
+    const registration = toDisposable(() => {
+      if (disposed) return;
+      disposed = true;
+      if (this.deleteOwner(owner) && !this.disposed) this.updateCatalog();
+    }) as LanguageCompletionProviderRegistration;
+    registration.replace = replacement => {
+      if (disposed) throw new ReferenceError("Language completion provider registration is already disposed");
+      this.ensureAlive();
+      this.replace(owner, replacement);
+    };
+    return registration;
   }
 
   get providerCatalog(): LanguageCompletionProviderCatalog {
@@ -146,18 +164,18 @@ export class LanguageCompletionProviderRegistry extends DisposableOwner implemen
     this.ensureAlive();
     assertLanguageId(languageId);
     assertCompletionContext(context);
-    const result = [...this.providers.values()].filter(provider => languageCompletionProviderMatches(provider, languageId, context));
+    const result = [...this.providers.values()].map(entry => entry.provider).filter(provider => languageCompletionProviderMatches(provider, languageId, context));
     return Object.freeze(result);
   }
 
   getProvider(providerId: string): RegisteredLanguageCompletionProvider | undefined {
     this.ensureAlive();
     assertIdentifier(providerId, "Language completion provider ID");
-    return this.providers.get(providerId);
+    return this.providers.get(providerId)?.provider;
   }
 
   private updateCatalog(): void {
-    const providers = Object.freeze([...this.providers.values()].map(provider => Object.freeze({
+    const providers = Object.freeze([...this.providers.values()].map(entry => entry.provider).map(provider => Object.freeze({
       id: provider.id,
       languageIds: provider.languageIds,
       triggerCharacters: provider.triggerCharacters,
@@ -173,6 +191,30 @@ export class LanguageCompletionProviderRegistry extends DisposableOwner implemen
     if (this.disposed) {
       throw new ReferenceError("LanguageCompletionProviderRegistry is already disposed");
     }
+  }
+
+  private replace(owner: object, providers: readonly LanguageCompletionProvider[]): void {
+    if (!Array.isArray(providers)) throw new TypeError("Language completion providers must be an array");
+    const registered = providers.map(normalizeProvider);
+    const identities = new Set<string>();
+    for (const provider of registered) {
+      const existing = this.providers.get(provider.id);
+      if (identities.has(provider.id) || existing && existing.owner !== owner) throw new RangeError(`Language completion provider '${provider.id}' is already registered`);
+      identities.add(provider.id);
+    }
+    this.deleteOwner(owner);
+    for (const provider of registered) this.providers.set(provider.id, { owner, provider });
+    this.updateCatalog();
+  }
+
+  private deleteOwner(owner: object): boolean {
+    let changed = false;
+    for (const [id, entry] of this.providers) {
+      if (entry.owner !== owner) continue;
+      this.providers.delete(id);
+      changed = true;
+    }
+    return changed;
   }
 }
 
@@ -289,12 +331,14 @@ function normalizeProvider(provider: LanguageCompletionProvider): RegisteredLang
   if (provider.resolveCompletionItem !== undefined && typeof provider.resolveCompletionItem !== "function") {
     throw new TypeError("Language completion provider resolveCompletionItem must be a function");
   }
+  if (provider.executeCompletionCommand !== undefined && typeof provider.executeCompletionCommand !== "function") throw new TypeError("Language completion provider executeCompletionCommand must be a function");
   return Object.freeze({
     id: provider.id,
     languageIds: Object.freeze(languageIds),
     triggerCharacters: Object.freeze(triggerCharacters),
     provideCompletions: provider.provideCompletions.bind(provider),
     ...(provider.resolveCompletionItem === undefined ? {} : { resolveCompletionItem: provider.resolveCompletionItem.bind(provider) }),
+    ...(provider.executeCompletionCommand === undefined ? {} : { executeCompletionCommand: provider.executeCompletionCommand.bind(provider) }),
   });
 }
 

@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { assemblePackage, hostTarget, replaceDirectoryAtomically, selectRipgrepArtifact } from "./prepare-dev-package.mjs";
+import { assemblePackage, copyBuiltinExtensions, hostTarget, replaceDirectoryAtomically, selectRipgrepArtifact } from "./prepare-dev-package.mjs";
 
 test("maps supported development hosts to Rust targets", () => {
   assert.equal(hostTarget("win32", "x64"), "x86_64-pc-windows-msvc");
@@ -110,6 +110,83 @@ test("assembles and validates the canonical Windows development layout", async (
     const extensionPackages = (await readdir(join(staging, "zeta-resources", "extensions"))).sort();
     assert.deepEqual(extensionPackages, ["css", "html", "javascript", "json", "markdown-basics", "python", "rust", "shellscript", "sql", "theme-defaults", "typescript-basics", "xml", "yaml"]);
     assert.match(await readFile(join(staging, "zeta-resources", "extensions", "json", "package.json"), "utf8"), /"name": "json"/);
+    assert.equal(
+      await readFile(join(staging, "zeta-resources", "licenses", "vscode", "LICENSE.txt"), "utf8"),
+      await readFile(new URL("../../third_party/vscode/LICENSE.txt", import.meta.url), "utf8"),
+    );
+    const fileTemplates = [];
+    for (const packageName of extensionPackages) {
+      const extensionRoot = join(staging, "zeta-resources", "extensions", packageName);
+      const manifest = JSON.parse(await readFile(join(extensionRoot, "package.json"), "utf8"));
+      for (const snippetContribution of manifest.contributes?.snippets ?? []) {
+        assert.match(snippetContribution.path, /^\.\//);
+        const snippetDocument = JSON.parse(await readFile(join(extensionRoot, ...snippetContribution.path.slice(2).split("/")), "utf8"));
+        const languages = Array.isArray(snippetContribution.language) ? snippetContribution.language : [snippetContribution.language];
+        for (const [snippetName, snippet] of Object.entries(snippetDocument)) {
+          if (snippet.isFileTemplate === true) {
+            fileTemplates.push(...languages.map(language => [`${manifest.publisher}.${manifest.name}`, language, snippetName]));
+          }
+        }
+      }
+    }
+    fileTemplates.sort((left, right) => left.join("\0").localeCompare(right.join("\0")));
+    assert.deepEqual(fileTemplates, [
+      ["vscode.html", "html", "html doc"],
+      ["vscode.javascript", "javascript", "Class Definition"],
+      ["vscode.javascript", "javascriptreact", "Class Definition"],
+      ["vscode.typescript", "typescript", "Class Definition"],
+      ["vscode.typescript", "typescriptreact", "Class Definition"],
+    ]);
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
+test("rejects an empty built-in extension source", async () => {
+  const root = await mkdtemp(join(tmpdir(), "zeta-dev-extension-test-"));
+  try {
+    const source = join(root, "source");
+    await mkdir(source);
+    await assert.rejects(copyBuiltinExtensions(join(root, "destination"), source), /source is empty/);
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
+test("rejects an empty built-in extension package directory", async () => {
+  const root = await mkdtemp(join(tmpdir(), "zeta-dev-extension-test-"));
+  try {
+    const source = join(root, "source");
+    await mkdir(join(source, "demo"), { recursive: true });
+    await assert.rejects(copyBuiltinExtensions(join(root, "destination"), source), /missing package.json/);
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
+test("rejects a symbolic built-in extension source directory", async () => {
+  const root = await mkdtemp(join(tmpdir(), "zeta-dev-extension-test-"));
+  try {
+    const target = join(root, "source-target");
+    const source = join(root, "source");
+    await mkdir(target);
+    await symlink(target, source, process.platform === "win32" ? "junction" : "dir");
+    await assert.rejects(copyBuiltinExtensions(join(root, "destination"), source), /source is not a real directory/);
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
+test("rejects a symbolic built-in extension package directory", async () => {
+  const root = await mkdtemp(join(tmpdir(), "zeta-dev-extension-test-"));
+  try {
+    const source = join(root, "source");
+    const extension = join(root, "demo-target");
+    await mkdir(source);
+    await mkdir(extension);
+    await writeFile(join(extension, "package.json"), '{"name":"demo","publisher":"zeta","version":"1.0.0"}');
+    await symlink(extension, join(source, "demo"), process.platform === "win32" ? "junction" : "dir");
+    await assert.rejects(copyBuiltinExtensions(join(root, "destination"), source), /Invalid built-in extension package/);
   } finally {
     await rm(root, { force: true, recursive: true });
   }

@@ -27,6 +27,7 @@ members = [
     "zeta-rs/diff",
     "zeta-rs/debug-adapter",
     "zeta-rs/extensions",
+    "zeta-rs/editor-extension-host",
     "zeta-rs/editor-core",
     "zeta-rs/ext/extension-api",
     "zeta-rs/ext/connectors",
@@ -242,6 +243,7 @@ zeta-web-search-extension = { path = "zeta-rs/ext/web-search" }
 zeta-exec = { path = "zeta-rs/exec" }
 zeta-execpolicy = { path = "zeta-rs/execpolicy" }
 zeta-extensions = { path = "zeta-rs/extensions" }
+zeta-editor-extension-host = { path = "zeta-rs/editor-extension-host" }
 zeta-icons = { path = "zeterm/icons" }
 zeta-icon = { path = "zeterm/icon" }
 zeta-file-icons = { path = "zeta-rs/file-icons" }

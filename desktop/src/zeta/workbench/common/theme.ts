@@ -1,15 +1,14 @@
-import {
-  type IDisposable,
-  toDisposable,
-} from "../../base/common/lifecycle.js";
-import {
-  darkColorTheme,
-  type IColorTheme,
-  lightColorTheme,
-} from "../../platform/theme/common/colorTheme.js";
+import { Emitter, type Event } from "../../base/common/event.js";
+import { type IDisposable, toDisposable } from "../../base/common/lifecycle.js";
+import { darkColorTheme, type IColorTheme, lightColorTheme } from "../../platform/theme/common/colorTheme.js";
 
 /** Configuration value that delegates the active theme to the operating system. */
 export const SystemColorThemePreference = "system";
+
+/** One caller-owned set of selectable themes that can be atomically replaced. */
+export interface WorkbenchThemeRegistration extends IDisposable {
+  replace(themes: readonly IColorTheme[]): void;
+}
 
 /**
  * Registry of complete color themes that can be selected by the workbench.
@@ -17,39 +16,77 @@ export const SystemColorThemePreference = "system";
  * Theme contributions must provide every color required by `IColorTheme`.
  */
 export class WorkbenchThemeRegistry {
-  private readonly themes = new Map<string, IColorTheme>();
+  private readonly _onDidChange = new Emitter<readonly IColorTheme[]>();
+  private readonly themes = new Map<string, { readonly owner: object; readonly theme: IColorTheme }>();
+
+  readonly onDidChange: Event<readonly IColorTheme[]> = this._onDidChange.event;
 
   constructor(initialThemes: readonly IColorTheme[] = []) {
-    for (const theme of initialThemes) this.add(theme);
+    const owner = Object.freeze({});
+    this.validateReplacement(owner, initialThemes);
+    for (const theme of initialThemes) this.themes.set(theme.id, { owner, theme });
   }
 
   registerColorTheme(theme: IColorTheme): IDisposable {
-    this.add(theme);
-    return toDisposable(() => {
-      if (this.themes.get(theme.id) === theme) {
-        this.themes.delete(theme.id);
-      }
-    });
+    return this.registerColorThemes([theme]);
+  }
+
+  registerColorThemes(themes: readonly IColorTheme[]): WorkbenchThemeRegistration {
+    const owner = Object.freeze({});
+    this.validateReplacement(owner, themes);
+    this.replace(owner, themes);
+    let disposed = false;
+    const registration = toDisposable(() => {
+      if (disposed) return;
+      disposed = true;
+      if (this.deleteOwner(owner)) this.publish();
+    }) as WorkbenchThemeRegistration;
+    registration.replace = replacement => {
+      if (disposed) throw new ReferenceError("Workbench theme registration is already disposed");
+      this.validateReplacement(owner, replacement);
+      this.replace(owner, replacement);
+    };
+    return registration;
   }
 
   getColorTheme(id: string): IColorTheme | undefined {
-    return this.themes.get(id);
+    return this.themes.get(id)?.theme;
   }
 
   getColorThemes(): readonly IColorTheme[] {
-    return [...this.themes.values()];
+    return Object.freeze([...this.themes.values()].map(entry => entry.theme));
   }
 
-  private add(theme: IColorTheme): void {
-    if (!theme.id.trim()) {
-      throw new TypeError("Workbench color theme ID must not be empty");
+  private validateReplacement(owner: object, themes: readonly IColorTheme[]): void {
+    if (!Array.isArray(themes)) throw new TypeError("Workbench color themes must be an array");
+    const ids = new Set<string>();
+    for (const theme of themes) {
+      if (typeof theme !== "object" || theme === null || !theme.id.trim()) throw new TypeError("Workbench color theme ID must not be empty");
+      if (ids.has(theme.id)) throw new Error(`Workbench color theme is already registered: ${theme.id}`);
+      ids.add(theme.id);
+      const existing = this.themes.get(theme.id);
+      if (existing && existing.owner !== owner) throw new Error(`Workbench color theme is already registered: ${theme.id}`);
     }
-    if (this.themes.has(theme.id)) {
-      throw new Error(
-        `Workbench color theme is already registered: ${theme.id}`,
-      );
+  }
+
+  private replace(owner: object, themes: readonly IColorTheme[]): void {
+    const changed = this.deleteOwner(owner) || themes.length > 0;
+    for (const theme of themes) this.themes.set(theme.id, { owner, theme });
+    if (changed) this.publish();
+  }
+
+  private deleteOwner(owner: object): boolean {
+    let changed = false;
+    for (const [id, entry] of this.themes) {
+      if (entry.owner !== owner) continue;
+      this.themes.delete(id);
+      changed = true;
     }
-    this.themes.set(theme.id, theme);
+    return changed;
+  }
+
+  private publish(): void {
+    this._onDidChange.fire(this.getColorThemes());
   }
 }
 

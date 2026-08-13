@@ -3,14 +3,23 @@ use std::time::Duration;
 
 use lsp_types::{
     CallHierarchyClientCapabilities, ClientCapabilities, ClientInfo,
-    CodeActionCapabilityResolveSupport, CodeActionClientCapabilities, FailureHandlingKind,
-    GeneralClientCapabilities, InlayHintClientCapabilities, LinkedEditingRangeClientCapabilities,
-    MarkupKind, ParameterInformationSettings, PositionEncodingKind,
-    PublishDiagnosticsClientCapabilities, RenameClientCapabilities, ResourceOperationKind,
+    CodeActionCapabilityResolveSupport, CodeActionClientCapabilities, CodeLensClientCapabilities,
+    CompletionClientCapabilities, CompletionItemCapability, CompletionItemCapabilityResolveSupport,
+    DiagnosticClientCapabilities, DiagnosticWorkspaceClientCapabilities,
+    DocumentColorClientCapabilities, DocumentFormattingClientCapabilities,
+    DocumentLinkClientCapabilities, DocumentRangeFormattingClientCapabilities,
+    DocumentSymbolClientCapabilities, DynamicRegistrationClientCapabilities,
+    ExecuteCommandClientCapabilities, FailureHandlingKind, FoldingRangeClientCapabilities,
+    GeneralClientCapabilities, GotoCapability, HoverClientCapabilities,
+    InlayHintClientCapabilities, LinkedEditingRangeClientCapabilities, MarkupKind,
+    ParameterInformationSettings, PositionEncodingKind, PublishDiagnosticsClientCapabilities,
+    ReferenceClientCapabilities, RenameClientCapabilities, ResourceOperationKind,
+    SemanticTokenModifier, SemanticTokenType, SemanticTokensClientCapabilities,
+    SemanticTokensClientCapabilitiesRequests, SemanticTokensFullOptions,
     SignatureHelpClientCapabilities, SignatureInformationSettings, TextDocumentClientCapabilities,
-    TextDocumentSyncClientCapabilities, TypeHierarchyClientCapabilities, Uri,
-    WorkspaceClientCapabilities, WorkspaceEditClientCapabilities, WorkspaceFolder,
-    WorkspaceSymbolClientCapabilities,
+    TextDocumentSyncClientCapabilities, TokenFormat, TypeHierarchyClientCapabilities, Uri,
+    WindowClientCapabilities, WorkspaceClientCapabilities, WorkspaceEditClientCapabilities,
+    WorkspaceFolder, WorkspaceSymbolClientCapabilities,
 };
 use serde_json::Value;
 
@@ -122,8 +131,14 @@ fn default_client_capabilities() -> ClientCapabilities {
             configuration: Some(true),
             workspace_folders: Some(true),
             symbol: Some(WorkspaceSymbolClientCapabilities {
-                dynamic_registration: Some(false),
+                dynamic_registration: Some(true),
                 ..Default::default()
+            }),
+            execute_command: Some(ExecuteCommandClientCapabilities {
+                dynamic_registration: Some(true),
+            }),
+            diagnostic: Some(DiagnosticWorkspaceClientCapabilities {
+                refresh_support: Some(false),
             }),
             workspace_edit: Some(WorkspaceEditClientCapabilities {
                 document_changes: Some(true),
@@ -146,8 +161,77 @@ fn default_client_capabilities() -> ClientCapabilities {
                 did_save: Some(true),
             }),
             publish_diagnostics: Some(PublishDiagnosticsClientCapabilities::default()),
+            diagnostic: Some(DiagnosticClientCapabilities {
+                dynamic_registration: Some(true),
+                related_document_support: Some(false),
+            }),
+            completion: Some(CompletionClientCapabilities {
+                dynamic_registration: Some(true),
+                completion_item: Some(CompletionItemCapability {
+                    snippet_support: Some(true),
+                    commit_characters_support: Some(true),
+                    documentation_format: Some(vec![MarkupKind::Markdown, MarkupKind::PlainText]),
+                    preselect_support: Some(true),
+                    insert_replace_support: Some(true),
+                    resolve_support: Some(CompletionItemCapabilityResolveSupport {
+                        properties: vec!["detail".into(), "documentation".into()],
+                    }),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }),
+            hover: Some(HoverClientCapabilities {
+                dynamic_registration: Some(true),
+                content_format: Some(vec![MarkupKind::Markdown, MarkupKind::PlainText]),
+            }),
+            references: Some(ReferenceClientCapabilities {
+                dynamic_registration: Some(true),
+            }),
+            document_symbol: Some(DocumentSymbolClientCapabilities {
+                dynamic_registration: Some(true),
+                hierarchical_document_symbol_support: Some(true),
+                ..Default::default()
+            }),
+            code_lens: Some(CodeLensClientCapabilities {
+                dynamic_registration: Some(true),
+            }),
+            document_link: Some(DocumentLinkClientCapabilities {
+                dynamic_registration: Some(true),
+                tooltip_support: Some(true),
+            }),
+            color_provider: Some(DocumentColorClientCapabilities {
+                dynamic_registration: Some(true),
+            }),
+            folding_range: Some(FoldingRangeClientCapabilities {
+                dynamic_registration: Some(true),
+                range_limit: Some(5_000),
+                line_folding_only: Some(true),
+                ..Default::default()
+            }),
+            formatting: Some(DocumentFormattingClientCapabilities {
+                dynamic_registration: Some(true),
+            }),
+            range_formatting: Some(DocumentRangeFormattingClientCapabilities {
+                dynamic_registration: Some(true),
+            }),
+            declaration: Some(GotoCapability {
+                dynamic_registration: Some(true),
+                link_support: Some(true),
+            }),
+            definition: Some(GotoCapability {
+                dynamic_registration: Some(true),
+                link_support: Some(true),
+            }),
+            type_definition: Some(GotoCapability {
+                dynamic_registration: Some(true),
+                link_support: Some(true),
+            }),
+            implementation: Some(GotoCapability {
+                dynamic_registration: Some(true),
+                link_support: Some(true),
+            }),
             signature_help: Some(SignatureHelpClientCapabilities {
-                dynamic_registration: Some(false),
+                dynamic_registration: Some(true),
                 signature_information: Some(SignatureInformationSettings {
                     documentation_format: Some(vec![MarkupKind::Markdown, MarkupKind::PlainText]),
                     parameter_information: Some(ParameterInformationSettings {
@@ -158,26 +242,26 @@ fn default_client_capabilities() -> ClientCapabilities {
                 context_support: Some(true),
             }),
             inlay_hint: Some(InlayHintClientCapabilities {
-                dynamic_registration: Some(false),
+                dynamic_registration: Some(true),
                 resolve_support: None,
             }),
             linked_editing_range: Some(LinkedEditingRangeClientCapabilities {
-                dynamic_registration: Some(false),
+                dynamic_registration: Some(true),
             }),
             call_hierarchy: Some(CallHierarchyClientCapabilities {
-                dynamic_registration: Some(false),
+                dynamic_registration: Some(true),
             }),
             type_hierarchy: Some(TypeHierarchyClientCapabilities {
-                dynamic_registration: Some(false),
+                dynamic_registration: Some(true),
             }),
             rename: Some(RenameClientCapabilities {
-                dynamic_registration: Some(false),
+                dynamic_registration: Some(true),
                 prepare_support: Some(true),
                 honors_change_annotations: Some(false),
                 ..Default::default()
             }),
             code_action: Some(CodeActionClientCapabilities {
-                dynamic_registration: Some(false),
+                dynamic_registration: Some(true),
                 is_preferred_support: Some(true),
                 disabled_support: Some(true),
                 data_support: Some(true),
@@ -186,6 +270,23 @@ fn default_client_capabilities() -> ClientCapabilities {
                 }),
                 honors_change_annotations: Some(false),
                 ..Default::default()
+            }),
+            semantic_tokens: Some(SemanticTokensClientCapabilities {
+                dynamic_registration: Some(true),
+                requests: SemanticTokensClientCapabilitiesRequests {
+                    range: Some(false),
+                    full: Some(SemanticTokensFullOptions::Bool(true)),
+                },
+                token_types: semantic_token_types(),
+                token_modifiers: semantic_token_modifiers(),
+                formats: vec![TokenFormat::RELATIVE],
+                overlapping_token_support: Some(false),
+                multiline_token_support: Some(false),
+                server_cancel_support: Some(true),
+                augments_syntax_tokens: Some(true),
+            }),
+            document_highlight: Some(DynamicRegistrationClientCapabilities {
+                dynamic_registration: Some(false),
             }),
             ..Default::default()
         }),
@@ -196,6 +297,53 @@ fn default_client_capabilities() -> ClientCapabilities {
             ]),
             ..Default::default()
         }),
+        window: Some(WindowClientCapabilities {
+            work_done_progress: Some(true),
+            ..Default::default()
+        }),
         ..Default::default()
     }
+}
+
+fn semantic_token_types() -> Vec<SemanticTokenType> {
+    vec![
+        SemanticTokenType::NAMESPACE,
+        SemanticTokenType::TYPE,
+        SemanticTokenType::CLASS,
+        SemanticTokenType::ENUM,
+        SemanticTokenType::INTERFACE,
+        SemanticTokenType::STRUCT,
+        SemanticTokenType::TYPE_PARAMETER,
+        SemanticTokenType::PARAMETER,
+        SemanticTokenType::VARIABLE,
+        SemanticTokenType::PROPERTY,
+        SemanticTokenType::ENUM_MEMBER,
+        SemanticTokenType::EVENT,
+        SemanticTokenType::FUNCTION,
+        SemanticTokenType::METHOD,
+        SemanticTokenType::MACRO,
+        SemanticTokenType::KEYWORD,
+        SemanticTokenType::MODIFIER,
+        SemanticTokenType::COMMENT,
+        SemanticTokenType::STRING,
+        SemanticTokenType::NUMBER,
+        SemanticTokenType::REGEXP,
+        SemanticTokenType::OPERATOR,
+        SemanticTokenType::DECORATOR,
+    ]
+}
+
+fn semantic_token_modifiers() -> Vec<SemanticTokenModifier> {
+    vec![
+        SemanticTokenModifier::DECLARATION,
+        SemanticTokenModifier::DEFINITION,
+        SemanticTokenModifier::READONLY,
+        SemanticTokenModifier::STATIC,
+        SemanticTokenModifier::DEPRECATED,
+        SemanticTokenModifier::ABSTRACT,
+        SemanticTokenModifier::ASYNC,
+        SemanticTokenModifier::MODIFICATION,
+        SemanticTokenModifier::DOCUMENTATION,
+        SemanticTokenModifier::DEFAULT_LIBRARY,
+    ]
 }

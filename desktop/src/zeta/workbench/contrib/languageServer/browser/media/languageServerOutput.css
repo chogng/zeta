@@ -1,0 +1,48 @@
+.zeta-language-server-output {
+  min-height: 0;
+}
+
+.zeta-language-server-output-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 4px 8px;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+}
+
+.zeta-language-server-output-toolbar button {
+  color: inherit;
+  background: transparent;
+  border: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+  border-radius: 3px;
+}
+
+.zeta-language-server-output-content {
+  min-height: 0;
+  height: 100%;
+  overflow: auto;
+  padding: 6px 10px;
+  font-family: var(--zeta-editor-font-family, monospace);
+  white-space: pre-wrap;
+  user-select: text;
+}
+
+.zeta-language-server-output-row,
+.zeta-language-server-output-progress {
+  padding-block: 2px;
+}
+
+.zeta-language-server-output-row.error {
+  color: var(--zeta-error-foreground);
+}
+
+.zeta-language-server-output-row.warning {
+  color: var(--zeta-warning-foreground);
+}
+
+.zeta-language-server-output-progress {
+  color: var(--zeta-accent-foreground);
+}
+
+.zeta-language-server-output-empty {
+  color: var(--zeta-description-foreground);
+}

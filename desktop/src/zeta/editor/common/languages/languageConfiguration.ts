@@ -95,6 +95,17 @@ export interface LanguageConfigurationRegistrationOptions {
   readonly priority?: number;
 }
 
+export interface LanguageConfigurationContributionInput {
+  readonly languageId: string;
+  readonly configuration: LanguageConfiguration;
+  readonly options?: LanguageConfigurationRegistrationOptions;
+}
+
+/** One caller-owned configuration set that can be atomically replaced. */
+export interface LanguageConfigurationRegistration extends IDisposable {
+  replace(contributions: readonly LanguageConfigurationContributionInput[]): void;
+}
+
 export interface LanguageConfigurationChangeEvent {
   readonly languageId: string;
   readonly configuration: ResolvedLanguageConfiguration;
@@ -105,6 +116,7 @@ export interface LanguageConfigurationSource {
 }
 
 interface LanguageConfigurationContribution {
+  readonly owner: object;
   readonly configuration: NormalizedLanguageConfiguration;
   readonly priority: number;
   readonly order: number;
@@ -151,24 +163,25 @@ export class LanguageConfigurationRegistry extends DisposableOwner implements La
   }
 
   register(languageId: string, configuration: LanguageConfiguration, options: LanguageConfigurationRegistrationOptions = {}): IDisposable {
+    return this.registerMany([{ languageId, configuration, options }]);
+  }
+
+  registerMany(contributions: readonly LanguageConfigurationContributionInput[]): LanguageConfigurationRegistration {
     this.ensureAlive();
-    assertLanguageId(languageId);
-    const normalized = normalizeLanguageConfiguration(configuration);
-    const priority = normalizePriority(options);
-    const contribution = Object.freeze({ configuration: normalized, priority, order: this.nextOrder++ });
-    const entries = this.contributions.get(languageId);
-    if (entries) entries.push(contribution);
-    else this.contributions.set(languageId, [contribution]);
-    this.publishChange(languageId);
-    return toDisposable(() => {
-      const current = this.contributions.get(languageId);
-      if (!current) return;
-      const index = current.indexOf(contribution);
-      if (index < 0) return;
-      current.splice(index, 1);
-      if (current.length === 0) this.contributions.delete(languageId);
-      if (!this.disposed) this.publishChange(languageId);
-    });
+    const owner = Object.freeze({});
+    this.replace(owner, contributions);
+    let disposed = false;
+    const registration = toDisposable(() => {
+      if (disposed) return;
+      disposed = true;
+      this.removeOwner(owner);
+    }) as LanguageConfigurationRegistration;
+    registration.replace = replacement => {
+      if (disposed) throw new ReferenceError("Language configuration registration is already disposed");
+      this.ensureAlive();
+      this.replace(owner, replacement);
+    };
+    return registration;
   }
 
   getLanguageConfiguration(languageId: string): ResolvedLanguageConfiguration {
@@ -192,6 +205,44 @@ export class LanguageConfigurationRegistry extends DisposableOwner implements La
 
   private ensureAlive(): void {
     if (this.disposed) throw new ReferenceError("LanguageConfigurationRegistry is already disposed");
+  }
+
+  private replace(owner: object, contributions: readonly LanguageConfigurationContributionInput[]): void {
+    if (!Array.isArray(contributions)) throw new TypeError("Language configuration contributions must be an array");
+    const entries = contributions.map(input => {
+      if (typeof input !== "object" || input === null) throw new TypeError("Language configuration contribution must be an object");
+      assertLanguageId(input.languageId);
+      return Object.freeze({ languageId: input.languageId, contribution: Object.freeze({ owner, configuration: normalizeLanguageConfiguration(input.configuration), priority: normalizePriority(input.options ?? {}), order: this.nextOrder++ }) });
+    });
+    const affected = this.ownerLanguageIds(owner);
+    for (const entry of entries) affected.add(entry.languageId);
+    this.deleteOwner(owner);
+    for (const entry of entries) {
+      const values = this.contributions.get(entry.languageId);
+      if (values) values.push(entry.contribution);
+      else this.contributions.set(entry.languageId, [entry.contribution]);
+    }
+    for (const languageId of [...affected].sort()) this.publishChange(languageId);
+  }
+
+  private removeOwner(owner: object): void {
+    const affected = this.ownerLanguageIds(owner);
+    this.deleteOwner(owner);
+    if (!this.disposed) for (const languageId of [...affected].sort()) this.publishChange(languageId);
+  }
+
+  private deleteOwner(owner: object): void {
+    for (const [languageId, entries] of this.contributions) {
+      const remaining = entries.filter(entry => entry.owner !== owner);
+      if (remaining.length === 0) this.contributions.delete(languageId);
+      else if (remaining.length !== entries.length) this.contributions.set(languageId, remaining);
+    }
+  }
+
+  private ownerLanguageIds(owner: object): Set<string> {
+    const languageIds = new Set<string>();
+    for (const [languageId, entries] of this.contributions) if (entries.some(entry => entry.owner === owner)) languageIds.add(languageId);
+    return languageIds;
   }
 }
 

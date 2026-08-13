@@ -124,9 +124,15 @@ server 选定的位置编码。
 - ✅ 意外 transport close、断连 route retirement、有限指数退避、healthy-window reset、crash-loop gate
   和 authoritative document replay；
 - ✅ Native Settings 显示 Starting、Ready、BackingOff、CrashLoop、Failed 和 Stopped，运行态不进入配置 authority；
-- ✅ hover/completion/navigation/hierarchy/rename/code-action/formatting/signature-help/inlay-hints/linked-editing 非阻塞 facade、capability gate、request identity 和 stale-result rejection；
+- ✅ hover/completion/resolve/command/navigation/hierarchy/rename/code-action/formatting/signature-help/inlay-hints/linked-editing 非阻塞 facade、capability gate、request identity 和 stale-result rejection；
+- ✅ Semantic Tokens、Document Symbols、CodeLens、Document Links、Document Colors 与 Folding 的 product-neutral projection 和 revision freshness；
+- ✅ 静态/动态 capability gate、dynamic registration 与 work-done progress 事件；
+- ✅ document pull diagnostics 的 full/unchanged report projection；full report 复用现有 diagnostics 事件和 freshness 规则；
+- ✅ workspace diagnostics 的 capability gate 与跨文件 raw-coordinate projection；文件读取和 UTF-16 转换仍由 App Server Workspace authority 完成；
+- ✅ message severity、show/log 区分与 work-done progress 的 product-neutral 事件；
 - ✅ Native pointer hover、latest-request gate、可滚动 completion window/安全 textEdit 接受，以及 F12
   definition navigation；
-- 尚未完成：completion resolve/commands、semantic tokens 和多 definition target picker；
+- ✅ Desktop 已把 completion resolve/commands、additional edits、semantic tokens 和文档特性接入现有 Editor contract；多 definition target 复用 Peek 列表；
+- 尚未完成：diagnostic result-id/partial-result/refresh；
 - 尚未完成：server-specific distribution provider 与产品级 message/install UI；
 - Potential：远程 workspace authority 出现后再评估是否把 execution 放到 App Server。

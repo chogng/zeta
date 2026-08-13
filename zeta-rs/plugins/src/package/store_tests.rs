@@ -60,3 +60,25 @@ fn source_mutation_after_validation_fails_without_promoting_an_object() {
             .is_none()
     );
 }
+
+#[test]
+fn activated_package_exposes_its_exact_immutable_object_root() {
+    let temporary = tempfile::tempdir().unwrap();
+    let source = temporary.path().join("source");
+    package(&source, "# Review");
+    let local = LocalPluginPackage::load(&source).unwrap();
+    let store = PluginPackageStore::open(temporary.path().join("store")).unwrap();
+    let installed = store.install_local(&local).unwrap();
+
+    let activated = store.activate(&installed).unwrap();
+
+    assert_eq!(
+        activated.package_root(),
+        temporary
+            .path()
+            .join("store/objects")
+            .join(installed.digest.as_str().trim_start_matches("sha256:"))
+            .canonicalize()
+            .unwrap()
+    );
+}

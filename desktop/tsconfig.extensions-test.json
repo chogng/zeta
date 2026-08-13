@@ -1,0 +1,33 @@
+{
+  "extends": "./tsconfig.test.json",
+  "include": [
+    "src/typings/**/*.d.ts",
+    "src/zeta/base/common/**/*.ts",
+    "src/zeta/base/test/common/event.test.ts",
+    "src/zeta/editor/common/**/*.ts",
+    "src/zeta/platform/commands/test/common/commands.test.ts",
+    "src/zeta/platform/extensions/**/*.ts",
+    "src/zeta/platform/extensionHost/common/**/*.ts",
+    "src/zeta/platform/extensionHost/test/**/*.ts",
+    "src/zeta/platform/instantiation/common/**/*.ts",
+    "src/zeta/platform/theme/common/**/*.ts",
+    "src/zeta/workbench/common/**/*.ts",
+    "src/zeta/workbench/services/extensions/**/*.ts",
+    "src/zeta/workbench/services/language/common/**/*.ts",
+    "src/zeta/workbench/services/textMate/common/**/*.ts",
+    "src/zeta/workbench/services/textMate/test/common/**/*.ts",
+    "src/zeta/workbench/contrib/codeEditor/test/browser/codeEditorPane.test.ts",
+    "src/zeta/workbench/contrib/codeEditor/test/common/editorInput.test.ts",
+    "src/zeta/workbench/contrib/preferences/test/browser/settings.test.ts",
+    "src/zeta/workbench/services/debug/test/browser/debugService.test.ts",
+    "src/zeta/workbench/services/debug/test/common/debugAdapterFactory.test.ts",
+    "src/zeta/workbench/services/debug/test/common/launchConfiguration.test.ts",
+    "src/zeta/workbench/services/extensionHost/**/*.ts",
+    "src/zeta/workbench/services/tasks/test/browser/taskService.test.ts",
+    "src/zeta/workbench/services/testing/test/browser/testingService.test.ts",
+    "src/zeta/workbench/services/untitled/test/common/untitled-text-editor-service.test.ts",
+    "src/zeta/workbench/test/browser/appServerConnectionStateObserver.test.ts",
+    "src/zeta/workbench/test/browser/workbench-theme.test.ts",
+    "src/zeta/workbench/test/common/theme.test.ts"
+  ]
+}
