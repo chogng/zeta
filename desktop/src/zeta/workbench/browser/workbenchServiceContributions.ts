@@ -14,6 +14,7 @@ export interface WorkbenchServiceContributionContext {
   readonly terminalService: ITerminalService;
   readonly storageService: IStorageService;
   readonly own: <T extends IDisposable>(value: T) => T;
+  readonly blockRestorationUntil: (operation: Promise<void>) => void;
 }
 
 export type WorkbenchServiceContribution = (context: WorkbenchServiceContributionContext) => void;

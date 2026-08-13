@@ -113,6 +113,7 @@ Manifest activation events 当前是经过验证并传给 runtime 的 facts；`z
 | 生产 sandbox、hard resources 与 killable process tree | 注入的 platform `ExtensionHostLauncher` | package enable/grant 或 provider semantics |
 | Host snapshot normalization 与 transport | `platform/extensionHost` adapter | 领域 provider ownership |
 | Host fleet 生命周期和原子 provider 编排 | `IExtensionHostService` implementation | generated DTO 作为 domain API |
+| Renderer Host service 安装与启动阻塞 | Code 产品入口选择的 `workbench/contrib/extensionHost` | 通用 Workbench 或 Academic 产品隐式安装 |
 | Commands、Language、Debug、Tasks、Testing 注册与调用 shape | 各自 Workbench domain owner | package 安装、进程监管 |
 
 Frontend common contract 使用 Workbench 自己的 snapshot/descriptor/failure 类型；generated DTO 和

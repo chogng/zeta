@@ -21,7 +21,7 @@
   height: 100%;
   overflow: auto;
   padding: 6px 10px;
-  font-family: var(--zeta-editor-font-family, monospace);
+  font-family: var(--zeta-font-family-monospace, ui-monospace, monospace);
   white-space: pre-wrap;
   user-select: text;
 }

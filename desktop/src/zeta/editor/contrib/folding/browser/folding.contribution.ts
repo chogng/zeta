@@ -1,4 +1,5 @@
 import { registerEditorContribution } from "../../../browser/editorContribution.js";
+import { toDisposable } from "../../../../base/common/lifecycle.js";
 import { FoldingController } from "./folding.js";
 import { TextEditorCapability } from "../../textEditorCapabilities.js";
 import { EditorFoldingModel } from "./foldingModel.js";
@@ -19,16 +20,33 @@ registerEditorContribution({
     let syntaxFolding: RustSyntaxFoldingService | undefined;
     let serverRanges: readonly { readonly startLineIndex: number; readonly endLineIndex: number }[] = [];
     let requestSerial = 0;
-    const update = () => folding.setProviderRanges(largeFile ? [] : mergeEditorFoldingRanges(serverRanges, syntaxFolding?.ranges ?? [], computeEditorLanguageFoldingRanges(context.model, context.languageId, context.configurations), computeEditorIndentFoldingRanges(context.model)));
+    let requestController: AbortController | undefined;
+    let disposed = false;
+    context.own(toDisposable(() => {
+      disposed = true;
+      requestSerial += 1;
+      requestController?.abort();
+      requestController = undefined;
+    }));
+    const update = () => {
+      if (disposed) return;
+      folding.setProviderRanges(largeFile ? [] : mergeEditorFoldingRanges(serverRanges, syntaxFolding?.ranges ?? [], computeEditorLanguageFoldingRanges(context.model, context.languageId, context.configurations), computeEditorIndentFoldingRanges(context.model)));
+    };
     const refresh = () => {
+      if (disposed) return;
       update();
       if (!languageFolding) return;
+      requestController?.abort();
+      const controller = new AbortController();
+      requestController = controller;
       const serial = ++requestSerial;
-      void languageFolding.provideFoldingRanges(context.languageId).then(ranges => {
-        if (serial !== requestSerial) return;
+      void languageFolding.provideFoldingRanges(context.languageId, controller.signal).then(ranges => {
+        if (disposed || controller.signal.aborted || serial !== requestSerial) return;
         serverRanges = ranges;
         update();
-      }, context.onLanguageError);
+      }, error => {
+        if (!disposed && !controller.signal.aborted && serial === requestSerial) context.onLanguageError(error);
+      });
     };
     if (rustSyntaxFacts) syntaxFolding = context.own(new RustSyntaxFoldingService(context.model, context.languageId, rustSyntaxFacts, update, context.onLanguageError));
     refresh();

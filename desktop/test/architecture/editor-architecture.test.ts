@@ -133,24 +133,28 @@ test("Product entries statically select their Aster contribution bundles", () =>
   assert.match(codeEntry, /workbench\/contrib\/tasks\/browser\/tasks\.contribution/u);
   assert.match(codeEntry, /workbench\/contrib\/testing\/browser\/testing\.contribution/u);
   assert.match(codeEntry, /workbench\/contrib\/debug\/browser\/debug\.contribution/u);
+  assert.match(codeEntry, /workbench\/contrib\/extensionHost\/browser\/extensionHost\.contribution/u);
   assert.doesNotMatch(codeEntry, /editor\/editor\.academic\.all/u);
   assert.match(academicEntry, /editor\/editor\.academic\.all/u);
   assert.match(academicEntry, /workbench\/contrib\/academic\/browser\/academicEditor\.contribution/u);
   assert.doesNotMatch(academicEntry, /workbench\/contrib\/tasks/u);
   assert.doesNotMatch(academicEntry, /workbench\/contrib\/testing/u);
   assert.doesNotMatch(academicEntry, /workbench\/contrib\/debug/u);
+  assert.doesNotMatch(academicEntry, /workbench\/contrib\/extensionHost/u);
   assert.doesNotMatch(academicEntry, /editor\/editor\.code\.all/u);
   assert.match(electronCodeEntry, /editor\/editor\.code\.all/u);
   assert.match(electronCodeEntry, /workbench\/contrib\/codeEditor\/browser\/codeEditor\.contribution/u);
   assert.match(electronCodeEntry, /workbench\/contrib\/tasks\/browser\/tasks\.contribution/u);
   assert.match(electronCodeEntry, /workbench\/contrib\/testing\/browser\/testing\.contribution/u);
   assert.match(electronCodeEntry, /workbench\/contrib\/debug\/browser\/debug\.contribution/u);
+  assert.match(electronCodeEntry, /workbench\/contrib\/extensionHost\/browser\/extensionHost\.contribution/u);
   assert.doesNotMatch(electronCodeEntry, /editor\/editor\.academic\.all/u);
   assert.match(electronAcademicEntry, /editor\/editor\.academic\.all/u);
   assert.match(electronAcademicEntry, /workbench\/contrib\/academic\/browser\/academicEditor\.contribution/u);
   assert.doesNotMatch(electronAcademicEntry, /workbench\/contrib\/tasks/u);
   assert.doesNotMatch(electronAcademicEntry, /workbench\/contrib\/testing/u);
   assert.doesNotMatch(electronAcademicEntry, /workbench\/contrib\/debug/u);
+  assert.doesNotMatch(electronAcademicEntry, /workbench\/contrib\/extensionHost/u);
   assert.doesNotMatch(electronAcademicEntry, /editor\/editor\.code\.all/u);
 });
 

@@ -39,7 +39,7 @@ class FakeHotContext implements ViteDevHotContext {
       this.respond(request, {
         serverInfo: { name: "zeta-app-server", version: "0.1.0" },
         schemaHash: APP_SERVER_SCHEMA_HASH,
-        capabilities: { sessions: true, threads: true, turns: true },
+        capabilities: { sessions: true, threads: true, turns: true, extensionHost: true },
         slashCommands: [],
       });
     } else if (request.method === "session/list") {

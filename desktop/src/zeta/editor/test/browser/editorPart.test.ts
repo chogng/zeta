@@ -3,6 +3,7 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import { URI } from "../../../base/common/uri.js";
 import { type TextModelReference } from "../../common/services/textModelService.js";
+import { LanguageFeaturesService } from "../../common/services/languageService.js";
 import { TextModel } from "../../common/model/textModel.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
@@ -91,6 +92,37 @@ test("Aster editor part derives indentation folds and projects their gutter cont
   assert.deepEqual([...container.querySelectorAll<HTMLElement>(".aster-editor-line")].map(line => line.dataset.logicalLineIndex), ["0", "2"]);
 
   editorPart.dispose();
+  dom.window.close();
+});
+
+test("Aster editor disposal cancels an in-flight folding provider before late results project", async () => {
+  const dom = new JSDOM("<!doctype html><body><main></main></body>");
+  dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+  const container = dom.window.document.querySelector<HTMLElement>("main")!;
+  const model = new TextModel("root\n  child\nafter");
+  const reference = modelReference(URI.file("C:\\project\\async-fold.txt"), model);
+  using languageFeatures = new LanguageFeaturesService();
+  let resolveRanges: ((ranges: readonly { readonly startLineIndex: number; readonly endLineIndex: number }[]) => void) | undefined;
+  let providerSignal: AbortSignal | undefined;
+  using registration = languageFeatures.registerFoldingRangeProvider({
+    languageIds: ["plaintext"],
+    provideFoldingRanges: (_request, signal) => {
+      providerSignal = signal;
+      return new Promise(resolve => { resolveRanges = resolve; });
+    },
+  });
+  const errors: unknown[] = [];
+  const editorPart = new EditorPart({ container, input: { resource: reference.resource, label: "async-fold.txt" }, languageId: "plaintext", modelReference: reference, languageFeaturesService: languageFeatures, onLanguageError: error => errors.push(error) });
+
+  assert.equal(providerSignal?.aborted, false);
+  editorPart.dispose();
+  assert.equal(providerSignal?.aborted, true);
+  resolveRanges?.([{ startLineIndex: 0, endLineIndex: 1 }]);
+  await Promise.resolve();
+  await Promise.resolve();
+
+  assert.deepEqual(errors, []);
+  assert.equal(container.children.length, 0);
   dom.window.close();
 });
 

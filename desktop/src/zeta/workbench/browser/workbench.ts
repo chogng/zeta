@@ -171,10 +171,6 @@ import { createEditorLineGutterDecorations } from "./parts/editor/editorGutterDe
 import { installWorkbenchServiceContributions } from "./workbenchServiceContributions.js";
 import { WorkbenchInteractionServices } from "./workbenchInteractionServices.js";
 import { AppServerConnectionStateObserver } from "./appServerConnectionStateObserver.js";
-import { AppServerExtensionHostService } from "../services/extensionHost/browser/appServerExtensionHostService.js";
-import { IExtensionHostService } from "../services/extensionHost/common/extensionHostService.js";
-import { ITaskService } from "../services/tasks/common/taskService.js";
-import { ITestingService } from "../services/testing/common/testingService.js";
 
 /** Host-specific inputs required to construct a workbench. */
 export interface IStartWorkbenchOptions {
@@ -361,11 +357,8 @@ export class Workbench extends DisposableOwner {
     this.workbenchWindow = workbenchWindow;
     this.storage = storage;
     services.set(IStorageService, storage);
-    installWorkbenchServiceContributions({ services, rendererHost: api, fileService, workspaceContext, terminalService, storageService: storage, own: value => this.own(value) });
-    const extensionHostService = this.own(new AppServerExtensionHostService({ api: api.extensionHost, languageFeatures: languageFeaturesService, tasks: services.get(ITaskService), testing: services.get(ITestingService) }));
-    services.set(IExtensionHostService, extensionHostService);
-    const extensionHostReady = extensionHostService.start();
-    void extensionHostReady.catch(error => console.error("Executable Extension Host activation failed", error));
+    const serviceContributionReady: Promise<void>[] = [];
+    installWorkbenchServiceContributions({ services, rendererHost: api, fileService, workspaceContext, terminalService, storageService: storage, own: value => this.own(value), blockRestorationUntil: operation => serviceContributionReady.push(operation) });
     services.set(IAccessibleViewInformationService, this.own(new AccessibleViewInformationService(storage)));
     const themeService = this.own(new ThemeService(
       resolveWorkbenchColorTheme(
@@ -726,7 +719,7 @@ export class Workbench extends DisposableOwner {
     void sessionService.initialize();
     contributions.advance(WorkbenchPhase.BlockRestore);
     layoutService.layout();
-    this.whenRestored = this.completeStartupRestoration([extensionReady, extensionHostReady], workingCopyBackups, editor, contributions);
+    this.whenRestored = this.completeStartupRestoration([extensionReady, ...serviceContributionReady], workingCopyBackups, editor, contributions);
     this.defer(() => {
       void storage.flush(WillSaveStateReason.SHUTDOWN);
     });
