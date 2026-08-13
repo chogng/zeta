@@ -78,6 +78,7 @@ impl ModelService for TestModel {
                     message.content.iter().find_map(|content| match content {
                         ContentPart::Text(text) => Some(text.as_str()),
                         ContentPart::ImageUrl { .. } => None,
+                        ContentPart::ImageAttachment { .. } => None,
                     })
                 }
                 ModelInputItem::ToolResult(_) => None,
@@ -222,7 +223,12 @@ fn in_process_client_uses_session_first_contract_and_canonical_updates() {
                         text: "hello".into(),
                     },
                     InputItem::Image {
-                        url: "https://example.test/image.png".into(),
+                        url: concat!(
+                            "data:image/png;base64,",
+                            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwC",
+                            "AAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+                        )
+                        .into(),
                     },
                 ],
             },
@@ -268,8 +274,7 @@ fn in_process_client_uses_session_first_contract_and_canonical_updates() {
     assert_eq!(snapshot.thread.turns[0].status, TurnStatus::Completed);
     assert!(matches!(
         &snapshot.thread.turns[0].items[1],
-        ThreadItem::UserImage { url, .. }
-            if url == "https://example.test/image.png"
+        ThreadItem::UserImageAttachment { .. }
     ));
 }
 

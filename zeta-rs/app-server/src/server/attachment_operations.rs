@@ -26,8 +26,8 @@ impl AppServer {
         params: &Value,
     ) -> Result<Value, RpcError> {
         let params: AttachmentUploadStartParams = decode(params)?;
-        let expected_bytes = usize::try_from(params.encoded_bytes)
-            .map_err(|_| invalid_attachment_params())?;
+        let expected_bytes =
+            usize::try_from(params.encoded_bytes).map_err(|_| invalid_attachment_params())?;
         let upload_id = self
             .attachment_uploads
             .lock()
@@ -107,10 +107,7 @@ impl AppServer {
         result(&())
     }
 
-    pub(super) fn attachment_import_remote(
-        &self,
-        params: &Value,
-    ) -> Result<Value, RpcError> {
+    pub(super) fn attachment_import_remote(&self, params: &Value) -> Result<Value, RpcError> {
         let params: AttachmentImportRemoteParams = decode(params)?;
         let attachment = self
             .sessions

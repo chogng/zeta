@@ -55,18 +55,18 @@ use zeta_model_provider_config::ProviderConfigRegistry;
 use zeta_models_manager::CatalogQuery;
 use zeta_models_manager::ModelRequirements;
 use zeta_models_manager::ModelsManager;
+use zeta_plugin_marketplace::RemotePluginMarketplace;
+use zeta_plugin_marketplace::RemotePluginMarketplaceConfig;
 use zeta_plugins::PluginActivationAuthority;
 use zeta_plugins::PluginActivationSnapshot;
-use zeta_plugins::PluginMarketplace;
-use zeta_plugins::PluginMarketplaceMode;
-use zeta_plugins::PluginMarketplaceService;
 use zeta_plugins::PluginAuthorityCommand;
 use zeta_plugins::PluginAuthorityCommandId;
 use zeta_plugins::PluginAuthorityCommandRequest;
+use zeta_plugins::PluginMarketplace;
+use zeta_plugins::PluginMarketplaceMode;
+use zeta_plugins::PluginMarketplaceService;
 use zeta_plugins::PluginProfileRequest;
 use zeta_plugins::PluginProfileRequestEnablement;
-use zeta_plugin_marketplace::RemotePluginMarketplace;
-use zeta_plugin_marketplace::RemotePluginMarketplaceConfig;
 use zeta_protocol::ContextWindow;
 use zeta_rollout::LocalStateRepository;
 use zeta_secrets::SecretStore;
@@ -184,6 +184,7 @@ pub struct LocalAppServerOptions {
     connector_runtime: Option<LocalConnectorRuntime>,
     plugin_marketplaces: Vec<(PathBuf, PluginMarketplaceMode)>,
     remote_plugin_marketplaces: Vec<RemotePluginMarketplaceConfig>,
+    product_services: Option<crate::LocalProductServicesConfig>,
 }
 
 impl LocalAppServerOptions {
@@ -200,6 +201,7 @@ impl LocalAppServerOptions {
             connector_runtime: None,
             plugin_marketplaces: Vec::new(),
             remote_plugin_marketplaces: Vec::new(),
+            product_services: None,
         }
     }
 
@@ -306,6 +308,12 @@ impl LocalAppServerOptions {
         self.remote_plugin_marketplaces.push(marketplace);
         self
     }
+
+    /// Installs distribution-pinned Marketplace roots and public OAuth product adapters.
+    pub fn with_product_services(mut self, services: crate::LocalProductServicesConfig) -> Self {
+        self.product_services = Some(services);
+        self
+    }
 }
 
 impl fmt::Debug for LocalAppServerOptions {
@@ -334,6 +342,10 @@ impl fmt::Debug for LocalAppServerOptions {
             .field(
                 "remote_plugin_marketplace_count",
                 &self.remote_plugin_marketplaces.len(),
+            )
+            .field(
+                "product_services_injected",
+                &self.product_services.is_some(),
             )
             .finish()
     }
@@ -364,6 +376,7 @@ impl PartialEq for LocalAppServerOptions {
             }
             && self.plugin_marketplaces == other.plugin_marketplaces
             && self.remote_plugin_marketplaces == other.remote_plugin_marketplaces
+            && self.product_services == other.product_services
     }
 }
 
@@ -619,15 +632,20 @@ pub fn open_local_app_server_with_code_index_providers(
     mut options: LocalAppServerOptions,
     providers: LocalCodeIndexProviders,
 ) -> Result<AppServer, OpenAppServerError> {
+    let product_services = options.product_services.take();
+    if let Some(services) = &product_services {
+        options
+            .remote_plugin_marketplaces
+            .extend(services.marketplaces.iter().cloned());
+    }
     if options.workspace.is_none()
         && let Some(workspace_root) = &options.workspace_root
     {
         options.workspace = Some(default_workspace_config(workspace_root)?);
     }
-    let image_store = zeta_attachments::FileImageAttachmentStore::open(
-        options.profile_root.join("attachments"),
-    )
-    .map_err(|error| OpenAppServerError(error.to_string()))?;
+    let image_store =
+        zeta_attachments::FileImageAttachmentStore::open(options.profile_root.join("attachments"))
+            .map_err(|error| OpenAppServerError(error.to_string()))?;
     let remote_images = zeta_attachments::SafeRemoteImageFetcher::production()
         .map_err(|error| OpenAppServerError(error.to_string()))?;
     let image_attachments = Arc::new(
@@ -663,7 +681,7 @@ pub fn open_local_app_server_with_code_index_providers(
     let user_config = config
         .read_snapshot()
         .map_err(|error| OpenAppServerError(error.0))?;
-    let connector_runtime = match options.connector_runtime.take() {
+    let mut connector_runtime = match options.connector_runtime.take() {
         Some(runtime) => Some(runtime),
         None => {
             let secrets = Arc::new(
@@ -680,6 +698,30 @@ pub fn open_local_app_server_with_code_index_providers(
             )?)
         }
     };
+    let plugin_marketplaces = match connector_runtime
+        .as_mut()
+        .and_then(|runtime| runtime.plugin_authority.as_ref())
+    {
+        Some(authority)
+            if !options.plugin_marketplaces.is_empty()
+                || !options.remote_plugin_marketplaces.is_empty() =>
+        {
+            let service = open_plugin_marketplaces(
+                authority,
+                &options.plugin_marketplaces,
+                &options.remote_plugin_marketplaces,
+                &user_config,
+            )?;
+            if let Some(runtime) = &mut connector_runtime {
+                runtime.reconcile_plugin_activation()?;
+            }
+            Some(service)
+        }
+        _ => None,
+    };
+    if let (Some(runtime), Some(services)) = (&mut connector_runtime, product_services) {
+        configure_product_connector_oauth(runtime, services.connector_oauth)?;
+    }
     let workspace = options.workspace.map(|workspace| {
         Arc::new(WorkspaceConfigTracker::new(WorkspaceConfigStore::open(
             workspace.config_path,
@@ -777,42 +819,9 @@ pub fn open_local_app_server_with_code_index_providers(
         server = server.with_connector_service(Arc::clone(&connectors.service));
         if let Some(authority) = &connectors.plugin_authority {
             server = server.with_plugin_authority(authority.clone());
-            if !options.plugin_marketplaces.is_empty()
-                || !options.remote_plugin_marketplaces.is_empty()
-            {
-                let mut marketplaces = options
-                    .plugin_marketplaces
-                    .iter()
-                    .map(|(root, mode)| PluginMarketplace::open(root, *mode))
-                    .collect::<Result<Vec<_>, _>>()
-                    .map_err(|error| OpenAppServerError(error.to_string()))?;
-                let (remote_marketplaces, revoked, remote_state) =
-                    sync_remote_marketplaces(&options.remote_plugin_marketplaces)?;
-                marketplaces.extend(remote_marketplaces);
-                reconcile_marketplace_revocations(authority, &revoked, &remote_state)?;
-                let service = PluginMarketplaceService::new(authority.clone(), marketplaces)
-                    .map_err(|error| OpenAppServerError(error.to_string()))?;
-                let requests = user_config.values.plugins.requests.values().map(|request| {
-                    Ok(PluginProfileRequest {
-                        id: zeta_plugins::PluginId::new(request.plugin_id.as_str())
-                            .map_err(|error| OpenAppServerError(error.to_string()))?,
-                        version: zeta_plugins::PluginVersion::new(request.version.as_str())
-                            .map_err(|error| OpenAppServerError(error.to_string()))?,
-                        enablement: match request.enablement {
-                            zeta_config::PluginRequestEnablement::Disabled => {
-                                PluginProfileRequestEnablement::Disabled
-                            }
-                            zeta_config::PluginRequestEnablement::Enabled => {
-                                PluginProfileRequestEnablement::Enabled
-                            }
-                        },
-                    })
-                });
-                service
-                    .reconcile_profile(requests.collect::<Result<Vec<_>, _>>()?)
-                    .map_err(|error| OpenAppServerError(error.to_string()))?;
-                server = server.with_plugin_marketplaces(service);
-            }
+        }
+        if let Some(service) = plugin_marketplaces.clone() {
+            server = server.with_plugin_marketplaces(service);
         }
         if let Some(oauth) = &connectors.oauth {
             server = server.with_connector_oauth_service(Arc::clone(oauth));
@@ -1537,6 +1546,106 @@ fn sync_remote_marketplaces(
     Ok((marketplaces, revoked, revisions.join(",")))
 }
 
+fn open_plugin_marketplaces(
+    authority: &PluginActivationAuthority,
+    local: &[(PathBuf, PluginMarketplaceMode)],
+    remote: &[RemotePluginMarketplaceConfig],
+    user_config: &zeta_config::ResolvedConfigSnapshot,
+) -> Result<PluginMarketplaceService, OpenAppServerError> {
+    let mut marketplaces = local
+        .iter()
+        .map(|(root, mode)| PluginMarketplace::open(root, *mode))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(open_error)?;
+    let (remote_marketplaces, revoked, remote_state) = sync_remote_marketplaces(remote)?;
+    marketplaces.extend(remote_marketplaces);
+    reconcile_marketplace_revocations(authority, &revoked, &remote_state)?;
+    let service =
+        PluginMarketplaceService::new(authority.clone(), marketplaces).map_err(open_error)?;
+    let requests = user_config.values.plugins.requests.values().map(|request| {
+        Ok(PluginProfileRequest {
+            id: zeta_plugins::PluginId::new(request.plugin_id.as_str()).map_err(open_error)?,
+            version: zeta_plugins::PluginVersion::new(request.version.as_str())
+                .map_err(open_error)?,
+            enablement: match request.enablement {
+                zeta_config::PluginRequestEnablement::Disabled => {
+                    PluginProfileRequestEnablement::Disabled
+                }
+                zeta_config::PluginRequestEnablement::Enabled => {
+                    PluginProfileRequestEnablement::Enabled
+                }
+            },
+        })
+    });
+    service
+        .reconcile_profile(requests.collect::<Result<Vec<_>, _>>()?)
+        .map_err(open_error)?;
+    Ok(service)
+}
+
+fn configure_product_connector_oauth(
+    runtime: &mut LocalConnectorRuntime,
+    configurations: Vec<crate::product_services::ProductConnectorOAuthConfig>,
+) -> Result<(), OpenAppServerError> {
+    let http: Arc<dyn zeta_http_client::HttpClient> = Arc::new(
+        zeta_http_client::UreqHttpClient::new()
+            .map_err(|error| OpenAppServerError(error.to_string()))?,
+    );
+    let mut browser = Vec::new();
+    let mut device = Vec::new();
+    for configuration in configurations {
+        match configuration {
+            crate::product_services::ProductConnectorOAuthConfig::GitHubBrokered {
+                connector_id,
+                config,
+            } => {
+                let provider = zeta_connectors_extension::GitHubBrokeredOAuthProvider::new(
+                    config,
+                    Arc::clone(&http),
+                )
+                .map_err(|error| OpenAppServerError(error.to_string()))?;
+                browser.push((
+                    connector_id,
+                    Arc::new(provider)
+                        as Arc<dyn zeta_connectors_extension::ConnectorOAuthProvider>,
+                ));
+            }
+            crate::product_services::ProductConnectorOAuthConfig::GitHubDevice {
+                connector_id,
+                config,
+            } => {
+                let provider = zeta_connectors_extension::GitHubDeviceOAuthProvider::new(
+                    config,
+                    Arc::clone(&http),
+                )
+                .map_err(|error| OpenAppServerError(error.to_string()))?;
+                device.push((
+                    connector_id,
+                    Arc::new(provider)
+                        as Arc<dyn zeta_connectors_extension::ConnectorDeviceOAuthProvider>,
+                ));
+            }
+        }
+    }
+    if !browser.is_empty() {
+        runtime.oauth = Some(Arc::new(
+            zeta_connectors_extension::ConnectorOAuthService::new(
+                Arc::clone(&runtime.service),
+                browser,
+            ),
+        ));
+    }
+    if !device.is_empty() {
+        runtime.device_oauth = Some(Arc::new(
+            zeta_connectors_extension::ConnectorDeviceOAuthService::new(
+                Arc::clone(&runtime.service),
+                device,
+            ),
+        ));
+    }
+    Ok(())
+}
+
 fn reconcile_marketplace_revocations(
     authority: &PluginActivationAuthority,
     revoked: &[zeta_plugins::InstalledPluginRef],
@@ -1551,11 +1660,9 @@ fn reconcile_marketplace_revocations(
         digest.update(b"zeta-marketplace-revocation-v1\0");
         digest.update(remote_state.as_bytes());
         digest.update(package.digest.as_str().as_bytes());
-        let command_id = PluginAuthorityCommandId::new(format!(
-            "marketplace-revoke-{:x}",
-            digest.finalize()
-        ))
-        .map_err(open_error)?;
+        let command_id =
+            PluginAuthorityCommandId::new(format!("marketplace-revoke-{:x}", digest.finalize()))
+                .map_err(open_error)?;
         authority
             .apply(PluginAuthorityCommandRequest {
                 command_id,

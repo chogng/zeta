@@ -23,3 +23,7 @@ mod archive_tests;
 #[cfg(test)]
 #[path = "metadata_tests.rs"]
 mod metadata_tests;
+
+#[cfg(test)]
+#[path = "remote_distribution_tests.rs"]
+mod remote_distribution_tests;

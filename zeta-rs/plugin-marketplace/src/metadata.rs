@@ -98,11 +98,7 @@ fn collect_delegated_targets(
                 .ok_or_else(metadata_error)?;
             if role.name != format!("publishers/{publisher}")
                 || name.raw()
-                    != format!(
-                        "plugins/{}/{}.zip",
-                        metadata.id.as_str(),
-                        metadata.version
-                    )
+                    != format!("plugins/{}/{}.zip", metadata.id.as_str(), metadata.version)
             {
                 return Err(metadata_error());
             }

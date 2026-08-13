@@ -8,6 +8,7 @@ export interface PluginPackageView {
   readonly enabled: boolean;
   readonly granted: boolean;
   readonly effective: boolean;
+  readonly revoked: boolean;
 }
 
 export interface PluginCatalogView {
@@ -18,7 +19,8 @@ export interface PluginCatalogView {
 
 export interface PluginMarketplacePackageView {
   readonly marketplaceId: string;
-  readonly marketplaceMode: "managed" | "localDevelopment";
+  readonly marketplaceMode: "managed" | "remoteManaged" | "localDevelopment";
+  readonly marketplaceRevision: string;
   readonly id: string;
   readonly version: string;
   readonly digest: string;

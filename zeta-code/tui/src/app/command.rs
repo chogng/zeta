@@ -17,6 +17,10 @@ pub(crate) enum AppCommand {
     Interrupt,
     Suspend,
     CopyLastResponse,
+    ConnectConnectorDeviceOAuth {
+        connector_id: String,
+        connection_generation: u64,
+    },
     DisconnectConnector {
         connector_id: String,
     },

@@ -65,7 +65,7 @@ export class PluginSettingsPane extends DisposableOwner {
     title.textContent = `${plugin.id} · ${plugin.version}`;
     const source = this.document.createElement("p");
     source.className = "zeta-connector-description";
-    source.textContent = `${plugin.marketplaceId} · ${plugin.marketplaceMode === "managed" ? "Managed Marketplace" : "Local development"}`;
+    source.textContent = `${plugin.marketplaceId} · ${marketplaceModeLabel(plugin.marketplaceMode)}`;
     const feedback = this.document.createElement("p");
     feedback.className = "zeta-integration-feedback";
     feedback.setAttribute("role", "status");
@@ -121,8 +121,17 @@ export class PluginSettingsPane extends DisposableOwner {
 }
 
 function status(plugin: PluginPackageView): string {
+  if (plugin.revoked) return "Revoked";
   if (plugin.effective) return "Active";
   if (plugin.enabled && !plugin.granted) return "Enabled · grant required";
   if (!plugin.enabled && plugin.granted) return "Granted · disabled";
   return "Installed";
+}
+
+function marketplaceModeLabel(mode: PluginMarketplacePackageView["marketplaceMode"]): string {
+  switch (mode) {
+    case "managed": return "Managed Marketplace";
+    case "remoteManaged": return "Verified remote Marketplace";
+    case "localDevelopment": return "Local development";
+  }
 }

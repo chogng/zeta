@@ -6,9 +6,11 @@
 > content-addressed store、Marketplace-first install/staged update/rollback、profile reconcile、durable installed/enabled/granted/effective authority、exact `PluginActivationSnapshot`、live generation publish 与 invocation drain 已实现；Connector domain 已提取到
 > `zeta-rs/connectors`，Plugin projection、durable authority 与 API-token connect/revoke 位于
 > `zeta-rs/ext/connectors`；App Server 已能从注入的 activation 自动接线 Connector 与 MCP，通用 OAuth
-> PKCE 状态机、App Server control plane、Desktop browser callback 与 GitHub provider 已实现；
-> PL2–PL4 Proposed
+> PKCE/device 状态机、App Server control plane、Desktop/TUI 产品入口与 GitHub providers 已实现；
+> TUF 远端 Marketplace、delegated publisher、完整离线缓存、revocation tombstone 与安全 ZIP ingestion
+> 已实现；PL4 Proposed
 > 当前 crate 实现契约：[`zeta-rs/plugins/README.md`](../zeta-rs/plugins/README.md)
+> 远端分发实现契约：[`zeta-rs/plugin-marketplace/README.md`](../zeta-rs/plugin-marketplace/README.md)
 > Connector account/lifecycle：[`connectors.md`](connectors.md)
 > MCP runtime：[`mcp.md`](mcp.md)
 > Skill runtime：[`skills.md`](skills.md)
@@ -594,8 +596,12 @@ runtime 不可用，但不会把 Plugin 标成未安装。
 
 已实现 mutation 使用 `CommandId + expectedRevision + exact package payload`；安装入口不会接受 Renderer
 传入的任意宿主文件路径。`Managed` Marketplace root 由产品分发层注册，`LocalDevelopment` 仅在 host
-显式开启时可用。当前 Marketplace 是 materialized catalog ingestion；公网 catalog 下载、publisher
-signature/revocation feed 和 download progress 尚未实现。最终 installed/active state 始终来自可读取 authority。
+显式开启时可用。`RemoteManaged` Marketplace 已通过 host-pinned TUF root 同步 HTTPS catalog：
+timestamp/snapshot/targets 的 threshold、rollback 与 expiry 检查由 TUF verifier 执行；package 必须来自
+`publishers/<publisher>` delegated role，并同时通过 target hash/length、受限 ZIP extraction、manifest
+identity 与 Zeta normalized digest。全仓库缓存只有在所有 package 验证成功后才替换；transport 失败可打开
+仍未过期的最后完整缓存，签名/过期/package 失败不能降级。顶层 revocation target 会写入 durable exact-package
+tombstone，不因后续 feed 缺项自动恢复。download progress 与 catalog 搜索仍未实现。
 
 客户端必须展示：
 
@@ -733,8 +739,8 @@ content-addressed object、重新验证 exact digest，再原子 promote。mutab
 ### 阶段 PL3：远端目录、signature 与更新增强
 
 - ✅ host-registered Marketplace metadata 与 digest-pinned materialized package ingestion；
-- 远端 catalog/download transport；
-- publisher signature、trust/revocation；
+- ✅ TUF 远端 catalog/download、完整离线 cache 与 fail-closed verification；
+- ✅ delegated publisher signature、root rotation/expiry/rollback 与顶层 revocation feed；
 - permission/contribution diff；
 - ✅ side-by-side staged update 与 exact rollback；GC 尚未完成。
 

@@ -1,7 +1,7 @@
-use crate::supports_session_event_schema_version;
+use crate::CURRENT_SESSION_EVENT_SCHEMA_VERSION;
 use crate::SessionStoreError;
 use crate::StoredSessionEvent;
-use crate::CURRENT_SESSION_EVENT_SCHEMA_VERSION;
+use crate::supports_session_event_schema_version;
 use zeta_protocol::SessionId;
 
 #[derive(Clone, Debug, Eq, PartialEq)]

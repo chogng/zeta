@@ -157,6 +157,7 @@ impl DebugAdapterService {
             return Err(DebugAdapterError::Busy);
         }
         let root = self.process_execution.root().canonical_path();
+        let _runtime_guard = self.runtime.enter();
         let mut process = tokio::process::Command::new(&command.program);
         process
             .args(&command.arguments)
@@ -364,10 +365,7 @@ fn spawn_stderr_reader(
 ) {
     runtime.spawn(async move {
         let mut buffer = vec![0; 8192];
-        loop {
-            let Ok(read) = stderr.read(&mut buffer).await else {
-                break;
-            };
+        while let Ok(read) = stderr.read(&mut buffer).await {
             if read == 0 {
                 break;
             }

@@ -102,7 +102,7 @@ fn theme_pane_is_numbered_fixed_and_not_searchable() {
         .map(|line| {
             line.spans
                 .iter()
-                .map(|span| span.content.as_ref())
+                .map(|span| span.content.as_ref() as &str)
                 .collect::<String>()
         })
         .collect::<Vec<_>>();
@@ -115,7 +115,7 @@ fn theme_pane_is_numbered_fixed_and_not_searchable() {
         .unwrap()
         .spans
         .iter()
-        .map(|span| span.content.as_ref())
+        .map(|span| span.content.as_ref() as &str)
         .collect::<String>();
     assert_eq!(caption, "Syntax palette: Palette 1");
     let height = crate::components::pane::desired_height(state.desired_height(80));

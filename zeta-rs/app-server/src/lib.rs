@@ -10,6 +10,7 @@ mod git_service;
 mod local;
 mod local_tools;
 mod model_catalog;
+mod product_services;
 mod resource_store;
 mod review;
 mod server;
@@ -31,13 +32,14 @@ pub use local::{
     BuiltInSkillRoot, LocalAppServerOptions, LocalCodeIndexProviders, LocalConnectorRuntime,
     LocalWorkspaceConfigOptions, SessionStateMode,
 };
-pub use zeta_plugin_marketplace::RemotePluginMarketplaceConfig;
+pub use product_services::LocalProductServicesConfig;
 pub use review::{ProviderReviewModel, ReviewModelResolutionError, ReviewModelResolver};
 pub use server::AppServer;
 pub use server::CodeIndexSemanticModels;
 pub use server::ConnectionNotifications;
 pub use server::ConnectionState;
 pub use zeta_extensions::{ExtensionRoot, ExtensionRootKind};
+pub use zeta_plugin_marketplace::RemotePluginMarketplaceConfig;
 pub use zeta_slash_commands::{SlashCommandCatalog, SlashCommandCatalogError};
 
 #[cfg(test)]

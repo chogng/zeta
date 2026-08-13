@@ -25,6 +25,7 @@ use crate::PluginPackageStore;
 
 mod persistence;
 
+use persistence::AuthorityStateRef;
 use persistence::FileAuthorityPersistence;
 use persistence::PersistedAuthority;
 use persistence::PersistedCommandReceipt;
@@ -461,16 +462,16 @@ impl PluginActivationAuthority {
         receipts.insert(request.command_id.as_str().to_string(), receipt);
         self.inner
             .persistence
-            .persist(&PersistedAuthority::from_state(
-                result_revision,
+            .persist(&PersistedAuthority::from_state(AuthorityStateRef {
+                revision: result_revision,
                 activation_generation,
-                &installed,
-                &enabled,
-                &granted,
-                &revoked,
-                &active,
-                &receipts,
-            ))?;
+                installed: &installed,
+                enabled: &enabled,
+                granted: &granted,
+                revoked: &revoked,
+                active: &active,
+                receipts: &receipts,
+            }))?;
         state.revision = result_revision;
         state.activation_generation = activation_generation;
         let removed_object = match &request.command {

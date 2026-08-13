@@ -22,10 +22,7 @@ pub struct RemoteMarketplaceError {
 }
 
 impl RemoteMarketplaceError {
-    pub(crate) fn new(
-        kind: RemoteMarketplaceErrorKind,
-        message: impl Into<String>,
-    ) -> Self {
+    pub(crate) fn new(kind: RemoteMarketplaceErrorKind, message: impl Into<String>) -> Self {
         Self {
             kind,
             message: message.into(),

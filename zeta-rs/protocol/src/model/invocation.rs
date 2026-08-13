@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
-use crate::ReasoningEffort;
 use crate::ImageAttachmentRef;
+use crate::ReasoningEffort;
 use crate::ToolCallId;
 use crate::ToolName;
 use schemars::JsonSchema;
@@ -59,8 +59,9 @@ fn sanitize_content(
 ) {
     for part in content {
         let detail = match part {
-            ContentPart::ImageUrl { detail, .. }
-            | ContentPart::ImageAttachment { detail, .. } => detail,
+            ContentPart::ImageUrl { detail, .. } | ContentPart::ImageAttachment { detail, .. } => {
+                detail
+            }
             ContentPart::Text(_) => continue,
         };
         let requested = *detail;
@@ -141,7 +142,10 @@ pub enum ContentPart {
         attachment: ImageAttachmentRef,
         detail: ImageDetail,
     },
-    ImageUrl { url: String, detail: ImageDetail },
+    ImageUrl {
+        url: String,
+        detail: ImageDetail,
+    },
 }
 
 #[derive(JsonSchema, Deserialize)]
@@ -151,12 +155,17 @@ pub enum ContentPart {
     rename_all_fields = "camelCase"
 )]
 enum ContentPartWire {
-    Text { text: String },
+    Text {
+        text: String,
+    },
     ImageAttachment {
         attachment: ImageAttachmentRef,
         detail: ImageDetail,
     },
-    ImageUrl { url: String, detail: ImageDetail },
+    ImageUrl {
+        url: String,
+        detail: ImageDetail,
+    },
 }
 
 #[derive(Serialize)]
@@ -166,12 +175,17 @@ enum ContentPartWire {
     rename_all_fields = "camelCase"
 )]
 enum ContentPartRef<'a> {
-    Text { text: &'a str },
+    Text {
+        text: &'a str,
+    },
     ImageAttachment {
         attachment: &'a ImageAttachmentRef,
         detail: ImageDetail,
     },
-    ImageUrl { url: &'a str, detail: ImageDetail },
+    ImageUrl {
+        url: &'a str,
+        detail: ImageDetail,
+    },
 }
 
 impl Serialize for ContentPart {

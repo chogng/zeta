@@ -30,5 +30,6 @@ pub(crate) fn empty_config_snapshot() -> ConfigReadResult {
             automatic_context: SemanticCodeIndexAutomaticContextDto::Off,
             active_workspace_authorized: false,
         },
+        exec_policy_rules: Vec::new(),
     }
 }

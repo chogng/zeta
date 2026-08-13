@@ -1,15 +1,15 @@
 use super::connection::{from_sql_integer, open, sql_error, to_sql_integer};
-use rusqlite::{params, Connection, OptionalExtension, TransactionBehavior};
+use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use zeta_protocol::SessionId;
-use zeta_session_store::validate_session_append_batch;
-use zeta_session_store::validate_session_history;
 use zeta_session_store::AppendSessionBatchResult;
 use zeta_session_store::SessionEventBatch;
 use zeta_session_store::SessionStore;
 use zeta_session_store::SessionStoreError;
 use zeta_session_store::StoredSessionEvent;
+use zeta_session_store::validate_session_append_batch;
+use zeta_session_store::validate_session_history;
 
 /// SQLite implementation of the authoritative typed Session event store.
 pub struct SqliteSessionStore {

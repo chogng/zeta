@@ -12,11 +12,24 @@ use ts_rs::TS;
     rename_all_fields = "camelCase"
 )]
 pub enum UserInput {
-    Text { text: String },
-    ImageAttachment { attachment: ImageAttachmentRef },
+    Text {
+        text: String,
+    },
+    ImageAttachment {
+        attachment: ImageAttachmentRef,
+    },
     /// Legacy inline/remote image input. New clients should materialize an attachment first.
-    Image { url: String },
-    LocalImage { path: String },
-    Skill { skill: SkillRef },
-    Mention { name: String, path: String },
+    Image {
+        url: String,
+    },
+    LocalImage {
+        path: String,
+    },
+    Skill {
+        skill: SkillRef,
+    },
+    Mention {
+        name: String,
+        path: String,
+    },
 }

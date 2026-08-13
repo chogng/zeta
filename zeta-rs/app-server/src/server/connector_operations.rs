@@ -126,10 +126,7 @@ impl AppServer {
         result(&command_result_dto(result_value))
     }
 
-    pub(super) fn connector_device_oauth_start(
-        &self,
-        params: &Value,
-    ) -> Result<Value, RpcError> {
+    pub(super) fn connector_device_oauth_start(&self, params: &Value) -> Result<Value, RpcError> {
         let params: ConnectorDeviceOAuthStartParams = decode(params)?;
         let authorization = self
             .connector_device_oauth_service()?
@@ -153,10 +150,7 @@ impl AppServer {
         })
     }
 
-    pub(super) fn connector_device_oauth_poll(
-        &self,
-        params: &Value,
-    ) -> Result<Value, RpcError> {
+    pub(super) fn connector_device_oauth_poll(&self, params: &Value) -> Result<Value, RpcError> {
         let params: ConnectorDeviceOAuthPollParams = decode(params)?;
         let outcome = self
             .connector_device_oauth_service()?
@@ -176,10 +170,7 @@ impl AppServer {
         })
     }
 
-    pub(super) fn connector_device_oauth_cancel(
-        &self,
-        params: &Value,
-    ) -> Result<Value, RpcError> {
+    pub(super) fn connector_device_oauth_cancel(&self, params: &Value) -> Result<Value, RpcError> {
         let params: ConnectorOAuthCancelParams = decode(params)?;
         let outcome = self
             .connector_device_oauth_service()?
@@ -210,7 +201,8 @@ impl AppServer {
     pub(super) fn connector_oauth_revoke(&self, params: &Value) -> Result<Value, RpcError> {
         let params: ConnectorDisconnectParams = decode(params)?;
         let connector_id = ConnectorId::new(params.connector_id).map_err(|_| invalid_params())?;
-        let command_id = ConnectorCommandId::new(params.command_id).map_err(|_| invalid_params())?;
+        let command_id =
+            ConnectorCommandId::new(params.command_id).map_err(|_| invalid_params())?;
         let expected_generation = ConnectorSnapshotGeneration::new(params.expected_generation);
         let outcome = if self
             .connector_oauth
@@ -223,11 +215,8 @@ impl AppServer {
                 connector_id,
             )
         } else {
-            self.connector_device_oauth_service()?.revoke_and_disconnect(
-                command_id,
-                expected_generation,
-                connector_id,
-            )
+            self.connector_device_oauth_service()?
+                .revoke_and_disconnect(command_id, expected_generation, connector_id)
         }
         .map_err(connector_oauth_error)?;
         result(&ConnectorDisconnectResultDto {
@@ -348,9 +337,7 @@ fn connector_dto(
     let oauth_supported = browser_oauth_supported || device_oauth_supported;
     let oauth_refresh_supported = browser_oauth_supported;
     let oauth_revoke_supported = browser_oauth_supported
-        || device_oauth.is_some_and(|oauth| {
-            oauth.supports_remote_revoke(entry.definition().id())
-        });
+        || device_oauth.is_some_and(|oauth| oauth.supports_remote_revoke(entry.definition().id()));
     let connect_action = if oauth_supported {
         ConnectorAvailableActionDto::ConnectOAuth
     } else {

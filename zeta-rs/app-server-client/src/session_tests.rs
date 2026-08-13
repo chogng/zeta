@@ -199,6 +199,7 @@ impl ModelService for TestModel {
                     message.content.iter().find_map(|content| match content {
                         ContentPart::Text(text) => Some(text.as_str()),
                         ContentPart::ImageUrl { .. } => None,
+                        ContentPart::ImageAttachment { .. } => None,
                     })
                 }
                 ModelInputItem::ToolResult(_) => None,

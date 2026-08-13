@@ -364,12 +364,11 @@ impl ConnectorOAuthService {
                     let credential = self.credentials.load_connected_credential(connector_id)?;
                     let replacement = provider
                         .refresh(&definition, ConnectorOAuthRefreshRequest { credential })?;
-                    self.credentials
-                        .replace_connected_oauth_credential(
-                            connector_id,
-                            replacement.runtime_secret,
-                            replacement.secret,
-                        )?;
+                    self.credentials.replace_connected_oauth_credential(
+                        connector_id,
+                        replacement.runtime_secret,
+                        replacement.secret,
+                    )?;
                     Ok::<(), ConnectorOAuthError>(())
                 },
             )

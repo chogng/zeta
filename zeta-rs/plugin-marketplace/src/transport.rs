@@ -60,10 +60,7 @@ impl Transport for MarketplaceTransport {
             ));
         }
         if !response.is_success() {
-            return Err(TransportError::new(
-                TransportErrorKind::Other,
-                url.as_str(),
-            ));
+            return Err(TransportError::new(TransportErrorKind::Other, url.as_str()));
         }
         let body = Bytes::copy_from_slice(response.body());
         Ok(Box::pin(stream::once(async move { Ok(body) })))

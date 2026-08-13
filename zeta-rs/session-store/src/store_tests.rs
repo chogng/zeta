@@ -1,8 +1,8 @@
 use super::*;
-use crate::SessionEventId;
-use crate::SessionTimestamp;
 use crate::CURRENT_SESSION_EVENT_SCHEMA_VERSION;
 use crate::MINIMUM_SUPPORTED_SESSION_EVENT_SCHEMA_VERSION;
+use crate::SessionEventId;
+use crate::SessionTimestamp;
 use zeta_protocol::SessionEvent;
 use zeta_protocol::SessionId;
 

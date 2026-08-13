@@ -18,71 +18,20 @@ use crate::ConnectorCommandId;
 use crate::ConnectorCommandResult;
 use crate::ConnectorCredentialService;
 use crate::ConnectorDisconnectResult;
-use crate::ConnectorOAuthCredential;
-use crate::ConnectorOAuthCredentialReplacement;
 use crate::ConnectorOAuthError;
 use crate::ConnectorOAuthErrorKind;
 use crate::ConnectorOAuthFlowId;
-use crate::ConnectorOAuthRefreshRequest;
-use crate::ConnectorOAuthRevokeRequest;
+
+mod provider;
+
+pub use provider::ConnectorDeviceOAuthGrant;
+pub use provider::ConnectorDeviceOAuthPoll;
+pub use provider::ConnectorDeviceOAuthPollRequest;
+pub use provider::ConnectorDeviceOAuthProvider;
 
 const MAX_DEVICE_FLOW_LIFETIME: Duration = Duration::from_secs(30 * 60);
 const MAX_POLL_INTERVAL: Duration = Duration::from_secs(5 * 60);
 const SLOW_DOWN_INCREMENT: Duration = Duration::from_secs(5);
-
-/// Secret-bearing provider response that starts one OAuth device authorization grant.
-pub struct ConnectorDeviceOAuthGrant {
-    pub device_code: SecretValue,
-    pub user_code: String,
-    pub verification_uri: String,
-    pub expires_in: Duration,
-    pub poll_interval: Duration,
-}
-
-/// Provider poll input for one exact in-memory device code.
-pub struct ConnectorDeviceOAuthPollRequest<'a> {
-    pub device_code: &'a SecretValue,
-}
-
-/// Provider result for one protocol-compliant device authorization poll.
-pub enum ConnectorDeviceOAuthPoll {
-    Pending,
-    SlowDown,
-    Complete(ConnectorOAuthCredential),
-    Denied,
-    Expired,
-}
-
-/// Exact product/provider adapter for one Connector's OAuth device wire protocol.
-///
-/// Implementations own provider endpoints, public client identity, scopes, polling error mapping,
-/// refresh behavior, and remote revocation behavior. Provider errors must not contain secrets.
-pub trait ConnectorDeviceOAuthProvider: Send + Sync {
-    fn start(
-        &self,
-        connector: &ConnectorDefinition,
-    ) -> Result<ConnectorDeviceOAuthGrant, ConnectorOAuthError>;
-
-    fn poll(
-        &self,
-        connector: &ConnectorDefinition,
-        request: ConnectorDeviceOAuthPollRequest<'_>,
-    ) -> Result<ConnectorDeviceOAuthPoll, ConnectorOAuthError>;
-
-    fn refresh(
-        &self,
-        connector: &ConnectorDefinition,
-        request: ConnectorOAuthRefreshRequest,
-    ) -> Result<ConnectorOAuthCredentialReplacement, ConnectorOAuthError>;
-
-    fn revoke(
-        &self,
-        connector: &ConnectorDefinition,
-        request: ConnectorOAuthRevokeRequest,
-    ) -> Result<(), ConnectorOAuthError>;
-
-    fn supports_remote_revoke(&self) -> bool;
-}
 
 /// Retry identity and authority generation for one OAuth device attempt.
 pub struct ConnectorDeviceOAuthStartRequest {
@@ -170,25 +119,22 @@ impl ConnectorDeviceOAuthService {
             expires_in_seconds: ceil_seconds(grant.expires_in),
             poll_interval_seconds: ceil_seconds(grant.poll_interval),
         };
-        self.pending
-            .lock()
-            .map_err(|_| internal_error())?
-            .insert(
-                flow_id,
-                PendingDeviceOAuthAttempt {
-                    started_at: now,
-                    expires_in: grant.expires_in,
-                    next_poll_at: now + grant.poll_interval,
-                    poll_interval: grant.poll_interval,
-                    command_id: request.command_id,
-                    expected_generation: request.expected_generation,
-                    authority_generation: begin.generation,
-                    connector_id: request.connector_id,
-                    definition_digest: definition.digest(),
-                    connection_generation: request.connection_generation,
-                    device_code: grant.device_code,
-                },
-            );
+        self.pending.lock().map_err(|_| internal_error())?.insert(
+            flow_id,
+            PendingDeviceOAuthAttempt {
+                started_at: now,
+                expires_in: grant.expires_in,
+                next_poll_at: now + grant.poll_interval,
+                poll_interval: grant.poll_interval,
+                command_id: request.command_id,
+                expected_generation: request.expected_generation,
+                authority_generation: begin.generation,
+                connector_id: request.connector_id,
+                definition_digest: definition.digest(),
+                connection_generation: request.connection_generation,
+                device_code: grant.device_code,
+            },
+        );
         Ok(authorization)
     }
 
@@ -338,14 +284,15 @@ impl ConnectorDeviceOAuthService {
                 &definition_digest,
                 || {
                     let credential = self.credentials.load_connected_credential(connector_id)?;
-                    let replacement = provider
-                        .refresh(&definition, ConnectorOAuthRefreshRequest { credential })?;
-                    self.credentials
-                        .replace_connected_oauth_credential(
-                            connector_id,
-                            replacement.runtime_secret,
-                            replacement.secret,
-                        )?;
+                    let replacement = provider.refresh(
+                        &definition,
+                        crate::ConnectorOAuthRefreshRequest { credential },
+                    )?;
+                    self.credentials.replace_connected_oauth_credential(
+                        connector_id,
+                        replacement.runtime_secret,
+                        replacement.secret,
+                    )?;
                     Ok::<(), ConnectorOAuthError>(())
                 },
             )
@@ -383,7 +330,10 @@ impl ConnectorDeviceOAuthService {
                 &definition_digest,
                 || {
                     let credential = self.credentials.load_connected_credential(&connector_id)?;
-                    provider.revoke(&definition, ConnectorOAuthRevokeRequest { credential })
+                    provider.revoke(
+                        &definition,
+                        crate::ConnectorOAuthRevokeRequest { credential },
+                    )
                 },
             )
             .ok_or_else(connection_changed)??;
@@ -490,7 +440,9 @@ fn random_base64url() -> Result<String, ConnectorOAuthError> {
 }
 
 fn ceil_seconds(duration: Duration) -> u64 {
-    duration.as_secs().saturating_add(u64::from(duration.subsec_nanos() > 0))
+    duration
+        .as_secs()
+        .saturating_add(u64::from(duration.subsec_nanos() > 0))
 }
 
 fn provider_unavailable() -> ConnectorOAuthError {

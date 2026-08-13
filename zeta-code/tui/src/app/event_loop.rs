@@ -186,6 +186,29 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
 
             if let Some(action) = action {
                 match action {
+                    AppCommand::ConnectConnectorDeviceOAuth {
+                        connector_id,
+                        connection_generation,
+                    } => {
+                        if pending_request.is_none() {
+                            let mut request_client = client.clone();
+                            pending_request = spawn_request(
+                                "zeta-tui-connect-device-oauth",
+                                move || {
+                                    RequestCompletion::Presentation(
+                                        crate::features::connectors::connect_device_oauth(
+                                            &mut request_client,
+                                            connector_id,
+                                            connection_generation,
+                                        )
+                                        .map(AppEvent::ConnectorViewReplaced)
+                                        .map_err(|error| error.to_string()),
+                                    )
+                                },
+                                &mut app,
+                            );
+                        }
+                    }
                     AppCommand::ExecuteProductCommand(invocation) => {
                         if pending_request.is_none() {
                             let mut request_client = client.clone();

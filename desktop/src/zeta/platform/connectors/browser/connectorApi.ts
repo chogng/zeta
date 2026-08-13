@@ -18,9 +18,33 @@ export function createViteDevConnectorApi(connection: ViteDevAppServerConnection
   return {
     list: () => viteDevRequest(connection, "connector/list", {}),
     connectApiToken: params => viteDevRequest(connection, "connector/connect/apiToken", params),
-    connectOAuth: () => Promise.reject(new Error("Connector OAuth callback hosting is unavailable in this browser host")),
+    connectOAuth: params => connectDeviceOAuth(connection, params),
     disconnect: params => viteDevRequest(connection, "connector/disconnect", params),
     refreshOAuth: async connectorId => { await viteDevRequest(connection, "connector/oauth/refresh", { connectorId }); },
     revokeOAuth: params => viteDevRequest(connection, "connector/oauth/revoke", params),
   };
+}
+
+async function connectDeviceOAuth(connection: ViteDevAppServerConnection, params: Parameters<IConnectorApi["connectOAuth"]>[0]) {
+  const catalog = await viteDevRequest(connection, "connector/list", {});
+  const connector = catalog.connectors.find(candidate => candidate.id === params.connectorId);
+  if (!connector?.oauthMethods.includes("device")) throw new Error("Connector device OAuth is unavailable in this browser host");
+  const started = await viteDevRequest(connection, "connector/connect/oauth/device/start", params);
+  let completed = false;
+  try {
+    window.open(started.verificationUri, "_blank", "noopener,noreferrer");
+    await navigator.clipboard.writeText(started.userCode);
+    let waitSeconds = started.pollIntervalSeconds;
+    for (;;) {
+      await new Promise(resolve => setTimeout(resolve, Math.min(waitSeconds, 30) * 1_000));
+      const result = await viteDevRequest(connection, "connector/connect/oauth/device/poll", { flowId: started.flowId });
+      if (result.status === "connected") {
+        completed = true;
+        return result.command;
+      }
+      waitSeconds = result.retryAfterSeconds;
+    }
+  } finally {
+    if (!completed) await viteDevRequest(connection, "connector/connect/oauth/device/cancel", { flowId: started.flowId }).catch(() => undefined);
+  }
 }

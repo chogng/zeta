@@ -34,8 +34,8 @@ use zeta_skills_extension::SkillRuntime;
 use zeta_skills_extension::SkillWatcher;
 use zeta_typst::TypstCompiler;
 
-mod cloud_code_index_operations;
 mod attachment_operations;
+mod cloud_code_index_operations;
 mod code_index_operations;
 mod code_index_runtime;
 mod code_retrieval_operations;

@@ -66,4 +66,3 @@ pub struct AttachmentImportRemoteParams {
 pub struct AttachmentMaterializeResult {
     pub attachment: ImageAttachmentRef,
 }
-

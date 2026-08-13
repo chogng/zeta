@@ -12,11 +12,19 @@ use zeta_protocol::SkillRef;
     rename_all_fields = "camelCase"
 )]
 pub enum InputItem {
-    Text { text: String },
-    ImageAttachment { attachment: ImageAttachmentRef },
+    Text {
+        text: String,
+    },
+    ImageAttachment {
+        attachment: ImageAttachmentRef,
+    },
     /// Legacy transport form. New clients should use the attachment upload/import methods.
-    Image { url: String },
-    Skill { skill: SkillRef },
+    Image {
+        url: String,
+    },
+    Skill {
+        skill: SkillRef,
+    },
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

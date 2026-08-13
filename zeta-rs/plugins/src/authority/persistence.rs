@@ -50,6 +50,17 @@ pub(super) struct PersistedAuthority {
     pub receipts: BTreeMap<String, PersistedCommandReceipt>,
 }
 
+pub(super) struct AuthorityStateRef<'a> {
+    pub revision: u64,
+    pub activation_generation: u64,
+    pub installed: &'a BTreeMap<InstalledKey, InstalledPluginRef>,
+    pub enabled: &'a BTreeMap<crate::PluginId, InstalledPluginRef>,
+    pub granted: &'a BTreeMap<InstalledKey, InstalledPluginRef>,
+    pub revoked: &'a BTreeMap<InstalledKey, InstalledPluginRef>,
+    pub active: &'a BTreeMap<crate::PluginId, ActivePlugin>,
+    pub receipts: &'a BTreeMap<String, PersistedCommandReceipt>,
+}
+
 impl PersistedAuthority {
     pub fn empty() -> Self {
         Self {
@@ -65,32 +76,24 @@ impl PersistedAuthority {
         }
     }
 
-    pub fn from_state(
-        revision: u64,
-        activation_generation: u64,
-        installed: &BTreeMap<InstalledKey, InstalledPluginRef>,
-        enabled: &BTreeMap<crate::PluginId, InstalledPluginRef>,
-        granted: &BTreeMap<InstalledKey, InstalledPluginRef>,
-        revoked: &BTreeMap<InstalledKey, InstalledPluginRef>,
-        active: &BTreeMap<crate::PluginId, ActivePlugin>,
-        receipts: &BTreeMap<String, PersistedCommandReceipt>,
-    ) -> Self {
+    pub fn from_state(state: AuthorityStateRef<'_>) -> Self {
         Self {
             schema_version: AUTHORITY_SCHEMA_VERSION,
-            revision,
-            activation_generation,
-            installed: installed.values().cloned().collect(),
-            enabled: enabled.values().cloned().collect(),
-            granted: granted.values().cloned().collect(),
-            revoked: revoked.values().cloned().collect(),
-            active: active
+            revision: state.revision,
+            activation_generation: state.activation_generation,
+            installed: state.installed.values().cloned().collect(),
+            enabled: state.enabled.values().cloned().collect(),
+            granted: state.granted.values().cloned().collect(),
+            revoked: state.revoked.values().cloned().collect(),
+            active: state
+                .active
                 .values()
                 .map(|active| ActivePluginRecord {
                     package: active.package.clone(),
                     activation_revision: active.activation_revision,
                 })
                 .collect(),
-            receipts: receipts.clone(),
+            receipts: state.receipts.clone(),
         }
     }
 

@@ -15,7 +15,13 @@ use crate::components::selection::SelectionViewModel;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum ConnectorSelectionAction {
-    Disconnect { connector_id: String },
+    ConnectDeviceOAuth {
+        connector_id: String,
+        connection_generation: u64,
+    },
+    Disconnect {
+        connector_id: String,
+    },
 }
 
 pub(crate) struct ConnectorSelectionView {
@@ -69,7 +75,7 @@ pub(crate) fn connector_selection_view(catalog: &ConnectorListResult) -> Connect
             .with_activation_mode(SelectionActivationMode::Enter)
             .with_search(SearchBoxModel::new("Search connectors"))
             .with_empty_message("No matching Connectors"),
-            "Space search  ·  ←/→ tabs  ·  ↑/↓ select  ·  Enter disconnect connected account  ·  Esc back",
+            "Space search  ·  ←/→ tabs  ·  ↑/↓ select  ·  Enter connect/disconnect  ·  Esc back",
         ),
         actions,
     }
@@ -91,6 +97,23 @@ fn connector_item(
                 connector_id: connector.id.clone(),
             },
         );
+    } else if connector.available_actions.iter().any(|action| {
+        matches!(
+            action,
+            ConnectorAvailableActionDto::ConnectOAuth
+                | ConnectorAvailableActionDto::ReauthorizeOAuth
+        )
+    }) && connector
+        .oauth_methods
+        .contains(&zeta_app_server_protocol::protocol::connectors::ConnectorOAuthMethodDto::Device)
+    {
+        actions.insert(
+            item_id.clone(),
+            ConnectorSelectionAction::ConnectDeviceOAuth {
+                connector_id: connector.id.clone(),
+                connection_generation: connector.connection_generation + 1,
+            },
+        );
     }
     SelectionItem::new(&connector.display_name)
         .with_id(item_id)
@@ -103,16 +126,14 @@ fn connector_item(
 
 fn state_label(state: &ConnectorConnectionStateDto) -> String {
     match state {
-        ConnectorConnectionStateDto::Disconnected => {
-            "not connected · connect in Desktop Settings".into()
-        }
+        ConnectorConnectionStateDto::Disconnected => "not connected".into(),
         ConnectorConnectionStateDto::Connecting => "connecting".into(),
         ConnectorConnectionStateDto::Connected { account } => {
             format!("connected as {}", account.display_name)
         }
         ConnectorConnectionStateDto::Unavailable { reason } => format!("unavailable: {reason}"),
         ConnectorConnectionStateDto::ReauthorizationRequired { account, .. } => {
-            format!("reconnect {} in Desktop Settings", account.display_name)
+            format!("reconnect {}", account.display_name)
         }
     }
 }

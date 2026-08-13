@@ -115,7 +115,9 @@ fn convert_content(content: &[ContentPart]) -> Value {
             .map(|part| match part {
                 ContentPart::Text(text) => json!({"type": "text", "text": text}),
                 ContentPart::ImageAttachment { .. } => {
-                    unreachable!("durable image attachments must be materialized before API encoding")
+                    unreachable!(
+                        "durable image attachments must be materialized before API encoding"
+                    )
                 }
                 ContentPart::ImageUrl { url, detail } => json!({
                     "type": "image_url",

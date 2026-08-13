@@ -7,6 +7,11 @@ use zeta_connectors::ConnectorId;
 use zeta_connectors::ConnectorRuntimeBinding;
 use zeta_connectors_extension::ConnectorAuthority;
 use zeta_connectors_extension::ConnectorCredentialService;
+use zeta_connectors_extension::ConnectorDeviceOAuthGrant;
+use zeta_connectors_extension::ConnectorDeviceOAuthPoll;
+use zeta_connectors_extension::ConnectorDeviceOAuthPollRequest;
+use zeta_connectors_extension::ConnectorDeviceOAuthProvider;
+use zeta_connectors_extension::ConnectorDeviceOAuthService;
 use zeta_connectors_extension::ConnectorOAuthChallenge;
 use zeta_connectors_extension::ConnectorOAuthCredential;
 use zeta_connectors_extension::ConnectorOAuthCredentialReplacement;
@@ -133,6 +138,96 @@ fn oauth_server() -> AppServer {
     )
     .with_connector_service(service)
     .with_connector_oauth_service(oauth)
+}
+
+struct TestDeviceOAuthProvider;
+
+impl ConnectorDeviceOAuthProvider for TestDeviceOAuthProvider {
+    fn start(
+        &self,
+        _: &ConnectorDefinition,
+    ) -> Result<ConnectorDeviceOAuthGrant, ConnectorOAuthError> {
+        Ok(ConnectorDeviceOAuthGrant {
+            device_code: zeta_secrets::SecretValue::new(b"device-secret".to_vec()),
+            user_code: "ABCD-EFGH".into(),
+            verification_uri: "https://accounts.example.test/device".into(),
+            expires_in: Duration::from_secs(60),
+            poll_interval: Duration::from_millis(1),
+        })
+    }
+
+    fn poll(
+        &self,
+        _: &ConnectorDefinition,
+        request: ConnectorDeviceOAuthPollRequest<'_>,
+    ) -> Result<ConnectorDeviceOAuthPoll, ConnectorOAuthError> {
+        assert_eq!(request.device_code.expose(), b"device-secret");
+        Ok(ConnectorDeviceOAuthPoll::Complete(
+            ConnectorOAuthCredential {
+                account_id: zeta_connectors::ConnectorAccountId::new("octocat").unwrap(),
+                account_display_name: "Octocat".into(),
+                runtime_secret: zeta_secrets::SecretValue::new(b"device-access-token".to_vec()),
+                secret: zeta_secrets::SecretValue::new(b"device-lifecycle".to_vec()),
+            },
+        ))
+    }
+
+    fn refresh(
+        &self,
+        _: &ConnectorDefinition,
+        request: ConnectorOAuthRefreshRequest,
+    ) -> Result<ConnectorOAuthCredentialReplacement, ConnectorOAuthError> {
+        Ok(ConnectorOAuthCredentialReplacement {
+            runtime_secret: zeta_secrets::SecretValue::new(b"device-access-token".to_vec()),
+            secret: request.credential,
+        })
+    }
+
+    fn revoke(
+        &self,
+        _: &ConnectorDefinition,
+        _: ConnectorOAuthRevokeRequest,
+    ) -> Result<(), ConnectorOAuthError> {
+        Ok(())
+    }
+
+    fn supports_remote_revoke(&self) -> bool {
+        false
+    }
+}
+
+fn device_oauth_server() -> AppServer {
+    let connector_id = ConnectorId::new("acme/github:connector:account").unwrap();
+    let connector = ConnectorDefinition::new(
+        connector_id.clone(),
+        "GitHub",
+        "GitHub tools",
+        ConnectorRuntimeBinding::mcp_server("plugin:acme/github:mcp:github").unwrap(),
+    )
+    .unwrap();
+    let authority = ConnectorAuthority::in_memory([connector]).unwrap();
+    let service = Arc::new(ConnectorCredentialService::new(
+        authority,
+        Arc::new(MemorySecretStore::default()),
+    ));
+    let provider: Arc<dyn ConnectorDeviceOAuthProvider> = Arc::new(TestDeviceOAuthProvider);
+    let oauth = Arc::new(ConnectorDeviceOAuthService::new(
+        Arc::clone(&service),
+        [(connector_id, provider)],
+    ));
+    let threads = Arc::new(ThreadController::with_store(Arc::new(
+        InMemoryThreadStore::default(),
+    )));
+    let sessions = Arc::new(SessionCoordinator::with_store(
+        Arc::new(InMemorySessionStore::default()),
+        threads,
+    ));
+    AppServer::new(
+        sessions,
+        Arc::new(ProviderModelService::new(Arc::new(EchoModel))),
+    )
+    .with_connector_service(service)
+    .with_connector_device_oauth_service(oauth)
 }
 
 fn call(
@@ -332,4 +427,113 @@ fn app_server_oauth_is_one_shot_and_projects_only_browser_navigation_values() {
         replayed_callback["error"]["message"],
         "ConnectorOAuthInvalidCallback"
     );
+}
+
+#[test]
+fn app_server_device_oauth_projects_only_user_values_and_connects_after_poll() {
+    let server = device_oauth_server();
+    let mut connection = server.connection();
+    call(
+        &server,
+        &mut connection,
+        1,
+        "initialize",
+        serde_json::json!({
+            "clientInfo": {"name": "test", "version": "1"},
+            "capabilities": {}
+        }),
+    );
+    let listed = call(
+        &server,
+        &mut connection,
+        2,
+        "connector/list",
+        serde_json::json!({}),
+    );
+    assert_eq!(
+        listed["result"]["connectors"][0]["oauthMethods"],
+        serde_json::json!(["device"])
+    );
+    let started = call(
+        &server,
+        &mut connection,
+        3,
+        "connector/connect/oauth/device/start",
+        serde_json::json!({
+            "commandId": "device-github",
+            "expectedGeneration": 1,
+            "connectorId": "acme/github:connector:account",
+            "connectionGeneration": 1
+        }),
+    );
+    assert_eq!(started["result"]["userCode"], "ABCD-EFGH");
+    assert_eq!(
+        started["result"]["verificationUri"],
+        "https://accounts.example.test/device"
+    );
+    let started_json = started.to_string();
+    assert!(!started_json.contains("device-secret"));
+    std::thread::sleep(Duration::from_millis(2));
+    let polled = call(
+        &server,
+        &mut connection,
+        4,
+        "connector/connect/oauth/device/poll",
+        serde_json::json!({"flowId": started["result"]["flowId"]}),
+    );
+    assert_eq!(polled["result"]["status"], "connected");
+    let serialized = call(
+        &server,
+        &mut connection,
+        5,
+        "connector/list",
+        serde_json::json!({}),
+    )
+    .to_string();
+    assert!(!serialized.contains("device-access-token"));
+    assert!(!serialized.contains("device-lifecycle"));
+}
+
+#[test]
+fn app_server_device_oauth_cancel_consumes_the_flow_and_revokes_connecting_state() {
+    let server = device_oauth_server();
+    let mut connection = server.connection();
+    call(
+        &server,
+        &mut connection,
+        1,
+        "initialize",
+        serde_json::json!({
+            "clientInfo": {"name": "test", "version": "1"},
+            "capabilities": {}
+        }),
+    );
+    let started = call(
+        &server,
+        &mut connection,
+        2,
+        "connector/connect/oauth/device/start",
+        serde_json::json!({
+            "commandId": "device-cancel",
+            "expectedGeneration": 1,
+            "connectorId": "acme/github:connector:account",
+            "connectionGeneration": 1
+        }),
+    );
+    let cancelled = call(
+        &server,
+        &mut connection,
+        3,
+        "connector/connect/oauth/device/cancel",
+        serde_json::json!({"flowId": started["result"]["flowId"]}),
+    );
+    assert_eq!(cancelled["result"]["generation"], 3);
+    let replay = call(
+        &server,
+        &mut connection,
+        4,
+        "connector/connect/oauth/device/cancel",
+        serde_json::json!({"flowId": started["result"]["flowId"]}),
+    );
+    assert_eq!(replay["error"]["code"], -32038);
 }

@@ -1,7 +1,7 @@
 import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
-import { shell } from "electron";
-import { APP_SERVER_METHODS, type ConnectorApiTokenConnectParams, type ConnectorCommandResultDto, type ConnectorDisconnectParams, type ConnectorOAuthStartResult } from "../../../../../generated/app-server/types.js";
+import { clipboard, shell } from "electron";
+import { APP_SERVER_METHODS, type ConnectorApiTokenConnectParams, type ConnectorCommandResultDto, type ConnectorDeviceOAuthPollResult, type ConnectorDeviceOAuthStartResult, type ConnectorDisconnectParams, type ConnectorOAuthStartResult } from "../../../../../generated/app-server/types.js";
 import type { AppServerSupervisor } from "../../app-server/electron-main/app-server-supervisor.js";
 import { nonEmptyString, positiveInteger, record } from "../../ipc/electron-main/ipcValidation.js";
 import type { IpcRoute } from "../../ipc/electron-main/trustedIpcRouter.js";
@@ -35,6 +35,15 @@ function oauthConnectParams(value: unknown): OAuthConnectParams {
 }
 
 async function connectOAuth(supervisor: AppServerSupervisor, params: OAuthConnectParams): Promise<ConnectorCommandResultDto> {
+  const catalog = await supervisor.request(APP_SERVER_METHODS["connector/list"], {});
+  const connector = catalog.connectors.find(candidate => candidate.id === params.connectorId);
+  if (!connector) throw new Error("Connector is unavailable");
+  if (connector.oauthMethods.includes("browser")) return connectBrowserOAuth(supervisor, params);
+  if (connector.oauthMethods.includes("device")) return connectDeviceOAuth(supervisor, params);
+  throw new Error("Connector OAuth is unavailable");
+}
+
+async function connectBrowserOAuth(supervisor: AppServerSupervisor, params: OAuthConnectParams): Promise<ConnectorCommandResultDto> {
   const callbackPath = `/connector-oauth/${randomUUID()}`;
   const callback = await LoopbackOAuthCallback.listen(callbackPath);
   let flowId: string | undefined;
@@ -60,6 +69,35 @@ async function connectOAuth(supervisor: AppServerSupervisor, params: OAuthConnec
       await supervisor.request(APP_SERVER_METHODS["connector/connect/oauth/cancel"], { flowId }).catch(() => undefined);
     }
   }
+}
+
+async function connectDeviceOAuth(supervisor: AppServerSupervisor, params: OAuthConnectParams): Promise<ConnectorCommandResultDto> {
+  let flowId: string | undefined;
+  let completed = false;
+  try {
+    const started = await supervisor.request(APP_SERVER_METHODS["connector/connect/oauth/device/start"], params) as ConnectorDeviceOAuthStartResult;
+    flowId = started.flowId;
+    await shell.openExternal(started.verificationUri);
+    clipboard.writeText(started.userCode);
+    let waitSeconds = started.pollIntervalSeconds;
+    for (;;) {
+      await wait(Math.min(waitSeconds, 30) * 1_000);
+      const result = await supervisor.request(APP_SERVER_METHODS["connector/connect/oauth/device/poll"], { flowId }) as ConnectorDeviceOAuthPollResult;
+      if (result.status === "connected") {
+        completed = true;
+        return result.command;
+      }
+      waitSeconds = result.retryAfterSeconds;
+    }
+  } finally {
+    if (flowId && !completed) {
+      await supervisor.request(APP_SERVER_METHODS["connector/connect/oauth/device/cancel"], { flowId }).catch(() => undefined);
+    }
+  }
+}
+
+function wait(milliseconds: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, milliseconds));
 }
 
 class LoopbackOAuthCallback {

@@ -21,6 +21,7 @@ use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
+use zeta_attachments::ImageAttachments;
 use zeta_history::CURRENT_STORED_EVENT_SCHEMA_VERSION;
 use zeta_history::EventId;
 use zeta_history::StoredEvent;
@@ -60,7 +61,6 @@ use zeta_protocol::UserInput;
 use zeta_thread_store::AppendBatchResult;
 use zeta_thread_store::ThreadStoreError;
 use zeta_thread_store::validate_append_batch;
-use zeta_attachments::ImageAttachments;
 
 mod agent;
 mod execution;

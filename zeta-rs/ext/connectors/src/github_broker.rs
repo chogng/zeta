@@ -267,6 +267,7 @@ fn validate_config(config: &GitHubBrokeredOAuthConfig) -> Result<(), ConnectorOA
         || config.broker_base_url.password().is_some()
         || config.broker_base_url.query().is_some()
         || config.broker_base_url.fragment().is_some()
+        || !config.broker_base_url.path().ends_with('/')
         || config.client_id.trim().is_empty()
         || config.client_id.contains(char::is_control)
         || config

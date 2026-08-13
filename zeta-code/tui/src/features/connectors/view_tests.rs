@@ -2,6 +2,7 @@ use zeta_app_server_protocol::protocol::connectors::ConnectorAvailableActionDto;
 use zeta_app_server_protocol::protocol::connectors::ConnectorConnectionStateDto;
 use zeta_app_server_protocol::protocol::connectors::ConnectorDto;
 use zeta_app_server_protocol::protocol::connectors::ConnectorListResult;
+use zeta_app_server_protocol::protocol::connectors::ConnectorOAuthMethodDto;
 
 use super::ConnectorSelectionAction;
 use super::connector_selection_view;
@@ -41,6 +42,28 @@ fn connected_connector_is_actionable_while_disconnected_connector_is_read_only()
     ));
 }
 
+#[test]
+fn disconnected_device_oauth_connector_is_actionable() {
+    let mut github = connector(
+        "github",
+        ConnectorConnectionStateDto::Disconnected,
+        vec![ConnectorAvailableActionDto::ConnectOAuth],
+    );
+    github.oauth_methods = vec![ConnectorOAuthMethodDto::Device];
+    let view = connector_selection_view(&ConnectorListResult {
+        generation: 4,
+        connectors: vec![github],
+    });
+
+    assert!(matches!(
+        view.actions.values().next(),
+        Some(ConnectorSelectionAction::ConnectDeviceOAuth {
+            connector_id,
+            connection_generation: 2,
+        }) if connector_id == "github"
+    ));
+}
+
 fn connector(
     id: &str,
     state: ConnectorConnectionStateDto,
@@ -55,6 +78,7 @@ fn connector(
         connection_generation: 1,
         state,
         available_actions,
+        oauth_methods: Vec::new(),
         credential_cleanup_pending: false,
     }
 }

@@ -55,6 +55,8 @@ impl RemotePluginMarketplaceConfig {
             || targets_base_url.scheme() != "https"
             || metadata_base_url.cannot_be_a_base()
             || targets_base_url.cannot_be_a_base()
+            || !valid_distribution_base_url(&metadata_base_url)
+            || !valid_distribution_base_url(&targets_base_url)
             || trusted_root.is_empty()
             || trusted_root.len() > MAX_TRUSTED_ROOT_BYTES
         {
@@ -124,9 +126,7 @@ impl RemotePluginMarketplace {
     ///
     /// Every target is revalidated against cached TUF metadata. The materialized package
     /// directory is never trusted as an offline authority on its own.
-    pub fn open_cached(
-        &self,
-    ) -> Result<RemotePluginMarketplaceSnapshot, RemoteMarketplaceError> {
+    pub fn open_cached(&self) -> Result<RemotePluginMarketplaceSnapshot, RemoteMarketplaceError> {
         prepare_cache_root(&self.config.cache_root)?;
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_time()
@@ -136,15 +136,15 @@ impl RemotePluginMarketplace {
     }
 
     async fn sync_async(&self) -> Result<RemotePluginMarketplaceSnapshot, RemoteMarketplaceError> {
-        let datastore = self.config.cache_root.join("tuf");
-        fs::create_dir_all(&datastore).map_err(|_| cache_error())?;
+        let datastore_root = self.config.cache_root.join("tuf");
+        let datastore = stage_datastore(&self.config.cache_root, &datastore_root)?;
         let repository = RepositoryLoader::new(
             &self.config.trusted_root,
             self.config.metadata_base_url.clone(),
             self.config.targets_base_url.clone(),
         )
         .transport(MarketplaceTransport::new(Arc::clone(&self.http)))
-        .datastore(datastore)
+        .datastore(datastore.path())
         .limits(Limits::default())
         .expiration_enforcement(ExpirationEnforcement::Safe)
         .load()
@@ -154,7 +154,11 @@ impl RemotePluginMarketplace {
             Err(tough::error::Error::Transport { .. }) => return self.open_cached_async().await,
             Err(_) => return Err(metadata_error()),
         };
-        self.materialize(&repository, RepositorySource::Remote).await
+        let snapshot = self
+            .materialize(&repository, RepositorySource::Remote)
+            .await?;
+        replace_directory(datastore, &datastore_root)?;
+        Ok(snapshot)
     }
 
     async fn open_cached_async(
@@ -163,9 +167,13 @@ impl RemotePluginMarketplace {
         let repository_root = self.config.cache_root.join("repository");
         let metadata = directory_url(&repository_root.join("metadata"))?;
         let targets = directory_url(&repository_root.join("targets"))?;
+        // Reuse the online datastore so an offline reopen cannot accept metadata older than any
+        // signed version this profile has already observed.
+        let datastore = self.config.cache_root.join("tuf");
+        fs::create_dir_all(&datastore).map_err(|_| cache_error())?;
         let repository = RepositoryLoader::new(&self.config.trusted_root, metadata, targets)
             .transport(FilesystemTransport)
-            .datastore(self.config.cache_root.join("offline-tuf"))
+            .datastore(datastore)
             .limits(Limits::default())
             .expiration_enforcement(ExpirationEnforcement::Safe)
             .load()
@@ -195,11 +203,9 @@ impl RemotePluginMarketplace {
         let snapshot_digest = signed_repository_digest(repository)?;
         let destination = snapshots.join(snapshot_digest);
         promote_snapshot(staging, &destination)?;
-        let marketplace = PluginMarketplace::open(
-            &destination,
-            PluginMarketplaceMode::RemoteManaged,
-        )
-        .map_err(|_| package_error())?;
+        let marketplace =
+            PluginMarketplace::open(&destination, PluginMarketplaceMode::RemoteManaged)
+                .map_err(|_| package_error())?;
         if source == RepositorySource::Remote {
             self.cache_repository(repository, &published).await?;
         }
@@ -278,6 +284,7 @@ async fn materialize_packages(
         let bytes = read_target(
             repository,
             &published.name,
+            published.length,
             archive::MAX_ARCHIVE_BYTES as usize,
         )
         .await?;
@@ -310,18 +317,25 @@ async fn read_revocations(
     repository: &Repository,
 ) -> Result<Vec<InstalledPluginRef>, RemoteMarketplaceError> {
     let name = TargetName::new(metadata::REVOCATIONS_TARGET).map_err(|_| metadata_error())?;
-    if !repository.targets().signed.targets.contains_key(&name) {
-        return Err(metadata_error());
-    }
-    let bytes = read_target(repository, &name, MAX_REVOCATIONS_BYTES).await?;
+    let target = repository
+        .targets()
+        .signed
+        .targets
+        .get(&name)
+        .ok_or_else(metadata_error)?;
+    let bytes = read_target(repository, &name, target.length, MAX_REVOCATIONS_BYTES).await?;
     metadata::RevocationDocument::parse(&bytes)
 }
 
 async fn read_target(
     repository: &Repository,
     name: &TargetName,
+    signed_length: u64,
     limit: usize,
 ) -> Result<Vec<u8>, RemoteMarketplaceError> {
+    if signed_length > limit as u64 {
+        return Err(distribution_error());
+    }
     let stream = repository
         .read_target(name)
         .await
@@ -408,7 +422,50 @@ fn prepare_cache_root(root: &Path) -> Result<(), RemoteMarketplaceError> {
     } else {
         fs::create_dir_all(root).map_err(|_| cache_error())?;
     }
-    Ok(())
+    recover_complete_directory(root, "repository")?;
+    recover_complete_directory(root, "tuf")
+}
+
+fn recover_complete_directory(root: &Path, name: &str) -> Result<(), RemoteMarketplaceError> {
+    let current = root.join(name);
+    let backup = current.with_extension("previous");
+    match (current.exists(), backup.exists()) {
+        (false, true) => fs::rename(backup, current).map_err(|_| cache_error()),
+        (true, true) => fs::remove_dir_all(backup).map_err(|_| cache_error()),
+        _ => Ok(()),
+    }
+}
+
+fn stage_datastore(root: &Path, current: &Path) -> Result<TempDir, RemoteMarketplaceError> {
+    let staging = tempfile::Builder::new()
+        .prefix(".tuf-state-")
+        .tempdir_in(root)
+        .map_err(|_| cache_error())?;
+    if !current.exists() {
+        return Ok(staging);
+    }
+    let metadata = fs::symlink_metadata(current).map_err(|_| cache_error())?;
+    if metadata.file_type().is_symlink() || !metadata.is_dir() {
+        return Err(cache_error());
+    }
+    for entry in fs::read_dir(current).map_err(|_| cache_error())? {
+        let entry = entry.map_err(|_| cache_error())?;
+        let metadata = entry.file_type().map_err(|_| cache_error())?;
+        if !metadata.is_file() {
+            return Err(cache_error());
+        }
+        fs::copy(entry.path(), staging.path().join(entry.file_name()))
+            .map_err(|_| cache_error())?;
+    }
+    Ok(staging)
+}
+
+fn valid_distribution_base_url(url: &Url) -> bool {
+    url.username().is_empty()
+        && url.password().is_none()
+        && url.query().is_none()
+        && url.fragment().is_none()
+        && url.path().ends_with('/')
 }
 
 fn config_error() -> RemoteMarketplaceError {
@@ -445,3 +502,7 @@ fn cache_error() -> RemoteMarketplaceError {
         "Plugin Marketplace cache is unavailable",
     )
 }
+
+#[cfg(test)]
+#[path = "remote_tests.rs"]
+mod tests;

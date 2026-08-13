@@ -341,11 +341,17 @@ fn distribution_revocation_is_a_durable_tombstone() {
             .unwrap();
     }
     assert!(authority.snapshot().activation().packages().is_empty());
-    assert_eq!(authority.snapshot().revoked(), std::slice::from_ref(&installed));
+    assert_eq!(
+        authority.snapshot().revoked(),
+        std::slice::from_ref(&installed)
+    );
     drop(authority);
 
     let reopened = PluginActivationAuthority::open(profile.path()).unwrap();
-    assert_eq!(reopened.snapshot().revoked(), std::slice::from_ref(&installed));
+    assert_eq!(
+        reopened.snapshot().revoked(),
+        std::slice::from_ref(&installed)
+    );
     let error = reopened
         .apply(request(
             &reopened,

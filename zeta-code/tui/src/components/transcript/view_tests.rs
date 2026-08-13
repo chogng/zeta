@@ -15,7 +15,7 @@ fn tool_output_renders_ansi_as_styled_spans() {
     let visible = output
         .spans
         .iter()
-        .map(|span| span.content.as_ref())
+        .map(|span| span.content.as_ref() as &str)
         .collect::<String>();
 
     assert_eq!(visible, "└─ plain red");

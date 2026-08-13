@@ -2,6 +2,7 @@ import type { Event } from "../../../../base/common/event.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 import type { ModelRef, SessionId, ThreadId } from "../../sessions/common/sessionService.js";
 import type { SkillReference } from "../../../../platform/skills/common/skillApi.js";
+import type { ImageAttachmentRef } from "../../../../../../generated/app-server/types.js";
 
 export interface ModelCatalogEntry {
   readonly model: ModelRef;
@@ -24,6 +25,7 @@ export interface SkillCommandDefinition {
 export type ThreadItem =
   | { readonly type: "userMessage"; readonly itemId: string; readonly turnId: string; readonly text: string }
   | { readonly type: "userImage"; readonly itemId: string; readonly turnId: string; readonly url: string }
+  | { readonly type: "userImageAttachment"; readonly itemId: string; readonly turnId: string; readonly attachment: ImageAttachmentRef }
   | { readonly type: "agentMessage"; readonly itemId: string; readonly turnId: string; readonly text: string }
   | { readonly type: "reasoning"; readonly itemId: string; readonly turnId: string; readonly text: string }
   | { readonly type: "plan"; readonly itemId: string; readonly turnId: string; readonly text: string }

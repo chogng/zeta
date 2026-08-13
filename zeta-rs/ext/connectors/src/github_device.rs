@@ -85,7 +85,10 @@ impl GitHubDeviceOAuthProvider {
             Vec::new(),
         )
         .map_err(|_| provider_failure())?;
-        let response = self.http.execute(&request).map_err(|_| provider_failure())?;
+        let response = self
+            .http
+            .execute(&request)
+            .map_err(|_| provider_failure())?;
         if !response.is_success() {
             return Err(provider_failure());
         }
@@ -130,10 +133,7 @@ impl ConnectorDeviceOAuthProvider for GitHubDeviceOAuthProvider {
             &[
                 ("client_id", &self.config.client_id),
                 ("device_code", &device_code),
-                (
-                    "grant_type",
-                    "urn:ietf:params:oauth:grant-type:device_code",
-                ),
+                ("grant_type", "urn:ietf:params:oauth:grant-type:device_code"),
             ],
         );
         device_code.zeroize();
@@ -173,12 +173,14 @@ impl ConnectorDeviceOAuthProvider for GitHubDeviceOAuthProvider {
         let secret = serde_json::to_vec(&bundle)
             .map(SecretValue::new)
             .map_err(|_| provider_failure())?;
-        Ok(ConnectorDeviceOAuthPoll::Complete(ConnectorOAuthCredential {
-            account_id,
-            account_display_name: display_name,
-            runtime_secret,
-            secret,
-        }))
+        Ok(ConnectorDeviceOAuthPoll::Complete(
+            ConnectorOAuthCredential {
+                account_id,
+                account_display_name: display_name,
+                runtime_secret,
+                secret,
+            },
+        ))
     }
 
     fn refresh(

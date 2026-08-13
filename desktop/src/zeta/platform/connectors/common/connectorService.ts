@@ -16,6 +16,7 @@ export interface ConnectorView {
   readonly description: string;
   readonly connectionGeneration: number;
   readonly state: ConnectorState;
+  readonly oauthMethods: readonly ("browser" | "device")[];
   readonly canConnectApiToken: boolean;
   readonly canConnectOAuth: boolean;
   readonly canDisconnect: boolean;

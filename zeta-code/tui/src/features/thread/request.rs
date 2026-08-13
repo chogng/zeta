@@ -1,17 +1,17 @@
 use crate::client::new_command_id;
-use base64::Engine;
-use base64::engine::general_purpose::STANDARD;
 use crate::components::composer::ComposerInput;
 use crate::components::composer::ComposerSubmission;
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD;
 use zeta_app_server_client::AppServerClient;
 use zeta_app_server_client::ClientError;
 use zeta_app_server_client::JsonRpcTransport;
-use zeta_app_server_protocol::protocol::session::SessionRequest;
 use zeta_app_server_protocol::protocol::attachments::AttachmentImportRemoteParams;
 use zeta_app_server_protocol::protocol::attachments::AttachmentUploadCancelParams;
 use zeta_app_server_protocol::protocol::attachments::AttachmentUploadFinishParams;
 use zeta_app_server_protocol::protocol::attachments::AttachmentUploadStartParams;
 use zeta_app_server_protocol::protocol::attachments::AttachmentUploadWriteParams;
+use zeta_app_server_protocol::protocol::session::SessionRequest;
 use zeta_app_server_protocol::protocol::session::SessionRequestParams;
 use zeta_app_server_protocol::protocol::session::SessionRequestResult;
 use zeta_app_server_protocol::protocol::session::SessionThreadReadParams;
@@ -156,7 +156,11 @@ fn decode_image_data_url(url: &str) -> Result<(ImageMediaType, Vec<u8>), ClientE
         Some("image/jpeg") => ImageMediaType::Jpeg,
         Some("image/gif") => ImageMediaType::Gif,
         Some("image/webp") => ImageMediaType::WebP,
-        _ => return Err(ClientError::Protocol("composer image MIME type is unsupported".into())),
+        _ => {
+            return Err(ClientError::Protocol(
+                "composer image MIME type is unsupported".into(),
+            ));
+        }
     };
     if !metadata.any(|part| part.eq_ignore_ascii_case("base64")) {
         return Err(ClientError::Protocol(

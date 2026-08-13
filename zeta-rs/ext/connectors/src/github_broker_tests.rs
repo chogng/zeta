@@ -90,3 +90,35 @@ fn brokered_pkce_keeps_confidential_secret_out_of_client_and_returns_account() {
     assert!(body.contains("code_verifier=verifier"));
     assert!(!body.contains("client_secret"));
 }
+
+#[test]
+fn broker_base_url_requires_an_unambiguous_https_directory() {
+    let http: Arc<dyn HttpClient> = Arc::new(RecordingHttpClient {
+        requests: Mutex::new(Vec::new()),
+        responses: Mutex::new(VecDeque::new()),
+    });
+    let configuration = |url: &str| GitHubBrokeredOAuthConfig {
+        broker_base_url: Url::parse(url).unwrap(),
+        client_id: "public-client".into(),
+        scopes: vec!["repo".into()],
+    };
+
+    assert!(
+        GitHubBrokeredOAuthProvider::new(
+            configuration("https://oauth.zeta.example/base"),
+            Arc::clone(&http),
+        )
+        .is_err()
+    );
+    assert!(
+        GitHubBrokeredOAuthProvider::new(
+            configuration("https://user@oauth.zeta.example/"),
+            Arc::clone(&http),
+        )
+        .is_err()
+    );
+    assert!(
+        GitHubBrokeredOAuthProvider::new(configuration("http://oauth.zeta.example/"), http,)
+            .is_err()
+    );
+}

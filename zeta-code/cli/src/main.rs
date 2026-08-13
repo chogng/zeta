@@ -6,6 +6,7 @@ use std::time::Instant;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 use zeta_app_server::LocalAppServerOptions;
+use zeta_app_server::LocalProductServicesConfig;
 use zeta_app_server::open_local_app_server;
 use zeta_app_server_client::AppServerEvent;
 use zeta_app_server_client::AppServerSession;
@@ -53,33 +54,66 @@ fn interactive() -> Result<(), String> {
             "interactive mode requires a TTY; use `zeta ask` or `zeta exec` instead".into(),
         );
     }
-    let session = AppServerSession::start_embedded(
-        InProcessClientOptions::new(
-            local_profile_root(),
-            ClientInfo {
-                name: "zeta-cli".into(),
-                version: env!("CARGO_PKG_VERSION").into(),
-            },
-        )
-        .with_capabilities(zeta_tui::client_capabilities())
-        .with_workspace_root(configured_workspace()?),
+    let profile_root = local_profile_root();
+    let options = InProcessClientOptions::new(
+        profile_root.clone(),
+        ClientInfo {
+            name: "zeta-cli".into(),
+            version: env!("CARGO_PKG_VERSION").into(),
+        },
     )
-    .map_err(|error| error.to_string())?;
+    .with_capabilities(zeta_tui::client_capabilities())
+    .with_workspace_root(configured_workspace()?);
+    let options = with_product_services(options, &profile_root)?;
+    let session = AppServerSession::start_embedded(options).map_err(|error| error.to_string())?;
     zeta_tui::run(session, zeta_tui::TuiOptions::new("TUI conversation"))
         .map(|_| ())
         .map_err(|error| error.to_string())
 }
 
 fn run_app_server(arguments: Vec<String>) -> Result<(), String> {
-    if arguments.as_slice() != ["--listen", "stdio://"] {
-        return Err("usage: zeta app-server --listen stdio://".into());
+    let product_services = match arguments.as_slice() {
+        [listen, address] if listen == "--listen" && address == "stdio://" => None,
+        [listen, address, product, path]
+            if listen == "--listen" && address == "stdio://" && product == "--product-services" =>
+        {
+            Some(PathBuf::from(path))
+        }
+        _ => {
+            return Err(
+                "usage: zeta app-server --listen stdio:// [--product-services PATH]".into(),
+            );
+        }
+    };
+    let profile_root = local_profile_root();
+    let mut options =
+        LocalAppServerOptions::new(&profile_root).with_workspace_root(configured_workspace()?);
+    if let Some(path) = product_services.or_else(product_services_path) {
+        options = options.with_product_services(
+            LocalProductServicesConfig::load(path, &profile_root)
+                .map_err(|error| error.to_string())?,
+        );
     }
-    let options = LocalAppServerOptions::new(local_profile_root())
-        .with_workspace_root(configured_workspace()?);
     open_local_app_server(options)
         .map_err(|error| error.to_string())?
         .serve_stdio()
         .map_err(|error| error.to_string())
+}
+
+fn with_product_services(
+    options: InProcessClientOptions,
+    profile_root: &std::path::Path,
+) -> Result<InProcessClientOptions, String> {
+    match product_services_path() {
+        Some(path) => LocalProductServicesConfig::load(path, profile_root)
+            .map(|services| options.with_product_services(services))
+            .map_err(|error| error.to_string()),
+        None => Ok(options),
+    }
+}
+
+fn product_services_path() -> Option<PathBuf> {
+    env::var_os("ZETA_PRODUCT_SERVICES_PATH").map(PathBuf::from)
 }
 
 fn app_server_command(arguments: Vec<String>) -> Result<(), String> {

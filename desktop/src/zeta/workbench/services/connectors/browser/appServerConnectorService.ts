@@ -71,6 +71,7 @@ function connectorView(connector: ConnectorDto): ConnectorView {
     description: connector.description,
     connectionGeneration: connector.connectionGeneration,
     state: connectorState(connector.state),
+    oauthMethods: connector.oauthMethods,
     canConnectApiToken: connector.availableActions.includes("connectApiToken") || connector.availableActions.includes("reauthorizeApiToken"),
     canConnectOAuth: connector.availableActions.includes("connectOAuth") || connector.availableActions.includes("reauthorizeOAuth"),
     canDisconnect: connector.availableActions.includes("disconnect"),

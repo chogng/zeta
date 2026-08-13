@@ -163,7 +163,11 @@ fn oauth_pkce_callback_publishes_only_provider_validated_account_and_secret_refe
         b"access-token"
     );
     assert_eq!(
-        oauth.credentials.load_connected_credential(&connector_id).unwrap().expose(),
+        oauth
+            .credentials
+            .load_connected_credential(&connector_id)
+            .unwrap()
+            .expose(),
         b"access-and-refresh-token-bundle"
     );
 }
@@ -200,7 +204,11 @@ fn refresh_replaces_the_opaque_secret_without_changing_connection_authority() {
         b"refreshed-access-token"
     );
     assert_eq!(
-        oauth.credentials.load_connected_credential(&connector_id).unwrap().expose(),
+        oauth
+            .credentials
+            .load_connected_credential(&connector_id)
+            .unwrap()
+            .expose(),
         b"refreshed-token-bundle"
     );
 }

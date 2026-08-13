@@ -7,8 +7,8 @@
 > 当前状态：Connector domain、SQLite authority、API-token connect/disconnect、App Server 协议、
 > package-rooted Plugin activation、ready/standalone MCP composition、模型安全点 registry replacement、
 > in-flight dispatch drain、OS keyring 与显式文件 `SecretStore`、OAuth PKCE 状态机和产品连接入口已实现。
-> Desktop loopback 浏览器回调、OAuth App Server 控制面、refresh/revoke 和 GitHub provider adapter
-> 已接通；产品 host 仍需提供自己的 GitHub OAuth App 配置。
+> Desktop loopback 浏览器回调、通用 device poll、OAuth App Server 控制面、refresh/revoke、GitHub
+> brokered PKCE 与 public-client device adapters 已接通；产品发行仍需注入真实 broker URL/client ID。
 
 ## 快速理解
 
@@ -112,12 +112,15 @@ flowchart TD
 ```
 
 当前 `ConnectorOAuthService` 已实现随机 state、PKCE S256、exact redirect、一次性 callback、超时、
-refresh/revoke 与 stale-generation 防护，并把 provider 交换后的 secret 交给既有 credential authority。
-`GitHubOAuthProvider` 已实现 authorization、code exchange、账户读取、可选 refresh token 更新与远端
-token revoke；它通过注入的 HTTP transport 和 OAuth App client 配置使用，不在 manifest 或仓库中保存
-client secret。Desktop 已拥有随机 loopback callback host、系统浏览器跳转及 start/complete/refresh/
-revoke RPC。Desktop Settings 已提供列表、API-token/OAuth 连接、刷新与撤销；TUI 提供 `/connectors` 列表、刷新与
-断开，并有意不把 secret 输入放入 composer/history。
+refresh/revoke 与 stale-generation 防护。`ConnectorDeviceOAuthService` 拥有通用 device-code 生命周期、
+provider poll interval、`slow_down + 5s`、expiry/cancel 与同一 Connector authority transition；provider adapter
+只负责 wire protocol。OAuth credential 在 SecretStore 中以 runtime access token + provider lifecycle bundle
+封装，MCP materialization 只得到 access token，refresh/revoke adapter 只得到 lifecycle bundle。
+
+GitHub 有三种产品 adapter：confidential direct adapter（host 注入 secret）、推荐的 brokered PKCE adapter
+（client 不持有 GitHub App secret）和 public-client device adapter（无 client secret；GitHub 不提供对应
+public-client remote revoke，因此 UI 只显示 local disconnect）。Desktop 按 `oauthMethods` 优先 browser、否则
+device；browser host 与 TUI 可执行 device flow，user code 复制到 clipboard，且不进入 composer/history。
 
 ## 4. 身份、凭据与 generation
 
@@ -159,11 +162,36 @@ connection generation；任何状态变化都必须同时推进 snapshot generat
 | 显式文件 backend | ✅ 已实现，保持 explicit opt-in，不作为自动 fallback |
 | App Server list/connect/disconnect + changed notification | ✅ 已实现 |
 | Desktop API-token UI；TUI 列表/断开/通知刷新 | ✅ 已实现 |
-| OAuth browser interaction | ✅ Desktop 已实现；TUI 尚不启动浏览器 flow |
+| OAuth browser/device interaction | ✅ Desktop browser+device、browser host device、TUI device 已实现 |
 | ready binding → `zeta-mcp-extension` composition + dispatch fence | ✅ 已实现（host-injected provider） |
 | exact Plugin activation → Connector/MCP runtime provider | ✅ 已实现，支持 live install/enable/disable authority reconcile |
 | MCP `tools/list_changed` → safe-point rebuild | ✅ 已实现 |
 
-下一阶段是增加其他服务 provider/device flow，并为 GitHub OAuth App 配置提供产品级部署入口。
-这些 adapter 必须复用现有 authority、SecretStore、App Server safe point 和 MCP dispatch fence，
-不得创建第二套 Connector 状态机。
+产品部署入口为 `LocalProductServicesConfig` / `--product-services PATH` /
+`ZETA_PRODUCT_SERVICES_PATH`。该只读 JSON 可声明 TUF Marketplace roots、broker URL 和 public client ID，不允许
+client secret；`trustedRoot` 必须是配置文件目录内的普通相对路径，distribution/broker base URL 必须是无
+credential/query/fragment 且以 `/` 结尾的 HTTPS URL。普通 Plugin manifest 和 user config 不能提供这些发行信任材料。下一阶段是部署真实 broker、
+发布 Marketplace metadata/keys，并增加其他服务 adapter；它们必须复用现有 authority、SecretStore、App
+Server safe point 和 MCP dispatch fence，不得创建第二套 Connector 状态机。
+
+```json
+{
+  "schemaVersion": 1,
+  "marketplaces": [{
+    "id": "zeta-official",
+    "metadataBaseUrl": "https://marketplace.zeta.example/metadata/",
+    "targetsBaseUrl": "https://marketplace.zeta.example/targets/",
+    "trustedRoot": "marketplace-root.json"
+  }],
+  "connectorOauth": [{
+    "type": "githubDevice",
+    "connectorId": "openai/github:connector:account",
+    "clientId": "PUBLIC_GITHUB_APP_CLIENT_ID",
+    "scopes": ["read:user", "repo"]
+  }]
+}
+```
+
+使用 broker 时把 `type` 改为 `githubBrokered`，并增加 `brokerBaseUrl`；broker API 固定为
+`v1/oauth/github/{authorize,token,revoke}`，response 必须带 provider-validated account identity。OAuth adapter
+可先于对应 Plugin 安装而注册；它保持 dormant，直到 exact Connector contribution 进入 activation snapshot。

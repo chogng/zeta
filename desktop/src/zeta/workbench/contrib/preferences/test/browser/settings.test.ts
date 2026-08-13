@@ -170,8 +170,8 @@ test("Connector settings project catalog state and invoke typed connect and disc
   const settings = disposables.add(new SettingsService());
   const configuration = disposables.add(new WorkbenchConfigurationService());
   const mutations: string[] = [];
-  const disconnected = { id: "github", displayName: "GitHub", description: "Connect GitHub.", connectionGeneration: 0, state: { status: "disconnected" as const }, canConnectApiToken: true, canConnectOAuth: false, canDisconnect: false, canRefreshOAuth: false, canRevokeOAuth: false };
-  const connected = { id: "slack", displayName: "Slack", description: "Connect Slack.", connectionGeneration: 2, state: { status: "connected" as const, account: { id: "team", displayName: "Zeta Team" } }, canConnectApiToken: false, canConnectOAuth: false, canDisconnect: true, canRefreshOAuth: false, canRevokeOAuth: false };
+  const disconnected = { id: "github", displayName: "GitHub", description: "Connect GitHub.", connectionGeneration: 0, state: { status: "disconnected" as const }, oauthMethods: [], canConnectApiToken: true, canConnectOAuth: false, canDisconnect: false, canRefreshOAuth: false, canRevokeOAuth: false };
+  const connected = { id: "slack", displayName: "Slack", description: "Connect Slack.", connectionGeneration: 2, state: { status: "connected" as const, account: { id: "team", displayName: "Zeta Team" } }, oauthMethods: [], canConnectApiToken: false, canConnectOAuth: false, canDisconnect: true, canRefreshOAuth: false, canRevokeOAuth: false };
   const connectorService = {
     onDidChange: () => toDisposable(() => {}),
     list: async () => ({ generation: 7, connectors: [disconnected, connected] }),
@@ -222,7 +222,7 @@ test("Plugin settings project layered authority and send exact-package commands"
   const settings = disposables.add(new SettingsService());
   const configuration = disposables.add(new WorkbenchConfigurationService());
   const mutations: string[] = [];
-  const plugin = { id: "acme/github", version: "1.0.0", digest: `sha256:${"a".repeat(64)}`, enabled: false, granted: false, effective: false };
+  const plugin = { id: "acme/github", version: "1.0.0", digest: `sha256:${"a".repeat(64)}`, enabled: false, granted: false, effective: false, revoked: false };
   const pluginService = {
     onDidChange: () => toDisposable(() => {}),
     list: async () => ({ revision: 7, activationGeneration: 3, packages: [plugin] }),
@@ -449,6 +449,7 @@ test("Indexing settings save Tool Search and semantic model consent configuratio
       },
       activeWorkspaceAuthorized: false,
     },
+    execPolicyRules: [],
   } as const satisfies ConfigReadResult;
   const configured: Array<{ mode: string; embeddingModel?: { provider: string; model: string }; revision: number }> = [];
   const configuredProviders: Array<{ provider: string; baseUrl: string | null; revision: number }> = [];

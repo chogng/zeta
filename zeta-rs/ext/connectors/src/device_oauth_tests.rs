@@ -14,6 +14,10 @@ use zeta_secrets::SecretValue;
 
 use super::*;
 use crate::ConnectorAuthority;
+use crate::ConnectorOAuthCredential;
+use crate::ConnectorOAuthCredentialReplacement;
+use crate::ConnectorOAuthRefreshRequest;
+use crate::ConnectorOAuthRevokeRequest;
 
 struct TestDeviceProvider {
     polls: Mutex<Vec<ConnectorDeviceOAuthPoll>>,
@@ -66,9 +70,7 @@ impl ConnectorDeviceOAuthProvider for TestDeviceProvider {
     }
 }
 
-fn fixture(
-    polls: Vec<ConnectorDeviceOAuthPoll>,
-) -> (ConnectorDeviceOAuthService, ConnectorId) {
+fn fixture(polls: Vec<ConnectorDeviceOAuthPoll>) -> (ConnectorDeviceOAuthService, ConnectorId) {
     let connector_id = ConnectorId::new("acme/github:connector:account").unwrap();
     let definition = ConnectorDefinition::new(
         connector_id.clone(),
@@ -85,10 +87,7 @@ fn fixture(
     let provider: Arc<dyn ConnectorDeviceOAuthProvider> = Arc::new(TestDeviceProvider {
         polls: Mutex::new(polls),
     });
-    let service = ConnectorDeviceOAuthService::new(
-        credentials,
-        [(connector_id.clone(), provider)],
-    );
+    let service = ConnectorDeviceOAuthService::new(credentials, [(connector_id.clone(), provider)]);
     (service, connector_id)
 }
 

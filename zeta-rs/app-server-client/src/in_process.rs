@@ -8,6 +8,7 @@ use zeta_app_server::AppServer;
 use zeta_app_server::BuiltInSkillRoot;
 use zeta_app_server::ConnectionState;
 use zeta_app_server::LocalAppServerOptions;
+use zeta_app_server::LocalProductServicesConfig;
 use zeta_app_server::SessionStateMode;
 use zeta_app_server::SlashCommandCatalog;
 use zeta_app_server::open_local_app_server;
@@ -27,6 +28,7 @@ pub struct InProcessClientOptions {
     pub built_in_skills: BuiltInSkillRoot,
     pub session_state_mode: SessionStateMode,
     model_operation_client: Option<Arc<dyn OperationClient>>,
+    product_services: Option<LocalProductServicesConfig>,
 }
 
 impl InProcessClientOptions {
@@ -40,6 +42,7 @@ impl InProcessClientOptions {
             built_in_skills: BuiltInSkillRoot::AutoDetect,
             session_state_mode: SessionStateMode::Durable,
             model_operation_client: None,
+            product_services: None,
         }
     }
 
@@ -80,6 +83,12 @@ impl InProcessClientOptions {
         self.model_operation_client = Some(client);
         self
     }
+
+    /// Installs product-pinned Marketplace roots and public Connector OAuth adapters.
+    pub fn with_product_services(mut self, services: LocalProductServicesConfig) -> Self {
+        self.product_services = Some(services);
+        self
+    }
 }
 
 impl fmt::Debug for InProcessClientOptions {
@@ -96,6 +105,10 @@ impl fmt::Debug for InProcessClientOptions {
             .field(
                 "model_operation_client_injected",
                 &self.model_operation_client.is_some(),
+            )
+            .field(
+                "product_services_injected",
+                &self.product_services.is_some(),
             )
             .finish()
     }
@@ -115,6 +128,7 @@ impl PartialEq for InProcessClientOptions {
                 (None, None) => true,
                 _ => false,
             }
+            && self.product_services == other.product_services
     }
 }
 
@@ -201,6 +215,9 @@ pub fn open_in_process_app_server(
     }
     if let Some(client) = options.model_operation_client {
         server_options = server_options.with_model_operation_client(client);
+    }
+    if let Some(services) = options.product_services {
+        server_options = server_options.with_product_services(services);
     }
     let server = open_local_app_server(server_options)
         .map_err(|error| ClientError::Transport(error.to_string()))?;

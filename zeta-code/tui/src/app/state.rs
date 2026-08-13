@@ -189,6 +189,13 @@ impl App {
             SelectionActions::ReadOnly => None,
             SelectionActions::Interaction(_) => None,
             SelectionActions::Connectors(actions) => match actions.get(item_id)? {
+                ConnectorSelectionAction::ConnectDeviceOAuth {
+                    connector_id,
+                    connection_generation,
+                } => Some(AppCommand::ConnectConnectorDeviceOAuth {
+                    connector_id: connector_id.clone(),
+                    connection_generation: *connection_generation,
+                }),
                 ConnectorSelectionAction::Disconnect { connector_id } => {
                     Some(AppCommand::DisconnectConnector {
                         connector_id: connector_id.clone(),

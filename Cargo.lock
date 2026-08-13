@@ -9756,7 +9756,9 @@ dependencies = [
 name = "zeta-plugin-marketplace"
 version = "0.1.0"
 dependencies = [
+ "aws-lc-rs",
  "futures",
+ "jiff",
  "pretty_assertions",
  "serde",
  "serde_json",

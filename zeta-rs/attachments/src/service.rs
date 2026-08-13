@@ -97,13 +97,13 @@ impl ImageAttachments {
         reference: &ImageAttachmentRef,
     ) -> Result<String, AttachmentError> {
         let bytes = self.read_verified(reference)?;
-        Ok(data_url_from_bytes(reference.media_type.mime_type(), &bytes))
+        Ok(data_url_from_bytes(
+            reference.media_type.mime_type(),
+            &bytes,
+        ))
     }
 
-    fn read_verified(
-        &self,
-        reference: &ImageAttachmentRef,
-    ) -> Result<Arc<[u8]>, AttachmentError> {
+    fn read_verified(&self, reference: &ImageAttachmentRef) -> Result<Arc<[u8]>, AttachmentError> {
         validate_reference_shape(reference)?;
         self.store.read(reference)
     }
@@ -113,7 +113,9 @@ pub fn image_media_type(bytes: &[u8]) -> Option<ImageMediaType> {
     detect_image_format(bytes).map(media_type_for_format)
 }
 
-pub(crate) fn reference_for_image(image: &EncodedImage) -> Result<ImageAttachmentRef, AttachmentError> {
+pub(crate) fn reference_for_image(
+    image: &EncodedImage,
+) -> Result<ImageAttachmentRef, AttachmentError> {
     let encoded_bytes = u64::try_from(image.bytes.len()).map_err(|_| AttachmentError::TooLarge)?;
     if image.bytes.is_empty() || image.bytes.len() > MAX_IMAGE_ATTACHMENT_BYTES {
         return Err(AttachmentError::TooLarge);
@@ -190,7 +192,9 @@ fn policy_for_detail(detail: ImageDetail) -> PromptImagePolicy {
     PromptImagePolicy {
         mode: match detail {
             ImageDetail::Original => PromptImageMode::Original,
-            ImageDetail::Auto | ImageDetail::Low | ImageDetail::High => PromptImageMode::ResizeToFit,
+            ImageDetail::Auto | ImageDetail::Low | ImageDetail::High => {
+                PromptImageMode::ResizeToFit
+            }
         },
         safety_limits: ImageSafetyLimits {
             max_input_bytes: MAX_IMAGE_ATTACHMENT_BYTES,

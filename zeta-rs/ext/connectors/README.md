@@ -20,8 +20,11 @@ orchestration。它不拥有 Connector state machine、secret backend、MCP sess
 | `ConnectorCredentialService::disconnect` | 先撤销 readiness，再 best-effort delete secret | cleanup 失败返回 `RetryRequired`，不回滚断连 |
 | `ConnectorAuthority::with_authorized_invocation` | 把 dispatch 与 disconnect commit 线性化 | stale generation/digest 不执行 closure |
 | `ConnectorOAuthService` | state + PKCE + exact redirect、one-shot callback、refresh/revoke 编排 | provider wire protocol 与 callback host 由 adapter/产品拥有 |
+| `ConnectorDeviceOAuthService` | device-code attempt、provider interval/slow-down、expiry/cancel 与 authority transition | device code 只驻留内存，不进入 protocol、history 或 SecretStore |
 | `ConnectorOAuthProvider` | 一个具体服务的授权 URL 与 code exchange 端口 | 不持久化 secret，不修改 authority |
-| `GitHubOAuthProvider` | GitHub authorization/code exchange/account/refresh/revoke wire adapter | OAuth App client 配置、浏览器 callback、secret persistence |
+| `GitHubBrokeredOAuthProvider` | 经产品 broker 执行 PKCE exchange/refresh/revoke | client 不持有 GitHub App secret；broker deployment 不属于本 crate |
+| `GitHubDeviceOAuthProvider` | GitHub public-client device grant 与账户读取 | 无 client secret；不声明 GitHub 未提供的 refresh/remote revoke |
+| `GitHubOAuthProvider` | confidential direct GitHub adapter | 仅供可信 host 显式注入 client secret |
 
 ## 内部调用路径
 
@@ -46,15 +49,18 @@ ConnectorAuthority::open_sqlite
 event/receipt 原子性；`auth::credential_key` 只生成 hashed non-PII key。若这些 helper 开始读取 token bytes、
 启动 MCP，或 App Server 直接写 SQLite，即表示 ownership 漂移。
 
-当前实现 API-token adapter 与 browser-code OAuth 的通用 PKCE 状态机。`oauth::PendingOAuthAttempt`
+当前实现 API-token adapter、browser-code OAuth 的通用 PKCE 状态机与 device grant 状态机。`oauth::PendingOAuthAttempt`
 只在内存保存 flow ID、state 和 verifier；`ConnectorOAuthService::complete` 一次性消费 callback，
 并在过期、state mismatch、provider 或 credential failure 时提交 `Unavailable`。Desktop loopback
-listener/browser interaction 已由 Electron main 持有。`GitHubOAuthProvider` 使用注入的 `HttpClient`
-实现 code exchange、账户读取、可选 refresh token 更新和远端 token revoke；产品 host 必须注入自己的
-OAuth App client ID/secret，仓库不硬编码凭据。远端 revoke 成功后才提交本地 disconnect；失败时保留
-ready connection 以便重试。device flow 和其他 provider 仍由上层 adapter 实现；不能通过扩张
-authority event payload 来保存 OAuth code、refresh token 或 raw credential。生产显式文件 backend 位于
-`zeta-secrets`，OS keyring 不属于本 crate。
+listener/browser interaction 已由 Electron main 持有。`device_oauth::PendingDeviceOAuthAttempt` 只在内存
+保存 device code，并严格执行 provider interval、GitHub `slow_down + 5s`、expiry 与 cancel。
+
+产品默认可选择 `GitHubBrokeredOAuthProvider`：client 只发送 PKCE verifier，GitHub App secret 留在发行方
+broker；或选择 `GitHubDeviceOAuthProvider`：仅需 public client ID。旧的 `GitHubOAuthProvider` 继续作为可信
+host 直连 adapter。OAuth secret 以 runtime token 与 lifecycle bundle 分层封装，MCP projection 只能拿到
+runtime token。远端 revoke 成功后才提交本地 disconnect；失败时保留 ready connection 以便重试。
+不能通过扩张 authority event payload 来保存 OAuth code、refresh token 或 raw credential。生产显式文件
+file backend 位于 `zeta-secrets`，OS keyring adapter 位于独立的 `zeta-keyring-store`；均不属于本 crate。
 
 验证入口：
 
