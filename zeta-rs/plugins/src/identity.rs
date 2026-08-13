@@ -31,6 +31,14 @@ impl PluginId {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+
+    /// Returns the publisher namespace carried by this validated Plugin identity.
+    pub fn publisher(&self) -> &str {
+        self.0
+            .split_once('/')
+            .expect("validated Plugin identity contains one separator")
+            .0
+    }
 }
 
 impl fmt::Display for PluginId {

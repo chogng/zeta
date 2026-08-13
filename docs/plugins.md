@@ -657,8 +657,10 @@ runtime 不可用，但不会把 Plugin 标成未安装。
 
 已实现 mutation 使用 `CommandId + expectedRevision + exact package payload`；安装入口不会接受 Renderer
 传入的任意宿主文件路径。`Managed` Marketplace root 由产品分发层注册，`LocalDevelopment` 仅在 host
-显式开启时可用。读取模式不决定运营方信任：官方远端源仍为 `ProductManaged`，只有由 host 明确接入
-并固定独立 root 的第三方源才是 `VerifiedExternal`。`RemoteManaged` Marketplace 已通过 host-pinned
+显式开启时可用。读取模式不决定运营方信任：官方远端源仍为 `ProductManaged`，只有由 host 明确接入、
+固定独立 root 并声明 non-empty `allowedPublishers` 的第三方源才是 `VerifiedExternal`；任一签名 target
+越过该 namespace scope 会使整源 fail-closed。不同远端源实际发布同一 publisher namespace 时，组合也会
+因 owner ambiguity 失败，而不是按源顺序覆盖。`RemoteManaged` Marketplace 已通过 host-pinned
 TUF root 同步 HTTPS catalog：
 timestamp/snapshot/targets 的 threshold、rollback 与 expiry 检查由 TUF verifier 执行；package 必须来自
 `publishers/<publisher>` delegated role。刷新只缓存签名 metadata、`zetaCatalog` discovery metadata 与撤销
@@ -674,6 +676,8 @@ revocation target 会写入 durable exact-package tombstone，不因后续 feed 
 Marketplace；`ZETA_PRODUCT_SERVICES_PATH` 与 App Server 的 `--product-services PATH` 仍是产品宿主的
 显式覆盖入口。远端 metadata、Plugin、用户配置和 Workspace 都不能更换这份 root。发行源仓库仍为
 private，Pages 只暴露经过 CI 生成和 Zeta 消费端复核的 `metadata/` 与 `targets/` 静态产物。
+默认产品文件只启用官方源；第三方源只能由 host 在同一只读文件中追加，不能从 Plugin、自身远端 metadata
+或普通用户设置提升为发行信任。
 
 客户端必须展示：
 

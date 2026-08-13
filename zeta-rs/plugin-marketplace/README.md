@@ -61,6 +61,8 @@ flowchart TD
 
 - Signature, threshold, version, expiry, delegation, target hash/length, package digest, and archive
   failures are fail-closed.
+- Verified-external sources additionally require a host-pinned, non-empty publisher allowlist.
+  Every signed target must remain inside that scope; remote metadata cannot broaden it.
 - Only a transport failure may fall back to the last complete discovery cache. Cached metadata is
   reopened through TUF with safe expiration enforcement; package directories are never trusted
   without the current signed target and revocation metadata.

@@ -181,6 +181,7 @@ Server safe point 和 MCP dispatch fence，不得创建第二套 Connector 状�
   "schemaVersion": 1,
   "marketplaces": [{
     "id": "zeta-official",
+    "trust": "productManaged",
     "metadataBaseUrl": "https://marketplace.zeta.example/metadata/",
     "targetsBaseUrl": "https://marketplace.zeta.example/targets/",
     "trustedRoot": "marketplace-root.json"
@@ -193,6 +194,11 @@ Server safe point 和 MCP dispatch fence，不得创建第二套 Connector 状�
   }]
 }
 ```
+
+第三方源使用 `"trust": "verifiedExternal"`，并必须同时提供 non-empty、无重复的
+`"allowedPublishers": ["community-a"]`；签名 catalog 出现 scope 外 publisher 或两个远端源实际占用
+同一 publisher namespace 时，App Server 启动失败。默认省略 `trust` 只为兼容旧产品文件，语义仍是
+`productManaged`，不能同时填写 `allowedPublishers`。
 
 使用 broker 时把 `type` 改为 `githubBrokered`，并增加 `brokerBaseUrl`；broker API 固定为
 `v1/oauth/github/{authorize,token,revoke}`，response 必须带 provider-validated account identity。OAuth adapter

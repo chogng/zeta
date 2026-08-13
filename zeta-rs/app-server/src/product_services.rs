@@ -58,14 +58,27 @@ impl LocalProductServicesConfig {
                     .as_ref()
                     .join("cache/plugin-marketplaces")
                     .join(id.as_str());
-                RemotePluginMarketplaceConfig::new(
+                let config = RemotePluginMarketplaceConfig::new(
                     id,
                     Url::parse(&marketplace.metadata_base_url).map_err(product_config_error)?,
                     Url::parse(&marketplace.targets_base_url).map_err(product_config_error)?,
                     trusted_root,
                     cache_root,
                 )
-                .map_err(product_config_error)
+                .map_err(product_config_error)?;
+                match marketplace.trust {
+                    ProductMarketplaceTrustDocument::ProductManaged
+                        if marketplace.allowed_publishers.is_empty() =>
+                    {
+                        Ok(config)
+                    }
+                    ProductMarketplaceTrustDocument::VerifiedExternal => config
+                        .with_verified_external_publishers(marketplace.allowed_publishers)
+                        .map_err(product_config_error),
+                    ProductMarketplaceTrustDocument::ProductManaged => {
+                        Err(product_config_error(()))
+                    }
+                }
             })
             .collect::<Result<Vec<_>, _>>()?;
         let connector_oauth = document
@@ -128,9 +141,21 @@ struct ProductServicesDocument {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct ProductMarketplaceDocument {
     id: String,
+    #[serde(default)]
+    trust: ProductMarketplaceTrustDocument,
+    #[serde(default)]
+    allowed_publishers: Vec<String>,
     metadata_base_url: String,
     targets_base_url: String,
     trusted_root: PathBuf,
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+enum ProductMarketplaceTrustDocument {
+    #[default]
+    ProductManaged,
+    VerifiedExternal,
 }
 
 #[derive(Deserialize)]

@@ -453,15 +453,27 @@ impl PluginMarketplaceService {
         marketplaces: impl IntoIterator<Item = PluginMarketplace>,
     ) -> Result<Self, PluginError> {
         let mut registered = BTreeMap::new();
+        let mut remote_publisher_owners = BTreeMap::new();
         for marketplace in marketplaces {
-            if registered
-                .insert(marketplace.id.clone(), marketplace)
-                .is_some()
-            {
+            if registered.contains_key(&marketplace.id) {
                 return Err(marketplace_error(
                     "Plugin Marketplace identity is registered more than once",
                 ));
             }
+            if marketplace.mode == PluginMarketplaceMode::RemoteManaged {
+                for package in marketplace.packages.values() {
+                    let publisher = package.manifest.id.publisher().to_owned();
+                    if let Some(owner) = remote_publisher_owners.get(&publisher)
+                        && owner != &marketplace.id
+                    {
+                        return Err(marketplace_error(
+                            "remote Plugin Marketplace publisher namespace is ambiguous",
+                        ));
+                    }
+                    remote_publisher_owners.insert(publisher, marketplace.id.clone());
+                }
+            }
+            registered.insert(marketplace.id.clone(), marketplace);
         }
         Ok(Self {
             authority,

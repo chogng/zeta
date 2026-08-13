@@ -125,6 +125,35 @@ fn signed_catalog_defers_package_download_and_revalidates_on_demand_cache() {
 }
 
 #[test]
+fn external_marketplace_rejects_signed_targets_outside_its_pinned_publisher_scope() {
+    let fixture = SignedDistributionFixture::create();
+    let client = Arc::new(FixtureHttpClient {
+        root: fixture.repository.path().to_path_buf(),
+        offline: AtomicBool::new(false),
+    });
+    let config = RemotePluginMarketplaceConfig::new(
+        PluginMarketplaceId::new("external-test").unwrap(),
+        Url::parse("https://marketplace.example/metadata/").unwrap(),
+        Url::parse("https://marketplace.example/targets/").unwrap(),
+        fixture.trusted_root,
+        fixture.cache.path(),
+    )
+    .unwrap()
+    .with_verified_external_publishers(["other-publisher".to_owned()])
+    .unwrap();
+
+    let error = RemotePluginMarketplace::new(config, client)
+        .sync()
+        .unwrap_err();
+
+    assert_eq!(
+        error.kind(),
+        crate::RemoteMarketplaceErrorKind::MetadataUntrusted
+    );
+    assert!(!fixture.cache.path().join("packages").exists());
+}
+
+#[test]
 fn cache_pruning_never_removes_the_installed_content_addressed_object() {
     let fixture = SignedDistributionFixture::create();
     let client = Arc::new(FixtureHttpClient {

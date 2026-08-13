@@ -222,6 +222,41 @@ fn materialization_lease_survives_until_authority_copies_the_package() {
 }
 
 #[test]
+fn remote_marketplaces_cannot_share_a_publisher_namespace() {
+    let root = tempdir().unwrap();
+    let first = write_package(&root.path().join("first"), "1.0.0", "# First");
+    let second = write_package(&root.path().join("second"), "2.0.0", "# Second");
+    let remote =
+        |marketplace_id: &str, trust: PluginMarketplaceTrust, package: LocalPluginPackage| {
+            PluginMarketplace::from_verified_remote(
+                PluginMarketplaceId::new(marketplace_id).unwrap(),
+                trust,
+                PluginPackageDigest::sha256(marketplace_id.as_bytes()),
+                [VerifiedRemotePluginPackage::new(
+                    package.manifest().clone(),
+                    package.package_digest().clone(),
+                    package.stats(),
+                    Arc::new(CountingMaterializer {
+                        package,
+                        calls: AtomicUsize::new(0),
+                    }),
+                )],
+            )
+            .unwrap()
+        };
+    let official = remote("official", PluginMarketplaceTrust::ProductManaged, first);
+    let external = remote("external", PluginMarketplaceTrust::VerifiedExternal, second);
+    let authority = PluginActivationAuthority::open(root.path().join("profile")).unwrap();
+
+    let error = match PluginMarketplaceService::new(authority, [official, external]) {
+        Ok(_) => panic!("remote publisher namespace collision was accepted"),
+        Err(error) => error,
+    };
+
+    assert_eq!(error.kind(), PluginErrorKind::SourceUnavailable);
+}
+
+#[test]
 fn update_stages_new_bytes_and_rollback_requires_old_digest_grant() {
     let root = tempdir().unwrap();
     let first = write_package(&root.path().join("packages/review-1"), "1.0.0", "# One");

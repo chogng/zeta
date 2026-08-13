@@ -23,6 +23,7 @@ use zeta_http_client::HttpClient;
 use zeta_plugins::InstalledPluginRef;
 use zeta_plugins::LocalPluginPackage;
 use zeta_plugins::MaterializedPluginMarketplacePackage;
+use zeta_plugins::PluginId;
 use zeta_plugins::PluginMarketplace;
 use zeta_plugins::PluginMarketplaceId;
 use zeta_plugins::PluginMarketplaceMaterializationError;
@@ -54,6 +55,7 @@ pub struct RemotePluginMarketplaceConfig {
     cache_root: PathBuf,
     cache_policy: RemoteMarketplaceCachePolicy,
     trust: PluginMarketplaceTrust,
+    allowed_publishers: BTreeSet<String>,
 }
 
 impl RemotePluginMarketplaceConfig {
@@ -83,6 +85,7 @@ impl RemotePluginMarketplaceConfig {
             cache_root: cache_root.into(),
             cache_policy: RemoteMarketplaceCachePolicy::default(),
             trust: PluginMarketplaceTrust::ProductManaged,
+            allowed_publishers: BTreeSet::new(),
         })
     }
 
@@ -100,15 +103,23 @@ impl RemotePluginMarketplaceConfig {
         self
     }
 
-    /// Marks a host-pinned remote source as product-managed or verified external.
-    pub fn with_trust(
+    /// Marks a host-pinned source as external and restricts its signed publisher namespaces.
+    pub fn with_verified_external_publishers(
         mut self,
-        trust: PluginMarketplaceTrust,
+        publishers: impl IntoIterator<Item = String>,
     ) -> Result<Self, RemoteMarketplaceError> {
-        if trust == PluginMarketplaceTrust::LocalDevelopment {
+        let publishers = publishers.into_iter().collect::<Vec<_>>();
+        let unique = publishers.iter().cloned().collect::<BTreeSet<_>>();
+        if unique.is_empty()
+            || unique.len() != publishers.len()
+            || publishers
+                .iter()
+                .any(|publisher| PluginId::new(format!("{publisher}/publisher-scope")).is_err())
+        {
             return Err(config_error());
         }
-        self.trust = trust;
+        self.trust = PluginMarketplaceTrust::VerifiedExternal;
+        self.allowed_publishers = unique;
         Ok(self)
     }
 }
@@ -323,6 +334,7 @@ impl RemotePluginMarketplace {
         let revoked = read_revocations(repository).await?;
         let revoked_set = revoked.iter().cloned().collect::<BTreeSet<_>>();
         let published = metadata::published_plugins(repository)?;
+        validate_publisher_scope(&self.config, &published)?;
         let revision = repository.targets().signed.version.get();
         let materializer = Arc::new(RemotePackageMaterializer {
             config: self.config.clone(),
@@ -444,6 +456,7 @@ impl RemotePackageMaterializer {
             return Err(package_error());
         }
         let published = metadata::published_plugins(&repository)?;
+        validate_publisher_scope(&self.config, &published)?;
         let target = published
             .iter()
             .find(|published| &published.package == package)
@@ -536,6 +549,27 @@ async fn catalog_packages(
         ));
     }
     Ok(packages)
+}
+
+fn validate_publisher_scope(
+    config: &RemotePluginMarketplaceConfig,
+    published: &[PublishedPluginTarget],
+) -> Result<(), RemoteMarketplaceError> {
+    match config.trust {
+        PluginMarketplaceTrust::ProductManaged if config.allowed_publishers.is_empty() => Ok(()),
+        PluginMarketplaceTrust::VerifiedExternal
+            if published.iter().all(|target| {
+                config
+                    .allowed_publishers
+                    .contains(target.package.id.publisher())
+            }) =>
+        {
+            Ok(())
+        }
+        PluginMarketplaceTrust::ProductManaged
+        | PluginMarketplaceTrust::VerifiedExternal
+        | PluginMarketplaceTrust::LocalDevelopment => Err(metadata_error()),
+    }
 }
 
 async fn materialize_package(

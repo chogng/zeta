@@ -109,7 +109,7 @@ fn distribution_urls_require_unambiguous_https_directory_bases() {
 }
 
 #[test]
-fn remote_source_trust_is_explicit_and_cannot_claim_local_development() {
+fn external_source_trust_requires_explicit_valid_publisher_namespaces() {
     let root = TempDir::new().unwrap();
     let config = RemotePluginMarketplaceConfig::new(
         PluginMarketplaceId::new("community").unwrap(),
@@ -124,14 +124,26 @@ fn remote_source_trust_is_explicit_and_cannot_claim_local_development() {
     assert_eq!(
         config
             .clone()
-            .with_trust(PluginMarketplaceTrust::VerifiedExternal)
+            .with_verified_external_publishers(["community".to_owned()])
             .unwrap()
             .trust(),
         PluginMarketplaceTrust::VerifiedExternal
     );
     assert!(
         config
-            .with_trust(PluginMarketplaceTrust::LocalDevelopment)
+            .clone()
+            .with_verified_external_publishers(Vec::new())
+            .is_err()
+    );
+    assert!(
+        config
+            .clone()
+            .with_verified_external_publishers(["Community".to_owned()])
+            .is_err()
+    );
+    assert!(
+        config
+            .with_verified_external_publishers(["community".to_owned(), "community".to_owned()])
             .is_err()
     );
 }
