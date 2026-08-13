@@ -1049,7 +1049,13 @@ fn start_turn_persists_ordered_text_and_image_items() {
     ));
     assert!(matches!(
         &snapshot.items[1],
-        ThreadItem::UserImage { turn_id, url, .. }
-            if turn_id == &result.turn_id && url == &image_url
+        ThreadItem::UserImageAttachment { turn_id, attachment, .. }
+            if turn_id == &result.turn_id
+                && threads.image_attachments().verify(attachment).is_ok()
+    ));
+    assert!(matches!(
+        &snapshot.commands[0].receipt.command,
+        zeta_protocol::ThreadCommand::StartTurn { input, .. }
+            if matches!(input[1], UserInput::ImageAttachment { .. })
     ));
 }

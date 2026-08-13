@@ -21,10 +21,7 @@ pub(crate) struct AttachmentModelService {
 }
 
 impl AttachmentModelService {
-    pub(crate) fn new(
-        inner: Arc<dyn ModelService>,
-        attachments: Arc<ImageAttachments>,
-    ) -> Self {
+    pub(crate) fn new(inner: Arc<dyn ModelService>, attachments: Arc<ImageAttachments>) -> Self {
         Self { inner, attachments }
     }
 
@@ -96,3 +93,7 @@ impl ModelService for AttachmentModelService {
             .stream(selection, &self.materialize(request)?, cancellation, sink)
     }
 }
+
+#[cfg(test)]
+#[path = "attachment_model_service_tests.rs"]
+mod tests;

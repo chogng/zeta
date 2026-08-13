@@ -499,7 +499,16 @@ Thread {
     "threadId": "thread_1",
     "input": [
       { "type": "text", "text": "Describe this image" },
-      { "type": "image", "url": "data:image/png;base64,..." }
+      {
+        "type": "imageAttachment",
+        "attachment": {
+          "contentDigest": "sha256:...",
+          "mediaType": "png",
+          "encodedBytes": 12345,
+          "width": 1024,
+          "height": 768
+        }
+      }
     ]
   }
 }
@@ -509,10 +518,14 @@ acceptance、user items 与 started facts 作为一个 atomic Thread batch 提�
 与 completed fact 也作为一个 atomic batch 提交。Provider 失败时持久化稳定
 `StableTurnError`；持久化失败时内存投影不得伪造终态。
 
-`input` 是保持顺序的非空 tagged union。文本项必须非空；图片项接受受限 HTTP(S) URL，或
-PNG/JPEG/GIF/WEBP base64 data URL。App Server 不接受本地路径；客户端必须在 RPC 边界前读取并
-规范化本地文件。Core 会重新校验 MIME、签名、base64 和 16 MiB decoded-size 上限，并把图片
-作为 durable `UserImage` 保存。
+`input` 是保持顺序的非空 tagged union。文本项必须非空；新客户端应先调用
+`attachment/upload/start`，按服务端返回的 `maxChunkBytes` 顺序调用
+`attachment/upload/write`，然后调用 `attachment/upload/finish` 取得
+`ImageAttachmentRef`。远程 HTTP(S) 图片使用 `attachment/importRemote`，由 host 执行 public-only
+DNS/redirect/size/image 校验。上传 session 归 connection 所有，断连、取消或 idle timeout 会清理；
+App Server 不接受本地路径。Core 持久化 `UserImageAttachment`，command receipt、Thread history 与
+snapshot 均只保存 content digest 和验证后的媒体元数据。旧 `image` URL input 仅作为兼容入口，
+在 durable Thread append 前同样会被归一化为 attachment reference。
 
 `session/request` 的 `InterruptTurn` 同样携带 `commandId`、Session/Thread/Turn identity 与
 `expectedSequence`，成功返回新的 Thread sequence。

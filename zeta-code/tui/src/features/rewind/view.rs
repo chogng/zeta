@@ -75,7 +75,9 @@ fn checkpoint_text(items: &[ThreadItem]) -> Option<String> {
         .iter()
         .filter_map(|item| match item {
             ThreadItem::UserMessage { text, .. } => Some(text.as_str()),
-            ThreadItem::UserImage { .. } => Some("[Image]"),
+            ThreadItem::UserImage { .. } | ThreadItem::UserImageAttachment { .. } => {
+                Some("[Image]")
+            }
             ThreadItem::AgentMessage { .. }
             | ThreadItem::Reasoning { .. }
             | ThreadItem::Plan { .. }

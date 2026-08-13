@@ -105,9 +105,7 @@ impl ImageAttachments {
         reference: &ImageAttachmentRef,
     ) -> Result<Arc<[u8]>, AttachmentError> {
         validate_reference_shape(reference)?;
-        let bytes = self.store.read(reference)?;
-        verify_reference_bytes(reference, &bytes)?;
-        Ok(bytes)
+        self.store.read(reference)
     }
 }
 

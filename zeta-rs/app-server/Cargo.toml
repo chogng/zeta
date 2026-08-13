@@ -78,6 +78,7 @@ zeta-typst = { workspace = true }
 zeta-utils-pty = { workspace = true }
 
 [dev-dependencies]
+image = { workspace = true, features = ["png"] }
 tempfile = { workspace = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]

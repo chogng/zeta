@@ -19,7 +19,10 @@ use crate::service::verify_reference_bytes;
 /// Implementations must commit bytes before returning their reference and must verify untrusted
 /// reference metadata rather than using it to select arbitrary filesystem paths.
 pub trait ImageAttachmentStore: Send + Sync {
+    /// Commits validated encoded bytes before returning their canonical durable reference.
     fn put(&self, image: &EncodedImage) -> Result<ImageAttachmentRef, AttachmentError>;
+
+    /// Resolves and verifies the bytes identified by an untrusted attachment reference.
     fn read(&self, reference: &ImageAttachmentRef) -> Result<Arc<[u8]>, AttachmentError>;
 }
 
@@ -40,12 +43,15 @@ impl ImageAttachmentStore for MemoryImageAttachmentStore {
     }
 
     fn read(&self, reference: &ImageAttachmentRef) -> Result<Arc<[u8]>, AttachmentError> {
-        self.bytes
+        let bytes = self
+            .bytes
             .lock()
             .map_err(|_| AttachmentError::Corrupt)?
             .get(&reference.content_digest)
             .cloned()
-            .ok_or(AttachmentError::NotFound)
+            .ok_or(AttachmentError::NotFound)?;
+        verify_reference_bytes(reference, &bytes)?;
+        Ok(bytes)
     }
 }
 
@@ -79,7 +85,9 @@ impl ImageAttachmentStore for FileImageAttachmentStore {
             verify_reference_bytes(&reference, &bytes)?;
             return Ok(reference);
         }
-        let parent = path.parent().expect("attachment paths always have a parent");
+        let parent = path
+            .parent()
+            .expect("attachment paths always have a parent");
         create_private_directory(parent)?;
         let mut temporary = tempfile::Builder::new()
             .prefix(".attachment-")
@@ -107,6 +115,7 @@ impl ImageAttachmentStore for FileImageAttachmentStore {
     fn read(&self, reference: &ImageAttachmentRef) -> Result<Arc<[u8]>, AttachmentError> {
         let path = self.path_for(&reference.content_digest);
         let bytes = read_regular_file(&path)?;
+        verify_reference_bytes(reference, &bytes)?;
         Ok(bytes.into())
     }
 }
@@ -127,8 +136,8 @@ fn read_regular_file(path: &Path) -> Result<Vec<u8>, AttachmentError> {
 
 fn create_private_directory(path: &Path) -> Result<(), AttachmentError> {
     fs::create_dir_all(path).map_err(|source| AttachmentError::storage(path, source))?;
-    let metadata = fs::symlink_metadata(path)
-        .map_err(|source| AttachmentError::storage(path, source))?;
+    let metadata =
+        fs::symlink_metadata(path).map_err(|source| AttachmentError::storage(path, source))?;
     if !metadata.file_type().is_dir() || metadata.file_type().is_symlink() {
         return Err(AttachmentError::Corrupt);
     }

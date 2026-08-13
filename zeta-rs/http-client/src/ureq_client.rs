@@ -291,8 +291,16 @@ fn is_public_ipv6(address: Ipv6Addr) -> bool {
     !address.is_unspecified()
         && !address.is_loopback()
         && !address.is_multicast()
+        && !segments[..6].iter().all(|segment| *segment == 0)
+        && !(segments[0] == 0x0064 && segments[1] == 0xff9b)
+        && !(segments[0] == 0x0100 && segments[1..4].iter().all(|segment| *segment == 0))
+        && !(segments[0] == 0x2001 && segments[1] <= 0x01ff)
+        && segments[0] != 0x2002
+        && segments[0] & 0xfff0 != 0x3ff0
+        && segments[0] != 0x5f00
         && segments[0] & 0xfe00 != 0xfc00
         && segments[0] & 0xffc0 != 0xfe80
+        && segments[0] & 0xffc0 != 0xfec0
         && !(segments[0] == 0x2001 && segments[1] == 0x0db8)
 }
 

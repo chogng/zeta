@@ -325,3 +325,58 @@ fn read_headers(stream: &mut impl Read) {
         }
     }
 }
+
+#[test]
+fn public_internet_policy_rejects_non_public_address_classes() {
+    for address in [
+        "0.0.0.0",
+        "10.0.0.1",
+        "100.64.0.1",
+        "127.0.0.1",
+        "169.254.1.1",
+        "172.16.0.1",
+        "192.168.0.1",
+        "198.18.0.1",
+        "203.0.113.1",
+        "224.0.0.1",
+        "::",
+        "::1",
+        "fc00::1",
+        "fe80::1",
+        "fec0::1",
+        "::192.168.1.1",
+        "64:ff9b::c0a8:101",
+        "100::1",
+        "2001::1",
+        "2002:c0a8:101::1",
+        "3fff::1",
+        "5f00::1",
+        "2001:db8::1",
+    ] {
+        assert!(
+            !crate::ureq_client::is_public_internet_ip(address.parse().unwrap()),
+            "{address} must not be treated as a public Internet target"
+        );
+    }
+    assert!(crate::ureq_client::is_public_internet_ip(
+        "1.1.1.1".parse().unwrap()
+    ));
+    assert!(crate::ureq_client::is_public_internet_ip(
+        "2606:4700:4700::1111".parse().unwrap()
+    ));
+}
+
+#[test]
+fn public_internet_policy_requires_direct_manual_redirect_handling() {
+    let ambient_proxy =
+        HttpClientConfig::new().with_network_target_policy(NetworkTargetPolicy::PublicInternetOnly);
+    assert!(matches!(
+        UreqHttpClient::with_config(ambient_proxy),
+        Err(HttpClientError::InvalidConfiguration(_))
+    ));
+
+    let direct = HttpClientConfig::new()
+        .with_proxy_policy(ProxyPolicy::Direct)
+        .with_network_target_policy(NetworkTargetPolicy::PublicInternetOnly);
+    assert!(UreqHttpClient::with_config(direct).is_ok());
+}

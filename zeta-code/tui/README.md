@@ -123,9 +123,9 @@ reconnect；这是一条明确支持边界，不是未完成的 TUI 恢复阶段
 transport retry。workspace mention 当前插入 workspace-relative 原子文本路径；通用
 `app://`/`plugin://` Mention 尚无已接受产品契约，也不是 TUI 自行扩展的领域模型。
 
-图片 data URL 会放大 command receipt、Thread store 与 snapshot；这是共享附件持久化边界，不能在
-TUI 内用私有 blob store 规避。只有共享 backend 接受 durable resource/blob contract 后，TUI 才能
-作为客户端接入。usage 和 status-line item/order 同样必须等待已接受的 typed snapshot/config
+图片 bytes 的持久化由共享 `zeta-attachments` content-addressed store 拥有；TUI 只在草稿期间保留
+本地 data URL，并在 `StartTurn` 前通过 App Server 分块上传或安全导入远程 URL，最终只提交 typed
+`ImageAttachmentRef`。usage 和 status-line item/order 同样必须等待已接受的 typed snapshot/config
 contract，不能从 transcript 推导。缺少 typed backend contract 的 login、compact、service tier 等
 命令不会进入 registry。Config 页面能读取 provider、MCP、Skill source、Plugin request、Hook 与
 language-server 状态，但只有当前已有 typed mutation 的 model/MCP/Skill 项可在 TUI 修改；它不会
@@ -328,20 +328,22 @@ subscription，再把新 `ActiveConversation`、`ThreadSubscription` 与 snapsho
 
 图片 paste 先尝试把完整字符串解释为本地文件路径；支持引号包裹和 shell 风格反斜杠转义。
 `Attachments` 通过 `zeta-utils-image` 的共享签名识别与 data URL helper 处理
-PNG/JPEG/GIF/WEBP，拒绝超过 16 MiB 的文件，并立即编码为 base64 data URL，避免提交时路径
-失效；真正的解码、资源限制和规范化由 Core 在 durable 接受边界执行。占位符绑定到稳定的
+PNG/JPEG/GIF/WEBP，拒绝超过 16 MiB 的文件，并在草稿期编码为 base64 data URL，避免提交时路径
+失效；提交时 `RequestTask` 使用 bounded chunk RPC 上传，真正的解码、资源限制、规范化和 durable
+identity 由共享 backend 接受边界执行。占位符绑定到稳定的
 `TextElementId`，光标移动和删除保持原子性，删除后剩余图片会重新编号。提交时
 `ChatComposer` 按草稿顺序生成 text/image items；
-展示记录保留 `[Image #N]`，App Server/Core 持久化规范化 URL 而不是本地路径。
+展示记录保留 `[Image #N]`，App Server/Core 持久化 attachment digest、格式、长度和尺寸，而不是
+本地路径或 data URL。
 
 `Ctrl-V` 是独立的 clipboard-image intent，不依赖 terminal `Event::Paste` 是否能携带位图。
 adapter 优先读取 clipboard file list 中可解码的图片，否则读取 RGBA image data，并统一编码为
 PNG bytes；`App` 再把 bytes 交给 `Attachments`，因此系统剪贴板和本地路径共享大小校验、
 占位符绑定、删除和提交语义。active Turn 期间同样可把图片加入 follow-up draft。
 
-该实现会让 data URL 进入 command receipt 与 durable Thread history，snapshot/store 体积随图片
-增长；当前 16 MiB 上限是保护边界。若产品接受 durable resource/blob 能力，长期替代方案必须由
-共享 backend/storage/protocol 拥有，TUI 只能消费该 contract，不能建立私有附件 authority。
+data URL 不进入 command receipt、durable Thread history 或 snapshot。当前 16 MiB 单图上限、192
+KiB upload chunk、connection-owned upload session 与共享缓冲上限共同构成 RPC 保护边界；TUI
+不能建立私有附件 authority，也不能绕过共享远程 URL 安全导入。
 
 `ChatComposer` 只解析光标下 whitespace-delimited `@token`；event loop 从 `App` 读取当前
 query 并同步给 `FileSearchManager`。manager 为 active token 保持一个 `PathSearchHandle`，后台 walker 使用

@@ -153,6 +153,22 @@
         {
           "type": "object",
           "properties": {
+            "attachment": {
+              "$ref": "#/$defs/ImageAttachmentRef"
+            },
+            "type": {
+              "type": "string",
+              "const": "userImageAttachment"
+            }
+          },
+          "required": [
+            "type",
+            "attachment"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
             "text": {
               "type": "string"
             },
@@ -988,6 +1004,131 @@
         }
       ]
     },
+    "AttachmentImportRemoteParams": {
+      "type": "object",
+      "properties": {
+        "detail": {
+          "$ref": "#/$defs/ImageDetail"
+        },
+        "url": {
+          "type": "string",
+          "maxLength": 8192,
+          "minLength": 1
+        }
+      },
+      "required": [
+        "url",
+        "detail"
+      ]
+    },
+    "AttachmentMaterializeResult": {
+      "type": "object",
+      "properties": {
+        "attachment": {
+          "$ref": "#/$defs/ImageAttachmentRef"
+        }
+      },
+      "required": [
+        "attachment"
+      ]
+    },
+    "AttachmentUploadCancelParams": {
+      "type": "object",
+      "properties": {
+        "uploadId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "uploadId"
+      ]
+    },
+    "AttachmentUploadFinishParams": {
+      "type": "object",
+      "properties": {
+        "uploadId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "uploadId"
+      ]
+    },
+    "AttachmentUploadStartParams": {
+      "type": "object",
+      "properties": {
+        "detail": {
+          "$ref": "#/$defs/ImageDetail"
+        },
+        "encodedBytes": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "mediaType": {
+          "$ref": "#/$defs/ImageMediaType"
+        }
+      },
+      "required": [
+        "mediaType",
+        "encodedBytes",
+        "detail"
+      ]
+    },
+    "AttachmentUploadStartResult": {
+      "type": "object",
+      "properties": {
+        "maxChunkBytes": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "uploadId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "uploadId",
+        "maxChunkBytes"
+      ]
+    },
+    "AttachmentUploadWriteParams": {
+      "type": "object",
+      "properties": {
+        "dataBase64": {
+          "type": "string"
+        },
+        "offset": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "uploadId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "uploadId",
+        "offset",
+        "dataBase64"
+      ]
+    },
+    "AttachmentUploadWriteResult": {
+      "type": "object",
+      "properties": {
+        "nextOffset": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "nextOffset"
+      ]
+    },
     "BrowserCapability": {
       "type": "object",
       "properties": {
@@ -1388,6 +1529,54 @@
             "method": {
               "type": "string",
               "const": "connector/connect/oauth/cancel"
+            },
+            "params": {
+              "$ref": "#/$defs/ConnectorOAuthCancelParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "connector/connect/oauth/device/start"
+            },
+            "params": {
+              "$ref": "#/$defs/ConnectorDeviceOAuthStartParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "connector/connect/oauth/device/poll"
+            },
+            "params": {
+              "$ref": "#/$defs/ConnectorDeviceOAuthPollParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "connector/connect/oauth/device/cancel"
             },
             "params": {
               "$ref": "#/$defs/ConnectorOAuthCancelParams"
@@ -2143,6 +2332,86 @@
             },
             "params": {
               "$ref": "#/$defs/ResourceReleaseParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "attachment/upload/start"
+            },
+            "params": {
+              "$ref": "#/$defs/AttachmentUploadStartParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "attachment/upload/write"
+            },
+            "params": {
+              "$ref": "#/$defs/AttachmentUploadWriteParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "attachment/upload/finish"
+            },
+            "params": {
+              "$ref": "#/$defs/AttachmentUploadFinishParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "attachment/upload/cancel"
+            },
+            "params": {
+              "$ref": "#/$defs/AttachmentUploadCancelParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "attachment/importRemote"
+            },
+            "params": {
+              "$ref": "#/$defs/AttachmentImportRemoteParams"
             }
           },
           "required": [
@@ -3487,6 +3756,54 @@
           "properties": {
             "method": {
               "type": "string",
+              "const": "connector/connect/oauth/device/start"
+            },
+            "result": {
+              "$ref": "#/$defs/ConnectorDeviceOAuthStartResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "connector/connect/oauth/device/poll"
+            },
+            "result": {
+              "$ref": "#/$defs/ConnectorDeviceOAuthPollResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "connector/connect/oauth/device/cancel"
+            },
+            "result": {
+              "$ref": "#/$defs/ConnectorCommandResultDto"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
               "const": "connector/oauth/refresh"
             },
             "result": {
@@ -4227,6 +4544,86 @@
             },
             "result": {
               "type": "null"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "attachment/upload/start"
+            },
+            "result": {
+              "$ref": "#/$defs/AttachmentUploadStartResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "attachment/upload/write"
+            },
+            "result": {
+              "$ref": "#/$defs/AttachmentUploadWriteResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "attachment/upload/finish"
+            },
+            "result": {
+              "$ref": "#/$defs/AttachmentMaterializeResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "attachment/upload/cancel"
+            },
+            "result": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "attachment/importRemote"
+            },
+            "result": {
+              "$ref": "#/$defs/AttachmentMaterializeResult"
             }
           },
           "required": [
@@ -6194,6 +6591,117 @@
         "connectorId"
       ]
     },
+    "ConnectorDeviceOAuthPollParams": {
+      "description": "Polls one exact in-memory device OAuth flow.",
+      "type": "object",
+      "properties": {
+        "flowId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "flowId"
+      ]
+    },
+    "ConnectorDeviceOAuthPollResult": {
+      "description": "Device flow status; clients must respect `retryAfterSeconds` before polling again.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "retryAfterSeconds": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "status": {
+              "type": "string",
+              "const": "pending"
+            }
+          },
+          "required": [
+            "status",
+            "retryAfterSeconds"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "command": {
+              "$ref": "#/$defs/ConnectorCommandResultDto"
+            },
+            "status": {
+              "type": "string",
+              "const": "connected"
+            }
+          },
+          "required": [
+            "status",
+            "command"
+          ]
+        }
+      ]
+    },
+    "ConnectorDeviceOAuthStartParams": {
+      "description": "Starts one device OAuth attempt bound to an exact Connector generation.",
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "type": "string"
+        },
+        "connectionGeneration": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 1
+        },
+        "connectorId": {
+          "type": "string"
+        },
+        "expectedGeneration": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedGeneration",
+        "connectorId",
+        "connectionGeneration"
+      ]
+    },
+    "ConnectorDeviceOAuthStartResult": {
+      "description": "User-facing code and polling schedule for an in-memory device authorization.",
+      "type": "object",
+      "properties": {
+        "expiresInSeconds": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "flowId": {
+          "type": "string"
+        },
+        "pollIntervalSeconds": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "userCode": {
+          "type": "string"
+        },
+        "verificationUri": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "flowId",
+        "userCode",
+        "verificationUri",
+        "expiresInSeconds",
+        "pollIntervalSeconds"
+      ]
+    },
     "ConnectorDisconnectParams": {
       "description": "Retry-safe readiness revocation request.",
       "type": "object",
@@ -6262,6 +6770,12 @@
         "id": {
           "type": "string"
         },
+        "oauthMethods": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ConnectorOAuthMethodDto"
+          }
+        },
         "runtimeServerId": {
           "type": "string"
         },
@@ -6278,6 +6792,7 @@
         "connectionGeneration",
         "state",
         "availableActions",
+        "oauthMethods",
         "credentialCleanupPending"
       ]
     },
@@ -6332,6 +6847,14 @@
         "flowId",
         "state",
         "authorizationCode"
+      ]
+    },
+    "ConnectorOAuthMethodDto": {
+      "description": "OAuth interaction methods configured for one exact Connector.",
+      "type": "string",
+      "enum": [
+        "browser",
+        "device"
       ]
     },
     "ConnectorOAuthRefreshParams": {
@@ -11895,6 +12418,9 @@
         "agentInteractions": {
           "type": "boolean"
         },
+        "attachments": {
+          "type": "boolean"
+        },
         "cloudCodeIndex": {
           "type": "boolean"
         },
@@ -11954,6 +12480,7 @@
         "threads",
         "turns",
         "resources",
+        "attachments",
         "fileSystem",
         "git",
         "workspaceSearch",

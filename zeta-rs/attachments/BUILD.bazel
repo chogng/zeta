@@ -1,0 +1,6 @@
+load("//:defs.bzl", "zeta_rust_crate")
+
+zeta_rust_crate(
+    name = "attachments",
+    crate_name = "zeta_attachments",
+)

@@ -1051,9 +1051,9 @@ lib_tests.rs
   远程产品需求，connection/recovery contract 必须先进入 `zeta-app-server-client`；
 - workspace mention 当前只插入原子文本路径。通用 app/plugin Mention、login、compact、service
   tier、usage、review 等没有已接受 contract 的 surface 不注册；
-- 图片输入已形成“本地路径/系统 clipboard → data URL → `UserImage` → provider image block”纵切。
-  data URL 的持久化成本属于共享附件/storage 边界；TUI 不建立私有 blob store，只有共享 contract
-  被接受后才消费；
+- 图片输入已形成“本地路径/系统 clipboard → 草稿 data URL → App Server 分块上传 →
+  `ImageAttachmentRef` → durable `UserImageAttachment` → provider 临时 image block”纵切。TUI
+  不建立私有 blob store；Thread history 与 command receipt 不持久化 data URL；
 - status line 已有 model/workspace/Git；usage 与稳定 item/order 没有 typed contract，因此不是通过
   transcript 推导的 TUI 缺口；
 - Config surface 可读 provider、MCP、Skill source、Plugin request、Hook、language server 状态；

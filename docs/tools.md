@@ -1242,10 +1242,13 @@ bytes 的权限。
 [`zeta-utils-image`](../zeta-rs/utils/image/README.md) 实现；本节拥有跨 Core、Tool、模型与
 provider 的安全和策略边界，crate README 拥有具体实现契约。
 
-- data URL、remote URL 和 resource handle 使用不同 typed source；
+- data URL、remote URL 和 durable attachment reference 使用不同 typed source；
 - 限制 decoded bytes、pixel count、dimensions、frame count 和 MIME；
 - SVG、animated image 和 metadata 使用明确 policy；
-- remote URL fetch 属于 host network/resource adapter，不在 `zeta-tools`；
+- remote URL fetch 属于 host-owned `zeta-attachments` admission，不在 `zeta-tools`；它使用 direct
+  transport、DNS-time public-address enforcement、逐跳 redirect 复核和 bounded body；
+- 接受后的图片以 content digest + 验证后的媒体元数据进入 Thread；只有 model invocation adapter
+  才把 verified bytes 临时 materialize 为 provider data URL；
 - telemetry 不记录完整 data URL 或图片 bytes；
 - dynamic/MCP adapter 若携带 image detail，它也只是请求；未携带时使用
   `ImageDetailSelection::ProviderDefault`，最终均由 model capability normalization 决定。

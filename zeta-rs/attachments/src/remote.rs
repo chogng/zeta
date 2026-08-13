@@ -106,12 +106,16 @@ fn validate_remote_url(raw: &str) -> Result<Url, AttachmentError> {
         return Err(AttachmentError::RemoteFetch);
     }
     let url = Url::parse(raw).map_err(|_| AttachmentError::RemoteFetch)?;
+    let has_standard_port = matches!(
+        (url.scheme(), url.port_or_known_default()),
+        ("http", Some(80)) | ("https", Some(443))
+    );
     if !matches!(url.scheme(), "http" | "https")
         || url.host_str().is_none()
         || !url.username().is_empty()
         || url.password().is_some()
         || url.fragment().is_some()
-        || !matches!(url.port_or_known_default(), Some(80 | 443))
+        || !has_standard_port
     {
         return Err(AttachmentError::RemoteFetch);
     }
