@@ -27,6 +27,7 @@ Marketplace install/update 先复制、复验并原子提升到 content-addresse
 | `LocalPluginCatalog::discover` | 读取一个 package 或目录下的直接 package children | recursive marketplace search |
 | `PluginMarketplace::open` | 校验 host 注册 catalog、无链接 package path 与 exact package digest | 网络下载、publisher 签名、客户端宿主路径 |
 | `PluginMarketplace::from_verified_remote` | 接收产品分发层已验证的签名 manifest、digest、统计与延迟 materializer | TUF/HTTP、自动下载、grant |
+| `PluginMarketplaceMode` / `PluginMarketplaceTrust` | 分别表达读取方式与运营方信任，避免把官方远端源误标成第三方 | signature 验证、用户授权 |
 | `PluginMarketplacePackageMaterializer` | 安装时把一个 exact ref materialize 为 canonical `LocalPluginPackage` | 目录发现、enable、运行时执行 |
 | `PluginMarketplaceService` | Marketplace install、staged update、rollback 与 profile request reconcile | 自动 grant、远端 catalog 同步、Workspace trust 决策 |
 | `PluginPackageStore::install_local` | stage、复制、复验 digest 并原子 promote immutable object | enablement、grant、activation |

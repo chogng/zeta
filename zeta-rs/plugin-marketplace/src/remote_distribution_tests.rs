@@ -35,6 +35,7 @@ use zeta_plugins::PluginAuthorityCommandId;
 use zeta_plugins::PluginMarketplaceId;
 use zeta_plugins::PluginMarketplaceMode;
 use zeta_plugins::PluginMarketplaceService;
+use zeta_plugins::PluginMarketplaceTrust;
 use zip::ZipWriter;
 use zip::write::SimpleFileOptions;
 
@@ -64,6 +65,10 @@ fn signed_catalog_defers_package_download_and_revalidates_on_demand_cache() {
     assert_eq!(
         online.marketplace().mode(),
         PluginMarketplaceMode::RemoteManaged
+    );
+    assert_eq!(
+        online.marketplace().trust(),
+        PluginMarketplaceTrust::ProductManaged
     );
     assert_eq!(
         online.marketplace().list()[0].package_ref(),

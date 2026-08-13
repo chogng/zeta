@@ -22,6 +22,7 @@ use zeta_plugins::PluginMarketplace;
 use zeta_plugins::PluginMarketplaceId;
 use zeta_plugins::PluginMarketplaceMaterializationError;
 use zeta_plugins::PluginMarketplacePackageMaterializer;
+use zeta_plugins::PluginMarketplaceTrust;
 use zeta_plugins::PluginPackageDigest;
 use zeta_plugins::VerifiedRemotePluginPackage;
 
@@ -43,6 +44,7 @@ pub struct RemotePluginMarketplaceConfig {
     targets_base_url: Url,
     trusted_root: Vec<u8>,
     cache_root: PathBuf,
+    trust: PluginMarketplaceTrust,
 }
 
 impl RemotePluginMarketplaceConfig {
@@ -70,11 +72,28 @@ impl RemotePluginMarketplaceConfig {
             targets_base_url,
             trusted_root,
             cache_root: cache_root.into(),
+            trust: PluginMarketplaceTrust::ProductManaged,
         })
     }
 
     pub fn id(&self) -> &PluginMarketplaceId {
         &self.id
+    }
+
+    pub fn trust(&self) -> PluginMarketplaceTrust {
+        self.trust
+    }
+
+    /// Marks a host-pinned remote source as product-managed or verified external.
+    pub fn with_trust(
+        mut self,
+        trust: PluginMarketplaceTrust,
+    ) -> Result<Self, RemoteMarketplaceError> {
+        if trust == PluginMarketplaceTrust::LocalDevelopment {
+            return Err(config_error());
+        }
+        self.trust = trust;
+        Ok(self)
     }
 }
 
@@ -194,6 +213,7 @@ impl RemotePluginMarketplace {
         let snapshot_digest = signed_repository_digest(repository)?;
         let marketplace = PluginMarketplace::from_verified_remote(
             self.config.id.clone(),
+            self.config.trust,
             snapshot_digest,
             packages,
         )

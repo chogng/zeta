@@ -3,6 +3,7 @@ use std::fs;
 use tempfile::TempDir;
 use url::Url;
 use zeta_plugins::PluginMarketplaceId;
+use zeta_plugins::PluginMarketplaceTrust;
 
 use super::RemotePluginMarketplaceConfig;
 use super::recover_complete_directory;
@@ -87,5 +88,33 @@ fn distribution_urls_require_unambiguous_https_directory_bases() {
             "https://marketplace.example/targets/?channel=test"
         )
         .is_err()
+    );
+}
+
+#[test]
+fn remote_source_trust_is_explicit_and_cannot_claim_local_development() {
+    let root = TempDir::new().unwrap();
+    let config = RemotePluginMarketplaceConfig::new(
+        PluginMarketplaceId::new("community").unwrap(),
+        Url::parse("https://community.example/metadata/").unwrap(),
+        Url::parse("https://community.example/targets/").unwrap(),
+        b"trusted root".to_vec(),
+        root.path(),
+    )
+    .unwrap();
+
+    assert_eq!(config.trust(), PluginMarketplaceTrust::ProductManaged);
+    assert_eq!(
+        config
+            .clone()
+            .with_trust(PluginMarketplaceTrust::VerifiedExternal)
+            .unwrap()
+            .trust(),
+        PluginMarketplaceTrust::VerifiedExternal
+    );
+    assert!(
+        config
+            .with_trust(PluginMarketplaceTrust::LocalDevelopment)
+            .is_err()
     );
 }

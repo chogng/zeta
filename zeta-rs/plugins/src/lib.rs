@@ -49,6 +49,7 @@ pub use marketplace::PluginMarketplaceMode;
 pub use marketplace::PluginMarketplacePackage;
 pub use marketplace::PluginMarketplacePackageMaterializer;
 pub use marketplace::PluginMarketplaceService;
+pub use marketplace::PluginMarketplaceTrust;
 pub use marketplace::PluginProfileRequest;
 pub use marketplace::PluginProfileRequestEnablement;
 pub use marketplace::PluginProfileResolution;

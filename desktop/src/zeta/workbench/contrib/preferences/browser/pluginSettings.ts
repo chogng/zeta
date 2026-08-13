@@ -198,7 +198,7 @@ function status(plugin: PluginPackageView): string {
 function marketplaceTrustLabel(trust: PluginMarketplacePackageView["marketplaceTrust"]): string {
   switch (trust) {
     case "productManaged": return "Zeta managed";
-    case "verifiedRemote": return "Verified source";
+    case "verifiedExternal": return "Verified external source";
     case "localDevelopment": return "Local development";
   }
 }

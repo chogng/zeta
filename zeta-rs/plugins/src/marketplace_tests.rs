@@ -19,6 +19,7 @@ use crate::PluginErrorKind;
 use crate::PluginMarketplaceId;
 use crate::PluginMarketplaceMaterializationError;
 use crate::PluginMarketplacePackageMaterializer;
+use crate::PluginMarketplaceTrust;
 use crate::PluginPackageDigest;
 use crate::VerifiedRemotePluginPackage;
 
@@ -114,6 +115,7 @@ fn verified_remote_catalog_defers_package_materialization_until_install() {
     });
     let marketplace = PluginMarketplace::from_verified_remote(
         PluginMarketplaceId::new("acme").unwrap(),
+        PluginMarketplaceTrust::ProductManaged,
         PluginPackageDigest::sha256(b"signed catalog"),
         [VerifiedRemotePluginPackage::new(
             package.manifest().clone(),

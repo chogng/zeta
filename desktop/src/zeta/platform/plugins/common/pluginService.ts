@@ -39,7 +39,7 @@ export interface PluginCredentialSlotView {
 export interface PluginMarketplacePackageView {
   readonly marketplaceId: string;
   readonly marketplaceMode: "managed" | "remoteManaged" | "localDevelopment";
-  readonly marketplaceTrust: "productManaged" | "verifiedRemote" | "localDevelopment";
+  readonly marketplaceTrust: "productManaged" | "verifiedExternal" | "localDevelopment";
   readonly marketplaceRevision: string;
   readonly id: string;
   readonly publisher: string;

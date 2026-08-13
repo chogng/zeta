@@ -71,6 +71,14 @@ pub enum PluginMarketplaceMode {
     LocalDevelopment,
 }
 
+/// Product-facing ownership and trust classification independent of transport mode.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PluginMarketplaceTrust {
+    ProductManaged,
+    VerifiedExternal,
+    LocalDevelopment,
+}
+
 /// One exact digest-pinned package offered by a Marketplace.
 #[derive(Clone)]
 pub struct PluginMarketplacePackage {
@@ -187,6 +195,7 @@ impl std::fmt::Debug for PluginMarketplacePackage {
 pub struct PluginMarketplace {
     id: PluginMarketplaceId,
     mode: PluginMarketplaceMode,
+    trust: PluginMarketplaceTrust,
     revision: PluginPackageDigest,
     packages: BTreeMap<MarketplacePackageKey, PluginMarketplacePackage>,
 }
@@ -253,6 +262,12 @@ impl PluginMarketplace {
         Ok(Self {
             id,
             mode,
+            trust: match mode {
+                PluginMarketplaceMode::Managed | PluginMarketplaceMode::RemoteManaged => {
+                    PluginMarketplaceTrust::ProductManaged
+                }
+                PluginMarketplaceMode::LocalDevelopment => PluginMarketplaceTrust::LocalDevelopment,
+            },
             revision: PluginPackageDigest::sha256(bytes),
             packages,
         })
@@ -264,9 +279,15 @@ impl PluginMarketplace {
     /// required to verify that downloaded content matches the signed manifest and digest.
     pub fn from_verified_remote(
         id: PluginMarketplaceId,
+        trust: PluginMarketplaceTrust,
         revision: PluginPackageDigest,
         packages: impl IntoIterator<Item = VerifiedRemotePluginPackage>,
     ) -> Result<Self, PluginError> {
+        if trust == PluginMarketplaceTrust::LocalDevelopment {
+            return Err(marketplace_error(
+                "remote Plugin Marketplace cannot use local-development trust",
+            ));
+        }
         let mut indexed = BTreeMap::new();
         for package in packages {
             let package_ref = InstalledPluginRef {
@@ -294,6 +315,7 @@ impl PluginMarketplace {
         Ok(Self {
             id,
             mode: PluginMarketplaceMode::RemoteManaged,
+            trust,
             revision,
             packages: indexed,
         })
@@ -305,6 +327,10 @@ impl PluginMarketplace {
 
     pub fn mode(&self) -> PluginMarketplaceMode {
         self.mode
+    }
+
+    pub fn trust(&self) -> PluginMarketplaceTrust {
+        self.trust
     }
 
     pub fn revision(&self) -> &PluginPackageDigest {

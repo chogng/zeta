@@ -89,7 +89,7 @@
 }
 
 .zeta-marketplace-badge.is-productManaged,
-.zeta-marketplace-badge.is-verifiedRemote {
+.zeta-marketplace-badge.is-verifiedExternal {
   color: var(--zeta-success-foreground, var(--zeta-description-foreground));
 }
 

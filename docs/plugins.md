@@ -650,7 +650,9 @@ runtime 不可用，但不会把 Plugin 标成未安装。
 
 已实现 mutation 使用 `CommandId + expectedRevision + exact package payload`；安装入口不会接受 Renderer
 传入的任意宿主文件路径。`Managed` Marketplace root 由产品分发层注册，`LocalDevelopment` 仅在 host
-显式开启时可用。`RemoteManaged` Marketplace 已通过 host-pinned TUF root 同步 HTTPS catalog：
+显式开启时可用。读取模式不决定运营方信任：官方远端源仍为 `ProductManaged`，只有由 host 明确接入
+并固定独立 root 的第三方源才是 `VerifiedExternal`。`RemoteManaged` Marketplace 已通过 host-pinned
+TUF root 同步 HTTPS catalog：
 timestamp/snapshot/targets 的 threshold、rollback 与 expiry 检查由 TUF verifier 执行；package 必须来自
 `publishers/<publisher>` delegated role。刷新只缓存签名 metadata、`zetaCatalog` discovery metadata 与撤销
 target，不预取 ZIP；安装或更新时才重新检查当前 TUF/revocation authority、读取一个 exact target，并通过

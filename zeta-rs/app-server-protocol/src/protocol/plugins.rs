@@ -29,7 +29,7 @@ pub enum PluginMarketplaceModeDto {
 #[serde(rename_all = "camelCase")]
 pub enum PluginMarketplaceTrustDto {
     ProductManaged,
-    VerifiedRemote,
+    VerifiedExternal,
     LocalDevelopment,
 }
 

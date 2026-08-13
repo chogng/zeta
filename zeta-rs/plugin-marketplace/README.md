@@ -10,8 +10,10 @@ contract of this crate.
 `RemotePluginMarketplace` refreshes a TUF repository with a host-pinned root, verifies delegated
 publisher targets, projects signed discovery metadata into an immutable `PluginMarketplace`, and
 defers bounded package download until an exact install or update requests the bytes.
-`RemotePluginMarketplaceConfig` is supplied by the trusted product composition root. Untrusted App
-Server clients never supply URLs, roots, target names, archive paths, or cache paths.
+`RemotePluginMarketplaceConfig` is supplied by the trusted product composition root. Its transport
+mode is always remote, while `PluginMarketplaceTrust` separately distinguishes a product-managed
+source from a host-approved external source. Untrusted App Server clients never supply URLs, roots,
+target names, archive paths, cache paths, or trust labels.
 
 The key private owners are:
 

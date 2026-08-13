@@ -32,6 +32,7 @@ use zeta_plugins::PluginErrorKind;
 use zeta_plugins::PluginId;
 use zeta_plugins::PluginMarketplaceId;
 use zeta_plugins::PluginMarketplaceMode;
+use zeta_plugins::PluginMarketplaceTrust;
 use zeta_plugins::PluginPackageDigest;
 use zeta_plugins::PluginVersion;
 use zeta_plugins::WorkspaceAccess;
@@ -99,14 +100,14 @@ impl AppServer {
                                 PluginMarketplaceModeDto::LocalDevelopment
                             }
                         },
-                        marketplace_trust: match marketplace_mode {
-                            PluginMarketplaceMode::Managed => {
+                        marketplace_trust: match marketplace.trust() {
+                            PluginMarketplaceTrust::ProductManaged => {
                                 PluginMarketplaceTrustDto::ProductManaged
                             }
-                            PluginMarketplaceMode::RemoteManaged => {
-                                PluginMarketplaceTrustDto::VerifiedRemote
+                            PluginMarketplaceTrust::VerifiedExternal => {
+                                PluginMarketplaceTrustDto::VerifiedExternal
                             }
-                            PluginMarketplaceMode::LocalDevelopment => {
+                            PluginMarketplaceTrust::LocalDevelopment => {
                                 PluginMarketplaceTrustDto::LocalDevelopment
                             }
                         },
