@@ -1,4 +1,9 @@
-use super::*;
+use std::fs;
+
+use super::LanguageServerDistributionError;
+use super::LanguageServerInstaller;
+use super::LanguageServerPackage;
+use super::LanguageServerPackageFile;
 
 fn package(version: &str, bytes: &[u8]) -> LanguageServerPackage {
     LanguageServerPackage::new(
@@ -22,7 +27,10 @@ fn verified_versions_install_side_by_side_and_repeat_idempotently() {
     let installed = installer
         .install_verified(first.clone(), first_digest)
         .unwrap();
-    assert_eq!(fs::read(&installed.executable).unwrap(), b"first");
+    assert_eq!(installed.server_id(), "rust-analyzer");
+    assert_eq!(installed.version(), "1.0.0");
+    assert_eq!(installed.package_sha256(), first_digest);
+    assert_eq!(fs::read(installed.executable()).unwrap(), b"first");
     assert_eq!(
         installer.install_verified(first, first_digest).unwrap(),
         installed
@@ -31,8 +39,8 @@ fn verified_versions_install_side_by_side_and_repeat_idempotently() {
     let second = package("2.0.0", b"second");
     let second_digest = second.sha256();
     let updated = installer.install_verified(second, second_digest).unwrap();
-    assert_eq!(fs::read(&updated.executable).unwrap(), b"second");
-    assert!(installed.executable.exists());
+    assert_eq!(fs::read(updated.executable()).unwrap(), b"second");
+    assert!(installed.executable().exists());
 }
 
 #[test]
@@ -67,7 +75,7 @@ fn existing_installation_is_reverified_instead_of_trusting_its_receipt() {
     let package = package("1.0.0", b"trusted");
     let digest = package.sha256();
     let installed = installer.install_verified(package.clone(), digest).unwrap();
-    fs::write(&installed.executable, b"tampered").unwrap();
+    fs::write(installed.executable(), b"tampered").unwrap();
 
     assert!(matches!(
         installer.install_verified(package, digest),

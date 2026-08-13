@@ -7,6 +7,7 @@ from typing import Optional, Sequence
 from .bubblewrap import resolve_bubblewrap
 from .cargo import resolve_zeta_binary
 from .layout import build_package_directory
+from .node import resolve_node
 from .ripgrep import resolve_ripgrep
 from .targets import TARGETS, default_target
 from .version import read_workspace_version
@@ -17,6 +18,8 @@ SCRIPT_DIRECTORY = Path(__file__).resolve().parents[1]
 REPOSITORY_ROOT = SCRIPT_DIRECTORY.parent
 DEFAULT_LOCK = REPOSITORY_ROOT / "third_party" / "ripgrep" / "runtime-lock.json"
 DEFAULT_CACHE = REPOSITORY_ROOT / "third_party" / ".cache" / "ripgrep"
+DEFAULT_NODE_LOCK = REPOSITORY_ROOT / "third_party" / "node" / "runtime-lock.json"
+DEFAULT_NODE_CACHE = REPOSITORY_ROOT / "third_party" / ".cache" / "node"
 DEFAULT_BUBBLEWRAP_LOCK = (
     REPOSITORY_ROOT / "third_party" / "bubblewrap" / "runtime-lock.json"
 )
@@ -54,6 +57,14 @@ def parse_arguments(arguments: Optional[Sequence[str]] = None) -> argparse.Names
         "--rg-bin",
         type=Path,
         help="Local ripgrep executable override instead of the locked download.",
+    )
+    parser.add_argument(
+        "--node-bin",
+        type=Path,
+        help=(
+            "Managed Node.js executable override instead of the locked download. "
+            "Required for musl targets."
+        ),
     )
     parser.add_argument(
         "--bwrap-bin",
@@ -96,6 +107,18 @@ def parse_arguments(arguments: Optional[Sequence[str]] = None) -> argparse.Names
         help="Verified ripgrep download and extraction cache.",
     )
     parser.add_argument(
+        "--node-lock",
+        type=Path,
+        default=DEFAULT_NODE_LOCK,
+        help="Pinned Node.js runtime lock.",
+    )
+    parser.add_argument(
+        "--node-cache-root",
+        type=Path,
+        default=DEFAULT_NODE_CACHE,
+        help="Verified Node.js download and extraction cache.",
+    )
+    parser.add_argument(
         "--bubblewrap-lock",
         type=Path,
         default=DEFAULT_BUBBLEWRAP_LOCK,
@@ -127,6 +150,12 @@ def main(arguments: Optional[Sequence[str]] = None) -> int:
         args.cache_root.expanduser().resolve(),
         explicit_binary=args.rg_bin,
     )
+    node = resolve_node(
+        spec,
+        args.node_lock.expanduser().resolve(),
+        args.node_cache_root.expanduser().resolve(),
+        explicit_binary=args.node_bin,
+    )
     bubblewrap = resolve_bubblewrap(
         REPOSITORY_ROOT,
         spec,
@@ -153,6 +182,7 @@ def main(arguments: Optional[Sequence[str]] = None) -> int:
         spec,
         zeta_binary,
         ripgrep,
+        node,
         bubblewrap,
         windows_helpers,
     )

@@ -24,6 +24,7 @@ approval、sandbox capability probe、下载、更新或安装 mutation。
     ├── bwrap              # Linux
     ├── zeta-command-runner.exe              # Windows
     ├── zeta-windows-sandbox-setup.exe        # Windows
+    ├── node/bin/node[.exe] # shared JavaScript LSP runtime
     ├── skills/            # built-in Agent Skills
     └── product-services/  # product Marketplace config + pinned public TUF root
 ```
@@ -76,6 +77,8 @@ host composition
    │  └─ WindowsSandbox validation + protocol probe + canonical identity freeze
    ├─ bundled_resource_directory("skills")
       └─ zeta-skills controlled BuiltIn source validation
+   ├─ bundled_resource("node/bin/node[.exe]")
+      └─ zeta-language-server-catalog::ManagedNodeRuntime validation
    └─ bundled_resource("product-services/product-services.json")
       └─ zeta-cli → LocalProductServicesConfig trust validation
 ```

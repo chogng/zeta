@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "runtime": "node",
+  "version": "24.18.1",
+  "source": {
+    "baseUrl": "https://nodejs.org/download/release/v24.18.1"
+  },
+  "packageTargets": {
+    "aarch64-apple-darwin": "darwin-arm64",
+    "aarch64-pc-windows-msvc": "win-arm64",
+    "aarch64-unknown-linux-gnu": "linux-arm64",
+    "x86_64-apple-darwin": "darwin-x64",
+    "x86_64-pc-windows-msvc": "win-x64",
+    "x86_64-unknown-linux-gnu": "linux-x64"
+  },
+  "licenseTargets": {
+    "aarch64-unknown-linux-musl": "linux-arm64",
+    "x86_64-unknown-linux-musl": "linux-x64"
+  },
+  "artifacts": {
+    "darwin-arm64": {
+      "archive": "node-v24.18.1-darwin-arm64.tar.xz",
+      "size": 27028232,
+      "sha256": "1d60b703fe5d7e7072489be8187f430f1a095a658c31e5e1e281331a5873fac3",
+      "format": "tar.xz",
+      "executable": "node-v24.18.1-darwin-arm64/bin/node",
+      "license": "node-v24.18.1-darwin-arm64/LICENSE"
+    },
+    "darwin-x64": {
+      "archive": "node-v24.18.1-darwin-x64.tar.xz",
+      "size": 28704372,
+      "sha256": "f892c7895720f40d3750bde24f3554242d36f23602b5167b5b73ec4d13938aef",
+      "format": "tar.xz",
+      "executable": "node-v24.18.1-darwin-x64/bin/node",
+      "license": "node-v24.18.1-darwin-x64/LICENSE"
+    },
+    "linux-arm64": {
+      "archive": "node-v24.18.1-linux-arm64.tar.xz",
+      "size": 30470068,
+      "sha256": "7201e3a09dc825bac57867c81913e2b8f0ef87d04cb9082af4cda82f6ff3d88c",
+      "format": "tar.xz",
+      "executable": "node-v24.18.1-linux-arm64/bin/node",
+      "license": "node-v24.18.1-linux-arm64/LICENSE"
+    },
+    "linux-x64": {
+      "archive": "node-v24.18.1-linux-x64.tar.xz",
+      "size": 31525884,
+      "sha256": "d6c664df3f3f61458e8c277585571328522d705166723a7c7823a9253a4d15a0",
+      "format": "tar.xz",
+      "executable": "node-v24.18.1-linux-x64/bin/node",
+      "license": "node-v24.18.1-linux-x64/LICENSE"
+    },
+    "win-arm64": {
+      "archive": "node-v24.18.1-win-arm64.zip",
+      "size": 33362490,
+      "sha256": "ffbc7d3e1baf6804f7431ff94f19b9a885a650568c93ea4ccb1bb0038f6af825",
+      "format": "zip",
+      "executable": "node-v24.18.1-win-arm64/node.exe",
+      "license": "node-v24.18.1-win-arm64/LICENSE"
+    },
+    "win-x64": {
+      "archive": "node-v24.18.1-win-x64.zip",
+      "size": 37177316,
+      "sha256": "ec56b84a7551893ab2324ebdfdc4ab974a63b4781162600b68a1293cc3e53765",
+      "format": "zip",
+      "executable": "node-v24.18.1-win-x64/node.exe",
+      "license": "node-v24.18.1-win-x64/LICENSE"
+    }
+  }
+}

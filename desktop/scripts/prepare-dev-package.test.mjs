@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { assemblePackage, copyBuiltinExtensions, hostTarget, replaceDirectoryAtomically, selectRipgrepArtifact } from "./prepare-dev-package.mjs";
+import { assemblePackage, copyBuiltinExtensions, hostTarget, replaceDirectoryAtomically, selectNodeArtifact, selectRipgrepArtifact } from "./prepare-dev-package.mjs";
 
 test("maps supported development hosts to Rust targets", () => {
   assert.equal(hostTarget("win32", "x64"), "x86_64-pc-windows-msvc");
@@ -33,6 +33,35 @@ test("selects the target-specific locked ripgrep artifact", () => {
   const artifact = selectRipgrepArtifact(lock, "x86_64-pc-windows-msvc");
   assert.equal(artifact.executable, "bundle/rg.exe");
   assert.equal(artifact.url, "https://example.invalid/repo/releases/download/1.0.0/rg.zip");
+});
+
+test("selects the target-specific locked Node.js artifact", () => {
+  const lock = {
+    artifacts: {
+      windows: {
+        archive: "node.zip",
+        executable: "bundle/node.exe",
+        format: "zip",
+        license: "bundle/LICENSE",
+        sha256: "a".repeat(64),
+        size: 123,
+      },
+    },
+    packageTargets: { "x86_64-pc-windows-msvc": "windows" },
+    runtime: "node",
+    schemaVersion: 1,
+    source: { baseUrl: "https://example.invalid/node" },
+    version: "1.0.0",
+  };
+  const artifact = selectNodeArtifact(lock, "x86_64-pc-windows-msvc");
+  assert.equal(artifact.executable, "bundle/node.exe");
+  assert.equal(artifact.url, "https://example.invalid/node/node.zip");
+
+  lock.artifacts.windows.sha256 = "invalid";
+  assert.throws(
+    () => selectNodeArtifact(lock, "x86_64-pc-windows-msvc"),
+    /SHA-256/,
+  );
 });
 
 test("replaces a complete development package atomically", async () => {
@@ -81,12 +110,16 @@ test("assembles and validates the canonical Windows development layout", async (
     zeta: join(root, "zeta.exe"),
   };
   const ripgrepExecutable = join(root, "rg.exe");
+  const nodeExecutable = join(root, "node.exe");
+  const nodeLicense = join(root, "node-license");
   try {
     await Promise.all([
       writeFile(executables.commandRunner, "runner"),
       writeFile(executables.sandboxSetup, "setup"),
       writeFile(executables.zeta, "zeta"),
       writeFile(ripgrepExecutable, "ripgrep"),
+      writeFile(nodeExecutable, "node"),
+      writeFile(nodeLicense, "node license"),
     ]);
     await assemblePackage(
       staging,
@@ -101,11 +134,21 @@ test("assembles and validates the canonical Windows development layout", async (
         source: "upstream-release",
         version: "1.0.0",
       },
+      {
+        archive: "node.zip",
+        archiveSha256: "c".repeat(64),
+        binarySha256: "d".repeat(64),
+        executable: nodeExecutable,
+        license: nodeLicense,
+        source: "upstream-release",
+        version: "24.18.1",
+      },
     );
     const metadata = JSON.parse(await readFile(join(staging, "zeta-package.json"), "utf8"));
     assert.equal(metadata.entrypoint, "bin/zeta.exe");
     assert.equal(metadata.target, "x86_64-pc-windows-msvc");
     assert.equal(await readFile(join(staging, "zeta-path", "rg.exe"), "utf8"), "ripgrep");
+    assert.equal(await readFile(join(staging, "zeta-resources", "node", "bin", "node.exe"), "utf8"), "node");
     assert.equal(await readFile(join(staging, "zeta-resources", "zeta-command-runner.exe"), "utf8"), "runner");
     const productServices = JSON.parse(await readFile(join(staging, "zeta-resources", "product-services", "product-services.json"), "utf8"));
     assert.equal(productServices.marketplaces[0].id, "zeta");

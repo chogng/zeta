@@ -37,6 +37,7 @@ JSONL / in-process caller
    ├─ optional CloudCodeIndexController → zeta-code-index-cloud + host provider registry
    ├─ request-scoped CodeRetrievalService → lexical/semantic/remote RRF + verification + budget
    ├─ optional TerminalService → zeta-utils-pty
+   ├─ optional LanguageServerProviderRegistry → zeta-language-service → zeta-lsp
    ├─ reloadable MCP Tool generation + status/OAuth/form interaction → zeta-mcp-extension → zeta-mcp
    ├─ ConnectorCredentialService → list/connect/disconnect + ready MCP reconcile
    ├─ client-hosted dynamic tools → durable Agent interaction owner
@@ -77,6 +78,7 @@ Core/store 继续拥有 Session/Thread durable state；需要进程内生命周�
 | `AppServer::with_file_system_watcher` | 监听可信 workspace root 并发布相对路径 invalidation hint |
 | `AppServer::with_git_root` | 冻结 workspace root，开启 Git status/mutation、watcher 与 revision notification |
 | `AppServer::with_workspace_search` | 注入 workspace root 与冻结的 ripgrep executable，构造外部内容搜索服务 |
+| `AppServer::with_language_server_providers` | 注入已验证、已安装的 provider registry；配置启用后与 built-in definitions 共同交给现有 supervisor |
 | `AppServer::with_code_index_storage_root` | 配置按 root identity 分隔的 persistent index cache |
 | `LocalCodeIndexProviders::with_semantic_models` | 在 Workspace activation 前注入本地 semantic 使用的 immutable embedding/rerank adapters |
 | `AppServer::with_cloud_code_index_providers` | 注入冻结的 provider registry；空 registry 不广告 cloud capability |
@@ -89,7 +91,8 @@ Core/store 继续拥有 Session/Thread durable state；需要进程内生命周�
 | `open_local_app_server` | 按 SessionStateMode 选择 durable/in-memory coordinator，打开 config 并组合 provider-backed model |
 | `open_local_app_server_with_cloud_providers` | 在 Workspace 激活前注入 cloud code-index providers；默认入口使用空 registry |
 | `open_local_app_server_with_code_index_providers` | 在 Workspace 激活前同时注入本地 semantic models 与可选 cloud providers |
-| `LocalAppServerOptions` | user profile root + SessionStateMode + optional Workspace/Connector runtime + Codex App Server options + validated slash catalog + built-in Skill root selection + optional model operation client/MCP OAuth providers |
+| `LocalAppServerOptions` | user profile root + SessionStateMode + optional Workspace/Connector/language-provider runtime + Codex App Server options + validated slash catalog + built-in Skill root selection + optional model operation client/MCP OAuth providers |
+| `LocalAppServerOptions::with_language_server_providers` | 在 local App Server 启动前注入冻结 provider registry；不代替 Marketplace 验签、下载或用户确认 |
 | `LocalAppServerOptions::with_mcp_oauth_providers` | 把 exact MCP server ID → provider adapter 注入使用共享 SecretStore 的 OAuth service |
 | `LocalConnectorRuntime` | Connector credential service + shared SecretStore + Plugin-specific MCP materializer |
 | `LocalAppServerOptions::with_plugin_activation` | 从 exact activation 构造 package-rooted Connector/MCP runtime |
@@ -197,6 +200,7 @@ src/
 │       ├── code_index_runtime.rs  # generation lifecycle、watcher reconcile 与 stale gate
 │       ├── cloud_code_index_operations.rs # preview/grant/sync/revoke DTO 与稳定错误映射
 │       ├── terminal_operations.rs # terminal RPC decode、ownership 与稳定错误映射
+│       ├── language_runtime.rs   # config + built-in/provider definitions → shared language-service
 │       └── update_broker.rs       # per-connection subscription/cursor/fanout
 ├── local.rs                       # local composition, session backend selection + model safe point
 ├── local_tools.rs                 # frozen rg registry + Core Tool/Policy adapters
@@ -251,6 +255,7 @@ src/
 | `CloudCodeIndexController` | external crate | root-bound grant、publication/deletion lifecycle 与 provider port | App Server 不复制 consent state 或允许 provider 直接读 Workspace |
 | `cloud_code_index_operations::project_status` | private | cloud lifecycle + grant → stable protocol DTO | 不回传 credential、绝对路径或 provider error text |
 | `TerminalService` | crate-private | 持有 `ExecuteProcess` 的 `TrustedWorkspace`、Tokio runtime、PTY session map 与 1 MiB output ring | 不从 client path 自行授予 process authority |
+| `AppServerLanguageRuntime::configured_provider_definitions` | private | 只对 Config 显式启用的已注册 provider 生成 definition，并保留 authoritative native override | 不下载包、不自己启动 child、不复制 restart policy |
 | `TerminalEnvironment` | crate-private | 二次过滤 host environment、规范化 Windows key、固定 `TERM`/`COLORTERM`/`TERM_PROGRAM` | 不继承凭据或接受 client mutation |
 | `TerminalProfileCatalog` | crate-private | 冻结可信 Shell Profile、program 与 `TerminalEnvironment` | external DTO 不暴露 executable/args/environment |
 | `TerminalService::create` | crate-private | 将 default/profile ID 解析到 catalog 并启动 workspace-rooted PTY | client 不能提交 executable/environment |

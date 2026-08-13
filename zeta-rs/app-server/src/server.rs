@@ -310,6 +310,18 @@ impl AppServer {
         connection
     }
 
+    /// Installs immutable language-server providers prepared by the product composition root.
+    pub fn with_language_server_providers(
+        mut self,
+        providers: zeta_language_server_catalog::LanguageServerProviderRegistry,
+    ) -> Self {
+        self.language
+            .get_mut()
+            .expect("new App Server language runtime mutex is not poisoned")
+            .set_provider_registry(providers);
+        self
+    }
+
     /// Opens a wakeable outbound-notification source for `connection`.
     pub fn connection_notifications(
         &self,

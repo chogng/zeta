@@ -9437,6 +9437,7 @@ dependencies = [
  "zeta-instructions",
  "zeta-keyring-store",
  "zeta-language-server-catalog",
+ "zeta-language-server-distribution",
  "zeta-language-service",
  "zeta-linux-sandbox",
  "zeta-login",
@@ -10004,6 +10005,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.19",
  "zeta-install-context",
+ "zeta-language-server-distribution",
  "zeta-lsp",
 ]
 

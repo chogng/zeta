@@ -1,6 +1,20 @@
 use std::collections::BTreeMap;
-use std::ffi::{OsStr, OsString};
-use std::path::{Path, PathBuf};
+use std::ffi::OsStr;
+use std::ffi::OsString;
+use std::path::Path;
+use std::path::PathBuf;
+
+/// Whether a language-server process inherits the App Server environment.
+///
+/// Hosts launching package-provided runtimes should normally select [`Self::Clear`] and add back
+/// only the variables required by that runtime. Direct user-configured executables retain the
+/// historical inherited environment unless their resolver selects a stricter policy.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum LanguageServerEnvironmentPolicy {
+    #[default]
+    Inherit,
+    Clear,
+}
 
 /// A local language-server process command supplied by the product host.
 ///
@@ -11,6 +25,7 @@ pub struct LanguageServerCommand {
     program: OsString,
     arguments: Vec<OsString>,
     environment: BTreeMap<OsString, OsString>,
+    environment_policy: LanguageServerEnvironmentPolicy,
     current_dir: Option<PathBuf>,
 }
 
@@ -20,6 +35,7 @@ impl LanguageServerCommand {
             program: program.into(),
             arguments: Vec::new(),
             environment: BTreeMap::new(),
+            environment_policy: LanguageServerEnvironmentPolicy::Inherit,
             current_dir: None,
         }
     }
@@ -47,6 +63,12 @@ impl LanguageServerCommand {
         self
     }
 
+    /// Prevents the child from inheriting ambient variables from the App Server process.
+    pub fn with_clean_environment(mut self) -> Self {
+        self.environment_policy = LanguageServerEnvironmentPolicy::Clear;
+        self
+    }
+
     pub fn with_current_dir(mut self, current_dir: impl Into<PathBuf>) -> Self {
         self.current_dir = Some(current_dir.into());
         self
@@ -56,12 +78,27 @@ impl LanguageServerCommand {
         &self.program
     }
 
+    pub fn arguments(&self) -> &[OsString] {
+        &self.arguments
+    }
+
+    pub fn environment(&self) -> &BTreeMap<OsString, OsString> {
+        &self.environment
+    }
+
+    pub const fn environment_policy(&self) -> LanguageServerEnvironmentPolicy {
+        self.environment_policy
+    }
+
     pub fn current_dir(&self) -> Option<&Path> {
         self.current_dir.as_deref()
     }
 
     pub(crate) fn into_tokio_command(self) -> tokio::process::Command {
         let mut command = tokio::process::Command::new(self.program);
+        if self.environment_policy == LanguageServerEnvironmentPolicy::Clear {
+            command.env_clear();
+        }
         command
             .args(self.arguments)
             .envs(self.environment)

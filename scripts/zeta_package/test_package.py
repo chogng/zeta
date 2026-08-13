@@ -15,6 +15,7 @@ from zeta_package.layout import (
     copy_builtin_extensions,
     copy_builtin_skills,
 )
+from zeta_package.node import NodeResolution, artifact_for_target, load_node_lock, resolve_node
 from zeta_package.ripgrep import load_lock, resolve_ripgrep
 from zeta_package.targets import TARGETS
 from zeta_package.version import read_workspace_version
@@ -23,6 +24,7 @@ from zeta_package.windows_helpers import resolve_windows_sandbox_helpers
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 PRODUCTION_LOCK = REPOSITORY_ROOT / "third_party" / "ripgrep" / "runtime-lock.json"
+PRODUCTION_NODE_LOCK = REPOSITORY_ROOT / "third_party" / "node" / "runtime-lock.json"
 PRODUCTION_BUBBLEWRAP_LOCK = (
     REPOSITORY_ROOT / "third_party" / "bubblewrap" / "runtime-lock.json"
 )
@@ -54,9 +56,30 @@ class PackageTests(unittest.TestCase):
             self.assertEqual(64, len(artifact["sha256"]))
             self.assertIn(artifact["format"], ("tar.gz", "zip"))
 
+        node_lock = load_node_lock(PRODUCTION_NODE_LOCK)
+        self.assertEqual(
+            set(TARGETS),
+            set(node_lock["packageTargets"]) | set(node_lock["licenseTargets"]),
+        )
+        for artifact in node_lock["artifacts"].values():
+            self.assertEqual(64, len(artifact["sha256"]))
+            self.assertIn(artifact["format"], ("tar.xz", "zip"))
+
         bubblewrap_lock = load_source_lock(PRODUCTION_BUBBLEWRAP_LOCK)
         self.assertEqual("0.11.2", bubblewrap_lock.version)
         self.assertEqual(64, len(bubblewrap_lock.archive_sha256))
+
+    def test_node_lock_requires_an_explicit_musl_binary(self) -> None:
+        lock = load_node_lock(PRODUCTION_NODE_LOCK)
+
+        with self.assertRaisesRegex(RuntimeError, "pass --node-bin"):
+            artifact_for_target(lock, "x86_64-unknown-linux-musl")
+        license_artifact = artifact_for_target(
+            lock,
+            "x86_64-unknown-linux-musl",
+            license_only=True,
+        )
+        self.assertEqual("linux-x64", license_artifact.key)
 
     def test_local_overrides_build_canonical_package(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -71,6 +94,7 @@ class PackageTests(unittest.TestCase):
                 root / "cache",
                 explicit_binary=rg_binary,
             )
+            node = test_node_resolution(root, spec)
 
             build_package_directory(
                 output,
@@ -79,10 +103,15 @@ class PackageTests(unittest.TestCase):
                 spec,
                 zeta_binary,
                 ripgrep,
+                node,
             )
 
             self.assertEqual(b"zeta", (output / "bin" / "zeta").read_bytes())
             self.assertEqual(b"ripgrep", (output / "zeta-path" / "rg").read_bytes())
+            self.assertEqual(
+                b"node",
+                (output / "zeta-resources" / "node" / "bin" / "node").read_bytes(),
+            )
             self.assertTrue(os.access(str(output / "bin" / "zeta"), os.X_OK))
             self.assertTrue(os.access(str(output / "zeta-path" / "rg"), os.X_OK))
             self.assertTrue(
@@ -174,9 +203,14 @@ class PackageTests(unittest.TestCase):
             )
             self.assertEqual("aarch64-apple-darwin", metadata["target"])
             self.assertEqual("local-override", metadata["components"]["ripgrep"]["source"])
+            self.assertEqual("local-override", metadata["components"]["node"]["source"])
             self.assertEqual(
                 hashlib.sha256(b"ripgrep").hexdigest(),
                 metadata["components"]["ripgrep"]["binarySha256"],
+            )
+            self.assertEqual(
+                hashlib.sha256(b"node").hexdigest(),
+                metadata["components"]["node"]["binarySha256"],
             )
 
             with self.assertRaisesRegex(RuntimeError, "Refusing to replace"):
@@ -187,12 +221,13 @@ class PackageTests(unittest.TestCase):
                     spec,
                     zeta_binary,
                     ripgrep,
+                    node,
                 )
 
     def assert_extension_resources(self, extensions: Path) -> None:
         self.assertEqual(
             self.BUILT_IN_EXTENSIONS,
-            sorted(path.name for path in extensions.iterdir()),
+            sorted(path.name for path in extensions.iterdir() if path.is_dir()),
         )
         seen_ids = set()
         file_templates = []
@@ -264,6 +299,7 @@ class PackageTests(unittest.TestCase):
                 root / "rg-cache",
                 explicit_binary=rg_binary,
             )
+            node = test_node_resolution(root, spec)
             bubblewrap = resolve_bubblewrap(
                 REPOSITORY_ROOT,
                 spec,
@@ -283,6 +319,7 @@ class PackageTests(unittest.TestCase):
                 spec,
                 zeta_binary,
                 ripgrep,
+                node,
                 bubblewrap,
             )
 
@@ -329,6 +366,7 @@ class PackageTests(unittest.TestCase):
                 root / "rg-cache",
                 explicit_binary=rg_binary,
             )
+            node = test_node_resolution(root, spec)
             helpers = resolve_windows_sandbox_helpers(
                 REPOSITORY_ROOT,
                 spec,
@@ -347,6 +385,7 @@ class PackageTests(unittest.TestCase):
                 spec,
                 zeta_binary,
                 ripgrep,
+                node,
                 windows_helpers=helpers,
             )
 
@@ -533,6 +572,56 @@ class PackageTests(unittest.TestCase):
             self.assertEqual(b"zip-rg", resolution.executable.read_bytes())
             self.assertEqual("rg.exe", resolution.executable.name)
 
+    def test_node_fetches_and_extracts_exact_tar_members(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            archive = root / "node-test.tar.xz"
+            write_node_tar_archive(archive, "bundle/bin/node", "bundle/LICENSE")
+            lock_path = write_node_lock(
+                root,
+                archive,
+                "tar.xz",
+                "bundle/bin/node",
+                "bundle/LICENSE",
+                "x86_64-unknown-linux-gnu",
+            )
+
+            resolution = resolve_node(
+                TARGETS["x86_64-unknown-linux-gnu"],
+                lock_path,
+                root / "cache",
+            )
+
+            self.assertEqual(b"node-runtime", resolution.executable.read_bytes())
+            self.assertEqual(b"node-license", resolution.license_file.read_bytes())
+            self.assertTrue(os.access(str(resolution.executable), os.X_OK))
+
+    def test_node_fetches_and_extracts_exact_zip_members(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            archive = root / "node-test.zip"
+            with zipfile.ZipFile(str(archive), "w") as output:
+                output.writestr("bundle/node.exe", b"node-runtime")
+                output.writestr("bundle/LICENSE", b"node-license")
+            lock_path = write_node_lock(
+                root,
+                archive,
+                "zip",
+                "bundle/node.exe",
+                "bundle/LICENSE",
+                "x86_64-pc-windows-msvc",
+            )
+
+            resolution = resolve_node(
+                TARGETS["x86_64-pc-windows-msvc"],
+                lock_path,
+                root / "cache",
+            )
+
+            self.assertEqual(b"node-runtime", resolution.executable.read_bytes())
+            self.assertEqual(b"node-license", resolution.license_file.read_bytes())
+            self.assertEqual("node.exe", resolution.executable.name)
+
     def test_digest_mismatch_aborts_and_removes_download(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -577,6 +666,18 @@ def write_tar_archive(path: Path, member_name: str, contents: bytes) -> None:
         member.size = len(contents)
         member.mode = 0o755
         archive.addfile(member, io.BytesIO(contents))
+
+
+def write_node_tar_archive(path: Path, executable_member: str, license_member: str) -> None:
+    with tarfile.open(str(path), "w:xz") as archive:
+        for member_name, contents, mode in (
+            (executable_member, b"node-runtime", 0o755),
+            (license_member, b"node-license", 0o644),
+        ):
+            member = tarfile.TarInfo(member_name)
+            member.size = len(contents)
+            member.mode = mode
+            archive.addfile(member, io.BytesIO(contents))
 
 
 def write_bubblewrap_source_archive(path: Path) -> None:
@@ -666,6 +767,53 @@ def write_test_lock(
     lock_path = root / "runtime-lock.json"
     lock_path.write_text(json.dumps(lock), encoding="utf-8")
     return lock_path
+
+
+def write_node_lock(
+    root: Path,
+    archive: Path,
+    archive_format: str,
+    executable_member: str,
+    license_member: str,
+    target: str,
+) -> Path:
+    artifact_key = "test-artifact"
+    lock = {
+        "schemaVersion": 1,
+        "runtime": "node",
+        "version": "test",
+        "source": {"baseUrl": root.as_uri()},
+        "packageTargets": {target: artifact_key},
+        "licenseTargets": {},
+        "artifacts": {
+            artifact_key: {
+                "archive": archive.name,
+                "size": archive.stat().st_size,
+                "sha256": hashlib.sha256(archive.read_bytes()).hexdigest(),
+                "format": archive_format,
+                "executable": executable_member,
+                "license": license_member,
+            }
+        },
+    }
+    lock_path = root / "node-lock.json"
+    lock_path.write_text(json.dumps(lock), encoding="utf-8")
+    return lock_path
+
+
+def test_node_resolution(root: Path, spec) -> NodeResolution:
+    executable = executable_file(root / spec.node_name, b"node")
+    license_file = root / "node-license"
+    license_file.write_bytes(b"node license")
+    return NodeResolution(
+        executable=executable,
+        license_file=license_file,
+        version="24.18.1-test",
+        source="local-override",
+        binary_sha256=hashlib.sha256(b"node").hexdigest(),
+        archive="node-test.zip",
+        archive_sha256="a" * 64,
+    )
 
 
 if __name__ == "__main__":

@@ -84,6 +84,7 @@ zeta-utils-pty = { workspace = true }
 [dev-dependencies]
 image = { workspace = true, features = ["png"] }
 tempfile = { workspace = true }
+zeta-language-server-distribution = { workspace = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 zeta-linux-sandbox = { workspace = true }

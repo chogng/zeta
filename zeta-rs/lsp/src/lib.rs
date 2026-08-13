@@ -19,6 +19,7 @@ mod router;
 pub use capability::{LanguageServerCapabilitySnapshot, LanguageServerDynamicRegistration};
 pub use client::{LanguageServerClient, LanguageServerInitialization};
 pub use command::LanguageServerCommand;
+pub use command::LanguageServerEnvironmentPolicy;
 pub use document::{
     DocumentChange, DocumentChangeSync, DocumentSave, DocumentSaveSync, DocumentSyncPolicy,
     DocumentVersion,

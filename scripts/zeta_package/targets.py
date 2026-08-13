@@ -26,6 +26,10 @@ class TargetSpec:
     def ripgrep_name(self) -> str:
         return "rg" + self.executable_suffix
 
+    @property
+    def node_name(self) -> str:
+        return "node" + self.executable_suffix
+
 
 TARGETS: Dict[str, TargetSpec] = {
     target: TargetSpec(target=target, is_windows="windows" in target)

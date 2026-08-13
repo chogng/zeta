@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Optional
 
 from .bubblewrap import BubblewrapResolution
+from .node import NodeResolution
 from .ripgrep import RipgrepResolution
 from .targets import TargetSpec
 from .windows_helpers import (
@@ -30,6 +31,7 @@ def build_package_directory(
     spec: TargetSpec,
     zeta_binary: Path,
     ripgrep: RipgrepResolution,
+    node: NodeResolution,
     bubblewrap: Optional[BubblewrapResolution] = None,
     windows_helpers: Optional[WindowsSandboxHelpers] = None,
 ) -> None:
@@ -46,10 +48,14 @@ def build_package_directory(
         skills_directory = staging / "zeta-resources" / "skills"
         extensions_directory = staging / "zeta-resources" / "extensions"
         product_services_directory = staging / "zeta-resources" / "product-services"
+        node_directory = staging / "zeta-resources" / "node" / "bin"
+        node_license_directory = staging / "zeta-resources" / "licenses" / "node"
         license_directory = staging / "zeta-resources" / "licenses" / "ripgrep"
         vscode_license_directory = staging / "zeta-resources" / "licenses" / "vscode"
         binary_directory.mkdir()
         path_directory.mkdir()
+        node_directory.mkdir(parents=True)
+        node_license_directory.mkdir(parents=True)
         license_directory.mkdir(parents=True)
         vscode_license_directory.mkdir()
         copy_builtin_skills(
@@ -76,6 +82,12 @@ def build_package_directory(
             path_directory / spec.ripgrep_name,
             is_windows=spec.is_windows,
         )
+        copy_executable(
+            node.executable,
+            node_directory / spec.node_name,
+            is_windows=spec.is_windows,
+        )
+        shutil.copyfile(node.license_file, node_license_directory / "LICENSE")
         for name in ("LICENSE-MIT", "UNLICENSE"):
             shutil.copyfile(
                 repository_root / "third_party" / "ripgrep" / name,
@@ -138,7 +150,16 @@ def build_package_directory(
             ripgrep_metadata["archive"] = ripgrep.archive
         if ripgrep.archive_sha256 is not None:
             ripgrep_metadata["archiveSha256"] = ripgrep.archive_sha256
-        components = {"ripgrep": ripgrep_metadata}
+        components = {
+            "node": {
+                "version": node.version,
+                "source": node.source,
+                "binarySha256": node.binary_sha256,
+                "archive": node.archive,
+                "archiveSha256": node.archive_sha256,
+            },
+            "ripgrep": ripgrep_metadata,
+        }
         if bubblewrap_metadata is not None:
             components["bubblewrap"] = bubblewrap_metadata
         if windows_sandbox_metadata is not None:
@@ -192,6 +213,7 @@ def validate_package_directory(package: Path, spec: TargetSpec) -> None:
     executables = (
         package / "bin" / spec.zeta_name,
         package / "zeta-path" / spec.ripgrep_name,
+        package / "zeta-resources" / "node" / "bin" / spec.node_name,
     )
     for executable in executables:
         if not executable.is_file():
@@ -217,6 +239,9 @@ def validate_package_directory(package: Path, spec: TargetSpec) -> None:
     )
     if vscode_license.is_symlink() or not vscode_license.is_file():
         raise RuntimeError("Missing VS Code extension license: {}".format(vscode_license))
+    node_license = package / "zeta-resources" / "licenses" / "node" / "LICENSE"
+    if node_license.is_symlink() or not node_license.is_file():
+        raise RuntimeError("Missing Node.js license: {}".format(node_license))
     validate_builtin_skills(package / "zeta-resources" / "skills")
     validate_builtin_extensions(package / "zeta-resources" / "extensions")
     validate_product_services(package / "zeta-resources" / "product-services")

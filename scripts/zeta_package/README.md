@@ -15,6 +15,9 @@ notarization, installer formats, or update delivery.
     ├── bwrap                         # Linux only
     ├── zeta-command-runner.exe       # Windows only
     ├── zeta-windows-sandbox-setup.exe # Windows only
+    ├── node/
+    │   └── bin/
+    │       └── node[.exe]          # shared JavaScript LSP runtime
     ├── skills/
     │   └── skill-creator/SKILL.md
     ├── extensions/
@@ -26,6 +29,7 @@ notarization, installer formats, or update delivery.
     │   └── marketplace-root.json      # public pinned TUF root
     └── licenses/
         ├── bubblewrap/COPYING        # Linux only
+        ├── node/LICENSE
         ├── ripgrep/
         │   ├── LICENSE-MIT
         │   └── UNLICENSE
@@ -36,7 +40,11 @@ The stable entry point is `scripts/build_zeta_package.py`. If `--zeta-bin` is
 omitted, `cargo.py` builds `zeta-cli` for the selected target. `ripgrep.py`
 maps the package target through `third_party/ripgrep/runtime-lock.json`,
 validates archive size and SHA-256 on every use, extracts only the locked
-member, and rejects non-regular archive members. For Linux, `bubblewrap.py`
+member, and rejects non-regular archive members. `node.py` applies the same
+locked size/SHA-256 gate to the shared Node.js runtime, extracts only `node[.exe]`
+and its license, and never resolves Node from the host `PATH`. Official Node.js
+releases do not contain musl builds, so musl release jobs must supply an exact
+`--node-bin`; the lock still supplies the verified upstream license. For Linux, `bubblewrap.py`
 verifies and extracts the locked upstream source, then builds the `zeta-bwrap`
 binary with the target C compiler and `libcap`; `--bwrap-bin` accepts an already
 built or signed helper. For Windows, `windows_helpers.py` builds both
@@ -74,7 +82,7 @@ python3 scripts/build_zeta_package.py \
 ```
 
 Release jobs that already built or signed binaries should use `--zeta-bin` and
-optionally `--rg-bin`; those overrides are copied verbatim and their binary
+optionally `--rg-bin` or `--node-bin`; those overrides are copied verbatim and their binary
 digest is recorded in `zeta-package.json`. Linux jobs can likewise pass
 `--bwrap-bin`. Signing and archive serialization must happen after this staging
 step. Windows jobs can supply `--windows-command-runner-bin` and
@@ -87,7 +95,8 @@ helper to be built for the selected target.
 | Linux | `zeta-resources/bwrap` is required and validated |
 | Windows | Both AppContainer helpers are required and validated |
 
-Tests are offline and cover target-lock completeness, package layout, all thirteen built-in
+Tests are offline and cover target-lock completeness, package layout, the shared Node executable
+and license, all thirteen built-in
 Extension packages, their referenced resources, real file-template declarations, the packaged VS Code
 license text, built-in Skill/Extension staging and link
 rejection, product-service trust bundle staging, tar/zip member/source extraction, Linux and
@@ -98,7 +107,7 @@ digest failure cleanup:
 python3 -m unittest discover -s scripts -p 'test_*.py'
 ```
 
-The Node development assembler's target selection, locked ripgrep selection,
+The Node development assembler's target selection, locked ripgrep/Node selection,
 and atomic replacement behavior are covered by:
 
 ```sh

@@ -121,10 +121,32 @@ impl LanguageServerPackage {
 /// Result of one verified, side-by-side application-managed installation.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InstalledLanguageServer {
-    pub server_id: String,
-    pub version: String,
-    pub executable: PathBuf,
-    pub package_sha256: [u8; 32],
+    server_id: String,
+    version: String,
+    executable: PathBuf,
+    package_sha256: [u8; 32],
+}
+
+impl InstalledLanguageServer {
+    /// Returns the provider identity bound into the verified installation receipt.
+    pub fn server_id(&self) -> &str {
+        &self.server_id
+    }
+
+    /// Returns the exact side-by-side package version.
+    pub fn version(&self) -> &str {
+        &self.version
+    }
+
+    /// Returns the installed package entrypoint declared by trusted package metadata.
+    pub fn executable(&self) -> &Path {
+        &self.executable
+    }
+
+    /// Returns the package digest verified before publication.
+    pub const fn package_sha256(&self) -> [u8; 32] {
+        self.package_sha256
+    }
 }
 
 /// Installer rooted in a product-owned directory, independent from PATH and global package tools.

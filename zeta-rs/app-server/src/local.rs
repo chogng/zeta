@@ -201,6 +201,7 @@ pub struct LocalAppServerOptions {
     mcp_oauth_providers: Vec<(McpServerId, Arc<dyn McpOAuthProvider>)>,
     plugin_marketplaces: Vec<(PathBuf, PluginMarketplaceMode)>,
     remote_plugin_marketplaces: Vec<RemotePluginMarketplaceConfig>,
+    language_server_providers: zeta_language_server_catalog::LanguageServerProviderRegistry,
     product_services: Option<crate::LocalProductServicesConfig>,
     codex_app_server: CodexAppServerOptions,
 }
@@ -220,6 +221,8 @@ impl LocalAppServerOptions {
             mcp_oauth_providers: Vec::new(),
             plugin_marketplaces: Vec::new(),
             remote_plugin_marketplaces: Vec::new(),
+            language_server_providers:
+                zeta_language_server_catalog::LanguageServerProviderRegistry::new(),
             product_services: None,
             codex_app_server: CodexAppServerOptions::default(),
         }
@@ -344,6 +347,15 @@ impl LocalAppServerOptions {
         self
     }
 
+    /// Installs exact, already materialized language-server providers for this App Server.
+    pub fn with_language_server_providers(
+        mut self,
+        providers: zeta_language_server_catalog::LanguageServerProviderRegistry,
+    ) -> Self {
+        self.language_server_providers = providers;
+        self
+    }
+
     /// Installs distribution-pinned Marketplace roots and public OAuth product adapters.
     pub fn with_product_services(mut self, services: crate::LocalProductServicesConfig) -> Self {
         self.product_services = Some(services);
@@ -378,6 +390,10 @@ impl fmt::Debug for LocalAppServerOptions {
             .field(
                 "remote_plugin_marketplace_count",
                 &self.remote_plugin_marketplaces.len(),
+            )
+            .field(
+                "language_server_provider_count",
+                &self.language_server_providers.len(),
             )
             .field(
                 "product_services_injected",
@@ -420,6 +436,9 @@ impl PartialEq for LocalAppServerOptions {
                 })
             && self.plugin_marketplaces == other.plugin_marketplaces
             && self.remote_plugin_marketplaces == other.remote_plugin_marketplaces
+            && self
+                .language_server_providers
+                .ptr_eq(&other.language_server_providers)
             && self.product_services == other.product_services
             && self.codex_app_server == other.codex_app_server
     }
@@ -844,6 +863,7 @@ pub fn open_local_app_server_with_code_index_providers(
         .with_approval_review_model(approval_review_model)
         .with_config_store(Arc::clone(&config))
         .with_login_service(login_service)
+        .with_language_server_providers(options.language_server_providers)
         .with_slash_command_catalog(options.slash_commands)
         .with_code_index_storage_root(options.profile_root.join("code-index"))
         .with_code_index_semantic_storage_root(options.profile_root.join("code-index-semantic"))

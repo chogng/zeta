@@ -1,6 +1,6 @@
 # 语言服务器系统
 
-> 状态：catalog、低层 LSP runtime 与产品级 language-service supervisor 已实现；Desktop/App Server
+> 状态：catalog/provider、托管 Node、低层 LSP runtime 与产品级 language-service supervisor 已实现；Desktop/App Server
 > 已接入 revision-bound 语言请求与编辑器 provider，Native 仍保留既有 Rust、JSON/JSONC、Shell
 > 设置和 diagnostics presentation。
 > 本文拥有跨 crate 的语言能力语义、所有权和演进阶段；当前实现接口与修改路径由
@@ -29,6 +29,7 @@ Automatic 或 Enabled。未配置的 server 默认 Disabled，不会自动拉起
 | 日志、show message 与 work-done progress | ✅ Desktop 将日志投影到 Output/Language Servers，showMessage 使用 Workbench Dialog，活动进度显示在状态栏与 Output | App Server + Desktop Workbench |
 | 显式替换服务器并恢复文档 | ✅ 新实例重放成功后切换 route/incarnation | 宿主需暂存 replacement 早期事件 |
 | 配置与发现 Rust/JSON/Shell server | ✅ 独立 Settings draft、revision-safe mode/path、catalog 校验与热重配 | 扩展安装 provider/UI |
+| 用共享 Node 运行已验证 CSS package | ✅ CSS provider 生成 `node <entrypoint> --stdio`，App Server 复用现有 supervisor/client | Marketplace 消费端仍需完成下载、用户确认与 registry materialization |
 | 意外退出、退避重启和 crash-loop | ✅ 断连 retirement、有限指数退避、状态展示和全文重放 | `zeta-language-service` + Native |
 | 安装、更新和选择其他 server | 部分具备；verified side-by-side installer 已完成，release provider/UI 尚缺 | distribution / config / Native |
 | 动态注册与 work-done progress | ✅ 按 server incarnation 隔离，静态与动态 capability 共同参与请求 gate | `zeta-lsp` + `zeta-language-service` |
@@ -40,6 +41,9 @@ Automatic 或 Enabled。未配置的 server 默认 Disabled，不会自动拉起
 ```mermaid
 flowchart LR
     Host["Native / Desktop host"] --> Catalog["zeta-language-server-catalog"]
+    Pack["Verified language pack"] --> Provider["LanguageServerProvider"]
+    Node["Zeta managed Node"] --> Provider
+    Provider --> Catalog
     Catalog --> Service["zeta-language-service"]
     Service --> Runtime["zeta-lsp runtime"]
     Runtime --> Server["Language server process"]
@@ -54,7 +58,9 @@ flowchart LR
 1. Native 通过 `config/read` 获得持久化 server preference；Settings UI 通过 revision-safe typed
    command 更新，`config/changed` 只作为重新读取权威 snapshot 的失效提示。
 2. 产品宿主把 preference、冻结的 executable candidates 和 execution policy 交给 catalog；catalog 只在候选
-   可 canonicalize、为普通可执行文件时产生 resolved definition。
+   可 canonicalize、为普通可执行文件时产生 resolved definition。对 package-backed CSS，宿主先把
+   distribution 返回的 `InstalledLanguageServer` 和 package 内共享 Node 注入
+   `CssLanguageServerProvider`；provider 产生同样的 definition，不直接启动 child。
 3. 产品宿主把 definitions 交给 `zeta-language-service`；无 definition 时禁用，不启动进程。
 4. 协调层把 resolved command 委托给 `zeta-lsp`；后者启动或接入 transport、发送 initialize，
    并校验 server 选定的位置编码。
@@ -75,23 +81,24 @@ Git object identity 或 durable product sequence。
 
 ## 2. 所有权边界
 
-| 能力 | `zeta-lsp` | Catalog | Language Service | Distribution | Native / Editor | App Server |
+| 能力 | `zeta-lsp` | Catalog / Provider | Language Service | Distribution | Native / Editor | App Server |
 | --- | --- | --- | --- | --- | --- | --- |
 | framing、initialize、request pairing、shutdown | ✅ | ❌ | 委托 | ❌ | ❌ | ❌ |
 | PATH discovery、canonical executable、server identity | ❌ | ✅ | ❌ | ❌ | 提供候选/policy | ❌ |
-| process enablement、language route、generation | ❌ | 提供 definition | ✅ | ❌ | 组合 | ❌ |
-| restart backoff、预算和 crash-loop | 只上报断连事实 | ❌ | ✅ | ❌ | 展示运行态 | ❌ |
-| server 包校验与 side-by-side 安装 | ❌ | 只消费路径 | ❌ | ✅ | 协调/展示 | ❌ |
+| managed Node 与 package/native 启动命令 | 只执行冻结 command | ✅ | ❌ | 只返回入口路径 | 注入 package/provider | 组合 registry |
+| process enablement、language route、generation | ❌ | 提供 definition | ✅ | ❌ | 组合 | 配置与组合 |
+| restart backoff、预算和 crash-loop | 只上报断连事实 | ❌ | ✅ | ❌ | 展示运行态 | 事件转发 |
+| server 包 bytes/digest 校验与 side-by-side 安装 | ❌ | 只消费已安装 receipt | ❌ | ✅ | 协调/展示 | 后续 Marketplace adapter owner |
 | 当前 document text / editor revision | ❌ | ❌ | 借用 snapshot | ❌ | ✅ | 文件 I/O authority |
-| diagnostics freshness 与 position conversion | 提供协议事实 | ❌ | ✅ | ❌ | ✅ Editor 绘制，Native hover | ❌ |
+| diagnostics freshness 与 position conversion | 提供协议事实 | ❌ | ✅ | ❌ | ✅ Editor 绘制，Native hover | 协议投影 |
 | mode/path durable preference | ❌ | 只消费 preference | ❌ | ❌ | Settings UI / adapter | ✅ authority |
 | workspace trust / executable policy | ❌ | 只消费结果 | 只消费 definition | ❌ | 协调 | authority |
 
 `zeta-editor` 保持纯 presentation，不依赖 catalog、`zeta-lsp` 或协调层。Native host 组合 catalog、
 editor 和 `zeta-language-service`，只在 adapter 中转换文档与事件；
-Desktop 的 legacy editor runtime host 可以消费相同系统语义，但不需要复用 Native paint types。App Server 只有
-在出现远程语言服务器、共享 workspace authority 或第二个进程消费者后才应增加 LSP method；
-当前不能为了形式统一把高频 editor-local request 绕进 App Server。
+Desktop 的 legacy editor runtime host 可以消费相同系统语义，但不需要复用 Native paint types。
+App Server 已经是 Desktop 的 workspace/document authority 与 LSP IPC boundary；它只组合 provider、配置、
+`zeta-language-service` 和协议 DTO，不复制 LSP framing、process supervisor 或 Editor presentation。
 
 ## 3. 可靠性与失败语义
 
@@ -124,6 +131,9 @@ Desktop 的 legacy editor runtime host 可以消费相同系统语义，但不�
 - generic typed requests、deadline cancellation、shutdown/exit；
 - 唯一 language route、EditorHost revision binding、显式 server replacement 和全文 replay；
 - 独立 `zeta-language-server-catalog`、Rust built-in identity、frozen PATH resolution 和 policy gate；
+- `LanguageServerProviderRegistry`、`ManagedNodeRuntime` 和 verified CSS package provider；
+- 发布包中的单份锁定 Node.js runtime、license 和 clean-environment `node <entrypoint> --stdio`；
+- App Server 将显式启用的 provider definition 与既有 built-in catalog definition 合并后交给同一 supervisor；
 - 独立 `zeta-language-service` supervisor、显式 enablement、resolved definition 校验、generation gate；
 - Native 文档 open/change/save/close、workspace replacement 与 event-loop adapter；
 - `zeta-config` mode/path schema、App Server typed mutation/config notification，以及三个内置 server 的
@@ -146,7 +156,8 @@ Desktop 的 legacy editor runtime host 可以消费相同系统语义，但不�
 
 1. 把 workspace trust 的明确结果映射为 catalog execution policy。
 2. 增加 pull diagnostics 的 result-id cache、partial-result progress 与 `workspace/diagnostic/refresh`。
-3. 为每个内置 server 增加可信 release metadata provider、archive limit、compatibility probe 和安装 UI。
+3. 为 Marketplace CSS target 增加通用 TUF consumer/download adapter、有界 archive extraction、
+   compatibility probe、用户确认/安装 UI，并从激活 receipt 自动构建 provider registry。
 
 ### 潜在方向
 

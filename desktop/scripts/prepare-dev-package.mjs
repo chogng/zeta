@@ -10,9 +10,11 @@ const sharedRustSource = join(repositoryRoot, "zeta-rs");
 const outputDirectory = join(repositoryRoot, "desktop", ".tmp", "zeta-package");
 const ripgrepLockPath = join(repositoryRoot, "third_party", "ripgrep", "runtime-lock.json");
 const ripgrepCacheRoot = join(repositoryRoot, "third_party", ".cache", "ripgrep");
+const nodeLockPath = join(repositoryRoot, "third_party", "node", "runtime-lock.json");
+const nodeCacheRoot = join(repositoryRoot, "third_party", ".cache", "node");
 const bubblewrapLockPath = join(repositoryRoot, "third_party", "bubblewrap", "runtime-lock.json");
 const bubblewrapCacheRoot = join(repositoryRoot, "third_party", ".cache", "bubblewrap");
-const archiveBufferLimit = 64 * 1024 * 1024;
+const archiveBufferLimit = 256 * 1024 * 1024;
 
 export function hostTarget(platform = process.platform, architecture = process.arch) {
   const targets = {
@@ -56,6 +58,41 @@ export function selectRipgrepArtifact(lock, target) {
     ...artifact,
     key: artifactKey,
     url: artifact.url ?? `${repository.replace(/\/+$/, "")}/releases/download/${release}/${artifact.archive}`,
+    version: lock.version,
+  };
+}
+
+export function selectNodeArtifact(lock, target) {
+  if (lock.schemaVersion !== 1 || lock.runtime !== "node") {
+    throw new Error("Unsupported Node.js runtime lock");
+  }
+  const artifactKey = lock.packageTargets?.[target];
+  const artifact = artifactKey ? lock.artifacts?.[artifactKey] : undefined;
+  if (!artifactKey || !artifact) {
+    throw new Error(`No locked Node.js artifact for ${target}`);
+  }
+  for (const field of ["archive", "sha256", "format", "executable", "license"]) {
+    if (typeof artifact[field] !== "string" || artifact[field].length === 0) {
+      throw new Error(`Invalid Node.js artifact field ${field} for ${target}`);
+    }
+  }
+  if (!/^[0-9a-f]{64}$/.test(artifact.sha256)) {
+    throw new Error(`Invalid Node.js artifact SHA-256 for ${target}`);
+  }
+  if (artifact.format !== "tar.xz" && artifact.format !== "zip") {
+    throw new Error(`Unsupported Node.js archive format for ${target}: ${artifact.format}`);
+  }
+  if (!Number.isSafeInteger(artifact.size) || artifact.size <= 0) {
+    throw new Error(`Invalid Node.js artifact size for ${target}`);
+  }
+  const baseUrl = lock.source?.baseUrl;
+  if (typeof baseUrl !== "string" || baseUrl.length === 0) {
+    throw new Error("Node.js lock is missing its upstream release URL");
+  }
+  return {
+    ...artifact,
+    key: artifactKey,
+    url: `${baseUrl.replace(/\/+$/, "")}/${artifact.archive}`,
     version: lock.version,
   };
 }
@@ -139,6 +176,40 @@ async function resolveRipgrep(target, isWindows) {
     archiveSha256: artifact.sha256,
     binarySha256: await sha256(executable),
     executable,
+    source: "upstream-release",
+    version: artifact.version,
+  };
+}
+
+async function resolveNode(target, isWindows) {
+  const lock = JSON.parse(await readFile(nodeLockPath, "utf8"));
+  const artifact = selectNodeArtifact(lock, target);
+  const cacheDirectory = join(nodeCacheRoot, artifact.version, artifact.key);
+  const archive = await materializeArchive(artifact, cacheDirectory);
+  const executable = join(cacheDirectory, isWindows ? "node.exe" : "node");
+  const license = join(cacheDirectory, "LICENSE");
+  const executablePartial = `${executable}.partial-${randomUUID()}`;
+  const licensePartial = `${license}.partial-${randomUUID()}`;
+  try {
+    await writeFile(executablePartial, extractArchiveMember(archive, artifact.executable), { flag: "wx" });
+    await writeFile(licensePartial, extractArchiveMember(archive, artifact.license), { flag: "wx" });
+    if (!isWindows) {
+      await chmod(executablePartial, 0o755);
+    }
+    await rm(executable, { force: true });
+    await rename(executablePartial, executable);
+    await rm(license, { force: true });
+    await rename(licensePartial, license);
+  } finally {
+    await rm(executablePartial, { force: true });
+    await rm(licensePartial, { force: true });
+  }
+  return {
+    archive: artifact.archive,
+    archiveSha256: artifact.sha256,
+    binarySha256: await sha256(executable),
+    executable,
+    license,
     source: "upstream-release",
     version: artifact.version,
   };
@@ -355,17 +426,21 @@ async function workspaceVersion() {
   return version;
 }
 
-export async function assemblePackage(staging, target, platform, executables, ripgrep) {
+export async function assemblePackage(staging, target, platform, executables, ripgrep, node) {
   const isWindows = platform === "win32";
   const zetaName = isWindows ? "zeta.exe" : "zeta";
   const rgName = isWindows ? "rg.exe" : "rg";
   const binDirectory = join(staging, "bin");
   const pathDirectory = join(staging, "zeta-path");
   const resourcesDirectory = join(staging, "zeta-resources");
+  const nodeDirectory = join(resourcesDirectory, "node", "bin");
+  const nodeLicenseDirectory = join(resourcesDirectory, "licenses", "node");
   const ripgrepLicenseDirectory = join(resourcesDirectory, "licenses", "ripgrep");
   const vscodeLicenseDirectory = join(resourcesDirectory, "licenses", "vscode");
   await mkdir(binDirectory, { recursive: true });
   await mkdir(pathDirectory, { recursive: true });
+  await mkdir(nodeDirectory, { recursive: true });
+  await mkdir(nodeLicenseDirectory, { recursive: true });
   await mkdir(ripgrepLicenseDirectory, { recursive: true });
   await mkdir(vscodeLicenseDirectory, { recursive: true });
   await copyBuiltinSkills(join(resourcesDirectory, "skills"));
@@ -373,12 +448,21 @@ export async function assemblePackage(staging, target, platform, executables, ri
   await copyRegularTree(join(repositoryRoot, "resources", "product-services"), join(resourcesDirectory, "product-services"), "product services");
   await copyExecutable(executables.zeta, join(binDirectory, zetaName), isWindows);
   await copyExecutable(ripgrep.executable, join(pathDirectory, rgName), isWindows);
+  await copyExecutable(node.executable, join(nodeDirectory, isWindows ? "node.exe" : "node"), isWindows);
+  await copyFile(node.license, join(nodeLicenseDirectory, "LICENSE"));
   for (const name of ["LICENSE-MIT", "UNLICENSE"]) {
     await copyFile(join(repositoryRoot, "third_party", "ripgrep", name), join(ripgrepLicenseDirectory, name));
   }
   await copyFile(join(repositoryRoot, "third_party", "vscode", "LICENSE.txt"), join(vscodeLicenseDirectory, "LICENSE.txt"));
 
   const components = {
+    node: {
+      archive: node.archive,
+      archiveSha256: node.archiveSha256,
+      binarySha256: node.binarySha256,
+      source: node.source,
+      version: node.version,
+    },
     ripgrep: {
       archive: ripgrep.archive,
       archiveSha256: ripgrep.archiveSha256,
@@ -434,6 +518,8 @@ async function validatePackage(packageRoot, platform) {
   await requireFile(join(packageRoot, "zeta-package.json"));
   await requireFile(join(packageRoot, "bin", isWindows ? "zeta.exe" : "zeta"));
   await requireFile(join(packageRoot, "zeta-path", isWindows ? "rg.exe" : "rg"));
+  await requireFile(join(packageRoot, "zeta-resources", "node", "bin", isWindows ? "node.exe" : "node"));
+  await requireFile(join(packageRoot, "zeta-resources", "licenses", "node", "LICENSE"));
   await requireFile(join(packageRoot, "zeta-resources", "licenses", "ripgrep", "LICENSE-MIT"));
   await requireFile(join(packageRoot, "zeta-resources", "licenses", "ripgrep", "UNLICENSE"));
   await requireFile(join(packageRoot, "zeta-resources", "licenses", "vscode", "LICENSE.txt"));
@@ -512,12 +598,14 @@ export async function prepareDevelopmentPackage() {
   const isWindows = process.platform === "win32";
   const executables = await buildFirstPartyExecutables(target, process.platform);
   const ripgrep = await resolveRipgrep(target, isWindows);
+  const node = await resolveNode(target, isWindows);
   await replaceDirectoryAtomically(outputDirectory, (staging) => assemblePackage(
     staging,
     target,
     process.platform,
     executables,
     ripgrep,
+    node,
   ));
   console.log(`Prepared Zeta Desktop development package at ${outputDirectory}`);
 }

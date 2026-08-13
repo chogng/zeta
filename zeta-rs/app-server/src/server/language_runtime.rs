@@ -16,6 +16,8 @@ use zeta_language_server_catalog::JSON_LANGUAGE_SERVER_ID;
 use zeta_language_server_catalog::LanguageServerCatalog;
 use zeta_language_server_catalog::LanguageServerExecutionPolicy;
 use zeta_language_server_catalog::LanguageServerPreference;
+use zeta_language_server_catalog::LanguageServerProviderLaunch;
+use zeta_language_server_catalog::LanguageServerProviderRegistry;
 use zeta_language_server_catalog::RUST_ANALYZER_SERVER_ID;
 use zeta_language_server_catalog::TYPESCRIPT_LANGUAGE_SERVER_ID;
 use zeta_language_service::LanguageRequestId;
@@ -142,6 +144,7 @@ pub(super) struct AppServerLanguageRuntime {
     config_generation: Option<u64>,
     language_servers: BTreeMap<String, String>,
     server_states: BTreeMap<String, LanguageServerState>,
+    providers: LanguageServerProviderRegistry,
 }
 
 impl AppServerLanguageRuntime {
@@ -155,7 +158,13 @@ impl AppServerLanguageRuntime {
             config_generation: None,
             language_servers: BTreeMap::new(),
             server_states: BTreeMap::new(),
+            providers: LanguageServerProviderRegistry::new(),
         }
+    }
+
+    pub(super) fn set_provider_registry(&mut self, providers: LanguageServerProviderRegistry) {
+        self.shutdown();
+        self.providers = providers;
     }
 
     pub(super) fn ensure(
@@ -291,8 +300,13 @@ impl AppServerLanguageRuntime {
                 workspace_root,
             )
             .map_err(|error| error.to_string())?;
-        self.language_servers = resolution
-            .definitions()
+        let mut definitions = resolution.into_definitions();
+        definitions.extend(configured_provider_definitions(
+            &self.providers,
+            configuration,
+            workspace_root,
+        )?);
+        self.language_servers = definitions
             .iter()
             .flat_map(|definition| {
                 let server = definition.name().to_string();
@@ -301,7 +315,6 @@ impl AppServerLanguageRuntime {
                     .map(move |language| (language.to_owned(), server.clone()))
             })
             .collect();
-        let definitions = resolution.into_definitions();
         if definitions.is_empty() {
             return Err("no configured language-server executable is available".into());
         }
@@ -382,6 +395,32 @@ impl AppServerLanguageRuntime {
     }
 }
 
+fn configured_provider_definitions(
+    providers: &LanguageServerProviderRegistry,
+    configuration: &LanguageServersConfig,
+    workspace_root: &Path,
+) -> Result<Vec<zeta_language_service::LanguageServerDefinition>, String> {
+    let mut definitions = Vec::new();
+    for (server_id, config) in &configuration.servers {
+        if config.mode == LanguageServerModeConfig::Disabled
+            || !providers.contains(server_id.as_str())
+        {
+            continue;
+        }
+        let launch = config.executable.as_deref().map_or(
+            LanguageServerProviderLaunch::Packaged,
+            LanguageServerProviderLaunch::ExplicitExecutable,
+        );
+        if let Some(definition) = providers
+            .definition(server_id.as_str(), workspace_root, launch)
+            .map_err(|error| error.to_string())?
+        {
+            definitions.push(definition);
+        }
+    }
+    Ok(definitions)
+}
+
 impl Drop for AppServerLanguageRuntime {
     fn drop(&mut self) {
         self.shutdown();
@@ -407,3 +446,7 @@ fn preference(configuration: &LanguageServersConfig, server_id: &str) -> Languag
             preference.with_explicit_executable(path)
         })
 }
+
+#[cfg(test)]
+#[path = "language_runtime_tests.rs"]
+mod tests;

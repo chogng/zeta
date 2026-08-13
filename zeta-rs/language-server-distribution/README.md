@@ -15,7 +15,11 @@ archive、不调用全局包管理器、不激活版本，也不删除旧版本�
 | `LanguageServerPackageFile` | 表达 traversal-free regular/executable package file | 跟随 symlink 或接受绝对路径 |
 | `LanguageServerPackage` | 冻结 server/version/executable path/file set 并计算 deterministic SHA-256 | 声称 digest 来源可信 |
 | `LanguageServerInstaller` | 验证 expected digest、写 staging、receipt 并原子发布 version directory | 覆盖已发布版本或改变 Config |
-| `InstalledLanguageServer` | 返回可交给 Config/catalog 的 versioned executable path 与 digest | 表示 server 已激活或 initialize |
+| `InstalledLanguageServer` | 不透明的已验证安装 receipt，以只读访问器交给 provider versioned entrypoint 与 digest | 允许调用方手工伪造或表示 server 已激活/initialize |
+
+`InstalledLanguageServer::executable` 是 package manifest 声明的入口，不承诺它是可由 OS
+直接启动的 native binary。例如 CSS provider 把该路径解释为 JavaScript 入口，并且只使用
+Zeta 托管的 Node 运行它；distribution 仍然只负责 bytes、digest 和安装路径的可验证性。
 
 ```text
 trusted server-specific provider

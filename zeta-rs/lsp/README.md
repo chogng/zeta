@@ -15,7 +15,7 @@
 | API / type | 当前职责 | 明确不做 |
 | --- | --- | --- |
 | `LanguageServerClient` | initialize 后的单服务器 session、类型化请求、文档同步、transport-close 事实和关闭 | server discovery、共享进程、重启策略 |
-| `LanguageServerCommand` | 保存宿主已经解析的 program、args、env 和 cwd | 验证 executable trust、安装或 sandbox |
+| `LanguageServerCommand` / `LanguageServerEnvironmentPolicy` | 保存宿主已经解析的 program、args、cwd，并明确选择继承或清空环境 | 验证 executable trust、安装或 sandbox |
 | `LanguageServerOptions` | client identity、workspace、capability、initialize options、host 和 deadline | 读取产品配置 |
 | `LanguageServerInitialization` | 冻结 server info、初始 capability、position encoding 和 document sync policy | 把随后动态注册伪装成 initialize 快照 |
 | `LanguageServerHost` | 快速接收事件，并按顺序回答 `workspace/configuration`，消费 progress/message/log 事件 | 直接修改 UI 或阻塞协议 driver |
@@ -100,7 +100,8 @@ Transport 使用 LSP stdio 的 `Content-Length` framing。Header 最多 16 KiB�
 
 宿主必须：
 
-- 在启动前决定 executable trust、workspace root、environment 与 sandbox；
+- 在启动前决定 executable trust、workspace root、environment 与 sandbox；执行包内 JavaScript
+  server 时应清空环境后只恢复明确 allowlist，不得继承 `NODE_OPTIONS` 或 `NODE_PATH`；
 - 让 `LanguageServerHost::on_event` 快速返回，把 UI 工作排入自己的 event loop；
 - 为 `workspace_configuration` 返回与请求项数量和顺序完全一致的结果；
 - 为每个文件维持稳定 URI 和 language ID，并只对 open document 发送 change/save/close；
