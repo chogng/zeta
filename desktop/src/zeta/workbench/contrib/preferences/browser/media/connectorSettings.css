@@ -4,6 +4,51 @@
   gap: 12px;
 }
 
+.zeta-marketplace-toolbar {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.zeta-marketplace-toolbar h3,
+.zeta-marketplace-toolbar p {
+  margin: 0;
+}
+
+.zeta-marketplace-toolbar p {
+  margin-top: 4px;
+  color: var(--zeta-description-foreground);
+  font-size: 12px;
+}
+
+.zeta-marketplace-search {
+  display: grid;
+  min-width: min(320px, 45%);
+  gap: 4px;
+  color: var(--zeta-description-foreground);
+  font-size: 12px;
+}
+
+.zeta-marketplace-search input {
+  min-width: 0;
+  padding: 7px 9px;
+  border: 1px solid var(--zeta-widget-border);
+  border-radius: 4px;
+  color: var(--zeta-foreground);
+  background: var(--zeta-input-background, var(--zeta-editor-background));
+}
+
+.zeta-marketplace-search input:focus {
+  border-color: var(--zeta-focus-border);
+  outline: 1px solid var(--zeta-focus-border);
+  outline-offset: -1px;
+}
+
+.zeta-marketplace-results {
+  display: contents;
+}
+
 .zeta-integration-card {
   padding: 14px;
   border: 1px solid var(--zeta-widget-border);
@@ -31,6 +76,52 @@
 .zeta-integration-state {
   color: var(--zeta-description-foreground);
   font-size: 12px;
+}
+
+.zeta-marketplace-badge,
+.zeta-marketplace-capabilities span {
+  padding: 2px 7px;
+  border: 1px solid var(--zeta-widget-border);
+  border-radius: 999px;
+  color: var(--zeta-description-foreground);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.zeta-marketplace-badge.is-productManaged,
+.zeta-marketplace-badge.is-verifiedRemote {
+  color: var(--zeta-success-foreground, var(--zeta-description-foreground));
+}
+
+.zeta-marketplace-description {
+  margin: 10px 0 0;
+  line-height: 1.5;
+}
+
+.zeta-marketplace-capabilities {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  gap: 6px;
+}
+
+.zeta-marketplace-access {
+  margin-top: 12px;
+  padding: 9px 10px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--zeta-widget-border) 22%, transparent);
+  font-size: 12px;
+}
+
+.zeta-marketplace-access p,
+.zeta-marketplace-details {
+  margin: 3px 0 0;
+  color: var(--zeta-description-foreground);
+  line-height: 1.5;
+}
+
+.zeta-marketplace-details {
+  font-size: 11px;
 }
 
 .zeta-integration-state.is-connected {
@@ -70,6 +161,15 @@
 }
 
 @media (max-width: 720px) {
+  .zeta-marketplace-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .zeta-marketplace-search {
+    min-width: 0;
+  }
+
   .zeta-connector-connect-form {
     grid-template-columns: minmax(0, 1fr);
   }

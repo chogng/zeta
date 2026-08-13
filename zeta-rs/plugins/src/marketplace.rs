@@ -5,6 +5,7 @@ use std::path::PathBuf;
 
 use crate::InstalledPluginRef;
 use crate::LocalPluginPackage;
+use crate::PackageFileStats;
 use crate::PluginActivationAuthority;
 use crate::PluginAuthorityCommand;
 use crate::PluginAuthorityCommandId;
@@ -87,6 +88,16 @@ impl PluginMarketplacePackage {
             version: self.package.manifest().version.clone(),
             digest: self.package.package_digest().clone(),
         }
+    }
+
+    /// Returns the validated manifest used to describe this exact Marketplace package.
+    pub fn manifest(&self) -> &crate::PluginManifest {
+        self.package.manifest()
+    }
+
+    /// Returns bounded package statistics captured by the canonical package validator.
+    pub fn stats(&self) -> PackageFileStats {
+        self.package.stats()
     }
 
     pub(crate) fn local_package(&self) -> &LocalPluginPackage {

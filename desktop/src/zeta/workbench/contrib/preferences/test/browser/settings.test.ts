@@ -256,6 +256,92 @@ test("Plugin settings project layered authority and send exact-package commands"
   assert.deepEqual(mutations, [`grant:acme/github:${plugin.digest}:7`]);
 });
 
+test("Plugin settings browse signed Marketplace metadata before installation", async () => {
+  using disposables = new DisposableStore();
+  const ownerDocument = browserEnvironment.window.document;
+  ownerDocument.body.replaceChildren();
+  const root = ownerDocument.createElement("div");
+  ownerDocument.body.append(root);
+  const settings = disposables.add(new SettingsService());
+  const configuration = disposables.add(new WorkbenchConfigurationService());
+  const mutations: string[] = [];
+  const review = {
+    marketplaceId: "zeta",
+    marketplaceMode: "remoteManaged" as const,
+    marketplaceTrust: "productManaged" as const,
+    marketplaceRevision: "sha256:catalog",
+    id: "chogng/code-review",
+    publisher: "chogng",
+    version: "1.0.0",
+    digest: `sha256:${"b".repeat(64)}`,
+    displayName: "Code Review",
+    description: "Review workspace changes before they ship.",
+    license: "Apache-2.0",
+    compatibilityZeta: ">=0.1.0",
+    contributions: { skills: 1, mcpServers: 0, connectors: 0, assets: 1, editorExtensions: 0 },
+    permissions: [{ type: "workspace" as const, access: "read" as const }],
+    credentialSlots: [],
+    packageFileCount: 3,
+    packageSizeBytes: 2048,
+    installed: false,
+    enabled: false,
+    granted: false,
+    effective: false,
+    revoked: false,
+  };
+  const theme = {
+    ...review,
+    id: "chogng/theme-pack",
+    version: "2.0.0",
+    digest: `sha256:${"c".repeat(64)}`,
+    displayName: "Theme Pack",
+    description: "Static visual assets.",
+    contributions: { skills: 0, mcpServers: 0, connectors: 0, assets: 4, editorExtensions: 0 },
+    permissions: [],
+    packageFileCount: 5,
+    packageSizeBytes: 1024,
+  };
+  const pluginService = {
+    onDidChange: () => toDisposable(() => {}),
+    list: async () => ({ revision: 4, activationGeneration: 0, packages: [] }),
+    listMarketplace: async () => [review, theme],
+    install: async (target: typeof review, revision: number) => { mutations.push(`install:${target.id}:${target.digest}:${revision}`); },
+    update: async () => {},
+    rollback: async () => {},
+    enable: async () => {},
+    disable: async () => {},
+    grant: async () => {},
+    revokeGrant: async () => {},
+    uninstall: async () => {},
+  };
+  disposables.add(new SettingsEditorContribution({
+    configurationService: configuration,
+    container: root,
+    dialogService: acceptingDialogService,
+    pluginService,
+    settingsService: settings,
+    themeService: disposables.add(new ThemeService(darkColorTheme)),
+    userThemeService: UnavailableUserThemeService,
+  }));
+
+  settings.open("plugins");
+  await new Promise((resolve) => globalThis.setTimeout(resolve, 0));
+  assert.deepEqual([...root.querySelectorAll(".zeta-marketplace-results h4")].map(element => element.textContent), ["Code Review", "Theme Pack"]);
+  assert.equal(root.querySelector(".zeta-marketplace-badge")?.textContent, "Zeta managed");
+  assert.match(root.querySelector(".zeta-marketplace-access p")?.textContent ?? "", /read workspace files/);
+  assert.match(root.querySelector(".zeta-marketplace-details")?.textContent ?? "", /2.0 KB/);
+
+  const search = root.querySelector<HTMLInputElement>(".zeta-marketplace-search input")!;
+  search.value = "theme";
+  search.dispatchEvent(new browserEnvironment.window.Event("input", { bubbles: true }));
+  assert.deepEqual([...root.querySelectorAll(".zeta-marketplace-results h4")].map(element => element.textContent), ["Theme Pack"]);
+  search.value = "review";
+  search.dispatchEvent(new browserEnvironment.window.Event("input", { bubbles: true }));
+  root.querySelector<HTMLButtonElement>(".zeta-marketplace-results .zeta-theme-action")?.click();
+  await new Promise((resolve) => globalThis.setTimeout(resolve, 0));
+  assert.deepEqual(mutations, [`install:${review.id}:${review.digest}:4`]);
+});
+
 test("Appearance settings persist and dynamically render registered theme preferences", async () => {
   using disposables = new DisposableStore();
   const ownerDocument = browserEnvironment.window.document;
@@ -454,7 +540,6 @@ test("Indexing settings save Tool Search and semantic model consent configuratio
       },
       activeWorkspaceAuthorized: false,
     },
-    execPolicyRules: [],
   } as const satisfies ConfigReadResult;
   const configured: Array<{ mode: string; embeddingModel?: { provider: string; model: string }; revision: number }> = [];
   const configuredProviders: Array<{ provider: string; baseUrl: string | null; revision: number }> = [];

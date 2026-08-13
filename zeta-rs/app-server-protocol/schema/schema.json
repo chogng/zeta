@@ -14303,6 +14303,73 @@
         "disposition"
       ]
     },
+    "PluginContributionSummaryDto": {
+      "description": "Counts of each runtime-neutral capability kind carried by one Plugin package.",
+      "type": "object",
+      "properties": {
+        "assets": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "connectors": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "editorExtensions": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "mcpServers": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "skills": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "skills",
+        "mcpServers",
+        "connectors",
+        "assets",
+        "editorExtensions"
+      ]
+    },
+    "PluginCredentialKindDto": {
+      "type": "string",
+      "enum": [
+        "secretText"
+      ]
+    },
+    "PluginCredentialSlotDto": {
+      "description": "One credential request shown without containing any secret value.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/PluginCredentialKindDto"
+        },
+        "name": {
+          "type": "string"
+        },
+        "requiredFor": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "name",
+        "kind",
+        "requiredFor"
+      ]
+    },
     "PluginListResult": {
       "description": "Current durable Plugin authority projection.",
       "type": "object",
@@ -14390,14 +14457,50 @@
       "description": "One exact package offered by a host-registered Marketplace.",
       "type": "object",
       "properties": {
+        "compatibilityZeta": {
+          "type": "string"
+        },
+        "contributions": {
+          "$ref": "#/$defs/PluginContributionSummaryDto"
+        },
+        "credentialSlots": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PluginCredentialSlotDto"
+          }
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "digest": {
           "type": "string"
+        },
+        "displayName": {
+          "type": "string"
+        },
+        "effective": {
+          "type": "boolean"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "granted": {
+          "type": "boolean"
         },
         "id": {
           "type": "string"
         },
         "installed": {
           "type": "boolean"
+        },
+        "license": {
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "marketplaceId": {
           "type": "string"
@@ -14408,6 +14511,31 @@
         "marketplaceRevision": {
           "type": "string"
         },
+        "marketplaceTrust": {
+          "$ref": "#/$defs/PluginMarketplaceTrustDto"
+        },
+        "packageFileCount": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "packageSizeBytes": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "permissions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PluginPermissionDto"
+          }
+        },
+        "publisher": {
+          "type": "string"
+        },
+        "revoked": {
+          "type": "boolean"
+        },
         "version": {
           "type": "string"
         }
@@ -14415,11 +14543,33 @@
       "required": [
         "marketplaceId",
         "marketplaceMode",
+        "marketplaceTrust",
         "marketplaceRevision",
         "id",
+        "publisher",
         "version",
         "digest",
-        "installed"
+        "displayName",
+        "compatibilityZeta",
+        "contributions",
+        "permissions",
+        "credentialSlots",
+        "packageFileCount",
+        "packageSizeBytes",
+        "installed",
+        "enabled",
+        "granted",
+        "effective",
+        "revoked"
+      ]
+    },
+    "PluginMarketplaceTrustDto": {
+      "description": "Product-facing trust classification of one Marketplace source.",
+      "type": "string",
+      "enum": [
+        "productManaged",
+        "verifiedRemote",
+        "localDevelopment"
       ]
     },
     "PluginPackageCommandParams": {
@@ -14486,6 +14636,62 @@
         "granted",
         "effective",
         "revoked"
+      ]
+    },
+    "PluginPermissionDto": {
+      "description": "One declared capability ceiling shown before a Plugin package is installed or granted.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "executable": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "process"
+            }
+          },
+          "required": [
+            "type",
+            "executable"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "access": {
+              "$ref": "#/$defs/PluginWorkspaceAccessDto"
+            },
+            "type": {
+              "type": "string",
+              "const": "workspace"
+            }
+          },
+          "required": [
+            "type",
+            "access"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "hosts": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "type": {
+              "type": "string",
+              "const": "network"
+            }
+          },
+          "required": [
+            "type",
+            "hosts"
+          ]
+        }
       ]
     },
     "PluginRequestDto": {
@@ -14588,6 +14794,13 @@
         "commandId",
         "expectedRevision",
         "request"
+      ]
+    },
+    "PluginWorkspaceAccessDto": {
+      "type": "string",
+      "enum": [
+        "read",
+        "write"
       ]
     },
     "PluginsChanged": {
