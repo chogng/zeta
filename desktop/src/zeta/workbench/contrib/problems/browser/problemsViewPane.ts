@@ -193,9 +193,9 @@ function matchesFilter(entry: ProblemEntry, filter: string): boolean {
 }
 
 function statusMessage(total: number, visible: number, filter: string, enabledSeverityCount: number): string {
-  if (total === 0) return "No problems have been detected in open files.";
-  if (visible === 0) return filter || enabledSeverityCount < severities.length ? `No problems match the current filters (${total} total).` : "No problems have been detected in open files.";
-  return visible === total ? `${total} ${total === 1 ? "problem" : "problems"} in open files.` : `${visible} of ${total} problems shown.`;
+  if (total === 0) return "No problems have been detected in the workspace.";
+  if (visible === 0) return filter || enabledSeverityCount < severities.length ? `No problems match the current filters (${total} total).` : "No problems have been detected in the workspace.";
+  return visible === total ? `${total} ${total === 1 ? "problem" : "problems"} in the workspace.` : `${visible} of ${total} problems shown.`;
 }
 
 function diagnosticSource(diagnostic: LanguageDiagnostic): string {

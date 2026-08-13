@@ -43,7 +43,7 @@ test("ProblemsViewPane filters diagnostics and opens the selected range", async 
     using pane = new ProblemsViewPane({ id: "zeta.problems", title: "Problems", ownerDocument: browser.window.document }, diagnostics, editorPart);
     browser.window.document.body.append(pane.element);
     assert.equal(pane.element.querySelectorAll(".zeta-problems-item").length, 3);
-    assert.equal(pane.element.querySelector(".zeta-problems-status")?.textContent, "3 problems in open files.");
+    assert.equal(pane.element.querySelector(".zeta-problems-status")?.textContent, "3 problems in the workspace.");
 
     const filter = pane.element.querySelector<HTMLInputElement>(".zeta-problems-filter")!;
     filter.value = "lib.rs";
@@ -66,7 +66,7 @@ test("ProblemsViewPane filters diagnostics and opens the selected range", async 
 
     diagnostics.replace([]);
     assert.equal(pane.element.querySelectorAll(".zeta-problems-item").length, 0);
-    assert.equal(pane.element.querySelector(".zeta-problems-status")?.textContent, "No problems have been detected in open files.");
+    assert.equal(pane.element.querySelector(".zeta-problems-status")?.textContent, "No problems have been detected in the workspace.");
   } finally {
     diagnostics.dispose();
     for (const name of installedGlobals) Reflect.deleteProperty(globalThis, name);

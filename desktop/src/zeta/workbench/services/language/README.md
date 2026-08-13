@@ -41,10 +41,13 @@ push diagnostics with editor-published parser diagnostics by resource and revisi
 
 The editor merges current-revision LSP diagnostics with parser diagnostics in its
 existing decoration collection; stale revisions are hidden immediately after an
-edit. The Workbench-owned Problems panel enumerates the same repository, groups
-open-file diagnostics, filters by severity/message/file, and delegates row
-navigation to `IEditorPart`; it does not inspect editor DOM or own diagnostic
-production. Semantic-token LSP adaptation remains future work. Formatting edits use the
+edit. The Workbench-owned Problems panel enumerates the complete shared workspace
+repository, groups diagnostics by resource, filters by severity/message/file,
+and delegates row navigation to `IEditorPart`; it does not inspect editor DOM or
+own diagnostic production. The current App Server push-diagnostic producer only
+synchronizes open models, while other producers may publish any workspace
+resource. Pull/workspace diagnostics and semantic-token LSP adaptation remain
+future work. Formatting edits use the
 editor command/undo layer; parameter hints retain provider-selected active
 signatures and parameters; inlay hints remain non-mutating; linked ranges extend
 native input before commit so every synchronized change is one atomic undo step.
