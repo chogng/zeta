@@ -4,12 +4,15 @@ mod capabilities;
 mod context;
 mod context_manager;
 mod error;
+mod image_preparation;
 mod multi_agent;
 mod policy_service;
 mod services;
 mod session_coordinator;
 mod session_reducer;
 mod state;
+#[cfg(test)]
+mod test_image;
 mod thread_controller;
 mod thread_reducer;
 mod turn;

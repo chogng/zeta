@@ -78,6 +78,7 @@ members = [
     "zeta-rs/thread-store",
     "zeta-rs/tools",
     "zeta-code/tui",
+    "zeta-rs/utils/image",
     "zeta-rs/utils/path-uri",
     "zeta-rs/utils/path-utils",
     "zeta-rs/utils/pdf",
@@ -290,6 +291,7 @@ zeta-thread-store = { path = "zeta-rs/thread-store" }
 zeta-tools = { path = "zeta-rs/tools" }
 zeta-tui = { path = "zeta-code/tui" }
 zeta-ui = { path = "zeterm/ui" }
+zeta-utils-image = { path = "zeta-rs/utils/image" }
 zeta-utils-path = { path = "zeta-rs/utils/path-utils" }
 zeta-utils-path-uri = { path = "zeta-rs/utils/path-uri" }
 zeta-pdf = { path = "zeta-rs/utils/pdf" }

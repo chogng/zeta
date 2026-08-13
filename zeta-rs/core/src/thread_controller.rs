@@ -819,10 +819,12 @@ impl ThreadController {
         let (text, content, is_error) = match request.output {
             ToolCallOutput::Success(text) => (text, None, false),
             ToolCallOutput::Failure(text) => (text, None, true),
-            ToolCallOutput::SuccessContent(content) => {
+            ToolCallOutput::SuccessContent(mut content) => {
+                crate::image_preparation::prepare_tool_content(&mut content);
                 (tool_content_preview(&content), Some(content), false)
             }
-            ToolCallOutput::FailureContent(content) => {
+            ToolCallOutput::FailureContent(mut content) => {
+                crate::image_preparation::prepare_tool_content(&mut content);
                 (tool_content_preview(&content), Some(content), true)
             }
         };

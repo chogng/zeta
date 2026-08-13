@@ -959,10 +959,65 @@ fn durable_projection_contains_messages_tools_and_session_identity() {
 }
 
 #[test]
+fn tool_image_content_is_prepared_before_it_becomes_durable() {
+    let store = Arc::new(InMemoryThreadStore::default());
+    let original = ThreadController::with_store(store.clone());
+    let thread = create_thread(&original, "tool image");
+    let turn = start_turn(&original, &thread, "tool-image");
+    let call = original
+        .record_tool_call(
+            &thread,
+            &turn,
+            RecordToolCallRequest {
+                tool_call_id: Some(
+                    ToolCallId::new("tool-image-call").expect("test tool call ID is non-empty"),
+                ),
+                name: ToolName::new("image-tool").expect("test tool name is valid"),
+                arguments_json: "{}".into(),
+                binding: None,
+            },
+        )
+        .unwrap();
+
+    original
+        .record_tool_result(
+            &thread,
+            &turn,
+            RecordToolResultRequest {
+                tool_call_id: call.tool_call_id,
+                output: ToolCallOutput::SuccessContent(vec![
+                    zeta_protocol::ContentPart::Text("before".into()),
+                    zeta_protocol::ContentPart::ImageUrl {
+                        url: "data:image/png;base64,AA==".into(),
+                        detail: zeta_protocol::ImageDetail::High,
+                    },
+                ]),
+            },
+        )
+        .unwrap();
+
+    let snapshot = ThreadController::with_store(store)
+        .recover_thread(&thread)
+        .unwrap();
+    assert!(matches!(
+        &snapshot.items[2],
+        ThreadItem::ToolResult {
+            content: Some(content),
+            ..
+        } if content == &vec![
+            zeta_protocol::ContentPart::Text("before".into()),
+            zeta_protocol::ContentPart::Text(
+                crate::image_preparation::IMAGE_PROCESSING_ERROR_PLACEHOLDER.into(),
+            ),
+        ]
+    ));
+}
+
+#[test]
 fn start_turn_persists_ordered_text_and_image_items() {
     let threads = ThreadController::with_store(Arc::new(InMemoryThreadStore::default()));
     let thread = create_thread(&threads, "image");
-    let image_url = "data:image/png;base64,iVBORw0KGgpwYXlsb2Fk";
+    let image_url = crate::test_image::one_pixel_png_data_url();
 
     let result = threads
         .start_turn(
@@ -979,7 +1034,7 @@ fn start_turn_persists_ordered_text_and_image_items() {
                         text: "describe".into(),
                     },
                     UserInput::Image {
-                        url: image_url.into(),
+                        url: image_url.clone(),
                     },
                 ],
             },
@@ -995,6 +1050,6 @@ fn start_turn_persists_ordered_text_and_image_items() {
     assert!(matches!(
         &snapshot.items[1],
         ThreadItem::UserImage { turn_id, url, .. }
-            if turn_id == &result.turn_id && url == image_url
+            if turn_id == &result.turn_id && url == &image_url
     ));
 }

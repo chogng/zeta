@@ -235,7 +235,7 @@ src/
 | `components::selection::SelectionViewState` | crate-private | 可配置 tabs/search/titled preview、Space search mode、过滤索引、候选 presentation highlight、选择与循环导航 | 不执行 action、不依赖产品 ID 或 App Server |
 | `components::selection::draw` | crate-private | generic title/tabs/search/items、可配置间距的水平分隔 preview、caption/footer Ratatui surface | 只读 selection state、不解释产品 action |
 | `ChatComposer` | private | blank/trim/submit、多行换行、paste routing、slash completion application、参数结构化与 local dispatch | 不自行实现 slash grammar，不拥有 cursor、Vim state 或 RPC |
-| `Attachments` | private | 图片 bytes/path、data URL 与原子占位符绑定、删除后重新编号 | 不直接读取系统 clipboard、不发 RPC、不渲染 |
+| `Attachments` | private | 图片 bytes/path、共享格式识别/data URL helper 与原子占位符绑定、删除后重新编号 | 不解码或缩放图片、不替代 Core 权威校验、不直接读取系统 clipboard、不发 RPC、不渲染 |
 | `host::clipboard::read_image` | crate-private | 从本机 clipboard 文件列表/RGBA image 读取并统一编码 PNG | 不改变 composer、不发 RPC、不持久化临时文件 |
 | `host::clipboard::write_text` / `host::transcript_export::write` | crate-private | command-based response copy 与 workspace-bounded Markdown export | 不拥有 transcript、不覆盖文件、不实现任意屏幕文本 selection |
 | `FileSearchManager` | crate-private | event loop 持有的 workspace search runtime；非阻塞 drain snapshot 并丢弃旧 query 结果 | 不进入 `App` state、不解析输入、不保存 popup state |
@@ -327,9 +327,11 @@ subscription，再把新 `ActiveConversation`、`ThreadSubscription` 与 snapsho
 占位符。
 
 图片 paste 先尝试把完整字符串解释为本地文件路径；支持引号包裹和 shell 风格反斜杠转义。
-`Attachments` 按文件签名识别 PNG/JPEG/GIF/WEBP，拒绝超过 16 MiB 的文件，并立即编码为
-base64 data URL，避免提交时路径失效。占位符绑定到稳定 `TextElementId`，光标移动和删除保持
-原子性，删除后剩余图片会重新编号。提交时 `ChatComposer` 按草稿顺序生成 text/image items；
+`Attachments` 通过 `zeta-utils-image` 的共享签名识别与 data URL helper 处理
+PNG/JPEG/GIF/WEBP，拒绝超过 16 MiB 的文件，并立即编码为 base64 data URL，避免提交时路径
+失效；真正的解码、资源限制和规范化由 Core 在 durable 接受边界执行。占位符绑定到稳定的
+`TextElementId`，光标移动和删除保持原子性，删除后剩余图片会重新编号。提交时
+`ChatComposer` 按草稿顺序生成 text/image items；
 展示记录保留 `[Image #N]`，App Server/Core 持久化规范化 URL 而不是本地路径。
 
 `Ctrl-V` 是独立的 clipboard-image intent，不依赖 terminal `Event::Paste` 是否能携带位图。

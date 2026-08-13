@@ -1,12 +1,13 @@
 //! Image attachment recognition, encoding, and composer placeholder bookkeeping.
 
-use base64::Engine;
-use base64::engine::general_purpose::STANDARD;
 use std::fs::File;
 use std::io::Read;
 use std::io::Seek;
 use std::path::Path;
 use std::path::PathBuf;
+use zeta_utils_image::SupportedImageFormat;
+use zeta_utils_image::data_url_from_bytes;
+use zeta_utils_image::detect_image_format;
 
 use super::editor::TextArea;
 use super::editor::TextElementId;
@@ -44,9 +45,9 @@ impl Attachments {
                 MAX_LOCAL_IMAGE_BYTES / 1024 / 1024
             ));
         }
-        let mime_type = image_mime_type(&bytes)
+        let format = detect_image_format(&bytes)
             .ok_or_else(|| "clipboard data is not a supported image".to_owned())?;
-        self.insert_image(textarea, LoadedImage { mime_type, bytes });
+        self.insert_image(textarea, LoadedImage { format, bytes });
         Ok(())
     }
 
@@ -75,11 +76,7 @@ impl Attachments {
         self.images.push(AttachedImage {
             element_id,
             placeholder,
-            data_url: format!(
-                "data:{};base64,{}",
-                image.mime_type,
-                STANDARD.encode(image.bytes)
-            ),
+            data_url: data_url_from_bytes(image.format.mime_type(), &image.bytes),
         });
     }
 
@@ -108,7 +105,7 @@ impl Attachments {
 }
 
 struct LoadedImage {
-    mime_type: &'static str,
+    format: SupportedImageFormat,
     bytes: Vec<u8>,
 }
 
@@ -135,7 +132,7 @@ fn load_image(path: &Path) -> Result<Option<LoadedImage>, String> {
     let signature_len = file
         .read(&mut signature)
         .map_err(|error| format!("could not read pasted image {}: {error}", path.display()))?;
-    if image_mime_type(&signature[..signature_len]).is_none() {
+    if detect_image_format(&signature[..signature_len]).is_none() {
         return Ok(None);
     }
     if metadata.len() > MAX_LOCAL_IMAGE_BYTES {
@@ -157,10 +154,10 @@ fn load_image(path: &Path) -> Result<Option<LoadedImage>, String> {
             MAX_LOCAL_IMAGE_BYTES / 1024 / 1024
         ));
     }
-    let Some(mime_type) = image_mime_type(&bytes) else {
+    let Some(format) = detect_image_format(&bytes) else {
         return Ok(None);
     };
-    Ok(Some(LoadedImage { mime_type, bytes }))
+    Ok(Some(LoadedImage { format, bytes }))
 }
 
 fn normalize_pasted_path(pasted: &str) -> Option<PathBuf> {
@@ -211,20 +208,6 @@ fn has_supported_image_extension(path: &Path) -> bool {
                 "png" | "jpg" | "jpeg" | "gif" | "webp"
             )
         })
-}
-
-fn image_mime_type(bytes: &[u8]) -> Option<&'static str> {
-    if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
-        Some("image/png")
-    } else if bytes.starts_with(b"\xff\xd8\xff") {
-        Some("image/jpeg")
-    } else if bytes.starts_with(b"GIF87a") || bytes.starts_with(b"GIF89a") {
-        Some("image/gif")
-    } else if bytes.len() >= 12 && bytes.starts_with(b"RIFF") && &bytes[8..12] == b"WEBP" {
-        Some("image/webp")
-    } else {
-        None
-    }
 }
 
 fn image_placeholder(number: usize) -> String {

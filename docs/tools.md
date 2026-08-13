@@ -1237,6 +1237,10 @@ bytes 的权限。
 
 ### 15.4 图像安全
 
+共享图片字节的解码、资源限制、缩放、重编码、metadata policy 与 bounded cache 由
+[`zeta-utils-image`](../zeta-rs/utils/image/README.md) 实现；本节拥有跨 Core、Tool、模型与
+provider 的安全和策略边界，crate README 拥有具体实现契约。
+
 - data URL、remote URL 和 resource handle 使用不同 typed source；
 - 限制 decoded bytes、pixel count、dimensions、frame count 和 MIME；
 - SVG、animated image 和 metadata 使用明确 policy；

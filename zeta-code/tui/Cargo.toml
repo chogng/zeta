@@ -11,7 +11,6 @@ name = "zeta_tui"
 path = "src/lib.rs"
 
 [dependencies]
-base64 = { workspace = true }
 crossterm = { workspace = true }
 ratatui = { workspace = true }
 serde_json = { workspace = true }
@@ -27,6 +26,7 @@ zeta-protocol = { workspace = true }
 zeta-slash-commands = { workspace = true }
 zeta-terminal-detection = { workspace = true }
 zeta-theme = { workspace = true }
+zeta-utils-image = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
 rustix = { workspace = true, features = ["fs", "process", "stdio"] }

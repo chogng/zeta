@@ -6144,13 +6144,17 @@
         {
           "type": "object",
           "properties": {
+            "text": {
+              "type": "string"
+            },
             "type": {
               "type": "string",
               "const": "text"
             }
           },
           "required": [
-            "type"
+            "type",
+            "text"
           ]
         },
         {

@@ -464,6 +464,19 @@ fn durable_tool_result_preserves_structured_image_content_and_reads_legacy_text(
     assert_eq!(value["content"][0]["type"], "imageUrl");
     assert_eq!(value["content"][0]["detail"], "high");
 
+    let text = serde_json::to_value(ContentPart::Text("result".into())).unwrap();
+    assert_eq!(
+        text,
+        json!({
+            "type": "text",
+            "text": "result"
+        })
+    );
+    assert_eq!(
+        serde_json::from_value::<ContentPart>(text).unwrap(),
+        ContentPart::Text("result".into())
+    );
+
     let legacy = json!({
         "type": "toolResult",
         "itemId": "item_2",

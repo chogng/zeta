@@ -1,8 +1,18 @@
-use crate::{ReasoningEffort, ToolCallId, ToolName};
+use std::borrow::Cow;
+
+use crate::ReasoningEffort;
+use crate::ToolCallId;
+use crate::ToolName;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use schemars::Schema;
+use schemars::SchemaGenerator;
+use serde::Deserialize;
+use serde::Deserializer;
+use serde::Serialize;
+use serde::Serializer;
 use serde_json::Value;
 use ts_rs::TS;
+use ts_rs::TypeVisitor;
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -121,15 +131,109 @@ pub enum MessageRole {
     Assistant,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ContentPart {
+    Text(String),
+    ImageUrl { url: String, detail: ImageDetail },
+}
+
+#[derive(JsonSchema, Deserialize)]
 #[serde(
     tag = "type",
     rename_all = "camelCase",
     rename_all_fields = "camelCase"
 )]
-pub enum ContentPart {
-    Text(String),
+enum ContentPartWire {
+    Text { text: String },
     ImageUrl { url: String, detail: ImageDetail },
+}
+
+#[derive(Serialize)]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+enum ContentPartRef<'a> {
+    Text { text: &'a str },
+    ImageUrl { url: &'a str, detail: ImageDetail },
+}
+
+impl Serialize for ContentPart {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            Self::Text(text) => ContentPartRef::Text { text }.serialize(serializer),
+            Self::ImageUrl { url, detail } => ContentPartRef::ImageUrl {
+                url,
+                detail: *detail,
+            }
+            .serialize(serializer),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for ContentPart {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        ContentPartWire::deserialize(deserializer).map(Into::into)
+    }
+}
+
+impl From<ContentPartWire> for ContentPart {
+    fn from(part: ContentPartWire) -> Self {
+        match part {
+            ContentPartWire::Text { text } => Self::Text(text),
+            ContentPartWire::ImageUrl { url, detail } => Self::ImageUrl { url, detail },
+        }
+    }
+}
+
+impl JsonSchema for ContentPart {
+    fn schema_name() -> Cow<'static, str> {
+        "ContentPart".into()
+    }
+
+    fn json_schema(generator: &mut SchemaGenerator) -> Schema {
+        ContentPartWire::json_schema(generator)
+    }
+}
+
+impl TS for ContentPart {
+    type WithoutGenerics = Self;
+    type OptionInnerType = Self;
+
+    const IS_ENUM: bool = true;
+
+    fn name(_: &ts_rs::Config) -> String {
+        "ContentPart".into()
+    }
+
+    fn inline(cfg: &ts_rs::Config) -> String {
+        format!(
+            "{{ \"type\": \"text\", text: string, }} | {{ \"type\": \"imageUrl\", url: string, detail: {}, }}",
+            ImageDetail::name(cfg),
+        )
+    }
+
+    fn decl(cfg: &ts_rs::Config) -> String {
+        format!("type {} = {};", Self::name(cfg), Self::inline(cfg))
+    }
+
+    fn decl_concrete(cfg: &ts_rs::Config) -> String {
+        Self::decl(cfg)
+    }
+
+    fn visit_dependencies(visitor: &mut impl TypeVisitor)
+    where
+        Self: 'static,
+    {
+        visitor.visit::<ImageDetail>();
+    }
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
