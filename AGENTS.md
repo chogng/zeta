@@ -1,4 +1,4 @@
-`../vscode` and `../codex` and `../zed` and `../warp` and `../pi`
+`../vscode` and `../codex` and `../zed` and `../warp` and `../pi`, `../marketplace`
 
 # Communication
 
