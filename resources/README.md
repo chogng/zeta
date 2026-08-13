@@ -3,6 +3,22 @@
 This directory owns product resources that are shared across Zeta clients or
 need a renderer-independent source of truth.
 
+## Product services
+
+`product-services/` is the release-owned trust bundle copied to
+`zeta-resources/product-services/` by both package assemblers. Its
+`product-services.json` registers the official HTTPS Plugin Marketplace and references the sibling
+`marketplace-root.json`; the root is public verification material, never a signing key.
+
+The packaged `zeta` executable discovers this file through `zeta-install-context`. An explicit
+`ZETA_PRODUCT_SERVICES_PATH` remains authoritative for development and specialized product hosts.
+Marketplace URLs or root replacement must not move into user configuration or Plugin metadata.
+
+The Marketplace source, public root owner, publishing pipeline, and key rotation procedure live in
+the private [`chogng/marketplace`](https://github.com/chogng/marketplace) repository. A root change
+must update both repositories through a valid TUF rotation; copying a newly generated unrelated root
+would strand clients or replace their trust authority.
+
 ## Icons
 
 The cross-client ownership and rendering contract is documented in

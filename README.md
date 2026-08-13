@@ -146,7 +146,9 @@ The builder compiles a release `zeta` executable when `--zeta-bin` is omitted,
 downloads the target-specific ripgrep archive, verifies its locked size and
 SHA-256 digest, and creates `bin/`, `zeta-path/`, `zeta-resources/`, and
 `zeta-package.json`. Repository-owned Skills are staged from
-`zeta-rs/skills/assets/` to `zeta-resources/skills/`. Linux packages additionally
+`zeta-rs/skills/assets/` to `zeta-resources/skills/`; the official Marketplace config and pinned
+public TUF root are staged from `resources/product-services/` to
+`zeta-resources/product-services/`. Linux packages additionally
 build and include the locked Bubblewrap runtime; Windows packages build and
 include both first-party AppContainer helpers. Cross-platform release jobs pass
 `--target`; jobs that already built or signed binaries pass the corresponding

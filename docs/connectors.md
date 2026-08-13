@@ -8,7 +8,8 @@
 > package-rooted Plugin activation、ready/standalone MCP composition、模型安全点 registry replacement、
 > in-flight dispatch drain、OS keyring 与显式文件 `SecretStore`、OAuth PKCE 状态机和产品连接入口已实现。
 > Desktop loopback 浏览器回调、通用 device poll、OAuth App Server 控制面、refresh/revoke、GitHub
-> brokered PKCE 与 public-client device adapters 已接通；产品发行仍需注入真实 broker URL/client ID。
+> brokered PKCE 与 public-client device adapters 已接通；正式 package 已内置官方 Plugin Marketplace
+> endpoint 与固定 TUF root，Connector 产品发行仍需注入真实 broker URL/client ID。
 
 ## 快速理解
 
@@ -170,8 +171,9 @@ connection generation；任何状态变化都必须同时推进 snapshot generat
 产品部署入口为 `LocalProductServicesConfig` / `--product-services PATH` /
 `ZETA_PRODUCT_SERVICES_PATH`。该只读 JSON 可声明 TUF Marketplace roots、broker URL 和 public client ID，不允许
 client secret；`trustedRoot` 必须是配置文件目录内的普通相对路径，distribution/broker base URL 必须是无
-credential/query/fragment 且以 `/` 结尾的 HTTPS URL。普通 Plugin manifest 和 user config 不能提供这些发行信任材料。下一阶段是部署真实 broker、
-发布 Marketplace metadata/keys，并增加其他服务 adapter；它们必须复用现有 authority、SecretStore、App
+credential/query/fragment 且以 `/` 结尾的 HTTPS URL。普通 Plugin manifest 和 user config 不能提供这些发行信任材料。官方 Marketplace 的配置和 root 已由
+package 从 `resources/product-services/` 携带，远端签名 metadata 与 package 由独立 registry 发布。下一阶段
+是部署真实 broker 并增加其他服务 adapter；它们必须复用现有 authority、SecretStore、App
 Server safe point 和 MCP dispatch fence，不得创建第二套 Connector 状态机。
 
 ```json

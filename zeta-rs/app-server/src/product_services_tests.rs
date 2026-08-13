@@ -44,6 +44,18 @@ fn product_services_loads_public_oauth_and_pins_marketplace_root() {
     ));
 }
 
+#[test]
+fn production_product_services_registers_the_official_marketplace() {
+    let product_services = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../resources/product-services/product-services.json");
+    let profile = TempDir::new().unwrap();
+
+    let config = LocalProductServicesConfig::load(product_services, profile.path()).unwrap();
+
+    assert_eq!(config.marketplaces.len(), 1);
+    assert_eq!(config.marketplaces[0].id().as_str(), "zeta");
+}
+
 #[cfg(unix)]
 #[test]
 fn product_services_rejects_symlinked_trust_inputs() {

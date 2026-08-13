@@ -107,6 +107,12 @@ test("assembles and validates the canonical Windows development layout", async (
     assert.equal(metadata.target, "x86_64-pc-windows-msvc");
     assert.equal(await readFile(join(staging, "zeta-path", "rg.exe"), "utf8"), "ripgrep");
     assert.equal(await readFile(join(staging, "zeta-resources", "zeta-command-runner.exe"), "utf8"), "runner");
+    const productServices = JSON.parse(await readFile(join(staging, "zeta-resources", "product-services", "product-services.json"), "utf8"));
+    assert.equal(productServices.marketplaces[0].id, "zeta");
+    assert.equal(
+      await readFile(join(staging, "zeta-resources", "product-services", "marketplace-root.json"), "utf8"),
+      await readFile(new URL("../../resources/product-services/marketplace-root.json", import.meta.url), "utf8"),
+    );
     const extensionPackages = (await readdir(join(staging, "zeta-resources", "extensions"))).sort();
     assert.deepEqual(extensionPackages, ["css", "html", "javascript", "json", "markdown-basics", "python", "rust", "shellscript", "sql", "theme-defaults", "typescript-basics", "xml", "yaml"]);
     assert.match(await readFile(join(staging, "zeta-resources", "extensions", "json", "package.json"), "utf8"), /"name": "json"/);

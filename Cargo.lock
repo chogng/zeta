@@ -9557,6 +9557,7 @@ dependencies = [
  "zeta-app-server-client",
  "zeta-app-server-protocol",
  "zeta-exec",
+ "zeta-install-context",
  "zeta-mcp-server",
  "zeta-protocol",
  "zeta-tui",

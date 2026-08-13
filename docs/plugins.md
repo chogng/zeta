@@ -31,6 +31,7 @@ Plugin 是经过校验和版本管理的扩展包，不是安装后便能执行�
 | 激活贡献 | 生成带来源和 generation 的不可变快照 | 不把 live manager 注入 Agent |
 | 更新或回滚 | 并存校验后的版本并原子切换 | 不原地修改已安装包 |
 | 卸载 | 撤销后续激活并清理可回收内容 | 不删除其他领域拥有的秘密或历史 |
+| 打开正式打包的 Zeta | 从产品内固定的 root 刷新官方 HTTPS Marketplace | 不信任服务器提供的新 root，不自动安装或启用 Plugin |
 
 ## 1. 结论
 
@@ -653,6 +654,13 @@ timestamp/snapshot/targets 的 threshold、rollback 与 expiry 检查由 TUF ver
 identity 与 Zeta normalized digest。全仓库缓存只有在所有 package 验证成功后才替换；transport 失败可打开
 仍未过期的最后完整缓存，签名/过期/package 失败不能降级。顶层 revocation target 会写入 durable exact-package
 tombstone，不因后续 feed 缺项自动恢复。download progress 与 catalog 搜索仍未实现。
+
+正式 package 把只读配置和公开信任根放在
+`zeta-resources/product-services/{product-services.json,marketplace-root.json}`。`zeta-cli` 通过
+`zeta-install-context` 发现该资源，默认注册 `https://chogng.github.io/marketplace/` 的 `zeta`
+Marketplace；`ZETA_PRODUCT_SERVICES_PATH` 与 App Server 的 `--product-services PATH` 仍是产品宿主的
+显式覆盖入口。远端 metadata、Plugin、用户配置和 Workspace 都不能更换这份 root。发行源仓库仍为
+private，Pages 只暴露经过 CI 生成和 Zeta 消费端复核的 `metadata/` 与 `targets/` 静态产物。
 
 客户端必须展示：
 

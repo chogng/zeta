@@ -45,6 +45,7 @@ def build_package_directory(
         path_directory = staging / "zeta-path"
         skills_directory = staging / "zeta-resources" / "skills"
         extensions_directory = staging / "zeta-resources" / "extensions"
+        product_services_directory = staging / "zeta-resources" / "product-services"
         license_directory = staging / "zeta-resources" / "licenses" / "ripgrep"
         vscode_license_directory = staging / "zeta-resources" / "licenses" / "vscode"
         binary_directory.mkdir()
@@ -58,6 +59,11 @@ def build_package_directory(
         copy_builtin_extensions(
             repository_root / "extensions",
             extensions_directory,
+        )
+        copy_regular_tree(
+            repository_root / "resources" / "product-services",
+            product_services_directory,
+            "product services",
         )
 
         copy_executable(
@@ -213,6 +219,7 @@ def validate_package_directory(package: Path, spec: TargetSpec) -> None:
         raise RuntimeError("Missing VS Code extension license: {}".format(vscode_license))
     validate_builtin_skills(package / "zeta-resources" / "skills")
     validate_builtin_extensions(package / "zeta-resources" / "extensions")
+    validate_product_services(package / "zeta-resources" / "product-services")
     if spec.is_linux:
         bubblewrap = package / "zeta-resources" / "bwrap"
         if not bubblewrap.is_file() or not is_executable(bubblewrap):
@@ -363,6 +370,27 @@ def validate_builtin_extensions(extensions_directory: Path) -> None:
                     extension_directory
                 )
             )
+
+
+def validate_product_services(product_services_directory: Path) -> None:
+    if product_services_directory.is_symlink() or not product_services_directory.is_dir():
+        raise RuntimeError("Package is missing product services")
+    config_path = product_services_directory / "product-services.json"
+    root_path = product_services_directory / "marketplace-root.json"
+    for path in (config_path, root_path):
+        if path.is_symlink() or not path.is_file():
+            raise RuntimeError("Package is missing product service file: {}".format(path))
+    document = json.loads(config_path.read_text(encoding="utf-8"))
+    marketplaces = document.get("marketplaces")
+    if document.get("schemaVersion") != 1 or not isinstance(marketplaces, list):
+        raise RuntimeError("Package product services configuration is invalid")
+    if not any(
+        marketplace.get("id") == "zeta"
+        and marketplace.get("trustedRoot") == "marketplace-root.json"
+        for marketplace in marketplaces
+        if isinstance(marketplace, dict)
+    ):
+        raise RuntimeError("Package product services does not pin the Zeta Marketplace root")
 
 
 def copy_executable(source: Path, destination: Path, is_windows: bool) -> None:

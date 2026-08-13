@@ -124,6 +124,29 @@ class PackageTests(unittest.TestCase):
             self.assertTrue(
                 (output / "zeta-resources" / "extensions").is_dir()
             )
+            product_services = json.loads(
+                (
+                    output
+                    / "zeta-resources"
+                    / "product-services"
+                    / "product-services.json"
+                ).read_text(encoding="utf-8")
+            )
+            self.assertEqual("zeta", product_services["marketplaces"][0]["id"])
+            self.assertEqual(
+                (
+                    REPOSITORY_ROOT
+                    / "resources"
+                    / "product-services"
+                    / "marketplace-root.json"
+                ).read_bytes(),
+                (
+                    output
+                    / "zeta-resources"
+                    / "product-services"
+                    / "marketplace-root.json"
+                ).read_bytes(),
+            )
             self.assertEqual(
                 [
                     path.name

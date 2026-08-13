@@ -21,6 +21,9 @@ notarization, installer formats, or update delivery.
     │   ├── css/package.json
     │   ├── ...
     │   └── yaml/package.json
+    ├── product-services/
+    │   ├── product-services.json      # official service endpoints
+    │   └── marketplace-root.json      # public pinned TUF root
     └── licenses/
         ├── bubblewrap/COPYING        # Linux only
         ├── ripgrep/
@@ -50,6 +53,10 @@ unlinked-tree restriction. Their canonical upstream license copy is
 once to `zeta-resources/licenses/vscode/LICENSE.txt`. Runtime discovery and contribution semantics remain owned by
 [`zeta-extensions`](../../zeta-rs/extensions/README.md) and
 [`docs/editor-extensions.md`](../../docs/editor-extensions.md), not by the package builder.
+Product service inputs come from `resources/product-services/`; both assemblers copy the regular
+tree and require the official Marketplace config and pinned root before completing a package. The
+runtime parser remains the trust authority for URLs, relative root containment, schema, and TUF
+verification.
 
 Desktop development uses the same locks and canonical layout through the Node
 assembler at `desktop/scripts/prepare-dev-package.mjs`. It builds the
@@ -83,7 +90,7 @@ helper to be built for the selected target.
 Tests are offline and cover target-lock completeness, package layout, all thirteen built-in
 Extension packages, their referenced resources, real file-template declarations, the packaged VS Code
 license text, built-in Skill/Extension staging and link
-rejection, tar/zip member/source extraction, Linux and
+rejection, product-service trust bundle staging, tar/zip member/source extraction, Linux and
 Windows helper layouts, executable permissions, refusal to overwrite, and
 digest failure cleanup:
 
