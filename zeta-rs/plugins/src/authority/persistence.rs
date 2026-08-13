@@ -13,7 +13,7 @@ use crate::InstalledPluginRef;
 use crate::PluginError;
 use crate::PluginErrorKind;
 
-const AUTHORITY_SCHEMA_VERSION: u32 = 2;
+const AUTHORITY_SCHEMA_VERSION: u32 = 3;
 const MAX_AUTHORITY_BYTES: u64 = 4 * 1024 * 1024;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -44,6 +44,8 @@ pub(super) struct PersistedAuthority {
     #[serde(default)]
     pub granted: Vec<InstalledPluginRef>,
     #[serde(default)]
+    pub revoked: Vec<InstalledPluginRef>,
+    #[serde(default)]
     pub active: Vec<ActivePluginRecord>,
     pub receipts: BTreeMap<String, PersistedCommandReceipt>,
 }
@@ -57,6 +59,7 @@ impl PersistedAuthority {
             installed: Vec::new(),
             enabled: Vec::new(),
             granted: Vec::new(),
+            revoked: Vec::new(),
             active: Vec::new(),
             receipts: BTreeMap::new(),
         }
@@ -68,6 +71,7 @@ impl PersistedAuthority {
         installed: &BTreeMap<InstalledKey, InstalledPluginRef>,
         enabled: &BTreeMap<crate::PluginId, InstalledPluginRef>,
         granted: &BTreeMap<InstalledKey, InstalledPluginRef>,
+        revoked: &BTreeMap<InstalledKey, InstalledPluginRef>,
         active: &BTreeMap<crate::PluginId, ActivePlugin>,
         receipts: &BTreeMap<String, PersistedCommandReceipt>,
     ) -> Self {
@@ -78,6 +82,7 @@ impl PersistedAuthority {
             installed: installed.values().cloned().collect(),
             enabled: enabled.values().cloned().collect(),
             granted: granted.values().cloned().collect(),
+            revoked: revoked.values().cloned().collect(),
             active: active
                 .values()
                 .map(|active| ActivePluginRecord {
@@ -90,7 +95,7 @@ impl PersistedAuthority {
     }
 
     pub fn validate(&self) -> Result<(), PluginError> {
-        if !matches!(self.schema_version, 1 | AUTHORITY_SCHEMA_VERSION)
+        if !matches!(self.schema_version, 1 | 2 | AUTHORITY_SCHEMA_VERSION)
             || self.activation_generation == 0
             || self.active.iter().any(|active| {
                 active.activation_revision == 0
@@ -116,8 +121,8 @@ impl PersistedAuthority {
                 .map(|active| active.package.clone())
                 .collect();
             self.granted = self.enabled.clone();
-            self.schema_version = AUTHORITY_SCHEMA_VERSION;
         }
+        self.schema_version = AUTHORITY_SCHEMA_VERSION;
         self
     }
 }

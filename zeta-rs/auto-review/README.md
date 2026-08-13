@@ -1,6 +1,6 @@
 # `zeta-auto-review`
 
-> 本 README 解释 crate 内部实现、维护约束和修改路径。跨 `zeta-policy`、Core、App Server、
+> 本 README 解释 crate 内部实现、维护约束和修改路径。跨 `zeta-action-policy`、Core、App Server、
 > Tool 与 sandbox 的系统设计见 [`docs/auto-review.md`](../../docs/auto-review.md)。
 > 文档分层遵循 [`docs/documentation-guidelines.md`](../../docs/documentation-guidelines.md)。
 
@@ -31,7 +31,7 @@ Agent action
             └─ possible side effects / unknown → 不重放       Current
 
 classifier
-└─ recommendation → PolicyEngine 校验
+└─ recommendation → ActionPolicyEngine 校验
    ├─ Approve → exact grant
    ├─ ReviseAction → Agent 换更安全的 action
    ├─ AskUser → 请求用户批准
@@ -60,8 +60,8 @@ exact grant 才能触发自动重试。部分副作用可能发生或结果未�
 本 crate 不拥有：
 
 - `ResolvedAction`、capability、review context 和 recommendation domain type；它们属于
-  `zeta-policy`；
-- recommendation 是否足以产生执行授权；它由 `PolicyEngine` 决定；
+  `zeta-action-policy`；
+- recommendation 是否足以产生执行授权；它由 `ActionPolicyEngine` 决定；
 - review model 的选择、credential 和 provider runtime；它们由 App Server 组合；
 - user approval、durable Tool lifecycle 和 rejection circuit breaker；它们属于 Core；
 - OS enforcement；它属于 Tool executor 与 `zeta-sandboxing`。
@@ -70,7 +70,7 @@ exact grant 才能触发自动重试。部分副作用可能发生或结果未�
 
 ```text
 zeta-auto-review
-  ├─ zeta-policy
+  ├─ zeta-action-policy
   ├─ zeta-sandboxing（只读取 sandbox contract）
   └─ zeta-async-utils
 
@@ -92,7 +92,7 @@ zeta-rs/auto-review/
 │   ├── README.md               # corpus 格式、隐私与指标要求
 │   └── cases.jsonl             # versioned synthetic gold cases
 ├── tests/
-│   └── eval_contract.rs        # 离线 corpus + PolicyEngine contract
+│   └── eval_contract.rs        # 离线 corpus + ActionPolicyEngine contract
 ├── BUILD.bazel
 └── Cargo.toml
 ```
@@ -107,11 +107,11 @@ private，并从 `lib.rs` 显式导出必要 API。
 | `ReviewModel` | provider-neutral completion port | 观察 cancellation；按 request budget 收集 JSON；不提供 Tool、memory 或 mutation capability |
 | `ReviewModelRequest` | 一次 review 的 exact prompt payload 与 response budget | adapter 分别消费 system prompt、input JSON 和 response schema，并执行 `maximum_response_bytes` |
 | `ReviewModelError` | adapter failure contract | 区分 provider invocation failure 与 response oversize |
-| `LlmActionClassifier<M>` | 实现 `zeta_policy::ActionClassifier` | caller 只提供 review model；classifier 固定使用当前 `ReviewProtocol` |
+| `LlmActionClassifier<M>` | 实现 `zeta_action_policy::ActionClassifier` | caller 只提供 review model；classifier 固定使用当前 `ReviewProtocol` |
 | `AutoReviewError` | fail-closed 的错误分类 | caller 只能映射为显式 failure policy，不能把错误当成批准 |
 
 `ActionReviewRequest`、`ClassifierAssessment`、`ClassifierRecommendation`、`RiskLevel` 和
-`UserAuthorization` 均来自 `zeta-policy`。这使 authorization authority 不依赖具体 LLM
+`UserAuthorization` 均来自 `zeta-action-policy`。这使 authorization authority 不依赖具体 LLM
 implementation。
 
 ## 4. 内部接口地图
@@ -132,7 +132,7 @@ ownership 为什么仍然正确。
 | `ModelSandboxCompatibility` | private enum | 把 sandbox contract 转成稳定的 tagged JSON | 只描述 host 结论，不让 model 修改 availability |
 | `ModelRecommendation` | private enum | strict deserialize target，拒绝 unknown fields | 不能直接成为 execution decision 或 grant |
 | `ModelCapability` | private struct | 对 capability 嵌套字段执行 `deny_unknown_fields` | 不直接反序列化 domain `Capability` 而丢弃未知字段 |
-| `From<ModelRecommendation> for ClassifierRecommendation` | private conversion impl | 转换成 `zeta-policy` advisory domain type | 转换后仍必须经过 host validation |
+| `From<ModelRecommendation> for ClassifierRecommendation` | private conversion impl | 转换成 `zeta-action-policy` advisory domain type | 转换后仍必须经过 host validation |
 | `response_json_bytes` | private function | 序列化 validated canonical recommendation | assessment ID 不 hash 未解析的 raw model text |
 | `RESPONSE_SCHEMA_JSON` | private constant | 定义四种 recommendation wire shape | 与 `ModelRecommendation` / `ModelCapability` lockstep 更新 |
 
@@ -282,11 +282,11 @@ serde 静默忽略。
 Response schema 提供给 adapter 以约束生成，但本地 serde parse 和 host validation 才是最终
 可信边界。当前 App Server adapter 将 schema 放入 model instructions；即使 provider 不支持
 原生 structured output，malformed response 仍会在本 crate 被拒绝。Capability exact/subset
-规则由 `zeta-policy::ClassifierRecommendation::validate_against` 定义；auto-review 在构造
-assessment 前调用，`PolicyEngine` 对任意 classifier implementation 的结果再次调用。
+规则由 `zeta-action-policy::ClassifierRecommendation::validate_against` 定义；auto-review 在构造
+assessment 前调用，`ActionPolicyEngine` 对任意 classifier implementation 的结果再次调用。
 
 本 crate 不执行 risk/authorization 到 execution decision 的映射。例如 high risk +
-implicit authorization 即使被解析为 `Approve` recommendation，仍由 `PolicyEngine` 转成
+implicit authorization 即使被解析为 `Approve` recommendation，仍由 `ActionPolicyEngine` 转成
 `AskUser`。系统级矩阵见
 [`docs/auto-review.md`](../../docs/auto-review.md#5-风险与用户授权矩阵)。
 
@@ -306,7 +306,7 @@ implicit authorization 即使被解析为 `Approve` recommendation，仍由 `Pol
 `ReviewModel::complete()` 返回 `Result<String, ReviewModelError>`。Port 只区分 invocation
 failure 与 response oversize，不把完整 provider taxonomy 泄漏进 classifier。App Server 应在
 进入本 crate 前完成安全 redaction。错误最终如何成为 `Block` 或 `AskUser` 由
-`zeta-policy::ReviewFailurePolicy` 决定。
+`zeta-action-policy::ReviewFailurePolicy` 决定。
 
 Cancellation 只能保证本 crate 在调用前后检查。正在进行的网络请求能否及时停止，取决于
 `ReviewModel` implementation 是否在 provider checkpoint 观察 token。
@@ -364,7 +364,7 @@ bazel test \
 - `classifier_tests.rs` 直接覆盖 parsing、nested strict fields、binding、capability escalation、
   request/response budgets 和 cancellation；
 - `eval_contract.rs` 离线读取 `evals/cases.jsonl`，检查 schema/coverage，并把 gold
-  recommendation 送入真实 `PolicyEngine` 验证最终 disposition。
+  recommendation 送入真实 `ActionPolicyEngine` 验证最终 disposition。
 
 默认测试禁止访问网络或调用真实 model。Model-backed eval 必须是显式 runner，记录 model 与
 review protocol revision，并输出 false-auto-approval 等安全指标。Corpus 的隐私和扩充规则见
@@ -385,15 +385,15 @@ review protocol revision，并输出 false-auto-approval 等安全指标。Corpu
 这不是 crate-local change。至少同时审查：
 
 1. `ModelRecommendation` 和 response schema；
-2. `zeta_policy::ClassifierRecommendation`；
-3. `PolicyEngine` 的 final decision mapping；
+2. `zeta_action_policy::ClassifierRecommendation`；
+3. `ActionPolicyEngine` 的 final decision mapping；
 4. Core Tool scheduler 的 durable/feedback 行为；
 5. classifier tests、policy tests 和 eval corpus；
 6. `docs/auto-review.md` 的用户可见语义。
 
 ### 增加证据类型
 
-Evidence domain type 属于 `zeta-policy`。新增 kind 后需要确认：
+Evidence domain type 属于 `zeta-action-policy`。新增 kind 后需要确认：
 
 - 哪个 host 负责产生它；
 - trust label 是否可能被伪造；

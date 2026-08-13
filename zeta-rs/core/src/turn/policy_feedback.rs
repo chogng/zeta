@@ -1,8 +1,8 @@
 use serde::{Deserialize, Serialize};
-use zeta_policy::{BlockReason, Capability, SaferActionRequest};
+use zeta_action_policy::{BlockReason, Capability, SaferActionRequest};
 use zeta_protocol::{ThreadItem, TurnId};
 
-const FEEDBACK_PREFIX: &str = "zeta_policy_feedback:";
+const FEEDBACK_PREFIX: &str = "zeta_action_policy_feedback:";
 const CONSECUTIVE_REJECTION_LIMIT: usize = 3;
 const ROLLING_REJECTION_LIMIT: usize = 10;
 const ROLLING_RESULT_WINDOW: usize = 50;

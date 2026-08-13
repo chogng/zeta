@@ -19,8 +19,9 @@ orchestration。它不拥有 Connector state machine、secret backend、MCP sess
 | `ConnectorCredentialService::connect_api_token` | Begin → secret store → Complete | secret store 失败时不会发布 `Connected` |
 | `ConnectorCredentialService::disconnect` | 先撤销 readiness，再 best-effort delete secret | cleanup 失败返回 `RetryRequired`，不回滚断连 |
 | `ConnectorAuthority::with_authorized_invocation` | 把 dispatch 与 disconnect commit 线性化 | stale generation/digest 不执行 closure |
-| `ConnectorOAuthService` | state + PKCE + exact redirect + one-shot callback 编排 | provider/callback host/refresh/revoke 由 adapter 拥有 |
+| `ConnectorOAuthService` | state + PKCE + exact redirect、one-shot callback、refresh/revoke 编排 | provider wire protocol 与 callback host 由 adapter/产品拥有 |
 | `ConnectorOAuthProvider` | 一个具体服务的授权 URL 与 code exchange 端口 | 不持久化 secret，不修改 authority |
+| `GitHubOAuthProvider` | GitHub authorization/code exchange/account/refresh/revoke wire adapter | OAuth App client 配置、浏览器 callback、secret persistence |
 
 ## 内部调用路径
 
@@ -48,8 +49,10 @@ event/receipt 原子性；`auth::credential_key` 只生成 hashed non-PII key。
 当前实现 API-token adapter 与 browser-code OAuth 的通用 PKCE 状态机。`oauth::PendingOAuthAttempt`
 只在内存保存 flow ID、state 和 verifier；`ConnectorOAuthService::complete` 一次性消费 callback，
 并在过期、state mismatch、provider 或 credential failure 时提交 `Unavailable`。Desktop loopback
-listener/browser interaction 已由 Electron main 持有；具体 provider、device flow、refresh 与远端 revoke
-仍由上层 adapter 实现；不能通过扩张
+listener/browser interaction 已由 Electron main 持有。`GitHubOAuthProvider` 使用注入的 `HttpClient`
+实现 code exchange、账户读取、可选 refresh token 更新和远端 token revoke；产品 host 必须注入自己的
+OAuth App client ID/secret，仓库不硬编码凭据。远端 revoke 成功后才提交本地 disconnect；失败时保留
+ready connection 以便重试。device flow 和其他 provider 仍由上层 adapter 实现；不能通过扩张
 authority event payload 来保存 OAuth code、refresh token 或 raw credential。生产显式文件 backend 位于
 `zeta-secrets`，OS keyring 不属于本 crate。
 

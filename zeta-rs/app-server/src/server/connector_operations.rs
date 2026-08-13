@@ -15,6 +15,7 @@ use zeta_app_server_protocol::protocol::connectors::ConnectorDisconnectResultDto
 use zeta_app_server_protocol::protocol::connectors::ConnectorDto;
 use zeta_app_server_protocol::protocol::connectors::ConnectorListResult;
 use zeta_app_server_protocol::protocol::connectors::ConnectorOAuthCancelParams;
+use zeta_app_server_protocol::protocol::connectors::ConnectorOAuthRefreshParams;
 use zeta_app_server_protocol::protocol::connectors::ConnectorOAuthStartParams;
 use zeta_app_server_protocol::protocol::connectors::ConnectorOAuthStartResult;
 use zeta_app_server_protocol::protocol::connectors::ConnectorSecretDto;
@@ -109,6 +110,30 @@ impl AppServer {
             .cancel(&ConnectorOAuthFlowId::new(params.flow_id).map_err(|_| invalid_params())?)
             .map_err(connector_oauth_error)?;
         result(&command_result_dto(result_value))
+    }
+
+    pub(super) fn connector_oauth_refresh(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: ConnectorOAuthRefreshParams = decode(params)?;
+        self.connector_oauth_service()?
+            .refresh(&ConnectorId::new(params.connector_id).map_err(|_| invalid_params())?)
+            .map_err(connector_oauth_error)?;
+        result(&())
+    }
+
+    pub(super) fn connector_oauth_revoke(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: ConnectorDisconnectParams = decode(params)?;
+        let outcome = self
+            .connector_oauth_service()?
+            .revoke_and_disconnect(
+                ConnectorCommandId::new(params.command_id).map_err(|_| invalid_params())?,
+                ConnectorSnapshotGeneration::new(params.expected_generation),
+                ConnectorId::new(params.connector_id).map_err(|_| invalid_params())?,
+            )
+            .map_err(connector_oauth_error)?;
+        result(&ConnectorDisconnectResultDto {
+            command: command_result_dto(outcome.command),
+            credential_cleanup: credential_cleanup_dto(outcome.credential_cleanup),
+        })
     }
 
     pub(super) fn connector_api_token_connect(&self, params: Value) -> Result<Value, RpcError> {
@@ -231,7 +256,14 @@ fn connector_dto(
             ConnectorConnectionStateDto::Connected {
                 account: account_dto(account),
             },
-            vec![ConnectorAvailableActionDto::Disconnect],
+            if oauth_supported {
+                vec![
+                    ConnectorAvailableActionDto::RefreshOAuth,
+                    ConnectorAvailableActionDto::RevokeOAuth,
+                ]
+            } else {
+                vec![ConnectorAvailableActionDto::Disconnect]
+            },
         ),
         ConnectorConnectionState::Unavailable { reason } => (
             ConnectorConnectionStateDto::Unavailable {

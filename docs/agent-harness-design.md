@@ -153,7 +153,7 @@ reminder 声明自己是背景信息而非用户指令。这是 Skill 激活、h
 
 1. **匹配训练分布**：Anthropic 系对 str-replace Edit/Glob/Grep 有深度训练，OpenAI 系对
    `apply_patch`（V4A）有专门训练。多 provider 的 Zeta **必须按模型家族分 profile**。
-2. **结构化优于 shell 万能**：结构化工具才能给 `zeta-policy` 精确的审查材料（参数级
+2. **结构化优于 shell 万能**：结构化工具才能给 `zeta-action-policy` 精确的审查材料（参数级
    capability、路径级沙箱判定），审批 UX 与 diff 展示也依赖结构。
 3. **工具描述就是提示词**：进入每次调用的 tools 前缀，与 system prompt 同级打磨。
 4. **少而精**：v1 ≤ 10 个。

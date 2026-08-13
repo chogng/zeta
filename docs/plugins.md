@@ -2,11 +2,11 @@
 
 > 物理位置：`zeta-rs/plugins/`
 > Rust crate：`zeta_plugins`
-> 当前状态：PL0 已实现并支持 `ConnectorContribution` 引用 `McpServerContribution` 的声明校验；PL1 的 local
-> content-addressed store、durable installed/enabled/granted/effective authority、exact `PluginActivationSnapshot`、live generation publish 与 invocation drain 已实现；Connector domain 已提取到
+> 当前状态：PL0 已实现并支持 `ConnectorContribution` 引用 `McpServerContribution` 的声明校验；PL1 的
+> content-addressed store、Marketplace-first install/staged update/rollback、profile reconcile、durable installed/enabled/granted/effective authority、exact `PluginActivationSnapshot`、live generation publish 与 invocation drain 已实现；Connector domain 已提取到
 > `zeta-rs/connectors`，Plugin projection、durable authority 与 API-token connect/revoke 位于
 > `zeta-rs/ext/connectors`；App Server 已能从注入的 activation 自动接线 Connector 与 MCP，通用 OAuth
-> PKCE 状态机、App Server control plane 与 Desktop browser callback 已实现，具体 provider 尚未接入；
+> PKCE 状态机、App Server control plane、Desktop browser callback 与 GitHub provider 已实现；
 > PL2–PL4 Proposed
 > 当前 crate 实现契约：[`zeta-rs/plugins/README.md`](../zeta-rs/plugins/README.md)
 > Connector account/lifecycle：[`connectors.md`](connectors.md)
@@ -80,13 +80,15 @@ package-relative path、本地 package 安全校验、确定性 digest、只读 
 failure semantics 由 crate
 [`README`](../zeta-rs/plugins/README.md) 维护。
 
-User/Workspace TOML 与 App Server 已能表达 exact Plugin request 和 desired enablement，但它们
-只是 `zeta-config` intent。Package store 已能安全保存 immutable object，并能把调用方选择的 exact
-installed package 解析为 generation-bound activation snapshot；App Server 可据此自动构造 Connector
-catalog、durable authority 和 package-rooted MCP provider。Plugin authority 现已分别持久化
-installed/enabled/granted/effective refs 和 command receipts，并驱动 live activation 切换；App Server
-已暴露 list/enable/disable/grant/revokeGrant/uninstall，workspace-profile resolver 与可信 install source
-尚未实现。`docs/tui.md` 也明确要求 Plugin domain projection 进入 canonical
+User/Workspace TOML 与 App Server 已能表达 exact Plugin request 和 desired enablement。产品 host 注册
+受管 Marketplace root；resolver 只按 catalog 中的 exact ID/version/digest 安装并协调 user-profile
+enablement，不自动授予权限。Workspace request 只能读取 profile 中可用、待 profile 安装或版本不匹配
+三种结果，不能以 Workspace trust 自动扩大 profile authority。Package store 安全保存 immutable object，
+并把 exact installed package 解析为 generation-bound activation snapshot；App Server 可据此自动构造
+Skill source、Connector catalog、durable authority 和 package-rooted MCP provider。Plugin authority
+分别持久化 installed/enabled/granted/effective refs 和 command receipts，并驱动 live activation 切换；
+App Server 已暴露 Marketplace list/install/update/rollback 及 enable/disable/grant/revokeGrant/uninstall。
+`docs/tui.md` 也明确要求 Plugin domain projection 进入 canonical
 App Server contract 后，TUI 才能增加管理 feature。TUI 已有可复用的 interaction view stack 与
 tabs/search/selection presentation primitive，但当前没有 Plugin view model 或 `/plugins` command；
 这些 UI 基础设施不改变本节的 backend gate。
@@ -560,8 +562,8 @@ binding variant。
 `zeta-connectors::ConnectorSnapshot`：disconnected entry 进入 discovery，只有认证 owner 通过合法
 generation transition 发布 `ConnectorAccount` 后才输出 ready MCP server ID。当前 API-token adapter、
 SQLite authority、exact activation 到 package-rooted MCP provider 的自动构造、独立 Plugin MCP、
-Connector-bound MCP composition、通用 OAuth PKCE 状态机和 Desktop browser callback 已实现。具体 OAuth
-provider 仍未实现。Plugin enable/update 已能 live replacement，并通过 exact invocation lease 阻止旧 contribution
+Connector-bound MCP composition、通用 OAuth PKCE 状态机、Desktop browser callback 与 GitHub provider
+已实现。Plugin enable/update 已能 live replacement，并通过 exact invocation lease 阻止旧 contribution
 在 authority commit 后开始 dispatch。完整边界由 [`connectors.md`](connectors.md) 维护。
 
 | 概念 | Identity/lifecycle | 例子 |
@@ -586,12 +588,14 @@ runtime 不可用，但不会把 Plugin 标成未安装。
 | ✅ 当前 | `plugin/enable` / `plugin/disable` | exact-package CAS 修改 profile enablement |
 | ✅ 当前 | `plugin/grant` / `plugin/revokeGrant` | exact-package CAS 修改 explicit grants |
 | ✅ 当前 | `plugin/uninstall` | 仅在 disabled + revoked 后移除 authority reference |
-| 尚未完成 | `plugin/install` / `plugin/update` / `plugin/rollback` | 可信 package ingestion 与 exact activation transaction |
+| ✅ 当前 | `plugin/marketplace/list` / `plugin/install` | 只接受 host 注册 catalog 中的 exact digest，不接受客户端路径 |
+| ✅ 当前 | `plugin/update` / `plugin/rollback` | staged newer package；rollback 只切到已安装且已授权的旧 digest |
 | 尚未完成 | operation read API | 长操作 progress/result |
 
 已实现 mutation 使用 `CommandId + expectedRevision + exact package payload`；安装入口不会接受 Renderer
-传入的任意宿主文件路径，后续由可信 ingestion owner 提供 package transaction。download progress 是瞬态
-update，最终 installed/active state 必须来自可读取 authority。
+传入的任意宿主文件路径。`Managed` Marketplace root 由产品分发层注册，`LocalDevelopment` 仅在 host
+显式开启时可用。当前 Marketplace 是 materialized catalog ingestion；公网 catalog 下载、publisher
+signature/revocation feed 和 download progress 尚未实现。最终 installed/active state 始终来自可读取 authority。
 
 客户端必须展示：
 
@@ -703,17 +707,17 @@ zeta-rs/plugins/src/
 当前完成条件：任何 contribution path 都不能逃出已验证 local snapshot root；安装时必须复制到
 content-addressed object、重新验证 exact digest，再原子 promote。mutable local root 不会被发布给 runtime。
 
-### 阶段 PL1：权威+激活（content store 与 snapshot 已完成）
+### 阶段 PL1：权威+激活（已完成）
 
 - ✅ local content-addressed store：unique staging、copy-time validation、digest revalidation、atomic promote；
 - ✅ install/enable/disable/grant/revoke/uninstall typed authority commands；
 - ✅ exact installed package resolution 与 activation snapshot generation；
 - ✅ durable install/enable/disable/uninstall authority record 与 typed command replay；
 - ✅ live revision/activation subscription、App Server lifecycle RPC/reconcile 与 exact invocation drain；
-- Skill contribution vertical slice；
-- Connector contribution 的 normalized projection；
-- 部分具备：user-profile authority 已落地；workspace profile layering 与 startup orphan recovery
-  尚未完成。
+- ✅ Plugin Skill contribution 的 exact immutable source projection 与 live catalog refresh；
+- ✅ Connector contribution 的 normalized projection；
+- ✅ user-profile exact Marketplace reconcile；Workspace request 保持只读、不能自动 grant；
+- 尚未完成：startup orphan recovery。
 
 完成条件：失败激活不改变上一 generation，重启可恢复唯一 active package set。
 
@@ -726,12 +730,13 @@ content-addressed object、重新验证 exact digest，再原子 promote。mutab
 
 完成条件：安装不启动进程，enable 无 grant 不启动，update 不劫持 in-flight tool binding。
 
-### 阶段 PL3：注册表、signature 与更新
+### 阶段 PL3：远端目录、signature 与更新增强
 
-- registry metadata、digest-pinned download；
+- ✅ host-registered Marketplace metadata 与 digest-pinned materialized package ingestion；
+- 远端 catalog/download transport；
 - publisher signature、trust/revocation；
 - permission/contribution diff；
-- side-by-side update、rollback 和 GC。
+- ✅ side-by-side staged update 与 exact rollback；GC 尚未完成。
 
 完成条件：相同 ID/version 不可换内容，grant expansion 必须重新 consent。
 

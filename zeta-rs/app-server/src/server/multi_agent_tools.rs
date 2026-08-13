@@ -1,5 +1,5 @@
 use super::workspace_runtime::WorkspaceRuntime;
-use crate::local_tools::LOCAL_POLICY_REVISION;
+use crate::local_tools::local_policy_revision;
 use serde::Deserialize;
 use serde_json::Value;
 use serde_json::json;
@@ -8,6 +8,15 @@ use std::sync::RwLock;
 use std::sync::Weak;
 use std::time::Duration;
 use std::time::Instant;
+use zeta_action_policy::ActionDigest;
+use zeta_action_policy::ActionKind;
+use zeta_action_policy::ActionPolicyRevision;
+use zeta_action_policy::ActionProvenance;
+use zeta_action_policy::ActionReviewRequest;
+use zeta_action_policy::ActionSource;
+use zeta_action_policy::CapabilitySet;
+use zeta_action_policy::ResolvedAction;
+use zeta_action_policy::SandboxCompatibility;
 use zeta_async_utils::CancellationToken;
 use zeta_core::CompleteDelegationRequest;
 use zeta_core::CoreError;
@@ -20,15 +29,6 @@ use zeta_core::ToolAuthorization;
 use zeta_core::ToolExecutionFacts;
 use zeta_core::ToolOutputSink;
 use zeta_core::ToolService;
-use zeta_policy::ActionDigest;
-use zeta_policy::ActionKind;
-use zeta_policy::ActionProvenance;
-use zeta_policy::ActionReviewRequest;
-use zeta_policy::ActionSource;
-use zeta_policy::CapabilitySet;
-use zeta_policy::PolicyRevision;
-use zeta_policy::ResolvedAction;
-use zeta_policy::SandboxCompatibility;
 use zeta_protocol::AgentContextMode;
 use zeta_protocol::AgentContextSource;
 use zeta_protocol::AgentJoinId;
@@ -63,6 +63,7 @@ pub(super) struct MultiAgentToolService {
     sessions: Arc<SessionCoordinator>,
     runtime: Weak<RwLock<WorkspaceRuntime>>,
     definitions: Vec<ToolDefinition>,
+    action_policy_revision: ActionPolicyRevision,
 }
 
 impl MultiAgentToolService {
@@ -76,7 +77,13 @@ impl MultiAgentToolService {
             sessions,
             runtime,
             definitions: vec![spawn_definition(), send_definition(), wait_definition()],
+            action_policy_revision: local_policy_revision(),
         }
+    }
+
+    pub(super) fn with_action_policy_revision(mut self, revision: ActionPolicyRevision) -> Self {
+        self.action_policy_revision = revision;
+        self
     }
 
     fn execute_with_context(
@@ -322,7 +329,7 @@ impl ToolService for MultiAgentToolService {
             SandboxCompatibility::NotApplicable {
                 reason: "Agent coordination only mutates durable Zeta Session/Thread state".into(),
             },
-            PolicyRevision::new(LOCAL_POLICY_REVISION),
+            self.action_policy_revision.clone(),
         ))
     }
 

@@ -4,7 +4,7 @@
 > [`docs/config.md`](../../docs/config.md) 规范。
 
 `zeta-config` 是普通、非 secret 用户配置的 TOML authority，也是严格 Workspace TOML document 的
-typed parser/resolver。SQLite 只保存 transaction metadata 和 exact receipt。它不拥有
+typed parser/resolver。SQLite 只保存 transaction metadata 和 exact receipt。它不拥有这些内容：
 UI/device preference、credential bytes、Plugin package/activation、live MCP connection、Hook
 execution、Skill 正文、Session/Thread 或 Core execution。
 
@@ -17,12 +17,16 @@ execution、Skill 正文、Session/Thread 或 Core execution。
 | `ResolvedConfigSnapshot` | User authority 的 immutable runtime input |
 | `WorkspaceConfigStore` | strict-read `.zeta/config.toml`，不写 Workspace 文件 |
 | `WorkspaceTrustConfig` | 按 opaque `WorkspaceTrustId` 持久化 User 的 Restricted/Trusted 决策；缺失时 fail closed |
+| `UserExecPolicyConfig` | 持久化 typed User rules；通过 `UpsertExecPolicyRule` / `RemoveExecPolicyRule` 原子变更 |
+| `WorkspaceExecPolicyConfig` | strict-read Workspace restrictions；validation 禁止 `AllowUnsandboxed` |
+| `compose_exec_policy` | 将 trusted Host/Organization layers、User rules 与 Workspace restrictions 组合成 immutable snapshot |
 | `LanguageServersConfig` / `LanguageServerConfig` | 持久化 stable server ID 对应的 Disabled/Automatic/Enabled 与可选绝对 executable override |
 | `resolve_scoped_config` | User + Workspace 的受限 merge、provenance 与 diagnostic |
 | `ConfigChange` | metadata commit 后的 revision/generation signal，包括 TOML 外部编辑与其他 connection 的提交 |
 
 `UserConfigDocument` 当前包含 Agent defaults、Provider map、standalone MCP declaration、Skill
-source/enablement、exact Plugin request、declarative Hook、language-server preference 和 Workspace trust decision。Trust key
+source/enablement、exact Plugin request、declarative Hook、language-server preference，以及 execution-policy
+rules 和 Workspace trust decision。Trust key
 由 host 对 canonical root 生成，document 不保存本地路径；User decision 不能冒充 organization
 policy 或 host configuration。Plugin request 不安装或授权 package；Hook declaration 不执行
 process。Theme/UI preference 不在本 crate；Desktop device configuration 是独立 authority。
@@ -56,7 +60,8 @@ metadata 不含 document 正文。`store_file` 拥有 strict TOML、semantic dig
 `WorkspaceConfigStore` 只接收 host 提供的 `WorkspaceId`、文件 path 与 observed content；
 Workspace 文档不能选择 namespace、credential binding 或 grant。`resolve_scoped_config` 当前只让
 Workspace preferred model 在 User 已配置对应 Provider 时覆盖，并把 MCP/Skill/Plugin/Hook 内容
-保留为 pending intent。
+保留为 pending intent；execution-policy rules 保留为只收紧 intent，并由 App Server 与 Host layer
+组合后在 tool safe point 激活。
 
 Workspace trust 是另一条解析轴：`.zeta/config.toml` 不能声明 `workspaceTrust`；只有 User
 `config.toml` 的 `WorkspaceTrustConfig`、organization policy 或 trusted host composition 能产生
@@ -84,6 +89,7 @@ reconcile failure 不能回滚 desired document。
 | `store_monitor::publish` | cross-connection 去重 signal | signal 不能成为未提交状态的来源 |
 | `UserConfigDocument::validate` | 全文 typed invariant | 禁止用 arbitrary JSON escape hatch 绕开 |
 | `resolve_scoped_config` | scope/trust merge | Workspace 不能扩大 credential、grant 或 policy |
+| `exec_policy::{compose_exec_policy, UserExecPolicyConfig, WorkspaceExecPolicyConfig}` | rule source validation 与 typed composition | 不能复制 selector evaluation 或最终 grant authority |
 | `workspace_trust::WorkspaceTrustConfig::decision_for` | User trust lookup 与缺失时 Restricted | Workspace document 不能进入这条 mutation/persistence 路径 |
 
 ## 失败与验证
@@ -97,5 +103,6 @@ cargo test -p zeta-config
 ```
 
 测试覆盖 TOML durability/reopen、旧 DB document 迁出、external edit、revision/replay/conflict、
-no-op generation、cross-connection signal、Provider/model invariant、MCP/Skill/Plugin/Hook desired
-config、language-server ID/mode/absolute-path validation、Workspace strict TOML parsing、namespace 和 scoped resolution。
+以下 no-op generation 与 cross-connection signal、Provider/model invariant、MCP/Skill/Plugin/Hook
+desired config、language-server ID/mode/absolute-path validation、execution-policy
+mutation/round-trip/layer constraints、Workspace strict TOML parsing、namespace 和 scoped resolution。

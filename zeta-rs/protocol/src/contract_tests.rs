@@ -67,6 +67,25 @@ fn sandbox_escalation_retains_the_structured_denied_process_result() {
 }
 
 #[test]
+fn exec_policy_authority_serializes_exact_rule_and_revision() {
+    let authority = ToolExecutionAuthority::ExecPolicyGranted {
+        layer_id: "user".into(),
+        rule_id: "user-safe-status".into(),
+        exec_policy_revision: "exec-policy-7".into(),
+    };
+
+    assert_eq!(
+        serde_json::to_value(authority).unwrap(),
+        json!({
+            "type": "execPolicyGranted",
+            "layerId": "user",
+            "ruleId": "user-safe-status",
+            "execPolicyRevision": "exec-policy-7"
+        })
+    );
+}
+
+#[test]
 fn canonical_session_contains_thread_lineage_without_embedding_thread_history() {
     let session = Session {
         session_id: SessionId::new("session_1").expect("test ID is non-empty"),

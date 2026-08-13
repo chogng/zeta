@@ -7,14 +7,24 @@ use crate::{
 use serde_json::json;
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
-use zeta_async_utils::CancellationSource;
-use zeta_policy::{
-    ActionClassifier, ActionDigest, ActionKind, ActionProvenance, ActionReviewPhase,
-    ActionReviewRequest, ActionSource, ApprovalRequest, AssessmentId, Capability, CapabilityKind,
-    CapabilitySet, ClassifierAssessment, ClassifierRecommendation, ExecutionDecision, PolicyEngine,
-    PolicyRevision, ResolvedAction, ReviewEvidence, ReviewEvidenceKind, ReviewEvidenceTrust,
-    ReviewFailurePolicy, RiskLevel, SandboxCompatibility, UserAuthorization,
+use zeta_action_policy::{
+    ActionClassifier, ActionDigest, ActionKind, ActionPolicyEngine, ActionPolicyRevision,
+    ActionProvenance, ActionReviewPhase, ActionReviewRequest, ActionSource, ApprovalRequest,
+    AssessmentId, Capability, CapabilityKind, CapabilitySet, ClassifierAssessment,
+    ClassifierRecommendation, ExecutionDecision, ResolvedAction, ReviewEvidence,
+    ReviewEvidenceKind, ReviewEvidenceTrust, ReviewFailurePolicy, RiskLevel, SandboxCompatibility,
+    UserAuthorization,
 };
+use zeta_async_utils::CancellationSource;
+use zeta_execpolicy::ExecPolicyDefault;
+use zeta_execpolicy::ExecPolicyEffect;
+use zeta_execpolicy::ExecPolicyLayer;
+use zeta_execpolicy::ExecPolicyLayerId;
+use zeta_execpolicy::ExecPolicyLayerKind;
+use zeta_execpolicy::ExecPolicyRule;
+use zeta_execpolicy::ExecPolicyRuleId;
+use zeta_execpolicy::ExecPolicySelector;
+use zeta_execpolicy::ExecPolicySnapshot;
 use zeta_protocol::{
     ActionApprovalDecision, ActionApprovalResponse, AgentRequest, AgentResponse, CommandId,
     DynamicToolOutput, DynamicToolResponse, SessionId, ThreadId, ThreadItem, ToolCallId,
@@ -199,6 +209,49 @@ fn permission_bypass_executes_with_exact_durable_authority_without_an_interactio
 }
 
 #[test]
+fn exec_policy_grant_is_exactly_bound_and_recorded_before_execution() {
+    let fixture = fixture_with(
+        Arc::new(ReviewTool::default()),
+        Arc::new(ExecAllowPolicy::new()),
+    );
+
+    assert_eq!(
+        fixture
+            .scheduler
+            .run_pending(
+                &fixture.thread_id,
+                &fixture.turn_id,
+                &CancellationSource::new().token(),
+            )
+            .unwrap(),
+        ToolSchedulingProgress::Complete
+    );
+
+    let authorizations = fixture.tools.authorizations.lock().unwrap();
+    assert!(matches!(
+        authorizations.as_slice(),
+        [ToolAuthorization::ExecPolicyGranted(grant)]
+            if grant.tool_call_id() == &fixture.call_id
+                && grant.policy_grant().source().rule_id().as_str() == "allow-reviewed"
+    ));
+    assert_eq!(
+        fixture
+            .threads
+            .read_thread(&fixture.thread_id)
+            .unwrap()
+            .tool_execution_starts
+            .get(&fixture.call_id)
+            .unwrap()
+            .authority,
+        ToolExecutionAuthority::ExecPolicyGranted {
+            layer_id: "host".into(),
+            rule_id: "allow-reviewed".into(),
+            exec_policy_revision: ExecAllowPolicy::snapshot().revision().to_string(),
+        }
+    );
+}
+
+#[test]
 fn decline_records_a_tool_failure_without_execution() {
     let fixture = fixture();
     fixture
@@ -253,8 +306,8 @@ fn reviewer_approval_executes_with_bound_authority_and_user_context() {
         )],
         ..ReviewTool::default()
     });
-    let engine = PolicyEngine::new(
-        PolicyRevision::new("policy-v1"),
+    let engine = ActionPolicyEngine::with_no_exec_rules(
+        ActionPolicyRevision::new("policy-v1"),
         ContextApprovingClassifier {
             observed: observed.clone(),
         },
@@ -303,8 +356,8 @@ fn safe_sandbox_denial_is_reviewed_and_retried_once() {
         ])),
         ..ReviewTool::default()
     });
-    let engine = PolicyEngine::new(
-        PolicyRevision::new("policy-v1"),
+    let engine = ActionPolicyEngine::with_no_exec_rules(
+        ActionPolicyRevision::new("policy-v1"),
         DenialApprovingClassifier {
             observed: observed.clone(),
         },
@@ -372,8 +425,8 @@ fn safe_sandbox_denial_waits_for_one_time_approval_and_resumes_after_recovery() 
         ])),
         ..ReviewTool::default()
     });
-    let engine = PolicyEngine::new(
-        PolicyRevision::new("policy-v1"),
+    let engine = ActionPolicyEngine::with_no_exec_rules(
+        ActionPolicyRevision::new("policy-v1"),
         DenialAskingClassifier,
         ReviewFailurePolicy::Block,
     );
@@ -444,8 +497,8 @@ fn declining_sandbox_escalation_does_not_retry_the_tool() {
         outputs: Mutex::new(VecDeque::from([safe_sandbox_denial()])),
         ..ReviewTool::default()
     });
-    let engine = PolicyEngine::new(
-        PolicyRevision::new("policy-v1"),
+    let engine = ActionPolicyEngine::with_no_exec_rules(
+        ActionPolicyRevision::new("policy-v1"),
         DenialAskingClassifier,
         ReviewFailurePolicy::Block,
     );
@@ -492,8 +545,8 @@ fn interrupted_approved_sandbox_escalation_is_not_retried() {
         outputs: Mutex::new(VecDeque::from([safe_sandbox_denial()])),
         ..ReviewTool::default()
     });
-    let engine = PolicyEngine::new(
-        PolicyRevision::new("policy-v1"),
+    let engine = ActionPolicyEngine::with_no_exec_rules(
+        ActionPolicyRevision::new("policy-v1"),
         DenialAskingClassifier,
         ReviewFailurePolicy::Block,
     );
@@ -526,7 +579,7 @@ fn interrupted_approved_sandbox_escalation_is_not_retried() {
             crate::thread_controller::RecordToolExecutionEscalation {
                 tool_call_id: fixture.call_id.clone(),
                 action_digest: reviewed.action().digest().as_str().to_owned(),
-                policy_revision: reviewed.policy_revision().as_str().to_owned(),
+                policy_revision: reviewed.action_policy_revision().as_str().to_owned(),
                 denial,
                 authority: ToolExecutionAuthority::ApprovedOnce {
                     request_id: interaction.request_id,
@@ -596,8 +649,8 @@ fn sandbox_denial_with_possible_side_effects_is_not_retried() {
         )])),
         ..ReviewTool::default()
     });
-    let engine = PolicyEngine::new(
-        PolicyRevision::new("policy-v1"),
+    let engine = ActionPolicyEngine::with_no_exec_rules(
+        ActionPolicyRevision::new("policy-v1"),
         DenialApprovingClassifier {
             observed: observed.clone(),
         },
@@ -640,8 +693,8 @@ fn reviewer_revision_returns_structured_safer_path_feedback() {
         requires_escalation: true,
         ..ReviewTool::default()
     });
-    let engine = PolicyEngine::new(
-        PolicyRevision::new("policy-v1"),
+    let engine = ActionPolicyEngine::with_no_exec_rules(
+        ActionPolicyRevision::new("policy-v1"),
         RevisingClassifier,
         ReviewFailurePolicy::Block,
     );
@@ -670,7 +723,7 @@ fn reviewer_revision_returns_structured_safer_path_feedback() {
                     text,
                     is_error: true,
                     ..
-                } if text.starts_with("zeta_policy_feedback:")
+                } if text.starts_with("zeta_action_policy_feedback:")
                     && text.contains("\"kind\":\"revise_action\"")
                     && text.contains("\"maximum_capabilities\"")
             ))
@@ -690,7 +743,7 @@ fn started_call_without_a_result_is_not_retried() {
             crate::thread_controller::RecordToolExecutionStart {
                 tool_call_id: fixture.call_id.clone(),
                 action_digest: reviewed.action().digest().as_str().to_owned(),
-                policy_revision: reviewed.policy_revision().as_str().to_owned(),
+                policy_revision: reviewed.action_policy_revision().as_str().to_owned(),
                 authority: zeta_protocol::ToolExecutionAuthority::Sandboxed,
             },
         )
@@ -831,13 +884,13 @@ fn fixture() -> Fixture {
     fixture_with(Arc::new(ReviewTool::default()), Arc::new(AskPolicy))
 }
 
-fn fixture_with(tools: Arc<ReviewTool>, policy: Arc<dyn PolicyService>) -> Fixture {
+fn fixture_with(tools: Arc<ReviewTool>, policy: Arc<dyn ActionPolicyService>) -> Fixture {
     fixture_with_approval_mode(tools, policy, zeta_protocol::ApprovalMode::AskPermissions)
 }
 
 fn fixture_with_approval_mode(
     tools: Arc<ReviewTool>,
-    policy: Arc<dyn PolicyService>,
+    policy: Arc<dyn ActionPolicyService>,
     approval_mode: zeta_protocol::ApprovalMode,
 ) -> Fixture {
     let store = Arc::new(InMemoryThreadStore::default());
@@ -1033,9 +1086,75 @@ impl ToolService for ReviewTool {
 
 struct AskPolicy;
 
+struct ExecAllowPolicy {
+    snapshot: ExecPolicySnapshot,
+}
+
+impl ExecAllowPolicy {
+    fn snapshot() -> ExecPolicySnapshot {
+        ExecPolicySnapshot::new(
+            ExecPolicyDefault::Continue,
+            vec![ExecPolicyLayer::new(
+                ExecPolicyLayerId::new("host"),
+                ExecPolicyLayerKind::Host,
+                [ExecPolicyRule::new(
+                    ExecPolicyRuleId::new("allow-reviewed"),
+                    ExecPolicySelector::source(
+                        Some("built_in_tool".into()),
+                        Some("reviewed".into()),
+                    ),
+                    ExecPolicyEffect::AllowUnsandboxed,
+                )],
+            )],
+        )
+        .unwrap()
+    }
+
+    fn new() -> Self {
+        Self {
+            snapshot: Self::snapshot(),
+        }
+    }
+}
+
+struct NeverClassify;
+
+impl ActionClassifier for NeverClassify {
+    type Error = std::convert::Infallible;
+
+    fn classify(
+        &self,
+        _: &ActionReviewRequest,
+        _: &CancellationToken,
+    ) -> Result<ClassifierAssessment, Self::Error> {
+        panic!("deterministic allow must not call the classifier")
+    }
+}
+
+impl ActionPolicyService for ExecAllowPolicy {
+    fn revision(&self) -> String {
+        "policy-v1".into()
+    }
+
+    fn decide(
+        &self,
+        request: &ActionReviewRequest,
+        cancellation: &CancellationToken,
+    ) -> Result<ExecutionDecision, CoreError> {
+        ActionPolicyEngine::new(
+            ActionPolicyRevision::new(self.revision()),
+            self.snapshot.clone(),
+            NeverClassify,
+            ReviewFailurePolicy::Block,
+        )
+        .decide(request, cancellation)
+        .map_err(|error| CoreError::Policy(error.to_string()))
+    }
+}
+
 struct ChangedPolicy;
 
-impl PolicyService for ChangedPolicy {
+impl ActionPolicyService for ChangedPolicy {
     fn revision(&self) -> String {
         "test-policy-v2".into()
     }
@@ -1049,7 +1168,7 @@ impl PolicyService for ChangedPolicy {
     }
 }
 
-impl PolicyService for AskPolicy {
+impl ActionPolicyService for AskPolicy {
     fn revision(&self) -> String {
         "test-policy-v1".into()
     }
@@ -1068,7 +1187,7 @@ impl PolicyService for AskPolicy {
 }
 
 struct ContextApprovingClassifier {
-    observed: Arc<Mutex<Option<zeta_policy::ReviewContext>>>,
+    observed: Arc<Mutex<Option<zeta_action_policy::ReviewContext>>>,
 }
 
 struct DenialApprovingClassifier {
@@ -1100,7 +1219,7 @@ impl ActionClassifier for ContextApprovingClassifier {
         Ok(ClassifierAssessment::new(
             AssessmentId::new("auto-assessment"),
             request.action().digest().clone(),
-            request.policy_revision().clone(),
+            request.action_policy_revision().clone(),
             "test-prompt",
             ClassifierRecommendation::Approve {
                 capabilities: request.action().required_capabilities().clone(),
@@ -1124,7 +1243,7 @@ impl ActionClassifier for DenialApprovingClassifier {
         Ok(ClassifierAssessment::new(
             AssessmentId::new("denial-assessment"),
             request.action().digest().clone(),
-            request.policy_revision().clone(),
+            request.action_policy_revision().clone(),
             "test-prompt",
             ClassifierRecommendation::Approve {
                 capabilities: request.action().required_capabilities().clone(),
@@ -1151,7 +1270,7 @@ impl ActionClassifier for DenialAskingClassifier {
         Ok(ClassifierAssessment::new(
             AssessmentId::new("denial-user-assessment"),
             request.action().digest().clone(),
-            request.policy_revision().clone(),
+            request.action_policy_revision().clone(),
             "test-prompt",
             ClassifierRecommendation::Approve {
                 capabilities: request.action().required_capabilities().clone(),
@@ -1176,7 +1295,7 @@ impl ActionClassifier for RevisingClassifier {
         Ok(ClassifierAssessment::new(
             AssessmentId::new("revise-assessment"),
             request.action().digest().clone(),
-            request.policy_revision().clone(),
+            request.action_policy_revision().clone(),
             "test-prompt",
             ClassifierRecommendation::ReviseAction {
                 maximum_capabilities: CapabilitySet::default(),
@@ -1209,6 +1328,6 @@ fn review_request(call: &ToolCall, requires_escalation: bool) -> ActionReviewReq
                 NetworkAccess::Denied,
             ))
         },
-        PolicyRevision::new("policy-v1"),
+        ActionPolicyRevision::new("policy-v1"),
     )
 }

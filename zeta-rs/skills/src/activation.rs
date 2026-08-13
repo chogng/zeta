@@ -61,8 +61,12 @@ impl SkillCatalog {
                     format!("Skill source '{}' is unavailable", selected.id.source),
                 )
             })?;
-        let body = load_exact_body(
-            source.canonical_root(),
+        let directory = source
+            .skill_directory(&selected.id.name)
+            .ok_or_else(|| content_changed(selected.id.name.as_str()))?;
+        let body = load_exact_body_from_directory(
+            source.host_root(),
+            &directory,
             selected.id.name.as_str(),
             entry.content_digest(),
         )?;
@@ -78,12 +82,12 @@ impl SkillCatalog {
     }
 }
 
-pub(crate) fn load_exact_body(
+pub(crate) fn load_exact_body_from_directory(
     source_root: &std::path::Path,
+    directory: &std::path::Path,
     skill_name: &str,
     expected_digest: &ContentDigest,
 ) -> Result<String, SkillError> {
-    let directory = source_root.join(skill_name);
     let directory_metadata = fs::symlink_metadata(&directory)
         .map_err(|_| unavailable(skill_name, "directory is unavailable"))?;
     if directory_metadata.file_type().is_symlink() || !directory_metadata.is_dir() {

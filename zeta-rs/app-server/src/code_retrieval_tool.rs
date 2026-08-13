@@ -3,6 +3,17 @@ use std::sync::Arc;
 
 use serde::Deserialize;
 use serde_json::json;
+use zeta_action_policy::ActionDigest;
+use zeta_action_policy::ActionKind;
+use zeta_action_policy::ActionPolicyRevision;
+use zeta_action_policy::ActionProvenance;
+use zeta_action_policy::ActionReviewRequest;
+use zeta_action_policy::ActionSource;
+use zeta_action_policy::Capability;
+use zeta_action_policy::CapabilityKind;
+use zeta_action_policy::CapabilitySet;
+use zeta_action_policy::ResolvedAction;
+use zeta_action_policy::SandboxCompatibility;
 use zeta_async_utils::CancellationToken;
 use zeta_code_index::CodeIndex;
 use zeta_code_index_cloud::CloudCodeIndexController;
@@ -13,17 +24,6 @@ use zeta_code_retrieval::CodeRetrievalService;
 use zeta_core::CoreError;
 use zeta_core::ToolAuthorization;
 use zeta_core::ToolService;
-use zeta_policy::ActionDigest;
-use zeta_policy::ActionKind;
-use zeta_policy::ActionProvenance;
-use zeta_policy::ActionReviewRequest;
-use zeta_policy::ActionSource;
-use zeta_policy::Capability;
-use zeta_policy::CapabilityKind;
-use zeta_policy::CapabilitySet;
-use zeta_policy::PolicyRevision;
-use zeta_policy::ResolvedAction;
-use zeta_policy::SandboxCompatibility;
 use zeta_protocol::ToolCall;
 use zeta_protocol::ToolDefinition;
 use zeta_protocol::ToolExecutionOutput;
@@ -45,6 +45,7 @@ pub(crate) struct CodeRetrievalTool {
     semantic: Option<Arc<CodeIndexSemanticService>>,
     cloud: Option<Arc<CloudCodeIndexController>>,
     definition: ToolDefinition,
+    action_policy_revision: ActionPolicyRevision,
 }
 
 impl CodeRetrievalTool {
@@ -59,6 +60,7 @@ impl CodeRetrievalTool {
             index,
             semantic,
             cloud,
+            action_policy_revision: super::local_tools::local_policy_revision(),
             definition: ToolDefinition {
                 name: ToolName::new(CODE_RETRIEVAL_TOOL_NAME)
                     .expect("static code-retrieval tool name is valid"),
@@ -83,6 +85,11 @@ impl CodeRetrievalTool {
                 strict: true,
             },
         }
+    }
+
+    pub(crate) fn with_action_policy_revision(mut self, revision: ActionPolicyRevision) -> Self {
+        self.action_policy_revision = revision;
+        self
     }
 
     fn query(&self, call: &ToolCall) -> Result<CodeRetrievalQuery, CoreError> {
@@ -158,7 +165,7 @@ impl ToolService for CodeRetrievalTool {
             SandboxCompatibility::NotApplicable {
                 reason: "code retrieval reads an authorized in-process workspace index".into(),
             },
-            PolicyRevision::new(super::local_tools::LOCAL_POLICY_REVISION),
+            self.action_policy_revision.clone(),
         ))
     }
 
@@ -172,6 +179,11 @@ impl ToolService for CodeRetrievalTool {
             authorization,
             ToolAuthorization::UnsandboxedGrant { grant_id }
                 if grant_id.as_str() == "workspace-code-index-read-only"
+        ) && !matches!(
+            authorization,
+            ToolAuthorization::ExecPolicyGranted(grant)
+                if grant.policy_grant().source().rule_id().as_str()
+                    == "workspace-code-index-read-only"
         ) {
             return Err(CoreError::Policy(
                 "search_code requires the exact read-only code-index grant".into(),

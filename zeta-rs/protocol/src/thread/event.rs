@@ -33,10 +33,21 @@ use ts_rs::TS;
 )]
 pub enum ToolExecutionAuthority {
     Sandboxed,
-    UnsandboxedGrant { grant_id: String },
-    AutoReviewed { assessment_id: String },
+    UnsandboxedGrant {
+        grant_id: String,
+    },
+    ExecPolicyGranted {
+        layer_id: String,
+        rule_id: String,
+        exec_policy_revision: String,
+    },
+    AutoReviewed {
+        assessment_id: String,
+    },
     PermissionBypassed,
-    ApprovedOnce { request_id: RequestId },
+    ApprovedOnce {
+        request_id: RequestId,
+    },
 }
 
 /// A durable fact in one Thread's authoritative event stream.
@@ -72,7 +83,7 @@ pub enum ThreadEvent {
     TurnAccepted {
         thread_id: ThreadId,
         turn_id: TurnId,
-        #[serde(default = "legacy_turn_policy_revision")]
+        #[serde(default = "legacy_turn_action_policy_revision")]
         policy_revision: String,
         #[serde(default)]
         approval_mode: ApprovalMode,
@@ -187,7 +198,7 @@ pub enum ThreadEvent {
     },
 }
 
-fn legacy_turn_policy_revision() -> String {
+fn legacy_turn_action_policy_revision() -> String {
     "legacy-unversioned-policy".into()
 }
 

@@ -13,4 +13,6 @@ export interface IConnectorApi {
   connectApiToken(params: ConnectorApiTokenConnectParams): Promise<ConnectorCommandResultDto>;
   connectOAuth(params: ConnectorOAuthConnectParams): Promise<ConnectorCommandResultDto>;
   disconnect(params: ConnectorDisconnectParams): Promise<ConnectorDisconnectResultDto>;
+  refreshOAuth(connectorId: string): Promise<void>;
+  revokeOAuth(params: ConnectorDisconnectParams): Promise<ConnectorDisconnectResultDto>;
 }

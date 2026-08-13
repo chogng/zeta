@@ -1,5 +1,5 @@
 use super::*;
-use zeta_policy::{AssessmentId, BlockReason};
+use zeta_action_policy::{AssessmentId, BlockReason};
 use zeta_protocol::{ItemId, ThreadItem, ToolCallId, TurnId};
 
 #[test]

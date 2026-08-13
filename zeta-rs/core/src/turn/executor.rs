@@ -1,16 +1,16 @@
 use super::tool_scheduler::{ToolScheduler, ToolSchedulingProgress};
+use crate::action_policy_service::UnavailableActionPolicyService;
 use crate::context::ContextMeasurementDisposition;
 use crate::context::ContextMeasurementPolicy;
 use crate::context::ModelContextCompactionService;
 use crate::context::ModelInvocationPreparation;
-use crate::policy_service::UnavailablePolicyService;
 use crate::thread_controller::CommitContextCheckpointRequest;
 use crate::thread_controller::PrepareModelInvocationRequest;
 use crate::{
-    CompletedTurn, ContextAssembler, ContextCompactionRequest, ContextCompactionService, CoreError,
-    HarnessInstructions, HarnessInstructionsProvider, ModelSelection, ModelService,
-    ModelStreamSink, NoThreadUpdates, NoTools, PolicyService, ThreadController, ThreadUpdateSink,
-    ToolService,
+    ActionPolicyService, CompletedTurn, ContextAssembler, ContextCompactionRequest,
+    ContextCompactionService, CoreError, HarnessInstructions, HarnessInstructionsProvider,
+    ModelSelection, ModelService, ModelStreamSink, NoThreadUpdates, NoTools, ThreadController,
+    ThreadUpdateSink, ToolService,
 };
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -35,7 +35,7 @@ pub struct TurnExecutor {
     threads: Arc<ThreadController>,
     model: Arc<dyn ModelService>,
     tools: Arc<dyn ToolService>,
-    policy: Arc<dyn PolicyService>,
+    policy: Arc<dyn ActionPolicyService>,
     compaction: Arc<dyn ContextCompactionService>,
     updates: Arc<dyn ThreadUpdateSink>,
     instructions: Arc<dyn HarnessInstructionsProvider>,
@@ -125,7 +125,7 @@ impl TurnExecutor {
         threads: Arc<ThreadController>,
         model: Arc<dyn ModelService>,
         tools: Arc<dyn ToolService>,
-        policy: Arc<dyn PolicyService>,
+        policy: Arc<dyn ActionPolicyService>,
     ) -> Self {
         let compaction = Arc::new(ModelContextCompactionService::new(model.clone()));
         Self {
@@ -148,7 +148,7 @@ impl TurnExecutor {
             threads,
             model,
             Arc::new(NoTools),
-            Arc::new(UnavailablePolicyService),
+            Arc::new(UnavailableActionPolicyService),
         )
     }
 

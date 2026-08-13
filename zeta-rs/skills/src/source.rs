@@ -1,4 +1,7 @@
-use crate::{SkillError, SkillErrorKind, SkillSourceId};
+use crate::SkillError;
+use crate::SkillErrorKind;
+use crate::SkillName;
+use crate::SkillSourceId;
 use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -8,6 +11,7 @@ pub enum SkillSourceKind {
     BuiltIn,
     User,
     Workspace,
+    Plugin,
 }
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -15,6 +19,7 @@ pub enum SkillTrust {
     BuiltInVerified,
     UserManaged,
     WorkspaceManaged,
+    PluginPackageVerified,
 }
 
 /// Consumer-visible Skill source provenance without its private host root.
@@ -48,6 +53,13 @@ impl SkillSourceView {
 pub struct SkillSourceRoot {
     view: SkillSourceView,
     canonical_root: PathBuf,
+    layout: SkillSourceLayout,
+}
+
+#[derive(Clone)]
+enum SkillSourceLayout {
+    Collection,
+    ExactSkill(SkillName),
 }
 
 impl SkillSourceRoot {
@@ -78,12 +90,47 @@ impl SkillSourceRoot {
         )
     }
 
+    /// Creates a source for one exact manifest-declared Skill directory in a verified Plugin.
+    pub fn plugin(
+        id: SkillSourceId,
+        name: SkillName,
+        root: impl AsRef<Path>,
+    ) -> Result<Self, SkillError> {
+        Self::new_exact(
+            id,
+            SkillSourceKind::Plugin,
+            SkillTrust::PluginPackageVerified,
+            name,
+            root.as_ref(),
+        )
+    }
+
     pub fn view(&self) -> &SkillSourceView {
         &self.view
     }
 
-    pub(crate) fn canonical_root(&self) -> &Path {
+    /// Returns the private host root for trusted runtime composition and file watching.
+    ///
+    /// Consumer-facing projections must use [`Self::view`] and must not serialize this path.
+    pub fn host_root(&self) -> &Path {
         &self.canonical_root
+    }
+
+    pub(crate) fn skill_directory(&self, name: &SkillName) -> Option<PathBuf> {
+        match &self.layout {
+            SkillSourceLayout::Collection => Some(self.canonical_root.join(name.as_str())),
+            SkillSourceLayout::ExactSkill(exact) if exact == name => {
+                Some(self.canonical_root.clone())
+            }
+            SkillSourceLayout::ExactSkill(_) => None,
+        }
+    }
+
+    pub(crate) fn exact_skill_name(&self) -> Option<&SkillName> {
+        match &self.layout {
+            SkillSourceLayout::Collection => None,
+            SkillSourceLayout::ExactSkill(name) => Some(name),
+        }
     }
 
     fn new(
@@ -100,7 +147,20 @@ impl SkillSourceRoot {
         Ok(Self {
             view: SkillSourceView { id, kind, trust },
             canonical_root,
+            layout: SkillSourceLayout::Collection,
         })
+    }
+
+    fn new_exact(
+        id: SkillSourceId,
+        kind: SkillSourceKind,
+        trust: SkillTrust,
+        name: SkillName,
+        root: &Path,
+    ) -> Result<Self, SkillError> {
+        let mut source = Self::new(id, kind, trust, root)?;
+        source.layout = SkillSourceLayout::ExactSkill(name);
+        Ok(source)
     }
 }
 

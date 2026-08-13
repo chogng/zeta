@@ -34,6 +34,7 @@ members = [
     "zeta-rs/ext/web-search",
     "zeta-rs/secrets",
     "zeta-rs/exec",
+    "zeta-rs/execpolicy",
     "zeta-rs/file-icons",
     "zeta-rs/file-identity",
     "zeta-rs/file-search",
@@ -57,7 +58,8 @@ members = [
     "zeta-rs/model-tokenizer",
     "zeta-rs/mcp",
     "zeta-rs/mcp-server",
-    "zeta-rs/policy",
+    "zeta-rs/action-policy",
+    "zeta-rs/plugin-marketplace",
     "zeta-rs/plugins",
     "zeta-rs/prompts",
     "zeta-rs/protocol",
@@ -129,6 +131,7 @@ clap = "4"
 cosmic-text = "0.19.0"
 dunce = "1"
 getrandom = "0.2"
+futures = "0.3"
 glyphon = "0.12.0"
 image = { version = "0.25.10", default-features = false }
 ignore = "0.4"
@@ -179,6 +182,7 @@ typst-pdf = "=0.15.1"
 tokio = "1"
 thiserror = "2"
 tempfile = "3"
+tough = "0.24"
 tokenizers = { version = "0.23.1", default-features = false, features = ["fancy-regex"] }
 toml = "0.9"
 tree-sitter = "0.26.11"
@@ -197,6 +201,7 @@ wgpu = "30.0.0"
 winit = "0.30.13"
 windows-sys = "0.59"
 zeroize = "1"
+zip = { version = "4.6.1", default-features = false, features = ["deflate-flate2"] }
 zeta-add-dir = { path = "zeta-rs/add-dir" }
 zeta-agent-import = { path = "zeta-rs/agent-import" }
 zeta-agents = { path = "zeta-rs/agents" }
@@ -233,6 +238,7 @@ zeta-mcp-extension = { path = "zeta-rs/ext/mcp" }
 zeta-skills-extension = { path = "zeta-rs/ext/skills" }
 zeta-web-search-extension = { path = "zeta-rs/ext/web-search" }
 zeta-exec = { path = "zeta-rs/exec" }
+zeta-execpolicy = { path = "zeta-rs/execpolicy" }
 zeta-extensions = { path = "zeta-rs/extensions" }
 zeta-icons = { path = "zeterm/icons" }
 zeta-icon = { path = "zeterm/icon" }
@@ -264,7 +270,8 @@ zeta-model-provider = { path = "zeta-rs/model-provider" }
 zeta-model-provider-config = { path = "zeta-rs/model-provider-config" }
 zeta-models-manager = { path = "zeta-rs/models-manager" }
 zeta-model-tokenizer = { path = "zeta-rs/model-tokenizer" }
-zeta-policy = { path = "zeta-rs/policy" }
+zeta-action-policy = { path = "zeta-rs/action-policy" }
+zeta-plugin-marketplace = { path = "zeta-rs/plugin-marketplace" }
 zeta-plugins = { path = "zeta-rs/plugins" }
 zeta-prompts = { path = "zeta-rs/prompts" }
 zeta-protocol = { path = "zeta-rs/protocol" }

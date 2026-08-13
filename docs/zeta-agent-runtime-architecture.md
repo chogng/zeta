@@ -141,7 +141,7 @@ TurnExecutor (zeta-core private module)
   context → model → tool calls → tool results → next model request
        │                              │
        ▼                              ▼
-  ModelService                   ToolService + PolicyService
+  ModelService                   ToolService + ActionPolicyService
        │                              │
 model-provider              shell-command / file-system / apply-patch / MCP adapters
 
@@ -173,7 +173,7 @@ Session 的三种语义必须区分（详见 [`protocol.md`](protocol.md)）：�
 
 **原问题。** 原设计的 `TurnPolicySnapshot` 是进程内不可变结构，"整个 Turn 生命周期有效"。但
 Turn 可以跨进程重启恢复（waiting approval、resumable tool continuation），进程内快照在恢复
-后不存在；当前实现在每次 pending call 审查时从 live `PolicyService` 读取最新策略。结果是：
+后不存在；当前实现在每次 pending call 审查时从 live `ActionPolicyService` 读取最新策略。结果是：
 配置在 Turn 中途放宽后，恢复的 Turn 会在更宽的策略下继续——这违反"安全策略不能在 Turn
 中途静默放宽"的固定决策。已有的缓解只覆盖局部：one-time approval 与 escalation 绑定了
 `action_digest + policy_revision`，但未绑定 Turn 级策略环境。
@@ -185,7 +185,7 @@ Turn 可以跨进程重启恢复（waiting approval、resumable tool continuatio
   [`protocol.md`](protocol.md) 阶段 P2/P3 的同一批 schema 同步）；
 - `ThreadSnapshot` 的 Turn 投影暴露冻结 revision；`ToolScheduler` 构造
   `ActionReviewRequest` 时同时携带冻结 revision 与当前 revision；
-- `PolicyService` 端口新增 host obligation（doc comment 契约）：当当前 revision 不等于冻结
+- `ActionPolicyService` 端口新增 host obligation（doc comment 契约）：当当前 revision 不等于冻结
   revision 时，实现只允许返回**不宽于**冻结 revision 的决定；无法判定时必须返回 `AskUser`
   或 `Block`，不得静默采用更宽策略；
 - 恢复路径（`resume_recovered_tool_continuations` 与 approval resume）从 durable 冻结
@@ -198,7 +198,7 @@ authority。
 ### 4.2 R2：同步执行内核，流式经 sink
 
 **立场。** 执行内核保持同步：per-Thread OS 线程邮箱（`ThreadExecutionMailboxes`）、同步
-`ModelService` / `ToolService` / `PolicyService` 端口、`CancellationToken` 协作取消。不进行
+`ModelService` / `ToolService` / `ActionPolicyService` 端口、`CancellationToken` 协作取消。不进行
 tokio / async 迁移；重新评审触发条件见 [§1.3](#13-明确推迟的决策)。
 
 **真实流式不需要异步运行时。** `ModelService::stream` 契约已经存在；当前默认桥接在

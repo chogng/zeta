@@ -188,6 +188,7 @@ inline argument parsing；提交仍通过 `session/request` 的 `StartTurn.input
 | `plugin/list` | Plugin authority | 分别投影 installed/enabled/granted/effective package 状态 |
 | `plugin/enable` / `disable` / `grant` / `revokeGrant` / `uninstall` | Plugin authority | exact-package CAS lifecycle mutation |
 | `config/update` | config | typed command 更新配置 |
+| `execPolicy/rule/upsert` / `execPolicy/rule/remove` | config + local policy runtime | revision-safe 持久化 User typed rule，并为未来 Tool safe point 重组 policy snapshot |
 | `toolSearch/configure` | config + semantic model runtime | 选择词法模式，或探活 exact embedding 模型后启用混合 Tool Search |
 | `workspace/codeIndex/semantic/configure` / `authorize` / `revoke` | config + Workspace | 独立配置 semantic CodeIndex，并显式管理源码外发授权 |
 | `workspace/codeIndex/semantic/cancel` / `retry` | semantic index job | 取消或重新调度 exact-generation 本地语义 projection；status 返回无内容进度计数 |
@@ -579,6 +580,13 @@ connection 会接收这些 child Thread 的实时 update。产品宿主应先应
 - `null`：清除；
 - value：替换。
 
+`execPolicy/rule/upsert` 接收完整 typed rule：selector 支持 action digest/kind、trusted source、
+tokenized command prefix、structured network target、capability scope 和显式 `all`；effect 支持
+`continue`、`allowUnsandboxed`、`requireApproval`、`requireSandbox` 与带理由的 `deny`。
+`execPolicy/rule/remove` 按 stable rule ID 删除。两者都使用 `commandId + expectedRevision`，并走
+Config authority 的 exact receipt/atomic TOML contract。`config/read.execPolicyRules` 返回当前 User
+rules；Workspace restrictions 不作为 User 配置回写。
+
 Config authority 提交 consumer-visible change 后向所有 connection 发布 `config/changed`。
 notification 是重新 `config/read` 的失效提示，不包含完整 desired document；no-op command 与
 exact replay 不推进 revision/generation，也不发布 change。外部 TOML 编辑与同一 profile 的其他
@@ -586,7 +594,7 @@ SQLite connection 提交也会被观察并投影。
 
 `config/read` 当前返回 Agent preference、Provider、standalone MCP、Skill source、exact Plugin
 request、declarative Hook、language-server mode/path preference、semantic CodeIndex 配置和 Tool
-Search 配置。`toolSearch.embeddingStatus` 明确区分 `disabled`、`ready` 和带脱敏原因的
+Search 配置，以及 User `execPolicyRules`。`toolSearch.embeddingStatus` 明确区分 `disabled`、`ready` 和带脱敏原因的
 `unavailable`；不能只根据 desired `mode` 推断 embedding 已可用。Plugin request 的 `enabled` 只表示期望参与未来 activation；
 Hook 的 `enabled` 也不表示 process 已获准或已经执行。两者的 runtime/lifecycle projection 必须由
 后续独立领域 API 返回，不能从 Config desired state 推断。

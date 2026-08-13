@@ -67,6 +67,8 @@ export class ConnectorSettingsPane extends DisposableOwner {
     card.append(heading, description);
     if (connector.canConnectApiToken) card.append(this.connectForm(catalogGeneration, connector, feedback));
     if (connector.canConnectOAuth) card.append(this.oauthButton(catalogGeneration, connector, feedback));
+    if (connector.canRefreshOAuth) card.append(this.refreshOAuthButton(connector, feedback));
+    if (connector.canRevokeOAuth) card.append(this.revokeOAuthButton(catalogGeneration, connector, feedback));
     if (connector.canDisconnect) card.append(this.disconnectButton(catalogGeneration, connector, feedback));
     card.append(feedback);
     return card;
@@ -143,6 +145,44 @@ export class ConnectorSettingsPane extends DisposableOwner {
       }).catch((error: unknown) => {
         button.disabled = false;
         feedback.textContent = error instanceof Error ? `OAuth connection failed: ${error.message}` : "OAuth connection failed.";
+      });
+    }));
+    return button;
+  }
+
+  private refreshOAuthButton(connector: ConnectorView, feedback: HTMLElement): HTMLButtonElement {
+    const button = this.document.createElement("button");
+    button.type = "button";
+    button.className = "zeta-theme-action";
+    button.textContent = "Refresh authorization";
+    this.rows.add(addDisposableListener(button, "click", () => {
+      button.disabled = true;
+      feedback.textContent = "Refreshing authorization…";
+      void this.connectors.refreshOAuth(connector).then(() => {
+        feedback.textContent = "Authorization refreshed.";
+        return this.reload();
+      }).catch((error: unknown) => {
+        button.disabled = false;
+        feedback.textContent = error instanceof Error ? `Refresh failed: ${error.message}` : "Refresh failed.";
+      });
+    }));
+    return button;
+  }
+
+  private revokeOAuthButton(catalogGeneration: number, connector: ConnectorView, feedback: HTMLElement): HTMLButtonElement {
+    const button = this.document.createElement("button");
+    button.type = "button";
+    button.className = "zeta-theme-action is-danger";
+    button.textContent = "Revoke access";
+    this.rows.add(addDisposableListener(button, "click", () => {
+      button.disabled = true;
+      feedback.textContent = "Revoking provider access…";
+      void this.connectors.revokeOAuth(connector, catalogGeneration).then(() => {
+        feedback.textContent = "Provider access revoked.";
+        return this.reload();
+      }).catch((error: unknown) => {
+        button.disabled = false;
+        feedback.textContent = error instanceof Error ? `Revoke failed: ${error.message}` : "Revoke failed.";
       });
     }));
     return button;

@@ -230,8 +230,9 @@ Core 的 `ToolService` 是 consumer-owned port；它可以由外层 `ToolRegistr
 - catalog/runtime manager 可依赖 `zeta-file-watcher` 获取 coarse invalidation hint；后者不依赖
   `zeta-tools`，不读取文件内容，也不注册为模型 Tool；
 - `zeta-apply-patch → zeta-tools + zeta-sandboxing`；
-- `zeta-policy → zeta-sandboxing`；
-- `zeta-auto-review → zeta-policy + zeta-sandboxing`；
+- `zeta-action-policy → zeta-execpolicy + zeta-sandboxing`；
+- `zeta-execpolicy` 不依赖 sandbox、Core、Tool 或配置 I/O；
+- `zeta-auto-review → zeta-action-policy + zeta-sandboxing`；
 - local process executor 可依赖 `zeta-sandboxing` 与当前平台 backend；Linux backend 仅通过
   `zeta-bwrap` 构造 Bubblewrap argv；
 - `zeta-api → zeta-tools + zeta-protocol`；

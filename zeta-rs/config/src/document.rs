@@ -8,6 +8,7 @@ use crate::PluginsConfig;
 use crate::SemanticCodeIndexConfig;
 use crate::SkillsConfig;
 use crate::ToolSearchConfig;
+use crate::UserExecPolicyConfig;
 use crate::WorkspaceConfigIntent;
 use crate::WorkspaceTrustConfig;
 use serde::Deserialize;
@@ -125,6 +126,8 @@ pub struct UserConfigDocument {
     #[serde(default)]
     pub semantic_code_index: SemanticCodeIndexConfig,
     #[serde(default)]
+    pub exec_policy: UserExecPolicyConfig,
+    #[serde(default)]
     pub workspace_trust: WorkspaceTrustConfig,
 }
 
@@ -199,6 +202,7 @@ impl UserConfigDocument {
         self.plugins.validate()?;
         self.hooks.validate_for_namespace("user")?;
         self.language_servers.validate()?;
+        self.exec_policy.validate()?;
         Ok(())
     }
 }
@@ -219,6 +223,7 @@ pub struct ResolvedConfig {
     pub language_servers: LanguageServersConfig,
     pub tool_search: ToolSearchConfig,
     pub semantic_code_index: SemanticCodeIndexConfig,
+    pub exec_policy: UserExecPolicyConfig,
     pub workspace_trust: WorkspaceTrustConfig,
     pub workspace: Option<WorkspaceConfigIntent>,
 }
@@ -292,6 +297,7 @@ impl From<&UserConfigDocument> for ResolvedConfig {
             language_servers: document.language_servers.clone(),
             tool_search: document.tool_search.clone(),
             semantic_code_index: document.semantic_code_index.clone(),
+            exec_policy: document.exec_policy.clone(),
             workspace_trust: document.workspace_trust.clone(),
             workspace: None,
         }

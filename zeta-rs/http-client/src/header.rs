@@ -1,4 +1,5 @@
 use std::fmt;
+use zeroize::Zeroize;
 
 /// An HTTP header whose debug output redacts its value.
 #[derive(Clone, Eq, PartialEq)]
@@ -31,5 +32,11 @@ impl fmt::Debug for HttpHeader {
             .field("name", &self.name)
             .field("value", &"[REDACTED]")
             .finish()
+    }
+}
+
+impl Drop for HttpHeader {
+    fn drop(&mut self) {
+        self.value.zeroize();
     }
 }

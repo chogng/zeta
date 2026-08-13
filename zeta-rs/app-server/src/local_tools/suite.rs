@@ -1,4 +1,5 @@
-use super::{LOCAL_POLICY_REVISION, LocalShellToolService, read_only_sandbox};
+use super::LocalShellToolService;
+use super::read_only_sandbox;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
@@ -7,12 +8,12 @@ use std::path::PathBuf;
 use std::process::{Command, Output, Stdio};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
-use zeta_async_utils::CancellationToken;
-use zeta_core::{CoreError, ToolAuthorization, ToolExecutionFacts, ToolOutputSink, ToolService};
-use zeta_policy::{
+use zeta_action_policy::{
     ActionDigest, ActionKind, ActionProvenance, ActionReviewRequest, ActionSource, Capability,
     CapabilityKind, CapabilitySet, ProcessInvocationKind, ResolvedAction, SandboxCompatibility,
 };
+use zeta_async_utils::CancellationToken;
+use zeta_core::{CoreError, ToolAuthorization, ToolExecutionFacts, ToolOutputSink, ToolService};
 use zeta_protocol::{ToolCall, ToolDefinition, ToolExecutionOutput, ToolName, ToolOutputStream};
 use zeta_shell_command::RipgrepExecutable;
 use zeta_workspace::TrustedWorkspace;
@@ -188,7 +189,7 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
             } else {
                 SandboxCompatibility::Supported(read_only_sandbox())
             },
-            zeta_policy::PolicyRevision::new(LOCAL_POLICY_REVISION),
+            self.shell.action_policy_revision.clone(),
         ))
     }
 

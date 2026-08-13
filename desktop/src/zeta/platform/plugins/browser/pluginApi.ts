@@ -6,6 +6,10 @@ import type { IPluginApi } from "../common/pluginApi.js";
 export function createDisconnectedPluginApi(unavailable: UnavailableOperation): IPluginApi {
   return {
     list: () => unavailable("plugins.list"),
+    listMarketplace: () => unavailable("plugins.listMarketplace"),
+    install: () => unavailable("plugins.install"),
+    update: () => unavailable("plugins.update"),
+    rollback: () => unavailable("plugins.rollback"),
     enable: () => unavailable("plugins.enable"),
     disable: () => unavailable("plugins.disable"),
     grant: () => unavailable("plugins.grant"),
@@ -17,6 +21,10 @@ export function createDisconnectedPluginApi(unavailable: UnavailableOperation): 
 export function createViteDevPluginApi(connection: ViteDevAppServerConnection): IPluginApi {
   return {
     list: () => viteDevRequest(connection, "plugin/list", {}),
+    listMarketplace: () => viteDevRequest(connection, "plugin/marketplace/list", {}),
+    install: params => viteDevRequest(connection, "plugin/install", params),
+    update: params => viteDevRequest(connection, "plugin/update", params),
+    rollback: params => viteDevRequest(connection, "plugin/rollback", params),
     enable: params => viteDevRequest(connection, "plugin/enable", params),
     disable: params => viteDevRequest(connection, "plugin/disable", params),
     grant: params => viteDevRequest(connection, "plugin/grant", params),

@@ -222,7 +222,7 @@ fn in_process_client_uses_session_first_contract_and_canonical_updates() {
                         text: "hello".into(),
                     },
                     InputItem::Image {
-                        url: "data:image/png;base64,iVBORw0KGgpwYXlsb2Fk".into(),
+                        url: "https://example.test/image.png".into(),
                     },
                 ],
             },
@@ -269,7 +269,7 @@ fn in_process_client_uses_session_first_contract_and_canonical_updates() {
     assert!(matches!(
         &snapshot.thread.turns[0].items[1],
         ThreadItem::UserImage { url, .. }
-            if url == "data:image/png;base64,iVBORw0KGgpwYXlsb2Fk"
+            if url == "https://example.test/image.png"
     ));
 }
 

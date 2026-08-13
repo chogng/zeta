@@ -250,14 +250,15 @@ src/
 | `read_state` | private | after-sequence cursor → bounded Base64 chunks + gap/exited state | ring eviction 必须显式返回 `output_gap` |
 | `ConfigBackedModelService::resolve_config` | private | user snapshot + optional Workspace snapshot merge | 每次 invocation safe point 重新解析 |
 | `WorkspaceConfigTracker::read` | private | 内容变化才推进 synthetic workspace revision | 不监听/修改 workspace file |
-| `compose_local_tools` | crate-private | 要求 root-bound `ExecuteProcess` capability、解析安装候选、冻结 rg、选择 native sandbox | containment、trust 或 discovery 失败时不降级成 unrestricted |
+| `compose_local_tools_with_config` | crate-private | 要求 root-bound `ExecuteProcess` capability、组合 Host/User/Workspace exec-policy snapshot、冻结统一 revision、解析安装候选与 native sandbox | containment、trust、policy composition 或 discovery 失败时不降级成 unrestricted |
+| `LocalExecPolicyConfig::from_resolved` | crate-private | 从 safe-point `ResolvedConfig` 提取 User rules 与 Workspace restrictions | 不读取文件或自己决定 layer trust |
 | `LocalShellToolService::materialize` | private | parse call、约束 workspace 参数、冻结 rg executable | policy review 前不启动进程 |
-| `LocalReadOnlyPolicy::decide` | private | 只接受 exact revision/provenance/capability/sandbox | 不产生 unsandboxed grant |
+| `LocalShellPolicy::decide` | private | 将 frozen `ExecPolicySnapshot` 交给 `ActionPolicyEngine`，返回 exact typed decision | 不复制 rule precedence 或绕过 grant binding |
 | `zeta_mcp_extension::McpRuntimeOwner` | ext/mcp private | worker thread 持有 Tokio runtime 和 live `McpRuntime` | Core thread 不嵌套 `block_on` |
 | `zeta_mcp_extension::McpToolService::review_request` | ext/mcp private | exact binding/arguments/generation → MCP action digest | remote annotation 不授予只读信任 |
 | `zeta_mcp_extension::McpApprovalPolicy::decide` | ext/mcp private | 只接受已知 user MCP provenance 并返回 one-time approval | 不自动批准远端副作用 |
 | `CompositeToolService` | private | frozen binding/runtime key → local、MCP、dynamic、extension runtime | duplicate name 在 composition 时失败，不按 live name 猜 executor |
-| `CompositePolicyService` | private | trusted `ActionSource` → owning policy | 不依靠 trial-and-error policy fallback |
+| `CompositeActionPolicyService` | private | trusted `ActionSource` → owning policy | 不依靠 trial-and-error policy fallback |
 | `ReloadableToolPorts` | crate-private | 原子替换未来 Tool generation，并为 prepared call 固定 service/policy | reconcile failure 保留上一份可用 runtime |
 | `DynamicToolService` | private | exact spec digest + arguments → durable `AgentRequest::DynamicTool`，并校验 owner response | 同名新定义不能认领旧 interaction |
 | `ExtensionToolReviewer` | private | host-installed executor + declared authority → frozen payload 与 exact Plugin provenance | capability contributor 不直接获得网络或 credential authority |
@@ -563,16 +564,16 @@ user text，并附 response schema；同时清空 tools、设置 `ToolChoice::No
 并使用 temperature 0。Response 只拼接 text fragments，忽略 reasoning，拒绝 refusal、Tool Call 与
 空 JSON。
 
-`ApprovalModePolicyService` 先调用 authoritative base policy，并且只处理其 `AskUser` 结果：
+`ApprovalModeActionPolicyService` 先调用 authoritative base policy，并且只处理其 `AskUser` 结果：
 
 | Turn 模式 | `AskUser` 后续行为 | 不变量 |
 | --- | --- | --- |
 | `AskPermissions` | 保留 durable approval interaction | 用户仍只能 approve once / decline |
-| `AutoReview` | 用冻结的 review runtime 创建 `LlmActionClassifier`，由 `PolicyEngine` 应用风险矩阵 | reviewer 缺失或失败时回退 `AskUser` |
+| `AutoReview` | 用冻结的 review runtime 创建 `LlmActionClassifier`，由 `ActionPolicyEngine` 应用风险矩阵 | reviewer 缺失或失败时回退 `AskUser` |
 | `BypassPermissions` | 签发绑定 action digest、完整 capabilities 与 policy revision 的 permission-bypass authority | 只跳过交互；不能改变 `Block`、revision error 或其他 base decision |
 
 这里负责选择/隔离 review runtime 和按 Turn 模式组合 policy；classifier schema validation 与
-Auto Review authorization decision 分别属于 `zeta-auto-review` 和 `zeta-policy`。review runtime
+Auto Review authorization decision 分别属于 `zeta-auto-review` 和 `zeta-action-policy`。review runtime
 当前在 local App Server 启动时从 frozen config 解析；配置变化需要重启 App Server 才能换用新模型。
 
 ## 资源存储

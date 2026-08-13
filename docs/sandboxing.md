@@ -21,7 +21,7 @@ Zeta 将动作审查、沙箱策略、平台选择、命令构建和操作系统
 
 ```mermaid
 flowchart TD
-    scheduler["Core 工具调度器<br/><code>ToolScheduler</code>"] --> policy["策略判断<br/><code>zeta-policy</code>"]
+    scheduler["Core 工具调度器<br/><code>ToolScheduler</code>"] --> policy["策略判断<br/><code>zeta-action-policy</code>"]
     policy --> review{"需要动作审查？"}
     review -- "是" --> autoReview["动作审查<br/><code>zeta-auto-review</code>"]
     review -- "否" --> executor["本地工具或命令执行器"]
@@ -124,8 +124,9 @@ Windows 测试人员应按
 zeta-linux-sandbox   → zeta-bwrap + zeta-sandboxing
 zeta-windows-sandbox → zeta-install-context + zeta-sandboxing
 主机组合              → zeta-install-context + 平台沙箱 + 工具运行时
-zeta-policy          → zeta-sandboxing
-zeta-auto-review     → zeta-policy + zeta-sandboxing
+zeta-action-policy   → zeta-execpolicy + zeta-sandboxing
+zeta-execpolicy      → no sandbox dependency
+zeta-auto-review     → zeta-action-policy + zeta-sandboxing
 主机执行器            → zeta-sandboxing + 当前平台后端
 ```
 
@@ -135,7 +136,8 @@ zeta-auto-review     → zeta-policy + zeta-sandboxing
 zeta-bwrap → zeta-sandboxing / protocol / core
 平台沙箱 → zeta-core / ThreadStore / 批准界面
 zeta-sandboxing → shell-command / file-system / apply-patch / app-server / provider
-zeta-sandboxing → zeta-policy / zeta-auto-review
+zeta-sandboxing → zeta-action-policy / zeta-auto-review
+zeta-execpolicy → zeta-action-policy / zeta-sandboxing / Core
 zeta-install-context → zeta-sandboxing / 平台沙箱 / shell-command
 ```
 

@@ -1,9 +1,10 @@
 use super::*;
 use crate::{
-    ContextBudget, ContextCompactionLimit, ContextTokenCount, ContextTokenMeasurementCapability,
-    ContextTokenMeasurementOutcome, CreateThreadRequest, InMemoryThreadStore, ModelSelection,
-    ModelService, ModelStreamSink, PolicyService, SequenceExpectation, StartTurnRequest,
-    ThreadUpdateSink, ToolAuthorization, ToolExecutionOutput, ToolService, TurnExecutionOutcome,
+    ActionPolicyService, ContextBudget, ContextCompactionLimit, ContextTokenCount,
+    ContextTokenMeasurementCapability, ContextTokenMeasurementOutcome, CreateThreadRequest,
+    InMemoryThreadStore, ModelSelection, ModelService, ModelStreamSink, SequenceExpectation,
+    StartTurnRequest, ThreadUpdateSink, ToolAuthorization, ToolExecutionOutput, ToolService,
+    TurnExecutionOutcome,
 };
 use serde_json::json;
 use std::collections::VecDeque;
@@ -11,14 +12,14 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
+use zeta_action_policy::{
+    ActionDigest, ActionKind, ActionPolicyRevision, ActionProvenance, ActionReviewRequest,
+    ActionSource, Capability, CapabilityKind, CapabilitySet, ExecutionDecision, ResolvedAction,
+    SandboxCompatibility,
+};
 use zeta_async_utils::CancellationSource;
 use zeta_context_engine::ContextTokenMeasurement;
 use zeta_context_engine::ContextTokenMeasurementSource;
-use zeta_policy::{
-    ActionDigest, ActionKind, ActionProvenance, ActionReviewRequest, ActionSource, Capability,
-    CapabilityKind, CapabilitySet, ExecutionDecision, PolicyRevision, ResolvedAction,
-    SandboxCompatibility,
-};
 use zeta_protocol::{
     CommandId, ContentDigest, ContentPart, FrozenSkillActivation, InputItem, ModelRequest,
     ModelResponse, ModelStreamEvent, ResponseItem, SessionId, SkillActivationReason, SkillId,
@@ -69,7 +70,7 @@ fn code_mode_nested_call_is_durable_and_reenters_the_ordinary_scheduler() {
         threads.clone(),
         model,
         Arc::new(WeatherTool),
-        Arc::new(SandboxPolicyService),
+        Arc::new(SandboxActionPolicyService),
     );
 
     let nested_id = executor
@@ -148,7 +149,7 @@ fn first_invocation_injects_untrusted_evidence_once() {
         threads,
         model.clone(),
         Arc::new(WeatherTool),
-        Arc::new(SandboxPolicyService),
+        Arc::new(SandboxActionPolicyService),
     )
     .with_context_source(source.clone());
 
@@ -189,7 +190,7 @@ fn successful_tool_search_result_loads_deferred_definition_for_next_model_step()
         threads,
         model.clone(),
         tools,
-        Arc::new(SandboxPolicyService),
+        Arc::new(SandboxActionPolicyService),
     );
 
     let outcome = executor
@@ -439,7 +440,7 @@ fn executes_a_durable_tool_loop_before_the_next_model_invocation() {
         threads.clone(),
         model.clone(),
         tools,
-        Arc::new(SandboxPolicyService),
+        Arc::new(SandboxActionPolicyService),
     );
 
     executor
@@ -503,7 +504,7 @@ fn reloadable_instructions_change_only_at_model_invocation_boundaries() {
         threads,
         model.clone(),
         Arc::new(WeatherTool),
-        Arc::new(SandboxPolicyService),
+        Arc::new(SandboxActionPolicyService),
     )
     .with_instructions_provider(instructions);
 
@@ -528,7 +529,7 @@ fn continues_beyond_two_hundred_model_invocations() {
         threads.clone(),
         model.clone(),
         Arc::new(WeatherTool),
-        Arc::new(SandboxPolicyService),
+        Arc::new(SandboxActionPolicyService),
     );
 
     let outcome = executor
@@ -773,7 +774,7 @@ fn interrupt_propagates_to_the_active_tool_call() {
         threads.clone(),
         model,
         tool.clone(),
-        Arc::new(SandboxPolicyService),
+        Arc::new(SandboxActionPolicyService),
     );
 
     executor.start(&thread_id, &turn_id).unwrap();
@@ -1231,7 +1232,7 @@ impl ToolService for DeferredWeatherTools {
         Ok(ActionReviewRequest::new(
             ResolvedAction::new(
                 ActionDigest::from_canonical_bytes(serde_json::to_vec(call).unwrap()),
-                ActionKind::LocalProcess(zeta_policy::ProcessInvocationKind::Direct),
+                ActionKind::LocalProcess(zeta_action_policy::ProcessInvocationKind::Direct),
                 "search tools",
                 CapabilitySet::new([]),
             ),
@@ -1240,7 +1241,7 @@ impl ToolService for DeferredWeatherTools {
                 FileSystemAccess::ReadOnly,
                 NetworkAccess::Denied,
             )),
-            PolicyRevision::new("test-policy"),
+            ActionPolicyRevision::new("test-policy"),
         ))
     }
 
@@ -1299,7 +1300,7 @@ impl ToolService for BlockingTool {
         Ok(ActionReviewRequest::new(
             ResolvedAction::new(
                 ActionDigest::from_canonical_bytes(serde_json::to_vec(call).unwrap()),
-                ActionKind::LocalProcess(zeta_policy::ProcessInvocationKind::Direct),
+                ActionKind::LocalProcess(zeta_action_policy::ProcessInvocationKind::Direct),
                 "wait for cancellation",
                 CapabilitySet::new([]),
             ),
@@ -1308,7 +1309,7 @@ impl ToolService for BlockingTool {
                 FileSystemAccess::ReadOnly,
                 NetworkAccess::Denied,
             )),
-            PolicyRevision::new("test-policy"),
+            ActionPolicyRevision::new("test-policy"),
         ))
     }
 
@@ -1353,7 +1354,7 @@ impl ToolService for WeatherTool {
             ),
             ActionProvenance::new(ActionSource::BuiltInTool, "weather"),
             SandboxCompatibility::Supported(sandbox),
-            PolicyRevision::new("test-policy"),
+            ActionPolicyRevision::new("test-policy"),
         ))
     }
 
@@ -1369,9 +1370,9 @@ impl ToolService for WeatherTool {
     }
 }
 
-struct SandboxPolicyService;
+struct SandboxActionPolicyService;
 
-impl PolicyService for SandboxPolicyService {
+impl ActionPolicyService for SandboxActionPolicyService {
     fn revision(&self) -> String {
         "test-policy-v1".into()
     }

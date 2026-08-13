@@ -1,10 +1,10 @@
 use super::*;
-use zeta_async_utils::CancellationSource;
-use zeta_policy::{
-    ActionClassifier, ActionDigest, ActionKind, ActionProvenance, ActionReviewRequest,
-    ActionSource, Capability, CapabilityKind, CapabilitySet, ClassifierRecommendation,
-    PolicyRevision, ProcessInvocationKind, ResolvedAction, SandboxCompatibility,
+use zeta_action_policy::{
+    ActionClassifier, ActionDigest, ActionKind, ActionPolicyRevision, ActionProvenance,
+    ActionReviewRequest, ActionSource, Capability, CapabilityKind, CapabilitySet,
+    ClassifierRecommendation, ProcessInvocationKind, ResolvedAction, SandboxCompatibility,
 };
+use zeta_async_utils::CancellationSource;
 
 struct StaticModel(&'static str);
 
@@ -99,12 +99,12 @@ fn request_with_summary(
         ),
         ActionProvenance::new(ActionSource::BuiltInTool, "shell-command"),
         sandbox,
-        PolicyRevision::new("policy-7"),
+        ActionPolicyRevision::new("policy-7"),
     )
 }
 
 #[test]
-fn binds_model_advice_to_the_host_action_and_policy_revision() {
+fn binds_model_advice_to_the_host_action_and_action_policy_revision() {
     let model = StaticModel(
         r#"{
             "recommendation":"approve",
@@ -124,7 +124,10 @@ fn binds_model_advice_to_the_host_action_and_policy_revision() {
         .unwrap();
 
     assert_eq!(assessment.action_digest(), request.action().digest());
-    assert_eq!(assessment.policy_revision(), request.policy_revision());
+    assert_eq!(
+        assessment.action_policy_revision(),
+        request.action_policy_revision()
+    );
     assert_eq!(assessment.review_protocol_revision(), "review-protocol-3");
     assert!(matches!(
         assessment.recommendation(),
@@ -192,7 +195,7 @@ fn model_request_identifies_review_after_a_confirmed_sandbox_denial() {
             zeta_sandboxing::NetworkAccess::Denied,
         ),
     ))
-    .after_sandbox_denial(zeta_policy::SandboxDenialEvidence::new(
+    .after_sandbox_denial(zeta_action_policy::SandboxDenialEvidence::new(
         "network access was denied",
         "connect: operation not permitted",
     ));

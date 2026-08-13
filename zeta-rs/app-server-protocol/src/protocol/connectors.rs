@@ -44,6 +44,8 @@ pub enum ConnectorAvailableActionDto {
     Disconnect,
     ReauthorizeApiToken,
     ReauthorizeOAuth,
+    RefreshOAuth,
+    RevokeOAuth,
 }
 
 /// One runtime-free Connector catalog entry and its account-state projection.
@@ -158,6 +160,12 @@ pub struct ConnectorDisconnectParams {
     #[schemars(range(min = 1))]
     #[ts(type = "number")]
     pub expected_generation: u64,
+    pub connector_id: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectorOAuthRefreshParams {
     pub connector_id: String,
 }
 

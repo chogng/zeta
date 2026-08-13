@@ -1,3 +1,4 @@
+use crate::WorkspaceExecPolicyConfig;
 use crate::{
     ConfigError, HooksConfig, McpServerEnablement, McpServerId, McpTransportConfig,
     SkillSourceConfig, SkillSourceId, WorkspacePluginRequests,
@@ -197,6 +198,7 @@ pub struct WorkspaceConfigIntent {
     pub plugin_requests: WorkspacePluginRequests,
     pub skills: WorkspaceSkillsConfig,
     pub hooks: HooksConfig,
+    pub exec_policy: WorkspaceExecPolicyConfig,
 }
 
 /// Typed, non-authoritative intent loaded from one Workspace configuration file.
@@ -213,6 +215,8 @@ pub struct WorkspaceConfigDocument {
     pub skills: WorkspaceSkillsConfig,
     #[serde(default)]
     pub hooks: HooksConfig,
+    #[serde(default)]
+    pub exec_policy: WorkspaceExecPolicyConfig,
 }
 
 impl WorkspaceConfigDocument {
@@ -221,7 +225,9 @@ impl WorkspaceConfigDocument {
         self.mcp.validate(&namespace)?;
         self.plugin_requests.validate()?;
         self.skills.validate(&namespace)?;
-        self.hooks.validate_for_namespace(&namespace)
+        self.hooks.validate_for_namespace(&namespace)?;
+        self.exec_policy.snapshot_layer(&scope.workspace_id)?;
+        Ok(())
     }
 }
 

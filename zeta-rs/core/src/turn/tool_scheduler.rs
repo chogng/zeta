@@ -3,16 +3,16 @@ use super::review_context::attach_review_context;
 use super::tool_execution::{
     ToolExecutionCompletion, ToolExecutionContext, ToolExecutionOrchestrator,
 };
-use crate::policy_service::approval_matches_review;
+use crate::action_policy_service::approval_matches_review;
 use crate::{
-    AutoReviewedToolGrant, CoreError, NoThreadUpdates, OneTimeToolGrant, PermissionBypassToolGrant,
-    PolicyService, RecordToolResultRequest, RequestTurnInteraction, ThreadController,
-    ThreadSnapshot, ThreadUpdateSink, ToolAuthorization, ToolCallOutput, ToolService,
-    durable_approval_request,
+    ActionPolicyService, AutoReviewedToolGrant, CoreError, ExecPolicyToolGrant, NoThreadUpdates,
+    OneTimeToolGrant, PermissionBypassToolGrant, RecordToolResultRequest, RequestTurnInteraction,
+    ThreadController, ThreadSnapshot, ThreadUpdateSink, ToolAuthorization, ToolCallOutput,
+    ToolService, durable_approval_request,
 };
 use std::sync::Arc;
+use zeta_action_policy::ExecutionDecision;
 use zeta_async_utils::CancellationToken;
-use zeta_policy::ExecutionDecision;
 use zeta_protocol::{
     ActionApprovalDecision, AgentRequest, AgentResponse, ItemId, ThreadId, ThreadItem, ToolCall,
     ToolCallId, TurnId,
@@ -28,7 +28,7 @@ pub(super) enum ToolSchedulingProgress {
 pub(super) struct ToolScheduler {
     threads: Arc<ThreadController>,
     tools: Arc<dyn ToolService>,
-    policy: Arc<dyn PolicyService>,
+    policy: Arc<dyn ActionPolicyService>,
     updates: Arc<dyn ThreadUpdateSink>,
 }
 
@@ -36,7 +36,7 @@ impl ToolScheduler {
     pub(super) fn new(
         threads: Arc<ThreadController>,
         tools: Arc<dyn ToolService>,
-        policy: Arc<dyn PolicyService>,
+        policy: Arc<dyn ActionPolicyService>,
     ) -> Self {
         Self {
             threads,
@@ -255,11 +255,30 @@ impl ToolScheduler {
                         return Ok(progress);
                     }
                 }
+                ExecutionDecision::RunExecPolicyGranted(grant) => {
+                    if !grant.matches(
+                        reviewed.action().digest(),
+                        reviewed.action().required_capabilities(),
+                        reviewed.action_policy_revision(),
+                    ) {
+                        return Err(CoreError::Policy(
+                            "execution-policy grant is not bound to the prepared action".into(),
+                        ));
+                    }
+                    let authorization = ToolAuthorization::ExecPolicyGranted(
+                        ExecPolicyToolGrant::new(pending.call.id.clone(), grant),
+                    );
+                    let progress =
+                        self.execute(&execution, pending.call, &reviewed, authorization)?;
+                    if progress != ToolSchedulingProgress::Complete {
+                        return Ok(progress);
+                    }
+                }
                 ExecutionDecision::RunAutoReviewed(grant) => {
                     if !grant.matches(
                         reviewed.action().digest(),
                         reviewed.action().required_capabilities(),
-                        reviewed.policy_revision(),
+                        reviewed.action_policy_revision(),
                     ) {
                         return Err(CoreError::Policy(
                             "automatic-review grant is not bound to the prepared action".into(),
@@ -278,7 +297,7 @@ impl ToolScheduler {
                     if !grant.matches(
                         reviewed.action().digest(),
                         reviewed.action().required_capabilities(),
-                        reviewed.policy_revision(),
+                        reviewed.action_policy_revision(),
                     ) {
                         return Err(CoreError::Policy(
                             "permission-bypass grant is not bound to the prepared action".into(),
@@ -341,7 +360,7 @@ impl ToolScheduler {
         turn_id: &TurnId,
         item_id: &ItemId,
         call: &ToolCall,
-    ) -> Result<zeta_policy::ActionReviewRequest, CoreError> {
+    ) -> Result<zeta_action_policy::ActionReviewRequest, CoreError> {
         let request = self.tools.prepare(call)?;
         let evidence = self.tools.review_evidence(call)?;
         Ok(attach_review_context(
@@ -369,7 +388,7 @@ impl ToolScheduler {
         &self,
         context: &ToolExecutionContext<'_>,
         call: ToolCall,
-        reviewed: &zeta_policy::ActionReviewRequest,
+        reviewed: &zeta_action_policy::ActionReviewRequest,
         authorization: ToolAuthorization,
     ) -> Result<ToolSchedulingProgress, CoreError> {
         let orchestrator = ToolExecutionOrchestrator::new(

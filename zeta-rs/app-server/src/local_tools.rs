@@ -2,22 +2,39 @@ use serde_json::json;
 use std::fmt;
 use std::path::{Component, Path};
 use std::sync::Arc;
+use std::sync::LazyLock;
 use std::time::Duration;
+use zeta_action_policy::{
+    ActionClassifier, ActionDigest, ActionKind, ActionPolicyEngine, ActionPolicyRevision,
+    ActionProvenance, ActionReviewRequest, ActionSource, AssessmentId, Capability, CapabilityKind,
+    CapabilitySet, ClassifierAssessment, ClassifierRecommendation, ExecutionDecision,
+    ProcessInvocationKind, ResolvedAction, ReviewFailurePolicy, SandboxCompatibility,
+};
 use zeta_apply_patch::ApplyPatchLimits;
 use zeta_apply_patch::ApplyPatchTool;
 use zeta_async_utils::CancellationToken;
+use zeta_config::ResolvedConfig;
+use zeta_config::UserExecPolicyConfig;
+use zeta_config::WorkspaceExecPolicyConfig;
+use zeta_config::WorkspaceId;
 use zeta_core::{
-    CoreError, PolicyService, ToolAuthorization, ToolExecutionFacts, ToolOutputSink, ToolService,
+    ActionPolicyService, CoreError, ToolAuthorization, ToolExecutionFacts, ToolOutputSink,
+    ToolService,
 };
+use zeta_execpolicy::ExecPolicyActionKind;
+use zeta_execpolicy::ExecPolicyDefault;
+use zeta_execpolicy::ExecPolicyEffect;
+use zeta_execpolicy::ExecPolicyLayer;
+use zeta_execpolicy::ExecPolicyLayerId;
+use zeta_execpolicy::ExecPolicyLayerKind;
+use zeta_execpolicy::ExecPolicyRule;
+use zeta_execpolicy::ExecPolicyRuleId;
+use zeta_execpolicy::ExecPolicySelector;
+use zeta_execpolicy::ExecPolicySnapshot;
 use zeta_file_system::LocalFileSystem;
 use zeta_file_system_tool::FileSystemLimits;
 use zeta_file_system_tool::FileSystemTool;
 use zeta_install_context::{ExecutableCandidates, InstallContext, ManagedExecutable};
-use zeta_policy::{
-    ActionDigest, ActionKind, ActionProvenance, ActionReviewPhase, ActionReviewRequest,
-    ActionSource, ApprovalRequest, Capability, CapabilityKind, CapabilitySet, ExecutionDecision,
-    PolicyRevision, ProcessInvocationKind, ResolvedAction, SandboxCompatibility,
-};
 use zeta_protocol::{ToolCall, ToolDefinition, ToolExecutionOutput, ToolOutputStream};
 use zeta_sandboxing::{FileSystemAccess, NetworkAccess, SandboxBackend, SandboxPolicy};
 use zeta_shell_command::{
@@ -37,15 +54,50 @@ mod suite;
 
 pub(crate) use suite::LocalToolSuite;
 
-pub(crate) const LOCAL_POLICY_REVISION: &str = "local-tools-v5";
+const LOCAL_GRANT_SNAPSHOT_REVISION: &str = "local-static-grants-v1";
+const LOCAL_REVIEWER_POLICY_REVISION: &str = "local-interactive-review-v1";
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 const DEFAULT_OUTPUT_BYTES: usize = 256 * 1024;
 
 pub(crate) struct LocalToolComposition {
     pub(crate) tools: Arc<dyn ToolService>,
-    pub(crate) policy: Arc<dyn PolicyService>,
+    pub(crate) policy: Arc<dyn ActionPolicyService>,
     pub(crate) ripgrep: RipgrepExecutable,
+    action_policy_revision: ActionPolicyRevision,
     executors: Vec<LocalExecutorContribution>,
+}
+
+/// Durable configuration inputs used to compose one immutable local execution-policy snapshot.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub(crate) struct LocalExecPolicyConfig {
+    user: UserExecPolicyConfig,
+    workspace: Option<(WorkspaceId, WorkspaceExecPolicyConfig)>,
+}
+
+impl LocalExecPolicyConfig {
+    pub(crate) fn from_resolved(config: &ResolvedConfig) -> Self {
+        Self {
+            user: config.exec_policy.clone(),
+            workspace: config.workspace.as_ref().map(|workspace| {
+                (
+                    workspace.workspace_id.clone(),
+                    workspace.exec_policy.clone(),
+                )
+            }),
+        }
+    }
+
+    fn snapshot(&self) -> Result<ExecPolicySnapshot, LocalToolError> {
+        zeta_config::compose_exec_policy(
+            ExecPolicyDefault::Deny("action is outside the local Tool policy contract".into()),
+            vec![LOCAL_EXEC_POLICY_HOST_LAYER.clone()],
+            &self.user,
+            self.workspace
+                .as_ref()
+                .map(|(workspace_id, workspace)| (workspace_id, workspace)),
+        )
+        .map_err(LocalToolError::policy)
+    }
 }
 
 struct LocalExecutorContribution {
@@ -54,8 +106,9 @@ struct LocalExecutorContribution {
     reviewer: Arc<dyn ToolExecutorReviewer>,
 }
 
-pub(crate) fn compose_local_tools(
+pub(crate) fn compose_local_tools_with_config(
     workspace: TrustedWorkspace,
+    policy_config: &LocalExecPolicyConfig,
 ) -> Result<LocalToolComposition, LocalToolError> {
     if workspace.capability() != WorkspaceCapability::ExecuteProcess {
         return Err(LocalToolError::trust(
@@ -66,9 +119,16 @@ pub(crate) fn compose_local_tools(
     let ripgrep = resolve_ripgrep(&install_context).map_err(LocalToolError::ripgrep)?;
     let environment_id = zeta_tools::ToolEnvironmentId::new("local-workspace")
         .map_err(LocalToolError::definition)?;
+    let exec_policy = policy_config.snapshot()?;
+    let action_policy_revision = ActionPolicyRevision::from_components(
+        exec_policy.revision(),
+        LOCAL_GRANT_SNAPSHOT_REVISION,
+        LOCAL_REVIEWER_POLICY_REVISION,
+    );
     let reviewer: Arc<dyn ToolExecutorReviewer> = Arc::new(LocalExecutorReviewer {
         workspace: workspace.clone(),
         ripgrep: ripgrep.clone(),
+        action_policy_revision: action_policy_revision.clone(),
     });
     let shell_executor: Arc<dyn zeta_tools::ToolExecutor> = Arc::new(
         ShellCommandTool::new(
@@ -99,17 +159,22 @@ pub(crate) fn compose_local_tools(
         )
         .map_err(LocalToolError::definition)?,
     );
-    let policy = LocalShellPolicy;
-    let shell = LocalShellToolService::new(
+    let policy = LocalShellPolicy {
+        exec_policy,
+        action_policy_revision: action_policy_revision.clone(),
+    };
+    let shell = LocalShellToolService::new_with_action_policy_revision(
         workspace.clone(),
         ripgrep.clone(),
         native_sandbox(&install_context)?,
+        action_policy_revision.clone(),
     )?;
     let service = LocalToolSuite::new(shell, ripgrep.clone());
     Ok(LocalToolComposition {
         tools: Arc::new(service),
         policy: Arc::new(policy),
         ripgrep,
+        action_policy_revision,
         executors: vec![
             LocalExecutorContribution {
                 executor: shell_executor,
@@ -134,15 +199,20 @@ impl LocalToolComposition {
     #[cfg(test)]
     pub(crate) fn without_executors(
         tools: Arc<dyn ToolService>,
-        policy: Arc<dyn PolicyService>,
+        policy: Arc<dyn ActionPolicyService>,
         ripgrep: RipgrepExecutable,
     ) -> Self {
         Self {
             tools,
             policy,
             ripgrep,
+            action_policy_revision: local_policy_revision(),
             executors: Vec::new(),
         }
+    }
+
+    pub(crate) fn action_policy_revision(&self) -> &ActionPolicyRevision {
+        &self.action_policy_revision
     }
 
     pub(crate) fn tool_port(&self) -> Result<ToolPort, ToolCompositionError> {
@@ -180,6 +250,7 @@ pub(crate) fn append_local_tool(
         }),
         policy: composition.policy,
         ripgrep: composition.ripgrep,
+        action_policy_revision: composition.action_policy_revision,
         executors: composition.executors,
     }
 }
@@ -324,6 +395,7 @@ struct LocalShellToolService<B> {
     ripgrep: RipgrepExecutable,
     shell: ShellCommandTool<CoreAuthorized, B>,
     definition: ToolDefinition,
+    action_policy_revision: ActionPolicyRevision,
 }
 
 impl<B: SandboxBackend> LocalShellToolService<B> {
@@ -331,6 +403,15 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
         workspace: TrustedWorkspace,
         ripgrep: RipgrepExecutable,
         backend: B,
+    ) -> Result<Self, LocalToolError> {
+        Self::new_with_action_policy_revision(workspace, ripgrep, backend, local_policy_revision())
+    }
+
+    fn new_with_action_policy_revision(
+        workspace: TrustedWorkspace,
+        ripgrep: RipgrepExecutable,
+        backend: B,
+        action_policy_revision: ActionPolicyRevision,
     ) -> Result<Self, LocalToolError> {
         let shell = ShellCommandTool::new(
             zeta_tools::ToolEnvironmentId::new("local-workspace")
@@ -351,6 +432,7 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
             ripgrep,
             shell,
             definition,
+            action_policy_revision,
         })
     }
 
@@ -430,10 +512,11 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
                     canonical_working_directory.display()
                 ),
                 capabilities,
-            ),
+            )
+            .with_command(request.program().to_owned(), request.arguments().to_vec()),
             ActionProvenance::new(ActionSource::BuiltInTool, "shell-command"),
             SandboxCompatibility::Supported(sandbox),
-            PolicyRevision::new(LOCAL_POLICY_REVISION),
+            self.action_policy_revision.clone(),
         ))
     }
 }
@@ -457,6 +540,7 @@ impl<B: SandboxBackend> ToolService for LocalShellToolService<B> {
         let authority = match authorization {
             ToolAuthorization::Sandboxed(policy) => CommandExecutionAuthority::Sandboxed(*policy),
             ToolAuthorization::UnsandboxedGrant { .. }
+            | ToolAuthorization::ExecPolicyGranted(_)
             | ToolAuthorization::AutoReviewed(_)
             | ToolAuthorization::PermissionBypassed(_)
             | ToolAuthorization::ApprovedOnce(_) => CommandExecutionAuthority::Unrestricted,
@@ -516,6 +600,7 @@ impl<B: SandboxBackend> ToolService for LocalShellToolService<B> {
 struct LocalExecutorReviewer {
     workspace: TrustedWorkspace,
     ripgrep: RipgrepExecutable,
+    action_policy_revision: ActionPolicyRevision,
 }
 
 impl ToolExecutorReviewer for LocalExecutorReviewer {
@@ -608,10 +693,11 @@ impl LocalExecutorReviewer {
                     working_directory.display()
                 ),
                 capabilities,
-            ),
+            )
+            .with_command(request.program().to_owned(), request.arguments().to_vec()),
             ActionProvenance::new(ActionSource::BuiltInTool, "shell-command"),
             SandboxCompatibility::Supported(sandbox),
-            PolicyRevision::new(LOCAL_POLICY_REVISION),
+            self.action_policy_revision.clone(),
         );
         Ok((review, request))
     }
@@ -658,7 +744,7 @@ impl LocalExecutorReviewer {
             SandboxCompatibility::NotApplicable {
                 reason: "the in-process file-system executor is confined by WorkspaceRoot".into(),
             },
-            PolicyRevision::new(LOCAL_POLICY_REVISION),
+            self.action_policy_revision.clone(),
         ))
     }
 
@@ -692,7 +778,7 @@ impl LocalExecutorReviewer {
             SandboxCompatibility::NotApplicable {
                 reason: "apply-patch validates every target through WorkspaceRoot and commits host-mediated file mutations".into(),
             },
-            PolicyRevision::new(LOCAL_POLICY_REVISION),
+            self.action_policy_revision.clone(),
         ))
     }
 }
@@ -736,11 +822,175 @@ fn materialize_patch_targets(
     Ok(targets)
 }
 
-struct LocalShellPolicy;
+struct LocalShellPolicy {
+    exec_policy: ExecPolicySnapshot,
+    action_policy_revision: ActionPolicyRevision,
+}
 
-impl PolicyService for LocalShellPolicy {
+impl Default for LocalShellPolicy {
+    fn default() -> Self {
+        let exec_policy = LocalExecPolicyConfig::default()
+            .snapshot()
+            .expect("static local execution policy is valid");
+        Self {
+            exec_policy,
+            action_policy_revision: local_policy_revision(),
+        }
+    }
+}
+
+static LOCAL_EXEC_POLICY_HOST_LAYER: LazyLock<ExecPolicyLayer> = LazyLock::new(|| {
+    let rules = [
+        local_rule(
+            "local-shell",
+            "shell-command",
+            ExecPolicyActionKind::LocalProcess,
+            ExecPolicyEffect::Continue,
+        ),
+        local_rule(
+            "local-read-file",
+            "read_file",
+            ExecPolicyActionKind::LocalProcess,
+            ExecPolicyEffect::Continue,
+        ),
+        local_rule(
+            "local-grep",
+            "grep",
+            ExecPolicyActionKind::LocalProcess,
+            ExecPolicyEffect::Continue,
+        ),
+        local_rule(
+            "local-glob",
+            "glob",
+            ExecPolicyActionKind::LocalProcess,
+            ExecPolicyEffect::Continue,
+        ),
+        local_rule(
+            "local-write-file",
+            "write_file",
+            ExecPolicyActionKind::FileSystemMutation,
+            ExecPolicyEffect::Continue,
+        ),
+        local_rule(
+            "local-edit",
+            "edit",
+            ExecPolicyActionKind::FileSystemMutation,
+            ExecPolicyEffect::Continue,
+        ),
+        local_rule(
+            "local-apply-patch",
+            "apply-patch",
+            ExecPolicyActionKind::FileSystemMutation,
+            ExecPolicyEffect::Continue,
+        ),
+        local_rule(
+            "local-file-system-read-only",
+            "file-system",
+            ExecPolicyActionKind::SystemOperation,
+            ExecPolicyEffect::AllowUnsandboxed,
+        ),
+        local_rule(
+            "workspace-code-index-read-only",
+            crate::code_retrieval_tool::CODE_RETRIEVAL_TOOL_NAME,
+            ExecPolicyActionKind::SystemOperation,
+            ExecPolicyEffect::AllowUnsandboxed,
+        ),
+        local_rule(
+            "built-in:spawn_agent",
+            crate::server::multi_agent_tools::SPAWN_AGENT_TOOL_NAME,
+            ExecPolicyActionKind::SystemOperation,
+            ExecPolicyEffect::AllowUnsandboxed,
+        ),
+        local_rule(
+            "built-in:send_agent_message",
+            crate::server::multi_agent_tools::SEND_AGENT_MESSAGE_TOOL_NAME,
+            ExecPolicyActionKind::SystemOperation,
+            ExecPolicyEffect::AllowUnsandboxed,
+        ),
+        local_rule(
+            "built-in:wait_agent",
+            crate::server::multi_agent_tools::WAIT_AGENT_TOOL_NAME,
+            ExecPolicyActionKind::SystemOperation,
+            ExecPolicyEffect::AllowUnsandboxed,
+        ),
+    ];
+    ExecPolicyLayer::new(
+        ExecPolicyLayerId::new("local-host"),
+        ExecPolicyLayerKind::Host,
+        rules,
+    )
+});
+
+static LOCAL_ACTION_POLICY_REVISION: LazyLock<ActionPolicyRevision> = LazyLock::new(|| {
+    let exec_policy = LocalExecPolicyConfig::default()
+        .snapshot()
+        .expect("static local execution policy is valid");
+    ActionPolicyRevision::from_components(
+        exec_policy.revision(),
+        LOCAL_GRANT_SNAPSHOT_REVISION,
+        LOCAL_REVIEWER_POLICY_REVISION,
+    )
+});
+
+fn local_rule(
+    rule_id: &str,
+    source_id: &str,
+    action_kind: ExecPolicyActionKind,
+    effect: ExecPolicyEffect,
+) -> ExecPolicyRule {
+    ExecPolicyRule::new(
+        ExecPolicyRuleId::new(rule_id),
+        ExecPolicySelector::all([
+            ExecPolicySelector::source(Some("built_in_tool".into()), Some(source_id.into())),
+            ExecPolicySelector::ActionKind { action_kind },
+        ]),
+        effect,
+    )
+}
+
+pub(crate) fn local_policy_revision() -> ActionPolicyRevision {
+    LOCAL_ACTION_POLICY_REVISION.clone()
+}
+
+struct LocalPolicyClassifier;
+
+impl ActionClassifier for LocalPolicyClassifier {
+    type Error = std::convert::Infallible;
+
+    fn classify(
+        &self,
+        request: &ActionReviewRequest,
+        cancellation: &CancellationToken,
+    ) -> Result<ClassifierAssessment, Self::Error> {
+        let _ = cancellation.check();
+        let reason = if matches!(
+            request.phase(),
+            zeta_action_policy::ActionReviewPhase::SandboxDenial(_)
+        ) {
+            "the command requires authority outside the workspace sandbox"
+        } else {
+            "the action requires user approval"
+        };
+        Ok(ClassifierAssessment::new(
+            AssessmentId::from_response(
+                request.action().digest(),
+                request.action_policy_revision(),
+                LOCAL_REVIEWER_POLICY_REVISION,
+                reason,
+            ),
+            request.action().digest().clone(),
+            request.action_policy_revision().clone(),
+            LOCAL_REVIEWER_POLICY_REVISION,
+            ClassifierRecommendation::AskUser {
+                reason: reason.into(),
+            },
+        ))
+    }
+}
+
+impl ActionPolicyService for LocalShellPolicy {
     fn revision(&self) -> String {
-        LOCAL_POLICY_REVISION.into()
+        self.action_policy_revision.as_str().to_owned()
     }
 
     fn decide(
@@ -751,83 +1001,14 @@ impl PolicyService for LocalShellPolicy {
         cancellation
             .check()
             .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
-        if request.policy_revision().as_str() != LOCAL_POLICY_REVISION
-            || request.provenance().source() != &ActionSource::BuiltInTool
-            || !matches!(
-                request.provenance().source_id(),
-                "shell-command"
-                    | "file-system"
-                    | "apply-patch"
-                    | "read_file"
-                    | "write_file"
-                    | "edit"
-                    | "grep"
-                    | "glob"
-                    | crate::code_retrieval_tool::CODE_RETRIEVAL_TOOL_NAME
-                    | crate::server::multi_agent_tools::SPAWN_AGENT_TOOL_NAME
-                    | crate::server::multi_agent_tools::SEND_AGENT_MESSAGE_TOOL_NAME
-                    | crate::server::multi_agent_tools::WAIT_AGENT_TOOL_NAME
-            )
-            || !matches!(
-                request.action().kind(),
-                ActionKind::LocalProcess(_)
-                    | ActionKind::FileSystemMutation
-                    | ActionKind::SystemOperation
-            )
-        {
-            return Err(CoreError::Policy(
-                "local shell policy rejected an action outside its exact review contract".into(),
-            ));
-        }
-        match (request.phase(), request.sandbox()) {
-            (ActionReviewPhase::Initial, SandboxCompatibility::Supported(policy))
-                if *policy == read_only_sandbox() || *policy == shell_sandbox() =>
-            {
-                Ok(ExecutionDecision::RunSandboxed(*policy))
-            }
-            (ActionReviewPhase::Initial, SandboxCompatibility::NotApplicable { .. }) => {
-                if request.provenance().source_id() == "file-system" {
-                    return Ok(ExecutionDecision::RunUnsandboxed {
-                        grant_id: zeta_policy::GrantId::new("local-file-system-read-only"),
-                    });
-                }
-                if request.provenance().source_id()
-                    == crate::code_retrieval_tool::CODE_RETRIEVAL_TOOL_NAME
-                {
-                    return Ok(ExecutionDecision::RunUnsandboxed {
-                        grant_id: zeta_policy::GrantId::new("workspace-code-index-read-only"),
-                    });
-                }
-                if matches!(
-                    request.provenance().source_id(),
-                    crate::server::multi_agent_tools::SPAWN_AGENT_TOOL_NAME
-                        | crate::server::multi_agent_tools::SEND_AGENT_MESSAGE_TOOL_NAME
-                        | crate::server::multi_agent_tools::WAIT_AGENT_TOOL_NAME
-                ) {
-                    return Ok(ExecutionDecision::RunUnsandboxed {
-                        grant_id: zeta_policy::GrantId::new(format!(
-                            "built-in:{}",
-                            request.provenance().source_id()
-                        )),
-                    });
-                }
-                Ok(ExecutionDecision::AskUser(ApprovalRequest::new(
-                    request.action().digest().clone(),
-                    request.action().required_capabilities().clone(),
-                    "the file mutation requires user approval",
-                )))
-            }
-            (ActionReviewPhase::SandboxDenial(_), SandboxCompatibility::Supported(_)) => {
-                Ok(ExecutionDecision::AskUser(ApprovalRequest::new(
-                    request.action().digest().clone(),
-                    request.action().required_capabilities().clone(),
-                    "the command requires authority outside the workspace sandbox",
-                )))
-            }
-            _ => Err(CoreError::Policy(
-                "local shell review phase is invalid".into(),
-            )),
-        }
+        ActionPolicyEngine::new(
+            self.action_policy_revision.clone(),
+            self.exec_policy.clone(),
+            LocalPolicyClassifier,
+            ReviewFailurePolicy::Block,
+        )
+        .decide(request, cancellation)
+        .map_err(|error| CoreError::Policy(error.to_string()))
     }
 }
 
@@ -954,6 +1135,10 @@ impl LocalToolError {
 
     fn definition(error: impl fmt::Display) -> Self {
         Self(format!("could not construct local tool registry: {error}"))
+    }
+
+    fn policy(error: impl fmt::Display) -> Self {
+        Self(format!("could not compose local execution policy: {error}"))
     }
 
     #[cfg(any(target_os = "linux", target_os = "windows"))]

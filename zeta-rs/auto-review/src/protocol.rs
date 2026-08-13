@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
-use zeta_policy::{
-    ActionProvenance, ActionReviewPhase, ActionReviewRequest, Capability, CapabilityKind,
-    CapabilitySet, ClassifierRecommendation, PolicyRevision, ResolvedAction, ReviewContext,
+use zeta_action_policy::{
+    ActionPolicyRevision, ActionProvenance, ActionReviewPhase, ActionReviewRequest, Capability,
+    CapabilityKind, CapabilitySet, ClassifierRecommendation, ResolvedAction, ReviewContext,
     RiskLevel, SandboxCompatibility, UserAuthorization,
 };
 
@@ -156,7 +156,7 @@ struct ModelInput<'a> {
     provenance: &'a ActionProvenance,
     sandbox: ModelSandboxCompatibility<'a>,
     phase: &'a ActionReviewPhase,
-    policy_revision: &'a PolicyRevision,
+    policy_revision: &'a ActionPolicyRevision,
     context: &'a ReviewContext,
 }
 
@@ -186,7 +186,7 @@ impl<'a> From<&'a ActionReviewRequest> for ModelInput<'a> {
             provenance: request.provenance(),
             sandbox,
             phase: request.phase(),
-            policy_revision: request.policy_revision(),
+            policy_revision: request.action_policy_revision(),
             context: request.context(),
         }
     }

@@ -1,6 +1,6 @@
 import { addDisposableListener } from "../../../../base/browser/dom.js";
 import { DisposableOwner, ResettableDisposableGroup } from "../../../../base/common/lifecycle.js";
-import type { IPluginService, PluginCatalogView, PluginPackageView } from "../../../../platform/plugins/common/pluginService.js";
+import type { IPluginService, PluginCatalogView, PluginMarketplacePackageView, PluginPackageView } from "../../../../platform/plugins/common/pluginService.js";
 import "./media/connectorSettings.css";
 
 export class PluginSettingsPane extends DisposableOwner {
@@ -23,18 +23,18 @@ export class PluginSettingsPane extends DisposableOwner {
     loading.className = "zeta-settings-message";
     loading.textContent = "Loading plugins…";
     this.element.replaceChildren(loading);
-    const catalog = await this.plugins.list().catch((error: unknown) => {
+    const loaded = await Promise.all([this.plugins.list(), this.plugins.listMarketplace()]).catch((error: unknown) => {
       if (loadGeneration !== this.loadGeneration) return undefined;
       loading.textContent = error instanceof Error ? `Unable to load plugins: ${error.message}` : "Unable to load plugins.";
       return undefined;
     });
-    if (!catalog || loadGeneration !== this.loadGeneration) return;
-    this.render(catalog);
+    if (!loaded || loadGeneration !== this.loadGeneration) return;
+    this.render(loaded[0], loaded[1]);
   }
 
-  private render(catalog: PluginCatalogView): void {
+  private render(catalog: PluginCatalogView, marketplace: readonly PluginMarketplacePackageView[]): void {
     this.rows.clear();
-    if (catalog.packages.length === 0) {
+    if (catalog.packages.length === 0 && marketplace.length === 0) {
       const empty = this.document.createElement("p");
       empty.className = "zeta-settings-message";
       empty.textContent = "No plugins are installed.";
@@ -42,11 +42,41 @@ export class PluginSettingsPane extends DisposableOwner {
       return;
     }
     const fragment = this.document.createDocumentFragment();
-    for (const plugin of catalog.packages) fragment.append(this.pluginCard(catalog.revision, plugin));
+    const available = marketplace.filter(candidate => !candidate.installed);
+    if (available.length > 0) {
+      const title = this.document.createElement("h3");
+      title.textContent = "Marketplace";
+      fragment.append(title);
+      for (const plugin of available) fragment.append(this.marketplaceCard(catalog, plugin));
+    }
+    if (catalog.packages.length > 0) {
+      const title = this.document.createElement("h3");
+      title.textContent = "Installed";
+      fragment.append(title);
+    }
+    for (const plugin of catalog.packages) fragment.append(this.pluginCard(catalog, plugin));
     this.element.replaceChildren(fragment);
   }
 
-  private pluginCard(revision: number, plugin: PluginPackageView): HTMLElement {
+  private marketplaceCard(catalog: PluginCatalogView, plugin: PluginMarketplacePackageView): HTMLElement {
+    const card = this.document.createElement("section");
+    card.className = "zeta-integration-card";
+    const title = this.document.createElement("h4");
+    title.textContent = `${plugin.id} · ${plugin.version}`;
+    const source = this.document.createElement("p");
+    source.className = "zeta-connector-description";
+    source.textContent = `${plugin.marketplaceId} · ${plugin.marketplaceMode === "managed" ? "Managed Marketplace" : "Local development"}`;
+    const feedback = this.document.createElement("p");
+    feedback.className = "zeta-integration-feedback";
+    feedback.setAttribute("role", "status");
+    const installedVersions = catalog.packages.filter(installed => installed.id === plugin.id);
+    const newest = installedVersions.sort((left, right) => left.version.localeCompare(right.version, undefined, { numeric: true })).at(-1);
+    const isUpdate = newest !== undefined && newest.version !== plugin.version;
+    card.append(title, source, this.action(isUpdate ? "Stage update" : "Install", () => isUpdate ? this.plugins.update(plugin, catalog.revision) : this.plugins.install(plugin, catalog.revision), feedback), feedback);
+    return card;
+  }
+
+  private pluginCard(catalog: PluginCatalogView, plugin: PluginPackageView): HTMLElement {
     const card = this.document.createElement("section");
     card.className = "zeta-integration-card";
     const heading = this.document.createElement("div");
@@ -61,11 +91,14 @@ export class PluginSettingsPane extends DisposableOwner {
     feedback.className = "zeta-integration-feedback";
     feedback.setAttribute("role", "status");
     card.append(heading);
-    if (!plugin.granted) card.append(this.action("Grant", () => this.plugins.grant(plugin, revision), feedback));
-    if (plugin.granted) card.append(this.action("Revoke grant", () => this.plugins.revokeGrant(plugin, revision), feedback));
-    if (!plugin.enabled) card.append(this.action("Enable", () => this.plugins.enable(plugin, revision), feedback));
-    if (plugin.enabled) card.append(this.action("Disable", () => this.plugins.disable(plugin, revision), feedback));
-    if (!plugin.enabled && !plugin.granted) card.append(this.action("Uninstall", () => this.plugins.uninstall(plugin, revision), feedback, true));
+    if (!plugin.granted) card.append(this.action("Grant", () => this.plugins.grant(plugin, catalog.revision), feedback));
+    if (plugin.granted) card.append(this.action("Revoke grant", () => this.plugins.revokeGrant(plugin, catalog.revision), feedback));
+    const enabledVersion = catalog.packages.find(candidate => candidate.id === plugin.id && candidate.enabled);
+    const rollback = plugin.granted && !plugin.enabled && enabledVersion !== undefined && plugin.version.localeCompare(enabledVersion.version, undefined, { numeric: true }) < 0;
+    if (rollback) card.append(this.action("Rollback to this version", () => this.plugins.rollback(plugin, catalog.revision), feedback));
+    if (!plugin.enabled && !rollback) card.append(this.action("Enable", () => this.plugins.enable(plugin, catalog.revision), feedback));
+    if (plugin.enabled) card.append(this.action("Disable", () => this.plugins.disable(plugin, catalog.revision), feedback));
+    if (!plugin.enabled && !plugin.granted) card.append(this.action("Uninstall", () => this.plugins.uninstall(plugin, catalog.revision), feedback, true));
     card.append(feedback);
     return card;
   }

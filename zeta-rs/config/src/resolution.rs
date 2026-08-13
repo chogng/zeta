@@ -255,6 +255,7 @@ pub fn resolve_scoped_config(
             plugin_requests: workspace.document.plugin_requests.clone(),
             skills: workspace.document.skills.clone(),
             hooks: workspace.document.hooks.clone(),
+            exec_policy: workspace.document.exec_policy.clone(),
         });
     }
 

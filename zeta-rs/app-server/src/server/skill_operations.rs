@@ -166,6 +166,7 @@ fn skill_list_result(snapshot: &SkillRuntimeSnapshot) -> SkillListResult {
                         SkillSourceKind::BuiltIn => SkillSourceKindDto::BuiltIn,
                         SkillSourceKind::User => SkillSourceKindDto::User,
                         SkillSourceKind::Workspace => SkillSourceKindDto::Workspace,
+                        SkillSourceKind::Plugin => SkillSourceKindDto::Plugin,
                     },
                     content_digest: catalog.content_digest().clone(),
                     enablement: enablement_dto(entry.enablement),

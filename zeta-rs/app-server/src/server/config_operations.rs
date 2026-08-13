@@ -32,6 +32,23 @@ use zeta_protocol::Patch;
 
 use crate::tool_search_models::ToolSearchEmbeddingStatus;
 use crate::tool_search_models::resolve_tool_search;
+use zeta_app_server_protocol::protocol::config::ExecPolicyActionKindDto;
+use zeta_app_server_protocol::protocol::config::ExecPolicyEffectDto;
+use zeta_app_server_protocol::protocol::config::ExecPolicyHostMatcherDto;
+use zeta_app_server_protocol::protocol::config::ExecPolicyRuleDto;
+use zeta_app_server_protocol::protocol::config::ExecPolicyRuleRemoveParams;
+use zeta_app_server_protocol::protocol::config::ExecPolicyRuleUpsertParams;
+use zeta_app_server_protocol::protocol::config::ExecPolicyScopeMatcherDto;
+use zeta_app_server_protocol::protocol::config::ExecPolicySelectorDto;
+use zeta_app_server_protocol::protocol::config::ExecPolicyTokenDto;
+use zeta_execpolicy::ExecPolicyActionKind;
+use zeta_execpolicy::ExecPolicyEffect;
+use zeta_execpolicy::ExecPolicyRule;
+use zeta_execpolicy::ExecPolicyRuleId;
+use zeta_execpolicy::ExecPolicySelector;
+use zeta_execpolicy::ExecPolicyToken;
+use zeta_execpolicy::HostMatcher;
+use zeta_execpolicy::ScopeMatcher;
 
 impl AppServer {
     pub(super) fn config_read(&self) -> Result<Value, RpcError> {
@@ -94,6 +111,42 @@ impl AppServer {
                         params.approval_review_model,
                     )?,
                 }),
+            })
+            .map_err(config_operation_error)?;
+        result(&config_command_result(outcome))
+    }
+
+    pub(super) fn exec_policy_rule_upsert(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: ExecPolicyRuleUpsertParams = decode(params)?;
+        let store = self
+            .config
+            .clone()
+            .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?;
+        let outcome = store
+            .apply(ConfigCommandRequest {
+                command_id: params.command_id,
+                expected_revision: ConfigRevision::new(params.expected_revision),
+                command: UserConfigCommand::UpsertExecPolicyRule {
+                    rule: exec_policy_rule_from_dto(params.rule),
+                },
+            })
+            .map_err(config_operation_error)?;
+        result(&config_command_result(outcome))
+    }
+
+    pub(super) fn exec_policy_rule_remove(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: ExecPolicyRuleRemoveParams = decode(params)?;
+        let store = self
+            .config
+            .clone()
+            .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?;
+        let outcome = store
+            .apply(ConfigCommandRequest {
+                command_id: params.command_id,
+                expected_revision: ConfigRevision::new(params.expected_revision),
+                command: UserConfigCommand::RemoveExecPolicyRule {
+                    rule_id: ExecPolicyRuleId::new(params.rule_id),
+                },
             })
             .map_err(config_operation_error)?;
         result(&config_command_result(outcome))
@@ -461,6 +514,187 @@ fn config_read_result(
             .collect(),
         tool_search,
         semantic_code_index,
+        exec_policy_rules: snapshot
+            .values
+            .exec_policy
+            .rules
+            .into_iter()
+            .map(exec_policy_rule_dto)
+            .collect(),
+    }
+}
+
+fn exec_policy_rule_dto(rule: ExecPolicyRule) -> ExecPolicyRuleDto {
+    ExecPolicyRuleDto {
+        id: rule.id().as_str().to_owned(),
+        selector: exec_policy_selector_dto(rule.selector()),
+        effect: exec_policy_effect_dto(rule.effect()),
+        justification: rule.justification().map(str::to_owned),
+    }
+}
+
+fn exec_policy_rule_from_dto(rule: ExecPolicyRuleDto) -> ExecPolicyRule {
+    let mut converted = ExecPolicyRule::new(
+        ExecPolicyRuleId::new(rule.id),
+        exec_policy_selector_from_dto(rule.selector),
+        exec_policy_effect_from_dto(rule.effect),
+    );
+    if let Some(justification) = rule.justification {
+        converted = converted.with_justification(justification);
+    }
+    converted
+}
+
+fn exec_policy_selector_dto(selector: &ExecPolicySelector) -> ExecPolicySelectorDto {
+    match selector {
+        ExecPolicySelector::Any => ExecPolicySelectorDto::Any,
+        ExecPolicySelector::ActionDigest { digest } => ExecPolicySelectorDto::ActionDigest {
+            digest: digest.clone(),
+        },
+        ExecPolicySelector::ActionKind { action_kind } => ExecPolicySelectorDto::ActionKind {
+            action_kind: exec_policy_action_kind_dto(*action_kind),
+        },
+        ExecPolicySelector::Source { source, source_id } => ExecPolicySelectorDto::Source {
+            source: source.clone(),
+            source_id: source_id.clone(),
+        },
+        ExecPolicySelector::CommandPrefix { pattern } => ExecPolicySelectorDto::CommandPrefix {
+            pattern: pattern.iter().map(exec_policy_token_dto).collect(),
+        },
+        ExecPolicySelector::Network {
+            protocol,
+            host,
+            port,
+        } => ExecPolicySelectorDto::Network {
+            protocol: protocol.clone(),
+            host: match host {
+                HostMatcher::Exact(value) => ExecPolicyHostMatcherDto::Exact(value.clone()),
+                HostMatcher::DomainSuffix(value) => {
+                    ExecPolicyHostMatcherDto::DomainSuffix(value.clone())
+                }
+            },
+            port: *port,
+        },
+        ExecPolicySelector::Capability {
+            capability_kind,
+            scope,
+        } => ExecPolicySelectorDto::Capability {
+            capability_kind: capability_kind.clone(),
+            scope: match scope {
+                ScopeMatcher::Exact(value) => ExecPolicyScopeMatcherDto::Exact(value.clone()),
+                ScopeMatcher::Prefix(value) => ExecPolicyScopeMatcherDto::Prefix(value.clone()),
+            },
+        },
+        ExecPolicySelector::All { selectors } => ExecPolicySelectorDto::All {
+            selectors: selectors.iter().map(exec_policy_selector_dto).collect(),
+        },
+    }
+}
+
+fn exec_policy_selector_from_dto(selector: ExecPolicySelectorDto) -> ExecPolicySelector {
+    match selector {
+        ExecPolicySelectorDto::Any => ExecPolicySelector::Any,
+        ExecPolicySelectorDto::ActionDigest { digest } => {
+            ExecPolicySelector::ActionDigest { digest }
+        }
+        ExecPolicySelectorDto::ActionKind { action_kind } => ExecPolicySelector::ActionKind {
+            action_kind: exec_policy_action_kind_from_dto(action_kind),
+        },
+        ExecPolicySelectorDto::Source { source, source_id } => {
+            ExecPolicySelector::source(source, source_id)
+        }
+        ExecPolicySelectorDto::CommandPrefix { pattern } => {
+            ExecPolicySelector::command_prefix(pattern.into_iter().map(exec_policy_token_from_dto))
+        }
+        ExecPolicySelectorDto::Network {
+            protocol,
+            host,
+            port,
+        } => ExecPolicySelector::Network {
+            protocol,
+            host: match host {
+                ExecPolicyHostMatcherDto::Exact(value) => HostMatcher::exact(value),
+                ExecPolicyHostMatcherDto::DomainSuffix(value) => HostMatcher::domain_suffix(value),
+            },
+            port,
+        },
+        ExecPolicySelectorDto::Capability {
+            capability_kind,
+            scope,
+        } => ExecPolicySelector::Capability {
+            capability_kind,
+            scope: match scope {
+                ExecPolicyScopeMatcherDto::Exact(value) => ScopeMatcher::exact(value),
+                ExecPolicyScopeMatcherDto::Prefix(value) => ScopeMatcher::prefix(value),
+            },
+        },
+        ExecPolicySelectorDto::All { selectors } => {
+            ExecPolicySelector::all(selectors.into_iter().map(exec_policy_selector_from_dto))
+        }
+    }
+}
+
+fn exec_policy_token_dto(token: &ExecPolicyToken) -> ExecPolicyTokenDto {
+    match token {
+        ExecPolicyToken::Literal(value) => ExecPolicyTokenDto::Literal(value.clone()),
+        ExecPolicyToken::OneOf(values) => {
+            ExecPolicyTokenDto::OneOf(values.iter().cloned().collect())
+        }
+    }
+}
+
+fn exec_policy_token_from_dto(token: ExecPolicyTokenDto) -> ExecPolicyToken {
+    match token {
+        ExecPolicyTokenDto::Literal(value) => ExecPolicyToken::literal(value),
+        ExecPolicyTokenDto::OneOf(values) => ExecPolicyToken::one_of(values),
+    }
+}
+
+fn exec_policy_action_kind_dto(kind: ExecPolicyActionKind) -> ExecPolicyActionKindDto {
+    match kind {
+        ExecPolicyActionKind::LocalProcess => ExecPolicyActionKindDto::LocalProcess,
+        ExecPolicyActionKind::FileSystemMutation => ExecPolicyActionKindDto::FileSystemMutation,
+        ExecPolicyActionKind::NetworkRequest => ExecPolicyActionKindDto::NetworkRequest,
+        ExecPolicyActionKind::BrowserInteraction => ExecPolicyActionKindDto::BrowserInteraction,
+        ExecPolicyActionKind::ExternalServiceMutation => {
+            ExecPolicyActionKindDto::ExternalServiceMutation
+        }
+        ExecPolicyActionKind::CredentialUse => ExecPolicyActionKindDto::CredentialUse,
+        ExecPolicyActionKind::SystemOperation => ExecPolicyActionKindDto::SystemOperation,
+    }
+}
+
+fn exec_policy_action_kind_from_dto(kind: ExecPolicyActionKindDto) -> ExecPolicyActionKind {
+    match kind {
+        ExecPolicyActionKindDto::LocalProcess => ExecPolicyActionKind::LocalProcess,
+        ExecPolicyActionKindDto::FileSystemMutation => ExecPolicyActionKind::FileSystemMutation,
+        ExecPolicyActionKindDto::NetworkRequest => ExecPolicyActionKind::NetworkRequest,
+        ExecPolicyActionKindDto::BrowserInteraction => ExecPolicyActionKind::BrowserInteraction,
+        ExecPolicyActionKindDto::ExternalServiceMutation => {
+            ExecPolicyActionKind::ExternalServiceMutation
+        }
+        ExecPolicyActionKindDto::CredentialUse => ExecPolicyActionKind::CredentialUse,
+        ExecPolicyActionKindDto::SystemOperation => ExecPolicyActionKind::SystemOperation,
+    }
+}
+
+fn exec_policy_effect_dto(effect: &ExecPolicyEffect) -> ExecPolicyEffectDto {
+    match effect {
+        ExecPolicyEffect::Continue => ExecPolicyEffectDto::Continue,
+        ExecPolicyEffect::AllowUnsandboxed => ExecPolicyEffectDto::AllowUnsandboxed,
+        ExecPolicyEffect::RequireApproval => ExecPolicyEffectDto::RequireApproval,
+        ExecPolicyEffect::RequireSandbox => ExecPolicyEffectDto::RequireSandbox,
+        ExecPolicyEffect::Deny(reason) => ExecPolicyEffectDto::Deny(reason.clone()),
+    }
+}
+
+fn exec_policy_effect_from_dto(effect: ExecPolicyEffectDto) -> ExecPolicyEffect {
+    match effect {
+        ExecPolicyEffectDto::Continue => ExecPolicyEffect::Continue,
+        ExecPolicyEffectDto::AllowUnsandboxed => ExecPolicyEffect::AllowUnsandboxed,
+        ExecPolicyEffectDto::RequireApproval => ExecPolicyEffect::RequireApproval,
+        ExecPolicyEffectDto::RequireSandbox => ExecPolicyEffect::RequireSandbox,
+        ExecPolicyEffectDto::Deny(reason) => ExecPolicyEffect::Deny(reason),
     }
 }
 

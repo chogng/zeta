@@ -9,6 +9,8 @@ export function createDisconnectedConnectorApi(unavailable: UnavailableOperation
     connectApiToken: () => unavailable("connectors.connectApiToken"),
     connectOAuth: () => unavailable("connectors.connectOAuth"),
     disconnect: () => unavailable("connectors.disconnect"),
+    refreshOAuth: () => unavailable("connectors.refreshOAuth"),
+    revokeOAuth: () => unavailable("connectors.revokeOAuth"),
   };
 }
 
@@ -18,5 +20,7 @@ export function createViteDevConnectorApi(connection: ViteDevAppServerConnection
     connectApiToken: params => viteDevRequest(connection, "connector/connect/apiToken", params),
     connectOAuth: () => Promise.reject(new Error("Connector OAuth callback hosting is unavailable in this browser host")),
     disconnect: params => viteDevRequest(connection, "connector/disconnect", params),
+    refreshOAuth: async connectorId => { await viteDevRequest(connection, "connector/oauth/refresh", { connectorId }); },
+    revokeOAuth: params => viteDevRequest(connection, "connector/oauth/revoke", params),
   };
 }

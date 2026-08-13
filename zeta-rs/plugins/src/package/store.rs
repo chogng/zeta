@@ -46,6 +46,21 @@ impl InstalledPluginPackage {
         Ok(canonical)
     }
 
+    /// Resolves one validated directory inside this immutable object.
+    pub fn resolve_directory(&self, path: &crate::PluginPath) -> Result<PathBuf, PluginError> {
+        let candidate = self.object_root.join(path.to_platform_path());
+        let canonical = candidate.canonicalize().map_err(store_io)?;
+        if !canonical.starts_with(&self.object_root)
+            || !fs::symlink_metadata(&candidate).map_err(store_io)?.is_dir()
+        {
+            return Err(PluginError::new(
+                PluginErrorKind::PackageUnsafe,
+                "installed Plugin directory escaped its immutable object",
+            ));
+        }
+        Ok(canonical)
+    }
+
     /// Reads one bounded UTF-8 definition file from this immutable object.
     pub fn read_utf8_file(
         &self,

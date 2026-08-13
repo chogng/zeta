@@ -2,26 +2,26 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use serde_json::json;
+use zeta_action_policy::ActionDigest;
+use zeta_action_policy::ActionKind;
+use zeta_action_policy::ActionPolicyRevision;
+use zeta_action_policy::ActionProvenance;
+use zeta_action_policy::ActionReviewPhase;
+use zeta_action_policy::ActionReviewRequest;
+use zeta_action_policy::ActionSource;
+use zeta_action_policy::ApprovalRequest;
+use zeta_action_policy::Capability;
+use zeta_action_policy::CapabilityKind;
+use zeta_action_policy::CapabilitySet;
+use zeta_action_policy::ExecutionDecision;
+use zeta_action_policy::GrantId;
+use zeta_action_policy::ResolvedAction;
+use zeta_action_policy::SandboxCompatibility;
 use zeta_async_utils::CancellationToken;
+use zeta_core::ActionPolicyService;
 use zeta_core::CoreError;
-use zeta_core::PolicyService;
 use zeta_extension_api::ExtensionRegistry;
 use zeta_extension_api::ExtensionToolAuthority;
-use zeta_policy::ActionDigest;
-use zeta_policy::ActionKind;
-use zeta_policy::ActionProvenance;
-use zeta_policy::ActionReviewPhase;
-use zeta_policy::ActionReviewRequest;
-use zeta_policy::ActionSource;
-use zeta_policy::ApprovalRequest;
-use zeta_policy::Capability;
-use zeta_policy::CapabilityKind;
-use zeta_policy::CapabilitySet;
-use zeta_policy::ExecutionDecision;
-use zeta_policy::GrantId;
-use zeta_policy::PolicyRevision;
-use zeta_policy::ResolvedAction;
-use zeta_policy::SandboxCompatibility;
 use zeta_protocol::ToolCall;
 use zeta_protocol::ToolName;
 use zeta_tools::ToolDefinition;
@@ -152,7 +152,7 @@ impl ToolExecutorReviewer for ExtensionToolReviewer {
             SandboxCompatibility::NotApplicable {
                 reason: extension_sandbox_reason(&registration.authority),
             },
-            PolicyRevision::new(EXTENSION_TOOL_POLICY_REVISION),
+            ActionPolicyRevision::new(EXTENSION_TOOL_POLICY_REVISION),
         );
         Ok(PreparedToolExecution::new(review, payload))
     }
@@ -162,7 +162,7 @@ struct ExtensionToolPolicy {
     registrations: Arc<BTreeMap<ToolName, ExtensionToolRegistration>>,
 }
 
-impl PolicyService for ExtensionToolPolicy {
+impl ActionPolicyService for ExtensionToolPolicy {
     fn revision(&self) -> String {
         EXTENSION_TOOL_POLICY_REVISION.into()
     }
@@ -183,7 +183,7 @@ impl PolicyService for ExtensionToolPolicy {
             .as_ref()
             .zip(registration)
             .map(|(name, registration)| extension_capabilities(name, &registration.authority));
-        if request.policy_revision().as_str() != EXTENSION_TOOL_POLICY_REVISION
+        if request.action_policy_revision().as_str() != EXTENSION_TOOL_POLICY_REVISION
             || request.provenance().source() != &ActionSource::Plugin
             || capabilities.as_ref() != Some(request.action().required_capabilities())
             || registration.is_none_or(|registration| {

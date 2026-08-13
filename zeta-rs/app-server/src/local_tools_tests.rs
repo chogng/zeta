@@ -49,7 +49,7 @@ fn local_registry_exposes_shell_command_and_preserves_read_only_ripgrep() {
         "working_directory": "."
     }));
     let review = service.prepare(&call).unwrap();
-    let policy = LocalShellPolicy;
+    let policy = LocalShellPolicy::default();
     assert_eq!(
         policy
             .decide(&review, &CancellationSource::new().token())
@@ -86,7 +86,7 @@ fn local_registry_accepts_shell_processes_but_rejects_ripgrep_workspace_escape_a
     }));
     let review = service.prepare(&shell).unwrap();
     assert_eq!(
-        LocalShellPolicy
+        LocalShellPolicy::default()
             .decide(&review, &CancellationSource::new().token())
             .unwrap(),
         ExecutionDecision::RunSandboxed(shell_sandbox())
@@ -123,6 +123,103 @@ fn local_registry_accepts_shell_processes_but_rejects_ripgrep_workspace_escape_a
 }
 
 #[test]
+fn durable_user_and_workspace_exec_rules_drive_local_authorization() {
+    let workspace = TestWorkspace::new();
+    let user_rule = ExecPolicyRule::new(
+        ExecPolicyRuleId::new("user-safe-shell"),
+        ExecPolicySelector::all([
+            ExecPolicySelector::source(Some("built_in_tool".into()), Some("shell-command".into())),
+            ExecPolicySelector::command_prefix([
+                zeta_execpolicy::ExecPolicyToken::literal("/bin/sh"),
+                zeta_execpolicy::ExecPolicyToken::literal("-lc"),
+                zeta_execpolicy::ExecPolicyToken::literal("printf safe"),
+            ]),
+        ]),
+        ExecPolicyEffect::AllowUnsandboxed,
+    );
+    let policy_config = LocalExecPolicyConfig {
+        user: UserExecPolicyConfig {
+            rules: vec![user_rule],
+        },
+        workspace: None,
+    };
+    let exec_policy = policy_config.snapshot().unwrap();
+    let action_policy_revision = ActionPolicyRevision::from_components(
+        exec_policy.revision(),
+        LOCAL_GRANT_SNAPSHOT_REVISION,
+        LOCAL_REVIEWER_POLICY_REVISION,
+    );
+    let service = LocalShellToolService::new_with_action_policy_revision(
+        workspace.trusted(),
+        RipgrepExecutable::from_path(workspace.ripgrep()).unwrap(),
+        PassThroughBackend,
+        action_policy_revision.clone(),
+    )
+    .unwrap();
+    let call = tool_call(json!({
+        "program": "/bin/sh",
+        "arguments": ["-lc", "printf safe"],
+        "working_directory": "."
+    }));
+    let review = service.prepare(&call).unwrap();
+    let decision = LocalShellPolicy {
+        exec_policy,
+        action_policy_revision,
+    }
+    .decide(&review, &CancellationSource::new().token())
+    .unwrap();
+    assert!(matches!(
+        decision,
+        ExecutionDecision::RunExecPolicyGranted(grant)
+            if grant.source().rule_id().as_str() == "user-safe-shell"
+    ));
+
+    let restrictive_config = LocalExecPolicyConfig {
+        user: policy_config.user,
+        workspace: Some((
+            WorkspaceId::new("project").unwrap(),
+            WorkspaceExecPolicyConfig {
+                rules: vec![ExecPolicyRule::new(
+                    ExecPolicyRuleId::new("workspace-block-shell"),
+                    ExecPolicySelector::source(
+                        Some("built_in_tool".into()),
+                        Some("shell-command".into()),
+                    ),
+                    ExecPolicyEffect::Deny("repository policy blocks shell".into()),
+                )],
+            },
+        )),
+    };
+    let exec_policy = restrictive_config.snapshot().unwrap();
+    let action_policy_revision = ActionPolicyRevision::from_components(
+        exec_policy.revision(),
+        LOCAL_GRANT_SNAPSHOT_REVISION,
+        LOCAL_REVIEWER_POLICY_REVISION,
+    );
+    let restrictive_service = LocalShellToolService::new_with_action_policy_revision(
+        workspace.trusted(),
+        RipgrepExecutable::from_path(workspace.ripgrep()).unwrap(),
+        PassThroughBackend,
+        action_policy_revision.clone(),
+    )
+    .unwrap();
+    let restrictive_review = restrictive_service.prepare(&call).unwrap();
+    let decision = LocalShellPolicy {
+        exec_policy,
+        action_policy_revision,
+    }
+    .decide(&restrictive_review, &CancellationSource::new().token())
+    .unwrap();
+    assert!(matches!(
+        decision,
+        ExecutionDecision::Block(zeta_action_policy::BlockReason::DeterministicRule {
+            reason,
+            ..
+        }) if reason.contains("repository policy")
+    ));
+}
+
+#[test]
 fn local_policy_runs_agent_coordination_without_an_external_approval() {
     for tool_name in [
         crate::server::multi_agent_tools::SPAWN_AGENT_TOOL_NAME,
@@ -140,14 +237,14 @@ fn local_policy_runs_agent_coordination_without_an_external_approval() {
             SandboxCompatibility::NotApplicable {
                 reason: "durable Session/Thread mutation".into(),
             },
-            PolicyRevision::new(LOCAL_POLICY_REVISION),
+            local_policy_revision(),
         );
 
         assert!(matches!(
-            LocalShellPolicy
+            LocalShellPolicy::default()
                 .decide(&request, &CancellationSource::new().token())
                 .unwrap(),
-            ExecutionDecision::RunUnsandboxed { .. }
+            ExecutionDecision::RunExecPolicyGranted(_)
         ));
     }
 }
@@ -159,6 +256,7 @@ fn executor_reviewer_materializes_workspace_paths_before_policy() {
     let reviewer = LocalExecutorReviewer {
         workspace: workspace.trusted(),
         ripgrep: RipgrepExecutable::from_path(workspace.ripgrep()).unwrap(),
+        action_policy_revision: local_policy_revision(),
     };
     let read = ToolCall {
         id: ToolCallId::new("file-system-read").unwrap(),
@@ -168,10 +266,10 @@ fn executor_reviewer_materializes_workspace_paths_before_policy() {
 
     let review = reviewer.prepare_file_system(&read).unwrap();
     assert!(matches!(
-        LocalShellPolicy
+        LocalShellPolicy::default()
             .decide(&review, &CancellationSource::new().token())
             .unwrap(),
-        ExecutionDecision::RunUnsandboxed { .. }
+        ExecutionDecision::RunExecPolicyGranted(_)
     ));
     assert!(
         review
@@ -190,7 +288,7 @@ fn executor_reviewer_materializes_workspace_paths_before_policy() {
     };
     let review = reviewer.prepare_apply_patch(&patch).unwrap();
     assert!(matches!(
-        LocalShellPolicy
+        LocalShellPolicy::default()
             .decide(&review, &CancellationSource::new().token())
             .unwrap(),
         ExecutionDecision::AskUser(_)
@@ -215,13 +313,15 @@ fn local_tool_port_exposes_executor_tools_and_hides_migrated_legacy_names() {
     let reviewer: Arc<dyn ToolExecutorReviewer> = Arc::new(LocalExecutorReviewer {
         workspace: trusted.clone(),
         ripgrep: ripgrep.clone(),
+        action_policy_revision: local_policy_revision(),
     });
     let shell =
         LocalShellToolService::new(trusted.clone(), ripgrep.clone(), PassThroughBackend).unwrap();
     let composition = LocalToolComposition {
         tools: Arc::new(LocalToolSuite::new(shell, ripgrep.clone())),
-        policy: Arc::new(LocalShellPolicy),
+        policy: Arc::new(LocalShellPolicy::default()),
         ripgrep,
+        action_policy_revision: local_policy_revision(),
         executors: vec![
             LocalExecutorContribution {
                 executor: Arc::new(

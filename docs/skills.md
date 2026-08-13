@@ -104,9 +104,10 @@ source 仍能提供 exact bytes。已经开始的 Turn 即使随后被 catalog d
 App Server 先按 durable command receipt 校验输入并返回原 Turn 结果，不重新读取当前 catalog 或
 Skill 文件；因此源文件删除不会破坏已完成命令的幂等重放。
 
-当前 runtime source composition 包含 built-in、user 和 active Workspace 的原生
-`.zeta/skills` source。Workspace config 中额外声明的 Skill source intent、Plugin contribution 与
-script execution adapter 尚未接入；正文读取、通用 package resource resolver、有界 UTF-8 模型
+当前 runtime source composition 包含 built-in、user、active Workspace 的原生 `.zeta/skills` source，
+以及 effective Plugin manifest 声明的 exact Skill directory。Plugin activation generation 变化会触发
+catalog refresh，未声明的同包 sibling directory 不会进入 catalog。Workspace config 中额外声明的独立
+Skill source intent 与 script execution adapter 尚未接入；正文读取、通用 package resource resolver、有界 UTF-8 模型
 读取、binary asset Resource materialization、compatibility gate、显式激活和模型按需读取已接入。
 
 仓库已有可复用边界：
@@ -114,7 +115,7 @@ script execution adapter 尚未接入；正文读取、通用 package resource r
 - `zeta-protocol` 的 UserInput、Resource、ToolName 和 provider-independent model contract；
 - Core `ContextAssembler`、`ModelInvocationSnapshot` 与 durable checkpoint pipeline；
 - App Server 的 typed command、Resource store 和 generated client contract；
-- Plugin manager 计划提供 immutable Skill contribution root；
+- Plugin manager 提供 digest-pinned immutable Skill contribution root；
 - 目标 `zeta-tool-executor` / `zeta-sandboxing` 负责脚本执行，而不是 Skill loader；产品层
   `zeta-exec` 是 headless Agent runner。
 
@@ -850,12 +851,12 @@ Skill 需要未来带来源限定的选择交互。CLI 没有独立可视化目�
 
 完成条件：读取 Skill 不产生副作用，运行脚本一定产生标准 durable Tool Call/Result。
 
-### 阶段 S3：Plugin 与 MCP 依赖
+### 阶段 S3：Plugin 与 MCP 依赖（Plugin source vertical slice 已完成）
 
-- Plugin Skill source；
-- composition generation；
+- ✅ Plugin Skill exact source；
+- ✅ Plugin activation generation 触发 catalog composition refresh；
 - machine-readable MCP/tool requirements；
-- Plugin update/disable 后 snapshot drain。
+- Plugin Skill update/disable 的 frozen Turn snapshot drain 仍需专项验证。
 
 完成条件：Skill 不能按名称碰撞绑定错误工具，Plugin update 不改变 in-flight invocation。
 

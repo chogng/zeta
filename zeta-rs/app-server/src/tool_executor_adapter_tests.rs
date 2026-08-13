@@ -3,20 +3,20 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 
+use zeta_action_policy::ActionDigest;
+use zeta_action_policy::ActionKind;
+use zeta_action_policy::ActionPolicyRevision;
+use zeta_action_policy::ActionProvenance;
+use zeta_action_policy::ActionReviewRequest;
+use zeta_action_policy::ActionSource;
+use zeta_action_policy::CapabilitySet;
+use zeta_action_policy::GrantId;
+use zeta_action_policy::ResolvedAction;
+use zeta_action_policy::SandboxCompatibility;
 use zeta_async_utils::CancellationSource;
 use zeta_core::CoreError;
 use zeta_core::ToolAuthorization;
 use zeta_core::ToolOutputSink;
-use zeta_policy::ActionDigest;
-use zeta_policy::ActionKind;
-use zeta_policy::ActionProvenance;
-use zeta_policy::ActionReviewRequest;
-use zeta_policy::ActionSource;
-use zeta_policy::CapabilitySet;
-use zeta_policy::GrantId;
-use zeta_policy::PolicyRevision;
-use zeta_policy::ResolvedAction;
-use zeta_policy::SandboxCompatibility;
 use zeta_protocol::ToolCall;
 use zeta_protocol::ToolCallId;
 use zeta_protocol::ToolExecutionOutput;
@@ -84,7 +84,7 @@ impl ToolExecutorReviewer for UnusedReviewer {
                 SandboxCompatibility::NotApplicable {
                     reason: "test".into(),
                 },
-                PolicyRevision::new("test"),
+                ActionPolicyRevision::new("test"),
             ),
             ToolPayload::FunctionArguments(call.arguments.clone()),
         ))

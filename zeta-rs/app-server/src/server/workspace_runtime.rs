@@ -11,9 +11,10 @@ use crate::code_retrieval_context::CodeRetrievalContextSource;
 use crate::code_retrieval_tool::CodeRetrievalTool;
 use crate::dynamic_tools::DynamicToolCompositionError;
 use crate::dynamic_tools::compose_dynamic_tools;
+use crate::local_tools::LocalExecPolicyConfig;
 use crate::local_tools::append_local_tool;
-use crate::local_tools::compose_local_tools;
-use crate::review::ApprovalModePolicyService;
+use crate::local_tools::compose_local_tools_with_config;
+use crate::review::ApprovalModeActionPolicyService;
 use crate::tool_composition::ReloadableToolPorts;
 use crate::tool_composition::ToolPort;
 use crate::tool_composition::ToolSearchOptions;
@@ -115,12 +116,74 @@ pub(crate) struct WorkspaceRuntimeControl {
     sessions: Arc<SessionCoordinator>,
     updates: Arc<super::update_broker::UpdateBroker>,
     config: Option<Arc<ConfigStore>>,
+    exec_policy_config: Arc<RwLock<LocalExecPolicyConfig>>,
     code_index_semantic_storage_root: Option<PathBuf>,
     code_index_semantic_models: Option<CodeIndexSemanticModels>,
     semantic_model_provider: Option<Arc<dyn SemanticModelProvider>>,
 }
 
 impl WorkspaceRuntimeControl {
+    pub(crate) fn reconcile_exec_policy_config(
+        &self,
+        config: &zeta_config::ResolvedConfig,
+    ) -> Result<(), WorkspaceRuntimeError> {
+        let _authority = self.authority_gate.lock().map_err(|_| {
+            WorkspaceRuntimeError::Failed("Workspace authority gate poisoned".into())
+        })?;
+        let policy_config = LocalExecPolicyConfig::from_resolved(config);
+        let (authorization, code_index, semantic, cloud) = {
+            let runtime = self
+                .runtime
+                .read()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            (
+                runtime.authorization.clone(),
+                runtime.code_index.clone(),
+                runtime.code_index_semantic.clone(),
+                runtime.cloud_code_index.clone(),
+            )
+        };
+        let Some(authorization) = authorization else {
+            *self
+                .exec_policy_config
+                .write()
+                .unwrap_or_else(|poisoned| poisoned.into_inner()) = policy_config;
+            return Ok(());
+        };
+        if authorization.decision() == WorkspaceTrustDecision::Restricted {
+            *self
+                .exec_policy_config
+                .write()
+                .unwrap_or_else(|poisoned| poisoned.into_inner()) = policy_config;
+            return Ok(());
+        }
+        let execution = authorization
+            .require(WorkspaceCapability::ExecuteProcess)
+            .map_err(|_| WorkspaceRuntimeError::TrustRequired)?;
+        let mut local = compose_local_tools_with_config(execution.clone(), &policy_config)
+            .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
+        if let Some(code_index) = code_index {
+            let action_policy_revision = local.action_policy_revision().clone();
+            local = append_local_tool(
+                local,
+                Arc::new(
+                    CodeRetrievalTool::new(execution, code_index.index(), semantic, cloud)
+                        .with_action_policy_revision(action_policy_revision),
+                ),
+            );
+        }
+        local = append_multi_agent_tools(local, &self.multi_agent, &self.sessions, &self.runtime);
+        let local_port = local
+            .tool_port()
+            .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
+        self.tools.replace_local(Some(local_port))?;
+        *self
+            .exec_policy_config
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = policy_config;
+        Ok(())
+    }
+
     pub(crate) fn reconcile_semantic_code_index_runtime(
         &self,
     ) -> Result<(), WorkspaceRuntimeError> {
@@ -179,16 +242,25 @@ impl WorkspaceRuntimeControl {
         let execution = authorization
             .require(WorkspaceCapability::ExecuteProcess)
             .map_err(|_| WorkspaceRuntimeError::TrustRequired)?;
-        let local = compose_local_tools(execution.clone())
+        let policy_config = self
+            .exec_policy_config
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone();
+        let local = compose_local_tools_with_config(execution.clone(), &policy_config)
             .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
+        let action_policy_revision = local.action_policy_revision().clone();
         let local = append_local_tool(
             local,
-            Arc::new(CodeRetrievalTool::new(
-                execution,
-                code_index.index(),
-                semantic.clone(),
-                cloud.clone(),
-            )),
+            Arc::new(
+                CodeRetrievalTool::new(
+                    execution,
+                    code_index.index(),
+                    semantic.clone(),
+                    cloud.clone(),
+                )
+                .with_action_policy_revision(action_policy_revision),
+            ),
         );
         let local =
             append_multi_agent_tools(local, &self.multi_agent, &self.sessions, &self.runtime);
@@ -752,7 +824,7 @@ impl AppServer {
             &providers,
             self.semantic_model_provider.clone(),
         )?;
-        let policy = Arc::new(ApprovalModePolicyService::new(
+        let policy = Arc::new(ApprovalModeActionPolicyService::new(
             tools.reloadable.policy(),
             self.approval_review_model.clone(),
         ));
@@ -774,6 +846,14 @@ impl AppServer {
         Ok(self)
     }
 
+    pub(crate) fn with_local_exec_policy_config(self, config: LocalExecPolicyConfig) -> Self {
+        *self
+            .local_exec_policy_config
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = config;
+        self
+    }
+
     pub(crate) fn local_workspace_tool_ports(&self) -> Option<Arc<WorkspaceToolPorts>> {
         self.local_workspace_host
             .as_ref()
@@ -792,6 +872,7 @@ impl AppServer {
                 sessions: Arc::clone(&self.sessions),
                 updates: Arc::clone(&self.updates),
                 config: self.config.clone(),
+                exec_policy_config: Arc::clone(&self.local_exec_policy_config),
                 code_index_semantic_storage_root: self.code_index_semantic_storage_root.clone(),
                 code_index_semantic_models: self.code_index_semantic_models.clone(),
                 semantic_model_provider: self.semantic_model_provider.clone(),
@@ -853,7 +934,12 @@ impl AppServer {
         let execution = authorization
             .require(WorkspaceCapability::ExecuteProcess)
             .map_err(|_| WorkspaceRuntimeError::TrustRequired)?;
-        let local = compose_local_tools(execution)
+        let policy_config = self
+            .local_exec_policy_config
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone();
+        let local = compose_local_tools_with_config(execution, &policy_config)
             .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
         self.commit_trusted_workspace_runtime(authorization, local, host)
     }
@@ -962,14 +1048,18 @@ impl AppServer {
         let retrieval_workspace = authorization
             .require(WorkspaceCapability::ExecuteProcess)
             .map_err(|_| WorkspaceRuntimeError::TrustRequired)?;
+        let action_policy_revision = local.action_policy_revision().clone();
         let local = append_local_tool(
             local,
-            Arc::new(CodeRetrievalTool::new(
-                retrieval_workspace,
-                code_index.index(),
-                code_index_semantic.clone(),
-                cloud_code_index.clone(),
-            )),
+            Arc::new(
+                CodeRetrievalTool::new(
+                    retrieval_workspace,
+                    code_index.index(),
+                    code_index_semantic.clone(),
+                    cloud_code_index.clone(),
+                )
+                .with_action_policy_revision(action_policy_revision),
+            ),
         );
         let local = append_multi_agent_tools(
             local,
@@ -1390,13 +1480,17 @@ fn append_multi_agent_tools(
     sessions: &Arc<SessionCoordinator>,
     runtime: &Arc<RwLock<WorkspaceRuntime>>,
 ) -> crate::local_tools::LocalToolComposition {
+    let action_policy_revision = local.action_policy_revision().clone();
     append_local_tool(
         local,
-        Arc::new(MultiAgentToolService::new(
-            Arc::clone(coordinator),
-            Arc::clone(sessions),
-            Arc::downgrade(runtime),
-        )),
+        Arc::new(
+            MultiAgentToolService::new(
+                Arc::clone(coordinator),
+                Arc::clone(sessions),
+                Arc::downgrade(runtime),
+            )
+            .with_action_policy_revision(action_policy_revision),
+        ),
     )
 }
 

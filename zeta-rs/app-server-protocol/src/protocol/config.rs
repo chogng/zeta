@@ -278,6 +278,111 @@ pub struct LanguageServerConfigDto {
     pub executable: Option<String>,
 }
 
+/// Coarse action category available to deterministic execution-policy selectors.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum ExecPolicyActionKindDto {
+    LocalProcess,
+    FileSystemMutation,
+    NetworkRequest,
+    BrowserInteraction,
+    ExternalServiceMutation,
+    CredentialUse,
+    SystemOperation,
+}
+
+/// One exact argv position in a command-prefix selector.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", tag = "type", content = "value")]
+pub enum ExecPolicyTokenDto {
+    Literal(String),
+    OneOf(Vec<String>),
+}
+
+/// Host matching semantics for one structured network target.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", tag = "type", content = "value")]
+pub enum ExecPolicyHostMatcherDto {
+    Exact(String),
+    DomainSuffix(String),
+}
+
+/// Scope matching semantics for one structured capability.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", tag = "type", content = "value")]
+pub enum ExecPolicyScopeMatcherDto {
+    Exact(String),
+    Prefix(String),
+}
+
+/// Deterministic selector over host-materialized action fields.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    tag = "type"
+)]
+pub enum ExecPolicySelectorDto {
+    Any,
+    ActionDigest {
+        digest: String,
+    },
+    ActionKind {
+        action_kind: ExecPolicyActionKindDto,
+    },
+    Source {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        source: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        source_id: Option<String>,
+    },
+    CommandPrefix {
+        pattern: Vec<ExecPolicyTokenDto>,
+    },
+    Network {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        protocol: Option<String>,
+        host: ExecPolicyHostMatcherDto,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        port: Option<u16>,
+    },
+    Capability {
+        capability_kind: String,
+        scope: ExecPolicyScopeMatcherDto,
+    },
+    All {
+        selectors: Vec<ExecPolicySelectorDto>,
+    },
+}
+
+/// Effect produced when one execution-policy rule matches.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", tag = "type", content = "reason")]
+pub enum ExecPolicyEffectDto {
+    Continue,
+    AllowUnsandboxed,
+    RequireApproval,
+    RequireSandbox,
+    Deny(String),
+}
+
+/// One durable user-owned deterministic execution-policy rule.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ExecPolicyRuleDto {
+    #[schemars(length(min = 1))]
+    pub id: String,
+    pub selector: ExecPolicySelectorDto,
+    pub effect: ExecPolicyEffectDto,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub justification: Option<String>,
+}
+
 /// Current user configuration snapshot returned by `config/read`.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -296,6 +401,30 @@ pub struct ConfigReadResult {
     pub language_servers: BTreeMap<String, LanguageServerConfigDto>,
     pub tool_search: ToolSearchConfigDto,
     pub semantic_code_index: SemanticCodeIndexConfigDto,
+    pub exec_policy_rules: Vec<ExecPolicyRuleDto>,
+}
+
+/// Creates or replaces one durable User execution-policy rule.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ExecPolicyRuleUpsertParams {
+    pub command_id: CommandId,
+    #[schemars(range(min = 0))]
+    #[ts(type = "number")]
+    pub expected_revision: u64,
+    pub rule: ExecPolicyRuleDto,
+}
+
+/// Removes one durable User execution-policy rule.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ExecPolicyRuleRemoveParams {
+    pub command_id: CommandId,
+    #[schemars(range(min = 0))]
+    #[ts(type = "number")]
+    pub expected_revision: u64,
+    #[schemars(length(min = 1))]
+    pub rule_id: String,
 }
 
 /// Selects lexical Tool Search or enables one exact embedding model after a readiness probe.

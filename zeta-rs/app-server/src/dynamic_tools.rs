@@ -2,25 +2,25 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use serde_json::json;
+use zeta_action_policy::ActionDigest;
+use zeta_action_policy::ActionKind;
+use zeta_action_policy::ActionPolicyRevision;
+use zeta_action_policy::ActionProvenance;
+use zeta_action_policy::ActionReviewPhase;
+use zeta_action_policy::ActionReviewRequest;
+use zeta_action_policy::ActionSource;
+use zeta_action_policy::ApprovalRequest;
+use zeta_action_policy::Capability;
+use zeta_action_policy::CapabilityKind;
+use zeta_action_policy::CapabilitySet;
+use zeta_action_policy::ExecutionDecision;
+use zeta_action_policy::ResolvedAction;
+use zeta_action_policy::SandboxCompatibility;
 use zeta_async_utils::CancellationToken;
+use zeta_core::ActionPolicyService;
 use zeta_core::CoreError;
-use zeta_core::PolicyService;
 use zeta_core::ToolAuthorization;
 use zeta_core::ToolService;
-use zeta_policy::ActionDigest;
-use zeta_policy::ActionKind;
-use zeta_policy::ActionProvenance;
-use zeta_policy::ActionReviewPhase;
-use zeta_policy::ActionReviewRequest;
-use zeta_policy::ActionSource;
-use zeta_policy::ApprovalRequest;
-use zeta_policy::Capability;
-use zeta_policy::CapabilityKind;
-use zeta_policy::CapabilitySet;
-use zeta_policy::ExecutionDecision;
-use zeta_policy::PolicyRevision;
-use zeta_policy::ResolvedAction;
-use zeta_policy::SandboxCompatibility;
 use zeta_protocol::AgentRequest;
 use zeta_protocol::AgentResponse;
 use zeta_protocol::ContentPart;
@@ -39,7 +39,7 @@ const DYNAMIC_TOOL_POLICY_REVISION: &str = "dynamic-tool-user-approval-v1";
 
 pub(crate) struct DynamicToolComposition {
     pub(crate) tools: Arc<dyn ToolService>,
-    pub(crate) policy: Arc<dyn PolicyService>,
+    pub(crate) policy: Arc<dyn ActionPolicyService>,
 }
 
 #[derive(Clone)]
@@ -206,7 +206,7 @@ impl ToolService for DynamicToolService {
             SandboxCompatibility::NotApplicable {
                 reason: "client-hosted side effects cannot be enforced by the local sandbox".into(),
             },
-            PolicyRevision::new(DYNAMIC_TOOL_POLICY_REVISION),
+            ActionPolicyRevision::new(DYNAMIC_TOOL_POLICY_REVISION),
         ))
     }
 
@@ -227,7 +227,7 @@ struct DynamicToolPolicy {
     bindings: Arc<BTreeMap<ToolName, DynamicToolBinding>>,
 }
 
-impl PolicyService for DynamicToolPolicy {
+impl ActionPolicyService for DynamicToolPolicy {
     fn revision(&self) -> String {
         DYNAMIC_TOOL_POLICY_REVISION.into()
     }
@@ -243,7 +243,7 @@ impl PolicyService for DynamicToolPolicy {
         let binding = ToolName::new(request.provenance().source_id())
             .ok()
             .and_then(|name| self.bindings.get(&name));
-        if request.policy_revision().as_str() != DYNAMIC_TOOL_POLICY_REVISION
+        if request.action_policy_revision().as_str() != DYNAMIC_TOOL_POLICY_REVISION
             || request.provenance().source() != &ActionSource::DynamicTool
             || binding.map(|binding| &binding.capabilities)
                 != Some(request.action().required_capabilities())

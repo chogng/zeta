@@ -57,6 +57,11 @@ use zeta_models_manager::ModelRequirements;
 use zeta_models_manager::ModelsManager;
 use zeta_plugins::PluginActivationAuthority;
 use zeta_plugins::PluginActivationSnapshot;
+use zeta_plugins::PluginMarketplace;
+use zeta_plugins::PluginMarketplaceMode;
+use zeta_plugins::PluginMarketplaceService;
+use zeta_plugins::PluginProfileRequest;
+use zeta_plugins::PluginProfileRequestEnablement;
 use zeta_protocol::ContextWindow;
 use zeta_rollout::LocalStateRepository;
 use zeta_secrets::SecretStore;
@@ -171,6 +176,7 @@ pub struct LocalAppServerOptions {
     model_operation_client: Option<Arc<dyn OperationClient>>,
     web_search_backend: Option<Arc<dyn zeta_web_search_extension::WebSearchBackend>>,
     connector_runtime: Option<LocalConnectorRuntime>,
+    plugin_marketplaces: Vec<(PathBuf, PluginMarketplaceMode)>,
 }
 
 impl LocalAppServerOptions {
@@ -185,6 +191,7 @@ impl LocalAppServerOptions {
             model_operation_client: None,
             web_search_backend: None,
             connector_runtime: None,
+            plugin_marketplaces: Vec::new(),
         }
     }
 
@@ -268,6 +275,20 @@ impl LocalAppServerOptions {
             LocalConnectorRuntime::from_plugin_authority(&self.profile_root, authority, secrets)?;
         Ok(self.with_connector_runtime(runtime))
     }
+
+    /// Registers one product-managed Marketplace root.
+    pub fn with_plugin_marketplace(mut self, root: impl Into<PathBuf>) -> Self {
+        self.plugin_marketplaces
+            .push((root.into(), PluginMarketplaceMode::Managed));
+        self
+    }
+
+    /// Registers one explicit local-development Marketplace root.
+    pub fn with_local_plugin_marketplace(mut self, root: impl Into<PathBuf>) -> Self {
+        self.plugin_marketplaces
+            .push((root.into(), PluginMarketplaceMode::LocalDevelopment));
+        self
+    }
 }
 
 impl fmt::Debug for LocalAppServerOptions {
@@ -292,6 +313,7 @@ impl fmt::Debug for LocalAppServerOptions {
                 "connector_runtime_injected",
                 &self.connector_runtime.is_some(),
             )
+            .field("plugin_marketplace_count", &self.plugin_marketplaces.len())
             .finish()
     }
 }
@@ -319,6 +341,7 @@ impl PartialEq for LocalAppServerOptions {
                 (None, None) => true,
                 _ => false,
             }
+            && self.plugin_marketplaces == other.plugin_marketplaces
     }
 }
 
@@ -697,12 +720,45 @@ pub fn open_local_app_server_with_code_index_providers(
         server = server.with_connector_service(Arc::clone(&connectors.service));
         if let Some(authority) = &connectors.plugin_authority {
             server = server.with_plugin_authority(authority.clone());
+            if !options.plugin_marketplaces.is_empty() {
+                let marketplaces = options
+                    .plugin_marketplaces
+                    .iter()
+                    .map(|(root, mode)| PluginMarketplace::open(root, *mode))
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(|error| OpenAppServerError(error.to_string()))?;
+                let service = PluginMarketplaceService::new(authority.clone(), marketplaces)
+                    .map_err(|error| OpenAppServerError(error.to_string()))?;
+                let requests = user_config.values.plugins.requests.values().map(|request| {
+                    Ok(PluginProfileRequest {
+                        id: zeta_plugins::PluginId::new(request.plugin_id.as_str())
+                            .map_err(|error| OpenAppServerError(error.to_string()))?,
+                        version: zeta_plugins::PluginVersion::new(request.version.as_str())
+                            .map_err(|error| OpenAppServerError(error.to_string()))?,
+                        enablement: match request.enablement {
+                            zeta_config::PluginRequestEnablement::Disabled => {
+                                PluginProfileRequestEnablement::Disabled
+                            }
+                            zeta_config::PluginRequestEnablement::Enabled => {
+                                PluginProfileRequestEnablement::Enabled
+                            }
+                        },
+                    })
+                });
+                service
+                    .reconcile_profile(requests.collect::<Result<Vec<_>, _>>()?)
+                    .map_err(|error| OpenAppServerError(error.to_string()))?;
+                server = server.with_plugin_marketplaces(service);
+            }
         }
         if let Some(oauth) = &connectors.oauth {
             server = server.with_connector_oauth_service(Arc::clone(oauth));
         }
     }
     server = server
+        .with_local_exec_policy_config(crate::local_tools::LocalExecPolicyConfig::from_resolved(
+            &runtime_config,
+        ))
         .with_local_workspace_host(
             mcp,
             WorkspaceSwitchTrustPolicy::UserConfig(Arc::clone(&config)),
@@ -727,6 +783,7 @@ pub fn open_local_app_server_with_code_index_providers(
         .ok_or_else(|| OpenAppServerError("local Workspace runtime is unavailable".into()))?;
     server = server.with_tool_config_watcher(ToolConfigWatcher::start(
         config,
+        workspace,
         workspace_tools,
         workspace_runtime,
         connector_runtime,
@@ -763,6 +820,7 @@ pub(crate) struct ToolConfigWatcher {
 impl ToolConfigWatcher {
     fn start(
         config: Arc<ConfigStore>,
+        workspace: Option<Arc<WorkspaceConfigTracker>>,
         workspace_tools: Arc<WorkspaceToolPorts>,
         workspace_runtime: crate::server::WorkspaceRuntimeControl,
         mut connector_runtime: Option<LocalConnectorRuntime>,
@@ -792,6 +850,9 @@ impl ToolConfigWatcher {
             .name("zeta-tool-config".into())
             .spawn(move || {
                 let mut catalog_generation = 1_u64;
+                let mut workspace_revision = workspace
+                    .as_ref()
+                    .and_then(|workspace| workspace.read().ok().map(|(_, revision)| revision));
                 let mut config_dirty = false;
                 let mut connector_dirty = false;
                 let mut mcp_dirty = false;
@@ -808,6 +869,19 @@ impl ToolConfigWatcher {
                         Err(std::sync::mpsc::RecvTimeoutError::Timeout) => false,
                         Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
                     };
+                    if let Some(workspace) = &workspace {
+                        match workspace.read() {
+                            Ok((_, revision)) if workspace_revision != Some(revision) => {
+                                workspace_revision = Some(revision);
+                                config_dirty = true;
+                            }
+                            Ok(_) => {}
+                            Err(error) => {
+                                workspace_tools.record_reconcile_failure(error.to_string());
+                                continue;
+                            }
+                        }
+                    }
                     if let Some(connector_changes) = &connector_changes {
                         while connector_changes.try_recv().is_ok() {
                             connector_dirty = true;
@@ -852,6 +926,20 @@ impl ToolConfigWatcher {
                                 continue;
                             }
                             semantic_binding = Some(next_semantic_binding);
+                        }
+                        let runtime_config =
+                            match resolve_local_config(&snapshot, workspace.as_deref()) {
+                                Ok(config) => config,
+                                Err(error) => {
+                                    workspace_tools.record_reconcile_failure(error.to_string());
+                                    continue;
+                                }
+                            };
+                        if let Err(error) =
+                            workspace_runtime.reconcile_exec_policy_config(&runtime_config)
+                        {
+                            workspace_tools.record_reconcile_failure(error.to_string());
+                            continue;
                         }
                     }
                     if plugin_dirty
@@ -1146,25 +1234,29 @@ impl ConfigBackedModelService {
     }
 
     fn resolve_config(&self, user: &ResolvedConfigSnapshot) -> Result<ResolvedConfig, CoreError> {
-        let Some(workspace) = &self.workspace else {
-            return Ok(user.values.clone());
-        };
-        let (document, revision) = workspace.read().map_err(|error| {
-            CoreError::Model(format!("failed to read Workspace config: {}", error.0))
-        })?;
-        resolve_scoped_config(
-            user,
-            Some(WorkspaceConfigInput::new(
-                workspace.scope(),
-                revision,
-                &document,
-            )),
-        )
-        .map(|resolved| resolved.values)
-        .map_err(|error| {
+        resolve_local_config(user, self.workspace.as_deref()).map_err(|error| {
             CoreError::Model(format!("failed to resolve Workspace config: {}", error.0))
         })
     }
+}
+
+fn resolve_local_config(
+    user: &ResolvedConfigSnapshot,
+    workspace: Option<&WorkspaceConfigTracker>,
+) -> Result<ResolvedConfig, zeta_config::ConfigError> {
+    let Some(workspace) = workspace else {
+        return Ok(user.values.clone());
+    };
+    let (document, revision) = workspace.read()?;
+    resolve_scoped_config(
+        user,
+        Some(WorkspaceConfigInput::new(
+            workspace.scope(),
+            revision,
+            &document,
+        )),
+    )
+    .map(|resolved| resolved.values)
 }
 
 fn context_budget_for_config(config: &ResolvedConfig) -> Result<ContextBudget, CoreError> {

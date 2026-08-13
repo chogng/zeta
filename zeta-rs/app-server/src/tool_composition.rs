@@ -4,29 +4,29 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::RwLock;
 
+use zeta_action_policy::ActionDigest;
+use zeta_action_policy::ActionKind;
+use zeta_action_policy::ActionPolicyRevision;
+use zeta_action_policy::ActionProvenance;
+use zeta_action_policy::ActionReviewRequest;
+use zeta_action_policy::ActionSource;
+use zeta_action_policy::CapabilitySet;
+use zeta_action_policy::ExecutionDecision;
+use zeta_action_policy::GrantId;
+use zeta_action_policy::ResolvedAction;
+use zeta_action_policy::ReviewEvidence;
+use zeta_action_policy::SandboxCompatibility;
 use zeta_async_utils::CancellationToken;
 use zeta_config::ToolSearchModeConfig;
+use zeta_core::ActionPolicyService;
 use zeta_core::CoreError;
 use zeta_core::ModelToolCatalogSnapshot;
-use zeta_core::PolicyService;
 use zeta_core::ToolAuthorization;
 use zeta_core::ToolExecutionFacts;
 use zeta_core::ToolOutputSink;
 use zeta_core::ToolService;
 use zeta_model_provider::EmbeddingInvoker;
 use zeta_model_provider::EmbeddingRequest;
-use zeta_policy::ActionDigest;
-use zeta_policy::ActionKind;
-use zeta_policy::ActionProvenance;
-use zeta_policy::ActionReviewRequest;
-use zeta_policy::ActionSource;
-use zeta_policy::CapabilitySet;
-use zeta_policy::ExecutionDecision;
-use zeta_policy::GrantId;
-use zeta_policy::PolicyRevision;
-use zeta_policy::ResolvedAction;
-use zeta_policy::ReviewEvidence;
-use zeta_policy::SandboxCompatibility;
 use zeta_protocol::ToolCall;
 use zeta_protocol::ToolCallBinding;
 use zeta_protocol::ToolCallCaller;
@@ -253,11 +253,14 @@ impl ToolPortKind {
 pub(crate) struct ToolPort {
     kind: ToolPortKind,
     contributions: Vec<ToolContribution>,
-    policy: Arc<dyn PolicyService>,
+    policy: Arc<dyn ActionPolicyService>,
 }
 
 impl ToolPort {
-    pub(crate) fn dynamic(tools: Arc<dyn ToolService>, policy: Arc<dyn PolicyService>) -> Self {
+    pub(crate) fn dynamic(
+        tools: Arc<dyn ToolService>,
+        policy: Arc<dyn ActionPolicyService>,
+    ) -> Self {
         Self::from_service(ToolPortKind::Dynamic, ToolExposure::Direct, tools, policy)
     }
 
@@ -265,7 +268,7 @@ impl ToolPort {
         executors: Vec<Arc<dyn zeta_tools::ToolExecutor>>,
         environment_id: zeta_tools::ToolEnvironmentId,
         reviewer: Arc<dyn ToolExecutorReviewer>,
-        policy: Arc<dyn PolicyService>,
+        policy: Arc<dyn ActionPolicyService>,
     ) -> Result<Self, ToolCompositionError> {
         let mut port = Self {
             kind: ToolPortKind::Extension,
@@ -278,11 +281,11 @@ impl ToolPort {
         Ok(port)
     }
 
-    pub(crate) fn local(tools: Arc<dyn ToolService>, policy: Arc<dyn PolicyService>) -> Self {
+    pub(crate) fn local(tools: Arc<dyn ToolService>, policy: Arc<dyn ActionPolicyService>) -> Self {
         Self::from_service(ToolPortKind::Local, ToolExposure::Direct, tools, policy)
     }
 
-    pub(crate) fn mcp(tools: Arc<dyn ToolService>, policy: Arc<dyn PolicyService>) -> Self {
+    pub(crate) fn mcp(tools: Arc<dyn ToolService>, policy: Arc<dyn ActionPolicyService>) -> Self {
         Self::from_service(ToolPortKind::Mcp, ToolExposure::Deferred, tools, policy)
     }
 
@@ -290,7 +293,7 @@ impl ToolPort {
         kind: ToolPortKind,
         exposure: ToolExposure,
         tools: Arc<dyn ToolService>,
-        policy: Arc<dyn PolicyService>,
+        policy: Arc<dyn ActionPolicyService>,
     ) -> Self {
         let search = ToolSearchMetadata::new(kind.search_label())
             .expect("static App Server tool search metadata is valid");
@@ -401,17 +404,17 @@ enum ToolContributionRuntime {
 
 pub(crate) struct CombinedToolPorts {
     pub(crate) tools: Arc<dyn ToolService>,
-    pub(crate) policy: Arc<dyn PolicyService>,
+    pub(crate) policy: Arc<dyn ActionPolicyService>,
 }
 
 struct ToolGeneration {
     tools: Arc<dyn ToolService>,
-    policy: Arc<dyn PolicyService>,
+    policy: Arc<dyn ActionPolicyService>,
 }
 
 struct BoundToolCall {
     tools: Arc<dyn ToolService>,
-    policy: Arc<dyn PolicyService>,
+    policy: Arc<dyn ActionPolicyService>,
     action_digest: Option<ActionDigest>,
 }
 
@@ -420,7 +423,7 @@ pub(crate) struct ReloadableToolPorts {
     incarnation: String,
     current: RwLock<Arc<ToolGeneration>>,
     calls: Mutex<BTreeMap<ToolCallId, BoundToolCall>>,
-    policies: Mutex<BTreeMap<ActionDigest, Arc<dyn PolicyService>>>,
+    policies: Mutex<BTreeMap<ActionDigest, Arc<dyn ActionPolicyService>>>,
     diagnostic: Mutex<Option<String>>,
 }
 
@@ -467,8 +470,8 @@ impl ReloadableToolPorts {
         })
     }
 
-    pub(crate) fn policy(self: &Arc<Self>) -> Arc<dyn PolicyService> {
-        Arc::new(ReloadablePolicyService {
+    pub(crate) fn policy(self: &Arc<Self>) -> Arc<dyn ActionPolicyService> {
+        Arc::new(ReloadableActionPolicyService {
             ports: Arc::clone(self),
         })
     }
@@ -783,11 +786,11 @@ impl ReloadableToolService {
     }
 }
 
-struct ReloadablePolicyService {
+struct ReloadableActionPolicyService {
     ports: Arc<ReloadableToolPorts>,
 }
 
-impl PolicyService for ReloadablePolicyService {
+impl ActionPolicyService for ReloadableActionPolicyService {
     fn revision(&self) -> String {
         self.ports.generation().policy.revision()
     }
@@ -817,7 +820,7 @@ fn tool_generation(combined: Option<CombinedToolPorts>) -> ToolGeneration {
         },
         None => ToolGeneration {
             tools: Arc::new(EmptyToolService),
-            policy: Arc::new(EmptyPolicyService),
+            policy: Arc::new(EmptyActionPolicyService),
         },
     }
 }
@@ -849,9 +852,9 @@ impl ToolService for EmptyToolService {
     }
 }
 
-struct EmptyPolicyService;
+struct EmptyActionPolicyService;
 
-impl PolicyService for EmptyPolicyService {
+impl ActionPolicyService for EmptyActionPolicyService {
     fn revision(&self) -> String {
         "empty-policy-v1".into()
     }
@@ -965,7 +968,7 @@ pub(crate) fn combine_tool_ports_at_generation_with_search(
             registry,
             search,
         }),
-        policy: Arc::new(CompositePolicyService {
+        policy: Arc::new(CompositeActionPolicyService {
             dynamic: dynamic_policy,
             extension: extension_policy,
             local: local_policy,
@@ -1364,15 +1367,15 @@ impl ToolOutputSink for NoopToolOutputSink {
     }
 }
 
-struct CompositePolicyService {
-    dynamic: Option<Arc<dyn PolicyService>>,
-    extension: Option<Arc<dyn PolicyService>>,
-    local: Option<Arc<dyn PolicyService>>,
-    mcp: Option<Arc<dyn PolicyService>>,
+struct CompositeActionPolicyService {
+    dynamic: Option<Arc<dyn ActionPolicyService>>,
+    extension: Option<Arc<dyn ActionPolicyService>>,
+    local: Option<Arc<dyn ActionPolicyService>>,
+    mcp: Option<Arc<dyn ActionPolicyService>>,
     search_enabled: bool,
 }
 
-impl PolicyService for CompositePolicyService {
+impl ActionPolicyService for CompositeActionPolicyService {
     fn revision(&self) -> String {
         format!(
             "composite-policy-v1:dynamic={}:extension={}:local={}:mcp={}:tool-search={}",
@@ -1522,7 +1525,7 @@ impl ToolSearchRuntime {
             SandboxCompatibility::NotApplicable {
                 reason: "tool search reads only an immutable in-process registry".into(),
             },
-            PolicyRevision::new(TOOL_SEARCH_POLICY_REVISION),
+            ActionPolicyRevision::new(TOOL_SEARCH_POLICY_REVISION),
         ))
     }
 
@@ -1657,7 +1660,7 @@ fn decide_tool_search(
     cancellation
         .check()
         .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
-    if request.policy_revision().as_str() != TOOL_SEARCH_POLICY_REVISION
+    if request.action_policy_revision().as_str() != TOOL_SEARCH_POLICY_REVISION
         || request.provenance().source() != &ActionSource::BuiltInTool
         || request.provenance().source_id() != TOOL_SEARCH_TOOL_NAME
         || request.action().kind() != &ActionKind::SystemOperation

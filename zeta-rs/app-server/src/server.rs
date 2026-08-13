@@ -1,7 +1,7 @@
 use crate::SlashCommandCatalog;
 use crate::model_catalog::{ModelCatalog, unavailable_model_catalog};
 use crate::resource_store::{ResourceError, ResourceStore};
-use crate::review::ApprovalModePolicyService;
+use crate::review::ApprovalModeActionPolicyService;
 use crate::review::ProviderReviewModel;
 use serde::Deserialize;
 use serde_json::Value;
@@ -19,8 +19,8 @@ use zeta_app_server_protocol::rpc::{
 use zeta_app_server_transport::{DEFAULT_MAX_MESSAGE_BYTES, JsonlTransport};
 use zeta_config::ConfigStore;
 use zeta_core::{
-    AgentTreeLimits, CancelTurnInteractionRequest, CoreError, ModelService, MultiAgentCoordinator,
-    PolicyService, SessionCoordinator, ThreadUpdateSink, ToolService, TurnExecutor,
+    ActionPolicyService, AgentTreeLimits, CancelTurnInteractionRequest, CoreError, ModelService,
+    MultiAgentCoordinator, SessionCoordinator, ThreadUpdateSink, ToolService, TurnExecutor,
 };
 use zeta_extension_api::ExtensionRegistry;
 use zeta_extensions::ExtensionCatalog;
@@ -59,6 +59,7 @@ mod notification_queue;
 mod operations;
 mod plugin_operations;
 mod plugin_runtime;
+mod plugin_skill_sources;
 mod search_operations;
 mod semantic_index_job;
 mod skill_operations;
@@ -114,9 +115,12 @@ pub struct AppServer {
     pub(super) collaboration: Mutex<collaboration_runtime::DocumentCollaborationStore>,
     pub(super) extensions: Mutex<ExtensionCatalog>,
     pub(super) config: Option<Arc<ConfigStore>>,
+    pub(super) local_exec_policy_config: Arc<RwLock<crate::local_tools::LocalExecPolicyConfig>>,
     pub(super) connectors: Option<Arc<zeta_connectors_extension::ConnectorCredentialService>>,
     pub(super) connector_oauth: Option<Arc<zeta_connectors_extension::ConnectorOAuthService>>,
     pub(super) plugins: Option<zeta_plugins::PluginActivationAuthority>,
+    pub(super) plugin_marketplaces: Option<zeta_plugins::PluginMarketplaceService>,
+    plugin_skill_sources: Option<Arc<dyn zeta_skills_extension::DynamicSkillSourceProvider>>,
     language: Mutex<language_runtime::AppServerLanguageRuntime>,
     approval_review_model: Option<ProviderReviewModel>,
     pub(super) workspace_authority_gate: Arc<Mutex<()>>,
@@ -138,6 +142,7 @@ pub struct AppServer {
     _config_watcher: Option<config_runtime::ConfigWatcher>,
     _connector_watcher: Option<connector_runtime::ConnectorWatcher>,
     _plugin_watcher: Option<plugin_runtime::PluginWatcher>,
+    _plugin_profile_watcher: Option<plugin_runtime::PluginProfileWatcher>,
     _tool_config_watcher: Option<crate::local::ToolConfigWatcher>,
     _interaction_deadline_watcher: interaction_runtime::InteractionDeadlineWatcher,
     updates: Arc<UpdateBroker>,
@@ -213,9 +218,14 @@ impl AppServer {
             collaboration: Mutex::new(collaboration_runtime::DocumentCollaborationStore::default()),
             extensions: Mutex::new(ExtensionCatalog::default()),
             config: None,
+            local_exec_policy_config: Arc::new(RwLock::new(
+                crate::local_tools::LocalExecPolicyConfig::default(),
+            )),
             connectors: None,
             connector_oauth: None,
             plugins: None,
+            plugin_marketplaces: None,
+            plugin_skill_sources: None,
             language: Mutex::new(language_runtime::AppServerLanguageRuntime::new(
                 updates.clone(),
             )),
@@ -240,6 +250,7 @@ impl AppServer {
             _config_watcher: None,
             _connector_watcher: None,
             _plugin_watcher: None,
+            _plugin_profile_watcher: None,
             _tool_config_watcher: None,
             _interaction_deadline_watcher: interaction_deadline_watcher,
             updates,
@@ -369,8 +380,33 @@ impl AppServer {
         self._plugin_watcher = Some(plugin_runtime::PluginWatcher::start(
             &plugins,
             Arc::clone(&self.updates),
+            self.skills.clone(),
         ));
+        let skill_sources: Arc<dyn zeta_skills_extension::DynamicSkillSourceProvider> = Arc::new(
+            plugin_skill_sources::PluginSkillSourceProvider::new(plugins.clone()),
+        );
+        if let Some(runtime) = &self.skills
+            && let Err(error) = runtime.bind_dynamic_sources(skill_sources.clone())
+        {
+            log::error!("failed to bind Plugin Skill sources: {error}");
+        }
+        self.plugin_skill_sources = Some(skill_sources);
         self.plugins = Some(plugins);
+        self
+    }
+
+    /// Installs host-registered Marketplace ingestion over the same Plugin authority.
+    pub fn with_plugin_marketplaces(
+        mut self,
+        marketplaces: zeta_plugins::PluginMarketplaceService,
+    ) -> Self {
+        if let Some(config) = &self.config {
+            self._plugin_profile_watcher = Some(plugin_runtime::PluginProfileWatcher::start(
+                Arc::clone(config),
+                marketplaces.clone(),
+            ));
+        }
+        self.plugin_marketplaces = Some(marketplaces);
         self
     }
 
@@ -393,7 +429,12 @@ impl AppServer {
         config: Arc<dyn SkillConfigSnapshotProvider>,
         web_search_backend: Option<Arc<dyn zeta_web_search_extension::WebSearchBackend>>,
     ) -> Result<Self, String> {
-        let runtime = SkillRuntime::new(built_in_source, config, self.updates.clone())?;
+        let runtime = SkillRuntime::with_dynamic_sources(
+            built_in_source,
+            config,
+            self.updates.clone(),
+            self.plugin_skill_sources.clone(),
+        )?;
         let mut builder = zeta_extension_api::ExtensionRegistryBuilder::new();
         zeta_skills_extension::install(&mut builder, Arc::clone(&runtime));
         if let Some(backend) = web_search_backend {
@@ -552,9 +593,9 @@ impl AppServer {
     pub fn with_tool_service(
         mut self,
         tools: Arc<dyn ToolService>,
-        policy: Arc<dyn PolicyService>,
+        policy: Arc<dyn ActionPolicyService>,
     ) -> Self {
-        let policy = Arc::new(ApprovalModePolicyService::new(
+        let policy = Arc::new(ApprovalModeActionPolicyService::new(
             policy,
             self.approval_review_model.clone(),
         ));
@@ -773,11 +814,21 @@ impl AppServer {
             Some(ClientMethod::ConnectorOAuthCancel) => {
                 self.connector_oauth_cancel(&request.params)
             }
+            Some(ClientMethod::ConnectorOAuthRefresh) => {
+                self.connector_oauth_refresh(&request.params)
+            }
+            Some(ClientMethod::ConnectorOAuthRevoke) => {
+                self.connector_oauth_revoke(&request.params)
+            }
             Some(ClientMethod::ConnectorDisconnect) => self.connector_disconnect(&request.params),
             Some(ClientMethod::ConnectorCredentialCleanupRetry) => {
                 self.connector_credential_cleanup_retry(&request.params)
             }
             Some(ClientMethod::PluginList) => self.plugin_list(),
+            Some(ClientMethod::PluginMarketplaceList) => self.plugin_marketplace_list(),
+            Some(ClientMethod::PluginInstall) => self.plugin_install(&request.params),
+            Some(ClientMethod::PluginUpdate) => self.plugin_update(&request.params),
+            Some(ClientMethod::PluginRollback) => self.plugin_rollback(&request.params),
             Some(ClientMethod::PluginEnable) => self.plugin_enable(&request.params),
             Some(ClientMethod::PluginDisable) => self.plugin_disable(&request.params),
             Some(ClientMethod::PluginGrant) => self.plugin_grant(&request.params),
@@ -785,6 +836,12 @@ impl AppServer {
             Some(ClientMethod::PluginUninstall) => self.plugin_uninstall(&request.params),
             Some(ClientMethod::ModelList) => self.model_list(),
             Some(ClientMethod::ConfigUpdate) => self.config_update(&request.params),
+            Some(ClientMethod::ExecPolicyRuleUpsert) => {
+                self.exec_policy_rule_upsert(&request.params)
+            }
+            Some(ClientMethod::ExecPolicyRuleRemove) => {
+                self.exec_policy_rule_remove(&request.params)
+            }
             Some(ClientMethod::ToolSearchConfigure) => self.tool_search_configure(&request.params),
             Some(ClientMethod::SemanticCodeIndexConfigure) => {
                 self.semantic_code_index_configure(&request.params)

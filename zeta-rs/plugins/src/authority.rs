@@ -19,6 +19,7 @@ use crate::PluginActivationSnapshot;
 use crate::PluginError;
 use crate::PluginErrorKind;
 use crate::PluginId;
+use crate::PluginMarketplacePackage;
 use crate::PluginPackageDigest;
 use crate::PluginPackageStore;
 
@@ -63,6 +64,8 @@ pub enum PluginAuthorityCommand {
     Disable { package: InstalledPluginRef },
     Grant { package: InstalledPluginRef },
     RevokeGrant { package: InstalledPluginRef },
+    RevokePackage { package: InstalledPluginRef },
+    RestorePackage { package: InstalledPluginRef },
     Uninstall { package: InstalledPluginRef },
 }
 
@@ -102,6 +105,7 @@ pub struct PluginAuthoritySnapshot {
     installed: Vec<InstalledPluginRef>,
     enabled: Vec<InstalledPluginRef>,
     granted: Vec<InstalledPluginRef>,
+    revoked: Vec<InstalledPluginRef>,
     activation: PluginActivationSnapshot,
 }
 
@@ -122,6 +126,14 @@ impl PluginAuthoritySnapshot {
     /// Exact packages whose contribution authority has been granted.
     pub fn granted(&self) -> &[InstalledPluginRef] {
         &self.granted
+    }
+
+    /// Exact packages denied by a trusted distribution revocation decision.
+    ///
+    /// Revocations are durable tombstones and can therefore refer to packages that are not
+    /// currently installed.
+    pub fn revoked(&self) -> &[InstalledPluginRef] {
+        &self.revoked
     }
 
     pub fn activation(&self) -> &PluginActivationSnapshot {
@@ -163,6 +175,7 @@ struct AuthorityState {
     installed: BTreeMap<InstalledKey, InstalledPluginRef>,
     enabled: BTreeMap<PluginId, InstalledPluginRef>,
     granted: BTreeMap<InstalledKey, InstalledPluginRef>,
+    revoked: BTreeMap<InstalledKey, InstalledPluginRef>,
     active: BTreeMap<PluginId, ActivePlugin>,
     activation: PluginActivationSnapshot,
     receipts: BTreeMap<String, PersistedCommandReceipt>,
@@ -259,7 +272,8 @@ impl PluginActivationAuthority {
         }
         let enabled = package_map_by_plugin(&installed, persisted.enabled, "enabled")?;
         let granted = package_map_by_key(&installed, persisted.granted, "granted")?;
-        let expected_active = effective_active(&enabled, &granted);
+        let revoked = package_tombstones(persisted.revoked, "revoked")?;
+        let expected_active = effective_active(&enabled, &granted, &revoked);
         if !same_active_packages(&active, &expected_active) {
             return Err(authority_error(
                 PluginErrorKind::PackageConflict,
@@ -276,6 +290,7 @@ impl PluginActivationAuthority {
                     installed,
                     enabled,
                     granted,
+                    revoked,
                     active,
                     activation,
                     receipts: persisted.receipts,
@@ -299,6 +314,7 @@ impl PluginActivationAuthority {
             installed: state.installed.values().cloned().collect(),
             enabled: state.enabled.values().cloned().collect(),
             granted: state.granted.values().cloned().collect(),
+            revoked: state.revoked.values().cloned().collect(),
             activation: state.activation.clone(),
         }
     }
@@ -315,6 +331,25 @@ impl PluginActivationAuthority {
 
     /// Validates, copies, and records one local-development package without enabling it.
     pub fn install_local(
+        &self,
+        command_id: PluginAuthorityCommandId,
+        expected_revision: u64,
+        package: &LocalPluginPackage,
+    ) -> Result<PluginInstallResult, PluginError> {
+        self.install_validated(command_id, expected_revision, package)
+    }
+
+    /// Copies and records one exact package resolved by a registered Marketplace.
+    pub fn install_marketplace(
+        &self,
+        command_id: PluginAuthorityCommandId,
+        expected_revision: u64,
+        package: &PluginMarketplacePackage,
+    ) -> Result<PluginInstallResult, PluginError> {
+        self.install_validated(command_id, expected_revision, package.local_package())
+    }
+
+    fn install_validated(
         &self,
         command_id: PluginAuthorityCommandId,
         expected_revision: u64,
@@ -390,14 +425,16 @@ impl PluginActivationAuthority {
         let mut installed = state.installed.clone();
         let mut enabled = state.enabled.clone();
         let mut granted = state.granted.clone();
+        let mut revoked = state.revoked.clone();
         apply_command(
             &self.inner.store,
             &mut installed,
             &mut enabled,
             &mut granted,
+            &mut revoked,
             &request.command,
         )?;
-        let mut active = effective_active(&enabled, &granted);
+        let mut active = effective_active(&enabled, &granted, &revoked);
         let activation_changed = !same_active_set(&state.active, &active);
         let activation_generation = if activation_changed {
             state
@@ -430,6 +467,7 @@ impl PluginActivationAuthority {
                 &installed,
                 &enabled,
                 &granted,
+                &revoked,
                 &active,
                 &receipts,
             ))?;
@@ -448,6 +486,7 @@ impl PluginActivationAuthority {
         state.installed = installed;
         state.enabled = enabled;
         state.granted = granted;
+        state.revoked = revoked;
         state.active = active;
         state.activation = activation;
         state.receipts = receipts;
@@ -634,12 +673,19 @@ fn apply_command(
     installed: &mut BTreeMap<InstalledKey, InstalledPluginRef>,
     enabled: &mut BTreeMap<PluginId, InstalledPluginRef>,
     granted: &mut BTreeMap<InstalledKey, InstalledPluginRef>,
+    revoked: &mut BTreeMap<InstalledKey, InstalledPluginRef>,
     command: &PluginAuthorityCommand,
 ) -> Result<(), PluginError> {
     match command {
         PluginAuthorityCommand::Install { package } => {
             store.read(package)?;
             let key = InstalledKey::from_package(package);
+            if revoked.get(&key) == Some(package) {
+                return Err(authority_error(
+                    PluginErrorKind::PackageRevoked,
+                    "revoked Plugin package cannot be installed",
+                ));
+            }
             if let Some(existing) = installed.get(&key)
                 && existing != package
             {
@@ -652,6 +698,12 @@ fn apply_command(
         }
         PluginAuthorityCommand::Enable { package } => {
             let key = InstalledKey::from_package(package);
+            if revoked.get(&key) == Some(package) {
+                return Err(authority_error(
+                    PluginErrorKind::PackageRevoked,
+                    "revoked Plugin package cannot be enabled",
+                ));
+            }
             if installed.get(&key) != Some(package) {
                 return Err(authority_error(
                     PluginErrorKind::SourceUnavailable,
@@ -672,6 +724,12 @@ fn apply_command(
         }
         PluginAuthorityCommand::Grant { package } => {
             let key = InstalledKey::from_package(package);
+            if revoked.get(&key) == Some(package) {
+                return Err(authority_error(
+                    PluginErrorKind::PackageRevoked,
+                    "revoked Plugin package cannot be granted",
+                ));
+            }
             if installed.get(&key) != Some(package) {
                 return Err(authority_error(
                     PluginErrorKind::SourceUnavailable,
@@ -690,6 +748,28 @@ fn apply_command(
                 ));
             }
             granted.remove(&key);
+        }
+        PluginAuthorityCommand::RevokePackage { package } => {
+            let key = InstalledKey::from_package(package);
+            if let Some(existing) = revoked.get(&key)
+                && existing != package
+            {
+                return Err(authority_error(
+                    PluginErrorKind::PackageConflict,
+                    "one revoked Plugin version cannot refer to multiple package digests",
+                ));
+            }
+            revoked.insert(key, package.clone());
+        }
+        PluginAuthorityCommand::RestorePackage { package } => {
+            let key = InstalledKey::from_package(package);
+            if revoked.get(&key) != Some(package) {
+                return Err(authority_error(
+                    PluginErrorKind::SourceUnavailable,
+                    "Plugin restore targets a package that is not revoked",
+                ));
+            }
+            revoked.remove(&key);
         }
         PluginAuthorityCommand::Uninstall { package } => {
             let key = InstalledKey::from_package(package);
@@ -714,10 +794,14 @@ fn apply_command(
 fn effective_active(
     enabled: &BTreeMap<PluginId, InstalledPluginRef>,
     granted: &BTreeMap<InstalledKey, InstalledPluginRef>,
+    revoked: &BTreeMap<InstalledKey, InstalledPluginRef>,
 ) -> BTreeMap<PluginId, ActivePlugin> {
     enabled
         .iter()
-        .filter(|(_, package)| granted.get(&InstalledKey::from_package(package)) == Some(*package))
+        .filter(|(_, package)| {
+            let key = InstalledKey::from_package(package);
+            granted.get(&key) == Some(*package) && revoked.get(&key) != Some(*package)
+        })
         .map(|(id, package)| {
             (
                 id.clone(),
@@ -773,6 +857,25 @@ fn package_map_by_key(
             return Err(authority_error(
                 PluginErrorKind::PackageConflict,
                 format!("Plugin authority {label} set does not match installed objects"),
+            ));
+        }
+    }
+    Ok(result)
+}
+
+fn package_tombstones(
+    packages: Vec<InstalledPluginRef>,
+    label: &str,
+) -> Result<BTreeMap<InstalledKey, InstalledPluginRef>, PluginError> {
+    let mut result = BTreeMap::new();
+    for package in packages {
+        let key = InstalledKey::from_package(&package);
+        if let Some(existing) = result.insert(key, package.clone())
+            && existing != package
+        {
+            return Err(authority_error(
+                PluginErrorKind::PackageConflict,
+                format!("Plugin authority {label} set contains conflicting package digests"),
             ));
         }
     }

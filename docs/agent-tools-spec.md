@@ -32,7 +32,7 @@
 | | |
 | --- | --- |
 | 状态 | 已接入（`zeta-shell-command` + `local_tools.rs`），schema 需按本节收敛 |
-| 执行 | 沙箱 + 审批走 `zeta-policy`；执行上限 256 KiB / 默认 30s（已有） |
+| 执行 | 沙箱 + 审批走 `zeta-action-policy`；执行上限 256 KiB / 默认 30s（已有） |
 | 模型侧限幅 | 30 KiB，头尾各半，中间标注 `[... N bytes truncated ...]` |
 
 **description（模型可见）：**

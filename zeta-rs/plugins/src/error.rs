@@ -13,6 +13,7 @@ pub enum PluginErrorKind {
     GenerationConflict,
     CommandConflict,
     PackageInUse,
+    PackageRevoked,
 }
 
 /// Sanitized failure returned while parsing or discovering a local Plugin package.

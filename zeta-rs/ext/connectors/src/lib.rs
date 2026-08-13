@@ -3,6 +3,7 @@
 mod auth;
 mod authority;
 mod command;
+mod github;
 mod oauth;
 mod projection;
 
@@ -21,6 +22,8 @@ pub use command::ConnectorCommandDisposition;
 pub use command::ConnectorCommandId;
 pub use command::ConnectorCommandRequest;
 pub use command::ConnectorCommandResult;
+pub use github::GitHubOAuthConfig;
+pub use github::GitHubOAuthProvider;
 pub use oauth::ConnectorOAuthAuthorization;
 pub use oauth::ConnectorOAuthChallenge;
 pub use oauth::ConnectorOAuthCompleteRequest;
@@ -30,6 +33,8 @@ pub use oauth::ConnectorOAuthErrorKind;
 pub use oauth::ConnectorOAuthExchangeRequest;
 pub use oauth::ConnectorOAuthFlowId;
 pub use oauth::ConnectorOAuthProvider;
+pub use oauth::ConnectorOAuthRefreshRequest;
+pub use oauth::ConnectorOAuthRevokeRequest;
 pub use oauth::ConnectorOAuthService;
 pub use oauth::ConnectorOAuthStartRequest;
 pub use projection::ConnectorCatalog;

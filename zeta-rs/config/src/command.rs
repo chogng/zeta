@@ -8,6 +8,8 @@ use crate::{
     SkillId, SkillSourceConfig, SkillSourceEnablement, SkillSourceId, WorkspaceTrustSetting,
 };
 use serde::{Deserialize, Serialize};
+use zeta_execpolicy::ExecPolicyRule;
+use zeta_execpolicy::ExecPolicyRuleId;
 use zeta_model_provider_config::ModelProviderConfig;
 use zeta_protocol::{CommandId, Patch, ProviderId};
 use zeta_workspace::WorkspaceTrustId;
@@ -104,6 +106,12 @@ pub enum UserConfigCommand {
     },
     ForgetWorkspaceTrust {
         workspace: WorkspaceTrustId,
+    },
+    UpsertExecPolicyRule {
+        rule: ExecPolicyRule,
+    },
+    RemoveExecPolicyRule {
+        rule_id: ExecPolicyRuleId,
     },
 }
 

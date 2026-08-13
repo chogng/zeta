@@ -170,8 +170,8 @@ test("Connector settings project catalog state and invoke typed connect and disc
   const settings = disposables.add(new SettingsService());
   const configuration = disposables.add(new WorkbenchConfigurationService());
   const mutations: string[] = [];
-  const disconnected = { id: "github", displayName: "GitHub", description: "Connect GitHub.", connectionGeneration: 0, state: { status: "disconnected" as const }, canConnectApiToken: true, canConnectOAuth: false, canDisconnect: false };
-  const connected = { id: "slack", displayName: "Slack", description: "Connect Slack.", connectionGeneration: 2, state: { status: "connected" as const, account: { id: "team", displayName: "Zeta Team" } }, canConnectApiToken: false, canConnectOAuth: false, canDisconnect: true };
+  const disconnected = { id: "github", displayName: "GitHub", description: "Connect GitHub.", connectionGeneration: 0, state: { status: "disconnected" as const }, canConnectApiToken: true, canConnectOAuth: false, canDisconnect: false, canRefreshOAuth: false, canRevokeOAuth: false };
+  const connected = { id: "slack", displayName: "Slack", description: "Connect Slack.", connectionGeneration: 2, state: { status: "connected" as const, account: { id: "team", displayName: "Zeta Team" } }, canConnectApiToken: false, canConnectOAuth: false, canDisconnect: true, canRefreshOAuth: false, canRevokeOAuth: false };
   const connectorService = {
     onDidChange: () => toDisposable(() => {}),
     list: async () => ({ generation: 7, connectors: [disconnected, connected] }),
@@ -182,6 +182,8 @@ test("Connector settings project catalog state and invoke typed connect and disc
     disconnect: async (connector: { id: string }, generation: number) => {
       mutations.push(`disconnect:${connector.id}:${generation}`);
     },
+    refreshOAuth: async () => {},
+    revokeOAuth: async () => {},
   };
   disposables.add(new SettingsEditorContribution({
     configurationService: configuration,
@@ -224,6 +226,10 @@ test("Plugin settings project layered authority and send exact-package commands"
   const pluginService = {
     onDidChange: () => toDisposable(() => {}),
     list: async () => ({ revision: 7, activationGeneration: 3, packages: [plugin] }),
+    listMarketplace: async () => [],
+    install: async () => {},
+    update: async () => {},
+    rollback: async () => {},
     enable: async (target: typeof plugin, revision: number) => { mutations.push(`enable:${target.id}:${target.digest}:${revision}`); },
     disable: async () => {},
     grant: async (target: typeof plugin, revision: number) => { mutations.push(`grant:${target.id}:${target.digest}:${revision}`); },

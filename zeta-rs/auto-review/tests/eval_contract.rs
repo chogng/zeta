@@ -1,14 +1,14 @@
 use serde::Deserialize;
 use std::collections::BTreeSet;
 use std::convert::Infallible;
-use zeta_async_utils::{CancellationSource, CancellationToken};
-use zeta_policy::{
-    ActionClassifier, ActionDigest, ActionKind, ActionProvenance, ActionReviewRequest,
-    ActionSource, AssessmentId, Capability, CapabilityKind, CapabilitySet, ClassifierAssessment,
-    ClassifierRecommendation, ExecutionDecision, PolicyEngine, PolicyRevision,
+use zeta_action_policy::{
+    ActionClassifier, ActionDigest, ActionKind, ActionPolicyEngine, ActionPolicyRevision,
+    ActionProvenance, ActionReviewRequest, ActionSource, AssessmentId, Capability, CapabilityKind,
+    CapabilitySet, ClassifierAssessment, ClassifierRecommendation, ExecutionDecision,
     ProcessInvocationKind, ResolvedAction, ReviewContext, ReviewEvidence, ReviewEvidenceKind,
     ReviewEvidenceTrust, ReviewFailurePolicy, RiskLevel, SandboxCompatibility, UserAuthorization,
 };
+use zeta_async_utils::{CancellationSource, CancellationToken};
 
 const CASES: &str = include_str!("../evals/cases.jsonl");
 const POLICY_REVISION: &str = "eval-policy-v1";
@@ -243,12 +243,12 @@ fn gold_recommendations_produce_the_expected_policy_decisions() {
         let assessment = ClassifierAssessment::new(
             AssessmentId::new(format!("eval:{}", case.id)),
             request.action().digest().clone(),
-            request.policy_revision().clone(),
+            request.action_policy_revision().clone(),
             "eval-gold-v1",
             case.expected.recommendation.to_policy(),
         );
-        let engine = PolicyEngine::new(
-            PolicyRevision::new(POLICY_REVISION),
+        let engine = ActionPolicyEngine::with_no_exec_rules(
+            ActionPolicyRevision::new(POLICY_REVISION),
             GoldClassifier(assessment),
             ReviewFailurePolicy::Block,
         );
@@ -389,7 +389,7 @@ impl EvalInput {
                 self.provenance.source_id.clone(),
             ),
             self.sandbox.to_policy(),
-            PolicyRevision::new(POLICY_REVISION),
+            ActionPolicyRevision::new(POLICY_REVISION),
         )
         .with_context(self.context.to_policy())
     }

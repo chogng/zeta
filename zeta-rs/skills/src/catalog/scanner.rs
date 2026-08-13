@@ -39,7 +39,7 @@ fn scan_source(
     entries: &mut Vec<SkillCatalogEntry>,
     diagnostics: &mut Vec<SkillDiagnostic>,
 ) {
-    let root = source.canonical_root();
+    let root = source.host_root();
     let Ok(root_metadata) = fs::symlink_metadata(root) else {
         diagnostics.push(diagnostic(
             source,
@@ -56,6 +56,11 @@ fn scan_source(
             SkillDiagnosticCode::SourceUnavailable,
             "skill source is no longer a real directory",
         ));
+        return;
+    }
+
+    if let Some(name) = source.exact_skill_name() {
+        scan_skill(source, name, root, entries, diagnostics);
         return;
     }
 
@@ -158,7 +163,7 @@ fn scan_skill(
         ));
         return;
     };
-    if !canonical_directory.starts_with(source.canonical_root()) {
+    if !canonical_directory.starts_with(source.host_root()) {
         diagnostics.push(diagnostic(
             source,
             Some(name.to_string()),

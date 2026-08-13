@@ -3,6 +3,11 @@ use std::path::Path;
 use std::sync::Arc;
 
 use serde_json::json;
+use zeta_action_policy::{
+    ActionDigest, ActionKind, ActionPolicyRevision, ActionProvenance, ActionReviewPhase,
+    ActionReviewRequest, ActionSource, ApprovalRequest, Capability, CapabilityKind, CapabilitySet,
+    ExecutionDecision, ResolvedAction, SandboxCompatibility,
+};
 use zeta_async_utils::CancellationToken;
 use zeta_config::{
     ConfigGeneration, McpCredentialBinding, McpServerEnablement, McpServerId, McpTransportConfig,
@@ -12,15 +17,10 @@ use zeta_connectors::ConnectorConnectionGeneration;
 use zeta_connectors::ConnectorDefinitionDigest;
 use zeta_connectors::ConnectorId;
 use zeta_connectors_extension::ConnectorAuthority;
-use zeta_core::{CoreError, PolicyService, ToolAuthorization, ToolService};
+use zeta_core::{ActionPolicyService, CoreError, ToolAuthorization, ToolService};
 use zeta_mcp::{
     McpCallError, McpRuntimeOptions, McpServerDefinition, McpServerTransport, McpSessionFactory,
     McpStartupPolicy,
-};
-use zeta_policy::{
-    ActionDigest, ActionKind, ActionProvenance, ActionReviewPhase, ActionReviewRequest,
-    ActionSource, ApprovalRequest, Capability, CapabilityKind, CapabilitySet, ExecutionDecision,
-    PolicyRevision, ResolvedAction, SandboxCompatibility,
 };
 use zeta_protocol::ContentPart;
 use zeta_protocol::ToolSourceProvenance;
@@ -63,7 +63,7 @@ pub(crate) struct McpInvocationAuthority {
 
 pub struct McpToolComposition {
     pub tools: Arc<dyn ToolService>,
-    pub policy: Arc<dyn PolicyService>,
+    pub policy: Arc<dyn ActionPolicyService>,
 }
 
 /// Resolves enabled MCP declarations into one live tool service and its exact approval policy.
@@ -448,7 +448,7 @@ impl McpToolService {
             SandboxCompatibility::NotApplicable {
                 reason: "remote MCP side effects cannot be enforced by the local sandbox".into(),
             },
-            PolicyRevision::new(MCP_POLICY_REVISION),
+            ActionPolicyRevision::new(MCP_POLICY_REVISION),
         ))
     }
 }
@@ -579,7 +579,7 @@ struct McpApprovalPolicy {
     capabilities: BTreeMap<String, CapabilitySet>,
 }
 
-impl PolicyService for McpApprovalPolicy {
+impl ActionPolicyService for McpApprovalPolicy {
     fn revision(&self) -> String {
         MCP_POLICY_REVISION.into()
     }
@@ -592,7 +592,7 @@ impl PolicyService for McpApprovalPolicy {
         cancellation
             .check()
             .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
-        if request.policy_revision().as_str() != MCP_POLICY_REVISION
+        if request.action_policy_revision().as_str() != MCP_POLICY_REVISION
             || request.provenance().source() != &ActionSource::McpServer
             || self.capabilities.get(request.provenance().source_id())
                 != Some(request.action().required_capabilities())

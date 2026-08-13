@@ -1403,6 +1403,38 @@
           "properties": {
             "method": {
               "type": "string",
+              "const": "connector/oauth/refresh"
+            },
+            "params": {
+              "$ref": "#/$defs/ConnectorOAuthRefreshParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "connector/oauth/revoke"
+            },
+            "params": {
+              "$ref": "#/$defs/ConnectorDisconnectParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
               "const": "connector/disconnect"
             },
             "params": {
@@ -1439,6 +1471,70 @@
             },
             "params": {
               "$ref": "#/$defs/EmptyParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "plugin/marketplace/list"
+            },
+            "params": {
+              "$ref": "#/$defs/EmptyParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "plugin/install"
+            },
+            "params": {
+              "$ref": "#/$defs/PluginMarketplaceCommandParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "plugin/update"
+            },
+            "params": {
+              "$ref": "#/$defs/PluginMarketplaceCommandParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "plugin/rollback"
+            },
+            "params": {
+              "$ref": "#/$defs/PluginPackageCommandParams"
             }
           },
           "required": [
@@ -1551,6 +1647,38 @@
             },
             "params": {
               "$ref": "#/$defs/ConfigUpdateParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "execPolicy/rule/upsert"
+            },
+            "params": {
+              "$ref": "#/$defs/ExecPolicyRuleUpsertParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "execPolicy/rule/remove"
+            },
+            "params": {
+              "$ref": "#/$defs/ExecPolicyRuleRemoveParams"
             }
           },
           "required": [
@@ -3359,6 +3487,38 @@
           "properties": {
             "method": {
               "type": "string",
+              "const": "connector/oauth/refresh"
+            },
+            "result": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "connector/oauth/revoke"
+            },
+            "result": {
+              "$ref": "#/$defs/ConnectorDisconnectResultDto"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
               "const": "connector/disconnect"
             },
             "result": {
@@ -3395,6 +3555,70 @@
             },
             "result": {
               "$ref": "#/$defs/PluginListResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "plugin/marketplace/list"
+            },
+            "result": {
+              "$ref": "#/$defs/PluginMarketplaceListResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "plugin/install"
+            },
+            "result": {
+              "$ref": "#/$defs/PluginCommandResultDto"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "plugin/update"
+            },
+            "result": {
+              "$ref": "#/$defs/PluginCommandResultDto"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "plugin/rollback"
+            },
+            "result": {
+              "$ref": "#/$defs/PluginCommandResultDto"
             }
           },
           "required": [
@@ -3504,6 +3728,38 @@
             "method": {
               "type": "string",
               "const": "config/update"
+            },
+            "result": {
+              "$ref": "#/$defs/ConfigCommandResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "execPolicy/rule/upsert"
+            },
+            "result": {
+              "$ref": "#/$defs/ConfigCommandResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "execPolicy/rule/remove"
             },
             "result": {
               "$ref": "#/$defs/ConfigCommandResult"
@@ -5619,6 +5875,12 @@
         "approvalReviewModel": {
           "$ref": "#/$defs/ApprovalReviewModelSelectionDto"
         },
+        "execPolicyRules": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ExecPolicyRuleDto"
+          }
+        },
         "generation": {
           "type": "integer",
           "format": "uint64",
@@ -5693,7 +5955,8 @@
         "hooks",
         "languageServers",
         "toolSearch",
-        "semanticCodeIndex"
+        "semanticCodeIndex",
+        "execPolicyRules"
       ]
     },
     "ConfigUpdateParams": {
@@ -5798,7 +6061,9 @@
         "connectOAuth",
         "disconnect",
         "reauthorizeApiToken",
-        "reauthorizeOAuth"
+        "reauthorizeOAuth",
+        "refreshOAuth",
+        "revokeOAuth"
       ]
     },
     "ConnectorCommandDispositionDto": {
@@ -6067,6 +6332,17 @@
         "flowId",
         "state",
         "authorizationCode"
+      ]
+    },
+    "ConnectorOAuthRefreshParams": {
+      "type": "object",
+      "properties": {
+        "connectorId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "connectorId"
       ]
     },
     "ConnectorOAuthStartParams": {
@@ -7101,6 +7377,436 @@
     "EmptyParams": {
       "type": "object",
       "additionalProperties": false
+    },
+    "ExecPolicyActionKindDto": {
+      "description": "Coarse action category available to deterministic execution-policy selectors.",
+      "type": "string",
+      "enum": [
+        "localProcess",
+        "fileSystemMutation",
+        "networkRequest",
+        "browserInteraction",
+        "externalServiceMutation",
+        "credentialUse",
+        "systemOperation"
+      ]
+    },
+    "ExecPolicyEffectDto": {
+      "description": "Effect produced when one execution-policy rule matches.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "continue"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "allowUnsandboxed"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "requireApproval"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "requireSandbox"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "reason": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "deny"
+            }
+          },
+          "required": [
+            "type",
+            "reason"
+          ]
+        }
+      ]
+    },
+    "ExecPolicyHostMatcherDto": {
+      "description": "Host matching semantics for one structured network target.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "exact"
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "domainSuffix"
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ]
+        }
+      ]
+    },
+    "ExecPolicyRuleDto": {
+      "description": "One durable user-owned deterministic execution-policy rule.",
+      "type": "object",
+      "properties": {
+        "effect": {
+          "$ref": "#/$defs/ExecPolicyEffectDto"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "justification": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "selector": {
+          "$ref": "#/$defs/ExecPolicySelectorDto"
+        }
+      },
+      "required": [
+        "id",
+        "selector",
+        "effect"
+      ]
+    },
+    "ExecPolicyRuleRemoveParams": {
+      "description": "Removes one durable User execution-policy rule.",
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "ruleId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision",
+        "ruleId"
+      ]
+    },
+    "ExecPolicyRuleUpsertParams": {
+      "description": "Creates or replaces one durable User execution-policy rule.",
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "rule": {
+          "$ref": "#/$defs/ExecPolicyRuleDto"
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision",
+        "rule"
+      ]
+    },
+    "ExecPolicyScopeMatcherDto": {
+      "description": "Scope matching semantics for one structured capability.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "exact"
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "prefix"
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ]
+        }
+      ]
+    },
+    "ExecPolicySelectorDto": {
+      "description": "Deterministic selector over host-materialized action fields.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "any"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "digest": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "actionDigest"
+            }
+          },
+          "required": [
+            "type",
+            "digest"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "actionKind": {
+              "$ref": "#/$defs/ExecPolicyActionKindDto"
+            },
+            "type": {
+              "type": "string",
+              "const": "actionKind"
+            }
+          },
+          "required": [
+            "type",
+            "actionKind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "source": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "sourceId": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "type": "string",
+              "const": "source"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "pattern": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ExecPolicyTokenDto"
+              }
+            },
+            "type": {
+              "type": "string",
+              "const": "commandPrefix"
+            }
+          },
+          "required": [
+            "type",
+            "pattern"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "host": {
+              "$ref": "#/$defs/ExecPolicyHostMatcherDto"
+            },
+            "port": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0
+            },
+            "protocol": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "type": "string",
+              "const": "network"
+            }
+          },
+          "required": [
+            "type",
+            "host"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "capabilityKind": {
+              "type": "string"
+            },
+            "scope": {
+              "$ref": "#/$defs/ExecPolicyScopeMatcherDto"
+            },
+            "type": {
+              "type": "string",
+              "const": "capability"
+            }
+          },
+          "required": [
+            "type",
+            "capabilityKind",
+            "scope"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "selectors": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ExecPolicySelectorDto"
+              }
+            },
+            "type": {
+              "type": "string",
+              "const": "all"
+            }
+          },
+          "required": [
+            "type",
+            "selectors"
+          ]
+        }
+      ]
+    },
+    "ExecPolicyTokenDto": {
+      "description": "One exact argv position in a command-prefix selector.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "literal"
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "oneOf"
+            },
+            "value": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ]
+        }
+      ]
     },
     "ExtensionCatalogReloadDto": {
       "type": "string",
@@ -10275,6 +10981,93 @@
         "packages"
       ]
     },
+    "PluginMarketplaceCommandParams": {
+      "description": "Exact Marketplace entry selected without exposing a host filesystem path.",
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "type": "string"
+        },
+        "digest": {
+          "type": "string"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "id": {
+          "type": "string"
+        },
+        "marketplaceId": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision",
+        "marketplaceId",
+        "id",
+        "version",
+        "digest"
+      ]
+    },
+    "PluginMarketplaceListResult": {
+      "type": "object",
+      "properties": {
+        "packages": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PluginMarketplacePackageDto"
+          }
+        }
+      },
+      "required": [
+        "packages"
+      ]
+    },
+    "PluginMarketplaceModeDto": {
+      "type": "string",
+      "enum": [
+        "managed",
+        "localDevelopment"
+      ]
+    },
+    "PluginMarketplacePackageDto": {
+      "description": "One exact package offered by a host-registered Marketplace.",
+      "type": "object",
+      "properties": {
+        "digest": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "installed": {
+          "type": "boolean"
+        },
+        "marketplaceId": {
+          "type": "string"
+        },
+        "marketplaceMode": {
+          "$ref": "#/$defs/PluginMarketplaceModeDto"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "marketplaceId",
+        "marketplaceMode",
+        "id",
+        "version",
+        "digest",
+        "installed"
+      ]
+    },
     "PluginPackageCommandParams": {
       "description": "Exact package target for retry-safe Plugin lifecycle commands.",
       "type": "object",
@@ -12544,7 +13337,8 @@
       "enum": [
         "builtIn",
         "user",
-        "workspace"
+        "workspace",
+        "plugin"
       ]
     },
     "SkillSourceRemoveParams": {
@@ -14623,6 +15417,30 @@
           "required": [
             "type",
             "grantId"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "execPolicyRevision": {
+              "type": "string"
+            },
+            "layerId": {
+              "type": "string"
+            },
+            "ruleId": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "execPolicyGranted"
+            }
+          },
+          "required": [
+            "type",
+            "layerId",
+            "ruleId",
+            "execPolicyRevision"
           ]
         },
         {

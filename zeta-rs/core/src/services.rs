@@ -7,12 +7,13 @@ use sha2::Sha256;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::sync::Arc;
+use zeta_action_policy::ActionReviewRequest;
+use zeta_action_policy::AutoReviewGrant;
+use zeta_action_policy::DeterministicPolicyGrant;
+use zeta_action_policy::GrantId;
+use zeta_action_policy::PermissionBypassGrant;
+use zeta_action_policy::ReviewEvidence;
 use zeta_async_utils::CancellationToken;
-use zeta_policy::ActionReviewRequest;
-use zeta_policy::AutoReviewGrant;
-use zeta_policy::GrantId;
-use zeta_policy::PermissionBypassGrant;
-use zeta_policy::ReviewEvidence;
 use zeta_protocol::ActionApprovalRequest;
 use zeta_protocol::ModelRef;
 use zeta_protocol::ModelRequest;
@@ -218,9 +219,34 @@ impl ThreadUpdateSink for NoThreadUpdates {
 pub enum ToolAuthorization {
     Sandboxed(SandboxPolicy),
     UnsandboxedGrant { grant_id: GrantId },
+    ExecPolicyGranted(ExecPolicyToolGrant),
     AutoReviewed(AutoReviewedToolGrant),
     PermissionBypassed(PermissionBypassToolGrant),
     ApprovedOnce(OneTimeToolGrant),
+}
+
+/// Non-reusable deterministic-policy authority bound to one exact durable Tool Call.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ExecPolicyToolGrant {
+    tool_call_id: ToolCallId,
+    policy_grant: DeterministicPolicyGrant,
+}
+
+impl ExecPolicyToolGrant {
+    pub(crate) fn new(tool_call_id: ToolCallId, policy_grant: DeterministicPolicyGrant) -> Self {
+        Self {
+            tool_call_id,
+            policy_grant,
+        }
+    }
+
+    pub fn tool_call_id(&self) -> &ToolCallId {
+        &self.tool_call_id
+    }
+
+    pub fn policy_grant(&self) -> &DeterministicPolicyGrant {
+        &self.policy_grant
+    }
 }
 
 type ModelToolCallBinder =

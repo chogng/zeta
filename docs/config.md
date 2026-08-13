@@ -5,7 +5,8 @@
 > 当前状态：TOML User Config authority、SQLite revision/generation 与 exact command receipt、
 > Provider map、standalone MCP declaration、Skill source/per-Skill enablement、Workspace TOML
 > read-only document、exact Plugin request、declarative Hook、User Workspace trust decision 和
-> scoped resolution、Tool Search 词法/混合 embedding 模式选择已实现。
+> scoped resolution、Tool Search 词法/混合 embedding 模式选择、User execution-policy rule
+> persistence 与 Workspace restrictive rule intent 已实现。
 > Local App Server 在 profile 下使用
 > `config.toml` 与 `state.sqlite3`，并在提交后原子切换未来的 model、Skill 与 MCP Tool safe point；
 > 已 prepare 的 Tool Call 保留旧 generation。Plugin contribution、grant 和完整环境组合仍是后续
@@ -69,9 +70,9 @@ Skill catalog、credential 和 action policy 继续由各自领域拥有。App S
 
 | Authority | 拥有 | 不拥有 |
 | --- | --- | --- |
-| User Config authority | Agent 默认值、Provider 配置、独立 MCP server、Skill source、Plugin request、Hook declaration、按 canonical root identity 的 Workspace trust decision | UI/device 偏好、installed Plugin package、live connection、Hook execution、secret、runtime health |
+| User Config authority | Agent 默认值、Provider 配置、独立 MCP server、Skill source、Plugin request、Hook declaration、execution-policy rules、按 canonical root identity 的 Workspace trust decision | UI/device 偏好、installed Plugin package、live connection、Hook execution、secret、runtime health |
 | Desktop device preference authority | theme、zoom、window/device UI 偏好 | Agent/Provider/MCP/Skill desired config、Session/Thread |
-| Workspace config document | Workspace Agent 默认值、独立 MCP 声明、Plugin 请求、Workspace Skill source、Hook 请求 | 自动安装、grant、Hook 执行、credential value、运行时状态 |
+| Workspace config document | Workspace Agent 默认值、独立 MCP 声明、Plugin 请求、Workspace Skill source、Hook 请求、只收紧的 execution-policy rules | 自动安装、扩权 grant、Hook 执行、credential value、运行时状态 |
 | Plugin authority | installed exact package、effective activation、activation grant、credential-slot binding、rollback | TOML request、MCP session、Skill catalog、per-call approval |
 | Domain auth authority | credential type、refresh、scope、credential revision | 普通配置、Plugin manifest、Thread history |
 | Secret store | opaque secret bytes 的 load/store/delete | credential type、OAuth、scope、refresh |
@@ -129,6 +130,7 @@ ResolvedConfigSnapshot
 | Hook declaration | User、Workspace | 只声明 safe-point、tool matcher 与 process argv；执行仍需 trust、policy、approval 和 sandbox |
 | Tool Search mode/model | User | 默认纯本地 BM25/Regex；混合模式独立选择 exact embedding `ModelRef`，由 App Server 探活后启用 |
 | Sandbox/approval intent | User、Workspace、Session | 低信任 source 只能保持或收紧安全性 |
+| Execution-policy rules | Host、Organization、User、Workspace | User 可显式授权；Workspace 只能拒绝、强制沙箱/审批或 Continue，不能 `AllowUnsandboxed` |
 | Workspace trust | User、organization policy、trusted host composition | Workspace document 无权自授信；User 缺失决策默认 Restricted |
 | System requirements | System/organization | 是约束，不是“最高优先级普通配置” |
 
@@ -145,6 +147,7 @@ pub struct UserConfigDocument {
     pub plugins: PluginsConfig,
     pub hooks: HooksConfig,
     pub tool_search: ToolSearchConfig,
+    pub exec_policy: UserExecPolicyConfig,
     pub workspace_trust: WorkspaceTrustConfig,
 }
 
@@ -154,8 +157,16 @@ pub struct WorkspaceConfigDocument {
     pub plugin_requests: WorkspacePluginRequests,
     pub skills: WorkspaceSkillsConfig,
     pub hooks: HooksConfig,
+    pub exec_policy: WorkspaceExecPolicyConfig,
 }
 ```
+
+`UserExecPolicyConfig` 持久化 typed `ExecPolicyRule`；`UserConfigCommand::UpsertExecPolicyRule` 和
+`RemoveExecPolicyRule` 走同一 expected-revision、receipt 与 atomic TOML replacement 路径。
+`WorkspaceExecPolicyConfig` 是 strict-read intent，validation 禁止 `AllowUnsandboxed`。
+`compose_exec_policy` 把它们与 trusted Host/Organization layers 组合为 immutable
+`ExecPolicySnapshot`；规则求值和 semantic revision 属于 `zeta-execpolicy`，最终 grant 属于
+`zeta-action-policy`，不属于 Config。
 
 User Config 的 `PluginsConfig` 保存 exact package request 与 desired enablement；Workspace 保存
 scoped request。Plugin installed state、effective activation、grant、digest 和 rollback 不复制进
@@ -498,7 +509,7 @@ pub struct AgentEnvironmentSnapshot {
     pub plugin_generation: PluginGeneration,
     pub mcp_generation: McpGeneration,
     pub skill_generation: SkillGeneration,
-    pub policy_revision: PolicyRevision,
+    pub policy_revision: ActionPolicyRevision,
 }
 ```
 

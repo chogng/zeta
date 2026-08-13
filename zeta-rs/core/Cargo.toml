@@ -18,7 +18,7 @@ zeta-async-utils = { workspace = true }
 zeta-context-engine = { workspace = true }
 zeta-extension-api = { workspace = true }
 zeta-history = { workspace = true }
-zeta-policy = { workspace = true }
+zeta-action-policy = { workspace = true }
 zeta-prompts = { workspace = true }
 zeta-protocol = { workspace = true }
 zeta-sandboxing = { workspace = true }
@@ -28,6 +28,7 @@ zeta-utils-image = { workspace = true }
 
 [dev-dependencies]
 image = { workspace = true, features = ["png"] }
+zeta-execpolicy = { workspace = true }
 
 [lints]
 workspace = true

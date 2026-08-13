@@ -11,6 +11,7 @@ mod discovery;
 mod error;
 mod identity;
 mod manifest;
+mod marketplace;
 mod package;
 mod path;
 
@@ -40,6 +41,15 @@ pub use manifest::{
     NetworkHost, Permission, PluginCompatibility, PluginContributions, PluginManifest,
     SkillContribution, WorkspaceAccess, ZetaVersionRequirement,
 };
+pub use marketplace::PluginMarketplace;
+pub use marketplace::PluginMarketplaceId;
+pub use marketplace::PluginMarketplaceMode;
+pub use marketplace::PluginMarketplacePackage;
+pub use marketplace::PluginMarketplaceService;
+pub use marketplace::PluginProfileRequest;
+pub use marketplace::PluginProfileRequestEnablement;
+pub use marketplace::PluginProfileResolution;
+pub use marketplace::PluginWorkspaceRequestResolution;
 pub use package::{
     InstalledPluginPackage, LocalPluginCatalog, LocalPluginPackage, PackageFileStats,
     PluginPackageSource, PluginPackageStore,

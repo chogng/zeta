@@ -70,6 +70,59 @@ impl ConnectorCredentialService {
         &self.authority
     }
 
+    /// Loads the opaque credential for one exact connected account.
+    ///
+    /// This is restricted to authentication adapters. Callers must validate the account and
+    /// connection generation through Connector authority before using or replacing the value.
+    pub(crate) fn load_connected_credential(
+        &self,
+        connector_id: &ConnectorId,
+    ) -> Result<SecretValue, ConnectorCredentialServiceError> {
+        let snapshot = self.authority.snapshot();
+        let entry = snapshot.entry(connector_id).ok_or_else(|| {
+            ConnectorCredentialServiceError::new(
+                ConnectorCredentialServiceErrorKind::Authority,
+                "connector is unavailable",
+            )
+        })?;
+        let account = match entry.connection().state() {
+            ConnectorConnectionState::Connected(account) => account,
+            ConnectorConnectionState::Disconnected
+            | ConnectorConnectionState::Connecting
+            | ConnectorConnectionState::Unavailable { .. }
+            | ConnectorConnectionState::ReauthorizationRequired { .. } => {
+                return Err(ConnectorCredentialServiceError::new(
+                    ConnectorCredentialServiceErrorKind::Authority,
+                    "connector is not connected",
+                ));
+            }
+        };
+        let key = SecretKey::new(account.credential_reference().as_str().to_owned()).map_err(
+            |error| {
+                ConnectorCredentialServiceError::new(
+                    ConnectorCredentialServiceErrorKind::InvalidValue,
+                    error.to_string(),
+                )
+            },
+        )?;
+        self.secrets.load(&key)?.ok_or_else(|| {
+            ConnectorCredentialServiceError::new(
+                ConnectorCredentialServiceErrorKind::SecretStore,
+                "connector credential is unavailable",
+            )
+        })
+    }
+
+    pub(crate) fn replace_connected_credential(
+        &self,
+        connector_id: &ConnectorId,
+        value: &SecretValue,
+    ) -> Result<(), ConnectorCredentialServiceError> {
+        let key = credential_key(connector_id)?;
+        self.secrets.store(&key, value)?;
+        Ok(())
+    }
+
     pub(crate) fn begin_connect_attempt(
         &self,
         command_id: &ConnectorCommandId,
@@ -372,7 +425,7 @@ pub(crate) fn phase_command_id(
     .map_err(Into::into)
 }
 
-fn credential_key(
+pub(crate) fn credential_key(
     connector_id: &ConnectorId,
 ) -> Result<SecretKey, ConnectorCredentialServiceError> {
     let mut digest = Sha256::new();

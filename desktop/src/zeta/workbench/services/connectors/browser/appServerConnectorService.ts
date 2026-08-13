@@ -50,6 +50,18 @@ export class AppServerConnectorService extends DisposableOwner implements IConne
       connectorId: connector.id,
     });
   }
+
+  async refreshOAuth(connector: ConnectorView): Promise<void> {
+    await this.api.refreshOAuth(connector.id);
+  }
+
+  async revokeOAuth(connector: ConnectorView, catalogGeneration: number): Promise<void> {
+    await this.api.revokeOAuth({
+      commandId: `desktop-connector-oauth-revoke-${crypto.randomUUID()}`,
+      expectedGeneration: catalogGeneration,
+      connectorId: connector.id,
+    });
+  }
 }
 
 function connectorView(connector: ConnectorDto): ConnectorView {
@@ -62,6 +74,8 @@ function connectorView(connector: ConnectorDto): ConnectorView {
     canConnectApiToken: connector.availableActions.includes("connectApiToken") || connector.availableActions.includes("reauthorizeApiToken"),
     canConnectOAuth: connector.availableActions.includes("connectOAuth") || connector.availableActions.includes("reauthorizeOAuth"),
     canDisconnect: connector.availableActions.includes("disconnect"),
+    canRefreshOAuth: connector.availableActions.includes("refreshOAuth"),
+    canRevokeOAuth: connector.availableActions.includes("revokeOAuth"),
   };
 }
 

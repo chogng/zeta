@@ -19,6 +19,8 @@ export interface ConnectorView {
   readonly canConnectApiToken: boolean;
   readonly canConnectOAuth: boolean;
   readonly canDisconnect: boolean;
+  readonly canRefreshOAuth: boolean;
+  readonly canRevokeOAuth: boolean;
 }
 
 export interface ConnectorCatalogView {
@@ -39,6 +41,8 @@ export interface IConnectorService {
   connectApiToken(connector: ConnectorView, catalogGeneration: number, input: ConnectorApiTokenInput): Promise<void>;
   connectOAuth(connector: ConnectorView, catalogGeneration: number): Promise<void>;
   disconnect(connector: ConnectorView, catalogGeneration: number): Promise<void>;
+  refreshOAuth(connector: ConnectorView): Promise<void>;
+  revokeOAuth(connector: ConnectorView, catalogGeneration: number): Promise<void>;
 }
 
 export const IConnectorService = createServiceIdentifier<IConnectorService>("connectorService");

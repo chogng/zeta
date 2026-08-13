@@ -204,8 +204,8 @@ mapping 另设“系统内部如何表达”表格。表格之后只补充无法
 | 用户可见概念 | 使用中文 | 权限、批准、拒绝、工作区、网络访问 |
 | 技术概念首次出现 | 中文名称（英文名称） | 执行授权（execution authority） |
 | 同一技术概念后续出现 | 只使用中文 | 执行授权 |
-| 代码类型、函数、枚举值 | 中文解释 + 反引号内的真实标识符 | 策略引擎 `PolicyEngine`、只读模式 `ReadOnly` |
-| crate、命令、文件和配置键 | 保留真实名称并使用反引号 | `zeta-policy`、`cargo test`、`policy_revision` |
+| 代码类型、函数、枚举值 | 中文解释 + 反引号内的真实标识符 | 策略引擎 `ActionPolicyEngine`、只读模式 `ReadOnly` |
+| crate、命令、文件和配置键 | 保留真实名称并使用反引号 | `zeta-action-policy`、`cargo test`、`policy_revision` |
 | 平台、协议和产品专名 | 保留正式英文名称 | macOS、Linux、Windows、Bubblewrap、Rust、MCP |
 | 行业通用缩写 | 保留大写缩写，必要时首次解释 | API、HTTP、JSON、UI、CLI |
 
@@ -227,7 +227,7 @@ grant 绑定 action digest、capabilities 和 policy revision。
 ```
 
 用户行为表的标题和单元格优先使用中文。内部实现映射表可以出现 `RunSandboxed`、
-`ApproveOnce`、`PolicyEngine` 等标识符，但必须同时解释其用户或系统含义。
+`ApproveOnce`、`ActionPolicyEngine` 等标识符，但必须同时解释其用户或系统含义。
 
 #### 核心术语表
 
@@ -239,8 +239,9 @@ grant 绑定 action digest、capabilities 和 policy revision。
 | 能力 | 能力（capability） | `Capability`、`CapabilityKind` |
 | 能力集合 | 能力集合（capability set） | `CapabilitySet` |
 | 作用范围 | 作用范围（scope） | capability scope |
-| 策略版本 | 策略版本（policy revision） | `PolicyRevision` |
-| 确定性策略 | 确定性策略（deterministic policy） | `BuiltInSafetyPolicy`、`PolicyEngine` |
+| 策略版本 | 策略版本（policy revision） | `ActionPolicyRevision` |
+| 确定性规则 | 确定性执行规则（deterministic execution policy） | `ExecPolicySnapshot`、`ExecPolicyRule`、`zeta-execpolicy` |
+| 最终动作策略 | 最终 action authority | `ActionPolicyEngine`、`ExecutionDecision`、`zeta-action-policy` |
 | 执行授权 | 执行授权（execution authority） | `ExecutionDecision`、`AutoReviewGrant` |
 | 一次性批准 | 一次性批准 | `ApproveOnce` |
 | 风险审查器 | 风险审查器（reviewer） | `ActionClassifier` |

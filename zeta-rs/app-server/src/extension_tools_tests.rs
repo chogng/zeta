@@ -3,6 +3,7 @@ use std::sync::Arc;
 use super::compose_extension_tools;
 use crate::tool_composition::combine_tool_ports;
 use serde_json::json;
+use zeta_action_policy::ExecutionDecision;
 use zeta_async_utils::CancellationSource;
 use zeta_extension_api::CapabilityToolContribution;
 use zeta_extension_api::CapabilityToolContributor;
@@ -10,7 +11,6 @@ use zeta_extension_api::ExtensionError;
 use zeta_extension_api::ExtensionRegistryBuilder;
 use zeta_extension_api::ExtensionToolAuthority;
 use zeta_extension_api::ReadOnlyToolContributor;
-use zeta_policy::ExecutionDecision;
 use zeta_protocol::ToolCall;
 use zeta_protocol::ToolCallId;
 use zeta_tools::ToolConcurrency;
@@ -145,7 +145,7 @@ fn capability_extension_tools_freeze_scopes_and_require_user_approval() {
 
     assert_eq!(
         review.action().kind(),
-        &zeta_policy::ActionKind::NetworkRequest
+        &zeta_action_policy::ActionKind::NetworkRequest
     );
     assert_eq!(review.action().required_capabilities().iter().count(), 2);
     assert!(matches!(

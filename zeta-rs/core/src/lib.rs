@@ -1,12 +1,12 @@
 //! Zeta's Agent lifecycle, Turn execution, context assembly, and outbound service ports.
 
+mod action_policy_service;
 mod capabilities;
 mod context;
 mod context_manager;
 mod error;
 mod image_preparation;
 mod multi_agent;
-mod policy_service;
 mod services;
 mod session_coordinator;
 mod session_reducer;
@@ -17,6 +17,7 @@ mod thread_controller;
 mod thread_reducer;
 mod turn;
 
+pub use action_policy_service::{ActionPolicyService, durable_approval_request};
 pub(crate) use context::ContextAssembler;
 pub use context::ContextBudget;
 pub use context::ContextCompactionLimit;
@@ -38,11 +39,11 @@ pub use multi_agent::MultiAgentCoordinator;
 pub use multi_agent::SendAgentMessageRequest;
 pub use multi_agent::SpawnAgentRequest;
 pub use multi_agent::SpawnedAgent;
-pub use policy_service::{PolicyService, durable_approval_request};
 pub use services::AutoReviewedToolGrant;
 pub use services::ContextEvidence;
 pub use services::ContextSource;
 pub use services::ContextSourceRequest;
+pub use services::ExecPolicyToolGrant;
 pub use services::LeaseGuard;
 pub use services::ModelSelection;
 pub use services::ModelService;

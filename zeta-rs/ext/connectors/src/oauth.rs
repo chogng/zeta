@@ -47,6 +47,16 @@ pub struct ConnectorOAuthExchangeRequest<'a> {
     pub redirect_uri: &'a str,
 }
 
+/// Opaque stored credential supplied for a provider-owned token refresh.
+pub struct ConnectorOAuthRefreshRequest {
+    pub credential: SecretValue,
+}
+
+/// Opaque stored credential supplied for provider-owned remote revocation.
+pub struct ConnectorOAuthRevokeRequest {
+    pub credential: SecretValue,
+}
+
 /// Provider-validated account projection and opaque credential payload.
 pub struct ConnectorOAuthCredential {
     pub account_id: ConnectorAccountId,
@@ -70,6 +80,18 @@ pub trait ConnectorOAuthProvider: Send + Sync {
         connector: &ConnectorDefinition,
         request: ConnectorOAuthExchangeRequest<'_>,
     ) -> Result<ConnectorOAuthCredential, ConnectorOAuthError>;
+
+    fn refresh(
+        &self,
+        connector: &ConnectorDefinition,
+        request: ConnectorOAuthRefreshRequest,
+    ) -> Result<SecretValue, ConnectorOAuthError>;
+
+    fn revoke(
+        &self,
+        connector: &ConnectorDefinition,
+        request: ConnectorOAuthRevokeRequest,
+    ) -> Result<(), ConnectorOAuthError>;
 }
 
 /// Retry identity and authority generation for one browser OAuth attempt.
@@ -308,6 +330,92 @@ impl ConnectorOAuthService {
                 attempt.connector_id.clone(),
                 attempt.connection_generation,
             )
+            .map_err(Into::into)
+    }
+
+    /// Refreshes one credential under the exact live connection lease.
+    pub fn refresh(&self, connector_id: &ConnectorId) -> Result<(), ConnectorOAuthError> {
+        let snapshot = self.credentials.authority().snapshot();
+        let entry = snapshot
+            .entry(connector_id)
+            .ok_or_else(provider_unavailable)?;
+        let definition = entry.definition().clone();
+        let connection_generation = entry.connection().generation();
+        let definition_digest = definition.digest();
+        let provider = self
+            .providers
+            .get(connector_id)
+            .ok_or_else(provider_unavailable)?;
+        self.credentials
+            .authority()
+            .with_authorized_invocation(
+                connector_id,
+                connection_generation,
+                &definition_digest,
+                || {
+                    let credential = self.credentials.load_connected_credential(connector_id)?;
+                    let replacement = provider
+                        .refresh(&definition, ConnectorOAuthRefreshRequest { credential })?;
+                    self.credentials
+                        .replace_connected_credential(connector_id, &replacement)?;
+                    Ok::<(), ConnectorOAuthError>(())
+                },
+            )
+            .ok_or_else(|| {
+                oauth_error(
+                    ConnectorOAuthErrorKind::InvalidRequest,
+                    "Connector connection changed during OAuth refresh",
+                )
+            })?
+    }
+
+    /// Revokes the provider token before committing the local disconnect.
+    ///
+    /// A remote failure leaves the exact local connection ready so the user can retry. Once
+    /// revocation succeeds, the ordinary disconnect fence drains in-flight calls and removes the
+    /// credential from the local secret store.
+    pub fn revoke_and_disconnect(
+        &self,
+        command_id: ConnectorCommandId,
+        expected_generation: ConnectorSnapshotGeneration,
+        connector_id: ConnectorId,
+    ) -> Result<crate::ConnectorDisconnectResult, ConnectorOAuthError> {
+        let snapshot = self.credentials.authority().snapshot();
+        if snapshot.generation() != expected_generation {
+            return Err(oauth_error(
+                ConnectorOAuthErrorKind::InvalidRequest,
+                "Connector generation changed before OAuth revocation",
+            ));
+        }
+        let entry = snapshot
+            .entry(&connector_id)
+            .ok_or_else(provider_unavailable)?;
+        let definition = entry.definition().clone();
+        let connection_generation = entry.connection().generation();
+        let definition_digest = definition.digest();
+        let provider = self
+            .providers
+            .get(&connector_id)
+            .ok_or_else(provider_unavailable)?;
+        self.credentials
+            .authority()
+            .with_authorized_invocation(
+                &connector_id,
+                connection_generation,
+                &definition_digest,
+                || {
+                    let credential = self.credentials.load_connected_credential(&connector_id)?;
+                    provider.revoke(&definition, ConnectorOAuthRevokeRequest { credential })
+                },
+            )
+            .ok_or_else(|| {
+                oauth_error(
+                    ConnectorOAuthErrorKind::InvalidRequest,
+                    "Connector connection changed during OAuth revocation",
+                )
+            })??;
+        self.credentials
+            .disconnect(command_id, expected_generation, connector_id)
             .map_err(Into::into)
     }
 

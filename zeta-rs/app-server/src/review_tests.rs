@@ -1,17 +1,17 @@
 use super::*;
 use std::collections::BTreeMap;
 use std::sync::Mutex;
+use zeta_action_policy::{
+    ActionClassifier, ActionDigest, ActionKind, ActionPolicyRevision, ActionProvenance,
+    ActionReviewRequest, ActionSource, Capability, CapabilityKind, CapabilitySet,
+    ExecutionDecision, ProcessInvocationKind, ResolvedAction, ReviewContext, SandboxCompatibility,
+};
 use zeta_async_utils::CancellationSource;
 use zeta_auto_review::{AutoReviewError, LlmActionClassifier};
 use zeta_model_provider::ModelProviderError;
 use zeta_model_provider_config::{
     ApiProfile, EndpointPolicy, Model, ModelCatalogPolicy, ModelId, ModelProviderConfig,
     ProviderAdapter, ProviderDefinition, ProviderId,
-};
-use zeta_policy::{
-    ActionClassifier, ActionDigest, ActionKind, ActionProvenance, ActionReviewRequest,
-    ActionSource, Capability, CapabilityKind, CapabilitySet, ExecutionDecision, PolicyRevision,
-    ProcessInvocationKind, ResolvedAction, ReviewContext, SandboxCompatibility,
 };
 use zeta_protocol::{ApprovalMode, ContentPart, InputItem, ModelResponse, StopReason};
 
@@ -99,7 +99,7 @@ fn review_request() -> ActionReviewRequest {
         SandboxCompatibility::Unsupported {
             reason: "network is unavailable".into(),
         },
-        PolicyRevision::new("policy-1"),
+        ActionPolicyRevision::new("policy-1"),
     )
     .with_context(ReviewContext::new(
         "call the configured API for this task",
@@ -198,7 +198,7 @@ fn explicit_review_rejects_a_model_outside_a_listed_catalog() {
 
 struct AskPolicy;
 
-impl PolicyService for AskPolicy {
+impl ActionPolicyService for AskPolicy {
     fn revision(&self) -> String {
         "base-policy-v1".into()
     }
@@ -209,7 +209,7 @@ impl PolicyService for AskPolicy {
         _: &CancellationToken,
     ) -> Result<ExecutionDecision, CoreError> {
         Ok(ExecutionDecision::AskUser(
-            zeta_policy::ApprovalRequest::new(
+            zeta_action_policy::ApprovalRequest::new(
                 request.action().digest().clone(),
                 request.action().required_capabilities().clone(),
                 "needs approval",
@@ -226,7 +226,7 @@ fn approval_mode_policy_runs_the_reviewer_only_for_auto_review() {
             r#"{"recommendation":"deny","reason":"unsafe"}"#.into(),
         )),
     };
-    let policy = ApprovalModePolicyService::new(Arc::new(AskPolicy), Some(review_model));
+    let policy = ApprovalModeActionPolicyService::new(Arc::new(AskPolicy), Some(review_model));
     let revision = policy.revision();
     let request = review_request();
 

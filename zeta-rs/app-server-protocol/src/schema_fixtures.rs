@@ -1,4 +1,5 @@
 use super::*;
+use crate::protocol::config::ExecPolicyRuleUpsertParams;
 use crate::protocol::config::{
     ApprovalReviewModelSelectionDto, ConfigUpdateParams, McpServerUpsertParams,
     SkillSourceAddParams,
@@ -546,6 +547,39 @@ fn mcp_and_skill_config_commands_round_trip() {
 
     assert_eq!(serde_json::to_value(mcp).unwrap(), mcp_fixture);
     assert_eq!(serde_json::to_value(skill).unwrap(), skill_fixture);
+}
+
+#[test]
+fn exec_policy_rule_command_round_trips_recursive_typed_selectors() {
+    let fixture = serde_json::json!({
+        "commandId": "allow-git-status",
+        "expectedRevision": 9,
+        "rule": {
+            "id": "allow-git-status",
+            "selector": {
+                "type": "all",
+                "selectors": [
+                    {
+                        "type": "source",
+                        "source": "built_in_tool",
+                        "sourceId": "shell-command"
+                    },
+                    {
+                        "type": "commandPrefix",
+                        "pattern": [
+                            {"type": "literal", "value": "git"},
+                            {"type": "oneOf", "value": ["status", "diff"]}
+                        ]
+                    }
+                ]
+            },
+            "effect": {"type": "allowUnsandboxed"},
+            "justification": "explicit user rule"
+        }
+    });
+    let params: ExecPolicyRuleUpsertParams = serde_json::from_value(fixture.clone()).unwrap();
+
+    assert_eq!(serde_json::to_value(params).unwrap(), fixture);
 }
 
 #[test]

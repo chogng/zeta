@@ -1,6 +1,6 @@
 use super::*;
-use zeta_policy::{
-    ActionDigest, ActionKind, ActionProvenance, ActionSource, CapabilitySet, PolicyRevision,
+use zeta_action_policy::{
+    ActionDigest, ActionKind, ActionPolicyRevision, ActionProvenance, ActionSource, CapabilitySet,
     ResolvedAction, ReviewEvidenceKind, ReviewEvidenceTrust, SandboxCompatibility,
 };
 use zeta_protocol::{ItemId, ThreadItem, ToolCallId, ToolName, TurnId};
@@ -62,6 +62,6 @@ fn request() -> ActionReviewRequest {
         SandboxCompatibility::NotApplicable {
             reason: "external deployment".into(),
         },
-        PolicyRevision::new("policy-1"),
+        ActionPolicyRevision::new("policy-1"),
     )
 }

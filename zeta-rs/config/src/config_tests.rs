@@ -295,6 +295,7 @@ fn workspace_document(preferred_model: Option<ModelRef>) -> WorkspaceConfigDocum
                 hook("workspace:project:hook:review"),
             )]),
         },
+        exec_policy: WorkspaceExecPolicyConfig::default(),
     }
 }
 

@@ -25,13 +25,13 @@ Zeta 把 Auto Review 定义为“受确定性策略约束的风险审查建议�
 核心决策：
 
 - 主机先解析精确动作、来源、最小能力和沙箱兼容性；
-- 内置安全策略 `BuiltInSafetyPolicy` 的确定性拒绝和强制沙箱规则优先于用户授权列表
-  `UserAllowlist`，两者都优先于 LLM；
+- `zeta-execpolicy` 对 Host / Organization / User / Workspace typed rules 做纯求值；更严格 effect
+  优先，Workspace 不能产生 `AllowUnsandboxed`；该结果和 exact `UserAllowlist` 都优先于 LLM；
 - `UserAllowlist` 只接受绑定动作摘要、完整能力集合与策略版本的精确沙箱外授权，不接受工具名称
   或命令前缀；
 - 风险审查器只给出批准 `Approve`、修改动作 `ReviseAction`、询问用户 `AskUser` 或拒绝 `Deny`
   四种建议；
-- 策略引擎 `PolicyEngine` 是唯一把建议转成执行决定并签发授权的责任方；
+- 策略引擎 `ActionPolicyEngine` 是唯一把建议转成执行决定并签发授权的责任方；
 - 自动授权绑定审查结论、动作摘要、完整能力集合和策略版本；
 - 用户意图与证据必须带有明确的信任边界，仓库、工具和 Agent 内容默认不可信；
 - 审查失败必须失败即关闭；
@@ -69,7 +69,8 @@ Auto Review 不解决：
 | 组件 | 拥有 | 不拥有 |
 | --- | --- | --- |
 | 工具主机 | 精确解析动作、来源、最小能力和审查证据 | 最终策略决定 |
-| `zeta-policy` | 规则、授权、风险审查接口、风险与授权门槛和最终决定 | LLM 提示词与模型提供方 |
+| `zeta-execpolicy` | typed rules、layer merge、effect precedence、semantic revision 与纯求值 | 最终 grant、LLM、配置 I/O |
+| `zeta-action-policy` | rule effect 映射、exact grants、风险审查接口、风险与授权门槛和最终决定 | 规则持久化、LLM 提示词与模型提供方 |
 | `zeta-auto-review` | 审查提示词、严格响应和审查结论绑定 | 签发授权、执行工具、批准界面 |
 | App Server | 配置安全点、审查模型解析和模型提供方适配器 | 审查建议的授权语义 |
 | Core | 工具调度、类型化批准、持久化执行起点与提权、安全重试门槛、恢复和拒绝断路器 | 模型风险判断、操作系统沙箱 |
@@ -80,14 +81,14 @@ Auto Review 不解决：
 
 ```text
 工具主机 ──准备完成的动作与证据──► Core
-Core ──审查请求──► zeta-policy
-zeta-policy ──建议调用──► zeta-auto-review
+Core ──审查请求──► zeta-action-policy ──纯规则求值──► zeta-execpolicy
+zeta-action-policy ──建议调用──► zeta-auto-review
 zeta-auto-review ──模型请求──► App Server 审查适配器
-zeta-policy ──最终决定──► Core
+zeta-action-policy ──最终决定──► Core
 Core ──精确执行授权──► 工具执行器与沙箱
 ```
 
-`zeta-policy` 不能依赖 `zeta-auto-review`。它依赖自己定义的风险审查接口
+`zeta-action-policy` 不能依赖 `zeta-auto-review`。它依赖自己定义的风险审查接口
 `ActionClassifier`，因此未来可以替换模型实现、关闭 Auto Review 或增加确定性审查器，而不改变
 权限系统的最终授权责任。
 
@@ -100,11 +101,12 @@ flowchart TD
     A["Agent 提出工具动作"] --> B["主机解析精确动作<br/>作用范围 / 来源 / 能力"]
     B --> C{"确定性策略"}
     C -- "拒绝" --> X["阻止"]
+    C -- "typed allow rule" --> PG["ActionPolicyEngine 签发 exact ExecPolicy grant"]
     C -- "匹配精确用户授权" --> G["使用精确沙箱外授权执行"]
     C -- "沙箱可用" --> S["在沙箱中执行"]
     C -- "需要上下文判断" --> R["Auto Review 风险审查器"]
     R --> V{"主机验证建议"}
-    V -- "符合自动批准条件" --> AG["PolicyEngine 签发 AutoReviewGrant"]
+    V -- "符合自动批准条件" --> AG["ActionPolicyEngine 签发 AutoReviewGrant"]
     V -- "存在更安全路径" --> SA["返回结构化 ReviseAction"]
     V -- "授权含糊" --> U["询问用户"]
     V -- "危险或极高风险" --> X
@@ -112,6 +114,7 @@ flowchart TD
     U -- "一次性批准" --> UG["创建绑定请求与调用的用户授权"]
     U -- "拒绝" --> D["记录被拒绝的工具结果"]
     AG --> E["持久化记录 ToolExecutionStarted"]
+    PG --> E
     UG --> E
     G --> E
     S --> E
@@ -142,7 +145,7 @@ flowchart TD
    └─ 可能已有部分副作用或结果未知 → 不自动重放
 
 重新审查
-└─ 风险审查建议 → PolicyEngine 校验
+└─ 风险审查建议 → ActionPolicyEngine 校验
    ├─ 符合 Approve 条件 → 使用精确授权重试
    ├─ ReviseAction → Agent 提出更安全的动作
    ├─ AskUser → 请求用户批准
@@ -165,7 +168,7 @@ flowchart TD
 
 ## 5. 风险与用户授权矩阵
 
-风险审查器对批准 `Approve` 同时输出风险等级和用户授权状态。策略引擎 `PolicyEngine` 使用固定
+风险审查器对批准 `Approve` 同时输出风险等级和用户授权状态。策略引擎 `ActionPolicyEngine` 使用固定
 矩阵：
 
 | 风险 | 明确授权 | 隐含授权 | 缺少或含糊 |
@@ -190,7 +193,7 @@ flowchart TD
 ### `Approve`
 
 表示风险审查器认为精确动作与用户意图相符。它不会直接执行；只有符合上一节矩阵时，策略引擎
-`PolicyEngine` 才签发自动审查授权 `AutoReviewGrant`。
+`ActionPolicyEngine` 才签发自动审查授权 `AutoReviewGrant`。
 
 用户体验目标：明确、低到可控风险的动作不产生重复确认。
 
@@ -285,7 +288,7 @@ Auto Review 的失败模式必须显式：
 
 已经实现：
 
-- 确定性策略优先的 `PolicyEngine` 决策顺序；
+- 确定性策略优先的 `ActionPolicyEngine` 决策顺序；
 - 四种风险审查建议；
 - 建议与能力集合两层严格 JSON 解析，以及策略拥有的精确或子集验证；
 - 64 KiB 序列化输入上限，以及适配器和风险审查器两层 16 KiB 响应上限；
@@ -359,4 +362,4 @@ Auto Review 的失败模式必须显式：
 
 Auto Review 的实现细节、错误语义和修改指南见
 [`zeta-auto-review` README](../zeta-rs/auto-review/README.md)；确定性决策引擎与授权实现见
-[`zeta-policy` README](../zeta-rs/policy/README.md)。
+[`zeta-action-policy` README](../zeta-rs/action-policy/README.md)。

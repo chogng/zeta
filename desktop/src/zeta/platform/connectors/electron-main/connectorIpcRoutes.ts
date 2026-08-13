@@ -12,6 +12,8 @@ export function connectorIpcRoutes(supervisor: AppServerSupervisor): readonly Ip
     route({ channel: "zeta:connectors:connect-api-token", validate: connectParams, invoke: params => supervisor.request(APP_SERVER_METHODS["connector/connect/apiToken"], params) }),
     route({ channel: "zeta:connectors:connect-oauth", validate: oauthConnectParams, invoke: params => connectOAuth(supervisor, params) }),
     route({ channel: "zeta:connectors:disconnect", validate: disconnectParams, invoke: params => supervisor.request(APP_SERVER_METHODS["connector/disconnect"], params) }),
+    route({ channel: "zeta:connectors:oauth-refresh", validate: oauthRefreshParams, invoke: params => supervisor.request(APP_SERVER_METHODS["connector/oauth/refresh"], params) }),
+    route({ channel: "zeta:connectors:oauth-revoke", validate: disconnectParams, invoke: params => supervisor.request(APP_SERVER_METHODS["connector/oauth/revoke"], params) }),
   ];
 }
 
@@ -163,4 +165,9 @@ function disconnectParams(value: unknown): ConnectorDisconnectParams {
     expectedGeneration: positiveInteger(params.expectedGeneration, "expectedGeneration"),
     connectorId: nonEmptyString(params.connectorId, "connectorId"),
   };
+}
+
+function oauthRefreshParams(value: unknown): { readonly connectorId: string } {
+  const params = record(value, ["connectorId"]);
+  return { connectorId: nonEmptyString(params.connectorId, "connectorId") };
 }

@@ -136,7 +136,7 @@ profile 用 edit，接 OpenAI 系时补）、`update_plan`、MCP 阈值策略、
   edit / grep / glob 六个成员，`definitions()` 聚合（顺序 = tools-spec 章节序，固定——
   这是缓存前缀稳定性的一部分）；`prepare` / `execute` 按 `call.name` 分发；
 - 每个工具的 `ActionReviewRequest` 构造：read/grep/glob → 只读 capability + 路径；
-  write/edit → 写 capability + 精确路径（喂给 `zeta-policy` 做审批/沙箱判定，复用现
+  write/edit → 写 capability + 精确路径（喂给 `zeta-action-policy` 做审批/沙箱判定，复用现
   有 shell 的 provenance/digest 模式，`source_id` 按工具名区分）；
 - `LOCAL_POLICY_REVISION` bump（`local-shell-v2` → `local-tools-v3`）；
 - `compose_local_tools` 返回签名不变，内部换 suite。

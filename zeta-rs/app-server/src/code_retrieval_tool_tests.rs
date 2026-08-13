@@ -1,8 +1,8 @@
 use super::*;
 use std::fs;
+use zeta_action_policy::GrantId;
 use zeta_code_index::CodeIndexLimits;
 use zeta_code_index::CodeIndexStorage;
-use zeta_policy::GrantId;
 use zeta_protocol::ToolCallId;
 use zeta_workspace::WorkspaceCapability;
 use zeta_workspace::WorkspaceRoot;

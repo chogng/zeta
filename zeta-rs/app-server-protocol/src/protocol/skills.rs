@@ -27,6 +27,7 @@ pub enum SkillSourceKindDto {
     BuiltIn,
     User,
     Workspace,
+    Plugin,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

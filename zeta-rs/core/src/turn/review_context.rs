@@ -1,4 +1,4 @@
-use zeta_policy::{ActionReviewRequest, ReviewContext, ReviewEvidence};
+use zeta_action_policy::{ActionReviewRequest, ReviewContext, ReviewEvidence};
 use zeta_protocol::{ItemId, ThreadItem, TurnId};
 
 const MAX_USER_INTENT_CHARS: usize = 4_000;

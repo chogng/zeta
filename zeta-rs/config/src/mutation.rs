@@ -191,6 +191,17 @@ pub(crate) fn apply_command(
         UserConfigCommand::ForgetWorkspaceTrust { workspace } => {
             document.workspace_trust.roots.remove(workspace);
         }
+        UserConfigCommand::UpsertExecPolicyRule { rule } => {
+            document.exec_policy.upsert(rule.clone());
+        }
+        UserConfigCommand::RemoveExecPolicyRule { rule_id } => {
+            if !document.exec_policy.remove(rule_id) {
+                return Err(ConfigError(format!(
+                    "execution-policy rule '{}' is not configured",
+                    rule_id.as_str()
+                )));
+            }
+        }
     }
     Ok(())
 }

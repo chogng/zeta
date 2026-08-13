@@ -35,6 +35,15 @@ use crate::protocol::common::{
     BrowserCapability, ClientCapabilities, ClientInfo, CommandId, EmptyParams, ItemId, RequestId,
     SchemaHash, ServerInfo, SessionId, StreamInstanceId, ThreadId, ToolCallId, ToolName, TurnId,
 };
+use crate::protocol::config::ExecPolicyActionKindDto;
+use crate::protocol::config::ExecPolicyEffectDto;
+use crate::protocol::config::ExecPolicyHostMatcherDto;
+use crate::protocol::config::ExecPolicyRuleDto;
+use crate::protocol::config::ExecPolicyRuleRemoveParams;
+use crate::protocol::config::ExecPolicyRuleUpsertParams;
+use crate::protocol::config::ExecPolicyScopeMatcherDto;
+use crate::protocol::config::ExecPolicySelectorDto;
+use crate::protocol::config::ExecPolicyTokenDto;
 use crate::protocol::config::{
     ApprovalReviewModelSelectionDto, ConfigChanged, ConfigCommandDispositionDto,
     ConfigCommandResult, ConfigReadResult, ConfigUpdateParams, HookActionDto, HookConfigDto,
@@ -66,6 +75,7 @@ use crate::protocol::connectors::ConnectorDto;
 use crate::protocol::connectors::ConnectorListResult;
 use crate::protocol::connectors::ConnectorOAuthCancelParams;
 use crate::protocol::connectors::ConnectorOAuthCompleteParams;
+use crate::protocol::connectors::ConnectorOAuthRefreshParams;
 use crate::protocol::connectors::ConnectorOAuthStartParams;
 use crate::protocol::connectors::ConnectorOAuthStartResult;
 use crate::protocol::connectors::ConnectorSecretDto;
@@ -136,6 +146,10 @@ use crate::protocol::notification::{SessionUpdateEnvelope, ThreadUpdateEnvelope}
 use crate::protocol::plugins::PluginCommandDispositionDto;
 use crate::protocol::plugins::PluginCommandResultDto;
 use crate::protocol::plugins::PluginListResult;
+use crate::protocol::plugins::PluginMarketplaceCommandParams;
+use crate::protocol::plugins::PluginMarketplaceListResult;
+use crate::protocol::plugins::PluginMarketplaceModeDto;
+use crate::protocol::plugins::PluginMarketplacePackageDto;
 use crate::protocol::plugins::PluginPackageCommandParams;
 use crate::protocol::plugins::PluginPackageDto;
 use crate::protocol::plugins::PluginsChanged;
@@ -446,6 +460,16 @@ client_methods! {
         response: ConnectorCommandResultDto,
         serialization: GlobalExclusive,
     },
+    ConnectorOAuthRefresh => "connector/oauth/refresh" {
+        params: ConnectorOAuthRefreshParams,
+        response: (),
+        serialization: GlobalExclusive,
+    },
+    ConnectorOAuthRevoke => "connector/oauth/revoke" {
+        params: ConnectorDisconnectParams,
+        response: ConnectorDisconnectResultDto,
+        serialization: GlobalExclusive,
+    },
     ConnectorDisconnect => "connector/disconnect" {
         params: ConnectorDisconnectParams,
         response: ConnectorDisconnectResultDto,
@@ -460,6 +484,26 @@ client_methods! {
         params: EmptyParams,
         response: PluginListResult,
         serialization: GlobalSharedRead,
+    },
+    PluginMarketplaceList => "plugin/marketplace/list" {
+        params: EmptyParams,
+        response: PluginMarketplaceListResult,
+        serialization: GlobalSharedRead,
+    },
+    PluginInstall => "plugin/install" {
+        params: PluginMarketplaceCommandParams,
+        response: PluginCommandResultDto,
+        serialization: GlobalExclusive,
+    },
+    PluginUpdate => "plugin/update" {
+        params: PluginMarketplaceCommandParams,
+        response: PluginCommandResultDto,
+        serialization: GlobalExclusive,
+    },
+    PluginRollback => "plugin/rollback" {
+        params: PluginPackageCommandParams,
+        response: PluginCommandResultDto,
+        serialization: GlobalExclusive,
     },
     PluginEnable => "plugin/enable" {
         params: PluginPackageCommandParams,
@@ -493,6 +537,16 @@ client_methods! {
     },
     ConfigUpdate => "config/update" {
         params: ConfigUpdateParams,
+        response: ConfigCommandResult,
+        serialization: GlobalExclusive,
+    },
+    ExecPolicyRuleUpsert => "execPolicy/rule/upsert" {
+        params: ExecPolicyRuleUpsertParams,
+        response: ConfigCommandResult,
+        serialization: GlobalExclusive,
+    },
+    ExecPolicyRuleRemove => "execPolicy/rule/remove" {
+        params: ExecPolicyRuleRemoveParams,
         response: ConfigCommandResult,
         serialization: GlobalExclusive,
     },
@@ -1129,6 +1183,7 @@ typescript_bindings! {
     ConnectorOAuthStartResult,
     ConnectorOAuthCompleteParams,
     ConnectorOAuthCancelParams,
+    ConnectorOAuthRefreshParams,
     ConnectorDisconnectParams,
     ConnectorCommandDispositionDto,
     ConnectorCommandResultDto,
@@ -1138,6 +1193,10 @@ typescript_bindings! {
     ConnectorsChanged,
     PluginPackageDto,
     PluginListResult,
+    PluginMarketplaceCommandParams,
+    PluginMarketplaceListResult,
+    PluginMarketplaceModeDto,
+    PluginMarketplacePackageDto,
     PluginPackageCommandParams,
     PluginCommandDispositionDto,
     PluginCommandResultDto,
@@ -1190,6 +1249,15 @@ typescript_bindings! {
     ConfigCommandDispositionDto,
     ConfigCommandResult,
     ConfigUpdateParams,
+    ExecPolicyActionKindDto,
+    ExecPolicyTokenDto,
+    ExecPolicyHostMatcherDto,
+    ExecPolicyScopeMatcherDto,
+    ExecPolicySelectorDto,
+    ExecPolicyEffectDto,
+    ExecPolicyRuleDto,
+    ExecPolicyRuleUpsertParams,
+    ExecPolicyRuleRemoveParams,
     ToolSearchModeDto,
     ToolSearchEmbeddingStatusDto,
     ToolSearchConfigDto,

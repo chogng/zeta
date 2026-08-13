@@ -34,6 +34,21 @@ pub trait SkillConfigSnapshotProvider: Send + Sync {
     }
 }
 
+/// Supplies host-authorized dynamic Skill source roots.
+///
+/// Implementations must return roots that have already passed the owning domain's authority and
+/// containment checks. The monotonically meaningful generation participates in runtime source
+/// replacement; implementations must not expose arbitrary client-provided paths.
+pub trait DynamicSkillSourceProvider: Send + Sync {
+    fn snapshot(&self) -> Result<DynamicSkillSourceSnapshot, String>;
+}
+
+/// One immutable generation of host-authorized dynamic Skill sources.
+pub struct DynamicSkillSourceSnapshot {
+    pub generation: u64,
+    pub roots: Vec<SkillSourceRoot>,
+}
+
 /// Receives generation changes without coupling the Skill runtime to a transport or product host.
 pub trait SkillRuntimeEventSink: Send + Sync {
     fn skills_changed(&self, generation: u64);
@@ -82,6 +97,7 @@ pub struct SkillRuntimeSnapshot {
 
 pub struct SkillRuntime {
     built_in_source: BuiltInSkillSource,
+    dynamic_sources: Mutex<Option<Arc<dyn DynamicSkillSourceProvider>>>,
     pub(crate) config: Arc<dyn SkillConfigSnapshotProvider>,
     pub(crate) workspace_root: Mutex<Option<PathBuf>>,
     pub(crate) state: Mutex<SkillRuntimeState>,
@@ -98,6 +114,7 @@ pub(crate) struct SkillRuntimeState {
 pub(crate) struct SourceFingerprint {
     id: SkillSourceId,
     pub(crate) root: PathBuf,
+    generation: u64,
 }
 
 struct SourceComposition {
@@ -119,8 +136,22 @@ impl SkillRuntime {
         config: Arc<dyn SkillConfigSnapshotProvider>,
         events: Arc<dyn SkillRuntimeEventSink>,
     ) -> Result<Arc<Self>, String> {
+        Self::with_dynamic_sources(built_in_source, config, events, None)
+    }
+
+    pub fn with_dynamic_sources(
+        built_in_source: BuiltInSkillSource,
+        config: Arc<dyn SkillConfigSnapshotProvider>,
+        events: Arc<dyn SkillRuntimeEventSink>,
+        dynamic_sources: Option<Arc<dyn DynamicSkillSourceProvider>>,
+    ) -> Result<Arc<Self>, String> {
         let skills_config = config.snapshot()?;
-        let composition = compose_sources(&built_in_source, &skills_config, None)?;
+        let dynamic_snapshot = dynamic_sources
+            .as_ref()
+            .map(|provider| provider.snapshot())
+            .transpose()?;
+        let composition =
+            compose_sources(&built_in_source, &skills_config, None, dynamic_snapshot)?;
         let catalog = SkillCatalog::discover(composition.roots)
             .map_err(|error| format!("failed to discover Skill catalog: {error}"))?;
         let snapshot = Arc::new(project_snapshot(
@@ -131,6 +162,7 @@ impl SkillRuntime {
         ));
         Ok(Arc::new(Self {
             built_in_source,
+            dynamic_sources: Mutex::new(dynamic_sources),
             config,
             workspace_root: Mutex::new(None),
             state: Mutex::new(SkillRuntimeState {
@@ -144,6 +176,18 @@ impl SkillRuntime {
 
     pub fn list(&self, reload: SkillCatalogReload) -> Result<Arc<SkillRuntimeSnapshot>, String> {
         self.reconcile(reload)
+    }
+
+    /// Replaces host-authorized dynamic sources and publishes their visible projection.
+    pub fn bind_dynamic_sources(
+        &self,
+        provider: Arc<dyn DynamicSkillSourceProvider>,
+    ) -> Result<Arc<SkillRuntimeSnapshot>, String> {
+        *self
+            .dynamic_sources
+            .lock()
+            .map_err(|_| "Dynamic Skill source lock poisoned".to_string())? = Some(provider);
+        self.reconcile(SkillCatalogReload::Refresh)
     }
 
     pub fn activate_explicit(&self, selected: &SkillRef) -> Result<ActivatedSkill, String> {
@@ -314,6 +358,12 @@ impl SkillRuntime {
             &self.built_in_source,
             &skills_config,
             workspace_root.as_deref(),
+            self.dynamic_sources
+                .lock()
+                .map_err(|_| "Dynamic Skill source lock poisoned".to_string())?
+                .as_ref()
+                .map(|provider| provider.snapshot())
+                .transpose()?,
         )?;
         let mut state = self
             .state
@@ -355,6 +405,7 @@ fn compose_sources(
     built_in_source: &BuiltInSkillSource,
     config: &SkillsConfig,
     workspace_root: Option<&Path>,
+    dynamic_sources: Option<DynamicSkillSourceSnapshot>,
 ) -> Result<SourceComposition, String> {
     let mut fingerprint = Vec::new();
     let mut roots = Vec::new();
@@ -407,6 +458,18 @@ fn compose_sources(
             &mut diagnostics,
         );
     }
+    if let Some(dynamic) = dynamic_sources {
+        for root in dynamic.roots {
+            let id = root.view().id().clone();
+            let canonical_root = root.host_root().to_path_buf();
+            fingerprint.push(SourceFingerprint {
+                id,
+                root: canonical_root,
+                generation: dynamic.generation,
+            });
+            roots.push(root);
+        }
+    }
     if let Some(workspace_root) = workspace_root {
         let root = workspace_root.join(".zeta/skills");
         match std::fs::symlink_metadata(&root) {
@@ -448,7 +511,11 @@ fn add_source(
     };
     match source {
         Ok(source) => {
-            fingerprint.push(SourceFingerprint { id, root });
+            fingerprint.push(SourceFingerprint {
+                id,
+                root,
+                generation: 0,
+            });
             roots.push(source);
         }
         Err(error) => diagnostics.push(source_unavailable_diagnostic(&id, &error.to_string())),

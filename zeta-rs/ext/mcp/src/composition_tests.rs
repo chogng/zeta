@@ -1,6 +1,10 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use zeta_action_policy::{
+    ActionDigest, ActionKind, ActionPolicyRevision, ActionProvenance, ActionReviewRequest,
+    ActionSource, CapabilitySet, ExecutionDecision, ResolvedAction, SandboxCompatibility,
+};
 use zeta_async_utils::CancellationSource;
 use zeta_config::{
     ConfigGeneration, McpConfig, McpCredentialBinding, McpServerConfig, McpServerEnablement,
@@ -18,10 +22,6 @@ use zeta_connectors_extension::ConnectorCredentialService;
 use zeta_mcp::{
     McpConnectFuture, McpPageCursor, McpServerDefinition, McpServerTransport, McpSession,
     McpSessionError, McpSessionFactory, McpSessionFuture,
-};
-use zeta_policy::{
-    ActionDigest, ActionKind, ActionProvenance, ActionReviewRequest, ActionSource, CapabilitySet,
-    ExecutionDecision, PolicyRevision, ResolvedAction, SandboxCompatibility,
 };
 use zeta_protocol::{ToolCall, ToolCallId};
 use zeta_rmcp_client::{
@@ -150,7 +150,7 @@ fn prepares_exact_mcp_provenance_and_requires_user_approval() {
         SandboxCompatibility::NotApplicable {
             reason: "test".into(),
         },
-        PolicyRevision::new(MCP_POLICY_REVISION),
+        ActionPolicyRevision::new(MCP_POLICY_REVISION),
     );
     assert!(
         composition

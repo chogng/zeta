@@ -2,13 +2,13 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::Mutex;
 
+use zeta_action_policy::ActionReviewRequest;
+use zeta_action_policy::ReviewEvidence;
 use zeta_async_utils::CancellationToken;
 use zeta_core::CoreError;
 use zeta_core::ToolAuthorization;
 use zeta_core::ToolExecutionFacts;
 use zeta_core::ToolOutputSink;
-use zeta_policy::ActionReviewRequest;
-use zeta_policy::ReviewEvidence;
 use zeta_protocol::ContentPart;
 use zeta_protocol::ToolCall;
 use zeta_protocol::ToolCallId;
@@ -140,6 +140,7 @@ impl ToolExecutorRuntime {
         let authority = match authorization {
             ToolAuthorization::Sandboxed(policy) => ToolRuntimeAuthority::Sandboxed(*policy),
             ToolAuthorization::UnsandboxedGrant { .. }
+            | ToolAuthorization::ExecPolicyGranted(_)
             | ToolAuthorization::AutoReviewed(_)
             | ToolAuthorization::PermissionBypassed(_)
             | ToolAuthorization::ApprovedOnce(_) => ToolRuntimeAuthority::Unrestricted,

@@ -11,6 +11,9 @@ use zeta_model_provider::EchoModel;
 use zeta_plugins::LocalPluginPackage;
 use zeta_plugins::PluginActivationAuthority;
 use zeta_plugins::PluginAuthorityCommandId;
+use zeta_plugins::PluginMarketplace;
+use zeta_plugins::PluginMarketplaceMode;
+use zeta_plugins::PluginMarketplaceService;
 
 #[test]
 fn app_server_projects_and_mutates_distinct_plugin_authority_layers() {
@@ -111,6 +114,101 @@ fn app_server_projects_and_mutates_distinct_plugin_authority_layers() {
     assert_eq!(effective["result"]["packages"][0]["enabled"], true);
     assert_eq!(effective["result"]["packages"][0]["granted"], true);
     assert_eq!(effective["result"]["packages"][0]["effective"], true);
+}
+
+#[test]
+fn app_server_installs_only_exact_host_registered_marketplace_entries() {
+    let root = tempdir().unwrap();
+    let package_root = root.path().join("packages/review");
+    fs::create_dir_all(package_root.join(".zeta-plugin")).unwrap();
+    fs::create_dir_all(package_root.join("skills/review")).unwrap();
+    fs::write(package_root.join("skills/review/SKILL.md"), "# Review").unwrap();
+    fs::write(
+        package_root.join(".zeta-plugin/plugin.json"),
+        r#"{
+            "schemaVersion": 1,
+            "id": "acme/review",
+            "version": "1.0.0",
+            "displayName": "Review",
+            "compatibility": {"zeta": ">=0.1.0"},
+            "contributions": {"skills": [{"id": "review", "path": "skills/review"}]},
+            "permissions": []
+        }"#,
+    )
+    .unwrap();
+    let package = LocalPluginPackage::load(&package_root).unwrap();
+    fs::create_dir_all(root.path().join(".zeta-marketplace")).unwrap();
+    fs::write(
+        root.path().join(".zeta-marketplace/marketplace.json"),
+        format!(
+            r#"{{"schemaVersion":1,"id":"acme","plugins":[{{"id":"acme/review","version":"1.0.0","digest":"{}","path":"packages/review"}}]}}"#,
+            package.package_digest()
+        ),
+    )
+    .unwrap();
+    let authority = PluginActivationAuthority::open(root.path().join("profile")).unwrap();
+    let marketplace = PluginMarketplace::open(root.path(), PluginMarketplaceMode::Managed).unwrap();
+    let marketplaces = PluginMarketplaceService::new(authority.clone(), [marketplace]).unwrap();
+    let threads = Arc::new(ThreadController::with_store(Arc::new(
+        InMemoryThreadStore::default(),
+    )));
+    let sessions = Arc::new(SessionCoordinator::with_store(
+        Arc::new(InMemorySessionStore::default()),
+        threads,
+    ));
+    let server = AppServer::new(
+        sessions,
+        Arc::new(ProviderModelService::new(Arc::new(EchoModel))),
+    )
+    .with_plugin_authority(authority)
+    .with_plugin_marketplaces(marketplaces);
+    let mut connection = server.connection();
+    call(
+        &server,
+        &mut connection,
+        1,
+        "initialize",
+        serde_json::json!({
+            "clientInfo": {"name": "test", "version": "1"},
+            "capabilities": {}
+        }),
+    );
+
+    let available = call(
+        &server,
+        &mut connection,
+        2,
+        "plugin/marketplace/list",
+        serde_json::json!({}),
+    );
+    let entry = &available["result"]["packages"][0];
+    assert_eq!(entry["marketplaceMode"], "managed");
+    assert_eq!(entry["installed"], false);
+
+    let installed = call(
+        &server,
+        &mut connection,
+        3,
+        "plugin/install",
+        serde_json::json!({
+            "commandId": "install-marketplace-review",
+            "expectedRevision": 0,
+            "marketplaceId": "acme",
+            "id": entry["id"],
+            "version": entry["version"],
+            "digest": entry["digest"]
+        }),
+    );
+    assert_eq!(installed["result"]["revision"], 1);
+    let packages = call(
+        &server,
+        &mut connection,
+        4,
+        "plugin/list",
+        serde_json::json!({}),
+    );
+    assert_eq!(packages["result"]["packages"][0]["enabled"], false);
+    assert_eq!(packages["result"]["packages"][0]["granted"], false);
 }
 
 fn call(

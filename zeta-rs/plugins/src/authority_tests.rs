@@ -303,6 +303,93 @@ fn enable_requires_an_exact_package_grant_before_activation() {
 }
 
 #[test]
+fn distribution_revocation_is_a_durable_tombstone() {
+    let profile = tempdir().unwrap();
+    let source = tempdir().unwrap();
+    let local = package(source.path(), "acme/review", "1.0.0");
+    let authority = PluginActivationAuthority::open(profile.path()).unwrap();
+    let installed = authority
+        .install_local(
+            PluginAuthorityCommandId::new("install-review").unwrap(),
+            0,
+            &local,
+        )
+        .unwrap()
+        .package;
+    for (command_id, command) in [
+        (
+            "grant-review",
+            PluginAuthorityCommand::Grant {
+                package: installed.clone(),
+            },
+        ),
+        (
+            "enable-review",
+            PluginAuthorityCommand::Enable {
+                package: installed.clone(),
+            },
+        ),
+        (
+            "revoke-package-review",
+            PluginAuthorityCommand::RevokePackage {
+                package: installed.clone(),
+            },
+        ),
+    ] {
+        authority
+            .apply(request(&authority, command_id, command))
+            .unwrap();
+    }
+    assert!(authority.snapshot().activation().packages().is_empty());
+    assert_eq!(authority.snapshot().revoked(), std::slice::from_ref(&installed));
+    drop(authority);
+
+    let reopened = PluginActivationAuthority::open(profile.path()).unwrap();
+    assert_eq!(reopened.snapshot().revoked(), std::slice::from_ref(&installed));
+    let error = reopened
+        .apply(request(
+            &reopened,
+            "reenable-revoked",
+            PluginAuthorityCommand::Enable { package: installed },
+        ))
+        .unwrap_err();
+    assert_eq!(error.kind(), PluginErrorKind::PackageRevoked);
+}
+
+#[test]
+fn restoring_a_revoked_package_does_not_implicitly_reactivate_it() {
+    let root = tempdir().unwrap();
+    let source = tempdir().unwrap();
+    let store = PluginPackageStore::open(root.path()).unwrap();
+    let installed = store
+        .install_local(&package(source.path(), "acme/review", "1.0.0"))
+        .unwrap();
+    let authority = PluginActivationAuthority::in_memory(store).unwrap();
+    authority
+        .apply(request(
+            &authority,
+            "revoke-package",
+            PluginAuthorityCommand::RevokePackage {
+                package: installed.clone(),
+            },
+        ))
+        .unwrap();
+    authority
+        .apply(request(
+            &authority,
+            "restore-package",
+            PluginAuthorityCommand::RestorePackage {
+                package: installed.clone(),
+            },
+        ))
+        .unwrap();
+
+    assert!(authority.snapshot().revoked().is_empty());
+    assert!(authority.snapshot().activation().packages().is_empty());
+    assert!(authority.snapshot().installed().is_empty());
+}
+
+#[test]
 fn disable_commits_then_waits_for_exact_invocation_drain() {
     let root = tempdir().unwrap();
     let source = tempdir().unwrap();

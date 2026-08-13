@@ -12,6 +12,8 @@ use zeta_connectors_extension::ConnectorOAuthCredential;
 use zeta_connectors_extension::ConnectorOAuthError;
 use zeta_connectors_extension::ConnectorOAuthExchangeRequest;
 use zeta_connectors_extension::ConnectorOAuthProvider;
+use zeta_connectors_extension::ConnectorOAuthRefreshRequest;
+use zeta_connectors_extension::ConnectorOAuthRevokeRequest;
 use zeta_connectors_extension::ConnectorOAuthService;
 use zeta_core::InMemorySessionStore;
 use zeta_core::InMemoryThreadStore;
@@ -75,6 +77,22 @@ impl ConnectorOAuthProvider for TestOAuthProvider {
             account_display_name: "Octocat".into(),
             secret: zeta_secrets::SecretValue::new(b"provider-access-token".to_vec()),
         })
+    }
+
+    fn refresh(
+        &self,
+        _connector: &ConnectorDefinition,
+        request: ConnectorOAuthRefreshRequest,
+    ) -> Result<zeta_secrets::SecretValue, ConnectorOAuthError> {
+        Ok(request.credential)
+    }
+
+    fn revoke(
+        &self,
+        _connector: &ConnectorDefinition,
+        _request: ConnectorOAuthRevokeRequest,
+    ) -> Result<(), ConnectorOAuthError> {
+        Ok(())
     }
 }
 

@@ -75,7 +75,7 @@ fn refuses_execution_without_durable_turn_identity() {
         .execute(
             &call,
             &ToolAuthorization::UnsandboxedGrant {
-                grant_id: zeta_policy::GrantId::new("test"),
+                grant_id: zeta_action_policy::GrantId::new("test"),
             },
             &CancellationSource::new().token(),
         )

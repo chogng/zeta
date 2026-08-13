@@ -14,17 +14,20 @@ path = "src/lib.rs"
 base64 = { workspace = true }
 getrandom = { workspace = true }
 rusqlite = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 sha2 = { workspace = true }
 url = { workspace = true }
 zeroize = { workspace = true }
 zeta-connectors = { workspace = true }
+zeta-http-client = { workspace = true }
 zeta-plugins = { workspace = true }
 zeta-secrets = { workspace = true }
 zeta-tools = { workspace = true }
 
 [dev-dependencies]
-serde_json = { workspace = true }
 tempfile = { workspace = true }
+
 
 [lints]
 workspace = true

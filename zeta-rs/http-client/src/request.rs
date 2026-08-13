@@ -1,11 +1,13 @@
 use crate::{HttpClientError, HttpHeader};
 use std::time::Duration;
+use zeroize::Zeroize;
 
 /// An HTTP method supported by the synchronous transport.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum HttpMethod {
     Get,
     Post,
+    Delete,
 }
 
 impl HttpMethod {
@@ -13,6 +15,7 @@ impl HttpMethod {
         match self {
             Self::Get => "GET",
             Self::Post => "POST",
+            Self::Delete => "DELETE",
         }
     }
 }
@@ -76,6 +79,12 @@ impl HttpRequest {
     }
 }
 
+impl Drop for HttpRequest {
+    fn drop(&mut self) {
+        self.body.zeroize();
+    }
+}
+
 /// A bounded unary HTTP response returned without provider-specific parsing.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct HttpResponse {
@@ -116,6 +125,12 @@ impl HttpResponse {
             .find(|header| header.name().eq_ignore_ascii_case("retry-after"))
             .and_then(|header| header.value().parse::<u64>().ok())
             .map(Duration::from_secs)
+    }
+}
+
+impl Drop for HttpResponse {
+    fn drop(&mut self) {
+        self.body.zeroize();
     }
 }
 

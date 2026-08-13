@@ -1,11 +1,11 @@
 use crate::protocol::{self, CURRENT_REVIEW_PROTOCOL};
 use crate::review_model::{ReviewModel, ReviewModelError, ReviewModelRequest};
 use std::fmt;
-use zeta_async_utils::CancellationToken;
-use zeta_policy::{
+use zeta_action_policy::{
     ActionClassifier, ActionReviewRequest, AssessmentId, ClassifierAssessment,
     ClassifierRecommendation,
 };
+use zeta_async_utils::CancellationToken;
 
 const MAX_MODEL_INPUT_BYTES: usize = 64 * 1024;
 const MAX_MODEL_RESPONSE_BYTES: usize = 16 * 1024;
@@ -131,12 +131,12 @@ impl<M: ReviewModel> ActionClassifier for LlmActionClassifier<M> {
         Ok(ClassifierAssessment::new(
             AssessmentId::from_response(
                 request.action().digest(),
-                request.policy_revision(),
+                request.action_policy_revision(),
                 CURRENT_REVIEW_PROTOCOL.revision(),
                 response_json_bytes,
             ),
             request.action().digest().clone(),
-            request.policy_revision().clone(),
+            request.action_policy_revision().clone(),
             CURRENT_REVIEW_PROTOCOL.revision(),
             recommendation,
         ))

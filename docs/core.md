@@ -378,7 +378,7 @@ zeta-core → Desktop / CLI / TUI
 | `WriterLease<Id>` | 已实现 | aggregate 单写者 | storage/host |
 | `ModelService` | 已实现（同步；流式默认桥接见 `ModelStreamSink`） | provider-neutral model invocation | model-provider adapter |
 | `ToolService` | 已实现（含 `prepare` / `review_evidence` / `execute_streaming`） | 已物化 Tool call 的执行 | built-in/MCP host |
-| `PolicyService` | 已实现 | action approval/sandbox 决策 | host policy layer |
+| `ActionPolicyService` | 已实现 | action approval/sandbox 决策 | host policy layer |
 | `ThreadUpdateSink` | 已实现 | committed/transient update 发布 | App Server subscription hub |
 | `ToolOutputSink` | 已实现 | Tool Call transient output | App Server/host |
 | `CapabilityBroker` | 仅设计 | Turn-scoped capability 解析 | App Server/host |
@@ -396,7 +396,7 @@ zeta-core → Desktop / CLI / TUI
 Port 必须是 consumer-owned interface。新 trait 必须说明角色、实现不变量、取消和错误约束。
 公共 request 不使用语义含糊的 `bool` 或 `Option` 参数。
 
-目标 host policy adapter 由 [`auto-review.md`](auto-review.md) 中的 `zeta-policy` 实现：
+目标 host policy adapter 由 [`auto-review.md`](auto-review.md) 中的 `zeta-action-policy` 实现：
 deterministic rule/grant 是 authority，LLM classifier 只提供 recommendation。Core 只消费最终
 decision，并负责 durable approval、retry 与 unknown-outcome lifecycle。
 
@@ -579,7 +579,7 @@ Thread；ContextManager 负责各自 context。详细契约见
 model emits Tool Calls
 → durable Tool Call intents
 → ToolService materializes ActionReviewRequest
-→ PolicyService evaluates sandbox / grant / approval / block
+→ ActionPolicyService evaluates sandbox / grant / approval / block
 → durable approval wait and exact continuation when required
 → durable ToolExecutionStarted with action/policy/authority identity
 → execute outside Thread writer
@@ -637,7 +637,11 @@ ActionApprovalResponse
   ApproveOnce | Decline
 ```
 
-Core 的 `PolicyService` 接收 immutable `ActionReviewRequest` 并返回 `ExecutionDecision`。
+Core 的 `ActionPolicyService` 接收 immutable `ActionReviewRequest` 并返回 `ExecutionDecision`。
+确定性规则由注入的 `zeta-action-policy` authority 消费 `zeta-execpolicy` snapshot 后求值；Core
+不解析规则。`RunExecPolicyGranted` 会被物化为绑定 exact `ToolCallId` 的
+`ExecPolicyToolGrant`，并在副作用前持久化为包含 rule ID 与 exec-policy revision 的
+`ToolExecutionAuthority::ExecPolicyGranted`。
 `AskUser` 必须先通过 `durable_approval_request` 绑定并转换，之后才能提交
 `InteractionRequested`。Reducer 校验 digest、revision、非空 capability scope 和重复
 capability，并把 Turn 转为 `WaitingForApproval`。响应通过原有的 RequestId、Thread/Turn identity

@@ -6,23 +6,23 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use zeta_action_policy::{
+    ActionDigest, ActionKind, ActionPolicyRevision, ActionProvenance, ActionReviewRequest,
+    ActionSource, Capability, CapabilityKind, CapabilitySet, ExecutionDecision,
+    ProcessInvocationKind, ResolvedAction, SandboxCompatibility,
+};
 use zeta_app_server_protocol::protocol::slash_commands::{
     SlashCommandArgumentModeDto, SlashCommandDefinition,
 };
 use zeta_async_utils::CancellationToken;
 use zeta_config::ConfigStore;
 use zeta_core::{
-    CoreError, InMemorySessionStore, InMemoryThreadStore, ModelService, PolicyService,
+    ActionPolicyService, CoreError, InMemorySessionStore, InMemoryThreadStore, ModelService,
     RequestTurnInteraction, SessionCoordinator, StartTurnRequest, ThreadController,
     ToolAuthorization, ToolOutputSink, ToolService,
 };
 use zeta_file_system::LocalFileSystem;
 use zeta_model_provider::EchoModel;
-use zeta_policy::{
-    ActionDigest, ActionKind, ActionProvenance, ActionReviewRequest, ActionSource, Capability,
-    CapabilityKind, CapabilitySet, ExecutionDecision, PolicyRevision, ProcessInvocationKind,
-    ResolvedAction, SandboxCompatibility,
-};
 use zeta_protocol::InteractionDeadline;
 use zeta_protocol::StableTurnErrorCode;
 use zeta_protocol::{
@@ -1242,7 +1242,7 @@ impl ToolService for ShellTestTool {
             ),
             ActionProvenance::new(ActionSource::BuiltInTool, "shell-command"),
             SandboxCompatibility::Supported(shell_test_sandbox()),
-            PolicyRevision::new("test-shell-v1"),
+            ActionPolicyRevision::new("test-shell-v1"),
         ))
     }
 
@@ -1278,7 +1278,7 @@ impl ToolService for ShellTestTool {
 
 struct ShellTestPolicy;
 
-impl PolicyService for ShellTestPolicy {
+impl ActionPolicyService for ShellTestPolicy {
     fn revision(&self) -> String {
         "test-policy-v1".into()
     }
@@ -2026,6 +2026,84 @@ fn config_updates_use_typed_command_ids() {
     let _ = std::fs::remove_file(&path);
     let _ = std::fs::remove_file(format!("{}-shm", path.display()));
     let _ = std::fs::remove_file(format!("{}-wal", path.display()));
+}
+
+#[test]
+fn exec_policy_rule_rpc_round_trips_typed_user_rules() {
+    let path = std::env::temp_dir().join(format!(
+        "zeta-app-server-exec-policy-{}.sqlite3",
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    let server = server().with_config_store(Arc::new(ConfigStore::open(&path).unwrap()));
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+
+    let upserted = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":2,"method":"execPolicy/rule/upsert",
+            "params":{
+                "commandId":"allow-git-status","expectedRevision":0,
+                "rule":{
+                    "id":"allow-git-status",
+                    "selector":{
+                        "type":"commandPrefix",
+                        "pattern":[
+                            {"type":"literal","value":"git"},
+                            {"type":"literal","value":"status"}
+                        ]
+                    },
+                    "effect":{"type":"allowUnsandboxed"},
+                    "justification":"explicit user rule"
+                }
+            }
+        }),
+    );
+    assert_eq!(upserted["result"]["revision"], 1);
+
+    let read = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"config/read","params":{}}),
+    );
+    assert_eq!(
+        read["result"]["execPolicyRules"],
+        serde_json::json!([{
+            "id":"allow-git-status",
+            "selector":{
+                "type":"commandPrefix",
+                "pattern":[
+                    {"type":"literal","value":"git"},
+                    {"type":"literal","value":"status"}
+                ]
+            },
+            "effect":{"type":"allowUnsandboxed"},
+            "justification":"explicit user rule"
+        }])
+    );
+
+    let removed = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":4,"method":"execPolicy/rule/remove",
+            "params":{
+                "commandId":"remove-git-status","expectedRevision":1,
+                "ruleId":"allow-git-status"
+            }
+        }),
+    );
+    assert_eq!(removed["result"]["revision"], 2);
+    let read = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":5,"method":"config/read","params":{}}),
+    );
+    assert_eq!(read["result"]["execPolicyRules"], serde_json::json!([]));
 }
 
 #[test]

@@ -16,6 +16,7 @@ pub(super) fn validate_escalation_authority(
 ) -> Result<(), CoreError> {
     match authority {
         ToolExecutionAuthority::UnsandboxedGrant { .. }
+        | ToolExecutionAuthority::ExecPolicyGranted { .. }
         | ToolExecutionAuthority::AutoReviewed { .. }
         | ToolExecutionAuthority::PermissionBypassed => Ok(()),
         ToolExecutionAuthority::ApprovedOnce { request_id } => {

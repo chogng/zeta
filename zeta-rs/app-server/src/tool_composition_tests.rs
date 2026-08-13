@@ -2,10 +2,15 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
+use zeta_action_policy::{
+    ActionDigest, ActionKind, ActionPolicyRevision, ActionProvenance, ActionReviewRequest,
+    ActionSource, ApprovalRequest, Capability, CapabilityKind, CapabilitySet, ExecutionDecision,
+    GrantId, ResolvedAction, SandboxCompatibility,
+};
 use zeta_async_utils::CancellationToken;
 use zeta_config::ToolSearchModeConfig;
+use zeta_core::ActionPolicyService;
 use zeta_core::CoreError;
-use zeta_core::PolicyService;
 use zeta_core::ProcessExecutionOutput;
 use zeta_core::ProcessExitStatus;
 use zeta_core::SandboxDenialOutput;
@@ -18,11 +23,6 @@ use zeta_model_provider::EmbeddingRequest;
 use zeta_model_provider::EmbeddingResponse;
 use zeta_model_provider::EmbeddingVector;
 use zeta_model_provider::ModelProviderError;
-use zeta_policy::{
-    ActionDigest, ActionKind, ActionProvenance, ActionReviewRequest, ActionSource, ApprovalRequest,
-    Capability, CapabilityKind, CapabilitySet, ExecutionDecision, GrantId, PolicyRevision,
-    ResolvedAction, SandboxCompatibility,
-};
 use zeta_protocol::ToolOutputStream;
 use zeta_protocol::{ToolCall, ToolDefinition, ToolExecutionOutput, ToolName};
 use zeta_tools::ToolExposure;
@@ -94,7 +94,7 @@ impl ToolService for FakeTools {
             SandboxCompatibility::NotApplicable {
                 reason: "test".into(),
             },
-            PolicyRevision::new("test"),
+            ActionPolicyRevision::new("test"),
         ))
     }
 
@@ -504,7 +504,7 @@ fn unavailable_persisted_hybrid_mode_does_not_silently_fallback_to_bm25() {
 
 struct AskPolicy;
 
-impl PolicyService for AskPolicy {
+impl ActionPolicyService for AskPolicy {
     fn revision(&self) -> String {
         "test-policy-v1".into()
     }
@@ -616,7 +616,7 @@ fn fake_review(
         SandboxCompatibility::NotApplicable {
             reason: "test".into(),
         },
-        PolicyRevision::new("test"),
+        ActionPolicyRevision::new("test"),
     ))
 }
 

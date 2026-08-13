@@ -18,6 +18,7 @@ use crate::ConnectorAuthority;
 
 struct TestProvider {
     verifier: Mutex<Option<String>>,
+    revocations: Mutex<usize>,
 }
 
 impl ConnectorOAuthProvider for TestProvider {
@@ -49,6 +50,31 @@ impl ConnectorOAuthProvider for TestProvider {
             secret: SecretValue::new(b"access-and-refresh-token-bundle".to_vec()),
         })
     }
+
+    fn refresh(
+        &self,
+        _: &ConnectorDefinition,
+        request: ConnectorOAuthRefreshRequest,
+    ) -> Result<SecretValue, ConnectorOAuthError> {
+        assert_eq!(
+            request.credential.expose(),
+            b"access-and-refresh-token-bundle"
+        );
+        Ok(SecretValue::new(b"refreshed-token-bundle".to_vec()))
+    }
+
+    fn revoke(
+        &self,
+        _: &ConnectorDefinition,
+        request: ConnectorOAuthRevokeRequest,
+    ) -> Result<(), ConnectorOAuthError> {
+        assert!(matches!(
+            request.credential.expose(),
+            b"access-and-refresh-token-bundle" | b"refreshed-token-bundle"
+        ));
+        *self.revocations.lock().unwrap() += 1;
+        Ok(())
+    }
 }
 
 fn fixture() -> (
@@ -70,6 +96,7 @@ fn fixture() -> (
     let credentials = Arc::new(ConnectorCredentialService::new(authority, secrets.clone()));
     let provider = Arc::new(TestProvider {
         verifier: Mutex::new(None),
+        revocations: Mutex::new(0),
     });
     let provider_port: Arc<dyn ConnectorOAuthProvider> = provider.clone();
     let oauth = ConnectorOAuthService::new(credentials, [(connector_id.clone(), provider_port)]);
@@ -128,6 +155,128 @@ fn oauth_pkce_callback_publishes_only_provider_validated_account_and_secret_refe
         secrets.load(&key).unwrap().unwrap().expose(),
         b"access-and-refresh-token-bundle"
     );
+}
+
+#[test]
+fn refresh_replaces_the_opaque_secret_without_changing_connection_authority() {
+    let (oauth, connector_id, secrets, _) = fixture();
+    complete_oauth(&oauth, &connector_id);
+    let before = oauth.credentials.authority().snapshot().generation();
+
+    oauth.refresh(&connector_id).unwrap();
+
+    assert_eq!(
+        oauth.credentials.authority().snapshot().generation(),
+        before
+    );
+    let account = match oauth
+        .credentials
+        .authority()
+        .snapshot()
+        .entry(&connector_id)
+        .unwrap()
+        .connection()
+        .state()
+    {
+        ConnectorConnectionState::Connected(account) => account.clone(),
+        state => panic!("expected connected account, got {state:?}"),
+    };
+    let key = SecretKey::new(account.credential_reference().as_str().to_owned()).unwrap();
+    assert_eq!(
+        secrets.load(&key).unwrap().unwrap().expose(),
+        b"refreshed-token-bundle"
+    );
+}
+
+#[test]
+fn remote_revoke_completes_before_local_disconnect_and_secret_cleanup() {
+    let (oauth, connector_id, secrets, _) = fixture();
+    complete_oauth(&oauth, &connector_id);
+    let expected_generation = oauth.credentials.authority().snapshot().generation();
+
+    let result = oauth
+        .revoke_and_disconnect(
+            ConnectorCommandId::new("revoke-github").unwrap(),
+            expected_generation,
+            connector_id.clone(),
+        )
+        .unwrap();
+
+    assert_eq!(
+        result.credential_cleanup,
+        crate::ConnectorCredentialCleanup::Deleted
+    );
+    assert!(matches!(
+        oauth
+            .credentials
+            .authority()
+            .snapshot()
+            .entry(&connector_id)
+            .unwrap()
+            .connection()
+            .state(),
+        ConnectorConnectionState::Disconnected
+    ));
+    assert!(
+        secrets
+            .load(&super::super::auth::credential_key(&connector_id).unwrap())
+            .unwrap()
+            .is_none()
+    );
+}
+
+#[test]
+fn stale_revoke_is_rejected_before_the_provider_sees_the_credential() {
+    let (oauth, connector_id, _, provider) = fixture();
+    complete_oauth(&oauth, &connector_id);
+
+    let error = oauth
+        .revoke_and_disconnect(
+            ConnectorCommandId::new("stale-revoke").unwrap(),
+            zeta_connectors::ConnectorSnapshotGeneration::new(0),
+            connector_id.clone(),
+        )
+        .unwrap_err();
+
+    assert_eq!(error.kind(), ConnectorOAuthErrorKind::InvalidRequest);
+    assert_eq!(*provider.revocations.lock().unwrap(), 0);
+    assert!(matches!(
+        oauth
+            .credentials
+            .authority()
+            .snapshot()
+            .entry(&connector_id)
+            .unwrap()
+            .connection()
+            .state(),
+        ConnectorConnectionState::Connected(_)
+    ));
+}
+
+fn complete_oauth(oauth: &ConnectorOAuthService, connector_id: &ConnectorId) {
+    let authorization = oauth
+        .start(ConnectorOAuthStartRequest {
+            command_id: ConnectorCommandId::new("oauth-complete-helper").unwrap(),
+            expected_generation: oauth.credentials.authority().snapshot().generation(),
+            connector_id: connector_id.clone(),
+            connection_generation: ConnectorConnectionGeneration::new(1),
+            redirect_uri: "http://127.0.0.1:49152/callback".into(),
+        })
+        .unwrap();
+    let state = Url::parse(&authorization.authorization_url)
+        .unwrap()
+        .query_pairs()
+        .find(|(key, _)| key == "state")
+        .unwrap()
+        .1
+        .into_owned();
+    oauth
+        .complete(ConnectorOAuthCompleteRequest {
+            flow_id: authorization.flow_id,
+            state: SecretValue::new(state.into_bytes()),
+            authorization_code: SecretValue::new(b"authorization-code".to_vec()),
+        })
+        .unwrap();
 }
 
 #[test]

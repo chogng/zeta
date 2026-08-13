@@ -4,6 +4,7 @@ use crate::local_tools::LocalToolComposition;
 use std::num::NonZeroU64;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use zeta_action_policy::{ActionReviewRequest, ExecutionDecision};
 use zeta_async_utils::CancellationToken;
 use zeta_code_index_cloud::CloudCodeIndexCapabilities;
 use zeta_code_index_cloud::CloudCodeIndexDeletionSupport;
@@ -24,8 +25,8 @@ use zeta_config::{
     ConfigCommandRequest, ConfigRevision, ConfigStore, UserConfigCommand, WorkspaceTrustSetting,
 };
 use zeta_core::{
-    CoreError, CreateSessionRequest, CreateSessionThreadRequest, InMemorySessionStore,
-    InMemoryThreadStore, NoTools, PolicyService, SequenceExpectation, SessionCoordinator,
+    ActionPolicyService, CoreError, CreateSessionRequest, CreateSessionThreadRequest,
+    InMemorySessionStore, InMemoryThreadStore, NoTools, SequenceExpectation, SessionCoordinator,
     StartTurnRequest, ThreadController,
 };
 use zeta_model_provider::EchoModel;
@@ -35,7 +36,6 @@ use zeta_model_provider::EmbeddingResponse;
 use zeta_model_provider::EmbeddingVector;
 use zeta_model_provider::ModelProviderError;
 use zeta_model_provider_config::ModelProviderConfig;
-use zeta_policy::{ActionReviewRequest, ExecutionDecision};
 use zeta_protocol::ModelId;
 use zeta_protocol::ModelRef;
 use zeta_protocol::ProviderId;
@@ -760,7 +760,7 @@ impl zeta_skills_extension::SkillConfigSnapshotProvider for EmptySkillConfig {
     }
 }
 
-impl PolicyService for RejectPolicy {
+impl ActionPolicyService for RejectPolicy {
     fn revision(&self) -> String {
         "test-policy-v1".into()
     }

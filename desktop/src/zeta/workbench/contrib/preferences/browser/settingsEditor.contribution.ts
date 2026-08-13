@@ -92,11 +92,17 @@ const unavailableConnectorService: IConnectorService = {
   connectApiToken: () => Promise.reject(new Error("Connectors are unavailable.")),
   connectOAuth: () => Promise.reject(new Error("Connectors are unavailable.")),
   disconnect: () => Promise.reject(new Error("Connectors are unavailable.")),
+  refreshOAuth: () => Promise.reject(new Error("Connectors are unavailable.")),
+  revokeOAuth: () => Promise.reject(new Error("Connectors are unavailable.")),
 };
 
 const unavailablePluginService: IPluginService = {
   onDidChange: () => ({ dispose() {}, [Symbol.dispose]() {} }),
   list: () => Promise.reject(new Error("Plugins are unavailable.")),
+  listMarketplace: () => Promise.reject(new Error("Plugins are unavailable.")),
+  install: () => Promise.reject(new Error("Plugins are unavailable.")),
+  update: () => Promise.reject(new Error("Plugins are unavailable.")),
+  rollback: () => Promise.reject(new Error("Plugins are unavailable.")),
   enable: () => Promise.reject(new Error("Plugins are unavailable.")),
   disable: () => Promise.reject(new Error("Plugins are unavailable.")),
   grant: () => Promise.reject(new Error("Plugins are unavailable.")),

@@ -54,7 +54,8 @@ zeta-language-service = { workspace = true }
 zeta-model-provider = { workspace = true }
 zeta-model-provider-config = { workspace = true }
 zeta-models-manager = { workspace = true }
-zeta-policy = { workspace = true }
+zeta-action-policy = { workspace = true }
+zeta-execpolicy = { workspace = true }
 zeta-plugins = { workspace = true }
 zeta-prompts = { workspace = true }
 zeta-protocol = { workspace = true }

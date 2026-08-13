@@ -1,14 +1,14 @@
 use super::policy_feedback::{denied_feedback, safer_action_feedback};
-use crate::policy_service::durable_sandbox_escalation_approval_request;
+use crate::action_policy_service::durable_sandbox_escalation_approval_request;
 use crate::thread_controller::{RecordToolExecutionEscalation, RecordToolExecutionStart};
 use crate::{
-    AutoReviewedToolGrant, CoreError, PermissionBypassToolGrant, PolicyService,
-    RecordToolResultRequest, RequestTurnInteraction, SandboxDenialOutput, ThreadController,
-    ThreadUpdateSink, ToolAuthorization, ToolCallOutput, ToolExecutionFacts, ToolExecutionOutput,
-    ToolOutputSink, ToolReplaySafety, ToolService,
+    ActionPolicyService, AutoReviewedToolGrant, CoreError, ExecPolicyToolGrant,
+    PermissionBypassToolGrant, RecordToolResultRequest, RequestTurnInteraction,
+    SandboxDenialOutput, ThreadController, ThreadUpdateSink, ToolAuthorization, ToolCallOutput,
+    ToolExecutionFacts, ToolExecutionOutput, ToolOutputSink, ToolReplaySafety, ToolService,
 };
+use zeta_action_policy::{ActionReviewRequest, ExecutionDecision, SandboxDenialEvidence};
 use zeta_async_utils::CancellationToken;
-use zeta_policy::{ActionReviewRequest, ExecutionDecision, SandboxDenialEvidence};
 use zeta_protocol::{
     AgentRequest, ApprovalMode, ItemId, StreamCursor, StreamInstanceId, ThreadId, ThreadUpdate,
     ThreadUpdateEnvelope, ToolCall, ToolCallId, ToolExecutionAuthority,
@@ -76,7 +76,7 @@ enum ToolAttempt {
 pub(super) struct ToolExecutionOrchestrator<'a> {
     threads: &'a ThreadController,
     tools: &'a dyn ToolService,
-    policy: &'a dyn PolicyService,
+    policy: &'a dyn ActionPolicyService,
     updates: &'a dyn ThreadUpdateSink,
 }
 
@@ -84,7 +84,7 @@ impl<'a> ToolExecutionOrchestrator<'a> {
     pub(super) fn new(
         threads: &'a ThreadController,
         tools: &'a dyn ToolService,
-        policy: &'a dyn PolicyService,
+        policy: &'a dyn ActionPolicyService,
         updates: &'a dyn ThreadUpdateSink,
     ) -> Self {
         Self {
@@ -108,7 +108,7 @@ impl<'a> ToolExecutionOrchestrator<'a> {
             RecordToolExecutionStart {
                 tool_call_id: call.id.clone(),
                 action_digest: reviewed.action().digest().as_str().to_owned(),
-                policy_revision: reviewed.policy_revision().as_str().to_owned(),
+                policy_revision: reviewed.action_policy_revision().as_str().to_owned(),
                 authority: execution_authority(&authorization),
             },
         )?;
@@ -151,7 +151,7 @@ impl<'a> ToolExecutionOrchestrator<'a> {
             RecordToolExecutionStart {
                 tool_call_id: call.id.clone(),
                 action_digest: reviewed.action().digest().as_str().to_owned(),
-                policy_revision: reviewed.policy_revision().as_str().to_owned(),
+                policy_revision: reviewed.action_policy_revision().as_str().to_owned(),
                 authority: execution_authority(authorization),
             },
         )?;
@@ -206,7 +206,7 @@ impl<'a> ToolExecutionOrchestrator<'a> {
             RecordToolExecutionEscalation {
                 tool_call_id: call.id.clone(),
                 action_digest: reviewed.action().digest().as_str().to_owned(),
-                policy_revision: reviewed.policy_revision().as_str().to_owned(),
+                policy_revision: reviewed.action_policy_revision().as_str().to_owned(),
                 denial,
                 authority: execution_authority(&authorization),
             },
@@ -376,11 +376,26 @@ impl<'a> ToolExecutionOrchestrator<'a> {
             ExecutionDecision::RunUnsandboxed { grant_id } => {
                 ToolAuthorization::UnsandboxedGrant { grant_id }
             }
+            ExecutionDecision::RunExecPolicyGranted(grant) => {
+                if !grant.matches(
+                    reviewed.action().digest(),
+                    reviewed.action().required_capabilities(),
+                    reviewed.action_policy_revision(),
+                ) {
+                    return Err(CoreError::Policy(
+                        "execution-policy retry grant is not bound to the prepared action".into(),
+                    ));
+                }
+                ToolAuthorization::ExecPolicyGranted(ExecPolicyToolGrant::new(
+                    call.id.clone(),
+                    grant,
+                ))
+            }
             ExecutionDecision::RunAutoReviewed(grant) => {
                 if !grant.matches(
                     reviewed.action().digest(),
                     reviewed.action().required_capabilities(),
-                    reviewed.policy_revision(),
+                    reviewed.action_policy_revision(),
                 ) {
                     return Err(CoreError::Policy(
                         "automatic-review retry grant is not bound to the prepared action".into(),
@@ -392,7 +407,7 @@ impl<'a> ToolExecutionOrchestrator<'a> {
                 if !grant.matches(
                     reviewed.action().digest(),
                     reviewed.action().required_capabilities(),
-                    reviewed.policy_revision(),
+                    reviewed.action_policy_revision(),
                 ) {
                     return Err(CoreError::Policy(
                         "permission-bypass retry grant is not bound to the prepared action".into(),
@@ -464,7 +479,7 @@ impl<'a> ToolExecutionOrchestrator<'a> {
             RecordToolExecutionEscalation {
                 tool_call_id: call.id.clone(),
                 action_digest: reviewed.action().digest().as_str().to_owned(),
-                policy_revision: reviewed.policy_revision().as_str().to_owned(),
+                policy_revision: reviewed.action_policy_revision().as_str().to_owned(),
                 denial,
                 authority,
             },
@@ -540,6 +555,15 @@ fn execution_authority(authorization: &ToolAuthorization) -> ToolExecutionAuthor
                 grant_id: grant_id.as_str().to_owned(),
             }
         }
+        ToolAuthorization::ExecPolicyGranted(grant) => ToolExecutionAuthority::ExecPolicyGranted {
+            layer_id: grant.policy_grant().source().layer_id().as_str().to_owned(),
+            rule_id: grant.policy_grant().source().rule_id().as_str().to_owned(),
+            exec_policy_revision: grant
+                .policy_grant()
+                .exec_policy_revision()
+                .as_str()
+                .to_owned(),
+        },
         ToolAuthorization::AutoReviewed(grant) => ToolExecutionAuthority::AutoReviewed {
             assessment_id: grant.policy_grant().assessment_id().as_str().to_owned(),
         },

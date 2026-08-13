@@ -5,12 +5,12 @@
 > [`docs/plugins.md`](../../docs/plugins.md) 维护；Connector account/lifecycle 由
 > [`docs/connectors.md`](../../docs/connectors.md) 维护。
 
-`zeta-plugins` 当前完成 PL0，并实现 PL1 的 package-store、durable live authority 与 activation snapshot vertical slice：严格解析 declarative
-Plugin v1 package，验证 package-relative path 与本地文件树，计算确定性 SHA-256 digest，提供只读
-local-development catalog，并能把一个已验证本地包复制、复验后原子提升到 content-addressed object
-store；authority 持久化 installed/active exact refs、typed command receipts 和单调 activation generation，
-并发布 generation subscription 与 exact invocation lease。它不自行执行 Plugin，不保存 grant/credential，也不解析
-`SKILL.md` 或 MCP JSON-RPC。
+`zeta-plugins` 严格解析 declarative Plugin v1 package，验证 package-relative path 与本地文件树，
+计算确定性 SHA-256 digest，并把 host 注册的 Marketplace catalog 解析为 exact、digest-pinned package。
+Marketplace install/update 先复制、复验并原子提升到 content-addressed object store；durable authority
+分别持久化 installed/enabled/granted/effective refs、typed command receipts 和单调 activation generation，
+并发布 generation subscription 与 exact invocation lease。它不自行执行 Plugin，不保存 credential，
+也不解析 `SKILL.md` 或 MCP JSON-RPC。
 
 ## 公共契约
 
@@ -23,6 +23,8 @@ store；authority 持久化 installed/active exact refs、typed command receipts
 | `PluginManifest::from_json` | strict JSON/schema/semantic validation | contribution content parsing |
 | `LocalPluginPackage::load` | 验证一个 exact root、digest 和所有 contribution path | copy/install/immutability |
 | `LocalPluginCatalog::discover` | 读取一个 package 或目录下的直接 package children | recursive marketplace search |
+| `PluginMarketplace::open` | 校验 host 注册 catalog、无链接 package path 与 exact package digest | 网络下载、publisher 签名、客户端宿主路径 |
+| `PluginMarketplaceService` | Marketplace install、staged update、rollback 与 profile request reconcile | 自动 grant、远端 catalog 同步、Workspace trust 决策 |
 | `PluginPackageStore::install_local` | stage、复制、复验 digest 并原子 promote immutable object | enablement、grant、activation |
 | `PluginPackageStore::read` | 按 exact installed ref 重新验证 object | authority lookup、版本选择 |
 | `PluginPackageStore::activate` | 把 exact installed refs 解析为一个 activation generation | installed/enable authority、live publish |
@@ -137,9 +139,13 @@ Digest 与 source root 无关，对 normalized relative path 和每个 regular f
 contribution 与 exact-version conflict。任何失败都不返回 partial package/catalog，也不改变
 filesystem。error message 只包含稳定 identity、relative path 与 sanitized 原因。
 
-`LocalPluginPackage` 捕获的是已验证的 local-development snapshot identity，source directory
+`LocalPluginPackage` 捕获的是已验证的 source snapshot identity，source directory
 仍可被外部修改。runtime consumer 不能把它当 immutable root；必须先通过 `PluginPackageStore`
 复制、重新验证并从 content-addressed object root 绑定 contribution。
+
+`PluginMarketplace::open` 的 root 只能由产品 host 注册。catalog entry 只暴露 Marketplace ID、
+Plugin ID/version/digest；Renderer 不能提交宿主路径。`Managed` 表示 root 已由受信产品分发层选择，
+`LocalDevelopment` 表示显式开发入口；两种模式都执行相同 package、digest、link 和 containment 校验。
 
 ## 验证
 
@@ -151,16 +157,18 @@ bazel test //zeta-rs/plugins:plugins-unit-tests
 ```
 
 当前测试覆盖严格/重复模式、身份/SemVer、凭据引用、权限、路径穿越/设备名/规范化、摘要确定性、
-缺失贡献、符号链接/硬链接、目录排序与读取，以及精确版本冲突。
+缺失贡献、符号链接/硬链接、目录排序与读取、精确版本冲突，以及 Marketplace digest mismatch、
+staged update 和 rollback grant 边界。
 
 ## 当前限制与扩展点
 
-PL1 的 local content store、durable installed/enabled/granted/effective authority、exact snapshot 和 live
-activation publish 已实现；workspace-profile resolver 尚未实现，authority v1→v2 migration 会把旧 active
-package 保守迁移为 enabled + granted。当前 object directory 的只读性由
+PL1 的 content store、durable installed/enabled/granted/effective authority、exact snapshot、live
+activation publish、Marketplace ingestion 和 user-profile reconcile 已实现。Workspace request 只做
+profile authority 的只读可用性判断，不从 Workspace 自动安装或授予权限；authority v1→v2 migration
+会把旧 active package 保守迁移为 enabled + granted。当前 object directory 的只读性由
 “不暴露可写根路径 + digest revalidation”保证，
 尚未施加平台级 immutable flag，也没有 orphan staging startup recovery；失败 install commit 和 uninstall
-会精确回收无引用 object。PL2+ 的 MCP activation、
-registry、signature、rollback 和 GC authority 也尚未实现；package-rooted MCP consumer
+会精确回收无引用 object。受信 host 可注册 materialized Marketplace root，但公网 catalog 下载、
+publisher signature/revocation 与 GC authority 尚未实现；package-rooted MCP consumer
 已位于 `zeta-mcp-extension`，不能反向并入本 crate。这些能力应在新的 private
 `authority/resolution` modules 中接入，不扩大 loader/store 为隐式 enable manager。

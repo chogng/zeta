@@ -154,16 +154,17 @@ impl SkillCatalog {
             .iter()
             .find(|source| source.view().id() == &selected.id.source)
             .ok_or_else(|| unavailable(selected.id.name.as_str()))?;
-        crate::activation::load_exact_body(
-            source.canonical_root(),
+        let candidate = source
+            .skill_directory(&selected.id.name)
+            .ok_or_else(|| unavailable(selected.id.name.as_str()))?;
+        crate::activation::load_exact_body_from_directory(
+            source.host_root(),
+            &candidate,
             selected.id.name.as_str(),
             entry.content_digest(),
         )?;
-        let skill_directory = checked_directory(
-            source.canonical_root(),
-            &source.canonical_root().join(selected.id.name.as_str()),
-            selected.id.name.as_str(),
-        )?;
+        let skill_directory =
+            checked_directory(source.host_root(), &candidate, selected.id.name.as_str())?;
         let resource_path =
             checked_resource_path(&skill_directory, path, selected.id.name.as_str())?;
         read_resource_file(resource_path, path.clone(), selected.id.name.as_str())

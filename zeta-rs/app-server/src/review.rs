@@ -1,23 +1,23 @@
 use std::fmt;
 use std::sync::Arc;
+use zeta_action_policy::ActionPolicyEngine;
+use zeta_action_policy::ActionReviewRequest;
+use zeta_action_policy::ExecutionDecision;
+use zeta_action_policy::PermissionBypassGrant;
+use zeta_action_policy::ReviewFailurePolicy;
 use zeta_async_utils::CancellationToken;
 use zeta_auto_review::LlmActionClassifier;
 use zeta_auto_review::ReviewModel;
 use zeta_auto_review::ReviewModelError;
 use zeta_auto_review::ReviewModelRequest;
 use zeta_config::ResolvedConfig;
+use zeta_core::ActionPolicyService;
 use zeta_core::CoreError;
-use zeta_core::PolicyService;
 use zeta_model_provider::ModelInvoker;
 use zeta_model_provider::ModelProvider;
 use zeta_model_provider::ModelProviderRuntime;
 use zeta_model_provider::ModelRuntimeRequest;
 use zeta_model_provider_config::ProviderConfigRegistry;
-use zeta_policy::ActionReviewRequest;
-use zeta_policy::ExecutionDecision;
-use zeta_policy::PermissionBypassGrant;
-use zeta_policy::PolicyEngine;
-use zeta_policy::ReviewFailurePolicy;
 use zeta_protocol::ApprovalMode;
 use zeta_protocol::ModelRef;
 use zeta_protocol::ModelRequest;
@@ -86,21 +86,21 @@ pub struct ProviderReviewModel {
 /// The base policy always evaluates first. Automatic review and permission bypass may replace
 /// only an `AskUser` result, so deterministic denial and all request/revision validation stay
 /// owned by the underlying policy.
-pub(crate) struct ApprovalModePolicyService {
-    base: Arc<dyn PolicyService>,
+pub(crate) struct ApprovalModeActionPolicyService {
+    base: Arc<dyn ActionPolicyService>,
     review_model: Option<ProviderReviewModel>,
 }
 
-impl ApprovalModePolicyService {
+impl ApprovalModeActionPolicyService {
     pub(crate) fn new(
-        base: Arc<dyn PolicyService>,
+        base: Arc<dyn ActionPolicyService>,
         review_model: Option<ProviderReviewModel>,
     ) -> Self {
         Self { base, review_model }
     }
 }
 
-impl PolicyService for ApprovalModePolicyService {
+impl ActionPolicyService for ApprovalModeActionPolicyService {
     fn revision(&self) -> String {
         let reviewer = self.review_model.as_ref().map_or_else(
             || "unavailable".into(),
@@ -140,15 +140,15 @@ impl PolicyService for ApprovalModePolicyService {
                 PermissionBypassGrant::new(
                     request.action().digest().clone(),
                     request.action().required_capabilities().clone(),
-                    request.policy_revision().clone(),
+                    request.action_policy_revision().clone(),
                 ),
             )),
             ApprovalMode::AutoReview => {
                 let Some(review_model) = self.review_model.clone() else {
                     return Ok(decision);
                 };
-                let engine = PolicyEngine::new(
-                    request.policy_revision().clone(),
+                let engine = ActionPolicyEngine::with_no_exec_rules(
+                    request.action_policy_revision().clone(),
                     LlmActionClassifier::new(review_model),
                     ReviewFailurePolicy::AskUser,
                 );

@@ -8,5 +8,7 @@ export function createConnectorApi(): IConnectorApi {
     connectApiToken: params => invoke<ConnectorCommandResultDto>("zeta:connectors:connect-api-token", params),
     connectOAuth: params => invoke<ConnectorCommandResultDto>("zeta:connectors:connect-oauth", params),
     disconnect: params => invoke<ConnectorDisconnectResultDto>("zeta:connectors:disconnect", params),
+    refreshOAuth: connectorId => invoke<void>("zeta:connectors:oauth-refresh", { connectorId }),
+    revokeOAuth: params => invoke<ConnectorDisconnectResultDto>("zeta:connectors:oauth-revoke", params),
   };
 }
