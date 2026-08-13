@@ -9,6 +9,8 @@ use url::Url;
 use zeta_connectors::ConnectorId;
 use zeta_connectors_extension::GitHubBrokeredOAuthConfig;
 use zeta_connectors_extension::GitHubDeviceOAuthConfig;
+use zeta_language_marketplace::LanguageMarketplaceId;
+use zeta_language_marketplace::RemoteLanguageMarketplaceConfig;
 use zeta_plugin_marketplace::RemotePluginMarketplaceConfig;
 use zeta_plugins::PluginMarketplaceId;
 
@@ -24,6 +26,7 @@ const MAX_PRODUCT_SERVICES_BYTES: u64 = 1024 * 1024;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LocalProductServicesConfig {
     pub(crate) marketplaces: Vec<RemotePluginMarketplaceConfig>,
+    pub(crate) language_marketplaces: Vec<RemoteLanguageMarketplaceConfig>,
     pub(crate) connector_oauth: Vec<ProductConnectorOAuthConfig>,
 }
 
@@ -47,40 +50,69 @@ impl LocalProductServicesConfig {
             return Err(product_config_error(()));
         }
         let source_root = path.parent().ok_or_else(|| product_config_error(()))?;
-        let marketplaces = document
+        let marketplace_configs = document
             .marketplaces
             .into_iter()
             .map(|marketplace| {
-                let id = PluginMarketplaceId::new(marketplace.id)
+                let plugin_id = PluginMarketplaceId::new(marketplace.id.clone())
+                    .map_err(|_| product_config_error(()))?;
+                let language_id = LanguageMarketplaceId::new(marketplace.id)
                     .map_err(|_| product_config_error(()))?;
                 let trusted_root = read_trusted_root(source_root, &marketplace.trusted_root)?;
-                let cache_root = profile_root
+                let plugin_cache_root = profile_root
                     .as_ref()
                     .join("cache/plugin-marketplaces")
-                    .join(id.as_str());
-                let config = RemotePluginMarketplaceConfig::new(
-                    id,
+                    .join(plugin_id.as_str());
+                let language_cache_root = profile_root
+                    .as_ref()
+                    .join("cache/language-marketplaces")
+                    .join(language_id.as_str());
+                let plugin = RemotePluginMarketplaceConfig::new(
+                    plugin_id,
+                    Url::parse(&marketplace.metadata_base_url).map_err(product_config_error)?,
+                    Url::parse(&marketplace.targets_base_url).map_err(product_config_error)?,
+                    trusted_root.clone(),
+                    plugin_cache_root,
+                )
+                .map_err(product_config_error)?;
+                let language = RemoteLanguageMarketplaceConfig::new(
+                    language_id,
                     Url::parse(&marketplace.metadata_base_url).map_err(product_config_error)?,
                     Url::parse(&marketplace.targets_base_url).map_err(product_config_error)?,
                     trusted_root,
-                    cache_root,
+                    language_cache_root,
+                    "zeta",
+                    semver::Version::parse(env!("CARGO_PKG_VERSION"))
+                        .expect("App Server package version is SemVer"),
                 )
                 .map_err(product_config_error)?;
                 match marketplace.trust {
                     ProductMarketplaceTrustDocument::ProductManaged
                         if marketplace.allowed_publishers.is_empty() =>
                     {
-                        Ok(config)
+                        Ok((plugin, language))
                     }
-                    ProductMarketplaceTrustDocument::VerifiedExternal => config
-                        .with_verified_external_publishers(marketplace.allowed_publishers)
-                        .map_err(product_config_error),
+                    ProductMarketplaceTrustDocument::VerifiedExternal => {
+                        let publishers = marketplace.allowed_publishers;
+                        Ok((
+                            plugin
+                                .with_verified_external_publishers(publishers.clone())
+                                .map_err(product_config_error)?,
+                            language
+                                .with_allowed_publishers(publishers)
+                                .map_err(product_config_error)?,
+                        ))
+                    }
                     ProductMarketplaceTrustDocument::ProductManaged => {
                         Err(product_config_error(()))
                     }
                 }
             })
             .collect::<Result<Vec<_>, _>>()?;
+        let (marketplaces, language_marketplaces): (
+            Vec<RemotePluginMarketplaceConfig>,
+            Vec<RemoteLanguageMarketplaceConfig>,
+        ) = marketplace_configs.into_iter().unzip();
         let connector_oauth = document
             .connector_oauth
             .into_iter()
@@ -89,6 +121,7 @@ impl LocalProductServicesConfig {
         validate_unique_configuration(&marketplaces, &connector_oauth)?;
         Ok(Self {
             marketplaces,
+            language_marketplaces,
             connector_oauth,
         })
     }

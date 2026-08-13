@@ -17,7 +17,7 @@ use zeta_language_server_distribution::LanguageServerPackageFile;
 use super::configured_provider_definitions;
 
 #[test]
-fn configured_provider_definitions_require_explicit_user_enablement() {
+fn manually_injected_provider_requires_explicit_user_enablement() {
     let fixture = ProviderFixture::new();
     let registry = fixture.registry();
     assert!(

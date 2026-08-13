@@ -1,4 +1,4 @@
-import { APP_SERVER_METHODS, type LanguageCloseParams, type LanguageCodeActionDto, type LanguageCodeActionsParams, type LanguageCodeLensDto, type LanguageColorDto, type LanguageColorPresentationsParams, type LanguageCommandDto, type LanguageCompletionsParams, type LanguageDocumentDiagnosticsParams, type LanguageDocumentFeaturesParams, type LanguageDocumentFormattingParams, type LanguageDocumentLinkDto, type LanguageExecuteCommandParams, type LanguageHierarchyItemDto, type LanguageHierarchyParams, type LanguageHoverParams, type LanguageInlayHintsParams, type LanguageLinkedEditingRangesParams, type LanguageLocationsParams, type LanguagePrepareRenameParams, type LanguageRangeFormattingParams, type LanguageRenameParams, type LanguageResolveCodeActionParams, type LanguageResolveCodeLensParams, type LanguageResolveCompletionParams, type LanguageResolveDocumentLinkParams, type LanguageSemanticTokensParams, type LanguageSignatureHelpParams, type LanguageSynchronizeParams, type LanguageWorkspaceDiagnosticsParams, type LanguageWorkspaceSymbolsParams } from "../../../../../generated/app-server/types.js";
+import { APP_SERVER_METHODS, type LanguageCloseParams, type LanguageCodeActionDto, type LanguageCodeActionsParams, type LanguageCodeLensDto, type LanguageColorDto, type LanguageColorPresentationsParams, type LanguageCommandDto, type LanguageCompletionsParams, type LanguageDocumentDiagnosticsParams, type LanguageDocumentFeaturesParams, type LanguageDocumentFormattingParams, type LanguageDocumentLinkDto, type LanguageExecuteCommandParams, type LanguageHierarchyItemDto, type LanguageHierarchyParams, type LanguageHoverParams, type LanguageInlayHintsParams, type LanguageLinkedEditingRangesParams, type LanguageLocationsParams, type LanguageMarketplaceInstallParams, type LanguagePrepareRenameParams, type LanguageRangeFormattingParams, type LanguageRenameParams, type LanguageResolveCodeActionParams, type LanguageResolveCodeLensParams, type LanguageResolveCompletionParams, type LanguageResolveDocumentLinkParams, type LanguageSemanticTokensParams, type LanguageSignatureHelpParams, type LanguageSynchronizeParams, type LanguageWorkspaceDiagnosticsParams, type LanguageWorkspaceSymbolsParams } from "../../../../../generated/app-server/types.js";
 import type { AppServerSupervisor } from "../../app-server/electron-main/app-server-supervisor.js";
 import { boolean, nonNegativeInteger, record, string } from "../../ipc/electron-main/ipcValidation.js";
 import type { IpcRoute } from "../../ipc/electron-main/trustedIpcRouter.js";
@@ -9,6 +9,8 @@ const MAX_LANGUAGE_INPUT_BYTES = 10 * 1024 * 1024;
 
 export function languageIpcRoutes(supervisor: AppServerSupervisor): readonly IpcRoute<unknown, unknown>[] {
   return [
+    route({ channel: "zeta:language:marketplace-list", validate: emptyParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/marketplace/list"], params) }),
+    route({ channel: "zeta:language:marketplace-install", validate: languageMarketplaceInstallParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/marketplace/install"], params) }),
     route({ channel: "zeta:language:synchronize", validate: languageSynchronizeParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/synchronize"], params) }),
     route({ channel: "zeta:language:close", validate: languageCloseParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/close"], params) }),
     route({ channel: "zeta:language:hover", validate: languageHoverParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/hover"], params) }),
@@ -39,6 +41,29 @@ export function languageIpcRoutes(supervisor: AppServerSupervisor): readonly Ipc
     route({ channel: "zeta:language:codeActions", validate: languageCodeActionsParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/codeActions"], params) }),
     route({ channel: "zeta:language:resolveCodeAction", validate: languageResolveCodeActionParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/resolveCodeAction"], params) }),
   ];
+}
+
+function emptyParams(value: unknown): Record<string, never> {
+  record(value, []);
+  return {};
+}
+
+function languageMarketplaceInstallParams(value: unknown): LanguageMarketplaceInstallParams {
+  const params = record(value, ["expectedCatalogRevision", "marketplaceId", "packageId", "version", "digest", "serverId"]);
+  return {
+    expectedCatalogRevision: boundedIdentity(params.expectedCatalogRevision, "expectedCatalogRevision", 1024),
+    marketplaceId: boundedIdentity(params.marketplaceId, "marketplaceId", 64),
+    packageId: boundedIdentity(params.packageId, "packageId", 128),
+    version: boundedIdentity(params.version, "version", 128),
+    digest: boundedIdentity(params.digest, "digest", 71),
+    serverId: boundedIdentity(params.serverId, "serverId", 64),
+  };
+}
+
+function boundedIdentity(value: unknown, field: string, maximum: number): string {
+  const candidate = string(value, field);
+  if (candidate.length === 0 || candidate.length > maximum) throw new Error(`${field} is invalid`);
+  return candidate;
 }
 
 function languageSynchronizeParams(value: unknown): LanguageSynchronizeParams {

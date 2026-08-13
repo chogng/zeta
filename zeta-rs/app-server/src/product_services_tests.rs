@@ -38,6 +38,11 @@ fn product_services_loads_public_oauth_and_pins_marketplace_root() {
     .unwrap();
 
     assert_eq!(config.marketplaces.len(), 1);
+    assert_eq!(config.language_marketplaces.len(), 1);
+    assert_eq!(
+        config.language_marketplaces[0].id().as_str(),
+        "zeta-official"
+    );
     assert_eq!(config.marketplaces[0].id().as_str(), "zeta-official");
     assert_eq!(
         config.marketplaces[0].trust(),
@@ -60,6 +65,8 @@ fn production_product_services_registers_the_official_marketplace() {
     let config = LocalProductServicesConfig::load(product_services, profile.path()).unwrap();
 
     assert_eq!(config.marketplaces.len(), 1);
+    assert_eq!(config.language_marketplaces.len(), 1);
+    assert_eq!(config.language_marketplaces[0].id().as_str(), "zeta");
     assert_eq!(config.marketplaces[0].id().as_str(), "zeta");
     assert_eq!(
         config.marketplaces[0].trust(),

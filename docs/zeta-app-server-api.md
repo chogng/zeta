@@ -190,6 +190,8 @@ inline argument parsing；提交仍通过 `session/request` 的 `StartTurn.input
 | `plugin/list` | Plugin authority | 分别投影 installed/enabled/granted/effective package 状态 |
 | `plugin/marketplace/list` / `plugin/install` / `plugin/update` / `plugin/rollback` | Plugin Marketplace + Plugin authority | 只接受 Host 注册 Marketplace 中由 `marketplaceId`、package identity 和 digest 精确绑定的条目；安装后不自动启用或 grant |
 | `plugin/enable` / `disable` / `grant` / `revokeGrant` / `uninstall` | Plugin authority | exact-package CAS lifecycle mutation |
+| `language/marketplace/list` | Language Marketplace + activation authority | 读取 signed package catalog、host compatibility 与当前 profile activation 投影 |
+| `language/marketplace/install` | Language Marketplace + activation authority + provider registry | revision-check 后重新匹配并下载 exact signed package，激活 exact receipt，并热替换 provider registry；调用前的用户确认由 Desktop 拥有 |
 | `config/update` | config | typed command 更新配置 |
 | `execPolicy/rule/upsert` / `execPolicy/rule/remove` | config + local policy runtime | revision-safe 持久化 User typed rule，并为未来 Tool safe point 重组 policy snapshot |
 | `toolSearch/configure` | config + semantic model runtime | 选择词法模式，或探活 exact embedding 模型后启用混合 Tool Search |

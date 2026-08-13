@@ -9396,6 +9396,7 @@ dependencies = [
  "image",
  "log",
  "pollster",
+ "semver",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -9436,6 +9437,7 @@ dependencies = [
  "zeta-install-context",
  "zeta-instructions",
  "zeta-keyring-store",
+ "zeta-language-marketplace",
  "zeta-language-server-catalog",
  "zeta-language-server-distribution",
  "zeta-language-service",
@@ -9995,6 +9997,28 @@ dependencies = [
  "sha2 0.10.9",
  "tempfile",
  "zeta-secrets",
+]
+
+[[package]]
+name = "zeta-language-marketplace"
+version = "0.1.0"
+dependencies = [
+ "aws-lc-rs",
+ "futures",
+ "jiff",
+ "pretty_assertions",
+ "semver",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "thiserror 2.0.19",
+ "tokio",
+ "tough",
+ "url",
+ "zeta-http-client",
+ "zeta-language-server-distribution",
+ "zip 4.6.1",
 ]
 
 [[package]]

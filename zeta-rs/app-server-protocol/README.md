@@ -52,6 +52,7 @@ zeta-rs/app-server-protocol/
 │   │   ├── slash_commands.rs
 │   │   ├── session.rs
 │   │   ├── model.rs
+│   │   ├── language.rs       # language-server Config 与 Marketplace DTO
 │   │   ├── turn.rs
 │   │   ├── config.rs
 │   │   ├── connectors.rs     # redacted connection DTO + inbound-only secret
@@ -89,7 +90,8 @@ zeta-rs/app-server-protocol/
 
 方法注册表当前覆盖初始化、Session 生命周期/聚合订阅、canonical `session/request` mutation、
 带 Session scope 的 Thread 读取/订阅、模型目录、Connector list/API-token connect/disconnect、
-配置/供应商/MCP/Skill/Plugin request/Hook declaration 修改、digest-pinned `skill/resource/open`、
+配置/供应商/MCP/Skill/Plugin request/Hook declaration 修改、signed language Marketplace list/install、
+digest-pinned `skill/resource/open`、
 Turn 与 Resource metadata/read/release、filesystem metadata/read/write、workspace search start/read/cancel、
 workspace code-index status/search/rebuild，以及 cloud code-index status/preview/authorize/sync/revoke。
 Notification 包含 `session/update`、Session-owned child 的 `session/thread/update`、owner-directed

@@ -54,6 +54,7 @@ members = [
     "zeta-rs/keyring-store",
     "zeta-rs/language-server-catalog",
     "zeta-rs/language-server-distribution",
+    "zeta-rs/language-marketplace",
     "zeta-rs/language-service",
     "zeta-rs/login",
     "zeta-rs/linux-sandbox",
@@ -278,6 +279,7 @@ zeta-layout = { path = "zeterm/layout" }
 zeta-keybindings-host = { path = "zeterm/native-keybindings" }
 zeta-language-server-catalog = { path = "zeta-rs/language-server-catalog" }
 zeta-language-server-distribution = { path = "zeta-rs/language-server-distribution" }
+zeta-language-marketplace = { path = "zeta-rs/language-marketplace" }
 zeta-language-service = { path = "zeta-rs/language-service" }
 zeta-login = { path = "zeta-rs/login" }
 zeta-linux-sandbox = { path = "zeta-rs/linux-sandbox" }

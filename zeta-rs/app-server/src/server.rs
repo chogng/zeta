@@ -65,6 +65,11 @@ mod git_operations;
 mod git_runtime;
 mod interaction_runtime;
 mod language_document_features;
+mod language_marketplace_operations;
+pub(crate) mod language_marketplace_runtime;
+#[cfg(test)]
+#[path = "server/language_marketplace_runtime_tests.rs"]
+mod language_marketplace_runtime_tests;
 mod language_operations;
 mod language_runtime;
 mod mcp_operations;
@@ -144,6 +149,8 @@ pub struct AppServer {
     pub(super) plugins: Option<zeta_plugins::PluginActivationAuthority>,
     pub(super) extension_hosts: Option<extension_host_runtime::ExtensionHostRuntime>,
     pub(super) plugin_marketplaces: Option<zeta_plugins::PluginMarketplaceService>,
+    language_marketplaces:
+        Option<language_marketplace_runtime::AppServerLanguageMarketplaceRuntime>,
     plugin_skill_sources: Option<Arc<dyn zeta_skills_extension::DynamicSkillSourceProvider>>,
     plugin_extension_sources: Option<Arc<dyn zeta_extensions::DynamicExtensionSourceProvider>>,
     pub(super) mcp_runtime_intents: McpRuntimeIntents,
@@ -261,6 +268,7 @@ impl AppServer {
             plugins: None,
             extension_hosts: None,
             plugin_marketplaces: None,
+            language_marketplaces: None,
             plugin_skill_sources: None,
             plugin_extension_sources: None,
             mcp_runtime_intents: McpRuntimeIntents::default(),
@@ -319,6 +327,14 @@ impl AppServer {
             .get_mut()
             .expect("new App Server language runtime mutex is not poisoned")
             .set_provider_registry(providers);
+        self
+    }
+
+    pub(crate) fn with_language_marketplaces(
+        mut self,
+        marketplaces: language_marketplace_runtime::AppServerLanguageMarketplaceRuntime,
+    ) -> Self {
+        self.language_marketplaces = Some(marketplaces);
         self
     }
 
@@ -1107,6 +1123,10 @@ impl AppServer {
             }
             Some(ClientMethod::LanguageServerRemove) => {
                 self.language_server_remove(&request.params)
+            }
+            Some(ClientMethod::LanguageMarketplaceList) => self.language_marketplace_list(),
+            Some(ClientMethod::LanguageMarketplaceInstall) => {
+                self.language_marketplace_install(&request.params)
             }
             Some(ClientMethod::ProviderConfigure) => self.provider_configure(&request.params),
             Some(ClientMethod::ProviderRemove) => self.provider_remove(&request.params),

@@ -3,6 +3,8 @@
 //! Download providers remain outside this crate. They supply an immutable package and the digest
 //! obtained from their trusted release metadata; this crate verifies and installs it side by side.
 
+mod activation;
+
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::{Component, Path, PathBuf};
@@ -11,7 +13,13 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
+pub use activation::LanguageServerActivationAuthority;
+pub use activation::LanguageServerActivationSnapshot;
+
 static STAGING_SEQUENCE: AtomicU64 = AtomicU64::new(1);
+const MAX_INSTALLED_FILES: usize = 10_000;
+const MAX_INSTALLED_FILE_BYTES: u64 = 16 * 1024 * 1024;
+const MAX_INSTALLED_TOTAL_BYTES: u64 = 256 * 1024 * 1024;
 
 /// One regular file in a provider-resolved language-server package.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -215,6 +223,12 @@ impl LanguageServerInstaller {
             version: package.version.clone(),
             executable_path: package.executable_path.clone(),
             package_sha256: hex_digest(actual),
+            executable_paths: package
+                .files
+                .iter()
+                .filter(|file| file.executable)
+                .map(|file| file.relative_path.clone())
+                .collect(),
         };
         let receipt_path = staging.join("installation.json");
         let mut output = OpenOptions::new()
@@ -227,6 +241,46 @@ impl LanguageServerInstaller {
         guard.0 = None;
         Ok(installed_result(&target, &package, actual))
     }
+
+    /// Reopens one exact side-by-side installation and revalidates every installed file.
+    ///
+    /// Activation receipts use this on every process start. The installation receipt is not
+    /// treated as sufficient proof: the package tree is scanned without following links and its
+    /// deterministic digest must still match `expected_sha256`.
+    pub fn load_installed(
+        &self,
+        server_id: &str,
+        version: &str,
+        expected_sha256: [u8; 32],
+    ) -> Result<InstalledLanguageServer, LanguageServerDistributionError> {
+        validate_identity("server ID", server_id)?;
+        validate_identity("version", version)?;
+        ensure_directory(&self.root)?;
+        let server_root = self.root.join(server_id);
+        ensure_directory(&server_root)?;
+        let target = server_root.join(version);
+        ensure_directory(&target)?;
+        let receipt_path = target.join("installation.json");
+        if !is_regular_file(&receipt_path, FileKind::Regular) {
+            return Err(LanguageServerDistributionError::ExistingInstallationMismatch);
+        }
+        let receipt: InstallationReceipt = serde_json::from_slice(&fs::read(&receipt_path)?)?;
+        if receipt.server_id != server_id
+            || receipt.version != version
+            || receipt.package_sha256 != hex_digest(expected_sha256)
+        {
+            return Err(LanguageServerDistributionError::ExistingInstallationMismatch);
+        }
+        validate_relative_path(&receipt.executable_path)?;
+        let executable_paths = receipt.executable_paths();
+        let files = installed_package_files(&target, &receipt.executable_path, &executable_paths)?;
+        let package =
+            LanguageServerPackage::new(server_id, version, receipt.executable_path, files)?;
+        if package.sha256() != expected_sha256 {
+            return Err(LanguageServerDistributionError::ExistingInstallationMismatch);
+        }
+        Ok(installed_result(&target, &package, expected_sha256))
+    }
 }
 
 #[derive(Deserialize, Serialize)]
@@ -236,6 +290,18 @@ struct InstallationReceipt {
     version: String,
     executable_path: PathBuf,
     package_sha256: String,
+    #[serde(default)]
+    executable_paths: Vec<PathBuf>,
+}
+
+impl InstallationReceipt {
+    fn executable_paths(&self) -> Vec<PathBuf> {
+        if self.executable_paths.is_empty() {
+            vec![self.executable_path.clone()]
+        } else {
+            self.executable_paths.clone()
+        }
+    }
 }
 
 struct StagingGuard(Option<PathBuf>);
@@ -264,6 +330,12 @@ pub enum LanguageServerDistributionError {
     DigestMismatch,
     #[error("an existing installation does not match the requested package")]
     ExistingInstallationMismatch,
+    #[error("installed language-server package exceeds bounded file limits")]
+    InstalledPackageTooLarge,
+    #[error("language-server activation receipt is invalid")]
+    InvalidActivationReceipt,
+    #[error("language-server activation authority is unavailable")]
+    ActivationUnavailable,
     #[error("language-server install directory is not a real directory: {0}")]
     UnsafeInstallDirectory(PathBuf),
     #[error(transparent)]
@@ -343,6 +415,13 @@ fn installed_from_receipt(
         || receipt.version != package.version
         || receipt.executable_path != package.executable_path
         || receipt.package_sha256 != hex_digest(digest)
+        || receipt.executable_paths()
+            != package
+                .files
+                .iter()
+                .filter(|file| file.executable)
+                .map(|file| file.relative_path.clone())
+                .collect::<Vec<_>>()
     {
         return Err(LanguageServerDistributionError::ExistingInstallationMismatch);
     }
@@ -388,6 +467,83 @@ fn installed_result(
     }
 }
 
+fn installed_package_files(
+    target: &Path,
+    executable_path: &Path,
+    executable_paths: &[PathBuf],
+) -> Result<Vec<LanguageServerPackageFile>, LanguageServerDistributionError> {
+    if !executable_paths.iter().any(|path| path == executable_path)
+        || executable_paths
+            .iter()
+            .any(|path| validate_relative_path(path).is_err())
+        || executable_paths.windows(2).any(|pair| pair[0] >= pair[1])
+    {
+        return Err(LanguageServerDistributionError::ExistingInstallationMismatch);
+    }
+    let mut pending = vec![target.to_path_buf()];
+    let mut files = Vec::new();
+    let mut total_bytes = 0_u64;
+    while let Some(directory) = pending.pop() {
+        let mut entries = fs::read_dir(&directory)?.collect::<Result<Vec<_>, _>>()?;
+        entries.sort_by_key(fs::DirEntry::file_name);
+        for entry in entries {
+            let path = entry.path();
+            let metadata = fs::symlink_metadata(&path)?;
+            if metadata.file_type().is_symlink() {
+                return Err(LanguageServerDistributionError::ExistingInstallationMismatch);
+            }
+            if metadata.is_dir() {
+                pending.push(path);
+                continue;
+            }
+            if !metadata.is_file() || regular_file_has_multiple_links(&metadata) {
+                return Err(LanguageServerDistributionError::ExistingInstallationMismatch);
+            }
+            let relative = path
+                .strip_prefix(target)
+                .map_err(|_| LanguageServerDistributionError::ExistingInstallationMismatch)?
+                .to_path_buf();
+            if relative == Path::new("installation.json") {
+                continue;
+            }
+            if files.len() >= MAX_INSTALLED_FILES || metadata.len() > MAX_INSTALLED_FILE_BYTES {
+                return Err(LanguageServerDistributionError::InstalledPackageTooLarge);
+            }
+            total_bytes = total_bytes
+                .checked_add(metadata.len())
+                .filter(|bytes| *bytes <= MAX_INSTALLED_TOTAL_BYTES)
+                .ok_or(LanguageServerDistributionError::InstalledPackageTooLarge)?;
+            let bytes = fs::read(&path)?;
+            let executable = executable_paths.contains(&relative);
+            if !executable_mode_matches(&path, executable) {
+                return Err(LanguageServerDistributionError::ExistingInstallationMismatch);
+            }
+            files.push(LanguageServerPackageFile::new(relative, bytes, executable)?);
+        }
+    }
+    if !files
+        .iter()
+        .any(|file| file.relative_path == executable_path && file.executable)
+    {
+        return Err(LanguageServerDistributionError::ExecutableMissing(
+            executable_path.to_path_buf(),
+        ));
+    }
+    Ok(files)
+}
+
+#[cfg(unix)]
+fn regular_file_has_multiple_links(metadata: &fs::Metadata) -> bool {
+    use std::os::unix::fs::MetadataExt;
+
+    metadata.nlink() != 1
+}
+
+#[cfg(not(unix))]
+fn regular_file_has_multiple_links(_metadata: &fs::Metadata) -> bool {
+    false
+}
+
 fn hex_digest(digest: [u8; 32]) -> String {
     digest.iter().map(|byte| format!("{byte:02x}")).collect()
 }
@@ -408,3 +564,7 @@ fn set_executable(_path: &Path, _executable: bool) -> Result<(), std::io::Error>
 #[cfg(test)]
 #[path = "installer_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "activation_tests.rs"]
+mod activation_tests;

@@ -108,6 +108,7 @@ test("Settings overlay opens, closes, and restores focus", () => {
       "User",
       "Appearance",
       "Editor",
+      "Languages",
       "Agents",
       "Models",
       "Git",
@@ -142,10 +143,10 @@ test("Settings overlay opens, closes, and restores focus", () => {
   assert.equal(settings.isOpen, true);
   assert.equal(search.value, "");
 
-  navigationItems[6].click();
+  navigationItems[7].click();
   assert.equal(settings.activeSectionId, "models");
   assert.equal(navigationItems[0].hasAttribute("aria-current"), false);
-  assert.equal(navigationItems[6].getAttribute("aria-current"), "page");
+  assert.equal(navigationItems[7].getAttribute("aria-current"), "page");
   assert.equal(root.querySelector(".zeta-settings-page h3")?.textContent, "Models");
   assert.equal(
     root.querySelector(".zeta-settings-page")?.getAttribute("data-active-settings-section"),
@@ -340,6 +341,75 @@ test("Plugin settings browse signed Marketplace metadata before installation", a
   root.querySelector<HTMLButtonElement>(".zeta-marketplace-results .zeta-theme-action")?.click();
   await new Promise((resolve) => globalThis.setTimeout(resolve, 0));
   assert.deepEqual(mutations, [`install:${review.id}:${review.digest}:4`]);
+});
+
+test("Language settings require confirmation and install the exact signed catalog entry", async () => {
+  using disposables = new DisposableStore();
+  const ownerDocument = browserEnvironment.window.document;
+  ownerDocument.body.replaceChildren();
+  const root = ownerDocument.createElement("div");
+  ownerDocument.body.append(root);
+  const settings = disposables.add(new SettingsService());
+  const configuration = disposables.add(new WorkbenchConfigurationService());
+  const digest = `sha256:${"d".repeat(64)}`;
+  const css = {
+    marketplaceId: "zeta",
+    packageId: "marketplace/css",
+    version: "1.0.0",
+    digest,
+    displayName: "CSS Language Support",
+    description: "CSS, SCSS, and Less language support.",
+    license: "MIT",
+    serverId: "css-language-server",
+    languages: ["css", "scss", "less"],
+    fileExtensions: [".css", ".scss", ".less"],
+    compatibility: { status: "compatible" as const },
+    installed: false,
+    active: false,
+  };
+  const native = {
+    ...css,
+    packageId: "marketplace/native-css",
+    displayName: "Native CSS",
+    compatibility: { status: "incompatible" as const, reason: "Native provider unavailable." },
+  };
+  const installs: string[] = [];
+  const confirmations: Array<{ message: string; detail?: string }> = [];
+  const languageMarketplaceService = {
+    list: async () => ({ revision: "signed-catalog:7", activationGeneration: 3, entries: [css, native] }),
+    install: async (entry: { marketplaceId: string; packageId: string; version: string; digest: string; serverId: string }, revision: string) => {
+      installs.push(`${entry.marketplaceId}:${entry.packageId}:${entry.version}:${entry.digest}:${entry.serverId}:${revision}`);
+    },
+  };
+  disposables.add(new SettingsEditorContribution({
+    configurationService: configuration,
+    container: root,
+    dialogService: {
+      showMessage: async () => {},
+      confirm: async (options) => {
+        confirmations.push({ message: options.message, detail: options.detail });
+        return true;
+      },
+    },
+    languageMarketplaceService,
+    settingsService: settings,
+    themeService: disposables.add(new ThemeService(darkColorTheme)),
+    userThemeService: UnavailableUserThemeService,
+  }));
+
+  settings.open("languages");
+  await new Promise((resolve) => globalThis.setTimeout(resolve, 0));
+  assert.deepEqual([...root.querySelectorAll(".zeta-integration-heading h4")].map(element => element.textContent), ["CSS Language Support", "Native CSS"]);
+  assert.equal(root.querySelectorAll(".zeta-theme-action").length, 1);
+  assert.match(root.textContent ?? "", /Native provider unavailable/);
+  root.querySelector<HTMLButtonElement>(".zeta-theme-action")?.click();
+  await new Promise((resolve) => globalThis.setTimeout(resolve, 0));
+
+  assert.equal(confirmations.length, 1);
+  assert.match(confirmations[0]?.message ?? "", /CSS Language Support 1\.0\.0/);
+  assert.match(confirmations[0]?.detail ?? "", new RegExp(digest));
+  assert.match(confirmations[0]?.detail ?? "", /shared Node-compatible runtime/);
+  assert.deepEqual(installs, [`zeta:marketplace/css:1.0.0:${digest}:css-language-server:signed-catalog:7`]);
 });
 
 test("Appearance settings persist and dynamically render registered theme preferences", async () => {

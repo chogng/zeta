@@ -1215,6 +1215,10 @@
         "CloudCodeIndexOperationFailed",
         "LanguageServiceUnavailable",
         "LanguageRequestFailed",
+        "LanguageMarketplaceUnavailable",
+        "LanguageMarketplaceRevisionConflict",
+        "LanguageMarketplaceIncompatible",
+        "LanguageMarketplaceOperationFailed",
         "SearchUnavailable",
         "SearchNotFound",
         "SearchNotOwner",
@@ -2447,6 +2451,38 @@
             },
             "params": {
               "$ref": "#/$defs/LanguageServerRemoveParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "language/marketplace/list"
+            },
+            "params": {
+              "$ref": "#/$defs/EmptyParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "language/marketplace/install"
+            },
+            "params": {
+              "$ref": "#/$defs/LanguageMarketplaceInstallParams"
             }
           },
           "required": [
@@ -5123,6 +5159,38 @@
             },
             "result": {
               "$ref": "#/$defs/ConfigCommandResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "language/marketplace/list"
+            },
+            "result": {
+              "$ref": "#/$defs/LanguageMarketplaceListResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "language/marketplace/install"
+            },
+            "result": {
+              "$ref": "#/$defs/LanguageMarketplaceInstallResult"
             }
           },
           "required": [
@@ -12893,6 +12961,176 @@
       "required": [
         "revision",
         "locations"
+      ]
+    },
+    "LanguageMarketplaceCompatibilityDto": {
+      "description": "Effective installability after signed consumer compatibility and local runtime probes.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "const": "compatible"
+            }
+          },
+          "required": [
+            "status"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "reason": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string",
+              "const": "incompatible"
+            }
+          },
+          "required": [
+            "status",
+            "reason"
+          ]
+        }
+      ]
+    },
+    "LanguageMarketplaceEntryDto": {
+      "description": "One exact signed Language Marketplace package and server route.",
+      "type": "object",
+      "properties": {
+        "active": {
+          "type": "boolean"
+        },
+        "compatibility": {
+          "$ref": "#/$defs/LanguageMarketplaceCompatibilityDto"
+        },
+        "description": {
+          "type": "string"
+        },
+        "digest": {
+          "type": "string"
+        },
+        "displayName": {
+          "type": "string"
+        },
+        "fileExtensions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "installed": {
+          "type": "boolean"
+        },
+        "languages": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "license": {
+          "type": "string"
+        },
+        "marketplaceId": {
+          "type": "string"
+        },
+        "packageId": {
+          "type": "string"
+        },
+        "serverId": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "marketplaceId",
+        "packageId",
+        "version",
+        "digest",
+        "displayName",
+        "description",
+        "license",
+        "serverId",
+        "languages",
+        "fileExtensions",
+        "compatibility",
+        "installed",
+        "active"
+      ]
+    },
+    "LanguageMarketplaceInstallParams": {
+      "description": "Exact catalog entry selected after the frontend presents its install confirmation.",
+      "type": "object",
+      "properties": {
+        "digest": {
+          "type": "string"
+        },
+        "expectedCatalogRevision": {
+          "type": "string"
+        },
+        "marketplaceId": {
+          "type": "string"
+        },
+        "packageId": {
+          "type": "string"
+        },
+        "serverId": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "expectedCatalogRevision",
+        "marketplaceId",
+        "packageId",
+        "version",
+        "digest",
+        "serverId"
+      ]
+    },
+    "LanguageMarketplaceInstallResult": {
+      "description": "Durable activation generation committed by one verified installation.",
+      "type": "object",
+      "properties": {
+        "activationGeneration": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "activationGeneration"
+      ]
+    },
+    "LanguageMarketplaceListResult": {
+      "description": "Current signed catalog and durable activation projection.",
+      "type": "object",
+      "properties": {
+        "activationGeneration": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "catalogRevision": {
+          "type": "string"
+        },
+        "entries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LanguageMarketplaceEntryDto"
+          }
+        }
+      },
+      "required": [
+        "catalogRevision",
+        "activationGeneration",
+        "entries"
       ]
     },
     "LanguageParameterInformationDto": {

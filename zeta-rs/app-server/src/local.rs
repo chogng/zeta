@@ -46,6 +46,10 @@ use zeta_core::ThreadController;
 use zeta_extensions::ExtensionRoot;
 use zeta_install_context::InstallContext;
 use zeta_keyring_store::KeyringSecretStore;
+use zeta_language_marketplace::RemoteLanguageMarketplace;
+use zeta_language_marketplace::RemoteLanguageMarketplaceConfig;
+use zeta_language_server_catalog::ManagedNodeRuntime;
+use zeta_language_server_distribution::LanguageServerActivationAuthority;
 use zeta_login::LoginService;
 use zeta_mcp_extension::ConnectorMcpRuntimeProvider;
 use zeta_mcp_extension::McpCatalogUpdateSubscription;
@@ -201,6 +205,7 @@ pub struct LocalAppServerOptions {
     mcp_oauth_providers: Vec<(McpServerId, Arc<dyn McpOAuthProvider>)>,
     plugin_marketplaces: Vec<(PathBuf, PluginMarketplaceMode)>,
     remote_plugin_marketplaces: Vec<RemotePluginMarketplaceConfig>,
+    remote_language_marketplaces: Vec<RemoteLanguageMarketplaceConfig>,
     language_server_providers: zeta_language_server_catalog::LanguageServerProviderRegistry,
     product_services: Option<crate::LocalProductServicesConfig>,
     codex_app_server: CodexAppServerOptions,
@@ -221,6 +226,7 @@ impl LocalAppServerOptions {
             mcp_oauth_providers: Vec::new(),
             plugin_marketplaces: Vec::new(),
             remote_plugin_marketplaces: Vec::new(),
+            remote_language_marketplaces: Vec::new(),
             language_server_providers:
                 zeta_language_server_catalog::LanguageServerProviderRegistry::new(),
             product_services: None,
@@ -347,6 +353,15 @@ impl LocalAppServerOptions {
         self
     }
 
+    /// Registers one TUF-backed Language Marketplace whose root trust is host-pinned.
+    pub fn with_remote_language_marketplace(
+        mut self,
+        marketplace: RemoteLanguageMarketplaceConfig,
+    ) -> Self {
+        self.remote_language_marketplaces.push(marketplace);
+        self
+    }
+
     /// Installs exact, already materialized language-server providers for this App Server.
     pub fn with_language_server_providers(
         mut self,
@@ -390,6 +405,10 @@ impl fmt::Debug for LocalAppServerOptions {
             .field(
                 "remote_plugin_marketplace_count",
                 &self.remote_plugin_marketplaces.len(),
+            )
+            .field(
+                "remote_language_marketplace_count",
+                &self.remote_language_marketplaces.len(),
             )
             .field(
                 "language_server_provider_count",
@@ -436,6 +455,7 @@ impl PartialEq for LocalAppServerOptions {
                 })
             && self.plugin_marketplaces == other.plugin_marketplaces
             && self.remote_plugin_marketplaces == other.remote_plugin_marketplaces
+            && self.remote_language_marketplaces == other.remote_language_marketplaces
             && self
                 .language_server_providers
                 .ptr_eq(&other.language_server_providers)
@@ -701,6 +721,9 @@ pub fn open_local_app_server_with_code_index_providers(
         options
             .remote_plugin_marketplaces
             .extend(services.marketplaces.iter().cloned());
+        options
+            .remote_language_marketplaces
+            .extend(services.language_marketplaces.iter().cloned());
     }
     let codex_app_server = options.codex_app_server.clone();
     let mcp_oauth_providers = std::mem::take(&mut options.mcp_oauth_providers);
@@ -785,6 +808,28 @@ pub fn open_local_app_server_with_code_index_providers(
         }
         _ => None,
     };
+    let language_authority =
+        LanguageServerActivationAuthority::open(options.profile_root.join("languages"))
+            .map_err(open_error)?;
+    let activation = language_authority.snapshot().map_err(open_error)?;
+    let managed_node = ManagedNodeRuntime::from_install_context(&InstallContext::current()).ok();
+    if !activation.servers().is_empty() && managed_node.is_none() {
+        return Err(OpenAppServerError(
+            "an active language server requires the managed Node-compatible runtime".into(),
+        ));
+    }
+    let language_sources =
+        sync_remote_language_marketplaces(&options.remote_language_marketplaces)?;
+    let language_marketplaces =
+        crate::server::language_marketplace_runtime::AppServerLanguageMarketplaceRuntime::new(
+            language_authority,
+            managed_node,
+            std::mem::take(&mut options.language_server_providers),
+            language_sources,
+        );
+    options.language_server_providers = language_marketplaces.registry().map_err(|_| {
+        OpenAppServerError("language-server activation could not be composed".into())
+    })?;
     if let (Some(runtime), Some(services)) = (&mut connector_runtime, product_services) {
         configure_product_connector_oauth(runtime, services.connector_oauth)?;
     }
@@ -864,6 +909,7 @@ pub fn open_local_app_server_with_code_index_providers(
         .with_config_store(Arc::clone(&config))
         .with_login_service(login_service)
         .with_language_server_providers(options.language_server_providers)
+        .with_language_marketplaces(language_marketplaces)
         .with_slash_command_catalog(options.slash_commands)
         .with_code_index_storage_root(options.profile_root.join("code-index"))
         .with_code_index_semantic_storage_root(options.profile_root.join("code-index-semantic"))
@@ -1716,6 +1762,42 @@ fn map_model_provider_error(error: zeta_model_provider::ModelProviderError) -> C
         error if error.is_transient() => CoreError::ModelTransient(error.to_string()),
         error => CoreError::Model(error.to_string()),
     }
+}
+
+fn sync_remote_language_marketplaces(
+    configs: &[RemoteLanguageMarketplaceConfig],
+) -> Result<
+    Vec<(
+        Arc<RemoteLanguageMarketplace>,
+        zeta_language_marketplace::RemoteLanguageMarketplaceSnapshot,
+    )>,
+    OpenAppServerError,
+> {
+    if configs.is_empty() {
+        return Ok(Vec::new());
+    }
+    let limit = zeta_http_client::ResponseBodyLimit::new(
+        std::num::NonZeroUsize::new(MARKETPLACE_HTTP_RESPONSE_LIMIT)
+            .expect("Marketplace response limit is non-zero"),
+    )
+    .map_err(open_error)?;
+    let http: Arc<dyn zeta_http_client::HttpClient> = Arc::new(
+        zeta_http_client::UreqHttpClient::with_config(
+            zeta_http_client::HttpClientConfig::new().with_response_body_limit(limit),
+        )
+        .map_err(open_error)?,
+    );
+    configs
+        .iter()
+        .map(|config| {
+            let marketplace = Arc::new(RemoteLanguageMarketplace::new(
+                config.clone(),
+                Arc::clone(&http),
+            ));
+            let snapshot = marketplace.sync().map_err(open_error)?;
+            Ok((marketplace, snapshot))
+        })
+        .collect()
 }
 
 fn sync_remote_marketplaces(

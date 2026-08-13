@@ -2,11 +2,12 @@
 
 > 本 README 是 application-managed language-server 安装存储的 canonical contract。Server identity
 > 与 executable discovery 见 [`language-server-catalog`](../language-server-catalog/README.md)，跨 crate
-> 产品语义见 [`docs/lsp.md`](../../docs/lsp.md)。
+> 产品语义见 [`docs/lsp.md`](../../docs/lsp.md)，TUF consumer 见
+> [`zeta-language-marketplace`](../language-marketplace/README.md)。
 
 本 crate 拥有已下载 package 的路径校验、provider-supplied SHA-256 验证、private staging、原子发布、
-version receipt 与 side-by-side update storage。它不查询网络、不选择 release channel、不解压不可信
-archive、不调用全局包管理器、不激活版本，也不删除旧版本。
+version receipt、side-by-side update storage 与 durable activation authority。它不查询网络、不选择
+release channel、不解压不可信 archive、不调用全局包管理器，也不删除旧版本。
 
 ## 公共接口与执行路径
 
@@ -15,6 +16,7 @@ archive、不调用全局包管理器、不激活版本，也不删除旧版本�
 | `LanguageServerPackageFile` | 表达 traversal-free regular/executable package file | 跟随 symlink 或接受绝对路径 |
 | `LanguageServerPackage` | 冻结 server/version/executable path/file set 并计算 deterministic SHA-256 | 声称 digest 来源可信 |
 | `LanguageServerInstaller` | 验证 expected digest、写 staging、receipt 并原子发布 version directory | 覆盖已发布版本或改变 Config |
+| `LanguageServerActivationAuthority` | 原子选择 exact installed version；每次 snapshot 重新扫描并校验 package digest | 下载 package、选择 runtime 或启动 server |
 | `InstalledLanguageServer` | 不透明的已验证安装 receipt，以只读访问器交给 provider versioned entrypoint 与 digest | 允许调用方手工伪造或表示 server 已激活/initialize |
 
 `InstalledLanguageServer::executable` 是 package manifest 声明的入口，不承诺它是可由 OS
@@ -28,7 +30,8 @@ trusted server-specific provider
   → verify deterministic package digest
   → <install-root>/.staging/<unique>/ files + installation.json
   → atomic rename to <install-root>/<server>/<version>
-  → Config authority explicitly activates returned executable
+  → LanguageServerActivationAuthority atomically selects exact receipt
+  → restart reopens and rehashes every active installation
 ```
 
 关键 private symbols：
@@ -48,7 +51,8 @@ ownership 漂移；如果 catalog 开始写安装目录或校验 package bytes�
 ## 失败语义、测试和限制
 
 Digest mismatch 在创建 staging 前失败。写入后的任何失败由 guard 清理；已发布目录从不覆盖。更新通过
-安装新 version directory 完成，旧版本保留，因此 rollback 只是 Config executable path 变更。
+安装新 version directory 并原子切换 activation receipt 完成，旧版本保留；回退通过
+`LanguageServerActivationAuthority::activate` 重新选择已经验证的 exact version 完成。
 
 ```bash
 cargo test --manifest-path Cargo.toml -p zeta-language-server-distribution
@@ -56,11 +60,13 @@ cargo clippy --manifest-path Cargo.toml -p zeta-language-server-distribution --a
 ```
 
 测试覆盖 traversal rejection、digest mismatch 不发布、version side-by-side、旧版本保留、同 package
-重复安装幂等，以及既有版本被篡改后即使 receipt 未变也拒绝复用。
+重复安装幂等、activation 跨进程重开，以及既有版本被篡改后即使 receipt 未变也拒绝复用或启动。
 
 当前限制：
 
 - ✅ verified package storage、atomic staging、receipt 与 side-by-side update/rollback 基础；
-- 尚未完成：每个 server 的可信 release metadata provider、archive extraction limit 与签名策略；
-- 尚未完成：compatibility probe、下载进度/取消、安装 UI、Config 激活和旧版本 GC；
-- Potential：provider authority 稳定后可放在 App Server 后方，但本 crate 继续只消费已解析 package。
+- ✅ durable exact-version activation、启动时 re-open/re-hash 与篡改 fail closed；
+- 委托：TUF release metadata、有界 archive、compatibility probe 和安装确认由
+  `zeta-language-marketplace`、App Server 与 Desktop 分别拥有；
+- 尚未完成：下载进度/取消、未激活安装与旧版本 GC；
+- 扩展约束：本 crate 继续只消费已解析 package，不拥有网络、UI、provider 或 workspace enablement。

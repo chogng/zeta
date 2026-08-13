@@ -809,6 +809,63 @@ pub struct LanguageServerProgressNotification {
     pub done: bool,
 }
 
+/// Effective installability after signed consumer compatibility and local runtime probes.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(tag = "status", rename_all = "camelCase")]
+pub enum LanguageMarketplaceCompatibilityDto {
+    Compatible,
+    Incompatible { reason: String },
+}
+
+/// One exact signed Language Marketplace package and server route.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageMarketplaceEntryDto {
+    pub marketplace_id: String,
+    pub package_id: String,
+    pub version: String,
+    pub digest: String,
+    pub display_name: String,
+    pub description: String,
+    pub license: String,
+    pub server_id: String,
+    pub languages: Vec<String>,
+    pub file_extensions: Vec<String>,
+    pub compatibility: LanguageMarketplaceCompatibilityDto,
+    pub installed: bool,
+    pub active: bool,
+}
+
+/// Current signed catalog and durable activation projection.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageMarketplaceListResult {
+    pub catalog_revision: String,
+    #[ts(type = "number")]
+    pub activation_generation: u64,
+    pub entries: Vec<LanguageMarketplaceEntryDto>,
+}
+
+/// Exact catalog entry selected after the frontend presents its install confirmation.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageMarketplaceInstallParams {
+    pub expected_catalog_revision: String,
+    pub marketplace_id: String,
+    pub package_id: String,
+    pub version: String,
+    pub digest: String,
+    pub server_id: String,
+}
+
+/// Durable activation generation committed by one verified installation.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageMarketplaceInstallResult {
+    #[ts(type = "number")]
+    pub activation_generation: u64,
+}
+
 /// Code-action request against one exact source snapshot and selection.
 #[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]

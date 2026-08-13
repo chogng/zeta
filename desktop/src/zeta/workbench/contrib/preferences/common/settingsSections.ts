@@ -32,6 +32,11 @@ export const SettingsSections = [
     description: "Configure text editing, fonts, and editor behavior.",
   },
   {
+    id: "languages",
+    label: "Languages",
+    description: "Install and manage signed language-server packages.",
+  },
+  {
     id: "agents",
     label: "Agents",
     description: "Control how agents work and collaborate on tasks.",

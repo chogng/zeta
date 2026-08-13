@@ -14,9 +14,9 @@ Zeta 通过独立的 catalog、语言服务协调层和 LSP 运行时连接现�
 写进编辑器。Native 已接入文档生命周期和事件循环；App Server Config authority 持久化
 三个内置服务器的 Disabled/Automatic/Enabled 与可选绝对 executable path。Settings 中每个 server
 都有独立的 Enable switch，默认关闭；开启时默认选择 Automatic，仍可用 Launch mode 选择
-Automatic 或 Enabled。未配置的 server 默认 Disabled，不会自动拉起；用户显式开启后才从进程启动时
-冻结的 PATH 解析，选择 Enabled 则启用该 server（可同时提供绝对 executable path）。缺失或不可执行时
-保持无语言服务器。
+Automatic 或 Enabled。未配置的 PATH server 默认 Disabled，不会自动拉起；用户显式开启后才从进程
+启动时冻结的 PATH 解析。Marketplace package 的安装确认同时写入 activation receipt，因此其 packaged
+route 默认启用；显式 Config `Disabled` 仍可关闭。缺失或不可执行时保持无语言服务器。
 
 | 使用场景 | 当前结果 | 谁负责下一步 |
 | --- | --- | --- |
@@ -29,9 +29,9 @@ Automatic 或 Enabled。未配置的 server 默认 Disabled，不会自动拉起
 | 日志、show message 与 work-done progress | ✅ Desktop 将日志投影到 Output/Language Servers，showMessage 使用 Workbench Dialog，活动进度显示在状态栏与 Output | App Server + Desktop Workbench |
 | 显式替换服务器并恢复文档 | ✅ 新实例重放成功后切换 route/incarnation | 宿主需暂存 replacement 早期事件 |
 | 配置与发现 Rust/JSON/Shell server | ✅ 独立 Settings draft、revision-safe mode/path、catalog 校验与热重配 | 扩展安装 provider/UI |
-| 用共享 Node-compatible runtime 运行已验证 CSS package | ✅ Desktop 复用 Electron run-as-Node，其他宿主回退 packaged Node；CSS provider 生成 `<runtime> <entrypoint> --stdio`，App Server 复用现有 supervisor/client | Marketplace 消费端仍需完成下载、用户确认与 registry materialization |
+| 用共享 Node-compatible runtime 运行已验证 CSS package | ✅ Desktop 复用 Electron run-as-Node；Rust 同步 TUF catalog、校验兼容性，并从 activation receipt 自动重建 provider | 用户在 Settings/Languages 确认 exact signed package |
 | 意外退出、退避重启和 crash-loop | ✅ 断连 retirement、有限指数退避、状态展示和全文重放 | `zeta-language-service` + Native |
-| 安装、更新和选择其他 server | 部分具备；verified side-by-side installer 已完成，release provider/UI 尚缺 | distribution / config / Native |
+| 安装、更新和选择其他 server | 部分具备；CSS 的 TUF download、确认、activation 与热 registry 已完成；其他 server 仍需 catalog adapter | Marketplace / catalog |
 | 动态注册与 work-done progress | ✅ 按 server incarnation 隔离，静态与动态 capability 共同参与请求 gate | `zeta-lsp` + `zeta-language-service` |
 | workspace edit、LSP 3.18 新能力 | 尚未完成 | 后续按真实消费者逐项加入 |
 
@@ -59,7 +59,7 @@ flowchart LR
    command 更新，`config/changed` 只作为重新读取权威 snapshot 的失效提示。
 2. 产品宿主把 preference、冻结的 executable candidates 和 execution policy 交给 catalog；catalog 只在候选
    可 canonicalize、为普通可执行文件时产生 resolved definition。对 package-backed CSS，宿主先把
-   distribution 返回的 `InstalledLanguageServer` 和宿主选择的共享 Node-compatible runtime 注入
+   distribution activation authority 返回的 `InstalledLanguageServer` 和宿主选择的共享 Node-compatible runtime 注入
    `CssLanguageServerProvider`；provider 产生同样的 definition，不直接启动 child。
 3. 产品宿主把 definitions 交给 `zeta-language-service`；无 definition 时禁用，不启动进程。
 4. 协调层把 resolved command 委托给 `zeta-lsp`；后者启动或接入 transport、发送 initialize，
@@ -88,7 +88,7 @@ Git object identity 或 durable product sequence。
 | managed Node 与 package/native 启动命令 | 只执行冻结 command | ✅ | ❌ | 只返回入口路径 | 注入 package/provider | 组合 registry |
 | process enablement、language route、generation | ❌ | 提供 definition | ✅ | ❌ | 组合 | 配置与组合 |
 | restart backoff、预算和 crash-loop | 只上报断连事实 | ❌ | ✅ | ❌ | 展示运行态 | 事件转发 |
-| server 包 bytes/digest 校验与 side-by-side 安装 | ❌ | 只消费已安装 receipt | ❌ | ✅ | 协调/展示 | 后续 Marketplace adapter owner |
+| server 包 TUF/digest 校验与 side-by-side 安装 | ❌ | 只消费已安装 receipt | ❌ | ✅ 安装/activation | 展示确认 | ✅ 组合 Marketplace consumer |
 | 当前 document text / editor revision | ❌ | ❌ | 借用 snapshot | ❌ | ✅ | 文件 I/O authority |
 | diagnostics freshness 与 position conversion | 提供协议事实 | ❌ | ✅ | ❌ | ✅ Editor 绘制，Native hover | 协议投影 |
 | mode/path durable preference | ❌ | 只消费 preference | ❌ | ❌ | Settings UI / adapter | ✅ authority |
@@ -135,7 +135,7 @@ App Server 已经是 Desktop 的 workspace/document authority 与 LSP IPC bounda
 - Desktop 通过 allowlisted `ZETA_ELECTRON_RUN_AS_NODE_PATH` 复用 exact Electron executable，且只在
   language-server child 的 clean environment 中设置 `ELECTRON_RUN_AS_NODE=1`；
 - standalone/headless package 保留锁定 Node.js runtime 与 license 作为非 Electron 回退；
-- App Server 将显式启用的 provider definition 与既有 built-in catalog definition 合并后交给同一 supervisor；
+- App Server 将 activation-confirmed provider definition 与显式启用的 built-in catalog definition 合并后交给同一 supervisor；
 - 独立 `zeta-language-service` supervisor、显式 enablement、resolved definition 校验、generation gate；
 - Native 文档 open/change/save/close、workspace replacement 与 event-loop adapter；
 - `zeta-config` mode/path schema、App Server typed mutation/config notification，以及三个内置 server 的
@@ -152,14 +152,18 @@ App Server 已经是 Desktop 的 workspace/document authority 与 LSP IPC bounda
 - 多 definition target 使用现有 Peek 列表选择，单目标直接导航；
 - Rust、JSON/JSONC、Shell 三项 built-in catalog definitions；
 - verified package staging、SHA-256、side-by-side update 与 receipt；
+- 通用 Language Marketplace TUF consumer、delegated publisher 校验、有界 ZIP extraction、Marketplace
+  tree digest、consumer SemVer compatibility 与 stable error mapping；
+- Desktop Settings/Languages exact package confirmation，App Server `language/marketplace/list` / `install`
+  RPC，以及 profile activation receipt 启动重建和安装后的热 registry replacement；
 - in-memory protocol vertical tests。
 
 ### 计划
 
 1. 把 workspace trust 的明确结果映射为 catalog execution policy。
 2. 增加 pull diagnostics 的 result-id cache、partial-result progress 与 `workspace/diagnostic/refresh`。
-3. 为 Marketplace CSS target 增加通用 TUF consumer/download adapter、有界 archive extraction、
-   compatibility probe、用户确认/安装 UI，并从激活 receipt 自动构建 provider registry。
+3. 为其他 language-server family 增加 schema 2 runtime metadata 和 catalog provider adapter，并为
+   未激活 version 增加独立 garbage collection policy。
 
 ### 潜在方向
 

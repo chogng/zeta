@@ -15,6 +15,7 @@ base64 = { workspace = true }
 getrandom = { workspace = true }
 log = { workspace = true }
 pollster = { workspace = true }
+semver = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
@@ -55,6 +56,8 @@ zeta-tool-executor = { workspace = true }
 zeta-instructions = { workspace = true }
 zeta-keyring-store = { workspace = true }
 zeta-language-server-catalog = { workspace = true }
+zeta-language-server-distribution = { workspace = true }
+zeta-language-marketplace = { workspace = true }
 zeta-language-service = { workspace = true }
 zeta-login = { workspace = true }
 zeta-model-provider = { workspace = true }
@@ -84,7 +87,6 @@ zeta-utils-pty = { workspace = true }
 [dev-dependencies]
 image = { workspace = true, features = ["png"] }
 tempfile = { workspace = true }
-zeta-language-server-distribution = { workspace = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 zeta-linux-sandbox = { workspace = true }

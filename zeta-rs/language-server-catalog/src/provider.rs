@@ -5,7 +5,12 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use zeta_language_server_distribution::LanguageServerActivationSnapshot;
+
+use crate::CSS_LANGUAGE_SERVER_ID;
+use crate::CssLanguageServerProvider;
 use crate::LanguageServerDefinition;
+use crate::ManagedNodeRuntime;
 
 /// Selects the package-managed server or one authoritative native executable override.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -38,12 +43,42 @@ pub trait LanguageServerProvider: Send + Sync {
 #[derive(Clone, Default)]
 pub struct LanguageServerProviderRegistry {
     providers: BTreeMap<&'static str, Arc<dyn LanguageServerProvider>>,
+    activation_enabled: std::collections::BTreeSet<&'static str>,
 }
 
 impl LanguageServerProviderRegistry {
     /// Creates an empty product composition registry.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Rebuilds the provider registry from one durable activation snapshot.
+    ///
+    /// This is the canonical product adapter boundary: the generic activation authority owns
+    /// exact installed versions, while this catalog maps known server identities to concrete
+    /// providers and their required shared runtimes.
+    pub fn from_activation(
+        activation: &LanguageServerActivationSnapshot,
+        node: ManagedNodeRuntime,
+    ) -> Result<Self, LanguageServerProviderError> {
+        let mut registry = Self::new();
+        for installed in activation.servers() {
+            match installed.server_id() {
+                CSS_LANGUAGE_SERVER_ID => {
+                    registry.register(CssLanguageServerProvider::new(
+                        installed.clone(),
+                        node.clone(),
+                    )?)?;
+                    registry.activation_enabled.insert(CSS_LANGUAGE_SERVER_ID);
+                }
+                server_id => {
+                    return Err(LanguageServerProviderError::UnsupportedActivatedServer(
+                        server_id.to_owned(),
+                    ));
+                }
+            }
+        }
+        Ok(registry)
     }
 
     /// Registers one uniquely identified provider.
@@ -70,6 +105,15 @@ impl LanguageServerProviderRegistry {
         Ok(())
     }
 
+    /// Merges another frozen composition, rejecting duplicate provider identities.
+    pub fn merge(&mut self, other: Self) -> Result<(), LanguageServerProviderError> {
+        self.activation_enabled.extend(other.activation_enabled);
+        for provider in other.providers.into_values() {
+            self.register_shared(provider)?;
+        }
+        Ok(())
+    }
+
     /// Returns whether an exact provider identity is installed.
     pub fn contains(&self, id: &str) -> bool {
         self.providers.contains_key(id)
@@ -83,6 +127,16 @@ impl LanguageServerProviderRegistry {
     /// Returns whether no provider is installed.
     pub fn is_empty(&self) -> bool {
         self.providers.is_empty()
+    }
+
+    /// Iterates stable installed provider identities in deterministic order.
+    pub fn ids(&self) -> impl Iterator<Item = &'static str> + '_ {
+        self.providers.keys().copied()
+    }
+
+    /// Returns whether a durable user activation enables this packaged provider without Config.
+    pub fn activation_enables(&self, id: &str) -> bool {
+        self.activation_enabled.contains(id)
     }
 
     /// Resolves a provider definition, returning `None` for an unknown identity.
@@ -101,6 +155,7 @@ impl LanguageServerProviderRegistry {
     /// Compares registries by exact shared provider identity for composition option equality.
     pub fn ptr_eq(&self, other: &Self) -> bool {
         self.providers.len() == other.providers.len()
+            && self.activation_enabled == other.activation_enabled
             && self.providers.iter().all(|(id, provider)| {
                 other
                     .providers
@@ -115,6 +170,7 @@ impl fmt::Debug for LanguageServerProviderRegistry {
         formatter
             .debug_struct("LanguageServerProviderRegistry")
             .field("provider_ids", &self.providers.keys().collect::<Vec<_>>())
+            .field("activation_enabled", &self.activation_enabled)
             .finish()
     }
 }
@@ -138,6 +194,8 @@ pub enum LanguageServerProviderError {
     InvalidProviderContract(&'static str),
     #[error("language-server provider '{0}' is registered more than once")]
     DuplicateProvider(&'static str),
+    #[error("activated language-server provider '{0}' is not supported by this Zeta build")]
+    UnsupportedActivatedServer(String),
     #[error(transparent)]
     InvalidDefinition(#[from] crate::LanguageServerCatalogError),
 }

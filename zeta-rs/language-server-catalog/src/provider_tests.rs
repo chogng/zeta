@@ -2,18 +2,19 @@ use std::fs;
 use std::path::Path;
 
 use tempfile::TempDir;
+use zeta_language_server_distribution::LanguageServerActivationAuthority;
 use zeta_language_server_distribution::LanguageServerInstaller;
 use zeta_language_server_distribution::LanguageServerPackage;
 use zeta_language_server_distribution::LanguageServerPackageFile;
 use zeta_lsp::LanguageServerEnvironmentPolicy;
 
-use crate::CSS_LANGUAGE_SERVER_ID;
 use crate::CssLanguageServerProvider;
 use crate::LanguageServerProviderError;
 use crate::LanguageServerProviderLaunch;
 use crate::LanguageServerProviderRegistry;
 use crate::ManagedNodeRuntime;
 use crate::ManagedNodeRuntimeSource;
+use crate::CSS_LANGUAGE_SERVER_ID;
 
 #[test]
 fn css_provider_uses_managed_node_and_a_clean_environment() {
@@ -50,21 +51,15 @@ fn css_provider_uses_managed_node_and_a_clean_environment() {
         command.environment_policy(),
         LanguageServerEnvironmentPolicy::Clear
     );
-    assert!(
-        !command
-            .environment()
-            .contains_key(std::ffi::OsStr::new("NODE_OPTIONS"))
-    );
-    assert!(
-        !command
-            .environment()
-            .contains_key(std::ffi::OsStr::new("NODE_PATH"))
-    );
-    assert!(
-        !command
-            .environment()
-            .contains_key(std::ffi::OsStr::new("ELECTRON_RUN_AS_NODE"))
-    );
+    assert!(!command
+        .environment()
+        .contains_key(std::ffi::OsStr::new("NODE_OPTIONS")));
+    assert!(!command
+        .environment()
+        .contains_key(std::ffi::OsStr::new("NODE_PATH")));
+    assert!(!command
+        .environment()
+        .contains_key(std::ffi::OsStr::new("ELECTRON_RUN_AS_NODE")));
     assert_eq!(command.current_dir(), Some(fixture.workspace.path()));
 }
 
@@ -143,6 +138,23 @@ fn registry_rejects_duplicate_provider_identity() {
     ));
 }
 
+#[test]
+fn registry_rebuilt_from_activation_retains_user_enablement() {
+    let fixture = ProviderFixture::new();
+    let authority =
+        LanguageServerActivationAuthority::open(fixture.root.path().join("languages")).unwrap();
+    let installed = fixture.installed();
+    let activation = authority.activate(installed).unwrap();
+    let registry = LanguageServerProviderRegistry::from_activation(
+        &activation,
+        ManagedNodeRuntime::from_path(&fixture.node).unwrap(),
+    )
+    .unwrap();
+
+    assert!(registry.contains(CSS_LANGUAGE_SERVER_ID));
+    assert!(registry.activation_enables(CSS_LANGUAGE_SERVER_ID));
+}
+
 struct ProviderFixture {
     root: TempDir,
     workspace: TempDir,
@@ -175,6 +187,10 @@ impl ProviderFixture {
     }
 
     fn provider_with_runtime(&self, runtime: ManagedNodeRuntime) -> CssLanguageServerProvider {
+        CssLanguageServerProvider::new(self.installed(), runtime).unwrap()
+    }
+
+    fn installed(&self) -> zeta_language_server_distribution::InstalledLanguageServer {
         let package = LanguageServerPackage::new(
             CSS_LANGUAGE_SERVER_ID,
             "0.1.0",
@@ -194,11 +210,10 @@ impl ProviderFixture {
         )
         .unwrap();
         let digest = package.sha256();
-        let installed = LanguageServerInstaller::new(self.root.path().join("languages"))
+        LanguageServerInstaller::new(self.root.path().join("languages"))
             .unwrap()
             .install_verified(package, digest)
-            .unwrap();
-        CssLanguageServerProvider::new(installed, runtime).unwrap()
+            .unwrap()
     }
 }
 

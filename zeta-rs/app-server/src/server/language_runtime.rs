@@ -401,18 +401,25 @@ fn configured_provider_definitions(
     workspace_root: &Path,
 ) -> Result<Vec<zeta_language_service::LanguageServerDefinition>, String> {
     let mut definitions = Vec::new();
-    for (server_id, config) in &configuration.servers {
-        if config.mode == LanguageServerModeConfig::Disabled
-            || !providers.contains(server_id.as_str())
-        {
+    for server_id in providers.ids() {
+        let config = configuration
+            .servers
+            .iter()
+            .find_map(|(id, config)| (id.as_str() == server_id).then_some(config));
+        if config.is_none() && !providers.activation_enables(server_id) {
             continue;
         }
-        let launch = config.executable.as_deref().map_or(
-            LanguageServerProviderLaunch::Packaged,
-            LanguageServerProviderLaunch::ExplicitExecutable,
-        );
+        if config.is_some_and(|config| config.mode == LanguageServerModeConfig::Disabled) {
+            continue;
+        }
+        let launch = config
+            .and_then(|config| config.executable.as_deref())
+            .map_or(
+                LanguageServerProviderLaunch::Packaged,
+                LanguageServerProviderLaunch::ExplicitExecutable,
+            );
         if let Some(definition) = providers
-            .definition(server_id.as_str(), workspace_root, launch)
+            .definition(server_id, workspace_root, launch)
             .map_err(|error| error.to_string())?
         {
             definitions.push(definition);

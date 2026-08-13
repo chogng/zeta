@@ -9,6 +9,7 @@ import type { ICodeIndexService } from "../../../../platform/codeIndex/common/co
 import type { IToolSearchService } from "../../../../platform/toolSearch/common/toolSearchService.js";
 import type { IConnectorService } from "../../../../platform/connectors/common/connectorService.js";
 import type { IPluginService } from "../../../../platform/plugins/common/pluginService.js";
+import type { ILanguageMarketplaceService } from "../../../../platform/language/common/languageMarketplaceService.js";
 import { SettingsEditor } from "./settingsEditor.js";
 
 export interface SettingsEditorContributionOptions {
@@ -21,6 +22,7 @@ export interface SettingsEditorContributionOptions {
   readonly codeIndexService?: ICodeIndexService;
   readonly connectorService?: IConnectorService;
   readonly pluginService?: IPluginService;
+  readonly languageMarketplaceService?: ILanguageMarketplaceService;
   readonly toolSearchService?: IToolSearchService;
 }
 
@@ -41,6 +43,7 @@ export class SettingsEditorContribution extends DisposableOwner {
       codeIndexService: options.codeIndexService ?? unavailableCodeIndexService,
       connectorService: options.connectorService ?? unavailableConnectorService,
       pluginService: options.pluginService ?? unavailablePluginService,
+      languageMarketplaceService: options.languageMarketplaceService ?? unavailableLanguageMarketplaceService,
       toolSearchService: options.toolSearchService ?? unavailableToolSearchService,
     }));
     this.modalEditor = this.own(new ModalEditorPart({
@@ -108,4 +111,9 @@ const unavailablePluginService: IPluginService = {
   grant: () => Promise.reject(new Error("Plugins are unavailable.")),
   revokeGrant: () => Promise.reject(new Error("Plugins are unavailable.")),
   uninstall: () => Promise.reject(new Error("Plugins are unavailable.")),
+};
+
+const unavailableLanguageMarketplaceService: ILanguageMarketplaceService = {
+  list: () => Promise.reject(new Error("Language Marketplace is unavailable.")),
+  install: () => Promise.reject(new Error("Language Marketplace is unavailable.")),
 };

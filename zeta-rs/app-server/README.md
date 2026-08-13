@@ -78,7 +78,8 @@ Core/store 继续拥有 Session/Thread durable state；需要进程内生命周�
 | `AppServer::with_file_system_watcher` | 监听可信 workspace root 并发布相对路径 invalidation hint |
 | `AppServer::with_git_root` | 冻结 workspace root，开启 Git status/mutation、watcher 与 revision notification |
 | `AppServer::with_workspace_search` | 注入 workspace root 与冻结的 ripgrep executable，构造外部内容搜索服务 |
-| `AppServer::with_language_server_providers` | 注入已验证、已安装的 provider registry；配置启用后与 built-in definitions 共同交给现有 supervisor |
+| `AppServer::with_language_server_providers` | 注入已验证、已安装的 provider registry；activation confirmation 启用 packaged route，显式 Config `Disabled` 仍可关闭 |
+| `AppServer::with_language_marketplaces` | 安装 TUF catalog、activation authority 与共享 runtime adapter；提供 list/install RPC，成功后热替换 registry |
 | `AppServer::with_code_index_storage_root` | 配置按 root identity 分隔的 persistent index cache |
 | `LocalCodeIndexProviders::with_semantic_models` | 在 Workspace activation 前注入本地 semantic 使用的 immutable embedding/rerank adapters |
 | `AppServer::with_cloud_code_index_providers` | 注入冻结的 provider registry；空 registry 不广告 cloud capability |
@@ -92,7 +93,8 @@ Core/store 继续拥有 Session/Thread durable state；需要进程内生命周�
 | `open_local_app_server_with_cloud_providers` | 在 Workspace 激活前注入 cloud code-index providers；默认入口使用空 registry |
 | `open_local_app_server_with_code_index_providers` | 在 Workspace 激活前同时注入本地 semantic models 与可选 cloud providers |
 | `LocalAppServerOptions` | user profile root + SessionStateMode + optional Workspace/Connector/language-provider runtime + Codex App Server options + validated slash catalog + built-in Skill root selection + optional model operation client/MCP OAuth providers |
-| `LocalAppServerOptions::with_language_server_providers` | 在 local App Server 启动前注入冻结 provider registry；不代替 Marketplace 验签、下载或用户确认 |
+| `LocalAppServerOptions::with_language_server_providers` | 在 local App Server 启动前注入额外 provider registry；receipt registry 由 composition 自动合并 |
+| `LocalAppServerOptions::with_remote_language_marketplace` | 注入 product-pinned TUF root；同步 signed catalog 并从 profile activation receipt 重建 provider |
 | `LocalAppServerOptions::with_mcp_oauth_providers` | 把 exact MCP server ID → provider adapter 注入使用共享 SecretStore 的 OAuth service |
 | `LocalConnectorRuntime` | Connector credential service + shared SecretStore + Plugin-specific MCP materializer |
 | `LocalAppServerOptions::with_plugin_activation` | 从 exact activation 构造 package-rooted Connector/MCP runtime |
@@ -201,6 +203,8 @@ src/
 │       ├── cloud_code_index_operations.rs # preview/grant/sync/revoke DTO 与稳定错误映射
 │       ├── terminal_operations.rs # terminal RPC decode、ownership 与稳定错误映射
 │       ├── language_runtime.rs   # config + built-in/provider definitions → shared language-service
+│       ├── language_marketplace_runtime.rs # TUF catalog + activation + base provider registry rebuild
+│       ├── language_marketplace_operations.rs # list/install DTO、错误映射与热 registry replacement
 │       └── update_broker.rs       # per-connection subscription/cursor/fanout
 ├── local.rs                       # local composition, session backend selection + model safe point
 ├── local_tools.rs                 # frozen rg registry + Core Tool/Policy adapters
