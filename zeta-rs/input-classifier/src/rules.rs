@@ -35,10 +35,11 @@ pub(super) fn classify_contextual_input(
 ) -> Option<InputClassification> {
     let trimmed = input.trim();
     if trimmed.is_empty() {
-        return Some(InputClassification::deterministic(
-            InputRoute::Agent,
-            InputClassificationSource::EmptyInput,
-        ));
+        return Some(InputClassification {
+            route: context.current_route,
+            confidence: 0.0,
+            source: InputClassificationSource::EmptyInput,
+        });
     }
     let normalized = trimmed.to_lowercase();
     let first_word_is_natural_language = word_tokens

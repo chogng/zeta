@@ -11,8 +11,8 @@ use super::InputRoute;
 use super::MODEL_SHA256;
 use super::TOKENIZER_SHA256;
 use crate::classifier::classify_with_model_attempt;
-use crate::model::ModelAttempt;
 use crate::model::classify_with_embedded_model;
+use crate::model::ModelAttempt;
 
 fn standalone(current_route: InputRoute) -> InputClassificationContext {
     InputClassificationContext::new(current_route, InputConversation::Standalone)
@@ -41,7 +41,8 @@ fn metadata_matches_the_runtime_contract() {
     );
     assert_eq!(metadata["tokenizer"]["sha256"], TOKENIZER_SHA256);
     assert_eq!(
-        metadata["deployment"]["onnx_variants"]["candle_fp32"]["probability_calibration"]["temperature"],
+        metadata["deployment"]["onnx_variants"]["candle_fp32"]["probability_calibration"]
+            ["temperature"],
         1.6894922825552194
     );
     assert_eq!(
@@ -80,6 +81,18 @@ fn deterministic_allowlists_run_before_the_model() {
         let classification = classifier.classify(input, standalone(InputRoute::Agent));
         assert_eq!(classification.route, route, "input: {input}");
         assert_eq!(classification.source, source, "input: {input}");
+    }
+}
+
+#[test]
+fn empty_input_preserves_the_current_route() {
+    let classifier = InputClassifier::default();
+
+    for route in [InputRoute::Agent, InputRoute::Shell] {
+        let classification = classifier.classify("   ", standalone(route));
+        assert_eq!(classification.route, route);
+        assert_eq!(classification.confidence, 0.0);
+        assert_eq!(classification.source, InputClassificationSource::EmptyInput);
     }
 }
 
@@ -162,6 +175,57 @@ fn model_routes_ambiguous_commands_and_agent_requests() {
     for (input, expected) in cases {
         let classification = classifier.classify(input, standalone(InputRoute::Agent));
         assert_eq!(classification.route, expected, "input: {input}");
+    }
+}
+
+#[test]
+fn embedded_model_and_pipeline_match_the_v3_release_cases() {
+    let classifier = InputClassifier::default();
+    let cases = [
+        ("git status", InputRoute::Shell),
+        ("git log --oneline --decorate -20", InputRoute::Shell),
+        (
+            "find . -type f -name '*.py' | xargs grep -n TODO",
+            InputRoute::Shell,
+        ),
+        ("docker compose up -d --build", InputRoute::Shell),
+        ("kubectl get pods -n production", InputRoute::Shell),
+        ("python -m pytest tests/test_api.py -q", InputRoute::Shell),
+        ("echo '请检查这个目录'", InputRoute::Shell),
+        ("python -c \"print('你好')\"", InputRoute::Shell),
+        (
+            "how do I see which process is using port 8080?",
+            InputRoute::Agent,
+        ),
+        ("explain why git rebase caused conflicts", InputRoute::Agent),
+        (
+            "write a shell command that finds files larger than 1 GB",
+            InputRoute::Agent,
+        ),
+        ("what does chmod 755 mean?", InputRoute::Agent),
+        ("帮我解释一下 git rebase", InputRoute::Agent),
+        ("写一个命令查找最近修改的文件", InputRoute::Agent),
+        ("为什么 docker compose up 会失败？", InputRoute::Agent),
+        ("如何查看 8080 端口被哪个进程占用？", InputRoute::Agent),
+        ("請解釋 chmod 755 的意思", InputRoute::Agent),
+        (
+            "不要执行命令，只告诉我如何清理 Docker 缓存",
+            InputRoute::Agent,
+        ),
+        ("总结下面命令的风险：rm -rf ./build", InputRoute::Agent),
+        ("git status 是做什么的", InputRoute::Agent),
+        ("ls -la 输出里的权限位怎么读", InputRoute::Agent),
+        ("kubectl get pods 的输出代表什么", InputRoute::Agent),
+    ];
+
+    for (input, expected) in cases {
+        let ModelAttempt::Classified(classification) = classify_with_embedded_model(input) else {
+            panic!("model should classify release case: {input}");
+        };
+        assert_eq!(classification.route, expected, "input: {input}");
+
+        let routed = classifier.classify(input, standalone(InputRoute::Shell));
+        assert_eq!(routed.route, expected, "pipeline input: {input}");
     }
 }
 

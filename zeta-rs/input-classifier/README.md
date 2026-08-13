@@ -46,6 +46,20 @@ Shell token 阈值采用 Warp 当前严格方案：所有解析 token 都有 She
 3 个自然语言 token 时，只要最后一个 command-position token 是已知命令也判为 Shell。其他输入交给模型，避免把
 `git status 是做什么的` 这类 command-prefix 问句提前截成命令。
 
+这里对齐的是判定顺序和阈值，不是复制 Warp 的补全器数据。两者当前的 Shell 证据边界如下：
+
+| 证据 | Warp | Zeta 当前实现 |
+| --- | --- | --- |
+| 顶层命令 | 补全器的 `ParsedTokensSnapshot` | 确定性 allowlist、Shell builtin、PATH 可执行文件和工作区 task manifest |
+| 参数 | 命令签名和 token description | 通用子命令、flag 和已存在路径 |
+| alias | 在分类前用当前会话的补全上下文展开 | 不做交互 Shell alias 展开 |
+| 证据不足 | 交给 BERT-Tiny | 交给 BERT-Tiny |
+
+当前 Zeterm 的 Shell Turn 由 App Server 以 `/bin/sh -lc` 执行，不承诺复用交互终端的
+alias 和补全器语义，因此这个差异不是当前路由契约的缺口。如果后续让 Composer 直接执行到
+交互 PTY，必须先为本 crate 增加后端无关的 token 证据输入契约，再由 Zeterm adapter 提供
+alias 和命令签名；不应把交互终端的补全运行时移进 `zeta-input-classifier`。
+
 `natural_language.rs` 的 fallback 会分别尝试排除和包含未完成的末 token，并按 1.0、0.8、
 0.6 的长度阈值使用 English stems、developer terms 和 command-overlap 词典打分。这三份词典为
 Zeta 独立构建，没有导入或变换 Warp 的词表。英文候选数据来自 MIT 许可的 TextBlob bundled
@@ -98,3 +112,7 @@ cargo clippy -p zeta-input-classifier --all-targets -- -D warnings
 测试覆盖 parser、历史冲突、严格 token 阈值、工作区命令、自然语言词典、follow-up、普通模型错误、模型 panic、
 模型路由样例、资产 SHA 和 Candle FP32 概率基线。当前模型仍可能误判自由措辞，例如
 `chmod 755 是什么意思`；用户显式选择始终覆盖自动分类。
+
+`InputClassifier::classify` 是同步调用；`start_background_warmup` 只提前解码模型和 tokenizer。
+当前 Zeterm 在编辑变更时直接调用它，将推理移出 UI 线程、废弃过期结果和添加 debounce 属于
+Zeterm adapter 的产品接线工作，不改变本 crate 的决策契约。
