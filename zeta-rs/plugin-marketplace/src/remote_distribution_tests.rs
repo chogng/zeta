@@ -443,7 +443,6 @@ impl HttpClient for FixtureHttpClient {
         let url = Url::parse(request.url())
             .map_err(|_| HttpClientError::InvalidRequest("invalid fixture URL".into()))?;
         let path = url.path().trim_start_matches('/');
-        let path = path.replace("%2F", "%2f");
         let candidate = self.root.join(path);
         match fs::read(candidate) {
             Ok(bytes) => Ok(HttpResponse::new(200, Vec::new(), bytes)),
