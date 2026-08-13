@@ -6436,6 +6436,26 @@
         {
           "type": "object",
           "properties": {
+            "attachment": {
+              "$ref": "#/$defs/ImageAttachmentRef"
+            },
+            "detail": {
+              "$ref": "#/$defs/ImageDetail"
+            },
+            "type": {
+              "type": "string",
+              "const": "imageAttachment"
+            }
+          },
+          "required": [
+            "type",
+            "attachment",
+            "detail"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
             "detail": {
               "$ref": "#/$defs/ImageDetail"
             },
@@ -8933,6 +8953,40 @@
         "hook"
       ]
     },
+    "ImageAttachmentRef": {
+      "description": "Durable, provider-neutral reference to one immutable validated image representation.\n\nThe digest identifies the exact encoded bytes. Stores must verify every other field when the\nbytes are admitted and again when an untrusted reference is resolved.",
+      "type": "object",
+      "properties": {
+        "contentDigest": {
+          "$ref": "#/$defs/ContentDigest"
+        },
+        "encodedBytes": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "height": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "mediaType": {
+          "$ref": "#/$defs/ImageMediaType"
+        },
+        "width": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "contentDigest",
+        "mediaType",
+        "encodedBytes",
+        "width",
+        "height"
+      ]
+    },
     "ImageDetail": {
       "type": "string",
       "enum": [
@@ -8940,6 +8994,16 @@
         "low",
         "high",
         "original"
+      ]
+    },
+    "ImageMediaType": {
+      "description": "Canonical encoded media type of one durable image attachment.",
+      "type": "string",
+      "enum": [
+        "png",
+        "jpeg",
+        "gif",
+        "webP"
       ]
     },
     "InitializeParams": {
@@ -9006,6 +9070,23 @@
           ]
         },
         {
+          "type": "object",
+          "properties": {
+            "attachment": {
+              "$ref": "#/$defs/ImageAttachmentRef"
+            },
+            "type": {
+              "type": "string",
+              "const": "imageAttachment"
+            }
+          },
+          "required": [
+            "type",
+            "attachment"
+          ]
+        },
+        {
+          "description": "Legacy transport form. New clients should use the attachment upload/import methods.",
           "type": "object",
           "properties": {
             "type": {
@@ -11033,6 +11114,7 @@
       "type": "string",
       "enum": [
         "managed",
+        "remoteManaged",
         "localDevelopment"
       ]
     },
@@ -11055,6 +11137,9 @@
         "marketplaceMode": {
           "$ref": "#/$defs/PluginMarketplaceModeDto"
         },
+        "marketplaceRevision": {
+          "type": "string"
+        },
         "version": {
           "type": "string"
         }
@@ -11062,6 +11147,7 @@
       "required": [
         "marketplaceId",
         "marketplaceMode",
+        "marketplaceRevision",
         "id",
         "version",
         "digest",
@@ -11117,6 +11203,9 @@
         "id": {
           "type": "string"
         },
+        "revoked": {
+          "type": "boolean"
+        },
         "version": {
           "type": "string"
         }
@@ -11127,7 +11216,8 @@
         "digest",
         "enabled",
         "granted",
-        "effective"
+        "effective",
+        "revoked"
       ]
     },
     "PluginRequestDto": {
@@ -14836,6 +14926,30 @@
             "itemId",
             "turnId",
             "url"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "attachment": {
+              "$ref": "#/$defs/ImageAttachmentRef"
+            },
+            "itemId": {
+              "$ref": "#/$defs/ItemId"
+            },
+            "turnId": {
+              "$ref": "#/$defs/TurnId"
+            },
+            "type": {
+              "type": "string",
+              "const": "userImageAttachment"
+            }
+          },
+          "required": [
+            "type",
+            "itemId",
+            "turnId",
+            "attachment"
           ]
         },
         {

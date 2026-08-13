@@ -39,6 +39,7 @@ impl AppServer {
                 digest: package.digest.as_str().to_owned(),
                 enabled: snapshot.enabled().contains(package),
                 granted: snapshot.granted().contains(package),
+                revoked: snapshot.revoked().contains(package),
                 effective: snapshot.activation().packages().iter().any(|active| {
                     active.manifest().id == package.id
                         && active.manifest().version == package.version
@@ -71,8 +72,12 @@ impl AppServer {
                     let package = package.package_ref();
                     PluginMarketplacePackageDto {
                         marketplace_id: marketplace.id().as_str().to_owned(),
+                        marketplace_revision: marketplace.revision().as_str().to_owned(),
                         marketplace_mode: match marketplace.mode() {
                             PluginMarketplaceMode::Managed => PluginMarketplaceModeDto::Managed,
+                            PluginMarketplaceMode::RemoteManaged => {
+                                PluginMarketplaceModeDto::RemoteManaged
+                            }
                             PluginMarketplaceMode::LocalDevelopment => {
                                 PluginMarketplaceModeDto::LocalDevelopment
                             }
@@ -225,7 +230,8 @@ fn plugin_error(error: PluginError) -> RpcError {
         | PluginErrorKind::ContributionInvalid
         | PluginErrorKind::PackageConflict
         | PluginErrorKind::AuthorityUnavailable
-        | PluginErrorKind::PackageInUse => {
+        | PluginErrorKind::PackageInUse
+        | PluginErrorKind::PackageRevoked => {
             RpcError::new(-32042, AppServerErrorName::PluginOperationFailed)
         }
     }

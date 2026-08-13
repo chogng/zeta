@@ -127,6 +127,10 @@ impl TurnExecutor {
         tools: Arc<dyn ToolService>,
         policy: Arc<dyn ActionPolicyService>,
     ) -> Self {
+        let model: Arc<dyn ModelService> = Arc::new(crate::attachment_model_service::AttachmentModelService::new(
+            model,
+            threads.image_attachments(),
+        ));
         let compaction = Arc::new(ModelContextCompactionService::new(model.clone()));
         Self {
             threads,

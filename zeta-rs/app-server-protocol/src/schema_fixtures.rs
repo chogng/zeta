@@ -315,10 +315,11 @@ fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
     assert!(!typescript.contains(r#""turn/start": { method: "turn/start" }"#));
     assert!(!typescript.contains(r#""turn/shell/start": { method: "turn/shell/start" }"#));
     assert!(typescript.contains(
-        r#"export type InputItem = { "type": "text", text: string, } | { "type": "image", url: string, } | { "type": "skill", skill: SkillRef, };"#
+        r#"export type InputItem = { "type": "text", text: string, } | { "type": "imageAttachment", attachment: ImageAttachmentRef, } | { "type": "image", url: string, } | { "type": "skill", skill: SkillRef, };"#
     ));
     assert!(!typescript.contains("InputItemKind"));
     assert!(typescript.contains(r#"{ "type": "userImage""#));
+    assert!(typescript.contains(r#"{ "type": "userImageAttachment""#));
     assert!(
         !typescript
             .contains(r#""turn/interaction/resolve": { method: "turn/interaction/resolve" }"#)

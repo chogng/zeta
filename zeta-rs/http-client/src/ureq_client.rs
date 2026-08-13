@@ -3,12 +3,19 @@ use crate::HttpClientConfig;
 use crate::HttpClientError;
 use crate::HttpRequest;
 use crate::HttpResponse;
+use crate::NetworkTargetPolicy;
 use crate::ProxyBypass;
 use crate::ProxyPolicy;
 use crate::RedirectPolicy;
 use crate::Timeout;
 use crate::TlsPolicy;
+use std::io;
 use std::io::Read;
+use std::net::IpAddr;
+use std::net::Ipv4Addr;
+use std::net::Ipv6Addr;
+use std::net::SocketAddr;
+use std::net::ToSocketAddrs;
 use std::sync::Arc;
 use std::sync::OnceLock;
 
@@ -57,6 +64,15 @@ impl UreqHttpClient {
         config: HttpClientConfig,
         system_root_loader: SystemRootLoader,
     ) -> Result<Self, HttpClientError> {
+        if config.network_targets() == NetworkTargetPolicy::PublicInternetOnly
+            && (!matches!(config.proxy(), ProxyPolicy::Direct)
+                || config.redirects() != RedirectPolicy::Reject)
+        {
+            return Err(HttpClientError::InvalidConfiguration(
+                "public-Internet target filtering requires direct connections and rejected redirects"
+                    .into(),
+            ));
+        }
         let http_tls_config = build_tls_config(&config, SystemRoots::Skip, &system_root_loader)?;
         let http_direct_agent = build_agent(&config, http_tls_config.clone(), None)?;
         let (proxy_url, proxy_bypass) = resolve_proxy(config.proxy());
@@ -192,6 +208,9 @@ fn build_agent(
         .max_idle_connections(config.connection_pool().max_idle_connections())
         .max_idle_connections_per_host(config.connection_pool().max_idle_connections_per_host())
         .tls_config(tls_config);
+    if config.network_targets() == NetworkTargetPolicy::PublicInternetOnly {
+        builder = builder.resolver(resolve_public_internet_target);
+    }
     if let Some(proxy_url) = proxy_url {
         let proxy = ureq::Proxy::new(proxy_url)
             .map_err(|_| HttpClientError::InvalidConfiguration("proxy URL is invalid".into()))?;
@@ -215,6 +234,66 @@ fn build_agent(
         builder = builder.timeout(timeout);
     }
     Ok(builder.build())
+}
+
+fn resolve_public_internet_target(netloc: &str) -> io::Result<Vec<SocketAddr>> {
+    let addresses = netloc.to_socket_addrs()?.collect::<Vec<_>>();
+    if addresses.is_empty() {
+        return Err(io::Error::new(
+            io::ErrorKind::AddrNotAvailable,
+            "target resolved to no addresses",
+        ));
+    }
+    if addresses
+        .iter()
+        .any(|address| !is_public_internet_ip(address.ip()))
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "target resolved to a non-public address",
+        ));
+    }
+    Ok(addresses)
+}
+
+pub(crate) fn is_public_internet_ip(address: IpAddr) -> bool {
+    match address {
+        IpAddr::V4(address) => is_public_ipv4(address),
+        IpAddr::V6(address) => is_public_ipv6(address),
+    }
+}
+
+fn is_public_ipv4(address: Ipv4Addr) -> bool {
+    let [a, b, c, _] = address.octets();
+    !matches!(
+        (a, b, c),
+        (0, _, _)
+            | (10, _, _)
+            | (100, 64..=127, _)
+            | (127, _, _)
+            | (169, 254, _)
+            | (172, 16..=31, _)
+            | (192, 0, 0..=2)
+            | (192, 88, 99)
+            | (192, 168, _)
+            | (198, 18..=19, _)
+            | (198, 51, 100)
+            | (203, 0, 113)
+            | (224..=255, _, _)
+    )
+}
+
+fn is_public_ipv6(address: Ipv6Addr) -> bool {
+    if let Some(address) = address.to_ipv4_mapped() {
+        return is_public_ipv4(address);
+    }
+    let segments = address.segments();
+    !address.is_unspecified()
+        && !address.is_loopback()
+        && !address.is_multicast()
+        && segments[0] & 0xfe00 != 0xfc00
+        && segments[0] & 0xffc0 != 0xfe80
+        && !(segments[0] == 0x2001 && segments[1] == 0x0db8)
 }
 
 fn request_authority(url: &str) -> Option<(&str, Option<u16>)> {

@@ -173,6 +173,9 @@ fn convert_content(role: MessageRole, part: &ContentPart) -> Value {
             },
             "text": text,
         }),
+        ContentPart::ImageAttachment { .. } => {
+            unreachable!("durable image attachments must be materialized before API encoding")
+        }
         ContentPart::ImageUrl { url, detail } => json!({
             "type": "input_image",
             "image_url": url,
@@ -334,6 +337,7 @@ fn content_text(content: &[ContentPart]) -> String {
         .iter()
         .filter_map(|part| match part {
             ContentPart::Text(text) => Some(text.as_str()),
+            ContentPart::ImageAttachment { .. } => None,
             ContentPart::ImageUrl { .. } => None,
         })
         .collect::<Vec<_>>()

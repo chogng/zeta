@@ -61,6 +61,13 @@ pub struct ConnectorOAuthRevokeRequest {
 pub struct ConnectorOAuthCredential {
     pub account_id: ConnectorAccountId,
     pub account_display_name: String,
+    pub runtime_secret: SecretValue,
+    pub secret: SecretValue,
+}
+
+/// Rotated runtime and lifecycle values produced by a provider refresh.
+pub struct ConnectorOAuthCredentialReplacement {
+    pub runtime_secret: SecretValue,
     pub secret: SecretValue,
 }
 
@@ -85,7 +92,7 @@ pub trait ConnectorOAuthProvider: Send + Sync {
         &self,
         connector: &ConnectorDefinition,
         request: ConnectorOAuthRefreshRequest,
-    ) -> Result<SecretValue, ConnectorOAuthError>;
+    ) -> Result<ConnectorOAuthCredentialReplacement, ConnectorOAuthError>;
 
     fn revoke(
         &self,
@@ -288,9 +295,8 @@ impl ConnectorOAuthService {
                 return Err(error);
             }
         };
-        match self
-            .credentials
-            .connect_api_token(ConnectorApiTokenConnectRequest {
+        match self.credentials.connect_oauth_credential(
+            ConnectorApiTokenConnectRequest {
                 command_id: attempt.command_id.clone(),
                 expected_generation: attempt.expected_generation,
                 connector_id: attempt.connector_id.clone(),
@@ -298,7 +304,9 @@ impl ConnectorOAuthService {
                 account_id: credential.account_id,
                 account_display_name: credential.account_display_name,
                 token: credential.secret,
-            }) {
+            },
+            credential.runtime_secret,
+        ) {
             Ok(result) => Ok(result),
             Err(error) => {
                 self.fail_attempt(&attempt);
@@ -357,7 +365,11 @@ impl ConnectorOAuthService {
                     let replacement = provider
                         .refresh(&definition, ConnectorOAuthRefreshRequest { credential })?;
                     self.credentials
-                        .replace_connected_credential(connector_id, &replacement)?;
+                        .replace_connected_oauth_credential(
+                            connector_id,
+                            replacement.runtime_secret,
+                            replacement.secret,
+                        )?;
                     Ok::<(), ConnectorOAuthError>(())
                 },
             )

@@ -11,6 +11,7 @@ name = "zeta_tui"
 path = "src/lib.rs"
 
 [dependencies]
+base64 = { workspace = true }
 crossterm = { workspace = true }
 ratatui = { workspace = true }
 serde_json = { workspace = true }

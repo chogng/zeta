@@ -1,4 +1,12 @@
 use crate::protocol::code_index::CloudCodeIndexAuthorizeParams;
+use crate::protocol::attachments::AttachmentImportRemoteParams;
+use crate::protocol::attachments::AttachmentMaterializeResult;
+use crate::protocol::attachments::AttachmentUploadCancelParams;
+use crate::protocol::attachments::AttachmentUploadFinishParams;
+use crate::protocol::attachments::AttachmentUploadStartParams;
+use crate::protocol::attachments::AttachmentUploadStartResult;
+use crate::protocol::attachments::AttachmentUploadWriteParams;
+use crate::protocol::attachments::AttachmentUploadWriteResult;
 use crate::protocol::code_index::CloudCodeIndexDestinationDto;
 use crate::protocol::code_index::CloudCodeIndexGrantDto;
 use crate::protocol::code_index::CloudCodeIndexPreviewParams;
@@ -69,11 +77,16 @@ use crate::protocol::connectors::ConnectorCommandResultDto;
 use crate::protocol::connectors::ConnectorConnectionStateDto;
 use crate::protocol::connectors::ConnectorCredentialCleanupDto;
 use crate::protocol::connectors::ConnectorCredentialCleanupParams;
+use crate::protocol::connectors::ConnectorDeviceOAuthPollParams;
+use crate::protocol::connectors::ConnectorDeviceOAuthPollResult;
+use crate::protocol::connectors::ConnectorDeviceOAuthStartParams;
+use crate::protocol::connectors::ConnectorDeviceOAuthStartResult;
 use crate::protocol::connectors::ConnectorDisconnectParams;
 use crate::protocol::connectors::ConnectorDisconnectResultDto;
 use crate::protocol::connectors::ConnectorDto;
 use crate::protocol::connectors::ConnectorListResult;
 use crate::protocol::connectors::ConnectorOAuthCancelParams;
+use crate::protocol::connectors::ConnectorOAuthMethodDto;
 use crate::protocol::connectors::ConnectorOAuthCompleteParams;
 use crate::protocol::connectors::ConnectorOAuthRefreshParams;
 use crate::protocol::connectors::ConnectorOAuthStartParams;
@@ -205,6 +218,8 @@ use zeta_protocol::AgentRequestEnvelope;
 use zeta_protocol::ApprovalMode;
 use zeta_protocol::ContentPart;
 use zeta_protocol::ImageDetail;
+use zeta_protocol::ImageAttachmentRef;
+use zeta_protocol::ImageMediaType;
 use zeta_protocol::ToolCallBinding;
 use zeta_protocol::ToolCallCaller;
 use zeta_protocol::ToolSourceProvenance;
@@ -460,6 +475,21 @@ client_methods! {
         response: ConnectorCommandResultDto,
         serialization: GlobalExclusive,
     },
+    ConnectorDeviceOAuthStart => "connector/connect/oauth/device/start" {
+        params: ConnectorDeviceOAuthStartParams,
+        response: ConnectorDeviceOAuthStartResult,
+        serialization: GlobalExclusive,
+    },
+    ConnectorDeviceOAuthPoll => "connector/connect/oauth/device/poll" {
+        params: ConnectorDeviceOAuthPollParams,
+        response: ConnectorDeviceOAuthPollResult,
+        serialization: GlobalExclusive,
+    },
+    ConnectorDeviceOAuthCancel => "connector/connect/oauth/device/cancel" {
+        params: ConnectorOAuthCancelParams,
+        response: ConnectorCommandResultDto,
+        serialization: GlobalExclusive,
+    },
     ConnectorOAuthRefresh => "connector/oauth/refresh" {
         params: ConnectorOAuthRefreshParams,
         response: (),
@@ -693,6 +723,31 @@ client_methods! {
     ResourceRelease => "resource/release" {
         params: ResourceReleaseParams,
         response: (),
+        serialization: ResourceExclusive,
+    },
+    AttachmentUploadStart => "attachment/upload/start" {
+        params: AttachmentUploadStartParams,
+        response: AttachmentUploadStartResult,
+        serialization: ResourceExclusive,
+    },
+    AttachmentUploadWrite => "attachment/upload/write" {
+        params: AttachmentUploadWriteParams,
+        response: AttachmentUploadWriteResult,
+        serialization: ResourceExclusive,
+    },
+    AttachmentUploadFinish => "attachment/upload/finish" {
+        params: AttachmentUploadFinishParams,
+        response: AttachmentMaterializeResult,
+        serialization: ResourceExclusive,
+    },
+    AttachmentUploadCancel => "attachment/upload/cancel" {
+        params: AttachmentUploadCancelParams,
+        response: (),
+        serialization: ResourceExclusive,
+    },
+    AttachmentImportRemote => "attachment/importRemote" {
+        params: AttachmentImportRemoteParams,
+        response: AttachmentMaterializeResult,
         serialization: ResourceExclusive,
     },
     FsGetMetadata => "fs/getMetadata" {
@@ -1174,6 +1229,7 @@ typescript_bindings! {
     ToolName,
     ConnectorAccountDto,
     ConnectorAvailableActionDto,
+    ConnectorOAuthMethodDto,
     ConnectorConnectionStateDto,
     ConnectorDto,
     ConnectorListResult,
@@ -1183,6 +1239,10 @@ typescript_bindings! {
     ConnectorOAuthStartResult,
     ConnectorOAuthCompleteParams,
     ConnectorOAuthCancelParams,
+    ConnectorDeviceOAuthStartParams,
+    ConnectorDeviceOAuthStartResult,
+    ConnectorDeviceOAuthPollParams,
+    ConnectorDeviceOAuthPollResult,
     ConnectorOAuthRefreshParams,
     ConnectorDisconnectParams,
     ConnectorCommandDispositionDto,
@@ -1401,6 +1461,8 @@ typescript_bindings! {
     ToolSourceProvenance,
     ToolCallCaller,
     ContentPart,
+    ImageAttachmentRef,
+    ImageMediaType,
     ImageDetail,
     Turn,
     Thread,
@@ -1437,6 +1499,14 @@ typescript_bindings! {
     ResourceReadParams,
     ResourceReadResult,
     ResourceReleaseParams,
+    AttachmentUploadStartParams,
+    AttachmentUploadStartResult,
+    AttachmentUploadWriteParams,
+    AttachmentUploadWriteResult,
+    AttachmentUploadFinishParams,
+    AttachmentUploadCancelParams,
+    AttachmentImportRemoteParams,
+    AttachmentMaterializeResult,
     FsFileType,
     FsGetMetadataParams,
     FsGetMetadataResult,

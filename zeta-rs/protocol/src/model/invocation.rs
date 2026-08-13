@@ -1,6 +1,7 @@
 use std::borrow::Cow;
 
 use crate::ReasoningEffort;
+use crate::ImageAttachmentRef;
 use crate::ToolCallId;
 use crate::ToolName;
 use schemars::JsonSchema;
@@ -57,8 +58,10 @@ fn sanitize_content(
     decisions: &mut Vec<crate::ImageDetailDecision>,
 ) {
     for part in content {
-        let ContentPart::ImageUrl { detail, .. } = part else {
-            continue;
+        let detail = match part {
+            ContentPart::ImageUrl { detail, .. }
+            | ContentPart::ImageAttachment { detail, .. } => detail,
+            ContentPart::Text(_) => continue,
         };
         let requested = *detail;
         let (effective, reason) = if requested == ImageDetail::Original && !supports_original {
@@ -134,6 +137,10 @@ pub enum MessageRole {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ContentPart {
     Text(String),
+    ImageAttachment {
+        attachment: ImageAttachmentRef,
+        detail: ImageDetail,
+    },
     ImageUrl { url: String, detail: ImageDetail },
 }
 
@@ -145,6 +152,10 @@ pub enum ContentPart {
 )]
 enum ContentPartWire {
     Text { text: String },
+    ImageAttachment {
+        attachment: ImageAttachmentRef,
+        detail: ImageDetail,
+    },
     ImageUrl { url: String, detail: ImageDetail },
 }
 
@@ -156,6 +167,10 @@ enum ContentPartWire {
 )]
 enum ContentPartRef<'a> {
     Text { text: &'a str },
+    ImageAttachment {
+        attachment: &'a ImageAttachmentRef,
+        detail: ImageDetail,
+    },
     ImageUrl { url: &'a str, detail: ImageDetail },
 }
 
@@ -166,6 +181,11 @@ impl Serialize for ContentPart {
     {
         match self {
             Self::Text(text) => ContentPartRef::Text { text }.serialize(serializer),
+            Self::ImageAttachment { attachment, detail } => ContentPartRef::ImageAttachment {
+                attachment,
+                detail: *detail,
+            }
+            .serialize(serializer),
             Self::ImageUrl { url, detail } => ContentPartRef::ImageUrl {
                 url,
                 detail: *detail,
@@ -188,6 +208,9 @@ impl From<ContentPartWire> for ContentPart {
     fn from(part: ContentPartWire) -> Self {
         match part {
             ContentPartWire::Text { text } => Self::Text(text),
+            ContentPartWire::ImageAttachment { attachment, detail } => {
+                Self::ImageAttachment { attachment, detail }
+            }
             ContentPartWire::ImageUrl { url, detail } => Self::ImageUrl { url, detail },
         }
     }
@@ -215,7 +238,9 @@ impl TS for ContentPart {
 
     fn inline(cfg: &ts_rs::Config) -> String {
         format!(
-            "{{ \"type\": \"text\", text: string, }} | {{ \"type\": \"imageUrl\", url: string, detail: {}, }}",
+            "{{ \"type\": \"text\", text: string, }} | {{ \"type\": \"imageAttachment\", attachment: {}, detail: {}, }} | {{ \"type\": \"imageUrl\", url: string, detail: {}, }}",
+            ImageAttachmentRef::name(cfg),
+            ImageDetail::name(cfg),
             ImageDetail::name(cfg),
         )
     }
@@ -232,6 +257,7 @@ impl TS for ContentPart {
     where
         Self: 'static,
     {
+        visitor.visit::<ImageAttachmentRef>();
         visitor.visit::<ImageDetail>();
     }
 }

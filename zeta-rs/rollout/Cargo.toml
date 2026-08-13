@@ -11,6 +11,7 @@ name = "zeta_rollout"
 path = "src/lib.rs"
 
 [dependencies]
+zeta-attachments = { workspace = true }
 zeta-core = { workspace = true }
 zeta-protocol = { workspace = true }
 zeta-session-store = { workspace = true }

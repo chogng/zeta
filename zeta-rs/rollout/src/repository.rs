@@ -1,6 +1,8 @@
 use crate::LocalStateError;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use zeta_attachments::FileImageAttachmentStore;
+use zeta_attachments::ImageAttachments;
 use zeta_core::{SessionCoordinator, ThreadController, ThreadStore, WriterLease};
 use zeta_protocol::SessionId;
 use zeta_session_store::SessionStore;
@@ -16,16 +18,20 @@ pub struct LocalStateRepository {
     session_store: Arc<SqliteSessionStore>,
     thread_store: Arc<SqliteThreadStore>,
     writer_lease: Arc<LeaseDirectory>,
+    image_attachments: Arc<ImageAttachments>,
 }
 
 impl LocalStateRepository {
     pub fn open(root: impl Into<PathBuf>) -> Result<Self, LocalStateError> {
         let root = root.into();
         let database_path = local_database_path(&root);
+        let image_store = FileImageAttachmentStore::open(root.join("attachments"))
+            .map_err(|error| zeta_core::CoreError::Journal(error.to_string()))?;
         Ok(Self {
             session_store: Arc::new(SqliteSessionStore::open(&database_path)?),
             thread_store: Arc::new(SqliteThreadStore::open(&database_path)?),
             writer_lease: Arc::new(LeaseDirectory::open(root.join("leases"))?),
+            image_attachments: Arc::new(ImageAttachments::new(Arc::new(image_store))),
             database_path,
         })
     }
@@ -50,11 +56,20 @@ impl LocalStateRepository {
     /// Thread recovery precedes Session recovery because Session reconciliation may finish a
     /// durable `ThreadCreationPlanned` saga by observing or creating its child Thread.
     pub fn recover_coordinator(&self) -> Result<Arc<SessionCoordinator>, LocalStateError> {
+        self.recover_coordinator_with_image_attachments(Arc::clone(&self.image_attachments))
+    }
+
+    /// Recovers state with the exact attachment service used by the owning product host.
+    pub fn recover_coordinator_with_image_attachments(
+        &self,
+        image_attachments: Arc<ImageAttachments>,
+    ) -> Result<Arc<SessionCoordinator>, LocalStateError> {
         let thread_store: Arc<dyn ThreadStore> = self.thread_store.clone();
         let thread_lease: Arc<dyn WriterLease<zeta_protocol::ThreadId>> = self.writer_lease.clone();
-        let threads = Arc::new(ThreadController::with_store_and_lease(
+        let threads = Arc::new(ThreadController::with_store_lease_and_image_attachments(
             thread_store,
             thread_lease,
+            image_attachments,
         ));
         for thread_id in self.thread_store.list_thread_ids()? {
             threads.recover_thread(&thread_id)?;

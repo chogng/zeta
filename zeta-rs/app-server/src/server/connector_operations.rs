@@ -10,11 +10,16 @@ use zeta_app_server_protocol::protocol::connectors::ConnectorCommandResultDto;
 use zeta_app_server_protocol::protocol::connectors::ConnectorConnectionStateDto;
 use zeta_app_server_protocol::protocol::connectors::ConnectorCredentialCleanupDto;
 use zeta_app_server_protocol::protocol::connectors::ConnectorCredentialCleanupParams;
+use zeta_app_server_protocol::protocol::connectors::ConnectorDeviceOAuthPollParams;
+use zeta_app_server_protocol::protocol::connectors::ConnectorDeviceOAuthPollResult;
+use zeta_app_server_protocol::protocol::connectors::ConnectorDeviceOAuthStartParams;
+use zeta_app_server_protocol::protocol::connectors::ConnectorDeviceOAuthStartResult;
 use zeta_app_server_protocol::protocol::connectors::ConnectorDisconnectParams;
 use zeta_app_server_protocol::protocol::connectors::ConnectorDisconnectResultDto;
 use zeta_app_server_protocol::protocol::connectors::ConnectorDto;
 use zeta_app_server_protocol::protocol::connectors::ConnectorListResult;
 use zeta_app_server_protocol::protocol::connectors::ConnectorOAuthCancelParams;
+use zeta_app_server_protocol::protocol::connectors::ConnectorOAuthMethodDto;
 use zeta_app_server_protocol::protocol::connectors::ConnectorOAuthRefreshParams;
 use zeta_app_server_protocol::protocol::connectors::ConnectorOAuthStartParams;
 use zeta_app_server_protocol::protocol::connectors::ConnectorOAuthStartResult;
@@ -33,6 +38,8 @@ use zeta_connectors_extension::ConnectorCommandResult;
 use zeta_connectors_extension::ConnectorCredentialCleanup;
 use zeta_connectors_extension::ConnectorCredentialServiceError;
 use zeta_connectors_extension::ConnectorCredentialServiceErrorKind;
+use zeta_connectors_extension::ConnectorDeviceOAuthPollResult as RuntimeDeviceOAuthPollResult;
+use zeta_connectors_extension::ConnectorDeviceOAuthStartRequest;
 use zeta_connectors_extension::ConnectorOAuthCompleteRequest;
 use zeta_connectors_extension::ConnectorOAuthError;
 use zeta_connectors_extension::ConnectorOAuthErrorKind;
@@ -47,7 +54,14 @@ impl AppServer {
         let connectors = snapshot
             .entries()
             .iter()
-            .map(|entry| connector_dto(entry, service, self.connector_oauth.as_deref()))
+            .map(|entry| {
+                connector_dto(
+                    entry,
+                    service,
+                    self.connector_oauth.as_deref(),
+                    self.connector_device_oauth.as_deref(),
+                )
+            })
             .collect::<Vec<_>>();
         result(&ConnectorListResult {
             generation: snapshot.generation().get(),
@@ -112,24 +126,110 @@ impl AppServer {
         result(&command_result_dto(result_value))
     }
 
+    pub(super) fn connector_device_oauth_start(
+        &self,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: ConnectorDeviceOAuthStartParams = decode(params)?;
+        let authorization = self
+            .connector_device_oauth_service()?
+            .start(ConnectorDeviceOAuthStartRequest {
+                command_id: ConnectorCommandId::new(params.command_id)
+                    .map_err(|_| invalid_params())?,
+                expected_generation: ConnectorSnapshotGeneration::new(params.expected_generation),
+                connector_id: ConnectorId::new(params.connector_id)
+                    .map_err(|_| invalid_params())?,
+                connection_generation: ConnectorConnectionGeneration::new(
+                    params.connection_generation,
+                ),
+            })
+            .map_err(connector_oauth_error)?;
+        result(&ConnectorDeviceOAuthStartResult {
+            flow_id: authorization.flow_id.as_str().to_owned(),
+            user_code: authorization.user_code,
+            verification_uri: authorization.verification_uri,
+            expires_in_seconds: authorization.expires_in_seconds,
+            poll_interval_seconds: authorization.poll_interval_seconds,
+        })
+    }
+
+    pub(super) fn connector_device_oauth_poll(
+        &self,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: ConnectorDeviceOAuthPollParams = decode(params)?;
+        let outcome = self
+            .connector_device_oauth_service()?
+            .poll(&ConnectorOAuthFlowId::new(params.flow_id).map_err(|_| invalid_params())?)
+            .map_err(connector_oauth_error)?;
+        result(&match outcome {
+            RuntimeDeviceOAuthPollResult::Pending {
+                retry_after_seconds,
+            } => ConnectorDeviceOAuthPollResult::Pending {
+                retry_after_seconds,
+            },
+            RuntimeDeviceOAuthPollResult::Connected(command) => {
+                ConnectorDeviceOAuthPollResult::Connected {
+                    command: command_result_dto(command),
+                }
+            }
+        })
+    }
+
+    pub(super) fn connector_device_oauth_cancel(
+        &self,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: ConnectorOAuthCancelParams = decode(params)?;
+        let outcome = self
+            .connector_device_oauth_service()?
+            .cancel(&ConnectorOAuthFlowId::new(params.flow_id).map_err(|_| invalid_params())?)
+            .map_err(connector_oauth_error)?;
+        result(&command_result_dto(outcome))
+    }
+
     pub(super) fn connector_oauth_refresh(&self, params: &Value) -> Result<Value, RpcError> {
         let params: ConnectorOAuthRefreshParams = decode(params)?;
-        self.connector_oauth_service()?
-            .refresh(&ConnectorId::new(params.connector_id).map_err(|_| invalid_params())?)
-            .map_err(connector_oauth_error)?;
+        let connector_id = ConnectorId::new(params.connector_id).map_err(|_| invalid_params())?;
+        if self
+            .connector_oauth
+            .as_deref()
+            .is_some_and(|oauth| oauth.supports(&connector_id))
+        {
+            self.connector_oauth_service()?
+                .refresh(&connector_id)
+                .map_err(connector_oauth_error)?;
+        } else {
+            self.connector_device_oauth_service()?
+                .refresh(&connector_id)
+                .map_err(connector_oauth_error)?;
+        }
         result(&())
     }
 
     pub(super) fn connector_oauth_revoke(&self, params: &Value) -> Result<Value, RpcError> {
         let params: ConnectorDisconnectParams = decode(params)?;
-        let outcome = self
-            .connector_oauth_service()?
-            .revoke_and_disconnect(
-                ConnectorCommandId::new(params.command_id).map_err(|_| invalid_params())?,
-                ConnectorSnapshotGeneration::new(params.expected_generation),
-                ConnectorId::new(params.connector_id).map_err(|_| invalid_params())?,
+        let connector_id = ConnectorId::new(params.connector_id).map_err(|_| invalid_params())?;
+        let command_id = ConnectorCommandId::new(params.command_id).map_err(|_| invalid_params())?;
+        let expected_generation = ConnectorSnapshotGeneration::new(params.expected_generation);
+        let outcome = if self
+            .connector_oauth
+            .as_deref()
+            .is_some_and(|oauth| oauth.supports(&connector_id))
+        {
+            self.connector_oauth_service()?.revoke_and_disconnect(
+                command_id,
+                expected_generation,
+                connector_id,
             )
-            .map_err(connector_oauth_error)?;
+        } else {
+            self.connector_device_oauth_service()?.revoke_and_disconnect(
+                command_id,
+                expected_generation,
+                connector_id,
+            )
+        }
+        .map_err(connector_oauth_error)?;
         result(&ConnectorDisconnectResultDto {
             command: command_result_dto(outcome.command),
             credential_cleanup: credential_cleanup_dto(outcome.credential_cleanup),
@@ -208,6 +308,14 @@ impl AppServer {
             .as_deref()
             .ok_or_else(|| RpcError::new(-32037, AppServerErrorName::ConnectorOAuthUnavailable))
     }
+
+    fn connector_device_oauth_service(
+        &self,
+    ) -> Result<&zeta_connectors_extension::ConnectorDeviceOAuthService, RpcError> {
+        self.connector_device_oauth
+            .as_deref()
+            .ok_or_else(|| RpcError::new(-32037, AppServerErrorName::ConnectorOAuthUnavailable))
+    }
 }
 
 #[derive(serde::Deserialize)]
@@ -231,8 +339,18 @@ fn connector_dto(
     entry: &zeta_connectors::ConnectorEntry,
     service: &zeta_connectors_extension::ConnectorCredentialService,
     oauth: Option<&zeta_connectors_extension::ConnectorOAuthService>,
+    device_oauth: Option<&zeta_connectors_extension::ConnectorDeviceOAuthService>,
 ) -> ConnectorDto {
-    let oauth_supported = oauth.is_some_and(|oauth| oauth.supports(entry.definition().id()));
+    let browser_oauth_supported =
+        oauth.is_some_and(|oauth| oauth.supports(entry.definition().id()));
+    let device_oauth_supported =
+        device_oauth.is_some_and(|oauth| oauth.supports(entry.definition().id()));
+    let oauth_supported = browser_oauth_supported || device_oauth_supported;
+    let oauth_refresh_supported = browser_oauth_supported;
+    let oauth_revoke_supported = browser_oauth_supported
+        || device_oauth.is_some_and(|oauth| {
+            oauth.supports_remote_revoke(entry.definition().id())
+        });
     let connect_action = if oauth_supported {
         ConnectorAvailableActionDto::ConnectOAuth
     } else {
@@ -256,14 +374,10 @@ fn connector_dto(
             ConnectorConnectionStateDto::Connected {
                 account: account_dto(account),
             },
-            if oauth_supported {
-                vec![
-                    ConnectorAvailableActionDto::RefreshOAuth,
-                    ConnectorAvailableActionDto::RevokeOAuth,
-                ]
-            } else {
-                vec![ConnectorAvailableActionDto::Disconnect]
-            },
+            oauth_connected_actions(OAuthLifecycleSupport {
+                refresh: oauth_refresh_supported,
+                remote_revoke: oauth_revoke_supported,
+            }),
         ),
         ConnectorConnectionState::Unavailable { reason } => (
             ConnectorConnectionStateDto::Unavailable {
@@ -295,10 +409,35 @@ fn connector_dto(
         connection_generation: entry.connection().generation().get(),
         state,
         available_actions,
+        oauth_methods: [
+            browser_oauth_supported.then_some(ConnectorOAuthMethodDto::Browser),
+            device_oauth_supported.then_some(ConnectorOAuthMethodDto::Device),
+        ]
+        .into_iter()
+        .flatten()
+        .collect(),
         credential_cleanup_pending: service
             .authority()
             .credential_cleanup_pending(entry.definition().id()),
     }
+}
+
+struct OAuthLifecycleSupport {
+    refresh: bool,
+    remote_revoke: bool,
+}
+
+fn oauth_connected_actions(support: OAuthLifecycleSupport) -> Vec<ConnectorAvailableActionDto> {
+    let mut actions = Vec::new();
+    if support.refresh {
+        actions.push(ConnectorAvailableActionDto::RefreshOAuth);
+    }
+    if support.remote_revoke {
+        actions.push(ConnectorAvailableActionDto::RevokeOAuth);
+    } else {
+        actions.push(ConnectorAvailableActionDto::Disconnect);
+    }
+    actions
 }
 
 fn credential_cleanup_dto(cleanup: ConnectorCredentialCleanup) -> ConnectorCredentialCleanupDto {

@@ -1,3 +1,4 @@
+use crate::ImageAttachmentRef;
 use crate::SkillRef;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -12,6 +13,8 @@ use ts_rs::TS;
 )]
 pub enum UserInput {
     Text { text: String },
+    ImageAttachment { attachment: ImageAttachmentRef },
+    /// Legacy inline/remote image input. New clients should materialize an attachment first.
     Image { url: String },
     LocalImage { path: String },
     Skill { skill: SkillRef },

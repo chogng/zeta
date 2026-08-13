@@ -5,6 +5,7 @@ use zeta_config::McpServerId;
 use zeta_connectors::ConnectorConnectionState;
 use zeta_connectors::ConnectorDefinition;
 use zeta_connectors_extension::ConnectorAuthority;
+use zeta_connectors_extension::project_runtime_credential;
 use zeta_mcp::McpServerDefinition;
 use zeta_mcp::McpServerTransport;
 use zeta_secrets::SecretKey;
@@ -128,6 +129,8 @@ pub(crate) fn materialize_connector_servers(
             .load(&secret_key)
             .map_err(|_| McpToolCompositionError::new("Connector credential store unavailable"))?
             .ok_or_else(|| McpToolCompositionError::new("Connector credential is unavailable"))?;
+        let credential = project_runtime_credential(credential)
+            .map_err(|_| McpToolCompositionError::new("Connector credential is invalid"))?;
         let contribution_server_id = McpServerId::new(
             entry
                 .definition()

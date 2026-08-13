@@ -15,6 +15,7 @@ use zeta_secrets::SecretValue;
 
 use super::*;
 use crate::ConnectorAuthority;
+use crate::project_runtime_credential;
 
 struct TestProvider {
     verifier: Mutex<Option<String>>,
@@ -47,6 +48,7 @@ impl ConnectorOAuthProvider for TestProvider {
         Ok(ConnectorOAuthCredential {
             account_id: ConnectorAccountId::new("octocat").unwrap(),
             account_display_name: "Octocat".into(),
+            runtime_secret: SecretValue::new(b"access-token".to_vec()),
             secret: SecretValue::new(b"access-and-refresh-token-bundle".to_vec()),
         })
     }
@@ -55,12 +57,15 @@ impl ConnectorOAuthProvider for TestProvider {
         &self,
         _: &ConnectorDefinition,
         request: ConnectorOAuthRefreshRequest,
-    ) -> Result<SecretValue, ConnectorOAuthError> {
+    ) -> Result<ConnectorOAuthCredentialReplacement, ConnectorOAuthError> {
         assert_eq!(
             request.credential.expose(),
             b"access-and-refresh-token-bundle"
         );
-        Ok(SecretValue::new(b"refreshed-token-bundle".to_vec()))
+        Ok(ConnectorOAuthCredentialReplacement {
+            runtime_secret: SecretValue::new(b"refreshed-access-token".to_vec()),
+            secret: SecretValue::new(b"refreshed-token-bundle".to_vec()),
+        })
     }
 
     fn revoke(
@@ -152,7 +157,13 @@ fn oauth_pkce_callback_publishes_only_provider_validated_account_and_secret_refe
     assert_eq!(account.account_id().as_str(), "octocat");
     let key = SecretKey::new(account.credential_reference().as_str().to_string()).unwrap();
     assert_eq!(
-        secrets.load(&key).unwrap().unwrap().expose(),
+        project_runtime_credential(secrets.load(&key).unwrap().unwrap())
+            .unwrap()
+            .expose(),
+        b"access-token"
+    );
+    assert_eq!(
+        oauth.credentials.load_connected_credential(&connector_id).unwrap().expose(),
         b"access-and-refresh-token-bundle"
     );
 }
@@ -183,7 +194,13 @@ fn refresh_replaces_the_opaque_secret_without_changing_connection_authority() {
     };
     let key = SecretKey::new(account.credential_reference().as_str().to_owned()).unwrap();
     assert_eq!(
-        secrets.load(&key).unwrap().unwrap().expose(),
+        project_runtime_credential(secrets.load(&key).unwrap().unwrap())
+            .unwrap()
+            .expose(),
+        b"refreshed-access-token"
+    );
+    assert_eq!(
+        oauth.credentials.load_connected_credential(&connector_id).unwrap().expose(),
         b"refreshed-token-bundle"
     );
 }

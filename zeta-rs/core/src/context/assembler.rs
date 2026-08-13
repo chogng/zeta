@@ -49,6 +49,21 @@ impl ContextAssembler {
                         },
                     );
                 }
+                ThreadItem::UserImageAttachment {
+                    turn_id,
+                    attachment,
+                    ..
+                } => {
+                    append_user_content(
+                        &mut input,
+                        &mut active_user_turn,
+                        turn_id,
+                        ContentPart::ImageAttachment {
+                            attachment: attachment.clone(),
+                            detail: ImageDetail::Auto,
+                        },
+                    );
+                }
                 ThreadItem::AgentMessage { text, .. } => {
                     active_user_turn = None;
                     input.push(InputItem::Message(Message::text(

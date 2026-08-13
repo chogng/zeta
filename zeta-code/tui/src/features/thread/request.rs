@@ -1,10 +1,17 @@
 use crate::client::new_command_id;
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD;
 use crate::components::composer::ComposerInput;
 use crate::components::composer::ComposerSubmission;
 use zeta_app_server_client::AppServerClient;
 use zeta_app_server_client::ClientError;
 use zeta_app_server_client::JsonRpcTransport;
 use zeta_app_server_protocol::protocol::session::SessionRequest;
+use zeta_app_server_protocol::protocol::attachments::AttachmentImportRemoteParams;
+use zeta_app_server_protocol::protocol::attachments::AttachmentUploadCancelParams;
+use zeta_app_server_protocol::protocol::attachments::AttachmentUploadFinishParams;
+use zeta_app_server_protocol::protocol::attachments::AttachmentUploadStartParams;
+use zeta_app_server_protocol::protocol::attachments::AttachmentUploadWriteParams;
 use zeta_app_server_protocol::protocol::session::SessionRequestParams;
 use zeta_app_server_protocol::protocol::session::SessionRequestResult;
 use zeta_app_server_protocol::protocol::session::SessionThreadReadParams;
@@ -16,6 +23,9 @@ use zeta_app_server_protocol::protocol::turn::TurnInterruptResult;
 use zeta_app_server_protocol::protocol::turn::TurnStartResult;
 use zeta_protocol::AgentResponse;
 use zeta_protocol::ApprovalMode;
+use zeta_protocol::ImageAttachmentRef;
+use zeta_protocol::ImageDetail;
+use zeta_protocol::ImageMediaType;
 use zeta_protocol::RequestId;
 use zeta_protocol::SessionId;
 use zeta_protocol::Thread;
@@ -60,6 +70,16 @@ pub(crate) fn submit_prompt<T>(
 where
     T: JsonRpcTransport,
 {
+    let mut input = Vec::with_capacity(submission.input.len());
+    for item in submission.input {
+        input.push(match item {
+            ComposerInput::Text(text) => InputItem::Text { text },
+            ComposerInput::Image { url } => InputItem::ImageAttachment {
+                attachment: materialize_image(client, &url)?,
+            },
+            ComposerInput::Skill { skill } => InputItem::Skill { skill },
+        });
+    }
     match client.request_session(SessionRequestParams {
         command_id: new_command_id("turn"),
         session_id: scope.session_id,
@@ -67,15 +87,7 @@ where
         request: SessionRequest::StartTurn {
             thread_id: scope.thread_id,
             approval_mode,
-            input: submission
-                .input
-                .into_iter()
-                .map(|input| match input {
-                    ComposerInput::Text(text) => InputItem::Text { text },
-                    ComposerInput::Image { url } => InputItem::Image { url },
-                    ComposerInput::Skill { skill } => InputItem::Skill { skill },
-                })
-                .collect(),
+            input,
         },
     })? {
         SessionRequestResult::Turn(result) => Ok(result),
@@ -83,6 +95,78 @@ where
             "session request returned {other:?} for StartTurn"
         ))),
     }
+}
+
+fn materialize_image<T>(
+    client: &mut AppServerClient<T>,
+    url: &str,
+) -> Result<ImageAttachmentRef, ClientError>
+where
+    T: JsonRpcTransport,
+{
+    if url.starts_with("https://") || url.starts_with("http://") {
+        return client
+            .import_remote_attachment(AttachmentImportRemoteParams {
+                url: url.to_owned(),
+                detail: ImageDetail::Auto,
+            })
+            .map(|result| result.attachment);
+    }
+    let (media_type, bytes) = decode_image_data_url(url)?;
+    let started = client.start_attachment_upload(AttachmentUploadStartParams {
+        media_type,
+        encoded_bytes: bytes.len() as u64,
+        detail: ImageDetail::Auto,
+    })?;
+    let upload_id = started.upload_id;
+    let upload_result = (|| {
+        let mut offset = 0usize;
+        for chunk in bytes.chunks(started.max_chunk_bytes) {
+            let written = client.write_attachment_upload(AttachmentUploadWriteParams {
+                upload_id: upload_id.clone(),
+                offset: offset as u64,
+                data_base64: STANDARD.encode(chunk),
+            })?;
+            offset = usize::try_from(written.next_offset).map_err(|_| {
+                ClientError::Protocol("attachment upload offset exceeds this platform".into())
+            })?;
+        }
+        client
+            .finish_attachment_upload(AttachmentUploadFinishParams {
+                upload_id: upload_id.clone(),
+            })
+            .map(|result| result.attachment)
+    })();
+    if upload_result.is_err() {
+        let _ = client.cancel_attachment_upload(AttachmentUploadCancelParams { upload_id });
+    }
+    upload_result
+}
+
+fn decode_image_data_url(url: &str) -> Result<(ImageMediaType, Vec<u8>), ClientError> {
+    let rest = url
+        .strip_prefix("data:")
+        .ok_or_else(|| ClientError::Protocol("composer image is not a data URL".into()))?;
+    let (metadata, encoded) = rest
+        .split_once(',')
+        .ok_or_else(|| ClientError::Protocol("composer image data URL is malformed".into()))?;
+    let mut metadata = metadata.split(';');
+    let media_type = match metadata.next() {
+        Some("image/png") => ImageMediaType::Png,
+        Some("image/jpeg") => ImageMediaType::Jpeg,
+        Some("image/gif") => ImageMediaType::Gif,
+        Some("image/webp") => ImageMediaType::WebP,
+        _ => return Err(ClientError::Protocol("composer image MIME type is unsupported".into())),
+    };
+    if !metadata.any(|part| part.eq_ignore_ascii_case("base64")) {
+        return Err(ClientError::Protocol(
+            "composer image data URL must use base64".into(),
+        ));
+    }
+    let bytes = STANDARD
+        .decode(encoded)
+        .map_err(|_| ClientError::Protocol("composer image base64 is invalid".into()))?;
+    Ok((media_type, bytes))
 }
 
 #[cfg(test)]

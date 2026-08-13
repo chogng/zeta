@@ -2,7 +2,13 @@ mod plan;
 
 pub use plan::{PlanStep, PlanStepStatus, PlanUpdate};
 
-use crate::{ContentPart, ItemId, ToolCallBinding, ToolCallId, ToolName, TurnId};
+use crate::ContentPart;
+use crate::ImageAttachmentRef;
+use crate::ItemId;
+use crate::ToolCallBinding;
+use crate::ToolCallId;
+use crate::ToolName;
+use crate::TurnId;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -24,6 +30,11 @@ pub enum ThreadItem {
         item_id: ItemId,
         turn_id: TurnId,
         url: String,
+    },
+    UserImageAttachment {
+        item_id: ItemId,
+        turn_id: TurnId,
+        attachment: ImageAttachmentRef,
     },
     AgentMessage {
         item_id: ItemId,
@@ -65,6 +76,7 @@ impl ThreadItem {
         match self {
             Self::UserMessage { item_id, .. }
             | Self::UserImage { item_id, .. }
+            | Self::UserImageAttachment { item_id, .. }
             | Self::AgentMessage { item_id, .. }
             | Self::Reasoning { item_id, .. }
             | Self::Plan { item_id, .. }
@@ -77,6 +89,7 @@ impl ThreadItem {
         match self {
             Self::UserMessage { turn_id, .. }
             | Self::UserImage { turn_id, .. }
+            | Self::UserImageAttachment { turn_id, .. }
             | Self::AgentMessage { turn_id, .. }
             | Self::Reasoning { turn_id, .. }
             | Self::Plan { turn_id, .. }

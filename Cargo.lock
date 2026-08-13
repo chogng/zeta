@@ -9023,6 +9023,7 @@ dependencies = [
  "zeta-app-server-transport",
  "zeta-apply-patch",
  "zeta-async-utils",
+ "zeta-attachments",
  "zeta-auto-review",
  "zeta-client",
  "zeta-code-index",
@@ -9043,6 +9044,7 @@ dependencies = [
  "zeta-file-system-tool",
  "zeta-file-watcher",
  "zeta-git",
+ "zeta-http-client",
  "zeta-install-context",
  "zeta-instructions",
  "zeta-keyring-store",
@@ -9053,6 +9055,7 @@ dependencies = [
  "zeta-model-provider",
  "zeta-model-provider-config",
  "zeta-models-manager",
+ "zeta-plugin-marketplace",
  "zeta-plugins",
  "zeta-prompts",
  "zeta-protocol",
@@ -9126,6 +9129,20 @@ dependencies = [
 [[package]]
 name = "zeta-async-utils"
 version = "0.1.0"
+
+[[package]]
+name = "zeta-attachments"
+version = "0.1.0"
+dependencies = [
+ "image",
+ "sha2 0.10.9",
+ "tempfile",
+ "thiserror 2.0.19",
+ "url",
+ "zeta-http-client",
+ "zeta-protocol",
+ "zeta-utils-image",
+]
 
 [[package]]
 name = "zeta-auto-review"
@@ -9314,6 +9331,7 @@ dependencies = [
  "sha2 0.10.9",
  "zeta-action-policy",
  "zeta-async-utils",
+ "zeta-attachments",
  "zeta-context-engine",
  "zeta-execpolicy",
  "zeta-extension-api",
@@ -9801,6 +9819,7 @@ dependencies = [
 name = "zeta-rollout"
 version = "0.1.0"
 dependencies = [
+ "zeta-attachments",
  "zeta-core",
  "zeta-protocol",
  "zeta-session-store",
@@ -10005,6 +10024,7 @@ name = "zeta-tui"
 version = "0.1.0"
 dependencies = [
  "arboard",
+ "base64 0.22.1",
  "crossterm",
  "image",
  "ratatui",

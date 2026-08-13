@@ -30,6 +30,7 @@ pub struct ServerCapabilities {
     pub threads: bool,
     pub turns: bool,
     pub resources: bool,
+    pub attachments: bool,
     pub file_system: bool,
     pub git: bool,
     pub workspace_search: bool,

@@ -15,6 +15,14 @@ use std::sync::{Arc, OnceLock};
 use zeroize::Zeroize;
 use zeroize::Zeroizing;
 use zeta_app_server_protocol::protocol::common::EmptyParams;
+use zeta_app_server_protocol::protocol::attachments::AttachmentImportRemoteParams;
+use zeta_app_server_protocol::protocol::attachments::AttachmentMaterializeResult;
+use zeta_app_server_protocol::protocol::attachments::AttachmentUploadCancelParams;
+use zeta_app_server_protocol::protocol::attachments::AttachmentUploadFinishParams;
+use zeta_app_server_protocol::protocol::attachments::AttachmentUploadStartParams;
+use zeta_app_server_protocol::protocol::attachments::AttachmentUploadStartResult;
+use zeta_app_server_protocol::protocol::attachments::AttachmentUploadWriteParams;
+use zeta_app_server_protocol::protocol::attachments::AttachmentUploadWriteResult;
 use zeta_app_server_protocol::protocol::config::{
     ConfigCommandResult, ConfigReadResult, ConfigUpdateParams, LanguageServerConfigureParams,
     LanguageServerRemoveParams, McpServerRemoveParams, McpServerSetEnablementParams,
@@ -26,6 +34,10 @@ use zeta_app_server_protocol::protocol::connectors::ConnectorCredentialCleanupDt
 use zeta_app_server_protocol::protocol::connectors::ConnectorCredentialCleanupParams;
 use zeta_app_server_protocol::protocol::connectors::ConnectorDisconnectParams;
 use zeta_app_server_protocol::protocol::connectors::ConnectorDisconnectResultDto;
+use zeta_app_server_protocol::protocol::connectors::ConnectorDeviceOAuthPollParams;
+use zeta_app_server_protocol::protocol::connectors::ConnectorDeviceOAuthPollResult;
+use zeta_app_server_protocol::protocol::connectors::ConnectorDeviceOAuthStartParams;
+use zeta_app_server_protocol::protocol::connectors::ConnectorDeviceOAuthStartResult;
 use zeta_app_server_protocol::protocol::connectors::ConnectorListResult;
 use zeta_app_server_protocol::protocol::connectors::ConnectorOAuthCancelParams;
 use zeta_app_server_protocol::protocol::connectors::ConnectorOAuthRefreshParams;
@@ -429,6 +441,27 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         self.call(ClientMethod::ConnectorOAuthCancel, params)
     }
 
+    pub fn start_connector_device_oauth(
+        &mut self,
+        params: ConnectorDeviceOAuthStartParams,
+    ) -> Result<ConnectorDeviceOAuthStartResult, ClientError> {
+        self.call(ClientMethod::ConnectorDeviceOAuthStart, params)
+    }
+
+    pub fn poll_connector_device_oauth(
+        &mut self,
+        params: ConnectorDeviceOAuthPollParams,
+    ) -> Result<ConnectorDeviceOAuthPollResult, ClientError> {
+        self.call(ClientMethod::ConnectorDeviceOAuthPoll, params)
+    }
+
+    pub fn cancel_connector_device_oauth(
+        &mut self,
+        params: ConnectorOAuthCancelParams,
+    ) -> Result<ConnectorCommandResultDto, ClientError> {
+        self.call(ClientMethod::ConnectorDeviceOAuthCancel, params)
+    }
+
     pub fn refresh_connector_oauth(
         &mut self,
         params: ConnectorOAuthRefreshParams,
@@ -643,6 +676,41 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
 
     pub fn release_resource(&mut self, params: ResourceReleaseParams) -> Result<(), ClientError> {
         self.call(ClientMethod::ResourceRelease, params)
+    }
+
+    pub fn start_attachment_upload(
+        &mut self,
+        params: AttachmentUploadStartParams,
+    ) -> Result<AttachmentUploadStartResult, ClientError> {
+        self.call(ClientMethod::AttachmentUploadStart, params)
+    }
+
+    pub fn write_attachment_upload(
+        &mut self,
+        params: AttachmentUploadWriteParams,
+    ) -> Result<AttachmentUploadWriteResult, ClientError> {
+        self.call(ClientMethod::AttachmentUploadWrite, params)
+    }
+
+    pub fn finish_attachment_upload(
+        &mut self,
+        params: AttachmentUploadFinishParams,
+    ) -> Result<AttachmentMaterializeResult, ClientError> {
+        self.call(ClientMethod::AttachmentUploadFinish, params)
+    }
+
+    pub fn cancel_attachment_upload(
+        &mut self,
+        params: AttachmentUploadCancelParams,
+    ) -> Result<(), ClientError> {
+        self.call(ClientMethod::AttachmentUploadCancel, params)
+    }
+
+    pub fn import_remote_attachment(
+        &mut self,
+        params: AttachmentImportRemoteParams,
+    ) -> Result<AttachmentMaterializeResult, ClientError> {
+        self.call(ClientMethod::AttachmentImportRemote, params)
     }
 
     pub fn start_workspace_search(

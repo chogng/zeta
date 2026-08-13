@@ -5,6 +5,7 @@ use crate::ContextCheckpointId;
 use crate::DelegationId;
 use crate::FrozenSkillActivation;
 use crate::ItemId;
+use crate::ImageAttachmentRef;
 use crate::ModelRef;
 use crate::ThreadId;
 use crate::ToolName;
@@ -95,6 +96,9 @@ pub enum AgentContextContent {
     },
     UserImage {
         url: String,
+    },
+    UserImageAttachment {
+        attachment: ImageAttachmentRef,
     },
     AssistantText {
         text: String,

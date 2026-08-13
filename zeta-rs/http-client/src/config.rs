@@ -356,6 +356,19 @@ pub enum ClientIdentityPolicy {
     Identity(ClientIdentity),
 }
 
+/// Restricts which resolved network targets a transport may connect to.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum NetworkTargetPolicy {
+    /// Permit any address accepted by the operating-system resolver.
+    #[default]
+    Any,
+    /// Permit only globally routable Internet addresses.
+    ///
+    /// This policy requires direct connections and caller-managed redirects so every hop is
+    /// revalidated before any response body is consumed.
+    PublicInternetOnly,
+}
+
 /// Complete configuration for a reusable synchronous HTTP transport client.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct HttpClientConfig {
@@ -366,6 +379,7 @@ pub struct HttpClientConfig {
     response_body_limit: ResponseBodyLimit,
     tls: TlsPolicy,
     client_identity: ClientIdentityPolicy,
+    network_targets: NetworkTargetPolicy,
 }
 
 impl HttpClientConfig {
@@ -408,6 +422,11 @@ impl HttpClientConfig {
         self
     }
 
+    pub fn with_network_target_policy(mut self, network_targets: NetworkTargetPolicy) -> Self {
+        self.network_targets = network_targets;
+        self
+    }
+
     pub fn proxy(&self) -> &ProxyPolicy {
         &self.proxy
     }
@@ -435,6 +454,10 @@ impl HttpClientConfig {
     pub fn client_identity(&self) -> &ClientIdentityPolicy {
         &self.client_identity
     }
+
+    pub const fn network_targets(&self) -> NetworkTargetPolicy {
+        self.network_targets
+    }
 }
 
 impl Default for HttpClientConfig {
@@ -447,6 +470,7 @@ impl Default for HttpClientConfig {
             response_body_limit: ResponseBodyLimit::default(),
             tls: TlsPolicy::SystemRoots,
             client_identity: ClientIdentityPolicy::None,
+            network_targets: NetworkTargetPolicy::Any,
         }
     }
 }

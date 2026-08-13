@@ -128,6 +128,7 @@ impl AppServer {
                 threads: true,
                 turns: true,
                 resources: true,
+                attachments: true,
                 file_system,
                 git,
                 workspace_search,
@@ -745,6 +746,9 @@ impl AppServer {
             .into_iter()
             .map(|item| match item {
                 InputItem::Text { text } => UserInput::Text { text },
+                InputItem::ImageAttachment { attachment } => {
+                    UserInput::ImageAttachment { attachment }
+                }
                 InputItem::Image { url } => UserInput::Image { url },
                 InputItem::Skill { skill } => UserInput::Skill { skill },
             })

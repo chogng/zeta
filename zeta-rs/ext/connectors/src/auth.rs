@@ -28,6 +28,7 @@ use crate::ConnectorCommandResult;
 
 const AUTH_COMMAND_DOMAIN: &[u8] = b"zeta-connector-auth-command-v1\0";
 const CREDENTIAL_KEY_DOMAIN: &[u8] = b"zeta-connector-credential-key-v1\0";
+const OAUTH_CREDENTIAL_MAGIC: &[u8] = b"zeta-oauth-credential-v1\0";
 
 /// Ephemeral API-token connection request. The token is never cloneable or persisted in authority.
 pub struct ConnectorApiTokenConnectRequest {
@@ -105,22 +106,34 @@ impl ConnectorCredentialService {
                 )
             },
         )?;
-        self.secrets.load(&key)?.ok_or_else(|| {
+        let stored = self.secrets.load(&key)?.ok_or_else(|| {
             ConnectorCredentialServiceError::new(
                 ConnectorCredentialServiceErrorKind::SecretStore,
                 "connector credential is unavailable",
             )
-        })
+        })?;
+        oauth_credential_part(stored, OAuthCredentialPart::Lifecycle)
     }
 
-    pub(crate) fn replace_connected_credential(
+    pub(crate) fn replace_connected_oauth_credential(
         &self,
         connector_id: &ConnectorId,
-        value: &SecretValue,
+        runtime_secret: SecretValue,
+        lifecycle_secret: SecretValue,
     ) -> Result<(), ConnectorCredentialServiceError> {
         let key = credential_key(connector_id)?;
-        self.secrets.store(&key, value)?;
+        let value = encode_oauth_credential(runtime_secret, lifecycle_secret)?;
+        self.secrets.store(&key, &value)?;
         Ok(())
+    }
+
+    pub(crate) fn connect_oauth_credential(
+        &self,
+        mut request: ConnectorApiTokenConnectRequest,
+        runtime_secret: SecretValue,
+    ) -> Result<ConnectorCommandResult, ConnectorCredentialServiceError> {
+        request.token = encode_oauth_credential(runtime_secret, request.token)?;
+        self.connect_api_token(request)
     }
 
     pub(crate) fn begin_connect_attempt(
@@ -332,6 +345,82 @@ impl ConnectorCredentialService {
             outcome
         }
     }
+}
+
+/// Projects only the invocation-time value from a stored Connector credential.
+///
+/// API tokens are returned unchanged. OAuth envelopes expose the access token while retaining the
+/// provider lifecycle bundle solely for refresh and revoke adapters.
+pub fn project_runtime_credential(
+    stored: SecretValue,
+) -> Result<SecretValue, ConnectorCredentialServiceError> {
+    oauth_credential_part(stored, OAuthCredentialPart::Runtime)
+}
+
+#[derive(Clone, Copy)]
+enum OAuthCredentialPart {
+    Runtime,
+    Lifecycle,
+}
+
+fn encode_oauth_credential(
+    runtime_secret: SecretValue,
+    lifecycle_secret: SecretValue,
+) -> Result<SecretValue, ConnectorCredentialServiceError> {
+    let runtime_len = u32::try_from(runtime_secret.expose().len()).map_err(|_| {
+        ConnectorCredentialServiceError::new(
+            ConnectorCredentialServiceErrorKind::InvalidValue,
+            "OAuth runtime credential is too large",
+        )
+    })?;
+    let mut encoded = Vec::with_capacity(
+        OAUTH_CREDENTIAL_MAGIC.len()
+            + std::mem::size_of::<u32>()
+            + runtime_secret.expose().len()
+            + lifecycle_secret.expose().len(),
+    );
+    encoded.extend_from_slice(OAUTH_CREDENTIAL_MAGIC);
+    encoded.extend_from_slice(&runtime_len.to_be_bytes());
+    encoded.extend_from_slice(runtime_secret.expose());
+    encoded.extend_from_slice(lifecycle_secret.expose());
+    Ok(SecretValue::new(encoded))
+}
+
+fn oauth_credential_part(
+    stored: SecretValue,
+    part: OAuthCredentialPart,
+) -> Result<SecretValue, ConnectorCredentialServiceError> {
+    if !stored.expose().starts_with(OAUTH_CREDENTIAL_MAGIC) {
+        return Ok(stored);
+    }
+    let length_start = OAUTH_CREDENTIAL_MAGIC.len();
+    let length_end = length_start + std::mem::size_of::<u32>();
+    let length = stored
+        .expose()
+        .get(length_start..length_end)
+        .and_then(|bytes| <[u8; 4]>::try_from(bytes).ok())
+        .map(u32::from_be_bytes)
+        .and_then(|length| usize::try_from(length).ok())
+        .ok_or_else(invalid_oauth_credential)?;
+    let runtime_start = length_end;
+    let runtime_end = runtime_start
+        .checked_add(length)
+        .filter(|end| *end <= stored.expose().len())
+        .ok_or_else(invalid_oauth_credential)?;
+    let bytes = match part {
+        OAuthCredentialPart::Runtime => stored.expose().get(runtime_start..runtime_end),
+        OAuthCredentialPart::Lifecycle => stored.expose().get(runtime_end..),
+    }
+    .filter(|bytes| !bytes.is_empty())
+    .ok_or_else(invalid_oauth_credential)?;
+    Ok(SecretValue::new(bytes.to_vec()))
+}
+
+fn invalid_oauth_credential() -> ConnectorCredentialServiceError {
+    ConnectorCredentialServiceError::new(
+        ConnectorCredentialServiceErrorKind::InvalidValue,
+        "OAuth credential envelope is invalid",
+    )
 }
 
 /// Stable classification for credential orchestration failures.

@@ -48,6 +48,14 @@ pub enum ConnectorAvailableActionDto {
     RevokeOAuth,
 }
 
+/// OAuth interaction methods configured for one exact Connector.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum ConnectorOAuthMethodDto {
+    Browser,
+    Device,
+}
+
 /// One runtime-free Connector catalog entry and its account-state projection.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -61,6 +69,7 @@ pub struct ConnectorDto {
     pub connection_generation: u64,
     pub state: ConnectorConnectionStateDto,
     pub available_actions: Vec<ConnectorAvailableActionDto>,
+    pub oauth_methods: Vec<ConnectorOAuthMethodDto>,
     pub credential_cleanup_pending: bool,
 }
 
@@ -134,6 +143,57 @@ pub struct ConnectorOAuthStartParams {
 pub struct ConnectorOAuthStartResult {
     pub flow_id: String,
     pub authorization_url: String,
+}
+
+/// Starts one device OAuth attempt bound to an exact Connector generation.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectorDeviceOAuthStartParams {
+    pub command_id: String,
+    #[schemars(range(min = 1))]
+    #[ts(type = "number")]
+    pub expected_generation: u64,
+    pub connector_id: String,
+    #[schemars(range(min = 1))]
+    #[ts(type = "number")]
+    pub connection_generation: u64,
+}
+
+/// User-facing code and polling schedule for an in-memory device authorization.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectorDeviceOAuthStartResult {
+    pub flow_id: String,
+    pub user_code: String,
+    pub verification_uri: String,
+    #[ts(type = "number")]
+    pub expires_in_seconds: u64,
+    #[ts(type = "number")]
+    pub poll_interval_seconds: u64,
+}
+
+/// Polls one exact in-memory device OAuth flow.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectorDeviceOAuthPollParams {
+    pub flow_id: String,
+}
+
+/// Device flow status; clients must respect `retryAfterSeconds` before polling again.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(
+    tag = "status",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum ConnectorDeviceOAuthPollResult {
+    Pending {
+        #[ts(type = "number")]
+        retry_after_seconds: u64,
+    },
+    Connected {
+        command: ConnectorCommandResultDto,
+    },
 }
 
 /// Inbound-only OAuth callback whose security values are cleared on drop.

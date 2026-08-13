@@ -1,5 +1,6 @@
 //! JSON-RPC application boundary between product clients and Zeta's domain components.
 
+mod attachment_upload_store;
 mod code_retrieval_context;
 mod code_retrieval_tool;
 mod debug_service;
@@ -30,6 +31,7 @@ pub use local::{
     BuiltInSkillRoot, LocalAppServerOptions, LocalCodeIndexProviders, LocalConnectorRuntime,
     LocalWorkspaceConfigOptions, SessionStateMode,
 };
+pub use zeta_plugin_marketplace::RemotePluginMarketplaceConfig;
 pub use review::{ProviderReviewModel, ReviewModelResolutionError, ReviewModelResolver};
 pub use server::AppServer;
 pub use server::CodeIndexSemanticModels;

@@ -1,0 +1,20 @@
+[package]
+name = "zeta-execpolicy"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+readme = "README.md"
+
+[lib]
+doctest = false
+name = "zeta_execpolicy"
+path = "src/lib.rs"
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+
+[lints]
+workspace = true

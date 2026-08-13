@@ -828,6 +828,11 @@ fn materialize_item(
         zeta_protocol::ThreadItem::UserImage { url, .. } => {
             AgentContextContent::UserImage { url: url.clone() }
         }
+        zeta_protocol::ThreadItem::UserImageAttachment { attachment, .. } => {
+            AgentContextContent::UserImageAttachment {
+                attachment: attachment.clone(),
+            }
+        }
         zeta_protocol::ThreadItem::AgentMessage { text, .. } => {
             AgentContextContent::AssistantText { text: text.clone() }
         }

@@ -112,6 +112,9 @@ fn materialized_content_text(content: &AgentContextContent) -> String {
     match content {
         AgentContextContent::UserText { text } => format!("User: {text}"),
         AgentContextContent::UserImage { url } => format!("User image: {url}"),
+        AgentContextContent::UserImageAttachment { attachment } => {
+            format!("User image attachment: {}", attachment.content_digest)
+        }
         AgentContextContent::AssistantText { text } => format!("Assistant: {text}"),
         AgentContextContent::Reasoning { text } => format!("Reasoning record: {text}"),
         AgentContextContent::Plan { text } => format!("Plan record: {text}"),

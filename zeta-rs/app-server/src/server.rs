@@ -1,4 +1,5 @@
 use crate::SlashCommandCatalog;
+use crate::attachment_upload_store::AttachmentUploadStore;
 use crate::model_catalog::{ModelCatalog, unavailable_model_catalog};
 use crate::resource_store::{ResourceError, ResourceStore};
 use crate::review::ApprovalModeActionPolicyService;
@@ -34,6 +35,7 @@ use zeta_skills_extension::SkillWatcher;
 use zeta_typst::TypstCompiler;
 
 mod cloud_code_index_operations;
+mod attachment_operations;
 mod code_index_operations;
 mod code_index_runtime;
 mod code_retrieval_operations;
@@ -112,12 +114,15 @@ pub struct AppServer {
     model_catalog: Arc<dyn ModelCatalog>,
     next_connection_id: AtomicU64,
     pub(super) resources: Mutex<ResourceStore>,
+    pub(super) attachment_uploads: Mutex<AttachmentUploadStore>,
     pub(super) collaboration: Mutex<collaboration_runtime::DocumentCollaborationStore>,
     pub(super) extensions: Mutex<ExtensionCatalog>,
     pub(super) config: Option<Arc<ConfigStore>>,
     pub(super) local_exec_policy_config: Arc<RwLock<crate::local_tools::LocalExecPolicyConfig>>,
     pub(super) connectors: Option<Arc<zeta_connectors_extension::ConnectorCredentialService>>,
     pub(super) connector_oauth: Option<Arc<zeta_connectors_extension::ConnectorOAuthService>>,
+    pub(super) connector_device_oauth:
+        Option<Arc<zeta_connectors_extension::ConnectorDeviceOAuthService>>,
     pub(super) plugins: Option<zeta_plugins::PluginActivationAuthority>,
     pub(super) plugin_marketplaces: Option<zeta_plugins::PluginMarketplaceService>,
     plugin_skill_sources: Option<Arc<dyn zeta_skills_extension::DynamicSkillSourceProvider>>,
@@ -215,6 +220,7 @@ impl AppServer {
             model_catalog: unavailable_model_catalog(),
             next_connection_id: AtomicU64::new(1),
             resources: Mutex::new(ResourceStore::default()),
+            attachment_uploads: Mutex::new(AttachmentUploadStore::default()),
             collaboration: Mutex::new(collaboration_runtime::DocumentCollaborationStore::default()),
             extensions: Mutex::new(ExtensionCatalog::default()),
             config: None,
@@ -223,6 +229,7 @@ impl AppServer {
             )),
             connectors: None,
             connector_oauth: None,
+            connector_device_oauth: None,
             plugins: None,
             plugin_marketplaces: None,
             plugin_skill_sources: None,
@@ -284,6 +291,9 @@ impl AppServer {
         connection.outbound_notifications.close();
         if let Ok(mut resources) = self.resources.lock() {
             resources.release_owner(connection.connection_id);
+        }
+        if let Ok(mut uploads) = self.attachment_uploads.lock() {
+            uploads.release_owner(connection.connection_id);
         }
         if let Some(terminals) = self.configured_terminal_service() {
             terminals.close_owner(connection.connection_id);
@@ -369,6 +379,15 @@ impl AppServer {
         oauth: Arc<zeta_connectors_extension::ConnectorOAuthService>,
     ) -> Self {
         self.connector_oauth = Some(oauth);
+        self
+    }
+
+    /// Installs product-owned OAuth device provider adapters over Connector authority.
+    pub fn with_connector_device_oauth_service(
+        mut self,
+        oauth: Arc<zeta_connectors_extension::ConnectorDeviceOAuthService>,
+    ) -> Self {
+        self.connector_device_oauth = Some(oauth);
         self
     }
 
@@ -814,6 +833,15 @@ impl AppServer {
             Some(ClientMethod::ConnectorOAuthCancel) => {
                 self.connector_oauth_cancel(&request.params)
             }
+            Some(ClientMethod::ConnectorDeviceOAuthStart) => {
+                self.connector_device_oauth_start(&request.params)
+            }
+            Some(ClientMethod::ConnectorDeviceOAuthPoll) => {
+                self.connector_device_oauth_poll(&request.params)
+            }
+            Some(ClientMethod::ConnectorDeviceOAuthCancel) => {
+                self.connector_device_oauth_cancel(&request.params)
+            }
             Some(ClientMethod::ConnectorOAuthRefresh) => {
                 self.connector_oauth_refresh(&request.params)
             }
@@ -893,6 +921,21 @@ impl AppServer {
             Some(ClientMethod::ResourceRead) => self.resource_read(connection, &request.params),
             Some(ClientMethod::ResourceRelease) => {
                 self.resource_release(connection, &request.params)
+            }
+            Some(ClientMethod::AttachmentUploadStart) => {
+                self.attachment_upload_start(connection, &request.params)
+            }
+            Some(ClientMethod::AttachmentUploadWrite) => {
+                self.attachment_upload_write(connection, &request.params)
+            }
+            Some(ClientMethod::AttachmentUploadFinish) => {
+                self.attachment_upload_finish(connection, &request.params)
+            }
+            Some(ClientMethod::AttachmentUploadCancel) => {
+                self.attachment_upload_cancel(connection, &request.params)
+            }
+            Some(ClientMethod::AttachmentImportRemote) => {
+                self.attachment_import_remote(&request.params)
             }
             Some(ClientMethod::FsGetMetadata) => self.fs_get_metadata(&request.params),
             Some(ClientMethod::FsReadDirectory) => self.fs_read_directory(&request.params),

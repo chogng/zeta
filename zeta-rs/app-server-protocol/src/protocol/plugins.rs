@@ -13,12 +13,14 @@ pub struct PluginPackageDto {
     pub enabled: bool,
     pub granted: bool,
     pub effective: bool,
+    pub revoked: bool,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum PluginMarketplaceModeDto {
     Managed,
+    RemoteManaged,
     LocalDevelopment,
 }
 
@@ -28,6 +30,7 @@ pub enum PluginMarketplaceModeDto {
 pub struct PluginMarketplacePackageDto {
     pub marketplace_id: String,
     pub marketplace_mode: PluginMarketplaceModeDto,
+    pub marketplace_revision: String,
     pub id: String,
     pub version: String,
     pub digest: String,

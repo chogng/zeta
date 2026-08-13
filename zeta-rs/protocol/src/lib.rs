@@ -1,5 +1,6 @@
 //! Provider-independent data contracts shared by Zeta runtimes, processes, and adapters.
 
+mod attachment;
 mod config;
 mod error;
 mod ids;
@@ -16,6 +17,7 @@ mod tool_execution;
 mod tool_name;
 mod turn;
 
+pub use attachment::{ImageAttachmentRef, ImageMediaType};
 pub use config::{ApprovalMode, Patch, Personality, SandboxMode, Theme, WebSearchMode};
 pub use error::{StableTurnError, StableTurnErrorCode};
 pub use ids::{

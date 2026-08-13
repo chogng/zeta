@@ -60,6 +60,7 @@ use zeta_protocol::UserInput;
 use zeta_thread_store::AppendBatchResult;
 use zeta_thread_store::ThreadStoreError;
 use zeta_thread_store::validate_append_batch;
+use zeta_attachments::ImageAttachments;
 
 mod agent;
 mod execution;
@@ -270,17 +271,27 @@ pub struct ThreadController {
     loaded_threads: Arc<loaded_thread::LoadedThreads>,
     execution_mailboxes: mailbox::ThreadExecutionMailboxes,
     extensions: RwLock<Arc<zeta_extension_api::ExtensionRegistry>>,
+    image_attachments: Arc<ImageAttachments>,
     next_id: AtomicU64,
 }
 
 impl ThreadController {
     pub fn with_store(store: Arc<dyn ThreadStore>) -> Self {
+        Self::with_store_and_image_attachments(store, Arc::new(ImageAttachments::in_memory()))
+    }
+
+    /// Builds a manager with the canonical image attachment service used before durable writes.
+    pub fn with_store_and_image_attachments(
+        store: Arc<dyn ThreadStore>,
+        image_attachments: Arc<ImageAttachments>,
+    ) -> Self {
         let loaded_threads = Arc::new(loaded_thread::LoadedThreads::new(store.clone()));
         Self {
             store,
             writer_lease: None,
             execution_mailboxes: mailbox::ThreadExecutionMailboxes::new(loaded_threads.clone()),
             extensions: RwLock::new(Arc::new(zeta_extension_api::ExtensionRegistry::default())),
+            image_attachments,
             loaded_threads,
             next_id: AtomicU64::new(1),
         }
@@ -292,15 +303,34 @@ impl ThreadController {
         store: Arc<dyn ThreadStore>,
         writer_lease: Arc<dyn WriterLease<ThreadId>>,
     ) -> Self {
+        Self::with_store_lease_and_image_attachments(
+            store,
+            writer_lease,
+            Arc::new(ImageAttachments::in_memory()),
+        )
+    }
+
+    /// Builds a leased manager with the attachment service shared by RPC admission and models.
+    pub fn with_store_lease_and_image_attachments(
+        store: Arc<dyn ThreadStore>,
+        writer_lease: Arc<dyn WriterLease<ThreadId>>,
+        image_attachments: Arc<ImageAttachments>,
+    ) -> Self {
         let loaded_threads = Arc::new(loaded_thread::LoadedThreads::new(store.clone()));
         Self {
             store,
             writer_lease: Some(writer_lease),
             execution_mailboxes: mailbox::ThreadExecutionMailboxes::new(loaded_threads.clone()),
             extensions: RwLock::new(Arc::new(zeta_extension_api::ExtensionRegistry::default())),
+            image_attachments,
             loaded_threads,
             next_id: AtomicU64::new(1),
         }
+    }
+
+    /// Returns the canonical service used by this Thread authority and its model executors.
+    pub fn image_attachments(&self) -> Arc<ImageAttachments> {
+        Arc::clone(&self.image_attachments)
     }
 
     /// Installs the shared agent extension registry before product Turns are accepted.
@@ -408,6 +438,8 @@ impl ThreadController {
     ) -> Result<StartTurnResult, CoreError> {
         validate_command_id(&request.command_id)?;
         validate_policy_revision(&request.policy_revision)?;
+        let normalized_input =
+            user_input::normalize_images(&request.input, &self.image_attachments)?;
         if let Some(existing) = self
             .read_thread(thread_id)?
             .commands
@@ -431,7 +463,7 @@ impl ThreadController {
             if model != &request.model
                 || host_activations != request.activated_skills
                 || approval_mode != &request.approval_mode
-                || input != &request.input
+                || input != &normalized_input
             {
                 return Err(CoreError::CommandConflict);
             }
@@ -452,7 +484,7 @@ impl ThreadController {
             .read()
             .map_err(|_| CoreError::Journal("extension registry lock poisoned".into()))?
             .contribute_skill_activations(zeta_extension_api::SkillActivationContext::new(
-                &request.input,
+                &normalized_input,
             ))
             .map_err(|error| CoreError::InvalidInput(error.to_string()))?;
         for activation in contributed_activations {
@@ -467,12 +499,12 @@ impl ThreadController {
             }
             activated_skills.push(activation);
         }
-        let validated_input = user_input::validate(&request.input, &activated_skills)?;
+        let validated_input = user_input::validate(&normalized_input, &activated_skills)?;
         let command = ThreadCommand::StartTurn {
             model: request.model.clone(),
             activated_skills: activated_skills.clone(),
             approval_mode: request.approval_mode,
-            input: request.input.clone(),
+            input: normalized_input.clone(),
         };
         self.mutate_thread(thread_id, |snapshot| {
             if let Some(existing) = snapshot
@@ -820,11 +852,17 @@ impl ThreadController {
             ToolCallOutput::Success(text) => (text, None, false),
             ToolCallOutput::Failure(text) => (text, None, true),
             ToolCallOutput::SuccessContent(mut content) => {
-                crate::image_preparation::prepare_tool_content(&mut content);
+                crate::image_preparation::prepare_tool_content(
+                    &mut content,
+                    &self.image_attachments,
+                );
                 (tool_content_preview(&content), Some(content), false)
             }
             ToolCallOutput::FailureContent(mut content) => {
-                crate::image_preparation::prepare_tool_content(&mut content);
+                crate::image_preparation::prepare_tool_content(
+                    &mut content,
+                    &self.image_attachments,
+                );
                 (tool_content_preview(&content), Some(content), true)
             }
         };
@@ -1317,6 +1355,7 @@ fn tool_content_preview(content: &[ContentPart]) -> String {
         .iter()
         .map(|part| match part {
             ContentPart::Text(text) => text.as_str(),
+            ContentPart::ImageAttachment { .. } => "[image]",
             ContentPart::ImageUrl { .. } => "[image]",
         })
         .collect::<Vec<_>>()

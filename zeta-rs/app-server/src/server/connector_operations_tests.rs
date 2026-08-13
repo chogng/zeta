@@ -9,6 +9,7 @@ use zeta_connectors_extension::ConnectorAuthority;
 use zeta_connectors_extension::ConnectorCredentialService;
 use zeta_connectors_extension::ConnectorOAuthChallenge;
 use zeta_connectors_extension::ConnectorOAuthCredential;
+use zeta_connectors_extension::ConnectorOAuthCredentialReplacement;
 use zeta_connectors_extension::ConnectorOAuthError;
 use zeta_connectors_extension::ConnectorOAuthExchangeRequest;
 use zeta_connectors_extension::ConnectorOAuthProvider;
@@ -75,6 +76,7 @@ impl ConnectorOAuthProvider for TestOAuthProvider {
         Ok(ConnectorOAuthCredential {
             account_id: zeta_connectors::ConnectorAccountId::new("octocat").unwrap(),
             account_display_name: "Octocat".into(),
+            runtime_secret: zeta_secrets::SecretValue::new(b"provider-access-token".to_vec()),
             secret: zeta_secrets::SecretValue::new(b"provider-access-token".to_vec()),
         })
     }
@@ -83,8 +85,11 @@ impl ConnectorOAuthProvider for TestOAuthProvider {
         &self,
         _connector: &ConnectorDefinition,
         request: ConnectorOAuthRefreshRequest,
-    ) -> Result<zeta_secrets::SecretValue, ConnectorOAuthError> {
-        Ok(request.credential)
+    ) -> Result<ConnectorOAuthCredentialReplacement, ConnectorOAuthError> {
+        Ok(ConnectorOAuthCredentialReplacement {
+            runtime_secret: zeta_secrets::SecretValue::new(b"provider-access-token".to_vec()),
+            secret: request.credential,
+        })
     }
 
     fn revoke(

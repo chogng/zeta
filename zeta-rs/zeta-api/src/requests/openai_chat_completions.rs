@@ -114,6 +114,9 @@ fn convert_content(content: &[ContentPart]) -> Value {
             .iter()
             .map(|part| match part {
                 ContentPart::Text(text) => json!({"type": "text", "text": text}),
+                ContentPart::ImageAttachment { .. } => {
+                    unreachable!("durable image attachments must be materialized before API encoding")
+                }
                 ContentPart::ImageUrl { url, detail } => json!({
                     "type": "image_url",
                     "image_url": {
@@ -265,6 +268,7 @@ fn content_text(content: &[ContentPart]) -> String {
         .iter()
         .filter_map(|part| match part {
             ContentPart::Text(text) => Some(text.as_str()),
+            ContentPart::ImageAttachment { .. } => None,
             ContentPart::ImageUrl { .. } => None,
         })
         .collect::<Vec<_>>()

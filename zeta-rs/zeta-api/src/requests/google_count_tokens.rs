@@ -142,6 +142,9 @@ fn convert_parts(parts: &[ContentPart]) -> Result<Vec<Value>, ApiError> {
         .iter()
         .map(|part| match part {
             ContentPart::Text(text) => Ok(json!({"text": text})),
+            ContentPart::ImageAttachment { .. } => {
+                unreachable!("durable image attachments must be materialized before API encoding")
+            }
             ContentPart::ImageUrl { url, .. } => convert_inline_image(url),
         })
         .collect()
@@ -207,6 +210,7 @@ fn content_text(content: &[ContentPart]) -> String {
         .iter()
         .filter_map(|part| match part {
             ContentPart::Text(text) => Some(text.as_str()),
+            ContentPart::ImageAttachment { .. } => None,
             ContentPart::ImageUrl { .. } => None,
         })
         .collect::<Vec<_>>()

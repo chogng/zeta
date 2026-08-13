@@ -79,6 +79,7 @@ fn text_content(content: &[ContentPart]) -> Option<String> {
     for part in content {
         match part {
             ContentPart::Text(part) => text.push_str(part),
+            ContentPart::ImageAttachment { .. } => return None,
             ContentPart::ImageUrl { .. } => return None,
         }
     }

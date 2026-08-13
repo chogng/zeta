@@ -2,6 +2,7 @@ use crate::protocol::common::TurnId;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
+use zeta_protocol::ImageAttachmentRef;
 use zeta_protocol::SkillRef;
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -12,6 +13,8 @@ use zeta_protocol::SkillRef;
 )]
 pub enum InputItem {
     Text { text: String },
+    ImageAttachment { attachment: ImageAttachmentRef },
+    /// Legacy transport form. New clients should use the attachment upload/import methods.
     Image { url: String },
     Skill { skill: SkillRef },
 }

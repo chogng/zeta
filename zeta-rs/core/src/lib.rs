@@ -1,6 +1,7 @@
 //! Zeta's Agent lifecycle, Turn execution, context assembly, and outbound service ports.
 
 mod action_policy_service;
+mod attachment_model_service;
 mod capabilities;
 mod context;
 mod context_manager;

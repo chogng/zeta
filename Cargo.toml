@@ -3,6 +3,7 @@ members = [
     "zeta-rs/add-dir",
     "zeta-rs/agent-import",
     "zeta-rs/agents",
+    "zeta-rs/attachments",
     "zeta-rs/app-server",
     "zeta-rs/app-server-client",
     "zeta-rs/app-server-protocol",
@@ -205,6 +206,7 @@ zip = { version = "4.6.1", default-features = false, features = ["deflate-flate2
 zeta-add-dir = { path = "zeta-rs/add-dir" }
 zeta-agent-import = { path = "zeta-rs/agent-import" }
 zeta-agents = { path = "zeta-rs/agents" }
+zeta-attachments = { path = "zeta-rs/attachments" }
 zeta-ansi-escape = { path = "zeta-code/ansi-escape" }
 zeta-agent-sidebar = { path = "zeterm/agent-sidebar" }
 zeta-commands = { path = "zeterm/commands" }

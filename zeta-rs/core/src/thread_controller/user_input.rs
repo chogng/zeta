@@ -1,5 +1,7 @@
-use std::borrow::Cow;
+use std::sync::Arc;
+use zeta_attachments::ImageAttachments;
 use zeta_protocol::FrozenSkillActivation;
+use zeta_protocol::ImageAttachmentRef;
 use zeta_protocol::ItemId;
 use zeta_protocol::SkillActivationReason;
 use zeta_protocol::SkillVersionSelector;
@@ -8,13 +10,41 @@ use zeta_protocol::TurnId;
 use zeta_protocol::UserInput;
 
 use crate::CoreError;
-use crate::image_preparation::prepare_user_image_data_url;
-
-const MAX_REMOTE_IMAGE_URL_BYTES: usize = 8 * 1024;
-
 pub(super) enum ValidatedUserInput<'a> {
     Text(&'a str),
-    Image(Cow<'a, str>),
+    Image(&'a ImageAttachmentRef),
+}
+
+pub(super) fn normalize_images(
+    input: &[UserInput],
+    attachments: &Arc<ImageAttachments>,
+) -> Result<Vec<UserInput>, CoreError> {
+    input
+        .iter()
+        .map(|input| match input {
+            UserInput::ImageAttachment { attachment } => {
+                attachments
+                    .verify(attachment)
+                    .map_err(|error| CoreError::InvalidInput(error.to_string()))?;
+                Ok(input.clone())
+            }
+            UserInput::Image { url } if is_data_url(url) => attachments
+                .import_data_url(url, zeta_protocol::ImageDetail::Auto)
+                .map(|attachment| UserInput::ImageAttachment { attachment })
+                .map_err(|error| CoreError::InvalidInput(error.to_string())),
+            UserInput::Image { url } if is_remote_image_url(url) => attachments
+                .import_remote_url(url, zeta_protocol::ImageDetail::Auto)
+                .map(|attachment| UserInput::ImageAttachment { attachment })
+                .map_err(|error| CoreError::InvalidInput(error.to_string())),
+            UserInput::Image { .. } => Err(CoreError::InvalidInput(
+                "image input must be a data URL, an HTTP(S) URL, or a durable attachment".into(),
+            )),
+            UserInput::Text { .. }
+            | UserInput::LocalImage { .. }
+            | UserInput::Skill { .. }
+            | UserInput::Mention { .. } => Ok(input.clone()),
+        })
+        .collect()
 }
 
 pub(super) fn validate<'a>(
@@ -36,9 +66,12 @@ pub(super) fn validate<'a>(
             UserInput::Text { .. } => Some(Err(CoreError::InvalidInput(
                 "Turn text input must not be empty".into(),
             ))),
-            UserInput::Image { url } => {
-                Some(validate_image_url(url).map(ValidatedUserInput::Image))
+            UserInput::ImageAttachment { attachment } => {
+                Some(Ok(ValidatedUserInput::Image(attachment)))
             }
+            UserInput::Image { .. } => Some(Err(CoreError::InvalidInput(
+                "legacy image input must be normalized before validation".into(),
+            ))),
             UserInput::Skill { .. } => None,
             UserInput::LocalImage { .. } | UserInput::Mention { .. } => {
                 Some(Err(CoreError::InvalidInput(
@@ -66,6 +99,7 @@ fn validate_skill_activations(
         .filter_map(|input| match input {
             UserInput::Skill { skill } => Some(skill),
             UserInput::Text { .. }
+            | UserInput::ImageAttachment { .. }
             | UserInput::Image { .. }
             | UserInput::LocalImage { .. }
             | UserInput::Mention { .. } => None,
@@ -110,28 +144,22 @@ pub(super) fn thread_items(
                 turn_id: turn_id.clone(),
                 text: (*text).to_owned(),
             },
-            ValidatedUserInput::Image(url) => ThreadItem::UserImage {
+            ValidatedUserInput::Image(attachment) => ThreadItem::UserImageAttachment {
                 item_id: next_item_id(),
                 turn_id: turn_id.clone(),
-                url: url.as_ref().to_owned(),
+                attachment: (*attachment).clone(),
             },
         })
         .collect()
 }
 
-fn validate_image_url(url: &str) -> Result<Cow<'_, str>, CoreError> {
-    if is_remote_image_url(url) {
-        return Ok(Cow::Borrowed(url));
-    }
-    prepare_user_image_data_url(url)
-        .map(Cow::Owned)
-        .map_err(|error| CoreError::InvalidInput(error.to_string()))
+fn is_remote_image_url(url: &str) -> bool {
+    url.starts_with("https://") || url.starts_with("http://")
 }
 
-fn is_remote_image_url(url: &str) -> bool {
-    url.len() <= MAX_REMOTE_IMAGE_URL_BYTES
-        && (url.starts_with("https://") || url.starts_with("http://"))
-        && !url.chars().any(char::is_whitespace)
+fn is_data_url(url: &str) -> bool {
+    url.get(.."data:".len())
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case("data:"))
 }
 
 #[cfg(test)]

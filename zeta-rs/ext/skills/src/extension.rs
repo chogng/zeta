@@ -34,6 +34,7 @@ impl SkillActivationContributor for SkillRuntime {
             .filter_map(|item| match item {
                 UserInput::Skill { skill } => Some(skill),
                 UserInput::Text { .. }
+                | UserInput::ImageAttachment { .. }
                 | UserInput::Image { .. }
                 | UserInput::LocalImage { .. }
                 | UserInput::Mention { .. } => None,

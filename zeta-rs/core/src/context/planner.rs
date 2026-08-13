@@ -358,6 +358,7 @@ fn validate_items(items: &[ThreadItem]) -> Result<(), ContextPreparationError> {
             }
             ThreadItem::UserMessage { .. }
             | ThreadItem::UserImage { .. }
+            | ThreadItem::UserImageAttachment { .. }
             | ThreadItem::AgentMessage { .. }
             | ThreadItem::Reasoning { .. }
             | ThreadItem::Plan { .. } => {}
@@ -547,6 +548,7 @@ fn estimate_item(item: &ThreadItem) -> ContextTokenCount {
         ThreadItem::UserImage { url, .. } => ContextTokenCount::new(
             IMAGE_TOKEN_ESTIMATE.saturating_add(estimate_bytes(url.len(), 0).get()),
         ),
+        ThreadItem::UserImageAttachment { .. } => ContextTokenCount::new(IMAGE_TOKEN_ESTIMATE),
         ThreadItem::ToolCall {
             name,
             arguments_json,
