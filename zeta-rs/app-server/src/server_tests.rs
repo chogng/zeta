@@ -1,7 +1,11 @@
 use super::*;
 use base64::Engine;
 use std::io::Cursor;
+use std::io::Write;
+use std::net::Shutdown;
+use std::os::unix::net::UnixStream;
 use std::sync::Arc;
+use std::sync::Condvar;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
@@ -22,6 +26,18 @@ use zeta_core::{
     ToolAuthorization, ToolOutputSink, ToolService,
 };
 use zeta_file_system::LocalFileSystem;
+use zeta_login::AccountRef;
+use zeta_login::AccountSnapshot;
+use zeta_login::AccountStatus;
+use zeta_login::BeginLogin;
+use zeta_login::BeginLoginRequest;
+use zeta_login::CancelLoginOutcome;
+use zeta_login::CompleteLogin;
+use zeta_login::InteractiveLoginDriver;
+use zeta_login::LoginCompletionOutcome;
+use zeta_login::LoginError;
+use zeta_login::LoginId;
+use zeta_login::LoginService;
 use zeta_model_provider::EchoModel;
 use zeta_protocol::InteractionDeadline;
 use zeta_protocol::StableTurnErrorCode;
@@ -52,6 +68,66 @@ fn server() -> AppServer {
     server_with_model(Arc::new(crate::local::ProviderModelService::new(Arc::new(
         EchoModel,
     ))))
+}
+
+#[derive(Clone)]
+struct CapturingWriter {
+    output: Arc<(Mutex<Vec<u8>>, Condvar)>,
+}
+
+#[derive(Default)]
+struct TestLoginDriver;
+
+impl InteractiveLoginDriver for TestLoginDriver {
+    fn read_account(&self) -> Result<Option<AccountSnapshot>, LoginError> {
+        Ok(None)
+    }
+
+    fn begin(&self, request: BeginLoginRequest) -> Result<BeginLogin, LoginError> {
+        Ok(BeginLogin::Browser {
+            login_id: request.login_id,
+            authorization_url: "https://auth.example.test/start".into(),
+        })
+    }
+
+    fn cancel(&self, _: &LoginId) -> Result<CancelLoginOutcome, LoginError> {
+        Ok(CancelLoginOutcome::Cancelled)
+    }
+
+    fn logout(&self, _: &AccountRef) -> Result<(), LoginError> {
+        Ok(())
+    }
+}
+
+impl Write for CapturingWriter {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        let (output, changed) = self.output.as_ref();
+        output
+            .lock()
+            .map_err(|_| std::io::Error::other("capture lock poisoned"))?
+            .extend_from_slice(bytes);
+        changed.notify_all();
+        Ok(bytes.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+fn wait_for_captured(output: &Arc<(Mutex<Vec<u8>>, Condvar)>, needle: &str) {
+    let deadline = Instant::now() + Duration::from_secs(2);
+    let (bytes, changed) = output.as_ref();
+    let mut bytes = bytes.lock().unwrap();
+    loop {
+        if String::from_utf8_lossy(&bytes).contains(needle) {
+            return;
+        }
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        assert!(!remaining.is_zero(), "timed out waiting for {needle}");
+        let (next, _) = changed.wait_timeout(bytes, remaining).unwrap();
+        bytes = next;
+    }
 }
 
 #[derive(Clone)]
@@ -1930,6 +2006,19 @@ fn config_updates_use_typed_command_ids() {
         }),
     );
     assert_eq!(mcp["result"]["revision"], 1);
+    let mcp_status = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":40,"method":"mcp/server/status","params":{}
+        }),
+    );
+    assert_eq!(mcp_status["result"]["catalogGeneration"], 1);
+    assert_eq!(mcp_status["result"]["servers"][0]["id"], "user:mcp:github");
+    assert_eq!(
+        mcp_status["result"]["servers"][0]["state"]["status"],
+        "disabled"
+    );
     let skill = call(
         &server,
         &mut connection,
@@ -2178,6 +2267,92 @@ fn exec_policy_rule_rpc_round_trips_typed_user_rules() {
 }
 
 #[test]
+fn mcp_runtime_intent_rpc_does_not_mutate_config_revision() {
+    let path = std::env::temp_dir().join(format!(
+        "zeta-app-server-mcp-intent-{}.sqlite3",
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    let server = server()
+        .with_config_store(Arc::new(ConfigStore::open(&path).unwrap()))
+        .with_local_workspace_host(None, crate::server::WorkspaceSwitchTrustPolicy::Restricted)
+        .unwrap();
+    let mut connection = server.connection();
+    let initialized = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":1,"method":"initialize",
+            "params":{"clientInfo":{"name":"test","version":"1"},"capabilities":{}}
+        }),
+    );
+    assert!(
+        initialized["result"]["capabilities"]["sessions"]
+            .as_bool()
+            .unwrap()
+    );
+
+    let created = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":2,"method":"mcp/server/upsert",
+            "params":{
+                "commandId":"intent-server","expectedRevision":0,
+                "server":{
+                    "id":"user:mcp:intent",
+                    "displayName":"Intent",
+                    "transport":{"type":"streamableHttp","url":"https://mcp.example.test"},
+                    "credential":{"type":"unauthenticated"},
+                    "enablement":"disabled"
+                }
+            }
+        }),
+    );
+    assert_eq!(created["result"]["revision"], 1);
+    let connected = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":3,"method":"mcp/server/connect",
+            "params":{"serverId":"user:mcp:intent"}
+        }),
+    );
+    assert_eq!(
+        connected["result"],
+        serde_json::json!({
+            "serverId":"user:mcp:intent","intent":"connect"
+        })
+    );
+    let disconnected = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":4,"method":"mcp/server/disconnect",
+            "params":{"serverId":"user:mcp:intent"}
+        }),
+    );
+    assert_eq!(
+        disconnected["result"],
+        serde_json::json!({
+            "serverId":"user:mcp:intent","intent":"disconnect"
+        })
+    );
+    let read = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":5,"method":"config/read","params":{}}),
+    );
+    assert_eq!(read["result"]["revision"], 1);
+    assert_eq!(
+        read["result"]["mcpServers"]["user:mcp:intent"]["enablement"],
+        "disabled"
+    );
+}
+
+#[test]
 fn tool_search_configure_rejects_an_unavailable_embedding_before_commit() {
     let path = std::env::temp_dir().join(format!(
         "zeta-app-server-tool-search-config-{}.sqlite3",
@@ -2273,7 +2448,7 @@ fn provider_context_budget_metadata_round_trips_through_the_rpc() {
 }
 
 #[test]
-fn interaction_resolution_uses_the_durable_request_identity() {
+fn interaction_resolution_uses_the_durable_identity_and_resumes_the_turn() {
     let server = server();
     let mut connection = server.connection();
     initialize_with_capabilities(
@@ -2361,9 +2536,271 @@ fn interaction_resolution_uses_the_durable_request_identity() {
     );
 
     assert_eq!(resolved["result"]["value"]["sequence"], 6);
-    let snapshot = server.sessions().threads().read_thread(&thread_id).unwrap();
-    assert_eq!(snapshot.turns[0].status, zeta_core::TurnStatus::Running);
-    assert!(snapshot.turns[0].pending_interaction.is_none());
+    let deadline = Instant::now() + Duration::from_secs(2);
+    loop {
+        let snapshot = server.sessions().threads().read_thread(&thread_id).unwrap();
+        assert!(snapshot.turns[0].pending_interaction.is_none());
+        if snapshot.turns[0].status == zeta_core::TurnStatus::Completed {
+            assert!(snapshot.items.iter().any(|item| {
+                matches!(item, zeta_protocol::ThreadItem::AgentMessage { text, .. } if text == "Zeta: wait")
+            }));
+            break;
+        }
+        assert_eq!(snapshot.turns[0].status, zeta_core::TurnStatus::Running);
+        assert!(
+            Instant::now() < deadline,
+            "resolved interaction did not resume the waiting Turn"
+        );
+        thread::sleep(Duration::from_millis(10));
+    }
+}
+
+#[derive(Default)]
+struct AppServerInteractiveModel {
+    calls: AtomicUsize,
+}
+
+impl ModelService for AppServerInteractiveModel {
+    fn invoke(
+        &self,
+        _: zeta_core::ModelSelection<'_>,
+        _: &ModelRequest,
+        _: &CancellationToken,
+    ) -> Result<ModelResponse, CoreError> {
+        let call = self.calls.fetch_add(1, Ordering::Relaxed);
+        if call == 0 {
+            return Ok(ModelResponse {
+                output: vec![ResponseItem::ToolCall(ToolCall {
+                    id: zeta_protocol::ToolCallId::new("app-server-interactive-call").unwrap(),
+                    name: zeta_protocol::ToolName::new("app-server-interactive").unwrap(),
+                    arguments: serde_json::json!({}),
+                })],
+                usage: None,
+                stop_reason: StopReason::ToolUse,
+            });
+        }
+        Ok(ModelResponse {
+            output: vec![ResponseItem::Text("done".into())],
+            usage: None,
+            stop_reason: StopReason::Completed,
+        })
+    }
+}
+
+struct AppServerInteractiveTool;
+
+impl ToolService for AppServerInteractiveTool {
+    fn definitions(&self) -> Vec<ToolDefinition> {
+        vec![ToolDefinition {
+            name: zeta_protocol::ToolName::new("app-server-interactive").unwrap(),
+            description: "request test user input".into(),
+            parameters: serde_json::json!({"type":"object"}),
+            strict: true,
+        }]
+    }
+
+    fn prepare(&self, call: &ToolCall) -> Result<ActionReviewRequest, CoreError> {
+        Ok(ActionReviewRequest::new(
+            ResolvedAction::new(
+                ActionDigest::from_canonical_bytes(serde_json::to_vec(call).unwrap()),
+                ActionKind::SystemOperation,
+                "request test user input",
+                CapabilitySet::new([]),
+            ),
+            ActionProvenance::new(ActionSource::BuiltInTool, "app-server-interactive"),
+            SandboxCompatibility::Supported(shell_test_sandbox()),
+            ActionPolicyRevision::new("app-server-interactive-v1"),
+        ))
+    }
+
+    fn execute(
+        &self,
+        _: &ToolCall,
+        _: &ToolAuthorization,
+        _: &CancellationToken,
+    ) -> Result<ToolExecutionOutput, CoreError> {
+        Err(CoreError::Execution(
+            "interactive execution context is required".into(),
+        ))
+    }
+
+    fn execute_streaming_with_facts_and_interactions(
+        &self,
+        _: &ToolCall,
+        _: &ToolAuthorization,
+        _: &CancellationToken,
+        _: &zeta_core::ToolExecutionFacts,
+        interactions: Arc<dyn zeta_core::ToolInteractionService>,
+        _: &mut dyn ToolOutputSink,
+    ) -> Result<ToolExecutionOutput, CoreError> {
+        match interactions.request_user_input(RequestUserInput {
+            questions: vec![zeta_protocol::UserInputQuestion {
+                id: "city".into(),
+                header: "City".into(),
+                question: "Which city?".into(),
+                options: Vec::new(),
+                allow_free_form: true,
+            }],
+        })? {
+            zeta_core::ToolUserInputOutcome::Answered(response) => Ok(
+                ToolExecutionOutput::Success(response.answers["city"].value.clone()),
+            ),
+            zeta_core::ToolUserInputOutcome::Cancelled(reason) => Ok(ToolExecutionOutput::Failure(
+                format!("interaction cancelled: {reason:?}"),
+            )),
+        }
+    }
+}
+
+struct CountingResumeBackend {
+    delegate: Arc<dyn zeta_core::TurnExecutionBackend>,
+    resumes: Arc<AtomicUsize>,
+}
+
+impl zeta_core::TurnExecutionBackend for CountingResumeBackend {
+    fn start(
+        &self,
+        thread_id: &zeta_protocol::ThreadId,
+        turn_id: &zeta_protocol::TurnId,
+    ) -> Result<(), CoreError> {
+        self.delegate.start(thread_id, turn_id)
+    }
+
+    fn resume(
+        &self,
+        thread_id: &zeta_protocol::ThreadId,
+        turn_id: &zeta_protocol::TurnId,
+    ) -> Result<(), CoreError> {
+        self.resumes.fetch_add(1, Ordering::Relaxed);
+        self.delegate.resume(thread_id, turn_id)
+    }
+}
+
+#[test]
+fn live_tool_interaction_resolution_wakes_execution_without_duplicate_backend_resume() {
+    let model = Arc::new(AppServerInteractiveModel::default());
+    let server = server_with_model(model.clone()).with_tool_service(
+        Arc::new(AppServerInteractiveTool),
+        Arc::new(ShellTestPolicy),
+    );
+    let resumes = Arc::new(AtomicUsize::new(0));
+    let backend = Arc::new(CountingResumeBackend {
+        delegate: server.turn_executor_backend(),
+        resumes: resumes.clone(),
+    });
+    let server = server.with_turn_backend(backend);
+    let mut connection = server.connection();
+    initialize_with_capabilities(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "agentInteractions":{"version":1,"kinds":["userInput"]}
+        }),
+    );
+    let session = create_session(&server, &mut connection, 2, "interactive-session");
+    let session_id = session["result"]["session"]["sessionId"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let thread = create_thread(
+        &server,
+        &mut connection,
+        3,
+        "interactive-thread",
+        &session_id,
+        1,
+    );
+    let thread_id = thread["result"]["value"]["threadId"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":4,
+            "method":"session/thread/subscribe",
+            "params":{"sessionId":session_id,"threadId":thread_id,"afterSequence":1}
+        }),
+    );
+    let started = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":5,
+            "method":"session/request",
+            "params":{
+                "commandId":"interactive-turn",
+                "sessionId":session_id,
+                "expectedSequence":1,
+                "request":{"type":"startTurn","threadId":thread_id,"input":[{"type":"text","text":"ask"}]}
+            }
+        }),
+    );
+    let turn_id = started["result"]["value"]["turnId"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let protocol_thread_id = zeta_protocol::ThreadId::new(&thread_id).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(2);
+    let (sequence, request_id) = loop {
+        let snapshot = server
+            .sessions()
+            .threads()
+            .read_thread(&protocol_thread_id)
+            .unwrap();
+        if let Some(interaction) = snapshot.turns[0].pending_interaction.as_ref() {
+            break (snapshot.sequence, interaction.request_id.to_string());
+        }
+        assert!(
+            Instant::now() < deadline,
+            "interactive tool did not publish its durable request"
+        );
+        thread::sleep(Duration::from_millis(2));
+    };
+    let notifications = server.drain_notifications(&mut connection);
+    assert!(
+        notifications
+            .iter()
+            .any(|notification| notification.contains("\"method\":\"agent/request\""))
+    );
+
+    let resolved = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":6,
+            "method":"session/request",
+            "params":{
+                "commandId":"resolve-live-tool-input",
+                "sessionId":session_id,
+                "expectedSequence":sequence,
+                "request":{
+                    "type":"resolveInteraction",
+                    "threadId":thread_id,
+                    "turnId":turn_id,
+                    "requestId":request_id,
+                    "response":{"type":"userInput","response":{"answers":{"city":{"value":"Paris"}}}}
+                }
+            }
+        }),
+    );
+    assert!(resolved["result"]["value"]["sequence"].is_number());
+    wait_for_latest_turn(&server, &thread_id, TurnStatus::Completed);
+    assert_eq!(resumes.load(Ordering::Relaxed), 0);
+    assert_eq!(model.calls.load(Ordering::Relaxed), 2);
+    let snapshot = server
+        .sessions()
+        .threads()
+        .read_thread(&protocol_thread_id)
+        .unwrap();
+    assert!(snapshot.items.iter().any(|item| matches!(
+        item,
+        zeta_protocol::ThreadItem::ToolResult { text, is_error: false, .. } if text == "Paris"
+    )));
 }
 
 #[test]
@@ -2702,6 +3139,104 @@ fn jsonl_transport_writes_response_before_causal_updates() {
     let lines = String::from_utf8(output).unwrap();
     assert_eq!(lines.lines().count(), 2);
     assert!(lines.lines().all(|line| line.contains("\"id\":")));
+}
+
+#[test]
+fn jsonl_transport_writes_notifications_without_another_request() {
+    let server = Arc::new(server());
+    let (mut client, host) = UnixStream::pair().unwrap();
+    let output = Arc::new((Mutex::new(Vec::new()), Condvar::new()));
+    let served = Arc::clone(&server);
+    let captured = Arc::clone(&output);
+    let server_thread = thread::spawn(move || {
+        served.serve_jsonl(
+            std::io::BufReader::new(host),
+            CapturingWriter { output: captured },
+        )
+    });
+
+    client
+        .write_all(
+            b"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"clientInfo\":{\"name\":\"test\",\"version\":\"1\"},\"capabilities\":{}}}\n",
+        )
+        .unwrap();
+    wait_for_captured(&output, "\"id\":1");
+    server.publish_fs_changed_for_test(
+        zeta_app_server_protocol::protocol::fs::FsChanged::PathsChanged {
+            paths: vec![std::path::PathBuf::from("src/lib.rs")],
+        },
+    );
+
+    wait_for_captured(&output, "\"method\":\"fs/changed\"");
+    client.shutdown(Shutdown::Write).unwrap();
+    server_thread.join().unwrap().unwrap();
+}
+
+#[test]
+fn account_rpc_projects_login_completion_without_credentials() {
+    let login = Arc::new(LoginService::new(Arc::new(TestLoginDriver)).unwrap());
+    let server = server().with_login_service(Arc::clone(&login));
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+
+    let initial = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"account/read","params":{}}),
+    );
+    assert!(initial["result"]["account"].is_null());
+    let started = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":3,"method":"account/login/start",
+            "params":{"method":{"type":"openAiChatGptBrowser"}}
+        }),
+    );
+    let login_id = LoginId::new(started["result"]["loginId"].as_str().unwrap()).unwrap();
+    login
+        .complete(CompleteLogin {
+            login_id,
+            outcome: LoginCompletionOutcome::Succeeded {
+                account: AccountSnapshot {
+                    account: AccountRef {
+                        provider: "openai-chatgpt".into(),
+                        account_id: "acct_redacted".into(),
+                    },
+                    email: Some("person@example.test".into()),
+                    display_name: None,
+                    organization: None,
+                    plan: Some("plus".into()),
+                    status: AccountStatus::Ready,
+                    credential_revision: 7,
+                },
+            },
+        })
+        .unwrap();
+
+    let notifications = server.drain_notifications(&mut connection);
+    assert!(notifications.iter().any(|value| {
+        value.contains("\"method\":\"account/login/completed\"")
+            && value.contains("\"accountId\":\"acct_redacted\"")
+    }));
+    assert!(
+        notifications
+            .iter()
+            .any(|value| value.contains("\"method\":\"account/updated\""))
+    );
+    assert!(notifications.iter().all(|value| {
+        !value.contains("accessToken")
+            && !value.contains("refreshToken")
+            && !value.contains("apiKey")
+    }));
+
+    let read = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":4,"method":"account/read","params":{}}),
+    );
+    assert_eq!(read["result"]["account"]["plan"], "plus");
+    assert_eq!(read["result"]["account"]["credentialRevision"], 7);
 }
 
 #[test]

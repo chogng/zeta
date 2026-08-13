@@ -168,9 +168,12 @@ impl DebugAdapterService {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .kill_on_drop(true);
-        let mut child = process
-            .spawn()
-            .map_err(|_| DebugAdapterError::OperationFailed)?;
+        let mut child = {
+            let _runtime = self.runtime.enter();
+            process
+                .spawn()
+                .map_err(|_| DebugAdapterError::OperationFailed)?
+        };
         let stdin = child
             .stdin
             .take()

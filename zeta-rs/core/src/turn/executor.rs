@@ -6,11 +6,12 @@ use crate::context::ModelContextCompactionService;
 use crate::context::ModelInvocationPreparation;
 use crate::thread_controller::CommitContextCheckpointRequest;
 use crate::thread_controller::PrepareModelInvocationRequest;
+use crate::turn::TurnExecutionBackend;
 use crate::{
     ActionPolicyService, CompletedTurn, ContextAssembler, ContextCompactionRequest,
     ContextCompactionService, CoreError, HarnessInstructions, HarnessInstructionsProvider,
-    ModelSelection, ModelService, ModelStreamSink, NoThreadUpdates, NoTools, ThreadController,
-    ThreadUpdateSink, ToolService,
+    HookEvent, HookService, ModelSelection, ModelService, ModelStreamSink, NoHooks,
+    NoThreadUpdates, NoTools, ThreadController, ThreadUpdateSink, ToolService,
 };
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -40,6 +41,7 @@ pub struct TurnExecutor {
     updates: Arc<dyn ThreadUpdateSink>,
     instructions: Arc<dyn HarnessInstructionsProvider>,
     context_source: Arc<dyn crate::ContextSource>,
+    hooks: Arc<dyn HookService>,
     extensions: Arc<zeta_extension_api::ExtensionRegistry>,
 }
 
@@ -145,6 +147,7 @@ impl TurnExecutor {
                 snapshot: Arc::new(HarnessInstructions::default()),
             }),
             context_source: Arc::new(crate::NoContextSource),
+            hooks: Arc::new(NoHooks),
             extensions: Arc::new(zeta_extension_api::ExtensionRegistry::default()),
         }
     }
@@ -193,6 +196,12 @@ impl TurnExecutor {
         compaction: Arc<dyn ContextCompactionService>,
     ) -> Self {
         self.compaction = compaction;
+        self
+    }
+
+    /// Installs the host-owned Hook runtime used at Core safe-points.
+    pub fn with_hooks(mut self, hooks: Arc<dyn HookService>) -> Self {
+        self.hooks = hooks;
         self
     }
 
@@ -326,6 +335,7 @@ impl TurnExecutor {
             .threads
             .complete_turn_without_agent_message(thread_id, turn_id)
             .map_err(ExecutionFailure::persistence)?;
+        let _ = self.hooks.run(&HookEvent::TurnCompleted, cancellation);
         Ok(TurnExecutionOutcome::ShellCompleted { sequence })
     }
 
@@ -593,9 +603,11 @@ impl TurnExecutor {
                         .complete_turn_with_agent_message(thread_id, turn_id, item_id, text),
                     None => self.threads.complete_turn(thread_id, turn_id, text),
                 };
-                return completion
+                let completion = completion
                     .map(TurnExecutionOutcome::Completed)
-                    .map_err(ExecutionFailure::persistence);
+                    .map_err(ExecutionFailure::persistence)?;
+                let _ = self.hooks.run(&HookEvent::TurnCompleted, cancellation);
+                return Ok(completion);
             }
 
             if !text.trim().is_empty() {
@@ -721,6 +733,17 @@ impl TurnExecutor {
             self.policy.clone(),
         )
         .with_thread_updates(self.updates.clone())
+        .with_hooks(self.hooks.clone())
+    }
+}
+
+impl TurnExecutionBackend for TurnExecutor {
+    fn start(&self, thread_id: &ThreadId, turn_id: &TurnId) -> Result<(), CoreError> {
+        TurnExecutor::start(self, thread_id, turn_id)
+    }
+
+    fn resume(&self, thread_id: &ThreadId, turn_id: &TurnId) -> Result<(), CoreError> {
+        TurnExecutor::resume(self, thread_id, turn_id)
     }
 }
 

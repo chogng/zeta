@@ -78,13 +78,16 @@ fn bridges_sync_calls_to_continuously_running_async_runtime() {
     .expect("start owner");
 
     assert_eq!(owner.definitions().len(), 1);
+    assert_eq!(owner.status().catalog_generation, 1);
+    assert_eq!(owner.status().servers[0].server_id, server.to_string());
+    assert_eq!(owner.status().servers[0].tool_count, 1);
     let tool_name = owner.definitions()[0].name.clone();
     let prepared = owner
         .prepare_call(&tool_name, serde_json::json!({}))
         .expect("prepare call");
     assert_eq!(prepared.binding().exposed_name(), &tool_name);
     let output = owner
-        .call(prepared, CancellationSource::new().token())
+        .call(prepared, CancellationSource::new().token(), None)
         .expect("call tool");
 
     assert_eq!(output.status(), ToolOutputStatus::Success);

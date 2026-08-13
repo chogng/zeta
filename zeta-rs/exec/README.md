@@ -1,62 +1,123 @@
 # `zeta-exec`
 
-> 本 README 是 Zeta 单进程执行边界的实现契约。Tool ownership 见
-> [`docs/tools.md`](../../docs/tools.md)，平台 enforcement 见
-> [`docs/sandboxing.md`](../../docs/sandboxing.md)。
+> 本 README 维护无界面 Agent runner 的当前实现契约。跨进程调度、远程执行平面与阶段规划由
+> [`docs/exec.md`](../../docs/exec.md) 统一维护；App Server 连接契约见
+> [`docs/app-server-client.md`](../../docs/app-server-client.md)。
 
-本 crate 在 approval、WorkspaceRoot、sandbox backend、timeout、cancellation 和 output budget
-都已固定后启动一个显式进程。它不解析 shell，不决定 Core policy，也不把普通 non-zero exit
-自动分类为 sandbox denial。
+本 crate 把一次 new、resume 或 fork 意图转换成类型化的 Session/Thread/Turn 请求，观察
+canonical Turn 终态，并输出版本化事件。它不执行 shell process，不拥有 Agent loop，也不直接读取
+Core、rollout、store、model provider、sandbox 或 `zeta-tool-executor`。
+
+## 文件与职责
+
+| 文件 | 当前职责 |
+| --- | --- |
+| `src/model.rs` | run input、approval mode、versioned event、terminal outcome 与 exit code |
+| `src/run_id.rs` | `ExecRunId` 校验和进程内生成 |
+| `src/output.rs` | `ExecEventSink`、discard sink 与逐事件 flush 的 JSONL sink |
+| `src/connection.rs` | 私有 `ExecConnection` 端口及 embedded App Server adapter |
+| `src/runner.rs` | 公共 runner、timeout 配置、cancellation contract 与显式 shutdown |
+| `src/run_loop.rs` | prepare、subscribe、start、observe、interrupt 与 unsubscribe 编排 |
+| `src/turn_outcome.rs` | canonical terminal status、交互等待与公开 outcome 的唯一映射 |
+| `src/*_tests.rs` | schema、JSONL、终态、取消、交互与断线 contract tests |
 
 ## 公共契约
 
-| Symbol | 职责 |
-| --- | --- |
-| `ApprovalPolicy` | 对 exact program/argv digest 给出 start gate |
-| `CommandExecutionAuthority` | 显式区分 sandboxed 与 unrestricted execution |
-| `ExecutionLimits` | 固定 wall-clock timeout 与 stdout/stderr 总 byte budget |
-| `CommandExecutor::execute` | prepare、spawn、监督、capture 与 backend denial classification |
-| `CommandExecutionOutcome` | completed output 或 structured sandbox denial |
-| `ExecutionError` | start 前拒绝、spawn failure、取消、timeout 或 sandbox setup failure |
+`ExecRunner::run` 是唯一产品执行入口。调用方提供：
 
-真实顺序不可交换：
+- `ExecRunRequest`：稳定 run identity、`ExecEntry` 与 `HeadlessApprovalMode`；
+- `ExecEventSink`：按顺序接收完整事件，失败时不自动重试；
+- `ExecCancellation`：廉价、非阻塞的取消观察点。
+
+`ExecEntry` 明确区分 `New`、`Resume` 和 `Fork`，避免由多个 bool 或缺省 ID 推断入口意图。
+`AppServerTarget` 当前只实现 `Embedded`；remote backend 仍是系统文档中的计划设计。
+
+`ExecEvent` 是 schema version 为 1 的展示/自动化 envelope。`ThreadUpdated` 机械携带 canonical
+`ThreadUpdateEnvelope`，不建立第二套 authoritative item 或 Turn 状态。`JsonLinesExecEventSink`
+每次写入一个完整 JSON object、换行并 flush；诊断文本必须由宿主写入 stderr。
+
+终态只由读取到的 canonical `TurnStatus::{Completed,Failed,Interrupted}` 产生：
+
+| `ExecOutcome` | 来源 | 默认退出码 |
+| --- | --- | --- |
+| `Completed` | canonical `Completed` | 0 |
+| `Failed` | canonical `Failed`，保留 `StableTurnError` | 1 |
+| `RequiresInteraction` | headless policy 请求 interrupt，随后观察到 canonical `Interrupted` | 2 |
+| `Interrupted` | canonical `Interrupted` | 130 |
+| `OutcomeUnknown` | Turn 已开始，但连接、观察或 interrupt handshake 未给出终态 | 75 |
+
+## 内部接口地图与调用路径
+
+`EmbeddedConnection` 是 `zeta-app-server-client` 的薄适配器；它只构造协议 Params、检查
+`SessionRequestResult` variant，并把 notification 映射为私有 `ConnectionEvent`。
+`prepare_run` 拥有 new/resume/fork 到 Session/Thread 选择的唯一映射。`terminal_outcome` 是
+canonical Turn status 到公开 outcome 的唯一转换点。`required_interaction` 只决定无 UI 时何时请求
+interrupt，不改变 App Server 内的批准结论。`best_effort_interrupt` 只用于 event sink 在 Turn 启动后
+失败的清理路径。
 
 ```text
-cancellation checkpoint
-→ ApprovalPolicy
-→ cancellation checkpoint
-→ SandboxManager::prepare
-→ cancellation checkpoint
-→ spawn prepared command
-→ poll child + cancellation + timeout
-→ join stdout/stderr readers
-→ bounded merge
-→ SandboxBackend::classify_denial
+ExecRunner::run
+  → EmbeddedConnection::start
+  → ExecRunner::run_connected
+     → prepare_run
+     → ExecConnection::subscribe_thread
+     → ExecConnection::start_turn
+     → ExecRunner::drive_turn
+        → read_thread / poll_event
+        → interrupt_turn when cancellation, timeout or unsupported interaction wins
+        → terminal_outcome
+     → ExecConnection::unsubscribe_thread
+  → ExecConnection::close
 ```
 
-只有 backend 返回的 `PreparedCommand` 会被启动。requested command 不会绕过 backend 直接 spawn。
-`Sandboxed` authority 若无法建立 backend boundary，必须失败关闭；调用方不能静默改成
-`Unrestricted`。
+`SessionRequestParams.expected_sequence` 在 Thread mutation 路径使用最新 Thread sequence；调用方不能
+硬编码新 Thread 的初始 sequence，也不能把 Session sequence 用于 StartTurn/InterruptTurn。
+每种 mutation 使用由 `ExecRunId + operation` 生成的稳定 `CommandId`，当前实现不自动 retry。
 
-## 取消、timeout 与输出
+若在本 crate 出现 Core reducer、provider request、rollout 读取、process spawn、sandbox policy 或
+scheduler lease table，说明 ownership 已漂移。底层进程执行只能进入
+[`zeta-tool-executor`](../tool-executor/README.md)。
 
-spawn 前观察到 cancellation 返回 `CancelledBeforeStart`。spawn 后 cancellation 或 timeout 会
-先 kill/wait child，再 join capture threads；前者返回 `CancelledAfterStart`，后者返回
-`TimedOut`。上层必须把两者视为已经跨过 side-effect boundary，不能自动 replay。
+## 取消、交互与失败
 
-stdout 与 stderr reader 各自最多读取总 budget，最终合并时 stdout 优先、stderr 使用剩余空间。
-`CommandOutput::{stdout_truncated,stderr_truncated}` 明确指出原 stream 是否超过保留范围。budget 是
-byte 数；截断跨 UTF-8 code point 时使用 lossy decoding，调用方不能把 retained string 当作完整
-输出。
+Turn 创建前取消返回 `ExecError::CancelledBeforeStart`。Turn 创建后取消和 timeout 都先发送类型化
+`SessionRequest::InterruptTurn`，然后在 `interrupt_timeout` 内继续读取 snapshot，只有观察到
+canonical terminal status 才返回 `Interrupted` 或 `RequiresInteraction`。
 
-## 内部接口与漂移检查
+默认 `DenyInteractiveRequests` 使用普通 approval policy，但一旦 Turn 等待 approval、user input 或
+capability，就请求 interrupt。`AutomaticReview` 允许 App Server 自动审查 approval，仍会停止无法呈现
+的 user input/capability。`BypassPermissions` 必须由宿主显式选择，不能成为远程 worker 默认值。
 
-`check_cancellation_before_start` 固定 pre-spawn semantics；`terminate` 统一 kill/wait/join；
-`drain_stream` 只负责 bounded capture。若 Tool schema、Core approval、自动 retry 或 Thread mutation
-进入本 crate，说明 ownership 已漂移。
+连接关闭不会转换成 `Failed`。Runner 会做一次最终 Thread read；无法确认 terminal status 时返回
+`OutcomeUnknown`。当前没有 remote reconnect/resubscribe backend，因而 unknown outcome 必须交给上层
+显式处理，不能自动 replay 可能已经产生副作用的 Turn。
+
+Sink 在 Turn 启动后失败会触发一次 best-effort interrupt，再返回 `ExecError::Output`。正常路径始终
+unsubscribe 并调用 `AppServerSession::shutdown`；shutdown 失败不会被静默吞掉。
+
+## 宿主接入与验证
+
+`zeta-cli` 负责参数、stdout/stderr 和 signal 注册；它不复制 runner 状态机。新的宿主应构造
+`EmbeddedAppServerOptions`、选择明确 approval mode，并根据 `ExecOutcome::exit_code` 映射进程或 Job
+状态。
 
 ```bash
 cargo test -p zeta-exec
+cargo test -p zeta-cli
 cargo clippy -p zeta-exec --all-targets --no-deps -- -D warnings
 bazel test //zeta-rs/exec:exec-unit-tests
 ```
+
+修改 event JSON shape 时必须更新 schema version、serialization fixture、本 README 和
+`docs/exec.md`。修改 interruption、terminal mapping 或 sequence 使用时必须同步覆盖 runner fake
+connection tests 与 CLI exit behavior。
+
+## 当前限制与扩展点
+
+- 当前只支持 embedded App Server，不支持 daemon/remote transport；
+- 当前是同步 run-once runner，没有长期 worker、Job/Attempt、lease、fencing 或 event ack；
+- JSONL 已 versioned，但尚无跨版本 compatibility fixture、last-message file 或 stdin item stream；
+- 自动审查由 App Server 拥有；当前 headless runner 不实现远程 reviewer channel；
+- 断线后只做最终 read，不执行 reconnect + snapshot/gap resubscribe。
+
+这些能力的 ownership 与前置条件以 `docs/exec.md` 的阶段 3–5 为准。

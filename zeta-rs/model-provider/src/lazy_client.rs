@@ -5,6 +5,7 @@ use zeta_client::ClientError;
 use zeta_client::ClientRequest;
 use zeta_client::ClientResponse;
 use zeta_client::OperationClient;
+use zeta_client::OperationStreamSink;
 
 type ClientFactory =
     dyn Fn() -> Result<Arc<dyn OperationClient>, ClientError> + Send + Sync + 'static;
@@ -52,6 +53,27 @@ impl OperationClient for LazyOperationClient {
             .map_err(|signal| ClientError::Cancelled(signal.reason().to_string()))?;
         self.client()?
             .execute_with_cancellation(request, cancellation)
+    }
+
+    fn execute_streaming(
+        &self,
+        request: &ClientRequest,
+        sink: &mut dyn OperationStreamSink,
+    ) -> Result<ClientResponse, ClientError> {
+        self.client()?.execute_streaming(request, sink)
+    }
+
+    fn execute_streaming_with_cancellation(
+        &self,
+        request: &ClientRequest,
+        cancellation: &CancellationToken,
+        sink: &mut dyn OperationStreamSink,
+    ) -> Result<ClientResponse, ClientError> {
+        cancellation
+            .check()
+            .map_err(|signal| ClientError::Cancelled(signal.reason().to_string()))?;
+        self.client()?
+            .execute_streaming_with_cancellation(request, cancellation, sink)
     }
 }
 

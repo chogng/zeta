@@ -36,8 +36,13 @@ struct ActiveExecution {
     cancellation: CancellationSource,
 }
 
-/// Identifies one accepted execution operation and its cancellation scope.
-pub(crate) struct ThreadExecutionContext {
+/// Cancellation and stale-operation guard for one accepted backend execution.
+///
+/// Turn execution backends receive this value only from
+/// [`ThreadController::enqueue_turn_execution`](super::ThreadController::enqueue_turn_execution).
+/// They must check it before external side effects and observe its cancellation token while
+/// waiting on a delegated runtime.
+pub struct ThreadExecutionContext {
     thread_id: ThreadId,
     turn_id: TurnId,
     incarnation: ThreadIncarnationId,
@@ -48,11 +53,11 @@ pub(crate) struct ThreadExecutionContext {
 }
 
 impl ThreadExecutionContext {
-    pub(crate) fn cancellation(&self) -> &CancellationToken {
+    pub fn cancellation(&self) -> &CancellationToken {
         &self.cancellation
     }
 
-    pub(crate) fn check_current(&self) -> Result<(), CoreError> {
+    pub fn check_current(&self) -> Result<(), CoreError> {
         let active = self
             .active
             .lock()

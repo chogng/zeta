@@ -143,6 +143,8 @@ notification contract，不能拥有隐藏业务接口。JSONL/stdio、WebSocket
     "codeIndex": true,
     "cloudCodeIndex": false,
     "terminal": true,
+    "mcp": true,
+    "mcpOAuth": false,
     "typst": true,
     "updateReplay": true
   },
@@ -175,7 +177,7 @@ inline argument parsing；提交仍通过 `session/request` 的 `StartTurn.input
 | `session/request` | Session | canonical typed mutation request；覆盖 Session、child Thread 与 Turn 操作 |
 | `session/unsubscribe` | connection | 删除订阅 |
 | `session/request` | Session | 通过 tagged request 完成 Session、child Thread 和 Turn mutation |
-| `model/list` | global model catalog | 列出当前已配置 provider 可选择的模型 |
+| `model/list` | global model catalog | 列出当前已配置 direct provider 与已登录 ChatGPT account 可选择的 Codex 模型 |
 | `session/thread/read` | Session + Thread | 读取 canonical Thread snapshot |
 | `session/thread/subscribe` | Session + Thread + connection | snapshot + `afterSequence` 之后的 durable gap |
 | `session/thread/unsubscribe` | Session + Thread + connection | 删除 child Thread 订阅 |
@@ -186,6 +188,7 @@ inline argument parsing；提交仍通过 `session/request` 的 `StartTurn.input
 | `connector/disconnect` | Connector authority + secret store | 先撤销 runtime readiness，再报告 credential cleanup 状态 |
 | `connector/credential/cleanup` | Connector credential owner | 重试 durable post-disconnect secret 删除义务 |
 | `plugin/list` | Plugin authority | 分别投影 installed/enabled/granted/effective package 状态 |
+| `plugin/marketplace/list` / `plugin/install` / `plugin/update` / `plugin/rollback` | Plugin Marketplace + Plugin authority | 只接受 Host 注册 Marketplace 中由 `marketplaceId`、package identity 和 digest 精确绑定的条目；安装后不自动启用或 grant |
 | `plugin/enable` / `disable` / `grant` / `revokeGrant` / `uninstall` | Plugin authority | exact-package CAS lifecycle mutation |
 | `config/update` | config | typed command 更新配置 |
 | `execPolicy/rule/upsert` / `execPolicy/rule/remove` | config + local policy runtime | revision-safe 持久化 User typed rule，并为未来 Tool safe point 重组 policy snapshot |
@@ -195,9 +198,13 @@ inline argument parsing；提交仍通过 `session/request` 的 `StartTurn.input
 | `languageServer/configure` / `languageServer/remove` | config | revision-safe 修改或恢复 language-server mode/path preference |
 | `provider/configure` / `provider/remove` | config | 修改 Provider declaration |
 | `mcp/server/upsert` / `mcp/server/remove` / `mcp/server/enablement/set` | config | 修改 standalone MCP desired config |
+| `mcp/server/connect` / `mcp/server/disconnect` | runtime | 设置 process-local lifecycle intent，不改变 Config revision |
+| `mcp/server/status` | read | 读取 active Config/Plugin/Connector MCP runtime 的 redacted lifecycle 与 generation projection |
+| `mcp/oauth/start` / `mcp/oauth/complete` | MCP OAuth owner | 为 exact standalone Config server 启动和一次性完成 PKCE flow |
+| `mcp/oauth/refresh` / `mcp/oauth/revoke` | MCP OAuth owner + secret store | 轮换 runtime/lifecycle credential；或先断开 runtime、远端 revoke 后删除本地 secret |
 | `skill/source/add` / `skill/source/remove` / `skill/source/enablement/set` | config | 修改 User Skill source |
 | `plugin/request/upsert` / `plugin/request/remove` / `plugin/request/enablement/set` | config | 修改 exact Plugin request；不安装或激活 |
-| `hook/upsert` / `hook/remove` / `hook/enablement/set` | config | 修改 declarative Hook；不执行 process |
+| `hook/upsert` / `hook/remove` / `hook/enablement/set` | config + Hook runtime | 修改 declarative Hook；trusted Workspace 的未来 safe point 按 immutable snapshot 执行匹配的 sandbox process |
 | `skills/list` | global Skill catalog | 读取 cached projection 或请求完整 refresh |
 | `skill/enablement/set` | config + Skill catalog | revision-checked 启用/禁用 exact `SkillId` |
 | `skill/resource/open` | Skill runtime + Resource | 将 digest-pinned package resource materialize 为 connection-owned resource |
@@ -263,13 +270,31 @@ complete DTO。PKCE verifier 留在 Connector OAuth service 内存，Desktop 的
 由 Electron main 持有，Renderer 不接触 verifier 或 provider token。具体 provider adapter 必须由产品
 composition 显式注入。
 
+### 独立 MCP OAuth
+
+`initialize.capabilities.mcp` 表示 host 安装了 Config-backed MCP runtime surface；
+`initialize.capabilities.mcpOAuth` 只有在 host 注入至少一个 standalone MCP OAuth provider 时为 true。
+这两个 capability 分开：有 MCP Config/状态 RPC 不代表任意 server 都有 OAuth adapter。
+
+`mcp/oauth/start` 只接受 exact server ID 与 redirect URI，返回 browser navigation URL 和 process-local
+flow ID。目标必须是带 credential reference 的 HTTPS Streamable HTTP server；redirect 只允许 HTTPS 或
+本机 loopback HTTP。`mcp/oauth/complete` 的 state 与 authorization code 是 inbound-only zeroizing
+field，不出现在 result/error/debug；flow 一次性消费，并在 exchange 前重新读取当前 Config target。
+
+`mcp/oauth/refresh` 轮换 SecretStore 中分离的 runtime bearer 与 lifecycle secret，并触发 connect
+reconcile。`mcp/oauth/revoke` 先设置 disconnect intent，等待 active Tool generation 移除该 server，
+再调用 provider remote revoke；只有远端成功后才删除本地 secret。具体 discovery、client identity、
+scope、token parsing、audience 和 provider
+endpoint policy 属于 host 注入的 provider adapter，不属于 App Server protocol。
+
 Plugin request 是 config intent；Plugin lifecycle authority 是另一层事实。`plugin/list` 不把它们压成
 一个布尔值，而是分别返回 enabled、granted 与 effective，只有 exact installed package 同时 enabled 且
-granted 时才进入 activation。install source 仍由可信 ingestion owner 管理，不接受 Renderer 提交任意
-host filesystem path。
+granted 时才进入 activation。`plugin/install`、`plugin/update` 和 `plugin/rollback` 只接受 Host 注册
+Marketplace 中按 marketplace、package identity 与 digest 精确绑定的条目；Renderer 不能提交任意 host
+filesystem path。
 
-长期 Zeta account control plane 另见[第 11 节](#11-account-与登录)。它尚未进入当前 registry/schema，
-加入时必须和 Rust DTO、TypeScript 与 JSON Schema 同步提交。
+Zeta account control plane 另见[第 11 节](#11-account-与登录)。其 Rust DTO、TypeScript 与 JSON Schema
+由同一个 registry 生成并同步提交。
 
 ### 文件系统
 
@@ -465,8 +490,9 @@ spawn 前执行 `env_clear`，所以 PTY 看不到最终 map 之外的 App Serve
 `ModelRef`。选择结果写入 Session event stream，只影响该 Session。`session/request::StartTurn` 将 Session
 当前模型复制到新 Turn；后续 Session 或全局配置变化不会改变已经启动的 Turn。
 
-`model/list` 只返回 App Server 当前已配置 provider 的静态目录。远端账号 entitlement 和模型
-实际可用性仍在调用时验证。
+`model/list` 合并 App Server 当前已配置 direct provider 目录与 upstream Codex account-filtered
+目录。后者使用稳定 `openai-chatgpt` provider identity；选择时再次校验 exact model，实际 entitlement
+仍在 upstream 调用时最终验证。登录状态不会隐式改变 Session model。
 
 ## 7. Thread 与 Turn
 
@@ -669,6 +695,12 @@ Resource bytes 使用标准 RFC 4648 Base64；`decodedLength` 是原始 byte 数
 - `GitNotRepository`
 - `GitOperationFailed`
 - `ConfigUnavailable`
+- `McpServerNotFound`
+- `McpRuntimeUnavailable`
+- `McpOAuthUnavailable`
+- `McpOAuthInvalidCallback`
+- `McpOAuthExpired`
+- `McpOAuthOperationFailed`
 - `ConnectorsUnavailable`
 - `ConnectorGenerationConflict`
 - `ConnectorOperationFailed`
@@ -680,7 +712,7 @@ Resource bytes 使用标准 RFC 4648 Base64；`decodedLength` 是原始 byte 数
 
 ## 11. Account 与登录
 
-Account 是 App Server 暴露给客户端的 redacted 控制面，不是 secret/token authority。长期 method：
+Account 是 App Server 暴露给客户端的 redacted 控制面，不是 secret/token authority。当前 method：
 
 ```text
 account/read
@@ -692,15 +724,20 @@ account/login/completed
 account/updated
 ```
 
-第一阶段只支持：
+当前交互登录 method：
 
 ```rust
 pub enum AccountLoginMethod {
-    ApiKey { provider: ProviderId },
     OpenAiChatGptBrowser,
     OpenAiChatGptDeviceCode,
 }
 ```
+
+上述 RPC、revisioned account projection 和 `account/login/completed` / `account/updated` 主动通知已
+实现，并通过注入的 `LoginService` 工作；未安装服务时返回稳定 `AccountUnavailable`。本地默认组合
+安装 deferred `zeta-codex-app-server` driver，第一次 `account/read` 或 login command 才启动上游
+`codex app-server`；二进制缺失、握手失败或 account method 不兼容时返回稳定账户错误。API key 继续
+属于对应模型凭据领域，不进入 account/login payload。
 
 Provider 是否支持 interactive login、credential 的实际所有者和 refresh 语义由
 [`zeta-login`](login.md) 的 exact driver 决定。对 ChatGPT/Codex subscription，该 driver 是

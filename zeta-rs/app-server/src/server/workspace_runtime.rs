@@ -11,6 +11,7 @@ use crate::code_retrieval_context::CodeRetrievalContextSource;
 use crate::code_retrieval_tool::CodeRetrievalTool;
 use crate::dynamic_tools::DynamicToolCompositionError;
 use crate::dynamic_tools::compose_dynamic_tools;
+use crate::hook_runtime::HookRuntime;
 use crate::local_tools::LocalExecPolicyConfig;
 use crate::local_tools::append_local_tool;
 use crate::local_tools::compose_local_tools_with_config;
@@ -64,7 +65,7 @@ use zeta_workspace::{
 };
 
 pub(super) struct WorkspaceRuntime {
-    authorization: Option<WorkspaceAuthorization>,
+    pub(super) authorization: Option<WorkspaceAuthorization>,
     pub(super) file_system: Option<Arc<dyn WorkspaceFileSystem>>,
     pub(super) _file_system_watcher: Option<FileSystemWatcher>,
     pub(super) _git_watcher: Option<GitWatcher>,
@@ -103,6 +104,7 @@ impl WorkspaceRuntime {
 
 pub(super) struct LocalWorkspaceHost {
     tools: Arc<WorkspaceToolPorts>,
+    hooks: Arc<HookRuntime>,
     trust: WorkspaceSwitchTrustPolicy,
 }
 
@@ -114,7 +116,10 @@ pub(crate) struct WorkspaceRuntimeControl {
     threads: Arc<ThreadController>,
     multi_agent: Arc<MultiAgentCoordinator>,
     sessions: Arc<SessionCoordinator>,
+    turn_backend: Arc<dyn zeta_core::TurnExecutionBackend>,
     updates: Arc<super::update_broker::UpdateBroker>,
+    hooks: Arc<HookRuntime>,
+    mcp_status: Arc<RwLock<zeta_mcp_extension::McpRuntimeStatusSnapshot>>,
     config: Option<Arc<ConfigStore>>,
     exec_policy_config: Arc<RwLock<LocalExecPolicyConfig>>,
     code_index_semantic_storage_root: Option<PathBuf>,
@@ -173,7 +178,8 @@ impl WorkspaceRuntimeControl {
                 ),
             );
         }
-        local = append_multi_agent_tools(local, &self.multi_agent, &self.sessions, &self.runtime);
+        local =
+            append_multi_agent_tools(local, &self.multi_agent, &self.sessions, &self.turn_backend);
         let local_port = local
             .tool_port()
             .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
@@ -183,6 +189,44 @@ impl WorkspaceRuntimeControl {
             .write()
             .unwrap_or_else(|poisoned| poisoned.into_inner()) = policy_config;
         Ok(())
+    }
+
+    pub(crate) fn reconcile_hooks(
+        &self,
+        config: &zeta_config::HooksConfig,
+    ) -> Result<(), WorkspaceRuntimeError> {
+        let _authority = self.authority_gate.lock().map_err(|_| {
+            WorkspaceRuntimeError::Failed("Workspace authority gate poisoned".into())
+        })?;
+        self.hooks.replace_config(config.clone());
+        let workspace = self
+            .runtime
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .authorization
+            .as_ref()
+            .filter(|authorization| authorization.decision() != WorkspaceTrustDecision::Restricted)
+            .map(|authorization| authorization.root().clone());
+        match workspace {
+            Some(workspace) => self
+                .hooks
+                .activate(workspace)
+                .map_err(WorkspaceRuntimeError::Failed),
+            None => {
+                self.hooks.clear_workspace();
+                Ok(())
+            }
+        }
+    }
+
+    pub(crate) fn replace_mcp_status(
+        &self,
+        snapshot: zeta_mcp_extension::McpRuntimeStatusSnapshot,
+    ) {
+        *self
+            .mcp_status
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = snapshot;
     }
 
     pub(crate) fn reconcile_semantic_code_index_runtime(
@@ -263,8 +307,9 @@ impl WorkspaceRuntimeControl {
                 .with_action_policy_revision(action_policy_revision),
             ),
         );
+        let turn_backend: Arc<dyn zeta_core::TurnExecutionBackend> = self.turn_backend.clone();
         let local =
-            append_multi_agent_tools(local, &self.multi_agent, &self.sessions, &self.runtime);
+            append_multi_agent_tools(local, &self.multi_agent, &self.sessions, &turn_backend);
         let watcher = FileSystemWatcher::start_with_observers(
             authorization.root().clone(),
             Arc::clone(&self.updates),
@@ -335,6 +380,7 @@ impl WorkspaceRuntimeControl {
             extension_hosts.unbind_workspace();
         }
         authorization.revoke();
+        self.hooks.clear_workspace();
         let cloud_code_index = runtime.cloud_code_index.clone();
         let old_file_system_watcher = runtime._file_system_watcher.take();
         let code_index = runtime.code_index.clone();
@@ -811,14 +857,22 @@ impl AppServer {
                 "local Workspace host is already installed".into(),
             ));
         }
-        let (search_config, providers) = match &self.config {
+        let (search_config, providers, hook_config) = match &self.config {
             Some(config) => {
                 let snapshot = config
                     .read_snapshot()
                     .map_err(|error| WorkspaceRuntimeError::Failed(error.0))?;
-                (snapshot.values.tool_search, snapshot.values.providers)
+                (
+                    snapshot.values.tool_search,
+                    snapshot.values.providers,
+                    snapshot.values.hooks,
+                )
             }
-            None => (ToolSearchConfig::default(), Default::default()),
+            None => (
+                ToolSearchConfig::default(),
+                Default::default(),
+                Default::default(),
+            ),
         };
         let tools = WorkspaceToolPorts::new(
             mcp,
@@ -832,21 +886,29 @@ impl AppServer {
             tools.reloadable.policy(),
             self.approval_review_model.clone(),
         ));
+        let hooks = Arc::new(HookRuntime::new(hook_config, tools.reloadable.policy()));
         let mut executor = TurnExecutor::new(
             self.sessions.threads().clone(),
             Arc::clone(&self.model),
             tools.reloadable.tools(),
             policy,
         )
+        .with_hooks(hooks.clone())
         .with_thread_updates(Arc::new(AppServerThreadUpdates {
             updates: Arc::clone(&self.updates),
         }));
         executor = executor.with_extensions(Arc::clone(&self.agent_extensions));
+        self.turn_backend.replace(Arc::new(executor.clone()));
         self.workspace_runtime
             .write()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .turn_executor = executor;
-        self.local_workspace_host = Some(LocalWorkspaceHost { tools, trust });
+        self.local_workspace_host = Some(LocalWorkspaceHost {
+            tools,
+            hooks,
+            trust,
+        });
+        self.use_current_local_turn_backend();
         Ok(self)
     }
 
@@ -874,7 +936,10 @@ impl AppServer {
                 threads: self.sessions.threads().clone(),
                 multi_agent: Arc::clone(&self.multi_agent),
                 sessions: Arc::clone(&self.sessions),
+                turn_backend: self.turn_backend.clone(),
                 updates: Arc::clone(&self.updates),
+                hooks: Arc::clone(&host.hooks),
+                mcp_status: Arc::clone(&self.mcp_status),
                 config: self.config.clone(),
                 exec_policy_config: Arc::clone(&self.local_exec_policy_config),
                 code_index_semantic_storage_root: self.code_index_semantic_storage_root.clone(),
@@ -975,6 +1040,7 @@ impl AppServer {
             ))
         })?;
 
+        host.hooks.clear_workspace();
         host.tools.replace_local(None)?;
         self.bind_workspace_skills(&canonical_root)?;
         if let Some(extension_hosts) = &self.extension_hosts {
@@ -1069,12 +1135,9 @@ impl AppServer {
                 .with_action_policy_revision(action_policy_revision),
             ),
         );
-        let local = append_multi_agent_tools(
-            local,
-            &self.multi_agent,
-            &self.sessions,
-            &self.workspace_runtime,
-        );
+        let turn_backend: Arc<dyn zeta_core::TurnExecutionBackend> = self.turn_backend.clone();
+        let local =
+            append_multi_agent_tools(local, &self.multi_agent, &self.sessions, &turn_backend);
         let local_port = local
             .tool_port()
             .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
@@ -1127,6 +1190,9 @@ impl AppServer {
                 WorkspaceRuntimeError::Failed("failed to initialize debug adapter runtime".into())
             })?,
         );
+        host.hooks
+            .activate(workspace.clone())
+            .map_err(WorkspaceRuntimeError::Failed)?;
         host.tools.replace_local(Some(local_port))?;
         self.bind_workspace_skills(&canonical_root)?;
         let context_source = Arc::new(CodeRetrievalContextSource::new(
@@ -1507,7 +1573,7 @@ fn append_multi_agent_tools(
     local: crate::local_tools::LocalToolComposition,
     coordinator: &Arc<MultiAgentCoordinator>,
     sessions: &Arc<SessionCoordinator>,
-    runtime: &Arc<RwLock<WorkspaceRuntime>>,
+    turn_backend: &Arc<dyn zeta_core::TurnExecutionBackend>,
 ) -> crate::local_tools::LocalToolComposition {
     let action_policy_revision = local.action_policy_revision().clone();
     append_local_tool(
@@ -1516,7 +1582,7 @@ fn append_multi_agent_tools(
             MultiAgentToolService::new(
                 Arc::clone(coordinator),
                 Arc::clone(sessions),
-                Arc::downgrade(runtime),
+                Arc::clone(turn_backend),
             )
             .with_action_policy_revision(action_policy_revision),
         ),

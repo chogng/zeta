@@ -1,3 +1,5 @@
+pub use crate::protocol::account::AccountLoginCompleted;
+pub use crate::protocol::account::AccountUpdated;
 pub use crate::protocol::config::ConfigChanged;
 pub use crate::protocol::connectors::ConnectorsChanged;
 pub use crate::protocol::extension_host::ExtensionHostChanged;

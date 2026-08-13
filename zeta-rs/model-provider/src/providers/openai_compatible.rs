@@ -1,5 +1,8 @@
-use super::{ProviderAdapter, api_endpoint};
+use super::ProviderAdapter;
+use super::api_endpoint;
+use super::stream_endpoint;
 use crate::ModelProviderError;
+use crate::provider::ModelEventSink;
 use zeta_api::{ApiEndpoint, ApiProtocol, ModelRequest, ModelResponse};
 use zeta_async_utils::CancellationToken;
 use zeta_client::{OperationClient, ResolvedApiTarget};
@@ -40,5 +43,24 @@ impl ProviderAdapter for OpenAiCompatibleAdapter {
                 cancellation,
             )
             .map_err(Into::into)
+    }
+
+    fn stream(
+        &self,
+        model: &str,
+        request: &ModelRequest,
+        client: &dyn OperationClient,
+        cancellation: &CancellationToken,
+        sink: &mut dyn ModelEventSink,
+    ) -> Result<ModelResponse, ModelProviderError> {
+        stream_endpoint(
+            self.endpoint,
+            &self.target,
+            model,
+            request,
+            client,
+            cancellation,
+            sink,
+        )
     }
 }

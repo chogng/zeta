@@ -2,6 +2,9 @@ use super::ThreadFeatureState;
 use crate::components::transcript::CommandStatus;
 use crate::components::transcript::MessageRole;
 use crate::features::thread::ThreadPresentationEvent;
+use zeta_protocol::ContentDigest;
+use zeta_protocol::ImageAttachmentRef;
+use zeta_protocol::ImageMediaType;
 use zeta_protocol::ItemId;
 use zeta_protocol::SessionId;
 use zeta_protocol::Thread;
@@ -34,6 +37,7 @@ fn canonical_snapshot_replaces_optimistic_projection_and_preserves_identity() {
             (MessageRole::User, "canonical prompt"),
             (MessageRole::Reasoning, "inspect the code"),
             (MessageRole::User, "[Image]"),
+            (MessageRole::User, "[Image]"),
             (MessageRole::Plan, "1. inspect\n2. change"),
             (MessageRole::Tool, "Tool · read_file"),
             (MessageRole::Tool, "Tool result · read_file"),
@@ -41,10 +45,10 @@ fn canonical_snapshot_replaces_optimistic_projection_and_preserves_identity() {
         ]
     );
     assert_eq!(
-        state.messages()[4].detail.as_deref(),
+        state.messages()[5].detail.as_deref(),
         Some("{\n  \"path\": \"src/lib.rs\"\n}")
     );
-    assert_eq!(state.messages()[5].detail.as_deref(), Some("file contents"));
+    assert_eq!(state.messages()[6].detail.as_deref(), Some("file contents"));
 }
 
 #[test]
@@ -333,6 +337,17 @@ fn thread_snapshot() -> Thread {
                     item_id: ItemId::new("item_3").unwrap(),
                     turn_id: turn_id.clone(),
                     url: "data:image/png;base64,cG5n".into(),
+                },
+                ThreadItem::UserImageAttachment {
+                    item_id: ItemId::new("item_attachment").unwrap(),
+                    turn_id: turn_id.clone(),
+                    attachment: ImageAttachmentRef {
+                        content_digest: ContentDigest::sha256(b"png"),
+                        media_type: ImageMediaType::Png,
+                        encoded_bytes: 3,
+                        width: 1,
+                        height: 1,
+                    },
                 },
                 ThreadItem::Plan {
                     item_id: ItemId::new("item_plan").unwrap(),

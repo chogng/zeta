@@ -371,6 +371,42 @@ impl ToolService for ExtendedLocalTools {
             )
         }
     }
+
+    fn execute_streaming_with_facts_and_interactions(
+        &self,
+        call: &ToolCall,
+        authorization: &ToolAuthorization,
+        cancellation: &CancellationToken,
+        facts: &ToolExecutionFacts,
+        interactions: Arc<dyn zeta_core::ToolInteractionService>,
+        sink: &mut dyn ToolOutputSink,
+    ) -> Result<ToolExecutionOutput, CoreError> {
+        if self
+            .extension
+            .definitions()
+            .iter()
+            .any(|definition| definition.name == call.name)
+        {
+            self.extension
+                .execute_streaming_with_facts_and_interactions(
+                    call,
+                    authorization,
+                    cancellation,
+                    facts,
+                    interactions,
+                    sink,
+                )
+        } else {
+            self.primary.execute_streaming_with_facts_and_interactions(
+                call,
+                authorization,
+                cancellation,
+                facts,
+                interactions,
+                sink,
+            )
+        }
+    }
 }
 
 fn resolve_ripgrep(context: &InstallContext) -> Result<RipgrepExecutable, RipgrepDiscoveryError> {

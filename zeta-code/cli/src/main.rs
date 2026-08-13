@@ -1,51 +1,61 @@
+use signal_hook::SigId;
+use signal_hook::consts::SIGINT;
 use std::env;
 use std::io::IsTerminal;
 use std::path::PathBuf;
-use std::time::Duration;
-use std::time::Instant;
-use std::time::SystemTime;
-use std::time::UNIX_EPOCH;
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use zeta_app_server::LocalAppServerOptions;
 use zeta_app_server::LocalProductServicesConfig;
 use zeta_app_server::open_local_app_server;
-use zeta_app_server_client::AppServerEvent;
 use zeta_app_server_client::AppServerSession;
 use zeta_app_server_client::InProcessClientOptions;
-use zeta_app_server_client::ServerNotification;
 use zeta_app_server_client::local_profile_root;
 use zeta_app_server_protocol::protocol::common::ClientInfo;
-use zeta_app_server_protocol::protocol::session::{
-    SessionCreateParams, SessionRequest, SessionRequestParams, SessionRequestResult,
-    SessionThreadReadParams, SessionThreadSubscribeParams,
-};
 use zeta_app_server_protocol::protocol::turn::InputItem;
-use zeta_protocol::{CommandId, ThreadItem, TurnStatus};
+use zeta_exec::AppServerTarget;
+use zeta_exec::DiscardExecEventSink;
+use zeta_exec::EmbeddedAppServerOptions;
+use zeta_exec::ExecEntry;
+use zeta_exec::ExecError;
+use zeta_exec::ExecFailure;
+use zeta_exec::ExecOutcome;
+use zeta_exec::ExecRunRequest;
+use zeta_exec::ExecRunner;
+use zeta_exec::HeadlessApprovalMode;
+use zeta_exec::JsonLinesExecEventSink;
+use zeta_protocol::SessionId;
+use zeta_protocol::ThreadId;
 
 fn main() {
     let mut arguments = env::args().skip(1);
     let outcome = match arguments.next() {
-        None => interactive(),
+        None => interactive().map_err(CliError::failure),
         Some(command) => match command.as_str() {
             "ask" => ask(arguments.collect::<Vec<_>>().join(" ")),
             "exec" => execute(arguments.collect()),
-            "app-server" => app_server_command(arguments.collect()),
-            "mcp-server" => mcp_server_command(arguments.collect()),
-            _ => Err(format!("unknown command: {command}")),
+            "app-server" => app_server_command(arguments.collect()).map_err(CliError::failure),
+            "mcp-server" => mcp_server_command(arguments.collect()).map_err(CliError::failure),
+            _ => Err(CliError::usage(format!("unknown command: {command}"))),
         },
     };
-    if let Err(message) = outcome {
-        eprintln!("zeta: {message}");
-        std::process::exit(1);
+    if let Err(error) = outcome {
+        eprintln!("zeta: {}", error.message);
+        std::process::exit(error.exit_code);
     }
 }
 
-fn ask(prompt: String) -> Result<(), String> {
+fn ask(prompt: String) -> Result<(), CliError> {
     if prompt.is_empty() {
-        return Err("ask requires a prompt".into());
+        return Err(CliError::usage("ask requires a prompt"));
     }
-    let response = run_prompt(prompt, "CLI conversation")?;
-    println!("{response}");
-    Ok(())
+    run_headless(HeadlessCliOptions {
+        entry: HeadlessEntry::New,
+        title: "CLI conversation".into(),
+        prompt,
+        output: ExecOutputMode::Human,
+        approval: HeadlessApprovalMode::DenyInteractiveRequests,
+    })
 }
 
 fn interactive() -> Result<(), String> {
@@ -166,154 +176,320 @@ fn configured_workspace() -> Result<PathBuf, String> {
         .unwrap_or_else(current_workspace)
 }
 
-fn execute(arguments: Vec<String>) -> Result<(), String> {
-    let prompt = arguments.join(" ");
-    if prompt.is_empty() {
-        return Err("exec requires a prompt".into());
-    }
-    println!("{}", run_prompt(prompt, "CLI execution")?);
-    Ok(())
+fn execute(arguments: Vec<String>) -> Result<(), CliError> {
+    run_headless(parse_exec_arguments(arguments)?)
 }
 
-fn run_prompt(prompt: String, title: &str) -> Result<String, String> {
-    let mut app_server = in_process_session()?;
-    let result = run_prompt_in_session(&mut app_server, prompt, title);
-    let shutdown = app_server.shutdown().map_err(|error| error.to_string());
-    match (result, shutdown) {
-        (Err(error), _) => Err(error),
-        (Ok(_), Err(error)) => Err(error),
-        (Ok(response), Ok(())) => Ok(response),
-    }
-}
-
-fn run_prompt_in_session(
-    app_server: &mut AppServerSession,
-    prompt: String,
-    title: &str,
-) -> Result<String, String> {
-    let mut client = app_server.client();
-    let session = client
-        .create_session(SessionCreateParams {
-            command_id: CommandId::new(request_key("session"))
-                .expect("generated command ID is non-empty"),
-            title: title.into(),
-        })
-        .map_err(|error| error.to_string())?;
-    let thread = client
-        .request_session(SessionRequestParams {
-            command_id: CommandId::new(request_key("thread"))
-                .expect("generated command ID is non-empty"),
-            session_id: session.session.session_id.clone(),
-            expected_sequence: session.session.sequence,
-            request: SessionRequest::CreateThread {
-                title: title.into(),
-            },
-        })
-        .map_err(|error| error.to_string())?;
-    let SessionRequestResult::Thread(thread) = thread else {
-        return Err("app server returned a non-Thread result for CreateThread".into());
-    };
-    client
-        .subscribe_session_thread(SessionThreadSubscribeParams {
-            session_id: session.session.session_id.clone(),
-            thread_id: thread.thread_id.clone(),
-            after_sequence: 0,
-            history: None,
-        })
-        .map_err(|error| error.to_string())?;
-    let events = app_server
-        .take_events()
-        .map_err(|error| error.to_string())?;
-    let SessionRequestResult::Turn(_) = client
-        .request_session(SessionRequestParams {
-            command_id: CommandId::new(request_key("turn"))
-                .expect("generated command ID is non-empty"),
-            session_id: session.session.session_id.clone(),
-            expected_sequence: 1,
-            request: SessionRequest::StartTurn {
-                thread_id: thread.thread_id.clone(),
-                approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
-                input: vec![InputItem::Text { text: prompt }],
-            },
-        })
-        .map_err(|error| error.to_string())?
-    else {
-        return Err("app server returned a non-Turn result for StartTurn".into());
-    };
-    let deadline = Instant::now() + Duration::from_secs(60);
-    loop {
-        let remaining = deadline.saturating_duration_since(Instant::now());
-        if remaining.is_zero() {
-            return Err("timed out waiting for the Turn to complete".into());
-        }
-        let event = events
-            .recv_timeout(remaining)
-            .map_err(|error| format!("could not receive App Server progress: {error}"))?;
-        match event {
-            AppServerEvent::Notification(ServerNotification::SessionThreadUpdate(update))
-                if update.thread_id == thread.thread_id => {}
-            AppServerEvent::ConnectionClosed(reason) => {
-                return Err(format!("App Server connection closed: {reason:?}"));
+fn parse_exec_arguments(arguments: Vec<String>) -> Result<HeadlessCliOptions, CliError> {
+    let mut index = 0;
+    let mut output = ExecOutputMode::Human;
+    let mut approval = None;
+    let mut entry = None;
+    let mut title = "CLI execution".to_string();
+    let mut prompt = Vec::new();
+    while index < arguments.len() {
+        match arguments[index].as_str() {
+            "--" => {
+                prompt.extend(arguments[index + 1..].iter().cloned());
+                break;
             }
-            AppServerEvent::Notification(_) => continue,
-        }
-        let snapshot = client
-            .read_session_thread(SessionThreadReadParams {
-                session_id: session.session.session_id.clone(),
-                thread_id: thread.thread_id.clone(),
-                history: None,
-            })
-            .map_err(|error| error.to_string())?;
-        let turn = snapshot
-            .thread
-            .turns
-            .last()
-            .ok_or_else(|| "app server did not create a Turn".to_string())?;
-        match turn.status {
-            TurnStatus::Completed => {
-                return turn
-                    .items
-                    .iter()
-                    .find_map(|item| match item {
-                        ThreadItem::AgentMessage { text, .. } => Some(text.clone()),
-                        _ => None,
-                    })
-                    .ok_or_else(|| "app server completed without an agent message".into());
+            "--jsonl" => output = ExecOutputMode::JsonLines,
+            "--auto-review" => {
+                select_approval(&mut approval, HeadlessApprovalMode::AutomaticReview)?
             }
-            TurnStatus::Failed => return Err("app server failed the Turn".into()),
-            TurnStatus::Interrupted => return Err("app server interrupted the Turn".into()),
-            TurnStatus::Created
-            | TurnStatus::Running
-            | TurnStatus::WaitingForApproval
-            | TurnStatus::WaitingForUserInput
-            | TurnStatus::WaitingForCapability
-            | TurnStatus::Cancelling => {}
+            "--dangerously-bypass-permissions" => {
+                select_approval(&mut approval, HeadlessApprovalMode::BypassPermissions)?
+            }
+            "--title" => {
+                index += 1;
+                title = required_argument(&arguments, index, "--title")?.clone();
+            }
+            "--resume" => {
+                index += 1;
+                let session_id = parse_session_id(required_argument(
+                    &arguments,
+                    index,
+                    "--resume SESSION_ID THREAD_ID",
+                )?)?;
+                index += 1;
+                let thread_id = parse_thread_id(required_argument(
+                    &arguments,
+                    index,
+                    "--resume SESSION_ID THREAD_ID",
+                )?)?;
+                select_entry(
+                    &mut entry,
+                    HeadlessEntry::Resume {
+                        session_id,
+                        thread_id,
+                    },
+                )?;
+            }
+            "--fork" => {
+                index += 1;
+                let session_id = parse_session_id(required_argument(
+                    &arguments,
+                    index,
+                    "--fork SESSION_ID PARENT_THREAD_ID",
+                )?)?;
+                index += 1;
+                let parent_thread_id = parse_thread_id(required_argument(
+                    &arguments,
+                    index,
+                    "--fork SESSION_ID PARENT_THREAD_ID",
+                )?)?;
+                select_entry(
+                    &mut entry,
+                    HeadlessEntry::Fork {
+                        session_id,
+                        parent_thread_id,
+                    },
+                )?;
+            }
+            argument if argument.starts_with("--") => {
+                return Err(CliError::usage(format!("unknown exec option: {argument}")));
+            }
+            _ => prompt.push(arguments[index].clone()),
         }
+        index += 1;
     }
+    let prompt = prompt.join(" ");
+    if prompt.trim().is_empty() {
+        return Err(CliError::usage("exec requires a prompt"));
+    }
+    Ok(HeadlessCliOptions {
+        entry: entry.unwrap_or(HeadlessEntry::New),
+        title,
+        prompt,
+        output,
+        approval: approval.unwrap_or(HeadlessApprovalMode::DenyInteractiveRequests),
+    })
 }
 
-fn in_process_session() -> Result<AppServerSession, String> {
-    AppServerSession::start_embedded(
-        InProcessClientOptions::new(
+fn run_headless(options: HeadlessCliOptions) -> Result<(), CliError> {
+    let entry = match options.entry {
+        HeadlessEntry::New => ExecEntry::New {
+            title: options.title,
+            input: prompt_input(options.prompt),
+        },
+        HeadlessEntry::Resume {
+            session_id,
+            thread_id,
+        } => ExecEntry::Resume {
+            session_id,
+            thread_id,
+            input: prompt_input(options.prompt),
+        },
+        HeadlessEntry::Fork {
+            session_id,
+            parent_thread_id,
+        } => ExecEntry::Fork {
+            session_id,
+            parent_thread_id,
+            title: options.title,
+            input: prompt_input(options.prompt),
+        },
+    };
+    let request = ExecRunRequest::new(entry).with_approval_mode(options.approval);
+    let runner = headless_runner()?;
+    let interrupt = InterruptSignal::register()?;
+    let outcome = match options.output {
+        ExecOutputMode::Human => {
+            runner.run(request, DiscardExecEventSink, interrupt.cancellation())
+        }
+        ExecOutputMode::JsonLines => {
+            let stdout = std::io::stdout();
+            let sink = JsonLinesExecEventSink::new(stdout.lock());
+            runner.run(request, sink, interrupt.cancellation())
+        }
+    }
+    .map_err(exec_error)?;
+    finish_headless_outcome(outcome, options.output)
+}
+
+fn headless_runner() -> Result<ExecRunner, CliError> {
+    let target = AppServerTarget::Embedded(
+        EmbeddedAppServerOptions::new(
             local_profile_root(),
             ClientInfo {
-                name: "zeta-cli".into(),
+                name: "zeta-cli-exec".into(),
                 version: env!("CARGO_PKG_VERSION").into(),
             },
         )
-        .with_workspace_root(configured_workspace()?),
-    )
-    .map_err(|error| error.to_string())
+        .with_workspace_root(configured_workspace().map_err(CliError::failure)?),
+    );
+    Ok(ExecRunner::new(target))
+}
+
+fn finish_headless_outcome(outcome: ExecOutcome, output: ExecOutputMode) -> Result<(), CliError> {
+    if let ExecOutcome::Completed { .. } = &outcome {
+        if output == ExecOutputMode::Human
+            && let Some(message) = outcome.final_message()
+        {
+            println!("{message}");
+        }
+        return Ok(());
+    }
+    Err(CliError {
+        message: outcome_message(&outcome),
+        exit_code: outcome.exit_code().get(),
+    })
+}
+
+fn outcome_message(outcome: &ExecOutcome) -> String {
+    match outcome {
+        ExecOutcome::Completed { .. } => "headless run completed".into(),
+        ExecOutcome::Failed {
+            failure: ExecFailure::Reported { error },
+            ..
+        } => format!("Turn failed: {}", error.message),
+        ExecOutcome::Failed {
+            failure: ExecFailure::Unspecified,
+            ..
+        } => "Turn failed without a stable error".into(),
+        ExecOutcome::Interrupted { reason, .. } => {
+            format!("Turn was interrupted: {reason:?}")
+        }
+        ExecOutcome::RequiresInteraction { interaction, .. } => format!(
+            "headless run requires an unsupported {:?} interaction",
+            interaction.kind
+        ),
+        ExecOutcome::OutcomeUnknown { reason, .. } => {
+            format!("Turn outcome is unknown: {reason:?}")
+        }
+    }
+}
+
+fn exec_error(error: ExecError) -> CliError {
+    let exit_code = if matches!(error, ExecError::CancelledBeforeStart) {
+        130
+    } else {
+        1
+    };
+    CliError {
+        message: error.to_string(),
+        exit_code,
+    }
+}
+
+fn prompt_input(prompt: String) -> Vec<InputItem> {
+    vec![InputItem::Text { text: prompt }]
+}
+
+fn select_approval(
+    selected: &mut Option<HeadlessApprovalMode>,
+    approval: HeadlessApprovalMode,
+) -> Result<(), CliError> {
+    if selected.replace(approval).is_some() {
+        return Err(CliError::usage("select only one headless approval option"));
+    }
+    Ok(())
+}
+
+fn select_entry(
+    selected: &mut Option<HeadlessEntry>,
+    entry: HeadlessEntry,
+) -> Result<(), CliError> {
+    if selected.replace(entry).is_some() {
+        return Err(CliError::usage("select only one of --resume or --fork"));
+    }
+    Ok(())
+}
+
+fn required_argument<'a>(
+    arguments: &'a [String],
+    index: usize,
+    option: &str,
+) -> Result<&'a String, CliError> {
+    arguments
+        .get(index)
+        .ok_or_else(|| CliError::usage(format!("{option} requires another argument")))
+}
+
+fn parse_session_id(value: &str) -> Result<SessionId, CliError> {
+    SessionId::new(value).map_err(|error| CliError::usage(error.to_string()))
+}
+
+fn parse_thread_id(value: &str) -> Result<ThreadId, CliError> {
+    ThreadId::new(value).map_err(|error| CliError::usage(error.to_string()))
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum HeadlessEntry {
+    New,
+    Resume {
+        session_id: SessionId,
+        thread_id: ThreadId,
+    },
+    Fork {
+        session_id: SessionId,
+        parent_thread_id: ThreadId,
+    },
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ExecOutputMode {
+    Human,
+    JsonLines,
+}
+
+struct HeadlessCliOptions {
+    entry: HeadlessEntry,
+    title: String,
+    prompt: String,
+    output: ExecOutputMode,
+    approval: HeadlessApprovalMode,
+}
+
+#[derive(Debug)]
+struct CliError {
+    message: String,
+    exit_code: i32,
+}
+
+impl CliError {
+    fn failure(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+            exit_code: 1,
+        }
+    }
+
+    fn usage(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+            exit_code: 2,
+        }
+    }
+}
+
+struct InterruptSignal {
+    requested: Arc<AtomicBool>,
+    registration: SigId,
+}
+
+impl InterruptSignal {
+    fn register() -> Result<Self, CliError> {
+        let requested = Arc::new(AtomicBool::new(false));
+        let registration = signal_hook::flag::register(SIGINT, Arc::clone(&requested))
+            .map_err(|error| CliError::failure(format!("could not register Ctrl-C: {error}")))?;
+        Ok(Self {
+            requested,
+            registration,
+        })
+    }
+
+    fn cancellation(&self) -> &Arc<AtomicBool> {
+        &self.requested
+    }
+}
+
+impl Drop for InterruptSignal {
+    fn drop(&mut self) {
+        signal_hook::low_level::unregister(self.registration);
+    }
 }
 
 #[cfg(test)]
 #[path = "main_tests.rs"]
 mod tests;
-
-fn request_key(prefix: &str) -> String {
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_nanos();
-    format!("{prefix}-{}-{timestamp}", std::process::id())
-}

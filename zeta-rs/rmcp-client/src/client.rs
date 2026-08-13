@@ -4,8 +4,8 @@ use std::time::Duration;
 
 use rmcp::model::{
     CallToolRequest, CallToolRequestParams, CallToolResult, ClientInfo, ClientRequest,
-    Implementation, ListToolsRequest, ListToolsResult, PaginatedRequestParams, ServerInfo,
-    ServerResult,
+    ElicitationCapability, FormElicitationCapability, Implementation, ListToolsRequest,
+    ListToolsResult, PaginatedRequestParams, ServerInfo, ServerResult,
 };
 use rmcp::service::{
     ClientServiceExt, PeerRequestOptions, RequestHandle, RoleClient, RunningService, ServiceError,
@@ -73,6 +73,15 @@ impl RmcpClientOptions {
 
     pub fn with_host(mut self, host: Arc<dyn McpClientHost>) -> Self {
         self.host = host;
+        self
+    }
+
+    /// Advertises validated form elicitation when the installed host can durably route it.
+    pub fn with_form_elicitation(mut self) -> Self {
+        self.client_info.capabilities.elicitation = Some(
+            ElicitationCapability::new()
+                .with_form(FormElicitationCapability::new().with_schema_validation(false)),
+        );
         self
     }
 

@@ -112,6 +112,29 @@ impl PluginPackageStore {
         Ok(Self { root })
     }
 
+    /// Removes only transient staging leftovers from an interrupted installation.
+    ///
+    /// The object store deliberately retains unreferenced immutable packages: a caller may have
+    /// installed a package into the store immediately before opening the authority and still be
+    /// preparing its durable Install command.
+    pub(crate) fn recover_orphans(&self) -> Result<(), PluginError> {
+        let staging = self.root.join("staging");
+        for entry in fs::read_dir(&staging).map_err(store_io)? {
+            let entry = entry.map_err(store_io)?;
+            let metadata = entry.file_type().map_err(store_io)?;
+            if metadata.is_dir() {
+                fs::remove_dir_all(entry.path()).map_err(store_io)?;
+            } else {
+                return Err(PluginError::new(
+                    PluginErrorKind::PackageUnsafe,
+                    "Plugin staging contains a non-directory orphan",
+                ));
+            }
+        }
+        sync_directory(&staging)?;
+        sync_directory(&self.root)
+    }
+
     pub fn install_local(
         &self,
         package: &LocalPluginPackage,

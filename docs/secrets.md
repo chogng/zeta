@@ -6,7 +6,7 @@
 > - 当前实现：typed key/value、`load/store/delete` port、OS keyring、ephemeral memory、unavailable 与显式文件 backend
 > - Crate 实现、安全义务与测试：[`zeta-rs/secrets/README.md`](../zeta-rs/secrets/README.md)
 > - OS keyring adapter：[`zeta-rs/keyring-store/README.md`](../zeta-rs/keyring-store/README.md)
-> - Direct-provider credential：[`model-provider.md`](model-provider.md#6-provider-credential-与-subscription-backend)
+> - Direct-provider credential：[`model-provider.md`](model-provider.md#6-供应商凭据与-codex-边界)
 > - Interactive login control plane：[`login.md`](login.md)
 > - App Server 登录控制面：[`zeta-app-server-api.md`](zeta-app-server-api.md#11-account-与登录)
 

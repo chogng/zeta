@@ -6,14 +6,20 @@
 //! behavior.
 
 mod anthropic_messages;
+mod openai_chat_completions;
 mod openai_responses;
 
 pub use anthropic_messages::AnthropicMessagesSseDecoder;
+pub use openai_chat_completions::OpenAiChatCompletionsSseDecoder;
 pub use openai_responses::OpenAiResponsesSseDecoder;
 
 #[cfg(test)]
 #[path = "anthropic_messages_tests.rs"]
 mod anthropic_messages_tests;
+
+#[cfg(test)]
+#[path = "openai_chat_completions_tests.rs"]
+mod openai_chat_completions_tests;
 
 #[cfg(test)]
 #[path = "openai_responses_tests.rs"]

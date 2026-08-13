@@ -1,16 +1,18 @@
 # 登录与账户系统
 
-> 计划物理位置：`zeta-rs/login/`
+> 物理位置：`zeta-rs/login/`
 > Rust crate：`zeta_login`
-> 当前状态：Proposed，尚未创建 crate
+> 当前状态：控制面、App Server RPC、Codex managed-login driver 与 Codex Turn backend adapter 已实现；
+> 产品通过显式 `openai-chatgpt` 模型选择接入 subscription Turn
 > ChatGPT/Codex subscription adapter：[`codex-app-server.md`](codex-app-server.md)
 > Provider runtime：[`model-provider.md`](model-provider.md)
 > Secret persistence：[`secrets.md`](secrets.md)
 
 ## 快速理解
 
-登录系统是面向用户的账户控制面，不是通用 OAuth 实现。当前文档定义计划边界，首个目标是把
-ChatGPT/Codex 订阅登录委托给上游 Codex App Server。
+登录系统是面向用户的账户控制面，不是通用 OAuth 实现。当前 `LoginService` 已拥有稳定 login ID、
+取消、完成、登出和 revisioned account projection；具体 ChatGPT/Codex 登录由
+`zeta-codex-app-server` driver 委托上游 Codex App Server。
 
 | 用户动作或凭据类型 | 由谁处理 | Zeta 登录系统能看到什么 |
 | --- | --- | --- |
@@ -26,9 +28,15 @@ ChatGPT/Codex 订阅登录委托给上游 Codex App Server。
 reauthentication-required 状态；它不把不同 Provider 的 credential 协议伪装成一套通用 OAuth
 实现。
 
-第一个实现是 **ChatGPT/Codex subscription**：`zeta-login` 把登录请求交给
-`zeta-codex-app-server`，由上游 Codex App Server 完成浏览器/设备码登录、token 持久化和刷新。
-Zeta 不读取、保存、交换或刷新 ChatGPT token。
+当前实现是 provider-neutral control plane：`InteractiveLoginDriver` 接收 service-owned `LoginId`，
+只返回 browser/device-code UI instruction 和 redacted account snapshot。App Server 已暴露
+`account/read`、`account/login/start`、`account/login/cancel`、`account/logout`，并主动发布
+`account/login/completed` 与 `account/updated`。本地默认 composition 已安装
+**ChatGPT/Codex managed-login driver**：它懒启动上游 `codex app-server`，由上游完成 token 持久化
+和刷新；Zeta 不读取、保存、交换或刷新 ChatGPT token。上游 thread/Turn 已由
+`CodexTurnExecutionBackend` 映射到 Core。默认 App Server 将 ChatGPT account 可用的 Codex model
+投影为 `openai-chatgpt` provider；只有 Session 显式选中该 ModelRef 后，新 Turn 才走订阅后端。
+登录完成不会自动切换已有 Session 或 Thread 的执行路径。
 
 未来只有在 Provider 的官方条款和技术接口明确允许时，才增加新的登录 adapter。API key、AWS
 credential chain、Google ADC 和 Azure managed identity 不是 interactive login 的变体，仍由各自
@@ -82,7 +90,7 @@ subscription credential 是两种完全不同的 secret，二者不能复用。
 
 ## 4. 最小公共边界
 
-以下仅表达目标形态。公共 trait 必须保持小，并由 `zeta-login` 作为消费者拥有：
+当前公共 trait 保持 consumer-owned，并要求 driver 保留 service 分配的 exact `LoginId`：
 
 ```rust
 /// Starts and observes one provider-owned interactive account login.
@@ -90,6 +98,7 @@ subscription credential 是两种完全不同的 secret，二者不能复用。
 /// Implementations keep provider credentials private. They may return only
 /// redacted UI instructions and must make cancellation idempotent for one login.
 pub trait InteractiveLoginDriver: Send + Sync {
+    fn read_account(&self) -> Result<Option<AccountSnapshot>, LoginError>;
     fn begin(&self, request: BeginLoginRequest) -> Result<BeginLogin, LoginError>;
     fn cancel(&self, login_id: &LoginId) -> Result<CancelLoginOutcome, LoginError>;
     fn logout(&self, account: &AccountRef) -> Result<(), LoginError>;
@@ -109,15 +118,17 @@ workspace selection 和 consent semantics 不能由一个宽泛 DTO 正确覆盖
 ```text
 zeta-app-server ──▶ zeta-login
 zeta-codex-app-server ──▶ zeta-login     # implements interactive login driver
+zeta-codex-app-server ──▶ zeta-core      # implements TurnExecutionBackend
 
 zeta-login -/-> zeta-secrets
 zeta-login -/-> zeta-api / zeta-client / zeta-http-client
 zeta-model-provider -/-> zeta-login
 ```
 
-`zeta-app-server` 是 composition root：它将 Codex adapter 注入 login service，并把 redacted control
-plane 映射到 RPC。`zeta-model-provider` 不因用户点击登录而启动浏览器；它只消费已配置的
-`SubscriptionModelBackend`。
+`zeta-app-server` 是 composition root：它已将 Codex adapter 注入 login service，并把 redacted
+control plane 映射到 RPC。Codex Turn adapter 实现 Core 的 `TurnExecutionBackend`，不经过
+`zeta-model-provider`；产品层仍需用显式 model/backend selection 决定哪些新 Turn 使用它。用户点击
+登录本身不能启动浏览器之外的模型执行，也不能隐式替换执行后端。
 
 ## 6. 固定决策
 

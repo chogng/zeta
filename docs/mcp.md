@@ -5,7 +5,8 @@
 > Low-level client 当前实现：[`zeta-rs/rmcp-client/`](../zeta-rs/rmcp-client/README.md)，
 > Rust crate：`zeta_rmcp_client`
 > 当前状态：low-level client、tools-only product runtime、Config/Connector/Plugin hot composition、
-> `tools/list_changed` rebuild、App Server/Core tools vertical slice 与 Connector disconnect dispatch fence 已实现
+> `tools/list_changed` rebuild、App Server/Core tools vertical slice、Connector disconnect dispatch fence、
+> 独立 Config MCP OAuth 编排、form elicitation 与只读 lifecycle projection 已实现
 > Core architecture：[`core.md`](core.md)
 > Agent runtime：[`zeta-agent-runtime-architecture.md`](zeta-agent-runtime-architecture.md)
 > Tool shared contract 与纯转换：[`tools.md`](tools.md)
@@ -31,7 +32,8 @@ MCP 客户端把外部 Server 的工具转换成 Zeta 的工具目录；方向�
 | 外部 Host 调用 Zeta Agent | 独立的 `zeta-mcp-server` 通过 App Server 启动和继续 Agent | 见 MCP Server 文档 |
 | MCP 暴露工具 | 转成带来源、绑定和失效 generation 的统一工具 | 已实现基础目录与调用路由 |
 | MCP 暴露资源或提示词 | 进入各自的上下文和产品契约 | 仍属计划设计 |
-| Server 需要凭据或网络 | 由凭据领域、权限和宿主策略处理 | MCP 不自行成为信任根 |
+| Server 需要 bearer 或 OAuth | 凭据保存在 SecretStore；具体 provider adapter 决定 discovery、scope 与 token wire | 独立 Config 与 Connector 路径均已具备窄实现 |
+| MCP 工具运行中请求表单输入 | 转成 Core durable 用户交互并唤醒同一次工具执行 | 基础类型已实现；URL、多选和跨重启恢复不支持 |
 | Plugin 独立声明 MCP Server | Plugin 只贡献声明，经激活和策略解析后由 MCP runtime 启动 | 安装不等于连接或授权 |
 | Plugin 声明需要外部账号的 Connector | Connector connected 后发布 ready MCP binding | Connector 不启动 MCP session |
 | 用户或 Workspace 直接配置 MCP Server | 配置经凭据、grant 和 policy 解析后直接进入 MCP runtime | 不必须先安装 Plugin 或创建 Connector |
@@ -44,8 +46,10 @@ runtime 负责多 server 启动、provider-neutral tool catalog/binding、分页
 取消与失效标记。Current App Server adapter 将 user config 与 ready Connector snapshot 接入 Core
 `ToolService`、逐次用户 approval 和 durable result，并在两类 generation 变化时重建 tool port。
 Connector API-token materialization、package-rooted Plugin MCP、通用 Connector OAuth PKCE 编排与 Desktop
-browser callback 已实现；独立 Config credential reference、具体 OAuth provider、resources、prompts、reconnect/health
-与 interaction delivery 仍是 Proposed。
+browser callback 已实现。独立 Config credential reference materialization、provider-injected OAuth
+PKCE/callback/refresh/revoke、process-local connect/disconnect/status，以及 MCP form elicitation 到 Core
+durable interaction 的同调用恢复也已实现。通用自动 OAuth discovery、内建具体 provider、resources、
+prompts、reconnect/health 和更完整的 interaction surface 仍是 Proposed。
 
 方向相反的 `zeta-mcp-server` 通过 App Server 将 Zeta Agent 暴露给外部 MCP Host。两者不共享
 runtime ownership，也不互相依赖；具体边界见 [`mcp-server.md`](mcp-server.md)。
@@ -95,9 +99,8 @@ flowchart TD
   等于 runtime 已启用；
 - `zeta-protocol` 已有 provider-independent `ToolDefinition`、`ToolCall`、`ToolResult`、
   `ToolName` 和 durable Thread tool item；
-- `zeta-core` 已有 approval policy 基础，目标 `zeta-tool-executor` /
-  `zeta-sandboxing` 已有本地执行边界；当前 process executor 的物理 crate 仍名为
-  `zeta-exec`，后续按 [`exec.md`](exec.md) 迁移；
+- `zeta-core` 已有 approval policy 基础，`zeta-tool-executor` / `zeta-sandboxing` 已形成独立
+  本地进程执行边界；产品层 `zeta-exec` 不参与单个 MCP tool process 的执行；
 - App Server 已把 enabled user declaration materialize 为 `McpServerDefinition`，通过持续运行
   的 Tokio worker 桥接同步 Core `ToolService`，合并 local/MCP definitions，并为每次 MCP call
   生成 exact `ActionSource::McpServer` review、durable one-time approval 与 unknown outcome；
@@ -108,12 +111,17 @@ flowchart TD
 - `compose_mcp_tools_with_connectors` 已通过 host-injected `ConnectorMcpRuntimeProvider` 读取 ready
   Connector credential，并用 exact connector ID / connection generation / definition digest 在 prepare
   与 dispatch 前 fail closed；本地 reconcile loop 同时订阅 Config 与 Connector authority；
-- 当前没有独立 Config credential materialization、具体 OAuth provider、自动 reconnect/health state machine、
-  workspace-profile Plugin resolver、resource/prompt product
-  adapter、progress/elicitation delivery 或跨重启 remote request 恢复。
+- 直接 Config MCP 的 HTTPS bearer credential 已在连接启动前由 host SecretStore materialize；
+  `McpOAuthService` 已为 host 注入的 exact provider 提供 S256 PKCE、state、redirect/resource/target
+  复核、一次性 callback、私有 runtime/lifecycle credential envelope、refresh/revoke 和 App Server RPC；
+- MCP form elicitation 已通过 task-local exact Tool-call binding 转成 Core durable
+  `AgentRequest::UserInput`，解决或取消后唤醒同一次 live execution；URL elicitation、数组/多选、完整
+  JSON Schema format 校验和跨重启 remote request 恢复仍不支持；
+- 自动 reconnect/health state machine、resource/prompt product adapter 和 progress 产品投影仍未实现。
 
-因此 low-level protocol/transport、独立 tools-only runtime 和窄 App Server/Core tools slice
-是 Current；完整 lifecycle/auth/interaction surface 仍是 Proposed。
+因此 low-level protocol/transport、独立 tools-only runtime、窄 App Server/Core tools slice、
+process-local connect/disconnect/status、provider-injected 独立 OAuth lifecycle 和基础 form interaction
+是 Current；自动 provider discovery、完整 interaction surface 与其他 MCP capability 仍是 Proposed。
 
 ## 3. 标准基线
 
@@ -128,13 +136,13 @@ operation。[官方架构](https://modelcontextprotocol.io/specification/2025-11
 | --- | --- | --- |
 | Base JSON-RPC lifecycle | Current | Current 多 session startup/shutdown；reconnect/health Proposed |
 | stdio | Current direct-local + injectable transport | Current absolute executable startup；sandboxed launcher Proposed |
-| Streamable HTTP | Current unauthenticated/bearer transport | Current unauthenticated Config + injected Connector credential；OAuth Proposed |
+| Streamable HTTP | Current unauthenticated/bearer transport | Current unauthenticated/SecretStore bearer；provider-injected OAuth lifecycle Current；自动 discovery/reconnect Proposed |
 | Tools | Current 原始 list/call | Current catalog/binding/Core approval/durable result；Config/Connector hot rebuild Current |
 | Resources | 尚未暴露 | 首发只做 list/read，显式进入 context |
 | Prompts | 尚未暴露 | 首发只做 list/get，不当作 Skill |
 | Roots | 尚未暴露 | 只暴露已授权 workspace root，不能替代 OS sandbox |
 | Sampling | 尚未暴露 | 默认不声明；需独立预算、隐私和审批 |
-| Elicitation | Current host callback，默认 decline | interaction delivery/recovery 完成前不声明 |
+| Elicitation | Current host callback | Current form → durable Core interaction；URL/array/multiselect/跨重启 remote recovery 不支持 |
 | Tasks | 尚未暴露 | experimental，不等同 Zeta Turn/Task |
 
 MCP 标准 transport 是
@@ -161,8 +169,8 @@ HTTP+SSE 是旧 revision 的兼容面，不进入 Zeta 第一版。
 - exact remote tool identity、catalog generation 和 host binding 所需的 source correlation；
 - startup/shutdown diagnostics 和 caller cancellation 传播。
 
-Proposed 扩展仍包括 resources/prompts、reconnect/health state machine、credential/OAuth lifecycle，
-以及 roots、sampling、elicitation 等 client feature 的产品 capability gate。
+Proposed 扩展仍包括 resources/prompts、reconnect/health state machine、roots、sampling、URL 或更复杂
+form elicitation，以及通用 OAuth metadata discovery 和 concrete provider adapter。
 
 ### 4.3 两个 MCP 客户端 crate 都不拥有
 
@@ -311,7 +319,11 @@ request ID 都不能污染新连接。
 
 ## 7. 连接生命周期
 
-状态不能压成 `connected: bool`：
+当前 runtime owner 发布 `Connected`、`Stale`、`Unavailable`；App Server 再结合 durable enablement 与
+process-local intent 投影 `Disabled`、`Disconnected`。这已经避免把“已配置但启动失败”压成
+`connected: bool`，但自动重连状态机尚未实现。
+
+完整目标状态仍是 Proposed：
 
 ```text
 Disabled
@@ -334,15 +346,17 @@ Disabled
 4. 不支持 server 返回 revision 时断开，而不是尝试按最新 DTO 继续；
 5. shutdown 停止接受新调用，取消或等待有界的 in-flight request，再关闭 transport。
 
-本地 policy：
+当前本地 policy：
 
 - initialize、list 和 call 使用分别配置的 deadline；
 - request ID 只在一个 connection generation 内相关；
 - cancellation 发送 MCP cancel notification，并停止本地等待；
 - cancel 不证明远端副作用没有发生；
 - server crash/EOF 使所有未完成请求进入 transport-lost 分类；
-- 自动重连使用 backoff + jitter，并受全局启动并发限制；
-- reconnect 成功后重新 initialize 和 discovery，不复用旧 server capability。
+- `tools/list_changed` 将 catalog 标为 stale，并触发 host 构造完整 replacement generation。
+
+Proposed reconnect policy 使用 backoff + jitter，并受全局启动并发限制；成功后必须重新 initialize 和
+discovery，不能复用旧 server capability、request 或 binding。
 
 ## 8. 传输
 
@@ -461,12 +475,20 @@ tool loop。第一版不声明 sampling capability。
 ### 10.3 询问（Elicitation）
 
 Elicitation 依赖 Zeta 的 typed Agent request/response delivery。App Server owner selection、deadline、
-disconnect re-selection 和 durable recovery 已完成；MCP adapter 只有在下游 client/session 确实
-提供 form elicitation 时才声明并映射该 capability，不能仅因共享 contract 存在就启用。
+disconnect re-selection 和 durable recovery 已完成。当前 MCP adapter 只在 App Server 为 Tool call
+注入 `ToolInteractionService` 时声明 form capability；RMCP callback 再通过 task-local binding 关联 exact
+Thread、Turn、request 与并发中的 MCP call，不能仅因共享 contract 存在就启用。
 
-将来 adapter 必须把 MCP request ID 与 Zeta `RequestId` 分开关联。Zeta interaction 可以 durable，
-但 remote MCP connection/request 本身通常不能跨重启恢复；恢复后必须重新建立 server state 或
-明确取消，不能向新 connection 发送旧 response。
+当前支持 string、number、integer、boolean 和单选 enum/oneOf，保留 required、长度和数值范围；每个
+表单最多 32 个字段、100 个选项、每段 4096 个字符。数组、多选、未知 schema，以及名称或说明看似
+承载 password、secret、token、credential 或 API key 的字段会失败关闭。当前声明
+`schemaValidation=false`，因为尚未承诺完整 JSON Schema format 校验。URL elicitation 没有产品安全
+契约，返回 `Decline`。
+
+表单被持久化为 Core `AgentRequest::UserInput`。解决后 live waiter 唤醒同一次工具执行，App Server
+不会再启动第二个 backend resume；取消映射为 MCP `Cancel`。Zeta interaction 可以 durable，但 remote
+MCP connection/request 本身不能跨重启恢复；恢复后已 started 且无 terminal result 的调用保持
+unknown outcome，不能向新 connection 发送旧 response。
 
 ### 10.4 实验性任务
 
@@ -529,6 +551,18 @@ MCP 内容可能包含 prompt injection。Zeta 必须带 provenance 传入 Core 
 - localhost callback 使用随机 state、短期 listener 和一次性 completion；
 - logout/revoke 后立即停止依赖该 credential 的 session。
 
+当前独立 Config MCP 的实现把上述责任拆为两层。`McpOAuthService` 拥有 process-local flow、S256
+PKCE、state、exact redirect/resource/Config target 复核、一次性 callback 和 SecretStore envelope；
+host 注入的 exact `McpOAuthProvider` 拥有 authorization-server discovery、endpoint allowlist、client
+identity、scope、token response parsing、audience、refresh 和 remote revoke。Zeta 当前不提供通用自动
+discovery 或内建 concrete provider；未注入 provider 时 OAuth capability 明确 unavailable。
+
+SecretStore envelope 分离 runtime bearer 与 lifecycle secret。MCP transport 只能 materialize bearer，
+refresh/revoke 只能取得 lifecycle 部分；旧 raw bearer 仍可读取以兼容已有配置。App Server callback 会
+重新读取当前 Config target，防止浏览器授权期间 endpoint 或 credential reference 被替换。revoke 在
+调用 provider 前先设置 disconnect intent，并等待 active Tool generation 移除该 server；remote
+revoke 失败时本地 secret 不删除，但 runtime 保持断开，避免凭据仍被继续使用。
+
 ### 12.3 数据外发
 
 每次 tool call 前，approval UI 应展示目标 server、tool、materialized arguments 和潜在数据范围。
@@ -559,18 +593,21 @@ secret、PID、request ID、OAuth verifier、SSE cursor 和 live session ID 不�
 同时订阅 Config 与 Connector generation。新 MCP runtime 完整启动后才原子发布到 future model safe
 point；模型可见 definitions 和响应 binder 属于同一冻结 generation，旧 generation 由已绑定调用持有到
 排空。Connector list/API-token connect/disconnect 与 changed notification 已有 typed RPC；MCP
-`tools/list_changed` 会触发同一 reconcile 并只在完整启动成功后发布下一代。独立 MCP
-runtime/catalog/auth/diagnostic RPC 仍未实现。
+`tools/list_changed` 会触发同一 reconcile 并只在完整启动成功后发布下一代。
+`mcp/server/connect`、`mcp/server/disconnect` 已作为 process-local intent 接入同一 reconcile loop；
+`mcp/server/status` 返回 active Config/Plugin/Connector runtime 的 redacted 连接状态、catalog/connection
+generation、tool count 和启动诊断。`mcp/oauth/start|complete|refresh|revoke` 已接入独立 Config MCP
+OAuth coordinator；complete/refresh 强制 reconcile 为 connect，revoke 先强制 disconnect。
 
-计划中的 App Server 接口面分为：
+当前与计划中的 App Server 接口面为：
 
 | 类别 | 方法示例 | 语义 |
 | --- | --- | --- |
-| Config | `mcp/server/list`、`mcp/server/update` | typed command 管理定义和 enablement |
-| Runtime | `mcp/server/connect`、`mcp/server/disconnect` | process-local lifecycle intent |
-| Catalog | `mcp/tool/list`、`mcp/resource/list`、`mcp/prompt/list` | 读取 snapshot |
-| Auth | `mcp/auth/start`、`mcp/auth/complete`、`mcp/auth/revoke` | connection-owned OAuth flow |
-| Diagnostics | `mcp/server/status`、`mcp/server/log/read` | redacted health 和 bounded logs |
+| Config | `mcp/server/upsert`、`mcp/server/remove`、`mcp/server/enablement/set` | Current typed command 管理定义和 enablement；读取并入 `config/read` |
+| Runtime | `mcp/server/connect`、`mcp/server/disconnect` | process-local lifecycle intent，已接入 reconcile |
+| Catalog | `mcp/tool/list`、`mcp/resource/list`、`mcp/prompt/list` | Proposed 读取 snapshot |
+| Auth | `mcp/oauth/start`、`mcp/oauth/complete`、`mcp/oauth/refresh`、`mcp/oauth/revoke` | Current process-local one-shot OAuth flow 与 credential lifecycle |
+| Diagnostics | `mcp/server/status`、`mcp/server/log/read` | status 已实现；log/read 尚未实现 |
 
 命名只是目标语义，实施时必须与 `zeta-app-server-protocol` 同步生成 schema/TypeScript。配置修改
 继续使用 `CommandId` 和 exact typed payload replay；connect/disconnect 是 runtime intent，不占用
@@ -653,7 +690,8 @@ security 和 identity。resources/prompts/auth/reconnect 落地时按独立 owne
 - ✅ 接入 Core Turn tool loop、逐次 approval、durable Tool Call/Result 和 UnknownOutcome；
 - Config/Connector hot rebuild、model-safe-point binding 与 old-generation drain 已接入；
 - ✅ `tools/list_changed` 进入 host reconcile，并在模型安全点替换 catalog；
-- sandbox/process supervisor 与 interaction delivery 尚未接入。
+- ✅ 基础 form elicitation 进入 durable Core interaction，并恢复同一次 live Tool execution；
+- sandbox/process supervisor 仍未接入。
 
 完成条件：server crash、取消和 Thread recovery 不会静默重放有副作用调用。
 
@@ -670,15 +708,18 @@ security 和 identity。resources/prompts/auth/reconnect 落地时按独立 owne
 
 - ✅ RMCP reqwest Streamable HTTP connector 支持 unauthenticated/bearer session；
 - ✅ Connector OAuth 通用 state/PKCE/exact redirect/one-shot exchange、App Server RPC 与 Desktop callback 编排；
-- session resume/reconnect、protected resource metadata、具体 provider、refresh 和 revoke；
-- 完整 endpoint/origin/redirect/egress policy 与 App Server credential materialization。
+- ✅ 直接 Config HTTPS bearer credential 的 host SecretStore materialization；
+- ✅ 独立 Config MCP 的 provider-injected PKCE/start/complete/refresh/revoke、target revalidation 与
+  runtime/lifecycle secret isolation；
+- session resume/reconnect、protected resource metadata、自动 discovery、内建具体 provider，以及完整
+  endpoint/origin/redirect/egress policy 尚未具备。
 
 完成条件：token 不进入 config/log/event，断线不被误判为取消或成功。
 
 ### 阶段 M4：可选客户端功能
 
-- 先完成 App Server owner-directed interaction；
-- 分别评审 sampling、elicitation 和 tasks；
+- ✅ App Server owner-directed interaction 与基础 MCP form elicitation；
+- URL、数组/多选 elicitation、sampling 和 tasks 仍需分别评审；
 - 每项独立 capability gate、budget、approval 和 recovery tests；
 - 未完成的 capability 不在 initialize 中声明。
 

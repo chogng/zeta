@@ -3,9 +3,10 @@
 > - 物理位置：`zeta-rs/model-provider/`
 > - Rust crate：`zeta_model_provider`
 > - 层次：Provider 运行时与选择层
-> - 当前状态：同步 unary runtime 已直接组合 `zeta-api` endpoint profile、`zeta-client`
->   operation retry 与 `zeta-http-client` transport；semantic OpenAI API-key materialization 已有 host-injected
->   `SecretStore` 路径，持久化 credential 产品闭环与 streaming 尚未实现
+> - 当前状态：completion runtime 已直接组合 `zeta-api` endpoint profile、`zeta-client` operation
+>   retry/stream framing 与 `zeta-http-client` transport；OpenAI Responses、OpenAI-compatible Chat
+>   Completions、Anthropic Messages 已使用原生 wire streaming；semantic OpenAI API-key
+>   materialization 已有 host-injected `SecretStore` 路径，持久化 credential 产品闭环尚未实现
 > - Crate 实现与 adapter 调用图：[`zeta-rs/model-provider/README.md`](../zeta-rs/model-provider/README.md)
 > - 声明配置层：[`model-provider-config.md`](model-provider-config.md)
 > - API 协议层：[`zeta-api.md`](zeta-api.md)
@@ -25,9 +26,9 @@
 | --- | --- | --- |
 | 本次到底使用哪个模型？ | 根据供应商定义、用户选择和本次调用覆盖生成不可变绑定 | [一次调用如何形成](#1-一次调用如何形成) |
 | 自定义服务地址会影响什么？ | 只在供应商配置明确允许时生效，不会把一个服务偷偷当成另一个协议 | [供应商与 API 端点](#5-供应商与-api-端点的联动) |
-| 凭据由这里保存吗？ | 不保存；这里只取得本次调用所需的凭据，保存和登录属于相邻系统 | [供应商凭据](#6-供应商凭据与订阅后端) |
+| 凭据由这里保存吗？ | 不保存；这里只取得本次调用所需的凭据，保存和登录属于相邻系统 | [供应商凭据](#6-供应商凭据与-codex-边界) |
 | 失败后会自动重试吗？ | 只有调用类型明确允许安全重试时才会重试；模型推理默认不能仅凭“没收到输出”重跑 | [重试分工](#8-重试分工) |
-| 当前已经能做什么？ | 已具备同步非流式 completion、embedding/rerank 调用；持久化凭据闭环和真实流式调用尚未完成 | [当前实现审计](#3-当前实现审计) |
+| 当前已经能做什么？ | 已具备三种 endpoint 的 unary/streaming completion 与 embedding/rerank；持久化凭据闭环尚未完成 | [当前实现审计](#3-当前实现审计) |
 
 ## 1. 一次调用如何形成
 
@@ -35,11 +36,9 @@
 flowchart TD
     request["Agent 发起模型调用"] --> select["读取用户选择和调用覆盖"]
     select --> definition["校验供应商定义与模型能力"]
-    definition --> identity{"使用哪种身份？"}
-    identity -- "API key 或云身份" --> credential["凭据系统提供本次调用材料"]
-    identity -- "ChatGPT / Codex 订阅" --> subscription["已认证的订阅后端"]
+    definition --> identity["解析 direct-provider API key 或云身份"]
+    identity --> credential["凭据系统提供本次调用材料"]
     credential --> binding["冻结模型、端点、凭据范围与重试策略"]
-    subscription --> binding
     binding --> encode["协议层编码请求"]
     encode --> operation["操作层执行截止时间、重试和流式分帧"]
     operation --> transport["网络层完成 HTTP / WebSocket 传输"]
@@ -49,6 +48,9 @@ flowchart TD
 这条流程中，模型调用系统只拥有“选择并冻结本次调用绑定”。协议层解释请求和响应，操作层处理
 安全重试与分帧，网络层负责真实连接；任何一层都不能根据 URL 或模型名称重新猜测上层已经作出
 的选择。
+
+ChatGPT/Codex subscription 不是 raw model invocation：上游 Codex 同时拥有 Agent/tool/approval
+循环，因此产品在 Core 层选择独立的 `TurnExecutionBackend`，不把它塞进本流程。
 
 一次绑定必须明确回答：
 
@@ -212,29 +214,24 @@ let binding = ApiBinding::OpenAiChat {
 上游 Codex 的 memories/search 等能力是 subscription runtime capability，不是 `zeta-api` endpoint；
 详见 [`zeta-api.md`](zeta-api.md#45-openai-platform-与-chatgptcodex-endpoint-清单)。
 
-因此 runtime binding 至少包含如下事实：
+因此 direct-provider runtime binding 包含如下事实：
 
 ```rust
-pub enum OpenAiExecutionBinding {
-    PlatformApi {
-        endpoint: zeta_api::ApiEndpoint,
-        target: ResolvedApiTarget,
-        credential_scope: CredentialScope,
-    },
-    CodexSubscription {
-        backend: Arc<dyn SubscriptionModelBackend>,
-    },
+pub struct OpenAiExecutionBinding {
+    endpoint: zeta_api::ApiEndpoint,
+    target: ResolvedApiTarget,
+    credential_scope: CredentialScope,
 }
 ```
 
-`CodexSubscription` 不是 `OpenAiCompatibleAdapter` 的用户自定义 base URL 选项。Platform API key、
-custom-compatible credential 与 ChatGPT/Codex subscription runtime 彼此不能复用或降级转换。
+ChatGPT/Codex subscription 不是 `OpenAiCompatibleAdapter` 的用户自定义 base URL 选项。Platform API
+key、custom-compatible credential 与 ChatGPT/Codex runtime 彼此不能复用或降级转换。
 
 ChatGPT/Codex subscription 不构造 `ResolvedApiTarget + Bearer token` binding。它只能由已认证的
-[`zeta-codex-app-server`](codex-app-server.md) `SubscriptionModelBackend` 构造；上游 Codex 选择
-allow-listed target、管理 credential refresh，并执行实际 backend request。
+[`zeta-codex-app-server`](codex-app-server.md) runtime 执行；上游 Codex 选择 allow-listed target、管理
+credential refresh，并执行实际 backend request 和 Agent loop。
 
-## 6. 供应商凭据与订阅后端
+## 6. 供应商凭据与 Codex 边界
 
 Provider 的共同点只到“调用前需要可用身份”为止。API key、AWS credential chain、Google ADC、
 Microsoft identity 和签名请求仍由本 crate 的 direct-provider runtime materialize；它们的 secret
@@ -244,17 +241,14 @@ ChatGPT/Codex subscription 是独立 runtime：
 
 ```text
 zeta-app-server → zeta-login → zeta-codex-app-server → upstream Codex App Server
-                                              │
-                                              └─ implements SubscriptionModelBackend
-                                                            ▲
-                                                            │
-                                                zeta-model-provider selects it
+                         │
+                         └─ implements Core TurnExecutionBackend
 ```
 
-`SubscriptionModelBackend` 是 `zeta-model-provider` 消费的窄 port。它接收已选择的 model/invocation
-intent，返回 canonical execution result 和 redacted account/reauthentication outcome；它不接受
-raw access token、header map 或 arbitrary ChatGPT base URL。Codex adapter 是第一个实现，但该 port
-不以 Codex DTO 为 public API。
+`TurnExecutionBackend` 是 Core 消费的窄 port。它接收已创建的 durable Turn，并把完整远端执行结果
+投影回 Core；它不接受 raw access token、header map 或 arbitrary ChatGPT base URL。产品 composition
+根据持久化 Turn model 的 exact provider 显式选择 default `TurnExecutor` 或 Codex backend；
+`openai-chatgpt` 由上游 account-filtered model catalog 提供，`zeta-model-provider` 不参与远端 Agent loop。
 
 401 recovery 也按身份所有者处理：direct-provider credential 可由其 provider runtime 做一次受限
 refresh/rebuild；Codex subscription 由 upstream Codex 自己刷新，Zeta 只接收 reauthentication-required
@@ -360,7 +354,7 @@ zeta-model-provider
 
 zeta-codex-app-server
   ├──▶ zeta-login
-  ├──▶ zeta-model-provider       # implements SubscriptionModelBackend
+  ├──▶ zeta-core                 # implements TurnExecutionBackend
   └──▶ zeta-protocol
 
 App Server composition
@@ -375,10 +369,10 @@ App Server composition
 - `zeta-http-client` 不依赖 Provider、API codec、Core、config 或 secret store；
 - `zeta-api` 可依赖 `zeta-client` 的 operation/SSE value；
 - `zeta-model-provider` 依赖 config、API、operation client、HTTP client、secrets 和 protocol；
-  它定义 `SubscriptionModelBackend` consumer port，但不依赖具体 Codex adapter；
+  它不定义或消费完整 Agent-loop backend；
 - config 不反向依赖 runtime；
 - API/client 都不反向依赖 model-provider。
-- `zeta-codex-app-server` 实现 interactive login 与 subscription-model port；
+- `zeta-codex-app-server` 实现 interactive login 与 Core `TurnExecutionBackend`；
 - Zeta App Server 只组合和映射 redacted control-plane DTO，不实现 OAuth host；
 - model-provider 不依赖 App Server、Desktop、CLI 或 TUI。
 
@@ -411,9 +405,6 @@ zeta-rs/model-provider/
     │   ├── recovery.rs
     │   ├── cloud/
     │   └── credential_tests.rs
-    ├── subscription/
-    │   ├── mod.rs             # consumer-owned SubscriptionModelBackend port
-    │   └── subscription_tests.rs
     ├── providers/
     │   ├── mod.rs
     │   ├── openai.rs
@@ -440,7 +431,6 @@ Public API 只暴露：
 - `ModelProviderRuntime` 或更窄的 runtime factory；
 - immutable `ModelInvoker`；
 - `ModelRuntimeRequest`；
-- `SubscriptionModelBackend` consumer port；
 - 安全的 `ModelProviderError`；
 - models manager 所需的 source adapter。
 
@@ -459,8 +449,8 @@ projection 由 [`zeta-login`](login.md) 提供；App Server 只读取该 redacte
 5. `model-provider/src/providers/*` 直接选择 endpoint/profile；
 6. 增加 streaming binding；
 7. 以 OpenAI API key 建立第一个 direct-provider credential vertical slice；
-8. 建立 `zeta-login` 与 `zeta-codex-app-server`，以 upstream managed ChatGPT login 接入第一个
-   `SubscriptionModelBackend` vertical slice；
+8. 建立 `zeta-login` 与 `zeta-codex-app-server`，以 upstream managed ChatGPT login 和 Core
+   `TurnExecutionBackend` 接入第一个完整 Codex Turn vertical slice；
 9. 实现 models manager 的 catalog source；
 10. 删除旧 Provider 级双重 dispatch。
 
@@ -480,4 +470,5 @@ projection 由 [`zeta-login`](login.md) 提供；App Server 只读取该 redacte
 9. interactive login lifecycle 属于 `zeta-login`；ChatGPT subscription 由
    `zeta-codex-app-server` 委托给 upstream Codex。
 10. 不建立统一 Provider OAuth，也不接入第三方 subscription token。
-11. `model-provider` 不创建 ChatGPT backend client；它只消费 injected subscription backend。
+11. `model-provider` 不创建或消费 ChatGPT Agent backend；产品在 Core `TurnExecutionBackend` 边界
+    选择 Codex adapter。

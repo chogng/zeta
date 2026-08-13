@@ -7,9 +7,9 @@ use zeta_attachments::ImageAttachments;
 fn normalizes_supported_image_data_to_a_durable_reference() {
     let attachments = Arc::new(ImageAttachments::in_memory());
     let png = crate::test_image::one_pixel_png_data_url();
+    let attachments = Arc::new(ImageAttachments::in_memory());
 
     let normalized = normalize_images(&[UserInput::Image { url: png }], &attachments).unwrap();
-
     assert!(matches!(
         &normalized[0],
         UserInput::ImageAttachment { attachment } if attachments.verify(attachment).is_ok()

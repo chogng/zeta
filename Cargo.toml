@@ -14,6 +14,7 @@ members = [
     "zeta-rs/code-index-cloud",
     "zeta-rs/code-index-semantic",
     "zeta-rs/code-retrieval",
+    "zeta-rs/codex-app-server",
     "zeta-rs/apply-patch",
     "zeta-rs/async-utils",
     "zeta-rs/auto-review",
@@ -37,6 +38,7 @@ members = [
     "zeta-rs/secrets",
     "zeta-rs/exec",
     "zeta-rs/execpolicy",
+    "zeta-rs/tool-executor",
     "zeta-rs/file-icons",
     "zeta-rs/file-identity",
     "zeta-rs/file-search",
@@ -53,6 +55,7 @@ members = [
     "zeta-rs/language-server-catalog",
     "zeta-rs/language-server-distribution",
     "zeta-rs/language-service",
+    "zeta-rs/login",
     "zeta-rs/linux-sandbox",
     "zeta-rs/lsp",
     "zeta-rs/model-provider",
@@ -226,6 +229,7 @@ zeta-code-index = { path = "zeta-rs/code-index" }
 zeta-code-index-cloud = { path = "zeta-rs/code-index-cloud" }
 zeta-code-index-semantic = { path = "zeta-rs/code-index-semantic" }
 zeta-code-retrieval = { path = "zeta-rs/code-retrieval" }
+zeta-codex-app-server = { path = "zeta-rs/codex-app-server" }
 zeta-apply-patch = { path = "zeta-rs/apply-patch" }
 zeta-async-utils = { path = "zeta-rs/async-utils" }
 zeta-auto-review = { path = "zeta-rs/auto-review" }
@@ -247,6 +251,7 @@ zeta-skills-extension = { path = "zeta-rs/ext/skills" }
 zeta-web-search-extension = { path = "zeta-rs/ext/web-search" }
 zeta-exec = { path = "zeta-rs/exec" }
 zeta-execpolicy = { path = "zeta-rs/execpolicy" }
+zeta-tool-executor = { path = "zeta-rs/tool-executor" }
 zeta-extensions = { path = "zeta-rs/extensions" }
 zeta-editor-extension-host = { path = "zeta-rs/editor-extension-host" }
 zeta-icons = { path = "zeterm/icons" }
@@ -271,6 +276,7 @@ zeta-keybindings-host = { path = "zeterm/native-keybindings" }
 zeta-language-server-catalog = { path = "zeta-rs/language-server-catalog" }
 zeta-language-server-distribution = { path = "zeta-rs/language-server-distribution" }
 zeta-language-service = { path = "zeta-rs/language-service" }
+zeta-login = { path = "zeta-rs/login" }
 zeta-linux-sandbox = { path = "zeta-rs/linux-sandbox" }
 zeta-lsp = { path = "zeta-rs/lsp" }
 zeta-markdown = { path = "zeterm/markdown" }

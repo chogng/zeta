@@ -149,6 +149,7 @@ fn snapshot(thread_id: &ThreadId) -> ThreadSnapshot {
         session_id: SessionId::new("session").unwrap(),
         thread_id: thread_id.clone(),
         title: "test".into(),
+        turn_execution_binding: None,
         sequence: 1,
         turns: Vec::new(),
         items: Vec::new(),

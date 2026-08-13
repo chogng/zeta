@@ -44,19 +44,23 @@ pub(crate) fn post_json_to_path(
     )?;
     let response = client.execute_with_cancellation(&request, cancellation)?;
     if !response.is_success() {
-        return Err(match response.status() {
-            429 => ApiError::RateLimited {
-                retry_after_ms: response
-                    .retry_after()
-                    .and_then(|delay| u64::try_from(delay.as_millis()).ok())
-                    .map(|delay| delay.min(60_000)),
-            },
-            500..=599 => ApiError::Overloaded,
-            status => ApiError::HttpStatus(status),
-        });
+        return Err(response_error(&response));
     }
     serde_json::from_slice(response.body())
         .map_err(|_| ApiError::InvalidResponse("server returned invalid JSON".into()))
+}
+
+pub(crate) fn response_error(response: &zeta_client::ClientResponse) -> ApiError {
+    match response.status() {
+        429 => ApiError::RateLimited {
+            retry_after_ms: response
+                .retry_after()
+                .and_then(|delay| u64::try_from(delay.as_millis()).ok())
+                .map(|delay| delay.min(60_000)),
+        },
+        500..=599 => ApiError::Overloaded,
+        status => ApiError::HttpStatus(status),
+    }
 }
 
 pub(crate) mod anthropic_messages;

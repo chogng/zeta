@@ -1,3 +1,18 @@
+use crate::protocol::account::AccountDto;
+use crate::protocol::account::AccountLoginCancelParams;
+use crate::protocol::account::AccountLoginCancelResult;
+use crate::protocol::account::AccountLoginCancelStatusDto;
+use crate::protocol::account::AccountLoginCompleted;
+use crate::protocol::account::AccountLoginCompletionStatusDto;
+use crate::protocol::account::AccountLoginFailureDto;
+use crate::protocol::account::AccountLoginMethodDto;
+use crate::protocol::account::AccountLoginStartParams;
+use crate::protocol::account::AccountLoginStartResult;
+use crate::protocol::account::AccountLogoutResult;
+use crate::protocol::account::AccountLogoutStatusDto;
+use crate::protocol::account::AccountReadResult;
+use crate::protocol::account::AccountStatusDto;
+use crate::protocol::account::AccountUpdated;
 use crate::protocol::attachments::AttachmentImportRemoteParams;
 use crate::protocol::attachments::AttachmentMaterializeResult;
 use crate::protocol::attachments::AttachmentUploadCancelParams;
@@ -187,6 +202,15 @@ use crate::protocol::language::{
     LanguageWorkspaceEditDto, LanguageWorkspaceEditEntryDto, LanguageWorkspaceSymbolDto,
     LanguageWorkspaceSymbolsParams, LanguageWorkspaceSymbolsResult,
 };
+use crate::protocol::mcp::McpOAuthCompleteParams;
+use crate::protocol::mcp::McpOAuthMutationParams;
+use crate::protocol::mcp::McpOAuthMutationResult;
+use crate::protocol::mcp::McpOAuthStartParams;
+use crate::protocol::mcp::McpOAuthStartResult;
+use crate::protocol::mcp::McpSecretDto;
+use crate::protocol::mcp::McpServerRuntimeIntentParams;
+use crate::protocol::mcp::McpServerRuntimeIntentResult;
+use crate::protocol::mcp::McpServerStatusResult;
 use crate::protocol::model::{ModelCatalogEntry, ModelListResult};
 use crate::protocol::notification::{SessionUpdateEnvelope, ThreadUpdateEnvelope};
 use crate::protocol::plugins::PluginCommandDispositionDto;
@@ -273,8 +297,8 @@ use zeta_protocol::{
     SessionUpdate, SkillActivationReason, SkillId, SkillName, SkillRef, SkillSourceId,
     SkillVersionSelector, StableTurnError, StableTurnErrorCode, StreamCursor, Thread, ThreadEvent,
     ThreadItem, ThreadOrigin, ThreadSequenceRange, ThreadStatus, ThreadUpdate,
-    ToolExecutionAuthority, ToolOutputStream, ToolReplaySafety, Turn, TurnInteraction, TurnStatus,
-    UserInputAnswer, UserInputOption, UserInputQuestion,
+    ToolExecutionAuthority, ToolOutputStream, ToolReplaySafety, Turn, TurnExecutionBinding,
+    TurnInteraction, TurnStatus, UserInputAnswer, UserInputOption, UserInputQuestion,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -483,6 +507,41 @@ client_methods! {
         response: ConfigReadResult,
         serialization: GlobalSharedRead,
     },
+    McpServerStatus => "mcp/server/status" {
+        params: EmptyParams,
+        response: McpServerStatusResult,
+        serialization: GlobalSharedRead,
+    },
+    McpServerConnect => "mcp/server/connect" {
+        params: McpServerRuntimeIntentParams,
+        response: McpServerRuntimeIntentResult,
+        serialization: GlobalExclusive,
+    },
+    McpServerDisconnect => "mcp/server/disconnect" {
+        params: McpServerRuntimeIntentParams,
+        response: McpServerRuntimeIntentResult,
+        serialization: GlobalExclusive,
+    },
+    McpOAuthStart => "mcp/oauth/start" {
+        params: McpOAuthStartParams,
+        response: McpOAuthStartResult,
+        serialization: GlobalExclusive,
+    },
+    McpOAuthComplete => "mcp/oauth/complete" {
+        params: McpOAuthCompleteParams,
+        response: McpOAuthMutationResult,
+        serialization: GlobalExclusive,
+    },
+    McpOAuthRefresh => "mcp/oauth/refresh" {
+        params: McpOAuthMutationParams,
+        response: McpOAuthMutationResult,
+        serialization: GlobalExclusive,
+    },
+    McpOAuthRevoke => "mcp/oauth/revoke" {
+        params: McpOAuthMutationParams,
+        response: McpOAuthMutationResult,
+        serialization: GlobalExclusive,
+    },
     ConnectorList => "connector/list" {
         params: EmptyParams,
         response: ConnectorListResult,
@@ -597,6 +656,26 @@ client_methods! {
         params: EmptyParams,
         response: ModelListResult,
         serialization: GlobalSharedRead,
+    },
+    AccountRead => "account/read" {
+        params: EmptyParams,
+        response: AccountReadResult,
+        serialization: GlobalSharedRead,
+    },
+    AccountLoginStart => "account/login/start" {
+        params: AccountLoginStartParams,
+        response: AccountLoginStartResult,
+        serialization: GlobalExclusive,
+    },
+    AccountLoginCancel => "account/login/cancel" {
+        params: AccountLoginCancelParams,
+        response: AccountLoginCancelResult,
+        serialization: GlobalExclusive,
+    },
+    AccountLogout => "account/logout" {
+        params: EmptyParams,
+        response: AccountLogoutResult,
+        serialization: GlobalExclusive,
     },
     ConfigUpdate => "config/update" {
         params: ConfigUpdateParams,
@@ -1290,6 +1369,12 @@ macro_rules! notification_storage {
 }
 
 server_notifications! {
+    AccountLoginCompleted => "account/login/completed" {
+        params: AccountLoginCompleted,
+    },
+    AccountUpdated => "account/updated" {
+        params: AccountUpdated,
+    },
     AgentRequest => "agent/request" {
         params: AgentRequestEnvelope,
     },
@@ -1351,6 +1436,21 @@ macro_rules! typescript_bindings {
 }
 
 typescript_bindings! {
+    AccountDto,
+    AccountLoginCancelParams,
+    AccountLoginCancelResult,
+    AccountLoginCancelStatusDto,
+    AccountLoginCompleted,
+    AccountLoginCompletionStatusDto,
+    AccountLoginFailureDto,
+    AccountLoginMethodDto,
+    AccountLoginStartParams,
+    AccountLoginStartResult,
+    AccountLogoutResult,
+    AccountLogoutStatusDto,
+    AccountReadResult,
+    AccountStatusDto,
+    AccountUpdated,
     ThreadId,
     SessionId,
     CommandId,
@@ -1383,6 +1483,12 @@ typescript_bindings! {
     ConnectorCredentialCleanupParams,
     ConnectorDisconnectResultDto,
     ConnectorsChanged,
+    McpSecretDto,
+    McpOAuthStartParams,
+    McpOAuthStartResult,
+    McpOAuthCompleteParams,
+    McpOAuthMutationParams,
+    McpOAuthMutationResult,
     PluginPackageDto,
     PluginListResult,
     PluginMarketplaceCommandParams,
@@ -1628,6 +1734,7 @@ typescript_bindings! {
     ContextSourceDigest,
     ContextCheckpointVerification,
     ContextCheckpoint,
+    TurnExecutionBinding,
     ThreadEvent,
     PlanStepStatus,
     PlanStep,

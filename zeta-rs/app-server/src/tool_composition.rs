@@ -744,6 +744,28 @@ impl ToolService for ReloadableToolService {
         self.release_if_terminal(call, &result);
         result
     }
+
+    fn execute_streaming_with_facts_and_interactions(
+        &self,
+        call: &ToolCall,
+        authorization: &ToolAuthorization,
+        cancellation: &CancellationToken,
+        facts: &ToolExecutionFacts,
+        interactions: Arc<dyn zeta_core::ToolInteractionService>,
+        sink: &mut dyn ToolOutputSink,
+    ) -> Result<ToolExecutionOutput, CoreError> {
+        let tools = self.bound_tools(call);
+        let result = tools.execute_streaming_with_facts_and_interactions(
+            call,
+            authorization,
+            cancellation,
+            facts,
+            interactions,
+            sink,
+        );
+        self.release_if_terminal(call, &result);
+        result
+    }
 }
 
 impl ReloadableToolService {
@@ -1352,6 +1374,37 @@ impl ToolService for CompositeToolService {
             ToolContributionRuntime::Service(service) => {
                 service.execute_streaming_with_facts(call, authorization, cancellation, facts, sink)
             }
+            ToolContributionRuntime::Executor(executor) => {
+                executor.execute(binding, call, authorization, cancellation, facts, sink)
+            }
+        }
+    }
+
+    fn execute_streaming_with_facts_and_interactions(
+        &self,
+        call: &ToolCall,
+        authorization: &ToolAuthorization,
+        cancellation: &CancellationToken,
+        facts: &ToolExecutionFacts,
+        interactions: Arc<dyn zeta_core::ToolInteractionService>,
+        sink: &mut dyn ToolOutputSink,
+    ) -> Result<ToolExecutionOutput, CoreError> {
+        if let Some(search) = &self.search
+            && call.name == search.definition().name
+        {
+            return search.execute(call, authorization, cancellation);
+        }
+        let (binding, runtime) = self.runtime(call)?;
+        match runtime {
+            ToolContributionRuntime::Service(service) => service
+                .execute_streaming_with_facts_and_interactions(
+                    call,
+                    authorization,
+                    cancellation,
+                    facts,
+                    interactions,
+                    sink,
+                ),
             ToolContributionRuntime::Executor(executor) => {
                 executor.execute(binding, call, authorization, cancellation, facts, sink)
             }

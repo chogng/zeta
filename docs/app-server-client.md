@@ -137,10 +137,9 @@ zeta-app-server-client
 Consumer 不直接创建 `AppServer`、`ConnectionState`、dispatcher 或 notification broker。
 这些类型可以在 client crate 内部使用，但不能泄漏到 `zeta-exec` 或 TUI 的业务代码。
 
-目标架构中的 `zeta-exec` 是非交互 Agent 宿主和未来远程调度执行入口。当前
-`zeta-rs/exec` 仍实现底层 tool process execution，这是现状与目标的职责偏差；迁移时必须把
-底层命令执行能力保留为独立边界，不能让“执行一个 tool process”和“宿主化完整 App Server”
-继续共用同一个含义不清的模块。
+当前 `zeta-exec` 已是非交互 Agent 宿主，并通过本 crate 启动 embedded App Server；底层 process
+execution 已迁移到独立 `zeta-tool-executor`。后续 remote scheduler 仍位于 `zeta-exec` 上层，不能让
+“执行一个 tool process”和“宿主化完整 App Server”重新共享同一个模块或协议。
 
 长期 backend 选择必须是显式 enum：
 

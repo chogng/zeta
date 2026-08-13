@@ -11,6 +11,7 @@ use zeta_core::ModelService;
 use zeta_core::SequenceExpectation;
 use zeta_core::StartTurnRequest;
 use zeta_core::ThreadController;
+use zeta_core::TurnExecutionBackend;
 use zeta_protocol::CommandId;
 use zeta_protocol::ContentPart;
 use zeta_protocol::InputItem;
@@ -274,6 +275,26 @@ fn service() -> MultiAgentToolService {
             AgentTreeLimits::default(),
         )),
         sessions,
-        Weak::new(),
+        Arc::new(NoopTurnBackend),
     )
+}
+
+struct NoopTurnBackend;
+
+impl TurnExecutionBackend for NoopTurnBackend {
+    fn start(
+        &self,
+        _: &zeta_protocol::ThreadId,
+        _: &zeta_protocol::TurnId,
+    ) -> Result<(), CoreError> {
+        Ok(())
+    }
+
+    fn resume(
+        &self,
+        _: &zeta_protocol::ThreadId,
+        _: &zeta_protocol::TurnId,
+    ) -> Result<(), CoreError> {
+        Ok(())
+    }
 }

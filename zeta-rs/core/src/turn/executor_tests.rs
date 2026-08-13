@@ -3,10 +3,12 @@ use crate::{
     ActionPolicyService, ContextBudget, ContextCompactionLimit, ContextTokenCount,
     ContextTokenMeasurementCapability, ContextTokenMeasurementOutcome, CreateThreadRequest,
     InMemoryThreadStore, ModelSelection, ModelService, ModelStreamSink, SequenceExpectation,
-    StartTurnRequest, ThreadUpdateSink, ToolAuthorization, ToolExecutionOutput, ToolService,
+    StartTurnRequest, ThreadUpdateSink, ToolAuthorization, ToolExecutionFacts, ToolExecutionOutput,
+    ToolInteractionService, ToolOutputSink, ToolService, ToolUserInputOutcome,
     TurnExecutionOutcome,
 };
 use serde_json::json;
+use std::collections::BTreeMap;
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
@@ -21,10 +23,11 @@ use zeta_async_utils::CancellationSource;
 use zeta_context_engine::ContextTokenMeasurement;
 use zeta_context_engine::ContextTokenMeasurementSource;
 use zeta_protocol::{
-    CommandId, ContentDigest, ContentPart, FrozenSkillActivation, InputItem, ModelRequest,
-    ModelResponse, ModelStreamEvent, ResponseItem, SessionId, SkillActivationReason, SkillId,
-    SkillName, SkillRef, SkillSourceId, StopReason, ThreadId, ThreadItem, ThreadUpdate,
-    ThreadUpdateEnvelope, ToolCallId, ToolDefinition, ToolName, TurnStatus, UserInput,
+    AgentResponse, CommandId, ContentDigest, ContentPart, FrozenSkillActivation, InputItem,
+    ModelRequest, ModelResponse, ModelStreamEvent, RequestUserInput, RequestUserInputResponse,
+    ResponseItem, SessionId, SkillActivationReason, SkillId, SkillName, SkillRef, SkillSourceId,
+    StopReason, ThreadId, ThreadItem, ThreadUpdate, ThreadUpdateEnvelope, ToolCallId,
+    ToolDefinition, ToolName, TurnStatus, UserInput, UserInputAnswer, UserInputQuestion,
 };
 use zeta_sandboxing::{FileSystemAccess, NetworkAccess, SandboxPolicy};
 
@@ -806,6 +809,77 @@ fn interrupt_propagates_to_the_active_tool_call() {
     ));
 }
 
+#[test]
+fn running_tool_user_input_is_durable_and_resumes_the_same_execution() {
+    let (threads, thread_id, turn_id) = started_turn();
+    let call = ToolCall {
+        id: ToolCallId::new("interactive_call").unwrap(),
+        name: ToolName::new("interactive").unwrap(),
+        arguments: json!({}),
+    };
+    let model = Arc::new(ScriptedModel::new([
+        Ok(ModelResponse {
+            output: vec![ResponseItem::ToolCall(call)],
+            usage: None,
+            stop_reason: StopReason::ToolUse,
+        }),
+        Ok(text_response("done")),
+    ]));
+    let executor = TurnExecutor::new(
+        threads.clone(),
+        model,
+        Arc::new(InteractiveTool),
+        Arc::new(SandboxActionPolicyService),
+    );
+
+    executor.start(&thread_id, &turn_id).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(1);
+    let pending = loop {
+        let snapshot = threads.read_thread(&thread_id).unwrap();
+        if let Some(interaction) = snapshot.turns[0].pending_interaction.clone() {
+            break (snapshot.sequence, interaction);
+        }
+        assert!(
+            Instant::now() < deadline,
+            "interactive tool did not request input"
+        );
+        thread::sleep(Duration::from_millis(2));
+    };
+    assert!(matches!(
+        pending.1.request,
+        zeta_protocol::AgentRequest::UserInput { .. }
+    ));
+    let resolved = threads
+        .resolve_turn_interaction(
+            &thread_id,
+            crate::ResolveTurnInteractionRequest {
+                command_id: CommandId::new("resolve-interactive").unwrap(),
+                expected_sequence: SequenceExpectation::Exact(pending.0),
+                turn_id: turn_id.clone(),
+                request_id: pending.1.request_id,
+                response: AgentResponse::UserInput {
+                    response: RequestUserInputResponse {
+                        answers: BTreeMap::from([(
+                            "city".into(),
+                            UserInputAnswer {
+                                value: "Paris".into(),
+                            },
+                        )]),
+                    },
+                },
+            },
+        )
+        .unwrap();
+    assert!(resolved.live_execution_woken);
+
+    wait_for_turn_status(&threads, &thread_id, &turn_id, TurnStatus::Completed);
+    let snapshot = threads.read_thread(&thread_id).unwrap();
+    assert!(snapshot.items.iter().any(|item| matches!(
+        item,
+        ThreadItem::ToolResult { text, is_error: false, .. } if text == "Paris"
+    )));
+}
+
 struct ScriptedModel {
     responses: Mutex<VecDeque<Result<ModelResponse, CoreError>>>,
     requests: Mutex<Vec<ModelRequest>>,
@@ -1272,6 +1346,70 @@ struct BlockingTool {
     was_cancelled: AtomicBool,
     entered_lock: Mutex<()>,
     entered_changed: Condvar,
+}
+
+struct InteractiveTool;
+
+impl ToolService for InteractiveTool {
+    fn definitions(&self) -> Vec<ToolDefinition> {
+        vec![tool_definition("interactive")]
+    }
+
+    fn prepare(&self, call: &ToolCall) -> Result<ActionReviewRequest, CoreError> {
+        Ok(ActionReviewRequest::new(
+            ResolvedAction::new(
+                ActionDigest::from_canonical_bytes(serde_json::to_vec(call).unwrap()),
+                ActionKind::SystemOperation,
+                "request user input",
+                CapabilitySet::new([]),
+            ),
+            ActionProvenance::new(ActionSource::BuiltInTool, "interactive"),
+            SandboxCompatibility::Supported(SandboxPolicy::new(
+                FileSystemAccess::ReadOnly,
+                NetworkAccess::Denied,
+            )),
+            ActionPolicyRevision::new("test-policy"),
+        ))
+    }
+
+    fn execute(
+        &self,
+        _: &ToolCall,
+        _: &ToolAuthorization,
+        _: &CancellationToken,
+    ) -> Result<ToolExecutionOutput, CoreError> {
+        Err(CoreError::Execution(
+            "interactive execution context is required".into(),
+        ))
+    }
+
+    fn execute_streaming_with_facts_and_interactions(
+        &self,
+        _: &ToolCall,
+        _: &ToolAuthorization,
+        _: &CancellationToken,
+        _: &ToolExecutionFacts,
+        interactions: Arc<dyn ToolInteractionService>,
+        _: &mut dyn ToolOutputSink,
+    ) -> Result<ToolExecutionOutput, CoreError> {
+        let outcome = interactions.request_user_input(RequestUserInput {
+            questions: vec![UserInputQuestion {
+                id: "city".into(),
+                header: "City".into(),
+                question: "Which city?".into(),
+                options: Vec::new(),
+                allow_free_form: true,
+            }],
+        })?;
+        match outcome {
+            ToolUserInputOutcome::Answered(response) => Ok(ToolExecutionOutput::Success(
+                response.answers["city"].value.clone(),
+            )),
+            ToolUserInputOutcome::Cancelled(reason) => Ok(ToolExecutionOutput::Failure(format!(
+                "interaction cancelled: {reason:?}"
+            ))),
+        }
+    }
 }
 
 impl BlockingTool {

@@ -10,11 +10,15 @@ use zeta_protocol::ModelStreamEvent;
 /// resumption; those remain client/runtime concerns.
 pub struct OpenAiResponsesSseDecoder {
     terminal: bool,
+    response: Option<Value>,
 }
 
 impl OpenAiResponsesSseDecoder {
     pub fn new() -> Self {
-        Self { terminal: false }
+        Self {
+            terminal: false,
+            response: None,
+        }
     }
 
     pub fn decode(&mut self, frame: &SseFrame) -> Result<Vec<ModelStreamEvent>, ApiError> {
@@ -40,6 +44,20 @@ impl OpenAiResponsesSseDecoder {
         }
     }
 
+    /// Returns the canonical terminal response carried by `response.completed`.
+    pub fn finish_response(self) -> Result<Value, ApiError> {
+        if !self.terminal {
+            return Err(ApiError::InvalidResponse(
+                "OpenAI response stream ended before a terminal event".into(),
+            ));
+        }
+        self.response.ok_or_else(|| {
+            ApiError::InvalidResponse(
+                "OpenAI response.completed event is missing its response".into(),
+            )
+        })
+    }
+
     fn decode_event(&mut self, event: &SseEvent) -> Result<Vec<ModelStreamEvent>, ApiError> {
         let payload: Value = serde_json::from_str(&event.data).map_err(|_| {
             ApiError::InvalidResponse("OpenAI response stream event contains invalid JSON".into())
@@ -61,6 +79,7 @@ impl OpenAiResponsesSseDecoder {
             )]),
             "response.completed" => {
                 self.terminal = true;
+                self.response = payload.get("response").cloned();
                 Ok(Vec::new())
             }
             "response.failed" | "response.incomplete" => Err(ApiError::InvalidResponse(

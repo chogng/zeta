@@ -25,7 +25,9 @@ JSONL / in-process caller
    ├─ protocol method dispatch
    ├─ SessionCoordinator / ThreadController
    ├─ MultiAgentCoordinator → child Thread spawn/context seed + durable delivery/join/cancellation
-   ├─ TurnExecutor
+   ├─ TurnBackendHandle → exact Turn.model provider router
+   │                   ├─ TurnExecutor (direct provider)
+   │                   └─ CodexTurnExecutionBackend (openai-chatgpt subscription)
    ├─ ConfigStore
    ├─ optional WorkspaceFileSystem + filesystem watcher
    ├─ optional GitRuntime → zeta-file-watcher + GitService → zeta-git
@@ -35,7 +37,7 @@ JSONL / in-process caller
    ├─ optional CloudCodeIndexController → zeta-code-index-cloud + host provider registry
    ├─ request-scoped CodeRetrievalService → lexical/semantic/remote RRF + verification + budget
    ├─ optional TerminalService → zeta-utils-pty
-   ├─ reloadable MCP Tool generation → zeta-mcp-extension → zeta-mcp
+   ├─ reloadable MCP Tool generation + status/OAuth/form interaction → zeta-mcp-extension → zeta-mcp
    ├─ ConnectorCredentialService → list/connect/disconnect + ready MCP reconcile
    ├─ client-hosted dynamic tools → durable Agent interaction owner
    ├─ read-only/capability ToolExecutor contributions → zeta-extension-api
@@ -80,12 +82,15 @@ Core/store 继续拥有 Session/Thread durable state；需要进程内生命周�
 | `AppServer::with_cloud_code_index_providers` | 注入冻结的 provider registry；空 registry 不广告 cloud capability |
 | `AppServer::with_cloud_code_index_storage_root` | local composition 配置按 root identity 分隔的 durable grant/deletion state |
 | `AppServer::with_tool_service` | 安装同一 server 内所有 Turn 使用的 Core Tool/Policy ports |
+| `AppServer::with_mcp_oauth_service` | 安装独立 Config MCP 的 process-local OAuth coordinator，并广告 `mcpOAuth` capability |
+| `AppServer::with_codex_turn_backend` | 将 `openai-chatgpt` 模型路由到 Codex complete-Turn backend；不读取登录状态做隐式切换 |
 | `AppServer::with_dynamic_tools` | 校验 client-hosted dynamic specs，并接入共享 registry、审批和 durable interaction 执行链 |
 | `AppServer::resume_recovered_agent_coordinations` | 恢复 Agent spawn/delivery/join/cancellation saga，并调度恢复期间新建的 child Turn |
 | `open_local_app_server` | 按 SessionStateMode 选择 durable/in-memory coordinator，打开 config 并组合 provider-backed model |
 | `open_local_app_server_with_cloud_providers` | 在 Workspace 激活前注入 cloud code-index providers；默认入口使用空 registry |
 | `open_local_app_server_with_code_index_providers` | 在 Workspace 激活前同时注入本地 semantic models 与可选 cloud providers |
-| `LocalAppServerOptions` | user profile root + SessionStateMode + optional Workspace/Connector runtime + validated slash catalog + built-in Skill root selection + optional model operation client |
+| `LocalAppServerOptions` | user profile root + SessionStateMode + optional Workspace/Connector runtime + Codex App Server options + validated slash catalog + built-in Skill root selection + optional model operation client/MCP OAuth providers |
+| `LocalAppServerOptions::with_mcp_oauth_providers` | 把 exact MCP server ID → provider adapter 注入使用共享 SecretStore 的 OAuth service |
 | `LocalConnectorRuntime` | Connector credential service + shared SecretStore + Plugin-specific MCP materializer |
 | `LocalAppServerOptions::with_plugin_activation` | 从 exact activation 构造 package-rooted Connector/MCP runtime |
 | `LocalConnectorRuntime::from_plugin_activation` | activation → Connector catalog + SQLite authority + Plugin MCP provider |
@@ -97,7 +102,7 @@ Core/store 继续拥有 Session/Thread durable state；需要进程内生命周�
 
 `AppServer::new` 默认用 `TurnExecutor::without_tools`。`with_tool_service` 才会替换为有 Tool 和
 Policy port 的 executor。`open_local_app_server` 会从 user config snapshot 连接明确 `enabled`
-的 unauthenticated MCP server，并把 catalog 与本地工具组合。Host 可用
+的 unauthenticated 或 SecretStore-backed MCP server，并把 catalog 与本地工具组合。Host 可用
 `LocalAppServerOptions::with_plugin_activation` 注入固定 activation，或用 `with_plugin_authority` 注入 live
 authority；两者都会自动构造 Connector catalog、SQLite authority 与 package-rooted Plugin MCP provider。
 没有注入时，local composition 打开 `<profile>/plugins` 的 durable `PluginActivationAuthority` 和按 profile
@@ -109,7 +114,10 @@ authority；两者都会自动构造 Connector catalog、SQLite authority 与 pa
 直到 execute 排空；Plugin-backed call 在 dispatch 前获取 exact activation lease，Connector-bound call 再
 额外复核 live connection generation/digest，
 disconnect 会等待已经 dispatch 的调用结束。每次 MCP tool
-call 仍必须经过 durable one-time approval。Host 安装的 read-only
+call 仍必须经过 durable one-time approval。Host 通过
+`LocalAppServerOptions::with_mcp_oauth_providers` 注入具体 provider 后，local composition 使用 Connector
+runtime 同一个 SecretStore 构造 `McpOAuthService`；App Server 只暴露 PKCE/callback/refresh/revoke RPC，
+不拥有 provider discovery、scope 或 token wire。Host 安装的 read-only
 extension executor（当前包括统一的 `skills-read`）和 client-hosted dynamic tools 也进入同一个 registry，
 不得绕过 binding、policy 或 durable result commit。它仅在调用方通过
 `LocalAppServerOptions::with_workspace_root` 提供统一 Workspace 根时同时组合 filesystem、
@@ -254,9 +262,13 @@ src/
 | `LocalExecPolicyConfig::from_resolved` | crate-private | 从 safe-point `ResolvedConfig` 提取 User rules 与 Workspace restrictions | 不读取文件或自己决定 layer trust |
 | `LocalShellToolService::materialize` | private | parse call、约束 workspace 参数、冻结 rg executable | policy review 前不启动进程 |
 | `LocalShellPolicy::decide` | private | 将 frozen `ExecPolicySnapshot` 交给 `ActionPolicyEngine`，返回 exact typed decision | 不复制 rule precedence 或绕过 grant binding |
+| `HookRuntime` | crate-private | immutable Hook snapshot → exact safe-point match → host policy → sandboxed process executor | 不拥有 Hook Config persistence、Core scheduling 或交互式批准 UI |
+| `NativeHookProcessExecutor` | private | trusted Workspace + canonical action → shared process executor | Restricted Workspace 不构造此 adapter，不自行放宽 sandbox |
 | `zeta_mcp_extension::McpRuntimeOwner` | ext/mcp private | worker thread 持有 Tokio runtime 和 live `McpRuntime` | Core thread 不嵌套 `block_on` |
 | `zeta_mcp_extension::McpToolService::review_request` | ext/mcp private | exact binding/arguments/generation → MCP action digest | remote annotation 不授予只读信任 |
 | `zeta_mcp_extension::McpApprovalPolicy::decide` | ext/mcp private | 只接受已知 user MCP provenance 并返回 one-time approval | 不自动批准远端副作用 |
+| `mcp_operations::{mcp_oauth_start,mcp_oauth_complete,mcp_oauth_refresh,mcp_oauth_revoke}` | private | protocol DTO → exact Config target → `McpOAuthService` → runtime reconcile | 不解析 provider token response 或返回 secret bytes |
+| `McpRuntimeIntents::reconcile` | crate-private | 唤醒既有 Tool reconcile worker，使 OAuth/lifecycle mutation 立即生效 | 不修改 durable Config enablement |
 | `CompositeToolService` | private | frozen binding/runtime key → local、MCP、dynamic、extension runtime | duplicate name 在 composition 时失败，不按 live name 猜 executor |
 | `CompositeActionPolicyService` | private | trusted `ActionSource` → owning policy | 不依靠 trial-and-error policy fallback |
 | `ReloadableToolPorts` | crate-private | 原子替换未来 Tool generation，并为 prepared call 固定 service/policy | reconcile failure 保留上一份可用 runtime |
@@ -364,9 +376,11 @@ approval/user-input owner 断连或
 退订可以确定性重选；已投递的 dynamic tool 不会转交给另一个连接，而是持久化
 `InteractionCancelled(OwnerDisconnected)`，恢复原 Tool path并收口为 unknown-outcome failure，
 非 owner 返回 `AgentInteractionNotOwner`，过期响应返回 `AgentInteractionExpired`。当 response 是
-Tool Call 对应的 approval 或 dynamic tool result，
-且 Core 确实产生 `Resolved` disposition，App Server 再启动 executor 恢复 Tool path。这个判断依赖
-pending interaction 的 item binding，不能简化为“所有 approval 都 restart”。
+Tool Call 对应的 approval、user input 或 dynamic tool result，且 Core 确实产生 `Resolved`
+disposition，App Server 才考虑恢复 Tool path。Core result 的 `live_execution_woken` 表明同进程
+`ToolInteractionService` waiter 已取得响应；此时 App Server 不再调用 backend `resume`。只有恢复后
+没有 live waiter 的 durable interaction 才启动 executor recovery。这个判断依赖 exact
+Thread/Turn/request 和 pending item binding，不能简化为“所有 interaction 都 restart”。
 同一路径同时恢复执行前 approval 与带结构化 `sandboxDenial` 的 sandbox escalation approval；
 App Server 不解释或扩大授权，Core 会在恢复后重新校验 action、policy、capability 与 ToolCall
 binding，并保证升级重试最多启动一次。
@@ -401,6 +415,10 @@ connection failure/recovery，而不是丢 control fact 或继续增长内存。
 若未显式 close，最后一个 strong owner drop 后 broker 仍会在下一次 publish 时通过
 `Weak::upgrade` 失败清除 subscriber。共享 embedded client 和 TUI event pump 也使用 1024 项有界
 channel，把 slow-consumer 背压传回该 queue。
+
+stdio/JSONL host 使用独立 notification waiter 和单一 writer thread。request response 与主动
+notification 统一进入 256 项有界 outbound channel；dispatch gate 保证一次 request 内产生的 causal
+notification 排在该 response 之后，而 request reader 阻塞等待下一行时 notification 仍能立即写出。
 
 ## Local composition 与模型安全点
 
@@ -452,7 +470,7 @@ Workspace activation
    └─ FileSystemWatcher invalidation → bounded catalog refresh
 
 local tools + enabled user MCP declarations
-├─ materialize absolute stdio executable / unauthenticated HTTP endpoint
+├─ materialize absolute stdio executable / HTTP endpoint / SecretStore credential
 ├─ collect host read-only extension executors and accepted dynamic specs
 ├─ combine duplicate-free model Tool names
 ├─ install ReloadableToolPorts
@@ -461,8 +479,8 @@ local tools + enabled user MCP declarations
 Plugin lifecycle + Hook declaration
 ├─ PluginActivationAuthority(<profile>/plugins)
 │  └─ live generation → Connector/MCP reconcile + invocation drain
-├─ Plugin lifecycle RPC/management UI 尚未实现
-└─ Hook execution/policy runtime 尚未实现
+├─ plugin list/marketplace/install/update/rollback/grant/enable/disable/revoke/uninstall RPC
+└─ HookRuntime → trusted Workspace gate → Host Policy → sandboxed process executor
 
 Language-server preference
 └─ config/read + languageServer/configure|remove
@@ -538,12 +556,20 @@ MCP runtime 在 `open_local_app_server` 构造初始 generation；后台 `ToolCo
 和 Connector authority，完整构造下一 generation 后原子切换 future model safe points，旧 generation
 由 model snapshot 和已绑定调用持有到排空。`enabled` 是建立连接/启动 server 的显式用户 intent；它不
 批准任何 tool call。stdio command 必须是存在的 absolute executable，独立 Config HTTP 当前只接受
-unauthenticated endpoint，credential reference 会使 composition 明确失败；注入的 Connector runtime
-可在 ready account 下 materialize credential-bearing transport。Workspace MCP intent 仍保持 pending
-trust，不会接入。`tools/list_changed` 通过 `McpCatalogUpdates` 触发同一 host reconcile；重建失败保留
-旧 generation 并记录诊断，不发布半成品 catalog。
+unauthenticated endpoint 或由共享 SecretStore materialize 的 credential reference；注入的 Connector
+runtime 可在 ready account 下 materialize credential-bearing transport。exact MCP OAuth provider 由
+host 注入，`mcp/oauth/complete|refresh` 会设置 connect intent 并立即 reconcile，revoke 在 provider
+调用前先设置 disconnect intent，并等待 active Tool generation 移除该 server。Workspace MCP intent
+仍保持 pending trust，不会接入。
+`tools/list_changed` 通过 `McpCatalogUpdates` 触发同一 host reconcile；重建失败保留旧 generation
+并记录诊断，不发布半成品 catalog。
 启动与重建采用 `RequireAll`，任一 enabled server 无法 initialize 时保留旧 generation 并记录诊断，
 不会静默发布不完整 catalog。
+
+当 MCP server 在工具调用期间发起 form elicitation，RMCP host 通过 task-local exact call binding
+进入 Core `ToolInteractionService`。Core 先持久化 `AgentRequest::UserInput`，owner response 再唤醒同一
+工具执行；URL elicitation、数组/多选与完整 JSON Schema format 当前失败关闭或 decline。进程重启后
+remote request 不可恢复，已 started 的调用保持 unknown outcome，不能向新 MCP connection 重放。
 
 缺少 preferred model/provider 时创建 `UnavailableModel`，使 invocation 显式失败，不回退到 echo
 或任意默认 provider。
@@ -603,6 +629,11 @@ Resource 不跨重启恢复，也不能被另一 connection 读取或 release。
 | other Core failure | `CoreOperationFailed` |
 | missing config store | `ConfigUnavailable` |
 | config sequence mismatch | `ConfigRevisionConflict` |
+| missing exact MCP server/runtime | `McpServerNotFound` / `McpRuntimeUnavailable` |
+| missing OAuth service/provider | `McpOAuthUnavailable` |
+| replayed, changed-target or state-mismatched OAuth callback | `McpOAuthInvalidCallback` |
+| expired OAuth flow | `McpOAuthExpired` |
+| provider exchange/refresh/revoke or credential store failure | `McpOAuthOperationFailed` |
 | missing Skill runtime | `SkillsUnavailable` |
 | invalid/missing exact Skill target | `SkillNotFound` |
 | Skill config/catalog failure | `SkillOperationFailed` |
@@ -666,6 +697,8 @@ bazel test //zeta-rs/app-server:app-server-unit-tests
 先响应后通知、模型配置安全点、
 Workspace override、review-only request、只读 `rg` definition/materialization/policy/execution，
 MCP worker bridge、exact provenance/approval policy、local/MCP 路由与 collision rejection、
+connect/disconnect/status、OAuth PKCE/one-shot callback/refresh/revoke/reconcile、form elicitation 的
+durable live wake 与 concurrent call isolation、
 Config commit/cross-connection notification、future Tool generation replacement 与 prepared-call
 generation retention，以及
 可信 Terminal Profile、真实 PTY create/write/read/exit、Terminal owner/error/ring limits，
@@ -678,14 +711,17 @@ text diff、local branch list/switch、path mutation 与 commit。Filesystem 覆
 Syntax 覆盖 connection owner、revision mismatch、Unicode UTF-16 batch 与非重叠 token encoding。
 
 local tool 的参数白名单、discovery、取消与输出限制由
-[`zeta-shell-command`](../shell-command/README.md) 和 [`zeta-exec`](../exec/README.md) 维护；
+[`zeta-shell-command`](../shell-command/README.md) 和
+[`zeta-tool-executor`](../tool-executor/README.md) 维护；
 本 README 只拥有 App Server 组合与 Core port binding。
 
 当前 JSONL 服务仍使用同步循环；自有嵌入式连接已具备可唤醒通知来源，以及显式订阅、资源和
 终端清理；尚无异步多连接调度器、序列化范围强制、持久化资源或完整网络服务
-生命周期。MCP desired config 的热更新和未来 Tool catalog replacement 已实现；当前仍没有凭据
-具体化、stdio 进程沙箱、对外 runtime health/diagnostic API、progress/elicitation delivery 或
-完整的 Plugin 安装/启用 authority。MCP 与 dynamic image result 已进入 canonical
+生命周期。MCP desired config 的热更新、SecretStore credential materialization、provider-injected
+OAuth lifecycle、form elicitation 和未来 Tool catalog replacement 已实现；当前仍没有 stdio 进程
+沙箱、自动 OAuth discovery/内建 provider、完整 runtime health/log API、progress 产品投影、URL/复杂
+form elicitation 或 MCP resources/prompts。Plugin 安装、marketplace、grant、enable/disable、rollback、
+revoke 和 uninstall authority 已具备 typed RPC；Renderer 管理 UI 不属于本 crate。MCP 与 dynamic image result 已进入 canonical
 `ContentPart`，Core 会把结构化内容写入 durable `ToolResult`，并在最终模型请求处按 model
 capability 统一处理 image detail；旧 transcript 的纯 text shape 仍可读取。Reloadable Tool service
 会在调用落盘前冻结 generation、definition digest、source chain 和 process incarnation；重启后的

@@ -29,16 +29,18 @@ use zeta_rmcp_client::{
     ServerInfo, StdioServerCommand, Tool,
 };
 use zeta_secrets::MemorySecretStore;
+use zeta_secrets::SecretKey;
 use zeta_secrets::SecretStore;
 use zeta_secrets::SecretValue;
 
 use super::{
     MCP_POLICY_REVISION, McpInvocationAuthority, McpInvocationTransport, compose_mcp_tools,
-    start_mcp_tools,
+    materialize_servers, start_mcp_tools,
 };
 use crate::connector::ConnectorMcpRuntimeError;
 use crate::connector::ConnectorMcpRuntimeProvider;
 use crate::connector::materialize_connector_servers;
+use crate::status::McpServerRuntimeIntent;
 
 struct FakeFactory;
 
@@ -187,6 +189,89 @@ fn rejects_relative_stdio_executable_before_starting_runtime() {
         Err(error) => error,
     };
     assert!(error.to_string().contains("absolute executable path"));
+}
+
+#[test]
+fn materializes_direct_http_credentials_only_from_the_host_secret_store() {
+    let server = McpServerId::new("user:mcp:private").unwrap();
+    let config = ResolvedConfig {
+        mcp: McpConfig {
+            servers: BTreeMap::from([(
+                server.clone(),
+                McpServerConfig {
+                    id: server,
+                    display_name: "Private".into(),
+                    transport: McpTransportConfig::StreamableHttp {
+                        url: "https://mcp.example.test".into(),
+                    },
+                    credential: McpCredentialBinding::Reference {
+                        credential_ref: "user:credential:private".into(),
+                    },
+                    enablement: McpServerEnablement::Enabled,
+                },
+            )]),
+        },
+        ..ResolvedConfig::default()
+    };
+    let secrets = MemorySecretStore::default();
+    let key = SecretKey::new("user:credential:private").unwrap();
+    secrets
+        .store(&key, &SecretValue::new(b"bearer-token".to_vec()))
+        .unwrap();
+
+    let (definitions, authorities) =
+        materialize_servers(&config, Some(&secrets), &BTreeMap::new()).unwrap();
+    assert_eq!(definitions.len(), 1);
+    assert_eq!(authorities.len(), 1);
+    assert!(matches!(
+        definitions[0].transport(),
+        McpServerTransport::StreamableHttp(_)
+    ));
+}
+
+#[test]
+fn runtime_intents_override_durable_enablement_without_mutating_config() {
+    let server = McpServerId::new("user:mcp:temporary").unwrap();
+    let config = ResolvedConfig {
+        mcp: McpConfig {
+            servers: BTreeMap::from([(
+                server.clone(),
+                McpServerConfig {
+                    id: server.clone(),
+                    display_name: "Temporary".into(),
+                    transport: McpTransportConfig::StreamableHttp {
+                        url: "https://mcp.example.test".into(),
+                    },
+                    credential: McpCredentialBinding::Unauthenticated,
+                    enablement: McpServerEnablement::Disabled,
+                },
+            )]),
+        },
+        ..ResolvedConfig::default()
+    };
+    let connect = BTreeMap::from([(server.clone(), McpServerRuntimeIntent::Connect)]);
+    let (definitions, _) = materialize_servers(&config, None, &connect).unwrap();
+    assert_eq!(definitions.len(), 1);
+    assert_eq!(
+        config.mcp.servers[&server].enablement,
+        McpServerEnablement::Disabled
+    );
+
+    let enabled_config = ResolvedConfig {
+        mcp: McpConfig {
+            servers: BTreeMap::from([(
+                server.clone(),
+                McpServerConfig {
+                    enablement: McpServerEnablement::Enabled,
+                    ..config.mcp.servers[&server].clone()
+                },
+            )]),
+        },
+        ..ResolvedConfig::default()
+    };
+    let disconnect = BTreeMap::from([(server, McpServerRuntimeIntent::Disconnect)]);
+    let (definitions, _) = materialize_servers(&enabled_config, None, &disconnect).unwrap();
+    assert!(definitions.is_empty());
 }
 
 #[test]

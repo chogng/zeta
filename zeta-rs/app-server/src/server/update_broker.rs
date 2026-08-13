@@ -5,6 +5,8 @@ use serde_json::Value;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::sync::Mutex;
+use zeta_app_server_protocol::protocol::account::AccountLoginCompleted;
+use zeta_app_server_protocol::protocol::account::AccountUpdated;
 use zeta_app_server_protocol::protocol::collaboration::DocumentCollaborationPresenceSnapshot;
 use zeta_app_server_protocol::protocol::collaboration::DocumentCollaborationUpdate;
 use zeta_app_server_protocol::protocol::common::AgentInteractionCapability;
@@ -74,6 +76,14 @@ impl Default for UpdateBroker {
 }
 
 impl UpdateBroker {
+    pub(super) fn publish_account_login_completed(&self, completed: AccountLoginCompleted) {
+        self.broadcast_notification(ServerNotificationMethod::AccountLoginCompleted, &completed);
+    }
+
+    pub(super) fn publish_account_updated(&self, updated: AccountUpdated) {
+        self.broadcast_notification(ServerNotificationMethod::AccountUpdated, &updated);
+    }
+
     pub(super) fn register(&self, connection_id: u64, queue: &NotificationQueue) {
         if let Ok(mut state) = self.state.lock() {
             state.subscribers.insert(
@@ -548,6 +558,10 @@ impl UpdateBroker {
         &self,
         diagnostics: LanguageDiagnosticsNotification,
     ) {
+        self.broadcast_notification(ServerNotificationMethod::LanguageDiagnostics, &diagnostics);
+    }
+
+    fn broadcast_notification(&self, method: ServerNotificationMethod, params: &impl Serialize) {
         let Ok(mut state) = self.state.lock() else {
             return;
         };
@@ -555,10 +569,7 @@ impl UpdateBroker {
             let Some(queue) = subscriber.queue.upgrade() else {
                 return false;
             };
-            queue.push(notification(
-                ServerNotificationMethod::LanguageDiagnostics,
-                &diagnostics,
-            ));
+            queue.push(notification(method, params));
             true
         });
     }

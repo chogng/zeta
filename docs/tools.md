@@ -222,7 +222,7 @@ Core 的 `ToolService` 是 consumer-owned port；它可以由外层 `ToolRegistr
 - `zeta-tools → zeta-protocol`；
 - `zeta-core → zeta-tools + zeta-protocol`；
 - `zeta-mcp → zeta-tools`；
-- `zeta-shell-command → zeta-tools + zeta-exec + zeta-sandboxing`；
+- `zeta-shell-command → zeta-tools + zeta-tool-executor + zeta-sandboxing`；
 - local App Server composition → `zeta-install-context + zeta-shell-command`；
 - `zeta-file-system → zeta-tools + zeta-sandboxing`；
 - `zeta-tui → zeta-file-search`；后者提供只读路径索引，不依赖 `zeta-tools`，也不注册为模型
@@ -267,7 +267,7 @@ App Server composition root 按 policy 单独注册：
 
 | Crate / tool name | 可做的事 | 明确不做的事 |
 | --- | --- | --- |
-| `zeta-shell-command` / `shell-command` | 在批准的相对 Workspace 工作目录执行显式 program/arguments；复用 `zeta-exec` 的 approval、timeout 和输出上限 | 不隐式启动 shell，不绕过 process policy |
+| `zeta-shell-command` / `shell-command` | 在批准的相对 Workspace 工作目录执行显式 program/arguments；复用 `zeta-tool-executor` 的 approval、timeout 和输出上限 | 不隐式启动 shell，不绕过 process policy |
 | `zeta-file-system` / `file-system` | 读取 UTF-8 文件、列目录、读取 metadata | 不写入、删除、移动或重命名 |
 | `zeta-apply-patch` / `apply-patch` | 预检后更新、添加或删除普通文件；replacement 按文件原子写入 | 不接受绝对/`..` 路径，不直接提供任意写入 API |
 

@@ -118,8 +118,8 @@ tabs/search/selection presentation primitive，但当前没有 Plugin view model
 
 - `zeta-config` 提供 ordinary config authority、typed patch 和 `CommandId` replay；
 - 各 credential domain 是生命周期 owner，`zeta-secrets` 是 opaque secret persistence owner；
-- `zeta-sandboxing`、目标 `zeta-tool-executor` 和 host capability 是执行权限边界；当前
-  process executor 的物理 crate 仍名为 `zeta-exec`，后续按 [`exec.md`](exec.md) 迁移；
+- `zeta-sandboxing`、`zeta-tool-executor` 和 host capability 是已分离的本地进程执行权限边界；
+  产品层 `zeta-exec` 只运行完整的无界面 Agent Turn；
 - App Server 是本地 runtime 的 composition root；
 - Resource store 可承载大块只读内容，但不是 Plugin package authority；
 - `zeta-protocol` 已固定“共享纯语义进入 protocol，I/O 和 policy 留在执行层”的规则。

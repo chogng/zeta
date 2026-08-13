@@ -16,7 +16,7 @@
 > MCP runtime：[`mcp.md`](mcp.md)  
 > Skill runtime：[`skills.md`](skills.md)  
 > Agent 自定义对象与外部导入边界：[`agent-customizations.md`](agent-customizations.md)
-> Direct-provider credential：[`model-provider.md`](model-provider.md#6-provider-credential-与-subscription-backend)  
+> Direct-provider credential：[`model-provider.md`](model-provider.md#6-供应商凭据与-codex-边界)
 > Interactive login：[`login.md`](login.md)
 > Secret persistence：[`secrets.md`](secrets.md)
 
@@ -174,7 +174,10 @@ scoped request。Plugin installed state、effective activation、grant、digest 
 
 `HooksConfig` 保存 namespaced Hook ID、`beforeTool`/`afterTool`/`turnCompleted` safe-point、
 exact tool-name matcher、process `program + args` 与 desired enablement。它不保存 PID、环境、
-执行队列、结果或 retry；当前只实现配置和 pending-trust resolution，尚未实现 Hook runtime。
+执行队列、结果或 retry。Local App Server 的 Hook runtime 在 trusted Workspace 中按 immutable
+配置快照匹配事件，经 Host Policy 评估后使用统一 sandbox executor；Restricted Workspace 不安装
+process runner。`TurnCompleted` 在 durable completion 后 best-effort 执行，`beforeTool`/`afterTool`
+遵守 cancellation，并在配置变更后热替换未来 safe point。
 
 Theme 已从 Rust Config schema、command 和 App Server Config DTO 中移除。Desktop device
 配置只拥有 device/UI preference；它不能再作为 Agent、Provider、MCP、Skill、
@@ -453,13 +456,14 @@ resolved sources
 | Ordinary Config | `config/read`、`config/update`、`config/changed` | Config authority；commit notification 携带 revision/generation，不包含 theme/UI device preference |
 | Provider Config | `provider/configure`、`provider/remove` | Config authority 的 Provider section |
 | Standalone MCP Config | `mcp/server/upsert`、`mcp/server/remove`、`mcp/server/enablement/set` | Config authority 的 MCP section（已实现 desired config） |
-| MCP Runtime | `mcp/server/connect`、`mcp/server/disconnect` | process-local lifecycle intent（Proposed） |
-| Plugin Package | `plugin/list`、`plugin/uninstall`；可信 `install/update` 尚未暴露 | Plugin authority（部分具备） |
+| MCP Runtime | `mcp/server/connect`、`mcp/server/disconnect`、`mcp/server/status` | process-local lifecycle intent 与 active runtime 的 redacted projection（已实现）；不改变 Config revision |
+| MCP OAuth | `mcp/oauth/start`、`mcp/oauth/complete`、`mcp/oauth/refresh`、`mcp/oauth/revoke` | exact Config target + SecretStore lifecycle；Config 只保存 credential reference |
+| Plugin Package | `plugin/list`、`plugin/marketplace/list`、`plugin/install`、`plugin/update`、`plugin/rollback`、`plugin/uninstall` | exact package Plugin authority（已实现） |
 | Plugin Activation | `plugin/enable`、`plugin/disable`、`plugin/grant`、`plugin/revokeGrant` | exact-package Plugin authority（已实现） |
 | Plugin Request Config | `plugin/request/upsert`、`plugin/request/remove`、`plugin/request/enablement/set` | Config authority 的 exact package request（已实现；不安装或激活） |
 | Skill Source | `skill/source/add`、`skill/source/remove`、`skill/source/enablement/set` | Config authority 的 Skill section（已实现 desired config） |
 | Skill Catalog | `skills/list`、`skill/enablement/set` | App Server metadata projection + Config authority per-Skill overlay（已实现 built-in/user） |
-| Hook Config | `hook/upsert`、`hook/remove`、`hook/enablement/set` | Config authority 的 Hook declaration（已实现；不执行） |
+| Hook Config/Runtime | `hook/upsert`、`hook/remove`、`hook/enablement/set` | Config authority 保存 declaration；Local App Server 在 trusted Workspace 运行匹配的 sandbox process |
 | Agent Import Apply | `agent/import/preview`、`agent/import/apply` | App Server 将用户选择的 normalized fragments 路由到 Config 与目标 artifact authorities（Proposed） |
 
 所有 durable mutation 使用 `CommandId`、对应 authority 的 expected revision、payload conflict
@@ -550,7 +554,7 @@ zeta-rs/config/src/
 ├── mcp.rs              # standalone MCP declaration
 ├── skills.rs           # source 与 per-Skill enablement
 ├── plugins.rs          # exact package request（不拥有 install/activation）
-├── hooks.rs            # safe-point/matcher/process declaration（不执行）
+├── hooks.rs            # safe-point/matcher/process declaration（runtime 在 App Server）
 ├── mutation.rs         # typed command reducer
 ├── workspace.rs        # strict read-only Workspace document
 ├── resolution.rs       # scoped merge、provenance、diagnostic

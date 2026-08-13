@@ -9,6 +9,7 @@ use crate::ApiError;
 use crate::InputTokenCount;
 use crate::ModelRequest;
 use crate::ModelResponse;
+use crate::ModelStreamEvent;
 use crate::requests;
 use zeta_async_utils::CancellationSource;
 use zeta_async_utils::CancellationToken;
@@ -42,6 +43,14 @@ pub enum ApiEndpoint {
     OpenAiChatCompletions,
     /// An endpoint implementing Anthropic's Messages API.
     AnthropicMessages,
+}
+
+/// Receives provider-neutral model deltas decoded from one API response stream.
+///
+/// Implementations should preserve event order and return an error when the
+/// invocation consumer has been cancelled or can no longer accept output.
+pub trait ApiStreamSink {
+    fn emit(&mut self, event: ModelStreamEvent) -> Result<(), ApiError>;
 }
 
 impl ApiEndpoint {
@@ -131,6 +140,52 @@ impl ApiEndpoint {
                 request,
                 client,
                 cancellation,
+            ),
+        }
+    }
+
+    /// Streams incremental output and returns the terminal canonical response.
+    ///
+    /// Every supported endpoint family uses its native wire-stream contract.
+    /// The returned response remains authoritative for Tool Calls, usage, and
+    /// terminal status.
+    pub fn stream_with_client_and_cancellation(
+        self,
+        target: &ResolvedApiTarget,
+        model: &str,
+        request: &ModelRequest,
+        client: &dyn OperationClient,
+        cancellation: &CancellationToken,
+        sink: &mut dyn ApiStreamSink,
+    ) -> Result<ModelResponse, ApiError> {
+        validate_request(model, request)?;
+        match self {
+            Self::OpenAiResponses => requests::openai_responses::stream(
+                self,
+                target,
+                model,
+                request,
+                client,
+                cancellation,
+                sink,
+            ),
+            Self::OpenAiChatCompletions => requests::openai_chat_completions::stream(
+                self,
+                target,
+                model,
+                request,
+                client,
+                cancellation,
+                sink,
+            ),
+            Self::AnthropicMessages => requests::anthropic_messages::stream(
+                self,
+                target,
+                model,
+                request,
+                client,
+                cancellation,
+                sink,
             ),
         }
     }

@@ -35,7 +35,7 @@ use zeta_core::{
     ForkSessionThreadRequest, InterruptTurnRequest, ResolveTurnInteractionRequest,
     RewindSessionThreadRequest, SequenceExpectation, SessionLifecycleRequest,
     SetSessionModelRequest, ShellTurnInvocation, StartShellTurnRequest, StartTurnDisposition,
-    StartTurnRequest, ThreadSnapshot, TurnStatus,
+    StartTurnRequest, ThreadSnapshot, TurnExecutionBackend, TurnStatus,
 };
 use zeta_protocol::AgentRequestEnvelope;
 use zeta_protocol::ApprovalMode;
@@ -142,6 +142,8 @@ impl AppServer {
                 extension_host: self.extension_hosts.is_some(),
                 connectors: self.connectors.is_some(),
                 plugins: self.plugins.is_some(),
+                mcp: self.config.is_some(),
+                mcp_oauth: self.mcp_oauth.is_some(),
             },
             slash_commands: self.slash_commands.commands().to_vec(),
         })
@@ -809,7 +811,7 @@ impl AppServer {
             .ok_or_else(|| RpcError::new(-32000, AppServerErrorName::InternalError));
         }
         self.notify_thread_updates(&thread_id, mutation.expected_sequence)?;
-        turn_executor
+        self.turn_backend
             .start(&thread_id, &turn_id)
             .map_err(core_error)?;
         Ok(TurnStartResult {
@@ -1002,41 +1004,6 @@ impl AppServer {
                 AppServerErrorName::CoreOperationFailed,
             ));
         }
-        let tool_execution_response = matches!(
-            &response,
-            zeta_protocol::AgentResponse::Approval { .. }
-                | zeta_protocol::AgentResponse::DynamicTool { .. }
-        );
-        let resumes_tool = tool_execution_response
-            && before
-                .turns
-                .iter()
-                .find(|turn| turn.turn_id == turn_id)
-                .and_then(|turn| turn.pending_interaction.as_ref())
-                .filter(|interaction| {
-                    matches!(
-                        (&interaction.request, &response),
-                        (
-                            zeta_protocol::AgentRequest::Approval { .. },
-                            zeta_protocol::AgentResponse::Approval { .. }
-                        ) | (
-                            zeta_protocol::AgentRequest::DynamicTool { .. },
-                            zeta_protocol::AgentResponse::DynamicTool { .. }
-                        )
-                    )
-                })
-                .and_then(|interaction| interaction.item_id.as_ref())
-                .is_some_and(|item_id| {
-                    before.items.iter().any(|item| {
-                        matches!(
-                            item,
-                            zeta_protocol::ThreadItem::ToolCall {
-                                item_id: call_item_id,
-                                ..
-                            } if call_item_id == item_id
-                        )
-                    })
-                });
         let turn_id_for_resume = turn_id.clone();
         let resolved = self
             .sessions
@@ -1052,10 +1019,10 @@ impl AppServer {
                 },
             )
             .map_err(core_error)?;
-        if resumes_tool
-            && resolved.disposition == zeta_core::ResolveTurnInteractionDisposition::Resolved
+        if resolved.disposition == zeta_core::ResolveTurnInteractionDisposition::Resolved
+            && !resolved.live_execution_woken
         {
-            self.turn_executor_snapshot()
+            self.turn_backend
                 .resume(&thread_id, &turn_id_for_resume)
                 .map_err(core_error)?;
         }

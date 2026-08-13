@@ -248,8 +248,9 @@ network client 读取 secret store。
 ChatGPT/Codex subscription 通过 [`codex-app-server.md`](codex-app-server.md) 接入：
 `zeta-codex-app-server` 启动并适配上游 `codex app-server`，由上游拥有 PKCE、callback、token
 persistence/refresh 和 Codex backend compatibility。Zeta App Server 只组合其 redacted login/account
-状态；`model-provider` 只选择 injected subscription backend。Zeta 不复制 OAuth 实现，也不读取
-`~/.codex/auth.json`。
+状态；完整 Codex Agent loop 通过 Core `TurnExecutionBackend` 委托，不进入 `model-provider`。产品
+composition 使用 `openai-chatgpt` provider 的 exact ModelRef 显式选择哪些 Turn 使用该 backend，
+不会由“已登录”隐式切换。Zeta 不复制 OAuth 实现，也不读取 `~/.codex/auth.json`。
 
 ## 3. Protocol 边界
 
@@ -420,7 +421,7 @@ Core 或 stores；HTTP security、SSE recovery、remote App Server 和 remote Ag
 worker adapter。它只通过 App Server Client 工作，不依赖 Core、store、provider、sandbox 或
 process executor。完整架构见 [`exec.md`](exec.md)。
 
-底层 process execution 从当前同名 crate 迁移为 `zeta-tool-executor`。未来
+底层 process execution 已从原同名 crate 迁移为 `zeta-tool-executor`。未来
 `zeta-exec-server` 只负责远程 process/PTY/filesystem execution，不能接收 Agent
 `session/request`。Remote Agent scheduling 与 remote process execution 使用不同 protocol、
 identity、lease 和 disconnect 语义。

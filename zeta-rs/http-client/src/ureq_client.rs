@@ -30,6 +30,38 @@ type SystemRootLoader =
 /// to replay.
 pub trait HttpClient: Send + Sync {
     fn execute(&self, request: &HttpRequest) -> Result<HttpResponse, HttpClientError>;
+
+    /// Executes one request and incrementally emits a successful response body.
+    ///
+    /// Non-success response bodies remain buffered in the returned response so
+    /// operation-level retry and status handling can inspect them. The default
+    /// bridge preserves compatibility for transports that only implement unary
+    /// execution.
+    fn execute_streaming(
+        &self,
+        request: &HttpRequest,
+        sink: &mut dyn HttpBodySink,
+    ) -> Result<HttpResponse, HttpClientError> {
+        let response = self.execute(request)?;
+        if !response.is_success() {
+            return Ok(response);
+        }
+        sink.emit(response.body())?;
+        Ok(HttpResponse::new(
+            response.status(),
+            response.headers().to_vec(),
+            Vec::new(),
+        ))
+    }
+}
+
+/// Receives ordered byte chunks from one successful HTTP response body.
+///
+/// Implementations should apply backpressure and return an error as soon as
+/// the consumer can no longer safely accept bytes. A sink is scoped to one raw
+/// transport attempt and must not interpret provider framing.
+pub trait HttpBodySink {
+    fn emit(&mut self, chunk: &[u8]) -> Result<(), HttpClientError>;
 }
 
 /// The production synchronous HTTP client backed by one reusable `ureq` agent.
@@ -414,28 +446,9 @@ fn add_certificate_bundle(
 
 impl HttpClient for UreqHttpClient {
     fn execute(&self, request: &HttpRequest) -> Result<HttpResponse, HttpClientError> {
-        let mut request_builder = self
-            .agent_for(request)?
-            .request(request.method().as_str(), request.url());
-        for header in request.headers() {
-            request_builder = request_builder.set(header.name(), header.value());
-        }
-        let response = match request_builder.send_bytes(request.body()) {
-            Ok(response) | Err(ureq::Error::Status(_, response)) => response,
-            Err(ureq::Error::Transport(_)) => {
-                return Err(HttpClientError::Transport("request failed".into()));
-            }
-        };
+        let response = self.send(request)?;
         let status = response.status();
-        let headers = response
-            .headers_names()
-            .iter()
-            .filter_map(|name| {
-                response
-                    .header(name)
-                    .map(|value| crate::HttpHeader::new(name.as_str(), value))
-            })
-            .collect();
+        let headers = response_headers(&response);
         let mut body = Vec::new();
         let read_limit = u64::try_from(self.response_body_limit)
             .unwrap_or(u64::MAX)
@@ -451,5 +464,80 @@ impl HttpClient for UreqHttpClient {
             ));
         }
         Ok(HttpResponse::new(status, headers, body))
+    }
+
+    fn execute_streaming(
+        &self,
+        request: &HttpRequest,
+        sink: &mut dyn HttpBodySink,
+    ) -> Result<HttpResponse, HttpClientError> {
+        let response = self.send(request)?;
+        let status = response.status();
+        let headers = response_headers(&response);
+        if !(200..300).contains(&status) {
+            let mut body = Vec::new();
+            read_bounded(response.into_reader(), self.response_body_limit, |chunk| {
+                body.extend_from_slice(chunk);
+                Ok(())
+            })?;
+            return Ok(HttpResponse::new(status, headers, body));
+        }
+        read_bounded(response.into_reader(), self.response_body_limit, |chunk| {
+            sink.emit(chunk)
+        })?;
+        Ok(HttpResponse::new(status, headers, Vec::new()))
+    }
+}
+
+impl UreqHttpClient {
+    fn send(&self, request: &HttpRequest) -> Result<ureq::Response, HttpClientError> {
+        let mut request_builder = self
+            .agent_for(request)?
+            .request(request.method().as_str(), request.url());
+        for header in request.headers() {
+            request_builder = request_builder.set(header.name(), header.value());
+        }
+        match request_builder.send_bytes(request.body()) {
+            Ok(response) | Err(ureq::Error::Status(_, response)) => Ok(response),
+            Err(ureq::Error::Transport(_)) => {
+                Err(HttpClientError::Transport("request failed".into()))
+            }
+        }
+    }
+}
+
+fn response_headers(response: &ureq::Response) -> Vec<crate::HttpHeader> {
+    response
+        .headers_names()
+        .iter()
+        .filter_map(|name| {
+            response
+                .header(name)
+                .map(|value| crate::HttpHeader::new(name.as_str(), value))
+        })
+        .collect()
+}
+
+fn read_bounded(
+    mut reader: impl Read,
+    limit: usize,
+    mut emit: impl FnMut(&[u8]) -> Result<(), HttpClientError>,
+) -> Result<(), HttpClientError> {
+    let mut total = 0usize;
+    let mut chunk = [0u8; 8 * 1024];
+    loop {
+        let read = reader
+            .read(&mut chunk)
+            .map_err(|_| HttpClientError::Transport("failed to read response body".into()))?;
+        if read == 0 {
+            return Ok(());
+        }
+        total = total.saturating_add(read);
+        if total > limit {
+            return Err(HttpClientError::Transport(
+                "response body exceeded configured limit".into(),
+            ));
+        }
+        emit(&chunk[..read])?;
     }
 }

@@ -1,0 +1,20 @@
+[package]
+name = "zeta-tool-executor"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+name = "zeta_tool_executor"
+path = "src/lib.rs"
+
+[dependencies]
+zeta-async-utils = { workspace = true }
+zeta-protocol = { workspace = true }
+zeta-sandboxing = { workspace = true }
+zeta-workspace = { workspace = true }
+
+[lints]
+workspace = true

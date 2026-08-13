@@ -1,10 +1,12 @@
 use super::*;
 use crate::thread_controller::CommitContextCheckpointRequest;
+use crate::thread_controller::live_interaction;
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex, mpsc};
 use std::thread;
 use std::time::Duration;
+use zeta_async_utils::CancellationSource;
 use zeta_history::StoredEvent;
 use zeta_protocol::{
     ActionApprovalCapability, ActionApprovalCapabilityKind, ActionApprovalDecision,
@@ -515,6 +517,56 @@ fn waiting_interaction_survives_recovery_and_resolves_idempotently() {
 }
 
 #[test]
+fn durable_resolution_wakes_the_exact_live_tool_interaction_without_restarting_the_turn() {
+    let threads = ThreadController::with_store(Arc::new(InMemoryThreadStore::default()));
+    let thread = create_thread(&threads, "live interaction");
+    let turn = start_turn(&threads, &thread, "live-interaction-start");
+    let request_id = RequestId::new("live_request_1").unwrap();
+    let waiter = threads
+        .live_interactions
+        .register(live_interaction::LiveInteractionKey {
+            thread_id: thread.clone(),
+            turn_id: turn.clone(),
+            request_id: request_id.clone(),
+        })
+        .unwrap();
+    let requested = threads
+        .request_turn_interaction(
+            &thread,
+            &turn,
+            RequestTurnInteraction {
+                request_id: request_id.clone(),
+                item_id: None,
+                request: user_input_interaction(),
+                deadline: None,
+            },
+        )
+        .unwrap();
+    let cancellation = CancellationSource::new();
+    let waiting = thread::spawn(move || waiter.wait(&cancellation.token()).unwrap());
+
+    let response = user_input_response();
+    let resolved = threads
+        .resolve_turn_interaction(
+            &thread,
+            ResolveTurnInteractionRequest {
+                command_id: CommandId::new("resolve_live_1").unwrap(),
+                expected_sequence: SequenceExpectation::Exact(requested.sequence),
+                turn_id: turn,
+                request_id,
+                response: response.clone(),
+            },
+        )
+        .unwrap();
+
+    assert!(resolved.live_execution_woken);
+    assert!(matches!(
+        waiting.join().unwrap(),
+        live_interaction::LiveInteractionOutcome::Response(actual) if actual == response
+    ));
+}
+
+#[test]
 fn approval_interaction_is_durable_bound_and_recoverable() {
     let store = Arc::new(InMemoryThreadStore::default());
     let original = ThreadController::with_store(store.clone());
@@ -1014,7 +1066,7 @@ fn tool_image_content_is_prepared_before_it_becomes_durable() {
 }
 
 #[test]
-fn start_turn_persists_ordered_text_and_image_items() {
+fn start_turn_persists_ordered_text_and_normalized_image_attachment_items() {
     let threads = ThreadController::with_store(Arc::new(InMemoryThreadStore::default()));
     let thread = create_thread(&threads, "image");
     let image_url = crate::test_image::one_pixel_png_data_url();

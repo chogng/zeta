@@ -1,4 +1,9 @@
-use crate::{HttpClient, HttpClientError, HttpMethod, HttpRequest, HttpResponse};
+use crate::HttpBodySink;
+use crate::HttpClient;
+use crate::HttpClientError;
+use crate::HttpMethod;
+use crate::HttpRequest;
+use crate::HttpResponse;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -89,5 +94,48 @@ impl HttpClient for TelemetryHttpClient {
             elapsed: started.elapsed(),
         });
         result
+    }
+
+    fn execute_streaming(
+        &self,
+        request: &HttpRequest,
+        sink: &mut dyn HttpBodySink,
+    ) -> Result<HttpResponse, HttpClientError> {
+        let started = Instant::now();
+        let mut counting_sink = CountingHttpBodySink {
+            inner: sink,
+            emitted_bytes: 0,
+        };
+        let result = self.inner.execute_streaming(request, &mut counting_sink);
+        let (outcome, buffered_bytes) = match &result {
+            Ok(response) => (
+                HttpTransportOutcome::Response {
+                    status_class: HttpStatusClass::from_status(response.status()),
+                },
+                response.body().len(),
+            ),
+            Err(_) => (HttpTransportOutcome::TransportFailure, 0),
+        };
+        self.telemetry.record(HttpClientTelemetryEvent {
+            method: request.method(),
+            outcome,
+            request_body_bytes: request.body().len(),
+            response_body_bytes: counting_sink.emitted_bytes.saturating_add(buffered_bytes),
+            elapsed: started.elapsed(),
+        });
+        result
+    }
+}
+
+struct CountingHttpBodySink<'a> {
+    inner: &'a mut dyn HttpBodySink,
+    emitted_bytes: usize,
+}
+
+impl HttpBodySink for CountingHttpBodySink<'_> {
+    fn emit(&mut self, chunk: &[u8]) -> Result<(), HttpClientError> {
+        self.inner.emit(chunk)?;
+        self.emitted_bytes = self.emitted_bytes.saturating_add(chunk.len());
+        Ok(())
     }
 }

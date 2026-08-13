@@ -44,4 +44,8 @@ pub struct ServerCapabilities {
     pub extension_host: bool,
     pub connectors: bool,
     pub plugins: bool,
+    pub mcp: bool,
+    #[serde(rename = "mcpOAuth")]
+    #[ts(rename = "mcpOAuth")]
+    pub mcp_oauth: bool,
 }

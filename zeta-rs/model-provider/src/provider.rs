@@ -8,6 +8,7 @@ use zeta_api::ContentPart;
 use zeta_api::InputItem;
 use zeta_api::ModelRequest;
 use zeta_api::ModelResponse;
+use zeta_api::ModelStreamEvent;
 use zeta_api::OutputItem;
 use zeta_api::StopReason;
 use zeta_async_utils::CancellationSource;
@@ -127,6 +128,27 @@ impl Provider {
             &request,
             self.client.as_ref(),
             cancellation,
+        )
+    }
+
+    pub fn stream_with_cancellation(
+        &self,
+        model_id: &ModelId,
+        request: &ModelRequest,
+        cancellation: &CancellationToken,
+        sink: &mut dyn ModelEventSink,
+    ) -> Result<ModelResponse, ModelProviderError> {
+        let model = self.resolve_model(model_id)?;
+        let mut request = request.clone();
+        let supports_original =
+            model.capabilities.image_detail_original == CapabilitySupport::Supported;
+        let _image_detail_decisions = request.sanitize_image_details(supports_original);
+        self.adapter.stream(
+            model.id.as_str(),
+            &request,
+            self.client.as_ref(),
+            cancellation,
+            sink,
         )
     }
 
@@ -360,6 +382,15 @@ pub struct ModelRuntimeRequest {
     pub config: ModelProviderConfig,
 }
 
+/// Receives provider-neutral model deltas from one immutable model invocation.
+///
+/// Implementations must preserve event order and should return an error when
+/// cancellation or downstream lifecycle prevents more output from being
+/// accepted.
+pub trait ModelEventSink {
+    fn emit(&mut self, event: ModelStreamEvent) -> Result<(), ModelProviderError>;
+}
+
 impl ModelRuntimeRequest {
     pub fn new(model: ModelRef, config: ModelProviderConfig) -> Self {
         Self { model, config }
@@ -415,6 +446,22 @@ pub trait ModelInvoker: Send + Sync {
         check_cancellation(cancellation)?;
         Ok(response)
     }
+
+    /// Streams incremental output within one caller-owned cancellation scope.
+    ///
+    /// The compatibility default invokes the unary implementation and emits
+    /// final text and reasoning items as one event each. Wire-streaming model
+    /// runtimes should override this method.
+    fn stream_with_cancellation(
+        &self,
+        request: &ModelRequest,
+        cancellation: &CancellationToken,
+        sink: &mut dyn ModelEventSink,
+    ) -> Result<ModelResponse, ModelProviderError> {
+        let response = self.invoke_with_cancellation(request, cancellation)?;
+        emit_model_response(&response, sink)?;
+        Ok(response)
+    }
 }
 
 /// Resolves declarative provider configuration into immutable Zeta model runtimes.
@@ -456,6 +503,17 @@ impl ModelInvoker for RegisteredModelInvoker {
         let request = self.prepare_request(request);
         self.provider
             .complete_with_cancellation(&self.model.id, &request, cancellation)
+    }
+
+    fn stream_with_cancellation(
+        &self,
+        request: &ModelRequest,
+        cancellation: &CancellationToken,
+        sink: &mut dyn ModelEventSink,
+    ) -> Result<ModelResponse, ModelProviderError> {
+        let request = self.prepare_request(request);
+        self.provider
+            .stream_with_cancellation(&self.model.id, &request, cancellation, sink)
     }
 
     fn input_token_measurement_capability(&self) -> ContextTokenMeasurementCapability {
@@ -535,4 +593,21 @@ fn check_cancellation(cancellation: &CancellationToken) -> Result<(), ModelProvi
     cancellation
         .check()
         .map_err(|signal| ModelProviderError::Cancelled(signal.reason().to_string()))
+}
+
+fn emit_model_response(
+    response: &ModelResponse,
+    sink: &mut dyn ModelEventSink,
+) -> Result<(), ModelProviderError> {
+    for item in &response.output {
+        let event = match item {
+            OutputItem::Text(text) => Some(ModelStreamEvent::TextDelta(text.clone())),
+            OutputItem::Reasoning(text) => Some(ModelStreamEvent::ReasoningDelta(text.clone())),
+            OutputItem::Refusal(_) | OutputItem::ToolCall(_) => None,
+        };
+        if let Some(event) = event {
+            sink.emit(event)?;
+        }
+    }
+    Ok(())
 }

@@ -158,7 +158,7 @@ Terminal 激活后 keyboard/IME/paste 可直接编码到 PTY。后台 PTY 的 al
 
 | 项目 | 当前边界 | 下一阶段 |
 | --- | --- | --- |
-| Tool output latency | stdout/stderr 类型与 UI 增量已贯通；local adapter 在进程完成后发布捕获结果 | `zeta-exec` pipe reader 实时发布有界 chunk |
+| Tool output latency | stdout/stderr 类型与 UI 增量已贯通；local adapter 在进程完成后发布捕获结果 | `zeta-tool-executor` pipe reader 实时发布有界 chunk |
 | Terminal layout | 独立全主区域 Surface | 可调整 TerminalPane / 多 Pane tree |
 | Agent message | ThreadTimeline 基本文本布局 | Markdown block、selection、折叠与虚拟化 |
 | Interaction UI | durable approval 已可恢复 | Timeline 内 approval card 与响应控件 |

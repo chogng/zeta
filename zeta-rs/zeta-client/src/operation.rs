@@ -1,9 +1,17 @@
-use crate::{ClientError, RetryPolicy};
-use std::sync::{Arc, mpsc};
+use crate::ClientError;
+use crate::RetryPolicy;
+use std::sync::Arc;
+use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
+use zeta_async_utils::CancellationSource;
 use zeta_async_utils::CancellationToken;
-use zeta_http_client::{HttpClient, HttpMethod, HttpRequest, HttpResponse};
+use zeta_http_client::HttpBodySink;
+use zeta_http_client::HttpClient;
+use zeta_http_client::HttpClientError;
+use zeta_http_client::HttpMethod;
+use zeta_http_client::HttpRequest;
+use zeta_http_client::HttpResponse;
 
 const CANCELLATION_POLL_INTERVAL: Duration = Duration::from_millis(5);
 
@@ -72,6 +80,15 @@ impl ClientRequest {
 /// A provider-neutral unary HTTP response returned for operation decoding.
 pub type ClientResponse = HttpResponse;
 
+/// Receives ordered byte chunks from one successful provider operation.
+///
+/// Implementations own protocol framing above this layer and should return an
+/// error when decoding, cancellation, or downstream backpressure prevents more
+/// bytes from being accepted.
+pub trait OperationStreamSink {
+    fn emit(&mut self, chunk: &[u8]) -> Result<(), ClientError>;
+}
+
 /// Executes a provider operation with its selected replay semantics.
 ///
 /// Implementations must delegate each attempt to `zeta-http-client` and keep
@@ -81,6 +98,28 @@ pub type ClientResponse = HttpResponse;
 /// is cancelled and must not begin another retry attempt.
 pub trait OperationClient: Send + Sync {
     fn execute(&self, request: &ClientRequest) -> Result<ClientResponse, ClientError>;
+
+    /// Executes one operation and incrementally emits its successful body.
+    ///
+    /// The default bridge preserves compatibility with unary clients. A
+    /// successful response is returned without a buffered body after emission;
+    /// non-success responses retain their body for status handling.
+    fn execute_streaming(
+        &self,
+        request: &ClientRequest,
+        sink: &mut dyn OperationStreamSink,
+    ) -> Result<ClientResponse, ClientError> {
+        let response = self.execute(request)?;
+        if !response.is_success() {
+            return Ok(response);
+        }
+        sink.emit(response.body())?;
+        Ok(HttpResponse::new(
+            response.status(),
+            response.headers().to_vec(),
+            Vec::new(),
+        ))
+    }
 
     /// Executes one operation while observing a caller-owned cancellation scope.
     ///
@@ -94,6 +133,19 @@ pub trait OperationClient: Send + Sync {
     ) -> Result<ClientResponse, ClientError> {
         check_cancellation(cancellation)?;
         let response = self.execute(request)?;
+        check_cancellation(cancellation)?;
+        Ok(response)
+    }
+
+    /// Executes one streaming operation within a caller-owned cancellation scope.
+    fn execute_streaming_with_cancellation(
+        &self,
+        request: &ClientRequest,
+        cancellation: &CancellationToken,
+        sink: &mut dyn OperationStreamSink,
+    ) -> Result<ClientResponse, ClientError> {
+        check_cancellation(cancellation)?;
+        let response = self.execute_streaming(request, sink)?;
         check_cancellation(cancellation)?;
         Ok(response)
     }
@@ -169,6 +221,48 @@ impl OperationClient for ZetaClient {
             wait_for_retry(retry_delay, cancellation)?;
         }
     }
+
+    fn execute_streaming(
+        &self,
+        request: &ClientRequest,
+        sink: &mut dyn OperationStreamSink,
+    ) -> Result<ClientResponse, ClientError> {
+        self.execute_streaming_with_cancellation(request, &CancellationSource::new().token(), sink)
+    }
+
+    fn execute_streaming_with_cancellation(
+        &self,
+        request: &ClientRequest,
+        cancellation: &CancellationToken,
+        sink: &mut dyn OperationStreamSink,
+    ) -> Result<ClientResponse, ClientError> {
+        let mut attempt = 1;
+        loop {
+            check_cancellation(cancellation)?;
+            let outcome = self.execute_streaming_attempt(request, cancellation, sink)?;
+            let retry_delay = match &outcome.result {
+                Ok(response)
+                    if !outcome.emitted
+                        && request
+                            .retry_policy()
+                            .should_retry_response(attempt, response.status()) =>
+                {
+                    response
+                        .retry_after()
+                        .unwrap_or_else(|| request.retry_policy().backoff_delay(attempt))
+                }
+                Err(_)
+                    if !outcome.emitted
+                        && request.retry_policy().should_retry_transport_error(attempt) =>
+                {
+                    request.retry_policy().backoff_delay(attempt)
+                }
+                _ => return outcome.result,
+            };
+            attempt += 1;
+            wait_for_retry(retry_delay, cancellation)?;
+        }
+    }
 }
 
 impl ZetaClient {
@@ -202,6 +296,73 @@ impl ZetaClient {
                 }
             }
         }
+    }
+
+    fn execute_streaming_attempt(
+        &self,
+        request: &ClientRequest,
+        cancellation: &CancellationToken,
+        sink: &mut dyn OperationStreamSink,
+    ) -> Result<StreamingAttemptOutcome, ClientError> {
+        let transport = self.transport.clone();
+        let request = request.request().clone();
+        let (message_tx, message_rx) = mpsc::sync_channel(1);
+        thread::Builder::new()
+            .name("zeta-http-stream-attempt".into())
+            .spawn(move || {
+                let mut channel_sink = ChannelHttpBodySink {
+                    messages: message_tx.clone(),
+                };
+                let result = transport
+                    .execute_streaming(&request, &mut channel_sink)
+                    .map_err(ClientError::from);
+                let _ = message_tx.send(StreamingAttemptMessage::Complete(result));
+            })
+            .map_err(|_| ClientError::Transport("failed to start HTTP stream attempt".into()))?;
+
+        let mut emitted = false;
+        loop {
+            check_cancellation(cancellation)?;
+            match message_rx.recv_timeout(CANCELLATION_POLL_INTERVAL) {
+                Ok(StreamingAttemptMessage::Chunk(chunk)) => {
+                    check_cancellation(cancellation)?;
+                    sink.emit(&chunk)?;
+                    emitted = true;
+                }
+                Ok(StreamingAttemptMessage::Complete(result)) => {
+                    check_cancellation(cancellation)?;
+                    return Ok(StreamingAttemptOutcome { result, emitted });
+                }
+                Err(mpsc::RecvTimeoutError::Timeout) => {}
+                Err(mpsc::RecvTimeoutError::Disconnected) => {
+                    return Err(ClientError::Transport(
+                        "HTTP stream attempt ended without a result".into(),
+                    ));
+                }
+            }
+        }
+    }
+}
+
+struct StreamingAttemptOutcome {
+    result: Result<ClientResponse, ClientError>,
+    emitted: bool,
+}
+
+enum StreamingAttemptMessage {
+    Chunk(Vec<u8>),
+    Complete(Result<ClientResponse, ClientError>),
+}
+
+struct ChannelHttpBodySink {
+    messages: mpsc::SyncSender<StreamingAttemptMessage>,
+}
+
+impl HttpBodySink for ChannelHttpBodySink {
+    fn emit(&mut self, chunk: &[u8]) -> Result<(), HttpClientError> {
+        self.messages
+            .send(StreamingAttemptMessage::Chunk(chunk.to_vec()))
+            .map_err(|_| HttpClientError::Transport("stream consumer disconnected".into()))
     }
 }
 

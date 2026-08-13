@@ -12,7 +12,11 @@ mod target;
 mod telemetry;
 
 pub use error::ClientError;
-pub use operation::{ClientRequest, ClientResponse, OperationClient, ZetaClient};
+pub use operation::ClientRequest;
+pub use operation::ClientResponse;
+pub use operation::OperationClient;
+pub use operation::OperationStreamSink;
+pub use operation::ZetaClient;
 pub use retry::BackoffPolicy;
 pub use retry::RetryPolicy;
 pub use retry::RetrySafety;

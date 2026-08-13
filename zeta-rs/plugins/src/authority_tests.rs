@@ -253,6 +253,32 @@ fn failed_install_authority_commit_removes_the_unreferenced_object() {
 }
 
 #[test]
+fn reopening_file_authority_clears_staging_without_removing_pending_objects() {
+    let profile = tempdir().unwrap();
+    let source = tempdir().unwrap();
+    let local = package(source.path(), "acme/recovered", "1.0.0");
+    let digest = local
+        .package_digest()
+        .as_str()
+        .strip_prefix("sha256:")
+        .unwrap()
+        .to_owned();
+    let store = PluginPackageStore::open(profile.path()).unwrap();
+    store.install_local(&local).unwrap();
+    std::fs::create_dir(profile.path().join("staging/orphaned")).unwrap();
+
+    let _authority = PluginActivationAuthority::open(profile.path()).unwrap();
+
+    assert!(profile.path().join("objects").join(digest).exists());
+    assert!(
+        std::fs::read_dir(profile.path().join("staging"))
+            .unwrap()
+            .next()
+            .is_none()
+    );
+}
+
+#[test]
 fn enable_requires_an_exact_package_grant_before_activation() {
     let root = tempdir().unwrap();
     let source = tempdir().unwrap();

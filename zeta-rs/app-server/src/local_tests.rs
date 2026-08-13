@@ -6,6 +6,7 @@ use std::sync::{Condvar, Mutex};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use zeta_async_utils::CancellationSource;
+use zeta_codex_app_server::CodexAppServerOptions;
 use zeta_config::{
     ConfigCommandRequest, ConfigRevision, PreferencesUpdate, ResolvedConfig, UserConfigCommand,
     WorkspaceConfigScope, WorkspaceConfigStore, WorkspaceId,
@@ -138,6 +139,30 @@ fn wait_for_connector_count(
         std::thread::sleep(Duration::from_millis(10));
     }
     panic!("Connector projection did not reach {expected} entries");
+}
+
+#[test]
+fn local_composition_installs_the_deferred_codex_account_driver() {
+    let profile = tempfile::tempdir().unwrap();
+    let server = open_local_app_server(
+        LocalAppServerOptions::new(profile.path())
+            .without_built_in_skills()
+            .with_session_state_mode(SessionStateMode::Ephemeral)
+            .with_codex_app_server(CodexAppServerOptions::new("/zeta/does/not/exist/codex")),
+    )
+    .unwrap();
+    let mut connection = server.connection();
+    let initialized = server.handle_json(
+        &mut connection,
+        r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"test","version":"1"},"capabilities":{}}}"#,
+    );
+    assert!(initialized.contains("\"result\""));
+
+    let account = server.handle_json(
+        &mut connection,
+        r#"{"jsonrpc":"2.0","id":2,"method":"account/read","params":{}}"#,
+    );
+    assert!(account.contains("AccountUnavailable"));
 }
 
 #[test]

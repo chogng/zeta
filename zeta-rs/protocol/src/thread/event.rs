@@ -18,6 +18,7 @@ use crate::ThreadId;
 use crate::ThreadItem;
 use crate::ToolCallId;
 use crate::Turn;
+use crate::TurnExecutionBinding;
 use crate::TurnId;
 use crate::TurnInteraction;
 use schemars::JsonSchema;
@@ -66,6 +67,10 @@ pub enum ThreadEvent {
         thread_id: ThreadId,
         title: String,
     },
+    TurnExecutionBound {
+        thread_id: ThreadId,
+        binding: TurnExecutionBinding,
+    },
     AgentContextSeedCommitted {
         thread_id: ThreadId,
         seed: Box<AgentContextSeed>,
@@ -96,6 +101,11 @@ pub enum ThreadEvent {
     TurnStarted {
         thread_id: ThreadId,
         turn_id: TurnId,
+    },
+    TurnExecutionAttempted {
+        thread_id: ThreadId,
+        turn_id: TurnId,
+        backend: String,
     },
     ItemCompleted {
         thread_id: ThreadId,
@@ -206,11 +216,13 @@ impl ThreadEvent {
     pub fn kind(&self) -> &'static str {
         match self {
             Self::ThreadCreated { .. } => "thread.created",
+            Self::TurnExecutionBound { .. } => "turn.execution_bound",
             Self::AgentContextSeedCommitted { .. } => "agent.context_seed_committed",
             Self::HistoryImported { .. } => "thread.history_imported",
             Self::ContextCheckpointCommitted { .. } => "context.checkpoint_committed",
             Self::TurnAccepted { .. } => "turn.accepted",
             Self::TurnStarted { .. } => "turn.started",
+            Self::TurnExecutionAttempted { .. } => "turn.execution_attempted",
             Self::ItemCompleted { .. } => "item.completed",
             Self::InteractionRequested { .. } => "interaction.requested",
             Self::InteractionResolved { .. } => "interaction.resolved",
@@ -239,11 +251,13 @@ impl ThreadEvent {
     pub fn thread_id(&self) -> &ThreadId {
         match self {
             Self::ThreadCreated { thread_id, .. }
+            | Self::TurnExecutionBound { thread_id, .. }
             | Self::AgentContextSeedCommitted { thread_id, .. }
             | Self::HistoryImported { thread_id, .. }
             | Self::ContextCheckpointCommitted { thread_id, .. }
             | Self::TurnAccepted { thread_id, .. }
             | Self::TurnStarted { thread_id, .. }
+            | Self::TurnExecutionAttempted { thread_id, .. }
             | Self::ItemCompleted { thread_id, .. }
             | Self::InteractionRequested { thread_id, .. }
             | Self::InteractionResolved { thread_id, .. }

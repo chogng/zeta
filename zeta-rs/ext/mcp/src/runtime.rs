@@ -1,14 +1,26 @@
 use std::collections::BTreeMap;
-use std::sync::{Arc, Mutex, mpsc};
-use std::thread::{self, JoinHandle};
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::mpsc;
+use std::thread;
+use std::thread::JoinHandle;
 
 use zeta_async_utils::CancellationToken;
-use zeta_mcp::{
-    McpCallError, McpRuntime, McpRuntimeOptions, McpServerDefinition, McpSessionFactory,
-    McpToolBinding, RmcpSessionFactory,
-};
-use zeta_protocol::{ToolDefinition, ToolName};
+use zeta_core::ToolInteractionService;
+use zeta_mcp::McpCallError;
+use zeta_mcp::McpRuntime;
+use zeta_mcp::McpRuntimeOptions;
+use zeta_mcp::McpServerDefinition;
+use zeta_mcp::McpSessionFactory;
+use zeta_mcp::McpToolBinding;
+use zeta_mcp::RmcpSessionFactory;
+use zeta_protocol::ToolDefinition;
+use zeta_protocol::ToolName;
 use zeta_tools::ToolOutput;
+
+use crate::status::McpRuntimeStatusSnapshot;
+use crate::status::McpServerRuntimeState;
+use crate::status::McpServerRuntimeStatus;
 
 const MCP_COMMAND_QUEUE_CAPACITY: usize = 64;
 
@@ -16,6 +28,7 @@ enum RuntimeCommand {
     Call {
         prepared: Box<McpPreparedCall>,
         cancellation: CancellationToken,
+        interactions: Option<Arc<dyn ToolInteractionService>>,
         response: mpsc::Sender<Result<ToolOutput, McpCallError>>,
     },
     Shutdown,
@@ -24,6 +37,7 @@ enum RuntimeCommand {
 struct RuntimeStartup {
     definitions: Vec<ToolDefinition>,
     bindings: BTreeMap<ToolName, McpToolBinding>,
+    status: McpRuntimeStatusSnapshot,
 }
 
 /// Exact MCP route and arguments admitted for one runtime dispatch.
@@ -51,6 +65,7 @@ pub(crate) struct McpRuntimeOwner {
     commands: Option<tokio::sync::mpsc::Sender<RuntimeCommand>>,
     definitions: Vec<ToolDefinition>,
     bindings: BTreeMap<ToolName, McpToolBinding>,
+    status: McpRuntimeStatusSnapshot,
     worker: Mutex<Option<JoinHandle<()>>>,
 }
 
@@ -90,6 +105,7 @@ impl McpRuntimeOwner {
             commands: Some(commands),
             definitions: startup.definitions,
             bindings: startup.bindings,
+            status: startup.status,
             worker: Mutex::new(Some(worker)),
         })
     }
@@ -100,6 +116,10 @@ impl McpRuntimeOwner {
 
     pub(crate) fn resolve(&self, name: &ToolName) -> Option<&McpToolBinding> {
         self.bindings.get(name)
+    }
+
+    pub(crate) fn status(&self) -> &McpRuntimeStatusSnapshot {
+        &self.status
     }
 
     pub(crate) fn prepare_call(
@@ -122,6 +142,7 @@ impl McpRuntimeOwner {
         &self,
         prepared: McpPreparedCall,
         cancellation: CancellationToken,
+        interactions: Option<Arc<dyn ToolInteractionService>>,
     ) -> Result<ToolOutput, McpCallError> {
         let (response, receiver) = mpsc::channel();
         self.commands
@@ -130,6 +151,7 @@ impl McpRuntimeOwner {
             .try_send(RuntimeCommand::Call {
                 prepared: Box::new(prepared),
                 cancellation,
+                interactions,
                 response,
             })
             .map_err(|error| match error {
@@ -169,6 +191,15 @@ fn run_worker(
     mut commands: tokio::sync::mpsc::Receiver<RuntimeCommand>,
     startup: mpsc::Sender<Result<RuntimeStartup, String>>,
 ) {
+    let server_metadata = definitions
+        .iter()
+        .map(|definition| {
+            (
+                definition.id().clone(),
+                definition.display_name().to_owned(),
+            )
+        })
+        .collect::<Vec<_>>();
     let runtime = match tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
@@ -206,10 +237,12 @@ fn run_worker(
                 )
             })
             .collect();
+        let status = runtime_status(&mcp, &server_metadata);
         if startup
             .send(Ok(RuntimeStartup {
                 definitions,
                 bindings,
+                status,
             }))
             .is_err()
         {
@@ -226,17 +259,26 @@ fn run_worker(
                         Some(RuntimeCommand::Call {
                             prepared,
                             cancellation,
+                            interactions,
                             response,
                         }) => {
                             let mcp = Arc::clone(&mcp);
                             calls.spawn(async move {
-                                let result = mcp
-                                    .call_tool(
-                                        prepared.binding(),
-                                        prepared.arguments.clone(),
-                                        &cancellation,
-                                    )
-                                    .await;
+                                let call = mcp.call_tool(
+                                    prepared.binding(),
+                                    prepared.arguments.clone(),
+                                    &cancellation,
+                                );
+                                let result = match interactions {
+                                    Some(interactions) => {
+                                        crate::updates::with_active_tool_interactions(
+                                            interactions,
+                                            call,
+                                        )
+                                        .await
+                                    }
+                                    None => call.await,
+                                };
                                 let _ = response.send(result);
                             });
                         }
@@ -252,6 +294,51 @@ fn run_worker(
             let _ = mcp.shutdown().await;
         }
     });
+}
+
+fn runtime_status(
+    runtime: &McpRuntime,
+    server_metadata: &[(zeta_config::McpServerId, String)],
+) -> McpRuntimeStatusSnapshot {
+    let catalog_generation = runtime.catalog().generation();
+    let mut servers = Vec::with_capacity(server_metadata.len());
+    for (server_id, display_name) in server_metadata {
+        let tools = runtime
+            .catalog()
+            .tools()
+            .iter()
+            .filter(|tool| tool.binding().remote().server() == server_id)
+            .collect::<Vec<_>>();
+        let connection_generation = tools
+            .iter()
+            .map(|tool| tool.binding().connection_generation())
+            .min();
+        let (state, diagnostic) = match runtime.catalog_freshness(server_id) {
+            Some(zeta_mcp::McpCatalogFreshness::Fresh) => (McpServerRuntimeState::Connected, None),
+            Some(zeta_mcp::McpCatalogFreshness::Stale) => (McpServerRuntimeState::Stale, None),
+            None => (
+                McpServerRuntimeState::Unavailable,
+                runtime
+                    .diagnostics()
+                    .iter()
+                    .find(|diagnostic| diagnostic.server == *server_id)
+                    .map(|diagnostic| diagnostic.message.clone()),
+            ),
+        };
+        servers.push(McpServerRuntimeStatus {
+            server_id: server_id.to_string(),
+            display_name: display_name.clone(),
+            state,
+            catalog_generation,
+            connection_generation,
+            tool_count: tools.len() as u64,
+            diagnostic,
+        });
+    }
+    McpRuntimeStatusSnapshot {
+        catalog_generation,
+        servers,
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

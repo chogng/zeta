@@ -22,7 +22,7 @@ materialization。安装布局与候选位置由 [`zeta-install-context`](../ins
 
 ```text
 ShellCommandTool::new
-└─ shell_command_definition + zeta_exec::CommandExecutor
+└─ shell_command_definition + zeta_tool_executor::CommandExecutor
 
 ToolExecutor::execute
 ├─ validate binding / environment / cancellation
@@ -79,7 +79,8 @@ identity freeze 和 fail-closed 语义。Linux package 同时携带经过 source
 - timeout 同样终止 child，并按 started/uncertain 处理；
 - stdout/stderr 共用一个 byte budget，结果保留 bounded prefix，并分别标记是否截断。
 
-底层 checkpoint、kill 和 capture 语义由 [`zeta-exec`](../exec/README.md) canonical 定义。
+底层 checkpoint、kill 和 capture 语义由
+[`zeta-tool-executor`](../tool-executor/README.md) canonical 定义。
 
 ## 修改与验证
 

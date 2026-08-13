@@ -25,16 +25,19 @@ use zeta_mcp::{
 use zeta_protocol::ContentPart;
 use zeta_protocol::ToolSourceProvenance;
 use zeta_protocol::{ToolCall, ToolDefinition, ToolExecutionOutput, ToolName};
-use zeta_rmcp_client::{StdioServerCommand, StreamableHttpServer};
+use zeta_rmcp_client::{BearerToken, StdioServerCommand, StreamableHttpServer};
+use zeta_secrets::SecretKey;
 use zeta_secrets::SecretStore;
 use zeta_tools::{ToolContent, ToolOutput, ToolOutputStatus};
 
+use crate::auth::project_runtime_credential;
 use crate::connector::ConnectorMcpRuntimeProvider;
 use crate::connector::RuntimeInvocationFence;
 use crate::connector::materialize_connector_servers;
 use crate::runtime::McpPreparedCall;
 use crate::runtime::McpRuntimeOwner;
 use crate::runtime::McpRuntimeOwnerError;
+use crate::status::{McpRuntimeStatusSnapshot, McpServerRuntimeIntent};
 use crate::updates::McpCatalogUpdates;
 
 const MCP_POLICY_REVISION: &str = "mcp-user-approval-v1";
@@ -64,6 +67,7 @@ pub(crate) struct McpInvocationAuthority {
 pub struct McpToolComposition {
     pub tools: Arc<dyn ToolService>,
     pub policy: Arc<dyn ActionPolicyService>,
+    pub status: McpRuntimeStatusSnapshot,
 }
 
 /// Resolves enabled MCP declarations into one live tool service and its exact approval policy.
@@ -71,7 +75,7 @@ pub fn compose_mcp_tools(
     config: &ResolvedConfig,
     generation: ConfigGeneration,
 ) -> Result<Option<McpToolComposition>, McpToolCompositionError> {
-    let (definitions, authorities) = materialize_servers(config)?;
+    let (definitions, authorities) = materialize_servers(config, None, &BTreeMap::new())?;
     if definitions.is_empty() {
         return Ok(None);
     }
@@ -88,7 +92,7 @@ pub fn compose_mcp_tools_with_updates(
     generation: ConfigGeneration,
     updates: McpCatalogUpdates,
 ) -> Result<Option<McpToolComposition>, McpToolCompositionError> {
-    let (definitions, authorities) = materialize_servers(config)?;
+    let (definitions, authorities) = materialize_servers(config, None, &BTreeMap::new())?;
     if definitions.is_empty() {
         return Ok(None);
     }
@@ -117,7 +121,33 @@ pub fn compose_mcp_tools_at_generation_with_updates(
             "MCP catalog generation must be non-zero".into(),
         ));
     }
-    let (definitions, authorities) = materialize_servers(config)?;
+    let (definitions, authorities) = materialize_servers(config, None, &BTreeMap::new())?;
+    if definitions.is_empty() {
+        return Ok(None);
+    }
+    start_mcp_tools_with_updates(
+        definitions,
+        authorities,
+        catalog_generation,
+        None,
+        Some(updates),
+    )
+    .map(Some)
+}
+
+/// Resolves enabled MCP declarations plus process-local lifecycle overrides.
+pub fn compose_mcp_tools_at_generation_with_runtime_intents_and_updates(
+    config: &ResolvedConfig,
+    catalog_generation: u64,
+    runtime_intents: &BTreeMap<McpServerId, McpServerRuntimeIntent>,
+    updates: McpCatalogUpdates,
+) -> Result<Option<McpToolComposition>, McpToolCompositionError> {
+    if catalog_generation == 0 {
+        return Err(McpToolCompositionError(
+            "MCP catalog generation must be non-zero".into(),
+        ));
+    }
+    let (definitions, authorities) = materialize_servers(config, None, runtime_intents)?;
     if definitions.is_empty() {
         return Ok(None);
     }
@@ -148,7 +178,8 @@ pub fn compose_mcp_tools_with_connectors(
             "MCP catalog generation must be non-zero".into(),
         ));
     }
-    let (mut definitions, mut authorities) = materialize_servers(config)?;
+    let (mut definitions, mut authorities) =
+        materialize_servers(config, Some(secrets.as_ref()), &BTreeMap::new())?;
     materialize_standalone_plugin_servers(provider.as_ref(), &mut definitions, &mut authorities)?;
     let connectors =
         materialize_connector_servers(connector_authority, secrets.as_ref(), provider.as_ref())?;
@@ -181,7 +212,50 @@ pub fn compose_mcp_tools_with_connectors_and_updates(
             "MCP catalog generation must be non-zero".into(),
         ));
     }
-    let (mut definitions, mut authorities) = materialize_servers(config)?;
+    let (mut definitions, mut authorities) =
+        materialize_servers(config, Some(secrets.as_ref()), &BTreeMap::new())?;
+    materialize_standalone_plugin_servers(provider.as_ref(), &mut definitions, &mut authorities)?;
+    let connectors =
+        materialize_connector_servers(connector_authority, secrets.as_ref(), provider.as_ref())?;
+    for server in connectors.authorities.keys() {
+        if authorities.contains_key(server) {
+            return Err(McpToolCompositionError(format!(
+                "MCP server identity is declared by Config and a Connector: {server}"
+            )));
+        }
+    }
+    definitions.extend(connectors.definitions);
+    authorities.extend(connectors.authorities);
+    if definitions.is_empty() {
+        return Ok(None);
+    }
+    start_mcp_tools_with_updates(
+        definitions,
+        authorities,
+        catalog_generation,
+        None,
+        Some(updates),
+    )
+    .map(Some)
+}
+
+/// Resolves Config, Plugin and ready Connector MCP servers with process-local lifecycle overrides.
+pub fn compose_mcp_tools_with_connectors_and_runtime_intents_and_updates(
+    config: &ResolvedConfig,
+    catalog_generation: u64,
+    runtime_intents: &BTreeMap<McpServerId, McpServerRuntimeIntent>,
+    connector_authority: ConnectorAuthority,
+    secrets: Arc<dyn SecretStore>,
+    provider: Arc<dyn ConnectorMcpRuntimeProvider>,
+    updates: McpCatalogUpdates,
+) -> Result<Option<McpToolComposition>, McpToolCompositionError> {
+    if catalog_generation == 0 {
+        return Err(McpToolCompositionError(
+            "MCP catalog generation must be non-zero".into(),
+        ));
+    }
+    let (mut definitions, mut authorities) =
+        materialize_servers(config, Some(secrets.as_ref()), runtime_intents)?;
     materialize_standalone_plugin_servers(provider.as_ref(), &mut definitions, &mut authorities)?;
     let connectors =
         materialize_connector_servers(connector_authority, secrets.as_ref(), provider.as_ref())?;
@@ -267,7 +341,9 @@ fn start_mcp_tools_with_updates(
         .with_catalog_generation(catalog_generation)
         .with_first_connection_generation(catalog_generation);
     if let Some(updates) = updates {
-        options = options.with_client_host(updates.client_host());
+        options = options
+            .with_client_host(updates.client_host())
+            .with_form_elicitation();
     }
     let owner = match factory {
         Some(factory) => McpRuntimeOwner::start_with_factory(definitions, options, factory),
@@ -285,6 +361,7 @@ fn start_mcp_tools_with_updates(
         })
         .collect();
     Ok(McpToolComposition {
+        status: owner.status().clone(),
         tools: Arc::new(McpToolService { owner, authorities }),
         policy: Arc::new(McpApprovalPolicy { capabilities }),
     })
@@ -292,6 +369,8 @@ fn start_mcp_tools_with_updates(
 
 fn materialize_servers(
     config: &ResolvedConfig,
+    secrets: Option<&dyn SecretStore>,
+    runtime_intents: &BTreeMap<McpServerId, McpServerRuntimeIntent>,
 ) -> Result<
     (
         Vec<McpServerDefinition>,
@@ -302,17 +381,22 @@ fn materialize_servers(
     let mut definitions = Vec::new();
     let mut authorities = BTreeMap::new();
     for server in config.mcp.servers.values() {
-        if server.enablement != McpServerEnablement::Enabled {
+        let enabled = match runtime_intents.get(&server.id) {
+            Some(McpServerRuntimeIntent::Connect) => true,
+            Some(McpServerRuntimeIntent::Disconnect) => false,
+            None => server.enablement == McpServerEnablement::Enabled,
+        };
+        if !enabled {
             continue;
-        }
-        if let McpCredentialBinding::Reference { credential_ref } = &server.credential {
-            return Err(McpToolCompositionError(format!(
-                "enabled MCP server '{}' requires unsupported credential reference '{}'",
-                server.id, credential_ref
-            )));
         }
         let (transport, authority) = match &server.transport {
             McpTransportConfig::Stdio { command, args } => {
+                if let McpCredentialBinding::Reference { credential_ref } = &server.credential {
+                    return Err(McpToolCompositionError(format!(
+                        "MCP stdio server '{}' cannot materialize credential reference '{}' without a declared environment slot",
+                        server.id, credential_ref
+                    )));
+                }
                 let executable = canonical_executable(command, &server.id)?;
                 let transport = StdioServerCommand::new(&executable).with_args(args);
                 (
@@ -322,17 +406,65 @@ fn materialize_servers(
                     },
                 )
             }
-            McpTransportConfig::StreamableHttp { url } => (
-                McpServerTransport::StreamableHttp(StreamableHttpServer::new(url).map_err(
-                    |error| {
+            McpTransportConfig::StreamableHttp { url } => {
+                let mut endpoint = StreamableHttpServer::new(url).map_err(|error| {
+                    McpToolCompositionError(format!(
+                        "invalid MCP endpoint for '{}': {error}",
+                        server.id
+                    ))
+                })?;
+                if let McpCredentialBinding::Reference { credential_ref } = &server.credential {
+                    let secrets = secrets.ok_or_else(|| {
                         McpToolCompositionError(format!(
-                            "invalid MCP endpoint for '{}': {error}",
+                            "MCP server '{}' requires a host SecretStore for credential reference",
                             server.id
                         ))
-                    },
-                )?),
-                McpInvocationTransport::StreamableHttp,
-            ),
+                    })?;
+                    let key = SecretKey::new(credential_ref).map_err(|error| {
+                        McpToolCompositionError(format!(
+                            "MCP credential reference for '{}' is invalid: {error}",
+                            server.id
+                        ))
+                    })?;
+                    let value = secrets
+                        .load(&key)
+                        .map_err(|error| {
+                            McpToolCompositionError(format!(
+                                "MCP credential for '{}' is unavailable: {error}",
+                                server.id
+                            ))
+                        })?
+                        .ok_or_else(|| {
+                            McpToolCompositionError(format!(
+                                "MCP credential for '{}' is unavailable",
+                                server.id
+                            ))
+                        })?;
+                    let value = project_runtime_credential(value).map_err(|error| {
+                        McpToolCompositionError(format!(
+                            "MCP credential for '{}' is invalid: {error}",
+                            server.id
+                        ))
+                    })?;
+                    let token = std::str::from_utf8(value.expose()).map_err(|_| {
+                        McpToolCompositionError(format!(
+                            "MCP credential for '{}' is not valid UTF-8 bearer material",
+                            server.id
+                        ))
+                    })?;
+                    endpoint =
+                        endpoint.with_bearer_token(BearerToken::new(token).map_err(|error| {
+                            McpToolCompositionError(format!(
+                                "MCP credential for '{}' is invalid: {error}",
+                                server.id
+                            ))
+                        })?);
+                }
+                (
+                    McpServerTransport::StreamableHttp(endpoint),
+                    McpInvocationTransport::StreamableHttp,
+                )
+            }
         };
         definitions.push(
             McpServerDefinition::new(server.id.clone(), &server.display_name, transport)
@@ -496,20 +628,39 @@ impl ToolService for McpToolService {
         authorization: &ToolAuthorization,
         cancellation: &CancellationToken,
     ) -> Result<ToolExecutionOutput, CoreError> {
+        self.execute_with_optional_interactions(call, authorization, cancellation, None)
+    }
+
+    fn execute_streaming_with_facts_and_interactions(
+        &self,
+        call: &ToolCall,
+        authorization: &ToolAuthorization,
+        cancellation: &CancellationToken,
+        _: &zeta_core::ToolExecutionFacts,
+        interactions: Arc<dyn zeta_core::ToolInteractionService>,
+        _: &mut dyn zeta_core::ToolOutputSink,
+    ) -> Result<ToolExecutionOutput, CoreError> {
+        self.execute_with_optional_interactions(
+            call,
+            authorization,
+            cancellation,
+            Some(interactions),
+        )
+    }
+}
+
+impl McpToolService {
+    fn execute_with_optional_interactions(
+        &self,
+        call: &ToolCall,
+        authorization: &ToolAuthorization,
+        cancellation: &CancellationToken,
+        interactions: Option<Arc<dyn zeta_core::ToolInteractionService>>,
+    ) -> Result<ToolExecutionOutput, CoreError> {
         cancellation
             .check()
             .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
-        if !matches!(
-            authorization,
-            ToolAuthorization::ApprovedOnce(_)
-                | ToolAuthorization::AutoReviewed(_)
-                | ToolAuthorization::PermissionBypassed(_)
-        ) {
-            return Err(CoreError::Policy(
-                "MCP tools require exact user, automatic-review, or permission-bypass authority"
-                    .into(),
-            ));
-        }
+        validate_mcp_authorization(authorization)?;
         let prepared = self.prepared_call(call)?;
         let binding = prepared.binding().clone();
         let authority = self
@@ -526,7 +677,10 @@ impl ToolService for McpToolService {
             })?),
             None => None,
         };
-        let invoke = || self.owner.call(prepared, cancellation.clone());
+        let invoke = || {
+            self.owner
+                .call(prepared, cancellation.clone(), interactions)
+        };
         let invocation = match authority.connector_fence {
             Some(fence) => fence
                 .authority
@@ -544,16 +698,37 @@ impl ToolService for McpToolService {
                 })?,
             None => invoke(),
         };
-        match invocation {
-            Ok(output) => protocol_execution_output(output),
-            Err(McpCallError::OutcomeUncertain(message)) => {
-                Ok(ToolExecutionOutput::OutcomeUnknown(message))
-            }
-            Err(McpCallError::NotStarted(message) | McpCallError::InvalidResult(message)) => {
-                Ok(ToolExecutionOutput::Failure(message))
-            }
-            Err(error) => Ok(ToolExecutionOutput::OutcomeUnknown(error.to_string())),
+        mcp_invocation_output(invocation)
+    }
+}
+
+fn validate_mcp_authorization(authorization: &ToolAuthorization) -> Result<(), CoreError> {
+    if matches!(
+        authorization,
+        ToolAuthorization::ApprovedOnce(_)
+            | ToolAuthorization::AutoReviewed(_)
+            | ToolAuthorization::PermissionBypassed(_)
+    ) {
+        Ok(())
+    } else {
+        Err(CoreError::Policy(
+            "MCP tools require exact user, automatic-review, or permission-bypass authority".into(),
+        ))
+    }
+}
+
+fn mcp_invocation_output(
+    invocation: Result<ToolOutput, McpCallError>,
+) -> Result<ToolExecutionOutput, CoreError> {
+    match invocation {
+        Ok(output) => protocol_execution_output(output),
+        Err(McpCallError::OutcomeUncertain(message)) => {
+            Ok(ToolExecutionOutput::OutcomeUnknown(message))
         }
+        Err(McpCallError::NotStarted(message) | McpCallError::InvalidResult(message)) => {
+            Ok(ToolExecutionOutput::Failure(message))
+        }
+        Err(error) => Ok(ToolExecutionOutput::OutcomeUnknown(error.to_string())),
     }
 }
 

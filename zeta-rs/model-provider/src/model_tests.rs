@@ -5,9 +5,11 @@ use std::net::TcpListener;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use zeta_api::{ModelRequest, StopReason, ToolDefinition, ToolName};
+use zeta_api::{ModelRequest, ModelStreamEvent, StopReason, ToolDefinition, ToolName};
 use zeta_async_utils::CancellationSource;
-use zeta_client::{ClientError, ClientRequest, ClientResponse, OperationClient};
+use zeta_client::{
+    ClientError, ClientRequest, ClientResponse, OperationClient, OperationStreamSink,
+};
 use zeta_context_engine::ContextTokenMeasurementAccuracy;
 use zeta_context_engine::ContextTokenMeasurementCapability;
 use zeta_context_engine::ContextTokenMeasurementOutcome;
@@ -54,6 +56,39 @@ impl OperationClient for FailingTransport {
         Err(ClientError::Transport(
             "fixture count endpoint failure".into(),
         ))
+    }
+}
+
+struct StreamingTransport;
+
+impl OperationClient for StreamingTransport {
+    fn execute(&self, _: &ClientRequest) -> Result<ClientResponse, ClientError> {
+        panic!("registered Responses models must retain the streaming operation path")
+    }
+
+    fn execute_streaming(
+        &self,
+        _: &ClientRequest,
+        sink: &mut dyn OperationStreamSink,
+    ) -> Result<ClientResponse, ClientError> {
+        let payload = concat!(
+            "event: response.output_text.delta\n",
+            "data: {\"type\":\"response.output_text.delta\",\"delta\":\"live\"}\n\n",
+            "event: response.completed\n",
+            "data: {\"type\":\"response.completed\",\"response\":{\"status\":\"completed\",\"output\":[{\"type\":\"message\",\"content\":[{\"type\":\"output_text\",\"text\":\"live\"}]}]}}\n\n",
+        );
+        sink.emit(payload.as_bytes())?;
+        Ok(ClientResponse::new(200, Vec::new(), Vec::new()))
+    }
+}
+
+#[derive(Default)]
+struct RecordedModelEvents(Vec<ModelStreamEvent>);
+
+impl ModelEventSink for RecordedModelEvents {
+    fn emit(&mut self, event: ModelStreamEvent) -> Result<(), ModelProviderError> {
+        self.0.push(event);
+        Ok(())
     }
 }
 
@@ -131,6 +166,29 @@ fn registered_model_propagates_cancellation_to_the_operation_client() {
         ))
     );
     assert!(transport.cancellable_path.load(Ordering::Relaxed));
+}
+
+#[test]
+fn registered_openai_model_propagates_wire_stream_events() {
+    let runtime = ModelProviderRuntime::builtin_with_client(Arc::new(StreamingTransport));
+    let model = runtime
+        .build_model(
+            &provider_config_with_endpoint("openai", "https://example.test/v1"),
+            &model_ref("openai", "gpt-5.6"),
+        )
+        .unwrap();
+    let mut events = RecordedModelEvents::default();
+
+    let response = model
+        .stream_with_cancellation(
+            &ModelRequest::text("hello"),
+            &CancellationSource::new().token(),
+            &mut events,
+        )
+        .unwrap();
+
+    assert_eq!(events.0, vec![ModelStreamEvent::TextDelta("live".into())]);
+    assert_eq!(response.text(), "live");
 }
 
 #[test]

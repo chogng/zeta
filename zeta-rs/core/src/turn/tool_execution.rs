@@ -1,19 +1,48 @@
-use super::policy_feedback::{denied_feedback, safer_action_feedback};
+use super::policy_feedback::denied_feedback;
+use super::policy_feedback::safer_action_feedback;
+use crate::ActionPolicyService;
+use crate::AutoReviewedToolGrant;
+use crate::CoreError;
+use crate::ExecPolicyToolGrant;
+use crate::PermissionBypassToolGrant;
+use crate::RecordToolResultRequest;
+use crate::RequestTurnInteraction;
+use crate::SandboxDenialOutput;
+use crate::ThreadController;
+use crate::ThreadUpdateSink;
+use crate::ToolAuthorization;
+use crate::ToolCallOutput;
+use crate::ToolExecutionFacts;
+use crate::ToolExecutionOutput;
+use crate::ToolInteractionService;
+use crate::ToolOutputSink;
+use crate::ToolReplaySafety;
+use crate::ToolService;
+use crate::ToolUserInputOutcome;
 use crate::action_policy_service::durable_sandbox_escalation_approval_request;
-use crate::thread_controller::{RecordToolExecutionEscalation, RecordToolExecutionStart};
-use crate::{
-    ActionPolicyService, AutoReviewedToolGrant, CoreError, ExecPolicyToolGrant,
-    PermissionBypassToolGrant, RecordToolResultRequest, RequestTurnInteraction,
-    SandboxDenialOutput, ThreadController, ThreadUpdateSink, ToolAuthorization, ToolCallOutput,
-    ToolExecutionFacts, ToolExecutionOutput, ToolOutputSink, ToolReplaySafety, ToolService,
-};
-use zeta_action_policy::{ActionReviewRequest, ExecutionDecision, SandboxDenialEvidence};
+use crate::thread_controller::RecordToolExecutionEscalation;
+use crate::thread_controller::RecordToolExecutionStart;
+use std::sync::Arc;
+use zeta_action_policy::ActionReviewRequest;
+use zeta_action_policy::ExecutionDecision;
+use zeta_action_policy::SandboxDenialEvidence;
 use zeta_async_utils::CancellationToken;
-use zeta_protocol::{
-    AgentRequest, ApprovalMode, ItemId, StreamCursor, StreamInstanceId, ThreadId, ThreadUpdate,
-    ThreadUpdateEnvelope, ToolCall, ToolCallId, ToolExecutionAuthority,
-    ToolExecutionAuthority::Sandboxed, ToolOutputStream, TurnId,
-};
+use zeta_protocol::AgentRequest;
+use zeta_protocol::AgentResponse;
+use zeta_protocol::ApprovalMode;
+use zeta_protocol::ItemId;
+use zeta_protocol::RequestUserInput;
+use zeta_protocol::StreamCursor;
+use zeta_protocol::StreamInstanceId;
+use zeta_protocol::ThreadId;
+use zeta_protocol::ThreadUpdate;
+use zeta_protocol::ThreadUpdateEnvelope;
+use zeta_protocol::ToolCall;
+use zeta_protocol::ToolCallId;
+use zeta_protocol::ToolExecutionAuthority;
+use zeta_protocol::ToolExecutionAuthority::Sandboxed;
+use zeta_protocol::ToolOutputStream;
+use zeta_protocol::TurnId;
 
 const MAX_DENIAL_REASON_CHARS: usize = 500;
 const MAX_DENIAL_OUTPUT_CHARS: usize = 2_000;
@@ -63,6 +92,10 @@ impl<'a> ToolExecutionContext<'a> {
     pub(super) fn item_id(&self) -> &ItemId {
         self.item_id
     }
+
+    pub(super) fn cancellation(&self) -> &CancellationToken {
+        self.cancellation
+    }
 }
 
 enum ToolAttempt {
@@ -73,19 +106,19 @@ enum ToolAttempt {
     WaitingForApproval,
 }
 
-pub(super) struct ToolExecutionOrchestrator<'a> {
-    threads: &'a ThreadController,
-    tools: &'a dyn ToolService,
-    policy: &'a dyn ActionPolicyService,
-    updates: &'a dyn ThreadUpdateSink,
+pub(super) struct ToolExecutionOrchestrator {
+    threads: Arc<ThreadController>,
+    tools: Arc<dyn ToolService>,
+    policy: Arc<dyn ActionPolicyService>,
+    updates: Arc<dyn ThreadUpdateSink>,
 }
 
-impl<'a> ToolExecutionOrchestrator<'a> {
+impl ToolExecutionOrchestrator {
     pub(super) fn new(
-        threads: &'a ThreadController,
-        tools: &'a dyn ToolService,
-        policy: &'a dyn ActionPolicyService,
-        updates: &'a dyn ThreadUpdateSink,
+        threads: Arc<ThreadController>,
+        tools: Arc<dyn ToolService>,
+        policy: Arc<dyn ActionPolicyService>,
+        updates: Arc<dyn ThreadUpdateSink>,
     ) -> Self {
         Self {
             threads,
@@ -320,7 +353,7 @@ impl<'a> ToolExecutionOrchestrator<'a> {
                 .map(|definition| definition.name),
         )?;
         let mut stream = ToolUpdateStream {
-            updates: self.updates,
+            updates: self.updates.as_ref(),
             session_id: snapshot.session_id,
             thread_id: context.thread_id.clone(),
             turn_id: context.turn_id.clone(),
@@ -329,11 +362,20 @@ impl<'a> ToolExecutionOrchestrator<'a> {
             stream_instance_id: self.threads.next_stream_instance_id(),
             next_sequence: 0,
         };
-        self.tools.execute_streaming_with_facts(
+        let interactions: Arc<dyn ToolInteractionService> = Arc::new(CoreToolInteractions {
+            threads: Arc::clone(&self.threads),
+            updates: Arc::clone(&self.updates),
+            thread_id: context.thread_id.clone(),
+            turn_id: context.turn_id.clone(),
+            item_id: context.item_id.clone(),
+            cancellation: context.cancellation.clone(),
+        });
+        self.tools.execute_streaming_with_facts_and_interactions(
             call,
             authorization,
             context.cancellation,
             &facts,
+            interactions,
             &mut stream,
         )
     }
@@ -508,6 +550,63 @@ impl<'a> ToolExecutionOrchestrator<'a> {
             output,
             completion: ToolExecutionCompletion::Complete,
         })
+    }
+}
+
+struct CoreToolInteractions {
+    threads: Arc<ThreadController>,
+    updates: Arc<dyn ThreadUpdateSink>,
+    thread_id: ThreadId,
+    turn_id: TurnId,
+    item_id: ItemId,
+    cancellation: CancellationToken,
+}
+
+impl ToolInteractionService for CoreToolInteractions {
+    fn request_user_input(
+        &self,
+        request: RequestUserInput,
+    ) -> Result<ToolUserInputOutcome, CoreError> {
+        self.cancellation
+            .check()
+            .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
+        let request_id = self.threads.next_interaction_request_id();
+        let key = crate::thread_controller::live_interaction::LiveInteractionKey {
+            thread_id: self.thread_id.clone(),
+            turn_id: self.turn_id.clone(),
+            request_id: request_id.clone(),
+        };
+        let waiter = self.threads.live_interactions.register(key)?;
+        let before_sequence = self.threads.read_thread(&self.thread_id)?.sequence;
+        self.threads.request_turn_interaction(
+            &self.thread_id,
+            &self.turn_id,
+            RequestTurnInteraction {
+                request_id,
+                item_id: Some(self.item_id.clone()),
+                request: AgentRequest::UserInput { request },
+                deadline: None,
+            },
+        )?;
+        for update in self
+            .threads
+            .thread_updates_after(&self.thread_id, before_sequence)?
+        {
+            self.updates.publish(update);
+        }
+        match waiter.wait(&self.cancellation)? {
+            crate::thread_controller::live_interaction::LiveInteractionOutcome::Response(
+                AgentResponse::UserInput { response },
+            ) => Ok(ToolUserInputOutcome::Answered(response)),
+            crate::thread_controller::live_interaction::LiveInteractionOutcome::Response(_) => {
+                Err(CoreError::Journal(
+                    "live Tool user-input interaction resolved with the wrong response kind".into(),
+                ))
+            }
+            crate::thread_controller::live_interaction::LiveInteractionOutcome::Cancelled(
+                reason,
+            ) => Ok(ToolUserInputOutcome::Cancelled(reason)),
+        }
     }
 }
 

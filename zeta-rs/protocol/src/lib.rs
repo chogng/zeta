@@ -16,6 +16,7 @@ mod tool_binding;
 mod tool_execution;
 mod tool_name;
 mod turn;
+mod turn_execution;
 
 pub use attachment::{ImageAttachmentRef, ImageMediaType};
 pub use config::{ApprovalMode, Patch, Personality, SandboxMode, Theme, WebSearchMode};
@@ -71,6 +72,7 @@ pub use tool_execution::{
 };
 pub use tool_name::{InvalidToolName, ToolName};
 pub use turn::{Turn, TurnStatus};
+pub use turn_execution::TurnExecutionBinding;
 
 #[cfg(test)]
 #[path = "contract_tests.rs"]

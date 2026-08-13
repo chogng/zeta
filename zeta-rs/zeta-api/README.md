@@ -5,8 +5,8 @@
 
 `zeta-api` 在 canonical `zeta-protocol` model values 与具体模型 API wire format 之间转换。
 它当前实现 OpenAI Responses、OpenAI-compatible Chat Completions 和 Anthropic Messages 的
-unary request/response codec，并实现 OpenAI Responses 与 Anthropic Messages 的 SSE event
-decoder。独立 input-token codec 覆盖 OpenAI Responses、Anthropic Messages、Gemini
+unary request/response codec、原生 HTTP/SSE streaming invocation 与 terminal response assembly。
+独立 input-token codec 覆盖 OpenAI Responses、Anthropic Messages、Gemini
 `countTokens`、Kimi estimate 和 Z.AI tokenizer。
 
 它不选择 provider、model 或 credential，不拥有 base URL，也不执行 socket、retry 或 SSE
@@ -122,11 +122,19 @@ end of stream
 - 要求 `message_start → content_block_* → message_stop`；
 - 用 `BTreeMap<u64, ContentBlockKind>` 跟踪并行 block index；
 - text/thinking delta 映射为 canonical delta；
-- ping、message-level delta、signature 与 tool input JSON fragment 当前不输出；
+- ping 不形成输出；message-level usage/stop reason、signature 与 tool input JSON fragment 进入
+  terminal response assembly；
 - 未 start 的 delta、重复 block、unknown stop、open block 上的 message stop、terminal 前 EOF 都被拒绝。
 
-当前只有这两个 streaming decoder；Chat Completions streaming codec 尚未实现。拥有 decoder 不表示
-整个 model invocation stack 已经暴露 streaming public API。
+`OpenAiChatCompletionsSseDecoder`：
+
+- 按 choice 与 tool-call index 重组 text 和 function argument fragment；
+- 接受独立 usage chunk，并要求 `[DONE]` terminal；
+- finish reason、usage 和重组后的 Tool Calls 进入 terminal response；
+- malformed chunk、terminal 前 EOF、terminal 后事件与不一致的 indexed Tool Call 都被拒绝。
+
+三种 endpoint 都由 `ApiEndpoint::stream_with_client_and_cancellation` 发起原生 wire stream，经过
+`zeta-client` framing 后边解码边投递 canonical delta，并返回权威 terminal `ModelResponse`。
 
 ## 错误语义
 
@@ -161,11 +169,10 @@ cargo test -p zeta-api
 bazel test //zeta-rs/zeta-api:zeta-api-unit-tests
 ```
 
-当前 tests 重点覆盖两个 SSE decoder 的 delta mapping、unknown optional event、terminal EOF、
-malformed JSON 与 Anthropic block lifecycle。Unary codec 还应持续通过 injected
+当前 tests 重点覆盖三个 SSE decoder 的 delta mapping、Tool Call fragment assembly、usage、
+unknown optional event、terminal EOF、malformed JSON 与 Anthropic block lifecycle，并通过 injected
 `OperationClient`/provider contract tests 验证 request 与 response shape。
 
-当前实现仍以同步 unary completion 为主；stream decoder 已存在，但端到端 streaming invocation、
-Chat Completions streaming、tool argument fragment assembly、NDJSON 和 provider-native catalog codec
-仍是潜在演进。新增能力必须继续保持 canonical domain、wire codec、operation framing、transport
-四层分离。
+当前三种 HTTP/SSE endpoint 已有端到端 streaming invocation；NDJSON、WebSocket、更多
+provider-native catalog codec 和 provider-specific stream profile 仍是潜在演进。新增能力必须继续
+保持 canonical domain、wire codec、operation framing、transport 四层分离。

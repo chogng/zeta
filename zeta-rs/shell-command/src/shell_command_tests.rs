@@ -27,16 +27,16 @@ use zeta_workspace::WorkspaceRoot;
 struct DenyAll;
 
 impl ApprovalPolicy for DenyAll {
-    fn requirement_for(&self, _: &str) -> zeta_exec::ApprovalRequirement {
-        zeta_exec::ApprovalRequirement::Denied
+    fn requirement_for(&self, _: &str) -> zeta_tool_executor::ApprovalRequirement {
+        zeta_tool_executor::ApprovalRequirement::Denied
     }
 }
 
 struct AllowAll;
 
 impl ApprovalPolicy for AllowAll {
-    fn requirement_for(&self, _: &str) -> zeta_exec::ApprovalRequirement {
-        zeta_exec::ApprovalRequirement::NotRequired
+    fn requirement_for(&self, _: &str) -> zeta_tool_executor::ApprovalRequirement {
+        zeta_tool_executor::ApprovalRequirement::NotRequired
     }
 }
 
@@ -257,8 +257,6 @@ fn sandboxed_tool_invocation_enforces_workspace_metadata_and_network_boundaries(
     fs::create_dir_all(&protected).unwrap();
     let outside = workspace.path.with_extension("outside");
     let _outside_cleanup = RemovePathOnDrop(outside.clone());
-    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-    let port = listener.local_addr().unwrap().port();
     let sandbox = SandboxPolicy::new(
         zeta_sandboxing::FileSystemAccess::WorkspaceWrite,
         zeta_sandboxing::NetworkAccess::Denied,
@@ -312,6 +310,9 @@ fn sandboxed_tool_invocation_enforces_workspace_metadata_and_network_boundaries(
     assert_sandbox_denial(metadata_write);
     assert!(!protected.join("persisted-hook").exists());
 
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let port = listener.local_addr().unwrap().port();
     let network = execute_sandboxed_command(
         &tool,
         &definition,
@@ -325,7 +326,12 @@ fn sandboxed_tool_invocation_enforces_workspace_metadata_and_network_boundaries(
             port.to_string(),
         ],
     );
-    assert_sandbox_denial(network);
+    let network = completed_output(network);
+    assert_ne!(network["result"]["exit_code"], json!(0));
+    let error = listener
+        .accept()
+        .expect_err("sandboxed command must not reach the loopback listener");
+    assert_eq!(error.kind(), std::io::ErrorKind::WouldBlock);
 }
 
 #[cfg(target_os = "macos")]

@@ -141,10 +141,12 @@ bazel test //zeta-rs/model-provider:model-provider-unit-tests
 当前 completion `ModelInvoker` 已有 concrete provider adapters；embedding/rerank 已有 canonical
 invoker、request/response validation、OpenAI-compatible/Ollama runtime resolver，以及本地
 `zeta-code-index-semantic` 和 Tool Search consumers。
-当前 invocation 是同步 unary；
+当前 completion invocation 同时支持 unary 与 OpenAI Responses、OpenAI-compatible Chat Completions、
+Anthropic Messages 原生 HTTP/SSE stream；
 OpenAI semantic adapter 可以从 host 注入的 `SecretStore` materialize API key；Ollama 与
 OpenAI-compatible semantic endpoint 当前按 unauthenticated endpoint 调用。持久化 secret backend、
-credential 设置 UI、subscription backend、streaming 与动态 catalog 的长期设计仍在系统文档中演进。
+credential 设置 UI、更多 stream profile 与动态 catalog 的长期设计仍在系统文档中演进。完整
+Codex subscription Agent loop 通过 Core `TurnExecutionBackend` 接入，不属于本 crate。
 新增能力应保持 invoker immutable、profile explicit、
 provider adapter private，以及 config/catalog/codec/operation/network 分层。
 

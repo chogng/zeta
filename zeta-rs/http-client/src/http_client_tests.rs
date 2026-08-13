@@ -254,6 +254,38 @@ fn unary_response_body_is_bounded_by_the_transport_configuration() {
 }
 
 #[test]
+fn successful_response_body_is_emitted_through_the_streaming_path() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let body = vec![b'x'; 20 * 1024];
+    let expected = body.clone();
+    let server = std::thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        read_headers(&mut stream);
+        write!(
+            stream,
+            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+            body.len()
+        )
+        .unwrap();
+        stream.write_all(&body).unwrap();
+    });
+    let request =
+        HttpRequest::post(format!("http://{address}/stream"), Vec::new(), Vec::new()).unwrap();
+    let mut sink = CollectedBody::default();
+
+    let response = UreqHttpClient::new()
+        .unwrap()
+        .execute_streaming(&request, &mut sink)
+        .unwrap();
+
+    assert!(response.body().is_empty());
+    assert_eq!(sink.body, expected);
+    assert!(sink.chunks > 1);
+    server.join().unwrap();
+}
+
+#[test]
 fn response_limit_reserves_headroom_for_overflow_detection() {
     assert!(matches!(
         ResponseBodyLimit::new(NonZeroUsize::new(usize::MAX).unwrap()),
@@ -307,6 +339,20 @@ impl HttpClient for StaticClient {
             Vec::new(),
             b"response body".to_vec(),
         ))
+    }
+}
+
+#[derive(Default)]
+struct CollectedBody {
+    body: Vec<u8>,
+    chunks: usize,
+}
+
+impl HttpBodySink for CollectedBody {
+    fn emit(&mut self, chunk: &[u8]) -> Result<(), HttpClientError> {
+        self.body.extend_from_slice(chunk);
+        self.chunks += 1;
+        Ok(())
     }
 }
 

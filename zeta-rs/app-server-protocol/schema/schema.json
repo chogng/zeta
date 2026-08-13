@@ -23,6 +23,298 @@
     "errorResponse"
   ],
   "$defs": {
+    "AccountDto": {
+      "description": "Redacted provider account metadata safe for the App Server wire contract.",
+      "type": "object",
+      "properties": {
+        "accountId": {
+          "type": "string"
+        },
+        "credentialRevision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "displayName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "email": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "organization": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "plan": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "provider": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/AccountStatusDto"
+        }
+      },
+      "required": [
+        "provider",
+        "accountId",
+        "status",
+        "credentialRevision"
+      ]
+    },
+    "AccountLoginCancelParams": {
+      "type": "object",
+      "properties": {
+        "loginId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "loginId"
+      ]
+    },
+    "AccountLoginCancelResult": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "$ref": "#/$defs/AccountLoginCancelStatusDto"
+        }
+      },
+      "required": [
+        "status"
+      ]
+    },
+    "AccountLoginCancelStatusDto": {
+      "type": "string",
+      "enum": [
+        "cancelled",
+        "notFound"
+      ]
+    },
+    "AccountLoginCompleted": {
+      "type": "object",
+      "properties": {
+        "account": {
+          "$ref": "#/$defs/AccountReadResult"
+        },
+        "loginId": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/AccountLoginCompletionStatusDto"
+        }
+      },
+      "required": [
+        "loginId",
+        "status",
+        "account"
+      ]
+    },
+    "AccountLoginCompletionStatusDto": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "succeeded"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "failure": {
+              "$ref": "#/$defs/AccountLoginFailureDto"
+            },
+            "type": {
+              "type": "string",
+              "const": "failed"
+            }
+          },
+          "required": [
+            "type",
+            "failure"
+          ]
+        }
+      ]
+    },
+    "AccountLoginFailureDto": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ]
+    },
+    "AccountLoginMethodDto": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "openAiChatGptBrowser"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "openAiChatGptDeviceCode"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        }
+      ]
+    },
+    "AccountLoginStartParams": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "$ref": "#/$defs/AccountLoginMethodDto"
+        }
+      },
+      "required": [
+        "method"
+      ]
+    },
+    "AccountLoginStartResult": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "authorizationUrl": {
+              "type": "string"
+            },
+            "loginId": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "browser"
+            }
+          },
+          "required": [
+            "type",
+            "loginId",
+            "authorizationUrl"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "loginId": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "deviceCode"
+            },
+            "userCode": {
+              "type": "string"
+            },
+            "verificationUrl": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "loginId",
+            "verificationUrl",
+            "userCode"
+          ]
+        }
+      ]
+    },
+    "AccountLogoutResult": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "$ref": "#/$defs/AccountLogoutStatusDto"
+        }
+      },
+      "required": [
+        "status"
+      ]
+    },
+    "AccountLogoutStatusDto": {
+      "type": "string",
+      "enum": [
+        "loggedOut",
+        "alreadyLoggedOut"
+      ]
+    },
+    "AccountReadResult": {
+      "type": "object",
+      "properties": {
+        "account": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AccountDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "revision"
+      ]
+    },
+    "AccountStatusDto": {
+      "type": "string",
+      "enum": [
+        "ready",
+        "reauthenticationRequired",
+        "unavailable"
+      ]
+    },
+    "AccountUpdated": {
+      "type": "object",
+      "properties": {
+        "account": {
+          "$ref": "#/$defs/AccountReadResult"
+        }
+      },
+      "required": [
+        "account"
+      ]
+    },
     "ActionApprovalCapability": {
       "description": "One exact capability included in an action approval request.",
       "type": "object",
@@ -939,6 +1231,16 @@
         "DebugAdapterOperationFailed",
         "ConfigUnavailable",
         "ConfigRevisionConflict",
+        "McpRuntimeUnavailable",
+        "McpServerNotFound",
+        "McpOAuthUnavailable",
+        "McpOAuthInvalidCallback",
+        "McpOAuthExpired",
+        "McpOAuthOperationFailed",
+        "AccountUnavailable",
+        "AccountLoginNotFound",
+        "AccountLoginConflict",
+        "AccountOperationFailed",
         "ConnectorsUnavailable",
         "ConnectorGenerationConflict",
         "ConnectorOperationFailed",
@@ -1469,6 +1771,118 @@
           "properties": {
             "method": {
               "type": "string",
+              "const": "mcp/server/status"
+            },
+            "params": {
+              "$ref": "#/$defs/EmptyParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "mcp/server/connect"
+            },
+            "params": {
+              "$ref": "#/$defs/McpServerRuntimeIntentParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "mcp/server/disconnect"
+            },
+            "params": {
+              "$ref": "#/$defs/McpServerRuntimeIntentParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "mcp/oauth/start"
+            },
+            "params": {
+              "$ref": "#/$defs/McpOAuthStartParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "mcp/oauth/complete"
+            },
+            "params": {
+              "$ref": "#/$defs/McpOAuthCompleteParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "mcp/oauth/refresh"
+            },
+            "params": {
+              "$ref": "#/$defs/McpOAuthMutationParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "mcp/oauth/revoke"
+            },
+            "params": {
+              "$ref": "#/$defs/McpOAuthMutationParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
               "const": "connector/list"
             },
             "params": {
@@ -1822,6 +2236,70 @@
             "method": {
               "type": "string",
               "const": "model/list"
+            },
+            "params": {
+              "$ref": "#/$defs/EmptyParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "account/read"
+            },
+            "params": {
+              "$ref": "#/$defs/EmptyParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "account/login/start"
+            },
+            "params": {
+              "$ref": "#/$defs/AccountLoginStartParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "account/login/cancel"
+            },
+            "params": {
+              "$ref": "#/$defs/AccountLoginCancelParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "account/logout"
             },
             "params": {
               "$ref": "#/$defs/EmptyParams"
@@ -3969,6 +4447,118 @@
           "properties": {
             "method": {
               "type": "string",
+              "const": "mcp/server/status"
+            },
+            "result": {
+              "$ref": "#/$defs/McpServerStatusResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "mcp/server/connect"
+            },
+            "result": {
+              "$ref": "#/$defs/McpServerRuntimeIntentResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "mcp/server/disconnect"
+            },
+            "result": {
+              "$ref": "#/$defs/McpServerRuntimeIntentResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "mcp/oauth/start"
+            },
+            "result": {
+              "$ref": "#/$defs/McpOAuthStartResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "mcp/oauth/complete"
+            },
+            "result": {
+              "$ref": "#/$defs/McpOAuthMutationResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "mcp/oauth/refresh"
+            },
+            "result": {
+              "$ref": "#/$defs/McpOAuthMutationResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "mcp/oauth/revoke"
+            },
+            "result": {
+              "$ref": "#/$defs/McpOAuthMutationResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
               "const": "connector/list"
             },
             "result": {
@@ -4325,6 +4915,70 @@
             },
             "result": {
               "$ref": "#/$defs/ModelListResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "account/read"
+            },
+            "result": {
+              "$ref": "#/$defs/AccountReadResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "account/login/start"
+            },
+            "result": {
+              "$ref": "#/$defs/AccountLoginStartResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "account/login/cancel"
+            },
+            "result": {
+              "$ref": "#/$defs/AccountLoginCancelResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "account/logout"
+            },
+            "result": {
+              "$ref": "#/$defs/AccountLogoutResult"
             }
           },
           "required": [
@@ -13053,6 +13707,86 @@
         }
       ]
     },
+    "McpOAuthCompleteParams": {
+      "description": "Completes one exact standalone MCP OAuth flow with secret callback values.",
+      "type": "object",
+      "properties": {
+        "authorizationCode": {
+          "$ref": "#/$defs/McpSecretDto"
+        },
+        "flowId": {
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/$defs/McpSecretDto"
+        }
+      },
+      "required": [
+        "flowId",
+        "state",
+        "authorizationCode"
+      ]
+    },
+    "McpOAuthMutationParams": {
+      "description": "Selects one standalone MCP server for credential refresh or revocation.",
+      "type": "object",
+      "properties": {
+        "serverId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "serverId"
+      ]
+    },
+    "McpOAuthMutationResult": {
+      "description": "Confirms the standalone MCP server whose OAuth lifecycle operation completed.",
+      "type": "object",
+      "properties": {
+        "serverId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "serverId"
+      ]
+    },
+    "McpOAuthStartParams": {
+      "description": "Starts browser authorization for one exact standalone MCP server.",
+      "type": "object",
+      "properties": {
+        "redirectUri": {
+          "type": "string"
+        },
+        "serverId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "serverId",
+        "redirectUri"
+      ]
+    },
+    "McpOAuthStartResult": {
+      "description": "Browser navigation values for one process-local standalone MCP OAuth flow.",
+      "type": "object",
+      "properties": {
+        "authorizationUrl": {
+          "type": "string"
+        },
+        "flowId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "flowId",
+        "authorizationUrl"
+      ]
+    },
+    "McpSecretDto": {
+      "description": "Inbound-only MCP OAuth value that redacts diagnostics and clears its allocation on drop.",
+      "type": "string"
+    },
     "McpServerConfigDto": {
       "description": "Desired, runtime-free standalone MCP server configuration.",
       "type": "object",
@@ -13114,6 +13848,111 @@
         "serverId"
       ]
     },
+    "McpServerRuntimeIntentDto": {
+      "description": "Process-local lifecycle intent returned by an MCP connect/disconnect command.",
+      "type": "string",
+      "enum": [
+        "connect",
+        "disconnect"
+      ]
+    },
+    "McpServerRuntimeIntentParams": {
+      "description": "Applies one process-local MCP lifecycle intent.",
+      "type": "object",
+      "properties": {
+        "serverId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "serverId"
+      ]
+    },
+    "McpServerRuntimeIntentResult": {
+      "description": "Result of applying one process-local MCP lifecycle intent.",
+      "type": "object",
+      "properties": {
+        "intent": {
+          "$ref": "#/$defs/McpServerRuntimeIntentDto"
+        },
+        "serverId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "serverId",
+        "intent"
+      ]
+    },
+    "McpServerRuntimeStateDto": {
+      "description": "Runtime lifecycle state of one configured MCP server.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "const": "disabled"
+            }
+          },
+          "required": [
+            "status"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "const": "disconnected"
+            }
+          },
+          "required": [
+            "status"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "const": "connected"
+            }
+          },
+          "required": [
+            "status"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "const": "stale"
+            }
+          },
+          "required": [
+            "status"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "reason": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string",
+              "const": "unavailable"
+            }
+          },
+          "required": [
+            "status",
+            "reason"
+          ]
+        }
+      ]
+    },
     "McpServerSetEnablementParams": {
       "description": "Changes desired enablement for one configured standalone MCP server.",
       "type": "object",
@@ -13139,6 +13978,67 @@
         "expectedRevision",
         "serverId",
         "enablement"
+      ]
+    },
+    "McpServerStatusDto": {
+      "description": "Redacted runtime projection of one configured MCP server.",
+      "type": "object",
+      "properties": {
+        "catalogGeneration": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "connectionGeneration": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "displayName": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/$defs/McpServerRuntimeStateDto"
+        },
+        "toolCount": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "id",
+        "displayName",
+        "state",
+        "catalogGeneration",
+        "toolCount"
+      ]
+    },
+    "McpServerStatusResult": {
+      "description": "Current MCP connection and catalog status for the local App Server.",
+      "type": "object",
+      "properties": {
+        "catalogGeneration": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "servers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/McpServerStatusDto"
+          }
+        }
+      },
+      "required": [
+        "catalogGeneration",
+        "servers"
       ]
     },
     "McpServerUpsertParams": {
@@ -14293,6 +15193,12 @@
         "git": {
           "type": "boolean"
         },
+        "mcp": {
+          "type": "boolean"
+        },
+        "mcpOAuth": {
+          "type": "boolean"
+        },
         "plugins": {
           "type": "boolean"
         },
@@ -14341,7 +15247,9 @@
         "extensions",
         "extensionHost",
         "connectors",
-        "plugins"
+        "plugins",
+        "mcp",
+        "mcpOAuth"
       ]
     },
     "ServerInfo": {
@@ -14361,6 +15269,38 @@
     },
     "ServerNotificationSchema": {
       "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "account/login/completed"
+            },
+            "params": {
+              "$ref": "#/$defs/AccountLoginCompleted"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "account/updated"
+            },
+            "params": {
+              "$ref": "#/$defs/AccountUpdated"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
         {
           "type": "object",
           "properties": {
@@ -16660,6 +17600,26 @@
         {
           "type": "object",
           "properties": {
+            "binding": {
+              "$ref": "#/$defs/TurnExecutionBinding"
+            },
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "type": {
+              "type": "string",
+              "const": "turnExecutionBound"
+            }
+          },
+          "required": [
+            "type",
+            "threadId",
+            "binding"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
             "seed": {
               "$ref": "#/$defs/AgentContextSeed"
             },
@@ -16791,6 +17751,30 @@
             "type",
             "threadId",
             "turnId"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "backend": {
+              "type": "string"
+            },
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "turnId": {
+              "$ref": "#/$defs/TurnId"
+            },
+            "type": {
+              "type": "string",
+              "const": "turnExecutionAttempted"
+            }
+          },
+          "required": [
+            "type",
+            "threadId",
+            "turnId",
+            "backend"
           ]
         },
         {
@@ -18351,6 +19335,27 @@
         "turnId",
         "status",
         "items"
+      ]
+    },
+    "TurnExecutionBinding": {
+      "description": "Durable binding from a local Thread to an external full-Turn execution runtime.\n\nThe remote identity is opaque to Core. Adapters may use it only to resume a completed\nconversation; an in-flight Turn still has unknown outcome after process loss and is never\nreplayed from this binding.",
+      "type": "object",
+      "properties": {
+        "backend": {
+          "type": "string"
+        },
+        "executionScope": {
+          "description": "Opaque authority scope in which the external thread was created.\n\nAdapters must compare this value before resuming the remote thread. It intentionally\nexcludes filesystem paths and credentials while preventing cross-workspace reuse.",
+          "type": "string"
+        },
+        "remoteThreadId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "backend",
+        "remoteThreadId",
+        "executionScope"
       ]
     },
     "TurnId": {

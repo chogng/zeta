@@ -2,7 +2,7 @@
 //!
 //! This crate owns the `shell-command` schema and executor. It delegates process approval,
 //! sandbox enforcement, output capture, timeout enforcement, and working-directory containment to
-//! `zeta-exec`.
+//! `zeta-tool-executor`.
 
 mod ripgrep;
 
@@ -16,8 +16,8 @@ use std::fmt;
 use std::future;
 use std::path::PathBuf;
 use zeta_async_utils::CancellationToken;
-use zeta_exec::{CommandExecutor, CommandRequest};
 use zeta_sandboxing::SandboxBackend;
+use zeta_tool_executor::{CommandExecutor, CommandRequest};
 use zeta_tools::{
     ToolConcurrency, ToolDefinition, ToolExecutionFuture, ToolExecutionOutcome, ToolExecutor,
     ToolInputSchema, ToolInvocation, ToolLoading, ToolName, ToolOutput, ToolOutputSchema,
@@ -25,7 +25,7 @@ use zeta_tools::{
 };
 use zeta_workspace::WorkspaceRoot;
 
-pub use zeta_exec::{
+pub use zeta_tool_executor::{
     ApprovalPolicy, ApprovalRequirement, CommandExecutionAuthority, CommandExecutionOutcome,
     ExecutionError, ExecutionLimits as ShellCommandLimits,
 };

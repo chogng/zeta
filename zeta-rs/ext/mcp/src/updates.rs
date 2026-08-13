@@ -5,6 +5,23 @@ use std::time::Duration;
 
 use zeta_rmcp_client::McpClientEvent;
 use zeta_rmcp_client::McpClientHost;
+use zeta_rmcp_client::McpElicitation;
+
+use zeta_core::ToolInteractionService;
+
+tokio::task_local! {
+    static ACTIVE_TOOL_INTERACTIONS: Arc<dyn ToolInteractionService>;
+}
+
+pub(crate) async fn with_active_tool_interactions<F>(
+    interactions: Arc<dyn ToolInteractionService>,
+    future: F,
+) -> F::Output
+where
+    F: std::future::Future,
+{
+    ACTIVE_TOOL_INTERACTIONS.scope(interactions, future).await
+}
 
 /// Process-local publication hub for MCP tool-catalog invalidations.
 ///
@@ -67,6 +84,16 @@ impl McpClientHost for McpCatalogUpdateHost {
         if matches!(event, McpClientEvent::ToolListChanged) {
             self.updates.publish();
         }
+    }
+
+    fn handle_elicitation(
+        &self,
+        request: McpElicitation,
+    ) -> zeta_rmcp_client::HostFuture<
+        Result<zeta_rmcp_client::ElicitResult, zeta_rmcp_client::RmcpErrorData>,
+    > {
+        let interactions = ACTIVE_TOOL_INTERACTIONS.try_with(Arc::clone).ok();
+        crate::elicitation::handle_elicitation(interactions, request)
     }
 }
 

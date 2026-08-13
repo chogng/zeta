@@ -2,6 +2,8 @@ use super::*;
 use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::num::NonZeroU8;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::Duration;
 use zeta_async_utils::CancellationSource;
@@ -106,6 +108,30 @@ fn cancellation_stops_waiting_for_an_active_transport_attempt() {
 }
 
 #[test]
+fn streaming_transport_failure_after_a_chunk_is_never_replayed() {
+    let transport = Arc::new(PartialStreamingHttpClient::default());
+    let client = ZetaClient::new(transport.clone());
+    let request = ClientRequest::post(
+        "https://example.test/responses",
+        Vec::new(),
+        Vec::new(),
+        RetryPolicy::replayable(
+            RetrySafety::Idempotent,
+            NonZeroU8::new(2).unwrap(),
+            BackoffPolicy::new(Duration::ZERO, Duration::ZERO),
+        ),
+    )
+    .unwrap();
+    let mut sink = CollectedBytes::default();
+
+    let result = client.execute_streaming(&request, &mut sink);
+
+    assert!(matches!(result, Err(ClientError::Transport(_))));
+    assert_eq!(sink.bytes, b"partial");
+    assert_eq!(transport.attempts.load(Ordering::Relaxed), 1);
+}
+
+#[test]
 fn sse_decoder_joins_multiline_data_across_chunks() {
     let mut decoder = SseDecoder::new(1024).unwrap();
     assert!(
@@ -191,6 +217,44 @@ impl OperationClient for StaticClient {
             200,
             Vec::new(),
             br#"{"ok":true}"#.to_vec(),
+        ))
+    }
+}
+
+#[derive(Default)]
+struct CollectedBytes {
+    bytes: Vec<u8>,
+}
+
+impl OperationStreamSink for CollectedBytes {
+    fn emit(&mut self, chunk: &[u8]) -> Result<(), ClientError> {
+        self.bytes.extend_from_slice(chunk);
+        Ok(())
+    }
+}
+
+#[derive(Default)]
+struct PartialStreamingHttpClient {
+    attempts: AtomicUsize,
+}
+
+impl zeta_http_client::HttpClient for PartialStreamingHttpClient {
+    fn execute(
+        &self,
+        _: &zeta_http_client::HttpRequest,
+    ) -> Result<ClientResponse, zeta_http_client::HttpClientError> {
+        panic!("streaming operation must use the streaming transport path")
+    }
+
+    fn execute_streaming(
+        &self,
+        _: &zeta_http_client::HttpRequest,
+        sink: &mut dyn zeta_http_client::HttpBodySink,
+    ) -> Result<ClientResponse, zeta_http_client::HttpClientError> {
+        self.attempts.fetch_add(1, Ordering::Relaxed);
+        sink.emit(b"partial")?;
+        Err(zeta_http_client::HttpClientError::Transport(
+            "fixture stream interrupted".into(),
         ))
     }
 }

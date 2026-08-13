@@ -15,11 +15,14 @@ use zeta_action_policy::PermissionBypassGrant;
 use zeta_action_policy::ReviewEvidence;
 use zeta_async_utils::CancellationToken;
 use zeta_protocol::ActionApprovalRequest;
+use zeta_protocol::InteractionCancelReason;
 use zeta_protocol::ModelRef;
 use zeta_protocol::ModelRequest;
 use zeta_protocol::ModelResponse;
 use zeta_protocol::ModelStreamEvent;
 use zeta_protocol::RequestId;
+use zeta_protocol::RequestUserInput;
+use zeta_protocol::RequestUserInputResponse;
 use zeta_protocol::SessionId;
 use zeta_protocol::ThreadId;
 use zeta_protocol::ThreadUpdateEnvelope;
@@ -205,6 +208,25 @@ impl ContextSource for NoContextSource {
 /// authoritative replay and recovery boundary.
 pub trait ToolOutputSink {
     fn emit(&mut self, stream: ToolOutputStream, text: String) -> Result<(), CoreError>;
+}
+
+/// Durable outcome of one user-input request raised while a Tool Call is already running.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ToolUserInputOutcome {
+    Answered(RequestUserInputResponse),
+    Cancelled(InteractionCancelReason),
+}
+
+/// Core-owned interaction port available to a running Tool Call.
+///
+/// Implementations durably commit and route requests through the current Thread authority, then
+/// wait for the exact response or cancellation. Tool services must never mutate Thread state or
+/// contact product clients directly.
+pub trait ToolInteractionService: Send + Sync {
+    fn request_user_input(
+        &self,
+        request: RequestUserInput,
+    ) -> Result<ToolUserInputOutcome, CoreError>;
 }
 
 /// Update sink used by hosts that do not expose live Thread subscriptions.
@@ -586,6 +608,21 @@ pub trait ToolService: Send + Sync {
     ) -> Result<ToolExecutionOutput, CoreError> {
         let _ = facts;
         self.execute_streaming(call, authorization, cancellation, sink)
+    }
+
+    /// Executes with durable facts, transient output, and Core-owned live interaction routing.
+    ///
+    /// Services that do not initiate interactions retain the existing streaming bridge.
+    fn execute_streaming_with_facts_and_interactions(
+        &self,
+        call: &ToolCall,
+        authorization: &ToolAuthorization,
+        cancellation: &CancellationToken,
+        facts: &ToolExecutionFacts,
+        _: Arc<dyn ToolInteractionService>,
+        sink: &mut dyn ToolOutputSink,
+    ) -> Result<ToolExecutionOutput, CoreError> {
+        self.execute_streaming_with_facts(call, authorization, cancellation, facts, sink)
     }
 }
 

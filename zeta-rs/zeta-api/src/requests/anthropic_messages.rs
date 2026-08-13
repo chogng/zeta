@@ -1,5 +1,6 @@
 use crate::ApiEndpoint;
 use crate::ApiError;
+use crate::ApiStreamSink;
 use crate::ContentPart;
 use crate::InputItem;
 use crate::InputTokenCount;
@@ -17,7 +18,14 @@ use crate::ToolDefinition;
 use crate::ToolName;
 use serde_json::{Map, Value, json};
 use zeta_async_utils::CancellationToken;
-use zeta_client::{OperationClient, ResolvedApiTarget};
+use zeta_client::ClientError;
+use zeta_client::ClientRequest;
+use zeta_client::OperationClient;
+use zeta_client::OperationStreamSink;
+use zeta_client::ResolvedApiTarget;
+use zeta_client::SseDecoder;
+
+const MAX_STREAM_EVENT_BYTES: usize = 1024 * 1024;
 
 pub(crate) fn complete(
     endpoint: ApiEndpoint,
@@ -40,6 +48,88 @@ pub(crate) fn complete(
         cancellation,
     )?;
     parse_response(response)
+}
+
+pub(crate) fn stream(
+    endpoint: ApiEndpoint,
+    target: &ResolvedApiTarget,
+    model: &str,
+    request: &ModelRequest,
+    client: &dyn OperationClient,
+    cancellation: &CancellationToken,
+    sink: &mut dyn ApiStreamSink,
+) -> Result<ModelResponse, ApiError> {
+    if request.reasoning.is_some() {
+        return Err(ApiError::InvalidRequest(
+            "Anthropic reasoning requires a provider-specific thinking configuration".into(),
+        ));
+    }
+    let Value::Object(mut body) = build_request(model, request)? else {
+        unreachable!("Anthropic request builders always return an object");
+    };
+    body.insert("stream".into(), Value::Bool(true));
+    let body = serde_json::to_vec(&Value::Object(body))
+        .map_err(|error| ApiError::InvalidRequest(format!("failed to encode API JSON: {error}")))?;
+    let operation = ClientRequest::new(
+        zeta_http_client::HttpMethod::Post,
+        target.endpoint(endpoint.relative_path())?,
+        endpoint.headers(target),
+        body,
+        target.retry_policy,
+    )?;
+    let mut body_sink = AnthropicMessageBodySink {
+        framing: SseDecoder::new(MAX_STREAM_EVENT_BYTES)?,
+        events: crate::AnthropicMessagesSseDecoder::new(),
+        sink,
+        failure: None,
+    };
+    let transport =
+        client.execute_streaming_with_cancellation(&operation, cancellation, &mut body_sink);
+    if let Ok(response) = &transport
+        && !response.is_success()
+    {
+        return Err(crate::requests::response_error(response));
+    }
+    if let Some(error) = body_sink.failure.take() {
+        return Err(error);
+    }
+    transport?;
+    let AnthropicMessageBodySink {
+        framing,
+        events,
+        sink: _,
+        failure: _,
+    } = body_sink;
+    framing.finish()?;
+    parse_response(events.finish_response()?)
+}
+
+struct AnthropicMessageBodySink<'a> {
+    framing: SseDecoder,
+    events: crate::AnthropicMessagesSseDecoder,
+    sink: &'a mut dyn ApiStreamSink,
+    failure: Option<ApiError>,
+}
+
+impl OperationStreamSink for AnthropicMessageBodySink<'_> {
+    fn emit(&mut self, chunk: &[u8]) -> Result<(), ClientError> {
+        let result = self.decode(chunk);
+        if let Err(error) = &result {
+            self.failure = Some(error.clone());
+        }
+        result.map_err(|error| ClientError::InvalidResponse(error.to_string()))
+    }
+}
+
+impl AnthropicMessageBodySink<'_> {
+    fn decode(&mut self, chunk: &[u8]) -> Result<(), ApiError> {
+        for frame in self.framing.push(chunk)? {
+            for event in self.events.decode(&frame)? {
+                self.sink.emit(event)?;
+            }
+        }
+        Ok(())
+    }
 }
 
 pub(crate) fn count_input_tokens(

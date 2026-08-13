@@ -11,16 +11,37 @@ pub const DEFAULT_MAX_MESSAGE_BYTES: usize = 320 * 1024 * 1024;
 
 /// A JSON Lines transport whose read and write operations enforce the negotiated message limit.
 pub struct JsonlTransport<R, W> {
-    reader: R,
-    writer: W,
-    max_message_bytes: usize,
+    reader: JsonlReader<R>,
+    writer: JsonlWriter<W>,
 }
 
 impl<R: BufRead, W: Write> JsonlTransport<R, W> {
     pub fn new(reader: R, writer: W, max_message_bytes: usize) -> Self {
         Self {
+            reader: JsonlReader::new(reader, max_message_bytes),
+            writer: JsonlWriter::new(writer, max_message_bytes),
+        }
+    }
+
+    pub fn read_message(&mut self) -> io::Result<Option<String>> {
+        self.reader.read_message()
+    }
+
+    pub fn write_message(&mut self, message: &str) -> io::Result<()> {
+        self.writer.write_message(message)
+    }
+}
+
+/// The bounded read half of a JSON Lines transport.
+pub struct JsonlReader<R> {
+    reader: R,
+    max_message_bytes: usize,
+}
+
+impl<R: BufRead> JsonlReader<R> {
+    pub fn new(reader: R, max_message_bytes: usize) -> Self {
+        Self {
             reader,
-            writer,
             max_message_bytes,
         }
     }
@@ -46,6 +67,21 @@ impl<R: BufRead, W: Write> JsonlTransport<R, W> {
         String::from_utf8(bytes).map(Some).map_err(|_| {
             io::Error::new(io::ErrorKind::InvalidData, "JSON-RPC message is not UTF-8")
         })
+    }
+}
+
+/// The bounded single-writer half of a JSON Lines transport.
+pub struct JsonlWriter<W> {
+    writer: W,
+    max_message_bytes: usize,
+}
+
+impl<W: Write> JsonlWriter<W> {
+    pub fn new(writer: W, max_message_bytes: usize) -> Self {
+        Self {
+            writer,
+            max_message_bytes,
+        }
     }
 
     pub fn write_message(&mut self, message: &str) -> io::Result<()> {

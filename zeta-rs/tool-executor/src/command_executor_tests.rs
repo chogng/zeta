@@ -228,8 +228,10 @@ struct TestWorkspace {
 impl TestWorkspace {
     fn new() -> Self {
         let sequence = NEXT_WORKSPACE.fetch_add(1, Ordering::Relaxed);
-        let path =
-            std::env::temp_dir().join(format!("zeta-exec-tests-{}-{sequence}", std::process::id()));
+        let path = std::env::temp_dir().join(format!(
+            "zeta-tool-executor-tests-{}-{sequence}",
+            std::process::id()
+        ));
         fs::create_dir_all(&path).unwrap();
         Self { path }
     }

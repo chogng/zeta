@@ -9,7 +9,32 @@ use zeta_protocol::{
 };
 
 impl ThreadController {
-    pub(crate) fn complete_turn_without_agent_message(
+    /// Durably records that a delegated backend is about to cross its external side-effect
+    /// boundary.
+    ///
+    /// A backend must append this fact before its first remote request and must never replay a
+    /// Turn that already carries an attempt after process recovery.
+    pub fn record_turn_execution_attempt(
+        &self,
+        thread_id: &ThreadId,
+        turn_id: &TurnId,
+        backend: String,
+    ) -> Result<u64, CoreError> {
+        self.mutate_thread(thread_id, |snapshot| {
+            self.record_batch(
+                snapshot,
+                vec![ThreadEvent::TurnExecutionAttempted {
+                    thread_id: thread_id.clone(),
+                    turn_id: turn_id.clone(),
+                    backend,
+                }],
+            )?;
+            Ok(snapshot.sequence)
+        })
+    }
+
+    /// Completes a delegated Turn that intentionally produced no agent message.
+    pub fn complete_turn_without_agent_message(
         &self,
         thread_id: &ThreadId,
         turn_id: &TurnId,
@@ -51,7 +76,8 @@ impl ThreadController {
         })
     }
 
-    pub(crate) fn record_agent_message(
+    /// Commits one complete agent message produced by a Turn execution backend.
+    pub fn record_agent_message(
         &self,
         thread_id: &ThreadId,
         turn_id: &TurnId,
@@ -65,7 +91,8 @@ impl ThreadController {
         )
     }
 
-    pub(crate) fn record_agent_message_with_id(
+    /// Commits one complete agent message using the Item ID projected during streaming.
+    pub fn record_agent_message_with_id(
         &self,
         thread_id: &ThreadId,
         turn_id: &TurnId,
@@ -83,7 +110,8 @@ impl ThreadController {
         )
     }
 
-    pub(crate) fn record_reasoning(
+    /// Commits one complete reasoning item produced by a Turn execution backend.
+    pub fn record_reasoning(
         &self,
         thread_id: &ThreadId,
         turn_id: &TurnId,
@@ -97,7 +125,8 @@ impl ThreadController {
         )
     }
 
-    pub(crate) fn record_reasoning_with_id(
+    /// Commits one complete reasoning item using the Item ID projected during streaming.
+    pub fn record_reasoning_with_id(
         &self,
         thread_id: &ThreadId,
         turn_id: &TurnId,
@@ -115,7 +144,8 @@ impl ThreadController {
         )
     }
 
-    pub(crate) fn complete_turn_with_agent_message(
+    /// Atomically commits the final agent message and terminal Turn completion.
+    pub fn complete_turn_with_agent_message(
         &self,
         thread_id: &ThreadId,
         turn_id: &TurnId,
@@ -149,16 +179,19 @@ impl ThreadController {
         })
     }
 
-    pub(crate) fn next_stream_item_id(&self) -> ItemId {
+    /// Allocates a process-unique Item ID for a backend's transient stream projection.
+    pub fn next_stream_item_id(&self) -> ItemId {
         ItemId::new(self.next_identifier("item")).expect("generated Item ID is non-empty")
     }
 
-    pub(crate) fn next_stream_instance_id(&self) -> StreamInstanceId {
+    /// Allocates a process-unique stream identity for ordered transient updates.
+    pub fn next_stream_instance_id(&self) -> StreamInstanceId {
         StreamInstanceId::new(self.next_identifier("stream"))
             .expect("generated stream instance ID is non-empty")
     }
 
-    pub(crate) fn next_interaction_request_id(&self) -> RequestId {
+    /// Allocates a process-unique ID for a backend-originated durable interaction.
+    pub fn next_interaction_request_id(&self) -> RequestId {
         RequestId::new(self.next_identifier("request"))
             .expect("generated interaction request ID is non-empty")
     }
@@ -202,7 +235,11 @@ impl ThreadController {
         )
     }
 
-    pub(crate) fn enqueue_turn_execution(
+    /// Enqueues backend work on the Thread-owned bounded execution mailbox.
+    ///
+    /// The task must keep all external Turn work inside the supplied cancellation scope. Returning
+    /// releases the active operation; a later interaction continuation may enqueue another task.
+    pub fn enqueue_turn_execution(
         &self,
         thread_id: &ThreadId,
         turn_id: &TurnId,

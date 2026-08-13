@@ -1,10 +1,15 @@
 use serde_json::{Value, json};
 use std::sync::Mutex;
 use zeta_api::{
-    ApiEndpoint, ApiProtocol, InputTokenCountEndpoint, ModelRequest, ReasoningConfig,
-    ReasoningEffort, SemanticApiEndpoint, StopReason, ToolDefinition, ToolName,
+    ApiEndpoint, ApiError, ApiProtocol, ApiStreamSink, InputTokenCountEndpoint, ModelRequest,
+    ModelStreamEvent, ReasoningConfig, ReasoningEffort, SemanticApiEndpoint, StopReason,
+    ToolDefinition, ToolName,
 };
-use zeta_client::{ClientError, ClientRequest, ClientResponse, OperationClient, ResolvedApiTarget};
+use zeta_async_utils::CancellationSource;
+use zeta_client::{
+    ClientError, ClientRequest, ClientResponse, OperationClient, OperationStreamSink,
+    ResolvedApiTarget,
+};
 use zeta_http_client::HttpHeader;
 
 struct CapturingTransport {
@@ -30,6 +35,82 @@ impl OperationClient for CapturingTransport {
         let response = serde_json::to_vec(&self.response)
             .map_err(|_| ClientError::InvalidResponse("test response did not encode".into()))?;
         Ok(ClientResponse::new(200, Vec::new(), response))
+    }
+}
+
+struct StreamingResponsesTransport {
+    request: Mutex<Option<Value>>,
+}
+
+impl OperationClient for StreamingResponsesTransport {
+    fn execute(&self, _: &ClientRequest) -> Result<ClientResponse, ClientError> {
+        panic!("Responses streaming must not use unary execution")
+    }
+
+    fn execute_streaming(
+        &self,
+        request: &ClientRequest,
+        sink: &mut dyn OperationStreamSink,
+    ) -> Result<ClientResponse, ClientError> {
+        *self.request.lock().unwrap() = Some(serde_json::from_slice(request.body()).unwrap());
+        let payload = concat!(
+            "event: response.output_text.delta\n",
+            "data: {\"type\":\"response.output_text.delta\",\"delta\":\"Hel\"}\n\n",
+            "event: response.output_text.delta\n",
+            "data: {\"type\":\"response.output_text.delta\",\"delta\":\"lo\"}\n\n",
+            "event: response.completed\n",
+            "data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_1\",\"status\":\"completed\",\"output\":[{\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"Hello\"}]}]}}\n\n",
+        );
+        for chunk in payload.as_bytes().chunks(37) {
+            sink.emit(chunk)?;
+        }
+        Ok(ClientResponse::new(200, Vec::new(), Vec::new()))
+    }
+}
+
+struct StreamingPayloadTransport {
+    request: Mutex<Option<Value>>,
+    payload: &'static str,
+    chunk_size: usize,
+}
+
+impl StreamingPayloadTransport {
+    fn new(payload: &'static str, chunk_size: usize) -> Self {
+        Self {
+            request: Mutex::new(None),
+            payload,
+            chunk_size,
+        }
+    }
+}
+
+impl OperationClient for StreamingPayloadTransport {
+    fn execute(&self, _: &ClientRequest) -> Result<ClientResponse, ClientError> {
+        panic!("native streaming must not use unary execution")
+    }
+
+    fn execute_streaming(
+        &self,
+        request: &ClientRequest,
+        sink: &mut dyn OperationStreamSink,
+    ) -> Result<ClientResponse, ClientError> {
+        *self.request.lock().unwrap() = Some(serde_json::from_slice(request.body()).unwrap());
+        for chunk in self.payload.as_bytes().chunks(self.chunk_size) {
+            sink.emit(chunk)?;
+        }
+        Ok(ClientResponse::new(200, Vec::new(), Vec::new()))
+    }
+}
+
+#[derive(Default)]
+struct RecordedStreamEvents {
+    events: Vec<ModelStreamEvent>,
+}
+
+impl ApiStreamSink for RecordedStreamEvents {
+    fn emit(&mut self, event: ModelStreamEvent) -> Result<(), ApiError> {
+        self.events.push(event);
+        Ok(())
     }
 }
 
@@ -98,6 +179,38 @@ fn openai_responses_converts_tools_reasoning_and_tool_calls() {
 }
 
 #[test]
+fn openai_responses_streams_wire_deltas_and_returns_the_terminal_response() {
+    let transport = StreamingResponsesTransport {
+        request: Mutex::new(None),
+    };
+    let mut events = RecordedStreamEvents::default();
+
+    let response = ApiEndpoint::OpenAiResponses
+        .stream_with_client_and_cancellation(
+            &target(),
+            "gpt-test",
+            &ModelRequest::text("hello"),
+            &transport,
+            &CancellationSource::new().token(),
+            &mut events,
+        )
+        .unwrap();
+
+    assert_eq!(
+        events.events,
+        vec![
+            ModelStreamEvent::TextDelta("Hel".into()),
+            ModelStreamEvent::TextDelta("lo".into()),
+        ]
+    );
+    assert_eq!(response.text(), "Hello");
+    assert_eq!(
+        transport.request.lock().unwrap().as_ref().unwrap()["stream"],
+        true
+    );
+}
+
+#[test]
 fn openai_responses_counts_the_frozen_input_payload() {
     let transport = CapturingTransport::new(json!({"input_tokens": 321}));
     let mut request = tool_request();
@@ -145,6 +258,52 @@ fn chat_completions_endpoint_converts_tools_and_text() {
 }
 
 #[test]
+fn chat_completions_streams_wire_deltas_and_reassembles_tool_calls() {
+    let transport = StreamingPayloadTransport::new(
+        concat!(
+            "data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"sun\",\"reasoning_content\":\"check \"},\"finish_reason\":null}]}\n\n",
+            "data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ny\",\"tool_calls\":[{\"index\":0,\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"weather\",\"arguments\":\"{\\\"city\\\":\"}}]},\"finish_reason\":null}]}\n\n",
+            "data: {\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"\\\"Paris\\\"}\"}}]},\"finish_reason\":\"tool_calls\"}],\"usage\":{\"prompt_tokens\":8,\"completion_tokens\":5}}\n\n",
+            "data: [DONE]\n\n",
+        ),
+        19,
+    );
+    let mut events = RecordedStreamEvents::default();
+
+    let response = ApiEndpoint::OpenAiChatCompletions
+        .stream_with_client_and_cancellation(
+            &target(),
+            "qwen-test",
+            &tool_request(),
+            &transport,
+            &CancellationSource::new().token(),
+            &mut events,
+        )
+        .unwrap();
+
+    assert_eq!(
+        events.events,
+        vec![
+            ModelStreamEvent::TextDelta("sun".into()),
+            ModelStreamEvent::ReasoningDelta("check ".into()),
+            ModelStreamEvent::TextDelta("ny".into()),
+        ]
+    );
+    assert_eq!(response.text(), "sunny");
+    assert_eq!(
+        response.tool_calls().next().unwrap().arguments,
+        json!({"city": "Paris"})
+    );
+    assert_eq!(response.usage.unwrap().output_tokens, 5);
+    let request = transport.request.lock().unwrap();
+    assert_eq!(request.as_ref().unwrap()["stream"], true);
+    assert_eq!(
+        request.as_ref().unwrap()["stream_options"]["include_usage"],
+        true
+    );
+}
+
+#[test]
 fn anthropic_messages_converts_tools_and_tool_use() {
     let transport = CapturingTransport::new(json!({
         "id": "msg_1",
@@ -183,6 +342,68 @@ fn anthropic_messages_converts_tools_and_tool_use() {
     assert_eq!(
         response.tool_calls().next().unwrap().name.as_str(),
         "weather"
+    );
+}
+
+#[test]
+fn anthropic_messages_streams_wire_deltas_and_reassembles_tool_use() {
+    let transport = StreamingPayloadTransport::new(
+        concat!(
+            "event: message_start\n",
+            "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_1\",\"content\":[],\"stop_reason\":null,\"usage\":{\"input_tokens\":10,\"output_tokens\":0}}}\n\n",
+            "event: content_block_start\n",
+            "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n",
+            "event: content_block_delta\n",
+            "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"sunny\"}}\n\n",
+            "event: content_block_stop\n",
+            "data: {\"type\":\"content_block_stop\",\"index\":0}\n\n",
+            "event: content_block_start\n",
+            "data: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_1\",\"name\":\"weather\",\"input\":{}}}\n\n",
+            "event: content_block_delta\n",
+            "data: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"city\\\":\"}}\n\n",
+            "event: content_block_delta\n",
+            "data: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"\\\"Paris\\\"}\"}}\n\n",
+            "event: content_block_stop\n",
+            "data: {\"type\":\"content_block_stop\",\"index\":1}\n\n",
+            "event: message_delta\n",
+            "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null},\"usage\":{\"output_tokens\":6}}\n\n",
+            "event: message_stop\n",
+            "data: {\"type\":\"message_stop\"}\n\n",
+        ),
+        23,
+    );
+    let mut request = tool_request();
+    request.reasoning = None;
+    let mut events = RecordedStreamEvents::default();
+
+    let response = ApiEndpoint::AnthropicMessages
+        .stream_with_client_and_cancellation(
+            &ResolvedApiTarget::new(
+                "https://api.anthropic.com",
+                vec![HttpHeader::new("x-api-key", "secret")],
+            ),
+            "claude-test",
+            &request,
+            &transport,
+            &CancellationSource::new().token(),
+            &mut events,
+        )
+        .unwrap();
+
+    assert_eq!(
+        events.events,
+        vec![ModelStreamEvent::TextDelta("sunny".into())]
+    );
+    assert_eq!(response.text(), "sunny");
+    assert_eq!(
+        response.tool_calls().next().unwrap().arguments,
+        json!({"city": "Paris"})
+    );
+    assert_eq!(response.stop_reason, StopReason::ToolUse);
+    assert_eq!(response.usage.unwrap().output_tokens, 6);
+    assert_eq!(
+        transport.request.lock().unwrap().as_ref().unwrap()["stream"],
+        true
     );
 }
 

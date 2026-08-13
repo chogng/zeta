@@ -1,4 +1,8 @@
-use crate::{ClientError, ClientRequest, ClientResponse, OperationClient};
+use crate::ClientError;
+use crate::ClientRequest;
+use crate::ClientResponse;
+use crate::OperationClient;
+use crate::OperationStreamSink;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use zeta_async_utils::CancellationToken;
@@ -80,13 +84,33 @@ impl OperationClient for TelemetryOperationClient {
     ) -> Result<ClientResponse, ClientError> {
         self.record(|| self.inner.execute_with_cancellation(request, cancellation))
     }
+
+    fn execute_streaming(
+        &self,
+        request: &ClientRequest,
+        sink: &mut dyn OperationStreamSink,
+    ) -> Result<ClientResponse, ClientError> {
+        self.record(|| self.inner.execute_streaming(request, sink))
+    }
+
+    fn execute_streaming_with_cancellation(
+        &self,
+        request: &ClientRequest,
+        cancellation: &CancellationToken,
+        sink: &mut dyn OperationStreamSink,
+    ) -> Result<ClientResponse, ClientError> {
+        self.record(|| {
+            self.inner
+                .execute_streaming_with_cancellation(request, cancellation, sink)
+        })
+    }
 }
 
 impl TelemetryOperationClient {
-    fn record(
+    fn record<T>(
         &self,
-        operation: impl FnOnce() -> Result<ClientResponse, ClientError>,
-    ) -> Result<ClientResponse, ClientError> {
+        operation: impl FnOnce() -> Result<T, ClientError>,
+    ) -> Result<T, ClientError> {
         let started = Instant::now();
         let result = operation();
         let outcome = match &result {

@@ -37,6 +37,7 @@ use zeta_protocol::ThreadItem;
 use zeta_protocol::ThreadStatus;
 use zeta_protocol::ToolCallId;
 use zeta_protocol::Turn;
+use zeta_protocol::TurnExecutionBinding;
 use zeta_protocol::TurnId;
 use zeta_protocol::TurnInteraction;
 use zeta_protocol::TurnStatus;
@@ -49,6 +50,7 @@ pub struct ThreadSnapshot {
     pub session_id: SessionId,
     pub thread_id: ThreadId,
     pub title: String,
+    pub turn_execution_binding: Option<TurnExecutionBinding>,
     pub sequence: u64,
     pub turns: Vec<TurnSnapshot>,
     pub items: Vec<ThreadItem>,
@@ -165,6 +167,7 @@ pub struct TurnSnapshot {
     pub activated_skills: Vec<FrozenSkillActivation>,
     pub failure: Option<StableTurnError>,
     pub pending_interaction: Option<TurnInteraction>,
+    pub execution_backend_attempt: Option<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -245,6 +248,7 @@ pub fn reduce_thread_event(
                     session_id: session_id.clone(),
                     thread_id: thread_id.clone(),
                     title: title.clone(),
+                    turn_execution_binding: None,
                     sequence: envelope.sequence,
                     turns: Vec::new(),
                     items: Vec::new(),
@@ -289,6 +293,53 @@ pub fn reduce_thread_event(
             return Err(CoreError::Journal(
                 "Thread cannot be created more than once".into(),
             ));
+        }
+        ThreadEvent::TurnExecutionBound { binding, .. } => {
+            require_no_command(envelope)?;
+            if binding.backend.trim().is_empty()
+                || binding.remote_thread_id.trim().is_empty()
+                || binding.execution_scope.trim().is_empty()
+            {
+                return Err(CoreError::Journal(
+                    "Turn execution binding identities and scope must not be empty".into(),
+                ));
+            }
+            if !snapshot
+                .turns
+                .iter()
+                .any(|turn| turn.status == TurnStatus::Completed)
+            {
+                return Err(CoreError::Journal(
+                    "Turn execution binding requires a completed Turn".into(),
+                ));
+            }
+            if snapshot.turn_execution_binding.is_some() {
+                return Err(CoreError::Journal(
+                    "Thread Turn execution binding is immutable".into(),
+                ));
+            }
+            snapshot.turn_execution_binding = Some(binding.clone());
+        }
+        ThreadEvent::TurnExecutionAttempted {
+            turn_id, backend, ..
+        } => {
+            require_no_command(envelope)?;
+            if backend.trim().is_empty() {
+                return Err(CoreError::Journal(
+                    "Turn execution backend identity must not be empty".into(),
+                ));
+            }
+            let turn = snapshot
+                .turns
+                .iter_mut()
+                .find(|turn| &turn.turn_id == turn_id)
+                .ok_or_else(|| CoreError::NotFound(turn_id.to_string()))?;
+            if turn.status != TurnStatus::Running || turn.execution_backend_attempt.is_some() {
+                return Err(CoreError::Journal(
+                    "Turn execution can be attempted once while running".into(),
+                ));
+            }
+            turn.execution_backend_attempt = Some(backend.clone());
         }
         ThreadEvent::AgentContextSeedCommitted { seed, .. } => {
             require_no_command(envelope)?;
@@ -1337,6 +1388,7 @@ fn import_history(
             activated_skills: Vec::new(),
             failure: turn.error.clone(),
             pending_interaction: None,
+            execution_backend_attempt: None,
         })
         .collect();
     snapshot.items = turns
@@ -1524,6 +1576,7 @@ fn create_turn(
         activated_skills,
         failure: None,
         pending_interaction: None,
+        execution_backend_attempt: None,
     });
     Ok(())
 }

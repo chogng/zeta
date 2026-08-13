@@ -18,8 +18,8 @@ App Server 契约执行。
 | 用户命令 | CLI 负责 | 后端负责 |
 | --- | --- | --- |
 | `zeta` | 启动交互式终端体验 | Session、Thread 和 Agent 状态 |
-| `zeta ask` | 解析参数、创建工作并流式显示更新 | 模型、工具、权限和持久化 |
-| `zeta exec` | 提供无交互输入和机器可消费输出 | 执行同一 Agent/Tool 路径，不绕过工具系统 |
+| `zeta ask` | 解析 prompt 并输出最终 Agent message | 模型、工具、权限和持久化 |
+| `zeta exec` | 提供 new/resume/fork、Human/JSONL 与稳定退出码 | 执行同一 Agent/Tool 路径，不绕过工具系统 |
 | `zeta login` / `zeta config` | 收集用户意图并调用类型化方法 | 登录、秘密和配置权威 |
 | `zeta app-server` / `zeta mcp-server` | 选择进程入口和监听方式 | 对应服务的协议与生命周期 |
 | 连接中断或失败 | 输出稳定错误、诊断和退出码 | 决定领域失败和恢复语义 |
@@ -35,6 +35,9 @@ facade。
 zeta
 zeta ask "解释当前仓库"
 zeta exec "检查测试失败"
+zeta exec --jsonl --auto-review "检查测试失败"
+zeta exec --resume SESSION_ID THREAD_ID "继续处理"
+zeta exec --fork SESSION_ID PARENT_THREAD_ID --title "替代方案" "尝试另一种修复"
 zeta login
 zeta config
 zeta app-server --listen stdio://
@@ -164,33 +167,35 @@ notification 显式映射。具体 mapping、stdout/stderr 和 scheduler event �
 
 ```json
 {
-  "type": "item.agentMessage.delta",
-  "threadId": "thread_123",
-  "turnId": "turn_456",
-  "itemId": "item_789",
-  "streamSeq": 14,
-  "delta": "..."
+  "schemaVersion": 1,
+  "runId": "run-123",
+  "event": {
+    "type": "turnStarted",
+    "sessionId": "session_123",
+    "threadId": "thread_123",
+    "turnId": "turn_456"
+  }
 }
 ```
 
-stderr 只用于诊断。stdout 在 JSON/JSONL 模式下只能输出机器数据。
+当前 `--jsonl` 每行输出一个完整 `ExecEvent` 并立即 flush；stderr 只用于诊断。Human 模式只把
+最终 Agent message 写入 stdout。
 
-建议退出码：
+当前退出码：
 
 ```text
 0  成功
 1  一般运行失败
-2  参数、配置或协议错误
-3  审批被拒绝
-4  用户中断
-5  capability 不可用
-6  Thread writer lease 冲突
+2  参数错误，或无界面运行需要交互
+75 Turn 已启动但无法确认 canonical terminal outcome
+130 用户中断或 Turn 被中断
 ```
 
 ## 7. 审批与安全
 
-CLI/TUI 可以展示审批 UI；headless exec 必须使用明确的 deny/configured/delegated policy。
-是否需要审批由 Core policy 决定，并经 App Server 双向请求送达 consumer。
+CLI/TUI 可以展示审批 UI；headless exec 当前提供 deny、automatic review 和显式 bypass 三种模式。
+默认 deny 不会等待不存在的 UI；automatic review 仍由 App Server/Core policy 决定，CLI 不拥有批准
+结论。远程 delegated reviewer 仍是 Proposed。
 
 审批响应必须绑定：
 
@@ -215,12 +220,13 @@ zeta-rs 开发者交付：
 - mock transport、fixtures 和 contract tests；
 - error → exit code 建议映射。
 
-`zeta-exec` 开发者交付：
+`zeta-exec` 当前已交付：
 
-- run-once、resume、interrupt 与 terminal outcome；
+- run-once、new/resume/fork、interrupt 与 terminal outcome；
 - human/JSONL output contract；
 - headless approval handling；
-- 后续 remote worker 的 Job/Attempt/lease/cursor adapter。
+
+后续由 `zeta-exec` 开发者交付 remote worker 的 Job/Attempt/lease/cursor adapter。
 
 CLI 开发者交付：
 

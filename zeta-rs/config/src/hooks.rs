@@ -1,6 +1,8 @@
 use crate::ConfigError;
-use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet};
+use serde::Deserialize;
+use serde::Serialize;
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
 /// Stable namespaced identity for one declarative Hook.
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize)]

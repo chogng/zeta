@@ -64,11 +64,15 @@ use zeta_thread_store::validate_append_batch;
 
 mod agent;
 mod execution;
+mod execution_binding;
+pub(crate) mod live_interaction;
 mod loaded_thread;
 mod mailbox;
 mod user_input;
 
 pub use agent::CreateAgentThreadRequest;
+pub use execution_binding::BoundTurnExecution;
+pub use mailbox::ThreadExecutionContext;
 
 pub struct StartTurnRequest {
     pub command_id: CommandId,
@@ -183,6 +187,8 @@ pub enum ResolveTurnInteractionDisposition {
 pub struct ResolveTurnInteractionResult {
     pub sequence: u64,
     pub disposition: ResolveTurnInteractionDisposition,
+    /// True when the response resumed an in-process Tool Call that is still executing.
+    pub live_execution_woken: bool,
 }
 
 /// Execution action that closes an outstanding interaction without accepting a client response.
@@ -194,6 +200,8 @@ pub struct CancelTurnInteractionRequest {
 
 pub struct CancelledTurnInteraction {
     pub sequence: u64,
+    /// True when cancellation resumed an in-process Tool Call that is still executing.
+    pub live_execution_woken: bool,
 }
 
 pub struct CompletedTurn {
@@ -270,6 +278,7 @@ pub struct ThreadController {
     writer_lease: Option<Arc<dyn WriterLease<ThreadId>>>,
     loaded_threads: Arc<loaded_thread::LoadedThreads>,
     execution_mailboxes: mailbox::ThreadExecutionMailboxes,
+    pub(crate) live_interactions: live_interaction::LiveInteractionWaiters,
     extensions: RwLock<Arc<zeta_extension_api::ExtensionRegistry>>,
     image_attachments: Arc<ImageAttachments>,
     next_id: AtomicU64,
@@ -290,6 +299,7 @@ impl ThreadController {
             store,
             writer_lease: None,
             execution_mailboxes: mailbox::ThreadExecutionMailboxes::new(loaded_threads.clone()),
+            live_interactions: live_interaction::LiveInteractionWaiters::default(),
             extensions: RwLock::new(Arc::new(zeta_extension_api::ExtensionRegistry::default())),
             image_attachments,
             loaded_threads,
@@ -321,6 +331,7 @@ impl ThreadController {
             store,
             writer_lease: Some(writer_lease),
             execution_mailboxes: mailbox::ThreadExecutionMailboxes::new(loaded_threads.clone()),
+            live_interactions: live_interaction::LiveInteractionWaiters::default(),
             extensions: RwLock::new(Arc::new(zeta_extension_api::ExtensionRegistry::default())),
             image_attachments,
             loaded_threads,
@@ -739,7 +750,13 @@ impl ThreadController {
         validate_command_id(&request.command_id)?;
         validate_request_id(&request.request_id)?;
         let command = resolution_command(&request);
-        self.mutate_thread(thread_id, |snapshot| {
+        let live_key = live_interaction::LiveInteractionKey {
+            thread_id: thread_id.clone(),
+            turn_id: request.turn_id.clone(),
+            request_id: request.request_id.clone(),
+        };
+        let live_response = request.response.clone();
+        let result = self.mutate_thread(thread_id, |snapshot| {
             if let Some(existing) = snapshot
                 .commands
                 .iter()
@@ -760,6 +777,7 @@ impl ThreadController {
                 return Ok(ResolveTurnInteractionResult {
                     sequence: existing.response_sequence,
                     disposition: ResolveTurnInteractionDisposition::Replayed,
+                    live_execution_woken: false,
                 });
             }
             validate_thread_expectation(request.expected_sequence, snapshot.sequence)?;
@@ -785,8 +803,17 @@ impl ThreadController {
             Ok(ResolveTurnInteractionResult {
                 sequence: snapshot.sequence,
                 disposition: ResolveTurnInteractionDisposition::Resolved,
+                live_execution_woken: false,
             })
-        })
+        })?;
+        if result.disposition == ResolveTurnInteractionDisposition::Resolved {
+            let live_execution_woken = self.live_interactions.resolve(&live_key, live_response);
+            return Ok(ResolveTurnInteractionResult {
+                live_execution_woken,
+                ..result
+            });
+        }
+        Ok(result)
     }
 
     /// Closes an outstanding interaction when its execution policy cannot accept a response.
@@ -799,7 +826,13 @@ impl ThreadController {
         request: CancelTurnInteractionRequest,
     ) -> Result<CancelledTurnInteraction, CoreError> {
         validate_request_id(&request.request_id)?;
-        self.mutate_thread(thread_id, |snapshot| {
+        let live_key = live_interaction::LiveInteractionKey {
+            thread_id: thread_id.clone(),
+            turn_id: request.turn_id.clone(),
+            request_id: request.request_id.clone(),
+        };
+        let reason = request.reason;
+        let result = self.mutate_thread(thread_id, |snapshot| {
             self.record_batch(
                 snapshot,
                 vec![ThreadEvent::InteractionCancelled {
@@ -811,7 +844,12 @@ impl ThreadController {
             )?;
             Ok(CancelledTurnInteraction {
                 sequence: snapshot.sequence,
+                live_execution_woken: false,
             })
+        })?;
+        Ok(CancelledTurnInteraction {
+            live_execution_woken: self.live_interactions.cancel(&live_key, reason),
+            ..result
         })
     }
 
@@ -975,6 +1013,11 @@ impl ThreadController {
                 disposition: InterruptTurnDisposition::Interrupted,
             })
         })?;
+        self.live_interactions.cancel_turn(
+            thread_id,
+            &turn_id_for_cancellation,
+            InteractionCancelReason::TurnInterrupted,
+        );
         self.cancel_turn_execution(thread_id, &turn_id_for_cancellation);
         Ok(result)
     }

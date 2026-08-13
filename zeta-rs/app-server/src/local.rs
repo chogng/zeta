@@ -1,6 +1,7 @@
 use crate::AppServer;
 use crate::CodeIndexSemanticModels;
 use crate::SlashCommandCatalog;
+use crate::model_catalog::CombinedModelCatalog;
 use crate::model_catalog::ModelCatalog;
 use crate::server::WorkspaceSwitchTrustPolicy;
 use crate::server::WorkspaceToolPorts;
@@ -15,6 +16,15 @@ use std::time::Duration;
 use zeta_async_utils::CancellationToken;
 use zeta_client::OperationClient;
 use zeta_code_index_cloud::CloudCodeIndexProviderRegistry;
+use zeta_codex_app_server::CodexAppServerLoginDriver;
+use zeta_codex_app_server::CodexAppServerOptions;
+use zeta_codex_app_server::CodexAppServerRuntime;
+use zeta_codex_app_server::CodexModelCatalog;
+use zeta_codex_app_server::CodexThreadAccess;
+use zeta_codex_app_server::CodexTurnDriver;
+use zeta_codex_app_server::CodexTurnExecutionBackend;
+use zeta_codex_app_server::CodexTurnExecutionBackendOptions;
+use zeta_config::McpServerId;
 use zeta_config::{
     ConfigStore, ResolvedConfig, ResolvedConfigSnapshot, WorkspaceConfigDocument,
     WorkspaceConfigInput, WorkspaceConfigRevision, WorkspaceConfigScope, WorkspaceConfigStore,
@@ -30,21 +40,27 @@ use zeta_core::InMemorySessionStore;
 use zeta_core::InMemoryThreadStore;
 use zeta_core::ModelSelection;
 use zeta_core::ModelService;
+use zeta_core::ModelStreamSink as CoreModelStreamSink;
 use zeta_core::SessionCoordinator;
 use zeta_core::ThreadController;
 use zeta_extensions::ExtensionRoot;
 use zeta_install_context::InstallContext;
 use zeta_keyring_store::KeyringSecretStore;
+use zeta_login::LoginService;
 use zeta_mcp_extension::ConnectorMcpRuntimeProvider;
 use zeta_mcp_extension::McpCatalogUpdateSubscription;
 use zeta_mcp_extension::McpCatalogUpdates;
+use zeta_mcp_extension::McpOAuthProvider;
+use zeta_mcp_extension::McpOAuthService;
+use zeta_mcp_extension::McpRuntimeStatusSnapshot;
 use zeta_mcp_extension::PluginConnectorMcpRuntimeProvider;
-use zeta_mcp_extension::compose_mcp_tools_at_generation_with_updates;
-use zeta_mcp_extension::compose_mcp_tools_with_connectors_and_updates;
+use zeta_mcp_extension::compose_mcp_tools_at_generation_with_runtime_intents_and_updates;
+use zeta_mcp_extension::compose_mcp_tools_with_connectors_and_runtime_intents_and_updates;
 use zeta_model_provider::HttpTokenizerAssetDownloader;
 use zeta_model_provider::HuggingFaceTokenizerAssetDiscoverer;
 use zeta_model_provider::ManagedLocalTokenizerService;
 use zeta_model_provider::MemoryTokenizerCapacity;
+use zeta_model_provider::ModelEventSink;
 use zeta_model_provider::ModelInvoker;
 use zeta_model_provider::ModelProvider;
 use zeta_model_provider::ModelProviderRuntime;
@@ -182,9 +198,11 @@ pub struct LocalAppServerOptions {
     model_operation_client: Option<Arc<dyn OperationClient>>,
     web_search_backend: Option<Arc<dyn zeta_web_search_extension::WebSearchBackend>>,
     connector_runtime: Option<LocalConnectorRuntime>,
+    mcp_oauth_providers: Vec<(McpServerId, Arc<dyn McpOAuthProvider>)>,
     plugin_marketplaces: Vec<(PathBuf, PluginMarketplaceMode)>,
     remote_plugin_marketplaces: Vec<RemotePluginMarketplaceConfig>,
     product_services: Option<crate::LocalProductServicesConfig>,
+    codex_app_server: CodexAppServerOptions,
 }
 
 impl LocalAppServerOptions {
@@ -199,9 +217,11 @@ impl LocalAppServerOptions {
             model_operation_client: None,
             web_search_backend: None,
             connector_runtime: None,
+            mcp_oauth_providers: Vec::new(),
             plugin_marketplaces: Vec::new(),
             remote_plugin_marketplaces: Vec::new(),
             product_services: None,
+            codex_app_server: CodexAppServerOptions::default(),
         }
     }
 
@@ -246,6 +266,12 @@ impl LocalAppServerOptions {
         self
     }
 
+    /// Selects the upstream Codex binary used for managed ChatGPT login.
+    pub fn with_codex_app_server(mut self, options: CodexAppServerOptions) -> Self {
+        self.codex_app_server = options;
+        self
+    }
+
     /// Installs the opt-in capability-bearing Web Search extension.
     ///
     /// Without an injected backend the `web_search` tool is absent. The backend's network and
@@ -261,6 +287,15 @@ impl LocalAppServerOptions {
     /// Installs product/plugin Connector authority, secret storage, and MCP materialization.
     pub fn with_connector_runtime(mut self, runtime: LocalConnectorRuntime) -> Self {
         self.connector_runtime = Some(runtime);
+        self
+    }
+
+    /// Installs exact OAuth wire adapters for standalone MCP server declarations.
+    pub fn with_mcp_oauth_providers(
+        mut self,
+        providers: impl IntoIterator<Item = (McpServerId, Arc<dyn McpOAuthProvider>)>,
+    ) -> Self {
+        self.mcp_oauth_providers = providers.into_iter().collect();
         self
     }
 
@@ -338,6 +373,7 @@ impl fmt::Debug for LocalAppServerOptions {
                 "connector_runtime_injected",
                 &self.connector_runtime.is_some(),
             )
+            .field("mcp_oauth_provider_count", &self.mcp_oauth_providers.len())
             .field("plugin_marketplace_count", &self.plugin_marketplaces.len())
             .field(
                 "remote_plugin_marketplace_count",
@@ -374,9 +410,18 @@ impl PartialEq for LocalAppServerOptions {
                 (None, None) => true,
                 _ => false,
             }
+            && self.mcp_oauth_providers.len() == other.mcp_oauth_providers.len()
+            && self
+                .mcp_oauth_providers
+                .iter()
+                .zip(&other.mcp_oauth_providers)
+                .all(|((left_id, left), (right_id, right))| {
+                    left_id == right_id && Arc::ptr_eq(left, right)
+                })
             && self.plugin_marketplaces == other.plugin_marketplaces
             && self.remote_plugin_marketplaces == other.remote_plugin_marketplaces
             && self.product_services == other.product_services
+            && self.codex_app_server == other.codex_app_server
     }
 }
 
@@ -638,6 +683,8 @@ pub fn open_local_app_server_with_code_index_providers(
             .remote_plugin_marketplaces
             .extend(services.marketplaces.iter().cloned());
     }
+    let codex_app_server = options.codex_app_server.clone();
+    let mcp_oauth_providers = std::mem::take(&mut options.mcp_oauth_providers);
     if options.workspace.is_none()
         && let Some(workspace_root) = &options.workspace_root
     {
@@ -778,10 +825,25 @@ pub fn open_local_app_server_with_code_index_providers(
     });
     let built_in_skill_root = resolve_built_in_skill_root(options.built_in_skills);
     let extension_roots = resolve_extension_roots(&options.profile_root);
+    let codex_runtime = CodexAppServerRuntime::new(codex_app_server);
+    let codex_login_driver = CodexAppServerLoginDriver::with_runtime(Arc::clone(&codex_runtime));
+    let login_service = Arc::new(LoginService::deferred(codex_login_driver.clone()));
+    codex_login_driver
+        .install_login_service(&login_service)
+        .map_err(|error| OpenAppServerError(error.to_string()))?;
+    let direct_catalog: Arc<dyn ModelCatalog> = model.clone();
+    let combined_catalog = Arc::new(
+        CombinedModelCatalog::new(
+            direct_catalog,
+            CodexModelCatalog::new(Arc::clone(&codex_runtime)),
+        )
+        .map_err(|error| OpenAppServerError(error.to_string()))?,
+    );
     let mut server = AppServer::new(sessions, model.clone())
-        .with_model_catalog(model)
+        .with_model_catalog(combined_catalog)
         .with_approval_review_model(approval_review_model)
         .with_config_store(Arc::clone(&config))
+        .with_login_service(login_service)
         .with_slash_command_catalog(options.slash_commands)
         .with_code_index_storage_root(options.profile_root.join("code-index"))
         .with_code_index_semantic_storage_root(options.profile_root.join("code-index-semantic"))
@@ -800,23 +862,41 @@ pub fn open_local_app_server_with_code_index_providers(
     }
     let mcp_updates = McpCatalogUpdates::default();
     let mcp_changes = mcp_updates.subscribe();
+    let mcp_runtime_intents = server.mcp_runtime_intents.clone();
+    let mcp_runtime_intent_changes = mcp_runtime_intents.subscribe();
+    let mcp_runtime_intent_snapshot = mcp_runtime_intents.snapshot();
     let mcp = match &connector_runtime {
-        Some(connectors) => compose_mcp_tools_with_connectors_and_updates(
+        Some(connectors) => compose_mcp_tools_with_connectors_and_runtime_intents_and_updates(
             &runtime_config,
             1,
+            &mcp_runtime_intent_snapshot,
             connectors.service.authority().clone(),
             Arc::clone(&connectors.secrets),
             Arc::clone(&connectors.mcp),
             mcp_updates.clone(),
         ),
-        None => {
-            compose_mcp_tools_at_generation_with_updates(&runtime_config, 1, mcp_updates.clone())
-        }
+        None => compose_mcp_tools_at_generation_with_runtime_intents_and_updates(
+            &runtime_config,
+            1,
+            &mcp_runtime_intent_snapshot,
+            mcp_updates.clone(),
+        ),
     }
-    .map_err(|error| OpenAppServerError(error.to_string()))?
-    .map(|mcp| ToolPort::mcp(mcp.tools, mcp.policy));
+    .map_err(|error| OpenAppServerError(error.to_string()))?;
+    let mcp_status = mcp
+        .as_ref()
+        .map(|mcp| mcp.status.clone())
+        .unwrap_or_else(|| McpRuntimeStatusSnapshot::empty(1));
+    let mcp = mcp.map(|mcp| ToolPort::mcp(mcp.tools, mcp.policy));
+    server = server.with_mcp_status_snapshot(mcp_status);
     if let Some(connectors) = &connector_runtime {
         server = server.with_connector_service(Arc::clone(&connectors.service));
+        if !mcp_oauth_providers.is_empty() {
+            server = server.with_mcp_oauth_service(Arc::new(McpOAuthService::new(
+                Arc::clone(&connectors.secrets),
+                mcp_oauth_providers,
+            )));
+        }
         if let Some(authority) = &connectors.plugin_authority {
             server = server.with_plugin_authority(authority.clone());
         }
@@ -844,6 +924,23 @@ pub fn open_local_app_server_with_code_index_providers(
             .activate_host_configured_workspace_root(workspace_root)
             .map_err(|error| OpenAppServerError(error.to_string()))?;
     }
+    let (codex_turn_driver, codex_turn_events) = CodexTurnDriver::new(codex_runtime);
+    let codex_turn_backend = Arc::new(
+        CodexTurnExecutionBackend::new(
+            codex_turn_driver,
+            codex_turn_events,
+            server.sessions().threads().clone(),
+            server.thread_update_sink(),
+            CodexTurnExecutionBackendOptions::from_source(
+                server.codex_workspace_source(),
+                CodexThreadAccess::WorkspaceWrite,
+            ),
+        )
+        .map_err(|error| OpenAppServerError(error.to_string()))?,
+    );
+    server = server
+        .with_codex_turn_backend(codex_turn_backend)
+        .map_err(|error| OpenAppServerError(error.to_string()))?;
     server
         .resume_recovered_agent_coordinations()
         .map_err(open_error)?;
@@ -862,8 +959,10 @@ pub fn open_local_app_server_with_code_index_providers(
         workspace_tools,
         workspace_runtime,
         connector_runtime,
+        mcp_runtime_intents,
         mcp_updates,
         mcp_changes,
+        mcp_runtime_intent_changes,
     ));
     Ok(server)
 }
@@ -899,8 +998,10 @@ impl ToolConfigWatcher {
         workspace_tools: Arc<WorkspaceToolPorts>,
         workspace_runtime: crate::server::WorkspaceRuntimeControl,
         mut connector_runtime: Option<LocalConnectorRuntime>,
+        mcp_runtime_intents: crate::mcp_runtime::McpRuntimeIntents,
         mcp_updates: McpCatalogUpdates,
         mcp_changes: McpCatalogUpdateSubscription,
+        mcp_runtime_intent_changes: std::sync::mpsc::Receiver<()>,
     ) -> Self {
         let mut semantic_binding = config.read_snapshot().ok().map(|snapshot| {
             (
@@ -931,6 +1032,7 @@ impl ToolConfigWatcher {
                 let mut config_dirty = false;
                 let mut connector_dirty = false;
                 let mut mcp_dirty = false;
+                let mut mcp_runtime_intent_dirty = false;
                 let mut plugin_dirty = false;
                 loop {
                     if shutdown_receiver.try_recv().is_ok() {
@@ -965,6 +1067,9 @@ impl ToolConfigWatcher {
                     while mcp_changes.try_recv().is_ok() {
                         mcp_dirty = true;
                     }
+                    while mcp_runtime_intent_changes.try_recv().is_ok() {
+                        mcp_runtime_intent_dirty = true;
+                    }
                     if let Some(plugin_changes) = &plugin_changes {
                         while let Ok(change) = plugin_changes.try_recv() {
                             if plugin_activation_generation != Some(change.activation_generation) {
@@ -973,7 +1078,12 @@ impl ToolConfigWatcher {
                             }
                         }
                     }
-                    if !config_dirty && !connector_dirty && !mcp_dirty && !plugin_dirty {
+                    if !config_dirty
+                        && !connector_dirty
+                        && !mcp_dirty
+                        && !plugin_dirty
+                        && !mcp_runtime_intent_dirty
+                    {
                         continue;
                     }
                     let snapshot = match config.read_snapshot() {
@@ -985,6 +1095,12 @@ impl ToolConfigWatcher {
                     };
                     if config_dirty {
                         if let Err(error) = workspace_runtime.reconcile_user_trust(&snapshot.values)
+                        {
+                            workspace_tools.record_reconcile_failure(error.to_string());
+                            continue;
+                        }
+                        if let Err(error) =
+                            workspace_runtime.reconcile_hooks(&snapshot.values.hooks)
                         {
                             workspace_tools.record_reconcile_failure(error.to_string());
                             continue;
@@ -1033,22 +1149,34 @@ impl ToolConfigWatcher {
                         }
                     };
                     let composition = match &connector_runtime {
-                        Some(connectors) => compose_mcp_tools_with_connectors_and_updates(
-                            &snapshot.values,
-                            catalog_generation,
-                            connectors.service.authority().clone(),
-                            Arc::clone(&connectors.secrets),
-                            Arc::clone(&connectors.mcp),
-                            mcp_updates.clone(),
-                        ),
-                        None => compose_mcp_tools_at_generation_with_updates(
-                            &snapshot.values,
-                            catalog_generation,
-                            mcp_updates.clone(),
-                        ),
+                        Some(connectors) => {
+                            let runtime_intents = mcp_runtime_intents.snapshot();
+                            compose_mcp_tools_with_connectors_and_runtime_intents_and_updates(
+                                &snapshot.values,
+                                catalog_generation,
+                                &runtime_intents,
+                                connectors.service.authority().clone(),
+                                Arc::clone(&connectors.secrets),
+                                Arc::clone(&connectors.mcp),
+                                mcp_updates.clone(),
+                            )
+                        }
+                        None => {
+                            let runtime_intents = mcp_runtime_intents.snapshot();
+                            compose_mcp_tools_at_generation_with_runtime_intents_and_updates(
+                                &snapshot.values,
+                                catalog_generation,
+                                &runtime_intents,
+                                mcp_updates.clone(),
+                            )
+                        }
                     };
-                    let mcp = match composition {
-                        Ok(mcp) => mcp.map(|mcp| ToolPort::mcp(mcp.tools, mcp.policy)),
+                    let (mcp, mcp_status) = match composition {
+                        Ok(Some(mcp)) => {
+                            let status = mcp.status.clone();
+                            (Some(ToolPort::mcp(mcp.tools, mcp.policy)), status)
+                        }
+                        Ok(None) => (None, McpRuntimeStatusSnapshot::empty(catalog_generation)),
                         Err(error) => {
                             workspace_tools.record_reconcile_failure(error.to_string());
                             continue;
@@ -1063,9 +1191,11 @@ impl ToolConfigWatcher {
                         workspace_tools.record_reconcile_failure(error.to_string());
                         continue;
                     }
+                    workspace_runtime.replace_mcp_status(mcp_status);
                     config_dirty = false;
                     connector_dirty = false;
                     mcp_dirty = false;
+                    mcp_runtime_intent_dirty = false;
                     plugin_dirty = false;
                 }
             })
@@ -1220,6 +1350,22 @@ impl ModelService for ConfigBackedModelService {
             ModelSelection::ConfiguredDefault,
             request,
             cancellation,
+        )
+    }
+
+    fn stream(
+        &self,
+        selection: ModelSelection<'_>,
+        request: &zeta_protocol::ModelRequest,
+        cancellation: &CancellationToken,
+        sink: &mut dyn CoreModelStreamSink,
+    ) -> Result<zeta_protocol::ModelResponse, CoreError> {
+        let config = self.config_for_selection(selection)?;
+        ProviderModelService::new(self.resolver.resolve(&config)).stream(
+            ModelSelection::ConfiguredDefault,
+            request,
+            cancellation,
+            sink,
         )
     }
 }
@@ -1492,6 +1638,53 @@ impl ModelService for ProviderModelService {
             .check()
             .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
         Ok(response)
+    }
+
+    fn stream(
+        &self,
+        _: ModelSelection<'_>,
+        request: &zeta_protocol::ModelRequest,
+        cancellation: &CancellationToken,
+        sink: &mut dyn CoreModelStreamSink,
+    ) -> Result<zeta_protocol::ModelResponse, CoreError> {
+        cancellation
+            .check()
+            .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
+        let mut adapter = CoreProviderStreamSink {
+            inner: sink,
+            failure: None,
+        };
+        let response = self
+            .invoker
+            .stream_with_cancellation(request, cancellation, &mut adapter);
+        if let Some(error) = adapter.failure {
+            return Err(error);
+        }
+        let response = response.map_err(map_model_provider_error)?;
+        cancellation
+            .check()
+            .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
+        Ok(response)
+    }
+}
+
+struct CoreProviderStreamSink<'a> {
+    inner: &'a mut dyn CoreModelStreamSink,
+    failure: Option<CoreError>,
+}
+
+impl ModelEventSink for CoreProviderStreamSink<'_> {
+    fn emit(
+        &mut self,
+        event: zeta_protocol::ModelStreamEvent,
+    ) -> Result<(), zeta_model_provider::ModelProviderError> {
+        if let Err(error) = self.inner.emit(event) {
+            self.failure = Some(error);
+            return Err(zeta_model_provider::ModelProviderError::Unavailable(
+                "model stream consumer rejected an event".into(),
+            ));
+        }
+        Ok(())
     }
 }
 

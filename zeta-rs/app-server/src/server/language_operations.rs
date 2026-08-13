@@ -7,6 +7,7 @@ use zeta_app_server_protocol::protocol::fs::{
     FsDeleteMode, FsExistingTargetBehavior, FsMissingTargetBehavior,
 };
 use zeta_app_server_protocol::protocol::language::LanguageCloseParams;
+use zeta_app_server_protocol::protocol::language::LanguageCodeActionDiagnosticDto;
 use zeta_app_server_protocol::protocol::language::LanguageCodeActionDto;
 use zeta_app_server_protocol::protocol::language::LanguageCodeActionsParams;
 use zeta_app_server_protocol::protocol::language::LanguageCodeActionsResult;

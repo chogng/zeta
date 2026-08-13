@@ -1,9 +1,12 @@
 use crate::ModelProviderError;
+use crate::provider::ModelEventSink;
 use std::sync::Arc;
 use zeta_api::ApiEndpoint;
 use zeta_api::ApiProtocol;
+use zeta_api::ApiStreamSink;
 use zeta_api::ModelRequest;
 use zeta_api::ModelResponse;
+use zeta_api::ModelStreamEvent;
 use zeta_async_utils::CancellationToken;
 use zeta_client::OperationClient;
 use zeta_context_engine::ContextTokenMeasurementCapability;
@@ -58,6 +61,82 @@ pub(crate) trait ProviderAdapter: Send + Sync {
         client: &dyn OperationClient,
         cancellation: &CancellationToken,
     ) -> Result<ModelResponse, ModelProviderError>;
+
+    fn stream(
+        &self,
+        model: &str,
+        request: &ModelRequest,
+        client: &dyn OperationClient,
+        cancellation: &CancellationToken,
+        sink: &mut dyn ModelEventSink,
+    ) -> Result<ModelResponse, ModelProviderError> {
+        let response = self.complete(model, request, client, cancellation)?;
+        emit_final_response(&response, sink)?;
+        Ok(response)
+    }
+}
+
+pub(crate) fn stream_endpoint(
+    endpoint: ApiEndpoint,
+    target: &zeta_client::ResolvedApiTarget,
+    model: &str,
+    request: &ModelRequest,
+    client: &dyn OperationClient,
+    cancellation: &CancellationToken,
+    sink: &mut dyn ModelEventSink,
+) -> Result<ModelResponse, ModelProviderError> {
+    let mut sink = ProviderApiStreamSink {
+        inner: sink,
+        failure: None,
+    };
+    let response = endpoint.stream_with_client_and_cancellation(
+        target,
+        model,
+        request,
+        client,
+        cancellation,
+        &mut sink,
+    );
+    if let Some(error) = sink.failure {
+        return Err(error);
+    }
+    response.map_err(Into::into)
+}
+
+struct ProviderApiStreamSink<'a> {
+    inner: &'a mut dyn ModelEventSink,
+    failure: Option<ModelProviderError>,
+}
+
+impl ApiStreamSink for ProviderApiStreamSink<'_> {
+    fn emit(&mut self, event: ModelStreamEvent) -> Result<(), zeta_api::ApiError> {
+        if let Err(error) = self.inner.emit(event) {
+            self.failure = Some(error);
+            return Err(zeta_api::ApiError::Transport(
+                "model stream consumer rejected an event".into(),
+            ));
+        }
+        Ok(())
+    }
+}
+
+fn emit_final_response(
+    response: &ModelResponse,
+    sink: &mut dyn ModelEventSink,
+) -> Result<(), ModelProviderError> {
+    for item in &response.output {
+        let event = match item {
+            zeta_api::OutputItem::Text(text) => Some(ModelStreamEvent::TextDelta(text.clone())),
+            zeta_api::OutputItem::Reasoning(text) => {
+                Some(ModelStreamEvent::ReasoningDelta(text.clone()))
+            }
+            zeta_api::OutputItem::Refusal(_) | zeta_api::OutputItem::ToolCall(_) => None,
+        };
+        if let Some(event) = event {
+            sink.emit(event)?;
+        }
+    }
+    Ok(())
 }
 
 pub(crate) fn instantiate(

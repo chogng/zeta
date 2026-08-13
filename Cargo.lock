@@ -9410,6 +9410,7 @@ dependencies = [
  "zeta-code-index-cloud",
  "zeta-code-index-semantic",
  "zeta-code-retrieval",
+ "zeta-codex-app-server",
  "zeta-collaboration",
  "zeta-config",
  "zeta-connectors",
@@ -9432,6 +9433,7 @@ dependencies = [
  "zeta-language-server-catalog",
  "zeta-language-service",
  "zeta-linux-sandbox",
+ "zeta-login",
  "zeta-mcp-extension",
  "zeta-model-provider",
  "zeta-model-provider-config",
@@ -9449,6 +9451,7 @@ dependencies = [
  "zeta-skills-extension",
  "zeta-slash-commands",
  "zeta-syntax",
+ "zeta-tool-executor",
  "zeta-tools",
  "zeta-typst",
  "zeta-utils-pty",
@@ -9549,9 +9552,11 @@ dependencies = [
 name = "zeta-cli"
 version = "0.1.0"
 dependencies = [
+ "signal-hook",
  "zeta-app-server",
  "zeta-app-server-client",
  "zeta-app-server-protocol",
+ "zeta-exec",
  "zeta-mcp-server",
  "zeta-protocol",
  "zeta-tui",
@@ -9617,6 +9622,19 @@ dependencies = [
  "zeta-code-index-semantic",
  "zeta-model-provider",
  "zeta-workspace",
+]
+
+[[package]]
+name = "zeta-codex-app-server"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "zeta-app-server-transport",
+ "zeta-core",
+ "zeta-login",
+ "zeta-protocol",
 ]
 
 [[package]]
@@ -9776,10 +9794,14 @@ dependencies = [
 name = "zeta-exec"
 version = "0.1.0"
 dependencies = [
+ "schemars",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.19",
+ "zeta-app-server-client",
+ "zeta-app-server-protocol",
  "zeta-async-utils",
  "zeta-protocol",
- "zeta-sandboxing",
- "zeta-workspace",
 ]
 
 [[package]]
@@ -10016,6 +10038,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "zeta-login"
+version = "0.1.0"
+
+[[package]]
 name = "zeta-lsp"
 version = "0.1.0"
 dependencies = [
@@ -10063,11 +10089,15 @@ dependencies = [
 name = "zeta-mcp-extension"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
+ "getrandom 0.2.17",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "tempfile",
  "tokio",
  "url",
+ "zeroize",
  "zeta-action-policy",
  "zeta-async-utils",
  "zeta-config",
@@ -10297,9 +10327,9 @@ dependencies = [
  "serde",
  "serde_json",
  "zeta-async-utils",
- "zeta-exec",
  "zeta-protocol",
  "zeta-sandboxing",
+ "zeta-tool-executor",
  "zeta-tools",
  "zeta-workspace",
 ]
@@ -10411,6 +10441,16 @@ version = "0.1.0"
 dependencies = [
  "zeta-history",
  "zeta-protocol",
+]
+
+[[package]]
+name = "zeta-tool-executor"
+version = "0.1.0"
+dependencies = [
+ "zeta-async-utils",
+ "zeta-protocol",
+ "zeta-sandboxing",
+ "zeta-workspace",
 ]
 
 [[package]]

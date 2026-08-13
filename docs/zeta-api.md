@@ -3,13 +3,14 @@
 > - 物理位置：`zeta-rs/zeta-api/`
 > - Rust crate：`zeta_api`
 > - 层次：模型 API 协议层
-> - 当前状态：同步 unary endpoint/profile dispatch、OpenAI Responses 与 Anthropic Messages SSE decoder 已迁移；live streaming invocation 尚未实现
+> - 当前状态：OpenAI Responses、OpenAI-compatible Chat Completions 与 Anthropic Messages 已具备
+>   unary codec、原生 HTTP/SSE invocation、canonical delta 与 terminal response assembly
 > - Crate codec 与 decoder 实现：[`zeta-rs/zeta-api/README.md`](../zeta-rs/zeta-api/README.md)
 > - Canonical contract：[`protocol.md`](protocol.md#6-provider-independent-model-contract)
 > - Provider runtime：[`model-provider.md`](model-provider.md)
 > - Operation client：[`zeta-client.md`](zeta-client.md)
 > - 底层网络：[`zeta-http-client` README](../zeta-rs/http-client/README.md)
-> - Direct-provider credential：[`model-provider.md`](model-provider.md#6-provider-credential-与-subscription-backend)
+> - Direct-provider credential：[`model-provider.md`](model-provider.md#6-供应商凭据与-codex-边界)
 > - Secret persistence：[`secrets.md`](secrets.md)
 > - Model catalog control plane：[`models-manager.md`](models-manager.md)
 > - Subscription runtime adapter：[`codex-app-server.md`](codex-app-server.md)
@@ -109,8 +110,9 @@ zeta-client      zeta-protocol
 - OpenAI Responses unary codec；
 - Anthropic Messages unary codec；
 - OpenAI-compatible Chat Completions unary codec；
-- OpenAI Responses 已 framed SSE event → canonical text/reasoning delta decoder；
-- Anthropic Messages 已 framed SSE lifecycle decoder（text/thinking delta、`ping`、content block close、terminal validation）；
+- OpenAI Responses 原生 HTTP/SSE invocation 与 canonical text/reasoning delta decoder；
+- Anthropic Messages 原生 HTTP/SSE lifecycle decoder（text/thinking/tool fragment、`ping`、usage、terminal validation）；
+- OpenAI-compatible Chat Completions 原生 HTTP/SSE decoder（indexed Tool Call 重组、usage-only chunk、`[DONE]`）；
 - 基础 text/tool/reasoning/usage/stop reason 映射；
 - API endpoint fixtures；
 - 对当前 `zeta-client::HttpClient` unary byte port 的临时依赖；raw port 后续迁入
@@ -126,7 +128,8 @@ zeta-client      zeta-protocol
 | transport 直接返回 `serde_json::Value` | client 已返回 status/headers/body bytes，API 负责 JSON |
 | provider facade 与 wire codec 两套目录 | Provider facade 已只留在 model-provider；API dispatch 只按 endpoint/profile |
 
-当前代码仍是同步、非流式 unary。目标文档不能被理解为 streaming 已经实现。
+三种已支持 endpoint 的 streaming 与 unary 都是当前实现；尚未实现的是 NDJSON、WebSocket 和更多
+provider-specific stream profile，不能把这些候选能力描述成现状。
 
 ## 4. `endpoint / requests / sse`
 
@@ -280,7 +283,8 @@ ChatGPT subscription 登录与其 backend contract 不进入本 crate：`zeta-co
 | 上游 capability | Zeta 长期接入点 |
 | --- | --- |
 | ChatGPT login、token refresh、account/rate-limit、Codex thread/turn | `zeta-codex-app-server`，通过上游 JSON-RPC |
-| Codex responses/stream、approvals、compact | `SubscriptionModelBackend` 的 semantic mapping；不引入 ChatGPT backend URL 或 header |
+| Codex thread/turn stream 与 approvals | Core `TurnExecutionBackend` 的 Codex adapter；不引入 ChatGPT backend URL 或 header |
+| Codex compact | 有明确产品语义和公开 App Server contract 后再增加单独 vertical slice |
 | memories、search、images、realtime | 只有 Zeta 的产品需求和上游公开 App Server contract 同时满足时，才在 Codex adapter 增加单独 vertical slice |
 | OpenAI Platform Responses/Chat/Images/Realtime | 继续按公开 Platform API 在 `zeta-api` 编解码 |
 
@@ -755,12 +759,13 @@ idle deadline、proxy/TLS、pool 和 HTTP diagnostics 的测试属于 `zeta-http
 - 已把现有 JSON conversion 物理移入 `requests/`；
 - 已删除 Provider 级空 facade。
 
-### 阶段 3：SSE 纵向切片
+### 阶段 3：SSE 纵向切片（已完成首批 endpoint）
 
 - 在 client 实现 SSE framing；
 - 已在 API 实现 OpenAI Responses `sse/` decoder；
 - 已接 Anthropic Messages decoder 与 `ping`/content-block lifecycle；
-- 由 model-provider 暴露 canonical stream。
+- 已接 OpenAI-compatible Chat Completions decoder、Tool Call fragment assembly 与 `[DONE]`；
+- 三种 endpoint 均由 model-provider 暴露 canonical stream，并返回 terminal response。
 
 ### 阶段 4：兼容差异与 NDJSON
 
@@ -798,8 +803,8 @@ idle deadline、proxy/TLS、pool 和 HTTP diagnostics 的测试属于 `zeta-http
 9. Prompt cache wire mapping 属于 `requests/`，catalog cache 属于 models manager。
 10. Inference retry safety 由 runtime policy 显式选择，client 执行。
 11. Provider error 不以 raw JSON/String 穿透产品 API。
-12. 当前没有 live stream HTTP execution 或 `ModelInvoker` stream API。`zeta-client` 的 SSE framer
-    与 OpenAI Responses event decoder 都有单元测试，但这不等同于 provider streaming 已接通。
+12. OpenAI Responses、OpenAI-compatible Chat Completions 与 Anthropic Messages 已接通 live HTTP/SSE
+    execution；NDJSON、WebSocket 和未验证 provider profile 仍须按真实协议另行实现。
 13. `OpenAiServiceSurface` 只用于公开 Platform API endpoint binding；ChatGPT/Codex subscription
     不共享 base URL、credential 或 custom endpoint override，而是独立 runtime。
 14. ChatGPT/Codex subscription auth 与 backend protocol 属于 upstream Codex App Server；本 crate

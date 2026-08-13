@@ -7,9 +7,13 @@ use crate::review::ProviderReviewModel;
 use serde::Deserialize;
 use serde_json::Value;
 use std::collections::BTreeSet;
-use std::io::{BufRead, Write};
+use std::io::BufRead;
+use std::io::BufReader;
+use std::io::Write;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::mpsc;
 use std::sync::{Arc, Mutex, RwLock};
+use std::thread;
 use std::time::Duration;
 use zeroize::Zeroize;
 use zeta_app_server_protocol::protocol::error::{AppServerError, AppServerErrorName};
@@ -17,11 +21,14 @@ use zeta_app_server_protocol::protocol::registry::{ClientMethod, client_method};
 use zeta_app_server_protocol::rpc::{
     JsonRpcFailure, JsonRpcId, JsonRpcRequest, JsonRpcSuccess, JsonRpcVersion,
 };
-use zeta_app_server_transport::{DEFAULT_MAX_MESSAGE_BYTES, JsonlTransport};
+use zeta_app_server_transport::DEFAULT_MAX_MESSAGE_BYTES;
+use zeta_app_server_transport::JsonlReader;
+use zeta_app_server_transport::JsonlWriter;
 use zeta_config::ConfigStore;
 use zeta_core::{
     ActionPolicyService, AgentTreeLimits, CancelTurnInteractionRequest, CoreError, ModelService,
-    MultiAgentCoordinator, SessionCoordinator, ThreadUpdateSink, ToolService, TurnExecutor,
+    MultiAgentCoordinator, SessionCoordinator, ThreadUpdateSink, ToolService, TurnExecutionBackend,
+    TurnExecutor,
 };
 use zeta_extension_api::ExtensionRegistry;
 use zeta_extensions::ExtensionCatalog;
@@ -34,6 +41,7 @@ use zeta_skills_extension::SkillRuntime;
 use zeta_skills_extension::SkillWatcher;
 use zeta_typst::TypstCompiler;
 
+mod account_operations;
 mod attachment_operations;
 mod cloud_code_index_operations;
 mod code_index_operations;
@@ -59,6 +67,7 @@ mod interaction_runtime;
 mod language_document_features;
 mod language_operations;
 mod language_runtime;
+mod mcp_operations;
 pub(crate) mod multi_agent_tools;
 mod notification_queue;
 mod operations;
@@ -71,11 +80,15 @@ mod skill_operations;
 mod start_turn;
 mod syntax_operations;
 mod terminal_operations;
+mod turn_backend_router;
 mod update_broker;
 mod workspace_customizations;
 mod workspace_operations;
 mod workspace_runtime;
 
+const OUTBOUND_MESSAGE_QUEUE_CAPACITY: usize = 256;
+
+use crate::mcp_runtime::McpRuntimeIntents;
 use notification_queue::NotificationListener;
 use notification_queue::NotificationQueue;
 use update_broker::UpdateBroker;
@@ -126,14 +139,19 @@ pub struct AppServer {
     pub(super) connector_oauth: Option<Arc<zeta_connectors_extension::ConnectorOAuthService>>,
     pub(super) connector_device_oauth:
         Option<Arc<zeta_connectors_extension::ConnectorDeviceOAuthService>>,
+    pub(super) mcp_oauth: Option<Arc<zeta_mcp_extension::McpOAuthService>>,
     pub(super) plugins: Option<zeta_plugins::PluginActivationAuthority>,
     pub(super) extension_hosts: Option<extension_host_runtime::ExtensionHostRuntime>,
     pub(super) plugin_marketplaces: Option<zeta_plugins::PluginMarketplaceService>,
     plugin_skill_sources: Option<Arc<dyn zeta_skills_extension::DynamicSkillSourceProvider>>,
+    pub(super) mcp_runtime_intents: McpRuntimeIntents,
+    pub(super) mcp_status: Arc<RwLock<zeta_mcp_extension::McpRuntimeStatusSnapshot>>,
     language: Mutex<language_runtime::AppServerLanguageRuntime>,
     approval_review_model: Option<ProviderReviewModel>,
+    login: Option<Arc<zeta_login::LoginService>>,
     pub(super) workspace_authority_gate: Arc<Mutex<()>>,
     workspace_runtime: Arc<RwLock<WorkspaceRuntime>>,
+    turn_backend: Arc<turn_backend_router::TurnBackendHandle>,
     local_workspace_host: Option<LocalWorkspaceHost>,
     dynamic_tool_port: Option<crate::tool_composition::ToolPort>,
     extension_tool_port: Option<crate::tool_composition::ToolPort>,
@@ -217,6 +235,9 @@ impl AppServer {
             Arc::clone(&sessions),
             AgentTreeLimits::default(),
         ));
+        let initial_backend: Arc<dyn TurnExecutionBackend> = Arc::new(turn_executor.clone());
+        let turn_backend = Arc::new(turn_backend_router::TurnBackendHandle::new(initial_backend));
+        let workspace_runtime = Arc::new(RwLock::new(WorkspaceRuntime::empty(turn_executor)));
         Self {
             sessions,
             multi_agent,
@@ -234,16 +255,23 @@ impl AppServer {
             connectors: None,
             connector_oauth: None,
             connector_device_oauth: None,
+            mcp_oauth: None,
             plugins: None,
             extension_hosts: None,
             plugin_marketplaces: None,
             plugin_skill_sources: None,
+            mcp_runtime_intents: McpRuntimeIntents::default(),
+            mcp_status: Arc::new(RwLock::new(
+                zeta_mcp_extension::McpRuntimeStatusSnapshot::empty(1),
+            )),
             language: Mutex::new(language_runtime::AppServerLanguageRuntime::new(
                 updates.clone(),
             )),
             approval_review_model: None,
+            login: None,
             workspace_authority_gate,
-            workspace_runtime: Arc::new(RwLock::new(WorkspaceRuntime::empty(turn_executor))),
+            workspace_runtime,
+            turn_backend,
             local_workspace_host: None,
             dynamic_tool_port: None,
             extension_tool_port: None,
@@ -331,21 +359,18 @@ impl AppServer {
                 continue;
             }
             let before_sequence = snapshot.sequence;
-            if self
-                .sessions
-                .threads()
-                .cancel_turn_interaction(
-                    &request.thread_id,
-                    CancelTurnInteractionRequest {
-                        turn_id: request.turn_id.clone(),
-                        request_id: request.interaction.request_id.clone(),
-                        reason: InteractionCancelReason::OwnerDisconnected,
-                    },
-                )
-                .is_err()
-            {
+            let cancelled = if let Ok(cancelled) = self.sessions.threads().cancel_turn_interaction(
+                &request.thread_id,
+                CancelTurnInteractionRequest {
+                    turn_id: request.turn_id.clone(),
+                    request_id: request.interaction.request_id.clone(),
+                    reason: InteractionCancelReason::OwnerDisconnected,
+                },
+            ) {
+                cancelled
+            } else {
                 continue;
-            }
+            };
             if let Ok(updates) = self
                 .sessions
                 .threads()
@@ -353,9 +378,11 @@ impl AppServer {
             {
                 self.updates.publish_thread(&request.thread_id, &updates);
             }
-            let _ = self
-                .turn_executor_snapshot()
-                .resume(&request.thread_id, &request.turn_id);
+            if !cancelled.live_execution_woken {
+                let _ = self
+                    .turn_backend
+                    .resume(&request.thread_id, &request.turn_id);
+            }
         }
     }
 
@@ -365,6 +392,17 @@ impl AppServer {
             Arc::clone(&self.updates),
         ));
         self.config = Some(config);
+        self
+    }
+
+    /// Installs the redacted interactive-account control plane.
+    pub fn with_login_service(mut self, login: Arc<zeta_login::LoginService>) -> Self {
+        login
+            .install_events(Arc::new(account_operations::AppServerLoginEvents::new(
+                Arc::clone(&self.updates),
+            )))
+            .expect("a newly composed login service accepts its App Server event sink");
+        self.login = Some(login);
         self
     }
 
@@ -396,6 +434,15 @@ impl AppServer {
         oauth: Arc<zeta_connectors_extension::ConnectorDeviceOAuthService>,
     ) -> Self {
         self.connector_device_oauth = Some(oauth);
+        self
+    }
+
+    /// Installs product-owned OAuth provider adapters for standalone MCP servers.
+    pub fn with_mcp_oauth_service(
+        mut self,
+        oauth: Arc<zeta_mcp_extension::McpOAuthService>,
+    ) -> Self {
+        self.mcp_oauth = Some(oauth);
         self
     }
 
@@ -467,6 +514,17 @@ impl AppServer {
         self
     }
 
+    pub(crate) fn with_mcp_status_snapshot(
+        self,
+        snapshot: zeta_mcp_extension::McpRuntimeStatusSnapshot,
+    ) -> Self {
+        *self
+            .mcp_status
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = snapshot;
+        self
+    }
+
     pub(crate) fn with_approval_review_model(
         mut self,
         review_model: Option<ProviderReviewModel>,
@@ -511,6 +569,7 @@ impl AppServer {
             .turn_executor
             .clone()
             .with_extensions(Arc::clone(&agent_extensions));
+        self.turn_backend.replace(Arc::new(executor.clone()));
         self.workspace_runtime_mut().turn_executor = executor;
         self.agent_extensions = agent_extensions;
         self = self
@@ -595,6 +654,51 @@ impl AppServer {
         self
     }
 
+    pub(crate) fn with_turn_backend(self, backend: Arc<dyn TurnExecutionBackend>) -> Self {
+        self.turn_backend.replace(backend);
+        self
+    }
+
+    pub(crate) fn with_codex_turn_backend(
+        self,
+        codex: Arc<dyn TurnExecutionBackend>,
+    ) -> Result<Self, CoreError> {
+        let provider =
+            zeta_protocol::ProviderId::new(zeta_codex_app_server::CODEX_SUBSCRIPTION_PROVIDER_ID)
+                .map_err(|error| CoreError::Model(error.to_string()))?;
+        let router = turn_backend_router::TurnBackendRouter::new(
+            self.sessions.threads().clone(),
+            self.turn_executor_backend(),
+            provider,
+            codex,
+        );
+        Ok(self.with_turn_backend(Arc::new(router)))
+    }
+
+    pub(super) fn use_current_local_turn_backend(&self) {
+        self.turn_backend.replace(self.turn_executor_backend());
+    }
+
+    pub(crate) fn turn_executor_backend(&self) -> Arc<dyn TurnExecutionBackend> {
+        Arc::new(turn_backend_router::CurrentLocalTurnBackend::new(
+            &self.workspace_runtime,
+        ))
+    }
+
+    pub(crate) fn thread_update_sink(&self) -> Arc<dyn ThreadUpdateSink> {
+        Arc::new(AppServerThreadUpdates {
+            updates: Arc::clone(&self.updates),
+        })
+    }
+
+    pub(crate) fn codex_workspace_source(
+        &self,
+    ) -> Arc<dyn zeta_codex_app_server::CodexTurnWorkspaceSource> {
+        Arc::new(turn_backend_router::CurrentCodexWorkspace::new(
+            &self.workspace_runtime,
+        ))
+    }
+
     /// Enables workspace-scoped Git queries without exposing arbitrary host paths to clients.
     #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn with_git_root(
@@ -666,6 +770,7 @@ impl AppServer {
             updates: self.updates.clone(),
         }));
         executor = executor.with_extensions(Arc::clone(&self.agent_extensions));
+        self.turn_backend.replace(Arc::new(executor.clone()));
         self.workspace_runtime_mut().turn_executor = executor;
         self
     }
@@ -691,7 +796,7 @@ impl AppServer {
 
     /// Reconciles durable Agent spawn/delivery sagas and starts newly materialized child Turns.
     pub fn resume_recovered_agent_coordinations(&self) -> Result<usize, CoreError> {
-        let executor = self.turn_executor_snapshot();
+        let backend = Arc::clone(&self.turn_backend);
         let mut resumed = 0;
         for session in self.sessions.list_sessions()? {
             for spawned in self.multi_agent.recover_session(&session.session_id)? {
@@ -705,7 +810,7 @@ impl AppServer {
                         && !child.has_resumable_tool_continuation(&turn.turn_id)
                 });
                 if should_start {
-                    executor.start(&spawned.child_thread_id, &spawned.child_turn_id)?;
+                    backend.start(&spawned.child_thread_id, &spawned.child_turn_id)?;
                     resumed += 1;
                 }
             }
@@ -726,6 +831,14 @@ impl AppServer {
             .into_iter()
             .map(serialize_response)
             .collect()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn publish_fs_changed_for_test(
+        &self,
+        changed: zeta_app_server_protocol::protocol::fs::FsChanged,
+    ) {
+        self.updates.publish_fs_changed(changed);
     }
 
     pub fn create_resource(
@@ -790,29 +903,71 @@ impl AppServer {
     }
 
     pub fn serve_stdio(&self) -> Result<(), std::io::Error> {
-        self.serve_jsonl(std::io::stdin().lock(), std::io::stdout().lock())
+        self.serve_jsonl(BufReader::new(std::io::stdin()), std::io::stdout())
     }
 
-    pub fn serve_jsonl<R: BufRead, W: Write>(
+    pub fn serve_jsonl<R: BufRead, W: Write + Send>(
         &self,
         reader: R,
         writer: W,
     ) -> Result<(), std::io::Error> {
-        let mut transport = JsonlTransport::new(reader, writer, DEFAULT_MAX_MESSAGE_BYTES);
+        let mut reader = JsonlReader::new(reader, DEFAULT_MAX_MESSAGE_BYTES);
         let mut connection = self.connection();
-        let result = (|| {
-            while let Some(mut line) = transport.read_message()? {
-                let response = self.handle_json(&mut connection, &line);
-                line.zeroize();
-                transport.write_message(&response)?;
-                for notification in self.drain_notifications(&mut connection) {
-                    transport.write_message(&notification)?;
+        let notifications = self.connection_notifications(&connection);
+        let dispatch_gate = Arc::new(Mutex::new(()));
+        let (outbound_tx, outbound_rx) =
+            mpsc::sync_channel::<String>(OUTBOUND_MESSAGE_QUEUE_CAPACITY);
+        thread::scope(|scope| {
+            let writer_handle = scope.spawn(move || {
+                let mut writer = JsonlWriter::new(writer, DEFAULT_MAX_MESSAGE_BYTES);
+                while let Ok(message) = outbound_rx.recv() {
+                    writer.write_message(&message)?;
                 }
-            }
-            Ok(())
-        })();
-        self.close_connection(connection);
-        result
+                Ok::<(), std::io::Error>(())
+            });
+            let notification_tx = outbound_tx.clone();
+            let notification_gate = Arc::clone(&dispatch_gate);
+            let notification_handle = scope.spawn(move || {
+                while notifications.wait() {
+                    let _guard = notification_gate.lock().map_err(|_| {
+                        std::io::Error::other("App Server dispatch gate lock poisoned")
+                    })?;
+                    for notification in notifications.drain() {
+                        if notification_tx.send(notification).is_err() {
+                            return Ok(());
+                        }
+                    }
+                }
+                Ok::<(), std::io::Error>(())
+            });
+            let read_result = (|| {
+                while let Some(mut line) = reader.read_message()? {
+                    let _guard = dispatch_gate.lock().map_err(|_| {
+                        std::io::Error::other("App Server dispatch gate lock poisoned")
+                    })?;
+                    let response = self.handle_json(&mut connection, &line);
+                    line.zeroize();
+                    outbound_tx.send(response).map_err(|_| {
+                        std::io::Error::new(
+                            std::io::ErrorKind::BrokenPipe,
+                            "App Server outbound writer closed",
+                        )
+                    })?;
+                }
+                Ok::<(), std::io::Error>(())
+            })();
+            self.close_connection(connection);
+            drop(outbound_tx);
+            let notification_result = notification_handle
+                .join()
+                .map_err(|_| std::io::Error::other("App Server notification thread panicked"))?;
+            let writer_result = writer_handle
+                .join()
+                .map_err(|_| std::io::Error::other("App Server writer thread panicked"))?;
+            read_result?;
+            notification_result?;
+            writer_result
+        })
     }
 
     fn dispatch(
@@ -860,6 +1015,10 @@ impl AppServer {
             }
             Some(ClientMethod::TypstCompile) => self.typst_compile(connection, &request.params),
             Some(ClientMethod::ConfigRead) => self.config_read(),
+            Some(ClientMethod::AccountRead) => self.account_read(),
+            Some(ClientMethod::AccountLoginStart) => self.account_login_start(&request.params),
+            Some(ClientMethod::AccountLoginCancel) => self.account_login_cancel(&request.params),
+            Some(ClientMethod::AccountLogout) => self.account_logout(),
             Some(ClientMethod::ConnectorList) => self.connector_list(),
             Some(ClientMethod::ConnectorApiTokenConnect) => {
                 self.connector_api_token_connect(std::mem::take(&mut request.params))
@@ -931,6 +1090,15 @@ impl AppServer {
             Some(ClientMethod::McpServerSetEnablement) => {
                 self.mcp_server_set_enablement(&request.params)
             }
+            Some(ClientMethod::McpServerStatus) => self.mcp_server_status(),
+            Some(ClientMethod::McpServerConnect) => self.mcp_server_connect(&request.params),
+            Some(ClientMethod::McpServerDisconnect) => self.mcp_server_disconnect(&request.params),
+            Some(ClientMethod::McpOAuthStart) => self.mcp_oauth_start(&request.params),
+            Some(ClientMethod::McpOAuthComplete) => {
+                self.mcp_oauth_complete(std::mem::take(&mut request.params))
+            }
+            Some(ClientMethod::McpOAuthRefresh) => self.mcp_oauth_refresh(&request.params),
+            Some(ClientMethod::McpOAuthRevoke) => self.mcp_oauth_revoke(&request.params),
             Some(ClientMethod::SkillSourceAdd) => self.skill_source_add(&request.params),
             Some(ClientMethod::SkillSourceRemove) => self.skill_source_remove(&request.params),
             Some(ClientMethod::SkillSourceSetEnablement) => {

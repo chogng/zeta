@@ -5,10 +5,11 @@ use super::tool_execution::{
 };
 use crate::action_policy_service::approval_matches_review;
 use crate::{
-    ActionPolicyService, AutoReviewedToolGrant, CoreError, ExecPolicyToolGrant, NoThreadUpdates,
-    OneTimeToolGrant, PermissionBypassToolGrant, RecordToolResultRequest, RequestTurnInteraction,
-    ThreadController, ThreadSnapshot, ThreadUpdateSink, ToolAuthorization, ToolCallOutput,
-    ToolService, durable_approval_request,
+    ActionPolicyService, AutoReviewedToolGrant, CoreError, ExecPolicyToolGrant, HookEvent,
+    HookOutcome, HookService, NoHooks, NoThreadUpdates, OneTimeToolGrant,
+    PermissionBypassToolGrant, RecordToolResultRequest, RequestTurnInteraction, ThreadController,
+    ThreadSnapshot, ThreadUpdateSink, ToolAuthorization, ToolCallOutput, ToolService,
+    durable_approval_request,
 };
 use std::sync::Arc;
 use zeta_action_policy::ExecutionDecision;
@@ -29,6 +30,7 @@ pub(super) struct ToolScheduler {
     threads: Arc<ThreadController>,
     tools: Arc<dyn ToolService>,
     policy: Arc<dyn ActionPolicyService>,
+    hooks: Arc<dyn HookService>,
     updates: Arc<dyn ThreadUpdateSink>,
 }
 
@@ -42,12 +44,18 @@ impl ToolScheduler {
             threads,
             tools,
             policy,
+            hooks: Arc::new(NoHooks),
             updates: Arc::new(NoThreadUpdates),
         }
     }
 
     pub(super) fn with_thread_updates(mut self, updates: Arc<dyn ThreadUpdateSink>) -> Self {
         self.updates = updates;
+        self
+    }
+
+    pub(super) fn with_hooks(mut self, hooks: Arc<dyn HookService>) -> Self {
+        self.hooks = hooks;
         self
     }
 
@@ -118,10 +126,10 @@ impl ToolScheduler {
                         ))
                     })?;
                 ToolExecutionOrchestrator::new(
-                    self.threads.as_ref(),
-                    self.tools.as_ref(),
-                    self.policy.as_ref(),
-                    self.updates.as_ref(),
+                    Arc::clone(&self.threads),
+                    Arc::clone(&self.tools),
+                    Arc::clone(&self.policy),
+                    Arc::clone(&self.updates),
                 )
                 .complete_execution_interaction(
                     &execution,
@@ -184,17 +192,22 @@ impl ToolScheduler {
                                 continue;
                             }
                             ToolExecutionOrchestrator::new(
-                                self.threads.as_ref(),
-                                self.tools.as_ref(),
-                                self.policy.as_ref(),
-                                self.updates.as_ref(),
+                                Arc::clone(&self.threads),
+                                Arc::clone(&self.tools),
+                                Arc::clone(&self.policy),
+                                Arc::clone(&self.updates),
                             )
                             .execute_approved_escalation(
                                 &execution,
-                                pending.call,
+                                pending.call.clone(),
                                 &reviewed,
                                 denial,
                                 authorization,
+                            )?;
+                            self.run_after_tool(
+                                &execution,
+                                &pending.call.id,
+                                pending.call.name.to_string(),
                             )?;
                         } else if snapshot.started_tool_calls.contains(&pending.call.id) {
                             self.record_failure(
@@ -391,11 +404,13 @@ impl ToolScheduler {
         reviewed: &zeta_action_policy::ActionReviewRequest,
         authorization: ToolAuthorization,
     ) -> Result<ToolSchedulingProgress, CoreError> {
+        let tool_name = call.name.to_string();
+        let tool_call_id = call.id.clone();
         let orchestrator = ToolExecutionOrchestrator::new(
-            self.threads.as_ref(),
-            self.tools.as_ref(),
-            self.policy.as_ref(),
-            self.updates.as_ref(),
+            Arc::clone(&self.threads),
+            Arc::clone(&self.tools),
+            Arc::clone(&self.policy),
+            Arc::clone(&self.updates),
         );
         if let Some(request) = self.tools.execution_interaction(&call)? {
             if !matches!(request, AgentRequest::DynamicTool { call: ref dynamic } if dynamic.call_id == call.id && dynamic.name == call.name)
@@ -417,10 +432,20 @@ impl ToolScheduler {
             )?;
             return Ok(ToolSchedulingProgress::WaitingForCapability);
         }
+        self.hooks.run(
+            &HookEvent::BeforeTool {
+                tool_name: tool_name.clone(),
+            },
+            context.cancellation(),
+        )?;
         let completion = orchestrator.execute(context, call, reviewed, authorization)?;
         match completion {
-            ToolExecutionCompletion::Complete => Ok(ToolSchedulingProgress::Complete),
+            ToolExecutionCompletion::Complete => {
+                self.run_after_tool(context, &tool_call_id, tool_name)?;
+                Ok(ToolSchedulingProgress::Complete)
+            }
             ToolExecutionCompletion::PolicyRejected => {
+                self.run_after_tool(context, &tool_call_id, tool_name)?;
                 self.enforce_rejection_circuit_breaker(context.thread_id(), context.turn_id())?;
                 Ok(ToolSchedulingProgress::Complete)
             }
@@ -428,6 +453,37 @@ impl ToolScheduler {
                 Ok(ToolSchedulingProgress::WaitingForApproval)
             }
         }
+    }
+
+    fn run_after_tool(
+        &self,
+        context: &ToolExecutionContext<'_>,
+        tool_call_id: &ToolCallId,
+        tool_name: String,
+    ) -> Result<(), CoreError> {
+        let outcome = self
+            .threads
+            .read_thread(context.thread_id())?
+            .items
+            .iter()
+            .rev()
+            .find_map(|item| match item {
+                zeta_protocol::ThreadItem::ToolResult {
+                    tool_call_id: result_id,
+                    is_error,
+                    ..
+                } if result_id == tool_call_id => Some(if *is_error {
+                    HookOutcome::Failed
+                } else {
+                    HookOutcome::Succeeded
+                }),
+                _ => None,
+            })
+            .unwrap_or(HookOutcome::Failed);
+        self.hooks.run(
+            &HookEvent::AfterTool { tool_name, outcome },
+            context.cancellation(),
+        )
     }
 
     fn record_failure(

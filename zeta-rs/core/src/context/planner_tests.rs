@@ -439,6 +439,7 @@ fn snapshot(current_turn_id: TurnId, items: Vec<ThreadItem>) -> ThreadSnapshot {
         session_id: id::<SessionId>("session"),
         thread_id: id::<ThreadId>("thread"),
         title: "test".into(),
+        turn_execution_binding: None,
         sequence: items.len() as u64 + 2,
         turns: turn_ids
             .into_iter()
@@ -455,6 +456,7 @@ fn snapshot(current_turn_id: TurnId, items: Vec<ThreadItem>) -> ThreadSnapshot {
                 activated_skills: Vec::new(),
                 failure: None,
                 pending_interaction: None,
+                execution_backend_attempt: None,
             })
             .collect(),
         items,

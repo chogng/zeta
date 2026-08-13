@@ -68,6 +68,7 @@ fn snapshot(sequence: u64, turn_id: TurnId) -> ThreadSnapshot {
         session_id: id::<SessionId>("session"),
         thread_id: id::<ThreadId>("thread"),
         title: "test".into(),
+        turn_execution_binding: None,
         sequence,
         turns: vec![TurnSnapshot {
             turn_id: turn_id.clone(),
@@ -78,6 +79,7 @@ fn snapshot(sequence: u64, turn_id: TurnId) -> ThreadSnapshot {
             activated_skills: Vec::new(),
             failure: None,
             pending_interaction: None,
+            execution_backend_attempt: None,
         }],
         items: vec![ThreadItem::UserMessage {
             item_id: id::<ItemId>("item"),

@@ -234,6 +234,14 @@ Session stored envelope 由 `zeta-session-store` 定义；Thread persisted recor
 - transient delta、delivery ack、RPC request 和 provider response 不进入 Event；
 - reducer policy 不编码进 Event helper。
 
+委托执行有两个 durable fact。`ThreadEvent::TurnExecutionAttempted` 在 backend 跨越外部副作用边界
+前写入 Turn；恢复时已有 attempt 的 in-flight Turn 结果未知，禁止重放。成功完成后，
+`ThreadEvent::TurnExecutionBound` 将 Thread 不可变地绑定到
+`{ backend, remoteThreadId, executionScope }`，并投影为
+`ThreadSnapshot.turn_execution_binding`。它不保存 access token、远端 Turn ID、pending request 或
+stream cursor；execution scope 是不含路径和凭据的 opaque Workspace authority identity，同一 Thread
+不能跨 scope 或改绑到另一个 backend/remote thread。
+
 ### 4.3 更新：面向消费者的变化
 
 `SessionUpdate` / `ThreadUpdate` 服务于 UI、CLI、TUI 和订阅客户端。
@@ -251,8 +259,9 @@ StreamCursor { streamInstanceId, sequence }
 
 两者不能合并。进程重启后 stream cursor 可以失效，durable sequence 不能失效。
 
-当前瞬态 update 类型已经存在，但生产运行路径还没有完整的 streaming model loop，因此属于
-部分落地。
+当前瞬态 update、Core streaming model loop，以及 OpenAI Responses、OpenAI-compatible Chat
+Completions、Anthropic Messages 的生产 HTTP/SSE 路径已经贯通。三种 endpoint 都使用各自原生
+wire stream；其他 SSE profile、NDJSON 与 WebSocket 仍需按真实协议逐项接入。
 
 ### 4.4 Agent 请求/响应：Turn 中的双向等待
 

@@ -1,11 +1,8 @@
-use super::workspace_runtime::WorkspaceRuntime;
 use crate::local_tools::local_policy_revision;
 use serde::Deserialize;
 use serde_json::Value;
 use serde_json::json;
 use std::sync::Arc;
-use std::sync::RwLock;
-use std::sync::Weak;
 use std::time::Duration;
 use std::time::Instant;
 use zeta_action_policy::ActionDigest;
@@ -29,6 +26,7 @@ use zeta_core::ToolAuthorization;
 use zeta_core::ToolExecutionFacts;
 use zeta_core::ToolOutputSink;
 use zeta_core::ToolService;
+use zeta_core::TurnExecutionBackend;
 use zeta_protocol::AgentContextMode;
 use zeta_protocol::AgentContextSource;
 use zeta_protocol::AgentJoinId;
@@ -61,7 +59,7 @@ const MAX_WAIT: Duration = Duration::from_secs(30);
 pub(super) struct MultiAgentToolService {
     coordinator: Arc<MultiAgentCoordinator>,
     sessions: Arc<SessionCoordinator>,
-    runtime: Weak<RwLock<WorkspaceRuntime>>,
+    turn_backend: Arc<dyn TurnExecutionBackend>,
     definitions: Vec<ToolDefinition>,
     action_policy_revision: ActionPolicyRevision,
 }
@@ -70,12 +68,12 @@ impl MultiAgentToolService {
     pub(super) fn new(
         coordinator: Arc<MultiAgentCoordinator>,
         sessions: Arc<SessionCoordinator>,
-        runtime: Weak<RwLock<WorkspaceRuntime>>,
+        turn_backend: Arc<dyn TurnExecutionBackend>,
     ) -> Self {
         Self {
             coordinator,
             sessions,
-            runtime,
+            turn_backend,
             definitions: vec![spawn_definition(), send_definition(), wait_definition()],
             action_policy_revision: local_policy_revision(),
         }
@@ -134,15 +132,8 @@ impl MultiAgentToolService {
                             .collect(),
                     },
                 })?;
-                let runtime = self.runtime.upgrade().ok_or_else(|| {
-                    CoreError::Execution("Workspace runtime is no longer available".into())
-                })?;
-                let executor = runtime
-                    .read()
-                    .unwrap_or_else(|poisoned| poisoned.into_inner())
-                    .turn_executor
-                    .clone();
-                executor.start(&spawned.child_thread_id, &spawned.child_turn_id)?;
+                self.turn_backend
+                    .start(&spawned.child_thread_id, &spawned.child_turn_id)?;
                 success(json!({
                     "delegation_id": delegation_id,
                     "child_thread_id": spawned.child_thread_id,

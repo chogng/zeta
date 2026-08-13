@@ -1,7 +1,8 @@
 # 无界面 Agent 执行
 
 > 目标物理位置：`zeta-rs/exec/`  
-> 当前状态：Proposed；现有同名 crate 仍是底层 process executor，必须先迁移职责  
+> 当前状态：阶段 1–2 已实现；可靠自动化、远程 worker 与远程执行环境仍是 Proposed
+> 当前 crate 实现契约：[`zeta-rs/exec/README.md`](../zeta-rs/exec/README.md)
 > App Server Client：[`app-server-client.md`](app-server-client.md)  
 > App Server contract：[`zeta-app-server-api.md`](zeta-app-server-api.md)  
 > Canonical 产品模型：[`protocol.md`](protocol.md)
@@ -42,8 +43,8 @@ local CLI / remote scheduler
 
 | 用户或调度器想做什么 | 正确入口 | 当前状态 |
 | --- | --- | --- |
-| 无交互地运行完整 Agent 任务 | 无界面 Agent 执行入口 | 计划设计 |
-| 执行一次已经批准的本地命令 | 工具进程执行器 | 当前同名 crate 暂时承担 |
+| 无交互地运行完整 Agent 任务 | `zeta-exec` | 本地 run-once 已实现 |
+| 执行一次已经批准的本地命令 | `zeta-tool-executor` | 已实现并与 Agent runner 分离 |
 | 在远程机器执行进程或文件操作 | 远程执行服务 | 潜在方向 |
 | 排队、租约和取消远程 Agent 任务 | 调度协议 | 潜在方向 |
 
@@ -80,29 +81,22 @@ Zeta 已有 durable aggregate sequence、snapshot + gap subscribe 和 typed comm
 
 ## 3. 当前仓库偏差与迁移
 
-当前 `zeta-rs/exec/` 定义的是：
-
-- `CommandRequest`；
-- `ExecutionLimits`；
-- `ToolExecutor`；
-- process stdout/stderr capture；
-- timeout、sandbox 与 approval。
-
-这些是底层 tool process execution，不是 headless Agent runner。
-Sandbox 的共享 policy、macOS backend、Linux Bubblewrap 和 Windows AppContainer crate
-边界见 [`sandboxing.md`](sandboxing.md)。
-
-目标迁移：
+命名迁移已经完成：
 
 ```text
-current zeta-rs/exec
+former zeta-rs/exec
   → zeta-rs/tool-executor
   → crate zeta-tool-executor
 
-new zeta-rs/exec
+current zeta-rs/exec
   → crate/binary zeta-exec
   → headless Agent runner
 ```
+
+`zeta-tool-executor` 继续拥有 `CommandRequest`、process capture、timeout、sandbox 与 approval start
+gate；`zeta-exec` 当前拥有 new/resume/fork、Turn start/interrupt、事件输出与终态映射。Sandbox 的
+共享 policy、macOS backend、Linux Bubblewrap 和 Windows AppContainer crate 边界见
+[`sandboxing.md`](sandboxing.md)。
 
 若后续需要远程 process/filesystem execution：
 
@@ -146,7 +140,7 @@ process lifecycle 和 sandbox authority 会混在同一 crate。
 
 ## 5. 本地单次运行
 
-第一阶段支持一次进程运行一个 Agent Job：
+当前支持一次进程运行一个 Agent Job：
 
 ```text
 parse ExecRunRequest
@@ -180,15 +174,15 @@ exec 应重新连接/read/subscribe 或返回 `OutcomeUnknown`，不能伪造 `F
 
 ## 6. 公共接口
 
-目标 library API 以 typed request 和 sink 为边界：
+当前 library API 以 typed request、sink 和 cancellation signal 为边界：
 
 ```rust
-pub struct ExecRunner;
-
 impl ExecRunner {
-    pub async fn run(
+    pub fn run(
+        &self,
         request: ExecRunRequest,
         output: impl ExecEventSink,
+        cancellation: &impl ExecCancellation,
     ) -> Result<ExecOutcome, ExecError>;
 }
 ```
@@ -197,28 +191,26 @@ impl ExecRunner {
 
 ```rust
 pub struct ExecRunRequest {
+    pub run_id: ExecRunId,
     pub entry: ExecEntry,
-    pub output: ExecOutputMode,
     pub approval: HeadlessApprovalMode,
-    pub app_server: AppServerTarget,
 }
 
 pub enum ExecEntry {
     New { title: String, input: Vec<InputItem> },
     Resume { session_id: SessionId, thread_id: ThreadId, input: Vec<InputItem> },
-    Fork { session_id: SessionId, parent_thread_id: ThreadId, input: Vec<InputItem> },
+    Fork { session_id: SessionId, parent_thread_id: ThreadId, title: String, input: Vec<InputItem> },
 }
 
 pub enum AppServerTarget {
     Embedded(EmbeddedAppServerOptions),
-    Remote(RemoteAppServerOptions),
 }
 ```
 
-`RemoteAppServerOptions` 表示连接相同 App Server contract，不表示 scheduler job protocol，也不
-表示 remote process executor。
+`AppServerTarget::Remote(RemoteAppServerOptions)` 仍是 Proposed。它将表示连接相同 App Server
+contract，不表示 scheduler job protocol，也不表示 remote process executor。
 
-`zeta-cli` 负责 clap 参数和帮助；`zeta-exec` 负责这些参数解析后的运行语义。
+`zeta-cli` 负责参数和帮助；`zeta-exec` 负责这些参数解析后的运行语义。
 
 ## 7. 输出契约
 
@@ -226,26 +218,31 @@ Human 输出可以演进；JSONL 与 scheduler event 是机器契约，必须 ve
 诊断隔离。
 
 ```rust
-pub enum ExecEvent {
+pub struct ExecEvent {
+    pub schema_version: u32,
+    pub run_id: ExecRunId,
+    pub event: ExecEventKind,
+}
+
+pub enum ExecEventKind {
     RunStarted {
-        run_id: ExecRunId,
         origin: ExecOrigin,
         session_id: SessionId,
         thread_id: ThreadId,
     },
-    TurnStarted { turn_id: TurnId },
-    ItemStarted { item: ThreadItem },
-    ItemUpdated { item_id: ItemId, update: ExecItemUpdate },
-    ItemCompleted { item: ThreadItem },
-    Warning { warning: ExecWarning },
-    TurnCompleted { outcome: ExecTurnOutcome },
+    TurnStarted { session_id: SessionId, thread_id: ThreadId, turn_id: TurnId },
+    ThreadUpdated { update: Box<ThreadUpdateEnvelope> },
+    RunCompleted { outcome: ExecOutcome },
 }
 
 pub enum ExecOrigin {
     Local,
-    Scheduled { job_id: JobId, attempt_id: AttemptId },
 }
 ```
+
+当前 schema version 是 1。Item-specific event、warning 与
+`Scheduled { job_id, attempt_id }` origin 属于阶段 3/4 的扩展点；当前先机械传递 canonical
+`ThreadUpdateEnvelope`，避免过早复制一套 item lifecycle。
 
 `ExecEvent` 是外部展示/automation envelope，不是新的 authoritative domain model：
 
@@ -264,18 +261,25 @@ pub enum ExecOrigin {
 ```rust
 pub enum HeadlessApprovalMode {
     DenyInteractiveRequests,
-    UseConfiguredPolicy,
-    Delegate(RemoteReviewerId),
+    AutomaticReview,
+    BypassPermissions,
 }
 ```
 
-规则：
+当前规则：
 
-- 没有 reviewer channel 时，approval/user-input server request 必须立即稳定拒绝；
+- `DenyInteractiveRequests` 在 Turn 进入 approval/user-input/capability wait 时发送 typed
+  `InterruptTurn`，观察 canonical `Interrupted` 后返回 `RequiresInteraction`；
+- `AutomaticReview` 映射为 App Server `AutoReview`，但无法呈现的 user-input/capability 仍会中断；
+- `BypassPermissions` 只由显式 `--dangerously-bypass-permissions` 选择，绝不是 worker 默认值；
+- Ctrl-C 和 turn timeout 都先发送 typed interrupt，再等待 bounded terminal observation；
+- 当前没有 remote reviewer channel，不能把交互请求悬挂给不存在的 UI。
+
+远程 reviewer 的 Proposed 规则：
+
 - remote scheduler 支持 reviewer 时，请求必须携带 Job/Attempt/Thread/Turn/Tool identity；
 - reviewer response 必须防重放并校验 action digest；
 - approval timeout、scheduler disconnect 和 worker shutdown 都必须结束 pending server request；
-- `--dangerously-*` 一类入口必须显式命名，不能成为远程 worker 默认值。
 
 因此 App Server Client 的长期 event stream 需要同时支持：
 
@@ -485,21 +489,21 @@ zeta-scheduler-protocol
 
 ## 15. 实施阶段
 
-### 阶段 1：消除命名冲突
+### 阶段 1：消除命名冲突（当前状态）
 
-- 将当前 process `zeta-exec` 迁移为 `zeta-tool-executor`；
-- 更新 shell-command、file-system、apply-patch、skills、plugins、MCP 文档与依赖；
-- 为新 headless `zeta-exec` 保留 crate/binary 名称。
+- 已将原 process `zeta-exec` 迁移为 `zeta-tool-executor`；
+- 已更新直接依赖与 tools、skills、plugins、MCP 文档中的 ownership；
+- `zeta-exec` crate 名称现由 headless runner 使用。
 
-### 阶段 2：本地无界面纵向切片
+### 阶段 2：本地无界面纵向切片（当前状态）
 
-- 完成异步 App Server Client；
-- 实现 new/resume、Turn start/interrupt；
+- 复用 owned App Server Client request/event session；
+- 实现 new/resume/fork、Turn start/interrupt；
 - human/JSONL output；
 - terminal status 与退出码；
 - 显式 shutdown。
 
-### 阶段 3：可靠自动化
+### 阶段 3：可靠自动化（计划）
 
 - 稳定 ExecEvent schema；
 - output schema、last-message file、stdin 与 workspace input；
@@ -507,7 +511,7 @@ zeta-scheduler-protocol
 - reconnect/read/subscribe resync；
 - integration fixtures。
 
-### 阶段 4：远程工作进程
+### 阶段 4：远程工作进程（计划）
 
 - scheduler protocol；
 - Job/Attempt/lease/fencing；
@@ -515,7 +519,7 @@ zeta-scheduler-protocol
 - event cursor/ack 与 reconnect；
 - tenant/workspace isolation。
 
-### 阶段 5：远程执行环境
+### 阶段 5：远程执行环境（潜在方向）
 
 - 独立 exec-server protocol；
 - process/PTY/filesystem handlers；
@@ -524,6 +528,8 @@ zeta-scheduler-protocol
 
 ## 16. 验证要求
 
+阶段 1–2 已由 crate/CLI tests 覆盖：
+
 - exec 与 TUI 使用同一个 App Server Client startup/connection contract；
 - exec 不直接依赖 Core、store、provider、sandbox 或 tool executor；
 - start/resume/interrupt 只通过 typed App Server API；
@@ -531,9 +537,13 @@ zeta-scheduler-protocol
 - JSONL stdout 永远是合法机器事件；
 - terminal outcome 只来自 canonical Turn status；
 - connection 断开不会伪造 Turn failure；
-- Ctrl-C 和 remote cancel 都发送 typed `session/request` `InterruptTurn`；
+- Ctrl-C 发送 typed `session/request` `InterruptTurn`；
 - headless approval 不会永久等待不存在的 UI；
-- durable gap 可通过 read/subscribe 恢复；
+
+阶段 3–5 尚需满足：
+
+- durable gap 可在断线后通过 reconnect/read/subscribe 恢复；
+- remote cancel 同样发送 typed `session/request` `InterruptTurn`；
 - Job/Attempt/Command/request/sequence identity 有独立 contract tests；
 - 过期 lease 无法提交 scheduler terminal result；
 - worker shutdown 不泄漏 Job、App Server connection 或后台 task；

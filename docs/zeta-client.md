@@ -298,11 +298,16 @@ Deadline 分层：
 Operation client 在每次 attempt 前计算 remaining budget，并把 bounded attempt deadline 交给
 `zeta-http-client`。任一上层 deadline 结束后不能启动新 attempt。
 
-当前 unary 路径的 cancellation 从 runtime 贯穿 operation preflight、活跃 attempt 的本地等待和
-retry timer。取消返回独立 `ClientError::Cancelled`，不会包装成 retryable network failure，也
-不会启动下一次 attempt。由于 `zeta-http-client` 仍使用同步 `ureq`，已经进入 socket 的 attempt
-不能被 token 强制关闭；它由 bounded transport timeout 收束，response 即使迟到也不再被接受。
-未来 streaming 路径还需把 token 继续贯穿 raw byte stream、framer 和 bounded frame channel。
+unary 与 streaming 路径的 cancellation 都从 runtime 贯穿 operation preflight、活跃 attempt 的
+本地等待和 retry timer。streaming attempt 使用有界 channel 把 raw chunks 交给调用线程，取消或
+consumer failure 会断开接收端；已经发布任意 chunk 的 attempt 发生 transport failure 后绝不重放，
+避免重复 delta。取消返回独立 `ClientError::Cancelled`，不会包装成 retryable network failure，也
+不会启动下一次 attempt。由于 `zeta-http-client` 仍使用同步 `ureq`，已经进入 socket read 的 worker
+不能被 token 强制关闭；它由 bounded transport timeout 收束，迟到的 chunk 或 response 不再被接受。
+
+当前生产 wire streaming 已覆盖 OpenAI Responses、OpenAI-compatible Chat Completions 与 Anthropic
+Messages SSE。三种 endpoint 都使用原生 wire stream；其他 SSE profile、NDJSON 与 WebSocket 仍需按
+真实协议逐项接入。
 
 Raw stream 的 socket/buffer backpressure 属于 `zeta-http-client`；SSE/NDJSON framed channel 的
 backpressure 属于 `zeta-client`。Client 不能合并或丢弃它不理解的 Provider payload。

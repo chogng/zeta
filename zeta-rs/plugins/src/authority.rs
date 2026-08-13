@@ -251,6 +251,9 @@ impl PluginActivationAuthority {
                 ));
             }
         }
+        if matches!(&persistence, Persistence::File(_)) {
+            store.recover_orphans()?;
+        }
         let mut active = BTreeMap::new();
         for record in persisted.active {
             let key = InstalledKey::from_package(&record.package);

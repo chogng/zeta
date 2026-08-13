@@ -22,7 +22,7 @@ pub use telemetry::{
     HttpClientTelemetry, HttpClientTelemetryEvent, HttpStatusClass, HttpTransportOutcome,
     TelemetryHttpClient,
 };
-pub use ureq_client::{HttpClient, UreqHttpClient};
+pub use ureq_client::{HttpBodySink, HttpClient, UreqHttpClient};
 
 #[cfg(test)]
 #[path = "http_client_tests.rs"]

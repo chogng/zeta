@@ -31,6 +31,7 @@ pub struct McpRuntimeOptions {
     client_version: String,
     client_timeouts: RmcpTimeouts,
     client_host: Arc<dyn McpClientHost>,
+    form_elicitation: bool,
     startup_policy: McpStartupPolicy,
     catalog_limits: McpCatalogLimits,
     loading: ToolLoading,
@@ -46,6 +47,7 @@ impl std::fmt::Debug for McpRuntimeOptions {
             .field("client_version", &self.client_version)
             .field("client_timeouts", &self.client_timeouts)
             .field("client_host", &"<dyn McpClientHost>")
+            .field("form_elicitation", &self.form_elicitation)
             .field("startup_policy", &self.startup_policy)
             .field("catalog_limits", &self.catalog_limits)
             .field("loading", &self.loading)
@@ -65,6 +67,7 @@ impl McpRuntimeOptions {
             client_version: client_version.into(),
             client_timeouts: RmcpTimeouts::default(),
             client_host: Arc::new(NoopMcpClientHost),
+            form_elicitation: false,
             startup_policy: McpStartupPolicy::RequireAll,
             catalog_limits: McpCatalogLimits::default(),
             loading: ToolLoading::Eager,
@@ -80,6 +83,12 @@ impl McpRuntimeOptions {
 
     pub fn with_client_host(mut self, host: Arc<dyn McpClientHost>) -> Self {
         self.client_host = host;
+        self
+    }
+
+    /// Enables form elicitation after the product host installs durable interaction routing.
+    pub fn with_form_elicitation(mut self) -> Self {
+        self.form_elicitation = true;
         self
     }
 
@@ -177,10 +186,13 @@ impl McpRuntime {
                 downstream: Arc::clone(&options.client_host),
                 catalog_stale: Arc::clone(&catalog_stale),
             });
-            let client_options =
+            let mut client_options =
                 RmcpClientOptions::new(&options.client_name, &options.client_version)
                     .with_timeouts(options.client_timeouts)
                     .with_host(host);
+            if options.form_elicitation {
+                client_options = client_options.with_form_elicitation();
+            }
             let session = match factory.connect(definition, client_options).await {
                 Ok(session) => session,
                 Err(error) => {
