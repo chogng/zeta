@@ -45,6 +45,117 @@ pub struct LanguageDocumentDto {
     pub text: String,
 }
 
+/// Updates the language server with one authoritative editor document snapshot.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageSynchronizeParams {
+    pub document: LanguageDocumentDto,
+}
+
+/// Releases one workspace document from the language-server session.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageCloseParams {
+    pub path: PathBuf,
+}
+
+/// Hover request against exactly one submitted document revision.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageHoverParams {
+    pub document: LanguageDocumentDto,
+    pub position: LanguagePositionDto,
+}
+
+/// Fresh hover content expressed in editor-native UTF-16 coordinates.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageHoverResult {
+    #[ts(type = "number")]
+    pub revision: u64,
+    pub contents: Option<String>,
+    pub range: Option<LanguageRangeDto>,
+}
+
+/// Why the editor requested completion candidates.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum LanguageCompletionTriggerKindDto {
+    Invoke,
+    TriggerCharacter,
+    IncompleteRefresh,
+}
+
+/// Completion request against exactly one submitted document revision.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageCompletionsParams {
+    pub document: LanguageDocumentDto,
+    pub position: LanguagePositionDto,
+    pub trigger_kind: LanguageCompletionTriggerKindDto,
+    pub trigger_character: Option<String>,
+}
+
+/// Presentation-neutral completion category understood by editor products.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum LanguageCompletionItemKindDto {
+    Text,
+    Method,
+    Function,
+    Constructor,
+    Field,
+    Variable,
+    Class,
+    Interface,
+    Module,
+    Property,
+    Unit,
+    Value,
+    Enum,
+    Keyword,
+    Snippet,
+    File,
+    Folder,
+    Reference,
+    TypeParameter,
+}
+
+/// Whether completion insertion text is literal text or snippet syntax.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum LanguageCompletionInsertTextFormatDto {
+    PlainText,
+    Snippet,
+}
+
+/// One bounded completion candidate with one safe primary document edit.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageCompletionItemDto {
+    pub label: String,
+    pub kind: LanguageCompletionItemKindDto,
+    pub detail: Option<String>,
+    pub documentation: Option<String>,
+    pub filter_text: Option<String>,
+    pub sort_text: Option<String>,
+    pub preselect: Option<bool>,
+    pub commit_characters: Vec<String>,
+    pub insert_text_format: LanguageCompletionInsertTextFormatDto,
+    pub range: LanguageRangeDto,
+    pub insert_text: String,
+}
+
+/// Fresh completion candidates for exactly one source document revision.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageCompletionsResult {
+    #[ts(type = "number")]
+    pub revision: u64,
+    pub is_incomplete: bool,
+    pub items: Vec<LanguageCompletionItemDto>,
+}
+
 /// Cross-file request against exactly one submitted document revision.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -195,6 +306,144 @@ pub struct LanguageTextEditDto {
     pub new_text: String,
 }
 
+/// Named editor preferences for one formatting request.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageFormattingOptionsDto {
+    pub tab_size: u32,
+    pub insert_spaces: bool,
+    pub trim_trailing_whitespace: Option<bool>,
+}
+
+/// Whole-document formatting against one exact editor snapshot.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageDocumentFormattingParams {
+    pub document: LanguageDocumentDto,
+    pub options: LanguageFormattingOptionsDto,
+}
+
+/// Range formatting against one exact editor snapshot.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageRangeFormattingParams {
+    pub document: LanguageDocumentDto,
+    pub range: LanguageRangeDto,
+    pub options: LanguageFormattingOptionsDto,
+}
+
+/// Validated UTF-16 formatting edits for the submitted snapshot.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageFormattingResult {
+    #[ts(type = "number")]
+    pub revision: u64,
+    pub edits: Vec<LanguageTextEditDto>,
+}
+
+/// Why the editor requested signature help.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum LanguageSignatureHelpTriggerKindDto {
+    Invoke,
+    TriggerCharacter,
+    ContentChange,
+}
+
+/// Signature-help request against one exact editor snapshot.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageSignatureHelpParams {
+    pub document: LanguageDocumentDto,
+    pub position: LanguagePositionDto,
+    pub trigger_kind: LanguageSignatureHelpTriggerKindDto,
+    pub trigger_character: Option<String>,
+}
+
+/// One parameter in a callable signature.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageParameterInformationDto {
+    pub label: String,
+    pub documentation: Option<String>,
+}
+
+/// One callable signature returned by a language server.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageSignatureInformationDto {
+    pub label: String,
+    pub documentation: Option<String>,
+    pub parameters: Vec<LanguageParameterInformationDto>,
+    pub active_parameter: Option<u32>,
+}
+
+/// Fresh signature help for the submitted document snapshot.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageSignatureHelpResult {
+    #[ts(type = "number")]
+    pub revision: u64,
+    pub signatures: Vec<LanguageSignatureInformationDto>,
+    pub active_signature: Option<u32>,
+}
+
+/// Inlay-hint request against one exact editor snapshot and UTF-16 range.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageInlayHintsParams {
+    pub document: LanguageDocumentDto,
+    pub range: LanguageRangeDto,
+}
+
+/// Presentation-neutral inlay-hint category.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum LanguageInlayHintKindDto {
+    Type,
+    Parameter,
+    Other,
+}
+
+/// One non-mutating inlay hint in editor-native UTF-16 coordinates.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageInlayHintDto {
+    pub position: LanguagePositionDto,
+    pub label: String,
+    pub kind: LanguageInlayHintKindDto,
+    pub tooltip: Option<String>,
+    pub padding_left: bool,
+    pub padding_right: bool,
+}
+
+/// Fresh bounded inlay hints for the submitted snapshot.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageInlayHintsResult {
+    #[ts(type = "number")]
+    pub revision: u64,
+    pub hints: Vec<LanguageInlayHintDto>,
+}
+
+/// Linked-editing request against one exact editor snapshot and UTF-16 position.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageLinkedEditingRangesParams {
+    pub document: LanguageDocumentDto,
+    pub position: LanguagePositionDto,
+}
+
+/// Fresh linked ranges whose text must remain identical in one editor transaction.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageLinkedEditingRangesResult {
+    #[ts(type = "number")]
+    pub revision: u64,
+    pub ranges: Vec<LanguageRangeDto>,
+    pub word_pattern: Option<String>,
+}
+
 /// Text replacements for one exact workspace content baseline.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -245,7 +494,7 @@ pub enum LanguageDiagnosticSeverityDto {
 }
 
 /// Diagnostic context submitted with a code-action request.
-#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize, TS)]
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct LanguageCodeActionDiagnosticDto {
     pub range: LanguageRangeDto,
@@ -254,6 +503,16 @@ pub struct LanguageCodeActionDiagnosticDto {
     #[ts(type = "unknown")]
     pub code: Option<Value>,
     pub source: Option<String>,
+}
+
+/// Fresh language-server diagnostics for one exact workspace document revision.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageDiagnosticsNotification {
+    pub path: PathBuf,
+    #[ts(type = "number")]
+    pub revision: u64,
+    pub diagnostics: Vec<LanguageCodeActionDiagnosticDto>,
 }
 
 /// Code-action request against one exact source snapshot and selection.

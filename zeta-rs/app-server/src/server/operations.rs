@@ -101,8 +101,15 @@ impl AppServer {
             params.capabilities.agent_interactions,
         );
         connection.initialized = true;
-        let (file_system, git, workspace_search, code_index, cloud_code_index, terminal) =
-            self.workspace_features();
+        let (
+            file_system,
+            git,
+            workspace_search,
+            code_index,
+            cloud_code_index,
+            terminal,
+            debug_adapter,
+        ) = self.workspace_features();
         let extensions = self
             .extensions
             .lock()
@@ -127,6 +134,7 @@ impl AppServer {
                 code_index,
                 cloud_code_index,
                 terminal,
+                debug_adapter,
                 typst: true,
                 update_replay: true,
                 extensions,

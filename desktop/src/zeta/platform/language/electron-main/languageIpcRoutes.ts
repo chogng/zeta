@@ -1,4 +1,4 @@
-import { APP_SERVER_METHODS, type LanguageCodeActionDto, type LanguageCodeActionsParams, type LanguageHierarchyItemDto, type LanguageHierarchyParams, type LanguageLocationsParams, type LanguagePrepareRenameParams, type LanguageRenameParams, type LanguageResolveCodeActionParams, type LanguageWorkspaceSymbolsParams } from "../../../../../generated/app-server/types.js";
+import { APP_SERVER_METHODS, type LanguageCloseParams, type LanguageCodeActionDto, type LanguageCodeActionsParams, type LanguageCompletionsParams, type LanguageDocumentFormattingParams, type LanguageHierarchyItemDto, type LanguageHierarchyParams, type LanguageHoverParams, type LanguageInlayHintsParams, type LanguageLinkedEditingRangesParams, type LanguageLocationsParams, type LanguagePrepareRenameParams, type LanguageRangeFormattingParams, type LanguageRenameParams, type LanguageResolveCodeActionParams, type LanguageSignatureHelpParams, type LanguageSynchronizeParams, type LanguageWorkspaceSymbolsParams } from "../../../../../generated/app-server/types.js";
 import type { AppServerSupervisor } from "../../app-server/electron-main/app-server-supervisor.js";
 import { boolean, nonNegativeInteger, record, string } from "../../ipc/electron-main/ipcValidation.js";
 import type { IpcRoute } from "../../ipc/electron-main/trustedIpcRouter.js";
@@ -9,6 +9,15 @@ const MAX_LANGUAGE_INPUT_BYTES = 10 * 1024 * 1024;
 
 export function languageIpcRoutes(supervisor: AppServerSupervisor): readonly IpcRoute<unknown, unknown>[] {
   return [
+    route({ channel: "zeta:language:synchronize", validate: languageSynchronizeParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/synchronize"], params) }),
+    route({ channel: "zeta:language:close", validate: languageCloseParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/close"], params) }),
+    route({ channel: "zeta:language:hover", validate: languageHoverParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/hover"], params) }),
+    route({ channel: "zeta:language:completions", validate: languageCompletionsParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/completions"], params) }),
+    route({ channel: "zeta:language:formatDocument", validate: languageDocumentFormattingParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/formatDocument"], params) }),
+    route({ channel: "zeta:language:formatRange", validate: languageRangeFormattingParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/formatRange"], params) }),
+    route({ channel: "zeta:language:signatureHelp", validate: languageSignatureHelpParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/signatureHelp"], params) }),
+    route({ channel: "zeta:language:inlayHints", validate: languageInlayHintsParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/inlayHints"], params) }),
+    route({ channel: "zeta:language:linkedEditingRanges", validate: languageLinkedEditingRangesParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/linkedEditingRanges"], params) }),
     route({ channel: "zeta:language:locations", validate: languageLocationsParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/locations"], params) }),
     route({ channel: "zeta:language:hierarchy", validate: languageHierarchyParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/hierarchy"], params) }),
     route({ channel: "zeta:language:workspaceSymbols", validate: languageWorkspaceSymbolsParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/workspaceSymbols"], params) }),
@@ -19,7 +28,70 @@ export function languageIpcRoutes(supervisor: AppServerSupervisor): readonly Ipc
   ];
 }
 
+function languageSynchronizeParams(value: unknown): LanguageSynchronizeParams {
+  const params = record(value, ["document"]);
+  return { document: languageDocument(params.document) };
+}
+
+function languageCloseParams(value: unknown): LanguageCloseParams {
+  const params = record(value, ["path"]);
+  return { path: string(params.path, "path") };
+}
+
+function languageHoverParams(value: unknown): LanguageHoverParams {
+  const params = record(value, ["document", "position"]);
+  return { document: languageDocument(params.document), position: languagePosition(params.position, "position") };
+}
+
+function languageCompletionsParams(value: unknown): LanguageCompletionsParams {
+  const params = record(value, ["document", "position", "triggerKind", "triggerCharacter"]);
+  const triggerKind = string(params.triggerKind, "triggerKind");
+  if (!["invoke", "triggerCharacter", "incompleteRefresh"].includes(triggerKind)) throw new Error("triggerKind must be a supported completion trigger");
+  if (params.triggerCharacter !== null && typeof params.triggerCharacter !== "string") throw new Error("triggerCharacter must be a string or null");
+  if ((triggerKind === "triggerCharacter") !== (params.triggerCharacter !== null)) throw new Error("triggerCharacter is required only for trigger-character completion");
+  if (typeof params.triggerCharacter === "string" && (params.triggerCharacter === "\n" || params.triggerCharacter === "\r" || [...params.triggerCharacter].length !== 1)) throw new Error("triggerCharacter must contain one non-line-break character");
+  return { document: languageDocument(params.document), position: languagePosition(params.position, "position"), triggerKind: triggerKind as LanguageCompletionsParams["triggerKind"], triggerCharacter: params.triggerCharacter as string | null };
+}
+
 function languagePrepareRenameParams(value: unknown): LanguagePrepareRenameParams {
+  const params = record(value, ["document", "position"]);
+  return { document: languageDocument(params.document), position: languagePosition(params.position, "position") };
+}
+
+function languageDocumentFormattingParams(value: unknown): LanguageDocumentFormattingParams {
+  const params = record(value, ["document", "options"]);
+  return { document: languageDocument(params.document), options: languageFormattingOptions(params.options) };
+}
+
+function languageRangeFormattingParams(value: unknown): LanguageRangeFormattingParams {
+  const params = record(value, ["document", "range", "options"]);
+  return { document: languageDocument(params.document), range: languageRange(params.range, "range"), options: languageFormattingOptions(params.options) };
+}
+
+function languageFormattingOptions(value: unknown): LanguageDocumentFormattingParams["options"] {
+  const options = record(value, ["tabSize", "insertSpaces", "trimTrailingWhitespace"]);
+  const tabSize = nonNegativeInteger(options.tabSize, "options.tabSize");
+  if (tabSize === 0 || tabSize > 256) throw new Error("options.tabSize must be between 1 and 256");
+  if (options.trimTrailingWhitespace !== null && typeof options.trimTrailingWhitespace !== "boolean") throw new Error("options.trimTrailingWhitespace must be a boolean or null");
+  return { tabSize, insertSpaces: boolean(options.insertSpaces, "options.insertSpaces"), trimTrailingWhitespace: options.trimTrailingWhitespace as boolean | null };
+}
+
+function languageSignatureHelpParams(value: unknown): LanguageSignatureHelpParams {
+  const params = record(value, ["document", "position", "triggerKind", "triggerCharacter"]);
+  const triggerKind = string(params.triggerKind, "triggerKind");
+  if (!["invoke", "triggerCharacter", "contentChange"].includes(triggerKind)) throw new Error("triggerKind must be a supported signature-help trigger");
+  if (params.triggerCharacter !== null && typeof params.triggerCharacter !== "string") throw new Error("triggerCharacter must be a string or null");
+  if ((triggerKind === "triggerCharacter") !== (params.triggerCharacter !== null)) throw new Error("triggerCharacter is required only for trigger-character signature help");
+  if (typeof params.triggerCharacter === "string" && (params.triggerCharacter === "\n" || params.triggerCharacter === "\r" || [...params.triggerCharacter].length !== 1)) throw new Error("triggerCharacter must contain one non-line-break character");
+  return { document: languageDocument(params.document), position: languagePosition(params.position, "position"), triggerKind: triggerKind as LanguageSignatureHelpParams["triggerKind"], triggerCharacter: params.triggerCharacter as string | null };
+}
+
+function languageInlayHintsParams(value: unknown): LanguageInlayHintsParams {
+  const params = record(value, ["document", "range"]);
+  return { document: languageDocument(params.document), range: languageRange(params.range, "range") };
+}
+
+function languageLinkedEditingRangesParams(value: unknown): LanguageLinkedEditingRangesParams {
   const params = record(value, ["document", "position"]);
   return { document: languageDocument(params.document), position: languagePosition(params.position, "position") };
 }

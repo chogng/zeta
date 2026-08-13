@@ -916,6 +916,11 @@
         "TerminalNotOwner",
         "TerminalBusy",
         "TerminalOperationFailed",
+        "DebugAdapterUnavailable",
+        "DebugAdapterNotFound",
+        "DebugAdapterNotOwner",
+        "DebugAdapterBusy",
+        "DebugAdapterOperationFailed",
         "ConfigUnavailable",
         "ConfigRevisionConflict",
         "ConnectorsUnavailable",
@@ -2118,6 +2123,70 @@
           "properties": {
             "method": {
               "type": "string",
+              "const": "language/synchronize"
+            },
+            "params": {
+              "$ref": "#/$defs/LanguageSynchronizeParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "language/close"
+            },
+            "params": {
+              "$ref": "#/$defs/LanguageCloseParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "language/hover"
+            },
+            "params": {
+              "$ref": "#/$defs/LanguageHoverParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "language/completions"
+            },
+            "params": {
+              "$ref": "#/$defs/LanguageCompletionsParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
               "const": "language/locations"
             },
             "params": {
@@ -2218,6 +2287,86 @@
             },
             "params": {
               "$ref": "#/$defs/LanguageResolveCodeActionParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "language/formatDocument"
+            },
+            "params": {
+              "$ref": "#/$defs/LanguageDocumentFormattingParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "language/formatRange"
+            },
+            "params": {
+              "$ref": "#/$defs/LanguageRangeFormattingParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "language/signatureHelp"
+            },
+            "params": {
+              "$ref": "#/$defs/LanguageSignatureHelpParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "language/inlayHints"
+            },
+            "params": {
+              "$ref": "#/$defs/LanguageInlayHintsParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "language/linkedEditingRanges"
+            },
+            "params": {
+              "$ref": "#/$defs/LanguageLinkedEditingRangesParams"
             }
           },
           "required": [
@@ -2794,6 +2943,70 @@
             },
             "params": {
               "$ref": "#/$defs/TerminalCloseParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "debug/adapter/start"
+            },
+            "params": {
+              "$ref": "#/$defs/DebugAdapterStartParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "debug/adapter/send"
+            },
+            "params": {
+              "$ref": "#/$defs/DebugAdapterSendParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "debug/adapter/read"
+            },
+            "params": {
+              "$ref": "#/$defs/DebugAdapterReadParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "debug/adapter/close"
+            },
+            "params": {
+              "$ref": "#/$defs/DebugAdapterCloseParams"
             }
           },
           "required": [
@@ -3866,6 +4079,70 @@
           "properties": {
             "method": {
               "type": "string",
+              "const": "language/synchronize"
+            },
+            "result": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "language/close"
+            },
+            "result": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "language/hover"
+            },
+            "result": {
+              "$ref": "#/$defs/LanguageHoverResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "language/completions"
+            },
+            "result": {
+              "$ref": "#/$defs/LanguageCompletionsResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
               "const": "language/locations"
             },
             "result": {
@@ -3966,6 +4243,86 @@
             },
             "result": {
               "$ref": "#/$defs/LanguageCodeActionDto"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "language/formatDocument"
+            },
+            "result": {
+              "$ref": "#/$defs/LanguageFormattingResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "language/formatRange"
+            },
+            "result": {
+              "$ref": "#/$defs/LanguageFormattingResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "language/signatureHelp"
+            },
+            "result": {
+              "$ref": "#/$defs/LanguageSignatureHelpResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "language/inlayHints"
+            },
+            "result": {
+              "$ref": "#/$defs/LanguageInlayHintsResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "language/linkedEditingRanges"
+            },
+            "result": {
+              "$ref": "#/$defs/LanguageLinkedEditingRangesResult"
             }
           },
           "required": [
@@ -4539,6 +4896,70 @@
             "method": {
               "type": "string",
               "const": "terminal/close"
+            },
+            "result": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "debug/adapter/start"
+            },
+            "result": {
+              "$ref": "#/$defs/DebugAdapterStartResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "debug/adapter/send"
+            },
+            "result": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "debug/adapter/read"
+            },
+            "result": {
+              "$ref": "#/$defs/DebugAdapterReadResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "debug/adapter/close"
             },
             "result": {
               "type": "null"
@@ -5854,6 +6275,157 @@
       "required": [
         "startSequence",
         "endSequence"
+      ]
+    },
+    "DebugAdapterCloseParams": {
+      "description": "Terminates and releases one connection-owned adapter process.",
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "sessionId"
+      ]
+    },
+    "DebugAdapterMessageDto": {
+      "description": "One ordered adapter message retained by the App Server.",
+      "type": "object",
+      "properties": {
+        "message": true,
+        "sequence": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "sequence",
+        "message"
+      ]
+    },
+    "DebugAdapterReadParams": {
+      "description": "Reads a bounded batch of adapter messages after a transport sequence.",
+      "type": "object",
+      "properties": {
+        "afterSequence": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "maxMessages": {
+          "type": "integer",
+          "format": "uint",
+          "maximum": 128,
+          "minimum": 1
+        },
+        "sessionId": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "sessionId",
+        "afterSequence",
+        "maxMessages"
+      ]
+    },
+    "DebugAdapterReadResult": {
+      "description": "Bounded adapter output and process state.",
+      "type": "object",
+      "properties": {
+        "exitCode": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
+        },
+        "exited": {
+          "type": "boolean"
+        },
+        "messages": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DebugAdapterMessageDto"
+          }
+        },
+        "nextSequence": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "outputGap": {
+          "type": "boolean"
+        },
+        "protocolError": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "stderr": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "messages",
+        "nextSequence",
+        "outputGap",
+        "stderr",
+        "exited"
+      ]
+    },
+    "DebugAdapterSendParams": {
+      "description": "Sends one complete DAP message to an owned adapter.",
+      "type": "object",
+      "properties": {
+        "message": true,
+        "sessionId": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "sessionId",
+        "message"
+      ]
+    },
+    "DebugAdapterStartParams": {
+      "description": "Starts one connection-owned stdio Debug Adapter Protocol process.",
+      "type": "object",
+      "properties": {
+        "arguments": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 128
+        },
+        "program": {
+          "type": "string",
+          "maxLength": 4096,
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "program",
+        "arguments"
+      ]
+    },
+    "DebugAdapterStartResult": {
+      "description": "Opaque identity allocated for one adapter process.",
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "sessionId"
       ]
     },
     "DelegatedCapabilityScope": {
@@ -7960,6 +8532,18 @@
         "2.0"
       ]
     },
+    "LanguageCloseParams": {
+      "description": "Releases one workspace document from the language-server session.",
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ]
+    },
     "LanguageCodeActionDiagnosticDto": {
       "description": "Diagnostic context submitted with a code-action request.",
       "type": "object",
@@ -8071,6 +8655,164 @@
         "actions"
       ]
     },
+    "LanguageCompletionInsertTextFormatDto": {
+      "description": "Whether completion insertion text is literal text or snippet syntax.",
+      "type": "string",
+      "enum": [
+        "plainText",
+        "snippet"
+      ]
+    },
+    "LanguageCompletionItemDto": {
+      "description": "One bounded completion candidate with one safe primary document edit.",
+      "type": "object",
+      "properties": {
+        "commitCharacters": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "detail": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "documentation": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "filterText": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "insertText": {
+          "type": "string"
+        },
+        "insertTextFormat": {
+          "$ref": "#/$defs/LanguageCompletionInsertTextFormatDto"
+        },
+        "kind": {
+          "$ref": "#/$defs/LanguageCompletionItemKindDto"
+        },
+        "label": {
+          "type": "string"
+        },
+        "preselect": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "range": {
+          "$ref": "#/$defs/LanguageRangeDto"
+        },
+        "sortText": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "label",
+        "kind",
+        "commitCharacters",
+        "insertTextFormat",
+        "range",
+        "insertText"
+      ]
+    },
+    "LanguageCompletionItemKindDto": {
+      "description": "Presentation-neutral completion category understood by editor products.",
+      "type": "string",
+      "enum": [
+        "text",
+        "method",
+        "function",
+        "constructor",
+        "field",
+        "variable",
+        "class",
+        "interface",
+        "module",
+        "property",
+        "unit",
+        "value",
+        "enum",
+        "keyword",
+        "snippet",
+        "file",
+        "folder",
+        "reference",
+        "typeParameter"
+      ]
+    },
+    "LanguageCompletionTriggerKindDto": {
+      "description": "Why the editor requested completion candidates.",
+      "type": "string",
+      "enum": [
+        "invoke",
+        "triggerCharacter",
+        "incompleteRefresh"
+      ]
+    },
+    "LanguageCompletionsParams": {
+      "description": "Completion request against exactly one submitted document revision.",
+      "type": "object",
+      "properties": {
+        "document": {
+          "$ref": "#/$defs/LanguageDocumentDto"
+        },
+        "position": {
+          "$ref": "#/$defs/LanguagePositionDto"
+        },
+        "triggerCharacter": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "triggerKind": {
+          "$ref": "#/$defs/LanguageCompletionTriggerKindDto"
+        }
+      },
+      "required": [
+        "document",
+        "position",
+        "triggerKind"
+      ]
+    },
+    "LanguageCompletionsResult": {
+      "description": "Fresh completion candidates for exactly one source document revision.",
+      "type": "object",
+      "properties": {
+        "isIncomplete": {
+          "type": "boolean"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LanguageCompletionItemDto"
+          }
+        },
+        "revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "revision",
+        "isIncomplete",
+        "items"
+      ]
+    },
     "LanguageDiagnosticSeverityDto": {
       "type": "string",
       "enum": [
@@ -8078,6 +8820,31 @@
         "warning",
         "information",
         "hint"
+      ]
+    },
+    "LanguageDiagnosticsNotification": {
+      "description": "Fresh language-server diagnostics for one exact workspace document revision.",
+      "type": "object",
+      "properties": {
+        "diagnostics": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LanguageCodeActionDiagnosticDto"
+          }
+        },
+        "path": {
+          "type": "string"
+        },
+        "revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "path",
+        "revision",
+        "diagnostics"
       ]
     },
     "LanguageDocumentDto": {
@@ -8105,6 +8872,67 @@
         "languageId",
         "revision",
         "text"
+      ]
+    },
+    "LanguageDocumentFormattingParams": {
+      "description": "Whole-document formatting against one exact editor snapshot.",
+      "type": "object",
+      "properties": {
+        "document": {
+          "$ref": "#/$defs/LanguageDocumentDto"
+        },
+        "options": {
+          "$ref": "#/$defs/LanguageFormattingOptionsDto"
+        }
+      },
+      "required": [
+        "document",
+        "options"
+      ]
+    },
+    "LanguageFormattingOptionsDto": {
+      "description": "Named editor preferences for one formatting request.",
+      "type": "object",
+      "properties": {
+        "insertSpaces": {
+          "type": "boolean"
+        },
+        "tabSize": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "trimTrailingWhitespace": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "tabSize",
+        "insertSpaces"
+      ]
+    },
+    "LanguageFormattingResult": {
+      "description": "Validated UTF-16 formatting edits for the submitted snapshot.",
+      "type": "object",
+      "properties": {
+        "edits": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LanguageTextEditDto"
+          }
+        },
+        "revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "revision",
+        "edits"
       ]
     },
     "LanguageHierarchyEntryDto": {
@@ -8238,6 +9066,175 @@
         "entries"
       ]
     },
+    "LanguageHoverParams": {
+      "description": "Hover request against exactly one submitted document revision.",
+      "type": "object",
+      "properties": {
+        "document": {
+          "$ref": "#/$defs/LanguageDocumentDto"
+        },
+        "position": {
+          "$ref": "#/$defs/LanguagePositionDto"
+        }
+      },
+      "required": [
+        "document",
+        "position"
+      ]
+    },
+    "LanguageHoverResult": {
+      "description": "Fresh hover content expressed in editor-native UTF-16 coordinates.",
+      "type": "object",
+      "properties": {
+        "contents": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "range": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LanguageRangeDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "revision"
+      ]
+    },
+    "LanguageInlayHintDto": {
+      "description": "One non-mutating inlay hint in editor-native UTF-16 coordinates.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/LanguageInlayHintKindDto"
+        },
+        "label": {
+          "type": "string"
+        },
+        "paddingLeft": {
+          "type": "boolean"
+        },
+        "paddingRight": {
+          "type": "boolean"
+        },
+        "position": {
+          "$ref": "#/$defs/LanguagePositionDto"
+        },
+        "tooltip": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "position",
+        "label",
+        "kind",
+        "paddingLeft",
+        "paddingRight"
+      ]
+    },
+    "LanguageInlayHintKindDto": {
+      "description": "Presentation-neutral inlay-hint category.",
+      "type": "string",
+      "enum": [
+        "type",
+        "parameter",
+        "other"
+      ]
+    },
+    "LanguageInlayHintsParams": {
+      "description": "Inlay-hint request against one exact editor snapshot and UTF-16 range.",
+      "type": "object",
+      "properties": {
+        "document": {
+          "$ref": "#/$defs/LanguageDocumentDto"
+        },
+        "range": {
+          "$ref": "#/$defs/LanguageRangeDto"
+        }
+      },
+      "required": [
+        "document",
+        "range"
+      ]
+    },
+    "LanguageInlayHintsResult": {
+      "description": "Fresh bounded inlay hints for the submitted snapshot.",
+      "type": "object",
+      "properties": {
+        "hints": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LanguageInlayHintDto"
+          }
+        },
+        "revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "revision",
+        "hints"
+      ]
+    },
+    "LanguageLinkedEditingRangesParams": {
+      "description": "Linked-editing request against one exact editor snapshot and UTF-16 position.",
+      "type": "object",
+      "properties": {
+        "document": {
+          "$ref": "#/$defs/LanguageDocumentDto"
+        },
+        "position": {
+          "$ref": "#/$defs/LanguagePositionDto"
+        }
+      },
+      "required": [
+        "document",
+        "position"
+      ]
+    },
+    "LanguageLinkedEditingRangesResult": {
+      "description": "Fresh linked ranges whose text must remain identical in one editor transaction.",
+      "type": "object",
+      "properties": {
+        "ranges": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LanguageRangeDto"
+          }
+        },
+        "revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "wordPattern": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "revision",
+        "ranges"
+      ]
+    },
     "LanguageLocationDto": {
       "description": "One workspace-relative target returned in editor-native UTF-16 coordinates.",
       "type": "object",
@@ -8314,6 +9311,24 @@
         "locations"
       ]
     },
+    "LanguageParameterInformationDto": {
+      "description": "One parameter in a callable signature.",
+      "type": "object",
+      "properties": {
+        "documentation": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "label": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "label"
+      ]
+    },
     "LanguagePositionDto": {
       "description": "One zero-based UTF-16 editor position.",
       "type": "object",
@@ -8379,6 +9394,26 @@
       "required": [
         "start",
         "end"
+      ]
+    },
+    "LanguageRangeFormattingParams": {
+      "description": "Range formatting against one exact editor snapshot.",
+      "type": "object",
+      "properties": {
+        "document": {
+          "$ref": "#/$defs/LanguageDocumentDto"
+        },
+        "options": {
+          "$ref": "#/$defs/LanguageFormattingOptionsDto"
+        },
+        "range": {
+          "$ref": "#/$defs/LanguageRangeDto"
+        }
+      },
+      "required": [
+        "document",
+        "range",
+        "options"
       ]
     },
     "LanguageRenameParams": {
@@ -8508,6 +9543,115 @@
         "commandId",
         "expectedRevision",
         "serverId"
+      ]
+    },
+    "LanguageSignatureHelpParams": {
+      "description": "Signature-help request against one exact editor snapshot.",
+      "type": "object",
+      "properties": {
+        "document": {
+          "$ref": "#/$defs/LanguageDocumentDto"
+        },
+        "position": {
+          "$ref": "#/$defs/LanguagePositionDto"
+        },
+        "triggerCharacter": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "triggerKind": {
+          "$ref": "#/$defs/LanguageSignatureHelpTriggerKindDto"
+        }
+      },
+      "required": [
+        "document",
+        "position",
+        "triggerKind"
+      ]
+    },
+    "LanguageSignatureHelpResult": {
+      "description": "Fresh signature help for the submitted document snapshot.",
+      "type": "object",
+      "properties": {
+        "activeSignature": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "signatures": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LanguageSignatureInformationDto"
+          }
+        }
+      },
+      "required": [
+        "revision",
+        "signatures"
+      ]
+    },
+    "LanguageSignatureHelpTriggerKindDto": {
+      "description": "Why the editor requested signature help.",
+      "type": "string",
+      "enum": [
+        "invoke",
+        "triggerCharacter",
+        "contentChange"
+      ]
+    },
+    "LanguageSignatureInformationDto": {
+      "description": "One callable signature returned by a language server.",
+      "type": "object",
+      "properties": {
+        "activeParameter": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "documentation": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "label": {
+          "type": "string"
+        },
+        "parameters": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LanguageParameterInformationDto"
+          }
+        }
+      },
+      "required": [
+        "label",
+        "parameters"
+      ]
+    },
+    "LanguageSynchronizeParams": {
+      "description": "Updates the language server with one authoritative editor document snapshot.",
+      "type": "object",
+      "properties": {
+        "document": {
+          "$ref": "#/$defs/LanguageDocumentDto"
+        }
+      },
+      "required": [
+        "document"
       ]
     },
     "LanguageTextDocumentEditDto": {
@@ -9873,6 +11017,9 @@
         "connectors": {
           "type": "boolean"
         },
+        "debugAdapter": {
+          "type": "boolean"
+        },
         "documentCollaboration": {
           "type": "boolean"
         },
@@ -9926,6 +11073,7 @@
         "codeIndex",
         "cloudCodeIndex",
         "terminal",
+        "debugAdapter",
         "typst",
         "updateReplay",
         "extensions",
@@ -10119,6 +11267,22 @@
             },
             "params": {
               "$ref": "#/$defs/FsChanged"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "language/diagnostics"
+            },
+            "params": {
+              "$ref": "#/$defs/LanguageDiagnosticsNotification"
             }
           },
           "required": [

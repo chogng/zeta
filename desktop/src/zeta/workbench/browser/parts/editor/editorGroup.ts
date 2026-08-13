@@ -3,6 +3,7 @@ import { DndCssClasses } from "../../../../base/browser/ui/dnd/dnd.js";
 import { addDisposableListener } from "../../../../base/browser/dom.js";
 import { Dimension, type IDimension } from "../../../../base/browser/geometry.js";
 import { DisposableOwner, setDisposableOwner } from "../../../../base/common/lifecycle.js";
+import type { URI } from "../../../../base/common/uri.js";
 import type { IKeybindingService } from "../../../../platform/keybinding/common/keybinding.js";
 import type { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
 import { type ITextFileService } from "../../../services/textfile/common/textFileService.js";
@@ -25,6 +26,8 @@ import { editorInputKey, type EditorTabDescriptor } from "./editorTabsControl.js
 import { EditorTitleControl, type EditorTitleActions } from "./editorTitleControl.js";
 import type { LanguageLocation } from "../../../../editor/contrib/gotoSymbol/common/languageNavigation.js";
 import type { LanguageWorkspaceEdit } from "../../../../editor/common/languages/languageWorkspaceEdit.js";
+import type { ILanguageDiagnosticsService } from "../../../../editor/common/services/languageDiagnosticsService.js";
+import type { EditorLineGutterDecoration } from "../../../../editor/browser/view/lineGutterDecoration.js";
 
 /** Operations and state owned independently by one EditorGroup. */
 export interface IEditorGroup {
@@ -58,12 +61,14 @@ export interface EditorGroupOptions {
   readonly languageResolver?: TextResourceLanguageResolver;
   readonly diffApi?: IDiffApi;
   readonly syntaxApi?: ISyntaxApi;
+  readonly languageDiagnosticsService?: ILanguageDiagnosticsService;
   readonly documentCollaborationApi?: IDocumentCollaborationApi;
   readonly serverEvents?: IServerEventApi;
   readonly workingCopyService?: IWorkingCopyService;
   readonly onSave?: (group: IEditorGroup, input: EditorInput, pane: IEditorPane) => Promise<boolean>;
   readonly onOpenLocation?: (location: LanguageLocation) => void | Promise<void>;
   readonly onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit) => void | Promise<void>;
+  readonly createLineGutterDecorations?: (resource: URI) => readonly EditorLineGutterDecoration[];
   readonly titleActions?: EditorTitleActions;
   readonly onDidActivate?: () => void;
   readonly dragAndDrop?: IEditorTabDragAndDrop;
@@ -92,12 +97,14 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
   private readonly languageResolver: TextResourceLanguageResolver | undefined;
   private readonly diffApi: IDiffApi | undefined;
   private readonly syntaxApi: ISyntaxApi | undefined;
+  private readonly languageDiagnosticsService: ILanguageDiagnosticsService | undefined;
   private readonly documentCollaborationApi: IDocumentCollaborationApi | undefined;
   private readonly serverEvents: IServerEventApi | undefined;
   private readonly workingCopyService: IWorkingCopyService | undefined;
   private readonly onSave: ((group: IEditorGroup, input: EditorInput, pane: IEditorPane) => Promise<boolean>) | undefined;
   private readonly onOpenLocation: ((location: LanguageLocation) => void | Promise<void>) | undefined;
   private readonly onApplyWorkspaceEdit: ((edit: LanguageWorkspaceEdit) => void | Promise<void>) | undefined;
+  private readonly createLineGutterDecorations: ((resource: URI) => readonly EditorLineGutterDecoration[]) | undefined;
   private readonly titleControl: EditorTitleControl;
   private readonly watermarkElement: HTMLElement;
   private readonly entries: EditorGroupEntry[] = [];
@@ -118,12 +125,14 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
     this.languageResolver = options.languageResolver;
     this.diffApi = options.diffApi;
     this.syntaxApi = options.syntaxApi;
+    this.languageDiagnosticsService = options.languageDiagnosticsService;
     this.documentCollaborationApi = options.documentCollaborationApi;
     this.serverEvents = options.serverEvents;
     this.workingCopyService = options.workingCopyService;
     this.onSave = options.onSave;
     this.onOpenLocation = options.onOpenLocation;
     this.onApplyWorkspaceEdit = options.onApplyWorkspaceEdit;
+    this.createLineGutterDecorations = options.createLineGutterDecorations;
     this.element = options.ownerDocument.createElement("section");
     this.element.className = "zeta-editor-group";
     this.element.setAttribute("aria-label", "Editor group");
@@ -235,11 +244,13 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
       languageFeaturesService: this.languageFeaturesService,
       diffApi: this.diffApi,
       syntaxApi: this.syntaxApi,
+      languageDiagnosticsService: this.languageDiagnosticsService,
       documentCollaborationApi: this.documentCollaborationApi,
       serverEvents: this.serverEvents,
       workingCopyService: this.workingCopyService,
       onOpenLocation: this.onOpenLocation,
       onApplyWorkspaceEdit: this.onApplyWorkspaceEdit,
+      createLineGutterDecorations: this.createLineGutterDecorations,
       ...(this.onSave ? {
         onSave: () => {
           if (!createdPane) return Promise.reject(new Error("Editor save is unavailable"));

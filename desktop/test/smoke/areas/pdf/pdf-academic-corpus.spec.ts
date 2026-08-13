@@ -5,10 +5,12 @@ import { academicPdfCorpus, downloadAcademicPdfCorpus } from "../../../automatio
 import { createTestWorkspace, disposeTestWorkspace, type TestWorkspace } from "../../../automation/testWorkspace.js";
 
 const test = base.extend<{ readonly testWorkspace: TestWorkspace }>({
-  testWorkspace: async ({}, use) => {
+  testWorkspace: async ({ target }, use) => {
     const workspace = await createTestWorkspace();
     try {
-      await downloadAcademicPdfCorpus(workspace.directory);
+      if (target.kind === "electron" && target.appServerMode === "required" && target.product === "code") {
+        await downloadAcademicPdfCorpus(workspace.directory);
+      }
       await use(workspace);
     } finally {
       await disposeTestWorkspace(workspace);

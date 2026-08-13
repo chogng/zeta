@@ -6,26 +6,51 @@ use zeta_app_server_protocol::protocol::error::AppServerErrorName;
 use zeta_app_server_protocol::protocol::fs::{
     FsDeleteMode, FsExistingTargetBehavior, FsMissingTargetBehavior,
 };
+use zeta_app_server_protocol::protocol::language::LanguageCloseParams;
 use zeta_app_server_protocol::protocol::language::LanguageCodeActionDto;
 use zeta_app_server_protocol::protocol::language::LanguageCodeActionsParams;
 use zeta_app_server_protocol::protocol::language::LanguageCodeActionsResult;
+use zeta_app_server_protocol::protocol::language::LanguageCompletionInsertTextFormatDto;
+use zeta_app_server_protocol::protocol::language::LanguageCompletionItemDto;
+use zeta_app_server_protocol::protocol::language::LanguageCompletionItemKindDto;
+use zeta_app_server_protocol::protocol::language::LanguageCompletionTriggerKindDto;
+use zeta_app_server_protocol::protocol::language::LanguageCompletionsParams;
+use zeta_app_server_protocol::protocol::language::LanguageCompletionsResult;
 use zeta_app_server_protocol::protocol::language::LanguageDiagnosticSeverityDto;
+use zeta_app_server_protocol::protocol::language::LanguageDocumentFormattingParams;
+use zeta_app_server_protocol::protocol::language::LanguageFormattingOptionsDto;
+use zeta_app_server_protocol::protocol::language::LanguageFormattingResult;
 use zeta_app_server_protocol::protocol::language::LanguageHierarchyEntryDto;
 use zeta_app_server_protocol::protocol::language::LanguageHierarchyItemDto;
 use zeta_app_server_protocol::protocol::language::LanguageHierarchyKindDto;
 use zeta_app_server_protocol::protocol::language::LanguageHierarchyParams;
 use zeta_app_server_protocol::protocol::language::LanguageHierarchyResultDto;
+use zeta_app_server_protocol::protocol::language::LanguageHoverParams;
+use zeta_app_server_protocol::protocol::language::LanguageHoverResult;
+use zeta_app_server_protocol::protocol::language::LanguageInlayHintDto;
+use zeta_app_server_protocol::protocol::language::LanguageInlayHintKindDto;
+use zeta_app_server_protocol::protocol::language::LanguageInlayHintsParams;
+use zeta_app_server_protocol::protocol::language::LanguageInlayHintsResult;
+use zeta_app_server_protocol::protocol::language::LanguageLinkedEditingRangesParams;
+use zeta_app_server_protocol::protocol::language::LanguageLinkedEditingRangesResult;
 use zeta_app_server_protocol::protocol::language::LanguageLocationDto;
 use zeta_app_server_protocol::protocol::language::LanguageLocationKindDto;
 use zeta_app_server_protocol::protocol::language::LanguageLocationsParams;
 use zeta_app_server_protocol::protocol::language::LanguageLocationsResult;
+use zeta_app_server_protocol::protocol::language::LanguageParameterInformationDto;
 use zeta_app_server_protocol::protocol::language::LanguagePositionDto;
 use zeta_app_server_protocol::protocol::language::LanguagePrepareRenameParams;
 use zeta_app_server_protocol::protocol::language::LanguagePrepareRenameResult;
 use zeta_app_server_protocol::protocol::language::LanguageRangeDto;
+use zeta_app_server_protocol::protocol::language::LanguageRangeFormattingParams;
 use zeta_app_server_protocol::protocol::language::LanguageRenameParams;
 use zeta_app_server_protocol::protocol::language::LanguageRenamePreparationDto;
 use zeta_app_server_protocol::protocol::language::LanguageResolveCodeActionParams;
+use zeta_app_server_protocol::protocol::language::LanguageSignatureHelpParams;
+use zeta_app_server_protocol::protocol::language::LanguageSignatureHelpResult;
+use zeta_app_server_protocol::protocol::language::LanguageSignatureHelpTriggerKindDto;
+use zeta_app_server_protocol::protocol::language::LanguageSignatureInformationDto;
+use zeta_app_server_protocol::protocol::language::LanguageSynchronizeParams;
 use zeta_app_server_protocol::protocol::language::LanguageTextDocumentEditDto;
 use zeta_app_server_protocol::protocol::language::LanguageTextEditDto;
 use zeta_app_server_protocol::protocol::language::LanguageWorkspaceEditDto;
@@ -34,18 +59,25 @@ use zeta_app_server_protocol::protocol::language::LanguageWorkspaceSymbolDto;
 use zeta_app_server_protocol::protocol::language::LanguageWorkspaceSymbolsParams;
 use zeta_app_server_protocol::protocol::language::LanguageWorkspaceSymbolsResult;
 use zeta_language_service::LanguageCodeAction;
+use zeta_language_service::LanguageCompletionInsertTextFormat;
+use zeta_language_service::LanguageCompletionItem;
+use zeta_language_service::LanguageCompletionItemKind;
+use zeta_language_service::LanguageCompletionTrigger;
 use zeta_language_service::LanguageDiagnostic;
 use zeta_language_service::LanguageDiagnosticSeverity;
 use zeta_language_service::LanguageDocumentPosition;
 use zeta_language_service::LanguageDocumentRevision;
+use zeta_language_service::LanguageFormattingOptions;
 use zeta_language_service::LanguageHierarchyEntry;
 use zeta_language_service::LanguageHierarchyItem;
+use zeta_language_service::LanguageInlayHintKind;
 use zeta_language_service::LanguageLocationPosition;
 use zeta_language_service::LanguageLocationRange;
 use zeta_language_service::LanguageLocationTarget;
 use zeta_language_service::LanguagePositionEncoding;
 use zeta_language_service::LanguageServiceDocument;
 use zeta_language_service::LanguageServiceEvent;
+use zeta_language_service::LanguageSignatureHelpTrigger;
 use zeta_language_service::LanguageTextRange;
 use zeta_language_service::LanguageWorkspaceEdit;
 use zeta_language_service::{
@@ -61,6 +93,30 @@ use super::result;
 const MAX_LANGUAGE_TARGET_BYTES: usize = 10 * 1024 * 1024;
 
 impl AppServer {
+    pub(super) fn language_synchronize(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: LanguageSynchronizeParams = decode(params)?;
+        let workspace = self.language_workspace_root()?;
+        let source_path = workspace
+            .resolve_existing(&params.document.path)
+            .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
+        let _runtime = self.prepare_document_runtime(&workspace, &source_path, &params.document)?;
+        result(&())
+    }
+
+    pub(super) fn language_close(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: LanguageCloseParams = decode(params)?;
+        let workspace = self.language_workspace_root()?;
+        let source_path = workspace
+            .resolve_for_write(&params.path)
+            .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
+        self.language
+            .lock()
+            .map_err(|_| language_error(AppServerErrorName::ServerOverloaded))?
+            .close_document(&source_path)
+            .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
+        result(&())
+    }
+
     fn prepare_position_request(
         &self,
         document: &zeta_app_server_protocol::protocol::language::LanguageDocumentDto,
@@ -113,18 +169,308 @@ impl AppServer {
             .language
             .lock()
             .map_err(|_| language_error(AppServerErrorName::ServerOverloaded))?;
-        let service = runtime
-            .ensure(
+        runtime
+            .synchronize_document(
                 workspace.canonical_path(),
                 snapshot.generation.get(),
                 &snapshot.values.language_servers,
-                language_service_id(&document.language_id),
+                &document.path,
+                service_document,
             )
-            .map_err(|_| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
-        service
-            .synchronize_document(service_document)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         Ok(runtime)
+    }
+
+    pub(super) fn language_hover(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: LanguageHoverParams = decode(params)?;
+        let (_, source_path, revision, position, mut runtime) =
+            self.prepare_position_request(&params.document, params.position)?;
+        let service = runtime
+            .service
+            .as_ref()
+            .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
+        let request_id = service
+            .request_hover(&source_path, revision, position)
+            .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
+        let event = runtime
+            .wait_for_request(request_id)
+            .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
+        let (contents, range) = match event {
+            LanguageServiceEvent::Hover(hover) => (
+                Some(hover.contents),
+                hover.range.and_then(|range| {
+                    byte_range_to_utf16(&params.document.text, range.byte_range())
+                }),
+            ),
+            LanguageServiceEvent::RequestFailed { .. } => (None, None),
+            _ => return Err(language_error(AppServerErrorName::LanguageRequestFailed)),
+        };
+        result(&LanguageHoverResult {
+            revision: params.document.revision,
+            contents,
+            range,
+        })
+    }
+
+    pub(super) fn language_completions(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: LanguageCompletionsParams = decode(params)?;
+        let (_, source_path, revision, position, mut runtime) =
+            self.prepare_position_request(&params.document, params.position)?;
+        let trigger = completion_trigger(params.trigger_kind, params.trigger_character.as_deref())?;
+        let service = runtime
+            .service
+            .as_ref()
+            .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
+        let request_id = service
+            .request_completions(&source_path, revision, position, trigger)
+            .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
+        let event = runtime
+            .wait_for_request(request_id)
+            .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
+        let completions = match event {
+            LanguageServiceEvent::Completions(completions) => completions,
+            LanguageServiceEvent::RequestFailed { .. } => {
+                return result(&LanguageCompletionsResult {
+                    revision: params.document.revision,
+                    is_incomplete: false,
+                    items: Vec::new(),
+                });
+            }
+            _ => return Err(language_error(AppServerErrorName::LanguageRequestFailed)),
+        };
+        let items = completions
+            .items
+            .into_iter()
+            .filter_map(|item| completion_item_to_dto(&params.document.text, item))
+            .collect();
+        result(&LanguageCompletionsResult {
+            revision: params.document.revision,
+            is_incomplete: completions.is_incomplete,
+            items,
+        })
+    }
+
+    pub(super) fn language_document_formatting(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: LanguageDocumentFormattingParams = decode(params)?;
+        self.language_formatting(&params.document, None, params.options)
+    }
+
+    pub(super) fn language_range_formatting(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: LanguageRangeFormattingParams = decode(params)?;
+        let range = utf8_byte_range(&params.document.text, params.range)
+            .map(LanguageTextRange::new)
+            .ok_or_else(|| language_error(AppServerErrorName::LanguageRequestFailed))?;
+        self.language_formatting(&params.document, Some(range), params.options)
+    }
+
+    fn language_formatting(
+        &self,
+        document: &zeta_app_server_protocol::protocol::language::LanguageDocumentDto,
+        range: Option<LanguageTextRange>,
+        options: LanguageFormattingOptionsDto,
+    ) -> Result<Value, RpcError> {
+        let workspace = self.language_workspace_root()?;
+        let source_path = workspace
+            .resolve_existing(&document.path)
+            .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
+        let revision = LanguageDocumentRevision::new(document.revision);
+        let mut runtime = self.prepare_document_runtime(&workspace, &source_path, document)?;
+        let service = runtime
+            .service
+            .as_ref()
+            .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
+        let options = LanguageFormattingOptions {
+            tab_size: options.tab_size,
+            insert_spaces: options.insert_spaces,
+            trim_trailing_whitespace: options.trim_trailing_whitespace,
+        };
+        let request_id = match range {
+            Some(range) => service.request_range_formatting(&source_path, revision, range, options),
+            None => service.request_document_formatting(&source_path, revision, options),
+        }
+        .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
+        let event = runtime
+            .wait_for_request(request_id)
+            .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
+        let edits = match event {
+            LanguageServiceEvent::FormattingEdits(result) => result.edits,
+            LanguageServiceEvent::RequestFailed { .. } => Vec::new(),
+            _ => return Err(language_error(AppServerErrorName::LanguageRequestFailed)),
+        };
+        let edits = edits
+            .into_iter()
+            .map(|edit| {
+                Ok(LanguageTextEditDto {
+                    range: byte_range_to_utf16(&document.text, edit.range.byte_range())
+                        .ok_or_else(|| language_error(AppServerErrorName::LanguageRequestFailed))?,
+                    new_text: edit.new_text,
+                })
+            })
+            .collect::<Result<Vec<_>, RpcError>>()?;
+        result(&LanguageFormattingResult {
+            revision: document.revision,
+            edits,
+        })
+    }
+
+    pub(super) fn language_signature_help(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: LanguageSignatureHelpParams = decode(params)?;
+        let (_, source_path, revision, position, mut runtime) =
+            self.prepare_position_request(&params.document, params.position)?;
+        let trigger = match (params.trigger_kind, params.trigger_character) {
+            (LanguageSignatureHelpTriggerKindDto::Invoke, None) => {
+                LanguageSignatureHelpTrigger::Invoked
+            }
+            (LanguageSignatureHelpTriggerKindDto::ContentChange, None) => {
+                LanguageSignatureHelpTrigger::ContentChange
+            }
+            (LanguageSignatureHelpTriggerKindDto::TriggerCharacter, Some(character))
+                if completion_character(&character) =>
+            {
+                LanguageSignatureHelpTrigger::TriggerCharacter(character)
+            }
+            _ => return Err(language_error(AppServerErrorName::LanguageRequestFailed)),
+        };
+        let service = runtime
+            .service
+            .as_ref()
+            .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
+        let request_id = service
+            .request_signature_help(&source_path, revision, position, trigger)
+            .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
+        let event = runtime
+            .wait_for_request(request_id)
+            .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
+        let help = match event {
+            LanguageServiceEvent::SignatureHelp(help) => Some(help),
+            LanguageServiceEvent::RequestFailed { .. } => None,
+            _ => return Err(language_error(AppServerErrorName::LanguageRequestFailed)),
+        };
+        let (signatures, active_signature) = help.map_or_else(
+            || (Vec::new(), None),
+            |help| {
+                let signatures = help
+                    .signatures
+                    .into_iter()
+                    .map(|signature| LanguageSignatureInformationDto {
+                        label: signature.label,
+                        documentation: signature.documentation,
+                        parameters: signature
+                            .parameters
+                            .into_iter()
+                            .map(|parameter| LanguageParameterInformationDto {
+                                label: parameter.label,
+                                documentation: parameter.documentation,
+                            })
+                            .collect(),
+                        active_parameter: signature.active_parameter,
+                    })
+                    .collect();
+                (signatures, help.active_signature)
+            },
+        );
+        result(&LanguageSignatureHelpResult {
+            revision: params.document.revision,
+            signatures,
+            active_signature,
+        })
+    }
+
+    pub(super) fn language_inlay_hints(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: LanguageInlayHintsParams = decode(params)?;
+        let workspace = self.language_workspace_root()?;
+        let source_path = workspace
+            .resolve_existing(&params.document.path)
+            .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
+        let revision = LanguageDocumentRevision::new(params.document.revision);
+        let range = utf8_byte_range(&params.document.text, params.range)
+            .map(LanguageTextRange::new)
+            .ok_or_else(|| language_error(AppServerErrorName::LanguageRequestFailed))?;
+        let mut runtime =
+            self.prepare_document_runtime(&workspace, &source_path, &params.document)?;
+        let service = runtime
+            .service
+            .as_ref()
+            .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
+        let request_id = service
+            .request_inlay_hints(&source_path, revision, range)
+            .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
+        let event = runtime
+            .wait_for_request(request_id)
+            .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
+        let hints = match event {
+            LanguageServiceEvent::InlayHints(result) => result.hints,
+            LanguageServiceEvent::RequestFailed { .. } => Vec::new(),
+            _ => return Err(language_error(AppServerErrorName::LanguageRequestFailed)),
+        };
+        let hints = hints
+            .into_iter()
+            .map(|hint| {
+                let position = byte_range_to_utf16(
+                    &params.document.text,
+                    absolute_byte_offset(&params.document.text, hint.position)
+                        .ok_or_else(|| language_error(AppServerErrorName::LanguageRequestFailed))?
+                        ..absolute_byte_offset(&params.document.text, hint.position).ok_or_else(
+                            || language_error(AppServerErrorName::LanguageRequestFailed),
+                        )?,
+                )
+                .map(|range| range.start)
+                .ok_or_else(|| language_error(AppServerErrorName::LanguageRequestFailed))?;
+                Ok(LanguageInlayHintDto {
+                    position,
+                    label: hint.label,
+                    kind: match hint.kind {
+                        LanguageInlayHintKind::Type => LanguageInlayHintKindDto::Type,
+                        LanguageInlayHintKind::Parameter => LanguageInlayHintKindDto::Parameter,
+                        LanguageInlayHintKind::Other => LanguageInlayHintKindDto::Other,
+                    },
+                    tooltip: hint.tooltip,
+                    padding_left: hint.padding_left,
+                    padding_right: hint.padding_right,
+                })
+            })
+            .collect::<Result<Vec<_>, RpcError>>()?;
+        result(&LanguageInlayHintsResult {
+            revision: params.document.revision,
+            hints,
+        })
+    }
+
+    pub(super) fn language_linked_editing_ranges(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: LanguageLinkedEditingRangesParams = decode(params)?;
+        let (_, source_path, revision, position, mut runtime) =
+            self.prepare_position_request(&params.document, params.position)?;
+        let service = runtime
+            .service
+            .as_ref()
+            .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
+        let request_id = service
+            .request_linked_editing_ranges(&source_path, revision, position)
+            .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
+        let event = runtime
+            .wait_for_request(request_id)
+            .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
+        let (ranges, word_pattern) = match event {
+            LanguageServiceEvent::LinkedEditingRanges(result) => {
+                let ranges = result
+                    .ranges
+                    .into_iter()
+                    .map(|range| {
+                        byte_range_to_utf16(&params.document.text, range.byte_range()).ok_or_else(
+                            || language_error(AppServerErrorName::LanguageRequestFailed),
+                        )
+                    })
+                    .collect::<Result<Vec<_>, RpcError>>()?;
+                (ranges, result.word_pattern)
+            }
+            LanguageServiceEvent::RequestFailed { .. } => (Vec::new(), None),
+            _ => return Err(language_error(AppServerErrorName::LanguageRequestFailed)),
+        };
+        result(&LanguageLinkedEditingRangesResult {
+            revision: params.document.revision,
+            ranges,
+            word_pattern,
+        })
     }
 
     pub(super) fn language_locations(&self, params: &Value) -> Result<Value, RpcError> {
@@ -153,17 +499,19 @@ impl AppServer {
             .language
             .lock()
             .map_err(|_| language_error(AppServerErrorName::ServerOverloaded))?;
-        let service = runtime
-            .ensure(
+        runtime
+            .synchronize_document(
                 workspace.canonical_path(),
                 snapshot.generation.get(),
                 &snapshot.values.language_servers,
-                language_service_id(&params.document.language_id),
+                &params.document.path,
+                document,
             )
-            .map_err(|_| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
-        service
-            .synchronize_document(document)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
+        let service = runtime
+            .service
+            .as_ref()
+            .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
         let request_id = match params.kind {
             LanguageLocationKindDto::Declaration => {
                 service.request_declaration(&source_path, revision, position)
@@ -259,17 +607,19 @@ impl AppServer {
             .language
             .lock()
             .map_err(|_| language_error(AppServerErrorName::ServerOverloaded))?;
-        let service = runtime
-            .ensure(
+        runtime
+            .synchronize_document(
                 workspace.canonical_path(),
                 snapshot.generation.get(),
                 &snapshot.values.language_servers,
-                language_service_id(&params.document.language_id),
+                &params.document.path,
+                document,
             )
-            .map_err(|_| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
-        service
-            .synchronize_document(document)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
+        let service = runtime
+            .service
+            .as_ref()
+            .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
         let request_id = match (params.kind, position, item) {
             (LanguageHierarchyKindDto::PrepareCall, Some(position), None) => {
                 service.request_prepare_call_hierarchy(&source_path, revision, position)
@@ -546,6 +896,79 @@ impl AppServer {
             action,
         )?)
     }
+}
+
+fn completion_item_to_dto(
+    text: &str,
+    item: LanguageCompletionItem,
+) -> Option<LanguageCompletionItemDto> {
+    let edit = item.edit?;
+    Some(LanguageCompletionItemDto {
+        label: item.label,
+        kind: match item.kind {
+            LanguageCompletionItemKind::Text => LanguageCompletionItemKindDto::Text,
+            LanguageCompletionItemKind::Method => LanguageCompletionItemKindDto::Method,
+            LanguageCompletionItemKind::Function => LanguageCompletionItemKindDto::Function,
+            LanguageCompletionItemKind::Constructor => LanguageCompletionItemKindDto::Constructor,
+            LanguageCompletionItemKind::Field => LanguageCompletionItemKindDto::Field,
+            LanguageCompletionItemKind::Variable => LanguageCompletionItemKindDto::Variable,
+            LanguageCompletionItemKind::Class => LanguageCompletionItemKindDto::Class,
+            LanguageCompletionItemKind::Interface => LanguageCompletionItemKindDto::Interface,
+            LanguageCompletionItemKind::Module => LanguageCompletionItemKindDto::Module,
+            LanguageCompletionItemKind::Property => LanguageCompletionItemKindDto::Property,
+            LanguageCompletionItemKind::Unit => LanguageCompletionItemKindDto::Unit,
+            LanguageCompletionItemKind::Value => LanguageCompletionItemKindDto::Value,
+            LanguageCompletionItemKind::Enum => LanguageCompletionItemKindDto::Enum,
+            LanguageCompletionItemKind::Keyword => LanguageCompletionItemKindDto::Keyword,
+            LanguageCompletionItemKind::Snippet => LanguageCompletionItemKindDto::Snippet,
+            LanguageCompletionItemKind::File => LanguageCompletionItemKindDto::File,
+            LanguageCompletionItemKind::Folder => LanguageCompletionItemKindDto::Folder,
+            LanguageCompletionItemKind::Reference => LanguageCompletionItemKindDto::Reference,
+            LanguageCompletionItemKind::TypeParameter => {
+                LanguageCompletionItemKindDto::TypeParameter
+            }
+        },
+        detail: item.detail,
+        documentation: item.documentation,
+        filter_text: item.filter_text,
+        sort_text: item.sort_text,
+        preselect: item.preselect,
+        commit_characters: item.commit_characters,
+        insert_text_format: match item.insert_text_format {
+            LanguageCompletionInsertTextFormat::PlainText => {
+                LanguageCompletionInsertTextFormatDto::PlainText
+            }
+            LanguageCompletionInsertTextFormat::Snippet => {
+                LanguageCompletionInsertTextFormatDto::Snippet
+            }
+        },
+        range: byte_range_to_utf16(text, edit.range.byte_range())?,
+        insert_text: edit.new_text,
+    })
+}
+
+fn completion_trigger(
+    kind: LanguageCompletionTriggerKindDto,
+    character: Option<&str>,
+) -> Result<LanguageCompletionTrigger, RpcError> {
+    match (kind, character) {
+        (LanguageCompletionTriggerKindDto::Invoke, None) => Ok(LanguageCompletionTrigger::Invoked),
+        (LanguageCompletionTriggerKindDto::TriggerCharacter, Some(character))
+            if completion_character(character) =>
+        {
+            Ok(LanguageCompletionTrigger::TriggerCharacter(
+                character.to_owned(),
+            ))
+        }
+        (LanguageCompletionTriggerKindDto::IncompleteRefresh, None) => {
+            Ok(LanguageCompletionTrigger::IncompleteRefresh)
+        }
+        _ => Err(language_error(AppServerErrorName::LanguageRequestFailed)),
+    }
+}
+
+fn completion_character(value: &str) -> bool {
+    value != "\n" && value != "\r" && value.chars().count() == 1
 }
 
 fn hierarchy_item_from_dto(
@@ -875,7 +1298,10 @@ fn absolute_byte_offset(text: &str, position: LanguageDocumentPosition) -> Optio
     }
 }
 
-fn byte_range_to_utf16(text: &str, range: std::ops::Range<usize>) -> Option<LanguageRangeDto> {
+pub(super) fn byte_range_to_utf16(
+    text: &str,
+    range: std::ops::Range<usize>,
+) -> Option<LanguageRangeDto> {
     Some(LanguageRangeDto {
         start: byte_offset_to_utf16(text, range.start)?,
         end: byte_offset_to_utf16(text, range.end)?,
@@ -990,3 +1416,7 @@ fn source_line(text: &str, requested: u32) -> Option<&str> {
 fn language_error(name: AppServerErrorName) -> RpcError {
     RpcError::new(-32072, name)
 }
+
+#[cfg(test)]
+#[path = "language_operations_tests.rs"]
+mod tests;

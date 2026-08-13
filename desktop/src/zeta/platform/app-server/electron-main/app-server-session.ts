@@ -194,6 +194,7 @@ function validateInitializeResult(value: InitializeResult): void {
     typeof value.capabilities.fileSystem !== "boolean" ||
     typeof value.capabilities.workspaceSearch !== "boolean" ||
     typeof value.capabilities.terminal !== "boolean" ||
+    typeof value.capabilities.debugAdapter !== "boolean" ||
     typeof value.capabilities.typst !== "boolean" ||
     typeof value.capabilities.updateReplay !== "boolean" ||
     typeof value.capabilities.extensions !== "boolean" ||

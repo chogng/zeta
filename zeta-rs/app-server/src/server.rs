@@ -43,6 +43,7 @@ mod config_operations;
 mod config_runtime;
 mod connector_operations;
 mod connector_runtime;
+mod debug_operations;
 mod diff_operations;
 mod extension_config_operations;
 mod extension_operations;
@@ -215,7 +216,9 @@ impl AppServer {
             connectors: None,
             connector_oauth: None,
             plugins: None,
-            language: Mutex::new(language_runtime::AppServerLanguageRuntime::default()),
+            language: Mutex::new(language_runtime::AppServerLanguageRuntime::new(
+                updates.clone(),
+            )),
             approval_review_model: None,
             workspace_authority_gate,
             workspace_runtime: Arc::new(RwLock::new(WorkspaceRuntime::empty(turn_executor))),
@@ -273,6 +276,9 @@ impl AppServer {
         }
         if let Some(terminals) = self.configured_terminal_service() {
             terminals.close_owner(connection.connection_id);
+        }
+        if let Some(debug_adapters) = self.configured_debug_adapter_service() {
+            debug_adapters.close_owner(connection.connection_id);
         }
     }
 
@@ -523,6 +529,22 @@ impl AppServer {
     ) -> Result<Self, crate::terminal_service::TerminalError> {
         let terminals = Arc::new(crate::terminal_service::TerminalService::new(workspace)?);
         self.workspace_runtime_mut().terminals = Some(terminals);
+        Ok(self)
+    }
+
+    /// Enables connection-owned debug adapters rooted at one trusted Workspace.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn with_debug_adapter_root(
+        mut self,
+        executable_configuration: zeta_workspace::TrustedWorkspace,
+        process_execution: zeta_workspace::TrustedWorkspace,
+    ) -> Result<Self, zeta_debug_adapter::DebugAdapterError> {
+        let service = Arc::new(crate::debug_service::DebugAdapterService::new(
+            executable_configuration,
+            process_execution,
+            crate::terminal_environment::safe_process_environment(),
+        )?);
+        self.workspace_runtime_mut().debug_adapters = Some(service);
         Ok(self)
     }
 
@@ -823,6 +845,23 @@ impl AppServer {
             }
             Some(ClientMethod::DiffCompute) => self.diff_compute(&request.params),
             Some(ClientMethod::SyntaxAnalyze) => self.syntax_analyze(&request.params),
+            Some(ClientMethod::LanguageSynchronize) => self.language_synchronize(&request.params),
+            Some(ClientMethod::LanguageClose) => self.language_close(&request.params),
+            Some(ClientMethod::LanguageHover) => self.language_hover(&request.params),
+            Some(ClientMethod::LanguageCompletions) => self.language_completions(&request.params),
+            Some(ClientMethod::LanguageDocumentFormatting) => {
+                self.language_document_formatting(&request.params)
+            }
+            Some(ClientMethod::LanguageRangeFormatting) => {
+                self.language_range_formatting(&request.params)
+            }
+            Some(ClientMethod::LanguageSignatureHelp) => {
+                self.language_signature_help(&request.params)
+            }
+            Some(ClientMethod::LanguageInlayHints) => self.language_inlay_hints(&request.params),
+            Some(ClientMethod::LanguageLinkedEditingRanges) => {
+                self.language_linked_editing_ranges(&request.params)
+            }
             Some(ClientMethod::LanguageLocations) => self.language_locations(&request.params),
             Some(ClientMethod::LanguageHierarchy) => self.language_hierarchy(&request.params),
             Some(ClientMethod::LanguageWorkspaceSymbols) => {
@@ -890,6 +929,18 @@ impl AppServer {
             Some(ClientMethod::TerminalResize) => self.terminal_resize(connection, &request.params),
             Some(ClientMethod::TerminalRead) => self.terminal_read(connection, &request.params),
             Some(ClientMethod::TerminalClose) => self.terminal_close(connection, &request.params),
+            Some(ClientMethod::DebugAdapterStart) => {
+                self.debug_adapter_start(connection, &request.params)
+            }
+            Some(ClientMethod::DebugAdapterSend) => {
+                self.debug_adapter_send(connection, &request.params)
+            }
+            Some(ClientMethod::DebugAdapterRead) => {
+                self.debug_adapter_read(connection, &request.params)
+            }
+            Some(ClientMethod::DebugAdapterClose) => {
+                self.debug_adapter_close(connection, &request.params)
+            }
             None => Err(RpcError::new(-32601, AppServerErrorName::MethodNotFound)),
         }
     }

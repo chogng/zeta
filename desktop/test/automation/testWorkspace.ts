@@ -1,6 +1,6 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { createAcademicDocumentSchema } from "../../src/zeta/editor/contrib/academic/common/schema.js";
 import { serializeDocument } from "../../src/zeta/editor/common/model/documentSerialization.js";
 
@@ -9,26 +9,38 @@ export interface TestWorkspace {
   readonly file: string;
   readonly rustFile: string;
   readonly academicFile: string;
+  readonly largeFile: string;
   readonly pdfFile: string;
+  readonly removeOnDispose: boolean;
+}
+
+export interface TestWorkspaceOptions {
+  readonly includeLargeFile?: boolean;
 }
 
 /** Creates an isolated folder and text file for App Server-backed UI tests. */
-export async function createTestWorkspace(): Promise<TestWorkspace> {
-  const directory = await mkdtemp(join(tmpdir(), "zeta-playwright-workspace-"));
+export async function createTestWorkspace(options: TestWorkspaceOptions = {}): Promise<TestWorkspace> {
+  const sharedDirectory = process.env.ZETA_PLAYWRIGHT_WORKSPACE;
+  const directory = sharedDirectory ? resolve(sharedDirectory) : await mkdtemp(join(tmpdir(), "zeta-playwright-workspace-"));
+  await mkdir(directory, { recursive: true });
   const file = join(directory, "main.ts");
   const rustFile = join(directory, "main.rs");
+  const rustManifest = join(directory, "Cargo.toml");
   const academicFile = join(directory, "paper.zeta-academic");
+  const largeFile = join(directory, "large.ts");
   const pdfFile = join(directory, "paper.pdf");
   await writeFile(file, "const value = 1;\n", "utf8");
-  await writeFile(rustFile, "fn main() {\n    work();\n}\n", "utf8");
+  await writeFile(rustManifest, "[package]\nname = \"zeta-smoke-workspace\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[[bin]]\nname = \"zeta-smoke-workspace\"\npath = \"main.rs\"\n", "utf8");
+  await writeFile(rustFile, "fn main() {\n    let message = String::from(\"hello\");\n    message.\n}\n", "utf8");
   await writeFile(academicFile, createAcademicDocument(), "utf8");
+  if (options.includeLargeFile) await writeFile(largeFile, "let value = 1;\n".repeat(300_001), "utf8");
   await writeFile(pdfFile, createPdfDocument());
-  return { directory, file, rustFile, academicFile, pdfFile };
+  return { directory, file, rustFile, academicFile, largeFile, pdfFile, removeOnDispose: sharedDirectory === undefined };
 }
 
 /** Removes one test workspace created by {@link createTestWorkspace}. */
 export async function disposeTestWorkspace(workspace: TestWorkspace): Promise<void> {
-  await rm(workspace.directory, { force: true, recursive: true });
+  if (workspace.removeOnDispose) await rm(workspace.directory, { force: true, recursive: true });
 }
 
 function createAcademicDocument(): string {

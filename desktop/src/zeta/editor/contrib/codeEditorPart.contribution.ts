@@ -14,7 +14,7 @@ import { TextPosition, type TextRange } from "../common/core/text.js";
 import { registerEditorPartFactory, type EditorPartOptions, type IEditorPartRuntime } from "../browser/editorPart.js";
 import { getEditorContributions, type EditorCapability } from "../browser/editorContribution.js";
 import { type DecorationSource } from "../browser/view/decorationPresentation.js";
-import { type EditorLineGutterDecoration } from "../browser/view/lineGutterDecoration.js";
+import { combineEditorLineGutterDecorations, type EditorLineGutterDecoration } from "../browser/view/lineGutterDecoration.js";
 import { type BracketColorizationSource, type SemanticTokenSource } from "../browser/view/semanticTokenPresentation.js";
 import { type EditorLineVisibilitySource } from "../common/viewModel/modelLineProjection.js";
 import { type LanguageLexicalContextSource } from "../common/languages/languageLexicalContext.js";
@@ -65,6 +65,7 @@ class ContributedEditorPart extends DisposableOwner implements IEditorPartRuntim
         contributionCapabilities.set(capability.id, value);
       };
       const decorationSources: DecorationSource[] = [];
+      const lineGutterDecorations: EditorLineGutterDecoration[] = [...(options.lineGutterDecorations ?? [])];
       let lineProjection: { readonly visibilitySource: EditorLineVisibilitySource; readonly gutterDecoration?: EditorLineGutterDecoration } | undefined;
       let semanticTokenSource: SemanticTokenSource | undefined;
       let bracketColorizationSource: BracketColorizationSource | undefined;
@@ -86,6 +87,7 @@ class ContributedEditorPart extends DisposableOwner implements IEditorPartRuntim
           getOptionalCapability,
           provideCapability,
           addDecorationSource: source => decorationSources.push(source),
+          addLineGutterDecoration: decoration => lineGutterDecorations.push(decoration),
           setLineProjection: projection => {
             if (lineProjection) throw new Error("Text editor line projection is already configured");
             lineProjection = projection;
@@ -123,7 +125,7 @@ class ContributedEditorPart extends DisposableOwner implements IEditorPartRuntim
         ariaLabel,
         viewport: {
           lineVisibilitySource: lineProjection?.visibilitySource,
-          lineGutterDecoration: lineProjection?.gutterDecoration,
+          lineGutterDecoration: combineEditorLineGutterDecorations([...lineGutterDecorations, ...(lineProjection?.gutterDecoration ? [lineProjection.gutterDecoration] : [])]),
           decorationSources,
           semanticTokenSource,
           bracketColorizationSource,

@@ -131,11 +131,13 @@ impl NotificationListener {
 }
 
 fn is_transient_notification(value: &Value) -> bool {
-    value.get("method").and_then(Value::as_str) == Some("session/thread/update")
-        && value
-            .pointer("/params/update/type")
-            .and_then(Value::as_str)
-            .is_some_and(|kind| kind != "committed")
+    let method = value.get("method").and_then(Value::as_str);
+    method == Some("language/diagnostics")
+        || method == Some("session/thread/update")
+            && value
+                .pointer("/params/update/type")
+                .and_then(Value::as_str)
+                .is_some_and(|kind| kind != "committed")
 }
 
 #[cfg(test)]

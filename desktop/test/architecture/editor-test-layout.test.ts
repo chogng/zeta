@@ -48,7 +48,7 @@ test("browser integrations import the stable API and only their product bundle",
 });
 
 test("desktop exposes one editor browser test entrypoint", () => {
-  assert.equal(desktopPackage.scripts?.["test:editor:browser"], "tsc -p test/editor/browser/tsconfig.json && playwright test --config test/editor/browser/playwright.config.ts");
+  assert.equal(desktopPackage.scripts?.["test:editor:browser"], "tsc -p test/editor/browser/tsconfig.json && node scripts/run-editor-browser-tests.mjs");
   assert.equal(desktopPackage.scripts?.["test:alpha"], undefined);
   assert.equal(desktopPackage.scripts?.["test:gama"], undefined);
 });

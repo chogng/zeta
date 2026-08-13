@@ -3,6 +3,7 @@ import { DisposableOwner, toDisposable, type IDisposable } from "../../../../bas
 import { type LanguageCompletionItem, type LanguageCompletionItemDetails, type LanguageCompletionResult } from "./languageCompletions.js";
 import { assertLanguageId, assertLanguageSelector } from "../languageId.js";
 import { type TextPosition, type TextSnapshot } from "../../core/text.js";
+import { type URI } from "../../../../base/common/uri.js";
 
 export enum LanguageCompletionTriggerKind {
   Invoke = "invoke",
@@ -27,6 +28,7 @@ export type LanguageCompletionContext = LanguageCompletionInvokeContext | Langua
 
 export interface LanguageCompletionRequest {
   readonly languageId: string;
+  readonly resource?: URI;
   readonly position: TextPosition;
   readonly context: LanguageCompletionContext;
 }
@@ -195,6 +197,7 @@ export function assertLanguageCompletionRequest(request: LanguageCompletionReque
     throw new TypeError("Language completion request must be an object");
   }
   assertLanguageId(request.languageId);
+  if (request.resource !== undefined && typeof request.resource.toString !== "function") throw new TypeError("Language completion resource must be a URI");
   assertCompletionContext(request.context);
 }
 

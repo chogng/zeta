@@ -40,6 +40,10 @@ impl TerminalEnvironment {
     }
 }
 
+pub(crate) fn safe_process_environment() -> HashMap<String, String> {
+    TerminalEnvironment::from_process().variables
+}
+
 fn normalized_allowed_environment_key(key: &str) -> Option<String> {
     if !is_valid_environment_name(key) {
         return None;

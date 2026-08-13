@@ -4,13 +4,6 @@ import { ViewContainerLocation, type WorkbenchViewRegistry, WorkbenchViewContain
 
 const placeholderPanels = [
   {
-    containerId: WorkbenchViewContainerId.Problems,
-    title: "Problems",
-    order: 1,
-    viewId: "zeta.problems",
-    message: "No problems have been detected.",
-  },
-  {
     containerId: WorkbenchViewContainerId.Output,
     title: "Output",
     order: 2,

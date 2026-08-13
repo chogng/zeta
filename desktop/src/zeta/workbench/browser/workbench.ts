@@ -160,7 +160,11 @@ import { IWorkspaceEditService } from "../services/language/common/workspaceEdit
 import { getBrowserTextModelService } from "../../editor/browser/services/browserTextModelService.js";
 import { getBrowserTextResourceStore } from "../contrib/codeEditor/browser/browserTextResourceStore.js";
 import { AppServerLanguageProviders } from "../services/language/browser/appServerLanguageProviders.js";
+import { AppServerLanguageDiagnosticsService } from "../services/language/browser/appServerLanguageDiagnosticsService.js";
+import { ILanguageDiagnosticsService } from "../services/language/common/languageDiagnosticsService.js";
 import { createWorkbenchSession, type WorkbenchSession } from "./workbenchSession.js";
+import { createEditorLineGutterDecorations } from "./parts/editor/editorGutterDecorations.js";
+import { installWorkbenchServiceContributions } from "./workbenchServiceContributions.js";
 import { WorkbenchInteractionServices } from "./workbenchInteractionServices.js";
 
 /** Host-specific inputs required to construct a workbench. */
@@ -287,6 +291,8 @@ export class Workbench extends DisposableOwner {
     const languageFeaturesService = this.own(new LanguageFeaturesService());
     services.set(ILanguageFeaturesService, languageFeaturesService);
     this.own(new AppServerLanguageProviders(languageFeaturesService, api.language, workspaceContext));
+    const languageDiagnosticsService = this.own(new AppServerLanguageDiagnosticsService(api.language, api.events, workspaceContext));
+    services.set(ILanguageDiagnosticsService, languageDiagnosticsService);
     const extensionService = this.own(new AppServerExtensionService({ api: api.extensions, textMateService, languageFeaturesService }));
     services.set(IExtensionService, extensionService);
     void extensionService.start().catch(error => console.error("Declarative extension activation failed", error));
@@ -296,6 +302,7 @@ export class Workbench extends DisposableOwner {
     );
     const terminalService = this.own(new TerminalService(api.terminal));
     services.set(ITerminalService, terminalService);
+    installWorkbenchServiceContributions({ services, rendererHost: api, fileService, workspaceContext, terminalService, own: value => this.own(value) });
     const gitService = this.own(new GitService({ api: api.git, appServerApi: api.appServer, eventApi: api.events }));
     services.set(IGitService, gitService);
     const chatService = this.own(new ChatService({ modelApi: api.model, threadApi: api.thread, turnApi: api.turn, skillApi: api.skills, appServerApi: api.appServer, eventApi: api.events }));
@@ -474,10 +481,12 @@ export class Workbench extends DisposableOwner {
       languageResolver: languageFeaturesService,
       diffApi: api.diff,
       syntaxApi: api.syntax,
+      languageDiagnosticsService,
       documentCollaborationApi: api.documentCollaboration,
       serverEvents: api.events,
       workingCopyService,
       workspaceEditService,
+      createLineGutterDecorations: resource => createEditorLineGutterDecorations(resource, services),
       saveAsResource: nativeHostApi
         ? async (defaultName) => {
           const filePath = await nativeHostApi.saveFile({ defaultName });

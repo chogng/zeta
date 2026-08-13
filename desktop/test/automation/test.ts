@@ -10,6 +10,7 @@ import { createTestWorkspace, disposeTestWorkspace, type TestWorkspace } from ".
 import type { Workbench } from "./workbench.js";
 
 interface PlaywrightFixtures {
+  readonly includeLargeTestFile: boolean;
   readonly target: PlaywrightTarget;
   readonly application: PlaywrightApplication;
   readonly driver: PlaywrightDriver;
@@ -18,11 +19,12 @@ interface PlaywrightFixtures {
 }
 
 export const test = base.extend<PlaywrightFixtures>({
+  includeLargeTestFile: [false, { option: true }],
   target: async ({ baseURL }, use, testInfo) => {
     await use(playwrightTargetForProject(testInfo.project.name, baseURL));
   },
-  testWorkspace: async ({}, use) => {
-    const workspace = await createTestWorkspace();
+  testWorkspace: async ({ includeLargeTestFile }, use) => {
+    const workspace = await createTestWorkspace({ includeLargeFile: includeLargeTestFile });
     try {
       await use(workspace);
     } finally {

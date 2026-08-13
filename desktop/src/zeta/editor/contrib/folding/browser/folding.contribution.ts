@@ -12,8 +12,8 @@ registerEditorContribution({
   id: "editor.contrib.folding",
   configure: context => {
     const folding = context.own(new EditorFoldingModel(context.model));
-    const hiddenRanges = context.own(new EditorHiddenRangeModel(context.model, folding));
     const largeFile = context.model.largeFile.tooLargeForTokenization;
+    const hiddenRanges = largeFile ? undefined : context.own(new EditorHiddenRangeModel(context.model, folding));
     const rustSyntaxFacts = largeFile ? undefined : context.getOptionalCapability(TextEditorCapability.rustSyntaxFacts);
     let syntaxFolding: RustSyntaxFoldingService | undefined;
     const update = () => folding.setProviderRanges(largeFile ? [] : mergeEditorFoldingRanges(syntaxFolding?.ranges ?? [], computeEditorLanguageFoldingRanges(context.model, context.languageId, context.configurations), computeEditorIndentFoldingRanges(context.model)));
@@ -21,10 +21,13 @@ registerEditorContribution({
     update();
     if (!largeFile) context.own(context.model.onDidChange(update));
     context.provideCapability(TextEditorCapability.folding, folding);
-    context.setLineProjection({ visibilitySource: hiddenRanges, gutterDecoration: new FoldingDecorationProvider(folding) });
+    if (hiddenRanges) {
+      context.setLineProjection({ visibilitySource: hiddenRanges });
+      context.addLineGutterDecoration(new FoldingDecorationProvider(folding));
+    }
   },
   install: context => {
-    if (context.kind !== "text") return;
+    if (context.kind !== "text" || context.model.largeFile.tooLargeForTokenization) return;
     context.own(new FoldingController(context.textInput.element, context.viewport, context.selections, context.getCapability(TextEditorCapability.folding)));
   },
 });

@@ -4,8 +4,10 @@ use std::time::Duration;
 use lsp_types::{
     CallHierarchyClientCapabilities, ClientCapabilities, ClientInfo,
     CodeActionCapabilityResolveSupport, CodeActionClientCapabilities, FailureHandlingKind,
-    GeneralClientCapabilities, PositionEncodingKind, PublishDiagnosticsClientCapabilities,
-    RenameClientCapabilities, ResourceOperationKind, TextDocumentClientCapabilities,
+    GeneralClientCapabilities, InlayHintClientCapabilities, LinkedEditingRangeClientCapabilities,
+    MarkupKind, ParameterInformationSettings, PositionEncodingKind,
+    PublishDiagnosticsClientCapabilities, RenameClientCapabilities, ResourceOperationKind,
+    SignatureHelpClientCapabilities, SignatureInformationSettings, TextDocumentClientCapabilities,
     TextDocumentSyncClientCapabilities, TypeHierarchyClientCapabilities, Uri,
     WorkspaceClientCapabilities, WorkspaceEditClientCapabilities, WorkspaceFolder,
     WorkspaceSymbolClientCapabilities,
@@ -144,6 +146,24 @@ fn default_client_capabilities() -> ClientCapabilities {
                 did_save: Some(true),
             }),
             publish_diagnostics: Some(PublishDiagnosticsClientCapabilities::default()),
+            signature_help: Some(SignatureHelpClientCapabilities {
+                dynamic_registration: Some(false),
+                signature_information: Some(SignatureInformationSettings {
+                    documentation_format: Some(vec![MarkupKind::Markdown, MarkupKind::PlainText]),
+                    parameter_information: Some(ParameterInformationSettings {
+                        label_offset_support: Some(true),
+                    }),
+                    active_parameter_support: Some(true),
+                }),
+                context_support: Some(true),
+            }),
+            inlay_hint: Some(InlayHintClientCapabilities {
+                dynamic_registration: Some(false),
+                resolve_support: None,
+            }),
+            linked_editing_range: Some(LinkedEditingRangeClientCapabilities {
+                dynamic_registration: Some(false),
+            }),
             call_hierarchy: Some(CallHierarchyClientCapabilities {
                 dynamic_registration: Some(false),
             }),

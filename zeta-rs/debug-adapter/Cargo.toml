@@ -1,0 +1,20 @@
+[package]
+name = "zeta-debug-adapter"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+name = "zeta_debug_adapter"
+path = "src/lib.rs"
+
+[dependencies]
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["io-util", "process", "rt-multi-thread", "sync"] }
+zeta-workspace = { workspace = true }
+
+[lints]
+workspace = true

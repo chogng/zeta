@@ -75,6 +75,7 @@ pub(super) struct WorkspaceRuntime {
     pub(super) cloud_code_index: Option<Arc<CloudCodeIndexController>>,
     pub(super) _customizations: Option<Arc<WorkspaceCustomizations>>,
     pub(super) terminals: Option<Arc<crate::terminal_service::TerminalService>>,
+    pub(super) debug_adapters: Option<Arc<crate::debug_service::DebugAdapterService>>,
     pub(super) turn_executor: TurnExecutor,
 }
 
@@ -93,6 +94,7 @@ impl WorkspaceRuntime {
             cloud_code_index: None,
             _customizations: None,
             terminals: None,
+            debug_adapters: None,
             turn_executor,
         }
     }
@@ -262,6 +264,7 @@ impl WorkspaceRuntimeControl {
         let code_index = runtime.code_index.clone();
         let customizations = runtime._customizations.clone();
         let terminals = runtime.terminals.take();
+        let debug_adapters = runtime.debug_adapters.take();
         let search = runtime.workspace_search.take();
         let git = runtime.git.take();
         let git_watcher = runtime._git_watcher.take();
@@ -298,6 +301,9 @@ impl WorkspaceRuntimeControl {
         let tool_result = self.tools.replace_local(None);
         if let Some(terminals) = terminals {
             terminals.terminate_all();
+        }
+        if let Some(debug_adapters) = debug_adapters {
+            debug_adapters.terminate_all();
         }
         if let Some(search) = search {
             search.cancel_all();
@@ -897,6 +903,7 @@ impl AppServer {
             cloud_code_index: None,
             _customizations: Some(Arc::clone(&customizations)),
             terminals: None,
+            debug_adapters: None,
             turn_executor: current
                 .turn_executor
                 .clone()
@@ -905,7 +912,7 @@ impl AppServer {
         };
         let previous = std::mem::replace(&mut *current, next);
         drop(current);
-        retire_workspace_runtime(previous, None, None);
+        retire_workspace_runtime(previous, None, None, None);
         Ok(canonical_root)
     }
 
@@ -1008,6 +1015,20 @@ impl AppServer {
                 )?,
             ),
         };
+        let debug_adapters = Arc::new(
+            crate::debug_service::DebugAdapterService::new(
+                authorization
+                    .require(WorkspaceCapability::LoadExecutableConfiguration)
+                    .map_err(|_| WorkspaceRuntimeError::TrustRequired)?,
+                authorization
+                    .require(WorkspaceCapability::ExecuteProcess)
+                    .map_err(|_| WorkspaceRuntimeError::TrustRequired)?,
+                crate::terminal_environment::safe_process_environment(),
+            )
+            .map_err(|_| {
+                WorkspaceRuntimeError::Failed("failed to initialize debug adapter runtime".into())
+            })?,
+        );
         host.tools.replace_local(Some(local_port))?;
         self.bind_workspace_skills(&canonical_root)?;
         let context_source = Arc::new(CodeRetrievalContextSource::new(
@@ -1034,6 +1055,7 @@ impl AppServer {
             cloud_code_index,
             _customizations: Some(Arc::clone(&customizations)),
             terminals: Some(Arc::clone(&terminals)),
+            debug_adapters: Some(Arc::clone(&debug_adapters)),
             turn_executor: current
                 .turn_executor
                 .clone()
@@ -1042,7 +1064,12 @@ impl AppServer {
         };
         let previous = std::mem::replace(&mut *current, next);
         drop(current);
-        retire_workspace_runtime(previous, Some(&workspace_search), Some(&terminals));
+        retire_workspace_runtime(
+            previous,
+            Some(&workspace_search),
+            Some(&terminals),
+            Some(&debug_adapters),
+        );
         let git_watcher = git.start_watching();
         let mut runtime = self
             .workspace_runtime
@@ -1082,7 +1109,7 @@ impl AppServer {
             })
     }
 
-    pub(super) fn workspace_features(&self) -> (bool, bool, bool, bool, bool, bool) {
+    pub(super) fn workspace_features(&self) -> (bool, bool, bool, bool, bool, bool, bool) {
         let runtime = self
             .workspace_runtime
             .read()
@@ -1096,6 +1123,7 @@ impl AppServer {
             (switchable && !self.cloud_code_index_providers.is_empty())
                 || runtime.cloud_code_index.is_some(),
             switchable || runtime.terminals.is_some(),
+            switchable || runtime.debug_adapters.is_some(),
         )
     }
 
@@ -1304,6 +1332,23 @@ impl AppServer {
             .read()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .terminals
+            .clone()
+    }
+
+    pub(super) fn debug_adapter_service(
+        &self,
+    ) -> Result<Arc<crate::debug_service::DebugAdapterService>, RpcError> {
+        self.configured_debug_adapter_service()
+            .ok_or_else(|| RpcError::new(-32070, AppServerErrorName::DebugAdapterUnavailable))
+    }
+
+    pub(super) fn configured_debug_adapter_service(
+        &self,
+    ) -> Option<Arc<crate::debug_service::DebugAdapterService>> {
+        self.workspace_runtime
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .debug_adapters
             .clone()
     }
 
@@ -1564,6 +1609,7 @@ fn retire_workspace_runtime(
     mut runtime: WorkspaceRuntime,
     retained_search: Option<&Arc<SearchService>>,
     retained_terminals: Option<&Arc<crate::terminal_service::TerminalService>>,
+    retained_debug_adapters: Option<&Arc<crate::debug_service::DebugAdapterService>>,
 ) {
     if let Some(authorization) = runtime.authorization.take() {
         authorization.revoke();
@@ -1572,6 +1618,11 @@ fn retire_workspace_runtime(
         && !retained_terminals.is_some_and(|retained| Arc::ptr_eq(retained, &terminals))
     {
         terminals.terminate_all();
+    }
+    if let Some(debug_adapters) = runtime.debug_adapters.take()
+        && !retained_debug_adapters.is_some_and(|retained| Arc::ptr_eq(retained, &debug_adapters))
+    {
+        debug_adapters.terminate_all();
     }
     if let Some(search) = runtime.workspace_search.take()
         && !retained_search.is_some_and(|retained| Arc::ptr_eq(retained, &search))

@@ -27,12 +27,30 @@ does not move those responsibilities into Workbench.
 
 ## LSP boundary
 
-An LSP client is not implemented here yet. Future LSP/JSON-RPC and server
-lifecycle code belongs in this Workbench service layer and should register thin
-adapters against the language provider contracts. Diagnostics, completion, semantic
-tokens, and provider-backed folding may originate from LSP; their versioned
-application and DOM projection remain editor-owned.
+The LSP client and server lifecycle live below the Renderer in
+`zeta-rs/lsp`, `zeta-rs/language-service`, and the App Server. This Workbench
+service owns only the frontend adapters in `browser/appServerLanguageProviders.ts`
+and `browser/appServerLanguageDiagnosticsService.ts`. The provider adapter exposes
+hover, completion, cross-file navigation, call/type hierarchy, workspace symbols,
+rename, code actions, document/range formatting, parameter hints, inlay hints,
+and linked editing through
+editor-owned contracts. The diagnostics adapter
+reference-counts open models, debounces authoritative document synchronization,
+closes the App Server document after the final editor releases it, and aggregates
+push diagnostics with editor-published parser diagnostics by resource and revision.
+
+The editor merges current-revision LSP diagnostics with parser diagnostics in its
+existing decoration collection; stale revisions are hidden immediately after an
+edit. The Workbench-owned Problems panel enumerates the same repository, groups
+open-file diagnostics, filters by severity/message/file, and delegates row
+navigation to `IEditorPart`; it does not inspect editor DOM or own diagnostic
+production. Semantic-token LSP adaptation remains future work. Formatting edits use the
+editor command/undo layer; parameter hints retain provider-selected active
+signatures and parameters; inlay hints remain non-mutating; linked ranges extend
+native input before commit so every synchronized change is one atomic undo step.
+Regardless of origin, revision gates, application semantics, and DOM projection
+stay editor-owned.
 
 TextMate is a separate provider under `workbench/services/textMate`. The local
-The lexical provider remains the deterministic fallback when no external
+lexical provider remains the deterministic fallback when no external
 provider is available.

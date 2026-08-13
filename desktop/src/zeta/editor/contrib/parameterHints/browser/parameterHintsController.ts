@@ -2,7 +2,7 @@ import "./media/parameterHints.css";
 import { registerEditorContribution } from "../../../browser/editorContribution.js";
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
-import { type ParameterHintsService, type LanguageParameterHints } from "../common/parameterHints.js";
+import { type ParameterHintsService, type LanguageParameterHints, type LanguageParameterHintsContext } from "../common/parameterHints.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 
@@ -30,18 +30,30 @@ export class ParameterHintsController extends DisposableOwner {
       stopEvent(event);
       this.hide();
     }));
-    this.own(viewport.textModel.onDidChange(() => this.hide()));
+    this.own(viewport.textModel.onDidChange(change => {
+      const inserted = change.changes.length === 1 ? change.changes[0]!.text : "";
+      const triggerIndex = Math.max(inserted.lastIndexOf("("), inserted.lastIndexOf(","));
+      const trigger = triggerIndex >= 0 ? inserted[triggerIndex] : undefined;
+      if (trigger === "(" || trigger === ",") {
+        queueMicrotask(() => void this.refresh({ kind: "triggerCharacter", triggerCharacter: trigger }));
+      } else if (!this.element.hidden) {
+        queueMicrotask(() => void this.refresh({ kind: "contentChange" }));
+      } else {
+        this.hide();
+      }
+    }));
     this.own(selections.onDidChange(() => this.hide()));
     this.own(viewport.onDidChangeLayout(() => this.position()));
   }
 
-  private async refresh(): Promise<void> {
+  private async refresh(context: LanguageParameterHintsContext = { kind: "invoke" }): Promise<void> {
     this.request?.abort();
     const request = this.request = new AbortController();
     try {
       const position = this.selections.selections.primary.active;
-      const hints = await this.service.provideParameterHints(this.languageId, position, request.signal);
-      if (request.signal.aborted || !hints) return;
+      const hints = await this.service.provideParameterHints(this.languageId, position, context, request.signal);
+      if (request.signal.aborted) return;
+      if (!hints) { this.hide(); return; }
       this.render(hints);
     } catch (error) {
       if (!request.signal.aborted) this.onError(error);
@@ -52,7 +64,16 @@ export class ParameterHintsController extends DisposableOwner {
     this.element.replaceChildren(...hints.signatures.map((signature, index) => {
       const node = this.element.ownerDocument.createElement("div");
       node.className = `aster-editor-parameter-hints-signature${hints.activeSignature === index ? " active" : ""}`;
-      node.textContent = signature.label;
+      const activeParameter = (hints.activeSignature ?? 0) === index && signature.activeParameter !== undefined ? signature.parameters[signature.activeParameter] : undefined;
+      const activeStart = activeParameter ? signature.label.indexOf(activeParameter.label) : -1;
+      if (activeParameter && activeStart >= 0) {
+        const parameter = this.element.ownerDocument.createElement("strong");
+        parameter.className = "aster-editor-parameter-hints-parameter active";
+        parameter.textContent = activeParameter.label;
+        node.append(signature.label.slice(0, activeStart), parameter, signature.label.slice(activeStart + activeParameter.label.length));
+      } else {
+        node.textContent = signature.label;
+      }
       if (signature.documentation) node.title = signature.documentation;
       return node;
     }));
@@ -79,6 +100,6 @@ export class ParameterHintsController extends DisposableOwner {
 
 registerEditorContribution({ id: "editor.contrib.parameterHints", install: context => {
   if (context.kind !== "text") return;
-  const service = context.own(context.languageFeaturesService.createParameterHintsService(context.model));
+  const service = context.own(context.languageFeaturesService.createParameterHintsService(context.model, context.options.input.resource));
   context.own(new ParameterHintsController(context.textInput.element, context.viewport, context.selections, service, context.languageId, context.onLanguageError));
 } });

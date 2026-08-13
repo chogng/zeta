@@ -1,12 +1,15 @@
 use super::connection::{from_sql_integer, open, sql_error, to_sql_integer};
-use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
+use rusqlite::{params, Connection, OptionalExtension, TransactionBehavior};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use zeta_protocol::SessionId;
-use zeta_session_store::{
-    AppendSessionBatchResult, SessionEventBatch, SessionStore, SessionStoreError,
-    StoredSessionEvent, validate_session_append_batch,
-};
+use zeta_session_store::validate_session_append_batch;
+use zeta_session_store::validate_session_history;
+use zeta_session_store::AppendSessionBatchResult;
+use zeta_session_store::SessionEventBatch;
+use zeta_session_store::SessionStore;
+use zeta_session_store::SessionStoreError;
+use zeta_session_store::StoredSessionEvent;
 
 /// SQLite implementation of the authoritative typed Session event store.
 pub struct SqliteSessionStore {
@@ -49,22 +52,68 @@ impl SessionStore for SqliteSessionStore {
     }
 
     fn load(&self, session_id: &SessionId) -> Result<Vec<StoredSessionEvent>, SessionStoreError> {
-        let connection = self.connection()?;
-        let mut statement = connection
-            .prepare(
-                "SELECT envelope_json FROM session_events
-                 WHERE session_id = ?1 ORDER BY sequence",
-            )
+        let mut connection = self.connection()?;
+        let transaction = connection
+            .transaction_with_behavior(TransactionBehavior::Deferred)
             .map_err(storage_error)?;
-        let events: Vec<StoredSessionEvent> = statement
-            .query_map([session_id.as_str()], |row| row.get::<_, String>(0))
+        let current_sequence = transaction
+            .query_row(
+                "SELECT current_sequence FROM session_streams WHERE session_id = ?1",
+                [session_id.as_str()],
+                |row| row.get::<_, i64>(0),
+            )
+            .optional()
             .map_err(storage_error)?
-            .map(|row| {
-                serde_json::from_str(&row.map_err(storage_error)?)
-                    .map_err(|error| SessionStoreError::Storage(error.to_string()))
-            })
-            .collect::<Result<_, _>>()?;
-        validate_loaded(session_id, &events)?;
+            .map(from_sql_integer)
+            .transpose()
+            .map_err(SessionStoreError::Storage)?;
+        let events = {
+            let mut statement = transaction
+                .prepare(
+                    "SELECT sequence, event_id, schema_version, envelope_json FROM session_events
+                     WHERE session_id = ?1 ORDER BY sequence",
+                )
+                .map_err(storage_error)?;
+            let rows = statement
+                .query_map([session_id.as_str()], |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, u32>(2)?,
+                        row.get::<_, String>(3)?,
+                    ))
+                })
+                .map_err(storage_error)?;
+            let mut events = Vec::new();
+            for row in rows {
+                let (sequence, event_id, schema_version, envelope) = row.map_err(storage_error)?;
+                let sequence = from_sql_integer(sequence).map_err(SessionStoreError::Storage)?;
+                let event = serde_json::from_str::<StoredSessionEvent>(&envelope)
+                    .map_err(|error| SessionStoreError::Storage(error.to_string()))?;
+                if event.sequence != sequence
+                    || event.event_id.0 != event_id
+                    || event.schema_version != schema_version
+                {
+                    return Err(SessionStoreError::Storage(
+                        "Session history row metadata disagrees with its envelope".into(),
+                    ));
+                }
+                events.push(event);
+            }
+            events
+        };
+        validate_session_history(session_id, &events)?;
+        let loaded_sequence = events.last().map_or(0, |event| event.sequence);
+        match current_sequence {
+            Some(current_sequence) if current_sequence == loaded_sequence => {}
+            None if events.is_empty() => {}
+            _ => {
+                return Err(SessionStoreError::Storage(
+                    "Session stream sequence disagrees with its durable event tail".into(),
+                ));
+            }
+        }
+        transaction.commit().map_err(storage_error)?;
         Ok(events)
     }
 
@@ -182,25 +231,6 @@ impl SqliteSessionStore {
             .lock()
             .map_err(|_| SessionStoreError::Storage("Session SQLite lock poisoned".into()))
     }
-}
-
-fn validate_loaded(
-    session_id: &SessionId,
-    events: &[StoredSessionEvent],
-) -> Result<(), SessionStoreError> {
-    if events.is_empty() {
-        return Ok(());
-    }
-    validate_session_append_batch(
-        &SessionEventBatch {
-            batch_id: "sqlite-recovery".into(),
-            session_id: session_id.clone(),
-            expected_sequence: 0,
-            events: events.to_vec(),
-        },
-        0,
-    )
-    .map(|_| ())
 }
 
 fn storage_error(error: impl std::fmt::Display) -> SessionStoreError {

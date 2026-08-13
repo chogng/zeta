@@ -4,6 +4,11 @@ use zeta_protocol::{CommandId, SessionCommand, SessionEvent, SessionId};
 pub const CURRENT_SESSION_EVENT_SCHEMA_VERSION: u32 = 2;
 pub const MINIMUM_SUPPORTED_SESSION_EVENT_SCHEMA_VERSION: u32 = 1;
 
+pub const fn supports_session_event_schema_version(schema_version: u32) -> bool {
+    schema_version >= MINIMUM_SUPPORTED_SESSION_EVENT_SCHEMA_VERSION
+        && schema_version <= CURRENT_SESSION_EVENT_SCHEMA_VERSION
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct SessionEventId(pub String);
 

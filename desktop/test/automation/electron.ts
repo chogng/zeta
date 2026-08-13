@@ -1,7 +1,9 @@
 import { resolve } from "node:path";
+import { createRequire } from "node:module";
 import type { AppServerTestMode, DesktopProduct } from "./testTarget.js";
 
 const desktopDirectory = resolve(import.meta.dirname, "../..");
+const electronExecutablePath = createRequire(import.meta.url)("electron") as string;
 
 export interface ElectronLaunchOptions {
   readonly appServerMode: AppServerTestMode;
@@ -11,6 +13,7 @@ export interface ElectronLaunchOptions {
 }
 
 export interface ElectronConfiguration {
+  readonly executablePath: string;
   readonly args: readonly string[];
   readonly cwd: string;
   readonly env: Readonly<Record<string, string>>;
@@ -31,6 +34,7 @@ export function resolveElectronConfiguration(options: ElectronLaunchOptions): El
   delete environment.ELECTRON_RUN_AS_NODE;
 
   return {
+    executablePath: electronExecutablePath,
     args: [
       "--disable-gpu",
       "--in-process-gpu",

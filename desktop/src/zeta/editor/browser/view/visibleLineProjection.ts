@@ -48,6 +48,7 @@ export class VisibleLineProjection extends DisposableOwner {
 
   private createProjection(): EditorVisualLineProjection {
     const source = this.source.ensureCurrent();
+    if (!this.visibility) return source;
     const visibleLogicalLines = this.visibleLogicalLines(source.logicalLineCount);
     const lines = source.lines.filter(line => visibleLogicalLines[line.logicalLineIndex]);
     const anchors = createVisualLineAnchors(source, visibleLogicalLines, lines);
@@ -55,9 +56,7 @@ export class VisibleLineProjection extends DisposableOwner {
   }
 
   private visibleLogicalLines(lineCount: number): readonly boolean[] {
-    const visibility = this.visibility;
-    if (!visibility) return Object.freeze(Array.from({ length: lineCount }, () => true));
-    return Object.freeze(Array.from({ length: lineCount }, (_, lineIndex) => visibility.isLineVisible(lineIndex)));
+    return Object.freeze(Array.from({ length: lineCount }, (_, lineIndex) => this.visibility!.isLineVisible(lineIndex)));
   }
 }
 

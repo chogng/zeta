@@ -3,6 +3,7 @@ import { createLanguageCompletionIncompleteRefreshContext, createLanguageComplet
 import { normalizeLanguageCompletionSnapshotResult, type LanguageCompletionItem, type LanguageCompletionResult } from "./languageCompletions.js";
 import { type LanguageWorkerWireCodec } from "../languageWorkerWire.js";
 import { TextPosition, TextRange, type TextSnapshot } from "../../core/text.js";
+import { URI } from "../../../../base/common/uri.js";
 
 export const languageCompletionWireCodec: LanguageWorkerWireCodec<LanguageCompletionLane, LanguageCompletionRequest, LanguageCompletionResult> = Object.freeze({
   lanes: Object.freeze([LANGUAGE_COMPLETION_LANE] as const),
@@ -24,6 +25,7 @@ export const languageCompletionWireCodec: LanguageWorkerWireCodec<LanguageComple
 function encodeCompletionRequest(request: LanguageCompletionRequest): unknown {
   return Object.freeze({
     languageId: request.languageId,
+    ...(request.resource ? { resource: request.resource.toString() } : {}),
     position: encodePosition(request.position),
     context: encodeContext(request.context),
   });
@@ -38,6 +40,7 @@ function decodeCompletionRequest(value: unknown, snapshot: TextSnapshot): Langua
   assertSnapshotPosition(snapshot, position);
   return Object.freeze({
     languageId: value.languageId,
+    ...(typeof value.resource === "string" ? { resource: URI.parse(value.resource) } : {}),
     position,
     context: decodeContext(value.context),
   });

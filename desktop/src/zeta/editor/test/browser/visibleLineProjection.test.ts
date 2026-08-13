@@ -55,6 +55,16 @@ test("Visible visual-line projection refreshes the source before collapsed range
   assert.equal(projection.projection.lineAt(0)?.logicalLineIndex, 0);
 });
 
+test("Visible visual-line projection reuses its source when no visibility filter is installed", () => {
+  using model = new TextModel("first\nsecond");
+  using wrapping = new VisualLineProjection(model, new FixedTextMeasurer());
+  using projection = new VisibleLineProjection(wrapping, undefined);
+
+  assert.equal(projection.projection, wrapping.projection);
+  model.applyEdits([{ range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 0)), text: "x" }]);
+  assert.equal(projection.projection, wrapping.projection);
+});
+
 class FixedTextMeasurer implements TextMeasurer {
   readonly horizontalPadding = 0;
   readonly contentLeftPadding = 0;

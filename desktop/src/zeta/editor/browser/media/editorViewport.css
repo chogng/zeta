@@ -80,7 +80,7 @@
   display: inline-block;
   box-sizing: border-box;
   width: var(--aster-editor-gutter-width);
-  padding: 0 8px;
+  padding: 0 8px 0 calc(var(--aster-editor-additional-feature-gutter-width, 0px) + 8px);
   color: var(--zeta-description-foreground);
   text-align: right;
   user-select: none;
@@ -94,7 +94,7 @@
 .aster-editor-diagnostic-marker {
   position: absolute;
   top: 0;
-  left: 20px;
+  left: max(20px, var(--aster-editor-feature-gutter-width, 0px));
   z-index: 5;
   width: 20px;
   height: 100%;
@@ -103,6 +103,25 @@
   text-align: center;
   pointer-events: auto;
   cursor: help;
+}
+
+.aster-editor-feature-gutter-slot {
+  position: relative;
+  z-index: 5;
+  display: inline-block;
+  width: 20px;
+  height: 100%;
+  vertical-align: top;
+}
+
+.aster-editor-feature-gutter {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 5;
+  width: var(--aster-editor-feature-gutter-width, 0px);
+  height: 100%;
+  white-space: nowrap;
 }
 
 .aster-editor-diagnostic-hover {

@@ -1,0 +1,39 @@
+.zeta-debug-breakpoint-gutter {
+  position: absolute;
+  inset: 0;
+  width: 20px;
+  height: 100%;
+  padding: 0;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+}
+
+.zeta-debug-breakpoint-gutter::before {
+  display: block;
+  width: 10px;
+  height: 10px;
+  margin: auto;
+  content: "";
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 50%;
+}
+
+.zeta-debug-breakpoint-gutter:hover::before {
+  background: color-mix(in srgb, var(--zeta-error-foreground) 45%, transparent);
+}
+
+.zeta-debug-breakpoint-gutter.checked::before {
+  background: var(--zeta-error-foreground);
+  border-color: var(--zeta-error-foreground);
+}
+
+.zeta-debug-breakpoint-gutter.checked:not(.verified)::before {
+  background: transparent;
+}
+
+.zeta-debug-breakpoint-gutter:focus-visible {
+  outline: 1px solid var(--zeta-focus-border);
+  outline-offset: -1px;
+}

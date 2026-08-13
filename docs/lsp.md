@@ -129,8 +129,8 @@ Desktop 的 legacy editor runtime host 可以消费相同系统语义，但不�
 - Native revision gate、CodeEditor severity squiggle/soft-wrap projection 与 hover detail；
 - transport-close detection、断连 route retirement、server epoch gate、有限指数退避与 crash-loop state；
 - Native Settings 的 Starting/Ready/BackingOff/CrashLoop/Failed/Stopped runtime projection；
-- hover/completion/definition product facade、capability gate、三重 freshness gate、Native latest-request
-  gate 与可见交互；
+- hover/completion/navigation/hierarchy/rename/code-action/formatting/signature-help/inlay-hints/linked-editing product facade、
+  capability gate、三重 freshness gate、Renderer latest-request gate 与可见交互；
 - Rust、JSON/JSONC、Shell 三项 built-in catalog definitions；
 - verified package staging、SHA-256、side-by-side update 与 receipt；
 - in-memory protocol vertical tests。
@@ -138,10 +138,9 @@ Desktop 的 legacy editor runtime host 可以消费相同系统语义，但不�
 ### 计划
 
 1. 把 workspace trust 的明确结果映射为 catalog execution policy。
-2. 接入 references 和 workspace symbols，并为多 definition target 建立 picker。
+2. 接入 semantic tokens，并为多 definition target 建立 picker。
 3. 为每个内置 server 增加可信 release metadata provider、archive limit、compatibility probe 和安装 UI。
-4. 有真实消费者后再增加 dynamic registration、workspace edit、progress、semantic tokens 和
-   pull diagnostics。
+4. 有真实消费者后再增加 dynamic registration、progress 和 pull diagnostics。
 
 ### 潜在方向
 

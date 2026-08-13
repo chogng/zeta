@@ -37,6 +37,7 @@ export type ITerminalProfileSelection =
 export interface ITerminalCreateOptions {
   readonly dimensions: ITerminalDimensions;
   readonly profile: ITerminalProfileSelection;
+  readonly title?: string;
 }
 
 /** One interactive terminal independently of its transport representation. */

@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::mpsc;
 use std::time::Duration;
 use std::time::Instant;
@@ -21,26 +22,99 @@ use zeta_language_service::LanguageRequestId;
 use zeta_language_service::LanguageServerState;
 use zeta_language_service::LanguageService;
 use zeta_language_service::LanguageServiceConfiguration;
+use zeta_language_service::LanguageServiceDocument;
 use zeta_language_service::LanguageServiceEvent;
 use zeta_language_service::LanguageServiceEventSink;
+
+use zeta_app_server_protocol::protocol::language::LanguageCodeActionDiagnosticDto;
+use zeta_app_server_protocol::protocol::language::LanguageDiagnosticSeverityDto;
+use zeta_app_server_protocol::protocol::language::LanguageDiagnosticsNotification;
+
+use super::language_operations::byte_range_to_utf16;
+use super::update_broker::UpdateBroker;
 
 const SERVER_START_TIMEOUT: Duration = Duration::from_secs(15);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
 struct AppServerLanguageEventSink {
     sender: mpsc::Sender<LanguageServiceEvent>,
+    diagnostics: Arc<LanguageDiagnosticPublisher>,
 }
 
 impl LanguageServiceEventSink for AppServerLanguageEventSink {
     fn on_event(&self, event: LanguageServiceEvent) {
+        if let LanguageServiceEvent::Diagnostics(diagnostics) = &event {
+            self.diagnostics.publish(diagnostics);
+            return;
+        }
         let _ = self.sender.send(event);
     }
 }
 
-#[derive(Default)]
+#[derive(Clone)]
+struct AppServerLanguageDocumentSnapshot {
+    relative_path: PathBuf,
+    revision: zeta_language_service::LanguageDocumentRevision,
+    text: String,
+}
+
+struct LanguageDiagnosticPublisher {
+    documents: Arc<Mutex<BTreeMap<PathBuf, AppServerLanguageDocumentSnapshot>>>,
+    updates: Arc<UpdateBroker>,
+}
+
+impl LanguageDiagnosticPublisher {
+    fn publish(&self, diagnostics: &zeta_language_service::LanguageDiagnostics) {
+        let snapshot = self
+            .documents
+            .lock()
+            .ok()
+            .and_then(|documents| documents.get(diagnostics.path()).cloned());
+        let Some(snapshot) =
+            snapshot.filter(|snapshot| snapshot.revision == diagnostics.revision())
+        else {
+            return;
+        };
+        let diagnostics = diagnostics
+            .diagnostics()
+            .iter()
+            .filter_map(|diagnostic| {
+                Some(LanguageCodeActionDiagnosticDto {
+                    range: byte_range_to_utf16(&snapshot.text, diagnostic.range.byte_range())?,
+                    severity: match diagnostic.severity {
+                        zeta_language_service::LanguageDiagnosticSeverity::Error => {
+                            LanguageDiagnosticSeverityDto::Error
+                        }
+                        zeta_language_service::LanguageDiagnosticSeverity::Warning => {
+                            LanguageDiagnosticSeverityDto::Warning
+                        }
+                        zeta_language_service::LanguageDiagnosticSeverity::Information => {
+                            LanguageDiagnosticSeverityDto::Information
+                        }
+                        zeta_language_service::LanguageDiagnosticSeverity::Hint => {
+                            LanguageDiagnosticSeverityDto::Hint
+                        }
+                    },
+                    message: diagnostic.message.clone(),
+                    code: diagnostic.code.clone().map(serde_json::Value::String),
+                    source: diagnostic.source.clone(),
+                })
+            })
+            .collect();
+        self.updates
+            .publish_language_diagnostics(LanguageDiagnosticsNotification {
+                path: snapshot.relative_path,
+                revision: snapshot.revision.value(),
+                diagnostics,
+            });
+    }
+}
+
 pub(super) struct AppServerLanguageRuntime {
     pub(super) service: Option<LanguageService>,
     receiver: Option<mpsc::Receiver<LanguageServiceEvent>>,
+    documents: Arc<Mutex<BTreeMap<PathBuf, AppServerLanguageDocumentSnapshot>>>,
+    updates: Arc<UpdateBroker>,
     workspace_root: Option<PathBuf>,
     config_generation: Option<u64>,
     language_servers: BTreeMap<String, String>,
@@ -48,6 +122,19 @@ pub(super) struct AppServerLanguageRuntime {
 }
 
 impl AppServerLanguageRuntime {
+    pub(super) fn new(updates: Arc<UpdateBroker>) -> Self {
+        Self {
+            service: None,
+            receiver: None,
+            documents: Arc::new(Mutex::new(BTreeMap::new())),
+            updates,
+            workspace_root: None,
+            config_generation: None,
+            language_servers: BTreeMap::new(),
+            server_states: BTreeMap::new(),
+        }
+    }
+
     pub(super) fn ensure(
         &mut self,
         workspace_root: &Path,
@@ -74,12 +161,20 @@ impl AppServerLanguageRuntime {
         loop {
             let event = self.recv_until(deadline)?;
             let matches = match &event {
+                LanguageServiceEvent::Hover(result) => result.request_id == request_id,
+                LanguageServiceEvent::Completions(result) => result.request_id == request_id,
                 LanguageServiceEvent::Locations(result) => result.request_id == request_id,
                 LanguageServiceEvent::Hierarchy(result) => result.request_id == request_id,
                 LanguageServiceEvent::WorkspaceSymbols(result) => result.request_id == request_id,
                 LanguageServiceEvent::RenamePreparation(result) => result.request_id == request_id,
                 LanguageServiceEvent::WorkspaceEdit(result) => result.request_id == request_id,
                 LanguageServiceEvent::CodeActions(result) => result.request_id == request_id,
+                LanguageServiceEvent::FormattingEdits(result) => result.request_id == request_id,
+                LanguageServiceEvent::SignatureHelp(result) => result.request_id == request_id,
+                LanguageServiceEvent::InlayHints(result) => result.request_id == request_id,
+                LanguageServiceEvent::LinkedEditingRanges(result) => {
+                    result.request_id == request_id
+                }
                 LanguageServiceEvent::RequestFailed {
                     request_id: failed, ..
                 } => *failed == request_id,
@@ -90,6 +185,52 @@ impl AppServerLanguageRuntime {
                 return Ok(event);
             }
         }
+    }
+
+    pub(super) fn synchronize_document(
+        &mut self,
+        workspace_root: &Path,
+        config_generation: u64,
+        configuration: &LanguageServersConfig,
+        relative_path: &Path,
+        document: LanguageServiceDocument,
+    ) -> Result<(), String> {
+        let language_id = document.language_id().to_owned();
+        self.ensure(
+            workspace_root,
+            config_generation,
+            configuration,
+            &language_id,
+        )?;
+        self.documents
+            .lock()
+            .map_err(|_| String::from("language document snapshots are unavailable"))?
+            .insert(
+                document.path().to_path_buf(),
+                AppServerLanguageDocumentSnapshot {
+                    relative_path: relative_path.to_path_buf(),
+                    revision: document.revision(),
+                    text: document.text().to_owned(),
+                },
+            );
+        self.service
+            .as_ref()
+            .ok_or_else(|| String::from("language service is unavailable"))?
+            .synchronize_document(document)
+            .map_err(|error| error.to_string())
+    }
+
+    pub(super) fn close_document(&mut self, path: &Path) -> Result<(), String> {
+        self.documents
+            .lock()
+            .map_err(|_| String::from("language document snapshots are unavailable"))?
+            .remove(path);
+        if let Some(service) = &self.service {
+            service
+                .close_document(path)
+                .map_err(|error| error.to_string())?;
+        }
+        Ok(())
     }
 
     fn restart(
@@ -131,7 +272,13 @@ impl AppServerLanguageRuntime {
         let (sender, receiver) = mpsc::channel();
         let service = LanguageService::start(
             LanguageServiceConfiguration::enabled(workspace_root, definitions),
-            Arc::new(AppServerLanguageEventSink { sender }),
+            Arc::new(AppServerLanguageEventSink {
+                sender,
+                diagnostics: Arc::new(LanguageDiagnosticPublisher {
+                    documents: Arc::clone(&self.documents),
+                    updates: Arc::clone(&self.updates),
+                }),
+            }),
         )
         .map_err(|error| error.to_string())?;
         self.service = Some(service);
@@ -185,6 +332,9 @@ impl AppServerLanguageRuntime {
     }
 
     fn shutdown(&mut self) {
+        if let Ok(mut documents) = self.documents.lock() {
+            documents.clear();
+        }
         if let Some(service) = self.service.take() {
             let _ = service.shutdown();
         }

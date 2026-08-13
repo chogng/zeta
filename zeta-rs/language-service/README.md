@@ -124,9 +124,9 @@ server 选定的位置编码。
 - ✅ 意外 transport close、断连 route retirement、有限指数退避、healthy-window reset、crash-loop gate
   和 authoritative document replay；
 - ✅ Native Settings 显示 Starting、Ready、BackingOff、CrashLoop、Failed 和 Stopped，运行态不进入配置 authority；
-- ✅ hover/completion/definition 非阻塞 facade、capability gate、request identity 和 stale-result rejection；
+- ✅ hover/completion/navigation/hierarchy/rename/code-action/formatting/signature-help/inlay-hints/linked-editing 非阻塞 facade、capability gate、request identity 和 stale-result rejection；
 - ✅ Native pointer hover、latest-request gate、可滚动 completion window/安全 textEdit 接受，以及 F12
   definition navigation；
-- 尚未完成：references/workspace symbols、completion resolve/commands 和多 definition target picker；
+- 尚未完成：completion resolve/commands、semantic tokens 和多 definition target picker；
 - 尚未完成：server-specific distribution provider 与产品级 message/install UI；
 - Potential：远程 workspace authority 出现后再评估是否把 execution 放到 App Server。

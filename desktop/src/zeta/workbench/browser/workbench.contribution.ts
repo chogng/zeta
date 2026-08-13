@@ -26,6 +26,7 @@ import {
   registerChatViews,
 } from "../contrib/chat/browser/chat.contribution.js";
 import { registerPanelPlaceholderViews } from "../contrib/panel/browser/panel.contribution.js";
+import { registerProblemsView } from "../contrib/problems/browser/problems.contribution.js";
 import { registerTerminalView } from "../contrib/terminal/browser/terminal.contribution.js";
 import { lxiconsLibrary } from "../../base/common/lxiconsLibrary.js";
 import "../contrib/markdown/browser/markdown.contribution.js";
@@ -51,6 +52,7 @@ registerFilesViews();
 registerSearchViews();
 registerGitViews();
 registerChatViews();
+registerProblemsView();
 registerPanelPlaceholderViews();
 registerTerminalView();
 

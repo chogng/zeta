@@ -38,6 +38,7 @@ zeta-connectors-extension = { workspace = true }
 zeta-core = { workspace = true }
 zeta-client = { workspace = true }
 zeta-diff = { workspace = true }
+zeta-debug-adapter = { workspace = true }
 zeta-extensions = { workspace = true }
 zeta-extension-api = { workspace = true }
 zeta-mcp-extension = { workspace = true }

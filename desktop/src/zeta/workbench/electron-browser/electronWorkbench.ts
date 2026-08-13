@@ -21,11 +21,13 @@ import {
 } from "../services/contextmenu/electron-browser/contextMenuService.js";
 import { loadUserThemes } from "./userThemes.js";
 import type { WorkbenchSession } from "../browser/workbenchSession.js";
+import { type ElectronRendererCapabilityContribution } from "../../platform/native/electron-browser/rendererApi.js";
 
 /** Starts one Electron renderer for the selected product edition. */
 export async function startElectronWorkbench(
   product: ProductConfiguration,
   session: WorkbenchSession,
+  rendererCapabilities: readonly ElectronRendererCapabilityContribution[] = [],
 ): Promise<void> {
   installBaseUiStyles();
   const disposableTracker = import.meta.env.DEV
@@ -34,7 +36,7 @@ export async function startElectronWorkbench(
   const tracking = disposableTracker
     ? installDisposableTracker(disposableTracker)
     : undefined;
-  const api = createElectronRendererApi();
+  const api = createElectronRendererApi(rendererCapabilities);
   const userThemes = await loadUserThemes(api.userThemes);
   const workbench = startWorkbench({
     product,

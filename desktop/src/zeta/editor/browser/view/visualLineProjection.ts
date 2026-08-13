@@ -183,6 +183,7 @@ export class VisualLineProjection extends DisposableOwner {
   }
 
   private createProjection(): EditorVisualLineProjection {
+    if (this.wrapping === EditorLineWrapping.Off || this.wrapWidth === 0) return this.createUnwrappedProjection();
     const breakColumnsByLine: number[][] = [];
     for (let lineIndex = 0; lineIndex < this.model.lineCount; lineIndex += 1) {
       const text = this.model.getLineContent(lineIndex);
@@ -192,13 +193,7 @@ export class VisualLineProjection extends DisposableOwner {
   }
 
   private createUnwrappedProjection(): EditorVisualLineProjection {
-    return EditorVisualLineProjection.fromBreakColumns(
-      this.model,
-      Array.from(
-        { length: this.model.lineCount },
-        (_, lineIndex) => [this.model.getLineContent(lineIndex).length],
-      ),
-    );
+    return EditorVisualLineProjection.identity(this.model);
   }
 
   private createProjectionFromPendingBreaks(): EditorVisualLineProjection {

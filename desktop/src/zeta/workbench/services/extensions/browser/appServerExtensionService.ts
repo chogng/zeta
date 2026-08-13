@@ -147,6 +147,7 @@ export class AppServerExtensionService extends DisposableOwner implements IExten
       this.changeEmitter.fire(catalog);
     } catch (error) {
       registrations.dispose();
+      if (this.disposed) return;
       this.failureEmitter.fire(Object.freeze({ extension: activeExtension, error }));
       throw error;
     }

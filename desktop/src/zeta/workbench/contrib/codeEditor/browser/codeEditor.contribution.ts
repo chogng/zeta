@@ -21,10 +21,12 @@ registerEditorPane({
       textMateService: options.textMateService,
       languageFeaturesService: options.languageFeaturesService,
       syntaxApi: options.syntaxApi,
+      languageDiagnosticsService: options.languageDiagnosticsService,
       workingCopyService: options.workingCopyService,
       onSave: options.onSave,
       onOpenLocation: options.onOpenLocation,
       onApplyWorkspaceEdit: options.onApplyWorkspaceEdit,
+      createLineGutterDecorations: options.createLineGutterDecorations,
     });
   },
 });

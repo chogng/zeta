@@ -17,6 +17,8 @@ import { type EditorTextDirection, type EditorViewport, type EditorViewportPrese
 import { type EditorLineWrapping } from "./view/visualLineProjection.js";
 import { type LanguageLocation } from "../contrib/gotoSymbol/common/languageNavigation.js";
 import { type LanguageWorkspaceEdit } from "../common/languages/languageWorkspaceEdit.js";
+import { type ILanguageDiagnosticsService } from "../common/services/languageDiagnosticsService.js";
+import { type EditorLineGutterDecoration } from "./view/lineGutterDecoration.js";
 
 export interface EditorContextMenuRequest {
   readonly position: TextPosition;
@@ -33,6 +35,8 @@ export interface EditorPartOptions {
   readonly languageFeaturesService?: ILanguageFeaturesService;
   /** Optional Rust-backed syntax facts used for parser-grade fold ranges. */
   readonly syntaxApi?: ISyntaxApi;
+  /** Optional host service that synchronizes open models and supplies push diagnostics. */
+  readonly languageDiagnosticsService?: ILanguageDiagnosticsService;
   readonly modelReference: TextModelReference;
   readonly syntaxWorkerFactory?: SyntaxWorkerFactory;
   readonly completionWorkerFactory?: LanguageCompletionWorkerFactory;
@@ -59,6 +63,8 @@ export interface EditorPartOptions {
   readonly onOpenLocation?: (location: LanguageLocation) => void | Promise<void>;
   /** Host-owned multi-resource edit transaction. */
   readonly onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit) => void | Promise<void>;
+  /** Host-contributed gutter presentation; feature semantics remain outside the editor core. */
+  readonly lineGutterDecorations?: readonly EditorLineGutterDecoration[];
   readonly placeholder?: string;
   readonly showUnicodeHighlights?: boolean;
   readonly fontZoom?: { readonly initialScale?: number };

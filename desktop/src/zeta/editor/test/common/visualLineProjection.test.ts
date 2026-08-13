@@ -75,3 +75,20 @@ test("visual line projection rejects stale or invalid break coordinates", () => 
   assert.throws(() => EditorVisualLineProjection.fromBreakColumns(model, [[0, 3]]), /empty visual segment/);
   assert.throws(() => EditorVisualLineProjection.fromBreakColumns(model, []), /one entry/);
 });
+
+test("identity visual line projection resolves unwrapped lines lazily", () => {
+  using model = new TextModel("first\nsecond");
+  const projection = EditorVisualLineProjection.identity(model);
+
+  assert.equal(projection.visualLineCount, 2);
+  assert.deepEqual(projection.lineAt(1), {
+    visualLineIndex: 1,
+    logicalLineIndex: 1,
+    startColumn: 0,
+    endColumn: 6,
+    firstForLogicalLine: true,
+    lastForLogicalLine: true,
+  });
+  assert.equal(projection.firstVisualLineIndex(1), 1);
+  assert.equal(projection.visualLineIndexAt(TextPosition.at(1, 3)), 1);
+});

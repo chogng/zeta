@@ -1,0 +1,91 @@
+.zeta-debug {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 8px;
+}
+
+.zeta-debug-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.zeta-debug-controls select {
+  flex: 1 1 100%;
+  min-width: 0;
+  padding: 4px 6px;
+  color: inherit;
+  background: var(--zeta-input-background);
+  border: 1px solid var(--zeta-input-border);
+}
+
+.zeta-debug button {
+  padding: 3px 6px;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  background: color-mix(in srgb, currentColor 8%, transparent);
+  border: 0;
+  border-radius: 3px;
+}
+
+.zeta-debug button:hover {
+  background: var(--zeta-toolbar-hover-background);
+}
+
+.zeta-debug button:focus-visible,
+.zeta-debug select:focus-visible {
+  outline: 1px solid var(--zeta-focus-border);
+  outline-offset: -1px;
+}
+
+.zeta-debug-status {
+  min-height: 18px;
+  padding: 6px 2px;
+  color: var(--zeta-description-foreground);
+  font-size: 12px;
+}
+
+.zeta-debug-section {
+  flex: 0 1 auto;
+  min-height: 0;
+  margin: 0 0 6px;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.zeta-debug-section-heading {
+  padding: 5px 3px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--zeta-border);
+}
+
+.zeta-debug-section li:not(.zeta-debug-section-heading) {
+  display: flex;
+  min-width: 0;
+}
+
+.zeta-debug-frame,
+.zeta-debug-variable,
+.zeta-debug-breakpoint {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zeta-debug-output {
+  flex: 1;
+  min-height: 60px;
+  margin: 0;
+  padding: 6px;
+  overflow: auto;
+  color: var(--zeta-editor-foreground);
+  font-family: var(--zeta-font-family-monospace);
+  white-space: pre-wrap;
+  background: var(--zeta-editor-background);
+}

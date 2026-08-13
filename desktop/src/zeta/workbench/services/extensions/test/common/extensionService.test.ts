@@ -164,3 +164,22 @@ test("registers extension grammars transactionally and loads resources through t
   service.dispose();
   assert.equal(disposed, 1);
 });
+
+test("treats an in-flight load cancelled by disposal as normal shutdown", async () => {
+  let rejectList: ((error: Error) => void) | undefined;
+  const api: IExtensionApi = {
+    list: () => new Promise((_resolve, reject) => { rejectList = reject; }),
+    readResource: async () => new Uint8Array(),
+  };
+  const textMateService = { grammars: { registerGrammar: () => toDisposable(() => {}) } } as unknown as ITextMateService;
+  const service = new AppServerExtensionService({ api, textMateService });
+  const failures: unknown[] = [];
+  using listener = service.onDidFail(failure => failures.push(failure.error));
+
+  const starting = service.start();
+  service.dispose();
+  rejectList?.(new Error("transport disposed"));
+
+  await assert.doesNotReject(starting);
+  assert.deepEqual(failures, []);
+});

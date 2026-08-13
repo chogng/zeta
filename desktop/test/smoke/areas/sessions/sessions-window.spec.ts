@@ -34,14 +34,14 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 
   const sessionWindowState = await application.evaluate(({ BrowserWindow }) => {
     const windows = BrowserWindow.getAllWindows();
-    return windows.map((window) => ({
+    return windows.map((window: { readonly id: number; getTitle(): string; readonly webContents: { getURL(): string } }) => ({
       id: window.id,
       title: window.getTitle(),
       url: window.webContents.getURL(),
     }));
   });
   expect(sessionWindowState).toHaveLength(2);
-  expect(sessionWindowState.some((window) => window.url.includes("sessions-code.html"))).toBe(true);
+  expect(sessionWindowState.some((window: { readonly url: string }) => window.url.includes("sessions-code.html"))).toBe(true);
 
   const closed = sessionsPage.waitForEvent("close");
   await sessionsPage.getByRole("button", { name: "Workbench" }).click();

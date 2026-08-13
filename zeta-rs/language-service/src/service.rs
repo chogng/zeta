@@ -17,12 +17,15 @@ use zeta_lsp::{
 use crate::projection::project_diagnostic;
 use crate::restart::{RestartDecision, ServerRestartTracker};
 use crate::{
-    LanguageCodeActions, LanguageCompletions, LanguageDiagnostic, LanguageDiagnostics,
-    LanguageDocumentPosition, LanguageDocumentRevision, LanguageHierarchyItem,
-    LanguageHierarchyResult, LanguageHover, LanguageLocationRange, LanguageLocations,
-    LanguageRenamePreparation, LanguageRequestId, LanguageRequestKind, LanguageServerDefinition,
-    LanguageServiceConfiguration, LanguageServiceDocument, LanguageServiceEnablement,
-    LanguageServiceError, LanguageWorkspaceEditResult, LanguageWorkspaceSymbols,
+    LanguageCodeActions, LanguageCompletionTrigger, LanguageCompletions, LanguageDiagnostic,
+    LanguageDiagnostics, LanguageDocumentPosition, LanguageDocumentRevision,
+    LanguageFormattingEdits, LanguageFormattingOptions, LanguageHierarchyItem,
+    LanguageHierarchyResult, LanguageHover, LanguageInlayHints, LanguageLinkedEditingRanges,
+    LanguageLocationRange, LanguageLocations, LanguageRenamePreparation, LanguageRequestId,
+    LanguageRequestKind, LanguageServerDefinition, LanguageServiceConfiguration,
+    LanguageServiceDocument, LanguageServiceEnablement, LanguageServiceError,
+    LanguageSignatureHelp, LanguageSignatureHelpTrigger, LanguageTextRange,
+    LanguageWorkspaceEditResult, LanguageWorkspaceSymbols,
 };
 
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(15);
@@ -82,6 +85,10 @@ pub enum LanguageServiceEvent {
     RenamePreparation(LanguageRenamePreparation),
     WorkspaceEdit(LanguageWorkspaceEditResult),
     CodeActions(LanguageCodeActions),
+    FormattingEdits(LanguageFormattingEdits),
+    SignatureHelp(LanguageSignatureHelp),
+    InlayHints(LanguageInlayHints),
+    LinkedEditingRanges(LanguageLinkedEditingRanges),
     RequestFailed {
         request_id: LanguageRequestId,
         kind: LanguageRequestKind,
@@ -205,12 +212,14 @@ impl LanguageService {
         path: impl Into<PathBuf>,
         revision: LanguageDocumentRevision,
         position: LanguageDocumentPosition,
+        trigger: LanguageCompletionTrigger,
     ) -> Result<LanguageRequestId, LanguageServiceError> {
         self.queue_request(PendingLanguageRequest::Completion {
             id: self.next_request_id(),
             path: path.into(),
             revision,
             position,
+            trigger,
         })
     }
 
@@ -443,6 +452,80 @@ impl LanguageService {
             path: path.into(),
             revision,
             provider_data,
+        })
+    }
+
+    pub fn request_document_formatting(
+        &self,
+        path: impl Into<PathBuf>,
+        revision: LanguageDocumentRevision,
+        options: LanguageFormattingOptions,
+    ) -> Result<LanguageRequestId, LanguageServiceError> {
+        self.queue_request(PendingLanguageRequest::DocumentFormatting {
+            id: self.next_request_id(),
+            path: path.into(),
+            revision,
+            options,
+        })
+    }
+
+    pub fn request_range_formatting(
+        &self,
+        path: impl Into<PathBuf>,
+        revision: LanguageDocumentRevision,
+        range: LanguageTextRange,
+        options: LanguageFormattingOptions,
+    ) -> Result<LanguageRequestId, LanguageServiceError> {
+        self.queue_request(PendingLanguageRequest::RangeFormatting {
+            id: self.next_request_id(),
+            path: path.into(),
+            revision,
+            range,
+            options,
+        })
+    }
+
+    pub fn request_signature_help(
+        &self,
+        path: impl Into<PathBuf>,
+        revision: LanguageDocumentRevision,
+        position: LanguageDocumentPosition,
+        trigger: LanguageSignatureHelpTrigger,
+    ) -> Result<LanguageRequestId, LanguageServiceError> {
+        self.queue_request(PendingLanguageRequest::SignatureHelp {
+            id: self.next_request_id(),
+            path: path.into(),
+            revision,
+            position,
+            trigger,
+        })
+    }
+
+    pub fn request_inlay_hints(
+        &self,
+        path: impl Into<PathBuf>,
+        revision: LanguageDocumentRevision,
+        range: LanguageTextRange,
+    ) -> Result<LanguageRequestId, LanguageServiceError> {
+        self.queue_request(PendingLanguageRequest::InlayHints {
+            id: self.next_request_id(),
+            path: path.into(),
+            revision,
+            range,
+        })
+    }
+
+    pub fn request_linked_editing_ranges(
+        &self,
+        path: impl Into<PathBuf>,
+        revision: LanguageDocumentRevision,
+        position: LanguageDocumentPosition,
+    ) -> Result<LanguageRequestId, LanguageServiceError> {
+        self.queue_request(PendingLanguageRequest::LinkedEditingRanges {
+            id: self.next_request_id(),
+            path: path.into(),
+            revision,
+            position,
         })
     }
 

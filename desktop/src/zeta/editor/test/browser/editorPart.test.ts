@@ -175,7 +175,7 @@ test("Code editor keeps large files editable while disabling full-document backg
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   dom.window.HTMLCanvasElement.prototype.getContext = () => null;
   const container = dom.window.document.querySelector<HTMLElement>("main")!;
-  const model = new TextModel("\n".repeat(300_000));
+  const model = new TextModel("let value = 1;\n".repeat(300_001));
   const reference = modelReference(URI.file("C:\\project\\large.ts"), model);
   const editorPart = new EditorPart({ container, input: { resource: reference.resource, label: "large.ts" }, languageId: "typescript", modelReference: reference });
   try {
@@ -184,7 +184,7 @@ test("Code editor keeps large files editable while disabling full-document backg
     assert.equal(container.querySelectorAll(".aster-editor-token").length, 0, "background tokens");
     assert.equal(container.querySelectorAll(".aster-editor-fold-toggle:not([hidden])").length, 0, "folding scan");
     editorPart.textInput.element.dispatchEvent(new dom.window.InputEvent("beforeinput", { bubbles: true, cancelable: true, data: "x", inputType: "insertText" }));
-    assert.equal(editorPart.getValue().startsWith("x\n"), true, "basic editing");
+    assert.equal(editorPart.getValue().startsWith("xlet value = 1;\n"), true, "basic editing");
   } finally {
     editorPart.dispose();
     dom.window.close();

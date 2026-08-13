@@ -37,6 +37,7 @@ export interface TextEditorContributionConfigurationContext {
   readonly getOptionalCapability: <T>(capability: EditorCapability<T>) => T | undefined;
   readonly provideCapability: <T>(capability: EditorCapability<T>, value: T) => void;
   readonly addDecorationSource: (source: DecorationSource) => void;
+  readonly addLineGutterDecoration: (decoration: EditorLineGutterDecoration) => void;
   readonly setLineProjection: (projection: { readonly visibilitySource: EditorLineVisibilitySource; readonly gutterDecoration?: EditorLineGutterDecoration }) => void;
   readonly setSemanticTokenSource: (source: SemanticTokenSource) => void;
   readonly setBracketColorizationSource: (source: BracketColorizationSource) => void;

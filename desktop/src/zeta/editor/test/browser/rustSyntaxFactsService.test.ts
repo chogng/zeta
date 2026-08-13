@@ -18,6 +18,7 @@ test("Rust syntax facts feed Aster token, diagnostic, and document-symbol servic
         revision: params.revision,
         hasErrors: true,
         tokens: [
+          { kind: "variable", range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 0, columnIndex: 7 } } },
           { kind: "keyword", range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 0, columnIndex: 2 } } },
           { kind: "function", range: { start: { lineIndex: 0, columnIndex: 3 }, end: { lineIndex: 0, columnIndex: 7 } } },
           { kind: "comment", range: { start: { lineIndex: 1, columnIndex: 2 }, end: { lineIndex: 2, columnIndex: 4 } } },
@@ -57,6 +58,7 @@ test("Rust syntax facts feed Aster token, diagnostic, and document-symbol servic
     token.tokenType,
   ]), [
     [0, 0, 0, 2, "keyword"],
+    [0, 2, 0, 3, "variable"],
     [0, 3, 0, 7, "function"],
     [1, 2, 1, 7, "comment"],
     [2, 0, 2, 4, "comment"],

@@ -12,6 +12,7 @@ use zeta_app_server_protocol::protocol::config::ConfigChanged;
 use zeta_app_server_protocol::protocol::connectors::ConnectorsChanged;
 use zeta_app_server_protocol::protocol::fs::FsChanged;
 use zeta_app_server_protocol::protocol::git::{GitStatusChanged, GitStatusResult};
+use zeta_app_server_protocol::protocol::language::LanguageDiagnosticsNotification;
 use zeta_app_server_protocol::protocol::plugins::PluginsChanged;
 use zeta_app_server_protocol::protocol::registry::ServerNotificationMethod;
 use zeta_app_server_protocol::protocol::skills::SkillsChanged;
@@ -520,6 +521,25 @@ impl UpdateBroker {
                 return false;
             };
             queue.push(notification(ServerNotificationMethod::FsChanged, &changed));
+            true
+        });
+    }
+
+    pub(super) fn publish_language_diagnostics(
+        &self,
+        diagnostics: LanguageDiagnosticsNotification,
+    ) {
+        let Ok(mut state) = self.state.lock() else {
+            return;
+        };
+        state.subscribers.retain(|_, subscriber| {
+            let Some(queue) = subscriber.queue.upgrade() else {
+                return false;
+            };
+            queue.push(notification(
+                ServerNotificationMethod::LanguageDiagnostics,
+                &diagnostics,
+            ));
             true
         });
     }

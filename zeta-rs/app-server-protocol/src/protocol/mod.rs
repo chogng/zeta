@@ -5,6 +5,7 @@ pub mod collaboration;
 pub mod common;
 pub mod config;
 pub mod connectors;
+pub mod debug;
 pub mod diff;
 pub mod document;
 pub mod error;

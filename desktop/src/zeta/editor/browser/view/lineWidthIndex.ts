@@ -27,6 +27,8 @@ export type LineWidthMeasurementScheduler = (callback: () => void) => IDisposabl
 export interface LineWidthInitialMeasurementOptions {
   readonly initialLineCount?: number;
   readonly linesPerSlice?: number;
+  /** Optional startup scan cap; later visible lines are measured on demand. */
+  readonly maximumMeasuredLineCount?: number;
   readonly schedule: LineWidthMeasurementScheduler;
 }
 
@@ -37,6 +39,7 @@ export interface LineWidthIndexOptions {
 interface ResolvedInitialMeasurement {
   readonly initialLineCount: number;
   readonly linesPerSlice: number;
+  readonly maximumMeasuredLineCount: number;
   readonly schedule: LineWidthMeasurementScheduler;
 }
 
@@ -46,6 +49,7 @@ export class LineWidthIndex extends DisposableOwner {
   private readonly widthCounts = new Map<number, number>();
   private readonly changeEmitter = this.own(new Emitter<void>());
   private readonly pendingMeasurement = this.own(new DisposableSlot<IDisposable>());
+  private readonly observedLineIndexes = new Set<number>();
   private readonly initialMeasurement: ResolvedInitialMeasurement | undefined;
   private maximumWidth = 0;
   private nextLineIndex = 0;
@@ -84,6 +88,7 @@ export class LineWidthIndex extends DisposableOwner {
     const previousMaximum = this.maximumWidth;
     this.widths = [];
     this.widthCounts.clear();
+    this.observedLineIndexes.clear();
     this.maximumWidth = 0;
     for (let lineIndex = 0; lineIndex < this.model.lineCount; lineIndex++) {
       const width = this.measure(lineIndex);
@@ -147,6 +152,20 @@ export class LineWidthIndex extends DisposableOwner {
     if (this.maximumWidth !== previousMaximum) this.changeEmitter.fire();
   }
 
+  /** Measures newly visible lines that lie beyond a bounded initial scan. */
+  observeLines(lineIndexes: readonly number[]): void {
+    const previousMaximum = this.maximumWidth;
+    for (const lineIndex of lineIndexes) {
+      if (!Number.isSafeInteger(lineIndex) || lineIndex < 0 || lineIndex >= this.model.lineCount) {
+        throw new RangeError("Observed Aster line index is outside the text model");
+      }
+      if (lineIndex < this.nextLineIndex || this.observedLineIndexes.has(lineIndex)) continue;
+      this.observedLineIndexes.add(lineIndex);
+      this.maximumWidth = Math.max(this.maximumWidth, this.measure(lineIndex));
+    }
+    if (this.maximumWidth !== previousMaximum) this.changeEmitter.fire();
+  }
+
   private startInitialMeasurement(): void {
     const options = this.initialMeasurement;
     if (!options) return;
@@ -154,6 +173,7 @@ export class LineWidthIndex extends DisposableOwner {
     this.pendingMeasurement.clear();
     this.widths = [];
     this.widthCounts.clear();
+    this.observedLineIndexes.clear();
     this.maximumWidth = 0;
     this.nextLineIndex = 0;
     this.scanVersion = this.model.version;
@@ -164,7 +184,7 @@ export class LineWidthIndex extends DisposableOwner {
 
   private scheduleNextSlice(): void {
     const options = this.initialMeasurement;
-    if (!options || this.complete) return;
+    if (!options || this.nextLineIndex >= this.initialScanLineCount) return;
     this.pendingMeasurement.replace(options.schedule(() => {
       this.pendingMeasurement.clear();
       if (this.scanVersion !== this.model.version) {
@@ -179,12 +199,16 @@ export class LineWidthIndex extends DisposableOwner {
   }
 
   private measureNextSlice(lineCount: number): void {
-    const endLineIndex = Math.min(this.model.lineCount, this.nextLineIndex + lineCount);
+    const endLineIndex = Math.min(this.initialScanLineCount, this.nextLineIndex + lineCount);
     for (; this.nextLineIndex < endLineIndex; this.nextLineIndex += 1) {
       const width = this.measure(this.nextLineIndex);
       this.widths.push(width);
       this.addWidth(width);
     }
+  }
+
+  private get initialScanLineCount(): number {
+    return Math.min(this.model.lineCount, this.initialMeasurement?.maximumMeasuredLineCount ?? this.model.lineCount);
   }
 
   private measure(lineIndex: number): number {
@@ -219,13 +243,17 @@ function readInitialMeasurement(value: LineWidthInitialMeasurementOptions | unde
   }
   const initialLineCount = value.initialLineCount ?? 512;
   const linesPerSlice = value.linesPerSlice ?? initialLineCount;
+  const maximumMeasuredLineCount = value.maximumMeasuredLineCount ?? Number.MAX_SAFE_INTEGER;
   if (!Number.isSafeInteger(initialLineCount) || initialLineCount <= 0) {
     throw new RangeError("Aster initial line measurement count must be a positive safe integer");
   }
   if (!Number.isSafeInteger(linesPerSlice) || linesPerSlice <= 0) {
     throw new RangeError("Aster line measurement slice size must be a positive safe integer");
   }
-  return Object.freeze({ initialLineCount, linesPerSlice, schedule: value.schedule });
+  if (!Number.isSafeInteger(maximumMeasuredLineCount) || maximumMeasuredLineCount <= 0) {
+    throw new RangeError("Aster maximum initial line measurement count must be a positive safe integer");
+  }
+  return Object.freeze({ initialLineCount: Math.min(initialLineCount, maximumMeasuredLineCount), linesPerSlice, maximumMeasuredLineCount, schedule: value.schedule });
 }
 
 function groupAffectedLines(

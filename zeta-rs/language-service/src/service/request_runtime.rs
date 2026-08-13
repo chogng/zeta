@@ -2,29 +2,37 @@
 
 use super::*;
 use crate::requests::{
-    project_call_hierarchy_items, project_code_actions, project_completions, project_hover,
-    project_incoming_calls, project_locations, project_outgoing_calls, project_references,
-    project_rename_preparation, project_resolved_code_action, project_type_hierarchy_items,
-    project_workspace_edit, project_workspace_symbols, protocol_call_hierarchy_item,
-    protocol_code_action, protocol_position, protocol_type_hierarchy_item,
+    project_call_hierarchy_items, project_code_actions, project_completions,
+    project_formatting_edits, project_hover, project_incoming_calls, project_inlay_hints,
+    project_linked_editing_ranges, project_locations, project_outgoing_calls, project_references,
+    project_rename_preparation, project_resolved_code_action, project_signature_help,
+    project_type_hierarchy_items, project_workspace_edit, project_workspace_symbols,
+    protocol_call_hierarchy_item, protocol_code_action, protocol_position,
+    protocol_type_hierarchy_item,
 };
 use crate::{
-    LanguageDiagnostic, LanguageDiagnosticSeverity, LanguageHierarchyItem, LanguageHierarchyKind,
-    LanguageLocationKind,
+    LanguageCompletionTrigger, LanguageDiagnostic, LanguageDiagnosticSeverity,
+    LanguageHierarchyItem, LanguageHierarchyKind, LanguageLocationKind,
+    LanguageSignatureHelpTrigger, LanguageTextRange,
 };
 use zeta_lsp::lsp_types::request::{
     CallHierarchyIncomingCalls, CallHierarchyOutgoingCalls, CallHierarchyPrepare,
-    CodeActionRequest, CodeActionResolveRequest, Completion, GotoDeclaration, GotoDefinition,
-    GotoImplementation, GotoTypeDefinition, HoverRequest, PrepareRenameRequest, References, Rename,
-    TypeHierarchyPrepare, TypeHierarchySubtypes, TypeHierarchySupertypes, WorkspaceSymbolRequest,
+    CodeActionRequest, CodeActionResolveRequest, Completion, Formatting, GotoDeclaration,
+    GotoDefinition, GotoImplementation, GotoTypeDefinition, HoverRequest, InlayHintRequest,
+    LinkedEditingRange, PrepareRenameRequest, RangeFormatting, References, Rename,
+    SignatureHelpRequest, TypeHierarchyPrepare, TypeHierarchySubtypes, TypeHierarchySupertypes,
+    WorkspaceSymbolRequest,
 };
 use zeta_lsp::lsp_types::{
     CallHierarchyIncomingCallsParams, CallHierarchyOutgoingCallsParams, CallHierarchyPrepareParams,
     CallHierarchyServerCapability, CodeActionContext, CodeActionKind, CodeActionParams,
     CodeActionProviderCapability, CodeActionTriggerKind, CompletionParams, CompletionTriggerKind,
-    DeclarationCapability, Diagnostic, DiagnosticSeverity, GotoDefinitionParams, HoverParams,
-    ImplementationProviderCapability, NumberOrString, OneOf, PartialResultParams,
-    PositionEncodingKind, ReferenceContext, ReferenceParams, RenameParams, TextDocumentIdentifier,
+    DeclarationCapability, Diagnostic, DiagnosticSeverity, DocumentFormattingParams,
+    DocumentRangeFormattingParams, FormattingOptions, GotoDefinitionParams, HoverParams,
+    ImplementationProviderCapability, InlayHintParams, LinkedEditingRangeParams,
+    LinkedEditingRangeServerCapabilities, NumberOrString, OneOf, PartialResultParams,
+    PositionEncodingKind, ReferenceContext, ReferenceParams, RenameParams, SignatureHelpContext,
+    SignatureHelpParams, SignatureHelpTriggerKind, TextDocumentIdentifier,
     TextDocumentPositionParams, TypeDefinitionProviderCapability, TypeHierarchyPrepareParams,
     TypeHierarchySubtypesParams, TypeHierarchySupertypesParams, WorkDoneProgressParams,
     WorkspaceSymbolParams,
@@ -42,6 +50,7 @@ pub(super) enum PendingLanguageRequest {
         path: PathBuf,
         revision: LanguageDocumentRevision,
         position: LanguageDocumentPosition,
+        trigger: LanguageCompletionTrigger,
     },
     Definition {
         id: LanguageRequestId,
@@ -137,6 +146,38 @@ pub(super) enum PendingLanguageRequest {
         revision: LanguageDocumentRevision,
         provider_data: serde_json::Value,
     },
+    DocumentFormatting {
+        id: LanguageRequestId,
+        path: PathBuf,
+        revision: LanguageDocumentRevision,
+        options: LanguageFormattingOptions,
+    },
+    RangeFormatting {
+        id: LanguageRequestId,
+        path: PathBuf,
+        revision: LanguageDocumentRevision,
+        range: LanguageTextRange,
+        options: LanguageFormattingOptions,
+    },
+    SignatureHelp {
+        id: LanguageRequestId,
+        path: PathBuf,
+        revision: LanguageDocumentRevision,
+        position: LanguageDocumentPosition,
+        trigger: LanguageSignatureHelpTrigger,
+    },
+    InlayHints {
+        id: LanguageRequestId,
+        path: PathBuf,
+        revision: LanguageDocumentRevision,
+        range: LanguageTextRange,
+    },
+    LinkedEditingRanges {
+        id: LanguageRequestId,
+        path: PathBuf,
+        revision: LanguageDocumentRevision,
+        position: LanguageDocumentPosition,
+    },
 }
 
 impl PendingLanguageRequest {
@@ -158,7 +199,12 @@ impl PendingLanguageRequest {
             Self::PrepareRename { id, .. }
             | Self::Rename { id, .. }
             | Self::CodeActions { id, .. }
-            | Self::ResolveCodeAction { id, .. } => *id,
+            | Self::ResolveCodeAction { id, .. }
+            | Self::DocumentFormatting { id, .. }
+            | Self::RangeFormatting { id, .. } => *id,
+            Self::SignatureHelp { id, .. } => *id,
+            Self::InlayHints { id, .. } => *id,
+            Self::LinkedEditingRanges { id, .. } => *id,
         }
     }
 
@@ -181,6 +227,11 @@ impl PendingLanguageRequest {
             Self::Rename { .. } => LanguageRequestKind::Rename,
             Self::CodeActions { .. } => LanguageRequestKind::CodeActions,
             Self::ResolveCodeAction { .. } => LanguageRequestKind::ResolveCodeAction,
+            Self::DocumentFormatting { .. } => LanguageRequestKind::DocumentFormatting,
+            Self::RangeFormatting { .. } => LanguageRequestKind::RangeFormatting,
+            Self::SignatureHelp { .. } => LanguageRequestKind::SignatureHelp,
+            Self::InlayHints { .. } => LanguageRequestKind::InlayHints,
+            Self::LinkedEditingRanges { .. } => LanguageRequestKind::LinkedEditingRanges,
         }
     }
 
@@ -202,7 +253,12 @@ impl PendingLanguageRequest {
             Self::PrepareRename { path, .. }
             | Self::Rename { path, .. }
             | Self::CodeActions { path, .. }
-            | Self::ResolveCodeAction { path, .. } => path,
+            | Self::ResolveCodeAction { path, .. }
+            | Self::DocumentFormatting { path, .. }
+            | Self::RangeFormatting { path, .. } => path,
+            Self::SignatureHelp { path, .. } => path,
+            Self::InlayHints { path, .. } => path,
+            Self::LinkedEditingRanges { path, .. } => path,
         }
     }
 
@@ -224,7 +280,12 @@ impl PendingLanguageRequest {
             Self::PrepareRename { revision, .. }
             | Self::Rename { revision, .. }
             | Self::CodeActions { revision, .. }
-            | Self::ResolveCodeAction { revision, .. } => *revision,
+            | Self::ResolveCodeAction { revision, .. }
+            | Self::DocumentFormatting { revision, .. }
+            | Self::RangeFormatting { revision, .. } => *revision,
+            Self::SignatureHelp { revision, .. } => *revision,
+            Self::InlayHints { revision, .. } => *revision,
+            Self::LinkedEditingRanges { revision, .. } => *revision,
         }
     }
 
@@ -239,12 +300,18 @@ impl PendingLanguageRequest {
             | Self::References { position, .. }
             | Self::PrepareCallHierarchy { position, .. }
             | Self::PrepareTypeHierarchy { position, .. } => Some(*position),
+            Self::SignatureHelp { position, .. } => Some(*position),
+            Self::LinkedEditingRanges { position, .. } => Some(*position),
             Self::PrepareRename { position, .. } | Self::Rename { position, .. } => Some(*position),
             Self::IncomingCalls { .. }
             | Self::OutgoingCalls { .. }
             | Self::Supertypes { .. }
             | Self::Subtypes { .. } => None,
-            Self::CodeActions { .. } | Self::ResolveCodeAction { .. } => None,
+            Self::CodeActions { .. }
+            | Self::ResolveCodeAction { .. }
+            | Self::DocumentFormatting { .. }
+            | Self::RangeFormatting { .. } => None,
+            Self::InlayHints { .. } => None,
         }
     }
 }
@@ -257,6 +324,10 @@ pub(super) enum CompletedLanguageRequest {
     RenamePreparation(LanguageRenamePreparation),
     WorkspaceEdit(LanguageWorkspaceEditResult),
     CodeActions(LanguageCodeActions),
+    FormattingEdits(LanguageFormattingEdits),
+    SignatureHelp(LanguageSignatureHelp),
+    InlayHints(LanguageInlayHints),
+    LinkedEditingRanges(LanguageLinkedEditingRanges),
     Empty {
         id: LanguageRequestId,
         kind: LanguageRequestKind,
@@ -282,6 +353,10 @@ impl CompletedLanguageRequest {
             Self::RenamePreparation(result) => &result.source_path,
             Self::WorkspaceEdit(result) => &result.source_path,
             Self::CodeActions(result) => &result.source_path,
+            Self::FormattingEdits(result) => &result.path,
+            Self::SignatureHelp(result) => &result.path,
+            Self::InlayHints(result) => &result.path,
+            Self::LinkedEditingRanges(result) => &result.path,
             Self::Empty { path, .. } | Self::Failed { path, .. } => path,
         }
     }
@@ -295,6 +370,10 @@ impl CompletedLanguageRequest {
             Self::RenamePreparation(result) => result.source_revision,
             Self::WorkspaceEdit(result) => result.source_revision,
             Self::CodeActions(result) => result.source_revision,
+            Self::FormattingEdits(result) => result.revision,
+            Self::SignatureHelp(result) => result.revision,
+            Self::InlayHints(result) => result.revision,
+            Self::LinkedEditingRanges(result) => result.revision,
             Self::Empty { revision, .. } | Self::Failed { revision, .. } => *revision,
         }
     }
@@ -424,6 +503,18 @@ impl Supervisor {
             CompletedLanguageRequest::CodeActions(result) => {
                 self.emit(LanguageServiceEvent::CodeActions(result))
             }
+            CompletedLanguageRequest::FormattingEdits(result) => {
+                self.emit(LanguageServiceEvent::FormattingEdits(result))
+            }
+            CompletedLanguageRequest::SignatureHelp(result) => {
+                self.emit(LanguageServiceEvent::SignatureHelp(result))
+            }
+            CompletedLanguageRequest::InlayHints(result) => {
+                self.emit(LanguageServiceEvent::InlayHints(result))
+            }
+            CompletedLanguageRequest::LinkedEditingRanges(result) => {
+                self.emit(LanguageServiceEvent::LinkedEditingRanges(result))
+            }
             CompletedLanguageRequest::Empty {
                 id,
                 kind,
@@ -510,6 +601,7 @@ async fn execute_request(
             path,
             revision,
             position: request_position,
+            trigger,
         } => {
             let text_document_position = text_document_position(uri, position)?;
             let response = client
@@ -517,10 +609,7 @@ async fn execute_request(
                     text_document_position,
                     work_done_progress_params: WorkDoneProgressParams::default(),
                     partial_result_params: PartialResultParams::default(),
-                    context: Some(zeta_lsp::lsp_types::CompletionContext {
-                        trigger_kind: CompletionTriggerKind::INVOKED,
-                        trigger_character: None,
-                    }),
+                    context: Some(completion_context(trigger)),
                 })
                 .await
                 .map_err(|error| error.to_string())?;
@@ -902,6 +991,164 @@ async fn execute_request(
             project_resolved_code_action(id, path, revision, &encoding, response)
                 .map(CompletedLanguageRequest::CodeActions)
         }
+        PendingLanguageRequest::DocumentFormatting {
+            id,
+            path,
+            revision,
+            options,
+        } => {
+            let response = client
+                .request::<Formatting>(DocumentFormattingParams {
+                    text_document: TextDocumentIdentifier::new(uri),
+                    options: protocol_formatting_options(options),
+                    work_done_progress_params: WorkDoneProgressParams::default(),
+                })
+                .await
+                .map_err(|error| error.to_string())?;
+            project_formatting_edits(id, path, revision, &text, &encoding, response)
+                .map(CompletedLanguageRequest::FormattingEdits)
+        }
+        PendingLanguageRequest::RangeFormatting {
+            id,
+            path,
+            revision,
+            range,
+            options,
+        } => {
+            let range = protocol_byte_range(&text, range.byte_range(), &encoding)
+                .ok_or_else(|| "formatting range is outside the document snapshot".to_owned())?;
+            let response = client
+                .request::<RangeFormatting>(DocumentRangeFormattingParams {
+                    text_document: TextDocumentIdentifier::new(uri),
+                    range,
+                    options: protocol_formatting_options(options),
+                    work_done_progress_params: WorkDoneProgressParams::default(),
+                })
+                .await
+                .map_err(|error| error.to_string())?;
+            project_formatting_edits(id, path, revision, &text, &encoding, response)
+                .map(CompletedLanguageRequest::FormattingEdits)
+        }
+        PendingLanguageRequest::SignatureHelp {
+            id,
+            path,
+            revision,
+            trigger,
+            ..
+        } => {
+            let response = client
+                .request::<SignatureHelpRequest>(SignatureHelpParams {
+                    context: Some(signature_help_context(trigger)),
+                    text_document_position_params: text_document_position(uri, position)?,
+                    work_done_progress_params: WorkDoneProgressParams::default(),
+                })
+                .await
+                .map_err(|error| error.to_string())?;
+            Ok(project_signature_help(id, path.clone(), revision, response)
+                .map(CompletedLanguageRequest::SignatureHelp)
+                .unwrap_or(CompletedLanguageRequest::Empty {
+                    id,
+                    kind: LanguageRequestKind::SignatureHelp,
+                    path,
+                    revision,
+                }))
+        }
+        PendingLanguageRequest::InlayHints {
+            id,
+            path,
+            revision,
+            range,
+        } => {
+            let range = protocol_byte_range(&text, range.byte_range(), &encoding)
+                .ok_or_else(|| "inlay-hint range is outside the document snapshot".to_owned())?;
+            let response = client
+                .request::<InlayHintRequest>(InlayHintParams {
+                    work_done_progress_params: WorkDoneProgressParams::default(),
+                    text_document: TextDocumentIdentifier::new(uri),
+                    range,
+                })
+                .await
+                .map_err(|error| error.to_string())?;
+            Ok(CompletedLanguageRequest::InlayHints(project_inlay_hints(
+                id, path, revision, &text, &encoding, response,
+            )))
+        }
+        PendingLanguageRequest::LinkedEditingRanges {
+            id, path, revision, ..
+        } => {
+            let response = client
+                .request::<LinkedEditingRange>(LinkedEditingRangeParams {
+                    text_document_position_params: text_document_position(uri, position)?,
+                    work_done_progress_params: WorkDoneProgressParams::default(),
+                })
+                .await
+                .map_err(|error| error.to_string())?;
+            Ok(project_linked_editing_ranges(
+                id,
+                path.clone(),
+                revision,
+                &text,
+                &encoding,
+                response,
+            )
+            .map(CompletedLanguageRequest::LinkedEditingRanges)
+            .unwrap_or(CompletedLanguageRequest::Empty {
+                id,
+                kind: LanguageRequestKind::LinkedEditingRanges,
+                path,
+                revision,
+            }))
+        }
+    }
+}
+
+fn signature_help_context(trigger: LanguageSignatureHelpTrigger) -> SignatureHelpContext {
+    let (trigger_kind, trigger_character) = match trigger {
+        LanguageSignatureHelpTrigger::Invoked => (SignatureHelpTriggerKind::INVOKED, None),
+        LanguageSignatureHelpTrigger::TriggerCharacter(character) => {
+            (SignatureHelpTriggerKind::TRIGGER_CHARACTER, Some(character))
+        }
+        LanguageSignatureHelpTrigger::ContentChange => {
+            (SignatureHelpTriggerKind::CONTENT_CHANGE, None)
+        }
+    };
+    SignatureHelpContext {
+        trigger_kind,
+        trigger_character,
+        is_retrigger: false,
+        active_signature_help: None,
+    }
+}
+
+fn protocol_formatting_options(options: LanguageFormattingOptions) -> FormattingOptions {
+    FormattingOptions {
+        tab_size: options.tab_size,
+        insert_spaces: options.insert_spaces,
+        properties: Default::default(),
+        trim_trailing_whitespace: options.trim_trailing_whitespace,
+        insert_final_newline: None,
+        trim_final_newlines: None,
+    }
+}
+
+fn completion_context(
+    trigger: LanguageCompletionTrigger,
+) -> zeta_lsp::lsp_types::CompletionContext {
+    match trigger {
+        LanguageCompletionTrigger::Invoked => zeta_lsp::lsp_types::CompletionContext {
+            trigger_kind: CompletionTriggerKind::INVOKED,
+            trigger_character: None,
+        },
+        LanguageCompletionTrigger::TriggerCharacter(character) => {
+            zeta_lsp::lsp_types::CompletionContext {
+                trigger_kind: CompletionTriggerKind::TRIGGER_CHARACTER,
+                trigger_character: Some(character),
+            }
+        }
+        LanguageCompletionTrigger::IncompleteRefresh => zeta_lsp::lsp_types::CompletionContext {
+            trigger_kind: CompletionTriggerKind::TRIGGER_FOR_INCOMPLETE_COMPLETIONS,
+            trigger_character: None,
+        },
     }
 }
 
@@ -1202,6 +1449,25 @@ fn supports_request(client: &LanguageServerClient, kind: LanguageRequestKind) ->
         LanguageRequestKind::ResolveCodeAction => matches!(
             capabilities.code_action_provider,
             Some(CodeActionProviderCapability::Options(ref options)) if options.resolve_provider == Some(true)
+        ),
+        LanguageRequestKind::DocumentFormatting => matches!(
+            capabilities.document_formatting_provider,
+            Some(OneOf::Left(true)) | Some(OneOf::Right(_))
+        ),
+        LanguageRequestKind::RangeFormatting => matches!(
+            capabilities.document_range_formatting_provider,
+            Some(OneOf::Left(true)) | Some(OneOf::Right(_))
+        ),
+        LanguageRequestKind::SignatureHelp => capabilities.signature_help_provider.is_some(),
+        LanguageRequestKind::InlayHints => matches!(
+            capabilities.inlay_hint_provider,
+            Some(OneOf::Left(true)) | Some(OneOf::Right(_))
+        ),
+        LanguageRequestKind::LinkedEditingRanges => matches!(
+            capabilities.linked_editing_range_provider,
+            Some(LinkedEditingRangeServerCapabilities::Simple(true))
+                | Some(LinkedEditingRangeServerCapabilities::Options(_))
+                | Some(LinkedEditingRangeServerCapabilities::RegistrationOptions(_))
         ),
     }
 }

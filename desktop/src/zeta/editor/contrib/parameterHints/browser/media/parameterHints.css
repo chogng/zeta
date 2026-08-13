@@ -13,3 +13,11 @@
 .aster-editor-parameter-hints-signature.active {
   font-weight: 600;
 }
+
+.aster-editor-parameter-hints-parameter.active {
+  color: var(--zeta-list-active-selection-foreground);
+  background: var(--zeta-list-active-selection-background);
+  border-radius: 2px;
+  padding: 0 1px;
+  font-weight: 700;
+}

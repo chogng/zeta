@@ -6,6 +6,11 @@ use zeta_app_server_protocol::protocol::config::ConfigChanged;
 use zeta_app_server_protocol::protocol::connectors::ConnectorsChanged;
 use zeta_app_server_protocol::protocol::fs::FsChanged;
 use zeta_app_server_protocol::protocol::git::{GitChangeStatusDto, GitHeadDto};
+use zeta_app_server_protocol::protocol::language::LanguageCodeActionDiagnosticDto;
+use zeta_app_server_protocol::protocol::language::LanguageDiagnosticSeverityDto;
+use zeta_app_server_protocol::protocol::language::LanguageDiagnosticsNotification;
+use zeta_app_server_protocol::protocol::language::LanguagePositionDto;
+use zeta_app_server_protocol::protocol::language::LanguageRangeDto;
 use zeta_app_server_protocol::protocol::plugins::PluginsChanged;
 
 #[test]
@@ -177,6 +182,52 @@ fn decodes_file_system_changed_notification() {
         notification,
         ServerNotification::FsChanged(FsChanged::PathsChanged {
             paths: vec!["src/lib.rs".into(), "README.md".into()],
+        })
+    );
+}
+
+#[test]
+fn decodes_language_diagnostics_notification() {
+    let notification = decode(
+        r#"{
+            "jsonrpc": "2.0",
+            "method": "language/diagnostics",
+            "params": {
+                "path": "src/main.rs",
+                "revision": 2,
+                "diagnostics": [{
+                    "range": {"start": {"lineIndex": 0, "columnIndex": 3}, "end": {"lineIndex": 0, "columnIndex": 7}},
+                    "severity": "error",
+                    "message": "broken",
+                    "code": "E1",
+                    "source": "fixture"
+                }]
+            }
+        }"#,
+    )
+    .expect("language diagnostics notification decodes");
+
+    assert_eq!(
+        notification,
+        ServerNotification::LanguageDiagnostics(LanguageDiagnosticsNotification {
+            path: "src/main.rs".into(),
+            revision: 2,
+            diagnostics: vec![LanguageCodeActionDiagnosticDto {
+                range: LanguageRangeDto {
+                    start: LanguagePositionDto {
+                        line_index: 0,
+                        column_index: 3
+                    },
+                    end: LanguagePositionDto {
+                        line_index: 0,
+                        column_index: 7
+                    },
+                },
+                severity: LanguageDiagnosticSeverityDto::Error,
+                message: "broken".into(),
+                code: Some(serde_json::Value::String("E1".into())),
+                source: Some("fixture".into()),
+            }],
         })
     );
 }

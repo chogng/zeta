@@ -6,6 +6,7 @@ import { createLanguageCompletionSnapshotNormalizer, createLanguageCompletionSto
 import { assertLanguageCompletionRequest, createLanguageCompletionTriggerCharacterContext, languageCompletionProviderMatches, LanguageCompletionProviderRegistry, type LanguageCompletionProviderCatalog, type LanguageCompletionProviderCatalogSource, type LanguageCompletionProviderItem, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult, type LanguageCompletionRequest, type RegisteredLanguageCompletionProvider } from "./languageCompletionProviders.js";
 import { type TextPosition } from "../../core/text.js";
 import { type TextModel } from "../../model/textModel.js";
+import { URI } from "../../../../base/common/uri.js";
 
 export const LANGUAGE_COMPLETION_LANE = "completion";
 export type LanguageCompletionLane = typeof LANGUAGE_COMPLETION_LANE;
@@ -15,6 +16,7 @@ export type LanguageCompletionWorkerFactory = () => LanguageCompletionWorker;
 
 export interface LanguageCompletionServiceOptions {
   readonly onProviderError?: LanguageCompletionProviderErrorHandler;
+  readonly resource?: URI;
   readonly workerFactory?: LanguageCompletionWorkerFactory;
 }
 
@@ -52,11 +54,16 @@ export class LanguageCompletionService extends DisposableOwner implements Langua
       this.dispose();
       throw new TypeError("Language completion worker factory must be a function");
     }
+    if (options.resource !== undefined && !(options.resource instanceof URI)) {
+      this.dispose();
+      throw new TypeError("Language completion resource must be a URI");
+    }
     if (options.workerFactory && options.onProviderError) {
       this.dispose();
       throw new TypeError("A custom language completion worker owns its provider error policy");
     }
     this.results = this.own(createLanguageCompletionStore(model));
+    this.resource = options.resource;
     const createWorker = (): LanguageCompletionWorker => {
       const worker = options.workerFactory
         ? options.workerFactory()
@@ -92,6 +99,8 @@ export class LanguageCompletionService extends DisposableOwner implements Langua
     });
   }
 
+  private readonly resource: URI | undefined;
+
   get textModel(): TextModel {
     return this.model;
   }
@@ -126,7 +135,7 @@ export class LanguageCompletionService extends DisposableOwner implements Langua
   }
 
   request(languageId: string, position: TextPosition, context: LanguageCompletionRequest["context"], options: LanguageRequestOptions = {}): Promise<LanguageRequestOutcome> {
-    const request = Object.freeze({ languageId, position, context });
+    const request = Object.freeze({ languageId, ...(this.resource ? { resource: this.resource } : {}), position, context });
     assertLanguageCompletionRequest(request);
     this.model.offsetAt(position);
     return this.coordinator.runLatest(

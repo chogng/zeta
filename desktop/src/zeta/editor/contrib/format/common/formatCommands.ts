@@ -6,6 +6,7 @@ import { createEditorEditCommand } from "../../../common/commands/editorCommand.
 import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageFeatureRequest } from "../../../common/languages/languageFeatureRequest.js";
 import { LanguageFeatureProviderRegistry, type LanguageFeatureProviderMetadata } from "../../../common/languages/languageFeatureRegistry.js";
 import { type TextModel } from "../../../common/model/textModel.js";
+import { type URI } from "../../../../base/common/uri.js";
 
 export interface LanguageFormattingOptions {
   readonly tabSize: number;
@@ -14,6 +15,7 @@ export interface LanguageFormattingOptions {
 }
 
 export interface LanguageFormattingRequest extends LanguageFeatureRequest {
+  readonly resource?: URI;
   readonly range?: TextRange;
   readonly options: LanguageFormattingOptions;
   readonly position?: TextPosition;
@@ -28,7 +30,7 @@ export interface LanguageFormattingProvider extends LanguageFeatureProviderMetad
 
 /** Owns formatting provider dispatch; edit validation/application stays in TextModel and cursor. */
 export class FormatService extends DisposableOwner {
-  constructor(private readonly model: TextModel, private readonly providers: LanguageFeatureProviderRegistry<LanguageFormattingProvider>) {
+  constructor(private readonly model: TextModel, private readonly providers: LanguageFeatureProviderRegistry<LanguageFormattingProvider>, private readonly resource?: URI) {
     super();
   }
 
@@ -45,7 +47,7 @@ export class FormatService extends DisposableOwner {
   }
 
   private async provide(languageId: string, fields: Partial<LanguageFormattingRequest>, method: "provideDocumentFormattingEdits" | "provideRangeFormattingEdits" | "provideOnTypeFormattingEdits", signal = new AbortController().signal): Promise<readonly TextEdit[]> {
-    const request = { ...createLanguageFeatureRequest(this.model, languageId, signal), ...fields } as LanguageFormattingRequest;
+    const request = { ...createLanguageFeatureRequest(this.model, languageId, signal), ...(this.resource ? { resource: this.resource } : {}), ...fields } as LanguageFormattingRequest;
     for (const provider of this.providers.getProviders(languageId)) {
       const provide = provider[method];
       if (!provide || !isLanguageFeatureRequestCurrent(request)) continue;

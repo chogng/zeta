@@ -130,7 +130,7 @@ export function projectRustSyntaxTokens(result: SyntaxAnalyzeResult, snapshot: T
   const tokens: LanguageToken[] = [];
   for (const token of result.tokens) {
     for (const range of projectSingleLineRanges(token.range, lines)) {
-      tokens.push(Object.freeze({
+      overlayToken(tokens, Object.freeze({
         range,
         tokenType: syntaxTokenType(token),
         modifiers: Object.freeze([]),
@@ -138,6 +138,32 @@ export function projectRustSyntaxTokens(result: SyntaxAnalyzeResult, snapshot: T
     }
   }
   return Object.freeze({ tokens: Object.freeze(tokens) });
+}
+
+function overlayToken(tokens: LanguageToken[], incoming: LanguageToken): void {
+  const retained: LanguageToken[] = [];
+  for (const token of tokens) {
+    if (token.range.end.compareTo(incoming.range.start) <= 0 || incoming.range.end.compareTo(token.range.start) <= 0) {
+      retained.push(token);
+      continue;
+    }
+    if (token.range.start.compareTo(incoming.range.start) < 0) retained.push(tokenWithRange(token, TextRange.from(token.range.start, incoming.range.start)));
+    if (incoming.range.end.compareTo(token.range.end) < 0) retained.push(tokenWithRange(token, TextRange.from(incoming.range.end, token.range.end)));
+  }
+  retained.push(incoming);
+  retained.sort((left, right) => left.range.start.compareTo(right.range.start) || left.range.end.compareTo(right.range.end));
+  tokens.splice(0, tokens.length, ...retained);
+}
+
+function tokenWithRange(token: LanguageToken, range: TextRange): LanguageToken {
+  return Object.freeze({
+    range,
+    tokenType: token.tokenType,
+    modifiers: token.modifiers,
+    ...(token.languageId === undefined ? {} : { languageId: token.languageId }),
+    ...(token.balancedBrackets === false ? { balancedBrackets: false as const } : {}),
+    ...(token.presentation === undefined ? {} : { presentation: token.presentation }),
+  });
 }
 
 export function projectRustSyntaxDiagnostics(result: SyntaxAnalyzeResult, snapshot: TextSnapshot): LanguageDiagnosticResult {

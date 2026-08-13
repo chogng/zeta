@@ -1,0 +1,8 @@
+export const DEBUG_VIEW_ID = "workbench.view.debug";
+export const START_DEBUG_COMMAND_ID = "workbench.action.debug.start";
+export const STOP_DEBUG_COMMAND_ID = "workbench.action.debug.stop";
+export const CONTINUE_DEBUG_COMMAND_ID = "workbench.action.debug.continue";
+export const PAUSE_DEBUG_COMMAND_ID = "workbench.action.debug.pause";
+export const STEP_OVER_DEBUG_COMMAND_ID = "workbench.action.debug.stepOver";
+export const STEP_INTO_DEBUG_COMMAND_ID = "workbench.action.debug.stepInto";
+export const STEP_OUT_DEBUG_COMMAND_ID = "workbench.action.debug.stepOut";

@@ -2,10 +2,10 @@ import { app } from "electron/main";
 import { join } from "node:path";
 import type { ProductConfiguration } from "../../product/common/product.js";
 import { resolveProductDataPaths } from "../../product/node/product.js";
-import { type AppServerStartupMode, ZetaApplication } from "./app.js";
+import { type AppServerStartupMode, type ElectronMainIpcRouteContribution, ZetaApplication } from "./app.js";
 
 /** Starts one explicitly selected Electron product after process bootstrap. */
-export function startElectronApplication(product: ProductConfiguration): void {
+export function startElectronApplication(product: ProductConfiguration, ipcRouteContributions: readonly ElectronMainIpcRouteContribution[] = []): void {
   const rendererRoot = join(app.getAppPath(), "dist", "renderer");
   const appServerStartupMode: AppServerStartupMode = process.env.ZETA_DESKTOP_UI_ONLY === "1"
     ? "disabled"
@@ -23,6 +23,7 @@ export function startElectronApplication(product: ProductConfiguration): void {
     product,
     rendererRoot,
     appServerStartupMode,
+    ipcRouteContributions,
   });
 
   app.on("second-instance", () => application.focusMainWindow());

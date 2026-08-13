@@ -2,23 +2,25 @@ use super::SqliteSessionStore;
 use super::SqliteThreadStore;
 use std::fs;
 use std::time::{SystemTime, UNIX_EPOCH};
-use zeta_history::CURRENT_STORED_EVENT_SCHEMA_VERSION;
 use zeta_history::EventId;
 use zeta_history::StoredEvent;
 use zeta_history::Timestamp;
+use zeta_history::CURRENT_STORED_EVENT_SCHEMA_VERSION;
 use zeta_protocol::CommandId;
 use zeta_protocol::SessionCommand;
 use zeta_protocol::SessionEvent;
 use zeta_protocol::SessionId;
 use zeta_protocol::ThreadEvent;
 use zeta_protocol::ThreadId;
-use zeta_session_store::CURRENT_SESSION_EVENT_SCHEMA_VERSION;
 use zeta_session_store::SessionCommandReceipt;
 use zeta_session_store::SessionEventBatch;
 use zeta_session_store::SessionEventId;
 use zeta_session_store::SessionStore;
+use zeta_session_store::SessionStoreError;
 use zeta_session_store::SessionTimestamp;
 use zeta_session_store::StoredSessionEvent;
+use zeta_session_store::CURRENT_SESSION_EVENT_SCHEMA_VERSION;
+use zeta_session_store::MINIMUM_SUPPORTED_SESSION_EVENT_SCHEMA_VERSION;
 use zeta_thread_store::ThreadEventBatch;
 use zeta_thread_store::ThreadStore;
 use zeta_thread_store::ThreadStoreError;
@@ -226,6 +228,84 @@ fn sqlite_thread_recovery_rejects_metadata_mismatch_and_accepts_legacy_schema() 
             .load(&thread_id),
         Err(ThreadStoreError::Storage(message))
             if message.contains("durable event tail")
+    ));
+    drop(connection);
+    fs::remove_file(path).unwrap();
+}
+
+#[test]
+fn sqlite_session_recovery_rejects_corruption_and_accepts_legacy_schema() {
+    let path = database_path("session-legacy-schema");
+    let session_id = SessionId::new("session_1").unwrap();
+    let mut event = StoredSessionEvent {
+        schema_version: CURRENT_SESSION_EVENT_SCHEMA_VERSION,
+        event_id: SessionEventId("session-event-1".into()),
+        sequence: 1,
+        session_id: session_id.clone(),
+        recorded_at: SessionTimestamp(1),
+        command: Some(SessionCommandReceipt {
+            command_id: CommandId::new("create-session").unwrap(),
+            command: SessionCommand::Create {
+                title: "Task".into(),
+                model: None,
+            },
+        }),
+        event: SessionEvent::SessionCreated {
+            session_id: session_id.clone(),
+            title: "Task".into(),
+            model: None,
+        },
+    };
+    let store = SqliteSessionStore::open(&path).unwrap();
+    store
+        .append_batch(&SessionEventBatch {
+            batch_id: "session-batch-1".into(),
+            session_id: session_id.clone(),
+            expected_sequence: 0,
+            events: vec![event.clone()],
+        })
+        .unwrap();
+    drop(store);
+
+    let connection = rusqlite::Connection::open(&path).unwrap();
+    connection
+        .execute(
+            "UPDATE session_events SET schema_version = ?1 WHERE session_id = ?2 AND sequence = 1",
+            rusqlite::params![
+                MINIMUM_SUPPORTED_SESSION_EVENT_SCHEMA_VERSION,
+                session_id.as_str()
+            ],
+        )
+        .unwrap();
+    assert!(matches!(
+        SqliteSessionStore::open(&path).unwrap().load(&session_id),
+        Err(SessionStoreError::Storage(message)) if message.contains("metadata disagrees")
+    ));
+
+    event.schema_version = MINIMUM_SUPPORTED_SESSION_EVENT_SCHEMA_VERSION;
+    connection
+        .execute(
+            "UPDATE session_events SET envelope_json = ?1 WHERE session_id = ?2 AND sequence = 1",
+            rusqlite::params![serde_json::to_string(&event).unwrap(), session_id.as_str()],
+        )
+        .unwrap();
+    assert_eq!(
+        SqliteSessionStore::open(&path)
+            .unwrap()
+            .load(&session_id)
+            .unwrap(),
+        vec![event]
+    );
+
+    connection
+        .execute(
+            "UPDATE session_streams SET current_sequence = 2 WHERE session_id = ?1",
+            [session_id.as_str()],
+        )
+        .unwrap();
+    assert!(matches!(
+        SqliteSessionStore::open(&path).unwrap().load(&session_id),
+        Err(SessionStoreError::Storage(message)) if message.contains("durable event tail")
     ));
     drop(connection);
     fs::remove_file(path).unwrap();

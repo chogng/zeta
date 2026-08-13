@@ -5,7 +5,7 @@ import { createViteDevExtensionApi } from "../../extensions/browser/extensionApi
 import { createViteDevDiffApi } from "../../diff/browser/diffApi.js";
 import { createViteDevSyntaxApi } from "../../syntax/browser/syntaxApi.js";
 import { createViteDevGitApi } from "../../git/browser/gitApi.js";
-import type { IRendererHost } from "../../renderer/common/rendererHost.js";
+import { mergeRendererHostCapabilities, type IRendererHost, type RendererHostCapabilities } from "../../renderer/common/rendererHost.js";
 import { createViteDevWorkspaceSearchApi } from "../../search/browser/searchApi.js";
 import { createViteDevModelApi, createViteDevSessionApi, createViteDevThreadApi, createViteDevTurnApi } from "../../sessions/browser/sessionApi.js";
 import { createViteDevSkillApi } from "../../skills/browser/skillApi.js";
@@ -18,6 +18,8 @@ import { createViteDevToolSearchApi } from "../../toolSearch/browser/toolSearchA
 import { createViteDevLanguageApi } from "../../language/browser/languageApi.js";
 import { createViteDevPluginApi } from "../../plugins/browser/pluginApi.js";
 
+export type ViteDevRendererCapabilityContribution = (connection: ViteDevAppServerConnection, appServer: IRendererHost["appServer"]) => RendererHostCapabilities;
+
 export interface ConnectedWebRendererApi {
   readonly api: IRendererHost;
   readonly metadata: ViteDevAppServerMetadata;
@@ -25,12 +27,12 @@ export interface ConnectedWebRendererApi {
 }
 
 /** Connects a browser Renderer host to the loopback Vite development bridge. */
-export async function connectViteDevRendererApi(hot: ViteDevHotContext, options: ViteDevAppServerConnectionOptions = {}): Promise<ConnectedWebRendererApi> {
+export async function connectViteDevRendererApi(hot: ViteDevHotContext, options: ViteDevAppServerConnectionOptions = {}, contributions: readonly ViteDevRendererCapabilityContribution[] = []): Promise<ConnectedWebRendererApi> {
   const connection = new ViteDevAppServerConnection(hot, options);
   try {
     const metadata = await connection.connect();
     return {
-      api: createRendererHost(connection),
+      api: createRendererHost(connection, contributions),
       metadata,
       dispose: () => connection.dispose(),
     };
@@ -40,9 +42,10 @@ export async function connectViteDevRendererApi(hot: ViteDevHotContext, options:
   }
 }
 
-function createRendererHost(connection: ViteDevAppServerConnection): IRendererHost {
+function createRendererHost(connection: ViteDevAppServerConnection, contributions: readonly ViteDevRendererCapabilityContribution[]): IRendererHost {
   const appServer = createViteDevAppServerApi(connection);
   const resource = createViteDevResourceApi(connection);
+  const capabilities = mergeRendererHostCapabilities(contributions.map(contribution => contribution(connection, appServer)));
   return {
     appServer,
     session: createViteDevSessionApi(connection),
@@ -61,6 +64,7 @@ function createRendererHost(connection: ViteDevAppServerConnection): IRendererHo
     git: createViteDevGitApi(connection),
     workspaceSearch: createViteDevWorkspaceSearchApi(connection),
     terminal: new ViteDevTerminalProcessService(connection, appServer),
+    ...capabilities,
     events: createViteDevServerEventApi(connection),
     codeIndex: createViteDevCodeIndexApi(connection),
     connectors: createViteDevConnectorApi(connection),

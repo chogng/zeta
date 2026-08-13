@@ -32,7 +32,7 @@ export function createBrowserEditorPart(options: BrowserEditorPartOptions): Edit
     return new EditorPart({
       ...options,
       syntaxWorkerFactory: textMateService.syntaxWorkerFactory,
-      completionWorkerFactory: createCompletionWorkerFactory(),
+      ...(options.languageFeaturesService ? {} : { completionWorkerFactory: createCompletionWorkerFactory() }),
       ...(ownsTextMateService ? { languageSupport: textMateService } : {}),
       onDidChangeLanguageSupport,
       whenLanguageSupportReady: () => textMateService.grammars.whenReady(),

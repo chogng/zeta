@@ -14,6 +14,7 @@ export async function launchElectron(options: ElectronLaunchOptions): Promise<El
     args: [...configuration.args],
     cwd: configuration.cwd,
     env: configuration.env,
+    executablePath: configuration.executablePath,
     timeout: 30_000,
   });
   const page = application.windows()[0] ?? await application.waitForEvent("window", { timeout: 30_000 });

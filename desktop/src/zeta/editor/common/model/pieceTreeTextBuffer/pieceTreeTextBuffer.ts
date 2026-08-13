@@ -230,10 +230,10 @@ export class PieceTreeTextBuffer {
     const intersectionStart = Math.max(startOffset, pieceStartOffset);
     const intersectionEnd = Math.min(endOffset, pieceEndOffset);
     if (intersectionStart < intersectionEnd) {
-      const text = this.pieceText(node.piece);
-      parts.push(text.slice(
-        intersectionStart - pieceStartOffset,
-        intersectionEnd - pieceStartOffset,
+      const buffer = node.piece.buffer === PieceBuffer.Original ? this.originalBuffer : this.addBuffer;
+      parts.push(buffer.slice(
+        node.piece.startOffset + intersectionStart - pieceStartOffset,
+        node.piece.startOffset + intersectionEnd - pieceStartOffset,
       ));
     }
     if (endOffset > pieceEndOffset) {

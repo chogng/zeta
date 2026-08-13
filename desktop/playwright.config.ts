@@ -21,7 +21,9 @@ export default defineConfig({
     { name: "electron-pdf-corpus-code-app-server", testMatch: "**/areas/pdf/pdf-academic-corpus.spec.ts" },
     { name: "electron-editor-academic-app-server", testMatch: "**/areas/editor/academic-open.spec.ts" },
   ],
-  webServer: browserServerMode === "disconnected"
+  webServer: process.env.ZETA_SMOKE_BROWSER_EXTERNAL_SERVER
+    ? undefined
+    : browserServerMode === "disconnected"
     ? {
         command: "corepack pnpm run dev:web",
         url: "http://127.0.0.1:5173/",

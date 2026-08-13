@@ -83,6 +83,29 @@ test("LineWidthIndex restarts an incomplete scan after an edit", () => {
   assert.equal(index.maximumLineWidth, fullScanMaximum(model, measurer));
 });
 
+test("LineWidthIndex bounds initial work and measures later visible lines on demand", () => {
+  const scheduler = new ManualMeasurementScheduler();
+  const measurer = new WeightedTextMeasurer();
+  using model = new TextModel("a\nbb\nccc\ndddddddddddddddd");
+  using index = new LineWidthIndex(model, measurer, {
+    initialMeasurement: {
+      initialLineCount: 1,
+      linesPerSlice: 1,
+      maximumMeasuredLineCount: 2,
+      schedule: callback => scheduler.schedule(callback),
+    },
+  });
+
+  scheduler.runAll();
+  assert.equal(index.complete, false);
+  assert.equal(index.maximumLineWidth, Math.max(
+    measurer.measureLineWidth("a"),
+    measurer.measureLineWidth("bb"),
+  ));
+  index.observeLines([3]);
+  assert.equal(index.maximumLineWidth, measurer.measureLineWidth("dddddddddddddddd"));
+});
+
 class ManualMeasurementScheduler {
   private readonly pending: { readonly callback: () => void; cancelled: boolean }[] = [];
 

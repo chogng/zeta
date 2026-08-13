@@ -24,6 +24,8 @@ import type { IWorkingCopyService } from "../../../services/workingCopy/common/w
 import type { IEditorPane } from "./editorPane.js";
 import { EditorPaneRegistry, EditorPanes } from "./editorRegistry.js";
 import type { IWorkspaceEditService } from "../../../services/language/common/workspaceEditService.js";
+import type { ILanguageDiagnosticsService } from "../../../../editor/common/services/languageDiagnosticsService.js";
+import type { EditorLineGutterDecoration } from "../../../../editor/browser/view/lineGutterDecoration.js";
 
 export { EditorOpenSupersededError } from "./editorGroup.js";
 
@@ -62,10 +64,12 @@ export interface IEditorPartOptions {
   readonly languageResolver?: TextResourceLanguageResolver;
   readonly diffApi?: IDiffApi;
   readonly syntaxApi?: ISyntaxApi;
+  readonly languageDiagnosticsService?: ILanguageDiagnosticsService;
   readonly documentCollaborationApi?: IDocumentCollaborationApi;
   readonly serverEvents?: IServerEventApi;
   readonly workingCopyService?: IWorkingCopyService;
   readonly workspaceEditService?: IWorkspaceEditService;
+  readonly createLineGutterDecorations?: (resource: URI) => readonly EditorLineGutterDecoration[];
   readonly registry?: EditorPaneRegistry;
   readonly titleActions?: {
     readonly menuService: IMenuService;
@@ -105,11 +109,13 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
       languageResolver: options.languageResolver,
       diffApi: options.diffApi,
       syntaxApi: options.syntaxApi,
+      languageDiagnosticsService: options.languageDiagnosticsService,
       documentCollaborationApi: options.documentCollaborationApi,
       serverEvents: options.serverEvents,
       workingCopyService: options.workingCopyService,
       onOpenLocation: location => this.openEditor({ resource: location.resource }, { selection: location.selectionRange ?? location.range }).then(() => undefined),
       onApplyWorkspaceEdit: options.workspaceEditService ? edit => options.workspaceEditService!.apply(edit).then(() => undefined) : undefined,
+      createLineGutterDecorations: options.createLineGutterDecorations,
       titleActions: options.titleActions,
       ...(options.saveAsResource ? {
         onSave: (group: IEditorGroup, input: EditorInput, pane: IEditorPane) => this.saveEditor(group, input, pane),

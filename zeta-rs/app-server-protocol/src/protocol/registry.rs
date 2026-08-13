@@ -70,6 +70,13 @@ use crate::protocol::connectors::ConnectorOAuthStartParams;
 use crate::protocol::connectors::ConnectorOAuthStartResult;
 use crate::protocol::connectors::ConnectorSecretDto;
 use crate::protocol::connectors::ConnectorsChanged;
+use crate::protocol::debug::DebugAdapterCloseParams;
+use crate::protocol::debug::DebugAdapterMessageDto;
+use crate::protocol::debug::DebugAdapterReadParams;
+use crate::protocol::debug::DebugAdapterReadResult;
+use crate::protocol::debug::DebugAdapterSendParams;
+use crate::protocol::debug::DebugAdapterStartParams;
+use crate::protocol::debug::DebugAdapterStartResult;
 use crate::protocol::diff::DiffComputeParams;
 use crate::protocol::diff::DiffComputeResult;
 use crate::protocol::diff::DiffComputeRowDto;
@@ -105,16 +112,24 @@ use crate::protocol::git::{
 };
 use crate::protocol::initialize::{InitializeParams, InitializeResult, ServerCapabilities};
 use crate::protocol::language::{
-    LanguageCodeActionDiagnosticDto, LanguageCodeActionDto, LanguageCodeActionsParams,
-    LanguageCodeActionsResult, LanguageDiagnosticSeverityDto, LanguageDocumentDto,
-    LanguageHierarchyEntryDto, LanguageHierarchyItemDto, LanguageHierarchyKindDto,
-    LanguageHierarchyParams, LanguageHierarchyResultDto, LanguageLocationDto,
-    LanguageLocationKindDto, LanguageLocationsParams, LanguageLocationsResult, LanguagePositionDto,
-    LanguagePrepareRenameParams, LanguagePrepareRenameResult, LanguageRangeDto,
+    LanguageCloseParams, LanguageCodeActionDiagnosticDto, LanguageCodeActionDto,
+    LanguageCodeActionsParams, LanguageCodeActionsResult, LanguageCompletionInsertTextFormatDto,
+    LanguageCompletionItemDto, LanguageCompletionItemKindDto, LanguageCompletionTriggerKindDto,
+    LanguageCompletionsParams, LanguageCompletionsResult, LanguageDiagnosticSeverityDto,
+    LanguageDiagnosticsNotification, LanguageDocumentDto, LanguageDocumentFormattingParams,
+    LanguageFormattingOptionsDto, LanguageFormattingResult, LanguageHierarchyEntryDto,
+    LanguageHierarchyItemDto, LanguageHierarchyKindDto, LanguageHierarchyParams,
+    LanguageHierarchyResultDto, LanguageHoverParams, LanguageHoverResult, LanguageInlayHintDto,
+    LanguageInlayHintKindDto, LanguageInlayHintsParams, LanguageInlayHintsResult,
+    LanguageLinkedEditingRangesParams, LanguageLinkedEditingRangesResult, LanguageLocationDto,
+    LanguageLocationKindDto, LanguageLocationsParams, LanguageLocationsResult,
+    LanguageParameterInformationDto, LanguagePositionDto, LanguagePrepareRenameParams,
+    LanguagePrepareRenameResult, LanguageRangeDto, LanguageRangeFormattingParams,
     LanguageRenameParams, LanguageRenamePreparationDto, LanguageResolveCodeActionParams,
-    LanguageTextDocumentEditDto, LanguageTextEditDto, LanguageWorkspaceEditDto,
-    LanguageWorkspaceEditEntryDto, LanguageWorkspaceSymbolDto, LanguageWorkspaceSymbolsParams,
-    LanguageWorkspaceSymbolsResult,
+    LanguageSignatureHelpParams, LanguageSignatureHelpResult, LanguageSignatureHelpTriggerKindDto,
+    LanguageSignatureInformationDto, LanguageSynchronizeParams, LanguageTextDocumentEditDto,
+    LanguageTextEditDto, LanguageWorkspaceEditDto, LanguageWorkspaceEditEntryDto,
+    LanguageWorkspaceSymbolDto, LanguageWorkspaceSymbolsParams, LanguageWorkspaceSymbolsResult,
 };
 use crate::protocol::model::{ModelCatalogEntry, ModelListResult};
 use crate::protocol::notification::{SessionUpdateEnvelope, ThreadUpdateEnvelope};
@@ -656,6 +671,26 @@ client_methods! {
         response: SyntaxAnalyzeResult,
         serialization: GlobalSharedRead,
     },
+    LanguageSynchronize => "language/synchronize" {
+        params: LanguageSynchronizeParams,
+        response: (),
+        serialization: GlobalSharedRead,
+    },
+    LanguageClose => "language/close" {
+        params: LanguageCloseParams,
+        response: (),
+        serialization: GlobalSharedRead,
+    },
+    LanguageHover => "language/hover" {
+        params: LanguageHoverParams,
+        response: LanguageHoverResult,
+        serialization: GlobalSharedRead,
+    },
+    LanguageCompletions => "language/completions" {
+        params: LanguageCompletionsParams,
+        response: LanguageCompletionsResult,
+        serialization: GlobalSharedRead,
+    },
     LanguageLocations => "language/locations" {
         params: LanguageLocationsParams,
         response: LanguageLocationsResult,
@@ -689,6 +724,31 @@ client_methods! {
     LanguageResolveCodeAction => "language/resolveCodeAction" {
         params: LanguageResolveCodeActionParams,
         response: LanguageCodeActionDto,
+        serialization: GlobalSharedRead,
+    },
+    LanguageDocumentFormatting => "language/formatDocument" {
+        params: LanguageDocumentFormattingParams,
+        response: LanguageFormattingResult,
+        serialization: GlobalSharedRead,
+    },
+    LanguageRangeFormatting => "language/formatRange" {
+        params: LanguageRangeFormattingParams,
+        response: LanguageFormattingResult,
+        serialization: GlobalSharedRead,
+    },
+    LanguageSignatureHelp => "language/signatureHelp" {
+        params: LanguageSignatureHelpParams,
+        response: LanguageSignatureHelpResult,
+        serialization: GlobalSharedRead,
+    },
+    LanguageInlayHints => "language/inlayHints" {
+        params: LanguageInlayHintsParams,
+        response: LanguageInlayHintsResult,
+        serialization: GlobalSharedRead,
+    },
+    LanguageLinkedEditingRanges => "language/linkedEditingRanges" {
+        params: LanguageLinkedEditingRangesParams,
+        response: LanguageLinkedEditingRangesResult,
         serialization: GlobalSharedRead,
     },
     FsWriteFile => "fs/writeFile" {
@@ -871,6 +931,26 @@ client_methods! {
         response: (),
         serialization: None,
     },
+    DebugAdapterStart => "debug/adapter/start" {
+        params: DebugAdapterStartParams,
+        response: DebugAdapterStartResult,
+        serialization: None,
+    },
+    DebugAdapterSend => "debug/adapter/send" {
+        params: DebugAdapterSendParams,
+        response: (),
+        serialization: None,
+    },
+    DebugAdapterRead => "debug/adapter/read" {
+        params: DebugAdapterReadParams,
+        response: DebugAdapterReadResult,
+        serialization: None,
+    },
+    DebugAdapterClose => "debug/adapter/close" {
+        params: DebugAdapterCloseParams,
+        response: (),
+        serialization: None,
+    },
 }
 
 macro_rules! server_notifications {
@@ -1011,6 +1091,9 @@ server_notifications! {
     },
     FsChanged => "fs/changed" {
         params: FsChanged,
+    },
+    LanguageDiagnostics => "language/diagnostics" {
+        params: LanguageDiagnosticsNotification,
     },
 }
 
@@ -1318,6 +1401,31 @@ typescript_bindings! {
     LanguagePositionDto,
     LanguageRangeDto,
     LanguageDocumentDto,
+    LanguageSynchronizeParams,
+    LanguageCloseParams,
+    LanguageHoverParams,
+    LanguageHoverResult,
+    LanguageCompletionTriggerKindDto,
+    LanguageCompletionsParams,
+    LanguageCompletionItemKindDto,
+    LanguageCompletionInsertTextFormatDto,
+    LanguageCompletionItemDto,
+    LanguageCompletionsResult,
+    LanguageFormattingOptionsDto,
+    LanguageDocumentFormattingParams,
+    LanguageRangeFormattingParams,
+    LanguageFormattingResult,
+    LanguageSignatureHelpTriggerKindDto,
+    LanguageSignatureHelpParams,
+    LanguageParameterInformationDto,
+    LanguageSignatureInformationDto,
+    LanguageSignatureHelpResult,
+    LanguageInlayHintsParams,
+    LanguageInlayHintKindDto,
+    LanguageInlayHintDto,
+    LanguageInlayHintsResult,
+    LanguageLinkedEditingRangesParams,
+    LanguageLinkedEditingRangesResult,
     LanguageLocationsParams,
     LanguageLocationDto,
     LanguageLocationsResult,
@@ -1339,6 +1447,7 @@ typescript_bindings! {
     LanguageWorkspaceEditEntryDto,
     LanguageDiagnosticSeverityDto,
     LanguageCodeActionDiagnosticDto,
+    LanguageDiagnosticsNotification,
     LanguageCodeActionsParams,
     LanguageCodeActionDto,
     LanguageCodeActionsResult,
@@ -1415,6 +1524,13 @@ typescript_bindings! {
     TerminalCommandStatusEvent,
     TerminalReadResult,
     TerminalCloseParams,
+    DebugAdapterStartParams,
+    DebugAdapterStartResult,
+    DebugAdapterSendParams,
+    DebugAdapterReadParams,
+    DebugAdapterMessageDto,
+    DebugAdapterReadResult,
+    DebugAdapterCloseParams,
     AppServerErrorName,
     AppServerError,
 }

@@ -686,6 +686,75 @@ fn terminal_rpc_enforces_connection_ownership_and_close() {
 }
 
 #[test]
+fn debug_adapter_rpc_enforces_connection_ownership_and_connection_cleanup() {
+    let root = std::env::temp_dir().join(format!(
+        "zeta-app-server-debug-adapter-owner-{}-{}",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos(),
+    ));
+    std::fs::create_dir_all(&root).unwrap();
+    let server = server()
+        .with_debug_adapter_root(
+            trusted_workspace(&root, WorkspaceCapability::LoadExecutableConfiguration),
+            trusted_workspace(&root, WorkspaceCapability::ExecuteProcess),
+        )
+        .unwrap();
+    let mut owner = server.connection();
+    let mut other = server.connection();
+    initialize(&server, &mut owner);
+    initialize(&server, &mut other);
+    #[cfg(windows)]
+    let (program, arguments) = (
+        std::env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".into()),
+        vec!["/D", "/Q", "/C", "more"],
+    );
+    #[cfg(not(windows))]
+    let (program, arguments) = ("/bin/sh".to_owned(), vec!["-c", "cat"]);
+    let started = call(
+        &server,
+        &mut owner,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":2,
+            "method":"debug/adapter/start",
+            "params":{"program":program,"arguments":arguments}
+        }),
+    );
+    let session_id = started["result"]["sessionId"].as_str().unwrap();
+
+    let rejected = call(
+        &server,
+        &mut other,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":2,
+            "method":"debug/adapter/read",
+            "params":{"sessionId":session_id,"afterSequence":0,"maxMessages":1}
+        }),
+    );
+    assert_eq!(rejected["error"]["message"], "DebugAdapterNotOwner");
+
+    server.close_connection(owner);
+    let missing = call(
+        &server,
+        &mut other,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":3,
+            "method":"debug/adapter/read",
+            "params":{"sessionId":session_id,"afterSequence":0,"maxMessages":1}
+        }),
+    );
+    assert_eq!(missing["error"]["message"], "DebugAdapterNotFound");
+
+    drop(server);
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn initialize_advertises_the_server_slash_command_snapshot() {
     let catalog = SlashCommandCatalog::new([SlashCommandDefinition {
         name: "diagnose".into(),

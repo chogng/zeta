@@ -8818,6 +8818,7 @@ dependencies = [
  "zeta-connectors",
  "zeta-connectors-extension",
  "zeta-core",
+ "zeta-debug-adapter",
  "zeta-diff",
  "zeta-extension-api",
  "zeta-extensions",
@@ -9102,6 +9103,16 @@ dependencies = [
  "zeta-sandboxing",
  "zeta-session-store",
  "zeta-thread-store",
+]
+
+[[package]]
+name = "zeta-debug-adapter"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "thiserror 2.0.19",
+ "tokio",
+ "zeta-workspace",
 ]
 
 [[package]]

@@ -1,0 +1,100 @@
+.zeta-tasks {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 8px;
+}
+
+.zeta-tasks-controls {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.zeta-tasks-refresh,
+.zeta-tasks-run,
+.zeta-task-run-button {
+  border: 0;
+  border-radius: 3px;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.zeta-tasks-refresh {
+  padding: 4px 8px;
+  background: color-mix(in srgb, currentColor 8%, transparent);
+}
+
+.zeta-tasks-status {
+  min-height: 18px;
+  padding: 5px 2px;
+  color: var(--zeta-description-foreground);
+  font-size: 12px;
+}
+
+.zeta-tasks-list {
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.zeta-tasks-run {
+  display: grid;
+  grid-template-columns: minmax(100px, 180px) 100px minmax(160px, 1fr);
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  padding: 5px 7px;
+  text-align: left;
+}
+
+.zeta-tasks-run:hover,
+.zeta-task-run-button:hover {
+  background: var(--zeta-toolbar-hover-background);
+}
+
+.zeta-tasks-run:focus-visible,
+.zeta-task-run-button:focus-visible,
+.zeta-tasks-refresh:focus-visible {
+  outline: 1px solid var(--zeta-focus-border);
+  outline-offset: -1px;
+}
+
+.zeta-task-label,
+.zeta-task-command {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zeta-task-source {
+  color: var(--zeta-description-foreground);
+  font-size: 11px;
+}
+
+.zeta-task-command {
+  color: var(--zeta-muted-foreground);
+}
+
+.zeta-task-run {
+  margin-top: 6px;
+  border-top: 1px solid var(--zeta-border);
+  padding-top: 5px;
+}
+
+.zeta-task-run-button {
+  width: 100%;
+  padding: 5px 7px;
+  text-align: left;
+}
+
+.zeta-task-run.failed .zeta-task-run-button {
+  color: var(--zeta-error-foreground);
+}
+
+.zeta-task-run.succeeded .zeta-task-run-button {
+  color: var(--zeta-success-foreground);
+}

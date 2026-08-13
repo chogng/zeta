@@ -36,6 +36,7 @@ pub struct ServerCapabilities {
     pub code_index: bool,
     pub cloud_code_index: bool,
     pub terminal: bool,
+    pub debug_adapter: bool,
     pub typst: bool,
     pub update_replay: bool,
     pub extensions: bool,

@@ -1,0 +1,94 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { Emitter, type Event } from "../../../../../base/common/event.js";
+import { DisposableOwner, toDisposable } from "../../../../../base/common/lifecycle.js";
+import { URI } from "../../../../../base/common/uri.js";
+import { FileKind, FileNotFoundError, type IFileBytes, type IFileService, type IFileStat, type IFileWriteResult } from "../../../../../platform/files/common/files.js";
+import { type IWorkspaceContextService } from "../../../../../platform/workspace/common/workspace.js";
+import { type ITerminalCommandStatusEvent, type ITerminalCreateOptions, type ITerminalDimensions, type ITerminalInstance, type ITerminalProfile, type ITerminalService, type TerminalInstanceState } from "../../../../services/terminal/common/terminal.js";
+import { TaskService } from "../../browser/taskService.js";
+
+test("TaskService discovers tasks, writes one terminal command, and tracks its exit", async () => {
+  const root = URI.file("C:\\project");
+  const files = new FakeFileService(root, {
+    ".vscode/tasks.json": '{"version":"2.0.0","tasks":[{"label":"Lint","command":"cargo lint","group":"build"}]}',
+    "package.json": '{"scripts":{"test":"node --test"}}',
+    "pnpm-lock.yaml": "lockfileVersion: 9",
+    "Cargo.toml": "[workspace]",
+  });
+  const workspace: IWorkspaceContextService = {
+    onDidChangeWorkspace: noEvent,
+    getWorkspace: () => ({ id: "workspace", folders: [{ uri: root, name: "project", index: 0 }] }),
+    getWorkbenchState: () => 2,
+  };
+  using terminals = new FakeTerminalService();
+  using service = new TaskService(files, workspace, terminals);
+  const tasks = await service.refresh();
+  assert.deepEqual(tasks.map(task => task.id), ["cargo:build", "cargo:check", "vscode:0:lint", "cargo:test", "pnpm:test", "cargo:run"]);
+
+  const task = tasks.find(candidate => candidate.id === "vscode:0:lint")!;
+  const run = await service.run(task);
+  const terminal = terminals.instances[0] as FakeTerminalInstance;
+  assert.equal(terminal.title, "Task: Lint");
+  assert.deepEqual(terminal.writes, ["cargo lint\r"]);
+  assert.equal(run.status, "running");
+  terminal.command({ commandId: "command-1", status: "running", exitCode: undefined });
+  terminal.command({ commandId: "command-1", status: "failed", exitCode: 2 });
+  assert.equal(run.status, "failed");
+  assert.equal(run.exitCode, 2);
+  assert.equal(service.activeRuns.length, 0);
+  assert.equal(service.lastRun, run);
+
+  const secondRun = await service.run(task);
+  await service.terminate(secondRun);
+  assert.equal(secondRun.status, "canceled");
+});
+
+const noEvent = (() => toDisposable(() => undefined)) as Event<never>;
+
+class FakeFileService implements IFileService {
+  readonly onDidChangeFiles = noEvent;
+  constructor(private readonly root: URI, private readonly files: Readonly<Record<string, string>>) {}
+  async stat(resource: URI) { const path = this.relative(resource); if (!(path in this.files)) throw new FileNotFoundError(resource); return { resource, kind: FileKind.File, sizeBytes: this.files[path]!.length, readonly: false, modifiedAtMillis: undefined }; }
+  async readFile(resource: URI) { const path = this.relative(resource); if (!(path in this.files)) throw new FileNotFoundError(resource); return { resource, content: this.files[path]!, revision: "1" }; }
+  async readDirectory() { return []; }
+  async readFileBytes(): Promise<IFileBytes> { throw new Error("unused"); }
+  async writeFile(): Promise<IFileWriteResult> { throw new Error("unused"); }
+  async createFile(): Promise<IFileStat> { throw new Error("unused"); }
+  async rename() { throw new Error("unused"); }
+  async delete() { throw new Error("unused"); }
+  private relative(resource: URI): string { return decodeURIComponent(resource.path).slice(decodeURIComponent(this.root.path).length + 1); }
+}
+
+class FakeTerminalService extends DisposableOwner implements ITerminalService {
+  private readonly createEmitter = this.own(new Emitter<ITerminalInstance>());
+  readonly instances: FakeTerminalInstance[] = [];
+  activeInstance: ITerminalInstance | undefined;
+  readonly onDidCreateInstance = this.createEmitter.event;
+  readonly onDidDisposeInstance = noEvent;
+  readonly onDidChangeInstances = noEvent;
+  readonly onDidChangeActiveInstance = noEvent;
+  async getProfiles(): Promise<readonly ITerminalProfile[]> { return [{ profileId: "command-prompt", title: "Command Prompt", isDefault: true }]; }
+  async createTerminal(options: ITerminalCreateOptions): Promise<ITerminalInstance> { const terminal = this.own(new FakeTerminalInstance(`terminal-${this.instances.length + 1}`, options.title ?? "Terminal")); this.instances.push(terminal); this.activeInstance = terminal; this.createEmitter.fire(terminal); return terminal; }
+  async relaunchTerminal() {}
+  setActiveInstance(instance: ITerminalInstance | undefined) { this.activeInstance = instance; }
+  moveTerminal() {}
+  async closeTerminal(instance: ITerminalInstance) { await instance.close(); }
+}
+
+class FakeTerminalInstance extends DisposableOwner implements ITerminalInstance {
+  readonly profile = { profileId: "command-prompt", title: "Command Prompt", isDefault: true };
+  readonly writes: string[] = [];
+  state: TerminalInstanceState = "running";
+  exitCode: number | undefined;
+  private readonly commandEmitter = this.own(new Emitter<ITerminalCommandStatusEvent>());
+  readonly onDidWriteData = noEvent;
+  readonly onDidChangeCommandStatus = this.commandEmitter.event;
+  readonly onDidExit = noEvent;
+  readonly onDidChangeState = noEvent;
+  constructor(readonly id: string, readonly title: string) { super(); }
+  write(data: string): void { this.writes.push(data); }
+  resize(_dimensions: ITerminalDimensions): void {}
+  async close(): Promise<void> { this.state = "exited"; }
+  command(event: ITerminalCommandStatusEvent): void { this.commandEmitter.fire(event); }
+}

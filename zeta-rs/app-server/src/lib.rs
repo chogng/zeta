@@ -2,6 +2,7 @@
 
 mod code_retrieval_context;
 mod code_retrieval_tool;
+mod debug_service;
 mod dynamic_tools;
 mod extension_tools;
 mod git_service;

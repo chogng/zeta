@@ -10,6 +10,7 @@ import { LanguageConfigurationRegistry, LanguageIndentAction } from "../../commo
 import { LanguageLexicalContextIndex } from "../../common/languages/languageLexicalContext.js";
 import { TextSelection, TextSelectionSet } from "../../common/core/selection.js";
 import { TextPosition, TextRange } from "../../common/core/text.js";
+import { extendEditorEditCommand } from "../../common/commands/editorCommand.js";
 import { TextModel } from "../../common/model/textModel.js";
 import "../../contrib/bracketMatching/browser/languageEditingAdapter.js";
 
@@ -291,6 +292,24 @@ test("Textarea mirrors the focused document and primary selection for assistive 
   dom.window.close();
 });
 
+test("Textarea bounds its accessibility mirror around the primary selection", () => {
+  const dom = new JSDOM("<!doctype html><body><main></main></body>");
+  const container = dom.window.document.querySelector("main");
+  assert.ok(container);
+  using model = new TextModel("x".repeat(40_000));
+  using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 20_000)));
+  using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+  using input = new TextInputController(viewport, selections);
+
+  input.focus();
+  assert.equal(input.element.value.length, 32 * 1_024);
+  assert.equal(input.element.selectionStart, 16 * 1_024);
+  input.element.setSelectionRange(16 * 1_024 - 2, 16 * 1_024 + 2);
+  input.element.dispatchEvent(new dom.window.Event("select"));
+  assert.deepEqual(selections.selections.primary.range, TextRange.from(TextPosition.at(0, 19_998), TextPosition.at(0, 20_002)));
+  dom.window.close();
+});
+
 test("Textarea inherits the viewport direction for macOS accessibility text services", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   const container = dom.window.document.querySelector("main");
@@ -442,6 +461,24 @@ test("Textarea applies current language pair configuration through editor comman
   input.element.dispatchEvent(beforeInput(dom.window, "insertText", "{"));
   assert.equal(model.getText(), "\"item\"(){");
   assert.deepEqual(selections.selections.primary, caret(0, model.getText().length));
+
+  dom.window.close();
+});
+
+test("Textarea command transformers keep linked input and undo atomic", () => {
+  const dom = new JSDOM("<!doctype html><body><main></main></body>");
+  const container = dom.window.document.querySelector("main");
+  assert.ok(container);
+  using model = new TextModel("tag tag");
+  using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 1)));
+  using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+  using input = new TextInputController(viewport, selections);
+  using linked = input.registerCommandTransformer(command => extendEditorEditCommand(model, command, [{ range: TextRange.emptyAt(TextPosition.at(0, 5)), text: "X" }]));
+
+  input.element.dispatchEvent(beforeInput(dom.window, "insertText", "X"));
+  assert.deepEqual({ text: model.getText(), selection: selections.selections.primary }, { text: "tXag tXag", selection: caret(0, 2) });
+  input.element.dispatchEvent(beforeInput(dom.window, "historyUndo"));
+  assert.deepEqual({ text: model.getText(), selection: selections.selections.primary }, { text: "tag tag", selection: caret(0, 1) });
 
   dom.window.close();
 });

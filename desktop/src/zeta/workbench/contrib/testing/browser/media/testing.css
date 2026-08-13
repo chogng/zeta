@@ -1,0 +1,88 @@
+.zeta-testing {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 8px;
+}
+
+.zeta-testing-controls {
+  display: flex;
+  gap: 5px;
+}
+
+.zeta-testing-controls button,
+.zeta-testing-run,
+.zeta-testing-run-result {
+  border: 0;
+  border-radius: 3px;
+  padding: 4px 7px;
+  color: inherit;
+  background: color-mix(in srgb, currentColor 8%, transparent);
+  font: inherit;
+  cursor: pointer;
+}
+
+.zeta-testing-status {
+  min-height: 18px;
+  padding: 6px 2px;
+  color: var(--zeta-description-foreground);
+  font-size: 12px;
+}
+
+.zeta-testing-list {
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.zeta-testing-profile {
+  display: grid;
+  grid-template-columns: auto minmax(70px, 1fr);
+  gap: 2px 7px;
+  align-items: center;
+  padding: 4px 2px;
+}
+
+.zeta-testing-run {
+  grid-row: 1 / 3;
+}
+
+.zeta-testing-label,
+.zeta-testing-detail {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zeta-testing-detail {
+  color: var(--zeta-muted-foreground);
+  font-size: 11px;
+}
+
+.zeta-testing-result {
+  margin-top: 4px;
+}
+
+.zeta-testing-run-result {
+  width: 100%;
+  text-align: left;
+}
+
+.zeta-testing-result.passed .zeta-testing-run-result {
+  color: var(--zeta-success-foreground);
+}
+
+.zeta-testing-result.failed .zeta-testing-run-result {
+  color: var(--zeta-error-foreground);
+}
+
+.zeta-testing button:hover {
+  background: var(--zeta-toolbar-hover-background);
+}
+
+.zeta-testing button:focus-visible {
+  outline: 1px solid var(--zeta-focus-border);
+  outline-offset: -1px;
+}

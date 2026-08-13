@@ -20,15 +20,20 @@ pub use diagnostics::{
 pub use document::{LanguageDocumentRevision, LanguageServiceDocument};
 pub use error::LanguageServiceError;
 pub use requests::{
-    LanguageCodeAction, LanguageCodeActions, LanguageCompletionItem, LanguageCompletions,
-    LanguageDeleteMode, LanguageDocumentPosition, LanguageExistingTargetBehavior,
+    LanguageCodeAction, LanguageCodeActions, LanguageCompletionInsertTextFormat,
+    LanguageCompletionItem, LanguageCompletionItemKind, LanguageCompletionTrigger,
+    LanguageCompletions, LanguageDeleteMode, LanguageDocumentPosition,
+    LanguageExistingTargetBehavior, LanguageFormattingEdits, LanguageFormattingOptions,
     LanguageHierarchyEntry, LanguageHierarchyItem, LanguageHierarchyKind, LanguageHierarchyResult,
-    LanguageHover, LanguageLocationKind, LanguageLocationPosition, LanguageLocationRange,
-    LanguageLocationTarget, LanguageLocations, LanguageMissingTargetBehavior,
-    LanguagePositionEncoding, LanguageRenamePreparation, LanguageRequestId, LanguageRequestKind,
-    LanguageTextEdit, LanguageWorkspaceDocumentEdit, LanguageWorkspaceEdit,
-    LanguageWorkspaceEditEntry, LanguageWorkspaceEditResult, LanguageWorkspaceSymbol,
-    LanguageWorkspaceSymbols, LanguageWorkspaceTextEdit,
+    LanguageHover, LanguageInlayHint, LanguageInlayHintKind, LanguageInlayHints,
+    LanguageLinkedEditingRanges, LanguageLocationKind, LanguageLocationPosition,
+    LanguageLocationRange, LanguageLocationTarget, LanguageLocations,
+    LanguageMissingTargetBehavior, LanguageParameterInformation, LanguagePositionEncoding,
+    LanguageRenamePreparation, LanguageRequestId, LanguageRequestKind, LanguageSignatureHelp,
+    LanguageSignatureHelpTrigger, LanguageSignatureInformation, LanguageTextEdit,
+    LanguageWorkspaceDocumentEdit, LanguageWorkspaceEdit, LanguageWorkspaceEditEntry,
+    LanguageWorkspaceEditResult, LanguageWorkspaceSymbol, LanguageWorkspaceSymbols,
+    LanguageWorkspaceTextEdit,
 };
 pub use restart::LanguageServerRestartPolicy;
 pub use service::{

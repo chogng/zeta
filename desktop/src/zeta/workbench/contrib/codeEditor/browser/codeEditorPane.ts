@@ -21,6 +21,7 @@ import { type ISyntaxApi } from "../../../../platform/syntax/common/syntaxApi.js
 import { type TextRange } from "../../../../editor/common/core/text.js";
 import { type LanguageLocation } from "../../../../editor/contrib/gotoSymbol/common/languageNavigation.js";
 import { type LanguageWorkspaceEdit } from "../../../../editor/common/languages/languageWorkspaceEdit.js";
+import { type ILanguageDiagnosticsService } from "../../../../editor/common/services/languageDiagnosticsService.js";
 
 export interface EditorPanePart extends IDisposable {
   layout(dimension: IDimension): void;
@@ -38,6 +39,7 @@ export interface EditorPanePartOptions extends EditorPartOptions {
   readonly textMateService?: ITextMateService;
   readonly languageFeaturesService?: ILanguageFeaturesService;
   readonly syntaxApi?: ISyntaxApi;
+  readonly languageDiagnosticsService?: ILanguageDiagnosticsService;
 }
 
 export interface EditorPaneOptions {
@@ -47,6 +49,7 @@ export interface EditorPaneOptions {
   readonly textMateService?: ITextMateService;
   readonly languageFeaturesService?: ILanguageFeaturesService;
   readonly syntaxApi?: ISyntaxApi;
+  readonly languageDiagnosticsService?: ILanguageDiagnosticsService;
   readonly lineWrapping?: EditorLineWrapping;
   /** Browser paragraph direction forwarded to every created editor part. */
   readonly textDirection?: EditorTextDirection;
@@ -55,6 +58,7 @@ export interface EditorPaneOptions {
   readonly onExecuteEditorCommand?: EditorPartOptions["onExecuteEditorCommand"];
   readonly onOpenLocation?: (location: LanguageLocation) => void | Promise<void>;
   readonly onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit) => void | Promise<void>;
+  readonly createLineGutterDecorations?: (resource: URI) => NonNullable<EditorPartOptions["lineGutterDecorations"]>;
   readonly placeholder?: string;
   readonly showUnicodeHighlights?: boolean;
   readonly fontZoom?: EditorPartOptions["fontZoom"];
@@ -119,6 +123,7 @@ export class CodeEditorPane extends DisposableOwner implements IEditorPane {
         textMateService: this.options.textMateService,
         languageFeaturesService: this.options.languageFeaturesService,
         syntaxApi: this.options.syntaxApi,
+        languageDiagnosticsService: this.options.languageDiagnosticsService,
         lineWrapping: this.options.lineWrapping,
         textDirection: this.options.textDirection,
         onOpenLink: this.options.onOpenLink,
@@ -126,6 +131,7 @@ export class CodeEditorPane extends DisposableOwner implements IEditorPane {
         onExecuteEditorCommand: this.options.onExecuteEditorCommand,
         onOpenLocation: this.options.onOpenLocation,
         onApplyWorkspaceEdit: this.options.onApplyWorkspaceEdit,
+        lineGutterDecorations: this.options.createLineGutterDecorations?.(input.resource),
         placeholder: this.options.placeholder,
         showUnicodeHighlights: this.options.showUnicodeHighlights,
         fontZoom: this.options.fontZoom,

@@ -26,11 +26,17 @@ import type { ZetaElectronRendererApi } from "../common/rendererApi.js";
 import { createNativeHostApi } from "./nativeHostApi.js";
 import { createLanguageApi } from "../../language/electron-browser/languageApi.js";
 import { createPluginApi } from "../../plugins/electron-browser/pluginApi.js";
+import type { IAppServerApi } from "../../app-server/common/appServerApi.js";
+import { mergeRendererHostCapabilities } from "../../renderer/common/rendererHost.js";
+import type { RendererHostCapabilities } from "../../renderer/common/rendererHost.js";
+
+export type ElectronRendererCapabilityContribution = (appServer: IAppServerApi) => RendererHostCapabilities;
 
 /** Composes Electron renderer capabilities from domain-owned IPC adapters. */
-export function createElectronRendererApi(): ZetaElectronRendererApi {
+export function createElectronRendererApi(contributions: readonly ElectronRendererCapabilityContribution[] = []): ZetaElectronRendererApi {
   const appServer = createAppServerApi();
   const resource = createResourceApi();
+  const capabilities = mergeRendererHostCapabilities(contributions.map(contribution => contribution(appServer)));
   return {
     environment: {
       runtime: "electron",
@@ -55,6 +61,7 @@ export function createElectronRendererApi(): ZetaElectronRendererApi {
     git: createGitApi(),
     workspaceSearch: createWorkspaceSearchApi(),
     terminal: new ElectronTerminalProcessService(appServer),
+    ...capabilities,
     events: createServerEventApi(),
     configuration: createConfigurationApi(),
     keybindings: createKeybindingsResourceApi(),

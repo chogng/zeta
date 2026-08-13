@@ -6,6 +6,8 @@ import { LanguageResultAcceptance } from "../../../../common/languages/languageR
 import { LanguageDiagnosticSeverity, createLanguageDiagnosticStore, type LanguageDiagnostic } from "../../../../common/languages/languageResults.js";
 import { TextPosition, TextRange } from "../../../../common/core/text.js";
 import { TextModel } from "../../../../common/model/textModel.js";
+import { Emitter } from "../../../../../base/common/event.js";
+import { URI } from "../../../../../base/common/uri.js";
 
 const position = TextPosition.at;
 const range = (lineIndex: number, startColumn: number, endColumn: number): TextRange => TextRange.from(
@@ -73,6 +75,27 @@ test("Model edits clear diagnostics before decoration ranges can drift", () => {
     modelVersion: 2,
     decorations: [],
   }]);
+});
+
+test("Diagnostic bridge merges only current external diagnostics and removes duplicates", () => {
+  using model = new TextModel("abc");
+  using store = createLanguageDiagnosticStore(model);
+  const resource = URI.file("C:\\project\\main.rs");
+  using changes = new Emitter<URI>();
+  let external = { resource, revision: model.version, diagnostics: [diagnostic(range(0, 0, 1), LanguageDiagnosticSeverity.Error, "shared")] };
+  using bridge = new LanguageDiagnosticDecorationBridge(store, {
+    onDidChangeDiagnostics: changes.event,
+    getDiagnostics: () => external,
+  }, resource);
+  acceptDiagnostics(store, model, 1, [diagnostic(range(0, 0, 1), LanguageDiagnosticSeverity.Error, "shared")]);
+
+  assert.equal(bridge.decorations.decorations.length, 1);
+  model.applyEdits([{ range: TextRange.emptyAt(position(0, 3)), text: "d" }]);
+  assert.equal(bridge.decorations.decorations.length, 0);
+
+  external = { resource, revision: model.version, diagnostics: [diagnostic(range(0, 1, 2), LanguageDiagnosticSeverity.Warning, "fresh")] };
+  changes.fire(resource);
+  assert.equal(bridge.decorations.decorations[0]!.metadata.message, "fresh");
 });
 
 test("Diagnostic bridge disposal owns only its projected collection", () => {

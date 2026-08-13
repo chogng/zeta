@@ -3,6 +3,7 @@ import { type TextPosition } from "../../../common/core/text.js";
 import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageFeatureRequest } from "../../../common/languages/languageFeatureRequest.js";
 import { LanguageFeatureProviderRegistry, type LanguageFeatureProviderMetadata } from "../../../common/languages/languageFeatureRegistry.js";
 import { type TextModel } from "../../../common/model/textModel.js";
+import { type URI } from "../../../../base/common/uri.js";
 
 export interface LanguageParameterInformation {
   readonly label: string;
@@ -22,8 +23,12 @@ export interface LanguageParameterHints {
 }
 
 export interface LanguageParameterHintsRequest extends LanguageFeatureRequest {
+  readonly resource?: URI;
   readonly position: TextPosition;
+  readonly context: LanguageParameterHintsContext;
 }
+
+export type LanguageParameterHintsContext = { readonly kind: "invoke" } | { readonly kind: "triggerCharacter"; readonly triggerCharacter: string } | { readonly kind: "contentChange" };
 
 export interface LanguageParameterHintsProvider extends LanguageFeatureProviderMetadata {
   provideParameterHints(request: LanguageParameterHintsRequest, signal: AbortSignal): LanguageParameterHints | undefined | Promise<LanguageParameterHints | undefined>;
@@ -31,12 +36,12 @@ export interface LanguageParameterHintsProvider extends LanguageFeatureProviderM
 
 /** Queries signature help independently of completion and keeps active indices provider-owned. */
 export class ParameterHintsService extends DisposableOwner {
-  constructor(private readonly model: TextModel, private readonly providers: LanguageFeatureProviderRegistry<LanguageParameterHintsProvider>) {
+  constructor(private readonly model: TextModel, private readonly providers: LanguageFeatureProviderRegistry<LanguageParameterHintsProvider>, private readonly resource?: URI) {
     super();
   }
 
-  async provideParameterHints(languageId: string, position: TextPosition, signal: AbortSignal = new AbortController().signal): Promise<LanguageParameterHints | undefined> {
-    const request = { ...createLanguageFeatureRequest(this.model, languageId, signal), position };
+  async provideParameterHints(languageId: string, position: TextPosition, context: LanguageParameterHintsContext = { kind: "invoke" }, signal: AbortSignal = new AbortController().signal): Promise<LanguageParameterHints | undefined> {
+    const request = { ...createLanguageFeatureRequest(this.model, languageId, signal), ...(this.resource ? { resource: this.resource } : {}), position, context };
     for (const provider of this.providers.getProviders(languageId)) {
       const value = await provider.provideParameterHints(request, signal);
       if (!isLanguageFeatureRequestCurrent(request)) return undefined;

@@ -64,14 +64,14 @@ export interface ILanguageFeaturesService extends IDisposable {
   createCodeActionService(model: TextModel, resource: URI): CodeActionService;
   createCodeLensService(model: TextModel): CodeLensService;
   createDocumentSymbolService(model: TextModel, options?: DocumentSymbolServiceOptions): DocumentSymbolService;
-  createFormatService(model: TextModel): FormatService;
+  createFormatService(model: TextModel, resource?: URI): FormatService;
   createGotoSymbolService(model: TextModel, options?: DocumentSymbolServiceOptions): GotoSymbolService;
-  createHoverService(model: TextModel): HoverService;
-  createInlayHintsService(model: TextModel): InlayHintsService;
+  createHoverService(model: TextModel, resource?: URI): HoverService;
+  createInlayHintsService(model: TextModel, resource?: URI): InlayHintsService;
   createInlineCompletionsService(model: TextModel): InlineCompletionsService;
-  createLinkedEditingService(model: TextModel): LinkedEditingService;
+  createLinkedEditingService(model: TextModel, resource?: URI): LinkedEditingService;
   createLinkService(model: TextModel): LinkService;
-  createParameterHintsService(model: TextModel): ParameterHintsService;
+  createParameterHintsService(model: TextModel, resource?: URI): ParameterHintsService;
   createRenameService(model: TextModel, resource: URI): RenameService;
   createColorService(model: TextModel): ColorService;
   createLanguageNavigationService(model: TextModel, resource: URI): LanguageNavigationService;
@@ -85,6 +85,7 @@ export interface SyntaxFeaturesOptions {
 }
 
 export interface LanguageCompletionFeaturesOptions {
+  readonly resource?: URI;
   readonly workerFactory?: LanguageCompletionWorkerFactory;
 }
 
@@ -251,6 +252,7 @@ export class LanguageFeaturesService extends DisposableOwner implements ILanguag
 
   createCompletionService(model: TextModel, options: LanguageCompletionFeaturesOptions = {}): LanguageCompletionService {
     return new LanguageCompletionService(model, this.completionProviders, {
+      ...(options.resource ? { resource: options.resource } : {}),
       ...(options.workerFactory ? { workerFactory: options.workerFactory } : {}),
     });
   }
@@ -267,36 +269,36 @@ export class LanguageFeaturesService extends DisposableOwner implements ILanguag
     return new DocumentSymbolService(model, this.documentSymbolProviders, options);
   }
 
-  createFormatService(model: TextModel): FormatService {
-    return new FormatService(model, this.formattingProviders);
+  createFormatService(model: TextModel, resource?: URI): FormatService {
+    return new FormatService(model, this.formattingProviders, resource);
   }
 
   createGotoSymbolService(model: TextModel, options: DocumentSymbolServiceOptions = {}): GotoSymbolService {
     return new GotoSymbolService(this.createDocumentSymbolService(model, options));
   }
 
-  createHoverService(model: TextModel): HoverService {
-    return new HoverService(model, this.hoverProviders);
+  createHoverService(model: TextModel, resource?: URI): HoverService {
+    return new HoverService(model, this.hoverProviders, resource);
   }
 
-  createInlayHintsService(model: TextModel): InlayHintsService {
-    return new InlayHintsService(model, this.inlayHintsProviders);
+  createInlayHintsService(model: TextModel, resource?: URI): InlayHintsService {
+    return new InlayHintsService(model, this.inlayHintsProviders, resource);
   }
 
   createInlineCompletionsService(model: TextModel): InlineCompletionsService {
     return new InlineCompletionsService(model, this.inlineCompletionsProviders);
   }
 
-  createLinkedEditingService(model: TextModel): LinkedEditingService {
-    return new LinkedEditingService(model, this.linkedEditingProviders);
+  createLinkedEditingService(model: TextModel, resource?: URI): LinkedEditingService {
+    return new LinkedEditingService(model, this.linkedEditingProviders, resource);
   }
 
   createLinkService(model: TextModel): LinkService {
     return new LinkService(model, this.linkProviders);
   }
 
-  createParameterHintsService(model: TextModel): ParameterHintsService {
-    return new ParameterHintsService(model, this.parameterHintsProviders);
+  createParameterHintsService(model: TextModel, resource?: URI): ParameterHintsService {
+    return new ParameterHintsService(model, this.parameterHintsProviders, resource);
   }
 
   createRenameService(model: TextModel, resource: URI): RenameService {

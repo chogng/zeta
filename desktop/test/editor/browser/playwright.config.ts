@@ -10,7 +10,7 @@ export default defineConfig({
   projects: [
     { name: "chromium", use: { browserName: "chromium" } },
   ],
-  webServer: {
+  webServer: process.env.ZETA_EDITOR_BROWSER_EXTERNAL_SERVER ? undefined : {
     command: "node ../../../node_modules/vite/bin/vite.js --config vite.config.ts",
     url: "http://127.0.0.1:5185/textModel.html",
     reuseExistingServer: !process.env.CI,

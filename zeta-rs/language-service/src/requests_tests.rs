@@ -2,11 +2,14 @@ use std::str::FromStr;
 
 use zeta_lsp::lsp_types::{
     CallHierarchyIncomingCall, CallHierarchyItem, CallHierarchyOutgoingCall, CodeAction,
-    CodeActionKind, CodeActionOrCommand, Command, CompletionItem, CompletionResponse, CreateFile,
-    DocumentChangeOperation, DocumentChanges, GotoDefinitionResponse, Hover, HoverContents,
-    Location, MarkedString, OneOf, OptionalVersionedTextDocumentIdentifier, PositionEncodingKind,
-    Range, ResourceOp, SymbolInformation, SymbolKind, TextDocumentEdit, TextEdit, Uri,
-    WorkspaceEdit, WorkspaceSymbolResponse,
+    CodeActionKind, CodeActionOrCommand, Command, CompletionItem, CompletionItemKind,
+    CompletionResponse, CreateFile, DocumentChangeOperation, DocumentChanges,
+    GotoDefinitionResponse, Hover, HoverContents, InlayHint, InlayHintKind, InlayHintLabel,
+    InlayHintTooltip, InsertTextFormat, LinkedEditingRanges, Location, MarkedString, OneOf,
+    OptionalVersionedTextDocumentIdentifier, ParameterInformation, ParameterLabel,
+    PositionEncodingKind, Range, ResourceOp, SignatureHelp, SignatureInformation,
+    SymbolInformation, SymbolKind, TextDocumentEdit, TextEdit, Uri, WorkspaceEdit,
+    WorkspaceSymbolResponse,
 };
 
 use super::*;
@@ -32,6 +35,185 @@ fn request_position_uses_the_negotiated_encoding_without_splitting_unicode() {
         ),
         None
     );
+}
+
+#[test]
+fn formatting_projection_converts_unicode_ranges_and_sorts_edits() {
+    let path = absolute_test_path("formatted.rs");
+    let result = project_formatting_edits(
+        LanguageRequestId::new(4),
+        path.clone(),
+        LanguageDocumentRevision::new(9),
+        "é rust\nsecond",
+        &PositionEncodingKind::UTF16,
+        Some(vec![
+            TextEdit::new(
+                Range::new(Position::new(1, 0), Position::new(1, 6)),
+                "next".into(),
+            ),
+            TextEdit::new(
+                Range::new(Position::new(0, 1), Position::new(0, 5)),
+                "RUST".into(),
+            ),
+        ]),
+    )
+    .expect("formatting edits");
+
+    assert_eq!(result.request_id, LanguageRequestId::new(4));
+    assert_eq!(result.path, path);
+    assert_eq!(result.revision, LanguageDocumentRevision::new(9));
+    assert_eq!(result.edits[0].range.byte_range(), 2..6);
+    assert_eq!(result.edits[0].new_text, "RUST");
+    assert_eq!(result.edits[1].range.byte_range(), 8..14);
+}
+
+#[test]
+fn formatting_projection_rejects_invalid_and_overlapping_edits() {
+    let path = absolute_test_path("formatted.rs");
+    let overlapping = project_formatting_edits(
+        LanguageRequestId::new(5),
+        path.clone(),
+        LanguageDocumentRevision::new(1),
+        "abcdef",
+        &PositionEncodingKind::UTF16,
+        Some(vec![
+            TextEdit::new(
+                Range::new(Position::new(0, 0), Position::new(0, 3)),
+                "a".into(),
+            ),
+            TextEdit::new(
+                Range::new(Position::new(0, 2), Position::new(0, 4)),
+                "b".into(),
+            ),
+        ]),
+    );
+    assert!(overlapping.is_err());
+
+    let invalid = project_formatting_edits(
+        LanguageRequestId::new(6),
+        path,
+        LanguageDocumentRevision::new(1),
+        "abcdef",
+        &PositionEncodingKind::UTF16,
+        Some(vec![TextEdit::new(
+            Range::new(Position::new(2, 0), Position::new(2, 1)),
+            "x".into(),
+        )]),
+    );
+    assert!(invalid.is_err());
+}
+
+#[test]
+fn signature_help_projection_resolves_utf16_parameter_labels_and_active_indices() {
+    let path = absolute_test_path("signature.rs");
+    let result = project_signature_help(
+        LanguageRequestId::new(7),
+        path,
+        LanguageDocumentRevision::new(3),
+        Some(SignatureHelp {
+            signatures: vec![SignatureInformation {
+                label: "call(é, value)".into(),
+                documentation: Some(Documentation::String("Calls it".into())),
+                parameters: Some(vec![
+                    ParameterInformation {
+                        label: ParameterLabel::LabelOffsets([5, 6]),
+                        documentation: None,
+                    },
+                    ParameterInformation {
+                        label: ParameterLabel::Simple("value".into()),
+                        documentation: Some(Documentation::String("The value".into())),
+                    },
+                ]),
+                active_parameter: None,
+            }],
+            active_signature: Some(0),
+            active_parameter: Some(1),
+        }),
+    )
+    .expect("signature help");
+
+    assert_eq!(result.active_signature, Some(0));
+    assert_eq!(result.signatures[0].parameters[0].label, "é");
+    assert_eq!(result.signatures[0].active_parameter, Some(1));
+    assert_eq!(
+        result.signatures[0].parameters[1].documentation.as_deref(),
+        Some("The value")
+    );
+}
+
+#[test]
+fn inlay_hint_projection_converts_positions_and_drops_mutating_behavior() {
+    let result = project_inlay_hints(
+        LanguageRequestId::new(8),
+        absolute_test_path("hints.rs"),
+        LanguageDocumentRevision::new(4),
+        "é value",
+        &PositionEncodingKind::UTF16,
+        Some(vec![InlayHint {
+            position: Position::new(0, 1),
+            label: InlayHintLabel::String(": String".into()),
+            kind: Some(InlayHintKind::TYPE),
+            text_edits: Some(vec![TextEdit::new(
+                Range::new(Position::new(0, 1), Position::new(0, 1)),
+                ": String".into(),
+            )]),
+            tooltip: Some(InlayHintTooltip::String("inferred type".into())),
+            padding_left: Some(true),
+            padding_right: None,
+            data: None,
+        }]),
+    );
+
+    assert_eq!(
+        result.hints[0].position,
+        LanguageDocumentPosition::new(0, 2)
+    );
+    assert_eq!(result.hints[0].kind, LanguageInlayHintKind::Type);
+    assert_eq!(result.hints[0].tooltip.as_deref(), Some("inferred type"));
+    assert!(result.hints[0].padding_left);
+}
+
+#[test]
+fn linked_editing_projection_validates_identical_non_overlapping_unicode_ranges() {
+    let result = project_linked_editing_ranges(
+        LanguageRequestId::new(9),
+        absolute_test_path("linked.rs"),
+        LanguageDocumentRevision::new(5),
+        "茅tag 茅tag",
+        &PositionEncodingKind::UTF16,
+        Some(LinkedEditingRanges {
+            ranges: vec![
+                Range::new(Position::new(0, 0), Position::new(0, 4)),
+                Range::new(Position::new(0, 5), Position::new(0, 9)),
+            ],
+            word_pattern: Some("[\\p{L}]+".into()),
+        }),
+    )
+    .expect("linked ranges");
+
+    assert_eq!(result.ranges[0].byte_range(), 0..6);
+    assert_eq!(result.ranges[1].byte_range(), 7..13);
+    assert_eq!(result.word_pattern.as_deref(), Some("[\\p{L}]+"));
+}
+
+#[test]
+fn linked_editing_projection_rejects_mismatched_contents() {
+    let result = project_linked_editing_ranges(
+        LanguageRequestId::new(10),
+        absolute_test_path("linked.rs"),
+        LanguageDocumentRevision::new(5),
+        "open close",
+        &PositionEncodingKind::UTF16,
+        Some(LinkedEditingRanges {
+            ranges: vec![
+                Range::new(Position::new(0, 0), Position::new(0, 4)),
+                Range::new(Position::new(0, 5), Position::new(0, 10)),
+            ],
+            word_pattern: None,
+        }),
+    );
+
+    assert!(result.is_none());
 }
 
 #[test]
@@ -305,7 +487,47 @@ fn hover_completion_and_definition_projection_remove_protocol_types() {
             ..CompletionItem::default()
         }])),
     );
-    assert_eq!(completions.items[0].insert_text, "println!($0)");
+    assert_eq!(completions.items[0].kind, LanguageCompletionItemKind::Text);
+    assert_eq!(
+        completions.items[0]
+            .edit
+            .as_ref()
+            .expect("completion edit")
+            .new_text,
+        "println!()"
+    );
+
+    let snippet = project_completions(
+        request_id,
+        path.clone(),
+        revision,
+        LanguageDocumentPosition::new(0, 3),
+        "pri",
+        &PositionEncodingKind::UTF8,
+        Some(CompletionResponse::Array(vec![CompletionItem {
+            label: "println!".into(),
+            kind: Some(CompletionItemKind::SNIPPET),
+            insert_text: Some("println!($0)".into()),
+            insert_text_format: Some(InsertTextFormat::SNIPPET),
+            commit_characters: Some(vec!["(".into()]),
+            preselect: Some(true),
+            ..CompletionItem::default()
+        }])),
+    );
+    assert_eq!(snippet.items[0].kind, LanguageCompletionItemKind::Snippet);
+    assert_eq!(
+        snippet.items[0].insert_text_format,
+        LanguageCompletionInsertTextFormat::Snippet
+    );
+    assert_eq!(snippet.items[0].commit_characters, ["("]);
+    assert_eq!(
+        snippet.items[0]
+            .edit
+            .as_ref()
+            .expect("snippet edit")
+            .new_text,
+        "println!($0)"
+    );
     assert_eq!(
         completions.items[0]
             .edit
@@ -368,4 +590,52 @@ fn hover_completion_and_definition_projection_remove_protocol_types() {
         definitions.targets[0].encoding,
         LanguagePositionEncoding::Utf16
     );
+}
+
+#[test]
+fn completion_projection_drops_editor_unsafe_items_and_normalizes_metadata() {
+    let completions = project_completions(
+        LanguageRequestId::new(7),
+        PathBuf::from("main.rs"),
+        LanguageDocumentRevision::new(3),
+        LanguageDocumentPosition::new(1, 8),
+        "first\nmessage.\nlast",
+        &PositionEncodingKind::UTF8,
+        Some(CompletionResponse::Array(vec![
+            CompletionItem {
+                label: "len".into(),
+                detail: Some("  ".into()),
+                preselect: Some(true),
+                commit_characters: Some(vec![".".into(), ".".into(), "\n".into(), "ab".into()]),
+                text_edit: Some(CompletionTextEdit::Edit(TextEdit::new(
+                    Range::new(Position::new(1, 0), Position::new(1, 8)),
+                    "len".into(),
+                ))),
+                ..CompletionItem::default()
+            },
+            CompletionItem {
+                label: "chars".into(),
+                preselect: Some(true),
+                ..CompletionItem::default()
+            },
+            CompletionItem {
+                label: "multiline".into(),
+                text_edit: Some(CompletionTextEdit::Edit(TextEdit::new(
+                    Range::new(Position::new(0, 0), Position::new(1, 8)),
+                    "multiline".into(),
+                ))),
+                ..CompletionItem::default()
+            },
+            CompletionItem {
+                label: " ".into(),
+                ..CompletionItem::default()
+            },
+        ])),
+    );
+
+    assert_eq!(completions.items.len(), 2);
+    assert_eq!(completions.items[0].commit_characters, ["."]);
+    assert_eq!(completions.items[0].detail, None);
+    assert_eq!(completions.items[0].preselect, Some(true));
+    assert_eq!(completions.items[1].preselect, Some(false));
 }

@@ -7,6 +7,7 @@ registerEditorContribution({
   id: "editor.contrib.suggest",
   configure: context => {
     const completions = context.own(context.languageFeaturesService.createCompletionService(context.model, {
+      resource: context.options.input.resource,
       ...(context.options.completionWorkerFactory ? { workerFactory: context.options.completionWorkerFactory } : {}),
     }));
     const session = context.own(new LanguageCompletionSessionController(completions.results, context.selections, {

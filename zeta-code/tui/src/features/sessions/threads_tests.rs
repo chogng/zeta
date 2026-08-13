@@ -2,6 +2,7 @@ use super::ThreadSelectionAction;
 use super::ThreadSelectionPurpose;
 use super::thread_selection_view;
 use crate::components::selection::SelectionViewState;
+use zeta_protocol::DelegationId;
 use zeta_protocol::Session;
 use zeta_protocol::SessionId;
 use zeta_protocol::SessionStatus;
@@ -38,6 +39,36 @@ fn archive_view_excludes_already_archived_threads() {
 
     assert_eq!(state.tabs()[0].label(), "All (1)");
     assert_eq!(state.visible_items()[0].label(), "thread-1 ✓");
+}
+
+#[test]
+fn switch_view_describes_agent_threads_by_parent_and_delegation() {
+    let parent_thread_id = ThreadId::new("thread-parent").unwrap();
+    let child_thread_id = ThreadId::new("thread-agent").unwrap();
+    let session = Session {
+        session_id: SessionId::new("session-agent").unwrap(),
+        title: "Agent session".into(),
+        status: SessionStatus::Active,
+        model: None,
+        sequence: 1,
+        threads: vec![SessionThread {
+            thread_id: child_thread_id.clone(),
+            origin: ThreadOrigin::AgentSpawn {
+                parent_thread_id,
+                parent_sequence: 1,
+                delegation_id: DelegationId::new("delegation-1").unwrap(),
+            },
+            status: SessionThreadStatus::Active,
+        }],
+    };
+
+    let view = thread_selection_view(&session, &child_thread_id, ThreadSelectionPurpose::Switch);
+    let state = SelectionViewState::new(view.model.into_body());
+
+    assert_eq!(
+        state.visible_items()[0].description(),
+        Some("active  ·  agent spawned by thread-parent for delegation-1")
+    );
 }
 
 fn session() -> Session {

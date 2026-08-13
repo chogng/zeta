@@ -21,19 +21,20 @@ export interface EditorVisualLine {
 
 /** Immutable source-to-visual-line mapping for one exact TextModel version. */
 export class EditorVisualLineProjection {
-  private readonly visualLineStarts: readonly number[];
-  private readonly logicalLineVisibility: readonly boolean[];
-
   private constructor(
     readonly modelVersion: number,
     readonly logicalLineCount: number,
-    readonly lines: readonly EditorVisualLine[],
-    visualLineStarts: readonly number[],
-    logicalLineVisibility: readonly boolean[],
+    private readonly projectedLines: readonly EditorVisualLine[] | undefined,
+    private readonly visualLineStarts: readonly number[] | undefined,
+    private readonly logicalLineVisibility: readonly boolean[] | undefined,
+    private readonly identityModel: TextModel | undefined,
   ) {
-    this.visualLineStarts = visualLineStarts;
-    this.logicalLineVisibility = logicalLineVisibility;
     Object.freeze(this);
+  }
+
+  /** Builds an unwrapped one-to-one projection without materializing one object per logical line. */
+  static identity(model: TextModel): EditorVisualLineProjection {
+    return new EditorVisualLineProjection(model.version, model.lineCount, undefined, undefined, undefined, model);
   }
 
   /** Builds a projection from one final visual segment end-column list per logical line. */
@@ -69,6 +70,7 @@ export class EditorVisualLineProjection {
       Object.freeze(lines),
       Object.freeze(visualLineStarts),
       Object.freeze(Array.from({ length: model.lineCount }, () => true)),
+      undefined,
     );
   }
 
@@ -119,26 +121,40 @@ export class EditorVisualLineProjection {
       Object.freeze(normalized),
       Object.freeze(visualLineIndexes.slice()),
       Object.freeze(visibility),
+      undefined,
     );
   }
 
+  get lines(): readonly EditorVisualLine[] {
+    if (this.projectedLines) return this.projectedLines;
+    const cached = identityLineCache.get(this);
+    if (cached) return cached;
+    const lines = Object.freeze(Array.from({ length: this.logicalLineCount }, (_, lineIndex) => this.identityLineAt(lineIndex)));
+    identityLineCache.set(this, lines);
+    return lines;
+  }
+
   get visualLineCount(): number {
-    return this.lines.length;
+    return this.projectedLines?.length ?? this.logicalLineCount;
   }
 
   lineAt(visualLineIndex: number): EditorVisualLine | undefined {
-    return this.lines[visualLineIndex];
+    if (this.projectedLines) return this.projectedLines[visualLineIndex];
+    return Number.isSafeInteger(visualLineIndex) && visualLineIndex >= 0 && visualLineIndex < this.logicalLineCount
+      ? this.identityLineAt(visualLineIndex)
+      : undefined;
   }
 
   firstVisualLineIndex(logicalLineIndex: number): number {
     validateLogicalLineIndex(logicalLineIndex, this.logicalLineCount);
-    return this.visualLineStarts[logicalLineIndex]!;
+    return this.visualLineStarts?.[logicalLineIndex] ?? logicalLineIndex;
   }
 
   visualLineIndexAt(position: TextPosition): number {
     validateLogicalLineIndex(position.lineIndex, this.logicalLineCount);
+    if (this.identityModel) return position.lineIndex;
     const first = this.firstVisualLineIndex(position.lineIndex);
-    if (!this.logicalLineVisibility[position.lineIndex]) return first;
+    if (!this.logicalLineVisibility![position.lineIndex]) return first;
     const lastExclusive = position.lineIndex + 1 < this.logicalLineCount
       ? this.nextVisualLineIndex(position.lineIndex + 1)
       : this.visualLineCount;
@@ -151,11 +167,26 @@ export class EditorVisualLineProjection {
 
   private nextVisualLineIndex(logicalLineIndex: number): number {
     for (let index = logicalLineIndex; index < this.logicalLineCount; index += 1) {
-      if (this.logicalLineVisibility[index]) return this.visualLineStarts[index]!;
+      if (this.logicalLineVisibility![index]) return this.visualLineStarts![index]!;
     }
     return this.visualLineCount;
   }
+
+  private identityLineAt(lineIndex: number): EditorVisualLine {
+    const model = this.identityModel!;
+    if (model.version !== this.modelVersion) throw new Error("Unwrapped visual line projection is stale");
+    return Object.freeze({
+      visualLineIndex: lineIndex,
+      logicalLineIndex: lineIndex,
+      startColumn: 0,
+      endColumn: model.getLineLength(lineIndex),
+      firstForLogicalLine: true,
+      lastForLogicalLine: true,
+    });
+  }
 }
+
+const identityLineCache = new WeakMap<EditorVisualLineProjection, readonly EditorVisualLine[]>();
 
 function validateBreakColumns(text: string, breakColumns: readonly number[]): void {
   if (!Array.isArray(breakColumns) || breakColumns.length === 0) {

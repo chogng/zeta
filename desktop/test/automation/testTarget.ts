@@ -6,6 +6,7 @@ export type PlaywrightTarget =
       readonly kind: "browser";
       readonly appServerMode: AppServerTestMode;
       readonly baseURL: string;
+      readonly product: DesktopProduct;
     }
   | {
       readonly kind: "electron";
@@ -16,9 +17,9 @@ export type PlaywrightTarget =
 export function playwrightTargetForProject(projectName: string, baseURL: string | undefined): PlaywrightTarget {
   switch (projectName) {
     case "browser-ui":
-      return { kind: "browser", appServerMode: "disabled", baseURL: requiredBaseURL(baseURL, projectName) };
+      return { kind: "browser", appServerMode: "disabled", baseURL: requiredBaseURL(baseURL, projectName), product: testProduct() };
     case "browser-app-server":
-      return { kind: "browser", appServerMode: "required", baseURL: requiredBaseURL(baseURL, projectName) };
+      return { kind: "browser", appServerMode: "required", baseURL: requiredBaseURL(baseURL, projectName), product: testProduct() };
     case "electron-ui":
       return { kind: "electron", appServerMode: "disabled", product: "code" };
     case "electron-academic-ui":
@@ -32,6 +33,10 @@ export function playwrightTargetForProject(projectName: string, baseURL: string 
     default:
       throw new Error(`Unsupported Playwright project: ${projectName}`);
   }
+}
+
+function testProduct(): DesktopProduct {
+  return process.env.ZETA_PRODUCT === "academic" ? "academic" : "code";
 }
 
 function requiredBaseURL(baseURL: string | undefined, projectName: string): string {

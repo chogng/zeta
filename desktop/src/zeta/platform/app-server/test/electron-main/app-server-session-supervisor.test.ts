@@ -69,6 +69,7 @@ class ProtocolChildProcess extends EventEmitter {
             fileSystem: true,
             workspaceSearch: true,
             terminal: true,
+            debugAdapter: true,
             typst: true,
             updateReplay: true,
             extensions: true,

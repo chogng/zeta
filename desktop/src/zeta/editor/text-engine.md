@@ -135,7 +135,7 @@ architectural drift signal and require extraction at that point.
 | Named browser decoration presentation | ✅ | `createAsterDecorationSource` / `EditorViewport` |
 | Versioned cancellable language request gate | ✅ | `LanguageRequestCoordinator` |
 | Versioned token and diagnostic result stores | ✅ | `VersionedLanguageResultStore` / `languageResults.ts` |
-| Versioned diagnostic decoration bridge | ✅ | `LanguageDiagnosticDecorationBridge` |
+| Versioned diagnostic decoration bridge | ✅ | `LanguageDiagnosticDecorationBridge`; merges parser diagnostics with current-revision host push diagnostics |
 | Diagnostic browser presentation | ✅ | Error/Warning/Information/Hint underlines, rich gutter hover, overview ruler, and highest-severity gutter marker |
 | Next/previous diagnostic navigation and live announcement | ✅ | `DiagnosticNavigationController` (F8 / Shift+F8) |
 | Semantic-token line index, closed modifier styling, and browser projection | ✅ | `LanguageTokenLineIndex` / `createAsterSemanticTokenSource` |

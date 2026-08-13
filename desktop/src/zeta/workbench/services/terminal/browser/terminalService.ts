@@ -73,8 +73,9 @@ export class TerminalService extends DisposableOwner implements ITerminalService
     const instance = this.own(new TerminalInstance(
       `terminal-instance-${instanceNumber}`,
       created.terminalId,
-      terminalProfileTitle(created.profile),
+      options.title ?? terminalProfileTitle(created.profile),
       created.profile,
+      options.title,
       this.processService,
       () => this.removeInstance(instance),
     ));
@@ -144,7 +145,7 @@ export class TerminalService extends DisposableOwner implements ITerminalService
     for (const profileInstances of instancesByProfile.values()) {
       const baseTitle = terminalProfileTitle(profileInstances[0].profile);
       for (const [index, instance] of profileInstances.entries()) {
-        instance.setTitle(profileInstances.length === 1 ? baseTitle : `${baseTitle} ${index + 1}`);
+        instance.setTitle(instance.customTitle ?? (profileInstances.length === 1 ? baseTitle : `${baseTitle} ${index + 1}`));
       }
     }
   }
@@ -191,6 +192,7 @@ class TerminalInstance extends DisposableOwner implements ITerminalInstance {
     serverTerminalId: string,
     title: string,
     profile: ITerminalProfile,
+    readonly customTitle: string | undefined,
     processService: ITerminalProcessService,
     onClosed: () => void,
   ) {

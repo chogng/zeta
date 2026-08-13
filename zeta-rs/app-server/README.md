@@ -465,7 +465,10 @@ Plugin lifecycle + Hook declaration
 
 Language-server preference
 └─ config/read + languageServer/configure|remove
-   └─ App Server 持久化 mode/path；Native catalog/runtime 负责解析与执行
+   ├─ App Server 持久化 mode/path，并负责 catalog resolution 与 LSP runtime
+   └─ language/hover|completions|locations|hierarchy|workspaceSymbols
+      + language/prepareRename|rename|codeActions|resolveCodeAction
+      + language/synchronize|close and revision-bound language/diagnostics notifications
 ```
 
 每次 `ModelService::invoke` 重新读取 user config，与 optional workspace document 合并，再由

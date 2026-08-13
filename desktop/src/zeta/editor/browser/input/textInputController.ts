@@ -1,5 +1,5 @@
 import { addDisposableListener, stopEvent } from "../../../base/browser/dom.js";
-import { DisposableOwner, type IDisposable } from "../../../base/common/lifecycle.js";
+import { DisposableOwner, toDisposable, type IDisposable } from "../../../base/common/lifecycle.js";
 import { createBackspaceCommand, createDeleteForwardCommand, createDeleteToLineEndCommand, createDeleteToLineStartCommand } from "../../common/cursor/cursorDeleteOperations.js";
 import { createDeleteWordBackwardCommand, createDeleteWordForwardCommand } from "../../common/cursor/cursorWordOperations.js";
 import { createTypeTextCommand } from "../../common/cursor/cursorTypeOperations.js";
@@ -12,10 +12,12 @@ import { type LanguageConfigurationSource } from "../../common/languages/languag
 import { type LanguageLexicalContextSource } from "../../common/languages/languageLexicalContext.js";
 import { createLanguageCompletionIncompleteRefreshContext, createLanguageCompletionInvokeContext, type LanguageCompletionContext } from "../../common/languages/completion/languageCompletionProviders.js";
 import { createOvertypeTextCommand } from "../../common/cursor/cursorOvertype.js";
-import { type TextModelChange } from "../../common/core/text.js";
+import { TextRange, type TextModelChange } from "../../common/core/text.js";
 import { TextSelection, TextSelectionSet } from "../../common/core/selection.js";
 import { type EditorViewport } from "../view/editorViewport.js";
 import { CompositionController } from "./compositionController.js";
+
+const MAXIMUM_ACCESSIBLE_INPUT_TEXT_UNITS = 32 * 1_024;
 
 export interface TextInputControllerOptions {
   readonly ariaLabel?: string;
@@ -28,6 +30,13 @@ export interface TextInputControllerOptions {
   readonly languageEditing?: TextInputLanguageEditingAdapter;
   readonly wordPattern?: () => RegExp | undefined;
 }
+
+export interface TextInputCommandContext {
+  readonly inputType: string;
+}
+
+/** Extends one native input command before it becomes an atomic model transaction. */
+export type TextInputCommandTransformer = (command: EditorEditCommand, context: TextInputCommandContext) => EditorEditCommand;
 
 export interface TextInputIndentationOptions {
   readonly kind?: "tabs" | "spaces";
@@ -128,10 +137,12 @@ export class TextInputController extends DisposableOwner {
   private readonly completionRequests: TextInputCompletionRequests | undefined;
   private readonly languageEditing: TextInputLanguageEditingAdapter | undefined;
   private readonly wordPattern: (() => RegExp | undefined) | undefined;
+  private readonly commandTransformers: TextInputCommandTransformer[] = [];
   private completionRequest: AbortController | undefined;
   private completionIsIncomplete = false;
   private overtype = false;
   private accessibleInputSyncScheduled = false;
+  private accessibleInputStartOffset = 0;
   private disposed = false;
 
   constructor(
@@ -266,6 +277,15 @@ export class TextInputController extends DisposableOwner {
     return this.overtype;
   }
 
+  registerCommandTransformer(transformer: TextInputCommandTransformer): IDisposable {
+    if (typeof transformer !== "function") throw new TypeError("Text input command transformer must be a function");
+    this.commandTransformers.push(transformer);
+    return toDisposable(() => {
+      const index = this.commandTransformers.indexOf(transformer);
+      if (index >= 0) this.commandTransformers.splice(index, 1);
+    });
+  }
+
   /** Toggles this editor instance's transient overtype input mode. */
   toggleOvertype(): boolean {
     this.overtype = !this.overtype;
@@ -353,6 +373,7 @@ export class TextInputController extends DisposableOwner {
     }
     stopEvent(event);
     this.resetInput();
+    for (const transformer of this.commandTransformers) command = transformer(command, { inputType: event.inputType });
     const change = this.execute(command);
     if (change) languageTypeCommand?.afterExecute?.(change);
     if (insertedText !== undefined) {
@@ -488,13 +509,15 @@ export class TextInputController extends DisposableOwner {
     const model = this.viewport.textModel;
     const selection = this.selectionController.selections.primary;
     this.updateAccessibleSelectionDescription();
-    const text = model.getText();
+    const selectionStartOffset = model.offsetAt(selection.range.start);
+    const selectionEndOffset = model.offsetAt(selection.range.end);
+    const window = accessibleInputWindow(model.length, selectionStartOffset, selectionEndOffset, model.offsetAt(selection.active));
+    this.accessibleInputStartOffset = window.startOffset;
+    const text = model.getTextInRange(TextRange.from(model.positionAt(window.startOffset), model.positionAt(window.endOffset)));
     if (this.element.value !== text) this.element.value = text;
-    const start = model.offsetAt(selection.range.start);
-    const end = model.offsetAt(selection.range.end);
     this.element.setSelectionRange(
-      start,
-      end,
+      clampOffset(selectionStartOffset - window.startOffset, text.length),
+      clampOffset(selectionEndOffset - window.startOffset, text.length),
       selection.direction === "backward" ? "backward" : "forward",
     );
   }
@@ -524,8 +547,8 @@ export class TextInputController extends DisposableOwner {
   private acceptAccessibleSelection(): void {
     if (this.compositionController.composing || this.element.ownerDocument.activeElement !== this.element) return;
     const model = this.viewport.textModel;
-    const startOffset = this.element.selectionStart;
-    const endOffset = this.element.selectionEnd;
+    const startOffset = this.accessibleInputStartOffset + this.element.selectionStart;
+    const endOffset = this.accessibleInputStartOffset + this.element.selectionEnd;
     const anchorOffset = this.element.selectionDirection === "backward" ? endOffset : startOffset;
     const activeOffset = this.element.selectionDirection === "backward" ? startOffset : endOffset;
     const current = this.selectionController.selections.primary;
@@ -646,6 +669,24 @@ export class TextInputController extends DisposableOwner {
       console.error("Aster completion request and error handler both failed", new AggregateError([error, reportingError]));
     }
   }
+}
+
+function accessibleInputWindow(modelLength: number, selectionStartOffset: number, selectionEndOffset: number, activeOffset: number): { readonly startOffset: number; readonly endOffset: number } {
+  if (modelLength <= MAXIMUM_ACCESSIBLE_INPUT_TEXT_UNITS) return { startOffset: 0, endOffset: modelLength };
+  const selectionLength = selectionEndOffset - selectionStartOffset;
+  if (selectionLength <= MAXIMUM_ACCESSIBLE_INPUT_TEXT_UNITS) {
+    const margin = Math.floor((MAXIMUM_ACCESSIBLE_INPUT_TEXT_UNITS - selectionLength) / 2);
+    let startOffset = Math.max(0, selectionStartOffset - margin);
+    startOffset = Math.min(startOffset, modelLength - MAXIMUM_ACCESSIBLE_INPUT_TEXT_UNITS);
+    if (selectionEndOffset > startOffset + MAXIMUM_ACCESSIBLE_INPUT_TEXT_UNITS) startOffset = selectionEndOffset - MAXIMUM_ACCESSIBLE_INPUT_TEXT_UNITS;
+    return { startOffset, endOffset: startOffset + MAXIMUM_ACCESSIBLE_INPUT_TEXT_UNITS };
+  }
+  const startOffset = Math.min(Math.max(0, activeOffset - Math.floor(MAXIMUM_ACCESSIBLE_INPUT_TEXT_UNITS / 2)), modelLength - MAXIMUM_ACCESSIBLE_INPUT_TEXT_UNITS);
+  return { startOffset, endOffset: startOffset + MAXIMUM_ACCESSIBLE_INPUT_TEXT_UNITS };
+}
+
+function clampOffset(offset: number, textLength: number): number {
+  return Math.min(Math.max(0, offset), textLength);
 }
 
 function validateIndentationOptions(options: TextInputIndentationOptions | undefined): void {

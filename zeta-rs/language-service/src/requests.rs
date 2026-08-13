@@ -5,17 +5,21 @@ use std::path::PathBuf;
 use serde_json::Value;
 use zeta_lsp::lsp_types::{
     CallHierarchyIncomingCall, CallHierarchyItem, CallHierarchyOutgoingCall, CodeAction,
-    CodeActionOrCommand, CompletionItem, CompletionResponse, CompletionTextEdit,
-    DocumentChangeOperation, DocumentChanges, Documentation, GotoDefinitionResponse, Hover,
-    HoverContents, InsertTextFormat, LanguageString, Location, MarkedString, MarkupContent, OneOf,
-    Position, PositionEncodingKind, PrepareRenameResponse, Range, ResourceOp, SymbolKind,
-    TextDocumentEdit, TextEdit, TypeHierarchyItem, Uri, WorkspaceEdit, WorkspaceSymbolResponse,
+    CodeActionOrCommand, CompletionItem, CompletionItemKind, CompletionResponse,
+    CompletionTextEdit, DocumentChangeOperation, DocumentChanges, Documentation,
+    GotoDefinitionResponse, Hover, HoverContents, InlayHint, InlayHintKind, InlayHintLabel,
+    InlayHintTooltip, InsertTextFormat, LanguageString, LinkedEditingRanges, Location,
+    MarkedString, MarkupContent, OneOf, ParameterLabel, Position, PositionEncodingKind,
+    PrepareRenameResponse, Range, ResourceOp, SignatureHelp, SymbolKind, TextDocumentEdit,
+    TextEdit, TypeHierarchyItem, Uri, WorkspaceEdit, WorkspaceSymbolResponse,
 };
 
 use crate::projection::{byte_offset_for_position, byte_range_for_lsp_range};
 use crate::{LanguageDocumentRevision, LanguageTextRange};
 
 const MAX_COMPLETION_ITEMS: usize = 200;
+const MAX_FORMATTING_EDITS: usize = 10_000;
+const MAX_FORMATTING_REPLACEMENT_BYTES: usize = 10 * 1024 * 1024;
 
 /// Monotonic identity assigned when a product request crosses the service boundary.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -52,6 +56,11 @@ pub enum LanguageRequestKind {
     Rename,
     CodeActions,
     ResolveCodeAction,
+    DocumentFormatting,
+    RangeFormatting,
+    SignatureHelp,
+    InlayHints,
+    LinkedEditingRanges,
 }
 
 /// UTF-8 position inside one source row of an authoritative editor snapshot.
@@ -81,10 +90,54 @@ pub struct LanguageHover {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LanguageCompletionItem {
     pub label: String,
+    pub kind: LanguageCompletionItemKind,
     pub detail: Option<String>,
     pub documentation: Option<String>,
-    pub insert_text: String,
+    pub filter_text: Option<String>,
+    pub sort_text: Option<String>,
+    pub preselect: Option<bool>,
+    pub commit_characters: Vec<String>,
+    pub insert_text_format: LanguageCompletionInsertTextFormat,
     pub edit: Option<LanguageTextEdit>,
+}
+
+/// Presentation-neutral completion category understood by editor products.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum LanguageCompletionItemKind {
+    Text,
+    Method,
+    Function,
+    Constructor,
+    Field,
+    Variable,
+    Class,
+    Interface,
+    Module,
+    Property,
+    Unit,
+    Value,
+    Enum,
+    Keyword,
+    Snippet,
+    File,
+    Folder,
+    Reference,
+    TypeParameter,
+}
+
+/// Whether the editor should interpret completion insertion text as snippet syntax.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum LanguageCompletionInsertTextFormat {
+    PlainText,
+    Snippet,
+}
+
+/// Why a completion request was issued by the editor.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum LanguageCompletionTrigger {
+    Invoked,
+    TriggerCharacter(String),
+    IncompleteRefresh,
 }
 
 /// One exact UTF-8 edit that can be safely delegated to an editor document.
@@ -92,6 +145,95 @@ pub struct LanguageCompletionItem {
 pub struct LanguageTextEdit {
     pub range: LanguageTextRange,
     pub new_text: String,
+}
+
+/// Editor-owned formatting preferences forwarded without product presentation concerns.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct LanguageFormattingOptions {
+    pub tab_size: u32,
+    pub insert_spaces: bool,
+    pub trim_trailing_whitespace: Option<bool>,
+}
+
+/// Fresh, validated formatting edits bound to the exact requesting snapshot.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LanguageFormattingEdits {
+    pub request_id: LanguageRequestId,
+    pub path: PathBuf,
+    pub revision: LanguageDocumentRevision,
+    pub edits: Vec<LanguageTextEdit>,
+}
+
+/// Why an editor requested callable signature information.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum LanguageSignatureHelpTrigger {
+    Invoked,
+    TriggerCharacter(String),
+    ContentChange,
+}
+
+/// One parameter label and optional provider documentation.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LanguageParameterInformation {
+    pub label: String,
+    pub documentation: Option<String>,
+}
+
+/// One callable signature with its provider-selected active parameter.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LanguageSignatureInformation {
+    pub label: String,
+    pub documentation: Option<String>,
+    pub parameters: Vec<LanguageParameterInformation>,
+    pub active_parameter: Option<u32>,
+}
+
+/// Fresh signature help bound to the exact requesting editor snapshot.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LanguageSignatureHelp {
+    pub request_id: LanguageRequestId,
+    pub path: PathBuf,
+    pub revision: LanguageDocumentRevision,
+    pub signatures: Vec<LanguageSignatureInformation>,
+    pub active_signature: Option<u32>,
+}
+
+/// Presentation-neutral category for one inline reading aid.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum LanguageInlayHintKind {
+    Type,
+    Parameter,
+    Other,
+}
+
+/// One non-mutating inline hint at an exact UTF-8 editor position.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LanguageInlayHint {
+    pub position: LanguageDocumentPosition,
+    pub label: String,
+    pub kind: LanguageInlayHintKind,
+    pub tooltip: Option<String>,
+    pub padding_left: bool,
+    pub padding_right: bool,
+}
+
+/// Fresh bounded inlay hints for the exact requesting editor snapshot.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LanguageInlayHints {
+    pub request_id: LanguageRequestId,
+    pub path: PathBuf,
+    pub revision: LanguageDocumentRevision,
+    pub hints: Vec<LanguageInlayHint>,
+}
+
+/// Fresh, validated ranges whose contents are edited as one logical value.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LanguageLinkedEditingRanges {
+    pub request_id: LanguageRequestId,
+    pub path: PathBuf,
+    pub revision: LanguageDocumentRevision,
+    pub ranges: Vec<LanguageTextRange>,
+    pub word_pattern: Option<String>,
 }
 
 /// Fresh completion candidates bound to the exact requesting revision.
@@ -382,16 +524,28 @@ pub(crate) fn project_completions(
         Some(CompletionResponse::List(list)) => (list.is_incomplete, list.items),
         None => (false, Vec::new()),
     };
+    let mut preselect_seen = false;
+    let items = items
+        .into_iter()
+        .take(MAX_COMPLETION_ITEMS)
+        .filter_map(|item| project_completion_item(item, request_position, text, encoding))
+        .map(|mut item| {
+            if item.preselect == Some(true) {
+                if preselect_seen {
+                    item.preselect = Some(false);
+                } else {
+                    preselect_seen = true;
+                }
+            }
+            item
+        })
+        .collect();
     LanguageCompletions {
         request_id,
         path,
         revision,
         is_incomplete,
-        items: items
-            .into_iter()
-            .take(MAX_COMPLETION_ITEMS)
-            .map(|item| project_completion_item(item, request_position, text, encoding))
-            .collect(),
+        items,
     }
 }
 
@@ -682,6 +836,238 @@ pub(crate) fn project_workspace_edit(
         source_path,
         source_revision,
         edit,
+    })
+}
+
+pub(crate) fn project_formatting_edits(
+    request_id: LanguageRequestId,
+    path: PathBuf,
+    revision: LanguageDocumentRevision,
+    text: &str,
+    encoding: &PositionEncodingKind,
+    response: Option<Vec<TextEdit>>,
+) -> Result<LanguageFormattingEdits, String> {
+    let response = response.unwrap_or_default();
+    if response.len() > MAX_FORMATTING_EDITS {
+        return Err(format!(
+            "language server returned more than {MAX_FORMATTING_EDITS} formatting edits"
+        ));
+    }
+    let replacement_bytes = response
+        .iter()
+        .try_fold(0usize, |total, edit| total.checked_add(edit.new_text.len()))
+        .ok_or_else(|| "formatting replacement size overflowed".to_owned())?;
+    if replacement_bytes > MAX_FORMATTING_REPLACEMENT_BYTES {
+        return Err(format!(
+            "language server returned more than {MAX_FORMATTING_REPLACEMENT_BYTES} formatting replacement bytes"
+        ));
+    }
+    let mut edits = response
+        .into_iter()
+        .map(|edit| {
+            let range = byte_range_for_lsp_range(text, edit.range.start, edit.range.end, encoding)
+                .ok_or_else(|| "language server returned an invalid formatting range".to_owned())?;
+            Ok(LanguageTextEdit {
+                range: LanguageTextRange::new(range),
+                new_text: edit.new_text,
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    edits.sort_by_key(|edit| {
+        let range = edit.range.byte_range();
+        (range.start, range.end)
+    });
+    for pair in edits.windows(2) {
+        let previous = pair[0].range.byte_range();
+        let current = pair[1].range.byte_range();
+        if previous.end > current.start || previous.start == current.start {
+            return Err("language server returned overlapping formatting edits".into());
+        }
+    }
+    Ok(LanguageFormattingEdits {
+        request_id,
+        path,
+        revision,
+        edits,
+    })
+}
+
+pub(crate) fn project_signature_help(
+    request_id: LanguageRequestId,
+    path: PathBuf,
+    revision: LanguageDocumentRevision,
+    response: Option<SignatureHelp>,
+) -> Option<LanguageSignatureHelp> {
+    let response = response?;
+    let signatures = response
+        .signatures
+        .into_iter()
+        .take(100)
+        .filter_map(|signature| {
+            let label = signature.label;
+            if label.trim().is_empty() || label.len() > 16 * 1024 {
+                return None;
+            }
+            let parameters = signature
+                .parameters
+                .unwrap_or_default()
+                .into_iter()
+                .take(256)
+                .filter_map(|parameter| {
+                    let label = match parameter.label {
+                        ParameterLabel::Simple(label) => label,
+                        ParameterLabel::LabelOffsets([start, end]) => {
+                            utf16_label_range(&label, start, end)?
+                        }
+                    };
+                    (!label.trim().is_empty()).then(|| LanguageParameterInformation {
+                        label,
+                        documentation: parameter
+                            .documentation
+                            .map(documentation_text)
+                            .filter(non_blank),
+                    })
+                })
+                .collect::<Vec<_>>();
+            let active_parameter = signature
+                .active_parameter
+                .or(response.active_parameter)
+                .filter(|index| {
+                    usize::try_from(*index).is_ok_and(|index| index < parameters.len())
+                });
+            Some(LanguageSignatureInformation {
+                label,
+                documentation: signature
+                    .documentation
+                    .map(documentation_text)
+                    .filter(non_blank),
+                parameters,
+                active_parameter,
+            })
+        })
+        .collect::<Vec<_>>();
+    if signatures.is_empty() {
+        return None;
+    }
+    let active_signature = response
+        .active_signature
+        .filter(|index| usize::try_from(*index).is_ok_and(|index| index < signatures.len()));
+    Some(LanguageSignatureHelp {
+        request_id,
+        path,
+        revision,
+        signatures,
+        active_signature,
+    })
+}
+
+pub(crate) fn project_inlay_hints(
+    request_id: LanguageRequestId,
+    path: PathBuf,
+    revision: LanguageDocumentRevision,
+    text: &str,
+    encoding: &PositionEncodingKind,
+    response: Option<Vec<InlayHint>>,
+) -> LanguageInlayHints {
+    let hints = response
+        .unwrap_or_default()
+        .into_iter()
+        .take(5_000)
+        .filter_map(|hint| {
+            let byte_offset = byte_offset_for_position(text, hint.position, encoding)?;
+            let prefix = &text[..byte_offset];
+            let row = u32::try_from(prefix.bytes().filter(|byte| *byte == b'\n').count()).ok()?;
+            let line_start = prefix.rfind('\n').map_or(0, |index| index + 1);
+            let position =
+                LanguageDocumentPosition::new(row, u32::try_from(byte_offset - line_start).ok()?);
+            let label = match hint.label {
+                InlayHintLabel::String(label) => label,
+                InlayHintLabel::LabelParts(parts) => {
+                    parts.into_iter().map(|part| part.value).collect()
+                }
+            };
+            if label.trim().is_empty() || label.len() > 16 * 1024 {
+                return None;
+            }
+            let tooltip = hint
+                .tooltip
+                .map(|tooltip| match tooltip {
+                    InlayHintTooltip::String(value) => value,
+                    InlayHintTooltip::MarkupContent(content) => content.value,
+                })
+                .filter(non_blank);
+            Some(LanguageInlayHint {
+                position,
+                label,
+                kind: match hint.kind {
+                    Some(kind) if kind == InlayHintKind::TYPE => LanguageInlayHintKind::Type,
+                    Some(kind) if kind == InlayHintKind::PARAMETER => {
+                        LanguageInlayHintKind::Parameter
+                    }
+                    _ => LanguageInlayHintKind::Other,
+                },
+                tooltip,
+                padding_left: hint.padding_left.unwrap_or(false),
+                padding_right: hint.padding_right.unwrap_or(false),
+            })
+        })
+        .collect();
+    LanguageInlayHints {
+        request_id,
+        path,
+        revision,
+        hints,
+    }
+}
+
+pub(crate) fn project_linked_editing_ranges(
+    request_id: LanguageRequestId,
+    path: PathBuf,
+    revision: LanguageDocumentRevision,
+    text: &str,
+    encoding: &PositionEncodingKind,
+    response: Option<LinkedEditingRanges>,
+) -> Option<LanguageLinkedEditingRanges> {
+    let response = response?;
+    if response.ranges.len() < 2 || response.ranges.len() > 256 {
+        return None;
+    }
+    let mut ranges = response
+        .ranges
+        .into_iter()
+        .map(|range| {
+            byte_range_for_lsp_range(text, range.start, range.end, encoding)
+                .filter(|range| range.start < range.end)
+                .map(LanguageTextRange::new)
+        })
+        .collect::<Option<Vec<_>>>()?;
+    ranges.sort_by_key(|range| {
+        let range = range.byte_range();
+        (range.start, range.end)
+    });
+    if ranges
+        .windows(2)
+        .any(|pair| pair[0].byte_range().end > pair[1].byte_range().start)
+    {
+        return None;
+    }
+    let expected = &text[ranges[0].byte_range()];
+    if ranges
+        .iter()
+        .skip(1)
+        .any(|range| &text[range.byte_range()] != expected)
+    {
+        return None;
+    }
+    let word_pattern = response
+        .word_pattern
+        .filter(|pattern| pattern.len() <= 4_096);
+    Some(LanguageLinkedEditingRanges {
+        request_id,
+        path,
+        revision,
+        ranges,
+        word_pattern,
     })
 }
 
@@ -1085,29 +1471,110 @@ fn project_completion_item(
     request_position: LanguageDocumentPosition,
     text: &str,
     encoding: &PositionEncodingKind,
-) -> LanguageCompletionItem {
-    let documentation = item.documentation.map(documentation_text);
-    let insert_text = item.insert_text.unwrap_or_else(|| item.label.clone());
-    let safe_format = item.insert_text_format != Some(InsertTextFormat::SNIPPET);
+) -> Option<LanguageCompletionItem> {
+    if item.label.trim().is_empty() {
+        return None;
+    }
+    let documentation = item.documentation.map(documentation_text).filter(non_blank);
     let safe_side_effects = item
         .additional_text_edits
         .as_ref()
         .is_none_or(Vec::is_empty)
         && item.command.is_none();
-    let edit = if safe_format && safe_side_effects {
-        match item.text_edit {
-            Some(edit) => completion_edit(edit, text, encoding),
-            None => insertion_edit(request_position, text, &insert_text),
-        }
-    } else {
-        None
+    if !safe_side_effects {
+        return None;
     };
-    LanguageCompletionItem {
+    let insert_text = item.insert_text.unwrap_or_else(|| item.label.clone());
+    let edit = match item.text_edit {
+        Some(edit) => completion_edit(edit, text, encoding),
+        None => insertion_edit(request_position, text, &insert_text),
+    }?;
+    if !completion_edit_matches_request(&edit, request_position, text) {
+        return None;
+    }
+    let mut commit_characters = Vec::new();
+    for character in item.commit_characters.unwrap_or_default() {
+        if completion_character(&character) && !commit_characters.contains(&character) {
+            commit_characters.push(character);
+        }
+    }
+    Some(LanguageCompletionItem {
         label: item.label,
-        detail: item.detail,
+        kind: completion_item_kind(item.kind),
+        detail: item.detail.filter(non_blank),
         documentation,
-        insert_text,
-        edit,
+        filter_text: item.filter_text.filter(non_blank),
+        sort_text: item.sort_text.filter(non_blank),
+        preselect: item.preselect,
+        commit_characters,
+        insert_text_format: if item.insert_text_format == Some(InsertTextFormat::SNIPPET) {
+            LanguageCompletionInsertTextFormat::Snippet
+        } else {
+            LanguageCompletionInsertTextFormat::PlainText
+        },
+        edit: Some(edit),
+    })
+}
+
+fn completion_edit_matches_request(
+    edit: &LanguageTextEdit,
+    request_position: LanguageDocumentPosition,
+    text: &str,
+) -> bool {
+    let Some(request_offset) = byte_offset_for_position(
+        text,
+        Position::new(request_position.row, request_position.byte_offset),
+        &PositionEncodingKind::UTF8,
+    ) else {
+        return false;
+    };
+    let request_row = usize::try_from(request_position.row).unwrap_or(usize::MAX);
+    let range = edit.range.byte_range();
+    range.start <= request_offset
+        && range.end >= request_offset
+        && text[..range.start]
+            .bytes()
+            .filter(|byte| *byte == b'\n')
+            .count()
+            == request_row
+        && text[..range.end]
+            .bytes()
+            .filter(|byte| *byte == b'\n')
+            .count()
+            == request_row
+}
+
+fn completion_character(value: &str) -> bool {
+    value != "\n" && value != "\r" && value.chars().count() == 1
+}
+
+fn non_blank(value: &String) -> bool {
+    !value.trim().is_empty()
+}
+
+fn completion_item_kind(kind: Option<CompletionItemKind>) -> LanguageCompletionItemKind {
+    match kind {
+        Some(CompletionItemKind::METHOD) => LanguageCompletionItemKind::Method,
+        Some(CompletionItemKind::FUNCTION) => LanguageCompletionItemKind::Function,
+        Some(CompletionItemKind::CONSTRUCTOR) => LanguageCompletionItemKind::Constructor,
+        Some(CompletionItemKind::FIELD) => LanguageCompletionItemKind::Field,
+        Some(CompletionItemKind::VARIABLE) => LanguageCompletionItemKind::Variable,
+        Some(CompletionItemKind::CLASS) => LanguageCompletionItemKind::Class,
+        Some(CompletionItemKind::INTERFACE) => LanguageCompletionItemKind::Interface,
+        Some(CompletionItemKind::MODULE) => LanguageCompletionItemKind::Module,
+        Some(CompletionItemKind::PROPERTY) => LanguageCompletionItemKind::Property,
+        Some(CompletionItemKind::UNIT) => LanguageCompletionItemKind::Unit,
+        Some(CompletionItemKind::VALUE) => LanguageCompletionItemKind::Value,
+        Some(CompletionItemKind::ENUM) | Some(CompletionItemKind::ENUM_MEMBER) => {
+            LanguageCompletionItemKind::Enum
+        }
+        Some(CompletionItemKind::KEYWORD) => LanguageCompletionItemKind::Keyword,
+        Some(CompletionItemKind::SNIPPET) => LanguageCompletionItemKind::Snippet,
+        Some(CompletionItemKind::FILE) => LanguageCompletionItemKind::File,
+        Some(CompletionItemKind::FOLDER) => LanguageCompletionItemKind::Folder,
+        Some(CompletionItemKind::REFERENCE) => LanguageCompletionItemKind::Reference,
+        Some(CompletionItemKind::TYPE_PARAMETER) => LanguageCompletionItemKind::TypeParameter,
+        _ => LanguageCompletionItemKind::Text,
     }
 }
 
@@ -1173,6 +1640,30 @@ fn documentation_text(documentation: Documentation) -> String {
         Documentation::String(value) => value,
         Documentation::MarkupContent(MarkupContent { value, .. }) => value,
     }
+}
+
+fn utf16_label_range(label: &str, start: u32, end: u32) -> Option<String> {
+    if start > end {
+        return None;
+    }
+    let start = utf16_offset_to_byte(label, start)?;
+    let end = utf16_offset_to_byte(label, end)?;
+    Some(label[start..end].to_owned())
+}
+
+fn utf16_offset_to_byte(value: &str, requested: u32) -> Option<usize> {
+    let requested = usize::try_from(requested).ok()?;
+    let mut utf16 = 0usize;
+    for (byte, character) in value.char_indices() {
+        if utf16 == requested {
+            return Some(byte);
+        }
+        utf16 += character.len_utf16();
+        if utf16 > requested {
+            return None;
+        }
+    }
+    (utf16 == requested).then_some(value.len())
 }
 
 fn source_line(text: &str, requested: usize) -> Option<&str> {

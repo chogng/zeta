@@ -30,7 +30,7 @@ import { projectAsterCompositionOverlay, projectAsterDecorationOverlays, project
 import { EditorLineWrapping, VisualLineProjection } from "./visualLineProjection.js";
 import { VisibleLineProjection } from "./visibleLineProjection.js";
 import { getTextGraphemeBoundaries } from "../../common/core/textSegmentation.js";
-import { type EditorLineGutterDecoration } from "./lineGutterDecoration.js";
+import { type CompositeEditorLineGutterDecoration, type EditorLineGutterDecoration } from "./lineGutterDecoration.js";
 
 const GUTTER_HORIZONTAL_PADDING = 16;
 const OVERVIEW_RULER_WIDTH = 6;
@@ -141,6 +141,8 @@ export class EditorViewport extends DisposableOwner {
   private renderedModelVersion = -1;
   private renderedLineHeight = -1;
   private renderedVisualProjectionRevision = -1;
+  private gutterRevision = 0;
+  private renderedGutterRevision = -1;
   private overviewRevision = 0;
   private renderedOverviewRevision = -1;
   private minimapRevision = 0;
@@ -213,6 +215,8 @@ export class EditorViewport extends DisposableOwner {
     this.element.classList.add(`aster-editor-direction-${this.textDirection}`);
     this.element.style.setProperty("--aster-editor-padding-left", `${this.padding.left}px`);
     this.element.style.setProperty("--aster-editor-padding-right", `${this.padding.right}px`);
+    this.element.style.setProperty("--aster-editor-feature-gutter-width", `${this.featureGutterWidth}px`);
+    this.element.style.setProperty("--aster-editor-additional-feature-gutter-width", `${this.additionalFeatureGutterWidth}px`);
     this.element.dir = this.textDirection;
     this.element.classList.toggle("word-wrapped", this.softWrapping);
     this.element.tabIndex = 0;
@@ -252,6 +256,7 @@ export class EditorViewport extends DisposableOwner {
       this.textMeasurer,
       {
         initialMeasurement: {
+          ...(this.model.largeFile.tooLargeForTokenization ? { maximumMeasuredLineCount: 2_048 } : {}),
           schedule: callback => runWhenWindowIdle(
             ownerDocument.defaultView!,
             () => callback(),
@@ -287,7 +292,7 @@ export class EditorViewport extends DisposableOwner {
     this.viewport = viewport;
     this.onDidChangeLayout = viewport.onDidChange;
     this.own(this.visibleLineProjection.onDidChange(() => this.project(viewport.layout)));
-    if (this.lineGutterDecoration) this.own(this.lineGutterDecoration.onDidChange(() => this.project(viewport.layout)));
+    if (this.lineGutterDecoration) this.own(this.lineGutterDecoration.onDidChange(() => { this.gutterRevision += 1; this.project(viewport.layout); }));
     viewport.setContentWidth(this.measuredContentWidth);
 
     this.own(viewport.onDidChange(({ layout }) => this.project(layout)));
@@ -628,8 +633,16 @@ export class EditorViewport extends DisposableOwner {
     const digitCount = String(this.model.lineCount).length;
     return Math.ceil(
       this.textMeasurer.measureLineWidth("9".repeat(digitCount)) +
-      GUTTER_HORIZONTAL_PADDING,
+      GUTTER_HORIZONTAL_PADDING + this.additionalFeatureGutterWidth,
     );
+  }
+
+  private get featureGutterWidth(): number {
+    return (this.lineGutterDecoration as CompositeEditorLineGutterDecoration | undefined)?.width ?? (this.lineGutterDecoration ? 20 : 0);
+  }
+
+  private get additionalFeatureGutterWidth(): number {
+    return Math.max(0, this.featureGutterWidth - 20);
   }
 
   private get textLeft(): number {
@@ -644,6 +657,8 @@ export class EditorViewport extends DisposableOwner {
   }
 
   private project(layout: EditorViewportLayout): void {
+    this.observeRenderedLineWidths(layout);
+    if (layout !== this.viewport.layout) return;
     this.element.classList.toggle("horizontally-scrollable", layout.maximumScrollPosition.left > 0);
     this.element.classList.toggle("vertically-scrollable", layout.maximumScrollPosition.top > 0);
     this.element.style.setProperty(
@@ -664,6 +679,17 @@ export class EditorViewport extends DisposableOwner {
     this.syncScrollPosition(layout);
   }
 
+  private observeRenderedLineWidths(layout: EditorViewportLayout): void {
+    if (this.lineWidths.complete) return;
+    const projection = this.visualProjection;
+    const logicalLineIndexes = new Set<number>();
+    for (let visualLineIndex = layout.renderLines.startLineIndex; visualLineIndex < layout.renderLines.endLineIndexExclusive; visualLineIndex += 1) {
+      const visualLine = projection.lineAt(visualLineIndex);
+      if (visualLine) logicalLineIndexes.add(visualLine.logicalLineIndex);
+    }
+    this.lineWidths.observeLines([...logicalLineIndexes]);
+  }
+
   private reconcileLines(layout: EditorViewportLayout): void {
     const visualProjection = this.visualProjection;
       const visualProjectionRevision = this.visibleLineProjection.revision;
@@ -671,6 +697,7 @@ export class EditorViewport extends DisposableOwner {
       this.renderedModelVersion === layout.modelVersion &&
       this.renderedLineHeight === layout.lineHeight &&
       this.renderedVisualProjectionRevision === visualProjectionRevision &&
+      this.renderedGutterRevision === this.gutterRevision &&
       lineRangesEqual(this.renderedRange, layout.renderLines)
     ) return;
 
@@ -688,7 +715,7 @@ export class EditorViewport extends DisposableOwner {
       const existing = this.renderedLines.get(visualLineIndex);
       const line = existing ?? createAsterRenderedLine(ownerDocument, visualLineIndex, this.lineGutterDecoration);
       line.element.dataset.logicalLineIndex = String(visualLine.logicalLineIndex);
-      if (!existing || this.renderedVisualProjectionRevision !== visualProjectionRevision) {
+      if (!existing || this.renderedVisualProjectionRevision !== visualProjectionRevision || this.renderedGutterRevision !== this.gutterRevision) {
         line.numberElement.textContent = visualLine.firstForLogicalLine
           ? String(visualLine.logicalLineIndex + 1)
           : "";
@@ -715,6 +742,7 @@ export class EditorViewport extends DisposableOwner {
     this.renderedModelVersion = layout.modelVersion;
     this.renderedLineHeight = layout.lineHeight;
     this.renderedVisualProjectionRevision = visualProjectionRevision;
+    this.renderedGutterRevision = this.gutterRevision;
   }
 
   private projectVisibleLineText(): void {

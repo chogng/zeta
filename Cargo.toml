@@ -24,6 +24,7 @@ members = [
     "zeta-rs/context-engine",
     "zeta-rs/core",
     "zeta-rs/diff",
+    "zeta-rs/debug-adapter",
     "zeta-rs/extensions",
     "zeta-rs/editor-core",
     "zeta-rs/ext/extension-api",
@@ -222,6 +223,7 @@ zeta-connectors = { path = "zeta-rs/connectors" }
 zeta-context-engine = { path = "zeta-rs/context-engine" }
 zeta-core = { path = "zeta-rs/core" }
 zeta-diff = { path = "zeta-rs/diff" }
+zeta-debug-adapter = { path = "zeta-rs/debug-adapter" }
 zeta-editor = { path = "zeterm/editor" }
 zeta-editor-core = { path = "zeta-rs/editor-core" }
 zeta-extension-api = { path = "zeta-rs/ext/extension-api" }

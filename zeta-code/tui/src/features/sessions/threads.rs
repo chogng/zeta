@@ -145,7 +145,7 @@ fn origin_label(origin: &ThreadOrigin) -> String {
             parent_thread_id,
             delegation_id,
             ..
-        } => format!("agent {delegation_id} from {parent_thread_id}"),
+        } => format!("agent spawned by {parent_thread_id} for {delegation_id}"),
     }
 }
 

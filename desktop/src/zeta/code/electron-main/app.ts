@@ -34,7 +34,7 @@ import {
   AppServerSupervisor,
 } from "../../platform/app-server/electron-main/app-server-supervisor.js";
 import { appServerExecutablePath } from "../../platform/app-server/electron-main/app-server-package.js";
-import { normalizeEntryUrl, TrustedIpcRouter } from "../../platform/ipc/electron-main/trustedIpcRouter.js";
+import { normalizeEntryUrl, TrustedIpcRouter, type IpcRoute } from "../../platform/ipc/electron-main/trustedIpcRouter.js";
 import {
   BROWSER_VIEW_EVENT_CHANNEL,
 } from "../../platform/browser/common/browserView.js";
@@ -108,12 +108,15 @@ import { createAppServerWorkspaceTransitionAdapter } from "../../platform/worksp
 import { type IWorkspaceTransitionFailure, type WorkspaceTransitionMainServiceOptions, WorkspaceTransitionFailureKind, WorkspaceTransitionMainService, WorkspaceTransitionStatus } from "../../platform/workspaces/electron-main/workspaceTransitionMainService.js";
 import { WorkspaceContextMainService, WorkspacesMainService, workspaceContextIpcRoutes } from "../../platform/workspaces/electron-main/workspacesMainService.js";
 export type AppServerStartupMode = "required" | "disabled";
+export type ElectronMainIpcRouteContribution = (supervisor: AppServerSupervisor) => readonly IpcRoute<unknown, unknown>[];
 
 export interface ZetaApplicationOptions {
   readonly product: ProductConfiguration;
   readonly rendererRoot: string;
   /** Selects whether this Electron process starts the App Server before opening its window. */
   readonly appServerStartupMode: AppServerStartupMode;
+  /** Product-selected IPC capabilities installed for the primary Workbench window. */
+  readonly ipcRouteContributions?: readonly ElectronMainIpcRouteContribution[];
 }
 
 interface PersistentServices {
@@ -135,6 +138,7 @@ export class ZetaApplication extends DisposableOwner {
   private readonly product: ProductConfiguration;
   private readonly rendererRoot: string;
   private readonly appServerStartupMode: AppServerStartupMode;
+  private readonly ipcRouteContributions: readonly ElectronMainIpcRouteContribution[];
   private readonly disposableTracker: DisposableTracker | undefined;
   private readonly tracking: Disposable | undefined;
   private readonly trustedIpcRouter: TrustedIpcRouter;
@@ -159,6 +163,7 @@ export class ZetaApplication extends DisposableOwner {
     this.product = options.product;
     this.rendererRoot = options.rendererRoot;
     this.appServerStartupMode = options.appServerStartupMode;
+    this.ipcRouteContributions = options.ipcRouteContributions ?? [];
     this.disposableTracker = disposableTracker;
     this.tracking = tracking;
     this.trustedIpcRouter = this.own(new TrustedIpcRouter(ipcMain));
@@ -413,6 +418,7 @@ export class ZetaApplication extends DisposableOwner {
       ...toolSearchIpcRoutes(supervisor),
       ...searchIpcRoutes(supervisor),
       ...terminalIpcRoutes(supervisor),
+      ...this.ipcRouteContributions.flatMap(contribution => contribution(supervisor)),
       ...browserViewIpcRoutes(browserViewMainService),
       ...configurationIpcRoutes(configuration),
       ...keybindingsResourceIpcRoutes(keybindings),
