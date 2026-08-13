@@ -351,7 +351,7 @@ impl PluginActivationAuthority {
         package: &PluginMarketplacePackage,
     ) -> Result<PluginInstallResult, PluginError> {
         let package = package.materialize()?;
-        self.install_validated(command_id, expected_revision, &package)
+        self.install_validated(command_id, expected_revision, package.package())
     }
 
     fn install_validated(

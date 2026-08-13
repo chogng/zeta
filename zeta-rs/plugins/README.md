@@ -29,7 +29,7 @@ Marketplace install/update 先复制、复验并原子提升到 content-addresse
 | `PluginMarketplace::open` | 校验 host 注册 catalog、无链接 package path 与 exact package digest | 网络下载、publisher 签名、客户端宿主路径 |
 | `PluginMarketplace::from_verified_remote` | 接收产品分发层已验证的签名 manifest、digest、统计与延迟 materializer | TUF/HTTP、自动下载、grant |
 | `PluginMarketplaceMode` / `PluginMarketplaceTrust` | 分别表达读取方式与运营方信任，避免把官方远端源误标成第三方 | signature 验证、用户授权 |
-| `PluginMarketplacePackageMaterializer` | 安装时把一个 exact ref materialize 为 canonical `LocalPluginPackage` | 目录发现、enable、运行时执行 |
+| `PluginMarketplacePackageMaterializer` / `MaterializedPluginMarketplacePackage` | 安装时把 exact ref materialize 为 canonical package，并把分发租约保持到 authority 复制完成 | 目录发现、enable、运行时执行 |
 | `PluginMarketplaceService` | Marketplace install、staged update、rollback 与 profile request reconcile | 自动 grant、远端 catalog 同步、Workspace trust 决策 |
 | `PluginPackageStore::install_local` | stage、复制、复验 digest 并原子 promote immutable object | enablement、grant、activation |
 | `PluginPackageStore::read` | 按 exact installed ref 重新验证 object | authority lookup、版本选择 |
@@ -214,8 +214,9 @@ profile authority 的只读可用性判断，不从 Workspace 自动安装或授
 “不暴露可写根路径 + digest revalidation”保证，
 尚未施加平台级 immutable flag，也没有 orphan staging startup recovery；失败 install commit 和 uninstall
 会精确回收无引用 object。受信 host 可注册 materialized Marketplace root；公网 catalog 下载、
-publisher signature/revocation 已由 `zeta-plugin-marketplace` 实现，package cache 与 content store 的 GC
-authority 尚未实现；package-rooted MCP consumer
+publisher signature/revocation、materialized package cache quota 与 GC 已由 `zeta-plugin-marketplace`
+实现；installed content store 仍只在 failed install/uninstall 时精确回收，没有独立的全局 orphan quota
+authority。package-rooted MCP consumer
 已位于 `zeta-mcp-extension`，不能反向并入本 crate。这些能力应在新的 private
 `authority/resolution` modules 中接入，不扩大 loader/store 为隐式 enable manager。
 

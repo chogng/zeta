@@ -39,6 +39,7 @@ use zeta_plugins::PluginMarketplaceTrust;
 use zip::ZipWriter;
 use zip::write::SimpleFileOptions;
 
+use crate::RemoteMarketplaceCachePolicy;
 use crate::RemotePluginMarketplace;
 use crate::RemotePluginMarketplaceConfig;
 
@@ -121,6 +122,67 @@ fn signed_catalog_defers_package_download_and_revalidates_on_demand_cache() {
         )
         .unwrap_err();
     assert_eq!(error.kind(), zeta_plugins::PluginErrorKind::PackageUnsafe);
+}
+
+#[test]
+fn cache_pruning_never_removes_the_installed_content_addressed_object() {
+    let fixture = SignedDistributionFixture::create();
+    let client = Arc::new(FixtureHttpClient {
+        root: fixture.repository.path().to_path_buf(),
+        offline: AtomicBool::new(false),
+    });
+    let policy = RemoteMarketplaceCachePolicy::default()
+        .with_max_materialized_bytes(1)
+        .unwrap();
+    let config = RemotePluginMarketplaceConfig::new(
+        PluginMarketplaceId::new("zeta-test").unwrap(),
+        Url::parse("https://marketplace.example/metadata/").unwrap(),
+        Url::parse("https://marketplace.example/targets/").unwrap(),
+        fixture.trusted_root,
+        fixture.cache.path(),
+    )
+    .unwrap()
+    .with_cache_policy(policy);
+    let marketplace = RemotePluginMarketplace::new(config, client);
+    let snapshot = marketplace.sync().unwrap();
+    let profile = fixture.cache.path().join("bounded-profile");
+    let authority = PluginActivationAuthority::open(&profile).unwrap();
+    let service =
+        PluginMarketplaceService::new(authority.clone(), [snapshot.into_marketplace()]).unwrap();
+
+    service
+        .install(
+            PluginAuthorityCommandId::new("install-before-prune").unwrap(),
+            0,
+            &PluginMarketplaceId::new("zeta-test").unwrap(),
+            &fixture.package,
+        )
+        .unwrap();
+    let report = marketplace.prune_cache().unwrap();
+
+    assert_eq!(report.evicted_packages, 1);
+    assert_eq!(report.retained_packages, 0);
+    let digest = fixture
+        .package
+        .digest
+        .as_str()
+        .strip_prefix("sha256:")
+        .unwrap();
+    assert!(!fixture.cache.path().join("packages").join(digest).exists());
+    assert!(
+        profile
+            .join("objects")
+            .join(digest)
+            .join(".zeta-plugin/plugin.json")
+            .is_file()
+    );
+    assert_eq!(
+        PluginActivationAuthority::open(profile)
+            .unwrap()
+            .snapshot()
+            .installed(),
+        &[fixture.package]
+    );
 }
 
 struct SignedDistributionFixture {

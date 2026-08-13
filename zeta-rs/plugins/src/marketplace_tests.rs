@@ -1,4 +1,5 @@
 use std::fs;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
@@ -11,6 +12,7 @@ use super::PluginMarketplaceService;
 use super::PluginProfileRequest;
 use super::PluginProfileRequestEnablement;
 use crate::LocalPluginPackage;
+use crate::MaterializedPluginMarketplacePackage;
 use crate::PluginActivationAuthority;
 use crate::PluginAuthorityCommand;
 use crate::PluginAuthorityCommandId;
@@ -28,13 +30,44 @@ struct CountingMaterializer {
     calls: AtomicUsize,
 }
 
+struct RemovingLease {
+    root: PathBuf,
+}
+
+impl Drop for RemovingLease {
+    fn drop(&mut self) {
+        fs::remove_dir_all(&self.root).unwrap();
+    }
+}
+
+struct LeasedMaterializer {
+    package: LocalPluginPackage,
+    source_root: PathBuf,
+}
+
+impl PluginMarketplacePackageMaterializer for LeasedMaterializer {
+    fn materialize(
+        &self,
+        _package: &crate::InstalledPluginRef,
+    ) -> Result<MaterializedPluginMarketplacePackage, PluginMarketplaceMaterializationError> {
+        Ok(MaterializedPluginMarketplacePackage::with_lease(
+            self.package.clone(),
+            RemovingLease {
+                root: self.source_root.clone(),
+            },
+        ))
+    }
+}
+
 impl PluginMarketplacePackageMaterializer for CountingMaterializer {
     fn materialize(
         &self,
         _package: &crate::InstalledPluginRef,
-    ) -> Result<LocalPluginPackage, PluginMarketplaceMaterializationError> {
+    ) -> Result<MaterializedPluginMarketplacePackage, PluginMarketplaceMaterializationError> {
         self.calls.fetch_add(1, Ordering::SeqCst);
-        Ok(self.package.clone())
+        Ok(MaterializedPluginMarketplacePackage::new(
+            self.package.clone(),
+        ))
     }
 }
 
@@ -142,6 +175,50 @@ fn verified_remote_catalog_defers_package_materialization_until_install() {
         .unwrap();
 
     assert_eq!(materializer.calls.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn materialization_lease_survives_until_authority_copies_the_package() {
+    let root = tempdir().unwrap();
+    let source_root = root.path().join("leased-source");
+    let package = write_package(&source_root, "1.0.0", "# Leased");
+    let marketplace = PluginMarketplace::from_verified_remote(
+        PluginMarketplaceId::new("acme").unwrap(),
+        PluginMarketplaceTrust::ProductManaged,
+        PluginPackageDigest::sha256(b"leased catalog"),
+        [VerifiedRemotePluginPackage::new(
+            package.manifest().clone(),
+            package.package_digest().clone(),
+            package.stats(),
+            Arc::new(LeasedMaterializer {
+                package: package.clone(),
+                source_root: source_root.clone(),
+            }),
+        )],
+    )
+    .unwrap();
+    let package_ref = marketplace.list()[0].package_ref();
+    let profile = root.path().join("profile");
+    let authority = PluginActivationAuthority::open(&profile).unwrap();
+    let service = PluginMarketplaceService::new(authority, [marketplace]).unwrap();
+
+    service
+        .install(
+            PluginAuthorityCommandId::new("install-leased").unwrap(),
+            0,
+            &PluginMarketplaceId::new("acme").unwrap(),
+            &package_ref,
+        )
+        .unwrap();
+
+    assert!(!source_root.exists());
+    assert!(
+        profile
+            .join("objects")
+            .join(package_ref.digest.as_str().strip_prefix("sha256:").unwrap())
+            .join(".zeta-plugin/plugin.json")
+            .is_file()
+    );
 }
 
 #[test]

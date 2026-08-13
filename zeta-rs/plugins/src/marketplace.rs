@@ -103,7 +103,7 @@ pub trait PluginMarketplacePackageMaterializer: Send + Sync {
     fn materialize(
         &self,
         package: &InstalledPluginRef,
-    ) -> Result<LocalPluginPackage, PluginMarketplaceMaterializationError>;
+    ) -> Result<MaterializedPluginMarketplacePackage, PluginMarketplaceMaterializationError>;
 }
 
 /// Sanitized failure category returned across a Marketplace distribution boundary.
@@ -111,6 +111,49 @@ pub trait PluginMarketplacePackageMaterializer: Send + Sync {
 pub enum PluginMarketplaceMaterializationError {
     SourceUnavailable,
     PackageUnsafe,
+}
+
+/// One validated package whose distribution resources remain leased until installation copies it.
+///
+/// Remote materializers use `with_lease` to keep cache eviction from removing package bytes during
+/// the handoff to Plugin authority. The lease has no authority semantics and is released on drop.
+pub struct MaterializedPluginMarketplacePackage {
+    package: LocalPluginPackage,
+    _lease: Option<Box<dyn Send + Sync>>,
+}
+
+impl MaterializedPluginMarketplacePackage {
+    /// Wraps a package that does not require a distribution-resource lease.
+    pub fn new(package: LocalPluginPackage) -> Self {
+        Self {
+            package,
+            _lease: None,
+        }
+    }
+
+    /// Keeps an opaque distribution lease alive for the lifetime of the materialized package.
+    pub fn with_lease<L>(package: LocalPluginPackage, lease: L) -> Self
+    where
+        L: Send + Sync + 'static,
+    {
+        Self {
+            package,
+            _lease: Some(Box::new(lease)),
+        }
+    }
+
+    pub(crate) fn package(&self) -> &LocalPluginPackage {
+        &self.package
+    }
+}
+
+impl std::fmt::Debug for MaterializedPluginMarketplacePackage {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("MaterializedPluginMarketplacePackage")
+            .field("package", &self.package)
+            .finish_non_exhaustive()
+    }
 }
 
 /// Signed discovery metadata for one remote package whose bytes are fetched on demand.
@@ -158,17 +201,19 @@ impl PluginMarketplacePackage {
         self.stats
     }
 
-    pub(crate) fn materialize(&self) -> Result<LocalPluginPackage, PluginError> {
+    pub(crate) fn materialize(&self) -> Result<MaterializedPluginMarketplacePackage, PluginError> {
         let package = match &self.source {
-            MarketplacePackageSource::Local(package) => package.as_ref().clone(),
+            MarketplacePackageSource::Local(package) => {
+                MaterializedPluginMarketplacePackage::new(package.as_ref().clone())
+            }
             MarketplacePackageSource::Deferred(materializer) => materializer
                 .materialize(&self.package)
                 .map_err(materialization_error)?,
         };
-        if package.manifest() != &self.manifest
-            || package.manifest().id != self.package.id
-            || package.manifest().version != self.package.version
-            || package.package_digest() != &self.package.digest
+        if package.package().manifest() != &self.manifest
+            || package.package().manifest().id != self.package.id
+            || package.package().manifest().version != self.package.version
+            || package.package().package_digest() != &self.package.digest
         {
             return Err(marketplace_error(
                 "materialized Plugin package does not match signed discovery metadata",

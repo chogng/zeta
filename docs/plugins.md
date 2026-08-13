@@ -666,7 +666,7 @@ target，不预取 ZIP；安装或更新时才重新检查当前 TUF/revocation 
 target hash/length、受限 ZIP extraction、manifest identity 与 Zeta normalized digest。transport 失败可打开
 仍未过期的最后目录缓存；离线安装只允许此前已经 materialize 且再次通过 exact digest 的包。顶层
 revocation target 会写入 durable exact-package tombstone，不因后续 feed 缺项自动恢复。可搜索的 Desktop
-目录已实现；download progress、permission/contribution diff 与 package-cache GC 仍未实现。
+目录、按需 package cache quota/GC 已实现；download progress 与 permission/contribution diff 仍未实现。
 
 正式 package 把只读配置和公开信任根放在
 `zeta-resources/product-services/{product-services.json,marketplace-root.json}`。`zeta-cli` 通过
@@ -815,7 +815,9 @@ content-addressed object、重新验证 exact digest，再原子 promote。mutab
 - ✅ TUF 远端 signed discovery catalog、离线 metadata cache 与按需 exact package download；
 - ✅ delegated publisher signature、root rotation/expiry/rollback 与顶层 revocation feed；
 - permission/contribution diff；
-- ✅ side-by-side staged update 与 exact rollback；GC 尚未完成。
+- ✅ side-by-side staged update 与 exact rollback；
+- ✅ 每 Marketplace materialized cache count/bytes budget、signed-target-aware eviction、protected
+  install handoff 与 retained/evicted/excess report；installed content store 不受 cache GC 影响。
 
 完成条件：相同 ID/version 不可换内容，grant expansion 必须重新 consent。
 

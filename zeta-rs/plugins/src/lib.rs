@@ -43,6 +43,7 @@ pub use manifest::{
     NetworkHost, Permission, PluginCompatibility, PluginContributions, PluginManifest,
     SkillContribution, WorkspaceAccess, ZetaVersionRequirement,
 };
+pub use marketplace::MaterializedPluginMarketplacePackage;
 pub use marketplace::PluginMarketplace;
 pub use marketplace::PluginMarketplaceId;
 pub use marketplace::PluginMarketplaceMaterializationError;
