@@ -40,6 +40,11 @@ licenses and notices, including the Desktop notices in
 
 ## Run
 
+The Rust workspace requires `protoc` to build the upstream Candle ONNX runtime used by the local
+input classifier. Install Protocol Buffers through the platform package manager before the first
+Cargo build (`brew install protobuf` on macOS or `apt-get install protobuf-compiler` on Debian and
+Ubuntu). Product binaries embed the classifier assets and do not invoke `protoc` at runtime.
+
 With [`just`](https://just.systems/) installed, launch the `zeta code` TUI from the current source
 tree:
 

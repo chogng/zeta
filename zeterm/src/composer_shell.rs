@@ -1,11 +1,6 @@
 use std::path::{Path, PathBuf};
 
-const SHELL_BUILTINS: &[&str] = &[
-    "alias", "bg", "cd", "command", "dirs", "disown", "echo", "eval", "exec", "exit", "export",
-    "fg", "getopts", "hash", "jobs", "kill", "popd", "printf", "pushd", "pwd", "read", "readonly",
-    "set", "shift", "source", "test", "times", "trap", "type", "ulimit", "umask", "unalias",
-    "unset", "wait",
-];
+use zeta_input_classifier::ShellCommandEvidence;
 
 const TASK_RUNNERS: &[(&str, &[&str])] = &[
     ("just", &["justfile", "Justfile", ".justfile"]),
@@ -40,20 +35,24 @@ impl ComposerShellDetector {
         self.working_directory = working_directory.into();
     }
 
-    pub(crate) fn detects_command(&self, text: &str) -> bool {
+    pub(crate) fn evidence(&self, text: &str) -> ShellCommandEvidence {
         let text = text.trim_start();
         if text.is_empty() || text.starts_with('/') {
-            return false;
-        }
-        if contains_unquoted_shell_operator(text) {
-            return true;
+            return ShellCommandEvidence::Absent;
         }
         let Some(command) = command_word(text) else {
-            return false;
+            return ShellCommandEvidence::Absent;
         };
-        SHELL_BUILTINS.contains(&command)
-            || self.workspace_declares_runner(command)
-            || self.resolves_executable(command)
+        let explicit_path = command.contains('/') || command.contains('\\');
+        let short_input = text.split_whitespace().count() < 3;
+        if (explicit_path && self.resolves_executable(command))
+            || (short_input
+                && (self.workspace_declares_runner(command) || self.resolves_executable(command)))
+        {
+            ShellCommandEvidence::HighConfidence
+        } else {
+            ShellCommandEvidence::Absent
+        }
     }
 
     fn workspace_declares_runner(&self, command: &str) -> bool {
@@ -92,33 +91,6 @@ fn command_word(text: &str) -> Option<&str> {
         .unwrap_or(text.len());
     let word = &text[..end];
     (!word.is_empty() && !word.starts_with(['\'', '"'])).then_some(word)
-}
-
-fn contains_unquoted_shell_operator(text: &str) -> bool {
-    let mut quote = None;
-    let mut escaped = false;
-    for character in text.chars() {
-        if escaped {
-            escaped = false;
-            continue;
-        }
-        if character == '\\' && quote != Some('\'') {
-            escaped = true;
-            continue;
-        }
-        if matches!(character, '\'' | '"') {
-            if quote == Some(character) {
-                quote = None;
-            } else if quote.is_none() {
-                quote = Some(character);
-            }
-            continue;
-        }
-        if quote.is_none() && is_shell_operator(character) {
-            return true;
-        }
-    }
-    false
 }
 
 fn is_shell_operator(character: char) -> bool {

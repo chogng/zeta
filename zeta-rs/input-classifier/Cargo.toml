@@ -1,0 +1,26 @@
+[package]
+name = "zeta-input-classifier"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+name = "zeta_input_classifier"
+path = "src/lib.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+candle-core = { workspace = true }
+candle-nn = { workspace = true }
+candle-onnx = { workspace = true }
+prost = { workspace = true }
+tokenizers = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+
+[lints]
+workspace = true

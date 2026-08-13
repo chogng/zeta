@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use zeta_editor::{
     CodeEditorCommand, CodeEditorLanguage, CodeEditorSelectionMode, CodeEditorStyle,
 };
+use zeta_input_classifier::InputRoute;
 use zeta_ui::{Point, Rect, TextInputCompositionEvent};
 
 use crate::composer_editor::ComposerEditor;
@@ -47,6 +48,7 @@ impl Default for AgentComposer {
 
 impl AgentComposer {
     pub(crate) fn for_working_directory(working_directory: impl Into<PathBuf>) -> Self {
+        zeta_input_classifier::start_background_warmup();
         Self {
             editor: ComposerEditor::default(),
             mode: ComposerMode::Agent,
@@ -200,10 +202,18 @@ impl AgentComposer {
 
     fn refresh_automatic_mode(&mut self) {
         if self.mode_selection == ComposerModeSelection::Automatic {
-            self.mode = if self.shell_detector.detects_command(self.editor.text()) {
-                ComposerMode::Shell
-            } else {
+            let text = self.editor.text();
+            self.mode = if text.trim_start().starts_with('/') {
                 ComposerMode::Agent
+            } else {
+                let shell_evidence = self.shell_detector.evidence(text);
+                match zeta_input_classifier::classify_input(text, shell_evidence) {
+                    Ok(classification) => match classification.route {
+                        InputRoute::Agent => ComposerMode::Agent,
+                        InputRoute::Shell => ComposerMode::Shell,
+                    },
+                    Err(_) => self.mode,
+                }
             };
         }
         self.refresh_editor_language();

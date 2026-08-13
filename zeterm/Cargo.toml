@@ -22,6 +22,7 @@ zeta-editor = { workspace = true }
 zeta-file-search = { workspace = true }
 zeta-icons = { workspace = true }
 zeta-install-context = { workspace = true }
+zeta-input-classifier = { workspace = true }
 zeta-keybinding = { workspace = true }
 zeta-keybindings-host = { workspace = true }
 zeta-layout = { workspace = true }

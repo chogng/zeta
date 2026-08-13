@@ -51,6 +51,39 @@ fn just_task_automatically_switches_to_shell_submission() {
 }
 
 #[test]
+fn automatic_mode_uses_the_model_for_command_prefix_questions() {
+    let mut composer = AgentComposer::default();
+
+    composer.apply(CodeEditorCommand::Insert(
+        "git status 是做什么的".to_owned(),
+    ));
+
+    assert_eq!(composer.mode(), ComposerMode::Agent);
+    assert!(matches!(
+        composer.submission(),
+        Some(ComposerSubmission::AgentMessage(text)) if text == "git status 是做什么的"
+    ));
+}
+
+#[test]
+fn automatic_mode_routes_direct_commands_to_shell() {
+    let mut composer = AgentComposer::default();
+
+    composer.apply(CodeEditorCommand::Insert("git status".to_owned()));
+
+    assert_eq!(composer.mode(), ComposerMode::Shell);
+}
+
+#[test]
+fn automatic_mode_keeps_natural_language_one_offs_in_agent() {
+    let mut composer = AgentComposer::default();
+
+    composer.apply(CodeEditorCommand::Insert("hello".to_owned()));
+
+    assert_eq!(composer.mode(), ComposerMode::Agent);
+}
+
+#[test]
 fn explicit_agent_mode_overrides_automatic_shell_detection() {
     let mut composer = AgentComposer::default();
     composer.apply(CodeEditorCommand::Insert("echo explain this".to_owned()));
