@@ -59,6 +59,18 @@ fn declare_editor_extension(root: &Path, entrypoint: &str) {
     fs::write(manifest_path, serde_json::to_vec_pretty(&value).unwrap()).unwrap();
 }
 
+fn declare_declarative_extension(root: &Path, path: &str) {
+    let manifest_path = root.join(".zeta-plugin/plugin.json");
+    let mut value =
+        serde_json::from_str::<serde_json::Value>(&fs::read_to_string(&manifest_path).unwrap())
+            .unwrap();
+    value["contributions"]["declarativeExtensions"] = serde_json::json!([{
+        "id": "review-theme",
+        "path": path
+    }]);
+    fs::write(manifest_path, serde_json::to_vec_pretty(&value).unwrap()).unwrap();
+}
+
 #[test]
 fn exact_local_package_loads_with_content_and_manifest_digests() {
     let directory = TestDirectory::new();
@@ -137,6 +149,36 @@ fn editor_extension_entrypoint_must_be_a_regular_contained_package_file() {
     .unwrap();
     let package = LocalPluginPackage::load(directory.path()).unwrap();
     assert_eq!(package.manifest().contributions.editor_extensions.len(), 1);
+}
+
+#[test]
+fn declarative_extension_must_be_a_directory_with_a_package_manifest() {
+    let directory = TestDirectory::new();
+    create_package(directory.path(), "acme/review", "1.0.0", "icon");
+    declare_declarative_extension(directory.path(), "extensions/review-theme");
+    fs::create_dir_all(directory.path().join("extensions/review-theme")).unwrap();
+
+    let error = LocalPluginPackage::load(directory.path()).unwrap_err();
+
+    assert_eq!(error.kind(), PluginErrorKind::ContributionInvalid);
+    assert!(error.to_string().contains("declarative Extension manifest"));
+
+    fs::write(
+        directory
+            .path()
+            .join("extensions/review-theme/package.json"),
+        r#"{"name":"review-theme","publisher":"acme","version":"1.0.0"}"#,
+    )
+    .unwrap();
+    let package = LocalPluginPackage::load(directory.path()).unwrap();
+    assert_eq!(
+        package
+            .manifest()
+            .contributions
+            .declarative_extensions
+            .len(),
+        1
+    );
 }
 
 #[cfg(unix)]

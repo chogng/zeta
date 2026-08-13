@@ -3,8 +3,10 @@ import { createHash } from "node:crypto";
 import test from "node:test";
 import { toDisposable } from "../../../../../base/common/lifecycle.js";
 import type { ExtensionCatalog, ExtensionDescriptor, IExtensionApi } from "../../../../../platform/extensions/common/extensionApi.js";
+import type { IServerEventApi } from "../../../../../platform/app-server/common/appServerApi.js";
+import type { ServerNotification } from "../../../../../../../generated/app-server/types.js";
 import { AppServerExtensionService } from "../../browser/appServerExtensionService.js";
-import { parseExtensionManifest } from "../../common/extensionService.js";
+import { parseExtensionManifest, type ExtensionCatalog as WorkbenchExtensionCatalog } from "../../common/extensionService.js";
 import { parseJsonc } from "../../common/jsonc.js";
 import { parseExtensionSnippetFile } from "../../common/extensionSnippetProvider.js";
 import { ExtensionThemeRegistry, parseExtensionTheme } from "../../common/extensionTheme.js";
@@ -291,6 +293,32 @@ test("coalesces concurrent reload requests into one queued follow-up refresh", a
 
   assert.equal(listCalls, 2);
   assert.equal(service.currentCatalog.generation, 2);
+});
+
+test("reloads declarative extensions when the Plugin activation generation changes", async () => {
+  let generation = 0;
+  let listener: ((event: ServerNotification) => void) | undefined;
+  const eventApi: IServerEventApi = {
+    subscribe(next) {
+      listener = next;
+      return { dispose: () => { listener = undefined; } };
+    },
+  };
+  const api: IExtensionApi = {
+    list: async () => emptyCatalog(++generation),
+    readResource: async () => new Uint8Array(),
+  };
+  using service = new AppServerExtensionService({ api, eventApi, textMateService: emptyTextMateService() });
+  await service.start();
+  const refreshed = deferred<WorkbenchExtensionCatalog>();
+  using changed = service.onDidChange(catalog => {
+    if (catalog.generation === 2) refreshed.resolve(catalog);
+  });
+
+  listener?.({ method: "plugin/changed", params: { revision: 2, activationGeneration: 2 } });
+  const catalog = await refreshed.promise;
+
+  assert.equal(catalog.generation, 2);
 });
 
 test("dispose suppresses a queued reload and ignores the in-flight result", async () => {

@@ -58,12 +58,14 @@ flowchart TD
     P --> C["ConnectorContribution → Connector runtime"]
     P --> M["McpServerContribution"]
     P --> E["EditorExtensionContribution → executable Host RPC v1 program"]
+    P --> D["DeclarativeExtensionContribution → static package.json catalog"]
     P --> A["StaticAssetContribution → Resource consumer"]
     C -. "references declaration" .-> M
     C -->|"connected"| B["Ready MCP binding"]
     M -->|"standalone activation"| R["MCP runtime"]
     M --> B
     E --> H["zeta-editor-extension-host supervisor"]
+    D --> X["zeta-extensions immutable snapshot"]
     B --> R
     R --> T["Tool Registry / Core"]
 ```
@@ -72,16 +74,21 @@ Plugin 只负责声明控制面和 package lifecycle。Skill、Connector、MCP �
 语义；它们不是 Plugin manager 内部的 live 子对象。Plugin、Connector 与 MCP 的 canonical 关系由
 [`connectors.md`](connectors.md) 维护。
 
-静态 Editor Extension 是另一套边界：它从 host-selected roots 读取 `package.json` 和声明式
-language/TextMate/snippet/theme/debugger 资源，不使用 Plugin v1 manifest，也没有 Plugin 的
-install/enable/grant/runtime 语义。其 canonical 文档是
-[`editor-extensions.md`](editor-extensions.md)。未来若共享安装控制面，仍必须保留两种 manifest、
-activation 与权限语义的显式转换，不能把当前静态 catalog 误称为 Plugin runtime。
+静态 Editor Extension 保持另一套内容边界：它读取自己的 `package.json` 和声明式
+language/TextMate/snippet/theme/debugger 资源。Plugin v1 现在可用 `declarativeExtensions[]` 指向包内
+静态 Extension 目录；只有 effective exact Plugin package 会被 App Server 投影到 `zeta-extensions`。
+这共享 install/enable/grant/revocation lifecycle，但不合并两种 manifest，也不把静态内容变成可执行
+runtime。其 canonical 文档是 [`editor-extensions.md`](editor-extensions.md)。
 
 Plugin v1 现在提供显式 `editorExtensions[]` bridge。每项指向包内一个可直接启动、自己实现 Zeta Host
 RPC v1 的程序；它不是由通用 Node/WASM runtime 加载的脚本。Plugin manager 只验证并授权声明，
 `zeta-editor-extension-host` supervisor 才拥有逐扩展进程隔离、RPC、crash recovery 和 provider
 lifecycle。静态 `package.json` catalog 不会被隐式转换成该 executable declaration。
+
+`declarativeExtensions[]` 是另一条显式 bridge：每项只有 manifest-local ID 和 package-relative
+directory，目录必须包含 regular `package.json`。它不需要 `process` permission；安装只存储 bytes，
+enable + grant 后才进入静态 catalog，disable、grant revoke、package revoke、update 或 uninstall 会使
+下一次 catalog refresh 移除旧 exact package。Workbench 监听 Plugin activation generation 并自动刷新。
 生产第三方执行还必须由产品注入能够实施 sandbox、memory/CPU/process hard limits 和 process-tree
 termination 的 platform launcher；没有该 launcher 时 Host capability 必须为 false，不能用
 `TrustedDevelopmentLauncher` 降级。该 v1 是 Zeta-native executable RPC，不是 VS Code/Node Extension
@@ -786,6 +793,7 @@ content-addressed object、重新验证 exact digest，再原子 promote。mutab
 - ✅ durable install/enable/disable/uninstall authority record 与 typed command replay；
 - ✅ live revision/activation subscription、App Server lifecycle RPC/reconcile 与 exact invocation drain；
 - ✅ Plugin Skill contribution 的 exact immutable source projection 与 live catalog refresh；
+- ✅ declarative Extension contribution 的 exact immutable source projection、precedence 与 live refresh；
 - ✅ Connector contribution 的 normalized projection；
 - ✅ user-profile exact Marketplace reconcile；Workspace request 保持只读、不能自动 grant；
 - 尚未完成：startup orphan recovery。
@@ -836,6 +844,7 @@ content-addressed object、重新验证 exact digest，再原子 promote。mutab
 - manifest unknown field、invalid ID/version、duplicate contribution；
 - Editor Extension runtime API、exact executable permission、activation/capability bound 与 entrypoint file type；
 - path traversal、symlink/hardlink、normalization collision 和 archive bomb；
+- declarative Extension 目录、`package.json` file type、source precedence 与 activation refresh；
 - digest/signature/revocation；
 - install 每个 durable boundary 的 crash recovery；
 - enable/grant `CommandId` replay 和 payload conflict；

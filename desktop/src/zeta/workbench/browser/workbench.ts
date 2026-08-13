@@ -300,7 +300,7 @@ export class Workbench extends DisposableOwner {
     this.own(new AppServerLanguageProviders(languageFeaturesService, api.language, workspaceContext));
     const languageDiagnosticsService = this.own(new AppServerLanguageDiagnosticsService(api.language, api.events, workspaceContext));
     services.set(ILanguageDiagnosticsService, languageDiagnosticsService);
-    const extensionService = this.own(new AppServerExtensionService({ api: api.extensions, textMateService, languageFeaturesService }));
+    const extensionService = this.own(new AppServerExtensionService({ api: api.extensions, eventApi: api.events, textMateService, languageFeaturesService }));
     services.set(IExtensionService, extensionService);
     const extensionReady = extensionService.start();
     void extensionReady.catch(error => console.error("Declarative extension activation failed", error));

@@ -218,6 +218,7 @@ function capabilityLabels(plugin: PluginMarketplacePackageView): string[] {
   const contributions = plugin.contributions;
   return [
     countLabel(contributions.skills, "Skill"),
+    countLabel(contributions.declarativeExtensions, "Declarative extension"),
     countLabel(contributions.editorExtensions, "Editor extension"),
     countLabel(contributions.mcpServers, "MCP server"),
     countLabel(contributions.connectors, "Connector"),

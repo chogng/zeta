@@ -10284,6 +10284,7 @@
       "type": "string",
       "enum": [
         "builtIn",
+        "plugin",
         "user"
       ]
     },
@@ -14317,6 +14318,11 @@
           "format": "uint32",
           "minimum": 0
         },
+        "declarativeExtensions": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
         "editorExtensions": {
           "type": "integer",
           "format": "uint32",
@@ -14338,7 +14344,8 @@
         "mcpServers",
         "connectors",
         "assets",
-        "editorExtensions"
+        "editorExtensions",
+        "declarativeExtensions"
       ]
     },
     "PluginCredentialKindDto": {

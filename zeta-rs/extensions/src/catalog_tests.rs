@@ -3,6 +3,8 @@ use sha2::Digest;
 use sha2::Sha256;
 use std::fs;
 use std::fs::File;
+use std::sync::Arc;
+use std::sync::Mutex;
 
 #[test]
 fn discovers_manifest_and_reads_a_grammar_resource() {
@@ -118,9 +120,11 @@ fn rejects_resource_reads_from_a_stale_catalog_generation() {
         catalog.open_resource(stale.generation, "zeta.demo", "resource.json"),
         Err(ExtensionCatalogError::GenerationConflict)
     );
-    assert!(catalog
-        .open_resource(current.generation, "zeta.demo", "resource.json")
-        .is_ok());
+    assert!(
+        catalog
+            .open_resource(current.generation, "zeta.demo", "resource.json")
+            .is_ok()
+    );
 }
 
 #[test]
@@ -234,6 +238,72 @@ fn keeps_the_first_root_when_extension_ids_conflict() {
         snapshot.diagnostics[0].code,
         ExtensionDiagnosticCode::DuplicateExtension
     );
+}
+
+#[test]
+fn plugin_authority_packages_precede_user_roots_and_refresh_on_generation_change() {
+    let plugin_root = tempfile::tempdir().expect("plugin package parent");
+    let plugin_package = write_package(plugin_root.path(), "2.0.0");
+    let user_root = tempfile::tempdir().expect("user extension root");
+    let _ = write_package(user_root.path(), "3.0.0");
+    let provider = Arc::new(TestDynamicSourceProvider::new(
+        1,
+        vec![DynamicExtensionPackageSource::plugin(
+            "acme/review:demo",
+            plugin_package,
+        )],
+    ));
+    let mut catalog = ExtensionCatalog::new(vec![ExtensionRoot::user(user_root.path())])
+        .with_dynamic_sources(provider.clone());
+
+    let plugin_snapshot = catalog.list(ExtensionCatalogReload::Cached);
+
+    assert_eq!(plugin_snapshot.extensions.len(), 1);
+    assert_eq!(plugin_snapshot.extensions[0].version, "2.0.0");
+    assert_eq!(
+        plugin_snapshot.extensions[0].source_kind,
+        ExtensionSourceKind::Plugin
+    );
+    assert_eq!(plugin_snapshot.diagnostics.len(), 1);
+
+    provider.replace(2, Vec::new());
+    let user_snapshot = catalog.list(ExtensionCatalogReload::Cached);
+
+    assert!(user_snapshot.generation > plugin_snapshot.generation);
+    assert_eq!(user_snapshot.extensions[0].version, "3.0.0");
+    assert_eq!(
+        user_snapshot.extensions[0].source_kind,
+        ExtensionSourceKind::User
+    );
+    assert!(user_snapshot.diagnostics.is_empty());
+}
+
+struct TestDynamicSourceProvider {
+    snapshot: Mutex<DynamicExtensionSourceSnapshot>,
+}
+
+impl TestDynamicSourceProvider {
+    fn new(generation: u64, packages: Vec<DynamicExtensionPackageSource>) -> Self {
+        Self {
+            snapshot: Mutex::new(DynamicExtensionSourceSnapshot {
+                generation,
+                packages,
+            }),
+        }
+    }
+
+    fn replace(&self, generation: u64, packages: Vec<DynamicExtensionPackageSource>) {
+        *self.snapshot.lock().unwrap() = DynamicExtensionSourceSnapshot {
+            generation,
+            packages,
+        };
+    }
+}
+
+impl DynamicExtensionSourceProvider for TestDynamicSourceProvider {
+    fn snapshot(&self) -> Result<DynamicExtensionSourceSnapshot, String> {
+        Ok(self.snapshot.lock().unwrap().clone())
+    }
 }
 
 fn write_package(root: &std::path::Path, version: &str) -> std::path::PathBuf {

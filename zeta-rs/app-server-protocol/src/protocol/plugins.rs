@@ -42,6 +42,7 @@ pub struct PluginContributionSummaryDto {
     pub connectors: u32,
     pub assets: u32,
     pub editor_extensions: u32,
+    pub declarative_extensions: u32,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

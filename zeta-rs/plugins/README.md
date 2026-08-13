@@ -21,6 +21,7 @@ Marketplace install/update 先复制、复验并原子提升到 content-addresse
 | `PluginPackageDigest` | `sha256:<64 lowercase hex>` exact content identity | signature/trust |
 | `PluginPath` | portable ASCII、slash-separated package-relative path | host absolute path authority |
 | `PluginManifest::from_json` | strict JSON/schema/semantic validation | contribution content parsing |
+| `DeclarativeExtensionContribution` | 声明一个包含静态 `package.json` 的 package-relative 目录 | 解析 Editor contribution、执行代码 |
 | `EditorExtensionContribution` | 声明 exact executable program、Host RPC API、activation triggers 与 capability ceiling | 启动/监管进程、provider registry、RPC transport |
 | `EditorExtensionActivationEvent` | 区分 startup/command/language/on-demand 等 bounded activation trigger | 把 provider kind 当成隐式 activation |
 | `LocalPluginPackage::load` | 验证一个 exact root、digest 和所有 contribution path | copy/install/immutability |
@@ -48,7 +49,8 @@ programmatic mutation 后必须再次调用 `PluginManifest::validate`。
 
 - `schemaVersion == 1`；
 - Plugin version 使用 SemVer；
-- Skill、MCP server、Connector、asset 和可执行 Editor Extension 都有稳定 manifest-local ID；
+- Skill、MCP server、Connector、asset、声明式 Extension 和可执行 Editor Extension 都有稳定
+  manifest-local ID；
 - Connector 必须引用同一个 manifest 中已声明的 MCP server contribution；
 - permission 是 `process/workspace/network` tagged value；
 - network v1 只接受 exact lowercase DNS/IP host，不接受 scheme、port 或 wildcard；
@@ -57,6 +59,8 @@ programmatic mutation 后必须再次调用 `PluginManifest::validate`。
 - unknown field、duplicate contribution/slot/permission/host 和非 namespaced metadata 均失败；
 - Skill path 必须是包含 regular `SKILL.md` 的目录，MCP definition/process executable 必须是
   regular file，asset 可以是 regular file 或目录；
+- `declarativeExtensions[]` path 必须是包含 regular `package.json` 的包内目录；它不请求 process
+  permission，由 `zeta-extensions` 在 exact effective Plugin snapshot 中二次验证并冻结资源；
 - `editorExtensions[]` 的 entrypoint 必须是包内 regular file，并有相同 `PluginPath` 的 exact
   `process` permission；runtime API 仅接受数值 `1`，entrypoint 和 manifest-local ID 都必须唯一；
 - 每个 Editor Extension 的 `activationEvents` 与 capability ceiling 均为 non-empty、unique、bounded
@@ -197,8 +201,8 @@ cargo clippy --manifest-path Cargo.toml \
 bazel test //zeta-rs/plugins:plugins-unit-tests
 ```
 
-当前测试覆盖严格/重复模式、身份/SemVer、凭据引用、权限、Editor Extension v1 API/activation/
-capability/entrypoint、路径穿越/设备名/规范化、摘要确定性、缺失贡献、符号链接/硬链接、目录排序与
+当前测试覆盖严格/重复模式、身份/SemVer、凭据引用、权限、声明式 Extension package path、Editor
+Extension v1 API/activation/capability/entrypoint、路径穿越/设备名/规范化、摘要确定性、缺失贡献、符号链接/硬链接、目录排序与
 读取、精确版本冲突，以及 Marketplace digest mismatch、staged update 和 rollback grant 边界。
 
 ## 当前限制与扩展点
@@ -215,8 +219,9 @@ authority 尚未实现；package-rooted MCP consumer
 已位于 `zeta-mcp-extension`，不能反向并入本 crate。这些能力应在新的 private
 `authority/resolution` modules 中接入，不扩大 loader/store 为隐式 enable manager。
 
-本 crate 当前只让可执行 Editor Extension 进入既有 Plugin package、digest、enable/grant 和 invocation
-fence 控制面；它不包含 Extension Host executable、RPC、crash supervisor、workspace trust broker 或
-provider runtime。即使 manifest 与 exact process permission 均有效，安装也不会启动 entrypoint；Host
+本 crate 让声明式和可执行 Editor Extension 都进入既有 Plugin package、digest 与 enable/grant
+控制面。声明式目录由 App Server 投影到 `zeta-extensions`，不获得任意执行权限；可执行声明才进入
+invocation fence。它不包含 Extension Host executable、RPC、crash supervisor、workspace trust broker
+或 provider runtime。即使 manifest 与 exact process permission 均有效，安装也不会启动 entrypoint；Host
 仍须在 dispatch 时复核 active generation/invocation lease，并把 capability ceiling 投影为拒绝默认的
 broker policy。

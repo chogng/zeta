@@ -13,6 +13,7 @@ use super::PluginManifest;
 const SUPPORTED_SCHEMA_VERSION: u32 = 1;
 const MAX_DISPLAY_NAME_BYTES: usize = 200;
 const MAX_DESCRIPTION_BYTES: usize = 4096;
+const MAX_DECLARATIVE_EXTENSION_CONTRIBUTIONS: usize = 128;
 const MAX_EDITOR_EXTENSION_CONTRIBUTIONS: usize = 64;
 const MAX_EDITOR_EXTENSION_ACTIVATION_EVENTS: usize = 64;
 const MAX_EDITOR_EXTENSION_ACTIVATION_SELECTOR_BYTES: usize = 128;
@@ -39,6 +40,7 @@ impl PluginManifest {
             && self.contributions.connectors.is_empty()
             && self.contributions.assets.is_empty()
             && self.contributions.editor_extensions.is_empty()
+            && self.contributions.declarative_extensions.is_empty()
         {
             return invalid("plugin manifest must declare at least one contribution");
         }
@@ -79,10 +81,23 @@ impl PluginManifest {
                 .map(|contribution| &contribution.id),
         )?;
         unique_ids(
+            "declarative Extension",
+            self.contributions
+                .declarative_extensions
+                .iter()
+                .map(|contribution| &contribution.id),
+        )?;
+        unique_ids(
             "credential slot",
             self.credential_slots.iter().map(|slot| &slot.name),
         )?;
         validate_editor_extensions(self)?;
+        if self.contributions.declarative_extensions.len() > MAX_DECLARATIVE_EXTENSION_CONTRIBUTIONS
+        {
+            return invalid(format!(
+                "plugin manifest may declare at most {MAX_DECLARATIVE_EXTENSION_CONTRIBUTIONS} declarative Extensions"
+            ));
+        }
 
         let available = contribution_references(self);
         let mcp_servers = self

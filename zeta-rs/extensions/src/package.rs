@@ -190,7 +190,7 @@ fn read_bounded_file_after_inspection(
     if !is_within(root, canonical) {
         return Err(PackageSnapshotError::UnsafeEntry);
     }
-    let mut file = fs::File::open(&canonical).map_err(|_| PackageSnapshotError::Unavailable)?;
+    let mut file = fs::File::open(canonical).map_err(|_| PackageSnapshotError::Unavailable)?;
     let opened_information =
         FileInformation::from_file(&file).map_err(|_| PackageSnapshotError::Unavailable)?;
     let opened = file

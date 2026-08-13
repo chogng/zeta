@@ -263,6 +263,7 @@ fn contribution_summary(manifest: &zeta_plugins::PluginManifest) -> PluginContri
         connectors: manifest.contributions.connectors.len() as u32,
         assets: manifest.contributions.assets.len() as u32,
         editor_extensions: manifest.contributions.editor_extensions.len() as u32,
+        declarative_extensions: manifest.contributions.declarative_extensions.len() as u32,
     }
 }
 

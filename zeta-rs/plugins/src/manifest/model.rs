@@ -228,6 +228,8 @@ pub struct PluginContributions {
     pub assets: Vec<AssetContribution>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub editor_extensions: Vec<EditorExtensionContribution>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub declarative_extensions: Vec<DeclarativeExtensionContribution>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -257,6 +259,18 @@ pub struct ConnectorContribution {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AssetContribution {
+    pub id: ManifestLocalId,
+    pub path: PluginPath,
+}
+
+/// One static Editor Extension package activated through Plugin authority.
+///
+/// The directory must contain a declarative `package.json`. The `zeta-extensions` crate owns
+/// parsing that package and freezing its resources; this declaration does not grant code
+/// execution or reinterpret executable `editorExtensions[]` contributions.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DeclarativeExtensionContribution {
     pub id: ManifestLocalId,
     pub path: PluginPath,
 }

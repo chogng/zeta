@@ -23,6 +23,7 @@ export interface PluginContributionSummaryView {
   readonly connectors: number;
   readonly assets: number;
   readonly editorExtensions: number;
+  readonly declarativeExtensions: number;
 }
 
 export type PluginPermissionView =

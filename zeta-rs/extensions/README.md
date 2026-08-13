@@ -5,30 +5,32 @@
 > [`docs/editor-extensions.md`](../../docs/editor-extensions.md) 维护；内置 package set 的来源和分发
 > 规则见 [`extensions/README.md`](../../extensions/README.md)。
 
-`zeta-extensions` 接收产品 host 选择的可信根，扫描每个根的直接 package children，把有效 package
-冻结成 generation-bound 内存快照，并返回 manifest descriptor、诊断和有界资源 bytes。它不拥有
-JSON-RPC、connection resource、Workbench、TextMate、安装 authority 或扩展代码执行。
+`zeta-extensions` 接收产品 host 选择的可信根以及 authority provider 选择的 exact immutable package
+目录，把有效 package 冻结成 generation-bound 内存快照，并返回 manifest descriptor、诊断和有界
+资源 bytes。它不拥有 JSON-RPC、connection resource、Workbench、TextMate、安装 authority 或扩展代码执行。
 
 ## 1. 边界与公共契约
 
 | Symbol | 当前职责 | 不承担 |
 | --- | --- | --- |
-| `ExtensionRoot` / `ExtensionRootKind` | 表达 host 已选择的 built-in/user root 及 precedence 顺序 | 从 Renderer 接收路径、Workspace trust |
+| `ExtensionRoot` / `ExtensionRootKind` | 表达 host 已选择的 built-in/user root | 从 Renderer 接收路径、Workspace trust |
+| `DynamicExtensionSourceProvider` / `DynamicExtensionSourceSnapshot` | 按 authority generation 提供 exact immutable package 目录 | Plugin install/enable/grant、下载或签名验证 |
 | `ExtensionCatalog::list` | cached query 或 refresh scan，并发布单调 generation | 解析 editor `contributes` |
 | `ExtensionCatalogSnapshot` | 固定一代 descriptor、diagnostic 和完整 package identity | 保留历史 generation |
 | `ExtensionDescriptor` | `publisher.name`、版本、manifest JSON/摘要和 package 摘要 | enablement、grant、signature |
 | `ExtensionCatalog::open_resource` | 校验 generation、ID 和包内相对路径后读取当前 frozen bytes | 从 live filesystem 回退 |
 | `ExtensionCatalogError` | generation conflict、缺失 ID/resource、非法路径、limit/IO failure | transport error code |
 
-Root 的 vector 顺序就是 precedence：第一个有效 extension ID 获胜，后续重复项只产生
-`DuplicateExtension` diagnostic。App Server 因此必须先传 built-in root，再传 profile root，避免可变
-用户包静默覆盖产品资源。Crate 不替 host 猜测或重排来源。
+固定 precedence 为 built-in roots → dynamic Plugin-authorized exact packages → user roots；每个阶段中
+第一个有效 extension ID 获胜，后续重复项只产生 `DuplicateExtension` diagnostic。由此可变用户包不能
+静默覆盖产品或已授权 Plugin 资源，Plugin 也不能覆盖产品内置资源。
 
 ## 2. 内部接口地图
 
 | Private symbol | 精确职责 | 不能承担 | 修改时同步检查 |
 | --- | --- | --- | --- |
 | `scan_root` | 稳定排序 root 的 direct children 并应用 first-wins precedence | 递归 marketplace discovery | duplicate/root-order tests、系统文档 |
+| `scan_dynamic_packages` | 稳定扫描 authority 给出的 exact package set | 读取 Marketplace、决定 enable/grant | generation/precedence tests、App Server provider tests |
 | `discover_package` | 校验 package/manifest identity 并建立 frozen snapshot | 解释 `contributes` | manifest、digest、file-type/limit tests |
 | `ExtensionPackageSnapshot::load` / `read_bounded_file` | 枚举 regular files、绑定 file identity、拒绝 link/special file、累计 limits 和 package digest | 暴露 canonical host path | symlink/hard-link/special/TOCTOU/digest tests |
 | `CatalogBudget` | 约束跨 root 的候选数、frozen bytes、manifest response 与 diagnostics | 改变 root precedence | 边界值、截断标记和原子 claim tests |
@@ -41,7 +43,7 @@ Root 的 vector 顺序就是 precedence：第一个有效 extension ID 获胜，
 ```text
 ExtensionCatalog::list(Refresh)
   -> ExtensionCatalog::scan
-  -> scan_root
+  -> scan_root / scan_dynamic_packages
   -> discover_package
   -> frozen package files + ExtensionDescriptor
   -> ExtensionCatalogSnapshot(generation)
@@ -86,7 +88,8 @@ theme 和 debugger 字段由产品 host 解释。
 
 ## 4. Generation、失败与集成义务
 
-首次 `Cached` query 在没有 snapshot 时执行扫描；已有 snapshot 时直接 clone 当前结果。每次
+首次 `Cached` query 在没有 snapshot 时执行扫描；已有 snapshot 且 dynamic authority generation 未变时
+直接 clone 当前结果。dynamic generation 改变时，即使请求 `Cached` 也会重新扫描。每次
 `Refresh` 都产生新的单调 generation，并原子替换当前 discovered map。资源读取必须携带当前
 generation；旧代返回 `GenerationConflict`。Catalog 不保留多代 bytes，也不把旧 descriptor 隐式绑定
 到新磁盘内容。
@@ -98,6 +101,7 @@ generation；旧代返回 `GenerationConflict`。Catalog 不保留多代 bytes�
 Host 必须：
 
 - 只从 composition root 构造 `ExtensionRoot`，并保持 built-in-first precedence；
+- dynamic provider 只发布上游 authority 已选择的 exact immutable package 目录与单调 generation；
 - 把 snapshot generation 原样带到资源读取 API；
 - 把资源 bytes 放入自己的 connection/lifetime boundary，不暴露 package root；
 - 让产品领域解析 `contributes`，不能向本 crate 增加 editor-specific schema；
@@ -121,10 +125,11 @@ stale-generation rejection。修改 wire DTO
 
 ## 6. 当前限制与扩展点
 
-Current：静态 root discovery、built-in-first precedence、不可变单代 snapshot、完整 package digest、
-typed diagnostic/error 与有代次约束的 bounded resource read 已实现。当前不持久化 catalog，不保留旧
-generation，不提供远端 registry、下载、enable/disable、signature/revocation、permission grant 或
-任意代码执行。Plugin-authorized executable Editor Extension 由独立的
+Current：静态 root discovery、Plugin-authorized exact package projection、built-in → Plugin → user
+precedence、不可变单代 snapshot、完整 package digest、typed diagnostic/error 与有代次约束的 bounded
+resource read 已实现。当前不持久化 catalog，不保留旧 generation，也不自行提供远端 registry、下载、
+enable/disable、signature/revocation、permission grant 或任意代码执行；这些 lifecycle decisions 由
+provider 上游的 `zeta-plugins` authority 完成。Plugin-authorized executable Editor Extension 由独立的
 [`zeta-editor-extension-host`](../editor-extension-host/README.md) 监管；静态 catalog 不会隐式进入该
 执行边界。
 
