@@ -14,10 +14,11 @@ The packaged `zeta` executable discovers this file through `zeta-install-context
 `ZETA_PRODUCT_SERVICES_PATH` remains authoritative for development and specialized product hosts.
 Marketplace URLs or root replacement must not move into user configuration or Plugin metadata.
 
-The Marketplace source, public root owner, publishing pipeline, and key rotation procedure live in
-the private [`chogng/marketplace`](https://github.com/chogng/marketplace) repository. A root change
-must update both repositories through a valid TUF rotation; copying a newly generated unrelated root
-would strand clients or replace their trust authority.
+The independent Marketplace source, public root owner, publishing pipeline, and key rotation
+procedure live in the private [`marketplace`](https://github.com/chogng/marketplace) repository.
+Zeta is one optional consumer: this product bundle chooses to pin that root, while Marketplace
+validation and publication do not depend on Zeta. A root rotation must be valid in the Marketplace;
+Zeta then updates its pinned copy before requiring metadata signed only by the rotated root.
 
 ## Icons
 

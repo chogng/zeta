@@ -36,6 +36,7 @@ use zeta_plugins::PluginMarketplaceId;
 use zeta_plugins::PluginMarketplaceMode;
 use zeta_plugins::PluginMarketplaceService;
 use zeta_plugins::PluginMarketplaceTrust;
+use zeta_plugins::PluginPackageDigestAlgorithm;
 use zip::ZipWriter;
 use zip::write::SimpleFileOptions;
 
@@ -243,7 +244,11 @@ impl SignedDistributionFixture {
         let archive_path = repository.path().join("review.zip");
         write_plugin_package(&package_root);
         write_archive(&package_root, &archive_path);
-        let package = LocalPluginPackage::load(&package_root).unwrap();
+        let package = LocalPluginPackage::load_with_digest_algorithm(
+            &package_root,
+            PluginPackageDigestAlgorithm::MarketplaceV1,
+        )
+        .unwrap();
         let package_ref = zeta_plugins::InstalledPluginRef {
             id: package.manifest().id.clone(),
             version: package.manifest().version.clone(),
@@ -254,7 +259,7 @@ impl SignedDistributionFixture {
         fs::write(&revocations_path, br#"{"schemaVersion":1,"revoked":[]}"#).unwrap();
         let mut package_target = Target::from_path(&archive_path).await.unwrap();
         package_target.custom.insert(
-            "zetaPlugin".into(),
+            "marketplacePackage".into(),
             serde_json::json!({
                 "schemaVersion": 1,
                 "id": package_ref.id,
@@ -263,17 +268,27 @@ impl SignedDistributionFixture {
             }),
         );
         package_target.custom.insert(
-            "zetaCatalog".into(),
+            "marketplaceCatalog".into(),
             serde_json::json!({
                 "schemaVersion": 1,
-                "manifest": package.manifest(),
+                "manifest": {
+                    "schemaVersion": 1,
+                    "id": package.manifest().id,
+                    "version": package.manifest().version,
+                    "displayName": package.manifest().display_name,
+                    "description": "Portable review workflow.",
+                    "license": "MIT",
+                    "capabilities": [{"kind": "skill", "id": "review", "path": "skills/review"}],
+                    "consumers": {"zeta": {"metadataPath": ".zeta-plugin/plugin.json"}}
+                },
+                "consumerMetadata": {"zeta": package.manifest()},
                 "packageFileCount": package.stats().file_count,
                 "packageSizeBytes": package.stats().total_bytes,
             }),
         );
         let revocations_target = Target::from_path(&revocations_path).await.unwrap();
-        let package_name = TargetName::new("plugins/acme/review/1.0.0.zip").unwrap();
-        let revocations_name = TargetName::new("zeta/revocations.json").unwrap();
+        let package_name = TargetName::new("packages/acme/review/1.0.0.zip").unwrap();
+        let revocations_name = TargetName::new("marketplace/revocations.json").unwrap();
         let one = NonZeroU64::new(1).unwrap();
         let later: Timestamp = "2999-01-01T00:00:00Z".parse().unwrap();
         let mut editor = RepositoryEditor::new(&trusted_root_path).await.unwrap();
@@ -288,7 +303,7 @@ impl SignedDistributionFixture {
                 "publishers/acme",
                 &keys,
                 PathSet::Paths(vec![
-                    PathPattern::new("plugins/acme/review/1.0.0.zip").unwrap(),
+                    PathPattern::new("packages/acme/review/1.0.0.zip").unwrap(),
                 ]),
                 true,
                 one,

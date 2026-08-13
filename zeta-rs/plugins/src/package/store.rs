@@ -150,7 +150,10 @@ impl PluginPackageStore {
         let result = (|| {
             fs::create_dir(&staging).map_err(store_io)?;
             copy_package_tree(canonical_path, &staging)?;
-            let installed = LocalPluginPackage::load(&staging)?;
+            let installed = LocalPluginPackage::load_with_digest_algorithm(
+                &staging,
+                package.digest_algorithm(),
+            )?;
             if installed.package_digest() != package.package_digest()
                 || installed.manifest().id != package.manifest().id
                 || installed.manifest().version != package.manifest().version
@@ -162,7 +165,10 @@ impl PluginPackageStore {
             }
             let object = self.object_path(installed.package_digest());
             if object.exists() {
-                let existing = LocalPluginPackage::load(&object)?;
+                let existing = LocalPluginPackage::load_with_digest_algorithm(
+                    &object,
+                    package.digest_algorithm(),
+                )?;
                 if existing.package_digest() != installed.package_digest() {
                     return Err(PluginError::new(
                         PluginErrorKind::PackageConflict,
@@ -187,7 +193,23 @@ impl PluginPackageStore {
     }
 
     pub fn read(&self, installed: &InstalledPluginRef) -> Result<LocalPluginPackage, PluginError> {
-        let package = LocalPluginPackage::load(self.object_path(&installed.digest))?;
+        let root = self.object_path(&installed.digest);
+        let package = [
+            crate::PluginPackageDigestAlgorithm::LegacyZetaV1,
+            crate::PluginPackageDigestAlgorithm::MarketplaceV1,
+        ]
+        .into_iter()
+        .find_map(|algorithm| {
+            LocalPluginPackage::load_with_digest_algorithm(&root, algorithm)
+                .ok()
+                .filter(|package| package.package_digest() == &installed.digest)
+        })
+        .ok_or_else(|| {
+            PluginError::new(
+                PluginErrorKind::PackageConflict,
+                "installed Plugin object does not match its recorded digest",
+            )
+        })?;
         if package.manifest().id != installed.id
             || package.manifest().version != installed.version
             || package.package_digest() != &installed.digest

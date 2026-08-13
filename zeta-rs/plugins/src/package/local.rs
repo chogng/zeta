@@ -14,6 +14,26 @@ pub enum PluginPackageSource {
     LocalDevelopment { canonical_path: PathBuf },
 }
 
+/// Normalized digest algorithm used to identify one exact package payload.
+///
+/// Local development keeps the historical Zeta algorithm for existing object-store compatibility.
+/// Product-independent Marketplace distributions explicitly select `MarketplaceV1`; the selected
+/// algorithm is preserved while Plugin authority copies and revalidates the package.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PluginPackageDigestAlgorithm {
+    LegacyZetaV1,
+    MarketplaceV1,
+}
+
+impl PluginPackageDigestAlgorithm {
+    pub(super) const fn domain(self) -> &'static [u8] {
+        match self {
+            Self::LegacyZetaV1 => b"zeta-plugin-package-v1\0",
+            Self::MarketplaceV1 => b"marketplace-package-v1\0",
+        }
+    }
+}
+
 /// Bounded file statistics captured while computing a local package digest.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct PackageFileStats {
@@ -33,13 +53,22 @@ pub struct LocalPluginPackage {
     package_digest: PluginPackageDigest,
     manifest_digest: PluginPackageDigest,
     stats: PackageFileStats,
+    digest_algorithm: PluginPackageDigestAlgorithm,
 }
 
 impl LocalPluginPackage {
     /// Loads one exact package root; this method never searches parent directories.
     pub fn load(root: impl AsRef<Path>) -> Result<Self, PluginError> {
+        Self::load_with_digest_algorithm(root, PluginPackageDigestAlgorithm::LegacyZetaV1)
+    }
+
+    /// Loads a package using the digest algorithm selected by its distribution protocol.
+    pub fn load_with_digest_algorithm(
+        root: impl AsRef<Path>,
+        digest_algorithm: PluginPackageDigestAlgorithm,
+    ) -> Result<Self, PluginError> {
         let root = validate_root(root.as_ref())?;
-        let scanned = scan_and_digest(&root)?;
+        let scanned = scan_and_digest(&root, digest_algorithm)?;
         let manifest = PluginManifest::from_json(&scanned.manifest_bytes)?;
         validate_contribution_paths(&root, &manifest, &scanned.entries)?;
         Ok(Self {
@@ -50,7 +79,12 @@ impl LocalPluginPackage {
             package_digest: scanned.digest,
             manifest_digest: PluginPackageDigest::sha256(&scanned.manifest_bytes),
             stats: scanned.stats,
+            digest_algorithm,
         })
+    }
+
+    pub fn digest_algorithm(&self) -> PluginPackageDigestAlgorithm {
+        self.digest_algorithm
     }
 
     pub fn source(&self) -> &PluginPackageSource {

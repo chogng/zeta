@@ -59,6 +59,6 @@ pub use marketplace::PluginWorkspaceRequestResolution;
 pub use marketplace::VerifiedRemotePluginPackage;
 pub use package::{
     InstalledPluginPackage, LocalPluginCatalog, LocalPluginPackage, PackageFileStats,
-    PluginPackageSource, PluginPackageStore,
+    PluginPackageDigestAlgorithm, PluginPackageSource, PluginPackageStore,
 };
 pub use path::{InvalidPluginPath, PluginPath};

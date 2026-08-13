@@ -12,6 +12,10 @@
 
 ## Learnings
 
+- 通用 Marketplace 基础设施和默认模板不得硬编码仓库所有者、个人 namespace 或具体产品标识；示例应使用中性占位符，publisher 由仓库配置驱动。产品专属 manifest 只能存在于明确的可选 consumer adapter 中，不能成为通用 package/template 的必需结构。
+- 用户明确指定源码仓库或工作树时，必须修改该准确位置；不要擅自用临时 clone、替代目录或仅远端分支代替用户正在检查的源码，除非用户明确同意隔离工作树。
+- 在个人所有者主导的早期开发仓库中，不要把 PR 当作功能开发的默认门槛；仓库所有者完成本地验证后可直接集成到 `main`。PR 主要用于外部 Plugin、Skill、Extension 投稿、需要独立审阅的安全敏感变更或多人协作，而不是为了流程本身制造中间分支。
+- 设计独立 Marketplace 时，不得把任何具体产品设为仓库、包格式、发布工具、信任模型或 CI 的必要依赖；产品只能通过独立的适配配置选择性消费 Marketplace，Marketplace 本身必须能在没有该产品源码或发布状态的情况下完成验证与发布。
 - 在把新能力接入 `native` 前，先按依赖方向判断其是否属于通用框架机制。帧调度、失效等级、retained presentation、Scene fragment 生命周期和局部重建策略应优先由 `zui` 提供后端无关契约；`native` 只保留产品状态映射、平台事件适配和具体 Part/Overlay 组合，不得因接入方便复制或拥有框架运行时。
 - 当用户讨论专化 Workbench、Sessions 或其他产品前端概念时，不要因为 IDE 当前打开的是 `zeta-code/tui` 文件就默认把目标定位到 TUI；应先在前端 Renderer/Workbench 范围定位同名能力，只有明确提到终端、Ratatui 或 `zeta-code` 时才转向 TUI。
 * 设计检索链路时，必须把 Workspace authority、模型接入与检索编排分开：所有源码扫描、ignore、读取、切块、revision 与 chunk identity 都由 Workspace 侧 CodeIndex 拥有，云端只能消费 Workspace 已授权并复核的精确 chunks，不能读取整文件后重新切块；`model-provider` 只统一调用 embedding/rerank 模型；云端 CodeIndex 服务负责准备模型输入、向量检索、调用 rerank，并依据模型分数排序、过滤和截断；跨来源结果融合才属于 retrieval 层。不得因为模型返回向量或相关性分数，就把索引策略或排序所有权归给 `model-provider` 或客户端 retrieval。

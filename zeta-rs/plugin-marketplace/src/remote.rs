@@ -333,8 +333,9 @@ impl RemotePluginMarketplace {
     ) -> Result<RemotePluginMarketplaceSnapshot, RemoteMarketplaceError> {
         let revoked = read_revocations(repository).await?;
         let revoked_set = revoked.iter().cloned().collect::<BTreeSet<_>>();
+        let publishers = metadata::published_publishers(repository)?;
+        validate_publisher_scope(&self.config, &publishers)?;
         let published = metadata::published_plugins(repository)?;
-        validate_publisher_scope(&self.config, &published)?;
         let revision = repository.targets().signed.version.get();
         let materializer = Arc::new(RemotePackageMaterializer {
             config: self.config.clone(),
@@ -455,8 +456,9 @@ impl RemotePackageMaterializer {
         if revoked.contains(package) {
             return Err(package_error());
         }
+        let publishers = metadata::published_publishers(&repository)?;
+        validate_publisher_scope(&self.config, &publishers)?;
         let published = metadata::published_plugins(&repository)?;
-        validate_publisher_scope(&self.config, &published)?;
         let target = published
             .iter()
             .find(|published| &published.package == package)
@@ -502,7 +504,7 @@ async fn cache_repository(
         .map_err(|_| cache_error())?;
     let metadata = staging.path().join("metadata");
     let targets = staging.path().join("targets");
-    let target_names = [metadata::REVOCATIONS_TARGET.to_owned()];
+    let target_names = [metadata::revocations_target(repository)?.to_owned()];
     repository
         .cache(&metadata, &targets, Some(&target_names), true)
         .await
@@ -553,16 +555,14 @@ async fn catalog_packages(
 
 fn validate_publisher_scope(
     config: &RemotePluginMarketplaceConfig,
-    published: &[PublishedPluginTarget],
+    publishers: &BTreeSet<String>,
 ) -> Result<(), RemoteMarketplaceError> {
     match config.trust {
         PluginMarketplaceTrust::ProductManaged if config.allowed_publishers.is_empty() => Ok(()),
         PluginMarketplaceTrust::VerifiedExternal
-            if published.iter().all(|target| {
-                config
-                    .allowed_publishers
-                    .contains(target.package.id.publisher())
-            }) =>
+            if publishers
+                .iter()
+                .all(|publisher| config.allowed_publishers.contains(publisher)) =>
         {
             Ok(())
         }
@@ -589,7 +589,7 @@ async fn materialize_package(
         .trim_start_matches("sha256:");
     let destination = packages_root.join(digest_path);
     if destination.exists() {
-        return load_exact_package(&destination, &published.package);
+        return load_exact_package(&destination, &published.package, published.digest_algorithm);
     }
     let bytes = read_target(
         repository,
@@ -603,16 +603,22 @@ async fn materialize_package(
         .tempdir_in(&packages_root)
         .map_err(|_| cache_error())?;
     archive::extract(&bytes, staging.path())?;
-    load_exact_package(staging.path(), &published.package)?;
+    load_exact_package(
+        staging.path(),
+        &published.package,
+        published.digest_algorithm,
+    )?;
     promote_snapshot(staging, &destination)?;
-    load_exact_package(&destination, &published.package)
+    load_exact_package(&destination, &published.package, published.digest_algorithm)
 }
 
 fn load_exact_package(
     root: &Path,
     expected: &InstalledPluginRef,
+    digest_algorithm: zeta_plugins::PluginPackageDigestAlgorithm,
 ) -> Result<LocalPluginPackage, RemoteMarketplaceError> {
-    let package = LocalPluginPackage::load(root).map_err(|_| package_error())?;
+    let package = LocalPluginPackage::load_with_digest_algorithm(root, digest_algorithm)
+        .map_err(|_| package_error())?;
     if package.manifest().id != expected.id
         || package.manifest().version != expected.version
         || package.package_digest() != &expected.digest
@@ -645,7 +651,8 @@ async fn open_cached_repository(
 async fn read_revocations(
     repository: &Repository,
 ) -> Result<Vec<InstalledPluginRef>, RemoteMarketplaceError> {
-    let name = TargetName::new(metadata::REVOCATIONS_TARGET).map_err(|_| metadata_error())?;
+    let name =
+        TargetName::new(metadata::revocations_target(repository)?).map_err(|_| metadata_error())?;
     let target = repository
         .targets()
         .signed

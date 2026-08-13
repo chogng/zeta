@@ -19,9 +19,10 @@ The key private owners are:
 
 - `MarketplaceTransport`: adapts the shared bounded HTTP client to TUF and rejects non-HTTPS
   network fetches;
-- `metadata::published_plugins`: requires every package target to be signed by its exact
-  `publishers/<publisher>` delegated role, preserves the backward-compatible `zetaPlugin` identity,
-  and validates optional `zetaCatalog` manifest/statistics metadata;
+- `metadata::published_publishers` / `metadata::published_plugins`: require every generic
+  `marketplacePackage` target to be signed by its exact `publishers/<publisher>` delegated role,
+  extract only the signed `consumerMetadata.zeta` adapter from `marketplaceCatalog`, and ignore
+  packages that do not target Zeta; legacy `zetaPlugin` targets remain read-only compatible;
 - `archive::extract`: enforces archive/entry/expanded-size limits and rejects traversal, links,
   encryption, duplicate paths, and unsupported entries;
 - `RemotePluginMarketplace::materialize` / `catalog_packages`: verify the revocation feed and build
@@ -48,7 +49,7 @@ Call flow:
 flowchart TD
     C["product-services.json + pinned root"] --> S["RemotePluginMarketplace::sync"]
     S --> T["TUF metadata, delegation, expiry, rollback"]
-    T --> D["signed zetaCatalog + revocations"]
+    T --> D["signed generic catalog + optional Zeta adapter"]
     D --> M["PluginMarketplace(RemoteManaged)"]
     M --> A["App Server discovery"]
     M -->|"exact install/update"| P["RemotePackageMaterializer"]
@@ -68,9 +69,13 @@ flowchart TD
   without the current signed target and revocation metadata.
 - Offline browsing works while cached metadata remains valid. Offline installation works only when
   that exact package was previously materialized; an uncached ZIP requires the distribution.
-- A catalog refresh replaces metadata only after signed discovery metadata passes Zeta manifest,
-  identity, contribution, and statistics validation. Legacy targets without `zetaCatalog` use a
-  compatibility download during refresh until the publisher republishes richer metadata.
+- A catalog refresh accepts the product-independent `marketplacePackage` / `marketplaceCatalog`
+  envelope, then strict-parses only the optional Zeta consumer adapter. Packages for other consumers
+  are ignored without making the source invalid. Legacy targets without `zetaCatalog` use a
+  compatibility download during refresh until the publisher republishes generic metadata.
+- `LocalPluginPackage` retains the historical local digest algorithm for existing object stores and
+  explicitly selects `MarketplaceV1` for generic remote targets; installation preserves that choice
+  while copying and revalidating the immutable object.
 - TUF rollback metadata is copied into a staging datastore for each online refresh and committed
   only after discovery validation and repository caching succeed. Install-time refresh commits its
   rollback state only after the selected package passes archive and normalized-digest validation.

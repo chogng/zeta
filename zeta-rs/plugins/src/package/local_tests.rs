@@ -118,6 +118,30 @@ fn normalized_package_digest_is_root_independent_and_content_sensitive() {
 }
 
 #[test]
+fn marketplace_digest_is_explicit_and_does_not_change_legacy_local_identity() {
+    let directory = TestDirectory::new();
+    create_package(directory.path(), "acme/review", "1.0.0", "same");
+
+    let legacy = LocalPluginPackage::load(directory.path()).unwrap();
+    let marketplace = LocalPluginPackage::load_with_digest_algorithm(
+        directory.path(),
+        PluginPackageDigestAlgorithm::MarketplaceV1,
+    )
+    .unwrap();
+
+    assert_eq!(
+        legacy.digest_algorithm(),
+        PluginPackageDigestAlgorithm::LegacyZetaV1
+    );
+    assert_eq!(
+        marketplace.digest_algorithm(),
+        PluginPackageDigestAlgorithm::MarketplaceV1
+    );
+    assert_ne!(legacy.package_digest(), marketplace.package_digest());
+    assert_eq!(legacy.manifest(), marketplace.manifest());
+}
+
+#[test]
 fn missing_or_wrong_type_contribution_fails_the_whole_package() {
     let directory = TestDirectory::new();
     create_package(directory.path(), "acme/review", "1.0.0", "icon");

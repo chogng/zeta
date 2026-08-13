@@ -663,9 +663,11 @@ runtime 不可用，但不会把 Plugin 标成未安装。
 因 owner ambiguity 失败，而不是按源顺序覆盖。`RemoteManaged` Marketplace 已通过 host-pinned
 TUF root 同步 HTTPS catalog：
 timestamp/snapshot/targets 的 threshold、rollback 与 expiry 检查由 TUF verifier 执行；package 必须来自
-`publishers/<publisher>` delegated role。刷新只缓存签名 metadata、`zetaCatalog` discovery metadata 与撤销
+`publishers/<publisher>` delegated role。远端协议是产品无关的 `marketplacePackage` exact identity 与
+`marketplaceCatalog` discovery envelope；Zeta 只解释其中可选的 `consumerMetadata.zeta`，不含该 adapter
+的 package 会被忽略，而不会让整个源失败。刷新只缓存签名 metadata、generic discovery metadata 与撤销
 target，不预取 ZIP；安装或更新时才重新检查当前 TUF/revocation authority、读取一个 exact target，并通过
-target hash/length、受限 ZIP extraction、manifest identity 与 Zeta normalized digest。transport 失败可打开
+target hash/length、受限 ZIP extraction、manifest identity 与 `MarketplaceV1` normalized digest。transport 失败可打开
 仍未过期的最后目录缓存；离线安装只允许此前已经 materialize 且再次通过 exact digest 的包。顶层
 revocation target 会写入 durable exact-package tombstone，不因后续 feed 缺项自动恢复。可搜索的 Desktop
 目录、按需 package cache quota/GC 已实现；download progress 与 permission/contribution diff 仍未实现。
@@ -675,7 +677,9 @@ revocation target 会写入 durable exact-package tombstone，不因后续 feed 
 `zeta-install-context` 发现该资源，默认注册 `https://chogng.github.io/marketplace/` 的 `zeta`
 Marketplace；`ZETA_PRODUCT_SERVICES_PATH` 与 App Server 的 `--product-services PATH` 仍是产品宿主的
 显式覆盖入口。远端 metadata、Plugin、用户配置和 Workspace 都不能更换这份 root。发行源仓库仍为
-private，Pages 只暴露经过 CI 生成和 Zeta 消费端复核的 `metadata/` 与 `targets/` 静态产物。
+private，Pages 只暴露经过 Marketplace 自身独立 validator 和 TUF verifier 复核的 `metadata/` 与
+`targets/` 静态产物。Marketplace 不依赖 Zeta 源码或发布状态；Zeta 只是通过 pinned root 和 consumer
+adapter 选择性消费它。
 默认产品文件只启用官方源；第三方源只能由 host 在同一只读文件中追加，不能从 Plugin、自身远端 metadata
 或普通用户设置提升为发行信任。
 

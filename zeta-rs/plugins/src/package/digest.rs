@@ -7,11 +7,11 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use super::local::PackageFileStats;
+use super::local::PluginPackageDigestAlgorithm;
 
 const MAX_PACKAGE_FILES: u64 = 10_000;
 const MAX_PACKAGE_FILE_BYTES: u64 = 16 * 1024 * 1024;
 const MAX_PACKAGE_TOTAL_BYTES: u64 = 256 * 1024 * 1024;
-const DIGEST_DOMAIN: &[u8] = b"zeta-plugin-package-v1\0";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum ScannedEntryKind {
@@ -26,14 +26,17 @@ pub(super) struct ScannedPackage {
     pub(super) stats: PackageFileStats,
 }
 
-pub(super) fn scan_and_digest(root: &Path) -> Result<ScannedPackage, PluginError> {
+pub(super) fn scan_and_digest(
+    root: &Path,
+    algorithm: PluginPackageDigestAlgorithm,
+) -> Result<ScannedPackage, PluginError> {
     let mut entries = BTreeMap::new();
     let mut files = Vec::new();
     walk_directory(root, root, &mut entries, &mut files)?;
     files.sort_by(|left, right| left.0.cmp(&right.0));
 
     let mut hasher = Sha256::new();
-    hasher.update(DIGEST_DOMAIN);
+    hasher.update(algorithm.domain());
     let mut manifest_bytes = None;
     let mut total_bytes = 0_u64;
     for (relative, absolute, expected_metadata) in &files {
