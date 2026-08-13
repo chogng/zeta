@@ -18,6 +18,7 @@ serde_json = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
 unicode-width = { workspace = true }
+zeta-ansi-escape = { workspace = true }
 zeta-app-server-client = { workspace = true }
 zeta-app-server-protocol = { workspace = true }
 zeta-file-search = { workspace = true }

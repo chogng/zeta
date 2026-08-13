@@ -99,6 +99,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "ansi-to-tui"
+version = "7.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "67555e1f1ece39d737e28c8a017721287753af3f93225e4a445b29ccb0f5912c"
+dependencies = [
+ "nom 7.1.3",
+ "ratatui",
+ "simdutf8",
+ "smallvec",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "anstream"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8756,6 +8769,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "zeta-ansi-escape"
+version = "0.1.0"
+dependencies = [
+ "ansi-to-tui",
+ "ratatui",
+]
+
+[[package]]
 name = "zeta-api"
 version = "0.1.0"
 dependencies = [
@@ -9745,6 +9766,7 @@ dependencies = [
  "strum 0.27.2",
  "strum_macros 0.27.2",
  "unicode-width 0.2.0",
+ "zeta-ansi-escape",
  "zeta-app-server-client",
  "zeta-app-server-protocol",
  "zeta-client",

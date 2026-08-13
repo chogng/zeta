@@ -17,6 +17,7 @@ members = [
     "zeta-rs/async-utils",
     "zeta-rs/auto-review",
     "zeta-rs/bwrap",
+    "zeta-code/ansi-escape",
     "zeta-code/cli",
     "zeta-rs/config",
     "zeta-rs/connectors",
@@ -116,6 +117,7 @@ version = "0.1.0"
 
 [workspace.dependencies]
 anyhow = "1"
+ansi-to-tui = "7.0.0"
 arboard = { version = "3", features = ["wayland-data-control"] }
 base64 = "0.22"
 bm25 = "2.3.2"
@@ -196,6 +198,7 @@ zeroize = "1"
 zeta-add-dir = { path = "zeta-rs/add-dir" }
 zeta-agent-import = { path = "zeta-rs/agent-import" }
 zeta-agents = { path = "zeta-rs/agents" }
+zeta-ansi-escape = { path = "zeta-code/ansi-escape" }
 zeta-agent-sidebar = { path = "zeterm/agent-sidebar" }
 zeta-commands = { path = "zeterm/commands" }
 zeta-app-server = { path = "zeta-rs/app-server" }

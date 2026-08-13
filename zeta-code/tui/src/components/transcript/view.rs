@@ -19,6 +19,7 @@ use ratatui::text::Line;
 use ratatui::text::Span;
 use ratatui::widgets::Paragraph;
 use ratatui::widgets::Wrap;
+use zeta_ansi_escape::ansi_text;
 
 pub(crate) fn draw(
     frame: &mut Frame<'_>,
@@ -65,10 +66,7 @@ fn message_lines(messages: &[Message]) -> Vec<Line<'_>> {
                 Span::raw(&message.text),
             ]));
             if let Some(detail) = &message.detail {
-                lines.push(Line::from(vec![
-                    Span::styled("└─ ", Style::default().fg(muted())),
-                    Span::styled(detail, Style::default().fg(muted())),
-                ]));
+                push_detail_lines(&mut lines, message.role, detail);
             }
             lines.push(Line::default());
             continue;
@@ -93,14 +91,37 @@ fn message_lines(messages: &[Message]) -> Vec<Line<'_>> {
             Span::raw(&message.text),
         ]));
         if let Some(detail) = &message.detail {
-            lines.push(Line::from(vec![
-                Span::styled("└─ ", Style::default().fg(muted())),
-                Span::styled(detail, Style::default().fg(muted())),
-            ]));
+            push_detail_lines(&mut lines, message.role, detail);
         }
         lines.push(Line::default());
     }
     lines
+}
+
+fn push_detail_lines<'a>(lines: &mut Vec<Line<'a>>, role: MessageRole, detail: &'a str) {
+    if !matches!(role, MessageRole::Tool | MessageRole::ToolError) {
+        lines.push(Line::from(vec![
+            Span::styled("└─ ", Style::default().fg(muted())),
+            Span::styled(detail, Style::default().fg(muted())),
+        ]));
+        return;
+    }
+
+    let mut output = ansi_text(detail).lines;
+    if output.is_empty() {
+        output.push(Line::default());
+    }
+    for line in &mut output {
+        for span in &mut line.spans {
+            if span.style.fg.is_none() {
+                span.style.fg = Some(muted());
+            }
+        }
+    }
+    output[0]
+        .spans
+        .insert(0, Span::styled("└─ ", Style::default().fg(muted())));
+    lines.extend(output);
 }
 
 fn message_rows(message: &Message, available_width: usize) -> usize {
@@ -113,3 +134,7 @@ fn message_rows(message: &Message, available_width: usize) -> usize {
         .saturating_add(detail_rows)
         .saturating_add(1)
 }
+
+#[cfg(test)]
+#[path = "view_tests.rs"]
+mod tests;

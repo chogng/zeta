@@ -1,6 +1,6 @@
 # `zeta code` TUI 架构与产品支持边界
 
-> 物理位置：`zeta-code/tui/`
+> 物理位置：`zeta-code/tui/`；ANSI/Ratatui adapter：`zeta-code/ansi-escape/`
 > 宿主：`zeta-code/cli/`
 > 文档所有权：本文是 TUI 跨 crate ownership、长期不变量、产品支持边界与已接受架构迁移顺序的 canonical 文档。
 > 当前实现接口与事件循环：[`zeta-code/tui/README.md`](../zeta-code/tui/README.md)
@@ -61,6 +61,7 @@ Zeta 已经在 TUI 外部拥有：
 - `zeta-app-server-client` 中共享的 App Server 启动、初始化、请求/事件连接与关闭层；
 - CLI 交付的启动配置与产品入口参数。
 - `zeta-theme` 中与 Desktop/Native 共享的 manifest、用户主题解析和 device preference loader。
+- `zeta-ansi-escape` 中独立的 ANSI SGR → Ratatui presentation adapter；它不拥有 PTY/terminal state。
 
 主题边界是“部分接入”而不是“尚未复制完成”：TUI chrome 读取 accent、composer chrome、错误、
 成功、警告、弱化文字和选择高亮；Theme Pane preview 额外读取有限的 syntax/diff token。选择高亮由
@@ -87,9 +88,10 @@ App Server facade。产品权威状态的依赖链固定为：
 ```text
 zeta-cli
   → zeta-tui
-  → zeta-app-server-client
-  → App Server dispatcher
-  → zeta-core
+    ├─ zeta-ansi-escape → ansi-to-tui / ratatui
+    └─ zeta-app-server-client
+       → App Server dispatcher
+       → zeta-core
 ```
 
 本地只读能力不必统一绕行 App Server：composer 的 workspace path mention 直接调用
@@ -220,7 +222,8 @@ connection recovery 路径必须定义 resync contract，不能只记录 warning
 
 目标边界先在 `zeta-tui` crate 内通过 private module 和 `pub(crate)` 验证。只有 runtime 或
 component 被至少两个真实消费者使用、API 变化频率下降且抽取能减少依赖时，才评估独立 crate
-或公共插件 API。
+或公共插件 API。窄的第三方类型适配层可以按依赖隔离提前成为产品内 crate，但必须保持单向、
+无产品状态且有明确 failure semantics；`zeta-ansi-escape` 是当前唯一此类例外。
 
 ## 4. 目标目录
 
@@ -1160,7 +1163,8 @@ Skill、workspace file browser、Git status、approval 与 user input 已按该�
 
 独立 runtime/component crate 或第三方 UI API 不是当前 roadmap。只有至少两个真实消费者已经
 使用同一内部边界、API 稳定多个版本且抽取能减少依赖与转换时才重新评估；否则继续在单 crate
-内使用 private module。
+内使用 private module。当前 `zeta-ansi-escape` 是已经完成的窄 dependency adapter，不是可复用
+component 或第三方 UI API，也不放宽其他 presentation state 的抽取门槛。
 
 ## 18. 测试
 
@@ -1242,7 +1246,7 @@ metadata-only 诊断与包含测试 fixture 的受控 trace。
 | 机械 protocol mapping | 稳定 ID/enum 被逐一包装 | 只转换高变、展示语义不同或 replay 所需对象 |
 | 控制面与数据面双状态源 | buffer 和 feature 都决定 active Turn | buffer 只存未合并事件，主循环仍是唯一 semantic writer |
 | 迁移期双 owner | old presentation container 与新 feature 双向同步 | 每个切片明确唯一 source of truth，adapter 只能单向 |
-| 过早拆 crate | public API 和类型转换快速增长 | 先用 private module，经真实复用验证后再抽取 |
+| 过早拆 crate | public API 和类型转换快速增长 | 默认先用 private module；窄 dependency adapter 必须保持无产品状态并单独固定 failure contract |
 | terminal 行为回退 | 架构重排同时改变 cursor/viewport | 先固定 behavior test，terminal 与 feature 分阶段迁移 |
 | 数据面饿死输入 | delta backlog 提高按键延迟 | 控制优先级、每轮 budget、batch/coalesce 与 resync |
 
