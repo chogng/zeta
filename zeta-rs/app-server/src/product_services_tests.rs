@@ -1,6 +1,7 @@
 use std::fs;
 
 use tempfile::TempDir;
+use zeta_plugins::PluginMarketplaceTrust;
 
 use super::*;
 
@@ -14,6 +15,8 @@ fn product_services_loads_public_oauth_and_pins_marketplace_root() {
           "schemaVersion": 1,
           "marketplaces": [{
             "id": "zeta-official",
+            "trust": "verifiedExternal",
+            "allowedPublishers": ["community"],
             "metadataBaseUrl": "https://marketplace.zeta.example/metadata/",
             "targetsBaseUrl": "https://marketplace.zeta.example/targets/",
             "trustedRoot": "root.json"
@@ -36,6 +39,10 @@ fn product_services_loads_public_oauth_and_pins_marketplace_root() {
 
     assert_eq!(config.marketplaces.len(), 1);
     assert_eq!(config.marketplaces[0].id().as_str(), "zeta-official");
+    assert_eq!(
+        config.marketplaces[0].trust(),
+        PluginMarketplaceTrust::VerifiedExternal
+    );
     assert!(matches!(
         &config.connector_oauth[0],
         ProductConnectorOAuthConfig::GitHubDevice { connector_id, config }
@@ -54,6 +61,10 @@ fn production_product_services_registers_the_official_marketplace() {
 
     assert_eq!(config.marketplaces.len(), 1);
     assert_eq!(config.marketplaces[0].id().as_str(), "zeta");
+    assert_eq!(
+        config.marketplaces[0].trust(),
+        PluginMarketplaceTrust::ProductManaged
+    );
 }
 
 #[cfg(unix)]

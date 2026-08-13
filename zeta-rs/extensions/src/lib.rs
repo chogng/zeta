@@ -9,6 +9,7 @@ mod catalog_budget;
 mod diagnostic;
 mod package;
 mod resource;
+mod source;
 
 pub use catalog::ExtensionCatalog;
 pub use catalog::ExtensionCatalogError;
@@ -18,9 +19,12 @@ pub use catalog::ExtensionDescriptor;
 pub use catalog::ExtensionDiagnostic;
 pub use catalog::ExtensionDiagnosticCode;
 pub use catalog::ExtensionResource;
-pub use catalog::ExtensionRoot;
-pub use catalog::ExtensionRootKind;
 pub use catalog::ExtensionSourceKind;
+pub use source::DynamicExtensionPackageSource;
+pub use source::DynamicExtensionSourceProvider;
+pub use source::DynamicExtensionSourceSnapshot;
+pub use source::ExtensionRoot;
+pub use source::ExtensionRootKind;
 
 #[cfg(test)]
 #[path = "catalog_tests.rs"]

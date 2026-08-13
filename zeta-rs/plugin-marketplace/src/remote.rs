@@ -1,10 +1,13 @@
+use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::OnceLock;
+use std::sync::Weak;
 
-use serde::Serialize;
 use sha2::Digest;
 use sha2::Sha256;
 use tempfile::TempDir;
@@ -19,13 +22,22 @@ use url::Url;
 use zeta_http_client::HttpClient;
 use zeta_plugins::InstalledPluginRef;
 use zeta_plugins::LocalPluginPackage;
+use zeta_plugins::MaterializedPluginMarketplacePackage;
+use zeta_plugins::PluginId;
 use zeta_plugins::PluginMarketplace;
 use zeta_plugins::PluginMarketplaceId;
-use zeta_plugins::PluginMarketplaceMode;
+use zeta_plugins::PluginMarketplaceMaterializationError;
+use zeta_plugins::PluginMarketplacePackageMaterializer;
+use zeta_plugins::PluginMarketplaceTrust;
+use zeta_plugins::PluginPackageDigest;
+use zeta_plugins::VerifiedRemotePluginPackage;
 
 use crate::RemoteMarketplaceError;
 use crate::RemoteMarketplaceErrorKind;
 use crate::archive;
+use crate::cache;
+use crate::cache::RemoteMarketplaceCachePolicy;
+use crate::cache::RemoteMarketplaceCacheReport;
 use crate::metadata;
 use crate::metadata::PublishedPluginTarget;
 use crate::transport::MarketplaceTransport;
@@ -41,6 +53,9 @@ pub struct RemotePluginMarketplaceConfig {
     targets_base_url: Url,
     trusted_root: Vec<u8>,
     cache_root: PathBuf,
+    cache_policy: RemoteMarketplaceCachePolicy,
+    trust: PluginMarketplaceTrust,
+    allowed_publishers: BTreeSet<String>,
 }
 
 impl RemotePluginMarketplaceConfig {
@@ -68,11 +83,44 @@ impl RemotePluginMarketplaceConfig {
             targets_base_url,
             trusted_root,
             cache_root: cache_root.into(),
+            cache_policy: RemoteMarketplaceCachePolicy::default(),
+            trust: PluginMarketplaceTrust::ProductManaged,
+            allowed_publishers: BTreeSet::new(),
         })
     }
 
     pub fn id(&self) -> &PluginMarketplaceId {
         &self.id
+    }
+
+    pub fn trust(&self) -> PluginMarketplaceTrust {
+        self.trust
+    }
+
+    /// Sets the bounded materialized package-cache policy for this source.
+    pub fn with_cache_policy(mut self, policy: RemoteMarketplaceCachePolicy) -> Self {
+        self.cache_policy = policy;
+        self
+    }
+
+    /// Marks a host-pinned source as external and restricts its signed publisher namespaces.
+    pub fn with_verified_external_publishers(
+        mut self,
+        publishers: impl IntoIterator<Item = String>,
+    ) -> Result<Self, RemoteMarketplaceError> {
+        let publishers = publishers.into_iter().collect::<Vec<_>>();
+        let unique = publishers.iter().cloned().collect::<BTreeSet<_>>();
+        if unique.is_empty()
+            || unique.len() != publishers.len()
+            || publishers
+                .iter()
+                .any(|publisher| PluginId::new(format!("{publisher}/publisher-scope")).is_err())
+        {
+            return Err(config_error());
+        }
+        self.trust = PluginMarketplaceTrust::VerifiedExternal;
+        self.allowed_publishers = unique;
+        Ok(self)
     }
 }
 
@@ -82,6 +130,7 @@ pub struct RemotePluginMarketplaceSnapshot {
     marketplace: PluginMarketplace,
     revoked: Vec<InstalledPluginRef>,
     targets_version: u64,
+    cache_report: RemoteMarketplaceCacheReport,
 }
 
 impl RemotePluginMarketplaceSnapshot {
@@ -100,20 +149,107 @@ impl RemotePluginMarketplaceSnapshot {
     pub fn targets_version(&self) -> u64 {
         self.targets_version
     }
+
+    pub fn cache_report(&self) -> RemoteMarketplaceCacheReport {
+        self.cache_report
+    }
+}
+
+static CACHE_COORDINATORS: OnceLock<Mutex<BTreeMap<PathBuf, Weak<CacheCoordinator>>>> =
+    OnceLock::new();
+
+struct CacheCoordinator {
+    operation: Mutex<()>,
+    leases: Mutex<BTreeMap<PluginPackageDigest, usize>>,
+}
+
+impl CacheCoordinator {
+    fn protected_digests(&self) -> Result<BTreeSet<PluginPackageDigest>, RemoteMarketplaceError> {
+        let leases = self.leases.lock().map_err(|_| cache_error())?;
+        Ok(leases.keys().cloned().collect())
+    }
+
+    fn lease(
+        self: &Arc<Self>,
+        digest: &PluginPackageDigest,
+    ) -> Result<CacheMaterializationLease, RemoteMarketplaceError> {
+        let mut leases = self.leases.lock().map_err(|_| cache_error())?;
+        let count = leases.entry(digest.clone()).or_default();
+        *count = count.checked_add(1).ok_or_else(cache_error)?;
+        Ok(CacheMaterializationLease {
+            coordinator: Arc::clone(self),
+            digest: digest.clone(),
+        })
+    }
+}
+
+struct CacheMaterializationLease {
+    coordinator: Arc<CacheCoordinator>,
+    digest: PluginPackageDigest,
+}
+
+impl Drop for CacheMaterializationLease {
+    fn drop(&mut self) {
+        let mut leases = self
+            .coordinator
+            .leases
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(count) = leases.get_mut(&self.digest) {
+            *count = count.saturating_sub(1);
+            if *count == 0 {
+                leases.remove(&self.digest);
+            }
+        }
+    }
+}
+
+fn cache_coordinator(root: &Path) -> Arc<CacheCoordinator> {
+    let key = if root.is_absolute() {
+        root.to_path_buf()
+    } else {
+        std::env::current_dir()
+            .map(|current| current.join(root))
+            .unwrap_or_else(|_| root.to_path_buf())
+    };
+    let registry = CACHE_COORDINATORS.get_or_init(|| Mutex::new(BTreeMap::new()));
+    let mut registry = registry
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if let Some(coordinator) = registry.get(&key).and_then(Weak::upgrade) {
+        return coordinator;
+    }
+    let coordinator = Arc::new(CacheCoordinator {
+        operation: Mutex::new(()),
+        leases: Mutex::new(BTreeMap::new()),
+    });
+    registry.insert(key, Arc::downgrade(&coordinator));
+    coordinator
 }
 
 /// Synchronous product boundary for refreshing one TUF-backed remote Marketplace.
 pub struct RemotePluginMarketplace {
     config: RemotePluginMarketplaceConfig,
     http: Arc<dyn HttpClient>,
+    cache_coordinator: Arc<CacheCoordinator>,
 }
 
 impl RemotePluginMarketplace {
     pub fn new(config: RemotePluginMarketplaceConfig, http: Arc<dyn HttpClient>) -> Self {
-        Self { config, http }
+        let cache_coordinator = cache_coordinator(&config.cache_root);
+        Self {
+            config,
+            http,
+            cache_coordinator,
+        }
     }
 
     pub fn sync(&self) -> Result<RemotePluginMarketplaceSnapshot, RemoteMarketplaceError> {
+        let _cache_guard = self
+            .cache_coordinator
+            .operation
+            .lock()
+            .map_err(|_| cache_error())?;
         prepare_cache_root(&self.config.cache_root)?;
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_time()
@@ -127,12 +263,34 @@ impl RemotePluginMarketplace {
     /// Every target is revalidated against cached TUF metadata. The materialized package
     /// directory is never trusted as an offline authority on its own.
     pub fn open_cached(&self) -> Result<RemotePluginMarketplaceSnapshot, RemoteMarketplaceError> {
+        let _cache_guard = self
+            .cache_coordinator
+            .operation
+            .lock()
+            .map_err(|_| cache_error())?;
         prepare_cache_root(&self.config.cache_root)?;
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_time()
             .build()
             .map_err(|_| cache_error())?;
         runtime.block_on(self.open_cached_async())
+    }
+
+    /// Reconciles the materialized package cache without touching installed Plugin objects.
+    pub fn prune_cache(&self) -> Result<RemoteMarketplaceCacheReport, RemoteMarketplaceError> {
+        let _cache_guard = self
+            .cache_coordinator
+            .operation
+            .lock()
+            .map_err(|_| cache_error())?;
+        prepare_cache_root(&self.config.cache_root)?;
+        let protected = self.cache_coordinator.protected_digests()?;
+        cache::prune(
+            &self.config.cache_root,
+            self.config.cache_policy,
+            &BTreeSet::new(),
+            &protected,
+        )
     }
 
     async fn sync_async(&self) -> Result<RemotePluginMarketplaceSnapshot, RemoteMarketplaceError> {
@@ -164,21 +322,7 @@ impl RemotePluginMarketplace {
     async fn open_cached_async(
         &self,
     ) -> Result<RemotePluginMarketplaceSnapshot, RemoteMarketplaceError> {
-        let repository_root = self.config.cache_root.join("repository");
-        let metadata = directory_url(&repository_root.join("metadata"))?;
-        let targets = directory_url(&repository_root.join("targets"))?;
-        // Reuse the online datastore so an offline reopen cannot accept metadata older than any
-        // signed version this profile has already observed.
-        let datastore = self.config.cache_root.join("tuf");
-        fs::create_dir_all(&datastore).map_err(|_| cache_error())?;
-        let repository = RepositoryLoader::new(&self.config.trusted_root, metadata, targets)
-            .transport(FilesystemTransport)
-            .datastore(datastore)
-            .limits(Limits::default())
-            .expiration_enforcement(ExpirationEnforcement::Safe)
-            .load()
-            .await
-            .map_err(|_| metadata_error())?;
+        let repository = open_cached_repository(&self.config).await?;
         self.materialize(&repository, RepositorySource::Cache).await
     }
 
@@ -190,56 +334,180 @@ impl RemotePluginMarketplace {
         let revoked = read_revocations(repository).await?;
         let revoked_set = revoked.iter().cloned().collect::<BTreeSet<_>>();
         let published = metadata::published_plugins(repository)?;
+        validate_publisher_scope(&self.config, &published)?;
         let revision = repository.targets().signed.version.get();
-        let snapshots = self.config.cache_root.join("snapshots");
-        fs::create_dir_all(&snapshots).map_err(|_| cache_error())?;
-        let staging = tempfile::Builder::new()
-            .prefix(".staging-")
-            .tempdir_in(&snapshots)
-            .map_err(|_| cache_error())?;
-        let entries =
-            materialize_packages(repository, &published, &revoked_set, staging.path()).await?;
-        write_catalog(staging.path(), &self.config.id, &entries)?;
+        let materializer = Arc::new(RemotePackageMaterializer {
+            config: self.config.clone(),
+            http: Arc::clone(&self.http),
+            cache_coordinator: Arc::clone(&self.cache_coordinator),
+        });
+        let packages = catalog_packages(
+            repository,
+            &published,
+            &revoked_set,
+            &self.config.cache_root,
+            materializer,
+        )
+        .await?;
         let snapshot_digest = signed_repository_digest(repository)?;
-        let destination = snapshots.join(snapshot_digest);
-        promote_snapshot(staging, &destination)?;
-        let marketplace =
-            PluginMarketplace::open(&destination, PluginMarketplaceMode::RemoteManaged)
-                .map_err(|_| package_error())?;
+        let marketplace = PluginMarketplace::from_verified_remote(
+            self.config.id.clone(),
+            self.config.trust,
+            snapshot_digest,
+            packages,
+        )
+        .map_err(|_| package_error())?;
         if source == RepositorySource::Remote {
-            self.cache_repository(repository, &published).await?;
+            self.cache_repository(repository).await?;
         }
+        let published_digests = published
+            .iter()
+            .filter(|target| !revoked_set.contains(&target.package))
+            .map(|target| target.package.digest.clone())
+            .collect::<BTreeSet<_>>();
+        let cache_report = cache::prune(
+            &self.config.cache_root,
+            self.config.cache_policy,
+            &published_digests,
+            &self.cache_coordinator.protected_digests()?,
+        )?;
         Ok(RemotePluginMarketplaceSnapshot {
             marketplace,
             revoked,
             targets_version: revision,
+            cache_report,
         })
     }
 
     async fn cache_repository(
         &self,
         repository: &Repository,
-        published: &[PublishedPluginTarget],
     ) -> Result<(), RemoteMarketplaceError> {
-        let root = self.config.cache_root.join("repository");
-        let parent = root.parent().ok_or_else(cache_error)?;
-        let staging = tempfile::Builder::new()
-            .prefix(".repository-")
-            .tempdir_in(parent)
-            .map_err(|_| cache_error())?;
-        let metadata = staging.path().join("metadata");
-        let targets = staging.path().join("targets");
-        let mut target_names = published
-            .iter()
-            .map(|target| target.name.raw().to_owned())
-            .collect::<Vec<_>>();
-        target_names.push(metadata::REVOCATIONS_TARGET.to_owned());
-        repository
-            .cache(&metadata, &targets, Some(&target_names), true)
-            .await
-            .map_err(|_| cache_error())?;
-        replace_directory(staging, &root)
+        cache_repository(&self.config, repository).await
     }
+}
+
+struct RemotePackageMaterializer {
+    config: RemotePluginMarketplaceConfig,
+    http: Arc<dyn HttpClient>,
+    cache_coordinator: Arc<CacheCoordinator>,
+}
+
+impl PluginMarketplacePackageMaterializer for RemotePackageMaterializer {
+    fn materialize(
+        &self,
+        package: &InstalledPluginRef,
+    ) -> Result<MaterializedPluginMarketplacePackage, PluginMarketplaceMaterializationError> {
+        let _cache_guard = self
+            .cache_coordinator
+            .operation
+            .lock()
+            .map_err(|_| remote_plugin_error(cache_error()))?;
+        prepare_cache_root(&self.config.cache_root).map_err(remote_plugin_error)?;
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_time()
+            .build()
+            .map_err(|_| remote_plugin_error(cache_error()))?;
+        let materialized = runtime
+            .block_on(self.materialize_async(package))
+            .map_err(remote_plugin_error)?;
+        let lease = self
+            .cache_coordinator
+            .lease(&package.digest)
+            .map_err(remote_plugin_error)?;
+        Ok(MaterializedPluginMarketplacePackage::with_lease(
+            materialized,
+            lease,
+        ))
+    }
+}
+
+impl RemotePackageMaterializer {
+    async fn materialize_async(
+        &self,
+        package: &InstalledPluginRef,
+    ) -> Result<LocalPluginPackage, RemoteMarketplaceError> {
+        let datastore_root = self.config.cache_root.join("tuf");
+        let datastore = stage_datastore(&self.config.cache_root, &datastore_root)?;
+        let remote = RepositoryLoader::new(
+            &self.config.trusted_root,
+            self.config.metadata_base_url.clone(),
+            self.config.targets_base_url.clone(),
+        )
+        .transport(MarketplaceTransport::new(Arc::clone(&self.http)))
+        .datastore(datastore.path())
+        .limits(Limits::default())
+        .expiration_enforcement(ExpirationEnforcement::Safe)
+        .load()
+        .await;
+        let (repository, source) = match remote {
+            Ok(repository) => (repository, RepositorySource::Remote),
+            Err(tough::error::Error::Transport { .. }) => (
+                open_cached_repository(&self.config).await?,
+                RepositorySource::Cache,
+            ),
+            Err(_) => return Err(metadata_error()),
+        };
+        let revoked = read_revocations(&repository)
+            .await?
+            .into_iter()
+            .collect::<BTreeSet<_>>();
+        if revoked.contains(package) {
+            return Err(package_error());
+        }
+        let published = metadata::published_plugins(&repository)?;
+        validate_publisher_scope(&self.config, &published)?;
+        let target = published
+            .iter()
+            .find(|published| &published.package == package)
+            .ok_or_else(metadata_error)?;
+        let published_digests = published
+            .iter()
+            .filter(|target| !revoked.contains(&target.package))
+            .map(|target| target.package.digest.clone())
+            .collect::<BTreeSet<_>>();
+        let mut protected = self.cache_coordinator.protected_digests()?;
+        protected.insert(package.digest.clone());
+        cache::prune(
+            &self.config.cache_root,
+            self.config.cache_policy,
+            &published_digests,
+            &protected,
+        )?;
+        let materialized =
+            materialize_package(&repository, target, &self.config.cache_root).await?;
+        if source == RepositorySource::Remote {
+            cache_repository(&self.config, &repository).await?;
+            replace_directory(datastore, &datastore_root)?;
+        }
+        cache::prune(
+            &self.config.cache_root,
+            self.config.cache_policy,
+            &published_digests,
+            &protected,
+        )?;
+        Ok(materialized)
+    }
+}
+
+async fn cache_repository(
+    config: &RemotePluginMarketplaceConfig,
+    repository: &Repository,
+) -> Result<(), RemoteMarketplaceError> {
+    let root = config.cache_root.join("repository");
+    let parent = root.parent().ok_or_else(cache_error)?;
+    let staging = tempfile::Builder::new()
+        .prefix(".repository-")
+        .tempdir_in(parent)
+        .map_err(|_| cache_error())?;
+    let metadata = staging.path().join("metadata");
+    let targets = staging.path().join("targets");
+    let target_names = [metadata::REVOCATIONS_TARGET.to_owned()];
+    repository
+        .cache(&metadata, &targets, Some(&target_names), true)
+        .await
+        .map_err(|_| cache_error())?;
+    replace_directory(staging, &root)
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -248,32 +516,14 @@ enum RepositorySource {
     Cache,
 }
 
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct CatalogDocument<'a> {
-    schema_version: u32,
-    id: &'a PluginMarketplaceId,
-    plugins: &'a [CatalogEntry],
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct CatalogEntry {
-    id: zeta_plugins::PluginId,
-    version: zeta_plugins::PluginVersion,
-    digest: zeta_plugins::PluginPackageDigest,
-    path: String,
-}
-
-async fn materialize_packages(
+async fn catalog_packages(
     repository: &Repository,
     published: &[PublishedPluginTarget],
     revoked: &BTreeSet<InstalledPluginRef>,
-    root: &Path,
-) -> Result<Vec<CatalogEntry>, RemoteMarketplaceError> {
-    let packages_root = root.join("packages");
-    fs::create_dir_all(&packages_root).map_err(|_| cache_error())?;
-    let mut entries = Vec::new();
+    cache_root: &Path,
+    materializer: Arc<RemotePackageMaterializer>,
+) -> Result<Vec<VerifiedRemotePluginPackage>, RemoteMarketplaceError> {
+    let mut packages = Vec::new();
     for published in published {
         if revoked.contains(&published.package) {
             continue;
@@ -281,36 +531,115 @@ async fn materialize_packages(
         if published.length > archive::MAX_ARCHIVE_BYTES {
             return Err(package_error());
         }
-        let bytes = read_target(
-            repository,
-            &published.name,
-            published.length,
-            archive::MAX_ARCHIVE_BYTES as usize,
-        )
-        .await?;
-        let digest_path = published
-            .package
-            .digest
-            .as_str()
-            .trim_start_matches("sha256:");
-        let package_root = packages_root.join(digest_path);
-        archive::extract(&bytes, &package_root)?;
-        let package = LocalPluginPackage::load(&package_root).map_err(|_| package_error())?;
-        if package.manifest().id != published.package.id
-            || package.manifest().version != published.package.version
-            || package.package_digest() != &published.package.digest
-        {
-            return Err(package_error());
-        }
-        entries.push(CatalogEntry {
-            id: published.package.id.clone(),
-            version: published.package.version.clone(),
-            digest: published.package.digest.clone(),
-            path: format!("packages/{digest_path}"),
-        });
+        let catalog = match &published.catalog {
+            Some(catalog) => catalog.clone(),
+            None => {
+                let package = materialize_package(repository, published, cache_root).await?;
+                metadata::PublishedPluginCatalog {
+                    manifest: package.manifest().clone(),
+                    stats: package.stats(),
+                }
+            }
+        };
+        packages.push(VerifiedRemotePluginPackage::new(
+            catalog.manifest,
+            published.package.digest.clone(),
+            catalog.stats,
+            materializer.clone(),
+        ));
     }
-    entries.sort_by(|left, right| (&left.id, &left.version).cmp(&(&right.id, &right.version)));
-    Ok(entries)
+    Ok(packages)
+}
+
+fn validate_publisher_scope(
+    config: &RemotePluginMarketplaceConfig,
+    published: &[PublishedPluginTarget],
+) -> Result<(), RemoteMarketplaceError> {
+    match config.trust {
+        PluginMarketplaceTrust::ProductManaged if config.allowed_publishers.is_empty() => Ok(()),
+        PluginMarketplaceTrust::VerifiedExternal
+            if published.iter().all(|target| {
+                config
+                    .allowed_publishers
+                    .contains(target.package.id.publisher())
+            }) =>
+        {
+            Ok(())
+        }
+        PluginMarketplaceTrust::ProductManaged
+        | PluginMarketplaceTrust::VerifiedExternal
+        | PluginMarketplaceTrust::LocalDevelopment => Err(metadata_error()),
+    }
+}
+
+async fn materialize_package(
+    repository: &Repository,
+    published: &PublishedPluginTarget,
+    cache_root: &Path,
+) -> Result<LocalPluginPackage, RemoteMarketplaceError> {
+    if published.length > archive::MAX_ARCHIVE_BYTES {
+        return Err(package_error());
+    }
+    let packages_root = cache_root.join("packages");
+    fs::create_dir_all(&packages_root).map_err(|_| cache_error())?;
+    let digest_path = published
+        .package
+        .digest
+        .as_str()
+        .trim_start_matches("sha256:");
+    let destination = packages_root.join(digest_path);
+    if destination.exists() {
+        return load_exact_package(&destination, &published.package);
+    }
+    let bytes = read_target(
+        repository,
+        &published.name,
+        published.length,
+        archive::MAX_ARCHIVE_BYTES as usize,
+    )
+    .await?;
+    let staging = tempfile::Builder::new()
+        .prefix(".package-")
+        .tempdir_in(&packages_root)
+        .map_err(|_| cache_error())?;
+    archive::extract(&bytes, staging.path())?;
+    load_exact_package(staging.path(), &published.package)?;
+    promote_snapshot(staging, &destination)?;
+    load_exact_package(&destination, &published.package)
+}
+
+fn load_exact_package(
+    root: &Path,
+    expected: &InstalledPluginRef,
+) -> Result<LocalPluginPackage, RemoteMarketplaceError> {
+    let package = LocalPluginPackage::load(root).map_err(|_| package_error())?;
+    if package.manifest().id != expected.id
+        || package.manifest().version != expected.version
+        || package.package_digest() != &expected.digest
+    {
+        return Err(package_error());
+    }
+    Ok(package)
+}
+
+async fn open_cached_repository(
+    config: &RemotePluginMarketplaceConfig,
+) -> Result<Repository, RemoteMarketplaceError> {
+    let repository_root = config.cache_root.join("repository");
+    let metadata = directory_url(&repository_root.join("metadata"))?;
+    let targets = directory_url(&repository_root.join("targets"))?;
+    // Reuse the online datastore so an offline reopen cannot accept metadata older than any
+    // signed version this profile has already observed.
+    let datastore = config.cache_root.join("tuf");
+    fs::create_dir_all(&datastore).map_err(|_| cache_error())?;
+    RepositoryLoader::new(&config.trusted_root, metadata, targets)
+        .transport(FilesystemTransport)
+        .datastore(datastore)
+        .limits(Limits::default())
+        .expiration_enforcement(ExpirationEnforcement::Safe)
+        .load()
+        .await
+        .map_err(|_| metadata_error())
 }
 
 async fn read_revocations(
@@ -348,29 +677,16 @@ async fn read_target(
     Ok(bytes)
 }
 
-fn write_catalog(
-    root: &Path,
-    id: &PluginMarketplaceId,
-    entries: &[CatalogEntry],
-) -> Result<(), RemoteMarketplaceError> {
-    let directory = root.join(".zeta-marketplace");
-    fs::create_dir_all(&directory).map_err(|_| cache_error())?;
-    let bytes = serde_json::to_vec(&CatalogDocument {
-        schema_version: 1,
-        id,
-        plugins: entries,
-    })
-    .map_err(|_| cache_error())?;
-    fs::write(directory.join("marketplace.json"), bytes).map_err(|_| cache_error())
-}
-
-fn signed_repository_digest(repository: &Repository) -> Result<String, RemoteMarketplaceError> {
+fn signed_repository_digest(
+    repository: &Repository,
+) -> Result<PluginPackageDigest, RemoteMarketplaceError> {
     let mut hasher = Sha256::new();
     let snapshot = serde_json::to_vec(repository.snapshot()).map_err(|_| metadata_error())?;
     let targets = serde_json::to_vec(repository.targets()).map_err(|_| metadata_error())?;
     hasher.update(snapshot);
     hasher.update(targets);
-    Ok(format!("{:x}", hasher.finalize()))
+    PluginPackageDigest::new(format!("sha256:{:x}", hasher.finalize()))
+        .map_err(|_| metadata_error())
 }
 
 fn promote_snapshot(staging: TempDir, destination: &Path) -> Result<(), RemoteMarketplaceError> {
@@ -501,6 +817,20 @@ fn cache_error() -> RemoteMarketplaceError {
         RemoteMarketplaceErrorKind::CacheUnavailable,
         "Plugin Marketplace cache is unavailable",
     )
+}
+
+fn remote_plugin_error(error: RemoteMarketplaceError) -> PluginMarketplaceMaterializationError {
+    match error.kind() {
+        RemoteMarketplaceErrorKind::PackageUnsafe => {
+            PluginMarketplaceMaterializationError::PackageUnsafe
+        }
+        RemoteMarketplaceErrorKind::InvalidConfiguration
+        | RemoteMarketplaceErrorKind::MetadataUntrusted
+        | RemoteMarketplaceErrorKind::DistributionUnavailable
+        | RemoteMarketplaceErrorKind::CacheUnavailable => {
+            PluginMarketplaceMaterializationError::SourceUnavailable
+        }
+    }
 }
 
 #[cfg(test)]

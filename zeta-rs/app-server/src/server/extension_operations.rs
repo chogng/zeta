@@ -1,9 +1,9 @@
-use super::decode;
-use super::operations::resource_rpc_error;
-use super::result;
 use super::AppServer;
 use super::ConnectionState;
 use super::RpcError;
+use super::decode;
+use super::operations::resource_rpc_error;
+use super::result;
 use serde_json::Value;
 use std::time::Duration;
 use zeta_app_server_protocol::protocol::error::AppServerErrorName;
@@ -94,6 +94,7 @@ fn extension_descriptor(value: ExtensionDescriptor) -> ExtensionDto {
         display_name: value.display_name,
         source_kind: match value.source_kind {
             ExtensionSourceKind::BuiltIn => ExtensionSourceKindDto::BuiltIn,
+            ExtensionSourceKind::Plugin => ExtensionSourceKindDto::Plugin,
             ExtensionSourceKind::User => ExtensionSourceKindDto::User,
         },
         manifest_json: value.manifest_json,

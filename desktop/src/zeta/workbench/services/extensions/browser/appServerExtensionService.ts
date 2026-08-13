@@ -6,6 +6,7 @@ import { parseLanguageConfiguration } from "../../../../editor/common/languages/
 import type { LanguageDescriptionContribution, LanguageDescriptionRegistration } from "../../../../editor/common/languages/languageRegistry.js";
 import type { ILanguageFeaturesService } from "../../../../editor/common/services/languageService.js";
 import type { IExtensionApi, ExtensionCatalog as TransportExtensionCatalog, ExtensionDescriptor as TransportExtensionDescriptor } from "../../../../platform/extensions/common/extensionApi.js";
+import type { IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
 import type { IColorTheme } from "../../../../platform/theme/common/colorTheme.js";
 import { ColorScheme } from "../../../../platform/theme/common/theme.js";
 import { WorkbenchThemesRegistry, type WorkbenchThemeRegistration } from "../../../common/theme.js";
@@ -25,6 +26,7 @@ import { ExtensionDebugAdapterRegistry, validateExtensionDebugAdapterDefinitions
 
 export interface AppServerExtensionServiceOptions {
   readonly api: IExtensionApi;
+  readonly eventApi?: IServerEventApi;
   readonly textMateService: ITextMateService;
   readonly languageFeaturesService?: ILanguageFeaturesService;
 }
@@ -93,6 +95,15 @@ export class AppServerExtensionService extends DisposableOwner implements IExten
     this.completionRegistration = options.languageFeaturesService ? this.own(options.languageFeaturesService.registerCompletionProviders([])) : undefined;
     this.workbenchThemeRegistration = this.own(WorkbenchThemesRegistry.registerColorThemes([]));
     this.debugAdapterFactoryRegistration = this.own(DebugAdapterFactoriesRegistry.registerFactories([]));
+    if (options.eventApi) {
+      let activationGeneration: number | undefined;
+      const subscription = options.eventApi.subscribe(event => {
+        if (event.method !== "plugin/changed" || event.params.activationGeneration === activationGeneration) return;
+        activationGeneration = event.params.activationGeneration;
+        void this.reload().catch(error => console.error("Declarative extension refresh failed", error));
+      });
+      this.defer(() => subscription.dispose());
+    }
   }
 
   get currentCatalog(): ExtensionCatalog {

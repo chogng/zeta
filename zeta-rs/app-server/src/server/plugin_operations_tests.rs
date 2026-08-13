@@ -122,17 +122,33 @@ fn app_server_installs_only_exact_host_registered_marketplace_entries() {
     let package_root = root.path().join("packages/review");
     fs::create_dir_all(package_root.join(".zeta-plugin")).unwrap();
     fs::create_dir_all(package_root.join("skills/review")).unwrap();
+    fs::create_dir_all(package_root.join("mcp")).unwrap();
+    fs::create_dir_all(package_root.join("assets")).unwrap();
     fs::write(package_root.join("skills/review/SKILL.md"), "# Review").unwrap();
+    fs::write(package_root.join("mcp/review.json"), "{}").unwrap();
+    fs::write(package_root.join("assets/icon.txt"), "review icon").unwrap();
     fs::write(
         package_root.join(".zeta-plugin/plugin.json"),
         r#"{
             "schemaVersion": 1,
             "id": "acme/review",
             "version": "1.0.0",
-            "displayName": "Review",
+            "displayName": "Acme Review",
+            "description": "Review workspace changes with a repeatable workflow.",
+            "license": "Apache-2.0",
             "compatibility": {"zeta": ">=0.1.0"},
-            "contributions": {"skills": [{"id": "review", "path": "skills/review"}]},
-            "permissions": []
+            "contributions": {
+                "skills": [{"id": "review", "path": "skills/review"}],
+                "mcpServers": [{"id": "review", "definition": "mcp/review.json"}],
+                "assets": [{"id": "icon", "path": "assets/icon.txt"}]
+            },
+            "permissions": [
+                {"type": "workspace", "access": "read"},
+                {"type": "network", "hosts": ["api.example.com"]}
+            ],
+            "credentialSlots": [
+                {"name": "api-token", "kind": "secretText", "requiredFor": ["mcp:review"]}
+            ]
         }"#,
     )
     .unwrap();
@@ -183,7 +199,30 @@ fn app_server_installs_only_exact_host_registered_marketplace_entries() {
     );
     let entry = &available["result"]["packages"][0];
     assert_eq!(entry["marketplaceMode"], "managed");
+    assert_eq!(entry["marketplaceTrust"], "productManaged");
+    assert_eq!(entry["publisher"], "acme");
+    assert_eq!(entry["displayName"], "Acme Review");
+    assert_eq!(
+        entry["description"],
+        "Review workspace changes with a repeatable workflow."
+    );
+    assert_eq!(entry["license"], "Apache-2.0");
+    assert_eq!(entry["compatibilityZeta"], ">=0.1.0");
+    assert_eq!(entry["contributions"]["skills"], 1);
+    assert_eq!(entry["contributions"]["mcpServers"], 1);
+    assert_eq!(entry["contributions"]["assets"], 1);
+    assert_eq!(entry["permissions"][0]["type"], "workspace");
+    assert_eq!(entry["permissions"][0]["access"], "read");
+    assert_eq!(entry["permissions"][1]["hosts"][0], "api.example.com");
+    assert_eq!(entry["credentialSlots"][0]["kind"], "secretText");
+    assert_eq!(entry["credentialSlots"][0]["requiredFor"][0], "mcp:review");
+    assert_eq!(entry["packageFileCount"], 4);
+    assert!(entry["packageSizeBytes"].as_u64().unwrap() > 0);
     assert_eq!(entry["installed"], false);
+    assert_eq!(entry["enabled"], false);
+    assert_eq!(entry["granted"], false);
+    assert_eq!(entry["effective"], false);
+    assert_eq!(entry["revoked"], false);
 
     let installed = call(
         &server,

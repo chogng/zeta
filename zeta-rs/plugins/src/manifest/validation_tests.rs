@@ -53,6 +53,12 @@ fn valid_manifest() -> Value {
                         "testProfileProvider"
                     ]
                 }
+            ],
+            "declarativeExtensions": [
+                {
+                    "id": "review-theme",
+                    "path": "extensions/review-theme"
+                }
             ]
         },
         "permissions": [
@@ -120,6 +126,27 @@ fn strict_v1_manifest_parses_typed_security_fields() {
     assert_eq!(
         editor_extension.capabilities[1],
         crate::EditorExtensionCapability::LanguageProvider
+    );
+    let declarative_extension = &manifest.contributions.declarative_extensions[0];
+    assert_eq!(declarative_extension.id.as_str(), "review-theme");
+    assert_eq!(
+        declarative_extension.path.as_str(),
+        "extensions/review-theme"
+    );
+}
+
+#[test]
+fn declarative_extension_identity_is_unique_and_bounded() {
+    let extension = valid_manifest()["contributions"]["declarativeExtensions"][0].clone();
+    let mut duplicate = valid_manifest();
+    duplicate["contributions"]["declarativeExtensions"] = json!([extension.clone(), extension]);
+
+    let error = parse(&duplicate).unwrap_err();
+
+    assert!(
+        error
+            .to_string()
+            .contains("duplicate declarative Extension")
     );
 }
 

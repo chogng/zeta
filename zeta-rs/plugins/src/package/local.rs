@@ -225,6 +225,29 @@ fn validate_contribution_paths(
         require_contained(root, &extension.entrypoint)?;
         unique_location(&mut locations, &extension.entrypoint, "Editor Extension")?;
     }
+    for extension in &manifest.contributions.declarative_extensions {
+        require_entry(
+            entries,
+            &extension.path,
+            ScannedEntryKind::Directory,
+            "declarative Extension",
+        )?;
+        require_contained(root, &extension.path)?;
+        let extension_manifest = PluginPath::new(format!("{}/package.json", extension.path))
+            .map_err(|error| {
+                contribution_invalid(format!(
+                    "declarative Extension '{}' has an invalid package.json path: {error}",
+                    extension.id
+                ))
+            })?;
+        require_entry(
+            entries,
+            &extension_manifest,
+            ScannedEntryKind::File,
+            "declarative Extension manifest",
+        )?;
+        unique_location(&mut locations, &extension.path, "declarative Extension")?;
+    }
     for asset in &manifest.contributions.assets {
         if !entries.contains_key(&asset.path) {
             return Err(contribution_invalid(format!(

@@ -3,10 +3,28 @@ use std::fs;
 use tempfile::TempDir;
 use url::Url;
 use zeta_plugins::PluginMarketplaceId;
+use zeta_plugins::PluginMarketplaceTrust;
+use zeta_plugins::PluginPackageDigest;
 
 use super::RemotePluginMarketplaceConfig;
+use super::cache_coordinator;
 use super::recover_complete_directory;
 use super::stage_datastore;
+
+#[test]
+fn cache_coordinator_is_shared_and_tracks_active_materialization_leases() {
+    let root = TempDir::new().unwrap();
+    let first = cache_coordinator(root.path());
+    let second = cache_coordinator(root.path());
+    let digest = PluginPackageDigest::new(format!("sha256:{}", "a".repeat(64))).unwrap();
+
+    assert!(std::sync::Arc::ptr_eq(&first, &second));
+    let lease = first.lease(&digest).unwrap();
+    assert_eq!(second.protected_digests().unwrap(), [digest.clone()].into());
+
+    drop(lease);
+    assert!(second.protected_digests().unwrap().is_empty());
+}
 
 #[test]
 fn cache_recovery_restores_the_previous_complete_repository() {
@@ -87,5 +105,45 @@ fn distribution_urls_require_unambiguous_https_directory_bases() {
             "https://marketplace.example/targets/?channel=test"
         )
         .is_err()
+    );
+}
+
+#[test]
+fn external_source_trust_requires_explicit_valid_publisher_namespaces() {
+    let root = TempDir::new().unwrap();
+    let config = RemotePluginMarketplaceConfig::new(
+        PluginMarketplaceId::new("community").unwrap(),
+        Url::parse("https://community.example/metadata/").unwrap(),
+        Url::parse("https://community.example/targets/").unwrap(),
+        b"trusted root".to_vec(),
+        root.path(),
+    )
+    .unwrap();
+
+    assert_eq!(config.trust(), PluginMarketplaceTrust::ProductManaged);
+    assert_eq!(
+        config
+            .clone()
+            .with_verified_external_publishers(["community".to_owned()])
+            .unwrap()
+            .trust(),
+        PluginMarketplaceTrust::VerifiedExternal
+    );
+    assert!(
+        config
+            .clone()
+            .with_verified_external_publishers(Vec::new())
+            .is_err()
+    );
+    assert!(
+        config
+            .clone()
+            .with_verified_external_publishers(["Community".to_owned()])
+            .is_err()
+    );
+    assert!(
+        config
+            .with_verified_external_publishers(["community".to_owned(), "community".to_owned()])
+            .is_err()
     );
 }

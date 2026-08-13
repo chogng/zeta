@@ -21,12 +21,16 @@ Marketplace install/update 先复制、复验并原子提升到 content-addresse
 | `PluginPackageDigest` | `sha256:<64 lowercase hex>` exact content identity | signature/trust |
 | `PluginPath` | portable ASCII、slash-separated package-relative path | host absolute path authority |
 | `PluginManifest::from_json` | strict JSON/schema/semantic validation | contribution content parsing |
+| `DeclarativeExtensionContribution` | 声明一个包含静态 `package.json` 的 package-relative 目录 | 解析 Editor contribution、执行代码 |
 | `EditorExtensionContribution` | 声明 exact executable program、Host RPC API、activation triggers 与 capability ceiling | 启动/监管进程、provider registry、RPC transport |
 | `EditorExtensionActivationEvent` | 区分 startup/command/language/on-demand 等 bounded activation trigger | 把 provider kind 当成隐式 activation |
 | `LocalPluginPackage::load` | 验证一个 exact root、digest 和所有 contribution path | copy/install/immutability |
 | `LocalPluginCatalog::discover` | 读取一个 package 或目录下的直接 package children | recursive marketplace search |
 | `PluginMarketplace::open` | 校验 host 注册 catalog、无链接 package path 与 exact package digest | 网络下载、publisher 签名、客户端宿主路径 |
-| `PluginMarketplaceService` | Marketplace install、staged update、rollback 与 profile request reconcile | 自动 grant、远端 catalog 同步、Workspace trust 决策 |
+| `PluginMarketplace::from_verified_remote` | 接收产品分发层已验证的签名 manifest、digest、统计与延迟 materializer | TUF/HTTP、自动下载、grant |
+| `PluginMarketplaceMode` / `PluginMarketplaceTrust` | 分别表达读取方式与运营方信任，避免把官方远端源误标成第三方 | signature 验证、用户授权 |
+| `PluginMarketplacePackageMaterializer` / `MaterializedPluginMarketplacePackage` | 安装时把 exact ref materialize 为 canonical package，并把分发租约保持到 authority 复制完成 | 目录发现、enable、运行时执行 |
+| `PluginMarketplaceService` | Marketplace install、staged update、rollback、profile reconcile，并拒绝跨远端源的 publisher namespace owner ambiguity | 自动 grant、远端 catalog 同步、Workspace trust 决策 |
 | `PluginPackageStore::install_local` | stage、复制、复验 digest 并原子 promote immutable object | enablement、grant、activation |
 | `PluginPackageStore::read` | 按 exact installed ref 重新验证 object | authority lookup、版本选择 |
 | `PluginPackageStore::activate` | 把 exact installed refs 解析为一个 activation generation | installed/enable authority、live publish |
@@ -45,7 +49,8 @@ programmatic mutation 后必须再次调用 `PluginManifest::validate`。
 
 - `schemaVersion == 1`；
 - Plugin version 使用 SemVer；
-- Skill、MCP server、Connector、asset 和可执行 Editor Extension 都有稳定 manifest-local ID；
+- Skill、MCP server、Connector、asset、声明式 Extension 和可执行 Editor Extension 都有稳定
+  manifest-local ID；
 - Connector 必须引用同一个 manifest 中已声明的 MCP server contribution；
 - permission 是 `process/workspace/network` tagged value；
 - network v1 只接受 exact lowercase DNS/IP host，不接受 scheme、port 或 wildcard；
@@ -54,6 +59,8 @@ programmatic mutation 后必须再次调用 `PluginManifest::validate`。
 - unknown field、duplicate contribution/slot/permission/host 和非 namespaced metadata 均失败；
 - Skill path 必须是包含 regular `SKILL.md` 的目录，MCP definition/process executable 必须是
   regular file，asset 可以是 regular file 或目录；
+- `declarativeExtensions[]` path 必须是包含 regular `package.json` 的包内目录；它不请求 process
+  permission，由 `zeta-extensions` 在 exact effective Plugin snapshot 中二次验证并冻结资源；
 - `editorExtensions[]` 的 entrypoint 必须是包内 regular file，并有相同 `PluginPath` 的 exact
   `process` permission；runtime API 仅接受数值 `1`，entrypoint 和 manifest-local ID 都必须唯一；
 - 每个 Editor Extension 的 `activationEvents` 与 capability ceiling 均为 non-empty、unique、bounded
@@ -180,9 +187,10 @@ filesystem。error message 只包含稳定 identity、relative path 与 sanitize
 仍可被外部修改。runtime consumer 不能把它当 immutable root；必须先通过 `PluginPackageStore`
 复制、重新验证并从 content-addressed object root 绑定 contribution。
 
-`PluginMarketplace::open` 的 root 只能由产品 host 注册。catalog entry 只暴露 Marketplace ID、
-Plugin ID/version/digest；Renderer 不能提交宿主路径。`Managed` 表示 root 已由受信产品分发层选择，
-`LocalDevelopment` 表示显式开发入口；两种模式都执行相同 package、digest、link 和 containment 校验。
+`PluginMarketplace::open` 的 root 只能由产品 host 注册。`PluginMarketplace::from_verified_remote`
+只接受产品分发层已经验证的 discovery metadata，并把 package bytes 延迟到安装时通过
+`PluginMarketplacePackageMaterializer` 获取；返回的 `LocalPluginPackage` 仍须与 signed manifest、ID、
+version 和 digest 完全一致。Renderer 只能提交 Marketplace ID 与 exact package ref，不能提交宿主路径。
 
 ## 验证
 
@@ -193,8 +201,8 @@ cargo clippy --manifest-path Cargo.toml \
 bazel test //zeta-rs/plugins:plugins-unit-tests
 ```
 
-当前测试覆盖严格/重复模式、身份/SemVer、凭据引用、权限、Editor Extension v1 API/activation/
-capability/entrypoint、路径穿越/设备名/规范化、摘要确定性、缺失贡献、符号链接/硬链接、目录排序与
+当前测试覆盖严格/重复模式、身份/SemVer、凭据引用、权限、声明式 Extension package path、Editor
+Extension v1 API/activation/capability/entrypoint、路径穿越/设备名/规范化、摘要确定性、缺失贡献、符号链接/硬链接、目录排序与
 读取、精确版本冲突，以及 Marketplace digest mismatch、staged update 和 rollback grant 边界。
 
 ## 当前限制与扩展点
@@ -205,13 +213,16 @@ profile authority 的只读可用性判断，不从 Workspace 自动安装或授
 会把旧 active package 保守迁移为 enabled + granted。当前 object directory 的只读性由
 “不暴露可写根路径 + digest revalidation”保证，
 尚未施加平台级 immutable flag，也没有 orphan staging startup recovery；失败 install commit 和 uninstall
-会精确回收无引用 object。受信 host 可注册 materialized Marketplace root，但公网 catalog 下载、
-publisher signature/revocation 与 GC authority 尚未实现；package-rooted MCP consumer
+会精确回收无引用 object。受信 host 可注册 materialized Marketplace root；公网 catalog 下载、
+publisher signature/revocation、materialized package cache quota 与 GC 已由 `zeta-plugin-marketplace`
+实现；installed content store 仍只在 failed install/uninstall 时精确回收，没有独立的全局 orphan quota
+authority。package-rooted MCP consumer
 已位于 `zeta-mcp-extension`，不能反向并入本 crate。这些能力应在新的 private
 `authority/resolution` modules 中接入，不扩大 loader/store 为隐式 enable manager。
 
-本 crate 当前只让可执行 Editor Extension 进入既有 Plugin package、digest、enable/grant 和 invocation
-fence 控制面；它不包含 Extension Host executable、RPC、crash supervisor、workspace trust broker 或
-provider runtime。即使 manifest 与 exact process permission 均有效，安装也不会启动 entrypoint；Host
+本 crate 让声明式和可执行 Editor Extension 都进入既有 Plugin package、digest 与 enable/grant
+控制面。声明式目录由 App Server 投影到 `zeta-extensions`，不获得任意执行权限；可执行声明才进入
+invocation fence。它不包含 Extension Host executable、RPC、crash supervisor、workspace trust broker
+或 provider runtime。即使 manifest 与 exact process permission 均有效，安装也不会启动 entrypoint；Host
 仍须在 dispatch 时复核 active generation/invocation lease，并把 capability ceiling 投影为拒绝默认的
 broker policy。

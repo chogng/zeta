@@ -4,18 +4,23 @@ use sha2::Sha256;
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
-use std::path::PathBuf;
+use std::sync::Arc;
 
 use crate::catalog_budget::CatalogBudget;
 use crate::catalog_budget::CatalogLimit;
 use crate::diagnostic::diagnostic;
 use crate::package::ExtensionPackageSnapshot;
+use crate::package::MAX_MANIFEST_BYTES;
 use crate::package::PackageSnapshotError;
 use crate::package::PackageSnapshotLimits;
-use crate::package::MAX_MANIFEST_BYTES;
 use crate::resource::is_within;
 use crate::resource::mime_type;
 use crate::resource::validate_relative_path;
+use crate::source::DynamicExtensionPackageSource;
+use crate::source::DynamicExtensionSourceProvider;
+use crate::source::DynamicExtensionSourceSnapshot;
+use crate::source::ExtensionRoot;
+use crate::source::ExtensionRootKind;
 
 const MAX_EXTENSION_ID_LENGTH: usize = 160;
 const MAX_MANIFEST_FIELD_LENGTH: usize = 256;
@@ -27,42 +32,6 @@ pub enum ExtensionCatalogReload {
     Cached,
     /// Rescan all configured roots and publish a new generation.
     Refresh,
-}
-
-/// Identifies the provenance of a static extension package.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum ExtensionRootKind {
-    /// A package shipped with the product installation.
-    BuiltIn,
-    /// A package installed below the user's trusted profile extension directory.
-    User,
-}
-
-/// Filesystem root containing direct-child extension packages.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ExtensionRoot {
-    /// Provenance reported in catalog diagnostics and descriptors.
-    pub kind: ExtensionRootKind,
-    /// Root path supplied by the host composition root.
-    pub path: PathBuf,
-}
-
-impl ExtensionRoot {
-    /// Creates a built-in extension root.
-    pub fn built_in(path: impl Into<PathBuf>) -> Self {
-        Self {
-            kind: ExtensionRootKind::BuiltIn,
-            path: path.into(),
-        }
-    }
-
-    /// Creates a user extension root.
-    pub fn user(path: impl Into<PathBuf>) -> Self {
-        Self {
-            kind: ExtensionRootKind::User,
-            path: path.into(),
-        }
-    }
 }
 
 /// Static metadata exposed to a host after manifest identity validation.
@@ -93,6 +62,8 @@ pub struct ExtensionDescriptor {
 pub enum ExtensionSourceKind {
     /// The package came from the product installation.
     BuiltIn,
+    /// The package came from an effective, exact Plugin package.
+    Plugin,
     /// The package came from the user's profile extension directory.
     User,
 }
@@ -167,6 +138,8 @@ pub enum ExtensionCatalogError {
 #[derive(Default)]
 pub struct ExtensionCatalog {
     roots: Vec<ExtensionRoot>,
+    dynamic_sources: Option<Arc<dyn DynamicExtensionSourceProvider>>,
+    dynamic_generation: Option<u64>,
     generation: u64,
     snapshot: Option<ExtensionCatalogSnapshot>,
     discovered: BTreeMap<String, DiscoveredExtension>,
@@ -186,19 +159,50 @@ impl ExtensionCatalog {
         }
     }
 
+    /// Binds an authority-owned source of exact immutable extension package directories.
+    pub fn with_dynamic_sources(
+        mut self,
+        provider: Arc<dyn DynamicExtensionSourceProvider>,
+    ) -> Self {
+        self.bind_dynamic_sources(provider);
+        self
+    }
+
+    /// Rebinds the dynamic authority and invalidates any snapshot from the previous provider.
+    pub fn bind_dynamic_sources(&mut self, provider: Arc<dyn DynamicExtensionSourceProvider>) {
+        self.dynamic_sources = Some(provider);
+        self.dynamic_generation = None;
+        self.snapshot = None;
+        self.discovered.clear();
+    }
+
     /// Reports whether at least one host-configured root exists.
     pub fn is_available(&self) -> bool {
-        !self.roots.is_empty()
+        !self.roots.is_empty() || self.dynamic_sources.is_some()
     }
 
     /// Lists extensions, rescanning roots when requested or when no snapshot exists.
     pub fn list(&mut self, reload: ExtensionCatalogReload) -> ExtensionCatalogSnapshot {
-        if reload == ExtensionCatalogReload::Cached {
-            if let Some(snapshot) = &self.snapshot {
-                return snapshot.clone();
-            }
+        let dynamic = self
+            .dynamic_sources
+            .as_ref()
+            .map(|provider| provider.snapshot());
+        let dynamic_unchanged = match &dynamic {
+            None => true,
+            Some(Ok(snapshot)) => self.dynamic_generation == Some(snapshot.generation),
+            Some(Err(_)) => false,
+        };
+        if reload == ExtensionCatalogReload::Cached
+            && dynamic_unchanged
+            && let Some(snapshot) = &self.snapshot
+        {
+            return snapshot.clone();
         }
-        let (extensions, diagnostics, discovered) = self.scan();
+        let dynamic_snapshot = dynamic.as_ref().and_then(|result| result.as_ref().ok());
+        let dynamic_error = dynamic.as_ref().and_then(|result| result.as_ref().err());
+        let (extensions, diagnostics, discovered) =
+            self.scan(dynamic_snapshot, dynamic_error.map(String::as_str));
+        self.dynamic_generation = dynamic_snapshot.map(|snapshot| snapshot.generation);
         self.generation = self
             .generation
             .checked_add(1)
@@ -249,6 +253,8 @@ impl ExtensionCatalog {
 
     fn scan(
         &self,
+        dynamic: Option<&DynamicExtensionSourceSnapshot>,
+        dynamic_error: Option<&str>,
     ) -> (
         Vec<ExtensionDescriptor>,
         Vec<ExtensionDiagnostic>,
@@ -258,7 +264,46 @@ impl ExtensionCatalog {
         let mut diagnostics = Vec::new();
         let mut discovered = BTreeMap::new();
         let mut budget = CatalogBudget::default();
-        for root in &self.roots {
+        for root in self
+            .roots
+            .iter()
+            .filter(|root| root.kind == ExtensionRootKind::BuiltIn)
+        {
+            if scan_root(
+                root,
+                &mut extensions,
+                &mut diagnostics,
+                &mut discovered,
+                &mut budget,
+            ) == CatalogScanControl::Stop
+            {
+                break;
+            }
+        }
+        if let Some(error) = dynamic_error {
+            budget.push_diagnostic(
+                &mut diagnostics,
+                ExtensionDiagnostic {
+                    source: "plugin".into(),
+                    subject: None,
+                    code: ExtensionDiagnosticCode::SourceUnavailable,
+                    message: format!("dynamic extension authority is unavailable: {error}"),
+                },
+            );
+        } else if let Some(dynamic) = dynamic {
+            scan_dynamic_packages(
+                &dynamic.packages,
+                &mut extensions,
+                &mut diagnostics,
+                &mut discovered,
+                &mut budget,
+            );
+        }
+        for root in self
+            .roots
+            .iter()
+            .filter(|root| root.kind == ExtensionRootKind::User)
+        {
             if scan_root(
                 root,
                 &mut extensions,
@@ -369,46 +414,124 @@ fn scan_root(
     }
     packages.sort_by(|left, right| left.0.cmp(&right.0));
     for (subject, package_path) in packages {
-        match discover_package(
+        publish_package(
             root,
             &canonical_root,
+            subject,
             &package_path,
-            PackageSnapshotLimits {
-                max_total_bytes: budget.remaining_snapshot_bytes(),
-            },
-        ) {
-            Ok(extension) => {
-                if discovered.contains_key(&extension.descriptor.id) {
-                    budget.push_diagnostic(
-                        diagnostics,
-                        diagnostic(
-                            root,
-                            Some(subject),
-                            ExtensionDiagnosticCode::DuplicateExtension,
-                            "extension ID is already registered",
-                        ),
-                    );
-                    continue;
-                }
-                if let Err(limit) = budget.claim_published_extension(
-                    extension.package.total_bytes(),
-                    extension.descriptor.manifest_json.len(),
-                ) {
-                    budget.push_diagnostic(
-                        diagnostics,
-                        catalog_limit_diagnostic(root, Some(subject), limit),
-                    );
-                    continue;
-                }
-                extensions.push(extension.descriptor.clone());
-                discovered.insert(extension.descriptor.id.clone(), extension);
-            }
-            Err((code, message)) => {
-                budget.push_diagnostic(diagnostics, diagnostic(root, Some(subject), code, message))
-            }
-        }
+            extensions,
+            diagnostics,
+            discovered,
+            budget,
+        );
     }
     scan_control
+}
+
+fn scan_dynamic_packages(
+    sources: &[DynamicExtensionPackageSource],
+    extensions: &mut Vec<ExtensionDescriptor>,
+    diagnostics: &mut Vec<ExtensionDiagnostic>,
+    discovered: &mut BTreeMap<String, DiscoveredExtension>,
+    budget: &mut CatalogBudget,
+) {
+    let mut sources = sources.to_vec();
+    sources.sort_by(|left, right| {
+        left.subject
+            .cmp(&right.subject)
+            .then_with(|| left.path.cmp(&right.path))
+    });
+    for source in sources {
+        let root_path = source
+            .path
+            .parent()
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| source.path.clone());
+        let root = ExtensionRoot::plugin(root_path);
+        if let Err(limit) = budget.claim_package_candidate() {
+            budget.push_diagnostic(
+                diagnostics,
+                catalog_limit_diagnostic(&root, Some(source.subject), limit),
+            );
+            break;
+        }
+        let canonical_root = match fs::canonicalize(&root.path) {
+            Ok(path) => path,
+            Err(_) => {
+                budget.push_diagnostic(
+                    diagnostics,
+                    diagnostic(
+                        &root,
+                        Some(source.subject),
+                        ExtensionDiagnosticCode::SourceUnavailable,
+                        "dynamic extension package parent is unavailable",
+                    ),
+                );
+                continue;
+            }
+        };
+        publish_package(
+            &root,
+            &canonical_root,
+            source.subject,
+            &source.path,
+            extensions,
+            diagnostics,
+            discovered,
+            budget,
+        );
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn publish_package(
+    root: &ExtensionRoot,
+    canonical_root: &Path,
+    subject: String,
+    package_path: &Path,
+    extensions: &mut Vec<ExtensionDescriptor>,
+    diagnostics: &mut Vec<ExtensionDiagnostic>,
+    discovered: &mut BTreeMap<String, DiscoveredExtension>,
+    budget: &mut CatalogBudget,
+) {
+    match discover_package(
+        root,
+        canonical_root,
+        package_path,
+        PackageSnapshotLimits {
+            max_total_bytes: budget.remaining_snapshot_bytes(),
+        },
+    ) {
+        Ok(extension) => {
+            if discovered.contains_key(&extension.descriptor.id) {
+                budget.push_diagnostic(
+                    diagnostics,
+                    diagnostic(
+                        root,
+                        Some(subject),
+                        ExtensionDiagnosticCode::DuplicateExtension,
+                        "extension ID is already registered",
+                    ),
+                );
+                return;
+            }
+            if let Err(limit) = budget.claim_published_extension(
+                extension.package.total_bytes(),
+                extension.descriptor.manifest_json.len(),
+            ) {
+                budget.push_diagnostic(
+                    diagnostics,
+                    catalog_limit_diagnostic(root, Some(subject), limit),
+                );
+                return;
+            }
+            extensions.push(extension.descriptor.clone());
+            discovered.insert(extension.descriptor.id.clone(), extension);
+        }
+        Err((code, message)) => {
+            budget.push_diagnostic(diagnostics, diagnostic(root, Some(subject), code, message));
+        }
+    }
 }
 
 fn catalog_limit_diagnostic(
@@ -607,6 +730,7 @@ fn is_manifest_component(value: &str) -> bool {
 fn source_kind(kind: &ExtensionRootKind) -> ExtensionSourceKind {
     match kind {
         ExtensionRootKind::BuiltIn => ExtensionSourceKind::BuiltIn,
+        ExtensionRootKind::Plugin => ExtensionSourceKind::Plugin,
         ExtensionRootKind::User => ExtensionSourceKind::User,
     }
 }

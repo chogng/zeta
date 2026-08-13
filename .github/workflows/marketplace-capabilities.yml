@@ -1,0 +1,70 @@
+name: Marketplace capabilities
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/marketplace-capabilities.yml"
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - "desktop/**"
+      - "docs/plugins.md"
+      - "resources/product-services/**"
+      - "zeta-rs/app-server-protocol/**"
+      - "zeta-rs/app-server/**"
+      - "zeta-rs/extensions/**"
+      - "zeta-rs/plugin-marketplace/**"
+      - "zeta-rs/plugins/**"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/marketplace-capabilities.yml"
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - "desktop/**"
+      - "docs/plugins.md"
+      - "resources/product-services/**"
+      - "zeta-rs/app-server-protocol/**"
+      - "zeta-rs/app-server/**"
+      - "zeta-rs/extensions/**"
+      - "zeta-rs/plugin-marketplace/**"
+      - "zeta-rs/plugins/**"
+
+permissions:
+  contents: read
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install Rust stable
+        run: rustup toolchain install stable --profile minimal --component clippy
+      - name: Test Marketplace capability crates
+        run: cargo +stable test --locked -p zeta-plugins -p zeta-plugin-marketplace -p zeta-extensions -p zeta-app-server-protocol
+      - name: Lint Marketplace capability crates
+        run: cargo +stable clippy --locked -p zeta-plugins -p zeta-plugin-marketplace -p zeta-extensions -p zeta-app-server-protocol --all-targets --no-deps -- -D warnings
+      - name: Check App Server integration
+        run: |
+          cargo +stable check --locked -p zeta-app-server
+          cargo +stable test --locked -p zeta-app-server --lib product_services::tests
+
+  desktop:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Enable pinned pnpm
+        run: corepack enable
+      - name: Install Desktop dependencies
+        run: corepack pnpm install --frozen-lockfile
+      - name: Typecheck Marketplace projections
+        run: |
+          corepack pnpm --dir desktop typecheck:renderer
+          corepack pnpm --dir desktop typecheck:extensions
+      - name: Test Extension projection lifecycle
+        run: corepack pnpm --dir desktop test:extensions

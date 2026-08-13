@@ -1,4 +1,8 @@
 use std::fs;
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 
 use tempfile::tempdir;
 
@@ -8,11 +12,64 @@ use super::PluginMarketplaceService;
 use super::PluginProfileRequest;
 use super::PluginProfileRequestEnablement;
 use crate::LocalPluginPackage;
+use crate::MaterializedPluginMarketplacePackage;
 use crate::PluginActivationAuthority;
 use crate::PluginAuthorityCommand;
 use crate::PluginAuthorityCommandId;
 use crate::PluginAuthorityCommandRequest;
 use crate::PluginErrorKind;
+use crate::PluginMarketplaceId;
+use crate::PluginMarketplaceMaterializationError;
+use crate::PluginMarketplacePackageMaterializer;
+use crate::PluginMarketplaceTrust;
+use crate::PluginPackageDigest;
+use crate::VerifiedRemotePluginPackage;
+
+struct CountingMaterializer {
+    package: LocalPluginPackage,
+    calls: AtomicUsize,
+}
+
+struct RemovingLease {
+    root: PathBuf,
+}
+
+impl Drop for RemovingLease {
+    fn drop(&mut self) {
+        fs::remove_dir_all(&self.root).unwrap();
+    }
+}
+
+struct LeasedMaterializer {
+    package: LocalPluginPackage,
+    source_root: PathBuf,
+}
+
+impl PluginMarketplacePackageMaterializer for LeasedMaterializer {
+    fn materialize(
+        &self,
+        _package: &crate::InstalledPluginRef,
+    ) -> Result<MaterializedPluginMarketplacePackage, PluginMarketplaceMaterializationError> {
+        Ok(MaterializedPluginMarketplacePackage::with_lease(
+            self.package.clone(),
+            RemovingLease {
+                root: self.source_root.clone(),
+            },
+        ))
+    }
+}
+
+impl PluginMarketplacePackageMaterializer for CountingMaterializer {
+    fn materialize(
+        &self,
+        _package: &crate::InstalledPluginRef,
+    ) -> Result<MaterializedPluginMarketplacePackage, PluginMarketplaceMaterializationError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        Ok(MaterializedPluginMarketplacePackage::new(
+            self.package.clone(),
+        ))
+    }
+}
 
 fn write_package(root: &std::path::Path, version: &str, body: &str) -> LocalPluginPackage {
     fs::create_dir_all(root.join(".zeta-plugin")).unwrap();
@@ -79,6 +136,124 @@ fn marketplace_install_stages_digest_pinned_content_without_granting_it() {
     assert_eq!(authority.snapshot().installed(), &[package]);
     assert!(authority.snapshot().granted().is_empty());
     assert!(authority.snapshot().activation().packages().is_empty());
+}
+
+#[test]
+fn verified_remote_catalog_defers_package_materialization_until_install() {
+    let root = tempdir().unwrap();
+    let package = write_package(&root.path().join("source"), "1.0.0", "# Deferred");
+    let materializer = Arc::new(CountingMaterializer {
+        package: package.clone(),
+        calls: AtomicUsize::new(0),
+    });
+    let marketplace = PluginMarketplace::from_verified_remote(
+        PluginMarketplaceId::new("acme").unwrap(),
+        PluginMarketplaceTrust::ProductManaged,
+        PluginPackageDigest::sha256(b"signed catalog"),
+        [VerifiedRemotePluginPackage::new(
+            package.manifest().clone(),
+            package.package_digest().clone(),
+            package.stats(),
+            materializer.clone(),
+        )],
+    )
+    .unwrap();
+    let package_ref = marketplace.list()[0].package_ref();
+
+    assert_eq!(marketplace.list()[0].manifest(), package.manifest());
+    assert_eq!(materializer.calls.load(Ordering::SeqCst), 0);
+
+    let authority = PluginActivationAuthority::open(root.path().join("profile")).unwrap();
+    let service = PluginMarketplaceService::new(authority, [marketplace]).unwrap();
+    service
+        .install(
+            PluginAuthorityCommandId::new("install-deferred").unwrap(),
+            0,
+            &PluginMarketplaceId::new("acme").unwrap(),
+            &package_ref,
+        )
+        .unwrap();
+
+    assert_eq!(materializer.calls.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn materialization_lease_survives_until_authority_copies_the_package() {
+    let root = tempdir().unwrap();
+    let source_root = root.path().join("leased-source");
+    let package = write_package(&source_root, "1.0.0", "# Leased");
+    let marketplace = PluginMarketplace::from_verified_remote(
+        PluginMarketplaceId::new("acme").unwrap(),
+        PluginMarketplaceTrust::ProductManaged,
+        PluginPackageDigest::sha256(b"leased catalog"),
+        [VerifiedRemotePluginPackage::new(
+            package.manifest().clone(),
+            package.package_digest().clone(),
+            package.stats(),
+            Arc::new(LeasedMaterializer {
+                package: package.clone(),
+                source_root: source_root.clone(),
+            }),
+        )],
+    )
+    .unwrap();
+    let package_ref = marketplace.list()[0].package_ref();
+    let profile = root.path().join("profile");
+    let authority = PluginActivationAuthority::open(&profile).unwrap();
+    let service = PluginMarketplaceService::new(authority, [marketplace]).unwrap();
+
+    service
+        .install(
+            PluginAuthorityCommandId::new("install-leased").unwrap(),
+            0,
+            &PluginMarketplaceId::new("acme").unwrap(),
+            &package_ref,
+        )
+        .unwrap();
+
+    assert!(!source_root.exists());
+    assert!(
+        profile
+            .join("objects")
+            .join(package_ref.digest.as_str().strip_prefix("sha256:").unwrap())
+            .join(".zeta-plugin/plugin.json")
+            .is_file()
+    );
+}
+
+#[test]
+fn remote_marketplaces_cannot_share_a_publisher_namespace() {
+    let root = tempdir().unwrap();
+    let first = write_package(&root.path().join("first"), "1.0.0", "# First");
+    let second = write_package(&root.path().join("second"), "2.0.0", "# Second");
+    let remote =
+        |marketplace_id: &str, trust: PluginMarketplaceTrust, package: LocalPluginPackage| {
+            PluginMarketplace::from_verified_remote(
+                PluginMarketplaceId::new(marketplace_id).unwrap(),
+                trust,
+                PluginPackageDigest::sha256(marketplace_id.as_bytes()),
+                [VerifiedRemotePluginPackage::new(
+                    package.manifest().clone(),
+                    package.package_digest().clone(),
+                    package.stats(),
+                    Arc::new(CountingMaterializer {
+                        package,
+                        calls: AtomicUsize::new(0),
+                    }),
+                )],
+            )
+            .unwrap()
+        };
+    let official = remote("official", PluginMarketplaceTrust::ProductManaged, first);
+    let external = remote("external", PluginMarketplaceTrust::VerifiedExternal, second);
+    let authority = PluginActivationAuthority::open(root.path().join("profile")).unwrap();
+
+    let error = match PluginMarketplaceService::new(authority, [official, external]) {
+        Ok(_) => panic!("remote publisher namespace collision was accepted"),
+        Err(error) => error,
+    };
+
+    assert_eq!(error.kind(), PluginErrorKind::SourceUnavailable);
 }
 
 #[test]

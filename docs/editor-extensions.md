@@ -20,6 +20,7 @@ v1 注册窄 provider。两者可以最终服务同一个 Workbench，但 manife
 | --- | --- | --- |
 | 打开受支持的源码文件 | 使用内置声明式扩展提供的语言关联、配置、grammar 和 snippet | 不下载扩展，不执行 manifest 中的脚本 |
 | 主机配置静态用户扩展目录 | 扫描该目录的直接子包，非法包产生诊断 | Workspace 或 Renderer 不能提交任意扩展根 |
+| Marketplace Plugin 声明 `declarativeExtensions[]` | 仅 effective exact package 的静态目录进入 catalog | 安装本身不激活，也不获得代码执行权限 |
 | 用户静态包与内置包使用同一扩展 ID | 内置包优先，用户包被报告为重复项 | 可变用户文件不能静默替换产品资源 |
 | Plugin 声明可执行 Editor Extension | 校验 exact entrypoint、process permission、Host API v1、activation event 和 capability ceiling | 安装或 manifest 校验本身不会启动进程 |
 | 已授权可执行扩展启动 | Runtime core 为它创建独立进程，完成版本握手和整批 registration validation | 不把它加载进 App Server 进程，不继承主机环境 |
@@ -39,7 +40,7 @@ launcher 尚未实现，默认产品仍以 capability=false 失败关闭，不�
 
 ```mermaid
 flowchart TD
-    package["产品打包或受信主机配置扩展根"] --> scan["zeta-extensions 扫描并冻结包快照"]
+    package["产品根 / Plugin authority exact package / 用户根"] --> scan["zeta-extensions 扫描并冻结包快照"]
     scan -->|非法包| diagnostic["目录诊断；不注册该包"]
     scan --> catalog["不可变目录代次与 package digest"]
     catalog --> protocol["App Server DTO 与有代次约束的资源读取"]
@@ -50,9 +51,10 @@ flowchart TD
     commit --> consumers["Aster / TextMate Worker / Debug service"]
 ```
 
-产品构建把仓库根目录 `extensions/` 复制到包内 `zeta-resources/extensions/`。App Server 组合根先
-注册内置目录，再注册 profile 下的静态用户目录；`zeta-extensions` 按此顺序扫描，每个扩展 ID 的第一
-个有效包获胜。每次 `Refresh` 都产生单调递增的目录代次，并把包内 regular-file bytes 冻结为当前
+产品构建把仓库根目录 `extensions/` 复制到包内 `zeta-resources/extensions/`。App Server 同时把当前
+Plugin activation snapshot 中的 `declarativeExtensions[]` 解析为 exact immutable package directories。
+`zeta-extensions` 按 built-in → Plugin → profile user 顺序扫描，每个扩展 ID 的第一个有效包获胜。每次
+`Refresh` 或 Plugin activation generation 改变都产生单调递增的目录代次，并把包内 regular-file bytes 冻结为当前
 内存快照。资源读取必须携带该代次，只能读取当前快照；刷新后请求旧代次会得到 generation
 conflict，而不是从已变化的磁盘路径读取内容。
 
@@ -102,6 +104,7 @@ Manifest activation events 当前是经过验证并传给 runtime 的 facts；`z
 | 内置静态资源源码与上游 provenance | 根目录 `extensions/` | 运行时扫描、Extension API |
 | 静态包扫描、路径/文件类型校验、快照、摘要与目录代次 | `zeta-extensions` | Editor 贡献语义、任意代码执行 |
 | 静态可信根选择和顺序 | App Server 产品组合根 | 由 Renderer 提交任意主机路径 |
+| Plugin 静态目录选择 | `zeta-plugins` activation authority + App Server provider | 解析静态 `package.json`、授予代码执行 |
 | 静态 DTO、connection resource 与错误映射 | App Server / `platform/extensions` adapter | Workbench 领域注册 |
 | 声明式 catalog 与生命周期 | `IExtensionService` / `AppServerExtensionService` | transport DTO、Plugin enable/grant |
 | Plugin package、install/update/rollback、enable/grant 与 activation generation | `zeta-plugins` | 启动进程、Host RPC、provider registry |
@@ -192,8 +195,8 @@ session seam，不能把任意 executable descriptor 从扩展进程直接交给
 
 ### 5.1 声明式静态资源
 
-主机是静态可信根的唯一来源。内置根固定优先于用户 profile 根；Workspace、Renderer、manifest 和
-网页内容均不能提交任意绝对路径。目录扫描拒绝 symlink、hard link、special file、越界相对路径和不
+主机和 Plugin activation authority 是静态来源的唯一入口。内置根固定优先于 Plugin exact package，
+Plugin 又优先于用户 profile 根；Workspace、Renderer、静态 manifest 和网页内容均不能提交任意绝对路径。目录扫描拒绝 symlink、hard link、special file、越界相对路径和不
 满足 manifest 身份的包。当前限制为：manifest 最大 4 MiB，单文件最大 16 MiB，每包最多 4096 个
 regular files、8192 个 filesystem entries，总 bytes 最大 64 MiB。
 
@@ -202,8 +205,9 @@ regular files、8192 个 filesystem entries，总 bytes 最大 64 MiB。
 package digest，原始 `package.json` bytes 已包含在 `packageSha256` 的整包身份中。当前快照只保留
 最新代，旧代资源请求明确失败，不做隐式重绑定。
 
-静态 profile 根当前没有独立 Editor Extension registry、signature、revocation 或 grant authority。把
-文件放入该目录不等于获得任意代码执行；它只能贡献第 3 节列出的声明式数据。
+静态 profile 根当前没有独立 Editor Extension registry、signature、revocation 或 grant authority。由
+Marketplace 分发的静态目录则继承外层 Plugin 的 TUF/digest/revocation 与 enable/grant authority，但
+仍不获得任意代码执行；两种来源都只能贡献第 3 节列出的声明式数据。
 
 ### 5.2 可执行进程
 
@@ -255,6 +259,7 @@ Host exit、invalid protocol 或 unknown outcome 会清空旧 registration，终
 | 子系统 | 状态 | 实现证据或缺口 |
 | --- | --- | --- |
 | 静态 package discovery、snapshot、digest、资源读取 | 已实现 | `zeta-extensions` + App Server extension operations |
+| Plugin 声明式 Extension 分发与 live activation | 已实现 | `declarativeExtensions[]`、dynamic source provider、Workbench Plugin generation refresh |
 | 声明式语言、grammar、snippet、theme、debugger 投影 | 已实现 | `AppServerExtensionService` 与领域 registry tests |
 | Plugin executable declaration、exact process permission、authority | 已实现 | `zeta-plugins` manifest/package/authority tests |
 | Host RPC v1、独立进程监管、取消、配额、restart | 已实现 | `zeta-editor-extension-host` standalone tests |

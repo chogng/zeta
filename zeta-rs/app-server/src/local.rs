@@ -1730,6 +1730,21 @@ fn sync_remote_marketplaces(
         let snapshot = RemotePluginMarketplace::new(config.clone(), Arc::clone(&http))
             .sync()
             .map_err(open_error)?;
+        let cache = snapshot.cache_report();
+        if cache.evicted_packages > 0 {
+            log::info!(
+                "Plugin Marketplace '{id}' cache evicted {} package(s) and {} byte(s)",
+                cache.evicted_packages,
+                cache.evicted_bytes
+            );
+        }
+        if cache.excess_packages > 0 || cache.excess_bytes > 0 {
+            log::warn!(
+                "Plugin Marketplace '{id}' cache exceeds policy by {} package(s) and {} byte(s)",
+                cache.excess_packages,
+                cache.excess_bytes
+            );
+        }
         revisions.push(format!("{id}:{}", snapshot.targets_version()));
         revoked.extend(snapshot.revoked().iter().cloned());
         marketplaces.push(snapshot.into_marketplace());

@@ -71,6 +71,7 @@ mod mcp_operations;
 pub(crate) mod multi_agent_tools;
 mod notification_queue;
 mod operations;
+mod plugin_extension_sources;
 mod plugin_operations;
 mod plugin_runtime;
 mod plugin_skill_sources;
@@ -144,6 +145,7 @@ pub struct AppServer {
     pub(super) extension_hosts: Option<extension_host_runtime::ExtensionHostRuntime>,
     pub(super) plugin_marketplaces: Option<zeta_plugins::PluginMarketplaceService>,
     plugin_skill_sources: Option<Arc<dyn zeta_skills_extension::DynamicSkillSourceProvider>>,
+    plugin_extension_sources: Option<Arc<dyn zeta_extensions::DynamicExtensionSourceProvider>>,
     pub(super) mcp_runtime_intents: McpRuntimeIntents,
     pub(super) mcp_status: Arc<RwLock<zeta_mcp_extension::McpRuntimeStatusSnapshot>>,
     language: Mutex<language_runtime::AppServerLanguageRuntime>,
@@ -260,6 +262,7 @@ impl AppServer {
             extension_hosts: None,
             plugin_marketplaces: None,
             plugin_skill_sources: None,
+            plugin_extension_sources: None,
             mcp_runtime_intents: McpRuntimeIntents::default(),
             mcp_status: Arc::new(RwLock::new(
                 zeta_mcp_extension::McpRuntimeStatusSnapshot::empty(1),
@@ -465,6 +468,12 @@ impl AppServer {
             log::error!("failed to bind Plugin Skill sources: {error}");
         }
         self.plugin_skill_sources = Some(skill_sources);
+        let extension_sources: Arc<dyn zeta_extensions::DynamicExtensionSourceProvider> =
+            Arc::new(plugin_extension_sources::PluginExtensionSourceProvider::new(plugins.clone()));
+        if let Ok(catalog) = self.extensions.get_mut() {
+            catalog.bind_dynamic_sources(Arc::clone(&extension_sources));
+        }
+        self.plugin_extension_sources = Some(extension_sources);
         self.plugins = Some(plugins);
         self
     }
@@ -585,7 +594,11 @@ impl AppServer {
     }
 
     pub fn with_extension_roots(mut self, roots: Vec<ExtensionRoot>) -> Self {
-        self.extensions = Mutex::new(ExtensionCatalog::new(roots));
+        let mut catalog = ExtensionCatalog::new(roots);
+        if let Some(provider) = &self.plugin_extension_sources {
+            catalog.bind_dynamic_sources(Arc::clone(provider));
+        }
+        self.extensions = Mutex::new(catalog);
         self
     }
 

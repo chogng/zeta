@@ -208,20 +208,29 @@ use crate::protocol::mcp::McpOAuthMutationResult;
 use crate::protocol::mcp::McpOAuthStartParams;
 use crate::protocol::mcp::McpOAuthStartResult;
 use crate::protocol::mcp::McpSecretDto;
+use crate::protocol::mcp::McpServerRuntimeIntentDto;
 use crate::protocol::mcp::McpServerRuntimeIntentParams;
 use crate::protocol::mcp::McpServerRuntimeIntentResult;
+use crate::protocol::mcp::McpServerRuntimeStateDto;
+use crate::protocol::mcp::McpServerStatusDto;
 use crate::protocol::mcp::McpServerStatusResult;
 use crate::protocol::model::{ModelCatalogEntry, ModelListResult};
 use crate::protocol::notification::{SessionUpdateEnvelope, ThreadUpdateEnvelope};
 use crate::protocol::plugins::PluginCommandDispositionDto;
 use crate::protocol::plugins::PluginCommandResultDto;
+use crate::protocol::plugins::PluginContributionSummaryDto;
+use crate::protocol::plugins::PluginCredentialKindDto;
+use crate::protocol::plugins::PluginCredentialSlotDto;
 use crate::protocol::plugins::PluginListResult;
 use crate::protocol::plugins::PluginMarketplaceCommandParams;
 use crate::protocol::plugins::PluginMarketplaceListResult;
 use crate::protocol::plugins::PluginMarketplaceModeDto;
 use crate::protocol::plugins::PluginMarketplacePackageDto;
+use crate::protocol::plugins::PluginMarketplaceTrustDto;
 use crate::protocol::plugins::PluginPackageCommandParams;
 use crate::protocol::plugins::PluginPackageDto;
+use crate::protocol::plugins::PluginPermissionDto;
+use crate::protocol::plugins::PluginWorkspaceAccessDto;
 use crate::protocol::plugins::PluginsChanged;
 use crate::protocol::resources::{
     ResourceMetadataParams, ResourceMetadataResult, ResourceReadParams, ResourceReadResult,
@@ -1489,15 +1498,27 @@ typescript_bindings! {
     McpOAuthCompleteParams,
     McpOAuthMutationParams,
     McpOAuthMutationResult,
+    McpServerRuntimeIntentDto,
+    McpServerRuntimeIntentParams,
+    McpServerRuntimeIntentResult,
+    McpServerRuntimeStateDto,
+    McpServerStatusDto,
+    McpServerStatusResult,
     PluginPackageDto,
     PluginListResult,
     PluginMarketplaceCommandParams,
     PluginMarketplaceListResult,
     PluginMarketplaceModeDto,
     PluginMarketplacePackageDto,
+    PluginMarketplaceTrustDto,
     PluginPackageCommandParams,
     PluginCommandDispositionDto,
     PluginCommandResultDto,
+    PluginContributionSummaryDto,
+    PluginCredentialKindDto,
+    PluginCredentialSlotDto,
+    PluginPermissionDto,
+    PluginWorkspaceAccessDto,
     PluginsChanged,
     TurnId,
     DelegationId,

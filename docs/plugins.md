@@ -7,8 +7,8 @@
 > `zeta-rs/connectors`，Plugin projection、durable authority 与 API-token connect/revoke 位于
 > `zeta-rs/ext/connectors`；App Server 已能从注入的 activation 自动接线 Connector 与 MCP，通用 OAuth
 > PKCE/device 状态机、App Server control plane、Desktop/TUI 产品入口与 GitHub providers 已实现；
-> TUF 远端 Marketplace、delegated publisher、完整离线缓存、revocation tombstone 与安全 ZIP ingestion
-> 已实现；PL4 的可执行 Editor Extension 安装/授权声明已实现，Host runtime 不由本 crate 拥有
+> TUF 远端 Marketplace、delegated publisher、离线签名目录缓存、按需安全 ZIP ingestion 与 revocation
+> tombstone 已实现；PL4 的可执行 Editor Extension 安装/授权声明已实现，Host runtime 不由本 crate 拥有
 > 当前 crate 实现契约：[`zeta-rs/plugins/README.md`](../zeta-rs/plugins/README.md)
 > 远端分发实现契约：[`zeta-rs/plugin-marketplace/README.md`](../zeta-rs/plugin-marketplace/README.md)
 > Connector account/lifecycle：[`connectors.md`](connectors.md)
@@ -32,6 +32,8 @@ Plugin 是经过校验和版本管理的扩展包，不是安装后便能执行�
 | 更新或回滚 | 并存校验后的版本并原子切换 | 不原地修改已安装包 |
 | 卸载 | 撤销后续激活并清理可回收内容 | 不删除其他领域拥有的秘密或历史 |
 | 打开正式打包的 Zeta | 从产品内固定的 root 刷新官方 HTTPS Marketplace | 不信任服务器提供的新 root，不自动安装或启用 Plugin |
+| 浏览 Marketplace | 读取已签名 manifest、能力、权限与包统计；离线时可使用仍有效的目录缓存 | 不预下载所有 Plugin ZIP |
+| 安装远端 Plugin | 重新检查 TUF 与撤销状态，只下载所选 exact ZIP，再校验内容摘要 | 不因已浏览或已下载而自动启用、授权 |
 
 ## 1. 结论
 
@@ -56,12 +58,14 @@ flowchart TD
     P --> C["ConnectorContribution → Connector runtime"]
     P --> M["McpServerContribution"]
     P --> E["EditorExtensionContribution → executable Host RPC v1 program"]
+    P --> D["DeclarativeExtensionContribution → static package.json catalog"]
     P --> A["StaticAssetContribution → Resource consumer"]
     C -. "references declaration" .-> M
     C -->|"connected"| B["Ready MCP binding"]
     M -->|"standalone activation"| R["MCP runtime"]
     M --> B
     E --> H["zeta-editor-extension-host supervisor"]
+    D --> X["zeta-extensions immutable snapshot"]
     B --> R
     R --> T["Tool Registry / Core"]
 ```
@@ -70,16 +74,21 @@ Plugin 只负责声明控制面和 package lifecycle。Skill、Connector、MCP �
 语义；它们不是 Plugin manager 内部的 live 子对象。Plugin、Connector 与 MCP 的 canonical 关系由
 [`connectors.md`](connectors.md) 维护。
 
-静态 Editor Extension 是另一套边界：它从 host-selected roots 读取 `package.json` 和声明式
-language/TextMate/snippet/theme/debugger 资源，不使用 Plugin v1 manifest，也没有 Plugin 的
-install/enable/grant/runtime 语义。其 canonical 文档是
-[`editor-extensions.md`](editor-extensions.md)。未来若共享安装控制面，仍必须保留两种 manifest、
-activation 与权限语义的显式转换，不能把当前静态 catalog 误称为 Plugin runtime。
+静态 Editor Extension 保持另一套内容边界：它读取自己的 `package.json` 和声明式
+language/TextMate/snippet/theme/debugger 资源。Plugin v1 现在可用 `declarativeExtensions[]` 指向包内
+静态 Extension 目录；只有 effective exact Plugin package 会被 App Server 投影到 `zeta-extensions`。
+这共享 install/enable/grant/revocation lifecycle，但不合并两种 manifest，也不把静态内容变成可执行
+runtime。其 canonical 文档是 [`editor-extensions.md`](editor-extensions.md)。
 
 Plugin v1 现在提供显式 `editorExtensions[]` bridge。每项指向包内一个可直接启动、自己实现 Zeta Host
 RPC v1 的程序；它不是由通用 Node/WASM runtime 加载的脚本。Plugin manager 只验证并授权声明，
 `zeta-editor-extension-host` supervisor 才拥有逐扩展进程隔离、RPC、crash recovery 和 provider
 lifecycle。静态 `package.json` catalog 不会被隐式转换成该 executable declaration。
+
+`declarativeExtensions[]` 是另一条显式 bridge：每项只有 manifest-local ID 和 package-relative
+directory，目录必须包含 regular `package.json`。它不需要 `process` permission；安装只存储 bytes，
+enable + grant 后才进入静态 catalog，disable、grant revoke、package revoke、update 或 uninstall 会使
+下一次 catalog refresh 移除旧 exact package。Workbench 监听 Plugin activation generation 并自动刷新。
 生产第三方执行还必须由产品注入能够实施 sandbox、memory/CPU/process hard limits 和 process-tree
 termination 的 platform launcher；没有该 launcher 时 Host capability 必须为 false，不能用
 `TrustedDevelopmentLauncher` 降级。该 v1 是 Zeta-native executable RPC，不是 VS Code/Node Extension
@@ -648,12 +657,18 @@ runtime 不可用，但不会把 Plugin 标成未安装。
 
 已实现 mutation 使用 `CommandId + expectedRevision + exact package payload`；安装入口不会接受 Renderer
 传入的任意宿主文件路径。`Managed` Marketplace root 由产品分发层注册，`LocalDevelopment` 仅在 host
-显式开启时可用。`RemoteManaged` Marketplace 已通过 host-pinned TUF root 同步 HTTPS catalog：
+显式开启时可用。读取模式不决定运营方信任：官方远端源仍为 `ProductManaged`，只有由 host 明确接入、
+固定独立 root 并声明 non-empty `allowedPublishers` 的第三方源才是 `VerifiedExternal`；任一签名 target
+越过该 namespace scope 会使整源 fail-closed。不同远端源实际发布同一 publisher namespace 时，组合也会
+因 owner ambiguity 失败，而不是按源顺序覆盖。`RemoteManaged` Marketplace 已通过 host-pinned
+TUF root 同步 HTTPS catalog：
 timestamp/snapshot/targets 的 threshold、rollback 与 expiry 检查由 TUF verifier 执行；package 必须来自
-`publishers/<publisher>` delegated role，并同时通过 target hash/length、受限 ZIP extraction、manifest
-identity 与 Zeta normalized digest。全仓库缓存只有在所有 package 验证成功后才替换；transport 失败可打开
-仍未过期的最后完整缓存，签名/过期/package 失败不能降级。顶层 revocation target 会写入 durable exact-package
-tombstone，不因后续 feed 缺项自动恢复。download progress 与 catalog 搜索仍未实现。
+`publishers/<publisher>` delegated role。刷新只缓存签名 metadata、`zetaCatalog` discovery metadata 与撤销
+target，不预取 ZIP；安装或更新时才重新检查当前 TUF/revocation authority、读取一个 exact target，并通过
+target hash/length、受限 ZIP extraction、manifest identity 与 Zeta normalized digest。transport 失败可打开
+仍未过期的最后目录缓存；离线安装只允许此前已经 materialize 且再次通过 exact digest 的包。顶层
+revocation target 会写入 durable exact-package tombstone，不因后续 feed 缺项自动恢复。可搜索的 Desktop
+目录、按需 package cache quota/GC 已实现；download progress 与 permission/contribution diff 仍未实现。
 
 正式 package 把只读配置和公开信任根放在
 `zeta-resources/product-services/{product-services.json,marketplace-root.json}`。`zeta-cli` 通过
@@ -661,6 +676,8 @@ tombstone，不因后续 feed 缺项自动恢复。download progress 与 catalog
 Marketplace；`ZETA_PRODUCT_SERVICES_PATH` 与 App Server 的 `--product-services PATH` 仍是产品宿主的
 显式覆盖入口。远端 metadata、Plugin、用户配置和 Workspace 都不能更换这份 root。发行源仓库仍为
 private，Pages 只暴露经过 CI 生成和 Zeta 消费端复核的 `metadata/` 与 `targets/` 静态产物。
+默认产品文件只启用官方源；第三方源只能由 host 在同一只读文件中追加，不能从 Plugin、自身远端 metadata
+或普通用户设置提升为发行信任。
 
 客户端必须展示：
 
@@ -780,6 +797,7 @@ content-addressed object、重新验证 exact digest，再原子 promote。mutab
 - ✅ durable install/enable/disable/uninstall authority record 与 typed command replay；
 - ✅ live revision/activation subscription、App Server lifecycle RPC/reconcile 与 exact invocation drain；
 - ✅ Plugin Skill contribution 的 exact immutable source projection 与 live catalog refresh；
+- ✅ declarative Extension contribution 的 exact immutable source projection、precedence 与 live refresh；
 - ✅ Connector contribution 的 normalized projection；
 - ✅ user-profile exact Marketplace reconcile；Workspace request 保持只读、不能自动 grant；
 - 尚未完成：startup orphan recovery。
@@ -798,10 +816,12 @@ content-addressed object、重新验证 exact digest，再原子 promote。mutab
 ### 阶段 PL3：远端目录、signature 与更新增强
 
 - ✅ host-registered Marketplace metadata 与 digest-pinned materialized package ingestion；
-- ✅ TUF 远端 catalog/download、完整离线 cache 与 fail-closed verification；
+- ✅ TUF 远端 signed discovery catalog、离线 metadata cache 与按需 exact package download；
 - ✅ delegated publisher signature、root rotation/expiry/rollback 与顶层 revocation feed；
 - permission/contribution diff；
-- ✅ side-by-side staged update 与 exact rollback；GC 尚未完成。
+- ✅ side-by-side staged update 与 exact rollback；
+- ✅ 每 Marketplace materialized cache count/bytes budget、signed-target-aware eviction、protected
+  install handoff 与 retained/evicted/excess report；installed content store 不受 cache GC 影响。
 
 完成条件：相同 ID/version 不可换内容，grant expansion 必须重新 consent。
 
@@ -830,6 +850,7 @@ content-addressed object、重新验证 exact digest，再原子 promote。mutab
 - manifest unknown field、invalid ID/version、duplicate contribution；
 - Editor Extension runtime API、exact executable permission、activation/capability bound 与 entrypoint file type；
 - path traversal、symlink/hardlink、normalization collision 和 archive bomb；
+- declarative Extension 目录、`package.json` file type、source precedence 与 activation refresh；
 - digest/signature/revocation；
 - install 每个 durable boundary 的 crash recovery；
 - enable/grant `CommandId` replay 和 payload conflict；

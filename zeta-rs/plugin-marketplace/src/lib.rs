@@ -5,11 +5,14 @@
 //! installation and activation authority remain owned by `zeta-plugins`.
 
 mod archive;
+mod cache;
 mod error;
 mod metadata;
 mod remote;
 mod transport;
 
+pub use cache::RemoteMarketplaceCachePolicy;
+pub use cache::RemoteMarketplaceCacheReport;
 pub use error::RemoteMarketplaceError;
 pub use error::RemoteMarketplaceErrorKind;
 pub use remote::RemotePluginMarketplace;

@@ -15,6 +15,7 @@ pub enum ExtensionCatalogReloadDto {
 #[serde(rename_all = "camelCase")]
 pub enum ExtensionSourceKindDto {
     BuiltIn,
+    Plugin,
     User,
 }
 

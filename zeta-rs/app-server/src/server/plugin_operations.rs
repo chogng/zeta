@@ -6,14 +6,22 @@ use serde_json::Value;
 use zeta_app_server_protocol::protocol::error::AppServerErrorName;
 use zeta_app_server_protocol::protocol::plugins::PluginCommandDispositionDto;
 use zeta_app_server_protocol::protocol::plugins::PluginCommandResultDto;
+use zeta_app_server_protocol::protocol::plugins::PluginContributionSummaryDto;
+use zeta_app_server_protocol::protocol::plugins::PluginCredentialKindDto;
+use zeta_app_server_protocol::protocol::plugins::PluginCredentialSlotDto;
 use zeta_app_server_protocol::protocol::plugins::PluginListResult;
 use zeta_app_server_protocol::protocol::plugins::PluginMarketplaceCommandParams;
 use zeta_app_server_protocol::protocol::plugins::PluginMarketplaceListResult;
 use zeta_app_server_protocol::protocol::plugins::PluginMarketplaceModeDto;
 use zeta_app_server_protocol::protocol::plugins::PluginMarketplacePackageDto;
+use zeta_app_server_protocol::protocol::plugins::PluginMarketplaceTrustDto;
 use zeta_app_server_protocol::protocol::plugins::PluginPackageCommandParams;
 use zeta_app_server_protocol::protocol::plugins::PluginPackageDto;
+use zeta_app_server_protocol::protocol::plugins::PluginPermissionDto;
+use zeta_app_server_protocol::protocol::plugins::PluginWorkspaceAccessDto;
+use zeta_plugins::CredentialKind;
 use zeta_plugins::InstalledPluginRef;
+use zeta_plugins::Permission;
 use zeta_plugins::PluginAuthorityCommand;
 use zeta_plugins::PluginAuthorityCommandId;
 use zeta_plugins::PluginAuthorityCommandRequest;
@@ -24,8 +32,10 @@ use zeta_plugins::PluginErrorKind;
 use zeta_plugins::PluginId;
 use zeta_plugins::PluginMarketplaceId;
 use zeta_plugins::PluginMarketplaceMode;
+use zeta_plugins::PluginMarketplaceTrust;
 use zeta_plugins::PluginPackageDigest;
 use zeta_plugins::PluginVersion;
+use zeta_plugins::WorkspaceAccess;
 
 impl AppServer {
     pub(super) fn plugin_list(&self) -> Result<Value, RpcError> {
@@ -69,11 +79,19 @@ impl AppServer {
             .marketplaces()
             .flat_map(|marketplace| {
                 marketplace.list().into_iter().map(|package| {
+                    let manifest = package.manifest();
+                    let stats = package.stats();
                     let package = package.package_ref();
+                    let active = installed.activation().packages().iter().any(|candidate| {
+                        candidate.manifest().id == package.id
+                            && candidate.manifest().version == package.version
+                            && candidate.package_digest() == &package.digest
+                    });
+                    let marketplace_mode = marketplace.mode();
                     PluginMarketplacePackageDto {
                         marketplace_id: marketplace.id().as_str().to_owned(),
                         marketplace_revision: marketplace.revision().as_str().to_owned(),
-                        marketplace_mode: match marketplace.mode() {
+                        marketplace_mode: match marketplace_mode {
                             PluginMarketplaceMode::Managed => PluginMarketplaceModeDto::Managed,
                             PluginMarketplaceMode::RemoteManaged => {
                                 PluginMarketplaceModeDto::RemoteManaged
@@ -82,10 +100,55 @@ impl AppServer {
                                 PluginMarketplaceModeDto::LocalDevelopment
                             }
                         },
+                        marketplace_trust: match marketplace.trust() {
+                            PluginMarketplaceTrust::ProductManaged => {
+                                PluginMarketplaceTrustDto::ProductManaged
+                            }
+                            PluginMarketplaceTrust::VerifiedExternal => {
+                                PluginMarketplaceTrustDto::VerifiedExternal
+                            }
+                            PluginMarketplaceTrust::LocalDevelopment => {
+                                PluginMarketplaceTrustDto::LocalDevelopment
+                            }
+                        },
                         id: package.id.as_str().to_owned(),
+                        publisher: package
+                            .id
+                            .as_str()
+                            .split_once('/')
+                            .map_or_else(String::new, |(publisher, _)| publisher.to_owned()),
                         version: package.version.to_string(),
                         digest: package.digest.as_str().to_owned(),
+                        display_name: manifest.display_name.clone(),
+                        description: manifest.description.clone(),
+                        license: manifest.license.clone(),
+                        compatibility_zeta: manifest.compatibility.zeta.to_string(),
+                        contributions: contribution_summary(manifest),
+                        permissions: manifest.permissions.iter().map(permission_dto).collect(),
+                        credential_slots: manifest
+                            .credential_slots
+                            .iter()
+                            .map(|slot| PluginCredentialSlotDto {
+                                name: slot.name.as_str().to_owned(),
+                                kind: match slot.kind {
+                                    CredentialKind::SecretText => {
+                                        PluginCredentialKindDto::SecretText
+                                    }
+                                },
+                                required_for: slot
+                                    .required_for
+                                    .iter()
+                                    .map(ToString::to_string)
+                                    .collect(),
+                            })
+                            .collect(),
+                        package_file_count: stats.file_count,
+                        package_size_bytes: stats.total_bytes,
                         installed: installed.installed().contains(&package),
+                        enabled: installed.enabled().contains(&package),
+                        granted: installed.granted().contains(&package),
+                        effective: active,
+                        revoked: installed.revoked().contains(&package),
                     }
                 })
             })
@@ -190,6 +253,34 @@ impl AppServer {
         self.plugin_marketplaces
             .as_ref()
             .ok_or_else(|| RpcError::new(-32040, AppServerErrorName::PluginsUnavailable))
+    }
+}
+
+fn contribution_summary(manifest: &zeta_plugins::PluginManifest) -> PluginContributionSummaryDto {
+    PluginContributionSummaryDto {
+        skills: manifest.contributions.skills.len() as u32,
+        mcp_servers: manifest.contributions.mcp_servers.len() as u32,
+        connectors: manifest.contributions.connectors.len() as u32,
+        assets: manifest.contributions.assets.len() as u32,
+        editor_extensions: manifest.contributions.editor_extensions.len() as u32,
+        declarative_extensions: manifest.contributions.declarative_extensions.len() as u32,
+    }
+}
+
+fn permission_dto(permission: &Permission) -> PluginPermissionDto {
+    match permission {
+        Permission::Process { executable } => PluginPermissionDto::Process {
+            executable: executable.as_str().to_owned(),
+        },
+        Permission::Workspace { access } => PluginPermissionDto::Workspace {
+            access: match access {
+                WorkspaceAccess::Read => PluginWorkspaceAccessDto::Read,
+                WorkspaceAccess::Write => PluginWorkspaceAccessDto::Write,
+            },
+        },
+        Permission::Network { hosts } => PluginPermissionDto::Network {
+            hosts: hosts.iter().map(ToString::to_string).collect(),
+        },
     }
 }
 

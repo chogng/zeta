@@ -5,7 +5,9 @@ use tough::Repository;
 use tough::TargetName;
 use tough::schema::Targets;
 use zeta_plugins::InstalledPluginRef;
+use zeta_plugins::PackageFileStats;
 use zeta_plugins::PluginId;
+use zeta_plugins::PluginManifest;
 use zeta_plugins::PluginPackageDigest;
 use zeta_plugins::PluginVersion;
 
@@ -19,6 +21,13 @@ pub(crate) struct PublishedPluginTarget {
     pub name: TargetName,
     pub package: InstalledPluginRef,
     pub length: u64,
+    pub catalog: Option<PublishedPluginCatalog>,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct PublishedPluginCatalog {
+    pub manifest: PluginManifest,
+    pub stats: PackageFileStats,
 }
 
 #[derive(Deserialize)]
@@ -28,6 +37,40 @@ struct PluginTargetMetadata {
     id: PluginId,
     version: PluginVersion,
     package_digest: PluginPackageDigest,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct PluginTargetCatalogMetadata {
+    schema_version: u32,
+    manifest: PluginManifest,
+    package_file_count: u64,
+    package_size_bytes: u64,
+}
+
+impl PluginTargetCatalogMetadata {
+    pub(crate) fn into_catalog(
+        self,
+        package: &InstalledPluginRef,
+    ) -> Result<PublishedPluginCatalog, RemoteMarketplaceError> {
+        if self.schema_version != 1
+            || self.manifest.id != package.id
+            || self.manifest.version != package.version
+            || self.package_file_count == 0
+            || self.package_file_count > crate::archive::MAX_ARCHIVE_ENTRIES as u64
+            || self.package_size_bytes == 0
+            || self.package_size_bytes > crate::archive::MAX_EXPANDED_BYTES
+        {
+            return Err(metadata_error());
+        }
+        Ok(PublishedPluginCatalog {
+            manifest: self.manifest,
+            stats: PackageFileStats {
+                file_count: self.package_file_count,
+                total_bytes: self.package_size_bytes,
+            },
+        })
+    }
 }
 
 #[derive(Deserialize)]
@@ -107,11 +150,21 @@ fn collect_delegated_targets(
                 version: metadata.version,
                 digest: metadata.package_digest,
             };
+            let catalog = target
+                .custom
+                .get("zetaCatalog")
+                .cloned()
+                .map(serde_json::from_value::<PluginTargetCatalogMetadata>)
+                .transpose()
+                .map_err(|_| metadata_error())?
+                .map(|catalog| catalog.into_catalog(&package))
+                .transpose()?;
             let key = (package.id.clone(), package.version.clone());
             let published = PublishedPluginTarget {
                 name: name.clone(),
                 package,
                 length: target.length,
+                catalog,
             };
             if let Some(existing) = packages.insert(key, published.clone())
                 && existing.package != published.package

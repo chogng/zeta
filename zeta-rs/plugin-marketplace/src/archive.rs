@@ -13,8 +13,8 @@ use crate::RemoteMarketplaceError;
 use crate::RemoteMarketplaceErrorKind;
 
 pub(crate) const MAX_ARCHIVE_BYTES: u64 = 64 * 1024 * 1024;
-const MAX_ARCHIVE_ENTRIES: usize = 4096;
-const MAX_EXPANDED_BYTES: u64 = 128 * 1024 * 1024;
+pub(crate) const MAX_ARCHIVE_ENTRIES: usize = 4096;
+pub(crate) const MAX_EXPANDED_BYTES: u64 = 128 * 1024 * 1024;
 
 pub(crate) fn extract(bytes: &[u8], destination: &Path) -> Result<(), RemoteMarketplaceError> {
     if bytes.len() as u64 > MAX_ARCHIVE_BYTES {
