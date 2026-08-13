@@ -1,6 +1,9 @@
 use std::path::Path;
 use std::path::PathBuf;
 
+use crate::ShellAlias;
+use crate::ShellCompletion;
+use crate::ShellCompletionSnapshot;
 use crate::history::InputHistory;
 use crate::history::InputHistoryEntry;
 use crate::model::ModelAttempt;
@@ -111,6 +114,31 @@ impl InputClassifier {
     /// Rebinds workspace-relative command and path evidence.
     pub fn set_working_directory(&mut self, working_directory: &Path) {
         self.shell_context.set_working_directory(working_directory);
+    }
+
+    /// Replaces the executable search path supplied by the active Shell environment.
+    pub fn set_shell_path_entries(&mut self, entries: impl IntoIterator<Item = PathBuf>) {
+        self.shell_context.set_path_entries(entries);
+    }
+
+    /// Replaces aliases supplied by the active Shell environment.
+    pub fn replace_shell_aliases(&mut self, aliases: impl IntoIterator<Item = ShellAlias>) {
+        self.shell_context.replace_aliases(aliases);
+    }
+
+    /// Re-reads workspace-owned package scripts, Just recipes, and Make targets.
+    pub fn refresh_shell_workspace(&mut self) {
+        self.shell_context.refresh_workspace();
+    }
+
+    /// Returns structural Shell completion candidates using the same evidence as classification.
+    pub fn shell_completions(&self, input: &str, cursor: usize) -> Vec<ShellCompletion> {
+        self.shell_context.complete(input, cursor)
+    }
+
+    /// Returns Shell completion candidates and exact-token metadata from the shared context.
+    pub fn shell_completion_snapshot(&self, input: &str, cursor: usize) -> ShellCompletionSnapshot {
+        self.shell_context.complete_snapshot(input, cursor)
     }
 
     /// Replaces chronological Shell and Agent submissions used for close-match routing.

@@ -1,7 +1,9 @@
 # `zeta-input-classifier`
 
-`zeta-input-classifier` 拥有本地 Shell/Agent 自动路由的完整决策管线：输入 parser、最近提交历史、
-Shell token 语义、工作区/PATH 解析、确定性规则、BERT-Tiny v3 模型与 tokenizer、模型失败后的 fallback。
+`zeta-input-classifier` 拥有本地 Shell/Agent 自动路由的完整决策管线：自然语言 parser、最近提交历史、
+确定性规则、BERT-Tiny v3 模型与 tokenizer、模型失败后的 fallback。Shell parser、command signatures、
+工作区/PATH/alias token evidence 和 completion candidates 由
+[`zeta-shell-completion`](../shell-completion/README.md) canonical 拥有，本 crate 只消费它的 snapshot。
 产品宿主只提供当前工作目录、当前路由和会话位置，不得复制标签顺序、阈值或词典。分类结果不做
 命令风险判断，也不授权执行。
 
@@ -15,6 +17,8 @@ Shell token 语义、工作区/PATH 解析、确定性规则、BERT-Tiny v3 模�
 | `InputHistoryEntry` | 提供按时间排序的 Shell 命令和 Agent prompt | Snapshot 必须按 Turn 顺序重建；command-not-found 不进入 Shell 历史 |
 | `InputClassification` | 返回路由、置信度与决策来源 | 置信度只用于诊断，不得作为执行授权 |
 | `start_background_warmup` | 后台解码一次内嵌模型和 tokenizer | 创建输入界面时调用，避免首次按键承担加载延迟 |
+| `shell_completions` / `shell_completion_snapshot` | 从分类器持有的同一 Shell context 返回补全项；snapshot 另含当前 token 的精确匹配状态 | UI 可投影结果，但不能建立第二套 parser/registry |
+| `replace_shell_aliases` / `set_shell_path_entries` | 更新宿主提供的 Shell 环境快照 | 只能传入当前执行环境的事实；不得猜测 alias |
 
 Zeterm 只把 `InputRoute` 映射为 Composer 模式，并把真实 Turn 生命周期投影成
 `InputConversation` 和按顺序排列的 `InputHistoryEntry`。Shell parser、相似度计算、PATH/manifest
@@ -31,8 +35,8 @@ InputClassifier::classify
       newest Shell command / Agent prompt close match, cutoff 0.9
   → NL one-off / Shell allowlist
   → ShellContext::analyze
-      parse_shell_tokens
-      executable + builtin + workspace runner + subcommand/flag/path descriptions
+      zeta-shell-completion::ShellCompletionEngine::analyze
+      executable + builtin + recursive signature + workspace/alias/path descriptions
       strict token threshold
   → EmbeddedClassifier
       Tokenizer::encode_fast
@@ -50,15 +54,15 @@ Shell token 阈值采用 Warp 当前严格方案：所有解析 token 都有 She
 
 | 证据 | Warp | Zeta 当前实现 |
 | --- | --- | --- |
-| 顶层命令 | 补全器的 `ParsedTokensSnapshot` | 确定性 allowlist、Shell builtin、PATH 可执行文件和工作区 task manifest |
-| 参数 | 命令签名和 token description | 通用子命令、flag 和已存在路径 |
-| alias | 在分类前用当前会话的补全上下文展开 | 不做交互 Shell alias 展开 |
+| 顶层命令 | 补全器的 `ParsedTokensSnapshot` | `zeta-shell-completion` registry、Shell builtin 和 PATH 可执行文件 |
+| 参数 | 命令签名和 token description | 递归 command spec、精确 option/value、现有路径和工作区 target |
+| alias | 在分类前用当前会话的补全上下文展开 | engine 已实现有界展开；由产品宿主提供 alias snapshot |
 | 证据不足 | 交给 BERT-Tiny | 交给 BERT-Tiny |
 
-当前 Zeterm 的 Shell Turn 由 App Server 以 `/bin/sh -lc` 执行，不承诺复用交互终端的
-alias 和补全器语义，因此这个差异不是当前路由契约的缺口。如果后续让 Composer 直接执行到
-交互 PTY，必须先为本 crate 增加后端无关的 token 证据输入契约，再由 Zeterm adapter 提供
-alias 和命令签名；不应把交互终端的补全运行时移进 `zeta-input-classifier`。
+当前 Zeterm 的 Shell Turn 由 App Server 以 `/bin/sh -lc` 执行，尚未向 engine 提供交互 PTY alias 和动态
+generator 候选；因此静态 command grammar、PATH 和 workspace evidence 已生效，alias API 暂时没有产品数据源。
+如果后续让 Composer 直接执行到交互 PTY，应由 Zeterm adapter 提供带环境 revision 的 alias/动态候选快照；
+不应把 PTY 或命令执行运行时移进 `zeta-input-classifier` 或 `zeta-shell-completion`。
 
 `natural_language.rs` 的 fallback 会分别尝试排除和包含未完成的末 token，并按 1.0、0.8、
 0.6 的长度阈值使用 English stems、developer terms 和 command-overlap 词典打分。这三份词典为
@@ -90,7 +94,8 @@ command-overlap 是为 Zeta 独立整理的集合。TextBlob 许可文本位于
 
 - `classifier::classify_with_model` 固定决策顺序与失败分支；改动会影响所有自动模式消费者。
 - `history::InputHistory` 拥有 0.9 相似度门槛和“最新匹配胜出”语义；宿主只提供有序事实。
-- `shell::ShellContext` 拥有命令和 token 描述；把它移回 Zeterm 会造成产品间行为分叉。
+- `shell::ShellContext` 只适配 `zeta-shell-completion::ShellCompletionEngine` 与 classifier 阈值；parser、
+  command registry 和 completion 不得移回本 crate 或 Zeterm。
 - `rules` 只放低风险、确定性的上下文和 allowlist 短路；模糊规则不得绕过模型。
 - `model::EmbeddedClassifier` 绑定模型图、tokenizer、标签和温度；任一资产变更都需要概率测试。
 - `natural_language::classify_with_fallback_heuristic` 只在模型不可用或 panic 后接管；它使用 Zeta
@@ -114,5 +119,7 @@ cargo clippy -p zeta-input-classifier --all-targets -- -D warnings
 `chmod 755 是什么意思`；用户显式选择始终覆盖自动分类。
 
 `InputClassifier::classify` 是同步调用；`start_background_warmup` 只提前解码模型和 tokenizer。
-当前 Zeterm 在编辑变更时直接调用它，将推理移出 UI 线程、废弃过期结果和添加 debounce 属于
-Zeterm adapter 的产品接线工作，不改变本 crate 的决策契约。
+当前 Zeterm 在编辑变更时直接调用分类，并从同一个 `InputClassifier` 请求 Shell completion；候选由
+`AgentComposer` 收敛为输入光标后的 ghost text，并通过 editor 的精确 text edit 应用；Slash/模型
+选择 Pane 不承载 Shell 候选。将模型推理移出 UI 线程、废弃
+过期结果和添加 debounce 属于 Zeterm adapter 的产品接线工作，不改变本 crate 的决策契约。

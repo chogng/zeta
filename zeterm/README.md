@@ -125,7 +125,7 @@ composition API 已删除，后续不得在 Native 宿主重新引入平行输�
 | Session Tab 到本地 PTY 的一对一 binding、活动/非活动 runtime 切换 | `terminal_workspace::TerminalWorkspace` | ✅；pending key、乱序 ready 和非活动 runtime 由 Native adapter 管理，不拥有 App Server Session/Thread authority |
 | Agent ThreadTimeline + fixed Agent/Shell Composer | `shell_scene` / `thread_timeline` / `composer_panel` / `agent_composer` | ✅ |
 | Composer 面板几何、信息栏与可展开交互 Pane 的位置 | [`zeta-composer`](composer/README.md) / `composer_panel` / `shell_scene` | ✅；`zeta-composer` 只解析 panel、固定行、interaction bounds 与 list scroll geometry，Native 负责状态、绘制和 scene 接线 |
-| Composer active View 与滚动状态 | `composer_interaction::ComposerInteractionModel` / `composer_interaction_pane::ComposerInteractionPaneState` / `zeta-ui::{ScrollView,ListView}` | ✅；Pane 只宿主 active View 并保留 viewport offset，通用 UI 基座负责裁剪、滚动与可见范围；Slash core 不拥有 renderer scroll，Native 当前提供 Slash 与 `/model` View |
+| Composer active View 与滚动状态 | `composer_interaction::ComposerInteractionModel` / `composer_interaction_pane::ComposerInteractionPaneState` / `zeta-ui::{ScrollView,ListView}` | ✅；Pane 只宿主 Slash 与 `/model` active View 并保留 viewport offset，通用 UI 基座负责裁剪、滚动与可见范围；Shell completion 不使用该 Pane |
 | App Server Session adapter 与 transient Thread projection / stream-gap recovery | `agent_session` / `thread_projection` | ✅；Thread 只作为 App Server 内部状态的 Native projection，不形成独立 crate |
 | durable direct Shell Turn | App Server `session/request::StartShellTurn` / Core `StartShellTurn` | ✅ |
 | 独立交互式 Terminal Surface | `workspace_surface` / `terminal_session` / `terminal_input` | ✅；`Cmd/Ctrl+J` 切换 |
@@ -183,7 +183,7 @@ authority。下表把仍保留的历史 shell vocabulary 映射到当前产品�
 | `zeta-commands` / `command_dispatch` / `keybindings` / `keybindings_resource` / `keyboard_shortcuts` | 把 pointer/menu 的 `ElementId` 与标准化键盘事件映射到同一 `CommandRequest`，再交给 `CommandRegistry` 的宿主 handler；向 `zeta-keybinding` 提供命令行、稳定 identity 和保存 adapter | Product command 与快捷键输入层 | ✅；支持完整 `when` 表达式、冲突/错误诊断、最多四段 Chord 与 keycap UI |
 | `shell_scene` / `thread_timeline` | Agent Surface 绘制 canonical Thread items；Terminal Surface 绘制活动 grid | Agent Workspace / Terminal compatibility | ✅ |
 | `layout_inspector` | `Cmd/Ctrl+Shift+I` 开关检查面板，面板 cursor action 显式开关选取，点击锁定最深检查节点，Escape 先停止选取再关闭 | Native UI layout inspection | ✅；原生窗口向右扩展独立层级面板，自动显示 ancestor、authored row/column/width/height、computed size/padding/gap/radius、layer 与源码位置 |
-| `composer_editor` / `agent_composer` / `composer_interaction` / `composer_interaction_pane` / `composer_panel` / `terminal_input` | Compact `CodeEditor` 共享 Agent/Shell 多行文档；宿主切换 `CodeEditorLanguage`，Shell parser/revision/token 由 editor 内部拥有；active View model 接管方向键、Enter、Tab、Escape，`zeta-composer` 提供 panel/list geometry，Pane state 与 zeta-ui list 基座接管滚动；Terminal Surface direct input | Agent Composer、Slash/模型选择与 explicit Shell Turn | ✅ |
+| `composer_editor` / `agent_composer` / `composer_interaction` / `composer_interaction_pane` / `composer_panel` / `terminal_input` | Compact `CodeEditor` 共享 Agent/Shell 多行文档；`zeta-input-classifier` 统一提供路由和 Shell completion；Shell 候选收敛为光标后的单条 ghost text，Tab 接受、Escape 隐藏；active View model 只接管 Slash/模型选择；`zeta-composer` 与 zeta-ui list 基座拥有几何和滚动 | Agent Composer、Slash/模型选择、Shell 补全与 explicit Shell Turn | ✅ |
 | `input_context_toolbar` / `workspace_path_picker` / `git_branch_context_menu` | `ActionBar` 排列 mode、Local、cwd、branch 与 `Changes files • +additions -deletions`；cwd 组合 `Dropdown`，branch 组合 `ContextMenu`，两者均使用各自通用 header slot | Composer context toolbar | ✅；两个浮层第一行均默认聚焦 Search Box；目录或分支切换后替换 Files 根、文件搜索索引和 Git/Changes projection；Changes action 刷新 Git projection、展开右栏并选择 Changes Pane |
 | `session_tab_list` | 组合 `zeta-ui::TabList` 投影 App Server Session；自身拥有白色状态容器、会话名和工作区两行截断信息，以及纵向 TabList/selected Tab 语义 | 多会话导航 | 已支持动态创建和切换；每个 Session Tab 绑定独立 Terminal PTY |
 | `session_sidebar_toolbar` / `session_search` | 整行组合 `SearchBox` 与右侧 `ActionBar`；按 session name 执行大小写不敏感过滤，并把 Add 暴露为稳定 action | Session 搜索与新建入口 | 搜索、新建 Session/Thread 和新 tab projection 已接通 |
@@ -426,6 +426,14 @@ viewport offset，`zeta-ui::ScrollView` / `ListView` 统一处理 content geomet
 选择和 dismiss 委托给 `zeta-slash-commands`，滚动由 Native renderer 保留。当前输入 `/` 时由共享
 状态提供 active View 并按初始化快照过滤命令；选择 `/model` 后压入模型列表。Escape 从子 View
 返回上一层，在根 View 时使 Pane 收起。
+非 Slash 输入由 `AgentComposer` 从
+[`zeta-input-classifier`](../zeta-rs/input-classifier/README.md) 持有的同一 Shell context 请求候选；
+command、subcommand、option、工作区 target 与 path 候选不会打开 Pane。`AgentComposer` 在光标位于
+输入末尾时把唯一候选的剩余文本，或多个候选仍可确定的最长公共前缀，投影为 `CodeEditor` 光标后的
+灰色 ghost text；没有可确定的下一段时不显示。Tab 通过 `CodeEditorTextEdit` 接受该段并重新运行自动
+路由，Escape 在输入再次变化前隐藏建议。Shell parser、command registry、PATH/manifest 扫描与 alias 展开仍由
+[`zeta-shell-completion`](../zeta-rs/shell-completion/README.md) 拥有，Native 不复制判断规则；相关
+workspace 文件变化时只触发该 context 的候选快照刷新。
 `zeta_composer::ComposerPanelLayout` 组合“交互区 → 信息栏 → editor → toolbar”；信息栏固定显示
 当前 mode 的提示，toolbar 固定在底部。交互区出现时只增加底部 Panel 高度并向上压缩
 ThreadTimeline，信息栏、editor 与 toolbar 的位置保持不变。模型列表来自 typed

@@ -75,6 +75,7 @@ members = [
     "zeta-rs/sandboxing",
     "zeta-rs/session-store",
     "zeta-rs/shell-command",
+    "zeta-rs/shell-completion",
     "zeta-rs/slash-commands",
     "zeta-rs/slash-launcher",
     "zeta-rs/skills",
@@ -303,6 +304,7 @@ zeta-secrets = { path = "zeta-rs/secrets" }
 zeta-session-store = { path = "zeta-rs/session-store" }
 zeta-settings = { path = "zeterm/settings" }
 zeta-shell-command = { path = "zeta-rs/shell-command" }
+zeta-shell-completion = { path = "zeta-rs/shell-completion" }
 zeta-slash-commands = { path = "zeta-rs/slash-commands" }
 zeta-slash-launcher = { path = "zeta-rs/slash-launcher" }
 zeta-skills = { path = "zeta-rs/skills" }

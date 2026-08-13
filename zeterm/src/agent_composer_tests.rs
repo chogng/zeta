@@ -1,8 +1,13 @@
-use super::{AgentComposer, ComposerMode, ComposerSubmission};
-use std::sync::atomic::{AtomicU64, Ordering};
-use zeta_editor::{CodeEditorCommand, CodeEditorSelectionMode};
+use super::AgentComposer;
+use super::ComposerMode;
+use super::ComposerSubmission;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
+use zeta_editor::CodeEditorCommand;
+use zeta_editor::CodeEditorSelectionMode;
 use zeta_input_classifier::InputConversation;
-use zeta_ui::{TextInputCompositionCursor, TextInputCompositionEvent};
+use zeta_ui::TextInputCompositionCursor;
+use zeta_ui::TextInputCompositionEvent;
 
 static NEXT_FIXTURE_ID: AtomicU64 = AtomicU64::new(0);
 
@@ -76,6 +81,66 @@ fn automatic_mode_routes_direct_commands_to_shell() {
 }
 
 #[test]
+fn automatic_mode_offers_command_prefix_completions() {
+    let mut composer = AgentComposer::default();
+    composer.set_text("ech");
+
+    assert_eq!(composer.editor().ghost_text(), Some("o"));
+    assert!(composer.accept_shell_suggestion());
+    assert_eq!(composer.editor().text(), "echo");
+    assert_eq!(composer.mode(), ComposerMode::Shell);
+    assert_eq!(composer.editor().ghost_text(), None);
+}
+
+#[test]
+fn shell_ghost_text_is_not_offered_when_the_caret_is_inside_a_token() {
+    let mut composer = AgentComposer::default();
+    composer.set_mode(ComposerMode::Shell);
+    composer.set_text("git cheout");
+    for _ in 0..3 {
+        composer.apply(CodeEditorCommand::MoveLeft(CodeEditorSelectionMode::Move));
+    }
+
+    assert!(!composer.has_shell_suggestion());
+    assert_eq!(composer.editor().text(), "git cheout");
+}
+
+#[test]
+fn shell_ghost_text_accepts_only_the_common_prefix_of_multiple_paths() {
+    let root = std::env::temp_dir().join(format!(
+        "zeta-agent-composer-completion-{}-{}",
+        std::process::id(),
+        NEXT_FIXTURE_ID.fetch_add(1, Ordering::Relaxed)
+    ));
+    std::fs::create_dir_all(&root).unwrap();
+    std::fs::write(root.join("alpha-one"), "").unwrap();
+    std::fs::write(root.join("alpha-two"), "").unwrap();
+    let mut composer = AgentComposer::for_working_directory(&root);
+    composer.set_mode(ComposerMode::Shell);
+    composer.set_text("cat al");
+
+    assert_eq!(composer.editor().ghost_text(), Some("pha-"));
+    assert!(composer.accept_shell_suggestion());
+    assert_eq!(composer.editor().text(), "cat alpha-");
+
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn dismissed_shell_ghost_text_stays_hidden_until_input_changes() {
+    let mut composer = AgentComposer::default();
+    composer.set_text("ech");
+
+    assert!(composer.dismiss_shell_suggestion());
+    assert_eq!(composer.editor().ghost_text(), None);
+    composer.cancel_composition();
+    assert_eq!(composer.editor().ghost_text(), None);
+
+    composer.apply(CodeEditorCommand::Insert("o".to_owned()));
+    assert_eq!(composer.editor().text(), "echo");
+}
+
+#[test]
 fn automatic_mode_keeps_natural_language_one_offs_in_agent() {
     let mut composer = AgentComposer::default();
 
@@ -96,6 +161,7 @@ fn explicit_agent_mode_overrides_automatic_shell_detection() {
         composer.submission(),
         Some(ComposerSubmission::AgentMessage(text)) if text == "echo explain this"
     ));
+    assert!(!composer.has_shell_suggestion());
 }
 
 #[test]
@@ -110,6 +176,21 @@ fn switching_mode_cancels_uncommitted_composition_without_losing_text() {
     composer.set_mode(ComposerMode::Shell);
 
     assert_eq!(composer.editor().text(), "committed");
+}
+
+#[test]
+fn active_ime_composition_suppresses_shell_ghost_text() {
+    let mut composer = AgentComposer::default();
+    composer.set_text("ech");
+    assert!(composer.has_shell_suggestion());
+
+    composer.apply_composition(TextInputCompositionEvent::Preedit {
+        text: "o".to_owned(),
+        cursor: TextInputCompositionCursor::Visible(0..1),
+    });
+
+    assert!(!composer.has_shell_suggestion());
+    assert_eq!(composer.editor().ghost_text(), None);
 }
 
 #[test]

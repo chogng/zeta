@@ -195,4 +195,46 @@ impl CodeEditor<'_> {
             ));
         }
     }
+
+    pub(super) fn paint_ghost_text(
+        &self,
+        scene: &mut UiScene,
+        bounds: Rect,
+        row_index: usize,
+        visual_row: usize,
+        text: &str,
+        origin_column: usize,
+    ) {
+        let Some(ghost_text) = self
+            .ghost_text
+            .and_then(|text| text.split(['\r', '\n']).next())
+            .filter(|text| !text.is_empty())
+        else {
+            return;
+        };
+        if self.rows.composition().is_some()
+            || self
+                .rows
+                .selection()
+                .is_some_and(|selection| selection.start != selection.end)
+        {
+            return;
+        }
+        let Some(caret) = self.rows.caret().filter(|caret| {
+            caret.row_index == row_index && self.caret_visual_row() == Some(visual_row)
+        }) else {
+            return;
+        };
+        let column = display_columns_until(text, caret.byte_offset.min(text.len()));
+        let x = bounds.origin.x
+            + CONTENT_HORIZONTAL_PADDING
+            + (column as isize - origin_column as isize) as f32 * CELL_WIDTH;
+        paint_text_block(
+            scene,
+            expand_tabs(ghost_text),
+            Point::new(x, bounds.origin.y),
+            Size::new(display_columns(ghost_text) as f32 * CELL_WIDTH, ROW_HEIGHT),
+            self.style.muted_text_style(),
+        );
+    }
 }

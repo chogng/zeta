@@ -1,9 +1,17 @@
 use std::time::Instant;
 
-use zeta_editor::{CodeEditorCommand, CodeEditorSelectionMode};
-use zeta_terminal::{KeyModifiers, TerminalCore, TerminalKey};
-use zeta_ui::{TextInputCommand, TextInputSelectionMode};
-use zeta_winit::{ElementState, Key, KeyEvent, ModifiersState, NamedKey};
+use zeta_editor::CodeEditorCommand;
+use zeta_editor::CodeEditorSelectionMode;
+use zeta_terminal::KeyModifiers;
+use zeta_terminal::TerminalCore;
+use zeta_terminal::TerminalKey;
+use zeta_ui::TextInputCommand;
+use zeta_ui::TextInputSelectionMode;
+use zeta_winit::ElementState;
+use zeta_winit::Key;
+use zeta_winit::KeyEvent;
+use zeta_winit::ModifiersState;
+use zeta_winit::NamedKey;
 
 use crate::NativeApp;
 use crate::agent_composer::{ComposerMode, ComposerSubmission};
@@ -155,6 +163,16 @@ impl NativeApp {
                 _ => {}
             }
         }
+        if event.logical_key == Key::Named(NamedKey::Tab)
+            && !self.modifiers.shift_key()
+            && !self.modifiers.alt_key()
+            && !self.modifiers.control_key()
+            && !self.modifiers.super_key()
+            && self.composer.accept_shell_suggestion()
+        {
+            self.composer_changed();
+            return;
+        }
         if event.logical_key == Key::Named(NamedKey::Enter) {
             if self.modifiers.shift_key() {
                 self.composer.apply(CodeEditorCommand::Newline);
@@ -165,6 +183,7 @@ impl NativeApp {
             return;
         }
         if event.logical_key == Key::Named(NamedKey::Escape) {
+            self.composer.dismiss_shell_suggestion();
             self.composer.cancel_composition();
             self.composer_changed();
             return;
@@ -190,6 +209,16 @@ impl NativeApp {
     pub(super) fn dispatch_primary_keyboard_input(&mut self, event: &KeyEvent) -> bool {
         if self.route_file_tree_keyboard(event) {
             return true;
+        }
+        if event.logical_key == Key::Named(NamedKey::Tab)
+            && !self.modifiers.shift_key()
+            && !self.modifiers.alt_key()
+            && !self.modifiers.control_key()
+            && !self.modifiers.super_key()
+            && self.ui_dispatch.is_focused(COMPOSER)
+            && self.composer.has_shell_suggestion()
+        {
+            return false;
         }
         let Some(presentation) = self.presentation.as_ref() else {
             return false;

@@ -19,6 +19,11 @@ pub use model::MODEL_SHA256;
 pub use model::MODEL_VERSION;
 pub use model::TOKENIZER_SHA256;
 pub use model::start_background_warmup;
+pub use zeta_shell_completion::ShellAlias;
+pub use zeta_shell_completion::ShellAliasError;
+pub use zeta_shell_completion::ShellCompletion;
+pub use zeta_shell_completion::ShellCompletionKind;
+pub use zeta_shell_completion::ShellCompletionSnapshot;
 
 #[cfg(test)]
 #[path = "input_classifier_tests.rs"]

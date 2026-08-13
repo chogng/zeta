@@ -100,3 +100,45 @@ fn shell_highlighting_projects_syntax_tokens_into_code_editor() {
             .any(|block| block.text() == "just zeterm-dev")
     );
 }
+
+#[test]
+fn focused_composer_projects_ghost_text_without_committing_it() {
+    let mut editor = ComposerEditor::default();
+    editor.set_text("git ch");
+    editor.show_ghost_text("eckout".to_owned());
+    let bounds = Rect::from_xywh(0.0, 0.0, 320.0, editor.preferred_height());
+    let mut scene = UiScene::new(Color::WHITE);
+
+    editor
+        .view(
+            bounds,
+            "",
+            ComposerEditorFocus::Focused(CaretVisibility::Visible),
+            Color::rgb(126, 126, 132),
+        )
+        .paint(&mut scene);
+
+    assert!(
+        scene
+            .text_blocks()
+            .iter()
+            .any(|block| block.text() == "eckout")
+    );
+    assert_eq!(editor.text(), "git ch");
+
+    let mut blurred_scene = UiScene::new(Color::WHITE);
+    editor
+        .view(
+            bounds,
+            "",
+            ComposerEditorFocus::Blurred,
+            Color::rgb(126, 126, 132),
+        )
+        .paint(&mut blurred_scene);
+    assert!(
+        blurred_scene
+            .text_blocks()
+            .iter()
+            .all(|block| block.text() != "eckout")
+    );
+}

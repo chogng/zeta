@@ -8,6 +8,7 @@ use zeta_editor::CodeEditorPresentation;
 use zeta_editor::CodeEditorRowSource;
 use zeta_editor::CodeEditorSelectionMode;
 use zeta_editor::CodeEditorStyle;
+use zeta_editor::CodeEditorTextEdit;
 use zeta_editor::CodeEditorViewport;
 use zeta_ui::CaretVisibility;
 use zeta_ui::Color;
@@ -39,6 +40,7 @@ pub(crate) struct ComposerEditor {
     document: CodeEditorDocument,
     viewport: CodeEditorViewport,
     style: CodeEditorStyle,
+    ghost_text: Option<String>,
 }
 
 impl Default for ComposerEditor {
@@ -47,6 +49,7 @@ impl Default for ComposerEditor {
             document: CodeEditorDocument::from_text(""),
             viewport: CodeEditorViewport::default(),
             style: CodeEditorStyle::light(),
+            ghost_text: None,
         }
     }
 }
@@ -58,6 +61,19 @@ impl ComposerEditor {
 
     pub(crate) fn selected_text(&self) -> Option<&str> {
         self.document.selected_text()
+    }
+
+    pub(crate) fn cursor(&self) -> usize {
+        self.document.cursor()
+    }
+
+    pub(crate) fn has_active_composition(&self) -> bool {
+        self.document.composition().is_some()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn ghost_text(&self) -> Option<&str> {
+        self.ghost_text.as_deref()
     }
 
     pub(crate) fn row_count(&self) -> usize {
@@ -73,6 +89,7 @@ impl ComposerEditor {
     }
 
     pub(crate) fn apply(&mut self, command: CodeEditorCommand) {
+        self.hide_ghost_text();
         self.document.apply_in_view(
             command,
             CodeEditorNavigation::LogicalLines {
@@ -82,7 +99,17 @@ impl ComposerEditor {
         self.reveal_caret();
     }
 
+    pub(crate) fn apply_text_edit(&mut self, edit: CodeEditorTextEdit) -> bool {
+        self.hide_ghost_text();
+        let applied = self.document.apply_text_edit(edit);
+        if applied {
+            self.reveal_caret();
+        }
+        applied
+    }
+
     pub(crate) fn apply_composition(&mut self, event: TextInputCompositionEvent) {
+        self.hide_ghost_text();
         self.document.apply_composition(event);
         self.reveal_caret();
     }
@@ -92,11 +119,13 @@ impl ComposerEditor {
     }
 
     pub(crate) fn clear(&mut self) {
+        self.hide_ghost_text();
         self.document.replace_text("");
         self.viewport = CodeEditorViewport::default();
     }
 
     pub(crate) fn set_text(&mut self, text: impl Into<String>) {
+        self.hide_ghost_text();
         self.document.replace_text(text);
         self.document.apply(CodeEditorCommand::SelectAll);
         self.document
@@ -110,6 +139,14 @@ impl ComposerEditor {
 
     pub(crate) fn set_style(&mut self, style: CodeEditorStyle) {
         self.style = style;
+    }
+
+    pub(crate) fn show_ghost_text(&mut self, text: String) {
+        self.ghost_text = (!text.is_empty()).then_some(text);
+    }
+
+    pub(crate) fn hide_ghost_text(&mut self) {
+        self.ghost_text = None;
     }
 
     pub(crate) fn is_collapsed_at_first_row(&self) -> bool {
@@ -134,6 +171,7 @@ impl ComposerEditor {
         point: Point,
         mode: CodeEditorSelectionMode,
     ) -> bool {
+        self.hide_ghost_text();
         let editor = self.code_editor(bounds, CaretVisibility::Visible);
         let Some(position) = editor.text_position_at(point) else {
             return false;
@@ -210,7 +248,13 @@ impl Component for ComposerEditorView<'_> {
             ComposerEditorFocus::Blurred => CaretVisibility::Hidden,
             ComposerEditorFocus::Focused(visibility) => visibility,
         };
-        scene.draw_component(&self.editor.code_editor(self.bounds, caret_visibility));
+        let mut editor = self.editor.code_editor(self.bounds, caret_visibility);
+        if matches!(self.focus, ComposerEditorFocus::Focused(_))
+            && let Some(ghost_text) = self.editor.ghost_text.as_deref()
+        {
+            editor = editor.with_ghost_text(ghost_text);
+        }
+        scene.draw_component(&editor);
         if self.editor.text().is_empty() {
             scene.with_clip(self.bounds, |scene| {
                 scene.draw_text(TextBlock::new(

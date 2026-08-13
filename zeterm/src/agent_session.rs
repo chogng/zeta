@@ -1191,6 +1191,9 @@ impl NativeApp {
                 self.refresh_files_from_app_server();
             }
             AgentSessionEvent::FilesChanged(changed) => {
+                if shell_completion_sources_changed(&changed) {
+                    self.composer.refresh_shell_workspace();
+                }
                 self.refresh_files_from_app_server();
                 self.refresh_open_files_from_app_server(&changed);
             }
@@ -1212,6 +1215,28 @@ impl NativeApp {
             .preserve_view_after_growth(line_count.saturating_sub(previous_line_count), limit);
         self.thread_timeline_scroll.clamp(limit);
         self.rebuild_presentation_on_next_redraw();
+    }
+}
+
+fn shell_completion_sources_changed(changed: &FsChanged) -> bool {
+    match changed {
+        FsChanged::RescanRequired => true,
+        FsChanged::PathsChanged { paths } => paths.iter().any(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| {
+                    matches!(
+                        name,
+                        "package.json"
+                            | "Justfile"
+                            | "justfile"
+                            | ".justfile"
+                            | "Makefile"
+                            | "makefile"
+                            | "GNUmakefile"
+                    )
+                })
+        }),
     }
 }
 

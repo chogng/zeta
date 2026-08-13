@@ -139,6 +139,36 @@ fn compact_presentation_uses_the_full_width_without_line_number_chrome() {
 }
 
 #[test]
+fn ghost_text_paints_at_the_caret_without_mutating_the_document() {
+    let mut document = CodeEditorDocument::from_text("git ch");
+    document.apply(CodeEditorCommand::SelectAll);
+    document.apply(CodeEditorCommand::MoveRight(CodeEditorSelectionMode::Move));
+    let style = CodeEditorStyle::light();
+    let editor = CodeEditor::new(
+        Rect::from_xywh(0.0, 0.0, 320.0, 40.0),
+        &document,
+        CodeEditorViewport::default(),
+        CodeEditorHeader::Hidden,
+        style.clone(),
+    )
+    .with_presentation(CodeEditorPresentation::Compact)
+    .with_ghost_text("eckout");
+    let caret = editor.caret_bounds().unwrap();
+    let mut scene = UiScene::new(Color::WHITE);
+
+    editor.paint(&mut scene);
+
+    let ghost = scene
+        .text_blocks()
+        .iter()
+        .find(|block| block.text() == "eckout")
+        .expect("ghost continuation should be painted");
+    assert_eq!(ghost.origin().x, caret.origin.x);
+    assert_eq!(ghost.style().color(), style.muted_text_style().color());
+    assert_eq!(document.text(), "git ch");
+}
+
+#[test]
 fn code_rows_keep_chinese_text_and_spaces_on_one_unwrapped_source_line() {
     let text = "中文 空格";
     let mut document = CodeEditorDocument::from_text(text);

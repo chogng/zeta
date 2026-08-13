@@ -1,14 +1,21 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 
-use zeta_editor::{
-    CodeEditorCommand, CodeEditorLanguage, CodeEditorSelectionMode, CodeEditorStyle,
-};
+use zeta_editor::CodeEditorCommand;
+use zeta_editor::CodeEditorLanguage;
+use zeta_editor::CodeEditorSelectionMode;
+use zeta_editor::CodeEditorStyle;
+use zeta_editor::CodeEditorTextEdit;
 use zeta_input_classifier::InputClassificationContext;
 use zeta_input_classifier::InputClassifier;
 use zeta_input_classifier::InputConversation;
 use zeta_input_classifier::InputHistoryEntry;
 use zeta_input_classifier::InputRoute;
-use zeta_ui::{Point, Rect, TextInputCompositionEvent};
+use zeta_input_classifier::ShellCompletion;
+use zeta_input_classifier::ShellCompletionSnapshot;
+use zeta_ui::Point;
+use zeta_ui::Rect;
+use zeta_ui::TextInputCompositionEvent;
 
 use crate::composer_editor::ComposerEditor;
 
@@ -39,6 +46,11 @@ enum AgentResponseState {
     Pending,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ShellGhostSuggestion {
+    edit: CodeEditorTextEdit,
+}
+
 /// Host-owned editor shared by Agent messages and direct Shell commands.
 pub(crate) struct AgentComposer {
     editor: ComposerEditor,
@@ -50,6 +62,8 @@ pub(crate) struct AgentComposer {
     shell_history: Vec<String>,
     shell_history_index: Option<usize>,
     shell_history_draft: Option<String>,
+    shell_suggestion: Option<ShellGhostSuggestion>,
+    dismissed_shell_suggestion_input: Option<String>,
 }
 
 impl Default for AgentComposer {
@@ -71,6 +85,8 @@ impl AgentComposer {
             shell_history: Vec::new(),
             shell_history_index: None,
             shell_history_draft: None,
+            shell_suggestion: None,
+            dismissed_shell_suggestion_input: None,
         }
     }
 
@@ -88,6 +104,8 @@ impl AgentComposer {
         self.editor.cancel_composition();
         self.leave_shell_history();
         self.refresh_editor_language();
+        self.dismissed_shell_suggestion_input = None;
+        self.refresh_shell_suggestion();
     }
 
     pub(crate) fn toggle_mode(&mut self) {
@@ -113,6 +131,56 @@ impl AgentComposer {
     pub(crate) fn set_working_directory(&mut self, working_directory: &Path) {
         self.classifier.set_working_directory(working_directory);
         self.refresh_automatic_mode();
+    }
+
+    pub(crate) fn refresh_shell_workspace(&mut self) {
+        self.classifier.refresh_shell_workspace();
+        self.refresh_automatic_mode();
+    }
+
+    pub(crate) fn has_shell_suggestion(&self) -> bool {
+        self.shell_suggestion.is_some()
+    }
+
+    pub(crate) fn accept_shell_suggestion(&mut self) -> bool {
+        let Some(suggestion) = self.shell_suggestion.take() else {
+            return false;
+        };
+        self.leave_shell_history();
+        self.dismissed_shell_suggestion_input = None;
+        let applied = self.editor.apply_text_edit(suggestion.edit);
+        self.refresh_automatic_mode();
+        applied
+    }
+
+    pub(crate) fn dismiss_shell_suggestion(&mut self) -> bool {
+        if self.shell_suggestion.take().is_none() {
+            return false;
+        }
+        self.dismissed_shell_suggestion_input = Some(self.editor.text().to_owned());
+        self.editor.hide_ghost_text();
+        true
+    }
+
+    fn shell_completion_snapshot(&self) -> Option<ShellCompletionSnapshot> {
+        let text = self.editor.text();
+        let cursor = self.editor.cursor();
+        if cursor != text.len()
+            || text.trim().is_empty()
+            || text.trim_start().starts_with('/')
+            || self.editor.selected_text().is_some()
+            || self.editor.has_active_composition()
+            || (self.mode_selection == ComposerModeSelection::Explicit
+                && self.mode == ComposerMode::Agent)
+            || (self.mode == ComposerMode::Agent
+                && text[..cursor]
+                    .chars()
+                    .next_back()
+                    .is_some_and(char::is_whitespace))
+        {
+            return None;
+        }
+        Some(self.classifier.shell_completion_snapshot(text, cursor))
     }
 
     pub(crate) fn mark_agent_message_submitted(&mut self, text: &str) {
@@ -196,6 +264,7 @@ impl AgentComposer {
 
     pub(crate) fn cancel_composition(&mut self) {
         self.editor.cancel_composition();
+        self.refresh_shell_suggestion();
     }
 
     pub(crate) fn clear_after_submit(&mut self) {
@@ -211,6 +280,8 @@ impl AgentComposer {
         }
         self.refresh_editor_language();
         self.leave_shell_history();
+        self.dismissed_shell_suggestion_input = None;
+        self.refresh_shell_suggestion();
     }
 
     pub(crate) fn move_caret_to_point(
@@ -220,7 +291,11 @@ impl AgentComposer {
         mode: CodeEditorSelectionMode,
     ) -> bool {
         self.leave_shell_history();
-        self.editor.move_caret_to_point(bounds, point, mode)
+        let moved = self.editor.move_caret_to_point(bounds, point, mode);
+        if moved {
+            self.refresh_shell_suggestion();
+        }
+        moved
     }
 
     fn older_shell_history(&mut self) -> bool {
@@ -237,6 +312,7 @@ impl AgentComposer {
         self.shell_history_index = Some(index);
         self.editor.set_text(self.shell_history[index].clone());
         self.refresh_editor_language();
+        self.refresh_shell_suggestion();
         true
     }
 
@@ -249,11 +325,13 @@ impl AgentComposer {
             self.shell_history_index = Some(next);
             self.editor.set_text(self.shell_history[next].clone());
             self.refresh_editor_language();
+            self.refresh_shell_suggestion();
         } else {
             let draft = self.shell_history_draft.take().unwrap_or_default();
             self.shell_history_index = None;
             self.editor.set_text(draft);
             self.refresh_editor_language();
+            self.refresh_shell_suggestion();
         }
         true
     }
@@ -276,6 +354,7 @@ impl AgentComposer {
             };
         }
         self.refresh_editor_language();
+        self.refresh_shell_suggestion();
     }
 
     fn refresh_editor_language(&mut self) {
@@ -285,10 +364,81 @@ impl AgentComposer {
         });
     }
 
+    fn refresh_shell_suggestion(&mut self) {
+        let text = self.editor.text().to_owned();
+        if self.dismissed_shell_suggestion_input.as_deref() == Some(&text) {
+            self.shell_suggestion = None;
+            self.editor.hide_ghost_text();
+            return;
+        }
+        self.dismissed_shell_suggestion_input = None;
+        let suggestion = self
+            .shell_completion_snapshot()
+            .filter(|snapshot| !snapshot.has_exact_match())
+            .and_then(|snapshot| {
+                shell_ghost_suggestion(&text, self.editor.cursor(), snapshot.into_completions())
+            });
+        if let Some(suggestion) = &suggestion {
+            let typed = &text[suggestion.edit.range.clone()];
+            let ghost_text = suggestion.edit.new_text[typed.len()..].to_owned();
+            self.editor.show_ghost_text(ghost_text);
+        } else {
+            self.editor.hide_ghost_text();
+        }
+        self.shell_suggestion = suggestion;
+    }
+
     fn leave_shell_history(&mut self) {
         self.shell_history_index = None;
         self.shell_history_draft = None;
     }
+}
+
+fn shell_ghost_suggestion(
+    input: &str,
+    cursor: usize,
+    completions: Vec<ShellCompletion>,
+) -> Option<ShellGhostSuggestion> {
+    let first = completions.iter().find(|completion| {
+        let range = completion.replace_range();
+        range.end == cursor
+            && input
+                .get(range)
+                .is_some_and(|typed| completion.replacement().starts_with(typed))
+    })?;
+    let range = first.replace_range();
+    let typed = input.get(range.clone())?;
+    let replacements = completions
+        .iter()
+        .filter(|completion| completion.replace_range() == range)
+        .map(ShellCompletion::replacement)
+        .filter(|replacement| replacement.starts_with(typed))
+        .collect::<Vec<_>>();
+    let first_replacement = *replacements.first()?;
+    let common_prefix_length = replacements
+        .iter()
+        .skip(1)
+        .fold(first_replacement.len(), |length, replacement| {
+            common_prefix_length(&first_replacement[..length], replacement)
+        });
+    if common_prefix_length <= typed.len() {
+        return None;
+    }
+    Some(ShellGhostSuggestion {
+        edit: CodeEditorTextEdit {
+            range,
+            new_text: first_replacement[..common_prefix_length].to_owned(),
+        },
+    })
+}
+
+fn common_prefix_length(left: &str, right: &str) -> usize {
+    for ((offset, left), right) in left.char_indices().zip(right.chars()) {
+        if left != right {
+            return offset;
+        }
+    }
+    left.len().min(right.len())
 }
 
 #[cfg(test)]

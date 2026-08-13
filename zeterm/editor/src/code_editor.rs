@@ -428,6 +428,7 @@ pub struct CodeEditor<'a> {
     line_wrapping: CodeEditorLineWrapping,
     visual_projection: CodeEditorVisualProjection,
     caret_visibility: CaretVisibility,
+    ghost_text: Option<&'a str>,
     diagnostics: &'a [CodeEditorDiagnostic],
 }
 
@@ -457,6 +458,7 @@ impl<'a> CodeEditor<'a> {
             line_wrapping: CodeEditorLineWrapping::None,
             visual_projection,
             caret_visibility: CaretVisibility::Visible,
+            ghost_text: None,
             diagnostics: &[],
         }
     }
@@ -471,6 +473,15 @@ impl<'a> CodeEditor<'a> {
     /// Projects host-owned focus blink state into caret paint.
     pub const fn with_caret_visibility(mut self, visibility: CaretVisibility) -> Self {
         self.caret_visibility = visibility;
+        self
+    }
+
+    /// Paints a non-document, single-line continuation at the committed caret.
+    ///
+    /// The host owns suggestion generation and acceptance. CodeEditor only projects the supplied
+    /// text without changing document layout, selection, history, or the committed caret.
+    pub const fn with_ghost_text(mut self, text: &'a str) -> Self {
+        self.ghost_text = Some(text);
         self
     }
 
@@ -772,6 +783,14 @@ impl<'a> CodeEditor<'a> {
                 source_row,
                 text,
                 line.start_byte..line.end_byte,
+                origin_column,
+            );
+            self.paint_ghost_text(
+                scene,
+                content_row_bounds,
+                source_row,
+                visual_row,
+                text,
                 origin_column,
             );
             self.paint_composition_and_caret(

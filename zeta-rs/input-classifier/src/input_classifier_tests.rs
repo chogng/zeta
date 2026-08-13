@@ -11,8 +11,10 @@ use super::InputRoute;
 use super::MODEL_SHA256;
 use super::TOKENIZER_SHA256;
 use crate::classifier::classify_with_model_attempt;
-use crate::model::classify_with_embedded_model;
 use crate::model::ModelAttempt;
+use crate::model::classify_with_embedded_model;
+use zeta_shell_completion::ShellAlias;
+use zeta_shell_completion::ShellCompletionKind;
 
 fn standalone(current_route: InputRoute) -> InputClassificationContext {
     InputClassificationContext::new(current_route, InputConversation::Standalone)
@@ -41,8 +43,7 @@ fn metadata_matches_the_runtime_contract() {
     );
     assert_eq!(metadata["tokenizer"]["sha256"], TOKENIZER_SHA256);
     assert_eq!(
-        metadata["deployment"]["onnx_variants"]["candle_fp32"]["probability_calibration"]
-            ["temperature"],
+        metadata["deployment"]["onnx_variants"]["candle_fp32"]["probability_calibration"]["temperature"],
         1.6894922825552194
     );
     assert_eq!(
@@ -142,6 +143,54 @@ fn workspace_token_semantics_short_circuit_only_clear_commands() {
     );
     assert_eq!(question.route, InputRoute::Agent);
     assert_eq!(question.source, InputClassificationSource::Model);
+}
+
+#[test]
+fn command_signatures_short_circuit_only_fully_described_shell_input() {
+    let classifier = InputClassifier::default();
+
+    let command = classifier.classify(
+        "git log --oneline --decorate -20",
+        standalone(InputRoute::Agent),
+    );
+    let question = classifier.classify("git status 是做什么的", standalone(InputRoute::Shell));
+
+    assert_eq!(command.route, InputRoute::Shell);
+    assert_eq!(
+        command.source,
+        InputClassificationSource::ShellTokenHeuristic
+    );
+    assert_eq!(question.route, InputRoute::Agent);
+    assert_eq!(question.source, InputClassificationSource::Model);
+}
+
+#[test]
+fn aliases_and_completions_share_the_classifier_shell_context() {
+    let mut classifier = InputClassifier::default();
+    classifier.replace_shell_aliases([ShellAlias::new("gco", "git checkout").unwrap()]);
+
+    let classification = classifier.classify("gco", standalone(InputRoute::Agent));
+    let completion = classifier
+        .shell_completions("gc", 2)
+        .into_iter()
+        .find(|completion| completion.replacement() == "gco")
+        .expect("alias completion");
+    let exact = classifier.shell_completion_snapshot("gco", 3);
+
+    assert_eq!(classification.route, InputRoute::Shell);
+    assert_eq!(
+        classification.source,
+        InputClassificationSource::ShellTokenHeuristic
+    );
+    assert_eq!(completion.kind(), ShellCompletionKind::Alias);
+    assert_eq!(completion.replace_range(), 0..2);
+    assert!(exact.has_exact_match());
+    assert!(
+        exact
+            .completions()
+            .iter()
+            .all(|completion| completion.replacement() != "gco")
+    );
 }
 
 #[test]
