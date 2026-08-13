@@ -3,11 +3,14 @@ use std::path::{Path, PathBuf};
 use zeta_editor::{
     CodeEditorCommand, CodeEditorLanguage, CodeEditorSelectionMode, CodeEditorStyle,
 };
+use zeta_input_classifier::InputClassificationContext;
+use zeta_input_classifier::InputClassifier;
+use zeta_input_classifier::InputConversation;
+use zeta_input_classifier::InputHistoryEntry;
 use zeta_input_classifier::InputRoute;
 use zeta_ui::{Point, Rect, TextInputCompositionEvent};
 
 use crate::composer_editor::ComposerEditor;
-use crate::composer_shell::ComposerShellDetector;
 
 /// Explicit submission mode for the shared Agent Console composer.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -29,12 +32,21 @@ enum ComposerModeSelection {
     Explicit,
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+enum AgentResponseState {
+    #[default]
+    None,
+    Pending,
+}
+
 /// Host-owned editor shared by Agent messages and direct Shell commands.
 pub(crate) struct AgentComposer {
     editor: ComposerEditor,
     mode: ComposerMode,
     mode_selection: ComposerModeSelection,
-    shell_detector: ComposerShellDetector,
+    classifier: InputClassifier,
+    conversation: InputConversation,
+    agent_response: AgentResponseState,
     shell_history: Vec<String>,
     shell_history_index: Option<usize>,
     shell_history_draft: Option<String>,
@@ -53,7 +65,9 @@ impl AgentComposer {
             editor: ComposerEditor::default(),
             mode: ComposerMode::Agent,
             mode_selection: ComposerModeSelection::Automatic,
-            shell_detector: ComposerShellDetector::new(working_directory),
+            classifier: InputClassifier::for_working_directory(working_directory),
+            conversation: InputConversation::Standalone,
+            agent_response: AgentResponseState::None,
             shell_history: Vec::new(),
             shell_history_index: None,
             shell_history_draft: None,
@@ -97,8 +111,52 @@ impl AgentComposer {
     }
 
     pub(crate) fn set_working_directory(&mut self, working_directory: &Path) {
-        self.shell_detector
-            .set_working_directory(working_directory.to_path_buf());
+        self.classifier.set_working_directory(working_directory);
+        self.refresh_automatic_mode();
+    }
+
+    pub(crate) fn mark_agent_message_submitted(&mut self, text: &str) {
+        self.classifier
+            .record_submission(InputHistoryEntry::agent(text));
+        self.conversation = InputConversation::Standalone;
+        self.agent_response = AgentResponseState::Pending;
+    }
+
+    pub(crate) fn mark_shell_command_submitted(&mut self, command: &str) {
+        self.classifier
+            .record_submission(InputHistoryEntry::shell(command));
+        self.conversation = InputConversation::Standalone;
+        self.agent_response = AgentResponseState::None;
+    }
+
+    pub(crate) fn replace_classification_history(
+        &mut self,
+        entries: impl IntoIterator<Item = InputHistoryEntry>,
+    ) {
+        self.classifier.replace_history(entries);
+    }
+
+    pub(crate) fn mark_agent_response_started(&mut self) {
+        self.conversation = InputConversation::Standalone;
+        self.agent_response = AgentResponseState::Pending;
+        self.refresh_automatic_mode();
+    }
+
+    pub(crate) fn mark_agent_turn_completed(&mut self) {
+        if self.agent_response == AgentResponseState::Pending {
+            self.conversation = InputConversation::AgentFollowUp;
+            self.agent_response = AgentResponseState::None;
+            self.refresh_automatic_mode();
+        }
+    }
+
+    pub(crate) fn mark_agent_turn_ended_without_response(&mut self) {
+        self.agent_response = AgentResponseState::None;
+    }
+
+    pub(crate) fn synchronize_conversation(&mut self, conversation: InputConversation) {
+        self.conversation = conversation;
+        self.agent_response = AgentResponseState::None;
         self.refresh_automatic_mode();
     }
 
@@ -206,13 +264,14 @@ impl AgentComposer {
             self.mode = if text.trim_start().starts_with('/') {
                 ComposerMode::Agent
             } else {
-                let shell_evidence = self.shell_detector.evidence(text);
-                match zeta_input_classifier::classify_input(text, shell_evidence) {
-                    Ok(classification) => match classification.route {
-                        InputRoute::Agent => ComposerMode::Agent,
-                        InputRoute::Shell => ComposerMode::Shell,
-                    },
-                    Err(_) => self.mode,
+                let current_route = match self.mode {
+                    ComposerMode::Agent => InputRoute::Agent,
+                    ComposerMode::Shell => InputRoute::Shell,
+                };
+                let context = InputClassificationContext::new(current_route, self.conversation);
+                match self.classifier.classify(text, context).route {
+                    InputRoute::Agent => ComposerMode::Agent,
+                    InputRoute::Shell => ComposerMode::Shell,
                 }
             };
         }

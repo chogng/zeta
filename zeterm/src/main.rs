@@ -58,11 +58,11 @@ mod command_dispatch;
 #[cfg(test)]
 #[path = "component_composition_tests.rs"]
 mod component_composition_tests;
+mod composer_classification;
 mod composer_editor;
 mod composer_interaction;
 mod composer_interaction_pane;
 mod composer_panel;
-mod composer_shell;
 mod file_editor_auto_scroll;
 mod file_editor_diagnostics;
 mod file_editor_host;

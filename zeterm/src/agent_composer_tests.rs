@@ -1,6 +1,7 @@
 use super::{AgentComposer, ComposerMode, ComposerSubmission};
 use std::sync::atomic::{AtomicU64, Ordering};
 use zeta_editor::{CodeEditorCommand, CodeEditorSelectionMode};
+use zeta_input_classifier::InputConversation;
 use zeta_ui::{TextInputCompositionCursor, TextInputCompositionEvent};
 
 static NEXT_FIXTURE_ID: AtomicU64 = AtomicU64::new(0);
@@ -149,4 +150,39 @@ fn submitting_an_automatic_shell_command_restores_agent_mode() {
 
     assert_eq!(composer.mode(), ComposerMode::Agent);
     assert_eq!(composer.editor().text(), "");
+}
+
+#[test]
+fn completed_agent_turn_marks_the_next_input_as_a_follow_up() {
+    let mut composer = AgentComposer::default();
+
+    composer.mark_agent_message_submitted("fix this");
+    composer.mark_agent_turn_completed();
+    composer.apply(CodeEditorCommand::Insert("continue".to_owned()));
+
+    assert_eq!(composer.conversation, InputConversation::AgentFollowUp);
+    assert_eq!(composer.mode(), ComposerMode::Agent);
+}
+
+#[test]
+fn shell_turn_completion_does_not_create_agent_follow_up_context() {
+    let mut composer = AgentComposer::default();
+
+    composer.mark_shell_command_submitted("cargo test");
+    composer.mark_agent_turn_completed();
+
+    assert_eq!(composer.conversation, InputConversation::Standalone);
+}
+
+#[test]
+fn recent_submission_history_overrides_model_and_shell_allowlists() {
+    let mut composer = AgentComposer::default();
+    composer.mark_shell_command_submitted("explain this failure");
+    composer.set_text("explain this failure");
+    assert_eq!(composer.mode(), ComposerMode::Shell);
+
+    composer.clear_after_submit();
+    composer.mark_agent_message_submitted("echo productions");
+    composer.set_text("echo productions");
+    assert_eq!(composer.mode(), ComposerMode::Agent);
 }

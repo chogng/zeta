@@ -308,19 +308,21 @@ impl NativeApp {
                 let Some(session) = self.agent_session.as_ref() else {
                     return;
                 };
-                if let Err(error) = session.submit_agent_message(text) {
+                if let Err(error) = session.submit_agent_message(text.clone()) {
                     eprintln!("could not submit Agent message: {error}");
                     return;
                 }
+                self.composer.mark_agent_message_submitted(&text);
             }
             ComposerSubmission::ShellCommand(command) => {
                 let Some(session) = self.agent_session.as_ref() else {
                     return;
                 };
-                if let Err(error) = session.submit_shell_command(command) {
+                if let Err(error) = session.submit_shell_command(command.clone()) {
                     eprintln!("could not submit Shell Turn: {error}");
                     return;
                 }
+                self.composer.mark_shell_command_submitted(&command);
             }
         }
         self.composer.clear_after_submit();

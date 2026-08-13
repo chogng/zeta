@@ -1,17 +1,24 @@
 //! Local Shell-versus-Agent input classification with pinned embedded assets.
 
 mod classifier;
+mod history;
+mod model;
+mod natural_language;
+mod parser;
 mod rules;
+mod shell;
 
 pub use classifier::InputClassification;
+pub use classifier::InputClassificationContext;
 pub use classifier::InputClassificationSource;
+pub use classifier::InputClassifier;
+pub use classifier::InputConversation;
 pub use classifier::InputRoute;
-pub use classifier::MODEL_SHA256;
-pub use classifier::MODEL_VERSION;
-pub use classifier::ShellCommandEvidence;
-pub use classifier::TOKENIZER_SHA256;
-pub use classifier::classify_input;
-pub use classifier::start_background_warmup;
+pub use history::InputHistoryEntry;
+pub use model::MODEL_SHA256;
+pub use model::MODEL_VERSION;
+pub use model::TOKENIZER_SHA256;
+pub use model::start_background_warmup;
 
 #[cfg(test)]
 #[path = "input_classifier_tests.rs"]

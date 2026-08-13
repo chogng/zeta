@@ -40,6 +40,8 @@ use zeta_text_file::{
 use zeta_winit::EventLoopProxy;
 
 use crate::NativeApp;
+use crate::composer_classification::synchronize_composer_classifier;
+use crate::composer_classification::update_composer_classifier;
 use crate::native_event::NativeEvent;
 use crate::session_switch_trace::{self, SwitchId};
 use crate::session_tab_list::SessionTabUpsert;
@@ -1169,9 +1171,11 @@ impl NativeApp {
                 self.upsert_session_tab(&session);
                 self.ensure_terminal_for_session(&session.session_id);
                 self.activate_terminal_for_session(&session.session_id);
+                synchronize_composer_classifier(&mut self.composer, &thread);
                 self.thread_projection.replace_snapshot(thread);
             }
             AgentSessionEvent::Update(update) => {
+                update_composer_classifier(&mut self.composer, &update.update);
                 if self.thread_projection.apply_update(*update)
                     == ThreadProjectionUpdate::ResubscribeRequired
                     && let Some(session) = self.agent_session.as_ref()

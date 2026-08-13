@@ -1,65 +1,60 @@
-use std::collections::HashMap;
-use std::panic::AssertUnwindSafe;
-use std::panic::catch_unwind;
-use std::sync::Once;
-use std::sync::OnceLock;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering;
-use std::thread;
+use std::path::Path;
+use std::path::PathBuf;
 
-use anyhow::Context;
-use anyhow::Result;
-use anyhow::anyhow;
-use anyhow::ensure;
-use candle_core::Device;
-use candle_core::IndexOp;
-use candle_core::Tensor;
-use candle_nn::ops::softmax_last_dim;
-use candle_onnx::onnx::ModelProto;
-use prost::Message;
-use tokenizers::Tokenizer;
-
-use crate::rules::classify_deterministic_input;
-
-const MODEL_BYTES: &[u8] = include_bytes!("../models/bert_tiny_v3_candle.onnx");
-const TOKENIZER_BYTES: &[u8] = include_bytes!("../models/bert_tiny_tokenizer.json");
-const CALIBRATION_TEMPERATURE: f64 = 1.6894922825552194;
-
-/// Pinned classifier variant embedded in this crate.
-pub const MODEL_VERSION: &str = "bert_tiny_v3_candle_fp32";
-/// SHA-256 of the embedded ONNX model.
-pub const MODEL_SHA256: &str = "d987f9e2c50a7c04f619423445cea4730950473ca80dc8dea149d285f631530c";
-/// SHA-256 of the embedded tokenizer.
-pub const TOKENIZER_SHA256: &str =
-    "b43e3d508ae9fe2c557ac2e0fb82f3487d59193a58f5328dc042ebf31ba1f72c";
-
-static CLASSIFIER: OnceLock<Result<EmbeddedClassifier, String>> = OnceLock::new();
-static WARMUP_STARTED: Once = Once::new();
+use crate::history::InputHistory;
+use crate::history::InputHistoryEntry;
+use crate::model::ModelAttempt;
+use crate::model::classify_with_embedded_model;
+use crate::natural_language::classify_with_fallback_heuristic;
+use crate::parser::parse_query_into_tokens;
+use crate::rules::classify_allowlisted_input;
+use crate::rules::classify_contextual_input;
+use crate::shell::ShellContext;
 
 /// Product-neutral destination selected for a piece of terminal input.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum InputRoute {
+    #[default]
     Agent,
     Shell,
 }
 
-/// High-confidence command evidence supplied by a host with workspace and PATH context.
+/// Conversation position used to interpret short replies.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub enum ShellCommandEvidence {
-    /// The host cannot prove that the input is command-shaped.
+pub enum InputConversation {
     #[default]
-    Absent,
-    /// Workspace or PATH context proves a short or explicit command shape.
-    HighConfidence,
+    Standalone,
+    AgentFollowUp,
+}
+
+/// Runtime context for one automatic classification decision.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct InputClassificationContext {
+    pub current_route: InputRoute,
+    pub conversation: InputConversation,
+}
+
+impl InputClassificationContext {
+    pub const fn new(current_route: InputRoute, conversation: InputConversation) -> Self {
+        Self {
+            current_route,
+            conversation,
+        }
+    }
 }
 
 /// Component that produced an input classification.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum InputClassificationSource {
     EmptyInput,
-    NaturalLanguageHeuristic,
-    ShellHeuristic,
+    AgentFollowUp,
+    NaturalLanguageOneOff,
+    ShellAllowlist,
+    ShellTokenHeuristic,
+    HistoryMatch,
     Model,
+    HeuristicFallback,
+    CurrentRouteFallback,
 }
 
 /// Route, confidence, and provenance for one classified input.
@@ -81,140 +76,119 @@ impl InputClassification {
             source,
         }
     }
-}
 
-/// Applies deterministic rules and host evidence before consulting the embedded model.
-pub fn classify_input(
-    input: &str,
-    shell_evidence: ShellCommandEvidence,
-) -> Result<InputClassification> {
-    if let Some(classification) = classify_deterministic_input(input) {
-        return Ok(classification);
+    const fn fallback(route: InputRoute) -> Self {
+        Self {
+            route,
+            confidence: 0.0,
+            source: InputClassificationSource::CurrentRouteFallback,
+        }
     }
-    if shell_evidence == ShellCommandEvidence::HighConfidence {
-        return Ok(InputClassification::deterministic(
-            InputRoute::Shell,
-            InputClassificationSource::ShellHeuristic,
-        ));
+}
+
+/// Stateful local classifier that owns workspace and executable-resolution context.
+#[derive(Clone, Debug)]
+pub struct InputClassifier {
+    shell_context: ShellContext,
+    history: InputHistory,
+}
+
+impl Default for InputClassifier {
+    fn default() -> Self {
+        Self::for_working_directory(std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")))
     }
-    embedded_classifier()?.classify(input.trim())
 }
 
-/// Starts one best-effort background load of the embedded model and tokenizer.
-pub fn start_background_warmup() {
-    WARMUP_STARTED.call_once(|| {
-        let _ = thread::Builder::new()
-            .name("zeta-input-classifier".to_owned())
-            .spawn(|| {
-                let _ = embedded_classifier();
-            });
-    });
-}
-
-fn embedded_classifier() -> Result<&'static EmbeddedClassifier> {
-    CLASSIFIER
-        .get_or_init(|| EmbeddedClassifier::load().map_err(|error| format!("{error:#}")))
-        .as_ref()
-        .map_err(|error| anyhow!(error.clone()))
-}
-
-struct EmbeddedClassifier {
-    model: ModelProto,
-    tokenizer: Tokenizer,
-    device: Device,
-    has_panicked: AtomicBool,
-}
-
-impl EmbeddedClassifier {
-    fn load() -> Result<Self> {
-        let model =
-            ModelProto::decode(MODEL_BYTES).context("failed to decode embedded ONNX model")?;
-        let tokenizer = Tokenizer::from_bytes(TOKENIZER_BYTES)
-            .map_err(|error| anyhow!(error))
-            .context("failed to decode embedded tokenizer")?;
-        Ok(Self {
-            model,
-            tokenizer,
-            device: Device::Cpu,
-            has_panicked: AtomicBool::new(false),
-        })
-    }
-
-    fn classify(&self, input: &str) -> Result<InputClassification> {
-        ensure!(
-            !self.has_panicked.load(Ordering::Acquire),
-            "classifier inference was disabled after a panic"
-        );
-        match catch_unwind(AssertUnwindSafe(|| self.run_inference(input))) {
-            Ok(result) => result,
-            Err(_) => {
-                self.has_panicked.store(true, Ordering::Release);
-                Err(anyhow!(
-                    "classifier inference panicked and was disabled for this process"
-                ))
-            }
+impl InputClassifier {
+    /// Creates a classifier whose shell evidence is resolved relative to `working_directory`.
+    pub fn for_working_directory(working_directory: impl Into<PathBuf>) -> Self {
+        Self {
+            shell_context: ShellContext::new(working_directory),
+            history: InputHistory::default(),
         }
     }
 
-    fn run_inference(&self, input: &str) -> Result<InputClassification> {
-        let encoding = self
-            .tokenizer
-            .encode_fast(input, true)
-            .map_err(|error| anyhow!(error))
-            .context("failed to tokenize classifier input")?;
-        let input_ids = encoding
-            .get_ids()
-            .iter()
-            .map(|token| i64::from(*token))
-            .collect::<Vec<_>>();
-        let attention_mask = encoding
-            .get_attention_mask()
-            .iter()
-            .map(|token| i64::from(*token))
-            .collect::<Vec<_>>();
-        let input_ids = Tensor::new(input_ids.as_slice(), &self.device)
-            .context("failed to build input_ids tensor")?
-            .unsqueeze(0)?;
-        let attention_mask = Tensor::new(attention_mask.as_slice(), &self.device)
-            .context("failed to build attention_mask tensor")?
-            .unsqueeze(0)?;
-        let outputs = candle_onnx::simple_eval(
-            &self.model,
-            HashMap::from([
-                ("input_ids".to_owned(), input_ids),
-                ("attention_mask".to_owned(), attention_mask),
-            ]),
-        )
-        .context("failed to evaluate embedded ONNX model")?;
-        let logits = outputs
-            .get("logits")
-            .context("classifier model did not return logits")?;
-        let calibrated_logits = logits
-            .affine(1.0 / CALIBRATION_TEMPERATURE, 0.0)
-            .context("failed to calibrate classifier logits")?;
-        let probabilities = softmax_last_dim(&calibrated_logits)
-            .context("failed to normalize classifier logits")?
-            .i(0)?
-            .to_vec1::<f32>()?;
-        ensure!(
-            probabilities.len() == 2,
-            "classifier returned an invalid label count"
-        );
-        let shell_probability = probabilities[0];
-        let agent_probability = probabilities[1];
-        ensure!(
-            shell_probability.is_finite() && agent_probability.is_finite(),
-            "classifier returned non-finite probabilities"
-        );
-        let (route, confidence) = if shell_probability > agent_probability {
-            (InputRoute::Shell, shell_probability)
-        } else {
-            (InputRoute::Agent, agent_probability)
-        };
-        Ok(InputClassification {
-            route,
-            confidence,
-            source: InputClassificationSource::Model,
-        })
+    /// Rebinds workspace-relative command and path evidence.
+    pub fn set_working_directory(&mut self, working_directory: &Path) {
+        self.shell_context.set_working_directory(working_directory);
     }
+
+    /// Replaces chronological Shell and Agent submissions used for close-match routing.
+    pub fn replace_history(&mut self, entries: impl IntoIterator<Item = InputHistoryEntry>) {
+        self.history.replace(entries);
+    }
+
+    /// Records one successful submission as the newest history candidate.
+    pub fn record_submission(&mut self, entry: InputHistoryEntry) {
+        self.history.record(entry);
+    }
+
+    /// Runs allowlists, token semantics, and finally the embedded model.
+    pub fn classify(
+        &self,
+        input: &str,
+        context: InputClassificationContext,
+    ) -> InputClassification {
+        classify_with_model(
+            input,
+            context,
+            &self.shell_context,
+            &self.history,
+            classify_with_embedded_model,
+        )
+    }
+}
+
+fn classify_with_model(
+    input: &str,
+    context: InputClassificationContext,
+    shell_context: &ShellContext,
+    history: &InputHistory,
+    model: impl FnOnce(&str) -> ModelAttempt,
+) -> InputClassification {
+    let word_tokens = parse_query_into_tokens(input);
+    if let Some(classification) = classify_contextual_input(input, &word_tokens, context) {
+        return classification;
+    }
+    if let Some(classification) = history.classify(input) {
+        return classification;
+    }
+    if let Some(classification) = classify_allowlisted_input(&word_tokens) {
+        return classification;
+    }
+
+    let shell_snapshot = shell_context.analyze(input);
+    if shell_snapshot.is_likely_shell_command(word_tokens.len()) {
+        return InputClassification::deterministic(
+            InputRoute::Shell,
+            InputClassificationSource::ShellTokenHeuristic,
+        );
+    }
+
+    match model(input.trim()) {
+        ModelAttempt::Classified(classification) => classification,
+        ModelAttempt::Failed => InputClassification::fallback(context.current_route),
+        ModelAttempt::Unavailable | ModelAttempt::Panicked => classify_with_fallback_heuristic(
+            input,
+            word_tokens,
+            &shell_snapshot,
+            context.current_route,
+        ),
+    }
+}
+
+#[cfg(test)]
+pub(crate) fn classify_with_model_attempt(
+    classifier: &InputClassifier,
+    input: &str,
+    context: InputClassificationContext,
+    attempt: ModelAttempt,
+) -> InputClassification {
+    classify_with_model(
+        input,
+        context,
+        &classifier.shell_context,
+        &classifier.history,
+        |_| attempt,
+    )
 }
