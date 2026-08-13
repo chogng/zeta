@@ -142,6 +142,8 @@ import { AppServerCodeIndexService } from "../services/codeIndex/browser/appServ
 import { IToolSearchService } from "../../platform/toolSearch/common/toolSearchService.js";
 import { IConnectorService } from "../../platform/connectors/common/connectorService.js";
 import { AppServerConnectorService } from "../services/connectors/browser/appServerConnectorService.js";
+import { IPluginService } from "../../platform/plugins/common/pluginService.js";
+import { AppServerPluginService } from "../services/plugins/browser/appServerPluginService.js";
 import { AppServerToolSearchService } from "../services/toolSearch/browser/appServerToolSearchService.js";
 import { AccessibleViewInformationService, IAccessibleViewInformationService } from "../services/accessibility/common/accessibleViewInformationService.js";
 import { NativeAccessibilityService } from "../services/accessibility/electron-browser/accessibilityService.js";
@@ -300,6 +302,7 @@ export class Workbench extends DisposableOwner {
     services.set(IChatService, chatService);
     services.set(ICodeIndexService, new AppServerCodeIndexService(api.codeIndex));
     services.set(IConnectorService, this.own(new AppServerConnectorService(api.connectors, api.events)));
+    services.set(IPluginService, this.own(new AppServerPluginService(api.plugins, api.events)));
     services.set(IToolSearchService, new AppServerToolSearchService(api.toolSearch));
     const workbenchState = workspaceContext.getWorkbenchState();
     const workbenchWindow = this.own(new WorkbenchWindow({

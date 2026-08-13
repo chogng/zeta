@@ -122,8 +122,17 @@ fn enabled_authority(package: LocalPluginPackage) -> PluginActivationAuthority {
         .unwrap();
     authority
         .apply(PluginAuthorityCommandRequest {
-            command_id: PluginAuthorityCommandId::new("enable").unwrap(),
+            command_id: PluginAuthorityCommandId::new("grant").unwrap(),
             expected_revision: 1,
+            command: PluginAuthorityCommand::Grant {
+                package: installed.clone(),
+            },
+        })
+        .unwrap();
+    authority
+        .apply(PluginAuthorityCommandRequest {
+            command_id: PluginAuthorityCommandId::new("enable").unwrap(),
+            expected_revision: 2,
             command: PluginAuthorityCommand::Enable { package: installed },
         })
         .unwrap();
@@ -205,9 +214,9 @@ fn live_authority_fences_old_connector_runtime_after_disable() {
     authority
         .apply(PluginAuthorityCommandRequest {
             command_id: PluginAuthorityCommandId::new("disable").unwrap(),
-            expected_revision: 2,
+            expected_revision: snapshot.revision(),
             command: PluginAuthorityCommand::Disable {
-                plugin_id: snapshot.activation().packages()[0].manifest().id.clone(),
+                package: snapshot.enabled()[0].clone(),
             },
         })
         .unwrap();

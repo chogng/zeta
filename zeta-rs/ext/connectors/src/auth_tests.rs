@@ -1,13 +1,18 @@
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 
 use zeta_connectors::ConnectorAccountId;
 use zeta_connectors::ConnectorConnectionState;
 use zeta_connectors::ConnectorDefinition;
 use zeta_connectors::ConnectorId;
 use zeta_connectors::ConnectorRuntimeBinding;
+use zeta_secrets::DeleteSecretOutcome;
 use zeta_secrets::MemorySecretStore;
 use zeta_secrets::SecretKey;
 use zeta_secrets::SecretStore;
+use zeta_secrets::SecretStoreError;
+use zeta_secrets::SecretStoreErrorKind;
 use zeta_secrets::SecretValue;
 
 use crate::ConnectorApiTokenConnectRequest;
@@ -25,6 +30,41 @@ fn definition() -> ConnectorDefinition {
         ConnectorRuntimeBinding::mcp_server("plugin:acme/github:mcp:github").unwrap(),
     )
     .unwrap()
+}
+
+struct FailingDeleteSecretStore {
+    inner: MemorySecretStore,
+    fail_delete: AtomicBool,
+}
+
+impl FailingDeleteSecretStore {
+    fn new() -> Self {
+        Self {
+            inner: MemorySecretStore::default(),
+            fail_delete: AtomicBool::new(true),
+        }
+    }
+}
+
+impl SecretStore for FailingDeleteSecretStore {
+    fn load(&self, key: &SecretKey) -> Result<Option<SecretValue>, SecretStoreError> {
+        self.inner.load(key)
+    }
+
+    fn store(&self, key: &SecretKey, value: &SecretValue) -> Result<(), SecretStoreError> {
+        self.inner.store(key, value)
+    }
+
+    fn delete(&self, key: &SecretKey) -> Result<DeleteSecretOutcome, SecretStoreError> {
+        if self.fail_delete.load(Ordering::SeqCst) {
+            Err(SecretStoreError::new(
+                SecretStoreErrorKind::BackendUnavailable,
+                "test secret store unavailable",
+            ))
+        } else {
+            self.inner.delete(key)
+        }
+    }
 }
 
 #[test]
@@ -113,7 +153,7 @@ fn secret_backend_failure_never_publishes_connected_state() {
             .unwrap()
             .connection()
             .state(),
-        ConnectorConnectionState::Connecting
+        ConnectorConnectionState::Unavailable { .. }
     ));
 }
 
@@ -194,4 +234,52 @@ fn connect_and_disconnect_requests_replay_without_restoring_readiness() {
         .unwrap();
     assert_eq!(replay.disposition, ConnectorCommandDisposition::Replayed);
     assert!(secrets.load(&credential_key).unwrap().is_none());
+}
+
+#[test]
+fn failed_disconnect_cleanup_stays_pending_until_an_explicit_retry_succeeds() {
+    let definition = definition();
+    let connector_id = definition.id().clone();
+    let authority = ConnectorAuthority::in_memory([definition]).unwrap();
+    let secrets = Arc::new(FailingDeleteSecretStore::new());
+    let service = ConnectorCredentialService::new(authority, secrets.clone());
+    service
+        .connect_api_token(ConnectorApiTokenConnectRequest {
+            command_id: ConnectorCommandId::new("connect-retry-cleanup").unwrap(),
+            expected_generation: service.authority().snapshot().generation(),
+            connector_id: connector_id.clone(),
+            connection_generation: zeta_connectors::ConnectorConnectionGeneration::new(1),
+            account_id: ConnectorAccountId::new("octocat").unwrap(),
+            account_display_name: "Octocat".into(),
+            token: SecretValue::new(b"secret-token".to_vec()),
+        })
+        .unwrap();
+    let snapshot = service.authority().snapshot();
+    let disconnected = service
+        .disconnect(
+            ConnectorCommandId::new("disconnect-retry-cleanup").unwrap(),
+            snapshot.generation(),
+            connector_id.clone(),
+        )
+        .unwrap();
+    assert_eq!(
+        disconnected.credential_cleanup,
+        ConnectorCredentialCleanup::RetryRequired
+    );
+    assert!(
+        service
+            .authority()
+            .credential_cleanup_pending(&connector_id)
+    );
+
+    secrets.fail_delete.store(false, Ordering::SeqCst);
+    assert_eq!(
+        service.retry_credential_cleanup(&connector_id),
+        ConnectorCredentialCleanup::Deleted
+    );
+    assert!(
+        !service
+            .authority()
+            .credential_cleanup_pending(&connector_id)
+    );
 }

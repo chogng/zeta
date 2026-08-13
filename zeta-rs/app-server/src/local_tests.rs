@@ -177,6 +177,15 @@ fn live_plugin_authority_reconciles_connector_projection() {
     authority
         .apply(plugin_request(
             &authority,
+            "grant-live",
+            PluginAuthorityCommand::Grant {
+                package: installed.clone(),
+            },
+        ))
+        .unwrap();
+    authority
+        .apply(plugin_request(
+            &authority,
             "enable-live",
             PluginAuthorityCommand::Enable {
                 package: installed.clone(),
@@ -189,9 +198,7 @@ fn live_plugin_authority_reconciles_connector_projection() {
         .apply(plugin_request(
             &authority,
             "disable-live",
-            PluginAuthorityCommand::Disable {
-                plugin_id: installed.id,
-            },
+            PluginAuthorityCommand::Disable { package: installed },
         ))
         .unwrap();
     wait_for_connector_count(&server, &mut connection, 0, &mut request_id);

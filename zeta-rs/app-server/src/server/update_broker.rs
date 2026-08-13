@@ -12,6 +12,7 @@ use zeta_app_server_protocol::protocol::config::ConfigChanged;
 use zeta_app_server_protocol::protocol::connectors::ConnectorsChanged;
 use zeta_app_server_protocol::protocol::fs::FsChanged;
 use zeta_app_server_protocol::protocol::git::{GitStatusChanged, GitStatusResult};
+use zeta_app_server_protocol::protocol::plugins::PluginsChanged;
 use zeta_app_server_protocol::protocol::registry::ServerNotificationMethod;
 use zeta_app_server_protocol::protocol::skills::SkillsChanged;
 use zeta_app_server_protocol::rpc::JsonRpcNotification;
@@ -468,6 +469,25 @@ impl UpdateBroker {
             queue.push(notification(
                 ServerNotificationMethod::ConnectorsChanged,
                 &ConnectorsChanged { generation },
+            ));
+            true
+        });
+    }
+
+    pub(super) fn publish_plugins_changed(&self, revision: u64, activation_generation: u64) {
+        let Ok(mut state) = self.state.lock() else {
+            return;
+        };
+        state.subscribers.retain(|_, subscriber| {
+            let Some(queue) = subscriber.queue.upgrade() else {
+                return false;
+            };
+            queue.push(notification(
+                ServerNotificationMethod::PluginsChanged,
+                &PluginsChanged {
+                    revision,
+                    activation_generation,
+                },
             ));
             true
         });

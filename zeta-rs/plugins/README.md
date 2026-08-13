@@ -155,10 +155,12 @@ bazel test //zeta-rs/plugins:plugins-unit-tests
 
 ## 当前限制与扩展点
 
-PL1 的 local content store、durable authority、exact snapshot 和 live activation publish 已实现；grant、
-workspace-profile layering 与 authority schema migration 尚未实现。当前 object directory 的只读性由
+PL1 的 local content store、durable installed/enabled/granted/effective authority、exact snapshot 和 live
+activation publish 已实现；workspace-profile resolver 尚未实现，authority v1→v2 migration 会把旧 active
+package 保守迁移为 enabled + granted。当前 object directory 的只读性由
 “不暴露可写根路径 + digest revalidation”保证，
-尚未施加平台级 immutable flag，也没有 orphan staging startup recovery。PL2+ 的 MCP activation、
+尚未施加平台级 immutable flag，也没有 orphan staging startup recovery；失败 install commit 和 uninstall
+会精确回收无引用 object。PL2+ 的 MCP activation、
 registry、signature、rollback 和 GC authority 也尚未实现；package-rooted MCP consumer
 已位于 `zeta-mcp-extension`，不能反向并入本 crate。这些能力应在新的 private
 `authority/resolution` modules 中接入，不扩大 loader/store 为隐式 enable manager。

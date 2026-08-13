@@ -40,8 +40,10 @@ pub enum ConnectorConnectionStateDto {
 #[serde(rename_all = "camelCase")]
 pub enum ConnectorAvailableActionDto {
     ConnectApiToken,
+    ConnectOAuth,
     Disconnect,
     ReauthorizeApiToken,
+    ReauthorizeOAuth,
 }
 
 /// One runtime-free Connector catalog entry and its account-state projection.
@@ -57,6 +59,7 @@ pub struct ConnectorDto {
     pub connection_generation: u64,
     pub state: ConnectorConnectionStateDto,
     pub available_actions: Vec<ConnectorAvailableActionDto>,
+    pub credential_cleanup_pending: bool,
 }
 
 /// Exact non-secret projection of the durable Connector authority.
@@ -108,6 +111,45 @@ pub struct ConnectorApiTokenConnectParams {
     pub api_token: ConnectorSecretDto,
 }
 
+/// Starts one browser OAuth attempt bound to an exact Connector generation.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectorOAuthStartParams {
+    pub command_id: String,
+    #[schemars(range(min = 1))]
+    #[ts(type = "number")]
+    pub expected_generation: u64,
+    pub connector_id: String,
+    #[schemars(range(min = 1))]
+    #[ts(type = "number")]
+    pub connection_generation: u64,
+    pub redirect_uri: String,
+}
+
+/// Browser navigation values for one in-memory OAuth attempt.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectorOAuthStartResult {
+    pub flow_id: String,
+    pub authorization_url: String,
+}
+
+/// Inbound-only OAuth callback whose security values are cleared on drop.
+#[derive(Debug, Deserialize, Eq, JsonSchema, PartialEq, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectorOAuthCompleteParams {
+    pub flow_id: String,
+    pub state: ConnectorSecretDto,
+    pub authorization_code: ConnectorSecretDto,
+}
+
+/// Cancels one exact in-memory browser OAuth attempt.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectorOAuthCancelParams {
+    pub flow_id: String,
+}
+
 /// Retry-safe readiness revocation request.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -116,6 +158,13 @@ pub struct ConnectorDisconnectParams {
     #[schemars(range(min = 1))]
     #[ts(type = "number")]
     pub expected_generation: u64,
+    pub connector_id: String,
+}
+
+/// Requests retry of one durable post-disconnect secret deletion.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectorCredentialCleanupParams {
     pub connector_id: String,
 }
 

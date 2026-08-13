@@ -59,10 +59,15 @@ use crate::protocol::connectors::ConnectorCommandDispositionDto;
 use crate::protocol::connectors::ConnectorCommandResultDto;
 use crate::protocol::connectors::ConnectorConnectionStateDto;
 use crate::protocol::connectors::ConnectorCredentialCleanupDto;
+use crate::protocol::connectors::ConnectorCredentialCleanupParams;
 use crate::protocol::connectors::ConnectorDisconnectParams;
 use crate::protocol::connectors::ConnectorDisconnectResultDto;
 use crate::protocol::connectors::ConnectorDto;
 use crate::protocol::connectors::ConnectorListResult;
+use crate::protocol::connectors::ConnectorOAuthCancelParams;
+use crate::protocol::connectors::ConnectorOAuthCompleteParams;
+use crate::protocol::connectors::ConnectorOAuthStartParams;
+use crate::protocol::connectors::ConnectorOAuthStartResult;
 use crate::protocol::connectors::ConnectorSecretDto;
 use crate::protocol::connectors::ConnectorsChanged;
 use crate::protocol::diff::DiffComputeParams;
@@ -113,6 +118,12 @@ use crate::protocol::language::{
 };
 use crate::protocol::model::{ModelCatalogEntry, ModelListResult};
 use crate::protocol::notification::{SessionUpdateEnvelope, ThreadUpdateEnvelope};
+use crate::protocol::plugins::PluginCommandDispositionDto;
+use crate::protocol::plugins::PluginCommandResultDto;
+use crate::protocol::plugins::PluginListResult;
+use crate::protocol::plugins::PluginPackageCommandParams;
+use crate::protocol::plugins::PluginPackageDto;
+use crate::protocol::plugins::PluginsChanged;
 use crate::protocol::resources::{
     ResourceMetadataParams, ResourceMetadataResult, ResourceReadParams, ResourceReadResult,
     ResourceReleaseParams,
@@ -405,9 +416,59 @@ client_methods! {
         response: ConnectorCommandResultDto,
         serialization: GlobalExclusive,
     },
+    ConnectorOAuthStart => "connector/connect/oauth/start" {
+        params: ConnectorOAuthStartParams,
+        response: ConnectorOAuthStartResult,
+        serialization: GlobalExclusive,
+    },
+    ConnectorOAuthComplete => "connector/connect/oauth/complete" {
+        params: ConnectorOAuthCompleteParams,
+        response: ConnectorCommandResultDto,
+        serialization: GlobalExclusive,
+    },
+    ConnectorOAuthCancel => "connector/connect/oauth/cancel" {
+        params: ConnectorOAuthCancelParams,
+        response: ConnectorCommandResultDto,
+        serialization: GlobalExclusive,
+    },
     ConnectorDisconnect => "connector/disconnect" {
         params: ConnectorDisconnectParams,
         response: ConnectorDisconnectResultDto,
+        serialization: GlobalExclusive,
+    },
+    ConnectorCredentialCleanupRetry => "connector/credential/cleanup" {
+        params: ConnectorCredentialCleanupParams,
+        response: ConnectorCredentialCleanupDto,
+        serialization: GlobalExclusive,
+    },
+    PluginList => "plugin/list" {
+        params: EmptyParams,
+        response: PluginListResult,
+        serialization: GlobalSharedRead,
+    },
+    PluginEnable => "plugin/enable" {
+        params: PluginPackageCommandParams,
+        response: PluginCommandResultDto,
+        serialization: GlobalExclusive,
+    },
+    PluginDisable => "plugin/disable" {
+        params: PluginPackageCommandParams,
+        response: PluginCommandResultDto,
+        serialization: GlobalExclusive,
+    },
+    PluginGrant => "plugin/grant" {
+        params: PluginPackageCommandParams,
+        response: PluginCommandResultDto,
+        serialization: GlobalExclusive,
+    },
+    PluginRevokeGrant => "plugin/revokeGrant" {
+        params: PluginPackageCommandParams,
+        response: PluginCommandResultDto,
+        serialization: GlobalExclusive,
+    },
+    PluginUninstall => "plugin/uninstall" {
+        params: PluginPackageCommandParams,
+        response: PluginCommandResultDto,
         serialization: GlobalExclusive,
     },
     ModelList => "model/list" {
@@ -939,6 +1000,9 @@ server_notifications! {
     ConnectorsChanged => "connector/changed" {
         params: ConnectorsChanged,
     },
+    PluginsChanged => "plugin/changed" {
+        params: PluginsChanged,
+    },
     SkillsChanged => "skills/changed" {
         params: SkillsChanged,
     },
@@ -978,12 +1042,23 @@ typescript_bindings! {
     ConnectorListResult,
     ConnectorSecretDto,
     ConnectorApiTokenConnectParams,
+    ConnectorOAuthStartParams,
+    ConnectorOAuthStartResult,
+    ConnectorOAuthCompleteParams,
+    ConnectorOAuthCancelParams,
     ConnectorDisconnectParams,
     ConnectorCommandDispositionDto,
     ConnectorCommandResultDto,
     ConnectorCredentialCleanupDto,
+    ConnectorCredentialCleanupParams,
     ConnectorDisconnectResultDto,
     ConnectorsChanged,
+    PluginPackageDto,
+    PluginListResult,
+    PluginPackageCommandParams,
+    PluginCommandDispositionDto,
+    PluginCommandResultDto,
+    PluginsChanged,
     TurnId,
     DelegationId,
     AgentJoinId,

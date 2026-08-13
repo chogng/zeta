@@ -182,7 +182,11 @@ inline argument parsing；提交仍通过 `session/request` 的 `StartTurn.input
 | `config/read` | config | 读取配置 |
 | `connector/list` | Connector authority | 读取不含 secret/reference 的外部账号连接投影 |
 | `connector/connect/apiToken` | Connector authority + secret store | retry-safe 保存 API token 并发布 connected account |
+| `connector/connect/oauth/start` / `complete` / `cancel` | Connector OAuth owner | 启动 exact PKCE flow，一次性消费 callback state/code，或显式结束 abandoned flow |
 | `connector/disconnect` | Connector authority + secret store | 先撤销 runtime readiness，再报告 credential cleanup 状态 |
+| `connector/credential/cleanup` | Connector credential owner | 重试 durable post-disconnect secret 删除义务 |
+| `plugin/list` | Plugin authority | 分别投影 installed/enabled/granted/effective package 状态 |
+| `plugin/enable` / `disable` / `grant` / `revokeGrant` / `uninstall` | Plugin authority | exact-package CAS lifecycle mutation |
 | `config/update` | config | typed command 更新配置 |
 | `toolSearch/configure` | config + semantic model runtime | 选择词法模式，或探活 exact embedding 模型后启用混合 Tool Search |
 | `workspace/codeIndex/semantic/configure` / `authorize` / `revoke` | config + Workspace | 独立配置 semantic CodeIndex，并显式管理源码外发授权 |
@@ -237,7 +241,8 @@ Connector account 是 GitHub、Slack 等外部产品账号，不是第 11 节的
 
 ### Connector 外部账号连接
 
-`initialize.capabilities.connectors` 只有在 host 注入 `ConnectorCredentialService` 时为 true。客户端收到
+`initialize.capabilities.connectors` 只有在 host 注入 `ConnectorCredentialService` 时为 true；
+`initialize.capabilities.plugins` 只有在 host 注入 live Plugin authority 时为 true。客户端收到
 `connector/changed { generation }` 后重新调用 `connector/list`；notification 不携带 account body、
 credential reference 或 secret。
 
@@ -248,8 +253,19 @@ request；App Server 把它移出通用 JSON value 后包装为 zeroizing `Secre
 
 disconnect 先提交新的 disconnected generation，再删除 secret。结果中的 `credentialCleanup` 为
 `deleted`、`alreadyAbsent` 或 `retryRequired`；后者不回滚 disconnect。客户端不得因为 cleanup 需要重试
-而继续显示 tools ready。`reauthorizationRequired` 同样不是 ready 状态，通常表示 Plugin package/runtime
+而继续显示 tools ready。失败的删除会持久化为 `credentialCleanupPending`，并由
+`connector/credential/cleanup` 收敛。`reauthorizationRequired` 同样不是 ready 状态，通常表示 Plugin package/runtime
 authorization revision 已改变。
+
+OAuth start 返回 browser navigation URL 与 opaque flow ID；callback state/code 只进入 inbound-only
+complete DTO。PKCE verifier 留在 Connector OAuth service 内存，Desktop 的随机 loopback callback listener
+由 Electron main 持有，Renderer 不接触 verifier 或 provider token。具体 provider adapter 必须由产品
+composition 显式注入。
+
+Plugin request 是 config intent；Plugin lifecycle authority 是另一层事实。`plugin/list` 不把它们压成
+一个布尔值，而是分别返回 enabled、granted 与 effective，只有 exact installed package 同时 enabled 且
+granted 时才进入 activation。install source 仍由可信 ingestion owner 管理，不接受 Renderer 提交任意
+host filesystem path。
 
 长期 Zeta account control plane 另见[第 11 节](#11-account-与登录)。它尚未进入当前 registry/schema，
 加入时必须和 Rust DTO、TypeScript 与 JSON Schema 同步提交。

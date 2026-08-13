@@ -6,6 +6,7 @@ use zeta_app_server_protocol::protocol::config::ConfigChanged;
 use zeta_app_server_protocol::protocol::connectors::ConnectorsChanged;
 use zeta_app_server_protocol::protocol::fs::FsChanged;
 use zeta_app_server_protocol::protocol::git::{GitChangeStatusDto, GitHeadDto};
+use zeta_app_server_protocol::protocol::plugins::PluginsChanged;
 
 #[test]
 fn decodes_owner_directed_agent_request_notification() {
@@ -214,5 +215,25 @@ fn decodes_connectors_changed_notification() {
     assert_eq!(
         notification,
         ServerNotification::ConnectorsChanged(ConnectorsChanged { generation: 9 })
+    );
+}
+
+#[test]
+fn decodes_plugins_changed_notification() {
+    let notification = decode(
+        r#"{
+            "jsonrpc": "2.0",
+            "method": "plugin/changed",
+            "params": {"revision": 7, "activationGeneration": 3}
+        }"#,
+    )
+    .expect("Plugin notification decodes");
+
+    assert_eq!(
+        notification,
+        ServerNotification::PluginsChanged(PluginsChanged {
+            revision: 7,
+            activation_generation: 3,
+        })
     );
 }

@@ -170,14 +170,15 @@ test("Connector settings project catalog state and invoke typed connect and disc
   const settings = disposables.add(new SettingsService());
   const configuration = disposables.add(new WorkbenchConfigurationService());
   const mutations: string[] = [];
-  const disconnected = { id: "github", displayName: "GitHub", description: "Connect GitHub.", connectionGeneration: 0, state: { status: "disconnected" as const }, canConnectApiToken: true, canDisconnect: false };
-  const connected = { id: "slack", displayName: "Slack", description: "Connect Slack.", connectionGeneration: 2, state: { status: "connected" as const, account: { id: "team", displayName: "Zeta Team" } }, canConnectApiToken: false, canDisconnect: true };
+  const disconnected = { id: "github", displayName: "GitHub", description: "Connect GitHub.", connectionGeneration: 0, state: { status: "disconnected" as const }, canConnectApiToken: true, canConnectOAuth: false, canDisconnect: false };
+  const connected = { id: "slack", displayName: "Slack", description: "Connect Slack.", connectionGeneration: 2, state: { status: "connected" as const, account: { id: "team", displayName: "Zeta Team" } }, canConnectApiToken: false, canConnectOAuth: false, canDisconnect: true };
   const connectorService = {
     onDidChange: () => toDisposable(() => {}),
     list: async () => ({ generation: 7, connectors: [disconnected, connected] }),
     connectApiToken: async (connector: { id: string }, generation: number, input: { accountId: string; accountDisplayName: string; token: string }) => {
       mutations.push(`connect:${connector.id}:${generation}:${input.accountId}:${input.accountDisplayName}:${input.token}`);
     },
+    connectOAuth: async () => {},
     disconnect: async (connector: { id: string }, generation: number) => {
       mutations.push(`disconnect:${connector.id}:${generation}`);
     },
@@ -194,7 +195,7 @@ test("Connector settings project catalog state and invoke typed connect and disc
 
   settings.open("connectors");
   await new Promise((resolve) => globalThis.setTimeout(resolve, 0));
-  assert.deepEqual([...root.querySelectorAll(".zeta-connector-heading h4")].map(element => element.textContent), ["GitHub", "Slack"]);
+  assert.deepEqual([...root.querySelectorAll(".zeta-integration-heading h4")].map(element => element.textContent), ["GitHub", "Slack"]);
   const inputs = root.querySelectorAll<HTMLInputElement>(".zeta-connector-connect-form input");
   inputs[0]!.value = "octocat";
   inputs[1]!.value = "Octocat";
@@ -202,12 +203,51 @@ test("Connector settings project catalog state and invoke typed connect and disc
   root.querySelector<HTMLFormElement>(".zeta-connector-connect-form")?.dispatchEvent(new browserEnvironment.window.SubmitEvent("submit", { bubbles: true, cancelable: true }));
   await new Promise((resolve) => globalThis.setTimeout(resolve, 0));
   assert.equal(inputs[2]!.value, "");
-  root.querySelector<HTMLButtonElement>(".zeta-connector-card > .is-danger")?.click();
+  root.querySelector<HTMLButtonElement>(".zeta-integration-card > .is-danger")?.click();
   await new Promise((resolve) => globalThis.setTimeout(resolve, 0));
   assert.deepEqual(mutations, [
     "connect:github:7:octocat:Octocat:secret-token",
     "disconnect:slack:7",
   ]);
+});
+
+test("Plugin settings project layered authority and send exact-package commands", async () => {
+  using disposables = new DisposableStore();
+  const ownerDocument = browserEnvironment.window.document;
+  ownerDocument.body.replaceChildren();
+  const root = ownerDocument.createElement("div");
+  ownerDocument.body.append(root);
+  const settings = disposables.add(new SettingsService());
+  const configuration = disposables.add(new WorkbenchConfigurationService());
+  const mutations: string[] = [];
+  const plugin = { id: "acme/github", version: "1.0.0", digest: `sha256:${"a".repeat(64)}`, enabled: false, granted: false, effective: false };
+  const pluginService = {
+    onDidChange: () => toDisposable(() => {}),
+    list: async () => ({ revision: 7, activationGeneration: 3, packages: [plugin] }),
+    enable: async (target: typeof plugin, revision: number) => { mutations.push(`enable:${target.id}:${target.digest}:${revision}`); },
+    disable: async () => {},
+    grant: async (target: typeof plugin, revision: number) => { mutations.push(`grant:${target.id}:${target.digest}:${revision}`); },
+    revokeGrant: async () => {},
+    uninstall: async (target: typeof plugin, revision: number) => { mutations.push(`uninstall:${target.id}:${target.digest}:${revision}`); },
+  };
+  disposables.add(new SettingsEditorContribution({
+    configurationService: configuration,
+    container: root,
+    dialogService: acceptingDialogService,
+    pluginService,
+    settingsService: settings,
+    themeService: disposables.add(new ThemeService(darkColorTheme)),
+    userThemeService: UnavailableUserThemeService,
+  }));
+
+  settings.open("plugins");
+  await new Promise((resolve) => globalThis.setTimeout(resolve, 0));
+  assert.equal(root.querySelector(".zeta-integration-heading h4")?.textContent, "acme/github · 1.0.0");
+  const buttons = [...root.querySelectorAll<HTMLButtonElement>(".zeta-integration-card > .zeta-theme-action")];
+  assert.deepEqual(buttons.map(button => button.textContent), ["Grant", "Enable", "Uninstall"]);
+  buttons[0]!.click();
+  await new Promise((resolve) => globalThis.setTimeout(resolve, 0));
+  assert.deepEqual(mutations, [`grant:acme/github:${plugin.digest}:7`]);
 });
 
 test("Appearance settings persist and dynamically render registered theme preferences", async () => {

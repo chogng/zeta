@@ -1,49 +1,49 @@
-.zeta-connectors-settings {
+.zeta-integration-settings {
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
 
-.zeta-connector-card {
+.zeta-integration-card {
   padding: 14px;
   border: 1px solid var(--zeta-widget-border);
   border-radius: 6px;
   background: var(--zeta-editor-background);
 }
 
-.zeta-connector-heading {
+.zeta-integration-heading {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
 }
 
-.zeta-connector-heading h4,
+.zeta-integration-heading h4,
 .zeta-connector-description,
-.zeta-connector-feedback {
+.zeta-integration-feedback {
   margin: 0;
 }
 
-.zeta-connector-heading h4 {
+.zeta-integration-heading h4 {
   font-size: 14px;
 }
 
-.zeta-connector-state {
+.zeta-integration-state {
   color: var(--zeta-description-foreground);
   font-size: 12px;
 }
 
-.zeta-connector-state.is-connected {
+.zeta-integration-state.is-connected {
   color: var(--zeta-success-foreground, var(--zeta-description-foreground));
 }
 
-.zeta-connector-state.is-unavailable,
-.zeta-connector-state.is-reauthorizationRequired {
+.zeta-integration-state.is-unavailable,
+.zeta-integration-state.is-reauthorizationRequired {
   color: var(--zeta-error-foreground);
 }
 
 .zeta-connector-description,
-.zeta-connector-feedback {
+.zeta-integration-feedback {
   margin-top: 8px;
   color: var(--zeta-description-foreground);
   font-size: 12px;
@@ -65,7 +65,7 @@
   justify-self: start;
 }
 
-.zeta-connector-card > .zeta-theme-action {
+.zeta-integration-card > .zeta-theme-action {
   margin-top: 12px;
 }
 

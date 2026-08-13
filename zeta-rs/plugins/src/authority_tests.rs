@@ -81,6 +81,15 @@ fn authority_persists_install_enable_disable_and_exact_replay() {
     authority
         .apply(request(
             &authority,
+            "grant-review",
+            PluginAuthorityCommand::Grant {
+                package: installed.clone(),
+            },
+        ))
+        .unwrap();
+    authority
+        .apply(request(
+            &authority,
             "enable-review",
             PluginAuthorityCommand::Enable {
                 package: installed.clone(),
@@ -92,7 +101,7 @@ fn authority_persists_install_enable_disable_and_exact_replay() {
     drop(authority);
 
     let reopened = PluginActivationAuthority::open(profile.path()).unwrap();
-    assert_eq!(reopened.snapshot().revision(), 2);
+    assert_eq!(reopened.snapshot().revision(), 3);
     assert_eq!(
         reopened.snapshot().installed(),
         std::slice::from_ref(&installed)
@@ -102,9 +111,7 @@ fn authority_persists_install_enable_disable_and_exact_replay() {
         .apply(request(
             &reopened,
             "disable-review",
-            PluginAuthorityCommand::Disable {
-                plugin_id: installed.id,
-            },
+            PluginAuthorityCommand::Disable { package: installed },
         ))
         .unwrap();
     assert!(reopened.snapshot().activation().packages().is_empty());
@@ -134,7 +141,7 @@ fn failed_enable_does_not_change_the_published_generation() {
 }
 
 #[test]
-fn disable_commits_then_waits_for_exact_invocation_drain() {
+fn disable_rejects_a_stale_exact_package_target() {
     let root = tempdir().unwrap();
     let source = tempdir().unwrap();
     let store = PluginPackageStore::open(root.path()).unwrap();
@@ -160,26 +167,200 @@ fn disable_commits_then_waits_for_exact_invocation_drain() {
             },
         ))
         .unwrap();
+    let mut stale = installed;
+    stale.digest = crate::PluginPackageDigest::new(format!("sha256:{}", "0".repeat(64))).unwrap();
+
+    let error = authority
+        .apply(request(
+            &authority,
+            "disable-stale",
+            PluginAuthorityCommand::Disable { package: stale },
+        ))
+        .unwrap_err();
+
+    assert_eq!(error.kind(), PluginErrorKind::SourceUnavailable);
+    assert_eq!(authority.snapshot().enabled().len(), 1);
+}
+
+#[test]
+fn revoke_and_uninstall_reject_stale_exact_package_targets() {
+    let root = tempdir().unwrap();
+    let source = tempdir().unwrap();
+    let store = PluginPackageStore::open(root.path()).unwrap();
+    let installed = store
+        .install_local(&package(source.path(), "acme/review", "1.0.0"))
+        .unwrap();
+    let authority = PluginActivationAuthority::in_memory(store).unwrap();
+    authority
+        .apply(request(
+            &authority,
+            "install",
+            PluginAuthorityCommand::Install {
+                package: installed.clone(),
+            },
+        ))
+        .unwrap();
+    authority
+        .apply(request(
+            &authority,
+            "grant",
+            PluginAuthorityCommand::Grant {
+                package: installed.clone(),
+            },
+        ))
+        .unwrap();
+    let mut stale = installed;
+    stale.digest = crate::PluginPackageDigest::new(format!("sha256:{}", "0".repeat(64))).unwrap();
+
+    for command in [
+        PluginAuthorityCommand::RevokeGrant {
+            package: stale.clone(),
+        },
+        PluginAuthorityCommand::Uninstall { package: stale },
+    ] {
+        let error = authority
+            .apply(request(&authority, "stale-exact-target", command))
+            .unwrap_err();
+        assert_eq!(error.kind(), PluginErrorKind::SourceUnavailable);
+    }
+    assert_eq!(authority.snapshot().installed().len(), 1);
+    assert_eq!(authority.snapshot().granted().len(), 1);
+}
+
+#[test]
+fn failed_install_authority_commit_removes_the_unreferenced_object() {
+    let profile = tempdir().unwrap();
+    let source = tempdir().unwrap();
+    let local = package(source.path(), "acme/orphan", "1.0.0");
+    let digest = local
+        .package_digest()
+        .as_str()
+        .strip_prefix("sha256:")
+        .unwrap()
+        .to_owned();
+    let authority = PluginActivationAuthority::open(profile.path()).unwrap();
+
+    let error = authority
+        .install_local(
+            PluginAuthorityCommandId::new("install-conflict").unwrap(),
+            99,
+            &local,
+        )
+        .unwrap_err();
+
+    assert_eq!(error.kind(), PluginErrorKind::GenerationConflict);
+    assert!(!profile.path().join("objects").join(digest).exists());
+}
+
+#[test]
+fn enable_requires_an_exact_package_grant_before_activation() {
+    let root = tempdir().unwrap();
+    let source = tempdir().unwrap();
+    let store = PluginPackageStore::open(root.path()).unwrap();
+    let installed = store
+        .install_local(&package(source.path(), "acme/review", "1.0.0"))
+        .unwrap();
+    let authority = PluginActivationAuthority::in_memory(store).unwrap();
+    authority
+        .apply(request(
+            &authority,
+            "install",
+            PluginAuthorityCommand::Install {
+                package: installed.clone(),
+            },
+        ))
+        .unwrap();
+    authority
+        .apply(request(
+            &authority,
+            "enable",
+            PluginAuthorityCommand::Enable {
+                package: installed.clone(),
+            },
+        ))
+        .unwrap();
+    assert!(authority.snapshot().activation().packages().is_empty());
+
+    authority
+        .apply(request(
+            &authority,
+            "grant",
+            PluginAuthorityCommand::Grant {
+                package: installed.clone(),
+            },
+        ))
+        .unwrap();
+    assert_eq!(authority.snapshot().activation().packages().len(), 1);
+
+    authority
+        .apply(request(
+            &authority,
+            "revoke",
+            PluginAuthorityCommand::RevokeGrant { package: installed },
+        ))
+        .unwrap();
+    assert!(authority.snapshot().activation().packages().is_empty());
+}
+
+#[test]
+fn disable_commits_then_waits_for_exact_invocation_drain() {
+    let root = tempdir().unwrap();
+    let source = tempdir().unwrap();
+    let store = PluginPackageStore::open(root.path()).unwrap();
+    let installed = store
+        .install_local(&package(source.path(), "acme/review", "1.0.0"))
+        .unwrap();
+    let authority = PluginActivationAuthority::in_memory(store).unwrap();
+    authority
+        .apply(request(
+            &authority,
+            "install",
+            PluginAuthorityCommand::Install {
+                package: installed.clone(),
+            },
+        ))
+        .unwrap();
+    authority
+        .apply(request(
+            &authority,
+            "grant",
+            PluginAuthorityCommand::Grant {
+                package: installed.clone(),
+            },
+        ))
+        .unwrap();
+    authority
+        .apply(request(
+            &authority,
+            "enable",
+            PluginAuthorityCommand::Enable {
+                package: installed.clone(),
+            },
+        ))
+        .unwrap();
     let active = authority.snapshot().activation().packages()[0].clone();
     let fence = authority.invocation_fence(&active).unwrap();
     let lease = fence.acquire().unwrap();
     let subscription = authority.subscribe();
     let expected_revision = authority.snapshot().revision();
     let disable_authority = authority.clone();
-    let plugin_id = installed.id;
+    let package = installed;
     let (completed_sender, completed_receiver) = mpsc::channel();
     let disable = thread::spawn(move || {
         let result = disable_authority.apply(PluginAuthorityCommandRequest {
             command_id: PluginAuthorityCommandId::new("disable").unwrap(),
             expected_revision,
-            command: PluginAuthorityCommand::Disable { plugin_id },
+            command: PluginAuthorityCommand::Disable { package },
         });
         completed_sender.send(()).unwrap();
         result
     });
 
     assert_eq!(
-        subscription.recv_timeout(Duration::from_secs(1)).unwrap(),
+        subscription
+            .recv_timeout(Duration::from_secs(1))
+            .unwrap()
+            .activation_generation,
         3
     );
     assert!(!fence.authorizes());
@@ -221,6 +402,15 @@ fn unrelated_activation_change_does_not_revoke_an_exact_package_fence() {
     authority
         .apply(request(
             &authority,
+            "grant-first",
+            PluginAuthorityCommand::Grant {
+                package: first.clone(),
+            },
+        ))
+        .unwrap();
+    authority
+        .apply(request(
+            &authority,
             "enable-first",
             PluginAuthorityCommand::Enable {
                 package: first.clone(),
@@ -230,6 +420,15 @@ fn unrelated_activation_change_does_not_revoke_an_exact_package_fence() {
     let active = authority.snapshot().activation().packages()[0].clone();
     let fence = authority.invocation_fence(&active).unwrap();
 
+    authority
+        .apply(request(
+            &authority,
+            "grant-second",
+            PluginAuthorityCommand::Grant {
+                package: second.clone(),
+            },
+        ))
+        .unwrap();
     authority
         .apply(request(
             &authority,

@@ -16,6 +16,7 @@ mod path;
 
 pub use activation::PluginActivationSnapshot;
 pub use authority::PluginActivationAuthority;
+pub use authority::PluginAuthorityChange;
 pub use authority::PluginAuthorityCommand;
 pub use authority::PluginAuthorityCommandId;
 pub use authority::PluginAuthorityCommandRequest;

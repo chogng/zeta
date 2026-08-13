@@ -25,6 +25,7 @@ import { createToolSearchApi } from "../../toolSearch/electron-browser/toolSearc
 import type { ZetaElectronRendererApi } from "../common/rendererApi.js";
 import { createNativeHostApi } from "./nativeHostApi.js";
 import { createLanguageApi } from "../../language/electron-browser/languageApi.js";
+import { createPluginApi } from "../../plugins/electron-browser/pluginApi.js";
 
 /** Composes Electron renderer capabilities from domain-owned IPC adapters. */
 export function createElectronRendererApi(): ZetaElectronRendererApi {
@@ -64,6 +65,7 @@ export function createElectronRendererApi(): ZetaElectronRendererApi {
     workspace: createWorkspaceContextApi(),
     codeIndex: createCodeIndexApi(),
     connectors: createConnectorApi(),
+    plugins: createPluginApi(),
     toolSearch: createToolSearchApi(),
   };
 }

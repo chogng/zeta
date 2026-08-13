@@ -12,7 +12,7 @@ export class ConnectorSettingsPane extends DisposableOwner {
   constructor(private readonly document: Document, private readonly connectors: IConnectorService) {
     super();
     this.element = document.createElement("div");
-    this.element.className = "zeta-connectors-settings";
+    this.element.className = "zeta-integration-settings";
     this.own(connectors.onDidChange(() => void this.reload()));
     void this.reload();
     this.defer(() => this.element.remove());
@@ -49,23 +49,24 @@ export class ConnectorSettingsPane extends DisposableOwner {
 
   private connectorCard(catalogGeneration: number, connector: ConnectorView): HTMLElement {
     const card = this.document.createElement("section");
-    card.className = "zeta-connector-card";
+    card.className = "zeta-integration-card";
     const heading = this.document.createElement("div");
-    heading.className = "zeta-connector-heading";
+    heading.className = "zeta-integration-heading";
     const title = this.document.createElement("h4");
     title.textContent = connector.displayName;
     const state = this.document.createElement("span");
-    state.className = `zeta-connector-state is-${connector.state.status}`;
+    state.className = `zeta-integration-state is-${connector.state.status}`;
     state.textContent = stateLabel(connector.state);
     heading.append(title, state);
     const description = this.document.createElement("p");
     description.className = "zeta-connector-description";
     description.textContent = connector.description;
     const feedback = this.document.createElement("p");
-    feedback.className = "zeta-connector-feedback";
+    feedback.className = "zeta-integration-feedback";
     feedback.setAttribute("role", "status");
     card.append(heading, description);
     if (connector.canConnectApiToken) card.append(this.connectForm(catalogGeneration, connector, feedback));
+    if (connector.canConnectOAuth) card.append(this.oauthButton(catalogGeneration, connector, feedback));
     if (connector.canDisconnect) card.append(this.disconnectButton(catalogGeneration, connector, feedback));
     card.append(feedback);
     return card;
@@ -123,6 +124,25 @@ export class ConnectorSettingsPane extends DisposableOwner {
       }).catch((error: unknown) => {
         button.disabled = false;
         feedback.textContent = error instanceof Error ? `Disconnect failed: ${error.message}` : "Disconnect failed.";
+      });
+    }));
+    return button;
+  }
+
+  private oauthButton(catalogGeneration: number, connector: ConnectorView, feedback: HTMLElement): HTMLButtonElement {
+    const button = this.document.createElement("button");
+    button.type = "button";
+    button.className = "zeta-theme-action";
+    button.textContent = connector.state.status === "reauthorizationRequired" ? "Reconnect with OAuth" : "Connect with OAuth";
+    this.rows.add(addDisposableListener(button, "click", () => {
+      button.disabled = true;
+      feedback.textContent = "Waiting for browser authorization…";
+      void this.connectors.connectOAuth(connector, catalogGeneration).then(() => {
+        feedback.textContent = "Connected.";
+        return this.reload();
+      }).catch((error: unknown) => {
+        button.disabled = false;
+        feedback.textContent = error instanceof Error ? `OAuth connection failed: ${error.message}` : "OAuth connection failed.";
       });
     }));
     return button;

@@ -443,8 +443,8 @@ resolved sources
 | Provider Config | `provider/configure`、`provider/remove` | Config authority 的 Provider section |
 | Standalone MCP Config | `mcp/server/upsert`、`mcp/server/remove`、`mcp/server/enablement/set` | Config authority 的 MCP section（已实现 desired config） |
 | MCP Runtime | `mcp/server/connect`、`mcp/server/disconnect` | process-local lifecycle intent（Proposed） |
-| Plugin Package | `plugin/install`、`plugin/update`、`plugin/uninstall` | Plugin authority（Proposed） |
-| Plugin Activation | `plugin/enable`、`plugin/disable`、`plugin/version/pin` | Plugin authority（Proposed） |
+| Plugin Package | `plugin/list`、`plugin/uninstall`；可信 `install/update` 尚未暴露 | Plugin authority（部分具备） |
+| Plugin Activation | `plugin/enable`、`plugin/disable`、`plugin/grant`、`plugin/revokeGrant` | exact-package Plugin authority（已实现） |
 | Plugin Request Config | `plugin/request/upsert`、`plugin/request/remove`、`plugin/request/enablement/set` | Config authority 的 exact package request（已实现；不安装或激活） |
 | Skill Source | `skill/source/add`、`skill/source/remove`、`skill/source/enablement/set` | Config authority 的 Skill section（已实现 desired config） |
 | Skill Catalog | `skills/list`、`skill/enablement/set` | App Server metadata projection + Config authority per-Skill overlay（已实现 built-in/user） |
@@ -656,8 +656,9 @@ authority。旧版 `config_authority.document_json` 会在首次打开时一次�
    保持 TOML authority；
 8. ✅ 用本地与跨 connection commit signal 驱动 Skill/MCP reconcile；
 9. ✅ MCP Tool registry 对未来调用原子切换，并保持 prepared call generation；
-10. 实现 Plugin authority 与 `PluginActivationSnapshot`；
-11. 接通 Plugin contribution 到 MCP/Skill manager；
+10. ✅ 实现分层 Plugin authority 与 `PluginActivationSnapshot`；
+11. 部分具备：Plugin Connector/MCP contribution 已接通 live manager；Skill contribution 与
+    workspace-profile resolver 尚未接入；
 12. 发布完整跨领域 `AgentEnvironmentSnapshot`；
 13. 增加 process-kill crash、permission monotonicity 和完整 generation consistency 测试。
 14. 增加 Agent Import 的 normalized fragment、原子 Config batch、receipt 与 rollback contract。

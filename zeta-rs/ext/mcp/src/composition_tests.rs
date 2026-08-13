@@ -243,3 +243,41 @@ fn connector_tool_is_materialized_only_while_exact_connection_is_authorized() {
 
     assert!(composition.tools.prepare(&call).is_err());
 }
+
+#[test]
+fn connected_accounts_bound_to_one_contribution_get_distinct_runtime_servers() {
+    let definitions = ["account-one", "account-two"].map(|local_id| {
+        ConnectorDefinition::new(
+            ConnectorId::new(format!("acme/github:connector:{local_id}")).unwrap(),
+            local_id,
+            "GitHub tools",
+            ConnectorRuntimeBinding::mcp_server("plugin:acme/github:mcp:github").unwrap(),
+        )
+        .unwrap()
+    });
+    let authority = ConnectorAuthority::in_memory(definitions.clone()).unwrap();
+    let secrets = Arc::new(MemorySecretStore::default());
+    let secret_store: Arc<dyn SecretStore> = secrets.clone();
+    let service = ConnectorCredentialService::new(authority.clone(), secret_store);
+    for (index, definition) in definitions.iter().enumerate() {
+        service
+            .connect_api_token(ConnectorApiTokenConnectRequest {
+                command_id: ConnectorCommandId::new(format!("connect-{index}")).unwrap(),
+                expected_generation: authority.snapshot().generation(),
+                connector_id: definition.id().clone(),
+                connection_generation: ConnectorConnectionGeneration::new(1),
+                account_id: ConnectorAccountId::new(format!("account-{index}")).unwrap(),
+                account_display_name: format!("Account {index}"),
+                token: SecretValue::new(b"secret-token".to_vec()),
+            })
+            .unwrap();
+    }
+
+    let materialized =
+        materialize_connector_servers(authority, secrets.as_ref(), &TokenStdioProvider).unwrap();
+    assert_eq!(materialized.definitions.len(), 2);
+    assert_ne!(
+        materialized.definitions[0].id(),
+        materialized.definitions[1].id()
+    );
+}

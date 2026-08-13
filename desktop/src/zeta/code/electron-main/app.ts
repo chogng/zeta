@@ -63,6 +63,7 @@ import { languageIpcRoutes } from "../../platform/language/electron-main/languag
 import { gitIpcRoutes } from "../../platform/git/electron-main/gitIpcRoutes.js";
 import { codeIndexIpcRoutes } from "../../platform/codeIndex/electron-main/codeIndexIpcRoutes.js";
 import { connectorIpcRoutes } from "../../platform/connectors/electron-main/connectorIpcRoutes.js";
+import { pluginIpcRoutes } from "../../platform/plugins/electron-main/pluginIpcRoutes.js";
 import { toolSearchIpcRoutes } from "../../platform/toolSearch/electron-main/toolSearchIpcRoutes.js";
 import {
   KEYBINDINGS_RESOURCE_CHANGED_CHANNEL,
@@ -408,6 +409,7 @@ export class ZetaApplication extends DisposableOwner {
       ...gitIpcRoutes(supervisor),
       ...codeIndexIpcRoutes(supervisor),
       ...connectorIpcRoutes(supervisor),
+      ...pluginIpcRoutes(supervisor),
       ...toolSearchIpcRoutes(supervisor),
       ...searchIpcRoutes(supervisor),
       ...terminalIpcRoutes(supervisor),

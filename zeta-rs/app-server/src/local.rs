@@ -331,6 +331,7 @@ pub struct LocalConnectorRuntime {
     secrets: Arc<dyn SecretStore>,
     mcp: Arc<dyn ConnectorMcpRuntimeProvider>,
     plugin_authority: Option<PluginActivationAuthority>,
+    oauth: Option<Arc<zeta_connectors_extension::ConnectorOAuthService>>,
 }
 
 impl LocalConnectorRuntime {
@@ -344,7 +345,27 @@ impl LocalConnectorRuntime {
             secrets,
             mcp,
             plugin_authority: None,
+            oauth: None,
         }
+    }
+
+    /// Installs concrete provider adapters while keeping PKCE and credentials in the shared runtime.
+    pub fn with_oauth_providers(
+        mut self,
+        providers: impl IntoIterator<
+            Item = (
+                zeta_connectors::ConnectorId,
+                Arc<dyn zeta_connectors_extension::ConnectorOAuthProvider>,
+            ),
+        >,
+    ) -> Self {
+        self.oauth = Some(Arc::new(
+            zeta_connectors_extension::ConnectorOAuthService::new(
+                Arc::clone(&self.service),
+                providers,
+            ),
+        ));
+        self
     }
 
     /// Builds the canonical local Connector runtime from an exact Plugin activation snapshot.
@@ -403,6 +424,7 @@ impl LocalConnectorRuntime {
             secrets,
             mcp: Arc::new(mcp),
             plugin_authority: Some(plugin_authority),
+            oauth: None,
         })
     }
 
@@ -673,6 +695,12 @@ pub fn open_local_app_server_with_code_index_providers(
     .map(|mcp| ToolPort::mcp(mcp.tools, mcp.policy));
     if let Some(connectors) = &connector_runtime {
         server = server.with_connector_service(Arc::clone(&connectors.service));
+        if let Some(authority) = &connectors.plugin_authority {
+            server = server.with_plugin_authority(authority.clone());
+        }
+        if let Some(oauth) = &connectors.oauth {
+            server = server.with_connector_oauth_service(Arc::clone(oauth));
+        }
     }
     server = server
         .with_local_workspace_host(
@@ -755,16 +783,24 @@ impl ToolConfigWatcher {
             .as_ref()
             .and_then(|runtime| runtime.plugin_authority.as_ref())
             .map(PluginActivationAuthority::subscribe);
+        let mut plugin_activation_generation = connector_runtime
+            .as_ref()
+            .and_then(|runtime| runtime.plugin_authority.as_ref())
+            .map(|authority| authority.snapshot().activation().generation());
         let (shutdown, shutdown_receiver) = std::sync::mpsc::channel();
         let thread = std::thread::Builder::new()
             .name("zeta-tool-config".into())
             .spawn(move || {
                 let mut catalog_generation = 1_u64;
+                let mut config_dirty = false;
+                let mut connector_dirty = false;
+                let mut mcp_dirty = false;
+                let mut plugin_dirty = false;
                 loop {
                     if shutdown_receiver.try_recv().is_ok() {
                         break;
                     }
-                    let config_changed = match changes.recv_timeout(Duration::from_millis(100)) {
+                    config_dirty |= match changes.recv_timeout(Duration::from_millis(100)) {
                         Ok(_) => {
                             while changes.try_recv().is_ok() {}
                             true
@@ -772,23 +808,23 @@ impl ToolConfigWatcher {
                         Err(std::sync::mpsc::RecvTimeoutError::Timeout) => false,
                         Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
                     };
-                    let mut connector_changed = false;
                     if let Some(connector_changes) = &connector_changes {
                         while connector_changes.try_recv().is_ok() {
-                            connector_changed = true;
+                            connector_dirty = true;
                         }
                     }
-                    let mut mcp_changed = false;
                     while mcp_changes.try_recv().is_ok() {
-                        mcp_changed = true;
+                        mcp_dirty = true;
                     }
-                    let mut plugin_changed = false;
                     if let Some(plugin_changes) = &plugin_changes {
-                        while plugin_changes.try_recv().is_ok() {
-                            plugin_changed = true;
+                        while let Ok(change) = plugin_changes.try_recv() {
+                            if plugin_activation_generation != Some(change.activation_generation) {
+                                plugin_activation_generation = Some(change.activation_generation);
+                                plugin_dirty = true;
+                            }
                         }
                     }
-                    if !config_changed && !connector_changed && !mcp_changed && !plugin_changed {
+                    if !config_dirty && !connector_dirty && !mcp_dirty && !plugin_dirty {
                         continue;
                     }
                     let snapshot = match config.read_snapshot() {
@@ -798,7 +834,7 @@ impl ToolConfigWatcher {
                             continue;
                         }
                     };
-                    if config_changed {
+                    if config_dirty {
                         if let Err(error) = workspace_runtime.reconcile_user_trust(&snapshot.values)
                         {
                             workspace_tools.record_reconcile_failure(error.to_string());
@@ -809,16 +845,16 @@ impl ToolConfigWatcher {
                             snapshot.values.providers.clone(),
                         );
                         if semantic_binding.as_ref() != Some(&next_semantic_binding) {
-                            semantic_binding = Some(next_semantic_binding);
                             if let Err(error) =
                                 workspace_runtime.reconcile_semantic_code_index_runtime()
                             {
                                 workspace_tools.record_reconcile_failure(error.to_string());
                                 continue;
                             }
+                            semantic_binding = Some(next_semantic_binding);
                         }
                     }
-                    if plugin_changed
+                    if plugin_dirty
                         && let Some(connectors) = connector_runtime.as_mut()
                         && let Err(error) = connectors.reconcile_plugin_activation()
                     {
@@ -862,7 +898,12 @@ impl ToolConfigWatcher {
                     ) {
                         log::error!("requested tool-search configuration is unavailable: {error}");
                         workspace_tools.record_reconcile_failure(error.to_string());
+                        continue;
                     }
+                    config_dirty = false;
+                    connector_dirty = false;
+                    mcp_dirty = false;
+                    plugin_dirty = false;
                 }
             })
             .ok();

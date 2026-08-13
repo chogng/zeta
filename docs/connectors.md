@@ -7,7 +7,8 @@
 > 当前状态：Connector domain、SQLite authority、API-token connect/disconnect、App Server 协议、
 > package-rooted Plugin activation、ready/standalone MCP composition、模型安全点 registry replacement、
 > in-flight dispatch drain、OS keyring 与显式文件 `SecretStore`、OAuth PKCE 状态机和产品连接入口已实现。
-> 具体 OAuth provider、浏览器回调接线与 refresh/远端 revoke 仍是扩展点。
+> Desktop loopback 浏览器回调与 OAuth App Server 控制面已接通；具体服务 provider、refresh
+> 与远端 revoke 仍是扩展点。
 
 ## 快速理解
 
@@ -112,8 +113,9 @@ flowchart TD
 
 当前 `ConnectorOAuthService` 已实现随机 state、PKCE S256、exact redirect、一次性 callback、超时与
 stale-generation 防护，并把 provider 交换后的 secret 交给既有 credential authority。它是通用机制，
-不是某个服务已经可用的 OAuth 产品流程：具体 provider、浏览器 callback host、refresh 与远端 revoke
-尚未接入。Desktop Settings 已提供列表、API-token 连接与断开；TUI 提供 `/connectors` 列表、刷新与
+不是某个服务已经可用的 OAuth 产品流程：Desktop 已拥有随机 loopback callback host、系统浏览器跳转
+和一次性 complete RPC，但具体 provider、refresh 与远端 revoke 尚未接入。Desktop Settings 已提供
+列表、API-token/OAuth 连接与断开；TUI 提供 `/connectors` 列表、刷新与
 断开，并有意不把 secret 输入放入 composer/history。
 
 ## 4. 身份、凭据与 generation
@@ -149,18 +151,18 @@ connection generation；任何状态变化都必须同时推进 snapshot generat
 | SQLite connection authority + exact retry receipts | ✅ 已实现 |
 | definition/package digest 变化触发 reauthorization | ✅ 重启恢复与 live Plugin activation 更新均已实现 |
 | API-token connect/disconnect + local secret cleanup | ✅ 已实现 |
-| OAuth state/PKCE/exchange 编排 | ✅ 已实现通用 provider port；具体 provider/浏览器回调尚未接入 |
+| OAuth state/PKCE/exchange 编排 | ✅ 已实现 provider port、App Server RPC 与 Desktop loopback callback |
 | refresh、远端 revoke | 尚未完成 |
 | `zeta-secrets` memory/unavailable backend | ✅ 已实现 |
 | OS keyring backend | ✅ 已实现并作为本地默认 Connector persistence |
 | 显式文件 backend | ✅ 已实现，保持 explicit opt-in，不作为自动 fallback |
 | App Server list/connect/disconnect + changed notification | ✅ 已实现 |
 | Desktop API-token UI；TUI 列表/断开/通知刷新 | ✅ 已实现 |
-| OAuth browser interaction；TUI secret 输入 | 尚未完成 |
+| OAuth browser interaction | ✅ Desktop 已实现；TUI 尚不启动浏览器 flow |
 | ready binding → `zeta-mcp-extension` composition + dispatch fence | ✅ 已实现（host-injected provider） |
 | exact Plugin activation → Connector/MCP runtime provider | ✅ 已实现，支持 live install/enable/disable authority reconcile |
 | MCP `tools/list_changed` → safe-point rebuild | ✅ 已实现 |
 
-下一阶段只补具体服务适配和 lifecycle authority：OAuth provider/browser callback、refresh/revoke，
-以及 Plugin grant/workspace-profile layering。它们必须复用现有 authority、SecretStore、
+下一阶段只补具体服务适配和 lifecycle authority：OAuth provider、refresh/revoke，以及 Plugin
+workspace-profile resolver。它们必须复用现有 authority、SecretStore、
 App Server safe point 和 MCP dispatch fence，不得创建第二套 Connector 状态机。

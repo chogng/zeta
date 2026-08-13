@@ -9,10 +9,14 @@ use zeta_app_server_protocol::protocol::connectors::ConnectorCommandDispositionD
 use zeta_app_server_protocol::protocol::connectors::ConnectorCommandResultDto;
 use zeta_app_server_protocol::protocol::connectors::ConnectorConnectionStateDto;
 use zeta_app_server_protocol::protocol::connectors::ConnectorCredentialCleanupDto;
+use zeta_app_server_protocol::protocol::connectors::ConnectorCredentialCleanupParams;
 use zeta_app_server_protocol::protocol::connectors::ConnectorDisconnectParams;
 use zeta_app_server_protocol::protocol::connectors::ConnectorDisconnectResultDto;
 use zeta_app_server_protocol::protocol::connectors::ConnectorDto;
 use zeta_app_server_protocol::protocol::connectors::ConnectorListResult;
+use zeta_app_server_protocol::protocol::connectors::ConnectorOAuthCancelParams;
+use zeta_app_server_protocol::protocol::connectors::ConnectorOAuthStartParams;
+use zeta_app_server_protocol::protocol::connectors::ConnectorOAuthStartResult;
 use zeta_app_server_protocol::protocol::connectors::ConnectorSecretDto;
 use zeta_app_server_protocol::protocol::error::AppServerErrorName;
 use zeta_connectors::ConnectorAccount;
@@ -28,6 +32,11 @@ use zeta_connectors_extension::ConnectorCommandResult;
 use zeta_connectors_extension::ConnectorCredentialCleanup;
 use zeta_connectors_extension::ConnectorCredentialServiceError;
 use zeta_connectors_extension::ConnectorCredentialServiceErrorKind;
+use zeta_connectors_extension::ConnectorOAuthCompleteRequest;
+use zeta_connectors_extension::ConnectorOAuthError;
+use zeta_connectors_extension::ConnectorOAuthErrorKind;
+use zeta_connectors_extension::ConnectorOAuthFlowId;
+use zeta_connectors_extension::ConnectorOAuthStartRequest;
 use zeta_secrets::SecretValue;
 
 impl AppServer {
@@ -37,12 +46,69 @@ impl AppServer {
         let connectors = snapshot
             .entries()
             .iter()
-            .map(connector_dto)
+            .map(|entry| connector_dto(entry, service, self.connector_oauth.as_deref()))
             .collect::<Vec<_>>();
         result(&ConnectorListResult {
             generation: snapshot.generation().get(),
             connectors,
         })
+    }
+
+    pub(super) fn connector_oauth_start(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: ConnectorOAuthStartParams = decode(params)?;
+        let oauth = self.connector_oauth_service()?;
+        let authorization = oauth
+            .start(ConnectorOAuthStartRequest {
+                command_id: ConnectorCommandId::new(params.command_id)
+                    .map_err(|_| invalid_params())?,
+                expected_generation: ConnectorSnapshotGeneration::new(params.expected_generation),
+                connector_id: ConnectorId::new(params.connector_id)
+                    .map_err(|_| invalid_params())?,
+                connection_generation: ConnectorConnectionGeneration::new(
+                    params.connection_generation,
+                ),
+                redirect_uri: params.redirect_uri,
+            })
+            .map_err(connector_oauth_error)?;
+        result(&ConnectorOAuthStartResult {
+            flow_id: authorization.flow_id.as_str().to_owned(),
+            authorization_url: authorization.authorization_url,
+        })
+    }
+
+    pub(super) fn connector_oauth_complete(&self, params: Value) -> Result<Value, RpcError> {
+        let Value::Object(mut params) = params else {
+            return Err(invalid_params());
+        };
+        let state: ConnectorSecretDto =
+            serde_json::from_value(params.remove("state").ok_or_else(invalid_params)?)
+                .map_err(|_| invalid_params())?;
+        let authorization_code: ConnectorSecretDto = serde_json::from_value(
+            params
+                .remove("authorizationCode")
+                .ok_or_else(invalid_params)?,
+        )
+        .map_err(|_| invalid_params())?;
+        let params: ConnectorOAuthCompleteMetadata =
+            serde_json::from_value(Value::Object(params)).map_err(|_| invalid_params())?;
+        let oauth = self.connector_oauth_service()?;
+        let outcome = oauth
+            .complete(ConnectorOAuthCompleteRequest {
+                flow_id: ConnectorOAuthFlowId::new(params.flow_id).map_err(|_| invalid_params())?,
+                state: SecretValue::new(state.into_bytes()),
+                authorization_code: SecretValue::new(authorization_code.into_bytes()),
+            })
+            .map_err(connector_oauth_error)?;
+        result(&command_result_dto(outcome))
+    }
+
+    pub(super) fn connector_oauth_cancel(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: ConnectorOAuthCancelParams = decode(params)?;
+        let result_value = self
+            .connector_oauth_service()?
+            .cancel(&ConnectorOAuthFlowId::new(params.flow_id).map_err(|_| invalid_params())?)
+            .map_err(connector_oauth_error)?;
+        result(&command_result_dto(result_value))
     }
 
     pub(super) fn connector_api_token_connect(&self, params: Value) -> Result<Value, RpcError> {
@@ -86,16 +152,20 @@ impl AppServer {
             .map_err(connector_error)?;
         result(&ConnectorDisconnectResultDto {
             command: command_result_dto(outcome.command),
-            credential_cleanup: match outcome.credential_cleanup {
-                ConnectorCredentialCleanup::Deleted => ConnectorCredentialCleanupDto::Deleted,
-                ConnectorCredentialCleanup::AlreadyAbsent => {
-                    ConnectorCredentialCleanupDto::AlreadyAbsent
-                }
-                ConnectorCredentialCleanup::RetryRequired => {
-                    ConnectorCredentialCleanupDto::RetryRequired
-                }
-            },
+            credential_cleanup: credential_cleanup_dto(outcome.credential_cleanup),
         })
+    }
+
+    pub(super) fn connector_credential_cleanup_retry(
+        &self,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: ConnectorCredentialCleanupParams = decode(params)?;
+        let connector_id = ConnectorId::new(params.connector_id).map_err(|_| invalid_params())?;
+        result(&credential_cleanup_dto(
+            self.connector_service()?
+                .retry_credential_cleanup(&connector_id),
+        ))
     }
 
     fn connector_service(
@@ -104,6 +174,14 @@ impl AppServer {
         self.connectors
             .as_deref()
             .ok_or_else(|| RpcError::new(-32034, AppServerErrorName::ConnectorsUnavailable))
+    }
+
+    fn connector_oauth_service(
+        &self,
+    ) -> Result<&zeta_connectors_extension::ConnectorOAuthService, RpcError> {
+        self.connector_oauth
+            .as_deref()
+            .ok_or_else(|| RpcError::new(-32037, AppServerErrorName::ConnectorOAuthUnavailable))
     }
 }
 
@@ -118,11 +196,32 @@ struct ConnectorApiTokenConnectMetadata {
     account_display_name: String,
 }
 
-fn connector_dto(entry: &zeta_connectors::ConnectorEntry) -> ConnectorDto {
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ConnectorOAuthCompleteMetadata {
+    flow_id: String,
+}
+
+fn connector_dto(
+    entry: &zeta_connectors::ConnectorEntry,
+    service: &zeta_connectors_extension::ConnectorCredentialService,
+    oauth: Option<&zeta_connectors_extension::ConnectorOAuthService>,
+) -> ConnectorDto {
+    let oauth_supported = oauth.is_some_and(|oauth| oauth.supports(entry.definition().id()));
+    let connect_action = if oauth_supported {
+        ConnectorAvailableActionDto::ConnectOAuth
+    } else {
+        ConnectorAvailableActionDto::ConnectApiToken
+    };
+    let reauthorize_action = if oauth_supported {
+        ConnectorAvailableActionDto::ReauthorizeOAuth
+    } else {
+        ConnectorAvailableActionDto::ReauthorizeApiToken
+    };
     let (state, available_actions) = match entry.connection().state() {
         ConnectorConnectionState::Disconnected => (
             ConnectorConnectionStateDto::Disconnected,
-            vec![ConnectorAvailableActionDto::ConnectApiToken],
+            vec![connect_action],
         ),
         ConnectorConnectionState::Connecting => (
             ConnectorConnectionStateDto::Connecting,
@@ -138,10 +237,7 @@ fn connector_dto(entry: &zeta_connectors::ConnectorEntry) -> ConnectorDto {
             ConnectorConnectionStateDto::Unavailable {
                 reason: reason.clone(),
             },
-            vec![
-                ConnectorAvailableActionDto::ConnectApiToken,
-                ConnectorAvailableActionDto::Disconnect,
-            ],
+            vec![connect_action, ConnectorAvailableActionDto::Disconnect],
         ),
         ConnectorConnectionState::ReauthorizationRequired {
             account,
@@ -151,10 +247,7 @@ fn connector_dto(entry: &zeta_connectors::ConnectorEntry) -> ConnectorDto {
                 account: account_dto(account),
                 previous_definition: previous_definition.as_str().to_string(),
             },
-            vec![
-                ConnectorAvailableActionDto::ReauthorizeApiToken,
-                ConnectorAvailableActionDto::Disconnect,
-            ],
+            vec![reauthorize_action, ConnectorAvailableActionDto::Disconnect],
         ),
     };
     ConnectorDto {
@@ -170,6 +263,17 @@ fn connector_dto(entry: &zeta_connectors::ConnectorEntry) -> ConnectorDto {
         connection_generation: entry.connection().generation().get(),
         state,
         available_actions,
+        credential_cleanup_pending: service
+            .authority()
+            .credential_cleanup_pending(entry.definition().id()),
+    }
+}
+
+fn credential_cleanup_dto(cleanup: ConnectorCredentialCleanup) -> ConnectorCredentialCleanupDto {
+    match cleanup {
+        ConnectorCredentialCleanup::Deleted => ConnectorCredentialCleanupDto::Deleted,
+        ConnectorCredentialCleanup::AlreadyAbsent => ConnectorCredentialCleanupDto::AlreadyAbsent,
+        ConnectorCredentialCleanup::RetryRequired => ConnectorCredentialCleanupDto::RetryRequired,
     }
 }
 
@@ -201,6 +305,23 @@ fn connector_error(error: ConnectorCredentialServiceError) -> RpcError {
         ConnectorCredentialServiceErrorKind::Authority
         | ConnectorCredentialServiceErrorKind::SecretStore
         | ConnectorCredentialServiceErrorKind::InvalidValue => {
+            RpcError::new(-32036, AppServerErrorName::ConnectorOperationFailed)
+        }
+    }
+}
+
+fn connector_oauth_error(error: ConnectorOAuthError) -> RpcError {
+    match error.kind() {
+        ConnectorOAuthErrorKind::ProviderUnavailable => {
+            RpcError::new(-32037, AppServerErrorName::ConnectorOAuthUnavailable)
+        }
+        ConnectorOAuthErrorKind::StateMismatch | ConnectorOAuthErrorKind::InvalidRequest => {
+            RpcError::new(-32038, AppServerErrorName::ConnectorOAuthInvalidCallback)
+        }
+        ConnectorOAuthErrorKind::Expired => {
+            RpcError::new(-32039, AppServerErrorName::ConnectorOAuthExpired)
+        }
+        ConnectorOAuthErrorKind::ProviderFailure | ConnectorOAuthErrorKind::Credential => {
             RpcError::new(-32036, AppServerErrorName::ConnectorOperationFailed)
         }
     }

@@ -6,6 +6,7 @@ export function createConnectorApi(): IConnectorApi {
   return {
     list: () => invoke<ConnectorListResult>("zeta:connectors:list"),
     connectApiToken: params => invoke<ConnectorCommandResultDto>("zeta:connectors:connect-api-token", params),
+    connectOAuth: params => invoke<ConnectorCommandResultDto>("zeta:connectors:connect-oauth", params),
     disconnect: params => invoke<ConnectorDisconnectResultDto>("zeta:connectors:disconnect", params),
   };
 }

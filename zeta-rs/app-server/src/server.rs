@@ -56,6 +56,8 @@ mod language_runtime;
 pub(crate) mod multi_agent_tools;
 mod notification_queue;
 mod operations;
+mod plugin_operations;
+mod plugin_runtime;
 mod search_operations;
 mod semantic_index_job;
 mod skill_operations;
@@ -112,6 +114,8 @@ pub struct AppServer {
     pub(super) extensions: Mutex<ExtensionCatalog>,
     pub(super) config: Option<Arc<ConfigStore>>,
     pub(super) connectors: Option<Arc<zeta_connectors_extension::ConnectorCredentialService>>,
+    pub(super) connector_oauth: Option<Arc<zeta_connectors_extension::ConnectorOAuthService>>,
+    pub(super) plugins: Option<zeta_plugins::PluginActivationAuthority>,
     language: Mutex<language_runtime::AppServerLanguageRuntime>,
     approval_review_model: Option<ProviderReviewModel>,
     pub(super) workspace_authority_gate: Arc<Mutex<()>>,
@@ -132,6 +136,7 @@ pub struct AppServer {
     _skill_watcher: Option<SkillWatcher>,
     _config_watcher: Option<config_runtime::ConfigWatcher>,
     _connector_watcher: Option<connector_runtime::ConnectorWatcher>,
+    _plugin_watcher: Option<plugin_runtime::PluginWatcher>,
     _tool_config_watcher: Option<crate::local::ToolConfigWatcher>,
     _interaction_deadline_watcher: interaction_runtime::InteractionDeadlineWatcher,
     updates: Arc<UpdateBroker>,
@@ -208,6 +213,8 @@ impl AppServer {
             extensions: Mutex::new(ExtensionCatalog::default()),
             config: None,
             connectors: None,
+            connector_oauth: None,
+            plugins: None,
             language: Mutex::new(language_runtime::AppServerLanguageRuntime::default()),
             approval_review_model: None,
             workspace_authority_gate,
@@ -229,6 +236,7 @@ impl AppServer {
             _skill_watcher: None,
             _config_watcher: None,
             _connector_watcher: None,
+            _plugin_watcher: None,
             _tool_config_watcher: None,
             _interaction_deadline_watcher: interaction_deadline_watcher,
             updates,
@@ -335,6 +343,28 @@ impl AppServer {
             Arc::clone(&self.updates),
         ));
         self.connectors = Some(connectors);
+        self
+    }
+
+    /// Installs product-owned OAuth provider adapters over the configured Connector authority.
+    pub fn with_connector_oauth_service(
+        mut self,
+        oauth: Arc<zeta_connectors_extension::ConnectorOAuthService>,
+    ) -> Self {
+        self.connector_oauth = Some(oauth);
+        self
+    }
+
+    /// Installs live Plugin lifecycle authority and product notifications.
+    pub fn with_plugin_authority(
+        mut self,
+        plugins: zeta_plugins::PluginActivationAuthority,
+    ) -> Self {
+        self._plugin_watcher = Some(plugin_runtime::PluginWatcher::start(
+            &plugins,
+            Arc::clone(&self.updates),
+        ));
+        self.plugins = Some(plugins);
         self
     }
 
@@ -714,7 +744,23 @@ impl AppServer {
             Some(ClientMethod::ConnectorApiTokenConnect) => {
                 self.connector_api_token_connect(std::mem::take(&mut request.params))
             }
+            Some(ClientMethod::ConnectorOAuthStart) => self.connector_oauth_start(&request.params),
+            Some(ClientMethod::ConnectorOAuthComplete) => {
+                self.connector_oauth_complete(std::mem::take(&mut request.params))
+            }
+            Some(ClientMethod::ConnectorOAuthCancel) => {
+                self.connector_oauth_cancel(&request.params)
+            }
             Some(ClientMethod::ConnectorDisconnect) => self.connector_disconnect(&request.params),
+            Some(ClientMethod::ConnectorCredentialCleanupRetry) => {
+                self.connector_credential_cleanup_retry(&request.params)
+            }
+            Some(ClientMethod::PluginList) => self.plugin_list(),
+            Some(ClientMethod::PluginEnable) => self.plugin_enable(&request.params),
+            Some(ClientMethod::PluginDisable) => self.plugin_disable(&request.params),
+            Some(ClientMethod::PluginGrant) => self.plugin_grant(&request.params),
+            Some(ClientMethod::PluginRevokeGrant) => self.plugin_revoke_grant(&request.params),
+            Some(ClientMethod::PluginUninstall) => self.plugin_uninstall(&request.params),
             Some(ClientMethod::ModelList) => self.model_list(),
             Some(ClientMethod::ConfigUpdate) => self.config_update(&request.params),
             Some(ClientMethod::ToolSearchConfigure) => self.tool_search_configure(&request.params),

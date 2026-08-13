@@ -277,6 +277,68 @@ fn sqlite_authority_persists_catalog_only_generations() {
 }
 
 #[test]
+fn sqlite_authority_recovers_an_interrupted_connect_as_unavailable() {
+    let directory = tempdir().unwrap();
+    let path = directory.path().join("connectors.sqlite3");
+    let connector = definition("plugin:acme/github:mcp:github");
+    let connector_id = connector.id().clone();
+    {
+        let authority = ConnectorAuthority::open_sqlite(&path, [connector.clone()]).unwrap();
+        authority
+            .apply(request(
+                &authority,
+                "begin-interrupted",
+                ConnectorAuthorityCommand::BeginConnect {
+                    generation: ConnectorConnectionGeneration::new(1),
+                },
+            ))
+            .unwrap();
+    }
+
+    let reopened = ConnectorAuthority::open_sqlite(&path, [connector]).unwrap();
+    assert!(matches!(
+        reopened
+            .snapshot()
+            .entry(&connector_id)
+            .unwrap()
+            .connection()
+            .state(),
+        ConnectorConnectionState::Unavailable { reason }
+            if reason == "Connector authorization was interrupted"
+    ));
+}
+
+#[test]
+fn sqlite_authority_recovers_pending_credential_cleanup() {
+    let directory = tempdir().unwrap();
+    let path = directory.path().join("connectors.sqlite3");
+    let connector = definition("plugin:acme/github:mcp:github");
+    let connector_id = connector.id().clone();
+    {
+        let authority = ConnectorAuthority::open_sqlite(&path, [connector.clone()]).unwrap();
+        connect(&authority);
+        authority
+            .apply(request(
+                &authority,
+                "disconnect-pending-cleanup",
+                ConnectorAuthorityCommand::Disconnect {
+                    generation: ConnectorConnectionGeneration::new(2),
+                },
+            ))
+            .unwrap();
+        assert!(authority.credential_cleanup_pending(&connector_id));
+    }
+
+    let reopened = ConnectorAuthority::open_sqlite(&path, [connector]).unwrap();
+    assert!(reopened.credential_cleanup_pending(&connector_id));
+    reopened.complete_credential_cleanup(&connector_id).unwrap();
+    drop(reopened);
+
+    let reopened = ConnectorAuthority::open_sqlite(&path, std::iter::empty()).unwrap();
+    assert!(!reopened.credential_cleanup_pending(&connector_id));
+}
+
+#[test]
 fn changed_definition_restores_as_reauthorization_required() {
     let directory = tempdir().unwrap();
     let path = directory.path().join("connectors.sqlite3");

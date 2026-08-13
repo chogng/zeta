@@ -165,6 +165,23 @@ impl PluginPackageStore {
         })
     }
 
+    /// Removes one exact immutable object after its authority reference has been removed.
+    pub(crate) fn remove_object(&self, digest: &PluginPackageDigest) -> Result<(), PluginError> {
+        let object = self.object_path(digest);
+        match fs::symlink_metadata(&object) {
+            Ok(metadata) if metadata.is_dir() && !metadata.file_type().is_symlink() => {
+                fs::remove_dir_all(&object).map_err(store_io)?;
+                sync_directory(&self.root.join("objects"))
+            }
+            Ok(_) => Err(PluginError::new(
+                PluginErrorKind::PackageUnsafe,
+                "Plugin object path is not a regular directory",
+            )),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(error) => Err(store_io(error)),
+        }
+    }
+
     fn object_path(&self, digest: &PluginPackageDigest) -> PathBuf {
         self.root.join("objects").join(
             digest

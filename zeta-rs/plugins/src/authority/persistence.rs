@@ -13,7 +13,7 @@ use crate::InstalledPluginRef;
 use crate::PluginError;
 use crate::PluginErrorKind;
 
-const AUTHORITY_SCHEMA_VERSION: u32 = 1;
+const AUTHORITY_SCHEMA_VERSION: u32 = 2;
 const MAX_AUTHORITY_BYTES: u64 = 4 * 1024 * 1024;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -39,6 +39,11 @@ pub(super) struct PersistedAuthority {
     pub revision: u64,
     pub activation_generation: u64,
     pub installed: Vec<InstalledPluginRef>,
+    #[serde(default)]
+    pub enabled: Vec<InstalledPluginRef>,
+    #[serde(default)]
+    pub granted: Vec<InstalledPluginRef>,
+    #[serde(default)]
     pub active: Vec<ActivePluginRecord>,
     pub receipts: BTreeMap<String, PersistedCommandReceipt>,
 }
@@ -50,6 +55,8 @@ impl PersistedAuthority {
             revision: 0,
             activation_generation: 1,
             installed: Vec::new(),
+            enabled: Vec::new(),
+            granted: Vec::new(),
             active: Vec::new(),
             receipts: BTreeMap::new(),
         }
@@ -59,6 +66,8 @@ impl PersistedAuthority {
         revision: u64,
         activation_generation: u64,
         installed: &BTreeMap<InstalledKey, InstalledPluginRef>,
+        enabled: &BTreeMap<crate::PluginId, InstalledPluginRef>,
+        granted: &BTreeMap<InstalledKey, InstalledPluginRef>,
         active: &BTreeMap<crate::PluginId, ActivePlugin>,
         receipts: &BTreeMap<String, PersistedCommandReceipt>,
     ) -> Self {
@@ -67,6 +76,8 @@ impl PersistedAuthority {
             revision,
             activation_generation,
             installed: installed.values().cloned().collect(),
+            enabled: enabled.values().cloned().collect(),
+            granted: granted.values().cloned().collect(),
             active: active
                 .values()
                 .map(|active| ActivePluginRecord {
@@ -79,7 +90,7 @@ impl PersistedAuthority {
     }
 
     pub fn validate(&self) -> Result<(), PluginError> {
-        if self.schema_version != AUTHORITY_SCHEMA_VERSION
+        if !matches!(self.schema_version, 1 | AUTHORITY_SCHEMA_VERSION)
             || self.activation_generation == 0
             || self.active.iter().any(|active| {
                 active.activation_revision == 0
@@ -95,6 +106,19 @@ impl PersistedAuthority {
             return Err(persistence_error("Plugin authority record is invalid"));
         }
         Ok(())
+    }
+
+    pub fn migrate(mut self) -> Self {
+        if self.schema_version == 1 {
+            self.enabled = self
+                .active
+                .iter()
+                .map(|active| active.package.clone())
+                .collect();
+            self.granted = self.enabled.clone();
+            self.schema_version = AUTHORITY_SCHEMA_VERSION;
+        }
+        self
     }
 }
 

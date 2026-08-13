@@ -14,6 +14,7 @@ import type { ICodeIndexApi } from "../../codeIndex/common/codeIndexApi.js";
 import type { IConnectorApi } from "../../connectors/common/connectorApi.js";
 import type { IToolSearchApi } from "../../toolSearch/common/toolSearchApi.js";
 import type { ILanguageApi } from "../../language/common/languageApi.js";
+import type { IPluginApi } from "../../plugins/common/pluginApi.js";
 
 /** Transport-neutral capability set supplied by a renderer host at startup. */
 export interface IRendererHost {
@@ -37,5 +38,6 @@ export interface IRendererHost {
   readonly events: IServerEventApi;
   readonly codeIndex: ICodeIndexApi;
   readonly connectors: IConnectorApi;
+  readonly plugins: IPluginApi;
   readonly toolSearch: IToolSearchApi;
 }

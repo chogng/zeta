@@ -43,8 +43,8 @@ initialize、原始 tools API 和 stdio/Streamable HTTP transport；Current `zet
 runtime 负责多 server 启动、provider-neutral tool catalog/binding、分页/大小限制、调用路由、
 取消与失效标记。Current App Server adapter 将 user config 与 ready Connector snapshot 接入 Core
 `ToolService`、逐次用户 approval 和 durable result，并在两类 generation 变化时重建 tool port。
-Connector API-token materialization、package-rooted Plugin MCP 和通用 Connector OAuth PKCE 编排已实现；
-独立 Config credential reference、具体 OAuth provider/browser flow、resources、prompts、reconnect/health
+Connector API-token materialization、package-rooted Plugin MCP、通用 Connector OAuth PKCE 编排与 Desktop
+browser callback 已实现；独立 Config credential reference、具体 OAuth provider、resources、prompts、reconnect/health
 与 interaction delivery 仍是 Proposed。
 
 方向相反的 `zeta-mcp-server` 通过 App Server 将 Zeta Agent 暴露给外部 MCP Host。两者不共享
@@ -108,8 +108,8 @@ flowchart TD
 - `compose_mcp_tools_with_connectors` 已通过 host-injected `ConnectorMcpRuntimeProvider` 读取 ready
   Connector credential，并用 exact connector ID / connection generation / definition digest 在 prepare
   与 dispatch 前 fail closed；本地 reconcile loop 同时订阅 Config 与 Connector authority；
-- 当前没有独立 Config credential materialization、具体 OAuth provider/browser flow、自动 reconnect/health state machine、
-  workspace Plugin install/enable authority、resource/prompt product
+- 当前没有独立 Config credential materialization、具体 OAuth provider、自动 reconnect/health state machine、
+  workspace-profile Plugin resolver、resource/prompt product
   adapter、progress/elicitation delivery 或跨重启 remote request 恢复。
 
 因此 low-level protocol/transport、独立 tools-only runtime 和窄 App Server/Core tools slice
@@ -669,8 +669,8 @@ security 和 identity。resources/prompts/auth/reconnect 落地时按独立 owne
 ### 阶段 M3：Streamable HTTP + OAuth（基础传输部分具备）
 
 - ✅ RMCP reqwest Streamable HTTP connector 支持 unauthenticated/bearer session；
-- ✅ Connector OAuth 通用 state/PKCE/exact redirect/one-shot exchange 编排；
-- session resume/reconnect、protected resource metadata、具体 provider/browser callback、refresh 和 revoke；
+- ✅ Connector OAuth 通用 state/PKCE/exact redirect/one-shot exchange、App Server RPC 与 Desktop callback 编排；
+- session resume/reconnect、protected resource metadata、具体 provider、refresh 和 revoke；
 - 完整 endpoint/origin/redirect/egress policy 与 App Server credential materialization。
 
 完成条件：token 不进入 config/log/event，断线不被误判为取消或成功。

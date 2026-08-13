@@ -103,7 +103,7 @@ impl ConnectorCredentialService {
                 connector_id,
                 command: ConnectorAuthorityCommand::MarkUnavailable {
                     generation: connection_generation,
-                    reason: "OAuth connection failed".into(),
+                    reason: "Connector authorization failed".into(),
                 },
             })
             .map_err(Into::into)
@@ -158,16 +158,30 @@ impl ConnectorCredentialService {
                     .map_err(Into::into);
             }
         }
-        self.secrets.store(&secret_key, &request.token)?;
+        if let Err(error) = self.secrets.store(&secret_key, &request.token) {
+            let _ = self.mark_connect_unavailable(
+                &request.command_id,
+                begin.generation,
+                request.connector_id,
+                request.connection_generation,
+            );
+            return Err(error.into());
+        }
         match self.authority.apply(ConnectorCommandRequest {
             command_id: complete_command_id,
             expected_generation: begin.generation,
-            connector_id: request.connector_id,
+            connector_id: request.connector_id.clone(),
             command: ConnectorAuthorityCommand::CompleteConnect { account },
         }) {
             Ok(result) => Ok(result),
             Err(error) => {
                 let _ = self.secrets.delete(&secret_key);
+                let _ = self.mark_connect_unavailable(
+                    &request.command_id,
+                    begin.generation,
+                    request.connector_id,
+                    request.connection_generation,
+                );
                 Err(error.into())
             }
         }
@@ -221,21 +235,49 @@ impl ConnectorCredentialService {
                 generation: next_connection_generation,
             },
         })?;
-        let credential_cleanup = match credential_reference {
-            Some(reference) => match SecretKey::new(reference) {
-                Ok(key) => match self.secrets.delete(&key) {
-                    Ok(DeleteSecretOutcome::Deleted) => ConnectorCredentialCleanup::Deleted,
-                    Ok(DeleteSecretOutcome::NotFound) => ConnectorCredentialCleanup::AlreadyAbsent,
-                    Err(_) => ConnectorCredentialCleanup::RetryRequired,
-                },
-                Err(_) => ConnectorCredentialCleanup::RetryRequired,
-            },
-            None => ConnectorCredentialCleanup::AlreadyAbsent,
-        };
+        let credential_cleanup = self.delete_credential(&connector_id, credential_reference);
         Ok(ConnectorDisconnectResult {
             command,
             credential_cleanup,
         })
+    }
+
+    /// Retries one durable credential-deletion obligation without changing connection state.
+    pub fn retry_credential_cleanup(
+        &self,
+        connector_id: &ConnectorId,
+    ) -> ConnectorCredentialCleanup {
+        if !self.authority.credential_cleanup_pending(connector_id) {
+            return ConnectorCredentialCleanup::AlreadyAbsent;
+        }
+        let reference = credential_key(connector_id)
+            .ok()
+            .map(|key| key.as_str().to_owned());
+        self.delete_credential(connector_id, reference)
+    }
+
+    fn delete_credential(
+        &self,
+        connector_id: &ConnectorId,
+        reference: Option<String>,
+    ) -> ConnectorCredentialCleanup {
+        let outcome = match reference.and_then(|reference| SecretKey::new(reference).ok()) {
+            Some(key) => match self.secrets.delete(&key) {
+                Ok(DeleteSecretOutcome::Deleted) => ConnectorCredentialCleanup::Deleted,
+                Ok(DeleteSecretOutcome::NotFound) => ConnectorCredentialCleanup::AlreadyAbsent,
+                Err(_) => return ConnectorCredentialCleanup::RetryRequired,
+            },
+            None => ConnectorCredentialCleanup::AlreadyAbsent,
+        };
+        if self
+            .authority
+            .complete_credential_cleanup(connector_id)
+            .is_err()
+        {
+            ConnectorCredentialCleanup::RetryRequired
+        } else {
+            outcome
+        }
     }
 }
 

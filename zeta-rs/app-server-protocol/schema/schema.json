@@ -921,6 +921,12 @@
         "ConnectorsUnavailable",
         "ConnectorGenerationConflict",
         "ConnectorOperationFailed",
+        "ConnectorOAuthUnavailable",
+        "ConnectorOAuthInvalidCallback",
+        "ConnectorOAuthExpired",
+        "PluginsUnavailable",
+        "PluginRevisionConflict",
+        "PluginOperationFailed",
         "ToolSearchUnavailable",
         "SkillsUnavailable",
         "SkillOperationFailed",
@@ -1344,10 +1350,170 @@
           "properties": {
             "method": {
               "type": "string",
+              "const": "connector/connect/oauth/start"
+            },
+            "params": {
+              "$ref": "#/$defs/ConnectorOAuthStartParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "connector/connect/oauth/complete"
+            },
+            "params": {
+              "$ref": "#/$defs/ConnectorOAuthCompleteParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "connector/connect/oauth/cancel"
+            },
+            "params": {
+              "$ref": "#/$defs/ConnectorOAuthCancelParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
               "const": "connector/disconnect"
             },
             "params": {
               "$ref": "#/$defs/ConnectorDisconnectParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "connector/credential/cleanup"
+            },
+            "params": {
+              "$ref": "#/$defs/ConnectorCredentialCleanupParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "plugin/list"
+            },
+            "params": {
+              "$ref": "#/$defs/EmptyParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "plugin/enable"
+            },
+            "params": {
+              "$ref": "#/$defs/PluginPackageCommandParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "plugin/disable"
+            },
+            "params": {
+              "$ref": "#/$defs/PluginPackageCommandParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "plugin/grant"
+            },
+            "params": {
+              "$ref": "#/$defs/PluginPackageCommandParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "plugin/revokeGrant"
+            },
+            "params": {
+              "$ref": "#/$defs/PluginPackageCommandParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "plugin/uninstall"
+            },
+            "params": {
+              "$ref": "#/$defs/PluginPackageCommandParams"
             }
           },
           "required": [
@@ -2932,10 +3098,170 @@
           "properties": {
             "method": {
               "type": "string",
+              "const": "connector/connect/oauth/start"
+            },
+            "result": {
+              "$ref": "#/$defs/ConnectorOAuthStartResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "connector/connect/oauth/complete"
+            },
+            "result": {
+              "$ref": "#/$defs/ConnectorCommandResultDto"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "connector/connect/oauth/cancel"
+            },
+            "result": {
+              "$ref": "#/$defs/ConnectorCommandResultDto"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
               "const": "connector/disconnect"
             },
             "result": {
               "$ref": "#/$defs/ConnectorDisconnectResultDto"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "connector/credential/cleanup"
+            },
+            "result": {
+              "$ref": "#/$defs/ConnectorCredentialCleanupDto"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "plugin/list"
+            },
+            "result": {
+              "$ref": "#/$defs/PluginListResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "plugin/enable"
+            },
+            "result": {
+              "$ref": "#/$defs/PluginCommandResultDto"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "plugin/disable"
+            },
+            "result": {
+              "$ref": "#/$defs/PluginCommandResultDto"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "plugin/grant"
+            },
+            "result": {
+              "$ref": "#/$defs/PluginCommandResultDto"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "plugin/revokeGrant"
+            },
+            "result": {
+              "$ref": "#/$defs/PluginCommandResultDto"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "plugin/uninstall"
+            },
+            "result": {
+              "$ref": "#/$defs/PluginCommandResultDto"
             }
           },
           "required": [
@@ -5048,8 +5374,10 @@
       "type": "string",
       "enum": [
         "connectApiToken",
+        "connectOAuth",
         "disconnect",
-        "reauthorizeApiToken"
+        "reauthorizeApiToken",
+        "reauthorizeOAuth"
       ]
     },
     "ConnectorCommandDispositionDto": {
@@ -5168,6 +5496,18 @@
         "retryRequired"
       ]
     },
+    "ConnectorCredentialCleanupParams": {
+      "description": "Requests retry of one durable post-disconnect secret deletion.",
+      "type": "object",
+      "properties": {
+        "connectorId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "connectorId"
+      ]
+    },
     "ConnectorDisconnectParams": {
       "description": "Retry-safe readiness revocation request.",
       "type": "object",
@@ -5221,6 +5561,9 @@
           "format": "uint64",
           "minimum": 0
         },
+        "credentialCleanupPending": {
+          "type": "boolean"
+        },
         "definitionDigest": {
           "type": "string"
         },
@@ -5248,7 +5591,8 @@
         "definitionDigest",
         "connectionGeneration",
         "state",
-        "availableActions"
+        "availableActions",
+        "credentialCleanupPending"
       ]
     },
     "ConnectorListResult": {
@@ -5270,6 +5614,86 @@
       "required": [
         "generation",
         "connectors"
+      ]
+    },
+    "ConnectorOAuthCancelParams": {
+      "description": "Cancels one exact in-memory browser OAuth attempt.",
+      "type": "object",
+      "properties": {
+        "flowId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "flowId"
+      ]
+    },
+    "ConnectorOAuthCompleteParams": {
+      "description": "Inbound-only OAuth callback whose security values are cleared on drop.",
+      "type": "object",
+      "properties": {
+        "authorizationCode": {
+          "$ref": "#/$defs/ConnectorSecretDto"
+        },
+        "flowId": {
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/$defs/ConnectorSecretDto"
+        }
+      },
+      "required": [
+        "flowId",
+        "state",
+        "authorizationCode"
+      ]
+    },
+    "ConnectorOAuthStartParams": {
+      "description": "Starts one browser OAuth attempt bound to an exact Connector generation.",
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "type": "string"
+        },
+        "connectionGeneration": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 1
+        },
+        "connectorId": {
+          "type": "string"
+        },
+        "expectedGeneration": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 1
+        },
+        "redirectUri": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedGeneration",
+        "connectorId",
+        "connectionGeneration",
+        "redirectUri"
+      ]
+    },
+    "ConnectorOAuthStartResult": {
+      "description": "Browser navigation values for one in-memory OAuth attempt.",
+      "type": "object",
+      "properties": {
+        "authorizationUrl": {
+          "type": "string"
+        },
+        "flowId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "flowId",
+        "authorizationUrl"
       ]
     },
     "ConnectorSecretDto": {
@@ -8645,6 +9069,126 @@
         "steps"
       ]
     },
+    "PluginCommandDispositionDto": {
+      "type": "string",
+      "enum": [
+        "updated",
+        "replayed"
+      ]
+    },
+    "PluginCommandResultDto": {
+      "description": "Result of one committed or exactly replayed Plugin authority command.",
+      "type": "object",
+      "properties": {
+        "activationGeneration": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "disposition": {
+          "$ref": "#/$defs/PluginCommandDispositionDto"
+        },
+        "revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "revision",
+        "activationGeneration",
+        "disposition"
+      ]
+    },
+    "PluginListResult": {
+      "description": "Current durable Plugin authority projection.",
+      "type": "object",
+      "properties": {
+        "activationGeneration": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "packages": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PluginPackageDto"
+          }
+        },
+        "revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "revision",
+        "activationGeneration",
+        "packages"
+      ]
+    },
+    "PluginPackageCommandParams": {
+      "description": "Exact package target for retry-safe Plugin lifecycle commands.",
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "type": "string"
+        },
+        "digest": {
+          "type": "string"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "id": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision",
+        "id",
+        "version",
+        "digest"
+      ]
+    },
+    "PluginPackageDto": {
+      "description": "Exact installed package plus each independent Plugin authority layer.",
+      "type": "object",
+      "properties": {
+        "digest": {
+          "type": "string"
+        },
+        "effective": {
+          "type": "boolean"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "granted": {
+          "type": "boolean"
+        },
+        "id": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "version",
+        "digest",
+        "enabled",
+        "granted",
+        "effective"
+      ]
+    },
     "PluginRequestDto": {
       "description": "Declarative request for one exact Plugin package.",
       "type": "object",
@@ -8745,6 +9289,26 @@
         "commandId",
         "expectedRevision",
         "request"
+      ]
+    },
+    "PluginsChanged": {
+      "description": "Notification emitted for every committed Plugin authority revision.",
+      "type": "object",
+      "properties": {
+        "activationGeneration": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "revision",
+        "activationGeneration"
       ]
     },
     "ProcessExecutionOutput": {
@@ -9321,6 +9885,9 @@
         "git": {
           "type": "boolean"
         },
+        "plugins": {
+          "type": "boolean"
+        },
         "resources": {
           "type": "boolean"
         },
@@ -9362,7 +9929,8 @@
         "typst",
         "updateReplay",
         "extensions",
-        "connectors"
+        "connectors",
+        "plugins"
       ]
     },
     "ServerInfo": {
@@ -9487,6 +10055,22 @@
             },
             "params": {
               "$ref": "#/$defs/ConnectorsChanged"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "plugin/changed"
+            },
+            "params": {
+              "$ref": "#/$defs/PluginsChanged"
             }
           },
           "required": [

@@ -47,8 +47,9 @@ event/receipt 原子性；`auth::credential_key` 只生成 hashed non-PII key。
 
 当前实现 API-token adapter 与 browser-code OAuth 的通用 PKCE 状态机。`oauth::PendingOAuthAttempt`
 只在内存保存 flow ID、state 和 verifier；`ConnectorOAuthService::complete` 一次性消费 callback，
-并在过期、state mismatch、provider 或 credential failure 时提交 `Unavailable`。具体 provider、callback
-listener/browser interaction、device flow、refresh 与远端 revoke 仍由上层 adapter 实现；不能通过扩张
+并在过期、state mismatch、provider 或 credential failure 时提交 `Unavailable`。Desktop loopback
+listener/browser interaction 已由 Electron main 持有；具体 provider、device flow、refresh 与远端 revoke
+仍由上层 adapter 实现；不能通过扩张
 authority event payload 来保存 OAuth code、refresh token 或 raw credential。生产显式文件 backend 位于
 `zeta-secrets`，OS keyring 不属于本 crate。
 

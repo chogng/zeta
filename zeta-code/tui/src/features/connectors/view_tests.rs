@@ -55,5 +55,6 @@ fn connector(
         connection_generation: 1,
         state,
         available_actions,
+        credential_cleanup_pending: false,
     }
 }

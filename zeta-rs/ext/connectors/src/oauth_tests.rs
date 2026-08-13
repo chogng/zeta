@@ -111,7 +111,7 @@ fn oauth_pkce_callback_publishes_only_provider_validated_account_and_secret_refe
     oauth
         .complete(ConnectorOAuthCompleteRequest {
             flow_id: authorization.flow_id,
-            state,
+            state: SecretValue::new(state.into_bytes()),
             authorization_code: SecretValue::new(b"authorization-code".to_vec()),
         })
         .unwrap();
@@ -146,7 +146,7 @@ fn oauth_state_mismatch_consumes_attempt_and_revokes_readiness() {
     let error = oauth
         .complete(ConnectorOAuthCompleteRequest {
             flow_id: authorization.flow_id,
-            state: "wrong-state".into(),
+            state: SecretValue::new(b"wrong-state".to_vec()),
             authorization_code: SecretValue::new(b"authorization-code".to_vec()),
         })
         .unwrap_err();
@@ -163,4 +163,100 @@ fn oauth_state_mismatch_consumes_attempt_and_revokes_readiness() {
             .state(),
         ConnectorConnectionState::Unavailable { .. }
     ));
+}
+
+#[test]
+fn oauth_cancel_consumes_the_exact_attempt_and_revokes_connecting_state() {
+    let (oauth, connector_id, _, _) = fixture();
+    let authorization = oauth
+        .start(ConnectorOAuthStartRequest {
+            command_id: ConnectorCommandId::new("oauth-cancel").unwrap(),
+            expected_generation: oauth.credentials.authority().snapshot().generation(),
+            connector_id: connector_id.clone(),
+            connection_generation: ConnectorConnectionGeneration::new(1),
+            redirect_uri: "http://127.0.0.1:49152/callback".into(),
+        })
+        .unwrap();
+
+    oauth.cancel(&authorization.flow_id).unwrap();
+
+    assert!(matches!(
+        oauth
+            .credentials
+            .authority()
+            .snapshot()
+            .entry(&connector_id)
+            .unwrap()
+            .connection()
+            .state(),
+        ConnectorConnectionState::Unavailable { .. }
+    ));
+    assert_eq!(
+        oauth.cancel(&authorization.flow_id).unwrap_err().kind(),
+        ConnectorOAuthErrorKind::InvalidRequest
+    );
+}
+
+#[test]
+fn oauth_callback_rejects_a_changed_connector_definition_before_exchange() {
+    let (oauth, connector_id, _, provider) = fixture();
+    let authorization = oauth
+        .start(ConnectorOAuthStartRequest {
+            command_id: ConnectorCommandId::new("oauth-definition-change").unwrap(),
+            expected_generation: oauth.credentials.authority().snapshot().generation(),
+            connector_id: connector_id.clone(),
+            connection_generation: ConnectorConnectionGeneration::new(1),
+            redirect_uri: "http://127.0.0.1:49152/callback".into(),
+        })
+        .unwrap();
+    oauth
+        .credentials
+        .authority()
+        .reconcile_definitions([ConnectorDefinition::new(
+            connector_id,
+            "GitHub changed",
+            "Connect GitHub.",
+            ConnectorRuntimeBinding::mcp_server("plugin:acme/github:mcp:github-v2").unwrap(),
+        )
+        .unwrap()])
+        .unwrap();
+    let state = Url::parse(&authorization.authorization_url)
+        .unwrap()
+        .query_pairs()
+        .find(|(key, _)| key == "state")
+        .unwrap()
+        .1
+        .into_owned();
+
+    let error = oauth
+        .complete(ConnectorOAuthCompleteRequest {
+            flow_id: authorization.flow_id,
+            state: SecretValue::new(state.into_bytes()),
+            authorization_code: SecretValue::new(b"authorization-code".to_vec()),
+        })
+        .unwrap_err();
+
+    assert_eq!(error.kind(), ConnectorOAuthErrorKind::InvalidRequest);
+    assert!(provider.verifier.lock().unwrap().is_none());
+}
+
+#[test]
+fn authorization_url_rejects_duplicate_security_parameters_and_fragments() {
+    let error = validate_authorization_url(
+        "https://accounts.example.test/authorize?state=wrong&state=right&code_challenge=challenge&code_challenge_method=S256&redirect_uri=https%3A%2F%2Fapp.example.test%2Fcallback",
+        "right",
+        "challenge",
+        "https://app.example.test/callback",
+    )
+    .unwrap_err();
+    assert_eq!(error.kind(), ConnectorOAuthErrorKind::ProviderFailure);
+
+    let error = validate_authorization_url(
+        "https://accounts.example.test/authorize?state=right&code_challenge=challenge&code_challenge_method=S256&redirect_uri=https%3A%2F%2Fapp.example.test%2Fcallback#token",
+        "right",
+        "challenge",
+        "https://app.example.test/callback",
+    )
+    .unwrap_err();
+    assert_eq!(error.kind(), ConnectorOAuthErrorKind::ProviderFailure);
 }

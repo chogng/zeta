@@ -16,6 +16,7 @@ import { createViteDevCodeIndexApi } from "../../codeIndex/browser/codeIndexApi.
 import { createViteDevConnectorApi } from "../../connectors/browser/connectorApi.js";
 import { createViteDevToolSearchApi } from "../../toolSearch/browser/toolSearchApi.js";
 import { createViteDevLanguageApi } from "../../language/browser/languageApi.js";
+import { createViteDevPluginApi } from "../../plugins/browser/pluginApi.js";
 
 export interface ConnectedWebRendererApi {
   readonly api: IRendererHost;
@@ -63,6 +64,7 @@ function createRendererHost(connection: ViteDevAppServerConnection): IRendererHo
     events: createViteDevServerEventApi(connection),
     codeIndex: createViteDevCodeIndexApi(connection),
     connectors: createViteDevConnectorApi(connection),
+    plugins: createViteDevPluginApi(connection),
     toolSearch: createViteDevToolSearchApi(connection),
   };
 }

@@ -30,6 +30,7 @@ fn project_notification(notification: ServerNotification) -> Option<ClientEvent>
             Some(ClientEvent::AgentRequest(Box::new(request)))
         }
         ServerNotification::ConnectorsChanged(_) => Some(ClientEvent::ConnectorsChanged),
+        ServerNotification::PluginsChanged(_) => None,
         ServerNotification::SkillsChanged(_) => Some(ClientEvent::SkillsChanged),
         ServerNotification::GitStatusChanged(changed) => {
             Some(ClientEvent::GitStatusChanged(changed.status))

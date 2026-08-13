@@ -60,7 +60,9 @@ impl PluginAuthorityCommandId {
 pub enum PluginAuthorityCommand {
     Install { package: InstalledPluginRef },
     Enable { package: InstalledPluginRef },
-    Disable { plugin_id: PluginId },
+    Disable { package: InstalledPluginRef },
+    Grant { package: InstalledPluginRef },
+    RevokeGrant { package: InstalledPluginRef },
     Uninstall { package: InstalledPluginRef },
 }
 
@@ -93,11 +95,13 @@ pub struct PluginInstallResult {
     pub command: PluginAuthorityCommandResult,
 }
 
-/// Immutable installed and active projection of the Plugin authority.
+/// Immutable installed, enabled, granted, and effective projection of Plugin authority.
 #[derive(Clone, Debug)]
 pub struct PluginAuthoritySnapshot {
     revision: u64,
     installed: Vec<InstalledPluginRef>,
+    enabled: Vec<InstalledPluginRef>,
+    granted: Vec<InstalledPluginRef>,
     activation: PluginActivationSnapshot,
 }
 
@@ -108,6 +112,16 @@ impl PluginAuthoritySnapshot {
 
     pub fn installed(&self) -> &[InstalledPluginRef] {
         &self.installed
+    }
+
+    /// Exact packages selected by profile policy, independent of grants.
+    pub fn enabled(&self) -> &[InstalledPluginRef] {
+        &self.enabled
+    }
+
+    /// Exact packages whose contribution authority has been granted.
+    pub fn granted(&self) -> &[InstalledPluginRef] {
+        &self.granted
     }
 
     pub fn activation(&self) -> &PluginActivationSnapshot {
@@ -147,6 +161,8 @@ struct AuthorityState {
     revision: u64,
     activation_generation: u64,
     installed: BTreeMap<InstalledKey, InstalledPluginRef>,
+    enabled: BTreeMap<PluginId, InstalledPluginRef>,
+    granted: BTreeMap<InstalledKey, InstalledPluginRef>,
     active: BTreeMap<PluginId, ActivePlugin>,
     activation: PluginActivationSnapshot,
     receipts: BTreeMap<String, PersistedCommandReceipt>,
@@ -172,7 +188,7 @@ struct PluginActivationAuthorityInner {
     state: Mutex<AuthorityState>,
     drained: Condvar,
     persistence: Persistence,
-    subscribers: Mutex<Vec<mpsc::Sender<u64>>>,
+    subscribers: Mutex<Vec<mpsc::Sender<PluginAuthorityChange>>>,
 }
 
 /// Durable source of truth for installed packages and the exact active Plugin set.
@@ -207,6 +223,7 @@ impl PluginActivationAuthority {
         persistence: Persistence,
     ) -> Result<Self, PluginError> {
         persisted.validate()?;
+        let persisted = persisted.migrate();
         let mut installed = BTreeMap::new();
         for package in persisted.installed {
             store.read(&package)?;
@@ -240,6 +257,15 @@ impl PluginActivationAuthority {
                 ));
             }
         }
+        let enabled = package_map_by_plugin(&installed, persisted.enabled, "enabled")?;
+        let granted = package_map_by_key(&installed, persisted.granted, "granted")?;
+        let expected_active = effective_active(&enabled, &granted);
+        if !same_active_packages(&active, &expected_active) {
+            return Err(authority_error(
+                PluginErrorKind::PackageConflict,
+                "Plugin authority active set does not match enabled grants",
+            ));
+        }
         let activation = resolve_activation(persisted.activation_generation, &store, &active)?;
         Ok(Self {
             inner: Arc::new(PluginActivationAuthorityInner {
@@ -248,6 +274,8 @@ impl PluginActivationAuthority {
                     revision: persisted.revision,
                     activation_generation: persisted.activation_generation,
                     installed,
+                    enabled,
+                    granted,
                     active,
                     activation,
                     receipts: persisted.receipts,
@@ -269,6 +297,8 @@ impl PluginActivationAuthority {
         PluginAuthoritySnapshot {
             revision: state.revision,
             installed: state.installed.values().cloned().collect(),
+            enabled: state.enabled.values().cloned().collect(),
+            granted: state.granted.values().cloned().collect(),
             activation: state.activation.clone(),
         }
     }
@@ -297,7 +327,21 @@ impl PluginActivationAuthority {
             command: PluginAuthorityCommand::Install {
                 package: installed.clone(),
             },
-        })?;
+        });
+        let command = match command {
+            Ok(command) => command,
+            Err(error) => {
+                if !self
+                    .snapshot()
+                    .installed()
+                    .iter()
+                    .any(|package| package.digest == installed.digest)
+                {
+                    let _ = self.inner.store.remove_object(&installed.digest);
+                }
+                return Err(error);
+            }
+        };
         Ok(PluginInstallResult {
             package: installed,
             command,
@@ -344,13 +388,16 @@ impl PluginActivationAuthority {
             .checked_add(1)
             .ok_or_else(|| authority_unavailable("Plugin authority revision overflow"))?;
         let mut installed = state.installed.clone();
-        let mut active = state.active.clone();
+        let mut enabled = state.enabled.clone();
+        let mut granted = state.granted.clone();
         apply_command(
             &self.inner.store,
             &mut installed,
-            &mut active,
+            &mut enabled,
+            &mut granted,
             &request.command,
         )?;
+        let mut active = effective_active(&enabled, &granted);
         let activation_changed = !same_active_set(&state.active, &active);
         let activation_generation = if activation_changed {
             state
@@ -360,9 +407,7 @@ impl PluginActivationAuthority {
         } else {
             state.activation_generation
         };
-        if activation_changed {
-            stamp_changed_activations(&state.active, &mut active, activation_generation);
-        }
+        stamp_changed_activations(&state.active, &mut active, activation_generation);
         let activation = if activation_changed {
             resolve_activation(activation_generation, &self.inner.store, &active)?
         } else {
@@ -383,21 +428,36 @@ impl PluginActivationAuthority {
                 result_revision,
                 activation_generation,
                 &installed,
+                &enabled,
+                &granted,
                 &active,
                 &receipts,
             ))?;
         state.revision = result_revision;
         state.activation_generation = activation_generation;
+        let removed_object = match &request.command {
+            PluginAuthorityCommand::Uninstall { package }
+                if !installed
+                    .values()
+                    .any(|installed| installed.digest == package.digest) =>
+            {
+                Some(package.digest.clone())
+            }
+            _ => None,
+        };
         state.installed = installed;
+        state.enabled = enabled;
+        state.granted = granted;
         state.active = active;
         state.activation = activation;
         state.receipts = receipts;
         drop(state);
 
-        if activation_changed {
-            self.publish(activation_generation);
-        }
+        self.publish(result_revision, activation_generation);
         self.wait_for_drain(drained)?;
+        if let Some(digest) = removed_object {
+            let _ = self.inner.store.remove_object(&digest);
+        }
         Ok(PluginAuthorityCommandResult {
             revision: result_revision,
             activation_generation,
@@ -429,12 +489,19 @@ impl PluginActivationAuthority {
         })
     }
 
-    fn publish(&self, generation: u64) {
+    fn publish(&self, revision: u64, activation_generation: u64) {
         self.inner
             .subscribers
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .retain(|subscriber| subscriber.send(generation).is_ok());
+            .retain(|subscriber| {
+                subscriber
+                    .send(PluginAuthorityChange {
+                        revision,
+                        activation_generation,
+                    })
+                    .is_ok()
+            });
     }
 
     fn wait_for_drain(&self, drained: Vec<InvocationKey>) -> Result<(), PluginError> {
@@ -539,15 +606,25 @@ impl Drop for PluginInvocationLease {
 
 /// Blocking subscription to consumer-visible Plugin activation generations.
 pub struct PluginAuthoritySubscription {
-    receiver: mpsc::Receiver<u64>,
+    receiver: mpsc::Receiver<PluginAuthorityChange>,
+}
+
+/// Committed authority revision and the effective runtime generation it resolved to.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PluginAuthorityChange {
+    pub revision: u64,
+    pub activation_generation: u64,
 }
 
 impl PluginAuthoritySubscription {
-    pub fn try_recv(&self) -> Result<u64, mpsc::TryRecvError> {
+    pub fn try_recv(&self) -> Result<PluginAuthorityChange, mpsc::TryRecvError> {
         self.receiver.try_recv()
     }
 
-    pub fn recv_timeout(&self, timeout: Duration) -> Result<u64, mpsc::RecvTimeoutError> {
+    pub fn recv_timeout(
+        &self,
+        timeout: Duration,
+    ) -> Result<PluginAuthorityChange, mpsc::RecvTimeoutError> {
         self.receiver.recv_timeout(timeout)
     }
 }
@@ -555,7 +632,8 @@ impl PluginAuthoritySubscription {
 fn apply_command(
     store: &PluginPackageStore,
     installed: &mut BTreeMap<InstalledKey, InstalledPluginRef>,
-    active: &mut BTreeMap<PluginId, ActivePlugin>,
+    enabled: &mut BTreeMap<PluginId, InstalledPluginRef>,
+    granted: &mut BTreeMap<InstalledKey, InstalledPluginRef>,
     command: &PluginAuthorityCommand,
 ) -> Result<(), PluginError> {
     match command {
@@ -581,31 +659,124 @@ fn apply_command(
                 ));
             }
             store.activate(package)?;
-            active.insert(
-                package.id.clone(),
+            enabled.insert(package.id.clone(), package.clone());
+        }
+        PluginAuthorityCommand::Disable { package } => {
+            if enabled.get(&package.id) != Some(package) {
+                return Err(authority_error(
+                    PluginErrorKind::SourceUnavailable,
+                    "Plugin disable targets a package that is not enabled",
+                ));
+            }
+            enabled.remove(&package.id);
+        }
+        PluginAuthorityCommand::Grant { package } => {
+            let key = InstalledKey::from_package(package);
+            if installed.get(&key) != Some(package) {
+                return Err(authority_error(
+                    PluginErrorKind::SourceUnavailable,
+                    "Plugin grant targets an uninstalled package",
+                ));
+            }
+            store.activate(package)?;
+            granted.insert(key, package.clone());
+        }
+        PluginAuthorityCommand::RevokeGrant { package } => {
+            let key = InstalledKey::from_package(package);
+            if granted.get(&key) != Some(package) {
+                return Err(authority_error(
+                    PluginErrorKind::SourceUnavailable,
+                    "Plugin grant revocation targets a package that is not granted",
+                ));
+            }
+            granted.remove(&key);
+        }
+        PluginAuthorityCommand::Uninstall { package } => {
+            let key = InstalledKey::from_package(package);
+            if installed.get(&key) != Some(package) {
+                return Err(authority_error(
+                    PluginErrorKind::SourceUnavailable,
+                    "Plugin uninstall targets an uninstalled package",
+                ));
+            }
+            if enabled.get(&package.id) == Some(package) || granted.get(&key) == Some(package) {
+                return Err(authority_error(
+                    PluginErrorKind::PackageInUse,
+                    "enabled or granted Plugin package must be disabled and revoked before uninstall",
+                ));
+            }
+            installed.remove(&key);
+        }
+    }
+    Ok(())
+}
+
+fn effective_active(
+    enabled: &BTreeMap<PluginId, InstalledPluginRef>,
+    granted: &BTreeMap<InstalledKey, InstalledPluginRef>,
+) -> BTreeMap<PluginId, ActivePlugin> {
+    enabled
+        .iter()
+        .filter(|(_, package)| granted.get(&InstalledKey::from_package(package)) == Some(*package))
+        .map(|(id, package)| {
+            (
+                id.clone(),
                 ActivePlugin {
                     package: package.clone(),
                     activation_revision: 0,
                 },
-            );
-        }
-        PluginAuthorityCommand::Disable { plugin_id } => {
-            active.remove(plugin_id);
-        }
-        PluginAuthorityCommand::Uninstall { package } => {
-            if active
-                .get(&package.id)
-                .is_some_and(|active| active.package == *package)
-            {
-                return Err(authority_error(
-                    PluginErrorKind::PackageInUse,
-                    "active Plugin package must be disabled before uninstall",
-                ));
-            }
-            installed.remove(&InstalledKey::from_package(package));
+            )
+        })
+        .collect()
+}
+
+fn same_active_packages(
+    left: &BTreeMap<PluginId, ActivePlugin>,
+    right: &BTreeMap<PluginId, ActivePlugin>,
+) -> bool {
+    left.len() == right.len()
+        && left.iter().all(|(id, active)| {
+            right
+                .get(id)
+                .is_some_and(|other| other.package == active.package)
+        })
+}
+
+fn package_map_by_plugin(
+    installed: &BTreeMap<InstalledKey, InstalledPluginRef>,
+    packages: Vec<InstalledPluginRef>,
+    label: &str,
+) -> Result<BTreeMap<PluginId, InstalledPluginRef>, PluginError> {
+    let mut result = BTreeMap::new();
+    for package in packages {
+        if installed.get(&InstalledKey::from_package(&package)) != Some(&package)
+            || result.insert(package.id.clone(), package).is_some()
+        {
+            return Err(authority_error(
+                PluginErrorKind::PackageConflict,
+                format!("Plugin authority {label} set does not match installed objects"),
+            ));
         }
     }
-    Ok(())
+    Ok(result)
+}
+
+fn package_map_by_key(
+    installed: &BTreeMap<InstalledKey, InstalledPluginRef>,
+    packages: Vec<InstalledPluginRef>,
+    label: &str,
+) -> Result<BTreeMap<InstalledKey, InstalledPluginRef>, PluginError> {
+    let mut result = BTreeMap::new();
+    for package in packages {
+        let key = InstalledKey::from_package(&package);
+        if installed.get(&key) != Some(&package) || result.insert(key, package).is_some() {
+            return Err(authority_error(
+                PluginErrorKind::PackageConflict,
+                format!("Plugin authority {label} set does not match installed objects"),
+            ));
+        }
+    }
+    Ok(result)
 }
 
 fn same_active_set(

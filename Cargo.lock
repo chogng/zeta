@@ -8779,6 +8779,7 @@ dependencies = [
  "sha2 0.10.9",
  "tempfile",
  "tokio",
+ "url",
  "zeroize",
  "zeta-agents",
  "zeta-app-server-protocol",
@@ -8840,6 +8841,7 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
+ "zeroize",
  "zeta-app-server",
  "zeta-app-server-protocol",
  "zeta-app-server-transport",
@@ -9050,6 +9052,7 @@ dependencies = [
  "sha2 0.10.9",
  "tempfile",
  "url",
+ "zeroize",
  "zeta-connectors",
  "zeta-plugins",
  "zeta-secrets",

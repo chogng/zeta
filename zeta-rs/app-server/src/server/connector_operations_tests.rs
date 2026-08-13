@@ -7,6 +7,12 @@ use zeta_connectors::ConnectorId;
 use zeta_connectors::ConnectorRuntimeBinding;
 use zeta_connectors_extension::ConnectorAuthority;
 use zeta_connectors_extension::ConnectorCredentialService;
+use zeta_connectors_extension::ConnectorOAuthChallenge;
+use zeta_connectors_extension::ConnectorOAuthCredential;
+use zeta_connectors_extension::ConnectorOAuthError;
+use zeta_connectors_extension::ConnectorOAuthExchangeRequest;
+use zeta_connectors_extension::ConnectorOAuthProvider;
+use zeta_connectors_extension::ConnectorOAuthService;
 use zeta_core::InMemorySessionStore;
 use zeta_core::InMemoryThreadStore;
 use zeta_core::SessionCoordinator;
@@ -39,6 +45,71 @@ fn server() -> AppServer {
         Arc::new(ProviderModelService::new(Arc::new(EchoModel))),
     )
     .with_connector_service(service)
+}
+
+struct TestOAuthProvider;
+
+impl ConnectorOAuthProvider for TestOAuthProvider {
+    fn authorization_url(
+        &self,
+        _connector: &ConnectorDefinition,
+        challenge: ConnectorOAuthChallenge<'_>,
+    ) -> Result<String, ConnectorOAuthError> {
+        let mut url = url::Url::parse("https://accounts.example.test/authorize").unwrap();
+        url.query_pairs_mut()
+            .append_pair("state", challenge.state)
+            .append_pair("code_challenge", challenge.code_challenge)
+            .append_pair("code_challenge_method", "S256")
+            .append_pair("redirect_uri", challenge.redirect_uri);
+        Ok(url.to_string())
+    }
+
+    fn exchange(
+        &self,
+        _connector: &ConnectorDefinition,
+        request: ConnectorOAuthExchangeRequest<'_>,
+    ) -> Result<ConnectorOAuthCredential, ConnectorOAuthError> {
+        assert_eq!(request.authorization_code.expose(), b"one-shot-code");
+        Ok(ConnectorOAuthCredential {
+            account_id: zeta_connectors::ConnectorAccountId::new("octocat").unwrap(),
+            account_display_name: "Octocat".into(),
+            secret: zeta_secrets::SecretValue::new(b"provider-access-token".to_vec()),
+        })
+    }
+}
+
+fn oauth_server() -> AppServer {
+    let connector_id = ConnectorId::new("acme/github:connector:account").unwrap();
+    let connector = ConnectorDefinition::new(
+        connector_id.clone(),
+        "GitHub",
+        "GitHub tools",
+        ConnectorRuntimeBinding::mcp_server("plugin:acme/github:mcp:github").unwrap(),
+    )
+    .unwrap();
+    let authority = ConnectorAuthority::in_memory([connector]).unwrap();
+    let service = Arc::new(ConnectorCredentialService::new(
+        authority,
+        Arc::new(MemorySecretStore::default()),
+    ));
+    let provider: Arc<dyn ConnectorOAuthProvider> = Arc::new(TestOAuthProvider);
+    let oauth = Arc::new(ConnectorOAuthService::new(
+        Arc::clone(&service),
+        [(connector_id, provider)],
+    ));
+    let threads = Arc::new(ThreadController::with_store(Arc::new(
+        InMemoryThreadStore::default(),
+    )));
+    let sessions = Arc::new(SessionCoordinator::with_store(
+        Arc::new(InMemorySessionStore::default()),
+        threads,
+    ));
+    AppServer::new(
+        sessions,
+        Arc::new(ProviderModelService::new(Arc::new(EchoModel))),
+    )
+    .with_connector_service(service)
+    .with_connector_oauth_service(oauth)
 }
 
 fn call(
@@ -114,7 +185,7 @@ fn app_server_connects_lists_notifies_and_disconnects_without_projecting_secrets
     );
     let serialized = connected_list.to_string();
     assert!(!serialized.contains("super-secret-token"));
-    assert!(!serialized.contains("credential"));
+    assert!(!serialized.contains("credentialReference"));
     assert_eq!(
         connected_list["result"]["connectors"][0]["state"]["status"],
         "connected"
@@ -150,4 +221,92 @@ fn app_server_connects_lists_notifies_and_disconnects_without_projecting_secrets
     );
     assert_eq!(disconnected["result"]["command"]["generation"], 4);
     assert_eq!(disconnected["result"]["credentialCleanup"], "deleted");
+}
+
+#[test]
+fn app_server_oauth_is_one_shot_and_projects_only_browser_navigation_values() {
+    let server = oauth_server();
+    let mut connection = server.connection();
+    call(
+        &server,
+        &mut connection,
+        1,
+        "initialize",
+        serde_json::json!({
+            "clientInfo": {"name": "test", "version": "1"},
+            "capabilities": {}
+        }),
+    );
+    let listed = call(
+        &server,
+        &mut connection,
+        2,
+        "connector/list",
+        serde_json::json!({}),
+    );
+    assert_eq!(
+        listed["result"]["connectors"][0]["availableActions"],
+        serde_json::json!(["connectOAuth"])
+    );
+
+    let started = call(
+        &server,
+        &mut connection,
+        3,
+        "connector/connect/oauth/start",
+        serde_json::json!({
+            "commandId": "oauth-github",
+            "expectedGeneration": 1,
+            "connectorId": "acme/github:connector:account",
+            "connectionGeneration": 1,
+            "redirectUri": "http://127.0.0.1:43117/oauth/callback"
+        }),
+    );
+    let authorization_url = started["result"]["authorizationUrl"].as_str().unwrap();
+    let parsed = url::Url::parse(authorization_url).unwrap();
+    let state = parsed
+        .query_pairs()
+        .find(|(key, _)| key == "state")
+        .unwrap()
+        .1
+        .into_owned();
+    let completed = call(
+        &server,
+        &mut connection,
+        4,
+        "connector/connect/oauth/complete",
+        serde_json::json!({
+            "flowId": started["result"]["flowId"],
+            "state": &state,
+            "authorizationCode": "one-shot-code"
+        }),
+    );
+    assert_eq!(completed["result"]["generation"], 3);
+    let serialized = call(
+        &server,
+        &mut connection,
+        5,
+        "connector/list",
+        serde_json::json!({}),
+    )
+    .to_string();
+    assert!(!serialized.contains("one-shot-code"));
+    assert!(!serialized.contains("provider-access-token"));
+
+    let replayed_callback = call(
+        &server,
+        &mut connection,
+        6,
+        "connector/connect/oauth/complete",
+        serde_json::json!({
+            "flowId": started["result"]["flowId"],
+            "state": &state,
+            "authorizationCode": "one-shot-code"
+        }),
+    );
+    assert_eq!(replayed_callback["error"]["code"], -32038);
+    assert_eq!(
+        replayed_callback["error"]["message"],
+        "ConnectorOAuthInvalidCallback"
+    );
 }

@@ -5,10 +5,15 @@ mod notification;
 mod profile;
 mod session;
 
+use serde::Serialize;
+use serde::Serializer;
+use serde::ser::SerializeStruct;
 use serde_json::Value;
 use std::fmt;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, OnceLock};
+use zeroize::Zeroize;
+use zeroize::Zeroizing;
 use zeta_app_server_protocol::protocol::common::EmptyParams;
 use zeta_app_server_protocol::protocol::config::{
     ConfigCommandResult, ConfigReadResult, ConfigUpdateParams, LanguageServerConfigureParams,
@@ -16,9 +21,15 @@ use zeta_app_server_protocol::protocol::config::{
     McpServerUpsertParams, ProviderConfigureParams, ProviderRemoveParams, SkillSourceAddParams,
     SkillSourceRemoveParams, SkillSourceSetEnablementParams,
 };
+use zeta_app_server_protocol::protocol::connectors::ConnectorCommandResultDto;
+use zeta_app_server_protocol::protocol::connectors::ConnectorCredentialCleanupDto;
+use zeta_app_server_protocol::protocol::connectors::ConnectorCredentialCleanupParams;
 use zeta_app_server_protocol::protocol::connectors::ConnectorDisconnectParams;
 use zeta_app_server_protocol::protocol::connectors::ConnectorDisconnectResultDto;
 use zeta_app_server_protocol::protocol::connectors::ConnectorListResult;
+use zeta_app_server_protocol::protocol::connectors::ConnectorOAuthCancelParams;
+use zeta_app_server_protocol::protocol::connectors::ConnectorOAuthStartParams;
+use zeta_app_server_protocol::protocol::connectors::ConnectorOAuthStartResult;
 use zeta_app_server_protocol::protocol::diff::DiffComputeParams;
 use zeta_app_server_protocol::protocol::diff::DiffComputeResult;
 use zeta_app_server_protocol::protocol::document::{TypstCompileParams, TypstCompileResult};
@@ -33,6 +44,9 @@ use zeta_app_server_protocol::protocol::git::{
 };
 use zeta_app_server_protocol::protocol::initialize::{InitializeParams, InitializeResult};
 use zeta_app_server_protocol::protocol::model::ModelListResult;
+use zeta_app_server_protocol::protocol::plugins::PluginCommandResultDto;
+use zeta_app_server_protocol::protocol::plugins::PluginListResult;
+use zeta_app_server_protocol::protocol::plugins::PluginPackageCommandParams;
 use zeta_app_server_protocol::protocol::registry::ClientMethod;
 use zeta_app_server_protocol::protocol::resources::{
     ResourceMetadataParams, ResourceMetadataResult, ResourceReadParams, ResourceReadResult,
@@ -87,6 +101,112 @@ pub struct AppServerClient<T> {
     transport: T,
     next_request_id: Arc<AtomicU64>,
     initialization: Arc<OnceLock<InitializeResult>>,
+}
+
+/// Client-owned API-token request whose secret and encoded wire buffer are cleared after one call.
+pub struct ConnectorApiTokenConnectRequest {
+    pub command_id: String,
+    pub expected_generation: u64,
+    pub connector_id: String,
+    pub connection_generation: u64,
+    pub account_id: String,
+    pub account_display_name: String,
+    api_token: Zeroizing<String>,
+}
+
+impl ConnectorApiTokenConnectRequest {
+    pub fn new(
+        command_id: String,
+        expected_generation: u64,
+        connector_id: String,
+        connection_generation: u64,
+        account_id: String,
+        account_display_name: String,
+        api_token: String,
+    ) -> Self {
+        Self {
+            command_id,
+            expected_generation,
+            connector_id,
+            connection_generation,
+            account_id,
+            account_display_name,
+            api_token: Zeroizing::new(api_token),
+        }
+    }
+}
+
+impl fmt::Debug for ConnectorApiTokenConnectRequest {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ConnectorApiTokenConnectRequest")
+            .field("command_id", &self.command_id)
+            .field("expected_generation", &self.expected_generation)
+            .field("connector_id", &self.connector_id)
+            .field("connection_generation", &self.connection_generation)
+            .field("account_id", &self.account_id)
+            .field("account_display_name", &self.account_display_name)
+            .field("api_token", &"[REDACTED]")
+            .finish()
+    }
+}
+
+impl Serialize for ConnectorApiTokenConnectRequest {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut request = serializer.serialize_struct("ConnectorApiTokenConnectRequest", 7)?;
+        request.serialize_field("commandId", &self.command_id)?;
+        request.serialize_field("expectedGeneration", &self.expected_generation)?;
+        request.serialize_field("connectorId", &self.connector_id)?;
+        request.serialize_field("connectionGeneration", &self.connection_generation)?;
+        request.serialize_field("accountId", &self.account_id)?;
+        request.serialize_field("accountDisplayName", &self.account_display_name)?;
+        request.serialize_field("apiToken", self.api_token.as_str())?;
+        request.end()
+    }
+}
+
+/// Client-owned OAuth callback whose state, code, and encoded wire buffer are one-shot.
+pub struct ConnectorOAuthCompleteRequest {
+    pub flow_id: String,
+    state: Zeroizing<String>,
+    authorization_code: Zeroizing<String>,
+}
+
+impl ConnectorOAuthCompleteRequest {
+    pub fn new(flow_id: String, state: String, authorization_code: String) -> Self {
+        Self {
+            flow_id,
+            state: Zeroizing::new(state),
+            authorization_code: Zeroizing::new(authorization_code),
+        }
+    }
+}
+
+impl fmt::Debug for ConnectorOAuthCompleteRequest {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ConnectorOAuthCompleteRequest")
+            .field("flow_id", &self.flow_id)
+            .field("state", &"[REDACTED]")
+            .field("authorization_code", &"[REDACTED]")
+            .finish()
+    }
+}
+
+impl Serialize for ConnectorOAuthCompleteRequest {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut request = serializer.serialize_struct("ConnectorOAuthCompleteRequest", 3)?;
+        request.serialize_field("flowId", &self.flow_id)?;
+        request.serialize_field("state", self.state.as_str())?;
+        request.serialize_field("authorizationCode", self.authorization_code.as_str())?;
+        request.end()
+    }
 }
 
 impl<T: Clone> Clone for AppServerClient<T> {
@@ -278,11 +398,85 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         self.call(ClientMethod::ConnectorList, EmptyParams {})
     }
 
+    pub fn connect_connector_api_token(
+        &mut self,
+        params: ConnectorApiTokenConnectRequest,
+    ) -> Result<ConnectorCommandResultDto, ClientError> {
+        self.call_secret(ClientMethod::ConnectorApiTokenConnect, params)
+    }
+
+    pub fn start_connector_oauth(
+        &mut self,
+        params: ConnectorOAuthStartParams,
+    ) -> Result<ConnectorOAuthStartResult, ClientError> {
+        self.call(ClientMethod::ConnectorOAuthStart, params)
+    }
+
+    pub fn complete_connector_oauth(
+        &mut self,
+        params: ConnectorOAuthCompleteRequest,
+    ) -> Result<ConnectorCommandResultDto, ClientError> {
+        self.call_secret(ClientMethod::ConnectorOAuthComplete, params)
+    }
+
+    pub fn cancel_connector_oauth(
+        &mut self,
+        params: ConnectorOAuthCancelParams,
+    ) -> Result<ConnectorCommandResultDto, ClientError> {
+        self.call(ClientMethod::ConnectorOAuthCancel, params)
+    }
+
     pub fn disconnect_connector(
         &mut self,
         params: ConnectorDisconnectParams,
     ) -> Result<ConnectorDisconnectResultDto, ClientError> {
         self.call(ClientMethod::ConnectorDisconnect, params)
+    }
+
+    pub fn retry_connector_credential_cleanup(
+        &mut self,
+        params: ConnectorCredentialCleanupParams,
+    ) -> Result<ConnectorCredentialCleanupDto, ClientError> {
+        self.call(ClientMethod::ConnectorCredentialCleanupRetry, params)
+    }
+
+    pub fn list_plugins(&mut self) -> Result<PluginListResult, ClientError> {
+        self.call(ClientMethod::PluginList, EmptyParams {})
+    }
+
+    pub fn enable_plugin(
+        &mut self,
+        params: PluginPackageCommandParams,
+    ) -> Result<PluginCommandResultDto, ClientError> {
+        self.call(ClientMethod::PluginEnable, params)
+    }
+
+    pub fn disable_plugin(
+        &mut self,
+        params: PluginPackageCommandParams,
+    ) -> Result<PluginCommandResultDto, ClientError> {
+        self.call(ClientMethod::PluginDisable, params)
+    }
+
+    pub fn grant_plugin(
+        &mut self,
+        params: PluginPackageCommandParams,
+    ) -> Result<PluginCommandResultDto, ClientError> {
+        self.call(ClientMethod::PluginGrant, params)
+    }
+
+    pub fn revoke_plugin_grant(
+        &mut self,
+        params: PluginPackageCommandParams,
+    ) -> Result<PluginCommandResultDto, ClientError> {
+        self.call(ClientMethod::PluginRevokeGrant, params)
+    }
+
+    pub fn uninstall_plugin(
+        &mut self,
+        params: PluginPackageCommandParams,
+    ) -> Result<PluginCommandResultDto, ClientError> {
+        self.call(ClientMethod::PluginUninstall, params)
     }
 
     pub fn list_models(&mut self) -> Result<ModelListResult, ClientError> {
@@ -486,6 +680,60 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
                     .into(),
             }),
         }
+    }
+
+    fn call_secret<P: Serialize, R: for<'a> serde::Deserialize<'a>>(
+        &mut self,
+        method: ClientMethod,
+        params: P,
+    ) -> Result<R, ClientError> {
+        let request_id = self.next_request_id.fetch_add(1, Ordering::Relaxed);
+        let request = JsonRpcRequest::new(
+            JsonRpcId::Number(request_id),
+            method.as_str().into(),
+            params,
+        );
+        let mut encoded_request = Zeroizing::new(
+            serde_json::to_string(&request)
+                .map_err(|error| ClientError::Protocol(error.to_string()))?,
+        );
+        let raw_response = self.transport.round_trip(encoded_request.as_str())?;
+        encoded_request.zeroize();
+        decode_call_response(request_id, &raw_response)
+    }
+}
+
+fn decode_call_response<R: for<'a> serde::Deserialize<'a>>(
+    request_id: u64,
+    raw_response: &str,
+) -> Result<R, ClientError> {
+    let response: JsonRpcResponse<Value, Value> = serde_json::from_str(raw_response)
+        .map_err(|error| ClientError::Protocol(error.to_string()))?;
+    let response_id = match &response {
+        JsonRpcResponse::Success(response) => &response.id,
+        JsonRpcResponse::Failure(response) => &response.id,
+    };
+    if response_id != &JsonRpcId::Number(request_id) {
+        return Err(ClientError::Protocol(
+            "response id did not match request".into(),
+        ));
+    }
+    match response {
+        JsonRpcResponse::Success(response) => serde_json::from_value(response.result)
+            .map_err(|error| ClientError::Protocol(error.to_string())),
+        JsonRpcResponse::Failure(response) => Err(ClientError::Server {
+            code: response
+                .error
+                .get("code")
+                .and_then(Value::as_i64)
+                .unwrap_or(-32000),
+            message: response
+                .error
+                .get("message")
+                .and_then(Value::as_str)
+                .unwrap_or("unknown error")
+                .to_owned(),
+        }),
     }
 }
 

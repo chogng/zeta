@@ -15,6 +15,7 @@ pub mod initialize;
 pub mod language;
 pub mod model;
 pub mod notification;
+pub mod plugins;
 pub mod registry;
 pub mod resources;
 pub mod search;

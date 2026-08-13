@@ -128,7 +128,7 @@ pub(crate) fn materialize_connector_servers(
             .load(&secret_key)
             .map_err(|_| McpToolCompositionError::new("Connector credential store unavailable"))?
             .ok_or_else(|| McpToolCompositionError::new("Connector credential is unavailable"))?;
-        let server_id = McpServerId::new(
+        let contribution_server_id = McpServerId::new(
             entry
                 .definition()
                 .runtime_binding()
@@ -136,6 +136,7 @@ pub(crate) fn materialize_connector_servers(
                 .to_string(),
         )
         .map_err(|error| McpToolCompositionError::new(error.to_string()))?;
+        let server_id = connector_server_id(&contribution_server_id, entry.definition().id())?;
         let transport = provider
             .materialize(entry.definition(), credential)
             .map_err(|error| McpToolCompositionError::new(error.to_string()))?;
@@ -180,4 +181,19 @@ pub(crate) fn materialize_connector_servers(
         definitions,
         authorities,
     })
+}
+
+fn connector_server_id(
+    contribution: &McpServerId,
+    connector: &zeta_connectors::ConnectorId,
+) -> Result<McpServerId, McpToolCompositionError> {
+    let local = contribution
+        .as_str()
+        .split_once(":mcp:")
+        .map(|(_, local)| local)
+        .ok_or_else(|| {
+            McpToolCompositionError::new("invalid Connector MCP contribution identity")
+        })?;
+    McpServerId::new(format!("{}:mcp:{local}", connector.as_str()))
+        .map_err(|error| McpToolCompositionError::new(error.to_string()))
 }

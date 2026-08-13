@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::fs;
 use std::path::Path;
 use std::sync::Mutex;
@@ -29,6 +30,7 @@ pub(super) struct LoadedAuthority {
     pub authority: SqliteAuthority,
     pub snapshot: ConnectorSnapshot,
     pub receipts: BTreeMap<String, CommandReceipt>,
+    pub credential_cleanup_pending: BTreeSet<ConnectorId>,
 }
 
 pub(super) struct SqliteAuthority {
@@ -66,12 +68,14 @@ impl SqliteAuthority {
             ConnectorSnapshot::restore(ConnectorSnapshotGeneration::new(max_generation), entries)
                 .map_err(domain_error)?;
         let receipts = load_receipts(&connection)?;
+        let credential_cleanup_pending = load_credential_cleanup(&connection)?;
         Ok(LoadedAuthority {
             authority: Self {
                 connection: Mutex::new(connection),
             },
             snapshot,
             receipts,
+            credential_cleanup_pending,
         })
     }
 
@@ -90,6 +94,25 @@ impl SqliteAuthority {
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(sql_error)?;
         insert_event(&transaction, event, result_generation)?;
+        match event {
+            AuthorityEvent::Disconnect { connector_id, .. } => {
+                transaction
+                    .execute(
+                        "INSERT OR IGNORE INTO connector_credential_cleanup (connector_id) VALUES (?1)",
+                        [connector_id.as_str()],
+                    )
+                    .map_err(sql_error)?;
+            }
+            AuthorityEvent::Complete { connector_id, .. } => {
+                transaction
+                    .execute(
+                        "DELETE FROM connector_credential_cleanup WHERE connector_id = ?1",
+                        [connector_id.as_str()],
+                    )
+                    .map_err(sql_error)?;
+            }
+            AuthorityEvent::Begin { .. } | AuthorityEvent::Unavailable { .. } => {}
+        }
         transaction
             .execute(
                 "INSERT INTO connector_command_receipts (
@@ -146,6 +169,23 @@ impl SqliteAuthority {
             })
             .collect()
     }
+
+    pub fn clear_credential_cleanup(
+        &self,
+        connector_id: &ConnectorId,
+    ) -> Result<(), ConnectorAuthorityError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| persistence_error("connector SQLite lock poisoned"))?;
+        connection
+            .execute(
+                "DELETE FROM connector_credential_cleanup WHERE connector_id = ?1",
+                [connector_id.as_str()],
+            )
+            .map_err(sql_error)?;
+        Ok(())
+    }
 }
 
 struct PersistedRecord {
@@ -159,18 +199,12 @@ impl PersistedRecord {
         definition: &ConnectorDefinition,
     ) -> Result<ConnectorConnection, ConnectorAuthorityError> {
         let (generation, state) = match &self.event {
-            AuthorityEvent::Begin {
-                generation,
-                definition_digest,
-                ..
-            } => {
-                let state = if definition.digest() == *definition_digest {
-                    ConnectorConnectionState::Connecting
-                } else {
-                    ConnectorConnectionState::Disconnected
-                };
-                (*generation, state)
-            }
+            AuthorityEvent::Begin { generation, .. } => (
+                *generation,
+                ConnectorConnectionState::Unavailable {
+                    reason: "Connector authorization was interrupted".into(),
+                },
+            ),
             AuthorityEvent::Complete {
                 account,
                 definition_digest,
@@ -229,10 +263,29 @@ fn initialize(connection: &Connection) -> Result<(), ConnectorAuthorityError> {
                 singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
                 snapshot_generation INTEGER NOT NULL
              );
+             CREATE TABLE IF NOT EXISTS connector_credential_cleanup (
+                connector_id TEXT PRIMARY KEY
+             );
              INSERT OR IGNORE INTO connector_authority_meta (singleton, snapshot_generation)
              VALUES (1, 1);",
         )
         .map_err(sql_error)
+}
+
+fn load_credential_cleanup(
+    connection: &Connection,
+) -> Result<BTreeSet<ConnectorId>, ConnectorAuthorityError> {
+    let mut statement = connection
+        .prepare("SELECT connector_id FROM connector_credential_cleanup ORDER BY connector_id")
+        .map_err(sql_error)?;
+    let rows = statement
+        .query_map([], |row| row.get::<_, String>(0))
+        .map_err(sql_error)?;
+    rows.map(|row| {
+        ConnectorId::new(row.map_err(sql_error)?)
+            .map_err(|_| persistence_error("persisted connector cleanup identity is invalid"))
+    })
+    .collect()
 }
 
 fn load_generation(connection: &Connection) -> Result<u64, ConnectorAuthorityError> {

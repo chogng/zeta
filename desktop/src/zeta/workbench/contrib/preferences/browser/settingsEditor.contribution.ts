@@ -8,6 +8,7 @@ import type { ISettingsService } from "../../../services/preferences/common/sett
 import type { ICodeIndexService } from "../../../../platform/codeIndex/common/codeIndexService.js";
 import type { IToolSearchService } from "../../../../platform/toolSearch/common/toolSearchService.js";
 import type { IConnectorService } from "../../../../platform/connectors/common/connectorService.js";
+import type { IPluginService } from "../../../../platform/plugins/common/pluginService.js";
 import { SettingsEditor } from "./settingsEditor.js";
 
 export interface SettingsEditorContributionOptions {
@@ -19,6 +20,7 @@ export interface SettingsEditorContributionOptions {
   readonly userThemeService: IUserThemeService;
   readonly codeIndexService?: ICodeIndexService;
   readonly connectorService?: IConnectorService;
+  readonly pluginService?: IPluginService;
   readonly toolSearchService?: IToolSearchService;
 }
 
@@ -38,6 +40,7 @@ export class SettingsEditorContribution extends DisposableOwner {
       userThemeService: options.userThemeService,
       codeIndexService: options.codeIndexService ?? unavailableCodeIndexService,
       connectorService: options.connectorService ?? unavailableConnectorService,
+      pluginService: options.pluginService ?? unavailablePluginService,
       toolSearchService: options.toolSearchService ?? unavailableToolSearchService,
     }));
     this.modalEditor = this.own(new ModalEditorPart({
@@ -87,5 +90,16 @@ const unavailableConnectorService: IConnectorService = {
   onDidChange: () => ({ dispose() {}, [Symbol.dispose]() {} }),
   list: () => Promise.reject(new Error("Connectors are unavailable.")),
   connectApiToken: () => Promise.reject(new Error("Connectors are unavailable.")),
+  connectOAuth: () => Promise.reject(new Error("Connectors are unavailable.")),
   disconnect: () => Promise.reject(new Error("Connectors are unavailable.")),
+};
+
+const unavailablePluginService: IPluginService = {
+  onDidChange: () => ({ dispose() {}, [Symbol.dispose]() {} }),
+  list: () => Promise.reject(new Error("Plugins are unavailable.")),
+  enable: () => Promise.reject(new Error("Plugins are unavailable.")),
+  disable: () => Promise.reject(new Error("Plugins are unavailable.")),
+  grant: () => Promise.reject(new Error("Plugins are unavailable.")),
+  revokeGrant: () => Promise.reject(new Error("Plugins are unavailable.")),
+  uninstall: () => Promise.reject(new Error("Plugins are unavailable.")),
 };

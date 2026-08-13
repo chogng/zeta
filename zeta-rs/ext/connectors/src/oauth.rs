@@ -10,6 +10,7 @@ use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use sha2::Digest;
 use sha2::Sha256;
 use url::Url;
+use zeroize::Zeroize;
 use zeta_connectors::ConnectorAccountId;
 use zeta_connectors::ConnectorConnectionGeneration;
 use zeta_connectors::ConnectorDefinition;
@@ -83,7 +84,7 @@ pub struct ConnectorOAuthStartRequest {
 /// Callback values for exactly one previously started OAuth attempt.
 pub struct ConnectorOAuthCompleteRequest {
     pub flow_id: ConnectorOAuthFlowId,
-    pub state: String,
+    pub state: SecretValue,
     pub authorization_code: SecretValue,
 }
 
@@ -131,10 +132,16 @@ impl ConnectorOAuthService {
         }
     }
 
+    /// Returns whether an exact Connector has a product-owned OAuth adapter.
+    pub fn supports(&self, connector_id: &ConnectorId) -> bool {
+        self.providers.contains_key(connector_id)
+    }
+
     pub fn start(
         &self,
         request: ConnectorOAuthStartRequest,
     ) -> Result<ConnectorOAuthAuthorization, ConnectorOAuthError> {
+        self.expire_pending();
         validate_redirect_uri(&request.redirect_uri)?;
         let snapshot = self.credentials.authority().snapshot();
         let definition = snapshot
@@ -176,6 +183,7 @@ impl ConnectorOAuthService {
             expected_generation: request.expected_generation,
             authority_generation: begin.generation,
             connector_id: request.connector_id,
+            definition_digest: definition.digest(),
             connection_generation: request.connection_generation,
             redirect_uri: request.redirect_uri,
             state,
@@ -183,7 +191,7 @@ impl ConnectorOAuthService {
         };
         self.pending
             .lock()
-            .map_err(|_| internal_error())?
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .insert(flow_id.clone(), attempt);
         Ok(ConnectorOAuthAuthorization {
             flow_id,
@@ -213,7 +221,7 @@ impl ConnectorOAuthService {
                 "Connector OAuth flow expired",
             ));
         }
-        if !constant_time_eq(attempt.state.as_bytes(), request.state.as_bytes()) {
+        if !constant_time_eq(attempt.state.as_bytes(), request.state.expose()) {
             self.fail_attempt(&attempt);
             return Err(oauth_error(
                 ConnectorOAuthErrorKind::StateMismatch,
@@ -222,10 +230,19 @@ impl ConnectorOAuthService {
         }
         let snapshot = self.credentials.authority().snapshot();
         let definition = match snapshot.entry(&attempt.connector_id) {
-            Some(entry) => entry.definition().clone(),
+            Some(entry) if entry.definition().digest() == attempt.definition_digest => {
+                entry.definition().clone()
+            }
             None => {
                 self.fail_attempt(&attempt);
                 return Err(provider_unavailable());
+            }
+            Some(_) => {
+                self.fail_attempt(&attempt);
+                return Err(oauth_error(
+                    ConnectorOAuthErrorKind::InvalidRequest,
+                    "Connector definition changed during OAuth authorization",
+                ));
             }
         };
         let provider = match self.providers.get(&attempt.connector_id) {
@@ -268,6 +285,32 @@ impl ConnectorOAuthService {
         }
     }
 
+    /// Cancels one exact browser attempt and moves its Connector out of `Connecting`.
+    pub fn cancel(
+        &self,
+        flow_id: &ConnectorOAuthFlowId,
+    ) -> Result<ConnectorCommandResult, ConnectorOAuthError> {
+        let attempt = self
+            .pending
+            .lock()
+            .map_err(|_| internal_error())?
+            .remove(flow_id)
+            .ok_or_else(|| {
+                oauth_error(
+                    ConnectorOAuthErrorKind::InvalidRequest,
+                    "Connector OAuth flow is unavailable",
+                )
+            })?;
+        self.credentials
+            .mark_connect_unavailable(
+                &attempt.command_id,
+                attempt.authority_generation,
+                attempt.connector_id.clone(),
+                attempt.connection_generation,
+            )
+            .map_err(Into::into)
+    }
+
     fn fail_attempt(&self, attempt: &PendingOAuthAttempt) {
         let _ = self.credentials.mark_connect_unavailable(
             &attempt.command_id,
@@ -275,6 +318,30 @@ impl ConnectorOAuthService {
             attempt.connector_id.clone(),
             attempt.connection_generation,
         );
+    }
+
+    /// Expires abandoned browser flows and revokes their connecting state.
+    pub fn expire_pending(&self) -> usize {
+        let expired = {
+            let mut pending = self
+                .pending
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let expired_ids = pending
+                .iter()
+                .filter(|(_, attempt)| attempt.started_at.elapsed() > FLOW_LIFETIME)
+                .map(|(id, _)| id.clone())
+                .collect::<Vec<_>>();
+            expired_ids
+                .into_iter()
+                .filter_map(|id| pending.remove(&id))
+                .collect::<Vec<_>>()
+        };
+        let count = expired.len();
+        for attempt in expired {
+            self.fail_attempt(&attempt);
+        }
+        count
     }
 }
 
@@ -284,10 +351,18 @@ struct PendingOAuthAttempt {
     expected_generation: ConnectorSnapshotGeneration,
     authority_generation: ConnectorSnapshotGeneration,
     connector_id: ConnectorId,
+    definition_digest: zeta_connectors::ConnectorDefinitionDigest,
     connection_generation: ConnectorConnectionGeneration,
     redirect_uri: String,
     state: String,
     verifier: String,
+}
+
+impl Drop for PendingOAuthAttempt {
+    fn drop(&mut self) {
+        self.state.zeroize();
+        self.verifier.zeroize();
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -366,10 +441,19 @@ fn validate_authorization_url(
     redirect_uri: &str,
 ) -> Result<(), ConnectorOAuthError> {
     let url = Url::parse(value).map_err(|_| invalid_authorization())?;
-    if url.scheme() != "https" || !url.username().is_empty() || url.password().is_some() {
+    if url.scheme() != "https"
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.fragment().is_some()
+    {
         return Err(invalid_authorization());
     }
-    let values = url.query_pairs().collect::<BTreeMap<_, _>>();
+    let mut values = BTreeMap::new();
+    for (key, value) in url.query_pairs() {
+        if values.insert(key, value).is_some() {
+            return Err(invalid_authorization());
+        }
+    }
     if values.get("state").map(|value| value.as_ref()) != Some(state)
         || values.get("code_challenge").map(|value| value.as_ref()) != Some(challenge)
         || values

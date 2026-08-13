@@ -3,10 +3,10 @@
 > 物理位置：`zeta-rs/plugins/`
 > Rust crate：`zeta_plugins`
 > 当前状态：PL0 已实现并支持 `ConnectorContribution` 引用 `McpServerContribution` 的声明校验；PL1 的 local
-> content-addressed store、durable installed/enable authority、exact `PluginActivationSnapshot`、live generation publish 与 invocation drain 已实现；Connector domain 已提取到
+> content-addressed store、durable installed/enabled/granted/effective authority、exact `PluginActivationSnapshot`、live generation publish 与 invocation drain 已实现；Connector domain 已提取到
 > `zeta-rs/connectors`，Plugin projection、durable authority 与 API-token connect/revoke 位于
 > `zeta-rs/ext/connectors`；App Server 已能从注入的 activation 自动接线 Connector 与 MCP，通用 OAuth
-> PKCE 状态机已实现，具体 provider/browser flow 尚未接入；
+> PKCE 状态机、App Server control plane 与 Desktop browser callback 已实现，具体 provider 尚未接入；
 > PL2–PL4 Proposed
 > 当前 crate 实现契约：[`zeta-rs/plugins/README.md`](../zeta-rs/plugins/README.md)
 > Connector account/lifecycle：[`connectors.md`](connectors.md)
@@ -83,9 +83,10 @@ failure semantics 由 crate
 User/Workspace TOML 与 App Server 已能表达 exact Plugin request 和 desired enablement，但它们
 只是 `zeta-config` intent。Package store 已能安全保存 immutable object，并能把调用方选择的 exact
 installed package 解析为 generation-bound activation snapshot；App Server 可据此自动构造 Connector
-catalog、durable authority 和 package-rooted MCP provider。Plugin authority 现已持久化 installed/active
-refs 和 command receipts，并驱动 live activation 切换；grant、workspace-profile layering 与完整 package
-lifecycle RPC 尚未实现。`docs/tui.md` 也明确要求 Plugin domain projection 进入 canonical
+catalog、durable authority 和 package-rooted MCP provider。Plugin authority 现已分别持久化
+installed/enabled/granted/effective refs 和 command receipts，并驱动 live activation 切换；App Server
+已暴露 list/enable/disable/grant/revokeGrant/uninstall，workspace-profile resolver 与可信 install source
+尚未实现。`docs/tui.md` 也明确要求 Plugin domain projection 进入 canonical
 App Server contract 后，TUI 才能增加管理 feature。TUI 已有可复用的 interaction view stack 与
 tabs/search/selection presentation primitive，但当前没有 Plugin view model 或 `/plugins` command；
 这些 UI 基础设施不改变本节的 backend gate。
@@ -559,8 +560,8 @@ binding variant。
 `zeta-connectors::ConnectorSnapshot`：disconnected entry 进入 discovery，只有认证 owner 通过合法
 generation transition 发布 `ConnectorAccount` 后才输出 ready MCP server ID。当前 API-token adapter、
 SQLite authority、exact activation 到 package-rooted MCP provider 的自动构造、独立 Plugin MCP、
-Connector-bound MCP composition 和通用 OAuth PKCE 状态机已实现。具体 OAuth provider/browser flow
-仍未实现。Plugin enable/update 已能 live replacement，并通过 exact invocation lease 阻止旧 contribution
+Connector-bound MCP composition、通用 OAuth PKCE 状态机和 Desktop browser callback 已实现。具体 OAuth
+provider 仍未实现。Plugin enable/update 已能 live replacement，并通过 exact invocation lease 阻止旧 contribution
 在 authority commit 后开始 dispatch。完整边界由 [`connectors.md`](connectors.md) 维护。
 
 | 概念 | Identity/lifecycle | 例子 |
@@ -577,20 +578,20 @@ runtime 不可用，但不会把 Plugin 标成未安装。
 
 ## 14. App Server API 与客户端
 
-目标 App Server surface：
+当前 App Server surface 与后续演进：
 
-| Method | Authority/effect |
-| --- | --- |
-| `plugin/list` / `plugin/read` | 读取 installed/active/health projection |
-| `plugin/install` | 长操作，创建 package transaction |
-| `plugin/enable` / `plugin/disable` | typed command 修改 profile enablement |
-| `plugin/grant/update` | typed command 修改 explicit grants |
-| `plugin/update` / `plugin/rollback` | exact package activation transaction |
-| `plugin/uninstall` | disable + reference-safe removal |
-| `plugin/operation/read` | 读取长操作 progress/result |
+| 状态 | Method | Authority/effect |
+| --- | --- | --- |
+| ✅ 当前 | `plugin/list` | 读取 installed/enabled/granted/effective projection |
+| ✅ 当前 | `plugin/enable` / `plugin/disable` | exact-package CAS 修改 profile enablement |
+| ✅ 当前 | `plugin/grant` / `plugin/revokeGrant` | exact-package CAS 修改 explicit grants |
+| ✅ 当前 | `plugin/uninstall` | 仅在 disabled + revoked 后移除 authority reference |
+| 尚未完成 | `plugin/install` / `plugin/update` / `plugin/rollback` | 可信 package ingestion 与 exact activation transaction |
+| 尚未完成 | operation read API | 长操作 progress/result |
 
-实际命名在实现时由 App Server 文档统一固定。所有 authority mutation 使用 `CommandId + exact typed
-payload`；download progress 是瞬态 update，最终 installed/active state 是可读取 authority。
+已实现 mutation 使用 `CommandId + expectedRevision + exact package payload`；安装入口不会接受 Renderer
+传入的任意宿主文件路径，后续由可信 ingestion owner 提供 package transaction。download progress 是瞬态
+update，最终 installed/active state 必须来自可读取 authority。
 
 客户端必须展示：
 
@@ -697,7 +698,7 @@ zeta-rs/plugins/src/
 - local development package discovery；
 - filesystem path/schema 安全 fixtures；Archive source 尚未启用，因此 archive ingestion
   fixtures 随对应 source 一起加入；
-- 只读 local package list/read projection；App Server `plugin/list/read` 尚未接入。
+- App Server `plugin/list` 与 lifecycle mutation 已接入；任意 host path install 有意不开放给 Renderer。
 
 当前完成条件：任何 contribution path 都不能逃出已验证 local snapshot root；安装时必须复制到
 content-addressed object、重新验证 exact digest，再原子 promote。mutable local root 不会被发布给 runtime。
@@ -705,13 +706,13 @@ content-addressed object、重新验证 exact digest，再原子 promote。mutab
 ### 阶段 PL1：权威+激活（content store 与 snapshot 已完成）
 
 - ✅ local content-addressed store：unique staging、copy-time validation、digest revalidation、atomic promote；
-- ✅ install/enable/disable/uninstall typed commands；grant command 尚未实现；
+- ✅ install/enable/disable/grant/revoke/uninstall typed authority commands；
 - ✅ exact installed package resolution 与 activation snapshot generation；
 - ✅ durable install/enable/disable/uninstall authority record 与 typed command replay；
-- ✅ live generation subscription、App Server reconcile 与 exact invocation drain；
+- ✅ live revision/activation subscription、App Server lifecycle RPC/reconcile 与 exact invocation drain；
 - Skill contribution vertical slice；
 - Connector contribution 的 normalized projection；
-- 部分具备：user-profile authority 已落地；workspace profile layering、grant 与 startup orphan recovery
+- 部分具备：user-profile authority 已落地；workspace profile layering 与 startup orphan recovery
   尚未完成。
 
 完成条件：失败激活不改变上一 generation，重启可恢复唯一 active package set。

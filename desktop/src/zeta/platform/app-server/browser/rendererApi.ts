@@ -16,6 +16,7 @@ import { createDisconnectedCodeIndexApi } from "../../codeIndex/browser/codeInde
 import { createDisconnectedConnectorApi } from "../../connectors/browser/connectorApi.js";
 import { createDisconnectedToolSearchApi } from "../../toolSearch/browser/toolSearchApi.js";
 import { createDisconnectedLanguageApi } from "../../language/browser/languageApi.js";
+import { createDisconnectedPluginApi } from "../../plugins/browser/pluginApi.js";
 
 export { WebAppServerUnavailableError };
 
@@ -43,6 +44,7 @@ export function createDisconnectedRendererApi(): IRendererHost {
     events: createDisconnectedServerEventApi(),
     codeIndex: createDisconnectedCodeIndexApi(unavailableOperation),
     connectors: createDisconnectedConnectorApi(unavailableOperation),
+    plugins: createDisconnectedPluginApi(unavailableOperation),
     toolSearch: createDisconnectedToolSearchApi(unavailableOperation),
   };
 }
