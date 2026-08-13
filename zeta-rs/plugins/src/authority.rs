@@ -350,7 +350,8 @@ impl PluginActivationAuthority {
         expected_revision: u64,
         package: &PluginMarketplacePackage,
     ) -> Result<PluginInstallResult, PluginError> {
-        self.install_validated(command_id, expected_revision, package.local_package())
+        let package = package.materialize()?;
+        self.install_validated(command_id, expected_revision, &package)
     }
 
     fn install_validated(

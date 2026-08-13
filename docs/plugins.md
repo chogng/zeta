@@ -7,8 +7,8 @@
 > `zeta-rs/connectors`，Plugin projection、durable authority 与 API-token connect/revoke 位于
 > `zeta-rs/ext/connectors`；App Server 已能从注入的 activation 自动接线 Connector 与 MCP，通用 OAuth
 > PKCE/device 状态机、App Server control plane、Desktop/TUI 产品入口与 GitHub providers 已实现；
-> TUF 远端 Marketplace、delegated publisher、完整离线缓存、revocation tombstone 与安全 ZIP ingestion
-> 已实现；PL4 的可执行 Editor Extension 安装/授权声明已实现，Host runtime 不由本 crate 拥有
+> TUF 远端 Marketplace、delegated publisher、离线签名目录缓存、按需安全 ZIP ingestion 与 revocation
+> tombstone 已实现；PL4 的可执行 Editor Extension 安装/授权声明已实现，Host runtime 不由本 crate 拥有
 > 当前 crate 实现契约：[`zeta-rs/plugins/README.md`](../zeta-rs/plugins/README.md)
 > 远端分发实现契约：[`zeta-rs/plugin-marketplace/README.md`](../zeta-rs/plugin-marketplace/README.md)
 > Connector account/lifecycle：[`connectors.md`](connectors.md)
@@ -32,6 +32,8 @@ Plugin 是经过校验和版本管理的扩展包，不是安装后便能执行�
 | 更新或回滚 | 并存校验后的版本并原子切换 | 不原地修改已安装包 |
 | 卸载 | 撤销后续激活并清理可回收内容 | 不删除其他领域拥有的秘密或历史 |
 | 打开正式打包的 Zeta | 从产品内固定的 root 刷新官方 HTTPS Marketplace | 不信任服务器提供的新 root，不自动安装或启用 Plugin |
+| 浏览 Marketplace | 读取已签名 manifest、能力、权限与包统计；离线时可使用仍有效的目录缓存 | 不预下载所有 Plugin ZIP |
+| 安装远端 Plugin | 重新检查 TUF 与撤销状态，只下载所选 exact ZIP，再校验内容摘要 | 不因已浏览或已下载而自动启用、授权 |
 
 ## 1. 结论
 
@@ -650,10 +652,12 @@ runtime 不可用，但不会把 Plugin 标成未安装。
 传入的任意宿主文件路径。`Managed` Marketplace root 由产品分发层注册，`LocalDevelopment` 仅在 host
 显式开启时可用。`RemoteManaged` Marketplace 已通过 host-pinned TUF root 同步 HTTPS catalog：
 timestamp/snapshot/targets 的 threshold、rollback 与 expiry 检查由 TUF verifier 执行；package 必须来自
-`publishers/<publisher>` delegated role，并同时通过 target hash/length、受限 ZIP extraction、manifest
-identity 与 Zeta normalized digest。全仓库缓存只有在所有 package 验证成功后才替换；transport 失败可打开
-仍未过期的最后完整缓存，签名/过期/package 失败不能降级。顶层 revocation target 会写入 durable exact-package
-tombstone，不因后续 feed 缺项自动恢复。download progress 与 catalog 搜索仍未实现。
+`publishers/<publisher>` delegated role。刷新只缓存签名 metadata、`zetaCatalog` discovery metadata 与撤销
+target，不预取 ZIP；安装或更新时才重新检查当前 TUF/revocation authority、读取一个 exact target，并通过
+target hash/length、受限 ZIP extraction、manifest identity 与 Zeta normalized digest。transport 失败可打开
+仍未过期的最后目录缓存；离线安装只允许此前已经 materialize 且再次通过 exact digest 的包。顶层
+revocation target 会写入 durable exact-package tombstone，不因后续 feed 缺项自动恢复。可搜索的 Desktop
+目录已实现；download progress、permission/contribution diff 与 package-cache GC 仍未实现。
 
 正式 package 把只读配置和公开信任根放在
 `zeta-resources/product-services/{product-services.json,marketplace-root.json}`。`zeta-cli` 通过
@@ -798,7 +802,7 @@ content-addressed object、重新验证 exact digest，再原子 promote。mutab
 ### 阶段 PL3：远端目录、signature 与更新增强
 
 - ✅ host-registered Marketplace metadata 与 digest-pinned materialized package ingestion；
-- ✅ TUF 远端 catalog/download、完整离线 cache 与 fail-closed verification；
+- ✅ TUF 远端 signed discovery catalog、离线 metadata cache 与按需 exact package download；
 - ✅ delegated publisher signature、root rotation/expiry/rollback 与顶层 revocation feed；
 - permission/contribution diff；
 - ✅ side-by-side staged update 与 exact rollback；GC 尚未完成。

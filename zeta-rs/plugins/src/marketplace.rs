@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use crate::InstalledPluginRef;
 use crate::LocalPluginPackage;
@@ -71,10 +72,63 @@ pub enum PluginMarketplaceMode {
 }
 
 /// One exact digest-pinned package offered by a Marketplace.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct PluginMarketplacePackage {
     marketplace_id: PluginMarketplaceId,
-    package: LocalPluginPackage,
+    package: InstalledPluginRef,
+    manifest: crate::PluginManifest,
+    stats: PackageFileStats,
+    source: MarketplacePackageSource,
+}
+
+#[derive(Clone)]
+enum MarketplacePackageSource {
+    Local(Arc<LocalPluginPackage>),
+    Deferred(Arc<dyn PluginMarketplacePackageMaterializer>),
+}
+
+/// Materializes one exact Marketplace package only when installation requires its bytes.
+///
+/// Remote implementations must re-establish their distribution trust boundary, enforce package
+/// size limits, and return a canonically validated local package matching the requested digest.
+pub trait PluginMarketplacePackageMaterializer: Send + Sync {
+    fn materialize(
+        &self,
+        package: &InstalledPluginRef,
+    ) -> Result<LocalPluginPackage, PluginMarketplaceMaterializationError>;
+}
+
+/// Sanitized failure category returned across a Marketplace distribution boundary.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PluginMarketplaceMaterializationError {
+    SourceUnavailable,
+    PackageUnsafe,
+}
+
+/// Signed discovery metadata for one remote package whose bytes are fetched on demand.
+#[derive(Clone)]
+pub struct VerifiedRemotePluginPackage {
+    manifest: crate::PluginManifest,
+    digest: PluginPackageDigest,
+    stats: PackageFileStats,
+    materializer: Arc<dyn PluginMarketplacePackageMaterializer>,
+}
+
+impl VerifiedRemotePluginPackage {
+    /// Binds signed manifest metadata and bounded statistics to an exact package materializer.
+    pub fn new(
+        manifest: crate::PluginManifest,
+        digest: PluginPackageDigest,
+        stats: PackageFileStats,
+        materializer: Arc<dyn PluginMarketplacePackageMaterializer>,
+    ) -> Self {
+        Self {
+            manifest,
+            digest,
+            stats,
+            materializer,
+        }
+    }
 }
 
 impl PluginMarketplacePackage {
@@ -83,25 +137,48 @@ impl PluginMarketplacePackage {
     }
 
     pub fn package_ref(&self) -> InstalledPluginRef {
-        InstalledPluginRef {
-            id: self.package.manifest().id.clone(),
-            version: self.package.manifest().version.clone(),
-            digest: self.package.package_digest().clone(),
-        }
+        self.package.clone()
     }
 
     /// Returns the validated manifest used to describe this exact Marketplace package.
     pub fn manifest(&self) -> &crate::PluginManifest {
-        self.package.manifest()
+        &self.manifest
     }
 
     /// Returns bounded package statistics captured by the canonical package validator.
     pub fn stats(&self) -> PackageFileStats {
-        self.package.stats()
+        self.stats
     }
 
-    pub(crate) fn local_package(&self) -> &LocalPluginPackage {
-        &self.package
+    pub(crate) fn materialize(&self) -> Result<LocalPluginPackage, PluginError> {
+        let package = match &self.source {
+            MarketplacePackageSource::Local(package) => package.as_ref().clone(),
+            MarketplacePackageSource::Deferred(materializer) => materializer
+                .materialize(&self.package)
+                .map_err(materialization_error)?,
+        };
+        if package.manifest() != &self.manifest
+            || package.manifest().id != self.package.id
+            || package.manifest().version != self.package.version
+            || package.package_digest() != &self.package.digest
+        {
+            return Err(marketplace_error(
+                "materialized Plugin package does not match signed discovery metadata",
+            ));
+        }
+        Ok(package)
+    }
+}
+
+impl std::fmt::Debug for PluginMarketplacePackage {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("PluginMarketplacePackage")
+            .field("marketplace_id", &self.marketplace_id)
+            .field("package", &self.package)
+            .field("manifest", &self.manifest)
+            .field("stats", &self.stats)
+            .finish_non_exhaustive()
     }
 }
 
@@ -158,7 +235,14 @@ impl PluginMarketplace {
             };
             let value = PluginMarketplacePackage {
                 marketplace_id: id.clone(),
-                package,
+                package: InstalledPluginRef {
+                    id: package.manifest().id.clone(),
+                    version: package.manifest().version.clone(),
+                    digest: package.package_digest().clone(),
+                },
+                manifest: package.manifest().clone(),
+                stats: package.stats(),
+                source: MarketplacePackageSource::Local(Arc::new(package)),
             };
             if packages.insert(key, value).is_some() {
                 return Err(marketplace_error(
@@ -171,6 +255,47 @@ impl PluginMarketplace {
             mode,
             revision: PluginPackageDigest::sha256(bytes),
             packages,
+        })
+    }
+
+    /// Creates a remote catalog from metadata already verified by a product-owned distributor.
+    ///
+    /// Package bytes remain deferred until installation. The supplied materializers are still
+    /// required to verify that downloaded content matches the signed manifest and digest.
+    pub fn from_verified_remote(
+        id: PluginMarketplaceId,
+        revision: PluginPackageDigest,
+        packages: impl IntoIterator<Item = VerifiedRemotePluginPackage>,
+    ) -> Result<Self, PluginError> {
+        let mut indexed = BTreeMap::new();
+        for package in packages {
+            let package_ref = InstalledPluginRef {
+                id: package.manifest.id.clone(),
+                version: package.manifest.version.clone(),
+                digest: package.digest,
+            };
+            let key = MarketplacePackageKey {
+                id: package_ref.id.clone(),
+                version: package_ref.version.clone(),
+            };
+            let value = PluginMarketplacePackage {
+                marketplace_id: id.clone(),
+                package: package_ref,
+                manifest: package.manifest,
+                stats: package.stats,
+                source: MarketplacePackageSource::Deferred(package.materializer),
+            };
+            if indexed.insert(key, value).is_some() {
+                return Err(marketplace_error(
+                    "Plugin Marketplace contains a duplicate Plugin version",
+                ));
+            }
+        }
+        Ok(Self {
+            id,
+            mode: PluginMarketplaceMode::RemoteManaged,
+            revision,
+            packages: indexed,
         })
     }
 
@@ -202,7 +327,7 @@ impl PluginMarketplace {
             .packages
             .get(&key)
             .ok_or_else(|| marketplace_error("Plugin is not available in this Marketplace"))?;
-        if resolved.package.package_digest() != &package.digest {
+        if resolved.package.digest != package.digest {
             return Err(marketplace_error(
                 "Plugin Marketplace package digest did not match the request",
             ));
@@ -507,6 +632,18 @@ fn validate_marketplace_root(root: &Path) -> Result<PathBuf, PluginError> {
 
 fn marketplace_error(message: impl Into<String>) -> PluginError {
     PluginError::new(PluginErrorKind::SourceUnavailable, message)
+}
+
+fn materialization_error(error: PluginMarketplaceMaterializationError) -> PluginError {
+    match error {
+        PluginMarketplaceMaterializationError::SourceUnavailable => marketplace_error(
+            "Plugin Marketplace package could not be materialized from its verified source",
+        ),
+        PluginMarketplaceMaterializationError::PackageUnsafe => PluginError::new(
+            PluginErrorKind::PackageUnsafe,
+            "Plugin Marketplace package did not match signed metadata",
+        ),
+    }
 }
 
 fn profile_command_id(

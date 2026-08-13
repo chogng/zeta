@@ -30,17 +30,19 @@ use zeta_http_client::HttpClientError;
 use zeta_http_client::HttpRequest;
 use zeta_http_client::HttpResponse;
 use zeta_plugins::LocalPluginPackage;
+use zeta_plugins::PluginActivationAuthority;
+use zeta_plugins::PluginAuthorityCommandId;
 use zeta_plugins::PluginMarketplaceId;
 use zeta_plugins::PluginMarketplaceMode;
+use zeta_plugins::PluginMarketplaceService;
 use zip::ZipWriter;
 use zip::write::SimpleFileOptions;
 
-use crate::RemoteMarketplaceErrorKind;
 use crate::RemotePluginMarketplace;
 use crate::RemotePluginMarketplaceConfig;
 
 #[test]
-fn signed_distribution_materializes_and_revalidates_the_complete_offline_cache() {
+fn signed_catalog_defers_package_download_and_revalidates_on_demand_cache() {
     let fixture = SignedDistributionFixture::create();
     let client = Arc::new(FixtureHttpClient {
         root: fixture.repository.path().to_path_buf(),
@@ -67,6 +69,10 @@ fn signed_distribution_materializes_and_revalidates_the_complete_offline_cache()
         online.marketplace().list()[0].package_ref(),
         fixture.package
     );
+    assert!(!fixture.cache.path().join("packages").exists());
+    assert!(
+        find_file_with_extension(&fixture.cache.path().join("repository/targets"), "zip").is_none()
+    );
 
     client.offline.store(true, Ordering::Release);
     let offline = marketplace.sync().unwrap();
@@ -75,14 +81,41 @@ fn signed_distribution_materializes_and_revalidates_the_complete_offline_cache()
         fixture.package
     );
 
-    let cached_archive =
-        find_file_with_extension(&fixture.cache.path().join("repository/targets"), "zip");
-    fs::write(cached_archive, b"tampered").unwrap();
-    let error = marketplace.open_cached().unwrap_err();
-    assert_eq!(
-        error.kind(),
-        RemoteMarketplaceErrorKind::DistributionUnavailable
+    client.offline.store(false, Ordering::Release);
+    let authority = PluginActivationAuthority::open(fixture.cache.path().join("profile")).unwrap();
+    let service = PluginMarketplaceService::new(authority, [offline.into_marketplace()]).unwrap();
+    service
+        .install(
+            PluginAuthorityCommandId::new("install-on-demand").unwrap(),
+            0,
+            &PluginMarketplaceId::new("zeta-test").unwrap(),
+            &fixture.package,
+        )
+        .unwrap();
+    let cached_package = fixture.cache.path().join("packages").join(
+        fixture
+            .package
+            .digest
+            .as_str()
+            .trim_start_matches("sha256:"),
     );
+    assert!(cached_package.join(".zeta-plugin/plugin.json").is_file());
+
+    fs::write(cached_package.join("skills/review/SKILL.md"), b"tampered").unwrap();
+    client.offline.store(true, Ordering::Release);
+    let cached = marketplace.open_cached().unwrap();
+    let authority =
+        PluginActivationAuthority::open(fixture.cache.path().join("tamper-profile")).unwrap();
+    let service = PluginMarketplaceService::new(authority, [cached.into_marketplace()]).unwrap();
+    let error = service
+        .install(
+            PluginAuthorityCommandId::new("install-tampered").unwrap(),
+            0,
+            &PluginMarketplaceId::new("zeta-test").unwrap(),
+            &fixture.package,
+        )
+        .unwrap_err();
+    assert_eq!(error.kind(), zeta_plugins::PluginErrorKind::PackageUnsafe);
 }
 
 struct SignedDistributionFixture {
@@ -131,6 +164,15 @@ impl SignedDistributionFixture {
                 "id": package_ref.id,
                 "version": package_ref.version,
                 "packageDigest": package_ref.digest,
+            }),
+        );
+        package_target.custom.insert(
+            "zetaCatalog".into(),
+            serde_json::json!({
+                "schemaVersion": 1,
+                "manifest": package.manifest(),
+                "packageFileCount": package.stats().file_count,
+                "packageSizeBytes": package.stats().total_bytes,
             }),
         );
         let revocations_target = Target::from_path(&revocations_path).await.unwrap();
@@ -274,7 +316,10 @@ fn write_target(repository: &Path, name: &TargetName, bytes: Vec<u8>) {
     fs::write(path, bytes).unwrap();
 }
 
-fn find_file_with_extension(root: &Path, extension: &str) -> PathBuf {
+fn find_file_with_extension(root: &Path, extension: &str) -> Option<PathBuf> {
+    if !root.exists() {
+        return None;
+    }
     let mut directories = vec![root.to_path_buf()];
     while let Some(directory) = directories.pop() {
         for entry in fs::read_dir(directory).unwrap() {
@@ -282,11 +327,11 @@ fn find_file_with_extension(root: &Path, extension: &str) -> PathBuf {
             if entry.file_type().unwrap().is_dir() {
                 directories.push(entry.path());
             } else if entry.path().extension().and_then(|value| value.to_str()) == Some(extension) {
-                return entry.path();
+                return Some(entry.path());
             }
         }
     }
-    panic!("expected cached target with extension {extension}");
+    None
 }
 
 struct FixtureHttpClient {

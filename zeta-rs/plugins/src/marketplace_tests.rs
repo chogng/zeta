@@ -1,4 +1,7 @@
 use std::fs;
+use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 
 use tempfile::tempdir;
 
@@ -13,6 +16,26 @@ use crate::PluginAuthorityCommand;
 use crate::PluginAuthorityCommandId;
 use crate::PluginAuthorityCommandRequest;
 use crate::PluginErrorKind;
+use crate::PluginMarketplaceId;
+use crate::PluginMarketplaceMaterializationError;
+use crate::PluginMarketplacePackageMaterializer;
+use crate::PluginPackageDigest;
+use crate::VerifiedRemotePluginPackage;
+
+struct CountingMaterializer {
+    package: LocalPluginPackage,
+    calls: AtomicUsize,
+}
+
+impl PluginMarketplacePackageMaterializer for CountingMaterializer {
+    fn materialize(
+        &self,
+        _package: &crate::InstalledPluginRef,
+    ) -> Result<LocalPluginPackage, PluginMarketplaceMaterializationError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        Ok(self.package.clone())
+    }
+}
 
 fn write_package(root: &std::path::Path, version: &str, body: &str) -> LocalPluginPackage {
     fs::create_dir_all(root.join(".zeta-plugin")).unwrap();
@@ -79,6 +102,44 @@ fn marketplace_install_stages_digest_pinned_content_without_granting_it() {
     assert_eq!(authority.snapshot().installed(), &[package]);
     assert!(authority.snapshot().granted().is_empty());
     assert!(authority.snapshot().activation().packages().is_empty());
+}
+
+#[test]
+fn verified_remote_catalog_defers_package_materialization_until_install() {
+    let root = tempdir().unwrap();
+    let package = write_package(&root.path().join("source"), "1.0.0", "# Deferred");
+    let materializer = Arc::new(CountingMaterializer {
+        package: package.clone(),
+        calls: AtomicUsize::new(0),
+    });
+    let marketplace = PluginMarketplace::from_verified_remote(
+        PluginMarketplaceId::new("acme").unwrap(),
+        PluginPackageDigest::sha256(b"signed catalog"),
+        [VerifiedRemotePluginPackage::new(
+            package.manifest().clone(),
+            package.package_digest().clone(),
+            package.stats(),
+            materializer.clone(),
+        )],
+    )
+    .unwrap();
+    let package_ref = marketplace.list()[0].package_ref();
+
+    assert_eq!(marketplace.list()[0].manifest(), package.manifest());
+    assert_eq!(materializer.calls.load(Ordering::SeqCst), 0);
+
+    let authority = PluginActivationAuthority::open(root.path().join("profile")).unwrap();
+    let service = PluginMarketplaceService::new(authority, [marketplace]).unwrap();
+    service
+        .install(
+            PluginAuthorityCommandId::new("install-deferred").unwrap(),
+            0,
+            &PluginMarketplaceId::new("acme").unwrap(),
+            &package_ref,
+        )
+        .unwrap();
+
+    assert_eq!(materializer.calls.load(Ordering::SeqCst), 1);
 }
 
 #[test]

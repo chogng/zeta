@@ -26,6 +26,8 @@ Marketplace install/update 先复制、复验并原子提升到 content-addresse
 | `LocalPluginPackage::load` | 验证一个 exact root、digest 和所有 contribution path | copy/install/immutability |
 | `LocalPluginCatalog::discover` | 读取一个 package 或目录下的直接 package children | recursive marketplace search |
 | `PluginMarketplace::open` | 校验 host 注册 catalog、无链接 package path 与 exact package digest | 网络下载、publisher 签名、客户端宿主路径 |
+| `PluginMarketplace::from_verified_remote` | 接收产品分发层已验证的签名 manifest、digest、统计与延迟 materializer | TUF/HTTP、自动下载、grant |
+| `PluginMarketplacePackageMaterializer` | 安装时把一个 exact ref materialize 为 canonical `LocalPluginPackage` | 目录发现、enable、运行时执行 |
 | `PluginMarketplaceService` | Marketplace install、staged update、rollback 与 profile request reconcile | 自动 grant、远端 catalog 同步、Workspace trust 决策 |
 | `PluginPackageStore::install_local` | stage、复制、复验 digest 并原子 promote immutable object | enablement、grant、activation |
 | `PluginPackageStore::read` | 按 exact installed ref 重新验证 object | authority lookup、版本选择 |
@@ -180,9 +182,10 @@ filesystem。error message 只包含稳定 identity、relative path 与 sanitize
 仍可被外部修改。runtime consumer 不能把它当 immutable root；必须先通过 `PluginPackageStore`
 复制、重新验证并从 content-addressed object root 绑定 contribution。
 
-`PluginMarketplace::open` 的 root 只能由产品 host 注册。catalog entry 只暴露 Marketplace ID、
-Plugin ID/version/digest；Renderer 不能提交宿主路径。`Managed` 表示 root 已由受信产品分发层选择，
-`LocalDevelopment` 表示显式开发入口；两种模式都执行相同 package、digest、link 和 containment 校验。
+`PluginMarketplace::open` 的 root 只能由产品 host 注册。`PluginMarketplace::from_verified_remote`
+只接受产品分发层已经验证的 discovery metadata，并把 package bytes 延迟到安装时通过
+`PluginMarketplacePackageMaterializer` 获取；返回的 `LocalPluginPackage` 仍须与 signed manifest、ID、
+version 和 digest 完全一致。Renderer 只能提交 Marketplace ID 与 exact package ref，不能提交宿主路径。
 
 ## 验证
 
@@ -205,8 +208,9 @@ profile authority 的只读可用性判断，不从 Workspace 自动安装或授
 会把旧 active package 保守迁移为 enabled + granted。当前 object directory 的只读性由
 “不暴露可写根路径 + digest revalidation”保证，
 尚未施加平台级 immutable flag，也没有 orphan staging startup recovery；失败 install commit 和 uninstall
-会精确回收无引用 object。受信 host 可注册 materialized Marketplace root，但公网 catalog 下载、
-publisher signature/revocation 与 GC authority 尚未实现；package-rooted MCP consumer
+会精确回收无引用 object。受信 host 可注册 materialized Marketplace root；公网 catalog 下载、
+publisher signature/revocation 已由 `zeta-plugin-marketplace` 实现，package cache 与 content store 的 GC
+authority 尚未实现；package-rooted MCP consumer
 已位于 `zeta-mcp-extension`，不能反向并入本 crate。这些能力应在新的 private
 `authority/resolution` modules 中接入，不扩大 loader/store 为隐式 enable manager。
 
