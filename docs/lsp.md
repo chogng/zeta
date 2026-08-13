@@ -29,7 +29,7 @@ Automatic 或 Enabled。未配置的 server 默认 Disabled，不会自动拉起
 | 日志、show message 与 work-done progress | ✅ Desktop 将日志投影到 Output/Language Servers，showMessage 使用 Workbench Dialog，活动进度显示在状态栏与 Output | App Server + Desktop Workbench |
 | 显式替换服务器并恢复文档 | ✅ 新实例重放成功后切换 route/incarnation | 宿主需暂存 replacement 早期事件 |
 | 配置与发现 Rust/JSON/Shell server | ✅ 独立 Settings draft、revision-safe mode/path、catalog 校验与热重配 | 扩展安装 provider/UI |
-| 用共享 Node 运行已验证 CSS package | ✅ CSS provider 生成 `node <entrypoint> --stdio`，App Server 复用现有 supervisor/client | Marketplace 消费端仍需完成下载、用户确认与 registry materialization |
+| 用共享 Node-compatible runtime 运行已验证 CSS package | ✅ Desktop 复用 Electron run-as-Node，其他宿主回退 packaged Node；CSS provider 生成 `<runtime> <entrypoint> --stdio`，App Server 复用现有 supervisor/client | Marketplace 消费端仍需完成下载、用户确认与 registry materialization |
 | 意外退出、退避重启和 crash-loop | ✅ 断连 retirement、有限指数退避、状态展示和全文重放 | `zeta-language-service` + Native |
 | 安装、更新和选择其他 server | 部分具备；verified side-by-side installer 已完成，release provider/UI 尚缺 | distribution / config / Native |
 | 动态注册与 work-done progress | ✅ 按 server incarnation 隔离，静态与动态 capability 共同参与请求 gate | `zeta-lsp` + `zeta-language-service` |
@@ -42,7 +42,7 @@ Automatic 或 Enabled。未配置的 server 默认 Disabled，不会自动拉起
 flowchart LR
     Host["Native / Desktop host"] --> Catalog["zeta-language-server-catalog"]
     Pack["Verified language pack"] --> Provider["LanguageServerProvider"]
-    Node["Zeta managed Node"] --> Provider
+    Node["Managed JS runtime<br/>Electron or packaged Node"] --> Provider
     Provider --> Catalog
     Catalog --> Service["zeta-language-service"]
     Service --> Runtime["zeta-lsp runtime"]
@@ -59,7 +59,7 @@ flowchart LR
    command 更新，`config/changed` 只作为重新读取权威 snapshot 的失效提示。
 2. 产品宿主把 preference、冻结的 executable candidates 和 execution policy 交给 catalog；catalog 只在候选
    可 canonicalize、为普通可执行文件时产生 resolved definition。对 package-backed CSS，宿主先把
-   distribution 返回的 `InstalledLanguageServer` 和 package 内共享 Node 注入
+   distribution 返回的 `InstalledLanguageServer` 和宿主选择的共享 Node-compatible runtime 注入
    `CssLanguageServerProvider`；provider 产生同样的 definition，不直接启动 child。
 3. 产品宿主把 definitions 交给 `zeta-language-service`；无 definition 时禁用，不启动进程。
 4. 协调层把 resolved command 委托给 `zeta-lsp`；后者启动或接入 transport、发送 initialize，
@@ -132,7 +132,9 @@ App Server 已经是 Desktop 的 workspace/document authority 与 LSP IPC bounda
 - 唯一 language route、EditorHost revision binding、显式 server replacement 和全文 replay；
 - 独立 `zeta-language-server-catalog`、Rust built-in identity、frozen PATH resolution 和 policy gate；
 - `LanguageServerProviderRegistry`、`ManagedNodeRuntime` 和 verified CSS package provider；
-- 发布包中的单份锁定 Node.js runtime、license 和 clean-environment `node <entrypoint> --stdio`；
+- Desktop 通过 allowlisted `ZETA_ELECTRON_RUN_AS_NODE_PATH` 复用 exact Electron executable，且只在
+  language-server child 的 clean environment 中设置 `ELECTRON_RUN_AS_NODE=1`；
+- standalone/headless package 保留锁定 Node.js runtime 与 license 作为非 Electron 回退；
 - App Server 将显式启用的 provider definition 与既有 built-in catalog definition 合并后交给同一 supervisor；
 - 独立 `zeta-language-service` supervisor、显式 enablement、resolved definition 校验、generation gate；
 - Native 文档 open/change/save/close、workspace replacement 与 event-loop adapter；

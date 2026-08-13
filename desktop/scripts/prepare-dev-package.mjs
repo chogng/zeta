@@ -15,6 +15,15 @@ const nodeCacheRoot = join(repositoryRoot, "third_party", ".cache", "node");
 const bubblewrapLockPath = join(repositoryRoot, "third_party", "bubblewrap", "runtime-lock.json");
 const bubblewrapCacheRoot = join(repositoryRoot, "third_party", ".cache", "bubblewrap");
 const archiveBufferLimit = 256 * 1024 * 1024;
+const javascriptRuntimeKinds = new Set(["host-provided-node", "packaged-node"]);
+
+export function parseJavaScriptRuntime(cliArguments) {
+  if (cliArguments.length === 0) return "host-provided-node";
+  if (cliArguments.length === 2 && cliArguments[0] === "--javascript-runtime" && javascriptRuntimeKinds.has(cliArguments[1])) {
+    return cliArguments[1];
+  }
+  throw new Error("Usage: node scripts/prepare-dev-package.mjs [--javascript-runtime host-provided-node|packaged-node]");
+}
 
 export function hostTarget(platform = process.platform, architecture = process.arch) {
   const targets = {
@@ -433,14 +442,10 @@ export async function assemblePackage(staging, target, platform, executables, ri
   const binDirectory = join(staging, "bin");
   const pathDirectory = join(staging, "zeta-path");
   const resourcesDirectory = join(staging, "zeta-resources");
-  const nodeDirectory = join(resourcesDirectory, "node", "bin");
-  const nodeLicenseDirectory = join(resourcesDirectory, "licenses", "node");
   const ripgrepLicenseDirectory = join(resourcesDirectory, "licenses", "ripgrep");
   const vscodeLicenseDirectory = join(resourcesDirectory, "licenses", "vscode");
   await mkdir(binDirectory, { recursive: true });
   await mkdir(pathDirectory, { recursive: true });
-  await mkdir(nodeDirectory, { recursive: true });
-  await mkdir(nodeLicenseDirectory, { recursive: true });
   await mkdir(ripgrepLicenseDirectory, { recursive: true });
   await mkdir(vscodeLicenseDirectory, { recursive: true });
   await copyBuiltinSkills(join(resourcesDirectory, "skills"));
@@ -448,21 +453,20 @@ export async function assemblePackage(staging, target, platform, executables, ri
   await copyRegularTree(join(repositoryRoot, "resources", "product-services"), join(resourcesDirectory, "product-services"), "product services");
   await copyExecutable(executables.zeta, join(binDirectory, zetaName), isWindows);
   await copyExecutable(ripgrep.executable, join(pathDirectory, rgName), isWindows);
-  await copyExecutable(node.executable, join(nodeDirectory, isWindows ? "node.exe" : "node"), isWindows);
-  await copyFile(node.license, join(nodeLicenseDirectory, "LICENSE"));
+  if (node) {
+    const nodeDirectory = join(resourcesDirectory, "node", "bin");
+    const nodeLicenseDirectory = join(resourcesDirectory, "licenses", "node");
+    await mkdir(nodeDirectory, { recursive: true });
+    await mkdir(nodeLicenseDirectory, { recursive: true });
+    await copyExecutable(node.executable, join(nodeDirectory, isWindows ? "node.exe" : "node"), isWindows);
+    await copyFile(node.license, join(nodeLicenseDirectory, "LICENSE"));
+  }
   for (const name of ["LICENSE-MIT", "UNLICENSE"]) {
     await copyFile(join(repositoryRoot, "third_party", "ripgrep", name), join(ripgrepLicenseDirectory, name));
   }
   await copyFile(join(repositoryRoot, "third_party", "vscode", "LICENSE.txt"), join(vscodeLicenseDirectory, "LICENSE.txt"));
 
   const components = {
-    node: {
-      archive: node.archive,
-      archiveSha256: node.archiveSha256,
-      binarySha256: node.binarySha256,
-      source: node.source,
-      version: node.version,
-    },
     ripgrep: {
       archive: ripgrep.archive,
       archiveSha256: ripgrep.archiveSha256,
@@ -471,6 +475,15 @@ export async function assemblePackage(staging, target, platform, executables, ri
       version: ripgrep.version,
     },
   };
+  if (node) {
+    components.node = {
+      archive: node.archive,
+      archiveSha256: node.archiveSha256,
+      binarySha256: node.binarySha256,
+      source: node.source,
+      version: node.version,
+    };
+  }
   if (isWindows) {
     await copyExecutable(executables.commandRunner, join(resourcesDirectory, "zeta-command-runner.exe"), true);
     await copyExecutable(executables.sandboxSetup, join(resourcesDirectory, "zeta-windows-sandbox-setup.exe"), true);
@@ -496,7 +509,8 @@ export async function assemblePackage(staging, target, platform, executables, ri
   const metadata = {
     components,
     entrypoint: `bin/${zetaName}`,
-    layoutVersion: 1,
+    javascriptRuntime: { kind: node ? "packagedNode" : "hostProvidedNode" },
+    layoutVersion: 2,
     pathDir: "zeta-path",
     resourcesDir: "zeta-resources",
     target,
@@ -513,13 +527,42 @@ async function requireFile(path) {
   }
 }
 
+async function pathExists(path) {
+  try {
+    await stat(path);
+    return true;
+  } catch (error) {
+    if (error?.code === "ENOENT") return false;
+    throw error;
+  }
+}
+
 async function validatePackage(packageRoot, platform) {
   const isWindows = platform === "win32";
-  await requireFile(join(packageRoot, "zeta-package.json"));
+  const metadataPath = join(packageRoot, "zeta-package.json");
+  await requireFile(metadataPath);
+  const metadata = JSON.parse(await readFile(metadataPath, "utf8"));
+  if (metadata.layoutVersion !== 2 || typeof metadata.components !== "object" || metadata.components === null) {
+    throw new Error("Invalid package metadata");
+  }
   await requireFile(join(packageRoot, "bin", isWindows ? "zeta.exe" : "zeta"));
   await requireFile(join(packageRoot, "zeta-path", isWindows ? "rg.exe" : "rg"));
-  await requireFile(join(packageRoot, "zeta-resources", "node", "bin", isWindows ? "node.exe" : "node"));
-  await requireFile(join(packageRoot, "zeta-resources", "licenses", "node", "LICENSE"));
+  if (metadata.javascriptRuntime?.kind === "packagedNode") {
+    if (typeof metadata.components.node !== "object" || metadata.components.node === null) {
+      throw new Error("Packaged Node runtime metadata is missing");
+    }
+    await requireFile(join(packageRoot, "zeta-resources", "node", "bin", isWindows ? "node.exe" : "node"));
+    await requireFile(join(packageRoot, "zeta-resources", "licenses", "node", "LICENSE"));
+  } else if (metadata.javascriptRuntime?.kind === "hostProvidedNode") {
+    if (metadata.components.node !== undefined) {
+      throw new Error("Host-provided runtime package contains Node metadata");
+    }
+    if (await pathExists(join(packageRoot, "zeta-resources", "node")) || await pathExists(join(packageRoot, "zeta-resources", "licenses", "node"))) {
+      throw new Error("Host-provided runtime package contains a standalone Node payload");
+    }
+  } else {
+    throw new Error("Invalid package JavaScript runtime declaration");
+  }
   await requireFile(join(packageRoot, "zeta-resources", "licenses", "ripgrep", "LICENSE-MIT"));
   await requireFile(join(packageRoot, "zeta-resources", "licenses", "ripgrep", "UNLICENSE"));
   await requireFile(join(packageRoot, "zeta-resources", "licenses", "vscode", "LICENSE.txt"));
@@ -593,12 +636,15 @@ export async function replaceDirectoryAtomically(output, build) {
   }
 }
 
-export async function prepareDevelopmentPackage() {
+export async function prepareDevelopmentPackage(javascriptRuntime = "host-provided-node") {
+  if (!javascriptRuntimeKinds.has(javascriptRuntime)) {
+    throw new Error(`Unsupported JavaScript runtime package mode: ${javascriptRuntime}`);
+  }
   const target = hostTarget();
   const isWindows = process.platform === "win32";
   const executables = await buildFirstPartyExecutables(target, process.platform);
   const ripgrep = await resolveRipgrep(target, isWindows);
-  const node = await resolveNode(target, isWindows);
+  const node = javascriptRuntime === "packaged-node" ? await resolveNode(target, isWindows) : undefined;
   await replaceDirectoryAtomically(outputDirectory, (staging) => assemblePackage(
     staging,
     target,
@@ -607,12 +653,12 @@ export async function prepareDevelopmentPackage() {
     ripgrep,
     node,
   ));
-  console.log(`Prepared Zeta Desktop development package at ${outputDirectory}`);
+  console.log(`Prepared Zeta development package (${javascriptRuntime}) at ${outputDirectory}`);
 }
 
 const isMain = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
-  prepareDevelopmentPackage().catch((error) => {
+  prepareDevelopmentPackage(parseJavaScriptRuntime(process.argv.slice(2))).catch((error) => {
     console.error(error instanceof Error ? error.message : error);
     process.exitCode = 1;
   });

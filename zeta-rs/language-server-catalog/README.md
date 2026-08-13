@@ -20,8 +20,8 @@ workspace trust。
 | `LanguageServerCatalogResolution` | 同时返回 resolved definitions 与每个内置 server 的 availability | 表示 server 已经 initialize |
 | `LanguageServerDefinition` | 冻结唯一 route、canonical executable command 和 initialize options | 在 runtime 内重新查询 PATH |
 | `LanguageServerProvider` / `LanguageServerProviderRegistry` | 把已验证、已安装的 server 包和运行时绑定为稳定 language route 与 definition | 下载、验签、启动进程或监督重启 |
-| `ManagedNodeRuntime` | 只从 Zeta package 解析一份 Node，冻结 canonical executable，生成 clean-environment command | 回退 host `PATH` 或允许 language pack 携带 Node |
-| `CssLanguageServerProvider` | 用共享 Node 运行 verified CSS package 入口，route `css`/`less`/`scss` | 复制 LSP client/supervisor 或解释 Marketplace metadata |
+| `ManagedNodeRuntime` | 冻结 canonical Node-compatible executable；Desktop 使用 Electron run-as-Node，其他 package 使用 standalone Node，并生成 clean-environment command | 回退 host `PATH` 或允许 language pack 携带 Node |
+| `CssLanguageServerProvider` | 用共享 Node-compatible runtime 运行 verified CSS package 入口，route `css`/`less`/`scss` | 复制 LSP client/supervisor 或解释 Marketplace metadata |
 
 当前内置项包括 `rust-analyzer → rust`、`vscode-json-language-server --stdio → json/jsonc` 和
 `bash-language-server start → shellscript`。CSS 是独立 provider，不进入 PATH built-in 列表。Native/App Server 从
@@ -45,9 +45,11 @@ Native composition
 
 verified CSS package composition
 ├─ InstalledLanguageServer::executable
-├─ InstallContext::bundled_resource("node/bin/node[.exe]")
+├─ Desktop: ZETA_ELECTRON_RUN_AS_NODE_PATH → exact Electron executable
+├─ other packaged hosts: InstallContext::bundled_resource("node/bin/node[.exe]")
 └─ CssLanguageServerProvider::definition
-   ├─ packaged → managed Node + package entrypoint + --stdio + clean environment
+   ├─ packaged → selected runtime + package entrypoint + --stdio + clean environment
+   │  └─ Electron source only: ELECTRON_RUN_AS_NODE=1
    └─ explicit override → authoritative native executable
       → LanguageServerDefinition
       → zeta-language-service
@@ -81,8 +83,8 @@ cargo clippy --manifest-path Cargo.toml -p zeta-language-server-catalog --all-ta
 ```
 
 测试覆盖三项 built-in 的 Automatic PATH resolution/route/launch arguments、execution policy gate、
-失效 explicit override 不回退，以及 CSS package 的 managed Node command、clean environment、native
-override 和 duplicate provider gate。
+失效 explicit override 不回退，以及 CSS package 的 standalone/Electron runtime command、clean
+environment、native override 和 duplicate provider gate。
 
 当前限制：
 
@@ -90,7 +92,7 @@ override 和 duplicate provider gate。
 - ✅ `zeta-config` 持久化 mode/path、App Server typed mutation 与 Native 三项 server Settings selector；
 - ✅ JSON/JSONC、Shell server definitions 与持久化 mode/path 映射；
 - ✅ 独立 `zeta-language-server-distribution` 提供 checksum 验证、原子 staging、side-by-side 安装和回滚基础；
-- ✅ verified CSS package provider、Zeta-managed Node 启动命令、App Server provider 组合点与 native override；
+- ✅ verified CSS package provider、managed Node-compatible runtime 启动命令、App Server provider 组合点与 native override；
 - 尚未完成：Marketplace CSS target 的通用 TUF 下载/解压 adapter、compatibility probe、
   用户确认/安装 UI 和从安装 receipt 自动构建 provider registry；
 - 尚未完成：组织策略或更细的 per-server executable grant。

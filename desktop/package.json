@@ -29,7 +29,7 @@
     "predev:preload": "node scripts/sync-generated-resources.mjs",
     "predev:renderer": "node scripts/sync-generated-resources.mjs",
     "predev:web": "node scripts/sync-generated-resources.mjs",
-    "predev:web:full": "node scripts/sync-generated-resources.mjs && node scripts/prepare-dev-package.mjs",
+    "predev:web:full": "node scripts/sync-generated-resources.mjs && node scripts/prepare-dev-package.mjs --javascript-runtime packaged-node",
     "pretest:main": "node scripts/sync-generated-resources.mjs",
     "pretypecheck:renderer": "node scripts/sync-generated-resources.mjs",
     "build": "tsc -p tsconfig.main.json && tsc -p tsconfig.preload.json && node scripts/verify-sandbox-preload.mjs && tsc -p tsconfig.renderer.json --noEmit && vite build",

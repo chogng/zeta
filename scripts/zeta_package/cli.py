@@ -67,6 +67,15 @@ def parse_arguments(arguments: Optional[Sequence[str]] = None) -> argparse.Names
         ),
     )
     parser.add_argument(
+        "--javascript-runtime",
+        choices=("packaged-node", "host-provided-node"),
+        default="packaged-node",
+        help=(
+            "Package the locked standalone Node runtime, or require a product host "
+            "such as Electron to inject an exact Node-compatible executable."
+        ),
+    )
+    parser.add_argument(
         "--bwrap-bin",
         type=Path,
         help=(
@@ -150,11 +159,17 @@ def main(arguments: Optional[Sequence[str]] = None) -> int:
         args.cache_root.expanduser().resolve(),
         explicit_binary=args.rg_bin,
     )
-    node = resolve_node(
-        spec,
-        args.node_lock.expanduser().resolve(),
-        args.node_cache_root.expanduser().resolve(),
-        explicit_binary=args.node_bin,
+    if args.javascript_runtime == "host-provided-node" and args.node_bin is not None:
+        raise RuntimeError("--node-bin cannot be used with --javascript-runtime host-provided-node")
+    node = (
+        resolve_node(
+            spec,
+            args.node_lock.expanduser().resolve(),
+            args.node_cache_root.expanduser().resolve(),
+            explicit_binary=args.node_bin,
+        )
+        if args.javascript_runtime == "packaged-node"
+        else None
     )
     bubblewrap = resolve_bubblewrap(
         REPOSITORY_ROOT,

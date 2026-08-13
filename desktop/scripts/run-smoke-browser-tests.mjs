@@ -11,7 +11,7 @@ if (mode !== "disconnected" && mode !== "full") {
 }
 
 if (mode === "full") {
-  const preparation = await run(process.execPath, ["scripts/prepare-dev-package.mjs"], process.env);
+  const preparation = await run(process.execPath, ["scripts/prepare-dev-package.mjs", "--javascript-runtime", "packaged-node"], process.env);
   if (preparation !== 0) {
     process.exitCode = preparation;
     process.exit();

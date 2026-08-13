@@ -25,6 +25,7 @@ pub use css::CssLanguageServerProvider;
 pub use definition::LanguageServerDefinition;
 pub use error::LanguageServerCatalogError;
 pub use node_runtime::ManagedNodeRuntime;
+pub use node_runtime::ManagedNodeRuntimeSource;
 pub use provider::LanguageServerProvider;
 pub use provider::LanguageServerProviderError;
 pub use provider::LanguageServerProviderLaunch;

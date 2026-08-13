@@ -201,6 +201,8 @@ class PackageTests(unittest.TestCase):
             metadata = json.loads(
                 (output / "zeta-package.json").read_text(encoding="utf-8")
             )
+            self.assertEqual(2, metadata["layoutVersion"])
+            self.assertEqual({"kind": "packagedNode"}, metadata["javascriptRuntime"])
             self.assertEqual("aarch64-apple-darwin", metadata["target"])
             self.assertEqual("local-override", metadata["components"]["ripgrep"]["source"])
             self.assertEqual("local-override", metadata["components"]["node"]["source"])
@@ -223,6 +225,38 @@ class PackageTests(unittest.TestCase):
                     ripgrep,
                     node,
                 )
+
+    def test_host_provided_runtime_package_omits_standalone_node(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            spec = TARGETS["aarch64-apple-darwin"]
+            output = root / "package"
+            build_package_directory(
+                output,
+                REPOSITORY_ROOT,
+                read_workspace_version(REPOSITORY_ROOT / "Cargo.toml"),
+                spec,
+                executable_file(root / "zeta-source", b"zeta"),
+                resolve_ripgrep(
+                    spec,
+                    PRODUCTION_LOCK,
+                    root / "cache",
+                    explicit_binary=executable_file(root / "rg-source", b"ripgrep"),
+                ),
+                None,
+            )
+
+            metadata = json.loads(
+                (output / "zeta-package.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(
+                {"kind": "hostProvidedNode"}, metadata["javascriptRuntime"]
+            )
+            self.assertNotIn("node", metadata["components"])
+            self.assertFalse((output / "zeta-resources" / "node").exists())
+            self.assertFalse(
+                (output / "zeta-resources" / "licenses" / "node").exists()
+            )
 
     def assert_extension_resources(self, extensions: Path) -> None:
         self.assertEqual(

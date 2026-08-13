@@ -15,7 +15,7 @@ notarization, installer formats, or update delivery.
     ├── bwrap                         # Linux only
     ├── zeta-command-runner.exe       # Windows only
     ├── zeta-windows-sandbox-setup.exe # Windows only
-    ├── node/
+    ├── node/                           # packaged-node variant only
     │   └── bin/
     │       └── node[.exe]          # shared JavaScript LSP runtime
     ├── skills/
@@ -29,7 +29,7 @@ notarization, installer formats, or update delivery.
     │   └── marketplace-root.json      # public pinned TUF root
     └── licenses/
         ├── bubblewrap/COPYING        # Linux only
-        ├── node/LICENSE
+        ├── node/LICENSE                # packaged-node variant only
         ├── ripgrep/
         │   ├── LICENSE-MIT
         │   └── UNLICENSE
@@ -66,9 +66,21 @@ tree and require the official Marketplace config and pinned root before completi
 runtime parser remains the trust authority for URLs, relative root containment, schema, and TUF
 verification.
 
+`--javascript-runtime packaged-node` is the default and retains standalone Node
+for CLI, browser-bridge, remote, and headless App Server hosts.
+`--javascript-runtime host-provided-node` omits the executable, license, and Node
+component metadata; this variant is valid only when the product host injects an
+exact Node-compatible executable. Electron Desktop uses that variant, declares
+its exact `process.execPath` to the Rust App Server, and enters run-as-Node mode
+only for JavaScript language-server children. Both alternatives are explicit in
+package layout version 2 under `javascriptRuntime.kind`; validators reject a
+payload whose files and declared runtime kind disagree.
+
 Desktop development uses the same locks and canonical layout through the Node
-assembler at `desktop/scripts/prepare-dev-package.mjs`. It builds the
-first-party executables with Cargo's `dev` profile, verifies and extracts the
+assembler at `desktop/scripts/prepare-dev-package.mjs`. It defaults to the
+host-provided runtime variant for Electron; Browser full mode passes
+`--javascript-runtime packaged-node`. The assembler builds first-party
+executables with Cargo's `dev` profile, verifies and extracts the required
 target-specific runtime archives, stages the result beside
 `desktop/.tmp/zeta-package`, and replaces the previous development package only
 after validation. It neither installs nor invokes Python. This Python package
@@ -81,8 +93,17 @@ python3 scripts/build_zeta_package.py \
   --package-dir /absolute/path/to/zeta-package
 ```
 
+For an Electron-owned package payload:
+
+```sh
+python3 scripts/build_zeta_package.py \
+  --target aarch64-apple-darwin \
+  --javascript-runtime host-provided-node \
+  --package-dir dist/zeta-electron
+```
+
 Release jobs that already built or signed binaries should use `--zeta-bin` and
-optionally `--rg-bin` or `--node-bin`; those overrides are copied verbatim and their binary
+optionally `--rg-bin` or, for the `packaged-node` variant, `--node-bin`; those overrides are copied verbatim and their binary
 digest is recorded in `zeta-package.json`. Linux jobs can likewise pass
 `--bwrap-bin`. Signing and archive serialization must happen after this staging
 step. Windows jobs can supply `--windows-command-runner-bin` and
@@ -95,8 +116,8 @@ helper to be built for the selected target.
 | Linux | `zeta-resources/bwrap` is required and validated |
 | Windows | Both AppContainer helpers are required and validated |
 
-Tests are offline and cover target-lock completeness, package layout, the shared Node executable
-and license, all thirteen built-in
+Tests are offline and cover target-lock completeness, both runtime package layouts, the packaged
+Node executable/license and host-provided omission, all thirteen built-in
 Extension packages, their referenced resources, real file-template declarations, the packaged VS Code
 license text, built-in Skill/Extension staging and link
 rejection, product-service trust bundle staging, tar/zip member/source extraction, Linux and

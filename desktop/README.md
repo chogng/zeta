@@ -54,7 +54,9 @@ corepack pnpm dev:web:full
 
 `dev:desktop` 与 `dev:web:full` 会先通过 Node 开发组装器生成
 `desktop/.tmp/zeta-package`；其中包含 debug Rust
-CLI、锁定版本的 ripgrep 与平台 sandbox helper。开发态和发布态 Electron 都从相同的
+CLI、锁定版本的 ripgrep 与平台 sandbox helper。Electron 默认生成 `hostProvidedNode` variant，
+不再下载或复制 standalone Node；`dev:web:full` 显式生成 `packagedNode` variant，因为 Browser bridge
+没有 Electron runtime。开发态和发布态 Electron 都从相同的
 `<package>/bin/zeta[.exe]` 入口启动 App Server，区别仅在编译 profile 和 package root。
 准备流程只使用 Desktop 已要求的 Node、Rust 和 host archive utility，不安装或调用
 Python。`dev:desktop` 随后启动 Vite、主进程、预加载脚本和 Electron；`dev:web:full` 只启动
@@ -112,6 +114,11 @@ Ready 后在后台启动 App Server，并完成 initialize、server identity、p
 在 `ready-to-show` 后恢复窗口模式并显示，启动过程不创建额外的 splash 窗口。
 门禁失败时使用 Electron 原生对话框提供 Retry/Quit，重试会先把 supervisor 恢复到
 stopped 状态。
+
+Electron Main 通过 allowlisted `ZETA_ELECTRON_RUN_AS_NODE_PATH=process.execPath` 把当前 exact host executable
+声明给 Rust App Server。CSS provider 仍由 Rust 直接监督，只在启动该 LSP child 时设置
+`ELECTRON_RUN_AS_NODE=1`；Renderer 和普通 App Server 进程都不会进入 Node mode。Browser、CLI、
+remote/headless 形态没有 Electron，因此继续使用 package 中的 standalone Node。
 
 ## Browser Workbench
 

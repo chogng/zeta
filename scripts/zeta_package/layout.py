@@ -19,7 +19,7 @@ from .windows_helpers import (
 )
 
 
-LAYOUT_VERSION = 1
+LAYOUT_VERSION = 2
 METADATA_FILE = "zeta-package.json"
 SKILL_NAME = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
@@ -31,7 +31,7 @@ def build_package_directory(
     spec: TargetSpec,
     zeta_binary: Path,
     ripgrep: RipgrepResolution,
-    node: NodeResolution,
+    node: Optional[NodeResolution],
     bubblewrap: Optional[BubblewrapResolution] = None,
     windows_helpers: Optional[WindowsSandboxHelpers] = None,
 ) -> None:
@@ -48,14 +48,10 @@ def build_package_directory(
         skills_directory = staging / "zeta-resources" / "skills"
         extensions_directory = staging / "zeta-resources" / "extensions"
         product_services_directory = staging / "zeta-resources" / "product-services"
-        node_directory = staging / "zeta-resources" / "node" / "bin"
-        node_license_directory = staging / "zeta-resources" / "licenses" / "node"
         license_directory = staging / "zeta-resources" / "licenses" / "ripgrep"
         vscode_license_directory = staging / "zeta-resources" / "licenses" / "vscode"
         binary_directory.mkdir()
         path_directory.mkdir()
-        node_directory.mkdir(parents=True)
-        node_license_directory.mkdir(parents=True)
         license_directory.mkdir(parents=True)
         vscode_license_directory.mkdir()
         copy_builtin_skills(
@@ -82,12 +78,17 @@ def build_package_directory(
             path_directory / spec.ripgrep_name,
             is_windows=spec.is_windows,
         )
-        copy_executable(
-            node.executable,
-            node_directory / spec.node_name,
-            is_windows=spec.is_windows,
-        )
-        shutil.copyfile(node.license_file, node_license_directory / "LICENSE")
+        if node is not None:
+            node_directory = staging / "zeta-resources" / "node" / "bin"
+            node_license_directory = staging / "zeta-resources" / "licenses" / "node"
+            node_directory.mkdir(parents=True)
+            node_license_directory.mkdir(parents=True)
+            copy_executable(
+                node.executable,
+                node_directory / spec.node_name,
+                is_windows=spec.is_windows,
+            )
+            shutil.copyfile(node.license_file, node_license_directory / "LICENSE")
         for name in ("LICENSE-MIT", "UNLICENSE"):
             shutil.copyfile(
                 repository_root / "third_party" / "ripgrep" / name,
@@ -151,15 +152,16 @@ def build_package_directory(
         if ripgrep.archive_sha256 is not None:
             ripgrep_metadata["archiveSha256"] = ripgrep.archive_sha256
         components = {
-            "node": {
+            "ripgrep": ripgrep_metadata,
+        }
+        if node is not None:
+            components["node"] = {
                 "version": node.version,
                 "source": node.source,
                 "binarySha256": node.binary_sha256,
                 "archive": node.archive,
                 "archiveSha256": node.archive_sha256,
-            },
-            "ripgrep": ripgrep_metadata,
-        }
+            }
         if bubblewrap_metadata is not None:
             components["bubblewrap"] = bubblewrap_metadata
         if windows_sandbox_metadata is not None:
@@ -171,6 +173,9 @@ def build_package_directory(
             "entrypoint": "bin/" + spec.zeta_name,
             "pathDir": "zeta-path",
             "resourcesDir": "zeta-resources",
+            "javascriptRuntime": {
+                "kind": "packagedNode" if node is not None else "hostProvidedNode",
+            },
             "components": components,
         }
         write_json(staging / METADATA_FILE, metadata)
@@ -210,11 +215,29 @@ def validate_package_directory(package: Path, spec: TargetSpec) -> None:
                 )
             )
 
-    executables = (
+    executables = [
         package / "bin" / spec.zeta_name,
         package / "zeta-path" / spec.ripgrep_name,
-        package / "zeta-resources" / "node" / "bin" / spec.node_name,
-    )
+    ]
+    components = metadata.get("components")
+    if not isinstance(components, dict):
+        raise RuntimeError("Invalid package component metadata")
+    javascript_runtime = metadata.get("javascriptRuntime")
+    if javascript_runtime == {"kind": "packagedNode"}:
+        if not isinstance(components.get("node"), dict):
+            raise RuntimeError("Packaged Node runtime metadata is missing")
+        executables.append(
+            package / "zeta-resources" / "node" / "bin" / spec.node_name
+        )
+    elif javascript_runtime == {"kind": "hostProvidedNode"}:
+        if "node" in components:
+            raise RuntimeError("Host-provided runtime package contains Node metadata")
+        if (package / "zeta-resources" / "node").exists():
+            raise RuntimeError("Host-provided runtime package contains a Node executable")
+        if (package / "zeta-resources" / "licenses" / "node").exists():
+            raise RuntimeError("Host-provided runtime package contains a Node license")
+    else:
+        raise RuntimeError("Invalid package JavaScript runtime declaration")
     for executable in executables:
         if not executable.is_file():
             raise RuntimeError("Missing package executable: {}".format(executable))
@@ -239,9 +262,10 @@ def validate_package_directory(package: Path, spec: TargetSpec) -> None:
     )
     if vscode_license.is_symlink() or not vscode_license.is_file():
         raise RuntimeError("Missing VS Code extension license: {}".format(vscode_license))
-    node_license = package / "zeta-resources" / "licenses" / "node" / "LICENSE"
-    if node_license.is_symlink() or not node_license.is_file():
-        raise RuntimeError("Missing Node.js license: {}".format(node_license))
+    if javascript_runtime == {"kind": "packagedNode"}:
+        node_license = package / "zeta-resources" / "licenses" / "node" / "LICENSE"
+        if node_license.is_symlink() or not node_license.is_file():
+            raise RuntimeError("Missing Node.js license: {}".format(node_license))
     validate_builtin_skills(package / "zeta-resources" / "skills")
     validate_builtin_extensions(package / "zeta-resources" / "extensions")
     validate_product_services(package / "zeta-resources" / "product-services")

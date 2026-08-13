@@ -4,7 +4,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { assemblePackage, copyBuiltinExtensions, hostTarget, replaceDirectoryAtomically, selectNodeArtifact, selectRipgrepArtifact } from "./prepare-dev-package.mjs";
+import { assemblePackage, copyBuiltinExtensions, hostTarget, parseJavaScriptRuntime, replaceDirectoryAtomically, selectNodeArtifact, selectRipgrepArtifact } from "./prepare-dev-package.mjs";
+
+test("selects host-provided Node for Desktop and explicit packaged Node for headless hosts", () => {
+  assert.equal(parseJavaScriptRuntime([]), "host-provided-node");
+  assert.equal(parseJavaScriptRuntime(["--javascript-runtime", "packaged-node"]), "packaged-node");
+  assert.throws(() => parseJavaScriptRuntime(["--javascript-runtime", "system-node"]), /Usage/);
+});
 
 test("maps supported development hosts to Rust targets", () => {
   assert.equal(hostTarget("win32", "x64"), "x86_64-pc-windows-msvc");
@@ -145,6 +151,8 @@ test("assembles and validates the canonical Windows development layout", async (
       },
     );
     const metadata = JSON.parse(await readFile(join(staging, "zeta-package.json"), "utf8"));
+    assert.equal(metadata.layoutVersion, 2);
+    assert.deepEqual(metadata.javascriptRuntime, { kind: "packagedNode" });
     assert.equal(metadata.entrypoint, "bin/zeta.exe");
     assert.equal(metadata.target, "x86_64-pc-windows-msvc");
     assert.equal(await readFile(join(staging, "zeta-path", "rg.exe"), "utf8"), "ripgrep");
@@ -186,6 +194,47 @@ test("assembles and validates the canonical Windows development layout", async (
       ["vscode.typescript", "typescript", "Class Definition"],
       ["vscode.typescript", "typescriptreact", "Class Definition"],
     ]);
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
+test("host-provided runtime package omits the standalone Node payload", async () => {
+  const root = await mkdtemp(join(tmpdir(), "zeta-dev-host-runtime-test-"));
+  const staging = join(root, "package");
+  const executables = {
+    commandRunner: join(root, "zeta-command-runner.exe"),
+    sandboxSetup: join(root, "zeta-windows-sandbox-setup.exe"),
+    zeta: join(root, "zeta.exe"),
+  };
+  const ripgrepExecutable = join(root, "rg.exe");
+  try {
+    await Promise.all([
+      writeFile(executables.commandRunner, "runner"),
+      writeFile(executables.sandboxSetup, "setup"),
+      writeFile(executables.zeta, "zeta"),
+      writeFile(ripgrepExecutable, "ripgrep"),
+    ]);
+    await assemblePackage(
+      staging,
+      "x86_64-pc-windows-msvc",
+      "win32",
+      executables,
+      {
+        archive: "rg.zip",
+        archiveSha256: "a".repeat(64),
+        binarySha256: "b".repeat(64),
+        executable: ripgrepExecutable,
+        source: "upstream-release",
+        version: "1.0.0",
+      },
+      undefined,
+    );
+    const metadata = JSON.parse(await readFile(join(staging, "zeta-package.json"), "utf8"));
+    assert.equal(metadata.layoutVersion, 2);
+    assert.deepEqual(metadata.javascriptRuntime, { kind: "hostProvidedNode" });
+    assert.equal(metadata.components.node, undefined);
+    await assert.rejects(readFile(join(staging, "zeta-resources", "node", "bin", "node.exe")), /ENOENT/);
   } finally {
     await rm(root, { force: true, recursive: true });
   }

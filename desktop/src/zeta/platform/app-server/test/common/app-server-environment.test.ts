@@ -11,6 +11,7 @@ test("App Server environment keeps safe POSIX session variables and excludes cre
     XDG_CONFIG_HOME: "/home/zeta/.config",
     OPENAI_API_KEY: "secret",
   }, "posix", {
+    ZETA_ELECTRON_RUN_AS_NODE_PATH: "/opt/Zeta/zeta",
     ZETA_PROFILE_ROOT: "/state",
     ZETA_WORKSPACE_ROOT: "/workspace",
   });
@@ -21,10 +22,13 @@ test("App Server environment keeps safe POSIX session variables and excludes cre
     PATH: "/usr/bin",
     XDG_CONFIG_HOME: "/home/zeta/.config",
     LC_ALL: "C.UTF-8",
+    ZETA_ELECTRON_RUN_AS_NODE_PATH: "/opt/Zeta/zeta",
     ZETA_PROFILE_ROOT: "/state",
     ZETA_WORKSPACE_ROOT: "/workspace",
   });
   assert.equal(isAllowedAppServerEnvironmentKey("OPENAI_API_KEY"), false);
+  assert.equal(isAllowedAppServerEnvironmentKey("ZETA_ELECTRON_RUN_AS_NODE_PATH"), true);
+  assert.equal(isAllowedAppServerEnvironmentKey("ELECTRON_RUN_AS_NODE"), false);
 });
 
 test("App Server environment canonicalizes Windows keys case-insensitively", () => {

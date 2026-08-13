@@ -13,11 +13,16 @@ use crate::LanguageServerProviderError;
 use crate::LanguageServerProviderLaunch;
 use crate::LanguageServerProviderRegistry;
 use crate::ManagedNodeRuntime;
+use crate::ManagedNodeRuntimeSource;
 
 #[test]
 fn css_provider_uses_managed_node_and_a_clean_environment() {
     let fixture = ProviderFixture::new();
     let provider = fixture.provider();
+    assert_eq!(
+        provider.node_runtime().source(),
+        ManagedNodeRuntimeSource::PackagedNode
+    );
     let mut registry = LanguageServerProviderRegistry::new();
     registry.register(provider).unwrap();
 
@@ -55,7 +60,46 @@ fn css_provider_uses_managed_node_and_a_clean_environment() {
             .environment()
             .contains_key(std::ffi::OsStr::new("NODE_PATH"))
     );
+    assert!(
+        !command
+            .environment()
+            .contains_key(std::ffi::OsStr::new("ELECTRON_RUN_AS_NODE"))
+    );
     assert_eq!(command.current_dir(), Some(fixture.workspace.path()));
+}
+
+#[test]
+fn css_provider_uses_electron_only_for_the_language_server_child() {
+    let fixture = ProviderFixture::new();
+    let provider = fixture
+        .provider_with_runtime(ManagedNodeRuntime::from_electron_path(&fixture.node).unwrap());
+    assert_eq!(
+        provider.node_runtime().source(),
+        ManagedNodeRuntimeSource::ElectronRunAsNode
+    );
+    let mut registry = LanguageServerProviderRegistry::new();
+    registry.register(provider).unwrap();
+
+    let definition = registry
+        .definition(
+            CSS_LANGUAGE_SERVER_ID,
+            fixture.workspace.path(),
+            LanguageServerProviderLaunch::Packaged,
+        )
+        .unwrap()
+        .unwrap();
+    let (_, command, _) = definition.into_launch_parts();
+    assert_eq!(
+        command
+            .environment()
+            .get(std::ffi::OsStr::new("ELECTRON_RUN_AS_NODE"))
+            .map(std::ffi::OsString::as_os_str),
+        Some(std::ffi::OsStr::new("1"))
+    );
+    assert_eq!(
+        command.environment_policy(),
+        LanguageServerEnvironmentPolicy::Clear
+    );
 }
 
 #[test]
@@ -127,6 +171,10 @@ impl ProviderFixture {
     }
 
     fn provider(&self) -> CssLanguageServerProvider {
+        self.provider_with_runtime(ManagedNodeRuntime::from_path(&self.node).unwrap())
+    }
+
+    fn provider_with_runtime(&self, runtime: ManagedNodeRuntime) -> CssLanguageServerProvider {
         let package = LanguageServerPackage::new(
             CSS_LANGUAGE_SERVER_ID,
             "0.1.0",
@@ -150,11 +198,7 @@ impl ProviderFixture {
             .unwrap()
             .install_verified(package, digest)
             .unwrap();
-        CssLanguageServerProvider::new(
-            installed,
-            ManagedNodeRuntime::from_path(&self.node).unwrap(),
-        )
-        .unwrap()
+        CssLanguageServerProvider::new(installed, runtime).unwrap()
     }
 }
 
