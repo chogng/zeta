@@ -59,8 +59,6 @@ use zeta_app_server_protocol::protocol::initialize::{InitializeParams, Initializ
 use zeta_app_server_protocol::protocol::model::ModelListResult;
 use zeta_app_server_protocol::protocol::plugins::PluginCommandResultDto;
 use zeta_app_server_protocol::protocol::plugins::PluginListResult;
-use zeta_app_server_protocol::protocol::plugins::PluginMarketplaceCommandParams;
-use zeta_app_server_protocol::protocol::plugins::PluginMarketplaceListResult;
 use zeta_app_server_protocol::protocol::plugins::PluginPackageCommandParams;
 use zeta_app_server_protocol::protocol::registry::ClientMethod;
 use zeta_app_server_protocol::protocol::resources::{
@@ -492,31 +490,6 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
 
     pub fn list_plugins(&mut self) -> Result<PluginListResult, ClientError> {
         self.call(ClientMethod::PluginList, EmptyParams {})
-    }
-
-    pub fn list_plugin_marketplace(&mut self) -> Result<PluginMarketplaceListResult, ClientError> {
-        self.call(ClientMethod::PluginMarketplaceList, EmptyParams {})
-    }
-
-    pub fn install_plugin(
-        &mut self,
-        params: PluginMarketplaceCommandParams,
-    ) -> Result<PluginCommandResultDto, ClientError> {
-        self.call(ClientMethod::PluginInstall, params)
-    }
-
-    pub fn update_plugin(
-        &mut self,
-        params: PluginMarketplaceCommandParams,
-    ) -> Result<PluginCommandResultDto, ClientError> {
-        self.call(ClientMethod::PluginUpdate, params)
-    }
-
-    pub fn rollback_plugin(
-        &mut self,
-        params: PluginPackageCommandParams,
-    ) -> Result<PluginCommandResultDto, ClientError> {
-        self.call(ClientMethod::PluginRollback, params)
     }
 
     pub fn enable_plugin(

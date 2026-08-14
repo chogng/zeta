@@ -1,7 +1,7 @@
 # App Server 客户端架构与演进方案
 
 > 物理位置：`zeta-rs/app-server-client/`  
-> 主要消费者：`zeta-exec` 非交互执行宿主、`zeta-tui`  
+> 主要消费者：`zeta-exec` 非交互执行宿主、`zeta-tui`、`zeterm`
 > Wire contract：[`zeta-app-server-api.md`](zeta-app-server-api.md)  
 > Canonical 产品模型：[`protocol.md`](protocol.md)  
 > Headless 与远程调度：[`exec.md`](exec.md)
@@ -20,7 +20,7 @@ App Server 客户端把“启动后端、初始化连接、配对请求、转发
 | 发出多个并发请求 | 按请求 ID 配对结果并结束等待者 | 处理领域结果和用户交互 |
 | 接收通知 | 独立转发服务端事件，不阻塞请求结果 | 更新自己的呈现状态 |
 | 关闭宿主 | 拒绝新请求、结束等待者并等待后台任务退出 | 决定产品级退出或重连策略 |
-| 将来连接远程 App Server | 复用同一公共 facade 和产品契约 | 远程调度和工作进程协议不属于本客户端 |
+| 连接远程 App Server | `start_stdio` 复用同一 ready session、typed request 与 event contract | SSH transport、安装和产品重连策略由 host layer 拥有 |
 
 ## 1. 结论
 
@@ -45,10 +45,10 @@ zeta-tui ──┘             │
                          └─ result/event  ◄──── App Server
 ```
 
-直接依赖和启动 `zeta-app-server` 是 embedded backend 的职责，不是依赖方向错误。长期可以在
-同一 public facade 下增加 remote App Server backend，但它只连接相同的 App Server contract，
-不是 scheduler protocol，也不是 remote process executor。Desktop 的 JSONL/stdio client
-仍不要求复用这个 Rust crate。
+直接依赖和启动 `zeta-app-server` 是 embedded backend 的职责，不是依赖方向错误。当前
+`AppServerSession::start_stdio` 已能在同一 public facade 下连接 product-selected child，`zeterm`
+用它承载 SSH Remote App Server；它仍只连接相同的 App Server contract，不是 scheduler protocol，
+也不是 remote process executor。Desktop 的 JSONL/stdio client 仍不要求复用这个 Rust crate。
 
 `zeta-exec` 是无交互界面的 Agent 执行宿主。当前它与 TUI 一样启动 embedded App Server；
 后续远程调度系统以它作为 headless execution entry。Job/Attempt/lease/event cursor 属于
@@ -459,7 +459,7 @@ TUI 不再接收一个同步 `&mut AppServerClient<T>`，也不调用 `drain_not
   connection，当前供 MCP HTTP session 共享一个 embedded composition；
 - `InProcessTransport::from_shared_server` 明确表达共享 host，不要求每个 transport 重建
   SQLite repository/config/model composition；
-- typed client methods；
+- typed client methods，包括 zeterm Remote 编辑器消费的文档同步、关闭、Hover、Completion 与位置请求；
 - protocol method registry；
 - external JSON-RPC request/response 编解码；
 - response ID 校验；
@@ -479,12 +479,13 @@ TUI 不再接收一个同步 `&mut AppServerClient<T>`，也不调用 `drain_not
 | `start_in_process_client` / generic `AppServerClient<T>` | MCP、rust-app 与 contract tests 的同步适配面；TUI/CLI 不再依赖 drain |
 | typed method 同步等待 completion | shared handle 保持同步 typed API；TUI 已用 `RequestTask` 把等待移出单写者 loop |
 | bounded event/data plane | Current：1024 event + 4096 server queue；显式 `Lagged` event 尚未提供 |
-| remote backend | 尚未实现；不能声称 reconnect/subscription restoration |
+| stdio remote backend | 已实现；`AppServerSession::start_stdio` 完成 initialize/schema gate 与同一 request/event contract；product-level reconnect/subscription restoration 仍由上层负责 |
 | initialize gate 只存在于一个 helper | 裸 `AppServerClient::new` 可以在未初始化时发送业务请求 |
 | server error 被压成 code/string | 丢失 typed error name/data |
 
 因此 owned embedded session 的 request/event/shutdown 与有界交付主路径已经完成；下一阶段集中
-在 typed error、显式 lag lifecycle、remote backend/reconnect，不再回退到 notification drain。
+下一阶段集中在 typed error、显式 lag lifecycle 和 product-level reconnect；不要把这些策略回退到
+notification drain，也不要把 durable subscription restoration 偷塞进低层 stdio transport。
 
 ## 11. 目标模块
 

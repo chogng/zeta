@@ -13,7 +13,7 @@ import { ICodeIndexService } from "../../../../platform/codeIndex/common/codeInd
 import { IToolSearchService } from "../../../../platform/toolSearch/common/toolSearchService.js";
 import { IConnectorService } from "../../../../platform/connectors/common/connectorService.js";
 import { IPluginService } from "../../../../platform/plugins/common/pluginService.js";
-import { ILanguageMarketplaceService } from "../../../../platform/language/common/languageMarketplaceService.js";
+import { IMarketplaceService } from "../../../../platform/marketplace/common/marketplaceService.js";
 import { SettingsEditorContribution } from "./settingsEditor.contribution.js";
 
 export const OpenSettingsCommandId = "workbench.action.openSettings";
@@ -64,7 +64,7 @@ registerWorkbenchContribution(
     codeIndexService: accessor.get(ICodeIndexService),
     connectorService: accessor.get(IConnectorService),
     pluginService: accessor.get(IPluginService),
-    languageMarketplaceService: accessor.get(ILanguageMarketplaceService),
+    marketplaceService: accessor.get(IMarketplaceService),
     toolSearchService: accessor.get(IToolSearchService),
   }),
 );

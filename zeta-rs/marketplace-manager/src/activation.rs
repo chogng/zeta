@@ -1,0 +1,251 @@
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD;
+use serde::Deserialize;
+use url::Url;
+use zeta_marketplace_client::ActivationSpec;
+use zeta_marketplace_client::CapabilityDescriptor;
+use zeta_marketplace_client::CapabilityKind;
+use zeta_marketplace_client::ConnectorActivationSpec;
+use zeta_marketplace_client::ExecutableActivationSpec;
+use zeta_marketplace_client::ExecutableRuntime;
+use zeta_marketplace_client::LanguageActivationSpec;
+use zeta_marketplace_client::McpActivationSpec;
+use zeta_marketplace_client::McpTransportSpec;
+use zeta_marketplace_client::PackageRef;
+use zeta_marketplace_client::ResourceContent;
+use zeta_marketplace_client::ResourceRef;
+use zeta_marketplace_client::SkillActivationSpec;
+
+use crate::manager::CapabilityRecord;
+use crate::manager::InstallationRecord;
+use crate::store::Store;
+use crate::store::opaque_id;
+use zeta_marketplace_client::MarketplaceClientError;
+
+pub(crate) fn descriptor(
+    store: &Store,
+    package: &PackageRef,
+    record: &CapabilityRecord,
+) -> Result<CapabilityDescriptor, MarketplaceClientError> {
+    let (permissions, authentication_provider) = match record.descriptor.kind {
+        CapabilityKind::Mcp => {
+            let definition = parse_mcp(store, package, &record.path)?;
+            let host = match definition {
+                McpDefinition::Http {
+                    schema_version,
+                    url,
+                } if schema_version == 1 && url.starts_with("https://") => Url::parse(&url)
+                    .ok()
+                    .and_then(|url| url.host_str().map(str::to_owned))
+                    .into_iter()
+                    .collect(),
+                McpDefinition::Stdio {
+                    schema_version: 1, ..
+                } => Vec::new(),
+                _ => return Err(unsupported()),
+            };
+            (host, None)
+        }
+        CapabilityKind::Connector => {
+            let connector = parse_connector(store, package, &record.path)?;
+            let provider = (connector.authentication.as_deref() == Some("oauth")).then(|| {
+                connector
+                    .provider
+                    .unwrap_or_else(|| record.descriptor.id.clone())
+            });
+            (Vec::new(), provider)
+        }
+        _ => (Vec::new(), None),
+    };
+    let mut descriptor = record.descriptor.clone();
+    descriptor.permissions = permissions;
+    descriptor.authentication_provider = authentication_provider;
+    Ok(descriptor)
+}
+
+pub(crate) fn acquire_spec(
+    store: &Store,
+    installation: &InstallationRecord,
+    capability: &CapabilityRecord,
+) -> Result<ActivationSpec, MarketplaceClientError> {
+    match capability.descriptor.kind {
+        CapabilityKind::Skill => Ok(ActivationSpec::Skill(SkillActivationSpec {
+            contract_version: "1".into(),
+            resource: resource_ref(&capability.descriptor.reference.id),
+        })),
+        CapabilityKind::Mcp => {
+            let definition = parse_mcp(store, &installation.package, &capability.path)?;
+            let McpDefinition::Http {
+                schema_version: 1,
+                url,
+            } = definition
+            else {
+                return Err(unsupported());
+            };
+            if !url.starts_with("https://") {
+                return Err(unsupported());
+            }
+            let endpoint = Url::parse(&url).map_err(|_| unsupported())?;
+            let host = endpoint.host_str().ok_or_else(unsupported)?.to_owned();
+            Ok(ActivationSpec::Mcp(McpActivationSpec {
+                contract_version: "1".into(),
+                transport: McpTransportSpec::StreamableHttp { url },
+                network_hosts: vec![host],
+            }))
+        }
+        CapabilityKind::Connector => {
+            let connector = parse_connector(store, &installation.package, &capability.path)?;
+            let authentication_provider = (connector.authentication.as_deref() == Some("oauth"))
+                .then(|| {
+                    connector
+                        .provider
+                        .unwrap_or_else(|| capability.descriptor.id.clone())
+                });
+            let mcp = connector.mcp_server.and_then(|mcp_id| {
+                installation
+                    .capabilities
+                    .iter()
+                    .find(|candidate| {
+                        candidate.descriptor.kind == CapabilityKind::Mcp
+                            && candidate.descriptor.id == mcp_id
+                    })
+                    .map(|candidate| candidate.descriptor.reference.clone())
+            });
+            Ok(ActivationSpec::Connector(ConnectorActivationSpec {
+                contract_version: "1".into(),
+                authentication_provider,
+                mcp,
+            }))
+        }
+        CapabilityKind::Language => Ok(ActivationSpec::Language(LanguageActivationSpec {
+            contract_version: "1".into(),
+            manifest: resource_ref(&capability.descriptor.reference.id),
+        })),
+        CapabilityKind::Executable => {
+            let runtime = match capability.runtime.as_deref() {
+                Some("direct") => ExecutableRuntime::Direct,
+                Some("node") | None => ExecutableRuntime::Node,
+                Some(_) => return Err(unsupported()),
+            };
+            Ok(ActivationSpec::Executable(ExecutableActivationSpec {
+                contract_version: "1".into(),
+                runtime,
+                entrypoint: resource_ref(&capability.descriptor.reference.id),
+            }))
+        }
+        CapabilityKind::Theme | CapabilityKind::Asset => Err(unsupported()),
+    }
+}
+
+pub(crate) fn open_resource(
+    store: &Store,
+    installation: &InstallationRecord,
+    capability: &CapabilityRecord,
+    requested: &ResourceRef,
+) -> Result<ResourceContent, MarketplaceClientError> {
+    if &resource_ref(&capability.descriptor.reference.id) != requested {
+        return Err(MarketplaceClientError::business(
+            zeta_marketplace_client::MarketplaceErrorCode::ResourceNotFound,
+            "Marketplace resource was not found",
+            false,
+        ));
+    }
+    let (path, media_type) = match capability.descriptor.kind {
+        CapabilityKind::Skill => (
+            format!("{}/SKILL.md", capability.path),
+            "text/markdown; charset=utf-8",
+        ),
+        CapabilityKind::Language => (
+            format!("{}/package.json", capability.path),
+            "application/json; charset=utf-8",
+        ),
+        CapabilityKind::Executable => (capability.path.clone(), "application/octet-stream"),
+        CapabilityKind::Mcp
+        | CapabilityKind::Connector
+        | CapabilityKind::Theme
+        | CapabilityKind::Asset => {
+            return Err(MarketplaceClientError::business(
+                zeta_marketplace_client::MarketplaceErrorCode::ResourceNotFound,
+                "Marketplace resource was not found",
+                false,
+            ));
+        }
+    };
+    let bytes = store.read_package_file(&installation.package, &path)?;
+    Ok(ResourceContent {
+        media_type: media_type.into(),
+        data_base64: STANDARD.encode(bytes),
+    })
+}
+
+fn resource_ref(capability_id: &str) -> ResourceRef {
+    ResourceRef {
+        id: opaque_id("res", &[capability_id]),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(tag = "transport", rename_all = "camelCase", deny_unknown_fields)]
+enum McpDefinition {
+    Stdio {
+        #[serde(rename = "schemaVersion")]
+        schema_version: u32,
+        #[serde(rename = "command")]
+        _command: String,
+        #[serde(default, rename = "args")]
+        _args: Vec<String>,
+    },
+    Http {
+        #[serde(rename = "schemaVersion")]
+        schema_version: u32,
+        url: String,
+    },
+}
+
+fn parse_mcp(
+    store: &Store,
+    package: &PackageRef,
+    path: &str,
+) -> Result<McpDefinition, MarketplaceClientError> {
+    let bytes = store.read_package_file(package, path)?;
+    serde_json::from_slice(&bytes).map_err(|_| unsupported())
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ConnectorDefinition {
+    schema_version: u32,
+    id: String,
+    display_name: String,
+    #[serde(default)]
+    authentication: Option<String>,
+    #[serde(default)]
+    provider: Option<String>,
+    #[serde(default)]
+    mcp_server: Option<String>,
+}
+
+fn parse_connector(
+    store: &Store,
+    package: &PackageRef,
+    path: &str,
+) -> Result<ConnectorDefinition, MarketplaceClientError> {
+    let bytes = store.read_package_file(package, path)?;
+    let definition: ConnectorDefinition =
+        serde_json::from_slice(&bytes).map_err(|_| unsupported())?;
+    if definition.schema_version != 1
+        || definition.id.is_empty()
+        || definition.display_name.is_empty()
+    {
+        return Err(unsupported());
+    }
+    Ok(definition)
+}
+
+fn unsupported() -> MarketplaceClientError {
+    MarketplaceClientError::business(
+        zeta_marketplace_client::MarketplaceErrorCode::CapabilityUnsupported,
+        "Marketplace capability contract is unsupported",
+        false,
+    )
+}

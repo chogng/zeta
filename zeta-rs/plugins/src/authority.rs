@@ -19,7 +19,6 @@ use crate::PluginActivationSnapshot;
 use crate::PluginError;
 use crate::PluginErrorKind;
 use crate::PluginId;
-use crate::PluginMarketplacePackage;
 use crate::PluginPackageDigest;
 use crate::PluginPackageStore;
 
@@ -341,17 +340,6 @@ impl PluginActivationAuthority {
         package: &LocalPluginPackage,
     ) -> Result<PluginInstallResult, PluginError> {
         self.install_validated(command_id, expected_revision, package)
-    }
-
-    /// Copies and records one exact package resolved by a registered Marketplace.
-    pub fn install_marketplace(
-        &self,
-        command_id: PluginAuthorityCommandId,
-        expected_revision: u64,
-        package: &PluginMarketplacePackage,
-    ) -> Result<PluginInstallResult, PluginError> {
-        let package = package.materialize()?;
-        self.install_validated(command_id, expected_revision, package.package())
     }
 
     fn install_validated(

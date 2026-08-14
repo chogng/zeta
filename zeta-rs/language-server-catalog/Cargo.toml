@@ -14,7 +14,6 @@ path = "src/lib.rs"
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 zeta-install-context = { workspace = true }
-zeta-language-server-distribution = { workspace = true }
 zeta-lsp = { workspace = true }
 
 [dev-dependencies]

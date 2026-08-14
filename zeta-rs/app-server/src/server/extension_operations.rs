@@ -95,6 +95,7 @@ fn extension_descriptor(value: ExtensionDescriptor) -> ExtensionDto {
         source_kind: match value.source_kind {
             ExtensionSourceKind::BuiltIn => ExtensionSourceKindDto::BuiltIn,
             ExtensionSourceKind::Plugin => ExtensionSourceKindDto::Plugin,
+            ExtensionSourceKind::Marketplace => ExtensionSourceKindDto::Marketplace,
             ExtensionSourceKind::User => ExtensionSourceKindDto::User,
         },
         manifest_json: value.manifest_json,

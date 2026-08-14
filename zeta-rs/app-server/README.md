@@ -10,7 +10,7 @@
 > [`docs/workspace-security.md`](../../docs/workspace-security.md)。跨文件内容搜索的执行实现见
 > [`zeta-rs/search/README.md`](../search/README.md)。Desktop 浏览器能力的跨进程所有权和当前限制见
 > [`docs/zeta-desktop-architecture.md`](../../docs/zeta-desktop-architecture.md#7-浏览器能力)。Marketplace
-> source composition、共享发行快照、领域投影和启动失败隔离见
+> Manager client composition、capability handoff、迁移边界和启动失败隔离见
 > [`docs/marketplace-integration.md`](../../docs/marketplace-integration.md)。
 
 `zeta-app-server` 是产品客户端与 Zeta domain/runtime 的 application boundary。它解析
@@ -42,6 +42,7 @@ JSONL / in-process caller
    ├─ request-scoped CodeRetrievalService → symbol/lexical/semantic/remote RRF + verification + budget
    ├─ optional TerminalService → zeta-utils-pty
    ├─ optional LanguageServerProviderRegistry → zeta-language-service → zeta-lsp
+   ├─ optional MarketplaceManager → local installation state + remote Marketplace client
    ├─ reloadable MCP Tool generation + status/OAuth/form interaction → zeta-mcp-extension → zeta-mcp
    ├─ ConnectorCredentialService → list/connect/disconnect + ready MCP reconcile
    ├─ client-hosted dynamic tools → durable Agent interaction owner
@@ -72,7 +73,7 @@ Core/store 继续拥有 Session/Thread durable state；需要进程内生命周�
 | `AppServer::new` | 用 recovered `SessionCoordinator` + `ModelService` 构造 server |
 | `AppServer::connection` | 分配 connection ID 并注册 notification queue |
 | `AppServer::connection_notifications` | 返回可阻塞等待、主动唤醒的 connection outbound message source |
-| `AppServer::close_connection` | 注销 subscription、关闭 notification source，并释放 Resource/Terminal/Syntax owner |
+| `AppServer::close_connection` | 注销 subscription、关闭 notification source，并释放 Resource/Terminal/Syntax owner 与 Marketplace leases |
 | `AppServer::handle_json` | 处理一个 JSON-RPC request string |
 | `AppServer::drain_notifications` | JSONL 与同步适配 caller 取出该 connection 的 serialized notifications |
 | `AppServer::{serve_stdio,serve_jsonl}` | 同步 JSON Lines service loop |
@@ -86,6 +87,7 @@ Core/store 继续拥有 Session/Thread durable state；需要进程内生命周�
 | `AppServer::with_workspace_search` | 注入 workspace root 与冻结的 ripgrep executable，构造外部内容搜索服务 |
 | `AppServer::with_language_server_providers` | 注入已验证、已安装的 provider registry；activation confirmation 启用 packaged route，显式 Config `Disabled` 仍可关闭 |
 | `AppServer::with_language_marketplaces` | 安装 TUF catalog、activation authority 与共享 runtime adapter；提供 list/install RPC，成功后热替换 registry |
+| `AppServer::with_marketplace_manager_client` | 持有 Zeta 本地 Manager 的 typed business client，广告 `marketplace` capability 并投影通用 package/capability RPC |
 | `AppServer::with_code_index_storage_root` | 配置按 root identity 分隔的 persistent index cache |
 | `LocalCodeIndexProviders::with_semantic_models` | 在 Workspace activation 前注入本地 semantic 使用的 immutable embedding/rerank adapters |
 | `AppServer::with_cloud_code_index_providers` | 注入冻结的 provider registry；空 registry 不广告 cloud capability |
@@ -101,6 +103,8 @@ Core/store 继续拥有 Session/Thread durable state；需要进程内生命周�
 | `LocalAppServerOptions` | user profile root + SessionStateMode + optional Workspace/Connector/language-provider runtime + Codex App Server options + validated slash catalog + built-in Skill root selection + optional model operation client/MCP OAuth providers |
 | `LocalAppServerOptions::with_language_server_providers` | 在 local App Server 启动前注入额外 provider registry；receipt registry 由 composition 自动合并 |
 | `LocalAppServerOptions::with_remote_language_marketplace` | 注入 product-pinned TUF root；同步 signed catalog 并从 profile activation receipt 重建 provider |
+| `LocalAppServerOptions::with_marketplace_registry` | 组合进程内 Zeta Manager 与 product-pinned HTTPS/TUF registry client |
+| `LocalAppServerOptions::with_marketplace_manager_client` | 注入由外部 supervisor 或测试拥有的 Manager client |
 | `LocalAppServerOptions::with_mcp_oauth_providers` | 把 exact MCP server ID → provider adapter 注入使用共享 SecretStore 的 OAuth service |
 | `LocalConnectorRuntime` | Connector credential service + shared SecretStore + Plugin-specific MCP materializer |
 | `LocalAppServerOptions::with_plugin_activation` | 从 exact activation 构造 package-rooted Connector/MCP runtime |
@@ -132,7 +136,7 @@ runtime 同一个 SecretStore 构造 `McpOAuthService`；App Server 只暴露 PK
 extension executor（当前包括统一的 `skills-read`）和 client-hosted dynamic tools 也进入同一个 registry，
 不得绕过 binding、policy 或 durable result commit。它仅在调用方通过
 `LocalAppServerOptions::with_workspace_root` 提供统一 Workspace 根时同时组合 filesystem、
-`.zeta` 自定义 catalog、Workspace code index、Workspace search、Git SCM、connection-owned Terminal runtime、
+`.zeta` 自定义 catalog、Workspace code index、Workspace search、Git SCM、connection-owned/leased Terminal runtime、
 只读 `rg` registry；Zeta CLI 的 stdio 与
 in-process 路径都会使用同一个启动时解析结果：
 `ZETA_WORKSPACE_ROOT` 优先，否则使用当前目录。不能因为 protocol 暴露 approval interaction 就
@@ -211,6 +215,8 @@ src/
 │       ├── language_runtime.rs   # config + built-in/provider definitions → shared language-service
 │       ├── language_marketplace_runtime.rs # TUF catalog + activation + base provider registry rebuild
 │       ├── language_marketplace_operations.rs # list/install DTO、错误映射与热 registry replacement
+│       ├── marketplace_operations.rs # Manager business RPC、稳定错误与 connection-owned lease
+│       ├── marketplace_projection.rs # Manager contract → App Server DTO 的无路径机械投影
 │       └── update_broker.rs       # per-connection subscription/cursor/fanout
 ├── local.rs                       # local composition, session backend selection + model safe point
 ├── local_tools.rs                 # frozen rg registry + Core Tool/Policy adapters
@@ -225,7 +231,7 @@ src/
 ├── git_service.rs                 # workspace root + GitClient + synchronous RPC runtime bridge
 ├── terminal_environment.rs        # secret-excluding host environment、platform normalization 与 terminal identity
 ├── terminal_profiles.rs           # trusted Shell discovery、ID 与 frozen environment
-└── terminal_service.rs            # PTY runtime、output ring 与 connection-owned sessions
+└── terminal_service.rs            # PTY runtime、output ring、connection owner 与 reconnect lease
 ```
 
 ## 内部接口地图
@@ -279,6 +285,7 @@ src/
 | `TerminalEnvironment` | crate-private | 二次过滤 host environment、规范化 Windows key、固定 `TERM`/`COLORTERM`/`TERM_PROGRAM` | 不继承凭据或接受 client mutation |
 | `TerminalProfileCatalog` | crate-private | 冻结可信 Shell Profile、program 与 `TerminalEnvironment` | external DTO 不暴露 executable/args/environment |
 | `TerminalService::create` | crate-private | 将 default/profile ID 解析到 catalog 并启动 workspace-rooted PTY | client 不能提交 executable/environment |
+| `TerminalService::attach` | crate-private | 校验 detached 状态、短租约和一次性 token，再转移 owner 并旋转凭据 | attached/过期/wrong-token/replay 都不能获取 PTY authority |
 | `spawn_output_drainers` | private | raw output/exit 并发收束；尾部输出 EOF 后才标记 exited | 不在 exit code 到达时提前丢弃尾部 bytes |
 | `read_state` | private | after-sequence cursor → bounded Base64 chunks + gap/exited state | ring eviction 必须显式返回 `output_gap` |
 | `ConfigBackedModelService::resolve_config` | private | user snapshot + optional Workspace snapshot merge | 每次 invocation safe point 重新解析 |
@@ -357,8 +364,10 @@ BrowserToolService::execute
 Terminal 因此使用 bounded `terminal/read` pull：`TerminalService` 在独立 runtime 中持续 drain
 PTY raw bytes，保留最多 1 MiB，并按 sequence 返回最多 128 个 chunk。`terminal/write` 的单批
 UTF-8 输入上限为 64 KiB，rows/cols 上限均为 512；未知 ID、跨 connection 使用和 runtime
-capacity 分别映射稳定 Terminal error。`serve_jsonl` 结束时调用 `close_owner`，不会把 PTY
-留给失效 connection。
+capacity 分别映射稳定 Terminal error。`serve_jsonl` 结束时调用 `close_owner`：普通 Terminal
+立即终止；`reconnectable` Terminal 解除旧 connection owner 并保留 30 秒，期间只接受 256-bit
+bearer token。`terminal/attach` 成功后把 owner 转给新 connection、恢复尺寸并旋转 token；错误、
+过期和重放统一返回 `TerminalAttachRejected`。后台 sweeper 会终止过期 PTY。
 
 `terminal/profile/list` 从 composition 时冻结的 `TerminalProfileCatalog` 返回安全显示信息；
 `terminal/create.profile` 只能选择 default 或已列出的稳定 ID。Windows catalog 可发现 Command
@@ -528,7 +537,8 @@ local tools + enabled user MCP declarations
 Plugin lifecycle + Hook declaration
 ├─ PluginActivationAuthority(<profile>/plugins)
 │  └─ live generation → Connector/MCP reconcile + invocation drain
-├─ plugin list/marketplace/install/update/rollback/grant/enable/disable/revoke/uninstall RPC
+├─ legacy plugin list/grant/enable/disable/revoke/uninstall RPC
+├─ generic Marketplace search/install/update/uninstall/capability RPC
 └─ HookRuntime → trusted Workspace gate → Host Policy → sandboxed process executor
 
 Language-server preference
@@ -707,6 +717,7 @@ MIME、size 与 SHA-256，不复制图片 bytes。
 | rg spawn/parse/exit failure | terminal `WorkspaceSearchReadResult.error` with stable redacted text |
 | missing terminal backend | `TerminalUnavailable` |
 | unknown/cross-connection Terminal | `TerminalNotFound` / `TerminalNotOwner` |
+| invalid reconnect lease or token replay | `TerminalAttachRejected` |
 | terminal capacity/runtime operation failure | `TerminalBusy` / `TerminalOperationFailed` |
 | poisoned lock/serialization invariant | `ServerOverloaded` or `InternalError` |
 
@@ -756,7 +767,7 @@ connect/disconnect/status、OAuth PKCE/one-shot callback/refresh/revoke/reconcil
 durable live wake 与 concurrent call isolation、
 Config commit/cross-connection notification、future Tool generation replacement 与 prepared-call
 generation retention，以及
-可信 Terminal Profile、真实 PTY create/write/read/exit、Terminal owner/error/ring limits，
+可信 Terminal Profile、真实 PTY create/attach/write/read/exit、Terminal owner/lease/token replay/error/ring limits，
 Skill 内置/用户/工作区来源组合、启用状态叠加、监听器刷新、精确激活、摘要变化失败即关闭、
 删除源文件后的 command receipt 重放与 `skills/changed`；工作区定制覆盖全局指令注入、Agent 目录刷新和
 `AGENTS.md` 非原生来源隔离。
@@ -779,7 +790,7 @@ local tool 的参数白名单、discovery、取消与输出限制由
 生命周期。MCP desired config 的热更新、SecretStore credential materialization、provider-injected
 OAuth lifecycle、form elicitation 和未来 Tool catalog replacement 已实现；当前仍没有 stdio 进程
 沙箱、自动 OAuth discovery/内建 provider、完整 runtime health/log API、progress 产品投影、URL/复杂
-form elicitation 或 MCP resources/prompts。Plugin 安装、marketplace、grant、enable/disable、rollback、
+form elicitation 或 MCP resources/prompts。Marketplace 安装与 Plugin grant/enable/disable、
 revoke 和 uninstall authority 已具备 typed RPC；Renderer 管理 UI 不属于本 crate。MCP 与 dynamic image result 已进入 canonical
 `ContentPart`，Core 会把结构化内容写入 durable `ToolResult`，并在最终模型请求处按 model
 capability 统一处理 image detail；旧 transcript 的纯 text shape 仍可读取。Reloadable Tool service

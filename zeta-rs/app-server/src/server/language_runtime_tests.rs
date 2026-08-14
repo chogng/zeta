@@ -10,9 +10,6 @@ use zeta_language_server_catalog::CSS_LANGUAGE_SERVER_ID;
 use zeta_language_server_catalog::CssLanguageServerProvider;
 use zeta_language_server_catalog::LanguageServerProviderRegistry;
 use zeta_language_server_catalog::ManagedNodeRuntime;
-use zeta_language_server_distribution::LanguageServerInstaller;
-use zeta_language_server_distribution::LanguageServerPackage;
-use zeta_language_server_distribution::LanguageServerPackageFile;
 
 use super::configured_provider_definitions;
 
@@ -91,31 +88,11 @@ impl ProviderFixture {
     }
 
     fn registry(&self) -> LanguageServerProviderRegistry {
-        let package = LanguageServerPackage::new(
-            CSS_LANGUAGE_SERVER_ID,
-            "0.1.0",
-            "server/css-language-server",
-            vec![
-                LanguageServerPackageFile::executable(
-                    "server/css-language-server",
-                    b"// server".to_vec(),
-                )
-                .unwrap(),
-                LanguageServerPackageFile::regular(
-                    "server/runtime/node_modules/example/index.js",
-                    b"module.exports = {};".to_vec(),
-                )
-                .unwrap(),
-            ],
-        )
-        .unwrap();
-        let digest = package.sha256();
-        let installed = LanguageServerInstaller::new(self.root.path().join("languages"))
-            .unwrap()
-            .install_verified(package, digest)
-            .unwrap();
+        let entrypoint = self.root.path().join("server/css-language-server");
+        fs::create_dir_all(entrypoint.parent().unwrap()).unwrap();
+        fs::write(&entrypoint, b"// server").unwrap();
         let provider = CssLanguageServerProvider::new(
-            installed,
+            entrypoint,
             ManagedNodeRuntime::from_path(&self.node).unwrap(),
         )
         .unwrap();

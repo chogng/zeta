@@ -199,14 +199,12 @@ use crate::protocol::language::{
     LanguageInlayHintKindDto, LanguageInlayHintsParams, LanguageInlayHintsResult,
     LanguageLinkedEditingRangesParams, LanguageLinkedEditingRangesResult, LanguageLocationDto,
     LanguageLocationKindDto, LanguageLocationsParams, LanguageLocationsResult,
-    LanguageMarketplaceCompatibilityDto, LanguageMarketplaceEntryDto,
-    LanguageMarketplaceInstallParams, LanguageMarketplaceInstallResult,
-    LanguageMarketplaceListResult, LanguageParameterInformationDto, LanguagePositionDto,
-    LanguagePrepareRenameParams, LanguagePrepareRenameResult, LanguageRangeDto,
-    LanguageRangeFormattingParams, LanguageRenameParams, LanguageRenamePreparationDto,
-    LanguageResolveCodeActionParams, LanguageResolveCodeLensParams,
-    LanguageResolveCompletionParams, LanguageResolveDocumentLinkParams, LanguageSemanticTokenDto,
-    LanguageSemanticTokensParams, LanguageSemanticTokensResult, LanguageServerMessageNotification,
+    LanguageParameterInformationDto, LanguagePositionDto, LanguagePrepareRenameParams,
+    LanguagePrepareRenameResult, LanguageRangeDto, LanguageRangeFormattingParams,
+    LanguageRenameParams, LanguageRenamePreparationDto, LanguageResolveCodeActionParams,
+    LanguageResolveCodeLensParams, LanguageResolveCompletionParams,
+    LanguageResolveDocumentLinkParams, LanguageSemanticTokenDto, LanguageSemanticTokensParams,
+    LanguageSemanticTokensResult, LanguageServerMessageNotification,
     LanguageServerMessageSeverityDto, LanguageServerProgressNotification,
     LanguageSignatureHelpParams, LanguageSignatureHelpResult, LanguageSignatureHelpTriggerKindDto,
     LanguageSignatureInformationDto, LanguageSynchronizeParams, LanguageTextDocumentEditDto,
@@ -215,6 +213,43 @@ use crate::protocol::language::{
     LanguageWorkspaceEditDto, LanguageWorkspaceEditEntryDto, LanguageWorkspaceSymbolDto,
     LanguageWorkspaceSymbolsParams, LanguageWorkspaceSymbolsResult,
 };
+use crate::protocol::marketplace::MarketplaceAcquireCapabilityParams;
+use crate::protocol::marketplace::MarketplaceAcquiredCapabilityDto;
+use crate::protocol::marketplace::MarketplaceActivationSpecDto;
+use crate::protocol::marketplace::MarketplaceArtifactHandleDto;
+use crate::protocol::marketplace::MarketplaceAvailableCapabilityDto;
+use crate::protocol::marketplace::MarketplaceCapabilityDescriptorDto;
+use crate::protocol::marketplace::MarketplaceCapabilityKindDto;
+use crate::protocol::marketplace::MarketplaceCapabilityLeaseDto;
+use crate::protocol::marketplace::MarketplaceCapabilityRefDto;
+use crate::protocol::marketplace::MarketplaceConnectorActivationSpecDto;
+use crate::protocol::marketplace::MarketplaceDownloadParams;
+use crate::protocol::marketplace::MarketplaceExecutableActivationSpecDto;
+use crate::protocol::marketplace::MarketplaceExecutableRuntimeDto;
+use crate::protocol::marketplace::MarketplaceGetParams;
+use crate::protocol::marketplace::MarketplaceInstallParams;
+use crate::protocol::marketplace::MarketplaceInstallationStateDto;
+use crate::protocol::marketplace::MarketplaceInstalledPackageDto;
+use crate::protocol::marketplace::MarketplaceLanguageActivationSpecDto;
+use crate::protocol::marketplace::MarketplaceListInstalledResult;
+use crate::protocol::marketplace::MarketplaceMcpActivationSpecDto;
+use crate::protocol::marketplace::MarketplaceMcpTransportDto;
+use crate::protocol::marketplace::MarketplaceOpenResourceParams;
+use crate::protocol::marketplace::MarketplacePackageDetailsDto;
+use crate::protocol::marketplace::MarketplacePackageRefDto;
+use crate::protocol::marketplace::MarketplacePackageSourceDto;
+use crate::protocol::marketplace::MarketplacePackageSummaryDto;
+use crate::protocol::marketplace::MarketplaceReleaseCapabilityParams;
+use crate::protocol::marketplace::MarketplaceResourceContentDto;
+use crate::protocol::marketplace::MarketplaceResourceRefDto;
+use crate::protocol::marketplace::MarketplaceSearchParams;
+use crate::protocol::marketplace::MarketplaceSearchResult;
+use crate::protocol::marketplace::MarketplaceSkillActivationSpecDto;
+use crate::protocol::marketplace::MarketplaceUninstallModeDto;
+use crate::protocol::marketplace::MarketplaceUninstallParams;
+use crate::protocol::marketplace::MarketplaceUpdateParams;
+use crate::protocol::marketplace::MarketplaceUpstreamReferenceDto;
+use crate::protocol::marketplace::MarketplaceUpstreamRegistryDto;
 use crate::protocol::mcp::McpOAuthCompleteParams;
 use crate::protocol::mcp::McpOAuthMutationParams;
 use crate::protocol::mcp::McpOAuthMutationResult;
@@ -231,19 +266,9 @@ use crate::protocol::model::{ModelCatalogEntry, ModelListResult};
 use crate::protocol::notification::{SessionUpdateEnvelope, ThreadUpdateEnvelope};
 use crate::protocol::plugins::PluginCommandDispositionDto;
 use crate::protocol::plugins::PluginCommandResultDto;
-use crate::protocol::plugins::PluginContributionSummaryDto;
-use crate::protocol::plugins::PluginCredentialKindDto;
-use crate::protocol::plugins::PluginCredentialSlotDto;
 use crate::protocol::plugins::PluginListResult;
-use crate::protocol::plugins::PluginMarketplaceCommandParams;
-use crate::protocol::plugins::PluginMarketplaceListResult;
-use crate::protocol::plugins::PluginMarketplaceModeDto;
-use crate::protocol::plugins::PluginMarketplacePackageDto;
-use crate::protocol::plugins::PluginMarketplaceTrustDto;
 use crate::protocol::plugins::PluginPackageCommandParams;
 use crate::protocol::plugins::PluginPackageDto;
-use crate::protocol::plugins::PluginPermissionDto;
-use crate::protocol::plugins::PluginWorkspaceAccessDto;
 use crate::protocol::plugins::PluginsChanged;
 use crate::protocol::resources::{
     ResourceMetadataParams, ResourceMetadataResult, ResourceReadParams, ResourceReadResult,
@@ -659,25 +684,55 @@ client_methods! {
         response: PluginListResult,
         serialization: GlobalSharedRead,
     },
-    PluginMarketplaceList => "plugin/marketplace/list" {
-        params: EmptyParams,
-        response: PluginMarketplaceListResult,
+    MarketplaceSearch => "marketplace/search" {
+        params: MarketplaceSearchParams,
+        response: MarketplaceSearchResult,
         serialization: GlobalSharedRead,
     },
-    PluginInstall => "plugin/install" {
-        params: PluginMarketplaceCommandParams,
-        response: PluginCommandResultDto,
+    MarketplaceGet => "marketplace/get" {
+        params: MarketplaceGetParams,
+        response: MarketplacePackageDetailsDto,
+        serialization: GlobalSharedRead,
+    },
+    MarketplaceDownload => "marketplace/download" {
+        params: MarketplaceDownloadParams,
+        response: MarketplaceArtifactHandleDto,
         serialization: GlobalExclusive,
     },
-    PluginUpdate => "plugin/update" {
-        params: PluginMarketplaceCommandParams,
-        response: PluginCommandResultDto,
+    MarketplaceInstall => "marketplace/install" {
+        params: MarketplaceInstallParams,
+        response: MarketplaceInstalledPackageDto,
         serialization: GlobalExclusive,
     },
-    PluginRollback => "plugin/rollback" {
-        params: PluginPackageCommandParams,
-        response: PluginCommandResultDto,
+    MarketplaceUpdate => "marketplace/update" {
+        params: MarketplaceUpdateParams,
+        response: MarketplaceInstalledPackageDto,
         serialization: GlobalExclusive,
+    },
+    MarketplaceUninstall => "marketplace/uninstall" {
+        params: MarketplaceUninstallParams,
+        response: (),
+        serialization: GlobalExclusive,
+    },
+    MarketplaceListInstalled => "marketplace/listInstalled" {
+        params: EmptyParams,
+        response: MarketplaceListInstalledResult,
+        serialization: GlobalSharedRead,
+    },
+    MarketplaceAcquireCapability => "marketplace/acquireCapability" {
+        params: MarketplaceAcquireCapabilityParams,
+        response: MarketplaceAcquiredCapabilityDto,
+        serialization: GlobalExclusive,
+    },
+    MarketplaceReleaseCapability => "marketplace/releaseCapability" {
+        params: MarketplaceReleaseCapabilityParams,
+        response: (),
+        serialization: GlobalExclusive,
+    },
+    MarketplaceOpenResource => "marketplace/openResource" {
+        params: MarketplaceOpenResourceParams,
+        response: MarketplaceResourceContentDto,
+        serialization: GlobalSharedRead,
     },
     PluginEnable => "plugin/enable" {
         params: PluginPackageCommandParams,
@@ -772,16 +827,6 @@ client_methods! {
     LanguageServerRemove => "languageServer/remove" {
         params: LanguageServerRemoveParams,
         response: ConfigCommandResult,
-        serialization: GlobalExclusive,
-    },
-    LanguageMarketplaceList => "language/marketplace/list" {
-        params: EmptyParams,
-        response: LanguageMarketplaceListResult,
-        serialization: GlobalSharedRead,
-    },
-    LanguageMarketplaceInstall => "language/marketplace/install" {
-        params: LanguageMarketplaceInstallParams,
-        response: LanguageMarketplaceInstallResult,
         serialization: GlobalExclusive,
     },
     ProviderConfigure => "provider/configure" {
@@ -1663,21 +1708,48 @@ typescript_bindings! {
     McpServerRuntimeStateDto,
     McpServerStatusDto,
     McpServerStatusResult,
+    MarketplacePackageRefDto,
+    MarketplaceArtifactHandleDto,
+    MarketplaceCapabilityRefDto,
+    MarketplaceResourceRefDto,
+    MarketplaceCapabilityKindDto,
+    MarketplaceCapabilityDescriptorDto,
+    MarketplaceAvailableCapabilityDto,
+    MarketplacePackageSummaryDto,
+    MarketplaceSearchParams,
+    MarketplaceSearchResult,
+    MarketplaceGetParams,
+    MarketplacePackageDetailsDto,
+    MarketplacePackageSourceDto,
+    MarketplaceUpstreamRegistryDto,
+    MarketplaceUpstreamReferenceDto,
+    MarketplaceDownloadParams,
+    MarketplaceInstallParams,
+    MarketplaceUpdateParams,
+    MarketplaceInstallationStateDto,
+    MarketplaceInstalledPackageDto,
+    MarketplaceListInstalledResult,
+    MarketplaceUninstallModeDto,
+    MarketplaceUninstallParams,
+    MarketplaceAcquireCapabilityParams,
+    MarketplaceCapabilityLeaseDto,
+    MarketplaceActivationSpecDto,
+    MarketplaceSkillActivationSpecDto,
+    MarketplaceMcpActivationSpecDto,
+    MarketplaceMcpTransportDto,
+    MarketplaceConnectorActivationSpecDto,
+    MarketplaceLanguageActivationSpecDto,
+    MarketplaceExecutableRuntimeDto,
+    MarketplaceExecutableActivationSpecDto,
+    MarketplaceAcquiredCapabilityDto,
+    MarketplaceReleaseCapabilityParams,
+    MarketplaceOpenResourceParams,
+    MarketplaceResourceContentDto,
     PluginPackageDto,
     PluginListResult,
-    PluginMarketplaceCommandParams,
-    PluginMarketplaceListResult,
-    PluginMarketplaceModeDto,
-    PluginMarketplacePackageDto,
-    PluginMarketplaceTrustDto,
     PluginPackageCommandParams,
     PluginCommandDispositionDto,
     PluginCommandResultDto,
-    PluginContributionSummaryDto,
-    PluginCredentialKindDto,
-    PluginCredentialSlotDto,
-    PluginPermissionDto,
-    PluginWorkspaceAccessDto,
     PluginsChanged,
     TurnId,
     DelegationId,
@@ -1756,11 +1828,6 @@ typescript_bindings! {
     SemanticCodeIndexRevokeParams,
     LanguageServerConfigureParams,
     LanguageServerRemoveParams,
-    LanguageMarketplaceCompatibilityDto,
-    LanguageMarketplaceEntryDto,
-    LanguageMarketplaceListResult,
-    LanguageMarketplaceInstallParams,
-    LanguageMarketplaceInstallResult,
     ProviderConfigureParams,
     ProviderRemoveParams,
     McpServerUpsertParams,

@@ -5,7 +5,9 @@
 
 mod css;
 mod definition;
+mod direct_package;
 mod error;
+mod node_package;
 mod node_runtime;
 mod provider;
 mod resolver;
@@ -23,7 +25,9 @@ pub const CSS_LANGUAGE_SERVER_ID: &str = "css-language-server";
 
 pub use css::CssLanguageServerProvider;
 pub use definition::LanguageServerDefinition;
+pub use direct_package::DirectPackageLanguageServerProvider;
 pub use error::LanguageServerCatalogError;
+pub use node_package::NodePackageLanguageServerProvider;
 pub use node_runtime::ManagedNodeRuntime;
 pub use node_runtime::ManagedNodeRuntimeSource;
 pub use provider::LanguageServerProvider;

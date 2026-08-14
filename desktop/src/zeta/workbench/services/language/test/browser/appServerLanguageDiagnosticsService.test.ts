@@ -76,8 +76,6 @@ class FakeLanguageApi implements ILanguageApi {
   workspaceDiagnosticPulls = 0;
   workspaceDiagnosticsError: Error | undefined;
   workspaceReport: Awaited<ReturnType<ILanguageApi["workspaceDiagnostics"]>> = { supported: false, snapshots: [] };
-  async listMarketplace(): ReturnType<ILanguageApi["listMarketplace"]> { return { catalogRevision: "none", activationGeneration: 1, entries: [] }; }
-  async installMarketplace(): ReturnType<ILanguageApi["installMarketplace"]> { return { activationGeneration: 1 }; }
   async synchronize(params: Parameters<ILanguageApi["synchronize"]>[0]): Promise<void> { this.synchronized.push(params); }
   async close(params: Parameters<ILanguageApi["close"]>[0]): Promise<void> { this.closed.push(params); }
   hover(): ReturnType<ILanguageApi["hover"]> { throw new Error("unused"); }

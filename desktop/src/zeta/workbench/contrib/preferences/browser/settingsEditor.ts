@@ -17,12 +17,12 @@ import type { ICodeIndexService } from "../../../../platform/codeIndex/common/co
 import type { IToolSearchService, ToolSearchEmbeddingStatus } from "../../../../platform/toolSearch/common/toolSearchService.js";
 import type { IConnectorService } from "../../../../platform/connectors/common/connectorService.js";
 import type { IPluginService } from "../../../../platform/plugins/common/pluginService.js";
-import type { ILanguageMarketplaceService } from "../../../../platform/language/common/languageMarketplaceService.js";
+import type { IMarketplaceService } from "../../../../platform/marketplace/common/marketplaceService.js";
 import type { CodeIndexStatusResult, SemanticCodeIndexSelectionDto } from "../../../../../../generated/app-server/types.js";
 import { getSettingsSection, SettingsSections, type SettingsSectionDescriptor } from "../common/settingsSections.js";
 import { ConnectorSettingsPane } from "./connectorSettings.js";
 import { PluginSettingsPane } from "./pluginSettings.js";
-import { LanguageMarketplaceSettingsPane } from "./languageMarketplaceSettings.js";
+import { MarketplaceSettingsPane } from "./marketplaceSettings.js";
 
 export interface SettingsEditorOptions {
   readonly ownerDocument: Document;
@@ -35,7 +35,7 @@ export interface SettingsEditorOptions {
   readonly toolSearchService: IToolSearchService;
   readonly connectorService: IConnectorService;
   readonly pluginService: IPluginService;
-  readonly languageMarketplaceService: ILanguageMarketplaceService;
+  readonly marketplaceService: IMarketplaceService;
 }
 
 let nextSettingsEditorId = 1;
@@ -52,7 +52,7 @@ export class SettingsEditor extends DisposableOwner {
   private readonly toolSearchService: IToolSearchService;
   private readonly connectorService: IConnectorService;
   private readonly pluginService: IPluginService;
-  private readonly languageMarketplaceService: ILanguageMarketplaceService;
+  private readonly marketplaceService: IMarketplaceService;
   private readonly searchInput: InputBox;
   private readonly navigationItems = new Map<string, HTMLButtonElement>();
   private readonly navigationEmpty: HTMLParagraphElement;
@@ -77,7 +77,7 @@ export class SettingsEditor extends DisposableOwner {
     this.toolSearchService = options.toolSearchService;
     this.connectorService = options.connectorService;
     this.pluginService = options.pluginService;
-    this.languageMarketplaceService = options.languageMarketplaceService;
+    this.marketplaceService = options.marketplaceService;
     const editorId = `zeta-settings-editor-${nextSettingsEditorId++}`;
     this.element = options.ownerDocument.createElement("div");
     this.element.className = "zeta-settings-editor";
@@ -235,6 +235,7 @@ export class SettingsEditor extends DisposableOwner {
     if (section.id === "connectors") this.renderConnectors();
     if (section.id === "plugins") this.renderPlugins();
     if (section.id === "languages") this.renderLanguages();
+    if (section.id === "marketplace") this.renderMarketplace();
     if (section.id === "indexing") void this.renderIndexing();
     this.contentScrollable.scrollTo(0, 0);
     this.contentScrollable.layout();
@@ -253,7 +254,13 @@ export class SettingsEditor extends DisposableOwner {
   }
 
   private renderLanguages(): void {
-    const pane = new LanguageMarketplaceSettingsPane(this.element.ownerDocument, this.languageMarketplaceService, this.dialogService);
+    const pane = new MarketplaceSettingsPane(this.element.ownerDocument, this.marketplaceService, "language");
+    this.sectionBindings.add(pane);
+    this.sectionContent.replaceChildren(pane.element);
+  }
+
+  private renderMarketplace(): void {
+    const pane = new MarketplaceSettingsPane(this.element.ownerDocument, this.marketplaceService);
     this.sectionBindings.add(pane);
     this.sectionContent.replaceChildren(pane.element);
   }

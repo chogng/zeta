@@ -3,14 +3,12 @@
 > 物理位置：`zeta-rs/plugins/`
 > Rust crate：`zeta_plugins`
 > 当前状态：PL0 已实现并支持 `ConnectorContribution` 引用 `McpServerContribution` 的声明校验；PL1 的
-> content-addressed store、Marketplace-first install/staged update/rollback、profile reconcile、durable installed/enabled/granted/effective authority、exact `PluginActivationSnapshot`、live generation publish 与 invocation drain 已实现；Connector domain 已提取到
+> legacy local content store、durable installed/enabled/granted/effective authority、exact `PluginActivationSnapshot`、live generation publish 与 invocation drain 已实现；远端 Marketplace 分发和安装已统一迁到 `zeta-marketplace-manager`；Connector domain 已提取到
 > `zeta-rs/connectors`，Plugin projection、durable authority 与 API-token connect/revoke 位于
 > `zeta-rs/ext/connectors`；App Server 已能从注入的 activation 自动接线 Connector 与 MCP，通用 OAuth
 > PKCE/device 状态机、App Server control plane、Desktop/TUI 产品入口与 GitHub providers 已实现；
-> TUF 远端 Marketplace、delegated publisher、离线签名目录缓存、按需安全 ZIP ingestion 与 revocation
-> tombstone 已实现；PL4 的可执行 Editor Extension 安装/授权声明已实现，Host runtime 不由本 crate 拥有
+> PL4 的可执行 Editor Extension 本地安装/授权声明已实现，Host runtime 不由本 crate 拥有
 > 当前 crate 实现契约：[`zeta-rs/plugins/README.md`](../zeta-rs/plugins/README.md)
-> 远端分发实现契约：[`zeta-rs/plugin-marketplace/README.md`](../zeta-rs/plugin-marketplace/README.md)
 > 跨 package family 的 Marketplace source、共享验证与领域投影：[`marketplace-integration.md`](marketplace-integration.md)
 > Connector account/lifecycle：[`connectors.md`](connectors.md)
 > MCP runtime：[`mcp.md`](mcp.md)
@@ -38,7 +36,7 @@ Plugin 是经过校验和版本管理的扩展包，不是安装后便能执行�
 
 ## 1. 结论
 
-`zeta-plugins` 是 Zeta 的扩展分发、安装、解析、启用和版本管理控制面。Plugin 是一个不可变、
+`zeta-plugins` 是 Zeta 的 Plugin manifest、领域投影、启用和授权控制面。Plugin 是一个不可变、
 可校验的包，可以贡献 Skill、Connector declaration、MCP server declaration、可执行 Editor Extension 声明和静态资源；Plugin manager 将这些贡献
 解析为带来源和 digest 的 activation snapshot，再由 App Server 注入对应 runtime。
 
@@ -112,14 +110,13 @@ package-relative path、本地 package 安全校验、确定性 digest、只读 
 failure semantics 由 crate
 [`README`](../zeta-rs/plugins/README.md) 维护。
 
-User/Workspace TOML 与 App Server 已能表达 exact Plugin request 和 desired enablement。产品 host 注册
-受管 Marketplace root；resolver 只按 catalog 中的 exact ID/version/digest 安装并协调 user-profile
-enablement，不自动授予权限。Workspace request 只能读取 profile 中可用、待 profile 安装或版本不匹配
-三种结果，不能以 Workspace trust 自动扩大 profile authority。Package store 安全保存 immutable object，
+User/Workspace TOML 与 App Server 已能表达 exact legacy Plugin request 和 desired enablement。
+Package store 安全保存既有 local-development immutable object，
 并把 exact installed package 解析为 generation-bound activation snapshot；App Server 可据此自动构造
 Skill source、Connector catalog、durable authority 和 package-rooted MCP provider。Plugin authority
 分别持久化 installed/enabled/granted/effective refs 和 command receipts，并驱动 live activation 切换；
-App Server 已暴露 Marketplace list/install/update/rollback 及 enable/disable/grant/revokeGrant/uninstall。
+App Server 只为该 legacy authority 暴露 list/enable/disable/grant/revokeGrant/uninstall；浏览和安装统一走
+通用 `marketplace/*` API。
 `docs/tui.md` 也明确要求 Plugin domain projection 进入 canonical
 App Server contract 后，TUI 才能增加管理 feature。TUI 已有可复用的 interaction view stack 与
 tabs/search/selection presentation primitive，但当前没有 Plugin view model 或 `/plugins` command；
@@ -652,26 +649,11 @@ runtime 不可用，但不会把 Plugin 标成未安装。
 | ✅ 当前 | `plugin/enable` / `plugin/disable` | exact-package CAS 修改 profile enablement |
 | ✅ 当前 | `plugin/grant` / `plugin/revokeGrant` | exact-package CAS 修改 explicit grants |
 | ✅ 当前 | `plugin/uninstall` | 仅在 disabled + revoked 后移除 authority reference |
-| ✅ 当前 | `plugin/marketplace/list` / `plugin/install` | 只接受 host 注册 catalog 中的 exact digest，不接受客户端路径 |
-| ✅ 当前 | `plugin/update` / `plugin/rollback` | staged newer package；rollback 只切到已安装且已授权的旧 digest |
 | 尚未完成 | operation read API | 长操作 progress/result |
 
-已实现 mutation 使用 `CommandId + expectedRevision + exact package payload`；安装入口不会接受 Renderer
-传入的任意宿主文件路径。`Managed` Marketplace root 由产品分发层注册，`LocalDevelopment` 仅在 host
-显式开启时可用。读取模式不决定运营方信任：官方远端源仍为 `ProductManaged`，只有由 host 明确接入、
-固定独立 root 并声明 non-empty `allowedPublishers` 的第三方源才是 `VerifiedExternal`；任一签名 target
-越过该 namespace scope 会使整源 fail-closed。不同远端源实际发布同一 publisher namespace 时，组合也会
-因 owner ambiguity 失败，而不是按源顺序覆盖。`RemoteManaged` Marketplace 已通过 host-pinned
-TUF root 同步 HTTPS catalog：
-timestamp/snapshot/targets 的 threshold、rollback 与 expiry 检查由 TUF verifier 执行；package 必须来自
-`publishers/<publisher>` delegated role。远端协议是产品无关的 `marketplacePackage` exact identity 与
-`marketplaceCatalog` discovery envelope；Zeta 只解释其中可选的 `consumerMetadata.zeta`，不含该 adapter
-的 package 会被忽略，而不会让整个源失败。刷新只缓存签名 metadata、generic discovery metadata 与撤销
-target，不预取 ZIP；安装或更新时才重新检查当前 TUF/revocation authority、读取一个 exact target，并通过
-target hash/length、受限 ZIP extraction、manifest identity 与 `MarketplaceV1` normalized digest。transport 失败可打开
-仍未过期的最后目录缓存；离线安装只允许此前已经 materialize 且再次通过 exact digest 的包。顶层
-revocation target 会写入 durable exact-package tombstone，不因后续 feed 缺项自动恢复。可搜索的 Desktop
-目录、按需 package cache quota/GC 已实现；download progress 与 permission/contribution diff 仍未实现。
+已实现 Plugin mutation 使用 `CommandId + expectedRevision + exact package payload`。这些 mutation 不读取
+Marketplace catalog，也不接受 Renderer 提交宿主文件路径。远端信任、TUF、revocation、下载、artifact
+和安装状态由 [`marketplace-integration.md`](marketplace-integration.md) 定义的 Manager 链路统一拥有。
 
 正式 package 把只读配置和公开信任根放在
 `zeta-resources/product-services/{product-services.json,marketplace-root.json}`。`zeta-cli` 通过

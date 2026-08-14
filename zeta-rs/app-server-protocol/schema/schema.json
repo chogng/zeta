@@ -1226,10 +1226,12 @@
         "CloudCodeIndexOperationFailed",
         "LanguageServiceUnavailable",
         "LanguageRequestFailed",
-        "LanguageMarketplaceUnavailable",
-        "LanguageMarketplaceRevisionConflict",
-        "LanguageMarketplaceIncompatible",
-        "LanguageMarketplaceOperationFailed",
+        "MarketplaceUnavailable",
+        "MarketplaceNotFound",
+        "MarketplaceUntrusted",
+        "MarketplaceIncompatible",
+        "MarketplaceInstallationInUse",
+        "MarketplaceOperationFailed",
         "SearchUnavailable",
         "SearchNotFound",
         "SearchNotOwner",
@@ -2429,7 +2431,103 @@
           "properties": {
             "method": {
               "type": "string",
-              "const": "plugin/marketplace/list"
+              "const": "marketplace/search"
+            },
+            "params": {
+              "$ref": "#/$defs/MarketplaceSearchParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "marketplace/get"
+            },
+            "params": {
+              "$ref": "#/$defs/MarketplaceGetParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "marketplace/download"
+            },
+            "params": {
+              "$ref": "#/$defs/MarketplaceDownloadParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "marketplace/install"
+            },
+            "params": {
+              "$ref": "#/$defs/MarketplaceInstallParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "marketplace/update"
+            },
+            "params": {
+              "$ref": "#/$defs/MarketplaceUpdateParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "marketplace/uninstall"
+            },
+            "params": {
+              "$ref": "#/$defs/MarketplaceUninstallParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "marketplace/listInstalled"
             },
             "params": {
               "$ref": "#/$defs/EmptyParams"
@@ -2445,10 +2543,10 @@
           "properties": {
             "method": {
               "type": "string",
-              "const": "plugin/install"
+              "const": "marketplace/acquireCapability"
             },
             "params": {
-              "$ref": "#/$defs/PluginMarketplaceCommandParams"
+              "$ref": "#/$defs/MarketplaceAcquireCapabilityParams"
             }
           },
           "required": [
@@ -2461,10 +2559,10 @@
           "properties": {
             "method": {
               "type": "string",
-              "const": "plugin/update"
+              "const": "marketplace/releaseCapability"
             },
             "params": {
-              "$ref": "#/$defs/PluginMarketplaceCommandParams"
+              "$ref": "#/$defs/MarketplaceReleaseCapabilityParams"
             }
           },
           "required": [
@@ -2477,10 +2575,10 @@
           "properties": {
             "method": {
               "type": "string",
-              "const": "plugin/rollback"
+              "const": "marketplace/openResource"
             },
             "params": {
-              "$ref": "#/$defs/PluginPackageCommandParams"
+              "$ref": "#/$defs/MarketplaceOpenResourceParams"
             }
           },
           "required": [
@@ -2785,38 +2883,6 @@
             },
             "params": {
               "$ref": "#/$defs/LanguageServerRemoveParams"
-            }
-          },
-          "required": [
-            "method",
-            "params"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "method": {
-              "type": "string",
-              "const": "language/marketplace/list"
-            },
-            "params": {
-              "$ref": "#/$defs/EmptyParams"
-            }
-          },
-          "required": [
-            "method",
-            "params"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "method": {
-              "type": "string",
-              "const": "language/marketplace/install"
-            },
-            "params": {
-              "$ref": "#/$defs/LanguageMarketplaceInstallParams"
             }
           },
           "required": [
@@ -5217,10 +5283,10 @@
           "properties": {
             "method": {
               "type": "string",
-              "const": "plugin/marketplace/list"
+              "const": "marketplace/search"
             },
             "result": {
-              "$ref": "#/$defs/PluginMarketplaceListResult"
+              "$ref": "#/$defs/MarketplaceSearchResult"
             }
           },
           "required": [
@@ -5233,10 +5299,10 @@
           "properties": {
             "method": {
               "type": "string",
-              "const": "plugin/install"
+              "const": "marketplace/get"
             },
             "result": {
-              "$ref": "#/$defs/PluginCommandResultDto"
+              "$ref": "#/$defs/MarketplacePackageDetailsDto"
             }
           },
           "required": [
@@ -5249,10 +5315,10 @@
           "properties": {
             "method": {
               "type": "string",
-              "const": "plugin/update"
+              "const": "marketplace/download"
             },
             "result": {
-              "$ref": "#/$defs/PluginCommandResultDto"
+              "$ref": "#/$defs/MarketplaceArtifactHandleDto"
             }
           },
           "required": [
@@ -5265,10 +5331,106 @@
           "properties": {
             "method": {
               "type": "string",
-              "const": "plugin/rollback"
+              "const": "marketplace/install"
             },
             "result": {
-              "$ref": "#/$defs/PluginCommandResultDto"
+              "$ref": "#/$defs/MarketplaceInstalledPackageDto"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "marketplace/update"
+            },
+            "result": {
+              "$ref": "#/$defs/MarketplaceInstalledPackageDto"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "marketplace/uninstall"
+            },
+            "result": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "marketplace/listInstalled"
+            },
+            "result": {
+              "$ref": "#/$defs/MarketplaceListInstalledResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "marketplace/acquireCapability"
+            },
+            "result": {
+              "$ref": "#/$defs/MarketplaceAcquiredCapabilityDto"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "marketplace/releaseCapability"
+            },
+            "result": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "marketplace/openResource"
+            },
+            "result": {
+              "$ref": "#/$defs/MarketplaceResourceContentDto"
             }
           },
           "required": [
@@ -5573,38 +5735,6 @@
             },
             "result": {
               "$ref": "#/$defs/ConfigCommandResult"
-            }
-          },
-          "required": [
-            "method",
-            "result"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "method": {
-              "type": "string",
-              "const": "language/marketplace/list"
-            },
-            "result": {
-              "$ref": "#/$defs/LanguageMarketplaceListResult"
-            }
-          },
-          "required": [
-            "method",
-            "result"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "method": {
-              "type": "string",
-              "const": "language/marketplace/install"
-            },
-            "result": {
-              "$ref": "#/$defs/LanguageMarketplaceInstallResult"
             }
           },
           "required": [
@@ -10860,6 +10990,7 @@
       "enum": [
         "builtIn",
         "plugin",
+        "marketplace",
         "user"
       ]
     },
@@ -13704,176 +13835,6 @@
         "locations"
       ]
     },
-    "LanguageMarketplaceCompatibilityDto": {
-      "description": "Effective installability after signed consumer compatibility and local runtime probes.",
-      "oneOf": [
-        {
-          "type": "object",
-          "properties": {
-            "status": {
-              "type": "string",
-              "const": "compatible"
-            }
-          },
-          "required": [
-            "status"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "reason": {
-              "type": "string"
-            },
-            "status": {
-              "type": "string",
-              "const": "incompatible"
-            }
-          },
-          "required": [
-            "status",
-            "reason"
-          ]
-        }
-      ]
-    },
-    "LanguageMarketplaceEntryDto": {
-      "description": "One exact signed Language Marketplace package and server route.",
-      "type": "object",
-      "properties": {
-        "active": {
-          "type": "boolean"
-        },
-        "compatibility": {
-          "$ref": "#/$defs/LanguageMarketplaceCompatibilityDto"
-        },
-        "description": {
-          "type": "string"
-        },
-        "digest": {
-          "type": "string"
-        },
-        "displayName": {
-          "type": "string"
-        },
-        "fileExtensions": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "installed": {
-          "type": "boolean"
-        },
-        "languages": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "license": {
-          "type": "string"
-        },
-        "marketplaceId": {
-          "type": "string"
-        },
-        "packageId": {
-          "type": "string"
-        },
-        "serverId": {
-          "type": "string"
-        },
-        "version": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "marketplaceId",
-        "packageId",
-        "version",
-        "digest",
-        "displayName",
-        "description",
-        "license",
-        "serverId",
-        "languages",
-        "fileExtensions",
-        "compatibility",
-        "installed",
-        "active"
-      ]
-    },
-    "LanguageMarketplaceInstallParams": {
-      "description": "Exact catalog entry selected after the frontend presents its install confirmation.",
-      "type": "object",
-      "properties": {
-        "digest": {
-          "type": "string"
-        },
-        "expectedCatalogRevision": {
-          "type": "string"
-        },
-        "marketplaceId": {
-          "type": "string"
-        },
-        "packageId": {
-          "type": "string"
-        },
-        "serverId": {
-          "type": "string"
-        },
-        "version": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "expectedCatalogRevision",
-        "marketplaceId",
-        "packageId",
-        "version",
-        "digest",
-        "serverId"
-      ]
-    },
-    "LanguageMarketplaceInstallResult": {
-      "description": "Durable activation generation committed by one verified installation.",
-      "type": "object",
-      "properties": {
-        "activationGeneration": {
-          "type": "integer",
-          "format": "uint64",
-          "minimum": 0
-        }
-      },
-      "required": [
-        "activationGeneration"
-      ]
-    },
-    "LanguageMarketplaceListResult": {
-      "description": "Current signed catalog and durable activation projection.",
-      "type": "object",
-      "properties": {
-        "activationGeneration": {
-          "type": "integer",
-          "format": "uint64",
-          "minimum": 0
-        },
-        "catalogRevision": {
-          "type": "string"
-        },
-        "entries": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/LanguageMarketplaceEntryDto"
-          }
-        }
-      },
-      "required": [
-        "catalogRevision",
-        "activationGeneration",
-        "entries"
-      ]
-    },
     "LanguageParameterInformationDto": {
       "description": "One parameter in a callable signature.",
       "type": "object",
@@ -14654,6 +14615,715 @@
         "symbols"
       ]
     },
+    "MarketplaceAcquireCapabilityParams": {
+      "type": "object",
+      "properties": {
+        "capability": {
+          "$ref": "#/$defs/MarketplaceCapabilityRefDto"
+        }
+      },
+      "required": [
+        "capability"
+      ]
+    },
+    "MarketplaceAcquiredCapabilityDto": {
+      "type": "object",
+      "properties": {
+        "lease": {
+          "$ref": "#/$defs/MarketplaceCapabilityLeaseDto"
+        },
+        "spec": {
+          "$ref": "#/$defs/MarketplaceActivationSpecDto"
+        }
+      },
+      "required": [
+        "lease",
+        "spec"
+      ]
+    },
+    "MarketplaceActivationSpecDto": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "skill"
+            }
+          },
+          "$ref": "#/$defs/MarketplaceSkillActivationSpecDto",
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "mcp"
+            }
+          },
+          "$ref": "#/$defs/MarketplaceMcpActivationSpecDto",
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "connector"
+            }
+          },
+          "$ref": "#/$defs/MarketplaceConnectorActivationSpecDto",
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "language"
+            }
+          },
+          "$ref": "#/$defs/MarketplaceLanguageActivationSpecDto",
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "executable"
+            }
+          },
+          "$ref": "#/$defs/MarketplaceExecutableActivationSpecDto",
+          "required": [
+            "kind"
+          ]
+        }
+      ]
+    },
+    "MarketplaceArtifactHandleDto": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "package": {
+          "$ref": "#/$defs/MarketplacePackageRefDto"
+        }
+      },
+      "required": [
+        "id",
+        "package"
+      ]
+    },
+    "MarketplaceAvailableCapabilityDto": {
+      "type": "object",
+      "properties": {
+        "authenticationProvider": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "contractVersion": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/MarketplaceCapabilityKindDto"
+        },
+        "permissions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "kind",
+        "id",
+        "contractVersion",
+        "permissions"
+      ]
+    },
+    "MarketplaceCapabilityDescriptorDto": {
+      "type": "object",
+      "properties": {
+        "authenticationProvider": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "contractVersion": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/MarketplaceCapabilityKindDto"
+        },
+        "permissions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "reference": {
+          "$ref": "#/$defs/MarketplaceCapabilityRefDto"
+        }
+      },
+      "required": [
+        "reference",
+        "kind",
+        "id",
+        "contractVersion",
+        "permissions"
+      ]
+    },
+    "MarketplaceCapabilityKindDto": {
+      "type": "string",
+      "enum": [
+        "skill",
+        "mcp",
+        "connector",
+        "theme",
+        "language",
+        "executable",
+        "asset"
+      ]
+    },
+    "MarketplaceCapabilityLeaseDto": {
+      "type": "object",
+      "properties": {
+        "capability": {
+          "$ref": "#/$defs/MarketplaceCapabilityRefDto"
+        },
+        "id": {
+          "type": "string"
+        },
+        "installationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "capability",
+        "installationId"
+      ]
+    },
+    "MarketplaceCapabilityRefDto": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ]
+    },
+    "MarketplaceConnectorActivationSpecDto": {
+      "type": "object",
+      "properties": {
+        "authenticationProvider": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "contractVersion": {
+          "type": "string"
+        },
+        "mcp": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MarketplaceCapabilityRefDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "contractVersion"
+      ]
+    },
+    "MarketplaceDownloadParams": {
+      "type": "object",
+      "properties": {
+        "packageId": {
+          "type": "string"
+        },
+        "version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "packageId"
+      ]
+    },
+    "MarketplaceExecutableActivationSpecDto": {
+      "type": "object",
+      "properties": {
+        "contractVersion": {
+          "type": "string"
+        },
+        "entrypoint": {
+          "$ref": "#/$defs/MarketplaceResourceRefDto"
+        },
+        "runtime": {
+          "$ref": "#/$defs/MarketplaceExecutableRuntimeDto"
+        }
+      },
+      "required": [
+        "contractVersion",
+        "runtime",
+        "entrypoint"
+      ]
+    },
+    "MarketplaceExecutableRuntimeDto": {
+      "type": "string",
+      "enum": [
+        "direct",
+        "node"
+      ]
+    },
+    "MarketplaceGetParams": {
+      "type": "object",
+      "properties": {
+        "packageId": {
+          "type": "string"
+        },
+        "version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "packageId"
+      ]
+    },
+    "MarketplaceInstallParams": {
+      "type": "object",
+      "properties": {
+        "packageId": {
+          "type": "string"
+        },
+        "version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "packageId"
+      ]
+    },
+    "MarketplaceInstallationStateDto": {
+      "type": "string",
+      "enum": [
+        "installed",
+        "pendingRemoval"
+      ]
+    },
+    "MarketplaceInstalledPackageDto": {
+      "type": "object",
+      "properties": {
+        "capabilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/MarketplaceCapabilityDescriptorDto"
+          }
+        },
+        "installationId": {
+          "type": "string"
+        },
+        "package": {
+          "$ref": "#/$defs/MarketplacePackageRefDto"
+        },
+        "state": {
+          "$ref": "#/$defs/MarketplaceInstallationStateDto"
+        }
+      },
+      "required": [
+        "installationId",
+        "package",
+        "state",
+        "capabilities"
+      ]
+    },
+    "MarketplaceLanguageActivationSpecDto": {
+      "type": "object",
+      "properties": {
+        "contractVersion": {
+          "type": "string"
+        },
+        "manifest": {
+          "$ref": "#/$defs/MarketplaceResourceRefDto"
+        }
+      },
+      "required": [
+        "contractVersion",
+        "manifest"
+      ]
+    },
+    "MarketplaceListInstalledResult": {
+      "type": "object",
+      "properties": {
+        "packages": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/MarketplaceInstalledPackageDto"
+          }
+        }
+      },
+      "required": [
+        "packages"
+      ]
+    },
+    "MarketplaceMcpActivationSpecDto": {
+      "type": "object",
+      "properties": {
+        "contractVersion": {
+          "type": "string"
+        },
+        "networkHosts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "transport": {
+          "$ref": "#/$defs/MarketplaceMcpTransportDto"
+        }
+      },
+      "required": [
+        "contractVersion",
+        "transport",
+        "networkHosts"
+      ]
+    },
+    "MarketplaceMcpTransportDto": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "streamableHttp"
+            },
+            "url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "url"
+          ]
+        }
+      ]
+    },
+    "MarketplaceOpenResourceParams": {
+      "type": "object",
+      "properties": {
+        "leaseId": {
+          "type": "string"
+        },
+        "resource": {
+          "$ref": "#/$defs/MarketplaceResourceRefDto"
+        }
+      },
+      "required": [
+        "leaseId",
+        "resource"
+      ]
+    },
+    "MarketplacePackageDetailsDto": {
+      "type": "object",
+      "properties": {
+        "capabilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/MarketplaceAvailableCapabilityDto"
+          }
+        },
+        "description": {
+          "type": "string"
+        },
+        "displayName": {
+          "type": "string"
+        },
+        "license": {
+          "type": "string"
+        },
+        "package": {
+          "$ref": "#/$defs/MarketplacePackageRefDto"
+        },
+        "packageType": {
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/$defs/MarketplacePackageSourceDto"
+        },
+        "upstream": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MarketplaceUpstreamReferenceDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "package",
+        "packageType",
+        "displayName",
+        "description",
+        "license",
+        "source",
+        "capabilities"
+      ]
+    },
+    "MarketplacePackageRefDto": {
+      "type": "object",
+      "properties": {
+        "digest": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "version",
+        "digest"
+      ]
+    },
+    "MarketplacePackageSourceDto": {
+      "type": "string",
+      "enum": [
+        "official",
+        "thirdParty"
+      ]
+    },
+    "MarketplacePackageSummaryDto": {
+      "type": "object",
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "displayName": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "packageType": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "version",
+        "packageType",
+        "displayName",
+        "description"
+      ]
+    },
+    "MarketplaceReleaseCapabilityParams": {
+      "type": "object",
+      "properties": {
+        "leaseId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "leaseId"
+      ]
+    },
+    "MarketplaceResourceContentDto": {
+      "type": "object",
+      "properties": {
+        "dataBase64": {
+          "type": "string"
+        },
+        "mediaType": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "mediaType",
+        "dataBase64"
+      ]
+    },
+    "MarketplaceResourceRefDto": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ]
+    },
+    "MarketplaceSearchParams": {
+      "type": "object",
+      "properties": {
+        "limit": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "packageType": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "query": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "query"
+      ]
+    },
+    "MarketplaceSearchResult": {
+      "type": "object",
+      "properties": {
+        "packages": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/MarketplacePackageSummaryDto"
+          }
+        }
+      },
+      "required": [
+        "packages"
+      ]
+    },
+    "MarketplaceSkillActivationSpecDto": {
+      "type": "object",
+      "properties": {
+        "contractVersion": {
+          "type": "string"
+        },
+        "resource": {
+          "$ref": "#/$defs/MarketplaceResourceRefDto"
+        }
+      },
+      "required": [
+        "contractVersion",
+        "resource"
+      ]
+    },
+    "MarketplaceUninstallModeDto": {
+      "type": "string",
+      "enum": [
+        "ifUnused",
+        "whenUnused"
+      ]
+    },
+    "MarketplaceUninstallParams": {
+      "type": "object",
+      "properties": {
+        "installationId": {
+          "type": "string"
+        },
+        "mode": {
+          "$ref": "#/$defs/MarketplaceUninstallModeDto"
+        }
+      },
+      "required": [
+        "installationId",
+        "mode"
+      ]
+    },
+    "MarketplaceUpdateParams": {
+      "type": "object",
+      "properties": {
+        "installationId": {
+          "type": "string"
+        },
+        "version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "installationId"
+      ]
+    },
+    "MarketplaceUpstreamReferenceDto": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "recordUrl": {
+          "type": "string"
+        },
+        "registry": {
+          "$ref": "#/$defs/MarketplaceUpstreamRegistryDto"
+        },
+        "repositoryUrl": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "registry",
+        "name",
+        "version",
+        "recordUrl"
+      ]
+    },
+    "MarketplaceUpstreamRegistryDto": {
+      "type": "string",
+      "enum": [
+        "officialMcp"
+      ]
+    },
     "McpCredentialBindingDto": {
       "description": "Non-secret credential binding for a standalone MCP server declaration.",
       "oneOf": [
@@ -15283,79 +15953,6 @@
         "disposition"
       ]
     },
-    "PluginContributionSummaryDto": {
-      "description": "Counts of each runtime-neutral capability kind carried by one Plugin package.",
-      "type": "object",
-      "properties": {
-        "assets": {
-          "type": "integer",
-          "format": "uint32",
-          "minimum": 0
-        },
-        "connectors": {
-          "type": "integer",
-          "format": "uint32",
-          "minimum": 0
-        },
-        "declarativeExtensions": {
-          "type": "integer",
-          "format": "uint32",
-          "minimum": 0
-        },
-        "editorExtensions": {
-          "type": "integer",
-          "format": "uint32",
-          "minimum": 0
-        },
-        "mcpServers": {
-          "type": "integer",
-          "format": "uint32",
-          "minimum": 0
-        },
-        "skills": {
-          "type": "integer",
-          "format": "uint32",
-          "minimum": 0
-        }
-      },
-      "required": [
-        "skills",
-        "mcpServers",
-        "connectors",
-        "assets",
-        "editorExtensions",
-        "declarativeExtensions"
-      ]
-    },
-    "PluginCredentialKindDto": {
-      "type": "string",
-      "enum": [
-        "secretText"
-      ]
-    },
-    "PluginCredentialSlotDto": {
-      "description": "One credential request shown without containing any secret value.",
-      "type": "object",
-      "properties": {
-        "kind": {
-          "$ref": "#/$defs/PluginCredentialKindDto"
-        },
-        "name": {
-          "type": "string"
-        },
-        "requiredFor": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        }
-      },
-      "required": [
-        "name",
-        "kind",
-        "requiredFor"
-      ]
-    },
     "PluginListResult": {
       "description": "Current durable Plugin authority projection.",
       "type": "object",
@@ -15381,181 +15978,6 @@
         "revision",
         "activationGeneration",
         "packages"
-      ]
-    },
-    "PluginMarketplaceCommandParams": {
-      "description": "Exact Marketplace entry selected without exposing a host filesystem path.",
-      "type": "object",
-      "properties": {
-        "commandId": {
-          "type": "string"
-        },
-        "digest": {
-          "type": "string"
-        },
-        "expectedRevision": {
-          "type": "integer",
-          "format": "uint64",
-          "minimum": 0
-        },
-        "id": {
-          "type": "string"
-        },
-        "marketplaceId": {
-          "type": "string"
-        },
-        "version": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "commandId",
-        "expectedRevision",
-        "marketplaceId",
-        "id",
-        "version",
-        "digest"
-      ]
-    },
-    "PluginMarketplaceListResult": {
-      "type": "object",
-      "properties": {
-        "packages": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/PluginMarketplacePackageDto"
-          }
-        }
-      },
-      "required": [
-        "packages"
-      ]
-    },
-    "PluginMarketplaceModeDto": {
-      "type": "string",
-      "enum": [
-        "managed",
-        "remoteManaged",
-        "localDevelopment"
-      ]
-    },
-    "PluginMarketplacePackageDto": {
-      "description": "One exact package offered by a host-registered Marketplace.",
-      "type": "object",
-      "properties": {
-        "compatibilityZeta": {
-          "type": "string"
-        },
-        "contributions": {
-          "$ref": "#/$defs/PluginContributionSummaryDto"
-        },
-        "credentialSlots": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/PluginCredentialSlotDto"
-          }
-        },
-        "description": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "digest": {
-          "type": "string"
-        },
-        "displayName": {
-          "type": "string"
-        },
-        "effective": {
-          "type": "boolean"
-        },
-        "enabled": {
-          "type": "boolean"
-        },
-        "granted": {
-          "type": "boolean"
-        },
-        "id": {
-          "type": "string"
-        },
-        "installed": {
-          "type": "boolean"
-        },
-        "license": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "marketplaceId": {
-          "type": "string"
-        },
-        "marketplaceMode": {
-          "$ref": "#/$defs/PluginMarketplaceModeDto"
-        },
-        "marketplaceRevision": {
-          "type": "string"
-        },
-        "marketplaceTrust": {
-          "$ref": "#/$defs/PluginMarketplaceTrustDto"
-        },
-        "packageFileCount": {
-          "type": "integer",
-          "format": "uint64",
-          "minimum": 0
-        },
-        "packageSizeBytes": {
-          "type": "integer",
-          "format": "uint64",
-          "minimum": 0
-        },
-        "permissions": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/PluginPermissionDto"
-          }
-        },
-        "publisher": {
-          "type": "string"
-        },
-        "revoked": {
-          "type": "boolean"
-        },
-        "version": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "marketplaceId",
-        "marketplaceMode",
-        "marketplaceTrust",
-        "marketplaceRevision",
-        "id",
-        "publisher",
-        "version",
-        "digest",
-        "displayName",
-        "compatibilityZeta",
-        "contributions",
-        "permissions",
-        "credentialSlots",
-        "packageFileCount",
-        "packageSizeBytes",
-        "installed",
-        "enabled",
-        "granted",
-        "effective",
-        "revoked"
-      ]
-    },
-    "PluginMarketplaceTrustDto": {
-      "description": "Product-facing trust classification of one Marketplace source.",
-      "type": "string",
-      "enum": [
-        "productManaged",
-        "verifiedExternal",
-        "localDevelopment"
       ]
     },
     "PluginPackageCommandParams": {
@@ -15622,62 +16044,6 @@
         "granted",
         "effective",
         "revoked"
-      ]
-    },
-    "PluginPermissionDto": {
-      "description": "One declared capability ceiling shown before a Plugin package is installed or granted.",
-      "oneOf": [
-        {
-          "type": "object",
-          "properties": {
-            "executable": {
-              "type": "string"
-            },
-            "type": {
-              "type": "string",
-              "const": "process"
-            }
-          },
-          "required": [
-            "type",
-            "executable"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "access": {
-              "$ref": "#/$defs/PluginWorkspaceAccessDto"
-            },
-            "type": {
-              "type": "string",
-              "const": "workspace"
-            }
-          },
-          "required": [
-            "type",
-            "access"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "hosts": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            },
-            "type": {
-              "type": "string",
-              "const": "network"
-            }
-          },
-          "required": [
-            "type",
-            "hosts"
-          ]
-        }
       ]
     },
     "PluginRequestDto": {
@@ -15780,13 +16146,6 @@
         "commandId",
         "expectedRevision",
         "request"
-      ]
-    },
-    "PluginWorkspaceAccessDto": {
-      "type": "string",
-      "enum": [
-        "read",
-        "write"
       ]
     },
     "PluginsChanged": {
@@ -16392,6 +16751,9 @@
         "git": {
           "type": "boolean"
         },
+        "marketplace": {
+          "type": "boolean"
+        },
         "mcp": {
           "type": "boolean"
         },
@@ -16447,6 +16809,7 @@
         "extensionHost",
         "connectors",
         "plugins",
+        "marketplace",
         "mcp",
         "mcpOAuth"
       ]
@@ -17991,7 +18354,8 @@
         "builtIn",
         "user",
         "workspace",
-        "plugin"
+        "plugin",
+        "marketplace"
       ]
     },
     "SkillSourceRemoveParams": {

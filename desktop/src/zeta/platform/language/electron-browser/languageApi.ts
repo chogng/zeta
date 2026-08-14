@@ -1,11 +1,9 @@
-import type { LanguageCodeActionDto, LanguageCodeActionsResult, LanguageCodeLensesResult, LanguageColorPresentationsResult, LanguageCompletionDetailsResult, LanguageCompletionsResult, LanguageDocumentColorsResult, LanguageDocumentDiagnosticsResult, LanguageDocumentLinksResult, LanguageDocumentSymbolsResult, LanguageFoldingRangesResult, LanguageFormattingResult, LanguageHierarchyResultDto, LanguageHoverResult, LanguageInlayHintsResult, LanguageLinkedEditingRangesResult, LanguageLocationsResult, LanguageMarketplaceInstallResult, LanguageMarketplaceListResult, LanguagePrepareRenameResult, LanguageSemanticTokensResult, LanguageSignatureHelpResult, LanguageWorkspaceDiagnosticsResult, LanguageWorkspaceEditDto, LanguageWorkspaceSymbolsResult } from "../../../../../generated/app-server/types.js";
+import type { LanguageCodeActionDto, LanguageCodeActionsResult, LanguageCodeLensesResult, LanguageColorPresentationsResult, LanguageCompletionDetailsResult, LanguageCompletionsResult, LanguageDocumentColorsResult, LanguageDocumentDiagnosticsResult, LanguageDocumentLinksResult, LanguageDocumentSymbolsResult, LanguageFoldingRangesResult, LanguageFormattingResult, LanguageHierarchyResultDto, LanguageHoverResult, LanguageInlayHintsResult, LanguageLinkedEditingRangesResult, LanguageLocationsResult, LanguagePrepareRenameResult, LanguageSemanticTokensResult, LanguageSignatureHelpResult, LanguageWorkspaceDiagnosticsResult, LanguageWorkspaceEditDto, LanguageWorkspaceSymbolsResult } from "../../../../../generated/app-server/types.js";
 import { invoke } from "../../ipc/electron-browser/rendererIpc.js";
 import type { ILanguageApi } from "../common/languageApi.js";
 
 export function createLanguageApi(): ILanguageApi {
   return {
-    listMarketplace: () => invoke<LanguageMarketplaceListResult>("zeta:language:marketplace-list"),
-    installMarketplace: params => invoke<LanguageMarketplaceInstallResult>("zeta:language:marketplace-install", params),
     synchronize: params => invoke<void>("zeta:language:synchronize", params),
     close: params => invoke<void>("zeta:language:close", params),
     hover: params => invoke<LanguageHoverResult>("zeta:language:hover", params),

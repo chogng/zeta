@@ -1,6 +1,5 @@
 use std::path::Path;
 
-use zeta_language_server_distribution::InstalledLanguageServer;
 use zeta_lsp::LanguageServerCommand;
 
 use crate::CSS_LANGUAGE_SERVER_ID;
@@ -18,26 +17,22 @@ const CSS_LANGUAGE_IDS: &[&str] = &["css", "less", "scss"];
 pub struct CssLanguageServerProvider {
     entrypoint: std::path::PathBuf,
     node: ManagedNodeRuntime,
+    languages: Vec<String>,
 }
 
 impl CssLanguageServerProvider {
-    /// Binds one verified CSS installation receipt to the shared managed Node runtime.
+    /// Binds one Manager-verified CSS entrypoint to the shared managed Node runtime.
     pub fn new(
-        installed: InstalledLanguageServer,
+        entrypoint: impl AsRef<Path>,
         node: ManagedNodeRuntime,
     ) -> Result<Self, LanguageServerProviderError> {
-        if installed.server_id() != CSS_LANGUAGE_SERVER_ID {
-            return Err(LanguageServerProviderError::InstalledServerIdentity {
-                expected: CSS_LANGUAGE_SERVER_ID,
-                actual: installed.server_id().to_owned(),
-            });
-        }
         Ok(Self {
             entrypoint: canonical_regular_file(
-                installed.executable(),
+                entrypoint.as_ref(),
                 "installed CSS language-server entrypoint",
             )?,
             node,
+            languages: CSS_LANGUAGE_IDS.iter().map(|id| (*id).to_owned()).collect(),
         })
     }
 
@@ -53,12 +48,12 @@ impl CssLanguageServerProvider {
 }
 
 impl LanguageServerProvider for CssLanguageServerProvider {
-    fn id(&self) -> &'static str {
+    fn id(&self) -> &str {
         CSS_LANGUAGE_SERVER_ID
     }
 
-    fn languages(&self) -> &'static [&'static str] {
-        CSS_LANGUAGE_IDS
+    fn languages(&self) -> &[String] {
+        &self.languages
     }
 
     fn definition(

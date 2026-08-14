@@ -7,6 +7,8 @@ pub enum ExtensionRootKind {
     BuiltIn,
     /// A package selected by the effective Plugin authority snapshot.
     Plugin,
+    /// A package installed by the local Marketplace Manager.
+    Marketplace,
     /// A package installed below the user's trusted profile extension directory.
     User,
 }
@@ -36,13 +38,6 @@ impl ExtensionRoot {
             path: path.into(),
         }
     }
-
-    pub(crate) fn plugin(path: impl Into<PathBuf>) -> Self {
-        Self {
-            kind: ExtensionRootKind::Plugin,
-            path: path.into(),
-        }
-    }
 }
 
 /// One exact declarative extension package selected by an external authority snapshot.
@@ -52,6 +47,8 @@ pub struct DynamicExtensionPackageSource {
     pub subject: String,
     /// Exact package directory containing `package.json`.
     pub path: PathBuf,
+    /// Verified package provenance projected into the catalog.
+    pub kind: ExtensionRootKind,
 }
 
 impl DynamicExtensionPackageSource {
@@ -60,6 +57,16 @@ impl DynamicExtensionPackageSource {
         Self {
             subject: subject.into(),
             path: path.into(),
+            kind: ExtensionRootKind::Plugin,
+        }
+    }
+
+    /// Creates a Marketplace-authorized exact package source.
+    pub fn marketplace(subject: impl Into<String>, path: impl Into<PathBuf>) -> Self {
+        Self {
+            subject: subject.into(),
+            path: path.into(),
+            kind: ExtensionRootKind::Marketplace,
         }
     }
 }

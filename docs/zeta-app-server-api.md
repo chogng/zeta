@@ -248,10 +248,9 @@ Desktop 当前实现和 Playwright 后续边界见
 | `connector/disconnect` | Connector authority + secret store | 先撤销 runtime readiness，再报告 credential cleanup 状态 |
 | `connector/credential/cleanup` | Connector credential owner | 重试 durable post-disconnect secret 删除义务 |
 | `plugin/list` | Plugin authority | 分别投影 installed/enabled/granted/effective package 状态 |
-| `plugin/marketplace/list` / `plugin/install` / `plugin/update` / `plugin/rollback` | Plugin Marketplace + Plugin authority | 只接受 Host 注册 Marketplace 中由 `marketplaceId`、package identity 和 digest 精确绑定的条目；安装后不自动启用或 grant |
 | `plugin/enable` / `disable` / `grant` / `revokeGrant` / `uninstall` | Plugin authority | exact-package CAS lifecycle mutation |
-| `language/marketplace/list` | Language Marketplace + activation authority | 读取 signed package catalog、host compatibility 与当前 profile activation 投影 |
-| `language/marketplace/install` | Language Marketplace + activation authority + provider registry | revision-check 后重新匹配并下载 exact signed package，激活 exact receipt，并热替换 provider registry；调用前的用户确认由 Desktop 拥有 |
+| `marketplace/search` / `get` / `install` / `update` / `uninstall` | Marketplace Manager | 通用 package discovery 与唯一安装状态；不自动授权或激活 capability |
+| `marketplace/listInstalled` / `acquireCapability` / `releaseCapability` / `openResource` | Marketplace Manager | 查询唯一安装状态，并通过 lease + opaque resource 完成 path-free capability handoff；本地可信 runtime adapter 不经过 Renderer |
 | `config/update` | config | typed command 更新配置 |
 | `execPolicy/rule/upsert` / `execPolicy/rule/remove` | config + local policy runtime | revision-safe 持久化 User typed rule，并为未来 Tool safe point 重组 policy snapshot |
 | `toolSearch/configure` | config + semantic model runtime | 选择词法模式，或探活 exact embedding 模型后启用混合 Tool Search |
@@ -353,11 +352,10 @@ reconcile。`mcp/oauth/revoke` 先设置 disconnect intent，等待 active Tool 
 scope、token parsing、audience 和 provider
 endpoint policy 属于 host 注入的 provider adapter，不属于 App Server protocol。
 
-Plugin request 是 config intent；Plugin lifecycle authority 是另一层事实。`plugin/list` 不把它们压成
-一个布尔值，而是分别返回 enabled、granted 与 effective，只有 exact installed package 同时 enabled 且
-granted 时才进入 activation。`plugin/install`、`plugin/update` 和 `plugin/rollback` 只接受 Host 注册
-Marketplace 中按 marketplace、package identity 与 digest 精确绑定的条目；Renderer 不能提交任意 host
-filesystem path。
+Plugin request 是 config intent；legacy Plugin lifecycle authority 是另一层事实。`plugin/list` 不把它们
+压成一个布尔值，而是分别返回 enabled、granted 与 effective，只有 exact installed package 同时 enabled
+且 granted 时才进入 activation。新的远端 package 只能通过 `marketplace/*` 方法进入
+`MarketplaceManager`；Plugin authority 不再拥有 Marketplace catalog 或安装入口。
 
 Zeta account control plane 另见[第 11 节](#11-account-与登录)。其 Rust DTO、TypeScript 与 JSON Schema
 由同一个 registry 生成并同步提交。

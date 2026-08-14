@@ -162,19 +162,19 @@ App Server 已经是 Desktop 的 workspace/document authority 与 LSP IPC bounda
 - document/workspace pull diagnostics 的 capability gate、report projection、App Server route 与 Desktop Problems 数据接入；
 - 多 definition target 使用现有 Peek 列表选择，单目标直接导航；
 - Rust、JSON/JSONC、Shell 三项 built-in catalog definitions；
-- verified package staging、SHA-256、side-by-side update 与 receipt；
-- 通用 Language Marketplace TUF consumer、delegated publisher 校验、有界 ZIP extraction、Marketplace
-  tree digest、consumer SemVer compatibility 与 stable error mapping；
-- Desktop Settings/Languages exact package confirmation，App Server `language/marketplace/list` / `install`
-  RPC，以及 profile activation receipt 启动重建和安装后的热 registry replacement；
+- 通用 Marketplace Manager 的 TUF verified download、整包 digest 复核、immutable install/update/uninstall；
+- Marketplace Language asset 投影到共享 Extension catalog，Executable 按 signed language route 和
+  `node`/`direct` runtime 组合 provider；
+- Desktop Settings/Languages 复用通用 Marketplace API 的 `packageType=language` 发现与安装，并在
+  install/update/uninstall 后热重建 provider registry；
 - in-memory protocol vertical tests。
 
 ### 计划
 
 1. 把 workspace trust 的明确结果映射为 catalog execution policy。
 2. 增加 pull diagnostics 的 result-id cache、partial-result progress 与 `workspace/diagnostic/refresh`。
-3. 为其他 language-server family 增加 schema 2 runtime metadata 和 catalog provider adapter，并为
-   未激活 version 增加独立 garbage collection policy。
+3. 为更多 language-server family 增加领域初始化参数 adapter，并为未引用 artifact 增加独立
+   garbage collection policy。
 4. 先评估已记录的重复请求、冷暖延迟和取消率；只有收益显著时才设计 session navigation cache。
    cache 必须绑定 server incarnation、configuration/service generation、request shape 和 document
    revision；当前没有安装或持久化 navigation cache。

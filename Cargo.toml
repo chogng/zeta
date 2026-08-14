@@ -53,10 +53,10 @@ members = [
     "zeta-rs/instructions",
     "zeta-rs/keyring-store",
     "zeta-rs/language-server-catalog",
-    "zeta-rs/language-server-distribution",
-    "zeta-rs/language-marketplace",
     "zeta-rs/language-service",
     "zeta-rs/login",
+    "zeta-rs/marketplace-client",
+    "zeta-rs/marketplace-manager",
     "zeta-rs/linux-sandbox",
     "zeta-rs/lsp",
     "zeta-rs/model-provider",
@@ -66,7 +66,6 @@ members = [
     "zeta-rs/mcp",
     "zeta-rs/mcp-server",
     "zeta-rs/action-policy",
-    "zeta-rs/plugin-marketplace",
     "zeta-rs/plugins",
     "zeta-rs/prompts",
     "zeta-rs/protocol",
@@ -165,6 +164,7 @@ pkg-config = "0.3"
 pretty_assertions = "1"
 prost = "0.14.3"
 crossterm = "0.28.1"
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 pulldown-cmark = { version = "0.13.4", default-features = false }
 ratex-layout = "0.1.14"
 ratex-parser = "0.1.14"
@@ -175,7 +175,7 @@ regex = "1"
 rust-stemmers = "1"
 resvg = { version = "0.47", default-features = false }
 schemars = "1.2.1"
-semver = "1"
+semver = { version = "1", features = ["serde"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_yaml = "0.9"
@@ -194,10 +194,11 @@ ts-rs = { version = "12.0.1", features = ["serde-compat"] }
 typst = "=0.15.1"
 typst-assets = { version = "=0.15.1", features = ["fonts"] }
 typst-pdf = "=0.15.1"
-tokio = "1"
+tokio = { version = "1", features = ["net", "rt", "time"] }
 thiserror = "2"
 tempfile = "3"
-tough = "0.24"
+tar = "0.4"
+tough = { version = "0.24", features = ["http"] }
 tokenizers = { version = "0.23.1", default-features = false, features = ["fancy-regex"] }
 toml = "0.9"
 tree-sitter = "0.26.11"
@@ -279,10 +280,10 @@ zeta-composer = { path = "zeterm/composer" }
 zeta-layout = { path = "zeterm/layout" }
 zeta-keybindings-host = { path = "zeterm/native-keybindings" }
 zeta-language-server-catalog = { path = "zeta-rs/language-server-catalog" }
-zeta-language-server-distribution = { path = "zeta-rs/language-server-distribution" }
-zeta-language-marketplace = { path = "zeta-rs/language-marketplace" }
 zeta-language-service = { path = "zeta-rs/language-service" }
 zeta-login = { path = "zeta-rs/login" }
+zeta-marketplace-client = { path = "zeta-rs/marketplace-client" }
+zeta-marketplace-manager = { path = "zeta-rs/marketplace-manager" }
 zeta-linux-sandbox = { path = "zeta-rs/linux-sandbox" }
 zeta-lsp = { path = "zeta-rs/lsp" }
 zeta-markdown = { path = "zeterm/markdown" }
@@ -293,7 +294,6 @@ zeta-model-provider-config = { path = "zeta-rs/model-provider-config" }
 zeta-models-manager = { path = "zeta-rs/models-manager" }
 zeta-model-tokenizer = { path = "zeta-rs/model-tokenizer" }
 zeta-action-policy = { path = "zeta-rs/action-policy" }
-zeta-plugin-marketplace = { path = "zeta-rs/plugin-marketplace" }
 zeta-plugins = { path = "zeta-rs/plugins" }
 zeta-prompts = { path = "zeta-rs/prompts" }
 zeta-protocol = { path = "zeta-rs/protocol" }

@@ -113,6 +113,7 @@ test("Settings overlay opens, closes, and restores focus", () => {
       "Models",
       "Git",
       "Worktrees",
+      "Marketplace",
       "Plugins",
       "Connectors",
       "Rules",
@@ -214,6 +215,55 @@ test("Connector settings project catalog state and invoke typed connect and disc
   ]);
 });
 
+test("Marketplace settings discover and install through the generic service", async () => {
+  using disposables = new DisposableStore();
+  const ownerDocument = browserEnvironment.window.document;
+  ownerDocument.body.replaceChildren();
+  const root = ownerDocument.createElement("div");
+  ownerDocument.body.append(root);
+  const settings = disposables.add(new SettingsService());
+  const configuration = disposables.add(new WorkbenchConfigurationService());
+  const installs: string[] = [];
+  let installed: readonly any[] = [];
+  const packageValue = { id: "marketplace/docs-mcp", version: "0.3.2", packageType: "mcp", displayName: "Docs MCP", description: "Search product documentation." };
+  const marketplaceService = {
+    search: async () => [packageValue],
+    get: async () => ({ package: { id: packageValue.id, version: packageValue.version, digest: `sha256:${"a".repeat(64)}` }, packageType: "mcp", displayName: packageValue.displayName, description: packageValue.description, license: "MIT", source: "thirdParty" as const, upstream: { registry: "officialMcp" as const, name: "ac.tandem/docs-mcp", version: "0.3.2", recordUrl: "https://registry.modelcontextprotocol.io/v0.1/servers/ac.tandem%2Fdocs-mcp/versions/0.3.2", repositoryUrl: "https://github.com/frumu-ai/tandem" }, capabilities: [{ kind: "mcp" as const, id: "docs-mcp", contractVersion: "1", permissions: ["tandem.ac"], authenticationProvider: null }] }),
+    download: async () => ({ id: "art", package: { id: packageValue.id, version: packageValue.version, digest: `sha256:${"a".repeat(64)}` } }),
+    install: async (id: string, version?: string) => {
+      installs.push(`${id}@${version}`);
+      const value = { installationId: "ins", package: { id, version: version!, digest: `sha256:${"a".repeat(64)}` }, state: "installed" as const, capabilities: [] };
+      installed = [value];
+      return value;
+    },
+    update: async () => { throw new Error("unused"); },
+    uninstall: async () => {},
+    listInstalled: async () => installed,
+    acquireCapability: async () => { throw new Error("unused"); },
+    releaseCapability: async () => {},
+    openResource: async () => { throw new Error("unused"); },
+  };
+  disposables.add(new SettingsEditorContribution({
+    configurationService: configuration,
+    container: root,
+    dialogService: acceptingDialogService,
+    marketplaceService,
+    settingsService: settings,
+    themeService: disposables.add(new ThemeService(darkColorTheme)),
+    userThemeService: UnavailableUserThemeService,
+  }));
+
+  settings.open("marketplace");
+  await new Promise((resolve) => globalThis.setTimeout(resolve, 0));
+  await new Promise((resolve) => globalThis.setTimeout(resolve, 0));
+  assert.equal(root.querySelector(".zeta-package-marketplace-card h4")?.textContent, "Docs MCP");
+  assert.match(root.textContent ?? "", /mcp: docs-mcp/);
+  assert.match(root.textContent ?? "", /Listed in the official MCP Registry · ac\.tandem\/docs-mcp@0\.3\.2/);
+  root.querySelector<HTMLButtonElement>(".zeta-package-marketplace-actions button")?.click();
+  await new Promise((resolve) => globalThis.setTimeout(resolve, 0));
+  assert.deepEqual(installs, ["marketplace/docs-mcp@0.3.2"]);
+});
+
 test("Plugin settings project layered authority and send exact-package commands", async () => {
   using disposables = new DisposableStore();
   const ownerDocument = browserEnvironment.window.document;
@@ -227,10 +277,6 @@ test("Plugin settings project layered authority and send exact-package commands"
   const pluginService = {
     onDidChange: () => toDisposable(() => {}),
     list: async () => ({ revision: 7, activationGeneration: 3, packages: [plugin] }),
-    listMarketplace: async () => [],
-    install: async () => {},
-    update: async () => {},
-    rollback: async () => {},
     enable: async (target: typeof plugin, revision: number) => { mutations.push(`enable:${target.id}:${target.digest}:${revision}`); },
     disable: async () => {},
     grant: async (target: typeof plugin, revision: number) => { mutations.push(`grant:${target.id}:${target.digest}:${revision}`); },
@@ -251,13 +297,13 @@ test("Plugin settings project layered authority and send exact-package commands"
   await new Promise((resolve) => globalThis.setTimeout(resolve, 0));
   assert.equal(root.querySelector(".zeta-integration-heading h4")?.textContent, "acme/github · 1.0.0");
   const buttons = [...root.querySelectorAll<HTMLButtonElement>(".zeta-integration-card > .zeta-theme-action")];
-  assert.deepEqual(buttons.map(button => button.textContent), ["Grant", "Enable", "Uninstall"]);
+  assert.deepEqual(buttons.map(button => button.textContent), ["Grant", "Enable", "Remove legacy installation"]);
   buttons[0]!.click();
   await new Promise((resolve) => globalThis.setTimeout(resolve, 0));
   assert.deepEqual(mutations, [`grant:acme/github:${plugin.digest}:7`]);
 });
 
-test("Plugin settings browse signed Marketplace metadata before installation", async () => {
+test("Plugin settings direct package discovery to the generic Marketplace", async () => {
   using disposables = new DisposableStore();
   const ownerDocument = browserEnvironment.window.document;
   ownerDocument.body.replaceChildren();
@@ -265,50 +311,9 @@ test("Plugin settings browse signed Marketplace metadata before installation", a
   ownerDocument.body.append(root);
   const settings = disposables.add(new SettingsService());
   const configuration = disposables.add(new WorkbenchConfigurationService());
-  const mutations: string[] = [];
-  const review = {
-    marketplaceId: "zeta",
-    marketplaceMode: "remoteManaged" as const,
-    marketplaceTrust: "productManaged" as const,
-    marketplaceRevision: "sha256:catalog",
-    id: "chogng/code-review",
-    publisher: "chogng",
-    version: "1.0.0",
-    digest: `sha256:${"b".repeat(64)}`,
-    displayName: "Code Review",
-    description: "Review workspace changes before they ship.",
-    license: "Apache-2.0",
-    compatibilityZeta: ">=0.1.0",
-    contributions: { skills: 1, mcpServers: 0, connectors: 0, assets: 1, editorExtensions: 0, declarativeExtensions: 0 },
-    permissions: [{ type: "workspace" as const, access: "read" as const }],
-    credentialSlots: [],
-    packageFileCount: 3,
-    packageSizeBytes: 2048,
-    installed: false,
-    enabled: false,
-    granted: false,
-    effective: false,
-    revoked: false,
-  };
-  const theme = {
-    ...review,
-    id: "chogng/theme-pack",
-    version: "2.0.0",
-    digest: `sha256:${"c".repeat(64)}`,
-    displayName: "Theme Pack",
-    description: "Static visual assets.",
-    contributions: { skills: 0, mcpServers: 0, connectors: 0, assets: 4, editorExtensions: 0, declarativeExtensions: 1 },
-    permissions: [],
-    packageFileCount: 5,
-    packageSizeBytes: 1024,
-  };
   const pluginService = {
     onDidChange: () => toDisposable(() => {}),
     list: async () => ({ revision: 4, activationGeneration: 0, packages: [] }),
-    listMarketplace: async () => [review, theme],
-    install: async (target: typeof review, revision: number) => { mutations.push(`install:${target.id}:${target.digest}:${revision}`); },
-    update: async () => {},
-    rollback: async () => {},
     enable: async () => {},
     disable: async () => {},
     grant: async () => {},
@@ -327,23 +332,12 @@ test("Plugin settings browse signed Marketplace metadata before installation", a
 
   settings.open("plugins");
   await new Promise((resolve) => globalThis.setTimeout(resolve, 0));
-  assert.deepEqual([...root.querySelectorAll(".zeta-marketplace-results h4")].map(element => element.textContent), ["Code Review", "Theme Pack"]);
-  assert.equal(root.querySelector(".zeta-marketplace-badge")?.textContent, "Zeta managed");
-  assert.match(root.querySelector(".zeta-marketplace-access p")?.textContent ?? "", /read workspace files/);
-  assert.match(root.querySelector(".zeta-marketplace-details")?.textContent ?? "", /2.0 KB/);
-
-  const search = root.querySelector<HTMLInputElement>(".zeta-marketplace-search input")!;
-  search.value = "theme";
-  search.dispatchEvent(new browserEnvironment.window.Event("input", { bubbles: true }));
-  assert.deepEqual([...root.querySelectorAll(".zeta-marketplace-results h4")].map(element => element.textContent), ["Theme Pack"]);
-  search.value = "review";
-  search.dispatchEvent(new browserEnvironment.window.Event("input", { bubbles: true }));
-  root.querySelector<HTMLButtonElement>(".zeta-marketplace-results .zeta-theme-action")?.click();
-  await new Promise((resolve) => globalThis.setTimeout(resolve, 0));
-  assert.deepEqual(mutations, [`install:${review.id}:${review.digest}:4`]);
+  assert.match(root.textContent ?? "", /No legacy plugins are installed/);
+  assert.match(root.textContent ?? "", /Discover new packages in Marketplace/);
+  assert.equal(root.querySelector(".zeta-marketplace-results"), null);
 });
 
-test("Language settings require confirmation and install the exact signed catalog entry", async () => {
+test("Language settings reuse Marketplace discovery with a language package filter", async () => {
   using disposables = new DisposableStore();
   const ownerDocument = browserEnvironment.window.document;
   ownerDocument.body.replaceChildren();
@@ -351,47 +345,27 @@ test("Language settings require confirmation and install the exact signed catalo
   ownerDocument.body.append(root);
   const settings = disposables.add(new SettingsService());
   const configuration = disposables.add(new WorkbenchConfigurationService());
-  const digest = `sha256:${"d".repeat(64)}`;
-  const css = {
-    marketplaceId: "zeta",
-    packageId: "marketplace/css",
-    version: "1.0.0",
-    digest,
-    displayName: "CSS Language Support",
-    description: "CSS, SCSS, and Less language support.",
-    license: "MIT",
-    serverId: "css-language-server",
-    languages: ["css", "scss", "less"],
-    fileExtensions: [".css", ".scss", ".less"],
-    compatibility: { status: "compatible" as const },
-    installed: false,
-    active: false,
-  };
-  const native = {
-    ...css,
-    packageId: "marketplace/native-css",
-    displayName: "Native CSS",
-    compatibility: { status: "incompatible" as const, reason: "Native provider unavailable." },
-  };
-  const installs: string[] = [];
-  const confirmations: Array<{ message: string; detail?: string }> = [];
-  const languageMarketplaceService = {
-    list: async () => ({ revision: "signed-catalog:7", activationGeneration: 3, entries: [css, native] }),
-    install: async (entry: { marketplaceId: string; packageId: string; version: string; digest: string; serverId: string }, revision: string) => {
-      installs.push(`${entry.marketplaceId}:${entry.packageId}:${entry.version}:${entry.digest}:${entry.serverId}:${revision}`);
+  const searches: Array<{ query: string; packageType?: string; limit?: number }> = [];
+  const marketplaceService = {
+    search: async (query: string, packageType?: string, limit?: number) => {
+      searches.push({ query, packageType, limit });
+      return [];
     },
+    get: async () => { throw new Error("unexpected get"); },
+    download: async () => { throw new Error("unexpected download"); },
+    install: async () => { throw new Error("unexpected install"); },
+    update: async () => { throw new Error("unexpected update"); },
+    uninstall: async () => { throw new Error("unexpected uninstall"); },
+    listInstalled: async () => [],
+    acquireCapability: async () => { throw new Error("unexpected acquire"); },
+    releaseCapability: async () => {},
+    openResource: async () => { throw new Error("unexpected resource"); },
   };
   disposables.add(new SettingsEditorContribution({
     configurationService: configuration,
     container: root,
-    dialogService: {
-      showMessage: async () => {},
-      confirm: async (options) => {
-        confirmations.push({ message: options.message, detail: options.detail });
-        return true;
-      },
-    },
-    languageMarketplaceService,
+    dialogService: acceptingDialogService,
+    marketplaceService,
     settingsService: settings,
     themeService: disposables.add(new ThemeService(darkColorTheme)),
     userThemeService: UnavailableUserThemeService,
@@ -399,17 +373,10 @@ test("Language settings require confirmation and install the exact signed catalo
 
   settings.open("languages");
   await new Promise((resolve) => globalThis.setTimeout(resolve, 0));
-  assert.deepEqual([...root.querySelectorAll(".zeta-integration-heading h4")].map(element => element.textContent), ["CSS Language Support", "Native CSS"]);
-  assert.equal(root.querySelectorAll(".zeta-theme-action").length, 1);
-  assert.match(root.textContent ?? "", /Native provider unavailable/);
-  root.querySelector<HTMLButtonElement>(".zeta-theme-action")?.click();
-  await new Promise((resolve) => globalThis.setTimeout(resolve, 0));
-
-  assert.equal(confirmations.length, 1);
-  assert.match(confirmations[0]?.message ?? "", /CSS Language Support 1\.0\.0/);
-  assert.match(confirmations[0]?.detail ?? "", new RegExp(digest));
-  assert.match(confirmations[0]?.detail ?? "", /shared Node-compatible runtime/);
-  assert.deepEqual(installs, [`zeta:marketplace/css:1.0.0:${digest}:css-language-server:signed-catalog:7`]);
+  assert.deepEqual(searches, [{ query: "", packageType: "language", limit: 100 }]);
+  assert.match(root.textContent ?? "", /No matching packages/);
+  assert.equal(root.querySelector<HTMLInputElement>('input[type="search"]')?.placeholder, "Search settings");
+  assert.equal(root.querySelector<HTMLInputElement>('.zeta-package-marketplace input[type="search"]')?.placeholder, "Search language extensions");
 });
 
 test("Appearance settings persist and dynamically render registered theme preferences", async () => {

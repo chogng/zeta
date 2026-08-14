@@ -12,6 +12,7 @@ pub enum SkillSourceKind {
     User,
     Workspace,
     Plugin,
+    Marketplace,
 }
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -20,6 +21,7 @@ pub enum SkillTrust {
     UserManaged,
     WorkspaceManaged,
     PluginPackageVerified,
+    MarketplacePackageVerified,
 }
 
 /// Consumer-visible Skill source provenance without its private host root.
@@ -100,6 +102,21 @@ impl SkillSourceRoot {
             id,
             SkillSourceKind::Plugin,
             SkillTrust::PluginPackageVerified,
+            name,
+            root.as_ref(),
+        )
+    }
+
+    /// Creates a source for one exact Skill capability in a Marketplace-verified package.
+    pub fn marketplace(
+        id: SkillSourceId,
+        name: SkillName,
+        root: impl AsRef<Path>,
+    ) -> Result<Self, SkillError> {
+        Self::new_exact(
+            id,
+            SkillSourceKind::Marketplace,
+            SkillTrust::MarketplacePackageVerified,
             name,
             root.as_ref(),
         )

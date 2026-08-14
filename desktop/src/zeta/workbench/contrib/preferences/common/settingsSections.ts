@@ -34,7 +34,7 @@ export const SettingsSections = [
   {
     id: "languages",
     label: "Languages",
-    description: "Install and manage signed language-server packages.",
+    description: "Discover and manage Marketplace language extensions.",
   },
   {
     id: "agents",
@@ -55,6 +55,11 @@ export const SettingsSections = [
     id: "worktrees",
     label: "Worktrees",
     description: "Manage worktree creation, placement, and lifecycle.",
+  },
+  {
+    id: "marketplace",
+    label: "Marketplace",
+    description: "Discover and install packages without exposing Marketplace internals to Zeta.",
   },
   {
     id: "plugins",

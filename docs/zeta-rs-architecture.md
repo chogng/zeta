@@ -214,10 +214,10 @@ server 保留独立 draft，并只提交 revision-safe typed command，
 读取编辑器文档。crate contract 见
 [`language-server-catalog/README.md`](../zeta-rs/language-server-catalog/README.md)。
 
-`zeta-language-server-distribution` 拥有 application-managed package 的 traversal validation、
-provider-supplied SHA-256 verification、private staging、原子 publish、version receipt 与 side-by-side
-update storage。它不查询网络、不选择 release channel、不操作全局包管理器，也不激活版本；可信 release
-provider 与 Config/Native 激活 UI 是独立产品责任。
+`zeta-marketplace-manager` 统一拥有 Marketplace package 的本地 staging、整包 digest 复核、immutable
+artifact、安装/update/uninstall 状态、lease 与 opaque resource。Language 不再拥有第二套 distribution
+storage；App Server 的本地 Language adapter 只把 Manager-verified capability handle 组合进 Extension
+catalog 和 language-server provider registry，下载、安装与激活所有权仍然分离。
 
 `zeta-language-service` 当前位于产品宿主与 `zeta-lsp` 之间，拥有显式 enablement、resolved
 definition 消费、非阻塞文档/request API、editor revision / LSP version freshness、位置编码转换、

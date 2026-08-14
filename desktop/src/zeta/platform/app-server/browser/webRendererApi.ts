@@ -19,6 +19,7 @@ import { createViteDevToolSearchApi } from "../../toolSearch/browser/toolSearchA
 import { createViteDevLanguageApi } from "../../language/browser/languageApi.js";
 import { createViteDevPluginApi } from "../../plugins/browser/pluginApi.js";
 import { createViteDevExtensionHostApi } from "../../extensionHost/browser/extensionHostApi.js";
+import { createViteDevMarketplaceApi } from "../../marketplace/browser/marketplaceApi.js";
 
 export type ViteDevRendererCapabilityContribution = (connection: ViteDevAppServerConnection, appServer: IRendererHost["appServer"]) => RendererHostCapabilities;
 
@@ -73,6 +74,7 @@ function createRendererHost(connection: ViteDevAppServerConnection, contribution
     symbolIndex: createViteDevSymbolIndexApi(connection),
     connectors: createViteDevConnectorApi(connection),
     plugins: createViteDevPluginApi(connection),
+    marketplace: createViteDevMarketplaceApi(connection),
     toolSearch: createViteDevToolSearchApi(connection),
   };
 }

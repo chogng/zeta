@@ -43,7 +43,6 @@ pub use server::CodeIndexSemanticModels;
 pub use server::ConnectionNotifications;
 pub use server::ConnectionState;
 pub use zeta_extensions::{ExtensionRoot, ExtensionRootKind};
-pub use zeta_plugin_marketplace::RemotePluginMarketplaceConfig;
 pub use zeta_slash_commands::{SlashCommandCatalog, SlashCommandCatalogError};
 
 #[cfg(test)]

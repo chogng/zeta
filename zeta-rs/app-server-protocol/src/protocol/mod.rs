@@ -18,6 +18,7 @@ pub mod fs;
 pub mod git;
 pub mod initialize;
 pub mod language;
+pub mod marketplace;
 pub mod mcp;
 pub mod model;
 pub mod notification;

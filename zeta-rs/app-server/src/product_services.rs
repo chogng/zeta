@@ -9,10 +9,6 @@ use url::Url;
 use zeta_connectors::ConnectorId;
 use zeta_connectors_extension::GitHubBrokeredOAuthConfig;
 use zeta_connectors_extension::GitHubDeviceOAuthConfig;
-use zeta_language_marketplace::LanguageMarketplaceId;
-use zeta_language_marketplace::RemoteLanguageMarketplaceConfig;
-use zeta_plugin_marketplace::RemotePluginMarketplaceConfig;
-use zeta_plugins::PluginMarketplaceId;
 
 use crate::OpenAppServerError;
 
@@ -25,8 +21,7 @@ const MAX_PRODUCT_SERVICES_BYTES: u64 = 1024 * 1024;
 /// by the product file, while broker URLs and public client IDs are explicit host inputs.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LocalProductServicesConfig {
-    pub(crate) marketplaces: Vec<RemotePluginMarketplaceConfig>,
-    pub(crate) language_marketplaces: Vec<RemoteLanguageMarketplaceConfig>,
+    pub(crate) marketplace_registry: Option<zeta_marketplace_client::RemoteMarketplaceConfig>,
     pub(crate) connector_oauth: Vec<ProductConnectorOAuthConfig>,
 }
 
@@ -50,91 +45,49 @@ impl LocalProductServicesConfig {
             return Err(product_config_error(()));
         }
         let source_root = path.parent().ok_or_else(|| product_config_error(()))?;
-        let marketplace_configs = document
-            .marketplaces
-            .into_iter()
-            .map(|marketplace| {
-                let plugin_id = PluginMarketplaceId::new(marketplace.id.clone())
-                    .map_err(|_| product_config_error(()))?;
-                let language_id = LanguageMarketplaceId::new(marketplace.id)
-                    .map_err(|_| product_config_error(()))?;
-                let trusted_root = read_trusted_root(source_root, &marketplace.trusted_root)?;
-                let plugin_cache_root = profile_root
-                    .as_ref()
-                    .join("cache/plugin-marketplaces")
-                    .join(plugin_id.as_str());
-                let language_cache_root = profile_root
-                    .as_ref()
-                    .join("cache/language-marketplaces")
-                    .join(language_id.as_str());
-                let plugin = RemotePluginMarketplaceConfig::new(
-                    plugin_id,
-                    Url::parse(&marketplace.metadata_base_url).map_err(product_config_error)?,
-                    Url::parse(&marketplace.targets_base_url).map_err(product_config_error)?,
-                    trusted_root.clone(),
-                    plugin_cache_root,
-                )
-                .map_err(product_config_error)?;
-                let language = RemoteLanguageMarketplaceConfig::new(
-                    language_id,
-                    Url::parse(&marketplace.metadata_base_url).map_err(product_config_error)?,
-                    Url::parse(&marketplace.targets_base_url).map_err(product_config_error)?,
+        let marketplace_registry = document
+            .marketplace_manager
+            .map(|manager| {
+                let trusted_root = read_trusted_root(source_root, &manager.trusted_root)?;
+                let config = zeta_marketplace_client::RemoteMarketplaceConfig::new(
+                    Url::parse(&manager.metadata_base_url).map_err(product_config_error)?,
+                    Url::parse(&manager.targets_base_url).map_err(product_config_error)?,
                     trusted_root,
-                    language_cache_root,
-                    "zeta",
-                    semver::Version::parse(env!("CARGO_PKG_VERSION"))
-                        .expect("App Server package version is SemVer"),
+                    profile_root.as_ref().join("cache/marketplace"),
                 )
                 .map_err(product_config_error)?;
-                match marketplace.trust {
-                    ProductMarketplaceTrustDocument::ProductManaged
-                        if marketplace.allowed_publishers.is_empty() =>
-                    {
-                        Ok((plugin, language))
-                    }
-                    ProductMarketplaceTrustDocument::VerifiedExternal => {
-                        let publishers = marketplace.allowed_publishers;
-                        Ok((
-                            plugin
-                                .with_verified_external_publishers(publishers.clone())
-                                .map_err(product_config_error)?,
-                            language
-                                .with_allowed_publishers(publishers)
-                                .map_err(product_config_error)?,
-                        ))
-                    }
-                    ProductMarketplaceTrustDocument::ProductManaged => {
-                        Err(product_config_error(()))
-                    }
+                if manager.allowed_publishers.is_empty() {
+                    Ok(config)
+                } else {
+                    config
+                        .with_allowed_publishers(manager.allowed_publishers)
+                        .map_err(product_config_error)
                 }
             })
-            .collect::<Result<Vec<_>, _>>()?;
-        let (marketplaces, language_marketplaces): (
-            Vec<RemotePluginMarketplaceConfig>,
-            Vec<RemoteLanguageMarketplaceConfig>,
-        ) = marketplace_configs.into_iter().unzip();
+            .transpose()?;
         let connector_oauth = document
             .connector_oauth
             .into_iter()
             .map(ProductConnectorOAuthConfig::try_from)
             .collect::<Result<Vec<_>, _>>()?;
-        validate_unique_configuration(&marketplaces, &connector_oauth)?;
+        validate_unique_configuration(&connector_oauth)?;
         Ok(Self {
-            marketplaces,
-            language_marketplaces,
+            marketplace_registry,
             connector_oauth,
         })
+    }
+
+    /// Returns the product-pinned remote registry configuration used by Marketplace Manager.
+    pub fn marketplace_registry(
+        &self,
+    ) -> Option<&zeta_marketplace_client::RemoteMarketplaceConfig> {
+        self.marketplace_registry.as_ref()
     }
 }
 
 fn validate_unique_configuration(
-    marketplaces: &[RemotePluginMarketplaceConfig],
     connector_oauth: &[ProductConnectorOAuthConfig],
 ) -> Result<(), OpenAppServerError> {
-    let marketplace_ids = marketplaces
-        .iter()
-        .map(|marketplace| marketplace.id())
-        .collect::<BTreeSet<_>>();
     let connector_ids = connector_oauth
         .iter()
         .map(|configuration| match configuration {
@@ -142,7 +95,7 @@ fn validate_unique_configuration(
             | ProductConnectorOAuthConfig::GitHubDevice { connector_id, .. } => connector_id,
         })
         .collect::<BTreeSet<_>>();
-    if marketplace_ids.len() != marketplaces.len() || connector_ids.len() != connector_oauth.len() {
+    if connector_ids.len() != connector_oauth.len() {
         return Err(product_config_error(()));
     }
     Ok(())
@@ -165,30 +118,19 @@ pub(crate) enum ProductConnectorOAuthConfig {
 struct ProductServicesDocument {
     schema_version: u32,
     #[serde(default)]
-    marketplaces: Vec<ProductMarketplaceDocument>,
+    marketplace_manager: Option<ProductMarketplaceManagerDocument>,
     #[serde(default)]
     connector_oauth: Vec<ProductConnectorOAuthDocument>,
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct ProductMarketplaceDocument {
-    id: String,
-    #[serde(default)]
-    trust: ProductMarketplaceTrustDocument,
-    #[serde(default)]
-    allowed_publishers: Vec<String>,
+struct ProductMarketplaceManagerDocument {
     metadata_base_url: String,
     targets_base_url: String,
     trusted_root: PathBuf,
-}
-
-#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq)]
-#[serde(rename_all = "camelCase")]
-enum ProductMarketplaceTrustDocument {
-    #[default]
-    ProductManaged,
-    VerifiedExternal,
+    #[serde(default)]
+    allowed_publishers: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -247,6 +189,14 @@ impl TryFrom<ProductConnectorOAuthDocument> for ProductConnectorOAuthConfig {
 }
 
 fn read_trusted_root(root: &Path, relative_path: &Path) -> Result<Vec<u8>, OpenAppServerError> {
+    let path = resolve_relative_regular_file(root, relative_path)?;
+    fs::read(path).map_err(product_config_error)
+}
+
+fn resolve_relative_regular_file(
+    root: &Path,
+    relative_path: &Path,
+) -> Result<PathBuf, OpenAppServerError> {
     if relative_path.as_os_str().is_empty()
         || relative_path
             .components()
@@ -267,7 +217,7 @@ fn read_trusted_root(root: &Path, relative_path: &Path) -> Result<Vec<u8>, OpenA
     if !canonical_path.starts_with(&canonical_root) {
         return Err(product_config_error(()));
     }
-    fs::read(canonical_path).map_err(product_config_error)
+    Ok(canonical_path)
 }
 
 fn product_config_error(_: impl Sized) -> OpenAppServerError {

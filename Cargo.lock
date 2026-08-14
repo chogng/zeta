@@ -1858,6 +1858,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "filetime"
+version = "0.2.29"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5c287a33c7f0a620c38e641e7f60827713987b3c0f26e8ddc9462cc69cf75759"
+dependencies = [
+ "cfg-if",
+ "libc",
+]
+
+[[package]]
 name = "find-msvc-tools"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6107,6 +6117,10 @@ name = "semver"
 version = "1.0.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a7852d02fc848982e0c167ef163aaff9cd91dc640ba85e263cb1ce46fae51cd"
+dependencies = [
+ "serde",
+ "serde_core",
+]
 
 [[package]]
 name = "seq-macro"
@@ -6776,6 +6790,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "tar"
+version = "0.4.46"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f6221d9a6003c78398e3b239969f352578258df48c8eb051caadae0015bc840"
+dependencies = [
+ "filetime",
+ "libc",
+ "xattr",
+]
+
+[[package]]
 name = "tempfile"
 version = "3.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7180,7 +7205,9 @@ dependencies = [
  "olpc-cjson",
  "pem",
  "percent-encoding",
+ "reqwest",
  "rustls",
+ "rustls-platform-verifier",
  "serde",
  "serde_json",
  "serde_plain",
@@ -9058,6 +9085,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ea6fc2961e4ef194dcbfe56bb845534d0dc8098940c7e5c012a258bfec6701bd"
 
 [[package]]
+name = "xattr"
+version = "1.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32e45ad4206f6d2479085147f02bc2ef834ac85886624a23575ae137c8aa8156"
+dependencies = [
+ "libc",
+ "rustix 1.1.4",
+]
+
+[[package]]
 name = "xcursor"
 version = "0.3.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9437,17 +9474,16 @@ dependencies = [
  "zeta-install-context",
  "zeta-instructions",
  "zeta-keyring-store",
- "zeta-language-marketplace",
  "zeta-language-server-catalog",
- "zeta-language-server-distribution",
  "zeta-language-service",
  "zeta-linux-sandbox",
  "zeta-login",
+ "zeta-marketplace-client",
+ "zeta-marketplace-manager",
  "zeta-mcp-extension",
  "zeta-model-provider",
  "zeta-model-provider-config",
  "zeta-models-manager",
- "zeta-plugin-marketplace",
  "zeta-plugins",
  "zeta-prompts",
  "zeta-protocol",
@@ -9562,6 +9598,8 @@ dependencies = [
 name = "zeta-cli"
 version = "0.1.0"
 dependencies = [
+ "serde",
+ "serde_json",
  "signal-hook",
  "zeta-app-server",
  "zeta-app-server-client",
@@ -9570,6 +9608,9 @@ dependencies = [
  "zeta-install-context",
  "zeta-mcp-server",
  "zeta-protocol",
+ "zeta-remote",
+ "zeta-remote-connections",
+ "zeta-remote-server",
  "zeta-tui",
 ]
 
@@ -10002,28 +10043,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-language-marketplace"
-version = "0.1.0"
-dependencies = [
- "aws-lc-rs",
- "futures",
- "jiff",
- "pretty_assertions",
- "semver",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "tempfile",
- "thiserror 2.0.19",
- "tokio",
- "tough",
- "url",
- "zeta-http-client",
- "zeta-language-server-distribution",
- "zip 4.6.1",
-]
-
-[[package]]
 name = "zeta-language-server-catalog"
 version = "0.1.0"
 dependencies = [
@@ -10031,19 +10050,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.19",
  "zeta-install-context",
- "zeta-language-server-distribution",
  "zeta-lsp",
-]
-
-[[package]]
-name = "zeta-language-server-distribution"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "tempfile",
- "thiserror 2.0.19",
 ]
 
 [[package]]
@@ -10107,6 +10114,34 @@ dependencies = [
  "thiserror 2.0.19",
  "url",
  "zeta-ui",
+]
+
+[[package]]
+name = "zeta-marketplace-client"
+version = "0.1.0"
+dependencies = [
+ "flate2",
+ "semver",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tough",
+ "url",
+ "zip 4.6.1",
+]
+
+[[package]]
+name = "zeta-marketplace-manager"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "url",
+ "zeta-marketplace-client",
 ]
 
 [[package]]
@@ -10226,26 +10261,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-plugin-marketplace"
-version = "0.1.0"
-dependencies = [
- "aws-lc-rs",
- "futures",
- "jiff",
- "pretty_assertions",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "tempfile",
- "tokio",
- "tough",
- "url",
- "zeta-http-client",
- "zeta-plugins",
- "zip 4.6.1",
-]
-
-[[package]]
 name = "zeta-plugins"
 version = "0.1.0"
 dependencies = [
@@ -10272,6 +10287,40 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "ts-rs",
+]
+
+[[package]]
+name = "zeta-remote"
+version = "0.1.0"
+
+[[package]]
+name = "zeta-remote-connections"
+version = "0.1.0"
+dependencies = [
+ "flate2",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tar",
+ "tempfile",
+ "zeta-app-server-client",
+ "zeta-app-server-protocol",
+ "zeta-remote",
+ "zeta-utils-path",
+]
+
+[[package]]
+name = "zeta-remote-server"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "libc",
+ "rustix 1.1.4",
+ "sha2 0.10.9",
+ "tempfile",
+ "zeta-app-server",
+ "zeta-app-server-client",
+ "zeta-app-server-protocol",
 ]
 
 [[package]]
@@ -10691,7 +10740,12 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "arboard",
+ "base64 0.22.1",
+ "flate2",
  "serde_json",
+ "sha2 0.10.9",
+ "tar",
+ "tempfile",
  "tokio",
  "unicode-width 0.2.0",
  "zeta-agent-sidebar",
@@ -10711,6 +10765,8 @@ dependencies = [
  "zeta-language-service",
  "zeta-layout",
  "zeta-protocol",
+ "zeta-remote",
+ "zeta-remote-connections",
  "zeta-renderer",
  "zeta-settings",
  "zeta-slash-commands",

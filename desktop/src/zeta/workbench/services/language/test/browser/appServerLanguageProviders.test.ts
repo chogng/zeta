@@ -144,9 +144,6 @@ class FakeLanguageApi implements ILanguageApi {
   readonly rangeFormattingRequests: Parameters<ILanguageApi["formatRange"]>[0][] = [];
   readonly signatureHelpRequests: Parameters<ILanguageApi["signatureHelp"]>[0][] = [];
 
-  async listMarketplace(): ReturnType<ILanguageApi["listMarketplace"]> { return { catalogRevision: "none", activationGeneration: 1, entries: [] }; }
-  async installMarketplace(): ReturnType<ILanguageApi["installMarketplace"]> { return { activationGeneration: 1 }; }
-
   async synchronize(): Promise<void> {}
   async close(): Promise<void> {}
 

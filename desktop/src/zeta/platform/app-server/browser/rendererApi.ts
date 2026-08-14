@@ -19,6 +19,7 @@ import { createDisconnectedToolSearchApi } from "../../toolSearch/browser/toolSe
 import { createDisconnectedLanguageApi } from "../../language/browser/languageApi.js";
 import { createDisconnectedPluginApi } from "../../plugins/browser/pluginApi.js";
 import { createDisconnectedExtensionHostApi } from "../../extensionHost/browser/extensionHostApi.js";
+import { createDisconnectedMarketplaceApi } from "../../marketplace/browser/marketplaceApi.js";
 
 export { WebAppServerUnavailableError };
 
@@ -49,6 +50,7 @@ export function createDisconnectedRendererApi(): IRendererHost {
     symbolIndex: createDisconnectedSymbolIndexApi(unavailableOperation),
     connectors: createDisconnectedConnectorApi(unavailableOperation),
     plugins: createDisconnectedPluginApi(unavailableOperation),
+    marketplace: createDisconnectedMarketplaceApi(unavailableOperation),
     toolSearch: createDisconnectedToolSearchApi(unavailableOperation),
   };
 }

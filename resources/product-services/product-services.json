@@ -1,12 +1,8 @@
 {
   "schemaVersion": 1,
-  "marketplaces": [
-    {
-      "id": "zeta",
-      "trust": "productManaged",
-      "metadataBaseUrl": "https://chogng.github.io/marketplace/metadata/",
-      "targetsBaseUrl": "https://chogng.github.io/marketplace/targets/",
-      "trustedRoot": "marketplace-root.json"
-    }
-  ]
+  "marketplaceManager": {
+    "metadataBaseUrl": "https://chogng.github.io/marketplace/metadata/",
+    "targetsBaseUrl": "https://chogng.github.io/marketplace/targets/",
+    "trustedRoot": "marketplace-root.json"
+  }
 }

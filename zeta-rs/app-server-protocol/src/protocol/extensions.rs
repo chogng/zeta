@@ -16,6 +16,7 @@ pub enum ExtensionCatalogReloadDto {
 pub enum ExtensionSourceKindDto {
     BuiltIn,
     Plugin,
+    Marketplace,
     User,
 }
 

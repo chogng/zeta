@@ -9,7 +9,7 @@ import type { ICodeIndexService } from "../../../../platform/codeIndex/common/co
 import type { IToolSearchService } from "../../../../platform/toolSearch/common/toolSearchService.js";
 import type { IConnectorService } from "../../../../platform/connectors/common/connectorService.js";
 import type { IPluginService } from "../../../../platform/plugins/common/pluginService.js";
-import type { ILanguageMarketplaceService } from "../../../../platform/language/common/languageMarketplaceService.js";
+import type { IMarketplaceService } from "../../../../platform/marketplace/common/marketplaceService.js";
 import { SettingsEditor } from "./settingsEditor.js";
 
 export interface SettingsEditorContributionOptions {
@@ -22,7 +22,7 @@ export interface SettingsEditorContributionOptions {
   readonly codeIndexService?: ICodeIndexService;
   readonly connectorService?: IConnectorService;
   readonly pluginService?: IPluginService;
-  readonly languageMarketplaceService?: ILanguageMarketplaceService;
+  readonly marketplaceService?: IMarketplaceService;
   readonly toolSearchService?: IToolSearchService;
 }
 
@@ -43,7 +43,7 @@ export class SettingsEditorContribution extends DisposableOwner {
       codeIndexService: options.codeIndexService ?? unavailableCodeIndexService,
       connectorService: options.connectorService ?? unavailableConnectorService,
       pluginService: options.pluginService ?? unavailablePluginService,
-      languageMarketplaceService: options.languageMarketplaceService ?? unavailableLanguageMarketplaceService,
+      marketplaceService: options.marketplaceService ?? unavailableMarketplaceService,
       toolSearchService: options.toolSearchService ?? unavailableToolSearchService,
     }));
     this.modalEditor = this.own(new ModalEditorPart({
@@ -102,10 +102,6 @@ const unavailableConnectorService: IConnectorService = {
 const unavailablePluginService: IPluginService = {
   onDidChange: () => ({ dispose() {}, [Symbol.dispose]() {} }),
   list: () => Promise.reject(new Error("Plugins are unavailable.")),
-  listMarketplace: () => Promise.reject(new Error("Plugins are unavailable.")),
-  install: () => Promise.reject(new Error("Plugins are unavailable.")),
-  update: () => Promise.reject(new Error("Plugins are unavailable.")),
-  rollback: () => Promise.reject(new Error("Plugins are unavailable.")),
   enable: () => Promise.reject(new Error("Plugins are unavailable.")),
   disable: () => Promise.reject(new Error("Plugins are unavailable.")),
   grant: () => Promise.reject(new Error("Plugins are unavailable.")),
@@ -113,7 +109,15 @@ const unavailablePluginService: IPluginService = {
   uninstall: () => Promise.reject(new Error("Plugins are unavailable.")),
 };
 
-const unavailableLanguageMarketplaceService: ILanguageMarketplaceService = {
-  list: () => Promise.reject(new Error("Language Marketplace is unavailable.")),
-  install: () => Promise.reject(new Error("Language Marketplace is unavailable.")),
+const unavailableMarketplaceService: IMarketplaceService = {
+  search: () => Promise.reject(new Error("Marketplace is unavailable.")),
+  get: () => Promise.reject(new Error("Marketplace is unavailable.")),
+  download: () => Promise.reject(new Error("Marketplace is unavailable.")),
+  install: () => Promise.reject(new Error("Marketplace is unavailable.")),
+  update: () => Promise.reject(new Error("Marketplace is unavailable.")),
+  uninstall: () => Promise.reject(new Error("Marketplace is unavailable.")),
+  listInstalled: () => Promise.reject(new Error("Marketplace is unavailable.")),
+  acquireCapability: () => Promise.reject(new Error("Marketplace is unavailable.")),
+  releaseCapability: () => Promise.reject(new Error("Marketplace is unavailable.")),
+  openResource: () => Promise.reject(new Error("Marketplace is unavailable.")),
 };

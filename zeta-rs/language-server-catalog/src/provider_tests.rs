@@ -2,14 +2,11 @@ use std::fs;
 use std::path::Path;
 
 use tempfile::TempDir;
-use zeta_language_server_distribution::LanguageServerActivationAuthority;
-use zeta_language_server_distribution::LanguageServerInstaller;
-use zeta_language_server_distribution::LanguageServerPackage;
-use zeta_language_server_distribution::LanguageServerPackageFile;
 use zeta_lsp::LanguageServerEnvironmentPolicy;
 
 use crate::CSS_LANGUAGE_SERVER_ID;
 use crate::CssLanguageServerProvider;
+use crate::DirectPackageLanguageServerProvider;
 use crate::LanguageServerProviderError;
 use crate::LanguageServerProviderLaunch;
 use crate::LanguageServerProviderRegistry;
@@ -140,25 +137,50 @@ fn registry_rejects_duplicate_provider_identity() {
     let error = registry.register(fixture.provider()).unwrap_err();
     assert!(matches!(
         error,
-        LanguageServerProviderError::DuplicateProvider(CSS_LANGUAGE_SERVER_ID)
+        LanguageServerProviderError::DuplicateProvider(id) if id == CSS_LANGUAGE_SERVER_ID
     ));
 }
 
 #[test]
-fn registry_rebuilt_from_activation_retains_user_enablement() {
+fn packaged_registry_retains_user_enablement() {
     let fixture = ProviderFixture::new();
-    let authority =
-        LanguageServerActivationAuthority::open(fixture.root.path().join("languages")).unwrap();
-    let installed = fixture.installed();
-    let activation = authority.activate(installed).unwrap();
-    let registry = LanguageServerProviderRegistry::from_activation(
-        &activation,
-        ManagedNodeRuntime::from_path(&fixture.node).unwrap(),
-    )
-    .unwrap();
+    let mut registry = LanguageServerProviderRegistry::new();
+    registry.register_packaged(fixture.provider()).unwrap();
 
     assert!(registry.contains(CSS_LANGUAGE_SERVER_ID));
     assert!(registry.activation_enables(CSS_LANGUAGE_SERVER_ID));
+}
+
+#[test]
+fn direct_package_provider_launches_the_verified_executable() {
+    let fixture = ProviderFixture::new();
+    let direct = fixture.root.path().join("demo-language-server");
+    write_executable(&direct);
+    let provider = DirectPackageLanguageServerProvider::new(
+        "demo-language-server",
+        ["demo".to_string()],
+        &direct,
+    )
+    .unwrap();
+    let mut registry = LanguageServerProviderRegistry::new();
+    registry.register_packaged(provider).unwrap();
+
+    let definition = registry
+        .definition(
+            "demo-language-server",
+            fixture.workspace.path(),
+            LanguageServerProviderLaunch::Packaged,
+        )
+        .unwrap()
+        .unwrap();
+    assert_eq!(definition.language_ids().collect::<Vec<_>>(), vec!["demo"]);
+    let (_, command, _) = definition.into_launch_parts();
+    assert_eq!(
+        command.program(),
+        direct.canonicalize().unwrap().as_os_str()
+    );
+    assert!(command.arguments().is_empty());
+    assert_eq!(command.current_dir(), Some(fixture.workspace.path()));
 }
 
 struct ProviderFixture {
@@ -180,6 +202,8 @@ impl ProviderFixture {
             .join("0.1.0")
             .join("server/css-language-server");
         write_executable(&node);
+        fs::create_dir_all(entrypoint.parent().unwrap()).unwrap();
+        fs::write(&entrypoint, b"// server").unwrap();
         Self {
             root,
             workspace,
@@ -193,33 +217,7 @@ impl ProviderFixture {
     }
 
     fn provider_with_runtime(&self, runtime: ManagedNodeRuntime) -> CssLanguageServerProvider {
-        CssLanguageServerProvider::new(self.installed(), runtime).unwrap()
-    }
-
-    fn installed(&self) -> zeta_language_server_distribution::InstalledLanguageServer {
-        let package = LanguageServerPackage::new(
-            CSS_LANGUAGE_SERVER_ID,
-            "0.1.0",
-            "server/css-language-server",
-            vec![
-                LanguageServerPackageFile::executable(
-                    "server/css-language-server",
-                    b"// server".to_vec(),
-                )
-                .unwrap(),
-                LanguageServerPackageFile::regular(
-                    "server/runtime/node_modules/example/index.js",
-                    b"module.exports = {};".to_vec(),
-                )
-                .unwrap(),
-            ],
-        )
-        .unwrap();
-        let digest = package.sha256();
-        LanguageServerInstaller::new(self.root.path().join("languages"))
-            .unwrap()
-            .install_verified(package, digest)
-            .unwrap()
+        CssLanguageServerProvider::new(&self.entrypoint, runtime).unwrap()
     }
 }
 

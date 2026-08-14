@@ -3,8 +3,8 @@
 跨 crate 的 Skill 语义和分阶段演进由 [`docs/skills.md`](../../../docs/skills.md) 维护；底层目录、
 文件和 catalog 契约由 [`zeta-skills`](../../skills/README.md) 维护。
 
-`zeta-skills-extension` 拥有 `zeta-skills` 之上的 Agent 运行时编排：组合 built-in、user 和当前
-Workspace source，应用启用状态与兼容性策略，在 Turn 提交前冻结显式选择，在模型调用安全点重新
+`zeta-skills-extension` 拥有 `zeta-skills` 之上的 Agent 运行时编排：组合 built-in、user、当前
+Workspace、Plugin 和 Marketplace 动态 source，应用启用状态与兼容性策略，在 Turn 提交前冻结显式选择，在模型调用安全点重新
 加载 exact content，并通过 `zeta-extension-api` 贡献有界元数据目录、exact Skill instructions
 以及单个只读 `skills-read` 模型工具。
 

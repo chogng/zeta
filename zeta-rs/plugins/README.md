@@ -6,11 +6,10 @@
 > [`docs/connectors.md`](../../docs/connectors.md) 维护。
 
 `zeta-plugins` 严格解析 declarative Plugin v1 package，验证 package-relative path 与本地文件树，
-计算确定性 SHA-256 digest，并把 host 注册的 Marketplace catalog 解析为 exact、digest-pinned package。
-Marketplace install/update 先复制、复验并原子提升到 content-addressed object store；durable authority
-分别持久化 installed/enabled/granted/effective refs、typed command receipts 和单调 activation generation，
-并发布 generation subscription 与 exact invocation lease。它不自行执行 Plugin，不保存 credential，
-也不解析 `SKILL.md` 或 MCP JSON-RPC。
+计算确定性 SHA-256 digest，并管理既有本地 Plugin 安装的 enable/grant/effective activation 状态。
+远端发现、下载、artifact、install/update/uninstall 和 capability lease 统一属于
+`zeta-marketplace-manager`；本 crate 不再解析 Marketplace catalog，也不是 Marketplace 安装 owner。
+它不自行执行 Plugin，不保存 credential，也不解析 `SKILL.md` 或 MCP JSON-RPC。
 
 ## 公共契约
 
@@ -26,11 +25,6 @@ Marketplace install/update 先复制、复验并原子提升到 content-addresse
 | `EditorExtensionActivationEvent` | 区分 startup/command/language/on-demand 等 bounded activation trigger | 把 provider kind 当成隐式 activation |
 | `LocalPluginPackage::load` | 验证一个 exact root、digest 和所有 contribution path | copy/install/immutability |
 | `LocalPluginCatalog::discover` | 读取一个 package 或目录下的直接 package children | recursive marketplace search |
-| `PluginMarketplace::open` | 校验 host 注册 catalog、无链接 package path 与 exact package digest | 网络下载、publisher 签名、客户端宿主路径 |
-| `PluginMarketplace::from_verified_remote` | 接收产品分发层已验证的签名 manifest、digest、统计与延迟 materializer | TUF/HTTP、自动下载、grant |
-| `PluginMarketplaceMode` / `PluginMarketplaceTrust` | 分别表达读取方式与运营方信任，避免把官方远端源误标成第三方 | signature 验证、用户授权 |
-| `PluginMarketplacePackageMaterializer` / `MaterializedPluginMarketplacePackage` | 安装时把 exact ref materialize 为 canonical package，并把分发租约保持到 authority 复制完成 | 目录发现、enable、运行时执行 |
-| `PluginMarketplaceService` | Marketplace install、staged update、rollback、profile reconcile，并拒绝跨远端源的 publisher namespace owner ambiguity | 自动 grant、远端 catalog 同步、Workspace trust 决策 |
 | `PluginPackageStore::install_local` | stage、复制、复验 digest 并原子 promote immutable object | enablement、grant、activation |
 | `PluginPackageStore::read` | 按 exact installed ref 重新验证 object | authority lookup、版本选择 |
 | `PluginPackageStore::activate` | 把 exact installed refs 解析为一个 activation generation | installed/enable authority、live publish |
@@ -187,10 +181,10 @@ filesystem。error message 只包含稳定 identity、relative path 与 sanitize
 仍可被外部修改。runtime consumer 不能把它当 immutable root；必须先通过 `PluginPackageStore`
 复制、重新验证并从 content-addressed object root 绑定 contribution。
 
-`PluginMarketplace::open` 的 root 只能由产品 host 注册。`PluginMarketplace::from_verified_remote`
-只接受产品分发层已经验证的 discovery metadata，并把 package bytes 延迟到安装时通过
-`PluginMarketplacePackageMaterializer` 获取；返回的 `LocalPluginPackage` 仍须与 signed manifest、ID、
-version 和 digest 完全一致。Renderer 只能提交 Marketplace ID 与 exact package ref，不能提交宿主路径。
+正式 Marketplace package 不通过 `LocalPluginPackage` 或 `PluginPackageStore` 安装。
+Renderer 只能调用通用 Marketplace business API；Manager 返回 opaque installation/capability identity，
+产品 runtime 再消费 path-free activation contract。`install_local` 仅服务显式本地开发或旧 profile
+恢复，不能作为远端 Marketplace 的旁路。
 
 ## 验证
 
@@ -203,20 +197,18 @@ bazel test //zeta-rs/plugins:plugins-unit-tests
 
 当前测试覆盖严格/重复模式、身份/SemVer、凭据引用、权限、声明式 Extension package path、Editor
 Extension v1 API/activation/capability/entrypoint、路径穿越/设备名/规范化、摘要确定性、缺失贡献、符号链接/硬链接、目录排序与
-读取、精确版本冲突，以及 Marketplace digest mismatch、staged update 和 rollback grant 边界。
+读取和精确版本冲突，以及 local install、grant、enable 和 invocation fence 边界。
 
 ## 当前限制与扩展点
 
-PL1 的 content store、durable installed/enabled/granted/effective authority、exact snapshot、live
-activation publish、Marketplace ingestion 和 user-profile reconcile 已实现。Workspace request 只做
-profile authority 的只读可用性判断，不从 Workspace 自动安装或授予权限；authority v1→v2 migration
+PL1 的 legacy content store、durable installed/enabled/granted/effective authority、exact snapshot 和
+live activation publish 已实现。Marketplace ingestion 与安装状态已经迁出到
+`zeta-marketplace-manager`。authority v1→v2 migration
 会把旧 active package 保守迁移为 enabled + granted。当前 object directory 的只读性由
 “不暴露可写根路径 + digest revalidation”保证，
 尚未施加平台级 immutable flag，也没有 orphan staging startup recovery；失败 install commit 和 uninstall
-会精确回收无引用 object。受信 host 可注册 materialized Marketplace root；公网 catalog 下载、
-publisher signature/revocation、materialized package cache quota 与 GC 已由 `zeta-plugin-marketplace`
-实现；installed content store 仍只在 failed install/uninstall 时精确回收，没有独立的全局 orphan quota
-authority。package-rooted MCP consumer
+会精确回收无引用 object。该旧 store 仍只在 failed local install/uninstall 时精确回收，没有独立的全局
+orphan quota authority；不得重新接入远端 catalog。package-rooted MCP consumer
 已位于 `zeta-mcp-extension`，不能反向并入本 crate。这些能力应在新的 private
 `authority/resolution` modules 中接入，不扩大 loader/store 为隐式 enable manager。
 

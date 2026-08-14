@@ -68,13 +68,19 @@ mod git_operations;
 mod git_runtime;
 mod interaction_runtime;
 mod language_document_features;
-mod language_marketplace_operations;
-pub(crate) mod language_marketplace_runtime;
-#[cfg(test)]
-#[path = "server/language_marketplace_runtime_tests.rs"]
-mod language_marketplace_runtime_tests;
 mod language_operations;
 mod language_runtime;
+mod marketplace_extension_sources;
+pub(crate) mod marketplace_language_runtime;
+#[cfg(test)]
+#[path = "server/marketplace_language_runtime_tests.rs"]
+mod marketplace_language_runtime_tests;
+mod marketplace_operations;
+#[cfg(test)]
+#[path = "server/marketplace_operations_tests.rs"]
+mod marketplace_operations_tests;
+mod marketplace_projection;
+mod marketplace_skill_sources;
 mod mcp_operations;
 pub(crate) mod multi_agent_tools;
 pub(crate) mod notification_queue;
@@ -152,12 +158,14 @@ pub struct AppServer {
         Option<Arc<zeta_connectors_extension::ConnectorDeviceOAuthService>>,
     pub(super) mcp_oauth: Option<Arc<zeta_mcp_extension::McpOAuthService>>,
     pub(super) plugins: Option<zeta_plugins::PluginActivationAuthority>,
-    pub(super) extension_hosts: Option<extension_host_runtime::ExtensionHostRuntime>,
-    pub(super) plugin_marketplaces: Option<zeta_plugins::PluginMarketplaceService>,
-    language_marketplaces:
-        Option<language_marketplace_runtime::AppServerLanguageMarketplaceRuntime>,
+    extension_hosts: Option<extension_host_runtime::ExtensionHostRuntime>,
+    pub(super) marketplace_manager_client:
+        Option<Arc<dyn zeta_marketplace_client::MarketplaceServiceClient>>,
+    marketplace_language_runtime: Option<marketplace_language_runtime::MarketplaceLanguageRuntime>,
     plugin_skill_sources: Option<Arc<dyn zeta_skills_extension::DynamicSkillSourceProvider>>,
+    marketplace_skill_sources: Option<Arc<dyn zeta_skills_extension::DynamicSkillSourceProvider>>,
     plugin_extension_sources: Option<Arc<dyn zeta_extensions::DynamicExtensionSourceProvider>>,
+    marketplace_extension_sources: Option<Arc<dyn zeta_extensions::DynamicExtensionSourceProvider>>,
     pub(super) mcp_runtime_intents: McpRuntimeIntents,
     pub(super) mcp_status: Arc<RwLock<zeta_mcp_extension::McpRuntimeStatusSnapshot>>,
     language: Mutex<language_runtime::AppServerLanguageRuntime>,
@@ -186,7 +194,6 @@ pub struct AppServer {
     _config_watcher: Option<config_runtime::ConfigWatcher>,
     _connector_watcher: Option<connector_runtime::ConnectorWatcher>,
     _plugin_watcher: Option<plugin_runtime::PluginWatcher>,
-    _plugin_profile_watcher: Option<plugin_runtime::PluginProfileWatcher>,
     _tool_config_watcher: Option<crate::local::ToolConfigWatcher>,
     _interaction_deadline_watcher: interaction_runtime::InteractionDeadlineWatcher,
     updates: Arc<UpdateBroker>,
@@ -197,6 +204,7 @@ pub struct ConnectionState {
     pub(super) connection_id: u64,
     initialized: bool,
     request_ids: BTreeSet<u64>,
+    marketplace_leases: BTreeSet<String>,
     outbound_notifications: NotificationQueue,
 }
 
@@ -281,10 +289,12 @@ impl AppServer {
             mcp_oauth: None,
             plugins: None,
             extension_hosts: None,
-            plugin_marketplaces: None,
-            language_marketplaces: None,
+            marketplace_manager_client: None,
+            marketplace_language_runtime: None,
             plugin_skill_sources: None,
+            marketplace_skill_sources: None,
             plugin_extension_sources: None,
+            marketplace_extension_sources: None,
             mcp_runtime_intents: McpRuntimeIntents::default(),
             mcp_status: Arc::new(RwLock::new(
                 zeta_mcp_extension::McpRuntimeStatusSnapshot::empty(1),
@@ -318,7 +328,6 @@ impl AppServer {
             _config_watcher: None,
             _connector_watcher: None,
             _plugin_watcher: None,
-            _plugin_profile_watcher: None,
             _tool_config_watcher: None,
             _interaction_deadline_watcher: interaction_deadline_watcher,
             updates,
@@ -347,11 +356,46 @@ impl AppServer {
         self
     }
 
-    pub(crate) fn with_language_marketplaces(
+    pub(crate) fn with_marketplace_language_runtime(
         mut self,
-        marketplaces: language_marketplace_runtime::AppServerLanguageMarketplaceRuntime,
+        runtime: marketplace_language_runtime::MarketplaceLanguageRuntime,
+    ) -> Result<Self, String> {
+        let providers = runtime.registry()?;
+        self.language
+            .get_mut()
+            .map_err(|_| "new App Server language runtime mutex is poisoned".to_string())?
+            .set_provider_registry(providers);
+        self.marketplace_language_runtime = Some(runtime);
+        Ok(self)
+    }
+
+    /// Installs the client used to call the product-local Marketplace Manager.
+    pub fn with_marketplace_manager_client(
+        mut self,
+        client: Arc<dyn zeta_marketplace_client::MarketplaceServiceClient>,
     ) -> Self {
-        self.language_marketplaces = Some(marketplaces);
+        self.marketplace_manager_client = Some(client);
+        self
+    }
+
+    /// Installs the concrete local Marketplace Manager and its trusted Skill projection.
+    pub fn with_local_marketplace_manager(
+        mut self,
+        manager: Arc<zeta_marketplace_manager::MarketplaceManager>,
+    ) -> Self {
+        let source: Arc<dyn zeta_skills_extension::DynamicSkillSourceProvider> = Arc::new(
+            marketplace_skill_sources::MarketplaceSkillSourceProvider::new(Arc::clone(&manager)),
+        );
+        self.marketplace_skill_sources = Some(source);
+        let extension_source: Arc<dyn zeta_extensions::DynamicExtensionSourceProvider> = Arc::new(
+            marketplace_extension_sources::MarketplaceExtensionSourceProvider::new(Arc::clone(
+                &manager,
+            )),
+        );
+        self.marketplace_extension_sources = Some(extension_source);
+        self.marketplace_manager_client = Some(manager);
+        self.rebind_dynamic_skill_sources();
+        self.rebind_dynamic_extension_sources();
         self
     }
 
@@ -367,6 +411,15 @@ impl AppServer {
 
     /// Releases connection-scoped subscriptions and runtime resources.
     pub fn close_connection(&self, connection: ConnectionState) {
+        if let Some(marketplace) = &self.marketplace_manager_client {
+            for lease_id in &connection.marketplace_leases {
+                let _ = marketplace.release_capability(
+                    zeta_marketplace_client::ReleaseCapabilityRequest {
+                        lease_id: lease_id.clone(),
+                    },
+                );
+            }
+        }
         self.browser_host.unregister(connection.connection_id);
         if let Err(error) = self.synchronize_browser_tool_availability()
             && let Some(host) = &self.local_workspace_host
@@ -527,20 +580,67 @@ impl AppServer {
         let skill_sources: Arc<dyn zeta_skills_extension::DynamicSkillSourceProvider> = Arc::new(
             plugin_skill_sources::PluginSkillSourceProvider::new(plugins.clone()),
         );
-        if let Some(runtime) = &self.skills
-            && let Err(error) = runtime.bind_dynamic_sources(skill_sources.clone())
-        {
-            log::error!("failed to bind Plugin Skill sources: {error}");
-        }
         self.plugin_skill_sources = Some(skill_sources);
+        self.rebind_dynamic_skill_sources();
         let extension_sources: Arc<dyn zeta_extensions::DynamicExtensionSourceProvider> =
             Arc::new(plugin_extension_sources::PluginExtensionSourceProvider::new(plugins.clone()));
-        if let Ok(catalog) = self.extensions.get_mut() {
-            catalog.bind_dynamic_sources(Arc::clone(&extension_sources));
-        }
         self.plugin_extension_sources = Some(extension_sources);
+        self.rebind_dynamic_extension_sources();
         self.plugins = Some(plugins);
         self
+    }
+
+    fn rebind_dynamic_skill_sources(&self) {
+        let Some(combined) = self.combined_dynamic_skill_sources() else {
+            return;
+        };
+        if let Some(runtime) = &self.skills
+            && let Err(error) = runtime.bind_dynamic_sources(combined)
+        {
+            log::error!("failed to bind dynamic Skill sources: {error}");
+        }
+    }
+
+    fn combined_dynamic_skill_sources(
+        &self,
+    ) -> Option<Arc<dyn zeta_skills_extension::DynamicSkillSourceProvider>> {
+        let providers = [
+            self.plugin_skill_sources.clone(),
+            self.marketplace_skill_sources.clone(),
+        ]
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>();
+        (!providers.is_empty()).then(|| {
+            Arc::new(marketplace_skill_sources::CombinedSkillSourceProvider::new(
+                providers,
+            )) as Arc<dyn zeta_skills_extension::DynamicSkillSourceProvider>
+        })
+    }
+
+    fn rebind_dynamic_extension_sources(&self) {
+        let Some(provider) = self.combined_dynamic_extension_sources() else {
+            return;
+        };
+        if let Ok(mut catalog) = self.extensions.lock() {
+            catalog.bind_dynamic_sources(provider);
+        }
+    }
+
+    fn combined_dynamic_extension_sources(
+        &self,
+    ) -> Option<Arc<dyn zeta_extensions::DynamicExtensionSourceProvider>> {
+        let providers = [
+            self.plugin_extension_sources.clone(),
+            self.marketplace_extension_sources.clone(),
+        ]
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>();
+        (!providers.is_empty()).then(|| {
+            Arc::new(marketplace_extension_sources::CombinedExtensionSourceProvider::new(providers))
+                as Arc<dyn zeta_extensions::DynamicExtensionSourceProvider>
+        })
     }
 
     /// Enables executable Editor Extensions over one explicitly injected process launcher.
@@ -571,21 +671,6 @@ impl AppServer {
         }
         self.extension_hosts = Some(runtime);
         Ok(self)
-    }
-
-    /// Installs host-registered Marketplace ingestion over the same Plugin authority.
-    pub fn with_plugin_marketplaces(
-        mut self,
-        marketplaces: zeta_plugins::PluginMarketplaceService,
-    ) -> Self {
-        if let Some(config) = &self.config {
-            self._plugin_profile_watcher = Some(plugin_runtime::PluginProfileWatcher::start(
-                Arc::clone(config),
-                marketplaces.clone(),
-            ));
-        }
-        self.plugin_marketplaces = Some(marketplaces);
-        self
     }
 
     pub(crate) fn with_mcp_status_snapshot(
@@ -622,7 +707,7 @@ impl AppServer {
             built_in_source,
             config,
             self.updates.clone(),
-            self.plugin_skill_sources.clone(),
+            self.combined_dynamic_skill_sources(),
         )?;
         let mut builder = zeta_extension_api::ExtensionRegistryBuilder::new();
         zeta_skills_extension::install(&mut builder, Arc::clone(&runtime));
@@ -660,8 +745,8 @@ impl AppServer {
 
     pub fn with_extension_roots(mut self, roots: Vec<ExtensionRoot>) -> Self {
         let mut catalog = ExtensionCatalog::new(roots);
-        if let Some(provider) = &self.plugin_extension_sources {
-            catalog.bind_dynamic_sources(Arc::clone(provider));
+        if let Some(provider) = self.combined_dynamic_extension_sources() {
+            catalog.bind_dynamic_sources(provider);
         }
         self.extensions = Mutex::new(catalog);
         self
@@ -1158,10 +1243,24 @@ impl AppServer {
                 self.connector_credential_cleanup_retry(&request.params)
             }
             Some(ClientMethod::PluginList) => self.plugin_list(),
-            Some(ClientMethod::PluginMarketplaceList) => self.plugin_marketplace_list(),
-            Some(ClientMethod::PluginInstall) => self.plugin_install(&request.params),
-            Some(ClientMethod::PluginUpdate) => self.plugin_update(&request.params),
-            Some(ClientMethod::PluginRollback) => self.plugin_rollback(&request.params),
+            Some(ClientMethod::MarketplaceSearch) => self.marketplace_search(&request.params),
+            Some(ClientMethod::MarketplaceGet) => self.marketplace_get(&request.params),
+            Some(ClientMethod::MarketplaceDownload) => self.marketplace_download(&request.params),
+            Some(ClientMethod::MarketplaceInstall) => self.marketplace_install(&request.params),
+            Some(ClientMethod::MarketplaceUpdate) => self.marketplace_update(&request.params),
+            Some(ClientMethod::MarketplaceUninstall) => self.marketplace_uninstall(&request.params),
+            Some(ClientMethod::MarketplaceListInstalled) => {
+                self.marketplace_list_installed(&request.params)
+            }
+            Some(ClientMethod::MarketplaceAcquireCapability) => {
+                self.marketplace_acquire_capability(connection, &request.params)
+            }
+            Some(ClientMethod::MarketplaceReleaseCapability) => {
+                self.marketplace_release_capability(connection, &request.params)
+            }
+            Some(ClientMethod::MarketplaceOpenResource) => {
+                self.marketplace_open_resource(connection, &request.params)
+            }
             Some(ClientMethod::PluginEnable) => self.plugin_enable(&request.params),
             Some(ClientMethod::PluginDisable) => self.plugin_disable(&request.params),
             Some(ClientMethod::PluginGrant) => self.plugin_grant(&request.params),
@@ -1190,10 +1289,6 @@ impl AppServer {
             }
             Some(ClientMethod::LanguageServerRemove) => {
                 self.language_server_remove(&request.params)
-            }
-            Some(ClientMethod::LanguageMarketplaceList) => self.language_marketplace_list(),
-            Some(ClientMethod::LanguageMarketplaceInstall) => {
-                self.language_marketplace_install(&request.params)
             }
             Some(ClientMethod::ProviderConfigure) => self.provider_configure(&request.params),
             Some(ClientMethod::ProviderRemove) => self.provider_remove(&request.params),

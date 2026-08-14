@@ -1,5 +1,5 @@
 export type ExtensionCatalogReload = "cached" | "refresh";
-export type ExtensionSourceKind = "builtIn" | "plugin" | "user";
+export type ExtensionSourceKind = "builtIn" | "plugin" | "marketplace" | "user";
 export type ExtensionDiagnosticCode = "sourceUnavailable" | "invalidManifest" | "duplicateExtension" | "pathEscapesRoot" | "resourceNotFound" | "resourceTooLarge";
 
 export interface ExtensionDescriptor {
@@ -106,7 +106,7 @@ function normalizeExtension(value: unknown): ExtensionDescriptor {
     publisher: boundedText(extension.publisher, "extension publisher", 256),
     version: boundedText(extension.version, "extension version", 256),
     displayName: boundedText(extension.displayName, "extension display name", 256),
-    sourceKind: stringEnum(extension.sourceKind, "extension source kind", ["builtIn", "plugin", "user"] as const),
+    sourceKind: stringEnum(extension.sourceKind, "extension source kind", ["builtIn", "plugin", "marketplace", "user"] as const),
     manifestJson: boundedText(extension.manifestJson, "extension manifest", 4 * 1024 * 1024),
     manifestSha256: sha256Digest(extension.manifestSha256, "extension manifest digest"),
     packageSha256: sha256Digest(extension.packageSha256, "extension package digest"),

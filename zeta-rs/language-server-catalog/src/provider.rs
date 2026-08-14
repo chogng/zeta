@@ -5,12 +5,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use zeta_language_server_distribution::LanguageServerActivationSnapshot;
-
-use crate::CSS_LANGUAGE_SERVER_ID;
-use crate::CssLanguageServerProvider;
 use crate::LanguageServerDefinition;
-use crate::ManagedNodeRuntime;
 
 /// Selects the package-managed server or one authoritative native executable override.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -26,10 +21,10 @@ pub enum LanguageServerProviderLaunch<'a> {
 /// context or an explicit executable override selected by the configuration authority.
 pub trait LanguageServerProvider: Send + Sync {
     /// Returns the stable server identity used by Config and the process supervisor.
-    fn id(&self) -> &'static str;
+    fn id(&self) -> &str;
 
     /// Returns the complete stable language route owned by this provider.
-    fn languages(&self) -> &'static [&'static str];
+    fn languages(&self) -> &[String];
 
     /// Produces one workspace-rooted launch definition without starting the process.
     fn definition(
@@ -42,43 +37,14 @@ pub trait LanguageServerProvider: Send + Sync {
 /// Frozen product registry of installed language-server providers.
 #[derive(Clone, Default)]
 pub struct LanguageServerProviderRegistry {
-    providers: BTreeMap<&'static str, Arc<dyn LanguageServerProvider>>,
-    activation_enabled: std::collections::BTreeSet<&'static str>,
+    providers: BTreeMap<String, Arc<dyn LanguageServerProvider>>,
+    activation_enabled: std::collections::BTreeSet<String>,
 }
 
 impl LanguageServerProviderRegistry {
     /// Creates an empty product composition registry.
     pub fn new() -> Self {
         Self::default()
-    }
-
-    /// Rebuilds the provider registry from one durable activation snapshot.
-    ///
-    /// This is the canonical product adapter boundary: the generic activation authority owns
-    /// exact installed versions, while this catalog maps known server identities to concrete
-    /// providers and their required shared runtimes.
-    pub fn from_activation(
-        activation: &LanguageServerActivationSnapshot,
-        node: ManagedNodeRuntime,
-    ) -> Result<Self, LanguageServerProviderError> {
-        let mut registry = Self::new();
-        for installed in activation.servers() {
-            match installed.server_id() {
-                CSS_LANGUAGE_SERVER_ID => {
-                    registry.register(CssLanguageServerProvider::new(
-                        installed.clone(),
-                        node.clone(),
-                    )?)?;
-                    registry.activation_enabled.insert(CSS_LANGUAGE_SERVER_ID);
-                }
-                server_id => {
-                    return Err(LanguageServerProviderError::UnsupportedActivatedServer(
-                        server_id.to_owned(),
-                    ));
-                }
-            }
-        }
-        Ok(registry)
     }
 
     /// Registers one uniquely identified provider.
@@ -89,16 +55,27 @@ impl LanguageServerProviderRegistry {
         self.register_shared(Arc::new(provider))
     }
 
+    /// Registers an installed package provider and enables its packaged launch by default.
+    pub fn register_packaged<P>(&mut self, provider: P) -> Result<(), LanguageServerProviderError>
+    where
+        P: LanguageServerProvider + 'static,
+    {
+        let id = provider.id().to_owned();
+        self.register(provider)?;
+        self.activation_enabled.insert(id);
+        Ok(())
+    }
+
     /// Registers one shared provider while retaining its exact runtime identity.
     pub fn register_shared(
         &mut self,
         provider: Arc<dyn LanguageServerProvider>,
     ) -> Result<(), LanguageServerProviderError> {
-        let id = provider.id();
+        let id = provider.id().to_owned();
         if id.is_empty() || provider.languages().is_empty() {
             return Err(LanguageServerProviderError::InvalidProviderContract(id));
         }
-        if self.providers.contains_key(id) {
+        if self.providers.contains_key(&id) {
             return Err(LanguageServerProviderError::DuplicateProvider(id));
         }
         self.providers.insert(id, provider);
@@ -130,8 +107,8 @@ impl LanguageServerProviderRegistry {
     }
 
     /// Iterates stable installed provider identities in deterministic order.
-    pub fn ids(&self) -> impl Iterator<Item = &'static str> + '_ {
-        self.providers.keys().copied()
+    pub fn ids(&self) -> impl Iterator<Item = &str> + '_ {
+        self.providers.keys().map(String::as_str)
     }
 
     /// Returns whether a durable user activation enables this packaged provider without Config.
@@ -185,19 +162,18 @@ pub enum LanguageServerProviderError {
         path: PathBuf,
         reason: &'static str,
     },
-    #[error("installed language-server identity '{actual}' does not match '{expected}'")]
-    InstalledServerIdentity {
-        expected: &'static str,
-        actual: String,
-    },
     #[error("language-server provider '{0}' has an empty identity or language route")]
-    InvalidProviderContract(&'static str),
+    InvalidProviderContract(String),
     #[error("language-server provider '{0}' is registered more than once")]
-    DuplicateProvider(&'static str),
-    #[error("activated language-server provider '{0}' is not supported by this Zeta build")]
-    UnsupportedActivatedServer(String),
+    DuplicateProvider(String),
     #[error(transparent)]
-    InvalidDefinition(#[from] crate::LanguageServerCatalogError),
+    InvalidDefinition(Box<crate::LanguageServerCatalogError>),
+}
+
+impl From<crate::LanguageServerCatalogError> for LanguageServerProviderError {
+    fn from(error: crate::LanguageServerCatalogError) -> Self {
+        Self::InvalidDefinition(Box::new(error))
+    }
 }
 
 pub(crate) fn canonical_regular_file(

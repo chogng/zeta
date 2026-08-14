@@ -64,6 +64,8 @@ pub enum ExtensionSourceKind {
     BuiltIn,
     /// The package came from an effective, exact Plugin package.
     Plugin,
+    /// The package came from the local Marketplace Manager.
+    Marketplace,
     /// The package came from the user's profile extension directory.
     User,
 }
@@ -447,7 +449,10 @@ fn scan_dynamic_packages(
             .parent()
             .map(Path::to_path_buf)
             .unwrap_or_else(|| source.path.clone());
-        let root = ExtensionRoot::plugin(root_path);
+        let root = ExtensionRoot {
+            kind: source.kind,
+            path: root_path,
+        };
         if let Err(limit) = budget.claim_package_candidate() {
             budget.push_diagnostic(
                 diagnostics,
@@ -731,6 +736,7 @@ fn source_kind(kind: &ExtensionRootKind) -> ExtensionSourceKind {
     match kind {
         ExtensionRootKind::BuiltIn => ExtensionSourceKind::BuiltIn,
         ExtensionRootKind::Plugin => ExtensionSourceKind::Plugin,
+        ExtensionRootKind::Marketplace => ExtensionSourceKind::Marketplace,
         ExtensionRootKind::User => ExtensionSourceKind::User,
     }
 }
