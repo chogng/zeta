@@ -56,6 +56,92 @@ test("Code consumes App Server Rust syntax facts in Aster", async ({ target, wor
   await expect(group.content.locator(".aster-editor-goto-symbol-item")).toContainText("main");
 });
 
+test("Code finds local workspace symbols when the language server has no workspace-symbol provider", async ({ target, workbench }) => {
+  test.skip(
+    target.appServerMode !== "required" || target.product !== "code" || !process.env.ZETA_PLAYWRIGHT_LANGUAGE_SERVER,
+    "This scenario requires Code with the smoke-test language server",
+  );
+  test.setTimeout(120_000);
+
+  const page = workbench.page;
+  await page.keyboard.press(process.platform === "darwin" ? "Meta+T" : "Control+T");
+  const quickPick = page.locator(".zeta-quick-pick");
+  const query = quickPick.locator(".zeta-quick-pick-input input");
+  await expect(query).toBeFocused();
+  await query.fill("main");
+  const result = quickPick.locator(".zeta-quick-pick-row-content").filter({ has: page.locator(".zeta-quick-pick-row-label", { hasText: /^main$/ }) }).filter({ hasText: "main.rs" });
+  await expect(result).toBeVisible({ timeout: 60_000 });
+  await query.press("Enter");
+
+  await expect(quickPick).toBeHidden();
+  const group = workbench.editors.groupAt(0);
+  await expect(group.tabs.first()).toContainText("main.rs");
+  await expect(group.content.locator(".aster-editor-accessibility-status")).toContainText("4 characters selected");
+});
+
+test("Code searches and opens a workspace symbol from unsaved editor content", async ({ target, workbench }) => {
+  test.skip(
+    target.appServerMode !== "required" || target.product !== "code",
+    "This scenario requires the Code App Server product",
+  );
+  test.setTimeout(120_000);
+
+  const page = workbench.page;
+  const explorer = page.locator(".zeta-explorer");
+  const fileRow = explorer.locator(".zeta-tree-row").filter({ hasText: "main.rs" });
+  await expect.poll(() => fileRow.count(), { timeout: 15_000, message: "Rust workspace file appears in Explorer" }).toBe(1);
+  await fileRow.click();
+
+  const group = workbench.editors.groupAt(0);
+  const input = group.content.locator(".aster-editor-input");
+  await input.focus();
+  await input.press(process.platform === "darwin" ? "Meta+Home" : "Control+Home");
+  for (let index = 0; index < 3; index += 1) await input.press("ArrowRight");
+  for (let index = 0; index < 4; index += 1) await input.press("Shift+ArrowRight");
+  await workbench.page.keyboard.insertText("ephemeral_workspace_symbol");
+  await expect.poll(() => hasIndexedSymbol(page, "ephemeral_workspace_symbol"), { timeout: 60_000, message: "unsaved declaration reaches the Workspace SymbolIndex overlay" }).toBe(true);
+  await page.keyboard.press(process.platform === "darwin" ? "Meta+T" : "Control+T");
+
+  const quickPick = page.locator(".zeta-quick-pick");
+  const query = quickPick.locator(".zeta-quick-pick-input input");
+  await expect(query).toBeFocused();
+  await query.fill("ephemeral_workspace_symbol");
+  await expect(quickPick.locator(".zeta-quick-pick-row-label", { hasText: /^ephemeral_workspace_symbol$/ })).toBeVisible({ timeout: 60_000 });
+  await query.press("Enter");
+
+  await expect(quickPick).toBeHidden();
+  await expect(group.content.locator(".aster-editor-accessibility-status")).toContainText("26 characters selected");
+});
+
+test("Code expands and shrinks Smart Select through semantic editor state", async ({ target, workbench }) => {
+  test.skip(
+    target.appServerMode !== "required" || target.product !== "code",
+    "This scenario requires the Code App Server product",
+  );
+  test.setTimeout(120_000);
+
+  const explorer = workbench.page.locator(".zeta-explorer");
+  const fileRow = explorer.locator(".zeta-tree-row").filter({ hasText: "main.rs" });
+  await expect.poll(() => fileRow.count(), { timeout: 15_000, message: "Rust workspace file appears in Explorer" }).toBe(1);
+  await fileRow.click();
+
+  const group = workbench.editors.groupAt(0);
+  const input = group.content.locator(".aster-editor-input");
+  const status = group.content.locator(".aster-editor-accessibility-status");
+  await input.focus();
+  await input.press(process.platform === "darwin" ? "Meta+Home" : "Control+Home");
+  await input.press("ArrowDown");
+  await input.press("Home");
+  for (let index = 0; index < 10; index += 1) await input.press("ArrowRight");
+
+  await input.press(process.platform === "darwin" ? "Meta+Shift+ArrowRight" : "Control+Shift+ArrowRight");
+  await expect(status).toContainText("7 characters selected");
+  await input.press(process.platform === "darwin" ? "Meta+Shift+ArrowRight" : "Control+Shift+ArrowRight");
+  await expect.poll(async () => selectedCharacterCount(await status.textContent()), { timeout: 60_000, message: "Smart Select expands beyond the identifier" }).toBeGreaterThan(7);
+  await input.press(process.platform === "darwin" ? "Meta+Shift+ArrowLeft" : "Control+Shift+ArrowLeft");
+  await expect(status).toContainText("7 characters selected");
+});
+
 test("Code shows App Server LSP completions in Aster", async ({ target, workbench }) => {
   test.skip(
     target.appServerMode !== "required" || target.product !== "code" || !process.env.ZETA_PLAYWRIGHT_LANGUAGE_SERVER,
@@ -275,6 +361,19 @@ test.describe("large files", () => {
     ).toBe(true);
   });
 });
+
+function selectedCharacterCount(status: string | null): number {
+  const match = status?.match(/(\d+) characters selected/u);
+  return match ? Number(match[1]) : 0;
+}
+
+async function hasIndexedSymbol(page: Page, name: string): Promise<boolean> {
+  return page.evaluate(async query => {
+    const host = (globalThis as { zetaWebWorkbenchHost?: { api: { symbolIndex: { search(request: { query: string; maxResults: number }): Promise<{ hits: readonly { name: string }[] }> } } } }).zetaWebWorkbenchHost;
+    if (!host) return false;
+    return host.api.symbolIndex.search({ query, maxResults: 20 }).then(result => result.hits.some(hit => hit.name === query), () => false);
+  }, name);
+}
 
 test("Code restores unsaved editor content after a browser reload", async ({ target, testWorkspace, workbench }) => {
   test.skip(

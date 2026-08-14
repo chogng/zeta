@@ -27,6 +27,9 @@ export default defineConfig(() => {
       __ZETA_WEB_APP_SERVER__: JSON.stringify(webAppServerEnabled),
     },
     plugins: [workbenchEntryPlugin(product.rendererEntry), productIconsPlugin(), ...(webAppServerEnabled ? [webAppServerVitePlugin()] : [])],
+    optimizeDeps: {
+      include: ["vscode-oniguruma"],
+    },
     server: {
       host: "127.0.0.1",
       port: developmentPort,

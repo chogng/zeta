@@ -49,3 +49,7 @@ pub use zeta_slash_commands::{SlashCommandCatalog, SlashCommandCatalogError};
 #[cfg(test)]
 #[path = "server_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "protocol_schema_tests.rs"]
+mod protocol_schema_tests;

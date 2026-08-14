@@ -7,6 +7,7 @@ import { type LanguageWorkspaceSymbol } from "../../../../editor/common/language
 import { IEditorPart } from "../../../browser/parts/editor/editorPart.js";
 import { ILanguageFeaturesService } from "../../../services/language/common/languageFeaturesService.js";
 import { IFileService } from "../../../../platform/files/common/files.js";
+import { IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";
 import { acceptWorkspaceSymbol } from "./workspaceSymbolNavigation.js";
 
 export const ShowAllSymbolsCommandId = "workbench.action.showAllSymbols";
@@ -29,6 +30,7 @@ registerAction2(class ShowAllSymbolsAction extends Action2 {
     const service = accessor.get(ILanguageFeaturesService).createWorkspaceSymbolService();
     const editor = accessor.get(IEditorPart);
     const files = accessor.get(IFileService);
+    const workingCopies = accessor.get(IWorkingCopyService);
     const quickPick = accessor.get(IQuickInputService).createQuickPick<WorkspaceSymbolQuickPickItem>();
     const disposables = new DisposableStore();
     let request: AbortController | undefined;
@@ -56,7 +58,7 @@ registerAction2(class ShowAllSymbolsAction extends Action2 {
     };
 
     disposables.add(quickPick.onDidChangeValue(update));
-    disposables.add(quickPick.onDidAccept(item => void acceptWorkspaceSymbol(item.symbol, files, editor, quickPick, () => update(quickPick.value))));
+    disposables.add(quickPick.onDidAccept(item => void acceptWorkspaceSymbol(item.symbol, files, workingCopies, editor, quickPick, () => update(quickPick.value))));
     disposables.add(quickPick.onDidHide(() => { request?.abort(); disposables.dispose(); }));
     quickPick.show();
     update("");

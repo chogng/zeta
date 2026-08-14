@@ -22,6 +22,7 @@ const port = mode === "full" ? 5174 : 5173;
 const serverUrl = `http://127.0.0.1:${port}/`;
 const workspaceDirectory = mode === "full" ? await mkdtemp(join(tmpdir(), "zeta-playwright-browser-workspace-")) : undefined;
 const profileDirectory = mode === "full" ? await mkdtemp(join(tmpdir(), "zeta-playwright-browser-profile-")) : undefined;
+const productServicesPath = profileDirectory ? join(profileDirectory, "product-services.json") : undefined;
 let languageServerExecutable = process.env.ZETA_PLAYWRIGHT_RUST_ANALYZER;
 if (profileDirectory && !languageServerExecutable) {
   languageServerExecutable = join(profileDirectory, process.platform === "win32" ? "zeta-test-language-server.exe" : "zeta-test-language-server");
@@ -34,9 +35,12 @@ if (profileDirectory && !languageServerExecutable) {
 if (profileDirectory && languageServerExecutable) {
   await writeFile(join(profileDirectory, "config.toml"), `[languageServers.servers.rust-analyzer]\nmode = "enabled"\nexecutable = ${JSON.stringify(languageServerExecutable)}\n`, "utf8");
 }
+if (productServicesPath) {
+  await writeFile(productServicesPath, '{"schemaVersion":1,"marketplaces":[]}\n', "utf8");
+}
 const testEnvironment = workspaceDirectory ? { ...process.env, ZETA_PLAYWRIGHT_WORKSPACE: workspaceDirectory, ...(languageServerExecutable ? { ZETA_PLAYWRIGHT_LANGUAGE_SERVER: languageServerExecutable } : {}) } : process.env;
 const serverEnvironment = mode === "full"
-  ? { ...testEnvironment, ZETA_WEB_APP_SERVER: "1", ZETA_WORKSPACE_ROOT: workspaceDirectory, ...(profileDirectory ? { ZETA_WEB_APP_SERVER_PROFILE: profileDirectory } : {}) }
+  ? { ...testEnvironment, ZETA_WEB_APP_SERVER: "1", ZETA_WORKSPACE_ROOT: workspaceDirectory, ...(profileDirectory ? { ZETA_WEB_APP_SERVER_PROFILE: profileDirectory } : {}), ...(productServicesPath ? { ZETA_PRODUCT_SERVICES_PATH: productServicesPath } : {}) }
   : testEnvironment;
 const server = spawn(process.execPath, ["node_modules/vite/bin/vite.js", "--force"], {
   cwd: process.cwd(),

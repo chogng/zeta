@@ -43,6 +43,7 @@ test("passes only safe host environment into the development App Server", () => 
       LC_ALL: "C.UTF-8",
       PATH: "/bin",
       OPENAI_API_KEY: "secret",
+      ZETA_PRODUCT_SERVICES_PATH: "/profile/product-services.json",
     },
   });
   assert.deepEqual(environment, {
@@ -51,6 +52,7 @@ test("passes only safe host environment into the development App Server", () => 
     PATH: "/bin",
     LC_ALL: "C.UTF-8",
     ZETA_PROFILE_ROOT: "/profile",
+    ZETA_PRODUCT_SERVICES_PATH: "/profile/product-services.json",
     ZETA_RG_PATH: "/bin/rg",
     ZETA_WORKSPACE_ROOT: "/workspace",
   });

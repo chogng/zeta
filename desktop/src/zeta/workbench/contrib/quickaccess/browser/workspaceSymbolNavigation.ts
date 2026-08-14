@@ -1,14 +1,14 @@
 import { type LanguageWorkspaceSymbol } from "../../../../editor/common/languages/workspaceSymbols.js";
 import { type IFileService } from "../../../../platform/files/common/files.js";
 import { type IEditorPart } from "../../../browser/parts/editor/editorPart.js";
+import { type IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";
 
 /** Opens a Workspace Symbol only after a local index result still matches current file content. */
-export async function acceptWorkspaceSymbol(symbol: LanguageWorkspaceSymbol, files: IFileService, editor: IEditorPart, quickPick: { hide(): void }, refresh: () => void): Promise<void> {
+export async function acceptWorkspaceSymbol(symbol: LanguageWorkspaceSymbol, files: IFileService, workingCopies: IWorkingCopyService, editor: IEditorPart, quickPick: { hide(): void }, refresh: () => void): Promise<void> {
   const revision = localSymbolRevision(symbol);
   if (revision) {
     try {
-      const current = await files.readFile(symbol.resource);
-      if (`sha256:${current.revision}` !== revision) {
+      if (await currentSourceRevision(symbol, files, workingCopies) !== revision) {
         refresh();
         return;
       }
@@ -20,6 +20,18 @@ export async function acceptWorkspaceSymbol(symbol: LanguageWorkspaceSymbol, fil
   }
   quickPick.hide();
   await editor.openEditor({ resource: symbol.resource }, { selection: symbol.range }).catch(error => console.error("Could not open workspace symbol", error));
+}
+
+async function currentSourceRevision(symbol: LanguageWorkspaceSymbol, files: IFileService, workingCopies: IWorkingCopyService): Promise<string | undefined> {
+  const contents = workingCopies.get(symbol.resource).filter(workingCopy => workingCopy.backupKind === "text").map(workingCopy => workingCopy.backup());
+  if (contents.length > 0) {
+    const content = contents[0] as string;
+    if (contents.some(candidate => candidate !== content)) return undefined;
+    const digest = await globalThis.crypto.subtle.digest("SHA-256", new TextEncoder().encode(content));
+    return `sha256:${[...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, "0")).join("")}`;
+  }
+  const current = await files.readFile(symbol.resource);
+  return `sha256:${current.revision}`;
 }
 
 function localSymbolRevision(symbol: LanguageWorkspaceSymbol): string | undefined {
