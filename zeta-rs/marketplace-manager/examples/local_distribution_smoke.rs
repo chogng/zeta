@@ -35,6 +35,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         ("plugin", "marketplace/github"),
         ("skill", "marketplace/commit"),
         ("language", "marketplace/css"),
+        ("mcp", "marketplace/playwright-mcp"),
+        ("theme", "marketplace/aurora-theme"),
     ] {
         let search = manager.search(SearchPackagesRequest {
             query: package_id.rsplit('/').next().unwrap_or_default().to_owned(),
@@ -64,11 +66,19 @@ fn main() -> Result<(), Box<dyn Error>> {
         );
     }
     let skill_sources = manager.local_capability_sources(CapabilityKind::Skill)?;
+    let mcp_sources = manager.local_capability_sources(CapabilityKind::Mcp)?;
+    let connector_sources = manager.local_capability_sources(CapabilityKind::Connector)?;
+    let theme_sources = manager.local_capability_sources(CapabilityKind::Theme)?;
     let language_sources = manager.local_capability_sources(CapabilityKind::Language)?;
     let executable_sources = manager.local_capability_sources(CapabilityKind::Executable)?;
-    if skill_sources.is_empty() || language_sources.is_empty() {
+    if skill_sources.is_empty()
+        || mcp_sources.is_empty()
+        || connector_sources.is_empty()
+        || theme_sources.is_empty()
+        || language_sources.is_empty()
+    {
         return Err(io::Error::other(
-            "installed Skill and Language packages were not projected as local capabilities",
+            "installed packages were not projected across every declarative capability kind",
         )
         .into());
     }

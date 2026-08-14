@@ -1,6 +1,8 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { URI } from "../../../../base/common/uri.js";
 import { type IDebugAdapterProcessService } from "../../../../platform/debug/common/debugAdapterProcessService.js";
+import { isRemoteResource } from "../../../../platform/remote/common/remote.js";
 import { type DebugEvaluateContext, type DebugSessionState, type IDebugBreakpoint, type IDebugConfiguration, type IDebugEvaluateResult, type IDebugExceptionBreakpointFilter, type IDebugScope, type IDebugSession, type IDebugSessionCapabilities, type IDebugSource, type IDebugSourceContent, type IDebugStackFrame, type IDebugThread, type IDebugVariable } from "../common/debugService.js";
 
 interface DapRequest { readonly seq: number; readonly type: "request"; readonly command: string; readonly arguments?: unknown }
@@ -14,7 +16,7 @@ export interface DebugAdapterSessionStartOptions {
   readonly configuration: IDebugConfiguration;
   readonly processService: IDebugAdapterProcessService;
   readonly breakpoints: () => readonly IDebugBreakpoint[];
-  readonly workspaceFolder: string;
+  readonly workspace: URI;
   readonly runInTerminal?: (argumentsValue: unknown) => Promise<Readonly<Record<string, unknown>>>;
   readonly updateBreakpoints?: (updates: readonly { readonly id: string; readonly verified: boolean; readonly message?: string }[]) => void;
   readonly exceptionBreakpoints?: () => readonly string[];
@@ -43,7 +45,7 @@ export class DebugAdapterSession extends DisposableOwner implements IDebugSessio
   readonly onDidChangeState: Event<DebugSessionState> = this.stateEmitter.event;
   readonly onDidOutput: Event<string> = this.outputEmitter.event;
 
-  private constructor(readonly configuration: IDebugConfiguration, private readonly processService: IDebugAdapterProcessService, readonly id: string, private readonly breakpoints: () => readonly IDebugBreakpoint[], private readonly runInTerminal: DebugAdapterSessionStartOptions["runInTerminal"], private readonly updateBreakpoints: DebugAdapterSessionStartOptions["updateBreakpoints"], private readonly exceptionBreakpoints: DebugAdapterSessionStartOptions["exceptionBreakpoints"]) {
+  private constructor(readonly configuration: IDebugConfiguration, private readonly processService: IDebugAdapterProcessService, readonly id: string, private readonly breakpoints: () => readonly IDebugBreakpoint[], private readonly workspace: URI, private readonly runInTerminal: DebugAdapterSessionStartOptions["runInTerminal"], private readonly updateBreakpoints: DebugAdapterSessionStartOptions["updateBreakpoints"], private readonly exceptionBreakpoints: DebugAdapterSessionStartOptions["exceptionBreakpoints"]) {
     super();
     this.sessionId = id;
     this.defer(() => { this.disposed = true; });
@@ -54,13 +56,14 @@ export class DebugAdapterSession extends DisposableOwner implements IDebugSessio
   }
 
   static async start(options: DebugAdapterSessionStartOptions): Promise<DebugAdapterSession> {
-    const adapter = replaceWorkspaceVariables(options.configuration.adapter, options.workspaceFolder) as IDebugConfiguration["adapter"];
+    const workspaceFolder = workspaceFolderPath(options.workspace);
+    const adapter = replaceWorkspaceVariables(options.configuration.adapter, workspaceFolder) as IDebugConfiguration["adapter"];
     const sessionId = await options.processService.start(adapter);
-    const session = new DebugAdapterSession(options.configuration, options.processService, sessionId, options.breakpoints, options.runInTerminal, options.updateBreakpoints, options.exceptionBreakpoints);
+    const session = new DebugAdapterSession(options.configuration, options.processService, sessionId, options.breakpoints, options.workspace, options.runInTerminal, options.updateBreakpoints, options.exceptionBreakpoints);
     try {
       session.polling = true;
       void session.poll();
-      await session.initialize(options.workspaceFolder);
+      await session.initialize(workspaceFolder);
       return session;
     } catch (error) {
       await session.closeProcess();
@@ -99,7 +102,7 @@ export class DebugAdapterSession extends DisposableOwner implements IDebugSessio
     const selectedThreadId = threadId === undefined ? await this.requireThreadId() : positiveInteger(threadId, "threadId");
     this._threadId = selectedThreadId;
     const body = record((await this.request("stackTrace", { threadId: selectedThreadId, startFrame: 0, levels: 100 })).body, "stackTrace body");
-    return array(body.stackFrames, "stackFrames").map((value, index) => stackFrame(value, index));
+    return array(body.stackFrames, "stackFrames").map((value, index) => stackFrame(value, index, this.workspace));
   }
 
   async scopes(frameId: number): Promise<readonly IDebugScope[]> {
@@ -135,8 +138,8 @@ export class DebugAdapterSession extends DisposableOwner implements IDebugSessio
 
   async syncBreakpoints(): Promise<void> {
     const groups = new Map<string, IDebugBreakpoint[]>();
-    for (const breakpoint of this.breakpoints().filter(breakpoint => breakpoint.enabled && breakpoint.resource.scheme === "file")) {
-      const path = breakpoint.resource.fsPath;
+    for (const breakpoint of this.breakpoints().filter(breakpoint => breakpoint.enabled && (breakpoint.resource.scheme === "file" || isRemoteResource(breakpoint.resource)))) {
+      const path = breakpoint.resource.scheme === "file" ? breakpoint.resource.fsPath : decodeURIComponent(breakpoint.resource.path);
       const group = groups.get(path) ?? [];
       group.push(breakpoint);
       groups.set(path, group);
@@ -312,9 +315,9 @@ function event(value: Record<string, unknown>): DapEvent {
   return { seq: positiveInteger(value.seq, "event seq"), type: "event", event: string(value.event, "event name"), ...(value.body === undefined ? {} : { body: value.body }) };
 }
 
-function stackFrame(value: unknown, index: number): IDebugStackFrame {
+function stackFrame(value: unknown, index: number, workspace: URI): IDebugStackFrame {
   const frame = record(value, `stackFrames[${index}]`);
-  return { id: positiveInteger(frame.id, `stackFrames[${index}].id`), name: string(frame.name, `stackFrames[${index}].name`), lineNumber: positiveInteger(frame.line, `stackFrames[${index}].line`), columnNumber: positiveInteger(frame.column, `stackFrames[${index}].column`), ...(frame.source === undefined ? {} : { source: source(frame.source, `stackFrames[${index}].source`) }) };
+  return { id: positiveInteger(frame.id, `stackFrames[${index}].id`), name: string(frame.name, `stackFrames[${index}].name`), lineNumber: positiveInteger(frame.line, `stackFrames[${index}].line`), columnNumber: positiveInteger(frame.column, `stackFrames[${index}].column`), ...(frame.source === undefined ? {} : { source: source(frame.source, `stackFrames[${index}].source`, workspace) }) };
 }
 
 function thread(value: unknown, index: number): IDebugThread {
@@ -322,9 +325,11 @@ function thread(value: unknown, index: number): IDebugThread {
   return Object.freeze({ id: positiveInteger(input.id, `threads[${index}].id`), name: string(input.name, `threads[${index}].name`) });
 }
 
-function source(value: unknown, path: string): IDebugStackFrame["source"] {
+function source(value: unknown, path: string, workspace: URI): IDebugStackFrame["source"] {
   const input = record(value, path);
-  return { ...(typeof input.name === "string" ? { name: input.name } : {}), ...(typeof input.path === "string" ? { path: input.path } : {}), ...(Number.isSafeInteger(input.sourceReference) ? { sourceReference: input.sourceReference as number } : {}) };
+  const adapterPath = typeof input.path === "string" ? input.path : undefined;
+  const resource = adapterPath ? sourceResource(workspace, adapterPath) : undefined;
+  return { ...(typeof input.name === "string" ? { name: input.name } : {}), ...(adapterPath ? { path: adapterPath } : {}), ...(resource ? { resource } : {}), ...(Number.isSafeInteger(input.sourceReference) ? { sourceReference: input.sourceReference as number } : {}) };
 }
 
 function scope(value: unknown, index: number): IDebugScope {
@@ -364,6 +369,19 @@ function positiveInteger(value: unknown, path: string, allowZero = false): numbe
 function delay(milliseconds: number): Promise<void> { return new Promise(resolve => setTimeout(resolve, milliseconds)); }
 function withTimeout<T>(promise: Promise<T>, milliseconds: number, timeoutMessage: string): Promise<T> { return new Promise((resolve, reject) => { const timeout = setTimeout(() => reject(new Error(timeoutMessage)), milliseconds); promise.then(value => { clearTimeout(timeout); resolve(value); }, error => { clearTimeout(timeout); reject(error); }); }); }
 function message(error: unknown): string { return error instanceof Error ? error.message : String(error); }
+function workspaceFolderPath(workspace: URI): string { return workspace.scheme === "file" ? workspace.fsPath : decodeURIComponent(workspace.path); }
+
+function sourceResource(workspace: URI, adapterPath: string): URI | undefined {
+  if (workspace.scheme === "file") {
+    try { return URI.file(adapterPath); } catch { return undefined; }
+  }
+  if (!isRemoteResource(workspace)) return undefined;
+  if (!adapterPath.startsWith("/") || adapterPath.includes("\0")) return undefined;
+  const segments = adapterPath.split("/");
+  if (adapterPath !== "/" && (adapterPath.endsWith("/") || segments.slice(1).some(segment => segment.length === 0 || segment === "." || segment === ".."))) return undefined;
+  return workspace.withPath(segments.map(encodeURIComponent).join("/"));
+}
+
 function expandWorkspaceVariables(value: Readonly<Record<string, unknown>>, workspaceFolder: string): Readonly<Record<string, unknown>> {
   return replaceWorkspaceVariables(value, workspaceFolder) as Readonly<Record<string, unknown>>;
 }

@@ -1,28 +1,14 @@
 import { toDisposable, type IDisposable } from "../../../base/common/lifecycle.js";
 import { URI } from "../../../base/common/uri.js";
 import type { IStateService } from "../../state/node/state.js";
-import {
-  type IAnyWorkspaceIdentifier,
-  type IWorkspaceIdentifier,
-  type WorkbenchState,
-  isEmptyWorkspaceIdentifier,
-  isSingleFolderWorkspaceIdentifier,
-  isWorkspaceIdentifier,
-  workbenchStateFromWorkspaceIdentifier,
-} from "../../workspace/common/workspace.js";
-import {
-  defaultWindowState,
-  WindowMode,
-  type IWindowBounds,
-  type IWindowState,
-} from "../../window/electron-main/window.js";
-import {
-  validateWindowState,
-  type IWindowDisplay,
-} from "./windows.js";
+import { type IAnyWorkspaceIdentifier, type IWorkspaceIdentifier, type WorkbenchState, isEmptyWorkspaceIdentifier, isSingleFolderWorkspaceIdentifier, isWorkspaceIdentifier, workbenchStateFromWorkspaceIdentifier } from "../../workspace/common/workspace.js";
+import { defaultWindowState, WindowMode, type IWindowBounds, type IWindowState } from "../../window/electron-main/window.js";
+import { validateWindowState, type IWindowDisplay } from "./windows.js";
+import { getRemoteWorkspacePath, isRemoteResource } from "../../remote/common/remote.js";
 
 const WINDOWS_STATE_STORAGE_KEY = "windowsState";
 const WINDOWS_STATE_VERSION = 1;
+const MAX_OPENED_WINDOW_RECORDS = 100;
 
 /** Display operations needed to restore and capture window placement. */
 export interface IWindowDisplayService {
@@ -159,9 +145,11 @@ export class WindowsStateHandler {
       this.backupPath,
       uiState,
     );
+    const latestState = parseWindowsState(this.stateService.getItem(WINDOWS_STATE_STORAGE_KEY));
+    const otherWindows = latestState.openedWindows.filter(windowState => !matchesWindowIdentity(windowState, this.workspace, this.backupPath));
     const windowsState: IWindowsState = {
       lastActiveWindow: currentWindow,
-      openedWindows: [currentWindow],
+      openedWindows: [currentWindow, ...otherWindows].slice(0, MAX_OPENED_WINDOW_RECORDS),
     };
     this.windowsState = windowsState;
     this.stateService.setItem(
@@ -332,7 +320,7 @@ function parseWindowStateRecord(
     return workspace ? { workspace, uiState } : undefined;
   }
   if (value.folder !== undefined) {
-    const folderUri = parseFileUri(value.folder);
+    const folderUri = parseWorkspaceFolderUri(value.folder);
     return folderUri ? { folderUri, uiState } : undefined;
   }
   if (value.backupPath !== undefined) {
@@ -362,6 +350,22 @@ function parseFileUri(value: unknown): URI | undefined {
     return uri.scheme === "file" && !uri.query && !uri.fragment
       ? uri
       : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function parseWorkspaceFolderUri(value: unknown): URI | undefined {
+  if (typeof value !== "string") return undefined;
+  try {
+    const uri = URI.parse(value);
+    if (uri.query || uri.fragment) return undefined;
+    if (uri.scheme === "file") return uri;
+    if (isRemoteResource(uri)) {
+      getRemoteWorkspacePath(uri);
+      return uri;
+    }
+    return undefined;
   } catch {
     return undefined;
   }

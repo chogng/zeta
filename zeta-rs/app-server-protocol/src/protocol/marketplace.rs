@@ -207,6 +207,7 @@ pub enum MarketplaceActivationSpecDto {
     Skill(MarketplaceSkillActivationSpecDto),
     Mcp(MarketplaceMcpActivationSpecDto),
     Connector(MarketplaceConnectorActivationSpecDto),
+    Theme(MarketplaceThemeActivationSpecDto),
     Language(MarketplaceLanguageActivationSpecDto),
     Executable(MarketplaceExecutableActivationSpecDto),
 }
@@ -229,7 +230,13 @@ pub struct MarketplaceMcpActivationSpecDto {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum MarketplaceMcpTransportDto {
-    StreamableHttp { url: String },
+    Stdio {
+        executable: MarketplaceResourceRefDto,
+        args: Vec<String>,
+    },
+    StreamableHttp {
+        url: String,
+    },
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -238,6 +245,13 @@ pub struct MarketplaceConnectorActivationSpecDto {
     pub contract_version: String,
     pub authentication_provider: Option<String>,
     pub mcp: Option<MarketplaceCapabilityRefDto>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct MarketplaceThemeActivationSpecDto {
+    pub contract_version: String,
+    pub manifest: MarketplaceResourceRefDto,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

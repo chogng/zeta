@@ -1,10 +1,18 @@
+use super::AgentSession;
+use super::AgentSessionCommand;
+use super::AgentSessionConnectionLost;
 use super::AgentSessionEvent;
+use super::client_error;
 use super::git_is_unavailable;
 use super::shell_completion_sources_changed;
 use super::snapshot_event_from_subscription;
 use super::workspace_title;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
+use std::sync::mpsc;
 use zeta_app_server_client::ClientError;
 use zeta_app_server_protocol::protocol::fs::FsChanged;
 use zeta_app_server_protocol::protocol::session::SessionSubscribeResult;
@@ -43,6 +51,53 @@ fn git_unavailable_does_not_hide_operation_failures() {
     assert!(git_is_unavailable(&server_error(-32060)));
     assert!(git_is_unavailable(&server_error(-32062)));
     assert!(!git_is_unavailable(&server_error(-32061)));
+}
+
+#[test]
+fn client_transport_errors_preserve_the_reconnect_marker() {
+    let transport = client_error(ClientError::Transport("SSH closed".into()));
+    assert!(
+        transport
+            .downcast_ref::<AgentSessionConnectionLost>()
+            .is_some()
+    );
+
+    let rejected = client_error(ClientError::Server {
+        code: -32000,
+        message: "request rejected".into(),
+    });
+    assert!(
+        rejected
+            .downcast_ref::<AgentSessionConnectionLost>()
+            .is_none()
+    );
+}
+
+#[test]
+fn disconnected_agent_rejects_commands_before_they_enter_the_queue() {
+    let (commands, receiver) = mpsc::sync_channel(2);
+    let available = Arc::new(AtomicBool::new(false));
+    let session = AgentSession {
+        available: Arc::clone(&available),
+        commands,
+        worker: None,
+    };
+
+    assert!(
+        session
+            .refresh()
+            .unwrap_err()
+            .to_string()
+            .contains("not connected")
+    );
+    assert!(receiver.try_recv().is_err());
+
+    available.store(true, Ordering::Release);
+    session.refresh().unwrap();
+    assert!(matches!(
+        receiver.recv().unwrap(),
+        AgentSessionCommand::Refresh
+    ));
 }
 
 #[test]

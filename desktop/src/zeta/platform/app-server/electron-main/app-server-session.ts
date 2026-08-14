@@ -30,6 +30,14 @@ import type {
 
 export type AppServerSessionState = "created" | "initializing" | "ready" | "closed";
 
+/** Typed initialize failure that a Remote host may recover with a trusted runtime upgrade. */
+export class AppServerProtocolIncompatibleError extends Error {
+  constructor(readonly expectedSchemaHash: string, readonly receivedSchemaHash: string) {
+    super(`Zeta app-server schema mismatch: expected ${expectedSchemaHash}, received ${receivedSchemaHash}`);
+    this.name = "AppServerProtocolIncompatibleError";
+  }
+}
+
 export interface AppServerSessionOptions {
   clientName: string;
   clientVersion: string;
@@ -97,9 +105,7 @@ export class AppServerSession implements IDisposable {
         );
       }
       if (initialized.schemaHash !== this.options.schemaHash) {
-        throw new Error(
-          `Zeta app-server schema mismatch: expected ${this.options.schemaHash}, received ${initialized.schemaHash}`,
-        );
+        throw new AppServerProtocolIncompatibleError(this.options.schemaHash, initialized.schemaHash);
       }
       this._initializeResult = initialized;
       this._state = "ready";

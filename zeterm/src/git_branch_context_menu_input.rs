@@ -45,6 +45,9 @@ impl NativeApp {
             .open(anchor, branches, restore_focus);
         self.session_context_menu.dismiss();
         self.workspace_path_picker.dismiss();
+        self.remote_connection_picker.dismiss();
+        self.dismiss_remote_connection_manager();
+        self.dismiss_remote_tunnel_manager();
         self.rebuild_and_focus_git_branch_search();
     }
 

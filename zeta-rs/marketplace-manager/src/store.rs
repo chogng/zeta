@@ -132,6 +132,18 @@ impl Store {
         Ok(canonical)
     }
 
+    pub(crate) fn verified_package_root(
+        &self,
+        package: &PackageRef,
+    ) -> Result<PathBuf, MarketplaceClientError> {
+        self.existing_artifact(package)?
+            .ok_or_else(MarketplaceClientError::storage)?;
+        self.artifacts
+            .join(digest_component(&package.digest)?)
+            .canonicalize()
+            .map_err(|_| MarketplaceClientError::storage())
+    }
+
     pub(crate) fn read_state<T>(&self) -> Result<T, MarketplaceClientError>
     where
         T: Default + DeserializeOwned,

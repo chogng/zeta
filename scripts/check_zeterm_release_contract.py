@@ -36,10 +36,30 @@ def main() -> int:
         fail("package contract must name bin/zeterm")
     if contract.get("signatureRecord") != policy.get("signatureRecord"):
         fail("package and signing contracts disagree on signature record")
-    if contract.get("releaseInvariant") != "The signed binary digest must be verified before publication.":
-        fail("release invariant does not require verified signed digest")
+    expected_invariant = (
+        "The signed binary digest and every declared Remote runtime catalog binding "
+        "must be verified before publication."
+    )
+    if contract.get("releaseInvariant") != expected_invariant:
+        fail("release invariant does not require signed binary and catalog verification")
+    if contract.get("optionalRemoteRuntimeCatalog") != "zeta-remote-runtimes/catalog.json":
+        fail("package contract does not name the optional Remote runtime catalog")
+    if contract.get("optionalNetworkRemoteRuntimeCatalog") != (
+        "credential-free HTTPS catalog.json URL plus SHA-256 compiled into the signed binary"
+    ):
+        fail("package contract does not define the optional network Remote catalog binding")
+    if "compiled into the signed zeterm binary" not in contract.get(
+        "remoteRuntimeTrustBinding", ""
+    ):
+        fail("package contract does not bind the Remote catalog into the signed binary")
     if policy.get("releaseRequired") is not True:
         fail("signing policy must require release signing")
+    authenticated_resources = policy.get("authenticatedResources")
+    if not isinstance(authenticated_resources, dict) or set(authenticated_resources) != {
+        "remoteRuntimeCatalog",
+        "remoteRuntimeArtifacts",
+    }:
+        fail("signing policy must describe the Remote runtime trust chain")
 
     platforms = policy.get("platforms")
     if not isinstance(platforms, dict) or set(platforms) != set(EXPECTED_PLATFORMS):

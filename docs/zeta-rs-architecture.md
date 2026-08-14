@@ -59,7 +59,6 @@ zeta-rs/
 ├── markdown/             # shared bounded CommonMark/GFM parsing；presentation 位于 zeterm/
 ├── lsp/                  # LSP stdio lifecycle、request pairing、document sync 与 server events
 ├── language-server-catalog/ # 内置 server、可信 executable resolution 与 availability；不启动进程
-├── language-server-distribution/ # verified package staging 与 side-by-side install storage
 ├── language-service/     # 产品级 LSP 启停、文档路由、请求 facade 与 stale-result gate
 ├── install-context/      # runtime install method, package layout and resource candidates
 ├── apply-patch/          # concrete validated write executor

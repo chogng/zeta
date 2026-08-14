@@ -50,6 +50,13 @@ names. Internal callers use the enum so command consumers do not depend on
 spelling or on UI element identity. A future namespace migration must add an
 alias/compatibility path before changing persisted IDs.
 
+`PickExecutionLocation` is currently the bindable Native entry to zeterm's saved Remote connection
+picker. The command remains a parameter-free product intent: picker selection and new-process
+launching belong to the host, while this crate knows neither Remote profiles nor SSH.
+`ManageRemoteTunnels` is the corresponding parameter-free entry for the current Remote window's
+Native tunnel manager. The host derives availability and SSH authority from the window; the
+command catalog owns neither tunnel state nor credentials.
+
 ## Verification
 
 ```bash

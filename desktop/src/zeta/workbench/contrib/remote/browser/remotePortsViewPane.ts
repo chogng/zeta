@@ -1,0 +1,271 @@
+import { addDisposableListener } from "../../../../base/browser/dom.js";
+import type { RemoteAgentConnection } from "../../../../platform/remote/common/remoteAgentApi.js";
+import type { IRemoteTunnelService } from "../../../../platform/remote/common/remoteTunnelService.js";
+import type { RemoteTunnel } from "../../../../platform/remote/common/remoteTunnelService.js";
+import type { RemoteTunnelChange } from "../../../../platform/remote/common/remoteTunnelService.js";
+import { ViewPane, type IViewPaneOptions } from "../../../browser/parts/views/viewPane.js";
+import type { IRemoteAgentService } from "../../../services/remote/common/remoteAgentService.js";
+import "./media/remotePorts.css";
+
+/** Renderer projection of the Electron Main-owned SSH tunnel catalog. */
+export class RemotePortsViewPane extends ViewPane {
+  private readonly formElement: HTMLFormElement;
+  private readonly portInput: HTMLInputElement;
+  private readonly forwardButton: HTMLButtonElement;
+  private readonly stopAllButton: HTMLButtonElement;
+  private readonly statusElement: HTMLDivElement;
+  private readonly listElement: HTMLUListElement;
+  private readonly tunnels = new Map<string, RemoteTunnel>();
+  private readonly closing = new Set<string>();
+  private tunnelRevision = 0;
+  private readRevision = 0;
+  private connectionRevision = 0;
+  private opening = false;
+  private closingAll = false;
+  private disposed = false;
+  private error: string | undefined;
+  private activeConnectionIdentity: string | undefined;
+
+  constructor(options: IViewPaneOptions, private readonly tunnelService: IRemoteTunnelService, private readonly remoteAgentService: IRemoteAgentService) {
+    super(options);
+    this.activeConnectionIdentity = remoteConnectionIdentity(remoteAgentService.connection);
+    this.contentElement.classList.add("zeta-remote-ports");
+    this.formElement = options.ownerDocument.createElement("form");
+    this.formElement.className = "zeta-remote-ports-form";
+    const label = options.ownerDocument.createElement("label");
+    label.className = "zeta-remote-ports-label";
+    label.htmlFor = `${options.id}-remote-port`;
+    label.textContent = "Remote port";
+    this.portInput = options.ownerDocument.createElement("input");
+    this.portInput.id = label.htmlFor;
+    this.portInput.className = "zeta-remote-ports-input";
+    this.portInput.type = "number";
+    this.portInput.min = "1";
+    this.portInput.max = "65535";
+    this.portInput.step = "1";
+    this.portInput.placeholder = "3000";
+    this.portInput.required = true;
+    this.forwardButton = options.ownerDocument.createElement("button");
+    this.forwardButton.className = "zeta-remote-ports-forward";
+    this.forwardButton.type = "submit";
+    this.forwardButton.textContent = "Forward Port";
+    this.stopAllButton = options.ownerDocument.createElement("button");
+    this.stopAllButton.className = "zeta-remote-ports-stop-all";
+    this.stopAllButton.type = "button";
+    this.stopAllButton.textContent = "Stop All";
+    this.formElement.append(label, this.portInput, this.forwardButton, this.stopAllButton);
+    this.statusElement = options.ownerDocument.createElement("div");
+    this.statusElement.className = "zeta-remote-ports-status";
+    this.statusElement.setAttribute("role", "status");
+    this.listElement = options.ownerDocument.createElement("ul");
+    this.listElement.className = "zeta-remote-ports-list";
+    this.listElement.setAttribute("aria-label", "Forwarded ports");
+    this.contentElement.append(this.formElement, this.statusElement, this.listElement);
+
+    this.own(addDisposableListener(this.formElement, "submit", event => this.forward(event)));
+    this.own(addDisposableListener(this.stopAllButton, "click", () => this.stopAll()));
+    this.own(addDisposableListener(this.listElement, "click", event => this.activate(event)));
+    const tunnelSubscription = tunnelService.onDidChange(change => this.acceptTunnelChange(change));
+    this.defer(() => tunnelSubscription.dispose());
+    this.own(remoteAgentService.onDidChangeConnection(connection => this.acceptConnection(connection)));
+    this.own(remoteAgentService.onDidChangeConnectionState(() => this.render()));
+    this.defer(() => { this.disposed = true; });
+    this.render();
+    this.refresh();
+  }
+
+  private forward(event: Event): void {
+    event.preventDefault();
+    if (!this.canForward() || this.opening) return;
+    const remotePort = this.portInput.valueAsNumber;
+    if (!Number.isSafeInteger(remotePort) || remotePort < 1 || remotePort > 65535) {
+      this.error = "Remote port must be an integer from 1 to 65535.";
+      this.render();
+      return;
+    }
+    const connectionRevision = this.connectionRevision;
+    this.opening = true;
+    this.error = undefined;
+    this.render();
+    void this.tunnelService.open({ remotePort }).then(tunnel => {
+      if (!this.isCurrentConnection(connectionRevision)) return;
+      this.tunnels.set(tunnel.id, tunnel);
+      this.portInput.value = "";
+    }, error => {
+      if (this.isCurrentConnection(connectionRevision)) this.error = errorMessage(error, "Could not forward the remote port.");
+    }).finally(() => {
+      if (!this.isCurrentConnection(connectionRevision)) return;
+      this.opening = false;
+      this.render();
+    });
+  }
+
+  private activate(event: Event): void {
+    const target = event.target;
+    if (!(target instanceof this.element.ownerDocument.defaultView!.Element)) return;
+    const id = target.closest<HTMLButtonElement>(".zeta-remote-port-stop")?.dataset.tunnelId;
+    if (!id || this.closing.has(id)) return;
+    const connectionRevision = this.connectionRevision;
+    this.closing.add(id);
+    this.error = undefined;
+    this.render();
+    void this.tunnelService.close(id).then(() => {
+      if (this.isCurrentConnection(connectionRevision)) this.tunnels.delete(id);
+    }, error => {
+      if (this.isCurrentConnection(connectionRevision)) this.error = errorMessage(error, "Could not stop the forwarded port.");
+    }).finally(() => {
+      if (!this.isCurrentConnection(connectionRevision)) return;
+      this.closing.delete(id);
+      this.render();
+    });
+  }
+
+  private stopAll(): void {
+    if (this.closingAll || this.tunnels.size === 0 || !this.isRemoteWorkspace()) return;
+    const connectionRevision = this.connectionRevision;
+    this.closingAll = true;
+    this.error = undefined;
+    this.render();
+    void this.tunnelService.closeAll().then(() => {
+      if (this.isCurrentConnection(connectionRevision)) this.tunnels.clear();
+    }, error => {
+      if (this.isCurrentConnection(connectionRevision)) this.error = errorMessage(error, "Could not stop all forwarded ports.");
+    }).finally(() => {
+      if (!this.isCurrentConnection(connectionRevision)) return;
+      this.closingAll = false;
+      this.closing.clear();
+      this.render();
+    });
+  }
+
+  private acceptTunnelChange(change: RemoteTunnelChange): void {
+    if (this.disposed) return;
+    this.tunnelRevision += 1;
+    if (change.kind === "upsert") this.tunnels.set(change.tunnel.id, change.tunnel);
+    else {
+      this.tunnels.delete(change.id);
+      this.closing.delete(change.id);
+    }
+    this.render();
+  }
+
+  private acceptConnection(connection: RemoteAgentConnection): void {
+    if (this.disposed) return;
+    this.connectionRevision += 1;
+    this.opening = false;
+    this.closingAll = false;
+    this.closing.clear();
+    this.error = undefined;
+    const connectionIdentity = remoteConnectionIdentity(connection);
+    if (connectionIdentity !== this.activeConnectionIdentity) this.tunnels.clear();
+    this.activeConnectionIdentity = connectionIdentity;
+    this.render();
+    if (connection.kind === "ssh") this.refresh();
+  }
+
+  private refresh(): void {
+    const readRevision = ++this.readRevision;
+    const tunnelRevision = this.tunnelRevision;
+    const connectionRevision = this.connectionRevision;
+    void this.tunnelService.list().then(tunnels => {
+      if (!this.isCurrentConnection(connectionRevision) || readRevision !== this.readRevision) return;
+      if (tunnelRevision !== this.tunnelRevision) {
+        this.refresh();
+        return;
+      }
+      this.tunnels.clear();
+      for (const tunnel of tunnels) this.tunnels.set(tunnel.id, tunnel);
+      this.error = undefined;
+      this.render();
+    }, error => {
+      if (!this.isCurrentConnection(connectionRevision) || readRevision !== this.readRevision) return;
+      this.error = errorMessage(error, "Could not read forwarded ports.");
+      this.render();
+    });
+  }
+
+  private render(): void {
+    const remote = this.isRemoteWorkspace();
+    const canForward = this.canForward();
+    this.portInput.disabled = !canForward || this.opening;
+    this.forwardButton.disabled = !canForward || this.opening;
+    this.forwardButton.textContent = this.opening ? "Forwarding…" : "Forward Port";
+    this.stopAllButton.disabled = !remote || this.tunnels.size === 0 || this.closingAll;
+    this.stopAllButton.textContent = this.closingAll ? "Stopping…" : "Stop All";
+    const tunnels = remote ? [...this.tunnels.values()].sort(compareTunnels) : [];
+    this.listElement.replaceChildren(...tunnels.map(tunnel => this.renderTunnel(tunnel)));
+    this.statusElement.classList.toggle("error", this.error !== undefined && remote);
+    this.statusElement.textContent = this.statusText(remote, tunnels.length);
+  }
+
+  private renderTunnel(tunnel: RemoteTunnel): HTMLLIElement {
+    const item = this.element.ownerDocument.createElement("li");
+    item.className = `zeta-remote-port ${tunnel.state}`;
+    item.dataset.tunnelId = tunnel.id;
+    const endpoints = this.element.ownerDocument.createElement("div");
+    endpoints.className = "zeta-remote-port-endpoints";
+    const local = this.element.ownerDocument.createElement("code");
+    local.className = "zeta-remote-port-local";
+    local.textContent = `127.0.0.1:${tunnel.localPort}`;
+    const arrow = this.element.ownerDocument.createElement("span");
+    arrow.className = "zeta-remote-port-arrow";
+    arrow.setAttribute("aria-hidden", "true");
+    arrow.textContent = "→";
+    const remote = this.element.ownerDocument.createElement("code");
+    remote.className = "zeta-remote-port-remote";
+    remote.textContent = `${tunnel.remoteHost}:${tunnel.remotePort}`;
+    endpoints.append(local, arrow, remote);
+    const state = this.element.ownerDocument.createElement("span");
+    state.className = "zeta-remote-port-state";
+    state.textContent = tunnelStateLabel(tunnel.state);
+    const stop = this.element.ownerDocument.createElement("button");
+    stop.className = "zeta-remote-port-stop";
+    stop.type = "button";
+    stop.dataset.tunnelId = tunnel.id;
+    stop.disabled = this.closingAll || this.closing.has(tunnel.id);
+    stop.textContent = this.closing.has(tunnel.id) ? "Stopping…" : "Stop";
+    stop.setAttribute("aria-label", `Stop forwarding remote port ${tunnel.remotePort}`);
+    item.append(endpoints, state, stop);
+    return item;
+  }
+
+  private statusText(remote: boolean, tunnelCount: number): string {
+    if (!remote) return "Forwarded ports are available in an SSH Remote Workspace.";
+    if (this.error) return this.error;
+    if (this.remoteAgentService.connectionState !== "connected") return tunnelCount === 0 ? "Waiting for the Remote connection." : `${tunnelCount} forwarded ${tunnelCount === 1 ? "port" : "ports"}; the Remote connection is ${this.remoteAgentService.connectionState ?? "starting"}.`;
+    if (tunnelCount === 0) return "No forwarded ports.";
+    return `${tunnelCount} forwarded ${tunnelCount === 1 ? "port" : "ports"}.`;
+  }
+
+  private isRemoteWorkspace(): boolean {
+    return this.remoteAgentService.connection?.kind === "ssh";
+  }
+
+  private canForward(): boolean {
+    return this.isRemoteWorkspace() && this.remoteAgentService.connectionState === "connected";
+  }
+
+  private isCurrentConnection(revision: number): boolean {
+    return !this.disposed && revision === this.connectionRevision;
+  }
+}
+
+function compareTunnels(first: RemoteTunnel, second: RemoteTunnel): number {
+  return first.remotePort - second.remotePort || first.localPort - second.localPort || first.id.localeCompare(second.id);
+}
+
+function remoteConnectionIdentity(connection: RemoteAgentConnection | undefined): string | undefined {
+  return connection?.kind === "ssh" ? connection.authority : connection?.kind;
+}
+
+function tunnelStateLabel(state: RemoteTunnel["state"]): string {
+  switch (state) {
+    case "open": return "Open";
+    case "recovering": return "Recovering";
+    case "failed": return "Failed";
+  }
+}
+
+function errorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message.trim() ? error.message : fallback;
+}

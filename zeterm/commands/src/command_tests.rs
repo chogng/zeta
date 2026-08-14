@@ -22,4 +22,12 @@ fn only_currently_supported_commands_are_bindable() {
         ZetermCommandId::bindable_from_id("workbench.action.newSession"),
         None
     );
+    assert_eq!(
+        ZetermCommandId::bindable_from_id("workbench.action.pickExecutionLocation"),
+        Some(ZetermCommandId::PickExecutionLocation)
+    );
+    assert_eq!(
+        ZetermCommandId::bindable_from_id("workbench.action.manageRemoteTunnels"),
+        Some(ZetermCommandId::ManageRemoteTunnels)
+    );
 }

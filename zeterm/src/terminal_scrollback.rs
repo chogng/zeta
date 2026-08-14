@@ -83,6 +83,15 @@ impl TerminalScroll {
 
 impl NativeApp {
     pub(super) fn mouse_wheel(&mut self, delta: MouseScrollDelta) {
+        if self.route_remote_tunnel_manager_wheel(delta) {
+            return;
+        }
+        if self.route_remote_connection_manager_wheel(delta) {
+            return;
+        }
+        if self.route_remote_connection_picker_wheel(delta) {
+            return;
+        }
         if self.route_workspace_path_picker_wheel(delta) {
             return;
         }

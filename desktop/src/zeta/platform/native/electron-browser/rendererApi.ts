@@ -31,6 +31,10 @@ import type { IAppServerApi } from "../../app-server/common/appServerApi.js";
 import { mergeRendererHostCapabilities } from "../../renderer/common/rendererHost.js";
 import type { RendererHostCapabilities } from "../../renderer/common/rendererHost.js";
 import { createElectronExtensionHostApi } from "../../extensionHost/electron-browser/extensionHostApi.js";
+import { createRemoteAgentApi } from "../../remote/electron-browser/remoteAgentApi.js";
+import { createRemoteConnectionApi } from "../../remote/electron-browser/remoteConnectionApi.js";
+import { createRemoteTunnelApi } from "../../remote/electron-browser/remoteTunnelApi.js";
+import { createMarketplaceApi } from "../../marketplace/electron-browser/marketplaceApi.js";
 
 export type ElectronRendererCapabilityContribution = (appServer: IAppServerApi) => RendererHostCapabilities;
 
@@ -46,6 +50,9 @@ export function createElectronRendererApi(contributions: readonly ElectronRender
       arch: sandboxProcess.arch,
     },
     appServer,
+    remote: createRemoteAgentApi(),
+    remoteConnections: createRemoteConnectionApi(),
+    remoteTunnels: createRemoteTunnelApi(),
     browserView: createBrowserViewApi(),
     session: createSessionApi(),
     model: createModelApi(),
@@ -77,6 +84,7 @@ export function createElectronRendererApi(contributions: readonly ElectronRender
     symbolIndex: createSymbolIndexApi(),
     connectors: createConnectorApi(),
     plugins: createPluginApi(),
+    marketplace: createMarketplaceApi(),
     toolSearch: createToolSearchApi(),
   };
 }

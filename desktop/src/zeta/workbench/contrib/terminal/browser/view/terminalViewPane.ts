@@ -167,7 +167,7 @@ export class TerminalViewPane extends ViewPane {
   private async relaunchActive(): Promise<void> {
     const instance = this.terminalService.activeInstance;
     const item = instance ? this.items.get(instance) : undefined;
-    if (!instance || !item || instance.state === "running") return;
+    if (!instance || !item || instance.state === "running" || instance.state === "reconnecting") return;
     this.setStatus(undefined);
     try {
       await this.terminalService.relaunchTerminal(instance, item.widget.dimensions());

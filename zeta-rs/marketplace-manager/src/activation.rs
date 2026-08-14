@@ -15,6 +15,7 @@ use zeta_marketplace_client::PackageRef;
 use zeta_marketplace_client::ResourceContent;
 use zeta_marketplace_client::ResourceRef;
 use zeta_marketplace_client::SkillActivationSpec;
+use zeta_marketplace_client::ThemeActivationSpec;
 
 use crate::manager::CapabilityRecord;
 use crate::manager::InstallationRecord;
@@ -75,22 +76,41 @@ pub(crate) fn acquire_spec(
         })),
         CapabilityKind::Mcp => {
             let definition = parse_mcp(store, &installation.package, &capability.path)?;
-            let McpDefinition::Http {
-                schema_version: 1,
-                url,
-            } = definition
-            else {
-                return Err(unsupported());
+            let (transport, network_hosts) = match definition {
+                McpDefinition::Stdio {
+                    schema_version: 1,
+                    command,
+                    args,
+                } => {
+                    validate_mcp_command(&command, &args)?;
+                    store.read_package_file(&installation.package, &command)?;
+                    (
+                        McpTransportSpec::Stdio {
+                            executable: mcp_executable_resource(
+                                &capability.descriptor.reference.id,
+                            ),
+                            args,
+                        },
+                        Vec::new(),
+                    )
+                }
+                McpDefinition::Http {
+                    schema_version: 1,
+                    url,
+                } => {
+                    if !url.starts_with("https://") {
+                        return Err(unsupported());
+                    }
+                    let endpoint = Url::parse(&url).map_err(|_| unsupported())?;
+                    let host = endpoint.host_str().ok_or_else(unsupported)?.to_owned();
+                    (McpTransportSpec::StreamableHttp { url }, vec![host])
+                }
+                _ => return Err(unsupported()),
             };
-            if !url.starts_with("https://") {
-                return Err(unsupported());
-            }
-            let endpoint = Url::parse(&url).map_err(|_| unsupported())?;
-            let host = endpoint.host_str().ok_or_else(unsupported)?.to_owned();
             Ok(ActivationSpec::Mcp(McpActivationSpec {
                 contract_version: "1".into(),
-                transport: McpTransportSpec::StreamableHttp { url },
-                network_hosts: vec![host],
+                transport,
+                network_hosts,
             }))
         }
         CapabilityKind::Connector => {
@@ -117,6 +137,10 @@ pub(crate) fn acquire_spec(
                 mcp,
             }))
         }
+        CapabilityKind::Theme => Ok(ActivationSpec::Theme(ThemeActivationSpec {
+            contract_version: "1".into(),
+            manifest: resource_ref(&capability.descriptor.reference.id),
+        })),
         CapabilityKind::Language => Ok(ActivationSpec::Language(LanguageActivationSpec {
             contract_version: "1".into(),
             manifest: resource_ref(&capability.descriptor.reference.id),
@@ -133,7 +157,7 @@ pub(crate) fn acquire_spec(
                 entrypoint: resource_ref(&capability.descriptor.reference.id),
             }))
         }
-        CapabilityKind::Theme | CapabilityKind::Asset => Err(unsupported()),
+        CapabilityKind::Asset => Err(unsupported()),
     }
 }
 
@@ -143,33 +167,43 @@ pub(crate) fn open_resource(
     capability: &CapabilityRecord,
     requested: &ResourceRef,
 ) -> Result<ResourceContent, MarketplaceClientError> {
-    if &resource_ref(&capability.descriptor.reference.id) != requested {
-        return Err(MarketplaceClientError::business(
-            zeta_marketplace_client::MarketplaceErrorCode::ResourceNotFound,
-            "Marketplace resource was not found",
-            false,
-        ));
-    }
     let (path, media_type) = match capability.descriptor.kind {
-        CapabilityKind::Skill => (
-            format!("{}/SKILL.md", capability.path),
-            "text/markdown; charset=utf-8",
-        ),
-        CapabilityKind::Language => (
-            format!("{}/package.json", capability.path),
-            "application/json; charset=utf-8",
-        ),
-        CapabilityKind::Executable => (capability.path.clone(), "application/octet-stream"),
-        CapabilityKind::Mcp
-        | CapabilityKind::Connector
-        | CapabilityKind::Theme
-        | CapabilityKind::Asset => {
-            return Err(MarketplaceClientError::business(
-                zeta_marketplace_client::MarketplaceErrorCode::ResourceNotFound,
-                "Marketplace resource was not found",
-                false,
-            ));
+        CapabilityKind::Skill
+            if &resource_ref(&capability.descriptor.reference.id) == requested =>
+        {
+            (
+                format!("{}/SKILL.md", capability.path),
+                "text/markdown; charset=utf-8",
+            )
         }
+        CapabilityKind::Theme | CapabilityKind::Language
+            if &resource_ref(&capability.descriptor.reference.id) == requested =>
+        {
+            (
+                format!("{}/package.json", capability.path),
+                "application/json; charset=utf-8",
+            )
+        }
+        CapabilityKind::Executable
+            if &resource_ref(&capability.descriptor.reference.id) == requested =>
+        {
+            (capability.path.clone(), "application/octet-stream")
+        }
+        CapabilityKind::Mcp
+            if &mcp_executable_resource(&capability.descriptor.reference.id) == requested =>
+        {
+            let McpDefinition::Stdio {
+                schema_version: 1,
+                command,
+                args,
+            } = parse_mcp(store, &installation.package, &capability.path)?
+            else {
+                return Err(resource_not_found());
+            };
+            validate_mcp_command(&command, &args)?;
+            (command, "application/octet-stream")
+        }
+        _ => return Err(resource_not_found()),
     };
     let bytes = store.read_package_file(&installation.package, &path)?;
     Ok(ResourceContent {
@@ -184,6 +218,34 @@ fn resource_ref(capability_id: &str) -> ResourceRef {
     }
 }
 
+fn mcp_executable_resource(capability_id: &str) -> ResourceRef {
+    ResourceRef {
+        id: opaque_id("res", &[capability_id, "executable"]),
+    }
+}
+
+fn resource_not_found() -> MarketplaceClientError {
+    MarketplaceClientError::business(
+        zeta_marketplace_client::MarketplaceErrorCode::ResourceNotFound,
+        "Marketplace resource was not found",
+        false,
+    )
+}
+
+fn validate_mcp_command(command: &str, args: &[String]) -> Result<(), MarketplaceClientError> {
+    if command.trim().is_empty()
+        || command != command.trim()
+        || args.len() > 128
+        || args.iter().map(String::len).sum::<usize>() > 16 * 1024
+        || args
+            .iter()
+            .any(|argument| argument.contains('\0') || argument.contains(['\r', '\n']))
+    {
+        return Err(unsupported());
+    }
+    Ok(())
+}
+
 #[derive(Deserialize)]
 #[serde(tag = "transport", rename_all = "camelCase", deny_unknown_fields)]
 enum McpDefinition {
@@ -191,9 +253,9 @@ enum McpDefinition {
         #[serde(rename = "schemaVersion")]
         schema_version: u32,
         #[serde(rename = "command")]
-        _command: String,
+        command: String,
         #[serde(default, rename = "args")]
-        _args: Vec<String>,
+        args: Vec<String>,
     },
     Http {
         #[serde(rename = "schemaVersion")]

@@ -34,6 +34,7 @@ export interface IDebugBreakpoint {
 export interface IDebugSource {
   readonly name?: string;
   readonly path?: string;
+  readonly resource?: URI;
   readonly sourceReference?: number;
 }
 

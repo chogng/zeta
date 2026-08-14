@@ -13,8 +13,9 @@ export class ViteDevTerminalProcessService implements ITerminalProcessService {
     return result.profiles;
   }
 
-  create(options: ITerminalProcessCreateOptions): Promise<ITerminalProcessCreation> {
-    return viteDevRequest(this.connection, "terminal/create", options);
+  async create(options: ITerminalProcessCreateOptions): Promise<ITerminalProcessCreation> {
+    const created = await viteDevRequest(this.connection, "terminal/create", { ...options, lifecycle: { type: "connectionOwned" } });
+    return { terminalId: created.terminalId, profile: created.profile, connectionPersistence: "connectionOwned" };
   }
 
   write(options: ITerminalProcessWriteOptions): Promise<void> {

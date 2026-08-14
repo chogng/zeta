@@ -18,6 +18,10 @@ import type { IPluginApi } from "../../plugins/common/pluginApi.js";
 import type { IDebugAdapterProcessService } from "../../debug/common/debugAdapterProcessService.js";
 import type { IExtensionHostApi } from "../../extensionHost/common/extensionHostApi.js";
 import type { ISymbolIndexApi } from "../../symbolIndex/common/symbolIndexApi.js";
+import type { IRemoteAgentApi } from "../../remote/common/remoteAgentApi.js";
+import type { IRemoteConnectionService } from "../../remote/common/remoteConnectionService.js";
+import type { IRemoteTunnelService } from "../../remote/common/remoteTunnelService.js";
+import type { IMarketplaceApi } from "../../marketplace/common/marketplaceApi.js";
 
 /** Optional product capabilities contributed by a statically selected host bundle. */
 export interface RendererHostCapabilities {
@@ -40,6 +44,11 @@ export function mergeRendererHostCapabilities(capabilities: readonly RendererHos
 /** Transport-neutral capability set supplied by a renderer host at startup. */
 export interface IRendererHost extends RendererHostCapabilities {
   readonly appServer: IAppServerApi;
+  readonly remote?: IRemoteAgentApi;
+  /** Optional because web hosts cannot restart into a host-owned SSH connection. */
+  readonly remoteConnections?: IRemoteConnectionService;
+  /** Optional because web and disconnected hosts cannot own an SSH process. */
+  readonly remoteTunnels?: IRemoteTunnelService;
   readonly session: ISessionApi;
   readonly model: IModelApi;
   readonly thread: IThreadApi;
@@ -62,5 +71,6 @@ export interface IRendererHost extends RendererHostCapabilities {
   readonly symbolIndex: ISymbolIndexApi;
   readonly connectors: IConnectorApi;
   readonly plugins: IPluginApi;
+  readonly marketplace: IMarketplaceApi;
   readonly toolSearch: IToolSearchApi;
 }

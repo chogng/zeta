@@ -12,6 +12,8 @@ mod git_service;
 mod hook_runtime;
 mod local;
 mod local_tools;
+mod marketplace_connector_runtime;
+mod marketplace_editor_extensions;
 mod mcp_runtime;
 mod model_catalog;
 mod product_services;
@@ -36,6 +38,9 @@ pub use local::{
     BuiltInSkillRoot, LocalAppServerOptions, LocalCodeIndexProviders, LocalConnectorRuntime,
     LocalWorkspaceConfigOptions, SessionStateMode,
 };
+pub use marketplace_editor_extensions::MarketplaceEditorExtensionAdmission;
+pub use marketplace_editor_extensions::MarketplaceEditorExtensionAdmissionLease;
+pub use marketplace_editor_extensions::MarketplaceEditorExtensionBinding;
 pub use product_services::LocalProductServicesConfig;
 pub use review::{ProviderReviewModel, ReviewModelResolutionError, ReviewModelResolver};
 pub use server::AppServer;

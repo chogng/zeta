@@ -36,7 +36,7 @@ if (profileDirectory && languageServerExecutable) {
   await writeFile(join(profileDirectory, "config.toml"), `[languageServers.servers.rust-analyzer]\nmode = "enabled"\nexecutable = ${JSON.stringify(languageServerExecutable)}\n`, "utf8");
 }
 if (productServicesPath) {
-  await writeFile(productServicesPath, '{"schemaVersion":1,"marketplaces":[]}\n', "utf8");
+  await writeFile(productServicesPath, '{"schemaVersion":1}\n', "utf8");
 }
 const testEnvironment = workspaceDirectory ? { ...process.env, ZETA_PLAYWRIGHT_WORKSPACE: workspaceDirectory, ...(languageServerExecutable ? { ZETA_PLAYWRIGHT_LANGUAGE_SERVER: languageServerExecutable } : {}) } : process.env;
 const serverEnvironment = mode === "full"

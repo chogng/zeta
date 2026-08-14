@@ -29,6 +29,14 @@ use crate::keyboard_shortcuts::{
 use crate::language_server_settings::{
     LanguageServerSettings, LanguageServerSettingsState, paint_switch_fragment,
 };
+use crate::remote_connection_manager::RemoteConnectionManagerField;
+use crate::remote_connection_manager::RemoteConnectionManagerState;
+use crate::remote_connection_manager_view::RemoteConnectionManager;
+use crate::remote_connection_picker::RemoteConnectionPicker;
+use crate::remote_connection_picker::RemoteConnectionPickerState;
+use crate::remote_tunnel_manager::REMOTE_TUNNEL_REMOTE_PORT;
+use crate::remote_tunnel_manager::RemoteTunnelManagerState;
+use crate::remote_tunnel_manager_view::RemoteTunnelManager;
 use crate::session_context_menu::{SessionContextMenu, SessionContextMenuState};
 use crate::session_search::SessionSearch;
 use crate::session_sidebar::SessionSidebarState;
@@ -187,6 +195,12 @@ pub(crate) struct ShellPresentation {
     pub(crate) ime_cursor_area: Option<Rect>,
     pub(crate) workspace_path_picker_scroll_metrics: Option<ScrollMetrics>,
     pub(crate) workspace_path_picker_item_viewport: Option<Rect>,
+    pub(crate) remote_connection_picker_scroll_metrics: Option<ScrollMetrics>,
+    pub(crate) remote_connection_picker_item_viewport: Option<Rect>,
+    pub(crate) remote_connection_manager_scroll_metrics: Option<ScrollMetrics>,
+    pub(crate) remote_connection_manager_list_viewport: Option<Rect>,
+    pub(crate) remote_tunnel_manager_scroll_metrics: Option<ScrollMetrics>,
+    pub(crate) remote_tunnel_manager_list_viewport: Option<Rect>,
     pub(crate) language_server_settings_content: Option<Rect>,
     base_checkpoint: Option<ShellBaseCheckpoint>,
     retained_fragments: BTreeMap<ElementId, RetainedFragmentCheckpoint>,
@@ -256,6 +270,12 @@ struct ShellOverlayPresentation {
     ime_cursor_area: Option<Rect>,
     workspace_path_picker_scroll_metrics: Option<ScrollMetrics>,
     workspace_path_picker_item_viewport: Option<Rect>,
+    remote_connection_picker_scroll_metrics: Option<ScrollMetrics>,
+    remote_connection_picker_item_viewport: Option<Rect>,
+    remote_connection_manager_scroll_metrics: Option<ScrollMetrics>,
+    remote_connection_manager_list_viewport: Option<Rect>,
+    remote_tunnel_manager_scroll_metrics: Option<ScrollMetrics>,
+    remote_tunnel_manager_list_viewport: Option<Rect>,
     language_server_settings_content: Option<Rect>,
 }
 
@@ -301,6 +321,9 @@ pub(crate) struct ShellPresentationModel<'a> {
     pub(crate) session_context_menu: SessionContextMenuState,
     pub(crate) git_branch_context_menu: &'a GitBranchContextMenuState,
     pub(crate) workspace_path_picker: &'a WorkspacePathPickerState,
+    pub(crate) remote_connection_picker: &'a RemoteConnectionPickerState,
+    pub(crate) remote_connection_manager: &'a RemoteConnectionManagerState,
+    pub(crate) remote_tunnel_manager: &'a RemoteTunnelManagerState,
     pub(crate) keybindings: &'a NativeKeybindings,
     pub(crate) keyboard_shortcuts: &'a KeyboardShortcutsState,
     pub(crate) language_server_settings: &'a LanguageServerSettingsState,
@@ -404,6 +427,12 @@ fn build_shell_presentation_with_bindings(
             ime_cursor_area: None,
             workspace_path_picker_scroll_metrics: None,
             workspace_path_picker_item_viewport: None,
+            remote_connection_picker_scroll_metrics: None,
+            remote_connection_picker_item_viewport: None,
+            remote_connection_manager_scroll_metrics: None,
+            remote_connection_manager_list_viewport: None,
+            remote_tunnel_manager_scroll_metrics: None,
+            remote_tunnel_manager_list_viewport: None,
             language_server_settings_content: None,
             base_checkpoint: None,
             retained_fragments: BTreeMap::new(),
@@ -581,6 +610,12 @@ fn build_shell_presentation_with_bindings(
         ime_cursor_area: overlay.ime_cursor_area,
         workspace_path_picker_scroll_metrics: overlay.workspace_path_picker_scroll_metrics,
         workspace_path_picker_item_viewport: overlay.workspace_path_picker_item_viewport,
+        remote_connection_picker_scroll_metrics: overlay.remote_connection_picker_scroll_metrics,
+        remote_connection_picker_item_viewport: overlay.remote_connection_picker_item_viewport,
+        remote_connection_manager_scroll_metrics: overlay.remote_connection_manager_scroll_metrics,
+        remote_connection_manager_list_viewport: overlay.remote_connection_manager_list_viewport,
+        remote_tunnel_manager_scroll_metrics: overlay.remote_tunnel_manager_scroll_metrics,
+        remote_tunnel_manager_list_viewport: overlay.remote_tunnel_manager_list_viewport,
         language_server_settings_content: overlay.language_server_settings_content,
         base_checkpoint: Some(base_checkpoint),
         retained_fragments: BTreeMap::new(),
@@ -617,6 +652,17 @@ pub(crate) fn rebuild_shell_overlays(
     presentation.workspace_path_picker_scroll_metrics =
         overlay.workspace_path_picker_scroll_metrics;
     presentation.workspace_path_picker_item_viewport = overlay.workspace_path_picker_item_viewport;
+    presentation.remote_connection_picker_scroll_metrics =
+        overlay.remote_connection_picker_scroll_metrics;
+    presentation.remote_connection_picker_item_viewport =
+        overlay.remote_connection_picker_item_viewport;
+    presentation.remote_connection_manager_scroll_metrics =
+        overlay.remote_connection_manager_scroll_metrics;
+    presentation.remote_connection_manager_list_viewport =
+        overlay.remote_connection_manager_list_viewport;
+    presentation.remote_tunnel_manager_scroll_metrics =
+        overlay.remote_tunnel_manager_scroll_metrics;
+    presentation.remote_tunnel_manager_list_viewport = overlay.remote_tunnel_manager_list_viewport;
     presentation.language_server_settings_content = overlay.language_server_settings_content;
     true
 }
@@ -655,6 +701,12 @@ fn draw_shell_overlays(
     let palette = model.palette;
     let mut workspace_path_picker_scroll_metrics = None;
     let mut workspace_path_picker_item_viewport = None;
+    let mut remote_connection_picker_scroll_metrics = None;
+    let mut remote_connection_picker_item_viewport = None;
+    let mut remote_connection_manager_scroll_metrics = None;
+    let mut remote_connection_manager_list_viewport = None;
+    let mut remote_tunnel_manager_scroll_metrics = None;
+    let mut remote_tunnel_manager_list_viewport = None;
     let mut language_server_settings_content = None;
     if let Some(context_menu) = SessionContextMenu::new(
         Rect::from_xywh(0.0, 0.0, viewport.width, viewport.height),
@@ -681,6 +733,60 @@ fn draw_shell_overlays(
             ime_cursor_area = path_picker.search_caret_bounds();
         }
         frame.draw_component(&path_picker);
+    }
+    if let Some(connection_picker) = RemoteConnectionPicker::new(
+        Rect::from_xywh(0.0, 0.0, viewport.width, viewport.height),
+        model.remote_connection_picker,
+        model.caret_visibility,
+        palette,
+        text_layout,
+        model.dispatch,
+    ) {
+        remote_connection_picker_scroll_metrics = connection_picker.scroll_metrics();
+        remote_connection_picker_item_viewport = Some(connection_picker.item_viewport_bounds());
+        if model
+            .dispatch
+            .is_focused(crate::remote_connection_picker::REMOTE_CONNECTION_SEARCH_INPUT)
+        {
+            ime_cursor_area = connection_picker.search_caret_bounds();
+        }
+        frame.draw_component(&connection_picker);
+    }
+    if let Some(connection_manager) = RemoteConnectionManager::new(
+        Rect::from_xywh(0.0, 0.0, viewport.width, viewport.height),
+        model.remote_connection_manager,
+        model.caret_visibility,
+        palette,
+        text_layout,
+        model.dispatch,
+    ) {
+        remote_connection_manager_scroll_metrics = Some(connection_manager.list_scroll_metrics());
+        remote_connection_manager_list_viewport = Some(connection_manager.list_viewport_bounds());
+        for field in [
+            RemoteConnectionManagerField::Name,
+            RemoteConnectionManagerField::Host,
+            RemoteConnectionManagerField::Workspace,
+        ] {
+            if model.dispatch.is_focused(field.element_id()) {
+                ime_cursor_area = connection_manager.caret_bounds(field);
+            }
+        }
+        frame.draw_component(&connection_manager);
+    }
+    if let Some(tunnel_manager) = RemoteTunnelManager::new(
+        Rect::from_xywh(0.0, 0.0, viewport.width, viewport.height),
+        model.remote_tunnel_manager,
+        model.caret_visibility,
+        palette,
+        text_layout,
+        model.dispatch,
+    ) {
+        remote_tunnel_manager_scroll_metrics = Some(tunnel_manager.list_scroll_metrics());
+        remote_tunnel_manager_list_viewport = Some(tunnel_manager.list_viewport_bounds());
+        if model.dispatch.is_focused(REMOTE_TUNNEL_REMOTE_PORT) {
+            ime_cursor_area = tunnel_manager.remote_port_caret_bounds();
+        }
+        frame.draw_component(&tunnel_manager);
     }
     if let Some(branch_menu) = GitBranchContextMenu::new(
         Rect::from_xywh(0.0, 0.0, viewport.width, viewport.height),
@@ -775,6 +881,12 @@ fn draw_shell_overlays(
         ime_cursor_area,
         workspace_path_picker_scroll_metrics,
         workspace_path_picker_item_viewport,
+        remote_connection_picker_scroll_metrics,
+        remote_connection_picker_item_viewport,
+        remote_connection_manager_scroll_metrics,
+        remote_connection_manager_list_viewport,
+        remote_tunnel_manager_scroll_metrics,
+        remote_tunnel_manager_list_viewport,
         language_server_settings_content,
     }
 }

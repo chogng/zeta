@@ -1,6 +1,6 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
-import type { ITerminalProcessCommandStatusEvent, ITerminalProcessOutputChunk, ITerminalProcessService, TerminalProcessConnectionState } from "../../../../platform/terminal/common/terminalProcessService.js";
+import type { ITerminalProcessCommandStatusEvent, ITerminalProcessOutputChunk, ITerminalProcessService, TerminalProcessConnectionPersistence, TerminalProcessConnectionState } from "../../../../platform/terminal/common/terminalProcessService.js";
 import type { ITerminalCommandStatusEvent, ITerminalCreateOptions, ITerminalDimensions, ITerminalInstance, ITerminalProfile, ITerminalService, TerminalInstanceState } from "../common/terminal.js";
 
 const POLL_DELAY_MILLIS = 35;
@@ -75,6 +75,7 @@ export class TerminalService extends DisposableOwner implements ITerminalService
       created.terminalId,
       options.title ?? terminalProfileTitle(created.profile),
       created.profile,
+      created.connectionPersistence,
       options.title,
       this.processService,
       () => this.removeInstance(instance),
@@ -153,9 +154,12 @@ export class TerminalService extends DisposableOwner implements ITerminalService
   private setConnectionState(state: TerminalProcessConnectionState): void {
     if (this.connectionState === state) return;
     this.connectionState = state;
-    if (state === "ready") return;
+    if (state === "ready") {
+      for (const instance of this._instances) instance.restoreConnection();
+      return;
+    }
     for (const instance of this._instances) {
-      instance.disconnect();
+      instance.loseConnection();
     }
   }
 }
@@ -192,6 +196,7 @@ class TerminalInstance extends DisposableOwner implements ITerminalInstance {
     serverTerminalId: string,
     title: string,
     profile: ITerminalProfile,
+    private readonly connectionPersistence: TerminalProcessConnectionPersistence,
     readonly customTitle: string | undefined,
     processService: ITerminalProcessService,
     onClosed: () => void,
@@ -286,16 +291,29 @@ class TerminalInstance extends DisposableOwner implements ITerminalInstance {
     }
   }
 
-  disconnect(): void {
+  loseConnection(): void {
     if (this.closed || this._state === "exited" || this._state === "disconnected") return;
     this.pollGeneration += 1;
     this.clearPendingInput();
+    if (this.connectionPersistence === "reconnectable") {
+      if (this._state !== "reconnecting") {
+        this.setState("reconnecting");
+        this._onDidWriteData.fire(new TextEncoder().encode("\r\n[terminal reconnecting]\r\n"));
+      }
+      return;
+    }
     this.setState("disconnected");
     this._onDidWriteData.fire(new TextEncoder().encode("\r\n[terminal connection lost; process was not preserved]\r\n"));
   }
 
+  restoreConnection(): void {
+    if (this.closed || this._state !== "reconnecting") return;
+    const generation = ++this.pollGeneration;
+    void this.poll(generation, "reconnecting");
+  }
+
   async relaunch(dimensions: ITerminalDimensions): Promise<void> {
-    if (this.closed || this._state === "running") return;
+    if (this.closed || this._state === "running" || this._state === "reconnecting") return;
     await this.processService.close({ terminalId: this.serverTerminalId }).catch(() => {});
     try {
       const created = await this.processService.create({
@@ -346,8 +364,9 @@ class TerminalInstance extends DisposableOwner implements ITerminalInstance {
       });
   }
 
-  private async poll(generation: number): Promise<void> {
-    while (!this.closed && this._state === "running" && generation === this.pollGeneration) {
+  private async poll(generation: number, initialState: "running" | "reconnecting" = "running"): Promise<void> {
+    let recoveryPending = initialState === "reconnecting";
+    while (!this.closed && generation === this.pollGeneration && (this._state === "running" || (recoveryPending && this._state === "reconnecting"))) {
       try {
         const result = await this.processService.read({
           terminalId: this.serverTerminalId,
@@ -355,7 +374,15 @@ class TerminalInstance extends DisposableOwner implements ITerminalInstance {
           afterCommandSequence: this.nextCommandSequence,
           maxChunks: MAX_READ_CHUNKS,
         });
-        if (this.closed || this._state !== "running" || generation !== this.pollGeneration) return;
+        if (this.closed || generation !== this.pollGeneration) return;
+        if (recoveryPending) {
+          if (this._state !== "reconnecting") return;
+          this._onDidWriteData.fire(new TextEncoder().encode("\r\n[terminal reconnected]\r\n"));
+          this.setState("running");
+          recoveryPending = false;
+        } else if (this._state !== "running") {
+          return;
+        }
         if (result.outputGap) {
           this._onDidWriteData.fire(new TextEncoder().encode("\r\n[terminal output truncated]\r\n"));
         }
@@ -370,7 +397,12 @@ class TerminalInstance extends DisposableOwner implements ITerminalInstance {
         }
         if (result.chunks.length === 0) await delay(POLL_DELAY_MILLIS);
       } catch {
-        if (!this.closed && generation === this.pollGeneration) this.setState("error");
+        if (!this.closed && generation === this.pollGeneration) {
+          if (recoveryPending && this._state === "reconnecting") {
+            this._onDidWriteData.fire(new TextEncoder().encode("\r\n[terminal recovery failed; relaunch required]\r\n"));
+          }
+          this.setState("error");
+        }
         return;
       }
     }

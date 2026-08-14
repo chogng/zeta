@@ -133,6 +133,69 @@ test("TerminalService keeps multiple instances and safely relaunches after a cra
   });
 });
 
+test("TerminalService resumes reconnectable terminals from their existing output cursors", async () => {
+  const processService = new TestTerminalProcessService([
+    readResult({ nextSequence: 4, nextCommandSequence: 2 }),
+  ], "reconnectable");
+  using service = new TerminalService(processService);
+  const instance = await service.createTerminal({
+    dimensions: { rows: 24, cols: 80 },
+    profile: { type: "default" },
+  });
+  const output: string[] = [];
+  instance.onDidWriteData(data => output.push(new TextDecoder().decode(data)));
+  await waitFor(() => processService.readCursors.length === 1);
+
+  processService.emitConnectionState("crashed");
+  await waitFor(() => instance.state === "reconnecting");
+  const supersededRead = deferred<ITerminalProcessReadResult>();
+  processService.queueRead(supersededRead.promise);
+  processService.emitConnectionState("ready");
+  await waitFor(() => processService.readCursors.length >= 2);
+  assert.equal(instance.state, "reconnecting");
+  assert.equal(output.some(value => value.includes("terminal reconnected")), false);
+
+  processService.emitConnectionState("crashed");
+  supersededRead.resolve(readResult({ nextSequence: 4, nextCommandSequence: 2 }));
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(instance.state, "reconnecting");
+
+  processService.queueRead(readResult({ nextSequence: 4, nextCommandSequence: 2 }));
+  processService.emitConnectionState("ready");
+  await waitFor(() => instance.state === "running" && processService.readCursors.length >= 3);
+
+  assert.equal(processService.createCalls.length, 1);
+  assert.deepEqual(processService.readCursors.slice(0, 3), [0, 4, 4]);
+  assert.deepEqual(processService.commandReadCursors.slice(0, 3), [0, 2, 2]);
+  assert.ok(output.some(value => value.includes("terminal reconnecting")));
+  assert.ok(output.some(value => value.includes("terminal reconnected")));
+});
+
+test("TerminalService exposes failed reconnectable recovery as a relaunchable error", async () => {
+  const processService = new TestTerminalProcessService([
+    readResult({ nextSequence: 1 }),
+  ], "reconnectable");
+  using service = new TerminalService(processService);
+  const instance = await service.createTerminal({
+    dimensions: { rows: 24, cols: 80 },
+    profile: { type: "default" },
+  });
+  const output: string[] = [];
+  instance.onDidWriteData(data => output.push(new TextDecoder().decode(data)));
+  await waitFor(() => processService.readCursors.length === 1);
+
+  processService.emitConnectionState("stopping");
+  await waitFor(() => instance.state === "reconnecting");
+  processService.queueRead(Promise.reject(new Error("old broker lease was abandoned")));
+  processService.emitConnectionState("ready");
+  await waitFor(() => instance.state === "error");
+
+  assert.ok(output.some(value => value.includes("terminal recovery failed; relaunch required")));
+  await service.relaunchTerminal(instance, { rows: 30, cols: 100 });
+  assert.equal(instance.state, "running");
+  assert.equal(processService.createCalls.length, 2);
+});
+
 test("TerminalService renumbers only concurrently open terminals", async () => {
   const processService = new TestTerminalProcessService([]);
   using service = new TerminalService(processService);
@@ -170,7 +233,7 @@ class TestTerminalProcessService implements ITerminalProcessService {
   private readonly connectionListeners = new Set<(state: TerminalProcessConnectionState) => void>();
   private connectionState: TerminalProcessConnectionState = "ready";
 
-  constructor(private readonly reads: ITerminalProcessReadResult[]) {}
+  constructor(private readonly reads: Array<ITerminalProcessReadResult | Promise<ITerminalProcessReadResult>>, private readonly connectionPersistence: "connectionOwned" | "reconnectable" = "connectionOwned") {}
 
   async listProfiles() {
     return [DEFAULT_PROFILE];
@@ -181,7 +244,12 @@ class TestTerminalProcessService implements ITerminalProcessService {
     return {
       terminalId: `terminal-${this.createCalls.length}`,
       profile: DEFAULT_PROFILE,
+      connectionPersistence: this.connectionPersistence,
     };
+  }
+
+  queueRead(result: ITerminalProcessReadResult | Promise<ITerminalProcessReadResult>): void {
+    this.reads.push(result);
   }
 
   async write(params: { terminalId: string; data: string }) {
@@ -195,7 +263,7 @@ class TestTerminalProcessService implements ITerminalProcessService {
   async read(params: { terminalId: string; afterSequence: number; afterCommandSequence: number; maxChunks: number }) {
     this.readCursors.push(params.afterSequence);
     this.commandReadCursors.push(params.afterCommandSequence);
-    return this.reads.shift() ?? readResult({ nextSequence: params.afterSequence, nextCommandSequence: params.afterCommandSequence });
+    return await (this.reads.shift() ?? readResult({ nextSequence: params.afterSequence, nextCommandSequence: params.afterCommandSequence }));
   }
 
   async close(params: { terminalId: string }) {
@@ -215,6 +283,14 @@ class TestTerminalProcessService implements ITerminalProcessService {
     this.connectionState = state;
     for (const listener of this.connectionListeners) listener(state);
   }
+}
+
+function deferred<T>(): { readonly promise: Promise<T>; readonly resolve: (value: T) => void } {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>(accept => {
+    resolve = accept;
+  });
+  return { promise, resolve };
 }
 
 function readResult(overrides: Partial<ITerminalProcessReadResult>): ITerminalProcessReadResult {

@@ -13,6 +13,15 @@ fi
 if [ -n "${ZETERM_CARGO_PROFILE:-}" ]; then
     set -- "$@" --cargo-profile "${ZETERM_CARGO_PROFILE}"
 fi
+if [ -n "${ZETERM_REMOTE_RUNTIME_BUNDLE:-}" ]; then
+    set -- "$@" --remote-runtime-bundle "${ZETERM_REMOTE_RUNTIME_BUNDLE}"
+fi
+if [ -n "${ZETERM_REMOTE_RUNTIME_CATALOG_URL:-}" ] || [ -n "${ZETERM_REMOTE_RUNTIME_CATALOG_SHA256:-}" ]; then
+    : "${ZETERM_REMOTE_RUNTIME_CATALOG_URL:?set both network Remote runtime catalog variables}"
+    : "${ZETERM_REMOTE_RUNTIME_CATALOG_SHA256:?set both network Remote runtime catalog variables}"
+    set -- "$@" --remote-runtime-catalog-url "${ZETERM_REMOTE_RUNTIME_CATALOG_URL}"
+    set -- "$@" --remote-runtime-catalog-sha256 "${ZETERM_REMOTE_RUNTIME_CATALOG_SHA256}"
+fi
 
 if [ -n "${ZETERM_BINARY:-}" ]; then
     python3 "${script_dir}/build_zeterm_package.py" "$@" --zeterm-bin "${ZETERM_BINARY}"

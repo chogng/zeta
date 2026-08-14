@@ -12,7 +12,6 @@ use super::FleetState;
 use super::MAXIMUM_FLEET_EXTENSIONS;
 use super::RuntimeEntry;
 use super::RuntimeInner;
-use super::authority;
 use super::authority::prepare_extension;
 use super::cancel_handles;
 use super::nonzero_incarnation;
@@ -21,6 +20,8 @@ use super::projection::ExtensionHostExtensionSnapshot;
 use super::projection::ExtensionHostFleetSnapshot;
 use super::projection::extension_projection;
 use super::projection::runtime_failure;
+use super::source;
+use super::source::EditorExtensionDeployment;
 
 impl RuntimeInner {
     pub(super) fn reconcile_authority_locked(
@@ -39,38 +40,41 @@ impl RuntimeInner {
         workspace
             .ensure_active()
             .map_err(|_| ExtensionHostRuntimeError::Host(ExtensionHostError::AuthorityDenied))?;
-        let authority_snapshot = self.authority.snapshot();
-        let activation = authority_snapshot.activation();
-        let activation_generation = activation.generation();
+        let source_snapshot = source::combined_deployments(
+            self.plugin_authority.as_ref(),
+            self.marketplace_manager.as_ref(),
+            self.marketplace_admission.as_ref(),
+        )?;
         if !force
             && self
                 .state
                 .lock()
                 .map_err(|_| ExtensionHostRuntimeError::Internal)?
-                .authority_generation
-                == activation_generation
+                .source_revision
+                == source_snapshot.revision
         {
             return Ok(self.snapshot());
         }
-        let extension_count = activation
-            .packages()
-            .iter()
-            .map(|package| package.manifest().contributions.editor_extensions.len())
-            .sum::<usize>();
+        let extension_count = source_snapshot.deployments.len();
         if extension_count > MAXIMUM_FLEET_EXTENSIONS {
             self.retire_current(CancelReason::AuthorityRevoked)?;
             return Err(ExtensionHostRuntimeError::QuotaExceeded);
         }
-        let Some(generation) = NonZeroU64::new(activation_generation) else {
-            self.retire_current(CancelReason::AuthorityRevoked)?;
-            return Err(ExtensionHostRuntimeError::Internal);
-        };
+        let activation_generation = self
+            .state
+            .lock()
+            .map_err(|_| ExtensionHostRuntimeError::Internal)?
+            .authority_generation
+            .checked_add(1)
+            .ok_or(ExtensionHostRuntimeError::Internal)?;
+        let generation =
+            NonZeroU64::new(activation_generation).ok_or(ExtensionHostRuntimeError::Internal)?;
         self.retire_current(CancelReason::AuthorityRevoked)?;
         let mut entries = BTreeMap::new();
-        for package in activation.packages() {
-            for contribution in &package.manifest().contributions.editor_extensions {
-                let entry = self.build_entry(&workspace, package, contribution, generation);
-                entries.insert(entry.fallback.id.clone(), entry);
+        for deployment in &source_snapshot.deployments {
+            let entry = self.build_entry(&workspace, deployment, generation);
+            if entries.insert(entry.fallback.id.clone(), entry).is_some() {
+                return Err(ExtensionHostRuntimeError::Internal);
             }
         }
         let published = {
@@ -80,6 +84,7 @@ impl RuntimeInner {
                 .map_err(|_| ExtensionHostRuntimeError::Internal)?;
             state.entries = entries;
             state.authority_generation = activation_generation;
+            state.source_revision = source_snapshot.revision;
             self.refresh_generation_locked(&mut state)?
         };
         self.publish(published);
@@ -89,33 +94,22 @@ impl RuntimeInner {
     fn build_entry(
         &self,
         workspace: &TrustedWorkspace,
-        package: &zeta_plugins::InstalledPluginPackage,
-        contribution: &zeta_plugins::EditorExtensionContribution,
+        deployment: &EditorExtensionDeployment,
         generation: NonZeroU64,
     ) -> RuntimeEntry {
-        let id = authority::stable_extension_id(
-            package.manifest().id.as_str(),
-            contribution.id.as_str(),
-        );
-        let version = package.manifest().version.to_string();
+        let version = deployment.version.clone();
         let fallback = ExtensionHostExtensionSnapshot {
-            id,
+            id: deployment.id.clone(),
             version: version.clone(),
-            package_digest: package.package_digest().as_str().to_string(),
-            runtime_api_version: contribution.runtime_api_version.as_u16(),
+            package_digest: deployment.package_digest.clone(),
+            runtime_api_version: deployment.params.runtime_api_version,
             activation_generation: generation.get(),
             incarnation: None,
             lifecycle: projection::ExtensionHostLifecycle::Failed,
             failure: None,
             registrations: Vec::new(),
         };
-        let prepared = prepare_extension(
-            &self.authority,
-            workspace,
-            package,
-            contribution,
-            generation,
-        );
+        let prepared = prepare_extension(workspace, deployment, generation);
         let supervisor = prepared.and_then(|prepared| {
             ExtensionHostSupervisor::new(
                 Arc::clone(&self.launcher),

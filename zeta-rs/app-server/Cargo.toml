@@ -46,6 +46,7 @@ zeta-extensions = { workspace = true }
 zeta-editor-extension-host = { workspace = true }
 zeta-extension-api = { workspace = true }
 zeta-mcp-extension = { workspace = true }
+zeta-mcp = { workspace = true }
 zeta-file-system = { workspace = true }
 zeta-file-system-tool = { workspace = true }
 zeta-file-watcher = { workspace = true }
@@ -69,6 +70,7 @@ zeta-plugins = { workspace = true }
 zeta-prompts = { workspace = true }
 zeta-protocol = { workspace = true }
 zeta-rollout = { workspace = true }
+zeta-rmcp-client = { workspace = true }
 zeta-sandboxing = { workspace = true }
 zeta-workspace = { workspace = true }
 zeta-search = { workspace = true }

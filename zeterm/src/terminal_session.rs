@@ -8,8 +8,13 @@ use zeta_utils_pty::{ProcessHandle, SpawnedProcess, TerminalSize, spawn_pty_proc
 use zeta_winit::EventLoopProxy;
 
 use crate::PRODUCT_DISPLAY_NAME;
+use crate::agent_session_target::AgentSessionTarget;
 use crate::native_event::NativeEvent;
 use crate::session_switch_trace;
+
+#[path = "terminal_session_remote.rs"]
+mod remote;
+use remote::RemoteTerminalBackend;
 
 const SHELL_BOOTSTRAP_MARKER: &[u8] = b"\x1b]9;zeterm-ready\x07";
 
@@ -64,16 +69,26 @@ impl TerminalSessionEvent {
 }
 
 pub(crate) struct TerminalSession {
-    _runtime: Runtime,
-    process: Arc<ProcessHandle>,
+    backend: TerminalBackend,
     core: TerminalCore,
     size: GridSize,
 }
 
 impl Drop for TerminalSession {
     fn drop(&mut self) {
-        self.process.request_terminate();
+        match &mut self.backend {
+            TerminalBackend::Local { process, .. } => process.request_terminate(),
+            TerminalBackend::Remote(_) => {}
+        }
     }
+}
+
+enum TerminalBackend {
+    Local {
+        _runtime: Runtime,
+        process: Arc<ProcessHandle>,
+    },
+    Remote(RemoteTerminalBackend),
 }
 
 impl TerminalSession {
@@ -84,6 +99,7 @@ impl TerminalSession {
         key: TerminalSessionKey,
         size: GridSize,
         event_proxy: EventLoopProxy<NativeEvent>,
+        target: AgentSessionTarget,
     ) -> Result<()> {
         session_switch_trace::event(
             None,
@@ -98,7 +114,7 @@ impl TerminalSession {
                     "terminal-spawn-start",
                     format_args!("key={key:?}"),
                 );
-                let result = Self::spawn(key, size, event_proxy.clone())
+                let result = Self::spawn(key, size, event_proxy.clone(), target)
                     .map_err(|error| format!("{error:#}"));
                 session_switch_trace::event(
                     None,
@@ -115,8 +131,29 @@ impl TerminalSession {
         key: TerminalSessionKey,
         size: GridSize,
         event_proxy: EventLoopProxy<NativeEvent>,
+        target: AgentSessionTarget,
     ) -> Result<Self> {
         let _trace = session_switch_trace::Span::new(None, "terminal-session-spawn");
+        match target {
+            AgentSessionTarget::Local { .. } => Self::spawn_local(key, size, event_proxy),
+            AgentSessionTarget::Ssh { connection, .. } => Ok(Self {
+                backend: TerminalBackend::Remote(RemoteTerminalBackend::spawn(
+                    key,
+                    size,
+                    event_proxy,
+                    connection,
+                )?),
+                core: TerminalCore::new(size),
+                size,
+            }),
+        }
+    }
+
+    fn spawn_local(
+        key: TerminalSessionKey,
+        size: GridSize,
+        event_proxy: EventLoopProxy<NativeEvent>,
+    ) -> Result<Self> {
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(2)
             .enable_all()
@@ -156,8 +193,10 @@ impl TerminalSession {
                 .context("terminal bootstrap queue is unavailable")?;
         }
         Ok(Self {
-            _runtime: runtime,
-            process,
+            backend: TerminalBackend::Local {
+                _runtime: runtime,
+                process,
+            },
             core: TerminalCore::new(size),
             size,
         })
@@ -177,10 +216,13 @@ impl TerminalSession {
         if input.is_empty() {
             return Ok(());
         }
-        self.process
-            .writer_sender()
-            .try_send(input)
-            .context("terminal input queue is unavailable")
+        match &self.backend {
+            TerminalBackend::Local { process, .. } => process
+                .writer_sender()
+                .try_send(input)
+                .context("terminal input queue is unavailable"),
+            TerminalBackend::Remote(remote) => remote.send_input(input),
+        }
     }
 
     pub(crate) fn resize(&mut self, size: GridSize) -> Result<()> {
@@ -189,12 +231,15 @@ impl TerminalSession {
         }
         self.core.resize(size);
         self.size = size;
-        self.process
-            .resize(TerminalSize {
-                rows: size.rows(),
-                cols: size.cols(),
-            })
-            .context("could not resize terminal PTY")
+        match &self.backend {
+            TerminalBackend::Local { process, .. } => process
+                .resize(TerminalSize {
+                    rows: size.rows(),
+                    cols: size.cols(),
+                })
+                .context("could not resize terminal PTY"),
+            TerminalBackend::Remote(remote) => remote.resize(size),
+        }
     }
 }
 

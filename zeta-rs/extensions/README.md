@@ -14,23 +14,24 @@
 | Symbol | 当前职责 | 不承担 |
 | --- | --- | --- |
 | `ExtensionRoot` / `ExtensionRootKind` | 表达 host 已选择的 built-in/user root | 从 Renderer 接收路径、Workspace trust |
-| `DynamicExtensionSourceProvider` / `DynamicExtensionSourceSnapshot` | 按 authority generation 提供 exact immutable package 目录 | Plugin install/enable/grant、下载或签名验证 |
+| `DynamicExtensionSourceProvider` / `DynamicExtensionSourceSnapshot` | 按 authority generation 提供 exact immutable package 目录 | Marketplace/Plugin install、enable/grant、下载或签名验证 |
+| `DynamicExtensionPackageSource::marketplace_with_manifest` | 为 product-independent portable family 提供 host-normalized 声明式 manifest，同时保留 exact package bytes/digest | 添加虚拟资源、绕过 package snapshot/path validation |
 | `ExtensionCatalog::list` | cached query 或 refresh scan，并发布单调 generation | 解析 editor `contributes` |
 | `ExtensionCatalogSnapshot` | 固定一代 descriptor、diagnostic 和完整 package identity | 保留历史 generation |
 | `ExtensionDescriptor` | `publisher.name`、版本、manifest JSON/摘要和 package 摘要 | enablement、grant、signature |
 | `ExtensionCatalog::open_resource` | 校验 generation、ID 和包内相对路径后读取当前 frozen bytes | 从 live filesystem 回退 |
 | `ExtensionCatalogError` | generation conflict、缺失 ID/resource、非法路径、limit/IO failure | transport error code |
 
-固定 precedence 为 built-in roots → dynamic Plugin-authorized exact packages → user roots；每个阶段中
+固定 precedence 为 built-in roots → dynamic authority-selected exact packages → user roots；每个阶段中
 第一个有效 extension ID 获胜，后续重复项只产生 `DuplicateExtension` diagnostic。由此可变用户包不能
-静默覆盖产品或已授权 Plugin 资源，Plugin 也不能覆盖产品内置资源。
+静默覆盖产品或已验证 dynamic 资源，Marketplace/Plugin 来源也不能覆盖产品内置资源。
 
 ## 2. 内部接口地图
 
 | Private symbol | 精确职责 | 不能承担 | 修改时同步检查 |
 | --- | --- | --- | --- |
 | `scan_root` | 稳定排序 root 的 direct children 并应用 first-wins precedence | 递归 marketplace discovery | duplicate/root-order tests、系统文档 |
-| `scan_dynamic_packages` | 稳定扫描 authority 给出的 exact package set | 读取 Marketplace、决定 enable/grant | generation/precedence tests、App Server provider tests |
+| `scan_dynamic_packages` | 稳定扫描 authority 给出的 exact package set | 读取 Marketplace registry、决定 enable/grant | generation/precedence tests、App Server provider tests |
 | `discover_package` | 校验 package/manifest identity 并建立 frozen snapshot | 解释 `contributes` | manifest、digest、file-type/limit tests |
 | `ExtensionPackageSnapshot::load` / `read_bounded_file` | 枚举 regular files、绑定 file identity、拒绝 link/special file、累计 limits 和 package digest | 暴露 canonical host path | symlink/hard-link/special/TOCTOU/digest tests |
 | `CatalogBudget` | 约束跨 root 的候选数、frozen bytes、manifest response 与 diagnostics | 改变 root precedence | 边界值、截断标记和原子 claim tests |
@@ -60,8 +61,10 @@ package path，说明 ownership 已经漂移。
 
 ## 3. 包、摘要与限制
 
-每个可信根的直接子目录是一个 package，必须包含 UTF-8 JSON `package.json`。必填身份字段为
-`name`、`publisher` 和 `version`，canonical ID 为 `publisher.name`。Descriptor 以 `manifest_sha256`
+每个可信根的直接子目录是一个 package，必须包含 UTF-8 JSON `package.json`。默认 manifest 的必填
+身份字段为 `name`、`publisher` 和 `version`，canonical ID 为 `publisher.name`。受信任 dynamic provider
+可以为 portable package family 提供 normalized declarative manifest；原始目录仍完整 snapshot/hash，
+normalized manifest 不能添加资源或改变 path containment。Descriptor 以 `manifest_sha256`
 校验暴露给客户端的 canonical `manifest_json` bytes，同时用确定性 `package_sha256` 绑定 package 内
 规范相对路径与全部原始 regular file bytes；digest 与 host absolute root 无关。
 
@@ -125,14 +128,15 @@ stale-generation rejection。修改 wire DTO
 
 ## 6. 当前限制与扩展点
 
-Current：静态 root discovery、Plugin-authorized exact package projection、built-in → Plugin → user
+Current：静态 root discovery、Marketplace/Plugin-authorized exact package projection、portable manifest
+normalization seam、built-in → dynamic → user
 precedence、不可变单代 snapshot、完整 package digest、typed diagnostic/error 与有代次约束的 bounded
 resource read 已实现。当前不持久化 catalog，不保留旧 generation，也不自行提供远端 registry、下载、
 enable/disable、signature/revocation、permission grant 或任意代码执行；这些 lifecycle decisions 由
-provider 上游的 `zeta-plugins` authority 完成。Plugin-authorized executable Editor Extension 由独立的
+provider 上游的 Marketplace Manager 或 legacy `zeta-plugins` authority 完成。Executable Editor Extension 由独立的
 [`zeta-editor-extension-host`](../editor-extension-host/README.md) 监管；静态 catalog 不会隐式进入该
 执行边界。
 
 未来若 Zeterm 需要同一静态 package 语义，应直接依赖本 crate；这只是明确的 extension point，当前
-仓库没有 Zeterm consumer。安装与信任控制面若需要演进，应与 `zeta-plugins` authority 明确对接，
+仓库没有 Zeterm consumer。安装与信任控制面若需要演进，应与 Manager/legacy Plugin authority 明确对接，
 不得把 mutable download 或 runtime process 塞入 `ExtensionCatalog`。

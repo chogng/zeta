@@ -4,6 +4,7 @@ import { Emitter } from "../../../../../base/common/event.js";
 import { URI } from "../../../../../base/common/uri.js";
 import { type IDebugAdapterProcessReadResult, type IDebugAdapterProcessService } from "../../../../../platform/debug/common/debugAdapterProcessService.js";
 import { type AppServerConnectionState } from "../../../../../platform/app-server/common/appServerApi.js";
+import { createSshRemoteWorkspaceUri } from "../../../../../platform/remote/common/remote.js";
 import { DebugAdapterSession } from "../../browser/debugAdapterSession.js";
 import { type IDebugBreakpoint, type IDebugConfiguration } from "../../common/debugService.js";
 
@@ -12,7 +13,7 @@ test("DebugAdapterSession performs DAP configuration, clears breakpoints, and re
   let breakpoints: readonly IDebugBreakpoint[] = [breakpoint(4)];
   const updates: Array<{ readonly id: string; readonly verified: boolean; readonly message?: string }> = [];
   const terminalRequests: unknown[] = [];
-  const session = await DebugAdapterSession.start({ configuration: configuration(), processService: processes, breakpoints: () => breakpoints, workspaceFolder: "C:\\workspace", runInTerminal: async value => { terminalRequests.push(value); return {}; }, updateBreakpoints: values => updates.push(...values) });
+  const session = await DebugAdapterSession.start({ configuration: configuration(), processService: processes, breakpoints: () => breakpoints, workspace: URI.file("C:\\workspace"), runInTerminal: async value => { terminalRequests.push(value); return {}; }, updateBreakpoints: values => updates.push(...values) });
 
   assert.equal(session.state, "running");
   assert.deepEqual(processes.started, { program: "C:\\workspace\\adapter", arguments: ["--stdio", "C:\\workspace"] });
@@ -35,7 +36,7 @@ test("DebugAdapterSession performs DAP configuration, clears breakpoints, and re
   await waitFor(() => session.state === "stopped");
   const frames = await session.stackTrace();
   assert.equal(processes.requests("threads").length, 1);
-  assert.deepEqual(frames, [{ id: 11, name: "main", source: { name: "main.ts", path: "C:\\workspace\\main.ts" }, lineNumber: 4, columnNumber: 1 }]);
+  assert.deepEqual(frames.map(frame => ({ ...frame, source: frame.source ? { ...frame.source, resource: frame.source.resource?.toString() } : undefined })), [{ id: 11, name: "main", source: { name: "main.ts", path: "C:\\workspace\\main.ts", resource: "file:///C:/workspace/main.ts" }, lineNumber: 4, columnNumber: 1 }]);
 
   assert.deepEqual(await session.threads(), [{ id: 7, name: "main" }, { id: 8, name: "worker" }]);
   session.selectThread(8);
@@ -54,6 +55,25 @@ test("DebugAdapterSession performs DAP configuration, clears breakpoints, and re
   assert.equal(processes.closed, true);
 });
 
+test("DebugAdapterSession keeps Remote adapter paths on the Remote Workspace authority", async () => {
+  using processes = new FakeDebugAdapterProcessService("/srv/project/src/main file.ts");
+  const workspace = createSshRemoteWorkspaceUri("work-server", "/srv/project");
+  const configurationValue: IDebugConfiguration = { ...configuration(), adapter: { program: "${workspaceFolder}/adapter", arguments: ["--stdio"] }, arguments: { program: "${workspaceFolder}/bin/app", cwd: "${workspaceFolder}" } };
+  const remoteBreakpoint: IDebugBreakpoint = { id: "remote:4", resource: createSshRemoteWorkspaceUri("work-server", "/srv/project/src/main file.ts"), lineNumber: 4, enabled: true, verified: false };
+  const session = await DebugAdapterSession.start({ configuration: configurationValue, processService: processes, breakpoints: () => [remoteBreakpoint], workspace });
+
+  assert.deepEqual(processes.started, { program: "/srv/project/adapter", arguments: ["--stdio"] });
+  assert.deepEqual(processes.request("launch").arguments, { program: "/srv/project/bin/app", cwd: "/srv/project" });
+  assert.deepEqual(processes.request("setBreakpoints").arguments, { source: { path: "/srv/project/src/main file.ts" }, breakpoints: [{ line: 4 }] });
+  processes.event("stopped", { reason: "breakpoint", allThreadsStopped: true });
+  await waitFor(() => session.state === "stopped");
+  const frame = (await session.stackTrace())[0];
+  assert.equal(frame?.source?.path, "/srv/project/src/main file.ts");
+  assert.equal(frame?.source?.resource?.toString(), "zeta-remote://ssh+work-server/srv/project/src/main%20file.ts");
+
+  await session.disconnect();
+});
+
 class FakeDebugAdapterProcessService implements IDebugAdapterProcessService {
   private readonly connectionEmitter = new Emitter<AppServerConnectionState>();
   private readonly messages: Array<{ readonly sequence: number; readonly message: unknown }> = [];
@@ -63,6 +83,8 @@ class FakeDebugAdapterProcessService implements IDebugAdapterProcessService {
   started: unknown;
   closed = false;
   readonly onConnectionState = this.connectionEmitter.event;
+
+  constructor(private readonly stackFramePath = "C:\\workspace\\main.ts") {}
 
   async start(options: unknown): Promise<string> { this.started = options; return "debug-1"; }
 
@@ -74,7 +96,7 @@ class FakeDebugAdapterProcessService implements IDebugAdapterProcessService {
     if (command === "launch") this.event("initialized");
     const body = command === "initialize" ? { supportsConfigurationDoneRequest: true, supportsRestartRequest: true, supportsTerminateRequest: true, exceptionBreakpointFilters: [{ filter: "uncaught", label: "Uncaught Exceptions", default: true }, { filter: "caught", label: "Caught Exceptions" }] }
       : command === "threads" ? { threads: [{ id: 7, name: "main" }, { id: 8, name: "worker" }] }
-      : command === "stackTrace" ? { stackFrames: [{ id: 11, name: "main", source: { name: "main.ts", path: "C:\\workspace\\main.ts" }, line: 4, column: 1 }] }
+      : command === "stackTrace" ? { stackFrames: [{ id: 11, name: "main", source: { name: "main.ts", path: this.stackFramePath }, line: 4, column: 1 }] }
       : command === "scopes" ? { scopes: [{ name: "Locals", variablesReference: 20 }] }
       : command === "variables" ? { variables: [{ name: "answer", value: "42", type: "number", variablesReference: 0 }] }
       : command === "evaluate" ? { result: "42", type: "number", variablesReference: 0 }

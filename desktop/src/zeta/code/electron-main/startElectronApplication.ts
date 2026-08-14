@@ -26,7 +26,11 @@ export function startElectronApplication(product: ProductConfiguration, ipcRoute
     ipcRouteContributions,
   });
 
-  app.on("second-instance", () => application.focusMainWindow());
+  app.on("second-instance", (_event, arguments_, cwd) => application.handleSecondInstance(arguments_, cwd));
+  app.on("activate", () => application.handleActivate());
+  app.on("window-all-closed", () => {
+    if (process.platform !== "darwin") app.quit();
+  });
   app.once("ready", () => {
     void startup(application);
   });

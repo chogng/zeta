@@ -20,6 +20,7 @@ use zeta_editor_extension_host::ExtensionInvocationTarget;
 use zeta_editor_extension_host::LanguageProviderOperation;
 use zeta_editor_extension_host::RegistrationKind;
 use zeta_editor_extension_host::RestartPolicy;
+use zeta_marketplace_manager::MarketplaceManager;
 use zeta_plugins::PluginActivationAuthority;
 use zeta_workspace::TrustedWorkspace;
 use zeta_workspace::WorkspaceCapability;
@@ -30,6 +31,7 @@ mod authority;
 mod fleet;
 mod projection;
 mod sessions;
+pub(crate) mod source;
 
 use projection::ExtensionHostExtensionSnapshot;
 pub(super) use projection::ExtensionHostFailureKind;
@@ -49,7 +51,9 @@ pub(super) struct ExtensionHostRuntime {
 }
 
 struct RuntimeInner {
-    authority: PluginActivationAuthority,
+    plugin_authority: Option<PluginActivationAuthority>,
+    marketplace_manager: Option<Arc<MarketplaceManager>>,
+    marketplace_admission: Option<Arc<dyn crate::MarketplaceEditorExtensionAdmission>>,
     launcher: Arc<dyn ExtensionHostLauncher>,
     limits: ExtensionHostLimits,
     restart_policy: RestartPolicy,
@@ -65,6 +69,7 @@ struct RuntimeInner {
 struct FleetState {
     generation: u64,
     authority_generation: u64,
+    source_revision: source::EditorExtensionSourceRevision,
     workspace: Option<TrustedWorkspace>,
     entries: BTreeMap<String, RuntimeEntry>,
     published: Vec<ExtensionHostExtensionSnapshot>,
@@ -116,7 +121,9 @@ pub(super) enum ExtensionHostRuntimeError {
 
 impl ExtensionHostRuntime {
     pub(super) fn start(
-        authority: PluginActivationAuthority,
+        plugin_authority: Option<PluginActivationAuthority>,
+        marketplace_manager: Option<Arc<MarketplaceManager>>,
+        marketplace_admission: Option<Arc<dyn crate::MarketplaceEditorExtensionAdmission>>,
         launcher: Arc<dyn ExtensionHostLauncher>,
         limits: ExtensionHostLimits,
         restart_policy: RestartPolicy,
@@ -124,10 +131,20 @@ impl ExtensionHostRuntime {
     ) -> Result<Self, ExtensionHostError> {
         limits.validate()?;
         restart_policy.validate()?;
-        let changes = authority.subscribe();
+        let plugin_changes = plugin_authority
+            .as_ref()
+            .map(PluginActivationAuthority::subscribe);
+        let marketplace_changes = marketplace_manager
+            .as_ref()
+            .and_then(|manager| manager.subscribe().ok());
+        let marketplace_admission_changes = marketplace_admission
+            .as_ref()
+            .and_then(|admission| admission.subscribe());
         let (shutdown, shutdown_receiver) = std::sync::mpsc::channel();
         let inner = Arc::new(RuntimeInner {
-            authority,
+            plugin_authority,
+            marketplace_manager,
+            marketplace_admission,
             launcher,
             limits,
             restart_policy,
@@ -135,6 +152,7 @@ impl ExtensionHostRuntime {
             state: Mutex::new(FleetState {
                 generation: 1,
                 authority_generation: 0,
+                source_revision: source::EditorExtensionSourceRevision::default(),
                 workspace: None,
                 entries: BTreeMap::new(),
                 published: Vec::new(),
@@ -151,7 +169,15 @@ impl ExtensionHostRuntime {
         let weak = Arc::downgrade(&inner);
         let worker = std::thread::Builder::new()
             .name("zeta-editor-extension-hosts".into())
-            .spawn(move || runtime_worker(weak, changes, shutdown_receiver))
+            .spawn(move || {
+                runtime_worker(
+                    weak,
+                    plugin_changes,
+                    marketplace_changes,
+                    marketplace_admission_changes,
+                    shutdown_receiver,
+                )
+            })
             .map_err(|_| ExtensionHostError::SpawnFailed)?;
         *inner
             .worker
@@ -196,6 +222,7 @@ impl ExtensionHostRuntime {
             };
             state.workspace = None;
             state.authority_generation = 0;
+            state.source_revision = source::EditorExtensionSourceRevision::default();
             self.inner
                 .refresh_generation_locked(&mut state)
                 .ok()
@@ -412,10 +439,9 @@ impl Drop for RuntimeInner {
             .get_mut()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .take()
+            && worker.thread().id() != std::thread::current().id()
         {
-            if worker.thread().id() != std::thread::current().id() {
-                let _ = worker.join();
-            }
+            let _ = worker.join();
         }
         let entries = self
             .state
@@ -465,18 +491,33 @@ fn language_operation_name(operation: LanguageProviderOperation) -> &'static str
 
 fn runtime_worker(
     runtime: Weak<RuntimeInner>,
-    changes: zeta_plugins::PluginAuthoritySubscription,
+    plugin_changes: Option<zeta_plugins::PluginAuthoritySubscription>,
+    marketplace_changes: Option<std::sync::mpsc::Receiver<u64>>,
+    marketplace_admission_changes: Option<std::sync::mpsc::Receiver<u64>>,
     shutdown: std::sync::mpsc::Receiver<()>,
 ) {
     loop {
         if shutdown.try_recv().is_ok() {
             break;
         }
-        let changed = match changes.recv_timeout(HEALTH_INTERVAL) {
-            Ok(_) => true,
-            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => false,
-            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
+        let plugin_changed = match plugin_changes.as_ref() {
+            Some(changes) => match changes.recv_timeout(HEALTH_INTERVAL) {
+                Ok(_) => true,
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => false,
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => false,
+            },
+            None => {
+                std::thread::sleep(HEALTH_INTERVAL);
+                false
+            }
         };
+        let marketplace_changed = marketplace_changes
+            .as_ref()
+            .is_some_and(|changes| changes.try_recv().is_ok());
+        let marketplace_admission_changed = marketplace_admission_changes
+            .as_ref()
+            .is_some_and(|changes| changes.try_recv().is_ok());
+        let changed = plugin_changed || marketplace_changed || marketplace_admission_changed;
         let Some(runtime) = runtime.upgrade() else {
             break;
         };

@@ -28,6 +28,8 @@ use zeta_install_context::InstallContext;
 use zeta_protocol::SessionId;
 use zeta_protocol::ThreadId;
 
+mod remote;
+
 const PRODUCT_SERVICES_OVERRIDE: &str = "ZETA_PRODUCT_SERVICES_PATH";
 const BUNDLED_PRODUCT_SERVICES: &str = "product-services/product-services.json";
 
@@ -40,6 +42,12 @@ fn main() {
             "exec" => execute(arguments.collect()),
             "app-server" => app_server_command(arguments.collect()).map_err(CliError::failure),
             "mcp-server" => mcp_server_command(arguments.collect()).map_err(CliError::failure),
+            "remote" => remote::run(arguments.collect()).map_err(CliError::failure),
+            "remote-server" => zeta_remote_server::run_from_environment_with_product_services(
+                arguments.collect::<Vec<_>>(),
+                product_services_path(),
+            )
+            .map_err(|error| CliError::failure(error.to_string())),
             _ => Err(CliError::usage(format!("unknown command: {command}"))),
         },
     };
@@ -80,9 +88,12 @@ fn interactive() -> Result<(), String> {
     .with_workspace_root(configured_workspace()?);
     let options = with_product_services(options, &profile_root)?;
     let session = AppServerSession::start_embedded(options).map_err(|error| error.to_string())?;
-    zeta_tui::run(session, zeta_tui::TuiOptions::new("TUI conversation"))
-        .map(|_| ())
-        .map_err(|error| error.to_string())
+    match zeta_tui::run(session, zeta_tui::TuiOptions::new("TUI conversation"))
+        .map_err(|error| error.to_string())?
+    {
+        zeta_tui::TuiExit::UserRequested | zeta_tui::TuiExit::TerminationRequested => Ok(()),
+        zeta_tui::TuiExit::ConnectionLost { reason, .. } => Err(reason),
+    }
 }
 
 fn run_app_server(arguments: Vec<String>) -> Result<(), String> {

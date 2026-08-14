@@ -551,7 +551,7 @@ fn terminal_requires_an_installed_backend() {
             "jsonrpc":"2.0",
             "id":2,
             "method":"terminal/create",
-            "params":{"rows":24,"cols":80,"profile":{"type":"default"}}
+            "params":{"rows":24,"cols":80,"profile":{"type":"default"},"lifecycle":{"type":"connectionOwned"}}
         }),
     );
 
@@ -613,7 +613,8 @@ fn terminal_profiles_are_server_owned_and_reject_unknown_ids() {
             "params":{
                 "rows":24,
                 "cols":80,
-                "profile":{"type":"profile","profileId":"client-program"}
+                "profile":{"type":"profile","profileId":"client-program"},
+                "lifecycle":{"type":"connectionOwned"}
             }
         }),
     );
@@ -630,6 +631,7 @@ fn terminal_profiles_are_server_owned_and_reject_unknown_ids() {
                 "rows":24,
                 "cols":80,
                 "profile":{"type":"default"},
+                "lifecycle":{"type":"connectionOwned"},
                 "environment":{"OPENAI_API_KEY":"injected"}
             }
         }),
@@ -666,7 +668,7 @@ fn terminal_rpc_drives_a_workspace_rooted_pty_to_exit() {
             "jsonrpc":"2.0",
             "id":2,
             "method":"terminal/create",
-            "params":{"rows":24,"cols":80,"profile":{"type":"default"}}
+            "params":{"rows":24,"cols":80,"profile":{"type":"default"},"lifecycle":{"type":"connectionOwned"}}
         }),
     );
     let terminal_id = created["result"]["terminalId"].as_str().unwrap();
@@ -778,7 +780,7 @@ fn terminal_rpc_enforces_connection_ownership_and_close() {
             "jsonrpc":"2.0",
             "id":2,
             "method":"terminal/create",
-            "params":{"rows":24,"cols":80,"profile":{"type":"default"}}
+            "params":{"rows":24,"cols":80,"profile":{"type":"default"},"lifecycle":{"type":"connectionOwned"}}
         }),
     );
     let terminal_id = created["result"]["terminalId"].as_str().unwrap();
@@ -828,6 +830,119 @@ fn terminal_rpc_enforces_connection_ownership_and_close() {
     );
     assert_eq!(missing["error"]["message"], "TerminalNotFound");
 
+    drop(server);
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn reconnectable_terminal_detaches_rotates_its_token_and_rejects_replay() {
+    let root = std::env::temp_dir().join(format!(
+        "zeta-app-server-terminal-attach-{}-{}",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos(),
+    ));
+    std::fs::create_dir_all(&root).unwrap();
+    let server = server()
+        .with_terminal_root(trusted_workspace(
+            &root,
+            WorkspaceCapability::ExecuteProcess,
+        ))
+        .unwrap();
+    let mut owner = server.connection();
+    initialize(&server, &mut owner);
+    let created = call(
+        &server,
+        &mut owner,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":2,
+            "method":"terminal/create",
+            "params":{"rows":24,"cols":80,"profile":{"type":"default"},"lifecycle":{"type":"reconnectable"}}
+        }),
+    );
+    let terminal_id = created["result"]["terminalId"].as_str().unwrap().to_owned();
+    let first_token = created["result"]["reconnect"]["reconnectToken"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    assert_eq!(first_token.len(), 64);
+    assert_eq!(
+        created["result"]["reconnect"]["reconnectGracePeriodMillis"],
+        30_000
+    );
+
+    server.close_connection(owner);
+    let mut replacement = server.connection();
+    initialize(&server, &mut replacement);
+    let rejected = call(
+        &server,
+        &mut replacement,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":2,
+            "method":"terminal/attach",
+            "params":{"terminalId":terminal_id,"reconnectToken":"0".repeat(64),"rows":30,"cols":100}
+        }),
+    );
+    assert_eq!(rejected["error"]["message"], "TerminalAttachRejected");
+
+    let attached = call(
+        &server,
+        &mut replacement,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":3,
+            "method":"terminal/attach",
+            "params":{"terminalId":terminal_id,"reconnectToken":first_token,"rows":30,"cols":100}
+        }),
+    );
+    let second_token = attached["result"]["reconnect"]["reconnectToken"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    assert_ne!(second_token, first_token);
+
+    server.close_connection(replacement);
+    let mut final_connection = server.connection();
+    initialize(&server, &mut final_connection);
+    let replayed = call(
+        &server,
+        &mut final_connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":2,
+            "method":"terminal/attach",
+            "params":{"terminalId":terminal_id,"reconnectToken":first_token,"rows":30,"cols":100}
+        }),
+    );
+    assert_eq!(replayed["error"]["message"], "TerminalAttachRejected");
+    let final_attach = call(
+        &server,
+        &mut final_connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":3,
+            "method":"terminal/attach",
+            "params":{"terminalId":terminal_id,"reconnectToken":second_token,"rows":30,"cols":100}
+        }),
+    );
+    assert_eq!(final_attach["result"]["terminalId"], terminal_id);
+    let closed = call(
+        &server,
+        &mut final_connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":4,
+            "method":"terminal/close",
+            "params":{"terminalId":terminal_id}
+        }),
+    );
+    assert!(closed["error"].is_null());
+
+    server.close_connection(final_connection);
     drop(server);
     std::fs::remove_dir_all(root).unwrap();
 }

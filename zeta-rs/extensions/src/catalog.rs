@@ -421,6 +421,7 @@ fn scan_root(
             &canonical_root,
             subject,
             &package_path,
+            None,
             extensions,
             diagnostics,
             discovered,
@@ -444,19 +445,24 @@ fn scan_dynamic_packages(
             .then_with(|| left.path.cmp(&right.path))
     });
     for source in sources {
-        let root_path = source
-            .path
+        let DynamicExtensionPackageSource {
+            subject,
+            path,
+            kind,
+            normalized_manifest_json,
+        } = source;
+        let root_path = path
             .parent()
             .map(Path::to_path_buf)
-            .unwrap_or_else(|| source.path.clone());
+            .unwrap_or_else(|| path.clone());
         let root = ExtensionRoot {
-            kind: source.kind,
+            kind,
             path: root_path,
         };
         if let Err(limit) = budget.claim_package_candidate() {
             budget.push_diagnostic(
                 diagnostics,
-                catalog_limit_diagnostic(&root, Some(source.subject), limit),
+                catalog_limit_diagnostic(&root, Some(subject), limit),
             );
             break;
         }
@@ -467,7 +473,7 @@ fn scan_dynamic_packages(
                     diagnostics,
                     diagnostic(
                         &root,
-                        Some(source.subject),
+                        Some(subject),
                         ExtensionDiagnosticCode::SourceUnavailable,
                         "dynamic extension package parent is unavailable",
                     ),
@@ -478,8 +484,9 @@ fn scan_dynamic_packages(
         publish_package(
             &root,
             &canonical_root,
-            source.subject,
-            &source.path,
+            subject,
+            &path,
+            normalized_manifest_json.as_deref(),
             extensions,
             diagnostics,
             discovered,
@@ -494,6 +501,7 @@ fn publish_package(
     canonical_root: &Path,
     subject: String,
     package_path: &Path,
+    normalized_manifest_json: Option<&str>,
     extensions: &mut Vec<ExtensionDescriptor>,
     diagnostics: &mut Vec<ExtensionDiagnostic>,
     discovered: &mut BTreeMap<String, DiscoveredExtension>,
@@ -503,6 +511,7 @@ fn publish_package(
         root,
         canonical_root,
         package_path,
+        normalized_manifest_json,
         PackageSnapshotLimits {
             max_total_bytes: budget.remaining_snapshot_bytes(),
         },
@@ -563,6 +572,7 @@ fn discover_package(
     root: &ExtensionRoot,
     canonical_root: &Path,
     package_path: &Path,
+    normalized_manifest_json: Option<&str>,
     limits: PackageSnapshotLimits,
 ) -> Result<DiscoveredExtension, (ExtensionDiagnosticCode, &'static str)> {
     let package_metadata = fs::symlink_metadata(package_path).map_err(|_| {
@@ -591,22 +601,31 @@ fn discover_package(
     }
     let package =
         ExtensionPackageSnapshot::load(&package_root, limits).map_err(package_snapshot_error)?;
-    let manifest_bytes = package.file("package.json").ok_or((
+    let package_manifest_bytes = package.file("package.json").ok_or((
         ExtensionDiagnosticCode::InvalidManifest,
         "extension package.json is missing",
     ))?;
-    if manifest_bytes.len() > MAX_MANIFEST_BYTES {
+    if package_manifest_bytes.len() > MAX_MANIFEST_BYTES {
         return Err((
             ExtensionDiagnosticCode::InvalidManifest,
             "extension package.json is too large",
         ));
     }
-    let manifest_text = std::str::from_utf8(manifest_bytes).map_err(|_| {
-        (
-            ExtensionDiagnosticCode::InvalidManifest,
-            "extension package.json must be UTF-8",
-        )
-    })?;
+    let manifest_text = match normalized_manifest_json {
+        Some(manifest) if manifest.len() <= MAX_MANIFEST_BYTES => manifest,
+        Some(_) => {
+            return Err((
+                ExtensionDiagnosticCode::InvalidManifest,
+                "normalized extension package.json is too large",
+            ));
+        }
+        None => std::str::from_utf8(package_manifest_bytes).map_err(|_| {
+            (
+                ExtensionDiagnosticCode::InvalidManifest,
+                "extension package.json must be UTF-8",
+            )
+        })?,
+    };
     let manifest = serde_json::from_str::<Value>(manifest_text).map_err(|_| {
         (
             ExtensionDiagnosticCode::InvalidManifest,

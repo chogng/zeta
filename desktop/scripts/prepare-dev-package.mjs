@@ -18,11 +18,52 @@ const archiveBufferLimit = 256 * 1024 * 1024;
 const javascriptRuntimeKinds = new Set(["host-provided-node", "packaged-node"]);
 
 export function parseJavaScriptRuntime(cliArguments) {
-  if (cliArguments.length === 0) return "host-provided-node";
-  if (cliArguments.length === 2 && cliArguments[0] === "--javascript-runtime" && javascriptRuntimeKinds.has(cliArguments[1])) {
-    return cliArguments[1];
+  return parsePackageOptions(cliArguments).javascriptRuntime;
+}
+
+export function parsePackageOptions(cliArguments) {
+  let javascriptRuntime = "host-provided-node";
+  let javascriptRuntimeSpecified = false;
+  let remoteRuntimeBundle;
+  let remoteRuntimeCatalogUrl;
+  let remoteRuntimeCatalogSha256;
+  for (let index = 0; index < cliArguments.length; index += 2) {
+    const name = cliArguments[index];
+    const value = cliArguments[index + 1];
+    if (value === undefined) throw packageUsage();
+    if (name === "--javascript-runtime" && javascriptRuntimeKinds.has(value) && !javascriptRuntimeSpecified) {
+      javascriptRuntime = value;
+      javascriptRuntimeSpecified = true;
+    } else if (name === "--remote-runtime-bundle" && value.length > 0 && remoteRuntimeBundle === undefined) {
+      remoteRuntimeBundle = resolve(value);
+    } else if (name === "--remote-runtime-catalog-url" && value.length > 0 && remoteRuntimeCatalogUrl === undefined) {
+      remoteRuntimeCatalogUrl = value;
+    } else if (name === "--remote-runtime-catalog-sha256" && /^[a-f0-9]{64}$/.test(value) && remoteRuntimeCatalogSha256 === undefined) {
+      remoteRuntimeCatalogSha256 = value;
+    } else {
+      throw packageUsage();
+    }
   }
-  throw new Error("Usage: node scripts/prepare-dev-package.mjs [--javascript-runtime host-provided-node|packaged-node]");
+  if ((remoteRuntimeCatalogUrl === undefined) !== (remoteRuntimeCatalogSha256 === undefined)) throw packageUsage();
+  if (remoteRuntimeCatalogUrl !== undefined) validateRemoteRuntimeCatalogUrl(remoteRuntimeCatalogUrl);
+  const remoteRuntimeRelease = remoteRuntimeCatalogUrl === undefined ? undefined : { url: remoteRuntimeCatalogUrl, sha256: remoteRuntimeCatalogSha256 };
+  return { javascriptRuntime, remoteRuntimeBundle, remoteRuntimeRelease };
+}
+
+function packageUsage() {
+  return new Error("Usage: node scripts/prepare-dev-package.mjs [--javascript-runtime host-provided-node|packaged-node] [--remote-runtime-bundle <bundle-directory>] [--remote-runtime-catalog-url <https-catalog.json> --remote-runtime-catalog-sha256 <digest>]");
+}
+
+function validateRemoteRuntimeCatalogUrl(value) {
+  let url;
+  try {
+    url = new URL(value);
+  } catch (error) {
+    throw new Error("Remote runtime catalog URL is invalid", { cause: error });
+  }
+  if (url.protocol !== "https:" || !url.hostname || url.username || url.password || url.search || url.hash || !url.pathname.endsWith("/catalog.json")) {
+    throw new Error("Remote runtime catalog URL must be a credential-free HTTPS catalog.json URL without query or fragment");
+  }
 }
 
 export function hostTarget(platform = process.platform, architecture = process.arch) {
@@ -435,7 +476,7 @@ async function workspaceVersion() {
   return version;
 }
 
-export async function assemblePackage(staging, target, platform, executables, ripgrep, node) {
+export async function assemblePackage(staging, target, platform, executables, ripgrep, node, remoteRuntimeBundle, remoteRuntimeRelease) {
   const isWindows = platform === "win32";
   const zetaName = isWindows ? "zeta.exe" : "zeta";
   const rgName = isWindows ? "rg.exe" : "rg";
@@ -451,6 +492,9 @@ export async function assemblePackage(staging, target, platform, executables, ri
   await copyBuiltinSkills(join(resourcesDirectory, "skills"));
   await copyBuiltinExtensions(join(resourcesDirectory, "extensions"));
   await copyRegularTree(join(repositoryRoot, "resources", "product-services"), join(resourcesDirectory, "product-services"), "product services");
+  if (remoteRuntimeBundle) {
+    await copyRegularTree(remoteRuntimeBundle, join(staging, "zeta-remote-runtimes"), "Remote runtime bundle");
+  }
   await copyExecutable(executables.zeta, join(binDirectory, zetaName), isWindows);
   await copyExecutable(ripgrep.executable, join(pathDirectory, rgName), isWindows);
   if (node) {
@@ -516,6 +560,13 @@ export async function assemblePackage(staging, target, platform, executables, ri
     target,
     version: await workspaceVersion(),
   };
+  if (remoteRuntimeBundle || remoteRuntimeRelease) {
+    const packagedCatalogSha256 = remoteRuntimeBundle ? await sha256(join(staging, "zeta-remote-runtimes", "catalog.json")) : undefined;
+    if (remoteRuntimeRelease && packagedCatalogSha256 && remoteRuntimeRelease.sha256 !== packagedCatalogSha256) throw new Error("Network Remote runtime catalog SHA-256 does not match the packaged catalog");
+    metadata.remoteRuntimeCatalog = remoteRuntimeRelease
+      ? { url: remoteRuntimeRelease.url, sha256: remoteRuntimeRelease.sha256, trustBinding: "signedProductPackage" }
+      : { path: "zeta-remote-runtimes/catalog.json", sha256: packagedCatalogSha256, trustBinding: "signedProductPackage" };
+  }
   await writeFile(join(staging, "zeta-package.json"), `${JSON.stringify(metadata, null, 2)}\n`);
   await validatePackage(staging, platform);
 }
@@ -593,6 +644,19 @@ async function validatePackage(packageRoot, platform) {
   for (const skillName of skillNames) {
     await requireFile(join(packageRoot, "zeta-resources", "skills", skillName, "SKILL.md"));
   }
+  if (metadata.remoteRuntimeCatalog !== undefined) {
+    if (metadata.remoteRuntimeCatalog.trustBinding !== "signedProductPackage" || !/^[a-f0-9]{64}$/.test(metadata.remoteRuntimeCatalog.sha256)) {
+      throw new Error("Invalid Remote runtime catalog package binding");
+    }
+    if (metadata.remoteRuntimeCatalog.path === "zeta-remote-runtimes/catalog.json" && metadata.remoteRuntimeCatalog.url === undefined) {
+      const catalog = JSON.parse(await readFile(join(packageRoot, "zeta-remote-runtimes", "catalog.json"), "utf8"));
+      if (catalog.formatVersion !== 1 || !Array.isArray(catalog.artifacts) || catalog.artifacts.length === 0) throw new Error("Invalid packaged Remote runtime catalog");
+    } else if (metadata.remoteRuntimeCatalog.path === undefined && typeof metadata.remoteRuntimeCatalog.url === "string") {
+      validateRemoteRuntimeCatalogUrl(metadata.remoteRuntimeCatalog.url);
+    } else {
+      throw new Error("Invalid Remote runtime catalog package source");
+    }
+  }
 }
 
 export async function replaceDirectoryAtomically(output, build) {
@@ -636,7 +700,7 @@ export async function replaceDirectoryAtomically(output, build) {
   }
 }
 
-export async function prepareDevelopmentPackage(javascriptRuntime = "host-provided-node") {
+export async function prepareDevelopmentPackage(javascriptRuntime = "host-provided-node", remoteRuntimeBundle, remoteRuntimeRelease) {
   if (!javascriptRuntimeKinds.has(javascriptRuntime)) {
     throw new Error(`Unsupported JavaScript runtime package mode: ${javascriptRuntime}`);
   }
@@ -652,13 +716,16 @@ export async function prepareDevelopmentPackage(javascriptRuntime = "host-provid
     executables,
     ripgrep,
     node,
+    remoteRuntimeBundle,
+    remoteRuntimeRelease,
   ));
   console.log(`Prepared Zeta development package (${javascriptRuntime}) at ${outputDirectory}`);
 }
 
 const isMain = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
-  prepareDevelopmentPackage(parseJavaScriptRuntime(process.argv.slice(2))).catch((error) => {
+  const options = parsePackageOptions(process.argv.slice(2));
+  prepareDevelopmentPackage(options.javascriptRuntime, options.remoteRuntimeBundle, options.remoteRuntimeRelease).catch((error) => {
     console.error(error instanceof Error ? error.message : error);
     process.exitCode = 1;
   });

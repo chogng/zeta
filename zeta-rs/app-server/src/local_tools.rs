@@ -435,6 +435,7 @@ struct LocalShellToolService<B> {
 }
 
 impl<B: SandboxBackend> LocalShellToolService<B> {
+    #[cfg(test)]
     fn new(
         workspace: TrustedWorkspace,
         ripgrep: RipgrepExecutable,

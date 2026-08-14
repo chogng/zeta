@@ -2,9 +2,10 @@ import { APP_SERVER_METHODS, type TerminalCloseParams, type TerminalCreateParams
 import type { AppServerSupervisor } from "../../app-server/electron-main/app-server-supervisor.js";
 import { boundedPositiveInteger, nonEmptyString, nonNegativeInteger, record, string } from "../../ipc/electron-main/ipcValidation.js";
 import type { IpcRoute } from "../../ipc/electron-main/trustedIpcRouter.js";
+import type { ReconnectableTerminalMainService } from "./reconnectableTerminalMainService.js";
 
 /** Exact-shape IPC routes for terminal process operations. */
-export function terminalIpcRoutes(supervisor: AppServerSupervisor): readonly IpcRoute<unknown, unknown>[] {
+export function terminalIpcRoutes(supervisor: AppServerSupervisor, reconnectable?: ReconnectableTerminalMainService): readonly IpcRoute<unknown, unknown>[] {
   return [
     route({
       channel: "zeta:terminal:profile-list",
@@ -14,27 +15,31 @@ export function terminalIpcRoutes(supervisor: AppServerSupervisor): readonly Ipc
     route({
       channel: "zeta:terminal:create",
       validate: terminalCreateParams,
-      invoke: (params) => supervisor.request(APP_SERVER_METHODS["terminal/create"], params),
+      invoke: async (params) => {
+        if (reconnectable) return reconnectable.create(params);
+        const created = await supervisor.request(APP_SERVER_METHODS["terminal/create"], params);
+        return { terminalId: created.terminalId, profile: created.profile, connectionPersistence: "connectionOwned" as const };
+      },
     }),
     route({
       channel: "zeta:terminal:write",
       validate: terminalWriteParams,
-      invoke: (params) => supervisor.request(APP_SERVER_METHODS["terminal/write"], params),
+      invoke: (params) => reconnectable ? reconnectable.write(params) : supervisor.request(APP_SERVER_METHODS["terminal/write"], params),
     }),
     route({
       channel: "zeta:terminal:resize",
       validate: terminalResizeParams,
-      invoke: (params) => supervisor.request(APP_SERVER_METHODS["terminal/resize"], params),
+      invoke: (params) => reconnectable ? reconnectable.resize(params) : supervisor.request(APP_SERVER_METHODS["terminal/resize"], params),
     }),
     route({
       channel: "zeta:terminal:read",
       validate: terminalReadParams,
-      invoke: (params) => supervisor.request(APP_SERVER_METHODS["terminal/read"], params),
+      invoke: (params) => reconnectable ? reconnectable.read(params) : supervisor.request(APP_SERVER_METHODS["terminal/read"], params),
     }),
     route({
       channel: "zeta:terminal:close",
       validate: terminalCloseParams,
-      invoke: (params) => supervisor.request(APP_SERVER_METHODS["terminal/close"], params),
+      invoke: (params) => reconnectable ? reconnectable.close(params) : supervisor.request(APP_SERVER_METHODS["terminal/close"], params),
     }),
   ];
 }
@@ -53,11 +58,16 @@ function emptyParams(value: unknown): Record<string, never> {
 }
 
 function terminalCreateParams(value: unknown): TerminalCreateParams {
-  const params = record(value, ["rows", "cols", "profile"]);
+  const params = record(value, ["rows", "cols", "profile", "lifecycle"]);
+  const lifecycle = record(params.lifecycle, ["type"]);
+  if (lifecycle.type !== "connectionOwned") {
+    throw new Error("Desktop renderer terminals must be connectionOwned");
+  }
   return {
     rows: boundedPositiveInteger(params.rows, "rows", 512),
     cols: boundedPositiveInteger(params.cols, "cols", 512),
     profile: terminalProfileSelection(params.profile),
+    lifecycle: { type: "connectionOwned" },
   };
 }
 

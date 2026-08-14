@@ -1,6 +1,7 @@
 use super::{
     InputMethodContext, InputMethodTarget, encode_terminal_ime_event, text_input_composition_event,
 };
+use crate::remote_connection_manager::RemoteConnectionManagerField;
 use crate::workspace_surface::WorkspaceSurfaceKind;
 use zeta_terminal::{GridSize, TerminalCore};
 use zeta_ui::{TextInputCompositionCursor, TextInputCompositionEvent};
@@ -19,6 +20,9 @@ fn target_requires_an_active_window_and_the_appropriate_editable_surface() {
         file_search_focused: false,
         git_branch_search_focused: false,
         workspace_path_search_focused: false,
+        remote_connection_search_focused: false,
+        remote_connection_manager_field: None,
+        remote_tunnel_port_focused: false,
         settings_search_focused: false,
         language_server_executable_focused: false,
     };
@@ -65,8 +69,20 @@ fn target_requires_an_active_window_and_the_appropriate_editable_surface() {
         workspace_path_search_focused: true,
         ..terminal_grid
     };
+    let remote_connection_search = InputMethodContext {
+        remote_connection_search_focused: true,
+        ..terminal_grid
+    };
     let settings_search = InputMethodContext {
         settings_search_focused: true,
+        ..terminal_grid
+    };
+    let remote_connection_workspace = InputMethodContext {
+        remote_connection_manager_field: Some(RemoteConnectionManagerField::Workspace),
+        ..terminal_grid
+    };
+    let remote_tunnel_port = InputMethodContext {
+        remote_tunnel_port_focused: true,
         ..terminal_grid
     };
     let language_server_executable = InputMethodContext {
@@ -117,6 +133,18 @@ fn target_requires_an_active_window_and_the_appropriate_editable_surface() {
     assert_eq!(
         InputMethodTarget::for_context(workspace_path_search),
         InputMethodTarget::WorkspacePathSearch
+    );
+    assert_eq!(
+        InputMethodTarget::for_context(remote_connection_search),
+        InputMethodTarget::RemoteConnectionSearch
+    );
+    assert_eq!(
+        InputMethodTarget::for_context(remote_connection_workspace),
+        InputMethodTarget::RemoteConnectionWorkspace
+    );
+    assert_eq!(
+        InputMethodTarget::for_context(remote_tunnel_port),
+        InputMethodTarget::RemoteTunnelPort
     );
     assert_eq!(
         InputMethodTarget::for_context(settings_search),

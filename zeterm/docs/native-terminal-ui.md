@@ -229,6 +229,7 @@ Config/Session/Thread authority。每条规则必须包含 `key` 和 `command`�
   `workbench.action.toggleAuxiliaryBar`；
 - `workbench.action.showAgentChanges`、`workbench.action.showAgentFiles`；
 - `workbench.action.refreshAgentFiles`、`workbench.action.toggleAgentFileSearch`；
+- `workbench.action.pickExecutionLocation`、`workbench.action.manageRemoteTunnels`；
 - `workbench.action.openKeyboardShortcuts`。
 
 当前“terminal core 纵切完成”指以下端到端路径已经同时成立：

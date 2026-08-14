@@ -27,7 +27,8 @@ const MAX_FORMATTING_REPLACEMENT_BYTES: usize = 10 * 1024 * 1024;
 pub struct LanguageRequestId(u64);
 
 impl LanguageRequestId {
-    pub(crate) const fn new(value: u64) -> Self {
+    /// Creates an identity assigned by a product adapter at its request boundary.
+    pub const fn new(value: u64) -> Self {
         Self(value)
     }
 

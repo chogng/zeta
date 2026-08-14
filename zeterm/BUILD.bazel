@@ -51,7 +51,11 @@ filegroup(
 
 filegroup(
     name = "zeterm_package_tool",
-    srcs = ["//scripts:build_zeterm_package.py"],
+    srcs = [
+        "//scripts:build_remote_runtime_bundle.py",
+        "//scripts:build_zeterm_package.py",
+        "//scripts:remote_runtime_bundle.py",
+    ],
 )
 
 filegroup(
@@ -88,7 +92,20 @@ sh_test(
     data = [
         "//zeterm:zeterm_package_contract",
         "//scripts:build_zeterm_package.py",
+        "//scripts:remote_runtime_bundle.py",
+        "//scripts:test_remote_runtime_bundle.py",
         "//scripts:test_zeterm_package.py",
+    ],
+    size = "small",
+)
+
+sh_test(
+    name = "remote_runtime_bundle_test",
+    srcs = ["//scripts:test_remote_runtime_bundle.sh"],
+    args = ["$(location //scripts:test_remote_runtime_bundle.py)"],
+    data = [
+        "//scripts:remote_runtime_bundle.py",
+        "//scripts:test_remote_runtime_bundle.py",
     ],
     size = "small",
 )
@@ -116,6 +133,8 @@ sh_test(
     data = [
         "//zeterm:zeterm_package_contract",
         "//scripts:build_zeterm_package.py",
+        "//scripts:remote_runtime_bundle.py",
+        "//scripts:test_remote_runtime_bundle.py",
         "//scripts:test_zeterm_signing.py",
         "//scripts:zeterm_signing.py",
     ],
@@ -125,6 +144,7 @@ sh_test(
 test_suite(
     name = "zeterm_ci",
     tests = [
+        ":remote_runtime_bundle_test",
         ":zeterm_boundary_test",
         ":zeterm_package_test",
         ":zeterm_release_contract_test",

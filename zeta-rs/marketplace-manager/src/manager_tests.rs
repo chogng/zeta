@@ -32,6 +32,13 @@ use zeta_marketplace_client::UpdatePackageRequest;
 use super::MarketplaceManager;
 
 const SKILL_CONTENT: &[u8] = b"# Demo skill\n";
+const MCP_DEFINITION: &[u8] = br#"{
+  "schemaVersion": 1,
+  "transport": "stdio",
+  "command": "server/demo",
+  "args": ["--stdio"]
+}"#;
+const MCP_EXECUTABLE: &[u8] = b"#!/bin/sh\n";
 
 #[test]
 fn local_manager_persists_the_full_installed_state() {
@@ -145,6 +152,48 @@ fn local_capability_sources_revalidate_the_immutable_artifact() {
     );
 }
 
+#[test]
+fn packaged_stdio_mcp_uses_a_path_free_executable_resource() {
+    let root = tempfile::tempdir().unwrap();
+    let manager = MarketplaceManager::open(root.path(), Arc::new(StdioRegistry)).unwrap();
+    let installed = manager
+        .install(InstallPackageRequest {
+            package_id: "example/demo-mcp".into(),
+            version: Some("1.0.0".into()),
+        })
+        .unwrap();
+    let acquired = manager
+        .acquire_capability(AcquireCapabilityRequest {
+            capability: installed.capabilities[0].reference.clone(),
+        })
+        .unwrap();
+    let executable = match &acquired.spec {
+        zeta_marketplace_client::ActivationSpec::Mcp(spec) => match &spec.transport {
+            zeta_marketplace_client::McpTransportSpec::Stdio { executable, args } => {
+                assert_eq!(args, &["--stdio"]);
+                executable.clone()
+            }
+            _ => panic!("expected stdio MCP activation"),
+        },
+        _ => panic!("expected MCP activation"),
+    };
+    let content = manager
+        .open_resource(OpenResourceRequest {
+            lease_id: acquired.lease.id.clone(),
+            resource: executable,
+        })
+        .unwrap();
+    assert_eq!(
+        STANDARD.decode(content.data_base64).unwrap(),
+        MCP_EXECUTABLE
+    );
+    manager
+        .release_capability(ReleaseCapabilityRequest {
+            lease_id: acquired.lease.id,
+        })
+        .unwrap();
+}
+
 struct FakeRegistry;
 
 impl MarketplaceRegistryClient for FakeRegistry {
@@ -190,6 +239,89 @@ impl MarketplaceRegistryClient for FakeRegistry {
         Ok(Box::new(FakePayload::new(
             request.version.as_deref().unwrap_or("2.0.0"),
         )))
+    }
+}
+
+struct StdioRegistry;
+
+impl MarketplaceRegistryClient for StdioRegistry {
+    fn search(
+        &self,
+        _: SearchPackagesRequest,
+    ) -> Result<SearchPackagesResult, MarketplaceClientError> {
+        Ok(SearchPackagesResult {
+            packages: Vec::new(),
+        })
+    }
+
+    fn get(&self, _: GetPackageRequest) -> Result<PackageDetails, MarketplaceClientError> {
+        Err(MarketplaceClientError::storage())
+    }
+
+    fn download(
+        &self,
+        _: DownloadPackageRequest,
+    ) -> Result<Box<dyn MarketplacePackagePayload>, MarketplaceClientError> {
+        Ok(Box::new(StdioPayload::new()))
+    }
+}
+
+struct StdioPayload {
+    package: PackageRef,
+    capabilities: Vec<MarketplaceInstallCapability>,
+}
+
+impl StdioPayload {
+    fn new() -> Self {
+        Self {
+            package: PackageRef {
+                id: "example/demo-mcp".into(),
+                version: "1.0.0".into(),
+                digest: package_digest_files(&[
+                    ("mcp/package.json", MCP_DEFINITION),
+                    ("server/demo", MCP_EXECUTABLE),
+                ]),
+            },
+            capabilities: vec![MarketplaceInstallCapability {
+                kind: CapabilityKind::Mcp,
+                id: "demo".into(),
+                path: "mcp/package.json".into(),
+                runtime: None,
+                language_ids: Vec::new(),
+            }],
+        }
+    }
+}
+
+impl MarketplacePackagePayload for StdioPayload {
+    fn package(&self) -> &PackageRef {
+        &self.package
+    }
+
+    fn package_type(&self) -> &str {
+        "mcp"
+    }
+
+    fn capabilities(&self) -> &[MarketplaceInstallCapability] {
+        &self.capabilities
+    }
+
+    fn expected_file_count(&self) -> u64 {
+        2
+    }
+
+    fn expected_size_bytes(&self) -> u64 {
+        (MCP_DEFINITION.len() + MCP_EXECUTABLE.len()) as u64
+    }
+
+    fn copy_to(&self, destination: &Path) -> Result<(), MarketplaceClientError> {
+        fs::create_dir(destination.join("mcp")).map_err(|_| MarketplaceClientError::storage())?;
+        fs::create_dir(destination.join("server"))
+            .map_err(|_| MarketplaceClientError::storage())?;
+        fs::write(destination.join("mcp/package.json"), MCP_DEFINITION)
+            .map_err(|_| MarketplaceClientError::storage())?;
+        fs::write(destination.join("server/demo"), MCP_EXECUTABLE)
+            .map_err(|_| MarketplaceClientError::storage())
     }
 }
 
@@ -247,12 +379,18 @@ impl MarketplacePackagePayload for FakePayload {
 }
 
 fn package_digest(path: &str, contents: &[u8]) -> String {
+    package_digest_files(&[(path, contents)])
+}
+
+fn package_digest_files(files: &[(&str, &[u8])]) -> String {
     let mut hasher = Sha256::new();
     hasher.update(b"marketplace-package-v1\0");
-    hasher.update((path.len() as u64).to_be_bytes());
-    hasher.update(path.as_bytes());
-    hasher.update((contents.len() as u64).to_be_bytes());
-    hasher.update(contents);
+    for (path, contents) in files {
+        hasher.update((path.len() as u64).to_be_bytes());
+        hasher.update(path.as_bytes());
+        hasher.update((contents.len() as u64).to_be_bytes());
+        hasher.update(contents);
+    }
     format!("sha256:{}", hex(&hasher.finalize()))
 }
 

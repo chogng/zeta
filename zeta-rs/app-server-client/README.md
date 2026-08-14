@@ -6,10 +6,10 @@
 
 ## 结论
 
-`AppServerSession` 是 CLI/TUI 的 canonical embedded connection owner。它完成 App Server
-composition、connection 创建、正式 initialize/schema gate、request driver、wakeable
-notification pump 与显式 shutdown。Consumer 不直接拥有 `AppServer` 或
-`ConnectionState`。
+`AppServerSession` 是 CLI/TUI 的 canonical App Server connection owner。它可以完成 embedded
+App Server composition，也可以绑定产品主进程启动的 JSONL stdio child；两条路径都经过正式
+initialize/schema gate、request driver、wakeable notification pump 与显式 shutdown。Consumer
+不直接拥有 `AppServer`、`ConnectionState` 或 child stdio。
 
 同步适配面 `AppServerClient<T>`、`InProcessTransport`、`start_in_process_client` 和
 `drain_notifications` 仍供 MCP adapter、rust-app 与 contract tests 使用；它们不是新交互
@@ -28,13 +28,15 @@ Session/Thread coordinator 的存储，不改变 Config、Workspace、Tool 或 p
 | 空闲/长 Turn notification | ✅ | 需要 consumer polling |
 | 有界 event/backpressure | ✅，1024 项 event channel | 由 consumer drain cadence 决定 |
 | 显式 connection shutdown/task join | ✅ | 由 host 管理 |
-| remote backend | 尚未完成 | ❌ |
+| remote/backend stdio | ✅ `start_stdio` | ❌ |
 
 ## 公共契约
 
 | Symbol | Owner 与 contract |
 | --- | --- |
 | `AppServerSession::start_embedded` | 创建 embedded composition；initialize/schema 校验失败时关闭已启动 driver |
+| `AppServerSession::start_stdio` | 绑定 product-selected child command；owner 负责 child lifetime、JSONL response pairing、notification stream 与 initialize/schema gate |
+| `StdioAppServerCommand` | product 选择的 executable、arguments 与 environment；不包含任何 App Server domain policy |
 | `AppServerSession::client` | 返回共享 request ID allocator 的 cloneable `AppServerRequestHandle` |
 | `AppServerSession::take_events` | 单次取出 `AppServerEvents`；第二次返回 `TakeEventsError` |
 | `AppServerSession::shutdown` | 拒绝后续 request、关闭 connection、唤醒 event pump 并 join tasks |
@@ -45,6 +47,7 @@ Session/Thread coordinator 的存储，不改变 Config、Workspace、Tool 或 p
 | `InProcessClientOptions::with_session_state_mode` | 明确选择 profile durable history 或 process-local ephemeral Session/Thread state |
 | `InProcessClientOptions::with_model_operation_client` | embedded host/test 注入离线或自定义 model transport；不改变 protocol/model semantics |
 | `AppServerClient::request_session` | Session aggregate 的 canonical typed mutation request；所有 Session mutation 统一由此进入 |
+| `AppServerClient::{synchronize_language_document,close_language_document,language_hover,language_completions,language_locations}` | CLI/native consumer 通过同一 request handle 调用 App Server-owned language authority；不在 client crate 启动 LSP 或转换产品坐标 |
 | `AppServerClient::open_skill_resource` | 以 exact Skill digest 打开 package resource；bytes 仍由 connection-owned Resource API 分块读取 |
 | `ServerNotification::ConnectorsChanged` | `connector/changed` 的 typed generation invalidation；consumer 收到后重新 list |
 
@@ -70,25 +73,25 @@ Notification 不依附 request completion；consumer 不得对 session handle �
 | 文件 | 当前 owner |
 | --- | --- |
 | `src/session.rs` | owned session、session transport、request/event threads、shutdown 与 connection lifecycle |
+| `src/session_stdio.rs` | child JSONL driver、response pairing、notification decode、child lifetime 与 stream failure boundary |
 | `src/in_process.rs` | embedded composition 与 initialized connection |
 | `src/profile.rs` | `ZETA_PROFILE_ROOT` 与 host-wide default profile state path |
 | `src/lib.rs` | generic typed JSON-RPC methods、request ID/result pairing 与 public exports |
 | `src/notification.rs` | 解析 notification envelope，并把 method/payload 交给 protocol-owned canonical decoder |
 | `src/session_tests.rs` | owned lifecycle、idle wakeup、clone identity 与 shutdown contract |
-| `src/client_tests.rs` | JSON-RPC pairing、schema、Session contract、Skill catalog/watcher contract |
+| `src/session_stdio_tests.rs` | child command 和 JSONL request/response identifier guard |
+| `src/client_tests.rs` | JSON-RPC pairing、schema、Session、Language typed methods、Skill catalog/watcher contract |
 
 ## 执行路径
 
 ```text
-AppServerSession::start_embedded
-├─ resolve/receive profile root
-├─ open_in_process_app_server
-├─ AppServer::connection
-├─ AppServer::connection_notifications
-├─ start connection driver
+AppServerSession::start_embedded / start_stdio
+├─ embedded: open_in_process_app_server → AppServer::connection
+├─ stdio: product-selected child → JSONL stdin/stdout
+├─ start request driver
 ├─ start notification pump
 ├─ AppServerClient::initialize
-│  └─ SessionTransport → request channel → AppServer::handle_json
+│  └─ SessionTransport → owned driver → App Server transport
 ├─ validate schema hash
 └─ return ready session
 
@@ -122,12 +125,15 @@ Connection driver 在 request response completion 发送之前持有 delivery ba
 - `shutdown` 后仍存在的 client clone 不延长 connection 生命周期。
 
 当前 event channel 已有界；transient purge 依赖 consumer 的 stream cursor gap → snapshot resync。
-显式 `Lagged` event 与 remote reconnect 尚未实现，connection/control overflow 后 consumer 仍需按
-`ConnectionClosed` 处理恢复。
+显式 `Lagged` event 与通用 remote reconnect 尚未实现，connection/control overflow 后 consumer 仍需按
+`ConnectionClosed` 处理恢复；具体产品（当前 `zeterm`）可以在上层分别重新建立 Agent、Language
+或 Terminal stdio session，并重读 durable snapshot、重同步打开文档或 attach PTY，但这不是本
+crate 的隐式行为。
 
 ## 内部所有权与漂移信号
 
-- `session::drive_connection` 唯一拥有 `ConnectionState` 与 request dispatch；
+- `session::drive_connection` 唯一拥有 embedded `ConnectionState` 与 request dispatch；
+- `session_stdio::{write_requests,read_output}` 唯一拥有 child JSONL request pairing、notification decode 与 child-stream failure boundary；
 - `session::pump_notifications` 唯一解码 session outbound notification；
 - `protocol::registry::server_notifications!` 同时生成 method registry、canonical
   `ServerNotification` 与 payload decoder；client crate 不维护第二份 variant mapping；

@@ -91,6 +91,7 @@ fn registry_method_and_notification_names_are_unique() {
     assert!(methods.contains("workspace/codeIndex/rebuild"));
     assert!(methods.contains("terminal/profile/list"));
     assert!(methods.contains("terminal/create"));
+    assert!(methods.contains("terminal/attach"));
     assert!(methods.contains("terminal/write"));
     assert!(methods.contains("terminal/resize"));
     assert!(methods.contains("terminal/read"));
@@ -376,11 +377,16 @@ fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
     ));
     assert!(typescript.contains(r#""terminal/profile/list": { method: "terminal/profile/list" }"#));
     assert!(typescript.contains(r#""terminal/create": { method: "terminal/create" }"#));
+    assert!(typescript.contains(r#""terminal/attach": { method: "terminal/attach" }"#));
     assert!(typescript.contains(r#""terminal/read": { method: "terminal/read" }"#));
     assert!(typescript.contains("export type TerminalProfile ="));
     assert!(typescript.contains("profileId: string"));
     assert!(typescript.contains("export type TerminalProfileSelection ="));
     assert!(typescript.contains("export type TerminalProfileListResult ="));
+    assert!(typescript.contains("export type TerminalLifecycle ="));
+    assert!(typescript.contains("export type TerminalReconnectLease ="));
+    assert!(typescript.contains("export type TerminalAttachParams ="));
+    assert!(typescript.contains("export type TerminalAttachResult ="));
     assert!(typescript.contains("export type TerminalCommandStatus ="));
     assert!(typescript.contains("export type TerminalCommandStatusEvent ="));
     assert!(typescript.contains("export type TerminalReadResult ="));
@@ -436,6 +442,10 @@ fn dto_driven_schema_contains_registered_rpc_envelopes() {
     assert!(definitions.contains_key("TerminalProfileSelection"));
     assert!(definitions.contains_key("TerminalProfileListResult"));
     assert!(definitions.contains_key("TerminalCreateParams"));
+    assert!(definitions.contains_key("TerminalLifecycle"));
+    assert!(definitions.contains_key("TerminalReconnectLease"));
+    assert!(definitions.contains_key("TerminalAttachParams"));
+    assert!(definitions.contains_key("TerminalAttachResult"));
     assert!(definitions.contains_key("TerminalCommandStatus"));
     assert!(definitions.contains_key("TerminalCommandStatusEvent"));
     assert!(definitions.contains_key("TerminalReadResult"));

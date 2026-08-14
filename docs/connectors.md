@@ -2,25 +2,28 @@
 
 > 领域实现：[`zeta-rs/connectors/`](../zeta-rs/connectors/README.md)，Rust crate：
 > `zeta_connectors`。
-> Plugin/discovery 集成：[`zeta-rs/ext/connectors/`](../zeta-rs/ext/connectors/README.md)。
-> Plugin 分发边界：[`plugins.md`](plugins.md)。MCP 调用边界：[`mcp.md`](mcp.md)。
+> Package 入口：[`marketplace-integration.md`](marketplace-integration.md)。
+> Legacy Plugin/discovery 集成：[`zeta-rs/ext/connectors/`](../zeta-rs/ext/connectors/README.md) 与
+> [`plugins.md`](plugins.md)。MCP 调用边界：[`mcp.md`](mcp.md)。
 > 当前状态：Connector domain、SQLite authority、API-token connect/disconnect、App Server 协议、
 > package-rooted Plugin activation、ready/standalone MCP composition、模型安全点 registry replacement、
 > in-flight dispatch drain、OS keyring 与显式文件 `SecretStore`、OAuth PKCE 状态机和产品连接入口已实现。
 > Desktop loopback 浏览器回调、通用 device poll、OAuth App Server 控制面、refresh/revoke、GitHub
-> brokered PKCE 与 public-client device adapters 已接通；正式 package 已内置官方 Plugin Marketplace
+> brokered PKCE 与 public-client device adapters 已接通；正式 package 已内置通用 Marketplace
 > endpoint 与固定 TUF root，Connector 产品发行仍需注入真实 broker URL/client ID。
 
 ## 快速理解
 
-Connector 管理“外部服务是否已经连接以及连接对应哪个账号”。在 Plugin 提供外部服务的
-常见路径中，Plugin 声明 Connector 和 MCP server，Connector 在认证成功后发布就绪的 MCP 绑定。
+Connector 管理“外部服务是否已经连接以及连接对应哪个账号”。在 Marketplace integration bundle
+提供外部服务的常见路径中，同一 package 的 Connector capability 引用 MCP capability，Connector
+在认证成功后发布就绪的 MCP 绑定。Legacy Plugin declaration 仍作为本地兼容来源。
 这是 declaration 和 runtime 之间的数据流，不是 Plugin 在运行时包含 Connector、MCP session 或 Tool。
 Connector 不要求用户登录 Zeta，连接的账号是 GitHub、Slack、Google Drive 等外部产品账号。
 
 | 用户场景 | 系统发生什么 | 不会自动发生什么 |
 | --- | --- | --- |
-| 安装 GitHub Plugin | Plugin contribution 提供 GitHub Connector declaration | 不连接 GitHub、不启动 MCP |
+| 安装 GitHub Marketplace Plugin bundle | Manager 只安装一次，Connector/MCP consumer 分别读取 exact capabilities | 不连接 GitHub、不启动 MCP |
+| 启用 legacy GitHub Plugin | 兼容 contribution 提供 GitHub Connector declaration | 不建立远端安装旁路 |
 | 查看未连接的 GitHub | Connector 以 `Connect` candidate 出现在 discovery | 不向 Agent 暴露 GitHub tools |
 | 完成 GitHub OAuth | 认证 owner 保存 secret，并向 Connector 发布 non-secret account/reference | Connector 不读取 token bytes |
 | Connector 成为 connected | ready MCP binding 可以由 host materialize | 不绕过 MCP policy 或 Tool approval |
@@ -31,18 +34,19 @@ Connector 不要求用户登录 Zeta，连接的账号是 GitHub、Slack、Googl
 
 系统边界固定为：
 
-> Plugin 管扩展分发，Connector 管外部账号连接，MCP 管协议会话与能力调用，Tool 是 Agent 最终消费的能力。
+> Marketplace Manager 管 package lifecycle，Connector 管外部账号连接，MCP 管协议会话与能力调用，Tool 是 Agent 最终消费的能力。
 
 | 对象 | 回答的核心问题 | 产出 | 不拥有 |
 | --- | --- | --- | --- |
-| Plugin | “要给 Zeta 分发和启用哪些扩展贡献？” | 带版本、摘要和来源的 contribution declaration | 外部账号、OAuth 状态、MCP session |
+| Marketplace package/bundle | “一次安装提供哪些 capabilities？” | 带版本、摘要和来源的 capability declarations | enable/grant、外部账号、MCP session |
+| Legacy Plugin | “本地兼容包当前启用了哪些贡献？” | generation-bound contribution declaration | 远端安装、外部账号、MCP session |
 | Connector | “这个外部产品连上了吗，连的是哪个账号？” | generation-bound connection state 和 ready runtime binding | Plugin package、secret bytes、MCP transport |
 | MCP | “如何与 capability server 建立会话并发现、调用能力？” | session、capability catalog、绑定和调用结果 | Plugin/Connector authority、每次 Tool approval |
 | Tool Registry / Core | “Agent 当前可以调用什么，这次调用是否允许？” | provider-independent Tool definition、approval 和 durable result | Plugin 安装、connect/OAuth lifecycle |
 
 ```mermaid
 flowchart TD
-    subgraph P["Plugin package：声明控制面"]
+    subgraph P["Marketplace bundle / legacy Plugin：声明来源"]
         PC["ConnectorContribution"]
         PM["McpServerContribution"]
         PO["Skill / static asset / other contributions"]
@@ -69,7 +73,8 @@ Connector；Plugin 或 User/Workspace 也可以独立声明 MCP server。只有�
 
 ### 1.1 关系是组合，不是运行时包含
 
-- Plugin 包可以同时声明 `ConnectorContribution` 和被它引用的 `McpServerContribution`，但 Plugin manager 只负责验证、分发和激活这些声明。
+- Marketplace bundle 可以同时携带 Connector 和被它引用的 MCP capability；Manager 只拥有 package、artifact 与 lease，App Server adapter 负责 exact binding。
+- Legacy Plugin 包可以声明 `ConnectorContribution` 与 `McpServerContribution`，但兼容 authority 只负责本地 enable/grant 与 immutable activation。
 - Connector runtime 消费 Connector declaration 并发布连接状态；OAuth/API-key 交互由认证 adapter 执行，secret bytes 由 Secrets owner 保存。
 - Ready binding 只是“已可以 materialize 哪个 runtime”的 generation-bound 描述，不是 live MCP session 或 Tool binding。
 - MCP runtime 消费 ready binding 或独立 MCP declaration，建立 session 并向统一 Tool Registry 贡献能力；Tool 不回归 Connector 或 Plugin 所有。
@@ -78,7 +83,8 @@ Connector；Plugin 或 User/Workspace 也可以独立声明 MCP server。只有�
 
 | Owner | 拥有 | 明确不拥有 |
 | --- | --- | --- |
-| `zeta-plugins` | package、manifest、`ConnectorContribution`、安装/启用 provenance | 外部账号、OAuth、MCP session |
+| `zeta-marketplace-manager` | remote package 的 artifact/install/update/uninstall、exact capability 与 lease | Connector enable/grant、外部账号、OAuth、MCP session |
+| `zeta-plugins` | legacy local package、manifest、enable/grant provenance 与 `ConnectorContribution` | 远端 Marketplace 安装、外部账号、OAuth、MCP session |
 | `zeta-connectors` | identity、definition、account projection、状态机、generation-bound snapshot | Plugin、secret storage、I/O runtime |
 | `zeta-connectors-extension` | Plugin 转换、Plugin provenance、discovery 与 ready-binding projection | 领域状态机、live authentication/MCP |
 | Connector auth adapter | connect/revoke、OAuth callback、credential refresh/materialization | Plugin package、Tool execution |
@@ -92,11 +98,11 @@ adapter；不得成为 `ConnectorId`、connection generation 或本地 runtime r
 
 当前 API-token 路径为：
 
-1. `PluginActivationSnapshot::resolve` 将 exact installed package 固定为不可变激活快照；`ConnectorCatalog::from_activation` 从该快照投影带 package digest 的 `ConnectorDefinition`。
+1. Marketplace 路径由 Manager 返回同一 digest 内的 exact Connector/MCP capabilities；legacy 路径由 `PluginActivationSnapshot::resolve` 固定不可变激活快照。两者在 App Server 转为带 package digest 的 `ConnectorDefinition`。
 2. App Server 通过 `connector/list` 返回不含 credential reference 的状态；`connector/connect/apiToken` 接收一次性 secret DTO。
 3. `ConnectorCredentialService` 先提交 `Connecting`，再把 token 写入 `SecretStore`，最后向 `ConnectorAuthority` 提交只含 account 与 opaque reference 的 `Connected`。
 4. SQLite authority 在一个事务中追加状态事件与 retry receipt；重复 command ID 只重放完全相同的请求。
-5. 本地 composition root 从激活快照自动构造 package-rooted MCP provider，并订阅 Config、Connector generation 与 MCP `tools/list_changed`；完整启动下一代 runtime 后替换 MCP tool port。
+5. 本地 composition root 从 Manager/legacy activation 自动构造 MCP provider，并订阅 Marketplace installation、Plugin activation、Config、Connector generation 与 MCP `tools/list_changed`；完整启动下一代 runtime 后替换 MCP tool port。
 6. 每个 Connector MCP call 在 prepare 和真正 dispatch 前复核 connector ID、connection generation 与 definition digest；disconnect 提交和 dispatch 使用同一 authority lock 线性化，已开始调用先排空，后续调用被拒绝。
 
 ```mermaid
@@ -143,7 +149,7 @@ connection generation；任何状态变化都必须同时推进 snapshot generat
 - disconnected、connecting 和 unavailable entry 都不能输出 ready runtime binding。
 - connect/revoke command 必须由 durable authority 按 expected generation 复核，不能信任客户端 snapshot。
 - MCP tool 仍经过普通 registry collision、policy、approval、durable Tool Call/Result 和 recovery。
-- Plugin 验证只证明 declaration/package 合法，不证明外部服务可信或未来调用已批准。
+- Marketplace/Plugin 验证只证明 declaration/package 合法，不证明外部服务可信或未来调用已批准。
 
 ## 6. 当前状态与后续阶段
 
@@ -165,11 +171,12 @@ connection generation；任何状态变化都必须同时推进 snapshot generat
 | Desktop API-token UI；TUI 列表/断开/通知刷新 | ✅ 已实现 |
 | OAuth browser/device interaction | ✅ Desktop browser+device、browser host device、TUI device 已实现 |
 | ready binding → `zeta-mcp-extension` composition + dispatch fence | ✅ 已实现（host-injected provider） |
-| exact Plugin activation → Connector/MCP runtime provider | ✅ 已实现，支持 live install/enable/disable authority reconcile |
+| exact legacy Plugin activation → Connector/MCP runtime provider | ✅ 已实现，支持 live install/enable/disable authority reconcile |
+| Marketplace bundle → Connector/MCP runtime provider | ✅ 已实现，同 digest exact binding、HTTP/packaged stdio 校验、Manager invocation lease 与 install/update/uninstall 热重建 |
 | MCP `tools/list_changed` → safe-point rebuild | ✅ 已实现 |
 
 产品部署入口为 `LocalProductServicesConfig` / `--product-services PATH` /
-`ZETA_PRODUCT_SERVICES_PATH`。该只读 JSON 可声明 TUF Marketplace roots、broker URL 和 public client ID，不允许
+`ZETA_PRODUCT_SERVICES_PATH`。该只读 JSON 可声明通用 Marketplace Manager registry、broker URL 和 public client ID，不允许
 client secret；`trustedRoot` 必须是配置文件目录内的普通相对路径，distribution/broker base URL 必须是无
 credential/query/fragment 且以 `/` 结尾的 HTTPS URL。普通 Plugin manifest 和 user config 不能提供这些发行信任材料。官方 Marketplace 的配置和 root 已由
 package 从 `resources/product-services/` 携带，远端签名 metadata 与 package 由独立 registry 发布。下一阶段
@@ -179,13 +186,12 @@ Server safe point 和 MCP dispatch fence，不得创建第二套 Connector 状�
 ```json
 {
   "schemaVersion": 1,
-  "marketplaces": [{
-    "id": "zeta-official",
-    "trust": "productManaged",
+  "marketplaceManager": {
     "metadataBaseUrl": "https://marketplace.zeta.example/metadata/",
     "targetsBaseUrl": "https://marketplace.zeta.example/targets/",
-    "trustedRoot": "marketplace-root.json"
-  }],
+    "trustedRoot": "marketplace-root.json",
+    "allowedPublishers": ["example"]
+  },
   "connectorOauth": [{
     "type": "githubDevice",
     "connectorId": "openai/github:connector:account",
@@ -195,10 +201,9 @@ Server safe point 和 MCP dispatch fence，不得创建第二套 Connector 状�
 }
 ```
 
-第三方源使用 `"trust": "verifiedExternal"`，并必须同时提供 non-empty、无重复的
-`"allowedPublishers": ["community-a"]`；签名 catalog 出现 scope 外 publisher 或两个远端源实际占用
-同一 publisher namespace 时，App Server 启动失败。默认省略 `trust` 只为兼容旧产品文件，语义仍是
-`productManaged`，不能同时填写 `allowedPublishers`。
+当前产品文件只选择一个远端 registry；新增独立源需要先扩展产品级 trust-root 配置，不得由 package
+或用户设置注入。可选 `allowedPublishers` 是 host-approved publisher namespace allowlist，必须非空、
+无重复且格式合法；签名 catalog 出现范围外 publisher 时刷新失败关闭。
 
 使用 broker 时把 `type` 改为 `githubBrokered`，并增加 `brokerBaseUrl`；broker API 固定为
 `v1/oauth/github/{authorize,token,revoke}`，response 必须带 provider-validated account identity。OAuth adapter

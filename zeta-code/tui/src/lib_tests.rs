@@ -8,6 +8,7 @@ use crate::features::thread::present_turn_error;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
+use std::path::PathBuf;
 use zeta_app_server_protocol::protocol::skills::SkillCompatibilityDto;
 use zeta_app_server_protocol::protocol::skills::SkillDto;
 use zeta_app_server_protocol::protocol::skills::SkillEnablementDto;
@@ -30,6 +31,19 @@ use zeta_protocol::ThreadStatus;
 use zeta_protocol::Turn;
 use zeta_protocol::TurnId;
 use zeta_protocol::TurnStatus;
+
+#[test]
+fn remote_workspace_is_displayed_without_enabling_local_path_search() {
+    let local_root = PathBuf::from("/local/export-root");
+    let remote_root = PathBuf::from("/srv/project");
+    let options = crate::TuiOptions::new("Remote")
+        .with_workspace_root(local_root.clone())
+        .with_remote_workspace(remote_root.clone());
+
+    assert_eq!(options.display_workspace_root, remote_root);
+    assert_eq!(options.host_workspace_root, local_root);
+    assert_eq!(options.host_file_search_root, None);
+}
 
 #[test]
 fn completed_active_turn_only_updates_lifecycle_after_snapshot_mapping() {

@@ -9,7 +9,7 @@ export interface ITerminalDimensions {
 }
 
 /** Lifecycle state of one Workbench terminal instance. */
-export type TerminalInstanceState = "running" | "exited" | "disconnected" | "error";
+export type TerminalInstanceState = "running" | "reconnecting" | "exited" | "disconnected" | "error";
 
 /** Renderer-independent lifecycle state of one shell command. */
 export type TerminalCommandStatus = "running" | "completed" | "succeeded" | "failed" | "canceled";

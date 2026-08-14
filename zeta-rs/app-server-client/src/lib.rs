@@ -56,6 +56,14 @@ use zeta_app_server_protocol::protocol::git::{
     GitBranchListResult, GitBranchSwitchParams, GitOperationResult, GitTextDiffResult,
 };
 use zeta_app_server_protocol::protocol::initialize::{InitializeParams, InitializeResult};
+use zeta_app_server_protocol::protocol::language::LanguageCloseParams;
+use zeta_app_server_protocol::protocol::language::LanguageCompletionsParams;
+use zeta_app_server_protocol::protocol::language::LanguageCompletionsResult;
+use zeta_app_server_protocol::protocol::language::LanguageHoverParams;
+use zeta_app_server_protocol::protocol::language::LanguageHoverResult;
+use zeta_app_server_protocol::protocol::language::LanguageLocationsParams;
+use zeta_app_server_protocol::protocol::language::LanguageLocationsResult;
+use zeta_app_server_protocol::protocol::language::LanguageSynchronizeParams;
 use zeta_app_server_protocol::protocol::model::ModelListResult;
 use zeta_app_server_protocol::protocol::plugins::PluginCommandResultDto;
 use zeta_app_server_protocol::protocol::plugins::PluginListResult;
@@ -81,6 +89,16 @@ use zeta_app_server_protocol::protocol::skills::{
 };
 use zeta_app_server_protocol::protocol::syntax::SyntaxAnalyzeParams;
 use zeta_app_server_protocol::protocol::syntax::SyntaxAnalyzeResult;
+use zeta_app_server_protocol::protocol::terminal::TerminalAttachParams;
+use zeta_app_server_protocol::protocol::terminal::TerminalAttachResult;
+use zeta_app_server_protocol::protocol::terminal::TerminalCloseParams;
+use zeta_app_server_protocol::protocol::terminal::TerminalCreateParams;
+use zeta_app_server_protocol::protocol::terminal::TerminalCreateResult;
+use zeta_app_server_protocol::protocol::terminal::TerminalProfileListResult;
+use zeta_app_server_protocol::protocol::terminal::TerminalReadParams;
+use zeta_app_server_protocol::protocol::terminal::TerminalReadResult;
+use zeta_app_server_protocol::protocol::terminal::TerminalResizeParams;
+use zeta_app_server_protocol::protocol::terminal::TerminalWriteParams;
 use zeta_app_server_protocol::protocol::workspace::{WorkspaceSwitchParams, WorkspaceSwitchResult};
 use zeta_app_server_protocol::rpc::{JsonRpcId, JsonRpcRequest, JsonRpcResponse};
 
@@ -93,7 +111,7 @@ pub use notification::ServerNotification;
 pub use profile::local_profile_root;
 pub use session::{
     AppServerEvent, AppServerEvents, AppServerRequestHandle, AppServerSession,
-    ConnectionCloseReason, ShutdownError, TakeEventsError,
+    ConnectionCloseReason, ShutdownError, StdioAppServerCommand, TakeEventsError,
 };
 pub use zeta_app_server::SessionStateMode;
 
@@ -277,6 +295,46 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         self.call(ClientMethod::WorkspaceSwitch, params)
     }
 
+    /// Synchronizes one authoritative editor snapshot with the App Server language runtime.
+    pub fn synchronize_language_document(
+        &mut self,
+        params: LanguageSynchronizeParams,
+    ) -> Result<(), ClientError> {
+        self.call(ClientMethod::LanguageSynchronize, params)
+    }
+
+    /// Releases one document from the App Server language runtime.
+    pub fn close_language_document(
+        &mut self,
+        params: LanguageCloseParams,
+    ) -> Result<(), ClientError> {
+        self.call(ClientMethod::LanguageClose, params)
+    }
+
+    /// Requests hover content for one exact synchronized document revision.
+    pub fn language_hover(
+        &mut self,
+        params: LanguageHoverParams,
+    ) -> Result<LanguageHoverResult, ClientError> {
+        self.call(ClientMethod::LanguageHover, params)
+    }
+
+    /// Requests completion candidates for one exact synchronized document revision.
+    pub fn language_completions(
+        &mut self,
+        params: LanguageCompletionsParams,
+    ) -> Result<LanguageCompletionsResult, ClientError> {
+        self.call(ClientMethod::LanguageCompletions, params)
+    }
+
+    /// Requests cross-file locations from the App Server language runtime.
+    pub fn language_locations(
+        &mut self,
+        params: LanguageLocationsParams,
+    ) -> Result<LanguageLocationsResult, ClientError> {
+        self.call(ClientMethod::LanguageLocations, params)
+    }
+
     pub fn read_directory(
         &mut self,
         params: FsReadDirectoryParams,
@@ -307,6 +365,50 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         params: FsWriteFileParams,
     ) -> Result<FsWriteFileResult, ClientError> {
         self.call(ClientMethod::FsWriteFile, params)
+    }
+
+    /// Lists the trusted shell profiles exposed by this App Server connection.
+    pub fn terminal_profile_list(&mut self) -> Result<TerminalProfileListResult, ClientError> {
+        self.call(ClientMethod::TerminalProfileList, EmptyParams {})
+    }
+
+    /// Creates one App Server-owned interactive terminal at the current Workspace root.
+    pub fn terminal_create(
+        &mut self,
+        params: TerminalCreateParams,
+    ) -> Result<TerminalCreateResult, ClientError> {
+        self.call(ClientMethod::TerminalCreate, params)
+    }
+
+    /// Reattaches a reconnectable terminal and returns its rotated recovery lease.
+    pub fn terminal_attach(
+        &mut self,
+        params: TerminalAttachParams,
+    ) -> Result<TerminalAttachResult, ClientError> {
+        self.call(ClientMethod::TerminalAttach, params)
+    }
+
+    /// Writes one bounded UTF-8 input batch to an App Server-owned terminal.
+    pub fn terminal_write(&mut self, params: TerminalWriteParams) -> Result<(), ClientError> {
+        self.call(ClientMethod::TerminalWrite, params)
+    }
+
+    /// Resizes an App Server-owned terminal.
+    pub fn terminal_resize(&mut self, params: TerminalResizeParams) -> Result<(), ClientError> {
+        self.call(ClientMethod::TerminalResize, params)
+    }
+
+    /// Reads terminal output after the caller's last observed output and command sequences.
+    pub fn terminal_read(
+        &mut self,
+        params: TerminalReadParams,
+    ) -> Result<TerminalReadResult, ClientError> {
+        self.call(ClientMethod::TerminalRead, params)
+    }
+
+    /// Closes an App Server-owned terminal.
+    pub fn terminal_close(&mut self, params: TerminalCloseParams) -> Result<(), ClientError> {
+        self.call(ClientMethod::TerminalClose, params)
     }
 
     pub fn git_text_diff(&mut self) -> Result<GitTextDiffResult, ClientError> {

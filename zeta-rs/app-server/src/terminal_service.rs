@@ -1,26 +1,50 @@
-use crate::terminal_command_status::{ParsedTerminalOutput, TerminalCommandStatusTracker};
+use crate::terminal_command_status::ParsedTerminalOutput;
+use crate::terminal_command_status::TerminalCommandStatusTracker;
 use crate::terminal_profiles::TerminalProfileCatalog;
 use base64::Engine;
-use std::collections::{HashMap, VecDeque};
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, RwLock};
+use getrandom::getrandom;
+use std::collections::HashMap;
+use std::collections::VecDeque;
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::RwLock;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
+use std::time::Duration;
+use std::time::Instant;
 use tokio::runtime::Runtime;
-use zeta_app_server_protocol::protocol::terminal::{
-    TerminalCreateParams, TerminalCreateResult, TerminalOutputChunk, TerminalProfile,
-    TerminalReadParams, TerminalReadResult, TerminalResizeParams, TerminalWriteParams,
-};
-use zeta_utils_pty::{ProcessHandle, SpawnedProcess, TerminalSize, spawn_pty_process};
-use zeta_workspace::{TrustedWorkspace, WorkspaceCapability};
+use zeta_app_server_protocol::protocol::terminal::TerminalAttachParams;
+use zeta_app_server_protocol::protocol::terminal::TerminalAttachResult;
+use zeta_app_server_protocol::protocol::terminal::TerminalCreateParams;
+use zeta_app_server_protocol::protocol::terminal::TerminalCreateResult;
+use zeta_app_server_protocol::protocol::terminal::TerminalLifecycle;
+use zeta_app_server_protocol::protocol::terminal::TerminalOutputChunk;
+use zeta_app_server_protocol::protocol::terminal::TerminalProfile;
+use zeta_app_server_protocol::protocol::terminal::TerminalReadParams;
+use zeta_app_server_protocol::protocol::terminal::TerminalReadResult;
+use zeta_app_server_protocol::protocol::terminal::TerminalReconnectLease;
+use zeta_app_server_protocol::protocol::terminal::TerminalResizeParams;
+use zeta_app_server_protocol::protocol::terminal::TerminalWriteParams;
+use zeta_utils_pty::ProcessHandle;
+use zeta_utils_pty::SpawnedProcess;
+use zeta_utils_pty::TerminalSize;
+use zeta_utils_pty::spawn_pty_process;
+use zeta_workspace::TrustedWorkspace;
+use zeta_workspace::WorkspaceCapability;
 
 const MAX_ACTIVE_TERMINALS: usize = 16;
 const MAX_OUTPUT_BYTES: usize = 1024 * 1024;
 const MAX_INPUT_BYTES: usize = 64 * 1024;
+const RECONNECT_GRACE_PERIOD: Duration = Duration::from_secs(30);
+const RECONNECT_GRACE_PERIOD_MILLIS: u64 = 30_000;
+const RECONNECT_SWEEP_INTERVAL: Duration = Duration::from_secs(1);
+const RECONNECT_TOKEN_BYTES: usize = 32;
 
-/// Owns connection-scoped interactive PTY processes rooted at one trusted workspace.
+/// Owns connection-scoped and briefly reconnectable PTY processes in one trusted workspace.
 pub(crate) struct TerminalService {
     workspace: RwLock<TrustedWorkspace>,
     next_terminal_id: AtomicU64,
-    sessions: Mutex<HashMap<String, TerminalSession>>,
+    sessions: Arc<Mutex<HashMap<String, TerminalSession>>>,
     runtime: Runtime,
     profiles: TerminalProfileCatalog,
 }
@@ -34,10 +58,12 @@ impl TerminalService {
             .thread_name("zeta-terminal")
             .build()
             .map_err(|_| TerminalError::OperationFailed)?;
+        let sessions = Arc::new(Mutex::new(HashMap::new()));
+        spawn_reconnect_sweeper(&runtime, Arc::clone(&sessions));
         Ok(Self {
             workspace: RwLock::new(workspace),
             next_terminal_id: AtomicU64::new(1),
-            sessions: Mutex::new(HashMap::new()),
+            sessions,
             runtime,
             profiles: TerminalProfileCatalog::discover(),
         })
@@ -66,6 +92,10 @@ impl TerminalService {
     ) -> Result<TerminalCreateResult, TerminalError> {
         self.ensure_trusted()?;
         validate_size(params.rows, params.cols)?;
+        let reconnect = match params.lifecycle {
+            TerminalLifecycle::ConnectionOwned => None,
+            TerminalLifecycle::Reconnectable => Some(new_reconnect_lease()?),
+        };
         let profile = self
             .profiles
             .resolve(&params.profile)
@@ -107,7 +137,10 @@ impl TerminalService {
         sessions.insert(
             terminal_id.clone(),
             TerminalSession {
-                owner_connection_id,
+                owner: TerminalOwner::Attached(owner_connection_id),
+                reconnect_token: reconnect
+                    .as_ref()
+                    .map(|lease| lease.reconnect_token.clone()),
                 process,
                 state,
             },
@@ -115,6 +148,46 @@ impl TerminalService {
         Ok(TerminalCreateResult {
             terminal_id,
             profile: profile.dto(),
+            reconnect,
+        })
+    }
+
+    pub(crate) fn attach(
+        &self,
+        owner_connection_id: u64,
+        params: TerminalAttachParams,
+    ) -> Result<TerminalAttachResult, TerminalError> {
+        self.ensure_trusted()?;
+        validate_size(params.rows, params.cols)?;
+        let reconnect = new_reconnect_lease()?;
+        let mut sessions = self.sessions.lock().map_err(|_| TerminalError::Busy)?;
+        remove_expired_sessions(&mut sessions, Instant::now());
+        let session = sessions
+            .get_mut(&params.terminal_id)
+            .ok_or(TerminalError::AttachRejected)?;
+        let TerminalOwner::Detached { expires_at } = session.owner else {
+            return Err(TerminalError::AttachRejected);
+        };
+        if expires_at <= Instant::now()
+            || !session
+                .reconnect_token
+                .as_deref()
+                .is_some_and(|expected| constant_time_eq(expected, &params.reconnect_token))
+        {
+            return Err(TerminalError::AttachRejected);
+        }
+        session
+            .process
+            .resize(TerminalSize {
+                rows: params.rows,
+                cols: params.cols,
+            })
+            .map_err(|_| TerminalError::OperationFailed)?;
+        session.owner = TerminalOwner::Attached(owner_connection_id);
+        session.reconnect_token = Some(reconnect.reconnect_token.clone());
+        Ok(TerminalAttachResult {
+            terminal_id: params.terminal_id,
+            reconnect,
         })
     }
 
@@ -198,7 +271,7 @@ impl TerminalService {
     ) -> Result<(), TerminalError> {
         let mut sessions = self.sessions.lock().map_err(|_| TerminalError::Busy)?;
         let session = sessions.get(terminal_id).ok_or(TerminalError::NotFound)?;
-        if session.owner_connection_id != owner_connection_id {
+        if session.owner != TerminalOwner::Attached(owner_connection_id) {
             return Err(TerminalError::NotOwner);
         }
         if let Ok(mut state) = session.state.lock() {
@@ -218,13 +291,27 @@ impl TerminalService {
             return;
         };
         sessions.retain(|_, session| {
-            if session.owner_connection_id == owner_connection_id {
+            if session.owner != TerminalOwner::Attached(owner_connection_id) {
+                return true;
+            }
+            if session.reconnect_token.is_some() {
+                session.owner = TerminalOwner::Detached {
+                    expires_at: Instant::now() + RECONNECT_GRACE_PERIOD,
+                };
+                true
+            } else {
                 session.process.request_terminate();
                 false
-            } else {
-                true
             }
         });
+    }
+
+    pub(crate) fn active_count(&self) -> usize {
+        let Ok(mut sessions) = self.sessions.lock() else {
+            return MAX_ACTIVE_TERMINALS;
+        };
+        remove_expired_sessions(&mut sessions, Instant::now());
+        sessions.len()
     }
 
     pub(crate) fn terminate_all(&self) {
@@ -251,7 +338,7 @@ impl TerminalService {
     ) -> Result<std::sync::MutexGuard<'_, HashMap<String, TerminalSession>>, TerminalError> {
         let sessions = self.sessions.lock().map_err(|_| TerminalError::Busy)?;
         let session = sessions.get(terminal_id).ok_or(TerminalError::NotFound)?;
-        if session.owner_connection_id != owner_connection_id {
+        if session.owner != TerminalOwner::Attached(owner_connection_id) {
             return Err(TerminalError::NotOwner);
         }
         Ok(sessions)
@@ -269,9 +356,16 @@ fn validate_workspace_capability(workspace: &TrustedWorkspace) -> Result<(), Ter
 }
 
 struct TerminalSession {
-    owner_connection_id: u64,
+    owner: TerminalOwner,
+    reconnect_token: Option<String>,
     process: Arc<ProcessHandle>,
     state: Arc<Mutex<TerminalState>>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum TerminalOwner {
+    Attached(u64),
+    Detached { expires_at: Instant },
 }
 
 struct TerminalState {
@@ -436,11 +530,64 @@ fn validate_size(rows: u16, cols: u16) -> Result<(), TerminalError> {
     Ok(())
 }
 
+fn new_reconnect_lease() -> Result<TerminalReconnectLease, TerminalError> {
+    let mut bytes = [0_u8; RECONNECT_TOKEN_BYTES];
+    getrandom(&mut bytes).map_err(|_| TerminalError::OperationFailed)?;
+    let mut reconnect_token = String::with_capacity(RECONNECT_TOKEN_BYTES * 2);
+    for byte in bytes {
+        use std::fmt::Write;
+        write!(&mut reconnect_token, "{byte:02x}").expect("writing to a String cannot fail");
+    }
+    Ok(TerminalReconnectLease {
+        reconnect_token,
+        reconnect_grace_period_millis: RECONNECT_GRACE_PERIOD_MILLIS,
+    })
+}
+
+fn constant_time_eq(left: &str, right: &str) -> bool {
+    if left.len() != right.len() {
+        return false;
+    }
+    left.bytes()
+        .zip(right.bytes())
+        .fold(0_u8, |difference, (left, right)| {
+            difference | (left ^ right)
+        })
+        == 0
+}
+
+fn spawn_reconnect_sweeper(
+    runtime: &Runtime,
+    sessions: Arc<Mutex<HashMap<String, TerminalSession>>>,
+) {
+    runtime.spawn(async move {
+        let mut interval = tokio::time::interval(RECONNECT_SWEEP_INTERVAL);
+        loop {
+            interval.tick().await;
+            let Ok(mut sessions) = sessions.lock() else {
+                return;
+            };
+            remove_expired_sessions(&mut sessions, Instant::now());
+        }
+    });
+}
+
+fn remove_expired_sessions(sessions: &mut HashMap<String, TerminalSession>, now: Instant) {
+    sessions.retain(|_, session| match session.owner {
+        TerminalOwner::Detached { expires_at } if expires_at <= now => {
+            session.process.request_terminate();
+            false
+        }
+        _ => true,
+    });
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum TerminalError {
     InvalidInput,
     NotFound,
     NotOwner,
+    AttachRejected,
     Busy,
     OperationFailed,
 }

@@ -33,8 +33,19 @@ export class BrowserAutomationMainService {
     });
   }
 
-  create(params: BrowserCreateParams): BrowserCreateResult {
-    const state = this.requireRuntime().browserViews.createTarget({ url: params.url });
+  async create(params: BrowserCreateParams, context: RpcRequestContext): Promise<BrowserCreateResult> {
+    const runtime = this.requireRuntime();
+    throwIfAborted(context.signal);
+    const state = await runtime.browserViews.createTarget({ url: params.url });
+    if (this.runtime !== runtime || context.signal.aborted) {
+      try {
+        runtime.browserViews.close(state.targetId);
+      } catch {
+        // Runtime retirement may already have closed the newly created target.
+      }
+      throwIfAborted(context.signal);
+      throw new Error("BrowserCapabilityUnavailable");
+    }
     this.hostedTargets.add(state.targetId);
     return { targetId: state.targetId };
   }
@@ -173,7 +184,7 @@ export class BrowserAutomationMainService {
 /** Registers all generated browser host methods on the restart-safe App Server supervisor. */
 export function registerBrowserAutomationHost(registrar: BrowserHostRequestRegistrar, service: BrowserAutomationMainService): IDisposable {
   const registrations = new DisposableStore();
-  registrations.add(registrar.registerRequestHandler(APP_SERVER_HOST_METHODS["browser/create"], params => service.create(params)));
+  registrations.add(registrar.registerRequestHandler(APP_SERVER_HOST_METHODS["browser/create"], (params, context) => service.create(params, context)));
   registrations.add(registrar.registerRequestHandler(APP_SERVER_HOST_METHODS["browser/observe"], (params, context) => service.observe(params, context)));
   registrations.add(registrar.registerRequestHandler(APP_SERVER_HOST_METHODS["browser/perform"], (params, context) => service.perform(params, context)));
   registrations.add(registrar.registerRequestHandler(APP_SERVER_HOST_METHODS["browser/close"], params => service.close(params)));

@@ -18,9 +18,13 @@ export interface ITerminalProcessCreateOptions {
   readonly profile: TerminalProcessProfileSelection;
 }
 
+/** Describes whether a terminal process survives replacement of its App Server connection. */
+export type TerminalProcessConnectionPersistence = "connectionOwned" | "reconnectable";
+
 export interface ITerminalProcessCreation {
   readonly terminalId: string;
   readonly profile: ITerminalProcessProfile;
+  readonly connectionPersistence: TerminalProcessConnectionPersistence;
 }
 
 export interface ITerminalProcessWriteOptions {

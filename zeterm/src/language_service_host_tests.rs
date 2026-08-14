@@ -3,7 +3,9 @@ use std::path::Path;
 
 use zeta_app_server_protocol::protocol::config::{
     ApprovalReviewModelSelectionDto, ConfigReadResult, LanguageServerConfigDto,
-    LanguageServerModeDto,
+    LanguageServerModeDto, SemanticCodeIndexAutomaticContextDto, SemanticCodeIndexConfigDto,
+    SemanticCodeIndexSelectionDto, ToolSearchConfigDto, ToolSearchEmbeddingStatusDto,
+    ToolSearchModeDto,
 };
 use zeta_language_server_catalog::{LanguageServerCatalogState, LanguageServerExecutionPolicy};
 use zeta_text_file::{TextFileAccess, TextFileDiskVersion, TextFileModifiedAt, TextFileSnapshot};
@@ -55,6 +57,17 @@ fn native_configuration_maps_persisted_mode_into_catalog_policy() {
         plugin_requests: BTreeMap::new(),
         hooks: BTreeMap::new(),
         language_servers,
+        tool_search: ToolSearchConfigDto {
+            mode: ToolSearchModeDto::Lexical,
+            embedding_model: None,
+            embedding_status: ToolSearchEmbeddingStatusDto::Disabled,
+        },
+        semantic_code_index: SemanticCodeIndexConfigDto {
+            selection: SemanticCodeIndexSelectionDto::Disabled,
+            automatic_context: SemanticCodeIndexAutomaticContextDto::Off,
+            active_workspace_authorized: false,
+        },
+        exec_policy_rules: Vec::new(),
     };
 
     let catalog = catalog_from_configuration(&configuration);
@@ -86,6 +99,17 @@ fn native_configuration_does_not_start_unconfigured_language_servers() {
         plugin_requests: BTreeMap::new(),
         hooks: BTreeMap::new(),
         language_servers: BTreeMap::new(),
+        tool_search: ToolSearchConfigDto {
+            mode: ToolSearchModeDto::Lexical,
+            embedding_model: None,
+            embedding_status: ToolSearchEmbeddingStatusDto::Disabled,
+        },
+        semantic_code_index: SemanticCodeIndexConfigDto {
+            selection: SemanticCodeIndexSelectionDto::Disabled,
+            automatic_context: SemanticCodeIndexAutomaticContextDto::Off,
+            active_workspace_authorized: false,
+        },
+        exec_policy_rules: Vec::new(),
     };
 
     let catalog = catalog_from_configuration(&configuration);

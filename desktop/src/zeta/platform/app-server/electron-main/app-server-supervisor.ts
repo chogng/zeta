@@ -1,9 +1,4 @@
-import {
-  type ChildProcessWithoutNullStreams,
-  spawn,
-} from "node:child_process";
-import { existsSync } from "node:fs";
-import { isAbsolute } from "node:path";
+import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import type {
   AppServerMethod,
   AppServerMethodDefinition,
@@ -12,7 +7,6 @@ import type {
   ServerNotification,
 } from "../../../../../generated/app-server/types.js";
 import type { AppServerConnectionState } from "../common/appServerApi.js";
-import { isAllowedAppServerEnvironmentKey } from "../common/appServerEnvironment.js";
 import {
   DisposableSlot,
   type IDisposable,
@@ -22,33 +16,19 @@ import {
   toDisposable,
 } from "../../../base/common/lifecycle.js";
 import { AppServerClient } from "./app-server-client.js";
+import type { IAppServerProcessLauncher } from "./appServerProcessLauncher.js";
 import {
   AppServerSession,
   type AppServerSessionOptions,
 } from "./app-server-session.js";
 import { JsonRpcPeer, type RpcMethodDefinition, type RpcRequestContext, type RpcRequestOptions } from "./json-rpc-peer.js";
 
-export interface SpawnAppServerOptions {
-  environment: Readonly<Record<string, string>>;
-}
-
-export type SpawnAppServer = (
-  executable: string,
-  args: readonly string[],
-  options: SpawnAppServerOptions,
-) => ChildProcessWithoutNullStreams;
-
 export interface AppServerSupervisorOptions {
-  executable: string;
-  args: readonly string[];
-  environment: Readonly<Record<string, string>>;
+  processLauncher: IAppServerProcessLauncher;
   session: AppServerSessionOptions;
   maxRestartAttempts?: number;
   initialRestartDelayMs?: number;
   maxRestartDelayMs?: number;
-  allowedEnvironmentKeys?: readonly string[];
-  spawnProcess?: SpawnAppServer;
-  fileExists?: (path: string) => boolean;
   wait?: (milliseconds: number) => Promise<void>;
 }
 
@@ -65,8 +45,6 @@ interface RegisteredRequestHandler {
  * Supervises App Server process/session replacement without replaying application requests.
  */
 export class AppServerSupervisor implements IDisposable {
-  private readonly spawnProcess: SpawnAppServer;
-  private readonly fileExists: (path: string) => boolean;
   private readonly wait: (milliseconds: number) => Promise<void>;
   private readonly stateListeners = new Set<StateListener>();
   private readonly notificationListeners = new Set<NotificationListener>();
@@ -78,23 +56,13 @@ export class AppServerSupervisor implements IDisposable {
   private _state: AppServerConnectionState = "stopped";
   private process?: ChildProcessWithoutNullStreams;
   private session?: AppServerSession;
-  private generation = 0;
+  private generationValue = 0;
   private restartAttempts = 0;
   private stopping = false;
   private disposed = false;
   private lastDiagnostics = "";
 
   constructor(readonly options: AppServerSupervisorOptions) {
-    if (!isAbsolute(options.executable)) {
-      throw new Error("App Server executable path must be absolute");
-    }
-    const allowedEnvironmentKeys = options.allowedEnvironmentKeys ? new Set(options.allowedEnvironmentKeys) : undefined;
-    for (const key of Object.keys(options.environment)) {
-      const allowed = allowedEnvironmentKeys ? allowedEnvironmentKeys.has(key) : isAllowedAppServerEnvironmentKey(key);
-      if (!allowed) {
-        throw new Error(`App Server environment variable is not allowed: ${key}`);
-      }
-    }
     this.maxRestartAttempts = nonNegativeInteger(
       options.maxRestartAttempts,
       3,
@@ -110,8 +78,6 @@ export class AppServerSupervisor implements IDisposable {
       2_000,
       "maxRestartDelayMs",
     );
-    this.spawnProcess = options.spawnProcess ?? defaultSpawn;
-    this.fileExists = options.fileExists ?? existsSync;
     this.wait = options.wait ?? wait;
     trackDisposable(this);
     setDisposableOwner(this.sessionNotification, this);
@@ -119,6 +85,11 @@ export class AppServerSupervisor implements IDisposable {
 
   get state(): AppServerConnectionState {
     return this._state;
+  }
+
+  /** Monotonic identity of the current or most recently attempted process connection. */
+  get generation(): number {
+    return this.generationValue;
   }
 
   get slashCommands() {
@@ -150,12 +121,11 @@ export class AppServerSupervisor implements IDisposable {
     if (this._state !== "stopped") {
       throw new Error(`Cannot start App Server supervisor from ${this._state}`);
     }
-    if (!this.fileExists(this.options.executable)) {
-      throw new Error(`Packaged Zeta binary is missing: ${this.options.executable}`);
-    }
+    await this.options.processLauncher.validate();
     this.stopping = false;
     this.restartAttempts = 0;
     let lastError: unknown;
+    let initializationRecovered = false;
     for (let attempt = 0; attempt <= this.maxRestartAttempts; attempt += 1) {
       if (attempt > 0) {
         this.setState("restarting");
@@ -167,6 +137,17 @@ export class AppServerSupervisor implements IDisposable {
       } catch (error) {
         lastError = error;
         this.setState("crashed");
+        if (!initializationRecovered && this.options.processLauncher.recoverInitializationFailure) {
+          try {
+            if (await this.options.processLauncher.recoverInitializationFailure(error)) {
+              initializationRecovered = true;
+              attempt -= 1;
+              continue;
+            }
+          } catch (recoveryError) {
+            lastError = recoveryError;
+          }
+        }
       }
     }
     throw lastError instanceof Error
@@ -211,7 +192,7 @@ export class AppServerSupervisor implements IDisposable {
   async stop(): Promise<void> {
     if (this._state === "stopped") return;
     this.stopping = true;
-    this.generation += 1;
+    this.generationValue += 1;
     this.setState("stopping");
     const session = this.session;
     this.session = undefined;
@@ -223,16 +204,12 @@ export class AppServerSupervisor implements IDisposable {
   }
 
   private async launch(): Promise<void> {
+    const generation = ++this.generationValue;
     this.setState("starting");
-    const generation = ++this.generation;
-    const child = this.spawnProcess(
-      this.options.executable,
-      this.options.args,
-      { environment: this.options.environment },
-    );
+    const child = this.options.processLauncher.launch();
     this.process = child;
     child.once("exit", () => {
-      if (this.process !== child || this.generation !== generation) return;
+      if (this.process !== child || this.generationValue !== generation) return;
       const restart = !this.stopping && this._state === "ready";
       const exitedSession = this.session;
       this.lastDiagnostics = exitedSession?.diagnostics() ?? this.lastDiagnostics;
@@ -269,6 +246,8 @@ export class AppServerSupervisor implements IDisposable {
     this.setState("initializing");
     try {
       await session.initialize();
+      if (this.stopping || this.generationValue !== generation) throw new Error("App Server startup was superseded");
+      await this.options.processLauncher.didInitialize?.();
     } catch (error) {
       this.lastDiagnostics = session.diagnostics();
       if (this.session === session) {
@@ -277,11 +256,11 @@ export class AppServerSupervisor implements IDisposable {
         this.session = undefined;
       }
       if (this.process === child) this.process = undefined;
-      this.generation += 1;
+      this.generationValue += 1;
       await session.close();
       throw error;
     }
-    if (this.stopping || this.generation !== generation) {
+    if (this.stopping || this.generationValue !== generation) {
       if (this.session === session) this.sessionNotification.clear();
       await session.close();
       throw new Error("App Server startup was superseded");
@@ -358,18 +337,6 @@ export class AppServerSupervisor implements IDisposable {
   [Symbol.dispose](): void {
     this.dispose();
   }
-}
-
-function defaultSpawn(
-  executable: string,
-  args: readonly string[],
-  options: SpawnAppServerOptions,
-): ChildProcessWithoutNullStreams {
-  return spawn(executable, [...args], {
-    env: { ...options.environment },
-    shell: false,
-    stdio: "pipe",
-  });
 }
 
 function wait(milliseconds: number): Promise<void> {

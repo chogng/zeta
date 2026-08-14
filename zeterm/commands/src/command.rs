@@ -14,6 +14,7 @@ pub enum ZetermCommandId {
     ToggleTerminalSurface,
     OpenKeyboardShortcuts,
     OpenLanguageServerSettings,
+    ManageRemoteTunnels,
     ToggleSessionSidebar,
     ToggleAgentSidebar,
     ActivateSessionTab,
@@ -34,7 +35,7 @@ pub enum ZetermCommandId {
 
 impl ZetermCommandId {
     /// Commands that can currently be assigned a user keybinding.
-    pub const BINDABLE: [Self; 13] = [
+    pub const BINDABLE: [Self; 15] = [
         Self::Copy,
         Self::Paste,
         Self::Save,
@@ -42,6 +43,8 @@ impl ZetermCommandId {
         Self::ToggleTerminalSurface,
         Self::OpenKeyboardShortcuts,
         Self::OpenLanguageServerSettings,
+        Self::ManageRemoteTunnels,
+        Self::PickExecutionLocation,
         Self::ToggleSessionSidebar,
         Self::ToggleAgentSidebar,
         Self::ShowAgentChanges,
@@ -51,7 +54,7 @@ impl ZetermCommandId {
     ];
 
     /// Every command known to the product command catalog.
-    pub const ALL: [Self; 23] = [
+    pub const ALL: [Self; 24] = [
         Self::Copy,
         Self::Paste,
         Self::Save,
@@ -59,6 +62,7 @@ impl ZetermCommandId {
         Self::ToggleTerminalSurface,
         Self::OpenKeyboardShortcuts,
         Self::OpenLanguageServerSettings,
+        Self::ManageRemoteTunnels,
         Self::ToggleSessionSidebar,
         Self::ToggleAgentSidebar,
         Self::ActivateSessionTab,
@@ -87,6 +91,7 @@ impl ZetermCommandId {
             Self::ToggleTerminalSurface => "workbench.action.toggleTerminal",
             Self::OpenKeyboardShortcuts => "workbench.action.openKeyboardShortcuts",
             Self::OpenLanguageServerSettings => "workbench.action.openLanguageServerSettings",
+            Self::ManageRemoteTunnels => "workbench.action.manageRemoteTunnels",
             Self::ToggleSessionSidebar => "workbench.action.toggleSideBar",
             Self::ToggleAgentSidebar => "workbench.action.toggleAuxiliaryBar",
             Self::ActivateSessionTab => "workbench.action.activateSession",
@@ -116,6 +121,7 @@ impl ZetermCommandId {
             Self::ToggleTerminalSurface => "Toggle terminal",
             Self::OpenKeyboardShortcuts => "Keyboard shortcuts",
             Self::OpenLanguageServerSettings => "Language server settings",
+            Self::ManageRemoteTunnels => "Manage Remote tunnels",
             Self::ToggleSessionSidebar => "Toggle session sidebar",
             Self::ToggleAgentSidebar => "Toggle agent sidebar",
             Self::ActivateSessionTab => "Activate session",

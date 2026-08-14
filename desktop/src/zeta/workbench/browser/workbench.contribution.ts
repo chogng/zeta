@@ -25,7 +25,7 @@ import {
 import {
   registerChatViews,
 } from "../contrib/chat/browser/chat.contribution.js";
-import { registerPanelPlaceholderViews } from "../contrib/panel/browser/panel.contribution.js";
+import { registerPanelViews } from "../contrib/panel/browser/panel.contribution.js";
 import { registerProblemsView } from "../contrib/problems/browser/problems.contribution.js";
 import { registerTerminalView } from "../contrib/terminal/browser/terminal.contribution.js";
 import { lxiconsLibrary } from "../../base/common/lxiconsLibrary.js";
@@ -34,7 +34,7 @@ import "../contrib/pdf/browser/pdf.contribution.js";
 import "../contrib/preferences/browser/preferences.contribution.js";
 import "../contrib/quickaccess/browser/commandsQuickAccess.js";
 import "../contrib/quickaccess/browser/workspaceSymbolsQuickAccess.js";
-import "../contrib/remote/browser/remote.contribution.js";
+import { registerRemoteViews } from "../contrib/remote/browser/remote.contribution.js";
 import "../contrib/sash/browser/sash.contribution.js";
 import "./parts/dialogs/dialog.contribution.js";
 import "./parts/editor/editorActions.js";
@@ -54,7 +54,8 @@ registerSearchViews();
 registerGitViews();
 registerChatViews();
 registerProblemsView();
-registerPanelPlaceholderViews();
+registerPanelViews();
+registerRemoteViews();
 registerTerminalView();
 
 registerWorkbenchContribution(

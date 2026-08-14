@@ -12,6 +12,15 @@ use zeta_app_server_protocol::protocol::fs::{
     FsReadFileParams, FsWriteFileParams,
 };
 use zeta_app_server_protocol::protocol::initialize::InitializeParams;
+use zeta_app_server_protocol::protocol::language::LanguageCloseParams;
+use zeta_app_server_protocol::protocol::language::LanguageCompletionTriggerKindDto;
+use zeta_app_server_protocol::protocol::language::LanguageCompletionsParams;
+use zeta_app_server_protocol::protocol::language::LanguageDocumentDto;
+use zeta_app_server_protocol::protocol::language::LanguageHoverParams;
+use zeta_app_server_protocol::protocol::language::LanguageLocationKindDto;
+use zeta_app_server_protocol::protocol::language::LanguageLocationsParams;
+use zeta_app_server_protocol::protocol::language::LanguagePositionDto;
+use zeta_app_server_protocol::protocol::language::LanguageSynchronizeParams;
 use zeta_app_server_protocol::protocol::session::{
     SessionCreateParams, SessionRequest, SessionRequestParams, SessionRequestResult,
     SessionThreadReadParams,
@@ -25,6 +34,13 @@ use zeta_app_server_protocol::protocol::slash_commands::{
 };
 use zeta_app_server_protocol::protocol::syntax::SyntaxAnalyzeParams;
 use zeta_app_server_protocol::protocol::syntax::SyntaxLanguageDto;
+use zeta_app_server_protocol::protocol::terminal::TerminalAttachParams;
+use zeta_app_server_protocol::protocol::terminal::TerminalCreateParams;
+use zeta_app_server_protocol::protocol::terminal::TerminalLifecycle;
+use zeta_app_server_protocol::protocol::terminal::TerminalProfileSelection;
+use zeta_app_server_protocol::protocol::terminal::TerminalReadParams;
+use zeta_app_server_protocol::protocol::terminal::TerminalResizeParams;
+use zeta_app_server_protocol::protocol::terminal::TerminalWriteParams;
 use zeta_app_server_protocol::protocol::turn::InputItem;
 use zeta_app_server_protocol::schema_hash;
 use zeta_async_utils::CancellationToken;
@@ -136,6 +152,124 @@ fn client_analyzes_syntax_through_the_typed_contract() {
 
     assert_eq!(result.revision, 8);
     assert!(!result.has_errors);
+}
+
+#[test]
+fn client_drives_language_documents_and_requests_through_typed_methods() {
+    let mut client = AppServerClient::new(MockTransport(VecDeque::from([
+        r#"{"jsonrpc":"2.0","id":1,"result":null}"#.into(),
+        r#"{"jsonrpc":"2.0","id":2,"result":{"revision":7,"contents":"i32","range":null}}"#.into(),
+        r#"{"jsonrpc":"2.0","id":3,"result":{"revision":7,"isIncomplete":false,"canResolve":false,"items":[]}}"#.into(),
+        r#"{"jsonrpc":"2.0","id":4,"result":{"revision":7,"locations":[]}}"#.into(),
+        r#"{"jsonrpc":"2.0","id":5,"result":null}"#.into(),
+    ])));
+    let document = LanguageDocumentDto {
+        path: "src/main.rs".into(),
+        language_id: "rust".into(),
+        revision: 7,
+        text: "let value: i32 = 1;".into(),
+    };
+    let position = LanguagePositionDto {
+        line_index: 0,
+        column_index: 9,
+    };
+
+    client
+        .synchronize_language_document(LanguageSynchronizeParams {
+            document: document.clone(),
+        })
+        .unwrap();
+    let hover = client
+        .language_hover(LanguageHoverParams {
+            document: document.clone(),
+            position,
+        })
+        .unwrap();
+    let completions = client
+        .language_completions(LanguageCompletionsParams {
+            document: document.clone(),
+            position,
+            trigger_kind: LanguageCompletionTriggerKindDto::Invoke,
+            trigger_character: None,
+        })
+        .unwrap();
+    let locations = client
+        .language_locations(LanguageLocationsParams {
+            document: document.clone(),
+            position,
+            kind: LanguageLocationKindDto::Definition,
+            include_declaration: false,
+        })
+        .unwrap();
+    client
+        .close_language_document(LanguageCloseParams {
+            path: document.path,
+        })
+        .unwrap();
+
+    assert_eq!(hover.contents.as_deref(), Some("i32"));
+    assert!(completions.items.is_empty());
+    assert!(locations.locations.is_empty());
+}
+
+#[test]
+fn client_drives_terminal_lifecycle_through_typed_methods() {
+    let mut client = AppServerClient::new(MockTransport(VecDeque::from([
+        format!(r#"{{"jsonrpc":"2.0","id":1,"result":{{"terminalId":"terminal-1","profile":{{"profileId":"default","title":"Shell","isDefault":true}},"reconnect":{{"reconnectToken":"{}","reconnectGracePeriodMillis":30000}}}}}}"#, "a".repeat(64)),
+        format!(r#"{{"jsonrpc":"2.0","id":2,"result":{{"terminalId":"terminal-1","reconnect":{{"reconnectToken":"{}","reconnectGracePeriodMillis":30000}}}}}}"#, "b".repeat(64)),
+        r#"{"jsonrpc":"2.0","id":3,"result":null}"#.into(),
+        r#"{"jsonrpc":"2.0","id":4,"result":null}"#.into(),
+        r#"{"jsonrpc":"2.0","id":5,"result":{"terminalId":"terminal-1","chunks":[],"nextSequence":0,"outputGap":false,"commandEvents":[],"nextCommandSequence":0,"commandEventGap":false,"exited":false,"exitCode":null}}"#.into(),
+        r#"{"jsonrpc":"2.0","id":6,"result":null}"#.into(),
+    ])));
+
+    let created = client
+        .terminal_create(TerminalCreateParams {
+            rows: 24,
+            cols: 80,
+            profile: TerminalProfileSelection::Default,
+            lifecycle: TerminalLifecycle::Reconnectable,
+        })
+        .unwrap();
+    assert_eq!(created.terminal_id, "terminal-1");
+    let attached = client
+        .terminal_attach(TerminalAttachParams {
+            terminal_id: created.terminal_id.clone(),
+            reconnect_token: created.reconnect.unwrap().reconnect_token,
+            rows: 24,
+            cols: 80,
+        })
+        .unwrap();
+    assert_eq!(attached.reconnect.reconnect_token, "b".repeat(64));
+    client
+        .terminal_write(TerminalWriteParams {
+            terminal_id: created.terminal_id.clone(),
+            data: "echo ready\n".into(),
+        })
+        .unwrap();
+    client
+        .terminal_resize(TerminalResizeParams {
+            terminal_id: created.terminal_id.clone(),
+            rows: 30,
+            cols: 100,
+        })
+        .unwrap();
+    let read = client
+        .terminal_read(TerminalReadParams {
+            terminal_id: created.terminal_id.clone(),
+            after_sequence: 0,
+            after_command_sequence: 0,
+            max_chunks: 8,
+        })
+        .unwrap();
+    assert_eq!(read.terminal_id, "terminal-1");
+    client
+        .terminal_close(
+            zeta_app_server_protocol::protocol::terminal::TerminalCloseParams {
+                terminal_id: created.terminal_id,
+            },
+        )
+        .unwrap();
 }
 
 #[test]

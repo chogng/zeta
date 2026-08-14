@@ -468,7 +468,10 @@ pub struct LocalConnectorRuntime {
     service: Arc<zeta_connectors_extension::ConnectorCredentialService>,
     secrets: Arc<dyn SecretStore>,
     mcp: Arc<dyn ConnectorMcpRuntimeProvider>,
+    base_definitions: Vec<zeta_connectors::ConnectorDefinition>,
+    base_mcp: Arc<dyn ConnectorMcpRuntimeProvider>,
     plugin_authority: Option<PluginActivationAuthority>,
+    marketplace_manager: Option<Arc<zeta_marketplace_manager::MarketplaceManager>>,
     oauth: Option<Arc<zeta_connectors_extension::ConnectorOAuthService>>,
     device_oauth: Option<Arc<zeta_connectors_extension::ConnectorDeviceOAuthService>>,
 }
@@ -479,11 +482,21 @@ impl LocalConnectorRuntime {
         secrets: Arc<dyn SecretStore>,
         mcp: Arc<dyn ConnectorMcpRuntimeProvider>,
     ) -> Self {
+        let base_definitions = service
+            .authority()
+            .snapshot()
+            .entries()
+            .iter()
+            .map(|entry| entry.definition().clone())
+            .collect();
         Self {
             service,
             secrets,
-            mcp,
+            mcp: Arc::clone(&mcp),
+            base_definitions,
+            base_mcp: mcp,
             plugin_authority: None,
+            marketplace_manager: None,
             oauth: None,
             device_oauth: None,
         }
@@ -572,8 +585,10 @@ impl LocalConnectorRuntime {
                 .map(|entry| entry.definition().clone()),
         )
         .map_err(|error| OpenAppServerError(error.to_string()))?;
-        let mcp = PluginConnectorMcpRuntimeProvider::from_authority(&plugin_authority)
-            .map_err(|error| OpenAppServerError(error.to_string()))?;
+        let mcp: Arc<dyn ConnectorMcpRuntimeProvider> = Arc::new(
+            PluginConnectorMcpRuntimeProvider::from_authority(&plugin_authority)
+                .map_err(|error| OpenAppServerError(error.to_string()))?,
+        );
         let service = Arc::new(zeta_connectors_extension::ConnectorCredentialService::new(
             authority,
             Arc::clone(&secrets),
@@ -581,11 +596,27 @@ impl LocalConnectorRuntime {
         Ok(Self {
             service,
             secrets,
-            mcp: Arc::new(mcp),
+            mcp: Arc::clone(&mcp),
+            base_definitions: catalog
+                .snapshot()
+                .entries()
+                .iter()
+                .map(|entry| entry.definition().clone())
+                .collect(),
+            base_mcp: mcp,
             plugin_authority: Some(plugin_authority),
+            marketplace_manager: None,
             oauth: None,
             device_oauth: None,
         })
+    }
+
+    fn bind_marketplace_manager(
+        &mut self,
+        manager: Arc<zeta_marketplace_manager::MarketplaceManager>,
+    ) -> Result<(), OpenAppServerError> {
+        self.marketplace_manager = Some(manager);
+        self.reconcile_sources()
     }
 
     fn reconcile_plugin_activation(&mut self) -> Result<(), OpenAppServerError> {
@@ -598,18 +629,40 @@ impl LocalConnectorRuntime {
                 .map_err(|error| OpenAppServerError(error.to_string()))?;
         let mcp = PluginConnectorMcpRuntimeProvider::from_authority(authority)
             .map_err(|error| OpenAppServerError(error.to_string()))?;
+        self.base_definitions = catalog
+            .snapshot()
+            .entries()
+            .iter()
+            .map(|entry| entry.definition().clone())
+            .collect();
+        self.base_mcp = Arc::new(mcp);
+        self.reconcile_sources()
+    }
+
+    fn reconcile_marketplace(&mut self) -> Result<(), OpenAppServerError> {
+        self.reconcile_sources()
+    }
+
+    fn reconcile_sources(&mut self) -> Result<(), OpenAppServerError> {
+        let mut definitions = self.base_definitions.clone();
+        self.mcp = Arc::clone(&self.base_mcp);
+        if let Some(manager) = &self.marketplace_manager {
+            let projection =
+                crate::marketplace_connector_runtime::MarketplaceConnectorProjection::from_manager(
+                    Arc::clone(manager),
+                )
+                .map_err(OpenAppServerError)?;
+            definitions.extend(projection.definitions().iter().cloned());
+            self.mcp = crate::marketplace_connector_runtime::combined_provider(
+                Arc::clone(&self.base_mcp),
+                projection.provider(),
+            );
+        }
         self.service
             .authority()
-            .reconcile_definitions(
-                catalog
-                    .snapshot()
-                    .entries()
-                    .iter()
-                    .map(|entry| entry.definition().clone()),
-            )
-            .map_err(|error| OpenAppServerError(error.to_string()))?;
-        self.mcp = Arc::new(mcp);
-        Ok(())
+            .reconcile_definitions(definitions)
+            .map(|_| ())
+            .map_err(|error| OpenAppServerError(error.to_string()))
     }
 
     fn ptr_eq(&self, other: &Self) -> bool {
@@ -785,6 +838,9 @@ pub fn open_local_app_server_with_code_index_providers(
             )?)
         }
     };
+    if let (Some(runtime), Some(manager)) = (&mut connector_runtime, &local_marketplace_manager) {
+        runtime.bind_marketplace_manager(Arc::clone(manager))?;
+    }
     let managed_node = ManagedNodeRuntime::from_install_context(&InstallContext::current()).ok();
     let marketplace_language_runtime = local_marketplace_manager.as_ref().map(|manager| {
         crate::server::marketplace_language_runtime::MarketplaceLanguageRuntime::new(
@@ -992,7 +1048,7 @@ pub fn open_local_app_server_with_code_index_providers(
     let workspace_runtime = server
         .workspace_runtime_control()
         .ok_or_else(|| OpenAppServerError("local Workspace runtime is unavailable".into()))?;
-    server = server.with_tool_config_watcher(ToolConfigWatcher::start(
+    server = server.with_tool_config_watcher(ToolConfigWatcher::start(ToolConfigWatcherInputs {
         config,
         workspace,
         workspace_tools,
@@ -1002,7 +1058,7 @@ pub fn open_local_app_server_with_code_index_providers(
         mcp_updates,
         mcp_changes,
         mcp_runtime_intent_changes,
-    ));
+    }));
     Ok(server)
 }
 
@@ -1030,18 +1086,31 @@ pub(crate) struct ToolConfigWatcher {
     thread: Option<JoinHandle<()>>,
 }
 
+struct ToolConfigWatcherInputs {
+    config: Arc<ConfigStore>,
+    workspace: Option<Arc<WorkspaceConfigTracker>>,
+    workspace_tools: Arc<WorkspaceToolPorts>,
+    workspace_runtime: crate::server::WorkspaceRuntimeControl,
+    connector_runtime: Option<LocalConnectorRuntime>,
+    mcp_runtime_intents: crate::mcp_runtime::McpRuntimeIntents,
+    mcp_updates: McpCatalogUpdates,
+    mcp_changes: McpCatalogUpdateSubscription,
+    mcp_runtime_intent_changes: std::sync::mpsc::Receiver<()>,
+}
+
 impl ToolConfigWatcher {
-    fn start(
-        config: Arc<ConfigStore>,
-        workspace: Option<Arc<WorkspaceConfigTracker>>,
-        workspace_tools: Arc<WorkspaceToolPorts>,
-        workspace_runtime: crate::server::WorkspaceRuntimeControl,
-        mut connector_runtime: Option<LocalConnectorRuntime>,
-        mcp_runtime_intents: crate::mcp_runtime::McpRuntimeIntents,
-        mcp_updates: McpCatalogUpdates,
-        mcp_changes: McpCatalogUpdateSubscription,
-        mcp_runtime_intent_changes: std::sync::mpsc::Receiver<()>,
-    ) -> Self {
+    fn start(inputs: ToolConfigWatcherInputs) -> Self {
+        let ToolConfigWatcherInputs {
+            config,
+            workspace,
+            workspace_tools,
+            workspace_runtime,
+            mut connector_runtime,
+            mcp_runtime_intents,
+            mcp_updates,
+            mcp_changes,
+            mcp_runtime_intent_changes,
+        } = inputs;
         let mut semantic_binding = config.read_snapshot().ok().map(|snapshot| {
             (
                 snapshot.values.semantic_code_index,
@@ -1056,6 +1125,10 @@ impl ToolConfigWatcher {
             .as_ref()
             .and_then(|runtime| runtime.plugin_authority.as_ref())
             .map(PluginActivationAuthority::subscribe);
+        let marketplace_changes = connector_runtime
+            .as_ref()
+            .and_then(|runtime| runtime.marketplace_manager.as_ref())
+            .and_then(|manager| manager.subscribe().ok());
         let mut plugin_activation_generation = connector_runtime
             .as_ref()
             .and_then(|runtime| runtime.plugin_authority.as_ref())
@@ -1073,6 +1146,7 @@ impl ToolConfigWatcher {
                 let mut mcp_dirty = false;
                 let mut mcp_runtime_intent_dirty = false;
                 let mut plugin_dirty = false;
+                let mut marketplace_dirty = false;
                 loop {
                     if shutdown_receiver.try_recv().is_ok() {
                         break;
@@ -1117,10 +1191,16 @@ impl ToolConfigWatcher {
                             }
                         }
                     }
+                    if let Some(marketplace_changes) = &marketplace_changes {
+                        while marketplace_changes.try_recv().is_ok() {
+                            marketplace_dirty = true;
+                        }
+                    }
                     if !config_dirty
                         && !connector_dirty
                         && !mcp_dirty
                         && !plugin_dirty
+                        && !marketplace_dirty
                         && !mcp_runtime_intent_dirty
                     {
                         continue;
@@ -1175,6 +1255,13 @@ impl ToolConfigWatcher {
                     if plugin_dirty
                         && let Some(connectors) = connector_runtime.as_mut()
                         && let Err(error) = connectors.reconcile_plugin_activation()
+                    {
+                        workspace_tools.record_reconcile_failure(error.to_string());
+                        continue;
+                    }
+                    if marketplace_dirty
+                        && let Some(connectors) = connector_runtime.as_mut()
+                        && let Err(error) = connectors.reconcile_marketplace()
                     {
                         workspace_tools.record_reconcile_failure(error.to_string());
                         continue;
@@ -1236,6 +1323,7 @@ impl ToolConfigWatcher {
                     mcp_dirty = false;
                     mcp_runtime_intent_dirty = false;
                     plugin_dirty = false;
+                    marketplace_dirty = false;
                 }
             })
             .ok();

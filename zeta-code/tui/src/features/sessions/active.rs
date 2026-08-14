@@ -56,6 +56,52 @@ impl ActiveConversation {
         create_conversation(client, title).map(|(conversation, _)| conversation)
     }
 
+    pub(crate) fn recover<T>(
+        client: &mut AppServerClient<T>,
+        recovery: crate::TuiRecoveryState,
+    ) -> Result<Self, ClientError>
+    where
+        T: JsonRpcTransport,
+    {
+        let (session_id, preferred_thread_id) = recovery.into_parts();
+        let session = client
+            .read_session(SessionReadParams { session_id })?
+            .session;
+        let thread_id = session
+            .threads
+            .iter()
+            .find(|thread| {
+                thread.thread_id == preferred_thread_id
+                    && thread.status == SessionThreadStatus::Active
+            })
+            .or_else(|| {
+                session
+                    .threads
+                    .iter()
+                    .rev()
+                    .find(|thread| thread.status == SessionThreadStatus::Active)
+            })
+            .map(|thread| thread.thread_id.clone())
+            .ok_or_else(|| {
+                ClientError::Protocol(format!(
+                    "session {} has no active Thread to recover",
+                    session.session_id
+                ))
+            })?;
+        let snapshot = client
+            .read_session_thread(SessionThreadReadParams {
+                session_id: session.session_id.clone(),
+                thread_id: thread_id.clone(),
+                history: None,
+            })?
+            .thread;
+        Ok(Self {
+            session,
+            thread_id,
+            thread_sequence: snapshot.sequence,
+        })
+    }
+
     pub(crate) fn session_id(&self) -> &SessionId {
         &self.session.session_id
     }
@@ -447,3 +493,7 @@ impl From<ClientError> for SessionsError {
         Self(error.to_string())
     }
 }
+
+#[cfg(test)]
+#[path = "active_tests.rs"]
+mod tests;

@@ -15,6 +15,9 @@ use crate::git_branch_context_menu::GitBranchContextMenuState;
 use crate::keybindings::NativeKeybindings;
 use crate::keyboard_shortcuts::KeyboardShortcutsState;
 use crate::language_server_settings::LanguageServerSettingsState;
+use crate::remote_connection_manager::RemoteConnectionManagerState;
+use crate::remote_connection_picker::RemoteConnectionPickerState;
+use crate::remote_tunnel_manager::RemoteTunnelManagerState;
 use crate::session_context_menu::SessionContextMenuState;
 use crate::session_search::SessionSearch;
 use crate::session_sidebar::SessionSidebarState;
@@ -176,6 +179,9 @@ fn presentation_with_workspace(
             session_context_menu,
             git_branch_context_menu: &GitBranchContextMenuState::default(),
             workspace_path_picker: &WorkspacePathPickerState::default(),
+            remote_connection_picker: &RemoteConnectionPickerState::default(),
+            remote_connection_manager: &RemoteConnectionManagerState::default(),
+            remote_tunnel_manager: &RemoteTunnelManagerState::default(),
             keybindings: &NativeKeybindings::default(),
             keyboard_shortcuts: &KeyboardShortcutsState::default(),
             language_server_settings: &LanguageServerSettingsState::default(),
@@ -228,6 +234,9 @@ fn presentation_with_workspace(
             session_context_menu,
             git_branch_context_menu: &GitBranchContextMenuState::default(),
             workspace_path_picker: &WorkspacePathPickerState::default(),
+            remote_connection_picker: &RemoteConnectionPickerState::default(),
+            remote_connection_manager: &RemoteConnectionManagerState::default(),
+            remote_tunnel_manager: &RemoteTunnelManagerState::default(),
             keybindings: &NativeKeybindings::default(),
             keyboard_shortcuts: &KeyboardShortcutsState::default(),
             language_server_settings: &LanguageServerSettingsState::default(),
@@ -377,6 +386,9 @@ fn editor_surface_mounts_the_active_file_without_agent_composer_or_timeline() {
             session_context_menu: SessionContextMenuState::default(),
             git_branch_context_menu: &GitBranchContextMenuState::default(),
             workspace_path_picker: &WorkspacePathPickerState::default(),
+            remote_connection_picker: &RemoteConnectionPickerState::default(),
+            remote_connection_manager: &RemoteConnectionManagerState::default(),
+            remote_tunnel_manager: &RemoteTunnelManagerState::default(),
             keybindings: &NativeKeybindings::default(),
             keyboard_shortcuts: &KeyboardShortcutsState::default(),
             language_server_settings: &LanguageServerSettingsState::default(),
@@ -640,6 +652,9 @@ fn session_search_filters_tabs_by_session_name() {
             session_context_menu: SessionContextMenuState::default(),
             git_branch_context_menu: &GitBranchContextMenuState::default(),
             workspace_path_picker: &WorkspacePathPickerState::default(),
+            remote_connection_picker: &RemoteConnectionPickerState::default(),
+            remote_connection_manager: &RemoteConnectionManagerState::default(),
+            remote_tunnel_manager: &RemoteTunnelManagerState::default(),
             keybindings: &NativeKeybindings::default(),
             keyboard_shortcuts: &KeyboardShortcutsState::default(),
             language_server_settings: &LanguageServerSettingsState::default(),
@@ -844,6 +859,9 @@ fn changes_switch_mounts_workspace_diffs_in_the_multi_diff_editor_without_files_
             session_context_menu: SessionContextMenuState::default(),
             git_branch_context_menu: &GitBranchContextMenuState::default(),
             workspace_path_picker: &WorkspacePathPickerState::default(),
+            remote_connection_picker: &RemoteConnectionPickerState::default(),
+            remote_connection_manager: &RemoteConnectionManagerState::default(),
+            remote_tunnel_manager: &RemoteTunnelManagerState::default(),
             keybindings: &NativeKeybindings::default(),
             keyboard_shortcuts: &KeyboardShortcutsState::default(),
             language_server_settings: &LanguageServerSettingsState::default(),
@@ -1024,6 +1042,8 @@ fn overlay_rebuild_restores_the_retained_base_scene_and_interactions() {
     let thread_projection = ThreadProjection::default();
     let git_branch_context_menu = GitBranchContextMenuState::default();
     let workspace_path_picker = WorkspacePathPickerState::default();
+    let remote_connection_picker = RemoteConnectionPickerState::default();
+    let remote_connection_manager = RemoteConnectionManagerState::default();
     let keybindings = NativeKeybindings::default();
     let keyboard_shortcuts = KeyboardShortcutsState::default();
     let language_server_settings = LanguageServerSettingsState::default();
@@ -1064,6 +1084,9 @@ fn overlay_rebuild_restores_the_retained_base_scene_and_interactions() {
         session_context_menu: SessionContextMenuState::default(),
         git_branch_context_menu: &git_branch_context_menu,
         workspace_path_picker: &workspace_path_picker,
+        remote_connection_picker: &remote_connection_picker,
+        remote_connection_manager: &remote_connection_manager,
+        remote_tunnel_manager: &RemoteTunnelManagerState::default(),
         keybindings: &keybindings,
         keyboard_shortcuts: &keyboard_shortcuts,
         language_server_settings: &language_server_settings,
@@ -1229,6 +1252,9 @@ fn compact_viewport_uses_bounded_fallback_scene() {
             session_context_menu: SessionContextMenuState::default(),
             git_branch_context_menu: &GitBranchContextMenuState::default(),
             workspace_path_picker: &WorkspacePathPickerState::default(),
+            remote_connection_picker: &RemoteConnectionPickerState::default(),
+            remote_connection_manager: &RemoteConnectionManagerState::default(),
+            remote_tunnel_manager: &RemoteTunnelManagerState::default(),
             keybindings: &NativeKeybindings::default(),
             keyboard_shortcuts: &KeyboardShortcutsState::default(),
             language_server_settings: &LanguageServerSettingsState::default(),

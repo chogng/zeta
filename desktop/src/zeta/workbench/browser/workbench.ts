@@ -13,6 +13,10 @@ import { URI } from "../../base/common/uri.js";
 import { AccessibilityService } from "../../platform/accessibility/browser/accessibilityService.js";
 import { IAccessibilityService } from "../../platform/accessibility/common/accessibility.js";
 import type { IRendererHost } from "../../platform/renderer/common/rendererHost.js";
+import { IRemoteConnectionService } from "../../platform/remote/common/remoteConnectionService.js";
+import { UnavailableRemoteConnectionService } from "../../platform/remote/common/remoteConnectionService.js";
+import { IRemoteTunnelService } from "../../platform/remote/common/remoteTunnelService.js";
+import { UnavailableRemoteTunnelService } from "../../platform/remote/common/remoteTunnelService.js";
 import type {
   INativeHostApi,
 } from "../../platform/native/common/nativeHost.js";
@@ -143,9 +147,9 @@ import { IToolSearchService } from "../../platform/toolSearch/common/toolSearchS
 import { IConnectorService } from "../../platform/connectors/common/connectorService.js";
 import { AppServerConnectorService } from "../services/connectors/browser/appServerConnectorService.js";
 import { IPluginService } from "../../platform/plugins/common/pluginService.js";
-import { ILanguageMarketplaceService } from "../../platform/language/common/languageMarketplaceService.js";
 import { AppServerPluginService } from "../services/plugins/browser/appServerPluginService.js";
-import { AppServerLanguageMarketplaceService } from "../services/language/browser/appServerLanguageMarketplaceService.js";
+import { IMarketplaceService } from "../../platform/marketplace/common/marketplaceService.js";
+import { AppServerMarketplaceService } from "../services/marketplace/browser/appServerMarketplaceService.js";
 import { AppServerToolSearchService } from "../services/toolSearch/browser/appServerToolSearchService.js";
 import { AccessibleViewInformationService, IAccessibleViewInformationService } from "../services/accessibility/common/accessibleViewInformationService.js";
 import { NativeAccessibilityService } from "../services/accessibility/electron-browser/accessibilityService.js";
@@ -254,8 +258,10 @@ export class Workbench extends DisposableOwner {
     this.session = normalizedSession;
     const services = new ServiceCollection();
     const instantiationService = new InstantiationService(services);
-    const remoteAgentService = this.own(new AppServerRemoteAgentService({ api: api.appServer }));
+    const remoteAgentService = this.own(new AppServerRemoteAgentService({ api: api.appServer, remoteApi: api.remote }));
     services.set(IRemoteAgentService, remoteAgentService);
+    services.set(IRemoteConnectionService, api.remoteConnections ?? UnavailableRemoteConnectionService);
+    services.set(IRemoteTunnelService, api.remoteTunnels ?? UnavailableRemoteTunnelService);
     if (nativeHostApi) {
       services.set(INativeHostService, nativeHostApi);
     }
@@ -320,7 +326,7 @@ export class Workbench extends DisposableOwner {
     services.set(ICodeIndexService, new AppServerCodeIndexService(api.codeIndex));
     services.set(IConnectorService, this.own(new AppServerConnectorService(api.connectors, api.events)));
     services.set(IPluginService, this.own(new AppServerPluginService(api.plugins, api.events)));
-    services.set(ILanguageMarketplaceService, new AppServerLanguageMarketplaceService(api.language));
+    services.set(IMarketplaceService, new AppServerMarketplaceService(api.marketplace));
     services.set(IToolSearchService, new AppServerToolSearchService(api.toolSearch));
     const workbenchState = workspaceContext.getWorkbenchState();
     const workbenchWindow = this.own(new WorkbenchWindow({

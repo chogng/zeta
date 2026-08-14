@@ -286,6 +286,71 @@ fn successful_response_body_is_emitted_through_the_streaming_path() {
 }
 
 #[test]
+fn streaming_success_and_buffered_error_use_independent_limits() {
+    let success_listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let success_address = success_listener.local_addr().unwrap();
+    let success_server = std::thread::spawn(move || {
+        let (mut stream, _) = success_listener.accept().unwrap();
+        read_headers(&mut stream);
+        write!(
+            stream,
+            "HTTP/1.1 200 OK\r\nContent-Length: 3\r\nConnection: close\r\n\r\nabc"
+        )
+        .unwrap();
+    });
+    let error_listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let error_address = error_listener.local_addr().unwrap();
+    let error_server = std::thread::spawn(move || {
+        let (mut stream, _) = error_listener.accept().unwrap();
+        read_headers(&mut stream);
+        write!(
+            stream,
+            "HTTP/1.1 500 Error\r\nContent-Length: 3\r\nConnection: close\r\n\r\nabc"
+        )
+        .unwrap();
+    });
+    let unary_limit = ResponseBodyLimit::new(NonZeroUsize::new(2).unwrap()).unwrap();
+    let streaming_limit = ResponseBodyLimit::new(NonZeroUsize::new(3).unwrap()).unwrap();
+    let client = UreqHttpClient::with_config(
+        HttpClientConfig::new()
+            .with_proxy_policy(ProxyPolicy::Direct)
+            .with_response_body_limit(unary_limit)
+            .with_streaming_response_body_limit(streaming_limit),
+    )
+    .unwrap();
+    let mut success_sink = CollectedBody::default();
+    let success_request = HttpRequest::new(
+        HttpMethod::Get,
+        format!("http://{success_address}/success"),
+        Vec::new(),
+        Vec::new(),
+    )
+    .unwrap();
+    let error_request = HttpRequest::new(
+        HttpMethod::Get,
+        format!("http://{error_address}/error"),
+        Vec::new(),
+        Vec::new(),
+    )
+    .unwrap();
+
+    assert_eq!(
+        client
+            .execute_streaming(&success_request, &mut success_sink)
+            .unwrap()
+            .status(),
+        200
+    );
+    assert_eq!(success_sink.body, b"abc");
+    assert!(matches!(
+        client.execute_streaming(&error_request, &mut CollectedBody::default()),
+        Err(HttpClientError::Transport(message)) if message == "response body exceeded configured limit"
+    ));
+    success_server.join().unwrap();
+    error_server.join().unwrap();
+}
+
+#[test]
 fn response_limit_reserves_headroom_for_overflow_detection() {
     assert!(matches!(
         ResponseBodyLimit::new(NonZeroUsize::new(usize::MAX).unwrap()),

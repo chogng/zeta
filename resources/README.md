@@ -7,7 +7,7 @@ need a renderer-independent source of truth.
 
 `product-services/` is the release-owned trust bundle copied to
 `zeta-resources/product-services/` by both package assemblers. Its
-`product-services.json` registers the official HTTPS Plugin Marketplace and references the sibling
+`product-services.json` registers the product-selected HTTPS Marketplace registry and references the sibling
 `marketplace-root.json`; the root is public verification material, never a signing key.
 
 The packaged `zeta` executable discovers this file through `zeta-install-context`. An explicit

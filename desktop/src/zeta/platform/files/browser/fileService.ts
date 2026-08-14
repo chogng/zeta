@@ -6,6 +6,7 @@ import { DisposableOwner } from "../../../base/common/lifecycle.js";
 import { URI } from "../../../base/common/uri.js";
 import { FileKind, FileNotFoundError, FileRevisionConflictError, type FileDeleteMode, type FileExistingTargetBehavior, type FileMissingTargetBehavior, type IFileBytes, type IFileChangeEvent, type IFileContent, type IFileEntry, type IFileService, type IFileStat, type IFileWriteRequest, type IFileWriteResult } from "../common/files.js";
 import type { IWorkspaceContextService } from "../../workspace/common/workspace.js";
+import { isRemoteResource } from "../../remote/common/remote.js";
 
 /** Narrow App Server surface consumed by the browser file-service adapter. */
 export interface IFileSystemApi {
@@ -201,15 +202,15 @@ function decodeResourceChunk(chunk: ResourceReadResult, resourceId: string, expe
 /** Resolves a resource to a slash-separated path beneath one workspace root. */
 export function workspaceRelativePath(root: URI, resource: URI): string {
   if (
-    root.scheme !== "file" ||
-    resource.scheme !== "file" ||
+    !isWorkspaceFileSystemResource(root) ||
+    resource.scheme !== root.scheme ||
     root.authority.toLowerCase() !== resource.authority.toLowerCase()
   ) {
-    throw new Error("Resource must belong to the local workspace filesystem");
+    throw new Error("Resource must belong to the current workspace filesystem");
   }
   const rootPath = decodedPath(root).replace(/\/+$/, "");
   const resourcePath = decodedPath(resource).replace(/\/+$/, "");
-  const ignoreCase = isCaseInsensitiveFileSystemPath(rootPath);
+  const ignoreCase = root.scheme === "file" && isCaseInsensitiveFileSystemPath(rootPath);
   const comparedRoot = ignoreCase ? rootPath.toLowerCase() : rootPath;
   const comparedResource = ignoreCase
     ? resourcePath.toLowerCase()
@@ -223,7 +224,8 @@ export function workspaceRelativePath(root: URI, resource: URI): string {
 }
 
 function decodedPath(resource: URI): string {
-  return decodeURIComponent(resource.path).replaceAll("\\", "/");
+  const path = decodeURIComponent(resource.path);
+  return resource.scheme === "file" ? path.replaceAll("\\", "/") : path;
 }
 
 function isCaseInsensitiveFileSystemPath(path: string): boolean {
@@ -240,11 +242,16 @@ function childResource(parent: URI, name: string): URI {
 
 /** Resolves one slash-separated protocol path beneath a workspace root. */
 export function workspaceResourceFromPath(root: URI, path: string): URI | undefined {
-  if (root.scheme !== "file") return undefined;
-  const segments = path.replaceAll("\\", "/").split("/");
+  if (!isWorkspaceFileSystemResource(root)) return undefined;
+  const normalizedPath = root.scheme === "file" ? path.replaceAll("\\", "/") : path;
+  const segments = normalizedPath.split("/");
   if (segments.length === 0 || segments.some(segment => segment.length === 0 || segment === "." || segment === "..")) return undefined;
   const rootPath = root.path.endsWith("/") ? root.path.slice(0, -1) : root.path;
   return root.withPath(`${rootPath}/${segments.map(encodeURIComponent).join("/")}`);
+}
+
+function isWorkspaceFileSystemResource(resource: URI): boolean {
+  return resource.scheme === "file" || isRemoteResource(resource);
 }
 
 function fileKind(fileType: FsFileType): FileKind {

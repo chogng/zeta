@@ -140,6 +140,19 @@ fn project_lines(projection: &ThreadProjection) -> Vec<TimelineLine> {
                 push_section(&mut lines, "You · Image", TimelineLineKind::UserLabel);
                 push_text(&mut lines, url, TimelineLineKind::UserMessage);
             }
+            ThreadItem::UserImageAttachment { attachment, .. } => {
+                push_section(&mut lines, "You · Image", TimelineLineKind::UserLabel);
+                push_text(
+                    &mut lines,
+                    &format!(
+                        "{} · {}×{}",
+                        attachment.media_type.mime_type(),
+                        attachment.width,
+                        attachment.height
+                    ),
+                    TimelineLineKind::UserMessage,
+                );
+            }
             ThreadItem::AgentMessage { text, .. } => {
                 push_section(&mut lines, "Agent", TimelineLineKind::AgentLabel);
                 push_text(&mut lines, text, TimelineLineKind::AgentMessage);

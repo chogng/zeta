@@ -3,9 +3,10 @@
 > 本 README 是 Plugin manifest、identity、local package validation 与 discovery 的当前实现
 > 契约。跨 crate 的安装、activation、权限和运行时演进由
 > [`docs/plugins.md`](../../docs/plugins.md) 维护；Connector account/lifecycle 由
-> [`docs/connectors.md`](../../docs/connectors.md) 维护。
+> [`docs/connectors.md`](../../docs/connectors.md) 维护。统一远端 package/capability 入口见
+> [`docs/marketplace-integration.md`](../../docs/marketplace-integration.md)。
 
-`zeta-plugins` 严格解析 declarative Plugin v1 package，验证 package-relative path 与本地文件树，
+`zeta-plugins` 是 legacy 本地 Plugin 来源适配器：它严格解析 declarative Plugin v1 package，验证 package-relative path 与本地文件树，
 计算确定性 SHA-256 digest，并管理既有本地 Plugin 安装的 enable/grant/effective activation 状态。
 远端发现、下载、artifact、install/update/uninstall 和 capability lease 统一属于
 `zeta-marketplace-manager`；本 crate 不再解析 Marketplace catalog，也不是 Marketplace 安装 owner。
@@ -212,9 +213,9 @@ orphan quota authority；不得重新接入远端 catalog。package-rooted MCP c
 已位于 `zeta-mcp-extension`，不能反向并入本 crate。这些能力应在新的 private
 `authority/resolution` modules 中接入，不扩大 loader/store 为隐式 enable manager。
 
-本 crate 让声明式和可执行 Editor Extension 都进入既有 Plugin package、digest 与 enable/grant
-控制面。声明式目录由 App Server 投影到 `zeta-extensions`，不获得任意执行权限；可执行声明才进入
-invocation fence。它不包含 Extension Host executable、RPC、crash supervisor、workspace trust broker
-或 provider runtime。即使 manifest 与 exact process permission 均有效，安装也不会启动 entrypoint；Host
-仍须在 dispatch 时复核 active generation/invocation lease，并把 capability ceiling 投影为拒绝默认的
-broker policy。
+本 crate 只让 legacy 本地 Plugin 的声明式和可执行 Editor Extension 进入既有 digest 与
+enable/grant 控制面。声明式目录由 App Server 投影到 `zeta-extensions`；可执行声明被规范化为通用
+Editor Extension deployment，Host 不再理解 Plugin package。正式 Marketplace 的 `packageType=plugin`
+只是 Manager 一次安装、多个 capability consumer 分解的 bundle，不进入本 store/authority。即使 legacy
+manifest 与 exact process permission 均有效，安装也不会启动 entrypoint；Host 仍须在 dispatch 时复核
+source lease 与 Workspace trust，并把 capability ceiling 投影为拒绝默认的 broker policy。

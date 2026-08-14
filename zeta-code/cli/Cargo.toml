@@ -10,6 +10,8 @@ name = "zeta"
 path = "src/main.rs"
 
 [dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
 signal-hook = { workspace = true }
 zeta-app-server = { workspace = true }
 zeta-app-server-client = { workspace = true }
@@ -18,7 +20,16 @@ zeta-exec = { workspace = true }
 zeta-install-context = { workspace = true }
 zeta-mcp-server = { workspace = true }
 zeta-protocol = { workspace = true }
+zeta-remote = { workspace = true }
+zeta-remote-connections = { workspace = true }
+zeta-remote-server = { workspace = true }
 zeta-tui = { workspace = true }
+
+[dev-dependencies]
+flate2 = { workspace = true }
+portable-pty = { workspace = true }
+sha2 = { workspace = true }
+tar = { workspace = true }
 
 [lints]
 workspace = true

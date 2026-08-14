@@ -1239,6 +1239,7 @@
         "TerminalUnavailable",
         "TerminalNotFound",
         "TerminalNotOwner",
+        "TerminalAttachRejected",
         "TerminalBusy",
         "TerminalOperationFailed",
         "DebugAdapterUnavailable",
@@ -4575,6 +4576,22 @@
           "properties": {
             "method": {
               "type": "string",
+              "const": "terminal/attach"
+            },
+            "params": {
+              "$ref": "#/$defs/TerminalAttachParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
               "const": "terminal/write"
             },
             "params": {
@@ -7415,6 +7432,22 @@
             },
             "result": {
               "$ref": "#/$defs/TerminalCreateResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "terminal/attach"
+            },
+            "result": {
+              "$ref": "#/$defs/TerminalAttachResult"
             }
           },
           "required": [
@@ -14687,6 +14720,19 @@
           "properties": {
             "kind": {
               "type": "string",
+              "const": "theme"
+            }
+          },
+          "$ref": "#/$defs/MarketplaceThemeActivationSpecDto",
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
               "const": "language"
             }
           },
@@ -15028,6 +15074,29 @@
         {
           "type": "object",
           "properties": {
+            "args": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "executable": {
+              "$ref": "#/$defs/MarketplaceResourceRefDto"
+            },
+            "type": {
+              "type": "string",
+              "const": "stdio"
+            }
+          },
+          "required": [
+            "type",
+            "executable",
+            "args"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
             "type": {
               "type": "string",
               "const": "streamableHttp"
@@ -15248,6 +15317,21 @@
       "required": [
         "contractVersion",
         "resource"
+      ]
+    },
+    "MarketplaceThemeActivationSpecDto": {
+      "type": "object",
+      "properties": {
+        "contractVersion": {
+          "type": "string"
+        },
+        "manifest": {
+          "$ref": "#/$defs/MarketplaceResourceRefDto"
+        }
+      },
+      "required": [
+        "contractVersion",
+        "manifest"
       ]
     },
     "MarketplaceUninstallModeDto": {
@@ -19008,8 +19092,58 @@
         "variable"
       ]
     },
+    "TerminalAttachParams": {
+      "description": "Reclaims one reconnectable terminal after its previous connection closed.",
+      "type": "object",
+      "properties": {
+        "cols": {
+          "type": "integer",
+          "format": "uint16",
+          "maximum": 512,
+          "minimum": 1
+        },
+        "reconnectToken": {
+          "type": "string",
+          "maxLength": 64,
+          "minLength": 64
+        },
+        "rows": {
+          "type": "integer",
+          "format": "uint16",
+          "maximum": 512,
+          "minimum": 1
+        },
+        "terminalId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "terminalId",
+        "reconnectToken",
+        "rows",
+        "cols"
+      ]
+    },
+    "TerminalAttachResult": {
+      "description": "Confirms attachment and rotates the bearer token for the next disconnect.",
+      "type": "object",
+      "properties": {
+        "reconnect": {
+          "$ref": "#/$defs/TerminalReconnectLease"
+        },
+        "terminalId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "terminalId",
+        "reconnect"
+      ]
+    },
     "TerminalCloseParams": {
-      "description": "Terminates and releases one connection-owned terminal.",
+      "description": "Terminates and releases one terminal attached to the calling connection.",
       "type": "object",
       "properties": {
         "terminalId": {
@@ -19069,7 +19203,7 @@
       ]
     },
     "TerminalCreateParams": {
-      "description": "Starts one connection-owned interactive terminal at the server's trusted workspace root.",
+      "description": "Starts one interactive terminal at the server's trusted workspace root.",
       "type": "object",
       "properties": {
         "cols": {
@@ -19077,6 +19211,9 @@
           "format": "uint16",
           "maximum": 512,
           "minimum": 1
+        },
+        "lifecycle": {
+          "$ref": "#/$defs/TerminalLifecycle"
         },
         "profile": {
           "$ref": "#/$defs/TerminalProfileSelection"
@@ -19092,7 +19229,8 @@
       "required": [
         "rows",
         "cols",
-        "profile"
+        "profile",
+        "lifecycle"
       ]
     },
     "TerminalCreateResult": {
@@ -19102,6 +19240,16 @@
         "profile": {
           "$ref": "#/$defs/TerminalProfile"
         },
+        "reconnect": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TerminalReconnectLease"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "terminalId": {
           "type": "string"
         }
@@ -19109,6 +19257,37 @@
       "required": [
         "terminalId",
         "profile"
+      ]
+    },
+    "TerminalLifecycle": {
+      "description": "Selects whether a terminal dies with its creating connection or may be reattached briefly.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "connectionOwned"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "reconnectable"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type"
+          ]
+        }
       ]
     },
     "TerminalOutputChunk": {
@@ -19287,6 +19466,27 @@
         "nextCommandSequence",
         "commandEventGap",
         "exited"
+      ]
+    },
+    "TerminalReconnectLease": {
+      "description": "One short-lived bearer lease used to reattach a detached terminal.",
+      "type": "object",
+      "properties": {
+        "reconnectGracePeriodMillis": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "reconnectToken": {
+          "type": "string",
+          "maxLength": 64,
+          "minLength": 64
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "reconnectToken",
+        "reconnectGracePeriodMillis"
       ]
     },
     "TerminalResizeParams": {

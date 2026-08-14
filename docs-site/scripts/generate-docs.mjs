@@ -115,6 +115,7 @@ const groups = [
   {
     label: "平台与交付",
     files: [
+      "remote-development",
       "git",
       "documentation-guidelines",
     ],

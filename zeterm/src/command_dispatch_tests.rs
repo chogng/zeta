@@ -3,8 +3,8 @@ use zeta_commands::ZetermCommandId;
 use super::builtin_command_registry;
 use super::command_request_for_element;
 use crate::shell_interaction::{
-    ADD_SESSION, AGENT_FILES, AGENT_FILES_REFRESH, CONTEXT_DIFF, CONTEXT_WORKING_DIRECTORY,
-    SESSION_SIDEBAR_TOGGLE,
+    ADD_SESSION, AGENT_FILES, AGENT_FILES_REFRESH, CONTEXT_DIFF, CONTEXT_LOCATION,
+    CONTEXT_WORKING_DIRECTORY, SESSION_SIDEBAR_TOGGLE,
 };
 
 #[test]
@@ -34,6 +34,12 @@ fn element_entry_points_map_to_stable_product_commands() {
             .command_id()
             .id(),
         "workbench.action.showWorkspaceDiff"
+    );
+    assert_eq!(
+        command_request_for_element(CONTEXT_LOCATION)
+            .expect("Remote connection picker command")
+            .command_id(),
+        ZetermCommandId::PickExecutionLocation
     );
     assert_eq!(
         command_request_for_element(CONTEXT_WORKING_DIRECTORY)

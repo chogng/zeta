@@ -2,10 +2,13 @@ use super::{AppServer, ConnectionState, RpcError, decode, result};
 use serde_json::Value;
 use zeta_app_server_protocol::protocol::common::EmptyParams;
 use zeta_app_server_protocol::protocol::error::AppServerErrorName;
-use zeta_app_server_protocol::protocol::terminal::{
-    TerminalCloseParams, TerminalCreateParams, TerminalProfileListResult, TerminalReadParams,
-    TerminalResizeParams, TerminalWriteParams,
-};
+use zeta_app_server_protocol::protocol::terminal::TerminalAttachParams;
+use zeta_app_server_protocol::protocol::terminal::TerminalCloseParams;
+use zeta_app_server_protocol::protocol::terminal::TerminalCreateParams;
+use zeta_app_server_protocol::protocol::terminal::TerminalProfileListResult;
+use zeta_app_server_protocol::protocol::terminal::TerminalReadParams;
+use zeta_app_server_protocol::protocol::terminal::TerminalResizeParams;
+use zeta_app_server_protocol::protocol::terminal::TerminalWriteParams;
 
 impl AppServer {
     pub(super) fn terminal_profile_list(&self, params: &Value) -> Result<Value, RpcError> {
@@ -38,6 +41,19 @@ impl AppServer {
             .write(connection.connection_id, params)
             .map_err(terminal_error)?;
         result(&())
+    }
+
+    pub(super) fn terminal_attach(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: TerminalAttachParams = decode(params)?;
+        let attached = self
+            .terminal_service()?
+            .attach(connection.connection_id, params)
+            .map_err(terminal_error)?;
+        result(&attached)
     }
 
     pub(super) fn terminal_resize(
@@ -84,6 +100,9 @@ fn terminal_error(error: crate::terminal_service::TerminalError) -> RpcError {
         TerminalError::InvalidInput => RpcError::new(-32602, AppServerErrorName::InvalidParams),
         TerminalError::NotFound => RpcError::new(-32061, AppServerErrorName::TerminalNotFound),
         TerminalError::NotOwner => RpcError::new(-32062, AppServerErrorName::TerminalNotOwner),
+        TerminalError::AttachRejected => {
+            RpcError::new(-32065, AppServerErrorName::TerminalAttachRejected)
+        }
         TerminalError::Busy => RpcError::new(-32063, AppServerErrorName::TerminalBusy),
         TerminalError::OperationFailed => {
             RpcError::new(-32064, AppServerErrorName::TerminalOperationFailed)

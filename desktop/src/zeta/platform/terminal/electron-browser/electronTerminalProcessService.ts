@@ -1,4 +1,4 @@
-import type { TerminalCloseParams, TerminalCreateParams, TerminalCreateResult, TerminalProfileListResult, TerminalReadParams, TerminalReadResult, TerminalResizeParams, TerminalWriteParams } from "../../../../../generated/app-server/types.js";
+import type { TerminalCloseParams, TerminalCreateParams, TerminalProfileListResult, TerminalReadParams, TerminalReadResult, TerminalResizeParams, TerminalWriteParams } from "../../../../../generated/app-server/types.js";
 import { type IDisposable, toDisposable } from "../../../base/common/lifecycle.js";
 import type { IAppServerApi } from "../../app-server/common/appServerApi.js";
 import { invoke } from "../../ipc/electron-browser/rendererIpc.js";
@@ -14,8 +14,8 @@ export class ElectronTerminalProcessService implements ITerminalProcessService {
   }
 
   create(options: ITerminalProcessCreateOptions): Promise<ITerminalProcessCreation> {
-    const params: TerminalCreateParams = options;
-    return invoke<TerminalCreateResult>("zeta:terminal:create", params);
+    const params: TerminalCreateParams = { ...options, lifecycle: { type: "connectionOwned" } };
+    return invoke<ITerminalProcessCreation>("zeta:terminal:create", params);
   }
 
   write(options: ITerminalProcessWriteOptions): Promise<void> {

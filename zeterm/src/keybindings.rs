@@ -209,6 +209,7 @@ fn default_keybinding(command: ZetermCommandId) -> Option<&'static KeySequence> 
         })),
         ZetermCommandId::ToggleComposerMode
         | ZetermCommandId::OpenLanguageServerSettings
+        | ZetermCommandId::ManageRemoteTunnels
         | ZetermCommandId::ToggleSessionSidebar
         | ZetermCommandId::ToggleAgentSidebar
         | ZetermCommandId::ActivateSessionTab

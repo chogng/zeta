@@ -9,11 +9,13 @@ import {
 } from "../../../../../../generated/app-server/types.js";
 import { AppServerClient } from "../../../../platform/app-server/electron-main/app-server-client.js";
 import { AppServerSession } from "../../../../platform/app-server/electron-main/app-server-session.js";
+import { AppServerProtocolIncompatibleError } from "../../../../platform/app-server/electron-main/app-server-session.js";
 import {
   AppServerSupervisor,
   type AppServerSupervisorOptions,
 } from "../../../../platform/app-server/electron-main/app-server-supervisor.js";
 import { JsonRpcPeer } from "../../../../platform/app-server/electron-main/json-rpc-peer.js";
+import { LocalAppServerProcessLauncher } from "../../../../platform/app-server/electron-main/localAppServerProcessLauncher.js";
 
 class ProtocolChildProcess extends EventEmitter {
   readonly stdin = new PassThrough();
@@ -110,12 +112,14 @@ function supervisorOptions(
   children: ProtocolChildProcess[],
 ): AppServerSupervisorOptions {
   return {
-    executable: "/test/zeta",
-    args: ["app-server", "--listen", "stdio://"],
-    environment: {
-      PATH: "/test/bin",
-      ZETA_RG_PATH: "/test/bin/rg",
-      ZETA_PROFILE_ROOT: "/test/state",
+    processLauncher: {
+      description: "test-app-server",
+      validate() {},
+      launch: () => {
+        const child = new ProtocolChildProcess();
+        children.push(child);
+        return child as unknown as ChildProcessWithoutNullStreams;
+      },
     },
     session: {
       clientName: "desktop-test",
@@ -124,13 +128,7 @@ function supervisorOptions(
       initializeTimeoutMs: 100,
       expectedServerName: "zeta-test",
     },
-    fileExists: () => true,
     wait: async () => {},
-    spawnProcess: () => {
-      const child = new ProtocolChildProcess();
-      children.push(child);
-      return child as unknown as ChildProcessWithoutNullStreams;
-    },
   };
 }
 
@@ -189,6 +187,7 @@ test("supervisor restarts a crashed process with bounded lifecycle states", asyn
   supervisor.onStateChange((state) => states.push(state));
   await supervisor.start();
   assert.equal(supervisor.state, "ready");
+  assert.equal(supervisor.generation, 1);
   assert.equal(supervisor.slashCommands[0]?.name, "diagnose");
 
   const restarted = new Promise<void>((resolve) => {
@@ -203,11 +202,13 @@ test("supervisor restarts a crashed process with bounded lifecycle states", asyn
   await restarted;
 
   assert.equal(children.length, 2);
+  assert.equal(supervisor.generation, 2);
   assert.ok(states.includes("crashed"));
   assert.ok(states.includes("restarting"));
   assert.equal(supervisor.state, "ready");
   await supervisor.stop();
   assert.equal(supervisor.state, "stopped");
+  assert.equal(supervisor.generation, 3);
 });
 
 test("workspace switching keeps the current App Server process and connection", async () => {
@@ -318,20 +319,21 @@ test("supervisor stops restarting after its crash budget is exhausted", async ()
   await supervisor.stop();
 });
 
-test("supervisor requires an absolute executable and rejects variables outside its environment allowlist", () => {
-  const children: ProtocolChildProcess[] = [];
+test("local launcher requires an absolute executable and rejects variables outside its environment allowlist", () => {
   assert.throws(
     () =>
-      new AppServerSupervisor({
-        ...supervisorOptions(children),
+      new LocalAppServerProcessLauncher({
         executable: "relative/zeta",
+        args: [],
+        environment: {},
       }),
     /must be absolute/,
   );
   assert.throws(
     () =>
-      new AppServerSupervisor({
-        ...supervisorOptions(children),
+      new LocalAppServerProcessLauncher({
+        executable: "/test/zeta",
+        args: [],
         environment: {
           PATH: "/test/bin",
           ZETA_PROFILE_ROOT: "/test/state",
@@ -340,16 +342,18 @@ test("supervisor requires an absolute executable and rejects variables outside i
       }),
     /AWS_SECRET_ACCESS_KEY/,
   );
-  const allowedSupervisor = new AppServerSupervisor({
-    ...supervisorOptions(children),
+  const allowedLauncher = new LocalAppServerProcessLauncher({
+    executable: "/test/zeta",
+    args: [],
     environment: {
       HOME: "/home/zeta",
       LANG: "C.UTF-8",
       PATH: "/test/bin",
       ZETA_PROFILE_ROOT: "/test/state",
     },
+    fileExists: () => true,
   });
-  allowedSupervisor.dispose();
+  allowedLauncher.validate();
 });
 
 test("initialization failures consume exactly the bounded startup retry budget", async () => {
@@ -357,10 +361,14 @@ test("initialization failures consume exactly the bounded startup retry budget",
   const options = supervisorOptions(children);
   options.maxRestartAttempts = 1;
   options.session = { ...options.session, initializeTimeoutMs: 5 };
-  options.spawnProcess = () => {
-    const child = new ProtocolChildProcess(APP_SERVER_SCHEMA_HASH, false);
-    children.push(child);
-    return child as unknown as ChildProcessWithoutNullStreams;
+  options.processLauncher = {
+    description: "unresponsive-test-app-server",
+    validate() {},
+    launch: () => {
+      const child = new ProtocolChildProcess(APP_SERVER_SCHEMA_HASH, false);
+      children.push(child);
+      return child as unknown as ChildProcessWithoutNullStreams;
+    },
   };
   const supervisor = new AppServerSupervisor(options);
 
@@ -377,13 +385,14 @@ test("supervisor can retry a failed startup gate after stopping", async () => {
   options.maxRestartAttempts = 0;
   options.session = { ...options.session, initializeTimeoutMs: 5 };
   let respondToInitialize = false;
-  options.spawnProcess = () => {
-    const child = new ProtocolChildProcess(
-      APP_SERVER_SCHEMA_HASH,
-      respondToInitialize,
-    );
-    children.push(child);
-    return child as unknown as ChildProcessWithoutNullStreams;
+  options.processLauncher = {
+    description: "recoverable-test-app-server",
+    validate() {},
+    launch: () => {
+      const child = new ProtocolChildProcess(APP_SERVER_SCHEMA_HASH, respondToInitialize);
+      children.push(child);
+      return child as unknown as ChildProcessWithoutNullStreams;
+    },
   };
   const supervisor = new AppServerSupervisor(options);
 
@@ -396,5 +405,36 @@ test("supervisor can retry a failed startup gate after stopping", async () => {
 
   assert.equal(supervisor.state, "ready");
   assert.equal(children.length, 2);
+  await supervisor.stop();
+});
+
+test("supervisor gives a launcher one typed initialization recovery without consuming restart budget", async () => {
+  const children: ProtocolChildProcess[] = [];
+  const failures: unknown[] = [];
+  let initialized = 0;
+  const options = supervisorOptions(children);
+  options.maxRestartAttempts = 0;
+  options.processLauncher = {
+    description: "recovering-remote-app-server",
+    validate() {},
+    launch: () => {
+      const child = new ProtocolChildProcess(children.length === 0 ? "sha256:old" : APP_SERVER_SCHEMA_HASH);
+      children.push(child);
+      return child as unknown as ChildProcessWithoutNullStreams;
+    },
+    recoverInitializationFailure: error => {
+      failures.push(error);
+      return error instanceof AppServerProtocolIncompatibleError;
+    },
+    didInitialize: () => { initialized += 1; },
+  };
+  const supervisor = new AppServerSupervisor(options);
+
+  await supervisor.start();
+
+  assert.equal(children.length, 2);
+  assert.equal(failures.length, 1);
+  assert.equal(initialized, 1);
+  assert.equal(supervisor.state, "ready");
   await supervisor.stop();
 });

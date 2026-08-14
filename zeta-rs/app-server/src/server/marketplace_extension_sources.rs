@@ -1,13 +1,21 @@
+use std::collections::BTreeSet;
+use std::path::Component;
+use std::path::Path;
 use std::sync::Arc;
 use std::sync::Mutex;
 
+use serde::Deserialize;
 use zeta_extensions::DynamicExtensionPackageSource;
 use zeta_extensions::DynamicExtensionSourceProvider;
 use zeta_extensions::DynamicExtensionSourceSnapshot;
 use zeta_marketplace_client::CapabilityKind;
+use zeta_marketplace_manager::LocalCapabilitySource;
 use zeta_marketplace_manager::MarketplaceManager;
 
-/// Projects installed Marketplace Language assets into the declarative Extension catalog.
+const MAXIMUM_PORTABLE_THEME_MANIFEST_BYTES: u64 = 64 * 1024;
+const MAXIMUM_PORTABLE_THEMES: usize = 128;
+
+/// Projects installed Marketplace declarative editor assets into the Extension catalog.
 pub(super) struct MarketplaceExtensionSourceProvider {
     manager: Arc<MarketplaceManager>,
     state: Mutex<ProjectionState>,
@@ -30,13 +38,38 @@ impl MarketplaceExtensionSourceProvider {
 
 impl DynamicExtensionSourceProvider for MarketplaceExtensionSourceProvider {
     fn snapshot(&self) -> Result<DynamicExtensionSourceSnapshot, String> {
-        let sources = self
+        let mut sources = self
             .manager
             .local_capability_sources(CapabilityKind::Language)
-            .map_err(|error| error.to_string())?;
+            .map_err(|error| error.to_string())?
+            .into_iter()
+            .map(|source| (source, None))
+            .collect::<Vec<_>>();
+        for source in self
+            .manager
+            .local_capability_sources(CapabilityKind::Theme)
+            .map_err(|error| error.to_string())?
+        {
+            let manifest = normalized_theme_manifest(&source)?;
+            sources.push((source, Some(manifest)));
+        }
+        sources.sort_by(|left, right| {
+            (
+                left.0.package().id.as_str(),
+                left.0.package().version.as_str(),
+                left.0.id(),
+                left.0.capability().id.as_str(),
+            )
+                .cmp(&(
+                    right.0.package().id.as_str(),
+                    right.0.package().version.as_str(),
+                    right.0.id(),
+                    right.0.capability().id.as_str(),
+                ))
+        });
         let fingerprint = sources
             .iter()
-            .map(|source| {
+            .map(|(source, _)| {
                 format!(
                     "{}\0{}\0{}\0{}",
                     source.package().id,
@@ -49,17 +82,121 @@ impl DynamicExtensionSourceProvider for MarketplaceExtensionSourceProvider {
         let generation = next_generation(&self.state, fingerprint)?;
         let packages = sources
             .into_iter()
-            .map(|source| {
-                DynamicExtensionPackageSource::marketplace(
-                    format!("{}:{}", source.package().id, source.id()),
-                    source.host_path(),
-                )
+            .map(|(source, normalized_manifest)| {
+                let subject = format!("{}:{}", source.package().id, source.id());
+                match normalized_manifest {
+                    Some(manifest) => DynamicExtensionPackageSource::marketplace_with_manifest(
+                        subject,
+                        source.host_path(),
+                        manifest,
+                    ),
+                    None => DynamicExtensionPackageSource::marketplace(subject, source.host_path()),
+                }
             })
             .collect();
         Ok(DynamicExtensionSourceSnapshot {
             generation,
             packages,
         })
+    }
+}
+
+fn normalized_theme_manifest(source: &LocalCapabilitySource) -> Result<String, String> {
+    let path = source.host_path().join("package.json");
+    let metadata = std::fs::symlink_metadata(&path)
+        .map_err(|_| "Marketplace Theme manifest is unavailable".to_string())?;
+    if !metadata.is_file() || metadata.len() > MAXIMUM_PORTABLE_THEME_MANIFEST_BYTES {
+        return Err("Marketplace Theme manifest exceeds its file contract".into());
+    }
+    let manifest: PortableThemeManifest = serde_json::from_slice(
+        &std::fs::read(path)
+            .map_err(|_| "Marketplace Theme manifest is unavailable".to_string())?,
+    )
+    .map_err(|_| "Marketplace Theme manifest is invalid".to_string())?;
+    if manifest.schema_version != 1
+        || manifest.themes.is_empty()
+        || manifest.themes.len() > MAXIMUM_PORTABLE_THEMES
+    {
+        return Err("Marketplace Theme manifest version is unsupported".into());
+    }
+    let (publisher, name) = source
+        .package()
+        .id
+        .split_once('/')
+        .ok_or_else(|| "Marketplace Theme package identity is invalid".to_string())?;
+    let mut ids = BTreeSet::new();
+    let mut paths = BTreeSet::new();
+    let mut themes = Vec::new();
+    for theme in manifest.themes {
+        if theme.id.trim().is_empty()
+            || theme.id.len() > 256
+            || theme.display_name.trim().is_empty()
+            || theme.display_name.len() > 512
+            || !valid_theme_path(&theme.path)
+            || !ids.insert(theme.id.clone())
+            || !paths.insert(theme.path.clone())
+        {
+            return Err("Marketplace Theme declaration is invalid".into());
+        }
+        let theme_path = source.host_path().join(&theme.path);
+        if !theme_path.is_file() {
+            return Err("Marketplace Theme resource is unavailable".into());
+        }
+        themes.push(serde_json::json!({
+            "id": theme.id,
+            "label": theme.display_name,
+            "uiTheme": theme.appearance.workbench_name(),
+            "path": format!("./{}", theme.path),
+        }));
+    }
+    serde_json::to_string(&serde_json::json!({
+        "name": name,
+        "publisher": publisher,
+        "version": source.package().version,
+        "displayName": name,
+        "contributes": { "themes": themes },
+    }))
+    .map_err(|_| "Marketplace Theme manifest cannot be normalized".to_string())
+}
+
+fn valid_theme_path(value: &str) -> bool {
+    let path = Path::new(value);
+    value.starts_with("themes/")
+        && !path.is_absolute()
+        && path
+            .components()
+            .all(|component| matches!(component, Component::Normal(_)))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PortableThemeManifest {
+    schema_version: u32,
+    themes: Vec<PortableThemeDeclaration>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PortableThemeDeclaration {
+    id: String,
+    display_name: String,
+    appearance: PortableThemeAppearance,
+    path: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum PortableThemeAppearance {
+    Dark,
+    Light,
+}
+
+impl PortableThemeAppearance {
+    fn workbench_name(&self) -> &'static str {
+        match self {
+            Self::Dark => "vs-dark",
+            Self::Light => "vs",
+        }
     }
 }
 

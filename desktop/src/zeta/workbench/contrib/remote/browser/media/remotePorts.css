@@ -1,0 +1,136 @@
+.zeta-remote-ports {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 8px;
+}
+
+.zeta-remote-ports-form {
+  display: grid;
+  grid-template-columns: auto minmax(84px, 120px) auto auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.zeta-remote-ports-label {
+  color: var(--zeta-description-foreground);
+  font-size: 12px;
+}
+
+.zeta-remote-ports-input {
+  min-width: 0;
+  padding: 4px 6px;
+  border: 1px solid var(--zeta-input-border);
+  border-radius: 3px;
+  color: var(--zeta-input-foreground);
+  background: var(--zeta-input-background);
+  font: inherit;
+}
+
+.zeta-remote-ports-forward,
+.zeta-remote-ports-stop-all,
+.zeta-remote-port-stop {
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 3px;
+  color: inherit;
+  background: color-mix(in srgb, currentColor 8%, transparent);
+  font: inherit;
+  cursor: pointer;
+}
+
+.zeta-remote-ports-forward:hover:not(:disabled),
+.zeta-remote-ports-stop-all:hover:not(:disabled),
+.zeta-remote-port-stop:hover:not(:disabled) {
+  background: var(--zeta-toolbar-hover-background);
+}
+
+.zeta-remote-ports-input:focus-visible,
+.zeta-remote-ports-forward:focus-visible,
+.zeta-remote-ports-stop-all:focus-visible,
+.zeta-remote-port-stop:focus-visible {
+  outline: 1px solid var(--zeta-focus-border);
+  outline-offset: -1px;
+}
+
+.zeta-remote-ports-forward:disabled,
+.zeta-remote-ports-stop-all:disabled,
+.zeta-remote-port-stop:disabled,
+.zeta-remote-ports-input:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.zeta-remote-ports-status {
+  min-height: 18px;
+  padding: 6px 2px;
+  color: var(--zeta-description-foreground);
+  font-size: 12px;
+}
+
+.zeta-remote-ports-status.error,
+.zeta-remote-port.failed .zeta-remote-port-state {
+  color: var(--zeta-error-foreground);
+}
+
+.zeta-remote-ports-list {
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.zeta-remote-port {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
+  padding: 6px 7px;
+  border-top: 1px solid var(--zeta-border);
+}
+
+.zeta-remote-port-endpoints {
+  display: flex;
+  min-width: 0;
+  gap: 7px;
+  align-items: center;
+}
+
+.zeta-remote-port-local,
+.zeta-remote-port-remote {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zeta-remote-port-arrow,
+.zeta-remote-port-state {
+  color: var(--zeta-description-foreground);
+}
+
+.zeta-remote-port-state {
+  font-size: 12px;
+}
+
+.zeta-remote-port.recovering .zeta-remote-port-state {
+  color: var(--zeta-warning-foreground, var(--zeta-description-foreground));
+}
+
+@media (max-width: 620px) {
+  .zeta-remote-ports-form {
+    grid-template-columns: auto minmax(72px, 1fr) auto;
+  }
+
+  .zeta-remote-ports-stop-all {
+    grid-column: 3;
+  }
+
+  .zeta-remote-port {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .zeta-remote-port-state {
+    display: none;
+  }
+}

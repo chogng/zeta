@@ -11,7 +11,9 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = { workspace = true }
+base64 = { workspace = true }
 serde_json = { workspace = true }
+signal-hook = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "sync"] }
 unicode-width = { workspace = true }
 zeta-agent-sidebar = { workspace = true }
@@ -30,6 +32,8 @@ zeta-language-server-catalog = { workspace = true }
 zeta-language-service = { workspace = true }
 zeta-protocol = { workspace = true }
 zeta-renderer = { workspace = true }
+zeta-remote = { workspace = true }
+zeta-remote-connections = { workspace = true }
 zeta-settings = { workspace = true }
 zeta-slash-commands = { workspace = true }
 zeta-terminal = { workspace = true }
@@ -49,3 +53,9 @@ arboard = { workspace = true }
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+flate2 = { workspace = true }
+sha2 = { workspace = true }
+tar = { workspace = true }
+tempfile = { workspace = true }

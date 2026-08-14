@@ -209,11 +209,10 @@ impl Default for ConnectionPoolPolicy {
     }
 }
 
-/// A hard upper bound for a fully buffered unary HTTP response body.
+/// A hard upper bound for a buffered response or one successful streamed body.
 ///
-/// The synchronous transport exposes only bounded unary responses. Streaming
-/// protocols must use a future stream-specific port instead of raising this
-/// limit to accommodate an unbounded response.
+/// [`HttpClientConfig`] keeps separate values for buffered responses and successful streaming
+/// responses so large artifacts do not also permit oversized diagnostics.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ResponseBodyLimit {
     bytes: NonZeroUsize,
@@ -377,6 +376,7 @@ pub struct HttpClientConfig {
     timeouts: TransportTimeouts,
     connection_pool: ConnectionPoolPolicy,
     response_body_limit: ResponseBodyLimit,
+    streaming_response_body_limit: ResponseBodyLimit,
     tls: TlsPolicy,
     client_identity: ClientIdentityPolicy,
     network_targets: NetworkTargetPolicy,
@@ -409,6 +409,18 @@ impl HttpClientConfig {
 
     pub fn with_response_body_limit(mut self, response_body_limit: ResponseBodyLimit) -> Self {
         self.response_body_limit = response_body_limit;
+        self
+    }
+
+    /// Sets the total successful body limit for [`crate::HttpClient::execute_streaming`].
+    ///
+    /// Non-success streaming responses remain governed by [`Self::with_response_body_limit`]
+    /// because the transport buffers those diagnostics instead of sending them to the sink.
+    pub fn with_streaming_response_body_limit(
+        mut self,
+        streaming_response_body_limit: ResponseBodyLimit,
+    ) -> Self {
+        self.streaming_response_body_limit = streaming_response_body_limit;
         self
     }
 
@@ -447,6 +459,10 @@ impl HttpClientConfig {
         self.response_body_limit
     }
 
+    pub const fn streaming_response_body_limit(&self) -> ResponseBodyLimit {
+        self.streaming_response_body_limit
+    }
+
     pub fn tls(&self) -> &TlsPolicy {
         &self.tls
     }
@@ -468,6 +484,7 @@ impl Default for HttpClientConfig {
             timeouts: TransportTimeouts::default(),
             connection_pool: ConnectionPoolPolicy::default(),
             response_body_limit: ResponseBodyLimit::default(),
+            streaming_response_body_limit: ResponseBodyLimit::default(),
             tls: TlsPolicy::SystemRoots,
             client_identity: ClientIdentityPolicy::None,
             network_targets: NetworkTargetPolicy::Any,

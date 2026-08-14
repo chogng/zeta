@@ -229,6 +229,7 @@ pub enum ActivationSpec {
     Skill(SkillActivationSpec),
     Mcp(McpActivationSpec),
     Connector(ConnectorActivationSpec),
+    Theme(ThemeActivationSpec),
     Language(LanguageActivationSpec),
     Executable(ExecutableActivationSpec),
 }
@@ -252,7 +253,14 @@ pub struct McpActivationSpec {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(tag = "type", rename_all = "camelCase", deny_unknown_fields)]
 pub enum McpTransportSpec {
-    StreamableHttp { url: String },
+    Stdio {
+        executable: ResourceRef,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        args: Vec<String>,
+    },
+    StreamableHttp {
+        url: String,
+    },
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -263,6 +271,13 @@ pub struct ConnectorActivationSpec {
     pub authentication_provider: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mcp: Option<CapabilityRef>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ThemeActivationSpec {
+    pub contract_version: String,
+    pub manifest: ResourceRef,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

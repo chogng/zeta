@@ -4,10 +4,10 @@
 > deadline 设计见 [`docs/zeta-client.md`](../../docs/zeta-client.md)。
 
 `zeta-http-client` 是 provider-neutral outbound HTTP substrate。它拥有 reusable backend、
-proxy route、TLS trust/mTLS、redirect、transport timeout、connection pool、bounded unary body 和
-safe telemetry。上层通过 `HttpClient` 执行一个已经完整构造的 request，且每次只执行一次。
+proxy route、TLS trust/mTLS、redirect、transport timeout、connection pool、bounded unary/streaming
+body 和 safe telemetry。上层通过 `HttpClient` 执行一个已经完整构造的 request，且每次只执行一次。
 
-它不解释 provider JSON，不拥有 model operation retry，也不实现 SSE/NDJSON/WebSocket。
+它不解释 provider JSON，不拥有 model operation retry，也不实现 SSE/NDJSON/WebSocket framing。
 
 ## 当前实现边界
 
@@ -37,7 +37,7 @@ consumer 可以直接依赖本 crate；需要 operation retry 或 SSE framing �
 
 | Symbol | 职责 |
 | --- | --- |
-| `HttpClient` | `execute(&HttpRequest)` 一次；implementation 不得 retry |
+| `HttpClient` | `execute` 或 `execute_streaming` 一次；implementation 不得 retry |
 | `UreqHttpClient` | fallible、reusable synchronous production client；没有 panic-based `Default` |
 | `HttpMethod::{Get,Post}` | 当前支持的 method |
 | `HttpRequest` | validated HTTP(S) URL、headers 与 raw body |
@@ -65,7 +65,9 @@ consumer 可以直接依赖本 crate；需要 operation retry 或 SSE framing �
 | `ClientIdentity` | DER chain 与 zeroizing private key，debug redacted |
 
 `HttpClientConfig::default()` 当前使用环境 proxy、拒绝 redirect、30 秒 connect timeout、60 秒
-overall timeout、system roots、无 client identity、100/1 idle pool 和 10 MiB response limit。
+overall timeout、system roots、无 client identity、100/1 idle pool，以及各自 10 MiB 的普通响应和
+成功 streaming response limit。`with_response_body_limit` 仍限制 unary 与 streaming 非成功响应；
+`with_streaming_response_body_limit` 独立限制成功流，避免大下载同时放大错误页缓冲上限。
 
 环境 proxy 与 bypass 在 `UreqHttpClient::new` / `with_config` 时快照，不在每个 request 重新读取。
 两者都返回 `Result`；proxy、自定义证书与 mTLS 静态材料在构造时校验。System roots 在第一次实际
@@ -226,8 +228,9 @@ bazel test //zeta-rs/http-client:http-client-unit-tests
 
 ## 当前限制与潜在演进
 
-当前实现是 synchronous、unary、fully buffered、one-attempt HTTP。它使用 bounded transport
-timeout，但不直接接收 caller cancellation token；上层 `zeta-client` 可以在取消后停止等待并丢弃
+当前实现是 synchronous、one-attempt HTTP；unary response fully buffered，成功 streaming response
+按 chunk 向 caller-owned sink 施加 backpressure。它使用 bounded transport timeout，但不直接接收
+caller cancellation token；上层 `zeta-client` 可以在取消后停止等待并丢弃
 迟到 response，不能强制关闭已经进入 `ureq` 的 socket attempt。stream body、WebSocket、async
 port、per-phase diagnostics、custom redirect security policy 和 config-generation rollover
 manager 仍未实现。

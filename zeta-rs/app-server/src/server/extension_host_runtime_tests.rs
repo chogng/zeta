@@ -1,10 +1,10 @@
 use super::ExtensionHostInvocationRead;
 use super::ExtensionHostRuntimeError;
-use super::authority::stable_extension_id;
 use super::projection::ExtensionHostFailureKind;
 use super::projection::runtime_failure;
 use super::registration_allows_operation;
 use super::sessions::InvocationSessionStore;
+use super::source::stable_extension_id;
 use serde_json::json;
 use std::time::Duration;
 use std::time::Instant;
@@ -19,6 +19,14 @@ fn stable_id_combines_plugin_and_manifest_local_identity() {
         stable_extension_id("acme/review", "editor-runtime"),
         "acme/review:editor-runtime"
     );
+}
+
+#[test]
+fn normalized_extension_source_does_not_require_legacy_plugin_authority() {
+    let snapshot = super::source::combined_deployments(None, None, None).unwrap();
+
+    assert_eq!(snapshot.revision, Default::default());
+    assert!(snapshot.deployments.is_empty());
 }
 
 #[test]

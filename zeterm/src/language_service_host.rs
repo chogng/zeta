@@ -1,8 +1,17 @@
+#[path = "language_service_remote.rs"]
+pub(crate) mod remote;
+#[path = "language_service_remote_session.rs"]
+mod remote_session;
+
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use zeta_app_server_protocol::protocol::config::{ConfigReadResult, LanguageServerModeDto};
+use zeta_app_server_protocol::protocol::language::LanguageCompletionTriggerKindDto;
+use zeta_app_server_protocol::protocol::language::LanguageCompletionsParams;
+use zeta_app_server_protocol::protocol::language::LanguageHoverParams;
+use zeta_app_server_protocol::protocol::language::LanguageLocationsParams;
 use zeta_editor::{
     CodeEditorDiagnostic, CodeEditorDiagnosticSeverity, CodeEditorLanguage, CodeEditorRowSource,
 };
@@ -13,13 +22,18 @@ use zeta_language_server_catalog::{
     TYPESCRIPT_LANGUAGE_SERVER_ID,
 };
 use zeta_language_service::{
-    LanguageCompletions, LanguageDocumentPosition, LanguageDocumentRevision, LanguageHover,
-    LanguageLocations, LanguageRequestId, LanguageRequestKind, LanguageServerState,
-    LanguageService, LanguageServiceConfiguration, LanguageServiceDocument, LanguageServiceEvent,
-    LanguageServiceEventSink,
+    LanguageCompletionTrigger, LanguageCompletions, LanguageDocumentPosition,
+    LanguageDocumentRevision, LanguageHover, LanguageLocations, LanguageRequestId,
+    LanguageRequestKind, LanguageServerState, LanguageService, LanguageServiceConfiguration,
+    LanguageServiceDocument, LanguageServiceEvent, LanguageServiceEventSink,
 };
 use zeta_winit::EventLoopProxy;
 
+use self::remote::protocol_document;
+use self::remote::protocol_location_kind;
+use self::remote::protocol_position;
+use self::remote_session::RemoteLanguageSession;
+use crate::agent_session_target::AgentSessionTarget;
 use crate::file_editor_host::{FileEditorHost, FileEditorTab};
 use crate::native_event::NativeEvent;
 
@@ -36,6 +50,8 @@ impl LanguageServiceEventSink for NativeLanguageServiceEventSink {
 /// Native composition adapter between retained file tabs and the product language service.
 pub(crate) struct NativeLanguageService {
     service: Option<LanguageService>,
+    remote: Option<RemoteLanguageSession>,
+    is_remote: bool,
     catalog: LanguageServerCatalog,
     install_context: InstallContext,
     config_generation: Option<u64>,
@@ -51,6 +67,29 @@ pub(crate) struct NativeLanguageService {
 }
 
 impl NativeLanguageService {
+    /// Creates the host adapter without starting a local language-server process.
+    ///
+    /// Creates a Remote adapter before the shared Agent connection becomes available.
+    pub(crate) fn remote(workspace_root: &Path, event_proxy: EventLoopProxy<NativeEvent>) -> Self {
+        Self {
+            service: None,
+            remote: None,
+            is_remote: true,
+            catalog: LanguageServerCatalog::default(),
+            install_context: InstallContext::current(),
+            config_generation: None,
+            workspace_root: workspace_root.to_path_buf(),
+            diagnostics: HashMap::new(),
+            server_states: HashMap::new(),
+            hover: None,
+            completions: None,
+            definitions: None,
+            request_error: None,
+            pending_requests: PendingLanguageRequests::default(),
+            event_proxy,
+        }
+    }
+
     pub(crate) fn start(workspace_root: &Path, event_proxy: EventLoopProxy<NativeEvent>) -> Self {
         let catalog = LanguageServerCatalog::default();
         let install_context = InstallContext::current();
@@ -65,6 +104,8 @@ impl NativeLanguageService {
         .ok();
         Self {
             service,
+            remote: None,
+            is_remote: false,
             catalog,
             install_context,
             config_generation: None,
@@ -80,8 +121,28 @@ impl NativeLanguageService {
         }
     }
 
+    fn attach_remote(&mut self, remote: RemoteLanguageSession) {
+        self.remote = Some(remote);
+    }
+
+    pub(crate) fn start_remote(
+        &mut self,
+        event_proxy: EventLoopProxy<NativeEvent>,
+        target: AgentSessionTarget,
+    ) -> anyhow::Result<()> {
+        self.attach_remote(RemoteLanguageSession::spawn(event_proxy, target)?);
+        Ok(())
+    }
+
     pub(crate) fn replace_workspace(&mut self, workspace_root: &Path) {
         self.shutdown_service();
+        if self.is_remote {
+            self.workspace_root = workspace_root.to_path_buf();
+            self.diagnostics.clear();
+            self.server_states.clear();
+            self.clear_requests();
+            return;
+        }
         let events = Arc::new(NativeLanguageServiceEventSink {
             event_proxy: self.event_proxy.clone(),
         });
@@ -114,6 +175,12 @@ impl NativeLanguageService {
             return;
         }
         self.catalog = catalog;
+        if self.is_remote {
+            self.diagnostics.clear();
+            self.server_states.clear();
+            self.clear_requests();
+            return;
+        }
         self.shutdown_service();
         let events = Arc::new(NativeLanguageServiceEventSink {
             event_proxy: self.event_proxy.clone(),
@@ -140,13 +207,19 @@ impl NativeLanguageService {
     }
 
     pub(crate) fn synchronize_active(&self, host: &FileEditorHost) {
-        let Some(service) = self.service.as_ref() else {
-            return;
-        };
         let Some(tab) = host.active() else {
             return;
         };
         let Ok(document) = language_document(&self.workspace_root, tab) else {
+            return;
+        };
+        if let Some(remote) = self.remote.as_ref() {
+            if let Err(error) = remote.synchronize(protocol_document(document)) {
+                eprintln!("could not synchronize Remote language document: {error}");
+            }
+            return;
+        }
+        let Some(service) = self.service.as_ref() else {
             return;
         };
         if let Err(error) = service.synchronize_document(document) {
@@ -217,9 +290,6 @@ impl NativeLanguageService {
         kind: LanguageRequestKind,
         position: zeta_editor::CodeEditorPosition,
     ) {
-        let Some(service) = self.service.as_ref() else {
-            return;
-        };
         let Some(tab) = host.active() else {
             return;
         };
@@ -231,6 +301,56 @@ impl NativeLanguageService {
         );
         self.request_error = None;
         self.pending_requests.clear(kind);
+        if let Some(remote) = self.remote.as_ref() {
+            let Ok(document) = language_document(&self.workspace_root, tab) else {
+                return;
+            };
+            let Some(protocol_position) = protocol_position(document.text(), position) else {
+                self.request_error = Some("language request position is invalid".into());
+                return;
+            };
+            let document = protocol_document(document);
+            let result = match kind {
+                LanguageRequestKind::Hover => {
+                    self.hover = None;
+                    remote.hover(LanguageHoverParams {
+                        document,
+                        position: protocol_position,
+                    })
+                }
+                LanguageRequestKind::Completion => {
+                    self.completions = None;
+                    remote.completions(LanguageCompletionsParams {
+                        document,
+                        position: protocol_position,
+                        trigger_kind: LanguageCompletionTriggerKindDto::Invoke,
+                        trigger_character: None,
+                    })
+                }
+                LanguageRequestKind::Declaration
+                | LanguageRequestKind::Definition
+                | LanguageRequestKind::Implementation
+                | LanguageRequestKind::TypeDefinition
+                | LanguageRequestKind::References => {
+                    self.definitions = None;
+                    remote.locations(LanguageLocationsParams {
+                        document,
+                        position: protocol_position,
+                        kind: protocol_location_kind(kind),
+                        include_declaration: kind == LanguageRequestKind::References,
+                    })
+                }
+                _ => return,
+            };
+            match result {
+                Ok(request_id) => self.pending_requests.set_value(kind, request_id),
+                Err(error) => self.request_error = Some(error.to_string()),
+            }
+            return;
+        }
+        let Some(service) = self.service.as_ref() else {
+            return;
+        };
         let result = match kind {
             LanguageRequestKind::Hover => {
                 self.hover = None;
@@ -238,7 +358,12 @@ impl NativeLanguageService {
             }
             LanguageRequestKind::Completion => {
                 self.completions = None;
-                service.request_completions(path, revision, position)
+                service.request_completions(
+                    path,
+                    revision,
+                    position,
+                    LanguageCompletionTrigger::Invoked,
+                )
             }
             LanguageRequestKind::Definition => {
                 self.definitions = None;
@@ -267,6 +392,7 @@ impl NativeLanguageService {
             | LanguageRequestKind::Rename
             | LanguageRequestKind::CodeActions
             | LanguageRequestKind::ResolveCodeAction => return,
+            _ => return,
         };
         match result {
             Ok(request_id) => self.pending_requests.set(kind, request_id),
@@ -275,6 +401,17 @@ impl NativeLanguageService {
     }
 
     fn synchronize_all(&self, host: &FileEditorHost) {
+        if let Some(remote) = self.remote.as_ref() {
+            for tab in host.tabs() {
+                let Ok(document) = language_document(&self.workspace_root, tab) else {
+                    continue;
+                };
+                if let Err(error) = remote.synchronize(protocol_document(document)) {
+                    eprintln!("could not synchronize Remote language document: {error}");
+                }
+            }
+            return;
+        }
         let Some(service) = self.service.as_ref() else {
             return;
         };
@@ -289,6 +426,9 @@ impl NativeLanguageService {
     }
 
     pub(crate) fn save(&self, path: &Path) {
+        if self.is_remote {
+            return;
+        }
         let Some(service) = self.service.as_ref() else {
             return;
         };
@@ -301,6 +441,12 @@ impl NativeLanguageService {
         let absolute = self.absolute_path(path);
         self.diagnostics.remove(&absolute);
         self.clear_requests();
+        if let Some(remote) = self.remote.as_ref() {
+            if let Err(error) = remote.close(absolute) {
+                eprintln!("could not close Remote language document: {error}");
+            }
+            return;
+        }
         let Some(service) = self.service.as_ref() else {
             return;
         };
@@ -333,7 +479,9 @@ impl NativeLanguageService {
                 eprintln!("language server {server}: {state:?}");
                 self.server_states.insert(server, state);
             }
-            LanguageServiceEvent::ServerMessage { server, message } => {
+            LanguageServiceEvent::ServerMessage {
+                server, message, ..
+            } => {
                 eprintln!("language server {server}: {message}");
             }
             LanguageServiceEvent::DocumentOperationFailed {
@@ -418,6 +566,7 @@ impl NativeLanguageService {
                     self.request_error = Some(message);
                 }
             }
+            _ => {}
         }
     }
 
@@ -446,13 +595,17 @@ impl Drop for NativeLanguageService {
 
 #[derive(Default)]
 struct PendingLanguageRequests {
-    hover: Option<LanguageRequestId>,
-    completion: Option<LanguageRequestId>,
-    definition: Option<LanguageRequestId>,
+    hover: Option<u64>,
+    completion: Option<u64>,
+    definition: Option<u64>,
 }
 
 impl PendingLanguageRequests {
     fn set(&mut self, kind: LanguageRequestKind, request_id: LanguageRequestId) {
+        self.set_value(kind, request_id.value());
+    }
+
+    fn set_value(&mut self, kind: LanguageRequestKind, request_id: u64) {
         *self.slot(kind) = Some(request_id);
     }
 
@@ -461,6 +614,10 @@ impl PendingLanguageRequests {
     }
 
     fn complete(&mut self, kind: LanguageRequestKind, request_id: LanguageRequestId) -> bool {
+        self.complete_value(kind, request_id.value())
+    }
+
+    fn complete_value(&mut self, kind: LanguageRequestKind, request_id: u64) -> bool {
         let slot = self.slot(kind);
         if *slot != Some(request_id) {
             return false;
@@ -469,7 +626,7 @@ impl PendingLanguageRequests {
         true
     }
 
-    fn slot(&mut self, kind: LanguageRequestKind) -> &mut Option<LanguageRequestId> {
+    fn slot(&mut self, kind: LanguageRequestKind) -> &mut Option<u64> {
         match kind {
             LanguageRequestKind::Hover => &mut self.hover,
             LanguageRequestKind::Completion => &mut self.completion,
@@ -478,17 +635,7 @@ impl PendingLanguageRequests {
             | LanguageRequestKind::Implementation
             | LanguageRequestKind::TypeDefinition
             | LanguageRequestKind::References => &mut self.definition,
-            LanguageRequestKind::PrepareCallHierarchy
-            | LanguageRequestKind::IncomingCalls
-            | LanguageRequestKind::OutgoingCalls
-            | LanguageRequestKind::PrepareTypeHierarchy
-            | LanguageRequestKind::Supertypes
-            | LanguageRequestKind::Subtypes
-            | LanguageRequestKind::WorkspaceSymbols
-            | LanguageRequestKind::PrepareRename
-            | LanguageRequestKind::Rename
-            | LanguageRequestKind::CodeActions
-            | LanguageRequestKind::ResolveCodeAction => &mut self.definition,
+            _ => &mut self.definition,
         }
     }
 }

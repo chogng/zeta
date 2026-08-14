@@ -1,0 +1,141 @@
+use std::path::Path;
+
+use super::RemoteConnectMode;
+use super::RemoteConnectTarget;
+use super::parse;
+use super::runtime::RemoteConnectRuntimeSelection;
+use super::runtime::RemoteRuntimeCatalogSelection;
+
+#[test]
+fn direct_connect_requires_a_credential_free_host_and_absolute_workspace() {
+    let options = parse(&strings([
+        "--host",
+        "build-linux",
+        "--workspace",
+        "/srv/project",
+        "--runtime",
+        "zeta-remote-server",
+        "--ssh",
+        "/usr/bin/ssh",
+        "--check",
+    ]))
+    .unwrap();
+
+    let RemoteConnectTarget::Direct(target) = options.target else {
+        panic!("expected direct target");
+    };
+    assert_eq!(target.host().as_str(), "build-linux");
+    assert_eq!(target.workspace().as_str(), "/srv/project");
+    let RemoteConnectRuntimeSelection::Explicit(runtime) = options.runtime else {
+        panic!("expected explicit runtime");
+    };
+    assert_eq!(runtime.executable(), "zeta-remote-server");
+    assert_eq!(
+        options.ssh_executable.as_deref(),
+        Some(Path::new("/usr/bin/ssh"))
+    );
+    assert_eq!(options.mode, RemoteConnectMode::Check);
+
+    assert!(
+        parse(&strings([
+            "--host",
+            "user@build-linux",
+            "--workspace",
+            "/srv/project"
+        ]))
+        .is_err()
+    );
+    assert!(
+        parse(&strings([
+            "--host",
+            "build-linux",
+            "--workspace",
+            "relative"
+        ]))
+        .is_err()
+    );
+}
+
+#[test]
+fn named_connect_is_exclusive_and_interactive_by_default() {
+    let options = parse(&strings(["--name", "Production"])).unwrap();
+    let RemoteConnectTarget::Named(name) = options.target else {
+        panic!("expected named target");
+    };
+    assert_eq!(name.as_str(), "production");
+    assert_eq!(
+        options.runtime,
+        RemoteConnectRuntimeSelection::Managed(RemoteRuntimeCatalogSelection::ProductPackage)
+    );
+    assert_eq!(options.mode, RemoteConnectMode::Interactive);
+
+    assert!(
+        parse(&strings([
+            "--name",
+            "production",
+            "--host",
+            "build-linux",
+            "--workspace",
+            "/srv/project"
+        ]))
+        .unwrap_err()
+        .contains("cannot be combined")
+    );
+    assert!(parse(&strings(["--host", "build-linux"])).is_err());
+    assert!(
+        parse(&strings(["--name", "production", "--check", "--check"]))
+            .unwrap_err()
+            .contains("only once")
+    );
+}
+
+#[test]
+fn runtime_catalog_options_are_authenticated_complete_and_mutually_exclusive() {
+    let options = parse(&strings([
+        "--host",
+        "build-linux",
+        "--workspace",
+        "/srv/project",
+        "--runtime-catalog-url",
+        "https://releases.example/zeta/catalog.json",
+        "--runtime-catalog-sha256",
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "--runtime-cache",
+        "/var/tmp/zeta-runtime-cache",
+        "--check",
+    ]))
+    .unwrap();
+    assert!(matches!(
+        options.runtime,
+        RemoteConnectRuntimeSelection::Managed(RemoteRuntimeCatalogSelection::Network { .. })
+    ));
+
+    assert!(
+        parse(&strings([
+            "--name",
+            "production",
+            "--runtime-catalog",
+            "/opt/zeta/catalog.json"
+        ]))
+        .unwrap_err()
+        .contains("--runtime-catalog-sha256")
+    );
+    assert!(
+        parse(&strings([
+            "--name",
+            "production",
+            "--runtime",
+            "zeta",
+            "--runtime-catalog",
+            "/opt/zeta/catalog.json",
+            "--runtime-catalog-sha256",
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ]))
+        .unwrap_err()
+        .contains("cannot be combined")
+    );
+}
+
+fn strings<const N: usize>(values: [&str; N]) -> Vec<String> {
+    values.into_iter().map(str::to_owned).collect()
+}

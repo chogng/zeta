@@ -32,6 +32,7 @@ fn timeline_groups_shell_result_under_its_tool_call() {
                     tool_call_id: ToolCallId::new("call").unwrap(),
                     name: ToolName::new("shell-command").unwrap(),
                     arguments_json: r#"{"program":"/bin/sh","arguments":["-lc","cargo test"],"working_directory":"."}"#.to_owned(),
+                    binding: None,
                 },
                 ThreadItem::ToolResult {
                     item_id: ItemId::new("result").unwrap(),

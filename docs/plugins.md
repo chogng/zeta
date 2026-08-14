@@ -19,13 +19,15 @@
 
 ## 快速理解
 
-Plugin 是经过校验和版本管理的扩展包，不是安装后便能执行任意代码的进程内插件。安装、启用、
-授权和实际调用是四个独立阶段。
+Plugin 是可同时携带多种 capability 的集成 bundle，不是第二个 Marketplace、安装器或常驻 runtime。
+远端 Plugin 统一由 Marketplace Manager 安装，再按 capability 交给各领域 consumer；`zeta-plugins`
+只保留 legacy local package 的兼容 authority。安装、启用、授权和实际调用仍是独立阶段。
 
 | 用户动作 | 系统发生什么 | 不会自动发生什么 |
 | --- | --- | --- |
-| 安装 Plugin | 校验不可变包、清单、来源和内容摘要后写入本地存储 | 不启用贡献、不授予权限 |
-| 在用户或 Workspace 中启用 | 允许其贡献参与解析 | 不连接 Connector、不启动 MCP、不执行脚本 |
+| 安装 Marketplace Plugin bundle | Manager 校验不可变 package、签名和摘要后只写入一次 | 不进入 `zeta-plugins`，不启用或授权任一 capability |
+| 各领域启用 capability | Skill/MCP/Connector/Editor Extension consumer 分别应用自己的 policy | 不存在 bundle 级隐式全开 |
+| 启用 legacy local Plugin | 允许兼容 contribution 参与解析 | 不连接 Connector、不启动 MCP、不执行脚本 |
 | 批准请求的能力 | 记录精确的进程、网络、目录或凭据授权 | 不批准未来每一次工具调用 |
 | 激活贡献 | 生成带来源和 generation 的不可变快照 | 不把 live manager 注入 Agent |
 | 更新或回滚 | 并存校验后的版本并原子切换 | 不原地修改已安装包 |
@@ -36,9 +38,16 @@ Plugin 是经过校验和版本管理的扩展包，不是安装后便能执行�
 
 ## 1. 结论
 
-`zeta-plugins` 是 Zeta 的 Plugin manifest、领域投影、启用和授权控制面。Plugin 是一个不可变、
-可校验的包，可以贡献 Skill、Connector declaration、MCP server declaration、可执行 Editor Extension 声明和静态资源；Plugin manager 将这些贡献
-解析为带来源和 digest 的 activation snapshot，再由 App Server 注入对应 runtime。
+Plugin 是 package composition 语义，不是生命周期 owner。当前有两条明确分开的来源：
+
+| 来源 | Package lifecycle owner | Capability activation owner |
+| --- | --- | --- |
+| Remote Marketplace Plugin bundle | `zeta-marketplace-manager` | Skill/MCP/Connector/Theme/Language/Editor Extension 各领域 |
+| Legacy local Plugin v1 | `zeta-plugins` compatibility authority | App Server 投影后的各领域；legacy enable/grant 先形成 activation snapshot |
+
+两条来源都可以提供 Skill、Connector、MCP、可执行 Editor Extension 或静态资源，但不会先汇入一个
+统一 Plugin runtime。Marketplace bundle 由 Manager 安装一次后直接按 capability 分流；legacy
+`PluginActivationSnapshot` 只是兼容 adapter 的 normalized source。
 
 Plugin 不是：
 
@@ -53,24 +62,27 @@ Plugin 不是：
 
 ```mermaid
 flowchart TD
-    P["Plugin activation snapshot"] --> S["SkillContribution → Skill runtime"]
-    P --> C["ConnectorContribution → Connector runtime"]
-    P --> M["McpServerContribution"]
-    P --> E["EditorExtensionContribution → executable Host RPC v1 program"]
+    M["Marketplace installation"] --> S["Skill capability → Skill runtime"]
+    M --> C["Connector capability → Connector runtime"]
+    M --> R["MCP capability → MCP runtime"]
+    M --> E["Executable + product admission → Editor Extension Host"]
+    P["Legacy Plugin activation snapshot"] --> S
+    P --> C
+    P --> R
+    P --> E
     P --> D["DeclarativeExtensionContribution → static package.json catalog"]
     P --> A["StaticAssetContribution → Resource consumer"]
-    C -. "references declaration" .-> M
+    C -. "references exact MCP" .-> R
     C -->|"connected"| B["Ready MCP binding"]
-    M -->|"standalone activation"| R["MCP runtime"]
-    M --> B
+    R -->|"standalone activation"| T["Tool Registry / Core"]
     E --> H["zeta-editor-extension-host supervisor"]
     D --> X["zeta-extensions immutable snapshot"]
     B --> R
-    R --> T["Tool Registry / Core"]
 ```
 
-Plugin 只负责声明控制面和 package lifecycle。Skill、Connector、MCP 和 Resource consumer 分别拥有自己的运行时
-语义；它们不是 Plugin manager 内部的 live 子对象。Plugin、Connector 与 MCP 的 canonical 关系由
+Plugin bundle 只表达组合；Marketplace package lifecycle 属于 Manager，legacy local lifecycle 属于
+compatibility authority。Skill、Connector、MCP 和 Resource consumer 分别拥有自己的运行时语义；
+它们不是 bundle/compatibility authority 内部的 live 子对象。Plugin、Connector 与 MCP 的 canonical 关系由
 [`connectors.md`](connectors.md) 维护。
 
 静态 Editor Extension 保持另一套内容边界：它读取自己的 `package.json` 和声明式
@@ -79,8 +91,8 @@ language/TextMate/snippet/theme/debugger 资源。Plugin v1 现在可用 `declar
 这共享 install/enable/grant/revocation lifecycle，但不合并两种 manifest，也不把静态内容变成可执行
 runtime。其 canonical 文档是 [`editor-extensions.md`](editor-extensions.md)。
 
-Plugin v1 现在提供显式 `editorExtensions[]` bridge。每项指向包内一个可直接启动、自己实现 Zeta Host
-RPC v1 的程序；它不是由通用 Node/WASM runtime 加载的脚本。Plugin manager 只验证并授权声明，
+Legacy Plugin v1 提供显式 `editorExtensions[]` bridge。每项指向包内一个可直接启动、自己实现 Zeta Host
+RPC v1 的程序；它不是由通用 Node/WASM runtime 加载的脚本。compatibility authority 只验证并授权声明，
 `zeta-editor-extension-host` supervisor 才拥有逐扩展进程隔离、RPC、crash recovery 和 provider
 lifecycle。静态 `package.json` catalog 不会被隐式转换成该 executable declaration。
 
@@ -104,7 +116,7 @@ Host。
 
 ## 2. 当前仓库审计
 
-当前已创建 `zeta-plugins`，实现 strict v1 manifest、Plugin identity/SemVer、portable
+当前 `zeta-plugins` 实现 legacy strict v1 manifest、Plugin identity/SemVer、portable
 package-relative path、本地 package 安全校验、确定性 digest、只读 local-development discovery，
 以及 stage-copy-revalidate-atomic-promote 的 local content-addressed store。实现细节、limits 与
 failure semantics 由 crate
@@ -144,7 +156,7 @@ Plugin v1 contributions = Skills + Connectors + MCP server declarations
 
 ## 3. 职责与非职责
 
-### 3.1 Plugin manager 拥有
+### 3.1 Legacy Plugin compatibility 权威拥有
 
 - Plugin package layout 和 manifest schema；
 - stable Plugin identity、version、digest 和 origin；
@@ -153,13 +165,13 @@ Plugin v1 contributions = Skills + Connectors + MCP server declarations
 - contribution discovery、path containment、compatibility 和 conflict validation；
 - requested permissions、credential slots 与 user grants 的差异计算；
 - immutable `PluginActivationSnapshot` 和 generation；
-- package provenance、signature/trust result、revocation/blocked diagnostics；
+- local package provenance、validation/trust result 与 blocked diagnostics；
 - enabled Plugin 向 Skill/Connector/MCP runtime 的 normalized contribution projection；
 - executable Editor Extension 的 exact program、Host RPC v1、activation trigger 与 capability ceiling 声明；
 - install/update/enable/disable/uninstall 的 typed command replay；
 - 不含秘密的 audit record 和 health projection。
 
-### 3.2 Plugin manager 不拥有
+### 3.2 Legacy Plugin compatibility 权威不拥有
 
 - Skill 的自动选择、prompt layering 或 context budget；
 - MCP JSON-RPC、process supervision、Connector connection/OAuth 或 tools/resources/prompts catalog；
@@ -168,7 +180,7 @@ Plugin v1 contributions = Skills + Connectors + MCP server declarations
 - API token、OAuth token、cookie 或 private key；
 - OS sandbox、network enforcement 或 per-call approval 的最终实现；
 - Thread reducer、Tool Call/Result commit 或 Agent retry；
-- Marketplace 搜索和支付业务；
+- Marketplace 搜索、TUF、remote download、artifact/install/update/uninstall；
 - 第三方 UI iframe、Renderer code execution 或 Electron preload extension；
 - 任意 native ABI、WASM ABI 或 provider adapter ABI。
 
@@ -198,7 +210,7 @@ Plugin v1 contributions = Skills + Connectors + MCP server declarations
 具体规则：
 
 - `zeta-plugins` 不依赖 `zeta-skills`、`zeta-connectors` 或 `zeta-mcp` live runtime；
-- Plugin manager 只输出 normalized descriptor 和 immutable root handle；
+- legacy Plugin authority 只输出 normalized descriptor 和 immutable root handle；
 - App Server 将 Skill contribution 注册到 Skill source，将 Connector contribution 交给 Connector adapter，
   并将独立或 ready-bound MCP contribution 解析为 `McpServerDefinition`；
 - contribution consumer 必须再次执行自己领域的校验，不能因为 package 已验证就跳过 schema、
@@ -207,9 +219,9 @@ Plugin v1 contributions = Skills + Connectors + MCP server declarations
 - App Server protocol 只暴露稳定 Plugin view 和 command DTO，不暴露内部 filesystem path、
   lock、transaction journal 或 signature library type。
 
-## 5. 包与清单
+## 5. Legacy local 包与清单
 
-### 5.1 v1 布局
+### 5.1 Legacy v1 布局
 
 ```text
 plugin-root/
@@ -512,7 +524,7 @@ HostCapability { capabilityKind }
 - 注册任意 App Server method；
 - 把 credential 注入日志、argv 或 manifest placeholder 后回写。
 
-Secret materialization 在启动/请求的最后时刻由 credential adapter 完成。Plugin manager 只看到
+Secret materialization 在启动/请求的最后时刻由 credential adapter 完成。legacy Plugin authority 只看到
 slot → `CredentialRef` binding 和 revision。
 
 ## 11. 贡献激活
@@ -595,7 +607,7 @@ Uninstall：
 
 ## 13. Skill、Connector 与 MCP 的明确关系
 
-| 行为 | Plugin manager | Skill manager | Connector / Auth | MCP runtime |
+| 行为 | Legacy Plugin authority | Skill manager | Connector / Auth | MCP runtime |
 | --- | --- | --- | --- | --- |
 | 校验 package digest/path | 负责 | 不负责 | 不负责 | 不负责 |
 | 解析 `SKILL.md` | 不负责 | 负责 | 不负责 | 不负责 |
@@ -624,7 +636,7 @@ binding variant。
 generation transition 发布 `ConnectorAccount` 后才输出 ready MCP server ID。当前 API-token adapter、
 SQLite authority、exact activation 到 package-rooted MCP provider 的自动构造、独立 Plugin MCP、
 Connector-bound MCP composition、通用 OAuth PKCE 状态机、Desktop browser callback 与 GitHub provider
-已实现。Plugin enable/update 已能 live replacement，并通过 exact invocation lease 阻止旧 contribution
+已实现。Legacy Plugin enable/update 已能 live replacement，并通过 exact invocation lease 阻止旧 contribution
 在 authority commit 后开始 dispatch。完整边界由 [`connectors.md`](connectors.md) 维护。
 
 | 概念 | Identity/lifecycle | 例子 |
@@ -635,9 +647,10 @@ Connector-bound MCP composition、通用 OAuth PKCE 状态机、Desktop browser 
 | Skill | source + name + content digest；select/activate | PR review workflow |
 | Built-in tool | Zeta release 中的 compiled capability | 本地受控 command executor |
 
-卸载 Plugin 只解除其 contribution 和 credential-slot binding，不能擅自删除对应 auth domain
-中可能被其他 connector 使用的 secret。反过来，revoke connector credential 会让相关 MCP
-runtime 不可用，但不会把 Plugin 标成未安装。
+卸载 legacy Plugin 只解除其 contribution 和 credential-slot binding；卸载 Marketplace bundle 则由
+Manager 撤销 installation，并等待 capability lease 排空。两者都不能擅自删除 auth domain 中可能被
+其他 Connector 使用的 secret。反过来，revoke Connector credential 会让相关 MCP runtime 不可用，
+但不会删除任何 package。
 
 ## 14. App Server API 与客户端
 
@@ -680,7 +693,8 @@ CLI/TUI/Desktop 不直接扫描 Plugin 目录，不解析 manifest，也不自�
 
 ## 15. 安全
 
-Package ingestion 必须防御：
+Legacy local package ingestion 必须防御以下问题；remote Marketplace ingestion 的 TUF/archive 契约由
+[`marketplace-integration.md`](marketplace-integration.md) 单独拥有：
 
 - archive path traversal、absolute path 和 drive/device path；
 - symlink/hardlink escape；
@@ -786,7 +800,7 @@ content-addressed object、重新验证 exact digest，再原子 promote。mutab
 - ✅ Plugin Skill contribution 的 exact immutable source projection 与 live catalog refresh；
 - ✅ declarative Extension contribution 的 exact immutable source projection、precedence 与 live refresh；
 - ✅ Connector contribution 的 normalized projection；
-- ✅ user-profile exact Marketplace reconcile；Workspace request 保持只读、不能自动 grant；
+- ✅ legacy user-profile exact package reconcile；Workspace request 保持只读、不能自动 grant；
 - 尚未完成：startup orphan recovery。
 
 完成条件：失败激活不改变上一 generation，重启可恢复唯一 active package set。
@@ -800,15 +814,13 @@ content-addressed object、重新验证 exact digest，再原子 promote。mutab
 
 完成条件：安装不启动进程，enable 无 grant 不启动，update 不劫持 in-flight tool binding。
 
-### 阶段 PL3：远端目录、signature 与更新增强
+### 阶段 PL3：远端分发迁移（已完成）
 
-- ✅ host-registered Marketplace metadata 与 digest-pinned materialized package ingestion；
-- ✅ TUF 远端 signed discovery catalog、离线 metadata cache 与按需 exact package download；
-- ✅ delegated publisher signature、root rotation/expiry/rollback 与顶层 revocation feed；
-- permission/contribution diff；
-- ✅ side-by-side staged update 与 exact rollback；
-- ✅ 每 Marketplace materialized cache count/bytes budget、signed-target-aware eviction、protected
-  install handoff 与 retained/evicted/excess report；installed content store 不受 cache GC 影响。
+- ✅ 远端 catalog/TUF/download、artifact、install/update/uninstall 与 lease 全部迁到
+  `zeta-marketplace-client` + `zeta-marketplace-manager`；
+- ✅ `zeta-plugins` 不再消费远端 catalog，也不作为 Marketplace package 的中转 store；
+- ✅ Marketplace Plugin bundle 直接按 capability 投影给领域 consumer；
+- 尚未完成：统一 UI 中跨 capability 的 permission/contribution diff。
 
 完成条件：相同 ID/version 不可换内容，grant expansion 必须重新 consent。
 

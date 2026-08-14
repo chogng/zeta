@@ -2,7 +2,9 @@ use std::collections::BTreeMap;
 
 use zeta_app_server_protocol::protocol::config::{
     ApprovalReviewModelSelectionDto, ConfigReadResult, LanguageServerConfigDto,
-    LanguageServerModeDto,
+    LanguageServerModeDto, SemanticCodeIndexAutomaticContextDto, SemanticCodeIndexConfigDto,
+    SemanticCodeIndexSelectionDto, ToolSearchConfigDto, ToolSearchEmbeddingStatusDto,
+    ToolSearchModeDto,
 };
 use zeta_language_server_catalog::{JSON_LANGUAGE_SERVER_ID, RUST_ANALYZER_SERVER_ID};
 use zeta_language_service::LanguageServerState;
@@ -237,5 +239,16 @@ fn configuration(
         plugin_requests: BTreeMap::new(),
         hooks: BTreeMap::new(),
         language_servers,
+        tool_search: ToolSearchConfigDto {
+            mode: ToolSearchModeDto::Lexical,
+            embedding_model: None,
+            embedding_status: ToolSearchEmbeddingStatusDto::Disabled,
+        },
+        semantic_code_index: SemanticCodeIndexConfigDto {
+            selection: SemanticCodeIndexSelectionDto::Disabled,
+            automatic_context: SemanticCodeIndexAutomaticContextDto::Off,
+            active_workspace_authorized: false,
+        },
+        exec_policy_rules: Vec::new(),
     }
 }

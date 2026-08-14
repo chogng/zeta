@@ -1,36 +1,43 @@
 # 编辑器扩展系统
 
 > 本文是 Zeta 编辑器扩展的跨层架构权威文档，明确区分两条当前边界：声明式静态 Editor
-> Extension 与 Plugin 授权的 Zeta 原生可执行 Host v1。静态目录实现见
+> Extension 与 Zeta 原生可执行 Editor Extension Host v1。静态目录实现见
 > [`zeta-rs/extensions/README.md`](../zeta-rs/extensions/README.md)，声明式 Workbench 投影见
 > [`desktop/src/zeta/workbench/services/extensions/README.md`](../desktop/src/zeta/workbench/services/extensions/README.md)，
 > 可执行进程与 RPC 实现见
-> [`zeta-rs/editor-extension-host/README.md`](../zeta-rs/editor-extension-host/README.md)。Plugin 安装、版本、
-> enable/grant 和 package authority 由 [`plugins.md`](plugins.md) 维护。
+> [`zeta-rs/editor-extension-host/README.md`](../zeta-rs/editor-extension-host/README.md)。统一 Marketplace
+> artifact/capability 入口由 [`marketplace-integration.md`](marketplace-integration.md) 维护；legacy
+> Plugin 本地来源 authority 由 [`plugins.md`](plugins.md) 维护。
 
 ## 快速理解
 
 Zeta 有两种不能互相冒充的 Editor Extension。声明式扩展读取主机限定目录中的
 `package.json`、language/TextMate/snippet/theme/debugger 资源，不执行包内代码；可执行扩展则必须先
-进入 Plugin 的 immutable package 与 enable/grant authority，再由每扩展独立进程通过 Zeta Host RPC
-v1 注册窄 provider。两者可以最终服务同一个 Workbench，但 manifest、身份、信任、刷新和失败语义
-始终分开。
+绑定一个 immutable package/executable 与独立 enable/grant authority，再由每扩展独立进程通过 Zeta
+Host RPC v1 注册窄 provider。来源可以是 legacy Plugin authority，也可以是 Marketplace Manager；
+两类扩展可以最终服务同一个 Workbench，但 manifest、身份、信任、刷新和失败语义始终分开。
+这里的声明式 `Extension` 是领域 consumer，不是独立 Marketplace 或 package family；当前远端
+Theme/Language package 通过 typed adapter 进入它；Theme 的 portable manifest 由 host 规范化为声明式
+manifest，同时 package 原始 bytes/digest 保持不变。通用 `asset` 不会被自动解释为编辑器扩展。
 
 | 用户或产品场景 | 当前行为 | 明确不会发生 |
 | --- | --- | --- |
 | 打开受支持的源码文件 | 使用内置声明式扩展提供的语言关联、配置、grammar 和 snippet | 不下载扩展，不执行 manifest 中的脚本 |
 | 主机配置静态用户扩展目录 | 扫描该目录的直接子包，非法包产生诊断 | Workspace 或 Renderer 不能提交任意扩展根 |
-| Marketplace Plugin 声明 `declarativeExtensions[]` | 仅 effective exact package 的静态目录进入 catalog | 安装本身不激活，也不获得代码执行权限 |
+| Marketplace Theme / Language | Manager 验证同一 package 后，将声明式 assets 投影进共享 Extension catalog | 不建立 `extension-marketplace`，不执行静态资源 |
+| Legacy Plugin 声明 `declarativeExtensions[]` | 仅 effective exact package 的静态目录进入 catalog | 本地兼容来源不成为远端 Marketplace 旁路 |
 | 用户静态包与内置包使用同一扩展 ID | 内置包优先，用户包被报告为重复项 | 可变用户文件不能静默替换产品资源 |
 | Plugin 声明可执行 Editor Extension | 校验 exact entrypoint、process permission、Host API v1、activation event 和 capability ceiling | 安装或 manifest 校验本身不会启动进程 |
+| Marketplace package 带可选 `zeta/editor-extensions.json` | 产品 adapter 绑定同 package 的 exact executable；独立 admission 与 Manager lease 都通过后才进入 Host | sidecar 不成为通用 Marketplace 必需 manifest；安装不自动 grant |
 | 已授权可执行扩展启动 | Runtime core 为它创建独立进程，完成版本握手和整批 registration validation | 不把它加载进 App Server 进程，不继承主机环境 |
 | 可执行扩展崩溃 | 清除旧 incarnation 注册，按有界预算重新握手和激活；超限进入 crash loop | 不无限重启，不把旧请求重绑定到新进程 |
 | 调用超时或取消后没有 terminal response | 结果标为 unknown outcome，终止旧 incarnation 后恢复 | 不声称副作用没有发生 |
 | 需要 VS Code Extension API 或 Marketplace compatibility | 当前不支持 | Host RPC v1 不是 Node Extension Host，也不是 VS Code API 子集 |
 | 生产环境没有可实施 hard limits 的 launcher | executable Host capability 必须为 false，失败关闭 | 不允许退化到无 sandbox 的第三方执行 |
 
-当前声明式装载链已接入 App Server 与 Workbench。Plugin executable declaration、独立 Host runtime、
-App Server broker 以及 Workbench 的 Commands/Language/Tasks/task-backed Testing 窄桥已实现；由于生产
+当前声明式装载链已接入 App Server 与 Workbench。Legacy Plugin 与 Marketplace executable source 都会
+先规范化为 Host deployment，Host runtime 不解析任何 package manifest。App Server broker 以及
+Workbench 的 Commands/Language/Tasks/task-backed Testing 窄桥已实现；由于生产
 launcher 尚未实现，默认产品仍以 capability=false 失败关闭，不能描述为可启用第三方代码的生产路径。
 后续章节分别说明两条流程、所有权、信任与失败边界、完成度及演进。
 
@@ -40,7 +47,7 @@ launcher 尚未实现，默认产品仍以 capability=false 失败关闭，不�
 
 ```mermaid
 flowchart TD
-    package["产品根 / Plugin authority exact package / 用户根"] --> scan["zeta-extensions 扫描并冻结包快照"]
+    package["产品根 / Marketplace exact asset / legacy Plugin exact package / 用户根"] --> scan["zeta-extensions 扫描并冻结包快照"]
     scan -->|非法包| diagnostic["目录诊断；不注册该包"]
     scan --> catalog["不可变目录代次与 package digest"]
     catalog --> protocol["App Server DTO 与有代次约束的资源读取"]
@@ -52,9 +59,10 @@ flowchart TD
 ```
 
 产品构建把仓库根目录 `extensions/` 复制到包内 `zeta-resources/extensions/`。App Server 同时把当前
-Plugin activation snapshot 中的 `declarativeExtensions[]` 解析为 exact immutable package directories。
-`zeta-extensions` 按 built-in → Plugin → profile user 顺序扫描，每个扩展 ID 的第一个有效包获胜。每次
-`Refresh` 或 Plugin activation generation 改变都产生单调递增的目录代次，并把包内 regular-file bytes 冻结为当前
+Plugin activation snapshot 中的 `declarativeExtensions[]` 与 Manager 的 Theme/Language capabilities
+解析为 exact immutable package directories。`zeta-extensions` 按 built-in → dynamic authority sources
+→ profile user 顺序扫描，每个扩展 ID 的第一个有效包获胜。每次 `Refresh` 或任一动态 source
+generation 改变都产生单调递增的目录代次，并把包内 regular-file bytes 冻结为当前
 内存快照。资源读取必须携带该代次，只能读取当前快照；刷新后请求旧代次会得到 generation
 conflict，而不是从已变化的磁盘路径读取内容。
 
@@ -66,12 +74,12 @@ Workbench 启动会保留初次 `AppServerExtensionService.start()` 的 Promise�
 才恢复 working-copy backup 并推进 `AfterRestored`。App Server 连接状态从任一非 `ready` 状态回到
 `ready` 时，组合根调用 `reload()`；该请求复用 single-runner 合并规则。
 
-### 1.2 Plugin 授权的可执行 Host v1
+### 1.2 来源授权的可执行 Host v1
 
 ```mermaid
 flowchart TD
-    manifest["Plugin editorExtensions declaration"] --> validate["package/digest/entrypoint/process permission validation"]
-    validate --> authority["enable + grant + activation generation + Workspace trust"]
+    manifest["legacy Plugin declaration / Marketplace optional Zeta sidecar"] --> validate["source adapter: package/digest/executable/capability ceiling"]
+    validate --> authority["source enable + grant + exact artifact lease + Workspace trust"]
     authority --> launcher{"production enforcing launcher available?"}
     launcher -->|no| unavailable["capability=false / isolationUnavailable"]
     launcher -->|yes| process["one isolated process per extension"]
@@ -83,10 +91,13 @@ flowchart TD
     recovery --> handshake
 ```
 
-Plugin v1 的 `editorExtensions[]` 指向包内一个可直接启动、自己实现 Zeta Host RPC v1 的程序。Plugin
-authority 只决定哪一个 immutable package/digest/generation 当前可被调用；它不启动进程。Host adapter
-还必须绑定 active Workspace trust，随后把绝对 executable 交给能够实施 sandbox 与 hard limits 的
-平台 launcher。默认安全策略缺少该 launcher 时失败关闭，不能自动改用可信开发 launcher。
+Legacy Plugin v1 的 `editorExtensions[]` 仍可作为本地兼容来源。Marketplace 来源则由可选
+`zeta/editor-extensions.json` consumer sidecar 把声明绑定到同 digest 内的 exact `executable`
+capability；没有独立 `MarketplaceEditorExtensionAdmission` grant 时 deployment 不会被接纳或启动。
+Admission authority 必须为 policy commit 推进 generation，并在可变时发布变更；Host 据此撤销旧
+fleet 并重新评估 grant。两条来源都只发布规范化 deployment 与 live authority，不启动进程。Host adapter 还必须绑定 active Workspace
+trust，随后把绝对 executable 交给能够实施 sandbox 与 hard limits 的平台 launcher。默认安全策略缺少
+该 launcher 时失败关闭，不能自动改用可信开发 launcher。
 
 一个 `ExtensionHostSupervisor` 只监管一个扩展程序。它先取得 live activation lease，再 spawn、执行
 Initialize/Activate，最后一次发布整批 registrations。每次 provider invocation 重新取得 lease，并绑定
@@ -105,11 +116,14 @@ Manifest activation events 当前是经过验证并传给 runtime 的 facts；`z
 | 静态包扫描、路径/文件类型校验、快照、摘要与目录代次 | `zeta-extensions` | Editor 贡献语义、任意代码执行 |
 | 静态可信根选择和顺序 | App Server 产品组合根 | 由 Renderer 提交任意主机路径 |
 | Plugin 静态目录选择 | `zeta-plugins` activation authority + App Server provider | 解析静态 `package.json`、授予代码执行 |
+| Marketplace Theme/Language 静态目录选择 | `MarketplaceManager` + App Server provider | 解析 Workbench 贡献、主题选择或 LSP lifecycle |
 | 静态 DTO、connection resource 与错误映射 | App Server / `platform/extensions` adapter | Workbench 领域注册 |
 | 声明式 catalog 与生命周期 | `IExtensionService` / `AppServerExtensionService` | transport DTO、Plugin enable/grant |
-| Plugin package、install/update/rollback、enable/grant 与 activation generation | `zeta-plugins` | 启动进程、Host RPC、provider registry |
-| 可执行进程、Host RPC、incarnation、取消和 crash recovery | `zeta-editor-extension-host` | Plugin discovery、Workspace trust decision、领域 payload |
-| Plugin + Workspace live authority adapter、Host fleet 与客户端 RPC | App Server composition | OS sandbox implementation、Workbench UI |
+| Marketplace package artifact/install/update/uninstall 与 capability lease | `zeta-marketplace-manager` | Editor Extension enable/grant、启动进程 |
+| Marketplace Editor Extension enable/grant generation、通知与 lease | 产品注入的 `MarketplaceEditorExtensionAdmission` | package 安装、Workspace trust、进程隔离 |
+| Legacy Plugin 本地 package 与 enable/grant generation | `zeta-plugins` compatibility authority | 远端 Marketplace 安装、启动进程 |
+| 可执行进程、Host RPC、incarnation、取消和 crash recovery | `zeta-editor-extension-host` | package discovery、Workspace trust decision、领域 payload |
+| source normalization + Workspace live authority adapter、Host fleet 与客户端 RPC | App Server composition | OS sandbox implementation、Workbench UI |
 | 生产 sandbox、hard resources 与 killable process tree | 注入的 platform `ExtensionHostLauncher` | package enable/grant 或 provider semantics |
 | Host snapshot normalization 与 transport | `platform/extensionHost` adapter | 领域 provider ownership |
 | Host fleet 生命周期和原子 provider 编排 | `IExtensionHostService` implementation | generated DTO 作为 domain API |
@@ -119,8 +133,8 @@ Manifest activation events 当前是经过验证并传给 runtime 的 facts；`z
 Frontend common contract 使用 Workbench 自己的 snapshot/descriptor/failure 类型；generated DTO 和
 资源传输 shape 只存在于运行时 adapter。`src/zeta/base` 不认识扩展、语言、grammar 或 Host RPC。
 
-静态 `package.json` catalog 与 Plugin manifest 之间没有隐式转换。未来即使共享安装 UI，也必须保留
-两种 package identity、authority、generation 和 failure semantics；不能把“静态资源目录可读”转换成
+静态 `package.json` catalog 与 executable consumer manifest 之间没有隐式转换。未来即使共享安装
+UI，也必须保留两种 package identity、authority、generation 和 failure semantics；不能把“静态资源目录可读”转换成
 “允许执行包内程序”。
 
 ## 3. 当前支持的声明式贡献
@@ -149,10 +163,11 @@ catalog 中，但投影为产品主题时会被忽略。
 
 ### 4.1 清单与激活上限
 
-每个 Plugin `editorExtensions[]` item 必须有唯一 manifest-local ID、唯一 package-relative entrypoint、
-数值 `runtimeApiVersion: 1`、非空且有界的 activation events 和 capabilities。entrypoint 必须是 immutable
-package 内 regular file，并有完全相同路径的 `process` permission。regular-file 校验不证明当前 OS、
-CPU、ABI、executable bit 或代码签名可运行；launcher 仍需在目标平台失败关闭。
+每个 legacy Plugin `editorExtensions[]` item 或 Marketplace Zeta sidecar item 必须有唯一
+manifest-local ID、唯一 exact executable binding、数值 `runtimeApiVersion: 1`、非空且有界的
+activation events 和 capabilities。Legacy entrypoint 必须有对应 `process` permission；Marketplace
+entrypoint 必须引用同一 Manager package 中声明为 `runtime: direct` 的 executable capability。
+regular-file 校验不证明当前 OS、CPU、ABI 或代码签名可运行；launcher 仍需在目标平台失败关闭。
 
 v1 activation event 为 `startup`、`onCommand`、`onLanguage`、`onDemand`、`onDebugType`、
 `onTaskType` 和 `onTestProfile`。`workspaceContains` 当前没有 Workspace-owned bounded scanner，因而
@@ -180,7 +195,7 @@ Renderer 不能把任意 Host RPC method 直接透传给扩展进程。
 Language Provider 调用会把当前 immutable editor snapshot 的完整 normalized text、version、language ID、
 可选 resource URI 及本次 position/range/options 交给扩展程序；因此 grant 该 capability 必须被产品明确
 解释为“允许 broker 披露当前参与调用的文档内容”，但不等于任意工作区文件读取。传输仍受 512 KiB
-payload ceiling、Workspace/Plugin live authority、activation generation 和 incarnation fence 约束，超限
+payload ceiling、Workspace/source live authority、activation generation 和 incarnation fence 约束，超限
 请求拒绝。
 Frontend v1 当前只投影 completion、Parameter Hints、hover、formatting、Inlay Hints 和 Linked Editing；
 Host vocabulary 中虽有 definition、references、rename、code action 等 operation，尚无严格 Workbench
@@ -196,8 +211,9 @@ session seam，不能把任意 executable descriptor 从扩展进程直接交给
 
 ### 5.1 声明式静态资源
 
-主机和 Plugin activation authority 是静态来源的唯一入口。内置根固定优先于 Plugin exact package，
-Plugin 又优先于用户 profile 根；Workspace、Renderer、静态 manifest 和网页内容均不能提交任意绝对路径。目录扫描拒绝 symlink、hard link、special file、越界相对路径和不
+主机选择的 built-in root、Manager dynamic source 与 legacy Plugin activation authority 是静态来源的
+唯一入口。内置根固定优先于 dynamic exact packages，后者又优先于用户 profile 根；Workspace、
+Renderer、静态 manifest 和网页内容均不能提交任意绝对路径。目录扫描拒绝 symlink、hard link、special file、越界相对路径和不
 满足 manifest 身份的包。当前限制为：manifest 最大 4 MiB，单文件最大 16 MiB，每包最多 4096 个
 regular files、8192 个 filesystem entries，总 bytes 最大 64 MiB。
 
@@ -206,14 +222,16 @@ regular files、8192 个 filesystem entries，总 bytes 最大 64 MiB。
 package digest，原始 `package.json` bytes 已包含在 `packageSha256` 的整包身份中。当前快照只保留
 最新代，旧代资源请求明确失败，不做隐式重绑定。
 
-静态 profile 根当前没有独立 Editor Extension registry、signature、revocation 或 grant authority。由
-Marketplace 分发的静态目录则继承外层 Plugin 的 TUF/digest/revocation 与 enable/grant authority，但
-仍不获得任意代码执行；两种来源都只能贡献第 3 节列出的声明式数据。
+静态 profile 根当前没有独立 Editor Extension registry、signature、revocation 或 grant authority。
+Marketplace Theme/Language 静态目录继承 Manager 的 TUF/digest/revocation 与 exact installation
+identity，但声明式消费不等于 executable grant；所有来源都只能贡献第 3 节列出的声明式数据。
 
 ### 5.2 可执行进程
 
-可执行扩展必须同时满足三层 gate：Plugin exact package/digest 的 enable + grant authority、active
-Workspace trust，以及平台 launcher 对 sandbox/hard limits 的实际实施。任一 gate 失效都拒绝新 activation
+可执行扩展必须同时满足三层 gate：来源的 exact package/digest + enable/grant lease、active Workspace
+trust，以及平台 launcher 对 sandbox/hard limits 的实际实施。Marketplace 来源额外同时持有 Manager
+capability lease 与产品 admission lease；admission generation/notification 负责使 grant/revoke 触发
+fleet replacement。任一 gate 失效都拒绝新 activation
 和 invocation；App Server 还须取消 connection-owned invocation，并在 disable/update/uninstall 或
 Workspace 切换时停止旧进程。
 
@@ -263,6 +281,7 @@ Host exit、invalid protocol 或 unknown outcome 会清空旧 registration，终
 | Plugin 声明式 Extension 分发与 live activation | 已实现 | `declarativeExtensions[]`、dynamic source provider、Workbench Plugin generation refresh |
 | 声明式语言、grammar、snippet、theme、debugger 投影 | 已实现 | `AppServerExtensionService` 与领域 registry tests |
 | Plugin executable declaration、exact process permission、authority | 已实现 | `zeta-plugins` manifest/package/authority tests |
+| Marketplace executable consumer adapter 与独立 admission | 已实现 | exact sidecar/executable binding、双 lease 与 deferred uninstall tests |
 | Host RPC v1、独立进程监管、取消、配额、restart | 已实现 | `zeta-editor-extension-host` standalone tests |
 | App Server Host fleet、Workspace gate、async invoke/cancel/read | 已实现 | exact operation broker、连接配额/TTL、退役取消与 changed notification |
 | Workbench Commands/Language/Tasks/Testing bridge | 已实现（窄契约） | 原子投影、取消、stale fence 与 last-good 测试；Testing 仅 task-backed profile |
@@ -302,14 +321,14 @@ Node/VS Code compatibility 若未来立项，仍是独立产品项目：需要 N
 - 静态扩展资源读取绑定精确目录代次；刷新不能使旧描述读取到新 bytes。
 - 内置静态产品包不能被可变 profile 包以同 ID 静默覆盖。
 - 安装、启用或 manifest validation 都不等于 execution authority；每次 activation/invocation 复核 live
-  Plugin + Workspace gate。
+  source admission/artifact lease + Workspace gate。
 - 生产第三方扩展必须逐进程隔离并实施 hard limits；缺失实施者时失败关闭。
 - 请求、响应和 registration 同时绑定 extension、incarnation 与 activation generation；恢复不重用旧
   identity 或 lease。
 - Workbench 消费领域类型；transport DTO 不进入 frontend common service contract。
 - 各 contribution 由语言、TextMate、Debug、Tasks、Testing 等领域 registry 拥有；extension service 只
   负责编排和生命周期。
-- 声明式 catalog 与 Plugin executable authority 保持概念分离；共享产品 UI 不能合并二者的 manifest
+- 声明式 catalog 与 executable authority 保持概念分离；共享产品 UI 不能合并二者的 manifest
   或运行时语义。
 
 ## 10. 实现证据与验证

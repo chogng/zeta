@@ -1,5 +1,8 @@
+use std::fmt;
+
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use ts_rs::TS;
 
 /// One server-owned shell profile available to interactive terminal clients.
@@ -30,7 +33,15 @@ pub enum TerminalProfileSelection {
     },
 }
 
-/// Starts one connection-owned interactive terminal at the server's trusted workspace root.
+/// Selects whether a terminal dies with its creating connection or may be reattached briefly.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", tag = "type", deny_unknown_fields)]
+pub enum TerminalLifecycle {
+    ConnectionOwned,
+    Reconnectable,
+}
+
+/// Starts one interactive terminal at the server's trusted workspace root.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TerminalCreateParams {
@@ -39,6 +50,30 @@ pub struct TerminalCreateParams {
     #[schemars(range(min = 1, max = 512))]
     pub cols: u16,
     pub profile: TerminalProfileSelection,
+    pub lifecycle: TerminalLifecycle,
+}
+
+/// One short-lived bearer lease used to reattach a detached terminal.
+#[derive(Clone, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TerminalReconnectLease {
+    #[schemars(length(min = 64, max = 64))]
+    pub reconnect_token: String,
+    #[ts(type = "number")]
+    pub reconnect_grace_period_millis: u64,
+}
+
+impl fmt::Debug for TerminalReconnectLease {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("TerminalReconnectLease")
+            .field("reconnect_token", &"[REDACTED]")
+            .field(
+                "reconnect_grace_period_millis",
+                &self.reconnect_grace_period_millis,
+            )
+            .finish()
+    }
 }
 
 /// Identity allocated for one interactive terminal.
@@ -47,6 +82,41 @@ pub struct TerminalCreateParams {
 pub struct TerminalCreateResult {
     pub terminal_id: String,
     pub profile: TerminalProfile,
+    pub reconnect: Option<TerminalReconnectLease>,
+}
+
+/// Reclaims one reconnectable terminal after its previous connection closed.
+#[derive(Clone, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TerminalAttachParams {
+    #[schemars(length(min = 1))]
+    pub terminal_id: String,
+    #[schemars(length(min = 64, max = 64))]
+    pub reconnect_token: String,
+    #[schemars(range(min = 1, max = 512))]
+    pub rows: u16,
+    #[schemars(range(min = 1, max = 512))]
+    pub cols: u16,
+}
+
+impl fmt::Debug for TerminalAttachParams {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("TerminalAttachParams")
+            .field("terminal_id", &self.terminal_id)
+            .field("reconnect_token", &"[REDACTED]")
+            .field("rows", &self.rows)
+            .field("cols", &self.cols)
+            .finish()
+    }
+}
+
+/// Confirms attachment and rotates the bearer token for the next disconnect.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalAttachResult {
+    pub terminal_id: String,
+    pub reconnect: TerminalReconnectLease,
 }
 
 /// Writes one bounded UTF-8 input batch to an interactive terminal.
@@ -135,7 +205,7 @@ pub struct TerminalReadResult {
     pub exit_code: Option<i32>,
 }
 
-/// Terminates and releases one connection-owned terminal.
+/// Terminates and releases one terminal attached to the calling connection.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TerminalCloseParams {

@@ -51,8 +51,43 @@ bazel test //zeterm:zeterm_ci
 平台 release job 使用 `ZETERM_PACKAGE_DIR`、`ZETERM_PLATFORM` 以及对应的 signing identity 环境
 调用 `scripts/release_zeterm_package.sh`；该入口完成签名和验签后才留下 `verified` artifact。
 
-package staging 只生成 unsigned artifact 和 binary digest；签名、平台验证与发布顺序见
+package staging 只生成 unsigned artifact、binary digest 和可选的 binary-bound Remote runtime
+bundle；签名、平台验证与发布顺序见
 [`zeterm` release graph](docs/zeterm-release-graph.md)。
+
+若发布包要支持“本机只安装 zeterm，远端尚未安装 zeta”，先把各 POSIX target 的 canonical
+packaged-node Zeta package 组装成确定性 Remote runtime bundle，再在构建 zeterm 时绑定它：
+
+```bash
+python3 scripts/build_remote_runtime_bundle.py \
+  --bundle-dir /absolute/path/to/remote-runtimes \
+  --package-dir /packages/x86_64-unknown-linux-gnu \
+  --package-dir /packages/aarch64-unknown-linux-gnu
+
+just zeterm-package \
+  --package-dir /absolute/path/to/zeterm-package \
+  --remote-runtime-bundle /absolute/path/to/remote-runtimes
+```
+
+package builder 会把 catalog SHA-256 编译进 zeterm binary，再把 catalog 与 archive 放到
+`zeta-remote-runtimes/`。staging 和 signing 都会确认 binary 实际包含该摘要；catalog 再以每个
+archive 的大小、展开大小和 SHA-256 绑定远端代码。使用预构建 `--zeterm-bin` 时，该 binary 也必须
+已用同一 `ZETERM_REMOTE_RUNTIME_CATALOG_SHA256` 编译，否则 staging 拒绝。release script 可通过
+`ZETERM_REMOTE_RUNTIME_BUNDLE` 接入同一 bundle。
+
+不希望把所有 POSIX runtime 装进 zeterm 产品包时，发布 job 可只绑定已发布 catalog：
+
+```bash
+just zeterm-package \
+  --package-dir /absolute/path/to/zeterm-package \
+  --remote-runtime-catalog-url https://releases.example/zeta/<version>/catalog.json \
+  --remote-runtime-catalog-sha256 <catalog-digest>
+```
+
+builder 会把 URL 和摘要都通过 `ZETERM_REMOTE_RUNTIME_CATALOG_URL` /
+`ZETERM_REMOTE_RUNTIME_CATALOG_SHA256` 编译进 binary；staging 和 signing 验证两者确实存在于签名
+artifact，运行时再由共享 updater 直连公共 HTTPS、拒绝重定向/私网目标，并在本机内容寻址缓存中完成
+完整 archive 验证后交给 SSH installer。URL 不是用户配置，也不能由远端或 Native UI 替换。
 
 ## 宿主边界与 frame ownership
 
@@ -121,16 +156,16 @@ composition API 已删除，后续不得在 Native 宿主重新引入平行输�
 | accessibility semantics → 平台屏幕阅读器 | 尚无 native adapter | 尚未完成 |
 | Transparent native chrome 与窗口拖动 adapter | `zeta-winit` | 委托 |
 | ANSI parser、terminal grid 与 BlockList | `zeta-terminal::TerminalCore` | 委托 |
-| 默认 shell PTY、output/exit event、write 与 resize | `terminal_session::TerminalSession` | ✅；PTY 创建在后台 worker 完成，UI 只接管 ready runtime |
-| Session Tab 到本地 PTY 的一对一 binding、活动/非活动 runtime 切换 | `terminal_workspace::TerminalWorkspace` | ✅；pending key、乱序 ready 和非活动 runtime 由 Native adapter 管理，不拥有 App Server Session/Thread authority |
+| 默认 shell PTY、output/exit event、write 与 resize | `terminal_session::TerminalSession` | ✅；Local 使用本地 PTY，Remote 使用 App Server `terminal/*` 协议；两者都在后台 worker 创建和轮询 |
+| Session Tab 到 terminal runtime 的一对一 binding、活动/非活动 runtime 切换 | `terminal_workspace::TerminalWorkspace` | ✅；Local/Remote 共用 pending key、乱序 ready 和非活动 runtime 管理，不拥有 App Server Session/Thread authority |
 | Agent ThreadTimeline + fixed Agent/Shell Composer | `shell_scene` / `thread_timeline` / `composer_panel` / `agent_composer` | ✅ |
 | Composer 面板几何、信息栏与可展开交互 Pane 的位置 | [`zeta-composer`](composer/README.md) / `composer_panel` / `shell_scene` | ✅；`zeta-composer` 只解析 panel、固定行、interaction bounds 与 list scroll geometry，Native 负责状态、绘制和 scene 接线 |
 | Composer active View 与滚动状态 | `composer_interaction::ComposerInteractionModel` / `composer_interaction_pane::ComposerInteractionPaneState` / `zeta-ui::{ScrollView,ListView}` | ✅；Pane 只宿主 Slash 与 `/model` active View 并保留 viewport offset，通用 UI 基座负责裁剪、滚动与可见范围；Shell completion 不使用该 Pane |
-| App Server Session adapter 与 transient Thread projection / stream-gap recovery | `agent_session` / `thread_projection` | ✅；Thread 只作为 App Server 内部状态的 Native projection，不形成独立 crate |
+| App Server Session adapter 与 transient Thread/language projection / stream-gap recovery | `agent_session` / `agent_session_target` / `agent_session_remote` / `language_service_remote` / `language_service_remote_session` / `thread_projection` | 部分具备；embedded 与 CLI Remote launch 均走同一 adapter，SSH profile 由 Native host 选择；Remote Agent 与独立 Remote language connection 均在 30 秒窗口内退避重连，断线期命令和语言请求不会延迟回放；命名连接 CLI、Native 选择器及图形新增/编辑/删除均已具备 |
 | durable direct Shell Turn | App Server `session/request::StartShellTurn` / Core `StartShellTurn` | ✅ |
 | 独立交互式 Terminal Surface | `workspace_surface` / `terminal_session` / `terminal_input` | ✅；`Cmd/Ctrl+J` 切换 |
 | Composer/File Editor/Session Search/File Search/Workspace Path Search/Git Branch Search IME target、事件转换、启停、composition lifecycle 与候选框同步 | `input_method` | ✅ |
-| Bottom Widget 底部的 Local/cwd/branch/Changes context toolbar | `input_context_toolbar::InputContextToolbar` / `workspace_path_picker` / `git_branch_context_menu` / `workspace_context::WorkspaceContext` | ✅；cwd 复用带 Search Box header 的 `Dropdown`，branch 复用带同类 header 的 `ContextMenu`，分别切换工作区投影和本地分支；Changes 显示 changed path 数与文本 `+addition -deletion`，点击后刷新并展开 Changes Pane |
+| Bottom Widget 底部的 Local/Remote/cwd/branch/Changes context toolbar | `input_context_toolbar::InputContextToolbar` / `workspace_path_picker` / `git_branch_context_menu` / `workspace_context::WorkspaceContext` | 部分具备；Remote 显示远端位置并禁止本地文件夹切换，Local 继续使用 picker；Changes/Git 仍由当前 App Server authority 投影 |
 | shell bootstrap、host-owned command submit 与 zsh completion marker | `terminal_session::TerminalSession` | 部分具备 |
 | terminal query reply → PTY write | `TerminalCore::take_reply_bytes` / `TerminalSession::handle_event` | ✅ |
 | alternate-screen mouse cell mapping、button state 与 PTY report | `terminal_pointer::TerminalPointer` / `TerminalCore::encode_mouse` | ✅ |
@@ -153,6 +188,7 @@ zeterm → zeta-winit
             → zeta-commands
             → zeta-keybinding
             → zeta-app-server-client
+            → zeta-remote → zeta-remote-connections
             → zeta-protocol
             → zeta-terminal
             → zeta-text-file
@@ -212,6 +248,8 @@ binary、非 UTF-8 与单侧超过 2 MiB 的文件；index-only 对比仍是后�
 
 ```text
 main
+  → ZetermLaunch::parse
+      → Local 或 `--remote <host> --workspace <absolute-remote-path>` RemoteProfile
   → zeta_winit::run_application
   → NativeApp::resumed
       → NativeWindow::create
@@ -221,15 +259,17 @@ main
       → request_redraw
   → NativeApp::window_event
       → resize / scale-factor update → rebuild scene
-          → TerminalWorkspace::resize_all → each TerminalSession::resize → TerminalCore + PTY
+          → TerminalWorkspace::resize_all → each TerminalSession::resize
+              → Local PTY 或 Remote App Server `terminal/resize`
       → AgentSessionEvent::Snapshot/Update → SessionTab/TerminalWorkspace binding + ThreadProjection
-          → unknown Session reserves a terminal key and starts background PTY creation
-          → TerminalReady → adopt the runtime; output/exit events route by terminal key
+          → unknown Session reserves a terminal key and starts background terminal creation
+          → TerminalReady → adopt Local PTY 或 Remote App Server terminal runtime
           → ThreadTimeline
           → committed update / stream gap → session/subscribe refresh
           → transient Agent/Tool delta → rebuild scene
       → TerminalSessionEvent::Output(key) → bound TerminalCore::process_output → rebuild scene when active
-          → terminal query → take_reply_bytes → TerminalSession::send_input → PTY
+          → terminal query → take_reply_bytes → TerminalSession::send_input
+              → Local PTY 或 Remote App Server `terminal/write`
       → TerminalSessionEvent::Exited → TerminalCore::mark_process_exited → rebuild scene
       → cursor / primary mouse event → titlebar drag 或 terminal cell mapping
       → Terminal Surface pointer → cell mapping / TerminalPointer / TerminalSelection → PTY
@@ -529,3 +569,114 @@ state 不进入 `zui`。
 macOS 可能在新窗口激活完成前把首次 surface acquisition 报为 occluded；该 frame 会被跳过。
 `NativeApp` 在后续 `WindowEvent::Occluded(false)` 上重新请求 redraw，保证首个可见 frame 不会
 因为一次正常的 activation transition 永久丢失。
+
+## Remote 启动边界
+
+当前 Native host 支持显式命令行 Remote launch：
+
+```text
+zeterm --remote <openssh-host> --workspace <absolute-remote-path> \
+  [--runtime <remote-zeta-executable>] [--ssh <local-ssh-executable>] \
+  [--runtime-catalog <local-catalog> --runtime-catalog-sha256 <digest>] \
+  [--runtime-catalog-url <https-catalog.json> --runtime-catalog-sha256 <digest>] \
+  [--runtime-cache <absolute-local-path>] \
+  [--rollback-runtime]
+```
+
+也可以把常用服务器保存为命名连接：
+
+```text
+zeterm remote save <name> --host <openssh-host> --workspace <absolute-remote-path> [--replace]
+zeterm remote list
+zeterm remote connect <name> [--runtime <remote-zeta-executable>] [--ssh <local-ssh-executable>]
+zeterm remote tunnel <name> --remote-port <port> [--local-port <port>] [--ssh <local-ssh-executable>]
+zeterm remote remove <name>
+```
+
+命名连接存放在 `<local-profile-root>/remote/targets.json`，只包含规范化名称、OpenSSH host alias 和
+Remote Workspace。它不保存密码、私钥、SSH executable 或 runtime；`connect` 解析出 target 后仍走
+下述同一套探测、安装、握手和连接流程。默认 create 不会覆盖同名连接，只有显式 `--replace` 才会
+替换。`remote list` 输出稳定的 tab-separated `name / host / workspace`，便于 shell 和 Native
+连接选择器和管理面板消费。
+
+运行中的 zeterm 点击底部 `Local/Remote` location 按钮，或调用可绑定命令
+`workbench.action.pickExecutionLocation`，会从同一目录打开可搜索的 Native modal picker。选择连接后
+Native host 用当前 zeterm executable 启动 `remote connect <name>` 新进程；它不经过 shell、不向 UI
+传 host/Workspace/凭据，也不改变当前窗口的 Workspace authority。父窗口只监督启动：子进程仍独立
+拥有 runtime 探测、安装、兼容性握手和 OpenSSH；父窗口只消费带前缀的有界 JSON Lines 进度，子进程
+普通诊断继续继承 stderr。
+
+picker 的 `Manage Remote connections…` 会打开 Native 管理面板。面板可新增、选择、编辑、改名、
+两步确认删除及连接；改名通过 `RemoteConnectionCatalog::update` 在同一 advisory lease 内完成，不能用
+“先创建、再删除”产生中间目录状态，也不能覆盖另一个规范名称。未保存草稿不会因切换连接或点击
+New 被静默丢弃；Connect 只接受已保存且无未提交修改的记录。所有字段都有键盘、鼠标、滚轮、
+accessibility 和 IME/clipboard 路由，错误直接留在面板内。管理面板仍只写无凭据 target 字段，SSH
+认证继续完全属于本机 OpenSSH。Connect 后面板会依次显示 runtime 检查、目录/artifact 下载、
+下载校验、平台探测、按 10% 分别节流的下载/上传、远端提交、下载/缓存/安装/复用和失败状态。收到 `Ready` 后父窗口解除监督并关闭面板，新
+Remote 窗口独立运行；在此之前关闭面板会取消子进程。失败会解除编辑锁并保留错误，可直接再次
+Connect。
+
+`remote tunnel` 是 zeterm 对共享 host-side Tunnel primitive 的前台 CLI 消费者。它只从命名连接读取
+OpenSSH host，固定监听 `127.0.0.1` 并只转发到远端 `127.0.0.1:<remote-port>`；不接受公开 bind、
+反向转发、密码、私钥或任意 SSH options。省略 `--local-port` 时 Native host 选择一个当前可用的
+loopback 端口，OpenSSH 再通过 `ExitOnForwardFailure=yes` 做最终 bind gate。CLI 会在 12 秒内轮询
+实际 loopback listener，只有 listener 稳定可连接且 child 仍存活才输出实际
+endpoint，并持续前台监督；Ctrl-C/TERM 会关闭 OpenSSH。这个基础 `ssh -L` 生命周期不需要
+Remote Server 参与，未来非 SSH transport 或远端动态 endpoint 才应扩展 Remote Server 协议。
+
+当当前窗口本身是 Remote authority 时，同一 location picker 还会显示
+`Manage Remote tunnels…`；也可将 `workbench.action.manageRemoteTunnels` 绑定到自定义快捷键。
+`remote_tunnel_process::RemoteTunnelHost` 从 `AgentSessionTarget` 复用该窗口
+已选择的 OpenSSH host 与 executable，在后台线程持有并监督每个 `ssh -N` child；Renderer-facing
+`RemoteTunnelManagerState` 只保存远端端口、分配后的本机 loopback 端口和
+Starting/Forwarding/Recovering/Stopping 状态。面板只接受远端端口，不能提交 host、凭据、监听地址或 SSH options。
+关闭面板不停止 Tunnel；再次打开可查看或逐项 Stop，关闭 zeterm 窗口则由 Native host owner 收掉全部
+child。Local 窗口没有可复用的 Remote authority，因此不展示 picker 动作，命令入口也会拒绝打开。
+首次启动早退、listener 未在 12 秒内出现都会失败；恢复尝试也经过同一 readiness gate。已经
+Forwarding 后的 child 退出会在 30 秒内按 250ms 到 2s 退避恢复，并复用
+原本的本机端口。恢复状态、恢复成功、恢复耗尽和显式 Stop 都通过 `NativeEvent::RemoteTunnel` 回到产品
+事件循环；Stop 与窗口关闭会立即唤醒退避，不阻塞 winit thread。
+
+默认启动先按 OpenSSH host + Remote Workspace 从本机
+`<local-profile-root>/remote/connections.json` 读取上次握手成功的精确 runtime；没有记录时才从远端
+`PATH` 探测 `zeta`。`local-profile-root` 与 App Server client 共用，`ZETA_PROFILE_ROOT` 可显式覆盖。
+availability probe 得到的 resolved executable 会用于短生命周期 App Server initialize/schema
+compatibility preflight，只有两项都成功才通过原子写入激活并保留一代 previous runtime。profile 只含
+host、Workspace 和 runtime，不保存凭据或 SSH executable。
+
+若 runtime 缺失或 schema 明确不兼容，正式 zeterm
+发布包从签名 binary 绑定的本地 catalog 或网络 URL + 摘要选择远端平台对应的完整 packaged-node
+runtime；网络包先通过共享 updater 写入本机内容寻址缓存，再经 SSH 上传安装，切换到返回的不可变摘要路径，并重新执行 availability 与 compatibility 两次检查，然后才
+启动窗口。因此本机只安装 zeterm、远端没有预装 zeta，或只安装了旧版 zeta，也能连接。source build
+没有绑定 catalog 时会安全退出；开发和运维可以显式同时传
+`--runtime-catalog` 与其已认证 SHA-256，或传 `--runtime-catalog-url`、摘要以及可选本机 cache root。
+显式 `--runtime` 永远不会被自动替换，也不能和 catalog
+参数混用，并且不会读写持久 profile。`--rollback-runtime` 不下载 artifact：它先验证 previous runtime
+仍可执行且协议兼容，再以 compare-and-swap 方式交换 active/previous；验证失败或并发修改都保持当前
+active 不变。它不能与 `--runtime` 或 catalog 参数混用。SSH transport failure 或 server rejection
+也不会被误判为升级信号。SSH host、agent、
+跳板、主机密钥和私钥仍由本机 OpenSSH 管理，profile 不保存凭据。
+
+Remote 模式下，文件树、文件读写、Git、Agent Session 和交互式 terminal 都由 SSH 到达的
+Remote Server daemon 执行；Native host 只拥有 OpenSSH 子进程和终端 grid 的本地投影。每条 SSH
+stdio 连接都经过 `remote-server connect` 接入按 Workspace 和 runtime 隔离的 App Server。当前本机
+语言服务进程不会在 Remote 路径启动；诊断、Hover、Completion 和位置跳转通过独立 language
+connection 调用远端 App Server，避免慢 LSP response 阻塞 Agent 与文件请求；位置在 UTF-8 editor
+byte 与协议 UTF-16 之间按 exact document revision 转换。
+Agent transport 断线后会在 30 秒窗口内以 250ms 到 2s 的退避重建 SSH/App Server connection，并
+重新投影 durable Session/Thread snapshot、重新同步打开的语言文档。正常连接
+曾恢复后发生的新断线会开启新的 recovery window；等待期间提交的命令会立即失败，不会在稍后连接
+恢复时被隐式回放。Remote terminal 以 `reconnectable`
+lifecycle 创建；transport 断开后，worker 在服务端给出的 30 秒 lease 内重新 SSH、attach 原 PTY，
+并使用服务端旋转后的 token 作为下一次恢复凭据。zeterm 已能从 release-bound 本地或网络
+catalog 自行选择和安装缺失 runtime；启动窗口前会在 stderr 投影下载、校验、平台探测、按 10% 节流的下载/上传、
+远端提交和安装/复用结果。从现有 Native 窗口发起连接时，同一 typed progress 会进入管理面板，
+并提供启动前取消和失败重试；直接从 shell 首次启动仍保留纯 CLI stderr 行为。正式 publisher/feed、
+企业代理、断点续传、其余尚无 Native UI 消费者的语言操作、旧 immutable runtime/cache GC，以及 Debug/Browser Tunnel
+自动消费者仍是后续能力；Native Tunnel manager 与前台 Tunnel CLI 均已可用。Desktop 与
+zeterm 的整体 Remote 状态见 [`docs/remote-development.md`](../docs/remote-development.md)。
+
+当前 Agent session、Remote language session 与每个 Remote terminal runtime 各自拥有一条 Native
+host → OpenSSH → App Server 通道；这保证 SSH transport 不进入 UI，也避免慢 LSP 请求占住 Agent
+request driver。Agent、Language 和 Terminal 都能用替换连接恢复，Terminal
+恢复窗口只覆盖短暂 transport 中断；远端主机/daemon 重启、长期离线、跨设备漫游和连接池仍未完成。

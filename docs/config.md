@@ -458,7 +458,7 @@ resolved sources
 | Standalone MCP Config | `mcp/server/upsert`、`mcp/server/remove`、`mcp/server/enablement/set` | Config authority 的 MCP section（已实现 desired config） |
 | MCP Runtime | `mcp/server/connect`、`mcp/server/disconnect`、`mcp/server/status` | process-local lifecycle intent 与 active runtime 的 redacted projection（已实现）；不改变 Config revision |
 | MCP OAuth | `mcp/oauth/start`、`mcp/oauth/complete`、`mcp/oauth/refresh`、`mcp/oauth/revoke` | exact Config target + SecretStore lifecycle；Config 只保存 credential reference |
-| Plugin Package | `plugin/list`、`plugin/marketplace/list`、`plugin/install`、`plugin/update`、`plugin/rollback`、`plugin/uninstall` | exact package Plugin authority（已实现） |
+| Plugin Package | `plugin/list`、`plugin/uninstall` | legacy exact package Plugin authority；新安装由 `marketplace/*` API 与 Marketplace Manager 拥有 |
 | Plugin Activation | `plugin/enable`、`plugin/disable`、`plugin/grant`、`plugin/revokeGrant` | exact-package Plugin authority（已实现） |
 | Plugin Request Config | `plugin/request/upsert`、`plugin/request/remove`、`plugin/request/enablement/set` | Config authority 的 exact package request（已实现；不安装或激活） |
 | Skill Source | `skill/source/add`、`skill/source/remove`、`skill/source/enablement/set` | Config authority 的 Skill section（已实现 desired config） |

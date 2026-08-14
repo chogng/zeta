@@ -71,19 +71,36 @@ test("browser host registrations use every generated reverse-RPC method", () => 
   registration.dispose();
 });
 
-test("browser host reset closes only targets created through the host capability", () => {
+test("browser host reset closes only targets created through the host capability", async () => {
   const closed: string[] = [];
   const service = new BrowserAutomationMainService();
   const registry = new BrowserTargetRegistry();
   const views = browserViewService({ close: target => closed.push(target) });
   const binding = service.bind(views, registry);
 
-  assert.deepEqual(service.create({ url: "about:blank" }), { targetId });
+  assert.deepEqual(await service.create({ url: "about:blank" }, requestContext()), { targetId });
   service.reset();
   service.reset();
 
   assert.deepEqual(closed, [targetId]);
   binding.dispose();
+});
+
+test("browser host closes a target whose asynchronous creation outlives its runtime binding", async () => {
+  let finishCreate: (createdState: ReturnType<typeof state>) => void = () => {};
+  const created = new Promise<ReturnType<typeof state>>(resolve => {
+    finishCreate = resolve;
+  });
+  const closed: string[] = [];
+  const service = new BrowserAutomationMainService();
+  const binding = service.bind(browserViewService({ createTarget: () => created, close: target => closed.push(target) }), new BrowserTargetRegistry());
+  const pending = service.create({ url: "about:blank" }, requestContext());
+
+  binding.dispose();
+  finishCreate(state());
+
+  await assert.rejects(pending, /BrowserCapabilityUnavailable/);
+  assert.deepEqual(closed, [targetId]);
 });
 
 test("a cancelled queued debugger turn does not block the next browser observation", async () => {
@@ -142,7 +159,7 @@ test("a cancelled queued debugger turn does not block the next browser observati
 
 function browserViewService(overrides: Partial<IBrowserViewMainService> = {}): IBrowserViewMainService {
   return {
-    createTarget: () => state(),
+    createTarget: async () => state(),
     observe: () => state(),
     layout: () => {},
     setVisibility: () => {},
@@ -170,4 +187,8 @@ function state() {
 
 function disposable(): IDisposable {
   return { dispose: () => {}, [Symbol.dispose]: () => {} };
+}
+
+function requestContext() {
+  return { signal: new AbortController().signal };
 }

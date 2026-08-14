@@ -103,8 +103,7 @@ export class DebugService extends DisposableOwner implements IDebugService {
     const root = this.workspace.getWorkspace().folders[0]?.uri;
     if (!root) throw new Error("Debugging requires an open workspace folder");
     await this.runTask(current.preLaunchTask, "preLaunchTask");
-    const workspaceFolder = root.scheme === "file" ? root.fsPath : decodeURIComponent(root.path);
-    const session = await DebugAdapterSession.start({ configuration: current, processService: this.processes, breakpoints: () => this.currentBreakpoints, workspaceFolder, runInTerminal: value => runDebuggeeInTerminal(this.terminals, value), updateBreakpoints: updates => this.acceptBreakpointUpdates(updates), exceptionBreakpoints: () => this.exceptionBreakpointsForType(current.type) });
+    const session = await DebugAdapterSession.start({ configuration: current, processService: this.processes, breakpoints: () => this.currentBreakpoints, workspace: root, runInTerminal: value => runDebuggeeInTerminal(this.terminals, value), updateBreakpoints: updates => this.acceptBreakpointUpdates(updates), exceptionBreakpoints: () => this.exceptionBreakpointsForType(current.type) });
     const listener = session.onDidChangeState(state => {
       if (this.sessionRecords.has(session.id)) this.sessionEmitter.fire(this.session);
       if (state === "terminated" || state === "error") queueMicrotask(() => { void this.finishSession(session); });

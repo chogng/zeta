@@ -16,6 +16,7 @@ import {
   browserViewIpcRoutes,
   type IBrowserViewMainService,
 } from "../../../../platform/browser/electron-main/browserViewIpc.js";
+import { directBrowserViewNavigation } from "../../../../platform/browser/common/browserViewNavigation.js";
 
 const targetId = "browser_target_123e4567-e89b-12d3-a456-426614174000";
 
@@ -78,6 +79,14 @@ test("browser view validators reject privileged URLs and malformed geometry", ()
   );
 });
 
+test("direct Browser navigation owns exactly one normalized origin", () => {
+  const navigation = directBrowserViewNavigation("https://example.com/path");
+  assert.equal(navigation.ownsRequestedUrl("https://example.com/next"), true);
+  assert.equal(navigation.ownsLoadedUrl("https://other.example/"), false);
+  assert.equal(navigation.loadUrlFor("https://example.com/next"), "https://example.com/next");
+  assert.throws(() => navigation.loadUrlFor("https://other.example/"));
+});
+
 test("browser view IPC routes delegate only validated commands", async () => {
   const calls: string[] = [];
   const state: IBrowserViewState = {
@@ -90,7 +99,7 @@ test("browser view IPC routes delegate only validated commands", async () => {
     visible: false,
   };
   const service: IBrowserViewMainService = {
-    createTarget: () => {
+    createTarget: async () => {
       calls.push("create");
       return state;
     },

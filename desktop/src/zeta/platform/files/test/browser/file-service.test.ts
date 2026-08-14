@@ -2,11 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { Emitter } from "../../../../base/common/event.js";
 import { URI } from "../../../../base/common/uri.js";
-import { BrowserFileService, workspaceRelativePath } from "../../../../platform/files/browser/fileService.js";
+import { BrowserFileService, workspaceRelativePath, workspaceResourceFromPath } from "../../../../platform/files/browser/fileService.js";
 import { FileKind, FileRevisionConflictError } from "../../../../platform/files/common/files.js";
 import type { FsChanged } from "../../../../../../generated/app-server/types.js";
 import type { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import { WorkspaceContextService } from "../../../../workbench/services/workspaces/browser/workspaceContextService.js";
+import { createSshRemoteWorkspaceUri } from "../../../../platform/remote/common/remote.js";
 
 test("workspaceRelativePath confines resources to the folder", () => {
   const root = URI.file("C:\\project");
@@ -20,6 +21,23 @@ test("workspaceRelativePath confines resources to the folder", () => {
     () => workspaceRelativePath(root, URI.file("C:\\project-other\\file.ts")),
     /outside/,
   );
+});
+
+test("workspaceRelativePath preserves case-sensitive Remote resource identity", () => {
+  const root = createSshRemoteWorkspaceUri("work-server", "/home/zeta/Project");
+  assert.equal(workspaceRelativePath(root, root), ".");
+  assert.equal(workspaceRelativePath(root, root.withPath("/home/zeta/Project/src/main.ts")), "src/main.ts");
+  assert.throws(() => workspaceRelativePath(root, root.withPath("/home/zeta/project/src/main.ts")), /outside/);
+  assert.throws(() => workspaceRelativePath(root, createSshRemoteWorkspaceUri("other-server", "/home/zeta/Project/src/main.ts")), /current workspace/);
+});
+
+test("workspace paths preserve backslashes as POSIX filename characters for Remote resources", () => {
+  const root = createSshRemoteWorkspaceUri("work-server", "/home/zeta/Project");
+  const resource = root.withPath("/home/zeta/Project/src%5Cgenerated/main.ts");
+
+  assert.equal(workspaceRelativePath(root, resource), "src\\generated/main.ts");
+  assert.equal(workspaceResourceFromPath(root, "src\\generated/main.ts")?.toString(), resource.toString());
+  assert.equal(workspaceResourceFromPath(URI.file("C:\\project"), "src\\generated\\main.ts")?.toString(), "file:///C:/project/src/generated/main.ts");
 });
 
 test("BrowserFileService maps wire entries back to resource URIs", async () => {

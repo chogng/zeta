@@ -20,7 +20,7 @@
 | `zeta-language-server-catalog::LanguageServerDefinition` | catalog 委托的唯一 route、canonical command 与 initialize options | 在 runtime 内重新查询 PATH |
 | `LanguageServiceDocument` | 传递绝对路径、language ID、精确 editor revision 和 authoritative full text | 充当磁盘 revision 或文件缓存 |
 | `LanguageDiagnostics` | 绑定路径、精确 editor revision 和 product-neutral UTF-8 ranges | 保存 LSP URI、version 或 paint style |
-| `LanguageRequestId` / `LanguageDocumentPosition` | 非阻塞请求 identity 与 editor-owned UTF-8 source position | 暴露 LSP position encoding |
+| `LanguageRequestId` / `LanguageDocumentPosition` | 非阻塞请求 identity 与 editor-owned UTF-8 source position；本地 service 或 Remote product adapter 在请求边界分配 identity | 暴露 LSP position encoding |
 | `LanguageHover` / `LanguageCompletions` / `LanguageDefinitions` | capability-gated、revision-fresh 的产品结果 | 绘制 popup、读取定义文件或持有 editor text |
 | `LanguageServiceEventSink` | 快速接收状态、诊断、消息和异步文档错误 | 在 callback 中阻塞或反向调用服务 |
 | `LanguageServiceMetricsSink` | 接收不含源码、路径、query 或 position 的请求结果指标 | 做 telemetry transport、保存用户内容或控制请求 |

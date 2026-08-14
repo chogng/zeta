@@ -1,61 +1,27 @@
-import {
-  app,
-  BrowserWindow,
-  dialog,
-  ipcMain,
-  Menu,
-  screen,
-  type Event as ElectronEvent,
-} from "electron/main";
+import { app, BrowserWindow, dialog, ipcMain, Menu, screen, type Event as ElectronEvent } from "electron/main";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { APP_SERVER_SCHEMA_HASH } from "../../../../generated/app-server/types.js";
-import {
-  DisposableOwner,
-  DisposableStore,
-  type IDisposable,
-} from "../../base/common/lifecycle.js";
+import { isCancellationError } from "../../base/common/cancellation.js";
+import { DisposableOwner, DisposableStore, type IDisposable, toDisposable } from "../../base/common/lifecycle.js";
 import { assertDefined } from "../../base/common/types.js";
-import {
-  DisposableTracker,
-  installDisposableTracker,
-} from "../../base/common/disposableTracker.js";
-import type {
-  ProductConfiguration,
-} from "../../product/common/product.js";
-import {
-  ElectronContextMenu,
-} from "../../base/parts/contextmenu/electron-main/contextmenu.js";
-import {
-  appServerIpcRoutes,
-} from "../../platform/app-server/electron-main/app-server-ipc.js";
+import { DisposableTracker, installDisposableTracker } from "../../base/common/disposableTracker.js";
+import type { ProductConfiguration } from "../../product/common/product.js";
+import { ElectronContextMenu } from "../../base/parts/contextmenu/electron-main/contextmenu.js";
+import { appServerIpcRoutes } from "../../platform/app-server/electron-main/app-server-ipc.js";
 import { buildAppServerEnvironment } from "../../platform/app-server/common/appServerEnvironment.js";
-import {
-  AppServerSupervisor,
-} from "../../platform/app-server/electron-main/app-server-supervisor.js";
+import { AppServerSupervisor } from "../../platform/app-server/electron-main/app-server-supervisor.js";
 import { appServerExecutablePath } from "../../platform/app-server/electron-main/app-server-package.js";
+import { LocalAppServerProcessLauncher } from "../../platform/app-server/electron-main/localAppServerProcessLauncher.js";
 import { normalizeEntryUrl, TrustedIpcRouter, type IpcRoute } from "../../platform/ipc/electron-main/trustedIpcRouter.js";
-import {
-  BROWSER_VIEW_EVENT_CHANNEL,
-} from "../../platform/browser/common/browserView.js";
-import {
-  browserViewIpcRoutes,
-} from "../../platform/browser/electron-main/browserViewIpc.js";
-import {
-  BrowserViewMainService,
-} from "../../platform/browser/electron-main/browserViewMainService.js";
+import { BROWSER_VIEW_EVENT_CHANNEL } from "../../platform/browser/common/browserView.js";
+import { browserViewIpcRoutes } from "../../platform/browser/electron-main/browserViewIpc.js";
+import { BrowserViewMainService } from "../../platform/browser/electron-main/browserViewMainService.js";
 import { BrowserAutomationMainService, registerBrowserAutomationHost } from "../../platform/browser/electron-main/browserAutomationMainService.js";
 import { BrowserTargetRegistry } from "../../platform/browser/electron-main/browserTargetRegistry.js";
-import {
-  CONFIGURATION_CHANGED_CHANNEL,
-} from "../../platform/configuration/common/configuration.js";
-import {
-  ConfigurationMainService,
-  configurationIpcRoutes,
-} from "../../platform/configuration/electron-main/configurationMainService.js";
-import {
-  nativeContextMenuIpcRoutes,
-} from "../../platform/contextview/electron-main/contextMenuIpc.js";
+import { CONFIGURATION_CHANGED_CHANNEL } from "../../platform/configuration/common/configuration.js";
+import { ConfigurationMainService, configurationIpcRoutes } from "../../platform/configuration/electron-main/configurationMainService.js";
+import { nativeContextMenuIpcRoutes } from "../../platform/contextview/electron-main/contextMenuIpc.js";
 import { fileIpcRoutes } from "../../platform/files/electron-main/fileIpcRoutes.js";
 import { extensionIpcRoutes } from "../../platform/extensions/electron-main/extensionIpcRoutes.js";
 import { extensionHostIpcRoutes } from "../../platform/extensionHost/electron-main/extensionHostIpcRoutes.js";
@@ -68,49 +34,48 @@ import { codeIndexIpcRoutes } from "../../platform/codeIndex/electron-main/codeI
 import { symbolIndexIpcRoutes } from "../../platform/symbolIndex/electron-main/symbolIndexIpcRoutes.js";
 import { connectorIpcRoutes } from "../../platform/connectors/electron-main/connectorIpcRoutes.js";
 import { pluginIpcRoutes } from "../../platform/plugins/electron-main/pluginIpcRoutes.js";
+import { marketplaceIpcRoutes } from "../../platform/marketplace/electron-main/marketplaceIpcRoutes.js";
 import { toolSearchIpcRoutes } from "../../platform/toolSearch/electron-main/toolSearchIpcRoutes.js";
-import {
-  KEYBINDINGS_RESOURCE_CHANGED_CHANNEL,
-} from "../../platform/keybinding/common/keybindingsResource.js";
-import {
-  KeybindingsResourceMainService,
-  keybindingsResourceIpcRoutes,
-} from "../../platform/keybinding/electron-main/keybindingsResourceMainService.js";
-import {
-  migrateLegacyKeybindings,
-} from "../../platform/keybinding/electron-main/migrateLegacyKeybindings.js";
-import {
-  NativeMenubarMainService,
-  nativeMenubarIpcRoutes,
-} from "../../platform/menubar/electron-main/menubarMainService.js";
-import {
-  nativeHostIpcRoutes,
-} from "../../platform/native/electron-main/nativeHostIpc.js";
+import { KEYBINDINGS_RESOURCE_CHANGED_CHANNEL } from "../../platform/keybinding/common/keybindingsResource.js";
+import { KeybindingsResourceMainService, keybindingsResourceIpcRoutes } from "../../platform/keybinding/electron-main/keybindingsResourceMainService.js";
+import { migrateLegacyKeybindings } from "../../platform/keybinding/electron-main/migrateLegacyKeybindings.js";
+import { NativeMenubarMainService, nativeMenubarIpcRoutes } from "../../platform/menubar/electron-main/menubarMainService.js";
+import { nativeHostIpcRoutes } from "../../platform/native/electron-main/nativeHostIpc.js";
 import { NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL } from "../../platform/native/common/nativeHost.js";
 import { searchIpcRoutes } from "../../platform/search/electron-main/searchIpcRoutes.js";
 import { sessionIpcRoutes } from "../../platform/sessions/electron-main/sessionIpcRoutes.js";
 import { skillIpcRoutes } from "../../platform/skills/electron-main/skillIpcRoutes.js";
 import { sessionsWindowIpcRoutes } from "../../sessions/electron-main/sessionsWindowIpc.js";
-import {
-  StateService,
-} from "../../platform/state/node/stateService.js";
+import { StateService } from "../../platform/state/node/stateService.js";
 import { terminalIpcRoutes } from "../../platform/terminal/electron-main/terminalIpcRoutes.js";
+import { ReconnectableTerminalMainService } from "../../platform/terminal/electron-main/reconnectableTerminalMainService.js";
 import { userThemeIpcRoutes } from "../../platform/theme/electron-main/userThemeIpc.js";
 import { UserThemeFileService } from "../../platform/theme/node/userThemeFileService.js";
 import { typstIpcRoutes } from "../../platform/typst/electron-main/typstIpcRoutes.js";
-import {
-  applyWindowState,
-  resolveBrowserWindowOptions,
-} from "../../platform/windows/electron-main/windows.js";
+import { applyWindowState, resolveBrowserWindowOptions } from "../../platform/windows/electron-main/windows.js";
 import { WindowMode } from "../../platform/window/electron-main/window.js";
-import {
-  WindowsStateHandler,
-} from "../../platform/windows/electron-main/windowsStateHandler.js";
-import { type IAnyWorkspaceIdentifier, isSingleFolderWorkspaceIdentifier, serializeWorkspaceIdentifier, UNKNOWN_EMPTY_WINDOW_WORKSPACE } from "../../platform/workspace/common/workspace.js";
+import { WindowsStateHandler } from "../../platform/windows/electron-main/windowsStateHandler.js";
+import { type IAnyWorkspaceIdentifier, isRemoteWorkspaceIdentifier, isSingleFolderWorkspaceIdentifier, serializeWorkspaceIdentifier, UNKNOWN_EMPTY_WINDOW_WORKSPACE } from "../../platform/workspace/common/workspace.js";
+import { packagedRemoteRuntimeCatalogSource } from "../../platform/remote/electron-main/packagedRemoteRuntimeCatalog.js";
+import { ZetaCliRemoteRuntimeInstaller, remoteRuntimeArtifactFromEnvironment } from "../../platform/remote/electron-main/zetaCliRemoteRuntimeInstaller.js";
+import { ZetaCliRemoteRuntimeProvisioner } from "../../platform/remote/electron-main/zetaCliRemoteRuntimeProvisioner.js";
+import { ZetaCliRemoteConnectionProfiles } from "../../platform/remote/electron-main/zetaCliRemoteConnectionProfiles.js";
+import { ZetaCliRemoteConnections } from "../../platform/remote/electron-main/zetaCliRemoteConnections.js";
+import type { RemoteConnectionDefinition } from "../../platform/remote/common/remoteConnectionService.js";
+import { RemoteBrowserViewNavigationResolver } from "../../platform/remote/electron-main/remoteBrowserViewNavigationResolver.js";
+import { SshRemoteTunnelService } from "../../platform/remote/electron-main/sshRemoteTunnelService.js";
+import { createRemoteRuntimeInstallProgressLogger } from "../../platform/remote/electron-main/remoteRuntimeBootstrapMainService.js";
+import { RemoteRuntimeBootstrapMainService } from "../../platform/remote/electron-main/remoteRuntimeBootstrapMainService.js";
+import { ElectronRemoteRuntimeInstallWindow } from "../../platform/remote/electron-main/electronRemoteRuntimeInstallWindow.js";
+import { electronRemoteWindowMainHost } from "../../platform/remote/electron-main/electronRemoteWindowMainHost.js";
+import { RemoteWindowMainContext } from "../../platform/remote/electron-main/remoteWindowMainContext.js";
 import { WORKSPACE_CONTEXT_CHANGED_CHANNEL } from "../../platform/workspace/common/workspaceIpc.js";
 import { createAppServerWorkspaceTransitionAdapter } from "../../platform/workspaces/electron-main/appServerWorkspaceTransition.js";
 import { type IWorkspaceTransitionFailure, type WorkspaceTransitionMainServiceOptions, WorkspaceTransitionFailureKind, WorkspaceTransitionMainService, WorkspaceTransitionStatus } from "../../platform/workspaces/electron-main/workspaceTransitionMainService.js";
-import { WorkspaceContextMainService, WorkspacesMainService, workspaceContextIpcRoutes } from "../../platform/workspaces/electron-main/workspacesMainService.js";
+import { WorkspaceContextMainService, WorkspacesMainService, parseWorkspaceLaunchArguments, workspaceContextIpcRoutes } from "../../platform/workspaces/electron-main/workspacesMainService.js";
+import type { IWorkbenchWindowRecord } from "./workbenchWindowRegistry.js";
+import { WorkbenchWindowRegistry } from "./workbenchWindowRegistry.js";
+import { electronWorkspaceLaunchArguments } from "./electronWindowLaunch.js";
 export type AppServerStartupMode = "required" | "disabled";
 export type ElectronMainIpcRouteContribution = (supervisor: AppServerSupervisor) => readonly IpcRoute<unknown, unknown>[];
 
@@ -119,7 +84,7 @@ export interface ZetaApplicationOptions {
   readonly rendererRoot: string;
   /** Selects whether this Electron process starts the App Server before opening its window. */
   readonly appServerStartupMode: AppServerStartupMode;
-  /** Product-selected IPC capabilities installed for the primary Workbench window. */
+  /** Product-selected IPC capabilities installed for every Workbench window. */
   readonly ipcRouteContributions?: readonly ElectronMainIpcRouteContribution[];
 }
 
@@ -135,8 +100,23 @@ interface RendererEntry {
   readonly useDevelopmentUrl: boolean;
 }
 
+interface WorkbenchWindowRecord extends IWorkbenchWindowRecord {
+  readonly window: BrowserWindow;
+  readonly workspaceContext: WorkspaceContextMainService;
+  readonly supervisor: AppServerSupervisor;
+  readonly resources: DisposableStore;
+  windowsStateHandler: WindowsStateHandler;
+  windowStateTracking: IDisposable;
+  sessionsWindow?: BrowserWindow;
+}
+
+interface PendingWindowLaunch {
+  readonly arguments: readonly string[];
+  readonly cwd: string;
+}
+
 /**
- * Owns the Electron application's services, primary window, IPC, and shutdown.
+ * Owns the Electron application's persistent services, Workbench windows, IPC, and shutdown.
  */
 export class ZetaApplication extends DisposableOwner {
   private readonly product: ProductConfiguration;
@@ -147,17 +127,14 @@ export class ZetaApplication extends DisposableOwner {
   private readonly tracking: Disposable | undefined;
   private readonly trustedIpcRouter: TrustedIpcRouter;
 
-  private supervisor: AppServerSupervisor | undefined;
-  private mainWindow: BrowserWindow | undefined;
-  private sessionsWindow: BrowserWindow | undefined;
+  private readonly workbenchWindows = new WorkbenchWindowRegistry<WorkbenchWindowRecord>();
+  private readonly pendingWindowLaunches: PendingWindowLaunch[] = [];
+  private workspaces: WorkspacesMainService | undefined;
   private persistentServices: PersistentServices | undefined;
-  private _windowsStateHandler: WindowsStateHandler | undefined;
-  private windowStateTracking: IDisposable | undefined;
   private closePersistentServicesPromise: Promise<void> | undefined;
   private quitRequested = false;
   private quitAfterStateSaved = false;
   private quitSaveStarted = false;
-  private readonly browserAutomationMainService = new BrowserAutomationMainService();
 
   private constructor(
     options: ZetaApplicationOptions,
@@ -203,29 +180,18 @@ export class ZetaApplication extends DisposableOwner {
 
     await this.createPersistentServices();
     const workspaces = new WorkspacesMainService();
+    this.workspaces = workspaces;
     const workspace = await this.resolveWorkspace(workspaces);
-    this._windowsStateHandler = this.createWindowsStateHandler(workspace);
-    const workspaceContext = this.own(new WorkspaceContextMainService(workspace));
-
-    const supervisor = this.own(this.createAppServerSupervisor(workspace));
-    this.own(registerBrowserAutomationHost(supervisor, this.browserAutomationMainService));
-    this.own(supervisor.onStateChange((state) => {
-      if (state === "crashed" || state === "restarting" || state === "stopping" || state === "stopped") {
-        this.browserAutomationMainService.reset();
-      }
-    }));
-    this.supervisor = supervisor;
-    if (this.appServerStartupMode === "required") {
-      const appServerReady = await this.startAppServerWithRecovery(supervisor);
-      if (!appServerReady) {
-        return;
-      }
+    const record = await this.openWorkspace(workspace, workspaces);
+    if (!record) {
+      if (!this.quitRequested) app.quit();
+      return;
     }
-    await this.openFirstWindow(workspaceContext, workspaces, supervisor);
+    await this.drainPendingWindowLaunches();
   }
 
   async disposeAfterStartupFailure(): Promise<void> {
-    this.supervisor?.dispose();
+    for (const record of this.workbenchWindows.values()) record.resources.dispose();
     try {
       await this.closePersistentServices();
     } finally {
@@ -234,12 +200,27 @@ export class ZetaApplication extends DisposableOwner {
     }
   }
 
-  /** Brings this product instance to the foreground for a second-instance launch. */
+  /** Brings the most recently active Workbench window to the foreground. */
   focusMainWindow(): void {
-    const window = this.mainWindow;
-    if (!window || window.isDestroyed()) return;
-    if (window.isMinimized()) window.restore();
-    window.focus();
+    this.workbenchWindows.focusActive();
+  }
+
+  /** Opens a second-instance Workspace in its own window, or focuses the active window when no target was supplied. */
+  handleSecondInstance(arguments_: readonly string[], cwd: string): void {
+    const launch = { arguments: arguments_, cwd };
+    if (!this.persistentServices || !this.workspaces) {
+      this.pendingWindowLaunches.push(launch);
+      return;
+    }
+    void this.openWindowLaunch(launch).catch(error => this.reportWindowOpenFailure(error));
+  }
+
+  /** Recreates an empty Workbench after macOS activates an application with no open windows. */
+  handleActivate(): void {
+    if (this.workbenchWindows.focusActive()) return;
+    const workspaces = this.workspaces;
+    if (!workspaces || !this.persistentServices) return;
+    void this.openWorkspace(UNKNOWN_EMPTY_WINDOW_WORKSPACE, workspaces).catch(error => this.reportWindowOpenFailure(error));
   }
 
   private async createPersistentServices(): Promise<void> {
@@ -278,9 +259,7 @@ export class ZetaApplication extends DisposableOwner {
   ): Promise<IAnyWorkspaceIdentifier> {
     try {
       return await workspaces.resolveStartupWorkspace({
-        arguments: process.argv
-          .slice(app.isPackaged ? 1 : 2)
-          .filter((argument) => argument !== app.getAppPath()),
+        arguments: this.workspaceLaunchArguments(process.argv),
         cwd: process.cwd(),
       });
     } catch (error) {
@@ -289,19 +268,86 @@ export class ZetaApplication extends DisposableOwner {
     }
   }
 
+  private workspaceLaunchArguments(arguments_: readonly string[]): string[] {
+    return electronWorkspaceLaunchArguments({
+      arguments: arguments_,
+      packaging: app.isPackaged ? "packaged" : "development",
+      appPath: app.getAppPath(),
+    });
+  }
+
+  private async openWindowLaunch(launch: PendingWindowLaunch): Promise<void> {
+    const workspaces = this.workspaces;
+    if (!workspaces) throw new Error("Workspace service is not initialized");
+    const arguments_ = this.workspaceLaunchArguments(launch.arguments);
+    if (!parseWorkspaceLaunchArguments(arguments_)) {
+      this.focusMainWindow();
+      return;
+    }
+    const workspace = await workspaces.resolveStartupWorkspace({ arguments: arguments_, cwd: launch.cwd });
+    await this.openWorkspace(workspace, workspaces);
+  }
+
+  private async drainPendingWindowLaunches(): Promise<void> {
+    while (this.pendingWindowLaunches.length > 0 && !this.quitRequested) {
+      const launch = this.pendingWindowLaunches.shift()!;
+      try {
+        await this.openWindowLaunch(launch);
+      } catch (error) {
+        await this.reportWindowOpenFailure(error);
+      }
+    }
+  }
+
+  private openWorkspace(workspace: IAnyWorkspaceIdentifier, workspaces: WorkspacesMainService): Promise<WorkbenchWindowRecord | undefined> {
+    return this.workbenchWindows.openWorkspace(workspace.id, () => this.performOpenWorkspace(workspace, workspaces));
+  }
+
+  private async performOpenWorkspace(workspace: IAnyWorkspaceIdentifier, workspaces: WorkspacesMainService): Promise<WorkbenchWindowRecord | undefined> {
+    const resources = this.own(new DisposableStore());
+    try {
+      const workspaceContext = resources.add(new WorkspaceContextMainService(workspace));
+      const supervisor = resources.add(this.createAppServerSupervisor(workspace, resources));
+      const browserAutomation = new BrowserAutomationMainService();
+      resources.add(registerBrowserAutomationHost(supervisor, browserAutomation));
+      resources.add(supervisor.onStateChange(state => {
+        if (state === "crashed" || state === "restarting" || state === "stopping" || state === "stopped") browserAutomation.reset();
+      }));
+      if (this.appServerStartupMode === "required" && !await this.startAppServerWithRecovery(supervisor)) {
+        resources.dispose();
+        return undefined;
+      }
+      const existing = this.workbenchWindows.findWorkspace(workspace.id);
+      if (existing) {
+        existing.focus();
+        resources.dispose();
+        return existing;
+      }
+      return await this.openWorkbenchWindow(workspaceContext, workspaces, supervisor, browserAutomation, resources);
+    } catch (error) {
+      resources.dispose();
+      throw error;
+    }
+  }
+
   private createAppServerSupervisor(
     workspace: IAnyWorkspaceIdentifier,
+    resources: DisposableStore,
   ): AppServerSupervisor {
-    const executable = appServerExecutablePath({
-      appPath: app.getAppPath(),
-      isPackaged: app.isPackaged,
-      platform: process.platform,
-      resourcesPath: process.resourcesPath,
-    });
+    const processLauncher = isRemoteWorkspaceIdentifier(workspace)
+      ? this.createSshAppServerProcessLauncher(workspace, resources)
+      : new LocalAppServerProcessLauncher({
+        executable: appServerExecutablePath({
+          appPath: app.getAppPath(),
+          isPackaged: app.isPackaged,
+          platform: process.platform,
+          resourcesPath: process.resourcesPath,
+        }),
+        args: ["app-server", "--listen", "stdio://"],
+        environment: this.appServerEnvironment(workspace),
+      });
     return new AppServerSupervisor({
-      executable,
-      args: ["app-server", "--listen", "stdio://"],
-      environment: this.appServerEnvironment(workspace),
+      processLauncher,
       session: {
         clientName: "zeta-desktop",
         clientVersion: app.getVersion(),
@@ -315,6 +361,58 @@ export class ZetaApplication extends DisposableOwner {
     });
   }
 
+  private createSshAppServerProcessLauncher(workspace: IAnyWorkspaceIdentifier, resources: DisposableStore) {
+    if (!isRemoteWorkspaceIdentifier(workspace)) throw new Error("SSH App Server launcher requires a Remote workspace");
+    const sshExecutable = process.env.ZETA_SSH_PATH ?? "ssh";
+    const zetaExecutable = appServerExecutablePath({
+      appPath: app.getAppPath(),
+      isPackaged: app.isPackaged,
+      platform: process.platform,
+      resourcesPath: process.resourcesPath,
+    });
+    const artifact = remoteRuntimeArtifactFromEnvironment(process.env);
+    const runtimeInstaller = artifact === undefined
+      ? new ZetaCliRemoteRuntimeProvisioner({
+        source: packagedRemoteRuntimeCatalogSource(
+          { appPath: app.getAppPath(), isPackaged: app.isPackaged, resourcesPath: process.resourcesPath },
+          join(app.getPath("userData"), "remote-runtime-downloads"),
+        ),
+        zetaExecutable,
+        sshExecutable,
+        environment: process.env,
+        installRoot: process.env.ZETA_REMOTE_RUNTIME_INSTALL_ROOT,
+      })
+      : new ZetaCliRemoteRuntimeInstaller({
+        zetaExecutable,
+        sshExecutable,
+        environment: process.env,
+        artifact,
+        installRoot: process.env.ZETA_REMOTE_RUNTIME_INSTALL_ROOT,
+      });
+    const configuredRuntime = process.env.ZETA_REMOTE_ZETA_PATH;
+    const connectionProfiles = configuredRuntime === undefined ? new ZetaCliRemoteConnectionProfiles({
+      zetaExecutable,
+      environment: { ...process.env, ZETA_PROFILE_ROOT: join(app.getPath("userData"), "state") },
+    }) : undefined;
+    const bootstrap = resources.add(new RemoteRuntimeBootstrapMainService({
+      workspace: workspace.uri,
+      sshExecutable,
+      remoteExecutable: configuredRuntime ?? "zeta",
+      localEnvironment: process.env,
+      runtimeInstaller,
+      connectionProfiles,
+      logProgress: createRemoteRuntimeInstallProgressLogger(),
+    }));
+    resources.add(new ElectronRemoteRuntimeInstallWindow({
+      productName: this.product.name,
+      rendererEntry: this.resolveRendererEntry("remoteRuntimeInstall"),
+      webPreferences: this.createSandboxWebPreferences(),
+      trustedIpcRouter: this.trustedIpcRouter,
+      progress: bootstrap.installProgress,
+    }));
+    return bootstrap.processLauncher;
+  }
+
   private async startAppServerWithRecovery(
     supervisor: AppServerSupervisor,
   ): Promise<boolean> {
@@ -325,6 +423,9 @@ export class ZetaApplication extends DisposableOwner {
       } catch (error) {
         console.error("App Server failed the startup gate", error);
         if (this.quitRequested) {
+          return false;
+        }
+        if (isCancellationError(error)) {
           return false;
         }
 
@@ -340,15 +441,12 @@ export class ZetaApplication extends DisposableOwner {
           title: `${this.product.name} startup failed`,
           message: "The App Server could not be validated.",
           detail,
-          buttons: ["Retry", "Quit"],
+          buttons: ["Retry", this.workbenchWindows.size === 0 ? "Quit" : "Cancel"],
           defaultId: 0,
           cancelId: 1,
           noLink: true,
         });
         if (this.quitRequested || result.response !== 0) {
-          if (!this.quitRequested) {
-            app.quit();
-          }
           return false;
         }
         await supervisor.stop();
@@ -357,12 +455,14 @@ export class ZetaApplication extends DisposableOwner {
     return false;
   }
 
-  private async openFirstWindow(
+  private async openWorkbenchWindow(
     workspaceContext: WorkspaceContextMainService,
     workspaces: WorkspacesMainService,
     supervisor: AppServerSupervisor,
-  ): Promise<void> {
-    const windowsStateHandler = this.windowsStateHandler;
+    browserAutomationMainService: BrowserAutomationMainService,
+    resources: DisposableStore,
+  ): Promise<WorkbenchWindowRecord> {
+    const windowsStateHandler = this.createWindowsStateHandler(workspaceContext.getWorkspace());
     const windowState = windowsStateHandler.restoreWindowState();
     const browserWindowOptions = resolveBrowserWindowOptions({
       state: windowState,
@@ -372,8 +472,33 @@ export class ZetaApplication extends DisposableOwner {
       ...browserWindowOptions,
       show: false,
     });
-    this.mainWindow = window;
-    this.windowStateTracking = windowsStateHandler.trackWindow(window);
+    const windowStateTracking = windowsStateHandler.trackWindow(window);
+    const record: WorkbenchWindowRecord = {
+      id: window.id,
+      workspaceId: workspaceContext.getWorkspace().id,
+      window,
+      workspaceContext,
+      supervisor,
+      resources,
+      windowsStateHandler,
+      windowStateTracking,
+      isDestroyed: () => window.isDestroyed(),
+      focus: () => focusElectronWindow(window),
+    };
+    this.workbenchWindows.add(record);
+    resources.defer(() => {
+      if (!window.isDestroyed()) window.destroy();
+    });
+    const onFocus = (): void => {
+      if (!window.isDestroyed()) this.workbenchWindows.activate(record.id);
+    };
+    window.on("focus", onFocus);
+    resources.add(toDisposable(() => window.removeListener("focus", onFocus)));
+    window.once("closed", () => {
+      this.closeSessionsWindow(record);
+      this.workbenchWindows.remove(record.id);
+      if (!resources.disposed) resources.dispose();
+    });
     window.once("ready-to-show", () => {
       if (window.isDestroyed()) {
         return;
@@ -384,8 +509,13 @@ export class ZetaApplication extends DisposableOwner {
 
     const rendererEntry = this.resolveRendererEntry("workbench");
 
-    const windowDisposables = this.own(new DisposableStore());
-    windowDisposables.add(this.windowStateTracking);
+    const windowDisposables = resources;
+    windowDisposables.add(record.windowStateTracking);
+    const remoteTunnelService = new SshRemoteTunnelService({
+      getWorkspace: () => workspaceContext.getWorkspace(),
+      sshExecutable: process.env.ZETA_SSH_PATH ?? "ssh",
+      localEnvironment: process.env,
+    });
     const browserTargetRegistry = new BrowserTargetRegistry();
     const browserViewMainService = windowDisposables.add(
       new BrowserViewMainService({
@@ -396,15 +526,21 @@ export class ZetaApplication extends DisposableOwner {
             window.webContents.send(BROWSER_VIEW_EVENT_CHANNEL, event);
           }
         },
+        navigationResolver: new RemoteBrowserViewNavigationResolver({
+          getWorkspace: () => workspaceContext.getWorkspace(),
+          tunnels: remoteTunnelService,
+          reportError: (message, error) => console.error(message, error),
+        }),
       }),
     );
-    windowDisposables.add(this.browserAutomationMainService.bind(browserViewMainService, browserTargetRegistry));
+    windowDisposables.add(browserAutomationMainService.bind(browserViewMainService, browserTargetRegistry));
     windowDisposables.add(workspaceContext.onDidChangeWorkspace(({ workspace: nextWorkspace }) => {
       if (window.isDestroyed()) return;
-      this.windowStateTracking?.dispose();
+      record.windowStateTracking.dispose();
       const nextWindowsStateHandler = this.createWindowsStateHandler(nextWorkspace);
-      this._windowsStateHandler = nextWindowsStateHandler;
-      this.windowStateTracking = windowDisposables.add(nextWindowsStateHandler.trackWindow(window));
+      record.windowsStateHandler = nextWindowsStateHandler;
+      record.windowStateTracking = windowDisposables.add(nextWindowsStateHandler.trackWindow(window));
+      this.workbenchWindows.updateWorkspace(record.id, nextWorkspace.id);
     }));
     windowDisposables.add(workspaceContext.onDidChangeWorkspace(({ workspace: nextWorkspace }) => {
       if (!window.isDestroyed()) {
@@ -417,8 +553,25 @@ export class ZetaApplication extends DisposableOwner {
       context: workspaceContext,
       ...this.createWorkspaceTransitionRuntime(supervisor),
     }));
+    const remoteConnections = new ZetaCliRemoteConnections({
+      zetaExecutable: appServerExecutablePath({ appPath: app.getAppPath(), isPackaged: app.isPackaged, platform: process.platform, resourcesPath: process.resourcesPath }),
+      environment: { ...process.env, ZETA_PROFILE_ROOT: join(app.getPath("userData"), "state") },
+      scheduleConnect: connection => this.openRemoteConnection(connection, workspaces),
+    });
+    const reconnectableTerminals = isRemoteWorkspaceIdentifier(workspaceContext.getWorkspace())
+      ? windowDisposables.add(new ReconnectableTerminalMainService({ supervisor }))
+      : undefined;
+    const remoteWindowContext = windowDisposables.add(new RemoteWindowMainContext({
+      supervisor,
+      workspaceContext,
+      connections: remoteConnections,
+      tunnels: remoteTunnelService,
+      host: electronRemoteWindowMainHost(window),
+      ...(reconnectableTerminals ? { prepareForRuntimeReplacement: () => reconnectableTerminals.prepareForServerReplacement() } : {}),
+    }));
     const ipcRoutes = [
       ...appServerIpcRoutes(supervisor),
+      ...remoteWindowContext.ipcRoutes,
       ...sessionIpcRoutes(supervisor),
       ...skillIpcRoutes(supervisor),
       ...typstIpcRoutes(supervisor),
@@ -434,9 +587,10 @@ export class ZetaApplication extends DisposableOwner {
       ...symbolIndexIpcRoutes(supervisor),
       ...connectorIpcRoutes(supervisor),
       ...pluginIpcRoutes(supervisor),
+      ...marketplaceIpcRoutes(supervisor),
       ...toolSearchIpcRoutes(supervisor),
       ...searchIpcRoutes(supervisor),
-      ...terminalIpcRoutes(supervisor),
+      ...terminalIpcRoutes(supervisor, reconnectableTerminals),
       ...this.ipcRouteContributions.flatMap(contribution => contribution(supervisor)),
       ...browserViewIpcRoutes(browserViewMainService),
       ...configurationIpcRoutes(configuration),
@@ -449,7 +603,17 @@ export class ZetaApplication extends DisposableOwner {
           });
           const folderPath = result.filePaths[0];
           if (result.canceled || !folderPath) return;
-          await this.windowsStateHandler.saveWindowState(window);
+          const nextWorkspace = await workspaces.resolveFolder(folderPath);
+          const existingWindow = this.workbenchWindows.findWorkspace(nextWorkspace.id);
+          if (existingWindow && existingWindow.id !== record.id) {
+            existingWindow.focus();
+            return;
+          }
+          if (isRemoteWorkspaceIdentifier(workspaceContext.getWorkspace())) {
+            await this.openWorkspace(nextWorkspace, workspaces);
+            return;
+          }
+          await record.windowsStateHandler.saveWindowState(window);
           const transition = await workspaceTransitions.transitionToFolder(folderPath);
           if (transition.status === WorkspaceTransitionStatus.Blocked) {
             await dialog.showMessageBox(window, {
@@ -483,8 +647,8 @@ export class ZetaApplication extends DisposableOwner {
     ];
     if (this.product.dedicatedSessions) {
       ipcRoutes.push(...sessionsWindowIpcRoutes({
-        openSessionsWindow: () => this.openSessionsWindow(supervisor),
-        returnToWorkbench: () => this.focusMainWindow(),
+        openSessionsWindow: () => this.openSessionsWindow(record),
+        returnToWorkbench: () => record.focus(),
       }));
     }
     if (process.platform === "darwin") {
@@ -509,37 +673,31 @@ export class ZetaApplication extends DisposableOwner {
     windowDisposables.add(supervisor.onNotification((notification) =>
       window.webContents.send("zeta:event", notification)
     ));
-    windowDisposables.add(supervisor.onStateChange((state) =>
-      window.webContents.send("zeta:app-server:stateChanged", state)
-    ));
+    windowDisposables.add(supervisor.onStateChange((state) => {
+      window.webContents.send("zeta:app-server:stateChanged", state);
+    }));
     windowDisposables.add(configuration.onDidChange((snapshot) =>
       window.webContents.send(CONFIGURATION_CHANGED_CHANNEL, snapshot)
     ));
     windowDisposables.add(keybindings.onDidChange((snapshot) =>
       window.webContents.send(KEYBINDINGS_RESOURCE_CHANGED_CHANNEL, snapshot)
     ));
-    window.once("closed", () => {
-      windowDisposables.dispose();
-      if (this.mainWindow === window) {
-        this.closeSessionsWindow();
-        this.mainWindow = undefined;
-        this.windowStateTracking = undefined;
-      }
-    });
-
-    if (rendererEntry.useDevelopmentUrl) {
-      await window.loadURL(rendererEntry.url);
-    } else {
-      await window.loadFile(rendererEntry.file);
+    try {
+      if (rendererEntry.useDevelopmentUrl) await window.loadURL(rendererEntry.url);
+      else await window.loadFile(rendererEntry.file);
+      return record;
+    } catch (error) {
+      if (!window.isDestroyed()) window.destroy();
+      throw error;
     }
   }
 
-  /** Creates or focuses the one product-scoped Sessions window beside Workbench. */
-  private async openSessionsWindow(supervisor: AppServerSupervisor): Promise<void> {
+  /** Creates or focuses the Sessions window belonging to one Workbench supervisor. */
+  private async openSessionsWindow(record: WorkbenchWindowRecord): Promise<void> {
     if (!this.product.dedicatedSessions) {
       throw new Error(`${this.product.name} does not provide a dedicated Sessions window`);
     }
-    const existing = this.sessionsWindow;
+    const existing = record.sessionsWindow;
     if (existing && !existing.isDestroyed()) {
       if (existing.isMinimized()) existing.restore();
       existing.focus();
@@ -560,14 +718,14 @@ export class ZetaApplication extends DisposableOwner {
       show: false,
       title: `${this.product.name} Sessions`,
     });
-    this.sessionsWindow = window;
+    record.sessionsWindow = window;
     window.once("ready-to-show", () => {
       if (!window.isDestroyed()) {
         window.show();
       }
     });
 
-    const windowDisposables = this.own(new DisposableStore());
+    const windowDisposables = record.resources.add(new DisposableStore());
     windowDisposables.add(this.trustedIpcRouter.register(
       {
         webContents: window.webContents,
@@ -576,30 +734,28 @@ export class ZetaApplication extends DisposableOwner {
         ]),
       },
       [
-        ...appServerIpcRoutes(supervisor),
-        ...sessionIpcRoutes(supervisor),
-        ...skillIpcRoutes(supervisor),
+        ...appServerIpcRoutes(record.supervisor),
+        ...sessionIpcRoutes(record.supervisor),
+        ...skillIpcRoutes(record.supervisor),
         ...sessionsWindowIpcRoutes({
-          openSessionsWindow: () => this.openSessionsWindow(supervisor),
-          returnToWorkbench: () => this.returnToMainWindow(window),
+          openSessionsWindow: () => this.openSessionsWindow(record),
+          returnToWorkbench: () => this.returnToMainWindow(record, window),
         }),
       ],
     ));
-    windowDisposables.add(supervisor.onNotification((notification) => {
+    windowDisposables.add(record.supervisor.onNotification((notification) => {
       if (!window.isDestroyed()) {
         window.webContents.send("zeta:event", notification);
       }
     }));
-    windowDisposables.add(supervisor.onStateChange((state) => {
+    windowDisposables.add(record.supervisor.onStateChange((state) => {
       if (!window.isDestroyed()) {
         window.webContents.send("zeta:app-server:stateChanged", state);
       }
     }));
     window.once("closed", () => {
       windowDisposables.dispose();
-      if (this.sessionsWindow === window) {
-        this.sessionsWindow = undefined;
-      }
+      if (record.sessionsWindow === window) record.sessionsWindow = undefined;
     });
 
     try {
@@ -616,32 +772,35 @@ export class ZetaApplication extends DisposableOwner {
     }
   }
 
-  private returnToMainWindow(sessionsWindow: BrowserWindow): void {
-    this.focusMainWindow();
+  private returnToMainWindow(record: WorkbenchWindowRecord, sessionsWindow: BrowserWindow): void {
+    record.focus();
     if (!sessionsWindow.isDestroyed()) {
       sessionsWindow.close();
     }
   }
 
-  private closeSessionsWindow(): void {
-    const window = this.sessionsWindow;
+  private closeSessionsWindow(record: WorkbenchWindowRecord): void {
+    const window = record.sessionsWindow;
     if (window && !window.isDestroyed()) {
       window.close();
     }
   }
 
-  private resolveRendererEntry(kind: "workbench" | "sessions"): RendererEntry {
+  private resolveRendererEntry(kind: "workbench" | "sessions" | "remoteRuntimeInstall"): RendererEntry {
     const entry = kind === "workbench"
       ? this.product.rendererEntry
-      : this.product.dedicatedSessions?.rendererEntry;
+      : kind === "sessions"
+        ? this.product.dedicatedSessions?.rendererEntry
+        : "remoteRuntimeInstall";
     if (!entry) {
       throw new Error(`${this.product.name} does not provide a Sessions renderer entry`);
     }
+    const directory = kind === "remoteRuntimeInstall" ? "remote-runtime-install" : kind;
     const file = join(
       this.rendererRoot,
       this.product.id,
       "electron-browser",
-      kind,
+      directory,
       `${entry}.html`,
     );
     const rendererUrl = process.env.ZETA_RENDERER_URL;
@@ -649,7 +808,7 @@ export class ZetaApplication extends DisposableOwner {
     return {
       file,
       url: useDevelopmentUrl
-        ? new URL(`/electron-browser/${kind}/${entry}.html`, rendererUrl).href
+        ? new URL(`/electron-browser/${directory}/${entry}.html`, rendererUrl).href
         : pathToFileURL(file).href,
       useDevelopmentUrl,
     };
@@ -689,9 +848,39 @@ export class ZetaApplication extends DisposableOwner {
     };
   }
 
+  private async openRemoteConnection(connection: RemoteConnectionDefinition, workspaces: WorkspacesMainService): Promise<void> {
+    if (this.quitRequested) return;
+    const workspace = await workspaces.resolveStartupWorkspace({
+      arguments: ["--remote-ssh", connection.host, "--folder", connection.workspace],
+      cwd: process.cwd(),
+    });
+    await this.openWorkspace(workspace, workspaces);
+  }
+
+  private async reportWindowOpenFailure(error: unknown): Promise<void> {
+    console.error("Failed to open Workbench window", error);
+    if (this.quitRequested) return;
+    const message = error instanceof Error ? error.message : "The requested Workspace could not be opened";
+    try {
+      await dialog.showMessageBox({
+        type: "error",
+        title: `${this.product.name} window failed`,
+        message: "The requested Workspace could not be opened.",
+        detail: message.slice(0, 8_000),
+        buttons: ["OK"],
+        defaultId: 0,
+        cancelId: 0,
+        noLink: true,
+      });
+    } catch (dialogError) {
+      console.error("Failed to report Workbench window open failure", dialogError);
+    }
+  }
+
   private readonly onBeforeQuit = (event: ElectronEvent): void => {
     this.quitRequested = true;
-    this.supervisor?.dispose();
+    const records = this.workbenchWindows.values();
+    for (const record of records) record.supervisor.dispose();
     if (this.quitAfterStateSaved || !this.persistentServices) {
       return;
     }
@@ -701,11 +890,11 @@ export class ZetaApplication extends DisposableOwner {
     }
 
     this.quitSaveStarted = true;
-    this.windowStateTracking?.dispose();
+    for (const record of records) record.windowStateTracking.dispose();
     void (async () => {
       try {
-        if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-          await this._windowsStateHandler?.saveWindowState(this.mainWindow);
+        for (const record of records) {
+          if (!record.window.isDestroyed()) await record.windowsStateHandler.saveWindowState(record.window);
         }
         await this.closePersistentServices();
       } catch (error) {
@@ -721,9 +910,9 @@ export class ZetaApplication extends DisposableOwner {
     _event: ElectronEvent,
     enabled: boolean,
   ): void => {
-    const window = this.mainWindow;
-    if (!window || window.isDestroyed()) return;
-    window.webContents.send(NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL, enabled);
+    for (const record of this.workbenchWindows.values()) {
+      record.window.webContents.send(NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL, enabled);
+    }
   };
 
   private readonly onWillQuit = (): void => {
@@ -782,11 +971,6 @@ export class ZetaApplication extends DisposableOwner {
     return this.persistentServices;
   }
 
-  private get windowsStateHandler(): WindowsStateHandler {
-    assertDefined(this._windowsStateHandler, "Window state handling is not initialized");
-    return this._windowsStateHandler;
-  }
-
   private releaseDisposableTracker(): void {
     try {
       this.disposableTracker?.assertNoLeaks();
@@ -802,4 +986,10 @@ function workspaceTransitionError(
   if (!failure) return new Error("Workspace transition failed without a classified failure");
   if (failure.error instanceof Error) return failure.error;
   return new Error(`Workspace transition failed during ${failure.stage}`);
+}
+
+function focusElectronWindow(window: BrowserWindow): void {
+  if (window.isDestroyed()) return;
+  if (window.isMinimized()) window.restore();
+  window.focus();
 }

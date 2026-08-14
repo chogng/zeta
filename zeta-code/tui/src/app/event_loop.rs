@@ -52,6 +52,7 @@ pub(crate) fn run(mut session: AppServerSession, options: TuiOptions) -> Result<
     let shutdown = session.shutdown();
     match (result, shutdown) {
         (Err(error), _) => Err(error),
+        (Ok(exit @ TuiExit::ConnectionLost { .. }), _) => Ok(exit),
         (Ok(_), Err(error)) => Err(error.into()),
         (Ok(exit), Ok(())) => Ok(exit),
     }
@@ -62,7 +63,10 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
     let events = session.take_events()?;
     let TuiOptions {
         thread_title,
-        workspace_root,
+        display_workspace_root,
+        host_workspace_root,
+        host_file_search_root,
+        recovery,
     } = options;
     let server_slash_commands = client.initialization()?.slash_commands.clone();
     let slash_registry = client
@@ -75,7 +79,10 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
             catalog: slash_command_registry(&server_slash_commands)?,
             skills: Default::default(),
         });
-    let mut conversation = ActiveConversation::start(&mut client, thread_title)?;
+    let mut conversation = match recovery {
+        Some(recovery) => ActiveConversation::recover(&mut client, recovery)?,
+        None => ActiveConversation::start(&mut client, thread_title)?,
+    };
     let mut active_turn = None;
     let (mut thread_subscription, initial_thread) = ThreadSubscription::start(
         &mut client,
@@ -85,9 +92,11 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
     conversation.set_thread_sequence(initial_thread.sequence);
     let mut terminal = terminal::TerminalSession::open()?;
     crate::ui::configure(terminal.background_color());
-    let mut file_search = FileSearchManager::new(workspace_root.clone());
-    let mut app =
-        App::for_workspace_with_slash_commands(&workspace_root, slash_registry.catalog.clone());
+    let mut file_search = host_file_search_root.map(FileSearchManager::new);
+    let mut app = App::for_workspace_with_slash_commands(
+        &display_workspace_root,
+        slash_registry.catalog.clone(),
+    );
     app.replace_slash_commands(slash_registry.catalog, slash_registry.skills);
     apply_thread_snapshot(&mut app, &mut active_turn, initial_thread);
     if let Ok(config) = client.read_config() {
@@ -111,6 +120,14 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
         loop {
             let action = match pump.recv()? {
                 client::RuntimeEvent::Client(event) => {
+                    let event = match super::recovery::continue_or_exit(
+                        event,
+                        conversation.session_id(),
+                        conversation.thread_id(),
+                    ) {
+                        Ok(event) => event,
+                        Err(exit) => return Ok(exit),
+                    };
                     let refresh = refresh_server_event(
                         event,
                         &mut conversation,
@@ -179,9 +196,11 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
 
             let action = schedule_action(action, pending_request.is_some(), &mut queued_actions);
 
-            sync_file_search_query(&app, &mut file_search);
-            for snapshot in file_search.poll() {
-                app.update(AppEvent::FileSearchSnapshotReceived(snapshot));
+            if let Some(file_search) = file_search.as_mut() {
+                sync_file_search_query(&app, file_search);
+                for snapshot in file_search.poll() {
+                    app.update(AppEvent::FileSearchSnapshotReceived(snapshot));
+                }
             }
 
             if let Some(action) = action {
@@ -285,7 +304,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             Err("there is no conversation to export".to_owned())
                         } else {
                             host::transcript_export::write(
-                                &workspace_root,
+                                &host_workspace_root,
                                 requested_path.as_deref(),
                                 &markdown,
                             )
@@ -801,9 +820,8 @@ fn refresh_server_event(
             connectors: app.connector_view_open(),
             ..ServerRefresh::default()
         },
-        client::ClientEvent::Failed(error) => {
-            app.update(AppEvent::FailureReported(error));
-            ServerRefresh::default()
+        client::ClientEvent::ConnectionClosed(_) => {
+            unreachable!("connection failures leave through the recovery boundary")
         }
         client::ClientEvent::GitStatusChanged(status) => {
             app.update(AppEvent::GitStatusReceived(status));

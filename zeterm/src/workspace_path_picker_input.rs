@@ -20,6 +20,12 @@ const PICKER_ROWS_PER_WHEEL_STEP: f32 = 3.0;
 
 impl NativeApp {
     pub(super) fn toggle_workspace_path_picker(&mut self) {
+        if self.agent_session_target.workspace_switch_support()
+            == crate::agent_session_target::WorkspaceSwitchSupport::Unsupported
+        {
+            eprintln!("Remote Workspace switching is not available in this zeterm session");
+            return;
+        }
         if self.workspace_path_picker.is_open() {
             self.dismiss_workspace_path_picker();
             return;
@@ -46,6 +52,9 @@ impl NativeApp {
         }
         self.session_context_menu.dismiss();
         self.git_branch_context_menu.dismiss();
+        self.remote_connection_picker.dismiss();
+        self.dismiss_remote_connection_manager();
+        self.dismiss_remote_tunnel_manager();
         self.rebuild_and_focus_workspace_path_search();
     }
 

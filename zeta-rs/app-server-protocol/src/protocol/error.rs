@@ -58,6 +58,7 @@ pub enum AppServerErrorName {
     TerminalUnavailable,
     TerminalNotFound,
     TerminalNotOwner,
+    TerminalAttachRejected,
     TerminalBusy,
     TerminalOperationFailed,
     DebugAdapterUnavailable,

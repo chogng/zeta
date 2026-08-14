@@ -1,0 +1,109 @@
+:root {
+  font-family: var(--zeta-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+  background: var(--zeta-workbench-background);
+  color: var(--zeta-foreground);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 420px;
+  min-height: 230px;
+  background: var(--zeta-workbench-background);
+}
+
+.remote-install {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr);
+  gap: 18px;
+  min-height: 230px;
+  padding: 28px;
+}
+
+.remote-install__mark {
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  border-radius: 12px;
+  background: var(--zeta-button-primary-background);
+  color: var(--zeta-button-primary-foreground);
+  font-family: var(--zeta-font-family-monospace, "SFMono-Regular", Consolas, monospace);
+  font-size: var(--zeta-font-size-heading2);
+  font-weight: var(--zeta-font-weight-semi-bold);
+}
+
+.remote-install__content {
+  min-width: 0;
+}
+
+h1 {
+  margin: 1px 0 6px;
+  color: var(--zeta-editor-foreground);
+  font-size: var(--zeta-font-size-heading2);
+  font-weight: var(--zeta-font-weight-semi-bold);
+}
+
+p {
+  margin: 0;
+}
+
+.remote-install__host {
+  overflow: hidden;
+  color: var(--zeta-accent-foreground);
+  font-family: var(--zeta-font-family-monospace, "SFMono-Regular", Consolas, monospace);
+  font-size: var(--zeta-font-size-label1);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.remote-install__stage {
+  margin-top: 19px;
+  color: var(--zeta-editor-foreground);
+  font-size: var(--zeta-font-size-body1);
+  font-weight: var(--zeta-font-weight-semi-bold);
+}
+
+.remote-install__progress {
+  width: 100%;
+  height: 5px;
+  margin: 9px 0 10px;
+  accent-color: var(--zeta-button-primary-background);
+}
+
+.remote-install__detail {
+  min-height: 32px;
+  color: var(--zeta-description-foreground);
+  font-size: var(--zeta-font-size-label1);
+  line-height: 16px;
+}
+
+button {
+  margin-top: 14px;
+  min-height: 28px;
+  padding: 4px 12px;
+  border: 1px solid var(--zeta-input-border);
+  border-radius: 2px;
+  background: var(--zeta-button-secondary-background);
+  color: var(--zeta-button-foreground);
+  font: inherit;
+  font-size: var(--zeta-font-size-label1);
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  background: var(--zeta-button-hover-background);
+}
+
+button:focus-visible {
+  outline: 1px solid var(--zeta-focus-border);
+  outline-offset: 2px;
+}
+
+button:disabled {
+  color: var(--zeta-muted-foreground);
+  cursor: default;
+}

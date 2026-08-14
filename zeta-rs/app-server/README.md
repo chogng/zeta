@@ -42,7 +42,8 @@ JSONL / in-process caller
    ├─ request-scoped CodeRetrievalService → symbol/lexical/semantic/remote RRF + verification + budget
    ├─ optional TerminalService → zeta-utils-pty
    ├─ optional LanguageServerProviderRegistry → zeta-language-service → zeta-lsp
-   ├─ optional MarketplaceManager → local installation state + remote Marketplace client
+   ├─ optional MarketplaceManager → local installation state + remote client
+   │                              → Skill/MCP/Connector/Theme/Language/Editor Extension consumers
    ├─ reloadable MCP Tool generation + status/OAuth/form interaction → zeta-mcp-extension → zeta-mcp
    ├─ ConnectorCredentialService → list/connect/disconnect + ready MCP reconcile
    ├─ client-hosted dynamic tools → durable Agent interaction owner
@@ -86,8 +87,11 @@ Core/store 继续拥有 Session/Thread durable state；需要进程内生命周�
 | `AppServer::with_git_root` | 冻结 workspace root，开启 Git status/mutation、watcher 与 revision notification |
 | `AppServer::with_workspace_search` | 注入 workspace root 与冻结的 ripgrep executable，构造外部内容搜索服务 |
 | `AppServer::with_language_server_providers` | 注入已验证、已安装的 provider registry；activation confirmation 启用 packaged route，显式 Config `Disabled` 仍可关闭 |
-| `AppServer::with_language_marketplaces` | 安装 TUF catalog、activation authority 与共享 runtime adapter；提供 list/install RPC，成功后热替换 registry |
 | `AppServer::with_marketplace_manager_client` | 持有 Zeta 本地 Manager 的 typed business client，广告 `marketplace` capability 并投影通用 package/capability RPC |
+| `AppServer::with_local_marketplace_manager` | 除业务 RPC 外，绑定只在进程内可见的 verified capability source；不会向 transport 暴露 host path |
+| `AppServer::with_marketplace_language_runtime` | 将通用 Marketplace 已验证的 Language/Executable capability 投影为本地 language-server provider registry；不拥有发现、下载或安装 |
+| `AppServer::with_marketplace_editor_extension_admission` | 注入 Marketplace executable 的产品 enable/grant generation、通知与 drain authority；安装本身不会执行代码 |
+| `AppServer::with_extension_host_runtime` | 将 legacy Plugin 与已授权 Marketplace executable 规范化为同一 deployment fleet；Host 不解析 package manifest |
 | `AppServer::with_code_index_storage_root` | 配置按 root identity 分隔的 persistent index cache |
 | `LocalCodeIndexProviders::with_semantic_models` | 在 Workspace activation 前注入本地 semantic 使用的 immutable embedding/rerank adapters |
 | `AppServer::with_cloud_code_index_providers` | 注入冻结的 provider registry；空 registry 不广告 cloud capability |
@@ -102,11 +106,10 @@ Core/store 继续拥有 Session/Thread durable state；需要进程内生命周�
 | `open_local_app_server_with_code_index_providers` | 在 Workspace 激活前同时注入本地 semantic models 与可选 cloud providers |
 | `LocalAppServerOptions` | user profile root + SessionStateMode + optional Workspace/Connector/language-provider runtime + Codex App Server options + validated slash catalog + built-in Skill root selection + optional model operation client/MCP OAuth providers |
 | `LocalAppServerOptions::with_language_server_providers` | 在 local App Server 启动前注入额外 provider registry；receipt registry 由 composition 自动合并 |
-| `LocalAppServerOptions::with_remote_language_marketplace` | 注入 product-pinned TUF root；同步 signed catalog 并从 profile activation receipt 重建 provider |
 | `LocalAppServerOptions::with_marketplace_registry` | 组合进程内 Zeta Manager 与 product-pinned HTTPS/TUF registry client |
 | `LocalAppServerOptions::with_marketplace_manager_client` | 注入由外部 supervisor 或测试拥有的 Manager client |
 | `LocalAppServerOptions::with_mcp_oauth_providers` | 把 exact MCP server ID → provider adapter 注入使用共享 SecretStore 的 OAuth service |
-| `LocalConnectorRuntime` | Connector credential service + shared SecretStore + Plugin-specific MCP materializer |
+| `LocalConnectorRuntime` | Connector credential service + shared SecretStore + legacy Plugin/Marketplace MCP providers |
 | `LocalAppServerOptions::with_plugin_activation` | 从 exact activation 构造 package-rooted Connector/MCP runtime |
 | `LocalConnectorRuntime::from_plugin_activation` | activation → Connector catalog + SQLite authority + Plugin MCP provider |
 | `SessionStateMode` | 明确选择 profile SQLite durable history 或 process-local ephemeral Session/Thread state |
@@ -213,10 +216,11 @@ src/
 │       ├── cloud_code_index_operations.rs # preview/grant/sync/revoke DTO 与稳定错误映射
 │       ├── terminal_operations.rs # terminal RPC decode、ownership 与稳定错误映射
 │       ├── language_runtime.rs   # config + built-in/provider definitions → shared language-service
-│       ├── language_marketplace_runtime.rs # TUF catalog + activation + base provider registry rebuild
-│       ├── language_marketplace_operations.rs # list/install DTO、错误映射与热 registry replacement
 │       ├── marketplace_operations.rs # Manager business RPC、稳定错误与 connection-owned lease
 │       ├── marketplace_projection.rs # Manager contract → App Server DTO 的无路径机械投影
+│       ├── marketplace_language_runtime.rs # 已验证 Language/Executable capability → provider registry
+│       ├── marketplace_extension_sources.rs # 已验证 Language capability → Extension catalog source
+│       ├── marketplace_skill_sources.rs # 已验证 Skill capability → Skill catalog source
 │       └── update_broker.rs       # per-connection subscription/cursor/fanout
 ├── local.rs                       # local composition, session backend selection + model safe point
 ├── local_tools.rs                 # frozen rg registry + Core Tool/Policy adapters
@@ -534,11 +538,14 @@ local tools + enabled user MCP declarations
 ├─ install ReloadableToolPorts
 └─ ToolConfigWatcher(ConfigChange)
 
-Plugin lifecycle + Hook declaration
-├─ PluginActivationAuthority(<profile>/plugins)
+External package lifecycle + legacy Plugin compatibility + Hook declaration
+├─ MarketplaceManager(<profile>/marketplace-manager)
+│  └─ one installation → Skill/MCP/Connector/Theme/Language/Executable capability consumers
+├─ legacy PluginActivationAuthority(<profile>/plugins)
 │  └─ live generation → Connector/MCP reconcile + invocation drain
 ├─ legacy plugin list/grant/enable/disable/revoke/uninstall RPC
 ├─ generic Marketplace search/install/update/uninstall/capability RPC
+├─ optional Zeta Editor Extension sidecar → independent admission + Manager lease → Host deployment
 └─ HookRuntime → trusted Workspace gate → Host Policy → sandboxed process executor
 
 Language-server preference
@@ -790,8 +797,9 @@ local tool 的参数白名单、discovery、取消与输出限制由
 生命周期。MCP desired config 的热更新、SecretStore credential materialization、provider-injected
 OAuth lifecycle、form elicitation 和未来 Tool catalog replacement 已实现；当前仍没有 stdio 进程
 沙箱、自动 OAuth discovery/内建 provider、完整 runtime health/log API、progress 产品投影、URL/复杂
-form elicitation 或 MCP resources/prompts。Marketplace 安装与 Plugin grant/enable/disable、
-revoke 和 uninstall authority 已具备 typed RPC；Renderer 管理 UI 不属于本 crate。MCP 与 dynamic image result 已进入 canonical
+form elicitation 或 MCP resources/prompts。Marketplace 安装由 Manager 唯一拥有；legacy Plugin
+grant/enable/disable/revoke/uninstall 仍有 typed compatibility RPC，不能作为远端安装旁路；Renderer 管理
+UI 不属于本 crate。MCP 与 dynamic image result 已进入 canonical
 `ContentPart`，Core 会把结构化内容写入 durable `ToolResult`，并在最终模型请求处按 model
 capability 统一处理 image detail；旧 transcript 的纯 text shape 仍可读取。Reloadable Tool service
 会在调用落盘前冻结 generation、definition digest、source chain 和 process incarnation；重启后的
@@ -801,8 +809,8 @@ capability 统一处理 image detail；旧 transcript 的纯 text shape 仍可�
 ## Static extension 资源
 
 跨层行为和信任边界由 [`docs/editor-extensions.md`](../../docs/editor-extensions.md) 维护，可复用包目录
-由 [`zeta-extensions`](../extensions/README.md) 拥有。本 crate 只按“内置目录优先、用户目录其次”的
-顺序组合主机根目录，把目录值适配为协议 DTO，并把打开的 bytes 放入 connection-owned
+由 [`zeta-extensions`](../extensions/README.md) 拥有。本 crate 按“内置目录 → Marketplace/legacy
+Plugin dynamic exact packages → 用户目录”的顺序组合来源，把目录值适配为协议 DTO，并把打开的 bytes 放入 connection-owned
 `ResourceStore`。Renderer 调用方不能提交绝对主机路径。
 
 `extensions/list` 返回一个不可变目录代次。`extensions/resource/open` 绑定代次、扩展 ID 和包内相对

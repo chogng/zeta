@@ -7,6 +7,7 @@ use zeta_protocol::SessionId;
 use zeta_terminal::GridSize;
 use zeta_winit::EventLoopProxy;
 
+use crate::agent_session_target::AgentSessionTarget;
 use crate::native_event::NativeEvent;
 use crate::session_switch_trace;
 use crate::terminal_session::TerminalSession;
@@ -21,6 +22,7 @@ use crate::terminal_session::TerminalSessionReady;
 /// It keeps inactive PTYs alive while the host renders another Session Tab.
 pub(crate) struct TerminalWorkspace {
     event_proxy: EventLoopProxy<NativeEvent>,
+    target: AgentSessionTarget,
     state: TerminalWorkspaceState,
     active: Option<(TerminalSessionKey, TerminalSession)>,
     inactive: HashMap<TerminalSessionKey, TerminalSession>,
@@ -199,9 +201,13 @@ pub(crate) enum TerminalReadyOutcome {
 }
 
 impl TerminalWorkspace {
-    pub(crate) fn new(event_proxy: EventLoopProxy<NativeEvent>) -> Self {
+    pub(crate) fn new(
+        event_proxy: EventLoopProxy<NativeEvent>,
+        target: AgentSessionTarget,
+    ) -> Self {
         Self {
             event_proxy,
+            target,
             state: TerminalWorkspaceState::default(),
             active: None,
             inactive: HashMap::new(),
@@ -394,7 +400,7 @@ impl TerminalWorkspace {
     }
 
     fn start_terminal(&mut self, key: TerminalSessionKey, size: GridSize) -> Result<()> {
-        TerminalSession::spawn_async(key, size, self.event_proxy.clone())
+        TerminalSession::spawn_async(key, size, self.event_proxy.clone(), self.target.clone())
             .with_context(|| format!("could not queue terminal runtime {key:?} creation"))
     }
 }

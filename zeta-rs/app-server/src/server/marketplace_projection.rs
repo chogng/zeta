@@ -22,6 +22,7 @@ use zeta_app_server_protocol::protocol::marketplace::MarketplaceResourceContentD
 use zeta_app_server_protocol::protocol::marketplace::MarketplaceResourceRefDto;
 use zeta_app_server_protocol::protocol::marketplace::MarketplaceSearchResult;
 use zeta_app_server_protocol::protocol::marketplace::MarketplaceSkillActivationSpecDto;
+use zeta_app_server_protocol::protocol::marketplace::MarketplaceThemeActivationSpecDto;
 use zeta_app_server_protocol::protocol::marketplace::MarketplaceUpstreamReferenceDto;
 use zeta_app_server_protocol::protocol::marketplace::MarketplaceUpstreamRegistryDto;
 use zeta_marketplace_client::AcquiredCapability;
@@ -48,6 +49,7 @@ use zeta_marketplace_client::ResourceContent;
 use zeta_marketplace_client::ResourceRef;
 use zeta_marketplace_client::SearchPackagesResult;
 use zeta_marketplace_client::SkillActivationSpec;
+use zeta_marketplace_client::ThemeActivationSpec;
 use zeta_marketplace_client::UpstreamReference;
 use zeta_marketplace_client::UpstreamRegistry;
 
@@ -206,6 +208,9 @@ fn activation_spec(value: ActivationSpec) -> MarketplaceActivationSpecDto {
         ActivationSpec::Connector(value) => {
             MarketplaceActivationSpecDto::Connector(connector_activation(value))
         }
+        ActivationSpec::Theme(value) => {
+            MarketplaceActivationSpecDto::Theme(theme_activation(value))
+        }
         ActivationSpec::Language(value) => {
             MarketplaceActivationSpecDto::Language(language_activation(value))
         }
@@ -226,6 +231,10 @@ fn mcp_activation(value: McpActivationSpec) -> MarketplaceMcpActivationSpecDto {
     MarketplaceMcpActivationSpecDto {
         contract_version: value.contract_version,
         transport: match value.transport {
+            McpTransportSpec::Stdio { executable, args } => MarketplaceMcpTransportDto::Stdio {
+                executable: resource_ref(executable),
+                args,
+            },
             McpTransportSpec::StreamableHttp { url } => {
                 MarketplaceMcpTransportDto::StreamableHttp { url }
             }
@@ -239,6 +248,13 @@ fn connector_activation(value: ConnectorActivationSpec) -> MarketplaceConnectorA
         contract_version: value.contract_version,
         authentication_provider: value.authentication_provider,
         mcp: value.mcp.map(capability_ref),
+    }
+}
+
+fn theme_activation(value: ThemeActivationSpec) -> MarketplaceThemeActivationSpecDto {
+    MarketplaceThemeActivationSpecDto {
+        contract_version: value.contract_version,
+        manifest: resource_ref(value.manifest),
     }
 }
 

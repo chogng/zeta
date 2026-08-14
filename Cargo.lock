@@ -9480,6 +9480,7 @@ dependencies = [
  "zeta-login",
  "zeta-marketplace-client",
  "zeta-marketplace-manager",
+ "zeta-mcp",
  "zeta-mcp-extension",
  "zeta-model-provider",
  "zeta-model-provider-config",
@@ -9487,6 +9488,7 @@ dependencies = [
  "zeta-plugins",
  "zeta-prompts",
  "zeta-protocol",
+ "zeta-rmcp-client",
  "zeta-rollout",
  "zeta-sandboxing",
  "zeta-search",
@@ -9598,9 +9600,13 @@ dependencies = [
 name = "zeta-cli"
 version = "0.1.0"
 dependencies = [
+ "flate2",
+ "portable-pty",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "signal-hook",
+ "tar",
  "zeta-app-server",
  "zeta-app-server-client",
  "zeta-app-server-protocol",
@@ -10303,8 +10309,10 @@ dependencies = [
  "sha2 0.10.9",
  "tar",
  "tempfile",
+ "url",
  "zeta-app-server-client",
  "zeta-app-server-protocol",
+ "zeta-http-client",
  "zeta-remote",
  "zeta-utils-path",
 ]
@@ -10744,6 +10752,7 @@ dependencies = [
  "flate2",
  "serde_json",
  "sha2 0.10.9",
+ "signal-hook",
  "tar",
  "tempfile",
  "tokio",

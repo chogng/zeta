@@ -245,6 +245,7 @@ use crate::protocol::marketplace::MarketplaceResourceRefDto;
 use crate::protocol::marketplace::MarketplaceSearchParams;
 use crate::protocol::marketplace::MarketplaceSearchResult;
 use crate::protocol::marketplace::MarketplaceSkillActivationSpecDto;
+use crate::protocol::marketplace::MarketplaceThemeActivationSpecDto;
 use crate::protocol::marketplace::MarketplaceUninstallModeDto;
 use crate::protocol::marketplace::MarketplaceUninstallParams;
 use crate::protocol::marketplace::MarketplaceUpdateParams;
@@ -318,12 +319,23 @@ use crate::protocol::syntax::SyntaxSymbolDto;
 use crate::protocol::syntax::SyntaxSymbolKindDto;
 use crate::protocol::syntax::SyntaxTokenDto;
 use crate::protocol::syntax::SyntaxTokenKindDto;
-use crate::protocol::terminal::{
-    TerminalCloseParams, TerminalCommandStatus, TerminalCommandStatusEvent, TerminalCreateParams,
-    TerminalCreateResult, TerminalOutputChunk, TerminalProfile, TerminalProfileListResult,
-    TerminalProfileSelection, TerminalReadParams, TerminalReadResult, TerminalResizeParams,
-    TerminalWriteParams,
-};
+use crate::protocol::terminal::TerminalAttachParams;
+use crate::protocol::terminal::TerminalAttachResult;
+use crate::protocol::terminal::TerminalCloseParams;
+use crate::protocol::terminal::TerminalCommandStatus;
+use crate::protocol::terminal::TerminalCommandStatusEvent;
+use crate::protocol::terminal::TerminalCreateParams;
+use crate::protocol::terminal::TerminalCreateResult;
+use crate::protocol::terminal::TerminalLifecycle;
+use crate::protocol::terminal::TerminalOutputChunk;
+use crate::protocol::terminal::TerminalProfile;
+use crate::protocol::terminal::TerminalProfileListResult;
+use crate::protocol::terminal::TerminalProfileSelection;
+use crate::protocol::terminal::TerminalReadParams;
+use crate::protocol::terminal::TerminalReadResult;
+use crate::protocol::terminal::TerminalReconnectLease;
+use crate::protocol::terminal::TerminalResizeParams;
+use crate::protocol::terminal::TerminalWriteParams;
 use crate::protocol::turn::{
     InputItem, TurnInteractionResolveResult, TurnInterruptResult, TurnStartResult,
 };
@@ -1354,6 +1366,11 @@ client_methods! {
         response: TerminalCreateResult,
         serialization: None,
     },
+    TerminalAttach => "terminal/attach" {
+        params: TerminalAttachParams,
+        response: TerminalAttachResult,
+        serialization: None,
+    },
     TerminalWrite => "terminal/write" {
         params: TerminalWriteParams,
         response: (),
@@ -1735,6 +1752,7 @@ typescript_bindings! {
     MarketplaceCapabilityLeaseDto,
     MarketplaceActivationSpecDto,
     MarketplaceSkillActivationSpecDto,
+    MarketplaceThemeActivationSpecDto,
     MarketplaceMcpActivationSpecDto,
     MarketplaceMcpTransportDto,
     MarketplaceConnectorActivationSpecDto,
@@ -2219,8 +2237,12 @@ typescript_bindings! {
     TerminalProfile,
     TerminalProfileListResult,
     TerminalProfileSelection,
+    TerminalLifecycle,
     TerminalCreateParams,
     TerminalCreateResult,
+    TerminalReconnectLease,
+    TerminalAttachParams,
+    TerminalAttachResult,
     TerminalWriteParams,
     TerminalResizeParams,
     TerminalReadParams,

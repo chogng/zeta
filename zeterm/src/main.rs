@@ -3,6 +3,7 @@ use std::time::Instant;
 
 use agent_composer::AgentComposer;
 use agent_session::AgentSession;
+use agent_session_target::AgentSessionTarget;
 use agent_sidebar::AgentSidebarState;
 use agent_sidebar_workspace::AgentSidebarWorkspace;
 use file_editor_host::FileEditorHost;
@@ -11,8 +12,14 @@ use git_branch_context_menu::GitBranchContextMenuState;
 use keybindings::{KeybindingsResource, KeybindingsResourcePoll};
 use keyboard_shortcuts::KeyboardShortcutsState;
 use language_server_settings::LanguageServerSettingsState;
+use launch::ZetermLaunch;
 use layout_inspector::LayoutInspector;
 use native_event::NativeEvent;
+use remote_connection_cli::ZetermInvocation;
+use remote_connection_manager::RemoteConnectionManagerState;
+use remote_connection_picker::RemoteConnectionPickerState;
+use remote_tunnel_manager::RemoteTunnelManagerState;
+use remote_tunnel_process::RemoteTunnelHost;
 use session_context_menu::SessionContextMenuState;
 use session_search::SessionSearch;
 use session_sidebar::SessionSidebarState;
@@ -52,6 +59,10 @@ use zui::{FrameInvalidation, FrameSchedule, FrameScheduler, RetainedRuntime};
 
 mod agent_composer;
 mod agent_session;
+mod agent_session_target;
+#[cfg(test)]
+#[path = "agent_session_target_tests.rs"]
+mod agent_session_target_tests;
 mod agent_sidebar;
 mod agent_sidebar_workspace;
 mod command_dispatch;
@@ -79,8 +90,42 @@ mod keyboard_shortcuts;
 mod language_server_settings;
 mod language_server_settings_input;
 mod language_service_host;
+mod launch;
+#[cfg(test)]
+#[path = "launch_profile_tests.rs"]
+mod launch_profile_tests;
+mod launch_progress;
+#[cfg(test)]
+#[path = "launch_progress_tests.rs"]
+mod launch_progress_tests;
+#[cfg(test)]
+#[path = "launch_test_support.rs"]
+mod launch_test_support;
+#[cfg(test)]
+#[path = "launch_tests.rs"]
+mod launch_tests;
 mod layout_inspector;
 mod native_event;
+mod remote_connection_cli;
+#[cfg(test)]
+#[path = "remote_connection_cli_tests.rs"]
+mod remote_connection_cli_tests;
+mod remote_connection_launch_input;
+mod remote_connection_manager;
+mod remote_connection_manager_input;
+mod remote_connection_manager_view;
+mod remote_connection_picker;
+mod remote_connection_picker_input;
+mod remote_connection_process;
+mod remote_connection_tunnel;
+#[cfg(test)]
+#[path = "remote_connection_tunnel_tests.rs"]
+mod remote_connection_tunnel_tests;
+mod remote_tunnel_manager;
+mod remote_tunnel_manager_input;
+mod remote_tunnel_manager_view;
+mod remote_tunnel_process;
+mod remote_tunnel_readiness;
 mod renderer_backend;
 mod session_context_menu;
 mod session_search;
@@ -115,7 +160,32 @@ const INITIAL_WIDTH: f64 = 1_000.0;
 const INITIAL_HEIGHT: f64 = 700.0;
 
 fn main() -> ExitCode {
-    let application = match run_application_with_user_events(NativeApp::new) {
+    let invocation = match ZetermInvocation::parse(std::env::args().skip(1)) {
+        Ok(invocation) => invocation,
+        Err(error) => {
+            eprintln!("{error}");
+            return if error.is_help_requested() {
+                ExitCode::SUCCESS
+            } else {
+                ExitCode::FAILURE
+            };
+        }
+    };
+    let mut launch = match invocation.resolve() {
+        Ok(Some(launch)) => launch,
+        Ok(None) => return ExitCode::SUCCESS,
+        Err(error) => {
+            eprintln!("{error}");
+            return ExitCode::FAILURE;
+        }
+    };
+    if let Err(error) = launch_progress::prepare_remote_launch(&mut launch) {
+        eprintln!("{error}");
+        return ExitCode::FAILURE;
+    }
+    let application = match run_application_with_user_events(move |event_proxy| {
+        NativeApp::new(event_proxy, launch)
+    }) {
         Ok(application) => application,
         Err(error) => {
             eprintln!("failed to run the native event loop: {error}");
@@ -149,8 +219,14 @@ struct NativeApp {
     session_context_menu: SessionContextMenuState,
     git_branch_context_menu: GitBranchContextMenuState,
     workspace_path_picker: WorkspacePathPickerState,
+    remote_connection_picker: RemoteConnectionPickerState,
+    remote_connection_manager: RemoteConnectionManagerState,
+    remote_connection_launch: Option<remote_connection_process::RemoteConnectionLaunch>,
+    remote_tunnel_manager: RemoteTunnelManagerState,
+    remote_tunnel_host: Option<RemoteTunnelHost>,
     ui_dispatch: UiDispatch,
     agent_session: Option<AgentSession>,
+    agent_session_target: AgentSessionTarget,
     thread_projection: ThreadProjection,
     thread_timeline_scroll: ThreadTimelineScroll,
     workspace_surface: WorkspaceSurface,
@@ -184,8 +260,21 @@ struct NativeApp {
 }
 
 impl NativeApp {
-    fn new(event_proxy: zeta_winit::EventLoopProxy<NativeEvent>) -> Self {
-        let workspace_context = WorkspaceContext::capture_current();
+    fn new(event_proxy: zeta_winit::EventLoopProxy<NativeEvent>, launch: ZetermLaunch) -> Self {
+        let local_workspace_context = WorkspaceContext::capture_current();
+        let agent_session_target =
+            launch.agent_session_target(local_workspace_context.working_directory());
+        let remote_tunnel_host =
+            agent_session_target
+                .ssh_transport()
+                .map(|(host, ssh_executable)| {
+                    RemoteTunnelHost::new(host.clone(), ssh_executable.to_path_buf())
+                });
+        let workspace_context = if agent_session_target.is_remote() {
+            WorkspaceContext::capture_remote(agent_session_target.workspace_root().to_path_buf())
+        } else {
+            local_workspace_context
+        };
         let agent_sidebar_workspace = AgentSidebarWorkspace::new(&workspace_context);
         let mut keybindings = keybindings::NativeKeybindings::default();
         let mut keybindings_resource = KeybindingsResource::new(
@@ -199,10 +288,17 @@ impl NativeApp {
             eprintln!("{error}");
         }
         let composer = AgentComposer::for_working_directory(workspace_context.working_directory());
-        let language_service = language_service_host::NativeLanguageService::start(
-            workspace_context.working_directory(),
-            event_proxy.clone(),
-        );
+        let language_service = if launch.is_remote() {
+            language_service_host::NativeLanguageService::remote(
+                workspace_context.working_directory(),
+                event_proxy.clone(),
+            )
+        } else {
+            language_service_host::NativeLanguageService::start(
+                workspace_context.working_directory(),
+                event_proxy.clone(),
+            )
+        };
         Self {
             window_id: None,
             window: None,
@@ -223,12 +319,18 @@ impl NativeApp {
             session_context_menu: SessionContextMenuState::default(),
             git_branch_context_menu: GitBranchContextMenuState::default(),
             workspace_path_picker: WorkspacePathPickerState::default(),
+            remote_connection_picker: RemoteConnectionPickerState::default(),
+            remote_connection_manager: RemoteConnectionManagerState::default(),
+            remote_connection_launch: None,
+            remote_tunnel_manager: RemoteTunnelManagerState::default(),
+            remote_tunnel_host,
             ui_dispatch: UiDispatch::default(),
             agent_session: None,
+            agent_session_target: agent_session_target.clone(),
             thread_projection: ThreadProjection::default(),
             thread_timeline_scroll: ThreadTimelineScroll::default(),
             workspace_surface: WorkspaceSurface::default(),
-            terminal_workspace: TerminalWorkspace::new(event_proxy.clone()),
+            terminal_workspace: TerminalWorkspace::new(event_proxy.clone(), agent_session_target),
             composer,
             workspace_context,
             composer_interaction: composer_interaction::ComposerInteractionModel::new(),
@@ -784,6 +886,15 @@ impl NativeApp {
         if self.activate_keyboard_shortcuts_element(id) {
             return;
         }
+        if self.activate_remote_connection_manager_element(id) {
+            return;
+        }
+        if self.activate_remote_tunnel_manager_element(id) {
+            return;
+        }
+        if self.activate_remote_connection_picker_element(id) {
+            return;
+        }
         if self.activate_git_branch_context_menu_element(id) {
             return;
         }
@@ -811,6 +922,15 @@ impl NativeApp {
         let point = self.logical_pointer_position(physical_x, physical_y);
         self.cursor_position = Some(point);
         if self.route_layout_inspector_pointer_move() {
+            return;
+        }
+        if self.route_remote_connection_manager_pointer_move(point) {
+            return;
+        }
+        if self.route_remote_tunnel_manager_pointer_move(point) {
+            return;
+        }
+        if self.route_remote_connection_picker_pointer_move(point) {
             return;
         }
         if self.route_git_branch_context_menu_pointer_move(point) {
@@ -916,6 +1036,15 @@ impl NativeApp {
 
     fn mouse_button_changed(&mut self, state: ElementState, button: MouseButton) {
         if self.route_layout_inspector_button(state, button) {
+            return;
+        }
+        if self.route_remote_connection_manager_button(state, button) {
+            return;
+        }
+        if self.route_remote_tunnel_manager_button(state, button) {
+            return;
+        }
+        if self.route_remote_connection_picker_button(state, button) {
             return;
         }
         if self.route_git_branch_context_menu_button(state, button) {
@@ -1032,6 +1161,9 @@ fn with_shell_presentation_model<R>(
         session_context_menu,
         git_branch_context_menu,
         workspace_path_picker,
+        remote_connection_picker,
+        remote_connection_manager,
+        remote_tunnel_manager,
         keybindings,
         keyboard_shortcuts,
         language_server_settings,
@@ -1079,6 +1211,9 @@ fn with_shell_presentation_model<R>(
             session_context_menu: *session_context_menu,
             git_branch_context_menu,
             workspace_path_picker,
+            remote_connection_picker,
+            remote_connection_manager,
+            remote_tunnel_manager,
             keybindings,
             keyboard_shortcuts,
             language_server_settings,
@@ -1216,9 +1351,17 @@ impl ApplicationHandler<NativeEvent> for NativeApp {
             self.fail(event_loop, error);
             return;
         }
+        if self.agent_session_target.is_remote()
+            && let Err(error) = self
+                .language_service
+                .start_remote(self.event_proxy.clone(), self.agent_session_target.clone())
+        {
+            self.fail(event_loop, error);
+            return;
+        }
         self.agent_session = match AgentSession::spawn(
             self.event_proxy.clone(),
-            self.workspace_context.working_directory().to_path_buf(),
+            self.agent_session_target.clone(),
         ) {
             Ok(session) => Some(session),
             Err(error) => {
@@ -1363,6 +1506,29 @@ impl ApplicationHandler<NativeEvent> for NativeApp {
                 }
                 self.rebuild_presentation();
                 self.request_redraw();
+                return;
+            }
+            NativeEvent::RemoteLanguage(event) => {
+                self.language_service
+                    .handle_remote_event(event, &self.file_editor_host);
+                if let Some(target) = self
+                    .language_service
+                    .take_definitions()
+                    .and_then(|definitions| definitions.targets.into_iter().next())
+                {
+                    self.open_language_definition(target);
+                    return;
+                }
+                self.rebuild_presentation();
+                self.request_redraw();
+                return;
+            }
+            NativeEvent::RemoteWindowLaunch(event) => {
+                self.handle_remote_window_launch_event(event);
+                return;
+            }
+            NativeEvent::RemoteTunnel(event) => {
+                self.handle_remote_tunnel_event(event);
                 return;
             }
             NativeEvent::Terminal(event) => {

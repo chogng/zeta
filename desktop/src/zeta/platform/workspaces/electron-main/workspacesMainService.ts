@@ -3,7 +3,7 @@ import { DisposableOwner } from "../../../base/common/lifecycle.js";
 import type { IpcRoute } from "../../ipc/electron-main/trustedIpcRouter.js";
 import { type IAnyWorkspaceIdentifier, type ISingleFolderWorkspaceIdentifier, UNKNOWN_EMPTY_WINDOW_WORKSPACE, isSingleFolderWorkspaceIdentifier, serializeWorkspaceIdentifier } from "../../workspace/common/workspace.js";
 import { WORKSPACE_CONTEXT_READ_CHANNEL, validateWorkspaceContextRead } from "../../workspace/common/workspaceIpc.js";
-import { type IWorkspaceOpenTarget, WorkspaceOpenTargetKind } from "../common/workspaces.js";
+import { type ILocalWorkspaceOpenTarget, type IWorkspaceOpenTarget, WorkspaceOpenTargetKind } from "../common/workspaces.js";
 import { type IWorkspacePathService, nodeWorkspacePathService, resolveWorkspaceOpenTarget } from "../node/workspaces.js";
 
 export interface IResolveStartupWorkspaceOptions {
@@ -100,10 +100,11 @@ export function workspaceContextIpcRoutes(
 export function parseWorkspaceLaunchArguments(
   args: readonly string[],
 ): IWorkspaceOpenTarget | undefined {
-  let target: IWorkspaceOpenTarget | undefined;
+  let target: ILocalWorkspaceOpenTarget | undefined;
+  let remoteSshHost: string | undefined;
   let positionalOnly = false;
 
-  const accept = (candidate: IWorkspaceOpenTarget): void => {
+  const accept = (candidate: ILocalWorkspaceOpenTarget): void => {
     if (target) {
       throw new Error("Zeta can open only one project per window");
     }
@@ -125,6 +126,18 @@ export function parseWorkspaceLaunchArguments(
         throw new Error("--folder requires a path");
       }
       accept({ kind: WorkspaceOpenTargetKind.Folder, path });
+      continue;
+    }
+    if (!positionalOnly && argument === "--remote-ssh") {
+      const host = args[++index];
+      if (host === undefined) throw new Error("--remote-ssh requires an OpenSSH config host");
+      if (remoteSshHost !== undefined) throw new Error("--remote-ssh may be specified only once");
+      remoteSshHost = host;
+      continue;
+    }
+    if (!positionalOnly && argument.startsWith("--remote-ssh=")) {
+      if (remoteSshHost !== undefined) throw new Error("--remote-ssh may be specified only once");
+      remoteSshHost = argument.slice("--remote-ssh=".length);
       continue;
     }
     if (!positionalOnly && argument.startsWith("--folder=")) {
@@ -155,5 +168,8 @@ export function parseWorkspaceLaunchArguments(
     accept({ kind: WorkspaceOpenTargetKind.Automatic, path: argument });
   }
 
-  return target;
+  if (!remoteSshHost) return target;
+  if (!target) throw new Error("--remote-ssh requires a Remote folder path");
+  if (target.kind === WorkspaceOpenTargetKind.Workspace) throw new Error("Remote multi-root workspaces are not supported yet");
+  return { kind: WorkspaceOpenTargetKind.RemoteFolder, path: target.path, sshHost: remoteSshHost };
 }

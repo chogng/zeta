@@ -72,6 +72,7 @@ pub struct UreqHttpClient {
     proxy_url: Option<String>,
     proxy_bypass: ProxyBypass,
     response_body_limit: usize,
+    streaming_response_body_limit: usize,
     system_root_loader: SystemRootLoader,
     secure_tls_config: OnceLock<Result<Arc<rustls::ClientConfig>, HttpClientError>>,
     https_direct_agent: OnceLock<Result<ureq::Agent, HttpClientError>>,
@@ -113,6 +114,7 @@ impl UreqHttpClient {
             .map(|proxy_url| build_agent(&config, http_tls_config, Some(proxy_url)))
             .transpose()?;
         let response_body_limit = config.response_body_limit().bytes().get();
+        let streaming_response_body_limit = config.streaming_response_body_limit().bytes().get();
 
         Ok(Self {
             config,
@@ -121,6 +123,7 @@ impl UreqHttpClient {
             proxy_url,
             proxy_bypass,
             response_body_limit,
+            streaming_response_body_limit,
             system_root_loader,
             secure_tls_config: OnceLock::new(),
             https_direct_agent: OnceLock::new(),
@@ -482,9 +485,11 @@ impl HttpClient for UreqHttpClient {
             })?;
             return Ok(HttpResponse::new(status, headers, body));
         }
-        read_bounded(response.into_reader(), self.response_body_limit, |chunk| {
-            sink.emit(chunk)
-        })?;
+        read_bounded(
+            response.into_reader(),
+            self.streaming_response_body_limit,
+            |chunk| sink.emit(chunk),
+        )?;
         Ok(HttpResponse::new(status, headers, Vec::new()))
     }
 }

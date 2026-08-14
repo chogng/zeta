@@ -25,6 +25,7 @@ impl WorkspaceDiff {
 pub(crate) struct WorkspaceContext {
     working_directory: PathBuf,
     working_directory_label: String,
+    location: WorkspaceLocation,
     git_branch: Option<String>,
     git_repository_root: Option<PathBuf>,
     upstream_distance: Option<(usize, usize)>,
@@ -34,24 +35,47 @@ pub(crate) struct WorkspaceContext {
     diff_deletions: usize,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum WorkspaceLocation {
+    Local,
+    Remote,
+}
+
 impl WorkspaceContext {
     pub(crate) fn capture_current() -> Self {
         let working_directory = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-        Self::capture(working_directory)
+        Self::capture_with_location(working_directory, WorkspaceLocation::Local)
     }
 
+    #[cfg(test)]
     fn capture(working_directory: PathBuf) -> Self {
-        let working_directory = working_directory
-            .canonicalize()
-            .unwrap_or(working_directory);
-        let home = std::env::var_os("HOME")
-            .or_else(|| std::env::var_os("USERPROFILE"))
-            .map(PathBuf::from);
+        Self::capture_with_location(working_directory, WorkspaceLocation::Local)
+    }
+
+    pub(crate) fn capture_remote(working_directory: PathBuf) -> Self {
+        Self::capture_with_location(working_directory, WorkspaceLocation::Remote)
+    }
+
+    fn capture_with_location(working_directory: PathBuf, location: WorkspaceLocation) -> Self {
+        let working_directory = match location {
+            WorkspaceLocation::Local => working_directory
+                .canonicalize()
+                .unwrap_or(working_directory),
+            WorkspaceLocation::Remote => working_directory,
+        };
+        let home = (location == WorkspaceLocation::Local)
+            .then(|| {
+                std::env::var_os("HOME")
+                    .or_else(|| std::env::var_os("USERPROFILE"))
+                    .map(PathBuf::from)
+            })
+            .flatten();
         let working_directory_label =
             display_working_directory(&working_directory, home.as_deref());
         Self {
             working_directory,
             working_directory_label,
+            location,
             git_branch: None,
             git_repository_root: None,
             upstream_distance: None,
@@ -63,7 +87,10 @@ impl WorkspaceContext {
     }
 
     pub(crate) const fn location_label(&self) -> &'static str {
-        "Local"
+        match self.location {
+            WorkspaceLocation::Local => "Local",
+            WorkspaceLocation::Remote => "Remote",
+        }
     }
 
     pub(crate) fn working_directory(&self) -> &Path {
@@ -156,7 +183,7 @@ impl WorkspaceContext {
                 format!("{} is not a directory", working_directory.display()),
             ));
         }
-        *self = Self::capture(working_directory);
+        *self = Self::capture_with_location(working_directory, WorkspaceLocation::Local);
         Ok(())
     }
 
@@ -189,6 +216,7 @@ impl WorkspaceContext {
         Self {
             working_directory: PathBuf::from("/fixture"),
             working_directory_label: working_directory_label.into(),
+            location: WorkspaceLocation::Local,
             git_branch: git_branch.map(ToOwned::to_owned),
             git_repository_root: git_branch.map(|_| PathBuf::from("/fixture")),
             upstream_distance: git_branch.map(|_| (0, 0)),

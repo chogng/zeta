@@ -47,6 +47,15 @@ impl NativeApp {
         if self.route_language_server_settings_keyboard(&event) {
             return;
         }
+        if self.route_remote_tunnel_manager_keyboard(&event) {
+            return;
+        }
+        if self.route_remote_connection_manager_keyboard(&event) {
+            return;
+        }
+        if self.route_remote_connection_picker_keyboard(&event) {
+            return;
+        }
         if self.route_git_branch_context_menu_keyboard(&event) {
             return;
         }

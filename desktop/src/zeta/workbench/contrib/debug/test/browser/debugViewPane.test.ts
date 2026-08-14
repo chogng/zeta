@@ -3,6 +3,7 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import { Emitter } from "../../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
+import { URI } from "../../../../../base/common/uri.js";
 import { type IEditorPart } from "../../../../browser/parts/editor/editorPart.js";
 import { type DebugEvaluateContext, type DebugSessionState, type IDebugBreakpoint, type IDebugCompound, type IDebugConfiguration, type IDebugEvaluateResult, type IDebugScope, type IDebugService, type IDebugSession, type IDebugSource, type IDebugSourceContent, type IDebugStackFrame, type IDebugThread, type IDebugVariable } from "../../../../services/debug/common/debugService.js";
 
@@ -48,6 +49,31 @@ test("Debug view switches sessions and renders threads, recursive variables, wat
   }
 });
 
+test("Debug view opens an authority-qualified Remote stack source", async () => {
+  const browser = new JSDOM("<!doctype html><body></body>");
+  const installedGlobals = installDomGlobals(browser);
+  let opened: Parameters<IEditorPart["openEditor"]>[0] | undefined;
+  const editor = { openEditor: async (input: Parameters<IEditorPart["openEditor"]>[0]) => { opened = input; return {}; } } as IEditorPart;
+  const resource = URI.parse("zeta-remote://ssh+work-server/srv/project/src/main.ts");
+  try {
+    const { DebugViewPane } = await import("../../browser/debugViewPane.js");
+    using debug = new FakeDebugService({ name: "main.ts", path: "/srv/project/src/main.ts", resource });
+    using view = new DebugViewPane({ id: "zeta.debug.remote.test", title: "Debug", ownerDocument: browser.window.document }, debug, editor);
+    browser.window.document.body.append(view.element);
+    debug.activate(debug.sessions[0]!);
+    await waitFor(() => view.element.querySelectorAll(".zeta-debug-frame").length === 1);
+
+    (view.element.querySelector<HTMLButtonElement>(".zeta-debug-frame")!).click();
+    await waitFor(() => opened !== undefined);
+
+    assert.equal(opened?.resource.toString(), resource.toString());
+    assert.equal(opened?.label, "main.ts");
+  } finally {
+    for (const name of installedGlobals) Reflect.deleteProperty(globalThis, name);
+    browser.window.close();
+  }
+});
+
 class FakeDebugService extends DisposableOwner implements IDebugService {
   private readonly configurationEmitter = this.own(new Emitter<readonly IDebugConfiguration[]>());
   private readonly breakpointEmitter = this.own(new Emitter<readonly IDebugBreakpoint[]>());
@@ -66,7 +92,7 @@ class FakeDebugService extends DisposableOwner implements IDebugService {
   readonly onDidChangeWatchExpressions = this.watchEmitter.event;
   readonly onDidChangeExceptionBreakpoints = this.exceptionEmitter.event;
   readonly onDidChangeSession = this.sessionEmitter.event;
-  constructor() { super(); this.sessions = Object.freeze([this.own(new FakeDebugSession("session-one", "One")), this.own(new FakeDebugSession("session-two", "Two"))]); }
+  constructor(source: IDebugSource = { name: "generated.ts", sourceReference: 33 }) { super(); this.sessions = Object.freeze([this.own(new FakeDebugSession("session-one", "One", source)), this.own(new FakeDebugSession("session-two", "Two", source))]); }
   async refresh() { return this.configurations; }
   async start() { return this.sessions[0]!; }
   async startCompound() { return this.sessions; }
@@ -92,7 +118,7 @@ class FakeDebugSession extends DisposableOwner implements IDebugSession {
   readonly reason = "breakpoint";
   readonly onDidChangeState = this.stateEmitter.event;
   readonly onDidOutput = this.outputEmitter.event;
-  constructor(readonly id: string, name: string) { super(); this.configuration = configuration(name); }
+  constructor(readonly id: string, name: string, private readonly stackSource: IDebugSource) { super(); this.configuration = configuration(name); }
   get threadId() { return this.selectedThread; }
   async continue() {}
   async pause() {}
@@ -102,7 +128,7 @@ class FakeDebugSession extends DisposableOwner implements IDebugSession {
   async restart() {}
   async threads(): Promise<readonly IDebugThread[]> { return Object.freeze([{ id: 1, name: "main" }, { id: 2, name: "worker" }]); }
   selectThread(threadId: number): void { this.selectedThread = threadId; }
-  async stackTrace(): Promise<readonly IDebugStackFrame[]> { return Object.freeze([{ id: 10, name: "main", source: { name: "generated.ts", sourceReference: 33 }, lineNumber: 1, columnNumber: 1 }]); }
+  async stackTrace(): Promise<readonly IDebugStackFrame[]> { return Object.freeze([{ id: 10, name: "main", source: this.stackSource, lineNumber: 1, columnNumber: 1 }]); }
   async scopes(): Promise<readonly IDebugScope[]> { return Object.freeze([{ name: "Locals", variablesReference: 20, expensive: false }]); }
   async variables(reference: number): Promise<readonly IDebugVariable[]> { return reference === 20 ? Object.freeze([{ name: "parent", value: "Object", variablesReference: 21 }]) : Object.freeze([{ name: "child", value: "value", variablesReference: 0 }]); }
   async evaluate(_expression: string, _frameId: number | undefined, _context: DebugEvaluateContext): Promise<IDebugEvaluateResult> { return { result: "42", type: "number", variablesReference: 0 }; }

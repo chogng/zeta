@@ -44,6 +44,18 @@ fn fixture_exposes_all_four_toolbar_values_without_inventing_git_state() {
 }
 
 #[test]
+fn remote_workspace_keeps_remote_path_and_location_identity() {
+    let context = WorkspaceContext::capture_remote("/srv/remote/project".into());
+
+    assert_eq!(context.location_label(), "Remote");
+    assert_eq!(
+        context.working_directory(),
+        Path::new("/srv/remote/project")
+    );
+    assert_eq!(context.working_directory_label(), "/srv/remote/project");
+}
+
+#[test]
 fn file_extension_selects_only_the_editor_language_contract() {
     assert_eq!(
         editor_language_for_path(Path::new("src/main.rs")),

@@ -1,28 +1,28 @@
 # `zeta-editor-extension-host`
 
 > 本 README 是 Zeta 原生可执行 Editor Extension Host v1 的进程、RPC、授权门禁、取消与故障恢复
-> 实现权威文档。跨 Plugin、Workspace、App Server 和 Workbench 的产品语义由
-> [`docs/editor-extensions.md`](../../docs/editor-extensions.md) 维护；安装、启用、授权与包身份由
-> [`zeta-rs/plugins/README.md`](../plugins/README.md) 维护。
+> 实现权威文档。跨 Marketplace/legacy Plugin、Workspace、App Server 和 Workbench 的产品语义由
+> [`docs/editor-extensions.md`](../../docs/editor-extensions.md) 维护；统一远端 package 身份由
+> [`zeta-rs/marketplace-manager/README.md`](../marketplace-manager/README.md) 维护。
 
 `zeta-editor-extension-host` 监管一个已经由上层解析和授权的扩展程序。每个
 `ExtensionHostSupervisor` 最多拥有一个扩展的一个活动进程 incarnation，通过有界 JSONL Host RPC v1
 完成握手、激活、调用、取消、停用和关闭，并在授权仍有效时按有界策略恢复崩溃进程。它不发现或
-安装 Plugin，不选择 activation event，不实现 Workbench provider，也不兼容 VS Code Node Extension
+安装 package，不选择 activation event，不实现 Workbench provider，也不兼容 VS Code Node Extension
 API。
 
 ## 1. Crate 边界
 
 | 能力 | 本 crate 的职责 | 上层或平台职责 |
 | --- | --- | --- |
-| Package binding | 接收并绑定 `package_id`、digest、entrypoint 与 activation generation | Plugin authority 选择 immutable package 并解析绝对 executable |
-| Activation authority | 每次激活和调用前获取 `ActivationLease` | Adapter 同时复核 Plugin invocation fence 与 Workspace trust |
+| Package binding | 接收并绑定 `package_id`、digest、entrypoint 与 activation generation | source adapter 选择 immutable package/executable 并解析绝对路径 |
+| Activation authority | 每次激活和调用前获取 `ActivationLease` | Adapter 同时复核 source artifact/admission lease 与 Workspace trust |
 | Process supervision | 每扩展一个进程、incarnation fencing、停用、关闭和有界重启 | 平台 launcher 安装 sandbox、hard limits 和 killable process tree |
 | Host RPC v1 | 版本、请求相关性、严格 shape、注册 ceiling 和 byte limits | 扩展程序实现协议；App Server 把注册投影到领域 owner |
 | Provider invocation | 路由到精确 registration、deadline、并发取消和结果校验 | Command、Language、Debug、Tasks、Testing 定义 payload 与消费结果 |
 | Diagnostics | 返回 typed `ExtensionHostError`，保留有界 stderr | App Server 清洗并映射客户端可见故障，不泄漏主机路径 |
 
-出现以下代码表示 ownership 漂移：本 crate 扫描 Plugin 目录、持久化 enable/grant、解释
+出现以下代码表示 ownership 漂移：本 crate 扫描 Marketplace/Plugin 目录、持久化 enable/grant、解释
 `package.json`、注册 Workbench provider、决定工作区信任，或自行把一个普通 Node/WASM 脚本当成
 entrypoint 加载。
 
@@ -81,10 +81,10 @@ response correlation 不完全一致、未知 request ID、错误 response kind 
 
 生命周期顺序固定为 `Initialize → Activate → Invoke* → Deactivate → Shutdown`。`Activate` 一次返回完整
 注册集合，只有整批验证通过才成为 `ExtensionHostSnapshot.registrations`。当前 registration kinds 为
-当前注册类型包括命令、语言供应商、调试适配器、任务供应商与测试配置供应商；语言 v1
-operation ceiling 包含 completion、Parameter Hints、definition、hover、references、rename、formatting、
-code action、code lens、document symbols、folding、document links/colors、semantic tokens、Inlay Hints
-与 Linked Editing。
+当前注册类型包括命令、语言供应商、调试适配器、任务供应商与测试配置供应商；语言 v1 的 operation
+ceiling 包含 completion、Parameter Hints、definition、hover、references、rename、formatting、code
+action、code lens、document symbols、folding、document links/colors、semantic tokens、Inlay Hints 与
+Linked Editing。
 
 `ActivateParams.activation_events` 是上层已经解析的 activation facts，监管器不会自行观察编辑器事件，
 也不会据此决定何时启动。`capabilities` 则是强制 registration ceiling：进程不能通过 activation 响应
@@ -143,7 +143,7 @@ outcome 都会 fence 当前 incarnation；activation authority 被撤销时恢�
 
 App Server 或其他 composition root 必须：
 
-1. 从 `PluginActivationAuthority` 的 exact immutable package、digest 和 generation 构造
+1. 从 source adapter 已规范化的 exact immutable package、digest、executable 与 live authority 构造
    `ExtensionActivationSpec`，并把 Workspace trust 加入同一 live gate；
 2. 只把经过 exact process permission 和 regular-file validation 的绝对 executable 交给 launcher；
 3. 注入能够实施 `RequirePlatformEnforcement` 的平台 launcher，若不存在则将生产能力标记为不可用；
@@ -188,7 +188,7 @@ Current：Host RPC v1、逐扩展进程监管、live activation/invocation lease
 - 空闲崩溃检测依赖上层 health loop；
 - v1 只有 request/response，没有 extension-originated event stream；
 - 没有 generic Node/WASM loader、VS Code Extension API、Marketplace compatibility 或多扩展共享进程；
-- 没有 publisher signature、revocation feed、跨平台 artifact selector 或 binary ABI 检查；这些属于 Plugin
+- 没有 publisher signature、revocation feed、跨平台 artifact selector 或 binary ABI 检查；这些属于 package
   supply-chain 与平台 launchability 演进，不应加入协议解析器。
 
 潜在演进必须由真实 consumer 驱动：若增加 extension-originated diagnostics/event、remote host 或新的

@@ -3,28 +3,10 @@ import test from "node:test";
 import type { IDisposable } from "../../../../base/common/lifecycle.js";
 import { URI } from "../../../../base/common/uri.js";
 import type { IStateService } from "../../../../platform/state/node/state.js";
-import {
-  type IAnyWorkspaceIdentifier,
-  type ISingleFolderWorkspaceIdentifier,
-  type IWorkspaceIdentifier,
-  UNKNOWN_EMPTY_WINDOW_WORKSPACE,
-  WorkbenchState,
-} from "../../../../platform/workspace/common/workspace.js";
-import {
-  defaultWindowState,
-  WindowMode,
-  type IWindowBounds,
-} from "../../../../platform/window/electron-main/window.js";
-import {
-  applyWindowState,
-  resolveBrowserWindowOptions,
-  validateWindowState,
-  type IWindowDisplay,
-} from "../../../../platform/windows/electron-main/windows.js";
-import {
-  WindowsStateHandler,
-  type IStatefulWindow,
-} from "../../../../platform/windows/electron-main/windowsStateHandler.js";
+import { type IAnyWorkspaceIdentifier, type ISingleFolderWorkspaceIdentifier, type IWorkspaceIdentifier, UNKNOWN_EMPTY_WINDOW_WORKSPACE, WorkbenchState } from "../../../../platform/workspace/common/workspace.js";
+import { defaultWindowState, WindowMode, type IWindowBounds } from "../../../../platform/window/electron-main/window.js";
+import { applyWindowState, resolveBrowserWindowOptions, validateWindowState, type IWindowDisplay } from "../../../../platform/windows/electron-main/windows.js";
+import { WindowsStateHandler, type IStatefulWindow } from "../../../../platform/windows/electron-main/windowsStateHandler.js";
 
 const primaryDisplay: IWindowDisplay = {
   id: 1,
@@ -443,6 +425,32 @@ test("empty windows persist their backup identity", async () => {
     lastActiveWindow: serializedWindow,
     openedWindows: [serializedWindow],
   });
+});
+
+test("independent handlers merge exact Workspace window state instead of overwriting it", async () => {
+  const stateService = new TestStateService();
+  const folderHandler = createHandler(stateService, folderWorkspace);
+  const workspaceHandler = createHandler(stateService, multiRootWorkspace);
+  const folderWindow = new TestWindow();
+  const workspaceWindow = new TestWindow();
+  workspaceWindow.bounds = { x: 200, y: 120, width: 1280, height: 800 };
+
+  await folderHandler.saveWindowState(folderWindow);
+  await workspaceHandler.saveWindowState(workspaceWindow);
+
+  const state = stateService.getItem("windowsState") as { readonly openedWindows: readonly unknown[] };
+  assert.equal(state.openedWindows.length, 2);
+  assert.deepEqual(state.openedWindows.map(record => Object.keys(record as object).sort()), [
+    ["uiState", "workspaceIdentifier"],
+    ["folder", "uiState"],
+  ]);
+
+  folderWindow.bounds = { x: 300, y: 160, width: 1440, height: 900 };
+  await folderHandler.saveWindowState(folderWindow);
+  const updated = stateService.getItem("windowsState") as { readonly openedWindows: ReadonlyArray<{ readonly folder?: string; readonly uiState: { readonly bounds: { readonly x: number } } }> };
+  assert.equal(updated.openedWindows.length, 2);
+  assert.equal(updated.openedWindows[0]?.folder, folderWorkspace.uri.toString());
+  assert.equal(updated.openedWindows[0]?.uiState.bounds.x, 300);
 });
 
 test("tracked windows save on blur and stop after disposal", async () => {

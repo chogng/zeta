@@ -5,6 +5,7 @@ import { URI } from "../../../../base/common/uri.js";
 import { toDisposable } from "../../../../base/common/lifecycle.js";
 import {
   isSingleFolderWorkspaceIdentifier,
+  isRemoteWorkspaceIdentifier,
   isWorkspaceIdentifier,
   parseWorkspaceIdentifier,
   serializeWorkspaceIdentifier,
@@ -12,6 +13,7 @@ import {
   workbenchStateFromWorkspaceIdentifier,
   WorkbenchState,
 } from "../../../../platform/workspace/common/workspace.js";
+import { createSshRemoteWorkspaceUri } from "../../../../platform/remote/common/remote.js";
 import {
   WorkspaceOpenTargetKind,
 } from "../../../../platform/workspaces/common/workspaces.js";
@@ -50,6 +52,11 @@ test("workspace launch arguments distinguish automatic and named targets", () =>
     kind: WorkspaceOpenTargetKind.Automatic,
     path: "-project",
   });
+  assert.deepEqual(parseWorkspaceLaunchArguments(["--remote-ssh", "work-server", "--folder", "/home/zeta/project"]), {
+    kind: WorkspaceOpenTargetKind.RemoteFolder,
+    path: "/home/zeta/project",
+    sshHost: "work-server",
+  });
 
   assert.throws(
     () => parseWorkspaceLaunchArguments(["one", "two"]),
@@ -59,6 +66,27 @@ test("workspace launch arguments distinguish automatic and named targets", () =>
     () => parseWorkspaceLaunchArguments(["--folder"]),
     /requires a path/,
   );
+  assert.throws(() => parseWorkspaceLaunchArguments(["--remote-ssh", "work-server"]), /requires a Remote folder/);
+  assert.throws(() => parseWorkspaceLaunchArguments(["--remote-ssh", "work-server", "--workspace", "/remote/team.zeta-workspace"]), /multi-root/);
+});
+
+test("workspaces service resolves SSH folders without reading the local filesystem", async () => {
+  let localReads = 0;
+  const workspace = await new WorkspacesMainService({
+    async resolvePath() {
+      localReads += 1;
+      throw new Error("Remote path must not be read locally");
+    },
+  }).resolveStartupWorkspace({
+    arguments: ["--remote-ssh=work-server", "--folder=/home/zeta/project"],
+    cwd: resolve("launch-root"),
+  });
+
+  assert.equal(localReads, 0);
+  assert.ok(isRemoteWorkspaceIdentifier(workspace));
+  assert.equal(workspace.uri.toString(), "zeta-remote://ssh+work-server/home/zeta/project");
+  assert.equal(workspace.id.length, 64);
+  assert.equal(new WorkspaceContextService(workspace).getWorkspace().folders[0]?.name, "project");
 });
 
 test("workspaces service resolves a canonical single-folder identity", async () => {
@@ -200,7 +228,7 @@ test("workspace identifier IPC validation revives URIs", () => {
         id: "folder-id",
         uri: "https://example.com/project",
       }),
-    /file scheme/,
+    /file or zeta-remote scheme/,
   );
   assert.throws(
     () =>
@@ -214,6 +242,15 @@ test("workspace identifier IPC validation revives URIs", () => {
     () => parseWorkspaceIdentifier({ id: "" }),
     /non-empty/,
   );
+
+  const remoteFolder = { id: "remote-folder-id", uri: createSshRemoteWorkspaceUri("work-server", "/home/zeta/project").toString() };
+  const parsedRemoteFolder = parseWorkspaceIdentifier(remoteFolder);
+  assert.ok(isRemoteWorkspaceIdentifier(parsedRemoteFolder));
+  assert.deepEqual(serializeWorkspaceIdentifier(parsedRemoteFolder), remoteFolder);
+  assert.throws(() => parseWorkspaceIdentifier({ id: "remote-folder-id", uri: "zeta-remote://ssh+bad%3Bhost/home/zeta/project" }), /Remote|SSH|authority|Invalid/);
+  assert.throws(() => parseWorkspaceIdentifier({ id: "remote-folder-id", uri: "zeta-remote://ssh+work-server/home/zeta%2Fproject" }), /canonical resource identity/);
+  assert.throws(() => parseWorkspaceIdentifier({ id: "remote-folder-id", uri: "zeta-remote://ssh+work-server/home//zeta/project" }), /canonical/);
+  assert.throws(() => parseWorkspaceIdentifier({ id: "remote-folder-id", uri: "zeta-remote://ssh+work-server/home/zeta/project/" }), /canonical/);
 });
 
 test("workspaces main service exposes a window-owned identity through IPC", async () => {

@@ -12,6 +12,7 @@ import {
   type IWorkspaceOpenTarget,
   WorkspaceOpenTargetKind,
 } from "../common/workspaces.js";
+import { createSshRemoteWorkspaceUri } from "../../remote/common/remote.js";
 
 const ZETA_WORKSPACE_EXTENSION = ".zeta-workspace";
 
@@ -57,6 +58,9 @@ export async function resolveWorkspaceOpenTarget(
   cwd: string,
   pathService: IWorkspacePathService = nodeWorkspacePathService,
 ): Promise<IAnyWorkspaceIdentifier> {
+  if (target.kind === WorkspaceOpenTargetKind.RemoteFolder) {
+    return getSingleFolderWorkspaceIdentifier(createSshRemoteWorkspaceUri(target.sshHost, target.path));
+  }
   const requestedPath = resolve(cwd, target.path);
   const resolved = await pathService.resolvePath(requestedPath);
   if (
@@ -108,8 +112,6 @@ export function getSingleFolderWorkspaceIdentifier(
 }
 
 function stableWorkspaceId(uri: URI): string {
-  const identity = process.platform === "linux"
-    ? uri.toString()
-    : uri.toString().toLowerCase();
+  const identity = uri.scheme !== "file" || process.platform === "linux" ? uri.toString() : uri.toString().toLowerCase();
   return createHash("sha256").update(identity).digest("hex");
 }

@@ -7,6 +7,9 @@ use zeta_winit::{Ime, ImeCursorArea};
 use crate::NativeApp;
 use crate::git_branch_context_menu::GIT_BRANCH_SEARCH_INPUT;
 use crate::language_server_settings::LANGUAGE_SERVER_EXECUTABLE_INPUT;
+use crate::remote_connection_manager::RemoteConnectionManagerField;
+use crate::remote_connection_picker::REMOTE_CONNECTION_SEARCH_INPUT;
+use crate::remote_tunnel_manager::REMOTE_TUNNEL_REMOTE_PORT;
 use crate::shell_interaction::{
     AGENT_FILE_SEARCH_INPUT, COMPOSER, FILE_EDITOR_FIND_INPUT, FILE_EDITOR_REPLACE_INPUT,
     SESSION_SEARCH_INPUT,
@@ -23,6 +26,11 @@ enum InputMethodTarget {
     FileSearch,
     GitBranchSearch,
     WorkspacePathSearch,
+    RemoteConnectionSearch,
+    RemoteConnectionName,
+    RemoteConnectionHost,
+    RemoteConnectionWorkspace,
+    RemoteTunnelPort,
     SettingsSearch,
     LanguageServerExecutable,
     FileEditor,
@@ -43,6 +51,9 @@ struct InputMethodContext {
     file_search_focused: bool,
     git_branch_search_focused: bool,
     workspace_path_search_focused: bool,
+    remote_connection_search_focused: bool,
+    remote_connection_manager_field: Option<RemoteConnectionManagerField>,
+    remote_tunnel_port_focused: bool,
     settings_search_focused: bool,
     language_server_executable_focused: bool,
 }
@@ -63,6 +74,19 @@ impl InputMethodTarget {
         }
         if context.workspace_path_search_focused {
             return Self::WorkspacePathSearch;
+        }
+        if context.remote_connection_search_focused {
+            return Self::RemoteConnectionSearch;
+        }
+        if let Some(field) = context.remote_connection_manager_field {
+            return match field {
+                RemoteConnectionManagerField::Name => Self::RemoteConnectionName,
+                RemoteConnectionManagerField::Host => Self::RemoteConnectionHost,
+                RemoteConnectionManagerField::Workspace => Self::RemoteConnectionWorkspace,
+            };
+        }
+        if context.remote_tunnel_port_focused {
+            return Self::RemoteTunnelPort;
         }
         if context.settings_search_focused {
             return Self::SettingsSearch;
@@ -147,6 +171,41 @@ impl NativeApp {
                 self.caret_blink.activity(Instant::now());
                 self.workspace_path_picker
                     .apply_search_composition(composition);
+                self.rebuild_presentation();
+                self.request_redraw();
+            }
+            InputMethodTarget::RemoteConnectionSearch => {
+                let Some(composition) = text_input_composition_event(event) else {
+                    return;
+                };
+                self.caret_blink.activity(Instant::now());
+                self.remote_connection_picker
+                    .apply_search_composition(composition);
+                self.rebuild_presentation();
+                self.request_redraw();
+            }
+            InputMethodTarget::RemoteConnectionName
+            | InputMethodTarget::RemoteConnectionHost
+            | InputMethodTarget::RemoteConnectionWorkspace => {
+                let Some(composition) = text_input_composition_event(event) else {
+                    return;
+                };
+                let field = target
+                    .remote_connection_manager_field()
+                    .expect("Remote connection input target has a field");
+                self.caret_blink.activity(Instant::now());
+                self.remote_connection_manager
+                    .apply_composition(field, composition);
+                self.rebuild_presentation();
+                self.request_redraw();
+            }
+            InputMethodTarget::RemoteTunnelPort => {
+                let Some(composition) = text_input_composition_event(event) else {
+                    return;
+                };
+                self.caret_blink.activity(Instant::now());
+                self.remote_tunnel_manager
+                    .apply_remote_port_composition(composition);
                 self.rebuild_presentation();
                 self.request_redraw();
             }
@@ -235,6 +294,11 @@ impl NativeApp {
                 | InputMethodTarget::FileSearch
                 | InputMethodTarget::GitBranchSearch
                 | InputMethodTarget::WorkspacePathSearch
+                | InputMethodTarget::RemoteConnectionSearch
+                | InputMethodTarget::RemoteConnectionName
+                | InputMethodTarget::RemoteConnectionHost
+                | InputMethodTarget::RemoteConnectionWorkspace
+                | InputMethodTarget::RemoteTunnelPort
                 | InputMethodTarget::SettingsSearch
                 | InputMethodTarget::LanguageServerExecutable
                 | InputMethodTarget::FileEditor
@@ -260,6 +324,14 @@ impl NativeApp {
         }
         if target != InputMethodTarget::WorkspacePathSearch {
             self.workspace_path_picker.cancel_search_composition();
+        }
+        if target != InputMethodTarget::RemoteConnectionSearch {
+            self.remote_connection_picker.cancel_search_composition();
+        }
+        self.remote_connection_manager
+            .cancel_compositions_except(target.remote_connection_manager_field());
+        if target != InputMethodTarget::RemoteTunnelPort {
+            self.remote_tunnel_manager.cancel_remote_port_composition();
         }
         if target != InputMethodTarget::SettingsSearch {
             self.language_server_settings.cancel_search_composition();
@@ -300,11 +372,30 @@ impl NativeApp {
             file_search_focused: self.ui_dispatch.is_focused(AGENT_FILE_SEARCH_INPUT),
             git_branch_search_focused: self.ui_dispatch.is_focused(GIT_BRANCH_SEARCH_INPUT),
             workspace_path_search_focused: self.ui_dispatch.is_focused(WORKSPACE_PATH_SEARCH_INPUT),
+            remote_connection_search_focused: self
+                .ui_dispatch
+                .is_focused(REMOTE_CONNECTION_SEARCH_INPUT),
+            remote_connection_manager_field: self
+                .ui_dispatch
+                .focused()
+                .and_then(RemoteConnectionManagerField::from_element_id),
+            remote_tunnel_port_focused: self.ui_dispatch.is_focused(REMOTE_TUNNEL_REMOTE_PORT),
             settings_search_focused: self.ui_dispatch.is_focused(SETTINGS_SEARCH_INPUT),
             language_server_executable_focused: self
                 .ui_dispatch
                 .is_focused(LANGUAGE_SERVER_EXECUTABLE_INPUT),
         })
+    }
+}
+
+impl InputMethodTarget {
+    const fn remote_connection_manager_field(self) -> Option<RemoteConnectionManagerField> {
+        match self {
+            Self::RemoteConnectionName => Some(RemoteConnectionManagerField::Name),
+            Self::RemoteConnectionHost => Some(RemoteConnectionManagerField::Host),
+            Self::RemoteConnectionWorkspace => Some(RemoteConnectionManagerField::Workspace),
+            _ => None,
+        }
     }
 }
 

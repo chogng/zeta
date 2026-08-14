@@ -4,6 +4,7 @@ import { Emitter } from "../../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
 import type { AppServerConnectionState, IAppServerApi } from "../../../../../platform/app-server/common/appServerApi.js";
 import type { RemoteConnectionState } from "../../../../../platform/remote/common/remote.js";
+import type { IRemoteAgentApi, RemoteAgentConnection } from "../../../../../platform/remote/common/remoteAgentApi.js";
 import { AppServerRemoteAgentService } from "../../browser/appServerRemoteAgentService.js";
 
 test("remote agent events supersede a stale initial App Server read", async () => {
@@ -53,6 +54,39 @@ test("remote agent suppresses pending reads and events after disposal", async ()
   assert.deepEqual(states, []);
 });
 
+test("remote agent metadata events supersede a stale connection read", async () => {
+  using api = new TestAppServerApi();
+  using remoteApi = new TestRemoteAgentApi();
+  using service = new AppServerRemoteAgentService({ api, remoteApi, onReadError: error => { throw error; } });
+  const connections: RemoteAgentConnection[] = [];
+  service.onDidChangeConnection(connection => connections.push(connection));
+
+  remoteApi.emit({ kind: "ssh", generation: 2, authority: "ssh+work-server", host: "work-server" });
+  remoteApi.resolveInitial({ kind: "local", generation: 1 });
+  await settlePromises();
+
+  assert.deepEqual(connections, [{ kind: "ssh", generation: 2, authority: "ssh+work-server", host: "work-server" }]);
+  assert.deepEqual(service.connection, connections[0]);
+});
+
+test("remote agent delegates path-free runtime rollback only for SSH connections", async () => {
+  using api = new TestAppServerApi();
+  using remoteApi = new TestRemoteAgentApi();
+  using service = new AppServerRemoteAgentService({ api, remoteApi, onReadError: error => { throw error; } });
+  remoteApi.emit({ kind: "ssh", generation: 2, authority: "ssh+work-server", host: "work-server" });
+
+  assert.deepEqual(await service.reconnect(), { kind: "reconnected" });
+  assert.deepEqual(await service.rollbackRuntime(), { kind: "rolledBack" });
+  assert.equal(remoteApi.reconnects, 1);
+  assert.equal(remoteApi.rollbacks, 1);
+
+  remoteApi.emit({ kind: "local", generation: 3 });
+  await assert.rejects(() => service.reconnect(), /SSH Remote Workspace/);
+  await assert.rejects(() => service.rollbackRuntime(), /SSH Remote Workspace/);
+  assert.equal(remoteApi.reconnects, 1);
+  assert.equal(remoteApi.rollbacks, 1);
+});
+
 class TestAppServerApi extends DisposableOwner implements IAppServerApi {
   private readonly stateEmitter = this.own(new Emitter<AppServerConnectionState>());
   private readonly initial = deferred<AppServerConnectionState>();
@@ -63,6 +97,20 @@ class TestAppServerApi extends DisposableOwner implements IAppServerApi {
   onConnectionState(listener: (state: AppServerConnectionState) => void) { return this.stateEmitter.event(listener); }
   emit(state: AppServerConnectionState): void { this.stateEmitter.fire(state); }
   resolveInitial(state: AppServerConnectionState): void { this.initial.resolve(state); }
+}
+
+class TestRemoteAgentApi extends DisposableOwner implements IRemoteAgentApi {
+  private readonly connectionEmitter = this.own(new Emitter<RemoteAgentConnection>());
+  private readonly initial = deferred<RemoteAgentConnection>();
+  reconnects = 0;
+  rollbacks = 0;
+
+  getConnection(): Promise<RemoteAgentConnection> { return this.initial.promise; }
+  async reconnect() { this.reconnects += 1; return { kind: "reconnected" } as const; }
+  async rollbackRuntime() { this.rollbacks += 1; return { kind: "rolledBack" } as const; }
+  onDidChangeConnection(listener: (connection: RemoteAgentConnection) => void) { return this.connectionEmitter.event(listener); }
+  emit(connection: RemoteAgentConnection): void { this.connectionEmitter.fire(connection); }
+  resolveInitial(connection: RemoteAgentConnection): void { this.initial.resolve(connection); }
 }
 
 function deferred<T>(): { readonly promise: Promise<T>; readonly resolve: (value: T) => void } {

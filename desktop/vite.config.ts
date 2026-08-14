@@ -19,6 +19,9 @@ export default defineConfig(() => {
         [`electron-browser/sessions/${dedicatedSessions.rendererEntry}`]: resolve(sourceRoot, `electron-browser/sessions/${dedicatedSessions.rendererEntry}.html`),
       }
     : {};
+  const remoteRuntimeInstallInput = {
+    "electron-browser/remote-runtime-install/remoteRuntimeInstall": resolve(sourceRoot, "electron-browser/remote-runtime-install/remoteRuntimeInstall.html"),
+  };
 
   return {
     base: "./",
@@ -43,6 +46,7 @@ export default defineConfig(() => {
           [browserEntry]: resolve(sourceRoot, `${browserEntry}.html`),
           [electronEntry]: resolve(sourceRoot, `${electronEntry}.html`),
           ...sessionsInputs,
+          ...remoteRuntimeInstallInput,
         },
       },
     },

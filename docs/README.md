@@ -39,6 +39,7 @@
 | 接 / 改模型供应商 | [`model-provider.md`](model-provider.md) → [`model-provider-config.md`](model-provider-config.md) → [`models-manager.md`](models-manager.md) |
 | 接 / 改独立 Marketplace | [`marketplace-integration.md`](marketplace-integration.md) → 对应 [`plugins.md`](plugins.md)、[`lsp.md`](lsp.md)、[`skills.md`](skills.md) 或 [`mcp.md`](mcp.md) → 对应 crate README |
 | 改 Desktop UI | [`zeta-desktop-architecture.md`](zeta-desktop-architecture.md) → [`ui-styling-ownership.md`](ui-styling-ownership.md) |
+| 开发 SSH Remote Workspace | [`remote-development.md`](remote-development.md) → [`zeta-desktop-architecture.md`](zeta-desktop-architecture.md) → [`app-server-client.md`](app-server-client.md) |
 | 改 `zeterm` 产品行为 | [`zeterm/docs/README.md`](../zeterm/docs/README.md) → 对应产品文档 → [`zeterm/README.md`](../zeterm/README.md) |
 | 写 / 改文档本身 | [`documentation-guidelines.md`](documentation-guidelines.md) |
 
@@ -69,7 +70,7 @@
 | [`agent-customizations.md`](agent-customizations.md) | 设计 | Instructions / Skills / Agents、`.zeta` 与外部导入边界 |
 | [`tools.md`](tools.md) | 设计 | 工具三层契约、registry snapshot |
 | [`exec.md`](exec.md) | 设计 | 进程执行 |
-| [`marketplace-integration.md`](marketplace-integration.md) | 设计 | 独立 Marketplace 的信任、共享发行快照、领域 adapter 与失败隔离 |
+| [`marketplace-integration.md`](marketplace-integration.md) | 设计 | 远端签名 registry、Zeta 本地 Manager、opaque capability handoff 与旧消费链迁移 |
 | [`plugins.md`](plugins.md) / [`connectors.md`](connectors.md) / [`skills.md`](skills.md) | 设计 | Plugin 扩展分发、Connector 外部账号连接与 Skill 指令运行时边界 |
 | [`editor-extensions.md`](editor-extensions.md) | 设计 | 声明式扩展与 Zeta 原生可执行 Host v1 的双轨边界、信任、生命周期和产品接入状态 |
 | [`mcp.md`](mcp.md) / [`mcp-server.md`](mcp-server.md) | 设计 | MCP 协议会话与能力调用、Connector ready binding，以及 Zeta 作为 MCP server |
@@ -119,7 +120,7 @@ Surface、Native Text Input、Rendering、UI 迁移、Native 弃用、应用迁�
 
 [`architecture.md`](architecture.md)（总入口）、[`zeta-rs-architecture.md`](zeta-rs-architecture.md)、
 [`zeta-cli-architecture.md`](zeta-cli-architecture.md)、[`product-editions.md`](product-editions.md)、
-[`product-lines.md`](product-lines.md)、[`git.md`](git.md)、
+[`product-lines.md`](product-lines.md)、[`remote-development.md`](remote-development.md)、[`git.md`](git.md)、
 [`documentation-guidelines.md`](documentation-guidelines.md)
 
 ### 计划与迁移（会过期）

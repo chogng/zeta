@@ -59,8 +59,9 @@ export interface MarketplaceInstalledPackage {
 
 export type MarketplaceActivationSpec =
   | { readonly kind: "skill"; readonly contractVersion: string; readonly resource: { readonly id: string } }
-  | { readonly kind: "mcp"; readonly contractVersion: string; readonly transport: { readonly type: "streamableHttp"; readonly url: string }; readonly networkHosts: readonly string[] }
+  | { readonly kind: "mcp"; readonly contractVersion: string; readonly transport: { readonly type: "stdio"; readonly executable: { readonly id: string }; readonly args: readonly string[] } | { readonly type: "streamableHttp"; readonly url: string }; readonly networkHosts: readonly string[] }
   | { readonly kind: "connector"; readonly contractVersion: string; readonly authenticationProvider: string | null; readonly mcp: { readonly id: string } | null }
+  | { readonly kind: "theme"; readonly contractVersion: string; readonly manifest: { readonly id: string } }
   | { readonly kind: "language"; readonly contractVersion: string; readonly manifest: { readonly id: string } }
   | { readonly kind: "executable"; readonly contractVersion: string; readonly runtime: "direct" | "node"; readonly entrypoint: { readonly id: string } };
 

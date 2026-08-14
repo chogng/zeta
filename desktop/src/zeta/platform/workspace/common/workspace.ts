@@ -3,6 +3,7 @@ import type { Event } from "../../../base/common/event.js";
 import {
   createServiceIdentifier,
 } from "../../instantiation/common/instantiation.js";
+import { getRemoteWorkspacePath, isRemoteResource } from "../../remote/common/remote.js";
 
 /** Describes whether a workbench contains no project, one folder, or a workspace. */
 export const enum WorkbenchState {
@@ -87,6 +88,11 @@ export function isSingleFolderWorkspaceIdentifier(
   return isNonEmptyString(candidate?.id) && candidate?.uri instanceof URI;
 }
 
+/** Returns whether a window is backed by a folder hosted through Remote. */
+export function isRemoteWorkspaceIdentifier(value: unknown): value is ISingleFolderWorkspaceIdentifier {
+  return isSingleFolderWorkspaceIdentifier(value) && isRemoteResource(value.uri);
+}
+
 /** Returns whether a value identifies a multi-root workspace file. */
 export function isWorkspaceIdentifier(
   value: unknown,
@@ -148,14 +154,14 @@ export function parseWorkspaceIdentifier(
     requireExactKeys(record, ["configPath", "id"]);
     return Object.freeze({
       id,
-      configPath: fileUri(record.configPath, "workspace config path"),
+      configPath: fileWorkspaceConfigUri(record.configPath, "workspace config path"),
     });
   }
   if ("uri" in record) {
     requireExactKeys(record, ["id", "uri"]);
     return Object.freeze({
       id,
-      uri: fileUri(record.uri, "workspace folder uri"),
+      uri: workspaceResourceUri(record.uri, "workspace folder uri"),
     });
   }
   requireExactKeys(record, ["id"]);
@@ -186,17 +192,25 @@ function requireExactKeys(
   }
 }
 
-function fileUri(value: unknown, field: string): URI {
+function workspaceResourceUri(value: unknown, field: string): URI {
   if (typeof value !== "string") {
     throw new Error(`${field} must be a string`);
   }
   const uri = URI.parse(value);
-  if (uri.scheme !== "file") {
-    throw new Error(`${field} must use the file scheme`);
-  }
   if (uri.query || uri.fragment) {
     throw new Error(`${field} must not contain a query or fragment`);
   }
+  if (uri.scheme === "file") return uri;
+  if (isRemoteResource(uri)) {
+    getRemoteWorkspacePath(uri);
+    return uri;
+  }
+  throw new Error(`${field} must use the file or zeta-remote scheme`);
+}
+
+function fileWorkspaceConfigUri(value: unknown, field: string): URI {
+  const uri = workspaceResourceUri(value, field);
+  if (uri.scheme !== "file") throw new Error(`${field} must use the file scheme`);
   return uri;
 }
 

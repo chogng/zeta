@@ -20,13 +20,13 @@ DebugService.start / startCompound
   -> postDebugTask through ITaskService
 ```
 
-`DebugBreakpointDecorationProvider` is the only Debug-to-editor adapter. The editor owns a generic composable gutter contract and must not import Debug semantics. Process lifetime, bounded DAP framing, trust retirement, and connection ownership remain backend responsibilities.
+`DebugBreakpointDecorationProvider` is the only Debug-to-editor adapter. The editor owns a generic composable gutter contract and must not import Debug semantics. `DebugAdapterSession` also converts adapter source paths into URIs on the current local or Remote Workspace authority; `DebugViewPane` consumes that domain resource and never reinterprets a Remote path as local `file://`. Process lifetime, bounded DAP framing, trust retirement, and connection ownership remain backend responsibilities.
 
 ## Configuration and extension integration
 
 Each `.vscode/launch.json` configuration can declare an explicit `debugAdapter.program` plus `debugAdapter.args`. If it omits `debugAdapter`, `parseLaunchConfigurationDocument` resolves the configuration `type` through the canonical `DebugAdapterFactoriesRegistry`. Declarative extensions register one caller-owned factory set for the program/argument descriptors contributed through `contributes.debuggers`; other runtime producers use independent registrations.
 
-All remaining configuration properties are forwarded to the adapter after `${workspaceFolder}` and `${workspaceFolderBasename}` expansion. Workbench-only `preLaunchTask` and `postDebugTask` fields are removed before the DAP launch/attach request. Compounds resolve configuration IDs or unique names and may request `stopAll` behavior.
+All remaining configuration properties are forwarded to the adapter after `${workspaceFolder}` and `${workspaceFolderBasename}` expansion. The value comes from the current Workspace URI: native filesystem syntax for `file:` and decoded POSIX syntax for Remote. Workbench-only `preLaunchTask` and `postDebugTask` fields are removed before the DAP launch/attach request. Compounds resolve configuration IDs or unique names and may request `stopAll` behavior.
 
 `DebugAdapterFactoryRegistry` discovers bounded executable descriptors only. It does not execute extension JavaScript or imply a full Extension Host.
 
@@ -40,7 +40,7 @@ Pre-launch tasks must finish with `succeeded`; missing, ambiguous, failed, cance
 
 Run the Debug tests with the desktop unit runner, or target the compiled files under `services/debug/test`. `debugAdapterSession.test.ts` covers DAP capabilities and inspection requests. `debugService.test.ts` covers persistence, task lifecycle, compounds, multiple sessions, and canonical factory resolution. `debugAdapterFactory.test.ts` covers multi-producer ownership and atomic replacement. `launchConfiguration.test.ts` covers explicit and extension-resolved adapters.
 
-Adding DAP client state to the backend, Debug-specific behavior to the editor, direct process execution to the Renderer, or live-session data to workspace persistence would signal ownership drift.
+Adding DAP client state to the backend, Debug-specific behavior to the editor, direct process execution to the Renderer, deriving Remote authority inside `DebugViewPane`, or live-session data to workspace persistence would signal ownership drift.
 
 ## Current limitations
 

@@ -1,15 +1,22 @@
+use std::fmt;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::mpsc::{self, Receiver, SyncSender, TryRecvError};
-use std::thread::{self, JoinHandle};
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
+use std::sync::mpsc;
+use std::sync::mpsc::Receiver;
+use std::sync::mpsc::SyncSender;
+use std::sync::mpsc::TryRecvError;
+use std::thread;
+use std::thread::JoinHandle;
 use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow};
 use zeta_app_server_client::{
-    AppServerEvent, AppServerEvents, AppServerRequestHandle, AppServerSession, ClientError,
-    InProcessClientOptions, ServerNotification, SessionStateMode, local_profile_root,
+    AppServerEvent, AppServerEvents, AppServerRequestHandle, ClientError, ServerNotification,
 };
-use zeta_app_server_protocol::protocol::common::{ClientInfo, CommandId};
+use zeta_app_server_protocol::protocol::common::CommandId;
 use zeta_app_server_protocol::protocol::config::{
     ConfigCommandResult, ConfigReadResult, LanguageServerConfigDto, LanguageServerConfigureParams,
     LanguageServerRemoveParams,
@@ -40,6 +47,8 @@ use zeta_text_file::{
 use zeta_winit::EventLoopProxy;
 
 use crate::NativeApp;
+use crate::agent_session_target::AgentSessionTarget;
+use crate::agent_session_target::WorkspaceSwitchSupport;
 use crate::composer_classification::synchronize_composer_classifier;
 use crate::composer_classification::update_composer_classifier;
 use crate::native_event::NativeEvent;
@@ -48,9 +57,57 @@ use crate::session_tab_list::SessionTabUpsert;
 use crate::session_tab_list::upsert_session_tab as project_session_tab;
 use crate::thread_projection::ThreadProjectionUpdate;
 
+#[path = "agent_session_remote.rs"]
+mod remote;
+
 const COMMAND_QUEUE_CAPACITY: usize = 32;
 const EVENT_POLL_INTERVAL: Duration = Duration::from_millis(25);
 const FILE_SNAPSHOT_READ_ATTEMPTS: usize = 3;
+pub(super) const AGENT_UNAVAILABLE_COMMAND_ERROR: &str =
+    "Agent session is not connected; the command was not sent";
+
+pub(super) struct AgentSessionFailure {
+    pub(super) error: anyhow::Error,
+    pub(super) retryable: bool,
+    pub(super) connection_was_ready: bool,
+}
+
+impl AgentSessionFailure {
+    fn connection(error: anyhow::Error) -> Self {
+        Self {
+            error,
+            retryable: true,
+            connection_was_ready: false,
+        }
+    }
+
+    fn disconnected(error: anyhow::Error) -> Self {
+        Self {
+            error,
+            retryable: true,
+            connection_was_ready: true,
+        }
+    }
+
+    fn fatal(error: anyhow::Error) -> Self {
+        Self {
+            error,
+            retryable: false,
+            connection_was_ready: false,
+        }
+    }
+}
+
+#[derive(Debug)]
+struct AgentSessionConnectionLost(String);
+
+impl fmt::Display for AgentSessionConnectionLost {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for AgentSessionConnectionLost {}
 
 #[derive(Debug)]
 pub(crate) enum AgentSessionEvent {
@@ -123,6 +180,7 @@ pub(crate) struct WorkspaceSwitchProjection {
 }
 
 pub(crate) struct AgentSession {
+    available: Arc<AtomicBool>,
     commands: SyncSender<AgentSessionCommand>,
     worker: Option<JoinHandle<()>>,
 }
@@ -130,29 +188,36 @@ pub(crate) struct AgentSession {
 impl AgentSession {
     pub(crate) fn spawn(
         event_proxy: EventLoopProxy<NativeEvent>,
-        workspace_root: PathBuf,
+        target: AgentSessionTarget,
     ) -> Result<Self> {
         let (commands, command_receiver) = mpsc::sync_channel(COMMAND_QUEUE_CAPACITY);
+        let available = Arc::new(AtomicBool::new(false));
+        let worker_availability = Arc::clone(&available);
         let worker = thread::Builder::new()
             .name("zeterm-agent-session".into())
-            .spawn(move || run_agent_session(event_proxy, command_receiver, workspace_root))
+            .spawn(move || {
+                run_agent_session(event_proxy, command_receiver, target, worker_availability)
+            })
             .context("could not start native Agent session worker")?;
         Ok(Self {
+            available,
             commands,
             worker: Some(worker),
         })
     }
 
     pub(crate) fn submit_agent_message(&self, text: String) -> Result<()> {
-        self.commands
-            .try_send(AgentSessionCommand::SubmitAgentMessage(text))
-            .context("Agent submission queue is unavailable")
+        self.try_send(
+            AgentSessionCommand::SubmitAgentMessage(text),
+            "Agent submission queue is unavailable",
+        )
     }
 
     pub(crate) fn create_session(&self) -> Result<()> {
-        self.commands
-            .try_send(AgentSessionCommand::CreateSession)
-            .context("Agent session creation queue is unavailable")
+        self.try_send(
+            AgentSessionCommand::CreateSession,
+            "Agent session creation queue is unavailable",
+        )
     }
 
     pub(crate) fn activate_session(
@@ -160,43 +225,49 @@ impl AgentSession {
         session_id: SessionId,
         switch_id: SwitchId,
     ) -> Result<()> {
-        self.commands
-            .try_send(AgentSessionCommand::ActivateSession {
+        self.try_send(
+            AgentSessionCommand::ActivateSession {
                 session_id,
                 switch_id,
-            })
-            .context("Agent session activation queue is unavailable")
+            },
+            "Agent session activation queue is unavailable",
+        )
     }
 
     pub(crate) fn submit_shell_command(&self, command: String) -> Result<()> {
-        self.commands
-            .try_send(AgentSessionCommand::SubmitShellCommand(command))
-            .context("Shell submission queue is unavailable")
+        self.try_send(
+            AgentSessionCommand::SubmitShellCommand(command),
+            "Shell submission queue is unavailable",
+        )
     }
 
     pub(crate) fn select_model(&self, model: ModelRef) -> Result<()> {
-        self.commands
-            .try_send(AgentSessionCommand::SelectModel(model))
-            .context("Agent model selection queue is unavailable")
+        self.try_send(
+            AgentSessionCommand::SelectModel(model),
+            "Agent model selection queue is unavailable",
+        )
     }
 
     pub(crate) fn refresh(&self) -> Result<()> {
-        self.commands
-            .try_send(AgentSessionCommand::Refresh)
-            .context("Agent refresh queue is unavailable")
+        self.try_send(
+            AgentSessionCommand::Refresh,
+            "Agent refresh queue is unavailable",
+        )
     }
 
     pub(crate) fn refresh_git(&self) -> Result<()> {
-        self.commands
-            .try_send(AgentSessionCommand::RefreshGit)
-            .context("Git refresh queue is unavailable")
+        self.try_send(
+            AgentSessionCommand::RefreshGit,
+            "Git refresh queue is unavailable",
+        )
     }
 
     pub(crate) fn read_directory(&self, path: PathBuf) -> Result<Vec<FsReadDirectoryEntry>> {
         let (response, result) = mpsc::sync_channel(1);
-        self.commands
-            .try_send(AgentSessionCommand::ReadDirectory { path, response })
-            .context("Workspace directory query queue is unavailable")?;
+        self.try_send(
+            AgentSessionCommand::ReadDirectory { path, response },
+            "Workspace directory query queue is unavailable",
+        )?;
         result
             .recv()
             .context("Workspace directory query worker stopped")?
@@ -205,9 +276,10 @@ impl AgentSession {
 
     pub(crate) fn read_file(&self, path: PathBuf) -> Result<TextFileSnapshot> {
         let (response, result) = mpsc::sync_channel(1);
-        self.commands
-            .try_send(AgentSessionCommand::ReadFile { path, response })
-            .context("Workspace file query queue is unavailable")?;
+        self.try_send(
+            AgentSessionCommand::ReadFile { path, response },
+            "Workspace file query queue is unavailable",
+        )?;
         result
             .recv()
             .context("Workspace file query worker stopped")?
@@ -216,9 +288,10 @@ impl AgentSession {
 
     pub(crate) fn write_file(&self, request: TextFileSaveRequest) -> Result<TextFileDiskVersion> {
         let (response, result) = mpsc::sync_channel(1);
-        self.commands
-            .try_send(AgentSessionCommand::WriteFile { request, response })
-            .context("Workspace file mutation queue is unavailable")?;
+        self.try_send(
+            AgentSessionCommand::WriteFile { request, response },
+            "Workspace file mutation queue is unavailable",
+        )?;
         result
             .recv()
             .context("Workspace file mutation worker stopped")?
@@ -227,9 +300,10 @@ impl AgentSession {
 
     pub(crate) fn local_branches(&self) -> Result<Vec<GitBranchDto>> {
         let (response, result) = mpsc::sync_channel(1);
-        self.commands
-            .try_send(AgentSessionCommand::ListGitBranches(response))
-            .context("Git branch query queue is unavailable")?;
+        self.try_send(
+            AgentSessionCommand::ListGitBranches(response),
+            "Git branch query queue is unavailable",
+        )?;
         result
             .recv()
             .context("Git branch query worker stopped")?
@@ -238,9 +312,10 @@ impl AgentSession {
 
     pub(crate) fn switch_git_branch(&self, name: String) -> Result<GitTextDiffResult> {
         let (response, result) = mpsc::sync_channel(1);
-        self.commands
-            .try_send(AgentSessionCommand::SwitchGitBranch { name, response })
-            .context("Git branch mutation queue is unavailable")?;
+        self.try_send(
+            AgentSessionCommand::SwitchGitBranch { name, response },
+            "Git branch mutation queue is unavailable",
+        )?;
         result
             .recv()
             .context("Git branch mutation worker stopped")?
@@ -249,9 +324,10 @@ impl AgentSession {
 
     pub(crate) fn switch_workspace(&self, root: PathBuf) -> Result<WorkspaceSwitchProjection> {
         let (response, result) = mpsc::sync_channel(1);
-        self.commands
-            .try_send(AgentSessionCommand::SwitchWorkspace { root, response })
-            .context("Workspace switch queue is unavailable")?;
+        self.try_send(
+            AgentSessionCommand::SwitchWorkspace { root, response },
+            "Workspace switch queue is unavailable",
+        )?;
         result
             .recv()
             .context("Workspace switch worker stopped")?
@@ -265,14 +341,15 @@ impl AgentSession {
         config: LanguageServerConfigDto,
     ) -> Result<ConfigCommandResult> {
         let (response, result) = mpsc::sync_channel(1);
-        self.commands
-            .try_send(AgentSessionCommand::ConfigureLanguageServer {
+        self.try_send(
+            AgentSessionCommand::ConfigureLanguageServer {
                 expected_revision,
                 server_id,
                 config,
                 response,
-            })
-            .context("Language server configuration queue is unavailable")?;
+            },
+            "Language server configuration queue is unavailable",
+        )?;
         result
             .recv()
             .context("Language server configuration worker stopped")?
@@ -285,22 +362,31 @@ impl AgentSession {
         server_id: String,
     ) -> Result<ConfigCommandResult> {
         let (response, result) = mpsc::sync_channel(1);
-        self.commands
-            .try_send(AgentSessionCommand::RemoveLanguageServerConfiguration {
+        self.try_send(
+            AgentSessionCommand::RemoveLanguageServerConfiguration {
                 expected_revision,
                 server_id,
                 response,
-            })
-            .context("Language server configuration queue is unavailable")?;
+            },
+            "Language server configuration queue is unavailable",
+        )?;
         result
             .recv()
             .context("Language server configuration worker stopped")?
             .map_err(anyhow::Error::msg)
     }
+
+    fn try_send(&self, command: AgentSessionCommand, queue_error: &'static str) -> Result<()> {
+        if !self.available.load(Ordering::Acquire) {
+            return Err(anyhow!(AGENT_UNAVAILABLE_COMMAND_ERROR));
+        }
+        self.commands.try_send(command).context(queue_error)
+    }
 }
 
 impl Drop for AgentSession {
     fn drop(&mut self) {
+        self.available.store(false, Ordering::Release);
         let _ = self.commands.send(AgentSessionCommand::Shutdown);
         if let Some(worker) = self.worker.take() {
             let _ = worker.join();
@@ -311,9 +397,10 @@ impl Drop for AgentSession {
 fn run_agent_session(
     event_proxy: EventLoopProxy<NativeEvent>,
     commands: Receiver<AgentSessionCommand>,
-    workspace_root: PathBuf,
+    target: AgentSessionTarget,
+    available: Arc<AtomicBool>,
 ) {
-    let result = run_agent_session_inner(&event_proxy, &commands, &workspace_root);
+    let result = run_agent_session_inner(&event_proxy, &commands, &target, &available);
     if let Err(error) = result {
         let _ = send_event(&event_proxy, AgentSessionEvent::Error(error.to_string()));
     }
@@ -323,29 +410,34 @@ fn run_agent_session(
 fn run_agent_session_inner(
     event_proxy: &EventLoopProxy<NativeEvent>,
     commands: &Receiver<AgentSessionCommand>,
-    workspace_root: &Path,
+    target: &AgentSessionTarget,
+    available: &AtomicBool,
 ) -> Result<()> {
-    let mut session = AppServerSession::start_embedded(
-        InProcessClientOptions::new(
-            local_profile_root(),
-            ClientInfo {
-                name: "zeterm".into(),
-                version: env!("CARGO_PKG_VERSION").into(),
-            },
-        )
-        .with_session_state_mode(SessionStateMode::Ephemeral)
-        .with_workspace_root(workspace_root),
-    )
-    .map_err(|error| anyhow!(error.to_string()))?;
+    if target.is_remote() {
+        return remote::run_with_recovery(event_proxy, commands, target, available);
+    }
+    run_agent_session_connection(event_proxy, commands, target, available)
+        .map_err(|failure| failure.error)
+}
+
+fn run_agent_session_connection(
+    event_proxy: &EventLoopProxy<NativeEvent>,
+    commands: &Receiver<AgentSessionCommand>,
+    target: &AgentSessionTarget,
+    available: &AtomicBool,
+) -> std::result::Result<(), AgentSessionFailure> {
+    available.store(false, Ordering::Release);
+    let workspace_root = target.workspace_root();
+    let mut session = target.start().map_err(AgentSessionFailure::connection)?;
     let mut client = session.client();
     let slash_commands = client
         .initialization()
-        .map_err(|error| anyhow!(error.to_string()))?
+        .map_err(|error| AgentSessionFailure::connection(anyhow!(error.to_string())))?
         .slash_commands
         .clone();
     let models = client
         .list_models()
-        .map_err(|error| anyhow!(error.to_string()))?
+        .map_err(|error| AgentSessionFailure::connection(anyhow!(error.to_string())))?
         .models;
     send_event(
         event_proxy,
@@ -353,14 +445,18 @@ fn run_agent_session_inner(
             slash_commands,
             models,
         },
-    )?;
-    publish_configuration(event_proxy, &mut client)?;
-    publish_git_projection(event_proxy, &mut client)?;
+    )
+    .map_err(AgentSessionFailure::fatal)?;
+    publish_configuration(event_proxy, &mut client).map_err(AgentSessionFailure::connection)?;
+    publish_git_projection(event_proxy, &mut client).map_err(AgentSessionFailure::connection)?;
     let events = session
         .take_events()
-        .map_err(|error| anyhow!(error.to_string()))?;
-    let mut active = ensure_active_session(&mut client, workspace_root)?;
-    publish_subscription(event_proxy, &active.subscription, &active.thread_id, None)?;
+        .map_err(|error| AgentSessionFailure::connection(anyhow!(error.to_string())))?;
+    let mut active = ensure_active_session(&mut client, workspace_root)
+        .map_err(AgentSessionFailure::connection)?;
+    publish_subscription(event_proxy, &active.subscription, &active.thread_id, None)
+        .map_err(AgentSessionFailure::fatal)?;
+    available.store(true, Ordering::Release);
 
     let loop_result = drive_agent_session(
         event_proxy,
@@ -369,11 +465,23 @@ fn run_agent_session_inner(
         &mut client,
         &mut active,
         workspace_root,
+        target.workspace_switch_support(),
     );
-    session
-        .shutdown()
-        .map_err(|error| anyhow!(error.to_string()))?;
-    loop_result
+    available.store(false, Ordering::Release);
+    match loop_result {
+        Ok(()) => {
+            let _ = session.shutdown();
+            Ok(())
+        }
+        Err(error) => {
+            let _ = session.shutdown();
+            if error.downcast_ref::<AgentSessionConnectionLost>().is_some() {
+                Err(AgentSessionFailure::disconnected(error))
+            } else {
+                Err(AgentSessionFailure::fatal(error))
+            }
+        }
+    }
 }
 
 fn drive_agent_session(
@@ -383,6 +491,7 @@ fn drive_agent_session(
     client: &mut AppServerRequestHandle,
     active: &mut ActiveSession,
     workspace_root: &Path,
+    workspace_switch_support: WorkspaceSwitchSupport,
 ) -> Result<()> {
     loop {
         loop {
@@ -527,7 +636,12 @@ fn drive_agent_session(
                     let _ = response.send(result.map_err(|error| error.to_string()));
                 }
                 Ok(AgentSessionCommand::SwitchWorkspace { root, response }) => {
-                    let result = switch_workspace(client, root);
+                    let result = match workspace_switch_support {
+                        WorkspaceSwitchSupport::Supported => switch_workspace(client, root),
+                        WorkspaceSwitchSupport::Unsupported => Err(anyhow!(
+                            "Remote workspace switching must create a new SSH connection"
+                        )),
+                    };
                     let _ = response.send(result.map_err(|error| error.to_string()));
                 }
                 Ok(AgentSessionCommand::ConfigureLanguageServer {
@@ -589,11 +703,17 @@ fn drive_agent_session(
             }
             Ok(AppServerEvent::Notification(_)) => {}
             Ok(AppServerEvent::ConnectionClosed(reason)) => {
-                return Err(anyhow!("App Server connection closed: {reason:?}"));
+                return Err(AgentSessionConnectionLost(format!(
+                    "App Server connection closed: {reason:?}"
+                ))
+                .into());
             }
             Err(mpsc::RecvTimeoutError::Timeout) => {}
             Err(mpsc::RecvTimeoutError::Disconnected) => {
-                return Err(anyhow!("App Server event stream disconnected"));
+                return Err(AgentSessionConnectionLost(
+                    "App Server event stream disconnected".into(),
+                )
+                .into());
             }
         }
     }
@@ -665,7 +785,10 @@ fn disk_version(metadata: FsGetMetadataResult) -> TextFileDiskVersion {
 }
 
 fn client_error(error: ClientError) -> anyhow::Error {
-    anyhow!(error.to_string())
+    match error {
+        ClientError::Transport(message) => AgentSessionConnectionLost(message).into(),
+        error => anyhow!(error.to_string()),
+    }
 }
 
 struct ActiveSession {
@@ -680,10 +803,7 @@ fn ensure_active_session(
     client: &mut AppServerRequestHandle,
     workspace_root: &Path,
 ) -> Result<ActiveSession> {
-    let sessions = client
-        .list_sessions()
-        .map_err(|error| anyhow!(error.to_string()))?
-        .sessions;
+    let sessions = client.list_sessions().map_err(client_error)?.sessions;
     session_switch_trace::event(
         None,
         "session-catalog",
@@ -721,7 +841,7 @@ fn activate_session(
 ) -> Result<ActiveSession> {
     let session = client
         .read_session(SessionReadParams { session_id })
-        .map_err(|error| anyhow!(error.to_string()))?
+        .map_err(client_error)?
         .session;
     if session.status != SessionStatus::Active {
         return Err(anyhow!("cannot activate a non-active session"));
@@ -753,7 +873,7 @@ fn create_session(client: &mut AppServerRequestHandle, workspace_root: &Path) ->
             title: workspace_title(workspace_root),
         })
         .map(|result| result.session)
-        .map_err(|error| anyhow!(error.to_string()))
+        .map_err(client_error)
 }
 
 fn ensure_session_thread(
@@ -777,7 +897,7 @@ fn ensure_session_thread(
                 title: workspace_title(workspace_root),
             },
         })
-        .map_err(|error| anyhow!(error.to_string()))?;
+        .map_err(client_error)?;
     let SessionRequestResult::Thread(result) = result else {
         return Err(anyhow!(
             "Session request returned an unexpected Thread result"
@@ -796,7 +916,7 @@ fn subscribe_session(
             session_id: session_id.clone(),
             after_sequence,
         })
-        .map_err(|error| anyhow!(error.to_string()))
+        .map_err(client_error)
 }
 
 fn active_thread_projection<'a>(
@@ -869,7 +989,7 @@ fn submit_agent_message(
                 input: vec![InputItem::Text { text }],
             },
         })
-        .map_err(|error| anyhow!(error.to_string()))?;
+        .map_err(client_error)?;
     let SessionRequestResult::Turn(result) = result else {
         return Err(anyhow!(
             "Session request returned an unexpected Turn result"
@@ -899,7 +1019,7 @@ fn submit_shell_command(
                 working_directory: ".".into(),
             },
         })
-        .map_err(|error| anyhow!(error.to_string()))?;
+        .map_err(client_error)?;
     let SessionRequestResult::Turn(result) = result else {
         return Err(anyhow!(
             "Session request returned an unexpected Turn result"
@@ -921,7 +1041,7 @@ fn select_model(
             expected_sequence: active.session_sequence,
             request: SessionRequest::SetModel { model },
         })
-        .map_err(|error| anyhow!(error.to_string()))?;
+        .map_err(client_error)?;
     let SessionRequestResult::Session(result) = result else {
         return Err(anyhow!(
             "Session request returned an unexpected Session result"
@@ -937,7 +1057,7 @@ fn switch_git_branch(
 ) -> Result<GitTextDiffResult> {
     client
         .switch_git_branch(GitBranchSwitchParams { name })
-        .map_err(|error| anyhow!(error.to_string()))?;
+        .map_err(client_error)?;
     read_git_projection(client)?.ok_or_else(|| anyhow!("Git repository became unavailable"))
 }
 
@@ -947,7 +1067,7 @@ fn switch_workspace(
 ) -> Result<WorkspaceSwitchProjection> {
     let switched = client
         .switch_workspace(WorkspaceSwitchParams { root })
-        .map_err(|error| anyhow!(error.to_string()))?;
+        .map_err(client_error)?;
     Ok(WorkspaceSwitchProjection {
         root: switched.root,
         git: read_git_projection(client)?,
@@ -976,7 +1096,7 @@ fn read_git_projection(client: &mut AppServerRequestHandle) -> Result<Option<Git
     match client.git_text_diff() {
         Ok(projection) => Ok(Some(projection)),
         Err(error) if git_is_unavailable(&error) => Ok(None),
-        Err(error) => Err(anyhow!(error.to_string())),
+        Err(error) => Err(client_error(error)),
     }
 }
 

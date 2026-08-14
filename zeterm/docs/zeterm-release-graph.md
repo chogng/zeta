@@ -44,7 +44,9 @@ Wine 只有在 Linux 主机交叉运行 Windows 测试时才有价值；专用 l
 ```mermaid
 flowchart LR
     A[Cargo check/test] --> B[Unsigned package staging]
-    B --> C[Binary SHA-256 digest]
+    R[Canonical packaged-node runtimes] --> RC[Deterministic Remote catalog]
+    RC --> A
+    B --> C[Binary SHA-256 + optional embedded catalog digest]
     C --> D{Platform signer}
     D --> E[Signature record]
     E --> F[Native verification]
@@ -67,7 +69,7 @@ just zeterm-package \
   --zeterm-bin /absolute/path/to/zeterm
 ```
 
-输出最小目录：
+不需要 standalone Remote 自动安装时输出最小目录：
 
 ```text
 zeterm-package/
@@ -79,6 +81,37 @@ zeterm-package/
 `zeterm-package.json` 固定 product、target、profile、binary path 和 SHA-256；staging 拒绝覆盖已有
 目录，并把状态标成 `unsigned`。这一步不取得密钥、不签名，也不宣称 artifact 可发布。
 
+需要支持只安装 zeterm 的用户时，先运行 `scripts/build_remote_runtime_bundle.py`，输入一个或多个
+canonical packaged-node Zeta package directory，再给 staging 追加
+`--remote-runtime-bundle <bundle>`。builder 将 catalog SHA-256 通过
+`ZETERM_REMOTE_RUNTIME_CATALOG_SHA256` 编译进 zeterm，并输出：
+
+```text
+zeterm-package/
+├── bin/zeterm
+├── zeta-remote-runtimes/
+│   ├── catalog.json
+│   └── artifacts/zeta-<target>.tar.gz
+├── zeterm-package.json
+└── zeterm-signing-policy.json
+```
+
+staging 拒绝未包含 catalog digest 的 binary；sign/verify 再验证 binding，signature record 记录同一
+catalog digest。由此平台签名认证 binary，binary 认证 catalog，catalog 认证每个 runtime archive。
+
+也可以生成不携带 runtime archive 的网络包：
+
+```bash
+just zeterm-package \
+  --package-dir /absolute/path/to/zeterm-package \
+  --remote-runtime-catalog-url https://releases.example/zeta/<version>/catalog.json \
+  --remote-runtime-catalog-sha256 <catalog-digest>
+```
+
+此时 builder 把 URL 和摘要同时编译进 binary，`zeterm-package.json` 记录
+`url + sha256 + compiledIntoSignedBinary`，sign/verify 检查两者都存在于签名 artifact。package 不含
+`zeta-remote-runtimes/`；运行时由本机 updater 下载并完整验证，远端主机仍不联网取包。
+
 ### 3. Sign 与 verify
 
 `zeterm/packaging/zeterm-signing-policy.json` 是 release job 的输入，不是开发机默认行为：
@@ -88,6 +121,9 @@ zeterm-package/
 - Windows 使用 `signtool` 和 `ZETERM_WINDOWS_CERTIFICATE`，验证 Authenticode chain；
 - 签名 job 只能读取 staging 输出，不能重建 binary；verify job 必须重新计算 digest，并检查与
   `zeterm-package.json`、signature record 一致；
+- 声明本地 Remote bundle 时，sign/verify 必须重新验证 catalog、archive 和 binary 内嵌 digest；
+- 声明网络 Remote catalog 时，sign/verify 必须验证无凭据 HTTPS URL、catalog digest 以及 binary 内嵌
+  的 URL/digest；
 - 本地 unsigned package 只用于开发和测试，release job 必须拒绝 `signing.status != verified`。
 
 密钥、证书和 token 不进入仓库，不由 Bazel rule 参数传递；CI secret store 和平台 signer 是发布
@@ -98,9 +134,13 @@ provider-neutral job 入口是：
 ```bash
 ZETERM_PACKAGE_DIR=/absolute/path/to/zeterm-package \
 ZETERM_PLATFORM=darwin \
+ZETERM_REMOTE_RUNTIME_BUNDLE=/absolute/path/to/remote-runtimes \
 ZETERM_MACOS_SIGNING_IDENTITY="Developer ID Application: ..." \
 scripts/release_zeterm_package.sh
 ```
+
+网络包改用 `ZETERM_REMOTE_RUNTIME_CATALOG_URL` 与
+`ZETERM_REMOTE_RUNTIME_CATALOG_SHA256`，两者必须同时存在。
 
 Linux 使用 `ZETERM_COSIGN_IDENTITY` 指向 cosign key，Windows 使用
 `ZETERM_WINDOWS_CERTIFICATE` 指向 CI 证书文件或证书存储标识。脚本只把 identity 传给 native signer，

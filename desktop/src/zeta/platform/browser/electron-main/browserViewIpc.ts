@@ -27,7 +27,7 @@ import {
 
 /** Main-process operations exposed through trusted browser-view IPC routes. */
 export interface IBrowserViewMainService {
-  createTarget(request: IBrowserViewCreateRequest): IBrowserViewState;
+  createTarget(request: IBrowserViewCreateRequest): Promise<IBrowserViewState>;
   observe(targetId: string): IBrowserViewState;
   layout(request: IBrowserViewLayoutRequest): void;
   setVisibility(request: IBrowserViewVisibilityRequest): void;

@@ -7,7 +7,10 @@ use base64::engine::general_purpose::STANDARD;
 use sha2::Digest;
 use sha2::Sha256;
 use zeta_extensions::DynamicExtensionSourceProvider;
+use zeta_extensions::ExtensionCatalog;
+use zeta_extensions::ExtensionCatalogReload;
 use zeta_extensions::ExtensionRootKind;
+use zeta_extensions::ExtensionSourceKind;
 use zeta_language_server_catalog::LanguageServerProviderLaunch;
 use zeta_language_server_catalog::LanguageServerProviderRegistry;
 use zeta_language_server_catalog::ManagedNodeRuntime;
@@ -42,6 +45,16 @@ const LANGUAGE_MANIFEST: &[u8] = br#"{
   "contributes": { "languages": [{ "id": "demo" }] }
 }"#;
 const SERVER_ENTRYPOINT: &[u8] = b"// demo language server\n";
+const THEME_MANIFEST: &[u8] = br#"{
+  "schemaVersion": 1,
+  "themes": [{
+    "id": "demo",
+    "displayName": "Demo",
+    "appearance": "dark",
+    "path": "themes/demo.json"
+  }]
+}"#;
+const THEME_DOCUMENT: &[u8] = br#"{"type":"dark","colors":{},"tokenColors":[]}"#;
 
 #[test]
 fn installed_language_package_projects_assets_and_packaged_server() {
@@ -146,6 +159,62 @@ fn installed_language_package_projects_assets_and_packaged_server() {
     );
 }
 
+#[test]
+fn installed_theme_enters_the_shared_declarative_extension_catalog() {
+    let root = tempfile::tempdir().unwrap();
+    let manager = Arc::new(
+        MarketplaceManager::open(root.path().join("manager"), Arc::new(LanguageRegistry)).unwrap(),
+    );
+    let installed = manager
+        .install(InstallPackageRequest {
+            package_id: "example/demo-theme".into(),
+            version: Some("1.0.0".into()),
+        })
+        .unwrap();
+    let provider: Arc<dyn DynamicExtensionSourceProvider> = Arc::new(
+        MarketplaceExtensionSourceProvider::new(Arc::clone(&manager)),
+    );
+    let mut catalog = ExtensionCatalog::new(Vec::new()).with_dynamic_sources(provider);
+    let snapshot = catalog.list(ExtensionCatalogReload::Refresh);
+    assert_eq!(snapshot.extensions.len(), 1);
+    assert_eq!(snapshot.extensions[0].id, "example.demo-theme");
+    assert_eq!(
+        snapshot.extensions[0].source_kind,
+        ExtensionSourceKind::Marketplace
+    );
+    let normalized_manifest: serde_json::Value =
+        serde_json::from_str(&snapshot.extensions[0].manifest_json).unwrap();
+    assert_eq!(
+        normalized_manifest["contributes"]["themes"][0]["uiTheme"],
+        "vs-dark"
+    );
+
+    let theme = installed
+        .capabilities
+        .iter()
+        .find(|capability| capability.kind == CapabilityKind::Theme)
+        .unwrap();
+    let acquired = manager
+        .acquire_capability(AcquireCapabilityRequest {
+            capability: theme.reference.clone(),
+        })
+        .unwrap();
+    let resource = match acquired.spec {
+        ActivationSpec::Theme(spec) => spec.manifest,
+        _ => panic!("expected Theme activation"),
+    };
+    let content = manager
+        .open_resource(OpenResourceRequest {
+            lease_id: acquired.lease.id,
+            resource,
+        })
+        .unwrap();
+    assert_eq!(
+        STANDARD.decode(content.data_base64).unwrap(),
+        THEME_MANIFEST
+    );
+}
+
 struct LanguageRegistry;
 
 impl MarketplaceRegistryClient for LanguageRegistry {
@@ -190,9 +259,72 @@ impl MarketplaceRegistryClient for LanguageRegistry {
 
     fn download(
         &self,
-        _: DownloadPackageRequest,
+        request: DownloadPackageRequest,
     ) -> Result<Box<dyn MarketplacePackagePayload>, MarketplaceClientError> {
-        Ok(Box::new(LanguagePayload::new()))
+        match request.package_id.as_str() {
+            "example/demo-language" => Ok(Box::new(LanguagePayload::new())),
+            "example/demo-theme" => Ok(Box::new(ThemePayload::new())),
+            _ => Err(MarketplaceClientError::storage()),
+        }
+    }
+}
+
+struct ThemePayload {
+    package: PackageRef,
+    capabilities: Vec<MarketplaceInstallCapability>,
+}
+
+impl ThemePayload {
+    fn new() -> Self {
+        Self {
+            package: PackageRef {
+                id: "example/demo-theme".into(),
+                version: "1.0.0".into(),
+                digest: package_digest(&[
+                    ("theme/package.json", THEME_MANIFEST),
+                    ("theme/themes/demo.json", THEME_DOCUMENT),
+                ]),
+            },
+            capabilities: vec![MarketplaceInstallCapability {
+                kind: CapabilityKind::Theme,
+                id: "theme-assets".into(),
+                path: "theme".into(),
+                runtime: None,
+                language_ids: Vec::new(),
+            }],
+        }
+    }
+}
+
+impl MarketplacePackagePayload for ThemePayload {
+    fn package(&self) -> &PackageRef {
+        &self.package
+    }
+
+    fn package_type(&self) -> &str {
+        "theme"
+    }
+
+    fn capabilities(&self) -> &[MarketplaceInstallCapability] {
+        &self.capabilities
+    }
+
+    fn expected_file_count(&self) -> u64 {
+        2
+    }
+
+    fn expected_size_bytes(&self) -> u64 {
+        (THEME_DOCUMENT.len() + THEME_MANIFEST.len()) as u64
+    }
+
+    fn copy_to(&self, destination: &Path) -> Result<(), MarketplaceClientError> {
+        fs::create_dir(destination.join("theme")).map_err(|_| MarketplaceClientError::storage())?;
+        fs::create_dir(destination.join("theme/themes"))
+            .map_err(|_| MarketplaceClientError::storage())?;
+        fs::write(destination.join("theme/themes/demo.json"), THEME_DOCUMENT)
+            .map_err(|_| MarketplaceClientError::storage())?;
+        fs::write(destination.join("theme/package.json"), THEME_MANIFEST)
+            .map_err(|_| MarketplaceClientError::storage())
     }
 }
 

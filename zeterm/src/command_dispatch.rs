@@ -106,6 +106,12 @@ pub(crate) fn builtin_command_registry() -> NativeCommandRegistry {
         .expect("built-in command IDs must be unique");
     registry
         .register(
+            ZetermCommandId::ManageRemoteTunnels,
+            execute_manage_remote_tunnels,
+        )
+        .expect("built-in command IDs must be unique");
+    registry
+        .register(
             ZetermCommandId::ToggleSessionSidebar,
             execute_toggle_session_sidebar,
         )
@@ -242,6 +248,9 @@ fn execute_toggle_terminal_surface(app: &mut NativeApp, _request: &CommandReques
 
 fn execute_open_keyboard_shortcuts(app: &mut NativeApp, _request: &CommandRequest) {
     app.language_server_settings.close();
+    app.remote_connection_picker.dismiss();
+    app.dismiss_remote_connection_manager();
+    app.dismiss_remote_tunnel_manager();
     app.keyboard_shortcuts.toggle();
     app.keybindings.cancel_chord();
 }
@@ -251,8 +260,24 @@ fn execute_open_language_server_settings(app: &mut NativeApp, _request: &Command
     app.keyboard_shortcuts.close();
     let _ = app.git_branch_context_menu.dismiss();
     let _ = app.workspace_path_picker.dismiss();
+    let _ = app.remote_connection_picker.dismiss();
+    app.dismiss_remote_connection_manager();
+    app.dismiss_remote_tunnel_manager();
     app.dismiss_session_context_menu();
     app.pending_focus = Some(zeta_settings::SETTINGS_SEARCH_INPUT);
+    app.keybindings.cancel_chord();
+}
+
+fn execute_manage_remote_tunnels(app: &mut NativeApp, _request: &CommandRequest) {
+    if app.remote_tunnel_host.is_none() {
+        eprintln!("Remote tunnels are available only in a Remote zeterm window");
+        app.keybindings.cancel_chord();
+        return;
+    }
+    let restore_focus = app.ui_dispatch.focused();
+    app.keyboard_shortcuts.close();
+    app.language_server_settings.close();
+    app.open_remote_tunnel_manager(restore_focus);
     app.keybindings.cancel_chord();
 }
 
@@ -327,8 +352,8 @@ fn execute_session_context_menu_action(app: &mut NativeApp, request: &CommandReq
     // PTY preview.
 }
 
-fn execute_pick_execution_location(_app: &mut NativeApp, _request: &CommandRequest) {
-    // Pickers are product commands layered above the dispatch foundation.
+fn execute_pick_execution_location(app: &mut NativeApp, _request: &CommandRequest) {
+    app.toggle_remote_connection_picker();
 }
 
 fn execute_pick_working_directory(app: &mut NativeApp, _request: &CommandRequest) {

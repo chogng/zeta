@@ -11,7 +11,8 @@
 > Agent runtime：[`zeta-agent-runtime-architecture.md`](zeta-agent-runtime-architecture.md)
 > Config authority 与 runtime snapshot 接入：[`config.md`](config.md)
 > Instructions/Skills/Agents 领域划分与外部导入：[`agent-customizations.md`](agent-customizations.md)
-> Plugin 分发边界：[`plugins.md`](plugins.md)
+> Marketplace package 入口：[`marketplace-integration.md`](marketplace-integration.md)
+> Legacy Plugin 兼容来源：[`plugins.md`](plugins.md)
 > MCP runtime：[`mcp.md`](mcp.md)
 
 > 外部格式核对日期：2026-07-28。Skill package 以
@@ -31,7 +32,8 @@ Skill 是按任务逐步加载的工作方法和参考资料，不是工具权�
 | 模型按需选择 Skill | 模型先看到有界元数据目录，再调用 `skills-read` 加载正文 | 后端不做关键词分类，也不暴露本地路径 |
 | 正文引用参考资料 | 只在当前任务确实需要时读取 | 路径必须受来源目录约束 |
 | Skill 建议运行脚本或工具 | 转成普通工具请求 | 不授予文件、网络、凭据或沙箱绕过能力 |
-| Plugin 提供 Skill | 保留 Plugin、版本和内容摘要来源 | Plugin 启用不等于 Skill 自动执行 |
+| Marketplace package 提供 Skill | Manager 验证 exact package，再把 Skill capability 投影进共享 catalog | 安装不等于启用、选择或执行 |
+| Legacy Plugin 提供 Skill | 保留 Plugin、版本和内容摘要来源 | Plugin 启用不等于 Skill 自动执行 |
 
 ## 1. 结论
 
@@ -104,9 +106,11 @@ source 仍能提供 exact bytes。已经开始的 Turn 即使随后被 catalog d
 App Server 先按 durable command receipt 校验输入并返回原 Turn 结果，不重新读取当前 catalog 或
 Skill 文件；因此源文件删除不会破坏已完成命令的幂等重放。
 
-当前 runtime source composition 包含 built-in、user、active Workspace 的原生 `.zeta/skills` source，
-以及 effective Plugin manifest 声明的 exact Skill directory。Plugin activation generation 变化会触发
-catalog refresh，未声明的同包 sibling directory 不会进入 catalog。Workspace config 中额外声明的独立
+当前 runtime source composition 包含 built-in、user、active Workspace 的原生 `.zeta/skills` source、
+Marketplace Manager 安装的 exact Skill capability，以及 effective legacy Plugin manifest 声明的 exact
+Skill directory。Manager installation generation 或 Plugin activation generation 变化都会触发 catalog
+refresh，未声明的同包 sibling directory 不会进入 catalog。Marketplace provenance 作为独立
+`SkillSourceKind::Marketplace` 保留，不伪装成 built-in 或 Plugin。Workspace config 中额外声明的独立
 Skill source intent 与 script execution adapter 尚未接入；正文读取、通用 package resource resolver、有界 UTF-8 模型
 读取、binary asset Resource materialization、compatibility gate、显式激活和模型按需读取已接入。
 
@@ -115,7 +119,8 @@ Skill source intent 与 script execution adapter 尚未接入；正文读取、�
 - `zeta-protocol` 的 UserInput、Resource、ToolName 和 provider-independent model contract；
 - Core `ContextAssembler`、`ModelInvocationSnapshot` 与 durable checkpoint pipeline；
 - App Server 的 typed command、Resource store 和 generated client contract；
-- Plugin manager 提供 digest-pinned immutable Skill contribution root；
+- Marketplace Manager 提供 digest-pinned immutable Skill capability root；
+- legacy Plugin authority 提供 manifest-declared exact Skill contribution root；
 - 目标 `zeta-tool-executor` / `zeta-sandboxing` 负责脚本执行，而不是 Skill loader；产品层
   `zeta-exec` 是 headless Agent runner。
 
@@ -174,7 +179,7 @@ Plugin manifest/config。独立 Skill 需要额外能力时只能产生明确 co
 
 ### 4.2 Skill manager 不拥有
 
-- Plugin package 下载、签名、安装、enablement 或 grants；
+- Marketplace/Plugin package 下载、签名、安装、enablement 或 grants；
 - script 执行、shell、dependency install、network 或 filesystem mutation；
 - MCP session、tool call 或 resource read；
 - Agent loop、model selection、prompt tokenization 算法；
@@ -186,7 +191,8 @@ Plugin manifest/config。独立 Skill 需要额外能力时只能产生明确 co
 ## 5. 目标依赖与组合
 
 ```text
-config / Workspace / Plugin roots
+config / Workspace / built-in roots
+Marketplace Manager / legacy Plugin authority
                 │
                 ▼
           zeta-skills
@@ -216,7 +222,7 @@ App Server 只在组合根安装 extension，并把 Config、RPC DTO 和 `skills
   policy；具体 Win32/Unix contract 见
   [`zeta-rs/file-identity/README.md`](../zeta-rs/file-identity/README.md)；
 - Skill source 以窄 `SkillSourceRoot`/file resolver port 注入；
-- Plugin manager 提供 immutable package root，Skill manager 仍重新校验 Skill format；
+- Marketplace Manager 或 legacy Plugin authority 只提供 immutable exact root，Skill manager 仍重新校验 Skill format；
 - Core ContextAssembler 只接收通用 `PromptFragment`，不依赖 Skill catalog 或 filesystem；
 - `zeta-skills-extension` 在 safe point 按 frozen digest 精确重读已激活正文，但不重新做选择；
 - Skill scripts 通过普通 Tool/exec port 执行，`zeta-skills` 不依赖
@@ -263,6 +269,7 @@ BuiltIn { release }
 User { configuredRoot }
 Workspace { workspaceId, configuredRoot }
 Plugin { pluginId, version, packageDigest }
+Marketplace { packageId, version, packageDigest, capabilityId }
 LocalDevelopment { canonicalRoot }
 ```
 
@@ -276,6 +283,7 @@ Precedence 只用于候选排序，不用于静默覆盖：
 用户在当前 Turn 显式选择
 > workspace enabled
 > user enabled
+> Marketplace enabled
 > Plugin enabled
 > built-in fallback
 ```
@@ -307,8 +315,9 @@ Precedence 只用于候选排序，不用于静默覆盖：
 - 跟随逃出 source root 的 symlink；
 - 因单个坏 Skill 让整个 built-in/user catalog 丢失。
 
-Plugin package 是原子 contribution：Plugin 内声明的 required Skill 无效时，由 Plugin resolver 决定
-整个 generation 是否失败；普通 user source 则可按 entry 隔离错误。
+Marketplace/Plugin package 是原子安装来源，但 Skill 仍由本领域重新校验。一个 exact Skill capability
+无效时，该 capability 不进入 catalog 并产生来源诊断；普通 user source 可按 entry 隔离错误。其他同包
+capability 是否可用由各自领域 consumer 决定，Skill loader 不回滚整个 Marketplace installation。
 
 ### 7.2 目录快照
 
@@ -851,8 +860,9 @@ Skill 需要未来带来源限定的选择交互。CLI 没有独立可视化目�
 
 完成条件：读取 Skill 不产生副作用，运行脚本一定产生标准 durable Tool Call/Result。
 
-### 阶段 S3：Plugin 与 MCP 依赖（Plugin source vertical slice 已完成）
+### 阶段 S3：包来源与 MCP 依赖（Marketplace/Plugin 来源纵向切片已完成）
 
+- ✅ Marketplace Skill exact source、独立 provenance 与 Manager generation refresh；
 - ✅ Plugin Skill exact source；
 - ✅ Plugin activation generation 触发 catalog composition refresh；
 - machine-readable MCP/tool requirements；

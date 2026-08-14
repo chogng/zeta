@@ -1,6 +1,7 @@
 package(default_visibility = ["//visibility:public"])
 
 exports_files([
+    "build_remote_runtime_bundle.py",
     "build_zeterm_package.py",
     "check_zeterm_boundary.py",
     "check_zeterm_boundary.sh",
@@ -9,9 +10,12 @@ exports_files([
     "test_zeterm_package.py",
     "test_zeterm_package.sh",
     "release_zeterm_package.sh",
+    "remote_runtime_bundle.py",
     "sign_zeterm_package.py",
     "test_zeterm_signing.py",
     "test_zeterm_signing.sh",
+    "test_remote_runtime_bundle.py",
+    "test_remote_runtime_bundle.sh",
     "verify_zeterm_package.py",
     "zeterm_signing.py",
 ])

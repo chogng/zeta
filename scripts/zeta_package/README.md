@@ -110,6 +110,21 @@ step. Windows jobs can supply `--windows-command-runner-bin` and
 `--windows-sandbox-setup-bin`; omitting either causes the missing first-party
 helper to be built for the selected target.
 
+For zeterm Remote delivery, one or more completed packaged-node directories can be serialized into
+deterministic rootless archives and a strict local catalog:
+
+```sh
+python3 scripts/build_remote_runtime_bundle.py \
+  --bundle-dir /absolute/path/to/remote-runtimes \
+  --package-dir /absolute/path/to/x86_64-linux-package \
+  --package-dir /absolute/path/to/aarch64-linux-package
+```
+
+The bundle builder rejects links, special files, duplicate targets, non-POSIX targets and package
+metadata that does not match the canonical Remote contract. It records compressed size, unpacked
+size and SHA-256 for each deterministic archive. Product packaging, not this canonical package
+builder, authenticates the resulting catalog.
+
 | Target | Current sandbox package state |
 | --- | --- |
 | macOS | Native Seatbelt; no helper executable |

@@ -1,15 +1,39 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { mkdtemp, mkdir, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import test from "node:test";
 
-import { assemblePackage, copyBuiltinExtensions, hostTarget, parseJavaScriptRuntime, replaceDirectoryAtomically, selectNodeArtifact, selectRipgrepArtifact } from "./prepare-dev-package.mjs";
+import { assemblePackage, copyBuiltinExtensions, hostTarget, parseJavaScriptRuntime, parsePackageOptions, replaceDirectoryAtomically, selectNodeArtifact, selectRipgrepArtifact } from "./prepare-dev-package.mjs";
 
 test("selects host-provided Node for Desktop and explicit packaged Node for headless hosts", () => {
   assert.equal(parseJavaScriptRuntime([]), "host-provided-node");
   assert.equal(parseJavaScriptRuntime(["--javascript-runtime", "packaged-node"]), "packaged-node");
   assert.throws(() => parseJavaScriptRuntime(["--javascript-runtime", "system-node"]), /Usage/);
+});
+
+test("parses an optional packaged Remote runtime bundle", () => {
+  assert.deepEqual(parsePackageOptions(["--remote-runtime-bundle", "../runtime-bundle", "--javascript-runtime", "packaged-node"]), {
+    javascriptRuntime: "packaged-node",
+    remoteRuntimeBundle: resolve("../runtime-bundle"),
+    remoteRuntimeRelease: undefined,
+  });
+  assert.throws(() => parsePackageOptions(["--remote-runtime-bundle"]), /Usage/);
+  assert.throws(() => parsePackageOptions(["--remote-runtime-bundle", "one", "--remote-runtime-bundle", "two"]), /Usage/);
+});
+
+test("parses only a complete credential-free network Remote runtime release", () => {
+  assert.deepEqual(parsePackageOptions([
+    "--remote-runtime-catalog-url", "https://releases.example/zeta/catalog.json",
+    "--remote-runtime-catalog-sha256", "a".repeat(64),
+  ]), {
+    javascriptRuntime: "host-provided-node",
+    remoteRuntimeBundle: undefined,
+    remoteRuntimeRelease: { url: "https://releases.example/zeta/catalog.json", sha256: "a".repeat(64) },
+  });
+  assert.throws(() => parsePackageOptions(["--remote-runtime-catalog-url", "https://user@releases.example/catalog.json", "--remote-runtime-catalog-sha256", "a".repeat(64)]), /credential-free HTTPS/);
+  assert.throws(() => parsePackageOptions(["--remote-runtime-catalog-url", "https://releases.example/catalog.json"]), /Usage/);
 });
 
 test("maps supported development hosts to Rust targets", () => {
@@ -118,7 +142,9 @@ test("assembles and validates the canonical Windows development layout", async (
   const ripgrepExecutable = join(root, "rg.exe");
   const nodeExecutable = join(root, "node.exe");
   const nodeLicense = join(root, "node-license");
+  const remoteRuntimeBundle = join(root, "remote-runtime-bundle");
   try {
+    await mkdir(join(remoteRuntimeBundle, "artifacts"), { recursive: true });
     await Promise.all([
       writeFile(executables.commandRunner, "runner"),
       writeFile(executables.sandboxSetup, "setup"),
@@ -126,6 +152,8 @@ test("assembles and validates the canonical Windows development layout", async (
       writeFile(ripgrepExecutable, "ripgrep"),
       writeFile(nodeExecutable, "node"),
       writeFile(nodeLicense, "node license"),
+      writeFile(join(remoteRuntimeBundle, "artifacts", "zeta-linux.tar.gz"), "remote runtime"),
+      writeFile(join(remoteRuntimeBundle, "catalog.json"), JSON.stringify({ formatVersion: 1, artifacts: [{ target: "x86_64-unknown-linux-gnu" }] })),
     ]);
     await assemblePackage(
       staging,
@@ -149,17 +177,24 @@ test("assembles and validates the canonical Windows development layout", async (
         source: "upstream-release",
         version: "24.18.1",
       },
+      remoteRuntimeBundle,
     );
     const metadata = JSON.parse(await readFile(join(staging, "zeta-package.json"), "utf8"));
     assert.equal(metadata.layoutVersion, 2);
     assert.deepEqual(metadata.javascriptRuntime, { kind: "packagedNode" });
     assert.equal(metadata.entrypoint, "bin/zeta.exe");
     assert.equal(metadata.target, "x86_64-pc-windows-msvc");
+    assert.deepEqual(metadata.remoteRuntimeCatalog, {
+      path: "zeta-remote-runtimes/catalog.json",
+      sha256: createHash("sha256").update(await readFile(join(remoteRuntimeBundle, "catalog.json"))).digest("hex"),
+      trustBinding: "signedProductPackage",
+    });
+    assert.equal(await readFile(join(staging, "zeta-remote-runtimes", "artifacts", "zeta-linux.tar.gz"), "utf8"), "remote runtime");
     assert.equal(await readFile(join(staging, "zeta-path", "rg.exe"), "utf8"), "ripgrep");
     assert.equal(await readFile(join(staging, "zeta-resources", "node", "bin", "node.exe"), "utf8"), "node");
     assert.equal(await readFile(join(staging, "zeta-resources", "zeta-command-runner.exe"), "utf8"), "runner");
     const productServices = JSON.parse(await readFile(join(staging, "zeta-resources", "product-services", "product-services.json"), "utf8"));
-    assert.equal(productServices.marketplaces[0].id, "zeta");
+    assert.equal(productServices.marketplaceManager.metadataBaseUrl, "https://chogng.github.io/marketplace/metadata/");
     assert.equal(
       await readFile(join(staging, "zeta-resources", "product-services", "marketplace-root.json"), "utf8"),
       await readFile(new URL("../../resources/product-services/marketplace-root.json", import.meta.url), "utf8"),
@@ -229,11 +264,18 @@ test("host-provided runtime package omits the standalone Node payload", async ()
         version: "1.0.0",
       },
       undefined,
+      undefined,
+      { url: "https://releases.example/zeta/catalog.json", sha256: "e".repeat(64) },
     );
     const metadata = JSON.parse(await readFile(join(staging, "zeta-package.json"), "utf8"));
     assert.equal(metadata.layoutVersion, 2);
     assert.deepEqual(metadata.javascriptRuntime, { kind: "hostProvidedNode" });
     assert.equal(metadata.components.node, undefined);
+    assert.deepEqual(metadata.remoteRuntimeCatalog, {
+      url: "https://releases.example/zeta/catalog.json",
+      sha256: "e".repeat(64),
+      trustBinding: "signedProductPackage",
+    });
     await assert.rejects(readFile(join(staging, "zeta-resources", "node", "bin", "node.exe")), /ENOENT/);
   } finally {
     await rm(root, { force: true, recursive: true });

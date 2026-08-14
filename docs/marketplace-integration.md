@@ -3,11 +3,11 @@
 > 类型：canonical 跨仓架构文档。
 > 当前状态：Zeta 内置本地 Marketplace Manager，并直接消费远端 Marketplace 的 HTTPS/TUF
 > 静态分发；旧 JSONL compatibility adapter、独立 Manager binary 和 Desktop packaging 已删除。
-> App Server Marketplace RPC 与 Settings service 已接通。Marketplace Skill 和 Language package
-> 已分别接入共享 Skill catalog、Extension catalog 与 language-server provider registry；Language 和
-> Executable 也具备 path-free capability handoff。旧 Plugin/Language 专用分发与安装链路均已删除。
+> App Server Marketplace RPC 与 Settings service 已接通。Skill、MCP、Connector、Theme、Language
+> 和可选 executable Editor Extension 都从同一个 Manager artifact/installation 入口进入各自领域；
+> 旧 Plugin/Language 专用远端分发与安装链路均已删除。
 
-## 结论
+## 快速理解
 
 `marketplace` 是远端签名 registry，`MarketplaceManager` 是 Zeta 本地库。两者不是 client/server
 进程对，也不通过 JSONL 相连。
@@ -18,7 +18,7 @@
 | Marketplace client | `zeta-rs/marketplace-client` | HTTPS/TUF、远端发现和 verified download 的私有适配 |
 | Marketplace Manager | `zeta-rs/marketplace-manager` | 本地 artifact、安装、更新、卸载、lease 和 opaque resource |
 | App Server | `zeta-rs/app-server` | 稳定 RPC、connection-owned lease 和 error mapping |
-| capability runtimes | Skill/MCP/Connector/Theme/Language 各领域 | 权限、认证、激活、执行、停用 |
+| capability consumers | Skill/MCP/Connector/Theme/Language/Editor Extension 各领域 | enable/grant、认证、配置、激活、执行、停用 |
 
 Zeta 产品层依赖 Marketplace 的业务能力，不依赖 Marketplace 的远端存储表现。当前静态分发没有
 远程业务服务器，因此这些实现细节由一个专门的 private adapter 封装在
@@ -83,7 +83,7 @@ acquireCapability / releaseCapability / openResource
 这些方法表达产品意图。`ArtifactHandle`、`CapabilityRef`、`ResourceRef` 和 lease 都是 opaque
 identity，不是路径或 URL。
 
-### 远端 registry 接口
+### 远端注册表接口
 
 `MarketplaceRegistryClient` 只供本地 Manager 使用：
 
@@ -122,6 +122,36 @@ Installed → Acquired → Authorized → Activated → Deactivated → Released
 
 `install()` 不授权、不登录、不启动进程。`acquireCapability()` 只返回 lease 和 path-free
 `ActivationSpec`，也不等于激活。
+
+## 一个包入口，多个领域消费方
+
+Package 是下载、安装、更新和卸载单位；capability 才是领域发现与激活单位。`packageType=plugin`
+只是一个可同时携带 Connector、MCP、Skill 与 executable 的集成 bundle，不是第二个安装器、第二个
+Marketplace 或必须常驻的 Plugin runtime。
+
+| Marketplace capability | Zeta consumer | 进入方式 | Manager 不拥有 |
+| --- | --- | --- | --- |
+| `skill` | `zeta-skills-extension` / Skill catalog | verified exact Skill root | 选择、完整 `SKILL.md` 加载与执行 |
+| `mcp` | MCP composition | HTTPS 或 package-relative stdio transport；调用持有 capability lease | OAuth、审批、Tool policy |
+| `connector` | Connector authority | 绑定同 digest 内 exact MCP，credential 由 Connector domain 注入 | 登录、SecretStore、连接状态 |
+| Theme package 的 `asset` | `zeta-extensions` → Workbench Theme | 规范化为 Theme capability，并把 portable theme manifest 转成 host declarative manifest 后进入共享 Extension catalog | Theme 选择与应用 |
+| Language package 的 `asset` + `executable` | `zeta-extensions` + language provider registry | editor assets 与 LSP route 分别消费同一安装 | 文档路由、LSP lifecycle |
+| `executable` + 可选 `zeta/editor-extensions.json` | Editor Extension source/admission → Host | Zeta consumer sidecar 绑定 exact executable；admission generation/lease 与 Manager lease 同时成立 | enable/grant、Workspace trust、进程隔离 |
+
+`zeta/editor-extensions.json` 是可选的产品 consumer adapter，并非 Marketplace schema、Plugin package
+或通用发布工具的必需结构。没有 sidecar 的 executable 可以继续被 Language 等其他 consumer 使用；
+有 sidecar 但没有产品 admission grant 时也不会执行。`zeta-editor-extension-host` 只消费已经规范化并
+授权的 deployment，不解析 Marketplace 或 Plugin manifest。
+
+内置内容不需要伪装成已下载 package：它保留 `BuiltIn` provenance，但进入相同的 Skill、声明式
+Extension、Language 等领域校验和注册路径。来源统一的是 consumer contract，不是把 product-shipped
+bytes 复制进 Manager store。
+
+`Extension` 当前不是第六种 Marketplace package family，也不是安装器名称；它是 Zeta 对
+`package.json` 静态 editor assets 的声明式 consumer contract。Theme 与 Language family 先由各自
+portable adapter 规范化，再进入该 contract。只有出现真实的跨 Theme/Language 静态贡献发布需求时，
+才应新增有明确 schema 的 `editorAssets` capability；不能把通用 `asset` 自动当成 Extension。可执行
+Editor Extension 则始终走 sidecar + admission + Host 路径，不能与声明式 catalog 合并。
 
 官方 MCP Registry 是上游发现源，不是 Zeta 的安装信任根。Marketplace publisher 将选中的
 Registry record 转换成固定版本 package，经审核后写入 signed catalog；Zeta 只安装经过 TUF 与
@@ -177,11 +207,14 @@ relative path 和 size limits 约束。
 | immutable installation、lease、deferred removal | ✅ |
 | App Server Marketplace RPC 与 connection cleanup | ✅ |
 | Desktop 无独立 Manager binary / adapter | ✅ |
-| Skill、remote MCP、Connector activation spec | ✅；Skill 安装后进入共享 Skill catalog，MCP/Connector 仍由各领域授权和激活 |
+| Marketplace Skill | ✅ 安装后进入共享 Skill catalog；完整内容仍按需加载 |
+| Marketplace MCP / Connector | ✅ HTTP/packaged stdio materialization、Connector credential binding、热重建与调用 lease |
 | Language、Executable activation spec | ✅ opaque manifest/entrypoint resource；本地 adapter 另用 verified host handle |
 | Marketplace Language editor assets | ✅ 进入共享 declarative Extension catalog，来源标记为 Marketplace |
 | Marketplace Language server | ✅ 按 signed language route 组合 `node`/`direct` provider，并在 install/update/uninstall 后热重建 |
-| Theme activation spec | 尚未完成 |
+| Marketplace Theme | ✅ Theme activation spec + portable-to-host manifest normalization + 共享 declarative Extension catalog；来源标记为 Marketplace |
+| Marketplace executable Editor Extension | ✅ 可选产品 sidecar、独立 admission + Workspace trust、Manager lease 与 Host deployment seam；生产 launcher 仍按 Host 文档失败关闭 |
+| Plugin bundle 语义 | ✅ Manager 只安装一次，运行时按 capability 分解；legacy `zeta-plugins` 仅保留本地/兼容来源 authority |
 | 旧 Plugin distribution consumer 迁移 | ✅ 专用 catalog、install/update RPC 与远端 crate 已删除 |
 | 旧 Language distribution consumer 迁移 | ✅ 专用 crate、RPC、Desktop service 与 duplicate storage 已删除 |
 

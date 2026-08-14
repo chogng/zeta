@@ -60,7 +60,7 @@ mod debug_operations;
 mod diff_operations;
 mod extension_config_operations;
 mod extension_host_operations;
-mod extension_host_runtime;
+pub(crate) mod extension_host_runtime;
 mod extension_operations;
 mod fs_operations;
 mod fs_watcher;
@@ -161,6 +161,9 @@ pub struct AppServer {
     extension_hosts: Option<extension_host_runtime::ExtensionHostRuntime>,
     pub(super) marketplace_manager_client:
         Option<Arc<dyn zeta_marketplace_client::MarketplaceServiceClient>>,
+    local_marketplace_manager: Option<Arc<zeta_marketplace_manager::MarketplaceManager>>,
+    marketplace_editor_extension_admission:
+        Option<Arc<dyn crate::MarketplaceEditorExtensionAdmission>>,
     marketplace_language_runtime: Option<marketplace_language_runtime::MarketplaceLanguageRuntime>,
     plugin_skill_sources: Option<Arc<dyn zeta_skills_extension::DynamicSkillSourceProvider>>,
     marketplace_skill_sources: Option<Arc<dyn zeta_skills_extension::DynamicSkillSourceProvider>>,
@@ -238,6 +241,15 @@ impl ConnectionNotifications {
 }
 
 impl AppServer {
+    /// Returns the number of live PTYs, including terminals waiting for a reconnect lease.
+    ///
+    /// Long-lived process hosts use this signal to avoid stopping while a detached terminal can
+    /// still be recovered. A poisoned terminal registry is conservatively treated as non-empty.
+    pub fn active_terminal_count(&self) -> usize {
+        self.configured_terminal_service()
+            .map_or(0, |terminals| terminals.active_count())
+    }
+
     pub fn new(sessions: Arc<SessionCoordinator>, model: Arc<dyn ModelService>) -> Self {
         let updates = Arc::new(UpdateBroker::default());
         let agent_extensions = Arc::new(ExtensionRegistry::default());
@@ -290,6 +302,8 @@ impl AppServer {
             plugins: None,
             extension_hosts: None,
             marketplace_manager_client: None,
+            local_marketplace_manager: None,
+            marketplace_editor_extension_admission: None,
             marketplace_language_runtime: None,
             plugin_skill_sources: None,
             marketplace_skill_sources: None,
@@ -374,6 +388,7 @@ impl AppServer {
         mut self,
         client: Arc<dyn zeta_marketplace_client::MarketplaceServiceClient>,
     ) -> Self {
+        self.local_marketplace_manager = None;
         self.marketplace_manager_client = Some(client);
         self
     }
@@ -393,7 +408,8 @@ impl AppServer {
             )),
         );
         self.marketplace_extension_sources = Some(extension_source);
-        self.marketplace_manager_client = Some(manager);
+        self.marketplace_manager_client = Some(manager.clone());
+        self.local_marketplace_manager = Some(manager);
         self.rebind_dynamic_skill_sources();
         self.rebind_dynamic_extension_sources();
         self
@@ -645,19 +661,27 @@ impl AppServer {
 
     /// Enables executable Editor Extensions over one explicitly injected process launcher.
     ///
-    /// Plugin authority must be installed first. Without this opt-in, App Server advertises no
-    /// executable Extension Host capability and never starts package code.
+    /// At least one executable Extension source must be installed first: legacy Plugin authority,
+    /// or a local Marketplace Manager paired with product admission policy. Without this opt-in,
+    /// App Server advertises no executable Extension Host capability and never starts package code.
     pub fn with_extension_host_runtime(
         mut self,
         launcher: Arc<dyn zeta_editor_extension_host::ExtensionHostLauncher>,
         limits: zeta_editor_extension_host::ExtensionHostLimits,
         restart_policy: zeta_editor_extension_host::RestartPolicy,
     ) -> Result<Self, String> {
-        let plugins = self.plugins.clone().ok_or_else(|| {
-            "Plugin authority must be installed before Extension Host runtime".to_string()
-        })?;
+        let marketplace_source = self.local_marketplace_manager.is_some()
+            && self.marketplace_editor_extension_admission.is_some();
+        if self.plugins.is_none() && !marketplace_source {
+            return Err(
+                "Plugin authority or Marketplace Editor Extension admission must be installed before Extension Host runtime"
+                    .to_string(),
+            );
+        }
         let runtime = extension_host_runtime::ExtensionHostRuntime::start(
-            plugins,
+            self.plugins.clone(),
+            self.local_marketplace_manager.clone(),
+            self.marketplace_editor_extension_admission.clone(),
             launcher,
             limits,
             restart_policy,
@@ -671,6 +695,18 @@ impl AppServer {
         }
         self.extension_hosts = Some(runtime);
         Ok(self)
+    }
+
+    /// Installs product-local enable and grant authority for Marketplace Editor Extensions.
+    ///
+    /// This policy does not install packages and does not launch processes. It is consulted only
+    /// when an explicitly configured Extension Host runtime consumes signed product sidecars.
+    pub fn with_marketplace_editor_extension_admission(
+        mut self,
+        admission: Arc<dyn crate::MarketplaceEditorExtensionAdmission>,
+    ) -> Self {
+        self.marketplace_editor_extension_admission = Some(admission);
+        self
     }
 
     pub(crate) fn with_mcp_status_snapshot(
@@ -894,7 +930,7 @@ impl AppServer {
         self
     }
 
-    /// Enables connection-owned interactive terminals rooted at one trusted Workspace.
+    /// Enables connection-owned and leased interactive terminals at one trusted Workspace.
     #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn with_terminal_root(
         mut self,
@@ -1499,6 +1535,7 @@ impl AppServer {
             }
             Some(ClientMethod::TerminalProfileList) => self.terminal_profile_list(&request.params),
             Some(ClientMethod::TerminalCreate) => self.terminal_create(connection, &request.params),
+            Some(ClientMethod::TerminalAttach) => self.terminal_attach(connection, &request.params),
             Some(ClientMethod::TerminalWrite) => self.terminal_write(connection, &request.params),
             Some(ClientMethod::TerminalResize) => self.terminal_resize(connection, &request.params),
             Some(ClientMethod::TerminalRead) => self.terminal_read(connection, &request.params),

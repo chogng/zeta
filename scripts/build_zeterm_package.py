@@ -9,12 +9,52 @@ import os
 import shutil
 import subprocess
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
+from urllib.parse import urlsplit
+
+from remote_runtime_bundle import RemoteRuntimeBundle
+from remote_runtime_bundle import validate_remote_runtime_bundle
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 ZETERM_ROOT = REPOSITORY_ROOT / "zeterm"
+
+
+@dataclass(frozen=True)
+class RemoteRuntimeNetworkRelease:
+    url: str
+    catalog_sha256: str
+
+
+def remote_runtime_network_release(
+    url: str, catalog_sha256: str
+) -> RemoteRuntimeNetworkRelease:
+    try:
+        parsed = urlsplit(url)
+        hostname = parsed.hostname
+        username = parsed.username
+        password = parsed.password
+    except ValueError as error:
+        raise RuntimeError("Remote runtime catalog URL is invalid") from error
+    if (
+        parsed.scheme != "https"
+        or not hostname
+        or username
+        or password
+        or parsed.query
+        or parsed.fragment
+        or not parsed.path.endswith("/catalog.json")
+    ):
+        raise RuntimeError(
+            "Remote runtime catalog URL must be a credential-free HTTPS catalog.json URL without query or fragment"
+        )
+    if len(catalog_sha256) != 64 or any(
+        character not in "0123456789abcdef" for character in catalog_sha256
+    ):
+        raise RuntimeError("Remote runtime catalog SHA-256 must be lowercase hexadecimal")
+    return RemoteRuntimeNetworkRelease(url, catalog_sha256)
 
 
 def host_target(cargo: str) -> str:
@@ -47,7 +87,14 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def resolve_binary(cargo: str, profile: str, target: Optional[str], explicit: Optional[Path]) -> Path:
+def resolve_binary(
+    cargo: str,
+    profile: str,
+    target: Optional[str],
+    explicit: Optional[Path],
+    remote_runtime_bundle: Optional[RemoteRuntimeBundle],
+    remote_runtime_release: Optional[RemoteRuntimeNetworkRelease],
+) -> Path:
     if explicit is not None:
         return explicit.expanduser().resolve()
 
@@ -66,7 +113,23 @@ def resolve_binary(cargo: str, profile: str, target: Optional[str], explicit: Op
     ]
     if target:
         command.extend(["--target", target])
-    subprocess.run(command, check=True)
+    environment = os.environ.copy()
+    selected_sha256 = (
+        remote_runtime_release.catalog_sha256
+        if remote_runtime_release is not None
+        else remote_runtime_bundle.catalog_sha256
+        if remote_runtime_bundle is not None
+        else None
+    )
+    if selected_sha256 is not None:
+        environment["ZETERM_REMOTE_RUNTIME_CATALOG_SHA256"] = selected_sha256
+    else:
+        environment.pop("ZETERM_REMOTE_RUNTIME_CATALOG_SHA256", None)
+    if remote_runtime_release is not None:
+        environment["ZETERM_REMOTE_RUNTIME_CATALOG_URL"] = remote_runtime_release.url
+    else:
+        environment.pop("ZETERM_REMOTE_RUNTIME_CATALOG_URL", None)
+    subprocess.run(command, check=True, env=environment)
 
     profile_directory = "debug" if profile == "dev" else profile
     binary = REPOSITORY_ROOT / "target"
@@ -76,9 +139,44 @@ def resolve_binary(cargo: str, profile: str, target: Optional[str], explicit: Op
     return binary / ("zeterm.exe" if target and "windows" in target else "zeterm")
 
 
-def build_package(output: Path, binary: Path, target: str, profile: str) -> None:
+def build_package(
+    output: Path,
+    binary: Path,
+    target: str,
+    profile: str,
+    remote_runtime_bundle: Optional[RemoteRuntimeBundle] = None,
+    remote_runtime_release: Optional[RemoteRuntimeNetworkRelease] = None,
+) -> None:
     if output.exists():
         raise RuntimeError(f"refusing to replace existing package directory: {output}")
+    if (
+        remote_runtime_bundle is not None
+        and remote_runtime_release is not None
+        and remote_runtime_bundle.catalog_sha256
+        != remote_runtime_release.catalog_sha256
+    ):
+        raise RuntimeError(
+            "network Remote runtime digest does not match the selected local bundle"
+        )
+    selected_sha256 = (
+        remote_runtime_release.catalog_sha256
+        if remote_runtime_release is not None
+        else remote_runtime_bundle.catalog_sha256
+        if remote_runtime_bundle is not None
+        else None
+    )
+    if remote_runtime_bundle is not None:
+        verified_bundle = validate_remote_runtime_bundle(remote_runtime_bundle.root)
+        if verified_bundle.catalog_sha256 != remote_runtime_bundle.catalog_sha256:
+            raise RuntimeError("Remote runtime catalog changed after product build selection")
+    if selected_sha256 is not None and selected_sha256.encode() not in binary.read_bytes():
+        raise RuntimeError(
+            "zeterm binary does not contain the selected Remote runtime catalog digest"
+        )
+    if remote_runtime_release is not None and remote_runtime_release.url.encode() not in binary.read_bytes():
+        raise RuntimeError(
+            "zeterm binary does not contain the selected Remote runtime catalog URL"
+        )
     output.parent.mkdir(parents=True, exist_ok=True)
     staging = Path(tempfile.mkdtemp(prefix=f".{output.name}.", dir=output.parent))
     try:
@@ -91,6 +189,11 @@ def build_package(output: Path, binary: Path, target: str, profile: str) -> None
             ZETERM_ROOT / "packaging" / "zeterm-signing-policy.json",
             staging / "zeterm-signing-policy.json",
         )
+        if remote_runtime_bundle is not None:
+            shutil.copytree(
+                remote_runtime_bundle.root,
+                staging / "zeta-remote-runtimes",
+            )
         metadata = {
             "formatVersion": 1,
             "product": "zeterm",
@@ -107,6 +210,18 @@ def build_package(output: Path, binary: Path, target: str, profile: str) -> None
                 "policy": "zeterm-signing-policy.json",
             },
         }
+        if remote_runtime_release is not None:
+            metadata["remoteRuntimeCatalog"] = {
+                "url": remote_runtime_release.url,
+                "sha256": remote_runtime_release.catalog_sha256,
+                "trustBinding": "compiledIntoSignedBinary",
+            }
+        elif remote_runtime_bundle is not None:
+            metadata["remoteRuntimeCatalog"] = {
+                "path": "zeta-remote-runtimes/catalog.json",
+                "sha256": remote_runtime_bundle.catalog_sha256,
+                "trustBinding": "compiledIntoSignedBinary",
+            }
         (staging / "zeterm-package.json").write_text(
             json.dumps(metadata, indent=2) + "\n"
         )
@@ -123,15 +238,51 @@ def main() -> int:
     parser.add_argument("--zeterm-bin", type=Path)
     parser.add_argument("--cargo", default="cargo")
     parser.add_argument("--cargo-profile", default="release")
+    parser.add_argument("--remote-runtime-bundle", type=Path)
+    parser.add_argument("--remote-runtime-catalog-url")
+    parser.add_argument("--remote-runtime-catalog-sha256")
     args = parser.parse_args()
 
     target = args.target or host_target(args.cargo)
-    binary = resolve_binary(args.cargo, args.cargo_profile, args.target, args.zeterm_bin)
+    remote_runtime_bundle = (
+        validate_remote_runtime_bundle(args.remote_runtime_bundle)
+        if args.remote_runtime_bundle is not None
+        else None
+    )
+    if (args.remote_runtime_catalog_url is None) != (
+        args.remote_runtime_catalog_sha256 is None
+    ):
+        parser.error(
+            "--remote-runtime-catalog-url and --remote-runtime-catalog-sha256 are required together"
+        )
+    remote_runtime_release = (
+        remote_runtime_network_release(
+            args.remote_runtime_catalog_url,
+            args.remote_runtime_catalog_sha256,
+        )
+        if args.remote_runtime_catalog_url is not None
+        else None
+    )
+    binary = resolve_binary(
+        args.cargo,
+        args.cargo_profile,
+        args.target,
+        args.zeterm_bin,
+        remote_runtime_bundle,
+        remote_runtime_release,
+    )
     binary = binary.expanduser().resolve()
     if not binary.is_file():
         raise RuntimeError(f"zeterm executable does not exist: {binary}")
     output = args.package_dir.expanduser().resolve()
-    build_package(output, binary, target, args.cargo_profile)
+    build_package(
+        output,
+        binary,
+        target,
+        args.cargo_profile,
+        remote_runtime_bundle,
+        remote_runtime_release,
+    )
     print(f"Built zeterm {target} package at {output}")
     return 0
 

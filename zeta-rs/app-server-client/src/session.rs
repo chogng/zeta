@@ -1,6 +1,7 @@
 use crate::in_process::{InProcessClientOptions, open_in_process_app_server};
 use crate::{AppServerClient, ClientError, JsonRpcTransport, ServerNotification, notification};
 use std::fmt;
+use std::process::Child;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
@@ -12,8 +13,15 @@ use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 use zeta_app_server::{AppServer, ConnectionNotifications};
+use zeta_app_server_protocol::protocol::common::ClientCapabilities;
+use zeta_app_server_protocol::protocol::common::ClientInfo;
 use zeta_app_server_protocol::protocol::initialize::InitializeParams;
 use zeta_app_server_protocol::schema_hash;
+
+#[path = "session_stdio.rs"]
+mod stdio;
+
+pub use stdio::StdioAppServerCommand;
 
 const REQUEST_QUEUE_CAPACITY: usize = 64;
 const EVENT_QUEUE_CAPACITY: usize = 1_024;
@@ -65,15 +73,19 @@ impl AppServerEvents {
     }
 }
 
-/// Owns one initialized embedded App Server connection and its background drivers.
+/// Owns one initialized App Server connection and its background drivers.
+///
+/// A session can either compose the server in-process or bind the same typed client contract to a
+/// child process's JSON Lines stdio stream. The latter is used by Remote host connections.
 pub struct AppServerSession {
     client: AppServerRequestHandle,
     events: Option<AppServerEvents>,
     commands: SyncSender<DriverCommand>,
-    notifications: Arc<ConnectionNotifications>,
+    notifications: Option<Arc<ConnectionNotifications>>,
     closing: Arc<AtomicBool>,
     driver: Option<JoinHandle<()>>,
     event_pump: Option<JoinHandle<()>>,
+    process: Option<Child>,
 }
 
 impl AppServerSession {
@@ -85,6 +97,19 @@ impl AppServerSession {
             host.client_info.clone(),
             host.capabilities.clone(),
         )
+    }
+
+    /// Starts an App Server process over its JSON Lines stdio protocol.
+    ///
+    /// The caller chooses the child command. This client owns the child lifetime, validates the
+    /// normal initialize/schema handshake, and delivers notifications through the same event API
+    /// as an embedded session.
+    pub fn start_stdio(
+        command: StdioAppServerCommand,
+        client_info: ClientInfo,
+        capabilities: ClientCapabilities,
+    ) -> Result<Self, ClientError> {
+        stdio::start(command, client_info, capabilities)
     }
 
     /// Returns a cloneable typed request handle for this initialized connection.
@@ -104,8 +129,8 @@ impl AppServerSession {
 
     fn from_embedded_host(
         server: Arc<AppServer>,
-        client_info: zeta_app_server_protocol::protocol::common::ClientInfo,
-        capabilities: zeta_app_server_protocol::protocol::common::ClientCapabilities,
+        client_info: ClientInfo,
+        capabilities: ClientCapabilities,
     ) -> Result<Self, ClientError> {
         let connection = server.connection();
         let notifications = Arc::new(server.connection_notifications(&connection));
@@ -191,10 +216,11 @@ impl AppServerSession {
                 receiver: event_receiver,
             }),
             commands,
-            notifications,
+            notifications: Some(notifications),
             closing,
             driver: Some(driver),
             event_pump: Some(event_pump),
+            process: None,
         })
     }
 
@@ -203,7 +229,13 @@ impl AppServerSession {
         if !was_closing {
             let _ = self.commands.send(DriverCommand::Shutdown);
         }
-        self.notifications.close();
+        if let Some(notifications) = &self.notifications {
+            notifications.close();
+        }
+        if let Some(mut process) = self.process.take() {
+            let _ = process.kill();
+            let _ = process.wait();
+        }
 
         let driver_panicked = self
             .driver
@@ -231,7 +263,12 @@ impl Drop for AppServerSession {
     fn drop(&mut self) {
         if !self.closing.swap(true, Ordering::AcqRel) {
             let _ = self.commands.try_send(DriverCommand::Shutdown);
-            self.notifications.close();
+            if let Some(notifications) = &self.notifications {
+                notifications.close();
+            }
+            if let Some(process) = self.process.as_mut() {
+                let _ = process.kill();
+            }
         }
     }
 }
@@ -257,7 +294,7 @@ impl JsonRpcTransport for SessionTransport {
     }
 }
 
-enum DriverCommand {
+pub(super) enum DriverCommand {
     Request {
         request: String,
         response: SyncSender<Result<String, ClientError>>,
@@ -345,7 +382,7 @@ fn pump_notifications(
     let _ = send_event(&events, AppServerEvent::ConnectionClosed(reason), &closing);
 }
 
-fn send_event(
+pub(super) fn send_event(
     events: &SyncSender<AppServerEvent>,
     mut event: AppServerEvent,
     closing: &AtomicBool,

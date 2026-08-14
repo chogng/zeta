@@ -93,8 +93,8 @@ fn notification_failure_becomes_a_client_event() {
         map_event(AppServerEvent::ConnectionClosed(
             ConnectionCloseReason::DriverStopped
         )),
-        Some(ClientEvent::Failed(
-            "App Server connection closed: DriverStopped".into()
+        Some(ClientEvent::ConnectionClosed(
+            ConnectionCloseReason::DriverStopped
         ))
     );
 }

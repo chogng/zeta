@@ -100,6 +100,10 @@
   color: var(--zeta-error-foreground);
 }
 
+.zeta-terminal-tabs .zeta-tab[data-state="reconnecting"] {
+  color: var(--zeta-description-foreground);
+}
+
 .zeta-terminal-widgets {
   display: flex;
   min-width: 0;

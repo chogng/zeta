@@ -209,8 +209,8 @@ export class DebugViewPane extends ViewPane {
 
   private async openFrameSource(session: IDebugSession, frame: IDebugStackFrame): Promise<void> {
     const position = TextPosition.at(Math.max(0, frame.lineNumber - 1), Math.max(0, frame.columnNumber - 1));
-    if (frame.source?.path) {
-      await this.editor.openEditor({ resource: URI.file(frame.source.path), label: frame.source.name }, { selection: TextRange.emptyAt(position) });
+    if (frame.source?.resource) {
+      await this.editor.openEditor({ resource: frame.source.resource, label: frame.source.name }, { selection: TextRange.emptyAt(position) });
       return;
     }
     if (frame.source?.sourceReference && frame.source.sourceReference > 0) {

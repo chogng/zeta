@@ -1,4 +1,5 @@
 use zeta_app_server_client::AppServerEvent;
+use zeta_app_server_client::ConnectionCloseReason;
 use zeta_app_server_client::ServerNotification;
 use zeta_app_server_protocol::protocol::git::GitStatusResult;
 use zeta_protocol::AgentRequestEnvelope;
@@ -8,7 +9,7 @@ use zeta_protocol::ThreadUpdateEnvelope;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum ClientEvent {
     AgentRequest(Box<AgentRequestEnvelope>),
-    Failed(String),
+    ConnectionClosed(ConnectionCloseReason),
     GitStatusChanged(GitStatusResult),
     ConnectorsChanged,
     SkillsChanged,
@@ -18,9 +19,7 @@ pub(crate) enum ClientEvent {
 pub(crate) fn map_event(event: AppServerEvent) -> Option<ClientEvent> {
     match event {
         AppServerEvent::Notification(notification) => project_notification(notification),
-        AppServerEvent::ConnectionClosed(reason) => Some(ClientEvent::Failed(format!(
-            "App Server connection closed: {reason:?}"
-        ))),
+        AppServerEvent::ConnectionClosed(reason) => Some(ClientEvent::ConnectionClosed(reason)),
     }
 }
 

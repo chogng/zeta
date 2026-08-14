@@ -49,6 +49,11 @@ pub struct DynamicExtensionPackageSource {
     pub path: PathBuf,
     /// Verified package provenance projected into the catalog.
     pub kind: ExtensionRootKind,
+    /// Optional host-normalized declarative manifest for a portable package family.
+    ///
+    /// The catalog still snapshots and hashes the exact package directory. This value may only
+    /// adapt its manifest contract; it cannot add files or bypass package path validation.
+    pub normalized_manifest_json: Option<String>,
 }
 
 impl DynamicExtensionPackageSource {
@@ -58,6 +63,7 @@ impl DynamicExtensionPackageSource {
             subject: subject.into(),
             path: path.into(),
             kind: ExtensionRootKind::Plugin,
+            normalized_manifest_json: None,
         }
     }
 
@@ -67,6 +73,21 @@ impl DynamicExtensionPackageSource {
             subject: subject.into(),
             path: path.into(),
             kind: ExtensionRootKind::Marketplace,
+            normalized_manifest_json: None,
+        }
+    }
+
+    /// Creates a Marketplace source with one host-normalized declarative manifest.
+    pub fn marketplace_with_manifest(
+        subject: impl Into<String>,
+        path: impl Into<PathBuf>,
+        normalized_manifest_json: impl Into<String>,
+    ) -> Self {
+        Self {
+            subject: subject.into(),
+            path: path.into(),
+            kind: ExtensionRootKind::Marketplace,
+            normalized_manifest_json: Some(normalized_manifest_json.into()),
         }
     }
 }

@@ -52,6 +52,7 @@ pub use model::ResourceRef;
 pub use model::SearchPackagesRequest;
 pub use model::SearchPackagesResult;
 pub use model::SkillActivationSpec;
+pub use model::ThemeActivationSpec;
 pub use model::UninstallMode;
 pub use model::UninstallPackageRequest;
 pub use model::UpdatePackageRequest;

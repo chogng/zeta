@@ -7,12 +7,24 @@ import json
 import os
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Sequence
+from urllib.parse import urlsplit
+
+from remote_runtime_bundle import RemoteRuntimeBundle
+from remote_runtime_bundle import validate_remote_runtime_bundle
 
 
 CommandRunner = Callable[[Sequence[str]], None]
 SUPPORTED_PLATFORMS = {"darwin", "linux", "windows"}
+
+
+@dataclass(frozen=True)
+class AuthenticatedRemoteRuntimeCatalog:
+    sha256: str
+    url: Optional[str]
+    bundle: Optional[RemoteRuntimeBundle]
 
 
 def sha256(path: Path) -> str:
@@ -85,6 +97,8 @@ def package_context(package_dir: Path) -> Dict[str, object]:
     if not isinstance(platforms, dict):
         raise RuntimeError(f"signing policy has no platform map: {policy_path}")
 
+    remote_runtime_catalog = authenticated_remote_runtime_catalog(package_dir, metadata, artifact)
+
     return {
         "package_dir": package_dir,
         "metadata_path": metadata_path,
@@ -94,7 +108,70 @@ def package_context(package_dir: Path) -> Dict[str, object]:
         "policy": policy,
         "platforms": platforms,
         "record_path": record_path,
+        "remote_runtime_catalog": remote_runtime_catalog,
     }
+
+
+def authenticated_remote_runtime_catalog(
+    package_dir: Path,
+    metadata: Dict[str, object],
+    artifact: Path,
+) -> Optional[AuthenticatedRemoteRuntimeCatalog]:
+    value = metadata.get("remoteRuntimeCatalog")
+    if value is None:
+        return None
+    if not isinstance(value, dict) or set(value) not in (
+        {"path", "sha256", "trustBinding"},
+        {"url", "sha256", "trustBinding"},
+    ):
+        raise RuntimeError("invalid Remote runtime catalog binding in zeterm-package.json")
+    expected_sha256 = value.get("sha256")
+    if (
+        not isinstance(expected_sha256, str)
+        or len(expected_sha256) != 64
+        or any(character not in "0123456789abcdef" for character in expected_sha256)
+    ):
+        raise RuntimeError("invalid Remote runtime catalog digest")
+    if value.get("trustBinding") != "compiledIntoSignedBinary":
+        raise RuntimeError("unsupported Remote runtime catalog trust binding")
+    if expected_sha256.encode() not in artifact.read_bytes():
+        raise RuntimeError("signed zeterm binary does not contain the Remote runtime catalog digest")
+    url = value.get("url")
+    if isinstance(url, str):
+        try:
+            parsed = urlsplit(url)
+            hostname = parsed.hostname
+            username = parsed.username
+            password = parsed.password
+        except ValueError as error:
+            raise RuntimeError("invalid network Remote runtime catalog URL") from error
+        if (
+            parsed.scheme != "https"
+            or not hostname
+            or username
+            or password
+            or parsed.query
+            or parsed.fragment
+            or not parsed.path.endswith("/catalog.json")
+        ):
+            raise RuntimeError("invalid network Remote runtime catalog URL")
+        if url.encode() not in artifact.read_bytes():
+            raise RuntimeError("signed zeterm binary does not contain the Remote runtime catalog URL")
+        return AuthenticatedRemoteRuntimeCatalog(expected_sha256, url, None)
+    path = value.get("path")
+    if not isinstance(path, str):
+        raise RuntimeError("invalid Remote runtime catalog path")
+    catalog = (package_dir / path).resolve()
+    try:
+        catalog.relative_to(package_dir)
+    except ValueError as error:
+        raise RuntimeError(f"Remote runtime catalog path escapes package: {catalog}") from error
+    if catalog.name != "catalog.json":
+        raise RuntimeError("Remote runtime catalog binding must name catalog.json")
+    bundle = validate_remote_runtime_bundle(catalog.parent)
+    if bundle.catalog_sha256 != expected_sha256:
+        raise RuntimeError("bundled Remote runtime catalog digest does not match package metadata")
+    return AuthenticatedRemoteRuntimeCatalog(expected_sha256, None, bundle)
 
 
 def platform_config(context: Dict[str, object], platform: str) -> Dict[str, object]:
@@ -243,6 +320,10 @@ def sign_package(
         "signedSha256": signed_digest,
         "status": "signed",
     }
+    remote_runtime_catalog = context["remote_runtime_catalog"]
+    if remote_runtime_catalog is not None:
+        assert isinstance(remote_runtime_catalog, AuthenticatedRemoteRuntimeCatalog)
+        record["remoteRuntimeCatalogSha256"] = remote_runtime_catalog.sha256
     if detached_signature is not None:
         record["signatureFile"] = str(detached_signature.relative_to(context["package_dir"]))
 
@@ -285,6 +366,11 @@ def verify_package(
         raise RuntimeError("signature record does not match the requested platform or state")
     if record.get("signedSha256") != digest:
         raise RuntimeError("signature record digest does not match the staged binary")
+    remote_runtime_catalog = context["remote_runtime_catalog"]
+    if remote_runtime_catalog is not None:
+        assert isinstance(remote_runtime_catalog, AuthenticatedRemoteRuntimeCatalog)
+        if record.get("remoteRuntimeCatalogSha256") != remote_runtime_catalog.sha256:
+            raise RuntimeError("signature record does not bind the Remote runtime catalog")
 
     detached_signature = signature_path(context, config)
     if detached_signature is not None and not detached_signature.is_file():

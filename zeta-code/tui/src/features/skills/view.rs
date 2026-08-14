@@ -119,6 +119,7 @@ fn source_kind_label(kind: SkillSourceKindDto) -> &'static str {
         SkillSourceKindDto::User => "user",
         SkillSourceKindDto::Workspace => "workspace",
         SkillSourceKindDto::Plugin => "plugin",
+        SkillSourceKindDto::Marketplace => "marketplace",
     }
 }
 

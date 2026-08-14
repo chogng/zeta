@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
+use std::sync::mpsc;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
@@ -93,6 +94,8 @@ pub struct LocalCapabilitySource {
     id: String,
     runtime: Option<String>,
     language_ids: Vec<String>,
+    package_root: PathBuf,
+    relative_path: String,
     host_path: PathBuf,
 }
 
@@ -121,6 +124,16 @@ impl LocalCapabilitySource {
         &self.language_ids
     }
 
+    /// Returns the verified immutable artifact root for trusted in-process adapters.
+    pub fn package_root(&self) -> &std::path::Path {
+        &self.package_root
+    }
+
+    /// Returns this capability's signed package-relative path.
+    pub fn relative_path(&self) -> &str {
+        &self.relative_path
+    }
+
     pub fn host_path(&self) -> &std::path::Path {
         &self.host_path
     }
@@ -130,6 +143,8 @@ impl LocalCapabilitySource {
 struct RuntimeState {
     durable: DurableState,
     leases: BTreeMap<String, LeaseRecord>,
+    generation: u64,
+    subscribers: Vec<mpsc::Sender<u64>>,
 }
 
 struct LeaseRecord {
@@ -147,6 +162,15 @@ impl MarketplaceManager {
         durable
             .installations
             .retain(|_, installation| installation.state == InstallationState::Installed);
+        for installation in durable.installations.values_mut() {
+            for capability in &mut installation.capabilities {
+                capability.descriptor.reference = capability_reference(
+                    &installation.installation_id,
+                    capability.descriptor.kind,
+                    &capability.descriptor.id,
+                );
+            }
+        }
         store.write_state(&durable)?;
         let session_nonce = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -159,10 +183,24 @@ impl MarketplaceManager {
             runtime: Mutex::new(RuntimeState {
                 durable,
                 leases: BTreeMap::new(),
+                generation: 1,
+                subscribers: Vec::new(),
             }),
             lease_sequence: AtomicU64::new(1),
             session_nonce,
         })
+    }
+
+    /// Subscribes to committed installation-state changes for local domain adapters.
+    pub fn subscribe(&self) -> Result<mpsc::Receiver<u64>, MarketplaceClientError> {
+        let (sender, receiver) = mpsc::channel();
+        self.lock_runtime()?.subscribers.push(sender);
+        Ok(receiver)
+    }
+
+    /// Returns the current process-local installation generation.
+    pub fn generation(&self) -> Result<u64, MarketplaceClientError> {
+        Ok(self.lock_runtime()?.generation)
     }
 
     /// Returns verified sources of one capability kind for trusted local runtime composition.
@@ -198,6 +236,8 @@ impl MarketplaceManager {
                     id: capability.descriptor.id.clone(),
                     runtime: capability.runtime.clone(),
                     language_ids: capability.language_ids.clone(),
+                    package_root: self.store.verified_package_root(&installation.package)?,
+                    relative_path: capability.path.clone(),
                     host_path: self
                         .store
                         .verified_package_path(&installation.package, &capability.path)?,
@@ -239,9 +279,11 @@ impl MarketplaceManager {
             .iter()
             .map(|capability| CapabilityRecord {
                 descriptor: CapabilityDescriptor {
-                    reference: CapabilityRef {
-                        id: opaque_id("cap", &[&installation_id, &capability.id]),
-                    },
+                    reference: capability_reference(
+                        &installation_id,
+                        capability.kind,
+                        &capability.id,
+                    ),
                     kind: capability.kind,
                     id: capability.id.clone(),
                     contract_version: "1".into(),
@@ -271,6 +313,7 @@ impl MarketplaceManager {
             .or_insert(installation)
             .clone();
         self.store.write_state(&runtime.durable)?;
+        publish_change(&mut runtime)?;
         Ok(installation.public())
     }
 
@@ -377,7 +420,8 @@ impl MarketplaceServiceClient for MarketplaceManager {
                     .remove(&request.installation_id);
             }
         }
-        self.store.write_state(&runtime.durable)
+        self.store.write_state(&runtime.durable)?;
+        publish_change(&mut runtime)
     }
 
     fn list_installed(
@@ -449,6 +493,7 @@ impl MarketplaceServiceClient for MarketplaceManager {
         {
             runtime.durable.installations.remove(&installation_id);
             self.store.write_state(&runtime.durable)?;
+            publish_change(&mut runtime)?;
         }
         Ok(())
     }
@@ -508,12 +553,49 @@ fn find_capability<'a>(
         .ok_or_else(capability_not_found)
 }
 
+fn capability_reference(
+    installation_id: &str,
+    kind: CapabilityKind,
+    capability_id: &str,
+) -> CapabilityRef {
+    CapabilityRef {
+        id: opaque_id(
+            "cap",
+            &[installation_id, capability_kind_tag(kind), capability_id],
+        ),
+    }
+}
+
+fn capability_kind_tag(kind: CapabilityKind) -> &'static str {
+    match kind {
+        CapabilityKind::Skill => "skill",
+        CapabilityKind::Mcp => "mcp",
+        CapabilityKind::Connector => "connector",
+        CapabilityKind::Theme => "theme",
+        CapabilityKind::Language => "language",
+        CapabilityKind::Executable => "executable",
+        CapabilityKind::Asset => "asset",
+    }
+}
+
 fn installation_not_found() -> MarketplaceClientError {
     MarketplaceClientError::business(
         MarketplaceErrorCode::InstallationNotFound,
         "Marketplace installation was not found",
         false,
     )
+}
+
+fn publish_change(runtime: &mut RuntimeState) -> Result<(), MarketplaceClientError> {
+    runtime.generation = runtime
+        .generation
+        .checked_add(1)
+        .ok_or_else(MarketplaceClientError::storage)?;
+    let generation = runtime.generation;
+    runtime
+        .subscribers
+        .retain(|subscriber| subscriber.send(generation).is_ok());
+    Ok(())
 }
 
 fn installation_in_use() -> MarketplaceClientError {

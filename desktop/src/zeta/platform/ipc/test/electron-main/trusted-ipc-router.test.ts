@@ -364,30 +364,42 @@ test("capability IPC validators reject malformed input", () => {
     rows: 24,
     cols: 80,
     profile: { type: "default" },
+    lifecycle: { type: "connectionOwned" },
   }), {
     rows: 24,
     cols: 80,
     profile: { type: "default" },
+    lifecycle: { type: "connectionOwned" },
   });
   assert.throws(() => terminalCreate.validate({
     rows: 0,
     cols: 80,
     profile: { type: "default" },
+    lifecycle: { type: "connectionOwned" },
   }), /must be positive/);
   assert.deepEqual(terminalCreate.validate({
     rows: 24,
     cols: 80,
     profile: { type: "profile", profileId: "powershell" },
+    lifecycle: { type: "connectionOwned" },
   }), {
     rows: 24,
     cols: 80,
     profile: { type: "profile", profileId: "powershell" },
+    lifecycle: { type: "connectionOwned" },
   });
   assert.throws(() => terminalCreate.validate({
     rows: 24,
     cols: 80,
     profile: { type: "profile", executable: "cmd.exe" },
+    lifecycle: { type: "connectionOwned" },
   }), /profile/);
+  assert.throws(() => terminalCreate.validate({
+    rows: 24,
+    cols: 80,
+    profile: { type: "default" },
+    lifecycle: { type: "reconnectable" },
+  }), /connectionOwned/);
   assert.deepEqual(terminalProfileList.validate(undefined), {});
   assert.deepEqual(terminalWrite.validate({
     terminalId: "terminal-1",
