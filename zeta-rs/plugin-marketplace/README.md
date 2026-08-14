@@ -1,9 +1,11 @@
 # zeta-plugin-marketplace
 
 `zeta-plugin-marketplace` owns verified remote distribution for product-managed Plugin
-Marketplaces. The cross-crate Plugin/Connector/MCP product model is canonical in
-[`docs/plugins.md`](../../docs/plugins.md); this README documents the exact implementation
-contract of this crate.
+Marketplaces. Cross-family source registration, shared verification, domain projection, and failure
+isolation are canonical in [`docs/marketplace-integration.md`](../../docs/marketplace-integration.md).
+The cross-crate Plugin/Connector/MCP product model is canonical in
+[`docs/plugins.md`](../../docs/plugins.md); this README documents the exact implementation contract
+of this crate.
 
 ## Ownership
 
@@ -21,8 +23,9 @@ The key private owners are:
   network fetches;
 - `metadata::published_publishers` / `metadata::published_plugins`: require every generic
   `marketplacePackage` target to be signed by its exact `publishers/<publisher>` delegated role,
-  extract only the signed `consumerMetadata.zeta` adapter from `marketplaceCatalog`, and ignore
-  packages that do not target Zeta; legacy `zetaPlugin` targets remain read-only compatible;
+  project only `packageType: plugin`, extract the signed `consumerMetadata.zeta` adapter from
+  `marketplaceCatalog`, and ignore other package families or Plugins that do not target Zeta;
+  legacy `zetaPlugin` targets remain read-only compatible;
 - `archive::extract`: enforces archive/entry/expanded-size limits and rejects traversal, links,
   encryption, duplicate paths, and unsupported entries;
 - `RemotePluginMarketplace::materialize` / `catalog_packages`: verify the revocation feed and build

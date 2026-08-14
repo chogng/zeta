@@ -3,10 +3,13 @@ import { IMenuService } from "../../../../platform/actions/common/menuService.js
 import { IContextKeyService } from "../../../../platform/contextkey/common/contextkey.js";
 import { IContextMenuService } from "../../../../platform/contextview/browser/contextMenu.js";
 import { SyncDescriptor } from "../../../../platform/instantiation/common/instantiation.js";
+import { registerWorkbenchContribution, WorkbenchPhase } from "../../../common/contributions.js";
 import { ViewContainerLocation, type WorkbenchViewRegistry, WorkbenchViewContainerId, ViewsRegistry } from "../../../common/views.js";
 import { IGitService } from "../../../services/git/common/gitService.js";
+import { IStatusbarService } from "../../../services/statusbar/browser/statusbar.js";
 import { ScmAgentReviewViewPane } from "./scmAgentReviewViewPane.js";
 import { ScmGraphViewPane } from "./scmGraphViewPane.js";
+import { ScmStatusContribution } from "./scmStatus.js";
 import { ScmViewPane } from "./scmViewPane.js";
 import "./media/scm.css";
 
@@ -55,3 +58,8 @@ export function registerGitViews(
     },
   ]);
 }
+
+registerWorkbenchContribution("workbench.contrib.scmStatus", WorkbenchPhase.BlockStartup, accessor => new ScmStatusContribution({
+  statusbarService: accessor.get(IStatusbarService),
+  gitService: accessor.get(IGitService),
+}));

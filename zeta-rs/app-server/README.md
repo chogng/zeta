@@ -9,7 +9,9 @@
 > [`docs/git.md`](../../docs/git.md)，Workspace identity 与 trust boundary 见
 > [`docs/workspace-security.md`](../../docs/workspace-security.md)。跨文件内容搜索的执行实现见
 > [`zeta-rs/search/README.md`](../search/README.md)。Desktop 浏览器能力的跨进程所有权和当前限制见
-> [`docs/zeta-desktop-architecture.md`](../../docs/zeta-desktop-architecture.md#7-浏览器能力)。
+> [`docs/zeta-desktop-architecture.md`](../../docs/zeta-desktop-architecture.md#7-浏览器能力)。Marketplace
+> source composition、共享发行快照、领域投影和启动失败隔离见
+> [`docs/marketplace-integration.md`](../../docs/marketplace-integration.md)。
 
 `zeta-app-server` 是产品客户端与 Zeta domain/runtime 的 application boundary。它解析
 `zeta-app-server-protocol` request，调用 `SessionCoordinator`、Thread controller、

@@ -22,6 +22,7 @@ export const lxiconsLibrary = {
   close: register("close", svg.close),
   dropdownIndicator: register("dropdown-indicator", svg.chevronDown),
   ellipsis: register("ellipsis", svg.ellipsis),
+  error: register("error", svg.error),
   files: register("files", svg.files),
   gear: register("gear", svg.gear),
   gitBranch: register("git-branch", svg.gitBranch),
@@ -39,6 +40,7 @@ export const lxiconsLibrary = {
   model: register("model", svg.model),
   paperclip: register("paperclip", svg.paperclip),
   refresh: register("refresh", svg.refresh),
+  remote: register("remote", svg.remote),
   repoFetch: register("repo-fetch", svg.repoFetch),
   repoPull: register("repo-pull", svg.repoPull),
   repoPush: register("repo-push", svg.repoPush),
@@ -54,4 +56,5 @@ export const lxiconsLibrary = {
   terminalGitBash: register("terminal-git-bash", svg.terminalGitBash),
   trash: register("trash", svg.trash),
   unlimited: register("unlimited", svg.unlimited),
+  warning: register("warning", svg.warning),
 } as const;

@@ -59,6 +59,7 @@ pub(crate) struct MarketplaceTargetCatalogMetadata {
 #[serde(rename_all = "camelCase")]
 struct MarketplaceManifestIdentity {
     schema_version: u32,
+    package_type: String,
     id: PluginId,
     version: PluginVersion,
 }
@@ -70,17 +71,20 @@ impl MarketplaceTargetCatalogMetadata {
     ) -> Result<Option<PublishedPluginCatalog>, RemoteMarketplaceError> {
         let identity: MarketplaceManifestIdentity =
             serde_json::from_value(self.manifest).map_err(|_| metadata_error())?;
+        if identity.package_type != "plugin" {
+            return Ok(None);
+        }
+        let Some(metadata) = self.consumer_metadata.get("zeta") else {
+            return Ok(None);
+        };
         if self.schema_version != 1
-            || identity.schema_version != 1
+            || !matches!(identity.schema_version, 1 | 2)
             || identity.id != package.id
             || identity.version != package.version
             || !valid_stats(self.package_file_count, self.package_size_bytes)
         {
             return Err(metadata_error());
         }
-        let Some(metadata) = self.consumer_metadata.get("zeta") else {
-            return Ok(None);
-        };
         let manifest: PluginManifest =
             serde_json::from_value(metadata.clone()).map_err(|_| metadata_error())?;
         if manifest.id != package.id || manifest.version != package.version {

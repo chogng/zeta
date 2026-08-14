@@ -1,7 +1,10 @@
 import { SyncDescriptor } from "../../../../platform/instantiation/common/instantiation.js";
+import { registerWorkbenchContribution, WorkbenchPhase } from "../../../common/contributions.js";
 import { ViewContainerLocation, type WorkbenchViewRegistry, WorkbenchViewContainerId, ViewsRegistry } from "../../../common/views.js";
 import { IEditorPart } from "../../../browser/parts/editor/editorPart.js";
 import { ILanguageDiagnosticsService } from "../../../services/language/common/languageDiagnosticsService.js";
+import { IStatusbarService } from "../../../services/statusbar/browser/statusbar.js";
+import { ProblemsStatusContribution } from "./problemsStatus.js";
 import { ProblemsViewPane } from "./problemsViewPane.js";
 import "./media/problems.css";
 
@@ -25,3 +28,8 @@ export function registerProblemsView(registry: WorkbenchViewRegistry = ViewsRegi
     }),
   }]);
 }
+
+registerWorkbenchContribution("workbench.contrib.problemsStatus", WorkbenchPhase.BlockStartup, accessor => new ProblemsStatusContribution({
+  statusbarService: accessor.get(IStatusbarService),
+  diagnosticsService: accessor.get(ILanguageDiagnosticsService),
+}));

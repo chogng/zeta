@@ -10,7 +10,6 @@ import type {
   ProductConfiguration,
 } from "../../product/common/product.js";
 import { URI } from "../../base/common/uri.js";
-import type { AppServerConnectionState } from "../../platform/app-server/common/appServerApi.js";
 import { AccessibilityService } from "../../platform/accessibility/browser/accessibilityService.js";
 import { IAccessibilityService } from "../../platform/accessibility/common/accessibility.js";
 import type { IRendererHost } from "../../platform/renderer/common/rendererHost.js";
@@ -75,7 +74,6 @@ import {
 } from "../common/views.js";
 import {
   IStatusbarService,
-  StatusbarAlignment,
   StatusbarService,
 } from "../services/statusbar/browser/statusbar.js";
 import {
@@ -132,6 +130,8 @@ import { ITextMateService } from "../services/textMate/common/textMateService.js
 import { BrowserTextMateService } from "../services/textMate/browser/browserTextMateService.js";
 import { AppServerExtensionService } from "../services/extensions/browser/appServerExtensionService.js";
 import { IExtensionService } from "../services/extensions/common/extensionService.js";
+import { AppServerRemoteAgentService } from "../services/remote/browser/appServerRemoteAgentService.js";
+import { IRemoteAgentService } from "../services/remote/common/remoteAgentService.js";
 import { ILanguageFeaturesService, LanguageFeaturesService } from "../services/language/common/languageFeaturesService.js";
 import { GitService } from "../services/git/browser/gitService.js";
 import { IGitService } from "../services/git/common/gitService.js";
@@ -172,7 +172,6 @@ import { createWorkbenchSession, type WorkbenchSession } from "./workbenchSessio
 import { createEditorLineGutterDecorations } from "./parts/editor/editorGutterDecorations.js";
 import { installWorkbenchServiceContributions } from "./workbenchServiceContributions.js";
 import { WorkbenchInteractionServices } from "./workbenchInteractionServices.js";
-import { AppServerConnectionStateObserver } from "./appServerConnectionStateObserver.js";
 
 /** Host-specific inputs required to construct a workbench. */
 export interface IStartWorkbenchOptions {
@@ -255,6 +254,8 @@ export class Workbench extends DisposableOwner {
     this.session = normalizedSession;
     const services = new ServiceCollection();
     const instantiationService = new InstantiationService(services);
+    const remoteAgentService = this.own(new AppServerRemoteAgentService({ api: api.appServer }));
+    services.set(IRemoteAgentService, remoteAgentService);
     if (nativeHostApi) {
       services.set(INativeHostService, nativeHostApi);
     }
@@ -395,30 +396,6 @@ export class Workbench extends DisposableOwner {
     this.own(bindColorTheme(themeService, workbenchRoot));
     const statusbarService = this.own(new StatusbarService());
     services.set(IStatusbarService, statusbarService);
-    const connectionStatus = this.own(statusbarService.addEntry(
-      appServerStatusEntry("starting"),
-      {
-        id: "zeta.status.appServer",
-        alignment: StatusbarAlignment.Left,
-      },
-    ));
-    let previousConnectionState: AppServerConnectionState | undefined;
-    const handleConnectionState = (state: AppServerConnectionState): void => {
-      connectionStatus.update(appServerStatusEntry(state));
-      const previous = previousConnectionState;
-      previousConnectionState = state;
-      if (state === "ready" && previous !== undefined && previous !== "ready") {
-        void extensionService.reload().catch(error => console.error("Declarative extension refresh after App Server recovery failed", error));
-      }
-    };
-    this.own(new AppServerConnectionStateObserver({
-      api: api.appServer,
-      onState: handleConnectionState,
-      onReadError: (error: unknown) => {
-        console.error("Failed to read App Server connection state", error);
-        handleConnectionState("crashed");
-      },
-    }));
     const dialogService = this.own(new DialogService());
     services.set(IDialogService, dialogService);
     services.set(IDialogsModel, dialogService.model);
@@ -799,45 +776,4 @@ function requiredViewContainer(
     );
   }
   return container;
-}
-
-function appServerStatusEntry(state: AppServerConnectionState) {
-  switch (state) {
-    case "ready":
-      return {
-        text: "Ready",
-        ariaLabel: "App Server ready",
-      };
-    case "stopped":
-      return {
-        text: "App Server unavailable",
-        ariaLabel: "App Server unavailable",
-        tooltip: "No App Server host is connected",
-      };
-    case "crashed":
-      return {
-        text: "App Server crashed",
-        ariaLabel: "App Server crashed",
-      };
-    case "restarting":
-      return {
-        text: "App Server restarting\u2026",
-        ariaLabel: "App Server restarting",
-      };
-    case "stopping":
-      return {
-        text: "App Server stopping\u2026",
-        ariaLabel: "App Server stopping",
-      };
-    case "initializing":
-      return {
-        text: "App Server initializing\u2026",
-        ariaLabel: "App Server initializing",
-      };
-    case "starting":
-      return {
-        text: "App Server starting\u2026",
-        ariaLabel: "App Server starting",
-      };
-  }
 }

@@ -34,6 +34,7 @@ import "../contrib/pdf/browser/pdf.contribution.js";
 import "../contrib/preferences/browser/preferences.contribution.js";
 import "../contrib/quickaccess/browser/commandsQuickAccess.js";
 import "../contrib/quickaccess/browser/workspaceSymbolsQuickAccess.js";
+import "../contrib/remote/browser/remote.contribution.js";
 import "../contrib/sash/browser/sash.contribution.js";
 import "./parts/dialogs/dialog.contribution.js";
 import "./parts/editor/editorActions.js";

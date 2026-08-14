@@ -405,6 +405,14 @@ pub(crate) fn catalog_entries(
         return Err(metadata_error());
     }
     let compatibility = compatibility(&manifest, consumer_id, consumer_version)?;
+    let declares_server = manifest
+        .languages
+        .iter()
+        .any(|language| language.lsp || language.language_server.is_some())
+        || manifest
+            .capabilities
+            .iter()
+            .any(|capability| capability.kind == "executable");
     let executable_capabilities = manifest
         .capabilities
         .iter()
@@ -491,7 +499,7 @@ pub(crate) fn catalog_entries(
             package_size_bytes: catalog.package_size_bytes,
         });
     }
-    if entries.is_empty() {
+    if entries.is_empty() && declares_server {
         return Err(metadata_error());
     }
     Ok(entries)

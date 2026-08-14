@@ -1,11 +1,8 @@
 import "./statusbarpart.css";
+import { appendIcon } from "../../../../base/browser/ui/icon/icon.js";
 import { WorkbenchPart } from "../../part.js";
 import { WorkbenchWindowBarHeight } from "../workbenchPartDimensions.js";
-import {
-  type IStatusbarEntryItem,
-  type IStatusbarService,
-  StatusbarAlignment,
-} from "../../../services/statusbar/browser/statusbar.js";
+import { type IStatusbarEntryItem, type IStatusbarService, StatusbarAlignment } from "../../../services/statusbar/browser/statusbar.js";
 
 /** Browser view of the window-scoped status bar entry service. */
 export class StatusbarPart extends WorkbenchPart {
@@ -66,7 +63,8 @@ function createEntryElement(
   const element = ownerDocument.createElement("span");
   element.className = "zeta-statusbar-item";
   element.dataset.statusbarItemId = item.id;
-  element.textContent = item.entry.text;
+  if (item.entry.icon) appendIcon(item.entry.icon, element);
+  if (item.entry.text) element.append(ownerDocument.createTextNode(item.entry.text));
   if (item.entry.ariaLabel) {
     element.setAttribute("aria-label", item.entry.ariaLabel);
   }

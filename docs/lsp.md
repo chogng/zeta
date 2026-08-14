@@ -8,7 +8,8 @@
 > [`zeta-language-server-catalog` README](../zeta-rs/language-server-catalog/README.md)、
 > [`zeta-language-service` README](../zeta-rs/language-service/README.md) 分别拥有。本地符号索引与
 > Language Server 结果如何组合、以及未来代码图的边界见
-> [`code-intelligence.md`](code-intelligence.md)。
+> [`code-intelligence.md`](code-intelligence.md)。跨 package family 的 Marketplace source、共享验证、
+> 领域投影与失败隔离见 [`marketplace-integration.md`](marketplace-integration.md)。
 
 ## 快速理解
 

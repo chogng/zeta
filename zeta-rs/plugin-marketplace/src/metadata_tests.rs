@@ -45,6 +45,7 @@ fn generic_catalog_extracts_only_the_zeta_consumer_adapter() {
         "schemaVersion": 1,
         "manifest": {
             "schemaVersion": 1,
+            "packageType": "plugin",
             "id": "acme/review",
             "version": "1.0.0",
             "displayName": "Review",
@@ -83,6 +84,7 @@ fn generic_catalog_without_zeta_adapter_is_ignored() {
         "schemaVersion": 1,
         "manifest": {
             "schemaVersion": 1,
+            "packageType": "plugin",
             "id": "acme/review",
             "version": "1.0.0",
             "displayName": "Review",
@@ -97,6 +99,64 @@ fn generic_catalog_without_zeta_adapter_is_ignored() {
     .unwrap();
 
     assert!(metadata.into_zeta_catalog(&package).unwrap().is_none());
+}
+
+#[test]
+fn generic_non_plugin_catalog_is_ignored_before_zeta_plugin_validation() {
+    let package = package("acme/review");
+    let metadata: MarketplaceTargetCatalogMetadata = serde_json::from_value(serde_json::json!({
+        "schemaVersion": 1,
+        "manifest": {
+            "schemaVersion": 2,
+            "packageType": "skill",
+            "id": "acme/review",
+            "version": "1.0.0",
+            "displayName": "Review",
+            "description": "Portable review workflow.",
+            "license": "MIT",
+            "capabilities": [{"kind": "skill", "id": "review", "path": "skill"}]
+        },
+        "consumerMetadata": {},
+        "packageFileCount": 2,
+        "packageSizeBytes": 1024
+    }))
+    .unwrap();
+
+    assert!(metadata.into_zeta_catalog(&package).unwrap().is_none());
+}
+
+#[test]
+fn generic_schema_two_plugin_accepts_a_zeta_adapter() {
+    let package = package("acme/review");
+    let metadata: MarketplaceTargetCatalogMetadata = serde_json::from_value(serde_json::json!({
+        "schemaVersion": 1,
+        "manifest": {
+            "schemaVersion": 2,
+            "packageType": "plugin",
+            "id": "acme/review",
+            "version": "1.0.0",
+            "displayName": "Review",
+            "description": "Portable review workflow.",
+            "license": "MIT",
+            "capabilities": [{"kind": "skill", "id": "review", "path": "skills/review"}]
+        },
+        "consumerMetadata": {
+            "zeta": {
+                "schemaVersion": 1,
+                "id": "acme/review",
+                "version": "1.0.0",
+                "displayName": "Review",
+                "compatibility": {"zeta": ">=0.1.0"},
+                "contributions": {"skills": [{"id": "review", "path": "skills/review"}]},
+                "permissions": []
+            }
+        },
+        "packageFileCount": 2,
+        "packageSizeBytes": 1024
+    }))
+    .unwrap();
+
+    assert!(metadata.into_zeta_catalog(&package).unwrap().is_some());
 }
 
 fn package(id: &str) -> InstalledPluginRef {

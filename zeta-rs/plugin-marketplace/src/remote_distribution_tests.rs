@@ -273,6 +273,7 @@ impl SignedDistributionFixture {
                 "schemaVersion": 1,
                 "manifest": {
                     "schemaVersion": 1,
+                    "packageType": "plugin",
                     "id": package.manifest().id,
                     "version": package.manifest().version,
                     "displayName": package.manifest().display_name,

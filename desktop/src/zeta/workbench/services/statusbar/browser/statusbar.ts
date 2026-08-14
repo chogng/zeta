@@ -1,11 +1,7 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
-import {
-  DisposableOwner,
-  type IDisposable,
-} from "../../../../base/common/lifecycle.js";
-import {
-  createServiceIdentifier,
-} from "../../../../platform/instantiation/common/instantiation.js";
+import type { Icon } from "../../../../base/common/icon.js";
+import { DisposableOwner, type IDisposable } from "../../../../base/common/lifecycle.js";
+import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 
 /** The side of the status bar that owns an entry. */
 export enum StatusbarAlignment {
@@ -15,6 +11,7 @@ export enum StatusbarAlignment {
 
 /** Declarative content displayed by one status bar entry. */
 export interface IStatusbarEntry {
+  readonly icon?: Icon;
   readonly text: string;
   readonly ariaLabel?: string;
   readonly tooltip?: string;

@@ -71,6 +71,7 @@ const groups = [
       "exec",
       "tools",
       "skills",
+      "marketplace-integration",
       "plugins",
       "slash-commands",
       "mcp",

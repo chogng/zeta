@@ -1,7 +1,8 @@
 # `zeta-language-marketplace`
 
 > 本 README 是签名语言包远程消费实现的 canonical contract。跨进程的产品语义和用户确认流程见
-> [`docs/lsp.md`](../../docs/lsp.md)；安装存储和 provider adapter 分别由
+> [`docs/lsp.md`](../../docs/lsp.md)；跨 package family 的 source 注册、共享验证、领域投影和失败隔离见
+> [`docs/marketplace-integration.md`](../../docs/marketplace-integration.md)；安装存储和 provider adapter 分别由
 > [`zeta-language-server-distribution`](../language-server-distribution/README.md) 与
 > [`zeta-language-server-catalog`](../language-server-catalog/README.md) 拥有。
 
@@ -25,7 +26,7 @@ process 或编辑器协议。
 | 文件 | 关键符号 | 职责 |
 | --- | --- | --- |
 | `remote.rs` | `RemoteLanguageMarketplace`、`snapshot_from_repository`、`collect_entries` | refresh/cache TUF repository，列出并 materialize exact entry |
-| `model.rs` | `catalog_entries`、`LanguageMarketplaceEntry` | 校验 schema 1/2 manifest、server route 和 consumer SemVer |
+| `model.rs` | `catalog_entries`、`LanguageMarketplaceEntry` | 校验 schema 1/2 manifest、server route 和 consumer SemVer；静态 language asset package 不冒充 server entry |
 | `archive.rs` | `extract`、`verify_package`、`language_server_package` | 有界解压、Marketplace tree digest、distribution handoff |
 | `transport.rs` | `MarketplaceTransport` | 只允许 HTTPS，通过共享 `HttpClient` 读取 metadata/target |
 | `error.rs` | `LanguageMarketplaceErrorKind` | 对 App Server 暴露不含远程 body/本地路径的稳定错误分类 |

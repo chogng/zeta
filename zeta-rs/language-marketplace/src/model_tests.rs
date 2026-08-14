@@ -55,6 +55,58 @@ fn signed_consumer_requirement_marks_entry_incompatible() {
     ));
 }
 
+#[test]
+fn static_language_asset_package_is_not_a_language_server_entry() {
+    let marketplace = LanguageMarketplaceId::new("official").unwrap();
+    let package: PackageTargetMetadata = serde_json::from_value(serde_json::json!({
+        "schemaVersion": 1,
+        "id": "marketplace/typescript",
+        "version": "1.0.0",
+        "packageDigest": format!("sha256:{}", "a".repeat(64)),
+    }))
+    .unwrap();
+    let catalog: PackageCatalogMetadata = serde_json::from_value(serde_json::json!({
+        "schemaVersion": 1,
+        "manifest": {
+            "schemaVersion": 2,
+            "packageType": "language",
+            "source": "official",
+            "id": "marketplace/typescript",
+            "version": "1.0.0",
+            "displayName": "TypeScript Language Support",
+            "description": "TypeScript language assets.",
+            "license": "MIT",
+            "languages": [{
+                "id": "typescript",
+                "displayName": "TypeScript",
+                "fileExtensions": [".ts"]
+            }],
+            "capabilities": [{
+                "kind": "asset",
+                "id": "language-assets",
+                "path": "language"
+            }]
+        },
+        "consumerMetadata": {},
+        "packageFileCount": 4,
+        "packageSizeBytes": 128
+    }))
+    .unwrap();
+
+    let entries = catalog_entries(CatalogContext {
+        marketplace_id: &marketplace,
+        package,
+        catalog,
+        target_name: "packages/marketplace/typescript/1.0.0.zip",
+        target_length: 1024,
+        consumer_id: "zeta",
+        consumer_version: &Version::new(0, 1, 0),
+    })
+    .unwrap();
+
+    assert!(entries.is_empty());
+}
+
 fn css_metadata(compatibility: Option<&str>) -> (PackageTargetMetadata, PackageCatalogMetadata) {
     let consumer = compatibility.map_or_else(String::new, |requirement| {
         format!(

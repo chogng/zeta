@@ -11,6 +11,7 @@
 > tombstone 已实现；PL4 的可执行 Editor Extension 安装/授权声明已实现，Host runtime 不由本 crate 拥有
 > 当前 crate 实现契约：[`zeta-rs/plugins/README.md`](../zeta-rs/plugins/README.md)
 > 远端分发实现契约：[`zeta-rs/plugin-marketplace/README.md`](../zeta-rs/plugin-marketplace/README.md)
+> 跨 package family 的 Marketplace source、共享验证与领域投影：[`marketplace-integration.md`](marketplace-integration.md)
 > Connector account/lifecycle：[`connectors.md`](connectors.md)
 > MCP runtime：[`mcp.md`](mcp.md)
 > Skill runtime：[`skills.md`](skills.md)
