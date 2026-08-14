@@ -9,13 +9,14 @@ import { type IServerEventApi } from "../../../../platform/app-server/common/app
 import { workspaceRelativePath, workspaceResourceFromPath } from "../../../../platform/files/browser/fileService.js";
 import { type ILanguageApi } from "../../../../platform/language/common/languageApi.js";
 import { type IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
-import { type LanguageCodeActionDiagnosticDto, type LanguageDiagnosticsNotification } from "../../../../../../generated/app-server/types.js";
+import { type AppServerErrorName, type LanguageCodeActionDiagnosticDto, type LanguageDiagnosticsNotification } from "../../../../../../generated/app-server/types.js";
 import { type ICodeIntelligenceDocumentService } from "../../codeIntelligence/common/codeIntelligenceDocumentService.js";
 import { APP_SERVER_WORKSPACE_DIAGNOSTIC_LANGUAGE_IDS, isAppServerLanguageId } from "./appServerLanguageSupport.js";
 import { type ILanguageDiagnosticsService, type LanguageDiagnosticSnapshot } from "../common/languageDiagnosticsService.js";
 
 const MAX_LANGUAGE_DOCUMENT_BYTES = 10 * 1024 * 1024;
 const SYNCHRONIZE_DELAY_MS = 150;
+const UNSUPPORTED_DIAGNOSTIC_ERROR_NAMES: ReadonlySet<AppServerErrorName> = new Set(["LanguageRequestFailed", "LanguageServiceUnavailable"]);
 
 interface LanguageDocumentEntry {
   readonly resource: URI;
@@ -285,7 +286,7 @@ function reportCodeIntelligenceSynchronizationError(error: unknown): void {
 
 function isUnsupportedDiagnosticPull(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
-  return /language request failed|language service unavailable|does not advertise this capability|method not found/i.test(error.message);
+  return UNSUPPORTED_DIAGNOSTIC_ERROR_NAMES.has(error.message as AppServerErrorName) || /language request failed|language service unavailable|does not advertise this capability|method not found/i.test(error.message);
 }
 
 function toDisposablePublisher(update: LanguageDiagnosticsPublisher["update"], dispose: () => void): LanguageDiagnosticsPublisher {

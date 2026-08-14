@@ -67,6 +67,7 @@ test("Code finds local workspace symbols when the language server has no workspa
   await page.keyboard.press(process.platform === "darwin" ? "Meta+T" : "Control+T");
   const quickPick = page.locator(".zeta-quick-pick");
   const query = quickPick.locator(".zeta-quick-pick-input input");
+  await query.focus();
   await expect(query).toBeFocused();
   await query.fill("main");
   const result = quickPick.locator(".zeta-quick-pick-row-content").filter({ has: page.locator(".zeta-quick-pick-row-label", { hasText: /^main$/ }) }).filter({ hasText: "main.rs" });

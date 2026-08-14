@@ -18,6 +18,8 @@ interface PlaywrightFixtures {
   readonly workbench: Workbench;
 }
 
+const FORBIDDEN_WORKBENCH_CONSOLE_ERRORS = ["App Server language document synchronization failed", "Declarative extension refresh failed"] as const;
+
 export const test = base.extend<PlaywrightFixtures>({
   includeLargeTestFile: [false, { option: true }],
   target: async ({ baseURL }, use, testInfo) => {
@@ -82,6 +84,10 @@ export const test = base.extend<PlaywrightFixtures>({
     }
     if (pageErrors.length > 0 && !failed) {
       throw new Error(`Workbench page errors:\n${pageErrors.join("\n\n")}`);
+    }
+    const forbiddenConsoleErrors = driver.consoleErrors.filter(message => FORBIDDEN_WORKBENCH_CONSOLE_ERRORS.some(prefix => message.startsWith(prefix)));
+    if (forbiddenConsoleErrors.length > 0 && !failed) {
+      throw new Error(`Workbench emitted a forbidden console error:\n${forbiddenConsoleErrors.join("\n\n")}`);
     }
   },
 });

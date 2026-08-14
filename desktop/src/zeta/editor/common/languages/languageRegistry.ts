@@ -111,7 +111,7 @@ export class LanguageRegistry extends DisposableOwner {
     const entries = contributions.map(contribution => {
       if (typeof contribution !== "object" || contribution === null) throw new TypeError("Language description contribution must be an object");
       const description = normalizeDescription(contribution.description);
-      return Object.freeze({ owner, description, ...(description.firstLine === undefined ? {} : { firstLinePattern: new RegExp(description.firstLine, "u") }), priority: normalizePriority(contribution.options ?? {}), order: this.nextOrder++ });
+      return Object.freeze({ owner, description, ...(description.firstLine === undefined ? {} : { firstLinePattern: new RegExp(description.firstLine) }), priority: normalizePriority(contribution.options ?? {}), order: this.nextOrder++ });
     });
     const affected = this.ownerLanguageIds(owner);
     for (const entry of entries) affected.add(entry.description.id);
@@ -217,7 +217,7 @@ function normalizeFirstLinePattern(value: string): string {
   if (typeof value !== "string" || value.length === 0 || value.length > 1024 || /[\r\n]/u.test(value)) throw new TypeError("Language first-line pattern must be a bounded single-line regular expression");
   const source = value.startsWith("^") ? value : `^(?:${value})`;
   let pattern: RegExp;
-  try { pattern = new RegExp(source, "u"); }
+  try { pattern = new RegExp(source); }
   catch { throw new TypeError("Language first-line pattern must be a valid regular expression"); }
   if (pattern.test("")) throw new TypeError("Language first-line pattern must not match an empty line");
   return source;

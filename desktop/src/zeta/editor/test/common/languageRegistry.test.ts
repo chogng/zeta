@@ -25,3 +25,11 @@ test("first-line associations are anchored, ignore a UTF-8 BOM, and cannot match
   assert.throws(() => descriptions.replace([{ description: { id: "catch-all", firstLine: ".*" } }]), /must not match an empty line/);
   assert.equal(registry.resolveLanguageId({ resource: URI.file("C:\\project\\script"), firstLine: "#!/usr/bin/env demo" }), "script");
 });
+
+test("first-line associations accept VS Code extension regex compatibility escapes", () => {
+  using registry = new LanguageRegistry();
+  using description = registry.register({ id: "xml", firstLine: "(\\<\\?xml.*)|(\\<svg)|(\\<\\!doctype\\s+svg)" });
+
+  assert.equal(registry.resolveLanguageId({ resource: URI.file("C:\\project\\document"), firstLine: "<?xml version=\"1.0\"?>" }), "xml");
+  assert.equal(registry.resolveLanguageId({ resource: URI.file("C:\\project\\image"), firstLine: "<svg viewBox=\"0 0 10 10\">" }), "xml");
+});

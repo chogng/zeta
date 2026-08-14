@@ -15,6 +15,7 @@ export class PlaywrightDriver {
   constructor(
     readonly application: PlaywrightApplication,
     readonly currentPage: Page,
+    readonly consoleErrors: readonly string[] = [],
   ) {
     this.workbench = new Workbench(currentPage);
   }

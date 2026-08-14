@@ -72,6 +72,9 @@ class FakeLanguageApi implements ILanguageApi {
   readonly synchronized: Parameters<ILanguageApi["synchronize"]>[0][] = [];
   readonly closed: Parameters<ILanguageApi["close"]>[0][] = [];
   readonly diagnosticPulls: Parameters<ILanguageApi["documentDiagnostics"]>[0][] = [];
+  documentDiagnosticsError: Error | undefined;
+  workspaceDiagnosticPulls = 0;
+  workspaceDiagnosticsError: Error | undefined;
   workspaceReport: Awaited<ReturnType<ILanguageApi["workspaceDiagnostics"]>> = { supported: false, snapshots: [] };
   async listMarketplace(): ReturnType<ILanguageApi["listMarketplace"]> { return { catalogRevision: "none", activationGeneration: 1, entries: [] }; }
   async installMarketplace(): ReturnType<ILanguageApi["installMarketplace"]> { return { activationGeneration: 1 }; }
@@ -81,8 +84,8 @@ class FakeLanguageApi implements ILanguageApi {
   completions(): ReturnType<ILanguageApi["completions"]> { throw new Error("unused"); }
   resolveCompletion(): ReturnType<ILanguageApi["resolveCompletion"]> { throw new Error("unused"); }
   executeCommand(): ReturnType<ILanguageApi["executeCommand"]> { throw new Error("unused"); }
-  async documentDiagnostics(params: Parameters<ILanguageApi["documentDiagnostics"]>[0]): ReturnType<ILanguageApi["documentDiagnostics"]> { this.diagnosticPulls.push(params); return { revision: params.document.revision, kind: "unchanged", diagnostics: [] }; }
-  async workspaceDiagnostics(): ReturnType<ILanguageApi["workspaceDiagnostics"]> { return this.workspaceReport; }
+  async documentDiagnostics(params: Parameters<ILanguageApi["documentDiagnostics"]>[0]): ReturnType<ILanguageApi["documentDiagnostics"]> { this.diagnosticPulls.push(params); if (this.documentDiagnosticsError) throw this.documentDiagnosticsError; return { revision: params.document.revision, kind: "unchanged", diagnostics: [] }; }
+  async workspaceDiagnostics(): ReturnType<ILanguageApi["workspaceDiagnostics"]> { this.workspaceDiagnosticPulls += 1; if (this.workspaceDiagnosticsError) throw this.workspaceDiagnosticsError; return this.workspaceReport; }
   formatDocument(): ReturnType<ILanguageApi["formatDocument"]> { throw new Error("unused"); }
   formatRange(): ReturnType<ILanguageApi["formatRange"]> { throw new Error("unused"); }
   signatureHelp(): ReturnType<ILanguageApi["signatureHelp"]> { throw new Error("unused"); }
@@ -125,4 +128,28 @@ test("App Server diagnostics service includes unopened workspace reports", async
   using acquisition = service.acquire(resource, "rust", model);
   await tick();
   assert.equal(service.getDiagnostics(resource), undefined);
+});
+
+test("App Server diagnostics service treats typed unavailable pulls as unsupported", async () => {
+  const events = new FakeServerEvents();
+  const api = new FakeLanguageApi();
+  api.documentDiagnosticsError = new Error("LanguageRequestFailed");
+  api.workspaceDiagnosticsError = new Error("LanguageServiceUnavailable");
+  const reported: unknown[][] = [];
+  const originalConsoleError = console.error;
+  console.error = (...arguments_: unknown[]) => reported.push(arguments_);
+  try {
+    using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:\\project") });
+    using service = new AppServerLanguageDiagnosticsService(api, events, workspace);
+    using model = new TextModel("fn main() {}\n");
+    using acquisition = service.acquire(URI.file("C:\\project\\main.rs"), "rust", model);
+    await tick();
+    await tick();
+
+    assert.equal(api.diagnosticPulls.length, 1);
+    assert.ok(api.workspaceDiagnosticPulls > 0);
+    assert.deepEqual(reported, []);
+  } finally {
+    console.error = originalConsoleError;
+  }
 });

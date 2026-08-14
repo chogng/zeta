@@ -17,6 +17,10 @@ export async function launchBrowser(options: BrowserLaunchOptions): Promise<Brow
   const browser = await chromium.launch();
   const context = await browser.newContext();
   const page = await context.newPage();
+  const consoleErrors: string[] = [];
+  page.on("console", message => {
+    if (message.type() === "error") consoleErrors.push(message.text());
+  });
   await page.goto(options.baseURL, { waitUntil: "domcontentloaded" });
   if (options.appServerMode === "required") {
     await page.waitForFunction(
@@ -26,7 +30,7 @@ export async function launchBrowser(options: BrowserLaunchOptions): Promise<Brow
     );
   }
 
-  const driver = new PlaywrightDriver(browser, page);
+  const driver = new PlaywrightDriver(browser, page, consoleErrors);
   await driver.workbench.waitForReady();
   return { application: browser, driver };
 }
