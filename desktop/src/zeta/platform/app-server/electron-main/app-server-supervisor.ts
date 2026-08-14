@@ -26,7 +26,7 @@ import {
   AppServerSession,
   type AppServerSessionOptions,
 } from "./app-server-session.js";
-import { JsonRpcPeer, type RpcRequestOptions } from "./json-rpc-peer.js";
+import { JsonRpcPeer, type RpcMethodDefinition, type RpcRequestContext, type RpcRequestOptions } from "./json-rpc-peer.js";
 
 export interface SpawnAppServerOptions {
   environment: Readonly<Record<string, string>>;
@@ -55,6 +55,12 @@ export interface AppServerSupervisorOptions {
 type StateListener = (state: AppServerConnectionState) => void;
 type NotificationListener = (notification: ServerNotification) => void;
 
+interface RegisteredRequestHandler {
+  readonly definition: RpcMethodDefinition<unknown, unknown>;
+  readonly handler: (params: unknown, context: RpcRequestContext) => unknown | Promise<unknown>;
+  active?: IDisposable;
+}
+
 /**
  * Supervises App Server process/session replacement without replaying application requests.
  */
@@ -64,6 +70,7 @@ export class AppServerSupervisor implements IDisposable {
   private readonly wait: (milliseconds: number) => Promise<void>;
   private readonly stateListeners = new Set<StateListener>();
   private readonly notificationListeners = new Set<NotificationListener>();
+  private readonly requestHandlers = new Map<string, RegisteredRequestHandler>();
   private readonly sessionNotification = new DisposableSlot<IDisposable>();
   private readonly maxRestartAttempts: number;
   private readonly initialRestartDelayMs: number;
@@ -178,6 +185,25 @@ export class AppServerSupervisor implements IDisposable {
     return this.session.request(definition, params, options);
   }
 
+  registerRequestHandler<P, R>(definition: RpcMethodDefinition<P, R>, handler: (params: P, context: RpcRequestContext) => R | Promise<R>): IDisposable {
+    if (this.disposed) throw new Error("Cannot register a handler on a disposed App Server supervisor");
+    if (this.requestHandlers.has(definition.method)) {
+      throw new Error(`App Server host request handler already registered: ${definition.method}`);
+    }
+    const entry: RegisteredRequestHandler = {
+      definition: definition as RpcMethodDefinition<unknown, unknown>,
+      handler: (params, context) => handler(params as P, context),
+    };
+    this.requestHandlers.set(definition.method, entry);
+    if (this.session) entry.active = this.session.registerRequestHandler(entry.definition, entry.handler);
+    return toDisposable(() => {
+      if (this.requestHandlers.get(definition.method) !== entry) return;
+      this.requestHandlers.delete(definition.method);
+      entry.active?.dispose();
+      entry.active = undefined;
+    });
+  }
+
   diagnostics(): string {
     return this.session?.diagnostics() ?? this.lastDiagnostics;
   }
@@ -191,6 +217,7 @@ export class AppServerSupervisor implements IDisposable {
     this.session = undefined;
     this.process = undefined;
     this.sessionNotification.clear();
+    this.clearActiveRequestHandlers();
     await session?.close();
     this.setState("stopped");
   }
@@ -210,6 +237,7 @@ export class AppServerSupervisor implements IDisposable {
       const exitedSession = this.session;
       this.lastDiagnostics = exitedSession?.diagnostics() ?? this.lastDiagnostics;
       this.sessionNotification.clear();
+      this.clearActiveRequestHandlers();
       this.process = undefined;
       this.session = undefined;
       if (exitedSession) {
@@ -227,6 +255,7 @@ export class AppServerSupervisor implements IDisposable {
     );
     setDisposableOwner(session, this);
     this.session = session;
+    this.activateRequestHandlers(session);
     this.sessionNotification.replace(session.onAnyNotification((notification) => {
       if (this.session !== session) return;
       for (const listener of this.notificationListeners) {
@@ -244,6 +273,7 @@ export class AppServerSupervisor implements IDisposable {
       this.lastDiagnostics = session.diagnostics();
       if (this.session === session) {
         this.sessionNotification.clear();
+        this.clearActiveRequestHandlers();
         this.session = undefined;
       }
       if (this.process === child) this.process = undefined;
@@ -281,6 +311,20 @@ export class AppServerSupervisor implements IDisposable {
     );
   }
 
+  private activateRequestHandlers(session: AppServerSession): void {
+    for (const entry of this.requestHandlers.values()) {
+      entry.active?.dispose();
+      entry.active = session.registerRequestHandler(entry.definition, entry.handler);
+    }
+  }
+
+  private clearActiveRequestHandlers(): void {
+    for (const entry of this.requestHandlers.values()) {
+      entry.active?.dispose();
+      entry.active = undefined;
+    }
+  }
+
   private setState(state: AppServerConnectionState): void {
     if (this._state === state) return;
     this._state = state;
@@ -298,6 +342,8 @@ export class AppServerSupervisor implements IDisposable {
     this.disposed = true;
     this.stateListeners.clear();
     this.notificationListeners.clear();
+    this.clearActiveRequestHandlers();
+    this.requestHandlers.clear();
     try {
       const stopping = this.stop();
       this.sessionNotification.dispose();

@@ -549,6 +549,36 @@ impl CompletedLanguageRequest {
             Self::Empty { revision, .. } | Self::Failed { revision, .. } => *revision,
         }
     }
+
+    fn result_count(&self) -> usize {
+        match self {
+            Self::Hover(_) | Self::CompletionDetails(_) | Self::CommandResult(_) => 1,
+            Self::Completions(result) => result.items.len(),
+            Self::Locations(result) => result.targets.len(),
+            Self::Hierarchy(result) => result.entries.len(),
+            Self::RenamePreparation(result) => usize::from(
+                result.range.is_some() || result.default_behavior || result.placeholder.is_some(),
+            ),
+            Self::WorkspaceEdit(_) => 1,
+            Self::CodeActions(result) => result.actions.len(),
+            Self::FormattingEdits(result) => result.edits.len(),
+            Self::SignatureHelp(result) => result.signatures.len(),
+            Self::InlayHints(result) => result.hints.len(),
+            Self::LinkedEditingRanges(result) => result.ranges.len(),
+            Self::SemanticTokens(result) => result.tokens.len(),
+            Self::DocumentSymbols(result) => result.symbols.len(),
+            Self::CodeLenses(result) => result.lenses.len(),
+            Self::DocumentLinks(result) => result.links.len(),
+            Self::DocumentColors(result) => result.colors.len(),
+            Self::ColorPresentations(result) => result.presentations.len(),
+            Self::FoldingRanges(result) => result.ranges.len(),
+            Self::PulledDiagnostics(result) => match &result.report {
+                LanguagePulledDiagnosticReport::Full(diagnostics) => diagnostics.len(),
+                LanguagePulledDiagnosticReport::Unchanged => 0,
+            },
+            Self::Empty { .. } | Self::Failed { .. } => 0,
+        }
+    }
 }
 
 impl Supervisor {
@@ -602,7 +632,13 @@ impl Supervisor {
         let failure_kind = request.kind();
         let failure_path = request.path().to_path_buf();
         let failure_revision = request.revision();
-        tokio::spawn(async move {
+        let kind = request.kind();
+        let cold_for_incarnation =
+            self.observed_request_kinds
+                .insert((server_name.clone(), server_epoch, kind));
+        let started = Instant::now();
+        let completion_server = server_name.clone();
+        let task = tokio::spawn(async move {
             let result = execute_request(client, request, uri, position, text, encoding)
                 .await
                 .or_else(|message| {
@@ -615,31 +651,51 @@ impl Supervisor {
                     })
                 });
             let _ = commands.send(SupervisorCommand::LanguageRequestCompleted {
-                server: server_name,
+                request_id: failure_id,
+                server: completion_server,
                 generation,
                 server_epoch,
                 result,
             });
         });
+        self.in_flight_requests.insert(
+            failure_id,
+            InFlightLanguageRequest {
+                task,
+                kind,
+                server: server_name.clone(),
+                server_epoch,
+                configuration_generation: self.configuration.generation,
+                service_generation: generation,
+                cold_for_incarnation,
+                started,
+            },
+        );
     }
 
     pub(super) fn complete_language_request(
-        &self,
+        &mut self,
+        request_id: LanguageRequestId,
         server: LanguageServerName,
         generation: u64,
         server_epoch: u64,
         result: Result<CompletedLanguageRequest, String>,
     ) {
+        let Some(tracking) = self.in_flight_requests.remove(&request_id) else {
+            return;
+        };
         if generation != self.generation
             || !self.servers.get(&server).is_some_and(|managed| {
                 managed.epoch == server_epoch && managed.phase == ManagedServerPhase::Ready
             })
         {
+            self.record_request_metric(tracking, LanguageRequestMetricOutcome::StaleDiscarded, 0);
             return;
         }
         let result = match result {
             Ok(result) => result,
             Err(message) => {
+                self.record_request_metric(tracking, LanguageRequestMetricOutcome::Failed, 0);
                 self.emit(LanguageServiceEvent::ServerMessage {
                     server: server.to_string(),
                     severity: LanguageServerMessageSeverity::Error,
@@ -653,8 +709,16 @@ impl Supervisor {
             document.routed && document.document.revision() == result.revision()
         });
         if !fresh {
+            self.record_request_metric(tracking, LanguageRequestMetricOutcome::StaleDiscarded, 0);
             return;
         }
+        let outcome = match &result {
+            CompletedLanguageRequest::Empty { .. } => LanguageRequestMetricOutcome::Empty,
+            CompletedLanguageRequest::Failed { .. } => LanguageRequestMetricOutcome::Failed,
+            _ => LanguageRequestMetricOutcome::Delivered,
+        };
+        let result_count = result.result_count();
+        self.record_request_metric(tracking, outcome, result_count);
         match result {
             CompletedLanguageRequest::Hover(result) => {
                 self.emit(LanguageServiceEvent::Hover(result))
@@ -769,12 +833,69 @@ impl Supervisor {
     }
 
     fn emit_request_failure(&self, request: &PendingLanguageRequest, message: &str) {
+        self.record_rejected_request(request.kind());
         self.emit(LanguageServiceEvent::RequestFailed {
             request_id: request.id(),
             kind: request.kind(),
             path: request.path().to_path_buf(),
             revision: request.revision(),
             message: message.into(),
+        });
+    }
+
+    pub(super) fn cancel_language_request(&mut self, request_id: LanguageRequestId) {
+        let Some(tracking) = self.in_flight_requests.remove(&request_id) else {
+            return;
+        };
+        tracking.task.abort();
+        self.record_request_metric(tracking, LanguageRequestMetricOutcome::Cancelled, 0);
+    }
+
+    pub(super) fn cancel_all_language_requests(&mut self) {
+        let requests = std::mem::take(&mut self.in_flight_requests);
+        for (_, tracking) in requests {
+            tracking.task.abort();
+            self.record_request_metric(tracking, LanguageRequestMetricOutcome::Cancelled, 0);
+        }
+    }
+
+    fn record_rejected_request(&self, kind: LanguageRequestKind) {
+        let Some(metrics) = &self.metrics else {
+            return;
+        };
+        metrics.record(LanguageRequestMetric {
+            kind,
+            server: None,
+            server_incarnation: None,
+            configuration_generation: self.configuration.generation,
+            service_generation: self.generation,
+            cold_for_incarnation: false,
+            elapsed_millis: 0,
+            result_count: 0,
+            outcome: LanguageRequestMetricOutcome::Rejected,
+        });
+    }
+
+    fn record_request_metric(
+        &self,
+        tracking: InFlightLanguageRequest,
+        outcome: LanguageRequestMetricOutcome,
+        result_count: usize,
+    ) {
+        let Some(metrics) = &self.metrics else {
+            return;
+        };
+        metrics.record(LanguageRequestMetric {
+            kind: tracking.kind,
+            server: Some(tracking.server.to_string()),
+            server_incarnation: Some(tracking.server_epoch),
+            configuration_generation: tracking.configuration_generation,
+            service_generation: tracking.service_generation,
+            cold_for_incarnation: tracking.cold_for_incarnation,
+            elapsed_millis: u64::try_from(tracking.started.elapsed().as_millis())
+                .unwrap_or(u64::MAX),
+            result_count,
+            outcome,
         });
     }
 }
@@ -1645,6 +1766,7 @@ impl Supervisor {
         query: String,
     ) {
         let Some((server, server_epoch)) = self.server_for_language(&language_id) else {
+            self.record_rejected_request(LanguageRequestKind::WorkspaceSymbols);
             self.emit(LanguageServiceEvent::WorkspaceSymbols(
                 LanguageWorkspaceSymbols {
                     request_id: id,
@@ -1655,6 +1777,7 @@ impl Supervisor {
             return;
         };
         let Ok(client) = self.router.client_for_language(&language_id).cloned() else {
+            self.record_rejected_request(LanguageRequestKind::WorkspaceSymbols);
             self.emit(LanguageServiceEvent::WorkspaceSymbols(
                 LanguageWorkspaceSymbols {
                     request_id: id,
@@ -1671,6 +1794,7 @@ impl Supervisor {
                 .workspace_symbol_provider,
             Some(OneOf::Left(true)) | Some(OneOf::Right(_))
         ) {
+            self.record_rejected_request(LanguageRequestKind::WorkspaceSymbols);
             self.emit(LanguageServiceEvent::WorkspaceSymbols(
                 LanguageWorkspaceSymbols {
                     request_id: id,
@@ -1684,7 +1808,13 @@ impl Supervisor {
         let generation = self.generation;
         let commands = self.commands.clone();
         let completion_query = query.clone();
-        tokio::spawn(async move {
+        let kind = LanguageRequestKind::WorkspaceSymbols;
+        let cold_for_incarnation =
+            self.observed_request_kinds
+                .insert((server.clone(), server_epoch, kind));
+        let started = Instant::now();
+        let completion_server = server.clone();
+        let task = tokio::spawn(async move {
             let result = client
                 .request::<WorkspaceSymbolRequest>(WorkspaceSymbolParams {
                     query: query.clone(),
@@ -1697,16 +1827,29 @@ impl Supervisor {
             let _ = commands.send(SupervisorCommand::WorkspaceSymbolsCompleted {
                 id,
                 query: completion_query,
-                server,
+                server: completion_server,
                 generation,
                 server_epoch,
                 result,
             });
         });
+        self.in_flight_requests.insert(
+            id,
+            InFlightLanguageRequest {
+                task,
+                kind,
+                server,
+                server_epoch,
+                configuration_generation: self.configuration.generation,
+                service_generation: generation,
+                cold_for_incarnation,
+                started,
+            },
+        );
     }
 
     pub(super) fn complete_workspace_symbols(
-        &self,
+        &mut self,
         id: LanguageRequestId,
         query: String,
         server: LanguageServerName,
@@ -1714,16 +1857,29 @@ impl Supervisor {
         server_epoch: u64,
         result: Result<LanguageWorkspaceSymbols, String>,
     ) {
+        let Some(tracking) = self.in_flight_requests.remove(&id) else {
+            return;
+        };
         if generation != self.generation
             || !self.servers.get(&server).is_some_and(|managed| {
                 managed.epoch == server_epoch && managed.phase == ManagedServerPhase::Ready
             })
         {
+            self.record_request_metric(tracking, LanguageRequestMetricOutcome::StaleDiscarded, 0);
             return;
         }
         match result {
-            Ok(result) => self.emit(LanguageServiceEvent::WorkspaceSymbols(result)),
+            Ok(result) => {
+                let result_count = result.symbols.len();
+                self.record_request_metric(
+                    tracking,
+                    LanguageRequestMetricOutcome::Delivered,
+                    result_count,
+                );
+                self.emit(LanguageServiceEvent::WorkspaceSymbols(result));
+            }
             Err(message) => {
+                self.record_request_metric(tracking, LanguageRequestMetricOutcome::Failed, 0);
                 self.emit(LanguageServiceEvent::ServerMessage {
                     server: server.to_string(),
                     severity: LanguageServerMessageSeverity::Error,

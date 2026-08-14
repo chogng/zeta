@@ -4,9 +4,11 @@
 > 具体实现见 [`zeta-code-index`](../zeta-rs/code-index/README.md)、
 > [`zeta-code-index-semantic`](../zeta-rs/code-index-semantic/README.md)、
 > [`zeta-code-retrieval`](../zeta-rs/code-retrieval/README.md)；可选远端 provider 控制面见
-> [`zeta-code-index-cloud`](../zeta-rs/code-index-cloud/README.md)。
+> [`zeta-code-index-cloud`](../zeta-rs/code-index-cloud/README.md)。编辑器语法、Language Server、本地符号
+> 索引与未来代码图的跨系统边界和开发顺序由 [`code-intelligence.md`](code-intelligence.md) canonical
+> 维护。
 
-## 结论
+## 快速理解
 
 Zeta 采用 local-first：本地扫描与切块、本地 SQLite/FTS、本地向量存储、本地 recall/fusion/final
 ordering。`zeta-model-provider` 只接入 embedding/rerank 模型；它不决定 chunks、候选、排序或存储。
@@ -15,14 +17,15 @@ ordering。`zeta-model-provider` 只接入 embedding/rerank 模型；它不决�
 | --- | --- | --- |
 | scan、ignore、chunk、revision identity | Workspace 本地 | ✅ |
 | lexical SQLite/FTS | 本地 | ✅ |
+| syntax symbol projection + fuzzy search | 本地 `zeta-symbol-index` | ✅；持久磁盘 projection + ephemeral dirty overlay |
 | embedding/rerank API 调用 | model adapter；模型可本地或远程 | ✅ OpenAI-compatible embedding/rerank；OpenAI/Ollama embedding |
 | embedding persistence、vector recall、rerank 分数解释与来源内排序 | 本地 `zeta-code-index-semantic` | ✅；自适应 exact/SimHash ANN |
-| lexical/semantic/optional remote fusion、复核与预算 | 本地 `zeta-code-retrieval` | ✅ |
+| symbol/lexical/semantic/optional remote fusion、复核与预算 | 本地 `zeta-code-retrieval` | ✅ |
 | 远端托管 code-index | 独立 provider | 可选 contract ✅；concrete provider 尚未完成 |
 | Agent 检索消费 | App Server + Core consumer | ✅ `search_code`；可选 first-invocation 自动 evidence |
 
 因此，Zeta 当前不是“把源码上传给自建服务器再让服务器完成整个 RAG”。默认 semantic selection 为
-disabled，只运行 lexical。用户配置 exact provider/model 并授权当前 Workspace 后，Zeta 才把模型当作
+disabled，只运行 local symbol + lexical。用户配置 exact provider/model 并授权当前 Workspace 后，Zeta 才把模型当作
 计算 API 调用；向量数据库和检索编排仍在本地。若 endpoint 位于远端，相应 chunk/query/candidate 文本
 会外发给模型。
 
@@ -47,23 +50,32 @@ flowchart TD
     Watch --> Scan["bounded ignore-aware scan"]
     Scan --> Chunk["local structural/line chunking"]
     Chunk --> Lexical["SQLite generation + FTS5"]
+    Chunk --> Symbols["SQLite symbol generation + Nucleo"]
+    Buffer["Editor dirty snapshot"] --> Overlay["canonical in-memory overlay"]
+    Overlay --> Lexical
+    Overlay --> Symbols
     Lexical --> Verify["materialize exact current chunks"]
     Verify --> Reuse["reuse vectors by root/model/path/language/chunk key"]
     Reuse --> Embed["EmbeddingInvoker for missing chunks"]
     Embed --> Dense["local SQLite embeddings"]
     Query["workspace/codeIndex/retrieve"] --> FTS["local lexical recall"]
+    Query --> SymbolQuery["local symbol recall"]
     Query --> QueryEmbed["query embedding"]
     QueryEmbed --> Vector["local cosine recall"]
     Vector --> Rerank["optional RerankInvoker"]
     Rerank --> Fuse["local RRF + identity dedupe"]
     FTS --> Fuse
+    SymbolQuery --> SymbolExcerpt["verified declaration excerpt"]
+    SymbolExcerpt --> Fuse
     Fuse --> Current["reread + verify current source"]
     Current --> Budget["item/total byte budget"]
 ```
 
 App Server 先注册 watcher，再把 scan/reconcile 投递给独立 refresh worker。lexical generation 成功更新后，
-worker 同步 semantic projection。新 semantic generation 采用 transaction 发布；同步完成前查询不会把旧
-generation 冒充当前结果，而是明确降级为 lexical。
+worker 同步 symbol 与 semantic projection。新 generation 采用 transaction 发布；同步完成前查询不会
+把旧 semantic generation 冒充当前结果，而是明确降级为 symbol/lexical。Editor dirty snapshot 由同一
+CodeIndex overlay 作为 current text authority；同路径磁盘 symbol/chunk 及 semantic/cloud candidate
+全部被抑制，直到磁盘 content hash 对齐后 handoff。
 
 重建并不等于重新调用所有 embedding。semantic store 使用 root、model ID、relative path、language 与
 稳定 chunk key 匹配可复用向量；只计算新增或变化的 chunks，再原子替换当前 generation。模型 ID 变化会
@@ -74,6 +86,7 @@ generation 冒充当前结果，而是明确降级为 lexical。
 | 能力 | Owner | 判断 |
 | --- | --- | --- |
 | filesystem scan、ignore、chunk、source revision 与 lexical FTS | `zeta-code-index` | ✅ 本地 authority |
+| verified declaration projection 与 fuzzy symbol ranking | `zeta-symbol-index` | ✅；不自主扫描 Workspace |
 | embedding/rerank 请求与响应 transport | `zeta-model-provider` | ✅ adapter contract；不排序 |
 | 模型输入准备、embedding cache、vector recall、rerank 时机/分数解释/排序 | `zeta-code-index-semantic` | ✅ 本地 orchestration |
 | 多来源 RRF、dedupe、current-source verification、content budget | `zeta-code-retrieval` | ✅ |
@@ -111,15 +124,19 @@ canonical 本地协议：
 
 - `workspace/codeIndex/status {}`；
 - `workspace/codeIndex/search { query, maxResults }`：纯 lexical 诊断；
-- `workspace/codeIndex/retrieve { query, maxResults }`：lexical + 可用 semantic/remote sources；
-- `workspace/codeIndex/rebuild {}`。
+- `workspace/codeIndex/retrieve { query, maxResults }`：symbol + lexical + 可用 semantic/remote sources；
+- `workspace/codeIndex/rebuild {}`；
+- `workspace/symbolIndex/status {}` 与 `workspace/symbolIndex/search { query, maxResults }`；
+- `workspace/codeIntelligence/document/synchronize|close`：同步/释放 ephemeral dirty overlay。
 
-`retrieve` origin 明确区分 `localLexical`、`localSemantic` 和 `cloudSemantic`。本地 semantic 或远端来源
-失败不会吞掉 FTS，而会返回 `localSemanticQueryFailed` 或 `cloudQueryFailed` degradation。
+`retrieve` origin 明确区分 `localSymbol`、`localLexical`、`localSemantic` 和 `cloudSemantic`。symbol、
+local semantic 或 remote source 失败不会吞掉 FTS，而会返回独立的
+`localSymbolQueryFailed`、`localSemanticQueryFailed` 或 `cloudQueryFailed` degradation。
 
 | projection | 默认路径 | 内容 |
 | --- | --- | --- |
 | lexical | `<profile>/code-index/<root-digest>.sqlite3` | chunks、generation、FTS |
+| symbols | `<profile>/symbol-index/<root-digest>.sqlite3` | source revisions、syntax declarations、generation；dirty overlay 不持久化 |
 | local semantic | `<profile>/code-index-semantic/<root-digest>.sqlite3` | chunks、model ID、embeddings |
 | remote control state | `<profile>/code-index-cloud/<root-digest>.sqlite3` | grant/phase/generation metadata；不保存源码/secret |
 
@@ -130,8 +147,10 @@ Workspace 安装。
 ## 一致性与安全
 
 - SQLite publication 使用 transaction；读者只看到完整 generation。
-- lexical、semantic 和 remote candidates 都只是 references；返回前必须从 Workspace 重读并验证
+- symbol、lexical、semantic 和 remote candidates 都只是 references；返回前必须从 Workspace 重读并验证
   root、revision、chunk key、range、line span 与 content hash。
+- dirty overlay 是 Editor-authorized current source projection；同 revision 不同内容会被拒绝，close、
+  Workspace replacement 或 content-hash handoff 会清理它，且它不会触发每次按键 remote embedding。
 - full scan 默认排除 hidden files，读取 Git ignore，并硬排除 `.git`、`.zeta`、`node_modules`、`target`。
 - 文件读取权限不等于网络 egress consent；默认 provider/model registry 为空。
 - OpenAI API-key semantic 调用要求 host 注入 `SecretStore`；Desktop 尚无持久化 API-key 管理 UI，因此
@@ -144,14 +163,15 @@ Workspace 安装。
 | --- | --- | --- |
 | 本地 lexical | ✅ Current | scan、chunk、stable identity、SQLite generation、FTS5、watcher |
 | 本地 semantic domain | ✅ Current | SQLite vectors、增量复用、embedding batches、cosine recall、optional rerank |
-| retrieval RPC | ✅ Current | 三来源 origin、RRF、dedupe、fallback、verification、byte budget |
+| local symbol index | ✅ Current | syntax extraction、SQLite reuse、Nucleo fuzzy、App Server RPC、Desktop staged provider |
+| retrieval RPC | ✅ Current | 四来源 origin、RRF、dedupe、fallback、verification、byte budget |
 | App Server composition | ✅ Current | durable selection/consent、trusted-only runtime、config rebind、background sync |
 | concrete embedding/rerank adapter | 部分具备 | OpenAI-compatible embedding/rerank、OpenAI/Ollama embedding；调用支持 cancellation/retry；持久化 credential UI 仍待补 |
 | semantic consent UI | 部分具备 | endpoint/model disclosure、exact Workspace scope、authorize/revoke、progress/cancel/retry；远端 retention audit 仍待 cloud provider |
 | scalable local ANN | ✅ Current | ≥2,048 chunks 使用 rebuildable SimHash candidates + exact cosine；异常自动 brute-force |
 | optional hosted provider | 尚未完成 | concrete endpoint、tenant auth、server DB、retention/deletion receipt |
 | Agent consumer | ✅ Current | 显式只读 `search_code`；可选 first-invocation 自动 evidence，默认关闭、预算受限且标记 untrusted |
-| Editor unsaved overlay | 尚未完成 | 当前只索引磁盘 generation |
+| Editor unsaved overlay | ✅ Current | canonical in-memory lexical/symbol projection、dirty suppression、save handoff |
 
 接下来的优先级是 secure credential 产品接入、ANN 召回/延迟实测与远端 retention audit。远端托管 provider
 与 PostgreSQL/pgvector 不应阻塞本地主路径。

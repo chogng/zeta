@@ -1,8 +1,18 @@
 use std::fmt;
-use std::future::{Future, ready};
+use zeta_async_utils::CancellationToken;
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct BrowserTargetId(pub String);
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CreateBrowserTargetRequest {
+    pub url: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CreateBrowserTargetResult {
+    pub target_id: BrowserTargetId,
+}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ElementTarget {
@@ -20,9 +30,12 @@ pub struct BrowserObserveRequest {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BrowserObservation {
     pub target_id: BrowserTargetId,
+    pub url: String,
+    pub title: String,
+    pub loading: bool,
     pub accessibility_tree: Option<String>,
     pub dom_snapshot: Option<String>,
-    pub screenshot: Option<PdfResource>,
+    pub screenshot: Option<MediaResource>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -65,12 +78,7 @@ pub struct BrowserActionResult {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct GetPdfRequest {
-    pub target_id: BrowserTargetId,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PdfResource {
+pub struct MediaResource {
     pub resource_id: String,
     pub mime_type: String,
     pub size: u64,
@@ -82,6 +90,8 @@ pub enum BrowserError {
     CapabilityUnavailable,
     TargetUnavailable(BrowserTargetId),
     PolicyDenied(String),
+    Cancelled(String),
+    TimedOut,
     Failed(String),
 }
 
@@ -95,6 +105,8 @@ impl fmt::Display for BrowserError {
             Self::PolicyDenied(reason) => {
                 write!(formatter, "browser action denied by policy: {reason}")
             }
+            Self::Cancelled(reason) => write!(formatter, "browser action cancelled: {reason}"),
+            Self::TimedOut => formatter.write_str("browser action timed out"),
             Self::Failed(reason) => formatter.write_str(reason),
         }
     }
@@ -107,38 +119,52 @@ impl std::error::Error for BrowserError {}
 /// enforcing target ownership, origin policy, deadlines, and cancellation. They must never expose
 /// arbitrary CDP commands to Core or let a closed target silently resolve to a different tab.
 pub trait BrowserCapability: Send + Sync {
+    fn create_target(
+        &self,
+        request: CreateBrowserTargetRequest,
+        cancellation: &CancellationToken,
+    ) -> Result<CreateBrowserTargetResult, BrowserError>;
     fn observe(
         &self,
         request: BrowserObserveRequest,
-    ) -> impl Future<Output = Result<BrowserObservation, BrowserError>> + Send;
+        cancellation: &CancellationToken,
+    ) -> Result<BrowserObservation, BrowserError>;
     fn perform(
         &self,
         action: BrowserAction,
-    ) -> impl Future<Output = Result<BrowserActionResult, BrowserError>> + Send;
-    fn get_pdf(
+        cancellation: &CancellationToken,
+    ) -> Result<BrowserActionResult, BrowserError>;
+    fn close_target(
         &self,
-        request: GetPdfRequest,
-    ) -> impl Future<Output = Result<PdfResource, BrowserError>> + Send;
+        target_id: BrowserTargetId,
+        cancellation: &CancellationToken,
+    ) -> Result<(), BrowserError>;
 }
 
 pub struct UnsupportedBrowserCapability;
 impl BrowserCapability for UnsupportedBrowserCapability {
+    fn create_target(
+        &self,
+        _: CreateBrowserTargetRequest,
+        _: &CancellationToken,
+    ) -> Result<CreateBrowserTargetResult, BrowserError> {
+        Err(BrowserError::CapabilityUnavailable)
+    }
     fn observe(
         &self,
         _: BrowserObserveRequest,
-    ) -> impl Future<Output = Result<BrowserObservation, BrowserError>> + Send {
-        ready(Err(BrowserError::CapabilityUnavailable))
+        _: &CancellationToken,
+    ) -> Result<BrowserObservation, BrowserError> {
+        Err(BrowserError::CapabilityUnavailable)
     }
     fn perform(
         &self,
         _: BrowserAction,
-    ) -> impl Future<Output = Result<BrowserActionResult, BrowserError>> + Send {
-        ready(Err(BrowserError::CapabilityUnavailable))
+        _: &CancellationToken,
+    ) -> Result<BrowserActionResult, BrowserError> {
+        Err(BrowserError::CapabilityUnavailable)
     }
-    fn get_pdf(
-        &self,
-        _: GetPdfRequest,
-    ) -> impl Future<Output = Result<PdfResource, BrowserError>> + Send {
-        ready(Err(BrowserError::CapabilityUnavailable))
+    fn close_target(&self, _: BrowserTargetId, _: &CancellationToken) -> Result<(), BrowserError> {
+        Err(BrowserError::CapabilityUnavailable)
     }
 }

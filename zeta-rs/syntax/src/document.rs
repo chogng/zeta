@@ -5,9 +5,9 @@ use tree_sitter::{InputEdit, Node, Parser, Point, Query, QueryCursor, StreamingI
 
 use crate::language::LanguageConfiguration;
 use crate::{
-    AnalysisLimits, DocumentSymbol, DocumentSymbolKind, FoldingRange, SyntaxDiagnostic,
-    SyntaxDiagnosticKind, SyntaxError, SyntaxLanguage, SyntaxPoint, SyntaxRange, SyntaxSnapshot,
-    SyntaxToken, SyntaxTokenKind,
+    AnalysisLimits, DocumentSymbol, DocumentSymbolKind, FoldingRange, SelectionRange,
+    SyntaxDiagnostic, SyntaxDiagnosticKind, SyntaxError, SyntaxLanguage, SyntaxPoint, SyntaxRange,
+    SyntaxSnapshot, SyntaxToken, SyntaxTokenKind,
 };
 
 /// Monotonic host-owned revision attached to source text and derived analysis.
@@ -134,6 +134,22 @@ impl SyntaxDocument {
             ),
             collect_diagnostics(&self.tree, self.limits.max_diagnostics),
         )
+    }
+
+    /// Returns the bounded, innermost-first parser scopes enclosing one exact byte range.
+    ///
+    /// The query is intentionally separate from [`Self::snapshot`] so consumers that only need
+    /// highlighting, folding, symbols, or diagnostics do not pay to serialize the whole tree.
+    pub fn selection_ranges(
+        &self,
+        range: Range<usize>,
+    ) -> Result<Vec<SelectionRange>, SyntaxError> {
+        validate_selection_range(&self.text, &range)?;
+        Ok(collect_selection_ranges(
+            &self.tree,
+            range,
+            self.limits.max_selection_ranges,
+        ))
     }
 
     pub fn apply_edit(
@@ -283,6 +299,22 @@ fn validate_edit(text: &str, edit: &SyntaxEdit) -> Result<(), SyntaxError> {
     Ok(())
 }
 
+fn validate_selection_range(text: &str, range: &Range<usize>) -> Result<(), SyntaxError> {
+    if range.start > range.end || range.end > text.len() {
+        return Err(SyntaxError::InvalidSelectionRange {
+            start: range.start,
+            end: range.end,
+            document_len: text.len(),
+        });
+    }
+    for offset in [range.start, range.end] {
+        if !text.is_char_boundary(offset) {
+            return Err(SyntaxError::InvalidSelectionBoundary { offset });
+        }
+    }
+    Ok(())
+}
+
 fn validated_edits<'a>(
     text: &str,
     edits: &'a [SyntaxEdit],
@@ -382,6 +414,47 @@ fn collect_folding_ranges(tree: &Tree, limit: usize) -> Vec<FoldingRange> {
     ranges
 }
 
+fn collect_selection_ranges(
+    tree: &Tree,
+    requested: Range<usize>,
+    limit: usize,
+) -> Vec<SelectionRange> {
+    if limit == 0 {
+        return Vec::new();
+    }
+    let lookup_end = requested
+        .end
+        .saturating_sub(usize::from(!requested.is_empty()));
+    let root = tree.root_node();
+    let Some(mut node) = root.named_descendant_for_byte_range(requested.start, lookup_end) else {
+        return Vec::new();
+    };
+    let mut ranges = Vec::new();
+    loop {
+        if node.parent().is_some()
+            && node.is_named()
+            && !node.is_error()
+            && !node.is_missing()
+            && node.start_byte() < node.end_byte()
+            && node.start_byte() <= requested.start
+            && requested.end <= node.end_byte()
+        {
+            ranges.push(SelectionRange {
+                range: syntax_range(node),
+            });
+            if ranges.len() == limit {
+                break;
+            }
+        }
+        let Some(parent) = node.parent() else {
+            break;
+        };
+        node = parent;
+    }
+    ranges.dedup_by(|left, right| left.range.bytes == right.range.bytes);
+    ranges
+}
+
 fn is_foldable(kind: &str) -> bool {
     matches!(
         kind,
@@ -461,7 +534,7 @@ fn symbol_kind(capture_name: &str) -> Option<DocumentSymbolKind> {
         "method" => Some(DocumentSymbolKind::Method),
         "module" => Some(DocumentSymbolKind::Module),
         "static" => Some(DocumentSymbolKind::Static),
-        "struct" => Some(DocumentSymbolKind::Struct),
+        "class" | "struct" => Some(DocumentSymbolKind::Struct),
         "trait" | "interface" => Some(DocumentSymbolKind::Trait),
         "type" => Some(DocumentSymbolKind::Type),
         "variable" => Some(DocumentSymbolKind::Variable),

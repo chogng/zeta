@@ -10,6 +10,7 @@ import { workspaceRelativePath, workspaceResourceFromPath } from "../../../../pl
 import { type ILanguageApi } from "../../../../platform/language/common/languageApi.js";
 import { type IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import { type LanguageCodeActionDiagnosticDto, type LanguageDiagnosticsNotification } from "../../../../../../generated/app-server/types.js";
+import { type ICodeIntelligenceDocumentService } from "../../codeIntelligence/common/codeIntelligenceDocumentService.js";
 import { APP_SERVER_WORKSPACE_DIAGNOSTIC_LANGUAGE_IDS, isAppServerLanguageId } from "./appServerLanguageSupport.js";
 import { type ILanguageDiagnosticsService, type LanguageDiagnosticSnapshot } from "../common/languageDiagnosticsService.js";
 
@@ -44,7 +45,7 @@ export class AppServerLanguageDiagnosticsService extends DisposableOwner impleme
   private alive = true;
   readonly onDidChangeDiagnostics = this.changeEmitter.event;
 
-  constructor(private readonly api: ILanguageApi, events: IServerEventApi, private readonly workspace: IWorkspaceContextService) {
+  constructor(private readonly api: ILanguageApi, events: IServerEventApi, private readonly workspace: IWorkspaceContextService, private readonly codeIntelligenceDocuments?: ICodeIntelligenceDocumentService) {
     super();
     const subscription = events.subscribe(event => {
       if (event.method === "language/diagnostics") this.acceptDiagnostics(event.params);
@@ -154,7 +155,10 @@ export class AppServerLanguageDiagnosticsService extends DisposableOwner impleme
     entry.queue = entry.queue.catch(() => undefined).then(async () => {
       if (entry.references === 0 || this.entries.get(entry.resource.toString()) !== entry) return;
       const document = { path: entry.path, languageId: entry.languageId, revision: snapshot.version, text };
-      await this.api.synchronize({ document });
+      await Promise.all([
+        this.api.synchronize({ document }),
+        this.codeIntelligenceDocuments?.synchronize(document).catch(reportCodeIntelligenceSynchronizationError),
+      ]);
       try {
         const report = await this.api.documentDiagnostics({ document });
         if (report.kind === "full") this.acceptDiagnostics({ path: entry.path, revision: report.revision, diagnostics: report.diagnostics });
@@ -225,7 +229,10 @@ export class AppServerLanguageDiagnosticsService extends DisposableOwner impleme
     if (this.serverSnapshots.delete(key)) this.changeEmitter.fire(entry.resource);
     entry.queue = entry.queue.catch(() => undefined).then(async () => {
       if (entry.references > 0) return;
-      await this.api.close({ path: entry.path });
+      await Promise.all([
+        this.api.close({ path: entry.path }),
+        this.codeIntelligenceDocuments?.close(entry.path).catch(reportCodeIntelligenceSynchronizationError),
+      ]);
       if (entry.references === 0 && this.entries.get(key) === entry) this.entries.delete(key);
       this.queueWorkspaceDiagnostics();
     }).catch(reportLanguageSynchronizationError);
@@ -270,6 +277,10 @@ export class AppServerLanguageDiagnosticsService extends DisposableOwner impleme
     if (folders.length !== 1) throw new Error("Language diagnostics require one workspace folder");
     return folders[0]!.uri;
   }
+}
+
+function reportCodeIntelligenceSynchronizationError(error: unknown): void {
+  console.error("Code-intelligence document synchronization failed", error);
 }
 
 function isUnsupportedDiagnosticPull(error: unknown): boolean {

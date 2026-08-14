@@ -5,11 +5,11 @@ use std::sync::OnceLock;
 use rust_stemmers::Algorithm;
 use rust_stemmers::Stemmer;
 
-use crate::rules::is_natural_language_one_off_or_prefix;
-use crate::shell::ShellTokenSnapshot;
 use crate::InputClassification;
 use crate::InputClassificationSource;
 use crate::InputRoute;
+use crate::rules::is_natural_language_one_off_or_prefix;
+use crate::shell::ShellTokenSnapshot;
 
 const MINIMUM_DETECTION_TOKEN_LENGTH: usize = 2;
 const END_TOKEN_COMPLETE_KEYS: &[char] = &[' ', '?', '!', '.', '"', ','];

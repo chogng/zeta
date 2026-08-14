@@ -248,6 +248,30 @@ pub struct MaterializedSource {
     pub content: String,
 }
 
+/// Latest immutable editor snapshot submitted to the Workspace-owned in-memory overlay.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CodeIndexOverlayDocument {
+    pub relative_path: PathBuf,
+    pub editor_revision: u64,
+    pub language: IndexedLanguage,
+    pub content: String,
+}
+
+/// One materialized dirty source and its canonical in-memory chunks.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MaterializedOverlayDocument {
+    pub editor_revision: u64,
+    pub source: MaterializedSource,
+    pub chunks: Vec<MaterializedChunk>,
+}
+
+/// Immutable content-bearing snapshot of every dirty document for one overlay generation.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CodeIndexOverlaySnapshot {
+    pub generation: u64,
+    pub documents: Vec<MaterializedOverlayDocument>,
+}
+
 /// Storage placement for one rebuildable index projection.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum CodeIndexStorage {

@@ -7,6 +7,15 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+/// Generic JSON-RPC error returned by a client-hosted method implementation.
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct JsonRpcError {
+    pub code: i64,
+    pub message: String,
+    pub data: serde_json::Value,
+}
+
 /// The only JSON-RPC version accepted by the current wire encoding.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 pub enum JsonRpcVersion {

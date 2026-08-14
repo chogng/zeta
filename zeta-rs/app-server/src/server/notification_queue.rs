@@ -8,7 +8,7 @@ use std::sync::Weak;
 const MAX_NOTIFICATION_QUEUE_LEN: usize = 4_096;
 
 #[derive(Clone, Debug, Default)]
-pub(super) struct NotificationQueue {
+pub(crate) struct NotificationQueue {
     inner: Arc<NotificationQueueInner>,
 }
 
@@ -40,17 +40,17 @@ impl NotificationQueue {
         }
     }
 
-    pub(super) fn listener(&self) -> NotificationListener {
+    pub(crate) fn listener(&self) -> NotificationListener {
         NotificationListener {
             queue: self.clone(),
         }
     }
 
-    pub(super) fn push(&self, value: Value) {
+    pub(crate) fn push(&self, value: Value) {
         self.extend([value]);
     }
 
-    pub(super) fn extend(&self, values: impl IntoIterator<Item = Value>) {
+    pub(crate) fn extend(&self, values: impl IntoIterator<Item = Value>) {
         if let Ok(mut state) = self.inner.state.lock() {
             let was_empty = state.values.is_empty();
             for value in values {
@@ -74,7 +74,7 @@ impl NotificationQueue {
         }
     }
 
-    pub(super) fn drain(&self) -> Vec<Value> {
+    pub(crate) fn drain(&self) -> Vec<Value> {
         self.inner
             .state
             .lock()
@@ -82,7 +82,7 @@ impl NotificationQueue {
             .unwrap_or_default()
     }
 
-    pub(super) fn close(&self) {
+    pub(crate) fn close(&self) {
         if let Ok(mut state) = self.inner.state.lock() {
             state.closed = true;
             self.inner.changed.notify_all();

@@ -1,6 +1,6 @@
 import { raceCancellation } from "../../../base/common/cancellation.js";
 import { DisposableOwner } from "../../../base/common/lifecycle.js";
-import type { ISyntaxApi, SyntaxAnalyzeResult, SyntaxDiagnostic, SyntaxSymbol, SyntaxToken } from "../../../platform/syntax/common/syntaxApi.js";
+import type { ISyntaxApi, SyntaxAnalyzeResult, SyntaxDiagnostic, SyntaxSelectionRangesResult, SyntaxSymbol, SyntaxToken } from "../../../platform/syntax/common/syntaxApi.js";
 import { type LanguageDocumentSymbol, type LanguageDocumentSymbolProvider } from "../../contrib/documentSymbols/common/documentSymbols.js";
 import { TextPosition, TextRange, type TextSnapshot } from "../../common/core/text.js";
 import type { SyntaxRequest } from "../../common/languages/syntax/syntaxProviders.js";
@@ -54,6 +54,21 @@ export class RustSyntaxFactsService extends DisposableOwner {
       throw new Error("Rust syntax result does not match the requested Aster model revision");
     }
     return result;
+  }
+
+  async selectionRanges(languageId: string, snapshot: TextSnapshot, ranges: readonly TextRange[], signal: AbortSignal): Promise<readonly TextRange[]> {
+    this.ensureAlive();
+    const language = syntaxLanguageForAsterLanguage(languageId);
+    if (!language || ranges.length === 0) return Object.freeze([]);
+    const text = snapshot.getText();
+    if (new TextEncoder().encode(text).byteLength > MAX_SYNTAX_INPUT_BYTES) return Object.freeze([]);
+    const result = await raceCancellation(this.syntax.selectionRanges({
+      language,
+      revision: snapshot.version,
+      text,
+      ranges: ranges.map(range => ({ start: range.start, end: range.end })),
+    }), signal, "Rust syntax selection request was cancelled");
+    return projectRustSyntaxSelectionRanges(result, snapshot);
   }
 
   private ensureAlive(): void {
@@ -180,6 +195,12 @@ export function projectRustSyntaxSymbols(result: SyntaxAnalyzeResult, snapshot: 
   return Object.freeze(result.symbols.map(symbol => projectRustSyntaxSymbol(symbol, lines)));
 }
 
+export function projectRustSyntaxSelectionRanges(result: SyntaxSelectionRangesResult, snapshot: TextSnapshot): readonly TextRange[] {
+  assertMatchingRevision(result, snapshot);
+  const lines = snapshotLines(snapshot);
+  return Object.freeze(result.ranges.map(selection => projectRange(selection.range, lines)));
+}
+
 function projectRustSyntaxDiagnostic(diagnostic: SyntaxDiagnostic, lines: readonly string[]) {
   const range = projectRange(diagnostic.range, lines);
   return Object.freeze({
@@ -256,7 +277,7 @@ function snapshotLines(snapshot: TextSnapshot): readonly string[] {
   return Object.freeze(lines);
 }
 
-function assertMatchingRevision(result: SyntaxAnalyzeResult, snapshot: TextSnapshot): void {
+function assertMatchingRevision(result: Pick<SyntaxAnalyzeResult, "revision">, snapshot: TextSnapshot): void {
   if (result.revision !== snapshot.version) {
     throw new Error("Rust syntax result does not match the requested Aster snapshot");
   }

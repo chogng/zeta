@@ -21,6 +21,7 @@ use zeta_language_server_catalog::LanguageServerProviderRegistry;
 use zeta_language_server_catalog::RUST_ANALYZER_SERVER_ID;
 use zeta_language_server_catalog::TYPESCRIPT_LANGUAGE_SERVER_ID;
 use zeta_language_service::LanguageRequestId;
+use zeta_language_service::LanguageRequestMetric;
 use zeta_language_service::LanguageServerMessageSeverity;
 use zeta_language_service::LanguageServerState;
 use zeta_language_service::LanguageService;
@@ -28,6 +29,7 @@ use zeta_language_service::LanguageServiceConfiguration;
 use zeta_language_service::LanguageServiceDocument;
 use zeta_language_service::LanguageServiceEvent;
 use zeta_language_service::LanguageServiceEventSink;
+use zeta_language_service::LanguageServiceMetricsSink;
 
 use zeta_app_server_protocol::protocol::language::LanguageDiagnosticsNotification;
 use zeta_app_server_protocol::protocol::language::LanguageServerMessageNotification;
@@ -39,6 +41,26 @@ use super::update_broker::UpdateBroker;
 
 const SERVER_START_TIMEOUT: Duration = Duration::from_secs(15);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+
+struct AppServerLanguageMetrics;
+
+impl LanguageServiceMetricsSink for AppServerLanguageMetrics {
+    fn record(&self, metric: LanguageRequestMetric) {
+        log::debug!(
+            target: "zeta_language_service",
+            "request completed: kind={:?} server={} incarnation={} config_generation={} service_generation={} cold={} elapsed_ms={} results={} outcome={:?}",
+            metric.kind,
+            metric.server.as_deref().unwrap_or("none"),
+            metric.server_incarnation.map_or_else(|| "none".into(), |value| value.to_string()),
+            metric.configuration_generation,
+            metric.service_generation,
+            metric.cold_for_incarnation,
+            metric.elapsed_millis,
+            metric.result_count,
+            metric.outcome,
+        );
+    }
+}
 
 struct AppServerLanguageEventSink {
     sender: mpsc::Sender<LanguageServiceEvent>,
@@ -319,8 +341,9 @@ impl AppServerLanguageRuntime {
             return Err("no configured language-server executable is available".into());
         }
         let (sender, receiver) = mpsc::channel();
-        let service = LanguageService::start(
-            LanguageServiceConfiguration::enabled(workspace_root, definitions),
+        let service = LanguageService::start_with_metrics(
+            LanguageServiceConfiguration::enabled(workspace_root, definitions)
+                .with_generation(config_generation),
             Arc::new(AppServerLanguageEventSink {
                 sender,
                 diagnostics: Arc::new(LanguageDiagnosticPublisher {
@@ -328,6 +351,7 @@ impl AppServerLanguageRuntime {
                     updates: Arc::clone(&self.updates),
                 }),
             }),
+            Arc::new(AppServerLanguageMetrics),
         )
         .map_err(|error| error.to_string())?;
         self.service = Some(service);

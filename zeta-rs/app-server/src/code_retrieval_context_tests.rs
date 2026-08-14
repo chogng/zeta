@@ -70,6 +70,7 @@ fn automatic_context_requires_both_opt_in_and_current_workspace_egress_consent()
         Arc::new(ConfigStore::open(profile.path().join("config.sqlite3")).expect("config"));
     let source = CodeRetrievalContextSource::new(
         Arc::clone(&index),
+        None,
         Some(semantic),
         None,
         Some(Arc::clone(&config)),

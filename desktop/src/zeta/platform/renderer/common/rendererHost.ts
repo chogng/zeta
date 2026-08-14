@@ -17,6 +17,7 @@ import type { ILanguageApi } from "../../language/common/languageApi.js";
 import type { IPluginApi } from "../../plugins/common/pluginApi.js";
 import type { IDebugAdapterProcessService } from "../../debug/common/debugAdapterProcessService.js";
 import type { IExtensionHostApi } from "../../extensionHost/common/extensionHostApi.js";
+import type { ISymbolIndexApi } from "../../symbolIndex/common/symbolIndexApi.js";
 
 /** Optional product capabilities contributed by a statically selected host bundle. */
 export interface RendererHostCapabilities {
@@ -58,6 +59,7 @@ export interface IRendererHost extends RendererHostCapabilities {
   readonly terminal: ITerminalProcessService;
   readonly events: IServerEventApi;
   readonly codeIndex: ICodeIndexApi;
+  readonly symbolIndex: ISymbolIndexApi;
   readonly connectors: IConnectorApi;
   readonly plugins: IPluginApi;
   readonly toolSearch: IToolSearchApi;

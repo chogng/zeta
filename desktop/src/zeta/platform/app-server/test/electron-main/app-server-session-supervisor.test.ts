@@ -50,6 +50,10 @@ class ProtocolChildProcess extends EventEmitter {
     this.stdout.write(`${JSON.stringify({ jsonrpc: "2.0", id, result })}\n`);
   }
 
+  requestHost(id: string, method: string, params: unknown): void {
+    this.stdout.write(`${JSON.stringify({ jsonrpc: "2.0", id, method, params })}\n`);
+  }
+
   private onStdin(chunk: Buffer): void {
     this.stdinBuffer += chunk.toString("utf8");
     const frames = this.stdinBuffer.split("\n");
@@ -222,6 +226,33 @@ test("workspace switching keeps the current App Server process and connection", 
   assert.equal(children[0].signalCode, null);
   assert.equal(supervisor.state, "ready");
   assert.deepEqual(states, ["starting", "initializing", "ready"]);
+  await supervisor.stop();
+});
+
+test("supervisor advertises and preserves client-hosted request handlers", async () => {
+  const children: ProtocolChildProcess[] = [];
+  const options = supervisorOptions(children);
+  options.session.capabilities = {
+    browser: { version: 1, observe: true, input: true },
+  };
+  const supervisor = new AppServerSupervisor(options);
+  const registration = supervisor.registerRequestHandler(
+    { method: "browser/create" },
+    (params: { url: string }) => ({ targetId: `target:${params.url}` }),
+  );
+  await supervisor.start();
+  const initialize = children[0].requests.find(request => request.method === "initialize");
+  assert.deepEqual((initialize?.params as { capabilities: unknown }).capabilities, {
+    notifications: true,
+    browser: { version: 1, observe: true, input: true },
+  });
+
+  children[0].requestHost("browser-host:1:1", "browser/create", { url: "https://example.test/" });
+  await new Promise<void>(resolve => setImmediate(resolve));
+  const response = children[0].requests.find(request => request.id === "browser-host:1:1");
+  assert.deepEqual(response?.result, { targetId: "target:https://example.test/" });
+
+  registration.dispose();
   await supervisor.stop();
 });
 

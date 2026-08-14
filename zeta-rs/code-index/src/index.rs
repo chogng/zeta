@@ -1,8 +1,10 @@
 use std::collections::BTreeMap;
 use std::fs;
 use std::io::Read;
+use std::path::Component;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use sha2::Digest;
 use sha2::Sha256;
@@ -11,9 +13,12 @@ use zeta_workspace::WorkspaceRoot;
 use crate::ChunkContentHash;
 use crate::ChunkKey;
 use crate::ChunkReference;
+use crate::ChunkSpan;
 use crate::CodeIndexError;
 use crate::CodeIndexLimits;
 use crate::CodeIndexManifest;
+use crate::CodeIndexOverlayDocument;
+use crate::CodeIndexOverlaySnapshot;
 use crate::CodeIndexQuery;
 use crate::CodeIndexSnapshot;
 use crate::CodeIndexStorage;
@@ -33,6 +38,7 @@ use crate::chunker::line_at;
 use crate::chunker::line_starts;
 use crate::chunker::source_revision;
 use crate::error::io_error;
+use crate::overlay::CodeIndexOverlay;
 use crate::scanner::prepare_relative_file;
 use crate::scanner::scan_workspace;
 use crate::store::FileUpdate;
@@ -45,6 +51,7 @@ pub struct CodeIndex {
     root_id: IndexRootId,
     limits: CodeIndexLimits,
     store: IndexStore,
+    overlay: Arc<CodeIndexOverlay>,
 }
 
 impl CodeIndex {
@@ -65,6 +72,7 @@ impl CodeIndex {
             root_id,
             limits,
             store,
+            overlay: Arc::new(CodeIndexOverlay::default()),
         })
     }
 
@@ -163,7 +171,65 @@ impl CodeIndex {
     pub fn search(&self, query: &CodeIndexQuery) -> Result<Vec<SearchHit>, CodeIndexError> {
         let expression = literal_fts_expression(query.text(), self.limits.max_query_bytes)?;
         let result_limit = query.result_limit().get().min(self.limits.max_results);
-        self.store.search(&self.root_id, &expression, result_limit)
+        let dirty_paths = self.overlay.dirty_paths();
+        let mut hits = self.overlay.search(query.text(), result_limit);
+        hits.extend(
+            self.store
+                .search(&self.root_id, &expression, self.limits.max_results)?
+                .into_iter()
+                .filter(|hit| !dirty_paths.contains(&hit.reference.relative_path)),
+        );
+        hits.sort_by(|left, right| {
+            right
+                .score
+                .total_cmp(&left.score)
+                .then_with(|| left.reference.cmp(&right.reference))
+        });
+        hits.truncate(result_limit);
+        Ok(hits)
+    }
+
+    /// Publishes the latest editor snapshot without mutating the persistent disk projection.
+    pub fn synchronize_overlay(
+        &self,
+        document: CodeIndexOverlayDocument,
+    ) -> Result<CodeIndexOverlaySnapshot, CodeIndexError> {
+        validate_overlay_path(&document.relative_path)?;
+        let persistent = self
+            .manifest()?
+            .sources
+            .into_iter()
+            .find(|source| source.relative_path == document.relative_path);
+        self.overlay.synchronize(
+            &self.root_id,
+            &self.limits,
+            document,
+            persistent.as_ref().map(|source| &source.source_revision),
+        )
+    }
+
+    /// Releases one editor document from the ephemeral overlay.
+    pub fn close_overlay(
+        &self,
+        relative_path: &Path,
+    ) -> Result<CodeIndexOverlaySnapshot, CodeIndexError> {
+        validate_overlay_path(relative_path)?;
+        Ok(self.overlay.close(relative_path))
+    }
+
+    /// Hands matching dirty snapshots back to the persistent generation after a save is observed.
+    pub fn handoff_matching_overlays(&self) -> Result<CodeIndexOverlaySnapshot, CodeIndexError> {
+        Ok(self.overlay.handoff(&self.manifest()?))
+    }
+
+    /// Returns the current immutable content-bearing overlay projection.
+    pub fn overlay_snapshot(&self) -> CodeIndexOverlaySnapshot {
+        self.overlay.snapshot()
+    }
+
+    /// Returns paths whose editor content supersedes every persistent candidate source.
+    pub fn dirty_overlay_paths(&self) -> std::collections::BTreeSet<PathBuf> {
+        self.overlay.dirty_paths()
     }
 
     /// Rereads one search result and proves that its revision, range, and chunk identities still
@@ -174,6 +240,9 @@ impl CodeIndex {
     ) -> Result<MaterializedChunk, CodeIndexError> {
         if reference.root_id != self.root_id {
             return Err(CodeIndexError::StorageRootMismatch);
+        }
+        if let Some(materialized) = self.overlay.materialize_chunk(reference) {
+            return materialized;
         }
         let absolute_path = self.root.resolve_existing(&reference.relative_path)?;
         let source = read_source_for_verification(&absolute_path, self.limits.max_file_bytes)?;
@@ -187,6 +256,9 @@ impl CodeIndex {
         reference: &SourceExcerptReference,
     ) -> Result<MaterializedExcerpt, CodeIndexError> {
         self.validate_root(&reference.root_id)?;
+        if let Some(materialized) = self.overlay.materialize_excerpt(reference) {
+            return materialized;
+        }
         let absolute_path = self.root.resolve_existing(&reference.relative_path)?;
         let source = read_source_for_verification(&absolute_path, self.limits.max_file_bytes)?;
         validate_source_revision(&source, &reference.source_revision)?;
@@ -202,6 +274,32 @@ impl CodeIndex {
         })
     }
 
+    /// Verifies an exact source revision and creates a content-addressed excerpt reference for a
+    /// Workspace-owned range such as a syntax declaration.
+    pub fn materialize_verified_excerpt(
+        &self,
+        source: &IndexedSourceReference,
+        span: ChunkSpan,
+    ) -> Result<MaterializedExcerpt, CodeIndexError> {
+        let materialized = self
+            .materialize_sources(std::slice::from_ref(source))?
+            .pop()
+            .ok_or(CodeIndexError::InvalidChunkRange)?;
+        let content = verified_span_content(&materialized.content, &span)?;
+        let reference = SourceExcerptReference {
+            root_id: source.root_id.clone(),
+            relative_path: source.relative_path.clone(),
+            source_revision: source.source_revision.clone(),
+            content_hash: ChunkContentHash::new(sha256(content.as_bytes())),
+            span,
+        };
+        Ok(MaterializedExcerpt {
+            reference,
+            language: source.language,
+            content: content.to_owned(),
+        })
+    }
+
     /// Rereads and verifies complete source files selected from one published manifest.
     pub fn materialize_sources(
         &self,
@@ -211,6 +309,9 @@ impl CodeIndex {
             .iter()
             .map(|reference| {
                 self.validate_root(&reference.root_id)?;
+                if let Some(materialized) = self.overlay.materialize_source(reference) {
+                    return materialized;
+                }
                 let absolute_path = self.root.resolve_existing(&reference.relative_path)?;
                 let content =
                     read_source_for_verification(&absolute_path, self.limits.max_file_bytes)?;
@@ -258,6 +359,20 @@ impl CodeIndex {
     }
 }
 
+fn validate_overlay_path(relative_path: &Path) -> Result<(), CodeIndexError> {
+    if relative_path.as_os_str().is_empty()
+        || !relative_path.is_relative()
+        || relative_path
+            .components()
+            .any(|component| !matches!(component, Component::Normal(_)))
+        || is_hard_excluded_path(relative_path)
+    {
+        Err(CodeIndexError::InvalidOverlayPath)
+    } else {
+        Ok(())
+    }
+}
+
 fn materialize_chunk_from_source(
     reference: &ChunkReference,
     source: &str,
@@ -278,7 +393,7 @@ fn materialize_chunk_from_source(
     })
 }
 
-fn verified_span_content<'a>(
+pub(crate) fn verified_span_content<'a>(
     source: &'a str,
     span: &crate::ChunkSpan,
 ) -> Result<&'a str, CodeIndexError> {

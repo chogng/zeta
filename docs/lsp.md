@@ -6,7 +6,9 @@
 > 本文拥有跨 crate 的语言能力语义、所有权和演进阶段；当前实现接口与修改路径由
 > [`zeta-lsp` README](../zeta-rs/lsp/README.md) 和
 > [`zeta-language-server-catalog` README](../zeta-rs/language-server-catalog/README.md)、
-> [`zeta-language-service` README](../zeta-rs/language-service/README.md) 分别拥有。
+> [`zeta-language-service` README](../zeta-rs/language-service/README.md) 分别拥有。本地符号索引与
+> Language Server 结果如何组合、以及未来代码图的边界见
+> [`code-intelligence.md`](code-intelligence.md)。
 
 ## 快速理解
 
@@ -23,6 +25,7 @@ route 默认启用；显式 Config `Disabled` 仍可关闭。缺失或不可执�
 | 启动一个已解析的语言服务器命令 | ✅ 完成 initialize/initialized，冻结能力和位置编码 | `zeta-lsp` |
 | 打开、修改、保存和关闭文档 | ✅ Native 发送 editor revision/full text；协调层绑定 LSP version | `zeta-language-service` + `zeta-lsp` |
 | hover、completion、definition 等请求 | ✅ 产品 facade、capability/freshness gate、Desktop 编辑器 provider；completion resolve/command 和多目标 Peek 已接通 | `zeta-language-service` + Desktop |
+| 请求取消与冷暖延迟观测 | ✅ in-flight task cancellation；按 request kind/server incarnation/config/service generation 记录 content-free outcome | `zeta-language-service` + App Server metrics sink |
 | Semantic Tokens 与文档特性 | ✅ Semantic Tokens、Document Symbols、CodeLens、Document Links、Document Colors、Folding 已适配现有 Editor contract | `zeta-language-service` + Desktop |
 | push / document pull diagnostics | ✅ 共用 freshness 校验和 Problems 数据入口；pull full report 替换当前快照，unchanged report 保留已有结果 | `zeta-language-service` + App Server + Desktop |
 | workspace diagnostics | ✅ 调用 `workspace/diagnostic`，App Server 通过 Workspace authority 读取未打开文件并转换范围，Desktop 将完整结果写入同一 Problems repository | `zeta-language-service` + App Server + Desktop |
@@ -71,6 +74,9 @@ flowchart LR
    发送 typed request。结果必须再次通过 service generation、server epoch 和 editor revision；Native
    用鼠标请求 hover、用 Ctrl/Cmd+Space 打开 completion popup，只接受可安全投影为精确 UTF-8
    `textEdit` 的候选，F12 definition 通过 App Server 文件 authority 打开目标。
+   请求 task 绑定 service generation、server incarnation 与 editor revision；显式取消、disable、重配或
+   shutdown 都会中止 task。完成后只记录 kind、代次、cold/warm、elapsed、result count 和 terminal
+   outcome，不记录路径、文本、query 或 position。
 8. Server push diagnostics 时，协调层按 URI、document version 和当前 position encoding 拒绝
    stale result、转换为 UTF-8 byte range，再交给产品 event loop；Native adapter 转换为
    `CodeEditorDiagnostic`，CodeEditor 按 source row/soft-wrap geometry 绘制并执行 hover hit-test。
@@ -112,6 +118,8 @@ App Server 已经是 Desktop 的 workspace/document authority 与 LSP IPC bounda
 - **进程回收**：规范关闭失败仍继续 exit 和 cleanup；直接 drop 只作为 fail-safe kill。
 - **替换恢复**：新服务器先按 URI 排序重放当前全文；任一 open 失败就清理 replacement 并保留
   原 route。成功后 server incarnation 递增、LSP document version 从 1 重新开始。
+- **请求观测**：`Delivered`、`Empty`、`Failed`、`Cancelled`、`StaleDiscarded` 与 `Rejected` 显式
+  区分；cold/warm 以 `(server, incarnation, request kind)` 计算，避免把重启后的首次请求算作 warm。
 
 意外 EOF、framing failure 或 transport channel 关闭会产生 `TransportClosed`。Supervisor 只接受
 当前 service generation 和 server epoch 的断连事件：Starting 阶段直接进入失败决策，Ready 阶段
@@ -147,6 +155,8 @@ App Server 已经是 Desktop 的 workspace/document authority 与 LSP IPC bounda
 - Native Settings 的 Starting/Ready/BackingOff/CrashLoop/Failed/Stopped runtime projection；
 - hover/completion/resolve/command/navigation/hierarchy/rename/code-action/formatting/signature-help/inlay-hints/linked-editing product facade、
   capability gate、三重 freshness gate、Renderer latest-request gate 与可见交互；
+- 语言请求 in-flight task registry、显式 cancellation，以及 content-free cold/warm latency/result-count/
+  terminal-outcome metrics sink；
 - Semantic Tokens、Document Symbols、CodeLens、Document Links、Document Colors、Folding 的 revision-bound facade 与 Desktop Editor provider；
 - document/workspace pull diagnostics 的 capability gate、report projection、App Server route 与 Desktop Problems 数据接入；
 - 多 definition target 使用现有 Peek 列表选择，单目标直接导航；
@@ -164,6 +174,9 @@ App Server 已经是 Desktop 的 workspace/document authority 与 LSP IPC bounda
 2. 增加 pull diagnostics 的 result-id cache、partial-result progress 与 `workspace/diagnostic/refresh`。
 3. 为其他 language-server family 增加 schema 2 runtime metadata 和 catalog provider adapter，并为
    未激活 version 增加独立 garbage collection policy。
+4. 先评估已记录的重复请求、冷暖延迟和取消率；只有收益显著时才设计 session navigation cache。
+   cache 必须绑定 server incarnation、configuration/service generation、request shape 和 document
+   revision；当前没有安装或持久化 navigation cache。
 
 ### 潜在方向
 

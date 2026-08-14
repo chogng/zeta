@@ -89,6 +89,7 @@ impl Default for CodeRetrievalBudget {
 /// Candidate source that contributed to one fused hit.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum CodeRetrievalOrigin {
+    LocalSymbol,
     LocalLexical,
     LocalSemantic,
     CloudSemantic,
@@ -97,6 +98,7 @@ pub enum CodeRetrievalOrigin {
 /// Non-fatal loss of one optional source or candidate set.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum CodeRetrievalDegradation {
+    LocalSymbolQueryFailed,
     LocalSemanticQueryFailed,
     CloudQueryFailed,
     CandidateVerificationFailed { discarded: usize },

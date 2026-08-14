@@ -1,8 +1,8 @@
 use super::ConnectionResourceUsage;
+use super::MAX_RESOURCE_BYTES_PER_CONNECTION;
+use super::MAX_RESOURCES_PER_CONNECTION;
 use super::ResourceError;
 use super::ResourceStore;
-use super::MAX_RESOURCES_PER_CONNECTION;
-use super::MAX_RESOURCE_BYTES_PER_CONNECTION;
 use std::time::Duration;
 
 #[test]
@@ -32,26 +32,30 @@ fn enforces_resource_count_per_connection_and_releases_capacity() {
         ),
         Err(ResourceError::TooLarge)
     ));
-    assert!(store
-        .create(
-            2,
-            "application/octet-stream".into(),
-            Vec::new(),
-            Duration::from_secs(60)
-        )
-        .is_ok());
+    assert!(
+        store
+            .create(
+                2,
+                "application/octet-stream".into(),
+                Vec::new(),
+                Duration::from_secs(60)
+            )
+            .is_ok()
+    );
 
     store
         .release(1, &first_resource_id.expect("first resource ID"))
         .expect("release resource");
-    assert!(store
-        .create(
-            1,
-            "application/octet-stream".into(),
-            Vec::new(),
-            Duration::from_secs(60)
-        )
-        .is_ok());
+    assert!(
+        store
+            .create(
+                1,
+                "application/octet-stream".into(),
+                Vec::new(),
+                Duration::from_secs(60)
+            )
+            .is_ok()
+    );
 }
 
 #[test]
@@ -113,12 +117,14 @@ fn expired_resources_do_not_consume_connection_capacity() {
             .expect("expired resource is cleaned before the next create");
     }
 
-    assert!(store
-        .create(
-            1,
-            "application/octet-stream".into(),
-            Vec::new(),
-            Duration::from_secs(60)
-        )
-        .is_ok());
+    assert!(
+        store
+            .create(
+                1,
+                "application/octet-stream".into(),
+                Vec::new(),
+                Duration::from_secs(60)
+            )
+            .is_ok()
+    );
 }

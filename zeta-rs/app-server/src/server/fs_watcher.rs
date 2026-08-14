@@ -1,5 +1,6 @@
 use super::code_index_runtime::CodeIndexRuntime;
 use super::semantic_index_job::SemanticIndexJobController;
+use super::symbol_index_runtime::SymbolIndexRuntime;
 use super::update_broker::UpdateBroker;
 use std::collections::BTreeSet;
 use std::fmt;
@@ -31,6 +32,7 @@ enum FileSystemWatcherObservers {
     None,
     WorkspaceRuntime {
         code_index: Arc<CodeIndexRuntime>,
+        symbol_index: Arc<SymbolIndexRuntime>,
         code_index_semantic: Option<Arc<SemanticIndexJobController>>,
         changes: Arc<dyn WorkspaceFileChangeSink>,
     },
@@ -78,6 +80,7 @@ struct CodeIndexRefreshWorker {
 impl CodeIndexRefreshWorker {
     fn start(
         runtime: Arc<CodeIndexRuntime>,
+        symbol_index: Arc<SymbolIndexRuntime>,
         semantic: Option<Arc<SemanticIndexJobController>>,
     ) -> Result<Self, String> {
         let pending = Arc::new(Mutex::new(PendingCodeIndexRefresh::None));
@@ -104,10 +107,19 @@ impl CodeIndexRefreshWorker {
                             .snapshot()
                             .map(|snapshot| snapshot.generation)
                             .ok();
-                        if previous_generation != current_generation
-                            && let Some(semantic) = &semantic
-                        {
-                            semantic.schedule();
+                        if previous_generation != current_generation {
+                            if let Err(error) = worker_runtime.index().handoff_matching_overlays() {
+                                log::warn!("code-index overlay handoff failed: {error}");
+                            }
+                            if let Err(error) = symbol_index.reconcile() {
+                                log::warn!("symbol-index reconcile failed: {error}");
+                            }
+                            if let Err(error) = symbol_index.reconcile_overlay() {
+                                log::warn!("symbol-index overlay reconcile failed: {error}");
+                            }
+                            if let Some(semantic) = &semantic {
+                                semantic.schedule();
+                            }
                         }
                     }
                 }
@@ -165,6 +177,7 @@ impl FileSystemWatcher {
         workspace: WorkspaceRoot,
         updates: Arc<UpdateBroker>,
         code_index: Arc<CodeIndexRuntime>,
+        symbol_index: Arc<SymbolIndexRuntime>,
         code_index_semantic: Option<Arc<SemanticIndexJobController>>,
         changes: Arc<dyn WorkspaceFileChangeSink>,
     ) -> Result<Self, FileSystemWatcherError> {
@@ -173,6 +186,7 @@ impl FileSystemWatcher {
             updates,
             FileSystemWatcherObservers::WorkspaceRuntime {
                 code_index,
+                symbol_index,
                 code_index_semantic,
                 changes,
             },
@@ -241,13 +255,19 @@ fn watch_workspace(
     mut shutdown: tokio::sync::oneshot::Receiver<()>,
     startup: std::sync::mpsc::SyncSender<Result<(), String>>,
 ) {
-    let (code_index, code_index_semantic, changes) = match observers {
-        FileSystemWatcherObservers::None => (None, None, None),
+    let (code_index, symbol_index, code_index_semantic, changes) = match observers {
+        FileSystemWatcherObservers::None => (None, None, None, None),
         FileSystemWatcherObservers::WorkspaceRuntime {
             code_index,
+            symbol_index,
             code_index_semantic,
             changes,
-        } => (Some(code_index), code_index_semantic, Some(changes)),
+        } => (
+            Some(code_index),
+            Some(symbol_index),
+            code_index_semantic,
+            Some(changes),
+        ),
     };
     let Ok(tokio_runtime) = tokio::runtime::Builder::new_current_thread()
         .enable_time()
@@ -287,9 +307,9 @@ fn watch_workspace(
                 return;
             }
         };
-        let code_index_worker = match code_index {
-            Some(code_index) => {
-                match CodeIndexRefreshWorker::start(code_index, code_index_semantic) {
+        let code_index_worker = match (code_index, symbol_index) {
+            (Some(code_index), Some(symbol_index)) => {
+                match CodeIndexRefreshWorker::start(code_index, symbol_index, code_index_semantic) {
                     Ok(worker) => Some(worker),
                     Err(error) => {
                         let _ = startup.send(Err(error));
@@ -297,7 +317,14 @@ fn watch_workspace(
                     }
                 }
             }
-            None => None,
+            (None, None) => None,
+            _ => {
+                let _ = startup.send(Err(
+                    "code-index and symbol-index watcher observers must be installed together"
+                        .into(),
+                ));
+                return;
+            }
         };
         if let Some(changes) = &changes {
             changes.files_changed(&FsChanged::RescanRequired);

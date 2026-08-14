@@ -261,6 +261,7 @@ impl Supervisor {
     }
 
     pub(super) async fn disable(&mut self) {
+        self.cancel_all_language_requests();
         self.generation = self.generation.saturating_add(1).max(1);
         for (_, launch) in self.launches.drain() {
             launch.abort();

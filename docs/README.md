@@ -30,7 +30,8 @@
 | 改执行内核（Turn/Thread/恢复/取消） | [`zeta-agent-runtime-architecture.md`](zeta-agent-runtime-architecture.md) → [`core.md`](core.md) |
 | 做上下文预算 / 压缩 | [`core-context.md`](core-context.md) + [`agent-harness-design.md`](agent-harness-design.md) §9–§11 |
 | 做多 Agent | [`core-multi-agent.md`](core-multi-agent.md)（gate 条件见其状态头） |
-| 开发工作区代码索引 / RAG | [`code-index.md`](code-index.md) → [`zeta-code-index` README](../zeta-rs/code-index/README.md) → [`zeta-code-index-semantic` README](../zeta-rs/code-index-semantic/README.md) → [`zeta-code-retrieval` README](../zeta-rs/code-retrieval/README.md) → [`zeta-code-index-cloud` README](../zeta-rs/code-index-cloud/README.md) |
+| 开发代码知识、Workspace Symbol 或跨语言导航 | [`code-intelligence.md`](code-intelligence.md) → [`syntax-analysis.md`](syntax-analysis.md) → [`lsp.md`](lsp.md) → [`code-index.md`](code-index.md) |
+| 开发工作区代码索引 / RAG | [`code-intelligence.md`](code-intelligence.md) → [`code-index.md`](code-index.md) → [`zeta-code-index` README](../zeta-rs/code-index/README.md) → [`zeta-code-index-semantic` README](../zeta-rs/code-index-semantic/README.md) → [`zeta-code-retrieval` README](../zeta-rs/code-retrieval/README.md) → [`zeta-code-index-cloud` README](../zeta-rs/code-index-cloud/README.md) |
 | 设计 Instructions / Skills / Agents 或外部导入 | [`agent-customizations.md`](agent-customizations.md) → 对应 authority 文档 |
 | 加 / 改一个工具 | [`agent-tools-spec.md`](agent-tools-spec.md) → [`tools.md`](tools.md)（契约层） |
 | 改协议 / 加 App Server 方法 | [`protocol.md`](protocol.md) → [`zeta-app-server-api.md`](zeta-app-server-api.md) → [`app-server-client.md`](app-server-client.md) |
@@ -100,6 +101,7 @@
 [`workbench-pane-composite-design.md`](workbench-pane-composite-design.md)、
 [`design-tokens.md`](design-tokens.md)、[`theme-authoring-template.md`](theme-authoring-template.md)（模板）、
 [`menu-system.md`](menu-system.md)、[`icons.md`](icons.md)、[`search.md`](search.md)、
+[`code-intelligence.md`](code-intelligence.md)、
 [`code-index.md`](code-index.md)、
 [`syntax-analysis.md`](syntax-analysis.md)、[`lsp.md`](lsp.md)、
 [`editor-extensions.md`](editor-extensions.md)、

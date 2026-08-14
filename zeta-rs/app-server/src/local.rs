@@ -912,6 +912,7 @@ pub fn open_local_app_server_with_code_index_providers(
         .with_language_marketplaces(language_marketplaces)
         .with_slash_command_catalog(options.slash_commands)
         .with_code_index_storage_root(options.profile_root.join("code-index"))
+        .with_symbol_index_storage_root(options.profile_root.join("symbol-index"))
         .with_code_index_semantic_storage_root(options.profile_root.join("code-index-semantic"))
         .with_semantic_model_provider(model_provider)
         .with_cloud_code_index_storage_root(options.profile_root.join("code-index-cloud"))

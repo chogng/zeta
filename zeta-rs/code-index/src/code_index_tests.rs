@@ -7,6 +7,7 @@ use zeta_workspace::WorkspaceRoot;
 use crate::CodeIndex;
 use crate::CodeIndexError;
 use crate::CodeIndexLimits;
+use crate::CodeIndexOverlayDocument;
 use crate::CodeIndexQuery;
 use crate::CodeIndexStorage;
 use crate::IndexedLanguage;
@@ -376,4 +377,120 @@ fn chunk_limit_is_bounded_and_visible_in_the_snapshot() {
             .expect("search")
             .is_empty()
     );
+}
+
+#[test]
+fn dirty_overlay_replaces_disk_search_and_materialization() {
+    let directory = workspace();
+    fs::write(directory.path().join("service.rs"), "fn disk_name() {}\n").expect("source");
+    let index = memory_index(&directory);
+    index.rebuild().expect("rebuild");
+    let disk_hit = index
+        .search(&CodeIndexQuery::new("disk_name"))
+        .expect("disk search")
+        .remove(0);
+
+    index
+        .synchronize_overlay(CodeIndexOverlayDocument {
+            relative_path: "service.rs".into(),
+            editor_revision: 2,
+            language: IndexedLanguage::Rust,
+            content: "fn unsaved_name() {}\n".into(),
+        })
+        .expect("overlay");
+
+    assert!(
+        index
+            .search(&CodeIndexQuery::new("disk_name"))
+            .unwrap()
+            .is_empty()
+    );
+    let overlay_hit = index
+        .search(&CodeIndexQuery::new("unsaved_name"))
+        .unwrap()
+        .remove(0);
+    assert!(overlay_hit.content.contains("unsaved_name"));
+    assert!(index.materialize(&overlay_hit.reference).is_ok());
+    assert!(matches!(
+        index.materialize(&disk_hit.reference),
+        Err(CodeIndexError::OverlaySupersedesPersistentSource)
+    ));
+}
+
+#[test]
+fn overlay_hands_back_to_matching_persistent_revision_after_save() {
+    let directory = workspace();
+    let source = directory.path().join("service.rs");
+    fs::write(&source, "fn before() {}\n").expect("source");
+    let index = memory_index(&directory);
+    index.rebuild().expect("rebuild");
+    index
+        .synchronize_overlay(CodeIndexOverlayDocument {
+            relative_path: "service.rs".into(),
+            editor_revision: 2,
+            language: IndexedLanguage::Rust,
+            content: "fn saved() {}\n".into(),
+        })
+        .expect("overlay");
+    assert_eq!(index.overlay_snapshot().documents.len(), 1);
+
+    fs::write(&source, "fn saved() {}\n").expect("save");
+    index
+        .refresh_observed_paths(&[source])
+        .expect("disk refresh");
+    index.handoff_matching_overlays().expect("handoff");
+
+    assert!(index.overlay_snapshot().documents.is_empty());
+    assert_eq!(
+        index.search(&CodeIndexQuery::new("saved")).unwrap().len(),
+        1
+    );
+}
+
+#[test]
+fn older_editor_revision_cannot_replace_a_newer_overlay() {
+    let directory = workspace();
+    let index = memory_index(&directory);
+    index.rebuild().expect("rebuild");
+    for (revision, content) in [(3, "fn newest() {}\n"), (2, "fn stale() {}\n")] {
+        let result = index.synchronize_overlay(CodeIndexOverlayDocument {
+            relative_path: "new.rs".into(),
+            editor_revision: revision,
+            language: IndexedLanguage::Rust,
+            content: content.into(),
+        });
+        if revision == 3 {
+            assert!(result.is_ok());
+        } else {
+            assert!(matches!(
+                result,
+                Err(CodeIndexError::OverlayRevisionConflict)
+            ));
+        }
+    }
+}
+
+#[test]
+fn equal_editor_revision_cannot_identify_two_different_snapshots() {
+    let directory = workspace();
+    let index = memory_index(&directory);
+    index.rebuild().expect("rebuild");
+    index
+        .synchronize_overlay(CodeIndexOverlayDocument {
+            relative_path: "new.rs".into(),
+            editor_revision: 3,
+            language: IndexedLanguage::Rust,
+            content: "fn first() {}\n".into(),
+        })
+        .expect("first snapshot");
+
+    assert!(matches!(
+        index.synchronize_overlay(CodeIndexOverlayDocument {
+            relative_path: "new.rs".into(),
+            editor_revision: 3,
+            language: IndexedLanguage::Rust,
+            content: "fn conflicting() {}\n".into(),
+        }),
+        Err(CodeIndexError::OverlayRevisionConflict)
+    ));
 }

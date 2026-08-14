@@ -174,8 +174,15 @@ contrib 不直接持有聚合 Renderer Host。Electron Main 的 `registerTrusted
 exact-shape validation。第三方页面使用独立的临时 partition，默认拒绝权限、下载和 popup，
 并且不会加载主窗口的 Zeta preload。
 
-当前只完成平台服务和 renderer API，浏览器编辑器、地址栏、标签页以及 DOM 容器到原生
-view 的自动布局绑定尚未实现。跨进程所有权与后续演进以
+Agent 浏览器能力复用同一目标权威源：Desktop 在 App Server initialize 中声明 browser host，
+`BrowserAutomationMainService` 处理 `browser/create`、`browser/observe`、`browser/perform` 和
+`browser/close` 反向 JSON-RPC。Rust 保留 Tool、批准、连接 owner、超时和截图 Resource authority；
+Electron Main 只执行有界语义 CDP 动作。实现直接使用 Electron 的 Node runtime，不启动 Node
+sidecar、不开放调试端口，也不接受任意 CDP method。App Server 连接退出时只回收通过宿主能力
+创建的目标，不影响 Renderer 自己持有的目标。
+
+浏览器编辑器、地址栏、标签页、DOM 容器自动布局绑定、Playwright 进程内代理和高级 locator
+尚未实现。跨进程所有权与后续演进以
 [`docs/zeta-desktop-architecture.md`](../docs/zeta-desktop-architecture.md) 的 Browser
 Capability 章节为准。
 

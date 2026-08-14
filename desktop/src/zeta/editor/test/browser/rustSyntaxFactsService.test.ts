@@ -11,6 +11,7 @@ import { RustSyntaxWorker, RustSyntaxDocumentSymbolProvider, RustSyntaxFactsServ
 test("Rust syntax facts feed Aster token, diagnostic, and document-symbol services from one revision request", async () => {
   using model = new TextModel("fn main() {\n  /* hi\n  */\n}\n");
   let calls = 0;
+  let selectionCalls = 0;
   using facts = new RustSyntaxFactsService({
     analyze: async params => {
       calls += 1;
@@ -35,6 +36,10 @@ test("Rust syntax facts feed Aster token, diagnostic, and document-symbol servic
           range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 0, columnIndex: 2 } },
         }],
       };
+    },
+    selectionRanges: async params => {
+      selectionCalls += 1;
+      return { revision: params.revision, ranges: [{ range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 3, columnIndex: 1 } } }] };
     },
   });
   using syntaxProviders = new SyntaxProviderRegistry();
@@ -69,6 +74,10 @@ test("Rust syntax facts feed Aster token, diagnostic, and document-symbol servic
   assert.deepEqual(documentSymbols.map(symbol => [symbol.name, symbol.kind, symbol.selectionRange.start.lineIndex, symbol.selectionRange.start.columnIndex]), [
     ["main", "function", 0, 3],
   ]);
+  const snapshot = model.createSnapshot();
+  const structural = await facts.selectionRanges("rust", snapshot, [TextRange.from(TextPosition.at(0, 3), TextPosition.at(0, 7))], new AbortController().signal);
+  assert.equal(model.getTextInRange(structural[0]!), "fn main() {\n  /* hi\n  */\n}");
+  assert.equal(selectionCalls, 1);
 });
 
 test("Rust syntax facts leave unsupported languages and oversized documents to Aster's fallback worker", async () => {
@@ -78,6 +87,9 @@ test("Rust syntax facts leave unsupported languages and oversized documents to A
   using facts = new RustSyntaxFactsService({
     analyze: async () => {
       syntaxCalls += 1;
+      throw new Error("Unsupported languages and oversized documents must not call the syntax endpoint");
+    },
+    selectionRanges: async () => {
       throw new Error("Unsupported languages and oversized documents must not call the syntax endpoint");
     },
   });
@@ -121,6 +133,9 @@ test("Rust syntax symbols remain a fallback behind registered Aster providers", 
   using facts = new RustSyntaxFactsService({
     analyze: async () => {
       syntaxCalls += 1;
+      throw new Error("Registered symbol providers must take precedence");
+    },
+    selectionRanges: async () => {
       throw new Error("Registered symbol providers must take precedence");
     },
   });

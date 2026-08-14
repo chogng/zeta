@@ -5,12 +5,13 @@
 > canonical product values 见 [`docs/protocol.md`](../../docs/protocol.md)，workspace 搜索的跨层
 > ownership 见 [`docs/search.md`](../../docs/search.md)，Terminal external 语义见
 > [`docs/zeta-app-server-api.md`](../../docs/zeta-app-server-api.md#integrated-terminal)，Git/SCM
-> ownership 见 [`docs/git.md`](../../docs/git.md)。
+> ownership 见 [`docs/git.md`](../../docs/git.md)，Desktop 浏览器宿主的跨进程语义见
+> [`docs/zeta-desktop-architecture.md`](../../docs/zeta-desktop-architecture.md#7-浏览器能力)。
 
-`zeta-app-server-protocol` 是 App Server 对外 wire contract 的唯一 Rust source。它定义 typed
-params/results/errors、JSON-RPC 2.0 envelopes、method/notification registry，并从同一套定义生成
-canonical `ServerNotification`、payload decoder、JSON Schema、TypeScript binding 和协商用
-schema hash。
+`zeta-app-server-protocol` 是 App Server 对外 wire contract 的唯一 Rust source。它定义类型化
+参数、结果、错误、JSON-RPC 2.0 envelope，以及客户端方法、服务端通知和宿主方法注册表；同一套
+定义还会生成 canonical `ServerNotification`、payload decoder、JSON Schema、TypeScript binding
+和协商用 schema hash。
 
 它不拥有 connection、framing、dispatcher、业务执行、Core state、resource bytes 或 persistence。
 
@@ -22,7 +23,7 @@ zeta-protocol canonical values
           ▼
 zeta-app-server-protocol
 ├─ protocol DTO
-├─ method/notification registry
+├─ client method / server notification / host method registry
 ├─ generic JSON-RPC envelope
 └─ schema / TypeScript / hash generator
           │
@@ -48,6 +49,7 @@ zeta-rs/app-server-protocol/
 │   │   ├── registry.rs       # method、notification、serialization scope
 │   │   ├── notification.rs   # canonical notification API re-export
 │   │   ├── common.rs         # handshake/shared wire values
+│   │   ├── browser.rs        # client-hosted semantic browser request/result DTO
 │   │   ├── initialize.rs
 │   │   ├── slash_commands.rs
 │   │   ├── session.rs
@@ -86,7 +88,14 @@ zeta-rs/app-server-protocol/
 | `SERVER_NOTIFICATIONS` | notification name 与 params type |
 | `ServerNotification` | 跨 crate 非穷尽的 canonical typed notification；consumer 只投影自己拥有的 capability |
 | `decode_server_notification` | registry-generated method/payload decoder；未知 method 无损保留为 `Unknown` |
+| `HostMethod` | App Server 可以向已声明能力的 client 发出的 typed request enum |
+| `HOST_METHODS` | host request name 与 params/result type 的唯一 registry |
 | `SerializationScopeDefinition` | dispatcher serialization requirement |
+
+`ClientCapabilities.browser` 是 connection-local browser host 声明。版本 1 用 `observe` 和 `input`
+显式表示 client 能处理的语义操作；它不授予 Rust 任意 CDP、Node 或浏览器对象访问权。
+`browser/create`、`browser/observe`、`browser/perform` 和 `browser/close` 是当前全部 host method。
+每个 action 都携带精确 `targetId`；点击和输入只使用观察结果中的 backend DOM node ID。
 
 方法注册表当前覆盖初始化、Session 生命周期/聚合订阅、canonical `session/request` mutation、
 带 Session scope 的 Thread 读取/订阅、模型目录、Connector list/API-token connect/disconnect、
@@ -124,8 +133,8 @@ capability 和 Session-owned Thread subscription 的 connection。响应继续�
 `SessionRequest::ResolveInteraction` + exact `RequestId`；非 owner/过期响应分别返回稳定
 `AgentInteractionNotOwner` / `AgentInteractionExpired`。owner、重选和 timer 都是 App Server runtime
 状态，不进入 DTO；deadline/cancel reason 则是 durable canonical fact。
-Git 注册 `git/status`、`git/textDiff`、`git/branch/list` query，以及
-branch/switch、stage/unstage/discardWorktree/commit/fetch/pull/push global-exclusive mutation；
+Git 注册 `git/status`、`git/textDiff`、`git/branch/list` 查询，以及分支切换、暂存、取消暂存、
+丢弃工作树修改、提交、抓取、拉取和推送等全局互斥变更方法；
 status 带 revision 和 repository-relative `workspacePath`，投影变化通过 `git/statusChanged` 发送
 完整 snapshot；该相对关系允许本地 host 提供 repository-root 导航，但不会把 host 绝对路径放进
 共享协议。
@@ -140,7 +149,8 @@ invalidation hint 或 rescan request，不成为 durable 文件事件。
 
 `JsonRpcRequest<P>`、`JsonRpcNotification<P>`、`JsonRpcSuccess<R>`、`JsonRpcFailure<E>` 和
 `JsonRpcResponse<R,E>` 对 envelope 使用 `deny_unknown_fields`。`JsonRpcId` 保留 number、string
-与 null 的 parse shape；App Server dispatcher 再实施更窄的 positive-integer request-ID policy。
+与 null 的 parse shape；App Server 对 Client → Server request 实施更窄的 positive-integer ID
+policy，Server → Client browser request 使用与其隔离的非空字符串 ID。
 
 `JsonRpcVersion` 只接受 `"2.0"`。
 
@@ -149,7 +159,7 @@ invalidation hint 或 rescan request，不成为 durable 文件事件。
 | Symbol | 输出 |
 | --- | --- |
 | `json_schema()` | pretty JSON schema + trailing newline |
-| `typescript()` | DTO declarations、method map、notification union、schema hash |
+| `typescript()` | DTO declarations、client/host method map、notification union、schema hash |
 | `schema_hash()` | `sha256:` + generated schema 的 deterministic digest |
 | `JSON_SCHEMA_FIXTURE` / `TYPESCRIPT_FIXTURE` | checked-in artifact 相对路径 |
 
@@ -160,14 +170,16 @@ Generator 只返回字符串，不读写 filesystem。只有 `write_schema_fixtu
 | Symbol | 可见性 | 当前职责 | 方向约束 |
 | --- | --- | --- | --- |
 | `client_methods!` | private macro | 一次定义 method enum、lookup、metadata、request/result schema enums | method 不得在 dispatcher 建第二份表 |
+| `host_methods!` | private macro | 一次定义 Server → Client method enum、lookup、metadata 与 request/result schema enums | Desktop handler 不手写平行 method name/type map |
 | `server_notifications!` | private macro | 一次定义 method enum、lookup、canonical runtime enum、payload decoder、metadata 与 schema enum | notification list 与 decode mapping 的唯一来源 |
 | `typescript_bindings!` | private macro | 建立显式 DTO declaration list | canonical/re-exported nested types 也必须可生成 |
 | `ClientRequestSchema` | crate-private generated enum | 聚合所有 request params 到 root schema | 不是 runtime dispatcher payload |
 | `ClientResultSchema` | crate-private generated enum | 聚合所有 method result | 与 method registry lockstep |
+| `HostRequestSchema` / `HostResultSchema` | crate-private generated enum | 聚合全部 reverse request params/result | 与 `HOST_METHODS` lockstep |
 | `ServerNotificationSchema` | crate-private generated enum | 聚合 notification params | 与 notification registry lockstep |
 | `TypeScriptBinding` | crate-private | 延迟调用每个 `TS::decl` | declaration order 必须 deterministic |
 | `type_name<T>` / `declaration<T>` | private | ts-rs adapter functions | 不手写 DTO field shape |
-| `ProtocolSchema` | private | JSON Schema root：request/response/notification/error | artifact coverage 的唯一 root |
+| `ProtocolSchema` | private | JSON Schema root：client/host request/response、notification/error | artifact coverage 的唯一 root |
 | `protocol_schema` | private | `schema_for!(ProtocolSchema)` | hash 与 JSON 必须调用同一函数 |
 | `Artifact::{parse,contents}` | binary-private | stdout exporter format selection | 不影响 library contract |
 | `write_fixture` | binary-private | explicit golden fixture overwrite | tests 不能隐式调用 |
@@ -203,6 +215,7 @@ typescript()
 ├─ schema_hash()
 ├─ TYPESCRIPT_BINDINGS → TypeScriptBinding::declaration
 ├─ SERVER_NOTIFICATIONS → ServerNotification union/map
+├─ HOST_METHODS → AppServerHostMethodMap + constants
 └─ CLIENT_METHODS → AppServerMethodMap + constants
 ```
 
@@ -216,6 +229,12 @@ dispatcher 的 executable metadata，不能被误写成已经落实的并发保�
   re-export/reuse `zeta-protocol`；不要复制相同语义 DTO。
 - RPC-only params/result 留在本 crate，例如 `SessionRequestParams`、`ConfigUpdateParams`、
   `ResourceReadResult`。
+- `SyntaxAnalyzeResult` 只包含通用 snapshot facts；structural selections 使用独立的
+  `SyntaxSelectionRangesParams/Result`，避免普通分析序列化全树节点。
+- `WorkspaceDocumentOverlay*` DTO 只传 Editor-authoritative full snapshot 或相对 path，响应只返回
+  content-free generation/count；Symbol/CodeIndex store identity 不进入 wire。
+- `SymbolIndexSearchHitDto` 投影 revision-bound UTF-16 declaration/selection range，不承诺 stable semantic
+  symbol ID；retrieval origin 显式区分 local symbol/lexical/semantic/cloud。
 - Durable mutation params 带 `CommandId` 与 expected sequence/revision；JSON-RPC ID 不替代它。
 - `ConfigUpdateParams` 使用 `Patch<T>` 表达 missing/no-op、null/clear、value/set 三态。
 - `SessionRequest::ResolveInteraction` 使用 canonical `AgentResponse` 与 exact `RequestId`。
@@ -260,6 +279,10 @@ dispatcher 的 executable metadata，不能被误写成已经落实的并发保�
 由于该宏同时生成 runtime enum 与 decoder，不得再在 client crate 增加平行 decode match；只有实际
 拥有该 capability 的产品 projection 才需要增加消费逻辑。
 
+新增 Server → Client request 时改用 `host_methods!`，并同步实现 App Server broker 和 capable client
+handler。host method 不填写 `SerializationScopeDefinition`，因为其顺序、owner、deadline 和取消由
+调用该 capability 的 broker 管理，不能借用 Client → Server dispatcher scope。
+
 Fixture 更新必须显式执行：
 
 ```text
@@ -294,6 +317,7 @@ diff，明确客户端是否能同步升级；不要在测试中为了保留旧 
 - Connection owner、actor handle 或 resource bytes 进入 DTO：runtime state 泄漏到 wire；
 - `AppServerError` 传递内部 error string：安全与兼容性 contract 漂移；
 - Client 使用 arbitrary method string 而非 generated method map：compile-time contract 被绕过。
+- Desktop 手写 host method 字符串或结果 shape：reverse RPC artifact 与 Rust registry 分叉。
 
 ## 测试、限制与演进
 
@@ -313,7 +337,8 @@ bazel test //zeta-rs/app-server-protocol:app-server-protocol-unit-tests
 [`docs/typst.md`](../../docs/typst.md) 中的跨进程契约。
 
 测试验证 method/notification 唯一性、JSON-RPC 2.0 envelope、TypeScript model/patch shape、root
-schema coverage、agent interaction capability/request/error、config 三态、MCP/Skill round trip、schema
+schema coverage、host method 名称与 request/result coverage、agent interaction capability/request/error、
+config 三态、MCP/Skill round trip、schema
 hash 和 checked-in fixtures exact match。
 
 当前只有 JSON-RPC 2.0 artifact，schema compatibility 依赖 exact hash + synchronized client build；

@@ -46,6 +46,8 @@ class FakeHotContext implements ViteDevHotContext {
       this.respond(request, { sessions: [] });
     } else if (request.method === "syntax/analyze") {
       this.respond(request, { revision: 4, hasErrors: false, tokens: [], foldingRanges: [], symbols: [], diagnostics: [] });
+    } else if (request.method === "syntax/selectionRanges") {
+      this.respond(request, { revision: 4, ranges: [] });
     }
   }
 
@@ -106,6 +108,9 @@ test("routes bounded syntax analysis through the connected renderer host", async
 
   assert.deepEqual(result, { revision: 4, hasErrors: false, tokens: [], foldingRanges: [], symbols: [], diagnostics: [] });
   assert.equal(hot.requests.at(-1)?.method, "syntax/analyze");
+
+  assert.deepEqual(await connected.api.syntax.selectionRanges({ language: "rust", revision: 4, text: "fn main() {}\n", ranges: [{ start: { lineIndex: 0, columnIndex: 3 }, end: { lineIndex: 0, columnIndex: 7 } }] }), { revision: 4, ranges: [] });
+  assert.equal(hot.requests.at(-1)?.method, "syntax/selectionRanges");
   connected.dispose();
 });
 

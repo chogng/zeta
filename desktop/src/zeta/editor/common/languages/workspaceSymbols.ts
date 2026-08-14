@@ -25,14 +25,19 @@ export class WorkspaceSymbolService extends DisposableOwner {
     super();
   }
 
-  async provideWorkspaceSymbols(query: string, signal: AbortSignal = new AbortController().signal): Promise<readonly LanguageWorkspaceSymbol[]> {
-    const symbols: LanguageWorkspaceSymbol[] = [];
-    for (const provider of this.providers.getProviders("*")) {
-      if (signal.aborted) return Object.freeze([]);
-      symbols.push(...(await provider.provideWorkspaceSymbols(query, signal)).map(normalizeWorkspaceSymbol));
-      if (signal.aborted) return Object.freeze([]);
-    }
-    return Object.freeze(symbols);
+  async provideWorkspaceSymbols(query: string, signal: AbortSignal = new AbortController().signal, onDidUpdate?: (symbols: readonly LanguageWorkspaceSymbol[]) => void): Promise<readonly LanguageWorkspaceSymbol[]> {
+    const providers = this.providers.getProviders("*");
+    const completed = new Array<readonly LanguageWorkspaceSymbol[] | undefined>(providers.length);
+    await Promise.all(providers.map(async (provider, index) => {
+      try {
+        const symbols = await provider.provideWorkspaceSymbols(query, signal);
+        completed[index] = Object.freeze(symbols.map(normalizeWorkspaceSymbol));
+      } catch {
+        completed[index] = Object.freeze([]);
+      }
+      if (!signal.aborted) onDidUpdate?.(mergeWorkspaceSymbols(completed));
+    }));
+    return signal.aborted ? Object.freeze([]) : mergeWorkspaceSymbols(completed);
   }
 
   async resolveWorkspaceSymbol(symbol: LanguageWorkspaceSymbol, signal: AbortSignal = new AbortController().signal): Promise<LanguageWorkspaceSymbol> {
@@ -42,6 +47,20 @@ export class WorkspaceSymbolService extends DisposableOwner {
     }
     return symbol;
   }
+}
+
+function mergeWorkspaceSymbols(providerResults: readonly (readonly LanguageWorkspaceSymbol[] | undefined)[]): readonly LanguageWorkspaceSymbol[] {
+  const seen = new Set<string>();
+  const merged: LanguageWorkspaceSymbol[] = [];
+  for (const symbols of providerResults) {
+    for (const symbol of symbols ?? []) {
+      const key = `${symbol.resource.toString()}\0${symbol.name}\0${symbol.range.start.lineIndex}:${symbol.range.start.columnIndex}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      merged.push(symbol);
+    }
+  }
+  return Object.freeze(merged);
 }
 
 function normalizeWorkspaceSymbol(symbol: LanguageWorkspaceSymbol): LanguageWorkspaceSymbol {

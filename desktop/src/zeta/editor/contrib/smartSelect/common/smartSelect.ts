@@ -3,15 +3,17 @@ import { TextPosition, TextRange } from "../../../common/core/text.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 import { getWordSelectionRange } from "../../../common/cursor/wordBoundary.js";
 
-/** Expands one selection through word, enclosing-pair, line, and document scopes. */
-export function expandSmartSelection(model: TextModel, selection: TextSelection, wordPattern?: RegExp): TextSelection {
+/** Expands one selection through word, parser, enclosing-pair, line, and document scopes. */
+export function expandSmartSelection(model: TextModel, selection: TextSelection, wordPattern?: RegExp, syntaxRanges: readonly TextRange[] = []): TextSelection {
   const current = selection.range;
-  const next = expandRange(model, current, wordPattern);
+  const next = expandRange(model, current, wordPattern, syntaxRanges);
   return TextSelection.fromRange(next, selection.direction);
 }
 
-function expandRange(model: TextModel, range: TextRange, wordPattern?: RegExp): TextRange {
+function expandRange(model: TextModel, range: TextRange, wordPattern: RegExp | undefined, syntaxRanges: readonly TextRange[]): TextRange {
   if (range.empty) return getWordSelectionRange(model, range.start, wordPattern);
+  const structural = smallestStrictlyContainingRange(model, range, syntaxRanges);
+  if (structural) return structural;
   const enclosing = findEnclosingPair(model, range);
   if (enclosing && !enclosing.equals(range)) return enclosing;
   const lineStart = TextPosition.at(range.start.lineIndex, 0);
@@ -19,6 +21,20 @@ function expandRange(model: TextModel, range: TextRange, wordPattern?: RegExp): 
   const lineRange = TextRange.from(lineStart, lineEnd);
   if (!lineRange.equals(range)) return lineRange;
   return TextRange.from(TextPosition.at(0, 0), TextPosition.at(model.lineCount - 1, model.getLineContent(model.lineCount - 1).length));
+}
+
+function smallestStrictlyContainingRange(model: TextModel, current: TextRange, ranges: readonly TextRange[]): TextRange | undefined {
+  let best: TextRange | undefined;
+  let bestLength = Number.POSITIVE_INFINITY;
+  for (const candidate of ranges) {
+    if (candidate.equals(current) || !candidate.containsRange(current)) continue;
+    const length = model.offsetAt(candidate.end) - model.offsetAt(candidate.start);
+    if (length < bestLength) {
+      best = candidate;
+      bestLength = length;
+    }
+  }
+  return best;
 }
 
 function findEnclosingPair(model: TextModel, range: TextRange): TextRange | undefined {

@@ -2,6 +2,7 @@
 
 pub mod account;
 pub mod attachments;
+pub mod browser;
 pub mod code_index;
 pub mod collaboration;
 pub mod common;
@@ -27,6 +28,7 @@ pub mod search;
 pub mod session;
 pub mod skills;
 pub mod slash_commands;
+pub mod symbol_index;
 pub mod syntax;
 pub mod terminal;
 pub mod turn;

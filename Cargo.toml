@@ -81,6 +81,7 @@ members = [
     "zeta-rs/slash-launcher",
     "zeta-rs/skills",
     "zeta-rs/storage",
+    "zeta-rs/symbol-index",
     "zeta-rs/syntax",
     "zeta-rs/terminal",
     "zeta-rs/text-file",
@@ -311,6 +312,7 @@ zeta-slash-commands = { path = "zeta-rs/slash-commands" }
 zeta-slash-launcher = { path = "zeta-rs/slash-launcher" }
 zeta-skills = { path = "zeta-rs/skills" }
 zeta-storage = { path = "zeta-rs/storage" }
+zeta-symbol-index = { path = "zeta-rs/symbol-index" }
 zeta-syntax = { path = "zeta-rs/syntax" }
 zeta-terminal = { path = "zeta-rs/terminal" }
 zeta-terminal-detection = { path = "zeta-rs/terminal-detection" }

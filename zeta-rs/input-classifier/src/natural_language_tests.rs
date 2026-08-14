@@ -1,12 +1,12 @@
-use super::classify_with_fallback_heuristic;
-use super::natural_language_words_score;
 use super::COMMAND_OVERLAP;
 use super::DEVELOPER_TERMS;
 use super::ENGLISH_STEMS;
-use crate::parser::parse_query_into_tokens;
-use crate::shell::ShellContext;
+use super::classify_with_fallback_heuristic;
+use super::natural_language_words_score;
 use crate::InputClassificationSource;
 use crate::InputRoute;
+use crate::parser::parse_query_into_tokens;
+use crate::shell::ShellContext;
 use sha2::Digest;
 use sha2::Sha256;
 

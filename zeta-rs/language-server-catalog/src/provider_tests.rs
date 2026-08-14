@@ -8,13 +8,13 @@ use zeta_language_server_distribution::LanguageServerPackage;
 use zeta_language_server_distribution::LanguageServerPackageFile;
 use zeta_lsp::LanguageServerEnvironmentPolicy;
 
+use crate::CSS_LANGUAGE_SERVER_ID;
 use crate::CssLanguageServerProvider;
 use crate::LanguageServerProviderError;
 use crate::LanguageServerProviderLaunch;
 use crate::LanguageServerProviderRegistry;
 use crate::ManagedNodeRuntime;
 use crate::ManagedNodeRuntimeSource;
-use crate::CSS_LANGUAGE_SERVER_ID;
 
 #[test]
 fn css_provider_uses_managed_node_and_a_clean_environment() {
@@ -51,15 +51,21 @@ fn css_provider_uses_managed_node_and_a_clean_environment() {
         command.environment_policy(),
         LanguageServerEnvironmentPolicy::Clear
     );
-    assert!(!command
-        .environment()
-        .contains_key(std::ffi::OsStr::new("NODE_OPTIONS")));
-    assert!(!command
-        .environment()
-        .contains_key(std::ffi::OsStr::new("NODE_PATH")));
-    assert!(!command
-        .environment()
-        .contains_key(std::ffi::OsStr::new("ELECTRON_RUN_AS_NODE")));
+    assert!(
+        !command
+            .environment()
+            .contains_key(std::ffi::OsStr::new("NODE_OPTIONS"))
+    );
+    assert!(
+        !command
+            .environment()
+            .contains_key(std::ffi::OsStr::new("NODE_PATH"))
+    );
+    assert!(
+        !command
+            .environment()
+            .contains_key(std::ffi::OsStr::new("ELECTRON_RUN_AS_NODE"))
+    );
     assert_eq!(command.current_dir(), Some(fixture.workspace.path()));
 }
 

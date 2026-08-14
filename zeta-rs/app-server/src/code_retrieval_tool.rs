@@ -28,6 +28,7 @@ use zeta_protocol::ToolCall;
 use zeta_protocol::ToolDefinition;
 use zeta_protocol::ToolExecutionOutput;
 use zeta_protocol::ToolName;
+use zeta_symbol_index::SymbolIndex;
 use zeta_workspace::TrustedWorkspace;
 
 pub(crate) const CODE_RETRIEVAL_TOOL_NAME: &str = "search_code";
@@ -42,6 +43,7 @@ struct SearchCodeArguments {
 pub(crate) struct CodeRetrievalTool {
     workspace: TrustedWorkspace,
     index: Arc<CodeIndex>,
+    symbol_index: Option<Arc<SymbolIndex>>,
     semantic: Option<Arc<CodeIndexSemanticService>>,
     cloud: Option<Arc<CloudCodeIndexController>>,
     definition: ToolDefinition,
@@ -52,12 +54,14 @@ impl CodeRetrievalTool {
     pub(crate) fn new(
         workspace: TrustedWorkspace,
         index: Arc<CodeIndex>,
+        symbol_index: Option<Arc<SymbolIndex>>,
         semantic: Option<Arc<CodeIndexSemanticService>>,
         cloud: Option<Arc<CloudCodeIndexController>>,
     ) -> Self {
         Self {
             workspace,
             index,
+            symbol_index,
             semantic,
             cloud,
             action_policy_revision: super::local_tools::local_policy_revision(),
@@ -120,7 +124,7 @@ impl CodeRetrievalTool {
                 Ok(status) if status.deployment_mode == CodeIndexDeploymentMode::LocalOnly
             )
         });
-        match (&self.semantic, cloud) {
+        let service = match (&self.semantic, cloud) {
             (Some(semantic), Some(cloud)) => CodeRetrievalService::local_semantic_with_cloud(
                 Arc::clone(&self.index),
                 Arc::clone(semantic),
@@ -132,9 +136,15 @@ impl CodeRetrievalTool {
             (None, Some(cloud)) => {
                 CodeRetrievalService::hybrid(Arc::clone(&self.index), Arc::clone(cloud))
             }
-            (None, None) => return Ok(CodeRetrievalService::local(Arc::clone(&self.index))),
+            (None, None) => Ok(CodeRetrievalService::local(Arc::clone(&self.index))),
         }
-        .map_err(|error| CoreError::Execution(error.to_string()))
+        .map_err(|error| CoreError::Execution(error.to_string()))?;
+        match &self.symbol_index {
+            Some(symbol_index) => service
+                .with_symbol_index(Arc::clone(symbol_index))
+                .map_err(|error| CoreError::Execution(error.to_string())),
+            None => Ok(service),
+        }
     }
 }
 

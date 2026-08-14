@@ -44,6 +44,8 @@ import {
 import {
   BrowserViewMainService,
 } from "../../platform/browser/electron-main/browserViewMainService.js";
+import { BrowserAutomationMainService, registerBrowserAutomationHost } from "../../platform/browser/electron-main/browserAutomationMainService.js";
+import { BrowserTargetRegistry } from "../../platform/browser/electron-main/browserTargetRegistry.js";
 import {
   CONFIGURATION_CHANGED_CHANNEL,
 } from "../../platform/configuration/common/configuration.js";
@@ -63,6 +65,7 @@ import { syntaxIpcRoutes } from "../../platform/syntax/electron-main/syntaxIpcRo
 import { languageIpcRoutes } from "../../platform/language/electron-main/languageIpcRoutes.js";
 import { gitIpcRoutes } from "../../platform/git/electron-main/gitIpcRoutes.js";
 import { codeIndexIpcRoutes } from "../../platform/codeIndex/electron-main/codeIndexIpcRoutes.js";
+import { symbolIndexIpcRoutes } from "../../platform/symbolIndex/electron-main/symbolIndexIpcRoutes.js";
 import { connectorIpcRoutes } from "../../platform/connectors/electron-main/connectorIpcRoutes.js";
 import { pluginIpcRoutes } from "../../platform/plugins/electron-main/pluginIpcRoutes.js";
 import { toolSearchIpcRoutes } from "../../platform/toolSearch/electron-main/toolSearchIpcRoutes.js";
@@ -154,6 +157,7 @@ export class ZetaApplication extends DisposableOwner {
   private quitRequested = false;
   private quitAfterStateSaved = false;
   private quitSaveStarted = false;
+  private readonly browserAutomationMainService = new BrowserAutomationMainService();
 
   private constructor(
     options: ZetaApplicationOptions,
@@ -204,6 +208,12 @@ export class ZetaApplication extends DisposableOwner {
     const workspaceContext = this.own(new WorkspaceContextMainService(workspace));
 
     const supervisor = this.own(this.createAppServerSupervisor(workspace));
+    this.own(registerBrowserAutomationHost(supervisor, this.browserAutomationMainService));
+    this.own(supervisor.onStateChange((state) => {
+      if (state === "crashed" || state === "restarting" || state === "stopping" || state === "stopped") {
+        this.browserAutomationMainService.reset();
+      }
+    }));
     this.supervisor = supervisor;
     if (this.appServerStartupMode === "required") {
       const appServerReady = await this.startAppServerWithRecovery(supervisor);
@@ -298,6 +308,9 @@ export class ZetaApplication extends DisposableOwner {
         schemaHash: APP_SERVER_SCHEMA_HASH,
         initializeTimeoutMs: 10_000,
         expectedServerName: "zeta-app-server",
+        capabilities: {
+          browser: { version: 1, observe: true, input: true },
+        },
       },
     });
   }
@@ -373,9 +386,11 @@ export class ZetaApplication extends DisposableOwner {
 
     const windowDisposables = this.own(new DisposableStore());
     windowDisposables.add(this.windowStateTracking);
+    const browserTargetRegistry = new BrowserTargetRegistry();
     const browserViewMainService = windowDisposables.add(
       new BrowserViewMainService({
         window,
+        registry: browserTargetRegistry,
         emitEvent: (event) => {
           if (!window.isDestroyed()) {
             window.webContents.send(BROWSER_VIEW_EVENT_CHANNEL, event);
@@ -383,6 +398,7 @@ export class ZetaApplication extends DisposableOwner {
         },
       }),
     );
+    windowDisposables.add(this.browserAutomationMainService.bind(browserViewMainService, browserTargetRegistry));
     windowDisposables.add(workspaceContext.onDidChangeWorkspace(({ workspace: nextWorkspace }) => {
       if (window.isDestroyed()) return;
       this.windowStateTracking?.dispose();
@@ -415,6 +431,7 @@ export class ZetaApplication extends DisposableOwner {
       ...languageIpcRoutes(supervisor),
       ...gitIpcRoutes(supervisor),
       ...codeIndexIpcRoutes(supervisor),
+      ...symbolIndexIpcRoutes(supervisor),
       ...connectorIpcRoutes(supervisor),
       ...pluginIpcRoutes(supervisor),
       ...toolSearchIpcRoutes(supervisor),

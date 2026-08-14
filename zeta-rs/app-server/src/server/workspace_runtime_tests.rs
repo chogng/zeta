@@ -60,6 +60,7 @@ impl EmbeddingInvoker for TrustBoundSemanticEmbedding {
 #[test]
 fn unavailable_hybrid_tool_search_remains_gated_and_reports_status() {
     let tools = WorkspaceToolPorts::new(
+        ToolPort::host(Arc::new(NoTools), Arc::new(RejectPolicy)),
         None,
         None,
         None,
@@ -117,6 +118,14 @@ fn workspace_runtime_replaces_authority_without_replacing_connection_owned_servi
         trusted_tool_names.contains(crate::server::multi_agent_tools::SEND_AGENT_MESSAGE_TOOL_NAME)
     );
     assert!(trusted_tool_names.contains(crate::server::multi_agent_tools::WAIT_AGENT_TOOL_NAME));
+    assert!(!trusted_tool_names.contains("browser_open"));
+    host.tools.replace_host_available(true).unwrap();
+    assert!(
+        host.tools
+            .definitions()
+            .iter()
+            .any(|definition| definition.name.as_str() == "browser_open")
+    );
     let Ok(first_file_system) = server.file_system_service() else {
         panic!("first file system should be installed");
     };
@@ -215,6 +224,13 @@ fn restricted_workspace_installs_only_non_executable_services() {
     assert!(server.git_runtime_service().is_err());
     assert!(server.workspace_search_service().is_err());
     assert!(server.terminal_service().is_err());
+    server
+        .local_workspace_host
+        .as_ref()
+        .unwrap()
+        .tools
+        .replace_host_available(true)
+        .unwrap();
     assert!(
         server
             .local_workspace_host
@@ -225,6 +241,93 @@ fn restricted_workspace_installs_only_non_executable_services() {
             .tools()
             .definitions()
             .is_empty()
+    );
+}
+
+#[test]
+fn browser_tools_follow_capable_connection_lifecycle_in_a_trusted_workspace() {
+    let workspace = TestWorkspace::new("browser-capability", "readable.txt");
+    let server = server()
+        .with_local_workspace_host(None, host_trust())
+        .unwrap();
+    assert_eq!(
+        server.switch_local_workspace_root(workspace.path.clone()),
+        Ok(workspace.root().canonical_path().to_path_buf())
+    );
+    let tools = &server.local_workspace_host.as_ref().unwrap().tools;
+    assert!(
+        !tools
+            .definitions()
+            .iter()
+            .any(|definition| definition.name.as_str() == "browser_open")
+    );
+
+    let mut connection = server.connection();
+    let response: serde_json::Value = serde_json::from_str(
+        &server.handle_json(
+            &mut connection,
+            &serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {
+                    "clientInfo": { "name": "desktop-test", "version": "1" },
+                    "capabilities": {
+                        "browser": { "version": 1, "observe": true, "input": false }
+                    }
+                }
+            })
+            .to_string(),
+        ),
+    )
+    .unwrap();
+    assert_eq!(response["result"]["capabilities"]["sessions"], true);
+    assert!(
+        !tools
+            .definitions()
+            .iter()
+            .any(|definition| definition.name.as_str() == "browser_open")
+    );
+
+    let mut second_connection = server.connection();
+    let second_response: serde_json::Value = serde_json::from_str(
+        &server.handle_json(
+            &mut second_connection,
+            &serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {
+                    "clientInfo": { "name": "desktop-test-2", "version": "1" },
+                    "capabilities": {
+                        "browser": { "version": 1, "observe": true, "input": true }
+                    }
+                }
+            })
+            .to_string(),
+        ),
+    )
+    .unwrap();
+    assert_eq!(second_response["result"]["capabilities"]["sessions"], true);
+    assert!(
+        tools
+            .definitions()
+            .iter()
+            .any(|definition| definition.name.as_str() == "browser_open")
+    );
+    server.close_connection(second_connection);
+    assert!(
+        !tools
+            .definitions()
+            .iter()
+            .any(|definition| definition.name.as_str() == "browser_open")
+    );
+    server.close_connection(connection);
+    assert!(
+        !tools
+            .definitions()
+            .iter()
+            .any(|definition| definition.name.as_str() == "browser_open")
     );
 }
 

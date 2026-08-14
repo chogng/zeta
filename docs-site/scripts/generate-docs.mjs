@@ -31,6 +31,7 @@ const groups = [
       "menu-system",
       "icons",
       "search",
+      "code-intelligence",
       "code-index",
       "syntax-analysis",
       "lsp",

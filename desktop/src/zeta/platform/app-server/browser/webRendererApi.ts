@@ -13,6 +13,7 @@ import { ViteDevTerminalProcessService } from "../../terminal/browser/viteDevTer
 import { createViteDevTypstApi } from "../../typst/browser/typstApi.js";
 import { createViteDevDocumentCollaborationApi } from "../../collaboration/browser/documentCollaborationApi.js";
 import { createViteDevCodeIndexApi } from "../../codeIndex/browser/codeIndexApi.js";
+import { createViteDevSymbolIndexApi } from "../../symbolIndex/browser/symbolIndexApi.js";
 import { createViteDevConnectorApi } from "../../connectors/browser/connectorApi.js";
 import { createViteDevToolSearchApi } from "../../toolSearch/browser/toolSearchApi.js";
 import { createViteDevLanguageApi } from "../../language/browser/languageApi.js";
@@ -69,6 +70,7 @@ function createRendererHost(connection: ViteDevAppServerConnection, contribution
     ...capabilities,
     events: createViteDevServerEventApi(connection),
     codeIndex: createViteDevCodeIndexApi(connection),
+    symbolIndex: createViteDevSymbolIndexApi(connection),
     connectors: createViteDevConnectorApi(connection),
     plugins: createViteDevPluginApi(connection),
     toolSearch: createViteDevToolSearchApi(connection),

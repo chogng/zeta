@@ -39,6 +39,12 @@ pub enum CodeIndexError {
     ChunkSpanMismatch,
     #[error("indexed chunk content no longer matches its stable identity")]
     ChunkIdentityMismatch,
+    #[error("workspace document overlay path is not an authorized relative source path")]
+    InvalidOverlayPath,
+    #[error("workspace document overlay revision does not advance consistently")]
+    OverlayRevisionConflict,
+    #[error("a dirty document overlay supersedes the requested persistent source revision")]
+    OverlaySupersedesPersistentSource,
 }
 
 pub(crate) fn io_error(path: impl Into<PathBuf>, source: std::io::Error) -> CodeIndexError {

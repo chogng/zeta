@@ -3,6 +3,7 @@ import type {
   AppServerMethodDefinition,
   AppServerNotificationDefinition,
   AppServerNotificationMethod,
+  ClientCapabilities,
   InitializeResult,
   MethodParams,
   MethodResult,
@@ -35,6 +36,7 @@ export interface AppServerSessionOptions {
   schemaHash: string;
   initializeTimeoutMs: number;
   expectedServerName?: string;
+  capabilities?: ClientCapabilities;
 }
 
 /**
@@ -81,7 +83,7 @@ export class AppServerSession implements IDisposable {
             name: this.options.clientName,
             version: this.options.clientVersion,
           },
-          capabilities: { notifications: true },
+          capabilities: { notifications: true, ...this.options.capabilities },
         },
         { timeoutMs: this.options.initializeTimeoutMs },
       );

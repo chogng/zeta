@@ -96,10 +96,31 @@ impl AppServer {
         {
             return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
         }
+        if params
+            .capabilities
+            .browser
+            .as_ref()
+            .is_some_and(|capability| {
+                capability.version != 1 || (!capability.observe && !capability.input)
+            })
+        {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
         self.updates.set_agent_interaction_capability(
             connection.connection_id,
             params.capabilities.agent_interactions,
         );
+        if let Some(capability) = params.capabilities.browser {
+            self.browser_host.register(
+                connection.connection_id,
+                capability,
+                connection.outbound_notifications.clone(),
+            );
+            if self.synchronize_browser_tool_availability().is_err() {
+                self.browser_host.unregister(connection.connection_id);
+                return Err(RpcError::new(-32603, AppServerErrorName::InternalError));
+            }
+        }
         connection.initialized = true;
         let (
             file_system,

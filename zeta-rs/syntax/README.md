@@ -4,9 +4,10 @@
 > 跨 Desktop、Native、EditorHost 和 LSP 的语言分析边界由
 > [`docs/syntax-analysis.md`](../../docs/syntax-analysis.md) 拥有。
 
-`zeta-syntax` 对宿主提供有界、增量、与 presentation 无关的源码结构分析。当前实现支持 Rust、
-JSON、JSONC 和 Shell，使用 tree-sitter 保存每个打开文档的增量 parse tree，并为精确的 host revision 派生 syntax
-tokens、folding ranges、document symbols 和 parse diagnostics。它不读取文件、不监听 workspace、
+`zeta-syntax` 对宿主提供有界、增量、与 presentation 无关的源码结构分析。当前实现支持
+JavaScript/JSX、TypeScript/TSX、Rust、JSON、JSONC 和 Shell，使用 tree-sitter 保存每个打开文档的
+增量 parse tree，并为精确 host revision 派生 syntax tokens、folding ranges、document symbols、parse
+diagnostics，以及按需的 structural selection scopes。它不读取文件、不监听 workspace、
 不持久化索引、不启动语言服务器，也不依赖 legacy editor runtime、`zeta-editor`、Native paint types 或 App
 Server DTO。
 
@@ -19,6 +20,7 @@ Server DTO。
 | `DocumentRevision` | 绑定宿主权威文本和派生 snapshot；更新时必须单调增加 | 充当磁盘 revision、Git identity 或全局 sequence |
 | `SyntaxEdit` | 以当前文档的 UTF-8 byte range 表达 replace/insert/delete；`apply_edits` 原子接收同一旧 revision 上的非重叠 batch | 接受编辑器 UTF-16 position 或猜测编码 |
 | `SyntaxSnapshot` | 返回同一 revision 的 tokens、folds、symbols 与 diagnostics | 暴露 `tree_sitter::Tree`、`Node` 或跨语言统一 AST |
+| `SyntaxDocument::selection_ranges` | 按一个 exact UTF-8 byte range 返回有界、innermost-first named parser scopes | 把整棵 tree 放进普通 snapshot 或声称 semantic AST |
 | `AnalysisLimits` | 限制文档和派生 collection 的资源使用 | 限制宿主队列、IPC message 或 workspace 文件数 |
 | `SyntaxTokenKind` | 提供不含主题颜色的语言中立 highlight category | 决定主题、foreground 或 decoration layer |
 | `DocumentSymbol` | 表达 tree-sitter tags query 发现的语法声明 | 类型解析、跨文件 reference、rename 或 completion |
@@ -35,6 +37,7 @@ Alpha UTF-16 position 与该 contract 之间转换；Native host 可以直接使
 | `LineIndex` | 以增量 line starts 把 byte offset 转换为 tree-sitter row/byte-column | Unicode display column 或 LSP position encoding |
 | `collect_tokens` | 运行 grammar highlight query、映射稳定 category 并应用结果上限 | 主题选择或编辑器 provider registration |
 | `collect_folding_ranges` | 从已解析 tree 的明确容器节点派生多行范围 | UI 折叠状态 |
+| `collect_selection_ranges` | 只沿 requested selection 的 named ancestor chain 收集 scopes | 全树遍历、selection history 或 edit application |
 | `collect_symbols` | 从 tags query 的 `definition.*` 与 `name` capture 构造声明 | workspace index lifecycle |
 | `collect_diagnostics` | 收集 error/missing node，并应用结果上限 | compiler diagnostics 或 quick fix |
 
@@ -59,6 +62,11 @@ SyntaxDocument::snapshot
   ├─ collect_folding_ranges
   ├─ collect_symbols
   └─ collect_diagnostics
+
+SyntaxDocument::selection_ranges(exact byte range)
+  → range / UTF-8 boundary validation
+  → named_descendant_for_byte_range
+  → bounded ancestor walk（默认最多 64 层）
 ```
 
 编辑校验发生在文本修改之前。解析使用已应用 edit 的旧 tree clone；如果 tree-sitter 取消解析，
@@ -79,8 +87,8 @@ bazel test //zeta-rs/syntax:syntax-unit-tests
 ```
 
 `src/syntax_tests.rs` 覆盖 Rust token/fold/symbol projection、JSON/JSONC token/fold/comment、Shell
-command/operator/comment token、单行和
-多行增量编辑、revision binding、UTF-8 boundary、更新后的 line index、resource limits，以及失败不修改文档。
+command/operator/comment token、ECMAScript grammar、单行和多行增量编辑、revision binding、UTF-8
+boundary、selection scope ordering、更新后的 line index、resource limits，以及失败不修改文档。
 
 新增 grammar 时必须同时增加 `SyntaxLanguage`、`LanguageConfiguration::load` 的 grammar/query
 绑定、capture mapping 测试和语言 fixture。修改 edit coordinate contract 时必须同步检查所有
@@ -89,14 +97,18 @@ host adapter；修改 symbol category 时必须同步检查未来 workspace inde
 
 当前限制：
 
-- Current：注册 Rust、Shell grammar，以及由独立私有语言模块选择的 JSON/JSONC grammar；JSON 与 JSONC
+- Current：注册 JavaScript/JSX、TypeScript/TSX、Rust、Shell grammar，以及由独立私有语言模块选择的 JSON/JSONC grammar；JSON 与 JSONC
   共用上游 comment-capable JSON parser，syntax snapshot 不代替 language server 的严格格式校验；
 - Current：单个 edit 和同一旧 revision 上的非重叠 batch 都使用 UTF-8 byte range；宿主负责事件 coalescing；
 - Current：文本保存在 `String`，中间插入需要移动后续 bytes；超大文档的 rope/chunked input 尚未实现；
 - Current：snapshot 派生为同步调用；异步 worker、debounce 与 cancellation 由产品宿主负责；
 - Current：App Server 使用 connection/model-owned open/change/close session 将 Rust、JSON 与 JSONC 的完整
-  analysis snapshot 投影为 UTF-16 wire DTO；Alpha 消费 token 与 parse diagnostic；
-- 尚未完成：Native EditorHost adapter，以及 Alpha folding/outline UI 投影；
-- 尚未完成：workspace symbol index、磁盘/unsaved-buffer arbitration 与持久化；
-- Potential：第二个真实 workspace index consumer 出现后提取 `zeta-symbol-index`，而不是把文件
-  authority 和数据库加入本 crate。
+  analysis snapshot 投影为 UTF-16 wire DTO；Aster 消费 token、parse diagnostic、symbol 与 folding；
+- Current：App Server 的 `syntax/selectionRanges` 只为离散命令按当前 selection 返回有限 scopes；普通
+  `syntax/analyze` 不携带全树 selection nodes，Aster Smart Select 负责 revision/cancellation/stale gate；
+- Current：Native `zeta-editor` 已私有组合 incremental analysis 与 folding；Aster folding/document-symbol
+  provider 已接入，具体 outline presentation 仍由产品 UI 决定；
+- Current：`zeta-symbol-index` 已作为独立 consumer 持久化 verified declaration facts；磁盘/dirty
+  arbitration 由 `zeta-code-index` overlay 拥有，不进入本 crate；
+- Potential：继续增加按需 structural operations；mutation 仍由 Editor 生成 undo transaction 并验证
+  revision，本 crate 不拥有 editor history。

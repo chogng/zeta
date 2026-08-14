@@ -101,6 +101,7 @@ fn symbol_boundaries(
         max_document_bytes: limits.max_file_bytes,
         max_tokens: 0,
         max_folding_ranges: 0,
+        max_selection_ranges: 0,
         max_symbols: limits.max_chunks_per_file.saturating_mul(4),
         max_diagnostics: 0,
     };

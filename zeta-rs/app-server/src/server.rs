@@ -1,5 +1,8 @@
 use crate::SlashCommandCatalog;
 use crate::attachment_upload_store::AttachmentUploadStore;
+use crate::browser_host::BrowserHost;
+use crate::browser_tool::BrowserToolPolicy;
+use crate::browser_tool::BrowserToolService;
 use crate::model_catalog::{ModelCatalog, unavailable_model_catalog};
 use crate::resource_store::{ResourceError, ResourceStore};
 use crate::review::ApprovalModeActionPolicyService;
@@ -74,7 +77,7 @@ mod language_operations;
 mod language_runtime;
 mod mcp_operations;
 pub(crate) mod multi_agent_tools;
-mod notification_queue;
+pub(crate) mod notification_queue;
 mod operations;
 mod plugin_extension_sources;
 mod plugin_operations;
@@ -84,6 +87,8 @@ mod search_operations;
 mod semantic_index_job;
 mod skill_operations;
 mod start_turn;
+mod symbol_index_operations;
+mod symbol_index_runtime;
 mod syntax_operations;
 mod terminal_operations;
 mod turn_backend_router;
@@ -135,7 +140,7 @@ pub struct AppServer {
     model: Arc<dyn ModelService>,
     model_catalog: Arc<dyn ModelCatalog>,
     next_connection_id: AtomicU64,
-    pub(super) resources: Mutex<ResourceStore>,
+    pub(super) resources: Arc<Mutex<ResourceStore>>,
     pub(super) attachment_uploads: Mutex<AttachmentUploadStore>,
     pub(super) collaboration: Mutex<collaboration_runtime::DocumentCollaborationStore>,
     pub(super) extensions: Mutex<ExtensionCatalog>,
@@ -164,7 +169,10 @@ pub struct AppServer {
     local_workspace_host: Option<LocalWorkspaceHost>,
     dynamic_tool_port: Option<crate::tool_composition::ToolPort>,
     extension_tool_port: Option<crate::tool_composition::ToolPort>,
+    browser_host: Arc<BrowserHost>,
+    browser_tool_port: crate::tool_composition::ToolPort,
     code_index_storage_root: Option<std::path::PathBuf>,
+    symbol_index_storage_root: Option<std::path::PathBuf>,
     code_index_semantic_storage_root: Option<std::path::PathBuf>,
     code_index_semantic_models: Option<CodeIndexSemanticModels>,
     semantic_model_provider: Option<Arc<dyn zeta_model_provider::SemanticModelProvider>>,
@@ -235,6 +243,12 @@ impl AppServer {
             updates.clone(),
             workspace_authority_gate.clone(),
         );
+        let resources = Arc::new(Mutex::new(ResourceStore::default()));
+        let browser_host = Arc::new(BrowserHost::new(Arc::clone(&resources)));
+        let browser_tool_port = crate::tool_composition::ToolPort::host(
+            Arc::new(BrowserToolService::new(Arc::clone(&browser_host))),
+            Arc::new(BrowserToolPolicy),
+        );
         let turn_executor = TurnExecutor::without_tools(sessions.threads().clone(), model.clone())
             .with_thread_updates(Arc::new(AppServerThreadUpdates {
                 updates: updates.clone(),
@@ -253,7 +267,7 @@ impl AppServer {
             model,
             model_catalog: unavailable_model_catalog(),
             next_connection_id: AtomicU64::new(1),
-            resources: Mutex::new(ResourceStore::default()),
+            resources,
             attachment_uploads: Mutex::new(AttachmentUploadStore::default()),
             collaboration: Mutex::new(collaboration_runtime::DocumentCollaborationStore::default()),
             extensions: Mutex::new(ExtensionCatalog::default()),
@@ -286,7 +300,10 @@ impl AppServer {
             local_workspace_host: None,
             dynamic_tool_port: None,
             extension_tool_port: None,
+            browser_host,
+            browser_tool_port,
             code_index_storage_root: None,
+            symbol_index_storage_root: None,
             code_index_semantic_storage_root: None,
             code_index_semantic_models: None,
             semantic_model_provider: None,
@@ -350,6 +367,12 @@ impl AppServer {
 
     /// Releases connection-scoped subscriptions and runtime resources.
     pub fn close_connection(&self, connection: ConnectionState) {
+        self.browser_host.unregister(connection.connection_id);
+        if let Err(error) = self.synchronize_browser_tool_availability()
+            && let Some(host) = &self.local_workspace_host
+        {
+            host.record_tool_reconcile_failure(error);
+        }
         let lost_dynamic_tools = self.updates.unregister(connection.connection_id);
         self.cancel_lost_dynamic_tool_owners(lost_dynamic_tools);
         connection.outbound_notifications.close();
@@ -367,6 +390,20 @@ impl AppServer {
         }
         if let Some(extension_hosts) = &self.extension_hosts {
             extension_hosts.close_owner(connection.connection_id);
+        }
+    }
+
+    fn synchronize_browser_tool_availability(&self) -> Result<(), String> {
+        let Some(host) = &self.local_workspace_host else {
+            return Ok(());
+        };
+        loop {
+            let (revision, available) = self.browser_host.owner_availability();
+            host.replace_browser_host_available(available)
+                .map_err(|error| error.to_string())?;
+            if self.browser_host.owner_availability().0 == revision {
+                return Ok(());
+            }
         }
     }
 
@@ -643,6 +680,14 @@ impl AppServer {
         storage_root: impl Into<std::path::PathBuf>,
     ) -> Self {
         self.code_index_semantic_storage_root = Some(storage_root.into());
+        self
+    }
+
+    pub(crate) fn with_symbol_index_storage_root(
+        mut self,
+        storage_root: impl Into<std::path::PathBuf>,
+    ) -> Self {
+        self.symbol_index_storage_root = Some(storage_root.into());
         self
     }
 
@@ -986,6 +1031,28 @@ impl AppServer {
                     let _guard = dispatch_gate.lock().map_err(|_| {
                         std::io::Error::other("App Server dispatch gate lock poisoned")
                     })?;
+                    let envelope = serde_json::from_str::<Value>(&line).map_err(|error| {
+                        std::io::Error::new(
+                            std::io::ErrorKind::InvalidData,
+                            format!("invalid App Server inbound JSON: {error}"),
+                        )
+                    })?;
+                    if envelope.get("method").is_none() {
+                        let handled = self
+                            .browser_host
+                            .handle_response(connection.connection_id, envelope)
+                            .map_err(|error| {
+                                std::io::Error::new(std::io::ErrorKind::InvalidData, error)
+                            })?;
+                        line.zeroize();
+                        if handled {
+                            continue;
+                        }
+                        return Err(std::io::Error::new(
+                            std::io::ErrorKind::InvalidData,
+                            "App Server received an unknown JSON-RPC response",
+                        ));
+                    }
                     let response = self.handle_json(&mut connection, &line);
                     line.zeroize();
                     outbound_tx.send(response).map_err(|_| {
@@ -1209,6 +1276,9 @@ impl AppServer {
             }
             Some(ClientMethod::DiffCompute) => self.diff_compute(&request.params),
             Some(ClientMethod::SyntaxAnalyze) => self.syntax_analyze(&request.params),
+            Some(ClientMethod::SyntaxSelectionRanges) => {
+                self.syntax_selection_ranges(&request.params)
+            }
             Some(ClientMethod::LanguageSynchronize) => self.language_synchronize(&request.params),
             Some(ClientMethod::LanguageClose) => self.language_close(&request.params),
             Some(ClientMethod::LanguageHover) => self.language_hover(&request.params),
@@ -1303,6 +1373,14 @@ impl AppServer {
             }
             Some(ClientMethod::CodeIndexStatus) => self.code_index_status(&request.params),
             Some(ClientMethod::CodeIndexSearch) => self.code_index_search(&request.params),
+            Some(ClientMethod::SymbolIndexStatus) => self.symbol_index_status(&request.params),
+            Some(ClientMethod::SymbolIndexSearch) => self.symbol_index_search(&request.params),
+            Some(ClientMethod::WorkspaceDocumentOverlaySynchronize) => {
+                self.workspace_document_overlay_synchronize(&request.params)
+            }
+            Some(ClientMethod::WorkspaceDocumentOverlayClose) => {
+                self.workspace_document_overlay_close(&request.params)
+            }
             Some(ClientMethod::CodeIndexRetrieve) => self.code_retrieve(&request.params),
             Some(ClientMethod::CodeIndexRebuild) => self.code_index_rebuild(&request.params),
             Some(ClientMethod::SemanticCodeIndexCancel) => {

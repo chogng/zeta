@@ -9459,6 +9459,7 @@ dependencies = [
  "zeta-skills",
  "zeta-skills-extension",
  "zeta-slash-commands",
+ "zeta-symbol-index",
  "zeta-syntax",
  "zeta-tool-executor",
  "zeta-tools",
@@ -9631,6 +9632,7 @@ dependencies = [
  "zeta-code-index-cloud",
  "zeta-code-index-semantic",
  "zeta-model-provider",
+ "zeta-symbol-index",
  "zeta-workspace",
 ]
 
@@ -10434,6 +10436,20 @@ dependencies = [
  "zeta-protocol",
  "zeta-session-store",
  "zeta-thread-store",
+]
+
+[[package]]
+name = "zeta-symbol-index"
+version = "0.1.0"
+dependencies = [
+ "nucleo",
+ "rusqlite",
+ "tempfile",
+ "thiserror 2.0.19",
+ "zeta-async-utils",
+ "zeta-code-index",
+ "zeta-syntax",
+ "zeta-workspace",
 ]
 
 [[package]]

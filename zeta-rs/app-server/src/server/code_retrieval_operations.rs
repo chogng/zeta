@@ -57,6 +57,12 @@ impl AppServer {
             }
             (None, None) => CodeRetrievalService::local(index),
         };
+        let service = match self.symbol_index_service() {
+            Ok(symbol_index) => service
+                .with_symbol_index(symbol_index.index())
+                .map_err(code_retrieval_error)?,
+            Err(_) => service,
+        };
         let retrieval = service.retrieve(&query).map_err(code_retrieval_error)?;
         result(&CodeRetrievalResult {
             status: self.project_code_index_status(&runtime),
@@ -90,6 +96,7 @@ fn project_hit(hit: CodeRetrievalHit) -> CodeRetrievalHitDto {
 
 fn project_origin(origin: CodeRetrievalOrigin) -> CodeRetrievalOriginDto {
     match origin {
+        CodeRetrievalOrigin::LocalSymbol => CodeRetrievalOriginDto::LocalSymbol,
         CodeRetrievalOrigin::LocalLexical => CodeRetrievalOriginDto::LocalLexical,
         CodeRetrievalOrigin::LocalSemantic => CodeRetrievalOriginDto::LocalSemantic,
         CodeRetrievalOrigin::CloudSemantic => CodeRetrievalOriginDto::CloudSemantic,
@@ -98,6 +105,9 @@ fn project_origin(origin: CodeRetrievalOrigin) -> CodeRetrievalOriginDto {
 
 fn project_degradation(degradation: CodeRetrievalDegradation) -> CodeRetrievalDegradationDto {
     match degradation {
+        CodeRetrievalDegradation::LocalSymbolQueryFailed => {
+            CodeRetrievalDegradationDto::LocalSymbolQueryFailed
+        }
         CodeRetrievalDegradation::LocalSemanticQueryFailed => {
             CodeRetrievalDegradationDto::LocalSemanticQueryFailed
         }

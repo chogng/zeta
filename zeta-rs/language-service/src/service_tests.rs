@@ -46,6 +46,44 @@ impl LanguageServiceEventSink for RecordingSink {
     }
 }
 
+#[derive(Default)]
+struct RecordingMetrics {
+    metrics: Mutex<Vec<LanguageRequestMetric>>,
+    changed: Condvar,
+}
+
+impl RecordingMetrics {
+    fn wait_for(
+        &self,
+        predicate: impl Fn(&LanguageRequestMetric) -> bool,
+    ) -> LanguageRequestMetric {
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let mut metrics = self.metrics.lock().expect("metric lock");
+        loop {
+            if let Some(metric) = metrics.iter().find(|metric| predicate(metric)).cloned() {
+                return metric;
+            }
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            assert!(
+                !remaining.is_zero(),
+                "timed out waiting for language metric"
+            );
+            metrics = self
+                .changed
+                .wait_timeout(metrics, remaining)
+                .expect("metric wait")
+                .0;
+        }
+    }
+}
+
+impl LanguageServiceMetricsSink for RecordingMetrics {
+    fn record(&self, metric: LanguageRequestMetric) {
+        self.metrics.lock().expect("metric lock").push(metric);
+        self.changed.notify_all();
+    }
+}
+
 #[test]
 fn disabled_service_retains_nonblocking_document_contract_without_starting_servers() {
     let workspace = tempfile::tempdir().expect("workspace");
@@ -78,6 +116,7 @@ async fn disabling_supervisor_aborts_pending_retry_tasks() {
     let mut supervisor = Supervisor::new(
         LanguageServiceConfiguration::disabled(workspace.path()),
         Arc::new(NoopLanguageServiceEventSink),
+        None,
         commands,
     );
     let (finished, receiver) = tokio::sync::oneshot::channel();
@@ -140,6 +179,90 @@ fn request_facade_reports_missing_ready_capability_without_blocking_the_caller()
         } if message.contains("not routed")
     ));
     service.shutdown().expect("shutdown");
+}
+
+#[test]
+fn metrics_report_rejected_requests_without_source_or_query_payloads() {
+    let workspace = tempfile::tempdir().expect("workspace");
+    let metrics = Arc::new(RecordingMetrics::default());
+    let service = LanguageService::start_with_metrics(
+        LanguageServiceConfiguration::disabled(workspace.path()),
+        Arc::new(NoopLanguageServiceEventSink),
+        metrics.clone(),
+    )
+    .expect("start disabled language service");
+    let path = workspace.path().join("src/main.rs");
+    service
+        .synchronize_document(
+            LanguageServiceDocument::new(
+                &path,
+                "rust",
+                LanguageDocumentRevision::INITIAL,
+                "fn private_source_text() {}",
+            )
+            .expect("document"),
+        )
+        .expect("synchronize");
+    service
+        .request_definition(
+            &path,
+            LanguageDocumentRevision::INITIAL,
+            LanguageDocumentPosition::new(0, 3),
+        )
+        .expect("request");
+
+    let metric = metrics.wait_for(|metric| metric.kind == LanguageRequestKind::Definition);
+    assert_eq!(metric.outcome, LanguageRequestMetricOutcome::Rejected);
+    assert_eq!(metric.server, None);
+    assert_eq!(metric.result_count, 0);
+    service.shutdown().expect("shutdown");
+}
+
+#[tokio::test]
+async fn cancelling_an_in_flight_request_aborts_work_and_records_the_terminal_outcome() {
+    let workspace = tempfile::tempdir().expect("workspace");
+    let (commands, _receiver) = tokio::sync::mpsc::unbounded_channel();
+    let metrics = Arc::new(RecordingMetrics::default());
+    let metrics_sink: Arc<dyn LanguageServiceMetricsSink> = metrics.clone();
+    let mut supervisor = Supervisor::new(
+        LanguageServiceConfiguration::disabled(workspace.path()),
+        Arc::new(NoopLanguageServiceEventSink),
+        Some(metrics_sink),
+        commands,
+    );
+    let request_id = LanguageRequestId::new(9);
+    let server = LanguageServerName::new("rust-analyzer").expect("server");
+    let (finished, receiver) = tokio::sync::oneshot::channel();
+    let task = tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_secs(60)).await;
+        let _ = finished.send(());
+    });
+    supervisor.in_flight_requests.insert(
+        request_id,
+        InFlightLanguageRequest {
+            task,
+            kind: LanguageRequestKind::References,
+            server,
+            server_epoch: 3,
+            configuration_generation: 4,
+            service_generation: 5,
+            cold_for_incarnation: true,
+            started: Instant::now(),
+        },
+    );
+
+    supervisor.cancel_language_request(request_id);
+
+    assert!(matches!(
+        tokio::time::timeout(Duration::from_secs(1), receiver).await,
+        Ok(Err(_))
+    ));
+    let metric = metrics.wait_for(|metric| metric.kind == LanguageRequestKind::References);
+    assert_eq!(metric.outcome, LanguageRequestMetricOutcome::Cancelled);
+    assert_eq!(metric.server_incarnation, Some(3));
+    assert_eq!(metric.configuration_generation, 4);
+    assert_eq!(metric.service_generation, 5);
+    assert!(metric.cold_for_incarnation);
 }
 
 #[test]
@@ -323,7 +446,7 @@ async fn transport_close_during_starting_cannot_become_a_false_ready_server() {
         .with_restart_policy(LanguageServerRestartPolicy::Never);
     let sink = Arc::new(RecordingSink::default());
     let (commands, _command_rx) = mpsc::unbounded_channel();
-    let mut supervisor = Supervisor::new(configuration, sink.clone(), commands);
+    let mut supervisor = Supervisor::new(configuration, sink.clone(), None, commands);
     let server = LanguageServerName::new("early-exit-rust").expect("server name");
     let managed = supervisor.servers.get_mut(&server).expect("managed server");
     managed.epoch = 1;

@@ -21,6 +21,17 @@ use crate::protocol::attachments::AttachmentUploadStartParams;
 use crate::protocol::attachments::AttachmentUploadStartResult;
 use crate::protocol::attachments::AttachmentUploadWriteParams;
 use crate::protocol::attachments::AttachmentUploadWriteResult;
+use crate::protocol::browser::BrowserBinaryPayload;
+use crate::protocol::browser::BrowserCloseParams;
+use crate::protocol::browser::BrowserCreateParams;
+use crate::protocol::browser::BrowserCreateResult;
+use crate::protocol::browser::BrowserElementTargetDto;
+use crate::protocol::browser::BrowserObserveParams;
+use crate::protocol::browser::BrowserObserveResult;
+use crate::protocol::browser::BrowserPerformActionDto;
+use crate::protocol::browser::BrowserPerformParams;
+use crate::protocol::browser::BrowserPerformResult;
+use crate::protocol::browser::BrowserTextInputTargetDto;
 use crate::protocol::code_index::CloudCodeIndexAuthorizeParams;
 use crate::protocol::code_index::CloudCodeIndexDestinationDto;
 use crate::protocol::code_index::CloudCodeIndexGrantDto;
@@ -258,6 +269,15 @@ use crate::protocol::skills::{
     SkillsChanged,
 };
 use crate::protocol::slash_commands::{SlashCommandArgumentModeDto, SlashCommandDefinition};
+use crate::protocol::symbol_index::SymbolIndexSearchHitDto;
+use crate::protocol::symbol_index::SymbolIndexSearchParams;
+use crate::protocol::symbol_index::SymbolIndexSearchResult;
+use crate::protocol::symbol_index::SymbolIndexStateDto;
+use crate::protocol::symbol_index::SymbolIndexStatusResult;
+use crate::protocol::symbol_index::SymbolKindDto;
+use crate::protocol::symbol_index::WorkspaceDocumentOverlayCloseParams;
+use crate::protocol::symbol_index::WorkspaceDocumentOverlayStatusResult;
+use crate::protocol::symbol_index::WorkspaceDocumentOverlaySynchronizeParams;
 use crate::protocol::syntax::SyntaxAnalyzeParams;
 use crate::protocol::syntax::SyntaxAnalyzeResult;
 use crate::protocol::syntax::SyntaxDiagnosticDto;
@@ -266,6 +286,9 @@ use crate::protocol::syntax::SyntaxFoldingRangeDto;
 use crate::protocol::syntax::SyntaxLanguageDto;
 use crate::protocol::syntax::SyntaxPositionDto;
 use crate::protocol::syntax::SyntaxRangeDto;
+use crate::protocol::syntax::SyntaxSelectionRangeDto;
+use crate::protocol::syntax::SyntaxSelectionRangesParams;
+use crate::protocol::syntax::SyntaxSelectionRangesResult;
 use crate::protocol::syntax::SyntaxSymbolDto;
 use crate::protocol::syntax::SyntaxSymbolKindDto;
 use crate::protocol::syntax::SyntaxTokenDto;
@@ -332,6 +355,24 @@ pub struct ClientMethodDefinition {
 }
 
 impl ClientMethodDefinition {
+    pub fn params_type(&self) -> String {
+        (self.params_type)()
+    }
+
+    pub fn result_type(&self) -> String {
+        (self.result_type)()
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct HostMethodDefinition {
+    pub kind: HostMethod,
+    pub method: &'static str,
+    params_type: fn() -> String,
+    result_type: fn() -> String,
+}
+
+impl HostMethodDefinition {
     pub fn params_type(&self) -> String {
         (self.params_type)()
     }
@@ -938,6 +979,11 @@ client_methods! {
         response: SyntaxAnalyzeResult,
         serialization: GlobalSharedRead,
     },
+    SyntaxSelectionRanges => "syntax/selectionRanges" {
+        params: SyntaxSelectionRangesParams,
+        response: SyntaxSelectionRangesResult,
+        serialization: GlobalSharedRead,
+    },
     LanguageSynchronize => "language/synchronize" {
         params: LanguageSynchronizeParams,
         response: (),
@@ -1188,6 +1234,26 @@ client_methods! {
         response: CodeIndexSearchResult,
         serialization: GlobalSharedRead,
     },
+    SymbolIndexStatus => "workspace/symbolIndex/status" {
+        params: EmptyParams,
+        response: SymbolIndexStatusResult,
+        serialization: GlobalSharedRead,
+    },
+    SymbolIndexSearch => "workspace/symbolIndex/search" {
+        params: SymbolIndexSearchParams,
+        response: SymbolIndexSearchResult,
+        serialization: GlobalSharedRead,
+    },
+    WorkspaceDocumentOverlaySynchronize => "workspace/codeIntelligence/document/synchronize" {
+        params: WorkspaceDocumentOverlaySynchronizeParams,
+        response: WorkspaceDocumentOverlayStatusResult,
+        serialization: GlobalSharedRead,
+    },
+    WorkspaceDocumentOverlayClose => "workspace/codeIntelligence/document/close" {
+        params: WorkspaceDocumentOverlayCloseParams,
+        response: WorkspaceDocumentOverlayStatusResult,
+        serialization: GlobalSharedRead,
+    },
     CodeIndexRetrieve => "workspace/codeIndex/retrieve" {
         params: CodeRetrievalParams,
         response: CodeRetrievalResult,
@@ -1282,6 +1348,87 @@ client_methods! {
         params: DebugAdapterCloseParams,
         response: (),
         serialization: None,
+    },
+}
+
+macro_rules! host_methods {
+    (
+        $(
+            $variant:ident => $method:literal {
+                params: $params:ty,
+                response: $response:ty,
+            }
+        ),+ $(,)?
+    ) => {
+        #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+        pub enum HostMethod {
+            $($variant,)+
+        }
+
+        impl HostMethod {
+            pub fn as_str(self) -> &'static str {
+                match self {
+                    $(Self::$variant => $method,)+
+                }
+            }
+        }
+
+        pub fn host_method(method: &str) -> Option<HostMethod> {
+            match method {
+                $($method => Some(HostMethod::$variant),)+
+                _ => None,
+            }
+        }
+
+        pub const HOST_METHODS: &[HostMethodDefinition] = &[
+            $(
+                HostMethodDefinition {
+                    kind: HostMethod::$variant,
+                    method: $method,
+                    params_type: type_name::<$params>,
+                    result_type: type_name::<$response>,
+                },
+            )+
+        ];
+
+        #[allow(dead_code)]
+        #[derive(JsonSchema)]
+        #[serde(tag = "method", content = "params")]
+        pub(crate) enum HostRequestSchema {
+            $(
+                #[serde(rename = $method)]
+                $variant($params),
+            )+
+        }
+
+        #[allow(dead_code)]
+        #[derive(JsonSchema)]
+        #[serde(tag = "method", content = "result")]
+        pub(crate) enum HostResultSchema {
+            $(
+                #[serde(rename = $method)]
+                $variant(Box<$response>),
+            )+
+        }
+    };
+}
+
+host_methods! {
+    BrowserCreate => "browser/create" {
+        params: BrowserCreateParams,
+        response: BrowserCreateResult,
+    },
+    BrowserObserve => "browser/observe" {
+        params: BrowserObserveParams,
+        response: BrowserObserveResult,
+    },
+    BrowserPerform => "browser/perform" {
+        params: BrowserPerformParams,
+        response: BrowserPerformResult,
+    },
+    BrowserClose => "browser/close" {
+        params: BrowserCloseParams,
+        response: (),
     },
 }
 
@@ -1540,6 +1687,17 @@ typescript_bindings! {
     ClientInfo,
     AgentInteractionCapability,
     BrowserCapability,
+    BrowserBinaryPayload,
+    BrowserCloseParams,
+    BrowserCreateParams,
+    BrowserCreateResult,
+    BrowserElementTargetDto,
+    BrowserObserveParams,
+    BrowserObserveResult,
+    BrowserPerformActionDto,
+    BrowserPerformParams,
+    BrowserPerformResult,
+    BrowserTextInputTargetDto,
     ClientCapabilities,
     ServerInfo,
     DocumentCollaborationOpenParams,
@@ -1825,6 +1983,9 @@ typescript_bindings! {
     SyntaxTokenKindDto,
     SyntaxTokenDto,
     SyntaxFoldingRangeDto,
+    SyntaxSelectionRangeDto,
+    SyntaxSelectionRangesParams,
+    SyntaxSelectionRangesResult,
     SyntaxSymbolKindDto,
     SyntaxSymbolDto,
     SyntaxDiagnosticKindDto,
@@ -1965,6 +2126,15 @@ typescript_bindings! {
     CodeIndexChunkSpanDto,
     CodeIndexSearchHitDto,
     CodeIndexSearchResult,
+    SymbolIndexStateDto,
+    SymbolIndexStatusResult,
+    SymbolIndexSearchParams,
+    SymbolKindDto,
+    SymbolIndexSearchHitDto,
+    SymbolIndexSearchResult,
+    WorkspaceDocumentOverlaySynchronizeParams,
+    WorkspaceDocumentOverlayCloseParams,
+    WorkspaceDocumentOverlayStatusResult,
     CodeRetrievalParams,
     CodeRetrievalOriginDto,
     CodeRetrievalDegradationDto,

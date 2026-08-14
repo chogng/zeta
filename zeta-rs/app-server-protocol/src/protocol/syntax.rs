@@ -70,6 +70,13 @@ pub struct SyntaxFoldingRangeDto {
     pub range: SyntaxRangeDto,
 }
 
+/// One parser-derived range used for structural selection expansion.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SyntaxSelectionRangeDto {
+    pub range: SyntaxRangeDto,
+}
+
 /// Language-neutral kind for one syntactically declared document symbol.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -136,4 +143,26 @@ pub struct SyntaxAnalyzeResult {
     pub folding_ranges: Vec<SyntaxFoldingRangeDto>,
     pub symbols: Vec<SyntaxSymbolDto>,
     pub diagnostics: Vec<SyntaxDiagnosticDto>,
+}
+
+/// Exact document and editor selections submitted for bounded structural-scope lookup.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SyntaxSelectionRangesParams {
+    pub language: SyntaxLanguageDto,
+    #[ts(type = "number")]
+    pub revision: u64,
+    #[schemars(length(max = 4_194_304))]
+    pub text: String,
+    #[schemars(length(max = 1_024))]
+    pub ranges: Vec<SyntaxRangeDto>,
+}
+
+/// Deduplicated parser scopes enclosing the submitted selections for one exact revision.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SyntaxSelectionRangesResult {
+    #[ts(type = "number")]
+    pub revision: u64,
+    pub ranges: Vec<SyntaxSelectionRangeDto>,
 }

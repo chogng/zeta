@@ -12,6 +12,12 @@
     "errorResponse": {
       "$ref": "#/$defs/JsonRpcFailure"
     },
+    "hostRequest": {
+      "$ref": "#/$defs/JsonRpcRequest2"
+    },
+    "hostResponse": {
+      "$ref": "#/$defs/JsonRpcResponse2"
+    },
     "serverNotification": {
       "$ref": "#/$defs/JsonRpcNotification"
     }
@@ -19,6 +25,8 @@
   "required": [
     "clientRequest",
     "clientResponse",
+    "hostRequest",
+    "hostResponse",
     "serverNotification",
     "errorResponse"
   ],
@@ -1206,6 +1214,9 @@
         "CodeIndexUnavailable",
         "CodeIndexNotReady",
         "CodeIndexOperationFailed",
+        "SymbolIndexUnavailable",
+        "SymbolIndexNotReady",
+        "SymbolIndexOperationFailed",
         "CodeRetrievalOperationFailed",
         "CloudCodeIndexUnavailable",
         "CloudCodeIndexInvalidGrant",
@@ -1440,6 +1451,29 @@
         "nextOffset"
       ]
     },
+    "BrowserBinaryPayload": {
+      "description": "One bounded binary payload returned by a client host before App Server resource registration.",
+      "type": "object",
+      "properties": {
+        "dataBase64": {
+          "type": "string"
+        },
+        "decodedLength": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "mimeType": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "mimeType",
+        "dataBase64",
+        "decodedLength"
+      ]
+    },
     "BrowserCapability": {
       "type": "object",
       "properties": {
@@ -1459,6 +1493,306 @@
         "version",
         "observe",
         "input"
+      ]
+    },
+    "BrowserCloseParams": {
+      "type": "object",
+      "properties": {
+        "targetId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "targetId"
+      ]
+    },
+    "BrowserCreateParams": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string",
+          "maxLength": 8192,
+          "minLength": 1
+        }
+      },
+      "required": [
+        "url"
+      ]
+    },
+    "BrowserCreateResult": {
+      "type": "object",
+      "properties": {
+        "targetId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "targetId"
+      ]
+    },
+    "BrowserElementTargetDto": {
+      "type": "object",
+      "properties": {
+        "nodeId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "nodeId"
+      ]
+    },
+    "BrowserObserveParams": {
+      "type": "object",
+      "properties": {
+        "includeAccessibilityTree": {
+          "type": "boolean"
+        },
+        "includeDomSnapshot": {
+          "type": "boolean"
+        },
+        "includeScreenshot": {
+          "type": "boolean"
+        },
+        "targetId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "targetId",
+        "includeAccessibilityTree",
+        "includeDomSnapshot",
+        "includeScreenshot"
+      ]
+    },
+    "BrowserObserveResult": {
+      "type": "object",
+      "properties": {
+        "accessibilityTree": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "domSnapshot": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "loading": {
+          "type": "boolean"
+        },
+        "screenshot": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BrowserBinaryPayload"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "targetId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "targetId",
+        "url",
+        "title",
+        "loading"
+      ]
+    },
+    "BrowserPerformActionDto": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "targetId": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "navigate"
+            },
+            "url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "targetId",
+            "url"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "target": {
+              "$ref": "#/$defs/BrowserElementTargetDto"
+            },
+            "targetId": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "click"
+            }
+          },
+          "required": [
+            "type",
+            "targetId",
+            "target"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "target": {
+              "$ref": "#/$defs/BrowserTextInputTargetDto"
+            },
+            "targetId": {
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "typeText"
+            }
+          },
+          "required": [
+            "type",
+            "targetId",
+            "target",
+            "text"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "deltaX": {
+              "type": "number",
+              "format": "double"
+            },
+            "deltaY": {
+              "type": "number",
+              "format": "double"
+            },
+            "targetId": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "scroll"
+            }
+          },
+          "required": [
+            "type",
+            "targetId",
+            "deltaX",
+            "deltaY"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "targetId": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "goBack"
+            }
+          },
+          "required": [
+            "type",
+            "targetId"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "targetId": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "reload"
+            }
+          },
+          "required": [
+            "type",
+            "targetId"
+          ]
+        }
+      ]
+    },
+    "BrowserPerformParams": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/BrowserPerformActionDto"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    },
+    "BrowserPerformResult": {
+      "type": "object",
+      "properties": {
+        "targetId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "targetId"
+      ]
+    },
+    "BrowserTextInputTargetDto": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "target": {
+              "$ref": "#/$defs/BrowserElementTargetDto"
+            },
+            "type": {
+              "type": "string",
+              "const": "element"
+            }
+          },
+          "required": [
+            "type",
+            "target"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "focusedElement"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        }
       ]
     },
     "ClientCapabilities": {
@@ -3119,6 +3453,22 @@
           "properties": {
             "method": {
               "type": "string",
+              "const": "syntax/selectionRanges"
+            },
+            "params": {
+              "$ref": "#/$defs/SyntaxSelectionRangesParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
               "const": "language/synchronize"
             },
             "params": {
@@ -3907,6 +4257,70 @@
             },
             "params": {
               "$ref": "#/$defs/CodeIndexSearchParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "workspace/symbolIndex/status"
+            },
+            "params": {
+              "$ref": "#/$defs/EmptyParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "workspace/symbolIndex/search"
+            },
+            "params": {
+              "$ref": "#/$defs/SymbolIndexSearchParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "workspace/codeIntelligence/document/synchronize"
+            },
+            "params": {
+              "$ref": "#/$defs/WorkspaceDocumentOverlaySynchronizeParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "workspace/codeIntelligence/document/close"
+            },
+            "params": {
+              "$ref": "#/$defs/WorkspaceDocumentOverlayCloseParams"
             }
           },
           "required": [
@@ -5827,6 +6241,22 @@
           "properties": {
             "method": {
               "type": "string",
+              "const": "syntax/selectionRanges"
+            },
+            "result": {
+              "$ref": "#/$defs/SyntaxSelectionRangesResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
               "const": "language/synchronize"
             },
             "result": {
@@ -6627,6 +7057,70 @@
           "properties": {
             "method": {
               "type": "string",
+              "const": "workspace/symbolIndex/status"
+            },
+            "result": {
+              "$ref": "#/$defs/SymbolIndexStatusResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "workspace/symbolIndex/search"
+            },
+            "result": {
+              "$ref": "#/$defs/SymbolIndexSearchResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "workspace/codeIntelligence/document/synchronize"
+            },
+            "result": {
+              "$ref": "#/$defs/WorkspaceDocumentOverlayStatusResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "workspace/codeIntelligence/document/close"
+            },
+            "result": {
+              "$ref": "#/$defs/WorkspaceDocumentOverlayStatusResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
               "const": "workspace/codeIndex/retrieve"
             },
             "result": {
@@ -7355,6 +7849,18 @@
           "properties": {
             "type": {
               "type": "string",
+              "const": "localSymbolQueryFailed"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
               "const": "localSemanticQueryFailed"
             }
           },
@@ -7460,6 +7966,7 @@
       "description": "Candidate source that contributed to one fused retrieval hit.",
       "type": "string",
       "enum": [
+        "localSymbol",
         "localLexical",
         "localSemantic",
         "cloudSemantic"
@@ -11330,6 +11837,142 @@
         "hook"
       ]
     },
+    "HostRequestSchema": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "browser/create"
+            },
+            "params": {
+              "$ref": "#/$defs/BrowserCreateParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "browser/observe"
+            },
+            "params": {
+              "$ref": "#/$defs/BrowserObserveParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "browser/perform"
+            },
+            "params": {
+              "$ref": "#/$defs/BrowserPerformParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "browser/close"
+            },
+            "params": {
+              "$ref": "#/$defs/BrowserCloseParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        }
+      ]
+    },
+    "HostResultSchema": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "browser/create"
+            },
+            "result": {
+              "$ref": "#/$defs/BrowserCreateResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "browser/observe"
+            },
+            "result": {
+              "$ref": "#/$defs/BrowserObserveResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "browser/perform"
+            },
+            "result": {
+              "$ref": "#/$defs/BrowserPerformResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "browser/close"
+            },
+            "result": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        }
+      ]
+    },
     "ImageAttachmentRef": {
       "description": "Durable, provider-neutral reference to one immutable validated image representation.\n\nThe digest identifies the exact encoded bytes. Stores must verify every other field when the\nbytes are admitted and again when an untrusted reference is resolved.",
       "type": "object",
@@ -11578,12 +12221,53 @@
       "type": "string",
       "minLength": 1
     },
+    "JsonRpcError": {
+      "description": "Generic JSON-RPC error returned by a client-hosted method implementation.",
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "data": true,
+        "message": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "message",
+        "data"
+      ]
+    },
     "JsonRpcFailure": {
       "description": "A failed JSON-RPC response envelope.",
       "type": "object",
       "properties": {
         "error": {
           "$ref": "#/$defs/AppServerError"
+        },
+        "id": {
+          "$ref": "#/$defs/JsonRpcId"
+        },
+        "jsonrpc": {
+          "$ref": "#/$defs/JsonRpcVersion"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "jsonrpc",
+        "id",
+        "error"
+      ]
+    },
+    "JsonRpcFailure2": {
+      "description": "A failed JSON-RPC response envelope.",
+      "type": "object",
+      "properties": {
+        "error": {
+          "$ref": "#/$defs/JsonRpcError"
         },
         "id": {
           "$ref": "#/$defs/JsonRpcId"
@@ -11661,6 +12345,31 @@
         "params"
       ]
     },
+    "JsonRpcRequest2": {
+      "description": "A JSON-RPC request envelope.\n\n`params` is generic so callers can bind it to a concrete protocol DTO. The App Server applies\nits own request-ID policy at its dispatch boundary.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/JsonRpcId"
+        },
+        "jsonrpc": {
+          "$ref": "#/$defs/JsonRpcVersion"
+        },
+        "method": {
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/HostRequestSchema"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "jsonrpc",
+        "id",
+        "method",
+        "params"
+      ]
+    },
     "JsonRpcResponse": {
       "description": "A JSON-RPC response, which contains exactly one success result or error object.",
       "anyOf": [
@@ -11669,6 +12378,17 @@
         },
         {
           "$ref": "#/$defs/JsonRpcFailure"
+        }
+      ]
+    },
+    "JsonRpcResponse2": {
+      "description": "A JSON-RPC response, which contains exactly one success result or error object.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/JsonRpcSuccess2"
+        },
+        {
+          "$ref": "#/$defs/JsonRpcFailure2"
         }
       ]
     },
@@ -11684,6 +12404,27 @@
         },
         "result": {
           "$ref": "#/$defs/ClientResultSchema"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "jsonrpc",
+        "id",
+        "result"
+      ]
+    },
+    "JsonRpcSuccess2": {
+      "description": "A successful JSON-RPC response envelope.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/JsonRpcId"
+        },
+        "jsonrpc": {
+          "$ref": "#/$defs/JsonRpcVersion"
+        },
+        "result": {
+          "$ref": "#/$defs/HostResultSchema"
         }
       },
       "additionalProperties": false,
@@ -17427,6 +18168,183 @@
       "type": "string",
       "minLength": 1
     },
+    "SymbolIndexSearchHitDto": {
+      "description": "One revision-verified local symbol match in editor-native UTF-16 coordinates.",
+      "type": "object",
+      "properties": {
+        "containerName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "declarationRange": {
+          "$ref": "#/$defs/LanguageRangeDto"
+        },
+        "kind": {
+          "$ref": "#/$defs/SymbolKindDto"
+        },
+        "language": {
+          "type": "string"
+        },
+        "matchedIndices": {
+          "description": "Zero-based UTF-16 offsets into `name` suitable for Renderer highlighting.",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "name": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "score": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "selectionRange": {
+          "$ref": "#/$defs/LanguageRangeDto"
+        },
+        "sourceRevision": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "kind",
+        "path",
+        "language",
+        "sourceRevision",
+        "declarationRange",
+        "selectionRange",
+        "score",
+        "matchedIndices"
+      ]
+    },
+    "SymbolIndexSearchParams": {
+      "description": "Performs one bounded local fuzzy lookup against workspace declarations.",
+      "type": "object",
+      "properties": {
+        "maxResults": {
+          "type": "integer",
+          "format": "uint",
+          "maximum": 100,
+          "minimum": 1
+        },
+        "query": {
+          "type": "string",
+          "maxLength": 8192
+        }
+      },
+      "required": [
+        "query",
+        "maxResults"
+      ]
+    },
+    "SymbolIndexSearchResult": {
+      "description": "Bounded verified matches paired with the symbol generation that served them.",
+      "type": "object",
+      "properties": {
+        "discardedStaleHitCount": {
+          "description": "Matches discarded because their exact source revision could no longer be materialized.",
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "hits": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SymbolIndexSearchHitDto"
+          }
+        },
+        "status": {
+          "$ref": "#/$defs/SymbolIndexStatusResult"
+        }
+      },
+      "required": [
+        "status",
+        "hits",
+        "discardedStaleHitCount"
+      ]
+    },
+    "SymbolIndexStateDto": {
+      "description": "Lifecycle state of the workspace-side declaration projection.",
+      "type": "string",
+      "enum": [
+        "empty",
+        "indexing",
+        "ready",
+        "stale",
+        "failed"
+      ]
+    },
+    "SymbolIndexStatusResult": {
+      "description": "Published counters for the current or most recent usable symbol generation.",
+      "type": "object",
+      "properties": {
+        "generation": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "indexedSourceCount": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "indexedSymbolCount": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "rootId": {
+          "type": "string"
+        },
+        "sourceGeneration": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "state": {
+          "$ref": "#/$defs/SymbolIndexStateDto"
+        },
+        "symbolLimitHit": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "state",
+        "rootId",
+        "generation",
+        "sourceGeneration",
+        "indexedSourceCount",
+        "indexedSymbolCount",
+        "symbolLimitHit"
+      ]
+    },
+    "SymbolKindDto": {
+      "description": "Language-neutral category of a syntactically declared symbol.",
+      "type": "string",
+      "enum": [
+        "constant",
+        "enum",
+        "field",
+        "function",
+        "macro",
+        "method",
+        "module",
+        "static",
+        "struct",
+        "trait",
+        "type",
+        "variable"
+      ]
+    },
     "SyntaxAnalyzeParams": {
       "description": "Immutable document snapshot submitted for bounded syntax analysis.",
       "type": "object",
@@ -17580,6 +18498,70 @@
       "required": [
         "start",
         "end"
+      ]
+    },
+    "SyntaxSelectionRangeDto": {
+      "description": "One parser-derived range used for structural selection expansion.",
+      "type": "object",
+      "properties": {
+        "range": {
+          "$ref": "#/$defs/SyntaxRangeDto"
+        }
+      },
+      "required": [
+        "range"
+      ]
+    },
+    "SyntaxSelectionRangesParams": {
+      "description": "Exact document and editor selections submitted for bounded structural-scope lookup.",
+      "type": "object",
+      "properties": {
+        "language": {
+          "$ref": "#/$defs/SyntaxLanguageDto"
+        },
+        "ranges": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SyntaxRangeDto"
+          },
+          "maxItems": 1024
+        },
+        "revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "text": {
+          "type": "string",
+          "maxLength": 4194304
+        }
+      },
+      "required": [
+        "language",
+        "revision",
+        "text",
+        "ranges"
+      ]
+    },
+    "SyntaxSelectionRangesResult": {
+      "description": "Deduplicated parser scopes enclosing the submitted selections for one exact revision.",
+      "type": "object",
+      "properties": {
+        "ranges": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SyntaxSelectionRangeDto"
+          }
+        },
+        "revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "revision",
+        "ranges"
       ]
     },
     "SyntaxSymbolDto": {
@@ -20082,6 +21064,50 @@
         "id",
         "header",
         "question"
+      ]
+    },
+    "WorkspaceDocumentOverlayCloseParams": {
+      "description": "Releases one editor document from the ephemeral code-intelligence overlay.",
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ]
+    },
+    "WorkspaceDocumentOverlayStatusResult": {
+      "description": "Content-free summary of the current in-memory editor overlay.",
+      "type": "object",
+      "properties": {
+        "dirtyDocumentCount": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "generation": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "generation",
+        "dirtyDocumentCount"
+      ]
+    },
+    "WorkspaceDocumentOverlaySynchronizeParams": {
+      "description": "Publishes the latest immutable editor text for one workspace-relative document.",
+      "type": "object",
+      "properties": {
+        "document": {
+          "$ref": "#/$defs/LanguageDocumentDto"
+        }
+      },
+      "required": [
+        "document"
       ]
     },
     "WorkspaceSearchCancelParams": {

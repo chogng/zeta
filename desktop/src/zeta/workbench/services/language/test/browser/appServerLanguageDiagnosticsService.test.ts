@@ -7,14 +7,16 @@ import { TextModel } from "../../../../../editor/common/model/textModel.js";
 import { type IServerEventApi } from "../../../../../platform/app-server/common/appServerApi.js";
 import { type ILanguageApi } from "../../../../../platform/language/common/languageApi.js";
 import { WorkspaceContextService } from "../../../workspaces/browser/workspaceContextService.js";
+import { type CodeIntelligenceDocumentSnapshot, type ICodeIntelligenceDocumentService } from "../../../codeIntelligence/common/codeIntelligenceDocumentService.js";
 import { AppServerLanguageDiagnosticsService } from "../../browser/appServerLanguageDiagnosticsService.js";
 import { type ServerNotification } from "../../../../../../../generated/app-server/types.js";
 
 test("App Server diagnostics service synchronizes, filters revisions, and closes once", async () => {
   const events = new FakeServerEvents();
   const api = new FakeLanguageApi();
+  const documents = new FakeCodeIntelligenceDocuments();
   using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:\\project") });
-  using service = new AppServerLanguageDiagnosticsService(api, events, workspace);
+  using service = new AppServerLanguageDiagnosticsService(api, events, workspace, documents);
   using model = new TextModel("fn main() {}\n");
   const resource = URI.file("C:\\project\\main.rs");
   using first = service.acquire(resource, "rust", model);
@@ -23,6 +25,7 @@ test("App Server diagnostics service synchronizes, filters revisions, and closes
   assert.equal(api.synchronized.length, 1);
   assert.equal(api.diagnosticPulls.length, 1);
   assert.equal(api.synchronized[0]!.document.path, "main.rs");
+  assert.deepEqual(documents.synchronized, api.synchronized.map(request => request.document));
 
   events.fire({ method: "language/diagnostics", params: { path: "main.rs", revision: 1, diagnostics: [{ range: { start: { lineIndex: 0, columnIndex: 3 }, end: { lineIndex: 0, columnIndex: 7 } }, severity: "error", message: "broken", code: "E1", source: "fixture" }] } });
   assert.equal(service.getDiagnostics(resource)?.diagnostics[0]!.message, "broken");
@@ -46,6 +49,7 @@ test("App Server diagnostics service synchronizes, filters revisions, and closes
   first.dispose();
   await tick();
   assert.deepEqual(api.closed, [{ path: "main.rs" }]);
+  assert.deepEqual(documents.closed, api.closed.map(request => request.path));
   assert.equal(service.getAllDiagnostics().length, 1);
   publisher.dispose();
   assert.equal(service.getAllDiagnostics().length, 0);
@@ -55,6 +59,13 @@ class FakeServerEvents implements IServerEventApi {
   private listener: ((event: ServerNotification) => void) | undefined;
   subscribe(listener: (event: ServerNotification) => void) { this.listener = listener; return { dispose: () => { this.listener = undefined; } }; }
   fire(event: ServerNotification): void { this.listener?.(event); }
+}
+
+class FakeCodeIntelligenceDocuments implements ICodeIntelligenceDocumentService {
+  readonly synchronized: CodeIntelligenceDocumentSnapshot[] = [];
+  readonly closed: string[] = [];
+  async synchronize(document: CodeIntelligenceDocumentSnapshot) { this.synchronized.push(document); }
+  async close(path: string) { this.closed.push(path); }
 }
 
 class FakeLanguageApi implements ILanguageApi {

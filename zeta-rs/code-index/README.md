@@ -30,8 +30,10 @@
 - `zeta-syntax` declaration facts 优先、行边界 fallback 的本地切块；
 - 全文件 revision、chunk content hash 与带 chunker version 的稳定 key；
 - SQLite 原子 generation publication、FTS5 检索和 exact-file 更新；
-- 命中再次读取时的 root、revision、range 与 hash 校验。
+- 命中再次读取时的 root、revision、range 与 hash 校验；
+- canonical in-memory dirty document overlay、revision 单调性、同 revision 冲突拒绝与 save handoff；
 - 把 Workspace-owned chunk reference 投影为适合上层返回的 revision-bound excerpt reference。
+- 把符号等 verified source span 投影为 content-addressed excerpt reference。
 - 为受控外发 consumer 提供不含正文的 generation manifest，以及批量复核后的 source/chunk
   materialization。
 
@@ -39,7 +41,7 @@
 
 - 工作区 trust、profile 路径、watcher thread 或 RPC lifecycle；
 - embedding/rerank 模型调用、本地向量 projection、云端同步、网络权限或数据外发策略；
-- Editor buffer overlay、LSP semantic facts、模型 Tool 和 UI result projection。
+- Editor snapshot 采集/生命周期、LSP semantic facts、模型 Tool 和 UI result projection。
 
 依赖方向固定为 `zeta-code-index → zeta-workspace + zeta-syntax`。如果本 crate 开始依赖 App
 Server protocol、产品 host、HTTP/provider 或 Renderer，说明 backend-neutral ownership 已经漂移。
@@ -57,6 +59,8 @@ Server protocol、产品 host、HTTP/provider 或 Renderer，说明 backend-neut
 | `CodeIndex::refresh_observed_paths` | public | 重新读取 hint；只对既有普通文件 exact update，其余 rebuild | 相信 watcher event 的类型或内容 |
 | `CodeIndex::materialize` | public | 当前源文件与旧 reference 的一致性证明 | 返回未经复核的 Agent context |
 | `CodeIndex::materialize_excerpt` | public | 复核 revision-bound excerpt 的 revision/range/hash | 允许云 provider 用它绕过 canonical chunk identity |
+| `CodeIndex::materialize_verified_excerpt` | public | 在当前磁盘或 overlay source 上复核任意有界 span，并生成 content-addressed excerpt | 让调用方绕过 Workspace source identity |
+| `CodeIndex::synchronize_overlay` / `close_overlay` | public | 接受 immutable editor snapshot、建立内存 chunks、协调 save handoff | 采集 Editor state 或写入持久 DB |
 | `CodeIndex::manifest` | public | 原子读取当前 generation 的 source/chunk references，不返回正文 | consent、network 或 provider routing |
 | `CodeIndex::materialize_sources` / `materialize_chunks` | public | 批量重读并复核 manifest references | 扩大 path scope 或跳过 revision gate |
 
@@ -86,6 +90,8 @@ watcher，再调用 `rebuild`；这样初始扫描期间的 mutation 仍会进�
 | `search` | `CodeIndexQuery` | 对 whitespace terms 做 literal-escaped FTS AND，最多返回 configured limit |
 | `materialize` | `ChunkReference` | revision/range/key/hash 任一不符即失败，不返回 stale content |
 | `materialize_excerpt` | `SourceExcerptReference` | revision/range/hash 任一不符即失败；这是通用投影 API，不授权云端定义不同 chunk boundary |
+| `materialize_verified_excerpt` | `IndexedSourceReference` + `ChunkSpan` | 先验证 current source/overlay，再产生包含 content hash 的 exact excerpt reference |
+| overlay synchronize/close | path、language、editor revision、text/hash | dirty path 完全替代同路径磁盘搜索与 materialization；save 只在磁盘 hash 对齐后 handoff |
 | `manifest` | 无 | 返回同一 published generation 的 source/chunk metadata，不复制 source content |
 | `materialize_sources` / `materialize_chunks` | manifest references | 当前 source revision 或 chunk identity 任一不符即整体失败 |
 
@@ -112,6 +118,11 @@ persistent cache 打不开时降级到 memory projection。删除源文件会在
 - query 为空或超过 byte limit 返回 `InvalidQuery`；
 - poisoned store mutex 表示进程内 invariant 已破坏，当前实现直接 panic，不伪装成可恢复 I/O 错误。
 
+Overlay 是进程内可丢弃 projection，不写 SQLite。相同 editor revision 只有在 language、text 与 content
+hash 都一致时才视为幂等；同 revision 不同内容会 fail closed。persistent search 命中 dirty path 会被
+抑制，`materialize`、`materialize_excerpt` 与 source materialization 都优先验证 overlay。磁盘
+generation 出现相同 content hash 后，overlay 才自动交回 persistent projection。
+
 ## 验证与修改影响
 
 ```bash
@@ -121,16 +132,18 @@ bazel test //zeta-rs/code-index:code-index-unit-tests
 ```
 
 测试在 sibling `code_index_tests.rs` 中覆盖 structural chunk、ignore/binary/limit、persistent reopen、
-exact refresh、stale reference、ignore policy reconcile 与 bounded query。修改 schema/chunker/limits 时
-必须同时检查 App Server status DTO、schema fixtures 和 [`docs/code-index.md`](../../docs/code-index.md)。
+并覆盖 exact refresh、stale reference、ignore policy reconcile、bounded query、dirty override、revision conflict、
+save handoff 与 verified arbitrary excerpt。修改 schema/chunker/limits 时必须同时检查 App Server status
+DTO、schema fixtures 和 [`docs/code-index.md`](../../docs/code-index.md)。
 
 ## 当前限制与扩展点
 
-- Current：单个 `WorkspaceRoot`、磁盘文件 snapshot、FTS5 词法排序；不是 semantic/vector search。
+- Current：单个 `WorkspaceRoot`、磁盘 generation + ephemeral dirty overlay、FTS5/overlay lexical 排序；
+  不是 semantic/vector search。
 - Current：JavaScript/JSX/JSON/JSONC/Rust/Shell/TypeScript/TSX 使用 `zeta-syntax` boundaries；其他
   UTF-8 文件使用 line/byte fallback。
-- Current limitation：未叠加未保存 Editor buffer；未实现 multi-root identity、主动 cache cleanup、
-  可取消 full scan/progress。
+- Current limitation：未实现 multi-root identity、主动 cache cleanup、可取消 full scan/progress；overlay
+  只做本地 lexical/chunk projection，不为每次编辑触发 embedding。
 - Extension point：`zeta-code-index-semantic` 消费 `manifest` 和复核后的 chunks 做本地 dense recall；
   `zeta-code-index-cloud` 消费相同 authority 做显式远端 grant。本 crate 保持无模型、无网络、无
   consent、无 provider dependency。

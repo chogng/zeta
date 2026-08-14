@@ -205,6 +205,7 @@ impl Default for ToolSearchOptions {
 enum ToolPortKind {
     Dynamic,
     Extension,
+    Host,
     Local,
     Mcp,
 }
@@ -214,6 +215,7 @@ impl ToolPortKind {
         match self {
             Self::Dynamic => "dynamic",
             Self::Extension => "extension",
+            Self::Host => "host",
             Self::Local => "local",
             Self::Mcp => "mcp",
         }
@@ -223,6 +225,7 @@ impl ToolPortKind {
         match self {
             Self::Dynamic => "client-hosted dynamic tool",
             Self::Extension => "host-installed extension tool",
+            Self::Host => "product-hosted capability",
             Self::Local => "built-in workspace tool",
             Self::Mcp => "MCP external tool",
         }
@@ -235,6 +238,9 @@ impl ToolPortKind {
             },
             Self::Extension => ToolSourceProvenance::Extension {
                 id: name.to_string(),
+            },
+            Self::Host => ToolSourceProvenance::Product {
+                component: "zeta-app-server/browser-host".into(),
             },
             Self::Local => ToolSourceProvenance::Product {
                 component: "zeta-app-server".into(),
@@ -257,6 +263,10 @@ pub(crate) struct ToolPort {
 }
 
 impl ToolPort {
+    pub(crate) fn host(tools: Arc<dyn ToolService>, policy: Arc<dyn ActionPolicyService>) -> Self {
+        Self::from_service(ToolPortKind::Host, ToolExposure::Direct, tools, policy)
+    }
+
     pub(crate) fn dynamic(
         tools: Arc<dyn ToolService>,
         policy: Arc<dyn ActionPolicyService>,
@@ -925,6 +935,7 @@ pub(crate) fn combine_tool_ports_at_generation_with_search(
     let mut mcp_policy = None;
     let mut dynamic_policy = None;
     let mut extension_policy = None;
+    let mut host_policy = None;
     for (service_index, port) in ports.into_iter().enumerate() {
         for contribution in port.contributions {
             if !names.insert(contribution.definition.name.clone()) {
@@ -946,6 +957,9 @@ pub(crate) fn combine_tool_ports_at_generation_with_search(
             ToolPortKind::Extension if extension_policy.is_none() => {
                 extension_policy = Some(Arc::clone(&port.policy));
             }
+            ToolPortKind::Host if host_policy.is_none() => {
+                host_policy = Some(Arc::clone(&port.policy));
+            }
             ToolPortKind::Local if local_policy.is_none() => {
                 local_policy = Some(Arc::clone(&port.policy));
             }
@@ -960,6 +974,11 @@ pub(crate) fn combine_tool_ports_at_generation_with_search(
             ToolPortKind::Extension => {
                 return Err(ToolCompositionError(
                     "multiple extension tool policy ports are not supported".into(),
+                ));
+            }
+            ToolPortKind::Host => {
+                return Err(ToolCompositionError(
+                    "multiple product-hosted policy ports are not supported".into(),
                 ));
             }
             ToolPortKind::Local => {
@@ -993,6 +1012,7 @@ pub(crate) fn combine_tool_ports_at_generation_with_search(
         policy: Arc::new(CompositeActionPolicyService {
             dynamic: dynamic_policy,
             extension: extension_policy,
+            host: host_policy,
             local: local_policy,
             mcp: mcp_policy,
             search_enabled,
@@ -1423,6 +1443,7 @@ impl ToolOutputSink for NoopToolOutputSink {
 struct CompositeActionPolicyService {
     dynamic: Option<Arc<dyn ActionPolicyService>>,
     extension: Option<Arc<dyn ActionPolicyService>>,
+    host: Option<Arc<dyn ActionPolicyService>>,
     local: Option<Arc<dyn ActionPolicyService>>,
     mcp: Option<Arc<dyn ActionPolicyService>>,
     search_enabled: bool,
@@ -1431,11 +1452,14 @@ struct CompositeActionPolicyService {
 impl ActionPolicyService for CompositeActionPolicyService {
     fn revision(&self) -> String {
         format!(
-            "composite-policy-v1:dynamic={}:extension={}:local={}:mcp={}:tool-search={}",
+            "composite-policy-v1:dynamic={}:extension={}:host={}:local={}:mcp={}:tool-search={}",
             self.dynamic
                 .as_ref()
                 .map_or_else(|| "none".into(), |policy| policy.revision()),
             self.extension
+                .as_ref()
+                .map_or_else(|| "none".into(), |policy| policy.revision()),
+            self.host
                 .as_ref()
                 .map_or_else(|| "none".into(), |policy| policy.revision()),
             self.local
@@ -1463,6 +1487,11 @@ impl ActionPolicyService for CompositeActionPolicyService {
         let policy = match request.provenance().source() {
             ActionSource::DynamicTool => self.dynamic.as_ref(),
             ActionSource::Plugin => self.extension.as_ref(),
+            ActionSource::BuiltInTool
+                if request.provenance().source_id().starts_with("browser_") =>
+            {
+                self.host.as_ref()
+            }
             ActionSource::BuiltInTool => self.local.as_ref(),
             ActionSource::McpServer => self.mcp.as_ref(),
             _ => None,

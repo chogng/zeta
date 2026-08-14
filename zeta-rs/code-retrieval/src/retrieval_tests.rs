@@ -9,7 +9,9 @@ use tempfile::TempDir;
 use zeta_code_index::ChunkReference;
 use zeta_code_index::CodeIndex;
 use zeta_code_index::CodeIndexLimits;
+use zeta_code_index::CodeIndexOverlayDocument;
 use zeta_code_index::CodeIndexStorage;
+use zeta_code_index::IndexedLanguage;
 use zeta_code_index_cloud::CloudCodeIndexCandidate;
 use zeta_code_index_cloud::CloudCodeIndexCapabilities;
 use zeta_code_index_cloud::CloudCodeIndexController;
@@ -36,6 +38,9 @@ use zeta_model_provider::EmbeddingRequest;
 use zeta_model_provider::EmbeddingResponse;
 use zeta_model_provider::EmbeddingVector;
 use zeta_model_provider::ModelProviderError;
+use zeta_symbol_index::SymbolIndex;
+use zeta_symbol_index::SymbolIndexLimits;
+use zeta_symbol_index::SymbolIndexStorage;
 use zeta_workspace::WorkspaceRoot;
 
 use crate::CodeRetrievalBudget;
@@ -293,6 +298,70 @@ fn verification_and_content_budgets_discard_unusable_candidates() {
         stale.degradations,
         [CodeRetrievalDegradation::CandidateVerificationFailed { discarded: 1 }]
     );
+}
+
+#[test]
+fn dirty_overlay_suppresses_old_disk_content_and_materializes_current_text() {
+    let workspace = workspace("pub fn persisted_secret() {}\n");
+    let index = index(&workspace);
+    index.rebuild().expect("rebuild");
+    index
+        .synchronize_overlay(CodeIndexOverlayDocument {
+            relative_path: "lib.rs".into(),
+            editor_revision: 2,
+            language: IndexedLanguage::Rust,
+            content: "pub fn unsaved_current() {}\n".into(),
+        })
+        .expect("overlay");
+    let service = CodeRetrievalService::local(index);
+
+    assert!(
+        service
+            .retrieve(&query("persisted_secret"))
+            .expect("old query")
+            .hits
+            .is_empty()
+    );
+    let current = service
+        .retrieve(&query("unsaved_current"))
+        .expect("current query");
+    assert_eq!(current.hits.len(), 1);
+    assert!(current.hits[0].content.contains("unsaved_current"));
+}
+
+#[test]
+fn symbol_retrieval_returns_the_exact_declaration_with_provenance() {
+    let workspace = workspace(
+        "const PREFIX: &str = \"outside\";\n\npub fn precise_symbol() {\n    let local = 1;\n}\n",
+    );
+    let index = index(&workspace);
+    index.rebuild().expect("rebuild");
+    let symbols = Arc::new(
+        SymbolIndex::open(
+            Arc::clone(&index),
+            SymbolIndexStorage::Memory,
+            SymbolIndexLimits::default(),
+        )
+        .expect("symbol index"),
+    );
+    symbols.reconcile().expect("symbol reconcile");
+    let service = CodeRetrievalService::local(index)
+        .with_symbol_index(symbols)
+        .expect("matching symbol root");
+
+    let result = service
+        .retrieve(&query("precise_symbol"))
+        .expect("retrieve");
+    let hit = result
+        .hits
+        .iter()
+        .find(|hit| hit.origins.contains(&CodeRetrievalOrigin::LocalSymbol))
+        .expect("symbol hit");
+
+    assert!(hit.content.starts_with("pub fn precise_symbol"));
+    assert!(!hit.content.contains("PREFIX"));
+    assert_eq!(hit.reference.span.start_line, 2);
+    assert!(result.degradations.is_empty());
 }
 
 fn workspace(content: &str) -> TempDir {

@@ -5,7 +5,7 @@ use crate::protocol::config::{
     SkillSourceAddParams,
 };
 use crate::protocol::fs::FsChanged;
-use crate::protocol::registry::{CLIENT_METHODS, SERVER_NOTIFICATIONS};
+use crate::protocol::registry::{CLIENT_METHODS, HOST_METHODS, SERVER_NOTIFICATIONS};
 use crate::protocol::slash_commands::{SlashCommandArgumentModeDto, SlashCommandDefinition};
 use crate::protocol::turn::InputItem;
 use crate::rpc::{JsonRpcFailure, JsonRpcId, JsonRpcNotification, JsonRpcRequest, JsonRpcSuccess};
@@ -29,9 +29,14 @@ fn registry_method_and_notification_names_are_unique() {
         .iter()
         .map(|definition| definition.method)
         .collect::<BTreeSet<_>>();
+    let host_methods = HOST_METHODS
+        .iter()
+        .map(|definition| definition.method)
+        .collect::<BTreeSet<_>>();
 
     assert_eq!(methods.len(), CLIENT_METHODS.len());
     assert_eq!(notifications.len(), SERVER_NOTIFICATIONS.len());
+    assert_eq!(host_methods.len(), HOST_METHODS.len());
     assert!(methods.contains("initialize"));
     assert!(methods.contains("session/request"));
     assert!(methods.contains("session/create"));
@@ -98,6 +103,15 @@ fn registry_method_and_notification_names_are_unique() {
     assert!(!notifications.contains("thread/update"));
     assert!(notifications.contains("git/statusChanged"));
     assert!(notifications.contains("fs/changed"));
+    assert_eq!(
+        host_methods,
+        BTreeSet::from([
+            "browser/close",
+            "browser/create",
+            "browser/observe",
+            "browser/perform",
+        ])
+    );
 }
 
 #[test]

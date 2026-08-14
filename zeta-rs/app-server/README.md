@@ -8,7 +8,8 @@
 > [`docs/mcp.md`](../../docs/mcp.md)，Git/SCM 跨进程 ownership 见
 > [`docs/git.md`](../../docs/git.md)，Workspace identity 与 trust boundary 见
 > [`docs/workspace-security.md`](../../docs/workspace-security.md)。跨文件内容搜索的执行实现见
-> [`zeta-rs/search/README.md`](../search/README.md)。
+> [`zeta-rs/search/README.md`](../search/README.md)。Desktop 浏览器能力的跨进程所有权和当前限制见
+> [`docs/zeta-desktop-architecture.md`](../../docs/zeta-desktop-architecture.md#7-浏览器能力)。
 
 `zeta-app-server` 是产品客户端与 Zeta domain/runtime 的 application boundary。它解析
 `zeta-app-server-protocol` request，调用 `SessionCoordinator`、Thread controller、
@@ -33,14 +34,17 @@ JSONL / in-process caller
    ├─ optional GitRuntime → zeta-file-watcher + GitService → zeta-git
    ├─ optional SearchService → zeta-search
    ├─ optional CodeIndexRuntime → zeta-code-index + filesystem watcher
+   ├─ optional SymbolIndexRuntime → zeta-symbol-index + CodeIndex source/overlay authority
    ├─ optional CodeIndexSemanticService → local SQLite vectors + host model adapters
    ├─ optional CloudCodeIndexController → zeta-code-index-cloud + host provider registry
-   ├─ request-scoped CodeRetrievalService → lexical/semantic/remote RRF + verification + budget
+   ├─ request-scoped CodeRetrievalService → symbol/lexical/semantic/remote RRF + verification + budget
    ├─ optional TerminalService → zeta-utils-pty
    ├─ optional LanguageServerProviderRegistry → zeta-language-service → zeta-lsp
    ├─ reloadable MCP Tool generation + status/OAuth/form interaction → zeta-mcp-extension → zeta-mcp
    ├─ ConnectorCredentialService → list/connect/disconnect + ready MCP reconcile
    ├─ client-hosted dynamic tools → durable Agent interaction owner
+   ├─ BrowserHost → connection-owned reverse JSON-RPC browser capability
+   │              → built-in browser Tool port + one-time approval policy
    ├─ read-only/capability ToolExecutor contributions → zeta-extension-api
    ├─ optional Web Search executor → zeta-web-search-extension
    ├─ trusted Workspace Agent tools → spawn_agent / send_agent_message / wait_agent
@@ -65,7 +69,7 @@ Core/store 继续拥有 Session/Thread durable state；需要进程内生命周�
 | `ConnectionState` | 每个 logical connection 的 initialized/request-ID/notification state |
 | `AppServer::new` | 用 recovered `SessionCoordinator` + `ModelService` 构造 server |
 | `AppServer::connection` | 分配 connection ID 并注册 notification queue |
-| `AppServer::connection_notifications` | 返回可阻塞等待、主动唤醒的 connection outbound source |
+| `AppServer::connection_notifications` | 返回可阻塞等待、主动唤醒的 connection outbound message source |
 | `AppServer::close_connection` | 注销 subscription、关闭 notification source，并释放 Resource/Terminal/Syntax owner |
 | `AppServer::handle_json` | 处理一个 JSON-RPC request string |
 | `AppServer::drain_notifications` | JSONL 与同步适配 caller 取出该 connection 的 serialized notifications |
@@ -208,6 +212,8 @@ src/
 │       └── update_broker.rs       # per-connection subscription/cursor/fanout
 ├── local.rs                       # local composition, session backend selection + model safe point
 ├── local_tools.rs                 # frozen rg registry + Core Tool/Policy adapters
+├── browser_host.rs                # reverse JSON-RPC broker、target owner、timeout/cancellation + screenshot resource binding
+├── browser_tool.rs                # semantic browser Tool definitions、input validation 与 approval policy
 ├── dynamic_tools.rs               # dynamic spec validation + durable interaction Tool adapter
 ├── extension_tools.rs             # read-only/capability contributors → reviewed ToolExecutor port
 ├── tool_executor_adapter.rs       # frozen payload/binding → ToolExecutor invocation
@@ -234,6 +240,12 @@ src/
 | `AppServerThreadUpdates` | private sink | 将 TurnExecutor live/committed update 接入 broker | 不修改 canonical update |
 | `UpdateBroker` | private | subscription、durable cursor、weak queue fanout | 不持有 connection/session runtime authority |
 | `UpdateBroker::publish_thread_update` | private | committed 按 durable cursor；transient 直接给 subscriber | 两类 cursor semantics 不得混合 |
+| `BrowserHost` | crate-private | capable connection、pending reverse request 和 exact target owner 的唯一 broker | 不执行 Electron/CDP，不选择活动标签，不暴露任意 host method |
+| `BrowserHost::request` | private | 产生独立字符串 ID、发布 Server → Client request、等待 30 秒 deadline 并观察取消 | 不复用 client numeric request-ID set；取消发送 `$/cancelRequest` |
+| `BrowserHost::handle_response` | crate-private | 校验 owner、terminal response 和 retired request outcome | 非 owner 不能移除 pending；只忽略已放弃请求的晚到响应 |
+| `BrowserHost::register_screenshot` | private | 校验 PNG MIME、长度、Base64 和 signature，再创建 connection-owned Resource | 不信任 host 声明的媒体类型，不把 bytes 放进 Tool result |
+| `BrowserToolService` | crate-private | 十个内置语义浏览器工具的 schema、materialization 和 Core capability 调用 | URL/node/target 校验不委托给模型或 Desktop |
+| `BrowserToolPolicy` | crate-private | 只接受 built-in `BrowserInteraction` + 单个 `UserInterface` capability，并要求一次性批准 | 不复用 local shell、MCP 或 extension policy |
 | `InteractionDeadlineWatcher` | crate-private | 在 workspace mutation gate 下重检 durable pending request，持久化 `DeadlineElapsed` cancellation 并失败 Turn | 不选择 UI、不解释 approval policy、不修改 reducer |
 | `zeta-skills-extension::SkillRuntime` | external runtime | 组合 roots、缓存 metadata projection、叠加 enablement，并贡献 durable activation/context fragment | App Server 只安装 runtime、提供 config/event adapter 与协议 projection |
 | `start_turn::replayed_result` | private | 用 durable command receipt 校验重复 `StartTurn` 输入并返回原 Turn 结果 | 重放不重新读取 model config 或 Skill 文件；不同输入返回 `CommandConflict` |
@@ -254,6 +266,8 @@ src/
 | `SearchService` | external crate | 持有 active workspace、frozen rg 和 owner-bound job map | App Server 不把 connection/DTO/UI 语义写入该 crate |
 | `CodeIndexRuntime` | crate-private | 串行 rebuild/refresh，投影 lifecycle，并在返回前 materialize | 不拥有 scan/chunk/schema，也不创建网络请求 |
 | `CodeIndexRefreshWorker` | private | 单 wake + merged paths/rescan priority 的后台刷新 | 不阻塞 filesystem notification thread，不建立无界 event queue |
+| `SymbolIndexRuntime` | crate-private | 在 canonical source generation 后 reconcile，保持 last-ready/stale 状态，并暴露 current index | 不扫描 Workspace、不请求 LSP、不拥有 UI fusion |
+| `WorkspaceDocumentOverlay` composition | crate-private | 先同步 CodeIndex canonical dirty snapshot，再投影 SymbolIndex；close/replacement 同步清理 | 不把 overlay 持久化或在每次编辑触发 embedding |
 | `CodeIndexSemanticService` | external crate | 同步 exact lexical generation、复用/持久化 vectors、本地 recall/rerank | App Server 不解释模型分数或拥有 vector schema |
 | `code_index_operations::project_status` | private | runtime state + last usable snapshot → stable protocol status | 不暴露 SQLite/internal error text |
 | `CloudCodeIndexController` | external crate | root-bound grant、publication/deletion lifecycle 与 provider port | App Server 不复制 consent state 或允许 provider 直接读 Workspace |
@@ -313,6 +327,30 @@ AppServer::handle_json(connection, raw)
 同步串行的；owned embedded client 通过 `ConnectionNotifications` 在独立 event pump 中等待同一
 queue 的 condition-variable wake。protocol registry 中的 `SerializationScopeDefinition`
 尚未接入并发 scheduler。
+
+同一 outbound queue 也承载 `BrowserHost` 的 Server → Client request。Desktop connection 只有在
+`initialize.capabilities.browser.version == 1` 且声明至少一种语义操作时才会注册为 browser host。
+内置浏览器 Tool port 还受 Workspace trust gate 约束：只有可信工作区与至少一个同时声明
+`observe + input` 的 live browser host 存在时才进入当前 Tool generation；最后一个完整 owner
+断开或信任撤销都会原子移除该 port。
+`BrowserHost` 使用 `browser-host:<connection>:<counter>` 字符串 ID，与 App Server 接受的 client
+正整数 ID 隔离；`serve_jsonl` 在普通 request dispatch 之前识别对应 response，并交给 broker
+完成 pending request。一次典型工具调用为：
+
+```text
+BrowserToolService::execute
+└─ BrowserHost::{create_target,observe,perform,close_target}
+   ├─ resolve capable connection / exact target owner
+   ├─ NotificationQueue::push(JsonRpcRequest)
+   ├─ Desktop browser handler
+   ├─ serve_jsonl → BrowserHost::handle_response
+   └─ typed Core result / connection-owned screenshot Resource
+```
+
+创建成功后 `target_id → connection_id` 固定；观察与动作必须回传同一 target ID。connection
+关闭会失败所有 pending request 并忘记其 target authority；Desktop Supervisor 同时关闭该连接
+创建的原生目标。取消和 30 秒超时都会先本地退休 pending request，再发送 `$/cancelRequest`；
+因此晚到的已放弃响应可忽略，已完成请求的重复响应仍是协议错误。
 
 Terminal 因此使用 bounded `terminal/read` pull：`TerminalService` 在独立 runtime 中持续 drain
 PTY raw bytes，保留最多 1 MiB，并按 sequence 返回最多 128 个 chunk。`terminal/write` 的单批
@@ -627,6 +665,10 @@ Resource 是 in-memory、connection-owned、TTL-bounded：
 Resource 不跨重启恢复，也不能被另一 connection 读取或 release。Connection drop 当前不会立即遍历
 删除资源，只依赖 TTL lazy cleanup。
 
+浏览器截图是这一存储的当前 producer 之一。Host response 中的 PNG 最多 16 MiB，必须同时通过
+decoded length、标准 Base64、`image/png` 和 PNG signature 校验；Tool result 只公开 resource ID、
+MIME、size 与 SHA-256，不复制图片 bytes。
+
 ## 错误映射
 
 | Source | External error |
@@ -679,6 +721,8 @@ protocol enum，再在本 crate 显式转换。
 - Model invocation 长期持有 mutable config snapshot：safe-point guarantee 被破坏；
 - Review model 保留 Tool definitions 或接受 model-selected provider：review isolation 失效；
 - Resource owner check只在某些 operation：跨 connection data leak；
+- Browser target 由“当前活动标签”解析，或非 owner response 能移除 pending：宿主边界漂移；
+- App Server 把任意 CDP method 暴露给 Core/Tool：语义 browser capability 退化为远程调试后门；
 - Error response回显 arbitrary internal text：external contract与安全边界漂移；
 - 新 method只改 `dispatch` 未改 protocol registry/artifacts：client/server contract分叉。
 
@@ -717,7 +761,11 @@ Skill 内置/用户/工作区来源组合、启用状态叠加、监听器刷新
 Git 覆盖 workspace projection、runtime stream identity、revision 去重、`git/statusChanged`、
 text diff、local branch list/switch、path mutation 与 commit。Filesystem 覆盖有界原子写入、权限保留、root containment、
 相对路径 `fs/changed` 与 watcher overflow rescan。
-Syntax 覆盖 connection owner、revision mismatch、Unicode UTF-16 batch 与非重叠 token encoding。
+Syntax 覆盖 revision mismatch、Unicode UTF-16 projection、按需 selection ancestor scopes 与 invalid
+surrogate boundary；CodeIndex/SymbolIndex 覆盖 persistent reopen、watcher reconcile、dirty overlay、
+save handoff、stale materialization 和 symbol-aware retrieval。
+Browser host 覆盖反向 request/response、非 owner 拒绝、target identity、断连 pending failure、
+截图 Resource ownership，以及 Desktop restart-safe handler registration 和原生目标回收。
 
 local tool 的参数白名单、discovery、取消与输出限制由
 [`zeta-shell-command`](../shell-command/README.md) 和

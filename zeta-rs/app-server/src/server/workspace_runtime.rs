@@ -5,6 +5,7 @@ use super::git_runtime::{GitRuntime, GitWatcher};
 use super::multi_agent_tools::MultiAgentToolService;
 use super::semantic_index_job::AppServerSemanticIndexMetrics;
 use super::semantic_index_job::SemanticIndexJobController;
+use super::symbol_index_runtime::SymbolIndexRuntime;
 use super::workspace_customizations::WorkspaceCustomizations;
 use super::{AppServer, AppServerThreadUpdates, RpcError};
 use crate::code_retrieval_context::CodeRetrievalContextSource;
@@ -59,6 +60,7 @@ use zeta_model_provider_config::ModelProviderConfig;
 use zeta_protocol::ProviderId;
 use zeta_protocol::{CommandId, TurnStatus};
 use zeta_search::SearchService;
+use zeta_symbol_index::SymbolIndexStorage;
 use zeta_tools::ToolRegistryGeneration;
 use zeta_workspace::{
     WorkspaceAuthorization, WorkspaceCapability, WorkspaceRoot, WorkspaceTrustDecision,
@@ -72,6 +74,7 @@ pub(super) struct WorkspaceRuntime {
     pub(super) git: Option<Arc<GitRuntime>>,
     pub(super) workspace_search: Option<Arc<SearchService>>,
     pub(super) code_index: Option<Arc<CodeIndexRuntime>>,
+    pub(super) symbol_index: Option<Arc<SymbolIndexRuntime>>,
     pub(super) code_index_semantic: Option<Arc<CodeIndexSemanticService>>,
     pub(super) code_index_semantic_job: Option<Arc<SemanticIndexJobController>>,
     pub(super) cloud_code_index: Option<Arc<CloudCodeIndexController>>,
@@ -91,6 +94,7 @@ impl WorkspaceRuntime {
             git: None,
             workspace_search: None,
             code_index: None,
+            symbol_index: None,
             code_index_semantic: None,
             code_index_semantic_job: None,
             cloud_code_index: None,
@@ -106,6 +110,19 @@ pub(super) struct LocalWorkspaceHost {
     tools: Arc<WorkspaceToolPorts>,
     hooks: Arc<HookRuntime>,
     trust: WorkspaceSwitchTrustPolicy,
+}
+
+impl LocalWorkspaceHost {
+    pub(super) fn replace_browser_host_available(
+        &self,
+        available: bool,
+    ) -> Result<(), WorkspaceRuntimeError> {
+        self.tools.replace_host_available(available)
+    }
+
+    pub(super) fn record_tool_reconcile_failure(&self, error: impl Into<String>) {
+        self.tools.record_reconcile_failure(error);
+    }
 }
 
 #[derive(Clone)]
@@ -137,7 +154,7 @@ impl WorkspaceRuntimeControl {
             WorkspaceRuntimeError::Failed("Workspace authority gate poisoned".into())
         })?;
         let policy_config = LocalExecPolicyConfig::from_resolved(config);
-        let (authorization, code_index, semantic, cloud) = {
+        let (authorization, code_index, symbol_index, semantic, cloud) = {
             let runtime = self
                 .runtime
                 .read()
@@ -145,6 +162,7 @@ impl WorkspaceRuntimeControl {
             (
                 runtime.authorization.clone(),
                 runtime.code_index.clone(),
+                runtime.symbol_index.clone(),
                 runtime.code_index_semantic.clone(),
                 runtime.cloud_code_index.clone(),
             )
@@ -173,8 +191,14 @@ impl WorkspaceRuntimeControl {
             local = append_local_tool(
                 local,
                 Arc::new(
-                    CodeRetrievalTool::new(execution, code_index.index(), semantic, cloud)
-                        .with_action_policy_revision(action_policy_revision),
+                    CodeRetrievalTool::new(
+                        execution,
+                        code_index.index(),
+                        symbol_index.map(|runtime| runtime.index()),
+                        semantic,
+                        cloud,
+                    )
+                    .with_action_policy_revision(action_policy_revision),
                 ),
             );
         }
@@ -235,7 +259,15 @@ impl WorkspaceRuntimeControl {
         let _authority = self.authority_gate.lock().map_err(|_| {
             WorkspaceRuntimeError::Failed("Workspace authority gate poisoned".into())
         })?;
-        let (authorization, code_index, cloud, customizations, previous_watcher, previous_job) = {
+        let (
+            authorization,
+            code_index,
+            symbol_index,
+            cloud,
+            customizations,
+            previous_watcher,
+            previous_job,
+        ) = {
             let mut runtime = self
                 .runtime
                 .write()
@@ -249,6 +281,9 @@ impl WorkspaceRuntimeControl {
             let Some(code_index) = runtime.code_index.clone() else {
                 return Ok(());
             };
+            let Some(symbol_index) = runtime.symbol_index.clone() else {
+                return Ok(());
+            };
             let Some(customizations) = runtime._customizations.clone() else {
                 return Ok(());
             };
@@ -258,6 +293,7 @@ impl WorkspaceRuntimeControl {
             (
                 authorization,
                 code_index,
+                symbol_index,
                 runtime.cloud_code_index.clone(),
                 customizations,
                 previous_watcher,
@@ -301,6 +337,7 @@ impl WorkspaceRuntimeControl {
                 CodeRetrievalTool::new(
                     execution,
                     code_index.index(),
+                    Some(symbol_index.index()),
                     semantic.clone(),
                     cloud.clone(),
                 )
@@ -314,6 +351,7 @@ impl WorkspaceRuntimeControl {
             authorization.root().clone(),
             Arc::clone(&self.updates),
             Arc::clone(&code_index),
+            Arc::clone(&symbol_index),
             semantic_job.clone(),
             customizations,
         )
@@ -328,6 +366,7 @@ impl WorkspaceRuntimeControl {
         self.tools.replace_local(Some(local_port))?;
         let context_source = Arc::new(CodeRetrievalContextSource::new(
             code_index.index(),
+            Some(symbol_index.index()),
             semantic.clone(),
             cloud.clone(),
             self.config.clone(),
@@ -384,6 +423,7 @@ impl WorkspaceRuntimeControl {
         let cloud_code_index = runtime.cloud_code_index.clone();
         let old_file_system_watcher = runtime._file_system_watcher.take();
         let code_index = runtime.code_index.clone();
+        let symbol_index = runtime.symbol_index.clone();
         let customizations = runtime._customizations.clone();
         let terminals = runtime.terminals.take();
         let debug_adapters = runtime.debug_adapters.take();
@@ -400,12 +440,13 @@ impl WorkspaceRuntimeControl {
         drop(runtime);
 
         drop(old_file_system_watcher);
-        let (restricted_watcher, watcher_error) = match (code_index, customizations) {
-            (Some(code_index), Some(customizations)) => {
+        let (restricted_watcher, watcher_error) = match (code_index, symbol_index, customizations) {
+            (Some(code_index), Some(symbol_index), Some(customizations)) => {
                 match FileSystemWatcher::start_with_observers(
                     root.clone(),
                     Arc::clone(&self.updates),
                     code_index,
+                    symbol_index,
                     None,
                     customizations,
                 ) {
@@ -420,7 +461,7 @@ impl WorkspaceRuntimeControl {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             ._file_system_watcher = restricted_watcher;
 
-        let tool_result = self.tools.replace_local(None);
+        let tool_result = self.tools.replace_executable(None, false);
         if let Some(terminals) = terminals {
             terminals.terminate_all();
         }
@@ -528,7 +569,10 @@ impl WorkspaceSwitchTrustPolicy {
 
 struct WorkspaceToolPortState {
     dynamic: Option<ToolPort>,
+    executables_enabled: bool,
     extension: Option<ToolPort>,
+    host: Option<ToolPort>,
+    host_available: bool,
     local: Option<ToolPort>,
     mcp: Option<ToolPort>,
     search: ToolSearchOptions,
@@ -539,6 +583,7 @@ struct WorkspaceToolPortState {
 pub(crate) struct WorkspaceToolPorts {
     state: Mutex<WorkspaceToolPortState>,
     reloadable: Arc<ReloadableToolPorts>,
+    host: ToolPort,
     semantic_model_provider: Option<Arc<dyn SemanticModelProvider>>,
 }
 
@@ -549,6 +594,7 @@ impl WorkspaceToolPorts {
     }
 
     fn new(
+        host: ToolPort,
         mcp: Option<ToolPort>,
         dynamic: Option<ToolPort>,
         extension: Option<ToolPort>,
@@ -574,7 +620,10 @@ impl WorkspaceToolPorts {
         Ok(Arc::new(Self {
             state: Mutex::new(WorkspaceToolPortState {
                 dynamic,
+                executables_enabled: false,
                 extension,
+                host: None,
+                host_available: false,
                 local: None,
                 mcp,
                 search: search.options,
@@ -582,6 +631,7 @@ impl WorkspaceToolPorts {
                 registry_generation,
             }),
             reloadable: ReloadableToolPorts::new(combined),
+            host,
             semantic_model_provider,
         }))
     }
@@ -589,6 +639,32 @@ impl WorkspaceToolPorts {
     fn replace_local(&self, local: Option<ToolPort>) -> Result<(), WorkspaceRuntimeError> {
         self.replace(|state| {
             state.local = local;
+            Ok(())
+        })
+    }
+
+    fn replace_executable(
+        &self,
+        local: Option<ToolPort>,
+        executables_enabled: bool,
+    ) -> Result<(), WorkspaceRuntimeError> {
+        let host = self.host.clone();
+        self.replace(|state| {
+            state.executables_enabled = executables_enabled;
+            state.host = (executables_enabled && state.host_available).then_some(host);
+            state.local = local;
+            Ok(())
+        })
+    }
+
+    pub(crate) fn replace_host_available(
+        &self,
+        host_available: bool,
+    ) -> Result<(), WorkspaceRuntimeError> {
+        let host = self.host.clone();
+        self.replace(|state| {
+            state.host_available = host_available;
+            state.host = (host_available && state.executables_enabled).then_some(host);
             Ok(())
         })
     }
@@ -636,7 +712,10 @@ impl WorkspaceToolPorts {
             .map_err(|_| WorkspaceRuntimeError::Failed("Workspace tool state poisoned".into()))?;
         let mut next = WorkspaceToolPortState {
             dynamic: state.dynamic.clone(),
+            executables_enabled: state.executables_enabled,
             extension: state.extension.clone(),
+            host: state.host.clone(),
+            host_available: state.host_available,
             local: state.local.clone(),
             mcp: state.mcp.clone(),
             search: state.search.clone(),
@@ -658,6 +737,7 @@ impl WorkspaceToolPorts {
             .extension
             .iter()
             .chain(next.dynamic.iter())
+            .chain(next.host.iter())
             .chain(next.local.iter())
             .chain(next.mcp.iter())
             .cloned()
@@ -875,6 +955,7 @@ impl AppServer {
             ),
         };
         let tools = WorkspaceToolPorts::new(
+            self.browser_tool_port.clone(),
             mcp,
             self.dynamic_tool_port.clone(),
             self.extension_tool_port.clone(),
@@ -1025,12 +1106,14 @@ impl AppServer {
         let file_system: Arc<dyn WorkspaceFileSystem> =
             Arc::new(LocalFileSystem::new(workspace.clone()));
         let code_index = self.open_code_index_runtime(workspace.clone())?;
+        let symbol_index = self.open_symbol_index_runtime(&code_index)?;
         self.retry_persisted_cloud_index_deletion(&code_index);
         let customizations = WorkspaceCustomizations::discover(&canonical_root);
         let file_system_watcher = FileSystemWatcher::start_with_observers(
             workspace,
             Arc::clone(&self.updates),
             Arc::clone(&code_index),
+            Arc::clone(&symbol_index),
             None,
             customizations.clone(),
         )
@@ -1041,7 +1124,7 @@ impl AppServer {
         })?;
 
         host.hooks.clear_workspace();
-        host.tools.replace_local(None)?;
+        host.tools.replace_executable(None, false)?;
         self.bind_workspace_skills(&canonical_root)?;
         if let Some(extension_hosts) = &self.extension_hosts {
             extension_hosts.unbind_workspace();
@@ -1058,6 +1141,7 @@ impl AppServer {
             git: None,
             workspace_search: None,
             code_index: Some(code_index),
+            symbol_index: Some(symbol_index),
             code_index_semantic: None,
             code_index_semantic_job: None,
             cloud_code_index: None,
@@ -1086,6 +1170,7 @@ impl AppServer {
         let file_system: Arc<dyn WorkspaceFileSystem> =
             Arc::new(LocalFileSystem::new(workspace.clone()));
         let code_index = self.open_code_index_runtime(workspace.clone())?;
+        let symbol_index = self.open_symbol_index_runtime(&code_index)?;
         let code_index_semantic = self.open_code_index_semantic(&code_index);
         let code_index_semantic_job =
             code_index_semantic.as_ref().and_then(
@@ -1111,6 +1196,7 @@ impl AppServer {
             workspace.clone(),
             Arc::clone(&self.updates),
             Arc::clone(&code_index),
+            Arc::clone(&symbol_index),
             code_index_semantic_job.clone(),
             customizations.clone(),
         )
@@ -1129,6 +1215,7 @@ impl AppServer {
                 CodeRetrievalTool::new(
                     retrieval_workspace,
                     code_index.index(),
+                    Some(symbol_index.index()),
                     code_index_semantic.clone(),
                     cloud_code_index.clone(),
                 )
@@ -1193,10 +1280,11 @@ impl AppServer {
         host.hooks
             .activate(workspace.clone())
             .map_err(WorkspaceRuntimeError::Failed)?;
-        host.tools.replace_local(Some(local_port))?;
+        host.tools.replace_executable(Some(local_port), true)?;
         self.bind_workspace_skills(&canonical_root)?;
         let context_source = Arc::new(CodeRetrievalContextSource::new(
             code_index.index(),
+            Some(symbol_index.index()),
             code_index_semantic.clone(),
             cloud_code_index.clone(),
             self.config.clone(),
@@ -1220,6 +1308,7 @@ impl AppServer {
             git: Some(Arc::clone(&git)),
             workspace_search: Some(Arc::clone(&workspace_search)),
             code_index: Some(code_index),
+            symbol_index: Some(symbol_index),
             code_index_semantic,
             code_index_semantic_job,
             cloud_code_index,
@@ -1350,6 +1439,50 @@ impl AppServer {
             .code_index
             .clone()
             .ok_or_else(|| RpcError::new(-32090, AppServerErrorName::CodeIndexUnavailable))
+    }
+
+    fn open_symbol_index_runtime(
+        &self,
+        code_index: &Arc<CodeIndexRuntime>,
+    ) -> Result<Arc<SymbolIndexRuntime>, WorkspaceRuntimeError> {
+        let trust_id = code_index.root().trust_id();
+        let digest = trust_id
+            .as_str()
+            .strip_prefix("sha256:")
+            .unwrap_or(trust_id.as_str());
+        let storage = self.symbol_index_storage_root.as_ref().map_or(
+            SymbolIndexStorage::Memory,
+            |storage_root| {
+                SymbolIndexStorage::Persistent(storage_root.join(format!("{digest}.sqlite3")))
+            },
+        );
+        match SymbolIndexRuntime::open(code_index.index(), storage) {
+            Ok(runtime) => Ok(runtime),
+            Err(persistent_error) if self.symbol_index_storage_root.is_some() => {
+                log::warn!(
+                    "persistent symbol-index cache is unavailable; using memory projection: {persistent_error}"
+                );
+                SymbolIndexRuntime::open(code_index.index(), SymbolIndexStorage::Memory).map_err(
+                    |error| {
+                        WorkspaceRuntimeError::Failed(format!(
+                            "failed to open symbol index: {error}"
+                        ))
+                    },
+                )
+            }
+            Err(error) => Err(WorkspaceRuntimeError::Failed(format!(
+                "failed to open symbol index: {error}"
+            ))),
+        }
+    }
+
+    pub(super) fn symbol_index_service(&self) -> Result<Arc<SymbolIndexRuntime>, RpcError> {
+        self.workspace_runtime
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .symbol_index
+            .clone()
+            .ok_or_else(|| RpcError::new(-32092, AppServerErrorName::SymbolIndexUnavailable))
     }
 
     fn open_code_index_semantic(

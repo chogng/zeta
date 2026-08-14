@@ -21,6 +21,10 @@ export interface SyntaxFoldingRange {
   readonly range: SyntaxRange;
 }
 
+export interface SyntaxSelectionRange {
+  readonly range: SyntaxRange;
+}
+
 export type SyntaxSymbolKind = "constant" | "enum" | "field" | "function" | "macro" | "method" | "module" | "static" | "struct" | "trait" | "type" | "variable";
 
 export interface SyntaxSymbol {
@@ -50,7 +54,17 @@ export interface SyntaxAnalyzeResult {
   readonly diagnostics: readonly SyntaxDiagnostic[];
 }
 
+export interface SyntaxSelectionRangesParams extends SyntaxAnalyzeParams {
+  readonly ranges: readonly SyntaxRange[];
+}
+
+export interface SyntaxSelectionRangesResult {
+  readonly revision: number;
+  readonly ranges: readonly SyntaxSelectionRange[];
+}
+
 /** Transport-neutral entry point for bounded, authoritative source syntax analysis. */
 export interface ISyntaxApi {
   analyze(params: SyntaxAnalyzeParams): Promise<SyntaxAnalyzeResult>;
+  selectionRanges(params: SyntaxSelectionRangesParams): Promise<SyntaxSelectionRangesResult>;
 }

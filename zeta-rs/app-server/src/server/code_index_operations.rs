@@ -54,6 +54,21 @@ impl AppServer {
         let _: EmptyParams = decode(params)?;
         let runtime = self.code_index_service()?;
         runtime.rebuild().map_err(code_index_error)?;
+        if let Err(error) = runtime.index().handoff_matching_overlays() {
+            log::warn!("code-index overlay handoff failed after explicit rebuild: {error}");
+        }
+        if let Ok(symbol_index) = self.symbol_index_service()
+            && let Err(error) = symbol_index.reconcile()
+        {
+            log::warn!("symbol-index reconcile failed after explicit code-index rebuild: {error}");
+        }
+        if let Ok(symbol_index) = self.symbol_index_service()
+            && let Err(error) = symbol_index.reconcile_overlay()
+        {
+            log::warn!(
+                "symbol-index overlay reconcile failed after explicit code-index rebuild: {error}"
+            );
+        }
         if let Some(job) = self.code_index_semantic_job() {
             job.schedule();
         }

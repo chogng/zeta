@@ -193,6 +193,20 @@ fn rust_snapshot_contains_tokens_folds_and_symbols() {
 }
 
 #[test]
+fn upstream_class_tags_project_to_struct_symbols() {
+    let document = SyntaxDocument::open(
+        SyntaxLanguage::Rust,
+        DocumentRevision::new(1),
+        "pub struct UserAuthenticationService;\n",
+    )
+    .expect("Rust grammar should load");
+
+    assert!(document.snapshot().symbols().iter().any(|symbol| {
+        symbol.name == "UserAuthenticationService" && symbol.kind == DocumentSymbolKind::Struct
+    }));
+}
+
+#[test]
 fn incremental_edit_updates_text_revision_positions_and_symbols() {
     let mut document = SyntaxDocument::open(
         SyntaxLanguage::Rust,
@@ -413,6 +427,7 @@ fn zero_collection_limits_produce_an_empty_bounded_snapshot() {
     let limits = AnalysisLimits {
         max_tokens: 0,
         max_folding_ranges: 0,
+        max_selection_ranges: 0,
         max_symbols: 0,
         max_diagnostics: 0,
         ..AnalysisLimits::default()
@@ -429,7 +444,53 @@ fn zero_collection_limits_produce_an_empty_bounded_snapshot() {
 
     assert!(snapshot.tokens().is_empty());
     assert!(snapshot.folding_ranges().is_empty());
+    assert!(document.selection_ranges(0..0).unwrap().is_empty());
     assert!(snapshot.symbols().is_empty());
     assert!(snapshot.diagnostics().is_empty());
     assert!(snapshot.has_errors());
+}
+
+#[test]
+fn selection_ranges_form_named_revision_bound_scopes_without_the_document_root() {
+    let source = "fn outer() {\n    let value = call(1 + 2);\n}\n";
+    let document = SyntaxDocument::open(SyntaxLanguage::Rust, DocumentRevision::new(7), source)
+        .expect("Rust grammar should load");
+    let cursor = source.find("value").expect("identifier offset");
+    let selections = document
+        .selection_ranges(cursor..cursor + "value".len())
+        .expect("selection range should be valid");
+    let scopes = selections
+        .iter()
+        .map(|selection| &source[selection.range.bytes.clone()])
+        .collect::<Vec<_>>();
+
+    assert!(scopes.contains(&"value"));
+    assert!(scopes.iter().any(|scope| scope.starts_with("let value")));
+    assert!(scopes.iter().any(|scope| scope.starts_with("fn outer")));
+    assert!(
+        !selections
+            .iter()
+            .any(|selection| selection.range.bytes == (0..source.len()))
+    );
+    assert!(scopes.windows(2).all(|pair| pair[0].len() <= pair[1].len()));
+    assert_eq!(document.revision(), DocumentRevision::new(7));
+}
+
+#[test]
+fn selection_ranges_reject_invalid_utf8_boundaries() {
+    let document = SyntaxDocument::open(
+        SyntaxLanguage::Rust,
+        DocumentRevision::new(1),
+        "fn café() {}\n",
+    )
+    .expect("Rust grammar should load");
+
+    let error = document
+        .selection_ranges(7..8)
+        .expect_err("a range inside the multibyte character must fail");
+
+    assert!(matches!(
+        error,
+        SyntaxError::InvalidSelectionBoundary { offset: 7 }
+    ));
 }

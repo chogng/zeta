@@ -12,6 +12,9 @@ use zeta_app_server_protocol::protocol::syntax::SyntaxFoldingRangeDto;
 use zeta_app_server_protocol::protocol::syntax::SyntaxLanguageDto;
 use zeta_app_server_protocol::protocol::syntax::SyntaxPositionDto;
 use zeta_app_server_protocol::protocol::syntax::SyntaxRangeDto;
+use zeta_app_server_protocol::protocol::syntax::SyntaxSelectionRangeDto;
+use zeta_app_server_protocol::protocol::syntax::SyntaxSelectionRangesParams;
+use zeta_app_server_protocol::protocol::syntax::SyntaxSelectionRangesResult;
 use zeta_app_server_protocol::protocol::syntax::SyntaxSymbolDto;
 use zeta_app_server_protocol::protocol::syntax::SyntaxSymbolKindDto;
 use zeta_app_server_protocol::protocol::syntax::SyntaxTokenDto;
@@ -36,6 +39,39 @@ impl AppServer {
         )
         .map_err(syntax_error)?;
         result(&project(&params.text, document.snapshot()))
+    }
+
+    pub(super) fn syntax_selection_ranges(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: SyntaxSelectionRangesParams = decode(params)?;
+        let document = SyntaxDocument::open(
+            syntax_language(params.language),
+            DocumentRevision::new(params.revision),
+            &params.text,
+        )
+        .map_err(syntax_error)?;
+        let mut ranges = Vec::new();
+        for requested in params.ranges {
+            let requested = byte_range_for_utf16(&params.text, requested)
+                .ok_or_else(|| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+            ranges.extend(document.selection_ranges(requested).map_err(syntax_error)?);
+        }
+        ranges.sort_by_key(|selection| {
+            (
+                selection.range.bytes.start,
+                std::cmp::Reverse(selection.range.bytes.end),
+            )
+        });
+        ranges.dedup_by(|left, right| left.range.bytes == right.range.bytes);
+        let positions = Utf16PositionIndex::for_selection_ranges(&params.text, &ranges);
+        result(&SyntaxSelectionRangesResult {
+            revision: params.revision,
+            ranges: ranges
+                .iter()
+                .map(|selection| SyntaxSelectionRangeDto {
+                    range: positions.project_range(&selection.range),
+                })
+                .collect(),
+        })
     }
 }
 
@@ -149,6 +185,8 @@ fn syntax_error(error: SyntaxError) -> RpcError {
         | SyntaxError::NonIncreasingRevision { .. }
         | SyntaxError::InvalidEditRange { .. }
         | SyntaxError::InvalidEditBoundary { .. }
+        | SyntaxError::InvalidSelectionRange { .. }
+        | SyntaxError::InvalidSelectionBoundary { .. }
         | SyntaxError::OverlappingEdits => {
             RpcError::new(-32071, AppServerErrorName::SyntaxAnalysisFailed)
         }
@@ -181,6 +219,18 @@ impl Utf16PositionIndex {
         for diagnostic in snapshot.diagnostics() {
             push_range_offsets(&mut byte_offsets, &diagnostic.range);
         }
+        Self::for_offsets(text, byte_offsets)
+    }
+
+    fn for_selection_ranges(text: &str, ranges: &[zeta_syntax::SelectionRange]) -> Self {
+        let mut byte_offsets = Vec::with_capacity(ranges.len() * 2);
+        for selection in ranges {
+            push_range_offsets(&mut byte_offsets, &selection.range);
+        }
+        Self::for_offsets(text, byte_offsets)
+    }
+
+    fn for_offsets(text: &str, mut byte_offsets: Vec<usize>) -> Self {
         byte_offsets.sort_unstable();
         byte_offsets.dedup();
 
@@ -213,7 +263,7 @@ impl Utf16PositionIndex {
         assert_eq!(
             next_offset,
             byte_offsets.len(),
-            "syntax snapshots must contain only UTF-8 boundaries"
+            "syntax ranges must contain only UTF-8 boundaries"
         );
         Self {
             byte_offsets,
@@ -235,6 +285,37 @@ impl Utf16PositionIndex {
             .expect("syntax range boundary must be indexed");
         self.positions[index]
     }
+}
+
+fn byte_range_for_utf16(text: &str, range: SyntaxRangeDto) -> Option<std::ops::Range<usize>> {
+    let start = byte_offset_for_utf16(text, range.start)?;
+    let end = byte_offset_for_utf16(text, range.end)?;
+    (start <= end).then_some(start..end)
+}
+
+fn byte_offset_for_utf16(text: &str, requested: SyntaxPositionDto) -> Option<usize> {
+    let mut line_index = 0;
+    let mut column_index = 0;
+    for (byte_offset, character) in text.char_indices() {
+        if line_index == requested.line_index && column_index == requested.column_index {
+            return Some(byte_offset);
+        }
+        if character == '\n' {
+            if line_index == requested.line_index {
+                return None;
+            }
+            line_index += 1;
+            column_index = 0;
+            continue;
+        }
+        let next_column = column_index + character.len_utf16();
+        if line_index == requested.line_index && requested.column_index < next_column {
+            return None;
+        }
+        column_index = next_column;
+    }
+    (line_index == requested.line_index && column_index == requested.column_index)
+        .then_some(text.len())
 }
 
 fn push_range_offsets(offsets: &mut Vec<usize>, range: &SyntaxRange) {

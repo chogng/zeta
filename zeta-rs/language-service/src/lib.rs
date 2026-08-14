@@ -10,6 +10,7 @@ mod diagnostics;
 mod document;
 mod document_features;
 mod error;
+mod metrics;
 mod projection;
 mod requests;
 mod restart;
@@ -30,6 +31,9 @@ pub use document_features::{
     LanguageFoldingRange, LanguageFoldingRangeKind, LanguageFoldingRanges,
 };
 pub use error::LanguageServiceError;
+pub use metrics::LanguageRequestMetric;
+pub use metrics::LanguageRequestMetricOutcome;
+pub use metrics::LanguageServiceMetricsSink;
 pub use requests::{
     LanguageCodeAction, LanguageCodeActions, LanguageCommandResult, LanguageCompletionDetails,
     LanguageCompletionInsertTextFormat, LanguageCompletionItem, LanguageCompletionItemKind,

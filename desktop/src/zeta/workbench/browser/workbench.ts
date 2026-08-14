@@ -163,6 +163,8 @@ import { getBrowserTextModelService } from "../../editor/browser/services/browse
 import { getBrowserTextResourceStore } from "../contrib/codeEditor/browser/browserTextResourceStore.js";
 import { AppServerLanguageProviders } from "../services/language/browser/appServerLanguageProviders.js";
 import { AppServerLanguageDiagnosticsService } from "../services/language/browser/appServerLanguageDiagnosticsService.js";
+import { AppServerCodeIntelligenceDocumentService } from "../services/codeIntelligence/browser/appServerCodeIntelligenceDocumentService.js";
+import { ICodeIntelligenceDocumentService } from "../services/codeIntelligence/common/codeIntelligenceDocumentService.js";
 import { AppServerLanguageServerStatusService } from "../services/language/browser/appServerLanguageServerStatusService.js";
 import { ILanguageServerStatusService } from "../services/language/common/languageServerStatusService.js";
 import { ILanguageDiagnosticsService } from "../services/language/common/languageDiagnosticsService.js";
@@ -296,7 +298,9 @@ export class Workbench extends DisposableOwner {
     const languageFeaturesService = this.own(new LanguageFeaturesService());
     services.set(ILanguageFeaturesService, languageFeaturesService);
     this.own(new AppServerLanguageProviders(languageFeaturesService, api.language, workspaceContext));
-    const languageDiagnosticsService = this.own(new AppServerLanguageDiagnosticsService(api.language, api.events, workspaceContext));
+    const codeIntelligenceDocuments = new AppServerCodeIntelligenceDocumentService(api.symbolIndex);
+    services.set(ICodeIntelligenceDocumentService, codeIntelligenceDocuments);
+    const languageDiagnosticsService = this.own(new AppServerLanguageDiagnosticsService(api.language, api.events, workspaceContext, codeIntelligenceDocuments));
     services.set(ILanguageDiagnosticsService, languageDiagnosticsService);
     const extensionService = this.own(new AppServerExtensionService({ api: api.extensions, eventApi: api.events, textMateService, languageFeaturesService }));
     services.set(IExtensionService, extensionService);

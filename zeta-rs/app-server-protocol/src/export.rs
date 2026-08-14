@@ -1,9 +1,11 @@
 use crate::protocol::error::AppServerError;
 use crate::protocol::registry::{
-    CLIENT_METHODS, ClientRequestSchema, ClientResultSchema, SERVER_NOTIFICATIONS,
-    ServerNotificationSchema, TYPESCRIPT_BINDINGS,
+    CLIENT_METHODS, ClientRequestSchema, ClientResultSchema, HOST_METHODS, HostRequestSchema,
+    HostResultSchema, SERVER_NOTIFICATIONS, ServerNotificationSchema, TYPESCRIPT_BINDINGS,
 };
-use crate::rpc::{JsonRpcFailure, JsonRpcNotification, JsonRpcRequest, JsonRpcResponse};
+use crate::rpc::{
+    JsonRpcError, JsonRpcFailure, JsonRpcNotification, JsonRpcRequest, JsonRpcResponse,
+};
 use schemars::{JsonSchema, Schema, schema_for};
 use sha2::{Digest, Sha256};
 
@@ -20,6 +22,8 @@ pub const TYPESCRIPT_FIXTURE: &str = "schema/types.ts";
 struct ProtocolSchema {
     client_request: JsonRpcRequest<ClientRequestSchema>,
     client_response: JsonRpcResponse<ClientResultSchema, AppServerError>,
+    host_request: JsonRpcRequest<HostRequestSchema>,
+    host_response: JsonRpcResponse<HostResultSchema, JsonRpcError>,
     server_notification: JsonRpcNotification<ServerNotificationSchema>,
     error_response: JsonRpcFailure<AppServerError>,
 }
@@ -35,7 +39,8 @@ pub fn typescript() -> String {
          export type JsonRpcNotification<P> = {{ jsonrpc: JsonRpcVersion; method: string; params: P }};\n\
          export type JsonRpcSuccess<R> = {{ jsonrpc: JsonRpcVersion; id: JsonRpcId; result: R }};\n\
          export type JsonRpcFailure<E> = {{ jsonrpc: JsonRpcVersion; id: JsonRpcId; error: E }};\n\
-         export type JsonRpcResponse<R, E> = JsonRpcSuccess<R> | JsonRpcFailure<E>;\n"
+         export type JsonRpcResponse<R, E> = JsonRpcSuccess<R> | JsonRpcFailure<E>;\n\
+         export type JsonRpcError = {{ code: number; message: string; data: unknown }};\n"
     );
     for binding in TYPESCRIPT_BINDINGS {
         output.push_str("export ");
@@ -105,6 +110,36 @@ pub fn typescript() -> String {
         output.push_str(&format!(
             "  {:?}: {{ method: {:?} }},\n",
             notification.method, notification.method
+        ));
+    }
+    output.push_str("};\n");
+    output.push_str("export interface AppServerHostMethodMap {\n");
+    for method in HOST_METHODS {
+        output.push_str(&format!(
+            "  {:?}: {{ params: {}; result: {} }};\n",
+            method.method,
+            method.params_type(),
+            method.result_type()
+        ));
+    }
+    output.push_str(
+        "}\n\
+         export type AppServerHostMethod = keyof AppServerHostMethodMap;\n\
+         export type HostMethodParams<M extends AppServerHostMethod> = AppServerHostMethodMap[M][\"params\"];\n\
+         export type HostMethodResult<M extends AppServerHostMethod> = AppServerHostMethodMap[M][\"result\"];\n\
+         export type AppServerHostRequest<M extends AppServerHostMethod> = JsonRpcRequest<HostMethodParams<M>>;\n\
+         export type AppServerHostResponse<M extends AppServerHostMethod> = JsonRpcResponse<HostMethodResult<M>, JsonRpcError>;\n\
+         export type AppServerHostMethodDefinition<M extends AppServerHostMethod> = {\n\
+           readonly method: M;\n\
+           readonly __params?: HostMethodParams<M>;\n\
+           readonly __result?: HostMethodResult<M>;\n\
+         };\n\
+         export const APP_SERVER_HOST_METHODS: { [M in AppServerHostMethod]: AppServerHostMethodDefinition<M> } = {\n",
+    );
+    for method in HOST_METHODS {
+        output.push_str(&format!(
+            "  {:?}: {{ method: {:?} }},\n",
+            method.method, method.method
         ));
     }
     output.push_str("};\n");

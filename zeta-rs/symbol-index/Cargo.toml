@@ -1,0 +1,26 @@
+[package]
+name = "zeta-symbol-index"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+name = "zeta_symbol_index"
+path = "src/lib.rs"
+
+[dependencies]
+nucleo = { workspace = true }
+rusqlite = { workspace = true }
+thiserror = { workspace = true }
+zeta-async-utils = { workspace = true }
+zeta-code-index = { workspace = true }
+zeta-syntax = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+zeta-workspace = { workspace = true }
+
+[lints]
+workspace = true

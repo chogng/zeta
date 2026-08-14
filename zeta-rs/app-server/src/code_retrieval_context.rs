@@ -6,6 +6,7 @@ use zeta_code_index::CodeIndex;
 use zeta_code_index_cloud::CloudCodeIndexController;
 use zeta_code_index_semantic::CodeIndexSemanticService;
 use zeta_code_retrieval::CodeRetrievalBudget;
+use zeta_code_retrieval::CodeRetrievalOrigin;
 use zeta_code_retrieval::CodeRetrievalQuery;
 use zeta_code_retrieval::CodeRetrievalService;
 use zeta_config::ConfigStore;
@@ -14,6 +15,7 @@ use zeta_core::ContextEvidence;
 use zeta_core::ContextSource;
 use zeta_core::ContextSourceRequest;
 use zeta_core::CoreError;
+use zeta_symbol_index::SymbolIndex;
 use zeta_workspace::WorkspaceTrustId;
 
 const MAX_EVIDENCE_ITEMS: usize = 8;
@@ -23,6 +25,7 @@ const MAX_EVIDENCE_TOTAL_BYTES: usize = 48 * 1024;
 /// Adapts current-source-verified code retrieval into Core's generic evidence contract.
 pub(crate) struct CodeRetrievalContextSource {
     index: Arc<CodeIndex>,
+    symbol_index: Option<Arc<SymbolIndex>>,
     semantic: Option<Arc<CodeIndexSemanticService>>,
     cloud: Option<Arc<CloudCodeIndexController>>,
     config: Option<Arc<ConfigStore>>,
@@ -32,6 +35,7 @@ pub(crate) struct CodeRetrievalContextSource {
 impl CodeRetrievalContextSource {
     pub(crate) fn new(
         index: Arc<CodeIndex>,
+        symbol_index: Option<Arc<SymbolIndex>>,
         semantic: Option<Arc<CodeIndexSemanticService>>,
         cloud: Option<Arc<CloudCodeIndexController>>,
         config: Option<Arc<ConfigStore>>,
@@ -39,6 +43,7 @@ impl CodeRetrievalContextSource {
     ) -> Self {
         Self {
             index,
+            symbol_index,
             semantic,
             cloud,
             config,
@@ -77,6 +82,12 @@ impl CodeRetrievalContextSource {
             (None, None) => Ok(CodeRetrievalService::local(Arc::clone(&self.index))),
         }
         .map_err(|error| CoreError::Context(error.to_string()))?;
+        let service = match &self.symbol_index {
+            Some(symbol_index) => service
+                .with_symbol_index(Arc::clone(symbol_index))
+                .map_err(|error| CoreError::Context(error.to_string()))?,
+            None => service,
+        };
         Ok(service.with_budget(
             CodeRetrievalBudget::default()
                 .with_max_item_bytes(NonZeroUsize::new(MAX_EVIDENCE_ITEM_BYTES).unwrap())
@@ -111,16 +122,23 @@ impl ContextSource for CodeRetrievalContextSource {
         Ok(retrieval
             .hits
             .into_iter()
-            .map(|hit| ContextEvidence {
-                source: "code-index".into(),
-                reference: format!(
-                    "{}:{}-{}",
-                    hit.reference.relative_path.display(),
-                    hit.reference.span.start_line.saturating_add(1),
-                    hit.reference.span.end_line_exclusive
-                ),
-                revision: hit.reference.source_revision.as_str().to_owned(),
-                body: hit.content,
+            .map(|hit| {
+                let source = if hit.origins.contains(&CodeRetrievalOrigin::LocalSymbol) {
+                    "code-index/local-symbol"
+                } else {
+                    "code-index"
+                };
+                ContextEvidence {
+                    source: source.into(),
+                    reference: format!(
+                        "{}:{}-{}",
+                        hit.reference.relative_path.display(),
+                        hit.reference.span.start_line.saturating_add(1),
+                        hit.reference.span.end_line_exclusive
+                    ),
+                    revision: hit.reference.source_revision.as_str().to_owned(),
+                    body: hit.content,
+                }
             })
             .collect())
     }

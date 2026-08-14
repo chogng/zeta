@@ -1,6 +1,8 @@
 //! JSON-RPC application boundary between product clients and Zeta's domain components.
 
 mod attachment_upload_store;
+mod browser_host;
+mod browser_tool;
 mod code_retrieval_context;
 mod code_retrieval_tool;
 mod debug_service;

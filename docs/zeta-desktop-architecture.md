@@ -602,22 +602,35 @@ Electron Main 是 Browser Target 的唯一权威持有者。
 隐藏；Renderer 必须先通过 `browserView.layout()` 提交窗口内容坐标，再通过
 `browserView.setVisibility()` 显示。
 
-调用路径固定为：
+浏览器目标当前同时服务于界面操作和 Agent 语义工具，但两条入口共享同一个 Electron Main
+目标权威源：
 
-```text
-Workbench consumer
-  → ZetaElectronRendererApi.browserView
-  → ISandboxGlobals.invoke/on
-  → registerTrustedIpcRoutes
-  → browserViewIpcRoutes
-  → BrowserViewMainService
-  → WebContentsView
+| 场景 | 入口 | 执行路径 | 权威边界 |
+| --- | --- | --- | --- |
+| Workbench 创建、布局和导航嵌入页面 | Renderer 的 `browserView` API | 可信 IPC → `BrowserViewMainService` | Electron Main 持有目标和原生对象 |
+| Agent 观察页面或执行输入 | Rust 内置浏览器工具 | `BrowserHost` → 反向 JSON-RPC → `BrowserAutomationMainService` | Rust 决定批准；Electron Main 执行语义动作 |
+| 截取页面 | `browser_screenshot` 或观察选项 | Electron `capturePage()` → App Server `ResourceStore` | 图片按连接隔离，响应只返回资源引用 |
+| App Server 断开或重启 | Supervisor 状态迁移 | `BrowserAutomationMainService.reset()` | 只关闭该宿主能力创建的目标 |
+
+```mermaid
+flowchart LR
+    Tool[Agent browser Tool] --> Policy[Rust Tool policy]
+    Policy --> Host[BrowserHost]
+    Host -->|browser/create, observe, perform, close| Peer[Desktop JSON-RPC peer]
+    Peer --> Automation[BrowserAutomationMainService]
+    Automation --> Registry[BrowserTargetRegistry]
+    Registry --> View[BrowserViewMainService]
+    View --> WebContents[WebContentsView]
+    Automation -->|bounded semantic CDP| WebContents
+    Automation -->|PNG response| Peer
+    Host -->|validated PNG| Resource[connection-owned ResourceStore]
 ```
 
 `platform/browser/common/browserView.ts` 拥有可序列化 DTO、频道和输入 validator。
 `browserViewIpcRoutes()` 只做受信 IPC 绑定，`BrowserViewMainService` 拥有 target map、原生 view、
 session 安全策略、导航历史和事件投影。`WebContentsView`、`WebContents`、Electron event 与
-session 对象均不得跨越 IPC。
+session 对象均不得跨越 IPC。`BrowserTargetRegistry` 只在 Electron Main 中把精确
+`targetId` 映射到仍存活的原生目标；它不选择活动标签，也不向 Renderer 暴露 CDP。
 
 当前 URL policy 允许 HTTPS、loopback HTTP 与精确的 `about:blank`，拒绝 URL credentials、
 `file:`、`javascript:` 和其他特权 scheme。每个目标使用独立临时 partition，并固定：
@@ -635,28 +648,50 @@ popup 请求只以 `openRequested` 事件返回已验证 URL，不会由远程�
 可收到目标 state、加载失败、popup 请求、renderer 崩溃和关闭事件，但不能获得底层 Electron
 对象。
 
+Desktop 在 `initialize` 中声明浏览器宿主能力版本 1，并注册四个 Server → Client 请求：
+
+- `browser/create` 创建隔离且默认隐藏的目标；
+- `browser/observe` 返回 URL、标题、加载状态，以及可选的 accessibility tree、DOM snapshot 和
+  PNG 截图；
+- `browser/perform` 只接受导航、按后端 DOM node ID 点击/输入、滚动、后退和刷新；
+- `browser/close` 只关闭请求中的精确目标。
+
+Electron Main 直接使用 Electron 自带的 Node runtime 和 `webContents.debugger`；没有 Node sidecar，
+也没有 localhost remote-debugging port。自动化层只发出固定的 Accessibility、DOM、Runtime 和
+Input CDP 命令，不接受任意 CDP method。accessibility tree 与 DOM snapshot 各限制为 8 MiB，PNG
+限制为 16 MiB；Debugger 操作按目标串行，并在每个可安全停止的边界观察取消。
+
+Rust `BrowserHost` 使用独立的字符串 request ID 复用现有 JSONL 连接，把新目标绑定到实际响应的
+Desktop connection。后续观察、动作和关闭只路由给这一 owner；非 owner 响应、目标身份变化和
+重复响应均失败。请求在 30 秒后超时，取消或超时会发送 `$/cancelRequest`，安全忽略已放弃请求的
+晚到终态。截图经 Base64 长度、PNG MIME/signature 校验后进入 5 分钟 TTL 的 connection-owned
+`ResourceStore`。
+
+内置工具为 `browser_open`、`browser_observe`、`browser_navigate`、`browser_click`、
+`browser_type`、`browser_scroll`、`browser_back`、`browser_reload`、`browser_screenshot` 和
+`browser_close`。Rust 重新执行 URL、目标与 node ID 校验，并把每次动作建模为
+`BrowserInteraction` + `UserInterface` capability；当前策略要求一次性用户批准，Electron Main
+不能自行放宽。完整浏览器工具面只有在工作区可信且至少一个 version 1 connection 同时声明
+`observe + input` 时才进入当前 Tool generation；工作区进入 Restricted 状态、信任被撤销或最后
+一个完整宿主断开时会原子移除。
+反向 RPC handler 可以继续注册，但 Agent 无法从没有上述双重授权的工作区发起动作。
+
+### 7.2 当前限制与计划演进
+
 当前限制：
 
 - 尚无浏览器编辑器、地址栏、标签页或 DOM 容器自动布局绑定；
 - 尚未实现持久 BrowserSession、下载 UI、权限提示、证书信任或 PDF 导出；
-- Browser Target 目前只绑定单个 Desktop 窗口，尚未绑定 App Server connection 或 Tool Call；
-- 尚未向 Rust 暴露 browser capability，也没有开放 CDP。
+- 当前观察结果是有界的原始 CDP JSON，还没有 Playwright locator、ARIA snapshot、trace、console
+  或 network inspection；
+- Electron Debugger 的单条在途命令不能被 Chromium 抢占；取消会阻止后续步骤并使 Rust 调用
+  终止，但底层命令仍可能在目标关闭前完成；
+- 目标只存在于当前 Desktop 窗口和 App Server 连接生命周期，不跨应用重启恢复。
 
-### 7.2 计划：App Server 与 Agent 浏览器能力
-
-Desktop 后续对 Rust 暴露语义动作时，计划使用：
-
-- `browser/observe`
-- `browser/perform`
-- `browser/getPdf`
-
-该 API 尚未实现，不能描述为当前 App Server capability。实现后仍不能暴露任意 CDP method；
-每个 `targetId` 必须：
-
-- 绑定创建它的 App Server connection；
-- 在 Tool Call 开始前固定；
-- 关闭后返回 `BrowserTargetUnavailable`；
-- 不得静默切换到另一个活动 Tab。
+下一阶段可以在 Electron Main 内增加 `CDPBrowserProxy`，通过 Playwright
+`connectOverCDP` 的进程内 transport 驱动现有 `WebContentsView`。这一阶段仍不得新增 Node
+sidecar、调试端口或把任意 CDP 暴露给 Rust。PDF、下载、trace、network、console 和高级 locator
+属于后续独立契约，当前不能描述为已完成能力。
 
 ## 8. Desktop 提交 App Server 能力需求
 

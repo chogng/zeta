@@ -35,6 +35,14 @@ pub enum SyntaxError {
     },
     #[error("edit offset {offset} is not a UTF-8 character boundary")]
     InvalidEditBoundary { offset: usize },
+    #[error("selection range {start}..{end} is invalid for a {document_len}-byte document")]
+    InvalidSelectionRange {
+        start: usize,
+        end: usize,
+        document_len: usize,
+    },
+    #[error("selection offset {offset} is not a UTF-8 character boundary")]
+    InvalidSelectionBoundary { offset: usize },
     #[error("syntax edit ranges overlap or share an ambiguous insertion point")]
     OverlappingEdits,
     #[error("document contains {actual} bytes, exceeding the {limit}-byte analysis limit")]

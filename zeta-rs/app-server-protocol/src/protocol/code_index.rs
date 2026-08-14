@@ -124,6 +124,7 @@ pub struct CodeRetrievalParams {
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum CodeRetrievalOriginDto {
+    LocalSymbol,
     LocalLexical,
     LocalSemantic,
     CloudSemantic,
@@ -133,6 +134,7 @@ pub enum CodeRetrievalOriginDto {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum CodeRetrievalDegradationDto {
+    LocalSymbolQueryFailed,
     LocalSemanticQueryFailed,
     CloudQueryFailed,
     CandidateVerificationFailed { discarded: usize },

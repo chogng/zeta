@@ -1,7 +1,7 @@
 use super::CatalogBudget;
 use super::CatalogLimit;
-use super::MAX_CATALOG_DIAGNOSTICS;
 use super::MAX_CATALOG_DIAGNOSTIC_BYTES;
+use super::MAX_CATALOG_DIAGNOSTICS;
 use super::MAX_CATALOG_MANIFEST_RESPONSE_BYTES;
 use super::MAX_CATALOG_PACKAGE_CANDIDATES;
 use super::MAX_CATALOG_SNAPSHOT_BYTES;

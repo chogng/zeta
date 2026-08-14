@@ -6,6 +6,8 @@ import { IQuickInputService, type IQuickPickItem } from "../../../../platform/qu
 import { type LanguageWorkspaceSymbol } from "../../../../editor/common/languages/workspaceSymbols.js";
 import { IEditorPart } from "../../../browser/parts/editor/editorPart.js";
 import { ILanguageFeaturesService } from "../../../services/language/common/languageFeaturesService.js";
+import { IFileService } from "../../../../platform/files/common/files.js";
+import { acceptWorkspaceSymbol } from "./workspaceSymbolNavigation.js";
 
 export const ShowAllSymbolsCommandId = "workbench.action.showAllSymbols";
 
@@ -26,6 +28,7 @@ registerAction2(class ShowAllSymbolsAction extends Action2 {
   override run(accessor: ServicesAccessor): void {
     const service = accessor.get(ILanguageFeaturesService).createWorkspaceSymbolService();
     const editor = accessor.get(IEditorPart);
+    const files = accessor.get(IFileService);
     const quickPick = accessor.get(IQuickInputService).createQuickPick<WorkspaceSymbolQuickPickItem>();
     const disposables = new DisposableStore();
     let request: AbortController | undefined;
@@ -38,7 +41,7 @@ registerAction2(class ShowAllSymbolsAction extends Action2 {
       request?.abort();
       const current = request = new AbortController();
       const generation = ++requestGeneration;
-      void service.provideWorkspaceSymbols(query, current.signal).then(symbols => {
+      const publish = (symbols: readonly LanguageWorkspaceSymbol[]): void => {
         if (current.signal.aborted || generation !== requestGeneration) return;
         quickPick.items = symbols.map(symbol => ({
           symbol,
@@ -46,16 +49,14 @@ registerAction2(class ShowAllSymbolsAction extends Action2 {
           description: symbol.containerName,
           detail: `${resourceLabel(symbol.resource)}:${symbol.range.start.lineIndex + 1}`,
         }));
-      }).catch(error => {
+      };
+      void service.provideWorkspaceSymbols(query, current.signal, publish).then(publish).catch(error => {
         if (!current.signal.aborted) console.error("Workspace symbol search failed", error);
       });
     };
 
     disposables.add(quickPick.onDidChangeValue(update));
-    disposables.add(quickPick.onDidAccept(item => {
-      quickPick.hide();
-      void editor.openEditor({ resource: item.symbol.resource }, { selection: item.symbol.range }).catch(error => console.error("Could not open workspace symbol", error));
-    }));
+    disposables.add(quickPick.onDidAccept(item => void acceptWorkspaceSymbol(item.symbol, files, editor, quickPick, () => update(quickPick.value))));
     disposables.add(quickPick.onDidHide(() => { request?.abort(); disposables.dispose(); }));
     quickPick.show();
     update("");

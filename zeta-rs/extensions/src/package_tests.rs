@@ -1,7 +1,7 @@
-use super::read_bounded_file_after_inspection;
 use super::ExtensionPackageSnapshot;
 use super::PackageSnapshotError;
 use super::PackageSnapshotLimits;
+use super::read_bounded_file_after_inspection;
 use std::fs;
 use zeta_file_identity::FileInformation;
 

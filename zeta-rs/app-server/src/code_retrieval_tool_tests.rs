@@ -29,7 +29,7 @@ fn explicit_search_code_tool_requires_its_exact_read_only_grant_and_returns_loca
         CodeIndex::open(root, CodeIndexStorage::Memory, CodeIndexLimits::default()).unwrap(),
     );
     index.rebuild().unwrap();
-    let tool = CodeRetrievalTool::new(workspace, index, None, None);
+    let tool = CodeRetrievalTool::new(workspace, index, None, None, None);
     let call = ToolCall {
         id: ToolCallId::new("search-code-test").unwrap(),
         name: ToolName::new(CODE_RETRIEVAL_TOOL_NAME).unwrap(),

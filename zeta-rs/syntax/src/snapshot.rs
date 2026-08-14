@@ -8,6 +8,8 @@ pub struct AnalysisLimits {
     pub max_document_bytes: usize,
     pub max_tokens: usize,
     pub max_folding_ranges: usize,
+    /// Maximum number of enclosing syntax ranges returned for one selection query.
+    pub max_selection_ranges: usize,
     pub max_symbols: usize,
     pub max_diagnostics: usize,
 }
@@ -18,6 +20,7 @@ impl Default for AnalysisLimits {
             max_document_bytes: 4 * 1024 * 1024,
             max_tokens: 200_000,
             max_folding_ranges: 20_000,
+            max_selection_ranges: 64,
             max_symbols: 50_000,
             max_diagnostics: 10_000,
         }
@@ -73,6 +76,12 @@ pub struct SyntaxToken {
 /// One structurally foldable source range.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FoldingRange {
+    pub range: SyntaxRange,
+}
+
+/// One named parser node that can participate in structural selection expansion.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SelectionRange {
     pub range: SyntaxRange,
 }
 

@@ -7,7 +7,7 @@ owner: zeta-rs
 consumers:
   - desktop
   - cli
-lastUpdated: 2026-08-12
+lastUpdated: 2026-08-13
 ```
 
 本文描述当前开发期的唯一 App Server 契约。项目不保留旧 wire API、旧 DTO 或旧持久化格式
@@ -37,6 +37,7 @@ Session、Thread、Turn 和更新流，不建立第二套领域模型。
 | 持续显示执行进度 | 订阅 Thread 更新并按序列消费 | 发现缺口时重新读取快照，不猜测丢失状态 |
 | 修改配置或资源 | 调用类型化方法并携带命令身份 | 重复命令可重放结果，冲突载荷会被拒绝 |
 | 响应批准或用户输入 | 回复等待中的类型化请求 | 回复绑定精确请求和当前 Thread |
+| 让 Agent 操作 Desktop 浏览器 | Desktop 初始化时声明 browser host | Rust 保留批准和目标 owner，Electron Main 只执行语义动作 |
 | 连接本地 App Server | 先初始化并校验能力和模式哈希 | 初始化前不能调用产品方法 |
 | 协议发生不兼容变化 | 同步修改 Rust 类型、生成物和调用方 | 开发期不保留隐藏的旧 DTO 入口 |
 
@@ -123,7 +124,10 @@ notification contract，不能拥有隐藏业务接口。JSONL/stdio、WebSocket
   "method": "initialize",
   "params": {
     "clientInfo": { "name": "zeta-desktop", "version": "0.1.0" },
-    "capabilities": { "notifications": true }
+    "capabilities": {
+      "notifications": true,
+      "browser": { "version": 1, "observe": true, "input": true }
+    }
   }
 }
 ```
@@ -165,6 +169,62 @@ inline argument parsing；提交仍通过 `session/request` 的 `StartTurn.input
 校验、local/server 合并与 Rust client 交互状态的 canonical owner 是
 [`zeta-slash-commands`](../zeta-rs/slash-commands/README.md)；App Server 只组合并发布 server snapshot。
 三种 client surface 的合并、执行与渲染边界见 [`slash-commands.md`](slash-commands.md)。
+
+### 客户端-hosted 浏览器能力
+
+Browser 是当前 Server → Client request capability。只有在 `initialize` 中提交 version 1 browser
+capability 的连接才能成为宿主；`observe` 与 `input` 分别声明页面观察和语义输入支持。该声明是
+短暂的 connection routing authority，不进入 Session、Thread 或持久化配置。
+
+| Host method | Params | Result | 当前语义 |
+| --- | --- | --- | --- |
+| `browser/create` | `{ url }` | `{ targetId }` | 创建一个隔离、默认隐藏的新目标 |
+| `browser/observe` | exact target + 三个 include flag | 页面状态 + 可选 AX/DOM/PNG | 不执行脚本，不返回 Electron 对象 |
+| `browser/perform` | tagged semantic action | `{ targetId }` | 导航、node click/type、滚动、后退或刷新 |
+| `browser/close` | `{ targetId }` | `null` | 关闭精确目标 |
+
+请求 ID 使用保留的非空字符串，与 Client → Server 正整数 ID 隔离。App Server 把 create result 的
+`targetId` 绑定到响应它的连接；此后不能由另一连接响应，也不能把观察或动作结果切换到另一个
+目标。connection 退出后 target authority 立即失效，Desktop 同时回收由该 host connection 创建的
+原生目标。
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "browser-host:1:7",
+  "method": "browser/perform",
+  "params": {
+    "action": {
+      "type": "click",
+      "targetId": "browser_target_123",
+      "target": { "nodeId": "42" }
+    }
+  }
+}
+```
+
+成功响应必须保留同一 ID 和 target：
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "browser-host:1:7",
+  "result": { "targetId": "browser_target_123" }
+}
+```
+
+App Server deadline 为 30 秒。Turn 取消或 deadline 到达时，Server 发送
+`$/cancelRequest { id }`；client 终止尚未开始的步骤，并用 `-32800` 返回已取消的在途请求。
+已放弃请求的晚到 terminal response 可以丢弃，已完成请求的重复 response 仍是协议错误。
+截图 payload 只允许 `image/png`，App Server 校验 decoded length、Base64 和 PNG signature 后才
+创建 connection-owned Resource。
+
+该契约从不接受任意 CDP method、JavaScript source、localhost 调试端口或 Node sidecar 配置。
+完整 Browser Tool generation 同时要求可信工作区和至少一个同时声明 `observe + input` 的 live
+version 1 宿主；Restricted、信任撤销或最后一个完整宿主断开都会移除该工具 port。恢复条件后
+只影响后续 Tool generation，不恢复或重放旧调用。
+Desktop 当前实现和 Playwright 后续边界见
+[`zeta-desktop-architecture.md#7-浏览器能力`](zeta-desktop-architecture.md#7-浏览器能力)。
 
 ## 5. 方法清单
 
@@ -217,6 +277,8 @@ inline argument parsing；提交仍通过 `session/request` 的 `StartTurn.input
 | `fs/readDirectory` | workspace | 枚举根相对目录的直接子项 |
 | `fs/readFile` | workspace | 读取不超过 10 MiB 的 UTF-8 文件 |
 | `fs/writeFile` | workspace | 原子替换或新建不超过 10 MiB 的 UTF-8 文件 |
+| `syntax/analyze` | stateless syntax | 返回同一 revision 的 bounded token/fold/symbol/diagnostic facts |
+| `syntax/selectionRanges` | stateless syntax | 只沿当前 UTF-16 selections 返回 bounded parser ancestor scopes |
 | `git/status` | workspace | 读取 HEAD、upstream 和 index/worktree change snapshot |
 | `git/textDiff` | workspace | 读取 status 及有界 UTF-8 HEAD/worktree text diff projection |
 | `git/branch/list` | workspace | 列出现有本地分支及 current/upstream 信息 |
@@ -233,6 +295,8 @@ inline argument parsing；提交仍通过 `session/request` 的 `StartTurn.input
 | `workspace/search/cancel` | connection + search job | 取消并释放搜索 |
 | `workspace/codeIndex/status` | workspace | 读取本地 index lifecycle 与 generation counters |
 | `workspace/codeIndex/search` | workspace | 返回有界、revision-bound 的本地 lexical chunks |
+| `workspace/symbolIndex/status` / `search` | workspace | 读取 declaration projection 状态并执行有界 local fuzzy symbol query |
+| `workspace/codeIntelligence/document/synchronize` / `close` | workspace + editor document | 发布或释放 ephemeral dirty snapshot；不持久化 overlay |
 | `workspace/codeIndex/retrieve` | workspace | 融合已启用召回源，返回复核、去重、受预算约束的 excerpts |
 | `workspace/codeIndex/rebuild` | workspace | 同步执行一次 full reconcile |
 | `workspace/codeIndex/cloud/status` | workspace | 读取 selected deployment、grant 与 local/remote generation state |
@@ -316,6 +380,18 @@ durable event 或文件内容事实，客户端收到后必须重新读取自己
 Filesystem contract 仍不包含重命名、删除、多根 Workspace 或跨请求 snapshot 一致性。当前
 Desktop 尚未调用 `fs/writeFile` 或消费 `fs/changed`；这些属于独立的前端接入阶段。
 
+### 语法事实
+
+`syntax/analyze` 接收最多 4 MiB 的完整 UTF-8 text、language 与 host revision，返回同一 revision 的
+bounded tokens、folding ranges、document symbols、parse diagnostics 和 `hasErrors`。它是 stateless
+projection，不建立 App Server-owned editor document，也不返回 Tree-sitter node。
+
+`syntax/selectionRanges` 使用同一 document envelope，并额外接受最多 1,024 个 UTF-16 ranges；server
+拒绝越界位置和 surrogate pair 中间位置，只沿每个 exact selection 的 named parser ancestors 返回
+默认最多 64 层，去重后按 source order 投影。该 operation 与普通 analyze 分离，避免 token/diagnostic
+请求携带整棵树的 selection nodes。Desktop 必须用 captured snapshot revision、request cancellation 与
+当前 selection set 做 stale gate。
+
 ### Git SCM
 
 `initialize.capabilities.git` 表示 server 已冻结可信 workspace root 并安装 Git backend。
@@ -378,13 +454,24 @@ generation counters；`workspace/codeIndex/search` 接受最多 8 KiB query 与 
 返回 root-relative path、language、source revision、chunk key/hash、UTF-8 byte/line span、当前
 验证过的 content 与 lexical score。初始 generation 尚未发布时返回 `CodeIndexNotReady`。
 
-`workspace/codeIndex/retrieve` 使用相同 query/result 数量上限；内部始终按 Workspace chunk key
-校验和去重，但返回面只投影 revision-bound excerpt、RRF score、`localLexical/cloudSemantic` origins
-和显式 degradations。未授权
-云能力时它只使用本地 FTS；已启用云能力时只查询 durable state 中 exact ready remote generation。
-cloud provider 返回完成 semantic recall/rerank/过滤/截断后的 final order，App Server 不使用模型分数
-重新排序。cloud query failure 会保留 local hits 并返回 `cloudQueryFailed`；复核失败或 content budget 丢弃也会
-返回计数，不把 provider candidate body 当作 source authority。
+`workspace/symbolIndex/status` 投影 `empty/indexing/ready/stale/failed` 与 source/symbol generation；
+`workspace/symbolIndex/search` 对当前持久 projection 和 dirty overlay 做 Nucleo fuzzy query，返回 UTF-16
+declaration/selection ranges、source revision、score 与 matched name indices。它不声称 reference 或 type
+语义；LSP workspace symbols 由 Desktop provider aggregator 并发补充。
+
+`workspace/codeIndex/retrieve` 使用相同 query/result 数量上限；内部始终按 Workspace excerpt identity
+校验和去重，但返回面只投影 revision-bound excerpt、RRF score、
+`localSymbol/localLexical/localSemantic/cloudSemantic` origins 和显式 degradations。未授权云能力时仍可
+使用本地 symbol/FTS 与已配置 local semantic；已启用云能力时只查询 durable state 中 exact ready
+remote generation。各来源失败会保留其他 local hits 并分别返回
+`localSymbolQueryFailed`、`localSemanticQueryFailed` 或 `cloudQueryFailed`；复核失败或 content budget
+丢弃也会返回计数，不把 provider candidate body 当作 source authority。
+
+`workspace/codeIntelligence/document/synchronize` 接收 Editor-authoritative full snapshot；CodeIndex
+首先校验 path、language、revision 与 text，再建立 canonical in-memory chunks，SymbolIndex 随后投影
+declarations。同一 dirty path 的磁盘 symbol、FTS、vector 和 cloud candidates 全部被抑制；保存后只有
+磁盘 generation 的 content hash 对齐才 handoff。`close`、Workspace replacement 或 host lifecycle
+释放 overlay。响应只包含 generation 和 dirty document count，不泄露正文。
 
 `workspace/codeIndex/rebuild` 是 global-exclusive、同步 manual reconcile；通常由 watcher-driven
 runtime 自动维护，不应在每次查询前调用。该能力不创建 embedding/network 请求，也不等价于产品

@@ -79,6 +79,7 @@ zeta-slash-commands = { workspace = true }
 zeta-skills = { workspace = true }
 zeta-skills-extension = { workspace = true }
 zeta-syntax = { workspace = true }
+zeta-symbol-index = { workspace = true }
 zeta-tools = { workspace = true }
 zeta-web-search-extension = { workspace = true }
 zeta-typst = { workspace = true }

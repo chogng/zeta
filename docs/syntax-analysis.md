@@ -3,7 +3,8 @@
 > 状态：Rust `CodeEditor` 已内部接入 Rust、JSON、JSONC 与 Shell 的增量 tree-sitter
 > 分析；Rust `DiffEditor` 已通过 retained `DiffEditorDocument` 内部维护两侧语法状态；Desktop
 > Aster Text Engine 通过 TextMate 与有界 Rust syntax facts 提供语法能力。本文拥有跨编辑器的语法能力边界；底层解析契约见
-> [`zeta-syntax` README](../zeta-rs/syntax/README.md)，Native 编辑器 API 见
+> [`zeta-syntax` README](../zeta-rs/syntax/README.md)，符号索引、Language Server、代码检索与未来代码图
+> 的跨系统演进见 [`code-intelligence.md`](code-intelligence.md)，Native 编辑器 API 见
 > [`zeta-editor` README](../zeterm/editor/README.md)。
 
 ## 快速理解
@@ -23,6 +24,7 @@
 | Aster bundled-language token | TextMate worker + lexical fallback | ✅ |
 | Aster parser facts | `zeta-rs/syntax` via bounded `platform/syntax` adapter | ✅ JavaScript/JSX、TypeScript/TSX、JSON/JSONC、Rust、Shell token/diagnostic/symbol/folding |
 | App Server syntax RPC | bounded stateless analysis | ✅；仅异步 facts，不拥有 editor revision 或输入热路径 |
+| Aster Smart Select | Aster selection/history + `zeta-syntax` on-demand scopes | ✅ expand/shrink；revision-bound、可取消、stale-safe，parser 失败时 lexical fallback |
 | completion、type、definition/reference、rename | `zeta-lsp` + language server，经编辑器 language feature 接入 | ✅ Code 主路径；语言覆盖由 catalog 决定 |
 | workspace code chunk index | `zeta-code-index` 消费 `zeta-syntax` declaration facts | ✅ 本地 lexical retrieval；不是统一 semantic symbol graph |
 | workspace symbol/reference capability | `zeta-lsp` + App Server language runtime | ✅ workspace symbols 与按需 references 已接通；持久化全局 semantic graph 仍属于可选 index 演进，不属于单个 editor document |
@@ -61,7 +63,7 @@ Native host
 | --- | --- | --- | --- | --- | --- |
 | grammar、query、tree-sitter tree | ✅ | 组合/消费 | ❌ | ❌ | ❌ |
 | editor text、selection、language 与本地 revision | ❌ | ✅ | 选择初始资源与语言 | ❌ | 消费同步 |
-| syntax token 与 parse facts | 计算 | ✅ 生命周期与展示 | ❌ | ❌ | ❌ |
+| syntax token、parse facts 与 selection scopes | 计算 | ✅ 生命周期、selection history 与展示 | ❌ | 只投影有界 stateless request | ❌ |
 | theme color、DOM/native geometry、fold UI state | ❌ | ✅ | 注入主题/布局 | ❌ | ❌ |
 | 文件 dirty/save/conflict | ❌ | ❌ | 组合 `zeta-text-file` | 可提供独立文件 I/O capability | ❌ |
 | type、completion、definition/reference、rename | ❌ | 交互入口 | 协调 | 可承载独立 LSP runtime | ✅ |
@@ -78,6 +80,14 @@ Worker 中运行；受支持语言还可通过 `RustSyntaxFactsService` 请求 A
 facts。该 adapter 不建立远端 shadow document，不参与键盘、IME、selection 或同步 transaction；
 返回结果仍经过 Aster 的 model-version gate 后进入 token、diagnostic、symbol 与 folding owner。
 
+Smart Select 是一条按需路径：快捷键捕获当前 snapshot 与所有 selection，调用
+`syntax/selectionRanges`，每个 selection 只沿 parser named ancestors 返回默认最多 64 层；普通
+`syntax/analyze` 不序列化全树 selection nodes。结果只有在 request 未取消、model revision 与 selection
+set 都仍一致时才应用。首次 caret expansion 仍选择 word，后续优先最小 parser scope，再回退到
+pair、line 和 document；shrink 只使用 Editor-owned history。该离散 command 可以承受 App Server
+round trip；任何进入连续 typing hot path 的未来 structural operation 必须迁到 editor worker/in-process
+parser。
+
 ## DiffEditor 与后续演进
 
 `DiffEditorDocument` 接收已经计算完成的 `DiffDocument` 和一个 `CodeEditorLanguage`，内部重建
@@ -90,6 +100,8 @@ source line number 读取同一份 editor-owned token；Changes Pane 不知道 p
 1. 按真实产品需要扩展 parser-grade 语言覆盖，不复制已有 editor language contract。
 2. 当前 `zeta-code-index` 已作为独立 workspace capability 消费 declaration ranges；后续 semantic
    symbol/reference graph 继续由 LSP/index owner 演进，不能回填到 editor-local parser lifecycle。
+3. 先增加 select declaration/argument/expression/statement 等只读 operation；delete/move/wrap 等 mutation
+   必须返回 revision-bound plan，由 Editor 在一个 undo transaction 中应用和复核。
 
 长期不变量是：产品层暴露编辑器，不暴露 parser RPC；编辑器拥有文档内语言能力，
 `zeta-syntax` 拥有底层 syntax 算法，LSP/compiler 拥有跨文件语义事实。

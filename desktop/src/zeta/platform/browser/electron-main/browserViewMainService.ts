@@ -1,27 +1,10 @@
-import {
-  WebContentsView,
-  type BrowserWindow,
-  type Event as ElectronEvent,
-  type WebContents,
-} from "electron/main";
+import { WebContentsView, type BrowserWindow, type Event as ElectronEvent, type WebContents } from "electron/main";
 import { randomUUID } from "node:crypto";
 import type { EventEmitter } from "node:events";
-import {
-  DisposableOwner,
-} from "../../../base/common/lifecycle.js";
-import {
-  type BrowserViewEvent,
-  type BrowserViewTargetId,
-  type IBrowserViewCreateRequest,
-  type IBrowserViewLayoutRequest,
-  type IBrowserViewNavigateRequest,
-  type IBrowserViewState,
-  type IBrowserViewVisibilityRequest,
-  normalizeBrowserViewUrl,
-} from "../common/browserView.js";
-import type {
-  IBrowserViewMainService,
-} from "./browserViewIpc.js";
+import { DisposableOwner } from "../../../base/common/lifecycle.js";
+import { type BrowserViewEvent, type BrowserViewTargetId, type IBrowserViewCreateRequest, type IBrowserViewLayoutRequest, type IBrowserViewNavigateRequest, type IBrowserViewState, type IBrowserViewVisibilityRequest, normalizeBrowserViewUrl } from "../common/browserView.js";
+import type { IBrowserViewMainService } from "./browserViewIpc.js";
+import { BrowserTargetRegistry } from "./browserTargetRegistry.js";
 
 interface BrowserTarget {
   readonly id: BrowserViewTargetId;
@@ -34,6 +17,7 @@ interface BrowserTarget {
 
 export interface BrowserViewMainServiceOptions {
   readonly window: BrowserWindow;
+  readonly registry: BrowserTargetRegistry;
   readonly emitEvent: (event: BrowserViewEvent) => void;
 }
 
@@ -46,6 +30,7 @@ export interface BrowserViewMainServiceOptions {
 export class BrowserViewMainService extends DisposableOwner
   implements IBrowserViewMainService {
   private readonly window: BrowserWindow;
+  private readonly registry: BrowserTargetRegistry;
   private readonly emitEvent: (event: BrowserViewEvent) => void;
   private readonly targets = new Map<BrowserViewTargetId, BrowserTarget>();
   private disposing = false;
@@ -53,6 +38,7 @@ export class BrowserViewMainService extends DisposableOwner
   constructor(options: BrowserViewMainServiceOptions) {
     super();
     this.window = options.window;
+    this.registry = options.registry;
     this.emitEvent = options.emitEvent;
     this.defer(() => {
       this.disposing = true;
@@ -85,6 +71,7 @@ export class BrowserViewMainService extends DisposableOwner
     this.targets.set(targetId, target);
 
     try {
+      this.registry.register(targetId, view);
       view.setBounds({ x: 0, y: 0, width: 1024, height: 768 });
       view.setVisible(false);
       this.window.contentView.addChildView(view);
@@ -299,6 +286,7 @@ export class BrowserViewMainService extends DisposableOwner
 
   private releaseTarget(target: BrowserTarget, closeContents: boolean): void {
     if (!this.targets.delete(target.id)) return;
+    this.registry.unregister(target.id);
     target.disposables.dispose();
     if (!this.window.isDestroyed()) {
       this.window.contentView.removeChildView(target.view);

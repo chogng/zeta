@@ -19,6 +19,7 @@ pub struct LanguageServiceConfiguration {
     pub(crate) enablement: LanguageServiceEnablement,
     pub(crate) servers: Vec<LanguageServerDefinition>,
     pub(crate) restart_policy: LanguageServerRestartPolicy,
+    pub(crate) generation: u64,
 }
 
 impl LanguageServiceConfiguration {
@@ -28,6 +29,7 @@ impl LanguageServiceConfiguration {
             enablement: LanguageServiceEnablement::Disabled,
             servers: Vec::new(),
             restart_policy: LanguageServerRestartPolicy::standard(),
+            generation: 0,
         }
     }
 
@@ -40,6 +42,7 @@ impl LanguageServiceConfiguration {
             enablement: LanguageServiceEnablement::Enabled,
             servers,
             restart_policy: LanguageServerRestartPolicy::standard(),
+            generation: 0,
         }
     }
 
@@ -57,6 +60,12 @@ impl LanguageServiceConfiguration {
 
     pub const fn restart_policy(&self) -> LanguageServerRestartPolicy {
         self.restart_policy
+    }
+
+    /// Binds request metrics and cache invalidation to the host's resolved configuration version.
+    pub const fn with_generation(mut self, generation: u64) -> Self {
+        self.generation = generation;
+        self
     }
 
     pub const fn with_restart_policy(mut self, policy: LanguageServerRestartPolicy) -> Self {

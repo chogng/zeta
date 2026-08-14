@@ -23,6 +23,7 @@
 | `LanguageRequestId` / `LanguageDocumentPosition` | 非阻塞请求 identity 与 editor-owned UTF-8 source position | 暴露 LSP position encoding |
 | `LanguageHover` / `LanguageCompletions` / `LanguageDefinitions` | capability-gated、revision-fresh 的产品结果 | 绘制 popup、读取定义文件或持有 editor text |
 | `LanguageServiceEventSink` | 快速接收状态、诊断、消息和异步文档错误 | 在 callback 中阻塞或反向调用服务 |
+| `LanguageServiceMetricsSink` | 接收不含源码、路径、query 或 position 的请求结果指标 | 做 telemetry transport、保存用户内容或控制请求 |
 
 `LanguageServiceEnablement::Disabled` 会保留最新文档快照但不启动 server。调用方必须显式提供
 `Enabled` 和非歧义 catalog，服务才会把 resolved command 委托给 `zeta-lsp` 启动。
@@ -59,6 +60,7 @@ request_hover / request_completions / request_definition
   → async typed LSP request
   → reject stale generation / server epoch / editor revision
   → project product-neutral result event
+  → emit cold/warm latency + result count + terminal outcome
 ```
 
 关键私有符号：
@@ -74,6 +76,8 @@ request_hover / request_completions / request_definition
 - `projection::project_diagnostic` 根据 initialize 协商的位置编码生成 editor byte range。
 - `request_runtime` 拥有 capability gate、异步 request task 和三重 freshness gate；`requests` 只定义
   product-neutral input/result 与 UTF-8/UTF-16 projection。
+- `metrics` 定义 content-free `LanguageRequestMetric`；`Supervisor` 按 `(server, epoch, request kind)`
+  区分 cold/warm，并拥有 in-flight task cancellation。
 
 如果宿主开始直接持有 `LanguageServerClient`，或者本 crate 开始读取 editor/file system，表示协调
 边界已经被绕过。若 `zeta-lsp` 开始决定用户是否启用某个 server 或从哪里安装它，则协议层发生了
@@ -88,7 +92,9 @@ ownership 漂移。
   `BackingOff` 或 `CrashLoop`，不会使 supervisor panic。
 - 默认策略最多重启五次，延迟从 250 ms 指数增长并封顶 4 s；连续 Ready 60 s 后下一次失败从新预算开始。
 - 禁用、重配或 shutdown 会递增 generation、失效 server epoch、取消 launch，并让旧 timer 和旧实例
-  的迟到事件无法触发重启或发布结果。
+  的迟到事件无法触发重启或发布结果；所有 in-flight requests 同时被取消。
+- `cancel_request` 会中止对应 task，并记录 `Cancelled`；freshness gate 丢弃的完成记录为
+  `StaleDiscarded`，capability/route 拒绝记录为 `Rejected`。
 - 意外断连会先清空该 server 文档的 diagnostics、退休 route 和旧 bindings；新实例 Ready 后只从
   本 crate 保留的 authoritative product snapshots 重放。
 - diagnostics 只有在 LSP version 仍绑定到当前 editor revision 时才会发布；非法 range 被丢弃。
@@ -107,7 +113,8 @@ cargo clippy --manifest-path Cargo.toml -p zeta-language-service --all-targets -
 ```
 
 测试覆盖禁用模式的文档生命周期、启动失败隔离、catalog 歧义校验、精确重启预算、backoff 期间
-禁用、真实 stdio server 初始化后崩溃，以及 UTF-8/UTF-16、emoji、CRLF position conversion。
+禁用、真实 stdio server 初始化后崩溃、UTF-8/UTF-16/emoji/CRLF position conversion，以及拒绝、
+取消和 content-free metrics。
 修改 enable/disable、generation 或 epoch 规则时必须补充迟到 timer/event 测试；修改文档 binding
 时必须同时检查 editor revision 与 LSP version；修改 projection 时必须覆盖 Unicode scalar 边界和
 server 选定的位置编码。
@@ -130,9 +137,14 @@ server 选定的位置编码。
 - ✅ document pull diagnostics 的 full/unchanged report projection；full report 复用现有 diagnostics 事件和 freshness 规则；
 - ✅ workspace diagnostics 的 capability gate 与跨文件 raw-coordinate projection；文件读取和 UTF-16 转换仍由 App Server Workspace authority 完成；
 - ✅ message severity、show/log 区分与 work-done progress 的 product-neutral 事件；
+- ✅ request kind/server incarnation/configuration + service generation/cold-warm/latency/result-count 与
+  delivered/empty/failed/cancelled/stale-discarded/rejected 指标；不记录路径、文本、query 或 position；
+- ✅ 显式 `cancel_request`、disable/reconfigure/shutdown 的 in-flight task cancellation；
 - ✅ Native pointer hover、latest-request gate、可滚动 completion window/安全 textEdit 接受，以及 F12
   definition navigation；
 - ✅ Desktop 已把 completion resolve/commands、additional edits、semantic tokens 和文档特性接入现有 Editor contract；多 definition target 复用 Peek 列表；
 - 尚未完成：diagnostic result-id/partial-result/refresh；
 - 尚未完成：server-specific distribution provider 与产品级 message/install UI；
+- 尚未安装：references/navigation session cache；先由现有指标证明重复成本，再设计 incarnation/revision
+  完整绑定的 key 与失效规则；
 - Potential：远程 workspace authority 出现后再评估是否把 execution 放到 App Server。

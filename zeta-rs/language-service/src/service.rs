@@ -17,6 +17,9 @@ use zeta_lsp::{
     LanguageServerOptions, LanguageServerRoute,
 };
 
+use crate::LanguageRequestMetric;
+use crate::LanguageRequestMetricOutcome;
+use crate::LanguageServiceMetricsSink;
 use crate::projection::project_diagnostic;
 use crate::restart::{RestartDecision, ServerRestartTracker};
 use crate::{
@@ -175,6 +178,23 @@ impl LanguageService {
         configuration: LanguageServiceConfiguration,
         events: Arc<dyn LanguageServiceEventSink>,
     ) -> Result<Self, LanguageServiceError> {
+        Self::start_inner(configuration, events, None)
+    }
+
+    /// Starts the service with content-free request metrics used to evaluate navigation caching.
+    pub fn start_with_metrics(
+        configuration: LanguageServiceConfiguration,
+        events: Arc<dyn LanguageServiceEventSink>,
+        metrics: Arc<dyn LanguageServiceMetricsSink>,
+    ) -> Result<Self, LanguageServiceError> {
+        Self::start_inner(configuration, events, Some(metrics))
+    }
+
+    fn start_inner(
+        configuration: LanguageServiceConfiguration,
+        events: Arc<dyn LanguageServiceEventSink>,
+        metrics: Option<Arc<dyn LanguageServiceMetricsSink>>,
+    ) -> Result<Self, LanguageServiceError> {
         validate_catalog(&configuration)?;
         let (commands, receiver) = mpsc::unbounded_channel();
         let (started_tx, started_rx) = std_mpsc::sync_channel(1);
@@ -191,7 +211,8 @@ impl LanguageService {
                     Ok(runtime) => {
                         let _ = started_tx.send(Ok(()));
                         runtime.block_on(
-                            Supervisor::new(configuration, events, thread_commands).run(receiver),
+                            Supervisor::new(configuration, events, metrics, thread_commands)
+                                .run(receiver),
                         );
                     }
                     Err(error) => {
@@ -237,6 +258,14 @@ impl LanguageService {
         enablement: LanguageServiceEnablement,
     ) -> Result<(), LanguageServiceError> {
         self.send(SupervisorCommand::SetEnablement(enablement))
+    }
+
+    /// Cancels one queued or in-flight request. Unknown or already completed IDs are a no-op.
+    pub fn cancel_request(
+        &self,
+        request_id: LanguageRequestId,
+    ) -> Result<(), LanguageServiceError> {
+        self.send(SupervisorCommand::CancelLanguageRequest(request_id))
     }
 
     pub fn request_hover(
@@ -810,6 +839,7 @@ enum SupervisorCommand {
         server_epoch: u64,
     },
     LanguageRequest(PendingLanguageRequest),
+    CancelLanguageRequest(LanguageRequestId),
     WorkspaceSymbols {
         id: LanguageRequestId,
         language_id: String,
@@ -836,6 +866,7 @@ enum SupervisorCommand {
         result: Result<LanguageWorkspaceDiagnostics, String>,
     },
     LanguageRequestCompleted {
+        request_id: LanguageRequestId,
         server: LanguageServerName,
         generation: u64,
         server_epoch: u64,
@@ -868,9 +899,21 @@ struct ManagedServer {
     restart: ServerRestartTracker,
 }
 
+struct InFlightLanguageRequest {
+    task: tokio::task::JoinHandle<()>,
+    kind: LanguageRequestKind,
+    server: LanguageServerName,
+    server_epoch: u64,
+    configuration_generation: u64,
+    service_generation: u64,
+    cold_for_incarnation: bool,
+    started: Instant,
+}
+
 struct Supervisor {
     configuration: LanguageServiceConfiguration,
     events: Arc<dyn LanguageServiceEventSink>,
+    metrics: Option<Arc<dyn LanguageServiceMetricsSink>>,
     commands: mpsc::UnboundedSender<SupervisorCommand>,
     router: LanguageServerDocumentRouter,
     documents: BTreeMap<PathBuf, DocumentState>,
@@ -878,6 +921,8 @@ struct Supervisor {
     servers: BTreeMap<LanguageServerName, ManagedServer>,
     launches: HashMap<LanguageServerName, tokio::task::JoinHandle<()>>,
     retry_tasks: HashMap<LanguageServerName, tokio::task::JoinHandle<()>>,
+    in_flight_requests: BTreeMap<LanguageRequestId, InFlightLanguageRequest>,
+    observed_request_kinds: BTreeSet<(LanguageServerName, u64, LanguageRequestKind)>,
     generation: u64,
 }
 
@@ -885,6 +930,7 @@ impl Supervisor {
     fn new(
         configuration: LanguageServiceConfiguration,
         events: Arc<dyn LanguageServiceEventSink>,
+        metrics: Option<Arc<dyn LanguageServiceMetricsSink>>,
         commands: mpsc::UnboundedSender<SupervisorCommand>,
     ) -> Self {
         let servers = configuration
@@ -906,6 +952,7 @@ impl Supervisor {
         Self {
             configuration,
             events,
+            metrics,
             commands,
             router: LanguageServerDocumentRouter::default(),
             documents: BTreeMap::new(),
@@ -913,6 +960,8 @@ impl Supervisor {
             servers,
             launches: HashMap::new(),
             retry_tasks: HashMap::new(),
+            in_flight_requests: BTreeMap::new(),
+            observed_request_kinds: BTreeSet::new(),
             generation: 0,
         }
     }
@@ -960,6 +1009,9 @@ impl Supervisor {
                 SupervisorCommand::LanguageRequest(request) => {
                     self.begin_language_request(request);
                 }
+                SupervisorCommand::CancelLanguageRequest(request_id) => {
+                    self.cancel_language_request(request_id);
+                }
                 SupervisorCommand::WorkspaceSymbols {
                     id,
                     language_id,
@@ -1005,12 +1057,19 @@ impl Supervisor {
                     );
                 }
                 SupervisorCommand::LanguageRequestCompleted {
+                    request_id,
                     server,
                     generation,
                     server_epoch,
                     result,
                 } => {
-                    self.complete_language_request(server, generation, server_epoch, result);
+                    self.complete_language_request(
+                        request_id,
+                        server,
+                        generation,
+                        server_epoch,
+                        result,
+                    );
                 }
                 SupervisorCommand::Shutdown { completion } => {
                     self.disable().await;

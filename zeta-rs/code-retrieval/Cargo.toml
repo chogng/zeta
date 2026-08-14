@@ -16,6 +16,7 @@ zeta-async-utils = { workspace = true }
 zeta-code-index = { workspace = true }
 zeta-code-index-cloud = { workspace = true }
 zeta-code-index-semantic = { workspace = true }
+zeta-symbol-index = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
