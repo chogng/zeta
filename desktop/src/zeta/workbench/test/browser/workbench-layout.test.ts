@@ -245,6 +245,7 @@ test("Workbench layout hides and restores Parts with context keys", () => {
   assert.equal(contextKeys.getValue("editorAreaVisible"), true);
   assert.equal(editorFrame?.style.paddingLeft, "6px");
   assert.equal(editorFrame?.style.paddingRight, "8px");
+  assert.equal(editorFrame?.style.paddingBottom, "0px");
   assert.equal(panelFrame?.style.paddingLeft, "6px");
   assert.equal(panelFrame?.style.paddingRight, "8px");
   harness.layout.showPart("agentSidebar");

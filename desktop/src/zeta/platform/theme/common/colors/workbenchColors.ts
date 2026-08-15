@@ -20,4 +20,7 @@ export const compositeBarForeground = color("compositeBar.foreground", "#ffffff"
 export const compositeBarInactiveForeground = color("compositeBar.inactiveForeground", "#858585", "#616161", "Inactive composite bar foreground.");
 export const statusBarForeground = color("statusBar.foreground", "#1f1f1f", "#1f1f1f", "Status bar foreground.");
 export const statusBarBackground = color("statusBar.background", "#FFFFFF", "#FFFFFF", "Status bar background.");
+export const statusBarItemHoverForeground = alias("statusBarItem.hoverForeground", statusBarForeground, "Hovered status bar item foreground.");
+export const statusBarItemHoverBackground = color("statusBarItem.hoverBackground", "#5a5d5e50", "#5a5d5e29", "Hovered status bar item background.");
+export const statusBarItemActiveBackground = color("statusBarItem.activeBackground", "#37373d", "#dcdcdc", "Pressed status bar item background.");
 export const sashHoverBackground = color("sash.hoverBackground", "#007acc", "#007acc", "Hovered sash background.");

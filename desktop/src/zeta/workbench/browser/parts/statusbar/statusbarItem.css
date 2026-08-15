@@ -1,0 +1,55 @@
+.zeta-statusbar-item {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 40vw;
+  height: 100%;
+  align-items: stretch;
+  line-height: 35px;
+  font-variant-numeric: tabular-nums;
+}
+
+.zeta-statusbar-item-label {
+  display: flex;
+  min-width: 0;
+  max-width: 100%;
+  height: 100%;
+  align-items: center;
+  gap: 4px;
+  margin: 0 3px;
+  padding: 0 5px;
+  overflow: hidden;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  white-space: pre;
+  text-overflow: ellipsis;
+  text-decoration: none;
+  cursor: pointer;
+  outline: 0;
+}
+
+.zeta-statusbar-item-label > .zeta-icon {
+  display: block;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+}
+
+.zeta-statusbar-item-label.disabled {
+  cursor: default;
+}
+
+.zeta-statusbar-item-label:hover:not(.disabled) {
+  color: var(--zeta-status-bar-item-hover-foreground);
+  background: var(--zeta-status-bar-item-hover-background);
+}
+
+.zeta-statusbar-item-label:active:not(.disabled) {
+  background: var(--zeta-status-bar-item-active-background);
+}
+
+.zeta-statusbar-item-label:focus-visible {
+  outline: 1px solid var(--zeta-focus-border);
+  outline-offset: -1px;
+}

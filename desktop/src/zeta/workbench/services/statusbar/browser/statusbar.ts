@@ -15,6 +15,8 @@ export interface IStatusbarEntry {
   readonly text: string;
   readonly ariaLabel?: string;
   readonly tooltip?: string;
+  /** Optional activation hook for entries that expose a status action. */
+  readonly run?: () => unknown;
 }
 
 /** Stable placement metadata supplied when an entry is registered. */

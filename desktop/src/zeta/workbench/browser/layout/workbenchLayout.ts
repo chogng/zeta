@@ -74,6 +74,7 @@ export class WorkbenchLayout
       initialState.sidebar.visible,
       initialState.auxiliarybar.visible,
       initialState.agentSidebar.visible,
+      initialState.panel.visible,
     );
     this.grid = this.own(SerializableGrid.deserialize(
       createWorkbenchGridDescriptor(this.views, initialDimension, initialState),
@@ -192,6 +193,7 @@ export class WorkbenchLayout
       uniquePartIds.includes("sidebar") ? visible : this.isPartVisible("sidebar"),
       uniquePartIds.includes("auxiliarybar") ? visible : this.isPartVisible("auxiliarybar"),
       uniquePartIds.includes("agentSidebar") ? visible : this.isPartVisible("agentSidebar"),
+      uniquePartIds.includes("panel") ? visible : this.isPartVisible("panel"),
     );
     const changed = uniquePartIds.filter(
       (partId) => this.isPartVisible(partId) !== visible,
@@ -206,6 +208,7 @@ export class WorkbenchLayout
     sidebarVisible = this.isPartVisible("sidebar"),
     auxiliarybarVisible = this.isPartVisible("auxiliarybar"),
     agentSidebarVisible = this.isPartVisible("agentSidebar"),
+    panelVisible = this.isPartVisible("panel"),
   ): void {
     const centralInsets = {
       left: sidebarVisible ? PART_GUTTER_HALF : WINDOW_LEFT_EDGE_INSET,
@@ -234,11 +237,11 @@ export class WorkbenchLayout
     this.view("editor").setFrameInsets({
       top: 0,
       right: centralInsets.right,
-      bottom: PART_GUTTER_HALF,
+      bottom: panelVisible ? PART_GUTTER_HALF : 0,
       left: centralInsets.left,
     });
     this.view("panel").setFrameInsets({
-      top: PART_GUTTER_HALF,
+      top: panelVisible ? PART_GUTTER_HALF : 0,
       right: centralInsets.right,
       bottom: 0,
       left: centralInsets.left,

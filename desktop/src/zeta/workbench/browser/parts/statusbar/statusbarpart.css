@@ -1,4 +1,8 @@
 .zeta-workbench-statusbar {
+  box-sizing: border-box;
+  width: 100%;
+  height: 35px;
+  overflow: hidden;
   color: var(--zeta-status-bar-foreground);
   background: var(--zeta-status-bar-background);
   font-size: 12px;
@@ -7,7 +11,7 @@
 .zeta-workbench-statusbar .zeta-workbench-part-content {
   flex-direction: row;
   align-items: stretch;
-  padding: 0 4px;
+  overflow: hidden;
 }
 
 .zeta-statusbar-items {
@@ -17,22 +21,8 @@
 }
 
 .zeta-statusbar-items-right {
+  flex: 0 1 auto;
+  flex-wrap: wrap;
   flex-direction: row-reverse;
   margin-left: auto;
-}
-
-.zeta-statusbar-item {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 4px;
-  padding: 0 6px;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.zeta-statusbar-item > .zeta-icon {
-  width: 14px;
-  height: 14px;
 }

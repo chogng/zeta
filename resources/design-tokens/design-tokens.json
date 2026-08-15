@@ -2451,6 +2451,66 @@
       }
     },
     {
+      "id": "statusBarItem.hoverForeground",
+      "kind": "color",
+      "cssVariable": "--zeta-status-bar-item-hover-foreground",
+      "owner": "workbench.shell",
+      "description": "Hovered status bar item foreground.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "statusBar.foreground",
+        "light": "statusBar.foreground",
+        "high-contrast-dark": "statusBar.foreground",
+        "high-contrast-light": "statusBar.foreground"
+      },
+      "values": {
+        "dark": "#1f1f1f",
+        "light": "#1f1f1f",
+        "high-contrast-dark": "#1f1f1f",
+        "high-contrast-light": "#1f1f1f"
+      }
+    },
+    {
+      "id": "statusBarItem.hoverBackground",
+      "kind": "color",
+      "cssVariable": "--zeta-status-bar-item-hover-background",
+      "owner": "workbench.shell",
+      "description": "Hovered status bar item background.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#5a5d5e50",
+        "light": "#5a5d5e29",
+        "high-contrast-dark": "#5a5d5e50",
+        "high-contrast-light": "#5a5d5e29"
+      },
+      "values": {
+        "dark": "#5a5d5e50",
+        "light": "#5a5d5e29",
+        "high-contrast-dark": "#5a5d5e50",
+        "high-contrast-light": "#5a5d5e29"
+      }
+    },
+    {
+      "id": "statusBarItem.activeBackground",
+      "kind": "color",
+      "cssVariable": "--zeta-status-bar-item-active-background",
+      "owner": "workbench.shell",
+      "description": "Pressed status bar item background.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#37373d",
+        "light": "#dcdcdc",
+        "high-contrast-dark": "#37373d",
+        "high-contrast-light": "#dcdcdc"
+      },
+      "values": {
+        "dark": "#37373d",
+        "light": "#dcdcdc",
+        "high-contrast-dark": "#37373d",
+        "high-contrast-light": "#dcdcdc"
+      }
+    },
+    {
       "id": "sash.hoverBackground",
       "kind": "color",
       "cssVariable": "--zeta-sash-hover-background",
