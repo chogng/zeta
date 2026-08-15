@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { Emitter } from "../../../../base/common/event.js";
+import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition } from "../../../../base/common/layout.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import type { IConfigurationChangeEvent, IConfigurationKey, IConfigurationService } from "../../../configuration/common/configuration.js";
 import type { IContextMenuService } from "../../../contextview/browser/contextMenu.js";
@@ -49,12 +50,19 @@ test("HoverService coordinates grouped Hovers and context menus", async () => {
     target: secondTarget,
     content: "Second Hover",
     groupId: "test.items",
+    anchorAlignment: AnchorAlignment.Left,
+    anchorAxisAlignment: AnchorAxisAlignment.Horizontal,
+    anchorPosition: AnchorPosition.Below,
+    gap: 8,
   });
   secondTarget.dispatchEvent(new environment.window.MouseEvent("pointerenter"));
   await nextTimer();
   assert.equal(second.visible, true);
   assert.equal(first.visible, false);
   assert.equal(contextViewElement.textContent, "Second Hover");
+  assert.equal(contextViewElement.style.left, "208px");
+  assert.equal(contextViewElement.style.top, "60px");
+  assert.equal(contextViewElement.classList.contains("zeta-context-view-axis-horizontal"), true);
 
   contextMenus.show();
   assert.equal(second.visible, false);

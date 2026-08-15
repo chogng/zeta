@@ -114,6 +114,7 @@ pub struct GitBranchListResult {
 #[serde(rename_all = "camelCase")]
 pub struct GitCommitSummaryDto {
     pub object_id: String,
+    pub parent_object_ids: Vec<String>,
     #[ts(type = "number")]
     pub timestamp_seconds: i64,
     pub subject: String,

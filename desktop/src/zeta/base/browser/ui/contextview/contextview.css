@@ -56,3 +56,23 @@
 .zeta-context-view-hover.zeta-context-view-align-right::before {
   right: 14px;
 }
+
+.zeta-context-view-hover.zeta-context-view-axis-horizontal.zeta-context-view-below::before {
+  top: 14px;
+  right: auto;
+  bottom: auto;
+  left: -5px;
+  border: 0;
+  border-bottom: 1px solid var(--zeta-hover-border);
+  border-left: 1px solid var(--zeta-hover-border);
+}
+
+.zeta-context-view-hover.zeta-context-view-axis-horizontal.zeta-context-view-above::before {
+  top: 14px;
+  right: -5px;
+  bottom: auto;
+  left: auto;
+  border: 0;
+  border-top: 1px solid var(--zeta-hover-border);
+  border-right: 1px solid var(--zeta-hover-border);
+}

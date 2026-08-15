@@ -40,6 +40,7 @@ export interface GitStatus {
 
 export interface GitCommitSummary {
   readonly objectId: string;
+  readonly parentObjectIds: readonly string[];
   readonly timestampSeconds: number;
   readonly subject: string;
 }

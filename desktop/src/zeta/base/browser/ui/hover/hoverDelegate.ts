@@ -1,4 +1,4 @@
-import type { AnchorAlignment, AnchorPosition } from "../contextview/contextview.js";
+import type { AnchorAlignment, AnchorAxisAlignment, AnchorPosition } from "../contextview/contextview.js";
 import type { HoverContent, HoverPersistence } from "./hover.js";
 import type { IDisposable } from "../../../common/lifecycle.js";
 import { toDisposable } from "../../../common/lifecycle.js";
@@ -10,6 +10,7 @@ export interface HoverDelegateSetupOptions {
   readonly groupId?: string;
   readonly persistence?: HoverPersistence;
   readonly anchorAlignment?: AnchorAlignment;
+  readonly anchorAxisAlignment?: AnchorAxisAlignment;
   readonly anchorPosition?: AnchorPosition;
   readonly gap?: number;
 }

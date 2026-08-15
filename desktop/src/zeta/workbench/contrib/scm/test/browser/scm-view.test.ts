@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
+import { AnchorAxisAlignment, AnchorPosition } from "../../../../../base/common/layout.js";
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
+import type { HoverSetupOptions, IHoverService, IManagedHover } from "../../../../../platform/hover/common/hoverService.js";
 import type { GitStatus, IGitService } from "../../../../../workbench/services/git/common/gitService.js";
 
 test("Git contribution registers Changes, Agent Review, and Graph as ordered panes", async () => {
@@ -42,19 +44,36 @@ test("ScmGraphViewPane renders bounded repository history", async () => {
   ]);
   using contextKeyService = new ContextKeyService();
   const menuService = new MenuService(new CommandService(new ServiceCollection()), contextKeyService);
+  const hoverOptions: HoverSetupOptions[] = [];
+  const hoverService: IHoverService = {
+    setupHover: (options) => {
+      hoverOptions.push(options);
+      return testManagedHover();
+    },
+    showHover: () => testManagedHover(),
+    hideHover() {},
+  };
+  const status: GitStatus = {
+    streamInstanceId: "git-graph-stream",
+    revision: 1,
+    workspacePath: ".",
+    head: { type: "branch", name: "main", objectId: "1234567890abcdef", upstream: { name: "origin/main", ahead: 0, behind: 0 } },
+    changes: [],
+  };
   const gitService = {
+      status: async () => status,
       history: async () => {
         historyRequests += 1;
         return [
-          { objectId: "1234567890abcdef", timestampSeconds: 1_753_000_000, subject: "Wire SCM panes" },
-          { objectId: "abcdef1234567890", timestampSeconds: 1_752_900_000, subject: "Prepare graph data" },
+          { objectId: "1234567890abcdef", parentObjectIds: ["abcdef1234567890", "side-parent"], timestampSeconds: 1_753_000_000, subject: "Wire SCM panes" },
+          { objectId: "abcdef1234567890", parentObjectIds: ["parent-one", "parent-two"], timestampSeconds: 1_752_900_000, subject: "Prepare graph data" },
         ];
       },
   } as unknown as IGitService;
 
   try {
     const { ScmGraphViewPane } = await import("../../../../../workbench/contrib/scm/browser/scmGraphViewPane.js");
-    using pane = new ScmGraphViewPane({ id: "zeta.gitGraph.test", title: "Graph", ownerDocument: browser.window.document }, gitService, menuService, {} as IContextMenuService, contextKeyService);
+    using pane = new ScmGraphViewPane({ id: "zeta.gitGraph.test", title: "Graph", ownerDocument: browser.window.document }, gitService, menuService, {} as IContextMenuService, contextKeyService, hoverService);
     browser.window.document.body.append(pane.element);
     await waitFor(() => pane.element.querySelectorAll(".zeta-scm-graph-commit").length === 2);
 
@@ -69,9 +88,25 @@ test("ScmGraphViewPane renders bounded repository history", async () => {
     const refresh = pane.element.querySelector<HTMLButtonElement>('[data-action-id="zeta.git.graph.refresh"] > button');
     assert.ok(refresh);
     refresh.click();
-    await waitFor(() => historyRequests === 2);
+    await waitFor(() => historyRequests === 2 && pane.element.querySelectorAll(".zeta-scm-graph-subject").length === 2);
 
     assert.deepEqual([...pane.element.querySelectorAll(".zeta-scm-graph-subject")].map((element) => element.textContent), ["Wire SCM panes", "Prepare graph data"]);
+    assert.equal(pane.element.querySelector(".zeta-scm-graph-commit.current")?.getAttribute("aria-current"), "true");
+    assert.ok(pane.element.querySelector(".zeta-scm-graph-commit.head"));
+    assert.ok(pane.element.querySelector(".zeta-scm-graph-commit.merge"));
+    assert.ok(pane.element.querySelector(".zeta-scm-graph-commit.head.merge"));
+    assert.equal(pane.element.querySelector(".zeta-scm-graph-head")?.textContent, "main");
+    assert.ok(pane.element.querySelector(".zeta-scm-graph-head .zeta-icon"));
+    assert.equal(hoverOptions.length, 4);
+    assert.ok(hoverOptions.every((options) => options.target.classList.contains("zeta-scm-graph-commit")));
+    assert.ok(hoverOptions.every((options) => options.anchorAxisAlignment === AnchorAxisAlignment.Horizontal));
+    assert.ok(hoverOptions.every((options) => options.anchorPosition === AnchorPosition.Below));
+    assert.equal(pane.element.querySelector(".zeta-scm-graph-graph.head")?.querySelectorAll(".zeta-scm-graph-node").length, 2);
+    assert.equal(pane.element.querySelector(".zeta-scm-graph-commit.head.merge > .zeta-scm-graph-graph")?.classList.contains("head"), true);
+    assert.equal(pane.element.querySelector(".zeta-scm-graph-commit.head.merge > .zeta-scm-graph-graph")?.classList.contains("merge"), false);
+    assert.equal(pane.element.querySelector(".zeta-scm-graph-graph.merge")?.querySelectorAll(".zeta-scm-graph-node").length, 2);
+    assert.equal(pane.element.querySelector<SVGSVGElement>(".zeta-scm-graph-graph.merge")?.style.width, "44px");
+    assert.ok((pane.element.querySelector(".zeta-scm-graph-graph.merge")?.querySelectorAll(".zeta-scm-graph-path").length ?? 0) > 1);
     assert.match(pane.element.querySelector(".zeta-scm-graph-metadata")?.textContent ?? "", /^1234567 · /);
   } finally {
     browser.window.close();
@@ -287,6 +322,17 @@ function change(path: string, indexStatus: GitStatus["changes"][number]["indexSt
       trackedChanges: false,
       untrackedChanges: false,
     },
+  };
+}
+
+function testManagedHover(): IManagedHover {
+  return {
+    visible: false,
+    show() {},
+    hide() {},
+    update() {},
+    dispose() {},
+    [Symbol.dispose]() {},
   };
 }
 

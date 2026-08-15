@@ -66,6 +66,7 @@ export class HoverService extends DisposableOwner implements IHoverService {
         enabled: () => !this.contextMenuVisible,
         pointerHoverEnabled: () => !this.pointerHoverSuppressed,
         anchorAlignment: options.anchorAlignment,
+        anchorAxisAlignment: options.anchorAxisAlignment,
         anchorPosition: options.anchorPosition,
         gap: options.gap,
         contextViewProvider: this.contextViewService,

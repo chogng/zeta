@@ -226,6 +226,10 @@ export class ContextView
       "zeta-context-view-align-left",
       result.anchorAlignment === AnchorAlignment.Left,
     );
+    this.element.classList.toggle(
+      "zeta-context-view-axis-horizontal",
+      options.anchorAxisAlignment === AnchorAxisAlignment.Horizontal,
+    );
     this.element.style.left = `${result.left}px`;
     this.element.style.top = `${result.top}px`;
   }

@@ -120,6 +120,7 @@ fn runtime_projects_text_diffs_and_switches_only_existing_local_branches() {
     assert_eq!(history.len(), 1);
     assert_eq!(history[0].subject, "initial");
     assert_eq!(history[0].object_id.len(), 40);
+    assert!(history[0].parent_object_ids.is_empty());
     let branches = runtime.local_branches().unwrap();
     assert!(
         branches

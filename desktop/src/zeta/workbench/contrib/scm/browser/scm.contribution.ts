@@ -2,6 +2,7 @@ import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
 import { IMenuService } from "../../../../platform/actions/common/menuService.js";
 import { IContextKeyService } from "../../../../platform/contextkey/common/contextkey.js";
 import { IContextMenuService } from "../../../../platform/contextview/browser/contextMenu.js";
+import { IHoverService } from "../../../../platform/hover/common/hoverService.js";
 import { SyncDescriptor } from "../../../../platform/instantiation/common/instantiation.js";
 import { registerWorkbenchContribution, WorkbenchPhase } from "../../../common/contributions.js";
 import { ViewContainerLocation, type WorkbenchViewRegistry, WorkbenchViewContainerId, ViewsRegistry } from "../../../common/views.js";
@@ -54,7 +55,7 @@ export function registerGitViews(
       collapsed: true,
       canToggleVisibility: false,
       ctorDescriptor: new SyncDescriptor(ScmGraphViewPane, {
-        serviceDependencies: [IGitService, IMenuService, IContextMenuService, IContextKeyService],
+        serviceDependencies: [IGitService, IMenuService, IContextMenuService, IContextKeyService, IHoverService],
       }),
     },
   ]);

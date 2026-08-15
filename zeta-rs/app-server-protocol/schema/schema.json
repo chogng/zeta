@@ -11516,6 +11516,12 @@
         "objectId": {
           "type": "string"
         },
+        "parentObjectIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "subject": {
           "type": "string"
         },
@@ -11526,6 +11532,7 @@
       },
       "required": [
         "objectId",
+        "parentObjectIds",
         "timestampSeconds",
         "subject"
       ]

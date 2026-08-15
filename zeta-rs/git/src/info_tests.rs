@@ -104,6 +104,7 @@ async fn returns_bounded_recent_commit_summaries() {
         commits,
         vec![GitCommitSummary {
             object_id: latest_oid,
+            parent_object_ids: vec![repository.git(&["rev-parse", "HEAD^"])],
             timestamp_seconds: latest_timestamp,
             subject: "second".to_string(),
         }]
@@ -112,12 +113,14 @@ async fn returns_bounded_recent_commit_summaries() {
 
 #[test]
 fn commit_parser_preserves_an_empty_subject_field() {
-    let commits = parse_commits(b"abc\0\x31\x32\x33\0\0", "git log").expect("parse commits");
+    let commits = parse_commits(b"abc\0parent-one parent-two\0\x31\x32\x33\0\0", "git log")
+        .expect("parse commits");
 
     assert_eq!(
         commits,
         vec![GitCommitSummary {
             object_id: "abc".to_string(),
+            parent_object_ids: vec!["parent-one".to_string(), "parent-two".to_string()],
             timestamp_seconds: 123,
             subject: String::new(),
         }]

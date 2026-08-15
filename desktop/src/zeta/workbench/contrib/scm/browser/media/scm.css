@@ -20,8 +20,11 @@
 }
 
 .zeta-scm-graph {
+  --zeta-scm-graph-accent: var(--zeta-accent-background);
+  container-name: zeta-scm-graph;
+  container-type: inline-size;
   min-height: 0;
-  padding: 4px 0 8px;
+  padding: 2px 0 8px;
   overflow: auto;
 }
 
@@ -36,60 +39,124 @@
 }
 
 .zeta-scm-graph-commit {
+  --zeta-scm-graph-row-background: var(--zeta-side-bar-background);
   position: relative;
   display: flex;
-  gap: 8px;
-  min-height: 38px;
-  padding: 3px 8px 3px 12px;
+  min-width: 0;
+  height: 22px;
+  align-items: center;
+  padding: 0 8px 0 0;
+  line-height: 22px;
 }
 
-.zeta-scm-graph-commit::before {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 16px;
-  width: 1px;
-  background: color-mix(in srgb, currentColor 30%, transparent);
-  content: "";
+.zeta-scm-graph-commit:hover {
+  --zeta-scm-graph-row-background: var(--zeta-list-hover-background);
+  background: var(--zeta-list-hover-background);
 }
 
-.zeta-scm-graph-commit:first-child::before {
-  top: 9px;
+.zeta-scm-graph-graph {
+  height: 22px;
+  flex: 0 0 auto;
+  overflow: visible;
 }
 
-.zeta-scm-graph-commit:last-child::before {
-  bottom: calc(100% - 10px);
+.zeta-scm-graph-path {
+  fill: none;
+  stroke: var(--zeta-scm-graph-accent);
+  stroke-linecap: round;
+  stroke-width: 1px;
 }
 
 .zeta-scm-graph-node {
-  position: relative;
-  z-index: 1;
-  width: 7px;
-  height: 7px;
-  flex: 0 0 7px;
-  margin-top: 6px;
-  border: 2px solid var(--zeta-workbench-background, Canvas);
-  border-radius: 50%;
-  background: currentColor;
-  box-shadow: 0 0 0 1px currentColor;
+  fill: var(--zeta-scm-graph-accent);
+  stroke: var(--zeta-scm-graph-row-background);
+  stroke-width: 2px;
+}
+
+.zeta-scm-graph-graph.head > .zeta-scm-graph-node.inner {
+  fill: var(--zeta-scm-graph-row-background);
 }
 
 .zeta-scm-graph-details {
   display: flex;
   min-width: 0;
   flex: 1 1 auto;
-  flex-direction: column;
+  gap: 6px;
+  align-items: center;
 }
 
 .zeta-scm-graph-subject {
+  min-width: 0;
+  flex: 1 1 auto;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.zeta-scm-graph-commit.current .zeta-scm-graph-subject {
+  font-weight: var(--zeta-font-weight-semi-bold);
+}
+
+.zeta-scm-graph-head {
+  display: inline-flex;
+  min-width: 0;
+  height: 22px;
+  max-width: 45%;
+  flex: 0 0 auto;
+  gap: 3px;
+  align-items: center;
+  border-radius: 11px;
+  padding: 0 7px 0 5px;
+  overflow: hidden;
+  color: var(--zeta-list-active-selection-foreground);
+  background: var(--zeta-scm-graph-accent);
+  font-size: var(--zeta-font-size-label1);
+  line-height: 22px;
+  white-space: nowrap;
+}
+
+.zeta-scm-graph-head > .zeta-icon {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+}
+
+.zeta-scm-graph-head > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .zeta-scm-graph-metadata {
-  color: color-mix(in srgb, currentColor 62%, transparent);
-  font-size: 11px;
+  flex: 0 0 auto;
+  margin-left: 8px;
+  overflow: hidden;
+  color: var(--zeta-muted-foreground);
+  font-size: var(--zeta-font-size-label2);
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@container zeta-scm-graph (max-width: 360px) {
+  .zeta-scm-graph-metadata {
+    display: none;
+  }
+}
+
+.zeta-scm-graph-hover {
+  display: grid;
+  max-width: min(420px, calc(100vw - 32px));
+  gap: 3px;
+}
+
+.zeta-scm-graph-hover-subject {
+  font-weight: var(--zeta-font-weight-semi-bold);
+}
+
+.zeta-scm-graph-hover-metadata {
+  overflow-wrap: anywhere;
+  color: var(--zeta-muted-foreground);
+  font-size: var(--zeta-font-size-label2);
 }
 
 .zeta-scm-summary {

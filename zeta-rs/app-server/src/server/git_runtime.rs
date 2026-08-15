@@ -110,6 +110,7 @@ impl GitRuntime {
                     .into_iter()
                     .map(|commit| GitCommitSummaryDto {
                         object_id: commit.object_id().into(),
+                        parent_object_ids: commit.parent_object_ids().into(),
                         timestamp_seconds: commit.timestamp_seconds(),
                         subject: commit.subject().into(),
                     })

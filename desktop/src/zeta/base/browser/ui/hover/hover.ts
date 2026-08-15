@@ -3,7 +3,7 @@ import { DisposableOwner, DisposableSlot, ResettableDisposableGroup, type IDispo
 import { addDisposableListener, isNode } from "../../dom.js";
 import { getWindow } from "../../window.js";
 import { getAriaAttribute, setAriaAttribute } from "../aria/aria.js";
-import { AnchorAlignment, AnchorPosition, ContextView, type ContextViewHideReason, type IContextViewProvider } from "../contextview/contextview.js";
+import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition, ContextView, type ContextViewHideReason, type IContextViewProvider } from "../contextview/contextview.js";
 
 export type HoverContentValue = string | HTMLElement | undefined;
 export type HoverContent = HoverContentValue | (() => HoverContentValue);
@@ -18,6 +18,7 @@ export interface HoverOptions {
   readonly enabled?: () => boolean;
   readonly pointerHoverEnabled?: () => boolean;
   readonly anchorAlignment?: AnchorAlignment;
+  readonly anchorAxisAlignment?: AnchorAxisAlignment;
   readonly anchorPosition?: AnchorPosition;
   readonly gap?: number;
   readonly contextViewProvider?: IContextViewProvider;
@@ -41,6 +42,7 @@ export class Hover extends DisposableOwner {
   private readonly enabled: (() => boolean) | undefined;
   private readonly pointerHoverEnabled: (() => boolean) | undefined;
   private readonly anchorAlignment: AnchorAlignment;
+  private readonly anchorAxisAlignment: AnchorAxisAlignment;
   private readonly anchorPosition: AnchorPosition;
   private readonly gap: number;
   private content: HoverContent;
@@ -62,6 +64,8 @@ export class Hover extends DisposableOwner {
     this.pointerHoverEnabled = options.pointerHoverEnabled;
     this.anchorAlignment = options.anchorAlignment ??
       AnchorAlignment.Left;
+    this.anchorAxisAlignment = options.anchorAxisAlignment ??
+      AnchorAxisAlignment.Vertical;
     this.anchorPosition = options.anchorPosition ??
       AnchorPosition.Above;
     this.gap = Math.max(0, options.gap ?? 6);
@@ -176,6 +180,7 @@ export class Hover extends DisposableOwner {
       anchor: this.element,
       content: tooltip,
       anchorAlignment: this.anchorAlignment,
+      anchorAxisAlignment: this.anchorAxisAlignment,
       anchorPosition: this.anchorPosition,
       gap: this.gap,
       presentation: "hover",
