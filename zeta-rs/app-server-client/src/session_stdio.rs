@@ -47,6 +47,7 @@ pub struct StdioAppServerCommand {
     executable: PathBuf,
     arguments: Vec<OsString>,
     environment: Vec<(OsString, OsString)>,
+    removed_environment: Vec<OsString>,
 }
 
 impl StdioAppServerCommand {
@@ -56,6 +57,7 @@ impl StdioAppServerCommand {
             executable: executable.into(),
             arguments: Vec::new(),
             environment: Vec::new(),
+            removed_environment: Vec::new(),
         }
     }
 
@@ -71,7 +73,21 @@ impl StdioAppServerCommand {
         name: impl Into<OsString>,
         value: impl Into<OsString>,
     ) -> Self {
-        self.environment.push((name.into(), value.into()));
+        let name = name.into();
+        self.removed_environment
+            .retain(|candidate| candidate != &name);
+        self.environment.retain(|(candidate, _)| candidate != &name);
+        self.environment.push((name, value.into()));
+        self
+    }
+
+    /// Prevents one inherited environment variable from reaching the App Server process.
+    pub fn without_environment_variable(mut self, name: impl Into<OsString>) -> Self {
+        let name = name.into();
+        self.environment.retain(|(candidate, _)| candidate != &name);
+        self.removed_environment
+            .retain(|candidate| candidate != &name);
+        self.removed_environment.push(name);
         self
     }
 
@@ -96,6 +112,10 @@ impl StdioAppServerCommand {
     fn environment(&self) -> &[(OsString, OsString)] {
         &self.environment
     }
+
+    fn removed_environment(&self) -> &[OsString] {
+        &self.removed_environment
+    }
 }
 
 pub(super) fn start(
@@ -103,12 +123,17 @@ pub(super) fn start(
     client_info: ClientInfo,
     capabilities: ClientCapabilities,
 ) -> Result<AppServerSession, ClientError> {
-    let mut process = Command::new(command.executable())
+    let mut process_command = Command::new(command.executable());
+    process_command
         .args(command.arguments())
         .envs(command.environment().iter().cloned())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
+        .stderr(Stdio::null());
+    for name in command.removed_environment() {
+        process_command.env_remove(name);
+    }
+    let mut process = process_command
         .spawn()
         .map_err(|error| ClientError::Transport(error.to_string()))?;
     let stdin = process

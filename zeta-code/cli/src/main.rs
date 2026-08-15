@@ -111,8 +111,10 @@ fn run_app_server(arguments: Vec<String>) -> Result<(), String> {
         }
     };
     let profile_root = local_profile_root();
-    let mut options =
-        LocalAppServerOptions::new(&profile_root).with_workspace_root(configured_workspace()?);
+    let mut options = LocalAppServerOptions::new(&profile_root);
+    if let Some(workspace_root) = configured_app_server_workspace() {
+        options = options.with_workspace_root(workspace_root);
+    }
     if let Some(path) = product_services.or_else(product_services_path) {
         options = options.with_product_services(
             LocalProductServicesConfig::load(path, &profile_root)
@@ -199,6 +201,10 @@ fn configured_workspace() -> Result<PathBuf, String> {
         .map(PathBuf::from)
         .map(Ok)
         .unwrap_or_else(current_workspace)
+}
+
+fn configured_app_server_workspace() -> Option<PathBuf> {
+    env::var_os("ZETA_WORKSPACE_ROOT").map(PathBuf::from)
 }
 
 fn execute(arguments: Vec<String>) -> Result<(), CliError> {

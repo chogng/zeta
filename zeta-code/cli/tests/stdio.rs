@@ -10,6 +10,7 @@ use std::time::UNIX_EPOCH;
 
 use zeta_app_server_client::AppServerEvent;
 use zeta_app_server_client::AppServerSession;
+use zeta_app_server_client::ClientError;
 use zeta_app_server_client::ConnectionCloseReason;
 use zeta_app_server_client::StdioAppServerCommand;
 use zeta_app_server_protocol::protocol::common::ClientCapabilities;
@@ -66,6 +67,39 @@ fn zeta_code_cli_serves_the_remote_stdio_contract() {
             .unwrap(),
         AppServerEvent::ConnectionClosed(ConnectionCloseReason::Shutdown)
     );
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn zeta_code_app_server_without_workspace_does_not_inherit_its_current_directory() {
+    let root = test_root("empty-workspace");
+    let profile = root.join("profile");
+    let command = StdioAppServerCommand::new(env!("CARGO_BIN_EXE_zeta"))
+        .with_argument("app-server")
+        .with_argument("--listen")
+        .with_argument("stdio://")
+        .without_environment_variable("ZETA_WORKSPACE_ROOT")
+        .with_environment_variable("ZETA_PROFILE_ROOT", profile.into_os_string());
+    let session = AppServerSession::start_stdio(
+        command,
+        ClientInfo {
+            name: "zeta-code-empty-workspace-test".into(),
+            version: "1".into(),
+        },
+        ClientCapabilities::default(),
+    )
+    .unwrap();
+    let mut client = session.client();
+
+    assert_eq!(
+        client.git_status().unwrap_err(),
+        ClientError::Server {
+            code: -32060,
+            message: "GitUnavailable".into(),
+        }
+    );
+
+    session.shutdown().unwrap();
     std::fs::remove_dir_all(root).unwrap();
 }
 
