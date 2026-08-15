@@ -93,7 +93,7 @@ fn save_list_replace_remove_and_connect_form_one_credential_free_workflow() {
         "connect".into(),
         "build".into(),
         "--runtime".into(),
-        "/opt/zeta-code/bin/zeta".into(),
+        "/opt/zeta/bin/zeta-server".into(),
         "--ssh".into(),
         "/usr/bin/ssh".into(),
     ])
@@ -112,7 +112,7 @@ fn save_list_replace_remove_and_connect_form_one_credential_free_workflow() {
     };
     assert_eq!(profile.target().host().as_str(), "other.example");
     assert_eq!(profile.target().workspace().as_str(), "/srv/other");
-    assert_eq!(profile.runtime().executable(), "/opt/zeta-code/bin/zeta");
+    assert_eq!(profile.runtime().executable(), "/opt/zeta/bin/zeta-server");
     assert_eq!(ssh_executable.unwrap().to_string_lossy(), "/usr/bin/ssh");
     assert_eq!(runtime_source, RemoteRuntimeSource::ExplicitRuntime);
 

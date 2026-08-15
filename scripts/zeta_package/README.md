@@ -8,7 +8,7 @@ notarization, installer formats, or update delivery.
 <package>/
 ├── zeta-package.json
 ├── bin/
-│   └── zeta[.exe]
+│   └── zeta-server[.exe]
 ├── zeta-path/
 │   └── rg[.exe]
 └── zeta-resources/
@@ -36,8 +36,8 @@ notarization, installer formats, or update delivery.
         └── vscode/LICENSE.txt        # built-in Editor Extension resources
 ```
 
-The stable entry point is `scripts/build_zeta_package.py`. If `--zeta-bin` is
-omitted, `cargo.py` builds `zeta-cli` for the selected target. `ripgrep.py`
+The stable entry point is `scripts/build_zeta_package.py`. If `--server-bin` is
+omitted, `cargo.py` builds the product-neutral `zeta-server-host` for the selected target. `ripgrep.py`
 maps the package target through `third_party/ripgrep/runtime-lock.json`,
 validates archive size and SHA-256 on every use, extracts only the locked
 member, and rejects non-regular archive members. `node.py` applies the same
@@ -102,7 +102,7 @@ python3 scripts/build_zeta_package.py \
   --package-dir dist/zeta-electron
 ```
 
-Release jobs that already built or signed binaries should use `--zeta-bin` and
+Release jobs that already built or signed binaries should use `--server-bin` and
 optionally `--rg-bin` or, for the `packaged-node` variant, `--node-bin`; those overrides are copied verbatim and their binary
 digest is recorded in `zeta-package.json`. Linux jobs can likewise pass
 `--bwrap-bin`. Signing and archive serialization must happen after this staging

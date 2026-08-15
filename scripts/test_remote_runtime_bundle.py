@@ -58,7 +58,7 @@ class RemoteRuntimeBundleTests(unittest.TestCase):
 
 def create_package(path: Path) -> Path:
     files = {
-        "bin/zeta": b"zeta",
+        "bin/zeta-server": b"zeta",
         "zeta-path/rg": b"ripgrep",
         "zeta-resources/node/bin/node": b"node",
     }
@@ -66,7 +66,7 @@ def create_package(path: Path) -> Path:
         "layoutVersion": 2,
         "version": "0.1.0",
         "target": "x86_64-unknown-linux-gnu",
-        "entrypoint": "bin/zeta",
+        "entrypoint": "bin/zeta-server",
         "pathDir": "zeta-path",
         "resourcesDir": "zeta-resources",
         "javascriptRuntime": {"kind": "packagedNode"},

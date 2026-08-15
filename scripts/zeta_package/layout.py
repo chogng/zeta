@@ -29,7 +29,7 @@ def build_package_directory(
     repository_root: Path,
     version: str,
     spec: TargetSpec,
-    zeta_binary: Path,
+    server_binary: Path,
     ripgrep: RipgrepResolution,
     node: Optional[NodeResolution],
     bubblewrap: Optional[BubblewrapResolution] = None,
@@ -69,8 +69,8 @@ def build_package_directory(
         )
 
         copy_executable(
-            zeta_binary,
-            binary_directory / spec.zeta_name,
+            server_binary,
+            binary_directory / spec.server_name,
             is_windows=spec.is_windows,
         )
         copy_executable(
@@ -170,7 +170,7 @@ def build_package_directory(
             "layoutVersion": LAYOUT_VERSION,
             "version": version,
             "target": spec.target,
-            "entrypoint": "bin/" + spec.zeta_name,
+            "entrypoint": "bin/" + spec.server_name,
             "pathDir": "zeta-path",
             "resourcesDir": "zeta-resources",
             "javascriptRuntime": {
@@ -203,7 +203,7 @@ def validate_package_directory(package: Path, spec: TargetSpec) -> None:
     expected = {
         "layoutVersion": LAYOUT_VERSION,
         "target": spec.target,
-        "entrypoint": "bin/" + spec.zeta_name,
+        "entrypoint": "bin/" + spec.server_name,
         "pathDir": "zeta-path",
         "resourcesDir": "zeta-resources",
     }
@@ -216,7 +216,7 @@ def validate_package_directory(package: Path, spec: TargetSpec) -> None:
             )
 
     executables = [
-        package / "bin" / spec.zeta_name,
+        package / "bin" / spec.server_name,
         package / "zeta-path" / spec.ripgrep_name,
     ]
     components = metadata.get("components")
@@ -430,15 +430,10 @@ def validate_product_services(product_services_directory: Path) -> None:
         if path.is_symlink() or not path.is_file():
             raise RuntimeError("Package is missing product service file: {}".format(path))
     document = json.loads(config_path.read_text(encoding="utf-8"))
-    marketplaces = document.get("marketplaces")
-    if document.get("schemaVersion") != 1 or not isinstance(marketplaces, list):
+    marketplace_manager = document.get("marketplaceManager")
+    if document.get("schemaVersion") != 1 or not isinstance(marketplace_manager, dict):
         raise RuntimeError("Package product services configuration is invalid")
-    if not any(
-        marketplace.get("id") == "zeta"
-        and marketplace.get("trustedRoot") == "marketplace-root.json"
-        for marketplace in marketplaces
-        if isinstance(marketplace, dict)
-    ):
+    if marketplace_manager.get("trustedRoot") != "marketplace-root.json":
         raise RuntimeError("Package product services does not pin the Zeta Marketplace root")
 
 

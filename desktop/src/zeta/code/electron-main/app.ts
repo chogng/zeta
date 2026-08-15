@@ -11,7 +11,7 @@ import { ElectronContextMenu } from "../../base/parts/contextmenu/electron-main/
 import { appServerIpcRoutes } from "../../platform/app-server/electron-main/app-server-ipc.js";
 import { buildAppServerEnvironment } from "../../platform/app-server/common/appServerEnvironment.js";
 import { AppServerSupervisor } from "../../platform/app-server/electron-main/app-server-supervisor.js";
-import { appServerExecutablePath } from "../../platform/app-server/electron-main/app-server-package.js";
+import { serverHostExecutablePath } from "../../platform/server-host/electron-main/serverHostPackage.js";
 import { LocalAppServerProcessLauncher } from "../../platform/app-server/electron-main/localAppServerProcessLauncher.js";
 import { normalizeEntryUrl, TrustedIpcRouter, type IpcRoute } from "../../platform/ipc/electron-main/trustedIpcRouter.js";
 import { BROWSER_VIEW_EVENT_CHANNEL } from "../../platform/browser/common/browserView.js";
@@ -57,10 +57,10 @@ import { WindowMode } from "../../platform/window/electron-main/window.js";
 import { WindowsStateHandler } from "../../platform/windows/electron-main/windowsStateHandler.js";
 import { type IAnyWorkspaceIdentifier, isRemoteWorkspaceIdentifier, isSingleFolderWorkspaceIdentifier, serializeWorkspaceIdentifier, UNKNOWN_EMPTY_WINDOW_WORKSPACE } from "../../platform/workspace/common/workspace.js";
 import { packagedRemoteRuntimeCatalogSource } from "../../platform/remote/electron-main/packagedRemoteRuntimeCatalog.js";
-import { ZetaCliRemoteRuntimeInstaller, remoteRuntimeArtifactFromEnvironment } from "../../platform/remote/electron-main/zetaCliRemoteRuntimeInstaller.js";
-import { ZetaCliRemoteRuntimeProvisioner } from "../../platform/remote/electron-main/zetaCliRemoteRuntimeProvisioner.js";
-import { ZetaCliRemoteConnectionProfiles } from "../../platform/remote/electron-main/zetaCliRemoteConnectionProfiles.js";
-import { ZetaCliRemoteConnections } from "../../platform/remote/electron-main/zetaCliRemoteConnections.js";
+import { ServerHostRemoteRuntimeInstaller, remoteRuntimeArtifactFromEnvironment } from "../../platform/remote/electron-main/serverHostRemoteRuntimeInstaller.js";
+import { ServerHostRemoteRuntimeProvisioner } from "../../platform/remote/electron-main/serverHostRemoteRuntimeProvisioner.js";
+import { ServerHostRemoteConnectionProfiles } from "../../platform/remote/electron-main/serverHostRemoteConnectionProfiles.js";
+import { ServerHostRemoteConnections } from "../../platform/remote/electron-main/serverHostRemoteConnections.js";
 import type { RemoteConnectionDefinition } from "../../platform/remote/common/remoteConnectionService.js";
 import { RemoteBrowserViewNavigationResolver } from "../../platform/remote/electron-main/remoteBrowserViewNavigationResolver.js";
 import { SshRemoteTunnelService } from "../../platform/remote/electron-main/sshRemoteTunnelService.js";
@@ -337,7 +337,7 @@ export class ZetaApplication extends DisposableOwner {
     const processLauncher = isRemoteWorkspaceIdentifier(workspace)
       ? this.createSshAppServerProcessLauncher(workspace, resources)
       : new LocalAppServerProcessLauncher({
-        executable: appServerExecutablePath({
+        executable: serverHostExecutablePath({
           appPath: app.getAppPath(),
           isPackaged: app.isPackaged,
           platform: process.platform,
@@ -364,7 +364,7 @@ export class ZetaApplication extends DisposableOwner {
   private createSshAppServerProcessLauncher(workspace: IAnyWorkspaceIdentifier, resources: DisposableStore) {
     if (!isRemoteWorkspaceIdentifier(workspace)) throw new Error("SSH App Server launcher requires a Remote workspace");
     const sshExecutable = process.env.ZETA_SSH_PATH ?? "ssh";
-    const zetaExecutable = appServerExecutablePath({
+    const serverHostExecutable = serverHostExecutablePath({
       appPath: app.getAppPath(),
       isPackaged: app.isPackaged,
       platform: process.platform,
@@ -372,26 +372,26 @@ export class ZetaApplication extends DisposableOwner {
     });
     const artifact = remoteRuntimeArtifactFromEnvironment(process.env);
     const runtimeInstaller = artifact === undefined
-      ? new ZetaCliRemoteRuntimeProvisioner({
+      ? new ServerHostRemoteRuntimeProvisioner({
         source: packagedRemoteRuntimeCatalogSource(
           { appPath: app.getAppPath(), isPackaged: app.isPackaged, resourcesPath: process.resourcesPath },
           join(app.getPath("userData"), "remote-runtime-downloads"),
         ),
-        zetaExecutable,
+        serverHostExecutable,
         sshExecutable,
         environment: process.env,
         installRoot: process.env.ZETA_REMOTE_RUNTIME_INSTALL_ROOT,
       })
-      : new ZetaCliRemoteRuntimeInstaller({
-        zetaExecutable,
+      : new ServerHostRemoteRuntimeInstaller({
+        serverHostExecutable,
         sshExecutable,
         environment: process.env,
         artifact,
         installRoot: process.env.ZETA_REMOTE_RUNTIME_INSTALL_ROOT,
       });
     const configuredRuntime = process.env.ZETA_REMOTE_ZETA_PATH;
-    const connectionProfiles = configuredRuntime === undefined ? new ZetaCliRemoteConnectionProfiles({
-      zetaExecutable,
+    const connectionProfiles = configuredRuntime === undefined ? new ServerHostRemoteConnectionProfiles({
+      serverHostExecutable,
       environment: { ...process.env, ZETA_PROFILE_ROOT: join(app.getPath("userData"), "state") },
     }) : undefined;
     const bootstrap = resources.add(new RemoteRuntimeBootstrapMainService({
@@ -553,8 +553,8 @@ export class ZetaApplication extends DisposableOwner {
       context: workspaceContext,
       ...this.createWorkspaceTransitionRuntime(supervisor),
     }));
-    const remoteConnections = new ZetaCliRemoteConnections({
-      zetaExecutable: appServerExecutablePath({ appPath: app.getAppPath(), isPackaged: app.isPackaged, platform: process.platform, resourcesPath: process.resourcesPath }),
+    const remoteConnections = new ServerHostRemoteConnections({
+      serverHostExecutable: serverHostExecutablePath({ appPath: app.getAppPath(), isPackaged: app.isPackaged, platform: process.platform, resourcesPath: process.resourcesPath }),
       environment: { ...process.env, ZETA_PROFILE_ROOT: join(app.getPath("userData"), "state") },
       scheduleConnect: connection => this.openRemoteConnection(connection, workspaces),
     });

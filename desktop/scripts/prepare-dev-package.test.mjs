@@ -137,7 +137,7 @@ test("assembles and validates the canonical Windows development layout", async (
   const executables = {
     commandRunner: join(root, "zeta-command-runner.exe"),
     sandboxSetup: join(root, "zeta-windows-sandbox-setup.exe"),
-    zeta: join(root, "zeta.exe"),
+    serverHost: join(root, "zeta-server.exe"),
   };
   const ripgrepExecutable = join(root, "rg.exe");
   const nodeExecutable = join(root, "node.exe");
@@ -148,7 +148,7 @@ test("assembles and validates the canonical Windows development layout", async (
     await Promise.all([
       writeFile(executables.commandRunner, "runner"),
       writeFile(executables.sandboxSetup, "setup"),
-      writeFile(executables.zeta, "zeta"),
+      writeFile(executables.serverHost, "zeta-server"),
       writeFile(ripgrepExecutable, "ripgrep"),
       writeFile(nodeExecutable, "node"),
       writeFile(nodeLicense, "node license"),
@@ -182,7 +182,7 @@ test("assembles and validates the canonical Windows development layout", async (
     const metadata = JSON.parse(await readFile(join(staging, "zeta-package.json"), "utf8"));
     assert.equal(metadata.layoutVersion, 2);
     assert.deepEqual(metadata.javascriptRuntime, { kind: "packagedNode" });
-    assert.equal(metadata.entrypoint, "bin/zeta.exe");
+    assert.equal(metadata.entrypoint, "bin/zeta-server.exe");
     assert.equal(metadata.target, "x86_64-pc-windows-msvc");
     assert.deepEqual(metadata.remoteRuntimeCatalog, {
       path: "zeta-remote-runtimes/catalog.json",
@@ -240,14 +240,14 @@ test("host-provided runtime package omits the standalone Node payload", async ()
   const executables = {
     commandRunner: join(root, "zeta-command-runner.exe"),
     sandboxSetup: join(root, "zeta-windows-sandbox-setup.exe"),
-    zeta: join(root, "zeta.exe"),
+    serverHost: join(root, "zeta-server.exe"),
   };
   const ripgrepExecutable = join(root, "rg.exe");
   try {
     await Promise.all([
       writeFile(executables.commandRunner, "runner"),
       writeFile(executables.sandboxSetup, "setup"),
-      writeFile(executables.zeta, "zeta"),
+      writeFile(executables.serverHost, "zeta-server"),
       writeFile(ripgrepExecutable, "ripgrep"),
     ]);
     await assemblePackage(

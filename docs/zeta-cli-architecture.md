@@ -21,7 +21,7 @@ App Server 契约执行。
 | `zeta ask` | 解析 prompt 并输出最终 Agent message | 模型、工具、权限和持久化 |
 | `zeta exec` | 提供 new/resume/fork、Human/JSONL 与稳定退出码 | 执行同一 Agent/Tool 路径，不绕过工具系统 |
 | `zeta login` / `zeta config` | 收集用户意图并调用类型化方法 | 登录、秘密和配置权威 |
-| `zeta app-server` / `zeta mcp-server` | 选择进程入口和监听方式 | 对应服务的协议与生命周期 |
+| `zeta app-server` / `zeta mcp-server` | 兼容入口与产品命令选择 | 共享 server host 或对应服务的协议与生命周期 |
 | 连接中断或失败 | 输出稳定错误、诊断和退出码 | 决定领域失败和恢复语义 |
 
 ## 1. 目标
@@ -40,7 +40,7 @@ zeta exec --resume SESSION_ID THREAD_ID "继续处理"
 zeta exec --fork SESSION_ID PARENT_THREAD_ID --title "替代方案" "尝试另一种修复"
 zeta login
 zeta config
-zeta app-server --listen stdio://
+zeta app-server --listen stdio://  # compatibility alias to zeta-server-host
 zeta mcp-server
 zeta mcp-server --listen http://127.0.0.1:8787/mcp
 ```
@@ -94,7 +94,8 @@ CLI 可以依赖产品层 `zeta-exec` 运行无交互 Agent，但不依赖目标
 `zeta-tool-executor`。CLI/TUI/exec 都不直接调用 `zeta-core`、`zeta-storage`、
 `zeta-rollout`、`zeta-rollout-trace`、`zeta-sandboxing` 或 Model Provider。
 
-`zeta app-server` 子命令可以作为明确的宿主入口依赖 `zeta-app-server`，但不能绕过
+`zeta app-server` 子命令只作为兼容入口委托 `zeta-server-host`，不能由 `zeta-cli` 直接组合
+`zeta-app-server`，也不能绕过
 dispatcher 直接调用 Core 用例。
 
 跨客户端的唯一外部门禁和进程内嵌规则以

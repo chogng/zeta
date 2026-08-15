@@ -1,23 +1,23 @@
-import { isCanonicalAbsolutePosixPath, normalizeCredentialFreeSshHost, type RunZetaRemoteCommand, runZetaRemoteCommand, validLocalCommand } from "./zetaCliRemoteCommand.js";
+import { isCanonicalAbsolutePosixPath, normalizeCredentialFreeSshHost, type RunServerHostRemoteCommand, runServerHostRemoteCommand, validLocalCommand } from "./serverHostRemoteCommand.js";
 
 export interface RemoteConnectionRuntimeProfile {
   readonly activeRuntime: string;
   readonly previousRuntime?: string;
 }
 
-export interface ZetaCliRemoteConnectionProfilesOptions {
-  readonly zetaExecutable: string;
+export interface ServerHostRemoteConnectionProfilesOptions {
+  readonly serverHostExecutable: string;
   readonly environment: NodeJS.ProcessEnv;
-  readonly runCommand?: RunZetaRemoteCommand;
+  readonly runCommand?: RunServerHostRemoteCommand;
 }
 
 /** Delegates credential-free Remote profile persistence to the shared Rust store. */
-export class ZetaCliRemoteConnectionProfiles {
-  private readonly runCommand: RunZetaRemoteCommand;
+export class ServerHostRemoteConnectionProfiles {
+  private readonly runCommand: RunServerHostRemoteCommand;
 
-  constructor(readonly options: ZetaCliRemoteConnectionProfilesOptions) {
-    if (!validLocalCommand(options.zetaExecutable)) throw new Error("Remote profile command executable must be non-empty and contain no control characters");
-    this.runCommand = options.runCommand ?? runZetaRemoteCommand;
+  constructor(readonly options: ServerHostRemoteConnectionProfilesOptions) {
+    if (!validLocalCommand(options.serverHostExecutable)) throw new Error("Remote profile command executable must be non-empty and contain no control characters");
+    this.runCommand = options.runCommand ?? runServerHostRemoteCommand;
   }
 
   async get(host: string, workspace: string): Promise<RemoteConnectionRuntimeProfile | undefined> {
@@ -47,7 +47,7 @@ export class ZetaCliRemoteConnectionProfiles {
     const args = ["remote", "profile", command, "--host", normalizedHost, "--workspace", workspace];
     if (runtime !== undefined) args.push("--runtime", runtime);
     if (sshExecutable !== undefined) args.push("--ssh", sshExecutable);
-    const result = await this.runCommand(this.options.zetaExecutable, args, this.options.environment);
+    const result = await this.runCommand(this.options.serverHostExecutable, args, this.options.environment);
     if (result.exitCode !== 0) {
       const diagnostic = result.stderr.trim() || result.stdout.trim() || `exit code ${result.exitCode ?? "unknown"}`;
       throw new Error(`Remote profile ${command} failed: ${diagnostic}`);

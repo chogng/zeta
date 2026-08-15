@@ -78,24 +78,26 @@ fn remote_runtime_probe_is_shell_quoted_and_reports_a_resolved_executable() {
             SshHost::parse("build-linux").unwrap(),
             RemoteWorkspacePath::parse("/srv/zeta").unwrap(),
         ),
-        RemoteRuntime::new("/opt/zeta's/bin/zeta").unwrap(),
+        RemoteRuntime::new("/opt/zeta's/bin/zeta-server").unwrap(),
     );
     let options = SshAppServerConnectionOptions::new(profile);
 
     assert_eq!(
         super::ssh::remote_runtime_probe_command(options.profile().runtime().executable()),
-        "if command -v '/opt/zeta'\\''s/bin/zeta' >/dev/null 2>&1; then printf '%s%s\\n' '__ZETA_REMOTE_RUNTIME_FOUND__:' \"$(command -v '/opt/zeta'\\''s/bin/zeta')\"; else printf '%s\\n' '__ZETA_REMOTE_RUNTIME_MISSING__'; exit 127; fi"
+        "if command -v '/opt/zeta'\\''s/bin/zeta-server' >/dev/null 2>&1; then printf '%s%s\\n' '__ZETA_REMOTE_RUNTIME_FOUND__:' \"$(command -v '/opt/zeta'\\''s/bin/zeta-server')\"; else printf '%s\\n' '__ZETA_REMOTE_RUNTIME_MISSING__'; exit 127; fi"
     );
 
     let probe = RemoteRuntimeProbe {
-        requested_runtime: RemoteRuntime::new("/opt/zeta/bin/zeta").unwrap(),
-        resolved_runtime: RemoteRuntime::new("/opt/zeta/bin/zeta").unwrap(),
+        requested_runtime: RemoteRuntime::new("/opt/zeta/bin/zeta-server").unwrap(),
+        resolved_runtime: RemoteRuntime::new("/opt/zeta/bin/zeta-server").unwrap(),
     };
-    assert_eq!(probe.requested_executable(), "/opt/zeta/bin/zeta");
-    assert_eq!(probe.resolved_executable(), "/opt/zeta/bin/zeta");
+    assert_eq!(probe.requested_executable(), "/opt/zeta/bin/zeta-server");
+    assert_eq!(probe.resolved_executable(), "/opt/zeta/bin/zeta-server");
     assert_eq!(
-        parse_runtime_probe_output("login banner\n__ZETA_REMOTE_RUNTIME_FOUND__:/usr/bin/zeta\n"),
-        Some(RuntimeProbeOutput::Found("/usr/bin/zeta".into()))
+        parse_runtime_probe_output(
+            "login banner\n__ZETA_REMOTE_RUNTIME_FOUND__:/usr/bin/zeta-server\n"
+        ),
+        Some(RuntimeProbeOutput::Found("/usr/bin/zeta-server".into()))
     );
     assert_eq!(
         parse_runtime_probe_output("__ZETA_REMOTE_RUNTIME_MISSING__\n"),
@@ -134,7 +136,7 @@ fn runtime_probe_distinguishes_available_and_missing_runtime() {
     let executable = directory.path().join("fake-ssh");
     fs::write(
         &executable,
-        "#!/bin/sh\ncase \"$*\" in\n  *missing-runtime*) printf '%s\\n' '__ZETA_REMOTE_RUNTIME_MISSING__'; exit 127 ;;\n  *) printf '%s%s\\n' '__ZETA_REMOTE_RUNTIME_FOUND__:' '/usr/bin/zeta' ;;\nesac\n",
+        "#!/bin/sh\ncase \"$*\" in\n  *missing-runtime*) printf '%s\\n' '__ZETA_REMOTE_RUNTIME_MISSING__'; exit 127 ;;\n  *) printf '%s%s\\n' '__ZETA_REMOTE_RUNTIME_FOUND__:' '/usr/bin/zeta-server' ;;\nesac\n",
     )
     .unwrap();
     let mut permissions = fs::metadata(&executable).unwrap().permissions();
@@ -149,7 +151,7 @@ fn runtime_probe_distinguishes_available_and_missing_runtime() {
         available.requested_executable(),
         "/opt/zeta/bin/zeta-remote-server"
     );
-    assert_eq!(available.resolved_executable(), "/usr/bin/zeta");
+    assert_eq!(available.resolved_executable(), "/usr/bin/zeta-server");
 
     let missing_profile = RemoteProfile::new(
         SshTarget::new(

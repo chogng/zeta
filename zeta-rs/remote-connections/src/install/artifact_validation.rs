@@ -148,7 +148,7 @@ fn validate_package_archive(
     }
     for required in [
         "zeta-package.json",
-        "bin/zeta",
+        "bin/zeta-server",
         "zeta-path/rg",
         "zeta-resources/node/bin/node",
     ] {
@@ -181,7 +181,7 @@ fn validate_package_metadata(
         ("layoutVersion", Value::from(2)),
         ("version", Value::from(artifact.version.as_str())),
         ("target", Value::from(artifact.platform.target_triple())),
-        ("entrypoint", Value::from("bin/zeta")),
+        ("entrypoint", Value::from("bin/zeta-server")),
         ("pathDir", Value::from("zeta-path")),
         ("resourcesDir", Value::from("zeta-resources")),
     ];

@@ -124,7 +124,7 @@ test("Remote window context scopes verified rollback to its own supervisor", asy
     localEnvironment: {},
     rollbackRuntime: async (host, remoteWorkspace, sshExecutable) => {
       calls.push(`rollback:${host}:${remoteWorkspace}:${sshExecutable}`);
-      return "/opt/zeta/previous/bin/zeta";
+      return "/opt/zeta/previous/bin/zeta-server";
     },
   });
   const stateListeners = new Set<(state: AppServerConnectionState) => void>();

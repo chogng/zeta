@@ -33,12 +33,12 @@ POSIX_TARGETS = {
 }
 REQUIRED_RUNTIME_FILES = {
     "zeta-package.json",
-    "bin/zeta",
+    "bin/zeta-server",
     "zeta-path/rg",
     "zeta-resources/node/bin/node",
 }
 EXECUTABLE_RUNTIME_FILES = {
-    "bin/zeta",
+    "bin/zeta-server",
     "zeta-path/rg",
     "zeta-resources/node/bin/node",
 }
@@ -288,7 +288,7 @@ def validate_package_metadata(metadata: Dict[str, object]) -> Tuple[str, str]:
     target = required_string(metadata, "target")
     expected = {
         "layoutVersion": 2,
-        "entrypoint": "bin/zeta",
+        "entrypoint": "bin/zeta-server",
         "pathDir": "zeta-path",
         "resourcesDir": "zeta-resources",
         "javascriptRuntime": {"kind": "packagedNode"},

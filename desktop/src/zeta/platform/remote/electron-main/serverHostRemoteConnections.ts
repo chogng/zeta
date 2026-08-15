@@ -2,28 +2,28 @@ import { canonicalRemoteConnectionDefinition } from "../common/remoteConnectionS
 import { canonicalRemoteConnectionName } from "../common/remoteConnectionService.js";
 import type { IRemoteConnectionService } from "../common/remoteConnectionService.js";
 import type { RemoteConnectionDefinition } from "../common/remoteConnectionService.js";
-import type { RunZetaRemoteCommand } from "./zetaCliRemoteCommand.js";
-import { runZetaRemoteCommand } from "./zetaCliRemoteCommand.js";
-import { validLocalCommand } from "./zetaCliRemoteCommand.js";
+import type { RunServerHostRemoteCommand } from "./serverHostRemoteCommand.js";
+import { runServerHostRemoteCommand } from "./serverHostRemoteCommand.js";
+import { validLocalCommand } from "./serverHostRemoteCommand.js";
 
 const MAX_CONNECTIONS = 1024;
 
-export interface ZetaCliRemoteConnectionsOptions {
-  readonly zetaExecutable: string;
+export interface ServerHostRemoteConnectionsOptions {
+  readonly serverHostExecutable: string;
   readonly environment: NodeJS.ProcessEnv;
   readonly scheduleConnect: (connection: RemoteConnectionDefinition) => void | Promise<void>;
-  readonly runCommand?: RunZetaRemoteCommand;
+  readonly runCommand?: RunServerHostRemoteCommand;
 }
 
 /** Uses the shared Rust catalog while keeping connection startup in Electron Main. */
-export class ZetaCliRemoteConnections implements IRemoteConnectionService {
+export class ServerHostRemoteConnections implements IRemoteConnectionService {
   readonly available = true;
-  private readonly runCommand: RunZetaRemoteCommand;
+  private readonly runCommand: RunServerHostRemoteCommand;
   private connectScheduled = false;
 
-  constructor(readonly options: ZetaCliRemoteConnectionsOptions) {
-    if (!validLocalCommand(options.zetaExecutable)) throw new Error("Remote connection command executable must be non-empty and contain no control characters");
-    this.runCommand = options.runCommand ?? runZetaRemoteCommand;
+  constructor(readonly options: ServerHostRemoteConnectionsOptions) {
+    if (!validLocalCommand(options.serverHostExecutable)) throw new Error("Remote connection command executable must be non-empty and contain no control characters");
+    this.runCommand = options.runCommand ?? runServerHostRemoteCommand;
   }
 
   async list(): Promise<readonly RemoteConnectionDefinition[]> {
@@ -92,7 +92,7 @@ export class ZetaCliRemoteConnections implements IRemoteConnectionService {
   }
 
   private async invoke(args: readonly string[]): Promise<string> {
-    const result = await this.runCommand(this.options.zetaExecutable, args, this.options.environment);
+    const result = await this.runCommand(this.options.serverHostExecutable, args, this.options.environment);
     if (result.exitCode !== 0) {
       const diagnostic = result.stderr.trim() || result.stdout.trim() || `exit code ${result.exitCode ?? "unknown"}`;
       throw new Error(`Remote connection catalog command failed: ${diagnostic.slice(0, 8_000)}`);

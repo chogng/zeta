@@ -119,7 +119,7 @@ corepack pnpm dev:web:full
 ```
 
 The full mode prepares the local development package, starts one
-`zeta app-server --listen stdio://` process per browser connection, and serves
+`zeta-server app-server --listen stdio://` process per browser connection, and serves
 the Workbench at [http://127.0.0.1:5174/](http://127.0.0.1:5174/).
 All commands select the default `zeta` Electron Desktop build. The internal
 `code` build edition and the corresponding `:academic` and `:complete` variants
@@ -142,7 +142,7 @@ python3 scripts/build_zeta_package.py \
   --package-dir /absolute/path/to/zeta-package
 ```
 
-The builder compiles a release `zeta` executable when `--zeta-bin` is omitted,
+The builder compiles a release `zeta-server` executable when `--server-bin` is omitted,
 downloads the target-specific ripgrep and Node.js archives, verifies their locked sizes and
 SHA-256 digests, and creates `bin/`, `zeta-path/`, `zeta-resources/`, and
 `zeta-package.json`. Repository-owned Skills are staged from

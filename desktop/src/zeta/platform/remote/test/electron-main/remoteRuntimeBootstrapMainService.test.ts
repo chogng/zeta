@@ -18,14 +18,14 @@ test("Remote runtime bootstrap binds install cancellation and settles its projec
       install: async (_host, options) => {
         installSignal = options?.signal;
         reportProgress = options?.onProgress;
-        return "/opt/zeta/bin/zeta";
+        return "/opt/zeta/bin/zeta-server";
       },
     },
   });
   try {
     const provisionRuntime = service.processLauncher.options.provisionRuntime;
     assert.ok(provisionRuntime);
-    assert.equal(await provisionRuntime("build-linux"), "/opt/zeta/bin/zeta");
+    assert.equal(await provisionRuntime("build-linux"), "/opt/zeta/bin/zeta-server");
     assert.ok(installSignal);
     assert.equal(installSignal.aborted, false);
     assert.deepEqual(service.installProgress.getState(), { host: "build-linux", status: "installing", phase: "probingPlatform" });
@@ -46,7 +46,7 @@ test("Remote runtime bootstrap delegates exact profile operations", async () => 
   const profiles: IRemoteRuntimeConnectionProfiles = {
     get: async (host, workspace) => {
       calls.push(`get:${host}:${workspace}`);
-      return { activeRuntime: "/opt/zeta/active/bin/zeta", previousRuntime: "/opt/zeta/previous/bin/zeta" };
+      return { activeRuntime: "/opt/zeta/active/bin/zeta-server", previousRuntime: "/opt/zeta/previous/bin/zeta-server" };
     },
     activate: async (host, workspace, runtime) => {
       calls.push(`activate:${host}:${workspace}:${runtime}`);
@@ -54,7 +54,7 @@ test("Remote runtime bootstrap delegates exact profile operations", async () => 
     },
     rollback: async (host, workspace, sshExecutable) => {
       calls.push(`rollback:${host}:${workspace}:${sshExecutable}`);
-      return { activeRuntime: "/opt/zeta/previous/bin/zeta" };
+      return { activeRuntime: "/opt/zeta/previous/bin/zeta-server" };
     },
   };
   const service = new RemoteRuntimeBootstrapMainService({
@@ -62,16 +62,16 @@ test("Remote runtime bootstrap delegates exact profile operations", async () => 
     sshExecutable: "custom-ssh",
     remoteExecutable: "zeta",
     localEnvironment: {},
-    runtimeInstaller: { install: async () => "/opt/zeta/new/bin/zeta" },
+    runtimeInstaller: { install: async () => "/opt/zeta/new/bin/zeta-server" },
     connectionProfiles: profiles,
   });
   try {
-    assert.equal(await service.processLauncher.options.resolveRuntime?.("build-linux", "/workspace/project"), "/opt/zeta/active/bin/zeta");
-    await service.processLauncher.options.activateRuntime?.("build-linux", "/workspace/project", "/opt/zeta/new/bin/zeta");
-    assert.equal(await service.processLauncher.options.rollbackRuntime?.("build-linux", "/workspace/project", "custom-ssh"), "/opt/zeta/previous/bin/zeta");
+    assert.equal(await service.processLauncher.options.resolveRuntime?.("build-linux", "/workspace/project"), "/opt/zeta/active/bin/zeta-server");
+    await service.processLauncher.options.activateRuntime?.("build-linux", "/workspace/project", "/opt/zeta/new/bin/zeta-server");
+    assert.equal(await service.processLauncher.options.rollbackRuntime?.("build-linux", "/workspace/project", "custom-ssh"), "/opt/zeta/previous/bin/zeta-server");
     assert.deepEqual(calls, [
       "get:build-linux:/workspace/project",
-      "activate:build-linux:/workspace/project:/opt/zeta/new/bin/zeta",
+      "activate:build-linux:/workspace/project:/opt/zeta/new/bin/zeta-server",
       "rollback:build-linux:/workspace/project:custom-ssh",
     ]);
   } finally {

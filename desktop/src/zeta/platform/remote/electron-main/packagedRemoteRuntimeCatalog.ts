@@ -2,8 +2,8 @@ import { createHash } from "node:crypto";
 import { createReadStream, lstatSync, readFileSync } from "node:fs";
 import { lstat, readFile } from "node:fs/promises";
 import { isAbsolute, join, resolve } from "node:path";
-import { validLocalCommand } from "./zetaCliRemoteCommand.js";
-import { type TrustedRemoteRuntimeArtifact, validateTrustedRemoteRuntimeArtifact } from "./zetaCliRemoteRuntimeInstaller.js";
+import { validLocalCommand } from "./serverHostRemoteCommand.js";
+import { type TrustedRemoteRuntimeArtifact, validateTrustedRemoteRuntimeArtifact } from "./serverHostRemoteRuntimeInstaller.js";
 
 const CATALOG_FORMAT_VERSION = 1;
 const MAX_CATALOG_BYTES = 1024 * 1024;

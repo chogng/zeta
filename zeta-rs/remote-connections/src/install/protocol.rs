@@ -86,7 +86,7 @@ pub(crate) fn remote_runtime_install_command(
             "case \"$install_root\" in */|*//*|*/./*|*/../*|*/.|*/..) fail 'install-root-not-canonical' 73 ;; esac; ",
             "target={target}; version={version}; digest={digest}; expected_size={archive_size}; ",
             "runtime_parent=\"$install_root/runtimes/$target/$version\"; runtime_dir=\"$runtime_parent/$digest\"; ",
-            "executable=\"$runtime_dir/bin/zeta\"; receipt=\"$runtime_dir/.zeta-remote-runtime-sha256\"; ",
+            "executable=\"$runtime_dir/bin/zeta-server\"; receipt=\"$runtime_dir/.zeta-remote-runtime-sha256\"; ",
             "report() {{ printf '%s%s:%s\\n' \"$1\" \"$digest\" \"$executable\"; exit 0; }}; ",
             "if [ -x \"$executable\" ] && [ -f \"$receipt\" ] && [ \"$(cat \"$receipt\")\" = \"$digest\" ]; then report {reused_marker}; fi; ",
             "command -v tar >/dev/null 2>&1 || fail 'tar-unavailable' 69; ",
@@ -111,10 +111,10 @@ pub(crate) fn remote_runtime_install_command(
             "[ \"$observed_hash\" = \"$digest\" ] || fail 'archive-sha256-mismatch' 65; ",
             "tar -xzf \"$archive\" -C \"$package\" || fail 'archive-extraction-failed' 65; ",
             "[ -f \"$package/zeta-package.json\" ] || fail 'package-metadata-missing' 65; ",
-            "[ -f \"$package/bin/zeta\" ] || fail 'package-entrypoint-missing' 65; ",
+            "[ -f \"$package/bin/zeta-server\" ] || fail 'package-entrypoint-missing' 65; ",
             "[ -f \"$package/zeta-path/rg\" ] || fail 'package-ripgrep-missing' 65; ",
             "[ -f \"$package/zeta-resources/node/bin/node\" ] || fail 'package-node-missing' 65; ",
-            "chmod 700 \"$package/bin/zeta\" \"$package/zeta-path/rg\" \"$package/zeta-resources/node/bin/node\" || fail 'package-executable-permissions-failed' 73; ",
+            "chmod 700 \"$package/bin/zeta-server\" \"$package/zeta-path/rg\" \"$package/zeta-resources/node/bin/node\" || fail 'package-executable-permissions-failed' 73; ",
             "printf '%s\\n' \"$digest\" > \"$package/.zeta-remote-runtime-sha256\" || fail 'receipt-write-failed' 73; ",
             "mv \"$package\" \"$runtime_dir\" || fail 'runtime-commit-failed' 73; report {installed_marker}"
         ),
@@ -152,7 +152,7 @@ pub(super) fn parse_install_receipt(
     };
     if digest != artifact.integrity.sha256
         || !is_canonical_absolute_posix_path(executable)
-        || !executable.ends_with("/bin/zeta")
+        || !executable.ends_with("/bin/zeta-server")
     {
         return Err(RemoteRuntimeInstallError::new(
             RemoteRuntimeInstallFailureKind::RemoteRejected,

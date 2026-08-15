@@ -9,7 +9,7 @@ test("Remote runtime recovery verifies rollback before replacing the connection"
   const lifecycle: string[] = [];
   const launcher = createLauncher(async () => {
     lifecycle.push("rollback");
-    return "/srv/zeta/runtime/one/bin/zeta";
+    return "/srv/zeta/runtime/one/bin/zeta-server";
   });
   const host = new TestRecoveryHost(lifecycle);
   const coordinator = new RemoteConnectionRecoveryCoordinator(host, launcher, () => lifecycle.push("prepare"));
@@ -76,7 +76,7 @@ test("Remote connection recovery rejects concurrent reconnect and rollback opera
 
   const first = coordinator.rollback();
   await assert.rejects(() => coordinator.reconnect(), /already in progress/);
-  pending.resolve("/srv/zeta/runtime/one/bin/zeta");
+  pending.resolve("/srv/zeta/runtime/one/bin/zeta-server");
   await first;
 
   assert.deepEqual(lifecycle, ["stop", "start"]);
@@ -86,7 +86,7 @@ function createLauncher(rollbackRuntime: () => Promise<string>): SshAppServerPro
   return new SshAppServerProcessLauncher({
     workspace: createSshRemoteWorkspaceUri("work-server", "/home/zeta/project"),
     sshExecutable: "ssh",
-    remoteExecutable: "/srv/zeta/runtime/two/bin/zeta",
+    remoteExecutable: "/srv/zeta/runtime/two/bin/zeta-server",
     localEnvironment: {},
     rollbackRuntime,
   });

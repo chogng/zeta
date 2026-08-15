@@ -48,16 +48,16 @@ corepack pnpm dev:web:full
 ```
 
 完整模式监听 `127.0.0.1:5174`，根地址同样会进入当前产品版本。Browser 通过 Vite 已认证的 HMR WebSocket 连接本地开发
-桥接器；桥接器为每个浏览器连接启动独立的 `zeta app-server --listen stdio://` 子进程，
+桥接器；桥接器为每个浏览器连接启动独立的 `zeta-server app-server --listen stdio://` 子进程，
 浏览器连接关闭时对应子进程也会被回收。`dev:web:code`、`dev:web:academic` 与对应的
 `dev:web:full:*` 命令用于显式选择产品版本。
 
 `dev:desktop` 与 `dev:web:full` 会先通过 Node 开发组装器生成
-`desktop/.tmp/zeta-package`；其中包含 debug Rust
-CLI、锁定版本的 ripgrep 与平台 sandbox helper。Electron 默认生成 `hostProvidedNode` variant，
+`desktop/.tmp/zeta-package`；其中包含 product-neutral `zeta-server` backend host、锁定版本的
+ripgrep 与平台 sandbox helper。Electron 默认生成 `hostProvidedNode` variant，
 不再下载或复制 standalone Node；`dev:web:full` 显式生成 `packagedNode` variant，因为 Browser bridge
 没有 Electron runtime。开发态和发布态 Electron 都从相同的
-`<package>/bin/zeta[.exe]` 入口启动 App Server，区别仅在编译 profile 和 package root。
+`<package>/bin/zeta-server[.exe]` 入口启动 App Server，区别仅在编译 profile 和 package root。
 准备流程只使用 Desktop 已要求的 Node、Rust 和 host archive utility，不安装或调用
 Python。`dev:desktop` 随后启动 Vite、主进程、预加载脚本和 Electron；`dev:web:full` 只启动
 Vite，并按浏览器连接管理 App Server。启动后不要关闭终端，停止服务可以按 `Ctrl+C`。
@@ -148,7 +148,7 @@ globalThis.zetaWebWorkbenchHost = {
 ```
 
 该对象是进程内 capability，不是可直接从不可信 JSON 反序列化的配置。当前 Rust App Server
-仍只支持 `zeta app-server --listen stdio://`。`dev:web:full` 的 WebSocket 只属于 loopback Vite
+仍只支持 `zeta-server app-server --listen stdio://`。`dev:web:full` 的 WebSocket 只属于 loopback Vite
 开发宿主，不是 Rust listener，也不是可部署服务；生产级 HTTP/WebSocket listener、认证、
 origin policy 和远程部署尚未实现，因此静态 Browser 构建不能描述为已连接的 Web 客户端。
 

@@ -91,7 +91,7 @@ zeterm remote connect work
 ```
 
 默认远端 runtime 是 `zeta`，也就是 `zeta code` CLI 的可执行入口；如安装路径不同，可以追加
-`--runtime /opt/zeta/bin/zeta`。`--ssh` 只选择本机 OpenSSH 可执行文件。两条参数都由 Native
+`--runtime /opt/zeta/bin/zeta-server`。`--ssh` 只选择本机 OpenSSH 可执行文件。两条参数都由 Native
 host 解析，不能由 Renderer 提供凭据或私钥。
 
 如远端 `zeta` 不在默认 `PATH`，主进程可以通过 `ZETA_REMOTE_ZETA_PATH` 指定远端可执行文件；
@@ -264,7 +264,7 @@ SSH launcher 使用 `BatchMode=yes`，不会在后台窗口等待密码输入。
 ## 运行时安装、升级与回滚
 
 Remote runtime artifact 必须是 canonical layout version 2 的 rootless `tar.gz`，并使用
-`javascriptRuntime.kind=packagedNode`。它包含 `bin/zeta`、`zeta-path/rg`、Node、Skills、Extensions、
+`javascriptRuntime.kind=packagedNode`。它包含 `bin/zeta-server`、`zeta-path/rg`、Node、Skills、Extensions、
 product services 与平台 sandbox 资源；安装器不会用裸二进制伪装成完整 `zeta code` runtime。
 
 网络发布先要求产品已认证无凭据 HTTPS `catalog.json` URL 和 64 位小写 SHA-256。共享 updater 拒绝

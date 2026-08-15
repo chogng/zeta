@@ -26,7 +26,7 @@ use zeta_remote_connections::SshRemoteRuntimeInstaller;
 
 use crate::agent_session_target::AgentSessionTarget;
 
-const DEFAULT_REMOTE_RUNTIME: &str = "zeta";
+const DEFAULT_REMOTE_RUNTIME: &str = "zeta-server";
 const BUNDLED_REMOTE_RUNTIME_CATALOG: &str = "zeta-remote-runtimes/catalog.json";
 const BUNDLED_REMOTE_RUNTIME_CATALOG_SHA256: Option<&str> =
     option_env!("ZETERM_REMOTE_RUNTIME_CATALOG_SHA256");

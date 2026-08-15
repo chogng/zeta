@@ -1,27 +1,27 @@
 import { isAbsolute } from "node:path";
 import type { RemoteRuntimeInstallProgress } from "../common/remoteRuntimeInstallProgress.js";
 import type { RemoteRuntimeCatalogSource } from "./packagedRemoteRuntimeCatalog.js";
-import { type RunZetaRemoteCommand, runZetaRemoteCommand, validLocalCommand } from "./zetaCliRemoteCommand.js";
-import { type TrustedRemoteRuntimeArtifact, validateTrustedRemoteRuntimeArtifact } from "./zetaCliRemoteRuntimeInstaller.js";
+import { type RunServerHostRemoteCommand, runServerHostRemoteCommand, validLocalCommand } from "./serverHostRemoteCommand.js";
+import { type TrustedRemoteRuntimeArtifact, validateTrustedRemoteRuntimeArtifact } from "./serverHostRemoteRuntimeInstaller.js";
 
 const ARTIFACT_KEYS = new Set(["archivePath", "version", "target", "archiveSize", "unpackedSize", "sha256"]);
 
-export interface ZetaCliRemoteRuntimeFetcherOptions {
-  readonly zetaExecutable: string;
+export interface ServerHostRemoteRuntimeFetcherOptions {
+  readonly serverHostExecutable: string;
   readonly environment: NodeJS.ProcessEnv;
   readonly source: Extract<RemoteRuntimeCatalogSource, { readonly kind: "network" }>;
   readonly onProgress?: (progress: RemoteRuntimeInstallProgress) => void;
-  readonly runCommand?: RunZetaRemoteCommand;
+  readonly runCommand?: RunServerHostRemoteCommand;
 }
 
 /** Materializes one product-authenticated network runtime through the shared Rust updater. */
-export class ZetaCliRemoteRuntimeFetcher {
-  private readonly runCommand: RunZetaRemoteCommand;
+export class ServerHostRemoteRuntimeFetcher {
+  private readonly runCommand: RunServerHostRemoteCommand;
 
-  constructor(private readonly options: ZetaCliRemoteRuntimeFetcherOptions) {
-    if (!validLocalCommand(options.zetaExecutable)) throw new Error("Remote runtime fetcher executable is invalid");
+  constructor(private readonly options: ServerHostRemoteRuntimeFetcherOptions) {
+    if (!validLocalCommand(options.serverHostExecutable)) throw new Error("Remote runtime fetcher executable is invalid");
     if (!isAbsolute(options.source.cacheRoot) || !validLocalCommand(options.source.cacheRoot)) throw new Error("Remote runtime download cache must be an absolute local path");
-    this.runCommand = options.runCommand ?? runZetaRemoteCommand;
+    this.runCommand = options.runCommand ?? runServerHostRemoteCommand;
   }
 
   async fetch(target: string, request: { readonly signal?: AbortSignal; readonly onProgress?: (progress: RemoteRuntimeInstallProgress) => void } = {}): Promise<TrustedRemoteRuntimeArtifact> {
@@ -36,7 +36,7 @@ export class ZetaCliRemoteRuntimeFetcher {
     const decoder = reportProgress === undefined ? undefined : new RemoteRuntimeDownloadProgressDecoder(reportProgress);
     if (decoder !== undefined) args.push("--progress", "json-lines");
     const observer = decoder === undefined && request.signal === undefined ? undefined : { onStderrData: (chunk: string) => decoder?.accept(chunk), signal: request.signal };
-    const result = await this.runCommand(this.options.zetaExecutable, args, this.options.environment, observer);
+    const result = await this.runCommand(this.options.serverHostExecutable, args, this.options.environment, observer);
     decoder?.finish();
     if (result.exitCode !== 0) {
       const diagnostic = result.stderr.trim() || result.stdout.trim() || `exit code ${result.exitCode ?? "unknown"}`;

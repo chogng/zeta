@@ -181,10 +181,6 @@ pub(super) fn run(options: RemoteConnectOptions) -> Result<(), String> {
     }
 }
 
-pub(super) const fn usage() -> &'static str {
-    CONNECT_USAGE
-}
-
 fn resolve_target(profile_root: &Path, target: RemoteConnectTarget) -> Result<SshTarget, String> {
     match target {
         RemoteConnectTarget::Direct(target) => Ok(target),

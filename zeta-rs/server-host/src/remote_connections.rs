@@ -8,17 +8,17 @@ use zeta_remote_connections::RemoteConnectionEntry;
 use zeta_remote_connections::RemoteConnectionName;
 use zeta_remote_connections::RemoteConnectionSaveMode;
 
-const LIST_USAGE: &str = "usage: zeta remote connections list";
-const GET_USAGE: &str = "usage: zeta remote connections get --name <name>";
+const LIST_USAGE: &str = "usage: zeta-server remote connections list";
+const GET_USAGE: &str = "usage: zeta-server remote connections get --name <name>";
 const SAVE_USAGE: &str = concat!(
-    "usage: zeta remote connections save --name <name> --host <ssh-host> ",
+    "usage: zeta-server remote connections save --name <name> --host <ssh-host> ",
     "--workspace <absolute-remote-path> [--mode create|replace]"
 );
 const UPDATE_USAGE: &str = concat!(
-    "usage: zeta remote connections update --name <existing-name> ",
+    "usage: zeta-server remote connections update --name <existing-name> ",
     "--new-name <name> --host <ssh-host> --workspace <absolute-remote-path>"
 );
-const REMOVE_USAGE: &str = "usage: zeta remote connections remove --name <name>";
+const REMOVE_USAGE: &str = "usage: zeta-server remote connections remove --name <name>";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) enum RemoteConnectionsCommand {

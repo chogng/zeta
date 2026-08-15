@@ -19,7 +19,7 @@ use zeta_remote_connections::RemoteRuntimeDownloadCache;
 use zeta_remote_connections::SshAppServerConnectionOptions;
 use zeta_remote_connections::SshRemoteRuntimeInstaller;
 
-const DEFAULT_REMOTE_RUNTIME: &str = "zeta";
+const DEFAULT_REMOTE_RUNTIME: &str = "zeta-server";
 const PACKAGED_REMOTE_RUNTIME_CATALOG: &str = "zeta-remote-runtimes/catalog.json";
 const REMOTE_RUNTIME_DOWNLOAD_CACHE: &str = "remote-runtime-downloads";
 const MAX_PACKAGE_METADATA_BYTES: u64 = 1024 * 1024;

@@ -1,13 +1,13 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
 import type { RemoteConnectionDefinition } from "../../../../platform/remote/common/remoteConnectionService.js";
-import { ZetaCliRemoteConnections } from "../../../../platform/remote/electron-main/zetaCliRemoteConnections.js";
+import { ServerHostRemoteConnections } from "../../../../platform/remote/electron-main/serverHostRemoteConnections.js";
 
 test("Electron Main lists and resolves named targets through the shared Rust catalog", async () => {
   const calls: string[][] = [];
   const scheduled: RemoteConnectionDefinition[] = [];
-  const service = new ZetaCliRemoteConnections({
-    zetaExecutable: "/Applications/Zeta.app/Contents/Resources/bin/zeta",
+  const service = new ServerHostRemoteConnections({
+    serverHostExecutable: "/Applications/Zeta.app/Contents/Resources/bin/zeta-server",
     environment: { ZETA_PROFILE_ROOT: "/Users/test/Library/Application Support/Zeta/state" },
     runCommand: async (_executable, args) => {
       calls.push([...args]);
@@ -35,8 +35,8 @@ test("Electron Main creates, atomically updates, and removes targets through the
     '{"name":"production","host":"production-linux","workspace":"/srv/production"}\n',
     '{"name":"production","host":"production-linux","workspace":"/srv/production"}\n',
   ];
-  const service = new ZetaCliRemoteConnections({
-    zetaExecutable: "zeta",
+  const service = new ServerHostRemoteConnections({
+    serverHostExecutable: "zeta-server",
     environment: {},
     runCommand: async (_executable, args) => {
       calls.push([...args]);
@@ -56,8 +56,8 @@ test("Electron Main creates, atomically updates, and removes targets through the
 });
 
 test("named Remote connection paths preserve POSIX backslashes", async () => {
-  const service = new ZetaCliRemoteConnections({
-    zetaExecutable: "zeta",
+  const service = new ServerHostRemoteConnections({
+    serverHostExecutable: "zeta-server",
     environment: {},
     runCommand: async () => ({ exitCode: 0, stdout: '[{"name":"build","host":"build","workspace":"/srv/project\\\\archive"}]', stderr: "" }),
     scheduleConnect: () => {},
@@ -67,8 +67,8 @@ test("named Remote connection paths preserve POSIX backslashes", async () => {
 });
 
 test("named Remote connection mutations require the CLI to return the exact requested target", async () => {
-  const service = new ZetaCliRemoteConnections({
-    zetaExecutable: "zeta",
+  const service = new ServerHostRemoteConnections({
+    serverHostExecutable: "zeta-server",
     environment: {},
     runCommand: async () => ({ exitCode: 0, stdout: '{"name":"other","host":"other","workspace":"/srv/other"}', stderr: "" }),
     scheduleConnect: () => {},
@@ -84,8 +84,8 @@ test("named Remote connections fail closed on missing, non-canonical, or expande
     '{"name":"build","host":"Build-Linux","workspace":"/srv/project"}\n',
     '{"name":"build","host":"build-linux","workspace":"/srv/project","password":"secret"}\n',
   ];
-  const service = new ZetaCliRemoteConnections({
-    zetaExecutable: "zeta",
+  const service = new ServerHostRemoteConnections({
+    serverHostExecutable: "zeta-server",
     environment: {},
     runCommand: async () => ({ exitCode: 0, stdout: outputs.shift()!, stderr: "" }),
     scheduleConnect: () => assert.fail("invalid connection must not be scheduled"),
@@ -97,8 +97,8 @@ test("named Remote connections fail closed on missing, non-canonical, or expande
 });
 
 test("named Remote connection lists require sorted unique canonical records", async () => {
-  const service = new ZetaCliRemoteConnections({
-    zetaExecutable: "zeta",
+  const service = new ServerHostRemoteConnections({
+    serverHostExecutable: "zeta-server",
     environment: {},
     runCommand: async () => ({
       exitCode: 0,
@@ -112,8 +112,8 @@ test("named Remote connection lists require sorted unique canonical records", as
 
 test("named Remote connection scheduling is reusable after one window open settles", async () => {
   let schedules = 0;
-  const service = new ZetaCliRemoteConnections({
-    zetaExecutable: "zeta",
+  const service = new ServerHostRemoteConnections({
+    serverHostExecutable: "zeta-server",
     environment: {},
     runCommand: async () => ({ exitCode: 0, stdout: '{"name":"build","host":"build","workspace":"/"}', stderr: "" }),
     scheduleConnect: () => { schedules += 1; },
@@ -128,8 +128,8 @@ test("concurrent named Remote connection requests cannot both cross the catalog 
   let finishLookup!: (output: { exitCode: number; stdout: string; stderr: string }) => void;
   const lookup = new Promise<{ exitCode: number; stdout: string; stderr: string }>(resolve => finishLookup = resolve);
   let schedules = 0;
-  const service = new ZetaCliRemoteConnections({
-    zetaExecutable: "zeta",
+  const service = new ServerHostRemoteConnections({
+    serverHostExecutable: "zeta-server",
     environment: {},
     runCommand: async () => lookup,
     scheduleConnect: () => { schedules += 1; },
@@ -146,8 +146,8 @@ test("named Remote connection remains fenced until asynchronous window creation 
   let finishWindowOpen!: () => void;
   const windowOpen = new Promise<void>(resolve => finishWindowOpen = resolve);
   let schedules = 0;
-  const service = new ZetaCliRemoteConnections({
-    zetaExecutable: "zeta",
+  const service = new ServerHostRemoteConnections({
+    serverHostExecutable: "zeta-server",
     environment: {},
     runCommand: async () => ({ exitCode: 0, stdout: '{"name":"build","host":"build","workspace":"/srv/project"}', stderr: "" }),
     scheduleConnect: async () => {

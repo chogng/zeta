@@ -5,18 +5,18 @@ import { throwIfCancelled } from "../../../base/common/cancellation.js";
 const SSH_HOST_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,251}[A-Za-z0-9])?$/;
 const MAX_OUTPUT_LENGTH = 1024 * 1024;
 
-export interface ZetaRemoteCommandResult {
+export interface ServerHostCommandResult {
   readonly exitCode: number | null;
   readonly stdout: string;
   readonly stderr: string;
 }
 
-export interface ZetaRemoteCommandObserver {
+export interface ServerHostCommandObserver {
   readonly onStderrData: (chunk: string) => void;
   readonly signal?: AbortSignal;
 }
 
-export type RunZetaRemoteCommand = (executable: string, args: readonly string[], environment: NodeJS.ProcessEnv, observer?: ZetaRemoteCommandObserver) => Promise<ZetaRemoteCommandResult>;
+export type RunServerHostRemoteCommand = (executable: string, args: readonly string[], environment: NodeJS.ProcessEnv, observer?: ServerHostCommandObserver) => Promise<ServerHostCommandResult>;
 
 export function normalizeCredentialFreeSshHost(host: string): string {
   const normalized = host.trim().toLowerCase();
@@ -33,7 +33,7 @@ export function isCanonicalAbsolutePosixPath(value: string): boolean {
   return value.split("/").slice(1).every(segment => segment.length > 0 && segment !== "." && segment !== "..");
 }
 
-export function runZetaRemoteCommand(executable: string, args: readonly string[], environment: NodeJS.ProcessEnv, observer?: ZetaRemoteCommandObserver): Promise<ZetaRemoteCommandResult> {
+export function runServerHostRemoteCommand(executable: string, args: readonly string[], environment: NodeJS.ProcessEnv, observer?: ServerHostCommandObserver): Promise<ServerHostCommandResult> {
   if (observer?.signal) throwIfCancelled(observer.signal, "Remote command cancelled");
   const child = spawn(executable, [...args], { env: { ...environment }, shell: false, stdio: "pipe" });
   child.stdin.end();

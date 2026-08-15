@@ -9617,7 +9617,7 @@ dependencies = [
  "zeta-protocol",
  "zeta-remote",
  "zeta-remote-connections",
- "zeta-remote-server",
+ "zeta-server-host",
  "zeta-tui",
 ]
 
@@ -10417,6 +10417,22 @@ dependencies = [
  "sha2 0.10.9",
  "tempfile",
  "zeroize",
+]
+
+[[package]]
+name = "zeta-server-host"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tempfile",
+ "zeta-app-server",
+ "zeta-app-server-client",
+ "zeta-app-server-protocol",
+ "zeta-install-context",
+ "zeta-remote",
+ "zeta-remote-connections",
+ "zeta-remote-server",
 ]
 
 [[package]]

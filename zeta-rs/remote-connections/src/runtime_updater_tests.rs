@@ -261,7 +261,7 @@ fn package_archive(root: &Path) -> PackageArchive {
         "layoutVersion": 2,
         "version": "0.1.0",
         "target": TARGET.target_triple(),
-        "entrypoint": "bin/zeta",
+        "entrypoint": "bin/zeta-server",
         "pathDir": "zeta-path",
         "resourcesDir": "zeta-resources",
         "javascriptRuntime": { "kind": "packagedNode" },
@@ -269,7 +269,7 @@ fn package_archive(root: &Path) -> PackageArchive {
     }))
     .unwrap();
     let mut unpacked_size = append_file(&mut builder, "zeta-package.json", &metadata, 0o644);
-    unpacked_size += append_file(&mut builder, "bin/zeta", b"zeta", 0o755);
+    unpacked_size += append_file(&mut builder, "bin/zeta-server", b"zeta", 0o755);
     unpacked_size += append_file(&mut builder, "zeta-path/rg", b"rg", 0o755);
     unpacked_size += append_file(&mut builder, "zeta-resources/node/bin/node", b"node", 0o755);
     builder.into_inner().unwrap().finish().unwrap();

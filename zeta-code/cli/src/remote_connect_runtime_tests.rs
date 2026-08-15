@@ -23,7 +23,7 @@ fn runtime_selection_keeps_explicit_and_managed_sources_unambiguous() {
     );
 
     let explicit = RemoteConnectRuntimeSelection::parse(RemoteConnectRuntimeInput {
-        runtime: Some(RemoteRuntime::new("/opt/zeta/bin/zeta").unwrap()),
+        runtime: Some(RemoteRuntime::new("/opt/zeta/bin/zeta-server").unwrap()),
         ..input()
     })
     .unwrap();

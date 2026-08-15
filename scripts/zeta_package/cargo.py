@@ -9,7 +9,7 @@ from typing import Optional
 from .targets import TargetSpec
 
 
-def resolve_zeta_binary(
+def resolve_server_binary(
     repository_root: Path,
     spec: TargetSpec,
     explicit_binary: Optional[Path],
@@ -18,7 +18,7 @@ def resolve_zeta_binary(
 ) -> Path:
     if explicit_binary is not None:
         return validate_input_binary(
-            explicit_binary, "Zeta executable", "--zeta-bin", spec.is_windows
+            explicit_binary, "Zeta server executable", "--server-bin", spec.is_windows
         )
 
     rust_workspace = repository_root
@@ -29,9 +29,9 @@ def resolve_zeta_binary(
         "--manifest-path",
         str(repository_root / "Cargo.toml"),
         "--package",
-        "zeta-cli",
+        "zeta-server-host",
         "--bin",
-        "zeta",
+        "zeta-server",
         "--profile",
         cargo_profile,
         "--target",
@@ -45,9 +45,9 @@ def resolve_zeta_binary(
         target_directory
         / spec.target
         / profile_directory
-        / ("zeta" + spec.executable_suffix)
+        / ("zeta-server" + spec.executable_suffix)
     )
-    return validate_input_binary(binary, "built Zeta executable", cargo, spec.is_windows)
+    return validate_input_binary(binary, "built Zeta server executable", cargo, spec.is_windows)
 
 
 def validate_input_binary(

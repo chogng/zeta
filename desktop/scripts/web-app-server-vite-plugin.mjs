@@ -28,7 +28,7 @@ export function webAppServerVitePlugin(options = {}) {
     ".tmp",
     "zeta-package",
     "bin",
-    process.platform === "win32" ? "zeta.exe" : "zeta",
+    process.platform === "win32" ? "zeta-server.exe" : "zeta-server",
   ));
   const ripgrep = resolve(options.ripgrep ?? process.env.ZETA_RG_PATH ?? join(
     desktopRoot,

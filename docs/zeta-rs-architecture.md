@@ -84,6 +84,7 @@ zeta-rs/
 ├── zeta-api/
 ├── http-client/           # shared proxy/TLS/unary HTTP substrate；stream/WebSocket 尚未实现
 ├── zeta-client/           # API operation retry 与 SSE framing layer
+├── server-host/           # product-neutral App Server / Remote process entrypoint
 ├── exec/                  # target headless Agent runner
 ├── tool-executor/         # target local process execution boundary
 ```

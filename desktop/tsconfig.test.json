@@ -55,7 +55,7 @@
     "src/zeta/workbench/services/documentCollaboration/**/*.ts",
     "src/zeta/workbench/services/documentEditor/**/*.ts",
     "src/zeta/platform/app-server/electron-main/app-server-client.ts",
-    "src/zeta/platform/app-server/electron-main/app-server-package.ts",
+    "src/zeta/platform/server-host/electron-main/serverHostPackage.ts",
     "src/zeta/platform/app-server/electron-main/app-server-ipc.ts",
     "src/zeta/platform/app-server/electron-main/app-server-session.ts",
     "src/zeta/platform/app-server/electron-main/app-server-supervisor.ts",

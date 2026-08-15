@@ -5,7 +5,7 @@ import type { RemoteRuntimeInstallProgress } from "../common/remoteRuntimeInstal
 import { RemoteRuntimeInstallProgressMainService } from "./remoteRuntimeInstallProgressMainService.js";
 import type { RemoteRuntimeInstallProgressOperation } from "./remoteRuntimeInstallProgressMainService.js";
 import { SshAppServerProcessLauncher } from "./sshAppServerProcessLauncher.js";
-import type { RemoteRuntimeInstallRequestOptions } from "./zetaCliRemoteRuntimeInstaller.js";
+import type { RemoteRuntimeInstallRequestOptions } from "./serverHostRemoteRuntimeInstaller.js";
 
 /** Installs one trusted Remote runtime selected entirely by the local product host. */
 export interface IRemoteRuntimeInstaller {

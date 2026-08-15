@@ -639,7 +639,7 @@ Forwarding 后的 child 退出会在 30 秒内按 250ms 到 2s 退避恢复，�
 
 默认启动先按 OpenSSH host + Remote Workspace 从本机
 `<local-profile-root>/remote/connections.json` 读取上次握手成功的精确 runtime；没有记录时才从远端
-`PATH` 探测 `zeta`。`local-profile-root` 与 App Server client 共用，`ZETA_PROFILE_ROOT` 可显式覆盖。
+`PATH` 探测产品无关的 `zeta-server`。`local-profile-root` 与 App Server client 共用，`ZETA_PROFILE_ROOT` 可显式覆盖。
 availability probe 得到的 resolved executable 会用于短生命周期 App Server initialize/schema
 compatibility preflight，只有两项都成功才通过原子写入激活并保留一代 previous runtime。profile 只含
 host、Workspace 和 runtime，不保存凭据或 SSH executable。
@@ -647,7 +647,7 @@ host、Workspace 和 runtime，不保存凭据或 SSH executable。
 若 runtime 缺失或 schema 明确不兼容，正式 zeterm
 发布包从签名 binary 绑定的本地 catalog 或网络 URL + 摘要选择远端平台对应的完整 packaged-node
 runtime；网络包先通过共享 updater 写入本机内容寻址缓存，再经 SSH 上传安装，切换到返回的不可变摘要路径，并重新执行 availability 与 compatibility 两次检查，然后才
-启动窗口。因此本机只安装 zeterm、远端没有预装 zeta，或只安装了旧版 zeta，也能连接。source build
+启动窗口。因此本机只安装 zeterm、远端没有预装 `zeta-server`，或只安装了旧版 `zeta-server`，也能连接。source build
 没有绑定 catalog 时会安全退出；开发和运维可以显式同时传
 `--runtime-catalog` 与其已认证 SHA-256，或传 `--runtime-catalog-url`、摘要以及可选本机 cache root。
 显式 `--runtime` 永远不会被自动替换，也不能和 catalog

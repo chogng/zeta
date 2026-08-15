@@ -101,6 +101,7 @@ members = [
     "zeta-rs/windows-sandbox-rs",
     "zeta-rs/workspace",
     "zeta-rs/search",
+    "zeta-rs/server-host",
     "zeta-rs/zeta-api",
     "zeta-rs/zeta-client",
     "zeterm",
@@ -311,6 +312,7 @@ zeta-rollout-trace = { path = "zeta-rs/rollout-trace" }
 zeta-rmcp-client = { path = "zeta-rs/rmcp-client" }
 zeta-sandboxing = { path = "zeta-rs/sandboxing" }
 zeta-search = { path = "zeta-rs/search" }
+zeta-server-host = { path = "zeta-rs/server-host" }
 zeta-secrets = { path = "zeta-rs/secrets" }
 zeta-session-store = { path = "zeta-rs/session-store" }
 zeta-settings = { path = "zeterm/settings" }

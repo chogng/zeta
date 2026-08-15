@@ -5,9 +5,7 @@ use std::io::IsTerminal;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
-use zeta_app_server::LocalAppServerOptions;
 use zeta_app_server::LocalProductServicesConfig;
-use zeta_app_server::open_local_app_server;
 use zeta_app_server_client::AppServerSession;
 use zeta_app_server_client::InProcessClientOptions;
 use zeta_app_server_client::local_profile_root;
@@ -43,11 +41,10 @@ fn main() {
             "app-server" => app_server_command(arguments.collect()).map_err(CliError::failure),
             "mcp-server" => mcp_server_command(arguments.collect()).map_err(CliError::failure),
             "remote" => remote::run(arguments.collect()).map_err(CliError::failure),
-            "remote-server" => zeta_remote_server::run_from_environment_with_product_services(
-                arguments.collect::<Vec<_>>(),
-                product_services_path(),
-            )
-            .map_err(|error| CliError::failure(error.to_string())),
+            "remote-server" => {
+                zeta_server_host::run(std::iter::once("remote-server".to_owned()).chain(arguments))
+                    .map_err(CliError::failure)
+            }
             _ => Err(CliError::usage(format!("unknown command: {command}"))),
         },
     };
@@ -97,34 +94,7 @@ fn interactive() -> Result<(), String> {
 }
 
 fn run_app_server(arguments: Vec<String>) -> Result<(), String> {
-    let product_services = match arguments.as_slice() {
-        [listen, address] if listen == "--listen" && address == "stdio://" => None,
-        [listen, address, product, path]
-            if listen == "--listen" && address == "stdio://" && product == "--product-services" =>
-        {
-            Some(PathBuf::from(path))
-        }
-        _ => {
-            return Err(
-                "usage: zeta app-server --listen stdio:// [--product-services PATH]".into(),
-            );
-        }
-    };
-    let profile_root = local_profile_root();
-    let mut options = LocalAppServerOptions::new(&profile_root);
-    if let Some(workspace_root) = configured_app_server_workspace() {
-        options = options.with_workspace_root(workspace_root);
-    }
-    if let Some(path) = product_services.or_else(product_services_path) {
-        options = options.with_product_services(
-            LocalProductServicesConfig::load(path, &profile_root)
-                .map_err(|error| error.to_string())?,
-        );
-    }
-    open_local_app_server(options)
-        .map_err(|error| error.to_string())?
-        .serve_stdio()
-        .map_err(|error| error.to_string())
+    zeta_server_host::run_app_server(arguments)
 }
 
 fn with_product_services(
@@ -201,10 +171,6 @@ fn configured_workspace() -> Result<PathBuf, String> {
         .map(PathBuf::from)
         .map(Ok)
         .unwrap_or_else(current_workspace)
-}
-
-fn configured_app_server_workspace() -> Option<PathBuf> {
-    env::var_os("ZETA_WORKSPACE_ROOT").map(PathBuf::from)
 }
 
 fn execute(arguments: Vec<String>) -> Result<(), CliError> {

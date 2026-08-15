@@ -29,6 +29,10 @@
   `winit` as direct child crates.
 - `zeta-code/` owns the `zeta code` product host: `zeta-cli` and `zeta-tui`. Do not add TUI
   presentation, raw-mode lifecycle, Ratatui interaction, or CLI product composition to `zeta-rs/`.
+- `desktop/` and `zeterm/` must not execute, package, import, or depend on `zeta-cli`, `zeta-tui`,
+  `zeta-code/cli`, or the `zeta app-server` product command. Shared backend process entrypoints
+  belong to `zeta-rs/server-host`; trace product entrypoint, packaged executable, and crate owner
+  before changing process launch, packaging, IPC, or Workspace authority.
 - All three boundaries may remain members of the single root Cargo workspace; workspace membership
   does not change implementation ownership.
 

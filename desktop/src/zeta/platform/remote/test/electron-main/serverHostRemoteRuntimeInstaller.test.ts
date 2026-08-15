@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { ZetaCliRemoteRuntimeInstaller, remoteRuntimeArtifactFromEnvironment } from "../../../../platform/remote/electron-main/zetaCliRemoteRuntimeInstaller.js";
+import { ServerHostRemoteRuntimeInstaller, remoteRuntimeArtifactFromEnvironment } from "../../../../platform/remote/electron-main/serverHostRemoteRuntimeInstaller.js";
 
 const artifact = Object.freeze({
   archivePath: "/cache/zeta-package.tar.gz",
@@ -13,23 +13,23 @@ const artifact = Object.freeze({
 
 test("Electron Main delegates installation to the shared zeta remote command", async () => {
   let invocation: { executable: string; args: readonly string[]; environment: NodeJS.ProcessEnv } | undefined;
-  const installer = new ZetaCliRemoteRuntimeInstaller({
-    zetaExecutable: "/Applications/Zeta.app/Contents/Resources/bin/zeta",
+  const installer = new ServerHostRemoteRuntimeInstaller({
+    serverHostExecutable: "/Applications/Zeta.app/Contents/Resources/bin/zeta-server",
     sshExecutable: "/usr/bin/ssh",
     environment: { SSH_AUTH_SOCK: "/tmp/agent.sock" },
     artifact,
     installRoot: "/srv/zeta runtime",
     runCommand: async (executable, args, environment) => {
       invocation = { executable, args, environment };
-      return { exitCode: 0, stdout: "/srv/zeta runtime/runtimes/x86_64-unknown-linux-gnu/0.1.0/abc/bin/zeta\n", stderr: "" };
+      return { exitCode: 0, stdout: "/srv/zeta runtime/runtimes/x86_64-unknown-linux-gnu/0.1.0/abc/bin/zeta-server\n", stderr: "" };
     },
   });
 
   const executable = await installer.install("Build-Linux");
 
-  assert.equal(executable, "/srv/zeta runtime/runtimes/x86_64-unknown-linux-gnu/0.1.0/abc/bin/zeta");
+  assert.equal(executable, "/srv/zeta runtime/runtimes/x86_64-unknown-linux-gnu/0.1.0/abc/bin/zeta-server");
   assert.deepEqual(invocation, {
-    executable: "/Applications/Zeta.app/Contents/Resources/bin/zeta",
+    executable: "/Applications/Zeta.app/Contents/Resources/bin/zeta-server",
     args: [
       "remote", "install",
       "--host", "build-linux",
@@ -66,8 +66,8 @@ test("artifact environment override is all-or-nothing and rejects unsupported ta
 });
 
 test("installer rejects nonzero commands and malformed receipts", async () => {
-  const rejected = new ZetaCliRemoteRuntimeInstaller({
-    zetaExecutable: "zeta",
+  const rejected = new ServerHostRemoteRuntimeInstaller({
+    serverHostExecutable: "zeta-server",
     sshExecutable: "ssh",
     environment: {},
     artifact,
@@ -75,12 +75,12 @@ test("installer rejects nonzero commands and malformed receipts", async () => {
   });
   await assert.rejects(() => rejected.install("build-linux"), /digest mismatch/);
 
-  const malformed = new ZetaCliRemoteRuntimeInstaller({
-    zetaExecutable: "zeta",
+  const malformed = new ServerHostRemoteRuntimeInstaller({
+    serverHostExecutable: "zeta-server",
     sshExecutable: "ssh",
     environment: {},
     artifact,
-    runCommand: async () => ({ exitCode: 0, stdout: "relative/bin/zeta\n", stderr: "" }),
+    runCommand: async () => ({ exitCode: 0, stdout: "relative/bin/zeta-server\n", stderr: "" }),
   });
   await assert.rejects(() => malformed.install("build-linux"), /valid immutable executable path/);
 });
@@ -88,8 +88,8 @@ test("installer rejects nonzero commands and malformed receipts", async () => {
 test("installer decodes fragmented structured progress without mixing it with the result", async () => {
   const progress: unknown[] = [];
   let args: readonly string[] = [];
-  const installer = new ZetaCliRemoteRuntimeInstaller({
-    zetaExecutable: "zeta",
+  const installer = new ServerHostRemoteRuntimeInstaller({
+    serverHostExecutable: "zeta-server",
     sshExecutable: "ssh",
     environment: {},
     artifact,
@@ -98,7 +98,7 @@ test("installer decodes fragmented structured progress without mixing it with th
       args = commandArgs;
       observer?.onStderrData('{"kind":"remoteRuntimeInstallProgress","phase":"validatingArtifact"}\n{"kind":"remoteRuntimeInstallProgress","phase":"upload');
       observer?.onStderrData('ing","transferredBytes":2048,"totalBytes":4096}\nplain diagnostic\n{"kind":"remoteRuntimeInstallProgress","phase":"complete","disposition":"installed"}\n');
-      return { exitCode: 0, stdout: "/srv/zeta/runtime/bin/zeta\n", stderr: "" };
+      return { exitCode: 0, stdout: "/srv/zeta/runtime/bin/zeta-server\n", stderr: "" };
     },
   });
 
@@ -113,15 +113,15 @@ test("installer decodes fragmented structured progress without mixing it with th
 });
 
 test("installer fails closed on malformed structured progress", async () => {
-  const installer = new ZetaCliRemoteRuntimeInstaller({
-    zetaExecutable: "zeta",
+  const installer = new ServerHostRemoteRuntimeInstaller({
+    serverHostExecutable: "zeta-server",
     sshExecutable: "ssh",
     environment: {},
     artifact,
     onProgress: () => {},
     runCommand: async (_executable, _args, _environment, observer) => {
       observer?.onStderrData('{"kind":"remoteRuntimeInstallProgress","phase":');
-      return { exitCode: 0, stdout: "/srv/zeta/runtime/bin/zeta\n", stderr: "" };
+      return { exitCode: 0, stdout: "/srv/zeta/runtime/bin/zeta-server\n", stderr: "" };
     },
   });
 
@@ -132,15 +132,15 @@ test("installer passes request-scoped cancellation and progress to its local com
   const cancellation = new AbortController();
   let observedSignal: AbortSignal | undefined;
   const progress: unknown[] = [];
-  const installer = new ZetaCliRemoteRuntimeInstaller({
-    zetaExecutable: "zeta",
+  const installer = new ServerHostRemoteRuntimeInstaller({
+    serverHostExecutable: "zeta-server",
     sshExecutable: "ssh",
     environment: {},
     artifact,
     runCommand: async (_executable, _args, _environment, observer) => {
       observedSignal = observer?.signal;
       observer?.onStderrData('{"kind":"remoteRuntimeInstallProgress","phase":"complete","disposition":"reused"}\n');
-      return { exitCode: 0, stdout: "/srv/zeta/runtime/bin/zeta\n", stderr: "" };
+      return { exitCode: 0, stdout: "/srv/zeta/runtime/bin/zeta-server\n", stderr: "" };
     },
   });
 

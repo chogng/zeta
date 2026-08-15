@@ -12,6 +12,7 @@
 > Agent 自定义对象、`.zeta` 与外部导入边界：[`agent-customizations.md`](agent-customizations.md)
 > TUI 明确不提供外部 Agent 导入入口：[`tui.md`](tui.md)
 > 三条公开产品线与宿主边界：[`product-lines.md`](product-lines.md)
+> 共享 Rust 进程入口实现：[`zeta-server-host`](../zeta-rs/server-host/README.md)
 
 ## 快速理解
 
@@ -39,7 +40,7 @@ Renderer
   → typed Preload API
   → Electron Main
   → JSON-RPC / JSONL / stdio
-  → zeta app-server
+  → zeta-server app-server
 ```
 
 Desktop 禁止执行 `zeta ask ...` 后解析终端输出，也禁止直接链接 `zeta-core`。
@@ -218,7 +219,7 @@ package；它读取 production builder 使用的同一份 runtime lock、校验 
 只有新 package 完整构建并通过 layout validation 后才替换上一代。它不安装或调用 Python；
 Python builder 只属于显式 release packaging。`appServerExecutablePath()` 在开发态选择该
 package root，在发布态选择 Electron `resourcesPath`，两者都只启动
-`<package>/bin/zeta[.exe]`。因此 ripgrep、sandbox helper 与 built-in Skills 不依赖开发机
+`<package>/bin/zeta-server[.exe]`。因此 ripgrep、sandbox helper 与 built-in Skills 不依赖开发机
 `PATH`，缺失或 digest 不匹配会在 package preparation 阶段失败，而不是推迟到 App Server
 initialize gate。
 
@@ -226,7 +227,7 @@ initialize gate。
 
 Main 必须：
 
-1. 从应用包内确定的绝对路径启动 `zeta app-server --listen stdio://`；
+1. 从应用包内确定的绝对路径启动 `zeta-server app-server --listen stdio://`；
 2. 使用 `shell: false`，只传递环境变量 allowlist；
 3. 在创建业务 UI 前完成 `initialize`；
 4. 校验 protocol version、schema hash 和 server build；
@@ -721,7 +722,7 @@ TypeScript 生成。进程内 CLI client 与 Desktop stdio client 必须经过�
 每次协议交付至少包含：
 
 - 可运行的 `zeta` 二进制；
-- `zeta app-server --listen stdio://`；
+- `zeta-server app-server --listen stdio://`；
 - `zeta-rs/app-server-protocol/schema/types.ts`；
 - `zeta-rs/app-server-protocol/schema/schema.json`；
 - schema hash；

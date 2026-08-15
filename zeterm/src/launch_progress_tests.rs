@@ -349,7 +349,7 @@ fn high_level_launch_stream_reports_preflight_failure_without_installing() {
                 SshHost::parse("build").unwrap(),
                 RemoteWorkspacePath::parse("/srv/project").unwrap(),
             ),
-            RemoteRuntime::new("/opt/zeta/bin/zeta").unwrap(),
+            RemoteRuntime::new("/opt/zeta/bin/zeta-server").unwrap(),
         ),
         ssh_executable: Some(fake_ssh),
         runtime_source: RemoteRuntimeSource::ExplicitRuntime,

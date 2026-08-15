@@ -1,28 +1,28 @@
 import type { RemoteRuntimeInstallProgress } from "../common/remoteRuntimeInstallProgress.js";
 import { PackagedRemoteRuntimeCatalog, type RemoteRuntimeCatalogSource } from "./packagedRemoteRuntimeCatalog.js";
-import { normalizeCredentialFreeSshHost, type RunZetaRemoteCommand, runZetaRemoteCommand, validLocalCommand } from "./zetaCliRemoteCommand.js";
-import { ZetaCliRemoteRuntimeFetcher } from "./zetaCliRemoteRuntimeFetcher.js";
-import type { RemoteRuntimeInstallRequestOptions } from "./zetaCliRemoteRuntimeInstaller.js";
-import { ZetaCliRemoteRuntimeInstaller } from "./zetaCliRemoteRuntimeInstaller.js";
+import { normalizeCredentialFreeSshHost, type RunServerHostRemoteCommand, runServerHostRemoteCommand, validLocalCommand } from "./serverHostRemoteCommand.js";
+import { ServerHostRemoteRuntimeFetcher } from "./serverHostRemoteRuntimeFetcher.js";
+import type { RemoteRuntimeInstallRequestOptions } from "./serverHostRemoteRuntimeInstaller.js";
+import { ServerHostRemoteRuntimeInstaller } from "./serverHostRemoteRuntimeInstaller.js";
 
-export interface ZetaCliRemoteRuntimeProvisionerOptions {
+export interface ServerHostRemoteRuntimeProvisionerOptions {
   readonly source: RemoteRuntimeCatalogSource;
-  readonly zetaExecutable: string;
+  readonly serverHostExecutable: string;
   readonly sshExecutable: string;
   readonly environment: NodeJS.ProcessEnv;
   readonly installRoot?: string;
   readonly onProgress?: (progress: RemoteRuntimeInstallProgress) => void;
-  readonly runCommand?: RunZetaRemoteCommand;
+  readonly runCommand?: RunServerHostRemoteCommand;
 }
 
 /** Selects a package-authenticated artifact for the probed host and delegates installation. */
-export class ZetaCliRemoteRuntimeProvisioner {
-  private readonly runCommand: RunZetaRemoteCommand;
+export class ServerHostRemoteRuntimeProvisioner {
+  private readonly runCommand: RunServerHostRemoteCommand;
   private catalog: Promise<PackagedRemoteRuntimeCatalog> | undefined;
 
-  constructor(private readonly options: ZetaCliRemoteRuntimeProvisionerOptions) {
-    if (!validLocalCommand(options.zetaExecutable) || !validLocalCommand(options.sshExecutable)) throw new Error("Remote provisioner executables must be non-empty and contain no control characters");
-    this.runCommand = options.runCommand ?? runZetaRemoteCommand;
+  constructor(private readonly options: ServerHostRemoteRuntimeProvisionerOptions) {
+    if (!validLocalCommand(options.serverHostExecutable) || !validLocalCommand(options.sshExecutable)) throw new Error("Remote provisioner executables must be non-empty and contain no control characters");
+    this.runCommand = options.runCommand ?? runServerHostRemoteCommand;
   }
 
   async install(host: string, request: RemoteRuntimeInstallRequestOptions = {}): Promise<string> {
@@ -30,11 +30,11 @@ export class ZetaCliRemoteRuntimeProvisioner {
     const target = await this.probeTarget(normalizedHost, request.signal);
     const reportProgress = request.onProgress ?? this.options.onProgress;
     const artifact = this.options.source.kind === "network"
-      ? await new ZetaCliRemoteRuntimeFetcher({ zetaExecutable: this.options.zetaExecutable, environment: this.options.environment, source: this.options.source, runCommand: this.runCommand }).fetch(target, { signal: request.signal, onProgress: reportProgress })
+      ? await new ServerHostRemoteRuntimeFetcher({ serverHostExecutable: this.options.serverHostExecutable, environment: this.options.environment, source: this.options.source, runCommand: this.runCommand }).fetch(target, { signal: request.signal, onProgress: reportProgress })
       : (await this.loadCatalog()).artifactFor(target);
     if (artifact === undefined) throw new Error(`The Desktop release has no Remote runtime for ${target}`);
-    return new ZetaCliRemoteRuntimeInstaller({
-      zetaExecutable: this.options.zetaExecutable,
+    return new ServerHostRemoteRuntimeInstaller({
+      serverHostExecutable: this.options.serverHostExecutable,
       sshExecutable: this.options.sshExecutable,
       environment: this.options.environment,
       artifact,
@@ -50,7 +50,7 @@ export class ZetaCliRemoteRuntimeProvisioner {
   }
 
   private async probeTarget(host: string, signal: AbortSignal | undefined): Promise<string> {
-    const result = await this.runCommand(this.options.zetaExecutable, ["remote", "probe", "--host", host, "--ssh", this.options.sshExecutable], this.options.environment, signal === undefined ? undefined : { onStderrData: () => {}, signal });
+    const result = await this.runCommand(this.options.serverHostExecutable, ["remote", "probe", "--host", host, "--ssh", this.options.sshExecutable], this.options.environment, signal === undefined ? undefined : { onStderrData: () => {}, signal });
     if (result.exitCode !== 0) {
       const diagnostic = result.stderr.trim() || result.stdout.trim() || `exit code ${result.exitCode ?? "unknown"}`;
       throw new Error(`Remote platform probe failed: ${diagnostic}`);

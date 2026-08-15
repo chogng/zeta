@@ -274,12 +274,12 @@ fn write_installing_fake_ssh(
             "printf '%s\\n' '__ZETA_REMOTE_RUNTIME_MISSING__'; exit 127"
         }
         InitialRemoteRuntime::Incompatible => {
-            "printf '%s\\n' '__ZETA_REMOTE_RUNTIME_FOUND__:/legacy/bin/zeta'"
+            "printf '%s\\n' '__ZETA_REMOTE_RUNTIME_FOUND__:/legacy/bin/zeta-server'"
         }
     };
     let obsolete_response = initialize_response("obsolete-schema");
     let receipt_runtime = format!(
-        "/srv/zeta/remote/runtimes/x86_64-unknown-linux-gnu/0.1.0/{artifact_sha256}/bin/zeta"
+        "/srv/zeta/remote/runtimes/x86_64-unknown-linux-gnu/0.1.0/{artifact_sha256}/bin/zeta-server"
     );
     fs::write(
         path,
@@ -308,7 +308,7 @@ fn create_runtime_archive(directory: &Path) -> TestRuntimeArtifact {
         "layoutVersion": 2,
         "version": "0.1.0",
         "target": "x86_64-unknown-linux-gnu",
-        "entrypoint": "bin/zeta",
+        "entrypoint": "bin/zeta-server",
         "pathDir": "zeta-path",
         "resourcesDir": "zeta-resources",
         "javascriptRuntime": { "kind": "packagedNode" },
@@ -317,7 +317,7 @@ fn create_runtime_archive(directory: &Path) -> TestRuntimeArtifact {
     .unwrap();
     let mut unpacked_size =
         append_archive_file(&mut builder, "zeta-package.json", &metadata, 0o644);
-    unpacked_size += append_archive_file(&mut builder, "bin/zeta", b"zeta", 0o755);
+    unpacked_size += append_archive_file(&mut builder, "bin/zeta-server", b"zeta", 0o755);
     unpacked_size += append_archive_file(&mut builder, "zeta-path/rg", b"rg", 0o755);
     unpacked_size +=
         append_archive_file(&mut builder, "zeta-resources/node/bin/node", b"node", 0o755);

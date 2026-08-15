@@ -19,8 +19,8 @@ class TargetSpec:
         return ".exe" if self.is_windows else ""
 
     @property
-    def zeta_name(self) -> str:
-        return "zeta" + self.executable_suffix
+    def server_name(self) -> str:
+        return "zeta-server" + self.executable_suffix
 
     @property
     def ripgrep_name(self) -> str:

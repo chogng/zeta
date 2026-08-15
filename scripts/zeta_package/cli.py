@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Optional, Sequence
 
 from .bubblewrap import resolve_bubblewrap
-from .cargo import resolve_zeta_binary
+from .cargo import resolve_server_binary
 from .layout import build_package_directory
 from .node import resolve_node
 from .ripgrep import resolve_ripgrep
@@ -49,9 +49,9 @@ def parse_arguments(arguments: Optional[Sequence[str]] = None) -> argparse.Names
         help="New directory to create as the package root.",
     )
     parser.add_argument(
-        "--zeta-bin",
+        "--server-bin",
         type=Path,
-        help="Prebuilt Zeta executable. If omitted, Cargo builds it.",
+        help="Prebuilt product-neutral Zeta server executable. If omitted, Cargo builds it.",
     )
     parser.add_argument(
         "--rg-bin",
@@ -146,10 +146,10 @@ def main(arguments: Optional[Sequence[str]] = None) -> int:
     args = parse_arguments(arguments)
     target = args.target or default_target()
     spec = TARGETS[target]
-    zeta_binary = resolve_zeta_binary(
+    server_binary = resolve_server_binary(
         REPOSITORY_ROOT,
         spec,
-        args.zeta_bin,
+        args.server_bin,
         cargo=args.cargo,
         cargo_profile=args.cargo_profile,
     )
@@ -195,7 +195,7 @@ def main(arguments: Optional[Sequence[str]] = None) -> int:
         REPOSITORY_ROOT,
         version,
         spec,
-        zeta_binary,
+        server_binary,
         ripgrep,
         node,
         bubblewrap,

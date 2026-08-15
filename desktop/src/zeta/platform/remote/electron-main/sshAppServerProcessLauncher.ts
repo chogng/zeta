@@ -3,7 +3,7 @@ import type { URI } from "../../../base/common/uri.js";
 import { AppServerProtocolIncompatibleError } from "../../app-server/electron-main/app-server-session.js";
 import type { IAppServerProcessLauncher } from "../../app-server/electron-main/appServerProcessLauncher.js";
 import { getRemoteAuthority, getRemoteWorkspacePath } from "../common/remote.js";
-import { isCanonicalAbsolutePosixPath, validLocalCommand } from "./zetaCliRemoteCommand.js";
+import { isCanonicalAbsolutePosixPath, validLocalCommand } from "./serverHostRemoteCommand.js";
 
 export interface SpawnSshAppServerOptions {
   readonly environment: NodeJS.ProcessEnv;

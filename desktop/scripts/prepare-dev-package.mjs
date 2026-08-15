@@ -298,10 +298,10 @@ function cargoBuild(target, packageName, binaryArgs, environment = process.env) 
 }
 
 async function buildFirstPartyExecutables(target, platform) {
-  cargoBuild(target, "zeta-cli", ["--bin", "zeta"]);
+  cargoBuild(target, "zeta-server-host", ["--bin", "zeta-server"]);
   const debugDirectory = join(cargoWorkspace, "target", target, "debug");
   const executables = {
-    zeta: join(debugDirectory, platform === "win32" ? "zeta.exe" : "zeta"),
+    serverHost: join(debugDirectory, platform === "win32" ? "zeta-server.exe" : "zeta-server"),
   };
   if (platform === "win32") {
     cargoBuild(target, "zeta-windows-sandbox", ["--bins"]);
@@ -478,7 +478,7 @@ async function workspaceVersion() {
 
 export async function assemblePackage(staging, target, platform, executables, ripgrep, node, remoteRuntimeBundle, remoteRuntimeRelease) {
   const isWindows = platform === "win32";
-  const zetaName = isWindows ? "zeta.exe" : "zeta";
+  const serverHostName = isWindows ? "zeta-server.exe" : "zeta-server";
   const rgName = isWindows ? "rg.exe" : "rg";
   const binDirectory = join(staging, "bin");
   const pathDirectory = join(staging, "zeta-path");
@@ -495,7 +495,7 @@ export async function assemblePackage(staging, target, platform, executables, ri
   if (remoteRuntimeBundle) {
     await copyRegularTree(remoteRuntimeBundle, join(staging, "zeta-remote-runtimes"), "Remote runtime bundle");
   }
-  await copyExecutable(executables.zeta, join(binDirectory, zetaName), isWindows);
+  await copyExecutable(executables.serverHost, join(binDirectory, serverHostName), isWindows);
   await copyExecutable(ripgrep.executable, join(pathDirectory, rgName), isWindows);
   if (node) {
     const nodeDirectory = join(resourcesDirectory, "node", "bin");
@@ -552,7 +552,7 @@ export async function assemblePackage(staging, target, platform, executables, ri
   }
   const metadata = {
     components,
-    entrypoint: `bin/${zetaName}`,
+    entrypoint: `bin/${serverHostName}`,
     javascriptRuntime: { kind: node ? "packagedNode" : "hostProvidedNode" },
     layoutVersion: 2,
     pathDir: "zeta-path",
@@ -596,7 +596,7 @@ async function validatePackage(packageRoot, platform) {
   if (metadata.layoutVersion !== 2 || typeof metadata.components !== "object" || metadata.components === null) {
     throw new Error("Invalid package metadata");
   }
-  await requireFile(join(packageRoot, "bin", isWindows ? "zeta.exe" : "zeta"));
+  await requireFile(join(packageRoot, "bin", isWindows ? "zeta-server.exe" : "zeta-server"));
   await requireFile(join(packageRoot, "zeta-path", isWindows ? "rg.exe" : "rg"));
   if (metadata.javascriptRuntime?.kind === "packagedNode") {
     if (typeof metadata.components.node !== "object" || metadata.components.node === null) {

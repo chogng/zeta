@@ -69,7 +69,7 @@ fn zeta_code_cli_owns_shared_remote_profile_persistence() {
             "--workspace",
             "/srv/project",
             "--runtime",
-            "/srv/zeta/runtime/one/bin/zeta",
+            "/srv/zeta/runtime/one/bin/zeta-server",
         ])
         .env("ZETA_PROFILE_ROOT", &root)
         .output()
@@ -81,7 +81,7 @@ fn zeta_code_cli_owns_shared_remote_profile_persistence() {
     );
     assert_eq!(
         String::from_utf8(activate.stdout).unwrap(),
-        "{\"activeRuntime\":\"/srv/zeta/runtime/one/bin/zeta\"}\n"
+        "{\"activeRuntime\":\"/srv/zeta/runtime/one/bin/zeta-server\"}\n"
     );
 
     let activate_second = Command::new(env!("CARGO_BIN_EXE_zeta"))
@@ -94,7 +94,7 @@ fn zeta_code_cli_owns_shared_remote_profile_persistence() {
             "--workspace",
             "/srv/project",
             "--runtime",
-            "/srv/zeta/runtime/two/bin/zeta",
+            "/srv/zeta/runtime/two/bin/zeta-server",
         ])
         .env("ZETA_PROFILE_ROOT", &root)
         .output()
@@ -117,7 +117,7 @@ fn zeta_code_cli_owns_shared_remote_profile_persistence() {
     assert!(get.status.success());
     assert_eq!(
         String::from_utf8(get.stdout).unwrap(),
-        "{\"activeRuntime\":\"/srv/zeta/runtime/two/bin/zeta\",\"previousRuntime\":\"/srv/zeta/runtime/one/bin/zeta\"}\n"
+        "{\"activeRuntime\":\"/srv/zeta/runtime/two/bin/zeta-server\",\"previousRuntime\":\"/srv/zeta/runtime/one/bin/zeta-server\"}\n"
     );
 
     let fake_ssh = root.join("fake-ssh");
@@ -125,7 +125,7 @@ fn zeta_code_cli_owns_shared_remote_profile_persistence() {
     fs::write(
         &fake_ssh,
         format!(
-            "#!/bin/sh\ncommand=''\nfor argument in \"$@\"; do command=$argument; done\ncase \"$command\" in\n  *\"'remote-server' 'connect'\"*) IFS= read -r request || exit 65; printf '%s\\n' '{}' ;;\n  *) printf '%s\\n' '__ZETA_REMOTE_RUNTIME_FOUND__:/srv/zeta/runtime/one/bin/zeta' ;;\nesac\n",
+            "#!/bin/sh\ncommand=''\nfor argument in \"$@\"; do command=$argument; done\ncase \"$command\" in\n  *\"'remote-server' 'connect'\"*) IFS= read -r request || exit 65; printf '%s\\n' '{}' ;;\n  *) printf '%s\\n' '__ZETA_REMOTE_RUNTIME_FOUND__:/srv/zeta/runtime/one/bin/zeta-server' ;;\nesac\n",
             response,
         ),
     )
@@ -153,7 +153,7 @@ fn zeta_code_cli_owns_shared_remote_profile_persistence() {
     );
     assert_eq!(
         String::from_utf8(rollback.stdout).unwrap(),
-        "{\"activeRuntime\":\"/srv/zeta/runtime/one/bin/zeta\",\"previousRuntime\":\"/srv/zeta/runtime/two/bin/zeta\"}\n"
+        "{\"activeRuntime\":\"/srv/zeta/runtime/one/bin/zeta-server\",\"previousRuntime\":\"/srv/zeta/runtime/two/bin/zeta-server\"}\n"
     );
     assert!(root.join("remote/connections.json").is_file());
     fs::remove_dir_all(root).unwrap();

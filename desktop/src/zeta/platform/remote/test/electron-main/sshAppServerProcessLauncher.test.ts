@@ -12,7 +12,7 @@ test("SSH launcher starts a non-interactive Remote App Server over stdio", () =>
   const launcher = new SshAppServerProcessLauncher({
     workspace: createSshRemoteWorkspaceUri("Work-Server", "/home/zeta/project with spaces"),
     sshExecutable: "ssh",
-    remoteExecutable: "/opt/zeta/bin/zeta",
+    remoteExecutable: "/opt/zeta/bin/zeta-server",
     localEnvironment: environment,
     spawnProcess: (executable, args, options) => {
       launches.push({ executable, args, environment: options.environment });
@@ -31,7 +31,7 @@ test("SSH launcher starts a non-interactive Remote App Server over stdio", () =>
       "-o",
       "ConnectTimeout=10",
       "work-server",
-      "'env' 'ZETA_WORKSPACE_ROOT=/home/zeta/project with spaces' '/opt/zeta/bin/zeta' 'remote-server' 'connect'",
+      "'env' 'ZETA_WORKSPACE_ROOT=/home/zeta/project with spaces' '/opt/zeta/bin/zeta-server' 'remote-server' 'connect'",
     ],
     environment,
   }]);
@@ -39,8 +39,8 @@ test("SSH launcher starts a non-interactive Remote App Server over stdio", () =>
 
 test("Remote App Server command shell-quotes apostrophes without interpolating input", () => {
   assert.equal(
-    remoteAppServerCommand("/opt/Zeta's/bin/zeta", "/home/zeta/O'Brien"),
-    "'env' 'ZETA_WORKSPACE_ROOT=/home/zeta/O'\\''Brien' '/opt/Zeta'\\''s/bin/zeta' 'remote-server' 'connect'",
+    remoteAppServerCommand("/opt/Zeta's/bin/zeta-server", "/home/zeta/O'Brien"),
+    "'env' 'ZETA_WORKSPACE_ROOT=/home/zeta/O'\\''Brien' '/opt/Zeta'\\''s/bin/zeta-server' 'remote-server' 'connect'",
   );
 });
 
@@ -53,7 +53,7 @@ test("Desktop validates the selected runtime before starting the App Server", as
     localEnvironment: { SSH_AUTH_SOCK: "/tmp/agent.sock" },
     probeRuntime: async (executable, args, options) => {
       probe = { executable, args, environment: options.environment };
-      return { exitCode: 0, stdout: "__ZETA_REMOTE_RUNTIME_FOUND__:/usr/bin/zeta\n", stderr: "" };
+      return { exitCode: 0, stdout: "__ZETA_REMOTE_RUNTIME_FOUND__:/usr/bin/zeta-server\n", stderr: "" };
     },
   });
 
@@ -94,11 +94,11 @@ test("Desktop provisions a missing runtime in Main and re-probes the exact insta
       probes.push([...args]);
       return probes.length === 1
         ? { exitCode: 127, stdout: "__ZETA_REMOTE_RUNTIME_MISSING__\n", stderr: "" }
-        : { exitCode: 0, stdout: "__ZETA_REMOTE_RUNTIME_FOUND__:/srv/zeta/runtime/bin/zeta\n", stderr: "" };
+        : { exitCode: 0, stdout: "__ZETA_REMOTE_RUNTIME_FOUND__:/srv/zeta/runtime/bin/zeta-server\n", stderr: "" };
     },
     provisionRuntime: async host => {
       provisions.push(host);
-      return "/srv/zeta/runtime/bin/zeta";
+      return "/srv/zeta/runtime/bin/zeta-server";
     },
     settleRuntimeProvision: () => settlements.push(probes.length),
     spawnProcess: (_executable, args) => {
@@ -114,9 +114,9 @@ test("Desktop provisions a missing runtime in Main and re-probes the exact insta
   assert.deepEqual(settlements, [2]);
   assert.deepEqual(probes, [
     [...sshRuntimeProbeArguments("work-server", "zeta")],
-    [...sshRuntimeProbeArguments("work-server", "/srv/zeta/runtime/bin/zeta")],
+    [...sshRuntimeProbeArguments("work-server", "/srv/zeta/runtime/bin/zeta-server")],
   ]);
-  assert.equal(launches[0]?.at(-1), "'env' 'ZETA_WORKSPACE_ROOT=/home/zeta/project' '/srv/zeta/runtime/bin/zeta' 'remote-server' 'connect'");
+  assert.equal(launches[0]?.at(-1), "'env' 'ZETA_WORKSPACE_ROOT=/home/zeta/project' '/srv/zeta/runtime/bin/zeta-server' 'remote-server' 'connect'");
 });
 
 test("Desktop settles bootstrap progress when provisioning fails", async () => {
@@ -145,7 +145,7 @@ test("Desktop never provisions on an SSH transport failure", async () => {
     probeRuntime: async () => ({ exitCode: 255, stdout: "", stderr: "host key rejected" }),
     provisionRuntime: async () => {
       provisioned = true;
-      return "/srv/zeta/runtime/bin/zeta";
+      return "/srv/zeta/runtime/bin/zeta-server";
     },
   });
 
@@ -166,12 +166,12 @@ test("Desktop resolves and activates a persisted exact runtime only around the i
     localEnvironment: {},
     resolveRuntime: async (host, workspace) => {
       lifecycle.push(`resolve:${host}:${workspace}`);
-      return "/srv/zeta/runtime/one/bin/zeta";
+      return "/srv/zeta/runtime/one/bin/zeta-server";
     },
     activateRuntime: async (host, workspace, runtime) => {
       lifecycle.push(`activate:${host}:${workspace}:${runtime}`);
     },
-    probeRuntime: async () => ({ exitCode: 0, stdout: "__ZETA_REMOTE_RUNTIME_FOUND__:/srv/zeta/runtime/one/bin/zeta\n", stderr: "" }),
+    probeRuntime: async () => ({ exitCode: 0, stdout: "__ZETA_REMOTE_RUNTIME_FOUND__:/srv/zeta/runtime/one/bin/zeta-server\n", stderr: "" }),
     spawnProcess: (_executable, args) => {
       launches.push([...args]);
       return {} as ChildProcessWithoutNullStreams;
@@ -181,12 +181,12 @@ test("Desktop resolves and activates a persisted exact runtime only around the i
   await launcher.validate();
   assert.deepEqual(lifecycle, ["resolve:work-server:/home/zeta/project"]);
   launcher.launch();
-  assert.equal(launches[0]?.at(-1), "'env' 'ZETA_WORKSPACE_ROOT=/home/zeta/project' '/srv/zeta/runtime/one/bin/zeta' 'remote-server' 'connect'");
+  assert.equal(launches[0]?.at(-1), "'env' 'ZETA_WORKSPACE_ROOT=/home/zeta/project' '/srv/zeta/runtime/one/bin/zeta-server' 'remote-server' 'connect'");
 
   await launcher.didInitialize();
   assert.deepEqual(lifecycle, [
     "resolve:work-server:/home/zeta/project",
-    "activate:work-server:/home/zeta/project:/srv/zeta/runtime/one/bin/zeta",
+    "activate:work-server:/home/zeta/project:/srv/zeta/runtime/one/bin/zeta-server",
   ]);
 });
 
@@ -196,11 +196,11 @@ test("Desktop selects only a host-verified rollback runtime", async () => {
   const launcher = new SshAppServerProcessLauncher({
     workspace: createSshRemoteWorkspaceUri("work-server", "/home/zeta/project"),
     sshExecutable: "/usr/bin/ssh",
-    remoteExecutable: "/srv/zeta/runtime/two/bin/zeta",
+    remoteExecutable: "/srv/zeta/runtime/two/bin/zeta-server",
     localEnvironment: {},
     rollbackRuntime: async (host, workspace, sshExecutable) => {
       rollbacks.push(`${host}:${workspace}:${sshExecutable}`);
-      return "/srv/zeta/runtime/one/bin/zeta";
+      return "/srv/zeta/runtime/one/bin/zeta-server";
     },
     spawnProcess: (_executable, args) => {
       launches.push([...args]);
@@ -213,16 +213,16 @@ test("Desktop selects only a host-verified rollback runtime", async () => {
   launcher.launch();
 
   assert.deepEqual(rollbacks, ["work-server:/home/zeta/project:/usr/bin/ssh"]);
-  assert.equal(launches[0]?.at(-1), "'env' 'ZETA_WORKSPACE_ROOT=/home/zeta/project' '/srv/zeta/runtime/one/bin/zeta' 'remote-server' 'connect'");
+  assert.equal(launches[0]?.at(-1), "'env' 'ZETA_WORKSPACE_ROOT=/home/zeta/project' '/srv/zeta/runtime/one/bin/zeta-server' 'remote-server' 'connect'");
 });
 
 test("Desktop rejects an invalid runtime returned by rollback policy", async () => {
   const launcher = new SshAppServerProcessLauncher({
     workspace: createSshRemoteWorkspaceUri("work-server", "/home/zeta/project"),
     sshExecutable: "ssh",
-    remoteExecutable: "/srv/zeta/runtime/two/bin/zeta",
+    remoteExecutable: "/srv/zeta/runtime/two/bin/zeta-server",
     localEnvironment: {},
-    rollbackRuntime: async () => "relative/bin/zeta",
+    rollbackRuntime: async () => "relative/bin/zeta-server",
   });
 
   await assert.rejects(() => launcher.rollbackRuntime(), /invalid executable path/);
@@ -237,12 +237,12 @@ test("Desktop provisions once for a typed protocol incompatibility and launches 
     remoteExecutable: "zeta",
     localEnvironment: {},
     probeRuntime: async (_executable, args) => {
-      const runtime = args.at(-1)?.includes("/srv/zeta/runtime/two/bin/zeta") ? "/srv/zeta/runtime/two/bin/zeta" : "/usr/bin/zeta";
+      const runtime = args.at(-1)?.includes("/srv/zeta/runtime/two/bin/zeta-server") ? "/srv/zeta/runtime/two/bin/zeta-server" : "/usr/bin/zeta-server";
       return { exitCode: 0, stdout: `__ZETA_REMOTE_RUNTIME_FOUND__:${runtime}\n`, stderr: "" };
     },
     provisionRuntime: async host => {
       provisions.push(host);
-      return "/srv/zeta/runtime/two/bin/zeta";
+      return "/srv/zeta/runtime/two/bin/zeta-server";
     },
     spawnProcess: (_executable, args) => {
       launches.push([...args]);
@@ -256,7 +256,7 @@ test("Desktop provisions once for a typed protocol incompatibility and launches 
   launcher.launch();
 
   assert.deepEqual(provisions, ["work-server"]);
-  assert.equal(launches[0]?.at(-1), "'env' 'ZETA_WORKSPACE_ROOT=/home/zeta/project' '/srv/zeta/runtime/two/bin/zeta' 'remote-server' 'connect'");
+  assert.equal(launches[0]?.at(-1), "'env' 'ZETA_WORKSPACE_ROOT=/home/zeta/project' '/srv/zeta/runtime/two/bin/zeta-server' 'remote-server' 'connect'");
 });
 
 test("an explicit new startup validation permits protocol provisioning after a failed gate", async () => {
@@ -267,13 +267,13 @@ test("an explicit new startup validation permits protocol provisioning after a f
     remoteExecutable: "zeta",
     localEnvironment: {},
     probeRuntime: async (_executable, args) => {
-      const runtime = args.at(-1)?.includes("/srv/zeta/runtime/two/bin/zeta") ? "/srv/zeta/runtime/two/bin/zeta" : "/usr/bin/zeta";
+      const runtime = args.at(-1)?.includes("/srv/zeta/runtime/two/bin/zeta-server") ? "/srv/zeta/runtime/two/bin/zeta-server" : "/usr/bin/zeta-server";
       return { exitCode: 0, stdout: `__ZETA_REMOTE_RUNTIME_FOUND__:${runtime}\n`, stderr: "" };
     },
     provisionRuntime: async () => {
       provisions += 1;
       if (provisions === 1) throw new Error("temporary install failure");
-      return "/srv/zeta/runtime/two/bin/zeta";
+      return "/srv/zeta/runtime/two/bin/zeta-server";
     },
   });
 

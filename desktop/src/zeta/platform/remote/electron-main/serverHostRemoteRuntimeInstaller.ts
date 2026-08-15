@@ -1,8 +1,8 @@
 import type { RemoteRuntimeInstallProgress } from "../common/remoteRuntimeInstallProgress.js";
 import { isAbsolute } from "node:path";
-import { isCanonicalAbsolutePosixPath, normalizeCredentialFreeSshHost, type RunZetaRemoteCommand, runZetaRemoteCommand, validLocalCommand } from "./zetaCliRemoteCommand.js";
+import { isCanonicalAbsolutePosixPath, normalizeCredentialFreeSshHost, type RunServerHostRemoteCommand, runServerHostRemoteCommand, validLocalCommand } from "./serverHostRemoteCommand.js";
 
-export type { RunZetaRemoteCommand, ZetaRemoteCommandResult } from "./zetaCliRemoteCommand.js";
+export type { RunServerHostRemoteCommand, ServerHostCommandResult } from "./serverHostRemoteCommand.js";
 
 const POSIX_REMOTE_TARGETS = new Set([
   "aarch64-apple-darwin",
@@ -25,14 +25,14 @@ export interface TrustedRemoteRuntimeArtifact {
   readonly sha256: string;
 }
 
-export interface ZetaCliRemoteRuntimeInstallerOptions {
-  readonly zetaExecutable: string;
+export interface ServerHostRemoteRuntimeInstallerOptions {
+  readonly serverHostExecutable: string;
   readonly sshExecutable: string;
   readonly environment: NodeJS.ProcessEnv;
   readonly artifact: TrustedRemoteRuntimeArtifact;
   readonly installRoot?: string;
   readonly onProgress?: (progress: RemoteRuntimeInstallProgress) => void;
-  readonly runCommand?: RunZetaRemoteCommand;
+  readonly runCommand?: RunServerHostRemoteCommand;
 }
 
 export interface RemoteRuntimeInstallRequestOptions {
@@ -41,19 +41,19 @@ export interface RemoteRuntimeInstallRequestOptions {
 }
 
 /**
- * Invokes the packaged `zeta remote install` host command from Electron Main.
+ * Invokes the packaged `zeta-server remote install` command from Electron Main.
  *
  * The artifact and all integrity facts are bound by the trusted product host. Renderer supplies
  * neither paths nor SSH options, and the Remote host never downloads release content itself.
  */
-export class ZetaCliRemoteRuntimeInstaller {
-  private readonly runCommand: RunZetaRemoteCommand;
+export class ServerHostRemoteRuntimeInstaller {
+  private readonly runCommand: RunServerHostRemoteCommand;
 
-  constructor(readonly options: ZetaCliRemoteRuntimeInstallerOptions) {
+  constructor(readonly options: ServerHostRemoteRuntimeInstallerOptions) {
     validateTrustedRemoteRuntimeArtifact(options.artifact);
-    if (!validLocalCommand(options.zetaExecutable) || !validLocalCommand(options.sshExecutable)) throw new Error("Remote installer executables must be non-empty and contain no control characters");
+    if (!validLocalCommand(options.serverHostExecutable) || !validLocalCommand(options.sshExecutable)) throw new Error("Remote installer executables must be non-empty and contain no control characters");
     if (options.installRoot !== undefined && !isCanonicalAbsolutePosixPath(options.installRoot)) throw new Error("Remote runtime install root must be a canonical absolute POSIX path");
-    this.runCommand = options.runCommand ?? runZetaRemoteCommand;
+    this.runCommand = options.runCommand ?? runServerHostRemoteCommand;
   }
 
   async install(host: string, request: RemoteRuntimeInstallRequestOptions = {}): Promise<string> {
@@ -86,14 +86,14 @@ export class ZetaCliRemoteRuntimeInstaller {
     const observer = progressDecoder === undefined && request.signal === undefined
       ? undefined
       : { onStderrData: (chunk: string) => progressDecoder?.accept(chunk), signal: request.signal };
-    const result = await this.runCommand(this.options.zetaExecutable, args, this.options.environment, observer);
+    const result = await this.runCommand(this.options.serverHostExecutable, args, this.options.environment, observer);
     progressDecoder?.finish();
     if (result.exitCode !== 0) {
       const diagnostic = result.stderr.trim() || result.stdout.trim() || `exit code ${result.exitCode ?? "unknown"}`;
       throw new Error(`Remote runtime installation failed: ${diagnostic}`);
     }
     const executable = result.stdout.split(/\r?\n/u).map(line => line.trim()).reverse().find(line => line.length > 0);
-    if (executable === undefined || !isCanonicalAbsolutePosixPath(executable) || !executable.endsWith("/bin/zeta")) {
+    if (executable === undefined || !isCanonicalAbsolutePosixPath(executable) || !executable.endsWith("/bin/zeta-server")) {
       throw new Error("Remote runtime installation did not return a valid immutable executable path");
     }
     return executable;

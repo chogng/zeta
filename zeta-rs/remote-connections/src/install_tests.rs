@@ -111,7 +111,7 @@ fn installer_probes_uploads_and_returns_an_exact_immutable_runtime() {
     let captured = directory.path().join("captured.tar.gz");
     let fake_ssh = directory.path().join("fake-ssh");
     let executable = format!(
-        "/home/remote/.local/share/zeta/remote/runtimes/{}/{}/{}/bin/zeta",
+        "/home/remote/.local/share/zeta/remote/runtimes/{}/{}/{}/bin/zeta-server",
         artifact.platform().target_triple(),
         artifact.version().as_str(),
         artifact.integrity().sha256()
@@ -187,7 +187,7 @@ fn installer_accepts_an_idempotent_receipt_when_remote_closes_upload_stdin_early
     let artifact = package_artifact(directory.path(), PackageVariant::Canonical);
     let fake_ssh = directory.path().join("fake-ssh");
     let executable = format!(
-        "/home/remote/.local/share/zeta/remote/runtimes/{}/{}/{}/bin/zeta",
+        "/home/remote/.local/share/zeta/remote/runtimes/{}/{}/{}/bin/zeta-server",
         artifact.platform().target_triple(),
         artifact.version().as_str(),
         artifact.integrity().sha256()
@@ -328,7 +328,7 @@ fn generated_remote_script_commits_a_package_and_is_idempotent() {
         .join(TARGET.target_triple())
         .join(VERSION)
         .join(artifact.integrity().sha256())
-        .join("bin/zeta");
+        .join("bin/zeta-server");
     let executable_text = executable.to_string_lossy().into_owned();
     assert!(receipt.contains(&executable_text));
     assert_eq!(fs::read(&executable).unwrap(), b"zeta");
@@ -362,7 +362,7 @@ fn package_artifact(root: &Path, variant: PackageVariant) -> RemoteRuntimeArtifa
         "layoutVersion": 2,
         "version": VERSION,
         "target": TARGET.target_triple(),
-        "entrypoint": "bin/zeta",
+        "entrypoint": "bin/zeta-server",
         "pathDir": "zeta-path",
         "resourcesDir": "zeta-resources",
         "javascriptRuntime": { "kind": javascript_runtime },
@@ -379,10 +379,10 @@ fn package_artifact(root: &Path, variant: PackageVariant) -> RemoteRuntimeArtifa
             header.set_link_name("../outside/zeta").unwrap();
             header.set_cksum();
             builder
-                .append_data(&mut header, "bin/zeta", std::io::empty())
+                .append_data(&mut header, "bin/zeta-server", std::io::empty())
                 .unwrap();
         }
-        _ => unpacked_size += append_file(&mut builder, "bin/zeta", b"zeta", 0o755),
+        _ => unpacked_size += append_file(&mut builder, "bin/zeta-server", b"zeta", 0o755),
     }
     unpacked_size += append_file(&mut builder, "zeta-path/rg", b"ripgrep", 0o755);
     if !matches!(variant, PackageVariant::HostProvidedNode) {

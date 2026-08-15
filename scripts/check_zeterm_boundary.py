@@ -103,6 +103,24 @@ def main() -> int:
         fail("zeterm/Cargo.toml still defines a nested workspace")
     if package_name(zeterm_manifest) != "zeterm":
         fail(f"expected zeterm package zeterm, got {package_name(zeterm_manifest)!r}")
+    launch_path = repository_root / "zeterm" / "src" / "launch.rs"
+    launch_text = launch_path.read_text()
+    if 'const DEFAULT_REMOTE_RUNTIME: &str = "zeta-server";' not in launch_text:
+        fail("zeterm Remote must default to the product-neutral zeta-server host")
+
+    product_host_references = ("zeta-cli", "zeta-code/cli")
+    boundary_sources = [
+        *(repository_root / "zeterm").rglob("Cargo.toml"),
+        *(repository_root / "zeterm").rglob("*.rs"),
+    ]
+    for source_path in boundary_sources:
+        source_text = source_path.read_text()
+        for forbidden_reference in product_host_references:
+            if forbidden_reference in source_text:
+                fail(
+                    f"zeterm source references Zeta Code product host: "
+                    f"{source_path}: {forbidden_reference}"
+                )
 
     members = workspace_members(root_manifest)
     missing_members = EXPECTED_ZETERM_MEMBERS - members

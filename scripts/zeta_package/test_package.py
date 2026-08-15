@@ -84,7 +84,7 @@ class PackageTests(unittest.TestCase):
     def test_local_overrides_build_canonical_package(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            zeta_binary = executable_file(root / "zeta-source", b"zeta")
+            server_binary = executable_file(root / "zeta-source", b"zeta-server")
             rg_binary = executable_file(root / "rg-source", b"ripgrep")
             output = root / "package"
             spec = TARGETS["aarch64-apple-darwin"]
@@ -101,18 +101,18 @@ class PackageTests(unittest.TestCase):
                 REPOSITORY_ROOT,
                 read_workspace_version(REPOSITORY_ROOT / "Cargo.toml"),
                 spec,
-                zeta_binary,
+                server_binary,
                 ripgrep,
                 node,
             )
 
-            self.assertEqual(b"zeta", (output / "bin" / "zeta").read_bytes())
+            self.assertEqual(b"zeta-server", (output / "bin" / "zeta-server").read_bytes())
             self.assertEqual(b"ripgrep", (output / "zeta-path" / "rg").read_bytes())
             self.assertEqual(
                 b"node",
                 (output / "zeta-resources" / "node" / "bin" / "node").read_bytes(),
             )
-            self.assertTrue(os.access(str(output / "bin" / "zeta"), os.X_OK))
+            self.assertTrue(os.access(str(output / "bin" / "zeta-server"), os.X_OK))
             self.assertTrue(os.access(str(output / "zeta-path" / "rg"), os.X_OK))
             self.assertTrue(
                 (
@@ -161,7 +161,10 @@ class PackageTests(unittest.TestCase):
                     / "product-services.json"
                 ).read_text(encoding="utf-8")
             )
-            self.assertEqual("zeta", product_services["marketplaces"][0]["id"])
+            self.assertEqual(
+                "marketplace-root.json",
+                product_services["marketplaceManager"]["trustedRoot"],
+            )
             self.assertEqual(
                 (
                     REPOSITORY_ROOT
@@ -221,7 +224,7 @@ class PackageTests(unittest.TestCase):
                     REPOSITORY_ROOT,
                     "0.1.0",
                     spec,
-                    zeta_binary,
+                    server_binary,
                     ripgrep,
                     node,
                 )
@@ -236,7 +239,7 @@ class PackageTests(unittest.TestCase):
                 REPOSITORY_ROOT,
                 read_workspace_version(REPOSITORY_ROOT / "Cargo.toml"),
                 spec,
-                executable_file(root / "zeta-source", b"zeta"),
+                executable_file(root / "zeta-source", b"zeta-server"),
                 resolve_ripgrep(
                     spec,
                     PRODUCTION_LOCK,
@@ -323,7 +326,7 @@ class PackageTests(unittest.TestCase):
             source_archive = root / "bubblewrap-test.tar.xz"
             write_bubblewrap_source_archive(source_archive)
             bubblewrap_lock = write_bubblewrap_lock(root, source_archive)
-            zeta_binary = executable_file(root / "zeta-source", b"zeta")
+            server_binary = executable_file(root / "zeta-source", b"zeta-server")
             rg_binary = executable_file(root / "rg-source", b"ripgrep")
             bwrap_binary = executable_file(root / "bwrap-source", b"bubblewrap")
             spec = TARGETS["x86_64-unknown-linux-musl"]
@@ -351,7 +354,7 @@ class PackageTests(unittest.TestCase):
                 REPOSITORY_ROOT,
                 "0.1.0",
                 spec,
-                zeta_binary,
+                server_binary,
                 ripgrep,
                 node,
                 bubblewrap,
@@ -385,8 +388,8 @@ class PackageTests(unittest.TestCase):
     def test_windows_package_contains_both_sandbox_helpers(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            zeta_binary = root / "zeta.exe"
-            zeta_binary.write_bytes(b"zeta")
+            server_binary = root / "zeta-server.exe"
+            server_binary.write_bytes(b"zeta-server")
             rg_binary = root / "rg.exe"
             rg_binary.write_bytes(b"ripgrep")
             command_runner = root / "zeta-command-runner.exe"
@@ -417,7 +420,7 @@ class PackageTests(unittest.TestCase):
                 REPOSITORY_ROOT,
                 "0.1.0",
                 spec,
-                zeta_binary,
+                server_binary,
                 ripgrep,
                 node,
                 windows_helpers=helpers,
