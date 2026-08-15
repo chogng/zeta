@@ -1,6 +1,7 @@
 import { strict as assert } from "node:assert";
 import { createHash } from "node:crypto";
 import test from "node:test";
+import { DisposableTracker, installDisposableTracker } from "../../../../../base/common/disposableTracker.js";
 import { toDisposable } from "../../../../../base/common/lifecycle.js";
 import type { ExtensionCatalog, ExtensionDescriptor, IExtensionApi } from "../../../../../platform/extensions/common/extensionApi.js";
 import type { IServerEventApi } from "../../../../../platform/app-server/common/appServerApi.js";
@@ -233,6 +234,16 @@ test("fails before registering when TextMate candidate preparation is unavailabl
 
   assert.throws(() => new AppServerExtensionService({ api, textMateService }), /requires a TextMate service/);
   assert.equal(registrations, 0);
+});
+
+test("disposes a TextMate service-owned grammar registration without taking duplicate ownership", () => {
+  const tracker = new DisposableTracker();
+  using installation = installDisposableTracker(tracker);
+  {
+    using grammars = new TextMateGrammarService();
+    using service = new AppServerExtensionService({ api: { list: async () => emptyCatalog(1), readResource: async () => new Uint8Array() }, textMateService: { grammars } as unknown as ITextMateService });
+  }
+  tracker.assertNoLeaks();
 });
 
 test("reads each generation-scoped resource once while preparing one catalog", async () => {

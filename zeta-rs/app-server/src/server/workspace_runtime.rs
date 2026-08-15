@@ -12,7 +12,6 @@ use crate::code_retrieval_context::CodeRetrievalContextSource;
 use crate::code_retrieval_tool::CodeRetrievalTool;
 use crate::dynamic_tools::DynamicToolCompositionError;
 use crate::dynamic_tools::compose_dynamic_tools;
-use crate::hook_runtime::HookRuntime;
 use crate::local_tools::LocalExecPolicyConfig;
 use crate::local_tools::append_local_tool;
 use crate::local_tools::compose_local_tools_with_config;
@@ -46,6 +45,7 @@ use zeta_core::{
     ThreadController, TurnExecutor,
 };
 use zeta_file_system::{LocalFileSystem, WorkspaceFileSystem};
+use zeta_hooks::DeclarativeHookRuntime;
 use zeta_model_provider::EmbeddingInvoker;
 use zeta_model_provider::EmbeddingRequest;
 use zeta_model_provider::EmbeddingResponse;
@@ -108,7 +108,7 @@ impl WorkspaceRuntime {
 
 pub(super) struct LocalWorkspaceHost {
     tools: Arc<WorkspaceToolPorts>,
-    hooks: Arc<HookRuntime>,
+    hooks: Arc<DeclarativeHookRuntime>,
     trust: WorkspaceSwitchTrustPolicy,
 }
 
@@ -135,7 +135,7 @@ pub(crate) struct WorkspaceRuntimeControl {
     sessions: Arc<SessionCoordinator>,
     turn_backend: Arc<dyn zeta_core::TurnExecutionBackend>,
     updates: Arc<super::update_broker::UpdateBroker>,
-    hooks: Arc<HookRuntime>,
+    hooks: Arc<DeclarativeHookRuntime>,
     mcp_status: Arc<RwLock<zeta_mcp_extension::McpRuntimeStatusSnapshot>>,
     config: Option<Arc<ConfigStore>>,
     exec_policy_config: Arc<RwLock<LocalExecPolicyConfig>>,
@@ -234,10 +234,10 @@ impl WorkspaceRuntimeControl {
         match workspace {
             Some(workspace) => self
                 .hooks
-                .activate(workspace)
-                .map_err(WorkspaceRuntimeError::Failed),
+                .bind_workspace(workspace)
+                .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string())),
             None => {
-                self.hooks.clear_workspace();
+                self.hooks.unbind_workspace();
                 Ok(())
             }
         }
@@ -419,7 +419,7 @@ impl WorkspaceRuntimeControl {
             extension_hosts.unbind_workspace();
         }
         authorization.revoke();
-        self.hooks.clear_workspace();
+        self.hooks.unbind_workspace();
         let cloud_code_index = runtime.cloud_code_index.clone();
         let old_file_system_watcher = runtime._file_system_watcher.take();
         let code_index = runtime.code_index.clone();
@@ -967,7 +967,10 @@ impl AppServer {
             tools.reloadable.policy(),
             self.approval_review_model.clone(),
         ));
-        let hooks = Arc::new(HookRuntime::new(hook_config, tools.reloadable.policy()));
+        let hooks = Arc::new(DeclarativeHookRuntime::new(
+            hook_config,
+            tools.reloadable.policy(),
+        ));
         let mut executor = TurnExecutor::new(
             self.sessions.threads().clone(),
             Arc::clone(&self.model),
@@ -1123,7 +1126,7 @@ impl AppServer {
             ))
         })?;
 
-        host.hooks.clear_workspace();
+        host.hooks.unbind_workspace();
         host.tools.replace_executable(None, false)?;
         self.bind_workspace_skills(&canonical_root)?;
         if let Some(extension_hosts) = &self.extension_hosts {
@@ -1278,8 +1281,8 @@ impl AppServer {
             })?,
         );
         host.hooks
-            .activate(workspace.clone())
-            .map_err(WorkspaceRuntimeError::Failed)?;
+            .bind_workspace(workspace.clone())
+            .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
         host.tools.replace_executable(Some(local_port), true)?;
         self.bind_workspace_skills(&canonical_root)?;
         let context_source = Arc::new(CodeRetrievalContextSource::new(

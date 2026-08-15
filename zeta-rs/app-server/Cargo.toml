@@ -52,6 +52,7 @@ zeta-file-system-tool = { workspace = true }
 zeta-file-watcher = { workspace = true }
 zeta-git = { workspace = true }
 zeta-http-client = { workspace = true }
+zeta-hooks = { workspace = true }
 zeta-install-context = { workspace = true }
 zeta-tool-executor = { workspace = true }
 zeta-instructions = { workspace = true }

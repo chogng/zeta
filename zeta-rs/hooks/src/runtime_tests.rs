@@ -70,8 +70,10 @@ fn hook(
     }
 }
 
-fn runtime(hooks: impl IntoIterator<Item = HookConfig>) -> (HookRuntime, Arc<RecordingProcess>) {
-    let workspace = WorkspaceRoot::open(env!("CARGO_MANIFEST_DIR")).expect("workspace root");
+fn runtime(
+    hooks: impl IntoIterator<Item = HookConfig>,
+) -> (DeclarativeHookRuntime, Arc<RecordingProcess>) {
+    let workspace = test_workspace();
     let process = Arc::new(RecordingProcess {
         workspace,
         executions: Mutex::new(Vec::new()),
@@ -84,9 +86,14 @@ fn runtime(hooks: impl IntoIterator<Item = HookConfig>) -> (HookRuntime, Arc<Rec
             .collect(),
     };
     (
-        HookRuntime::with_process(config, Arc::new(TestPolicy), process.clone()),
+        DeclarativeHookRuntime::with_process(config, Arc::new(TestPolicy), process.clone()),
         process,
     )
+}
+
+fn test_workspace() -> WorkspaceRoot {
+    WorkspaceRoot::open(std::env::current_dir().expect("test working directory"))
+        .expect("workspace root")
 }
 
 #[test]
@@ -180,7 +187,7 @@ fn runtime_checks_cancellation_between_hooks() {
 
 #[test]
 fn review_authority_is_bound_to_the_exact_hook_identity() {
-    let workspace = WorkspaceRoot::open(env!("CARGO_MANIFEST_DIR")).expect("workspace root");
+    let workspace = test_workspace();
     let first = hook(
         "user:hook:first",
         ConfigHookEvent::BeforeTool,

@@ -9470,6 +9470,7 @@ dependencies = [
  "zeta-file-system-tool",
  "zeta-file-watcher",
  "zeta-git",
+ "zeta-hooks",
  "zeta-http-client",
  "zeta-install-context",
  "zeta-instructions",
@@ -9966,6 +9967,23 @@ dependencies = [
  "serde",
  "serde_json",
  "zeta-protocol",
+]
+
+[[package]]
+name = "zeta-hooks"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "zeta-action-policy",
+ "zeta-async-utils",
+ "zeta-config",
+ "zeta-core",
+ "zeta-install-context",
+ "zeta-linux-sandbox",
+ "zeta-sandboxing",
+ "zeta-tool-executor",
+ "zeta-windows-sandbox",
+ "zeta-workspace",
 ]
 
 [[package]]

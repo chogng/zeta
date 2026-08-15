@@ -15,6 +15,7 @@
 > Session/Thread store ports：[`zeta-session-store`](../zeta-rs/session-store/README.md) /
 > [`zeta-thread-store`](../zeta-rs/thread-store/README.md)
 > Local recovery composition：[`zeta-rollout`](../zeta-rs/rollout/README.md)
+> Hook runtime 实现：[`zeta-hooks`](../zeta-rs/hooks/README.md)
 
 ## 快速理解
 
@@ -394,7 +395,7 @@ zeta-core → Desktop / CLI / TUI
 | `ModelService` | 已实现（同步；流式默认桥接见 `ModelStreamSink`） | provider-neutral model invocation | model-provider adapter |
 | `ToolService` | 已实现（含 `prepare` / `review_evidence` / `execute_streaming`） | 已物化 Tool call 的执行 | built-in/MCP host |
 | `ToolInteractionService` | 已实现 | 工具运行中提交 durable 用户输入请求，并等待 exact Thread/Turn/request 的响应或取消 | Core tool orchestrator；MCP adapter 消费 |
-| `HookService` | 已实现 | 在 Core-owned tool/Turn safe point 调用 host-owned declarative Hook runtime | App Server Hook adapter |
+| `HookService` | 已实现 | 在 Core-owned tool/Turn safe point 调用 host-owned declarative Hook runtime | `zeta-hooks` runtime；App Server 负责组合 |
 | `ActionPolicyService` | 已实现 | action approval/sandbox 决策 | host policy layer |
 | `ThreadUpdateSink` | 已实现 | committed/transient update 发布 | App Server subscription hub |
 | `ToolOutputSink` | 已实现 | Tool Call transient output | App Server/host |

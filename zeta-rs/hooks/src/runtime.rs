@@ -40,19 +40,20 @@ use zeta_workspace::WorkspaceRoot;
 const HOOK_TIMEOUT: Duration = Duration::from_secs(30);
 const HOOK_OUTPUT_BYTES: usize = 64 * 1024;
 
-/// Host-owned runtime for declarative Hooks.
+/// Shared host runtime for declarative Hooks.
 ///
 /// The runtime keeps configuration separate from the current trusted Workspace executor. A
 /// restricted Workspace therefore has no process runner at all, while a configuration update can
 /// replace the immutable Hook snapshot without rebuilding Core's Turn executor.
-pub(crate) struct HookRuntime {
+pub struct DeclarativeHookRuntime {
     config: RwLock<HooksConfig>,
     policy: Arc<dyn ActionPolicyService>,
     process: RwLock<Option<Arc<dyn HookProcessExecutor>>>,
 }
 
-impl HookRuntime {
-    pub(crate) fn new(config: HooksConfig, policy: Arc<dyn ActionPolicyService>) -> Self {
+impl DeclarativeHookRuntime {
+    /// Creates an unbound runtime from an initial declaration snapshot and host policy.
+    pub fn new(config: HooksConfig, policy: Arc<dyn ActionPolicyService>) -> Self {
         Self {
             config: RwLock::new(config),
             policy,
@@ -60,15 +61,19 @@ impl HookRuntime {
         }
     }
 
-    pub(crate) fn replace_config(&self, config: HooksConfig) {
+    /// Replaces the declaration snapshot used by future Hook invocations.
+    pub fn replace_config(&self, config: HooksConfig) {
         *self
             .config
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = config;
     }
 
-    /// Installs a process executor only for a trusted, active Workspace.
-    pub(crate) fn activate(&self, workspace: WorkspaceRoot) -> Result<(), String> {
+    /// Binds process execution to an active Workspace that the host has already trusted.
+    pub fn bind_workspace(
+        &self,
+        workspace: WorkspaceRoot,
+    ) -> Result<(), HookWorkspaceBindingError> {
         let has_enabled_hooks = self
             .config
             .read()
@@ -77,10 +82,11 @@ impl HookRuntime {
             .values()
             .any(|hook| hook.enablement == HookEnablement::Enabled);
         if !has_enabled_hooks {
-            self.clear_workspace();
+            self.unbind_workspace();
             return Ok(());
         }
-        let process = NativeHookProcessExecutor::new(workspace)?;
+        let process = NativeHookProcessExecutor::new(workspace)
+            .map_err(|message| HookWorkspaceBindingError { message })?;
         *self
             .process
             .write()
@@ -88,7 +94,8 @@ impl HookRuntime {
         Ok(())
     }
 
-    pub(crate) fn clear_workspace(&self) {
+    /// Removes the active Workspace executor so future Hook invocations cannot spawn processes.
+    pub fn unbind_workspace(&self) {
         *self
             .process
             .write()
@@ -190,7 +197,7 @@ impl HookRuntime {
     }
 }
 
-impl HookService for HookRuntime {
+impl HookService for DeclarativeHookRuntime {
     fn run(&self, event: &HookEvent, cancellation: &CancellationToken) -> Result<(), CoreError> {
         self.run_event(event, cancellation)
     }
@@ -376,6 +383,24 @@ fn native_sandbox() -> Result<NativeSandbox, String> {
 #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
 compile_error!("configured Hooks require a supported sandbox backend");
 
+/// Failure to construct the sandboxed process executor for a trusted Workspace.
+#[derive(Debug)]
+pub struct HookWorkspaceBindingError {
+    message: String,
+}
+
+impl std::fmt::Display for HookWorkspaceBindingError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            formatter,
+            "could not bind declarative Hooks to the Workspace: {}",
+            self.message
+        )
+    }
+}
+
+impl std::error::Error for HookWorkspaceBindingError {}
+
 #[cfg(test)]
-#[path = "hook_runtime_tests.rs"]
+#[path = "runtime_tests.rs"]
 mod tests;

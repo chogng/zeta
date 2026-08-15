@@ -89,7 +89,8 @@ export class AppServerExtensionService extends DisposableOwner implements IExten
       this.dispose();
       throw new TypeError("App Server extension service requires a TextMate service");
     }
-    this.grammarRegistration = this.own(options.textMateService.grammars.registerGrammars([]));
+    this.grammarRegistration = options.textMateService.grammars.registerGrammars([]);
+    this.defer(() => this.grammarRegistration.dispose());
     this.languageRegistration = options.languageFeaturesService ? this.own(options.languageFeaturesService.registerLanguages([])) : undefined;
     this.languageConfigurationRegistration = options.languageFeaturesService ? this.own(options.languageFeaturesService.registerLanguageConfigurations([])) : undefined;
     this.completionRegistration = options.languageFeaturesService ? this.own(options.languageFeaturesService.registerCompletionProviders([])) : undefined;

@@ -9,7 +9,6 @@ mod debug_service;
 mod dynamic_tools;
 mod extension_tools;
 mod git_service;
-mod hook_runtime;
 mod local;
 mod local_tools;
 mod marketplace_connector_runtime;

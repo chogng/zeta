@@ -19,6 +19,7 @@
 > Direct-provider credential：[`model-provider.md`](model-provider.md#6-供应商凭据与-codex-边界)
 > Interactive login：[`login.md`](login.md)
 > Secret persistence：[`secrets.md`](secrets.md)
+> Hook runtime 实现：[`zeta-hooks`](../zeta-rs/hooks/README.md)
 
 ## 快速理解
 
@@ -174,10 +175,11 @@ scoped request。Plugin installed state、effective activation、grant、digest 
 
 `HooksConfig` 保存 namespaced Hook ID、`beforeTool`/`afterTool`/`turnCompleted` safe-point、
 exact tool-name matcher、process `program + args` 与 desired enablement。它不保存 PID、环境、
-执行队列、结果或 retry。Local App Server 的 Hook runtime 在 trusted Workspace 中按 immutable
-配置快照匹配事件，经 Host Policy 评估后使用统一 sandbox executor；Restricted Workspace 不安装
-process runner。`TurnCompleted` 在 durable completion 后 best-effort 执行，`beforeTool`/`afterTool`
-遵守 cancellation，并在配置变更后热替换未来 safe point。
+执行队列、结果或 retry。`zeta-hooks` 在 App Server 已确认可信的 Workspace 中按 immutable 配置
+快照匹配事件，经 Host Policy 评估后使用统一 sandbox executor；Restricted Workspace 不安装
+process runner。App Server 只负责 Config reconcile、信任 gate 与 runtime composition。
+`TurnCompleted` 在 durable completion 后 best-effort 执行，`beforeTool`/`afterTool` 遵守
+cancellation，并在配置变更后热替换未来 safe point。
 
 Theme 已从 Rust Config schema、command 和 App Server Config DTO 中移除。Desktop device
 配置只拥有 device/UI preference；它不能再作为 Agent、Provider、MCP、Skill、
@@ -463,7 +465,7 @@ resolved sources
 | Plugin Request Config | `plugin/request/upsert`、`plugin/request/remove`、`plugin/request/enablement/set` | Config authority 的 exact package request（已实现；不安装或激活） |
 | Skill Source | `skill/source/add`、`skill/source/remove`、`skill/source/enablement/set` | Config authority 的 Skill section（已实现 desired config） |
 | Skill Catalog | `skills/list`、`skill/enablement/set` | App Server metadata projection + Config authority per-Skill overlay（已实现 built-in/user） |
-| Hook Config/Runtime | `hook/upsert`、`hook/remove`、`hook/enablement/set` | Config authority 保存 declaration；Local App Server 在 trusted Workspace 运行匹配的 sandbox process |
+| Hook Config/Runtime | `hook/upsert`、`hook/remove`、`hook/enablement/set` | Config authority 保存 declaration；`zeta-hooks` 运行匹配的 sandbox process；App Server 负责 trusted Workspace 组合 |
 | Agent Import Apply | `agent/import/preview`、`agent/import/apply` | App Server 将用户选择的 normalized fragments 路由到 Config 与目标 artifact authorities（Proposed） |
 
 所有 durable mutation 使用 `CommandId`、对应 authority 的 expected revision、payload conflict
@@ -554,7 +556,7 @@ zeta-rs/config/src/
 ├── mcp.rs              # standalone MCP declaration
 ├── skills.rs           # source 与 per-Skill enablement
 ├── plugins.rs          # exact package request（不拥有 install/activation）
-├── hooks.rs            # safe-point/matcher/process declaration（runtime 在 App Server）
+├── hooks.rs            # safe-point/matcher/process declaration（runtime 在 zeta-hooks）
 ├── mutation.rs         # typed command reducer
 ├── workspace.rs        # strict read-only Workspace document
 ├── resolution.rs       # scoped merge、provenance、diagnostic
@@ -578,17 +580,17 @@ zeta-rs/config/src/
 zeta-config → zeta-protocol
 zeta-config → zeta-model-provider-config
 
-zeta-plugins / zeta-mcp / zeta-skills
+zeta-plugins / zeta-mcp / zeta-skills / zeta-hooks
     → zeta-config 中与自己消费语义一致的纯配置值
 
 App Server
-    → zeta-config + zeta-plugins + zeta-mcp + zeta-skills + credentials + policy
+    → zeta-config + zeta-plugins + zeta-mcp + zeta-skills + zeta-hooks + credentials + policy
 ```
 
 禁止：
 
 ```text
-zeta-config → Plugin/MCP/Skill live runtime
+zeta-config → Plugin/MCP/Skill/Hook live runtime
 zeta-config → credential materialization
 zeta-config → zeta-core
 zeta-core → Config authority or config files

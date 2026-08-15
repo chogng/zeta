@@ -265,7 +265,7 @@ Desktop 当前实现和 Playwright 后续边界见
 | `mcp/oauth/refresh` / `mcp/oauth/revoke` | MCP OAuth owner + secret store | 轮换 runtime/lifecycle credential；或先断开 runtime、远端 revoke 后删除本地 secret |
 | `skill/source/add` / `skill/source/remove` / `skill/source/enablement/set` | config | 修改 User Skill source |
 | `plugin/request/upsert` / `plugin/request/remove` / `plugin/request/enablement/set` | config | 修改 exact Plugin request；不安装或激活 |
-| `hook/upsert` / `hook/remove` / `hook/enablement/set` | config + Hook runtime | 修改 declarative Hook；trusted Workspace 的未来 safe point 按 immutable snapshot 执行匹配的 sandbox process |
+| `hook/upsert` / `hook/remove` / `hook/enablement/set` | config + `zeta-hooks` runtime | 修改 declarative Hook；App Server 在 trusted Workspace 中组合 runtime，后续 safe point 按 immutable snapshot 执行匹配的 sandbox process |
 | `skills/list` | global Skill catalog | 读取 cached projection 或请求完整 refresh |
 | `skill/enablement/set` | config + Skill catalog | revision-checked 启用/禁用 exact `SkillId` |
 | `skill/resource/open` | Skill runtime + Resource | 将 digest-pinned package resource materialize 为 connection-owned resource |

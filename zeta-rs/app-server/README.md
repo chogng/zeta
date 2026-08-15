@@ -298,8 +298,7 @@ src/
 | `LocalExecPolicyConfig::from_resolved` | crate-private | 从 safe-point `ResolvedConfig` 提取 User rules 与 Workspace restrictions | 不读取文件或自己决定 layer trust |
 | `LocalShellToolService::materialize` | private | parse call、约束 workspace 参数、冻结 rg executable | policy review 前不启动进程 |
 | `LocalShellPolicy::decide` | private | 将 frozen `ExecPolicySnapshot` 交给 `ActionPolicyEngine`，返回 exact typed decision | 不复制 rule precedence 或绕过 grant binding |
-| `HookRuntime` | crate-private | immutable Hook snapshot → exact safe-point match → host policy → sandboxed process executor | 不拥有 Hook Config persistence、Core scheduling 或交互式批准 UI |
-| `NativeHookProcessExecutor` | private | trusted Workspace + canonical action → shared process executor | Restricted Workspace 不构造此 adapter，不自行放宽 sandbox |
+| `zeta_hooks::DeclarativeHookRuntime` | external crate | immutable Hook snapshot → exact safe-point match → host policy → sandboxed process executor | App Server 只负责 Config reconcile、trust gate 与 Core port binding；实现契约见 [`zeta-hooks`](../hooks/README.md) |
 | `zeta_mcp_extension::McpRuntimeOwner` | ext/mcp private | worker thread 持有 Tokio runtime 和 live `McpRuntime` | Core thread 不嵌套 `block_on` |
 | `zeta_mcp_extension::McpToolService::review_request` | ext/mcp private | exact binding/arguments/generation → MCP action digest | remote annotation 不授予只读信任 |
 | `zeta_mcp_extension::McpApprovalPolicy::decide` | ext/mcp private | 只接受已知 user MCP provenance 并返回 one-time approval | 不自动批准远端副作用 |
@@ -546,7 +545,7 @@ External package lifecycle + legacy Plugin compatibility + Hook declaration
 ├─ legacy plugin list/grant/enable/disable/revoke/uninstall RPC
 ├─ generic Marketplace search/install/update/uninstall/capability RPC
 ├─ optional Zeta Editor Extension sidecar → independent admission + Manager lease → Host deployment
-└─ HookRuntime → trusted Workspace gate → Host Policy → sandboxed process executor
+└─ App Server trusted Workspace gate → zeta-hooks runtime → Host Policy → sandboxed process executor
 
 Language-server preference
 └─ config/read + languageServer/configure|remove
