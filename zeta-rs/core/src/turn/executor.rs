@@ -10,8 +10,8 @@ use crate::turn::TurnExecutionBackend;
 use crate::{
     ActionPolicyService, CompletedTurn, ContextAssembler, ContextCompactionRequest,
     ContextCompactionService, CoreError, HarnessInstructions, HarnessInstructionsProvider,
-    HookEvent, HookService, ModelSelection, ModelService, ModelStreamSink, NoHooks,
-    NoThreadUpdates, NoTools, ThreadController, ThreadUpdateSink, ToolService,
+    HookService, ModelSelection, ModelService, ModelStreamSink, NoHooks, NoThreadUpdates, NoTools,
+    ThreadController, ThreadUpdateSink, ToolService, TurnCompletedHookRequest,
 };
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -335,7 +335,13 @@ impl TurnExecutor {
             .threads
             .complete_turn_without_agent_message(thread_id, turn_id)
             .map_err(ExecutionFailure::persistence)?;
-        let _ = self.hooks.run(&HookEvent::TurnCompleted, cancellation);
+        let _ = self.hooks.turn_completed(
+            &TurnCompletedHookRequest {
+                thread_id: thread_id.clone(),
+                turn_id: turn_id.clone(),
+            },
+            cancellation,
+        );
         Ok(TurnExecutionOutcome::ShellCompleted { sequence })
     }
 
@@ -606,7 +612,13 @@ impl TurnExecutor {
                 let completion = completion
                     .map(TurnExecutionOutcome::Completed)
                     .map_err(ExecutionFailure::persistence)?;
-                let _ = self.hooks.run(&HookEvent::TurnCompleted, cancellation);
+                let _ = self.hooks.turn_completed(
+                    &TurnCompletedHookRequest {
+                        thread_id: thread_id.clone(),
+                        turn_id: turn_id.clone(),
+                    },
+                    cancellation,
+                );
                 return Ok(completion);
             }
 

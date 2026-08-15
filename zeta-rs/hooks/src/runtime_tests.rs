@@ -1,9 +1,27 @@
 use super::*;
+use crate::HookRunEvent;
+use crate::HookRunStatus;
+use crate::process::HookProcessExecutor;
 use std::sync::Mutex;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
+use zeta_action_policy::ActionReviewRequest;
 use zeta_action_policy::ExecutionDecision;
 use zeta_async_utils::CancellationSource;
+use zeta_config::HookAction;
+use zeta_config::HookConfig;
+use zeta_config::HookEnablement;
+use zeta_config::HookEvent as ConfigHookEvent;
+use zeta_core::AfterToolHookRequest;
+use zeta_core::BeforeToolHookRequest;
+use zeta_core::HookOutcome;
+use zeta_protocol::ThreadId;
+use zeta_protocol::ToolCallId;
+use zeta_protocol::TurnId;
+use zeta_sandboxing::FileSystemAccess;
+use zeta_sandboxing::NetworkAccess;
+use zeta_sandboxing::SandboxPolicy;
+use zeta_tool_executor::CommandExecutionAuthority;
 
 struct TestPolicy;
 
@@ -28,6 +46,7 @@ struct RecordingProcess {
     workspace: WorkspaceRoot,
     executions: Mutex<Vec<String>>,
     calls: AtomicUsize,
+    decision: Mutex<crate::outcome::HookDecision>,
 }
 
 impl HookProcessExecutor for RecordingProcess {
@@ -38,15 +57,20 @@ impl HookProcessExecutor for RecordingProcess {
     fn execute(
         &self,
         hook: &HookConfig,
+        _: Vec<u8>,
         _: CommandExecutionAuthority,
         _: &CancellationToken,
-    ) -> Result<(), CoreError> {
+    ) -> Result<crate::outcome::HookDecision, CoreError> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         self.executions
             .lock()
             .expect("recording process lock")
             .push(hook.id.to_string());
-        Ok(())
+        Ok(self
+            .decision
+            .lock()
+            .expect("recording decision lock")
+            .clone())
     }
 }
 
@@ -78,6 +102,7 @@ fn runtime(
         workspace,
         executions: Mutex::new(Vec::new()),
         calls: AtomicUsize::new(0),
+        decision: Mutex::new(crate::outcome::HookDecision::Continue),
     });
     let config = HooksConfig {
         hooks: hooks
@@ -94,6 +119,25 @@ fn runtime(
 fn test_workspace() -> WorkspaceRoot {
     WorkspaceRoot::open(std::env::current_dir().expect("test working directory"))
         .expect("workspace root")
+}
+
+fn before_request(tool_name: &str) -> BeforeToolHookRequest {
+    BeforeToolHookRequest {
+        thread_id: ThreadId::new("thread-test").unwrap(),
+        turn_id: TurnId::new("turn-test").unwrap(),
+        tool_call_id: ToolCallId::new("tool-test").unwrap(),
+        tool_name: tool_name.into(),
+    }
+}
+
+fn after_request(tool_name: &str, outcome: HookOutcome) -> AfterToolHookRequest {
+    AfterToolHookRequest {
+        thread_id: ThreadId::new("thread-test").unwrap(),
+        turn_id: TurnId::new("turn-test").unwrap(),
+        tool_call_id: ToolCallId::new("tool-test").unwrap(),
+        tool_name: tool_name.into(),
+        outcome,
+    }
 }
 
 #[test]
@@ -127,19 +171,11 @@ fn runtime_matches_events_and_tool_filters_in_stable_order() {
     let source = CancellationSource::new();
 
     runtime
-        .run(
-            &HookEvent::BeforeTool {
-                tool_name: "shell-command".into(),
-            },
-            &source.token(),
-        )
+        .before_tool(&before_request("shell-command"), &source.token())
         .expect("before Hook run");
     runtime
-        .run(
-            &HookEvent::AfterTool {
-                tool_name: "file-system".into(),
-                outcome: zeta_core::HookOutcome::Succeeded,
-            },
+        .after_tool(
+            &after_request("file-system", HookOutcome::Succeeded),
             &source.token(),
         )
         .expect("non-matching after Hook run");
@@ -174,38 +210,47 @@ fn runtime_checks_cancellation_between_hooks() {
     source.cancel();
 
     let error = runtime
-        .run(
-            &HookEvent::BeforeTool {
-                tool_name: "shell-command".into(),
-            },
-            &source.token(),
-        )
+        .before_tool(&before_request("shell-command"), &source.token())
         .expect_err("cancelled Hook run");
     assert!(matches!(error, CoreError::Cancelled(_)));
     assert_eq!(process.calls.load(Ordering::SeqCst), 0);
 }
 
 #[test]
-fn review_authority_is_bound_to_the_exact_hook_identity() {
-    let workspace = test_workspace();
-    let first = hook(
-        "user:hook:first",
+fn before_tool_denial_is_typed_and_projected_as_a_terminal_run() {
+    let (runtime, process) = runtime([hook(
+        "user:hook:guard",
         ConfigHookEvent::BeforeTool,
         &[],
         HookEnablement::Enabled,
-    );
-    let second = hook(
-        "user:hook:second",
-        ConfigHookEvent::BeforeTool,
-        &[],
-        HookEnablement::Enabled,
-    );
+    )]);
+    *process.decision.lock().expect("recording decision lock") =
+        crate::outcome::HookDecision::Deny {
+            reason: "blocked by repository policy".into(),
+        };
 
-    let first_review = review_request(&first, &workspace, "hook-test-policy".into()).unwrap();
-    let second_review = review_request(&second, &workspace, "hook-test-policy".into()).unwrap();
-    assert_eq!(first_review.provenance().source_id(), "user:hook:first");
-    assert_ne!(
-        first_review.action().digest(),
-        second_review.action().digest()
+    let decision = runtime
+        .before_tool(
+            &before_request("shell-command"),
+            &CancellationSource::new().token(),
+        )
+        .expect("typed Hook decision");
+
+    assert_eq!(
+        decision,
+        BeforeToolHookDecision::Deny {
+            reason: "blocked by repository policy".into(),
+        }
+    );
+    let runs = runtime.recent_runs();
+    assert_eq!(runs.len(), 1);
+    assert_eq!(runs[0].run_id, "hook-run-1");
+    assert_eq!(runs[0].hook_id, "user:hook:guard");
+    assert_eq!(runs[0].event, HookRunEvent::BeforeTool);
+    assert_eq!(
+        runs[0].status,
+        HookRunStatus::Denied {
+            reason: "blocked by repository policy".into(),
+        }
     );
 }

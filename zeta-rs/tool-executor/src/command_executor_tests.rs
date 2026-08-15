@@ -90,6 +90,7 @@ fn executor_spawns_only_the_command_prepared_by_the_sandbox_backend() {
                 program: "must-not-run".into(),
                 arguments: Vec::new(),
                 working_directory: ".".into(),
+                input: CommandInput::Closed,
             },
             CommandExecutionAuthority::Sandboxed(SandboxPolicy::new(
                 FileSystemAccess::ReadOnly,
@@ -122,6 +123,7 @@ fn missing_sandbox_launcher_is_safe_to_retry_because_the_action_never_started() 
                 program: "must-not-run".into(),
                 arguments: Vec::new(),
                 working_directory: ".".into(),
+                input: CommandInput::Closed,
             },
             CommandExecutionAuthority::Sandboxed(SandboxPolicy::new(
                 FileSystemAccess::ReadOnly,
@@ -164,6 +166,7 @@ fn executor_returns_bounded_output_with_explicit_truncation_markers() {
                 program: "/bin/sh".into(),
                 arguments: vec!["-c".into(), "printf 123456789; printf abc >&2".into()],
                 working_directory: ".".into(),
+                input: CommandInput::Closed,
             },
             CommandExecutionAuthority::Unrestricted,
             &CancellationSource::new().token(),
@@ -177,6 +180,37 @@ fn executor_returns_bounded_output_with_explicit_truncation_markers() {
     assert!(output.stderr.is_empty());
     assert!(output.stdout_truncated);
     assert!(output.stderr_truncated);
+}
+
+#[cfg(unix)]
+#[test]
+fn executor_writes_explicit_bytes_to_child_stdin() {
+    let workspace = TestWorkspace::new();
+    let executor = CommandExecutor::new(
+        workspace.root(),
+        PassThroughBackend,
+        AllowAll,
+        test_limits(),
+    );
+
+    let outcome = executor
+        .execute(
+            CommandRequest {
+                program: "/bin/sh".into(),
+                arguments: vec!["-c".into(), "cat".into()],
+                working_directory: ".".into(),
+                input: CommandInput::Bytes(b"zeta-hook-payload".to_vec()),
+            },
+            CommandExecutionAuthority::Unrestricted,
+            &CancellationSource::new().token(),
+        )
+        .unwrap();
+    let CommandExecutionOutcome::Completed(output) = outcome else {
+        panic!("pass-through command should complete");
+    };
+
+    assert_eq!(output.exit_code, Some(0));
+    assert_eq!(output.stdout, "zeta-hook-payload");
 }
 
 #[cfg(unix)]
@@ -197,6 +231,7 @@ fn executor_terminates_a_running_process_when_cancelled() {
                 program: "/bin/sleep".into(),
                 arguments: vec!["10".into()],
                 working_directory: ".".into(),
+                input: CommandInput::Closed,
             },
             CommandExecutionAuthority::Unrestricted,
             &token,

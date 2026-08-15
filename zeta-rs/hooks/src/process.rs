@@ -1,0 +1,128 @@
+use crate::error::hook_execution_error;
+use crate::outcome::HookDecision;
+use crate::outcome::parse_output;
+use std::time::Duration;
+use zeta_async_utils::CancellationToken;
+use zeta_config::HookAction;
+use zeta_config::HookConfig;
+use zeta_core::CoreError;
+use zeta_tool_executor::ApprovalPolicy;
+use zeta_tool_executor::ApprovalRequirement;
+use zeta_tool_executor::CommandExecutionAuthority;
+use zeta_tool_executor::CommandExecutionOutcome;
+use zeta_tool_executor::CommandExecutor;
+use zeta_tool_executor::CommandInput;
+use zeta_tool_executor::CommandRequest;
+use zeta_tool_executor::ExecutionLimits;
+use zeta_workspace::WorkspaceRoot;
+
+const HOOK_TIMEOUT: Duration = Duration::from_secs(30);
+const HOOK_OUTPUT_BYTES: usize = 64 * 1024;
+
+pub(crate) trait HookProcessExecutor: Send + Sync {
+    fn workspace(&self) -> &WorkspaceRoot;
+
+    fn execute(
+        &self,
+        hook: &HookConfig,
+        input: Vec<u8>,
+        authority: CommandExecutionAuthority,
+        cancellation: &CancellationToken,
+    ) -> Result<HookDecision, CoreError>;
+}
+
+struct AlwaysAuthorized;
+
+impl ApprovalPolicy for AlwaysAuthorized {
+    fn requirement_for(&self, _: &str) -> ApprovalRequirement {
+        ApprovalRequirement::NotRequired
+    }
+}
+
+pub(crate) struct NativeHookProcessExecutor {
+    workspace: WorkspaceRoot,
+    executor: CommandExecutor<AlwaysAuthorized, NativeSandbox>,
+}
+
+impl NativeHookProcessExecutor {
+    pub(crate) fn new(workspace: WorkspaceRoot) -> Result<Self, String> {
+        let backend = native_sandbox().map_err(|error| error.to_string())?;
+        Ok(Self {
+            workspace: workspace.clone(),
+            executor: CommandExecutor::new(
+                workspace,
+                backend,
+                AlwaysAuthorized,
+                ExecutionLimits {
+                    timeout: HOOK_TIMEOUT,
+                    max_output_bytes: HOOK_OUTPUT_BYTES,
+                },
+            ),
+        })
+    }
+}
+
+impl HookProcessExecutor for NativeHookProcessExecutor {
+    fn workspace(&self) -> &WorkspaceRoot {
+        &self.workspace
+    }
+
+    fn execute(
+        &self,
+        hook: &HookConfig,
+        input: Vec<u8>,
+        authority: CommandExecutionAuthority,
+        cancellation: &CancellationToken,
+    ) -> Result<HookDecision, CoreError> {
+        let HookAction::Process { program, args } = &hook.action;
+        let result = self.executor.execute(
+            CommandRequest {
+                program: program.clone(),
+                arguments: args.clone(),
+                working_directory: self.workspace.canonical_path().to_path_buf(),
+                input: CommandInput::Bytes(input),
+            },
+            authority,
+            cancellation,
+        );
+        match result {
+            Ok(CommandExecutionOutcome::Completed(output)) => {
+                parse_output(hook.id.as_str(), output)
+            }
+            Ok(CommandExecutionOutcome::SandboxDenied(_)) => Err(CoreError::Policy(format!(
+                "Hook '{}' was denied by the Workspace sandbox",
+                hook.id
+            ))),
+            Err(error) => Err(CoreError::Execution(hook_execution_error(error))),
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+type NativeSandbox = zeta_sandboxing::MacosSeatbeltSandbox;
+
+#[cfg(target_os = "macos")]
+fn native_sandbox() -> Result<NativeSandbox, String> {
+    Ok(NativeSandbox::new())
+}
+
+#[cfg(target_os = "linux")]
+type NativeSandbox = zeta_linux_sandbox::LinuxSandbox;
+
+#[cfg(target_os = "linux")]
+fn native_sandbox() -> Result<NativeSandbox, String> {
+    NativeSandbox::discover(&zeta_install_context::InstallContext::current())
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(target_os = "windows")]
+type NativeSandbox = zeta_windows_sandbox::WindowsSandbox;
+
+#[cfg(target_os = "windows")]
+fn native_sandbox() -> Result<NativeSandbox, String> {
+    NativeSandbox::discover(&zeta_install_context::InstallContext::current())
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
+compile_error!("configured Hooks require a supported sandbox backend");

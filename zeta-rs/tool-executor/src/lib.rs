@@ -1,6 +1,7 @@
 //! The single process-execution boundary used by Zeta tools.
 
 use std::io::Read;
+use std::io::Write;
 use std::path::PathBuf;
 use std::process::Stdio;
 use std::thread;
@@ -40,6 +41,18 @@ pub struct CommandRequest {
     pub program: String,
     pub arguments: Vec<String>,
     pub working_directory: PathBuf,
+    pub input: CommandInput,
+}
+
+/// Bytes supplied to a child process after spawn.
+///
+/// Callers must choose explicitly between a closed stdin stream and a bounded payload. The
+/// executor writes payloads on a dedicated thread so cancellation and timeout monitoring cannot
+/// deadlock when a child stops reading.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum CommandInput {
+    Closed,
+    Bytes(Vec<u8>),
 }
 
 /// Exact process authority selected before execution reaches the host spawn boundary.
@@ -129,11 +142,13 @@ impl<P: ApprovalPolicy, B: SandboxBackend> CommandExecutor<P, B> {
             ApprovalRequirement::Required => return Err(ExecutionError::ApprovalRequired),
             ApprovalRequirement::Denied => return Err(ExecutionError::Denied),
         }
-        let command = SandboxCommand::new(
-            request.program,
-            request.arguments,
-            request.working_directory,
-        );
+        let CommandRequest {
+            program,
+            arguments,
+            working_directory,
+            input,
+        } = request;
+        let command = SandboxCommand::new(program, arguments, working_directory);
         let prepared = match self.sandbox.prepare(&command, authority.sandbox_policy()) {
             Ok(prepared) => prepared,
             Err(error @ SandboxError::BackendUnavailable { .. })
@@ -155,7 +170,14 @@ impl<P: ApprovalPolicy, B: SandboxBackend> CommandExecutor<P, B> {
         check_cancellation_before_start(cancellation)?;
         let prepared_kind = prepared.kind();
         let mut command = prepared.into_command();
-        command.stdout(Stdio::piped()).stderr(Stdio::piped());
+        let stdin = match &input {
+            CommandInput::Closed => Stdio::null(),
+            CommandInput::Bytes(_) => Stdio::piped(),
+        };
+        command
+            .stdin(stdin)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
         let mut child = match command.spawn() {
             Ok(child) => child,
             Err(error)
@@ -175,6 +197,15 @@ impl<P: ApprovalPolicy, B: SandboxBackend> CommandExecutor<P, B> {
             }
             Err(error) => return Err(ExecutionError::Spawn(error.to_string())),
         };
+        let stdin_writer = match input {
+            CommandInput::Closed => None,
+            CommandInput::Bytes(bytes) => {
+                let mut stdin = child.stdin.take().expect("stdin was piped");
+                Some(thread::spawn(move || {
+                    stdin.write_all(&bytes).map_err(|error| error.to_string())
+                }))
+            }
+        };
         let stdout = child.stdout.take().expect("stdout was piped");
         let stderr = child.stderr.take().expect("stderr was piped");
         let max_output_bytes = self.limits.max_output_bytes;
@@ -189,17 +220,23 @@ impl<P: ApprovalPolicy, B: SandboxBackend> CommandExecutor<P, B> {
                 break status;
             }
             if let Err(cancellation) = cancellation.check() {
-                terminate(&mut child, stdout_reader, stderr_reader)?;
+                terminate(&mut child, stdin_writer, stdout_reader, stderr_reader)?;
                 return Err(ExecutionError::CancelledAfterStart(
                     cancellation.reason().to_string(),
                 ));
             }
             if started.elapsed() >= self.limits.timeout {
-                terminate(&mut child, stdout_reader, stderr_reader)?;
+                terminate(&mut child, stdin_writer, stdout_reader, stderr_reader)?;
                 return Err(ExecutionError::TimedOut);
             }
             thread::sleep(Duration::from_millis(10));
         };
+        if let Some(stdin_writer) = stdin_writer {
+            stdin_writer
+                .join()
+                .map_err(|_| ExecutionError::Spawn("stdin writer panicked".into()))?
+                .map_err(ExecutionError::Spawn)?;
+        }
         let (stdout, stdout_exceeded) = stdout_reader
             .join()
             .map_err(|_| ExecutionError::Spawn("stdout reader panicked".into()))?
@@ -259,6 +296,7 @@ fn check_cancellation_before_start(cancellation: &CancellationToken) -> Result<(
 
 fn terminate(
     child: &mut std::process::Child,
+    stdin_writer: Option<thread::JoinHandle<Result<(), String>>>,
     stdout_reader: thread::JoinHandle<Result<(Vec<u8>, bool), String>>,
     stderr_reader: thread::JoinHandle<Result<(Vec<u8>, bool), String>>,
 ) -> Result<(), ExecutionError> {
@@ -266,6 +304,9 @@ fn terminate(
         .kill()
         .map_err(|error| ExecutionError::Spawn(error.to_string()))?;
     let _ = child.wait();
+    if let Some(stdin_writer) = stdin_writer {
+        let _ = stdin_writer.join();
+    }
     let _ = stdout_reader.join();
     let _ = stderr_reader.join();
     Ok(())

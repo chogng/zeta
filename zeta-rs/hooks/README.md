@@ -1,26 +1,27 @@
 # `zeta-hooks`
 
-> 本 README 负责声明式 Hook 运行时的实现契约。Core 安全点和执行顺序的跨系统语义见
+> 本 README 负责 Zeta 原生声明式 Hook 运行时的实现契约。Core 安全点和执行顺序的跨系统语义见
 > [`docs/core.md`](../../docs/core.md)，持久化声明与作用域解析见
 > [`docs/config.md`](../../docs/config.md)。
 
 `zeta-hooks` 在宿主已经授权的工作区中，把不可变 Hook 配置快照投影为经过动作策略评估的沙箱
-进程。它拥有事件匹配、稳定执行顺序、动作身份、执行限制和运行时工作区绑定；不拥有配置持久化、
-Core 安全点、工作区信任决策、外部协议或批准界面。
+进程。它拥有精确匹配、稳定执行顺序、Zeta JSON 输入输出、动作身份、执行限制、运行记录和工作区
+绑定；不拥有配置持久化、Core 安全点、工作区信任决策、Provider DTO、外部 Hook 方言或批准界面。
 
 ## 所有权与依赖方向
 
 | 责任 | Owner | 本 crate 的边界 |
 | --- | --- | --- |
-| `beforeTool`、`afterTool`、`turnCompleted` 安全点 | `zeta-core` | 实现 `HookService`，不决定调用时机 |
+| `beforeTool`、`afterTool`、`turnCompleted` 安全点和类型化请求 | `zeta-core` | 实现 `HookService`，不决定调用时机 |
+| `beforeTool` 拒绝后的模型可见工具失败 | `zeta-core` | 返回 `BeforeToolHookDecision`，不直接写 Thread |
 | `HookId`、matcher、action 与 desired enablement | `zeta-config` | 消费完整 `HooksConfig` 快照，不读写配置文件 |
-| Hook 匹配、动作评估与沙箱进程 | `zeta-hooks` | 唯一运行时 owner |
+| 匹配、JSON codec、动作评估与沙箱进程 | `zeta-hooks` | 唯一原生 Hook 运行时 owner |
 | 工作区信任与 `ExecuteProcess` capability | App Server / Workspace authority | 宿主授权后才能调用 `bind_workspace` |
-| RPC DTO、revision-safe mutation 与错误投影 | App Server protocol / App Server | 本 crate 不依赖 transport |
+| RPC DTO、配置 mutation 与运行状态通知 | App Server protocol / App Server | 当前只组合 runtime，尚未投影 `recent_runs` |
 
 依赖方向是 `zeta-hooks → zeta-core`，因为 `HookService` 是 Core 拥有的消费方端口；Core 不得反向
-依赖本 crate。`zeta-hooks → zeta-config` 只消费无运行时状态的声明，不得把 PID、执行结果、队列或
-重试状态写回 Config。
+依赖本 crate。`zeta-hooks → zeta-config` 只消费无运行时状态的声明；有界 `HookRunRecord` 只存在于
+进程内，不写回 Config，也不是持久化 Thread 事实。
 
 ## 公共契约
 
@@ -29,60 +30,102 @@ Core 安全点、工作区信任决策、外部协议或批准界面。
 - 使用 `replace_config` 原子替换未来调用读取的声明快照；
 - 在已经通过工作区信任检查后使用 `bind_workspace` 安装沙箱进程执行器；
 - 使用 `unbind_workspace` 立即移除进程执行能力；
-- 把 runtime 作为 `Arc<dyn zeta_core::HookService>` 注入 `TurnExecutor`。
+- 把 runtime 作为 `Arc<dyn zeta_core::HookService>` 注入 `TurnExecutor`；
+- 使用 `recent_runs` 读取最近 128 条非持久化运行投影。
 
-`replace_config` 不改变正在执行的 invocation：`run_event` 在开始时克隆一份完整配置快照和当前
-process binding。没有 workspace binding 时，事件成功地执行为空操作；这保证 Restricted Workspace
-不会构造或保留进程执行器。
+`replace_config` 不改变正在执行的 invocation：`run_event` 在开始时克隆完整配置快照和当前 process
+binding。没有 workspace binding 时，事件成功执行为空操作；Restricted Workspace 因而不会构造或
+保留进程执行器。
+
+## 原生进程协议
+
+每个匹配的 Hook 从 stdin 接收一个不带 Provider 信息的 Zeta JSON 对象：
+
+```json
+{
+  "protocolVersion": 1,
+  "hookId": "user:hook:audit",
+  "workspace": "/canonical/workspace",
+  "event": {
+    "name": "beforeTool",
+    "threadId": "thread-7",
+    "turnId": "turn-3",
+    "toolCallId": "tool-9",
+    "toolName": "shell-command"
+  }
+}
+```
+
+`afterTool` 额外携带 `outcome: "succeeded" | "failed"`，但不暴露原始工具输出；`turnCompleted`
+只携带 Thread 和 Turn identity。完整 stdin 最大 64 KiB，超过限制时不启动进程。
+
+空 stdout 表示继续，用于兼容既有 Zeta Hook。非空 stdout 必须严格匹配以下一种对象：
+
+```json
+{"decision":"continue"}
+{"decision":"deny","reason":"blocked by repository policy"}
+```
+
+只有 `beforeTool` 可以返回 `deny`。Core 将拒绝原因保存为对应 Tool Call 的错误结果，模型可以在同一
+Turn 的下一步看到该反馈。`afterTool` 和 `turnCompleted` 已处于提交后的观察点，返回 `deny` 是协议
+错误，不能倒转已经发生的结果。
 
 ## 内部接口与调用关系
 
 | Symbol | 职责 | 不得承担 |
 | --- | --- | --- |
-| `DeclarativeHookRuntime::run_event` | 观察取消、冻结调用快照、按 `BTreeMap` identity 顺序匹配并逐个执行 | 不读取 mutable Config authority 或重新安排 Core 安全点 |
-| `matches_event` | 把 Core runtime event 与 Config declaration event/tool matcher 对齐 | 不解释 tool output 或添加隐式 glob/regex 语义 |
-| `review_request` | 将 Hook ID、program、arguments 与 canonical workspace 绑定为 exact action digest、来源和能力集合 | 不授予执行权限 |
-| `HookProcessExecutor` | 隔离可测试的工作区进程执行 seam | 不成为公共插件扩展面 |
-| `NativeHookProcessExecutor` | 用统一 `CommandExecutor`、原生 sandbox 和固定限制执行 process action | 不自行读取信任配置或放宽策略决定 |
-| `hook_execution_error` | 将 executor failure 收敛为不泄漏 child stderr 的 Core failure | 不把内部 sandbox 文本返回给产品客户端 |
+| `DeclarativeHookRuntime::run_event` | 冻结快照、按 `BTreeMap` identity 匹配、协调 policy/process/record | 不读取 mutable Config authority 或安排 Core 安全点 |
+| `matcher::matches_event` | 将 Core 类型化 invocation 与 declaration event/tool matcher 对齐 | 不添加隐式 glob/regex 语义 |
+| `protocol::encode_input` | 构造并限制 Zeta 原生 stdin JSON | 不引用 Provider 或外部 Hook 方言字段 |
+| `outcome::parse_output` | 校验退出状态、截断标记和严格 decision JSON | 不决定 Core 如何应用拒绝 |
+| `policy::execution_authority` | 构造 review 并把 exact grant 转换成 process authority | 不自行授予权限 |
+| `policy::review_request` | 将 Hook ID、program、arguments 与 canonical workspace 绑定为动作摘要 | 不执行进程 |
+| `process::HookProcessExecutor` | 隔离可测试的工作区进程 seam | 不成为公共插件扩展面 |
+| `process::NativeHookProcessExecutor` | 使用统一 `CommandExecutor`、原生 sandbox 和固定限制 | 不读取信任配置或放宽策略决定 |
+| `records::HookRunLog` | 保留最近 128 条 running/continued/denied/failed 投影 | 不成为 durable authority |
 
 ```text
-Core Hook safe point
-└─ HookService::run
+Core typed Hook safe point
+└─ HookService::{before_tool,after_tool,turn_completed}
    └─ DeclarativeHookRuntime::run_event
-      ├─ clone HooksConfig + workspace process binding
-      ├─ matches_event
-      ├─ review_request
-      ├─ ActionPolicyService::decide
-      └─ HookProcessExecutor::execute
-         └─ CommandExecutor → native sandbox → process
+      ├─ matcher::matches_event
+      ├─ records::HookRunLog::start
+      ├─ policy::execution_authority
+      ├─ protocol::encode_input
+      ├─ process::HookProcessExecutor::execute
+      │  └─ CommandExecutor → native sandbox → process
+      ├─ outcome::parse_output
+      └─ records::HookRunLog::finish
 ```
 
 ## 安全与失败语义
 
-- 每个 Hook 动作摘要绑定 Hook ID、完整 argv 和 canonical workspace；授权凭证必须再次匹配动作摘要、
-  能力集合与策略版本。
+- 每个动作摘要绑定 Hook ID、完整 argv 和 canonical workspace；授权凭证必须再次匹配动作摘要、能力
+  集合与策略版本。
 - 默认沙箱允许工作区读写、拒绝网络，并把 process spawn capability 绑定到声明的 program。
-- 单个进程最长运行 30 秒，captured output 上限为 64 KiB；非零退出码是执行失败。
+- stdin、stdout 与 stderr 均有 byte 上限；单个进程最长运行 30 秒，captured output 总上限为
+  64 KiB。
+- 非零退出、截断、非空但无效的 JSON 和空拒绝原因都是执行失败，不会被解释成继续。
 - `AskUser` 不会从后台 Hook 打开交互式批准，而是失败关闭；block、revision mismatch 与错误 grant
   同样不能执行。
 - 取消在事件开始、每个 Hook 之前和进程执行期间观察。Core 在 durable Turn completion 后忽略
-  `turnCompleted` failure；`beforeTool` 与 `afterTool` failure 会返回给 Tool scheduler。
-- `HookWorkspaceBindingError` 只表示无法为已授权工作区构造原生 sandbox；信任拒绝应由宿主在调用
-  `bind_workspace` 之前处理。
+  `turnCompleted` failure；`beforeTool` 和 `afterTool` failure 返回 Tool scheduler。
+- `HookWorkspaceBindingError` 只表示无法为可信工作区构造原生 sandbox；信任拒绝应发生在调用
+  `bind_workspace` 之前。
 
 ## 验证与修改影响
 
 ```text
-cargo test -p zeta-hooks
+cargo test -p zeta-hooks -p zeta-core -p zeta-tool-executor
 bazel test //zeta-rs/hooks:hooks-unit-tests
 ```
 
-测试覆盖 stable identity ordering、event/tool matcher、disabled declaration、调用间取消和 exact Hook
-action identity。修改事件种类时同步检查 `zeta-core` 安全点、`zeta-config` declaration、App Server
-DTO/schema 与本文档；修改 action shape、capability 或 sandbox policy 时同步检查
-`zeta-action-policy`、`zeta-tool-executor` 和权限文档。
+测试覆盖稳定 identity 顺序、精确 event/tool matcher、disabled declaration、取消、动作摘要、Zeta JSON
+输入、严格 outcome、类型化拒绝、模型可见工具反馈、运行记录和共享 executor stdin。修改事件种类时
+同步检查 `zeta-core` 安全点、`zeta-config` declaration、App Server DTO/schema 与本文档；修改 action
+shape、capability、sandbox policy 或 stdin 时同步检查 `zeta-action-policy`、`zeta-tool-executor` 和权限
+文档。
 
-当前只支持 process action，以及 macOS、Linux 和 Windows 原生 sandbox。并行 Hook、retry、持久化
-execution record、环境变量声明和网络 capability 都尚未实现；增加这些能力必须先定义 durable、
-policy 与 secret boundary，不能直接扩展 `NativeHookProcessExecutor` 绕过领域设计。
+当前只支持 Zeta 原生 process action，以及 macOS、Linux 和 Windows 原生 sandbox。并行 Hook、retry、
+持久化 execution record、环境变量声明、网络 capability、工具输入改写、`afterTool` 上下文注入和外部
+Hook 方言均未实现；增加这些能力必须先定义当前 consumer、durability、policy 与 secret boundary。

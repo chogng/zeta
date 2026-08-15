@@ -176,10 +176,12 @@ scoped request。Plugin installed state、effective activation、grant、digest 
 `HooksConfig` 保存 namespaced Hook ID、`beforeTool`/`afterTool`/`turnCompleted` safe-point、
 exact tool-name matcher、process `program + args` 与 desired enablement。它不保存 PID、环境、
 执行队列、结果或 retry。`zeta-hooks` 在 App Server 已确认可信的 Workspace 中按 immutable 配置
-快照匹配事件，经 Host Policy 评估后使用统一 sandbox executor；Restricted Workspace 不安装
-process runner。App Server 只负责 Config reconcile、信任 gate 与 runtime composition。
-`TurnCompleted` 在 durable completion 后 best-effort 执行，`beforeTool`/`afterTool` 遵守
-cancellation，并在配置变更后热替换未来 safe point。
+快照匹配事件，经 Host Policy 评估后使用统一 sandbox executor，并通过有界 Zeta JSON stdin/stdout
+交换 provider-neutral 请求和决定；Restricted Workspace 不安装 process runner。App Server 只负责
+Config reconcile、信任 gate 与 runtime composition，当前尚未把进程内 `recent_runs` 投影为 RPC。
+`beforeTool` 可以返回带原因的拒绝，Core 将其提交为 Tool failure；`afterTool` 和
+`TurnCompleted` 是观察点，不能倒转已经提交的结果。`TurnCompleted` 在 durable completion 后
+best-effort 执行，全部安全点遵守 cancellation，并在配置变更后热替换未来调用读取的快照。
 
 Theme 已从 Rust Config schema、command 和 App Server Config DTO 中移除。Desktop device
 配置只拥有 device/UI preference；它不能再作为 Agent、Provider、MCP、Skill、

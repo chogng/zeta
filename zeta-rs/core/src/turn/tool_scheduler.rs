@@ -5,11 +5,11 @@ use super::tool_execution::{
 };
 use crate::action_policy_service::approval_matches_review;
 use crate::{
-    ActionPolicyService, AutoReviewedToolGrant, CoreError, ExecPolicyToolGrant, HookEvent,
-    HookOutcome, HookService, NoHooks, NoThreadUpdates, OneTimeToolGrant,
-    PermissionBypassToolGrant, RecordToolResultRequest, RequestTurnInteraction, ThreadController,
-    ThreadSnapshot, ThreadUpdateSink, ToolAuthorization, ToolCallOutput, ToolService,
-    durable_approval_request,
+    ActionPolicyService, AfterToolHookRequest, AutoReviewedToolGrant, BeforeToolHookDecision,
+    BeforeToolHookRequest, CoreError, ExecPolicyToolGrant, HookOutcome, HookService, NoHooks,
+    NoThreadUpdates, OneTimeToolGrant, PermissionBypassToolGrant, RecordToolResultRequest,
+    RequestTurnInteraction, ThreadController, ThreadSnapshot, ThreadUpdateSink, ToolAuthorization,
+    ToolCallOutput, ToolService, durable_approval_request,
 };
 use std::sync::Arc;
 use zeta_action_policy::ExecutionDecision;
@@ -432,12 +432,19 @@ impl ToolScheduler {
             )?;
             return Ok(ToolSchedulingProgress::WaitingForCapability);
         }
-        self.hooks.run(
-            &HookEvent::BeforeTool {
+        let hook_decision = self.hooks.before_tool(
+            &BeforeToolHookRequest {
+                thread_id: context.thread_id().clone(),
+                turn_id: context.turn_id().clone(),
+                tool_call_id: tool_call_id.clone(),
                 tool_name: tool_name.clone(),
             },
             context.cancellation(),
         )?;
+        if let BeforeToolHookDecision::Deny { reason } = hook_decision {
+            self.record_failure(context.thread_id(), context.turn_id(), tool_call_id, reason)?;
+            return Ok(ToolSchedulingProgress::Complete);
+        }
         let completion = orchestrator.execute(context, call, reviewed, authorization)?;
         match completion {
             ToolExecutionCompletion::Complete => {
@@ -480,8 +487,14 @@ impl ToolScheduler {
                 _ => None,
             })
             .unwrap_or(HookOutcome::Failed);
-        self.hooks.run(
-            &HookEvent::AfterTool { tool_name, outcome },
+        self.hooks.after_tool(
+            &AfterToolHookRequest {
+                thread_id: context.thread_id().clone(),
+                turn_id: context.turn_id().clone(),
+                tool_call_id: tool_call_id.clone(),
+                tool_name,
+                outcome,
+            },
             context.cancellation(),
         )
     }

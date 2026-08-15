@@ -16,6 +16,7 @@
 | `ApprovalPolicy` | 对 exact program/argv digest 给出 start gate |
 | `CommandExecutionAuthority` | 显式区分 sandboxed 与 unrestricted execution |
 | `ExecutionLimits` | 固定 wall-clock timeout 与 stdout/stderr 总 byte budget |
+| `CommandInput` | 显式选择关闭 stdin 或写入调用方已经限制的 bytes |
 | `CommandExecutor::execute` | prepare、spawn、监督、capture 与 backend denial classification |
 | `CommandExecutionOutcome` | completed output 或 structured sandbox denial |
 | `ExecutionError` | start 前拒绝、spawn failure、取消、timeout 或 sandbox setup failure |
@@ -29,8 +30,9 @@ cancellation checkpoint
 → SandboxManager::prepare
 → cancellation checkpoint
 → spawn prepared command
+→ dedicated stdin writer + stdout/stderr readers
 → poll child + cancellation + timeout
-→ join stdout/stderr readers
+→ join stdin/stdout/stderr workers
 → bounded merge
 → SandboxBackend::classify_denial
 ```
@@ -39,10 +41,15 @@ cancellation checkpoint
 `Sandboxed` authority 若无法建立 backend boundary，必须失败关闭；调用方不能静默改成
 `Unrestricted`。
 
-## 取消、timeout 与输出
+## stdin、取消、timeout 与输出
+
+`CommandInput::Closed` 把子进程 stdin 接到 null device；`CommandInput::Bytes` 在独立线程写入调用方
+提供的完整 bytes，并在写入完成后关闭 pipe。调用方拥有 input budget，本 crate 不截断 stdin。独立
+writer 保证不读取 stdin 的 child 不会阻止 cancellation/timeout 监督；终止路径会 kill/wait child
+并 join writer 和两个 reader。
 
 spawn 前观察到 cancellation 返回 `CancelledBeforeStart`。spawn 后 cancellation 或 timeout 会
-先 kill/wait child，再 join capture threads；前者返回 `CancelledAfterStart`，后者返回
+先 kill/wait child，再 join I/O threads；前者返回 `CancelledAfterStart`，后者返回
 `TimedOut`。上层必须把两者视为已经跨过 side-effect boundary，不能自动 replay。
 
 stdout 与 stderr reader 各自最多读取总 budget，最终合并时 stdout 优先、stderr 使用剩余空间。
@@ -52,9 +59,9 @@ byte 数；截断跨 UTF-8 code point 时使用 lossy decoding，调用方不能
 
 ## 内部接口与漂移检查
 
-`check_cancellation_before_start` 固定 pre-spawn semantics；`terminate` 统一 kill/wait/join；
-`drain_stream` 只负责 bounded capture。若 Tool schema、Core approval、自动 retry 或 Thread mutation
-进入本 crate，说明 ownership 已漂移。
+`check_cancellation_before_start` 固定 pre-spawn semantics；`terminate` 统一 kill/wait/join 全部 I/O
+worker；`drain_stream` 只负责 bounded capture。若 Tool schema、Core approval、自动 retry 或 Thread
+mutation 进入本 crate，说明 ownership 已漂移。
 
 ```bash
 cargo test -p zeta-tool-executor

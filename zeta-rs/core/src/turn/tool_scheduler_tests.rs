@@ -32,6 +32,68 @@ use zeta_protocol::{
 };
 use zeta_sandboxing::{FileSystemAccess, NetworkAccess, SandboxPolicy};
 
+struct DenyBeforeToolHooks;
+
+impl HookService for DenyBeforeToolHooks {
+    fn before_tool(
+        &self,
+        _: &BeforeToolHookRequest,
+        _: &CancellationToken,
+    ) -> Result<BeforeToolHookDecision, CoreError> {
+        Ok(BeforeToolHookDecision::Deny {
+            reason: "blocked by native Zeta Hook".into(),
+        })
+    }
+
+    fn after_tool(&self, _: &AfterToolHookRequest, _: &CancellationToken) -> Result<(), CoreError> {
+        Ok(())
+    }
+
+    fn turn_completed(
+        &self,
+        _: &crate::TurnCompletedHookRequest,
+        _: &CancellationToken,
+    ) -> Result<(), CoreError> {
+        Ok(())
+    }
+}
+
+#[test]
+fn before_tool_hook_denial_becomes_model_visible_tool_feedback() {
+    let policy = Arc::new(ExecAllowPolicy::new());
+    let mut fixture = fixture_with(Arc::new(ReviewTool::default()), policy.clone());
+    fixture.scheduler = ToolScheduler::new(fixture.threads.clone(), fixture.tools.clone(), policy)
+        .with_hooks(Arc::new(DenyBeforeToolHooks));
+
+    fixture
+        .scheduler
+        .run_pending(
+            &fixture.thread_id,
+            &fixture.turn_id,
+            &CancellationSource::new().token(),
+        )
+        .unwrap();
+
+    assert!(fixture.tools.authorizations.lock().unwrap().is_empty());
+    assert!(
+        fixture
+            .threads
+            .read_thread(&fixture.thread_id)
+            .unwrap()
+            .items
+            .iter()
+            .any(|item| matches!(
+                item,
+                ThreadItem::ToolResult {
+                    tool_call_id,
+                    text,
+                    is_error: true,
+                    ..
+                } if tool_call_id == &fixture.call_id && text == "blocked by native Zeta Hook"
+            ))
+    );
+}
+
 #[test]
 fn approve_once_resumes_the_exact_tool_call() {
     let fixture = fixture();

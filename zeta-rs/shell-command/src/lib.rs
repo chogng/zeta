@@ -17,7 +17,9 @@ use std::future;
 use std::path::PathBuf;
 use zeta_async_utils::CancellationToken;
 use zeta_sandboxing::SandboxBackend;
-use zeta_tool_executor::{CommandExecutor, CommandRequest};
+use zeta_tool_executor::CommandExecutor;
+use zeta_tool_executor::CommandInput;
+use zeta_tool_executor::CommandRequest;
 use zeta_tools::{
     ToolConcurrency, ToolDefinition, ToolExecutionFuture, ToolExecutionOutcome, ToolExecutor,
     ToolInputSchema, ToolInvocation, ToolLoading, ToolName, ToolOutput, ToolOutputSchema,
@@ -90,6 +92,7 @@ impl<P: ApprovalPolicy, B: SandboxBackend> ShellCommandTool<P, B> {
                 program: request.program,
                 arguments: request.arguments,
                 working_directory: request.working_directory,
+                input: CommandInput::Closed,
             },
             authority,
             cancellation,

@@ -9973,6 +9973,7 @@ dependencies = [
 name = "zeta-hooks"
 version = "0.1.0"
 dependencies = [
+ "serde",
  "serde_json",
  "zeta-action-policy",
  "zeta-async-utils",
@@ -9980,6 +9981,7 @@ dependencies = [
  "zeta-core",
  "zeta-install-context",
  "zeta-linux-sandbox",
+ "zeta-protocol",
  "zeta-sandboxing",
  "zeta-tool-executor",
  "zeta-windows-sandbox",
