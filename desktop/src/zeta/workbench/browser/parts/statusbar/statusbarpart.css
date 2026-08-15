@@ -1,28 +1,40 @@
 .zeta-workbench-statusbar {
   box-sizing: border-box;
   width: 100%;
-  height: 35px;
+  height: 32px;
+  padding: 4px 6px;
   overflow: hidden;
   color: var(--zeta-status-bar-foreground);
   background: var(--zeta-status-bar-background);
   font-size: 12px;
-}
-
-.zeta-workbench-statusbar .zeta-workbench-part-content {
   flex-direction: row;
   align-items: stretch;
-  overflow: hidden;
 }
 
 .zeta-statusbar-items {
   display: flex;
   min-width: 0;
   align-items: stretch;
+  gap: 5px;
+}
+
+.zeta-statusbar-compact-group {
+  display: inline-flex;
+  min-width: 0;
+  height: 100%;
+  align-items: stretch;
+}
+
+.zeta-statusbar-items-right > .zeta-statusbar-compact-group {
+  flex-direction: row-reverse;
+}
+
+.zeta-statusbar-items-left {
+  flex: 1 1 auto;
 }
 
 .zeta-statusbar-items-right {
   flex: 0 1 auto;
   flex-wrap: wrap;
   flex-direction: row-reverse;
-  margin-left: auto;
 }

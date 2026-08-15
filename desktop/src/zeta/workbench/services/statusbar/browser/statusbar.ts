@@ -9,10 +9,21 @@ export enum StatusbarAlignment {
   Right = "right",
 }
 
+/** Semantic presentation applied to a status bar entry. */
+export type StatusbarEntryKind = "standard" | "remote";
+
+/** One icon-and-text segment rendered inside a grouped status bar entry. */
+export interface IStatusbarEntrySegment {
+  readonly icon?: Icon;
+  readonly text: string;
+}
+
 /** Declarative content displayed by one status bar entry. */
 export interface IStatusbarEntry {
   readonly icon?: Icon;
   readonly text: string;
+  readonly segments?: readonly IStatusbarEntrySegment[];
+  readonly kind?: StatusbarEntryKind;
   readonly ariaLabel?: string;
   readonly tooltip?: string;
   /** Optional activation hook for entries that expose a status action. */
@@ -24,6 +35,8 @@ export interface IStatusbarEntryOptions {
   readonly id: string;
   readonly alignment: StatusbarAlignment;
   readonly priority?: number;
+  /** Adjacent entries with the same key render as one compact visual group. */
+  readonly compactGroup?: string;
 }
 
 /** A registered entry exposed to status bar views. */
@@ -31,6 +44,7 @@ export interface IStatusbarEntryItem {
   readonly id: string;
   readonly alignment: StatusbarAlignment;
   readonly priority: number;
+  readonly compactGroup?: string;
   readonly entry: IStatusbarEntry;
 }
 
@@ -105,6 +119,7 @@ export class StatusbarService extends DisposableOwner
       id: options.id,
       alignment: options.alignment,
       priority,
+      compactGroup: options.compactGroup,
       entry: { ...entry },
       order: this.nextOrder++,
     };
@@ -135,10 +150,11 @@ export class StatusbarService extends DisposableOwner
     return [...this.entries.values()]
       .filter((item) => item.alignment === alignment)
       .sort(compareEntries)
-      .map(({ id, entry, priority, alignment: itemAlignment }) => ({
+      .map(({ id, entry, priority, compactGroup, alignment: itemAlignment }) => ({
         id,
         entry,
         priority,
+        compactGroup,
         alignment: itemAlignment,
       }));
   }

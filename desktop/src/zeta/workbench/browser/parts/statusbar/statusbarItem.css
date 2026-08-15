@@ -4,8 +4,9 @@
   max-width: 40vw;
   height: 100%;
   align-items: stretch;
-  line-height: 35px;
+  line-height: 24px;
   font-variant-numeric: tabular-nums;
+  border-radius: 4px;
 }
 
 .zeta-statusbar-item-label {
@@ -15,8 +16,7 @@
   height: 100%;
   align-items: center;
   gap: 4px;
-  margin: 0 3px;
-  padding: 0 5px;
+  padding: 0 8px;
   overflow: hidden;
   border: 0;
   color: inherit;
@@ -27,17 +27,66 @@
   text-decoration: none;
   cursor: pointer;
   outline: 0;
+  border-radius: 4px;
 }
 
-.zeta-statusbar-item-label > .zeta-icon {
+.zeta-statusbar-item.icon-only:not(.compact-left):not(.compact-right) > .zeta-statusbar-item-label {
+  width: 24px;
+  justify-content: center;
+  padding: 0;
+}
+
+.zeta-statusbar-item.compact-left,
+.zeta-statusbar-item.compact-left > .zeta-statusbar-item-label {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.zeta-statusbar-item.compact-right,
+.zeta-statusbar-item.compact-right > .zeta-statusbar-item-label {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.zeta-statusbar-item.compact-left > .zeta-statusbar-item-label {
+  padding: 0 5px 0 3px;
+}
+
+.zeta-statusbar-item.compact-right > .zeta-statusbar-item-label {
+  padding: 0 3px 0 5px;
+}
+
+.zeta-statusbar-item.compact-left.compact-right > .zeta-statusbar-item-label {
+  padding: 0 3px;
+}
+
+.zeta-statusbar-item-label > .zeta-icon,
+.zeta-statusbar-item-segment > .zeta-icon {
   display: block;
-  width: 14px;
-  height: 14px;
-  flex: 0 0 14px;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+}
+
+.zeta-statusbar-item-segment {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+}
+
+.zeta-statusbar-item-label.has-segments {
+  gap: 4px;
+  padding: 0 5px;
 }
 
 .zeta-statusbar-item-label.disabled {
   cursor: default;
+}
+
+.zeta-statusbar-item.remote-kind {
+  color: var(--zeta-status-bar-item-remote-foreground);
+  background: var(--zeta-status-bar-item-remote-background);
 }
 
 .zeta-statusbar-item-label:hover:not(.disabled) {
@@ -45,8 +94,24 @@
   background: var(--zeta-status-bar-item-hover-background);
 }
 
+.zeta-statusbar-item.compact-group-hover > .zeta-statusbar-item-label {
+  color: var(--zeta-status-bar-item-hover-foreground);
+  background: var(--zeta-status-bar-item-hover-background);
+}
+
+.zeta-statusbar-item.compact-entry-hover > .zeta-statusbar-item-label {
+  background-image: linear-gradient(var(--zeta-status-bar-item-compact-hover-background), var(--zeta-status-bar-item-compact-hover-background));
+}
+
+.zeta-statusbar-item.remote-kind > .zeta-statusbar-item-label:hover:not(.disabled) {
+  color: var(--zeta-status-bar-item-remote-hover-foreground);
+  background: var(--zeta-status-bar-item-remote-hover-background);
+}
+
 .zeta-statusbar-item-label:active:not(.disabled) {
   background: var(--zeta-status-bar-item-active-background);
+  outline: 1px solid var(--zeta-focus-border);
+  outline-offset: -1px;
 }
 
 .zeta-statusbar-item-label:focus-visible {

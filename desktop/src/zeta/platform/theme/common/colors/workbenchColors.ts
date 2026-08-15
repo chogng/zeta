@@ -1,5 +1,5 @@
 import { registerColor } from "../colorRegistry.js";
-import { descriptionForeground, foreground } from "./baseColors.js";
+import { accentBackground, descriptionForeground, foreground } from "./baseColors.js";
 
 const owner = "workbench.shell";
 const color = (id: string, dark: string, light: string, description: string): string => registerColor(id, { dark, light }, { description, owner });
@@ -22,5 +22,10 @@ export const statusBarForeground = color("statusBar.foreground", "#1f1f1f", "#1f
 export const statusBarBackground = color("statusBar.background", "#FFFFFF", "#FFFFFF", "Status bar background.");
 export const statusBarItemHoverForeground = alias("statusBarItem.hoverForeground", statusBarForeground, "Hovered status bar item foreground.");
 export const statusBarItemHoverBackground = color("statusBarItem.hoverBackground", "#5a5d5e50", "#5a5d5e29", "Hovered status bar item background.");
+export const statusBarItemCompactHoverBackground = alias("statusBarItem.compactHoverBackground", statusBarItemHoverBackground, "Overlay for the hovered member of a compact status bar group.");
 export const statusBarItemActiveBackground = color("statusBarItem.activeBackground", "#37373d", "#dcdcdc", "Pressed status bar item background.");
+export const statusBarItemRemoteForeground = color("statusBarItem.remoteForeground", "#FFFFFF", "#FFFFFF", "Remote status bar item foreground.");
+export const statusBarItemRemoteBackground = alias("statusBarItem.remoteBackground", accentBackground, "Remote status bar item background.");
+export const statusBarItemRemoteHoverForeground = alias("statusBarItem.remoteHoverForeground", statusBarItemHoverForeground, "Hovered remote status bar item foreground.");
+export const statusBarItemRemoteHoverBackground = alias("statusBarItem.remoteHoverBackground", statusBarItemHoverBackground, "Hovered remote status bar item background.");
 export const sashHoverBackground = color("sash.hoverBackground", "#007acc", "#007acc", "Hovered sash background.");

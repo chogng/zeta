@@ -3,7 +3,7 @@ import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { DialogSeverity, type IDialogService } from "../../../../platform/dialogs/common/dialogs.js";
 import { type IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
 import { type LanguageServerMessageNotification, type LanguageServerMessageSeverityDto, type LanguageServerProgressNotification } from "../../../../../../generated/app-server/types.js";
-import { StatusbarAlignment, type IStatusbarEntryAccessor, type IStatusbarService } from "../../statusbar/browser/statusbar.js";
+import { StatusbarAlignment, type IStatusbarEntry, type IStatusbarEntryAccessor, type IStatusbarService } from "../../statusbar/browser/statusbar.js";
 import { type ILanguageServerStatusService, type LanguageServerLogEntry, type LanguageServerProgressState } from "../common/languageServerStatusService.js";
 
 const MAX_LOG_ENTRIES = 2_000;
@@ -17,9 +17,9 @@ export class AppServerLanguageServerStatusService extends DisposableOwner implem
   private nextSequence = 1;
   readonly onDidChange = this.changeEmitter.event;
 
-  constructor(events: IServerEventApi, private readonly dialogs: IDialogService, statusbar: IStatusbarService) {
+  constructor(events: IServerEventApi, private readonly dialogs: IDialogService, statusbar: IStatusbarService, private readonly openOutput: () => unknown) {
     super();
-    this.status = this.own(statusbar.addEntry({ text: "Language Servers", tooltip: "No active language-server operation" }, { id: "zeta.status.languageServers", alignment: StatusbarAlignment.Right, priority: 20 }));
+    this.status = this.own(statusbar.addEntry(this.statusEntry("Language Servers", "No active language-server operation"), { id: "zeta.status.languageServers", alignment: StatusbarAlignment.Right, priority: 20 }));
     const subscription = events.subscribe(event => {
       if (event.method === "language/serverMessage") this.acceptMessage(event.params);
       if (event.method === "language/serverProgress") this.acceptProgress(event.params);
@@ -66,13 +66,17 @@ export class AppServerLanguageServerStatusService extends DisposableOwner implem
   private updateStatus(): void {
     const active = [...this.progress.values()];
     if (active.length === 0) {
-      this.status.update({ text: "Language Servers", tooltip: "No active language-server operation" });
+      this.status.update(this.statusEntry("Language Servers", "No active language-server operation"));
       return;
     }
     const first = active[0]!;
     const percentage = first.percentage === undefined ? "" : ` ${first.percentage}%`;
     const suffix = active.length === 1 ? "" : ` (+${active.length - 1})`;
-    this.status.update({ text: `${first.title}${percentage}${suffix}`, tooltip: [first.server, first.message].filter(Boolean).join(": ") });
+    this.status.update(this.statusEntry(`${first.title}${percentage}${suffix}`, [first.server, first.message].filter(Boolean).join(": ")));
+  }
+
+  private statusEntry(text: string, tooltip: string): IStatusbarEntry {
+    return { text, tooltip, run: this.openOutput };
   }
 }
 

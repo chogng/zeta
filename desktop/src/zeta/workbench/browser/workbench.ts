@@ -405,7 +405,7 @@ export class Workbench extends DisposableOwner {
     const dialogService = this.own(new DialogService());
     services.set(IDialogService, dialogService);
     services.set(IDialogsModel, dialogService.model);
-    const languageServerStatusService = this.own(new AppServerLanguageServerStatusService(api.events, dialogService, statusbarService));
+    const languageServerStatusService = this.own(new AppServerLanguageServerStatusService(api.events, dialogService, statusbarService, () => services.get(IViewsService).focusView("zeta.output")));
     services.set(ILanguageServerStatusService, languageServerStatusService);
     services.set(
       IWorkbenchDialogHandler,

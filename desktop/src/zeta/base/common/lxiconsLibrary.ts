@@ -50,6 +50,7 @@ export const lxiconsLibrary = {
   settings: register("settings", svg.settings),
   splitHorizontal: register("split-horizontal", svg.splitHorizontal),
   start: register("start", svg.start),
+  sync: register("sync", svg.sync),
   submenuIndicator: register("submenu-indicator", svg.chevronRight),
   terminal: register("terminal", svg.terminal),
   terminalCmd: register("terminal-cmd", svg.terminalCmd),

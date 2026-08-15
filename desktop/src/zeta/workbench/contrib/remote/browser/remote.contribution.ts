@@ -1,4 +1,5 @@
 import { registerWorkbenchContribution, WorkbenchPhase } from "../../../common/contributions.js";
+import { ICommandService } from "../../../../platform/commands/common/commands.js";
 import { IContextKeyService } from "../../../../platform/contextkey/common/contextkey.js";
 import { IExtensionService } from "../../../services/extensions/common/extensionService.js";
 import { IRemoteAgentService } from "../../../services/remote/common/remoteAgentService.js";
@@ -40,6 +41,7 @@ registerWorkbenchContribution(RemoteContextKeys.ID, WorkbenchPhase.BlockStartup,
 
 registerWorkbenchContribution(RemoteStatusIndicator.ID, WorkbenchPhase.BlockStartup, accessor => new RemoteStatusIndicator({
   remoteAgentService: accessor.get(IRemoteAgentService),
+  runCommand: id => accessor.get(ICommandService).executeCommand(id),
   statusbarService: accessor.get(IStatusbarService),
 }));
 

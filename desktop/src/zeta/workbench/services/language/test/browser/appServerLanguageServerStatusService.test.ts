@@ -10,10 +10,13 @@ test("language-server status service retains logs and projects work-done progres
   const events = new FakeServerEvents();
   using dialogs = new DialogService();
   using statusbar = new StatusbarService();
-  using service = new AppServerLanguageServerStatusService(events, dialogs, statusbar);
+  let outputFocuses = 0;
+  using service = new AppServerLanguageServerStatusService(events, dialogs, statusbar, () => { outputFocuses += 1; });
 
   events.fire({ method: "language/serverMessage", params: { server: "rust-analyzer", severity: "warning", show: false, message: "  check failed  " } });
   assert.deepEqual(service.getLogEntries().map(entry => [entry.server, entry.severity, entry.message]), [["rust-analyzer", "warning", "check failed"]]);
+  assert.equal(statusbar.getEntries(StatusbarAlignment.Right)[0]?.entry.run?.(), undefined);
+  assert.equal(outputFocuses, 1);
 
   events.fire({ method: "language/serverProgress", params: { server: "rust-analyzer", token: "index", title: "Indexing", message: "1/2 files", percentage: 50, done: false } });
   assert.equal(service.getProgress()[0]?.title, "Indexing");

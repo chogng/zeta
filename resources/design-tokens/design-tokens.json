@@ -82,6 +82,26 @@
       }
     },
     {
+      "id": "accent.background",
+      "kind": "color",
+      "cssVariable": "--zeta-accent-background",
+      "owner": "platform.theme",
+      "description": "Background for accented controls and indicators.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#328eb9",
+        "light": "#328eb9",
+        "high-contrast-dark": "#328eb9",
+        "high-contrast-light": "#328eb9"
+      },
+      "values": {
+        "dark": "#328eb9",
+        "light": "#328eb9",
+        "high-contrast-dark": "#328eb9",
+        "high-contrast-light": "#328eb9"
+      }
+    },
+    {
       "id": "error.foreground",
       "kind": "color",
       "cssVariable": "--zeta-error-foreground",
@@ -2118,10 +2138,10 @@
       "description": "Background for the Empty Explorer Open Folder action.",
       "needsTransparency": false,
       "defaults": {
-        "dark": "#328eb9",
-        "light": "#328eb9",
-        "high-contrast-dark": "#328eb9",
-        "high-contrast-light": "#328eb9"
+        "dark": "accent.background",
+        "light": "accent.background",
+        "high-contrast-dark": "accent.background",
+        "high-contrast-light": "accent.background"
       },
       "values": {
         "dark": "#328eb9",
@@ -2491,6 +2511,26 @@
       }
     },
     {
+      "id": "statusBarItem.compactHoverBackground",
+      "kind": "color",
+      "cssVariable": "--zeta-status-bar-item-compact-hover-background",
+      "owner": "workbench.shell",
+      "description": "Overlay for the hovered member of a compact status bar group.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "statusBarItem.hoverBackground",
+        "light": "statusBarItem.hoverBackground",
+        "high-contrast-dark": "statusBarItem.hoverBackground",
+        "high-contrast-light": "statusBarItem.hoverBackground"
+      },
+      "values": {
+        "dark": "#5a5d5e50",
+        "light": "#5a5d5e29",
+        "high-contrast-dark": "#5a5d5e50",
+        "high-contrast-light": "#5a5d5e29"
+      }
+    },
+    {
       "id": "statusBarItem.activeBackground",
       "kind": "color",
       "cssVariable": "--zeta-status-bar-item-active-background",
@@ -2508,6 +2548,86 @@
         "light": "#dcdcdc",
         "high-contrast-dark": "#37373d",
         "high-contrast-light": "#dcdcdc"
+      }
+    },
+    {
+      "id": "statusBarItem.remoteForeground",
+      "kind": "color",
+      "cssVariable": "--zeta-status-bar-item-remote-foreground",
+      "owner": "workbench.shell",
+      "description": "Remote status bar item foreground.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#FFFFFF",
+        "light": "#FFFFFF",
+        "high-contrast-dark": "#FFFFFF",
+        "high-contrast-light": "#FFFFFF"
+      },
+      "values": {
+        "dark": "#ffffff",
+        "light": "#ffffff",
+        "high-contrast-dark": "#ffffff",
+        "high-contrast-light": "#ffffff"
+      }
+    },
+    {
+      "id": "statusBarItem.remoteBackground",
+      "kind": "color",
+      "cssVariable": "--zeta-status-bar-item-remote-background",
+      "owner": "workbench.shell",
+      "description": "Remote status bar item background.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "accent.background",
+        "light": "accent.background",
+        "high-contrast-dark": "accent.background",
+        "high-contrast-light": "accent.background"
+      },
+      "values": {
+        "dark": "#328eb9",
+        "light": "#328eb9",
+        "high-contrast-dark": "#328eb9",
+        "high-contrast-light": "#328eb9"
+      }
+    },
+    {
+      "id": "statusBarItem.remoteHoverForeground",
+      "kind": "color",
+      "cssVariable": "--zeta-status-bar-item-remote-hover-foreground",
+      "owner": "workbench.shell",
+      "description": "Hovered remote status bar item foreground.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "statusBarItem.hoverForeground",
+        "light": "statusBarItem.hoverForeground",
+        "high-contrast-dark": "statusBarItem.hoverForeground",
+        "high-contrast-light": "statusBarItem.hoverForeground"
+      },
+      "values": {
+        "dark": "#1f1f1f",
+        "light": "#1f1f1f",
+        "high-contrast-dark": "#1f1f1f",
+        "high-contrast-light": "#1f1f1f"
+      }
+    },
+    {
+      "id": "statusBarItem.remoteHoverBackground",
+      "kind": "color",
+      "cssVariable": "--zeta-status-bar-item-remote-hover-background",
+      "owner": "workbench.shell",
+      "description": "Hovered remote status bar item background.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "statusBarItem.hoverBackground",
+        "light": "statusBarItem.hoverBackground",
+        "high-contrast-dark": "statusBarItem.hoverBackground",
+        "high-contrast-light": "statusBarItem.hoverBackground"
+      },
+      "values": {
+        "dark": "#5a5d5e50",
+        "light": "#5a5d5e29",
+        "high-contrast-dark": "#5a5d5e50",
+        "high-contrast-light": "#5a5d5e29"
       }
     },
     {

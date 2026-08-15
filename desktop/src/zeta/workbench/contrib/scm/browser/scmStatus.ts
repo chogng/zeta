@@ -3,21 +3,22 @@ import { DisposableOwner, DisposableSlot } from "../../../../base/common/lifecyc
 import type { IWorkbenchContribution } from "../../../common/contributions.js";
 import type { GitHead, GitStatus, IGitService } from "../../../services/git/common/gitService.js";
 import { StatusbarAlignment, type IStatusbarEntry, type IStatusbarEntryAccessor, type IStatusbarService } from "../../../services/statusbar/browser/statusbar.js";
+import type { IViewsService } from "../../../services/views/browser/viewsService.js";
 
 const BranchPriority = 900;
-const PullPriority = 800;
-const PushPriority = 790;
+const SyncPriority = 800;
+const ScmCompactGroup = "zeta.status.git";
 
 export interface ScmStatusContributionOptions {
   readonly statusbarService: IStatusbarService;
   readonly gitService: IGitService;
+  readonly viewsService: IViewsService;
 }
 
 /** Projects the active Git branch and upstream state into the status bar. */
 export class ScmStatusContribution extends DisposableOwner implements IWorkbenchContribution {
   private readonly branch = this.own(new DisposableSlot<IStatusbarEntryAccessor>());
-  private readonly pull = this.own(new DisposableSlot<IStatusbarEntryAccessor>());
-  private readonly push = this.own(new DisposableSlot<IStatusbarEntryAccessor>());
+  private readonly sync = this.own(new DisposableSlot<IStatusbarEntryAccessor>());
   private readonly retiredGitStreams = new Set<string>();
   private gitStatus: GitStatus | undefined;
   private refreshRevision = 0;
@@ -51,10 +52,9 @@ export class ScmStatusContribution extends DisposableOwner implements IWorkbench
       }
     }
     this.gitStatus = status;
-    this.updateOrAdd(this.branch, branchEntry(status.head), "zeta.status.git.branch", BranchPriority);
-    const upstream = status.head.type === "branch" ? status.head.upstream : undefined;
-    this.updateOrAdd(this.pull, transferEntry("pull", upstream?.behind ?? 0, upstream?.name), "zeta.status.git.pull", PullPriority);
-    this.updateOrAdd(this.push, transferEntry("push", upstream?.ahead ?? 0, upstream?.name), "zeta.status.git.push", PushPriority);
+    const focusGit = () => this.options.viewsService.focusView("zeta.gitView");
+    this.updateOrAdd(this.branch, branchEntry(status.head, focusGit), "zeta.status.git.branch", BranchPriority);
+    this.updateOrAdd(this.sync, syncEntry(status.head, focusGit), "zeta.status.git.sync", SyncPriority);
   }
 
   private updateOrAdd(slot: DisposableSlot<IStatusbarEntryAccessor>, entry: IStatusbarEntry, id: string, priority: number): void {
@@ -62,27 +62,26 @@ export class ScmStatusContribution extends DisposableOwner implements IWorkbench
       slot.value.update(entry);
       return;
     }
-    slot.replace(this.options.statusbarService.addEntry(entry, { id, alignment: StatusbarAlignment.Left, priority }));
+    slot.replace(this.options.statusbarService.addEntry(entry, { id, alignment: StatusbarAlignment.Left, priority, compactGroup: ScmCompactGroup }));
   }
 }
 
-function branchEntry(head: GitHead): IStatusbarEntry {
+function branchEntry(head: GitHead, run: () => unknown): IStatusbarEntry {
   switch (head.type) {
-    case "branch": return { icon: lxiconsLibrary.gitBranch, text: head.name, ariaLabel: `Git branch ${head.name}`, tooltip: head.upstream ? `${head.name} tracks ${head.upstream.name}` : `${head.name} has no upstream` };
-    case "unborn": return { icon: lxiconsLibrary.gitBranch, text: head.name, ariaLabel: `Unborn Git branch ${head.name}`, tooltip: `${head.name} has no commits` };
+    case "branch": return { icon: lxiconsLibrary.gitBranch, text: head.name, ariaLabel: `Git branch ${head.name}`, tooltip: head.upstream ? `${head.name} tracks ${head.upstream.name}` : `${head.name} has no upstream`, run };
+    case "unborn": return { icon: lxiconsLibrary.gitBranch, text: head.name, ariaLabel: `Unborn Git branch ${head.name}`, tooltip: `${head.name} has no commits`, run };
     case "detached": {
       const revision = head.objectId.slice(0, 8);
-      return { icon: lxiconsLibrary.gitCommit, text: revision, ariaLabel: `Detached Git HEAD at ${revision}`, tooltip: `Detached HEAD at ${head.objectId}` };
+      return { icon: lxiconsLibrary.gitCommit, text: revision, ariaLabel: `Detached Git HEAD at ${revision}`, tooltip: `Detached HEAD at ${head.objectId}`, run };
     }
   }
 }
 
-function transferEntry(direction: "pull" | "push", count: number, upstream: string | undefined): IStatusbarEntry {
-  const action = direction === "pull" ? "incoming" : "outgoing";
-  return {
-    icon: direction === "pull" ? lxiconsLibrary.repoPull : lxiconsLibrary.repoPush,
-    text: String(count),
-    ariaLabel: `${count} ${action} Git ${count === 1 ? "change" : "changes"}`,
-    tooltip: upstream ? `${count} ${action} from ${upstream}` : "No upstream branch configured",
-  };
+function syncEntry(head: GitHead, run: () => unknown): IStatusbarEntry {
+  if (head.type !== "branch") return { icon: lxiconsLibrary.sync, text: "", ariaLabel: "No Git branch to synchronize", tooltip: "No Git branch to synchronize", run };
+  if (!head.upstream) return { icon: lxiconsLibrary.repoPush, text: "", ariaLabel: `Publish Git branch ${head.name}`, tooltip: `${head.name} has no upstream`, run };
+  const { ahead, behind, name } = head.upstream;
+  const text = ahead === 0 && behind === 0 ? "" : `${behind}↓ ${ahead}↑`;
+  const summary = `${behind} incoming and ${ahead} outgoing ${ahead + behind === 1 ? "change" : "changes"}`;
+  return { icon: lxiconsLibrary.sync, text, ariaLabel: `Synchronize Git changes, ${summary}`, tooltip: `Synchronize Changes with ${name}: ${summary}`, run };
 }

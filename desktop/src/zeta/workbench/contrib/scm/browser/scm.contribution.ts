@@ -7,6 +7,7 @@ import { registerWorkbenchContribution, WorkbenchPhase } from "../../../common/c
 import { ViewContainerLocation, type WorkbenchViewRegistry, WorkbenchViewContainerId, ViewsRegistry } from "../../../common/views.js";
 import { IGitService } from "../../../services/git/common/gitService.js";
 import { IStatusbarService } from "../../../services/statusbar/browser/statusbar.js";
+import { IViewsService } from "../../../services/views/browser/viewsService.js";
 import { ScmAgentReviewViewPane } from "./scmAgentReviewViewPane.js";
 import { ScmGraphViewPane } from "./scmGraphViewPane.js";
 import { ScmStatusContribution } from "./scmStatus.js";
@@ -59,7 +60,8 @@ export function registerGitViews(
   ]);
 }
 
-registerWorkbenchContribution("workbench.contrib.scmStatus", WorkbenchPhase.BlockStartup, accessor => new ScmStatusContribution({
+registerWorkbenchContribution("workbench.contrib.scmStatus", WorkbenchPhase.BlockRestore, accessor => new ScmStatusContribution({
   statusbarService: accessor.get(IStatusbarService),
   gitService: accessor.get(IGitService),
+  viewsService: accessor.get(IViewsService),
 }));

@@ -5,12 +5,15 @@ import type { IWorkbenchContribution } from "../../../common/contributions.js";
 import type { IRemoteAgentService } from "../../../services/remote/common/remoteAgentService.js";
 import type { RemoteAgentConnection } from "../../../../platform/remote/common/remoteAgentApi.js";
 import { StatusbarAlignment, type IStatusbarEntry, type IStatusbarService } from "../../../services/statusbar/browser/statusbar.js";
+import { ConnectToRemoteCommandId } from "./remoteActions.js";
+import { ReconnectRemoteCommandId } from "./remoteActions.js";
 
 const RemoteStatusPriority = 1_000;
 
 export interface RemoteStatusIndicatorOptions {
   readonly remoteAgentService: IRemoteAgentService;
   readonly statusbarService: IStatusbarService;
+  readonly runCommand: (id: string) => unknown;
 }
 
 /** Projects the active backend connection into the leading Workbench status item. */
@@ -21,34 +24,36 @@ export class RemoteStatusIndicator extends DisposableOwner implements IWorkbench
     super();
     let state = options.remoteAgentService.connectionState ?? "connecting";
     let connection = options.remoteAgentService.connection;
-    const status = this.own(options.statusbarService.addEntry(remoteStatusEntry(state, connection), {
+    const status = this.own(options.statusbarService.addEntry(remoteStatusEntry(state, connection, options.runCommand), {
       id: "zeta.status.remote",
       alignment: StatusbarAlignment.Left,
       priority: RemoteStatusPriority,
     }));
     this.own(options.remoteAgentService.onDidChangeConnectionState(nextState => {
       state = nextState;
-      status.update(remoteStatusEntry(state, connection));
+      status.update(remoteStatusEntry(state, connection, options.runCommand));
     }));
     this.own(options.remoteAgentService.onDidChangeConnection(nextConnection => {
       connection = nextConnection;
-      status.update(remoteStatusEntry(state, connection));
+      status.update(remoteStatusEntry(state, connection, options.runCommand));
     }));
   }
 }
 
-function remoteStatusEntry(state: RemoteConnectionState, connection: RemoteAgentConnection | undefined): IStatusbarEntry {
+function remoteStatusEntry(state: RemoteConnectionState, connection: RemoteAgentConnection | undefined, runCommand: (id: string) => unknown): IStatusbarEntry {
   const backend = connection?.kind === "ssh" ? `SSH host ${connection.host}` : "local backend";
+  const run = () => runCommand(connection?.kind === "ssh" && state === "disconnected" ? ReconnectRemoteCommandId : ConnectToRemoteCommandId);
+  const kind = connection?.kind === "ssh" && state === "connected" ? "remote" : undefined;
   switch (state) {
     case "connected":
-      return { icon: lxiconsLibrary.remote, text: "", ariaLabel: `Remote connection to ${backend} is ready`, tooltip: `Connected to ${backend}` };
+      return { kind, icon: lxiconsLibrary.remote, text: "", ariaLabel: `Remote connection to ${backend} is ready`, tooltip: `Connected to ${backend}`, run };
     case "connecting":
-      return { icon: lxiconsLibrary.remote, text: "Connecting\u2026", ariaLabel: `Remote connection to ${backend} is connecting`, tooltip: `Connecting to ${backend}` };
+      return { kind, icon: lxiconsLibrary.remote, text: "Connecting\u2026", ariaLabel: `Remote connection to ${backend} is connecting`, tooltip: `Connecting to ${backend}`, run };
     case "reconnecting":
-      return { icon: lxiconsLibrary.remote, text: "Reconnecting\u2026", ariaLabel: `Remote connection to ${backend} is reconnecting`, tooltip: `Reconnecting to ${backend}` };
+      return { kind, icon: lxiconsLibrary.remote, text: "Reconnecting\u2026", ariaLabel: `Remote connection to ${backend} is reconnecting`, tooltip: `Reconnecting to ${backend}`, run };
     case "disconnecting":
-      return { icon: lxiconsLibrary.remote, text: "Disconnecting\u2026", ariaLabel: `Remote connection to ${backend} is disconnecting`, tooltip: `Disconnecting from ${backend}` };
+      return { kind, icon: lxiconsLibrary.remote, text: "Disconnecting\u2026", ariaLabel: `Remote connection to ${backend} is disconnecting`, tooltip: `Disconnecting from ${backend}`, run };
     case "disconnected":
-      return { icon: lxiconsLibrary.remote, text: "Disconnected", ariaLabel: `Remote connection to ${backend} is disconnected`, tooltip: `${backend} is disconnected` };
+      return { kind, icon: lxiconsLibrary.remote, text: "Disconnected", ariaLabel: `Remote connection to ${backend} is disconnected`, tooltip: `${backend} is disconnected`, run };
   }
 }

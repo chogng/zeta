@@ -1,4 +1,5 @@
 import "./statusbarpart.css";
+import { addDisposableListener, isNode } from "../../../../base/browser/dom.js";
 import { WorkbenchPart } from "../../part.js";
 import { StatusbarHeight } from "../workbenchPartDimensions.js";
 import { StatusbarEntryItem } from "./statusbarItem.js";
@@ -10,6 +11,8 @@ export class StatusbarPart extends WorkbenchPart {
   private readonly leftItems: HTMLDivElement;
   private readonly rightItems: HTMLDivElement;
   private readonly items = new Map<string, StatusbarEntryItem>();
+  private readonly compactGroupByItemId = new Map<string, string>();
+  private readonly compactGroups = new Map<string, StatusbarEntryItem[]>();
 
   override get minimumHeight(): number { return StatusbarHeight; }
   override get maximumHeight(): number { return StatusbarHeight; }
@@ -20,13 +23,30 @@ export class StatusbarPart extends WorkbenchPart {
   ) {
     super("statusbar", ownerDocument);
     this.statusbarService = statusbarService;
-    this.contentElement.setAttribute("role", "status");
-    this.contentElement.setAttribute("aria-live", "polite");
-    this.contentElement.tabIndex = 0;
+    this.titleElement.remove();
+    this.contentElement.remove();
+    this.element.setAttribute("role", "status");
+    this.element.setAttribute("aria-live", "polite");
+    this.element.tabIndex = 0;
+    this.own(addDisposableListener(this.element, "keydown", (event) => {
+      if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+      if (event.key === "ArrowRight") {
+        this.focusNextEntry();
+      } else if (event.key === "ArrowLeft") {
+        this.focusPreviousEntry();
+      } else {
+        return;
+      }
+      this.itemForTarget(event.target)?.hideHover();
+      event.preventDefault();
+      event.stopPropagation();
+    }));
+    this.own(addDisposableListener(this.element, "mouseover", (event) => this.updateCompactHover(event.target)));
+    this.own(addDisposableListener(this.element, "mouseout", (event) => this.updateCompactHover(event.relatedTarget)));
 
     this.leftItems = createItemsContainer(ownerDocument, "left");
     this.rightItems = createItemsContainer(ownerDocument, "right");
-    this.contentElement.append(this.leftItems, this.rightItems);
+    this.element.append(this.leftItems, this.rightItems);
 
     this.defer(() => this.disposeItems());
     this.own(this.statusbarService.onDidChangeEntries(() => this.render()));
@@ -42,6 +62,9 @@ export class StatusbarPart extends WorkbenchPart {
       item.dispose();
       this.items.delete(id);
     }
+    this.clearCompactHover();
+    this.compactGroupByItemId.clear();
+    this.compactGroups.clear();
     this.renderItems(this.leftItems, leftEntries);
     this.renderItems(this.rightItems, rightEntries);
   }
@@ -50,7 +73,12 @@ export class StatusbarPart extends WorkbenchPart {
     container: HTMLDivElement,
     entries: readonly IStatusbarEntryItem[],
   ): void {
-    for (const entry of entries) {
+    container.replaceChildren();
+    let compactGroupElement: HTMLDivElement | undefined;
+    let compactGroupId: string | undefined;
+    for (let index = 0; index < entries.length; index += 1) {
+      const entry = entries[index];
+      if (!entry) continue;
       let item = this.items.get(entry.id);
       if (item) {
         item.update(entry.entry);
@@ -58,8 +86,83 @@ export class StatusbarPart extends WorkbenchPart {
         item = new StatusbarEntryItem(entry.id, entry.entry, container.ownerDocument);
         this.items.set(entry.id, item);
       }
-      container.append(item.element);
+      item.setCompactNeighbors({
+        left: entry.compactGroup !== undefined && entries[index - 1]?.compactGroup === entry.compactGroup,
+        right: entry.compactGroup !== undefined && entries[index + 1]?.compactGroup === entry.compactGroup,
+      });
+      if (entry.compactGroup) {
+        this.compactGroupByItemId.set(entry.id, entry.compactGroup);
+        const group = this.compactGroups.get(entry.compactGroup) ?? [];
+        group.push(item);
+        this.compactGroups.set(entry.compactGroup, group);
+      }
+      const belongsToCompactRun = entry.compactGroup !== undefined && (entries[index - 1]?.compactGroup === entry.compactGroup || entries[index + 1]?.compactGroup === entry.compactGroup);
+      if (belongsToCompactRun) {
+        if (!compactGroupElement || compactGroupId !== entry.compactGroup) {
+          compactGroupElement = container.ownerDocument.createElement("div");
+          compactGroupElement.className = "zeta-statusbar-compact-group";
+          compactGroupElement.dataset.compactGroup = entry.compactGroup;
+          compactGroupId = entry.compactGroup;
+          container.append(compactGroupElement);
+        }
+        compactGroupElement.append(item.element);
+      } else {
+        compactGroupElement = undefined;
+        compactGroupId = undefined;
+        container.append(item.element);
+      }
     }
+  }
+
+  focusNextEntry(): void {
+    this.focusEntry(1);
+  }
+
+  focusPreviousEntry(): void {
+    this.focusEntry(-1);
+  }
+
+  isEntryFocused(): boolean {
+    return this.focusableItems().some((item) => item.isFocused());
+  }
+
+  private focusEntry(delta: 1 | -1): void {
+    const items = this.focusableItems();
+    if (items.length === 0) return;
+    const focusedIndex = items.findIndex((item) => item.isFocused());
+    const targetIndex = focusedIndex === -1
+      ? delta === 1 ? 0 : items.length - 1
+      : focusedIndex + delta;
+    const target = items[targetIndex];
+    if (!target) return;
+    target.focus();
+  }
+
+  private focusableItems(): StatusbarEntryItem[] {
+    const entries = [
+      ...this.statusbarService.getEntries(StatusbarAlignment.Left),
+      ...this.statusbarService.getEntries(StatusbarAlignment.Right),
+    ];
+    return entries
+      .map(({ id }) => this.items.get(id))
+      .filter((item): item is StatusbarEntryItem => item?.isFocusable() === true);
+  }
+
+  private itemForTarget(target: EventTarget | null): StatusbarEntryItem | undefined {
+    if (!isNode(target)) return undefined;
+    return [...this.items.values()].find((item) => item.element.contains(target));
+  }
+
+  private updateCompactHover(target: EventTarget | null): void {
+    const hoveredItem = this.itemForTarget(target);
+    const compactGroup = hoveredItem && hoveredItem.isFocusable() ? this.compactGroupByItemId.get(hoveredItem.id) : undefined;
+    this.clearCompactHover();
+    if (!compactGroup || !hoveredItem) return;
+    for (const item of this.compactGroups.get(compactGroup) ?? []) item.setCompactHoverState(item === hoveredItem ? "entry" : "group");
+  }
+
+  private clearCompactHover(): void {
+    for (const item of this.items.values()) item.setCompactHoverState("none");
   }
 
   private disposeItems(): void {
