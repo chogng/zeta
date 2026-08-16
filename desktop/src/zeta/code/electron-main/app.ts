@@ -68,6 +68,7 @@ import { RemoteBrowserViewNavigationResolver } from "../../platform/remote/elect
 import { SshRemoteTunnelService } from "../../platform/remote/electron-main/sshRemoteTunnelService.js";
 import { createRemoteRuntimeInstallProgressLogger } from "../../platform/remote/electron-main/remoteRuntimeBootstrapMainService.js";
 import { RemoteRuntimeBootstrapMainService } from "../../platform/remote/electron-main/remoteRuntimeBootstrapMainService.js";
+import { SshAppServerProcessLauncher } from "../../platform/remote/electron-main/sshAppServerProcessLauncher.js";
 import { ElectronRemoteRuntimeInstallWindow } from "../../platform/remote/electron-main/electronRemoteRuntimeInstallWindow.js";
 import { electronRemoteWindowMainHost } from "../../platform/remote/electron-main/electronRemoteWindowMainHost.js";
 import { RemoteWindowMainContext } from "../../platform/remote/electron-main/remoteWindowMainContext.js";
