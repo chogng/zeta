@@ -99,7 +99,7 @@ export class ParameterHintsController extends DisposableOwner {
 }
 
 registerEditorContribution({ id: "editor.contrib.parameterHints", install: context => {
-  if (context.kind !== "text") return;
+  if (context.kind !== "text" || context.options.parameterHints === false) return;
   const service = context.own(context.languageFeaturesService.createParameterHintsService(context.model, context.options.input.resource));
   context.own(new ParameterHintsController(context.textInput.element, context.viewport, context.selections, service, context.languageId, context.onLanguageError));
 } });

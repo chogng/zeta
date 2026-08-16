@@ -21,6 +21,19 @@ Desktop SCM View
 这条依赖方向让 workspace path authority、Git executable identity、process limits 和 output
 parsing 留在 Rust host。Renderer 只拥有展示状态和用户 intent。
 
+Workspace trust 只限制 Git 的副作用，不隐藏本地只读状态：
+
+| Git 能力 | Restricted | Trusted |
+| --- | --- | --- |
+| 当前分支、HEAD、改动状态、变更路径 | ✅ | ✅ |
+| 本地分支、最近提交、受限文本 diff | ✅ | ✅ |
+| 暂存、取消暂存、丢弃、提交、切分支 | ❌ | ✅ |
+| fetch、pull、push | ❌ | ✅ |
+
+`InspectRepository` 是可在 Restricted 下签发的只读 capability；`MutateRepository` 仍要求
+Trusted workspace。Git query 继续由 `zeta-git` 以禁用 hooks、非交互和有界进程的 query profile
+执行，不能借此启用 workspace code 或远程操作。
+
 | 用户操作 | 当前行为 | 关键限制 |
 | --- | --- | --- |
 | 查看更改 | 自动读取并投影工作区范围内的 Git 状态 | 当前只支持单工作区 |
@@ -37,7 +50,7 @@ parsing 留在 Rust host。Renderer 只拥有展示状态和用户 intent。
 | Desktop SCM | 分支/upstream、Merge/Staged/Working Tree 分组，提交输入，Git intent，以及按 revision 接收自动状态更新 | Git process、porcelain parser、任意 host path authority |
 | Electron bridge | 校验 workspace-relative path、commit message 和空参数，再把 typed Git intent 转发给 App Server | Git domain semantics、最终路径授权 |
 | App Server `GitRuntime` | 串行化 operation、维护 workspace projection/revision、消费 watcher hint、去重并发布状态 | Git command/parsing、Renderer state |
-| App Server `GitService` | 冻结 workspace root、映射 workspace/repository path、持有 Tokio runtime并调用 `zeta-git` | live projection、notification |
+| App Server `GitService` | 冻结 workspace root、映射 workspace/repository path、持有 Tokio runtime并调用 `zeta-git`；按 `InspectRepository`/`MutateRepository` 再校验读写边界 | live projection、notification |
 | `zeta-app-server-protocol` | Git query/mutation、`git/statusChanged`、DTO、capability 和 stable error name | process/runtime state |
 | `zeta-git` | system Git identity、仓库发现、porcelain-v2 snapshot、HEAD/worktree 文本 Diff 与增删行统计、typed mutation 与结构化 parsing | App Server lifecycle、workspace product boundary、Renderer state |
 
@@ -45,8 +58,8 @@ parsing 留在 Rust host。Renderer 只拥有展示状态和用户 intent。
 
 当前已经实现 status 与常用用户 mutation 的完整纵向切片：
 
-- App Server 只在 local composition 收到可信 workspace root 时声明
-  `initialize.capabilities.git = true`；
+- App Server 在 local composition 收到 workspace root 后声明 `initialize.capabilities.git = true`；
+  Restricted runtime 也创建只读 Git projection，只有 repository mutation 需要 trusted root；
 - `git/status` 不接受路径；mutation 只接受 workspace-relative path，Electron 和 Rust 边界都会
   拒绝绝对路径、空路径和父目录逃逸；
 - workspace 位于更大 repository 内时，App Server 会过滤 repository 其他目录并把 path 重新映射为

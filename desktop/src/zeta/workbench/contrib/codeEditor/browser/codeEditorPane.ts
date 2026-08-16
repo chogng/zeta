@@ -51,6 +51,24 @@ export interface EditorPaneOptions {
   readonly syntaxApi?: ISyntaxApi;
   readonly languageDiagnosticsService?: ILanguageDiagnosticsService;
   readonly lineWrapping?: EditorLineWrapping;
+  readonly fontFamily?: string;
+  readonly fontSize?: number;
+  readonly lineHeight?: number;
+  readonly fontLigatures?: boolean;
+  readonly minimap?: EditorPartOptions["minimap"];
+  readonly activeLineHighlight?: EditorPartOptions["activeLineHighlight"];
+  readonly showLineNumbers?: boolean;
+  readonly showIndentationGuides?: boolean;
+  readonly bracketPairColorization?: boolean;
+  readonly stickyScroll?: boolean;
+  readonly suggestions?: boolean;
+  readonly inlineCompletions?: boolean;
+  readonly parameterHints?: boolean;
+  readonly inlayHints?: boolean;
+  readonly codeLens?: boolean;
+  readonly formatOnSave?: boolean;
+  readonly find?: EditorPartOptions["find"];
+  readonly indentation?: EditorPartOptions["indentation"];
   /** Browser paragraph direction forwarded to every created editor part. */
   readonly textDirection?: EditorTextDirection;
   readonly onOpenLink?: (target: string) => void | Promise<void>;
@@ -61,6 +79,7 @@ export interface EditorPaneOptions {
   readonly createLineGutterDecorations?: (resource: URI) => NonNullable<EditorPartOptions["lineGutterDecorations"]>;
   readonly placeholder?: string;
   readonly showUnicodeHighlights?: boolean;
+  readonly insertFinalNewLine?: boolean;
   readonly fontZoom?: EditorPartOptions["fontZoom"];
   readonly onSave?: () => Promise<void | boolean>;
   readonly onSaveError?: (error: unknown) => void;
@@ -125,6 +144,24 @@ export class CodeEditorPane extends DisposableOwner implements IEditorPane {
         syntaxApi: this.options.syntaxApi,
         languageDiagnosticsService: this.options.languageDiagnosticsService,
         lineWrapping: this.options.lineWrapping,
+        fontFamily: this.options.fontFamily,
+        fontSize: this.options.fontSize,
+        lineHeight: this.options.lineHeight,
+        fontLigatures: this.options.fontLigatures,
+        minimap: this.options.minimap,
+        activeLineHighlight: this.options.activeLineHighlight,
+        showLineNumbers: this.options.showLineNumbers,
+        showIndentationGuides: this.options.showIndentationGuides,
+        bracketPairColorization: this.options.bracketPairColorization,
+        stickyScroll: this.options.stickyScroll,
+        suggestions: this.options.suggestions,
+        inlineCompletions: this.options.inlineCompletions,
+        parameterHints: this.options.parameterHints,
+        inlayHints: this.options.inlayHints,
+        codeLens: this.options.codeLens,
+        formatOnSave: this.options.formatOnSave,
+        find: this.options.find,
+        indentation: this.options.indentation,
         textDirection: this.options.textDirection,
         onOpenLink: this.options.onOpenLink,
         onShowContextMenu: this.options.onShowContextMenu,
@@ -134,6 +171,7 @@ export class CodeEditorPane extends DisposableOwner implements IEditorPane {
         lineGutterDecorations: this.options.createLineGutterDecorations?.(input.resource),
         placeholder: this.options.placeholder,
         showUnicodeHighlights: this.options.showUnicodeHighlights,
+        insertFinalNewLine: this.options.insertFinalNewLine,
         fontZoom: this.options.fontZoom,
         onSave: input.resource.scheme === "untitled"
           ? this.options.onSave

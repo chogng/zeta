@@ -116,6 +116,29 @@ test("find in selection restricts replace all to its tracked opening scope", () 
   assert.equal(fixture.model.getText(), "alpha beta alpha beta alpha");
 });
 
+test("configured find defaults seed toggles, selection scope, and non-looping navigation", () => {
+  const fixture = createFixture("Alpha beta Alpha", TextPosition.at(0, 0), TextPosition.at(0, 5), {
+    seedSearchStringFromSelection: false,
+    autoFindInSelection: true,
+    loop: false,
+    matchCase: true,
+    wholeWord: true,
+    regularExpression: false,
+  });
+  using resources = fixture;
+  fixture.find.open();
+
+  assert.equal(fixture.find.searchInput.value, "");
+  assert.equal(requiredElement<HTMLButtonElement>(fixture.find.element, '[aria-label="Match case"]').classList.contains("checked"), true);
+  assert.equal(requiredElement<HTMLButtonElement>(fixture.find.element, '[aria-label="Match whole word"]').classList.contains("checked"), true);
+  assert.equal(requiredElement<HTMLButtonElement>(fixture.find.element, '[aria-label="Find in selection"]').classList.contains("checked"), true);
+  setInputValue(fixture.find.searchInput, "Alpha");
+  fixture.find.searchInput.dispatchEvent(keyboardEvent(fixture.dom.window, "Enter"));
+  fixture.find.searchInput.dispatchEvent(keyboardEvent(fixture.dom.window, "Enter"));
+  assert.deepEqual(fixture.selections.selections.primary.range.start, TextPosition.at(0, 0));
+  assert.deepEqual(fixture.selections.selections.primary.range.end, TextPosition.at(0, 5));
+});
+
 test("replace current and replace all use isolated undo transactions", () => {
   const fixture = createFixture("a a a");
   using resources = fixture;
@@ -149,7 +172,7 @@ interface Fixture extends Disposable {
   readonly find: InstanceType<typeof FindController>;
 }
 
-function createFixture(text: string, anchor = TextPosition.at(0, 0), active = anchor): Fixture {
+function createFixture(text: string, anchor = TextPosition.at(0, 0), active = anchor, options?: ConstructorParameters<typeof FindController>[4]): Fixture {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   const container = requiredElement<HTMLElement>(dom.window.document, "main");
   const model = new TextModel(text);
@@ -166,7 +189,7 @@ function createFixture(text: string, anchor = TextPosition.at(0, 0), active = an
   viewport.layout({ width: 600, height: 120 });
   const editorInput = dom.window.document.createElement("textarea") as unknown as HTMLTextAreaElement;
   viewport.element.append(editorInput);
-  const find = new FindController(editorInput, viewport, selections, decorations);
+  const find = new FindController(editorInput, viewport, selections, decorations, options);
   return {
     dom,
     model,

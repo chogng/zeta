@@ -1,0 +1,181 @@
+.zeta-editor-settings {
+  display: flex;
+  max-width: 760px;
+  flex-direction: column;
+  gap: 30px;
+}
+
+.zeta-editor-settings-note {
+  margin: -10px 0 -12px;
+  color: var(--zeta-description-foreground);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.zeta-editor-settings-group h4 {
+  margin: 0;
+  color: var(--zeta-foreground);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.zeta-editor-settings-group-description {
+  margin: 5px 0 12px;
+  color: var(--zeta-description-foreground);
+  line-height: 1.5;
+}
+
+.zeta-editor-settings-list {
+  overflow: hidden;
+  border: 1px solid var(--zeta-widget-border);
+  border-radius: 8px;
+  background: var(--zeta-editor-background);
+}
+
+.zeta-editor-setting {
+  display: grid;
+  min-height: 68px;
+  box-sizing: border-box;
+  align-items: center;
+  padding: 12px 14px;
+  color: var(--zeta-foreground);
+  cursor: pointer;
+  gap: 18px;
+  grid-template-columns: minmax(0, 1fr) minmax(112px, 180px);
+}
+
+.zeta-editor-setting + .zeta-editor-setting {
+  border-top: 1px solid var(--zeta-widget-border);
+}
+
+.zeta-editor-setting:hover {
+  background: var(--zeta-list-hover-background);
+}
+
+.zeta-editor-setting-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.zeta-editor-setting-title {
+  font-weight: 600;
+}
+
+.zeta-editor-setting-description {
+  color: var(--zeta-description-foreground);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.zeta-editor-setting-state {
+  padding: 4px 8px;
+  border: 1px solid var(--zeta-widget-border);
+  border-radius: 999px;
+  color: var(--zeta-description-foreground);
+  font-size: 11px;
+  text-align: center;
+}
+
+.zeta-editor-setting-select,
+.zeta-editor-setting-number,
+.zeta-editor-setting-text {
+  width: 100%;
+  min-height: 30px;
+  box-sizing: border-box;
+  padding: 4px 8px;
+  border: 1px solid var(--zeta-input-border);
+  border-radius: 4px;
+  outline: none;
+  color: var(--zeta-input-foreground);
+  background: var(--zeta-input-background);
+  font: inherit;
+}
+
+.zeta-editor-setting-select:focus-visible,
+.zeta-editor-setting-number:focus-visible,
+.zeta-editor-setting-text:focus-visible {
+  border-color: var(--zeta-focus-border);
+}
+
+.zeta-editor-toggle-setting {
+  position: relative;
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.zeta-editor-toggle-setting > input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  margin: -1px;
+  padding: 0;
+  clip-path: inset(50%);
+  border: 0;
+  white-space: nowrap;
+}
+
+.zeta-editor-toggle-track {
+  position: relative;
+  width: 34px;
+  height: 18px;
+  border: 1px solid var(--zeta-input-border);
+  border-radius: 10px;
+  background: var(--zeta-input-background);
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.zeta-editor-toggle-track::after {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--zeta-description-foreground);
+  content: "";
+  transition: left 120ms ease, background 120ms ease;
+}
+
+.zeta-editor-toggle-setting.checked .zeta-editor-toggle-track {
+  border-color: var(--zeta-focus-border);
+  background: var(--zeta-list-active-selection-background);
+}
+
+.zeta-editor-toggle-setting.checked .zeta-editor-toggle-track::after {
+  left: 18px;
+  background: var(--zeta-list-active-selection-foreground);
+}
+
+.zeta-editor-toggle-setting > input:focus-visible + .zeta-editor-toggle-track {
+  outline: 1px solid var(--zeta-focus-border);
+  outline-offset: 2px;
+}
+
+.zeta-editor-settings.is-saving .zeta-editor-setting {
+  cursor: wait;
+  opacity: .72;
+}
+
+.zeta-editor-settings-status {
+  min-height: 18px;
+  margin: -18px 0 0;
+  color: var(--zeta-description-foreground);
+  font-size: 12px;
+}
+
+.zeta-editor-settings-status.is-error {
+  color: var(--zeta-error-foreground);
+}
+
+@media (max-width: 720px) {
+  .zeta-editor-setting {
+    align-items: start;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .zeta-editor-toggle-setting {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+}

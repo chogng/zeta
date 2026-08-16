@@ -17,6 +17,29 @@ fn restricted_workspace_cannot_acquire_execution_capability() {
 }
 
 #[test]
+fn restricted_workspace_can_acquire_repository_inspection_but_not_mutation() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = WorkspaceRoot::open(directory.path()).unwrap();
+    let authorization = WorkspaceAuthorization::new(root, WorkspaceTrustDecision::Restricted);
+
+    let inspection = authorization
+        .require(WorkspaceCapability::InspectRepository)
+        .unwrap();
+
+    assert_eq!(
+        inspection.capability(),
+        WorkspaceCapability::InspectRepository
+    );
+    assert_eq!(inspection.source(), WorkspaceTrustSource::RestrictedMode);
+    assert!(inspection.ensure_active().is_ok());
+    assert!(
+        authorization
+            .require(WorkspaceCapability::MutateRepository)
+            .is_err()
+    );
+}
+
+#[test]
 fn trusted_token_remains_bound_to_the_approved_root() {
     let first = tempfile::tempdir().unwrap();
     let second = tempfile::tempdir().unwrap();

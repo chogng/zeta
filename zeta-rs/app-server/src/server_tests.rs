@@ -3757,6 +3757,69 @@ fn git_status_rpc_projects_workspace_repository_state() {
 }
 
 #[test]
+fn restricted_workspace_exposes_git_status_but_rejects_mutations() {
+    let root = std::env::temp_dir().join(format!(
+        "zeta-app-server-restricted-git-{}-{}",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos(),
+    ));
+    std::fs::create_dir_all(&root).unwrap();
+    run_git(&root, &["init", "--initial-branch=main"]);
+    run_git(&root, &["config", "user.name", "Zeta Test"]);
+    run_git(&root, &["config", "user.email", "zeta@example.test"]);
+    std::fs::write(root.join("tracked.txt"), "initial\n").unwrap();
+    run_git(&root, &["add", "tracked.txt"]);
+    run_git(&root, &["commit", "-m", "initial"]);
+    std::fs::write(root.join("tracked.txt"), "changed\n").unwrap();
+
+    let server = server()
+        .with_local_workspace_host(None, crate::server::WorkspaceSwitchTrustPolicy::Restricted)
+        .unwrap();
+    assert_eq!(
+        server.switch_local_workspace_root(root.clone()),
+        Ok(root.canonicalize().unwrap())
+    );
+    let mut connection = server.connection();
+    let initialized = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":1,
+            "method":"initialize",
+            "params":{"clientInfo":{"name":"test","version":"1"},"capabilities":{}}
+        }),
+    );
+    assert_eq!(initialized["result"]["capabilities"]["git"], true);
+
+    let status = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"git/status","params":{}}),
+    );
+    assert_eq!(status["result"]["changes"].as_array().unwrap().len(), 1);
+    assert_eq!(status["result"]["changes"][0]["path"], "tracked.txt");
+
+    let staged = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":3,
+            "method":"git/stage",
+            "params":{"paths":["tracked.txt"]}
+        }),
+    );
+    assert_eq!(staged["error"]["message"], "GitUnavailable");
+
+    drop(server);
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn git_remote_rpcs_fetch_pull_and_push_against_a_local_bare_remote() {
     let root = std::env::temp_dir().join(format!(
         "zeta-app-server-git-remote-{}-{}",

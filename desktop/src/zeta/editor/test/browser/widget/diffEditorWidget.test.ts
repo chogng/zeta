@@ -81,6 +81,30 @@ test("DiffEditorWidget refreshes on either source model and virtualizes diff row
   dom.window.close();
 });
 
+test("DiffEditorWidget applies presentation settings and clamps change navigation when looping is disabled", async () => {
+  const dom = new JSDOM("<!doctype html><body><main></main></body>");
+  const container = requiredElement<HTMLElement>(dom.window.document, "main");
+  using original = new TextModel("old\nsame\nold again");
+  using modified = new TextModel("new\nsame\nnew again");
+  using computationService = new WidgetTestDiffComputationService();
+  using model = new DiffModel({ original, modified, computationService });
+  await waitForReady(model);
+  using editor = new DiffEditorWidget({ container, model, lineHeight: 24, fontFamily: "Test Mono", fontSize: 15, fontLigatures: true, showLineNumbers: false, showInlineChanges: false, loopChanges: false });
+  editor.layout({ width: 400, height: 80 });
+
+  assert.equal(editor.element.classList.contains("hide-line-numbers"), true);
+  assert.equal(editor.element.style.fontFamily, '"Test Mono"');
+  assert.equal(editor.element.style.fontSize, "15px");
+  assert.equal(editor.element.style.fontVariantLigatures, "normal");
+  assert.equal(editor.element.querySelectorAll(".aster-diff-editor-inline").length, 0);
+  assert.equal(editor.nextChange(), 0);
+  assert.equal(editor.nextChange(), 2);
+  assert.equal(editor.nextChange(), 2);
+  assert.equal(editor.previousChange(), 0);
+  assert.equal(editor.previousChange(), 0);
+  dom.window.close();
+});
+
 function lines(prefix: string, count: number): string {
   return Array.from({ length: count }, (_, index) => `${prefix} ${index}`).join("\n");
 }

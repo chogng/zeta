@@ -116,11 +116,12 @@ class ContributedEditorPart extends DisposableOwner implements IEditorPartRuntim
         });
       }
       const ariaLabel = editorLabel(options.input);
+      const lineHeight = options.lineHeight ?? (options.fontSize === undefined ? 20 : Math.max(20, Math.ceil(options.fontSize * 1.5)));
 
       this.codeEditor = this.own(new CodeEditorWidget({
         container: options.container,
         model,
-        lineHeight: 20,
+        lineHeight,
         selectionController: this.selections,
         ariaLabel,
         viewport: {
@@ -130,6 +131,13 @@ class ContributedEditorPart extends DisposableOwner implements IEditorPartRuntim
           semanticTokenSource,
           bracketColorizationSource,
           lineWrapping: options.lineWrapping,
+          fontFamily: options.fontFamily,
+          fontSize: options.fontSize,
+          fontLigatures: options.fontLigatures,
+          showLineNumbers: options.showLineNumbers,
+          showIndentationGuides: options.showIndentationGuides,
+          minimap: options.minimap,
+          activeLineHighlight: options.activeLineHighlight,
           textDirection: options.textDirection,
           presentation: options.presentation,
           indentation: options.indentation,
@@ -255,6 +263,30 @@ function validateOptions(options: EditorPartOptions): void {
   }
   if (options.insertFinalNewLine !== undefined && typeof options.insertFinalNewLine !== "boolean") {
     throw new TypeError("Editor final newline option must be boolean");
+  }
+  if (options.fontFamily !== undefined && (typeof options.fontFamily !== "string" || !options.fontFamily.trim())) {
+    throw new TypeError("Editor font family must be a non-empty string");
+  }
+  if (options.fontSize !== undefined && (!Number.isSafeInteger(options.fontSize) || options.fontSize < 8 || options.fontSize > 40)) {
+    throw new RangeError("Editor font size must be an integer between 8 and 40");
+  }
+  if (options.lineHeight !== undefined && (!Number.isSafeInteger(options.lineHeight) || options.lineHeight < 12 || options.lineHeight > 80)) {
+    throw new RangeError("Editor line height must be an integer between 12 and 80");
+  }
+  for (const [name, value] of [
+    ["font ligatures", options.fontLigatures],
+    ["line numbers", options.showLineNumbers],
+    ["indentation guides", options.showIndentationGuides],
+    ["bracket pair colorization", options.bracketPairColorization],
+    ["sticky scroll", options.stickyScroll],
+    ["suggestions", options.suggestions],
+    ["inline completions", options.inlineCompletions],
+    ["parameter hints", options.parameterHints],
+    ["inlay hints", options.inlayHints],
+    ["CodeLens", options.codeLens],
+    ["format on save", options.formatOnSave],
+  ] as const) {
+    if (value !== undefined && typeof value !== "boolean") throw new TypeError(`Editor ${name} option must be boolean`);
   }
 }
 

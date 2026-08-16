@@ -1,6 +1,8 @@
 import { addDisposableListener } from "../../../../base/browser/dom.js";
 import type { IWorkspaceSearchQuery, IWorkspaceSearchService, WorkspaceSearchMatch, WorkspaceSearchMatchRange } from "../../../../platform/search/common/search.js";
+import type { IConfigurationKey, IConfigurationService } from "../../../../platform/configuration/common/configurationService.js";
 import { ViewPane, type IViewPaneOptions } from "../../../browser/parts/views/viewPane.js";
+import { WorkspaceSearchConfiguration } from "../common/searchConfiguration.js";
 
 interface SearchFileGroup {
   readonly matches: HTMLUListElement;
@@ -27,6 +29,7 @@ export class SearchViewPane extends ViewPane {
   constructor(
     options: IViewPaneOptions,
     searchService: IWorkspaceSearchService,
+    private readonly configurationService?: IConfigurationService,
   ) {
     super(options);
     this.searchService = searchService;
@@ -64,6 +67,7 @@ export class SearchViewPane extends ViewPane {
       ariaLabel: "Files to exclude",
     });
     filters.append(this.includeInput, this.excludeInput);
+    this.applyConfiguration();
     form.append(
       this.queryInput,
       this.submitButton,
@@ -86,6 +90,15 @@ export class SearchViewPane extends ViewPane {
     this.own(addDisposableListener(form, "submit", (event) => {
       event.preventDefault();
       void this.startSearch();
+    }));
+    if (configurationService) this.own(configurationService.onDidChangeConfiguration(event => {
+      if (
+        event.affectsConfiguration(WorkspaceSearchConfiguration.matchCase) ||
+        event.affectsConfiguration(WorkspaceSearchConfiguration.smartCase) ||
+        event.affectsConfiguration(WorkspaceSearchConfiguration.regularExpression) ||
+        event.affectsConfiguration(WorkspaceSearchConfiguration.includePatterns) ||
+        event.affectsConfiguration(WorkspaceSearchConfiguration.excludePatterns)
+      ) this.applyConfiguration();
     }));
     this.defer(() => {
       this.disposed = true;
@@ -161,10 +174,22 @@ export class SearchViewPane extends ViewPane {
       patternKind: this.regexInput.checked ? "regex" : "literal",
       caseSensitivity: this.caseSensitiveInput.checked
         ? "sensitive"
-        : "smart",
+        : this.configurationValue(WorkspaceSearchConfiguration.smartCase) ? "smart" : "insensitive",
       includePatterns: patterns(this.includeInput.value),
       excludePatterns: patterns(this.excludeInput.value),
+      maxResults: this.configurationValue(WorkspaceSearchConfiguration.maxResults),
     };
+  }
+
+  private applyConfiguration(): void {
+    this.caseSensitiveInput.checked = this.configurationValue(WorkspaceSearchConfiguration.matchCase);
+    this.regexInput.checked = this.configurationValue(WorkspaceSearchConfiguration.regularExpression);
+    this.includeInput.value = this.configurationValue(WorkspaceSearchConfiguration.includePatterns);
+    this.excludeInput.value = this.configurationValue(WorkspaceSearchConfiguration.excludePatterns);
+  }
+
+  private configurationValue<T>(key: IConfigurationKey<T>): T {
+    return this.configurationService?.getValue(key) ?? key.defaultValue;
   }
 
   private appendMatches(matches: readonly WorkspaceSearchMatch[]): void {

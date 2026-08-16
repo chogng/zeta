@@ -22,6 +22,9 @@ import { getSettingsSection, SettingsSections, type SettingsSectionDescriptor } 
 import { ConnectorSettingsPane } from "./connectorSettings.js";
 import { PluginSettingsPane } from "./pluginSettings.js";
 import { MarketplaceSettingsPane } from "./marketplaceSettings.js";
+import { EditorSettingsPane } from "./editorSettings.js";
+import { GeneralSettingsPane } from "./generalSettings.js";
+import { hasSectionOverviewSettings, SectionOverviewSettingsPane } from "./sectionOverviewSettings.js";
 
 export interface SettingsEditorOptions {
   readonly ownerDocument: Document;
@@ -230,18 +233,39 @@ export class SettingsEditor extends DisposableOwner {
     this.contentDescription.textContent = section.description;
     this.sectionBindings.clear();
     this.sectionContent.replaceChildren();
-    if (section.id === "appearance") this.renderAppearance();
-    if (section.id === "connectors") this.renderConnectors();
-    if (section.id === "plugins") this.renderPlugins();
-    if (section.id === "languages") this.renderLanguages();
-    if (section.id === "marketplace") this.renderMarketplace();
-    if (section.id === "indexing") void this.renderIndexing();
+    if (section.id === "general") this.renderGeneral();
+    else if (section.id === "appearance") this.renderAppearance();
+    else if (section.id === "editor") this.renderEditor();
+    else if (section.id === "connectors") this.renderConnectors();
+    else if (section.id === "plugins") this.renderPlugins();
+    else if (section.id === "languages") this.renderLanguages();
+    else if (section.id === "marketplace") this.renderMarketplace();
+    else if (section.id === "indexing") void this.renderIndexing();
+    else if (hasSectionOverviewSettings(section.id)) this.renderOverview(section.id);
     this.contentScrollable.scrollTo(0, 0);
     this.contentScrollable.layout();
   }
 
   private renderConnectors(): void {
     const pane = new ConnectorSettingsPane(this.element.ownerDocument, this.connectorService);
+    this.sectionBindings.add(pane);
+    this.sectionContent.replaceChildren(pane.element);
+  }
+
+  private renderGeneral(): void {
+    const pane = new GeneralSettingsPane(this.element.ownerDocument, this.configurationService);
+    this.sectionBindings.add(pane);
+    this.sectionContent.replaceChildren(pane.element);
+  }
+
+  private renderOverview(sectionId: string): void {
+    const pane = new SectionOverviewSettingsPane(this.element.ownerDocument, sectionId, this.settingsService);
+    this.sectionBindings.add(pane);
+    this.sectionContent.replaceChildren(pane.element);
+  }
+
+  private renderEditor(): void {
+    const pane = new EditorSettingsPane(this.element.ownerDocument, this.configurationService);
     this.sectionBindings.add(pane);
     this.sectionContent.replaceChildren(pane.element);
   }

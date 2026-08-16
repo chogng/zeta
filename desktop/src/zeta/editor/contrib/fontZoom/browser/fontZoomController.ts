@@ -4,16 +4,18 @@ import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.j
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 
-export interface FontZoomControllerOptions { readonly baseLineHeight?: number; readonly initialScale?: number; }
+export interface FontZoomControllerOptions { readonly baseFontSize?: number; readonly baseLineHeight?: number; readonly initialScale?: number; }
 
 /** Owns per-editor font zoom state and invalidates browser measurements after each change. */
 export class FontZoomController extends DisposableOwner {
   private readonly baseLineHeight: number;
+  private readonly baseFontSize: number | undefined;
   private scale: number;
 
   constructor(private readonly input: HTMLTextAreaElement, private readonly viewport: EditorViewport, options: FontZoomControllerOptions = {}) {
     super();
     this.baseLineHeight = readPositive(options.baseLineHeight ?? viewport.viewportLayout.lineHeight, "baseLineHeight");
+    this.baseFontSize = options.baseFontSize === undefined ? undefined : readPositive(options.baseFontSize, "baseFontSize");
     this.scale = readScale(options.initialScale ?? 1);
     this.apply();
     this.own(addDisposableListener(input, "keydown", event => this.handleKeydown(event), true));
@@ -35,7 +37,7 @@ export class FontZoomController extends DisposableOwner {
 
   private apply(): void {
     this.viewport.element.style.setProperty("--aster-editor-font-scale", String(this.scale));
-    this.viewport.element.style.fontSize = `${this.scale}em`;
+    this.viewport.element.style.fontSize = this.baseFontSize === undefined ? `${this.scale}em` : `${this.baseFontSize * this.scale}px`;
     this.viewport.setLineHeight(Math.max(1, Math.round(this.baseLineHeight * this.scale)));
     this.viewport.refreshFontMetrics();
     this.viewport.announceAccessibilityStatus(`Editor font size ${Math.round(this.scale * 100)} percent`);
@@ -49,6 +51,6 @@ registerEditorContribution({
   id: "editor.contrib.fontZoom",
   install: context => {
     if (context.kind !== "text") return;
-    context.own(new FontZoomController(context.textInput.element, context.viewport, { baseLineHeight: 20, initialScale: context.options.fontZoom?.initialScale }));
+    context.own(new FontZoomController(context.textInput.element, context.viewport, { baseFontSize: context.options.fontSize, initialScale: context.options.fontZoom?.initialScale }));
   },
 });

@@ -1,0 +1,325 @@
+import "./media/editorSettings.css";
+import { addDisposableListener } from "../../../../base/browser/dom.js";
+import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import type { IConfigurationKey, IConfigurationService } from "../../../../platform/configuration/common/configurationService.js";
+import { EditorIndentationKind } from "../../../../editor/common/editorIndentation.js";
+import { EditorLineWrapping } from "../../../../editor/browser/view/visualLineProjection.js";
+import { CodeEditorConfiguration } from "../../codeEditor/common/editorConfiguration.js";
+import { WorkspaceSearchConfiguration } from "../../search/common/searchConfiguration.js";
+import { EditorSelectionConfiguration } from "../../../common/editorSelectionConfiguration.js";
+
+/** Product settings controls for Aster-backed code editors. */
+export class EditorSettingsPane extends DisposableOwner {
+  readonly element: HTMLDivElement;
+  private readonly controls = new Map<string, HTMLInputElement | HTMLSelectElement>();
+  private readonly status: HTMLParagraphElement;
+
+  constructor(ownerDocument: Document, private readonly configurationService: IConfigurationService) {
+    super();
+    this.element = ownerDocument.createElement("div");
+    this.element.className = "zeta-editor-settings";
+
+    const note = ownerDocument.createElement("p");
+    note.className = "zeta-editor-settings-note";
+    note.textContent = "Workspace search defaults update immediately. Editor and diff presentation changes apply when that editor is opened.";
+    this.element.append(note);
+
+    this.element.append(
+      this.createGroup("Editor selection", "Choose what new documents start with while existing resources continue to resolve by content type. The new-document preference activates with the unified profile host.", [
+        this.createSelectSetting({
+          key: EditorSelectionConfiguration.defaultNewDocumentEditor,
+          label: "Default editor for new documents",
+          description: "Follow the active Workbench profile, or explicitly prefer the Code or Academic editor for new untitled documents.",
+          options: [
+            { value: "profile", label: "Follow Workbench profile" },
+            { value: "code", label: "Code Editor" },
+            { value: "academic", label: "Academic Editor" },
+          ],
+        }),
+        this.createInformationalSetting("Existing resources", "Source files continue to open in the Code Editor, while Academic content types and .zeta-paper files open in the Structured Editor.", "Automatic"),
+        this.createInformationalSetting("Editor associations", "Custom glob-to-editor associations are not persisted yet. Use the resource type resolver until the association service is added.", "Not available"),
+      ]),
+      this.createGroup("Typography", "Set the typeface and size used for code.", [
+        this.createTextSetting(CodeEditorConfiguration.fontFamily, "Font family", "Use a CSS font-family list, or leave this empty to use the default monospace font.", "Default monospace"),
+        this.createNumberSetting(CodeEditorConfiguration.fontSize, "Font size", "Set the editor text size in pixels.", 8, 40),
+        this.createNumberSetting(CodeEditorConfiguration.lineHeight, "Line height", "Set the height of each editor line in pixels.", 12, 80),
+        this.createToggleSetting(CodeEditorConfiguration.fontLigatures, "Font ligatures", "Use programming ligatures when the selected font supports them."),
+      ]),
+      this.createGroup("Display", "Control how code is presented while you work.", [
+        this.createSelectSetting({
+          key: CodeEditorConfiguration.wordWrap,
+          label: "Word wrap",
+          description: "Wrap long lines at the editor viewport instead of scrolling horizontally.",
+          options: [
+            { value: EditorLineWrapping.Off, label: "Off" },
+            { value: EditorLineWrapping.On, label: "On" },
+          ],
+        }),
+        this.createToggleSetting(CodeEditorConfiguration.minimapEnabled, "Minimap", "Show a compact document overview on the right side of the editor."),
+        this.createToggleSetting(CodeEditorConfiguration.lineNumbers, "Line numbers", "Show line numbers in the editor gutter."),
+        this.createToggleSetting(CodeEditorConfiguration.indentationGuides, "Indentation guides", "Show vertical guides aligned with indentation levels."),
+        this.createToggleSetting(CodeEditorConfiguration.bracketPairColorization, "Bracket pair colorization", "Use matching colors to distinguish nested bracket pairs."),
+        this.createToggleSetting(CodeEditorConfiguration.stickyScroll, "Sticky scroll", "Keep enclosing scopes visible at the top while scrolling."),
+        this.createToggleSetting(CodeEditorConfiguration.highlightActiveLine, "Highlight active line", "Give the line containing the cursor a subtle background highlight."),
+        this.createToggleSetting(CodeEditorConfiguration.unicodeHighlights, "Unicode highlights", "Call attention to invisible or easily confused Unicode characters."),
+      ]),
+      this.createGroup("Editing", "Choose default editing and formatting behavior.", [
+        this.createSelectSetting({
+          key: CodeEditorConfiguration.indentationKind,
+          label: "Indent using",
+          description: "Choose whether indentation inserts spaces or tab characters.",
+          options: [
+            { value: EditorIndentationKind.Spaces, label: "Spaces" },
+            { value: EditorIndentationKind.Tabs, label: "Tabs" },
+          ],
+        }),
+        this.createNumberSetting(CodeEditorConfiguration.tabSize, "Tab size", "Set the number of columns represented by one indentation level.", 1, 32),
+        this.createToggleSetting(CodeEditorConfiguration.formatOnSave, "Format on save", "Run the active language formatter before saving a file."),
+      ]),
+      this.createGroup("Code intelligence", "Control language-aware assistance inside code editors.", [
+        this.createToggleSetting(CodeEditorConfiguration.suggestions, "Suggestions", "Show completion suggestions from language providers."),
+        this.createToggleSetting(CodeEditorConfiguration.inlineCompletions, "Inline completions", "Show provider-supplied completion text directly in the editor."),
+        this.createToggleSetting(CodeEditorConfiguration.parameterHints, "Parameter hints", "Show signature information while entering function arguments."),
+        this.createToggleSetting(CodeEditorConfiguration.inlayHints, "Inlay hints", "Show inferred types, parameter names, and other inline annotations."),
+        this.createToggleSetting(CodeEditorConfiguration.codeLens, "CodeLens", "Show provider actions and references near relevant code."),
+      ]),
+      this.createGroup("Find and replace", "Choose how the editor-local Find widget starts and navigates matches.", [
+        this.createToggleSetting(CodeEditorConfiguration.findSeedFromSelection, "Seed from selection", "Use a single-line selection as the initial Find query."),
+        this.createToggleSetting(CodeEditorConfiguration.findAutoFindInSelection, "Find in selection automatically", "Limit Find to the current non-empty selection when the widget opens."),
+        this.createToggleSetting(CodeEditorConfiguration.findLoop, "Loop through matches", "Wrap from the final match to the first match and back again."),
+        this.createToggleSetting(CodeEditorConfiguration.findMatchCase, "Match case by default", "Open Find with case-sensitive matching enabled."),
+        this.createToggleSetting(CodeEditorConfiguration.findWholeWord, "Whole word by default", "Open Find with whole-word matching enabled."),
+        this.createToggleSetting(CodeEditorConfiguration.findRegularExpression, "Regular expression by default", "Open Find with regular-expression matching enabled."),
+      ]),
+      this.createGroup("Workspace search", "Set defaults for searching files across the current workspace.", [
+        this.createToggleSetting(WorkspaceSearchConfiguration.matchCase, "Match case", "Start workspace searches in case-sensitive mode."),
+        this.createToggleSetting(WorkspaceSearchConfiguration.smartCase, "Smart case", "Use case-sensitive matching automatically when the query contains uppercase characters."),
+        this.createToggleSetting(WorkspaceSearchConfiguration.regularExpression, "Use regular expressions", "Interpret workspace search queries as regular expressions by default."),
+        this.createTextSetting(WorkspaceSearchConfiguration.includePatterns, "Files to include", "Comma-separated glob patterns included in new workspace searches.", "src/**, packages/**"),
+        this.createTextSetting(WorkspaceSearchConfiguration.excludePatterns, "Files to exclude", "Comma-separated glob patterns excluded from new workspace searches.", "**/node_modules/**, **/dist/**"),
+        this.createNumberSetting(WorkspaceSearchConfiguration.maxResults, "Maximum results", "Stop a workspace search after this many matches.", 100, 5_000),
+      ]),
+      this.createGroup("Diff editor", "Control side-by-side comparison presentation and navigation.", [
+        this.createToggleSetting(CodeEditorConfiguration.diffShowLineNumbers, "Line numbers", "Show original and modified line numbers in diff cells."),
+        this.createToggleSetting(CodeEditorConfiguration.diffShowInlineChanges, "Inline change highlights", "Highlight the exact changed ranges within modified lines."),
+        this.createToggleSetting(CodeEditorConfiguration.diffLoopChanges, "Loop through changes", "Wrap change navigation from the final difference to the first."),
+        this.createToggleSetting(CodeEditorConfiguration.diffBreadcrumbs, "Change breadcrumbs", "Show the current change position while navigating a diff."),
+      ]),
+      this.createGroup("Files", "Apply small consistency fixes when saving code files.", [
+        this.createToggleSetting(CodeEditorConfiguration.insertFinalNewLine, "Insert final newline", "Ensure non-empty files end with a line feed when saved."),
+      ]),
+    );
+
+    this.status = ownerDocument.createElement("p");
+    this.status.className = "zeta-editor-settings-status";
+    this.status.setAttribute("role", "status");
+    this.status.setAttribute("aria-live", "polite");
+    this.element.append(this.status);
+    this.syncControls();
+    this.own(configurationService.onDidChangeConfiguration(() => this.syncControls()));
+  }
+
+  private createGroup(title: string, description: string, settings: readonly HTMLElement[]): HTMLElement {
+    const document = this.element.ownerDocument;
+    const group = document.createElement("section");
+    group.className = "zeta-editor-settings-group";
+    const heading = document.createElement("h4");
+    heading.textContent = title;
+    const hint = document.createElement("p");
+    hint.className = "zeta-editor-settings-group-description";
+    hint.textContent = description;
+    const list = document.createElement("div");
+    list.className = "zeta-editor-settings-list";
+    list.append(...settings);
+    group.append(heading, hint, list);
+    return group;
+  }
+
+  private createToggleSetting(key: IConfigurationKey<boolean>, label: string, description: string): HTMLElement {
+    const document = this.element.ownerDocument;
+    const setting = document.createElement("label");
+    setting.className = "zeta-editor-setting zeta-editor-toggle-setting";
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.dataset.configurationKey = key.key;
+    const track = document.createElement("span");
+    track.className = "zeta-editor-toggle-track";
+    track.setAttribute("aria-hidden", "true");
+    const copy = this.createSettingCopy(label, description);
+    setting.append(input, track, copy);
+    this.controls.set(key.key, input);
+    this.own(addDisposableListener(input, "change", () => {
+      setting.classList.toggle("checked", input.checked);
+      void this.updateConfiguration(key, input.checked);
+    }));
+    return setting;
+  }
+
+  private createInformationalSetting(label: string, description: string, stateLabel: string): HTMLElement {
+    const setting = this.element.ownerDocument.createElement("div");
+    setting.className = "zeta-editor-setting zeta-editor-informational-setting";
+    setting.append(this.createSettingCopy(label, description));
+    const state = this.element.ownerDocument.createElement("span");
+    state.className = "zeta-editor-setting-state";
+    state.textContent = stateLabel;
+    setting.append(state);
+    return setting;
+  }
+
+  private createSelectSetting<T extends string>(options: {
+    readonly key: IConfigurationKey<T>;
+    readonly label: string;
+    readonly description: string;
+    readonly options: readonly { readonly value: T; readonly label: string }[];
+  }): HTMLElement {
+    const document = this.element.ownerDocument;
+    const setting = document.createElement("label");
+    setting.className = "zeta-editor-setting";
+    const copy = this.createSettingCopy(options.label, options.description);
+    const select = document.createElement("select");
+    select.className = "zeta-editor-setting-select";
+    select.dataset.configurationKey = options.key.key;
+    for (const option of options.options) {
+      const element = document.createElement("option");
+      element.value = option.value;
+      element.textContent = option.label;
+      select.append(element);
+    }
+    setting.append(copy, select);
+    this.controls.set(options.key.key, select);
+    this.own(addDisposableListener(select, "change", () => void this.updateConfiguration(options.key, select.value as T)));
+    return setting;
+  }
+
+  private createNumberSetting(key: IConfigurationKey<number>, label: string, description: string, minimum: number, maximum: number): HTMLElement {
+    const document = this.element.ownerDocument;
+    const setting = document.createElement("label");
+    setting.className = "zeta-editor-setting";
+    const copy = this.createSettingCopy(label, description);
+    const input = document.createElement("input");
+    input.className = "zeta-editor-setting-number";
+    input.type = "number";
+    input.min = String(minimum);
+    input.max = String(maximum);
+    input.step = "1";
+    input.dataset.configurationKey = key.key;
+    setting.append(copy, input);
+    this.controls.set(key.key, input);
+    this.own(addDisposableListener(input, "change", () => {
+      const value = input.valueAsNumber;
+      if (!Number.isSafeInteger(value) || value < minimum || value > maximum) {
+        this.syncControl(key);
+        this.showStatus(`${label} must be between ${minimum} and ${maximum}.`, true);
+        return;
+      }
+      void this.updateConfiguration(key, value);
+    }));
+    return setting;
+  }
+
+  private createTextSetting(key: IConfigurationKey<string>, label: string, description: string, placeholder: string): HTMLElement {
+    const document = this.element.ownerDocument;
+    const setting = document.createElement("label");
+    setting.className = "zeta-editor-setting";
+    const copy = this.createSettingCopy(label, description);
+    const input = document.createElement("input");
+    input.className = "zeta-editor-setting-text";
+    input.type = "text";
+    input.placeholder = placeholder;
+    input.dataset.configurationKey = key.key;
+    setting.append(copy, input);
+    this.controls.set(key.key, input);
+    this.own(addDisposableListener(input, "change", () => void this.updateConfiguration(key, input.value.trim())));
+    return setting;
+  }
+
+  private createSettingCopy(label: string, description: string): HTMLElement {
+    const document = this.element.ownerDocument;
+    const copy = document.createElement("span");
+    copy.className = "zeta-editor-setting-copy";
+    const title = document.createElement("span");
+    title.className = "zeta-editor-setting-title";
+    title.textContent = label;
+    const hint = document.createElement("span");
+    hint.className = "zeta-editor-setting-description";
+    hint.textContent = description;
+    copy.append(title, hint);
+    return copy;
+  }
+
+  private syncControls(): void {
+    this.syncControl(EditorSelectionConfiguration.defaultNewDocumentEditor);
+    this.syncControl(CodeEditorConfiguration.fontFamily);
+    this.syncControl(CodeEditorConfiguration.fontSize);
+    this.syncControl(CodeEditorConfiguration.lineHeight);
+    this.syncControl(CodeEditorConfiguration.fontLigatures);
+    this.syncControl(CodeEditorConfiguration.wordWrap);
+    this.syncControl(CodeEditorConfiguration.minimapEnabled);
+    this.syncControl(CodeEditorConfiguration.lineNumbers);
+    this.syncControl(CodeEditorConfiguration.indentationGuides);
+    this.syncControl(CodeEditorConfiguration.bracketPairColorization);
+    this.syncControl(CodeEditorConfiguration.stickyScroll);
+    this.syncControl(CodeEditorConfiguration.highlightActiveLine);
+    this.syncControl(CodeEditorConfiguration.unicodeHighlights);
+    this.syncControl(CodeEditorConfiguration.indentationKind);
+    this.syncControl(CodeEditorConfiguration.tabSize);
+    this.syncControl(CodeEditorConfiguration.formatOnSave);
+    this.syncControl(CodeEditorConfiguration.suggestions);
+    this.syncControl(CodeEditorConfiguration.inlineCompletions);
+    this.syncControl(CodeEditorConfiguration.parameterHints);
+    this.syncControl(CodeEditorConfiguration.inlayHints);
+    this.syncControl(CodeEditorConfiguration.codeLens);
+    this.syncControl(CodeEditorConfiguration.findSeedFromSelection);
+    this.syncControl(CodeEditorConfiguration.findAutoFindInSelection);
+    this.syncControl(CodeEditorConfiguration.findLoop);
+    this.syncControl(CodeEditorConfiguration.findMatchCase);
+    this.syncControl(CodeEditorConfiguration.findWholeWord);
+    this.syncControl(CodeEditorConfiguration.findRegularExpression);
+    this.syncControl(WorkspaceSearchConfiguration.matchCase);
+    this.syncControl(WorkspaceSearchConfiguration.smartCase);
+    this.syncControl(WorkspaceSearchConfiguration.regularExpression);
+    this.syncControl(WorkspaceSearchConfiguration.includePatterns);
+    this.syncControl(WorkspaceSearchConfiguration.excludePatterns);
+    this.syncControl(WorkspaceSearchConfiguration.maxResults);
+    this.syncControl(CodeEditorConfiguration.diffShowLineNumbers);
+    this.syncControl(CodeEditorConfiguration.diffShowInlineChanges);
+    this.syncControl(CodeEditorConfiguration.diffLoopChanges);
+    this.syncControl(CodeEditorConfiguration.diffBreadcrumbs);
+    this.syncControl(CodeEditorConfiguration.insertFinalNewLine);
+  }
+
+  private syncControl<T>(key: IConfigurationKey<T>): void {
+    const control = this.controls.get(key.key);
+    if (!control) return;
+    const value = this.configurationService.getValue(key);
+    if (control instanceof this.element.ownerDocument.defaultView!.HTMLInputElement && control.type === "checkbox") {
+      control.checked = value as boolean;
+      control.closest(".zeta-editor-toggle-setting")?.classList.toggle("checked", control.checked);
+      return;
+    }
+    control.value = String(value);
+  }
+
+  private async updateConfiguration<T>(key: IConfigurationKey<T>, value: T): Promise<void> {
+    this.setControlsEnabled(false);
+    try {
+      await this.configurationService.updateValue(key, value);
+      this.showStatus("Setting saved.", false);
+    } catch (error) {
+      this.syncControl(key);
+      this.showStatus(error instanceof Error ? error.message : "Unable to save the setting.", true);
+    } finally {
+      this.setControlsEnabled(true);
+    }
+  }
+
+  private setControlsEnabled(enabled: boolean): void {
+    this.element.classList.toggle("is-saving", !enabled);
+    for (const control of this.controls.values()) control.disabled = !enabled;
+  }
+
+  private showStatus(message: string, error: boolean): void {
+    this.status.textContent = message;
+    this.status.classList.toggle("is-error", error);
+  }
+}

@@ -6,6 +6,7 @@ import { TextPosition, TextRange } from "../../../../../editor/common/core/text.
 import { EditorPaneVisibility } from "../../../../browser/parts/editor/editorPane.js";
 import { TextFileContentSource, type ITextFileService, type ResolvedTextFileContent, type TextFileResolveRequest } from "../../../../services/textfile/common/textFileService.js";
 import { LanguageFeaturesService } from "../../../../services/language/common/languageFeaturesService.js";
+import type { EditorPanePartOptions } from "../../browser/codeEditorPane.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -25,6 +26,9 @@ const { CodeEditorPane: EditorPane } = await import("../../browser/codeEditorPan
 const { BrowserTextModelService } = await import("../../../../../editor/browser/services/browserTextModelService.js");
 const { BrowserTextResourceStore } = await import("../../browser/browserTextResourceStore.js");
 const { EditorTextDirection } = await import("../../../../../editor/browser/view/editorViewport.js");
+const { EditorMinimap } = await import("../../../../../editor/browser/view/editorViewport.js");
+const { EditorIndentationKind } = await import("../../../../../editor/common/editorIndentation.js");
+const { EditorLineWrapping } = await import("../../../../../editor/browser/view/visualLineProjection.js");
 
 test.after(() => browserEnvironment.window.close());
 
@@ -35,7 +39,7 @@ test("Aster editor pane loads, lays out, focuses, hides, and clears one editor p
   const textFiles = new ImmediateTextFiles("from disk");
   const resourceStore = new BrowserTextResourceStore(textFiles);
   using models = new BrowserTextModelService(resourceStore);
-  const pane = new EditorPane(resourceStore, { modelService: models, textDirection: EditorTextDirection.RightToLeft });
+  const pane = new EditorPane(resourceStore, { modelService: models, textDirection: EditorTextDirection.RightToLeft, fontFamily: "Fira Code, monospace", fontSize: 16 });
   pane.create(parent);
   pane.layout({ width: 640, height: 480 });
   await pane.setInput({
@@ -47,7 +51,10 @@ test("Aster editor pane loads, lays out, focuses, hides, and clears one editor p
   assert.equal(pane.getValue(), "const alpha = 1;");
   assert.equal(parent.querySelectorAll(".aster-editor-pane").length, 1);
   assert.equal(parent.querySelectorAll(".aster-editor").length, 1);
-  assert.equal(parent.querySelector<HTMLElement>(".aster-editor")?.dir, "rtl");
+  const editor = parent.querySelector<HTMLElement>(".aster-editor")!;
+  assert.equal(editor.dir, "rtl");
+  assert.equal(editor.style.fontFamily, '"Fira Code", monospace');
+  assert.equal(editor.style.fontSize, "16px");
   pane.focus();
   assert.equal(dom.window.document.activeElement?.classList.contains("aster-editor-input"), true);
   assert.equal((dom.window.document.activeElement as HTMLTextAreaElement).dir, "rtl");
@@ -148,6 +155,83 @@ test("Aster editor pane resolves extension first-line languages after loading an
   await pane.setInput({ resource: URI.file("C:\\project\\script.cgi") }, new AbortController().signal);
 
   assert.equal(languageId, "demo");
+  pane.dispose();
+  dom.window.close();
+});
+
+test("Aster editor pane forwards Workbench editor preferences to each created part", async () => {
+  const dom = new JSDOM("<!doctype html><body><main></main></body>");
+  const parent = dom.window.document.querySelector<HTMLElement>("main")!;
+  const textFiles = new ImmediateTextFiles("const value = 1;");
+  const resourceStore = new BrowserTextResourceStore(textFiles);
+  using models = new BrowserTextModelService(resourceStore);
+  let received: EditorPanePartOptions | undefined;
+  const pane = new EditorPane(resourceStore, {
+    modelService: models,
+    fontFamily: "Fira Code, monospace",
+    fontSize: 16,
+    lineHeight: 26,
+    fontLigatures: true,
+    lineWrapping: EditorLineWrapping.On,
+    minimap: EditorMinimap.Off,
+    activeLineHighlight: "off",
+    showLineNumbers: false,
+    showIndentationGuides: false,
+    bracketPairColorization: false,
+    stickyScroll: false,
+    suggestions: false,
+    inlineCompletions: false,
+    parameterHints: false,
+    inlayHints: false,
+    codeLens: false,
+    formatOnSave: true,
+    find: {
+      seedSearchStringFromSelection: false,
+      autoFindInSelection: true,
+      loop: false,
+      matchCase: true,
+      wholeWord: true,
+      regularExpression: true,
+    },
+    indentation: { kind: EditorIndentationKind.Tabs, tabSize: 2 },
+    showUnicodeHighlights: false,
+    insertFinalNewLine: true,
+    createPart: options => {
+      received = options;
+      return { layout: () => {}, focus: () => {}, getValue: () => "", dispose: () => {}, [Symbol.dispose]: () => {} };
+    },
+  });
+  pane.create(parent);
+  await pane.setInput({ resource: URI.file("C:\\project\\configured.ts") }, new AbortController().signal);
+
+  assert.equal(received?.lineWrapping, EditorLineWrapping.On);
+  assert.equal(received?.fontFamily, "Fira Code, monospace");
+  assert.equal(received?.fontSize, 16);
+  assert.equal(received?.lineHeight, 26);
+  assert.equal(received?.fontLigatures, true);
+  assert.equal(received?.minimap, EditorMinimap.Off);
+  assert.equal(received?.activeLineHighlight, "off");
+  assert.equal(received?.showLineNumbers, false);
+  assert.equal(received?.showIndentationGuides, false);
+  assert.equal(received?.bracketPairColorization, false);
+  assert.equal(received?.stickyScroll, false);
+  assert.equal(received?.suggestions, false);
+  assert.equal(received?.inlineCompletions, false);
+  assert.equal(received?.parameterHints, false);
+  assert.equal(received?.inlayHints, false);
+  assert.equal(received?.codeLens, false);
+  assert.equal(received?.formatOnSave, true);
+  assert.deepEqual(received?.find, {
+    seedSearchStringFromSelection: false,
+    autoFindInSelection: true,
+    loop: false,
+    matchCase: true,
+    wholeWord: true,
+    regularExpression: true,
+  });
+  assert.deepEqual(received?.indentation, { kind: EditorIndentationKind.Tabs, tabSize: 2 });
+  assert.equal(received?.showUnicodeHighlights, false);
+  assert.equal(received?.insertFinalNewLine, true);
   pane.dispose();
   dom.window.close();
 });

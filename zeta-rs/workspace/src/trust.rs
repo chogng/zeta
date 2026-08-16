@@ -3,7 +3,7 @@ use std::fmt;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-/// Host-owned source that established one workspace trust decision.
+/// Host-owned source that established one workspace authorization decision.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum WorkspaceTrustSource {
     /// The user explicitly approved this exact workspace identity.
@@ -12,6 +12,8 @@ pub enum WorkspaceTrustSource {
     OrganizationPolicy,
     /// A trusted host composition root fixed this workspace before accepting client requests.
     HostConfiguration,
+    /// The host enabled bounded read-only inspection without approving workspace execution.
+    RestrictedMode,
 }
 
 /// Trust result resolved by the host for one exact [`WorkspaceRoot`].
@@ -23,9 +25,11 @@ pub enum WorkspaceTrustDecision {
     Trusted(WorkspaceTrustSource),
 }
 
-/// High-risk behavior that requires a trusted workspace.
+/// Workspace behavior capabilities used to enforce the trust boundary.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum WorkspaceCapability {
+    /// Read repository metadata and bounded read-only content without approving workspace code.
+    InspectRepository,
     ExecuteProcess,
     LoadExecutableConfiguration,
     ActivateWorkspaceExtension,
@@ -36,6 +40,9 @@ pub enum WorkspaceCapability {
 impl fmt::Display for WorkspaceCapability {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::InspectRepository => {
+                formatter.write_str("inspect repository metadata and read-only content")
+            }
             Self::ExecuteProcess => formatter.write_str("execute a process"),
             Self::LoadExecutableConfiguration => {
                 formatter.write_str("load executable configuration")
@@ -89,9 +96,9 @@ struct WorkspaceTrustLease {
 }
 
 impl WorkspaceTrustLease {
-    fn new(active: bool) -> Self {
+    fn new() -> Self {
         Self {
-            active: AtomicBool::new(active),
+            active: AtomicBool::new(true),
         }
     }
 
@@ -114,11 +121,10 @@ pub struct WorkspaceAuthorization {
 impl WorkspaceAuthorization {
     /// Binds a host-owned decision to one exact canonical root.
     pub fn new(root: WorkspaceRoot, decision: WorkspaceTrustDecision) -> Self {
-        let active = matches!(decision, WorkspaceTrustDecision::Trusted(_));
         Self {
             root,
             decision,
-            lease: Arc::new(WorkspaceTrustLease::new(active)),
+            lease: Arc::new(WorkspaceTrustLease::new()),
         }
     }
 
@@ -140,16 +146,25 @@ impl WorkspaceAuthorization {
         self.lease.is_active()
     }
 
-    /// Requires one high-risk capability and returns a root- and capability-bound token.
+    /// Requires one capability and returns a root- and capability-bound token.
+    ///
+    /// Repository inspection is intentionally available in Restricted mode. Every other
+    /// capability still requires a trusted workspace decision.
     pub fn require(
         &self,
         capability: WorkspaceCapability,
     ) -> Result<TrustedWorkspace, WorkspaceTrustError> {
-        let WorkspaceTrustDecision::Trusted(source) = self.decision else {
+        let permitted = matches!(capability, WorkspaceCapability::InspectRepository)
+            || matches!(self.decision, WorkspaceTrustDecision::Trusted(_));
+        if !permitted {
             return Err(WorkspaceTrustError {
                 root: self.root.clone(),
                 capability,
             });
+        }
+        let source = match self.decision {
+            WorkspaceTrustDecision::Trusted(source) => source,
+            WorkspaceTrustDecision::Restricted => WorkspaceTrustSource::RestrictedMode,
         };
         if !self.lease.is_active() {
             return Err(WorkspaceTrustError {
@@ -168,8 +183,8 @@ impl WorkspaceAuthorization {
 
 /// Capability token bound to one exact canonical workspace identity.
 ///
-/// High-risk services should retain this type rather than copying its path into an untyped
-/// `PathBuf`. The token carries the host decision source for diagnostics and audit.
+/// Services should retain this type rather than copying its path into an untyped `PathBuf`. The
+/// token carries the host decision source and capability for diagnostics and audit.
 #[derive(Clone, Debug)]
 pub struct TrustedWorkspace {
     root: WorkspaceRoot,

@@ -14,6 +14,15 @@ import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 const DISPLAY_RESULT_LIMIT = 999;
 const REPLACE_ALL_RESULT_LIMIT = 100_000;
 
+export interface FindControllerOptions {
+  readonly seedSearchStringFromSelection?: boolean;
+  readonly autoFindInSelection?: boolean;
+  readonly loop?: boolean;
+  readonly matchCase?: boolean;
+  readonly wholeWord?: boolean;
+  readonly regularExpression?: boolean;
+}
+
 /** Owns Aster's browser find/replace widget, shortcuts, match navigation, and search decorations. */
 export class FindController extends DisposableOwner {
   readonly element: HTMLDivElement;
@@ -35,14 +44,25 @@ export class FindController extends DisposableOwner {
   private regularExpression = false;
   private findInSelection = false;
   private matchesTruncated = false;
+  private readonly seedSearchStringFromSelection: boolean;
+  private readonly autoFindInSelection: boolean;
+  private readonly loop: boolean;
 
   constructor(
     private readonly editorInput: HTMLTextAreaElement,
     private readonly viewport: EditorViewport,
     private readonly selections: EditorSelectionController,
     private readonly decorations: TextDecorationCollection<void>,
+    options: FindControllerOptions = {},
   ) {
     super();
+    validateFindControllerOptions(options);
+    this.seedSearchStringFromSelection = options.seedSearchStringFromSelection ?? true;
+    this.autoFindInSelection = options.autoFindInSelection ?? false;
+    this.loop = options.loop ?? true;
+    this.matchCase = options.matchCase ?? false;
+    this.wholeWord = options.wholeWord ?? false;
+    this.regularExpression = options.regularExpression ?? false;
     if (viewport.textModel !== selections.textModel || viewport.textModel !== decorations.textModel) {
       this.dispose();
       throw new TypeError("Aster find dependencies must share one text model");
@@ -93,6 +113,9 @@ export class FindController extends DisposableOwner {
     const replaceAllButton = createButton(ownerDocument, "Replace all matches", "All");
     this.replaceRow.append(replaceSpacer, this.replaceInput, replaceButton, replaceAllButton);
     this.element.append(findRow, this.replaceRow);
+    projectToggle(this.matchCaseButton, this.matchCase);
+    projectToggle(this.wholeWordButton, this.wholeWord);
+    projectToggle(this.regularExpressionButton, this.regularExpression);
     viewport.element.append(this.element);
     this.defer(() => {
       this.decorations.clear();
@@ -145,7 +168,8 @@ export class FindController extends DisposableOwner {
     if (options.showReplace) this.setReplaceVisible(true);
     if (!wasVisible) {
       this.captureSelectionScope();
-      const selectedText = this.readSelectedSearchText();
+      if (this.autoFindInSelection) this.setFindInSelection(true);
+      const selectedText = this.seedSearchStringFromSelection ? this.readSelectedSearchText() : undefined;
       if (selectedText !== undefined) this.searchInput.value = selectedText;
     }
     this.position();
@@ -266,7 +290,11 @@ export class FindController extends DisposableOwner {
   private selectRelativeMatch(delta: -1 | 1): void {
     if (this.matches.length === 0) return;
     const base = this.currentMatchIndex >= 0 ? this.currentMatchIndex : this.findCurrentMatchIndex();
-    this.selectMatch((base + delta + this.matches.length) % this.matches.length);
+    const candidate = base + delta;
+    const index = this.loop
+      ? (candidate + this.matches.length) % this.matches.length
+      : Math.max(0, Math.min(this.matches.length - 1, candidate));
+    this.selectMatch(index);
   }
 
   private selectMatch(index: number): void {
@@ -407,4 +435,11 @@ function createToggleButton(ownerDocument: Document, label: string, text: string
 function projectToggle(button: HTMLButtonElement, checked: boolean): void {
   button.classList.toggle("checked", checked);
   button.setAttribute("aria-pressed", String(checked));
+}
+
+function validateFindControllerOptions(options: FindControllerOptions): void {
+  if (!options || typeof options !== "object") throw new TypeError("Aster Find options must be an object");
+  for (const [name, value] of Object.entries(options)) {
+    if (typeof value !== "boolean") throw new TypeError(`Aster Find option '${name}' must be boolean`);
+  }
 }

@@ -17,6 +17,14 @@ import { DiffEditorBreadcrumbsController } from "../../../../editor/contrib/diff
 export interface DiffEditorPaneOptions {
   readonly modelService: ITextModelService;
   readonly createComputationService: () => IDiffComputationService;
+  readonly lineHeight?: number;
+  readonly fontFamily?: string;
+  readonly fontSize?: number;
+  readonly fontLigatures?: boolean;
+  readonly showLineNumbers?: boolean;
+  readonly showInlineChanges?: boolean;
+  readonly loopChanges?: boolean;
+  readonly breadcrumbs?: boolean;
 }
 
 /** Workbench pane that acquires two text references for a read-only comparison. */
@@ -69,7 +77,7 @@ export class DiffEditorPane extends DisposableOwner implements IEditorPane {
       throwIfCancelled(signal, "Diff editor input loading was cancelled");
       modified = await this.modelService.acquire(input.modified, signal);
       throwIfCancelled(signal, "Diff editor input loading was cancelled");
-      next = new DiffEditorPaneSession(container, original, modified, input.original.label, input.modified.label, this.options.createComputationService);
+      next = new DiffEditorPaneSession(container, original, modified, input.original.label, input.modified.label, this.options);
       throwIfCancelled(signal, "Diff editor input loading was cancelled");
     } catch (error) {
       next?.dispose();
@@ -111,11 +119,11 @@ export class DiffEditorPane extends DisposableOwner implements IEditorPane {
 class DiffEditorPaneSession extends DisposableOwner {
   readonly editor: DiffEditorWidget;
 
-  constructor(container: HTMLElement, original: TextModelReference, modified: TextModelReference, originalLabel: string | undefined, modifiedLabel: string | undefined, createComputationService: () => IDiffComputationService) {
+  constructor(container: HTMLElement, original: TextModelReference, modified: TextModelReference, originalLabel: string | undefined, modifiedLabel: string | undefined, options: DiffEditorPaneOptions) {
     super();
     this.own(original);
     this.own(modified);
-    const computationService = createComputationService();
+    const computationService = options.createComputationService();
     if (!computationService || typeof computationService.compute !== "function") {
       throw new TypeError("Diff editor pane factory returned an invalid Rust diff computation service");
     }
@@ -128,10 +136,17 @@ class DiffEditorPaneSession extends DisposableOwner {
     this.editor = this.own(new DiffEditorWidget({
       container,
       model,
+      lineHeight: options.lineHeight,
+      fontFamily: options.fontFamily,
+      fontSize: options.fontSize,
+      fontLigatures: options.fontLigatures,
+      showLineNumbers: options.showLineNumbers,
+      showInlineChanges: options.showInlineChanges,
+      loopChanges: options.loopChanges,
       originalAriaLabel: originalLabel,
       modifiedAriaLabel: modifiedLabel,
     }));
-    this.own(new DiffEditorBreadcrumbsController(this.editor, model));
+    if (options.breadcrumbs !== false) this.own(new DiffEditorBreadcrumbsController(this.editor, model));
   }
 
   layout(dimension: IDimension): void {

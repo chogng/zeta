@@ -57,7 +57,7 @@ export class CodeLensController extends DisposableOwner {
 }
 
 registerEditorContribution({ id: "editor.contrib.codelens", install: context => {
-  if (context.kind !== "text" || context.model.largeFile.tooLargeForTokenization) return;
+  if (context.kind !== "text" || context.options.codeLens === false || context.model.largeFile.tooLargeForTokenization) return;
   const service = context.own(context.languageFeaturesService.createCodeLensService(context.model, context.options.input.resource));
   context.own(new CodeLensController(context.viewport, service, context.languageId, context.options.onExecuteEditorCommand, context.onLanguageError));
 } });

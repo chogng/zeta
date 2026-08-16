@@ -77,6 +77,10 @@
   user-select: none;
 }
 
+.aster-diff-editor.hide-line-numbers .aster-diff-editor-line-number {
+  display: none;
+}
+
 .aster-diff-editor-line-content {
   display: inline;
 }

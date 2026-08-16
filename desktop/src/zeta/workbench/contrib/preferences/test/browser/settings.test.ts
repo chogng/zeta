@@ -33,6 +33,7 @@ const { resolveKeybinding } = await import("../../../../../base/common/keybindin
 const { lxiconsLibrary } = await import("../../../../../base/common/lxiconsLibrary.js");
 const { OperatingSystem } = await import("../../../../../base/common/platform.js");
 const { MenuId } = await import("../../../../../platform/actions/common/actions.js");
+const { HoverConfiguration } = await import("../../../../../platform/hover/common/hoverService.js");
 const { MenuService } = await import("../../../../../platform/actions/common/menuService.js");
 const { ContextKeyService } = await import("../../../../../platform/contextkey/common/contextkey.js");
 const { ServiceCollection } = await import("../../../../../platform/instantiation/common/instantiation.js");
@@ -45,6 +46,10 @@ const { ColorScheme } = await import("../../../../../platform/theme/common/theme
 const { ISettingsService } = await import("../../../../../workbench/services/preferences/common/settings.js");
 const { SettingsService } = await import("../../../../../workbench/services/preferences/common/settingsService.js");
 const { WorkbenchConfiguration } = await import("../../../../../workbench/common/configuration.js");
+const { WorkbenchProfileConfiguration } = await import("../../../../../workbench/common/workbenchProfileConfiguration.js");
+const { CodeEditorConfiguration } = await import("../../../../../workbench/contrib/codeEditor/common/editorConfiguration.js");
+const { EditorIndentationKind } = await import("../../../../../editor/common/editorIndentation.js");
+const { EditorLineWrapping } = await import("../../../../../editor/browser/view/visualLineProjection.js");
 const { WorkbenchThemesRegistry } = await import("../../../../../workbench/common/theme.js");
 const { UnavailableUserThemeService } = await import("../../../../../workbench/common/userThemes.js");
 const { WorkbenchConfigurationService } = await import("../../../../../workbench/services/configuration/browser/configurationService.js");
@@ -129,6 +134,7 @@ test("Settings overlay opens, closes, and restores focus", () => {
   );
   assert.equal(navigationItems[0].getAttribute("aria-current"), "page");
   assert.equal(root.querySelector(".zeta-settings-page h3")?.textContent, "General");
+  assert.equal(root.querySelectorAll(".zeta-general-setting").length, 10);
 
   search.value = "model";
   search.dispatchEvent(new browserEnvironment.window.Event("input", { bubbles: true }));
@@ -161,6 +167,133 @@ test("Settings overlay opens, closes, and restores focus", () => {
   assert.equal(settings.isOpen, false);
   assert.equal(host.hidden, true);
   assert.equal(ownerDocument.activeElement, trigger);
+});
+
+test("General settings persist the default Workbench profile and shared interaction preferences", async () => {
+  using disposables = new DisposableStore();
+  const ownerDocument = browserEnvironment.window.document;
+  ownerDocument.body.replaceChildren();
+  const root = ownerDocument.createElement("div");
+  ownerDocument.body.append(root);
+  const settings = disposables.add(new SettingsService());
+  const configuration = disposables.add(new WorkbenchConfigurationService());
+  disposables.add(new SettingsEditorContribution({
+    configurationService: configuration,
+    container: root,
+    dialogService: acceptingDialogService,
+    settingsService: settings,
+    themeService: disposables.add(new ThemeService(darkColorTheme)),
+    userThemeService: UnavailableUserThemeService,
+  }));
+
+  settings.open("general");
+  const profile = root.querySelector<HTMLSelectElement>('[data-configuration-key="workbench.defaultProfile"]')!;
+  const reduceMotion = root.querySelector<HTMLSelectElement>('[data-configuration-key="workbench.reduceMotion"]')!;
+  const hoverDelay = root.querySelector<HTMLInputElement>('[data-configuration-key="workbench.hover.delay"]')!;
+  assert.equal(profile.value, "code");
+  assert.equal(reduceMotion.value, "auto");
+  assert.equal(hoverDelay.value, "500");
+  profile.value = "academic";
+  profile.dispatchEvent(new browserEnvironment.window.Event("change", { bubbles: true }));
+  await new Promise(resolve => globalThis.setTimeout(resolve, 0));
+  reduceMotion.value = "on";
+  reduceMotion.dispatchEvent(new browserEnvironment.window.Event("change", { bubbles: true }));
+  await new Promise(resolve => globalThis.setTimeout(resolve, 0));
+  hoverDelay.value = "250";
+  hoverDelay.dispatchEvent(new browserEnvironment.window.Event("change", { bubbles: true }));
+  await new Promise(resolve => globalThis.setTimeout(resolve, 0));
+
+  assert.equal(configuration.getValue(WorkbenchProfileConfiguration.defaultProfile), "academic");
+  assert.equal(configuration.getValue(WorkbenchConfiguration.reduceMotion), "on");
+  assert.equal(configuration.getValue(HoverConfiguration.delay), 250);
+  assert.equal(root.querySelector(".zeta-general-settings-status")?.textContent, "Setting saved.");
+});
+
+test("Settings domains without writable services render honest capability overviews", () => {
+  using disposables = new DisposableStore();
+  const ownerDocument = browserEnvironment.window.document;
+  ownerDocument.body.replaceChildren();
+  const root = ownerDocument.createElement("div");
+  ownerDocument.body.append(root);
+  const settings = disposables.add(new SettingsService());
+  disposables.add(new SettingsEditorContribution({
+    configurationService: disposables.add(new WorkbenchConfigurationService()),
+    container: root,
+    dialogService: acceptingDialogService,
+    settingsService: settings,
+    themeService: disposables.add(new ThemeService(darkColorTheme)),
+    userThemeService: UnavailableUserThemeService,
+  }));
+  const overviewSections = ["chat", "user", "agents", "models", "git", "worktrees", "rules", "skills-and-subagents", "tools-and-mcps", "hooks", "browser", "tabs", "experimental", "documentation"];
+  for (const sectionId of overviewSections) {
+    settings.open(sectionId);
+    assert.ok(root.querySelectorAll(".zeta-settings-overview-item").length > 0, sectionId);
+  }
+  settings.open("models");
+  root.querySelector<HTMLButtonElement>(".zeta-settings-overview-action")?.click();
+  assert.equal(settings.activeSectionId, "chat");
+});
+
+test("Editor settings render supported controls and persist typed preferences", async () => {
+  using disposables = new DisposableStore();
+  const ownerDocument = browserEnvironment.window.document;
+  ownerDocument.body.replaceChildren();
+  const root = ownerDocument.createElement("div");
+  ownerDocument.body.append(root);
+  const settings = disposables.add(new SettingsService());
+  const configuration = disposables.add(new WorkbenchConfigurationService());
+  disposables.add(new SettingsEditorContribution({
+    configurationService: configuration,
+    container: root,
+    dialogService: acceptingDialogService,
+    settingsService: settings,
+    themeService: disposables.add(new ThemeService(darkColorTheme)),
+    userThemeService: UnavailableUserThemeService,
+  }));
+
+  settings.open("editor");
+  assert.deepEqual([...root.querySelectorAll(".zeta-editor-settings-group h4")].map(element => element.textContent), ["Editor selection", "Typography", "Display", "Editing", "Code intelligence", "Find and replace", "Workspace search", "Diff editor", "Files"]);
+  assert.equal(root.querySelectorAll(".zeta-editor-setting").length, 40);
+  const fontFamily = root.querySelector<HTMLInputElement>('[data-configuration-key="editor.fontFamily"]')!;
+  const fontSize = root.querySelector<HTMLInputElement>('[data-configuration-key="editor.fontSize"]')!;
+  const wordWrap = root.querySelector<HTMLSelectElement>('[data-configuration-key="editor.wordWrap"]')!;
+  const minimap = root.querySelector<HTMLInputElement>('[data-configuration-key="editor.minimap.enabled"]')!;
+  const indentation = root.querySelector<HTMLSelectElement>('[data-configuration-key="editor.indentation"]')!;
+  const tabSize = root.querySelector<HTMLInputElement>('[data-configuration-key="editor.tabSize"]')!;
+  assert.equal(wordWrap.value, EditorLineWrapping.Off);
+  assert.equal(root.querySelector<HTMLSelectElement>('[data-configuration-key="workbench.editor.defaultNewDocumentEditor"]')?.value, "profile");
+  assert.equal(fontFamily.value, "");
+  assert.equal(fontFamily.placeholder, "Default monospace");
+  assert.equal(fontSize.value, "13");
+  assert.equal(root.querySelector<HTMLInputElement>('[data-configuration-key="editor.lineHeight"]')?.value, "20");
+  assert.equal(root.querySelector<HTMLInputElement>('[data-configuration-key="editor.lineNumbers"]')?.checked, true);
+  assert.equal(root.querySelector<HTMLInputElement>('[data-configuration-key="editor.formatOnSave"]')?.checked, false);
+  assert.equal(root.querySelector<HTMLInputElement>('[data-configuration-key="editor.inlayHints.enabled"]')?.checked, true);
+  assert.equal(root.querySelector<HTMLInputElement>('[data-configuration-key="editor.find.loop"]')?.checked, true);
+  assert.equal(root.querySelector<HTMLInputElement>('[data-configuration-key="search.smartCase"]')?.checked, true);
+  assert.equal(root.querySelector<HTMLInputElement>('[data-configuration-key="search.maxResults"]')?.value, "2000");
+  assert.equal(root.querySelector<HTMLInputElement>('[data-configuration-key="diffEditor.showInlineChanges"]')?.checked, true);
+  assert.equal(minimap.checked, true);
+  assert.equal(indentation.value, EditorIndentationKind.Spaces);
+  assert.equal(tabSize.value, "4");
+
+  wordWrap.value = EditorLineWrapping.On;
+  wordWrap.dispatchEvent(new browserEnvironment.window.Event("change", { bubbles: true }));
+  await new Promise(resolve => globalThis.setTimeout(resolve, 0));
+  indentation.value = EditorIndentationKind.Tabs;
+  indentation.dispatchEvent(new browserEnvironment.window.Event("change", { bubbles: true }));
+  await new Promise(resolve => globalThis.setTimeout(resolve, 0));
+  tabSize.value = "2";
+  tabSize.dispatchEvent(new browserEnvironment.window.Event("change", { bubbles: true }));
+  await new Promise(resolve => globalThis.setTimeout(resolve, 0));
+  minimap.click();
+  await new Promise(resolve => globalThis.setTimeout(resolve, 0));
+
+  assert.equal(configuration.getValue(CodeEditorConfiguration.wordWrap), EditorLineWrapping.On);
+  assert.equal(configuration.getValue(CodeEditorConfiguration.indentationKind), EditorIndentationKind.Tabs);
+  assert.equal(configuration.getValue(CodeEditorConfiguration.tabSize), 2);
+  assert.equal(configuration.getValue(CodeEditorConfiguration.minimapEnabled), false);
+  assert.equal(root.querySelector(".zeta-editor-settings-status")?.textContent, "Setting saved.");
 });
 
 test("Connector settings project catalog state and invoke typed connect and disconnect actions", async () => {

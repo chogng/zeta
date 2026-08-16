@@ -5,6 +5,7 @@ import { URI } from "../../../base/common/uri.js";
 import { type TextModelReference } from "../../common/services/textModelService.js";
 import { LanguageFeaturesService } from "../../common/services/languageService.js";
 import { TextModel } from "../../common/model/textModel.js";
+import { TextPosition, TextRange } from "../../common/core/text.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -187,17 +188,59 @@ test("Aster editor part applies selected before-save contributions through expli
   const container = dom.window.document.querySelector<HTMLElement>("main")!;
   const model = new TextModel("alpha");
   const reference = modelReference(URI.file("C:\\project\\save.txt"), model);
+  using languageFeatures = new LanguageFeaturesService();
+  using formatting = languageFeatures.registerFormattingProvider({
+    languageIds: ["plaintext"],
+    provideDocumentFormattingEdits: () => [{ range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 5)), text: "formatted" }],
+  });
   let savedText = "";
   const editorPart = new EditorPart({
     container,
     input: { resource: reference.resource, label: "save.txt" },
     languageId: "plaintext",
+    languageFeaturesService: languageFeatures,
     modelReference: reference,
+    formatOnSave: true,
     insertFinalNewLine: true,
     onSave: async () => { savedText = model.getText(); },
   });
   await editorPart.save();
-  assert.equal(savedText, "alpha\n");
+  assert.equal(savedText, "formatted\n");
+
+  editorPart.dispose();
+  dom.window.close();
+});
+
+test("Aster editor part omits disabled presentation and language-assistance contributions", () => {
+  const dom = new JSDOM("<!doctype html><body><main></main></body>");
+  dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+  const container = dom.window.document.querySelector<HTMLElement>("main")!;
+  const model = new TextModel("function example() {\n  return 1;\n}");
+  const reference = modelReference(URI.file("C:\\project\\minimal.ts"), model);
+  const editorPart = new EditorPart({
+    container,
+    input: { resource: reference.resource, label: "minimal.ts" },
+    languageId: "typescript",
+    modelReference: reference,
+    showLineNumbers: false,
+    showIndentationGuides: false,
+    bracketPairColorization: false,
+    stickyScroll: false,
+    suggestions: false,
+    inlineCompletions: false,
+    parameterHints: false,
+    inlayHints: false,
+    codeLens: false,
+  });
+  editorPart.layout({ width: 320, height: 80 });
+
+  assert.equal(editorPart.viewport.element.classList.contains("hide-line-numbers"), true);
+  assert.equal(container.querySelectorAll(".aster-editor-indent-guide").length, 0);
+  assert.equal(container.querySelectorAll(".aster-editor-bracket-level-1").length, 0);
+  assert.equal(container.querySelectorAll(".aster-editor-sticky-scroll").length, 0);
+  assert.equal(container.querySelectorAll(".aster-editor-completion").length, 0);
+  assert.equal(container.querySelectorAll(".aster-editor-inline-completion").length, 0);
+  assert.equal(container.querySelectorAll(".aster-editor-parameter-hints").length, 0);
 
   editorPart.dispose();
   dom.window.close();

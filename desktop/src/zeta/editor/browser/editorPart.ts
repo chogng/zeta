@@ -13,7 +13,7 @@ import { type EditorIndentationOptions } from "../common/editorIndentation.js";
 import { type TextInputController } from "./input/textInputController.js";
 import { type CodeEditorWidget } from "./widget/codeEditor/codeEditorWidget.js";
 import { type EditorHitTarget } from "./view/pointerHitTest.js";
-import { type EditorTextDirection, type EditorViewport, type EditorViewportPresentation } from "./view/editorViewport.js";
+import { type EditorActiveLineHighlight, type EditorMinimap, type EditorTextDirection, type EditorViewport, type EditorViewportPresentation } from "./view/editorViewport.js";
 import { type EditorLineWrapping } from "./view/visualLineProjection.js";
 import { type LanguageLocation } from "../contrib/gotoSymbol/common/languageNavigation.js";
 import { type LanguageWorkspaceEdit } from "../common/languages/languageWorkspaceEdit.js";
@@ -25,6 +25,16 @@ export interface EditorContextMenuRequest {
   readonly target: EditorHitTarget | undefined;
   readonly clientX: number;
   readonly clientY: number;
+}
+
+/** Defaults applied whenever the editor-local Find and Replace widget opens. */
+export interface EditorFindOptions {
+  readonly seedSearchStringFromSelection?: boolean;
+  readonly autoFindInSelection?: boolean;
+  readonly loop?: boolean;
+  readonly matchCase?: boolean;
+  readonly wholeWord?: boolean;
+  readonly regularExpression?: boolean;
 }
 
 export interface EditorPartOptions {
@@ -48,6 +58,23 @@ export interface EditorPartOptions {
   readonly onRevert?: () => Promise<void>;
   readonly indentation?: EditorIndentationOptions;
   readonly lineWrapping?: EditorLineWrapping;
+  readonly fontFamily?: string;
+  readonly fontSize?: number;
+  readonly lineHeight?: number;
+  readonly fontLigatures?: boolean;
+  readonly minimap?: EditorMinimap;
+  readonly activeLineHighlight?: EditorActiveLineHighlight;
+  readonly showLineNumbers?: boolean;
+  readonly showIndentationGuides?: boolean;
+  readonly bracketPairColorization?: boolean;
+  readonly stickyScroll?: boolean;
+  readonly suggestions?: boolean;
+  readonly inlineCompletions?: boolean;
+  readonly parameterHints?: boolean;
+  readonly inlayHints?: boolean;
+  readonly codeLens?: boolean;
+  readonly formatOnSave?: boolean;
+  readonly find?: EditorFindOptions;
   /** Applies a single LF at the save boundary when the document has content and no final LF. */
   readonly insertFinalNewLine?: boolean;
   /** Browser paragraph direction for this editor part's DOM projection. */

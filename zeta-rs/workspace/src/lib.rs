@@ -2,7 +2,8 @@
 //!
 //! This crate deliberately does not own editor, Git, terminal, MCP, LSP, configuration
 //! persistence, or trust UI. Hosts establish a [`WorkspaceRoot`], resolve their own trust policy,
-//! and require a [`TrustedWorkspace`] before enabling workspace-controlled execution.
+//! and require a [`TrustedWorkspace`] before enabling workspace-controlled execution. Restricted
+//! workspaces may still issue the bounded [`WorkspaceCapability::InspectRepository`] capability.
 
 mod binding;
 mod identity;

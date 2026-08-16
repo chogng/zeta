@@ -348,7 +348,7 @@ fn restricted_workspace_installs_only_non_executable_services() {
     assert!(server.file_system_service().is_ok());
     assert!(server.code_index_service().is_ok());
     assert!(server.cloud_code_index_service().is_err());
-    assert!(server.git_runtime_service().is_err());
+    assert!(server.git_runtime_service().is_ok());
     assert!(server.workspace_search_service().is_err());
     assert!(server.terminal_service().is_err());
     server
@@ -622,7 +622,7 @@ fn user_config_revocation_removes_executable_services_but_keeps_file_access() {
         b"config-revocation"
     );
     assert!(server.code_index_service().is_ok());
-    assert!(server.git_runtime_service().is_err());
+    assert!(server.git_runtime_service().is_ok());
     assert!(server.workspace_search_service().is_err());
     assert!(server.terminal_service().is_err());
     assert_eq!(

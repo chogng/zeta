@@ -42,6 +42,10 @@
   display: none;
 }
 
+.aster-editor.hide-line-numbers .aster-editor-line-number {
+  display: none;
+}
+
 .aster-editor-content {
   position: relative;
   min-width: 100%;

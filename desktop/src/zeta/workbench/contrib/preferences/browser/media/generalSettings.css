@@ -1,0 +1,116 @@
+.zeta-general-settings {
+  display: flex;
+  max-width: 760px;
+  flex-direction: column;
+  gap: 30px;
+}
+
+.zeta-general-settings-group h4 {
+  margin: 0;
+  color: var(--zeta-foreground);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.zeta-general-settings-group-description {
+  margin: 5px 0 12px;
+  color: var(--zeta-description-foreground);
+  line-height: 1.5;
+}
+
+.zeta-general-settings-list {
+  overflow: hidden;
+  border: 1px solid var(--zeta-widget-border);
+  border-radius: 8px;
+  background: var(--zeta-editor-background);
+}
+
+.zeta-general-setting {
+  display: grid;
+  min-height: 68px;
+  box-sizing: border-box;
+  align-items: center;
+  padding: 12px 14px;
+  color: var(--zeta-foreground);
+  gap: 18px;
+  grid-template-columns: minmax(0, 1fr) minmax(132px, 190px);
+}
+
+.zeta-general-setting + .zeta-general-setting {
+  border-top: 1px solid var(--zeta-widget-border);
+}
+
+label.zeta-general-setting:hover {
+  background: var(--zeta-list-hover-background);
+}
+
+.zeta-general-setting-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.zeta-general-setting-title {
+  font-weight: 600;
+}
+
+.zeta-general-setting-description {
+  color: var(--zeta-description-foreground);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.zeta-general-setting-control {
+  width: 100%;
+  min-height: 30px;
+  box-sizing: border-box;
+  padding: 4px 8px;
+  border: 1px solid var(--zeta-input-border);
+  border-radius: 4px;
+  outline: none;
+  color: var(--zeta-input-foreground);
+  background: var(--zeta-input-background);
+  font: inherit;
+}
+
+.zeta-general-setting-control:focus-visible,
+.zeta-general-toggle-setting input:focus-visible {
+  outline: 1px solid var(--zeta-focus-border);
+  outline-offset: 1px;
+}
+
+.zeta-general-toggle-setting input {
+  justify-self: end;
+}
+
+.zeta-general-setting-state {
+  padding: 4px 8px;
+  border: 1px solid var(--zeta-widget-border);
+  border-radius: 999px;
+  color: var(--zeta-description-foreground);
+  font-size: 11px;
+  text-align: center;
+}
+
+.zeta-general-settings-status {
+  min-height: 18px;
+  margin: -18px 0 0;
+  color: var(--zeta-description-foreground);
+  font-size: 12px;
+}
+
+.zeta-general-settings-status.is-error {
+  color: var(--zeta-error-foreground);
+}
+
+@media (max-width: 720px) {
+  .zeta-general-setting {
+    align-items: start;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .zeta-general-toggle-setting input {
+    justify-self: start;
+  }
+}

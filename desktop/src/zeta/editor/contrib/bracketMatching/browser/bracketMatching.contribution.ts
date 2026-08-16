@@ -22,7 +22,7 @@ registerEditorContribution({ id: "editor.contrib.bracketMatching", configure: co
   context.provideCapability(TextEditorCapability.languageLexicalContext, lexicalContext);
   context.addDecorationSource(createAsterDecorationSource(decorations, () => DecorationPresentation.BracketMatch));
   context.setLanguageLexicalContext(lexicalContext);
-  if (!largeFile) {
+  if (!largeFile && context.options.bracketPairColorization !== false) {
     const colorizations = context.own(new LanguageBracketColorizationIndex(context.model, lexicalContext));
     context.setBracketColorizationSource(new BracketColorizationSource(colorizations));
   }

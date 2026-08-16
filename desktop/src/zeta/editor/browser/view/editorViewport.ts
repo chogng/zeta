@@ -84,6 +84,11 @@ export interface EditorViewportOptions {
   /** `off` omits current-line presentation while preserving selections and carets. */
   readonly activeLineHighlight?: EditorActiveLineHighlight;
   readonly lineWrapping?: EditorLineWrapping;
+  readonly fontFamily?: string;
+  readonly fontSize?: number;
+  readonly fontLigatures?: boolean;
+  readonly showLineNumbers?: boolean;
+  readonly showIndentationGuides?: boolean;
   readonly minimap?: EditorMinimap;
   readonly indentation?: EditorIndentationOptions;
   /** Browser text-direction input; automatic direction is the default. */
@@ -128,6 +133,8 @@ export class EditorViewport extends DisposableOwner {
   private readonly presentation: EditorViewportPresentation;
   private readonly focusOutlineOwner: EditorFocusOutlineOwner;
   private readonly activeLineHighlight: EditorActiveLineHighlight;
+  private readonly showLineNumbers: boolean;
+  private readonly showIndentationGuides: boolean;
   private readonly padding: EditorViewportPadding;
   private readonly indentation: ResolvedEditorIndentationOptions;
   private readonly decorationSnapshots =
@@ -171,6 +178,8 @@ export class EditorViewport extends DisposableOwner {
     this.presentation = options.presentation ?? "document";
     this.focusOutlineOwner = options.focusOutlineOwner ?? "editor";
     this.activeLineHighlight = options.activeLineHighlight ?? (this.presentation === "embedded" ? "off" : "on");
+    this.showLineNumbers = options.showLineNumbers ?? this.presentation !== "embedded";
+    this.showIndentationGuides = options.showIndentationGuides ?? this.presentation !== "embedded";
     this.padding = resolveEditorViewportPadding(options.padding);
     this.minimap = options.minimap ?? (this.presentation === "document" ? EditorMinimap.On : EditorMinimap.Off);
     this.textDirection = options.textDirection ?? EditorTextDirection.Auto;
@@ -213,6 +222,11 @@ export class EditorViewport extends DisposableOwner {
     this.element.classList.add(`aster-editor-${this.presentation}`);
     this.element.classList.add(`aster-editor-focus-owner-${this.focusOutlineOwner}`);
     this.element.classList.add(`aster-editor-direction-${this.textDirection}`);
+    this.element.classList.toggle("hide-line-numbers", !this.showLineNumbers);
+    if (options.fontFamily) this.element.style.fontFamily = options.fontFamily;
+    if (options.fontSize !== undefined) this.element.style.fontSize = `${options.fontSize}px`;
+    this.element.style.fontVariantLigatures = options.fontLigatures ? "normal" : "none";
+    this.element.style.tabSize = String(this.indentation.tabSize);
     this.element.style.setProperty("--aster-editor-padding-left", `${this.padding.left}px`);
     this.element.style.setProperty("--aster-editor-padding-right", `${this.padding.right}px`);
     this.element.style.setProperty("--aster-editor-feature-gutter-width", `${this.featureGutterWidth}px`);
@@ -630,6 +644,7 @@ export class EditorViewport extends DisposableOwner {
 
   private get gutterWidth(): number {
     if (this.presentation === "embedded") return 0;
+    if (!this.showLineNumbers) return this.featureGutterWidth;
     const digitCount = String(this.model.lineCount).length;
     return Math.ceil(
       this.textMeasurer.measureLineWidth("9".repeat(digitCount)) +
@@ -771,6 +786,7 @@ export class EditorViewport extends DisposableOwner {
     for (const [visualLineIndex, line] of this.renderedLines) {
       const visualLine = visualProjection.lineAt(visualLineIndex);
       line.indentationElement.replaceChildren();
+      if (!this.showIndentationGuides) continue;
       if (!visualLine?.firstForLogicalLine) continue;
       const text = this.model.getLineContent(visualLine.logicalLineIndex);
       for (const guide of createAsterIndentationGuides(text, this.indentation.tabSize)) {

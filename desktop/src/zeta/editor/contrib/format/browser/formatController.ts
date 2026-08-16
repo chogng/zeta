@@ -41,8 +41,9 @@ export class FormatController extends DisposableOwner {
 registerEditorContribution({ id: "editor.contrib.format", install: context => {
   if (context.kind !== "text") return;
   const service = context.own(context.languageFeaturesService.createFormatService(context.model, context.options.input.resource));
-  context.own(new FormatController(context.textInput.element, context.viewport, context.selections, service, context.languageId, {
+  const controller = context.own(new FormatController(context.textInput.element, context.viewport, context.selections, service, context.languageId, {
     formattingOptions: { tabSize: context.options.indentation?.tabSize ?? 4, insertSpaces: context.options.indentation?.kind !== "tabs" },
     onError: context.onLanguageError,
   }));
+  if (context.options.formatOnSave) context.own(context.registerBeforeSave(() => controller.formatDocument()));
 } });

@@ -415,6 +415,17 @@ impl WorkspaceRuntimeControl {
         }
 
         let root = authorization.root().clone();
+        let restricted_authorization =
+            WorkspaceAuthorization::new(root.clone(), WorkspaceTrustDecision::Restricted);
+        let repository_inspection = restricted_authorization
+            .require(WorkspaceCapability::InspectRepository)
+            .map_err(|_| {
+                WorkspaceRuntimeError::Failed("failed to authorize Git inspection".into())
+            })?;
+        let restricted_git = GitRuntime::new(repository_inspection, Arc::clone(&self.updates))
+            .map_err(|_| {
+                WorkspaceRuntimeError::Failed("failed to initialize Git runtime".into())
+            })?;
         if let Some(extension_hosts) = &self.extension_hosts {
             extension_hosts.unbind_workspace();
         }
@@ -433,10 +444,8 @@ impl WorkspaceRuntimeControl {
         runtime.cloud_code_index = None;
         runtime.code_index_semantic = None;
         runtime.code_index_semantic_job = None;
-        runtime.authorization = Some(WorkspaceAuthorization::new(
-            root.clone(),
-            WorkspaceTrustDecision::Restricted,
-        ));
+        runtime.authorization = Some(restricted_authorization);
+        runtime.git = Some(Arc::clone(&restricted_git));
         drop(runtime);
 
         drop(old_file_system_watcher);
@@ -1149,6 +1158,15 @@ impl AppServer {
         let code_index = self.open_code_index_runtime(workspace.clone())?;
         let symbol_index = self.open_symbol_index_runtime(&code_index)?;
         self.retry_persisted_cloud_index_deletion(&code_index);
+        let repository_inspection = authorization
+            .require(WorkspaceCapability::InspectRepository)
+            .map_err(|_| {
+                WorkspaceRuntimeError::Failed("failed to authorize Git inspection".into())
+            })?;
+        let git =
+            GitRuntime::new(repository_inspection, Arc::clone(&self.updates)).map_err(|_| {
+                WorkspaceRuntimeError::Failed("failed to initialize Git runtime".into())
+            })?;
         let customizations = WorkspaceCustomizations::discover(&canonical_root);
         let file_system_watcher = FileSystemWatcher::start_with_observers(
             workspace,
@@ -1179,7 +1197,7 @@ impl AppServer {
             file_system: Some(file_system),
             _file_system_watcher: Some(file_system_watcher),
             _git_watcher: None,
-            git: None,
+            git: Some(Arc::clone(&git)),
             workspace_search: None,
             code_index: Some(code_index),
             symbol_index: Some(symbol_index),

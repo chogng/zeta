@@ -37,6 +37,14 @@ test("Aster diff pane acquires both models, lays out the review view, and releas
   const pane = new DiffEditorPane(resourceStore, {
     modelService: models,
     createComputationService: () => new PaneTestDiffComputationService(),
+    lineHeight: 24,
+    fontFamily: "Test Mono",
+    fontSize: 15,
+    fontLigatures: true,
+    showLineNumbers: false,
+    showInlineChanges: false,
+    loopChanges: false,
+    breadcrumbs: false,
   });
   pane.create(parent);
   pane.layout({ width: 640, height: 480 });
@@ -47,6 +55,12 @@ test("Aster diff pane acquires both models, lays out the review view, and releas
 
   assert.equal(parent.querySelectorAll(".aster-diff-editor-pane").length, 1);
   assert.equal(parent.querySelectorAll(".aster-diff-editor").length, 1);
+  const editor = requiredElement<HTMLElement>(dom.window.document, ".aster-diff-editor");
+  assert.equal(editor.classList.contains("hide-line-numbers"), true);
+  assert.equal(editor.style.fontFamily, '"Test Mono"');
+  assert.equal(editor.style.fontSize, "15px");
+  assert.equal(editor.style.fontVariantLigatures, "normal");
+  assert.equal(parent.querySelector(".aster-diff-editor-breadcrumbs"), null);
   assert.match(parent.querySelector(".aster-diff-editor")?.getAttribute("aria-label") ?? "", /before\.ts/);
   pane.focus();
   assert.equal(dom.window.document.activeElement?.classList.contains("aster-diff-editor"), true);

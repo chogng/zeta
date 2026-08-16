@@ -41,7 +41,10 @@ pub(crate) struct GitService {
 
 impl GitService {
     pub(crate) fn new(workspace: TrustedWorkspace) -> Result<Self, GitServiceError> {
-        if workspace.capability() != WorkspaceCapability::MutateRepository {
+        if !matches!(
+            workspace.capability(),
+            WorkspaceCapability::InspectRepository | WorkspaceCapability::MutateRepository
+        ) {
             return Err(GitServiceError::Trust);
         }
         let runtime = tokio::runtime::Builder::new_current_thread()
@@ -58,7 +61,7 @@ impl GitService {
     pub(crate) fn snapshot(
         &self,
     ) -> Result<(GitRepository, GitRepositorySnapshot), GitServiceError> {
-        self.ensure_trusted()?;
+        self.ensure_readable()?;
         let runtime = self.runtime.lock().map_err(|_| GitServiceError::Runtime)?;
         runtime.block_on(async {
             let repository = self
@@ -91,7 +94,7 @@ impl GitService {
     }
 
     pub(crate) fn local_branches(&self) -> Result<Vec<GitBranch>, GitServiceError> {
-        self.ensure_trusted()?;
+        self.ensure_readable()?;
         let runtime = self.runtime.lock().map_err(|_| GitServiceError::Runtime)?;
         runtime.block_on(async {
             let repository = self.open_repository().await?;
@@ -103,7 +106,7 @@ impl GitService {
     }
 
     pub(crate) fn recent_commits(&self) -> Result<Vec<GitCommitSummary>, GitServiceError> {
-        self.ensure_trusted()?;
+        self.ensure_readable()?;
         let runtime = self.runtime.lock().map_err(|_| GitServiceError::Runtime)?;
         runtime.block_on(async {
             let repository = self.open_repository().await?;
@@ -117,7 +120,7 @@ impl GitService {
     pub(crate) fn text_diff_snapshot(
         &self,
     ) -> Result<(GitRepository, GitTextDiffSnapshot), GitServiceError> {
-        self.ensure_trusted()?;
+        self.ensure_readable()?;
         let limits =
             GitTextDiffLimits::new(MAX_TEXT_DIFF_FILE_BYTES).map_err(GitServiceError::Git)?;
         let runtime = self.runtime.lock().map_err(|_| GitServiceError::Runtime)?;
@@ -141,7 +144,7 @@ impl GitService {
         &self,
         name: &str,
     ) -> Result<(GitRepository, GitRepositorySnapshot), GitServiceError> {
-        self.ensure_trusted()?;
+        self.ensure_mutable()?;
         let runtime = self.runtime.lock().map_err(|_| GitServiceError::Runtime)?;
         runtime.block_on(async {
             let repository = self.open_repository().await?;
@@ -182,7 +185,7 @@ impl GitService {
     }
 
     pub(crate) fn commit(&self, message: String) -> Result<GitServiceCommit, GitServiceError> {
-        self.ensure_trusted()?;
+        self.ensure_mutable()?;
         let request = GitCommitRequest::new(message).map_err(GitServiceError::Git)?;
         let runtime = self.runtime.lock().map_err(|_| GitServiceError::Runtime)?;
         runtime.block_on(async {
@@ -224,7 +227,7 @@ impl GitService {
         operation: GitPathMutation,
         paths: Vec<PathBuf>,
     ) -> Result<(GitRepository, GitRepositorySnapshot), GitServiceError> {
-        self.ensure_trusted()?;
+        self.ensure_mutable()?;
         let runtime = self.runtime.lock().map_err(|_| GitServiceError::Runtime)?;
         runtime.block_on(async {
             let repository = self.open_repository().await?;
@@ -250,7 +253,7 @@ impl GitService {
         &self,
         operation: GitRemoteMutation,
     ) -> Result<(GitRepository, GitRepositorySnapshot), GitServiceError> {
-        self.ensure_trusted()?;
+        self.ensure_mutable()?;
         let runtime = self.runtime.lock().map_err(|_| GitServiceError::Runtime)?;
         runtime.block_on(async {
             let repository = self.open_repository().await?;
@@ -297,7 +300,22 @@ impl GitService {
         .map_err(GitServiceError::Git)
     }
 
-    fn ensure_trusted(&self) -> Result<(), GitServiceError> {
+    fn ensure_readable(&self) -> Result<(), GitServiceError> {
+        if !matches!(
+            self.workspace.capability(),
+            WorkspaceCapability::InspectRepository | WorkspaceCapability::MutateRepository
+        ) {
+            return Err(GitServiceError::Trust);
+        }
+        self.workspace
+            .ensure_active()
+            .map_err(|_| GitServiceError::Trust)
+    }
+
+    fn ensure_mutable(&self) -> Result<(), GitServiceError> {
+        if self.workspace.capability() != WorkspaceCapability::MutateRepository {
+            return Err(GitServiceError::Trust);
+        }
         self.workspace
             .ensure_active()
             .map_err(|_| GitServiceError::Trust)

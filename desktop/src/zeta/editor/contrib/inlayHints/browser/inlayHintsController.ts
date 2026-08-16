@@ -54,7 +54,7 @@ export class InlayHintsController extends DisposableOwner {
 }
 
 registerEditorContribution({ id: "editor.contrib.inlayHints", install: context => {
-  if (context.kind !== "text" || context.model.largeFile.tooLargeForTokenization) return;
+  if (context.kind !== "text" || context.options.inlayHints === false || context.model.largeFile.tooLargeForTokenization) return;
   const service = context.own(context.languageFeaturesService.createInlayHintsService(context.model, context.options.input.resource));
   context.own(new InlayHintsController(context.viewport, service, context.languageId, context.onLanguageError));
 } });

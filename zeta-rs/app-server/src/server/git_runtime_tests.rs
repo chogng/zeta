@@ -76,6 +76,33 @@ fn runtime_revisions_and_notifies_only_for_changed_workspace_projection() {
 }
 
 #[test]
+fn restricted_runtime_exposes_read_only_git_and_rejects_mutations() {
+    let repository = TestRepository::init();
+    repository.write("tracked.txt", "initial\n");
+    repository.git(&["add", "tracked.txt"]);
+    repository.git(&["commit", "-m", "initial"]);
+    repository.write("tracked.txt", "changed\n");
+    let runtime = GitRuntime::new(
+        inspection_workspace(repository.root()),
+        Arc::new(UpdateBroker::default()),
+    )
+    .unwrap();
+
+    let status = runtime.status().unwrap();
+    assert_eq!(status.changes.len(), 1);
+    assert_eq!(runtime.recent_commits().unwrap().len(), 1);
+    assert_eq!(runtime.local_branches().unwrap().len(), 1);
+    assert!(runtime.text_diff().is_ok());
+    assert!(matches!(
+        runtime.stage(vec![PathBuf::from("tracked.txt")]),
+        Err(super::GitRuntimeError::Service(
+            crate::git_service::GitServiceError::Trust
+        ))
+    ));
+    assert!(runtime.switch_branch("main").is_err());
+}
+
+#[test]
 fn runtime_incarnations_use_distinct_revision_scopes() {
     let repository = TestRepository::init();
     let broker = Arc::new(UpdateBroker::default());
@@ -207,6 +234,15 @@ fn trusted_workspace(root: &Path) -> TrustedWorkspace {
         WorkspaceRoot::open(root).unwrap(),
         WorkspaceTrustDecision::Trusted(WorkspaceTrustSource::HostConfiguration),
         WorkspaceCapability::MutateRepository,
+    )
+    .unwrap()
+}
+
+fn inspection_workspace(root: &Path) -> TrustedWorkspace {
+    TrustedWorkspace::require(
+        WorkspaceRoot::open(root).unwrap(),
+        WorkspaceTrustDecision::Restricted,
+        WorkspaceCapability::InspectRepository,
     )
     .unwrap()
 }

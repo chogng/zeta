@@ -4,6 +4,8 @@ import { JSDOM } from "jsdom";
 import { BrowserWorkspaceSearchService } from "../../../../../platform/search/browser/searchService.js";
 import type { IWorkspaceSearchQuery, IWorkspaceSearchService, WorkspaceSearchMatch } from "../../../../../platform/search/common/search.js";
 import type { IWorkspaceSearchApi } from "../../../../../platform/search/common/searchApi.js";
+import { WorkbenchConfigurationService } from "../../../../../workbench/services/configuration/browser/configurationService.js";
+import { WorkspaceSearchConfiguration } from "../../common/searchConfiguration.js";
 
 const matches: readonly WorkspaceSearchMatch[] = [
   {
@@ -125,6 +127,7 @@ test("SearchViewPane submits typed filters and groups highlighted matches", asyn
       caseSensitivity: "sensitive",
       includePatterns: ["src/**", "docs/**"],
       excludePatterns: ["**/*.test.ts"],
+      maxResults: 2_000,
     });
     assert.equal(
       pane.element.querySelector(".zeta-search-file-path")?.textContent,
@@ -145,6 +148,50 @@ test("SearchViewPane submits typed filters and groups highlighted matches", asyn
     for (const name of installedGlobals) {
       Reflect.deleteProperty(globalThis, name);
     }
+  }
+});
+
+test("SearchViewPane applies configured query defaults and result limits", async () => {
+  const browser = new JSDOM("<!doctype html><body></body>");
+  const installedGlobals = installDomGlobals(browser);
+  using configuration = new WorkbenchConfigurationService();
+  await configuration.updateValue(WorkspaceSearchConfiguration.matchCase, true);
+  await configuration.updateValue(WorkspaceSearchConfiguration.smartCase, false);
+  await configuration.updateValue(WorkspaceSearchConfiguration.regularExpression, true);
+  await configuration.updateValue(WorkspaceSearchConfiguration.includePatterns, "src/**, packages/**");
+  await configuration.updateValue(WorkspaceSearchConfiguration.excludePatterns, "**/*.test.ts");
+  await configuration.updateValue(WorkspaceSearchConfiguration.maxResults, 750);
+  let submitted: IWorkspaceSearchQuery | undefined;
+  const service: IWorkspaceSearchService = {
+    search: async searchQuery => {
+      submitted = searchQuery;
+      return { resultCount: 0, limitHit: false, error: undefined };
+    },
+  };
+
+  try {
+    const { SearchViewPane } = await import("../../../../../workbench/contrib/search/browser/searchViewPane.js");
+    using pane = new SearchViewPane({ id: "zeta.search", title: "Search", ownerDocument: browser.window.document }, service, configuration);
+    browser.window.document.body.append(pane.element);
+    input(pane.element, "Search workspace").value = "Needle";
+    const checkboxes = pane.element.querySelectorAll<HTMLInputElement>('input[type="checkbox"]');
+    assert.equal(checkboxes[0]?.checked, true);
+    assert.equal(checkboxes[1]?.checked, true);
+    assert.equal(input(pane.element, "Files to include").value, "src/**, packages/**");
+    assert.equal(input(pane.element, "Files to exclude").value, "**/*.test.ts");
+    pane.element.querySelector("form")?.dispatchEvent(new browser.window.Event("submit", { bubbles: true, cancelable: true }));
+    await waitFor(() => submitted !== undefined);
+    assert.deepEqual(submitted, {
+      text: "Needle",
+      patternKind: "regex",
+      caseSensitivity: "sensitive",
+      includePatterns: ["src/**", "packages/**"],
+      excludePatterns: ["**/*.test.ts"],
+      maxResults: 750,
+    });
+  } finally {
+    browser.window.close();
+    for (const name of installedGlobals) Reflect.deleteProperty(globalThis, name);
   }
 });
 
