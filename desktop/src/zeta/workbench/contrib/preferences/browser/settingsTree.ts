@@ -1,0 +1,141 @@
+import "./media/settingsTree.css";
+import type { ObjectTreeNode } from "../../../../base/browser/ui/tree/objectTreeModel.js";
+import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import type { SettingsTreeElement, SettingsTreeGroup, SettingsTreeItem, SettingsTreeModel } from "./settingsTreeModels.js";
+
+export interface SettingsTreeOptions<T> {
+  readonly ownerDocument: Document;
+  readonly model: SettingsTreeModel<T>;
+  readonly rootClassName: string;
+  readonly groupClassName: string;
+  readonly groupDescriptionClassName: string;
+  readonly itemsClassName: string;
+  readonly renderItem: (item: SettingsTreeItem<T>) => HTMLElement;
+  readonly updateItem?: (item: SettingsTreeItem<T>, element: HTMLElement) => void;
+  readonly disposeItem?: (item: SettingsTreeItem<T>, element: HTMLElement) => void;
+}
+
+interface RenderedSettingsGroup<T> {
+  readonly kind: "group";
+  readonly element: HTMLElement;
+  readonly heading: HTMLHeadingElement;
+  readonly description: HTMLParagraphElement;
+  readonly items: HTMLDivElement;
+  group: SettingsTreeGroup;
+}
+
+interface RenderedSettingsItem<T> {
+  readonly kind: "item";
+  readonly element: HTMLElement;
+  item: SettingsTreeItem<T>;
+}
+
+type RenderedSettingsNode<T> = RenderedSettingsGroup<T> | RenderedSettingsItem<T>;
+
+/**
+ * Keyed Settings renderer that leaves interactive item content to its domain.
+ *
+ * Stable model IDs retain item DOM, focus, and control-local state across
+ * filtering, sorting, and structural updates. This specialized renderer does
+ * not nest Settings inputs, selects, or buttons inside an interactive tree row.
+ */
+export class SettingsTree<T> extends DisposableOwner {
+  readonly element: HTMLDivElement;
+  readonly model: SettingsTreeModel<T>;
+  private readonly options: SettingsTreeOptions<T>;
+  private readonly rendered = new Map<string, RenderedSettingsNode<T>>();
+
+  constructor(options: SettingsTreeOptions<T>) {
+    super();
+    this.options = options;
+    this.model = options.model;
+    this.element = options.ownerDocument.createElement("div");
+    this.element.className = `zeta-settings-tree ${options.rootClassName}`;
+    this.own(options.model.onDidChange(() => this.render()));
+    this.defer(() => {
+      for (const rendered of this.rendered.values()) this.disposeRenderedNode(rendered);
+      this.rendered.clear();
+      this.element.remove();
+    });
+    this.render();
+  }
+
+  getItemElement(id: string): HTMLElement | undefined {
+    const rendered = this.rendered.get(id);
+    return rendered?.kind === "item" ? rendered.element : undefined;
+  }
+
+  setQuery(query: string): void {
+    this.model.setQuery(query);
+  }
+
+  private render(): void {
+    const children = this.options.model.visibleChildren.map((node) => this.renderNode(node));
+    this.element.replaceChildren(...children);
+    for (const [id, rendered] of this.rendered) {
+      if (this.options.model.has(id)) continue;
+      this.disposeRenderedNode(rendered);
+      this.rendered.delete(id);
+    }
+  }
+
+  private renderNode(node: ObjectTreeNode<SettingsTreeElement<T>>): HTMLElement {
+    return node.element.kind === "item"
+      ? this.renderItem(node.element)
+      : this.renderGroup(node, node.element);
+  }
+
+  private renderItem(item: SettingsTreeItem<T>): HTMLElement {
+    const previous = this.rendered.get(item.id);
+    if (previous?.kind === "item") {
+      previous.item = item;
+      this.options.updateItem?.(item, previous.element);
+      return previous.element;
+    }
+    if (previous) this.disposeRenderedNode(previous);
+    const element = this.options.renderItem(item);
+    element.dataset.settingsTreeItemId = item.id;
+    this.rendered.set(item.id, { kind: "item", element, item });
+    return element;
+  }
+
+  private renderGroup(node: ObjectTreeNode<SettingsTreeElement<T>>, group: SettingsTreeGroup): HTMLElement {
+    const previous = this.rendered.get(group.id);
+    let rendered: RenderedSettingsGroup<T>;
+    if (previous?.kind === "group") {
+      rendered = previous;
+      rendered.group = group;
+    } else {
+      if (previous) this.disposeRenderedNode(previous);
+      rendered = this.createGroup(group);
+      this.rendered.set(group.id, rendered);
+    }
+    rendered.heading.textContent = group.title;
+    rendered.description.textContent = group.description;
+    rendered.element.classList.toggle("collapsed", node.collapsed);
+    rendered.element.dataset.settingsTreeGroupId = group.id;
+    const children = node.collapsed
+      ? []
+      : node.children.filter((child) => child.visible).map((child) => this.renderNode(child));
+    rendered.items.replaceChildren(...children);
+    return rendered.element;
+  }
+
+  private createGroup(group: SettingsTreeGroup): RenderedSettingsGroup<T> {
+    const document = this.element.ownerDocument;
+    const element = document.createElement("section");
+    element.className = this.options.groupClassName;
+    const heading = document.createElement("h4");
+    const description = document.createElement("p");
+    description.className = this.options.groupDescriptionClassName;
+    const items = document.createElement("div");
+    items.className = this.options.itemsClassName;
+    element.append(heading, description, items);
+    return { kind: "group", element, heading, description, items, group };
+  }
+
+  private disposeRenderedNode(rendered: RenderedSettingsNode<T>): void {
+    if (rendered.kind === "item") this.options.disposeItem?.(rendered.item, rendered.element);
+    rendered.element.remove();
+  }
+}

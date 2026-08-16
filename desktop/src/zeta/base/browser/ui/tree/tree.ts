@@ -2,6 +2,23 @@ import { addDisposableListener, isHTMLElement, stopEvent } from "../../dom.js";
 import { Emitter, type Event } from "../../../common/event.js";
 import { DisposableOwner } from "../../../common/lifecycle.js";
 
+export const TreeVisibility = Object.freeze({
+  Hidden: "hidden",
+  Visible: "visible",
+  Recurse: "recurse",
+} as const);
+
+export type TreeVisibility = typeof TreeVisibility[keyof typeof TreeVisibility];
+export type TreeFilterResult = boolean | TreeVisibility;
+
+export interface TreeFilter<T> {
+  filter(element: T, parentVisibility: TreeVisibility): TreeFilterResult;
+}
+
+export interface TreeSorter<T> {
+  compare(left: T, right: T): number;
+}
+
 export type TreeIndentGuides = "none" | "onHover" | "always";
 
 export interface TreeTwistieState {

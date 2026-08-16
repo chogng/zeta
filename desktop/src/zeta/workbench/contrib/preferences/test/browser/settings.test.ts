@@ -58,6 +58,8 @@ const { WorkbenchThemesRegistry } = await import("../../../../../workbench/commo
 const { UnavailableUserThemeService } = await import("../../../../../workbench/common/userThemes.js");
 const { WorkbenchConfigurationService } = await import("../../../../../workbench/services/configuration/browser/configurationService.js");
 const { SettingsEditorContribution } = await import("../../../../../workbench/contrib/preferences/browser/settingsEditor.contribution.js");
+const { SettingsTree } = await import("../../../../../workbench/contrib/preferences/browser/settingsTree.js");
+const { SettingsTreeModel } = await import("../../../../../workbench/contrib/preferences/browser/settingsTreeModels.js");
 const { CommandService } = await import("../../../../../workbench/services/commands/common/commandService.js");
 const { BrowserKeyboardLayoutService } = await import("../../../../../workbench/services/keybinding/browser/keyboardLayoutService.js");
 const { WorkbenchKeybindingService } = await import("../../../../../workbench/services/keybinding/browser/keybindingService.js");
@@ -83,6 +85,70 @@ function chooseSettingOption(root: HTMLElement, key: string, label: string): voi
   assert.ok(option);
   option.click();
 }
+
+test("Settings tree renders validated group and item identities", () => {
+  using disposables = new DisposableStore();
+  const ownerDocument = browserEnvironment.window.document;
+  const model = disposables.add(new SettingsTreeModel<string>());
+  model.setChildren([{
+    element: { kind: "group", id: "appearance.colors", title: "Colors", description: "Choose the active color scheme." },
+    children: [
+      { element: { kind: "item", id: "appearance.colors.theme", title: "Theme", description: "Choose a theme.", value: "Theme" } },
+      { element: { kind: "item", id: "appearance.colors.font", title: "Font family", description: "Choose a UI font.", value: "Font" } },
+    ],
+  }]);
+  const disposedItems: string[] = [];
+  const renderer = disposables.add(new SettingsTree({
+    ownerDocument,
+    model,
+    rootClassName: "test-settings-tree",
+    groupClassName: "test-settings-group",
+    groupDescriptionClassName: "test-settings-group-description",
+    itemsClassName: "test-settings-items",
+    renderItem: (item) => {
+      const element = ownerDocument.createElement("article");
+      element.textContent = item.value;
+      return element;
+    },
+    updateItem: (item, element) => { element.textContent = item.value; },
+    disposeItem: (item) => disposedItems.push(item.id),
+  }));
+
+  assert.equal(renderer.element.classList.contains("zeta-settings-tree"), true);
+  assert.equal(renderer.element.querySelector<HTMLElement>("[data-settings-tree-group-id]")?.dataset.settingsTreeGroupId, "appearance.colors");
+  assert.equal(renderer.element.querySelector<HTMLElement>("[data-settings-tree-item-id]")?.dataset.settingsTreeItemId, "appearance.colors.theme");
+  assert.equal(renderer.element.querySelector("article")?.textContent, "Theme");
+  assert.equal(renderer.element.querySelectorAll("article").length, 2);
+  assert.equal(model.getNode("appearance.colors.theme")?.id, "appearance.colors.theme");
+  assert.equal(model.getParent("appearance.colors.theme")?.id, "appearance.colors");
+  assert.equal(model.getNode("appearance.colors")?.collapsible, false);
+  const themeElement = renderer.getItemElement("appearance.colors.theme");
+  model.setQuery("font family");
+  assert.deepEqual(model.visibleItems.map((item) => item.id), ["appearance.colors.font"]);
+  assert.equal(model.countVisibleItems("appearance.colors"), 1);
+  assert.equal(renderer.element.querySelector("article")?.textContent, "Font");
+  model.setQuery("theme");
+  assert.equal(renderer.getItemElement("appearance.colors.theme"), themeElement);
+  model.setQuery("");
+  assert.equal(renderer.element.querySelectorAll("article").length, 2);
+  model.setNodeChildren("appearance.colors", [{
+    element: { kind: "item", id: "appearance.colors.theme", title: "Theme", description: "Choose a theme.", value: "Updated Theme" },
+  }]);
+  assert.equal(renderer.getItemElement("appearance.colors.theme"), themeElement);
+  assert.equal(themeElement?.textContent, "Updated Theme");
+  assert.deepEqual(disposedItems, ["appearance.colors.font"]);
+  assert.throws(() => model.setChildren([
+    { element: { kind: "item", id: "duplicate", title: "One", description: "", value: "one" } },
+    { element: { kind: "item", id: "duplicate", title: "Two", description: "", value: "two" } },
+  ]), /Duplicate tree node ID/);
+  assert.throws(() => model.setChildren([{
+    element: { kind: "group", id: "empty-title", title: "", description: "" },
+  }]), /must have a title/);
+  assert.throws(() => model.setChildren([{
+    element: { kind: "item", id: "parent-item", title: "Parent item", description: "", value: "parent" },
+    children: [{ element: { kind: "item", id: "child-item", title: "Child item", description: "", value: "child" } }],
+  }]), /must not have children/);
+});
 
 test("Settings overlay opens, closes, and restores focus", () => {
   using disposables = new DisposableStore();

@@ -2,6 +2,8 @@ import "./media/sectionOverviewSettings.css";
 import { addDisposableListener } from "../../../../base/browser/dom.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import type { ISettingsService } from "../../../services/preferences/common/settings.js";
+import { SettingsTree } from "./settingsTree.js";
+import { SettingsTreeModel, type SettingsTreeNode } from "./settingsTreeModels.js";
 
 type OverviewStatusTone = "available" | "managed" | "unavailable";
 
@@ -15,6 +17,7 @@ interface OverviewItem {
 }
 
 interface OverviewGroup {
+  readonly id: string;
   readonly title: string;
   readonly description: string;
   readonly items: readonly OverviewItem[];
@@ -23,6 +26,7 @@ interface OverviewGroup {
 const SectionOverviewContent: Readonly<Record<string, readonly OverviewGroup[]>> = Object.freeze({
   chat: [
     {
+      id: "conversations",
       title: "Conversations",
       description: "Chat state is owned by Sessions and the active conversation.",
       items: [
@@ -31,6 +35,7 @@ const SectionOverviewContent: Readonly<Record<string, readonly OverviewGroup[]>>
       ],
     },
     {
+      id: "models-and-context",
       title: "Models and context",
       description: "Model choice, connected sources, and retrieved context are managed by their owning capabilities.",
       items: [
@@ -41,6 +46,7 @@ const SectionOverviewContent: Readonly<Record<string, readonly OverviewGroup[]>>
   ],
   user: [
     {
+      id: "local-profile",
       title: "Local profile",
       description: "Zeta keeps application preferences and keybindings in the active local profile.",
       items: [
@@ -49,6 +55,7 @@ const SectionOverviewContent: Readonly<Record<string, readonly OverviewGroup[]>>
       ],
     },
     {
+      id: "personalization",
       title: "Personalization",
       description: "Personal packages and presentation remain independent of one Workspace.",
       items: [
@@ -59,6 +66,7 @@ const SectionOverviewContent: Readonly<Record<string, readonly OverviewGroup[]>>
   ],
   agents: [
     {
+      id: "agent-behavior",
       title: "Agent behavior",
       description: "Agent execution composes rules, skills, tools, and verified Workspace context.",
       items: [
@@ -70,6 +78,7 @@ const SectionOverviewContent: Readonly<Record<string, readonly OverviewGroup[]>>
   ],
   models: [
     {
+      id: "model-selection",
       title: "Model selection",
       description: "Each consumer owns the model operation it performs; there is no single global model that silently overrides every workflow.",
       items: [
@@ -78,6 +87,7 @@ const SectionOverviewContent: Readonly<Record<string, readonly OverviewGroup[]>>
       ],
     },
     {
+      id: "providers",
       title: "Providers",
       description: "Provider packages own authentication and endpoint-specific behavior.",
       items: [
@@ -88,6 +98,7 @@ const SectionOverviewContent: Readonly<Record<string, readonly OverviewGroup[]>>
   ],
   git: [
     {
+      id: "source-control",
       title: "Source control",
       description: "Git operations are scoped to the active Workspace and executed through the Workspace Git service.",
       items: [
@@ -99,6 +110,7 @@ const SectionOverviewContent: Readonly<Record<string, readonly OverviewGroup[]>>
   ],
   worktrees: [
     {
+      id: "worktree-lifecycle",
       title: "Worktree lifecycle",
       description: "Worktree creation and cleanup require a dedicated repository-aware provider.",
       items: [
@@ -109,6 +121,7 @@ const SectionOverviewContent: Readonly<Record<string, readonly OverviewGroup[]>>
   ],
   rules: [
     {
+      id: "instruction-sources",
       title: "Instruction sources",
       description: "Rules are durable instructions, not hidden prompt switches.",
       items: [
@@ -120,6 +133,7 @@ const SectionOverviewContent: Readonly<Record<string, readonly OverviewGroup[]>>
   ],
   "skills-and-subagents": [
     {
+      id: "skills",
       title: "Skills",
       description: "Enabled Skills project callable entries directly into the unified slash-command panel.",
       items: [
@@ -131,6 +145,7 @@ const SectionOverviewContent: Readonly<Record<string, readonly OverviewGroup[]>>
   ],
   "tools-and-mcps": [
     {
+      id: "tool-catalog",
       title: "Tool catalog",
       description: "Tools come from the built-in runtime and enabled plugin capabilities.",
       items: [
@@ -142,6 +157,7 @@ const SectionOverviewContent: Readonly<Record<string, readonly OverviewGroup[]>>
   ],
   hooks: [
     {
+      id: "workflow-automation",
       title: "Workflow automation",
       description: "Hooks can execute consequential actions and therefore require an explicit owner, event contract, and permission model.",
       items: [
@@ -152,6 +168,7 @@ const SectionOverviewContent: Readonly<Record<string, readonly OverviewGroup[]>>
   ],
   browser: [
     {
+      id: "web-interactions",
       title: "Web interactions",
       description: "The in-app browser runs behind a host-owned navigation and automation boundary.",
       items: [
@@ -163,6 +180,7 @@ const SectionOverviewContent: Readonly<Record<string, readonly OverviewGroup[]>>
   ],
   tabs: [
     {
+      id: "editor-tabs",
       title: "Editor tabs",
       description: "Tabs reflect the retained Editor Group state rather than creating duplicate editor models.",
       items: [
@@ -174,6 +192,7 @@ const SectionOverviewContent: Readonly<Record<string, readonly OverviewGroup[]>>
   ],
   experimental: [
     {
+      id: "opt-in-capabilities",
       title: "Opt-in capabilities",
       description: "Experimental behavior remains behind an explicit owner and does not silently change stable workflows.",
       items: [
@@ -184,6 +203,7 @@ const SectionOverviewContent: Readonly<Record<string, readonly OverviewGroup[]>>
   ],
   documentation: [
     {
+      id: "document-formats",
       title: "Document formats",
       description: "Documentation support is selected by resource type and installed language capabilities.",
       items: [
@@ -202,31 +222,24 @@ export class SectionOverviewSettingsPane extends DisposableOwner {
 
   constructor(ownerDocument: Document, sectionId: string, settingsService: ISettingsService) {
     super();
-    this.element = ownerDocument.createElement("div");
-    this.element.className = "zeta-section-overview-settings";
     const groups = SectionOverviewContent[sectionId];
     if (!groups) throw new RangeError(`No Settings overview content is registered for '${sectionId}'`);
-    for (const group of groups) this.element.append(this.renderGroup(group, settingsService));
+    const model = this.own(new SettingsTreeModel<OverviewItem>());
+    model.setChildren(groups.map((group) => this.groupNode(sectionId, group)));
+    const tree = this.own(new SettingsTree({
+      ownerDocument,
+      model,
+      rootClassName: "zeta-section-overview-settings",
+      groupClassName: "zeta-settings-overview-group",
+      groupDescriptionClassName: "zeta-settings-overview-group-description",
+      itemsClassName: "zeta-settings-overview-items",
+      renderItem: (item) => this.renderItem(item.value, ownerDocument, settingsService),
+    }));
+    this.element = tree.element;
   }
 
-  private renderGroup(group: OverviewGroup, settingsService: ISettingsService): HTMLElement {
-    const document = this.element.ownerDocument;
-    const section = document.createElement("section");
-    section.className = "zeta-settings-overview-group";
-    const heading = document.createElement("h4");
-    heading.textContent = group.title;
-    const description = document.createElement("p");
-    description.className = "zeta-settings-overview-group-description";
-    description.textContent = group.description;
-    const items = document.createElement("div");
-    items.className = "zeta-settings-overview-items";
-    for (const item of group.items) items.append(this.renderItem(item, settingsService));
-    section.append(heading, description, items);
-    return section;
-  }
-
-  private renderItem(item: OverviewItem, settingsService: ISettingsService): HTMLElement {
-    const document = this.element.ownerDocument;
+  private renderItem(item: OverviewItem, ownerDocument: Document, settingsService: ISettingsService): HTMLElement {
+    const document = ownerDocument;
     const element = document.createElement("article");
     element.className = "zeta-settings-overview-item";
     const copy = document.createElement("div");
@@ -252,6 +265,23 @@ export class SectionOverviewSettingsPane extends DisposableOwner {
       element.append(action);
     }
     return element;
+  }
+
+  private groupNode(sectionId: string, group: OverviewGroup): SettingsTreeNode<OverviewItem> {
+    const groupId = `${sectionId}.group.${group.id}`;
+    return {
+      element: { kind: "group", id: groupId, title: group.title, description: group.description },
+      children: group.items.map((item, itemIndex): SettingsTreeNode<OverviewItem> => ({
+        element: {
+          kind: "item",
+          id: `${groupId}.item.${itemIndex}`,
+          title: item.title,
+          description: item.description,
+          keywords: [item.status, item.actionLabel ?? ""],
+          value: item,
+        },
+      })),
+    };
   }
 }
 

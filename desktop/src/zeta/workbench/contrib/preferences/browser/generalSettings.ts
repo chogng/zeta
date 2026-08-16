@@ -7,6 +7,8 @@ import { AccessibilityConfiguration, type AccessibilityReductionConfiguration, t
 import type { IConfigurationKey, IConfigurationService } from "../../../../platform/configuration/common/configurationService.js";
 import { HoverConfiguration, MaximumHoverDelay, MinimumHoverDelay } from "../../../../platform/hover/common/hoverService.js";
 import { MaximumSashHoverDelay, MaximumSashSize, MinimumSashHoverDelay, MinimumSashSize, SashConfiguration } from "../../sash/common/sash.js";
+import { SettingsTree } from "./settingsTree.js";
+import { SettingsTreeModel, type SettingsTreeNode } from "./settingsTreeModels.js";
 
 type GeneralControl = HTMLInputElement | SelectBox;
 
@@ -20,8 +22,9 @@ export class GeneralSettingsPane extends DisposableOwner {
     super();
     this.element = ownerDocument.createElement("div");
     this.element.className = "zeta-general-settings";
-    this.element.append(
-      this.createGroup("Accessibility", "Adapt interaction and presentation to accessibility needs.", [
+    const model = this.own(new SettingsTreeModel<HTMLElement>());
+    model.setChildren([
+      this.createGroup("accessibility", "Accessibility", "Adapt interaction and presentation to accessibility needs.", [
         this.createSelectSetting({
           key: AccessibilityConfiguration.editorAccessibilitySupport,
           label: "Screen reader optimization",
@@ -42,13 +45,23 @@ export class GeneralSettingsPane extends DisposableOwner {
         }),
         this.createToggleSetting(AccessibilityConfiguration.underlineLinks, "Always underline links", "Keep link affordances visible without requiring hover or focus."),
       ]),
-      this.createGroup("Interaction", "Tune common pointer feedback and resize affordances.", [
+      this.createGroup("interaction", "Interaction", "Tune common pointer feedback and resize affordances.", [
         this.createNumberSetting(HoverConfiguration.delay, "Hover delay", "Milliseconds before standard managed hovers appear.", MinimumHoverDelay, MaximumHoverDelay),
         this.createNumberSetting(HoverConfiguration.reducedDelay, "Fast hover delay", "Milliseconds used for controls that request reduced-delay hover feedback.", MinimumHoverDelay, MaximumHoverDelay),
         this.createNumberSetting(SashConfiguration.size, "Resize handle size", "Width in pixels of Workbench resize handles.", MinimumSashSize, MaximumSashSize),
         this.createNumberSetting(SashConfiguration.hoverDelay, "Resize handle hover delay", "Milliseconds before resize handles show hover feedback.", MinimumSashHoverDelay, MaximumSashHoverDelay),
       ]),
-    );
+    ]);
+    const tree = this.own(new SettingsTree({
+      ownerDocument,
+      model,
+      rootClassName: "zeta-general-settings-tree",
+      groupClassName: "zeta-general-settings-group",
+      groupDescriptionClassName: "zeta-general-settings-group-description",
+      itemsClassName: "zeta-general-settings-list",
+      renderItem: (item) => item.value,
+    }));
+    this.element.append(tree.element);
     this.status = ownerDocument.createElement("p");
     this.status.className = "zeta-general-settings-status";
     this.status.setAttribute("role", "status");
@@ -58,20 +71,29 @@ export class GeneralSettingsPane extends DisposableOwner {
     this.own(configurationService.onDidChangeConfiguration(() => this.syncControls()));
   }
 
-  private createGroup(title: string, description: string, settings: readonly HTMLElement[]): HTMLElement {
-    const document = this.element.ownerDocument;
-    const group = document.createElement("section");
-    group.className = "zeta-general-settings-group";
-    const heading = document.createElement("h4");
-    heading.textContent = title;
-    const hint = document.createElement("p");
-    hint.className = "zeta-general-settings-group-description";
-    hint.textContent = description;
-    const list = document.createElement("div");
-    list.className = "zeta-general-settings-list";
-    list.append(...settings);
-    group.append(heading, hint, list);
-    return group;
+  private createGroup(id: string, title: string, description: string, settings: readonly HTMLElement[]): SettingsTreeNode<HTMLElement> {
+    const groupId = `general.group.${id}`;
+    return {
+      element: { kind: "group", id: groupId, title, description },
+      children: settings.map((setting, index) => this.createTreeItem(groupId, setting, index)),
+    };
+  }
+
+  private createTreeItem(groupId: string, element: HTMLElement, index: number): SettingsTreeNode<HTMLElement> {
+    const configurationKey = element.querySelector<HTMLElement>("[data-configuration-key]")?.dataset.configurationKey;
+    const title = element.querySelector(".zeta-general-setting-title")?.textContent?.trim();
+    const description = element.querySelector(".zeta-general-setting-description")?.textContent?.trim() ?? "";
+    if (!title) throw new TypeError(`General setting '${configurationKey ?? index}' must have a title`);
+    return {
+      element: {
+        kind: "item",
+        id: `${groupId}.item.${configurationKey ?? index}`,
+        title,
+        description,
+        keywords: configurationKey ? [configurationKey] : undefined,
+        value: element,
+      },
+    };
   }
 
   private createToggleSetting(key: IConfigurationKey<boolean>, label: string, description: string): HTMLElement {
