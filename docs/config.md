@@ -6,7 +6,8 @@
 > Provider map、standalone MCP declaration、Skill source/per-Skill enablement、Workspace TOML
 > read-only document、exact Plugin request、declarative Hook、User Workspace trust decision 和
 > scoped resolution、Tool Search 词法/混合 embedding 模式选择、User execution-policy rule
-> persistence 与 Workspace restrictive rule intent 已实现。
+> persistence、Workspace restrictive rule intent，以及 Desktop/Zeta Code/zeterm 的 typed
+> `products.*` preference 已实现。
 > Local App Server 在 profile 下使用
 > `config.toml` 与 `state.sqlite3`，并在提交后原子切换未来的 model、Skill 与 MCP Tool safe point；
 > 已 prepare 的 Tool Call 保留旧 generation。Plugin contribution、grant 和完整环境组合仍是后续
@@ -71,8 +72,8 @@ Skill catalog、credential 和 action policy 继续由各自领域拥有。App S
 
 | Authority | 拥有 | 不拥有 |
 | --- | --- | --- |
-| User Config authority | Agent 默认值、Provider 配置、独立 MCP server、Skill source、Plugin request、Hook declaration、execution-policy rules、按 canonical root identity 的 Workspace trust decision | UI/device 偏好、installed Plugin package、live connection、Hook execution、secret、runtime health |
-| Desktop device preference authority | theme、zoom、window/device UI 偏好 | Agent/Provider/MCP/Skill desired config、Session/Thread |
+| User Config authority | Agent 默认值、Provider 配置、独立 MCP server、Skill source、Plugin request、Hook declaration、execution-policy rules、按 canonical root identity 的 Workspace trust decision，以及 `products.*` 强类型产品偏好 | installed Plugin package、live connection、Hook execution、secret、runtime health、窗口位置 |
+| Product services distribution authority | Marketplace endpoint、trusted root、刷新策略、允许的 publisher、公开 OAuth client/broker 输入 | 用户偏好、secret、安装状态、catalog 内容、运行时连接状态 |
 | Workspace config document | Workspace Agent 默认值、独立 MCP 声明、Plugin 请求、Workspace Skill source、Hook 请求、只收紧的 execution-policy rules | 自动安装、扩权 grant、Hook 执行、credential value、运行时状态 |
 | Plugin authority | installed exact package、effective activation、activation grant、credential-slot binding、rollback | TOML request、MCP session、Skill catalog、per-call approval |
 | Domain auth authority | credential type、refresh、scope、credential revision | 普通配置、Plugin manifest、Thread history |
@@ -122,7 +123,7 @@ ResolvedConfigSnapshot
 
 | 配置 | 允许的 source | 规则 |
 | --- | --- | --- |
-| Theme/UI preference | Desktop device authority | 不进入 Rust `UserConfigDocument`，Workspace、Session 和 launch 不能覆盖 |
+| 产品 Theme/UI preference | User `products.desktop/code/zeterm` | 进入 Rust `UserConfigDocument`；Workspace、Session 和 launch 不能覆盖，主题文件内容仍留在 device root |
 | Preferred model | User、Workspace、Session、launch | 只影响下一个 model safe point |
 | Provider endpoint/profile | User、host | Workspace 不能静默替换认证或网络边界 |
 | Standalone MCP server | User、Workspace | Workspace declaration 需要 trust/grant 后才能启动 |
@@ -147,6 +148,7 @@ pub struct UserConfigDocument {
     pub skills: SkillsConfig,
     pub plugins: PluginsConfig,
     pub hooks: HooksConfig,
+    pub products: ProductsConfig,
     pub tool_search: ToolSearchConfig,
     pub exec_policy: UserExecPolicyConfig,
     pub workspace_trust: WorkspaceTrustConfig,
@@ -161,6 +163,23 @@ pub struct WorkspaceConfigDocument {
     pub exec_policy: WorkspaceExecPolicyConfig,
 }
 ```
+
+产品偏好使用稳定 namespace，而不是自由键值表：
+
+```toml
+[products.desktop]
+colorTheme = "zeta-dark"
+sashSize = 8
+
+[products.code]
+colorTheme = "zeta-code-dark"
+
+[products.zeterm]
+colorTheme = "zeta-light"
+```
+
+未出现的产品或字段继续使用产品默认值；未知字段、越界数值和含空白的 theme ID 会使整个外部编辑
+fail closed，不会部分应用。
 
 `UserExecPolicyConfig` 持久化 typed `ExecPolicyRule`；`UserConfigCommand::UpsertExecPolicyRule` 和
 `RemoveExecPolicyRule` 走同一 expected-revision、receipt 与 atomic TOML replacement 路径。
@@ -183,9 +202,16 @@ Config reconcile、信任 gate 与 runtime composition，当前尚未把进程�
 `TurnCompleted` 是观察点，不能倒转已经提交的结果。`TurnCompleted` 在 durable completion 后
 best-effort 执行，全部安全点遵守 cancellation，并在配置变更后热替换未来调用读取的快照。
 
-Theme 已从 Rust Config schema、command 和 App Server Config DTO 中移除。Desktop device
-配置只拥有 device/UI preference；它不能再作为 Agent、Provider、MCP、Skill、
-Session 或 Thread 的第二 authority。
+产品主题和 Desktop accessibility/hover/sash 偏好由 Rust `ProductsConfig`、typed command 与 App
+Server Config DTO 统一承载。Desktop 原有 `configuration.json` 的受支持键在首次连接时迁移；TUI
+和 zeterm 直接消费 `config/read.products`。主题 JSON 内容、窗口位置和运行时 UI 状态不进入 Config，
+也不能成为 Agent、Provider、MCP、Skill、Session 或 Thread 的第二 authority。
+
+发行版的 `product-services.json` 也不进入 User Config。它是 Desktop、`zeta code`/TUI、zeterm
+和独立 `zeta-server` 共同发现的只读 host input，并由每个产品宿主显式注入 App Server。普通用户
+设置继续统一写入 profile 的 `config.toml`；产品服务文件只选择发行信任和公共服务接入，不能保存
+token、安装列表或用户期望状态。因而“统一 Settings”指统一 typed Config API 和作用域语义，不是把
+所有 authority 递归合并进一个 JSON。
 
 所有 section 必须是 typed schema。禁止使用以下通用逃生口：
 
@@ -457,7 +483,7 @@ resolved sources
 
 | 类别 | 方法示例 | Authority/语义 |
 | --- | --- | --- |
-| Ordinary Config | `config/read`、`config/update`、`config/changed` | Config authority；commit notification 携带 revision/generation，不包含 theme/UI device preference |
+| Ordinary Config | `config/read`、`config/update`、`config/changed` | Config authority；snapshot 包含 `products.*`，commit notification 仅携带 revision/generation |
 | Provider Config | `provider/configure`、`provider/remove` | Config authority 的 Provider section |
 | Standalone MCP Config | `mcp/server/upsert`、`mcp/server/remove`、`mcp/server/enablement/set` | Config authority 的 MCP section（已实现 desired config） |
 | MCP Runtime | `mcp/server/connect`、`mcp/server/disconnect`、`mcp/server/status` | process-local lifecycle intent 与 active runtime 的 redacted projection（已实现）；不改变 Config revision |
@@ -620,7 +646,9 @@ Workspace Config → grant or secret authority
 ## 15. TOML 权威、SQLite 状态与配置档案边界
 
 本地 host 解析一个用户级 `profile_root`。`ZETA_PROFILE_ROOT` 显式覆盖；未设置时使用操作系统
-的用户 state 目录。切换 workspace 不会切换用户 Config/Session/Thread authority。
+的用户 state 目录。Zeta Desktop 的 `userData/state`、Zeta Code/TUI 和 zeterm 的
+`local_profile_root()` 在默认发行配置中解析到同一目录，因此三个产品读取同一个 `config.toml`；
+显式 profile override 会作为整体隔离。切换 workspace 不会切换用户 Config/Session/Thread authority。
 
 ```text
 <profile_root>/

@@ -17,19 +17,27 @@ export const NoWorkbenchPartFrameInsets: WorkbenchPartFrameInsets = {
   left: 0,
 };
 
+export interface WorkbenchPartViewOptions {
+  /** Whether the hosting Grid may snap this Part closed through its Sash. */
+  readonly snap?: boolean;
+}
+
 /** Adapts one Workbench Part to the generic Grid view contract. */
 export class WorkbenchPartView<TPartId extends string = WorkbenchPartId> {
   readonly frame: HTMLDivElement;
+  readonly snap: boolean;
   private frameInsets = NoWorkbenchPartFrameInsets;
 
   constructor(
     readonly partId: TPartId,
     readonly part: WorkbenchPart,
+    options: WorkbenchPartViewOptions = {},
   ) {
     const frame = part.element.ownerDocument.createElement("div");
     this.frame = frame;
     frame.className = "zeta-workbench-part-frame";
     frame.append(part.element);
+    this.snap = options.snap === true;
   }
 
   get element(): HTMLElement {

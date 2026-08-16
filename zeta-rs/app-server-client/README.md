@@ -20,6 +20,11 @@ consumer 的启动入口。新的 CLI/TUI 交互统一通过 `AppServerSession` 
 必须显式调用 `with_session_state_mode(SessionStateMode::Ephemeral)`；该模式只替换
 Session/Thread coordinator 的存储，不改变 Config、Workspace、Tool 或 protocol contract。
 
+发行服务发现由 `discovered_product_services_path` / `load_discovered_product_services` 统一实现，
+但不会自动进入 embedded composition。Desktop/server、`zeta code`/TUI 与 zeterm 等产品宿主必须
+显式调用 `InProcessClientOptions::with_discovered_product_services`；Marketplace trust/cache 边界见
+[`marketplace-integration.md`](../../docs/marketplace-integration.md)。
+
 | 能力 | Owned session | Synchronous adapter |
 | --- | --- | --- |
 | ready initialize/schema gate | ✅ `start_embedded` | `start_in_process_client` 时具备 |
@@ -46,6 +51,8 @@ Session/Thread coordinator 的存储，不改变 Config、Workspace、Tool 或 p
 | `AppServerClient<T>` | typed JSON-RPC client；method 与 DTO source 仍来自 protocol crate |
 | `InProcessClientOptions::with_session_state_mode` | 明确选择 profile durable history 或 process-local ephemeral Session/Thread state |
 | `InProcessClientOptions::with_model_operation_client` | embedded host/test 注入离线或自定义 model transport；不改变 protocol/model semantics |
+| `InProcessClientOptions::with_discovered_product_services` | 显式加载发行版 Marketplace trust/public Connector adapter；缺少发行资源时保持未注入，配置存在但无效时失败关闭 |
+| `discovered_product_services_path` | `ZETA_PRODUCT_SERVICES_PATH` 优先于 packaged resource 的统一发现规则；不读取 User Config |
 | `AppServerClient::request_session` | Session aggregate 的 canonical typed mutation request；所有 Session mutation 统一由此进入 |
 | `AppServerClient::{synchronize_language_document,close_language_document,language_hover,language_completions,language_locations}` | CLI/native consumer 通过同一 request handle 调用 App Server-owned language authority；不在 client crate 启动 LSP 或转换产品坐标 |
 | `AppServerClient::open_skill_resource` | 以 exact Skill digest 打开 package resource；bytes 仍由 connection-owned Resource API 分块读取 |
@@ -76,6 +83,7 @@ Notification 不依附 request completion；consumer 不得对 session handle �
 | `src/session_stdio.rs` | child JSONL driver、response pairing、notification decode、child lifetime 与 stream failure boundary |
 | `src/in_process.rs` | embedded composition 与 initialized connection |
 | `src/profile.rs` | `ZETA_PROFILE_ROOT` 与 host-wide default profile state path |
+| `src/product_services.rs` | 发行版 product-services 发现、优先级与 typed load；不拥有 Marketplace catalog/cache |
 | `src/lib.rs` | generic typed JSON-RPC methods、request ID/result pairing 与 public exports |
 | `src/notification.rs` | 解析 notification envelope，并把 method/payload 交给 protocol-owned canonical decoder |
 | `src/session_tests.rs` | owned lifecycle、idle wakeup、clone identity 与 shutdown contract |

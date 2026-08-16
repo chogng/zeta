@@ -63,11 +63,15 @@ test("Terminal instance list sash resizes the right column within its bounds", (
   layout.setInstanceListPresentation("hidden");
   assert.equal(panes[1]?.hidden, true);
   assert.equal(panes[0]?.style.width, "1000px");
-  assert.equal(layout.element.querySelector(":scope > .zeta-sash"), null);
+  const hiddenSash = layout.element.querySelector<HTMLElement>(":scope > .zeta-sash");
+  assert.ok(hiddenSash);
+  assert.equal(hiddenSash.classList.contains("zeta-sash-disabled"), true);
+  assert.equal(hiddenSash.getAttribute("aria-disabled"), "true");
 
   layout.setInstanceListPresentation("visible");
   assert.equal(panes[1]?.hidden, false);
   assert.equal(panes[1]?.style.width, "500px");
+  assert.equal(layout.element.querySelector(":scope > .zeta-sash"), hiddenSash);
   assert.equal(layout.element.querySelector(":scope > .zeta-sash")?.getAttribute("aria-label"), "Resize terminal instance list");
   dom.window.close();
 });

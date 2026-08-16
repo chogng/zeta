@@ -58,7 +58,9 @@ export class WorkbenchLayout
     for (const partId of workbenchPartIds) {
       this.views.set(
         partId,
-        new WorkbenchPartView(partId, requiredPart(parts, partId)),
+        new WorkbenchPartView(partId, requiredPart(parts, partId), {
+          snap: isSnappableWorkbenchPart(partId),
+        }),
       );
     }
     const initialDimension = resolveInitialDimension(
@@ -83,6 +85,10 @@ export class WorkbenchLayout
       { sashPresentation: { type: "inset", gap: PART_GUTTER_SIZE } },
     ));
     this.element.append(this.grid.element);
+    this.own(this.grid.onDidChange(() => {
+      this.projectPartFrameInsets();
+      this.publishPartVisibility();
+    }));
     if (options.storageService) {
       this.own(options.storageService.onWillSaveState(() => {
         this.saveState();
@@ -282,4 +288,11 @@ function requiredPart(
   const part = parts.get(partId);
   if (!part) throw new Error(`Workbench Part is not registered: ${partId}`);
   return part;
+}
+
+function isSnappableWorkbenchPart(partId: WorkbenchPartId): boolean {
+  return partId === "sidebar" ||
+    partId === "auxiliarybar" ||
+    partId === "agentSidebar" ||
+    partId === "panel";
 }

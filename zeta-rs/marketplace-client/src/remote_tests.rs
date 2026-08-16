@@ -1,3 +1,4 @@
+use std::time::Duration;
 use tempfile::TempDir;
 use url::Url;
 
@@ -41,10 +42,22 @@ fn production_registry_exposes_only_pinned_remote_endpoints() {
 
     assert_eq!(config.metadata_base_url(), &metadata);
     assert_eq!(config.targets_base_url(), &targets);
+    assert_eq!(config.catalog_refresh_interval(), Duration::from_secs(300));
     assert!(
         config
             .clone()
             .with_allowed_publishers(["example".to_owned(), "example".to_owned()])
             .is_err()
+    );
+    assert!(
+        config
+            .clone()
+            .with_catalog_refresh_interval(Duration::from_secs(30))
+            .is_err()
+    );
+    assert!(
+        config
+            .with_catalog_refresh_interval(Duration::from_secs(900))
+            .is_ok()
     );
 }

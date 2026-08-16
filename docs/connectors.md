@@ -190,6 +190,7 @@ Server safe point 和 MCP dispatch fence，不得创建第二套 Connector 状�
     "metadataBaseUrl": "https://marketplace.zeta.example/metadata/",
     "targetsBaseUrl": "https://marketplace.zeta.example/targets/",
     "trustedRoot": "marketplace-root.json",
+    "catalogRefreshIntervalSeconds": 300,
     "allowedPublishers": ["example"]
   },
   "connectorOauth": [{

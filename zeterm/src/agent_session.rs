@@ -1275,6 +1275,12 @@ impl NativeApp {
                 }
             }
             AgentSessionEvent::Configuration(configuration) => {
+                let configured_theme = configuration.products.zeterm.color_theme.clone();
+                if configured_theme != self.configured_theme {
+                    self.configured_theme = configured_theme;
+                    self.reload_theme(self.system_theme_scheme);
+                    self.rebuild_presentation_on_next_redraw();
+                }
                 self.language_server_settings.synchronize(&configuration);
                 self.language_service
                     .apply_configuration(&configuration, &self.file_editor_host);

@@ -14,7 +14,8 @@ fn product_services_loads_public_oauth_and_pins_marketplace_root() {
           "marketplaceManager": {
             "metadataBaseUrl": "https://marketplace.zeta.example/metadata/",
             "targetsBaseUrl": "https://marketplace.zeta.example/targets/",
-            "trustedRoot": "root.json"
+            "trustedRoot": "root.json",
+            "catalogRefreshIntervalSeconds": 900
           },
           "connectorOauth": [{
             "type": "githubDevice",
@@ -33,6 +34,13 @@ fn product_services_loads_public_oauth_and_pins_marketplace_root() {
     .unwrap();
 
     assert!(config.marketplace_registry().is_some());
+    assert_eq!(
+        config
+            .marketplace_registry()
+            .unwrap()
+            .catalog_refresh_interval(),
+        Duration::from_secs(900)
+    );
     assert!(matches!(
         &config.connector_oauth[0],
         ProductConnectorOAuthConfig::GitHubDevice { connector_id, config }
@@ -57,6 +65,37 @@ fn production_product_services_delegates_to_the_marketplace_manager() {
     assert_eq!(
         registry.targets_base_url().as_str(),
         "https://chogng.github.io/marketplace/targets/"
+    );
+    assert_eq!(
+        registry.catalog_refresh_interval(),
+        Duration::from_secs(300)
+    );
+}
+
+#[test]
+fn product_services_rejects_out_of_range_marketplace_refresh_intervals() {
+    let root = TempDir::new().unwrap();
+    fs::write(root.path().join("root.json"), br#"{"signed":{}}"#).unwrap();
+    fs::write(
+        root.path().join("product-services.json"),
+        r#"{
+          "schemaVersion": 1,
+          "marketplaceManager": {
+            "metadataBaseUrl": "https://marketplace.zeta.example/metadata/",
+            "targetsBaseUrl": "https://marketplace.zeta.example/targets/",
+            "trustedRoot": "root.json",
+            "catalogRefreshIntervalSeconds": 30
+          }
+        }"#,
+    )
+    .unwrap();
+
+    assert!(
+        LocalProductServicesConfig::load(
+            root.path().join("product-services.json"),
+            root.path().join("profile"),
+        )
+        .is_err()
     );
 }
 

@@ -57,6 +57,20 @@ export interface MarketplaceInstalledPackage {
   readonly capabilities: readonly MarketplaceCapabilityDescriptor[];
 }
 
+export interface MarketplaceBrowsePackage {
+  readonly summary: MarketplacePackageSummary;
+  readonly details: MarketplacePackageDetails | undefined;
+}
+
+/** Renderer-ready catalog projection retained by the Workbench Marketplace service. */
+export interface MarketplaceBrowseSnapshot {
+  readonly query: string;
+  readonly packageType: string | undefined;
+  readonly limit: number | undefined;
+  readonly packages: readonly MarketplaceBrowsePackage[];
+  readonly installed: readonly MarketplaceInstalledPackage[];
+}
+
 export type MarketplaceActivationSpec =
   | { readonly kind: "skill"; readonly contractVersion: string; readonly resource: { readonly id: string } }
   | { readonly kind: "mcp"; readonly contractVersion: string; readonly transport: { readonly type: "stdio"; readonly executable: { readonly id: string }; readonly args: readonly string[] } | { readonly type: "streamableHttp"; readonly url: string }; readonly networkHosts: readonly string[] }
@@ -72,6 +86,9 @@ export interface MarketplaceAcquiredCapability {
 
 /** Frontend Marketplace business capability, independent of distribution and package internals. */
 export interface IMarketplaceService {
+  cachedBrowse(query: string, packageType?: string, limit?: number): MarketplaceBrowseSnapshot | undefined;
+  browse(query: string, packageType?: string, limit?: number): Promise<MarketplaceBrowseSnapshot>;
+  refreshBrowse(query: string, packageType?: string, limit?: number): Promise<MarketplaceBrowseSnapshot>;
   search(query: string, packageType?: string, limit?: number): Promise<readonly MarketplacePackageSummary[]>;
   get(packageId: string, version?: string): Promise<MarketplacePackageDetails>;
   download(packageId: string, version?: string): Promise<{ readonly id: string; readonly package: MarketplacePackageRef }>;

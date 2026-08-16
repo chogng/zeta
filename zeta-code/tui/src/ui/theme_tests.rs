@@ -41,11 +41,12 @@ fn tui_projects_only_its_theme_subset_for_each_terminal_capability() {
 }
 
 #[test]
-fn theme_choices_and_selection_use_the_tui_device_preference() {
+fn theme_choices_preview_without_writing_the_legacy_device_preference() {
     let root = std::env::temp_dir().join(format!("zeta-tui-theme-command-{}", std::process::id()));
     let _ = fs::remove_dir_all(&root);
 
-    let catalog = super::theme_catalog_at(&root, ColorLevel::TrueColor, ColorScheme::Dark).unwrap();
+    let catalog =
+        super::theme_catalog_at(&root, ColorLevel::TrueColor, ColorScheme::Dark, None).unwrap();
     assert_eq!(catalog.choices.len(), 8);
     assert_eq!(catalog.choices[0].label, "Auto");
     assert_eq!(catalog.choices[0].palette_label, "GitHub Dark");
@@ -70,14 +71,21 @@ fn theme_choices_and_selection_use_the_tui_device_preference() {
         ColorScheme::Dark,
     )
     .unwrap();
-    let configuration = fs::read_to_string(root.join("configuration.json")).unwrap();
-    assert!(configuration.contains(r#""tui.colorTheme": "zeta-code-dark""#));
+    assert!(!root.join("configuration.json").exists());
+    let configured = super::theme_catalog_at(
+        &root,
+        ColorLevel::TrueColor,
+        ColorScheme::Dark,
+        Some("zeta-code-dark"),
+    )
+    .unwrap();
+    assert!(configured.choices[1].selected);
     assert!(
         super::select_theme_at(&root, "zeta-dark", ColorLevel::TrueColor, ColorScheme::Dark,)
             .is_err()
     );
 
-    fs::remove_dir_all(root).unwrap();
+    let _ = fs::remove_dir_all(root);
 }
 
 #[test]
@@ -85,7 +93,8 @@ fn ansi_modes_force_the_ansi_16_projection() {
     let root = std::env::temp_dir().join(format!("zeta-tui-ansi-theme-{}", std::process::id()));
     let _ = fs::remove_dir_all(&root);
 
-    let catalog = super::theme_catalog_at(&root, ColorLevel::TrueColor, ColorScheme::Dark).unwrap();
+    let catalog =
+        super::theme_catalog_at(&root, ColorLevel::TrueColor, ColorScheme::Dark, None).unwrap();
     let ansi = &catalog.choices[5].palette;
     assert!(!matches!(ansi.keyword, Color::Rgb(..) | Color::Indexed(..)));
     assert!(!matches!(

@@ -3,6 +3,7 @@ use std::fs;
 use std::path::Component;
 use std::path::Path;
 use std::path::PathBuf;
+use std::time::Duration;
 
 use serde::Deserialize;
 use url::Url;
@@ -56,6 +57,12 @@ impl LocalProductServicesConfig {
                     profile_root.as_ref().join("cache/marketplace"),
                 )
                 .map_err(product_config_error)?;
+                let config = match manager.catalog_refresh_interval_seconds {
+                    Some(seconds) => config
+                        .with_catalog_refresh_interval(Duration::from_secs(seconds))
+                        .map_err(product_config_error)?,
+                    None => config,
+                };
                 if manager.allowed_publishers.is_empty() {
                     Ok(config)
                 } else {
@@ -129,6 +136,8 @@ struct ProductMarketplaceManagerDocument {
     metadata_base_url: String,
     targets_base_url: String,
     trusted_root: PathBuf,
+    #[serde(default)]
+    catalog_refresh_interval_seconds: Option<u64>,
     #[serde(default)]
     allowed_publishers: Vec<String>,
 }

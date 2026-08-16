@@ -4,11 +4,9 @@ use std::path::PathBuf;
 use zeta_app_server::LocalAppServerOptions;
 use zeta_app_server::LocalProductServicesConfig;
 use zeta_app_server::open_local_app_server;
+use zeta_app_server_client::discovered_product_services_path;
 use zeta_app_server_client::local_profile_root;
-use zeta_install_context::InstallContext;
 
-const PRODUCT_SERVICES_OVERRIDE: &str = "ZETA_PRODUCT_SERVICES_PATH";
-const BUNDLED_PRODUCT_SERVICES: &str = "product-services/product-services.json";
 const WORKSPACE_TRUST_SOURCE: &str = "ZETA_WORKSPACE_TRUST_SOURCE";
 
 pub(super) fn run(arguments: Vec<String>) -> Result<(), String> {
@@ -55,7 +53,5 @@ pub(super) fn run(arguments: Vec<String>) -> Result<(), String> {
 }
 
 pub(super) fn product_services_path() -> Option<PathBuf> {
-    env::var_os(PRODUCT_SERVICES_OVERRIDE)
-        .map(PathBuf::from)
-        .or_else(|| InstallContext::current().bundled_resource(BUNDLED_PRODUCT_SERVICES))
+    discovered_product_services_path()
 }

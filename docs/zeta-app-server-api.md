@@ -719,7 +719,8 @@ exact replay 不推进 revision/generation，也不发布 change。外部 TOML �
 SQLite connection 提交也会被观察并投影。
 
 `config/read` 当前返回 Agent preference、Provider、standalone MCP、Skill source、exact Plugin
-request、declarative Hook、language-server mode/path preference、semantic CodeIndex 配置和 Tool
+request、declarative Hook、language-server mode/path preference、`products.desktop/code/zeterm`
+强类型产品偏好、semantic CodeIndex 配置和 Tool
 Search 配置，以及 User `execPolicyRules`。`toolSearch.embeddingStatus` 明确区分 `disabled`、`ready` 和带脱敏原因的
 `unavailable`；不能只根据 desired `mode` 推断 embedding 已可用。Plugin request 的 `enabled` 只表示期望参与未来 activation；
 Hook 的 `enabled` 也不表示 process 已获准或已经执行。两者的 runtime/lifecycle projection 必须由

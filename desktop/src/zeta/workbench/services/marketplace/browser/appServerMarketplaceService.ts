@@ -1,9 +1,28 @@
 import type { IMarketplaceApi } from "../../../../platform/marketplace/common/marketplaceApi.js";
-import type { IMarketplaceService, MarketplaceAcquiredCapability, MarketplaceInstalledPackage, MarketplacePackageDetails, MarketplacePackageSummary } from "../../../../platform/marketplace/common/marketplaceService.js";
+import type { IMarketplaceService, MarketplaceAcquiredCapability, MarketplaceBrowseSnapshot, MarketplaceInstalledPackage, MarketplacePackageDetails, MarketplacePackageSummary } from "../../../../platform/marketplace/common/marketplaceService.js";
 
-/** Mechanical adapter from App Server DTOs to frontend-owned Marketplace values. */
+/** App Server adapter and owner of path-free Renderer browse snapshots. */
 export class AppServerMarketplaceService implements IMarketplaceService {
+  private readonly browseSnapshots = new Map<string, MarketplaceBrowseSnapshot>();
+  private readonly browseRequests = new Map<string, Promise<MarketplaceBrowseSnapshot>>();
+  private readonly details = new Map<string, Promise<MarketplacePackageDetails>>();
+  private browseGeneration = 0;
+
   constructor(private readonly api: IMarketplaceApi) {}
+
+  cachedBrowse(query: string, packageType?: string, limit?: number): MarketplaceBrowseSnapshot | undefined {
+    return this.browseSnapshots.get(browseKey(query, packageType, limit));
+  }
+
+  browse(query: string, packageType?: string, limit?: number): Promise<MarketplaceBrowseSnapshot> {
+    return Promise.resolve(this.cachedBrowse(query, packageType, limit) ?? this.loadBrowse(query, packageType, limit));
+  }
+
+  refreshBrowse(query: string, packageType?: string, limit?: number): Promise<MarketplaceBrowseSnapshot> {
+    const key = browseKey(query, packageType, limit);
+    this.browseSnapshots.delete(key);
+    return this.loadBrowse(query, packageType, limit);
+  }
 
   async search(query: string, packageType?: string, limit?: number): Promise<readonly MarketplacePackageSummary[]> {
     return (await this.api.search({ query, packageType: packageType ?? null, limit: limit ?? null })).packages;
@@ -17,16 +36,21 @@ export class AppServerMarketplaceService implements IMarketplaceService {
     return this.api.download({ packageId, version: version ?? null });
   }
 
-  install(packageId: string, version?: string): Promise<MarketplaceInstalledPackage> {
-    return this.api.install({ packageId, version: version ?? null });
+  async install(packageId: string, version?: string): Promise<MarketplaceInstalledPackage> {
+    const installed = await this.api.install({ packageId, version: version ?? null });
+    this.invalidateBrowse();
+    return installed;
   }
 
-  update(installationId: string, version?: string): Promise<MarketplaceInstalledPackage> {
-    return this.api.update({ installationId, version: version ?? null });
+  async update(installationId: string, version?: string): Promise<MarketplaceInstalledPackage> {
+    const installed = await this.api.update({ installationId, version: version ?? null });
+    this.invalidateBrowse();
+    return installed;
   }
 
-  uninstall(installationId: string, mode: "ifUnused" | "whenUnused" = "whenUnused"): Promise<void> {
-    return this.api.uninstall({ installationId, mode });
+  async uninstall(installationId: string, mode: "ifUnused" | "whenUnused" = "whenUnused"): Promise<void> {
+    await this.api.uninstall({ installationId, mode });
+    this.invalidateBrowse();
   }
 
   async listInstalled(): Promise<readonly MarketplaceInstalledPackage[]> {
@@ -44,4 +68,50 @@ export class AppServerMarketplaceService implements IMarketplaceService {
   openResource(leaseId: string, resourceId: string) {
     return this.api.openResource({ leaseId, resource: { id: resourceId } });
   }
+
+  private loadBrowse(query: string, packageType?: string, limit?: number): Promise<MarketplaceBrowseSnapshot> {
+    const key = browseKey(query, packageType, limit);
+    const existing = this.browseRequests.get(key);
+    if (existing) return existing;
+    const generation = this.browseGeneration;
+    let request!: Promise<MarketplaceBrowseSnapshot>;
+    request = Promise.all([
+      this.search(query, packageType, limit),
+      this.listInstalled(),
+    ]).then(async ([packages, installed]) => {
+      const browsePackages = await Promise.all(packages.map(async summary => ({
+        summary,
+        details: await this.packageDetails(summary.id, summary.version).catch(() => undefined),
+      })));
+      const snapshot = Object.freeze({ query, packageType, limit, packages: Object.freeze(browsePackages), installed: Object.freeze([...installed]) });
+      if (generation === this.browseGeneration) this.browseSnapshots.set(key, snapshot);
+      return snapshot;
+    }).finally(() => {
+      if (this.browseRequests.get(key) === request) this.browseRequests.delete(key);
+    });
+    this.browseRequests.set(key, request);
+    return request;
+  }
+
+  private packageDetails(packageId: string, version: string): Promise<MarketplacePackageDetails> {
+    const key = `${packageId}\0${version}`;
+    const existing = this.details.get(key);
+    if (existing) return existing;
+    const request = this.get(packageId, version).catch((error: unknown) => {
+      this.details.delete(key);
+      throw error;
+    });
+    this.details.set(key, request);
+    return request;
+  }
+
+  private invalidateBrowse(): void {
+    this.browseGeneration += 1;
+    this.browseSnapshots.clear();
+    this.browseRequests.clear();
+  }
+}
+
+function browseKey(query: string, packageType?: string, limit?: number): string {
+  return JSON.stringify([query, packageType ?? null, limit ?? null]);
 }

@@ -5,7 +5,6 @@ use std::io::IsTerminal;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
-use zeta_app_server::LocalProductServicesConfig;
 use zeta_app_server_client::AppServerSession;
 use zeta_app_server_client::InProcessClientOptions;
 use zeta_app_server_client::local_profile_root;
@@ -22,14 +21,10 @@ use zeta_exec::ExecRunRequest;
 use zeta_exec::ExecRunner;
 use zeta_exec::HeadlessApprovalMode;
 use zeta_exec::JsonLinesExecEventSink;
-use zeta_install_context::InstallContext;
 use zeta_protocol::SessionId;
 use zeta_protocol::ThreadId;
 
 mod remote;
-
-const PRODUCT_SERVICES_OVERRIDE: &str = "ZETA_PRODUCT_SERVICES_PATH";
-const BUNDLED_PRODUCT_SERVICES: &str = "product-services/product-services.json";
 
 fn main() {
     let mut arguments = env::args().skip(1);
@@ -73,17 +68,17 @@ fn interactive() -> Result<(), String> {
             "interactive mode requires a TTY; use `zeta ask` or `zeta exec` instead".into(),
         );
     }
-    let profile_root = local_profile_root();
     let options = InProcessClientOptions::new(
-        profile_root.clone(),
+        local_profile_root(),
         ClientInfo {
             name: "zeta-cli".into(),
             version: env!("CARGO_PKG_VERSION").into(),
         },
     )
     .with_capabilities(zeta_tui::client_capabilities())
-    .with_workspace_root(configured_workspace()?);
-    let options = with_product_services(options, &profile_root)?;
+    .with_workspace_root(configured_workspace()?)
+    .with_discovered_product_services()
+    .map_err(|error| error.to_string())?;
     let session = AppServerSession::start_embedded(options).map_err(|error| error.to_string())?;
     match zeta_tui::run(session, zeta_tui::TuiOptions::new("TUI conversation"))
         .map_err(|error| error.to_string())?
@@ -95,32 +90,6 @@ fn interactive() -> Result<(), String> {
 
 fn run_app_server(arguments: Vec<String>) -> Result<(), String> {
     zeta_server_host::run_app_server(arguments)
-}
-
-fn with_product_services(
-    options: InProcessClientOptions,
-    profile_root: &std::path::Path,
-) -> Result<InProcessClientOptions, String> {
-    match product_services_path() {
-        Some(path) => LocalProductServicesConfig::load(path, profile_root)
-            .map(|services| options.with_product_services(services))
-            .map_err(|error| error.to_string()),
-        None => Ok(options),
-    }
-}
-
-fn product_services_path() -> Option<PathBuf> {
-    select_product_services_path(
-        env::var_os(PRODUCT_SERVICES_OVERRIDE).map(PathBuf::from),
-        InstallContext::current().bundled_resource(BUNDLED_PRODUCT_SERVICES),
-    )
-}
-
-fn select_product_services_path(
-    explicit: Option<PathBuf>,
-    bundled: Option<PathBuf>,
-) -> Option<PathBuf> {
-    explicit.or(bundled)
 }
 
 fn app_server_command(arguments: Vec<String>) -> Result<(), String> {

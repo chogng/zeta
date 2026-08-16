@@ -9,6 +9,8 @@ export interface IView {
   readonly maximumWidth: number;
   readonly minimumHeight: number;
   readonly maximumHeight: number;
+  /** Whether the view can snap closed along its primary Grid axis. */
+  readonly snap?: boolean;
   readonly onDidChange?: Event<void>;
   layout(bounds: IRectangle): void;
   setVisible?(visible: boolean): void;

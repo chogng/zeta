@@ -221,4 +221,65 @@ fn apply_preferences(document: &mut UserConfigDocument, update: &PreferencesUpda
             document.agent.approval_review_model = selection.clone();
         }
     }
+    if let Some(products) = &update.products {
+        apply_product_preferences(document, products);
+    }
+}
+
+fn apply_product_preferences(
+    document: &mut UserConfigDocument,
+    update: &crate::ProductsConfigUpdate,
+) {
+    if let Some(desktop) = &update.desktop {
+        apply_patch(
+            &mut document.products.desktop.color_theme,
+            &desktop.color_theme,
+        );
+        apply_patch(
+            &mut document.products.desktop.accessibility_support,
+            &desktop.accessibility_support,
+        );
+        apply_patch(
+            &mut document.products.desktop.reduce_motion,
+            &desktop.reduce_motion,
+        );
+        apply_patch(
+            &mut document.products.desktop.reduce_transparency,
+            &desktop.reduce_transparency,
+        );
+        apply_patch(
+            &mut document.products.desktop.underline_links,
+            &desktop.underline_links,
+        );
+        apply_patch(
+            &mut document.products.desktop.hover_delay_milliseconds,
+            &desktop.hover_delay_milliseconds,
+        );
+        apply_patch(
+            &mut document.products.desktop.reduced_hover_delay_milliseconds,
+            &desktop.reduced_hover_delay_milliseconds,
+        );
+        apply_patch(&mut document.products.desktop.sash_size, &desktop.sash_size);
+        apply_patch(
+            &mut document.products.desktop.sash_hover_delay_milliseconds,
+            &desktop.sash_hover_delay_milliseconds,
+        );
+    }
+    if let Some(code) = &update.code {
+        apply_patch(&mut document.products.code.color_theme, &code.color_theme);
+    }
+    if let Some(zeterm) = &update.zeterm {
+        apply_patch(
+            &mut document.products.zeterm.color_theme,
+            &zeterm.color_theme,
+        );
+    }
+}
+
+fn apply_patch<T: Clone>(target: &mut Option<T>, patch: &Patch<T>) {
+    match patch {
+        Patch::Missing => {}
+        Patch::Null => *target = None,
+        Patch::Value(value) => *target = Some(value.clone()),
+    }
 }

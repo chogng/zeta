@@ -19,7 +19,7 @@ for (const [name, value] of Object.entries({
   });
 }
 
-const { Sash, SashSettingsBinding } = await import("../../browser/ui/sash/sash.js");
+const { Sash, SashSettingsBinding, SashState } = await import("../../browser/ui/sash/sash.js");
 
 test("Sash settings are scoped to a subtree and clean up their projection", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
@@ -111,5 +111,105 @@ test("Sash applies configured hover feedback and active drag state", () => {
     button: 0,
   }));
   assert.equal(sash.element.classList.contains("zeta-sash-active"), false);
+  dom.window.close();
+});
+
+test("Sash projects directional and disabled interaction states", () => {
+  const dom = new JSDOM("<!doctype html><body></body>");
+  using sash = new Sash("vertical", dom.window.document);
+  dom.window.document.body.append(sash.element);
+  let starts = 0;
+  sash.onDidStart(() => starts += 1);
+
+  sash.state = SashState.AtMinimum;
+  assert.equal(sash.element.classList.contains("zeta-sash-minimum"), true);
+  assert.equal(sash.element.getAttribute("aria-disabled"), "false");
+  assert.equal(sash.element.tabIndex, 0);
+
+  sash.state = SashState.Disabled;
+  sash.element.dispatchEvent(new dom.window.MouseEvent("pointerdown", { bubbles: true, button: 0 }));
+  sash.element.dispatchEvent(new dom.window.KeyboardEvent("keydown", { bubbles: true, key: "ArrowRight" }));
+  assert.equal(starts, 0);
+  assert.equal(sash.element.classList.contains("zeta-sash-disabled"), true);
+  assert.equal(sash.element.getAttribute("aria-disabled"), "true");
+  assert.equal(sash.element.tabIndex, -1);
+
+  dom.window.close();
+});
+
+test("Sash corner handles drag both orthogonal separators", () => {
+  const dom = new JSDOM("<!doctype html><body></body>");
+  using horizontal = new Sash("horizontal", dom.window.document);
+  using vertical = new Sash("vertical", dom.window.document);
+  dom.window.document.body.append(horizontal.element, vertical.element);
+  const horizontalDeltas: number[] = [];
+  const verticalDeltas: number[] = [];
+  let resets = 0;
+  horizontal.onDidChange((event) => horizontalDeltas.push(event.delta));
+  vertical.onDidChange((event) => verticalDeltas.push(event.delta));
+  horizontal.onDidReset(() => resets += 1);
+  vertical.onDidReset(() => resets += 1);
+  horizontal.orthogonalStartSash = vertical;
+  const handle = horizontal.element.querySelector<HTMLElement>(".zeta-sash-orthogonal-handle-start");
+  assert.ok(handle);
+
+  handle.dispatchEvent(new dom.window.MouseEvent("pointerdown", { bubbles: true, button: 0, clientX: 10, clientY: 20 }));
+  dom.window.dispatchEvent(new dom.window.MouseEvent("pointermove", { bubbles: true, clientX: 40, clientY: 60 }));
+  dom.window.dispatchEvent(new dom.window.MouseEvent("pointerup", { bubbles: true, clientX: 40, clientY: 60 }));
+  assert.deepEqual(horizontalDeltas, [40]);
+  assert.deepEqual(verticalDeltas, [30]);
+
+  handle.dispatchEvent(new dom.window.MouseEvent("dblclick", { bubbles: true }));
+  assert.equal(resets, 2);
+  vertical.state = SashState.Disabled;
+  assert.equal(horizontal.element.querySelector(".zeta-sash-orthogonal-handle-start"), null);
+  using sameOrientation = new Sash("horizontal", dom.window.document);
+  assert.throws(() => horizontal.orthogonalEndSash = sameOrientation, /different orientations/);
+
+  dom.window.close();
+});
+
+test("Sash forwards drag, hover, and reset to a linked Sash", () => {
+  const dom = new JSDOM("<!doctype html><body><main></main></body>");
+  const root = dom.window.document.querySelector("main");
+  assert.ok(root);
+  using binding = new SashSettingsBinding(root);
+  binding.update({ dragAreaSize: 4, hoverFeedbackSize: 4, hoverDelay: 0 });
+  using first = new Sash("vertical", dom.window.document);
+  using second = new Sash("vertical", dom.window.document);
+  root.append(first.element, second.element);
+  first.linkedSash = second;
+  second.linkedSash = first;
+  const firstDeltas: number[] = [];
+  const secondDeltas: number[] = [];
+  let resets = 0;
+  first.onDidChange((event) => firstDeltas.push(event.delta));
+  second.onDidChange((event) => secondDeltas.push(event.delta));
+  first.onDidReset(() => resets += 1);
+  second.onDidReset(() => resets += 1);
+  let firstPointerCaptures = 0;
+  let secondPointerCaptures = 0;
+  first.element.setPointerCapture = () => firstPointerCaptures += 1;
+  second.element.setPointerCapture = () => secondPointerCaptures += 1;
+
+  first.element.dispatchEvent(new dom.window.MouseEvent("pointerenter"));
+  assert.equal(first.element.classList.contains("zeta-sash-hover"), true);
+  assert.equal(second.element.classList.contains("zeta-sash-hover"), true);
+  first.element.dispatchEvent(new dom.window.MouseEvent("pointerleave"));
+  assert.equal(second.element.classList.contains("zeta-sash-hover"), false);
+  const pointerDown = new dom.window.MouseEvent("pointerdown", { bubbles: true, button: 0, clientX: 10 });
+  Object.defineProperty(pointerDown, "pointerId", { value: 1 });
+  first.element.dispatchEvent(pointerDown);
+  dom.window.dispatchEvent(new dom.window.MouseEvent("pointermove", { bubbles: true, clientX: 35 }));
+  dom.window.dispatchEvent(new dom.window.MouseEvent("pointerup", { bubbles: true, clientX: 35 }));
+  assert.deepEqual(firstDeltas, [25]);
+  assert.deepEqual(secondDeltas, [25]);
+  assert.equal(firstPointerCaptures, 1);
+  assert.equal(secondPointerCaptures, 0);
+  first.element.dispatchEvent(new dom.window.MouseEvent("dblclick", { bubbles: true }));
+  assert.equal(resets, 2);
+
+  using horizontal = new Sash("horizontal", dom.window.document);
+  assert.throws(() => first.linkedSash = horizontal, /same orientation/);
   dom.window.close();
 });

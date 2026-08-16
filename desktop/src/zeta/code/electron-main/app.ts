@@ -21,6 +21,7 @@ import { BrowserAutomationMainService, registerBrowserAutomationHost } from "../
 import { BrowserTargetRegistry } from "../../platform/browser/electron-main/browserTargetRegistry.js";
 import { CONFIGURATION_CHANGED_CHANNEL } from "../../platform/configuration/common/configuration.js";
 import { ConfigurationMainService, configurationIpcRoutes } from "../../platform/configuration/electron-main/configurationMainService.js";
+import { AppServerConfigurationMainService } from "../../platform/configuration/electron-main/appServerConfigurationMainService.js";
 import { nativeContextMenuIpcRoutes } from "../../platform/contextview/electron-main/contextMenuIpc.js";
 import { fileIpcRoutes } from "../../platform/files/electron-main/fileIpcRoutes.js";
 import { extensionIpcRoutes } from "../../platform/extensions/electron-main/extensionIpcRoutes.js";
@@ -558,6 +559,9 @@ export class ZetaApplication extends DisposableOwner {
       }
     }));
     const { configuration, keybindings } = this.services;
+    const windowConfiguration = this.appServerStartupMode === "required"
+      ? windowDisposables.add(await AppServerConfigurationMainService.create(supervisor, configuration))
+      : configuration;
     const workspaceTransitions = windowDisposables.add(new WorkspaceTransitionMainService({
       workspaces,
       context: workspaceContext,
@@ -603,7 +607,7 @@ export class ZetaApplication extends DisposableOwner {
       ...terminalIpcRoutes(supervisor, reconnectableTerminals),
       ...this.ipcRouteContributions.flatMap(contribution => contribution(supervisor)),
       ...browserViewIpcRoutes(browserViewMainService),
-      ...configurationIpcRoutes(configuration),
+      ...configurationIpcRoutes(windowConfiguration),
       ...keybindingsResourceIpcRoutes(keybindings),
       ...nativeHostIpcRoutes({
         openFolder: async () => {
@@ -689,7 +693,7 @@ export class ZetaApplication extends DisposableOwner {
     windowDisposables.add(supervisor.onStateChange((state) => {
       window.webContents.send("zeta:app-server:stateChanged", state);
     }));
-    windowDisposables.add(configuration.onDidChange((snapshot) =>
+    windowDisposables.add(windowConfiguration.onDidChange((snapshot) =>
       window.webContents.send(CONFIGURATION_CHANGED_CHANNEL, snapshot)
     ));
     windowDisposables.add(keybindings.onDidChange((snapshot) =>

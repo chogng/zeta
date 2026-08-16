@@ -110,6 +110,9 @@ const unavailablePluginService: IPluginService = {
 };
 
 const unavailableMarketplaceService: IMarketplaceService = {
+  cachedBrowse: () => undefined,
+  browse: () => Promise.reject(new Error("Marketplace is unavailable.")),
+  refreshBrowse: () => Promise.reject(new Error("Marketplace is unavailable.")),
   search: () => Promise.reject(new Error("Marketplace is unavailable.")),
   get: () => Promise.reject(new Error("Marketplace is unavailable.")),
   download: () => Promise.reject(new Error("Marketplace is unavailable.")),

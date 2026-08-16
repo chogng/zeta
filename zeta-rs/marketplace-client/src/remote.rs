@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::path::Path;
 use std::path::PathBuf;
+use std::time::Duration;
 
 use crate::PackageRef;
 use semver::Version;
@@ -32,6 +33,9 @@ use cache::stage_datastore;
 
 const MAX_TRUSTED_ROOT_BYTES: usize = 1024 * 1024;
 const MAX_REVOCATIONS_BYTES: usize = 4 * 1024 * 1024;
+const DEFAULT_CATALOG_REFRESH_INTERVAL: Duration = Duration::from_secs(300);
+const MIN_CATALOG_REFRESH_INTERVAL: Duration = Duration::from_secs(60);
+const MAX_CATALOG_REFRESH_INTERVAL: Duration = Duration::from_secs(86_400);
 
 /// Product-pinned deployment configuration for one remote Marketplace source.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -41,6 +45,7 @@ pub struct RemoteMarketplaceConfig {
     trusted_root: Vec<u8>,
     cache_root: PathBuf,
     allowed_publishers: BTreeSet<String>,
+    catalog_refresh_interval: Duration,
 }
 
 impl RemoteMarketplaceConfig {
@@ -68,6 +73,7 @@ impl RemoteMarketplaceConfig {
             trusted_root,
             cache_root: cache_root.into(),
             allowed_publishers: BTreeSet::new(),
+            catalog_refresh_interval: DEFAULT_CATALOG_REFRESH_INTERVAL,
         })
     }
 
@@ -92,6 +98,7 @@ impl RemoteMarketplaceConfig {
             trusted_root,
             cache_root: cache_root.into(),
             allowed_publishers: BTreeSet::new(),
+            catalog_refresh_interval: DEFAULT_CATALOG_REFRESH_INTERVAL,
         })
     }
 
@@ -116,6 +123,22 @@ impl RemoteMarketplaceConfig {
         Ok(self)
     }
 
+    /// Sets how long an in-process verified catalog snapshot may be reused before refreshing.
+    ///
+    /// TUF expiry and rollback checks remain mandatory and are not weakened by this interval.
+    pub fn with_catalog_refresh_interval(
+        mut self,
+        interval: Duration,
+    ) -> Result<Self, MarketplaceClientError> {
+        if !(MIN_CATALOG_REFRESH_INTERVAL..=MAX_CATALOG_REFRESH_INTERVAL).contains(&interval) {
+            return Err(MarketplaceClientError::invalid_request(
+                "Marketplace catalog refresh interval is invalid",
+            ));
+        }
+        self.catalog_refresh_interval = interval;
+        Ok(self)
+    }
+
     /// Returns the pinned TUF metadata endpoint used by this registry.
     pub fn metadata_base_url(&self) -> &Url {
         &self.metadata_base_url
@@ -124,6 +147,11 @@ impl RemoteMarketplaceConfig {
     /// Returns the pinned TUF target endpoint used by this registry.
     pub fn targets_base_url(&self) -> &Url {
         &self.targets_base_url
+    }
+
+    /// Returns the product-selected in-process catalog refresh interval.
+    pub fn catalog_refresh_interval(&self) -> Duration {
+        self.catalog_refresh_interval
     }
 }
 

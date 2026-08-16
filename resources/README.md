@@ -10,8 +10,9 @@ need a renderer-independent source of truth.
 `product-services.json` registers the product-selected HTTPS Marketplace registry and references the sibling
 `marketplace-root.json`; the root is public verification material, never a signing key.
 
-The packaged `zeta` executable discovers this file through `zeta-install-context`. An explicit
-`ZETA_PRODUCT_SERVICES_PATH` remains authoritative for development and specialized product hosts.
+Packaged Desktop/server hosts, `zeta code`/TUI, and zeterm discover this file through the shared
+App Server client + `zeta-install-context` boundary. Each host explicitly injects the typed result;
+an explicit `ZETA_PRODUCT_SERVICES_PATH` remains authoritative for development and specialized hosts.
 Marketplace URLs or root replacement must not move into user configuration or Plugin metadata.
 
 The independent Marketplace source, public root owner, publishing pipeline, and key rotation

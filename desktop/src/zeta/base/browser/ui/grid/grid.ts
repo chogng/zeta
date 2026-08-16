@@ -56,6 +56,11 @@ export class Grid<TView extends IView = IView> extends DisposableOwner {
   get maximumWidth(): number { return this.gridview.maximumWidth; }
   get minimumHeight(): number { return this.gridview.minimumHeight; }
   get maximumHeight(): number { return this.gridview.maximumHeight; }
+  get edgeSnapping(): boolean { return this.gridview.edgeSnapping; }
+
+  set edgeSnapping(enabled: boolean) {
+    this.gridview.edgeSnapping = enabled;
+  }
 
   constructor(
     descriptorOrGridView: GridDescriptor<TView> | GridView,

@@ -413,6 +413,7 @@ fn select_model(
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
                 preferred_model: Patch::Value(model_ref(model)),
                 approval_review_model: Patch::Missing,
+                products: None,
             }),
         })
         .unwrap()

@@ -88,7 +88,7 @@ export class ConfigurationMainService extends DisposableOwner {
 }
 
 export function configurationIpcRoutes(
-  service: ConfigurationMainService,
+  service: Pick<ConfigurationMainService, "read" | "update">,
 ): readonly IpcRoute<unknown, unknown>[] {
   return [
     {

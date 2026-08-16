@@ -18,6 +18,7 @@ zeta-app-server = { workspace = true }
 zeta-app-server-protocol = { workspace = true }
 zeta-app-server-transport = { workspace = true }
 zeta-client = { workspace = true }
+zeta-install-context = { workspace = true }
 zeta-protocol = { workspace = true }
 
 [lints]

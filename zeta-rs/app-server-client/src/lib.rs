@@ -2,6 +2,7 @@
 
 mod in_process;
 mod notification;
+mod product_services;
 mod profile;
 mod session;
 
@@ -108,6 +109,8 @@ pub use in_process::InProcessTransport;
 pub use in_process::open_in_process_app_server;
 pub use in_process::start_in_process_client;
 pub use notification::ServerNotification;
+pub use product_services::discovered_product_services_path;
+pub use product_services::load_discovered_product_services;
 pub use profile::local_profile_root;
 pub use session::{
     AppServerEvent, AppServerEvents, AppServerRequestHandle, AppServerSession,

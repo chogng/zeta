@@ -89,6 +89,19 @@ impl InProcessClientOptions {
         self.product_services = Some(services);
         self
     }
+
+    /// Loads the distribution-owned product services document selected for this process.
+    ///
+    /// Product hosts call this explicitly while composing an embedded App Server so Marketplace
+    /// trust roots and public Connector adapters remain host inputs rather than hidden defaults.
+    pub fn with_discovered_product_services(
+        self,
+    ) -> Result<Self, zeta_app_server::OpenAppServerError> {
+        let Some(services) = crate::load_discovered_product_services(&self.profile_root)? else {
+            return Ok(self);
+        };
+        Ok(self.with_product_services(services))
+    }
 }
 
 impl fmt::Debug for InProcessClientOptions {

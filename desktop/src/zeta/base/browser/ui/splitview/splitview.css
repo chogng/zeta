@@ -1,4 +1,5 @@
-.zeta-split-view { position: relative; min-width: 0; min-height: 0; overflow: hidden; }
+.zeta-split-view { position: relative; min-width: 0; min-height: 0; overflow: visible; }
 .zeta-split-view-pane { position: absolute; display: flex; min-width: 0; min-height: 0; overflow: hidden; flex-direction: column; }
+.zeta-split-view-pane-overflow-visible { overflow: visible; }
 .zeta-split-view-pane[hidden] { display: none; }
 .zeta-split-view-pane > * { flex: 1 1 auto; min-width: 0; min-height: 0; }

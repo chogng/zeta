@@ -257,6 +257,8 @@ struct NativeApp {
     palette: ShellPalette,
     theme_scheme: ColorScheme,
     theme_follows_system: bool,
+    system_theme_scheme: ColorScheme,
+    configured_theme: Option<String>,
 }
 
 impl NativeApp {
@@ -358,18 +360,26 @@ impl NativeApp {
             palette: SHELL_PALETTE,
             theme_scheme: ColorScheme::Light,
             theme_follows_system: true,
+            system_theme_scheme: ColorScheme::Light,
+            configured_theme: None,
         }
     }
 
     fn reload_theme(&mut self, system_scheme: ColorScheme) {
+        self.system_theme_scheme = system_scheme;
         let Ok(loader) = ThemeLoader::embedded() else {
             return;
         };
         let device_root = default_device_root();
-        let loaded = loader.load(
-            ThemeLoadOptions::new(&device_root, ThemeSurface::Graphical, system_scheme)
-                .with_default_entry(DEFAULT_THEME_ENTRY),
-        );
+        let options = ThemeLoadOptions::new(&device_root, ThemeSurface::Graphical, system_scheme)
+            .with_default_entry(DEFAULT_THEME_ENTRY);
+        let loaded = match self.configured_theme.as_deref() {
+            Some(preference) => loader.preview(options, preference).unwrap_or_else(|error| {
+                eprintln!("theme: {error}");
+                loader.load(options)
+            }),
+            None => loader.load(options),
+        };
         for diagnostic in &loaded.diagnostics {
             eprintln!("theme: {}", diagnostic.message);
         }

@@ -169,6 +169,24 @@ impl ThemeLoader {
     pub fn choices(&self, options: ThemeLoadOptions<'_>) -> ThemeChoices {
         let mut diagnostics = Vec::new();
         let selected = read_preference(&options, &mut diagnostics);
+        self.choices_with_selected(options, selected, diagnostics)
+    }
+
+    /// Lists themes while using a product Config preference as the selected value.
+    pub fn choices_for_preference(
+        &self,
+        options: ThemeLoadOptions<'_>,
+        preference: &str,
+    ) -> ThemeChoices {
+        self.choices_with_selected(options, preference.to_owned(), Vec::new())
+    }
+
+    fn choices_with_selected(
+        &self,
+        options: ThemeLoadOptions<'_>,
+        selected: String,
+        mut diagnostics: Vec<ThemeDiagnostic>,
+    ) -> ThemeChoices {
         let system = self.default_snapshot(&options, &mut diagnostics);
         let mut themes = vec![ThemeChoice {
             id: "system".into(),

@@ -19,8 +19,8 @@ export function marketplaceIpcRoutes(supervisor: AppServerSupervisor): readonly 
 }
 
 function emptyParams(value: unknown): Record<string, never> {
-  record(value, []);
-  return {};
+  if (value === undefined) return {};
+  return record(value, []) as Record<string, never>;
 }
 
 function searchParams(value: unknown): MarketplaceSearchParams {

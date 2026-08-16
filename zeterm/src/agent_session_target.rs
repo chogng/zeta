@@ -91,16 +91,18 @@ impl AgentSessionTarget {
             version: env!("CARGO_PKG_VERSION").into(),
         };
         match self {
-            Self::Local { workspace_root } => AppServerSession::start_embedded(
-                InProcessClientOptions::new(local_profile_root(), client_info)
+            Self::Local { workspace_root } => {
+                let options = InProcessClientOptions::new(local_profile_root(), client_info)
                     .with_session_state_mode(SessionStateMode::Ephemeral)
                     .with_capabilities(ClientCapabilities {
                         workspace_trust_host: Some(WorkspaceTrustHostCapability { version: 1 }),
                         ..ClientCapabilities::default()
                     })
-                    .with_workspace_root(workspace_root),
-            )
-            .map_err(|error| anyhow!(error.to_string())),
+                    .with_workspace_root(workspace_root)
+                    .with_discovered_product_services()?;
+                AppServerSession::start_embedded(options)
+                    .map_err(|error| anyhow!(error.to_string()))
+            }
             Self::Ssh { connection, .. } => connection
                 .connect(client_info, ClientCapabilities::default())
                 .map_err(|error| anyhow!(error.to_string())),

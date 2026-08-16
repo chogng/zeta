@@ -224,16 +224,28 @@ test("Marketplace settings discover and install through the generic service", as
   const settings = disposables.add(new SettingsService());
   const configuration = disposables.add(new WorkbenchConfigurationService());
   const installs: string[] = [];
+  const searches: Array<{ query: string; packageType?: string; limit?: number }> = [];
   let installed: readonly any[] = [];
+  let cachedBrowse: any;
   const packageValue = { id: "marketplace/docs-mcp", version: "0.3.2", packageType: "mcp", displayName: "Docs MCP", description: "Search product documentation." };
+  const detailsValue = { package: { id: packageValue.id, version: packageValue.version, digest: `sha256:${"a".repeat(64)}` }, packageType: "mcp", displayName: packageValue.displayName, description: packageValue.description, license: "MIT", source: "thirdParty" as const, upstream: { registry: "officialMcp" as const, name: "ac.tandem/docs-mcp", version: "0.3.2", recordUrl: "https://registry.modelcontextprotocol.io/v0.1/servers/ac.tandem%2Fdocs-mcp/versions/0.3.2", repositoryUrl: "https://github.com/frumu-ai/tandem" }, capabilities: [{ kind: "mcp" as const, id: "docs-mcp", contractVersion: "1", permissions: ["tandem.ac"], authenticationProvider: null }] };
+  const loadBrowse = async (query: string, packageType?: string, limit?: number) => {
+    searches.push({ query, packageType, limit });
+    cachedBrowse = { query, packageType, limit, packages: [{ summary: packageValue, details: detailsValue }], installed };
+    return cachedBrowse;
+  };
   const marketplaceService = {
+    cachedBrowse: (query: string, packageType?: string, limit?: number) => cachedBrowse?.query === query && cachedBrowse?.packageType === packageType && cachedBrowse?.limit === limit ? cachedBrowse : undefined,
+    browse: loadBrowse,
+    refreshBrowse: loadBrowse,
     search: async () => [packageValue],
-    get: async () => ({ package: { id: packageValue.id, version: packageValue.version, digest: `sha256:${"a".repeat(64)}` }, packageType: "mcp", displayName: packageValue.displayName, description: packageValue.description, license: "MIT", source: "thirdParty" as const, upstream: { registry: "officialMcp" as const, name: "ac.tandem/docs-mcp", version: "0.3.2", recordUrl: "https://registry.modelcontextprotocol.io/v0.1/servers/ac.tandem%2Fdocs-mcp/versions/0.3.2", repositoryUrl: "https://github.com/frumu-ai/tandem" }, capabilities: [{ kind: "mcp" as const, id: "docs-mcp", contractVersion: "1", permissions: ["tandem.ac"], authenticationProvider: null }] }),
+    get: async () => detailsValue,
     download: async () => ({ id: "art", package: { id: packageValue.id, version: packageValue.version, digest: `sha256:${"a".repeat(64)}` } }),
     install: async (id: string, version?: string) => {
       installs.push(`${id}@${version}`);
       const value = { installationId: "ins", package: { id, version: version!, digest: `sha256:${"a".repeat(64)}` }, state: "installed" as const, capabilities: [] };
       installed = [value];
+      cachedBrowse = undefined;
       return value;
     },
     update: async () => { throw new Error("unused"); },
@@ -256,9 +268,24 @@ test("Marketplace settings discover and install through the generic service", as
   settings.open("marketplace");
   await new Promise((resolve) => globalThis.setTimeout(resolve, 0));
   await new Promise((resolve) => globalThis.setTimeout(resolve, 0));
+  assert.equal(root.querySelector(".zeta-package-marketplace-toolbar > button")?.textContent, "Browse Marketplace");
+  assert.deepEqual([...root.querySelectorAll(".zeta-package-marketplace-filter")].map(button => button.textContent), ["All", "Plugins", "MCPs", "Skills", "Languages", "Themes"]);
+  assert.equal(root.querySelector(".zeta-package-marketplace-filter.checked")?.textContent, "All");
   assert.equal(root.querySelector(".zeta-package-marketplace-card h4")?.textContent, "Docs MCP");
   assert.match(root.textContent ?? "", /mcp: docs-mcp/);
   assert.match(root.textContent ?? "", /Listed in the official MCP Registry · ac\.tandem\/docs-mcp@0\.3\.2/);
+  settings.open("general");
+  settings.open("marketplace");
+  assert.equal(root.querySelector(".zeta-package-marketplace-card h4")?.textContent, "Docs MCP");
+  assert.deepEqual(searches, [{ query: "", packageType: undefined, limit: 100 }]);
+  root.querySelectorAll<HTMLButtonElement>(".zeta-package-marketplace-filter")[3]?.click();
+  await new Promise((resolve) => globalThis.setTimeout(resolve, 0));
+  await new Promise((resolve) => globalThis.setTimeout(resolve, 0));
+  assert.deepEqual(searches, [
+    { query: "", packageType: undefined, limit: 100 },
+    { query: "", packageType: "skill", limit: 100 },
+  ]);
+  assert.equal(root.querySelector(".zeta-package-marketplace-filter.checked")?.textContent, "Skills");
   root.querySelector<HTMLButtonElement>(".zeta-package-marketplace-actions button")?.click();
   await new Promise((resolve) => globalThis.setTimeout(resolve, 0));
   assert.deepEqual(installs, ["marketplace/docs-mcp@0.3.2"]);
@@ -346,11 +373,17 @@ test("Language settings reuse Marketplace discovery with a language package filt
   const settings = disposables.add(new SettingsService());
   const configuration = disposables.add(new WorkbenchConfigurationService());
   const searches: Array<{ query: string; packageType?: string; limit?: number }> = [];
+  let cachedBrowse: any;
+  const loadBrowse = async (query: string, packageType?: string, limit?: number) => {
+    searches.push({ query, packageType, limit });
+    cachedBrowse = { query, packageType, limit, packages: [], installed: [] };
+    return cachedBrowse;
+  };
   const marketplaceService = {
-    search: async (query: string, packageType?: string, limit?: number) => {
-      searches.push({ query, packageType, limit });
-      return [];
-    },
+    cachedBrowse: (query: string, packageType?: string, limit?: number) => cachedBrowse?.query === query && cachedBrowse?.packageType === packageType && cachedBrowse?.limit === limit ? cachedBrowse : undefined,
+    browse: loadBrowse,
+    refreshBrowse: loadBrowse,
+    search: async () => [],
     get: async () => { throw new Error("unexpected get"); },
     download: async () => { throw new Error("unexpected download"); },
     install: async () => { throw new Error("unexpected install"); },
@@ -543,6 +576,7 @@ test("Indexing settings save Tool Search and semantic model consent configuratio
     generation: 4,
     preferredModel: null,
     approvalReviewModel: { type: "automatic" },
+    products: { desktop: {}, code: {}, zeterm: {} },
     providers: {
       ollama: {
         provider: "ollama",

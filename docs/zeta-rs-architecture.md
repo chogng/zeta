@@ -157,9 +157,9 @@ Agent conversation state；App Server 按请求组合并通过
 [`code-retrieval/README.md`](../zeta-rs/code-retrieval/README.md)。
 
 `zeta-theme` 当前嵌入 Desktop registry 生成的语言中立 manifest，严格解析同一用户主题 JSON，
-解析 alias/transform/default graph，并从 device-local `configuration.json` 与 `themes/*.json`
-选择 Graphical/Terminal snapshot。它不依赖 renderer、不拥有组件 geometry，也不进入 Agent
-config、Session/Thread store。`zeterm/zeterm` 消费完整相关 palette，TUI 只消费明确子集；当前 API、
+解析 alias/transform/default graph，并以 `config/read.products` 注入的产品选择和 device-local
+`themes/*.json` 产生 Graphical/Terminal snapshot。它不依赖 renderer、不拥有组件 geometry；旧
+`configuration.json` 只保留迁移 fallback。`zeterm/zeterm` 消费完整相关 palette，TUI 只消费明确子集；当前 API、
 失败语义和 conformance contract 见 [`theme/README.md`](../zeta-rs/theme/README.md)。
 
 `zeta-editor` 当前拥有 `zeterm/zeterm` 使用的多行编辑、caret/selection、undo/redo、IME、language-aware

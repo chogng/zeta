@@ -5,6 +5,7 @@ use crate::HooksConfig;
 use crate::LanguageServersConfig;
 use crate::McpConfig;
 use crate::PluginsConfig;
+use crate::ProductsConfig;
 use crate::SemanticCodeIndexConfig;
 use crate::SkillsConfig;
 use crate::ToolSearchConfig;
@@ -117,6 +118,8 @@ pub struct UserConfigDocument {
     pub skills: SkillsConfig,
     #[serde(default)]
     pub plugins: PluginsConfig,
+    #[serde(default, skip_serializing_if = "ProductsConfig::is_empty")]
+    pub products: ProductsConfig,
     #[serde(default)]
     pub hooks: HooksConfig,
     #[serde(default)]
@@ -200,6 +203,7 @@ impl UserConfigDocument {
         self.mcp.validate_for_namespace("user")?;
         self.skills.validate_for_namespace("user")?;
         self.plugins.validate()?;
+        self.products.validate()?;
         self.hooks.validate_for_namespace("user")?;
         self.language_servers.validate()?;
         self.exec_policy.validate()?;
@@ -219,6 +223,7 @@ pub struct ResolvedConfig {
     pub mcp: McpConfig,
     pub skills: SkillsConfig,
     pub plugins: PluginsConfig,
+    pub products: ProductsConfig,
     pub hooks: HooksConfig,
     pub language_servers: LanguageServersConfig,
     pub tool_search: ToolSearchConfig,
@@ -293,6 +298,7 @@ impl From<&UserConfigDocument> for ResolvedConfig {
             mcp: document.mcp.clone(),
             skills: document.skills.clone(),
             plugins: document.plugins.clone(),
+            products: document.products.clone(),
             hooks: document.hooks.clone(),
             language_servers: document.language_servers.clone(),
             tool_search: document.tool_search.clone(),

@@ -4,8 +4,9 @@
 > [`docs/config.md`](../../docs/config.md) 规范。
 
 `zeta-config` 是普通、非 secret 用户配置的 TOML authority，也是严格 Workspace TOML document 的
-typed parser/resolver。SQLite 只保存 transaction metadata 和 exact receipt。它不拥有这些内容：
-UI/device preference、credential bytes、Plugin package/activation、live MCP connection、Hook
+typed parser/resolver。SQLite 只保存 transaction metadata 和 exact receipt。产品设置以严格
+`products.desktop`、`products.code`、`products.zeterm` namespace 存放；它不拥有这些内容：
+credential bytes、Plugin package/activation、live MCP connection、Hook
 execution、Skill 正文、Session/Thread 或 Core execution。
 
 ## 当前 API 与所有权
@@ -21,15 +22,17 @@ execution、Skill 正文、Session/Thread 或 Core execution。
 | `WorkspaceExecPolicyConfig` | strict-read Workspace restrictions；validation 禁止 `AllowUnsandboxed` |
 | `compose_exec_policy` | 将 trusted Host/Organization layers、User rules 与 Workspace restrictions 组合成 immutable snapshot |
 | `LanguageServersConfig` / `LanguageServerConfig` | 持久化 stable server ID 对应的 Disabled/Automatic/Enabled 与可选绝对 executable override |
+| `ProductsConfig` / `ProductsConfigUpdate` | 持久化 Desktop、Zeta Code 和 zeterm 的强类型产品偏好；未知产品字段 fail closed |
 | `resolve_scoped_config` | User + Workspace 的受限 merge、provenance 与 diagnostic |
 | `ConfigChange` | metadata commit 后的 revision/generation signal，包括 TOML 外部编辑与其他 connection 的提交 |
 
 `UserConfigDocument` 当前包含 Agent defaults、Provider map、standalone MCP declaration、Skill
-source/enablement、exact Plugin request、declarative Hook、language-server preference，以及 execution-policy
-rules 和 Workspace trust decision。Trust key
+source/enablement、exact Plugin request、declarative Hook、language-server preference、产品偏好，以及
+execution-policy rules 和 Workspace trust decision。Trust key
 由 host 对 canonical root 生成，document 不保存本地路径；User decision 不能冒充 organization
 policy 或 host configuration。Plugin request 不安装或授权 package；Hook declaration 不执行
-process。Theme/UI preference 不在本 crate；Desktop device configuration 是独立 authority。
+process。Theme ID 和 Desktop accessibility/hover/sash 偏好由产品 namespace 拥有；主题文件内容、
+窗口位置和瞬态 UI 状态仍不进入 Config。
 
 ## Durable 路径
 
@@ -104,5 +107,5 @@ cargo test -p zeta-config
 
 测试覆盖 TOML durability/reopen、旧 DB document 迁出、external edit、revision/replay/conflict、
 以下 no-op generation 与 cross-connection signal、Provider/model invariant、MCP/Skill/Plugin/Hook
-desired config、language-server ID/mode/absolute-path validation、execution-policy
+desired config、product namespace/field/range validation、language-server ID/mode/absolute-path validation、execution-policy
 mutation/round-trip/layer constraints、Workspace strict TOML parsing、namespace 和 scoped resolution。

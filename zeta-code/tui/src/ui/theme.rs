@@ -147,17 +147,25 @@ impl TuiTheme {
     }
 }
 
-pub(crate) fn configure(terminal_background: Option<TerminalRgb>) {
+pub(crate) fn configure(
+    terminal_background: Option<TerminalRgb>,
+    configured_preference: Option<&str>,
+) {
     let system_scheme = detect_system_scheme(terminal_background);
     set_system_scheme(system_scheme);
     let Ok(loader) = ThemeLoader::embedded() else {
         return;
     };
     let device_root = default_device_root();
-    let loaded = loader.load(
-        ThemeLoadOptions::new(&device_root, ThemeSurface::Terminal, system_scheme)
-            .with_default_entry(DEFAULT_THEME_ENTRY),
-    );
+    let options = ThemeLoadOptions::new(&device_root, ThemeSurface::Terminal, system_scheme)
+        .with_default_entry(DEFAULT_THEME_ENTRY);
+    let loaded = match configured_preference {
+        Some(preference) => loader.preview(options, preference).unwrap_or_else(|error| {
+            eprintln!("theme: {error}");
+            loader.load(options)
+        }),
+        None => loader.load(options),
+    };
     for diagnostic in &loaded.diagnostics {
         eprintln!("theme: {}", diagnostic.message);
     }
@@ -168,11 +176,14 @@ pub(crate) fn configure(terminal_background: Option<TerminalRgb>) {
     set_active(theme);
 }
 
-pub(crate) fn theme_catalog() -> Result<ThemePickerCatalog, String> {
+pub(crate) fn theme_catalog(
+    configured_preference: Option<&str>,
+) -> Result<ThemePickerCatalog, String> {
     theme_catalog_at(
         &default_device_root(),
         detect_host_terminal().color_level,
         system_scheme(),
+        configured_preference,
     )
 }
 
@@ -180,11 +191,15 @@ fn theme_catalog_at(
     device_root: &Path,
     capability: ColorLevel,
     system_scheme: ColorScheme,
+    configured_preference: Option<&str>,
 ) -> Result<ThemePickerCatalog, String> {
     let loader = ThemeLoader::embedded().map_err(|error| error.to_string())?;
     let options = ThemeLoadOptions::new(device_root, ThemeSurface::Terminal, system_scheme)
         .with_default_entry(DEFAULT_THEME_ENTRY);
-    let available = loader.choices(options);
+    let available = match configured_preference {
+        Some(preference) => loader.choices_for_preference(options, preference),
+        None => loader.choices(options),
+    };
     let selected_is_custom = available
         .themes
         .iter()
@@ -274,8 +289,13 @@ fn syntax_palette_label(preference: &str, snapshot: &ThemeSnapshot) -> String {
     }
 }
 
-pub(crate) fn select_theme(preference: &str) -> Result<String, String> {
-    select_theme_at(
+pub(crate) struct PreparedTheme {
+    theme: TuiTheme,
+    label: String,
+}
+
+pub(crate) fn prepare_theme(preference: &str) -> Result<PreparedTheme, String> {
+    prepare_theme_at(
         &default_device_root(),
         preference,
         detect_host_terminal().color_level,
@@ -283,12 +303,17 @@ pub(crate) fn select_theme(preference: &str) -> Result<String, String> {
     )
 }
 
-fn select_theme_at(
+pub(crate) fn apply_theme(prepared: PreparedTheme) -> String {
+    set_active(prepared.theme);
+    prepared.label
+}
+
+fn prepare_theme_at(
     device_root: &Path,
     preference: &str,
     capability: ColorLevel,
     system_scheme: ColorScheme,
-) -> Result<String, String> {
+) -> Result<PreparedTheme, String> {
     let loader = ThemeLoader::embedded().map_err(|error| error.to_string())?;
     let options = ThemeLoadOptions::new(device_root, ThemeSurface::Terminal, system_scheme)
         .with_default_entry(DEFAULT_THEME_ENTRY);
@@ -307,13 +332,22 @@ fn select_theme_at(
         return Err(format!("theme '{preference}' is not a Zeta Code theme"));
     }
     let loaded = loader
-        .select(options, preference)
+        .preview(options, preference)
         .map_err(|error| error.to_string())?;
     let theme =
         TuiTheme::from_snapshot(&loaded.snapshot, capability).map_err(|error| error.to_string())?;
     let label = loaded.snapshot.label().to_owned();
-    set_active(theme);
-    Ok(label)
+    Ok(PreparedTheme { theme, label })
+}
+
+#[cfg(test)]
+fn select_theme_at(
+    device_root: &Path,
+    preference: &str,
+    capability: ColorLevel,
+    system_scheme: ColorScheme,
+) -> Result<String, String> {
+    prepare_theme_at(device_root, preference, capability, system_scheme).map(apply_theme)
 }
 
 fn set_active(theme: TuiTheme) {

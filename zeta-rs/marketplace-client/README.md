@@ -38,7 +38,9 @@ MarketplaceManager
 
 `MarketplaceRemoteClient::open` is network-free so Marketplace availability cannot block App Server
 startup. The first Marketplace operation lazily loads the signed catalog and later failed initial
-loads remain retryable. `search` and `get` return normalized DTOs. `download` refreshes trust metadata, checks exact revocation state, downloads and
+loads remain retryable. `search` and `get` reuse the in-process verified snapshot until the
+product-selected `catalog_refresh_interval` elapses, then synchronously refresh it through TUF.
+`download` always refreshes trust metadata, checks exact revocation state, downloads and
 verifies the TUF target, extracts it into private temporary storage, and returns only a
 `MarketplacePackagePayload` object. The local Manager may copy that payload into an empty staging
 directory but cannot discover the remote cache or extraction path.
@@ -52,7 +54,7 @@ link is never treated as an executable or download URL.
 
 | Symbol | Contract |
 | --- | --- |
-| `RemoteMarketplaceConfig` | product-pinned HTTPS metadata/target URLs, trusted root, cache root and publisher policy |
+| `RemoteMarketplaceConfig` | product-pinned HTTPS metadata/target URLs, trusted root, cache root, publisher policy and bounded catalog refresh interval |
 | `MarketplaceRemoteClient` | concrete current remote distribution adapter |
 | `MarketplaceRegistryClient` | narrow remote discovery/download dependency injected into the local Manager |
 | `MarketplacePackagePayload` | opaque verified handoff; permits copy-to-staging, never path access |

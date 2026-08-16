@@ -9522,6 +9522,7 @@ dependencies = [
  "zeta-async-utils",
  "zeta-client",
  "zeta-core",
+ "zeta-install-context",
  "zeta-protocol",
 ]
 
@@ -9608,7 +9609,6 @@ dependencies = [
  "sha2 0.10.9",
  "signal-hook",
  "tar",
- "zeta-app-server",
  "zeta-app-server-client",
  "zeta-app-server-protocol",
  "zeta-exec",
@@ -10429,7 +10429,6 @@ dependencies = [
  "zeta-app-server",
  "zeta-app-server-client",
  "zeta-app-server-protocol",
- "zeta-install-context",
  "zeta-remote",
  "zeta-remote-connections",
  "zeta-remote-server",

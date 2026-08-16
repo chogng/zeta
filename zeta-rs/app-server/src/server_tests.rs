@@ -2346,6 +2346,66 @@ fn config_updates_use_typed_command_ids() {
 }
 
 #[test]
+fn config_rpc_round_trips_typed_product_preferences() {
+    let path = std::env::temp_dir().join(format!(
+        "zeta-app-server-product-config-{}.sqlite3",
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    let server = server().with_config_store(Arc::new(ConfigStore::open(&path).unwrap()));
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+
+    let updated = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":2,"method":"config/update",
+            "params":{
+                "commandId":"desktop-product-preferences","expectedRevision":0,
+                "products":{
+                    "desktop":{"colorTheme":"zeta-dark","sashSize":8},
+                    "code":{"colorTheme":"zeta-code-dark"},
+                    "zeterm":{"colorTheme":"zeta-light"}
+                }
+            }
+        }),
+    );
+    assert_eq!(updated["result"]["revision"], 1);
+    let read = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"config/read","params":{}}),
+    );
+    assert_eq!(read["result"]["products"]["desktop"]["sashSize"], 8);
+    assert_eq!(
+        read["result"]["products"]["code"]["colorTheme"],
+        "zeta-code-dark"
+    );
+    let rejected = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":4,"method":"config/update",
+            "params":{
+                "commandId":"unknown-product-preference","expectedRevision":1,
+                "products":{"desktop":{"unknownSetting":true}}
+            }
+        }),
+    );
+    assert!(rejected.get("error").is_some());
+    assert!(
+        std::fs::read_to_string(path.with_extension("toml"))
+            .unwrap()
+            .contains("[products.zeterm]")
+    );
+    let _ = std::fs::remove_file(&path);
+    let _ = std::fs::remove_file(path.with_extension("toml"));
+}
+
+#[test]
 fn exec_policy_rule_rpc_round_trips_typed_user_rules() {
     let path = std::env::temp_dir().join(format!(
         "zeta-app-server-exec-policy-{}.sqlite3",

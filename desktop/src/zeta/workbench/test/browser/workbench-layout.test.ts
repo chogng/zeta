@@ -184,7 +184,7 @@ test("Workbench layout hides and restores Parts with context keys", () => {
   harness.layout.layout(new Dimension(1_000, 700));
   assert.equal(
     harness.container.querySelectorAll(".zeta-sash").length,
-    3,
+    4,
   );
   assert.equal(overlay.parentElement, harness.container);
   assert.ok(overlay.isConnected);
@@ -262,6 +262,48 @@ test("Workbench layout hides and restores Parts with context keys", () => {
   assert.equal(contextKeys.getValue("sideBarVisible"), true);
   assert.equal(editorFrame?.style.paddingLeft, "3px");
   assert.equal(editorFrame?.style.paddingRight, "8px");
+
+  harness.disposables.dispose();
+  dom.window.close();
+});
+
+test("Workbench pane sashes snap closed and remain available for drag restore", () => {
+  const dom = new JSDOM("<!doctype html><body></body>");
+  const harness = createLayoutHarness(dom.window.document, {
+    initialDimension: new Dimension(1_200, 800),
+  });
+  const contextKeys = harness.disposables.add(new ContextKeyService());
+  harness.disposables.add(bindWorkbenchPartVisibilityContextKeys(
+    contextKeys,
+    harness.layout,
+  ));
+  harness.layout.layout(new Dimension(1_200, 800));
+
+  dragWorkbenchSash(dom.window, harness.container, "sidebar", 0, -140);
+  assert.equal(harness.layout.isPartVisible("sidebar"), false);
+  assert.equal(contextKeys.getValue("sideBarVisible"), false);
+  dragWorkbenchSash(dom.window, harness.container, "sidebar", 0, 110);
+  assert.equal(harness.layout.isPartVisible("sidebar"), true);
+
+  dragWorkbenchSash(dom.window, harness.container, "auxiliarybar", 1, 320);
+  assert.equal(harness.layout.isPartVisible("auxiliarybar"), false);
+  assert.equal(contextKeys.getValue("auxiliaryBarVisible"), false);
+  dragWorkbenchSash(dom.window, harness.container, "auxiliarybar", 1, -110);
+  assert.equal(harness.layout.isPartVisible("auxiliarybar"), true);
+
+  dragWorkbenchSash(dom.window, harness.container, "panel", 0, 170);
+  assert.equal(harness.layout.isPartVisible("panel"), false);
+  assert.equal(contextKeys.getValue("panelVisible"), false);
+  dragWorkbenchSash(dom.window, harness.container, "panel", 0, -50);
+  assert.equal(harness.layout.isPartVisible("panel"), true);
+
+  dragWorkbenchSash(dom.window, harness.container, "agentSidebar", 2, -110);
+  assert.equal(harness.layout.isPartVisible("agentSidebar"), true);
+  assert.equal(contextKeys.getValue("agentSidebarVisible"), true);
+  dragWorkbenchSash(dom.window, harness.container, "agentSidebar", 2, 120);
+  assert.equal(harness.layout.isPartVisible("agentSidebar"), false);
+  dragWorkbenchSash(dom.window, harness.container, "agentSidebar", 2, -110);
+  assert.equal(harness.layout.isPartVisible("agentSidebar"), true);
 
   harness.disposables.dispose();
   dom.window.close();
@@ -1128,6 +1170,37 @@ test("panel layout actions use state icons", () => {
   assert.equal(maximizePanelAction()?.icon, lxiconsLibrary.screenNormal);
   assert.equal(maximizePanelAction()?.checked, true);
 });
+
+function dragWorkbenchSash(
+  targetWindow: typeof browserEnvironment.window,
+  container: HTMLElement,
+  partId: WorkbenchPartId,
+  previousViewIndex: number,
+  delta: number,
+): void {
+  const part = container.querySelector<HTMLElement>(`[data-part='${partId}']`);
+  assert.ok(part);
+  const splitView = part.parentElement?.parentElement?.parentElement;
+  if (!splitView?.classList.contains("zeta-split-view")) {
+    throw new Error(`Workbench Part ${partId} is not hosted by a SplitView`);
+  }
+  const sashes = [...splitView.querySelectorAll<HTMLElement>(
+    `:scope > .zeta-sash[data-previous-view-index='${previousViewIndex}']`,
+  )];
+  const sash = sashes.at(-1);
+  assert.ok(sash);
+  const vertical = sash.classList.contains("zeta-sash-vertical");
+  const event = (type: string, coordinate: number) =>
+    new targetWindow.MouseEvent(type, {
+      bubbles: true,
+      button: 0,
+      clientX: vertical ? coordinate : 0,
+      clientY: vertical ? 0 : coordinate,
+    });
+  sash.dispatchEvent(event("pointerdown", 0));
+  targetWindow.dispatchEvent(event("pointermove", delta));
+  targetWindow.dispatchEvent(event("pointerup", delta));
+}
 
 function compositeBarDragEvent(targetWindow: { readonly Event: typeof Event }, type: string, clientX = 0): DragEvent {
   const event = new targetWindow.Event(type, { bubbles: true, cancelable: true }) as DragEvent;

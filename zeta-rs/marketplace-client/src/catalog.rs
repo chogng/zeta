@@ -23,11 +23,10 @@ use crate::remote::RemotePackageTarget;
 use crate::remote::RemoteSource;
 
 const MAX_PACKAGE_ID_BYTES: usize = 128;
-const REMOTE_DISCOVERY_REFRESH_INTERVAL: Duration = Duration::from_secs(60);
-
 pub(crate) struct Catalog {
     releases: Mutex<BTreeMap<String, BTreeMap<Version, Release>>>,
     remote: RemoteSource,
+    refresh_interval: Duration,
     last_remote_refresh: Mutex<Option<Instant>>,
 }
 
@@ -194,11 +193,13 @@ impl Catalog {
     pub(crate) fn load_remote(
         config: RemoteMarketplaceConfig,
     ) -> Result<Self, MarketplaceClientError> {
+        let refresh_interval = config.catalog_refresh_interval();
         let remote = RemoteSource::new(config)?;
         let releases = index_releases(remote.releases()?)?;
         Ok(Self {
             releases: Mutex::new(releases),
             remote,
+            refresh_interval,
             last_remote_refresh: Mutex::new(Some(Instant::now())),
         })
     }
@@ -314,7 +315,7 @@ impl Catalog {
             .last_remote_refresh
             .lock()
             .map_err(|_| MarketplaceClientError::unavailable())?
-            .is_some_and(|refreshed| refreshed.elapsed() < REMOTE_DISCOVERY_REFRESH_INTERVAL)
+            .is_some_and(|refreshed| refreshed.elapsed() < self.refresh_interval)
         {
             return Ok(());
         }
