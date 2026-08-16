@@ -6,7 +6,7 @@ const DEFAULT_AUXILIARYBAR_WIDTH = 380;
 const DEFAULT_AGENT_SIDEBAR_WIDTH = 280;
 const DEFAULT_PANEL_HEIGHT = 200;
 
-/** The persisted, product-specific portion of Workbench layout state. */
+/** The persisted, application-scoped portion of Workbench layout state. */
 export interface WorkbenchLayoutState {
   readonly version: 3;
   readonly sidebar: {

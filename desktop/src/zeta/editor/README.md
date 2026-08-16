@@ -55,17 +55,17 @@ Contribution 必须满足以下条件：
 ## 入口与调用路径
 
 ```text
-Code product entry ───────┬→ editor.code.all.ts → editor.all.ts ─────────→ standard capability registration
-                          └→ workbench/contrib/codeEditor ───→ code/diff pane + input registration
-Academic product entry ───┬→ editor.academic.all.ts → editor.all.ts + document contribution
-                          └→ workbench/contrib/academic ──────→ profile + document pane registration
+Code build mode ───────┬→ editor.code.all.ts → editor.all.ts ─────────→ standard capability registration
+                       └→ workbench/contrib/codeEditor ───→ code/diff pane + input registration
+Academic build mode ───┬→ editor.academic.all.ts → editor.all.ts + document contribution
+                       └→ workbench/contrib/academic ──────→ profile + document pane registration
                                                                └→ embedded CodeEditorWidget factory
 
 editor.api.ts ─────────────→ TextModel / DocumentModel APIs
 editor.main.ts ────────────→ editor.all.ts + editor.api.ts
 ```
 
-产品入口是唯一产品选择点：`editor.all.ts` 固定标准能力，`editor.code.all.ts` 和 `editor.academic.all.ts` 只表达产品差异，并与对应 Workbench contribution 配对。新增版本应从少量经过验证的 profile 扩展；不得在 widget、model 或 feature controller 内增加产品分支，也不得复制整份标准能力清单。
+构建模式 contribution 是唯一能力选择点：`editor.all.ts` 固定标准能力，`editor.code.all.ts` 和 `editor.academic.all.ts` 只表达模式差异，并与对应 Workbench contribution 配对。新增模式应从少量经过验证的 profile 扩展；不得在共享 Workbench、widget、model 或 feature controller 内增加产品分支，也不得复制整份标准能力清单。
 
 ## 关键实现符号
 

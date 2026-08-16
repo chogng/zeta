@@ -6,5 +6,5 @@ export const codeSessionsProfile = createSessionsProfile({
   productId: "code",
   label: "Code Sessions",
   titlebarActionId: "zeta.code.open-sessions",
-  workbenchRelativePath: "../workbench/workbench-code.html",
+  workbenchRelativePath: "../workbench/workbench.html",
 });

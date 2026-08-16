@@ -51,7 +51,6 @@ const { ColorScheme } = await import("../../../../../platform/theme/common/theme
 const { ISettingsService } = await import("../../../../../workbench/services/preferences/common/settings.js");
 const { SettingsService } = await import("../../../../../workbench/services/preferences/common/settingsService.js");
 const { WorkbenchConfiguration } = await import("../../../../../workbench/common/configuration.js");
-const { WorkbenchProfileConfiguration } = await import("../../../../../workbench/common/workbenchProfileConfiguration.js");
 const { CodeEditorConfiguration } = await import("../../../../../workbench/contrib/codeEditor/common/editorConfiguration.js");
 const { EditorIndentationKind } = await import("../../../../../editor/common/editorIndentation.js");
 const { EditorLineWrapping } = await import("../../../../../editor/browser/view/visualLineProjection.js");
@@ -157,7 +156,7 @@ test("Settings overlay opens, closes, and restores focus", () => {
   );
   assert.equal(navigationItems[0].getAttribute("aria-current"), "page");
   assert.equal(root.querySelector(".zeta-settings-page h3")?.textContent, "General");
-  assert.equal(root.querySelectorAll(".zeta-general-setting").length, 10);
+  assert.equal(root.querySelectorAll(".zeta-general-setting").length, 8);
 
   search.value = "model";
   search.dispatchEvent(new browserEnvironment.window.Event("input", { bubbles: true }));
@@ -263,7 +262,7 @@ test("Workspace Trust settings add, list, and revoke durable folder decisions", 
   assert.equal(root.querySelector("h4")?.textContent, "/workspaces/new");
 });
 
-test("General settings persist the default Workbench profile and shared interaction preferences", async () => {
+test("General settings persist shared interaction preferences", async () => {
   using disposables = new DisposableStore();
   const ownerDocument = browserEnvironment.window.document;
   ownerDocument.body.replaceChildren();
@@ -282,26 +281,16 @@ test("General settings persist the default Workbench profile and shared interact
   }));
 
   settings.open("general");
-  const profile = root.querySelector<HTMLElement>('[data-configuration-key="workbench.defaultProfile"]')!;
-  const profileButton = profile.querySelector<HTMLButtonElement>(".zeta-select-box-button")!;
   const hoverDelay = root.querySelector<HTMLInputElement>('[data-configuration-key="workbench.hover.delay"]')!;
-  assert.equal(profileButton.getAttribute("role"), "combobox");
-  assert.equal(profileButton.getAttribute("aria-haspopup"), "listbox");
-  assert.equal(profileButton.getAttribute("aria-expanded"), "false");
-  assert.equal(settingValue(root, "workbench.defaultProfile"), "Code");
+  assert.equal(root.querySelector('[data-configuration-key="workbench.defaultProfile"]'), null);
   assert.equal(settingValue(root, "workbench.reduceMotion"), "Auto");
-  profile.closest<HTMLElement>(".zeta-general-setting")!.querySelector<HTMLElement>(".zeta-general-setting-copy")!.click();
-  assert.equal(profileButton.getAttribute("aria-expanded"), "false");
   assert.equal(hoverDelay.value, "500");
-  chooseSettingOption(root, "workbench.defaultProfile", "Academic");
-  await new Promise(resolve => globalThis.setTimeout(resolve, 0));
   chooseSettingOption(root, "workbench.reduceMotion", "On");
   await new Promise(resolve => globalThis.setTimeout(resolve, 0));
   hoverDelay.value = "250";
   hoverDelay.dispatchEvent(new browserEnvironment.window.Event("change", { bubbles: true }));
   await new Promise(resolve => globalThis.setTimeout(resolve, 0));
 
-  assert.equal(configuration.getValue(WorkbenchProfileConfiguration.defaultProfile), "academic");
   assert.equal(configuration.getValue(WorkbenchConfiguration.reduceMotion), "on");
   assert.equal(configuration.getValue(HoverConfiguration.delay), 250);
   assert.equal(root.querySelector(".zeta-general-settings-status")?.textContent, "Setting saved.");
@@ -362,7 +351,7 @@ test("Editor settings render supported controls and persist typed preferences", 
   const tabSize = root.querySelector<HTMLInputElement>('[data-configuration-key="editor.tabSize"]')!;
   assert.equal(wordWrap.querySelector<HTMLButtonElement>(".zeta-select-box-button")?.getAttribute("role"), "combobox");
   assert.equal(settingValue(root, "editor.wordWrap"), "Off");
-  assert.equal(settingValue(root, "workbench.editor.defaultNewDocumentEditor"), "Follow Workbench profile");
+  assert.equal(settingValue(root, "workbench.editor.defaultNewDocumentEditor"), "Follow build mode");
   const wordWrapButton = wordWrap.querySelector<HTMLButtonElement>(".zeta-select-box-button")!;
   wordWrap.closest<HTMLElement>(".zeta-editor-setting")!.querySelector<HTMLElement>(".zeta-editor-setting-copy")!.click();
   assert.equal(wordWrapButton.getAttribute("aria-expanded"), "false");

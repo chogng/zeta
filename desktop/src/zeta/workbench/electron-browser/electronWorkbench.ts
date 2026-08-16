@@ -29,6 +29,7 @@ export async function startElectronWorkbench(
   session: WorkbenchSession,
   rendererCapabilities: readonly ElectronRendererCapabilityContribution[] = [],
 ): Promise<void> {
+  document.title = product.name;
   installBaseUiStyles();
   const disposableTracker = import.meta.env.DEV
     ? new DisposableTracker()

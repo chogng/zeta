@@ -111,7 +111,7 @@ test("Text engine PieceTree tests follow VS Code's common model layout", () => {
   assert.equal(statSafe(join(editorRoot, "test/common/pieceTreeTextBuffer.test.ts")), false);
 });
 
-test("Product entries statically select their Aster contribution bundles", () => {
+test("Build modes statically select their Aster contribution bundles behind one Workbench entry", () => {
   const codeBundle = readFileSync(join(editorRoot, "editor.code.all.ts"), "utf8");
   const academicBundle = readFileSync(join(editorRoot, "editor.academic.all.ts"), "utf8");
   const standardBundle = readFileSync(join(editorRoot, "editor.all.ts"), "utf8");
@@ -124,38 +124,32 @@ test("Product entries statically select their Aster contribution bundles", () =>
   assert.match(standardBundle, /contrib\/codeEditorPart\.contribution/u);
   assert.doesNotMatch(standardBundle, /editor\.(?:code|academic)\.all/u);
 
-  const codeEntry = readFileSync(resolve(editorRoot, "../code/browser/workbench/workbench-code.ts"), "utf8");
-  const academicEntry = readFileSync(resolve(editorRoot, "../code/browser/workbench/workbench-academic.ts"), "utf8");
-  const electronCodeEntry = readFileSync(resolve(editorRoot, "../code/electron-browser/workbench/workbench-code.ts"), "utf8");
-  const electronAcademicEntry = readFileSync(resolve(editorRoot, "../code/electron-browser/workbench/workbench-academic.ts"), "utf8");
-  assert.match(codeEntry, /editor\/editor\.code\.all/u);
-  assert.match(codeEntry, /workbench\/contrib\/codeEditor\/browser\/codeEditor\.contribution/u);
-  assert.match(codeEntry, /workbench\/contrib\/tasks\/browser\/tasks\.contribution/u);
-  assert.match(codeEntry, /workbench\/contrib\/testing\/browser\/testing\.contribution/u);
-  assert.match(codeEntry, /workbench\/contrib\/debug\/browser\/debug\.contribution/u);
-  assert.match(codeEntry, /codeWorkbenchServices/u);
-  assert.doesNotMatch(codeEntry, /editor\/editor\.academic\.all/u);
-  assert.match(academicEntry, /editor\/editor\.academic\.all/u);
-  assert.match(academicEntry, /workbench\/contrib\/academic\/browser\/academicEditor\.contribution/u);
-  assert.doesNotMatch(academicEntry, /workbench\/contrib\/tasks/u);
-  assert.doesNotMatch(academicEntry, /workbench\/contrib\/testing/u);
-  assert.doesNotMatch(academicEntry, /workbench\/contrib\/debug/u);
-  assert.doesNotMatch(academicEntry, /workbench\/contrib\/extensionHost/u);
-  assert.doesNotMatch(academicEntry, /editor\/editor\.code\.all/u);
-  assert.match(electronCodeEntry, /editor\/editor\.code\.all/u);
-  assert.match(electronCodeEntry, /workbench\/contrib\/codeEditor\/browser\/codeEditor\.contribution/u);
-  assert.match(electronCodeEntry, /workbench\/contrib\/tasks\/browser\/tasks\.contribution/u);
-  assert.match(electronCodeEntry, /workbench\/contrib\/testing\/browser\/testing\.contribution/u);
-  assert.match(electronCodeEntry, /workbench\/contrib\/debug\/browser\/debug\.contribution/u);
-  assert.match(electronCodeEntry, /codeWorkbenchServices/u);
-  assert.doesNotMatch(electronCodeEntry, /editor\/editor\.academic\.all/u);
-  assert.match(electronAcademicEntry, /editor\/editor\.academic\.all/u);
-  assert.match(electronAcademicEntry, /workbench\/contrib\/academic\/browser\/academicEditor\.contribution/u);
-  assert.doesNotMatch(electronAcademicEntry, /workbench\/contrib\/tasks/u);
-  assert.doesNotMatch(electronAcademicEntry, /workbench\/contrib\/testing/u);
-  assert.doesNotMatch(electronAcademicEntry, /workbench\/contrib\/debug/u);
-  assert.doesNotMatch(electronAcademicEntry, /workbench\/contrib\/extensionHost/u);
-  assert.doesNotMatch(electronAcademicEntry, /editor\/editor\.code\.all/u);
+  const browserEntry = readFileSync(resolve(editorRoot, "../code/browser/workbench/workbench.ts"), "utf8");
+  const electronEntry = readFileSync(resolve(editorRoot, "../code/electron-browser/workbench/workbench.ts"), "utf8");
+  const codeContribution = readFileSync(resolve(editorRoot, "../code/browser/workbench/modes/code.contribution.ts"), "utf8");
+  const academicContribution = readFileSync(resolve(editorRoot, "../code/browser/workbench/modes/academic.contribution.ts"), "utf8");
+  const electronCodeMode = readFileSync(resolve(editorRoot, "../code/electron-browser/workbench/modes/code.ts"), "utf8");
+  const electronAcademicMode = readFileSync(resolve(editorRoot, "../code/electron-browser/workbench/modes/academic.ts"), "utf8");
+  for (const entry of [browserEntry, electronEntry]) {
+    assert.match(entry, /__ZETA_PRODUCT__/u);
+    assert.match(entry, /modes\/code/u);
+    assert.match(entry, /modes\/academic/u);
+    assert.doesNotMatch(entry, /editor\/editor\.(?:code|academic)\.all/u);
+  }
+  assert.match(codeContribution, /editor\/editor\.code\.all/u);
+  assert.match(codeContribution, /workbench\/contrib\/codeEditor\/browser\/codeEditor\.contribution/u);
+  assert.match(codeContribution, /workbench\/contrib\/tasks\/browser\/tasks\.contribution/u);
+  assert.match(codeContribution, /workbench\/contrib\/testing\/browser\/testing\.contribution/u);
+  assert.match(codeContribution, /workbench\/contrib\/debug\/browser\/debug\.contribution/u);
+  assert.match(codeContribution, /codeWorkbenchServices/u);
+  assert.doesNotMatch(codeContribution, /editor\/editor\.academic\.all/u);
+  assert.match(academicContribution, /editor\/editor\.academic\.all/u);
+  assert.match(academicContribution, /workbench\/contrib\/academic\/browser\/academicEditor\.contribution/u);
+  assert.doesNotMatch(academicContribution, /workbench\/contrib\/(?:tasks|testing|debug)/u);
+  assert.doesNotMatch(academicContribution, /workbench\/contrib\/extensionHost/u);
+  assert.doesNotMatch(academicContribution, /editor\/editor\.code\.all/u);
+  assert.match(electronCodeMode, /browser\/workbench\/modes\/code\.contribution/u);
+  assert.match(electronAcademicMode, /browser\/workbench\/modes\/academic\.contribution/u);
 });
 
 test("Code services are installed by product-selected service registrations rather than UI contributions", () => {
@@ -177,10 +171,10 @@ test("Code services are installed by product-selected service registrations rath
 });
 
 test("Debug transport is contributed by Code product hosts only", () => {
-  const browserCode = readFileSync(resolve(editorRoot, "../code/browser/workbench/workbench-code.ts"), "utf8");
-  const browserAcademic = readFileSync(resolve(editorRoot, "../code/browser/workbench/workbench-academic.ts"), "utf8");
-  const electronCode = readFileSync(resolve(editorRoot, "../code/electron-browser/workbench/workbench-code.ts"), "utf8");
-  const electronAcademic = readFileSync(resolve(editorRoot, "../code/electron-browser/workbench/workbench-academic.ts"), "utf8");
+  const browserCode = readFileSync(resolve(editorRoot, "../code/browser/workbench/modes/code.ts"), "utf8");
+  const browserAcademic = readFileSync(resolve(editorRoot, "../code/browser/workbench/modes/academic.ts"), "utf8");
+  const electronCode = readFileSync(resolve(editorRoot, "../code/electron-browser/workbench/modes/code.ts"), "utf8");
+  const electronAcademic = readFileSync(resolve(editorRoot, "../code/electron-browser/workbench/modes/academic.ts"), "utf8");
   const mainCode = readFileSync(resolve(editorRoot, "../code/electron-main/codeMain.ts"), "utf8");
   const mainAcademic = readFileSync(resolve(editorRoot, "../code/electron-main/acaMain.ts"), "utf8");
   const sharedElectronRenderer = readFileSync(resolve(editorRoot, "../platform/native/electron-browser/rendererApi.ts"), "utf8");

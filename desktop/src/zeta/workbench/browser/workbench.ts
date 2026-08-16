@@ -268,11 +268,6 @@ export class Workbench extends DisposableOwner {
   ) {
     super();
     const normalizedSession = createWorkbenchSession(session);
-    if (normalizedSession.productId !== product.id) {
-      throw new TypeError(
-        `Workbench session '${normalizedSession.id}' belongs to '${normalizedSession.productId}', not '${product.id}'`,
-      );
-    }
     this.session = normalizedSession;
     const services = new ServiceCollection();
     const instantiationService = new InstantiationService(services);

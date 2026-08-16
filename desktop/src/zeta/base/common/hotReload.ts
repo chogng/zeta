@@ -61,9 +61,11 @@ function patchExportedPrototypes(oldExports: Record<string, unknown>, newExports
   for (const name of Object.keys(newExports)) {
     const current = oldExports[name];
     const replacement = newExports[name];
+    if (!isClassLike(current) && !isClassLike(replacement)) continue;
     if (!isClassLike(current) || !isClassLike(replacement) || !canPatchPrototype(current.prototype, replacement.prototype)) return false;
     replacements.push({ current: current.prototype, replacement: replacement.prototype, name });
   }
+  if (replacements.length === 0) return false;
   for (const replacement of replacements) {
     patchPrototype(replacement.current, replacement.replacement);
     newExports[replacement.name] = oldExports[replacement.name];

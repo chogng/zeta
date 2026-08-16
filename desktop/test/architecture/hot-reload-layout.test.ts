@@ -9,6 +9,7 @@ const buildRoot = join(desktopRoot, "build/vite");
 
 test("hot reload separates the base runtime from Vite build integration", () => {
   const runtime = read("src/zeta/base/common/hotReload.ts");
+  const helpers = read("src/zeta/base/common/hotReloadHelpers.ts");
   const setup = read("build/vite/setup-dev.ts");
   const plugin = read("build/vite/hotReloadPlugin.ts");
   const config = read("build/vite/vite.config.ts");
@@ -16,6 +17,10 @@ test("hot reload separates the base runtime from Vite build integration", () => 
   assert.match(runtime, /registerHotReloadHandler/u);
   assert.match(runtime, /\$hotReload_applyNewExports/u);
   assert.doesNotMatch(runtime, /from\s+["']vite["']|import\.meta\.hot|workbench/u);
+  assert.match(helpers, /readHotReloadableExport/u);
+  assert.match(helpers, /observeHotReloadableExports/u);
+  assert.match(helpers, /createHotClass/u);
+  assert.doesNotMatch(helpers, /from\s+["']vite["']|import\.meta\.hot|workbench/u);
   assert.match(setup, /base\/common\/hotReload\.ts/u);
   assert.match(setup, /enableHotReload\(\)/u);
   assert.match(plugin, /type Plugin/u);

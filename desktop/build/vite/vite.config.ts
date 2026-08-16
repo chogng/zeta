@@ -12,8 +12,8 @@ export default defineConfig(() => {
   const webAppServerEnabled = process.env.ZETA_WEB_APP_SERVER === "1";
   const developmentPort = webAppServerEnabled ? 5174 : 5173;
   const sourceRoot = resolve(desktopRoot, "src/zeta/code");
-  const browserEntry = `browser/workbench/${product.rendererEntry}`;
-  const electronEntry = `electron-browser/workbench/${product.rendererEntry}`;
+  const browserEntry = "browser/workbench/workbench";
+  const electronEntry = "electron-browser/workbench/workbench";
   const dedicatedSessions = product.dedicatedSessions;
   const sessionsInputs = dedicatedSessions
     ? {
@@ -29,9 +29,10 @@ export default defineConfig(() => {
     base: "./",
     root: sourceRoot,
     define: {
+      __ZETA_PRODUCT__: JSON.stringify(product.id),
       __ZETA_WEB_APP_SERVER__: JSON.stringify(webAppServerEnabled),
     },
-    plugins: [hotReloadPlugin({ desktopRoot }), workbenchEntryPlugin(product.rendererEntry), productIconsPlugin(), ...(webAppServerEnabled ? [webAppServerVitePlugin()] : [])],
+    plugins: [hotReloadPlugin({ desktopRoot }), workbenchEntryPlugin(), productIconsPlugin(), ...(webAppServerEnabled ? [webAppServerVitePlugin()] : [])],
     optimizeDeps: {
       include: ["vscode-oniguruma"],
     },

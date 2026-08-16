@@ -1,9 +1,7 @@
 /**
- * Redirects the development server root to the selected Browser Workbench.
+ * Redirects the development server root to the shared Browser Workbench.
  */
-export function workbenchEntryPlugin(rendererEntry) {
-  const entryPath = `/browser/workbench/${rendererEntry}.html`;
-
+export function workbenchEntryPlugin() {
   return {
     name: "zeta-workbench-entry",
     configureServer(server) {
@@ -17,7 +15,7 @@ export function workbenchEntryPlugin(rendererEntry) {
 
         response.statusCode = 302;
         response.setHeader("Cache-Control", "no-store");
-        response.setHeader("Location", entryPath);
+        response.setHeader("Location", "/browser/workbench/workbench.html");
         response.end();
       });
     },

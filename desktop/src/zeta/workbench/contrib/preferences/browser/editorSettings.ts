@@ -27,13 +27,13 @@ export class EditorSettingsPane extends DisposableOwner {
     this.element.append(note);
 
     this.element.append(
-      this.createGroup("Editor selection", "Choose what new documents start with while existing resources continue to resolve by content type. The new-document preference activates with the unified profile host.", [
+      this.createGroup("Editor selection", "Choose what new documents start with while existing resources continue to resolve by content type.", [
         this.createSelectSetting({
           key: EditorSelectionConfiguration.defaultNewDocumentEditor,
           label: "Default editor for new documents",
-          description: "Follow the active Workbench profile, or explicitly prefer the Code or Academic editor for new untitled documents.",
+          description: "Follow the active build mode, or explicitly prefer the Code or Academic editor for new untitled documents.",
           options: [
-            { value: "profile", label: "Follow Workbench profile" },
+            { value: "buildMode", label: "Follow build mode" },
             { value: "code", label: "Code Editor" },
             { value: "academic", label: "Academic Editor" },
           ],

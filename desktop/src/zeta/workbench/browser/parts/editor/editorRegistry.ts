@@ -87,7 +87,7 @@ export class EditorPaneRegistry {
   }
 }
 
-/** Realm-scoped declarations populated by the selected product entry. */
+/** Realm-scoped declarations populated by the selected build-mode contribution. */
 export const EditorPanes = new EditorPaneRegistry();
 
 export function registerEditorPane(

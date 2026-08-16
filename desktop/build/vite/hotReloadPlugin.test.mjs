@@ -23,10 +23,20 @@ test("Vite hot reload supports explicit prototype-patch opt in", () => {
   assert.match(transformed, /CustomSurface/u);
 });
 
-test("Vite hot reload leaves non-UI modules and production builds unchanged", () => {
+test("Vite hot reload exposes general runtime exports for helper-driven invalidation", () => {
+  const plugin = hotReloadPlugin({ desktopRoot: "/workspace/desktop" });
+  const transformed = transform(plugin, "export function compute() { return 1; } export const label = 'one';", "/workspace/desktop/src/zeta/feature.ts");
+  assert.match(transformed, /\{ compute, label \}/u);
+  assert.ok(transformed.indexOf("$hotReload_applyNewExports") > transformed.indexOf("import.meta.hot.accept"));
+  assert.match(transformed, /config: \{\}/u);
+});
+
+test("Vite hot reload leaves type-only modules and production builds unchanged", () => {
   const plugin = hotReloadPlugin({ desktopRoot: "/workspace/desktop" });
   assert.equal(plugin.apply, "serve");
-  assert.equal(transform(plugin, "export class ConfigurationService extends DisposableOwner {}", "/workspace/desktop/src/zeta/configurationService.ts"), undefined);
+  assert.equal(transform(plugin, "export interface Configuration { value: string; }", "/workspace/desktop/src/zeta/configuration.ts"), undefined);
+  assert.equal(transform(plugin, "interface Configuration { value: string; } export type { Configuration };", "/workspace/desktop/src/zeta/configuration.ts"), undefined);
+  assert.equal(transform(plugin, "export declare const injected: string;", "/workspace/desktop/src/zeta/environment.ts"), undefined);
   assert.equal(transform(plugin, "export class SidebarPart extends PaneCompositePart {}", "/workspace/desktop/src/zeta/sidebarPart.js"), undefined);
 });
 
@@ -74,6 +84,20 @@ test("Vite hot reload keeps HMR for a safe method-only update", async () => {
   const result = await plugin.handleHotUpdate({
     file,
     read: async () => "export class SidebarPart extends BasePart { render() { return 2; } }",
+    server: { config: { logger: { info() {} } }, ws: { send: message => messages.push(message) } },
+  });
+  assert.equal(result, undefined);
+  assert.deepEqual(messages, []);
+});
+
+test("Vite hot reload lets helper-driven modules reach the runtime handler", async () => {
+  const plugin = hotReloadPlugin({ desktopRoot: "/workspace/desktop" });
+  const file = "/workspace/desktop/src/zeta/feature.ts";
+  transform(plugin, "export function compute() { return 1; }", file);
+  const messages = [];
+  const result = await plugin.handleHotUpdate({
+    file,
+    read: async () => "export function compute() { return 2; }",
     server: { config: { logger: { info() {} } }, ws: { send: message => messages.push(message) } },
   });
   assert.equal(result, undefined);

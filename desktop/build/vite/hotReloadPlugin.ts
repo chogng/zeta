@@ -28,10 +28,10 @@ export function hotReloadPlugin(options: HotReloadPluginOptions = {}): Plugin {
         const file = cleanModuleId(id);
         if (!file.endsWith(".ts")) return undefined;
         const analysis = analyzeHotReloadModule(code, file);
-        if (!analysis.syntaxValid || analysis.classNames.length === 0) return undefined;
+        if (!analysis.syntaxValid || analysis.exportNames.length === 0) return undefined;
         if (code.includes(hotExportsName)) throw new Error(`Reserved hot-reload export is already declared: ${hotExportsName}`);
         analyses.set(file, analysis);
-        return injectHotReloadBoundary(code, analysis.classNames, neutralModuleId(file, desktopRoot));
+        return injectHotReloadBoundary(code, analysis.exportNames, neutralModuleId(file, desktopRoot), analysis.classNames.length > 0);
       },
     },
     async handleHotUpdate(context) {
@@ -41,6 +41,10 @@ export function hotReloadPlugin(options: HotReloadPluginOptions = {}): Plugin {
       const code = context.read ? await context.read() : await readFile(file, "utf8");
       const next = analyzeHotReloadModule(code, file);
       if (!next.syntaxValid) return undefined;
+      if (previous.classNames.length === 0) {
+        analyses.set(file, next);
+        return undefined;
+      }
       const reason = unsafeHotReloadChangeReason(previous, next);
       analyses.set(file, next);
       if (!reason) return undefined;
@@ -52,9 +56,10 @@ export function hotReloadPlugin(options: HotReloadPluginOptions = {}): Plugin {
   };
 }
 
-function injectHotReloadBoundary(code: string, classNames: readonly string[], moduleId: string): string {
-  const exports = classNames.join(", ");
-  return `${code}\n\nconst ${hotExportsName} = { ${exports} };\nexport { ${hotExportsName} };\nif (import.meta.hot) {\n  const oldExports = import.meta.hot.data.$hotReloadExports ?? ${hotExportsName};\n  import.meta.hot.data.$hotReloadExports = oldExports;\n  const acceptNewExports = globalThis.$hotReload_applyNewExports?.({\n    oldExports,\n    newSrc: ${JSON.stringify(moduleId)},\n    config: { mode: "patch-prototype" },\n  });\n  if (acceptNewExports) {\n    import.meta.hot.accept(newModule => {\n      const newExports = newModule?.${hotExportsName};\n      if (!newExports || !acceptNewExports(newExports)) import.meta.hot?.invalidate("Hot-reload boundary became incompatible");\n    });\n  } else {\n    import.meta.hot.invalidate("No hot-reload runtime accepted this module");\n  }\n}\n`;
+function injectHotReloadBoundary(code: string, exportNames: readonly string[], moduleId: string, patchPrototype: boolean): string {
+  const exports = exportNames.join(", ");
+  const config = patchPrototype ? '{ mode: "patch-prototype" }' : "{}";
+  return `${code}\n\nconst ${hotExportsName} = { ${exports} };\nexport { ${hotExportsName} };\nif (import.meta.hot) {\n  const oldExports = import.meta.hot.data.$hotReloadExports ?? ${hotExportsName};\n  import.meta.hot.data.$hotReloadExports = oldExports;\n  import.meta.hot.accept(newModule => {\n    const newExports = newModule?.${hotExportsName};\n    const acceptNewExports = globalThis.$hotReload_applyNewExports?.({\n      oldExports,\n      newSrc: ${JSON.stringify(moduleId)},\n      config: ${config},\n    });\n    if (!newExports || !acceptNewExports?.(newExports)) import.meta.hot?.invalidate("No compatible hot-reload handler accepted this module");\n  });\n}\n`;
 }
 
 function cleanModuleId(id: string): string {

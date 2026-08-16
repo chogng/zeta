@@ -5,12 +5,8 @@ export const productIds = [
 
 export type ProductId = typeof productIds[number];
 
-export const rendererEntryNames = [
-  "workbench-code",
-  "workbench-academic",
-] as const;
-
-export type RendererEntryName = typeof rendererEntryNames[number];
+/** Canonical Workbench renderer shared by every build mode. */
+export const WORKBENCH_RENDERER_ENTRY = "workbench";
 
 /** Product-owned renderer entry for an optional dedicated Sessions window. */
 export interface DedicatedSessionsConfiguration {
@@ -27,7 +23,7 @@ export interface ProductConfiguration {
   readonly userDataFolderName: string;
   /** Stable renderer storage namespace for this product edition. */
   readonly storageNamespace: string;
-  readonly rendererEntry: RendererEntryName;
+  readonly rendererEntry: typeof WORKBENCH_RENDERER_ENTRY;
   /** Omitted when the product keeps all of its work inside the regular Workbench. */
   readonly dedicatedSessions?: DedicatedSessionsConfiguration;
 }
@@ -38,7 +34,7 @@ export const ZetaDesktopProduct: ProductConfiguration = {
   applicationId: "com.zeta.desktop.code",
   userDataFolderName: "Zeta",
   storageNamespace: "code",
-  rendererEntry: "workbench-code",
+  rendererEntry: WORKBENCH_RENDERER_ENTRY,
   dedicatedSessions: {
     rendererEntry: "sessions-code",
   },
@@ -50,7 +46,7 @@ export const AcademicProduct: ProductConfiguration = {
   applicationId: "com.zeta.desktop.academic",
   userDataFolderName: "Zeta Academic",
   storageNamespace: "academic",
-  rendererEntry: "workbench-academic",
+  rendererEntry: WORKBENCH_RENDERER_ENTRY,
 };
 
 const products: Readonly<Record<ProductId, ProductConfiguration>> = {

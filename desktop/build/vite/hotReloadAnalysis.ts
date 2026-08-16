@@ -11,6 +11,7 @@ export interface HotReloadClassAnalysis {
 
 export interface HotReloadModuleAnalysis {
   readonly syntaxValid: boolean;
+  readonly exportNames: readonly string[];
   readonly classNames: readonly string[];
   readonly classes: readonly HotReloadClassAnalysis[];
   readonly moduleBoundary: readonly string[];
@@ -30,10 +31,51 @@ export function analyzeHotReloadModule(code: string, file = "module.ts"): HotRel
   }
   return {
     syntaxValid: sourceParseDiagnostics(source).length === 0,
+    exportNames: collectRuntimeExportNames(source, targetDeclarations),
     classNames: classes.map(entry => entry.name),
     classes,
     moduleBoundary: source.statements.filter(statement => !targetDeclarations.has(statement as ts.ClassDeclaration)).map(statement => statement.getText(source)),
   };
+}
+
+function collectRuntimeExportNames(source: ts.SourceFile, targetDeclarations: ReadonlySet<ts.ClassDeclaration>): readonly string[] {
+  const names = new Set<string>();
+  for (const declaration of targetDeclarations) {
+    if (declaration.name) names.add(declaration.name.text);
+  }
+  for (const statement of source.statements) {
+    if (hasModifier(statement, ts.SyntaxKind.ExportKeyword) && !hasModifier(statement, ts.SyntaxKind.DeclareKeyword)) collectExportedDeclarationNames(statement, names);
+    if (ts.isExportDeclaration(statement) && !statement.isTypeOnly && !statement.moduleSpecifier && statement.exportClause && ts.isNamedExports(statement.exportClause)) {
+      for (const element of statement.exportClause.elements) {
+        if (!element.isTypeOnly) names.add((element.propertyName ?? element.name).text);
+      }
+    }
+    if (ts.isExportAssignment(statement) && ts.isIdentifier(statement.expression)) names.add(statement.expression.text);
+  }
+  return [...names];
+}
+
+function collectExportedDeclarationNames(statement: ts.Statement, names: Set<string>): void {
+  if ((ts.isClassDeclaration(statement) || ts.isFunctionDeclaration(statement) || ts.isEnumDeclaration(statement)) && statement.name) {
+    names.add(statement.name.text);
+    return;
+  }
+  if (ts.isModuleDeclaration(statement) && ts.isIdentifier(statement.name)) {
+    names.add(statement.name.text);
+    return;
+  }
+  if (!ts.isVariableStatement(statement)) return;
+  for (const declaration of statement.declarationList.declarations) collectBindingNames(declaration.name, names);
+}
+
+function collectBindingNames(name: ts.BindingName, names: Set<string>): void {
+  if (ts.isIdentifier(name)) {
+    names.add(name.text);
+    return;
+  }
+  for (const element of name.elements) {
+    if (!ts.isOmittedExpression(element)) collectBindingNames(element.name, names);
+  }
 }
 
 /** Explains why a change must rebuild the module rather than patch existing prototypes. */

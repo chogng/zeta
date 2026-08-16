@@ -86,8 +86,8 @@ const { CommandService } = await import(
 const { InstantiationService, ServiceCollection, SyncDescriptor } = await import(
   "../../../platform/instantiation/common/instantiation.js"
 );
-const { academicWorkbenchSession } = await import(
-  "../../../code/browser/workbench/academicWorkbenchSession.js"
+const { defaultWorkbenchSession } = await import(
+  "../../../workbench/browser/defaultWorkbenchSession.js"
 );
 
 type WorkbenchPartId =
@@ -393,18 +393,18 @@ test("Workbench layout derives flexible editor size from the container", () => {
   dom.window.close();
 });
 
-test("Workbench layout applies the selected product session defaults", () => {
+test("Workbench layout applies the shared session defaults", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
   const harness = createLayoutHarness(dom.window.document, {
     initialDimension: new Dimension(1_200, 800),
-    session: academicWorkbenchSession,
+    session: defaultWorkbenchSession,
   });
   harness.layout.layout(new Dimension(1_200, 800));
 
-  assert.equal(harness.layout.getPartSize("sidebar").width, 280);
-  assert.equal(harness.layout.getPartSize("auxiliarybar").width, 420);
-  assert.equal(harness.layout.getPartSize("panel").height, 280);
-  assert.equal(harness.layout.isPartVisible("auxiliarybar"), false);
+  assert.equal(harness.layout.getPartSize("sidebar").width, 220);
+  assert.equal(harness.layout.getPartSize("auxiliarybar").width, 380);
+  assert.equal(harness.layout.getPartSize("panel").height, 200);
+  assert.equal(harness.layout.isPartVisible("auxiliarybar"), true);
   assert.equal(harness.layout.isPartVisible("sidebar"), true);
 
   harness.disposables.dispose();

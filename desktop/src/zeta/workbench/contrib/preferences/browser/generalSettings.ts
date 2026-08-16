@@ -6,7 +6,6 @@ import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { AccessibilityConfiguration, type AccessibilityReductionConfiguration, type AccessibilitySupportConfiguration } from "../../../../platform/accessibility/common/accessibility.js";
 import type { IConfigurationKey, IConfigurationService } from "../../../../platform/configuration/common/configurationService.js";
 import { HoverConfiguration, MaximumHoverDelay, MinimumHoverDelay } from "../../../../platform/hover/common/hoverService.js";
-import { WorkbenchProfileConfiguration } from "../../../common/workbenchProfileConfiguration.js";
 import { MaximumSashHoverDelay, MaximumSashSize, MinimumSashHoverDelay, MinimumSashSize, SashConfiguration } from "../../sash/common/sash.js";
 
 type GeneralControl = HTMLInputElement | SelectBox;
@@ -22,18 +21,6 @@ export class GeneralSettingsPane extends DisposableOwner {
     this.element = ownerDocument.createElement("div");
     this.element.className = "zeta-general-settings";
     this.element.append(
-      this.createGroup("Work mode", "Choose the default environment used by new Zeta windows.", [
-        this.createSelectSetting({
-          key: WorkbenchProfileConfiguration.defaultProfile,
-          label: "Default Workbench profile",
-          description: "Code emphasizes projects, source control, tasks, testing, and debugging. Academic emphasizes structured documents, citations, and writing.",
-          options: [
-            { value: "code", label: "Code" },
-            { value: "academic", label: "Academic" },
-          ],
-        }),
-        this.createNotice("Profile runtime migration", "The preference is persisted now. Switching the active runtime will take effect after Code and Academic move to the shared product entry; the current window is not changed."),
-      ]),
       this.createGroup("Accessibility", "Adapt interaction and presentation to accessibility needs.", [
         this.createSelectSetting({
           key: AccessibilityConfiguration.editorAccessibilitySupport,
@@ -85,17 +72,6 @@ export class GeneralSettingsPane extends DisposableOwner {
     list.append(...settings);
     group.append(heading, hint, list);
     return group;
-  }
-
-  private createNotice(label: string, description: string): HTMLElement {
-    const notice = this.element.ownerDocument.createElement("div");
-    notice.className = "zeta-general-setting zeta-general-setting-notice";
-    notice.append(this.createSettingCopy(label, description));
-    const state = this.element.ownerDocument.createElement("span");
-    state.className = "zeta-general-setting-state";
-    state.textContent = "Pending host migration";
-    notice.append(state);
-    return notice;
   }
 
   private createToggleSetting(key: IConfigurationKey<boolean>, label: string, description: string): HTMLElement {
@@ -167,7 +143,6 @@ export class GeneralSettingsPane extends DisposableOwner {
   }
 
   private syncControls(): void {
-    this.syncControl(WorkbenchProfileConfiguration.defaultProfile);
     this.syncControl(AccessibilityConfiguration.editorAccessibilitySupport);
     this.syncControl(AccessibilityConfiguration.reduceMotion);
     this.syncControl(AccessibilityConfiguration.reduceTransparency);

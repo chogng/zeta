@@ -3,29 +3,24 @@ import test from "node:test";
 
 import { workbenchEntryPlugin } from "./workbenchEntryPlugin.mjs";
 
-test("Workbench entry redirects root requests to the selected product", () => {
-  for (const [rendererEntry, expectedLocation] of [
-    ["workbench-code", "/browser/workbench/workbench-code.html"],
-    ["workbench-academic", "/browser/workbench/workbench-academic.html"],
-  ]) {
-    const middleware = configuredMiddleware(rendererEntry);
-    const result = invoke(middleware, { method: "GET", url: "/?theme=dark" });
-    assert.deepEqual(result, {
-      ended: true,
-      headers: {
-        "Cache-Control": "no-store",
-        Location: expectedLocation,
-      },
-      nextCalled: false,
-      statusCode: 302,
-    });
-  }
+test("Workbench entry redirects root requests to the shared Workbench", () => {
+  const middleware = configuredMiddleware();
+  const result = invoke(middleware, { method: "GET", url: "/?theme=dark" });
+  assert.deepEqual(result, {
+    ended: true,
+    headers: {
+      "Cache-Control": "no-store",
+      Location: "/browser/workbench/workbench.html",
+    },
+    nextCalled: false,
+    statusCode: 302,
+  });
 });
 
 test("Workbench entry leaves non-root and mutating requests to Vite", () => {
-  const middleware = configuredMiddleware("workbench-code");
+  const middleware = configuredMiddleware();
   for (const request of [
-    { method: "GET", url: "/browser/workbench/workbench-code.html" },
+    { method: "GET", url: "/browser/workbench/workbench.html" },
     { method: "POST", url: "/" },
   ]) {
     assert.deepEqual(invoke(middleware, request), {
@@ -37,9 +32,9 @@ test("Workbench entry leaves non-root and mutating requests to Vite", () => {
   }
 });
 
-function configuredMiddleware(rendererEntry) {
+function configuredMiddleware() {
   let middleware;
-  workbenchEntryPlugin(rendererEntry).configureServer({
+  workbenchEntryPlugin().configureServer({
     middlewares: {
       use(candidate) {
         middleware = candidate;

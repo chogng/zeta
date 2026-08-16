@@ -6,13 +6,13 @@ import { createSessionsProfile } from "../../common/sessionsProfile.js";
 
 test("dedicated Sessions profile belongs to the Code product", () => {
   assert.equal(codeSessionsProfile.productId, "code");
-  assert.equal(codeSessionsProfile.workbenchRelativePath, "../workbench/workbench-code.html");
+  assert.equal(codeSessionsProfile.workbenchRelativePath, "../workbench/workbench.html");
 });
 
 test("Sessions navigation only resolves a sibling renderer page", () => {
   assert.equal(
-    resolveSessionsPageUrl("../workbench/workbench-code.html", "file:///zeta/electron-browser/sessions/sessions-code.html"),
-    "file:///zeta/electron-browser/workbench/workbench-code.html",
+    resolveSessionsPageUrl("../workbench/workbench.html", "file:///zeta/electron-browser/sessions/sessions-code.html"),
+    "file:///zeta/electron-browser/workbench/workbench.html",
   );
   assert.throws(
     () => resolveSessionsPageUrl("https://example.com", "file:///zeta/electron-browser/sessions/sessions-code.html"),

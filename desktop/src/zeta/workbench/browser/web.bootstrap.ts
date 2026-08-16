@@ -8,6 +8,7 @@ declare const __ZETA_WEB_APP_SERVER__: boolean;
 
 /** Starts a product Workbench after resolving its optional development host. */
 export function startBrowserWorkbench(product: ProductConfiguration, session: WorkbenchSession, rendererCapabilities: readonly ViteDevRendererCapabilityContribution[] = []): void {
+  document.title = product.name;
   void startBrowserWorkbenchAsync(product, session, rendererCapabilities);
 }
 

@@ -11,8 +11,8 @@ import test from "node:test";
 import {
   getProductConfiguration,
   productIds,
-  rendererEntryNames,
   resolveProductId,
+  WORKBENCH_RENDERER_ENTRY,
 } from "../../../product/common/product.js";
 import {
   resolvePackagedProductId,
@@ -26,7 +26,7 @@ test("product selection defaults to the Zeta Desktop build and accepts every edi
     const product = getProductConfiguration(productId);
     assert.equal(resolveProductId(productId), productId);
     assert.equal(product.id, productId);
-    assert.ok(rendererEntryNames.includes(product.rendererEntry));
+    assert.equal(product.rendererEntry, WORKBENCH_RENDERER_ENTRY);
     assert.match(product.applicationId, /^com\.zeta\.desktop\./);
     assert.ok(product.userDataFolderName.length > 0);
     assert.equal(product.storageNamespace, product.id);
@@ -36,7 +36,7 @@ test("product selection defaults to the Zeta Desktop build and accepts every edi
   assert.equal(new Set(productIds.map((id) => getProductConfiguration(id).storageNamespace)).size, productIds.length);
   assert.equal(
     getProductConfiguration("code").rendererEntry,
-    "workbench-code",
+    WORKBENCH_RENDERER_ENTRY,
   );
   assert.equal(getProductConfiguration("code").name, "Zeta");
   assert.equal(
@@ -45,7 +45,7 @@ test("product selection defaults to the Zeta Desktop build and accepts every edi
   );
   assert.equal(
     getProductConfiguration("academic").rendererEntry,
-    "workbench-academic",
+    WORKBENCH_RENDERER_ENTRY,
   );
   assert.equal(getProductConfiguration("academic").dedicatedSessions, undefined);
 });

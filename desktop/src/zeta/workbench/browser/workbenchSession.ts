@@ -1,16 +1,14 @@
 import { parseWorkbenchLayoutState, type WorkbenchLayoutState } from "./layout/workbenchLayoutState.js";
 
 /**
- * Product-owned Workbench composition profile.
+ * Host-supplied Workbench composition profile.
  *
- * The product entry supplies one profile before the shared Workbench starts.
  * Workbench owns the layout/runtime contract, while the profile owns the
- * initial arrangement appropriate for Code, Academic, or a combined build.
+ * initial arrangement. Build-mode capability selection is intentionally
+ * independent from this UI profile.
  */
 export interface WorkbenchSession {
   readonly id: string;
-  /** Product edition that is allowed to consume this profile. */
-  readonly productId: string;
   readonly label: string;
   readonly layout: WorkbenchLayoutState;
   readonly composition: WorkbenchSessionComposition;
@@ -28,7 +26,6 @@ export interface WorkbenchSessionComposition {
 export function validateWorkbenchSession(session: WorkbenchSession): void {
   if (!session || typeof session !== "object") throw new TypeError("Workbench session is required");
   if (typeof session.id !== "string" || !/^[a-z][a-z0-9-]*$/.test(session.id)) throw new TypeError("Workbench session id must be a stable kebab-case identifier");
-  if (typeof session.productId !== "string" || !/^[a-z][a-z0-9-]*$/.test(session.productId)) throw new TypeError("Workbench session product id must be a stable kebab-case identifier");
   if (typeof session.label !== "string" || session.label.trim().length === 0) throw new TypeError("Workbench session label must not be empty");
   parseWorkbenchLayoutState(session.layout);
   validateWorkbenchSessionComposition(session.composition);
@@ -40,7 +37,6 @@ export function createWorkbenchSession(session: WorkbenchSession): WorkbenchSess
   const layout = parseWorkbenchLayoutState(session.layout);
   return Object.freeze({
     id: session.id,
-    productId: session.productId,
     label: session.label,
     layout: Object.freeze({
       version: 3 as const,

@@ -14,8 +14,8 @@
 | `workbench/contrib/codeEditor/browser/browserEditorPart.ts` | TextMate grammar readiness、syntax Worker 和 completion Worker 的 Workbench browser adapter。 |
 | `editor.api.ts` | DOM-free 的统一程序化 API；其中 Aster text-model 导出不加载 Workbench、DOM 或 contribution。 |
 | `editor.all.ts` | Code 与 Academic 共同验证的标准 editor profile；静态导入共同 contribution。 |
-| `editor.code.all.ts` | Code 产品入口；当前只加载标准 profile，不复制共同清单。 |
-| `editor.academic.all.ts` | Academic 产品入口；在标准 profile 上追加 document engine contribution。 |
+| `editor.code.all.ts` | Code 构建模式；当前只加载标准 profile，不复制共同清单。 |
+| `editor.academic.all.ts` | Academic 构建模式；在标准 profile 上追加 document engine contribution。 |
 | `editor.main.ts` | 完整入口；组合 `editor.all.ts` 与 `editor.api.ts`。 |
 | `browser/language/languageWorker.start.ts` | dedicated language worker 的统一启动协议；syntax 与 completion worker 使用它建立 canonical wire port。 |
 | `workbench/contrib/codeEditor/browser/codeEditor.contribution.ts` | 注册 Aster code/diff pane，并注入 Workbench text-file、TextMate 与 Rust adapter；生产环境不提供 fallback。 |

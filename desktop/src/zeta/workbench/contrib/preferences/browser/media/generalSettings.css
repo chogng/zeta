@@ -87,15 +87,6 @@
   justify-self: end;
 }
 
-.zeta-general-setting-state {
-  padding: 4px 8px;
-  border: 1px solid var(--zeta-widget-border);
-  border-radius: 999px;
-  color: var(--zeta-description-foreground);
-  font-size: 11px;
-  text-align: center;
-}
-
 .zeta-general-settings-status {
   min-height: 18px;
   margin: -18px 0 0;

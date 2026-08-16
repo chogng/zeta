@@ -4,7 +4,7 @@
 
 ## 快速理解
 
-Aster 是 Zeta 唯一的可组装编辑器内核，源码保持在一个扁平的 `editor` 领域模块中。它包含两个独立的同步权威：行式文本 `TextModel` 和结构化文档 `DocumentModel`。两者共同使用 VS Code 风格的 `common / browser / contrib / test` 分区；Code 与 Academic 不拥有第二份 editor 源码，而是在产品入口静态加载不同的 contribution bundle。
+Aster 是 Zeta 唯一的可组装编辑器内核，源码保持在一个扁平的 `editor` 领域模块中。它包含两个独立的同步权威：行式文本 `TextModel` 和结构化文档 `DocumentModel`。两者共同使用 VS Code 风格的 `common / browser / contrib / test` 分区；Code 与 Academic 不拥有第二份 editor 源码，而是在共享 Workbench 入口之后按构建模式静态加载不同的 contribution bundle。
 
 | 使用场景 | 产品加载入口 | 编辑能力 |
 | --- | --- | --- |

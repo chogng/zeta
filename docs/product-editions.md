@@ -3,14 +3,20 @@
 > 本文是 Electron Desktop 内部 `code` 与 `academic` 构建变体的 canonical 说明。
 > 它们不等同于公开产品线；公开宿主边界见 [`product-lines.md`](product-lines.md)。
 
-## 当前构建变体
+## 快速理解
+
+Code 与 Academic 是同一桌面宿主的两种构建模式，不是两套 Workbench。两种构建共享入口、
+布局 profile 和 Workbench runtime；构建模式只静态选择 editor、Tasks、Testing、Debug 等能力
+contribution。这个边界沿用 VS Code 的单一 Workbench 与产品级 contribution 装配方式。
 
 | Electron 构建变体 | `ZETA_PRODUCT` | Workbench 入口 | Dedicated Sessions | Renderer 输出 |
 | --- | --- | --- | --- | --- |
-| Zeta Code | `code` | `workbench-code` | `sessions-code` | `desktop/dist/renderer/code` |
-| Zeta Academic | `academic` | `workbench-academic` | ❌ 未提供 | `desktop/dist/renderer/academic` |
+| Zeta Code | `code` | `workbench` | `sessions-code` | `desktop/dist/renderer/code` |
+| Zeta Academic | `academic` | `workbench` | ❌ 未提供 | `desktop/dist/renderer/academic` |
 
-两个产品位于同一仓库、共享 Workbench 基础设施和 Rust App Server，但各自拥有
+## 当前构建变体
+
+两个构建变体位于同一仓库、共享 Workbench 基础设施和 Rust App Server，但各自拥有
 `applicationId`、`userDataFolderName`、renderer storage namespace 与 App Server profile
 root。Electron Main 在持久化服务启动前设置这些路径，因此两者能够同机安装和同时运行。
 同一 workspace 仍是共享文件场景，需要文件级协调；它不是产品状态共享。
@@ -46,11 +52,15 @@ Zotero 同步和引用索引等领域能力不得提前放进 Workbench layout �
 
 ## 编辑器与默认 Workbench
 
-普通 Workbench 仍使用已有的 immutable `WorkbenchSession` 初始 profile：Code 使用 Aster，
-Academic 使用 Aster。它们只决定正常工作台启动时的默认区域和 editor bundle；Dedicated
-Sessions 自己构造固定页面，不读取或更改 `WorkbenchLayout`。
+普通 Workbench 使用唯一的 immutable `defaultWorkbenchSession`：两个构建具有相同初始区域、
+默认 view container 和可持久化布局语义。Dedicated Sessions 自己构造固定页面，不读取或更改
+`WorkbenchLayout`。
 
-产品入口分别静态加载 `editor.code.all.ts` 与 `editor.academic.all.ts`。两个 bundle 都来自同一个扁平的 `src/zeta/editor` 模块；Aster 是统一内核品牌，`TextModel` 与 `DocumentModel` 分别拥有 Text Engine 和 Document Engine 的同步语义。
+`workbench.ts` 是 Browser 与 Electron 各自唯一的 Workbench renderer 入口；Vite 将
+`__ZETA_PRODUCT__` 固定为当前构建模式，再加载 `modes/code` 或 `modes/academic`。模式 contribution
+分别静态加载 `editor.code.all.ts` 与 `editor.academic.all.ts`，但不得拥有布局、Part topology 或
+第二套 Workbench runtime。两个 editor bundle 都来自同一个扁平的 `src/zeta/editor` 模块；Aster
+是统一内核品牌，`TextModel` 与 `DocumentModel` 分别拥有 Text Engine 和 Document Engine 的同步语义。
 
 ## 构建与验证
 
@@ -61,6 +71,6 @@ corepack pnpm --dir desktop build:code
 corepack pnpm --dir desktop build:academic
 ```
 
-每次构建必须产生该产品的 Browser 与 Electron Workbench HTML；只有声明
+每次构建必须产生共享命名的 Browser 与 Electron `workbench.html`；只有声明
 `dedicatedSessions` 的 Code 还必须产生 Browser 与 Electron Sessions HTML。发布包只收录一个
 产品 renderer 目录；Main 会校验该产品声明的完整入口集合，避免安装身份依赖用户可控的环境变量。

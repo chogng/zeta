@@ -65,12 +65,14 @@ Vite，并按浏览器连接管理 App Server。启动后不要关闭终端，�
 
 ### 开发态热更新
 
-热更新分为两个单向依赖层：`src/zeta/base/common/hotReload.ts` 只定义 Renderer realm 内通用的
-export-handler runtime，不依赖 Vite 或 Workbench；`build/vite/` 拥有开发入口、语法分析、HMR 边界
-注入和完整 Vite 配置。Workbench 产品源码不启用或配置开发工具。
+热更新分为两个单向依赖层：`src/zeta/base/common/hotReload.ts` 定义 Renderer realm 内通用的
+export-handler runtime，`src/zeta/base/common/hotReloadHelpers.ts` 在其上提供
+`readHotReloadableExport`、`observeHotReloadableExports` 和 `createHotClass`；两者都不依赖 Vite 或
+Workbench。`build/vite/` 拥有开发入口、语法分析、HMR 边界注入和完整 Vite 配置。Workbench 产品
+源码不启用或配置开发工具。
 
 Renderer 开发服务器使用 Vite HMR。`build/vite/setup-dev.ts` 在产品入口前启用 runtime。CSS 由 Vite
-直接替换；名称以 `Part`、`ViewPane` 或
+直接替换；一般运行时导出会交给 helper 注册的观察者决定是否接受更新。名称以 `Part`、`ViewPane` 或
 `Widget` 结尾的持久 UI 类由 `build/vite/hotReloadPlugin.ts` 建立稳定身份，方法修改会补丁到
 现有实例，因此 Workbench 状态和当前窗口不需要重建。其他确实只修改原型方法的派生 UI 类可以用
 `@zeta-hot-reload patch-prototype` 显式加入同一机制。

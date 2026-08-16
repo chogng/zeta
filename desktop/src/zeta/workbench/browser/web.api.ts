@@ -33,7 +33,7 @@ export interface IWebWorkbench extends IDisposable {
 
 declare global {
   /**
-   * Optional host capabilities installed before a product entry is imported.
+   * Optional host capabilities installed before the shared Workbench entry is imported.
    */
   var zetaWebWorkbenchHost: IWebWorkbenchHost | undefined;
 }

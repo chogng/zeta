@@ -1,28 +1,23 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { academicWorkbenchSession } from "../../browser/workbench/academicWorkbenchSession.js";
-import { codeWorkbenchSession } from "../../browser/workbench/codeWorkbenchSession.js";
+import { defaultWorkbenchSession } from "../../../workbench/browser/defaultWorkbenchSession.js";
 
-test("product Workbenches provide distinct default layout profiles", () => {
-  assert.equal(codeWorkbenchSession.id, "code");
-  assert.equal(codeWorkbenchSession.productId, "code");
-  assert.equal(academicWorkbenchSession.id, "academic");
-  assert.equal(academicWorkbenchSession.productId, "academic");
-  assert.equal(codeWorkbenchSession.layout.auxiliarybar.visible, true);
-  assert.equal(academicWorkbenchSession.layout.auxiliarybar.visible, false);
-  assert.notEqual(codeWorkbenchSession.layout.sidebar.width, academicWorkbenchSession.layout.sidebar.width);
-  assert.equal(codeWorkbenchSession.composition.panel, "zeta.panel.terminal");
-  assert.equal(academicWorkbenchSession.composition.panel, "zeta.panel.problems");
+test("build modes share one default Workbench profile", () => {
+  assert.equal(defaultWorkbenchSession.id, "default");
+  assert.equal(defaultWorkbenchSession.label, "Workbench");
+  assert.equal("productId" in defaultWorkbenchSession, false);
+  assert.equal(defaultWorkbenchSession.layout.auxiliarybar.visible, true);
+  assert.equal(defaultWorkbenchSession.composition.panel, "zeta.panel.terminal");
 });
 
-test("product Workbench layout profiles are immutable at the profile boundary", () => {
+test("the shared Workbench layout profile is immutable at its boundary", () => {
   assert.throws(() => {
-    (codeWorkbenchSession as { id: string }).id = "academic";
+    (defaultWorkbenchSession as { id: string }).id = "academic";
   }, TypeError);
   assert.throws(() => {
-    (codeWorkbenchSession.layout.sidebar as { width: number }).width = 999;
+    (defaultWorkbenchSession.layout.sidebar as { width: number }).width = 999;
   }, TypeError);
   assert.throws(() => {
-    (codeWorkbenchSession.composition as { panel: string }).panel = "zeta.panel.problems";
+    (defaultWorkbenchSession.composition as { panel: string }).panel = "zeta.panel.problems";
   }, TypeError);
 });
