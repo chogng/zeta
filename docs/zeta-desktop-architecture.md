@@ -227,7 +227,8 @@ initialize gate。
 
 Main 必须：
 
-1. 从应用包内确定的绝对路径启动 `zeta-server app-server --listen stdio://`；
+1. 从应用包内确定的绝对路径启动 `zeta-server app-server connect`，由 `server-host` 连接或选举
+   profile/Workspace-scoped local authority；
 2. 使用 `shell: false`，只传递环境变量 allowlist；
 3. 在创建业务 UI 前完成 `initialize`；
 4. 校验 protocol version、schema hash 和 server build；
@@ -283,7 +284,8 @@ primitive 位于 `platform/ipc/electron-main`，不反向依赖任何产品能�
 - `platform/workspace`（单数）定义一个窗口当前工作区的模型、结构化标识、
   `WorkbenchState` 和 `IWorkspaceContextService`；
 - `platform/workspaces`（复数）负责解析、识别和管理工作区。当前已实现启动目标解析，
-  最近项目、运行时切换和 Untitled Workspace 尚未实现。
+  单根 Folder 的运行时 authority 切换，以及已解析 Remote Folder 的同 SSH host 重连；最近项目和
+  Untitled Workspace 尚未实现。
 
 Desktop 在创建窗口前由 `WorkspacesMainService.resolveStartupWorkspace()` 解析一次启动参数，
 并产生不可变的 `IAnyWorkspaceIdentifier`：
@@ -313,9 +315,16 @@ contribution 不得通过该服务直接访问文件系统。单根 Folder 启�
 [`search.md`](search.md)。Desktop 的保存命令、dirty state、watcher 消费、多根 Workspace 与
 搜索结果打开仍未实现。
 
+Profile 级 Session catalog 可包含多个 Workspace。`WorkbenchSessionService` 只持有可重建的
+前端 projection；选中其他 Workspace 的 durable Session 时，它通过 native host 请求 Main 重连
+App Server authority，等待 Workspace context 提交后重新 list/subscribe，并恢复精确的
+Session/Thread。Local 路径重启 profile broker connection；SSH Remote 路径保留 host、凭据 owner
+和 runtime policy，只替换远端 Workspace root。切换失败会回滚原 authority，Renderer 不直接读写
+SQLite，也不能在旧 Workspace connection 上执行目标 Session。
+
 当前限制：
 
-- Workspace 身份只在启动时确定，尚无运行时打开、关闭或切换项目流程；
+- 运行时已支持单根 Folder authority 切换；关闭项目、多根 Workspace 内容切换和最近项目流程尚未实现；
 - `.zeta-workspace` 当前只作为窗口身份，尚未定义或解析其内容；
 - 普通单文件参数仍属于空窗口，文件编辑器尚未实现；
 - Explorer 当前仅支持单根 Folder 的按需读取；后端已有 `fs/writeFile` 与 `fs/changed`，但
@@ -359,6 +368,32 @@ Renderer Host，也不能导入生成 DTO。所有产品代码禁止直接导入
 ```ts
 execute(method: string, params?: unknown): Promise<unknown>
 ```
+
+### 5.1 平台服务与产品装配
+
+平台目录按“契约、运行时适配、产品装配”分层，不按 VS Code 的目录名称机械对齐。当前稳定边界如下：
+
+| 能力 | 前端契约 owner | 运行时或传输 owner | 产品装配责任 |
+| --- | --- | --- | --- |
+| 配置 | `configurationService.ts` | `configurationIpc.ts` 与 Electron adapters | Workbench 创建窗口级 service |
+| 生命周期 | `ILifecycleService` | `BrowserLifecycleService` | Workbench 注册 backup、storage 等同步 joiner |
+| 日志 | `ILogService` / `ILogSink` | Console 与 System Output sinks | composition root 选择 sinks |
+| 外部 URL 与剪贴板 | `IOpenerService` / `IClipboardService` | Browser、Electron Main adapters | Connector host 注入适配器 |
+| 编辑器打开 | `IEditorService` | `BrowserEditorService` | Workbench 把具体 `EditorPart` 封装在 service 后面 |
+| 窗口宿主操作 | `IWorkbenchHostService` | `WorkbenchWindow` | Workbench 注册当前窗口实现 |
+| Code 产品能力 | 各领域 `I*Service` | 对应 browser service implementation | `codeWorkbenchServices.ts` 静态选择并按依赖安装 |
+
+`common/*Service.ts` 只能包含调用方使用的领域类型和 service identifier。IPC channel、生成 DTO、
+context bridge API 与 host validation 留在 `*Ipc.ts` 或具体运行时实现中；UI contribution 不得负责
+创建 service。`workbenchServiceContributions.ts` 只描述 service、依赖与安装函数，composition root
+负责提供原始 capability，并在缺失依赖或依赖环时启动失败。
+
+Zeta 当前没有 VS Code `externalServices` 中的 telemetry machine ID / Marketplace header 组合语义，
+也没有构建时替换的 Copilot license endpoint，因此不建立同名空目录。Marketplace 请求继续由
+`platform/marketplace` 拥有；不可把任意网络调用、外部 URL 或产品常量汇总进一个模糊的
+`externalServices` 或 `endpoint` 包。运行时事实保留在 `base/common/environment.ts`，产品版本在
+`product`，跨产品本地资料根在 `platform/profile`；只有出现需要注入、替换或拥有生命周期的真实
+调用方时，才把这些不可变策略升级成 service。
 
 ## 6. Renderer
 
@@ -488,8 +523,9 @@ Product session profile defaults
 `platform/storage/common/storage.ts` 定义 Renderer 通用存储契约，包括 Application、
 Profile、Workspace scope，User/Machine target，值变更事件和 will-save lifecycle。
 `workbench/services/storage/browser/storageService.ts` 是浏览器适配器：以产品、profile 和
-workspace identity 隔离 versioned `localStorage` 文档，周期 flush，并在 `pagehide` 和
-Workbench 释放前发布 shutdown flush；存储不可用或文档损坏时回退到内存 projection。
+workspace identity 隔离 versioned `localStorage` 文档，提供周期 flush 与释放 fallback；
+Workbench 的 `ILifecycleService` 在 `pagehide` 或显式关闭时统一等待 shutdown flush。存储不可用
+或文档损坏时回退到内存 projection。
 
 具体 Layout 内的私有 `WorkbenchLayoutStateModel` 负责把 domain state 映射为存储 key：
 Sidebar、Auxiliary Bar 和 Panel 的尺寸使用 Profile/Machine，显隐使用
@@ -723,7 +759,7 @@ TypeScript 生成。进程内 CLI client 与 Desktop stdio client 必须经过�
 每次协议交付至少包含：
 
 - 可运行的 `zeta` 二进制；
-- `zeta-server app-server --listen stdio://`；
+- `zeta-server app-server connect`（共享 local authority）与 `--listen stdio://`（direct compatibility）；
 - `zeta-rs/app-server-protocol/schema/types.ts`；
 - `zeta-rs/app-server-protocol/schema/schema.json`；
 - schema hash；

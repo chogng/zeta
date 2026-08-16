@@ -3,6 +3,7 @@ use crate::ModelRef;
 use crate::SessionId;
 use crate::SessionThread;
 use crate::ThreadId;
+use crate::WorkspaceBinding;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -21,6 +22,9 @@ pub enum SessionEvent {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional = nullable)]
         model: Option<ModelRef>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        workspace: Option<WorkspaceBinding>,
     },
     SessionModelChanged {
         session_id: SessionId,

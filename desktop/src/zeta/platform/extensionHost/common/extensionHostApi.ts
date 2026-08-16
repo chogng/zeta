@@ -1,6 +1,7 @@
 import { CancellationError, throwIfCancelled } from "../../../base/common/cancellation.js";
 import type { AppServerConnectionState } from "../../app-server/common/appServerApi.js";
 import type { DisposableHandle } from "../../ipc/common/ipc.js";
+import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
 
 export type ExtensionHostReconcileMode = "refresh" | "restartFailed";
 export type ExtensionHostRuntimeLifecycle = "stopped" | "starting" | "handshaking" | "ready" | "recovering" | "crashLoop" | "failed";
@@ -101,6 +102,8 @@ export interface IExtensionHostApi {
   onDidChange(listener: (generation: number) => void): DisposableHandle;
   onConnectionState(listener: (state: AppServerConnectionState) => void): DisposableHandle;
 }
+
+export const IExtensionHostApi = createServiceIdentifier<IExtensionHostApi>("extensionHostApi");
 
 export interface ExtensionHostInvokeTransport {
   start(request: ExtensionHostInvocationRequest): Promise<unknown>;

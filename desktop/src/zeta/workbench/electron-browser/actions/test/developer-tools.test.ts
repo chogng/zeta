@@ -44,6 +44,7 @@ test("native host routes validate folder opening and developer tools", async () 
     openFolder: async () => {
       folderOpens += 1;
     },
+    openWorkspace: async () => {},
     saveFile: async (options) => {
       savedFileOptions = options;
       return "C:\\project\\draft.txt";
@@ -124,6 +125,7 @@ test("desktop commands are available from the command palette", async () => {
   let toggles = 0;
   services.set(INativeHostService, {
     openFolder: async () => {},
+    openWorkspace: async () => {},
     saveFile: async () => undefined,
     isAccessibilitySupportEnabled: async () => false,
     onDidChangeAccessibilitySupport: () => ({ dispose() {} }),

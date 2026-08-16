@@ -6,6 +6,8 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use serde::Deserialize;
+use sha2::Digest;
+use sha2::Sha256;
 use url::Url;
 use zeta_connectors::ConnectorId;
 use zeta_connectors_extension::GitHubBrokeredOAuthConfig;
@@ -24,6 +26,7 @@ const MAX_PRODUCT_SERVICES_BYTES: u64 = 1024 * 1024;
 pub struct LocalProductServicesConfig {
     pub(crate) marketplace_registry: Option<zeta_marketplace_client::RemoteMarketplaceConfig>,
     pub(crate) connector_oauth: Vec<ProductConnectorOAuthConfig>,
+    authority_identity: [u8; 32],
 }
 
 impl LocalProductServicesConfig {
@@ -46,10 +49,14 @@ impl LocalProductServicesConfig {
             return Err(product_config_error(()));
         }
         let source_root = path.parent().ok_or_else(|| product_config_error(()))?;
+        let mut authority_identity = Sha256::new();
+        authority_identity.update(&bytes);
         let marketplace_registry = document
             .marketplace_manager
             .map(|manager| {
                 let trusted_root = read_trusted_root(source_root, &manager.trusted_root)?;
+                authority_identity.update((trusted_root.len() as u64).to_le_bytes());
+                authority_identity.update(&trusted_root);
                 let config = zeta_marketplace_client::RemoteMarketplaceConfig::new(
                     Url::parse(&manager.metadata_base_url).map_err(product_config_error)?,
                     Url::parse(&manager.targets_base_url).map_err(product_config_error)?,
@@ -81,6 +88,7 @@ impl LocalProductServicesConfig {
         Ok(Self {
             marketplace_registry,
             connector_oauth,
+            authority_identity: authority_identity.finalize().into(),
         })
     }
 
@@ -89,6 +97,15 @@ impl LocalProductServicesConfig {
         &self,
     ) -> Option<&zeta_marketplace_client::RemoteMarketplaceConfig> {
         self.marketplace_registry.as_ref()
+    }
+
+    /// Returns the distribution inputs that must match before products share a local authority.
+    ///
+    /// The identity covers the manifest and referenced trust-root bytes, but not their installation
+    /// paths. Identical signed product configuration can therefore be packaged by multiple product
+    /// hosts without splitting their profile authority.
+    pub fn authority_identity(&self) -> &[u8; 32] {
+        &self.authority_identity
     }
 }
 

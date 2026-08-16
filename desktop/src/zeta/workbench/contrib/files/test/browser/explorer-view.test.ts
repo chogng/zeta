@@ -6,8 +6,7 @@ import { FileKind, type IFileService } from "../../../../../platform/files/commo
 import { WorkspaceContextService } from "../../../../../workbench/services/workspaces/browser/workspaceContextService.js";
 import type { IFileIconThemeService } from "../../../../../platform/theme/browser/fileIconThemeService.js";
 import type { IHoverService, IManagedHover } from "../../../../../platform/hover/common/hoverService.js";
-import type { EditorInput } from "../../../../../workbench/browser/parts/editor/editorInput.js";
-import type { IEditorPart } from "../../../../../workbench/browser/parts/editor/editorPart.js";
+import type { EditorInput, IEditorService } from "../../../../../workbench/services/editor/common/editorService.js";
 
 test("ExplorerViewPane renders, expands, and opens workspace files", async () => {
   const browser = new JSDOM("<!doctype html><body></body>");
@@ -74,25 +73,11 @@ test("ExplorerViewPane renders, expands, and opens workspace files", async () =>
     id: "workspace",
     uri: root,
   });
-  const editorPart: IEditorPart = {
-    element: browser.window.document.createElement("section"),
-    groups: [],
-    activeGroup: {} as never,
-    activeInput: undefined,
-    activePane: undefined,
+  const editorService: IEditorService = {
     openEditor: async (input: EditorInput) => {
       openedInput = input;
-      return {} as never;
     },
-    activateEditor: () => {
-      throw new Error("No active editor");
-    },
-    closeEditor() {},
-    async saveActiveEditor() {},
-    setContent() {},
-    async splitActiveGroupHorizontal() {},
-    layout() {},
-    focus() {},
+    focusActiveEditor() {},
   };
   const fileIconThemeService: IFileIconThemeService = {
     onDidFileIconThemeChange: () => ({
@@ -155,7 +140,7 @@ test("ExplorerViewPane renders, expands, and opens workspace files", async () =>
       },
       fileService,
       workspaceContextService,
-      editorPart,
+      editorService,
       fileIconThemeService,
       hoverService,
     );

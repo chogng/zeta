@@ -4,7 +4,7 @@ import type { IAction } from "../../../../base/common/actions.js";
 import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { LanguageDiagnosticSeverity, type LanguageDiagnostic } from "../../../../editor/common/languages/languageResults.js";
-import { type IEditorPart } from "../../../browser/parts/editor/editorPart.js";
+import { type IEditorService } from "../../../services/editor/common/editorService.js";
 import { ViewPane, type IViewPaneOptions, type PartTitleProjection } from "../../../browser/parts/views/viewPane.js";
 import { type ILanguageDiagnosticsService, type LanguageDiagnosticSnapshot } from "../../../services/language/common/languageDiagnosticsService.js";
 
@@ -39,7 +39,7 @@ export class ProblemsViewPane extends ViewPane {
   private navigationError: string | undefined;
   private disposed = false;
 
-  constructor(options: IViewPaneOptions, private readonly diagnosticsService: ILanguageDiagnosticsService, private readonly editorPart: IEditorPart) {
+  constructor(options: IViewPaneOptions, private readonly diagnosticsService: ILanguageDiagnosticsService, private readonly editorService: IEditorService) {
     super(options);
     this.contentElement.classList.add("zeta-problems");
     const document = options.ownerDocument;
@@ -173,8 +173,8 @@ export class ProblemsViewPane extends ViewPane {
   private async openProblem(entry: ProblemEntry): Promise<void> {
     this.navigationError = undefined;
     try {
-      await this.editorPart.openEditor({ resource: entry.resource, label: resourceName(entry.resource) }, { selection: entry.diagnostic.range });
-      if (!this.disposed) this.editorPart.focus();
+      await this.editorService.openEditor({ resource: entry.resource, label: resourceName(entry.resource) }, { selection: entry.diagnostic.range });
+      if (!this.disposed) this.editorService.focusActiveEditor();
     } catch (error) {
       if (this.disposed) return;
       this.navigationError = error instanceof Error ? error.message : "Could not open problem location.";

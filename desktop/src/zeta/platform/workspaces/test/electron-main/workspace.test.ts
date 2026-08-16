@@ -334,6 +334,30 @@ test("workspace transition commits only after the runtime accepts the folder", a
   assert.equal(context.getWorkspace().id, accepted.workspace.id);
 });
 
+test("workspace transition accepts a validated Remote identity without reading it as a local path", async () => {
+  const workspaces = new WorkspacesMainService();
+  const original = getSingleFolderWorkspaceIdentifier(createSshRemoteWorkspaceUri("build-host", "/srv/one"));
+  const target = getSingleFolderWorkspaceIdentifier(createSshRemoteWorkspaceUri("build-host", "/srv/two"));
+  const context = new WorkspaceContextMainService(original);
+  const switchedRoots: string[] = [];
+  const transitions = new WorkspaceTransitionMainService({
+    workspaces,
+    context,
+    runtime: {
+      async switchWorkspace({ root }) {
+        switchedRoots.push(root);
+      },
+    },
+    classifyRuntimeError: () => WorkspaceTransitionFailureKind.RuntimeRejected,
+  });
+
+  const result = await transitions.transitionToWorkspace({ workspace: target, root: "/srv/two" });
+
+  assert.equal(result.status, WorkspaceTransitionStatus.Applied);
+  assert.deepEqual(switchedRoots, ["/srv/two"]);
+  assert.equal(context.getWorkspace().id, target.id);
+});
+
 test("workspace transition serializes concurrent folder requests", async () => {
   const workspaces = new WorkspacesMainService({
     async resolvePath(path) {
@@ -503,6 +527,7 @@ test("App Server workspace adapter routes only connection recovery into a retry"
     transitionId: 1,
     previous: UNKNOWN_EMPTY_WINDOW_WORKSPACE,
     workspace,
+    root: workspace.uri.fsPath,
     trust: WorkspaceTrustChoice.UserConfig,
   });
   assert.deepEqual(switchedRoots, [workspace.uri.fsPath]);

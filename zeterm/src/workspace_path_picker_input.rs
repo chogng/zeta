@@ -8,6 +8,7 @@ use zui::{
 };
 
 use crate::NativeApp;
+use crate::agent_session::WorkspaceSwitchProjection;
 use crate::file_editor_host::FileEditorCloseRequest;
 use crate::shell_interaction::CONTEXT_WORKING_DIRECTORY;
 use crate::terminal_selection::{read_clipboard_text, write_clipboard_text};
@@ -20,12 +21,6 @@ const PICKER_ROWS_PER_WHEEL_STEP: f32 = 3.0;
 
 impl NativeApp {
     pub(super) fn toggle_workspace_path_picker(&mut self) {
-        if self.agent_session_target.workspace_switch_support()
-            == crate::agent_session_target::WorkspaceSwitchSupport::Unsupported
-        {
-            eprintln!("Remote Workspace switching is not available in this zeterm session");
-            return;
-        }
         if self.workspace_path_picker.is_open() {
             self.dismiss_workspace_path_picker();
             return;
@@ -94,28 +89,38 @@ impl NativeApp {
                         return true;
                     }
                 };
-                if let Err(error) = self
-                    .workspace_context
-                    .switch_working_directory(switched.root)
-                {
-                    eprintln!("could not switch workspace directory: {error}");
+                if !self.apply_workspace_switch_projection(switched) {
                     return true;
                 }
-                self.workspace_context
-                    .apply_git_projection(switched.git.as_ref());
-                self.replace_agent_sidebar_workspace();
-                self.language_service
-                    .replace_workspace(self.workspace_context.working_directory());
-                self.file_editor_host.replace_workspace();
-                self.file_editor_input.reset_for_document_change();
-                self.workspace_surface.show_agent();
-                self.pending_focus = Some(crate::shell_interaction::COMPOSER);
-                self.refresh_files_from_app_server();
-                self.composer
-                    .set_working_directory(self.workspace_context.working_directory());
                 self.dismiss_workspace_path_picker();
             }
         }
+        true
+    }
+
+    pub(crate) fn apply_workspace_switch_projection(
+        &mut self,
+        switched: WorkspaceSwitchProjection,
+    ) -> bool {
+        if let Err(error) = self
+            .workspace_context
+            .switch_working_directory(switched.root)
+        {
+            eprintln!("could not switch workspace directory: {error}");
+            return false;
+        }
+        self.workspace_context
+            .apply_git_projection(switched.git.as_ref());
+        self.replace_agent_sidebar_workspace();
+        self.language_service
+            .replace_workspace(self.workspace_context.working_directory());
+        self.file_editor_host.replace_workspace();
+        self.file_editor_input.reset_for_document_change();
+        self.workspace_surface.show_agent();
+        self.pending_focus = Some(crate::shell_interaction::COMPOSER);
+        self.refresh_files_from_app_server();
+        self.composer
+            .set_working_directory(self.workspace_context.working_directory());
         true
     }
 

@@ -102,6 +102,37 @@ pub struct TuiRecoveryState {
     thread_id: ThreadId,
 }
 
+/// Host-owned Workspace reconnect requested by selecting a Session from another authority.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TuiWorkspaceReconnect {
+    workspace_root: PathBuf,
+    recovery: TuiRecoveryState,
+}
+
+impl TuiWorkspaceReconnect {
+    pub(crate) fn new(workspace_root: PathBuf, recovery: TuiRecoveryState) -> Self {
+        Self {
+            workspace_root,
+            recovery,
+        }
+    }
+
+    /// Returns the canonical Workspace root recorded by the selected Session.
+    pub fn workspace_root(&self) -> &std::path::Path {
+        &self.workspace_root
+    }
+
+    /// Returns the Session and Thread identity to restore after reconnecting.
+    pub fn recovery(&self) -> &TuiRecoveryState {
+        &self.recovery
+    }
+
+    /// Splits the host reconnect target into its Workspace and durable recovery identity.
+    pub fn into_parts(self) -> (PathBuf, TuiRecoveryState) {
+        (self.workspace_root, self.recovery)
+    }
+}
+
 /// Classifies why an initialized TUI connection reached its terminal boundary.
 ///
 /// Product hosts may retry [`Self::Transport`] after establishing a new connection. A server
@@ -146,6 +177,8 @@ pub enum TuiExit {
     UserRequested,
     /// The host process received an operating-system termination request.
     TerminationRequested,
+    /// The selected Session belongs to another Workspace and the product host must reconnect.
+    WorkspaceReconnectRequested(TuiWorkspaceReconnect),
     /// The initialized App Server connection ended while the durable conversation remained.
     ConnectionLost {
         kind: TuiConnectionLossKind,

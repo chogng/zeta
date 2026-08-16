@@ -272,6 +272,20 @@ enum BatchCommand {
     },
 }
 
+struct ExtensionRegistries {
+    fallback: Arc<zeta_extension_api::ExtensionRegistry>,
+    sessions: BTreeMap<SessionId, Arc<zeta_extension_api::ExtensionRegistry>>,
+}
+
+impl Default for ExtensionRegistries {
+    fn default() -> Self {
+        Self {
+            fallback: Arc::new(zeta_extension_api::ExtensionRegistry::default()),
+            sessions: BTreeMap::new(),
+        }
+    }
+}
+
 /// Coordinates durable mutations for each loaded Thread.
 pub struct ThreadController {
     store: Arc<dyn ThreadStore>,
@@ -279,7 +293,7 @@ pub struct ThreadController {
     loaded_threads: Arc<loaded_thread::LoadedThreads>,
     execution_mailboxes: mailbox::ThreadExecutionMailboxes,
     pub(crate) live_interactions: live_interaction::LiveInteractionWaiters,
-    extensions: RwLock<Arc<zeta_extension_api::ExtensionRegistry>>,
+    extensions: RwLock<ExtensionRegistries>,
     image_attachments: Arc<ImageAttachments>,
     next_id: AtomicU64,
 }
@@ -300,7 +314,7 @@ impl ThreadController {
             writer_lease: None,
             execution_mailboxes: mailbox::ThreadExecutionMailboxes::new(loaded_threads.clone()),
             live_interactions: live_interaction::LiveInteractionWaiters::default(),
-            extensions: RwLock::new(Arc::new(zeta_extension_api::ExtensionRegistry::default())),
+            extensions: RwLock::new(ExtensionRegistries::default()),
             image_attachments,
             loaded_threads,
             next_id: AtomicU64::new(1),
@@ -332,7 +346,7 @@ impl ThreadController {
             writer_lease: Some(writer_lease),
             execution_mailboxes: mailbox::ThreadExecutionMailboxes::new(loaded_threads.clone()),
             live_interactions: live_interaction::LiveInteractionWaiters::default(),
-            extensions: RwLock::new(Arc::new(zeta_extension_api::ExtensionRegistry::default())),
+            extensions: RwLock::new(ExtensionRegistries::default()),
             image_attachments,
             loaded_threads,
             next_id: AtomicU64::new(1),
@@ -349,11 +363,27 @@ impl ThreadController {
         &self,
         extensions: Arc<zeta_extension_api::ExtensionRegistry>,
     ) -> Result<(), CoreError> {
-        *self
-            .extensions
+        self.extensions
             .write()
-            .map_err(|_| CoreError::Journal("extension registry lock poisoned".into()))? =
-            extensions;
+            .map_err(|_| CoreError::Journal("extension registry lock poisoned".into()))?
+            .fallback = extensions;
+        Ok(())
+    }
+
+    /// Installs the extension registry used when starting Turns in one Session.
+    ///
+    /// Profile daemons call this for each durable Session so concurrently open Workspaces cannot
+    /// replace one another's automatic Skill activation authority.
+    pub fn install_session_extensions(
+        &self,
+        session_id: SessionId,
+        extensions: Arc<zeta_extension_api::ExtensionRegistry>,
+    ) -> Result<(), CoreError> {
+        self.extensions
+            .write()
+            .map_err(|_| CoreError::Journal("extension registry lock poisoned".into()))?
+            .sessions
+            .insert(session_id, extensions);
         Ok(())
     }
 
@@ -451,8 +481,9 @@ impl ThreadController {
         validate_policy_revision(&request.policy_revision)?;
         let normalized_input =
             user_input::normalize_images(&request.input, &self.image_attachments)?;
-        if let Some(existing) = self
-            .read_thread(thread_id)?
+        let thread = self.read_thread(thread_id)?;
+        let session_id = thread.session_id.clone();
+        if let Some(existing) = thread
             .commands
             .into_iter()
             .find(|existing| existing.receipt.command_id == request.command_id)
@@ -490,10 +521,15 @@ impl ThreadController {
             });
         }
         let mut activated_skills = request.activated_skills.clone();
-        let contributed_activations = self
+        let registries = self
             .extensions
             .read()
-            .map_err(|_| CoreError::Journal("extension registry lock poisoned".into()))?
+            .map_err(|_| CoreError::Journal("extension registry lock poisoned".into()))?;
+        let extensions = registries
+            .sessions
+            .get(&session_id)
+            .unwrap_or(&registries.fallback);
+        let contributed_activations = extensions
             .contribute_skill_activations(zeta_extension_api::SkillActivationContext::new(
                 &normalized_input,
             ))

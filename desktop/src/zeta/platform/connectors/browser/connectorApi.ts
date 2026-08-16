@@ -2,6 +2,15 @@ import type { ViteDevAppServerConnection } from "../../app-server/browser/viteDe
 import { viteDevRequest } from "../../app-server/browser/viteDevRequest.js";
 import type { UnavailableOperation } from "../../renderer/browser/disconnectedHost.js";
 import type { IConnectorApi } from "../common/connectorApi.js";
+import { BrowserClipboardService } from "../../clipboard/browser/browserClipboardService.js";
+import type { IClipboardService } from "../../clipboard/common/clipboardService.js";
+import { BrowserOpenerService } from "../../opener/browser/browserOpenerService.js";
+import type { IOpenerService } from "../../opener/common/openerService.js";
+
+export interface BrowserConnectorHostServices {
+  readonly openerService: IOpenerService;
+  readonly clipboardService: IClipboardService;
+}
 
 export function createDisconnectedConnectorApi(unavailable: UnavailableOperation): IConnectorApi {
   return {
@@ -14,26 +23,26 @@ export function createDisconnectedConnectorApi(unavailable: UnavailableOperation
   };
 }
 
-export function createViteDevConnectorApi(connection: ViteDevAppServerConnection): IConnectorApi {
+export function createViteDevConnectorApi(connection: ViteDevAppServerConnection, hostServices?: BrowserConnectorHostServices): IConnectorApi {
   return {
     list: () => viteDevRequest(connection, "connector/list", {}),
     connectApiToken: params => viteDevRequest(connection, "connector/connect/apiToken", params),
-    connectOAuth: params => connectDeviceOAuth(connection, params),
+    connectOAuth: params => connectDeviceOAuth(connection, params, hostServices ?? browserConnectorHostServices()),
     disconnect: params => viteDevRequest(connection, "connector/disconnect", params),
     refreshOAuth: async connectorId => { await viteDevRequest(connection, "connector/oauth/refresh", { connectorId }); },
     revokeOAuth: params => viteDevRequest(connection, "connector/oauth/revoke", params),
   };
 }
 
-async function connectDeviceOAuth(connection: ViteDevAppServerConnection, params: Parameters<IConnectorApi["connectOAuth"]>[0]) {
+async function connectDeviceOAuth(connection: ViteDevAppServerConnection, params: Parameters<IConnectorApi["connectOAuth"]>[0], hostServices: BrowserConnectorHostServices) {
   const catalog = await viteDevRequest(connection, "connector/list", {});
   const connector = catalog.connectors.find(candidate => candidate.id === params.connectorId);
   if (!connector?.oauthMethods.includes("device")) throw new Error("Connector device OAuth is unavailable in this browser host");
   const started = await viteDevRequest(connection, "connector/connect/oauth/device/start", params);
   let completed = false;
   try {
-    window.open(started.verificationUri, "_blank", "noopener,noreferrer");
-    await navigator.clipboard.writeText(started.userCode);
+    await hostServices.openerService.openExternal(started.verificationUri);
+    await hostServices.clipboardService.writeText(started.userCode);
     let waitSeconds = started.pollIntervalSeconds;
     for (;;) {
       await new Promise(resolve => setTimeout(resolve, Math.min(waitSeconds, 30) * 1_000));
@@ -47,4 +56,8 @@ async function connectDeviceOAuth(connection: ViteDevAppServerConnection, params
   } finally {
     if (!completed) await viteDevRequest(connection, "connector/connect/oauth/device/cancel", { flowId: started.flowId }).catch(() => undefined);
   }
+}
+
+function browserConnectorHostServices(): BrowserConnectorHostServices {
+  return { openerService: new BrowserOpenerService(window), clipboardService: new BrowserClipboardService(navigator.clipboard) };
 }

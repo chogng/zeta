@@ -12,19 +12,25 @@ import type {
 import { URI } from "../../base/common/uri.js";
 import { AccessibilityService } from "../../platform/accessibility/browser/accessibilityService.js";
 import { IAccessibilityService } from "../../platform/accessibility/common/accessibility.js";
+import { ConsoleLogSink } from "../../platform/log/common/consoleLogSink.js";
+import { ILogService } from "../../platform/log/common/logService.js";
+import { LogService } from "../../platform/log/common/logServiceImpl.js";
+import { BrowserLifecycleService } from "../../platform/lifecycle/browser/browserLifecycleService.js";
+import { ILifecycleService, type ShutdownReason } from "../../platform/lifecycle/common/lifecycleService.js";
+import { IDebugAdapterProcessService } from "../../platform/debug/common/debugAdapterProcessService.js";
+import { IExtensionHostApi } from "../../platform/extensionHost/common/extensionHostApi.js";
 import type { IRendererHost } from "../../platform/renderer/common/rendererHost.js";
 import { IRemoteConnectionService } from "../../platform/remote/common/remoteConnectionService.js";
 import { UnavailableRemoteConnectionService } from "../../platform/remote/common/remoteConnectionService.js";
 import { IRemoteTunnelService } from "../../platform/remote/common/remoteTunnelService.js";
 import { UnavailableRemoteTunnelService } from "../../platform/remote/common/remoteTunnelService.js";
+import { getRemoteWorkspacePath, isRemoteResource } from "../../platform/remote/common/remote.js";
 import type {
   INativeHostApi,
 } from "../../platform/native/common/nativeHost.js";
 import { MenuId } from "../../platform/actions/common/actions.js";
-import {
-  type IConfigurationApi,
-  IConfigurationService,
-} from "../../platform/configuration/common/configuration.js";
+import type { IConfigurationApi } from "../../platform/configuration/common/configurationIpc.js";
+import { IConfigurationService } from "../../platform/configuration/common/configurationService.js";
 import { IStorageService, WillSaveStateReason } from "../../platform/storage/common/storage.js";
 import { BrowserLayoutService } from "../../platform/layout/browser/layoutService.js";
 import { ILayoutService } from "../../platform/layout/common/layoutService.js";
@@ -102,7 +108,7 @@ import {
 } from "../services/configuration/browser/configurationService.js";
 import type {
   WorkbenchContextMenuServiceFactory,
-} from "../services/contextmenu/common/contextMenuService.js";
+} from "../services/contextmenu/browser/workbenchContextMenuService.js";
 import {
   DialogService,
 } from "../services/dialogs/common/dialogService.js";
@@ -127,7 +133,7 @@ import type {
   TitlebarPartFactory,
 } from "./parts/titlebar/titlebarPart.js";
 import { PaneComposite } from "./parts/views/paneComposite.js";
-import { IWorkbenchWindowService, WorkbenchWindow } from "./window.js";
+import { WorkbenchWindow } from "./window.js";
 import { TerminalService } from "../services/terminal/browser/terminalService.js";
 import { ITerminalService } from "../services/terminal/common/terminal.js";
 import { ITextFileService, TextFileService } from "../services/textfile/common/textFileService.js";
@@ -152,6 +158,7 @@ import { AppServerPluginService } from "../services/plugins/browser/appServerPlu
 import { IMarketplaceService } from "../../platform/marketplace/common/marketplaceService.js";
 import { AppServerMarketplaceService } from "../services/marketplace/browser/appServerMarketplaceService.js";
 import { AppServerToolSearchService } from "../services/toolSearch/browser/appServerToolSearchService.js";
+import { ISymbolIndexApi } from "../../platform/symbolIndex/common/symbolIndexApi.js";
 import { AccessibleViewInformationService, IAccessibleViewInformationService } from "../services/accessibility/common/accessibleViewInformationService.js";
 import { NativeAccessibilityService } from "../services/accessibility/electron-browser/accessibilityService.js";
 import { BrowserUntitledTextEditorService } from "../services/untitled/browser/browserUntitledTextEditorService.js";
@@ -175,6 +182,9 @@ import { ILanguageServerStatusService } from "../services/language/common/langua
 import { ILanguageDiagnosticsService } from "../services/language/common/languageDiagnosticsService.js";
 import { OutputService } from "../services/output/browser/outputService.js";
 import { IOutputService } from "../services/output/common/outputService.js";
+import { IWorkbenchHostService } from "../services/host/common/workbenchHostService.js";
+import { BrowserEditorService } from "../services/editor/browser/browserEditorService.js";
+import { IEditorService } from "../services/editor/common/editorService.js";
 import { OUTPUT_VIEW_ID } from "../contrib/output/common/output.js";
 import { createWorkbenchSession, type WorkbenchSession } from "./workbenchSession.js";
 import { createEditorLineGutterDecorations } from "./parts/editor/editorGutterDecorations.js";
@@ -236,6 +246,8 @@ export class Workbench extends DisposableOwner {
   private readonly workingCopyBackups: IndexedDbWorkingCopyBackupService;
   private readonly workingCopyBackupTracker: WorkingCopyBackupTracker;
   private readonly workbenchWindow: WorkbenchWindow;
+  private readonly logService: ILogService;
+  private readonly lifecycleService: ILifecycleService;
   private workspaceSwitchQueue: Promise<void> = Promise.resolve();
   private disposed = false;
 
@@ -262,6 +274,12 @@ export class Workbench extends DisposableOwner {
     this.session = normalizedSession;
     const services = new ServiceCollection();
     const instantiationService = new InstantiationService(services);
+    const logService = this.own(new LogService({ sinks: [new ConsoleLogSink()] }));
+    this.logService = logService;
+    services.set(ILogService, logService);
+    services.set(IExtensionHostApi, api.extensionHost);
+    services.set(ISymbolIndexApi, api.symbolIndex);
+    if (api.debugAdapter) services.set(IDebugAdapterProcessService, api.debugAdapter);
     const remoteAgentService = this.own(new AppServerRemoteAgentService({ api: api.appServer, remoteApi: api.remote }));
     services.set(IRemoteAgentService, remoteAgentService);
     services.set(IRemoteConnectionService, api.remoteConnections ?? UnavailableRemoteConnectionService);
@@ -316,7 +334,7 @@ export class Workbench extends DisposableOwner {
     const extensionService = this.own(new AppServerExtensionService({ api: api.extensions, eventApi: api.events, textMateService, languageFeaturesService }));
     services.set(IExtensionService, extensionService);
     const extensionReady = extensionService.start();
-    void extensionReady.catch(error => console.error("Declarative extension activation failed", error));
+    void extensionReady.catch(error => logService.error("extensions", "Declarative extension activation failed", error));
     services.set(
       IWorkspaceSearchService,
       new BrowserWorkspaceSearchService(api.workspaceSearch),
@@ -338,7 +356,7 @@ export class Workbench extends DisposableOwner {
       productId: product.id,
       workbenchState,
     }));
-    services.set(IWorkbenchWindowService, workbenchWindow);
+    services.set(IWorkbenchHostService, workbenchWindow);
     const ownerDocument = workbenchWindow.ownerDocument;
     let workbenchLayout: WorkbenchLayout | undefined;
     const layoutService = this.own(new BrowserLayoutService({
@@ -359,11 +377,11 @@ export class Workbench extends DisposableOwner {
     if (!ownerWindow) {
       throw new Error("Workbench requires an owner window");
     }
+    const lifecycleService = this.own(new BrowserLifecycleService({ ownerWindow, onError: error => logService.error("lifecycle", "Workbench shutdown failed", error) }));
+    this.lifecycleService = lifecycleService;
+    services.set(ILifecycleService, lifecycleService);
     const workingCopyBackupTracker = this.own(new WorkingCopyBackupTracker(workingCopyService, workingCopyBackups, ownerWindow));
     this.workingCopyBackupTracker = workingCopyBackupTracker;
-    const pageHideBackup = () => { void workingCopyBackupTracker.flush(); };
-    ownerWindow.addEventListener("pagehide", pageHideBackup);
-    this.defer(() => ownerWindow.removeEventListener("pagehide", pageHideBackup));
     const storage = this.own(new BrowserStorageService({
       ownerWindow,
       applicationId: product.storageNamespace,
@@ -372,11 +390,16 @@ export class Workbench extends DisposableOwner {
     this.workbenchWindow = workbenchWindow;
     this.storage = storage;
     services.set(IStorageService, storage);
+    this.own(lifecycleService.onWillShutdown(event => {
+      event.join(workingCopyBackupTracker.flush(), "working-copy backup flush");
+      event.join(storage.flush(WillSaveStateReason.SHUTDOWN), "Workbench storage flush");
+    }));
     const outputService = this.own(new OutputService({ storageService: storage }));
     services.set(IOutputService, outputService);
-    this.own(new SystemOutputService(outputService, api.appServer, workbenchWindow));
+    const systemOutputService = this.own(new SystemOutputService(outputService, api.appServer, workbenchWindow));
+    this.own(logService.registerSink(systemOutputService));
     const serviceContributionReady: Promise<void>[] = [];
-    installWorkbenchServiceContributions({ services, rendererHost: api, fileService, workspaceContext, terminalService, storageService: storage, own: value => this.own(value), blockRestorationUntil: operation => serviceContributionReady.push(operation) });
+    installWorkbenchServiceContributions({ services, own: value => this.own(value), blockRestorationUntil: operation => serviceContributionReady.push(operation) });
     services.set(IAccessibleViewInformationService, this.own(new AccessibleViewInformationService(storage)));
     const themeService = this.own(new ThemeService(
       resolveWorkbenchColorTheme(
@@ -391,7 +414,7 @@ export class Workbench extends DisposableOwner {
       if (!model) return;
       const activeTheme = themeService.getColorTheme();
       try { model.replace(projectExtensionTokenTheme(extensionService.themes.currentCatalog, activeTheme.colorScheme, ++textMateThemeRevision, activeTheme.id)); }
-      catch (error) { console.error("Failed to apply extension token theme", error); }
+      catch (error) { logService.error("theme", "Failed to apply extension token theme", error); }
     };
     this.own(extensionService.themes.onDidChange(() => updateTextMateTheme()));
     this.own(themeService.onDidColorThemeChange(() => updateTextMateTheme()));
@@ -452,7 +475,20 @@ export class Workbench extends DisposableOwner {
       contextKeyService: contextKeys,
     }));
     services.set(IViewDescriptorService, viewDescriptors);
-    const sessionService = this.own(new WorkbenchSessionService({ session: api.session, events: api.events }));
+    const sessionService = this.own(new WorkbenchSessionService({
+      session: api.session,
+      events: api.events,
+      ...(nativeHostApi ? {
+        workspaceRouter: {
+          currentWorkspaceRoot: () => {
+            const resource = workspaceContext.getWorkspace().folders[0]?.uri;
+            if (!resource) return undefined;
+            return isRemoteResource(resource) ? getRemoteWorkspacePath(resource) : resource.fsPath;
+          },
+          reopenWorkspace: (root: string) => nativeHostApi.openWorkspace(root),
+        },
+      } : {}),
+    }));
     services.set(IWorkbenchSessionService, sessionService);
     const keybindings = interactionServices.keybindingService;
     const contributions = this.own(
@@ -511,6 +547,7 @@ export class Workbench extends DisposableOwner {
       },
     }));
     services.set(IEditorPart, editor);
+    services.set(IEditorService, new BrowserEditorService(editor));
     const sidebarCompositeDescriptor = requiredViewContainer(
       viewDescriptors,
       ViewContainerLocation.Sidebar,
@@ -724,9 +761,10 @@ export class Workbench extends DisposableOwner {
     contributions.advance(WorkbenchPhase.BlockRestore);
     layoutService.layout();
     this.whenRestored = this.completeStartupRestoration([extensionReady, ...serviceContributionReady], workingCopyBackups, editor, contributions);
-    this.defer(() => {
-      void storage.flush(WillSaveStateReason.SHUTDOWN);
-    });
+  }
+
+  shutdown(reason: ShutdownReason): Promise<void> {
+    return this.lifecycleService.shutdown(reason);
   }
 
   private async completeStartupRestoration(extensionReady: readonly Promise<void>[], backups: IWorkingCopyBackupService, editor: EditorPart, contributions: WorkbenchContributionHost): Promise<void> {
@@ -742,7 +780,7 @@ export class Workbench extends DisposableOwner {
   private async restoreWorkingCopyBackups(backups: IWorkingCopyBackupService, editor: EditorPart): Promise<void> {
     let pending: readonly WorkingCopyBackup[];
     try { pending = await backups.list(); }
-    catch (error) { console.error("Failed to list working-copy backups", error); return; }
+    catch (error) { this.logService.error("workingCopy", "Failed to list working-copy backups", error); return; }
     for (const backup of pending) {
       try {
         let pane;
@@ -755,7 +793,7 @@ export class Workbench extends DisposableOwner {
         if (!workingCopy || workingCopy.backupKind !== backup.kind) throw new Error(`Restored editor does not support ${backup.kind} backups`);
         workingCopy.restoreBackup(backup.content);
       } catch (error) {
-        console.error(`Failed to restore working-copy backup '${backup.resource.toString()}'`, error);
+        this.logService.error("workingCopy", `Failed to restore working-copy backup '${backup.resource.toString()}'`, error);
       }
     }
   }

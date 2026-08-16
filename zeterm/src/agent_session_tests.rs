@@ -4,6 +4,7 @@ use super::AgentSessionConnectionLost;
 use super::AgentSessionEvent;
 use super::client_error;
 use super::git_is_unavailable;
+use super::route_session_for_target;
 use super::shell_completion_sources_changed;
 use super::snapshot_event_from_subscription;
 use super::workspace_title;
@@ -14,6 +15,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::mpsc;
 use zeta_app_server_client::ClientError;
+use zeta_app_server_client::SessionWorkspaceRoute;
 use zeta_app_server_protocol::protocol::fs::FsChanged;
 use zeta_app_server_protocol::protocol::session::SessionSubscribeResult;
 use zeta_app_server_protocol::protocol::session::SessionThreadProjection;
@@ -30,6 +32,42 @@ use zeta_protocol::ThreadStatus;
 use zeta_protocol::ThreadUpdate;
 use zeta_protocol::ThreadUpdateEnvelope;
 use zeta_protocol::TurnId;
+use zeta_protocol::WorkspaceBinding;
+use zeta_workspace::WorkspaceRoot;
+
+#[test]
+fn session_route_distinguishes_current_and_foreign_workspaces() {
+    let root = tempfile::tempdir().unwrap();
+    let current_path = root.path().join("current");
+    let foreign_path = root.path().join("foreign");
+    std::fs::create_dir(&current_path).unwrap();
+    std::fs::create_dir(&foreign_path).unwrap();
+    let current = WorkspaceRoot::open(&current_path).unwrap();
+    let foreign = WorkspaceRoot::open(&foreign_path).unwrap();
+    let mut session = session_with_workspace(WorkspaceBinding::from_root(&current));
+
+    assert!(matches!(
+        route_session_for_target(&session, &current_path).unwrap(),
+        SessionWorkspaceRoute::Current
+    ));
+    session.workspace = Some(WorkspaceBinding::from_root(&foreign));
+    assert!(matches!(
+        route_session_for_target(&session, &current_path).unwrap(),
+        SessionWorkspaceRoute::Reconnect(binding) if binding.root() == foreign.canonical_path()
+    ));
+}
+
+fn session_with_workspace(workspace: WorkspaceBinding) -> Session {
+    Session {
+        session_id: SessionId::new("routed-session").unwrap(),
+        title: "Routed".into(),
+        status: SessionStatus::Active,
+        model: None,
+        workspace: Some(workspace),
+        sequence: 1,
+        threads: Vec::new(),
+    }
+}
 
 #[test]
 fn workspace_title_uses_the_last_path_component() {
@@ -130,6 +168,7 @@ fn subscription_snapshot_does_not_replay_history_as_live_thread_updates() {
             title: "First terminal".to_owned(),
             status: SessionStatus::Active,
             model: None,
+            workspace: None,
             sequence: 1,
             threads: vec![SessionThread {
                 thread_id: thread_id.clone(),

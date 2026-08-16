@@ -104,7 +104,9 @@ Core/store 继续拥有 Session/Thread durable state；需要进程内生命周�
 | `open_local_app_server` | 按 SessionStateMode 选择 durable/in-memory coordinator，打开 config 并组合 provider-backed model |
 | `open_local_app_server_with_cloud_providers` | 在 Workspace 激活前注入 cloud code-index providers；默认入口使用空 registry |
 | `open_local_app_server_with_code_index_providers` | 在 Workspace 激活前同时注入本地 semantic models 与可选 cloud providers |
+| `LocalProfileRuntime` | 单进程、单 profile 的 Session/Thread projection、Config 与跨 Workspace Session notification authority |
 | `LocalAppServerOptions` | user profile root + SessionStateMode + optional Workspace/Connector/language-provider runtime + Codex App Server options + validated slash catalog + built-in Skill root selection + optional model operation client/MCP OAuth providers |
+| `LocalAppServerOptions::with_profile_runtime` | 在 profile daemon 内复用 durable authority，同时为连接组合独立 Workspace runtime |
 | `LocalAppServerOptions::with_language_server_providers` | 在 local App Server 启动前注入额外 provider registry；receipt registry 由 composition 自动合并 |
 | `LocalAppServerOptions::with_marketplace_registry` | 组合进程内 Zeta Manager 与 product-pinned HTTPS/TUF registry client |
 | `LocalAppServerOptions::with_marketplace_manager_client` | 注入由外部 supervisor 或测试拥有的 Manager client |

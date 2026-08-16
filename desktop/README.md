@@ -48,8 +48,9 @@ corepack pnpm dev:web:full
 ```
 
 完整模式监听 `127.0.0.1:5174`，根地址同样会进入当前产品版本。Browser 通过 Vite 已认证的 HMR WebSocket 连接本地开发
-桥接器；桥接器为每个浏览器连接启动独立的 `zeta-server app-server --listen stdio://` 子进程，
-浏览器连接关闭时对应子进程也会被回收。`dev:web:code`、`dev:web:academic` 与对应的
+桥接器；桥接器当前仍为每个浏览器连接启动 direct `zeta-server app-server --listen stdio://`
+子进程，浏览器连接关闭时对应子进程也会被回收。Electron 产品改用 `app-server connect`，与
+TUI、zeterm 连接同一 profile/Workspace authority。`dev:web:code`、`dev:web:academic` 与对应的
 `dev:web:full:*` 命令用于显式选择产品版本。
 
 `dev:desktop` 与 `dev:web:full` 会先通过 Node 开发组装器生成
@@ -147,8 +148,8 @@ globalThis.zetaWebWorkbenchHost = {
 };
 ```
 
-该对象是进程内 capability，不是可直接从不可信 JSON 反序列化的配置。当前 Rust App Server
-仍只支持 `zeta-server app-server --listen stdio://`。`dev:web:full` 的 WebSocket 只属于 loopback Vite
+该对象是进程内 capability，不是可直接从不可信 JSON 反序列化的配置。Rust local host 支持
+`app-server connect` broker 与 `--listen stdio://` direct mode。`dev:web:full` 的 WebSocket 只属于 loopback Vite
 开发宿主，不是 Rust listener，也不是可部署服务；生产级 HTTP/WebSocket listener、认证、
 origin policy 和远程部署尚未实现，因此静态 Browser 构建不能描述为已连接的 Web 客户端。
 

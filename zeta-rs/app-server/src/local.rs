@@ -5,8 +5,10 @@ use crate::model_catalog::CombinedModelCatalog;
 use crate::model_catalog::ModelCatalog;
 use crate::server::WorkspaceSwitchTrustPolicy;
 use crate::server::WorkspaceToolPorts;
+use crate::server::update_broker::UpdateBroker;
 use crate::tool_composition::ToolPort;
 use sha2::{Digest, Sha256};
+use std::collections::BTreeMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -197,6 +199,7 @@ pub struct LocalAppServerOptions {
     language_server_providers: zeta_language_server_catalog::LanguageServerProviderRegistry,
     product_services: Option<crate::LocalProductServicesConfig>,
     codex_app_server: CodexAppServerOptions,
+    profile_runtime: Option<Arc<LocalProfileRuntime>>,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -226,6 +229,7 @@ impl LocalAppServerOptions {
                 zeta_language_server_catalog::LanguageServerProviderRegistry::new(),
             product_services: None,
             codex_app_server: CodexAppServerOptions::default(),
+            profile_runtime: None,
         }
     }
 
@@ -266,6 +270,12 @@ impl LocalAppServerOptions {
     /// Selects whether Session and Thread event history is recovered from profile storage.
     pub fn with_session_state_mode(mut self, mode: SessionStateMode) -> Self {
         self.session_state_mode = mode;
+        self
+    }
+
+    /// Reuses one process-wide profile authority while composing a Workspace-scoped runtime.
+    pub fn with_profile_runtime(mut self, runtime: Arc<LocalProfileRuntime>) -> Self {
+        self.profile_runtime = Some(runtime);
         self
     }
 
@@ -738,6 +748,118 @@ impl fmt::Display for OpenAppServerError {
 
 impl std::error::Error for OpenAppServerError {}
 
+/// Process-wide durable authority shared by all Workspace runtimes for one profile.
+///
+/// The profile runtime owns the single recovered Session projection, config store, and live
+/// Session notification graph. Workspace filesystem, terminal, Git, language, and execution
+/// services remain in separately composed [`AppServer`] instances.
+pub struct LocalProfileRuntime {
+    profile_root: PathBuf,
+    database_path: PathBuf,
+    sessions: Arc<SessionCoordinator>,
+    config: Arc<ConfigStore>,
+    updates: Arc<UpdateBroker>,
+    update_scopes: Mutex<BTreeMap<ProfileUpdateScopeKey, Arc<UpdateBroker>>>,
+    marketplace: Mutex<
+        Vec<(
+            zeta_marketplace_client::RemoteMarketplaceConfig,
+            Arc<zeta_marketplace_manager::MarketplaceManager>,
+        )>,
+    >,
+}
+
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+struct ProfileUpdateScopeKey {
+    authority_id: Option<zeta_workspace::WorkspaceTrustId>,
+    root: Option<PathBuf>,
+}
+
+impl From<Option<zeta_workspace::WorkspaceBinding>> for ProfileUpdateScopeKey {
+    fn from(workspace: Option<zeta_workspace::WorkspaceBinding>) -> Self {
+        match workspace {
+            Some(workspace) => Self {
+                authority_id: Some(workspace.authority_id),
+                root: Some(workspace.root),
+            },
+            None => Self {
+                authority_id: None,
+                root: None,
+            },
+        }
+    }
+}
+
+impl LocalProfileRuntime {
+    /// Opens and recovers one durable profile authority.
+    pub fn open(profile_root: impl Into<PathBuf>) -> Result<Self, OpenAppServerError> {
+        let requested_root = profile_root.into();
+        std::fs::create_dir_all(&requested_root).map_err(open_error)?;
+        let profile_root = std::fs::canonicalize(&requested_root).map_err(open_error)?;
+        let image_attachments = open_image_attachments(&profile_root)?;
+        let repository = LocalStateRepository::open(&profile_root).map_err(open_error)?;
+        let database_path = repository.database_path().to_path_buf();
+        let sessions = repository
+            .recover_coordinator_with_image_attachments(image_attachments)
+            .map_err(open_error)?;
+        let config = Arc::new(
+            ConfigStore::open_with_paths(database_path.clone(), profile_root.join("config.toml"))
+                .map_err(|error| OpenAppServerError(error.0))?,
+        );
+        Ok(Self {
+            profile_root,
+            database_path,
+            sessions,
+            config,
+            updates: Arc::new(UpdateBroker::default()),
+            update_scopes: Mutex::new(BTreeMap::new()),
+            marketplace: Mutex::new(Vec::new()),
+        })
+    }
+
+    fn scoped_updates(
+        &self,
+        workspace: Option<zeta_workspace::WorkspaceBinding>,
+    ) -> Result<Arc<UpdateBroker>, OpenAppServerError> {
+        let key = ProfileUpdateScopeKey::from(workspace);
+        let mut scopes = self
+            .update_scopes
+            .lock()
+            .map_err(|_| OpenAppServerError("profile update-scope lock poisoned".into()))?;
+        Ok(Arc::clone(
+            scopes
+                .entry(key)
+                .or_insert_with(|| Arc::new(self.updates.fork_scope())),
+        ))
+    }
+
+    fn marketplace_manager(
+        &self,
+        config: zeta_marketplace_client::RemoteMarketplaceConfig,
+    ) -> Result<Arc<zeta_marketplace_manager::MarketplaceManager>, OpenAppServerError> {
+        let mut marketplace = self
+            .marketplace
+            .lock()
+            .map_err(|_| OpenAppServerError("profile Marketplace lock poisoned".into()))?;
+        if let Some((_, manager)) = marketplace
+            .iter()
+            .find(|(existing_config, _)| existing_config == &config)
+        {
+            return Ok(Arc::clone(manager));
+        }
+        let registry = zeta_marketplace_client::MarketplaceRemoteClient::open(config.clone())
+            .map_err(|error| OpenAppServerError(error.to_string()))?;
+        let manager = Arc::new(
+            zeta_marketplace_manager::MarketplaceManager::open(
+                self.profile_root.join("marketplace-manager"),
+                Arc::new(registry),
+            )
+            .map_err(|error| OpenAppServerError(error.to_string()))?,
+        );
+        marketplace.push((config, Arc::clone(&manager)));
+        Ok(manager)
+    }
+}
+
 /// Optional code-index adapters installed before the local Workspace runtime is activated.
 #[derive(Default)]
 pub struct LocalCodeIndexProviders {
@@ -793,47 +915,79 @@ pub fn open_local_app_server_with_code_index_providers(
             .and_then(crate::LocalProductServicesConfig::marketplace_registry)
             .cloned()
     {
-        options = options.with_marketplace_registry(registry)?;
+        if let Some(runtime) = &options.profile_runtime {
+            let manager = runtime.marketplace_manager(registry)?;
+            let client: Arc<dyn zeta_marketplace_client::MarketplaceServiceClient> =
+                manager.clone();
+            options.marketplace_manager_client = Some(client);
+            options.local_marketplace_manager = Some(manager);
+        } else {
+            options = options.with_marketplace_registry(registry)?;
+        }
     }
     let codex_app_server = options.codex_app_server.clone();
     let marketplace_manager_client = options.marketplace_manager_client.take();
     let local_marketplace_manager = options.local_marketplace_manager.take();
     let mcp_oauth_providers = std::mem::take(&mut options.mcp_oauth_providers);
-    let image_store =
-        zeta_attachments::FileImageAttachmentStore::open(options.profile_root.join("attachments"))
-            .map_err(|error| OpenAppServerError(error.to_string()))?;
-    let remote_images = zeta_attachments::SafeRemoteImageFetcher::production()
-        .map_err(|error| OpenAppServerError(error.to_string()))?;
-    let image_attachments = Arc::new(
-        zeta_attachments::ImageAttachments::new(Arc::new(image_store))
-            .with_remote_fetcher(Arc::new(remote_images)),
-    );
-    let (database_path, sessions) = match options.session_state_mode {
-        SessionStateMode::Durable => {
+    let profile_runtime = options.profile_runtime.take();
+    if profile_runtime.is_some() && options.session_state_mode != SessionStateMode::Durable {
+        return Err(OpenAppServerError(
+            "a shared profile runtime requires durable Session state".into(),
+        ));
+    }
+    if let Some(runtime) = &profile_runtime {
+        let requested_root = std::fs::canonicalize(&options.profile_root).map_err(open_error)?;
+        if requested_root != runtime.profile_root {
+            return Err(OpenAppServerError(
+                "shared profile runtime does not match the requested profile root".into(),
+            ));
+        }
+    }
+    let (_database_path, sessions, config) = match (&profile_runtime, options.session_state_mode) {
+        (Some(runtime), SessionStateMode::Durable) => (
+            runtime.database_path.clone(),
+            Arc::clone(&runtime.sessions),
+            Arc::clone(&runtime.config),
+        ),
+        (Some(_), SessionStateMode::Ephemeral) => unreachable!("validated above"),
+        (None, SessionStateMode::Durable) => {
+            let image_attachments = open_image_attachments(&options.profile_root)?;
             let repository =
                 LocalStateRepository::open(&options.profile_root).map_err(open_error)?;
             let database_path = repository.database_path().to_path_buf();
             let sessions = repository
-                .recover_coordinator_with_image_attachments(Arc::clone(&image_attachments))
+                .recover_coordinator_with_image_attachments(image_attachments)
                 .map_err(open_error)?;
-            (database_path, sessions)
+            let config = Arc::new(
+                ConfigStore::open_with_paths(
+                    database_path.clone(),
+                    options.profile_root.join("config.toml"),
+                )
+                .map_err(|error| OpenAppServerError(error.0))?,
+            );
+            (database_path, sessions, config)
         }
-        SessionStateMode::Ephemeral => {
+        (None, SessionStateMode::Ephemeral) => {
+            let image_attachments = open_image_attachments(&options.profile_root)?;
             let threads = Arc::new(ThreadController::with_store_and_image_attachments(
                 Arc::new(InMemoryThreadStore::default()),
-                Arc::clone(&image_attachments),
+                image_attachments,
             ));
             let sessions = Arc::new(SessionCoordinator::with_store(
                 Arc::new(InMemorySessionStore::default()),
                 threads,
             ));
-            (options.profile_root.join("state.sqlite3"), sessions)
+            let database_path = options.profile_root.join("state.sqlite3");
+            let config = Arc::new(
+                ConfigStore::open_with_paths(
+                    database_path.clone(),
+                    options.profile_root.join("config.toml"),
+                )
+                .map_err(|error| OpenAppServerError(error.0))?,
+            );
+            (database_path, sessions, config)
         }
     };
-    let config = Arc::new(
-        ConfigStore::open_with_paths(database_path, options.profile_root.join("config.toml"))
-            .map_err(|error| OpenAppServerError(error.0))?,
-    );
     let user_config = config
         .read_snapshot()
         .map_err(|error| OpenAppServerError(error.0))?;
@@ -959,26 +1113,45 @@ pub fn open_local_app_server_with_code_index_providers(
         )
         .map_err(|error| OpenAppServerError(error.to_string()))?,
     );
-    let mut server = AppServer::new(sessions, model.clone())
-        .with_model_catalog(combined_catalog)
-        .with_approval_review_model(approval_review_model)
-        .with_config_store(Arc::clone(&config))
-        .with_login_service(login_service)
-        .with_language_server_providers(options.language_server_providers)
-        .with_slash_command_catalog(options.slash_commands)
-        .with_code_index_storage_root(options.profile_root.join("code-index"))
-        .with_symbol_index_storage_root(options.profile_root.join("symbol-index"))
-        .with_code_index_semantic_storage_root(options.profile_root.join("code-index-semantic"))
-        .with_semantic_model_provider(model_provider)
-        .with_cloud_code_index_storage_root(options.profile_root.join("code-index-cloud"))
-        .with_cloud_code_index_providers(providers.cloud)
-        .with_extension_roots(extension_roots)
-        .with_skill_runtime(
-            built_in_skill_root,
-            skill_config,
-            options.web_search_backend.take(),
-        )
-        .map_err(OpenAppServerError)?;
+    let update_workspace = if workspace.is_some() {
+        options
+            .workspace_root
+            .as_deref()
+            .map(WorkspaceRoot::open)
+            .transpose()
+            .map_err(open_error)?
+            .as_ref()
+            .map(zeta_workspace::WorkspaceBinding::from_root)
+    } else {
+        None
+    };
+    let mut server = match &profile_runtime {
+        Some(runtime) => AppServer::new_with_updates(
+            sessions,
+            model.clone(),
+            runtime.scoped_updates(update_workspace)?,
+        ),
+        None => AppServer::new(sessions, model.clone()),
+    }
+    .with_model_catalog(combined_catalog)
+    .with_approval_review_model(approval_review_model)
+    .with_config_store(Arc::clone(&config))
+    .with_login_service(login_service)
+    .with_language_server_providers(options.language_server_providers)
+    .with_slash_command_catalog(options.slash_commands)
+    .with_code_index_storage_root(options.profile_root.join("code-index"))
+    .with_symbol_index_storage_root(options.profile_root.join("symbol-index"))
+    .with_code_index_semantic_storage_root(options.profile_root.join("code-index-semantic"))
+    .with_semantic_model_provider(model_provider)
+    .with_cloud_code_index_storage_root(options.profile_root.join("code-index-cloud"))
+    .with_cloud_code_index_providers(providers.cloud)
+    .with_extension_roots(extension_roots)
+    .with_skill_runtime(
+        built_in_skill_root,
+        skill_config,
+        options.web_search_backend.take(),
+    )
+    .map_err(OpenAppServerError)?;
     if let Some(models) = providers.semantic_models {
         server = server.with_code_index_semantic_models(models);
     }
@@ -1058,6 +1231,9 @@ pub fn open_local_app_server_with_code_index_providers(
                 .map_err(|error| OpenAppServerError(error.to_string()))?,
         };
     }
+    server
+        .bind_active_workspace_session_extensions()
+        .map_err(open_error)?;
     let (codex_turn_driver, codex_turn_events) = CodexTurnDriver::new(codex_runtime);
     let codex_turn_backend = Arc::new(
         CodexTurnExecutionBackend::new(
@@ -1117,6 +1293,20 @@ fn default_workspace_config(
     Ok(LocalWorkspaceConfigOptions::new(
         canonical.join(".zeta/config.toml"),
         workspace_id,
+    ))
+}
+
+fn open_image_attachments(
+    profile_root: &Path,
+) -> Result<Arc<zeta_attachments::ImageAttachments>, OpenAppServerError> {
+    let image_store =
+        zeta_attachments::FileImageAttachmentStore::open(profile_root.join("attachments"))
+            .map_err(|error| OpenAppServerError(error.to_string()))?;
+    let remote_images = zeta_attachments::SafeRemoteImageFetcher::production()
+        .map_err(|error| OpenAppServerError(error.to_string()))?;
+    Ok(Arc::new(
+        zeta_attachments::ImageAttachments::new(Arc::new(image_store))
+            .with_remote_fetcher(Arc::new(remote_images)),
     ))
 }
 

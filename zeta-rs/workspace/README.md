@@ -18,6 +18,7 @@ Server runtime orchestration。
 | `WorkspaceRoot::project_observed_path` | 把 requested/canonical watcher path 投影到一个 relative namespace | watcher lifecycle 或 debounce |
 | `WorkspaceRoot::relative_to_existing_ancestor` | 为 nested Git worktree 提供 canonical projection | Git status semantics |
 | `WorkspaceRoot::trust_id` / `WorkspaceTrustId` | 生成 host persistence 使用的 opaque canonical-root key | User Config storage 或 trust policy |
+| `WorkspaceBinding::from_root` | 将 canonical root 与 authority ID 冻结为可持久化 Session binding | 当前 trust decision、runtime registry 或 Session storage |
 | `WorkspaceAuthorization::revoke` | 失效一个 host decision 签发的全部 capability token | runtime teardown orchestration |
 | `TrustedWorkspace::require` | 将 host trust decision 转成绑定 exact root 的 revocable token | trust UI、trust-store persistence、organization policy resolution |
 
@@ -59,11 +60,17 @@ filesystem mutation 的 caller 必须增加 platform handle-relative operation�
 Workspace 移动后 identity 会变化；canonical alias 会得到同一 identity。当前它不能检测同一路径
 上的 filesystem object replacement。
 
+`WorkspaceBinding` 会额外保存 canonical root，供产品重新打开 Session 所属 Workspace。consumer
+必须重新执行 `WorkspaceRoot::open`、比对 authority ID，并重新解析当前 trust decision；binding
+本身不授予文件或执行权限。Session event ownership 与跨 Workspace runtime routing 仍分别属于
+`zeta-core`/`zeta-session-store` 和 `zeta-app-server`/`zeta-server-host`。
+
 ## 测试与修改影响
 
 `root_tests.rs` 覆盖 directory validation、lexical escape rejection、symlink escape rejection 与
 dual-namespace watcher projection。`trust_tests.rs` 覆盖 Restricted denial、exact-root binding 与
-revocation。Identity 或 projection 变化会影响 Files、sandbox、watcher 和 Git consumer；trust
+revocation。`binding_tests.rs` 覆盖 canonical binding 与 authority mismatch。Identity 或 projection
+变化会影响 Files、sandbox、watcher 和 Git consumer；trust
 capability semantics 变化会影响全部 executable Workspace runtime。
 
 下列代码形态表示 architecture drift：

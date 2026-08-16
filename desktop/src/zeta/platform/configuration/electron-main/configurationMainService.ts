@@ -18,7 +18,7 @@ import {
   validateConfigurationDocument,
   validateConfigurationRead,
   validateConfigurationUpdateRequest,
-} from "../common/configuration.js";
+} from "../common/configurationIpc.js";
 
 export interface ConfigurationMainServiceOptions {
   readonly filePath: string;

@@ -133,7 +133,7 @@ test("Product entries statically select their Aster contribution bundles", () =>
   assert.match(codeEntry, /workbench\/contrib\/tasks\/browser\/tasks\.contribution/u);
   assert.match(codeEntry, /workbench\/contrib\/testing\/browser\/testing\.contribution/u);
   assert.match(codeEntry, /workbench\/contrib\/debug\/browser\/debug\.contribution/u);
-  assert.match(codeEntry, /workbench\/contrib\/extensionHost\/browser\/extensionHost\.contribution/u);
+  assert.match(codeEntry, /codeWorkbenchServices/u);
   assert.doesNotMatch(codeEntry, /editor\/editor\.academic\.all/u);
   assert.match(academicEntry, /editor\/editor\.academic\.all/u);
   assert.match(academicEntry, /workbench\/contrib\/academic\/browser\/academicEditor\.contribution/u);
@@ -147,7 +147,7 @@ test("Product entries statically select their Aster contribution bundles", () =>
   assert.match(electronCodeEntry, /workbench\/contrib\/tasks\/browser\/tasks\.contribution/u);
   assert.match(electronCodeEntry, /workbench\/contrib\/testing\/browser\/testing\.contribution/u);
   assert.match(electronCodeEntry, /workbench\/contrib\/debug\/browser\/debug\.contribution/u);
-  assert.match(electronCodeEntry, /workbench\/contrib\/extensionHost\/browser\/extensionHost\.contribution/u);
+  assert.match(electronCodeEntry, /codeWorkbenchServices/u);
   assert.doesNotMatch(electronCodeEntry, /editor\/editor\.academic\.all/u);
   assert.match(electronAcademicEntry, /editor\/editor\.academic\.all/u);
   assert.match(electronAcademicEntry, /workbench\/contrib\/academic\/browser\/academicEditor\.contribution/u);
@@ -158,15 +158,22 @@ test("Product entries statically select their Aster contribution bundles", () =>
   assert.doesNotMatch(electronAcademicEntry, /editor\/editor\.code\.all/u);
 });
 
-test("Code services are installed by product contributions rather than product-id branches", () => {
+test("Code services are installed by product-selected service registrations rather than UI contributions", () => {
   const workbench = readFileSync(join(workbenchRoot, "browser/workbench.ts"), "utf8");
-  const tasks = readFileSync(join(workbenchRoot, "contrib/tasks/browser/tasks.contribution.ts"), "utf8");
-  const testing = readFileSync(join(workbenchRoot, "contrib/testing/browser/testing.contribution.ts"), "utf8");
-  const debug = readFileSync(join(workbenchRoot, "contrib/debug/browser/debug.contribution.ts"), "utf8");
+  const productServices = readFileSync(resolve(workbenchRoot, "../code/browser/workbench/codeWorkbenchServices.ts"), "utf8");
+  const tasks = readFileSync(join(workbenchRoot, "services/tasks/browser/taskServiceRegistration.ts"), "utf8");
+  const testing = readFileSync(join(workbenchRoot, "services/testing/browser/testingServiceRegistration.ts"), "utf8");
+  const debug = readFileSync(join(workbenchRoot, "services/debug/browser/debugServiceRegistration.ts"), "utf8");
   assert.doesNotMatch(workbench, /services\/(?:tasks|testing|debug)\/(?:browser|common)/u);
   assert.doesNotMatch(workbench, /product\.id\s*===\s*["']code["']/u);
   assert.match(workbench, /installWorkbenchServiceContributions/u);
-  for (const contribution of [tasks, testing, debug]) assert.match(contribution, /registerWorkbenchServiceContribution/u);
+  assert.match(productServices, /taskServiceRegistration/u);
+  assert.match(productServices, /testingServiceRegistration/u);
+  assert.match(productServices, /debugServiceRegistration/u);
+  assert.match(productServices, /extensionHostServiceRegistration/u);
+  assert.match(productServices, /symbolIndexServiceRegistration/u);
+  for (const registration of [tasks, testing, debug]) assert.match(registration, /registerWorkbenchServiceContribution/u);
+  for (const contribution of ["tasks", "testing", "debug"]) assert.doesNotMatch(readFileSync(join(workbenchRoot, `contrib/${contribution}/browser/${contribution}.contribution.ts`), "utf8"), /registerWorkbenchServiceContribution/u);
 });
 
 test("Debug transport is contributed by Code product hosts only", () => {

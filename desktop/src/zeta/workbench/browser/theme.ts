@@ -1,5 +1,5 @@
 import { DisposableOwner, toDisposable } from "../../base/common/lifecycle.js";
-import type { IConfigurationService } from "../../platform/configuration/common/configuration.js";
+import type { IConfigurationService } from "../../platform/configuration/common/configurationService.js";
 import type { IThemeService } from "../../platform/theme/common/themeService.js";
 import { WorkbenchConfiguration } from "../common/configuration.js";
 import { resolveWorkbenchColorTheme, SystemColorThemePreference } from "../common/theme.js";

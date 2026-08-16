@@ -1,5 +1,6 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { DisposableOwner, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
+import type { ILogService } from "../../../../platform/log/common/logService.js";
 import { type ITaskRun, type ITaskService } from "../../tasks/common/taskService.js";
 import { type ITestProfile, type ITestRun, type ITestingService, type TestProfileContribution, type TestProfileProvider, type TestProfileProviderRegistration, type TestRunStatus } from "../common/testingService.js";
 
@@ -27,11 +28,11 @@ export class TestingService extends DisposableOwner implements ITestingService {
   readonly onDidStartRun: Event<ITestRun> = this.startRunEmitter.event;
   readonly onDidChangeRun: Event<ITestRun> = this.changeRunEmitter.event;
 
-  constructor(private readonly taskService: ITaskService) {
+  constructor(private readonly taskService: ITaskService, private readonly logService?: ILogService) {
     super();
     this.own(taskService.onDidChangeTasks(() => {
       this.projectProfiles();
-      if (this.loaded && this.refreshingTasks === 0 && !this.activeProviderRefresh) void this.refreshProviderProfiles().catch(reportTestingError);
+      if (this.loaded && this.refreshingTasks === 0 && !this.activeProviderRefresh) void this.refreshProviderProfiles().catch(error => this.reportError(error));
     }));
     this.defer(() => {
       this.disposed = true;
@@ -146,7 +147,7 @@ export class TestingService extends DisposableOwner implements ITestingService {
     this.projectProfiles();
     this.activeProviderRefresh?.abort();
     this.providerRefreshGeneration += 1;
-    if (refresh) void this.refreshProviderProfiles().catch(reportTestingError);
+    if (refresh) void this.refreshProviderProfiles().catch(error => this.reportError(error));
   }
 
   private async refreshProviderProfiles(): Promise<readonly ITestProfile[]> {
@@ -191,6 +192,10 @@ export class TestingService extends DisposableOwner implements ITestingService {
 
   private ensureAlive(): void {
     if (this.disposed) throw new ReferenceError("TestingService is already disposed");
+  }
+
+  private reportError(error: unknown): void {
+    this.logService?.error("testing.profiles", "Could not refresh Test Profiles", error);
   }
 }
 
@@ -239,8 +244,4 @@ function projectProviderProfile(providerId: string, contribution: TestProfileCon
 function normalizeText(value: string, owner: string, maximum: number, trim = true): string {
   if (typeof value !== "string" || value.trim().length === 0 || value.length > maximum || value.includes("\0")) throw new TypeError(`${owner} must contain 1 to ${maximum} characters without NUL`);
   return trim ? value.trim() : value;
-}
-
-function reportTestingError(error: unknown): void {
-  console.error("Could not refresh Test Profiles", error);
 }

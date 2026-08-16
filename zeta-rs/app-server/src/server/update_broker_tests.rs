@@ -57,6 +57,31 @@ fn broker_fans_out_filesystem_invalidation_without_a_subscription() {
 }
 
 #[test]
+fn profile_broker_shares_sessions_but_isolates_workspace_notifications() {
+    let first_scope = UpdateBroker::default();
+    let second_scope = first_scope.fork_scope();
+    let first = NotificationQueue::default();
+    let second = NotificationQueue::default();
+    let first_connection = first_scope.allocate_connection_id();
+    let second_connection = second_scope.allocate_connection_id();
+    let session_id = SessionId::new("session_1").expect("test ID is non-empty");
+    first_scope.register(first_connection, &first);
+    second_scope.register(second_connection, &second);
+    first_scope.subscribe_session(first_connection, session_id.clone(), 0);
+    second_scope.subscribe_session(second_connection, session_id.clone(), 0);
+
+    first_scope.publish_session(&session_id, &[update(&session_id, 1)]);
+    first_scope.publish_fs_changed(FsChanged::PathsChanged {
+        paths: vec!["first/src/lib.rs".into()],
+    });
+
+    assert_ne!(first_connection, second_connection);
+    assert_eq!(first.len(), 2);
+    assert_eq!(second.len(), 1);
+    assert_eq!(second.drain()[0]["method"], "session/update");
+}
+
+#[test]
 fn broker_fans_out_language_server_lifecycle_without_a_subscription() {
     let broker = UpdateBroker::default();
     let queue = NotificationQueue::default();
@@ -126,6 +151,7 @@ fn agent_request_is_delivered_to_exactly_one_capable_thread_subscriber() {
     let second = NotificationQueue::default();
     let session_id = SessionId::new("session_1").expect("test ID is non-empty");
     let thread_id = ThreadId::new("thread_1").expect("test ID is non-empty");
+    broker.bind_session_scope(session_id.clone());
     broker.register(1, &first);
     broker.register(2, &second);
     broker.set_agent_interaction_capability(1, Some(approval_capability()));
@@ -150,6 +176,7 @@ fn agent_request_is_reassigned_when_its_connection_closes() {
     let second = NotificationQueue::default();
     let session_id = SessionId::new("session_1").expect("test ID is non-empty");
     let thread_id = ThreadId::new("thread_1").expect("test ID is non-empty");
+    broker.bind_session_scope(session_id.clone());
     broker.register(1, &first);
     broker.register(2, &second);
     broker.set_agent_interaction_capability(1, Some(approval_capability()));
@@ -177,6 +204,7 @@ fn delivered_dynamic_tool_is_not_reassigned_when_its_owner_closes() {
     let second = NotificationQueue::default();
     let session_id = SessionId::new("session_1").unwrap();
     let thread_id = ThreadId::new("thread_1").unwrap();
+    broker.bind_session_scope(session_id.clone());
     broker.register(1, &first);
     broker.register(2, &second);
     broker.set_agent_interaction_capability(1, Some(dynamic_tool_capability()));
@@ -200,6 +228,7 @@ fn dynamic_tool_is_delivered_only_to_a_connection_hosting_that_tool_name() {
     let owner = NotificationQueue::default();
     let session_id = SessionId::new("session_1").unwrap();
     let thread_id = ThreadId::new("thread_1").unwrap();
+    broker.bind_session_scope(session_id.clone());
     broker.register(1, &other);
     broker.register(2, &owner);
     broker.set_agent_interaction_capability(1, Some(dynamic_tool_capability_for("other_tool")));
@@ -219,6 +248,7 @@ fn agent_request_waits_until_a_matching_capability_subscribes() {
     let queue = NotificationQueue::default();
     let session_id = SessionId::new("session_1").expect("test ID is non-empty");
     let thread_id = ThreadId::new("thread_1").expect("test ID is non-empty");
+    broker.bind_session_scope(session_id.clone());
     broker.register(1, &queue);
     broker.subscribe_session_thread(1, session_id.clone(), thread_id.clone(), 0);
     broker.offer_agent_request(approval_request(&session_id, &thread_id));
@@ -227,6 +257,24 @@ fn agent_request_waits_until_a_matching_capability_subscribes() {
     broker.set_agent_interaction_capability(1, Some(approval_capability()));
 
     assert_eq!(queue.len(), 1);
+}
+
+#[test]
+fn agent_request_is_not_assigned_to_a_foreign_workspace_scope() {
+    let owning_scope = UpdateBroker::default();
+    let foreign_scope = owning_scope.fork_scope();
+    let queue = NotificationQueue::default();
+    let session_id = SessionId::new("session_1").expect("test ID is non-empty");
+    let thread_id = ThreadId::new("thread_1").expect("test ID is non-empty");
+    let connection_id = foreign_scope.allocate_connection_id();
+    owning_scope.bind_session_scope(session_id.clone());
+    foreign_scope.register(connection_id, &queue);
+    foreign_scope.set_agent_interaction_capability(connection_id, Some(approval_capability()));
+    foreign_scope.subscribe_session_thread(connection_id, session_id.clone(), thread_id.clone(), 0);
+
+    owning_scope.offer_agent_request(approval_request(&session_id, &thread_id));
+
+    assert!(queue.drain().is_empty());
 }
 
 fn approval_capability() -> AgentInteractionCapability {
@@ -304,6 +352,7 @@ fn update(session_id: &SessionId, sequence: u64) -> SessionUpdateEnvelope {
                 session_id: session_id.clone(),
                 title: "task".into(),
                 model: None,
+                workspace: None,
             },
         },
     }

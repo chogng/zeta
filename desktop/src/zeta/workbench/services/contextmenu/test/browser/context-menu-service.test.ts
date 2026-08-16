@@ -10,7 +10,7 @@ import {
 } from "../../../../../platform/contextview/browser/contextMenu.js";
 import {
   WorkbenchContextMenuService,
-} from "../../../../../workbench/services/contextmenu/common/contextMenuService.js";
+} from "../../../../../workbench/services/contextmenu/browser/workbenchContextMenuService.js";
 
 test("workbench context menu service owns and forwards its implementation", () => {
   const implementation = new TestContextMenuImplementation();

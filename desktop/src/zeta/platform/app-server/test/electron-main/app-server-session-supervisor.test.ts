@@ -357,6 +357,35 @@ test("local launcher requires an absolute executable and rejects variables outsi
   allowedLauncher.validate();
 });
 
+test("local launcher applies a validated authority environment to the next connection", () => {
+  const launchedEnvironments: Readonly<Record<string, string>>[] = [];
+  const launcher = new LocalAppServerProcessLauncher({
+    executable: "/test/zeta-server",
+    args: ["app-server", "connect"],
+    environment: {
+      ZETA_PROFILE_ROOT: "/profiles/zeta",
+      ZETA_WORKSPACE_ROOT: "/workspaces/one",
+    },
+    fileExists: () => true,
+    spawnProcess: (_executable, _args, options) => {
+      launchedEnvironments.push(options.environment);
+      return new ProtocolChildProcess(APP_SERVER_SCHEMA_HASH) as unknown as ChildProcessWithoutNullStreams;
+    },
+  });
+
+  launcher.launch();
+  launcher.replaceEnvironment({
+    ZETA_PROFILE_ROOT: "/profiles/zeta",
+    ZETA_WORKSPACE_ROOT: "/workspaces/two",
+    ZETA_WORKSPACE_TRUST_SOURCE: "userConfig",
+  });
+  launcher.launch();
+
+  assert.equal(launchedEnvironments[0].ZETA_WORKSPACE_ROOT, "/workspaces/one");
+  assert.equal(launchedEnvironments[1].ZETA_WORKSPACE_ROOT, "/workspaces/two");
+  assert.throws(() => launcher.replaceEnvironment({ AWS_SECRET_ACCESS_KEY: "secret" }), /AWS_SECRET_ACCESS_KEY/);
+});
+
 test("initialization failures consume exactly the bounded startup retry budget", async () => {
   const children: ProtocolChildProcess[] = [];
   const options = supervisorOptions(children);

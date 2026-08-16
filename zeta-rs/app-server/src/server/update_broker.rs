@@ -4,7 +4,10 @@ use serde::Serialize;
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 use zeta_app_server_protocol::protocol::account::AccountLoginCompleted;
 use zeta_app_server_protocol::protocol::account::AccountUpdated;
 use zeta_app_server_protocol::protocol::collaboration::DocumentCollaborationPresenceSnapshot;
@@ -43,19 +46,24 @@ pub(super) fn unix_time_millis() -> u64 {
         .min(u128::from(u64::MAX)) as u64
 }
 
-pub(super) struct UpdateBroker {
-    state: Mutex<BrokerState>,
+pub(crate) struct UpdateBroker {
+    state: Arc<Mutex<BrokerState>>,
+    next_connection_id: Arc<AtomicU64>,
+    next_scope_id: Arc<AtomicU64>,
+    scope_id: u64,
 }
 
 #[derive(Default)]
 struct BrokerState {
     subscribers: BTreeMap<u64, Subscriber>,
+    session_scopes: BTreeMap<SessionId, u64>,
     interaction_assignments: BTreeMap<RequestId, u64>,
     pending_interactions: BTreeMap<RequestId, AgentRequestEnvelope>,
 }
 
 struct Subscriber {
     queue: NotificationQueueHandle,
+    scope_id: u64,
     agent_interactions: Option<AgentInteractionCapability>,
     collaboration_rooms: BTreeSet<String>,
     sessions: BTreeMap<SessionId, u64>,
@@ -71,12 +79,28 @@ struct ThreadSubscription {
 impl Default for UpdateBroker {
     fn default() -> Self {
         Self {
-            state: Mutex::new(BrokerState::default()),
+            state: Arc::new(Mutex::new(BrokerState::default())),
+            next_connection_id: Arc::new(AtomicU64::new(1)),
+            next_scope_id: Arc::new(AtomicU64::new(2)),
+            scope_id: 1,
         }
     }
 }
 
 impl UpdateBroker {
+    pub(crate) fn fork_scope(&self) -> Self {
+        Self {
+            state: Arc::clone(&self.state),
+            next_connection_id: Arc::clone(&self.next_connection_id),
+            next_scope_id: Arc::clone(&self.next_scope_id),
+            scope_id: self.next_scope_id.fetch_add(1, Ordering::Relaxed),
+        }
+    }
+
+    pub(super) fn allocate_connection_id(&self) -> u64 {
+        self.next_connection_id.fetch_add(1, Ordering::Relaxed)
+    }
+
     pub(super) fn publish_account_login_completed(&self, completed: AccountLoginCompleted) {
         self.broadcast_notification(ServerNotificationMethod::AccountLoginCompleted, &completed);
     }
@@ -91,6 +115,7 @@ impl UpdateBroker {
                 connection_id,
                 Subscriber {
                     queue: queue.downgrade(),
+                    scope_id: self.scope_id,
                     agent_interactions: None,
                     collaboration_rooms: BTreeSet::new(),
                     sessions: BTreeMap::new(),
@@ -200,6 +225,13 @@ impl UpdateBroker {
         }
     }
 
+    pub(super) fn bind_session_scope(&self, session_id: SessionId) {
+        if let Ok(mut state) = self.state.lock() {
+            state.session_scopes.insert(session_id, self.scope_id);
+            reconcile_interaction_assignments(&mut state);
+        }
+    }
+
     pub(super) fn unsubscribe_session(
         &self,
         connection_id: u64,
@@ -238,7 +270,9 @@ impl UpdateBroker {
             let Some(queue) = subscriber.queue.upgrade() else {
                 return false;
             };
-            if subscriber.collaboration_rooms.contains(&update.room_id) {
+            if subscriber.scope_id == self.scope_id
+                && subscriber.collaboration_rooms.contains(&update.room_id)
+            {
                 queue.push(notification(
                     ServerNotificationMethod::DocumentCollaborationUpdate,
                     &update,
@@ -259,7 +293,9 @@ impl UpdateBroker {
             let Some(queue) = subscriber.queue.upgrade() else {
                 return false;
             };
-            if subscriber.collaboration_rooms.contains(&snapshot.room_id) {
+            if subscriber.scope_id == self.scope_id
+                && subscriber.collaboration_rooms.contains(&snapshot.room_id)
+            {
                 queue.push(notification(
                     ServerNotificationMethod::DocumentCollaborationPresence,
                     &snapshot,
@@ -532,6 +568,9 @@ impl UpdateBroker {
             let Some(queue) = subscriber.queue.upgrade() else {
                 return false;
             };
+            if subscriber.scope_id != self.scope_id {
+                return true;
+            }
             queue.push(notification(
                 ServerNotificationMethod::GitStatusChanged,
                 &GitStatusChanged {
@@ -550,6 +589,9 @@ impl UpdateBroker {
             let Some(queue) = subscriber.queue.upgrade() else {
                 return false;
             };
+            if subscriber.scope_id != self.scope_id {
+                return true;
+            }
             queue.push(notification(ServerNotificationMethod::FsChanged, &changed));
             true
         });
@@ -559,7 +601,10 @@ impl UpdateBroker {
         &self,
         diagnostics: LanguageDiagnosticsNotification,
     ) {
-        self.broadcast_notification(ServerNotificationMethod::LanguageDiagnostics, &diagnostics);
+        self.publish_language_notification(
+            ServerNotificationMethod::LanguageDiagnostics,
+            &diagnostics,
+        );
     }
 
     fn broadcast_notification(&self, method: ServerNotificationMethod, params: &impl Serialize) {
@@ -611,6 +656,9 @@ impl UpdateBroker {
             let Some(queue) = subscriber.queue.upgrade() else {
                 return false;
             };
+            if subscriber.scope_id != self.scope_id {
+                return true;
+            }
             queue.push(notification(method, params));
             true
         });
@@ -679,10 +727,13 @@ fn reconcile_interaction_assignments(state: &mut BrokerState) {
         .iter()
         .filter_map(|(request_id, connection_id)| {
             let request = state.pending_interactions.get(request_id)?;
+            let required_scope = state.session_scopes.get(&request.session_id).copied();
             let valid = state
                 .subscribers
                 .get(connection_id)
-                .is_some_and(|subscriber| interaction_owner_matches(subscriber, request));
+                .is_some_and(|subscriber| {
+                    interaction_owner_matches(subscriber, request, required_scope)
+                });
             (!valid).then_some(request_id.clone())
         })
         .collect::<Vec<_>>();
@@ -700,11 +751,12 @@ fn reconcile_interaction_assignments(state: &mut BrokerState) {
         let Some(request) = state.pending_interactions.get(&request_id) else {
             continue;
         };
+        let required_scope = state.session_scopes.get(&request.session_id).copied();
         let owner = state
             .subscribers
             .iter()
             .find_map(|(connection_id, subscriber)| {
-                interaction_owner_matches(subscriber, request)
+                interaction_owner_matches(subscriber, request, required_scope)
                     .then(|| subscriber.queue.upgrade())
                     .flatten()
                     .map(|queue| (*connection_id, queue))
@@ -721,7 +773,11 @@ fn reconcile_interaction_assignments(state: &mut BrokerState) {
     }
 }
 
-fn interaction_owner_matches(subscriber: &Subscriber, request: &AgentRequestEnvelope) -> bool {
+fn interaction_owner_matches(
+    subscriber: &Subscriber,
+    request: &AgentRequestEnvelope,
+    required_scope: Option<u64>,
+) -> bool {
     let supports_kind = subscriber
         .agent_interactions
         .as_ref()
@@ -739,7 +795,8 @@ fn interaction_owner_matches(subscriber: &Subscriber, request: &AgentRequestEnve
                     .contains(&request.interaction.request.kind())
                 && supports_exact_dynamic_tool
         });
-    supports_kind
+    required_scope == Some(subscriber.scope_id)
+        && supports_kind
         && subscriber
             .threads
             .get(&request.thread_id)

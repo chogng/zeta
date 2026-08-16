@@ -78,11 +78,19 @@ export class ServiceCollection implements ServicesAccessor {
     this.services.set(id, service);
   }
 
+  has<T>(id: ServiceIdentifier<T>): boolean {
+    return this.services.has(id);
+  }
+
   get<T>(id: ServiceIdentifier<T>): T {
     if (!this.services.has(id)) {
       throw new Error(`Unknown service: ${id.description ?? String(id)}`);
     }
     return this.services.get(id) as T;
+  }
+
+  getOptional<T>(id: ServiceIdentifier<T>): T | undefined {
+    return this.services.get(id) as T | undefined;
   }
 }
 

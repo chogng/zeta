@@ -2,11 +2,12 @@ import "./media/sessionsWorkbench.css";
 import "./actions/sessionsChatActions.js";
 import { DisposableOwner } from "../../base/common/lifecycle.js";
 import type { ProductConfiguration } from "../../product/common/product.js";
-import type { IConfigurationApi } from "../../platform/configuration/common/configuration.js";
+import type { IConfigurationApi } from "../../platform/configuration/common/configurationIpc.js";
 import type { IKeybindingsResourceApi } from "../../platform/keybinding/common/keybindingsResource.js";
 import type { IRendererHost } from "../../platform/renderer/common/rendererHost.js";
+import type { IWorkspaceContextApi } from "../../platform/workspace/common/workspaceIpc.js";
 import { IStorageService } from "../../platform/storage/common/storage.js";
-import type { WorkbenchContextMenuServiceFactory } from "../../workbench/services/contextmenu/common/contextMenuService.js";
+import type { WorkbenchContextMenuServiceFactory } from "../../workbench/services/contextmenu/browser/workbenchContextMenuService.js";
 import { BrowserStorageService } from "../../workbench/services/storage/browser/storageService.js";
 import type { SessionsProfile } from "../common/sessionsProfile.js";
 import type { ISessionsWindowApi } from "../common/sessionsWindow.js";
@@ -19,6 +20,7 @@ export interface SessionsWorkbenchOptions {
   readonly profile: SessionsProfile;
   readonly api: IRendererHost;
   readonly sessionsWindowApi?: ISessionsWindowApi;
+  readonly workspaceApi?: IWorkspaceContextApi;
   readonly configurationApi?: IConfigurationApi;
   readonly keybindingsResourceApi?: IKeybindingsResourceApi;
   readonly createContextMenuService: WorkbenchContextMenuServiceFactory;
@@ -39,7 +41,10 @@ export class SessionsWorkbench extends DisposableOwner {
     const ownerWindow = container.ownerDocument.defaultView;
     if (!ownerWindow) throw new Error("Sessions renderer requires an owner window");
     this.own(bindSessionsTheme(container));
-    const runtime = this.own(new SessionsRuntime(options.api));
+    const runtime = this.own(new SessionsRuntime(options.api, {
+      ...(options.sessionsWindowApi ? { sessionsWindowApi: options.sessionsWindowApi } : {}),
+      ...(options.workspaceApi ? { workspaceApi: options.workspaceApi } : {}),
+    }));
     const storage = this.own(new BrowserStorageService({
       ownerWindow,
       applicationId: options.product.storageNamespace,

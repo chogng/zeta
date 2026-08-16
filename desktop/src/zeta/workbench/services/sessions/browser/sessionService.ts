@@ -6,9 +6,21 @@ import type { IServerEventApi } from "../../../../platform/app-server/common/app
 import type { ISessionApi } from "../../../../platform/sessions/common/sessionApi.js";
 import type { AgentThreadExecutionStatus, IActiveSessionThread, IUntitledChatSession, IWorkbenchSessionService, ModelRef, Session, SessionId, ThreadId, WorkbenchSessionState } from "../common/sessionService.js";
 
+export interface ISessionWorkspaceRouter {
+  currentWorkspaceRoot(): string | undefined;
+  reopenWorkspace(root: string): Promise<void>;
+}
+
+interface WorkbenchSessionServiceHost {
+  readonly session: ISessionApi;
+  readonly events?: IServerEventApi;
+  readonly workspaceRouter?: ISessionWorkspaceRouter;
+}
+
 /** App Server-backed active Session selector for one workbench window. */
 export class WorkbenchSessionService extends DisposableOwner implements IWorkbenchSessionService {
   private readonly api: ISessionApi;
+  private readonly workspaceRouter: ISessionWorkspaceRouter | undefined;
   private readonly _onDidChange = this.own(new Emitter<void>());
   private _sessions: readonly Session[] = [];
   private _active: IActiveSessionThread | undefined;
@@ -23,9 +35,10 @@ export class WorkbenchSessionService extends DisposableOwner implements IWorkben
 
   readonly onDidChange = this._onDidChange.event;
 
-  constructor(api: ISessionApi | { readonly session: ISessionApi; readonly events?: IServerEventApi }) {
+  constructor(api: ISessionApi | WorkbenchSessionServiceHost) {
     super();
     this.api = "session" in api ? api.session : api;
+    this.workspaceRouter = "session" in api ? api.workspaceRouter : undefined;
     const events = "session" in api ? api.events : undefined;
     if (events) {
       const subscription = events.subscribe(event => {
@@ -58,6 +71,17 @@ export class WorkbenchSessionService extends DisposableOwner implements IWorkben
 
   selectThread(sessionId: SessionId, threadId: ThreadId): void {
     const session = this._sessions.find((candidate) => candidate.sessionId === sessionId);
+    const targetRoot = session?.workspace?.root;
+    const currentRoot = this.workspaceRouter?.currentWorkspaceRoot();
+    if (targetRoot && this.workspaceRouter && (!currentRoot || !sameWorkspacePath(targetRoot, currentRoot))) {
+      void this.reopenWorkspaceAndSelect(targetRoot, sessionId, threadId);
+      return;
+    }
+    this.selectAvailableThread(sessionId, threadId);
+  }
+
+  private selectAvailableThread(sessionId: SessionId, threadId: ThreadId): void {
+    const session = this._sessions.find((candidate) => candidate.sessionId === sessionId);
     const thread = session?.threads.find((candidate) => candidate.threadId === threadId && candidate.status === "active");
     if (!session || !thread || session.status !== "active") throw new Error(`Active Session Thread is not available: ${threadId}`);
     if (this._active?.session.sessionId === sessionId && this._active.threadId === threadId && this._activeUntitledSessionId === undefined) return;
@@ -65,6 +89,19 @@ export class WorkbenchSessionService extends DisposableOwner implements IWorkben
     this._activeUntitledSessionId = undefined;
     this._error = undefined;
     this._onDidChange.fire();
+  }
+
+  private async reopenWorkspaceAndSelect(targetRoot: string, sessionId: SessionId, threadId: ThreadId): Promise<void> {
+    try {
+      await this.workspaceRouter!.reopenWorkspace(targetRoot);
+      this.subscribedSessionIds.clear();
+      this.pendingSessionSequences.clear();
+      this.refreshes.clear();
+      await this.loadSessions();
+      this.selectAvailableThread(sessionId, threadId);
+    } catch (error) {
+      this.setError(error);
+    }
   }
 
   createUntitledSession(title = "New Chat"): IUntitledChatSession {
@@ -135,7 +172,7 @@ export class WorkbenchSessionService extends DisposableOwner implements IWorkben
       const result = await this.api.archive({ commandId: commandId("archive-session"), sessionId, expectedSequence: session.sequence });
       this.replaceSession(toSession(result.session, [], session));
       await this.unsubscribeSession(sessionId);
-      if (this._active?.session.sessionId === sessionId) this._active = firstActiveThread(this._sessions);
+      if (this._active?.session.sessionId === sessionId) this._active = this.firstActiveThread();
       this.restoreAvailableSelection();
       this.setState("ready");
     } catch (error) {
@@ -153,7 +190,7 @@ export class WorkbenchSessionService extends DisposableOwner implements IWorkben
       const result = await this.api.stop({ commandId: commandId("stop-session"), sessionId, expectedSequence: session.sequence });
       this.replaceSession(toSession(result.session, [], session));
       await this.unsubscribeSession(sessionId);
-      if (this._active?.session.sessionId === sessionId) this._active = firstActiveThread(this._sessions);
+      if (this._active?.session.sessionId === sessionId) this._active = this.firstActiveThread();
       this.restoreAvailableSelection();
       this.setState("ready");
     } catch (error) {
@@ -205,7 +242,7 @@ export class WorkbenchSessionService extends DisposableOwner implements IWorkben
       const result = await this.api.list();
       const sessions = result.sessions.map(session => toSession(session));
       this._sessions = await Promise.all(sessions.map(session => this.subscribeSession(session)));
-      this._active = firstActiveThread(this._sessions);
+      this._active = this.firstActiveThread();
       this.restoreAvailableSelection();
       this.setState("ready");
     } catch (error) {
@@ -293,8 +330,8 @@ export class WorkbenchSessionService extends DisposableOwner implements IWorkben
         this.replaceSession(refreshed);
         if (this._active?.session.sessionId === sessionId) {
           this._active = refreshed.status === "active"
-            ? activeThread(refreshed, this._active.threadId) ?? firstActiveThread(this._sessions)
-            : firstActiveThread(this._sessions);
+            ? activeThread(refreshed, this._active.threadId) ?? this.firstActiveThread()
+            : this.firstActiveThread();
         }
         this.restoreAvailableSelection();
         this._error = undefined;
@@ -309,6 +346,11 @@ export class WorkbenchSessionService extends DisposableOwner implements IWorkben
   private replaceSession(session: Session): void {
     this._sessions = this._sessions.map(candidate => candidate.sessionId === session.sessionId ? session : candidate);
   }
+
+  private firstActiveThread(): IActiveSessionThread | undefined {
+    const currentRoot = this.workspaceRouter?.currentWorkspaceRoot();
+    return firstActiveThread(this._sessions, currentRoot);
+  }
 }
 
 function toSession(session: SessionDto, projections: readonly SessionThreadProjectionDto[] = [], previous?: Session): Session {
@@ -318,6 +360,7 @@ function toSession(session: SessionDto, projections: readonly SessionThreadProje
     title: session.title,
     status: session.status,
     model: session.model ? toModelRef(session.model) : session.model,
+    workspace: session.workspace ? { ...session.workspace } : session.workspace,
     sequence: session.sequence,
     threads: session.threads.map((thread) => {
       const projection = projectionByThread.get(thread.threadId);
@@ -349,13 +392,23 @@ function executionStatus(status: TurnStatusDto | undefined): AgentThreadExecutio
 
 function toModelRef(model: ModelRefDto): ModelRef { return { provider: model.provider, model: model.model }; }
 
-function firstActiveThread(sessions: readonly Session[]): IActiveSessionThread | undefined {
+function firstActiveThread(sessions: readonly Session[], currentWorkspaceRoot?: string): IActiveSessionThread | undefined {
   for (const session of sessions) {
     if (session.status !== "active") continue;
+    if (currentWorkspaceRoot && session.workspace?.root && !sameWorkspacePath(session.workspace.root, currentWorkspaceRoot)) continue;
     const thread = session.threads.find((candidate) => candidate.status === "active");
     if (thread) return { session, threadId: thread.threadId };
   }
   return undefined;
+}
+
+function sameWorkspacePath(left: string, right: string): boolean {
+  const normalize = (value: string): string => value.replaceAll("\\", "/").replace(/\/+$/, "");
+  const normalizedLeft = normalize(left);
+  const normalizedRight = normalize(right);
+  return /^[a-z]:\//i.test(normalizedLeft) && /^[a-z]:\//i.test(normalizedRight)
+    ? normalizedLeft.toLowerCase() === normalizedRight.toLowerCase()
+    : normalizedLeft === normalizedRight;
 }
 
 function activeThread(session: Session, threadId: ThreadId): IActiveSessionThread | undefined {

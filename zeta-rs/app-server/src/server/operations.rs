@@ -1,6 +1,7 @@
 use super::{AppServer, ConnectionState, RpcError, core_error, decode, result};
 use base64::Engine;
 use serde_json::Value;
+use std::sync::Arc;
 use std::time::Duration;
 use zeta_app_server_protocol::protocol::common::{SchemaHash, ServerInfo};
 use zeta_app_server_protocol::protocol::document::{
@@ -195,7 +196,16 @@ impl AppServer {
                     .model_catalog
                     .configured_default()
                     .map_err(core_error)?,
+                workspace: self.active_workspace_binding(),
             })
+            .map_err(core_error)?;
+        self.updates.bind_session_scope(created.session_id.clone());
+        self.sessions
+            .threads()
+            .install_session_extensions(
+                created.session_id.clone(),
+                Arc::clone(&self.agent_extensions),
+            )
             .map_err(core_error)?;
         self.updates.subscribe_session(
             connection.connection_id,
@@ -350,6 +360,18 @@ impl AppServer {
             expected_sequence,
             request,
         } = decode(params)?;
+        let session = self
+            .sessions
+            .read_session(&session_id)
+            .map_err(core_error)?;
+        if session.workspace_binding_is_legacy
+            || session.workspace != self.active_workspace_binding()
+        {
+            return Err(RpcError::new(
+                -32053,
+                AppServerErrorName::WorkspaceAuthorityMismatch,
+            ));
+        }
         let mutation = SessionMutation {
             command_id: command_id.clone(),
             session_id: session_id.clone(),

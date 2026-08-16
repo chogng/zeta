@@ -52,7 +52,10 @@ pub(crate) fn run(mut session: AppServerSession, options: TuiOptions) -> Result<
     let shutdown = session.shutdown();
     match (result, shutdown) {
         (Err(error), _) => Err(error),
-        (Ok(exit @ TuiExit::ConnectionLost { .. }), _) => Ok(exit),
+        (
+            Ok(exit @ (TuiExit::ConnectionLost { .. } | TuiExit::WorkspaceReconnectRequested(_))),
+            _,
+        ) => Ok(exit),
         (Ok(_), Err(error)) => Err(error.into()),
         (Ok(exit), Ok(())) => Ok(exit),
     }
@@ -178,13 +181,15 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                 match task.poll() {
                     Ok(Some(completion)) => {
                         pending_request = None;
-                        apply_request_completion(
+                        if let Some(exit) = apply_request_completion(
                             completion,
                             &mut conversation,
                             &mut active_turn,
                             &mut thread_subscription,
                             &mut app,
-                        );
+                        ) {
+                            return Ok(exit);
+                        }
                     }
                     Ok(None) => {}
                     Err(error) => {
@@ -444,25 +449,36 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             let next_subscription = thread_subscription.clone();
                             pending_request = spawn_request(
                                 "zeta-tui-resume-session",
-                                move || RequestCompletion::ConversationChanged {
-                                    command,
-                                    result: next_conversation
-                                        .resume_session(&mut request_client, &session_id)
-                                        .map_err(|error| error.to_string())
-                                        .and_then(|outcome| match outcome {
-                                            ResumeOutcome::Changed(change) => {
-                                                finish_conversation_request(
-                                                    &mut request_client,
-                                                    next_conversation,
-                                                    next_subscription,
-                                                    change,
-                                                )
-                                            }
-                                            ResumeOutcome::Listed(_) => {
-                                                Err("resume selection did not identify a session"
-                                                    .into())
-                                            }
-                                        }),
+                                move || match next_conversation
+                                    .resume_session(&mut request_client, &session_id)
+                                {
+                                    Ok(ResumeOutcome::WorkspaceReconnect(reconnect)) => {
+                                        RequestCompletion::WorkspaceReconnect(reconnect)
+                                    }
+                                    Ok(ResumeOutcome::Changed(change)) => {
+                                        RequestCompletion::ConversationChanged {
+                                            command,
+                                            result: finish_conversation_request(
+                                                &mut request_client,
+                                                next_conversation,
+                                                next_subscription,
+                                                change,
+                                            ),
+                                        }
+                                    }
+                                    Ok(ResumeOutcome::Listed(_)) => {
+                                        RequestCompletion::ConversationChanged {
+                                            command,
+                                            result: Err(
+                                                "resume selection did not identify a session"
+                                                    .into(),
+                                            ),
+                                        }
+                                    }
+                                    Err(error) => RequestCompletion::ConversationChanged {
+                                        command,
+                                        result: Err(error.to_string()),
+                                    },
                                 },
                                 &mut app,
                             );

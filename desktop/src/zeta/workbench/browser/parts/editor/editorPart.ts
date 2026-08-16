@@ -4,7 +4,7 @@ import type { URI } from "../../../../base/common/uri.js";
 import { Dimension, type IDimension } from "../../../../base/browser/geometry.js";
 import { SplitView, type ISplitViewView } from "../../../../base/browser/ui/splitview/splitview.js";
 import type { IMenuService } from "../../../../platform/actions/common/menuService.js";
-import type { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
+import type { IConfigurationService } from "../../../../platform/configuration/common/configurationService.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 import type { IKeybindingService } from "../../../../platform/keybinding/common/keybinding.js";
 import { type ITextFileService } from "../../../services/textfile/common/textFileService.js";
@@ -18,7 +18,7 @@ import type { IServerEventApi } from "../../../../platform/app-server/common/app
 import { WorkbenchPart } from "../../part.js";
 import { EditorGroup, type EditorGroupOptions, type IEditorGroup } from "./editorGroup.js";
 import { EditorTabDragAndDropController, type EditorTabDropEvent } from "./editorTabDragAndDrop.js";
-import type { EditorInput, EditorOpenOptions } from "./editorInput.js";
+import type { EditorInput, EditorOpenOptions } from "../../../services/editor/common/editorService.js";
 import type { TextResourceLanguageResolver } from "../../../../platform/language/common/textResourceLanguage.js";
 import type { IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";
 import type { IEditorPane } from "./editorPane.js";

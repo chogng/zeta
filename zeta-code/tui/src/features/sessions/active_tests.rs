@@ -17,7 +17,54 @@ use zeta_client::ClientResponse;
 use zeta_client::OperationClient;
 
 use super::ActiveConversation;
+use super::workspace_reconnect;
 use crate::TuiRecoveryState;
+use zeta_protocol::Session;
+use zeta_protocol::SessionId;
+use zeta_protocol::SessionStatus;
+use zeta_protocol::ThreadId;
+use zeta_protocol::WorkspaceBinding;
+use zeta_protocol::WorkspaceTrustId;
+
+#[test]
+fn foreign_workspace_session_requests_host_reconnect() {
+    let current = bound_session("current", "/workspaces/current", '1');
+    let target = bound_session("target", "/workspaces/target", '2');
+    let thread_id = ThreadId::new("target-thread").unwrap();
+
+    let reconnect = workspace_reconnect(&current, &target, &thread_id)
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(
+        reconnect.workspace_root(),
+        std::path::Path::new("/workspaces/target")
+    );
+    assert_eq!(reconnect.recovery().session_id(), &target.session_id);
+    assert_eq!(reconnect.recovery().thread_id(), &thread_id);
+    assert!(
+        workspace_reconnect(&target, &target, &thread_id)
+            .unwrap()
+            .is_none()
+    );
+}
+
+fn bound_session(id: &str, root: &str, digest: char) -> Session {
+    Session {
+        session_id: SessionId::new(id).unwrap(),
+        title: id.into(),
+        status: SessionStatus::Active,
+        model: None,
+        workspace: Some(WorkspaceBinding {
+            authority_id: format!("sha256:{}", digest.to_string().repeat(64))
+                .parse::<WorkspaceTrustId>()
+                .unwrap(),
+            root: root.into(),
+        }),
+        sequence: 1,
+        threads: Vec::new(),
+    }
+}
 
 #[test]
 fn recovery_reopens_the_exact_durable_conversation() {

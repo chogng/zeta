@@ -1,16 +1,24 @@
 import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
-import { clipboard, shell } from "electron";
 import { APP_SERVER_METHODS, type ConnectorApiTokenConnectParams, type ConnectorCommandResultDto, type ConnectorDeviceOAuthPollResult, type ConnectorDeviceOAuthStartResult, type ConnectorDisconnectParams, type ConnectorOAuthStartResult } from "../../../../../generated/app-server/types.js";
 import type { AppServerSupervisor } from "../../app-server/electron-main/app-server-supervisor.js";
+import { ElectronClipboardService } from "../../clipboard/electron-main/electronClipboardService.js";
+import type { IClipboardService } from "../../clipboard/common/clipboardService.js";
 import { nonEmptyString, positiveInteger, record } from "../../ipc/electron-main/ipcValidation.js";
 import type { IpcRoute } from "../../ipc/electron-main/trustedIpcRouter.js";
+import { ElectronOpenerService } from "../../opener/electron-main/electronOpenerService.js";
+import type { IOpenerService } from "../../opener/common/openerService.js";
 
-export function connectorIpcRoutes(supervisor: AppServerSupervisor): readonly IpcRoute<unknown, unknown>[] {
+export interface ConnectorHostServices {
+  readonly openerService: IOpenerService;
+  readonly clipboardService: IClipboardService;
+}
+
+export function connectorIpcRoutes(supervisor: AppServerSupervisor, hostServices: ConnectorHostServices = electronConnectorHostServices()): readonly IpcRoute<unknown, unknown>[] {
   return [
     route({ channel: "zeta:connectors:list", validate: emptyParams, invoke: () => supervisor.request(APP_SERVER_METHODS["connector/list"], {}) }),
     route({ channel: "zeta:connectors:connect-api-token", validate: connectParams, invoke: params => supervisor.request(APP_SERVER_METHODS["connector/connect/apiToken"], params) }),
-    route({ channel: "zeta:connectors:connect-oauth", validate: oauthConnectParams, invoke: params => connectOAuth(supervisor, params) }),
+    route({ channel: "zeta:connectors:connect-oauth", validate: oauthConnectParams, invoke: params => connectOAuth(supervisor, params, hostServices) }),
     route({ channel: "zeta:connectors:disconnect", validate: disconnectParams, invoke: params => supervisor.request(APP_SERVER_METHODS["connector/disconnect"], params) }),
     route({ channel: "zeta:connectors:oauth-refresh", validate: oauthRefreshParams, invoke: params => supervisor.request(APP_SERVER_METHODS["connector/oauth/refresh"], params) }),
     route({ channel: "zeta:connectors:oauth-revoke", validate: disconnectParams, invoke: params => supervisor.request(APP_SERVER_METHODS["connector/oauth/revoke"], params) }),
@@ -34,16 +42,16 @@ function oauthConnectParams(value: unknown): OAuthConnectParams {
   };
 }
 
-async function connectOAuth(supervisor: AppServerSupervisor, params: OAuthConnectParams): Promise<ConnectorCommandResultDto> {
+async function connectOAuth(supervisor: AppServerSupervisor, params: OAuthConnectParams, hostServices: ConnectorHostServices): Promise<ConnectorCommandResultDto> {
   const catalog = await supervisor.request(APP_SERVER_METHODS["connector/list"], {});
   const connector = catalog.connectors.find(candidate => candidate.id === params.connectorId);
   if (!connector) throw new Error("Connector is unavailable");
-  if (connector.oauthMethods.includes("browser")) return connectBrowserOAuth(supervisor, params);
-  if (connector.oauthMethods.includes("device")) return connectDeviceOAuth(supervisor, params);
+  if (connector.oauthMethods.includes("browser")) return connectBrowserOAuth(supervisor, params, hostServices.openerService);
+  if (connector.oauthMethods.includes("device")) return connectDeviceOAuth(supervisor, params, hostServices);
   throw new Error("Connector OAuth is unavailable");
 }
 
-async function connectBrowserOAuth(supervisor: AppServerSupervisor, params: OAuthConnectParams): Promise<ConnectorCommandResultDto> {
+async function connectBrowserOAuth(supervisor: AppServerSupervisor, params: OAuthConnectParams, openerService: IOpenerService): Promise<ConnectorCommandResultDto> {
   const callbackPath = `/connector-oauth/${randomUUID()}`;
   const callback = await LoopbackOAuthCallback.listen(callbackPath);
   let flowId: string | undefined;
@@ -54,7 +62,7 @@ async function connectBrowserOAuth(supervisor: AppServerSupervisor, params: OAut
       redirectUri: callback.redirectUri,
     }) as ConnectorOAuthStartResult;
     flowId = started.flowId;
-    await shell.openExternal(started.authorizationUrl);
+    await openerService.openExternal(started.authorizationUrl);
     const values = await callback.wait();
     const result = await supervisor.request(APP_SERVER_METHODS["connector/connect/oauth/complete"], {
       flowId: started.flowId,
@@ -71,14 +79,14 @@ async function connectBrowserOAuth(supervisor: AppServerSupervisor, params: OAut
   }
 }
 
-async function connectDeviceOAuth(supervisor: AppServerSupervisor, params: OAuthConnectParams): Promise<ConnectorCommandResultDto> {
+async function connectDeviceOAuth(supervisor: AppServerSupervisor, params: OAuthConnectParams, hostServices: ConnectorHostServices): Promise<ConnectorCommandResultDto> {
   let flowId: string | undefined;
   let completed = false;
   try {
     const started = await supervisor.request(APP_SERVER_METHODS["connector/connect/oauth/device/start"], params) as ConnectorDeviceOAuthStartResult;
     flowId = started.flowId;
-    await shell.openExternal(started.verificationUri);
-    clipboard.writeText(started.userCode);
+    await hostServices.openerService.openExternal(started.verificationUri);
+    await hostServices.clipboardService.writeText(started.userCode);
     let waitSeconds = started.pollIntervalSeconds;
     for (;;) {
       await wait(Math.min(waitSeconds, 30) * 1_000);
@@ -94,6 +102,10 @@ async function connectDeviceOAuth(supervisor: AppServerSupervisor, params: OAuth
       await supervisor.request(APP_SERVER_METHODS["connector/connect/oauth/device/cancel"], { flowId }).catch(() => undefined);
     }
   }
+}
+
+function electronConnectorHostServices(): ConnectorHostServices {
+  return { openerService: new ElectronOpenerService(), clipboardService: new ElectronClipboardService() };
 }
 
 function wait(milliseconds: number): Promise<void> {

@@ -43,7 +43,7 @@ Zeta 的产品 authority、typed contract 和 crate dependency direction 仍由�
 | 本文的 ownership 与长期不变量 | Accepted architecture baseline | 本文 |
 | independent request driver、wakeable event pump | Current | [`app-server-client.md`](app-server-client.md) 与 crate README |
 | 非阻塞 request completion dispatch、有界 transient data plane、Session/Thread/interaction 垂直切片 | Current | [`zeta-code/tui/README.md`](../zeta-code/tui/README.md) |
-| plain-text transcript、必要 popup mouse hit 与 embedded session | Current product support boundary | 本文与 crate README |
+| plain-text transcript、必要 popup mouse hit 与 brokered local session | Current product support boundary | 本文与 crate README |
 | active-Turn follow-up queue、多行 composer、copy/export、分页历史与 suspend/resume | Current | [`zeta-code/tui/README.md`](../zeta-code/tui/README.md) |
 | 尚无 `zeta code` 产品要求或 canonical contract 的 feature | 非目标或 Potential；不构成实现承诺 | 对应产品线、领域与 App Server API 文档 |
 
@@ -1047,7 +1047,8 @@ lib_tests.rs
   不是 TUI 的“尚未完成”；
 - Mouse 只覆盖 slash/file-mention popup 的必要左键命中。完整 pointer/selection 交互不属于当前
   `zeta code` 要求；Vim mode/motion/operator 也没有被产品文档接受；
-- 当前入口消费 embedded `AppServerSession`，不提供 remote selector 或自动 reconnect。若未来接受
+- 当前入口通过 `AppServerSession` 消费 profile/Workspace-scoped local authority，不提供 remote
+  selector 或自动 reconnect。若未来接受
   远程产品需求，connection/recovery contract 必须先进入 `zeta-app-server-client`；
 - workspace mention 当前只插入原子文本路径。通用 app/plugin Mention、login、compact、service
   tier、usage、review 等没有已接受 contract 的 surface 不注册；
@@ -1131,7 +1132,7 @@ README 中记录。
 4. 把稳定 `CommandId` 生命周期集中到 `client/command_id.rs`；（Current）
 
 退出条件：Turn 执行期间输入和 redraw 不被 request completion 阻塞；duplicate、gap、lag、
-connection close 和 runtime 切换都有确定结果；当前 embedded client 不会把结果未知的写入当成
+connection close 和 runtime 切换都有确定结果；当前 local authority client 不会把结果未知的写入当成
 失败后新命令重放。Remote reconnect 不在本阶段范围内。
 
 ### 阶段三：核心交互

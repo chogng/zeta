@@ -1,5 +1,6 @@
 import type { IDisposable } from "../../base/common/lifecycle.js";
 import type { IRendererHost } from "../../platform/renderer/common/rendererHost.js";
+import type { ShutdownReason } from "../../platform/lifecycle/common/lifecycleService.js";
 import type {
   IAnyWorkspaceIdentifier,
 } from "../../platform/workspace/common/workspace.js";
@@ -26,7 +27,9 @@ export interface IWebWorkbenchConstructionOptions {
 }
 
 /** Lifecycle facade returned to a Web Workbench embedder. */
-export interface IWebWorkbench extends IDisposable {}
+export interface IWebWorkbench extends IDisposable {
+  shutdown(reason: ShutdownReason): Promise<void>;
+}
 
 declare global {
   /**

@@ -41,6 +41,7 @@ zeta exec --fork SESSION_ID PARENT_THREAD_ID --title "替代方案" "尝试另�
 zeta login
 zeta config
 zeta app-server --listen stdio://  # compatibility alias to zeta-server-host
+zeta app-server connect            # profile/Workspace-scoped local authority
 zeta mcp-server
 zeta mcp-server --listen http://127.0.0.1:8787/mcp
 ```
@@ -119,14 +120,14 @@ CLI 不复制 MCP framing、Agent polling、interaction 或 invocation identity 
 ```text
 默认 CLI/TUI
   → AppServerSession
-  → request handle + event stream
-  → typed in-process App Server dispatcher
+  → JSONL / stdio proxy
+  → profile/Workspace-scoped local App Server authority
 
 Desktop
   → JSONL / stdio
-  → 独立 App Server
+  → 同一 local App Server authority
 
-未来 daemon/remote App Server
+Remote App Server
   → App Server Client remote backend
   → 相同 App Server protocol
 

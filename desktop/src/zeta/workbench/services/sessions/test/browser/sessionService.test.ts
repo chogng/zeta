@@ -88,6 +88,51 @@ test("WorkbenchSessionService stops refreshing when the canonical snapshot canno
   assert.match(service.error ?? "", /did not advance/);
 });
 
+test("WorkbenchSessionService reopens a foreign Session Workspace before selecting its Thread", async () => {
+  const current = { ...session(1), workspace: { authorityId: "current", root: "/workspaces/current" } };
+  const foreign: SessionDto = {
+    ...session(1),
+    sessionId: "session-foreign",
+    title: "Foreign",
+    workspace: { authorityId: "foreign", root: "/workspaces/foreign" },
+    threads: [{ threadId: "thread-foreign", origin: { type: "root" }, status: "active" }],
+  };
+  let currentWorkspaceRoot = current.workspace.root;
+  const reopened: string[] = [];
+  const api: ISessionApi = {
+    async create() { return { session: current }; },
+    async read(params) { return { session: params.sessionId === foreign.sessionId ? foreign : current }; },
+    async list() { return { sessions: [foreign, current] }; },
+    async subscribe(params) { const value = params.sessionId === foreign.sessionId ? foreign : current; return { session: value, updates: [], threadProjections: [] }; },
+    async unsubscribe() {},
+    async createThread() { throw new Error("Not used"); },
+    async forkThread() { throw new Error("Not used"); },
+    async archiveThread() { throw new Error("Not used"); },
+    async complete() { throw new Error("Not used"); },
+    async archive() { throw new Error("Not used"); },
+    async stop() { throw new Error("Not used"); },
+    async setModel() { throw new Error("Not used"); },
+  };
+  using service = new WorkbenchSessionService({
+    session: api,
+    workspaceRouter: {
+      currentWorkspaceRoot: () => currentWorkspaceRoot,
+      async reopenWorkspace(root) {
+        reopened.push(root);
+        currentWorkspaceRoot = root;
+      },
+    },
+  });
+  await service.initialize();
+
+  assert.equal(service.active?.session.sessionId, current.sessionId);
+  service.selectThread(foreign.sessionId, "thread-foreign");
+  await waitFor(() => service.active?.session.sessionId === foreign.sessionId);
+
+  assert.deepEqual(reopened, ["/workspaces/foreign"]);
+  assert.equal(service.active?.threadId, "thread-foreign");
+});
+
 function session(sequence: number): SessionDto {
   return {
     sessionId: "session-1",

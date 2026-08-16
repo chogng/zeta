@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import type { ConfigReadResult, SemanticCodeIndexSelectionDto } from "../../../../../../../generated/app-server/types.js";
+import type { CodeIndexConfigurationSnapshot, SemanticCodeIndexSelection } from "../../../../../platform/codeIndex/common/codeIndexService.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>", {
   pretendToBeVisual: true,
@@ -574,29 +574,12 @@ test("Indexing settings save Tool Search and semantic model consent configuratio
   const config = {
     revision: 4,
     generation: 4,
-    preferredModel: null,
-    approvalReviewModel: { type: "automatic" },
     providers: {
       ollama: {
         provider: "ollama",
         baseUrl: "http://localhost:11434/v1",
         maxOutputTokens: null,
         modelContext: {},
-      },
-    },
-    mcpServers: {},
-    skillSources: {},
-    pluginRequests: {},
-    hooks: {},
-    languageServers: {},
-    execPolicyRules: [],
-    toolSearch: {
-      mode: "hybridEmbedding",
-      embeddingModel: { provider: "ollama", model: "nomic-embed-text" },
-      embeddingStatus: {
-        type: "unavailable",
-        model: { provider: "ollama", model: "nomic-embed-text" },
-        reason: "connection refused",
       },
     },
     semanticCodeIndex: {
@@ -610,10 +593,20 @@ test("Indexing settings save Tool Search and semantic model consent configuratio
       },
       activeWorkspaceAuthorized: false,
     },
-  } as const satisfies ConfigReadResult;
+  } as const satisfies CodeIndexConfigurationSnapshot;
+  const toolSearchConfig = {
+    revision: 4,
+    mode: "hybridEmbedding" as const,
+    embeddingModel: { provider: "ollama", model: "nomic-embed-text" },
+    embeddingStatus: {
+      type: "unavailable" as const,
+      model: { provider: "ollama", model: "nomic-embed-text" },
+      reason: "connection refused",
+    },
+  };
   const configured: Array<{ mode: string; embeddingModel?: { provider: string; model: string }; revision: number }> = [];
   const configuredProviders: Array<{ provider: string; baseUrl: string | null; revision: number }> = [];
-  const configuredSemantic: Array<{ selection: SemanticCodeIndexSelectionDto; automaticContext: string; revision: number }> = [];
+  const configuredSemantic: Array<{ selection: SemanticCodeIndexSelection; automaticContext: string; revision: number }> = [];
   let authorizations = 0;
   disposables.add(new SettingsEditorContribution({
     configurationService: configuration,
@@ -642,7 +635,7 @@ test("Indexing settings save Tool Search and semantic model consent configuratio
       retry: () => Promise.reject(new Error("Code index runtime is not exercised by this test.")),
     },
     toolSearchService: {
-      readConfig: async () => ({ revision: 4, ...config.toolSearch }),
+      readConfig: async () => toolSearchConfig,
       configure: async (next, revision) => { configured.push({ ...next, revision }); },
     },
   }));

@@ -1,10 +1,10 @@
 import { type LanguageWorkspaceSymbol } from "../../../../editor/common/languages/workspaceSymbols.js";
 import { type IFileService } from "../../../../platform/files/common/files.js";
-import { type IEditorPart } from "../../../browser/parts/editor/editorPart.js";
+import { type IEditorService } from "../../../services/editor/common/editorService.js";
 import { type IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";
 
 /** Opens a Workspace Symbol only after a local index result still matches current file content. */
-export async function acceptWorkspaceSymbol(symbol: LanguageWorkspaceSymbol, files: IFileService, workingCopies: IWorkingCopyService, editor: IEditorPart, quickPick: { hide(): void }, refresh: () => void): Promise<void> {
+export async function acceptWorkspaceSymbol(symbol: LanguageWorkspaceSymbol, files: IFileService, workingCopies: IWorkingCopyService, editor: IEditorService, quickPick: { hide(): void }, refresh: () => void): Promise<void> {
   const revision = localSymbolRevision(symbol);
   if (revision) {
     try {

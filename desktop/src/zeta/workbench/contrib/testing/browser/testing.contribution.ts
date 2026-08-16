@@ -8,9 +8,6 @@ import { TESTING_VIEW_ID } from "../common/testing.js";
 import { TestingViewPane } from "./testingViewPane.js";
 import "./testingActions.js";
 import "./media/testing.css";
-import { registerWorkbenchServiceContribution } from "../../../browser/workbenchServiceContributions.js";
-import { ITaskService } from "../../../services/tasks/common/taskService.js";
-import { TestingService } from "../../../services/testing/browser/testingService.js";
 
 export function registerTestingView(registry: WorkbenchViewRegistry = ViewsRegistry): void {
   registry.registerStaticViewContainer({ id: WorkbenchViewContainerId.Testing, title: "Testing", location: ViewContainerLocation.Sidebar, icon: lxiconsLibrary.check, order: 4 });
@@ -24,4 +21,3 @@ export function registerTestingView(registry: WorkbenchViewRegistry = ViewsRegis
 }
 
 registerTestingView();
-registerWorkbenchServiceContribution(context => context.services.set(ITestingService, context.own(new TestingService(context.services.get(ITaskService)))));

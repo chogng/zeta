@@ -20,7 +20,7 @@
 }
 
 .zeta-scm-graph {
-  --zeta-scm-graph-accent: var(--zeta-accent-background);
+  --scm-graph-accent: var(--zeta-accent-background);
   container-name: zeta-scm-graph;
   container-type: inline-size;
   min-height: 0;
@@ -39,7 +39,7 @@
 }
 
 .zeta-scm-graph-commit {
-  --zeta-scm-graph-row-background: var(--zeta-side-bar-background);
+  --scm-graph-row-background: var(--zeta-side-bar-background);
   position: relative;
   display: flex;
   min-width: 0;
@@ -50,7 +50,7 @@
 }
 
 .zeta-scm-graph-commit:hover {
-  --zeta-scm-graph-row-background: var(--zeta-list-hover-background);
+  --scm-graph-row-background: var(--zeta-list-hover-background);
   background: var(--zeta-list-hover-background);
 }
 
@@ -62,19 +62,19 @@
 
 .zeta-scm-graph-path {
   fill: none;
-  stroke: var(--zeta-scm-graph-accent);
+  stroke: var(--scm-graph-accent);
   stroke-linecap: round;
   stroke-width: 1px;
 }
 
 .zeta-scm-graph-node {
-  fill: var(--zeta-scm-graph-accent);
-  stroke: var(--zeta-scm-graph-row-background);
+  fill: var(--scm-graph-accent);
+  stroke: var(--scm-graph-row-background);
   stroke-width: 2px;
 }
 
 .zeta-scm-graph-graph.head > .zeta-scm-graph-node.inner {
-  fill: var(--zeta-scm-graph-row-background);
+  fill: var(--scm-graph-row-background);
 }
 
 .zeta-scm-graph-details {
@@ -109,7 +109,7 @@
   padding: 0 7px 0 5px;
   overflow: hidden;
   color: var(--zeta-list-active-selection-foreground);
-  background: var(--zeta-scm-graph-accent);
+  background: var(--scm-graph-accent);
   font-size: var(--zeta-font-size-label1);
   line-height: 22px;
   white-space: nowrap;

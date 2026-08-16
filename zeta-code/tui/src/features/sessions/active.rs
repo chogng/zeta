@@ -1,3 +1,5 @@
+use crate::TuiRecoveryState;
+use crate::TuiWorkspaceReconnect;
 use crate::client::new_command_id;
 use std::fmt;
 use zeta_app_server_client::AppServerClient;
@@ -43,6 +45,7 @@ pub(crate) enum ConversationTranscript {
 pub(crate) enum ResumeOutcome {
     Listed(String),
     Changed(ConversationChange),
+    WorkspaceReconnect(TuiWorkspaceReconnect),
 }
 
 impl ActiveConversation {
@@ -403,6 +406,9 @@ impl ActiveConversation {
                     session.session_id
                 ))
             })?;
+        if let Some(reconnect) = workspace_reconnect(&self.session, &session, &thread_id)? {
+            return Ok(ResumeOutcome::WorkspaceReconnect(reconnect));
+        }
         let snapshot = client
             .read_session_thread(SessionThreadReadParams {
                 session_id: session.session_id.clone(),
@@ -421,6 +427,26 @@ impl ActiveConversation {
             transcript: ConversationTranscript::Replace,
         }))
     }
+}
+
+fn workspace_reconnect(
+    current: &Session,
+    target: &Session,
+    thread_id: &ThreadId,
+) -> Result<Option<TuiWorkspaceReconnect>, SessionsError> {
+    if target.workspace == current.workspace {
+        return Ok(None);
+    }
+    let workspace = target.workspace.as_ref().ok_or_else(|| {
+        SessionsError(format!(
+            "session {} predates Workspace binding and is read-only",
+            target.session_id
+        ))
+    })?;
+    Ok(Some(TuiWorkspaceReconnect::new(
+        workspace.root.clone(),
+        TuiRecoveryState::new(target.session_id.clone(), thread_id.clone()),
+    )))
 }
 
 fn create_conversation<T>(

@@ -21,8 +21,8 @@ export interface IAppServerWorkspaceTransitionHost {
 export class AppServerWorkspaceTransitionAdapter implements IWorkspaceRuntimeSwitcher, IWorkspaceTransitionRecoveryRouter {
   constructor(private readonly host: IAppServerWorkspaceTransitionHost) {}
 
-  switchWorkspace({ workspace, trust }: IWorkspaceTransitionContext): Promise<void> {
-    return this.host.switchWorkspace(workspace.uri.fsPath, trust);
+  switchWorkspace({ root, trust }: IWorkspaceTransitionContext): Promise<void> {
+    return this.host.switchWorkspace(root, trust);
   }
 
   classifyRuntimeError(error: unknown): WorkspaceTransitionFailureKind {
@@ -96,12 +96,13 @@ interface IWaitUntilReadyOptions {
 
 export function createAppServerWorkspaceTransitionAdapter(
   supervisor: AppServerSupervisor,
+  switchWorkspace: (root: string, trust: WorkspaceTrustChoice) => Promise<void> = async (root, trust) => {
+    await switchAppServerWorkspace(supervisor, root, trust);
+  },
 ): AppServerWorkspaceTransitionAdapter {
   return new AppServerWorkspaceTransitionAdapter({
     getState: () => supervisor.state,
-    switchWorkspace: async (root, trust) => {
-      await switchAppServerWorkspace(supervisor, root, trust);
-    },
+    switchWorkspace,
     onStateChange: (listener) => supervisor.onStateChange(listener),
   });
 }

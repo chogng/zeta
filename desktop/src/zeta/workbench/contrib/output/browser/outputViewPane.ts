@@ -13,9 +13,9 @@ import type { IContextMenuService } from "../../../../platform/contextview/brows
 import type { IStorageService } from "../../../../platform/storage/common/storage.js";
 import { StorageScope, StorageTarget } from "../../../../platform/storage/common/storage.js";
 import type { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
-import type { IEditorPart } from "../../../browser/parts/editor/editorPart.js";
+import type { IEditorService } from "../../../services/editor/common/editorService.js";
 import { ViewPane, type IViewPaneOptions, type PartTitleProjection } from "../../../browser/parts/views/viewPane.js";
-import type { IWorkbenchWindowService } from "../../../browser/window.js";
+import type { IWorkbenchHostService } from "../../../services/host/common/workbenchHostService.js";
 import type { IOutputChannel, IOutputEntry, IOutputService, OutputEntrySeverity } from "../../../services/output/common/outputService.js";
 import { OutputFilterState, OutputSeverities } from "./outputFilterState.js";
 import { detectOutputLinks } from "./outputLinks.js";
@@ -40,7 +40,7 @@ export class OutputViewPane extends ViewPane {
   private autoScroll: boolean;
   private titleStateKey = "";
 
-  constructor(options: IViewPaneOptions, private readonly outputService: IOutputService, private readonly contextMenuService: IContextMenuService, private readonly storageService?: IStorageService, private readonly editorPart?: IEditorPart, private readonly workspaceContextService?: IWorkspaceContextService, private readonly windowService?: IWorkbenchWindowService) {
+  constructor(options: IViewPaneOptions, private readonly outputService: IOutputService, private readonly contextMenuService: IContextMenuService, private readonly storageService?: IStorageService, private readonly editorService?: IEditorService, private readonly workspaceContextService?: IWorkspaceContextService, private readonly hostService?: IWorkbenchHostService) {
     super(options);
     this.contentElement.classList.add("zeta-output");
     this.filters = this.own(new OutputFilterState(storageService));
@@ -152,12 +152,12 @@ export class OutputViewPane extends ViewPane {
   private openLink(event: MouseEvent): void {
     const target = event.target instanceof Element ? event.target.closest<HTMLAnchorElement>(".zeta-output-link") : null;
     const resourceValue = target?.dataset.resource;
-    if (!target || !resourceValue || !this.editorPart) return;
+    if (!target || !resourceValue || !this.editorService) return;
     stopEvent(event);
     const line = Number.parseInt(target.dataset.line ?? "0", 10);
     const column = Number.parseInt(target.dataset.column ?? "0", 10);
     const selection = TextRange.emptyAt(TextPosition.at(Number.isSafeInteger(line) ? line : 0, Number.isSafeInteger(column) ? column : 0));
-    void this.editorPart.openEditor({ resource: URI.parse(resourceValue) }, { selection });
+    void this.editorService.openEditor({ resource: URI.parse(resourceValue) }, { selection });
   }
 
   private createActionViewItem(action: IAction, options: ActionViewItemOptions): ActionViewItem | undefined {
@@ -195,8 +195,8 @@ export class OutputViewPane extends ViewPane {
     const active = this.outputService.activeChannel;
     if (!active) return [];
     return [
-      this.action("zeta.output.openInEditor", "Open Output in Editor", `Open ${active.label} in Editor`, lxiconsLibrary.linkExternal, Boolean(this.editorPart), undefined, () => this.editorPart ? openOutputChannelInEditor(active, this.editorPart) : undefined),
-      this.action("zeta.output.export", "Export Output…", `Export ${active.label}`, lxiconsLibrary.download, Boolean(this.windowService), undefined, () => this.windowService ? exportOutputChannel(active, this.windowService) : undefined),
+      this.action("zeta.output.openInEditor", "Open Output in Editor", `Open ${active.label} in Editor`, lxiconsLibrary.linkExternal, Boolean(this.editorService), undefined, () => this.editorService ? openOutputChannelInEditor(active, this.editorService) : undefined),
+      this.action("zeta.output.export", "Export Output…", `Export ${active.label}`, lxiconsLibrary.download, Boolean(this.hostService), undefined, () => this.hostService ? exportOutputChannel(active, this.hostService) : undefined),
     ];
   }
 

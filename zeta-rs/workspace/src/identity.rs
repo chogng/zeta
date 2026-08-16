@@ -12,7 +12,9 @@ const SHA256_HEX_LENGTH: usize = 64;
 /// Hosts persist this value instead of the filesystem path itself. It intentionally identifies
 /// the canonical path boundary rather than Workspace-controlled content, so aliases resolve to
 /// the same key and moving the directory requires a new trust decision.
-#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, schemars::JsonSchema, ts_rs::TS)]
+#[schemars(transparent)]
+#[ts(type = "string")]
 pub struct WorkspaceTrustId(String);
 
 impl WorkspaceTrustId {

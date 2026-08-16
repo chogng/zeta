@@ -631,6 +631,7 @@ fn fixture() -> Fixture {
             command_id: CommandId::new("create-session").unwrap(),
             title: "multi agent".into(),
             model: None,
+            workspace: None,
         })
         .unwrap();
     let parent = sessions

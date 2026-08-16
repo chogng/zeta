@@ -1,5 +1,5 @@
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
-import type { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
+import type { IConfigurationService } from "../../../../platform/configuration/common/configurationService.js";
 import type { IDialogService } from "../../../../platform/dialogs/common/dialogs.js";
 import type { IThemeService } from "../../../../platform/theme/common/themeService.js";
 import { ModalEditorPart } from "../../../browser/parts/editor/modalEditorPart.js";

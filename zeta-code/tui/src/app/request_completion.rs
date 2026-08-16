@@ -3,6 +3,8 @@ use super::App;
 use super::AppEvent;
 use super::dispatch::ProductCommandOutput;
 use super::skill_slash_command_registry;
+use crate::TuiExit;
+use crate::TuiWorkspaceReconnect;
 use crate::components::composer::ComposerSubmission;
 use crate::components::composer::SlashCommandCatalog;
 use crate::features::config;
@@ -39,6 +41,7 @@ use zeta_protocol::Turn;
 use zeta_protocol::TurnId;
 
 pub(super) enum RequestCompletion {
+    WorkspaceReconnect(TuiWorkspaceReconnect),
     ConversationChanged {
         command: String,
         result: Result<ConversationRequestCompletion, String>,
@@ -185,8 +188,11 @@ pub(super) fn apply_request_completion(
     active_turn: &mut Option<TurnId>,
     thread_subscription: &mut ThreadSubscription,
     app: &mut App,
-) {
+) -> Option<TuiExit> {
     match completion {
+        RequestCompletion::WorkspaceReconnect(reconnect) => {
+            return Some(TuiExit::WorkspaceReconnectRequested(reconnect));
+        }
         RequestCompletion::ConversationChanged {
             command,
             result:
@@ -219,6 +225,9 @@ pub(super) fn apply_request_completion(
             mut output,
             switched,
         })) => {
+            if let Some(reconnect) = output.workspace_reconnect.take() {
+                return Some(TuiExit::WorkspaceReconnectRequested(reconnect));
+            }
             for event in output.events.drain(..) {
                 app.update(event);
             }
@@ -227,7 +236,7 @@ pub(super) fn apply_request_completion(
                     app.update(AppEvent::FailureReported(
                         "conversation command completed without a subscription result".into(),
                     ));
-                    return;
+                    return None;
                 };
                 *conversation = output.conversation;
                 *thread_subscription = subscription;
@@ -298,7 +307,7 @@ pub(super) fn apply_request_completion(
                     conversation.session_id(),
                     conversation.thread_id()
                 )));
-                return;
+                return None;
             }
             conversation.set_thread_sequence(snapshot.thread.sequence);
             thread_subscription.apply_latest_snapshot(&snapshot.thread, snapshot.boundary);
@@ -315,7 +324,7 @@ pub(super) fn apply_request_completion(
                     conversation.session_id(),
                     conversation.thread_id()
                 )));
-                return;
+                return None;
             }
             thread_subscription.apply_history_page(&page.thread, page.boundary);
             app.update(AppEvent::ThreadHistoryPageReceived(page.thread));
@@ -335,6 +344,7 @@ pub(super) fn apply_request_completion(
             app.update(AppEvent::InterruptFailed(error.to_string()));
         }
     }
+    None
 }
 
 fn report_turn_start_failure(app: &mut App, active_turn: &Option<TurnId>, error: String) {

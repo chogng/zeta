@@ -50,6 +50,7 @@ fn switch_view_describes_agent_threads_by_parent_and_delegation() {
         title: "Agent session".into(),
         status: SessionStatus::Active,
         model: None,
+        workspace: None,
         sequence: 1,
         threads: vec![SessionThread {
             thread_id: child_thread_id.clone(),
@@ -77,6 +78,7 @@ fn session() -> Session {
         title: "Session".into(),
         status: SessionStatus::Active,
         model: None,
+        workspace: None,
         sequence: 3,
         threads: vec![
             SessionThread {

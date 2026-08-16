@@ -12,6 +12,7 @@ use crate::natural_language::classify_with_fallback_heuristic;
 use crate::parser::parse_query_into_tokens;
 use crate::rules::classify_allowlisted_input;
 use crate::rules::classify_contextual_input;
+use crate::rules::classify_current_route_input;
 use crate::shell::ShellContext;
 
 /// Product-neutral destination selected for a piece of terminal input.
@@ -175,10 +176,13 @@ fn classify_with_model(
     model: impl FnOnce(&str) -> ModelAttempt,
 ) -> InputClassification {
     let word_tokens = parse_query_into_tokens(input);
-    if let Some(classification) = classify_contextual_input(input, &word_tokens, context) {
+    if let Some(classification) = classify_contextual_input(input, context) {
         return classification;
     }
     if let Some(classification) = history.classify(input) {
+        return classification;
+    }
+    if let Some(classification) = classify_current_route_input(&word_tokens, context) {
         return classification;
     }
     if let Some(classification) = classify_allowlisted_input(&word_tokens) {

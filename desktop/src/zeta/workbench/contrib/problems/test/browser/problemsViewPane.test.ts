@@ -7,8 +7,7 @@ import { URI } from "../../../../../base/common/uri.js";
 import { TextPosition, TextRange } from "../../../../../editor/common/core/text.js";
 import { LanguageDiagnosticSeverity } from "../../../../../editor/common/languages/languageResults.js";
 import { type ILanguageDiagnosticsService, type LanguageDiagnosticsPublisher, type LanguageDiagnosticSnapshot } from "../../../../../editor/common/services/languageDiagnosticsService.js";
-import { type IEditorPart } from "../../../../../workbench/browser/parts/editor/editorPart.js";
-import { type EditorInput, type EditorOpenOptions } from "../../../../../workbench/browser/parts/editor/editorInput.js";
+import { type EditorInput, type EditorOpenOptions, type IEditorService } from "../../../../../workbench/services/editor/common/editorService.js";
 
 test("ProblemsViewPane filters diagnostics and opens the selected range", async () => {
   const browser = new JSDOM("<!doctype html><body></body>");
@@ -22,25 +21,14 @@ test("ProblemsViewPane filters diagnostics and opens the selected range", async 
   ]);
   let opened: { readonly input: EditorInput; readonly options?: EditorOpenOptions } | undefined;
   let focusCount = 0;
-  const editorPart: IEditorPart = {
-    element: browser.window.document.createElement("section"),
-    groups: [],
-    activeGroup: {} as never,
-    activeInput: undefined,
-    activePane: undefined,
-    openEditor: async (input, options) => { opened = { input, options }; return {} as never; },
-    activateEditor: () => { throw new Error("No active editor"); },
-    closeEditor() {},
-    async saveActiveEditor() {},
-    setContent() {},
-    async splitActiveGroupHorizontal() {},
-    layout() {},
-    focus() { focusCount += 1; },
+  const editorService: IEditorService = {
+    openEditor: async (input, options) => { opened = { input, options }; },
+    focusActiveEditor() { focusCount += 1; },
   };
 
   try {
     const { ProblemsViewPane } = await import("../../../../../workbench/contrib/problems/browser/problemsViewPane.js");
-    using pane = new ProblemsViewPane({ id: "zeta.problems", title: "Problems", ownerDocument: browser.window.document }, diagnostics, editorPart);
+    using pane = new ProblemsViewPane({ id: "zeta.problems", title: "Problems", ownerDocument: browser.window.document }, diagnostics, editorService);
     browser.window.document.body.append(pane.element);
     const titleActions = pane.partTitleProjection?.actions;
     assert.ok(titleActions);

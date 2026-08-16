@@ -53,6 +53,7 @@ fn trace_keeps_session_and_thread_sequences_independent() {
                         session_id: session_id.clone(),
                         title: "Task".into(),
                         model: None,
+                        workspace: None,
                     },
                 },
                 StoredSessionEvent {

@@ -5,6 +5,7 @@ mod notification;
 mod product_services;
 mod profile;
 mod session;
+mod session_workspace;
 
 use serde::Serialize;
 use serde::Serializer;
@@ -116,6 +117,8 @@ pub use session::{
     AppServerEvent, AppServerEvents, AppServerRequestHandle, AppServerSession,
     ConnectionCloseReason, ShutdownError, StdioAppServerCommand, TakeEventsError,
 };
+pub use session_workspace::SessionWorkspaceRoute;
+pub use session_workspace::route_session_workspace;
 pub use zeta_app_server::SessionStateMode;
 
 /// Exchanges one complete JSON-RPC request with a connected app-server transport.

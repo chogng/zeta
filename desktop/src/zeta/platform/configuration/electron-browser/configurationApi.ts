@@ -1,4 +1,4 @@
-import { CONFIGURATION_CHANGED_CHANNEL, CONFIGURATION_READ_CHANNEL, CONFIGURATION_UPDATE_CHANNEL, type IConfigurationApi } from "../common/configuration.js";
+import { CONFIGURATION_CHANGED_CHANNEL, CONFIGURATION_READ_CHANNEL, CONFIGURATION_UPDATE_CHANNEL, type IConfigurationApi } from "../common/configurationIpc.js";
 import { invoke, subscribe } from "../../ipc/electron-browser/rendererIpc.js";
 
 export function createConfigurationApi(): IConfigurationApi {

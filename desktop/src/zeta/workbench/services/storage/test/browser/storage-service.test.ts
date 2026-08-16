@@ -146,10 +146,7 @@ test("Browser storage emits changes and will-save lifecycle events", async () =>
   assert.deepEqual(changes, ["one", "one"]);
   assert.deepEqual(saves, [WillSaveStateReason.SHUTDOWN]);
   dom.window.dispatchEvent(new dom.window.Event("pagehide"));
-  assert.deepEqual(saves, [
-    WillSaveStateReason.SHUTDOWN,
-    WillSaveStateReason.SHUTDOWN,
-  ]);
+  assert.deepEqual(saves, [WillSaveStateReason.SHUTDOWN]);
 
   disposables.dispose();
   dom.window.close();

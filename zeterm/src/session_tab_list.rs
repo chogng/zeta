@@ -1,3 +1,6 @@
+use std::path::Path;
+use std::path::PathBuf;
+
 use zeta_protocol::Session;
 use zeta_protocol::SessionId;
 use zeta_ui::{
@@ -38,6 +41,7 @@ pub(crate) struct SessionTabState {
     session_id: SessionId,
     title: String,
     workspace: String,
+    workspace_root: Option<PathBuf>,
     status_label: String,
 }
 
@@ -60,6 +64,7 @@ impl SessionTabState {
             session_id,
             title: title.into(),
             workspace: workspace.into(),
+            workspace_root: None,
             status_label: status_label.into(),
         }
     }
@@ -80,6 +85,10 @@ impl SessionTabState {
         &self.workspace
     }
 
+    pub(crate) fn workspace_root(&self) -> Option<&Path> {
+        self.workspace_root.as_deref()
+    }
+
     pub(crate) fn status_label(&self) -> &str {
         &self.status_label
     }
@@ -97,6 +106,10 @@ impl SessionTabState {
 
     pub(crate) fn update_status(&mut self, status_label: impl Into<String>) {
         self.status_label = status_label.into();
+    }
+
+    fn update_workspace_root(&mut self, workspace_root: Option<PathBuf>) {
+        self.workspace_root = workspace_root;
     }
 }
 
@@ -117,19 +130,36 @@ pub(crate) fn upsert_session_tab(
         .find(|tab| tab.session_id() == &session.session_id)
     {
         let tab_id = tab.id();
-        tab.update_labels(session.title.clone(), workspace, "Active");
+        tab.update_labels(
+            session.title.clone(),
+            workspace_label(session, workspace),
+            "Active",
+        );
+        tab.update_workspace_root(
+            session
+                .workspace
+                .as_ref()
+                .map(|binding| binding.root.clone()),
+        );
         *selected = tab_id;
         return SessionTabUpsert::Updated(tab_id);
     }
 
     let tab_id = session_tab_id(tabs.len());
-    tabs.push(SessionTabState::new(
+    let mut tab = SessionTabState::new(
         tab_id,
         session.session_id.clone(),
         session.title.clone(),
-        workspace,
+        workspace_label(session, workspace),
         "Active",
-    ));
+    );
+    tab.update_workspace_root(
+        session
+            .workspace
+            .as_ref()
+            .map(|binding| binding.root.clone()),
+    );
+    tabs.push(tab);
     *selected = tab_id;
     SessionTabUpsert::Added(tab_id)
 }
@@ -145,19 +175,47 @@ pub(crate) fn upsert_session_catalog_tab(
         .find(|tab| tab.session_id() == &session.session_id)
     {
         let tab_id = tab.id();
-        tab.update_labels(session.title.clone(), workspace, "Active");
+        tab.update_labels(
+            session.title.clone(),
+            workspace_label(session, workspace),
+            "Active",
+        );
+        tab.update_workspace_root(
+            session
+                .workspace
+                .as_ref()
+                .map(|binding| binding.root.clone()),
+        );
         return SessionTabUpsert::Updated(tab_id);
     }
 
     let tab_id = session_tab_id(tabs.len());
-    tabs.push(SessionTabState::new(
+    let mut tab = SessionTabState::new(
         tab_id,
         session.session_id.clone(),
         session.title.clone(),
-        workspace,
+        workspace_label(session, workspace),
         "Active",
-    ));
+    );
+    tab.update_workspace_root(
+        session
+            .workspace
+            .as_ref()
+            .map(|binding| binding.root.clone()),
+    );
+    tabs.push(tab);
     SessionTabUpsert::Added(tab_id)
+}
+
+fn workspace_label<'a>(session: &'a Session, fallback: &'a str) -> String {
+    session
+        .workspace
+        .as_ref()
+        .and_then(|binding| binding.root.file_name())
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty())
+        .map(str::to_owned)
+        .unwrap_or_else(|| fallback.to_owned())
 }
 
 impl<'a> SessionTab<'a> {

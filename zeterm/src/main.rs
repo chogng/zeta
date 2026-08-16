@@ -160,7 +160,20 @@ const INITIAL_WIDTH: f64 = 1_000.0;
 const INITIAL_HEIGHT: f64 = 700.0;
 
 fn main() -> ExitCode {
-    let invocation = match ZetermInvocation::parse(std::env::args().skip(1)) {
+    let arguments = std::env::args().skip(1).collect::<Vec<_>>();
+    if arguments
+        .first()
+        .is_some_and(|command| command == "app-server")
+    {
+        return match zeta_server_host::run_app_server(arguments.into_iter().skip(1)) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(error) => {
+                eprintln!("zeterm App Server host: {error}");
+                ExitCode::FAILURE
+            }
+        };
+    }
+    let invocation = match ZetermInvocation::parse(arguments) {
         Ok(invocation) => invocation,
         Err(error) => {
             eprintln!("{error}");

@@ -20,9 +20,9 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use zeta_async_utils::{Cancellation, CancellationReason, CancellationToken};
 use zeta_context_engine::ContextTokenMeasurementOutcome;
 use zeta_protocol::{
-    ItemId, ModelResponse, ModelStreamEvent, ResponseItem, StableTurnError, StreamCursor,
-    StreamInstanceId, ThreadCommand, ThreadId, ThreadItem, ThreadUpdate, ThreadUpdateEnvelope,
-    ToolCall, TurnId, TurnStatus,
+    ItemId, ModelResponse, ModelStreamEvent, ResponseItem, SessionId, StableTurnError,
+    StreamCursor, StreamInstanceId, ThreadCommand, ThreadId, ThreadItem, ThreadUpdate,
+    ThreadUpdateEnvelope, ToolCall, TurnId, TurnStatus,
 };
 
 /// Executes provider-independent model and tool steps for one already-started Turn.
@@ -270,8 +270,28 @@ impl TurnExecutor {
     /// normal execution. A call that crossed its durable execution-start boundary is converted
     /// into an unknown-outcome Tool failure and is never replayed.
     pub fn resume_recovered_tool_continuations(&self) -> Result<usize, CoreError> {
+        self.resume_recovered_tool_continuations_matching(|_| true)
+    }
+
+    /// Resumes durable Tool continuations owned by the supplied Session authorities.
+    pub fn resume_recovered_tool_continuations_in_sessions(
+        &self,
+        session_ids: &BTreeSet<SessionId>,
+    ) -> Result<usize, CoreError> {
+        self.resume_recovered_tool_continuations_matching(|session_id| {
+            session_ids.contains(session_id)
+        })
+    }
+
+    fn resume_recovered_tool_continuations_matching(
+        &self,
+        matches_session: impl Fn(&SessionId) -> bool,
+    ) -> Result<usize, CoreError> {
         let mut resumed = 0;
         for snapshot in self.threads.list_threads()? {
+            if !matches_session(&snapshot.session_id) {
+                continue;
+            }
             for turn in &snapshot.turns {
                 if turn.status == TurnStatus::Running
                     && snapshot.has_resumable_tool_continuation(&turn.turn_id)

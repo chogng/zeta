@@ -13,6 +13,8 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow};
+use zeta_app_server_client::SessionWorkspaceRoute;
+use zeta_app_server_client::route_session_workspace;
 use zeta_app_server_client::{
     AppServerEvent, AppServerEvents, AppServerRequestHandle, ClientError, ServerNotification,
 };
@@ -36,8 +38,6 @@ use zeta_app_server_protocol::protocol::session::{
 };
 use zeta_app_server_protocol::protocol::slash_commands::SlashCommandDefinition;
 use zeta_app_server_protocol::protocol::turn::InputItem;
-use zeta_app_server_protocol::protocol::workspace::WorkspaceSwitchParams;
-use zeta_app_server_protocol::protocol::workspace::WorkspaceSwitchTrust;
 use zeta_protocol::{
     ModelRef, Session, SessionId, SessionStatus, SessionThreadStatus, Thread, ThreadId,
     ThreadUpdateEnvelope,
@@ -49,7 +49,6 @@ use zeta_winit::EventLoopProxy;
 
 use crate::NativeApp;
 use crate::agent_session_target::AgentSessionTarget;
-use crate::agent_session_target::WorkspaceSwitchSupport;
 use crate::composer_classification::synchronize_composer_classifier;
 use crate::composer_classification::update_composer_classifier;
 use crate::native_event::NativeEvent;
@@ -112,6 +111,24 @@ impl fmt::Display for AgentSessionConnectionLost {
 impl std::error::Error for AgentSessionConnectionLost {}
 
 #[derive(Debug)]
+struct AgentSessionReconnect {
+    root: PathBuf,
+    preferred_session_id: Option<SessionId>,
+}
+
+impl fmt::Display for AgentSessionReconnect {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            formatter,
+            "reconnect local Workspace authority at {}",
+            self.root.display()
+        )
+    }
+}
+
+impl std::error::Error for AgentSessionReconnect {}
+
+#[derive(Debug)]
 pub(crate) enum AgentSessionEvent {
     Catalog {
         slash_commands: Vec<SlashCommandDefinition>,
@@ -136,6 +153,7 @@ enum AgentSessionCommand {
     ActivateSession {
         session_id: SessionId,
         switch_id: SwitchId,
+        response: SyncSender<std::result::Result<Option<WorkspaceSwitchProjection>, String>>,
     },
     SubmitAgentMessage(String),
     SubmitShellCommand(String),
@@ -227,14 +245,20 @@ impl AgentSession {
         &self,
         session_id: SessionId,
         switch_id: SwitchId,
-    ) -> Result<()> {
+    ) -> Result<Option<WorkspaceSwitchProjection>> {
+        let (response, result) = mpsc::sync_channel(1);
         self.try_send(
             AgentSessionCommand::ActivateSession {
                 session_id,
                 switch_id,
+                response,
             },
             "Agent session activation queue is unavailable",
-        )
+        )?;
+        result
+            .recv()
+            .context("Agent session activation worker stopped")?
+            .map_err(anyhow::Error::msg)
     }
 
     pub(crate) fn submit_shell_command(&self, command: String) -> Result<()> {
@@ -419,14 +443,33 @@ fn run_agent_session_inner(
     if target.is_remote() {
         return remote::run_with_recovery(event_proxy, commands, target, available);
     }
-    run_agent_session_connection(event_proxy, commands, target, available)
-        .map_err(|failure| failure.error)
+    let mut target = target.clone();
+    let mut preferred_session_id = None;
+    loop {
+        match run_agent_session_connection(
+            event_proxy,
+            commands,
+            &target,
+            preferred_session_id.as_ref(),
+            available,
+        ) {
+            Ok(()) => return Ok(()),
+            Err(failure) => {
+                let Some(reconnect) = failure.error.downcast_ref::<AgentSessionReconnect>() else {
+                    return Err(failure.error);
+                };
+                target = AgentSessionTarget::local(reconnect.root.clone());
+                preferred_session_id = reconnect.preferred_session_id.clone();
+            }
+        }
+    }
 }
 
 fn run_agent_session_connection(
     event_proxy: &EventLoopProxy<NativeEvent>,
     commands: &Receiver<AgentSessionCommand>,
     target: &AgentSessionTarget,
+    preferred_session_id: Option<&SessionId>,
     available: &AtomicBool,
 ) -> std::result::Result<(), AgentSessionFailure> {
     available.store(false, Ordering::Release);
@@ -455,8 +498,9 @@ fn run_agent_session_connection(
     let events = session
         .take_events()
         .map_err(|error| AgentSessionFailure::connection(anyhow!(error.to_string())))?;
-    let (sessions, mut active) = ensure_active_session(&mut client, workspace_root)
-        .map_err(AgentSessionFailure::connection)?;
+    let (sessions, mut active) =
+        ensure_active_session(&mut client, workspace_root, preferred_session_id)
+            .map_err(AgentSessionFailure::connection)?;
     send_event(event_proxy, AgentSessionEvent::SessionCatalog(sessions))
         .map_err(AgentSessionFailure::fatal)?;
     publish_subscription(event_proxy, &active.subscription, &active.thread_id, None)
@@ -470,7 +514,7 @@ fn run_agent_session_connection(
         &mut client,
         &mut active,
         workspace_root,
-        target.workspace_switch_support(),
+        target,
     );
     available.store(false, Ordering::Release);
     match loop_result {
@@ -496,7 +540,7 @@ fn drive_agent_session(
     client: &mut AppServerRequestHandle,
     active: &mut ActiveSession,
     workspace_root: &Path,
-    workspace_switch_support: WorkspaceSwitchSupport,
+    target: &AgentSessionTarget,
 ) -> Result<()> {
     loop {
         loop {
@@ -544,6 +588,7 @@ fn drive_agent_session(
                 Ok(AgentSessionCommand::ActivateSession {
                     session_id,
                     switch_id,
+                    response,
                 }) => {
                     let _trace = session_switch_trace::Span::new(
                         Some(switch_id),
@@ -554,8 +599,8 @@ fn drive_agent_session(
                         "worker-activation-start",
                         format_args!("session_id={session_id}"),
                     );
-                    match activate_session(client, session_id, workspace_root) {
-                        Ok(next) => {
+                    match resolve_session_activation(client, session_id, workspace_root) {
+                        Ok(SessionActivation::Current(next)) => {
                             let previous_session_id = active.session_id.clone();
                             if let Err(error) =
                                 client.unsubscribe_session(SessionUnsubscribeParams {
@@ -574,6 +619,27 @@ fn drive_agent_session(
                                 &active.thread_id,
                                 Some(switch_id),
                             )?;
+                            let _ = response.send(Ok(None));
+                        }
+                        Ok(SessionActivation::Reconnect {
+                            root,
+                            preferred_session_id,
+                        }) => {
+                            let projection = match prepare_workspace_reconnect(target, root.clone())
+                            {
+                                Ok(projection) => projection,
+                                Err(error) => {
+                                    let message = error.to_string();
+                                    let _ = response.send(Err(message.clone()));
+                                    send_event(event_proxy, AgentSessionEvent::Error(message))?;
+                                    continue;
+                                }
+                            };
+                            let _ = response.send(Ok(Some(projection)));
+                            return Err(anyhow!(AgentSessionReconnect {
+                                root,
+                                preferred_session_id: Some(preferred_session_id),
+                            }));
                         }
                         Err(error) => {
                             session_switch_trace::event(
@@ -581,6 +647,7 @@ fn drive_agent_session(
                                 "worker-activation-error",
                                 format_args!("error={error}"),
                             );
+                            let _ = response.send(Err(error.to_string()));
                             send_event(event_proxy, AgentSessionEvent::Error(error.to_string()))?;
                         }
                     }
@@ -641,13 +708,20 @@ fn drive_agent_session(
                     let _ = response.send(result.map_err(|error| error.to_string()));
                 }
                 Ok(AgentSessionCommand::SwitchWorkspace { root, response }) => {
-                    let result = match workspace_switch_support {
-                        WorkspaceSwitchSupport::Supported => switch_workspace(client, root),
-                        WorkspaceSwitchSupport::Unsupported => Err(anyhow!(
-                            "Remote workspace switching must create a new SSH connection"
-                        )),
-                    };
-                    let _ = response.send(result.map_err(|error| error.to_string()));
+                    let result = prepare_workspace_reconnect(target, root.clone());
+                    match result {
+                        Ok(projection) => {
+                            let root = projection.root.clone();
+                            let _ = response.send(Ok(projection));
+                            return Err(anyhow!(AgentSessionReconnect {
+                                root,
+                                preferred_session_id: None,
+                            }));
+                        }
+                        Err(error) => {
+                            let _ = response.send(Err(error.to_string()));
+                        }
+                    }
                 }
                 Ok(AgentSessionCommand::ConfigureLanguageServer {
                     expected_revision,
@@ -807,6 +881,7 @@ struct ActiveSession {
 fn ensure_active_session(
     client: &mut AppServerRequestHandle,
     workspace_root: &Path,
+    preferred_session_id: Option<&SessionId>,
 ) -> Result<(Vec<Session>, ActiveSession)> {
     let mut sessions = client.list_sessions().map_err(client_error)?.sessions;
     sessions.sort_by(|left, right| {
@@ -826,9 +901,20 @@ fn ensure_active_session(
                 .count()
         ),
     );
-    let session = match sessions
-        .iter()
-        .find(|session| session.status == SessionStatus::Active)
+    let session = match preferred_session_id
+        .and_then(|preferred| {
+            sessions.iter().find(|session| {
+                &session.session_id == preferred
+                    && session.status == SessionStatus::Active
+                    && session_is_current_workspace(session, workspace_root)
+            })
+        })
+        .or_else(|| {
+            sessions.iter().find(|session| {
+                session.status == SessionStatus::Active
+                    && session_is_current_workspace(session, workspace_root)
+            })
+        })
         .cloned()
     {
         Some(session) => session,
@@ -851,11 +937,19 @@ fn create_active_session(
     initialize_session(client, session, workspace_root)
 }
 
-fn activate_session(
+enum SessionActivation {
+    Current(ActiveSession),
+    Reconnect {
+        root: PathBuf,
+        preferred_session_id: SessionId,
+    },
+}
+
+fn resolve_session_activation(
     client: &mut AppServerRequestHandle,
     session_id: SessionId,
     workspace_root: &Path,
-) -> Result<ActiveSession> {
+) -> Result<SessionActivation> {
     let session = client
         .read_session(SessionReadParams { session_id })
         .map_err(client_error)?
@@ -863,7 +957,46 @@ fn activate_session(
     if session.status != SessionStatus::Active {
         return Err(anyhow!("cannot activate a non-active session"));
     }
-    initialize_session(client, session, workspace_root)
+    match route_session_for_target(&session, workspace_root)? {
+        SessionWorkspaceRoute::Current => {
+            initialize_session(client, session, workspace_root).map(SessionActivation::Current)
+        }
+        SessionWorkspaceRoute::Reconnect(binding) => Ok(SessionActivation::Reconnect {
+            root: binding.root,
+            preferred_session_id: session.session_id,
+        }),
+        SessionWorkspaceRoute::LegacyUnbound => Err(anyhow!(
+            "cannot activate legacy Session {} because it has no Workspace binding",
+            session.session_id,
+        )),
+    }
+}
+
+fn session_is_current_workspace(session: &Session, workspace_root: &Path) -> bool {
+    matches!(
+        route_session_for_target(session, workspace_root),
+        Ok(SessionWorkspaceRoute::Current)
+    )
+}
+
+fn route_session_for_target(
+    session: &Session,
+    workspace_root: &Path,
+) -> Result<SessionWorkspaceRoute> {
+    if session
+        .workspace
+        .as_ref()
+        .is_some_and(|binding| binding.root() == workspace_root)
+    {
+        return Ok(SessionWorkspaceRoute::Current);
+    }
+    if workspace_root.exists() {
+        return route_session_workspace(session, workspace_root).map_err(anyhow::Error::from);
+    }
+    Ok(match session.workspace.as_ref() {
+        Some(binding) => SessionWorkspaceRoute::Reconnect(binding.clone()),
+        None => SessionWorkspaceRoute::LegacyUnbound,
+    })
 }
 
 fn initialize_session(
@@ -1078,20 +1211,19 @@ fn switch_git_branch(
     read_git_projection(client)?.ok_or_else(|| anyhow!("Git repository became unavailable"))
 }
 
-fn switch_workspace(
-    client: &mut AppServerRequestHandle,
+fn prepare_workspace_reconnect(
+    target: &AgentSessionTarget,
     root: PathBuf,
 ) -> Result<WorkspaceSwitchProjection> {
-    let switched = client
-        .switch_workspace(WorkspaceSwitchParams {
-            root,
-            trust: WorkspaceSwitchTrust::HostSession,
-        })
-        .map_err(client_error)?;
-    Ok(WorkspaceSwitchProjection {
-        root: switched.root,
-        git: read_git_projection(client)?,
-    })
+    let session = target.with_workspace_root(&root)?.start()?;
+    let mut client = session.client();
+    let git = read_git_projection(&mut client);
+    let shutdown = session
+        .shutdown()
+        .map_err(|error| anyhow!(error.to_string()));
+    let projection = WorkspaceSwitchProjection { root, git: git? };
+    shutdown?;
+    Ok(projection)
 }
 
 fn publish_git_projection(
@@ -1180,6 +1312,7 @@ impl NativeApp {
         };
         let tab_id = tab.id();
         let session_id = tab.session_id().clone();
+        let target_workspace_root = tab.workspace_root().map(Path::to_path_buf);
         session_switch_trace::event(
             Some(switch_id),
             "activation-request",
@@ -1191,6 +1324,21 @@ impl NativeApp {
                 "activation-rejected",
                 format_args!("reason=already-selected"),
             );
+            return;
+        }
+        let switches_workspace = target_workspace_root
+            .as_deref()
+            .is_some_and(|target| target != self.workspace_context.working_directory());
+        if switches_workspace
+            && self.file_editor_host.request_workspace_replace()
+                == crate::file_editor_host::FileEditorCloseRequest::NeedsConfirmation
+        {
+            session_switch_trace::event(
+                Some(switch_id),
+                "activation-rejected",
+                format_args!("reason=unsaved-workspace-file"),
+            );
+            eprintln!("could not open Session Workspace while the active file has unsaved changes");
             return;
         }
         let ensured = {
@@ -1213,13 +1361,21 @@ impl NativeApp {
             );
             return;
         };
-        if let Err(error) = session.activate_session(session_id.clone(), switch_id) {
-            session_switch_trace::event(
-                Some(switch_id),
-                "activation-rejected",
-                format_args!("reason=agent-command-queue error={error}"),
-            );
-            eprintln!("could not activate session: {error}");
+        let workspace_switch = match session.activate_session(session_id.clone(), switch_id) {
+            Ok(workspace_switch) => workspace_switch,
+            Err(error) => {
+                session_switch_trace::event(
+                    Some(switch_id),
+                    "activation-rejected",
+                    format_args!("reason=agent-command-queue error={error}"),
+                );
+                eprintln!("could not activate session: {error}");
+                return;
+            }
+        };
+        if let Some(projection) = workspace_switch
+            && !self.apply_workspace_switch_projection(projection)
+        {
             return;
         }
         self.selected_session_tab = tab_id;

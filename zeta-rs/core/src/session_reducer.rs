@@ -2,7 +2,7 @@ use crate::CoreError;
 use crate::multi_agent::validate_context_seed_digest;
 use zeta_protocol::{
     AgentContextSeed, ModelRef, Session, SessionCommand, SessionEvent, SessionId, SessionStatus,
-    SessionThread, SessionThreadStatus, ThreadId, ThreadOrigin,
+    SessionThread, SessionThreadStatus, ThreadId, ThreadOrigin, WorkspaceBinding,
 };
 use zeta_session_store::{
     CURRENT_SESSION_EVENT_SCHEMA_VERSION, MINIMUM_SUPPORTED_SESSION_EVENT_SCHEMA_VERSION,
@@ -15,6 +15,9 @@ pub struct SessionSnapshot {
     pub title: String,
     pub status: SessionStatus,
     pub model: Option<ModelRef>,
+    pub workspace: Option<WorkspaceBinding>,
+    /// True only for Session streams created before durable Workspace binding existed.
+    pub workspace_binding_is_legacy: bool,
     pub sequence: u64,
     pub threads: Vec<SessionThreadSnapshot>,
     pub commands: Vec<SessionCommandSnapshot>,
@@ -28,6 +31,7 @@ impl SessionSnapshot {
             title: self.title.clone(),
             status: self.status,
             model: self.model.clone(),
+            workspace: self.workspace.clone(),
             sequence: self.sequence,
             threads: self
                 .threads
@@ -86,6 +90,7 @@ pub fn reduce_session_event(
             session_id,
             title,
             model,
+            workspace,
         } = &envelope.event
         else {
             return Err(CoreError::Journal(
@@ -97,6 +102,7 @@ pub fn reduce_session_event(
             != (SessionCommand::Create {
                 title: title.clone(),
                 model: model.clone(),
+                workspace: workspace.clone(),
             })
         {
             return Err(CoreError::Journal(
@@ -108,6 +114,8 @@ pub fn reduce_session_event(
             title: title.clone(),
             status: SessionStatus::Active,
             model: model.clone(),
+            workspace: workspace.clone(),
+            workspace_binding_is_legacy: envelope.schema_version < 3,
             sequence: 1,
             threads: Vec::new(),
             commands: vec![SessionCommandSnapshot {

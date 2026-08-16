@@ -21,9 +21,7 @@ import {
 import {
   IWorkspaceOpenService,
 } from "../../../services/workspaces/browser/workspaceOpenService.js";
-import {
-  IEditorPart,
-} from "../../../browser/parts/editor/editorPart.js";
+import { IEditorService } from "../../../services/editor/common/editorService.js";
 import {
   IFileIconThemeService,
 } from "../../../../platform/theme/browser/fileIconThemeService.js";
@@ -49,7 +47,7 @@ export function registerFilesViews(
         serviceDependencies: [
           IFileService,
           IWorkspaceContextService,
-          IEditorPart,
+          IEditorService,
           IFileIconThemeService,
           IHoverService,
         ],

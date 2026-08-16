@@ -20,7 +20,7 @@ for (const [name, value] of Object.entries({
 }
 
 const { ServiceCollection } = await import("../../../../../platform/instantiation/common/instantiation.js");
-const { IConfigurationService } = await import("../../../../../platform/configuration/common/configuration.js");
+const { IConfigurationService } = await import("../../../../../platform/configuration/common/configurationService.js");
 const { ILayoutService } = await import("../../../../../platform/layout/common/layoutService.js");
 const { WorkbenchContributionsRegistry, WorkbenchPhase } = await import("../../../../../workbench/common/contributions.js");
 const { SashConfiguration } = await import("../../../../../workbench/contrib/sash/common/sash.js");

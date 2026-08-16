@@ -2,7 +2,7 @@ import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import type { URI } from "../../../base/common/uri.js";
 import { AppServerProtocolIncompatibleError } from "../../app-server/electron-main/app-server-session.js";
 import type { IAppServerProcessLauncher } from "../../app-server/electron-main/appServerProcessLauncher.js";
-import { getRemoteAuthority, getRemoteWorkspacePath } from "../common/remote.js";
+import { createSshRemoteWorkspaceUri, getRemoteAuthority, getRemoteWorkspacePath } from "../common/remote.js";
 import { isCanonicalAbsolutePosixPath, validLocalCommand } from "./serverHostRemoteCommand.js";
 
 export interface SpawnSshAppServerOptions {
@@ -53,7 +53,7 @@ export class SshAppServerProcessLauncher implements IAppServerProcessLauncher {
   private readonly host: string;
   private readonly spawnProcess: SpawnSshAppServer;
   private readonly probeRuntime: ProbeSshRuntime;
-  private readonly workspacePath: string;
+  private workspacePath: string;
   private remoteExecutable: string;
   private profileResolved = false;
   private provisionAttempted = false;
@@ -75,6 +75,17 @@ export class SshAppServerProcessLauncher implements IAppServerProcessLauncher {
   /** Whether this product host supplied a credential-free, verified profile rollback. */
   get runtimeRollbackAvailable(): boolean {
     return this.options.rollbackRuntime !== undefined;
+  }
+
+  /** Absolute POSIX Workspace root selected for the next Remote App Server connection. */
+  get workspaceRoot(): string {
+    return this.workspacePath;
+  }
+
+  /** Retargets this same SSH authority without moving credentials or execution into Renderer. */
+  replaceWorkspaceRoot(root: string): void {
+    this.workspacePath = getRemoteWorkspacePath(createSshRemoteWorkspaceUri(this.host, root));
+    this.profileResolved = false;
   }
 
   async validate(): Promise<void> {

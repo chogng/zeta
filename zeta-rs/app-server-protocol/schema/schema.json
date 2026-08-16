@@ -1277,6 +1277,7 @@
         "WorkspaceSwitchBusy",
         "WorkspaceSwitchFailed",
         "WorkspaceTrustRequired",
+        "WorkspaceAuthorityMismatch",
         "ExtensionsUnavailable",
         "ExtensionGenerationConflict",
         "ExtensionNotFound",
@@ -17640,6 +17641,16 @@
         },
         "title": {
           "type": "string"
+        },
+        "workspace": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkspaceBinding"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -17690,6 +17701,16 @@
             "type": {
               "type": "string",
               "const": "sessionCreated"
+            },
+            "workspace": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/WorkspaceBinding"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             }
           },
           "required": [
@@ -22048,6 +22069,22 @@
         "question"
       ]
     },
+    "WorkspaceBinding": {
+      "description": "Durable Session binding to one canonical Workspace authority.\n\nProduct hosts use the root to reopen the Workspace and must recompute the authority ID before\nenabling execution. The ID is never a substitute for containment or a current trust decision.",
+      "type": "object",
+      "properties": {
+        "authorityId": {
+          "$ref": "#/$defs/WorkspaceTrustId"
+        },
+        "root": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "authorityId",
+        "root"
+      ]
+    },
     "WorkspaceDocumentOverlayCloseParams": {
       "description": "Releases one editor document from the ephemeral code-intelligence overlay.",
       "type": "object",
@@ -22396,6 +22433,10 @@
       "required": [
         "version"
       ]
+    },
+    "WorkspaceTrustId": {
+      "description": "Opaque, durable lookup key for one canonical Workspace root.\n\nHosts persist this value instead of the filesystem path itself. It intentionally identifies\nthe canonical path boundary rather than Workspace-controlled content, so aliases resolve to\nthe same key and moving the directory requires a new trust decision.",
+      "type": "string"
     },
     "WorkspaceTrustReadParams": {
       "description": "Reads whether one exact canonical Workspace already has a durable user decision.",

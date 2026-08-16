@@ -117,8 +117,9 @@ transcript 当前采用 plain-text wrapping；Native Agent Timeline 的 Markdown
 只服务 slash/file-mention popup 的必要左键命中；完整 pointer/selection 交互属于 Native UI。
 `TextArea` 保留局部 keymap 扩展边界，但 Vim mode/motion/operator 不是当前 `zeta code` 产品要求。
 
-TUI 当前只连接 CLI 提供的 embedded `AppServerSession`，不提供 remote connection selector 或自动
-reconnect；这是一条明确支持边界，不是未完成的 TUI 恢复阶段。若未来产品要求远程运行，必须先由
+TUI 当前连接 CLI 提供的 profile/Workspace-scoped local App Server authority，不提供 remote
+connection selector 或自动 reconnect；Desktop 与 zeterm 在相同 authority partition 下可以实时读取
+同一份 Session catalog 和 Thread event。若未来产品要求远程运行，必须先由
 `zeta-app-server-client` 接受 connection/recovery contract，TUI 只消费其 typed state，不能自建
 transport retry。workspace mention 当前插入 workspace-relative 原子文本路径；通用
 `app://`/`plugin://` Mention 尚无已接受产品契约，也不是 TUI 自行扩展的领域模型。
@@ -131,7 +132,7 @@ contract，不能从 transcript 推导。缺少 typed backend contract 的 login
 language-server 状态，但只有当前已有 typed mutation 的 model/MCP/Skill 项可在 TUI 修改；它不会
 复制 Desktop-only 的外部 Agent 导入或凭据配置流程。
 
-从 repository root 启动当前 embedded TUI：
+从 repository root 启动当前 TUI：
 
 ```bash
 just zeta
@@ -157,7 +158,7 @@ cargo run --manifest-path Cargo.toml -p zeta-cli
 | `TuiError::Shutdown` | App Server background driver 关闭失败 |
 | `TuiError::Terminal` | terminal setup/event/draw failure |
 
-`run` 接受一个已经初始化的 `AppServerSession`。Transport/embedded/local/remote 选择与
+`run` 接受一个已经初始化的 `AppServerSession`。Transport/brokered-local/embedded/remote 选择与
 initialize/schema handshake 属于 CLI 和 app-server-client，不在 TUI 内重复实现；TUI 读取
 request handle 保存的 immutable initialize result，在创建 Session 前拒绝非法/冲突的 server
 slash snapshot，并且只取一次 connection event stream。
@@ -562,7 +563,7 @@ Model Pane 只接收 preferred model，MCP Pane 只接收 server map，status li
 
 Render tests 使用 Ratatui `TestBackend` 固定 empty/error surface，transcript component tests
 固定 row estimation；命令行状态测试是通过依据，没有截图/像素基线。完整 fake-transport `run`
-event-loop integration 可以继续加强当前 embedded 路径，但 remote reconnect trace、Native
+event-loop integration 可以继续加强当前 brokered-local 路径，但 remote reconnect trace、Native
 Markdown/diff/table、任意鼠标文本框选和完整 pointer parity 都不是当前 TUI 验收项；命令式
 copy/export 已由 TUI host adapter 提供。产品要求与
 owner 判断以 [`docs/tui.md`](../../docs/tui.md#17-已接受的架构迁移顺序) 和

@@ -3,7 +3,7 @@ import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.j
 import { InputBox } from "../../../../base/browser/ui/inputbox/inputbox.js";
 import { ScrollableElement } from "../../../../base/browser/ui/scrollbar/scrollableElement.js";
 import { DisposableOwner, ResettableDisposableGroup, toDisposable } from "../../../../base/common/lifecycle.js";
-import type { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
+import type { IConfigurationService } from "../../../../platform/configuration/common/configurationService.js";
 import type { IDialogService } from "../../../../platform/dialogs/common/dialogs.js";
 import { ColorId, darkColorTheme, type IColorTheme, lightColorTheme } from "../../../../platform/theme/common/colorTheme.js";
 import type { IThemeService } from "../../../../platform/theme/common/themeService.js";
@@ -13,12 +13,11 @@ import { WorkbenchConfiguration } from "../../../common/configuration.js";
 import { SystemColorThemePreference, WorkbenchThemesRegistry } from "../../../common/theme.js";
 import type { IUserThemeService } from "../../../common/userThemes.js";
 import type { ISettingsService } from "../../../services/preferences/common/settings.js";
-import type { ICodeIndexService } from "../../../../platform/codeIndex/common/codeIndexService.js";
+import type { CodeIndexStatus, ICodeIndexService, SemanticCodeIndexSelection } from "../../../../platform/codeIndex/common/codeIndexService.js";
 import type { IToolSearchService, ToolSearchEmbeddingStatus } from "../../../../platform/toolSearch/common/toolSearchService.js";
 import type { IConnectorService } from "../../../../platform/connectors/common/connectorService.js";
 import type { IPluginService } from "../../../../platform/plugins/common/pluginService.js";
 import type { IMarketplaceService } from "../../../../platform/marketplace/common/marketplaceService.js";
-import type { CodeIndexStatusResult, SemanticCodeIndexSelectionDto } from "../../../../../../generated/app-server/types.js";
 import { getSettingsSection, SettingsSections, type SettingsSectionDescriptor } from "../common/settingsSections.js";
 import { ConnectorSettingsPane } from "./connectorSettings.js";
 import { PluginSettingsPane } from "./pluginSettings.js";
@@ -409,7 +408,7 @@ export class SettingsEditor extends DisposableOwner {
     retryJob.className = "zeta-theme-action";
     retryJob.type = "button";
     retryJob.textContent = "Retry indexing";
-    const updateJobStatus = (indexStatus: CodeIndexStatusResult): void => {
+    const updateJobStatus = (indexStatus: CodeIndexStatus): void => {
       progress.textContent = semanticIndexStatusMessage(indexStatus);
       cancelJob.disabled = indexStatus.semantic.state !== "syncing";
       retryJob.disabled = !codeConfig.semanticCodeIndex.activeWorkspaceAuthorized || indexStatus.semantic.state === "syncing";
@@ -488,7 +487,7 @@ export class SettingsEditor extends DisposableOwner {
       consent.disabled = !enabled.checked;
     }));
     this.sectionBindings.add(addDisposableListener(save, "click", () => {
-      let selection: SemanticCodeIndexSelectionDto = { type: "disabled" };
+      let selection: SemanticCodeIndexSelection = { type: "disabled" };
       try {
         if (enabled.checked) {
           selection = {
@@ -834,7 +833,7 @@ function toolSearchStatusMessage(status: ToolSearchEmbeddingStatus): string {
   }
 }
 
-function semanticIndexStatusMessage(status: CodeIndexStatusResult): string {
+function semanticIndexStatusMessage(status: CodeIndexStatus): string {
   const semantic = status.semantic;
   switch (semantic.state) {
     case "unavailable":

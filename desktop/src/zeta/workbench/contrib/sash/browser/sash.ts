@@ -1,6 +1,6 @@
 import { SashSettingsBinding } from "../../../../base/browser/ui/sash/sash.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
-import type { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
+import type { IConfigurationService } from "../../../../platform/configuration/common/configurationService.js";
 import { SashConfiguration } from "../common/sash.js";
 
 const MinimumDragAreaSize = 4;

@@ -1,7 +1,7 @@
 import { Hover, type HoverContent } from "../../../base/browser/ui/hover/hover.js";
 import { addDisposableListener, isHTMLElement } from "../../../base/browser/dom.js";
 import { DisposableOwner } from "../../../base/common/lifecycle.js";
-import type { IConfigurationService } from "../../configuration/common/configuration.js";
+import type { IConfigurationService } from "../../configuration/common/configurationService.js";
 import type { IContextMenuService } from "../../contextview/browser/contextMenu.js";
 import type { IContextViewService } from "../../contextview/browser/contextView.js";
 import { HoverConfiguration, type HoverDelayMode, type HoverSetupOptions, type IHoverService, type IManagedHover } from "../common/hoverService.js";

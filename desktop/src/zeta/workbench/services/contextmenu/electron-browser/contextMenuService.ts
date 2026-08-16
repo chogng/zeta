@@ -11,7 +11,7 @@ import {
 import {
   type WorkbenchContextMenuServiceOptions,
   WorkbenchContextMenuService,
-} from "../common/contextMenuService.js";
+} from "../browser/workbenchContextMenuService.js";
 
 /**
  * Creates the Electron product service and applies the host rendering policy.

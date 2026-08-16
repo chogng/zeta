@@ -1,7 +1,7 @@
 import { addDisposableListener } from "../../../../base/browser/dom.js";
 import { URI } from "../../../../base/common/uri.js";
 import { TextPosition, TextRange } from "../../../../editor/common/core/text.js";
-import { type IEditorPart } from "../../../browser/parts/editor/editorPart.js";
+import { type IEditorService } from "../../../services/editor/common/editorService.js";
 import { ViewPane, type IViewPaneOptions } from "../../../browser/parts/views/viewPane.js";
 import { type IDebugBreakpoint, type IDebugConfiguration, type IDebugEvaluateResult, type IDebugScope, type IDebugService, type IDebugSession, type IDebugStackFrame, type IDebugThread, type IDebugVariable } from "../../../services/debug/common/debugService.js";
 
@@ -44,7 +44,7 @@ export class DebugViewPane extends ViewPane {
   private refreshGeneration = 0;
   private error: string | undefined;
 
-  constructor(options: IViewPaneOptions, private readonly debug: IDebugService, private readonly editor: IEditorPart) {
+  constructor(options: IViewPaneOptions, private readonly debug: IDebugService, private readonly editor: IEditorService) {
     super(options);
     this.contentElement.classList.add("zeta-debug");
     const controls = options.ownerDocument.createElement("div");

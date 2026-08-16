@@ -17,7 +17,7 @@ import {
   validateConfigurationDocument,
   validateConfigurationSnapshot,
   validateConfigurationUpdateRequest,
-} from "../../../../platform/configuration/common/configuration.js";
+} from "../../../../platform/configuration/common/configurationIpc.js";
 import {
   ConfigurationMainService,
 } from "../../../../platform/configuration/electron-main/configurationMainService.js";

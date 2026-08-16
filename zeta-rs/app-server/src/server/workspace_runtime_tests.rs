@@ -565,6 +565,7 @@ fn user_config_revocation_removes_executable_services_but_keeps_file_access() {
             command_id: CommandId::new("create-revocation-session").unwrap(),
             title: "revocation".into(),
             model: None,
+            workspace: None,
         })
         .unwrap();
     let thread = server
@@ -834,6 +835,7 @@ fn active_turn_blocks_workspace_switch_without_changing_authority() {
             command_id: CommandId::new("create-session").unwrap(),
             title: "session".into(),
             model: None,
+            workspace: None,
         })
         .unwrap();
     let thread = server

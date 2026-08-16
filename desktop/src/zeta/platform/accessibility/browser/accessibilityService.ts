@@ -2,7 +2,7 @@ import { AriaLiveRegion } from "../../../base/browser/ui/aria/aria.js";
 import { Emitter } from "../../../base/common/event.js";
 import { DisposableOwner, toDisposable } from "../../../base/common/lifecycle.js";
 import { IContextKey, IContextKeyService } from "../../contextkey/common/contextkey.js";
-import { IConfigurationService } from "../../configuration/common/configuration.js";
+import { IConfigurationService } from "../../configuration/common/configurationService.js";
 import { AccessibilityConfiguration, AccessibilitySupport, CONTEXT_ACCESSIBILITY_MODE_ENABLED, IAccessibilityService } from "../common/accessibility.js";
 
 /** Inputs required by the browser-independent accessibility policy. */

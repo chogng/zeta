@@ -363,6 +363,8 @@ use zeta_protocol::ImageMediaType;
 use zeta_protocol::ToolCallBinding;
 use zeta_protocol::ToolCallCaller;
 use zeta_protocol::ToolSourceProvenance;
+use zeta_protocol::WorkspaceBinding;
+use zeta_protocol::WorkspaceTrustId;
 use zeta_protocol::{
     ActionApprovalCapability, ActionApprovalCapabilityKind, ActionApprovalDecision,
     ActionApprovalRequest, ActionApprovalResponse, AgentContextContent, AgentContextMode,
@@ -1822,6 +1824,8 @@ typescript_bindings! {
     ItemId,
     ToolCallId,
     ToolName,
+    WorkspaceTrustId,
+    WorkspaceBinding,
     ConnectorAccountDto,
     ConnectorAvailableActionDto,
     ConnectorOAuthMethodDto,

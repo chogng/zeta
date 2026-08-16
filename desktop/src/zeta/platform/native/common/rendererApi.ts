@@ -7,7 +7,7 @@ import type {
 import type { IRendererHost } from "../../renderer/common/rendererHost.js";
 import type {
   IConfigurationApi,
-} from "../../configuration/common/configuration.js";
+} from "../../configuration/common/configurationIpc.js";
 import type {
   IKeybindingsResourceApi,
 } from "../../keybinding/common/keybindingsResource.js";

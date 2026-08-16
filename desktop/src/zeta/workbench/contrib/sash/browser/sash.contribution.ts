@@ -1,4 +1,4 @@
-import { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
+import { IConfigurationService } from "../../../../platform/configuration/common/configurationService.js";
 import { ILayoutService } from "../../../../platform/layout/common/layoutService.js";
 import { registerWorkbenchContribution, WorkbenchPhase } from "../../../common/contributions.js";
 import { SashSettingsController } from "./sash.js";

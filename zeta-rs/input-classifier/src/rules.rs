@@ -30,7 +30,6 @@ const SHELL_COMMAND_KEYWORDS: &[&str] = &[
 
 pub(super) fn classify_contextual_input(
     input: &str,
-    word_tokens: &[String],
     context: InputClassificationContext,
 ) -> Option<InputClassification> {
     let trimmed = input.trim();
@@ -42,15 +41,6 @@ pub(super) fn classify_contextual_input(
         });
     }
     let normalized = trimmed.to_lowercase();
-    let first_word_is_natural_language = word_tokens
-        .first()
-        .is_some_and(|word| is_natural_language_one_off(&word.to_lowercase()));
-    if first_word_is_natural_language && context.current_route == InputRoute::Agent {
-        return Some(InputClassification::deterministic(
-            InputRoute::Agent,
-            InputClassificationSource::NaturalLanguageOneOff,
-        ));
-    }
     if context.conversation == crate::InputConversation::AgentFollowUp
         && AGENT_FOLLOW_UP_INPUTS.contains(&normalized.as_str())
     {
@@ -60,6 +50,21 @@ pub(super) fn classify_contextual_input(
         ));
     }
     None
+}
+
+pub(super) fn classify_current_route_input(
+    word_tokens: &[String],
+    context: InputClassificationContext,
+) -> Option<InputClassification> {
+    let first_word_is_natural_language = word_tokens
+        .first()
+        .is_some_and(|word| is_natural_language_one_off(&word.to_lowercase()));
+    (first_word_is_natural_language && context.current_route == InputRoute::Agent).then(|| {
+        InputClassification::deterministic(
+            InputRoute::Agent,
+            InputClassificationSource::NaturalLanguageOneOff,
+        )
+    })
 }
 
 pub(super) fn classify_allowlisted_input(word_tokens: &[String]) -> Option<InputClassification> {

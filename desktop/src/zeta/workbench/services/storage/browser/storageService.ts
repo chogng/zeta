@@ -68,12 +68,6 @@ export class BrowserStorageService extends DisposableOwner implements IStorageSe
     this.ownerWindow.addEventListener("storage", handleStorage);
     this.defer(() => this.ownerWindow.removeEventListener("storage", handleStorage));
 
-    const handlePageHide = () => {
-      void this.flush(WillSaveStateReason.SHUTDOWN);
-    };
-    this.ownerWindow.addEventListener("pagehide", handlePageHide);
-    this.defer(() => this.ownerWindow.removeEventListener("pagehide", handlePageHide));
-
     if (flushInterval > 0) {
       const timer = this.ownerWindow.setInterval(() => {
         void this.flush(WillSaveStateReason.PERIODIC);

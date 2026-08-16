@@ -1,6 +1,4 @@
-import type {
-  IConfigurationKey,
-} from "./configuration.js";
+import type { IConfigurationKey } from "./configurationService.js";
 
 export interface IConfigurationKeyDefinition<T> {
   readonly key: string;

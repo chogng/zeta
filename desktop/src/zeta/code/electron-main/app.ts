@@ -19,7 +19,7 @@ import { browserViewIpcRoutes } from "../../platform/browser/electron-main/brows
 import { BrowserViewMainService } from "../../platform/browser/electron-main/browserViewMainService.js";
 import { BrowserAutomationMainService, registerBrowserAutomationHost } from "../../platform/browser/electron-main/browserAutomationMainService.js";
 import { BrowserTargetRegistry } from "../../platform/browser/electron-main/browserTargetRegistry.js";
-import { CONFIGURATION_CHANGED_CHANNEL } from "../../platform/configuration/common/configuration.js";
+import { CONFIGURATION_CHANGED_CHANNEL } from "../../platform/configuration/common/configurationIpc.js";
 import { ConfigurationMainService, configurationIpcRoutes } from "../../platform/configuration/electron-main/configurationMainService.js";
 import { nativeContextMenuIpcRoutes } from "../../platform/contextview/electron-main/contextMenuIpc.js";
 import { fileIpcRoutes } from "../../platform/files/electron-main/fileIpcRoutes.js";
@@ -63,7 +63,7 @@ import { ServerHostRemoteRuntimeProvisioner } from "../../platform/remote/electr
 import { ServerHostRemoteConnectionProfiles } from "../../platform/remote/electron-main/serverHostRemoteConnectionProfiles.js";
 import { ServerHostRemoteConnections } from "../../platform/remote/electron-main/serverHostRemoteConnections.js";
 import type { RemoteConnectionDefinition } from "../../platform/remote/common/remoteConnectionService.js";
-import { isRemoteResource } from "../../platform/remote/common/remote.js";
+import { getRemoteAuthority, isRemoteResource } from "../../platform/remote/common/remote.js";
 import { RemoteBrowserViewNavigationResolver } from "../../platform/remote/electron-main/remoteBrowserViewNavigationResolver.js";
 import { SshRemoteTunnelService } from "../../platform/remote/electron-main/sshRemoteTunnelService.js";
 import { createRemoteRuntimeInstallProgressLogger } from "../../platform/remote/electron-main/remoteRuntimeBootstrapMainService.js";
@@ -110,6 +110,7 @@ interface WorkbenchWindowRecord extends IWorkbenchWindowRecord {
   windowsStateHandler: WindowsStateHandler;
   windowStateTracking: IDisposable;
   sessionsWindow?: BrowserWindow;
+  openWorkspace?: (root: string) => Promise<void>;
 }
 
 interface PendingWindowLaunch {
@@ -356,7 +357,7 @@ export class ZetaApplication extends DisposableOwner {
           platform: process.platform,
           resourcesPath: process.resourcesPath,
         }),
-        args: ["app-server", "--listen", "stdio://"],
+        args: ["app-server", "connect"],
         environment: this.appServerEnvironment(workspace),
       });
     return new AppServerSupervisor({
@@ -583,6 +584,30 @@ export class ZetaApplication extends DisposableOwner {
       host: electronRemoteWindowMainHost(window),
       ...(reconnectableTerminals ? { prepareForRuntimeReplacement: () => reconnectableTerminals.prepareForServerReplacement() } : {}),
     }));
+    const transitionToFolder = async (folderPath: string, trustRequired: boolean): Promise<void> => {
+      const currentWorkspace = workspaceContext.getWorkspace();
+      const nextWorkspace = isRemoteWorkspaceIdentifier(currentWorkspace)
+        ? await this.resolveRemoteFolderWorkspace(currentWorkspace, folderPath, workspaces)
+        : await workspaces.resolveFolder(folderPath);
+      if (nextWorkspace.id === currentWorkspace.id) return;
+      const trust = await this.resolveLocalWorkspaceTrust(supervisor, folderPath, window);
+      if (trust === undefined) {
+        if (trustRequired) throw new Error(`Workspace trust was not selected for '${folderPath}'`);
+        return;
+      }
+      await record.windowsStateHandler.saveWindowState(window);
+      reconnectableTerminals?.prepareForServerReplacement();
+      const transition = isRemoteWorkspaceIdentifier(nextWorkspace)
+        ? await workspaceTransitions.transitionToWorkspace({ workspace: nextWorkspace, root: folderPath }, trust)
+        : await workspaceTransitions.transitionToFolder(folderPath, trust);
+      if (transition.status === WorkspaceTransitionStatus.Blocked) {
+        throw new Error("Finish the active request before opening another Workspace");
+      }
+      if (transition.status === WorkspaceTransitionStatus.Failed) {
+        throw workspaceTransitionError(transition.failure);
+      }
+    };
+    record.openWorkspace = (root) => transitionToFolder(root, true);
     const ipcRoutes = [
       ...appServerIpcRoutes(supervisor),
       ...remoteWindowContext.ipcRoutes,
@@ -617,33 +642,21 @@ export class ZetaApplication extends DisposableOwner {
           });
           const folderPath = result.filePaths[0];
           if (result.canceled || !folderPath) return;
-          const nextWorkspace = await workspaces.resolveFolder(folderPath);
-          if (nextWorkspace.id === workspaceContext.getWorkspace().id) return;
-          const existingWindow = this.workbenchWindows.findWorkspace(nextWorkspace.id);
-          if (existingWindow && existingWindow.id !== record.id) {
-            existingWindow.focus();
-            return;
-          }
-          if (isRemoteWorkspaceIdentifier(workspaceContext.getWorkspace())) {
-            await this.openWorkspace(nextWorkspace, workspaces);
-            return;
-          }
-          const trust = await this.resolveLocalWorkspaceTrust(supervisor, folderPath, window);
-          if (trust === undefined) return;
-          await record.windowsStateHandler.saveWindowState(window);
-          const transition = await workspaceTransitions.transitionToFolder(folderPath, trust);
-          if (transition.status === WorkspaceTransitionStatus.Blocked) {
-            await dialog.showMessageBox(window, {
-              type: "info",
-              message: "Finish the active request before opening another folder.",
-              detail: "The current Workspace was kept unchanged.",
-            });
-            return;
-          }
-          if (transition.status === WorkspaceTransitionStatus.Failed) {
-            throw workspaceTransitionError(transition.failure);
+          try {
+            await transitionToFolder(folderPath, false);
+          } catch (error) {
+            if (error instanceof Error && error.message.includes("Finish the active request")) {
+              await dialog.showMessageBox(window, {
+                type: "info",
+                message: "Finish the active request before opening another folder.",
+                detail: "The current Workspace was kept unchanged.",
+              });
+              return;
+            }
+            throw error;
           }
         },
+        openWorkspace: (root) => transitionToFolder(root, true),
         saveFile: async (options) => {
           const result = await dialog.showSaveDialog(window, {
             title: "Save File",
@@ -666,6 +679,7 @@ export class ZetaApplication extends DisposableOwner {
       ipcRoutes.push(...sessionsWindowIpcRoutes({
         openSessionsWindow: () => this.openSessionsWindow(record),
         returnToWorkbench: () => record.focus(),
+        openWorkspace: (root) => record.openWorkspace?.(root) ?? Promise.reject(new Error("Workspace routing is unavailable")),
       }));
     }
     if (process.platform === "darwin") {
@@ -754,15 +768,22 @@ export class ZetaApplication extends DisposableOwner {
         ...appServerIpcRoutes(record.supervisor),
         ...sessionIpcRoutes(record.supervisor),
         ...skillIpcRoutes(record.supervisor),
+        ...workspaceContextIpcRoutes(record.workspaceContext),
         ...sessionsWindowIpcRoutes({
           openSessionsWindow: () => this.openSessionsWindow(record),
           returnToWorkbench: () => this.returnToMainWindow(record, window),
+          openWorkspace: (root) => record.openWorkspace?.(root) ?? Promise.reject(new Error("Workspace routing is unavailable")),
         }),
       ],
     ));
     windowDisposables.add(record.supervisor.onNotification((notification) => {
       if (!window.isDestroyed()) {
         window.webContents.send("zeta:event", notification);
+      }
+    }));
+    windowDisposables.add(record.workspaceContext.onDidChangeWorkspace(({ workspace }) => {
+      if (!window.isDestroyed()) {
+        window.webContents.send(WORKSPACE_CONTEXT_CHANGED_CHANNEL, serializeWorkspaceIdentifier(workspace));
       }
     }));
     windowDisposables.add(record.supervisor.onStateChange((state) => {
@@ -857,12 +878,91 @@ export class ZetaApplication extends DisposableOwner {
         classifyRuntimeError: () => WorkspaceTransitionFailureKind.RuntimeUnavailable,
       };
     }
-    const appServerWorkspace = createAppServerWorkspaceTransitionAdapter(supervisor);
+    const launcher = supervisor.options.processLauncher;
+    const appServerWorkspace = createAppServerWorkspaceTransitionAdapter(
+      supervisor,
+      launcher instanceof LocalAppServerProcessLauncher
+        ? (root, trust) => this.reconnectLocalAppServerWorkspace(supervisor, launcher, root, trust)
+        : launcher instanceof SshAppServerProcessLauncher
+          ? (root, trust) => this.reconnectRemoteAppServerWorkspace(supervisor, launcher, root, trust)
+        : undefined,
+    );
     return {
       runtime: appServerWorkspace,
       classifyRuntimeError: (error) => appServerWorkspace.classifyRuntimeError(error),
       recovery: appServerWorkspace,
     };
+  }
+
+  private async reconnectLocalAppServerWorkspace(
+    supervisor: AppServerSupervisor,
+    launcher: LocalAppServerProcessLauncher,
+    root: string,
+    trust: WorkspaceTrustChoice,
+  ): Promise<void> {
+    const previousEnvironment = launcher.environment;
+    const nextEnvironment = {
+      ...previousEnvironment,
+      ZETA_WORKSPACE_ROOT: root,
+      ZETA_WORKSPACE_TRUST_SOURCE: "userConfig",
+    };
+    await supervisor.stop();
+    launcher.replaceEnvironment(nextEnvironment);
+    try {
+      await supervisor.start();
+      await switchAppServerWorkspace(supervisor, root, trust);
+    } catch (error) {
+      await supervisor.stop();
+      launcher.replaceEnvironment(previousEnvironment);
+      try {
+        await supervisor.start();
+      } catch (rollbackError) {
+        throw new AggregateError([error, rollbackError], "Workspace authority switch and rollback both failed");
+      }
+      throw error;
+    }
+  }
+
+  private async reconnectRemoteAppServerWorkspace(
+    supervisor: AppServerSupervisor,
+    launcher: SshAppServerProcessLauncher,
+    root: string,
+    trust: WorkspaceTrustChoice,
+  ): Promise<void> {
+    const previousRoot = launcher.workspaceRoot;
+    await supervisor.stop();
+    launcher.replaceWorkspaceRoot(root);
+    try {
+      await supervisor.start();
+      await switchAppServerWorkspace(supervisor, root, trust);
+    } catch (error) {
+      await supervisor.stop();
+      launcher.replaceWorkspaceRoot(previousRoot);
+      try {
+        await supervisor.start();
+      } catch (rollbackError) {
+        throw new AggregateError([error, rollbackError], "Remote Workspace authority switch and rollback both failed");
+      }
+      throw error;
+    }
+  }
+
+  private async resolveRemoteFolderWorkspace(
+    currentWorkspace: IAnyWorkspaceIdentifier,
+    folderPath: string,
+    workspaces: WorkspacesMainService,
+  ) {
+    if (!isRemoteWorkspaceIdentifier(currentWorkspace)) throw new Error("Remote Workspace resolution requires a Remote window");
+    const authority = getRemoteAuthority(currentWorkspace.uri);
+    if (!authority || authority.type !== "ssh") throw new Error("Unsupported Remote Workspace authority");
+    const workspace = await workspaces.resolveStartupWorkspace({
+      arguments: ["--remote-ssh", authority.host, "--folder", folderPath],
+      cwd: process.cwd(),
+    });
+    if (!isSingleFolderWorkspaceIdentifier(workspace) || !isRemoteWorkspaceIdentifier(workspace)) {
+      throw new Error("Remote folder did not resolve to a Remote Workspace");
+    }
+    return workspace;
   }
 
   private async openRemoteConnection(connection: RemoteConnectionDefinition, workspaces: WorkspacesMainService): Promise<void> {

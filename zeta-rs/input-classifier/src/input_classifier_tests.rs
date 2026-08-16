@@ -211,6 +211,37 @@ fn newest_close_submission_history_runs_before_shell_and_model_detection() {
 }
 
 #[test]
+fn exact_history_runs_before_current_route_natural_language_bias() {
+    let mut classifier = InputClassifier::default();
+    classifier.record_submission(InputHistoryEntry::shell("explain this failure"));
+
+    let classification = classifier.classify("explain this failure", standalone(InputRoute::Agent));
+
+    assert_eq!(classification.route, InputRoute::Shell);
+    assert_eq!(
+        classification.source,
+        InputClassificationSource::HistoryMatch
+    );
+}
+
+#[test]
+fn agent_follow_up_context_stays_stronger_than_submission_history() {
+    let mut classifier = InputClassifier::default();
+    classifier.record_submission(InputHistoryEntry::shell("continue"));
+
+    let classification = classifier.classify(
+        "continue",
+        InputClassificationContext::new(InputRoute::Shell, InputConversation::AgentFollowUp),
+    );
+
+    assert_eq!(classification.route, InputRoute::Agent);
+    assert_eq!(
+        classification.source,
+        InputClassificationSource::AgentFollowUp
+    );
+}
+
+#[test]
 fn model_routes_ambiguous_commands_and_agent_requests() {
     let classifier = InputClassifier::default();
     let cases = [

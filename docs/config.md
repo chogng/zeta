@@ -663,9 +663,19 @@ Workspace Config → grant or secret authority
 Desktop、`zeta code`/TUI 与 zeterm 的本地 App Server 都以 durable mode 打开这一 authority。产品
 通过 `session/list` 发现会话，并以 `session/read`、`session/subscribe` 和
 `session/thread/read` 恢复同一份对话；UI 不直接查询 SQLite。关闭并重新打开任一产品时，会从
-共享 event history 重建 Session/Thread projection。多个已经运行的独立 App Server 之间目前没有
-跨进程 catalog notification，因此另一产品新建的会话需要重启其本地 App Server 后才会出现在
-既有窗口；长期实时同步应收敛到单一 profile-scoped authority，而不是引入第二份 UI cache。
+共享 event history 重建 Session/Thread projection。同一 canonical profile 与 protocol schema 的
+Desktop、`zeta code`/TUI 和 zeterm 连接到同一个 profile daemon；product-services 作为 connection
+adapter key 选择对应 composition，但不再切分 profile authority。Session
+catalog 和订阅通知因此能在已运行产品及不同 Workspace 之间实时传播，不需要轮询 SQLite 或重新打开
+Settings。daemon 内部以 canonical Workspace root + trust source 建立隔离 runtime，产品切换 Workspace
+时重连并通过 connection prelude 选择 runtime，不修改进程全局 Workspace。新 Session 的创建事件会
+持久化 canonical root 与 Workspace authority ID；不同 runtime 可读取它，但 mutation/Turn 必须匹配，
+否则返回 `WorkspaceAuthorityMismatch`。旧的未绑定 Session 保持只读，等待显式迁移，不能被当前目录
+自动认领。
+
+broker endpoint 和 start lock 是运行时协调数据，不是可迁移 profile 数据。Unix 放在当前 UID 私有的
+`/tmp/zeta-local-app-server-<uid>/`，Windows 放在 `<profile_root>/run/`；daemon 空闲后自动退出，
+`state.sqlite3`、TOML/JSON 配置和 Marketplace cache 仍保留在规范化 profile root。
 
 | 数据类别 | TOML | SQLite |
 | --- | --- | --- |

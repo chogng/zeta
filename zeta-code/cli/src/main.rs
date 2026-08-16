@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use zeta_app_server_client::AppServerSession;
-use zeta_app_server_client::InProcessClientOptions;
+use zeta_app_server_client::StdioAppServerCommand;
 use zeta_app_server_client::local_profile_root;
 use zeta_app_server_protocol::protocol::common::ClientInfo;
 use zeta_app_server_protocol::protocol::turn::InputItem;
@@ -68,23 +68,45 @@ fn interactive() -> Result<(), String> {
             "interactive mode requires a TTY; use `zeta ask` or `zeta exec` instead".into(),
         );
     }
-    let options = InProcessClientOptions::new(
-        local_profile_root(),
-        ClientInfo {
-            name: "zeta-cli".into(),
-            version: env!("CARGO_PKG_VERSION").into(),
-        },
-    )
-    .with_capabilities(zeta_tui::client_capabilities())
-    .with_workspace_root(configured_workspace()?)
-    .with_discovered_product_services()
-    .map_err(|error| error.to_string())?;
-    let session = AppServerSession::start_embedded(options).map_err(|error| error.to_string())?;
-    match zeta_tui::run(session, zeta_tui::TuiOptions::new("TUI conversation"))
-        .map_err(|error| error.to_string())?
-    {
-        zeta_tui::TuiExit::UserRequested | zeta_tui::TuiExit::TerminationRequested => Ok(()),
-        zeta_tui::TuiExit::ConnectionLost { reason, .. } => Err(reason),
+    let profile_root = local_profile_root();
+    let executable = env::current_exe()
+        .map_err(|error| format!("could not resolve zeta executable: {error}"))?;
+    let mut workspace_root = configured_workspace()?;
+    let mut recovery = None;
+    loop {
+        let command = StdioAppServerCommand::new(executable.clone())
+            .with_argument("app-server")
+            .with_argument("connect")
+            .with_environment_variable("ZETA_PROFILE_ROOT", profile_root.clone().into_os_string())
+            .with_environment_variable(
+                "ZETA_WORKSPACE_ROOT",
+                workspace_root.clone().into_os_string(),
+            );
+        let session = AppServerSession::start_stdio(
+            command,
+            ClientInfo {
+                name: "zeta-cli".into(),
+                version: env!("CARGO_PKG_VERSION").into(),
+            },
+            zeta_tui::client_capabilities(),
+        )
+        .map_err(|error| error.to_string())?;
+        let mut options =
+            zeta_tui::TuiOptions::new("TUI conversation").with_workspace_root(&workspace_root);
+        if let Some(state) = recovery.take() {
+            options = options.with_recovery(state);
+        }
+        match zeta_tui::run(session, options).map_err(|error| error.to_string())? {
+            zeta_tui::TuiExit::UserRequested | zeta_tui::TuiExit::TerminationRequested => {
+                return Ok(());
+            }
+            zeta_tui::TuiExit::WorkspaceReconnectRequested(request) => {
+                let (next_workspace, next_recovery) = request.into_parts();
+                workspace_root = next_workspace;
+                recovery = Some(next_recovery);
+            }
+            zeta_tui::TuiExit::ConnectionLost { reason, .. } => return Err(reason),
+        }
     }
 }
 

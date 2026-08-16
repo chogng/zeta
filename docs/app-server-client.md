@@ -50,7 +50,8 @@ zeta-tui ──┘             │
 用它承载 SSH Remote App Server；它仍只连接相同的 App Server contract，不是 scheduler protocol，
 也不是 remote process executor。Desktop 的 JSONL/stdio client 仍不要求复用这个 Rust crate。
 
-`zeta-exec` 是无交互界面的 Agent 执行宿主。当前它与 TUI 一样启动 embedded App Server；
+`zeta-exec` 是无交互界面的 Agent 执行宿主。当前它启动 embedded App Server；交互式 TUI 则通过
+stdio 连接 profile/Workspace-scoped local authority。
 后续远程调度系统以它作为 headless execution entry。Job/Attempt/lease/event cursor 属于
 [`exec.md`](exec.md) 定义的 scheduler adapter，不进入 App Server Client。
 
@@ -452,7 +453,8 @@ TUI 不再接收一个同步 `&mut AppServerClient<T>`，也不调用 `drain_not
 - `AppServerEvents` channel 限 1024 项，背压到 App Server 4096 项 connection queue；transient
   backlog 可清除，durable/control 不静默丢弃；
 - `shutdown` 拒绝后续请求、关闭 connection、唤醒 event pump 并 join 两个 background task；
-- CLI interactive/headless 路径使用同一个 `AppServerSession::start_embedded` composition；
+- CLI interactive 路径使用 `AppServerSession::start_stdio` 连接 local authority；headless 路径仍可
+  使用 `start_embedded` composition；
 - `start_in_process_client` 已经体现“由共享 crate 创建本地 App Server”的正确方向；
 - `open_in_process_app_server` 返回可克隆的 `InProcessAppServer` host；
 - `InProcessAppServer::connect` 为同一个 `Arc<AppServer>` 建立各自 initialize 完成的 typed

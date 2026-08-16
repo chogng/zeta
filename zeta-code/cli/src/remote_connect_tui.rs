@@ -4,6 +4,8 @@ use std::time::Duration;
 use std::time::Instant;
 
 use zeta_remote::RemoteProfile;
+use zeta_remote::RemoteWorkspacePath;
+use zeta_remote::SshTarget;
 use zeta_remote_connections::RemoteConnectionFailureKind;
 
 use super::runtime;
@@ -17,7 +19,7 @@ pub(super) fn run(
     ready: ReadyRemoteRuntime,
     ssh_executable: Option<PathBuf>,
 ) -> Result<(), String> {
-    let profile = ready.profile;
+    let mut profile = ready.profile;
     let mut session = ready.session;
     let mut recovery = None;
     loop {
@@ -44,6 +46,24 @@ pub(super) fn run(
                 return Err(format!(
                     "Remote App Server recovery stopped after {kind:?}: {reason}"
                 ));
+            }
+            zeta_tui::TuiExit::WorkspaceReconnectRequested(request) => {
+                let (workspace_root, next_recovery) = request.into_parts();
+                let workspace = workspace_root.to_str().ok_or_else(|| {
+                    "Remote Session Workspace path is not valid UTF-8".to_string()
+                })?;
+                let target = SshTarget::new(
+                    profile.target().host().clone(),
+                    RemoteWorkspacePath::parse(workspace).map_err(|error| error.to_string())?,
+                );
+                profile = RemoteProfile::new(target, profile.runtime().clone());
+                recovery = Some(next_recovery);
+                session = reconnect(
+                    &profile,
+                    ssh_executable.as_deref(),
+                    "Session belongs to another Remote Workspace",
+                )?
+                .session;
             }
         }
     }

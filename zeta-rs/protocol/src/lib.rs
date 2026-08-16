@@ -73,6 +73,8 @@ pub use tool_execution::{
 pub use tool_name::{InvalidToolName, ToolName};
 pub use turn::{Turn, TurnStatus};
 pub use turn_execution::TurnExecutionBinding;
+pub use zeta_workspace::WorkspaceBinding;
+pub use zeta_workspace::WorkspaceTrustId;
 
 #[cfg(test)]
 #[path = "contract_tests.rs"]

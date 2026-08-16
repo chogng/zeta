@@ -54,15 +54,16 @@ export function startWebWorkbench(
 ): IDisposable {
   const host = readWebWorkbenchHost();
   const workbench = new DisposableStore();
-  workbench.add(createWebWorkbench(product, {
+  const instance = createWebWorkbench(product, {
     api: host?.api ?? createDisconnectedRendererApi(),
     session,
     workspace: host?.workspace,
     container: host?.container ??
       document.querySelector<HTMLElement>("#app"),
-  }));
+  });
+  workbench.add(instance);
   workbench.add(addDisposableListener(window, "pagehide", () => {
-    workbench.dispose();
+    void instance.shutdown("pageHide").catch(error => console.error("Failed to shut down Workbench", error)).finally(() => workbench.dispose());
   }, { once: true }));
   return workbench;
 }

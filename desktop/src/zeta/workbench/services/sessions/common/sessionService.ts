@@ -32,6 +32,10 @@ export interface Session {
   readonly title: string;
   readonly status: SessionStatus;
   readonly model?: ModelRef | null;
+  readonly workspace?: {
+    readonly authorityId: string;
+    readonly root: string;
+  } | null;
   readonly sequence: number;
   readonly threads: readonly SessionThread[];
 }

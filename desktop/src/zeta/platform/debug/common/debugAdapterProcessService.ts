@@ -1,5 +1,6 @@
 import { type IDisposable } from "../../../base/common/lifecycle.js";
 import { type AppServerConnectionState } from "../../app-server/common/appServerApi.js";
+import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
 
 export interface IDebugAdapterProcessStartOptions {
   readonly program: string;
@@ -30,3 +31,5 @@ export interface IDebugAdapterProcessService {
   getConnectionState(): Promise<AppServerConnectionState>;
   onConnectionState(listener: (state: AppServerConnectionState) => void): IDisposable;
 }
+
+export const IDebugAdapterProcessService = createServiceIdentifier<IDebugAdapterProcessService>("debugAdapterProcessService");

@@ -14,7 +14,6 @@ use std::io::BufRead;
 use std::io::BufReader;
 use std::io::Write;
 use std::sync::Condvar;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
@@ -102,7 +101,7 @@ mod symbol_index_runtime;
 mod syntax_operations;
 mod terminal_operations;
 mod turn_backend_router;
-mod update_broker;
+pub(crate) mod update_broker;
 mod workspace_customizations;
 mod workspace_operations;
 mod workspace_runtime;
@@ -152,7 +151,6 @@ pub struct AppServer {
     pub(super) multi_agent: Arc<MultiAgentCoordinator>,
     model: Arc<dyn ModelService>,
     model_catalog: Arc<dyn ModelCatalog>,
-    next_connection_id: AtomicU64,
     request_scheduler: RequestScheduler,
     pub(super) resources: Arc<Mutex<ResourceStore>>,
     pub(super) attachment_uploads: Mutex<AttachmentUploadStore>,
@@ -379,6 +377,14 @@ impl AppServer {
 
     pub fn new(sessions: Arc<SessionCoordinator>, model: Arc<dyn ModelService>) -> Self {
         let updates = Arc::new(UpdateBroker::default());
+        Self::new_with_updates(sessions, model, updates)
+    }
+
+    pub(crate) fn new_with_updates(
+        sessions: Arc<SessionCoordinator>,
+        model: Arc<dyn ModelService>,
+        updates: Arc<UpdateBroker>,
+    ) -> Self {
         let agent_extensions = Arc::new(ExtensionRegistry::default());
         sessions
             .threads()
@@ -413,7 +419,6 @@ impl AppServer {
             multi_agent,
             model,
             model_catalog: unavailable_model_catalog(),
-            next_connection_id: AtomicU64::new(1),
             request_scheduler: RequestScheduler::default(),
             resources,
             attachment_uploads: Mutex::new(AttachmentUploadStore::default()),
@@ -478,7 +483,7 @@ impl AppServer {
 
     pub fn connection(&self) -> ConnectionState {
         let connection = ConnectionState {
-            connection_id: self.next_connection_id.fetch_add(1, Ordering::Relaxed),
+            connection_id: self.updates.allocate_connection_id(),
             ..ConnectionState::default()
         };
         self.updates
@@ -1134,11 +1139,29 @@ impl AppServer {
         &self.sessions
     }
 
+    pub(crate) fn bind_active_workspace_session_extensions(&self) -> Result<(), CoreError> {
+        let workspace = self.active_workspace_binding();
+        for session in self.sessions.list_sessions()? {
+            if !session.workspace_binding_is_legacy && session.workspace == workspace {
+                self.updates.bind_session_scope(session.session_id.clone());
+                self.sessions.threads().install_session_extensions(
+                    session.session_id,
+                    Arc::clone(&self.agent_extensions),
+                )?;
+            }
+        }
+        Ok(())
+    }
+
     /// Reconciles durable Agent spawn/delivery sagas and starts newly materialized child Turns.
     pub fn resume_recovered_agent_coordinations(&self) -> Result<usize, CoreError> {
         let backend = Arc::clone(&self.turn_backend);
         let mut resumed = 0;
+        let workspace = self.active_workspace_binding();
         for session in self.sessions.list_sessions()? {
+            if session.workspace_binding_is_legacy || session.workspace != workspace {
+                continue;
+            }
             for spawned in self.multi_agent.recover_session(&session.session_id)? {
                 let child = self
                     .sessions
@@ -1160,8 +1183,18 @@ impl AppServer {
 
     /// Re-enqueues durable running Tool continuations after host services are installed.
     pub fn resume_recovered_tool_continuations(&self) -> Result<usize, CoreError> {
+        let workspace = self.active_workspace_binding();
+        let session_ids = self
+            .sessions
+            .list_sessions()?
+            .into_iter()
+            .filter(|session| {
+                !session.workspace_binding_is_legacy && session.workspace == workspace
+            })
+            .map(|session| session.session_id)
+            .collect::<BTreeSet<_>>();
         self.turn_executor_snapshot()
-            .resume_recovered_tool_continuations()
+            .resume_recovered_tool_continuations_in_sessions(&session_ids)
     }
 
     pub fn drain_notifications(&self, connection: &mut ConnectionState) -> Vec<String> {

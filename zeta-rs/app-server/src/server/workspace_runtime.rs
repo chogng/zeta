@@ -888,6 +888,15 @@ impl AppServer {
             .map(|authorization| authorization.root().trust_id())
     }
 
+    pub(super) fn active_workspace_binding(&self) -> Option<zeta_workspace::WorkspaceBinding> {
+        self.workspace_runtime
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .authorization
+            .as_ref()
+            .map(|authorization| zeta_workspace::WorkspaceBinding::from_root(authorization.root()))
+    }
+
     pub(super) fn reconcile_semantic_code_index_runtime(
         &self,
     ) -> Result<(), WorkspaceRuntimeError> {

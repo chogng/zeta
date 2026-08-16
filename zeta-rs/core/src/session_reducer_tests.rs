@@ -26,6 +26,32 @@ fn receipt(id: &str, command: SessionCommand) -> SessionCommandReceipt {
 }
 
 #[test]
+fn pre_binding_session_streams_are_marked_legacy_unbound() {
+    let mut created = envelope(
+        1,
+        Some(receipt(
+            "create-session",
+            SessionCommand::Create {
+                title: "legacy".into(),
+                model: None,
+                workspace: None,
+            },
+        )),
+        SessionEvent::SessionCreated {
+            session_id: SessionId::new("session_1").expect("test ID is non-empty"),
+            title: "legacy".into(),
+            model: None,
+            workspace: None,
+        },
+    );
+    created.schema_version = 2;
+
+    let session = reduce_session_event(None, &created).unwrap();
+
+    assert!(session.workspace_binding_is_legacy);
+}
+
+#[test]
 fn reducer_projects_a_recoverable_thread_creation_saga() {
     let session = reduce_session_event(
         None,
@@ -36,16 +62,19 @@ fn reducer_projects_a_recoverable_thread_creation_saga() {
                 SessionCommand::Create {
                     title: "task".into(),
                     model: None,
+                    workspace: None,
                 },
             )),
             SessionEvent::SessionCreated {
                 session_id: SessionId::new("session_1").expect("test ID is non-empty"),
                 title: "task".into(),
                 model: None,
+                workspace: None,
             },
         ),
     )
     .unwrap();
+    assert!(!session.workspace_binding_is_legacy);
     let session = reduce_session_event(
         Some(session),
         &envelope(
@@ -104,12 +133,14 @@ fn reducer_rejects_fork_from_an_unknown_parent() {
                 SessionCommand::Create {
                     title: "task".into(),
                     model: None,
+                    workspace: None,
                 },
             )),
             SessionEvent::SessionCreated {
                 session_id: SessionId::new("session_1").expect("test ID is non-empty"),
                 title: "task".into(),
                 model: None,
+                workspace: None,
             },
         ),
     )

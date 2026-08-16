@@ -37,6 +37,27 @@ test("SSH launcher starts a non-interactive Remote App Server over stdio", () =>
   }]);
 });
 
+test("SSH launcher retargets the same authority to another Workspace root", () => {
+  const launches: string[][] = [];
+  const launcher = new SshAppServerProcessLauncher({
+    workspace: createSshRemoteWorkspaceUri("work-server", "/srv/one"),
+    sshExecutable: "ssh",
+    remoteExecutable: "zeta",
+    localEnvironment: {},
+    spawnProcess: (_executable, args) => {
+      launches.push([...args]);
+      return {} as ChildProcessWithoutNullStreams;
+    },
+  });
+
+  launcher.replaceWorkspaceRoot("/srv/two");
+  launcher.launch();
+
+  assert.equal(launcher.workspaceRoot, "/srv/two");
+  assert.match(launches[0]?.at(-1) ?? "", /ZETA_WORKSPACE_ROOT=\/srv\/two/);
+  assert.throws(() => launcher.replaceWorkspaceRoot("relative"), /absolute POSIX path/);
+});
+
 test("Remote App Server command shell-quotes apostrophes without interpolating input", () => {
   assert.equal(
     remoteAppServerCommand("/opt/Zeta's/bin/zeta-server", "/home/zeta/O'Brien"),

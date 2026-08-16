@@ -1,5 +1,6 @@
 //! Built-in product command dispatch for the active Session and Thread.
 
+use crate::TuiWorkspaceReconnect;
 use crate::app::AppEvent;
 use crate::app::help_selection_view;
 use crate::components::composer::ComposerInput;
@@ -39,6 +40,7 @@ pub(crate) struct ProductCommandOutput {
     pub(crate) conversation: ActiveConversation,
     pub(crate) events: Vec<AppEvent>,
     pub(crate) conversation_change: Option<ConversationChange>,
+    pub(crate) workspace_reconnect: Option<TuiWorkspaceReconnect>,
 }
 
 pub(crate) fn execute_product_command<T>(
@@ -55,6 +57,7 @@ where
             conversation,
             events: output.events,
             conversation_change: output.conversation_change,
+            workspace_reconnect: output.workspace_reconnect,
         })
         .map_err(|error| error.to_string())
 }
@@ -152,6 +155,9 @@ impl ActiveConversation {
                         }
                         ResumeOutcome::Changed(change) => {
                             output.conversation_change = Some(change);
+                        }
+                        ResumeOutcome::WorkspaceReconnect(reconnect) => {
+                            output.workspace_reconnect = Some(reconnect);
                         }
                     }
                 }
@@ -310,6 +316,7 @@ impl ActiveConversation {
 struct CommandOutput {
     events: Vec<AppEvent>,
     conversation_change: Option<ConversationChange>,
+    workspace_reconnect: Option<TuiWorkspaceReconnect>,
 }
 
 #[cfg(test)]

@@ -9,7 +9,7 @@ import { FileKind, type IFileEntry, type IFileService } from "../../../../platfo
 import type { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import type { IFileIconThemeService } from "../../../../platform/theme/browser/fileIconThemeService.js";
 import type { IHoverService } from "../../../../platform/hover/common/hoverService.js";
-import type { IEditorPart } from "../../../browser/parts/editor/editorPart.js";
+import type { IEditorService } from "../../../services/editor/common/editorService.js";
 import { ViewPane, type IViewPaneOptions } from "../../../browser/parts/views/viewPane.js";
 
 interface ExplorerNode {
@@ -25,7 +25,7 @@ interface ExplorerNode {
 export class ExplorerViewPane extends ViewPane {
   private readonly fileService: IFileService;
   private readonly workspaceContextService: IWorkspaceContextService;
-  private readonly editorPart: IEditorPart;
+  private readonly editorService: IEditorService;
   private readonly fileIconThemeService: IFileIconThemeService;
   private readonly hoverService: IHoverService;
   private readonly scrollable: ScrollableElement;
@@ -41,14 +41,14 @@ export class ExplorerViewPane extends ViewPane {
     options: IViewPaneOptions,
     fileService: IFileService,
     workspaceContextService: IWorkspaceContextService,
-    editorPart: IEditorPart,
+    editorService: IEditorService,
     fileIconThemeService: IFileIconThemeService,
     hoverService: IHoverService,
   ) {
     super(options);
     this.fileService = fileService;
     this.workspaceContextService = workspaceContextService;
-    this.editorPart = editorPart;
+    this.editorService = editorService;
     this.fileIconThemeService = fileIconThemeService;
     this.hoverService = hoverService;
     this.element.classList.add("zeta-explorer-view-pane");
@@ -167,11 +167,11 @@ export class ExplorerViewPane extends ViewPane {
 
   private async openFile(node: ExplorerNode): Promise<void> {
     try {
-      await this.editorPart.openEditor({
+      await this.editorService.openEditor({
         resource: node.resource,
         label: node.name,
       });
-      if (!this.disposed) this.editorPart.focus();
+      if (!this.disposed) this.editorService.focusActiveEditor();
     } catch (error) {
       if (this.disposed) return;
       this.error = error instanceof Error

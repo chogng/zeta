@@ -48,7 +48,13 @@ export interface IWorkspaceTransitionContext {
   readonly transitionId: number;
   readonly previous: IAnyWorkspaceIdentifier;
   readonly workspace: ISingleFolderWorkspaceIdentifier;
+  readonly root: string;
   readonly trust: WorkspaceTrustChoice;
+}
+
+export interface IResolvedWorkspaceTransitionTarget {
+  readonly workspace: ISingleFolderWorkspaceIdentifier;
+  readonly root: string;
 }
 
 export interface IWorkspaceRuntimeSwitcher {
@@ -144,6 +150,13 @@ export class WorkspaceTransitionMainService extends DisposableOwner {
     return transition;
   }
 
+  /** Transitions to an already validated local or Remote single-folder Workspace identity. */
+  transitionToWorkspace(target: IResolvedWorkspaceTransitionTarget, trust: WorkspaceTrustChoice = WorkspaceTrustChoice.UserConfig): Promise<IWorkspaceTransitionResult> {
+    const transition = this.transitionQueue.then(() => this.doTransitionToWorkspace(target.root, target.workspace, trust));
+    this.transitionQueue = transition.then(() => undefined, () => undefined);
+    return transition;
+  }
+
   private async doTransitionToFolder(requestedPath: string, trust: WorkspaceTrustChoice): Promise<IWorkspaceTransitionResult> {
     const transitionId = this.nextTransitionId++;
     const previous = this.context.getWorkspace();
@@ -162,12 +175,22 @@ export class WorkspaceTransitionMainService extends DisposableOwner {
         error,
       });
     }
+    return this.doTransitionToWorkspace(requestedPath, workspace, trust, transitionId, previous);
+  }
+
+  private async doTransitionToWorkspace(
+    requestedPath: string,
+    workspace: ISingleFolderWorkspaceIdentifier,
+    trust: WorkspaceTrustChoice,
+    transitionId = this.nextTransitionId++,
+    previous = this.context.getWorkspace(),
+  ): Promise<IWorkspaceTransitionResult> {
     if (workspace.id === previous.id) {
       this.setState({ phase: WorkspaceTransitionPhase.Idle });
       return { status: WorkspaceTransitionStatus.Unchanged, previous, workspace };
     }
 
-    const context = { transitionId, previous, workspace, trust };
+    const context = { transitionId, previous, workspace, root: requestedPath, trust };
     const runtime = await this.switchRuntime(requestedPath, context);
     if (runtime.failure) return this.finishBeforeCommit(runtime.failure);
 

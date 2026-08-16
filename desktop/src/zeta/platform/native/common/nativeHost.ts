@@ -4,6 +4,8 @@ export const NATIVE_HOST_TOGGLE_DEVELOPER_TOOLS_CHANNEL =
   "zeta:native-host:toggle-developer-tools";
 export const NATIVE_HOST_OPEN_FOLDER_CHANNEL =
   "zeta:native-host:open-folder";
+export const NATIVE_HOST_OPEN_WORKSPACE_CHANNEL =
+  "zeta:native-host:open-workspace";
 export const NATIVE_HOST_SET_WINDOW_THEME_CHANNEL =
   "zeta:native-host:set-window-theme";
 export const NATIVE_HOST_SAVE_FILE_CHANNEL =
@@ -26,11 +28,19 @@ export interface INativeSaveFileOptions {
 /** Window-scoped native capabilities exposed to an Electron renderer. */
 export interface INativeHostApi {
   openFolder(): Promise<void>;
+  openWorkspace(root: string): Promise<void>;
   setWindowTheme(theme: INativeWindowTheme): Promise<void>;
   toggleDeveloperTools(): Promise<void>;
   saveFile(options?: INativeSaveFileOptions): Promise<string | undefined>;
   isAccessibilitySupportEnabled(): Promise<boolean>;
   onDidChangeAccessibilitySupport(listener: (enabled: boolean) => void): DisposableHandle;
+}
+
+export function validateOpenWorkspace(value: unknown): string {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new Error("workspace root must be a non-empty string");
+  }
+  return value;
 }
 
 export function validateOpenFolder(value: unknown): undefined {

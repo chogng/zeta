@@ -17,6 +17,7 @@ fn create_session(coordinator: &SessionCoordinator) -> CreateSessionResult {
             command_id: CommandId::new("create-session").expect("test ID is non-empty"),
             title: "task".into(),
             model: None,
+            workspace: None,
         })
         .unwrap()
 }
@@ -131,6 +132,7 @@ fn commands_replay_by_typed_identity_and_reject_payload_conflicts() {
         command_id: CommandId::new("create-session").expect("test ID is non-empty"),
         title: "different".into(),
         model: None,
+        workspace: None,
     });
     assert!(matches!(conflict, Err(CoreError::CommandConflict)));
 }
@@ -144,6 +146,7 @@ fn model_selection_is_durable_and_isolated_per_session() {
             command_id: CommandId::new("create-second").unwrap(),
             title: "second".into(),
             model: None,
+            workspace: None,
         })
         .unwrap();
     let selected = zeta_protocol::ModelRef::new(

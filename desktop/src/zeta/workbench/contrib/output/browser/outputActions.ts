@@ -2,8 +2,8 @@ import { DisposableStore } from "../../../../base/common/lifecycle.js";
 import { Action2, registerAction2 } from "../../../../platform/actions/common/actions.js";
 import type { ServicesAccessor } from "../../../../platform/instantiation/common/instantiation.js";
 import { IQuickInputService, type IQuickPickItem } from "../../../../platform/quickinput/common/quickInput.js";
-import { IEditorPart } from "../../../browser/parts/editor/editorPart.js";
-import { IWorkbenchWindowService } from "../../../browser/window.js";
+import { IEditorService } from "../../../services/editor/common/editorService.js";
+import { IWorkbenchHostService } from "../../../services/host/common/workbenchHostService.js";
 import { IOutputService, type IOutputChannel } from "../../../services/output/common/outputService.js";
 import { IViewsService } from "../../../services/views/browser/viewsService.js";
 import { CLEAR_OUTPUT_COMMAND_ID, EXPORT_OUTPUT_COMMAND_ID, OPEN_OUTPUT_IN_EDITOR_COMMAND_ID, OUTPUT_VIEW_ID, SHOW_OUTPUT_CHANNELS_COMMAND_ID, SHOW_OUTPUT_COMMAND_ID } from "../common/output.js";
@@ -42,7 +42,7 @@ registerAction2(class OpenOutputInEditorAction extends Action2 {
   constructor() { super({ id: OPEN_OUTPUT_IN_EDITOR_COMMAND_ID, title: "Output: Open Output in Editor", f1: true }); }
   override run(accessor: ServicesAccessor): void {
     const channel = accessor.get(IOutputService).activeChannel;
-    if (channel) void openOutputChannelInEditor(channel, accessor.get(IEditorPart));
+    if (channel) void openOutputChannelInEditor(channel, accessor.get(IEditorService));
   }
 });
 
@@ -50,6 +50,6 @@ registerAction2(class ExportOutputAction extends Action2 {
   constructor() { super({ id: EXPORT_OUTPUT_COMMAND_ID, title: "Output: Export Output…", f1: true }); }
   override run(accessor: ServicesAccessor): void {
     const channel = accessor.get(IOutputService).activeChannel;
-    if (channel) exportOutputChannel(channel, accessor.get(IWorkbenchWindowService));
+    if (channel) exportOutputChannel(channel, accessor.get(IWorkbenchHostService));
   }
 });

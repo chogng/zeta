@@ -1,4 +1,7 @@
-use crate::{ModelRef, SessionId, SessionStatus, SessionThreadStatus, ThreadId, ThreadOrigin};
+use crate::{
+    ModelRef, SessionId, SessionStatus, SessionThreadStatus, ThreadId, ThreadOrigin,
+    WorkspaceBinding,
+};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -16,6 +19,9 @@ pub struct Session {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub model: Option<ModelRef>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub workspace: Option<WorkspaceBinding>,
     #[ts(type = "number")]
     pub sequence: u64,
     pub threads: Vec<SessionThread>,

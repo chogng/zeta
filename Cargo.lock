@@ -9515,6 +9515,7 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
+ "tempfile",
  "zeroize",
  "zeta-app-server",
  "zeta-app-server-protocol",
@@ -9524,6 +9525,7 @@ dependencies = [
  "zeta-core",
  "zeta-install-context",
  "zeta-protocol",
+ "zeta-workspace",
 ]
 
 [[package]]
@@ -10313,6 +10315,7 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "ts-rs",
+ "zeta-workspace",
 ]
 
 [[package]]
@@ -10423,12 +10426,16 @@ dependencies = [
 name = "zeta-server-host"
 version = "0.1.0"
 dependencies = [
+ "libc",
+ "rustix 1.1.4",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "tempfile",
  "zeta-app-server",
  "zeta-app-server-client",
  "zeta-app-server-protocol",
+ "zeta-protocol",
  "zeta-remote",
  "zeta-remote-connections",
  "zeta-remote-server",
@@ -10771,10 +10778,12 @@ name = "zeta-workspace"
 version = "0.1.0"
 dependencies = [
  "dunce",
+ "schemars",
  "serde",
  "sha2 0.10.9",
  "tempfile",
  "thiserror 2.0.19",
+ "ts-rs",
 ]
 
 [[package]]
@@ -10812,6 +10821,7 @@ dependencies = [
  "zeta-remote",
  "zeta-remote-connections",
  "zeta-renderer",
+ "zeta-server-host",
  "zeta-settings",
  "zeta-slash-commands",
  "zeta-terminal",
@@ -10822,6 +10832,7 @@ dependencies = [
  "zeta-utils-pty",
  "zeta-wgpu",
  "zeta-winit",
+ "zeta-workspace",
  "zui",
 ]
 

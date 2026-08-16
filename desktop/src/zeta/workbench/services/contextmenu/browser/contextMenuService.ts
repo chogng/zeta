@@ -4,7 +4,7 @@ import {
 import {
   type WorkbenchContextMenuServiceOptions,
   WorkbenchContextMenuService,
-} from "../common/contextMenuService.js";
+} from "./workbenchContextMenuService.js";
 
 /** Creates the HTML context menu product service used by browser hosts. */
 export function createBrowserWorkbenchContextMenuService(

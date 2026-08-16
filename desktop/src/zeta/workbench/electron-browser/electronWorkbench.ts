@@ -61,14 +61,16 @@ export async function startElectronWorkbench(
     void applyWorkspaceChange(workbench, workspace);
   });
   window.addEventListener("pagehide", () => {
-    try {
-      workspaceSubscription.dispose();
-      workbench.dispose();
-      userThemes.dispose();
-      disposableTracker?.assertNoLeaks();
-    } finally {
-      tracking?.[Symbol.dispose]();
-    }
+    void workbench.shutdown("pageHide").catch(error => console.error("Failed to shut down Workbench", error)).finally(() => {
+      try {
+        workspaceSubscription.dispose();
+        workbench.dispose();
+        userThemes.dispose();
+        disposableTracker?.assertNoLeaks();
+      } finally {
+        tracking?.[Symbol.dispose]();
+      }
+    });
   }, { once: true });
 }
 

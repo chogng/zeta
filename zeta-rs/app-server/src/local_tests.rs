@@ -166,6 +166,114 @@ fn local_composition_installs_the_deferred_codex_account_driver() {
 }
 
 #[test]
+fn shared_profile_runtime_projects_sessions_across_isolated_workspaces() {
+    let profile = tempfile::tempdir().unwrap();
+    let first_workspace = tempfile::tempdir().unwrap();
+    let second_workspace = tempfile::tempdir().unwrap();
+    let runtime = Arc::new(LocalProfileRuntime::open(profile.path()).unwrap());
+    let open = |workspace: &Path| {
+        open_local_app_server(
+            LocalAppServerOptions::new(profile.path())
+                .with_profile_runtime(Arc::clone(&runtime))
+                .with_workspace_root(workspace)
+                .without_built_in_skills()
+                .with_codex_app_server(CodexAppServerOptions::new("/zeta/does/not/exist/codex")),
+        )
+        .unwrap()
+    };
+    let first = open(first_workspace.path());
+    let second = open(second_workspace.path());
+    let mut first_connection = first.connection();
+    let mut second_connection = second.connection();
+    for (server, connection) in [
+        (&first, &mut first_connection),
+        (&second, &mut second_connection),
+    ] {
+        let initialized = server.handle_json(
+            connection,
+            r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"test","version":"1"},"capabilities":{}}}"#,
+        );
+        assert!(initialized.contains("\"result\""));
+    }
+
+    let created: serde_json::Value = serde_json::from_str(&first.handle_json(
+        &mut first_connection,
+        r#"{"jsonrpc":"2.0","id":2,"method":"session/create","params":{"commandId":"create-shared","title":"Shared task"}}"#,
+    ))
+    .unwrap();
+    let session_id = created["result"]["session"]["sessionId"].as_str().unwrap();
+    assert_eq!(
+        created["result"]["session"]["workspace"]["root"]
+            .as_str()
+            .unwrap(),
+        first_workspace
+            .path()
+            .canonicalize()
+            .unwrap()
+            .to_string_lossy()
+    );
+
+    let listed: serde_json::Value = serde_json::from_str(&second.handle_json(
+        &mut second_connection,
+        r#"{"jsonrpc":"2.0","id":2,"method":"session/list","params":{}}"#,
+    ))
+    .unwrap();
+    assert_eq!(listed["result"]["sessions"][0]["sessionId"], session_id);
+    let subscribed = second.handle_json(
+        &mut second_connection,
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "session/subscribe",
+            "params": {"sessionId": session_id, "afterSequence": 1}
+        })
+        .to_string(),
+    );
+    assert!(subscribed.contains("\"result\""));
+    let created_thread = first.handle_json(
+        &mut first_connection,
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "session/request",
+            "params": {
+                "commandId": "create-thread",
+                "sessionId": session_id,
+                "expectedSequence": 1,
+                "request": {"type": "createThread", "title": "Shared thread"}
+            }
+        })
+        .to_string(),
+    );
+    assert!(created_thread.contains("\"result\""));
+    let notifications = second.drain_notifications(&mut second_connection);
+    assert!(
+        notifications
+            .iter()
+            .any(|notification| notification.contains("session/update"))
+    );
+    let rejected: serde_json::Value = serde_json::from_str(
+        &second.handle_json(
+            &mut second_connection,
+            &serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 4,
+                "method": "session/request",
+                "params": {
+                    "commandId": "wrong-workspace",
+                    "sessionId": session_id,
+                    "expectedSequence": 3,
+                    "request": {"type": "complete"}
+                }
+            })
+            .to_string(),
+        ),
+    )
+    .unwrap();
+    assert_eq!(rejected["error"]["message"], "WorkspaceAuthorityMismatch");
+}
+
+#[test]
 fn live_plugin_authority_reconciles_connector_projection() {
     let profile = tempfile::tempdir().unwrap();
     let source = tempfile::tempdir().unwrap();

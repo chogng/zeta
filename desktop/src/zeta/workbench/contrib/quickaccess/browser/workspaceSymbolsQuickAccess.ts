@@ -4,7 +4,7 @@ import { Action2, registerAction2 } from "../../../../platform/actions/common/ac
 import { type ServicesAccessor } from "../../../../platform/instantiation/common/instantiation.js";
 import { IQuickInputService, type IQuickPickItem } from "../../../../platform/quickinput/common/quickInput.js";
 import { type LanguageWorkspaceSymbol } from "../../../../editor/common/languages/workspaceSymbols.js";
-import { IEditorPart } from "../../../browser/parts/editor/editorPart.js";
+import { IEditorService } from "../../../services/editor/common/editorService.js";
 import { ILanguageFeaturesService } from "../../../services/language/common/languageFeaturesService.js";
 import { IFileService } from "../../../../platform/files/common/files.js";
 import { IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";
@@ -28,7 +28,7 @@ registerAction2(class ShowAllSymbolsAction extends Action2 {
 
   override run(accessor: ServicesAccessor): void {
     const service = accessor.get(ILanguageFeaturesService).createWorkspaceSymbolService();
-    const editor = accessor.get(IEditorPart);
+    const editor = accessor.get(IEditorService);
     const files = accessor.get(IFileService);
     const workingCopies = accessor.get(IWorkingCopyService);
     const quickPick = accessor.get(IQuickInputService).createQuickPick<WorkspaceSymbolQuickPickItem>();

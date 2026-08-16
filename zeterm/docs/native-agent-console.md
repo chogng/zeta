@@ -51,10 +51,11 @@ compatibility 的程序进入独立 TerminalPane。
 `BlockList` 只保留为 terminal compatibility model，不再绘制 Agent 主界面，也不拥有 Agent
 Thread transcript。
 
-`zeterm` 的 local embedded App Server 显式选择 `SessionStateMode::Durable`。它与 Desktop、
-`zeta code`/TUI 使用同一个 `<profile_root>/state.sqlite3`，启动时通过 `session/list` 投影现有 active
-Session，并用 `session/subscribe` 恢复选中 Thread。Native 不直接打开 SQLite，也不维护第二份
-conversation history；Remote Session 继续由远端 profile authority 拥有。
+`zeterm` 通过 `server-host` 连接 profile/Workspace-scoped local App Server authority。它与
+Desktop、`zeta code`/TUI 共享同一 live authority 和 `<profile_root>/state.sqlite3`；启动时通过
+`session/list` 投影现有 active Session，并用 `session/subscribe` 恢复选中 Thread。Native 不直接
+打开 SQLite，也不维护第二份 conversation history；Remote Session 继续由远端 profile authority
+拥有。
 
 ## 所有权
 

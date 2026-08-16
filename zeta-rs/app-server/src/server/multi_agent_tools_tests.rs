@@ -164,6 +164,7 @@ fn recovered_spawn_starts_a_new_child_turn_once() {
             command_id: CommandId::new("create-session").unwrap(),
             title: "agent recovery".into(),
             model: None,
+            workspace: None,
         })
         .unwrap();
     let parent = sessions

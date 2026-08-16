@@ -52,12 +52,14 @@ fn sqlite_stores_share_one_database_and_recover_typed_events() {
             command: SessionCommand::Create {
                 title: "Task".into(),
                 model: None,
+                workspace: None,
             },
         }),
         event: SessionEvent::SessionCreated {
             session_id: session_id.clone(),
             title: "Task".into(),
             model: None,
+            workspace: None,
         },
     };
     let thread_event = StoredEvent {
@@ -248,12 +250,14 @@ fn sqlite_session_recovery_rejects_corruption_and_accepts_legacy_schema() {
             command: SessionCommand::Create {
                 title: "Task".into(),
                 model: None,
+                workspace: None,
             },
         }),
         event: SessionEvent::SessionCreated {
             session_id: session_id.clone(),
             title: "Task".into(),
             model: None,
+            workspace: None,
         },
     };
     let store = SqliteSessionStore::open(&path).unwrap();

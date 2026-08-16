@@ -29,11 +29,34 @@ pub(super) fn run_with_recovery(
     target: &AgentSessionTarget,
     available: &AtomicBool,
 ) -> anyhow::Result<()> {
+    let mut target = target.clone();
+    let mut preferred_session_id = None;
     let mut attempts = 0;
     let mut recovery_started = None;
     loop {
-        match super::run_agent_session_connection(event_proxy, commands, target, available) {
+        match super::run_agent_session_connection(
+            event_proxy,
+            commands,
+            &target,
+            preferred_session_id.as_ref(),
+            available,
+        ) {
             Ok(()) => return Ok(()),
+            Err(failure)
+                if failure
+                    .error
+                    .downcast_ref::<super::AgentSessionReconnect>()
+                    .is_some() =>
+            {
+                let reconnect = failure
+                    .error
+                    .downcast_ref::<super::AgentSessionReconnect>()
+                    .expect("guard verified reconnect marker");
+                target = target.with_workspace_root(&reconnect.root)?;
+                preferred_session_id = reconnect.preferred_session_id.clone();
+                attempts = 0;
+                recovery_started = None;
+            }
             Err(failure) if !failure.retryable => {
                 return Err(anyhow::anyhow!(
                     "Remote Agent session stopped: {}",
@@ -116,6 +139,9 @@ fn reject_disconnected_command(command: AgentSessionCommand) -> bool {
         AgentSessionCommand::SwitchWorkspace { response, .. } => {
             let _ = response.send(disconnected_command_error());
         }
+        AgentSessionCommand::ActivateSession { response, .. } => {
+            let _ = response.send(disconnected_command_error());
+        }
         AgentSessionCommand::ConfigureLanguageServer { response, .. } => {
             let _ = response.send(disconnected_command_error());
         }
@@ -123,7 +149,6 @@ fn reject_disconnected_command(command: AgentSessionCommand) -> bool {
             let _ = response.send(disconnected_command_error());
         }
         AgentSessionCommand::CreateSession
-        | AgentSessionCommand::ActivateSession { .. }
         | AgentSessionCommand::SubmitAgentMessage(_)
         | AgentSessionCommand::SubmitShellCommand(_)
         | AgentSessionCommand::SelectModel(_)

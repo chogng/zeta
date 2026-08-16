@@ -3,7 +3,7 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import { Emitter } from "../../../../base/common/event.js";
 import { ContextKeyService } from "../../../../platform/contextkey/common/contextkey.js";
-import { type IConfigurationChangeEvent, type IConfigurationKey, type IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
+import { type IConfigurationChangeEvent, type IConfigurationKey, type IConfigurationService } from "../../../../platform/configuration/common/configurationService.js";
 import { AccessibilityConfiguration, AccessibilitySupport, CONTEXT_ACCESSIBILITY_MODE_ENABLED } from "../../../../platform/accessibility/common/accessibility.js";
 import { AccessibilityService } from "../../../../platform/accessibility/browser/accessibilityService.js";
 

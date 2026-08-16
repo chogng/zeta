@@ -1,32 +1,52 @@
 import { type IDisposable } from "../../base/common/lifecycle.js";
-import { type IRendererHost } from "../../platform/renderer/common/rendererHost.js";
-import { type IFileService } from "../../platform/files/common/files.js";
-import { type IWorkspaceContextService } from "../../platform/workspace/common/workspace.js";
-import { type ServiceCollection } from "../../platform/instantiation/common/instantiation.js";
-import { type ITerminalService } from "../services/terminal/common/terminal.js";
-import { type IStorageService } from "../../platform/storage/common/storage.js";
+import { type ServiceCollection, type ServiceIdentifier } from "../../platform/instantiation/common/instantiation.js";
 
 export interface WorkbenchServiceContributionContext {
   readonly services: ServiceCollection;
-  readonly rendererHost: IRendererHost;
-  readonly fileService: IFileService;
-  readonly workspaceContext: IWorkspaceContextService;
-  readonly terminalService: ITerminalService;
-  readonly storageService: IStorageService;
   readonly own: <T extends IDisposable>(value: T) => T;
   readonly blockRestorationUntil: (operation: Promise<void>) => void;
 }
 
-export type WorkbenchServiceContribution = (context: WorkbenchServiceContributionContext) => void;
+export interface WorkbenchServiceContribution<T> {
+  readonly service: ServiceIdentifier<T>;
+  readonly dependencies: readonly ServiceIdentifier<unknown>[];
+  readonly install: (context: WorkbenchServiceContributionContext) => T;
+}
 
-const contributions: WorkbenchServiceContribution[] = [];
+export class WorkbenchServiceContributionRegistry {
+  private readonly contributions: WorkbenchServiceContribution<unknown>[] = [];
+
+  register<T>(contribution: WorkbenchServiceContribution<T>): void {
+    if (this.contributions.some(candidate => candidate.service === contribution.service)) throw new Error(`Workbench service '${serviceName(contribution.service)}' was contributed more than once`);
+    this.contributions.push(contribution as WorkbenchServiceContribution<unknown>);
+  }
+
+  install(context: WorkbenchServiceContributionContext): void {
+    const pending = [...this.contributions];
+    while (pending.length > 0) {
+      const readyIndex = pending.findIndex(contribution => contribution.dependencies.every(dependency => context.services.has(dependency)));
+      if (readyIndex < 0) {
+        const unresolved = pending.map(contribution => `${serviceName(contribution.service)} <- ${contribution.dependencies.filter(dependency => !context.services.has(dependency)).map(serviceName).join(", ")}`).join("; ");
+        throw new Error(`Workbench service contributions have missing or cyclic dependencies: ${unresolved}`);
+      }
+      const [contribution] = pending.splice(readyIndex, 1);
+      const service = contribution!.install(context);
+      context.services.set(contribution!.service, service);
+    }
+  }
+}
+
+export const WorkbenchServiceContributionsRegistry = new WorkbenchServiceContributionRegistry();
 
 /** Registers services owned by a statically selected product contribution bundle. */
-export function registerWorkbenchServiceContribution(contribution: WorkbenchServiceContribution): void {
-  if (typeof contribution !== "function") throw new TypeError("Workbench service contribution must be a function");
-  contributions.push(contribution);
+export function registerWorkbenchServiceContribution<T>(contribution: WorkbenchServiceContribution<T>): void {
+  WorkbenchServiceContributionsRegistry.register(contribution);
 }
 
 export function installWorkbenchServiceContributions(context: WorkbenchServiceContributionContext): void {
-  for (const contribution of contributions) contribution(context);
+  WorkbenchServiceContributionsRegistry.install(context);
+}
+
+function serviceName(service: ServiceIdentifier<unknown>): string {
+  return service.description ?? String(service);
 }

@@ -2,7 +2,7 @@ import { setHoverDelegate } from "../../base/browser/ui/hover/hoverDelegate.js";
 import { DisposableOwner } from "../../base/common/lifecycle.js";
 import { IMenuService, MenuService } from "../../platform/actions/common/menuService.js";
 import { ICommandService } from "../../platform/commands/common/commands.js";
-import { IConfigurationService, type IConfigurationService as IConfigurationServiceContract } from "../../platform/configuration/common/configuration.js";
+import { IConfigurationService, type IConfigurationService as IConfigurationServiceContract } from "../../platform/configuration/common/configurationService.js";
 import { IContextKeyService, ContextKeyService } from "../../platform/contextkey/common/contextkey.js";
 import { IContextMenuService } from "../../platform/contextview/browser/contextMenu.js";
 import { IContextViewService } from "../../platform/contextview/browser/contextView.js";
@@ -16,7 +16,7 @@ import { IKeyboardLayoutService } from "../../platform/keyboardLayout/common/key
 import { ILayoutService, type ILayoutService as ILayoutServiceContract } from "../../platform/layout/common/layoutService.js";
 import { IQuickInputService } from "../../platform/quickinput/common/quickInput.js";
 import { CommandService } from "../services/commands/common/commandService.js";
-import type { WorkbenchContextMenuServiceFactory } from "../services/contextmenu/common/contextMenuService.js";
+import type { WorkbenchContextMenuServiceFactory } from "../services/contextmenu/browser/workbenchContextMenuService.js";
 import { BrowserKeyboardLayoutService } from "../services/keybinding/browser/keyboardLayoutService.js";
 import { WorkbenchKeybindingService } from "../services/keybinding/browser/keybindingService.js";
 import { WorkbenchKeybindingsResourceService } from "../services/keybinding/browser/keybindingsResourceService.js";

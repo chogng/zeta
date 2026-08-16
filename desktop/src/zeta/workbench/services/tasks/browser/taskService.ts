@@ -2,6 +2,7 @@ import { Emitter, type Event } from "../../../../base/common/event.js";
 import { DisposableOwner, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { FileKind, FileNotFoundError, type IFileService } from "../../../../platform/files/common/files.js";
+import type { ILogService } from "../../../../platform/log/common/logService.js";
 import { type IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import { type ITerminalCommandStatusEvent, type ITerminalInstance, type ITerminalService } from "../../terminal/common/terminal.js";
 import { type ITaskRun, type ITaskService, type IWorkspaceTask, type TaskProvider, type TaskProviderRegistration, type TaskProviderTask, type TaskRunStatus } from "../common/taskService.js";
@@ -34,11 +35,11 @@ export class TaskService extends DisposableOwner implements ITaskService {
   readonly onDidStartTask: Event<ITaskRun> = this.startTaskEmitter.event;
   readonly onDidChangeTaskRun: Event<ITaskRun> = this.changeTaskRunEmitter.event;
 
-  constructor(private readonly fileService: IFileService, private readonly workspace: IWorkspaceContextService, private readonly terminalService: ITerminalService, outputService?: IOutputService) {
+  constructor(private readonly fileService: IFileService, private readonly workspace: IWorkspaceContextService, private readonly terminalService: ITerminalService, outputService?: IOutputService, private readonly logService?: ILogService) {
     super();
     this.output = outputService ? this.own(outputService.createChannel({ id: "tasks", label: "Tasks", kind: "log", source: "core" })) : undefined;
     this.own(fileService.onDidChangeFiles(event => {
-      if (this.loaded && affectsTaskConfiguration(event.resources)) void this.refresh().catch(reportTaskError);
+      if (this.loaded && affectsTaskConfiguration(event.resources)) void this.refresh().catch(error => this.reportError(error));
     }));
     this.own(workspace.onDidChangeWorkspace(() => {
       this.activeRefresh?.abort();
@@ -178,7 +179,7 @@ export class TaskService extends DisposableOwner implements ITaskService {
     })));
     this.activeRefresh?.abort();
     this.refreshGeneration += 1;
-    if (refresh) void this.refresh().catch(reportTaskError);
+    if (refresh) void this.refresh().catch(error => this.reportError(error));
   }
 
   private async provideTasks(provider: TaskProvider, signal: AbortSignal): Promise<readonly IWorkspaceTask[]> {
@@ -202,6 +203,15 @@ export class TaskService extends DisposableOwner implements ITaskService {
 
   private log(severity: OutputEntrySeverity, category: string, text: string): void {
     this.output?.appendLine({ severity, category, text });
+    const logCategory = `tasks.${category}`;
+    if (severity === "error") this.logService?.error(logCategory, text);
+    else if (severity === "warning") this.logService?.warn(logCategory, text);
+    else if (severity === "debug") this.logService?.debug(logCategory, text);
+    else this.logService?.info(logCategory, text);
+  }
+
+  private reportError(error: unknown): void {
+    this.logService?.error("tasks.discovery", "Could not refresh workspace tasks", error);
   }
 
   private async packageManager(root: URI): Promise<"npm" | "pnpm" | "yarn"> {
@@ -350,10 +360,6 @@ function taskTerminalCommand(command: string, profileId: string): string {
   if (profileId === "fish") return `${command}; set __zeta_task_exit $status; exit $__zeta_task_exit`;
   if (profileId === "bash" || profileId === "zsh" || profileId === "sh" || profileId === "git-bash" || profileId === "default") return `${command}; __zeta_task_exit=$?; exit $__zeta_task_exit`;
   return command;
-}
-
-function reportTaskError(error: unknown): void {
-  console.error("Could not refresh workspace tasks", error);
 }
 
 function errorMessage(error: unknown): string {

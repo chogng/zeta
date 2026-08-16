@@ -23,6 +23,7 @@ fn stored_session_created(
             session_id: session_id.clone(),
             title: "test".into(),
             model: None,
+            workspace: None,
         },
     }
 }

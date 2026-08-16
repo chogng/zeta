@@ -11,6 +11,7 @@ use zeta_protocol::TurnId;
 use zeta_protocol::{
     CommandId, ModelRef, SessionCommand, SessionEvent, SessionId, SessionStatus, SessionThread,
     SessionThreadStatus, SessionUpdate, SessionUpdateEnvelope, ThreadId, ThreadOrigin, TurnStatus,
+    WorkspaceBinding,
 };
 use zeta_session_store::{
     AppendSessionBatchResult, CURRENT_SESSION_EVENT_SCHEMA_VERSION, SessionCommandReceipt,
@@ -38,6 +39,7 @@ pub struct CreateSessionRequest {
     pub command_id: CommandId,
     pub title: String,
     pub model: Option<ModelRef>,
+    pub workspace: Option<WorkspaceBinding>,
 }
 
 pub struct SetSessionModelRequest {
@@ -188,6 +190,7 @@ impl SessionCoordinator {
         let command = SessionCommand::Create {
             title: request.title.clone(),
             model: request.model.clone(),
+            workspace: request.workspace.clone(),
         };
         let catalog_id = SessionId::new("__zeta_session_catalog__")
             .expect("static Session catalog ID is non-empty");
@@ -232,6 +235,7 @@ impl SessionCoordinator {
                 session_id: session_id.clone(),
                 title: request.title,
                 model: request.model,
+                workspace: request.workspace,
             }],
             SessionBatchCommand::FirstEvent(SessionCommandReceipt {
                 command_id: request.command_id,

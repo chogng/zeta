@@ -20,6 +20,7 @@ fn session(id: &str, title: &str) -> Session {
         title: title.to_owned(),
         status: SessionStatus::Active,
         model: None,
+        workspace: None,
         sequence: 1,
         threads: Vec::new(),
     }

@@ -1,13 +1,13 @@
 import { bindResizableLayout } from "../../../base/browser/ui/resizable/resizable.js";
 import { DisposableOwner } from "../../../base/common/lifecycle.js";
 import { BrowserLayoutService } from "../../../platform/layout/browser/layoutService.js";
-import type { IConfigurationApi } from "../../../platform/configuration/common/configuration.js";
+import type { IConfigurationApi } from "../../../platform/configuration/common/configurationIpc.js";
 import type { IKeybindingsResourceApi } from "../../../platform/keybinding/common/keybindingsResource.js";
 import type { IStorageService } from "../../../platform/storage/common/storage.js";
 import type { WorkbenchPart } from "../../../workbench/browser/part.js";
 import { WorkbenchInteractionServices } from "../../../workbench/browser/workbenchInteractionServices.js";
 import { WorkbenchConfigurationService } from "../../../workbench/services/configuration/browser/configurationService.js";
-import type { WorkbenchContextMenuServiceFactory } from "../../../workbench/services/contextmenu/common/contextMenuService.js";
+import type { WorkbenchContextMenuServiceFactory } from "../../../workbench/services/contextmenu/browser/workbenchContextMenuService.js";
 import type { ISessionsWindowApi } from "../../common/sessionsWindow.js";
 import type { SessionsProfile } from "../../common/sessionsProfile.js";
 import { SessionsWorkbenchLayout } from "../layout.js";

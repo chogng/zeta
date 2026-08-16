@@ -25,6 +25,7 @@ fn repository_recovers_threads_before_their_session_membership() {
             command_id: CommandId::new("create-session").expect("test ID is non-empty"),
             title: "Task".into(),
             model: None,
+            workspace: None,
         })
         .unwrap();
     let thread = runtime

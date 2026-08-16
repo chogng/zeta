@@ -3,17 +3,8 @@ import {
   DisposableOwner,
   toDisposable,
 } from "../../../../base/common/lifecycle.js";
-import {
-  emptyConfigurationDocument,
-  type IConfigurationApi,
-  type IConfigurationChangeEvent,
-  type IConfigurationDocument,
-  type IConfigurationKey,
-  type IConfigurationService,
-  type IConfigurationSnapshot,
-  validateConfigurationDocument,
-  validateConfigurationSnapshot,
-} from "../../../../platform/configuration/common/configuration.js";
+import { emptyConfigurationDocument, type IConfigurationApi, type IConfigurationDocument, type IConfigurationSnapshot, validateConfigurationDocument, validateConfigurationSnapshot } from "../../../../platform/configuration/common/configurationIpc.js";
+import type { IConfigurationChangeEvent, IConfigurationKey, IConfigurationService } from "../../../../platform/configuration/common/configurationService.js";
 import {
   type ConfigurationRegistry,
   ConfigurationsRegistry,

@@ -23,19 +23,27 @@ export interface LocalAppServerProcessLauncherOptions {
 export class LocalAppServerProcessLauncher implements IAppServerProcessLauncher {
   private readonly spawnProcess: SpawnLocalAppServer;
   private readonly fileExists: (path: string) => boolean;
+  private environmentValue: Readonly<Record<string, string>>;
 
   readonly description: string;
 
   constructor(readonly options: LocalAppServerProcessLauncherOptions) {
     if (!isAbsolute(options.executable)) throw new Error("App Server executable path must be absolute");
-    const allowedEnvironmentKeys = options.allowedEnvironmentKeys ? new Set(options.allowedEnvironmentKeys) : undefined;
-    for (const key of Object.keys(options.environment)) {
-      const allowed = allowedEnvironmentKeys ? allowedEnvironmentKeys.has(key) : isAllowedAppServerEnvironmentKey(key);
-      if (!allowed) throw new Error(`App Server environment variable is not allowed: ${key}`);
-    }
+    this.validateEnvironment(options.environment);
     this.description = options.executable;
     this.spawnProcess = options.spawnProcess ?? defaultSpawn;
     this.fileExists = options.fileExists ?? existsSync;
+    this.environmentValue = options.environment;
+  }
+
+  get environment(): Readonly<Record<string, string>> {
+    return this.environmentValue;
+  }
+
+  /** Selects the immutable authority scope used by the next launched connection. */
+  replaceEnvironment(environment: Readonly<Record<string, string>>): void {
+    this.validateEnvironment(environment);
+    this.environmentValue = environment;
   }
 
   validate(): void {
@@ -43,7 +51,15 @@ export class LocalAppServerProcessLauncher implements IAppServerProcessLauncher 
   }
 
   launch(): ChildProcessWithoutNullStreams {
-    return this.spawnProcess(this.options.executable, this.options.args, { environment: this.options.environment });
+    return this.spawnProcess(this.options.executable, this.options.args, { environment: this.environmentValue });
+  }
+
+  private validateEnvironment(environment: Readonly<Record<string, string>>): void {
+    const allowedEnvironmentKeys = this.options.allowedEnvironmentKeys ? new Set(this.options.allowedEnvironmentKeys) : undefined;
+    for (const key of Object.keys(environment)) {
+      const allowed = allowedEnvironmentKeys ? allowedEnvironmentKeys.has(key) : isAllowedAppServerEnvironmentKey(key);
+      if (!allowed) throw new Error(`App Server environment variable is not allowed: ${key}`);
+    }
   }
 }
 

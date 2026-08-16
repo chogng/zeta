@@ -4,6 +4,7 @@ import { DisposableOwner, type IDisposable } from "../../../../base/common/lifec
 import { URI } from "../../../../base/common/uri.js";
 import { type IDebugAdapterProcessService } from "../../../../platform/debug/common/debugAdapterProcessService.js";
 import { FileNotFoundError, type IFileService } from "../../../../platform/files/common/files.js";
+import type { ILogService } from "../../../../platform/log/common/logService.js";
 import { type IStorageService, StorageScope, StorageTarget } from "../../../../platform/storage/common/storage.js";
 import { type IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import { Memento } from "../../../common/memento.js";
@@ -59,13 +60,13 @@ export class DebugService extends DisposableOwner implements IDebugService {
   readonly onDidChangeExceptionBreakpoints: Event<readonly string[]> = this.exceptionBreakpointsEmitter.event;
   readonly onDidChangeSession: Event<IDebugSession | undefined> = this.sessionEmitter.event;
 
-  constructor(private readonly files: IFileService, private readonly workspace: IWorkspaceContextService, private readonly processes: IDebugAdapterProcessService | undefined, private readonly terminals: ITerminalService, storage: IStorageService, private readonly tasks: ITaskService, private readonly adapters: DebugAdapterFactorySource = DebugAdapterFactoriesRegistry) {
+  constructor(private readonly files: IFileService, private readonly workspace: IWorkspaceContextService, private readonly processes: IDebugAdapterProcessService | undefined, private readonly terminals: ITerminalService, storage: IStorageService, private readonly tasks: ITaskService, private readonly adapters: DebugAdapterFactorySource = DebugAdapterFactoriesRegistry, private readonly logService?: ILogService) {
     super();
     this.stateMemento = this.own(new Memento(storage, { id: "debug.workspace", scope: StorageScope.WORKSPACE, target: StorageTarget.USER, defaultValue: () => EMPTY_STATE, parse: parsePersistedDebugState, serialize: serializePersistedDebugState }));
     this.restoreState(this.stateMemento.state);
     this.own(this.stateMemento.onDidChange(event => { if (event.external) this.restoreState(event.state); }));
-    this.own(files.onDidChangeFiles(event => { if (event.resources === undefined || event.resources.some(resource => /\/\.vscode\/launch\.json$/i.test(resource.path))) void this.refresh().catch(reportError); }));
-    this.own(adapters.onDidChange(() => { this.setLaunchDocument(Object.freeze([]), Object.freeze([])); void this.refresh().catch(reportError); }));
+    this.own(files.onDidChangeFiles(event => { if (event.resources === undefined || event.resources.some(resource => /\/\.vscode\/launch\.json$/i.test(resource.path))) void this.refresh().catch(error => this.reportError(error)); }));
+    this.own(adapters.onDidChange(() => { this.setLaunchDocument(Object.freeze([]), Object.freeze([])); void this.refresh().catch(error => this.reportError(error)); }));
     this.own(workspace.onDidChangeWorkspace(() => { this.refreshGeneration += 1; this.setLaunchDocument(Object.freeze([]), Object.freeze([])); void this.stopAll(); }));
     this.defer(() => { for (const record of this.sessionRecords.values()) record.listener.dispose(); this.sessionRecords.clear(); });
   }
@@ -173,7 +174,7 @@ export class DebugService extends DisposableOwner implements IDebugService {
     this.currentBreakpoints = existing ? Object.freeze(this.currentBreakpoints.filter(breakpoint => breakpoint !== existing)) : Object.freeze([...this.currentBreakpoints, createBreakpoint(resource, lineNumber, true)].sort(compareBreakpoints));
     this.breakpointsEmitter.fire(this.currentBreakpoints);
     this.persistState();
-    for (const session of this.sessions) void (session as DebugAdapterSession).syncBreakpoints().catch(reportError);
+    for (const session of this.sessions) void (session as DebugAdapterSession).syncBreakpoints().catch(error => this.reportError(error));
   }
 
   removeBreakpoint(id: string): void {
@@ -182,7 +183,7 @@ export class DebugService extends DisposableOwner implements IDebugService {
     this.currentBreakpoints = Object.freeze(next);
     this.breakpointsEmitter.fire(this.currentBreakpoints);
     this.persistState();
-    for (const session of this.sessions) void (session as DebugAdapterSession).syncBreakpoints().catch(reportError);
+    for (const session of this.sessions) void (session as DebugAdapterSession).syncBreakpoints().catch(error => this.reportError(error));
   }
 
   addWatchExpression(expression: string): void {
@@ -239,7 +240,7 @@ export class DebugService extends DisposableOwner implements IDebugService {
     if (this.completedPostTasks.has(session.id)) return;
     this.completedPostTasks.add(session.id);
     try { await this.runTask(session.configuration.postDebugTask, "postDebugTask"); }
-    catch (error) { reportError(error); }
+    catch (error) { this.reportError(error); }
   }
 
   private async runTask(reference: string | undefined, role: string): Promise<void> {
@@ -269,13 +270,15 @@ export class DebugService extends DisposableOwner implements IDebugService {
   private persistState(): void {
     this.stateMemento.update({ version: 1, breakpoints: Object.freeze(this.currentBreakpoints.map(breakpoint => Object.freeze({ resource: breakpoint.resource.toString(), lineNumber: breakpoint.lineNumber, enabled: breakpoint.enabled }))), watchExpressions: this.currentWatchExpressions, exceptionBreakpoints: this.exceptionBreakpointsByType });
   }
+
+  private reportError(error: unknown): void {
+    this.logService?.error("debug.service", "Debug service operation failed", error);
+  }
 }
 
 function childResource(root: URI, relativePath: string): URI { const base = root.path.endsWith("/") ? root.path.slice(0, -1) : root.path; return root.withPath(`${base}/${relativePath.split("/").map(encodeURIComponent).join("/")}`); }
 function createBreakpoint(resource: URI, lineNumber: number, enabled: boolean): IDebugBreakpoint { return Object.freeze({ id: `${resource.toString()}:${lineNumber}`, resource, lineNumber, enabled, verified: false }); }
 function compareBreakpoints(left: IDebugBreakpoint, right: IDebugBreakpoint): number { return left.resource.toString().localeCompare(right.resource.toString()) || left.lineNumber - right.lineNumber; }
-function reportError(error: unknown): void { console.error("Debug service operation failed", error); }
-
 function normalizeExpression(expression: string): string {
   const normalized = expression.trim();
   if (!normalized || normalized.length > 32_768 || normalized.includes("\0")) throw new TypeError("Watch expression must contain 1 to 32768 characters");

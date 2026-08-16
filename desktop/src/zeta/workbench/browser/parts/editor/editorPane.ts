@@ -7,7 +7,7 @@ import type {
 import type { URI } from "../../../../base/common/uri.js";
 import type {
   IConfigurationService,
-} from "../../../../platform/configuration/common/configuration.js";
+} from "../../../../platform/configuration/common/configurationService.js";
 import { type ITextFileService } from "../../../services/textfile/common/textFileService.js";
 import type { IFileService } from "../../../../platform/files/common/files.js";
 import { type ITextMateService } from "../../../services/textMate/common/textMateService.js";

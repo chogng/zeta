@@ -161,7 +161,7 @@ composition API 已删除，后续不得在 Native 宿主重新引入平行输�
 | Agent ThreadTimeline + fixed Agent/Shell Composer | `shell_scene` / `thread_timeline` / `composer_panel` / `agent_composer` | ✅ |
 | Composer 面板几何、信息栏与可展开交互 Pane 的位置 | [`zeta-composer`](composer/README.md) / `composer_panel` / `shell_scene` | ✅；`zeta-composer` 只解析 panel、固定行、interaction bounds 与 list scroll geometry，Native 负责状态、绘制和 scene 接线 |
 | Composer active View 与滚动状态 | `composer_interaction::ComposerInteractionModel` / `composer_interaction_pane::ComposerInteractionPaneState` / `zeta-ui::{ScrollView,ListView}` | ✅；Pane 只宿主 Slash 与 `/model` active View 并保留 viewport offset，通用 UI 基座负责裁剪、滚动与可见范围；Shell completion 不使用该 Pane |
-| App Server Session adapter 与 transient Thread/language projection / stream-gap recovery | `agent_session` / `agent_session_target` / `agent_session_remote` / `language_service_remote` / `language_service_remote_session` / `thread_projection` | 部分具备；embedded 与 CLI Remote launch 均走同一 adapter，SSH profile 由 Native host 选择；Remote Agent 与独立 Remote language connection 均在 30 秒窗口内退避重连，断线期命令和语言请求不会延迟回放；命名连接 CLI、Native 选择器及图形新增/编辑/删除均已具备 |
+| App Server Session adapter 与 transient Thread/language projection / stream-gap recovery | `agent_session` / `agent_session_target` / `agent_session_remote` / `language_service_remote` / `language_service_remote_session` / `thread_projection` | 部分具备；本地 profile/Workspace authority 与 CLI Remote launch 均走同一 adapter，SSH profile 由 Native host 选择；本地 Session 与 Desktop/TUI 实时共享；Remote Agent 与独立 Remote language connection 均在 30 秒窗口内退避重连，断线期命令和语言请求不会延迟回放；命名连接 CLI、Native 选择器及图形新增/编辑/删除均已具备 |
 | durable direct Shell Turn | App Server `session/request::StartShellTurn` / Core `StartShellTurn` | ✅ |
 | 独立交互式 Terminal Surface | `workspace_surface` / `terminal_session` / `terminal_input` | ✅；`Cmd/Ctrl+J` 切换 |
 | Composer/File Editor/Session Search/File Search/Workspace Path Search/Git Branch Search IME target、事件转换、启停、composition lifecycle 与候选框同步 | `input_method` | ✅ |
@@ -666,7 +666,10 @@ byte 与协议 UTF-16 之间按 exact document revision 转换。
 Agent transport 断线后会在 30 秒窗口内以 250ms 到 2s 的退避重建 SSH/App Server connection，并
 重新投影 durable Session/Thread snapshot、重新同步打开的语言文档。正常连接
 曾恢复后发生的新断线会开启新的 recovery window；等待期间提交的命令会立即失败，不会在稍后连接
-恢复时被隐式回放。Remote terminal 以 `reconnectable`
+恢复时被隐式回放。Profile Session catalog 同时展示其他 Workspace 的 durable Session；选择后由
+Native Agent host 保留当前 SSH host、runtime 和 OpenSSH executable，只替换 Remote Workspace
+root、预检新 connection，再恢复精确 Session。Local Session 使用同一条路由语义重连对应的
+profile/Workspace authority，不能在旧 Workspace connection 上执行。Remote terminal 以 `reconnectable`
 lifecycle 创建；transport 断开后，worker 在服务端给出的 30 秒 lease 内重新 SSH、attach 原 PTY，
 并使用服务端旋转后的 token 作为下一次恢复凭据。zeterm 已能从 release-bound 本地或网络
 catalog 自行选择和安装缺失 runtime；启动窗口前会在 stderr 投影下载、校验、平台探测、按 10% 节流的下载/上传、

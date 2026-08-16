@@ -6,7 +6,7 @@ import { URI } from "../../../../../base/common/uri.js";
 import { TextPosition, TextRange } from "../../../../../editor/common/core/text.js";
 import { type LanguageWorkspaceSymbol } from "../../../../../editor/common/languages/workspaceSymbols.js";
 import { type IFileService } from "../../../../../platform/files/common/files.js";
-import { type IEditorPart } from "../../../../browser/parts/editor/editorPart.js";
+import { type IEditorService } from "../../../../services/editor/common/editorService.js";
 import { type IWorkingCopyService } from "../../../../services/workingCopy/common/workingCopyService.js";
 import { acceptWorkspaceSymbol } from "../../browser/workspaceSymbolNavigation.js";
 
@@ -54,7 +54,7 @@ function acceptanceEvents(revision: string, workingCopyContent?: string) {
   let opened = 0;
   const files = { readFile: async () => ({ resource, content: "fn main() {}\n", revision }) } as unknown as IFileService;
   const workingCopies = { get: () => workingCopyContent === undefined ? [] : [{ backupKind: "text", backup: () => workingCopyContent }] } as unknown as IWorkingCopyService;
-  const editor = { openEditor: async () => { opened += 1; return {}; } } as unknown as IEditorPart;
+  const editor = { openEditor: async () => { opened += 1; }, focusActiveEditor() {} } satisfies IEditorService;
   return {
     files,
     workingCopies,

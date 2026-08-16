@@ -35,7 +35,7 @@ pub use local::open_local_app_server_with_cloud_providers;
 pub use local::open_local_app_server_with_code_index_providers;
 pub use local::{
     BuiltInSkillRoot, LocalAppServerOptions, LocalCodeIndexProviders, LocalConnectorRuntime,
-    LocalWorkspaceConfigOptions, SessionStateMode,
+    LocalProfileRuntime, LocalWorkspaceConfigOptions, SessionStateMode,
 };
 pub use marketplace_editor_extensions::MarketplaceEditorExtensionAdmission;
 pub use marketplace_editor_extensions::MarketplaceEditorExtensionAdmissionLease;

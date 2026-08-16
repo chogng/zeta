@@ -4,10 +4,12 @@
 //! persistence, or trust UI. Hosts establish a [`WorkspaceRoot`], resolve their own trust policy,
 //! and require a [`TrustedWorkspace`] before enabling workspace-controlled execution.
 
+mod binding;
 mod identity;
 mod root;
 mod trust;
 
+pub use binding::WorkspaceBinding;
 pub use identity::{WorkspaceTrustId, WorkspaceTrustIdError};
 pub use root::{WorkspacePathError, WorkspaceRoot};
 pub use trust::{
