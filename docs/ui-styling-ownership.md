@@ -161,7 +161,7 @@ Workbench 的固定横向几何使用物理方向 CSS。仅需左右 inset 时�
 export type CompositeBarPresentation = "icon" | "label";
 ```
 
-Sidebar 使用默认 `icon` presentation；Panel 显式选择 `label` presentation。两种 item 的几何及 presentation 专属前景色由 `CompositeBar` 拥有；标准 tab 的选中背景仍归 `TabList`，非选中项透明。
+Sidebar 使用默认 `icon` presentation；Panel 显式选择 `label` presentation。两种 item 的几何及 presentation 专属前景色由 `CompositeBar` 拥有；标准 tab 的选中背景仍归 `TabList`，非选中项透明。`TabList` 同时拥有 tab 完整命中区域（包括 action gap）的光标：静止可点击态统一为 pointer，只有拖拽手势激活后才切换为 grabbing；presentation 和 Part 不得重写 label 光标。
 
 ## Panel 规范
 

@@ -86,6 +86,20 @@ test("ToolBar icon actions use the 22px borderless VS Code geometry", async () =
   assert.match(compositeBarCss, /\.zeta-composite-bar-overflow > \.zeta-button \{[^}]*width: var\(--zeta-toolbar-action-size\);[^}]*height: var\(--zeta-toolbar-action-size\);[^}]*padding: 3px;[^}]*border: 0;/s);
 });
 
+test("TabList owns a stable pointer cursor across labels and action gaps", async () => {
+  const sourceRoot = join(process.cwd(), "src", "zeta");
+  const tabListCss = await readFile(join(sourceRoot, "base", "browser", "ui", "tablist", "tablist.css"), "utf8");
+  const compositeBarCss = await readFile(join(sourceRoot, "workbench", "browser", "parts", "compositebar", "compositebar.css"), "utf8");
+  const editorTabsCss = await readFile(join(sourceRoot, "workbench", "browser", "parts", "editor", "media", "multiEditorTabsControl.css"), "utf8");
+
+  assert.match(tabListCss, /\.zeta-tab\s*\{[^}]*cursor: pointer;/s);
+  assert.match(tabListCss, /\.zeta-tab\.zeta-dnd-draggable\s*\{[^}]*cursor: pointer;/s);
+  assert.match(tabListCss, /\.zeta-tab\.zeta-dnd-draggable:active\s*\{[^}]*cursor: grabbing;/s);
+  assert.match(tabListCss, /\.zeta-tab-label\s*\{[^}]*cursor: inherit;/s);
+  assert.doesNotMatch(compositeBarCss, /\.zeta-composite-bar \.zeta-tab-label\s*\{[^}]*cursor:/s);
+  assert.doesNotMatch(editorTabsCss, /\.zeta-multi-editor-tabs-control \.zeta-tab-label\s*\{[^}]*cursor:/s);
+});
+
 test("Menubar icon actions hide only their text label", async () => {
   const menubarCss = await readFile(join(process.cwd(), "src", "zeta", "workbench", "browser", "parts", "titlebar", "menubarControl.css"), "utf8");
 

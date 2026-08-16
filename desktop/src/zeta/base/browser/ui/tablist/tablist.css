@@ -27,6 +27,16 @@
   min-width: 0;
   height: var(--zeta-tab-height);
   align-items: center;
+  cursor: pointer;
+}
+
+/* A draggable tab remains a pointer target until the drag gesture starts. */
+.zeta-tab.zeta-dnd-draggable {
+  cursor: pointer;
+}
+
+.zeta-tab.zeta-dnd-draggable:active {
+  cursor: grabbing;
 }
 
 /* Keep the visual gap inside a tab's native drop hit area. */
@@ -86,7 +96,7 @@
   border: 0;
   color: inherit;
   background: transparent;
-  cursor: default;
+  cursor: inherit;
   font: inherit;
   font-weight: var(--zeta-font-weight-semi-bold);
 }
