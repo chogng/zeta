@@ -491,6 +491,7 @@ fn workspace_trust_commands_persist_user_owned_decisions() {
     let path = config_path("workspace-trust");
     let store = ConfigStore::open(&path).unwrap();
     let workspace = workspace_trust_id();
+    let display_root = std::path::PathBuf::from("/tmp/zeta-workspace-trust");
     let trusted = store
         .apply(ConfigCommandRequest {
             command_id: CommandId::new("trust-workspace").unwrap(),
@@ -498,6 +499,7 @@ fn workspace_trust_commands_persist_user_owned_decisions() {
             command: UserConfigCommand::SetWorkspaceTrust {
                 workspace: workspace.clone(),
                 setting: WorkspaceTrustSetting::Trusted,
+                display_root: Some(display_root.clone()),
             },
         })
         .unwrap();
@@ -510,6 +512,15 @@ fn workspace_trust_commands_persist_user_owned_decisions() {
             .workspace_trust
             .decision_for(&workspace),
         WorkspaceTrustDecision::Trusted(WorkspaceTrustSource::ExplicitUserDecision)
+    );
+    assert_eq!(
+        store
+            .read_snapshot()
+            .unwrap()
+            .values
+            .workspace_trust
+            .explicit_root_path_for(&workspace),
+        Some(display_root.as_path())
     );
     assert!(persisted_config_document(&path).contains("[workspaceTrust.roots]"));
 
@@ -530,6 +541,15 @@ fn workspace_trust_commands_persist_user_owned_decisions() {
             .workspace_trust
             .decision_for(&workspace),
         WorkspaceTrustDecision::Restricted
+    );
+    assert_eq!(
+        store
+            .read_snapshot()
+            .unwrap()
+            .values
+            .workspace_trust
+            .explicit_root_path_for(&workspace),
+        None
     );
     remove_config_files(&path);
 }

@@ -1,6 +1,8 @@
 use super::AppServer;
 use super::ConnectionState;
 use super::RpcError;
+use super::config_operations::config_command_result;
+use super::config_operations::config_operation_error;
 use super::decode;
 use super::result;
 use super::workspace_runtime::WorkspaceRuntimeError;
@@ -9,8 +11,12 @@ use zeta_app_server_protocol::protocol::error::AppServerErrorName;
 use zeta_app_server_protocol::protocol::workspace::WorkspaceSwitchParams;
 use zeta_app_server_protocol::protocol::workspace::WorkspaceSwitchResult;
 use zeta_app_server_protocol::protocol::workspace::WorkspaceSwitchTrust;
+use zeta_app_server_protocol::protocol::workspace::WorkspaceTrustEntryDto;
+use zeta_app_server_protocol::protocol::workspace::WorkspaceTrustForgetParams;
+use zeta_app_server_protocol::protocol::workspace::WorkspaceTrustListResult;
 use zeta_app_server_protocol::protocol::workspace::WorkspaceTrustReadParams;
 use zeta_app_server_protocol::protocol::workspace::WorkspaceTrustReadResult;
+use zeta_app_server_protocol::protocol::workspace::WorkspaceTrustSetParams;
 use zeta_app_server_protocol::protocol::workspace::WorkspaceTrustSettingDto;
 use zeta_app_server_protocol::protocol::workspace::WorkspaceTrustStateDto;
 use zeta_config::ConfigCommandRequest;
@@ -48,6 +54,90 @@ impl AppServer {
                 WorkspaceTrustSetting::Trusted => WorkspaceTrustSettingDto::Trusted,
             });
         result(&WorkspaceTrustReadResult { setting })
+    }
+
+    pub(super) fn workspace_trust_list(
+        &self,
+        connection: &ConnectionState,
+    ) -> Result<Value, RpcError> {
+        require_workspace_trust_host(connection)?;
+        let snapshot = self
+            .config
+            .as_ref()
+            .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?
+            .read_snapshot()
+            .map_err(|_| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?;
+        let entries = snapshot
+            .values
+            .workspace_trust
+            .roots
+            .iter()
+            .map(|(workspace, setting)| WorkspaceTrustEntryDto {
+                workspace: workspace.clone(),
+                root: snapshot
+                    .values
+                    .workspace_trust
+                    .explicit_root_path_for(workspace)
+                    .map(|path| path.to_path_buf()),
+                setting: workspace_trust_setting_dto(*setting),
+            })
+            .collect();
+        result(&WorkspaceTrustListResult {
+            revision: snapshot.revision.get(),
+            entries,
+        })
+    }
+
+    pub(super) fn workspace_trust_set(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        require_workspace_trust_host(connection)?;
+        let params: WorkspaceTrustSetParams = decode(params)?;
+        if !params.root.is_absolute() || params.root.as_os_str().is_empty() {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        let workspace = WorkspaceRoot::open(params.root)
+            .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+        let setting = workspace_trust_setting(params.setting);
+        let outcome = self
+            .config
+            .as_ref()
+            .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?
+            .apply(ConfigCommandRequest {
+                command_id: params.command_id,
+                expected_revision: ConfigRevision::new(params.expected_revision),
+                command: UserConfigCommand::SetWorkspaceTrust {
+                    workspace: workspace.trust_id(),
+                    setting,
+                    display_root: Some(workspace.canonical_path().to_path_buf()),
+                },
+            })
+            .map_err(config_operation_error)?;
+        result(&config_command_result(outcome))
+    }
+
+    pub(super) fn workspace_trust_forget(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        require_workspace_trust_host(connection)?;
+        let params: WorkspaceTrustForgetParams = decode(params)?;
+        let outcome = self
+            .config
+            .as_ref()
+            .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?
+            .apply(ConfigCommandRequest {
+                command_id: params.command_id,
+                expected_revision: ConfigRevision::new(params.expected_revision),
+                command: UserConfigCommand::ForgetWorkspaceTrust {
+                    workspace: params.workspace,
+                },
+            })
+            .map_err(config_operation_error)?;
+        result(&config_command_result(outcome))
     }
 
     pub(super) fn workspace_switch(
@@ -90,6 +180,7 @@ impl AppServer {
                         command: UserConfigCommand::SetWorkspaceTrust {
                             workspace: workspace.trust_id(),
                             setting,
+                            display_root: Some(workspace.canonical_path().to_path_buf()),
                         },
                     })
                     .map_err(|_| {
@@ -112,6 +203,20 @@ impl AppServer {
             WorkspaceTrustStateDto::Restricted
         };
         result(&WorkspaceSwitchResult { root, trust })
+    }
+}
+
+fn workspace_trust_setting(setting: WorkspaceTrustSettingDto) -> WorkspaceTrustSetting {
+    match setting {
+        WorkspaceTrustSettingDto::Restricted => WorkspaceTrustSetting::Restricted,
+        WorkspaceTrustSettingDto::Trusted => WorkspaceTrustSetting::Trusted,
+    }
+}
+
+fn workspace_trust_setting_dto(setting: WorkspaceTrustSetting) -> WorkspaceTrustSettingDto {
+    match setting {
+        WorkspaceTrustSetting::Restricted => WorkspaceTrustSettingDto::Restricted,
+        WorkspaceTrustSetting::Trusted => WorkspaceTrustSettingDto::Trusted,
     }
 }
 

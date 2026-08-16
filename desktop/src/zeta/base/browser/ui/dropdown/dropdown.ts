@@ -1,23 +1,15 @@
 import { Emitter } from "../../../common/event.js";
-import {
-  DisposableOwner,
-} from "../../../common/lifecycle.js";
-import {
-  addDisposableListener,
-  stopEvent,
-} from "../../dom.js";
-import {
-  AnchorAlignment,
-  AnchorAxisAlignment,
-  AnchorPosition,
-  ContextView,
-  ContextViewFocusRestore,
-  type ContextViewHideReason,
-  type IContextViewProvider,
-} from "../contextview/contextview.js";
+import type { Icon } from "../../../common/icon.js";
+import { DisposableOwner } from "../../../common/lifecycle.js";
+import { lxiconsLibrary } from "../../../common/lxiconsLibrary.js";
+import { addDisposableListener, stopEvent } from "../../dom.js";
 import { setAriaAttribute } from "../aria/aria.js";
+import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition, ContextView, ContextViewFocusRestore, type ContextViewHideReason, type IContextViewProvider } from "../contextview/contextview.js";
+import { appendIcon } from "../icon/icon.js";
 
 export type DropdownContent = HTMLElement | (() => HTMLElement);
+
+export type DropdownContentWidth = "intrinsic" | "at-least-trigger";
 
 export interface DropdownOptions {
   readonly label: string;
@@ -28,6 +20,8 @@ export interface DropdownOptions {
   readonly anchorPosition?: AnchorPosition;
   readonly anchorAxisAlignment?: AnchorAxisAlignment;
   readonly gap?: number;
+  readonly indicator?: Icon;
+  readonly contentWidth?: DropdownContentWidth;
   readonly contextViewProvider?: IContextViewProvider;
 }
 
@@ -78,7 +72,7 @@ export class Dropdown extends DisposableOwner {
     label.textContent = options.label;
     const indicator = ownerDocument.createElement("span");
     indicator.className = "zeta-dropdown-indicator";
-    indicator.textContent = "\u25be";
+    appendIcon(options.indicator ?? lxiconsLibrary.dropdownIndicator, indicator);
     setAriaAttribute(indicator, "hidden", true);
     button.append(label, indicator);
     element.append(button);
@@ -124,6 +118,10 @@ export class Dropdown extends DisposableOwner {
       ? this.content()
       : this.content;
     content.classList.add("zeta-dropdown-content");
+    if (this.options.contentWidth === "at-least-trigger") {
+      const triggerWidth = Math.ceil(this.button.getBoundingClientRect().width);
+      content.style.setProperty("--dropdown-trigger-width", `${triggerWidth}px`);
+    }
     if (!content.id) {
       dropdownId += 1;
       content.id = `zeta-dropdown-content-${dropdownId}`;

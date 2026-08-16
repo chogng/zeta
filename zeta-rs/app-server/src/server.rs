@@ -1493,6 +1493,13 @@ impl AppServer {
             Some(ClientMethod::WorkspaceTrustRead) => {
                 self.workspace_trust_read(connection, &request.params)
             }
+            Some(ClientMethod::WorkspaceTrustList) => self.workspace_trust_list(connection),
+            Some(ClientMethod::WorkspaceTrustSet) => {
+                self.workspace_trust_set(connection, &request.params)
+            }
+            Some(ClientMethod::WorkspaceTrustForget) => {
+                self.workspace_trust_forget(connection, &request.params)
+            }
             Some(ClientMethod::DocumentCollaborationOpen) => {
                 self.document_collaboration_open(connection, &request.params)
             }

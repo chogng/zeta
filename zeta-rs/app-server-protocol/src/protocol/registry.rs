@@ -348,8 +348,12 @@ use crate::protocol::turn::{
 use crate::protocol::workspace::WorkspaceSwitchParams;
 use crate::protocol::workspace::WorkspaceSwitchResult;
 use crate::protocol::workspace::WorkspaceSwitchTrust;
+use crate::protocol::workspace::WorkspaceTrustEntryDto;
+use crate::protocol::workspace::WorkspaceTrustForgetParams;
+use crate::protocol::workspace::WorkspaceTrustListResult;
 use crate::protocol::workspace::WorkspaceTrustReadParams;
 use crate::protocol::workspace::WorkspaceTrustReadResult;
+use crate::protocol::workspace::WorkspaceTrustSetParams;
 use crate::protocol::workspace::WorkspaceTrustSettingDto;
 use crate::protocol::workspace::WorkspaceTrustStateDto;
 use schemars::JsonSchema;
@@ -650,6 +654,21 @@ client_methods! {
         params: WorkspaceTrustReadParams,
         response: WorkspaceTrustReadResult,
         serialization: GlobalSharedRead,
+    },
+    WorkspaceTrustList => "workspace/trust/list" {
+        params: EmptyParams,
+        response: WorkspaceTrustListResult,
+        serialization: GlobalSharedRead,
+    },
+    WorkspaceTrustSet => "workspace/trust/set" {
+        params: WorkspaceTrustSetParams,
+        response: ConfigCommandResult,
+        serialization: GlobalExclusive,
+    },
+    WorkspaceTrustForget => "workspace/trust/forget" {
+        params: WorkspaceTrustForgetParams,
+        response: ConfigCommandResult,
+        serialization: GlobalExclusive,
     },
     DocumentCollaborationOpen => "document/collaboration/open" {
         params: DocumentCollaborationOpenParams,
@@ -2084,6 +2103,10 @@ typescript_bindings! {
     WorkspaceSwitchTrust,
     WorkspaceTrustReadParams,
     WorkspaceTrustReadResult,
+    WorkspaceTrustEntryDto,
+    WorkspaceTrustListResult,
+    WorkspaceTrustSetParams,
+    WorkspaceTrustForgetParams,
     WorkspaceTrustSettingDto,
     WorkspaceTrustStateDto,
     SessionStatus,

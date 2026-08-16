@@ -182,14 +182,25 @@ pub(crate) fn apply_command(
         UserConfigCommand::RevokeSemanticCodeIndexEgress { workspace } => {
             document.semantic_code_index.revoke(workspace);
         }
-        UserConfigCommand::SetWorkspaceTrust { workspace, setting } => {
+        UserConfigCommand::SetWorkspaceTrust {
+            workspace,
+            setting,
+            display_root,
+        } => {
             document
                 .workspace_trust
                 .roots
                 .insert(workspace.clone(), *setting);
+            if let Some(display_root) = display_root {
+                document
+                    .workspace_trust
+                    .root_paths
+                    .insert(workspace.clone(), display_root.clone());
+            }
         }
         UserConfigCommand::ForgetWorkspaceTrust { workspace } => {
             document.workspace_trust.roots.remove(workspace);
+            document.workspace_trust.root_paths.remove(workspace);
         }
         UserConfigCommand::UpsertExecPolicyRule { rule } => {
             document.exec_policy.upsert(rule.clone());

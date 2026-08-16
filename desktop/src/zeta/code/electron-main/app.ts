@@ -36,6 +36,7 @@ import { connectorIpcRoutes } from "../../platform/connectors/electron-main/conn
 import { pluginIpcRoutes } from "../../platform/plugins/electron-main/pluginIpcRoutes.js";
 import { marketplaceIpcRoutes } from "../../platform/marketplace/electron-main/marketplaceIpcRoutes.js";
 import { toolSearchIpcRoutes } from "../../platform/toolSearch/electron-main/toolSearchIpcRoutes.js";
+import { workspaceTrustIpcRoutes } from "../../platform/workspaceTrust/electron-main/workspaceTrustIpcRoutes.js";
 import { KEYBINDINGS_RESOURCE_CHANGED_CHANNEL } from "../../platform/keybinding/common/keybindingsResource.js";
 import { KeybindingsResourceMainService, keybindingsResourceIpcRoutes } from "../../platform/keybinding/electron-main/keybindingsResourceMainService.js";
 import { migrateLegacyKeybindings } from "../../platform/keybinding/electron-main/migrateLegacyKeybindings.js";
@@ -629,6 +630,7 @@ export class ZetaApplication extends DisposableOwner {
       ...pluginIpcRoutes(supervisor),
       ...marketplaceIpcRoutes(supervisor),
       ...toolSearchIpcRoutes(supervisor),
+      ...workspaceTrustIpcRoutes(supervisor),
       ...searchIpcRoutes(supervisor),
       ...terminalIpcRoutes(supervisor, reconnectableTerminals),
       ...this.ipcRouteContributions.flatMap(contribution => contribution(supervisor)),
@@ -656,6 +658,13 @@ export class ZetaApplication extends DisposableOwner {
             }
             throw error;
           }
+        },
+        pickFolder: async () => {
+          const result = await dialog.showOpenDialog(window, {
+            title: "Add Trusted Folder",
+            properties: ["openDirectory"],
+          });
+          return result.canceled || !result.filePaths[0] ? undefined : result.filePaths[0];
         },
         openWorkspace: (root) => transitionToFolder(root, true),
         saveFile: async (options) => {

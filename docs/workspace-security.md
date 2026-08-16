@@ -44,8 +44,10 @@ Restricted 模式仍不可用，直到存在 restricted-safe backend 或更窄�
 
 信任 capability vocabulary 当前覆盖进程执行、可执行配置、Workspace extension、
 Workspace-declared Tool 与仓库 mutation。Host 负责解析信任决定；仓库文件和普通产品 client
-payload 都不是 authority。`WorkspaceTrustId` 对 canonical root 的平台原生 bytes 做 hash，因此
-User Config 可以保存 opaque key 而不存储明文路径。
+payload 都不是 authority。`WorkspaceTrustId` 对 canonical root 的平台原生 bytes 做 hash，
+User Config 的 `roots` 因此只保存 opaque key。为支持 Settings 中的 Workspace Trust 管理页，
+User Config 可在 `rootPaths` 保存 canonical path 作为展示元数据；它不参与授权，旧记录也可以
+没有对应路径。
 
 `zeta-config` 在 `UserConfigDocument.workspace_trust` 中保存用户明确的 Restricted/Trusted
 决定。缺失项解析为 Restricted；checked-in `.zeta/config.toml` 若声明该 section 会被拒绝。
@@ -54,6 +56,11 @@ authority：普通 client 只能读取最新 User snapshot；声明 `workspaceTr
 提交一次会话级 `HostConfiguration` trust，或携带 config revision 和 command id 持久化明确的
 Restricted/Trusted 用户决定。App Server 始终先 canonicalize root、自行生成 trust identity，再写入
 User Config；Renderer 不能提供 identity 或直接签发 capability。
+
+声明 `workspaceTrustHost` 的 Desktop host 还可以调用 `workspace/trust/list` 查看当前 profile
+的显式决定，调用 `workspace/trust/set` 添加或修改决定，调用 `workspace/trust/forget` 删除
+决定。三个管理 RPC 都在 App Server 侧重新 canonicalize 或按 opaque identity 校验，不能把
+Renderer 提供的 path 或 identity 直接当成 capability authority。
 
 当前产品入口的默认语义如下：
 

@@ -1,5 +1,6 @@
 import "./media/settingsEditor.css";
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
+import type { IContextViewProvider } from "../../../../base/browser/ui/contextview/contextview.js";
 import { InputBox } from "../../../../base/browser/ui/inputbox/inputbox.js";
 import { ScrollableElement } from "../../../../base/browser/ui/scrollbar/scrollableElement.js";
 import { DisposableOwner, ResettableDisposableGroup, toDisposable } from "../../../../base/common/lifecycle.js";
@@ -18,6 +19,8 @@ import type { IToolSearchService, ToolSearchEmbeddingStatus } from "../../../../
 import type { IConnectorService } from "../../../../platform/connectors/common/connectorService.js";
 import type { IPluginService } from "../../../../platform/plugins/common/pluginService.js";
 import type { IMarketplaceService } from "../../../../platform/marketplace/common/marketplaceService.js";
+import type { IWorkspaceTrustService } from "../../../../platform/workspaceTrust/common/workspaceTrustService.js";
+import type { IWorkspaceOpenService } from "../../../services/workspaces/browser/workspaceOpenService.js";
 import { getSettingsSection, SettingsSections, type SettingsSectionDescriptor } from "../common/settingsSections.js";
 import { ConnectorSettingsPane } from "./connectorSettings.js";
 import { PluginSettingsPane } from "./pluginSettings.js";
@@ -25,9 +28,11 @@ import { MarketplaceSettingsPane } from "./marketplaceSettings.js";
 import { EditorSettingsPane } from "./editorSettings.js";
 import { GeneralSettingsPane } from "./generalSettings.js";
 import { hasSectionOverviewSettings, SectionOverviewSettingsPane } from "./sectionOverviewSettings.js";
+import { WorkspaceTrustSettingsPane } from "./workspaceTrustSettings.js";
 
 export interface SettingsEditorOptions {
   readonly ownerDocument: Document;
+  readonly contextViewProvider: IContextViewProvider;
   readonly configurationService: IConfigurationService;
   readonly dialogService: IDialogService;
   readonly settingsService: ISettingsService;
@@ -38,6 +43,8 @@ export interface SettingsEditorOptions {
   readonly connectorService: IConnectorService;
   readonly pluginService: IPluginService;
   readonly marketplaceService: IMarketplaceService;
+  readonly workspaceTrustService: IWorkspaceTrustService;
+  readonly workspaceOpenService: IWorkspaceOpenService;
 }
 
 let nextSettingsEditorId = 1;
@@ -46,6 +53,7 @@ let nextSettingsEditorId = 1;
 export class SettingsEditor extends DisposableOwner {
   readonly element: HTMLDivElement;
   private readonly configurationService: IConfigurationService;
+  private readonly contextViewProvider: IContextViewProvider;
   private readonly dialogService: IDialogService;
   private readonly settingsService: ISettingsService;
   private readonly themeService: IThemeService;
@@ -55,6 +63,8 @@ export class SettingsEditor extends DisposableOwner {
   private readonly connectorService: IConnectorService;
   private readonly pluginService: IPluginService;
   private readonly marketplaceService: IMarketplaceService;
+  private readonly workspaceTrustService: IWorkspaceTrustService;
+  private readonly workspaceOpenService: IWorkspaceOpenService;
   private readonly searchInput: InputBox;
   private readonly navigationItems = new Map<string, HTMLButtonElement>();
   private readonly navigationEmpty: HTMLParagraphElement;
@@ -71,6 +81,7 @@ export class SettingsEditor extends DisposableOwner {
   constructor(options: SettingsEditorOptions) {
     super();
     this.configurationService = options.configurationService;
+    this.contextViewProvider = options.contextViewProvider;
     this.dialogService = options.dialogService;
     this.settingsService = options.settingsService;
     this.themeService = options.themeService;
@@ -80,6 +91,8 @@ export class SettingsEditor extends DisposableOwner {
     this.connectorService = options.connectorService;
     this.pluginService = options.pluginService;
     this.marketplaceService = options.marketplaceService;
+    this.workspaceTrustService = options.workspaceTrustService;
+    this.workspaceOpenService = options.workspaceOpenService;
     const editorId = `zeta-settings-editor-${nextSettingsEditorId++}`;
     this.element = options.ownerDocument.createElement("div");
     this.element.className = "zeta-settings-editor";
@@ -241,6 +254,7 @@ export class SettingsEditor extends DisposableOwner {
     else if (section.id === "languages") this.renderLanguages();
     else if (section.id === "marketplace") this.renderMarketplace();
     else if (section.id === "indexing") void this.renderIndexing();
+    else if (section.id === "workspace-trust") this.renderWorkspaceTrust();
     else if (hasSectionOverviewSettings(section.id)) this.renderOverview(section.id);
     this.contentScrollable.scrollTo(0, 0);
     this.contentScrollable.layout();
@@ -253,7 +267,7 @@ export class SettingsEditor extends DisposableOwner {
   }
 
   private renderGeneral(): void {
-    const pane = new GeneralSettingsPane(this.element.ownerDocument, this.configurationService);
+    const pane = new GeneralSettingsPane(this.element.ownerDocument, this.configurationService, this.contextViewProvider);
     this.sectionBindings.add(pane);
     this.sectionContent.replaceChildren(pane.element);
   }
@@ -265,7 +279,7 @@ export class SettingsEditor extends DisposableOwner {
   }
 
   private renderEditor(): void {
-    const pane = new EditorSettingsPane(this.element.ownerDocument, this.configurationService);
+    const pane = new EditorSettingsPane(this.element.ownerDocument, this.configurationService, this.contextViewProvider);
     this.sectionBindings.add(pane);
     this.sectionContent.replaceChildren(pane.element);
   }
@@ -284,6 +298,12 @@ export class SettingsEditor extends DisposableOwner {
 
   private renderMarketplace(): void {
     const pane = new MarketplaceSettingsPane(this.element.ownerDocument, this.marketplaceService);
+    this.sectionBindings.add(pane);
+    this.sectionContent.replaceChildren(pane.element);
+  }
+
+  private renderWorkspaceTrust(): void {
+    const pane = new WorkspaceTrustSettingsPane(this.element.ownerDocument, this.workspaceTrustService, this.workspaceOpenService, this.dialogService);
     this.sectionBindings.add(pane);
     this.sectionContent.replaceChildren(pane.element);
   }

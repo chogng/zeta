@@ -1,23 +1,12 @@
 import { Emitter } from "../../../common/event.js";
-import {
-  DisposableOwner,
-} from "../../../common/lifecycle.js";
-import {
-  addDisposableListener,
-  isHTMLElement,
-  stopEvent,
-} from "../../dom.js";
+import { DisposableOwner } from "../../../common/lifecycle.js";
+import { lxiconsLibrary } from "../../../common/lxiconsLibrary.js";
+import { addDisposableListener, isHTMLElement, stopEvent } from "../../dom.js";
 import { focusPreservingScroll } from "../../focus.js";
-import {
-  setAriaAttribute,
-  setRole,
-} from "../aria/aria.js";
-import {
-  Dropdown,
-} from "../dropdown/dropdown.js";
-import type {
-  IContextViewProvider,
-} from "../contextview/contextview.js";
+import { setAriaAttribute, setRole } from "../aria/aria.js";
+import type { IContextViewProvider } from "../contextview/contextview.js";
+import { Dropdown } from "../dropdown/dropdown.js";
+import { appendIcon } from "../icon/icon.js";
 
 export interface SelectOption {
   readonly value: string;
@@ -31,8 +20,12 @@ export interface SelectBoxOptions {
   readonly selectedValue?: string;
   readonly ownerDocument?: Document;
   readonly ariaLabel?: string;
+  readonly presentation?: SelectBoxPresentation;
   readonly contextViewProvider?: IContextViewProvider;
 }
+
+/** Visual treatment for the select trigger while retaining the same behavior. */
+export type SelectBoxPresentation = "default" | "field";
 
 export interface SelectBoxSelection {
   readonly value: string;
@@ -71,11 +64,14 @@ export class SelectBox extends DisposableOwner {
       ownerDocument,
       ariaLabel: options.ariaLabel,
       gap: 2,
+      indicator: lxiconsLibrary.unfold,
+      contentWidth: "at-least-trigger",
       contextViewProvider: options.contextViewProvider,
     }));
     this.dropdown = dropdown;
     this.element = dropdown.element;
-    this.element.classList.add("zeta-select-box");
+    const presentation = options.presentation ?? "default";
+    this.element.classList.add("zeta-select-box", `zeta-select-box-${presentation}`);
     dropdown.button.classList.add("zeta-select-box-button");
     setRole(dropdown.button, "combobox");
     setAriaAttribute(dropdown.button, "haspopup", "listbox");
@@ -212,6 +208,11 @@ export class SelectBox extends DisposableOwner {
         description.textContent = option.description;
         element.append(description);
       }
+      const check = ownerDocument.createElement("span");
+      check.className = "zeta-select-box-option-check";
+      setAriaAttribute(check, "hidden", true);
+      appendIcon(lxiconsLibrary.check, check);
+      element.append(check);
       return element;
     });
     this.list.replaceChildren(...elements);

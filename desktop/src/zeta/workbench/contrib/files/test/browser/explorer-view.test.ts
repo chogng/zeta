@@ -114,6 +114,7 @@ test("ExplorerViewPane renders, expands, and opens workspace files", async () =>
         openFolder: async () => {
           folderOpens += 1;
         },
+        pickFolder: async () => undefined,
       },
     );
     assert.equal(emptyView.element.dataset.viewId, EmptyView.ID);

@@ -17,6 +17,7 @@ fn persisted_trust_resolves_as_an_explicit_user_decision() {
     let workspace = identity();
     let config = WorkspaceTrustConfig {
         roots: BTreeMap::from([(workspace.clone(), WorkspaceTrustSetting::Trusted)]),
+        ..WorkspaceTrustConfig::default()
     };
 
     assert_eq!(

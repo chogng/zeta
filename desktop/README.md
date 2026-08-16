@@ -63,6 +63,18 @@ ripgrep 与平台 sandbox helper。Electron 默认生成 `hostProvidedNode` vari
 Python。`dev:desktop` 随后启动 Vite、主进程、预加载脚本和 Electron；`dev:web:full` 只启动
 Vite，并按浏览器连接管理 App Server。启动后不要关闭终端，停止服务可以按 `Ctrl+C`。
 
+### 开发态热更新
+
+Renderer 开发服务器使用 Vite HMR。CSS 由 Vite 直接替换；名称以 `Part`、`ViewPane` 或
+`Widget` 结尾的持久 UI 类由 `workbench-hot-reload-vite-plugin.mjs` 建立稳定身份，方法修改会补丁到
+现有实例，因此 Workbench 状态和当前窗口不需要重建。其他确实只修改原型方法的派生 UI 类可以用
+`@zeta-hot-reload patch-prototype` 显式加入同一机制。
+
+原型热替换不处理构造器、实例字段、模块注册副作用或继承关系变更。继承关系不兼容或热更新运行时
+未就绪时，插件会让 Vite 执行完整页面重载；开发者修改构造阶段行为后也应主动重载一次。Electron
+Main 与 Preload 仍由 TypeScript watch 和 nodemon 重启整个 Electron 进程。Rust App Server 不属于
+Renderer HMR，`dev:desktop` 不会因 Rust 源码变化自动重编译开发包。
+
 不带项目路径启动时，Zeta 使用空窗口上下文。构建完成后，可以通过启动参数打开一个项目目录：
 
 ```powershell

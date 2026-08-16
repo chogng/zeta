@@ -16,7 +16,7 @@ execution、Skill 正文、Session/Thread 或 Core execution。
 | `ConfigCommandRequest` / `UserConfigCommand` | typed mutation、expected revision 与 retry identity |
 | `ResolvedConfigSnapshot` | User authority 的 immutable runtime input |
 | `WorkspaceConfigStore` | strict-read `.zeta/config.toml`，不写 Workspace 文件 |
-| `WorkspaceTrustConfig` | 按 opaque `WorkspaceTrustId` 持久化 User 的 Restricted/Trusted 决策；缺失时 fail closed |
+| `WorkspaceTrustConfig` | 按 opaque `WorkspaceTrustId` 持久化 User 的 Restricted/Trusted 决策，并可保留仅供管理页展示的 canonical root metadata；缺失时 fail closed |
 | `UserExecPolicyConfig` | 持久化 typed User rules；通过 `UpsertExecPolicyRule` / `RemoveExecPolicyRule` 原子变更 |
 | `WorkspaceExecPolicyConfig` | strict-read Workspace restrictions；validation 禁止 `AllowUnsandboxed` |
 | `compose_exec_policy` | 将 trusted Host/Organization layers、User rules 与 Workspace restrictions 组合成 immutable snapshot |
@@ -27,9 +27,10 @@ execution、Skill 正文、Session/Thread 或 Core execution。
 `UserConfigDocument` 当前包含 Agent defaults、Provider map、standalone MCP declaration、Skill
 source/enablement、exact Plugin request、declarative Hook、language-server preference，以及 execution-policy
 rules 和 Workspace trust decision。Trust key
-由 host 对 canonical root 生成，document 不保存本地路径；User decision 不能冒充 organization
-policy 或 host configuration。Plugin request 不安装或授权 package；Hook declaration 不执行
-process。Theme/UI preference 不在本 crate；Desktop device configuration 是独立 authority。
+由 host 对 canonical root 生成，`roots` 不保存本地路径；管理页使用同一 document 中不参与授权的
+`rootPaths` 展示 metadata，旧记录可能没有路径。User decision 不能冒充 organization policy 或
+host configuration。Plugin request 不安装或授权 package；Hook declaration 不执行 process。
+Theme/UI preference 不在本 crate；Desktop device configuration 是独立 authority。
 
 ## Durable 路径
 
@@ -70,6 +71,9 @@ Workspace trust 是另一条解析轴：`.zeta/config.toml` 不能声明 `worksp
 明确固定的初始根仍标记为 `HostConfiguration`，不等同于 client 后续选择的任意根。
 User trust 从 Trusted 变为 Restricted 时，Config change 同时触发 App Server 撤销当前
 root-bound lease、移除执行型服务并中断活跃 Turn；filesystem 与 watcher 保留。
+拥有 `workspaceTrustHost` capability 的 Desktop host 还可通过 `workspace/trust/list`、
+`workspace/trust/set` 与 `workspace/trust/forget` 管理这些 User decisions；管理 RPC 不改变
+active Workspace，且由 App Server 负责 identity/canonicalization。
 
 App Server 在 model safe point 读取 resolved snapshot；Skill/MCP manager 订阅 `ConfigChange` 后在
 旁路 reconcile。Config commit 成功不等于 MCP 已连接、Skill 已可用、Plugin 已激活或 Hook 已执行，

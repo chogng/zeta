@@ -1,5 +1,5 @@
 .zeta-select-box {
-  min-width: 120px;
+  min-width: 80px;
   max-width: 100%;
 }
 
@@ -8,17 +8,19 @@
 }
 
 .zeta-select-box-list {
-  min-width: 160px;
+  min-width: max(160px, var(--dropdown-trigger-width, 0px));
   max-height: min(320px, calc(100vh - 16px));
   padding: 3px;
   outline: none;
+  color: var(--zeta-input-foreground);
+  background: var(--zeta-input-background);
   overflow: auto;
 }
 
 .zeta-select-box-option {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto 16px;
+  gap: 6px;
   min-height: 24px;
   padding: 3px 6px;
   border-radius: 2px;
@@ -31,20 +33,27 @@
   background: var(--zeta-selection-background);
 }
 
-.zeta-select-box-option-selected .zeta-select-box-option-label::before {
-  content: "✓";
-  display: inline-block;
-  width: 16px;
+.zeta-select-box-option-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.zeta-select-box-option:not(.zeta-select-box-option-selected)
-  .zeta-select-box-option-label::before {
-  content: "";
-  display: inline-block;
-  width: 16px;
+.zeta-select-box-option-check {
+  display: inline-flex;
+  grid-column: 3;
+  align-items: center;
+  justify-content: center;
+  visibility: hidden;
+}
+
+.zeta-select-box-option-selected > .zeta-select-box-option-check {
+  visibility: visible;
 }
 
 .zeta-select-box-option-description {
+  grid-column: 2;
   color: var(--zeta-description-foreground);
 }
 
@@ -55,4 +64,33 @@
 .zeta-select-box-option-disabled {
   opacity: .5;
   cursor: default;
+}
+
+.zeta-select-box.zeta-select-box-field {
+  width: 60px;
+  min-width: 60px;
+}
+
+.zeta-select-box-field > .zeta-select-box-button {
+  width: 60px;
+  height: 24px;
+  min-height: 24px;
+  box-sizing: border-box;
+  padding: 2px 6px;
+  border: 1px solid var(--zeta-input-border);
+  border-radius: 8px;
+  color: var(--zeta-input-foreground);
+  background: var(--zeta-input-background);
+  font: inherit;
+}
+
+.zeta-select-box-field > .zeta-select-box-button:hover,
+.zeta-select-box-field.zeta-dropdown-open > .zeta-select-box-button {
+  background: var(--zeta-input-background);
+}
+
+.zeta-select-box-field > .zeta-select-box-button:focus-visible {
+  border-color: var(--zeta-focus-border);
+  outline: 1px solid var(--zeta-focus-border);
+  outline-offset: 1px;
 }

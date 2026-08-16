@@ -22,6 +22,7 @@ import type { IRemoteAgentApi } from "../../remote/common/remoteAgentApi.js";
 import type { IRemoteConnectionService } from "../../remote/common/remoteConnectionService.js";
 import type { IRemoteTunnelService } from "../../remote/common/remoteTunnelService.js";
 import type { IMarketplaceApi } from "../../marketplace/common/marketplaceApi.js";
+import type { IWorkspaceTrustApi } from "../../workspaceTrust/common/workspaceTrustApi.js";
 
 /** Optional product capabilities contributed by a statically selected host bundle. */
 export interface RendererHostCapabilities {
@@ -73,4 +74,5 @@ export interface IRendererHost extends RendererHostCapabilities {
   readonly plugins: IPluginApi;
   readonly marketplace: IMarketplaceApi;
   readonly toolSearch: IToolSearchApi;
+  readonly workspaceTrust: IWorkspaceTrustApi;
 }

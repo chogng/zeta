@@ -40,7 +40,7 @@
   border-top: 1px solid var(--zeta-widget-border);
 }
 
-label.zeta-general-setting:hover {
+.zeta-general-setting:hover {
   background: var(--zeta-list-hover-background);
 }
 
@@ -65,6 +65,9 @@ label.zeta-general-setting:hover {
   width: 100%;
   min-height: 30px;
   box-sizing: border-box;
+}
+
+.zeta-general-setting-control:not(.zeta-select-box) {
   padding: 4px 8px;
   border: 1px solid var(--zeta-input-border);
   border-radius: 4px;
@@ -74,7 +77,7 @@ label.zeta-general-setting:hover {
   font: inherit;
 }
 
-.zeta-general-setting-control:focus-visible,
+.zeta-general-setting-control:not(.zeta-select-box):focus-visible,
 .zeta-general-toggle-setting input:focus-visible {
   outline: 1px solid var(--zeta-focus-border);
   outline-offset: 1px;

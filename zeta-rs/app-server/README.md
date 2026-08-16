@@ -515,6 +515,11 @@ Workspace authority
    ├─ missing / Restricted → filesystem + watcher + local code index + customizations
    └─ Trusted → ExplicitUserDecision capability + optional cloud controller when providers exist
 
+Workspace Trust management (workspaceTrustHost)
+├─ workspace/trust/list → explicit User decisions + display-only root metadata
+├─ workspace/trust/set → canonicalize root, then persist without switching active Workspace
+└─ workspace/trust/forget → remove one decision by opaque WorkspaceTrustId
+
 ConfigChange trust revocation
 ├─ revoke shared capability lease
 ├─ persist cloud Revoking + request idempotent provider deletion + remove cloud controller

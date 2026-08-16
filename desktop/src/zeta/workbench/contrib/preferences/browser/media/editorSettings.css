@@ -52,6 +52,10 @@
   background: var(--zeta-list-hover-background);
 }
 
+.zeta-editor-setting-select-row {
+  cursor: default;
+}
+
 .zeta-editor-setting-copy {
   display: flex;
   min-width: 0;
@@ -84,6 +88,10 @@
   width: 100%;
   min-height: 30px;
   box-sizing: border-box;
+}
+
+.zeta-editor-setting-number,
+.zeta-editor-setting-text {
   padding: 4px 8px;
   border: 1px solid var(--zeta-input-border);
   border-radius: 4px;
@@ -93,7 +101,6 @@
   font: inherit;
 }
 
-.zeta-editor-setting-select:focus-visible,
 .zeta-editor-setting-number:focus-visible,
 .zeta-editor-setting-text:focus-visible {
   border-color: var(--zeta-focus-border);

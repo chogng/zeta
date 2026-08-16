@@ -1,3 +1,4 @@
+import type { IContextViewProvider } from "../../../../base/browser/ui/contextview/contextview.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import type { IConfigurationService } from "../../../../platform/configuration/common/configurationService.js";
 import type { IDialogService } from "../../../../platform/dialogs/common/dialogs.js";
@@ -10,11 +11,14 @@ import type { IToolSearchService } from "../../../../platform/toolSearch/common/
 import type { IConnectorService } from "../../../../platform/connectors/common/connectorService.js";
 import type { IPluginService } from "../../../../platform/plugins/common/pluginService.js";
 import type { IMarketplaceService } from "../../../../platform/marketplace/common/marketplaceService.js";
+import type { IWorkspaceTrustService } from "../../../../platform/workspaceTrust/common/workspaceTrustService.js";
+import type { IWorkspaceOpenService } from "../../../services/workspaces/browser/workspaceOpenService.js";
 import { SettingsEditor } from "./settingsEditor.js";
 
 export interface SettingsEditorContributionOptions {
   readonly configurationService: IConfigurationService;
   readonly container: HTMLElement;
+  readonly contextViewProvider: IContextViewProvider;
   readonly dialogService: IDialogService;
   readonly settingsService: ISettingsService;
   readonly themeService: IThemeService;
@@ -24,6 +28,8 @@ export interface SettingsEditorContributionOptions {
   readonly pluginService?: IPluginService;
   readonly marketplaceService?: IMarketplaceService;
   readonly toolSearchService?: IToolSearchService;
+  readonly workspaceTrustService?: IWorkspaceTrustService;
+  readonly workspaceOpenService?: IWorkspaceOpenService;
 }
 
 /** Connects window Settings state to its modal editor host and content. */
@@ -35,6 +41,7 @@ export class SettingsEditorContribution extends DisposableOwner {
     super();
     this.editor = this.own(new SettingsEditor({
       ownerDocument: options.container.ownerDocument,
+      contextViewProvider: options.contextViewProvider,
       configurationService: options.configurationService,
       dialogService: options.dialogService,
       settingsService: options.settingsService,
@@ -45,6 +52,8 @@ export class SettingsEditorContribution extends DisposableOwner {
       pluginService: options.pluginService ?? unavailablePluginService,
       marketplaceService: options.marketplaceService ?? unavailableMarketplaceService,
       toolSearchService: options.toolSearchService ?? unavailableToolSearchService,
+      workspaceTrustService: options.workspaceTrustService ?? unavailableWorkspaceTrustService,
+      workspaceOpenService: options.workspaceOpenService ?? unavailableWorkspaceOpenService,
     }));
     this.modalEditor = this.own(new ModalEditorPart({
       container: options.container,
@@ -87,6 +96,18 @@ const unavailableCodeIndexService: ICodeIndexService = {
 const unavailableToolSearchService: IToolSearchService = {
   readConfig: () => Promise.reject(new Error("Tool Search settings are unavailable.")),
   configure: () => Promise.reject(new Error("Tool Search settings are unavailable.")),
+};
+
+const unavailableWorkspaceTrustService: IWorkspaceTrustService = {
+  list: () => Promise.reject(new Error("Workspace Trust settings are unavailable.")),
+  set: () => Promise.reject(new Error("Workspace Trust settings are unavailable.")),
+  forget: () => Promise.reject(new Error("Workspace Trust settings are unavailable.")),
+};
+
+const unavailableWorkspaceOpenService: IWorkspaceOpenService = {
+  canOpenFolder: false,
+  openFolder: () => Promise.reject(new Error("Folder picking is unavailable.")),
+  pickFolder: () => Promise.reject(new Error("Folder picking is unavailable.")),
 };
 
 const unavailableConnectorService: IConnectorService = {

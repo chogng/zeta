@@ -3,6 +3,7 @@ import type {
 } from "../../ipc/electron-main/trustedIpcRouter.js";
 import {
   NATIVE_HOST_OPEN_FOLDER_CHANNEL,
+  NATIVE_HOST_PICK_FOLDER_CHANNEL,
   NATIVE_HOST_OPEN_WORKSPACE_CHANNEL,
   NATIVE_HOST_GET_ACCESSIBILITY_SUPPORT_CHANNEL,
   NATIVE_HOST_SAVE_FILE_CHANNEL,
@@ -13,6 +14,7 @@ import {
   validateAccessibilitySupportRead,
   validateNativeWindowTheme,
   validateOpenFolder,
+  validatePickFolder,
   validateOpenWorkspace,
   validateSaveFileOptions,
   validateToggleDeveloperTools,
@@ -21,6 +23,7 @@ import {
 /** Main-process implementation of native operations for one window. */
 export interface INativeHostMainService {
   openFolder(): Promise<void>;
+  pickFolder(): Promise<string | undefined>;
   openWorkspace(root: string): Promise<void>;
   saveFile(options: INativeSaveFileOptions): Promise<string | undefined>;
   isAccessibilitySupportEnabled(): boolean;
@@ -42,6 +45,11 @@ export function nativeHostIpcRoutes(
       channel: NATIVE_HOST_OPEN_FOLDER_CHANNEL,
       validate: validateOpenFolder,
       invoke: () => service.openFolder(),
+    },
+    {
+      channel: NATIVE_HOST_PICK_FOLDER_CHANNEL,
+      validate: validatePickFolder,
+      invoke: () => service.pickFolder(),
     },
     {
       channel: NATIVE_HOST_OPEN_WORKSPACE_CHANNEL,

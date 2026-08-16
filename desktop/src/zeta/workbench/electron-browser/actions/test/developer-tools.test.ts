@@ -15,6 +15,7 @@ import {
 import {
   NATIVE_HOST_GET_ACCESSIBILITY_SUPPORT_CHANNEL,
   NATIVE_HOST_OPEN_FOLDER_CHANNEL,
+  NATIVE_HOST_PICK_FOLDER_CHANNEL,
   NATIVE_HOST_SAVE_FILE_CHANNEL,
   NATIVE_HOST_SET_WINDOW_THEME_CHANNEL,
   NATIVE_HOST_TOGGLE_DEVELOPER_TOOLS_CHANNEL,
@@ -37,12 +38,17 @@ import { IWorkspaceOpenService } from "../../../../workbench/services/workspaces
 
 test("native host routes validate folder opening and developer tools", async () => {
   let folderOpens = 0;
+  let pickedFolder: string | undefined;
   let toggles = 0;
   let savedFileOptions: unknown;
   const windowThemes: unknown[] = [];
   const routes = nativeHostIpcRoutes({
     openFolder: async () => {
       folderOpens += 1;
+    },
+    pickFolder: async () => {
+      pickedFolder = "/tmp/trusted-folder";
+      return pickedFolder;
     },
     openWorkspace: async () => {},
     saveFile: async (options) => {
@@ -63,6 +69,9 @@ test("native host routes validate folder opening and developer tools", async () 
   const accessibilitySupport = routes.find(
     ({ channel }) => channel === NATIVE_HOST_GET_ACCESSIBILITY_SUPPORT_CHANNEL,
   );
+  const pickFolder = routes.find(
+    ({ channel }) => channel === NATIVE_HOST_PICK_FOLDER_CHANNEL,
+  );
   const toggleDeveloperTools = routes.find(
     ({ channel }) =>
       channel === NATIVE_HOST_TOGGLE_DEVELOPER_TOOLS_CHANNEL,
@@ -75,6 +84,7 @@ test("native host routes validate folder opening and developer tools", async () 
     ({ channel }) => channel === NATIVE_HOST_SAVE_FILE_CHANNEL,
   );
   assert.ok(accessibilitySupport);
+  assert.ok(pickFolder);
   assert.ok(setWindowTheme);
   assert.ok(toggleDeveloperTools);
   assert.ok(saveFile);
@@ -85,6 +95,12 @@ test("native host routes validate folder opening and developer tools", async () 
   );
   await openFolder.invoke(openFolder.validate(undefined));
   assert.equal(folderOpens, 1);
+  assert.throws(
+    () => pickFolder.validate(null),
+    /does not accept parameters/,
+  );
+  assert.equal(await pickFolder.invoke(pickFolder.validate(undefined)), "/tmp/trusted-folder");
+  assert.equal(pickedFolder, "/tmp/trusted-folder");
   assert.throws(
     () => saveFile.validate({ defaultName: "" }),
     /default name must be a non-empty string/,
@@ -125,6 +141,7 @@ test("desktop commands are available from the command palette", async () => {
   let toggles = 0;
   services.set(INativeHostService, {
     openFolder: async () => {},
+    pickFolder: async () => undefined,
     openWorkspace: async () => {},
     saveFile: async () => undefined,
     isAccessibilitySupportEnabled: async () => false,
@@ -139,6 +156,9 @@ test("desktop commands are available from the command palette", async () => {
     canOpenFolder: true,
     async openFolder() {
       folderOpens += 1;
+    },
+    async pickFolder() {
+      return undefined;
     },
   });
   using commands = new CommandService(services);

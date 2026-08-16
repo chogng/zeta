@@ -9,6 +9,7 @@ import {
 export interface IWorkspaceOpenService {
   readonly canOpenFolder: boolean;
   openFolder(): Promise<void>;
+  pickFolder(): Promise<string | undefined>;
 }
 
 export const IWorkspaceOpenService =
@@ -33,5 +34,14 @@ export class WorkspaceOpenService implements IWorkspaceOpenService {
       );
     }
     return this.nativeHostApi.openFolder();
+  }
+
+  pickFolder(): Promise<string | undefined> {
+    if (!this.nativeHostApi) {
+      return Promise.reject(
+        new Error("Picking folders is unavailable in this Workbench host"),
+      );
+    }
+    return this.nativeHostApi.pickFolder();
   }
 }

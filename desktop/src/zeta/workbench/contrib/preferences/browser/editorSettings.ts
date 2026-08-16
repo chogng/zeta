@@ -1,5 +1,7 @@
 import "./media/editorSettings.css";
 import { addDisposableListener } from "../../../../base/browser/dom.js";
+import type { IContextViewProvider } from "../../../../base/browser/ui/contextview/contextview.js";
+import { SelectBox } from "../../../../base/browser/ui/selectbox/selectbox.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import type { IConfigurationKey, IConfigurationService } from "../../../../platform/configuration/common/configurationService.js";
 import { EditorIndentationKind } from "../../../../editor/common/editorIndentation.js";
@@ -11,10 +13,10 @@ import { EditorSelectionConfiguration } from "../../../common/editorSelectionCon
 /** Product settings controls for Aster-backed code editors. */
 export class EditorSettingsPane extends DisposableOwner {
   readonly element: HTMLDivElement;
-  private readonly controls = new Map<string, HTMLInputElement | HTMLSelectElement>();
+  private readonly controls = new Map<string, HTMLInputElement | SelectBox>();
   private readonly status: HTMLParagraphElement;
 
-  constructor(ownerDocument: Document, private readonly configurationService: IConfigurationService) {
+  constructor(ownerDocument: Document, private readonly configurationService: IConfigurationService, private readonly contextViewProvider: IContextViewProvider) {
     super();
     this.element = ownerDocument.createElement("div");
     this.element.className = "zeta-editor-settings";
@@ -173,21 +175,21 @@ export class EditorSettingsPane extends DisposableOwner {
     readonly options: readonly { readonly value: T; readonly label: string }[];
   }): HTMLElement {
     const document = this.element.ownerDocument;
-    const setting = document.createElement("label");
-    setting.className = "zeta-editor-setting";
+    const setting = document.createElement("div");
+    setting.className = "zeta-editor-setting zeta-editor-setting-select-row";
     const copy = this.createSettingCopy(options.label, options.description);
-    const select = document.createElement("select");
-    select.className = "zeta-editor-setting-select";
-    select.dataset.configurationKey = options.key.key;
-    for (const option of options.options) {
-      const element = document.createElement("option");
-      element.value = option.value;
-      element.textContent = option.label;
-      select.append(element);
-    }
-    setting.append(copy, select);
+    const select = this.own(new SelectBox({
+      options: options.options,
+      ownerDocument: document,
+      ariaLabel: options.label,
+      presentation: "field",
+      contextViewProvider: this.contextViewProvider,
+    }));
+    select.element.classList.add("zeta-editor-setting-select");
+    select.element.dataset.configurationKey = options.key.key;
+    setting.append(copy, select.element);
     this.controls.set(options.key.key, select);
-    this.own(addDisposableListener(select, "change", () => void this.updateConfiguration(options.key, select.value as T)));
+    this.own(select.onDidSelect(({ value }) => void this.updateConfiguration(options.key, value as T)));
     return setting;
   }
 
@@ -315,7 +317,10 @@ export class EditorSettingsPane extends DisposableOwner {
 
   private setControlsEnabled(enabled: boolean): void {
     this.element.classList.toggle("is-saving", !enabled);
-    for (const control of this.controls.values()) control.disabled = !enabled;
+    for (const control of this.controls.values()) {
+      if (control instanceof SelectBox) control.enabled = enabled;
+      else control.disabled = !enabled;
+    }
   }
 
   private showStatus(message: string, error: boolean): void {

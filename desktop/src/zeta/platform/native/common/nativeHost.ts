@@ -4,6 +4,8 @@ export const NATIVE_HOST_TOGGLE_DEVELOPER_TOOLS_CHANNEL =
   "zeta:native-host:toggle-developer-tools";
 export const NATIVE_HOST_OPEN_FOLDER_CHANNEL =
   "zeta:native-host:open-folder";
+export const NATIVE_HOST_PICK_FOLDER_CHANNEL =
+  "zeta:native-host:pick-folder";
 export const NATIVE_HOST_OPEN_WORKSPACE_CHANNEL =
   "zeta:native-host:open-workspace";
 export const NATIVE_HOST_SET_WINDOW_THEME_CHANNEL =
@@ -28,6 +30,7 @@ export interface INativeSaveFileOptions {
 /** Window-scoped native capabilities exposed to an Electron renderer. */
 export interface INativeHostApi {
   openFolder(): Promise<void>;
+  pickFolder(): Promise<string | undefined>;
   openWorkspace(root: string): Promise<void>;
   setWindowTheme(theme: INativeWindowTheme): Promise<void>;
   toggleDeveloperTools(): Promise<void>;
@@ -46,6 +49,13 @@ export function validateOpenWorkspace(value: unknown): string {
 export function validateOpenFolder(value: unknown): undefined {
   if (value !== undefined) {
     throw new Error("open folder does not accept parameters");
+  }
+  return undefined;
+}
+
+export function validatePickFolder(value: unknown): undefined {
+  if (value !== undefined) {
+    throw new Error("pick folder does not accept parameters");
   }
   return undefined;
 }

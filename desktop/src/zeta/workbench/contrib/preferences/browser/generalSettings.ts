@@ -1,5 +1,7 @@
 import "./media/generalSettings.css";
 import { addDisposableListener } from "../../../../base/browser/dom.js";
+import type { IContextViewProvider } from "../../../../base/browser/ui/contextview/contextview.js";
+import { SelectBox } from "../../../../base/browser/ui/selectbox/selectbox.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { AccessibilityConfiguration, type AccessibilityReductionConfiguration, type AccessibilitySupportConfiguration } from "../../../../platform/accessibility/common/accessibility.js";
 import type { IConfigurationKey, IConfigurationService } from "../../../../platform/configuration/common/configurationService.js";
@@ -7,7 +9,7 @@ import { HoverConfiguration, MaximumHoverDelay, MinimumHoverDelay } from "../../
 import { WorkbenchProfileConfiguration } from "../../../common/workbenchProfileConfiguration.js";
 import { MaximumSashHoverDelay, MaximumSashSize, MinimumSashHoverDelay, MinimumSashSize, SashConfiguration } from "../../sash/common/sash.js";
 
-type GeneralControl = HTMLInputElement | HTMLSelectElement;
+type GeneralControl = HTMLInputElement | SelectBox;
 
 /** Core application preferences that are independent of one editor or feature domain. */
 export class GeneralSettingsPane extends DisposableOwner {
@@ -15,7 +17,7 @@ export class GeneralSettingsPane extends DisposableOwner {
   private readonly controls = new Map<string, GeneralControl>();
   private readonly status: HTMLParagraphElement;
 
-  constructor(ownerDocument: Document, private readonly configurationService: IConfigurationService) {
+  constructor(ownerDocument: Document, private readonly configurationService: IConfigurationService, private readonly contextViewProvider: IContextViewProvider) {
     super();
     this.element = ownerDocument.createElement("div");
     this.element.className = "zeta-general-settings";
@@ -110,20 +112,20 @@ export class GeneralSettingsPane extends DisposableOwner {
   }
 
   private createSelectSetting<T extends string>(options: { readonly key: IConfigurationKey<T>; readonly label: string; readonly description: string; readonly options: readonly { readonly value: T; readonly label: string }[] }): HTMLElement {
-    const setting = this.element.ownerDocument.createElement("label");
+    const setting = this.element.ownerDocument.createElement("div");
     setting.className = "zeta-general-setting";
-    const select = this.element.ownerDocument.createElement("select");
-    select.className = "zeta-general-setting-control";
-    select.dataset.configurationKey = options.key.key;
-    for (const option of options.options) {
-      const element = this.element.ownerDocument.createElement("option");
-      element.value = option.value;
-      element.textContent = option.label;
-      select.append(element);
-    }
-    setting.append(this.createSettingCopy(options.label, options.description), select);
+    const select = this.own(new SelectBox({
+      options: options.options,
+      ownerDocument: this.element.ownerDocument,
+      ariaLabel: options.label,
+      presentation: "field",
+      contextViewProvider: this.contextViewProvider,
+    }));
+    select.element.classList.add("zeta-general-setting-control");
+    select.element.dataset.configurationKey = options.key.key;
+    setting.append(this.createSettingCopy(options.label, options.description), select.element);
     this.controls.set(options.key.key, select);
-    this.own(addDisposableListener(select, "change", () => void this.updateConfiguration(options.key, select.value as T)));
+    this.own(select.onDidSelect(({ value }) => void this.updateConfiguration(options.key, value as T)));
     return setting;
   }
 
@@ -198,7 +200,10 @@ export class GeneralSettingsPane extends DisposableOwner {
   }
 
   private setControlsEnabled(enabled: boolean): void {
-    for (const control of this.controls.values()) control.disabled = !enabled;
+    for (const control of this.controls.values()) {
+      if (control instanceof SelectBox) control.enabled = enabled;
+      else control.disabled = !enabled;
+    }
   }
 
   private showStatus(message: string, error: boolean): void {

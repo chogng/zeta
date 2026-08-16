@@ -331,6 +331,129 @@ fn workspace_switch_rpc_persists_host_collected_user_trust() {
 }
 
 #[test]
+fn workspace_trust_management_rpc_lists_sets_and_forgets_user_decisions() {
+    let workspace = TestWorkspace::new("rpc-trust-management", "readable.txt");
+    let root = workspace.root();
+    let config_storage = tempfile::tempdir().unwrap();
+    let config = Arc::new(ConfigStore::open(config_storage.path().join("trust.sqlite3")).unwrap());
+    let server = server()
+        .with_config_store(Arc::clone(&config))
+        .with_local_workspace_host(
+            None,
+            WorkspaceSwitchTrustPolicy::UserConfig(Arc::clone(&config)),
+        )
+        .unwrap();
+    let mut connection = server.connection();
+    server.handle_json(
+        &mut connection,
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "clientInfo": {"name": "desktop", "version": "1"},
+                "capabilities": {"workspaceTrustHost": {"version": 1}}
+            }
+        })
+        .to_string(),
+    );
+
+    let empty: serde_json::Value = serde_json::from_str(
+        &server.handle_json(
+            &mut connection,
+            &serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "workspace/trust/list",
+                "params": {}
+            })
+            .to_string(),
+        ),
+    )
+    .unwrap();
+    assert_eq!(empty["result"]["revision"], 0);
+    assert_eq!(empty["result"]["entries"].as_array().unwrap().len(), 0);
+
+    let set: serde_json::Value = serde_json::from_str(
+        &server.handle_json(
+            &mut connection,
+            &serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 3,
+                "method": "workspace/trust/set",
+                "params": {
+                    "commandId": "desktop-trust-management-set",
+                    "expectedRevision": 0,
+                    "root": workspace.path,
+                    "setting": "trusted"
+                }
+            })
+            .to_string(),
+        ),
+    )
+    .unwrap();
+    assert_eq!(set["result"]["revision"], 1, "{set:#}");
+
+    let listed: serde_json::Value = serde_json::from_str(
+        &server.handle_json(
+            &mut connection,
+            &serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 4,
+                "method": "workspace/trust/list",
+                "params": {}
+            })
+            .to_string(),
+        ),
+    )
+    .unwrap();
+    assert_eq!(listed["result"]["revision"], 1);
+    assert_eq!(
+        listed["result"]["entries"][0]["workspace"],
+        root.trust_id().to_string()
+    );
+    assert_eq!(
+        listed["result"]["entries"][0]["root"],
+        root.canonical_path().to_string_lossy().to_string()
+    );
+    assert_eq!(listed["result"]["entries"][0]["setting"], "trusted");
+
+    let forgotten: serde_json::Value = serde_json::from_str(
+        &server.handle_json(
+            &mut connection,
+            &serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 5,
+                "method": "workspace/trust/forget",
+                "params": {
+                    "commandId": "desktop-trust-management-forget",
+                    "expectedRevision": 1,
+                    "workspace": root.trust_id()
+                }
+            })
+            .to_string(),
+        ),
+    )
+    .unwrap();
+    assert_eq!(forgotten["result"]["revision"], 2, "{forgotten:#}");
+
+    let final_list: serde_json::Value = serde_json::from_str(
+        &server.handle_json(
+            &mut connection,
+            &serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 6,
+                "method": "workspace/trust/list",
+                "params": {}
+            })
+            .to_string(),
+        ),
+    )
+    .unwrap();
+    assert_eq!(final_list["result"]["entries"].as_array().unwrap().len(), 0);
+}
+
+#[test]
 fn restricted_workspace_installs_only_non_executable_services() {
     let workspace = TestWorkspace::new("restricted", "readable.txt");
     let provider = Arc::new(TrustRevocationProvider::new());
@@ -521,6 +644,7 @@ fn user_config_trust_is_resolved_for_each_client_requested_root() {
             command: UserConfigCommand::SetWorkspaceTrust {
                 workspace: root.trust_id(),
                 setting: WorkspaceTrustSetting::Trusted,
+                display_root: None,
             },
         })
         .unwrap();
@@ -546,6 +670,7 @@ fn user_config_revocation_removes_executable_services_but_keeps_file_access() {
             command: UserConfigCommand::SetWorkspaceTrust {
                 workspace: root.trust_id(),
                 setting: WorkspaceTrustSetting::Trusted,
+                display_root: None,
             },
         })
         .unwrap();
@@ -603,6 +728,7 @@ fn user_config_revocation_removes_executable_services_but_keeps_file_access() {
             command: UserConfigCommand::SetWorkspaceTrust {
                 workspace: root.trust_id(),
                 setting: WorkspaceTrustSetting::Restricted,
+                display_root: None,
             },
         })
         .unwrap();
@@ -663,6 +789,7 @@ fn user_config_revocation_removes_local_semantic_model_access() {
             command: UserConfigCommand::SetWorkspaceTrust {
                 workspace: root.trust_id(),
                 setting: WorkspaceTrustSetting::Trusted,
+                display_root: None,
             },
         })
         .unwrap();
@@ -689,6 +816,7 @@ fn user_config_revocation_removes_local_semantic_model_access() {
             command: UserConfigCommand::SetWorkspaceTrust {
                 workspace: root.trust_id(),
                 setting: WorkspaceTrustSetting::Restricted,
+                display_root: None,
             },
         })
         .unwrap();
@@ -714,6 +842,7 @@ fn user_config_revocation_deletes_cloud_grant_and_removes_cloud_runtime() {
             command: UserConfigCommand::SetWorkspaceTrust {
                 workspace: root.trust_id(),
                 setting: WorkspaceTrustSetting::Trusted,
+                display_root: None,
             },
         })
         .unwrap();
@@ -761,6 +890,7 @@ fn user_config_revocation_deletes_cloud_grant_and_removes_cloud_runtime() {
             command: UserConfigCommand::SetWorkspaceTrust {
                 workspace: root.trust_id(),
                 setting: WorkspaceTrustSetting::Restricted,
+                display_root: None,
             },
         })
         .unwrap();

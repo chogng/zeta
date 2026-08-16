@@ -245,10 +245,12 @@ credential、订阅 entitlement 和远端模型是否实际可调用，由创建
 Workspace 配置不能覆盖审批模型，避免仓库内容自行降低 reviewer 强度。模型不可用或不兼容时
 fail closed，不得静默换成其他审批模型。
 
-`WorkspaceTrustConfig` 使用 `WorkspaceTrustId` 作为 key。该 ID 由 `zeta-workspace` 对 canonical
-root 的平台原生 path bytes 做 SHA-256 得到，因此不把本机路径写入 User TOML，symlink/平台别名
-共享决定，移动根目录后必须重新决定。它目前仍是 path-bound identity：同一路径被其他目录内容
-替换时不会自动失效，identity-change detection 属于后续 host 持久化阶段。
+`WorkspaceTrustConfig` 使用 `WorkspaceTrustId` 作为授权 key。该 ID 由 `zeta-workspace` 对
+canonical root 的平台原生 path bytes 做 SHA-256 得到；`roots` 中仍只保存 opaque identity，
+symlink/平台别名共享决定，移动根目录后必须重新决定。Settings 的 Workspace Trust 管理页另外
+会在 `rootPaths` 保存 canonical root 作为展示元数据，旧 trust 记录可能没有该字段；该 map
+绝不能参与授权判断。它目前仍是 path-bound identity：同一路径被其他目录内容替换时不会自动
+失效，identity-change detection 属于后续 host 持久化阶段。
 
 Local App Server 把 User trust `ConfigChange` 同时作为撤销信号：Trusted → Restricted 会使当前
 root-bound capability lease 永久失效，拆除 local Tool/Git/search/terminal runtime、终止相关

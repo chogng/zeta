@@ -151,6 +151,8 @@ import { IChatService } from "../services/chat/common/chatService.js";
 import { ICodeIndexService } from "../../platform/codeIndex/common/codeIndexService.js";
 import { AppServerCodeIndexService } from "../services/codeIndex/browser/appServerCodeIndexService.js";
 import { IToolSearchService } from "../../platform/toolSearch/common/toolSearchService.js";
+import { IWorkspaceTrustService } from "../../platform/workspaceTrust/common/workspaceTrustService.js";
+import { AppServerWorkspaceTrustService } from "../services/workspaces/browser/appServerWorkspaceTrustService.js";
 import { IConnectorService } from "../../platform/connectors/common/connectorService.js";
 import { AppServerConnectorService } from "../services/connectors/browser/appServerConnectorService.js";
 import { IPluginService } from "../../platform/plugins/common/pluginService.js";
@@ -350,6 +352,7 @@ export class Workbench extends DisposableOwner {
     services.set(IPluginService, this.own(new AppServerPluginService(api.plugins, api.events)));
     services.set(IMarketplaceService, new AppServerMarketplaceService(api.marketplace));
     services.set(IToolSearchService, new AppServerToolSearchService(api.toolSearch));
+    services.set(IWorkspaceTrustService, new AppServerWorkspaceTrustService(api.workspaceTrust));
     const workbenchState = workspaceContext.getWorkbenchState();
     const workbenchWindow = this.own(new WorkbenchWindow({
       root: workbenchRoot,

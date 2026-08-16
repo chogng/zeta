@@ -1917,6 +1917,54 @@
           "properties": {
             "method": {
               "type": "string",
+              "const": "workspace/trust/list"
+            },
+            "params": {
+              "$ref": "#/$defs/EmptyParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "workspace/trust/set"
+            },
+            "params": {
+              "$ref": "#/$defs/WorkspaceTrustSetParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "workspace/trust/forget"
+            },
+            "params": {
+              "$ref": "#/$defs/WorkspaceTrustForgetParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
               "const": "document/collaboration/open"
             },
             "params": {
@@ -4789,6 +4837,54 @@
             },
             "result": {
               "$ref": "#/$defs/WorkspaceTrustReadResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "workspace/trust/list"
+            },
+            "result": {
+              "$ref": "#/$defs/WorkspaceTrustListResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "workspace/trust/set"
+            },
+            "result": {
+              "$ref": "#/$defs/ConfigCommandResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "workspace/trust/forget"
+            },
+            "result": {
+              "$ref": "#/$defs/ConfigCommandResult"
             }
           },
           "required": [
@@ -22420,6 +22516,50 @@
         }
       ]
     },
+    "WorkspaceTrustEntryDto": {
+      "description": "One persisted user trust decision projected for the trust-management surface.\n\n`workspace` remains the authoritative identity. `root` is display metadata and may be absent\nfor decisions written by older clients.",
+      "type": "object",
+      "properties": {
+        "root": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "setting": {
+          "$ref": "#/$defs/WorkspaceTrustSettingDto"
+        },
+        "workspace": {
+          "$ref": "#/$defs/WorkspaceTrustId"
+        }
+      },
+      "required": [
+        "workspace",
+        "setting"
+      ]
+    },
+    "WorkspaceTrustForgetParams": {
+      "description": "Removes one user trust decision by its opaque Workspace identity.",
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "workspace": {
+          "$ref": "#/$defs/WorkspaceTrustId"
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision",
+        "workspace"
+      ]
+    },
     "WorkspaceTrustHostCapability": {
       "description": "Declares that this connection is owned by a product host that can collect Workspace trust.\n\nThis is an authority boundary for host-only protocol operations. Renderer or extension\nconnections must not declare it merely because they can display a trust prompt.",
       "type": "object",
@@ -22437,6 +22577,27 @@
     "WorkspaceTrustId": {
       "description": "Opaque, durable lookup key for one canonical Workspace root.\n\nHosts persist this value instead of the filesystem path itself. It intentionally identifies\nthe canonical path boundary rather than Workspace-controlled content, so aliases resolve to\nthe same key and moving the directory requires a new trust decision.",
       "type": "string"
+    },
+    "WorkspaceTrustListResult": {
+      "description": "Lists all explicit user trust decisions in the active profile.",
+      "type": "object",
+      "properties": {
+        "entries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/WorkspaceTrustEntryDto"
+          }
+        },
+        "revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "revision",
+        "entries"
+      ]
     },
     "WorkspaceTrustReadParams": {
       "description": "Reads whether one exact canonical Workspace already has a durable user decision.",
@@ -22464,6 +22625,32 @@
           ]
         }
       }
+    },
+    "WorkspaceTrustSetParams": {
+      "description": "Persists one user trust decision without switching the active Workspace.",
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "root": {
+          "type": "string"
+        },
+        "setting": {
+          "$ref": "#/$defs/WorkspaceTrustSettingDto"
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision",
+        "root",
+        "setting"
+      ]
     },
     "WorkspaceTrustSettingDto": {
       "description": "User-owned trust setting collected by a product host.",

@@ -3,6 +3,7 @@ import { defineConfig } from "vite";
 import { productIconsPlugin } from "./scripts/product-icons-vite-plugin.mjs";
 import { webAppServerVitePlugin } from "./scripts/web-app-server-vite-plugin.mjs";
 import { workbenchEntryPlugin } from "./scripts/workbench-entry-vite-plugin.mjs";
+import { workbenchHotReloadPlugin } from "./scripts/workbench-hot-reload-vite-plugin.mjs";
 import { getProductConfiguration, resolveProductId } from "./src/zeta/product/common/product.js";
 
 export default defineConfig(() => {
@@ -29,7 +30,7 @@ export default defineConfig(() => {
     define: {
       __ZETA_WEB_APP_SERVER__: JSON.stringify(webAppServerEnabled),
     },
-    plugins: [workbenchEntryPlugin(product.rendererEntry), productIconsPlugin(), ...(webAppServerEnabled ? [webAppServerVitePlugin()] : [])],
+    plugins: [workbenchHotReloadPlugin(), workbenchEntryPlugin(product.rendererEntry), productIconsPlugin(), ...(webAppServerEnabled ? [webAppServerVitePlugin()] : [])],
     optimizeDeps: {
       include: ["vscode-oniguruma"],
     },

@@ -1,0 +1,70 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { JSDOM } from "jsdom";
+
+test("SelectBox owns its unfold trigger and trailing selected check inside a themed ContextView", async () => {
+  const dom = new JSDOM("<!doctype html><body><main></main></body>", { pretendToBeVisual: true });
+  Object.defineProperties(globalThis, {
+    window: { configurable: true, value: dom.window },
+    document: { configurable: true, value: dom.window.document },
+    Node: { configurable: true, value: dom.window.Node },
+    HTMLElement: { configurable: true, value: dom.window.HTMLElement },
+  });
+  Object.defineProperty(dom.window.Element.prototype, "scrollIntoView", {
+    configurable: true,
+    value(): void {},
+  });
+  Object.defineProperty(dom.window.HTMLElement.prototype, "scrollTo", {
+    configurable: true,
+    value(): void {},
+  });
+  const [{ ContextView }, { appendIcon }, { SelectBox }, { lxiconsLibrary }] = await Promise.all([
+    import("../../browser/ui/contextview/contextview.js"),
+    import("../../browser/ui/icon/icon.js"),
+    import("../../browser/ui/selectbox/selectbox.js"),
+    import("../../common/lxiconsLibrary.js"),
+  ]);
+  const host = dom.window.document.querySelector<HTMLElement>("main")!;
+  const contextView = new ContextView(host);
+  const selectBox = new SelectBox({
+    options: [
+      { value: "auto", label: "Auto" },
+      { value: "on", label: "On" },
+      { value: "off", label: "Off" },
+    ],
+    selectedValue: "auto",
+    ownerDocument: dom.window.document,
+    ariaLabel: "Screen reader optimization",
+    contextViewProvider: contextView,
+  });
+  host.append(selectBox.element);
+
+  const button = selectBox.element.querySelector<HTMLButtonElement>(".zeta-select-box-button")!;
+  button.getBoundingClientRect = () => ({ width: 192 } as DOMRect);
+  const indicator = selectBox.element.querySelector<HTMLElement>(".zeta-dropdown-indicator")!;
+  const expectedIndicator = dom.window.document.createElement("span");
+  appendIcon(lxiconsLibrary.unfold, expectedIndicator);
+  assert.equal(indicator.innerHTML, expectedIndicator.innerHTML);
+
+  selectBox.show();
+  assert.equal(contextView.element.parentElement, host);
+  assert.equal(contextView.element.classList.contains("zeta-context-view-default"), true);
+  const list = contextView.element.querySelector<HTMLElement>(".zeta-select-box-list")!;
+  assert.ok(list);
+  assert.equal(list.style.getPropertyValue("--dropdown-trigger-width"), "192px");
+  const selected = list.querySelector<HTMLElement>(".zeta-select-box-option-selected")!;
+  const check = selected.querySelector<HTMLElement>(":scope > .zeta-select-box-option-check")!;
+  const expectedCheck = dom.window.document.createElement("span");
+  appendIcon(lxiconsLibrary.check, expectedCheck);
+  assert.equal(selected.lastElementChild, check);
+  assert.equal(check.innerHTML, expectedCheck.innerHTML);
+  assert.equal(selected.getAttribute("aria-selected"), "true");
+
+  selectBox.dispose();
+  contextView.dispose();
+  dom.window.close();
+  Reflect.deleteProperty(globalThis, "window");
+  Reflect.deleteProperty(globalThis, "document");
+  Reflect.deleteProperty(globalThis, "Node");
+  Reflect.deleteProperty(globalThis, "HTMLElement");
+});

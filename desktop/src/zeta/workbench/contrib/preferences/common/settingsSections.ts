@@ -22,6 +22,11 @@ export const SettingsSections = [
     description: "Manage your identity, account, and user-level preferences.",
   },
   {
+    id: "workspace-trust",
+    label: "Workspace Trust",
+    description: "Review and revoke folders that are allowed to run workspace capabilities.",
+  },
+  {
     id: "appearance",
     label: "Appearance",
     description: "Customize the visual appearance of Zeta.",

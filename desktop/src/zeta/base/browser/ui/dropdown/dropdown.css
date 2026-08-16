@@ -42,8 +42,17 @@
 }
 
 .zeta-dropdown-indicator {
-  flex: none;
-  font-size: 10px;
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+
+.zeta-dropdown-indicator > .zeta-icon {
+  display: block;
 }
 
 .zeta-dropdown-content {

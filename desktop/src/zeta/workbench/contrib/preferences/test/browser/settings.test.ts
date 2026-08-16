@@ -10,6 +10,10 @@ Object.defineProperty(browserEnvironment.window.Element.prototype, "scrollTo", {
   configurable: true,
   value() {},
 });
+Object.defineProperty(browserEnvironment.window.Element.prototype, "scrollIntoView", {
+  configurable: true,
+  value() {},
+});
 for (const [name, value] of Object.entries({
   window: browserEnvironment.window,
   document: browserEnvironment.window.document,
@@ -36,6 +40,7 @@ const { MenuId } = await import("../../../../../platform/actions/common/actions.
 const { HoverConfiguration } = await import("../../../../../platform/hover/common/hoverService.js");
 const { MenuService } = await import("../../../../../platform/actions/common/menuService.js");
 const { ContextKeyService } = await import("../../../../../platform/contextkey/common/contextkey.js");
+const { BrowserContextViewService } = await import("../../../../../platform/contextview/browser/contextViewService.js");
 const { ServiceCollection } = await import("../../../../../platform/instantiation/common/instantiation.js");
 const { KeybindingResolver } = await import("../../../../../platform/keybinding/common/keybindingResolver.js");
 const { KeybindingsRegistry } = await import("../../../../../platform/keybinding/common/keybindingsRegistry.js");
@@ -64,6 +69,22 @@ const acceptingDialogService = {
   confirm: async () => true,
 };
 
+function settingValue(root: HTMLElement, key: string): string | undefined {
+  return root.querySelector<HTMLElement>(`[data-configuration-key="${key}"] .zeta-dropdown-label`)?.textContent ?? undefined;
+}
+
+function chooseSettingOption(root: HTMLElement, key: string, label: string): void {
+  const control = root.querySelector<HTMLElement>(`[data-configuration-key="${key}"]`);
+  assert.ok(control);
+  const button = control.querySelector<HTMLButtonElement>(".zeta-select-box-button");
+  assert.ok(button);
+  button.click();
+  const option = [...browserEnvironment.window.document.querySelectorAll<HTMLElement>(".zeta-select-box-option")]
+    .find(element => element.querySelector(".zeta-select-box-option-label")?.textContent === label);
+  assert.ok(option);
+  option.click();
+}
+
 test("Settings overlay opens, closes, and restores focus", () => {
   using disposables = new DisposableStore();
   const ownerDocument = browserEnvironment.window.document;
@@ -80,6 +101,7 @@ test("Settings overlay opens, closes, and restores focus", () => {
   disposables.add(new SettingsEditorContribution({
     configurationService: configuration,
     container: root,
+    contextViewProvider: disposables.add(new BrowserContextViewService(root)),
     dialogService: acceptingDialogService,
     settingsService: settings,
     themeService: disposables.add(new ThemeService(darkColorTheme)),
@@ -111,6 +133,7 @@ test("Settings overlay opens, closes, and restores focus", () => {
       "General",
       "Chat",
       "User",
+      "Workspace Trust",
       "Appearance",
       "Editor",
       "Languages",
@@ -150,10 +173,10 @@ test("Settings overlay opens, closes, and restores focus", () => {
   assert.equal(settings.isOpen, true);
   assert.equal(search.value, "");
 
-  navigationItems[7].click();
+  navigationItems[8].click();
   assert.equal(settings.activeSectionId, "models");
   assert.equal(navigationItems[0].hasAttribute("aria-current"), false);
-  assert.equal(navigationItems[7].getAttribute("aria-current"), "page");
+  assert.equal(navigationItems[8].getAttribute("aria-current"), "page");
   assert.equal(root.querySelector(".zeta-settings-page h3")?.textContent, "Models");
   assert.equal(
     root.querySelector(".zeta-settings-page")?.getAttribute("data-active-settings-section"),
@@ -169,6 +192,77 @@ test("Settings overlay opens, closes, and restores focus", () => {
   assert.equal(ownerDocument.activeElement, trigger);
 });
 
+test("Workspace Trust settings add, list, and revoke durable folder decisions", async () => {
+  using disposables = new DisposableStore();
+  const ownerDocument = browserEnvironment.window.document;
+  ownerDocument.body.replaceChildren();
+  const root = ownerDocument.createElement("div");
+  ownerDocument.body.append(root);
+  const settings = disposables.add(new SettingsService());
+  const configuration = disposables.add(new WorkbenchConfigurationService());
+  let revision = 7;
+  let entries = [
+    { workspace: "sha256:restricted", root: "/workspaces/restricted", setting: "restricted" as const },
+    { workspace: "sha256:trusted", root: "/workspaces/trusted", setting: "trusted" as const },
+  ];
+  const mutations: string[] = [];
+  const workspaceTrustService = {
+    list: async () => ({ revision, entries }),
+    set: async (folder: string, setting: "restricted" | "trusted", expectedRevision: number) => {
+      mutations.push(`set:${folder}:${setting}:${expectedRevision}`);
+      revision += 1;
+      entries = [...entries, { workspace: "sha256:new", root: folder, setting }];
+      return { revision, generation: revision, disposition: "updated" as const };
+    },
+    forget: async (workspace: string, expectedRevision: number) => {
+      mutations.push(`forget:${workspace}:${expectedRevision}`);
+      revision += 1;
+      entries = entries.filter(entry => entry.workspace !== workspace);
+      return { revision, generation: revision, disposition: "updated" as const };
+    },
+  };
+  const workspaceOpenService = {
+    canOpenFolder: true,
+    openFolder: async () => {},
+    pickFolder: async () => "/workspaces/new",
+  };
+  disposables.add(new SettingsEditorContribution({
+    configurationService: configuration,
+    container: root,
+    contextViewProvider: disposables.add(new BrowserContextViewService(root)),
+    dialogService: acceptingDialogService,
+    settingsService: settings,
+    themeService: disposables.add(new ThemeService(darkColorTheme)),
+    userThemeService: UnavailableUserThemeService,
+    workspaceTrustService,
+    workspaceOpenService,
+  }));
+
+  settings.open("workspace-trust");
+  await new Promise(resolve => globalThis.setTimeout(resolve, 0));
+  assert.deepEqual(
+    [...root.querySelectorAll<HTMLElement>(".zeta-workspace-trust-entry h4")].map(element => element.textContent),
+    ["/workspaces/restricted", "/workspaces/trusted"],
+  );
+  assert.equal(root.querySelector<HTMLButtonElement>(".zeta-workspace-trust-toolbar button")?.textContent, "Add Folder…");
+  root.querySelector<HTMLButtonElement>(".zeta-workspace-trust-toolbar button")?.click();
+  await new Promise(resolve => globalThis.setTimeout(resolve, 0));
+  await new Promise(resolve => globalThis.setTimeout(resolve, 0));
+  assert.deepEqual(mutations, ["set:/workspaces/new:trusted:7"]);
+
+  const trustedEntry = [...root.querySelectorAll<HTMLElement>(".zeta-workspace-trust-entry")]
+    .find(element => element.querySelector("h4")?.textContent === "/workspaces/trusted");
+  assert.ok(trustedEntry);
+  trustedEntry.querySelector<HTMLButtonElement>("button")?.click();
+  await new Promise(resolve => globalThis.setTimeout(resolve, 0));
+  await new Promise(resolve => globalThis.setTimeout(resolve, 0));
+  assert.deepEqual(mutations, [
+    "set:/workspaces/new:trusted:7",
+    "forget:sha256:trusted:8",
+  ]);
+  assert.equal(root.querySelector("h4")?.textContent, "/workspaces/new");
+});
+
 test("General settings persist the default Workbench profile and shared interaction preferences", async () => {
   using disposables = new DisposableStore();
   const ownerDocument = browserEnvironment.window.document;
@@ -180,6 +274,7 @@ test("General settings persist the default Workbench profile and shared interact
   disposables.add(new SettingsEditorContribution({
     configurationService: configuration,
     container: root,
+    contextViewProvider: disposables.add(new BrowserContextViewService(root)),
     dialogService: acceptingDialogService,
     settingsService: settings,
     themeService: disposables.add(new ThemeService(darkColorTheme)),
@@ -187,17 +282,20 @@ test("General settings persist the default Workbench profile and shared interact
   }));
 
   settings.open("general");
-  const profile = root.querySelector<HTMLSelectElement>('[data-configuration-key="workbench.defaultProfile"]')!;
-  const reduceMotion = root.querySelector<HTMLSelectElement>('[data-configuration-key="workbench.reduceMotion"]')!;
+  const profile = root.querySelector<HTMLElement>('[data-configuration-key="workbench.defaultProfile"]')!;
+  const profileButton = profile.querySelector<HTMLButtonElement>(".zeta-select-box-button")!;
   const hoverDelay = root.querySelector<HTMLInputElement>('[data-configuration-key="workbench.hover.delay"]')!;
-  assert.equal(profile.value, "code");
-  assert.equal(reduceMotion.value, "auto");
+  assert.equal(profileButton.getAttribute("role"), "combobox");
+  assert.equal(profileButton.getAttribute("aria-haspopup"), "listbox");
+  assert.equal(profileButton.getAttribute("aria-expanded"), "false");
+  assert.equal(settingValue(root, "workbench.defaultProfile"), "Code");
+  assert.equal(settingValue(root, "workbench.reduceMotion"), "Auto");
+  profile.closest<HTMLElement>(".zeta-general-setting")!.querySelector<HTMLElement>(".zeta-general-setting-copy")!.click();
+  assert.equal(profileButton.getAttribute("aria-expanded"), "false");
   assert.equal(hoverDelay.value, "500");
-  profile.value = "academic";
-  profile.dispatchEvent(new browserEnvironment.window.Event("change", { bubbles: true }));
+  chooseSettingOption(root, "workbench.defaultProfile", "Academic");
   await new Promise(resolve => globalThis.setTimeout(resolve, 0));
-  reduceMotion.value = "on";
-  reduceMotion.dispatchEvent(new browserEnvironment.window.Event("change", { bubbles: true }));
+  chooseSettingOption(root, "workbench.reduceMotion", "On");
   await new Promise(resolve => globalThis.setTimeout(resolve, 0));
   hoverDelay.value = "250";
   hoverDelay.dispatchEvent(new browserEnvironment.window.Event("change", { bubbles: true }));
@@ -219,6 +317,7 @@ test("Settings domains without writable services render honest capability overvi
   disposables.add(new SettingsEditorContribution({
     configurationService: disposables.add(new WorkbenchConfigurationService()),
     container: root,
+    contextViewProvider: disposables.add(new BrowserContextViewService(root)),
     dialogService: acceptingDialogService,
     settingsService: settings,
     themeService: disposables.add(new ThemeService(darkColorTheme)),
@@ -245,6 +344,7 @@ test("Editor settings render supported controls and persist typed preferences", 
   disposables.add(new SettingsEditorContribution({
     configurationService: configuration,
     container: root,
+    contextViewProvider: disposables.add(new BrowserContextViewService(root)),
     dialogService: acceptingDialogService,
     settingsService: settings,
     themeService: disposables.add(new ThemeService(darkColorTheme)),
@@ -256,12 +356,16 @@ test("Editor settings render supported controls and persist typed preferences", 
   assert.equal(root.querySelectorAll(".zeta-editor-setting").length, 40);
   const fontFamily = root.querySelector<HTMLInputElement>('[data-configuration-key="editor.fontFamily"]')!;
   const fontSize = root.querySelector<HTMLInputElement>('[data-configuration-key="editor.fontSize"]')!;
-  const wordWrap = root.querySelector<HTMLSelectElement>('[data-configuration-key="editor.wordWrap"]')!;
+  const wordWrap = root.querySelector<HTMLElement>('[data-configuration-key="editor.wordWrap"]')!;
   const minimap = root.querySelector<HTMLInputElement>('[data-configuration-key="editor.minimap.enabled"]')!;
-  const indentation = root.querySelector<HTMLSelectElement>('[data-configuration-key="editor.indentation"]')!;
+  const indentation = root.querySelector<HTMLElement>('[data-configuration-key="editor.indentation"]')!;
   const tabSize = root.querySelector<HTMLInputElement>('[data-configuration-key="editor.tabSize"]')!;
-  assert.equal(wordWrap.value, EditorLineWrapping.Off);
-  assert.equal(root.querySelector<HTMLSelectElement>('[data-configuration-key="workbench.editor.defaultNewDocumentEditor"]')?.value, "profile");
+  assert.equal(wordWrap.querySelector<HTMLButtonElement>(".zeta-select-box-button")?.getAttribute("role"), "combobox");
+  assert.equal(settingValue(root, "editor.wordWrap"), "Off");
+  assert.equal(settingValue(root, "workbench.editor.defaultNewDocumentEditor"), "Follow Workbench profile");
+  const wordWrapButton = wordWrap.querySelector<HTMLButtonElement>(".zeta-select-box-button")!;
+  wordWrap.closest<HTMLElement>(".zeta-editor-setting")!.querySelector<HTMLElement>(".zeta-editor-setting-copy")!.click();
+  assert.equal(wordWrapButton.getAttribute("aria-expanded"), "false");
   assert.equal(fontFamily.value, "");
   assert.equal(fontFamily.placeholder, "Default monospace");
   assert.equal(fontSize.value, "13");
@@ -274,14 +378,12 @@ test("Editor settings render supported controls and persist typed preferences", 
   assert.equal(root.querySelector<HTMLInputElement>('[data-configuration-key="search.maxResults"]')?.value, "2000");
   assert.equal(root.querySelector<HTMLInputElement>('[data-configuration-key="diffEditor.showInlineChanges"]')?.checked, true);
   assert.equal(minimap.checked, true);
-  assert.equal(indentation.value, EditorIndentationKind.Spaces);
+  assert.equal(settingValue(root, "editor.indentation"), "Spaces");
   assert.equal(tabSize.value, "4");
 
-  wordWrap.value = EditorLineWrapping.On;
-  wordWrap.dispatchEvent(new browserEnvironment.window.Event("change", { bubbles: true }));
+  chooseSettingOption(root, "editor.wordWrap", "On");
   await new Promise(resolve => globalThis.setTimeout(resolve, 0));
-  indentation.value = EditorIndentationKind.Tabs;
-  indentation.dispatchEvent(new browserEnvironment.window.Event("change", { bubbles: true }));
+  chooseSettingOption(root, "editor.indentation", "Tabs");
   await new Promise(resolve => globalThis.setTimeout(resolve, 0));
   tabSize.value = "2";
   tabSize.dispatchEvent(new browserEnvironment.window.Event("change", { bubbles: true }));
@@ -324,6 +426,7 @@ test("Connector settings project catalog state and invoke typed connect and disc
     configurationService: configuration,
     connectorService,
     container: root,
+    contextViewProvider: disposables.add(new BrowserContextViewService(root)),
     dialogService: acceptingDialogService,
     settingsService: settings,
     themeService: disposables.add(new ThemeService(darkColorTheme)),
@@ -391,6 +494,7 @@ test("Marketplace settings discover and install through the generic service", as
   disposables.add(new SettingsEditorContribution({
     configurationService: configuration,
     container: root,
+    contextViewProvider: disposables.add(new BrowserContextViewService(root)),
     dialogService: acceptingDialogService,
     marketplaceService,
     settingsService: settings,
@@ -446,6 +550,7 @@ test("Plugin settings project layered authority and send exact-package commands"
   disposables.add(new SettingsEditorContribution({
     configurationService: configuration,
     container: root,
+    contextViewProvider: disposables.add(new BrowserContextViewService(root)),
     dialogService: acceptingDialogService,
     pluginService,
     settingsService: settings,
@@ -483,6 +588,7 @@ test("Plugin settings direct package discovery to the generic Marketplace", asyn
   disposables.add(new SettingsEditorContribution({
     configurationService: configuration,
     container: root,
+    contextViewProvider: disposables.add(new BrowserContextViewService(root)),
     dialogService: acceptingDialogService,
     pluginService,
     settingsService: settings,
@@ -530,6 +636,7 @@ test("Language settings reuse Marketplace discovery with a language package filt
   disposables.add(new SettingsEditorContribution({
     configurationService: configuration,
     container: root,
+    contextViewProvider: disposables.add(new BrowserContextViewService(root)),
     dialogService: acceptingDialogService,
     marketplaceService,
     settingsService: settings,
@@ -556,6 +663,7 @@ test("Appearance settings persist and dynamically render registered theme prefer
   disposables.add(new SettingsEditorContribution({
     configurationService: configuration,
     container: root,
+    contextViewProvider: disposables.add(new BrowserContextViewService(root)),
     dialogService: acceptingDialogService,
     settingsService: settings,
     themeService: disposables.add(new ThemeService(darkColorTheme)),
@@ -644,6 +752,7 @@ test("Appearance edits the resolved Light JSON, previews it, and saves a new the
   disposables.add(new SettingsEditorContribution({
     configurationService: configuration,
     container: root,
+    contextViewProvider: disposables.add(new BrowserContextViewService(root)),
     dialogService: acceptingDialogService,
     settingsService: settings,
     themeService,
@@ -744,6 +853,7 @@ test("Indexing settings save Tool Search and semantic model consent configuratio
   disposables.add(new SettingsEditorContribution({
     configurationService: configuration,
     container: root,
+    contextViewProvider: disposables.add(new BrowserContextViewService(root)),
     dialogService: acceptingDialogService,
     settingsService: settings,
     themeService: disposables.add(new ThemeService(darkColorTheme)),
