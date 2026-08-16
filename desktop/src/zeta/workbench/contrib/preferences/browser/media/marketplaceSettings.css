@@ -53,20 +53,24 @@
 }
 
 .zeta-package-marketplace-toolbar > button,
-.zeta-package-marketplace-actions button {
-  min-height: 40px;
-  padding: 7px 18px;
-  border: 1px solid transparent;
-  border-radius: 999px;
+.zeta-package-marketplace-actions button,
+.zeta-package-marketplace-filter,
+.zeta-package-marketplace-empty-state button {
+  height: 24px;
+  padding: 3px 6px;
+  border: 1px solid var(--zeta-widget-border);
+  border-radius: 6px;
   color: var(--zeta-button-foreground);
-  background: var(--zeta-button-background);
+  background: transparent;
   cursor: pointer;
   font: inherit;
 }
 
 .zeta-package-marketplace-toolbar > button:hover,
-.zeta-package-marketplace-actions button:hover {
-  background: var(--zeta-button-hover-background);
+.zeta-package-marketplace-actions button:hover,
+.zeta-package-marketplace-filter:hover,
+.zeta-package-marketplace-empty-state button:hover {
+  border-color: color-mix(in srgb, var(--zeta-widget-border) 80%, black 20%);
 }
 
 .zeta-package-marketplace-toolbar > button:focus-visible,
@@ -87,26 +91,9 @@
   gap: 8px;
 }
 
-.zeta-package-marketplace-filter,
-.zeta-package-marketplace-empty-state button {
-  min-height: 34px;
-  padding: 5px 14px;
-  border: 1px solid var(--zeta-widget-border);
-  border-radius: 999px;
-  color: var(--zeta-foreground);
-  background: transparent;
-  cursor: pointer;
-  font: inherit;
-}
-
-.zeta-package-marketplace-filter:hover,
-.zeta-package-marketplace-empty-state button:hover {
-  background: var(--zeta-list-hover-background);
-}
-
 .zeta-package-marketplace-filter.checked {
   border-color: var(--zeta-focus-border);
-  background: var(--zeta-list-hover-background);
+  background: transparent;
 }
 
 .zeta-package-marketplace-filter:focus-visible,

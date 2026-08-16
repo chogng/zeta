@@ -315,18 +315,18 @@
 }
 
 .zeta-theme-action {
-  min-height: 30px;
-  padding: 4px 12px;
-  border: 1px solid var(--zeta-input-border);
-  border-radius: 4px;
+  height: 24px;
+  padding: 3px 6px;
+  border: 1px solid var(--zeta-widget-border);
+  border-radius: 6px;
   color: var(--zeta-button-foreground);
-  background: var(--zeta-button-background);
+  background: transparent;
   cursor: pointer;
   font: inherit;
 }
 
 .zeta-theme-action:hover {
-  background: var(--zeta-button-hover-background);
+  border-color: color-mix(in srgb, var(--zeta-widget-border) 80%, black 20%);
 }
 
 .zeta-theme-action.is-danger {
@@ -336,7 +336,7 @@
 }
 
 .zeta-theme-action.is-danger:hover {
-  background: var(--zeta-list-hover-background);
+  border-color: color-mix(in srgb, var(--zeta-error-foreground) 80%, black 20%);
 }
 
 .zeta-theme-action:focus-visible {
