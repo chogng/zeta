@@ -65,15 +65,26 @@ Vite，并按浏览器连接管理 App Server。启动后不要关闭终端，�
 
 ### 开发态热更新
 
-Renderer 开发服务器使用 Vite HMR。CSS 由 Vite 直接替换；名称以 `Part`、`ViewPane` 或
-`Widget` 结尾的持久 UI 类由 `workbench-hot-reload-vite-plugin.mjs` 建立稳定身份，方法修改会补丁到
+热更新分为两个单向依赖层：`src/zeta/base/common/hotReload.ts` 只定义 Renderer realm 内通用的
+export-handler runtime，不依赖 Vite 或 Workbench；`build/vite/` 拥有开发入口、语法分析、HMR 边界
+注入和完整 Vite 配置。Workbench 产品源码不启用或配置开发工具。
+
+Renderer 开发服务器使用 Vite HMR。`build/vite/setup-dev.ts` 在产品入口前启用 runtime。CSS 由 Vite
+直接替换；名称以 `Part`、`ViewPane` 或
+`Widget` 结尾的持久 UI 类由 `build/vite/hotReloadPlugin.ts` 建立稳定身份，方法修改会补丁到
 现有实例，因此 Workbench 状态和当前窗口不需要重建。其他确实只修改原型方法的派生 UI 类可以用
 `@zeta-hot-reload patch-prototype` 显式加入同一机制。
 
-原型热替换不处理构造器、实例字段、模块注册副作用或继承关系变更。继承关系不兼容或热更新运行时
-未就绪时，插件会让 Vite 执行完整页面重载；开发者修改构造阶段行为后也应主动重载一次。Electron
-Main 与 Preload 仍由 TypeScript watch 和 nodemon 重启整个 Electron 进程。Rust App Server 不属于
-Renderer HMR，`dev:desktop` 不会因 Rust 源码变化自动重编译开发包。
+Vite 插件会在模块执行前比较 TypeScript 语法结构。只有普通实例方法、getter 和 setter 的变化进入
+原型热替换；构造器、实例字段、静态状态、装饰器、模块声明/副作用或继承关系变化都会自动执行完整
+页面重载，并在开发服务器日志中说明原因。这样旧实例不会静默保留过期的初始化状态。Electron Main
+与 Preload 仍由 TypeScript watch 和 nodemon 重启整个 Electron 进程，连续输出使用 300 ms 防抖。
+
+完整 Electron 开发命令还会运行 `build/serverHost/watch.mjs`。Rust 源码或 Cargo manifest 变化后，它先完成
+`zeta-server-host` 构建，再发布一个不可变 generation；每个本地 Workbench window 随后通过现有 App
+Server supervisor 停止旧连接并启动新 generation。构建失败时当前 App Server 继续运行，初始化失败
+时自动回滚到上一 generation。可以单独运行 `corepack pnpm dev:rust` 启动同一 watcher；`dev:ui` 和
+不启动 Rust 的 disconnected Web 模式不会监听后端。
 
 不带项目路径启动时，Zeta 使用空窗口上下文。构建完成后，可以通过启动参数打开一个项目目录：
 
@@ -148,7 +159,7 @@ Command、MenuId、Context Key 与菜单型 Toolbar 的 canonical 组合规范�
 
 普通 `dev:web`、`dev:renderer` 和静态 Browser 构建未配置 host 时由
 `platform/app-server/browser/rendererApi.ts` 提供 disconnected API：UI 正常启动，状态栏显示
-App Server 不可用，产品操作明确失败。`dev:web:full` 则由 `web-app-server-vite-plugin.mjs`、
+App Server 不可用，产品操作明确失败。`dev:web:full` 则由 `build/vite/webAppServerPlugin.mjs`、
 `ViteDevAppServerConnection` 与 `connectViteDevRendererApi()` 组成仅限本机开发的 host，并在
 Workbench 启动前注入同一份 `IRendererHost` contract。嵌入方若已实现受认证的远程 transport，必须在产品入口
 执行前注入：

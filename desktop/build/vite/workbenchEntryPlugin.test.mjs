@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { workbenchEntryPlugin } from "./workbench-entry-vite-plugin.mjs";
+import { workbenchEntryPlugin } from "./workbenchEntryPlugin.mjs";
 
 test("Workbench entry redirects root requests to the selected product", () => {
   for (const [rendererEntry, expectedLocation] of [

@@ -19,7 +19,7 @@ const MAX_PENDING_WRITES = 128;
  * HMR WebSocket and one stdio App Server child per browser connection.
  */
 export function webAppServerVitePlugin(options = {}) {
-  const desktopRoot = resolve(options.desktopRoot ?? resolve(import.meta.dirname, ".."));
+  const desktopRoot = resolve(options.desktopRoot ?? resolve(import.meta.dirname, "../.."));
   const repositoryRoot = resolve(options.repositoryRoot ?? resolve(desktopRoot, ".."));
   const workspaceRoot = resolve(options.workspaceRoot ?? process.env.ZETA_WORKSPACE_ROOT ?? repositoryRoot);
   const profileRoot = resolve(options.profileRoot ?? process.env.ZETA_WEB_APP_SERVER_PROFILE ?? join(desktopRoot, ".tmp", "web-profile"));

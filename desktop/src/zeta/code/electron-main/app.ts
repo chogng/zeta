@@ -11,7 +11,8 @@ import { ElectronContextMenu } from "../../base/parts/contextmenu/electron-main/
 import { appServerIpcRoutes } from "../../platform/app-server/electron-main/app-server-ipc.js";
 import { buildAppServerEnvironment } from "../../platform/app-server/common/appServerEnvironment.js";
 import { AppServerSupervisor } from "../../platform/app-server/electron-main/app-server-supervisor.js";
-import { serverHostExecutablePath } from "../../platform/server-host/electron-main/serverHostPackage.js";
+import { developmentServerHostGenerationPath, serverHostExecutablePath } from "../../platform/server-host/electron-main/serverHostPackage.js";
+import { DevelopmentServerHostReloader, readDevelopmentServerHostGenerationSync, selectDevelopmentServerHostExecutable } from "../../platform/server-host/electron-main/developmentServerHostReloader.js";
 import { LocalAppServerProcessLauncher } from "../../platform/app-server/electron-main/localAppServerProcessLauncher.js";
 import { normalizeEntryUrl, TrustedIpcRouter, type IpcRoute } from "../../platform/ipc/electron-main/trustedIpcRouter.js";
 import { BROWSER_VIEW_EVENT_CHANNEL } from "../../platform/browser/common/browserView.js";
@@ -350,19 +351,31 @@ export class ZetaApplication extends DisposableOwner {
     workspace: IAnyWorkspaceIdentifier,
     resources: DisposableStore,
   ): AppServerSupervisor {
+    const packagedExecutable = serverHostExecutablePath({
+      appPath: app.getAppPath(),
+      isPackaged: app.isPackaged,
+      platform: process.platform,
+      resourcesPath: process.resourcesPath,
+    });
+    const generationFile = !app.isPackaged && process.env.ZETA_DEV_SERVER_HOST_RELOAD === "1"
+      ? developmentServerHostGenerationPath(app.getAppPath())
+      : undefined;
+    let developmentExecutable: string | undefined;
+    if (generationFile) {
+      try {
+        developmentExecutable = readDevelopmentServerHostGenerationSync(generationFile);
+      } catch (error) {
+        console.error("[server-host] Ignoring invalid development generation", error);
+      }
+    }
     const processLauncher = isRemoteWorkspaceIdentifier(workspace)
       ? this.createSshAppServerProcessLauncher(workspace, resources)
       : new LocalAppServerProcessLauncher({
-        executable: serverHostExecutablePath({
-          appPath: app.getAppPath(),
-          isPackaged: app.isPackaged,
-          platform: process.platform,
-          resourcesPath: process.resourcesPath,
-        }),
+        executable: selectDevelopmentServerHostExecutable(packagedExecutable, developmentExecutable),
         args: ["app-server", "connect"],
         environment: this.appServerEnvironment(workspace),
       });
-    return new AppServerSupervisor({
+    const supervisor = new AppServerSupervisor({
       processLauncher,
       session: {
         clientName: "zeta-desktop",
@@ -376,6 +389,10 @@ export class ZetaApplication extends DisposableOwner {
         },
       },
     });
+    if (generationFile && processLauncher instanceof LocalAppServerProcessLauncher) {
+      resources.add(new DevelopmentServerHostReloader({ generationFile, launcher: processLauncher, supervisor }));
+    }
+    return supervisor;
   }
 
   private createSshAppServerProcessLauncher(workspace: IAnyWorkspaceIdentifier, resources: DisposableStore) {

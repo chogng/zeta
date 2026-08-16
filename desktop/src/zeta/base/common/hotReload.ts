@@ -1,89 +1,97 @@
-/** Constructor whose existing instances may receive development-time method updates. */
-export type HotReloadableConstructor = Function & {
-  readonly prototype: object;
-};
+import type { IDisposable } from "./lifecycle.js";
+import { toDisposable } from "./lifecycle.js";
 
-/** Result of registering one class with the development hot-reload runtime. */
-export type HotReloadClassRegistration =
-  | "disabled"
-  | "registered"
-  | "unchanged"
-  | "patched"
-  | "incompatible";
+export interface HotReloadConfig {
+  readonly mode?: "patch-prototype";
+}
+
+export interface HotReloadRequest {
+  readonly oldExports: Record<string, unknown>;
+  readonly newSrc: string;
+  readonly config: HotReloadConfig;
+}
+
+export type AcceptNewExportsHandler = (newExports: Record<string, unknown>) => boolean;
+export type HotReloadHandler = (request: HotReloadRequest) => AcceptNewExportsHandler | undefined;
 
 type HotReloadGlobal = typeof globalThis & {
-  $zetaHotReload_registerClass?: (
-    id: string,
-    constructor: HotReloadableConstructor,
-  ) => HotReloadClassRegistration;
+  $hotReload_applyNewExports?: (request: Omit<HotReloadRequest, "config"> & { readonly config?: HotReloadConfig }) => AcceptNewExportsHandler | undefined;
 };
 
 let enabled = false;
-const constructors = new Map<string, HotReloadableConstructor>();
+const handlers = new Set<HotReloadHandler>();
 
-/** Enables the Renderer-only development hot-reload runtime for this realm. */
+/** Enables the development-only hot-reload handler boundary in this realm. */
 export function enableHotReload(): void {
   if (enabled) return;
   enabled = true;
-  (globalThis as HotReloadGlobal).$zetaHotReload_registerClass =
-    registerHotReloadableClass;
+  handlers.add(createPrototypePatchHandler());
+  (globalThis as HotReloadGlobal).$hotReload_applyNewExports = applyNewExports;
 }
 
-/** Returns whether development hot reload is enabled in the current realm. */
+/** Returns whether hot reload has been enabled for the current realm. */
 export function isHotReloadEnabled(): boolean {
   return enabled;
 }
 
-/**
- * Registers a stable class identity and patches its existing prototype on a
- * later registration from Vite. Callers must fall back to a full reload when
- * this function returns `incompatible`.
- */
-export function registerHotReloadableClass(
-  id: string,
-  constructor: HotReloadableConstructor,
-): HotReloadClassRegistration {
-  if (!enabled) return "disabled";
-  if (!id.trim()) throw new TypeError("Hot-reload class ID must not be empty");
-  if (
-    typeof constructor !== "function" ||
-    typeof constructor.prototype !== "object" ||
-    constructor.prototype === null
-  ) {
-    throw new TypeError("Hot-reload class registration requires a constructor");
-  }
+/** Registers a runtime strategy that may accept one Vite module replacement. */
+export function registerHotReloadHandler(handler: HotReloadHandler): IDisposable {
+  if (!enabled) return toDisposable(() => {});
+  handlers.add(handler);
+  return toDisposable(() => handlers.delete(handler));
+}
 
-  const current = constructors.get(id);
-  if (!current) {
-    constructors.set(id, constructor);
-    return "registered";
-  }
-  if (current === constructor) return "unchanged";
-  if (!canPatchPrototype(current.prototype, constructor.prototype)) {
-    return "incompatible";
-  }
+function applyNewExports(request: Omit<HotReloadRequest, "config"> & { readonly config?: HotReloadConfig }): AcceptNewExportsHandler | undefined {
+  const normalized: HotReloadRequest = { ...request, config: request.config ?? {} };
+  const acceptors = [...handlers].map(handler => handler(normalized)).filter((handler): handler is AcceptNewExportsHandler => handler !== undefined);
+  if (acceptors.length === 0) return undefined;
+  return newExports => acceptors.reduce((accepted, accept) => accept(newExports) || accepted, false);
+}
 
-  patchPrototype(current.prototype, constructor.prototype);
-  console.debug(`[hot-reload] Patched '${id}'`);
-  return "patched";
+function createPrototypePatchHandler(): HotReloadHandler {
+  return ({ oldExports, newSrc, config }) => {
+    if (config.mode !== "patch-prototype") return undefined;
+    return newExports => patchExportedPrototypes(oldExports, newExports, newSrc);
+  };
+}
+
+function patchExportedPrototypes(oldExports: Record<string, unknown>, newExports: Record<string, unknown>, source: string): boolean {
+  if (!sameKeys(oldExports, newExports)) return false;
+  const replacements: Array<{ readonly current: object; readonly replacement: object; readonly name: string }> = [];
+  for (const name of Object.keys(newExports)) {
+    const current = oldExports[name];
+    const replacement = newExports[name];
+    if (!isClassLike(current) || !isClassLike(replacement) || !canPatchPrototype(current.prototype, replacement.prototype)) return false;
+    replacements.push({ current: current.prototype, replacement: replacement.prototype, name });
+  }
+  for (const replacement of replacements) {
+    patchPrototype(replacement.current, replacement.replacement);
+    newExports[replacement.name] = oldExports[replacement.name];
+    console.debug(`[hot-reload] Patched '${replacement.name}' from ${source}`);
+  }
+  return true;
+}
+
+function sameKeys(first: Record<string, unknown>, second: Record<string, unknown>): boolean {
+  const firstKeys = Object.keys(first).sort();
+  const secondKeys = Object.keys(second).sort();
+  return firstKeys.length === secondKeys.length && firstKeys.every((key, index) => key === secondKeys[index]);
+}
+
+function isClassLike(value: unknown): value is Function & { readonly prototype: object } {
+  return typeof value === "function" && typeof value.prototype === "object" && value.prototype !== null;
 }
 
 function canPatchPrototype(current: object, replacement: object): boolean {
-  if (Object.getPrototypeOf(current) !== Object.getPrototypeOf(replacement)) {
-    return false;
-  }
-
+  if (Object.getPrototypeOf(current) !== Object.getPrototypeOf(replacement)) return false;
   const replacementKeys = new Set(Reflect.ownKeys(replacement));
   for (const key of Reflect.ownKeys(current)) {
     if (key === "constructor" || replacementKeys.has(key)) continue;
-    if (Object.getOwnPropertyDescriptor(current, key)?.configurable === false) {
-      return false;
-    }
+    if (Object.getOwnPropertyDescriptor(current, key)?.configurable === false) return false;
   }
   for (const key of replacementKeys) {
     if (key === "constructor") continue;
-    const currentDescriptor = Object.getOwnPropertyDescriptor(current, key);
-    if (currentDescriptor?.configurable === false) return false;
+    if (Object.getOwnPropertyDescriptor(current, key)?.configurable === false) return false;
   }
   return true;
 }
@@ -91,9 +99,7 @@ function canPatchPrototype(current: object, replacement: object): boolean {
 function patchPrototype(current: object, replacement: object): void {
   const replacementKeys = new Set(Reflect.ownKeys(replacement));
   for (const key of Reflect.ownKeys(current)) {
-    if (key !== "constructor" && !replacementKeys.has(key)) {
-      Reflect.deleteProperty(current, key);
-    }
+    if (key !== "constructor" && !replacementKeys.has(key)) Reflect.deleteProperty(current, key);
   }
   for (const key of replacementKeys) {
     if (key === "constructor") continue;

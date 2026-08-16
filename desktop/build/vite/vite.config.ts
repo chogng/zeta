@@ -1,16 +1,17 @@
 import { resolve } from "node:path";
 import { defineConfig } from "vite";
-import { productIconsPlugin } from "./scripts/product-icons-vite-plugin.mjs";
-import { webAppServerVitePlugin } from "./scripts/web-app-server-vite-plugin.mjs";
-import { workbenchEntryPlugin } from "./scripts/workbench-entry-vite-plugin.mjs";
-import { workbenchHotReloadPlugin } from "./scripts/workbench-hot-reload-vite-plugin.mjs";
-import { getProductConfiguration, resolveProductId } from "./src/zeta/product/common/product.js";
+import { getProductConfiguration, resolveProductId } from "../../src/zeta/product/common/product.js";
+import { hotReloadPlugin } from "./hotReloadPlugin.ts";
+import { productIconsPlugin } from "./productIconsPlugin.mjs";
+import { webAppServerVitePlugin } from "./webAppServerPlugin.mjs";
+import { workbenchEntryPlugin } from "./workbenchEntryPlugin.mjs";
 
 export default defineConfig(() => {
+  const desktopRoot = resolve(import.meta.dirname, "../..");
   const product = getProductConfiguration(resolveProductId(process.env.ZETA_PRODUCT));
   const webAppServerEnabled = process.env.ZETA_WEB_APP_SERVER === "1";
   const developmentPort = webAppServerEnabled ? 5174 : 5173;
-  const sourceRoot = resolve(import.meta.dirname, "src/zeta/code");
+  const sourceRoot = resolve(desktopRoot, "src/zeta/code");
   const browserEntry = `browser/workbench/${product.rendererEntry}`;
   const electronEntry = `electron-browser/workbench/${product.rendererEntry}`;
   const dedicatedSessions = product.dedicatedSessions;
@@ -30,7 +31,7 @@ export default defineConfig(() => {
     define: {
       __ZETA_WEB_APP_SERVER__: JSON.stringify(webAppServerEnabled),
     },
-    plugins: [workbenchHotReloadPlugin(), workbenchEntryPlugin(product.rendererEntry), productIconsPlugin(), ...(webAppServerEnabled ? [webAppServerVitePlugin()] : [])],
+    plugins: [hotReloadPlugin({ desktopRoot }), workbenchEntryPlugin(product.rendererEntry), productIconsPlugin(), ...(webAppServerEnabled ? [webAppServerVitePlugin()] : [])],
     optimizeDeps: {
       include: ["vscode-oniguruma"],
     },
@@ -40,7 +41,7 @@ export default defineConfig(() => {
       strictPort: true,
     },
     build: {
-      outDir: resolve(import.meta.dirname, `dist/renderer/${product.id}`),
+      outDir: resolve(desktopRoot, `dist/renderer/${product.id}`),
       emptyOutDir: true,
       rollupOptions: {
         input: {

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { appServerEnvironment, JsonlFrameDecoder, isAllowedDevOrigin } from "./web-app-server-vite-plugin.mjs";
+import { appServerEnvironment, JsonlFrameDecoder, isAllowedDevOrigin } from "./webAppServerPlugin.mjs";
 
 test("accepts only same-origin loopback WebSocket clients", () => {
   assert.equal(isAllowedDevOrigin("http://127.0.0.1:5173", "127.0.0.1:5173"), true);

@@ -6,7 +6,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
 
-import { productIconsPlugin } from "./product-icons-vite-plugin.mjs";
+import { productIconsPlugin } from "../build/vite/productIconsPlugin.mjs";
 import { checkProductIcons, syncProductIcons } from "./sync-product-icons.mjs";
 
 const addSvg = `<svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">

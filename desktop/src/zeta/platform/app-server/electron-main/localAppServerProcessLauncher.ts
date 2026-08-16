@@ -23,17 +23,24 @@ export interface LocalAppServerProcessLauncherOptions {
 export class LocalAppServerProcessLauncher implements IAppServerProcessLauncher {
   private readonly spawnProcess: SpawnLocalAppServer;
   private readonly fileExists: (path: string) => boolean;
+  private executableValue: string;
   private environmentValue: Readonly<Record<string, string>>;
 
-  readonly description: string;
-
   constructor(readonly options: LocalAppServerProcessLauncherOptions) {
-    if (!isAbsolute(options.executable)) throw new Error("App Server executable path must be absolute");
+    validateExecutable(options.executable);
     this.validateEnvironment(options.environment);
-    this.description = options.executable;
     this.spawnProcess = options.spawnProcess ?? defaultSpawn;
     this.fileExists = options.fileExists ?? existsSync;
+    this.executableValue = options.executable;
     this.environmentValue = options.environment;
+  }
+
+  get description(): string {
+    return this.executableValue;
+  }
+
+  get executable(): string {
+    return this.executableValue;
   }
 
   get environment(): Readonly<Record<string, string>> {
@@ -46,12 +53,18 @@ export class LocalAppServerProcessLauncher implements IAppServerProcessLauncher 
     this.environmentValue = environment;
   }
 
+  /** Selects a fully built development generation for the next connection. */
+  replaceExecutable(executable: string): void {
+    validateExecutable(executable);
+    this.executableValue = executable;
+  }
+
   validate(): void {
-    if (!this.fileExists(this.options.executable)) throw new Error(`Packaged Zeta binary is missing: ${this.options.executable}`);
+    if (!this.fileExists(this.executableValue)) throw new Error(`Packaged Zeta binary is missing: ${this.executableValue}`);
   }
 
   launch(): ChildProcessWithoutNullStreams {
-    return this.spawnProcess(this.options.executable, this.options.args, { environment: this.environmentValue });
+    return this.spawnProcess(this.executableValue, this.options.args, { environment: this.environmentValue });
   }
 
   private validateEnvironment(environment: Readonly<Record<string, string>>): void {
@@ -61,6 +74,10 @@ export class LocalAppServerProcessLauncher implements IAppServerProcessLauncher 
       if (!allowed) throw new Error(`App Server environment variable is not allowed: ${key}`);
     }
   }
+}
+
+function validateExecutable(executable: string): void {
+  if (!isAbsolute(executable)) throw new Error("App Server executable path must be absolute");
 }
 
 function defaultSpawn(executable: string, args: readonly string[], options: SpawnLocalAppServerOptions): ChildProcessWithoutNullStreams {

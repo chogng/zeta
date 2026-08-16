@@ -17,3 +17,8 @@ export function serverHostExecutablePath(location: ServerHostPackageLocation): s
   const executableName = location.platform === "win32" ? "zeta-server.exe" : "zeta-server";
   return join(packageRoot, "bin", executableName);
 }
+
+/** Resolves the development-only generation pointer published by the Rust watcher. */
+export function developmentServerHostGenerationPath(appPath: string): string {
+  return resolve(appPath, ".tmp", "dev-server-host", "current.json");
+}

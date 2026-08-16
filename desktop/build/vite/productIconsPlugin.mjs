@@ -1,5 +1,5 @@
 import { dirname, extname, resolve } from "node:path";
-import { syncProductIcons } from "./sync-product-icons.mjs";
+import { syncProductIcons } from "../../scripts/sync-product-icons.mjs";
 
 const watchedEvents = new Set(["add", "change", "unlink"]);
 
@@ -8,7 +8,7 @@ const watchedEvents = new Set(["add", "change", "unlink"]);
  * while Vite is running and reloads the Renderer after a successful update.
  */
 export function productIconsPlugin(options = {}) {
-  const sourceDirectory = resolve(options.sourceDirectory ?? resolve(import.meta.dirname, "../../resources/icons"));
+  const sourceDirectory = resolve(options.sourceDirectory ?? resolve(import.meta.dirname, "../../../resources/icons"));
   const outputFile = options.outputFile;
   const debounceMilliseconds = options.debounceMilliseconds ?? 50;
   let timer;

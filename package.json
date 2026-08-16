@@ -22,6 +22,7 @@
     "dev:desktop:ui:code": "corepack pnpm --dir desktop dev:ui:code",
     "dev:desktop:ui:academic": "corepack pnpm --dir desktop dev:ui:academic",
     "dev:desktop:ui:complete": "corepack pnpm --dir desktop dev:ui:complete",
+    "dev:desktop:rust": "corepack pnpm --dir desktop dev:rust",
     "dev:web": "corepack pnpm --dir desktop dev:web",
     "dev:web:code": "corepack pnpm --dir desktop dev:web:code",
     "dev:web:academic": "corepack pnpm --dir desktop dev:web:academic",
