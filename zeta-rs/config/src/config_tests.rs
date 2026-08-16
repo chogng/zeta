@@ -138,7 +138,6 @@ fn update_preferences(
         command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
             preferred_model,
             approval_review_model: Patch::Missing,
-            products: None,
         }),
     }
 }
@@ -488,52 +487,6 @@ fn preference_patches_preserve_missing_fields_and_clear_null_fields() {
 }
 
 #[test]
-fn product_preferences_are_typed_namespaced_and_persisted_in_config_toml() {
-    let path = config_path("product-preferences");
-    let store = ConfigStore::open(&path).unwrap();
-    store
-        .apply(ConfigCommandRequest {
-            command_id: CommandId::new("configure-product-preferences").unwrap(),
-            expected_revision: ConfigRevision::INITIAL,
-            command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
-                preferred_model: Patch::Missing,
-                approval_review_model: Patch::Missing,
-                products: Some(ProductsConfigUpdate {
-                    desktop: Some(DesktopProductPreferencesUpdate {
-                        color_theme: Patch::Value("zeta-dark".into()),
-                        sash_size: Patch::Value(8),
-                        ..Default::default()
-                    }),
-                    code: Some(CodeProductPreferencesUpdate {
-                        color_theme: Patch::Value("zeta-code-ansi-dark".into()),
-                    }),
-                    zeterm: Some(ZetermProductPreferencesUpdate {
-                        color_theme: Patch::Value("zeta-light".into()),
-                    }),
-                }),
-            }),
-        })
-        .unwrap();
-
-    let snapshot = store.read_snapshot().unwrap();
-    assert_eq!(snapshot.values.products.desktop.sash_size, Some(8));
-    assert_eq!(
-        snapshot.values.products.code.color_theme.as_deref(),
-        Some("zeta-code-ansi-dark")
-    );
-    let persisted = persisted_config_document(&path);
-    assert!(persisted.contains("[products.desktop]"));
-    assert!(persisted.contains("[products.code]"));
-    assert!(persisted.contains("[products.zeterm]"));
-
-    let invalid = toml::from_str::<UserConfigDocument>(
-        "[products.desktop]\nsashSize = 0\nunknownSetting = true\n",
-    );
-    assert!(invalid.is_err());
-    remove_config_files(&path);
-}
-
-#[test]
 fn workspace_trust_commands_persist_user_owned_decisions() {
     let path = config_path("workspace-trust");
     let store = ConfigStore::open(&path).unwrap();
@@ -619,7 +572,6 @@ fn approval_review_model_is_explicit_and_keeps_its_provider_configured() {
                 approval_review_model: Patch::Value(ApprovalReviewModelSelection::Explicit {
                     model: model_ref("openai", "codex-auto-review"),
                 }),
-                products: None,
             }),
         })
         .unwrap_err();
@@ -635,7 +587,6 @@ fn approval_review_model_is_explicit_and_keeps_its_provider_configured() {
                 approval_review_model: Patch::Value(ApprovalReviewModelSelection::Explicit {
                     model: model_ref("openai", "codex-auto-review"),
                 }),
-                products: None,
             }),
         })
         .unwrap();

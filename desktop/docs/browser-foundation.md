@@ -158,22 +158,23 @@ authorities:
   `IConfigurationService` contract, and the bounded versioned wire document.
 - `workbench/services/configuration` validates host snapshots through the
   registered keys and publishes atomic changes to product services.
-- Electron Main owns `configuration.json`, performs atomic writes, watches for
+- Electron Main owns `<profile>/configuration.json`, performs atomic writes, watches for
   external edits, and enforces compare-and-swap revisions. Renderer access is
   restricted to the typed read/update/change preload capability.
-- Electron Main independently owns `keybindings.json` under the same
+- Electron Main independently owns `<profile>/keybindings.json` under the same
   revisioned JSON storage primitive. This preserves ordered shortcut rules
   without turning them into an ordinary configuration value.
 - Browser hosts use the same Workbench service with an in-memory document
   until a browser persistence host is supplied.
-- `configuration.json` stores Desktop-only key/value settings such as menu
-  presentation and fonts. Keyboard shortcuts belong to `keybindings.json`.
+- `configuration.json` stores frontend/device key/value settings such as menu
+  presentation, fonts, accessibility, and product theme selections. Keyboard
+  shortcuts belong to `keybindings.json`.
 - `state.json` stores reconstructable machine state such as window bounds. It
   must not become a configuration store.
-- The Rust ConfigStore remains authoritative for cross-client domain intent
-  such as models, providers, MCP servers, Skills, and shared product
-  preferences. Keyboard events and Desktop command IDs do not cross that
-  boundary.
+- The Rust ConfigStore remains authoritative for cross-client backend intent
+  such as models, providers, MCP servers, Skills, and Workspace trust.
+  Presentation preferences, keyboard events, and Desktop command IDs do not
+  cross that boundary.
 
 The current Desktop document is:
 

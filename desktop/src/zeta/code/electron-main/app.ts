@@ -21,7 +21,6 @@ import { BrowserAutomationMainService, registerBrowserAutomationHost } from "../
 import { BrowserTargetRegistry } from "../../platform/browser/electron-main/browserTargetRegistry.js";
 import { CONFIGURATION_CHANGED_CHANNEL } from "../../platform/configuration/common/configuration.js";
 import { ConfigurationMainService, configurationIpcRoutes } from "../../platform/configuration/electron-main/configurationMainService.js";
-import { AppServerConfigurationMainService } from "../../platform/configuration/electron-main/appServerConfigurationMainService.js";
 import { nativeContextMenuIpcRoutes } from "../../platform/contextview/electron-main/contextMenuIpc.js";
 import { fileIpcRoutes } from "../../platform/files/electron-main/fileIpcRoutes.js";
 import { extensionIpcRoutes } from "../../platform/extensions/electron-main/extensionIpcRoutes.js";
@@ -48,6 +47,7 @@ import { sessionIpcRoutes } from "../../platform/sessions/electron-main/sessionI
 import { skillIpcRoutes } from "../../platform/skills/electron-main/skillIpcRoutes.js";
 import { sessionsWindowIpcRoutes } from "../../sessions/electron-main/sessionsWindowIpc.js";
 import { StateService } from "../../platform/state/node/stateService.js";
+import { localProfileRoot, migrateLegacyLocalProfile } from "../../platform/profile/node/localProfile.js";
 import { terminalIpcRoutes } from "../../platform/terminal/electron-main/terminalIpcRoutes.js";
 import { ReconnectableTerminalMainService } from "../../platform/terminal/electron-main/reconnectableTerminalMainService.js";
 import { userThemeIpcRoutes } from "../../platform/theme/electron-main/userThemeIpc.js";
@@ -128,6 +128,7 @@ export class ZetaApplication extends DisposableOwner {
   private readonly disposableTracker: DisposableTracker | undefined;
   private readonly tracking: Disposable | undefined;
   private readonly trustedIpcRouter: TrustedIpcRouter;
+  private readonly profileRoot: string;
 
   private readonly workbenchWindows = new WorkbenchWindowRegistry<WorkbenchWindowRecord>();
   private readonly pendingWindowLaunches: PendingWindowLaunch[] = [];
@@ -151,6 +152,7 @@ export class ZetaApplication extends DisposableOwner {
     this.disposableTracker = disposableTracker;
     this.tracking = tracking;
     this.trustedIpcRouter = this.own(new TrustedIpcRouter(ipcMain));
+    this.profileRoot = localProfileRoot();
 
     app.on("before-quit", this.onBeforeQuit);
     app.on("will-quit", this.onWillQuit);
@@ -226,6 +228,7 @@ export class ZetaApplication extends DisposableOwner {
   }
 
   private async createPersistentServices(): Promise<void> {
+    await migrateLegacyLocalProfile({ legacyUserDataRoot: app.getPath("userData"), profileRoot: this.profileRoot });
     const state = await StateService.create(
       join(app.getPath("userData"), "state.json"),
     );
@@ -233,13 +236,13 @@ export class ZetaApplication extends DisposableOwner {
     let keybindings: KeybindingsResourceMainService | undefined;
     try {
       configuration = await ConfigurationMainService.create({
-        filePath: join(app.getPath("userData"), "configuration.json"),
+        filePath: join(this.profileRoot, "configuration.json"),
         onError: (error) => {
           console.error("Failed to process configuration", error);
         },
       });
       keybindings = await KeybindingsResourceMainService.create({
-        filePath: join(app.getPath("userData"), "keybindings.json"),
+        filePath: join(this.profileRoot, "keybindings.json"),
         onError: (error) => {
           console.error("Failed to process keybindings resource", error);
         },
@@ -403,7 +406,7 @@ export class ZetaApplication extends DisposableOwner {
     const configuredRuntime = process.env.ZETA_REMOTE_ZETA_PATH;
     const connectionProfiles = configuredRuntime === undefined ? new ServerHostRemoteConnectionProfiles({
       serverHostExecutable,
-      environment: { ...process.env, ZETA_PROFILE_ROOT: join(app.getPath("userData"), "state") },
+      environment: { ...process.env, ZETA_PROFILE_ROOT: this.profileRoot },
     }) : undefined;
     const bootstrap = resources.add(new RemoteRuntimeBootstrapMainService({
       workspace: workspace.uri,
@@ -559,9 +562,6 @@ export class ZetaApplication extends DisposableOwner {
       }
     }));
     const { configuration, keybindings } = this.services;
-    const windowConfiguration = this.appServerStartupMode === "required"
-      ? windowDisposables.add(await AppServerConfigurationMainService.create(supervisor, configuration))
-      : configuration;
     const workspaceTransitions = windowDisposables.add(new WorkspaceTransitionMainService({
       workspaces,
       context: workspaceContext,
@@ -569,7 +569,7 @@ export class ZetaApplication extends DisposableOwner {
     }));
     const remoteConnections = new ServerHostRemoteConnections({
       serverHostExecutable: serverHostExecutablePath({ appPath: app.getAppPath(), isPackaged: app.isPackaged, platform: process.platform, resourcesPath: process.resourcesPath }),
-      environment: { ...process.env, ZETA_PROFILE_ROOT: join(app.getPath("userData"), "state") },
+      environment: { ...process.env, ZETA_PROFILE_ROOT: this.profileRoot },
       scheduleConnect: connection => this.openRemoteConnection(connection, workspaces),
     });
     const reconnectableTerminals = isRemoteWorkspaceIdentifier(workspaceContext.getWorkspace())
@@ -607,7 +607,7 @@ export class ZetaApplication extends DisposableOwner {
       ...terminalIpcRoutes(supervisor, reconnectableTerminals),
       ...this.ipcRouteContributions.flatMap(contribution => contribution(supervisor)),
       ...browserViewIpcRoutes(browserViewMainService),
-      ...configurationIpcRoutes(windowConfiguration),
+      ...configurationIpcRoutes(configuration),
       ...keybindingsResourceIpcRoutes(keybindings),
       ...nativeHostIpcRoutes({
         openFolder: async () => {
@@ -659,7 +659,7 @@ export class ZetaApplication extends DisposableOwner {
         },
         toggleDeveloperTools: () => window.webContents.toggleDevTools(),
       }),
-      ...userThemeIpcRoutes(new UserThemeFileService(join(app.getPath("userData"), "themes"))),
+      ...userThemeIpcRoutes(new UserThemeFileService(join(this.profileRoot, "themes"))),
       ...workspaceContextIpcRoutes(workspaceContext),
     ];
     if (this.product.dedicatedSessions) {
@@ -693,7 +693,7 @@ export class ZetaApplication extends DisposableOwner {
     windowDisposables.add(supervisor.onStateChange((state) => {
       window.webContents.send("zeta:app-server:stateChanged", state);
     }));
-    windowDisposables.add(windowConfiguration.onDidChange((snapshot) =>
+    windowDisposables.add(configuration.onDidChange((snapshot) =>
       window.webContents.send(CONFIGURATION_CHANGED_CHANNEL, snapshot)
     ));
     windowDisposables.add(keybindings.onDidChange((snapshot) =>
@@ -977,7 +977,7 @@ export class ZetaApplication extends DisposableOwner {
         ? { ZETA_PRODUCT_SERVICES_PATH: process.env.ZETA_PRODUCT_SERVICES_PATH }
         : {}),
       ZETA_ELECTRON_RUN_AS_NODE_PATH: process.execPath,
-      ZETA_PROFILE_ROOT: join(app.getPath("userData"), "state"),
+      ZETA_PROFILE_ROOT: this.profileRoot,
       ...(isSingleFolderWorkspaceIdentifier(workspace)
         ? {
           ZETA_WORKSPACE_ROOT: workspace.uri.fsPath,

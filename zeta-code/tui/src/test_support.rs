@@ -14,7 +14,6 @@ pub(crate) fn empty_config_snapshot() -> ConfigReadResult {
         generation: 0,
         preferred_model: None,
         approval_review_model: ApprovalReviewModelSelectionDto::Automatic,
-        products: Default::default(),
         providers: BTreeMap::new(),
         mcp_servers: BTreeMap::new(),
         skill_sources: BTreeMap::new(),

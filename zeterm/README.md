@@ -174,7 +174,7 @@ composition API 已删除，后续不得在 Native 宿主重新引入平行输�
 | system clipboard copy/paste 与 bracketed-paste routing | `terminal_selection` / `terminal_input` | ✅ |
 | OSC title → Terminal Surface / native window title | `TerminalCore::title` / `NativeWindow::set_title` | ✅；后台 terminal title 不覆盖 Agent Session title |
 | 完整 TUI compatibility | 尚无完整 owner | 尚未完成 |
-| App Server session 与进程内 Thread projection | `agent_session` / `thread_projection` | ✅；Native 通过 `SessionStateMode::Ephemeral` 使用 application boundary，Session/Thread/用户消息只在当前 zeterm 进程内存在 |
+| App Server Session 与 Thread projection | `agent_session` / `thread_projection` | ✅；Local 使用共享 `<profile_root>/state.sqlite3` 的 durable composition，启动时通过 `session/list` 恢复可用会话；Remote 使用远端 profile authority |
 
 依赖方向：
 

@@ -185,7 +185,8 @@ App Server 启动时：
 
 `catalogRefreshIntervalSeconds` 是产品选择的进程内已验签 catalog snapshot 复用时间，允许范围为
 60–86400 秒，默认 300 秒。它只控制何时再次尝试远端刷新，不改变 TUF expiry、rollback、revocation
-或签名校验；磁盘 cache 继续由 `MarketplaceRemoteClient` 私有持有。Renderer 的 Marketplace service
+或签名校验；磁盘 cache 继续由 `MarketplaceRemoteClient` 私有持有，并统一位于
+`<profile>/cache/marketplace`（默认即 `<home>/.zeta/cache/marketplace`）。Renderer 的 Marketplace service
 只保留 path-free、Renderer-ready 的内存展示快照，因此 Settings 重开可以同步绘制；它不保存 catalog
 manifest、TUF metadata 或 package bytes。用户显式 Browse/Search 时才要求 service 重新读取目录。
 
@@ -194,7 +195,8 @@ Marketplace Manager executable。`zeta-app-server-client` 统一发现该发行�
 是否注入：Desktop/独立 `zeta-server`、`zeta code`/TUI 和 zeterm 本地 embedded session 都注入同一
 typed `LocalProductServicesConfig`；远端 zeterm session 由远端 `zeta-server` 注入。各客户端读取
 Marketplace 的方式始终是 App Server `marketplace/search`（空 query 即 list）等业务 RPC，而不是读取
-cache 文件。
+cache 文件。因此 PreferencesView 不拥有 cache，也不需要为 TUI/zeterm 维护第二份列表；三个产品的
+本地 App Server 组合复用同一个磁盘 cache，各自只维护可丢弃的进程内 snapshot。
 
 ## 安全和失败语义
 

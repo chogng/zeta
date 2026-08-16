@@ -184,7 +184,7 @@ Session、Thread、Turn、PTY process 和 durable output 必须来自对应 runt
 ### 4.1 用户快捷键资源
 
 `<ZETA_PROFILE_ROOT>/keybindings.json` 是严格 JSON 数组。未设置 `ZETA_PROFILE_ROOT` 时，Native 与
-App Server 使用同一个操作系统用户 profile state 根；切换工作区不会切换用户快捷键或
+App Server 使用同一个 `<home>/.zeta` profile root；切换工作区不会切换用户快捷键或
 Config/Session/Thread authority。每条规则必须包含 `key` 和 `command`；
 `command: null` 表示 blocker。`mac`、`linux`、`win` 可以用平台专属按键覆盖 `key`，设为
 `null` 表示该平台禁用该条规则。

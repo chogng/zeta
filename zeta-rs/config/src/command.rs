@@ -1,4 +1,3 @@
-use crate::ProductsConfigUpdate;
 use crate::SemanticCodeIndexAutomaticContext;
 use crate::SemanticCodeIndexSelection;
 use crate::ToolSearchConfig;
@@ -23,8 +22,6 @@ pub struct PreferencesUpdate {
     pub preferred_model: Patch<ModelRef>,
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
     pub approval_review_model: Patch<ApprovalReviewModelSelection>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub products: Option<ProductsConfigUpdate>,
 }
 
 /// Typed mutations accepted by the user configuration authority.

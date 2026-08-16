@@ -82,7 +82,7 @@ Notification 不依附 request completion；consumer 不得对 session handle �
 | `src/session.rs` | owned session、session transport、request/event threads、shutdown 与 connection lifecycle |
 | `src/session_stdio.rs` | child JSONL driver、response pairing、notification decode、child lifetime 与 stream failure boundary |
 | `src/in_process.rs` | embedded composition 与 initialized connection |
-| `src/profile.rs` | `ZETA_PROFILE_ROOT` 与 host-wide default profile state path |
+| `src/profile.rs` | `ZETA_PROFILE_ROOT` 与跨 Desktop/Zeta Code/zeterm 的 `<home>/.zeta` profile root |
 | `src/product_services.rs` | 发行版 product-services 发现、优先级与 typed load；不拥有 Marketplace catalog/cache |
 | `src/lib.rs` | generic typed JSON-RPC methods、request ID/result pairing 与 public exports |
 | `src/notification.rs` | 解析 notification envelope，并把 method/payload 交给 protocol-owned canonical decoder |

@@ -91,13 +91,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
     )?;
     conversation.set_thread_sequence(initial_thread.sequence);
     let mut terminal = terminal::TerminalSession::open()?;
-    let initial_config = client.read_config().ok();
-    crate::ui::configure(
-        terminal.background_color(),
-        initial_config
-            .as_ref()
-            .and_then(|config| config.products.code.color_theme.as_deref()),
-    );
+    crate::ui::configure(terminal.background_color());
     let mut file_search = host_file_search_root.map(FileSearchManager::new);
     let mut app = App::for_workspace_with_slash_commands(
         &display_workspace_root,
@@ -105,7 +99,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
     );
     app.replace_slash_commands(slash_registry.catalog, slash_registry.skills);
     apply_thread_snapshot(&mut app, &mut active_turn, initial_thread);
-    if let Some(config) = initial_config {
+    if let Ok(config) = client.read_config() {
         app.update(AppEvent::PreferredModelReceived(config.preferred_model));
     }
     if let Ok(status) = client.git_status() {
@@ -341,12 +335,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             );
                         }
                     }
-                    AppCommand::OpenCustomThemePane => match client
-                        .read_config()
-                        .map_err(|error| error.to_string())
-                        .and_then(|config| {
-                            ui::theme_catalog(config.products.code.color_theme.as_deref())
-                        }) {
+                    AppCommand::OpenCustomThemePane => match ui::theme_catalog() {
                         Ok(catalog) => app.update(AppEvent::ThemeViewOpened(
                             theme_feature::custom_theme_selection_view(&catalog),
                         )),
@@ -618,11 +607,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     AppCommand::SetCustomTheme { preference } => {
                         let command = format!("/theme {preference}");
                         app.update(AppEvent::CommandStarted(command.clone()));
-                        match ui::prepare_theme(&preference).and_then(|prepared| {
-                            config::set_code_theme(&mut client, &preference)
-                                .map_err(|error| error.to_string())
-                                .map(|()| ui::apply_theme(prepared))
-                        }) {
+                        match ui::select_theme(&preference) {
                             Ok(label) => {
                                 app.update(AppEvent::CommandCompleted {
                                     command,
@@ -636,11 +621,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     AppCommand::SetTheme { preference } => {
                         let command = format!("/theme {preference}");
                         app.update(AppEvent::CommandStarted(command.clone()));
-                        match ui::prepare_theme(&preference).and_then(|prepared| {
-                            config::set_code_theme(&mut client, &preference)
-                                .map_err(|error| error.to_string())
-                                .map(|()| ui::apply_theme(prepared))
-                        }) {
+                        match ui::select_theme(&preference) {
                             Ok(label) => {
                                 app.update(AppEvent::CommandCompleted {
                                     command,

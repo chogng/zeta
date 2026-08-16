@@ -576,7 +576,6 @@ test("Indexing settings save Tool Search and semantic model consent configuratio
     generation: 4,
     preferredModel: null,
     approvalReviewModel: { type: "automatic" },
-    products: { desktop: {}, code: {}, zeterm: {} },
     providers: {
       ollama: {
         provider: "ollama",

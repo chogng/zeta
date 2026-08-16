@@ -134,6 +134,32 @@ pub(crate) fn upsert_session_tab(
     SessionTabUpsert::Added(tab_id)
 }
 
+/// Adds or updates one catalog entry without changing the active tab selection.
+pub(crate) fn upsert_session_catalog_tab(
+    tabs: &mut Vec<SessionTabState>,
+    session: &Session,
+    workspace: &str,
+) -> SessionTabUpsert {
+    if let Some(tab) = tabs
+        .iter_mut()
+        .find(|tab| tab.session_id() == &session.session_id)
+    {
+        let tab_id = tab.id();
+        tab.update_labels(session.title.clone(), workspace, "Active");
+        return SessionTabUpsert::Updated(tab_id);
+    }
+
+    let tab_id = session_tab_id(tabs.len());
+    tabs.push(SessionTabState::new(
+        tab_id,
+        session.session_id.clone(),
+        session.title.clone(),
+        workspace,
+        "Active",
+    ));
+    SessionTabUpsert::Added(tab_id)
+}
+
 impl<'a> SessionTab<'a> {
     pub(crate) const fn new(
         id: ElementId,

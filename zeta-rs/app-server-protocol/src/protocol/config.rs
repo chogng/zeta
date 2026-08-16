@@ -383,143 +383,6 @@ pub struct ExecPolicyRuleDto {
     pub justification: Option<String>,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
-pub enum AutomaticPreferenceDto {
-    Auto,
-    Off,
-    On,
-}
-
-#[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct DesktopProductPreferencesDto {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional = nullable)]
-    pub color_theme: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional = nullable)]
-    pub accessibility_support: Option<AutomaticPreferenceDto>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional = nullable)]
-    pub reduce_motion: Option<AutomaticPreferenceDto>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional = nullable)]
-    pub reduce_transparency: Option<AutomaticPreferenceDto>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional = nullable)]
-    pub underline_links: Option<bool>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional = nullable)]
-    pub hover_delay_milliseconds: Option<u16>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional = nullable)]
-    pub reduced_hover_delay_milliseconds: Option<u16>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional = nullable)]
-    pub sash_size: Option<u8>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional = nullable)]
-    pub sash_hover_delay_milliseconds: Option<u16>,
-}
-
-#[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct CodeProductPreferencesDto {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional = nullable)]
-    pub color_theme: Option<String>,
-}
-
-#[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct ZetermProductPreferencesDto {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional = nullable)]
-    pub color_theme: Option<String>,
-}
-
-#[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct ProductsConfigDto {
-    pub desktop: DesktopProductPreferencesDto,
-    pub code: CodeProductPreferencesDto,
-    pub zeterm: ZetermProductPreferencesDto,
-}
-
-#[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct DesktopProductPreferencesUpdateDto {
-    #[serde(default, skip_serializing_if = "Patch::is_missing")]
-    #[schemars(with = "Option<String>")]
-    #[ts(as = "Option<String>", optional = nullable)]
-    pub color_theme: Patch<String>,
-    #[serde(default, skip_serializing_if = "Patch::is_missing")]
-    #[schemars(with = "Option<AutomaticPreferenceDto>")]
-    #[ts(as = "Option<AutomaticPreferenceDto>", optional = nullable)]
-    pub accessibility_support: Patch<AutomaticPreferenceDto>,
-    #[serde(default, skip_serializing_if = "Patch::is_missing")]
-    #[schemars(with = "Option<AutomaticPreferenceDto>")]
-    #[ts(as = "Option<AutomaticPreferenceDto>", optional = nullable)]
-    pub reduce_motion: Patch<AutomaticPreferenceDto>,
-    #[serde(default, skip_serializing_if = "Patch::is_missing")]
-    #[schemars(with = "Option<AutomaticPreferenceDto>")]
-    #[ts(as = "Option<AutomaticPreferenceDto>", optional = nullable)]
-    pub reduce_transparency: Patch<AutomaticPreferenceDto>,
-    #[serde(default, skip_serializing_if = "Patch::is_missing")]
-    #[schemars(with = "Option<bool>")]
-    #[ts(as = "Option<bool>", optional = nullable)]
-    pub underline_links: Patch<bool>,
-    #[serde(default, skip_serializing_if = "Patch::is_missing")]
-    #[schemars(with = "Option<u16>")]
-    #[ts(as = "Option<u16>", optional = nullable)]
-    pub hover_delay_milliseconds: Patch<u16>,
-    #[serde(default, skip_serializing_if = "Patch::is_missing")]
-    #[schemars(with = "Option<u16>")]
-    #[ts(as = "Option<u16>", optional = nullable)]
-    pub reduced_hover_delay_milliseconds: Patch<u16>,
-    #[serde(default, skip_serializing_if = "Patch::is_missing")]
-    #[schemars(with = "Option<u8>")]
-    #[ts(as = "Option<u8>", optional = nullable)]
-    pub sash_size: Patch<u8>,
-    #[serde(default, skip_serializing_if = "Patch::is_missing")]
-    #[schemars(with = "Option<u16>")]
-    #[ts(as = "Option<u16>", optional = nullable)]
-    pub sash_hover_delay_milliseconds: Patch<u16>,
-}
-
-#[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct CodeProductPreferencesUpdateDto {
-    #[serde(default, skip_serializing_if = "Patch::is_missing")]
-    #[schemars(with = "Option<String>")]
-    #[ts(as = "Option<String>", optional = nullable)]
-    pub color_theme: Patch<String>,
-}
-
-#[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct ZetermProductPreferencesUpdateDto {
-    #[serde(default, skip_serializing_if = "Patch::is_missing")]
-    #[schemars(with = "Option<String>")]
-    #[ts(as = "Option<String>", optional = nullable)]
-    pub color_theme: Patch<String>,
-}
-
-#[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct ProductsConfigUpdateDto {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
-    pub desktop: Option<DesktopProductPreferencesUpdateDto>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
-    pub code: Option<CodeProductPreferencesUpdateDto>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
-    pub zeterm: Option<ZetermProductPreferencesUpdateDto>,
-}
-
 /// Current user configuration snapshot returned by `config/read`.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -530,7 +393,6 @@ pub struct ConfigReadResult {
     pub generation: u64,
     pub preferred_model: Option<ModelRefDto>,
     pub approval_review_model: ApprovalReviewModelSelectionDto,
-    pub products: ProductsConfigDto,
     pub providers: BTreeMap<String, ProviderConfigDto>,
     pub mcp_servers: BTreeMap<String, McpServerConfigDto>,
     pub skill_sources: BTreeMap<String, SkillSourceConfigDto>,
@@ -656,9 +518,6 @@ pub struct ConfigUpdateParams {
     #[schemars(with = "Option<ApprovalReviewModelSelectionDto>")]
     #[ts(as = "Option<ApprovalReviewModelSelectionDto>", optional = nullable)]
     pub approval_review_model: Patch<ApprovalReviewModelSelectionDto>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
-    pub products: Option<ProductsConfigUpdateDto>,
 }
 
 /// Creates or replaces one user-owned language-server preference.

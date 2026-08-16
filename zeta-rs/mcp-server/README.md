@@ -25,8 +25,8 @@ ZETA_MCP_BEARER_TOKEN=<at-least-32-visible-ASCII-characters> \
   zeta mcp-server --listen http://127.0.0.1:8787/mcp
 ```
 
-两个入口都读取 `ZETA_PROFILE_ROOT` 和 `ZETA_WORKSPACE_ROOT`；前者默认使用操作系统用户 state
-目录，后者默认使用进程工作目录。HTTP 还必须提供 `ZETA_MCP_BEARER_TOKEN`；
+两个入口都读取 `ZETA_PROFILE_ROOT` 和 `ZETA_WORKSPACE_ROOT`；前者默认使用 `<home>/.zeta`，
+后者默认使用进程工作目录。HTTP 还必须提供 `ZETA_MCP_BEARER_TOKEN`；
 `ZETA_MCP_ALLOWED_ORIGIN` 可以额外允许一个
 精确浏览器来源。内置监听器只提供普通 HTTP，远程部署时应放在已认证的 TLS 反向代理之后。
 

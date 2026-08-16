@@ -233,7 +233,6 @@ fn configuration(
         generation,
         preferred_model: None,
         approval_review_model: ApprovalReviewModelSelectionDto::Automatic,
-        products: Default::default(),
         providers: BTreeMap::new(),
         mcp_servers: BTreeMap::new(),
         skill_sources: BTreeMap::new(),

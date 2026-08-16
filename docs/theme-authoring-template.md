@@ -29,7 +29,7 @@
 
 ## 文件安装与卸载
 
-Zeta 宿主读取 device root 的 `themes` 目录中的常规 `*.json` 文件。Desktop 的 device root 是 Electron `userData`；Native/TUI 使用相同平台目录（macOS 为 `~/Library/Application Support/Zeta`，Windows 为 `%APPDATA%/Zeta`，Linux 为 `$XDG_CONFIG_HOME/zeta` 或 `~/.config/zeta`）。测试和开发可用 `ZETA_DEVICE_ROOT` 显式覆盖。Desktop 中的实际绝对路径会显示在 Settings → Appearance 底部。
+Zeta 宿主读取 profile root 的 `themes` 目录中的常规 `*.json` 文件。默认 profile root 在 macOS 为 `/Users/<user>/.zeta`，Linux 为 `/home/<user>/.zeta`，Windows 为 `C:\Users\<user>\.zeta`。`ZETA_PROFILE_ROOT` 可整体覆盖 profile；测试主题加载器时还可用优先级更高的 `ZETA_DEVICE_ROOT` 仅覆盖 device resource root。Desktop 中的实际绝对路径会显示在 Settings → Appearance 底部。
 
 - 外部安装：把 [`color-theme.template.json`](../resources/design-tokens/color-theme.template.json) 复制到该目录，修改 `id`、`label` 和颜色后保存，完全重启 Zeta。
 - 外部更新：替换同名文件，完全重启 Zeta。
@@ -158,21 +158,19 @@ Zeta 宿主读取 device root 的 `themes` 目录中的常规 `*.json` 文件。
 
 TUI 有意只消费共享 token 子集，并根据终端能力降级到 TrueColor、ANSI-256、ANSI-16 或 Monochrome；因此一个合法主题不保证终端能复现 Desktop 的全部颜色细节。
 
-选择值保存在 profile `config.toml` 的产品 namespace；主题文档本身仍位于 device root 的
-`themes/*.json`：
+选择值保存在 profile `configuration.json`；主题文档本身仍位于 profile root 的 `themes/*.json`：
 
-```toml
-[products.desktop]
-colorTheme = "zeta-aurora"
-
-[products.code]
-colorTheme = "zeta-aurora"
-
-[products.zeterm]
-colorTheme = "zeta-aurora"
+```json
+{
+  "version": 1,
+  "values": {
+    "workbench.colorTheme": "zeta-aurora",
+    "tui.colorTheme": "zeta-aurora"
+  }
+}
 ```
 
-各产品字段都可省略，省略时使用该产品的 `system` 默认入口。`system` 仍表示跟随操作系统并在内置 Light/Dark 之间切换。Desktop 保存/预览会即时更新；TUI 可用 `/theme` 打开不带搜索的 Zeta Code Theme Pane，通过 Enter 原子保存、即时切换并返回主界面，并在 transcript 中以状态圆点、`/theme <id>` 与下一行通过 `└─` 归属且对齐的 `Theme set to …` 记录结果；也可用 `/theme <id>` 直接选择。Custom color theme 行进入有效用户主题列表；外部修改主题文件后，Native 与 TUI 仍需重启才能重新读取文件内容。
+各字段都可省略，省略时使用对应 surface 的 `system` 默认入口。`system` 仍表示跟随操作系统并在内置 Light/Dark 之间切换。Desktop 保存/预览会即时更新；TUI 可用 `/theme` 打开不带搜索的 Zeta Code Theme Pane，通过 Enter 原子保存、即时切换并返回主界面，并在 transcript 中以状态圆点、`/theme <id>` 与下一行通过 `└─` 归属且对齐的 `Theme set to …` 记录结果；也可用 `/theme <id>` 直接选择。Custom color theme 行进入有效用户主题列表；外部修改主题文件后，Native 与 TUI 仍需重启才能重新读取文件内容。
 
 ## 开发与验证
 

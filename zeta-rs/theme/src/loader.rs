@@ -17,41 +17,44 @@ const MAX_DEVICE_DOCUMENT_BYTES: u64 = 1_048_576;
 
 /// Resolves the host-local UI preference root without consulting Agent configuration.
 pub fn default_device_root() -> PathBuf {
-    if let Some(root) = std::env::var_os("ZETA_DEVICE_ROOT") {
-        return PathBuf::from(root);
-    }
-    platform_device_root().unwrap_or_else(|| PathBuf::from(".zeta-device"))
+    resolve_device_root(
+        std::env::var_os("ZETA_DEVICE_ROOT"),
+        std::env::var_os("ZETA_PROFILE_ROOT"),
+        platform_home_directory(),
+    )
 }
 
 #[cfg(target_os = "windows")]
-fn platform_device_root() -> Option<PathBuf> {
-    std::env::var_os("APPDATA")
-        .map(PathBuf::from)
-        .map(|root| root.join("Zeta"))
-}
-
-#[cfg(target_os = "macos")]
-fn platform_device_root() -> Option<PathBuf> {
-    std::env::var_os("HOME")
-        .map(PathBuf::from)
-        .map(|root| root.join("Library/Application Support/Zeta"))
-}
-
-#[cfg(all(unix, not(target_os = "macos")))]
-fn platform_device_root() -> Option<PathBuf> {
-    std::env::var_os("XDG_CONFIG_HOME")
-        .map(PathBuf::from)
-        .map(|root| root.join("zeta"))
+fn platform_home_directory() -> Option<std::ffi::OsString> {
+    std::env::var_os("USERPROFILE")
+        .or_else(|| std::env::var_os("HOME"))
         .or_else(|| {
-            std::env::var_os("HOME")
-                .map(PathBuf::from)
-                .map(|root| root.join(".config/zeta"))
+            let mut root = std::env::var_os("HOMEDRIVE")?;
+            root.push(std::env::var_os("HOMEPATH")?);
+            Some(root)
         })
 }
 
+#[cfg(unix)]
+fn platform_home_directory() -> Option<std::ffi::OsString> {
+    std::env::var_os("HOME")
+}
+
 #[cfg(not(any(unix, target_os = "windows")))]
-fn platform_device_root() -> Option<PathBuf> {
-    None
+fn platform_home_directory() -> Option<std::ffi::OsString> {
+    std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE"))
+}
+
+pub(crate) fn resolve_device_root(
+    configured_device_root: Option<std::ffi::OsString>,
+    configured_profile_root: Option<std::ffi::OsString>,
+    home: Option<std::ffi::OsString>,
+) -> PathBuf {
+    configured_device_root
+        .or(configured_profile_root)
+        .map(PathBuf::from)
+        .or_else(|| home.map(PathBuf::from).map(|root| root.join(".zeta")))
+        .unwrap_or_else(|| PathBuf::from(".zeta"))
 }
 
 /// Presentation surface selecting a device-local theme preference.
@@ -169,24 +172,6 @@ impl ThemeLoader {
     pub fn choices(&self, options: ThemeLoadOptions<'_>) -> ThemeChoices {
         let mut diagnostics = Vec::new();
         let selected = read_preference(&options, &mut diagnostics);
-        self.choices_with_selected(options, selected, diagnostics)
-    }
-
-    /// Lists themes while using a product Config preference as the selected value.
-    pub fn choices_for_preference(
-        &self,
-        options: ThemeLoadOptions<'_>,
-        preference: &str,
-    ) -> ThemeChoices {
-        self.choices_with_selected(options, preference.to_owned(), Vec::new())
-    }
-
-    fn choices_with_selected(
-        &self,
-        options: ThemeLoadOptions<'_>,
-        selected: String,
-        mut diagnostics: Vec<ThemeDiagnostic>,
-    ) -> ThemeChoices {
         let system = self.default_snapshot(&options, &mut diagnostics);
         let mut themes = vec![ThemeChoice {
             id: "system".into(),

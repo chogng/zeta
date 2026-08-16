@@ -92,14 +92,9 @@ impl AgentSessionTarget {
         };
         match self {
             Self::Local { workspace_root } => {
-                let options = InProcessClientOptions::new(local_profile_root(), client_info)
-                    .with_session_state_mode(SessionStateMode::Ephemeral)
-                    .with_capabilities(ClientCapabilities {
-                        workspace_trust_host: Some(WorkspaceTrustHostCapability { version: 1 }),
-                        ..ClientCapabilities::default()
-                    })
-                    .with_workspace_root(workspace_root)
-                    .with_discovered_product_services()?;
+                let options =
+                    local_client_options(local_profile_root(), workspace_root, client_info)
+                        .with_discovered_product_services()?;
                 AppServerSession::start_embedded(options)
                     .map_err(|error| anyhow!(error.to_string()))
             }
@@ -108,6 +103,20 @@ impl AgentSessionTarget {
                 .map_err(|error| anyhow!(error.to_string())),
         }
     }
+}
+
+pub(super) fn local_client_options(
+    profile_root: PathBuf,
+    workspace_root: &Path,
+    client_info: ClientInfo,
+) -> InProcessClientOptions {
+    InProcessClientOptions::new(profile_root, client_info)
+        .with_session_state_mode(SessionStateMode::Durable)
+        .with_capabilities(ClientCapabilities {
+            workspace_trust_host: Some(WorkspaceTrustHostCapability { version: 1 }),
+            ..ClientCapabilities::default()
+        })
+        .with_workspace_root(workspace_root)
 }
 
 /// Whether the existing local Workspace picker may call `workspace/switch` for this target.

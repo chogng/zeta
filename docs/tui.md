@@ -68,8 +68,8 @@ Zeta 已经在 TUI 外部拥有：
 `tui.highlightForeground` 独立表达，不借用编辑器关键字色。`ui/theme.rs` 将透明色先合成到 terminal
 background，再按 TrueColor、ANSI-256、ANSI-16、Monochrome 投影；其他 Desktop/Native token
 不进入 TUI API。
-主题选择保存在 User `config.toml` 的 `products.code.colorTheme`，通过 App Server typed Config API
-读写；旧 `configuration.json` 仅作未迁移配置的启动 fallback。无参数 `/theme` 打开由 `features/theme` 拥有、不可搜索的固定
+主题选择保存在共享 profile `configuration.json` 的 `tui.colorTheme`，由 `zeta-theme` 严格读取并
+原子写回；它不进入 App Server Config API。无参数 `/theme` 打开由 `features/theme` 拥有、不可搜索的固定
 Zeta Code Theme Pane 以 `Theme` 为标题，顶部分隔线与标题、标题与第一个候选项之间各保留一行；固定选项为 Auto、Dark/Light、对应 colorblind-friendly 与 ANSI-only 模式，以及 Custom
 color theme。候选行编号展示，cursor 选择色和 syntax/diff preview 随候选主题变化；Enter 原子保存、
 即时切换并关闭整个 Theme flow 返回主界面；保存成功后 transcript 以独立的状态圆点显示实际执行的 `/theme <id>`，下一行通过 `└─` 结构连接符归属结果说明，两行正文保持同列对齐；保存失败时则保留当前 Pane 以显示错误。移动 cursor 时，Theme Pane 分隔线、上方 welcome banner

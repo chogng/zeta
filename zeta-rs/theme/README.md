@@ -13,7 +13,7 @@ Schema 和模板由 Desktop registry 编译到 [`resources/design-tokens`](../..
 | `ThemeLoader` | 有界读取主题入口、device configuration 与 `themes/*.json`，隔离单文件错误并选择主题 |
 | `ThemeLoader::choices` / `preview` / `select` | 枚举有效 built-in/user 主题；无副作用解析 preview；验证后原子保存 surface preference |
 | `ThemeLoadOptions::with_default_entry` | 由产品启动组合选择 `zeta`、`zeta-code` 或 `zeterm` 默认入口；组件和 token 不感知产品 |
-| `ThemeSurface` | 选择 graphical 或 terminal 主题表面；产品通过 `zeta-config.products.*.colorTheme` 注入选择值 |
+| `ThemeSurface` | 选择 graphical 或 terminal device preference；不把 UI preference 放进 `zeta-config` |
 
 Desktop 使用自己的 TypeScript resolver 和 CSS projection；Rust 与 TypeScript 通过同一 manifest、
 Schema 和 parity fixture 保持一致。Native/TUI adapter 只能把 snapshot 投影为自己的 component
@@ -28,7 +28,7 @@ ThemeLoader::embedded
    └─ include_str!(resources/design-tokens/theme-entries.json)
 
 ThemeLoader::load(options)
-├─ preference::read_preference(configuration.json)（旧配置兼容 fallback）
+├─ preference::read_preference(configuration.json)
 ├─ system preference → ThemeCatalog::built_in_entry(default_entry)
 ├─ read_theme_documents(themes/*.json)
 │  └─ ThemeDocument::parse → validate schema/version/id/label/value bounds
@@ -43,9 +43,6 @@ ThemeLoader::select(options, preference)
    ├─ 保留其他 device-local values
    └─ zeta_utils_path::write_text_atomically
 ```
-
-产品宿主对 canonical `config.toml` 的主题值使用 `ThemeLoader::preview`；`load`/`select` 读取或写入
-`configuration.json` 仅保留为旧宿主迁移兼容，不再是 Desktop、TUI 或 zeterm 的权威写路径。
 
 `Resolver` 是 alias/default/override graph、cycle path、transform depth、factor 与 transparency
 contract 的唯一内部 owner；宿主不能再解析 token 引用。`read_preference` 只解释 device-local
@@ -67,8 +64,8 @@ contract 的唯一内部 owner；宿主不能再解析 token 引用。`read_pref
   回退调用方提供的 system scheme。
 - `ThemeSnapshot::required_color` 只用于宿主声明为必需的 token；缺失返回 `ThemeError`，adapter
   必须原子地保留上一份完整 palette 或 fallback，不能部分应用。
-- Native 选择 `ThemeSurface::Graphical`，TUI 选择 `ThemeSurface::Terminal`；两者优先使用 App Server
-  `config/read` 返回的各自产品 theme，只有尚未迁移时才读取旧 device preference。
+- Native 选择 `ThemeSurface::Graphical`，TUI 选择 `ThemeSurface::Terminal`；TUI preference 缺失时
+  loader 才回退 graphical preference。
 - 新增 token 只在 Desktop registry 声明并重新生成 manifest；不得在 `tokens.rs` 加默认 RGB。
   `tokens.rs` 只是 Rust adapter 使用的稳定 ID 常量子集。
 

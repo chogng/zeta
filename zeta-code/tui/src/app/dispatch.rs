@@ -280,18 +280,13 @@ impl ActiveConversation {
             }
             TuiSlashCommandAction::Theme => {
                 if arguments.is_empty() {
-                    let config = client.read_config()?;
-                    let catalog = ui::theme_catalog(config.products.code.color_theme.as_deref())
-                        .map_err(CommandExecutionError)?;
+                    let catalog = ui::theme_catalog().map_err(CommandExecutionError)?;
                     output
                         .events
                         .push(AppEvent::ThemeViewOpened(theme_selection_view(&catalog)));
                 } else {
                     let command = format!("/theme {arguments}");
-                    let prepared = ui::prepare_theme(&arguments).map_err(CommandExecutionError)?;
-                    config::set_code_theme(client, &arguments)
-                        .map_err(|error| CommandExecutionError(error.to_string()))?;
-                    let label = ui::apply_theme(prepared);
+                    let label = ui::select_theme(&arguments).map_err(CommandExecutionError)?;
                     output
                         .events
                         .push(AppEvent::CommandStarted(command.clone()));

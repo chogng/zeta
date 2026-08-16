@@ -12,7 +12,6 @@ mod language_servers;
 mod mcp;
 mod mutation;
 mod plugins;
-mod products;
 mod resolution;
 mod skills;
 mod store;
@@ -49,11 +48,6 @@ pub use mcp::{
 pub use plugins::{
     PluginId, PluginRequest, PluginRequestEnablement, PluginVersion, PluginsConfig,
     WorkspacePluginRequest, WorkspacePluginRequestScope, WorkspacePluginRequests,
-};
-pub use products::{
-    AutomaticPreference, CodeProductPreferences, CodeProductPreferencesUpdate,
-    DesktopProductPreferences, DesktopProductPreferencesUpdate, ProductsConfig,
-    ProductsConfigUpdate, ZetermProductPreferences, ZetermProductPreferencesUpdate,
 };
 pub use resolution::{
     ConfigDiagnostic, ConfigDiagnosticCode, ConfigProvenance, ConfigValueSource,

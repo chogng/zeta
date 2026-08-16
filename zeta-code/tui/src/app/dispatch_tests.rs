@@ -269,33 +269,6 @@ fn model_command_updates_and_clears_preferred_model_with_config_revision() {
 }
 
 #[test]
-fn theme_command_persists_the_zeta_code_product_preference() {
-    let (mut client, state_root) = client();
-    let mut conversation = ActiveConversation::start(&mut client, "theme".into()).unwrap();
-    let mut app = App::new();
-
-    conversation.execute(
-        &mut client,
-        invocation(TuiSlashCommandAction::Theme, "zeta-code-dark"),
-        &mut app,
-    );
-
-    assert_eq!(
-        client
-            .read_config()
-            .unwrap()
-            .products
-            .code
-            .color_theme
-            .as_deref(),
-        Some("zeta-code-dark")
-    );
-    assert_eq!(app.status(), &Status::Ready);
-    drop(client);
-    let _ = fs::remove_dir_all(state_root);
-}
-
-#[test]
 fn resume_and_model_without_arguments_open_actionable_panes() {
     let (mut client, state_root) = client();
     let mut conversation = ActiveConversation::start(&mut client, "current".into()).unwrap();

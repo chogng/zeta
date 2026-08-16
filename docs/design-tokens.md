@@ -13,7 +13,7 @@ Zeta 采用“单一声明目录、共享版本化 contract、各宿主独立投
 | 一个组件的语义颜色 | 修改或新增该组件所有者注册的 token | 在组件 CSS 中复制十六进制颜色 |
 | 整套主题外观 | 切换主题入口或覆盖公开 token | 重写组件 selector |
 | Native/CodeEditor 语法颜色 | 覆盖 `editor.token.*Foreground` | 让 parser 或 CodeEditor token 携带固定 RGB |
-| TUI 外观 | 覆盖 TUI 消费的共享子集；必要时设置 `products.code.colorTheme` | 要求终端实现全部 Desktop 视觉能力 |
+| TUI 外观 | 覆盖 TUI 消费的共享子集；必要时设置 `tui.colorTheme` | 要求终端实现全部 Desktop 视觉能力 |
 | 跟随操作系统明暗模式 | 选择 `system` | 维护第四套 system 主题值 |
 | 增加新的视觉值类型 | 有真实跨组件消费者后增加独立注册表 | 把阴影、字体或动效伪装成颜色 |
 
@@ -28,8 +28,8 @@ Zeta 采用“单一声明目录、共享版本化 contract、各宿主独立投
 | Desktop 快照 | `colorTheme.ts` | 将 scheme、覆盖值和注册目录编译为只读颜色/尺寸表 |
 | Rust 快照与加载 | `zeta-rs/theme` | 嵌入同一 manifest，严格解析用户 JSON，选择 Graphical/Terminal 偏好并产生 RGBA snapshot |
 | 宿主投影 | Desktop theme binding、Native `shell_style`、TUI `ui/theme` | 把 snapshot 转成宿主组件公开的 palette/style；不注册新的产品语义 |
-| 产品主题偏好 | profile `config.toml` 的 `[products.*]` | Desktop、Zeta Code 与 zeterm 各自保存 `colorTheme`；`configuration.json` 只作一次性旧值迁移 |
-| 用户主题内容 | device root 的 `themes/*.json` | 保存主题文档，不保存产品当前选择或 Config revision |
+| 产品主题偏好 | profile `configuration.json` | Desktop/zeterm 使用 graphical key，Zeta Code 使用 TUI key；不进入 App Server Config revision |
+| 用户主题内容 | profile root 的 `themes/*.json` | 保存主题文档，不保存产品当前选择或 Config revision |
 | 离线治理 | `tokenCompiler.ts` 与 `scripts/compile-design-tokens.mjs` | 校验所有 scheme，生成 manifest、Schema、模板和目录 |
 
 `src/zeta/base` 不引用主题平台或 workbench。颜色数学保持通用，注册、用户偏好和产品语义都位于更高层。
@@ -43,7 +43,7 @@ flowchart LR
   C --> D["Versioned manifest + Schema"]
   B --> E["Desktop resolver"]
   D --> F["zeta-theme resolver"]
-  G["Config product preference"] --> E
+  G["Device JSON theme preference"] --> E
   G --> F
   L["User theme JSON"] --> E
   L --> F
@@ -76,8 +76,8 @@ flowchart LR
   [Primer functional color](https://www.primer.style/product/primitives/color/) 的经典语义，但值已固化在
   Zeta 自己的 token entry 中，不形成运行时主题依赖。`zeta-code` 保留蓝紫 highlight；TUI 的
   `system` 默认必须通过 `with_default_entry("zeta-code")` 选择它。
-- Desktop、Native 和 TUI 从同一 profile `config.toml` 的产品 namespace 读取选择值，并使用 device
-  root 下的 `themes/*.json` 加载用户主题内容；每个错误文件独立隔离，内置主题始终可回退。
+- Desktop、Native 和 TUI 从同一 profile `configuration.json` 读取选择值，并使用 profile root 下的
+  `themes/*.json` 加载用户主题内容；每个错误文件独立隔离，内置主题始终可回退。
   Native `zeterm` 在没有显式用户主题时选择 `zeterm` 入口。
 - 127 个语义颜色 token 与 23 个标准标量尺寸 token；四种 `ColorScheme` 均在编译期解析，高对比度当前继承对应明暗默认值。
 - 不可变颜色对象、注册贡献、主题快照和生成产物。
@@ -94,7 +94,7 @@ flowchart LR
 - 高对比度使用明暗默认值回退，尚未提供独立视觉设计；类型、解析路径和 manifest 已保留独立 scheme。
 - Desktop 的保存/预览可即时更新；Native 与 TUI 当前在进程启动时加载一次，外部文件修改需要重启对应宿主。
   这是当前宿主生命周期边界；`zeta code` 产品文档未要求外部主题热重载，因此不构成 TUI backlog。
-- `products.code.colorTheme` 当前有 typed configuration contract，但尚无 Settings UI；TUI 可用 `/theme` 打开
+- `tui.colorTheme` 当前由严格 JSON device configuration 承载，但尚无 Desktop Settings UI；TUI 可用 `/theme` 打开
   不带搜索的八项 Zeta Code Theme Pane，用 Enter 原子保存、即时切换并返回主界面，也可用 `/theme <id>` 快速
   切换；Theme Pane 的 syntax/diff preview 读取同一 resolved snapshot，切换不追加 transcript notice；
   缺失时使用 Zeta Code 的 `system` 默认入口。

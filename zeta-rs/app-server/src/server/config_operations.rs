@@ -2,32 +2,28 @@ use super::extension_config_operations::{hook_config_dto, plugin_request_dto};
 use super::{AppServer, RpcError, decode, result};
 use serde_json::Value;
 use zeta_app_server_protocol::protocol::config::{
-    ApprovalReviewModelSelectionDto, AutomaticPreferenceDto, CodeProductPreferencesDto,
-    CodeProductPreferencesUpdateDto, ConfigCommandDispositionDto, ConfigCommandResult,
-    ConfigReadResult, ConfigUpdateParams, DesktopProductPreferencesDto,
-    DesktopProductPreferencesUpdateDto, LanguageServerConfigDto, LanguageServerConfigureParams,
+    ApprovalReviewModelSelectionDto, ConfigCommandDispositionDto, ConfigCommandResult,
+    ConfigReadResult, ConfigUpdateParams, LanguageServerConfigDto, LanguageServerConfigureParams,
     LanguageServerModeDto, LanguageServerRemoveParams, McpCredentialBindingDto, McpServerConfigDto,
     McpServerEnablementDto, McpServerRemoveParams, McpServerSetEnablementParams,
-    McpServerUpsertParams, McpTransportDto, ModelContextConfigDto, ModelRefDto, ProductsConfigDto,
-    ProductsConfigUpdateDto, ProviderConfigDto, ProviderConfigureParams, ProviderRemoveParams,
-    SemanticCodeIndexAuthorizeParams, SemanticCodeIndexAutomaticContextDto,
-    SemanticCodeIndexConfigDto, SemanticCodeIndexConfigureParams, SemanticCodeIndexModelsDto,
-    SemanticCodeIndexRevokeParams, SemanticCodeIndexSelectionDto, SkillSourceAddParams,
-    SkillSourceConfigDto, SkillSourceEnablementDto, SkillSourceRemoveParams,
-    SkillSourceSetEnablementParams, ToolSearchConfigDto, ToolSearchConfigureParams,
-    ToolSearchEmbeddingStatusDto, ToolSearchModeDto, ZetermProductPreferencesDto,
-    ZetermProductPreferencesUpdateDto,
+    McpServerUpsertParams, McpTransportDto, ModelContextConfigDto, ModelRefDto, ProviderConfigDto,
+    ProviderConfigureParams, ProviderRemoveParams, SemanticCodeIndexAuthorizeParams,
+    SemanticCodeIndexAutomaticContextDto, SemanticCodeIndexConfigDto,
+    SemanticCodeIndexConfigureParams, SemanticCodeIndexModelsDto, SemanticCodeIndexRevokeParams,
+    SemanticCodeIndexSelectionDto, SkillSourceAddParams, SkillSourceConfigDto,
+    SkillSourceEnablementDto, SkillSourceRemoveParams, SkillSourceSetEnablementParams,
+    ToolSearchConfigDto, ToolSearchConfigureParams, ToolSearchEmbeddingStatusDto,
+    ToolSearchModeDto,
 };
 use zeta_app_server_protocol::protocol::error::AppServerErrorName;
 use zeta_config::{
-    ApprovalReviewModelSelection, AutomaticPreference, CodeProductPreferencesUpdate,
-    ConfigCommandDisposition, ConfigCommandError, ConfigCommandRequest, ConfigRevision,
-    DesktopProductPreferencesUpdate, LanguageServerConfig, LanguageServerId,
+    ApprovalReviewModelSelection, ConfigCommandDisposition, ConfigCommandError,
+    ConfigCommandRequest, ConfigRevision, LanguageServerConfig, LanguageServerId,
     LanguageServerModeConfig, McpCredentialBinding, McpServerConfig, McpServerEnablement,
-    McpServerId, McpTransportConfig, PreferencesUpdate, ProductsConfig, ProductsConfigUpdate,
-    ResolvedConfigSnapshot, SemanticCodeIndexAutomaticContext, SemanticCodeIndexModelSelection,
-    SemanticCodeIndexSelection, SkillSourceConfig, SkillSourceEnablement, SkillSourceId,
-    ToolSearchConfig, ToolSearchModeConfig, UserConfigCommand, ZetermProductPreferencesUpdate,
+    McpServerId, McpTransportConfig, PreferencesUpdate, ResolvedConfigSnapshot,
+    SemanticCodeIndexAutomaticContext, SemanticCodeIndexModelSelection, SemanticCodeIndexSelection,
+    SkillSourceConfig, SkillSourceEnablement, SkillSourceId, ToolSearchConfig,
+    ToolSearchModeConfig, UserConfigCommand,
 };
 use zeta_model_provider::{ModelId, ModelRef, ProviderId};
 use zeta_model_provider_config::ModelContextConfig;
@@ -114,7 +110,6 @@ impl AppServer {
                     approval_review_model: approval_review_model_update_from_dto(
                         params.approval_review_model,
                     )?,
-                    products: params.products.map(products_update_from_dto),
                 }),
             })
             .map_err(config_operation_error)?;
@@ -476,7 +471,6 @@ fn config_read_result(
         generation: snapshot.generation.get(),
         preferred_model: snapshot.values.preferred_model.map(model_ref_dto),
         approval_review_model: approval_review_model_dto(snapshot.values.approval_review_model),
-        products: products_config_dto(snapshot.values.products),
         providers: snapshot
             .values
             .providers
@@ -527,94 +521,6 @@ fn config_read_result(
             .into_iter()
             .map(exec_policy_rule_dto)
             .collect(),
-    }
-}
-
-fn products_config_dto(config: ProductsConfig) -> ProductsConfigDto {
-    ProductsConfigDto {
-        desktop: DesktopProductPreferencesDto {
-            color_theme: config.desktop.color_theme,
-            accessibility_support: config
-                .desktop
-                .accessibility_support
-                .map(automatic_preference_dto),
-            reduce_motion: config.desktop.reduce_motion.map(automatic_preference_dto),
-            reduce_transparency: config
-                .desktop
-                .reduce_transparency
-                .map(automatic_preference_dto),
-            underline_links: config.desktop.underline_links,
-            hover_delay_milliseconds: config.desktop.hover_delay_milliseconds,
-            reduced_hover_delay_milliseconds: config.desktop.reduced_hover_delay_milliseconds,
-            sash_size: config.desktop.sash_size,
-            sash_hover_delay_milliseconds: config.desktop.sash_hover_delay_milliseconds,
-        },
-        code: CodeProductPreferencesDto {
-            color_theme: config.code.color_theme,
-        },
-        zeterm: ZetermProductPreferencesDto {
-            color_theme: config.zeterm.color_theme,
-        },
-    }
-}
-
-fn products_update_from_dto(update: ProductsConfigUpdateDto) -> ProductsConfigUpdate {
-    ProductsConfigUpdate {
-        desktop: update.desktop.map(desktop_preferences_update_from_dto),
-        code: update.code.map(code_preferences_update_from_dto),
-        zeterm: update.zeterm.map(zeterm_preferences_update_from_dto),
-    }
-}
-
-fn desktop_preferences_update_from_dto(
-    update: DesktopProductPreferencesUpdateDto,
-) -> DesktopProductPreferencesUpdate {
-    DesktopProductPreferencesUpdate {
-        color_theme: update.color_theme,
-        accessibility_support: update
-            .accessibility_support
-            .map(automatic_preference_from_dto),
-        reduce_motion: update.reduce_motion.map(automatic_preference_from_dto),
-        reduce_transparency: update
-            .reduce_transparency
-            .map(automatic_preference_from_dto),
-        underline_links: update.underline_links,
-        hover_delay_milliseconds: update.hover_delay_milliseconds,
-        reduced_hover_delay_milliseconds: update.reduced_hover_delay_milliseconds,
-        sash_size: update.sash_size,
-        sash_hover_delay_milliseconds: update.sash_hover_delay_milliseconds,
-    }
-}
-
-fn code_preferences_update_from_dto(
-    update: CodeProductPreferencesUpdateDto,
-) -> CodeProductPreferencesUpdate {
-    CodeProductPreferencesUpdate {
-        color_theme: update.color_theme,
-    }
-}
-
-fn zeterm_preferences_update_from_dto(
-    update: ZetermProductPreferencesUpdateDto,
-) -> ZetermProductPreferencesUpdate {
-    ZetermProductPreferencesUpdate {
-        color_theme: update.color_theme,
-    }
-}
-
-fn automatic_preference_dto(preference: AutomaticPreference) -> AutomaticPreferenceDto {
-    match preference {
-        AutomaticPreference::Auto => AutomaticPreferenceDto::Auto,
-        AutomaticPreference::Off => AutomaticPreferenceDto::Off,
-        AutomaticPreference::On => AutomaticPreferenceDto::On,
-    }
-}
-
-fn automatic_preference_from_dto(preference: AutomaticPreferenceDto) -> AutomaticPreference {
-    match preference {
-        AutomaticPreferenceDto::Auto => AutomaticPreference::Auto,
-        AutomaticPreferenceDto::Off => AutomaticPreference::Off,
-        AutomaticPreferenceDto::On => AutomaticPreference::On,
     }
 }
 

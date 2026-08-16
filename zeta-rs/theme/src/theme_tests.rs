@@ -10,7 +10,32 @@ use crate::ThemeDocument;
 use crate::ThemeLoadOptions;
 use crate::ThemeLoader;
 use crate::ThemeSurface;
+use crate::loader::resolve_device_root;
 use crate::tokens;
+
+#[test]
+fn device_preferences_share_the_profile_root_by_default() {
+    assert_eq!(
+        resolve_device_root(None, None, Some("/home/ada".into())),
+        std::path::PathBuf::from("/home/ada/.zeta")
+    );
+    assert_eq!(
+        resolve_device_root(
+            None,
+            Some("/profiles/zeta".into()),
+            Some("/home/ignored".into()),
+        ),
+        std::path::PathBuf::from("/profiles/zeta")
+    );
+    assert_eq!(
+        resolve_device_root(
+            Some("/devices/zeta".into()),
+            Some("/profiles/zeta".into()),
+            Some("/home/ignored".into()),
+        ),
+        std::path::PathBuf::from("/devices/zeta")
+    );
+}
 
 #[test]
 fn embedded_catalog_preserves_aliases_when_a_dependency_is_overridden() {

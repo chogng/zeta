@@ -55,6 +55,7 @@ use crate::composer_classification::update_composer_classifier;
 use crate::native_event::NativeEvent;
 use crate::session_switch_trace::{self, SwitchId};
 use crate::session_tab_list::SessionTabUpsert;
+use crate::session_tab_list::upsert_session_catalog_tab as project_session_catalog_tab;
 use crate::session_tab_list::upsert_session_tab as project_session_tab;
 use crate::thread_projection::ThreadProjectionUpdate;
 
@@ -117,6 +118,7 @@ pub(crate) enum AgentSessionEvent {
         models: Vec<ModelCatalogEntry>,
     },
     Configuration(ConfigReadResult),
+    SessionCatalog(Vec<Session>),
     Snapshot {
         session: Session,
         thread: Thread,
@@ -453,8 +455,10 @@ fn run_agent_session_connection(
     let events = session
         .take_events()
         .map_err(|error| AgentSessionFailure::connection(anyhow!(error.to_string())))?;
-    let mut active = ensure_active_session(&mut client, workspace_root)
+    let (sessions, mut active) = ensure_active_session(&mut client, workspace_root)
         .map_err(AgentSessionFailure::connection)?;
+    send_event(event_proxy, AgentSessionEvent::SessionCatalog(sessions))
+        .map_err(AgentSessionFailure::fatal)?;
     publish_subscription(event_proxy, &active.subscription, &active.thread_id, None)
         .map_err(AgentSessionFailure::fatal)?;
     available.store(true, Ordering::Release);
@@ -803,8 +807,13 @@ struct ActiveSession {
 fn ensure_active_session(
     client: &mut AppServerRequestHandle,
     workspace_root: &Path,
-) -> Result<ActiveSession> {
-    let sessions = client.list_sessions().map_err(client_error)?.sessions;
+) -> Result<(Vec<Session>, ActiveSession)> {
+    let mut sessions = client.list_sessions().map_err(client_error)?.sessions;
+    sessions.sort_by(|left, right| {
+        left.title
+            .cmp(&right.title)
+            .then_with(|| left.session_id.as_str().cmp(right.session_id.as_str()))
+    });
     session_switch_trace::event(
         None,
         "session-catalog",
@@ -818,13 +827,20 @@ fn ensure_active_session(
         ),
     );
     let session = match sessions
-        .into_iter()
+        .iter()
         .find(|session| session.status == SessionStatus::Active)
+        .cloned()
     {
         Some(session) => session,
-        None => create_session(client, workspace_root)?,
+        None => {
+            let session = create_session(client, workspace_root)?;
+            sessions.push(session.clone());
+            session
+        }
     };
-    initialize_session(client, session, workspace_root)
+    let active = initialize_session(client, session, workspace_root)?;
+    sessions.retain(|session| session.status == SessionStatus::Active);
+    Ok((sessions, active))
 }
 
 fn create_active_session(
@@ -1247,6 +1263,13 @@ impl NativeApp {
         );
     }
 
+    fn upsert_session_catalog(&mut self, sessions: &[Session]) {
+        let workspace = self.workspace_context.working_directory_label().to_owned();
+        for session in sessions {
+            project_session_catalog_tab(&mut self.session_tabs, session, &workspace);
+        }
+    }
+
     pub(crate) fn handle_agent_session_event(&mut self, event: AgentSessionEvent) {
         let previous_line_count = crate::thread_timeline::line_count(&self.thread_projection);
         let workspace_may_have_changed = matches!(
@@ -1275,15 +1298,12 @@ impl NativeApp {
                 }
             }
             AgentSessionEvent::Configuration(configuration) => {
-                let configured_theme = configuration.products.zeterm.color_theme.clone();
-                if configured_theme != self.configured_theme {
-                    self.configured_theme = configured_theme;
-                    self.reload_theme(self.system_theme_scheme);
-                    self.rebuild_presentation_on_next_redraw();
-                }
                 self.language_server_settings.synchronize(&configuration);
                 self.language_service
                     .apply_configuration(&configuration, &self.file_editor_host);
+            }
+            AgentSessionEvent::SessionCatalog(sessions) => {
+                self.upsert_session_catalog(&sessions);
             }
             AgentSessionEvent::Snapshot {
                 session,

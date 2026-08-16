@@ -1455,14 +1455,6 @@
         "nextOffset"
       ]
     },
-    "AutomaticPreferenceDto": {
-      "type": "string",
-      "enum": [
-        "auto",
-        "off",
-        "on"
-      ]
-    },
     "BrowserBinaryPayload": {
       "description": "One bounded binary payload returned by a client host before App Server resource registration.",
       "type": "object",
@@ -8056,30 +8048,6 @@
         "semantic"
       ]
     },
-    "CodeProductPreferencesDto": {
-      "type": "object",
-      "properties": {
-        "colorTheme": {
-          "type": [
-            "string",
-            "null"
-          ]
-        }
-      },
-      "additionalProperties": false
-    },
-    "CodeProductPreferencesUpdateDto": {
-      "type": "object",
-      "properties": {
-        "colorTheme": {
-          "type": [
-            "string",
-            "null"
-          ]
-        }
-      },
-      "additionalProperties": false
-    },
     "CodeRetrievalDegradationDto": {
       "description": "Non-fatal loss reported while preserving usable retrieval results.",
       "oneOf": [
@@ -8366,9 +8334,6 @@
             }
           ]
         },
-        "products": {
-          "$ref": "#/$defs/ProductsConfigDto"
-        },
         "providers": {
           "type": "object",
           "additionalProperties": {
@@ -8397,7 +8362,6 @@
         "revision",
         "generation",
         "approvalReviewModel",
-        "products",
         "providers",
         "mcpServers",
         "skillSources",
@@ -8435,16 +8399,6 @@
           "anyOf": [
             {
               "$ref": "#/$defs/ModelRefDto"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "products": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ProductsConfigUpdateDto"
             },
             {
               "type": "null"
@@ -9443,174 +9397,6 @@
         "deliveryFailed",
         "unknownOutcome"
       ]
-    },
-    "DesktopProductPreferencesDto": {
-      "type": "object",
-      "properties": {
-        "accessibilitySupport": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/AutomaticPreferenceDto"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "colorTheme": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "hoverDelayMilliseconds": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint16",
-          "maximum": 65535,
-          "minimum": 0
-        },
-        "reduceMotion": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/AutomaticPreferenceDto"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "reduceTransparency": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/AutomaticPreferenceDto"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "reducedHoverDelayMilliseconds": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint16",
-          "maximum": 65535,
-          "minimum": 0
-        },
-        "sashHoverDelayMilliseconds": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint16",
-          "maximum": 65535,
-          "minimum": 0
-        },
-        "sashSize": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint8",
-          "maximum": 255,
-          "minimum": 0
-        },
-        "underlineLinks": {
-          "type": [
-            "boolean",
-            "null"
-          ]
-        }
-      },
-      "additionalProperties": false
-    },
-    "DesktopProductPreferencesUpdateDto": {
-      "type": "object",
-      "properties": {
-        "accessibilitySupport": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/AutomaticPreferenceDto"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "colorTheme": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "hoverDelayMilliseconds": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint16",
-          "maximum": 65535,
-          "minimum": 0
-        },
-        "reduceMotion": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/AutomaticPreferenceDto"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "reduceTransparency": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/AutomaticPreferenceDto"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "reducedHoverDelayMilliseconds": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint16",
-          "maximum": 65535,
-          "minimum": 0
-        },
-        "sashHoverDelayMilliseconds": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint16",
-          "maximum": 65535,
-          "minimum": 0
-        },
-        "sashSize": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint8",
-          "maximum": 255,
-          "minimum": 0
-        },
-        "underlineLinks": {
-          "type": [
-            "boolean",
-            "null"
-          ]
-        }
-      },
-      "additionalProperties": false
     },
     "DiffComputeParams": {
       "description": "Inputs for one presentation-independent comparison of two text snapshots.",
@@ -16926,62 +16712,6 @@
         }
       ]
     },
-    "ProductsConfigDto": {
-      "type": "object",
-      "properties": {
-        "code": {
-          "$ref": "#/$defs/CodeProductPreferencesDto"
-        },
-        "desktop": {
-          "$ref": "#/$defs/DesktopProductPreferencesDto"
-        },
-        "zeterm": {
-          "$ref": "#/$defs/ZetermProductPreferencesDto"
-        }
-      },
-      "additionalProperties": false,
-      "required": [
-        "desktop",
-        "code",
-        "zeterm"
-      ]
-    },
-    "ProductsConfigUpdateDto": {
-      "type": "object",
-      "properties": {
-        "code": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/CodeProductPreferencesUpdateDto"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "desktop": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/DesktopProductPreferencesUpdateDto"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "zeterm": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ZetermProductPreferencesUpdateDto"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      },
-      "additionalProperties": false
-    },
     "ProviderConfigDto": {
       "description": "Non-secret declarative provider settings exposed through the App Server contract.",
       "type": "object",
@@ -22709,30 +22439,6 @@
         "restricted",
         "trusted"
       ]
-    },
-    "ZetermProductPreferencesDto": {
-      "type": "object",
-      "properties": {
-        "colorTheme": {
-          "type": [
-            "string",
-            "null"
-          ]
-        }
-      },
-      "additionalProperties": false
-    },
-    "ZetermProductPreferencesUpdateDto": {
-      "type": "object",
-      "properties": {
-        "colorTheme": {
-          "type": [
-            "string",
-            "null"
-          ]
-        }
-      },
-      "additionalProperties": false
     }
   }
 }

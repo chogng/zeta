@@ -1,4 +1,8 @@
-use super::{SessionTab, SessionTabList, SessionTabUpsert, upsert_session_tab};
+use super::SessionTab;
+use super::SessionTabList;
+use super::SessionTabUpsert;
+use super::upsert_session_catalog_tab;
+use super::upsert_session_tab;
 use crate::shell_interaction::{ACTIVE_SESSION_TAB, SESSION_TAB_LIST, session_tab_id};
 use crate::shell_style::SHELL_PALETTE;
 use zeta_protocol::{Session, SessionId, SessionStatus};
@@ -51,6 +55,22 @@ fn add_session_snapshots_create_independent_tabs_and_select_the_newest() {
     assert_eq!(tabs.len(), 2);
     assert_eq!(selected, ACTIVE_SESSION_TAB);
     assert_eq!(tabs[0].title(), "First terminal renamed");
+}
+
+#[test]
+fn catalog_upsert_does_not_change_the_selected_tab() {
+    let mut tabs = Vec::new();
+    let mut selected = ACTIVE_SESSION_TAB;
+    let active = session("session-active", "Active");
+    let saved = session("session-saved", "Saved");
+    upsert_session_tab(&mut tabs, &mut selected, &active, "~/zeta");
+    let selected_before_catalog = selected;
+
+    assert_eq!(
+        upsert_session_catalog_tab(&mut tabs, &saved, "~/zeta"),
+        SessionTabUpsert::Added(session_tab_id(1))
+    );
+    assert_eq!(selected, selected_before_catalog);
 }
 
 #[test]

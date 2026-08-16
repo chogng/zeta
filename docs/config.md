@@ -6,8 +6,7 @@
 > Provider map、standalone MCP declaration、Skill source/per-Skill enablement、Workspace TOML
 > read-only document、exact Plugin request、declarative Hook、User Workspace trust decision 和
 > scoped resolution、Tool Search 词法/混合 embedding 模式选择、User execution-policy rule
-> persistence、Workspace restrictive rule intent，以及 Desktop/Zeta Code/zeterm 的 typed
-> `products.*` preference 已实现。
+> persistence 与 Workspace restrictive rule intent 已实现。
 > Local App Server 在 profile 下使用
 > `config.toml` 与 `state.sqlite3`，并在提交后原子切换未来的 model、Skill 与 MCP Tool safe point；
 > 已 prepare 的 Tool Call 保留旧 generation。Plugin contribution、grant 和完整环境组合仍是后续
@@ -72,7 +71,8 @@ Skill catalog、credential 和 action policy 继续由各自领域拥有。App S
 
 | Authority | 拥有 | 不拥有 |
 | --- | --- | --- |
-| User Config authority | Agent 默认值、Provider 配置、独立 MCP server、Skill source、Plugin request、Hook declaration、execution-policy rules、按 canonical root identity 的 Workspace trust decision，以及 `products.*` 强类型产品偏好 | installed Plugin package、live connection、Hook execution、secret、runtime health、窗口位置 |
+| User Config authority | Agent 默认值、Provider 配置、独立 MCP server、Skill source、Plugin request、Hook declaration、execution-policy rules、按 canonical root identity 的 Workspace trust decision | installed Plugin package、live connection、Hook execution、secret、runtime health、前端设备偏好、窗口位置 |
+| Device settings authority | Desktop/TUI/zeterm 的主题选择、可访问性、hover、sash 等 presentation preference | Agent、Provider、MCP、Skill、Workspace trust、运行时健康状态 |
 | Product services distribution authority | Marketplace endpoint、trusted root、刷新策略、允许的 publisher、公开 OAuth client/broker 输入 | 用户偏好、secret、安装状态、catalog 内容、运行时连接状态 |
 | Workspace config document | Workspace Agent 默认值、独立 MCP 声明、Plugin 请求、Workspace Skill source、Hook 请求、只收紧的 execution-policy rules | 自动安装、扩权 grant、Hook 执行、credential value、运行时状态 |
 | Plugin authority | installed exact package、effective activation、activation grant、credential-slot binding、rollback | TOML request、MCP session、Skill catalog、per-call approval |
@@ -123,7 +123,7 @@ ResolvedConfigSnapshot
 
 | 配置 | 允许的 source | 规则 |
 | --- | --- | --- |
-| 产品 Theme/UI preference | User `products.desktop/code/zeterm` | 进入 Rust `UserConfigDocument`；Workspace、Session 和 launch 不能覆盖，主题文件内容仍留在 device root |
+| 产品 Theme/UI preference | profile `configuration.json` | 使用产品命名的 typed key；不进入 App Server Config、Workspace、Session 或 Agent runtime snapshot |
 | Preferred model | User、Workspace、Session、launch | 只影响下一个 model safe point |
 | Provider endpoint/profile | User、host | Workspace 不能静默替换认证或网络边界 |
 | Standalone MCP server | User、Workspace | Workspace declaration 需要 trust/grant 后才能启动 |
@@ -148,7 +148,6 @@ pub struct UserConfigDocument {
     pub skills: SkillsConfig,
     pub plugins: PluginsConfig,
     pub hooks: HooksConfig,
-    pub products: ProductsConfig,
     pub tool_search: ToolSearchConfig,
     pub exec_policy: UserExecPolicyConfig,
     pub workspace_trust: WorkspaceTrustConfig,
@@ -163,23 +162,6 @@ pub struct WorkspaceConfigDocument {
     pub exec_policy: WorkspaceExecPolicyConfig,
 }
 ```
-
-产品偏好使用稳定 namespace，而不是自由键值表：
-
-```toml
-[products.desktop]
-colorTheme = "zeta-dark"
-sashSize = 8
-
-[products.code]
-colorTheme = "zeta-code-dark"
-
-[products.zeterm]
-colorTheme = "zeta-light"
-```
-
-未出现的产品或字段继续使用产品默认值；未知字段、越界数值和含空白的 theme ID 会使整个外部编辑
-fail closed，不会部分应用。
 
 `UserExecPolicyConfig` 持久化 typed `ExecPolicyRule`；`UserConfigCommand::UpsertExecPolicyRule` 和
 `RemoveExecPolicyRule` 走同一 expected-revision、receipt 与 atomic TOML replacement 路径。
@@ -202,16 +184,17 @@ Config reconcile、信任 gate 与 runtime composition，当前尚未把进程�
 `TurnCompleted` 是观察点，不能倒转已经提交的结果。`TurnCompleted` 在 durable completion 后
 best-effort 执行，全部安全点遵守 cancellation，并在配置变更后热替换未来调用读取的快照。
 
-产品主题和 Desktop accessibility/hover/sash 偏好由 Rust `ProductsConfig`、typed command 与 App
-Server Config DTO 统一承载。Desktop 原有 `configuration.json` 的受支持键在首次连接时迁移；TUI
-和 zeterm 直接消费 `config/read.products`。主题 JSON 内容、窗口位置和运行时 UI 状态不进入 Config，
-也不能成为 Agent、Provider、MCP、Skill、Session 或 Thread 的第二 authority。
+产品主题和 Desktop accessibility/hover/sash 偏好由 profile 下的 `configuration.json` 承载。
+Desktop 的 Configuration service 负责 strict validation、CAS revision、atomic replace 与 watcher；
+Rust `zeta-theme` 只读取/原子更新它拥有的主题 key。TUI 和 zeterm 因为使用同一个 profile root，
+能直接读到相同 JSON 资源。窗口位置和 Electron/Chromium 运行时状态不进入该文件，也不能成为
+Agent、Provider、MCP、Skill、Session 或 Thread 的第二 authority。
 
 发行版的 `product-services.json` 也不进入 User Config。它是 Desktop、`zeta code`/TUI、zeterm
 和独立 `zeta-server` 共同发现的只读 host input，并由每个产品宿主显式注入 App Server。普通用户
-设置继续统一写入 profile 的 `config.toml`；产品服务文件只选择发行信任和公共服务接入，不能保存
-token、安装列表或用户期望状态。因而“统一 Settings”指统一 typed Config API 和作用域语义，不是把
-所有 authority 递归合并进一个 JSON。
+后端和跨运行时设置写入 profile 的 `config.toml`；前端设备设置写入 `configuration.json`。产品服务
+文件只选择发行信任和公共服务接入，不能保存 token、安装列表或用户期望状态。因而“统一 Settings”
+指一个 Settings UI 按 key metadata 路由到明确 authority，不是把所有状态递归合并进一个文件。
 
 所有 section 必须是 typed schema。禁止使用以下通用逃生口：
 
@@ -483,7 +466,7 @@ resolved sources
 
 | 类别 | 方法示例 | Authority/语义 |
 | --- | --- | --- |
-| Ordinary Config | `config/read`、`config/update`、`config/changed` | Config authority；snapshot 包含 `products.*`，commit notification 仅携带 revision/generation |
+| Ordinary Config | `config/read`、`config/update`、`config/changed` | 后端 Config authority；commit notification 仅携带 revision/generation，前端 device settings 不进入该 snapshot |
 | Provider Config | `provider/configure`、`provider/remove` | Config authority 的 Provider section |
 | Standalone MCP Config | `mcp/server/upsert`、`mcp/server/remove`、`mcp/server/enablement/set` | Config authority 的 MCP section（已实现 desired config） |
 | MCP Runtime | `mcp/server/connect`、`mcp/server/disconnect`、`mcp/server/status` | process-local lifecycle intent 与 active runtime 的 redacted projection（已实现）；不改变 Config revision |
@@ -645,17 +628,22 @@ Workspace Config → grant or secret authority
 
 ## 15. TOML 权威、SQLite 状态与配置档案边界
 
-本地 host 解析一个用户级 `profile_root`。`ZETA_PROFILE_ROOT` 显式覆盖；未设置时使用操作系统
-的用户 state 目录。Zeta Desktop 的 `userData/state`、Zeta Code/TUI 和 zeterm 的
-`local_profile_root()` 在默认发行配置中解析到同一目录，因此三个产品读取同一个 `config.toml`；
-显式 profile override 会作为整体隔离。切换 workspace 不会切换用户 Config/Session/Thread authority。
+本地 host 解析一个用户级 `profile_root`。`ZETA_PROFILE_ROOT` 显式覆盖；未设置时三个产品在所有
+操作系统上统一使用用户 home 下的 `.zeta`：macOS `/Users/<user>/.zeta`、Linux
+`/home/<user>/.zeta`、Windows `C:\Users\<user>\.zeta`。显式 profile override 会作为整体隔离；
+切换 workspace 不会切换用户 Config、device settings、Session 或 Thread authority。
 
 ```text
 <profile_root>/
 ├── config.toml         # human-authored User desired configuration
+├── configuration.json  # frontend/device presentation preferences
+├── keybindings.json    # ordered user shortcut rules
+├── themes/             # user-authored theme documents
 ├── state.sqlite3       # transaction metadata + Session/Thread machine state
 ├── state.sqlite3-wal   # SQLite WAL（运行时）
 ├── state.sqlite3-shm   # SQLite shared memory（运行时）
+├── cache/
+│   └── marketplace/    # verified TUF/catalog/package cache shared by all product hosts
 └── leases/             # writer lease
 
 <workspace_root>/
@@ -672,6 +660,13 @@ Workspace Config → grant or secret authority
 | MCP server adapter | `mcp_invocation_receipts`、`mcp_thread_bindings` | principal-scoped invocation replay 与 Thread authorization；不拥有 Agent state |
 | Schema | `zeta_schema_migrations` | component 独立 version gate；不支持的版本 fail closed |
 
+Desktop、`zeta code`/TUI 与 zeterm 的本地 App Server 都以 durable mode 打开这一 authority。产品
+通过 `session/list` 发现会话，并以 `session/read`、`session/subscribe` 和
+`session/thread/read` 恢复同一份对话；UI 不直接查询 SQLite。关闭并重新打开任一产品时，会从
+共享 event history 重建 Session/Thread projection。多个已经运行的独立 App Server 之间目前没有
+跨进程 catalog notification，因此另一产品新建的会话需要重启其本地 App Server 后才会出现在
+既有窗口；长期实时同步应收敛到单一 profile-scoped authority，而不是引入第二份 UI cache。
+
 | 数据类别 | TOML | SQLite |
 | --- | --- | --- |
 | User/Workspace 声明式配置正文 | ✅ 唯一 authority | ❌ 不保存副本 |
@@ -679,6 +674,13 @@ Workspace Config → grant or secret authority
 | command / MCP invocation receipt | ❌ | ✅ |
 | Session、Thread event 与恢复状态 | ❌ | ✅ |
 | secret bytes | ❌ | ❌，由 Secret Store 拥有 |
+
+Electron 的 `userData` 继续保留 `state.json`、Chromium session/cache、日志、crash data 与发行版窗口
+状态；它不是 Zeta profile root。Secret 继续由系统 Keychain/Credential Manager/Secret Service 拥有，
+不得因为 `.zeta` 统一而落入 JSON、TOML、SQLite 或 Marketplace cache。
+Desktop 首次使用新 profile 时只会以“目标不存在”为条件复制旧 `configuration.json`、
+`keybindings.json` 和 `themes/`。SQLite/WAL 不做文件级复制；需要迁移旧后端 profile 时必须通过
+显式 `ZETA_PROFILE_ROOT` 保持原 authority，或使用能够协调 writer/backup 的专门迁移流程。
 
 Config command 先在 `BEGIN IMMEDIATE` 下校验 expected revision，再以 temp-file + rename 原子替换
 `config.toml`，最后提交 metadata 与 receipt。TOML 与 SQLite 无法组成单个跨文件 ACID 事务；
