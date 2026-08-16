@@ -13,6 +13,7 @@ use std::collections::BTreeSet;
 use std::io::BufRead;
 use std::io::BufReader;
 use std::io::Write;
+use std::sync::Condvar;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex, RwLock};
@@ -20,7 +21,9 @@ use std::thread;
 use std::time::Duration;
 use zeroize::Zeroize;
 use zeta_app_server_protocol::protocol::error::{AppServerError, AppServerErrorName};
-use zeta_app_server_protocol::protocol::registry::{ClientMethod, client_method};
+use zeta_app_server_protocol::protocol::registry::ClientMethod;
+use zeta_app_server_protocol::protocol::registry::client_method;
+use zeta_app_server_protocol::protocol::registry::client_method_definition;
 use zeta_app_server_protocol::rpc::{
     JsonRpcFailure, JsonRpcId, JsonRpcRequest, JsonRpcSuccess, JsonRpcVersion,
 };
@@ -89,6 +92,7 @@ mod plugin_extension_sources;
 mod plugin_operations;
 mod plugin_runtime;
 mod plugin_skill_sources;
+mod request_serialization;
 mod search_operations;
 mod semantic_index_job;
 mod skill_operations;
@@ -104,10 +108,13 @@ mod workspace_operations;
 mod workspace_runtime;
 
 const OUTBOUND_MESSAGE_QUEUE_CAPACITY: usize = 256;
+const INBOUND_REQUEST_QUEUE_CAPACITY: usize = 64;
+const CONNECTION_REQUEST_WORKERS: usize = 4;
 
 use crate::mcp_runtime::McpRuntimeIntents;
 use notification_queue::NotificationListener;
 use notification_queue::NotificationQueue;
+use request_serialization::RequestScheduler;
 use update_broker::UpdateBroker;
 use workspace_runtime::{LocalWorkspaceHost, WorkspaceRuntime};
 pub(crate) use workspace_runtime::{
@@ -146,6 +153,7 @@ pub struct AppServer {
     model: Arc<dyn ModelService>,
     model_catalog: Arc<dyn ModelCatalog>,
     next_connection_id: AtomicU64,
+    request_scheduler: RequestScheduler,
     pub(super) resources: Arc<Mutex<ResourceStore>>,
     pub(super) attachment_uploads: Mutex<AttachmentUploadStore>,
     pub(super) collaboration: Mutex<collaboration_runtime::DocumentCollaborationStore>,
@@ -205,10 +213,79 @@ pub struct AppServer {
 #[derive(Clone, Debug, Default)]
 pub struct ConnectionState {
     pub(super) connection_id: u64,
+    state: Arc<Mutex<ConnectionMutableState>>,
+    outbound_notifications: NotificationQueue,
+}
+
+#[derive(Debug, Default)]
+struct ConnectionMutableState {
+    closed: bool,
     initialized: bool,
     request_ids: BTreeSet<u64>,
     marketplace_leases: BTreeSet<String>,
-    outbound_notifications: NotificationQueue,
+    workspace_trust_host: bool,
+}
+
+impl ConnectionState {
+    fn is_closed(&self) -> bool {
+        connection_state(self).closed
+    }
+
+    fn mark_closed(&self) -> bool {
+        let mut state = connection_state(self);
+        let was_open = !state.closed;
+        state.closed = true;
+        was_open
+    }
+
+    fn is_initialized(&self) -> bool {
+        connection_state(self).initialized
+    }
+
+    fn set_initialized(&self) {
+        connection_state(self).initialized = true;
+    }
+
+    fn record_request_id(&self, request_id: u64) -> bool {
+        connection_state(self).request_ids.insert(request_id)
+    }
+
+    fn set_workspace_trust_host(&self, supported: bool) {
+        connection_state(self).workspace_trust_host = supported;
+    }
+
+    pub(super) fn supports_workspace_trust_host(&self) -> bool {
+        connection_state(self).workspace_trust_host
+    }
+
+    fn marketplace_leases(&self) -> Vec<String> {
+        connection_state(self)
+            .marketplace_leases
+            .iter()
+            .cloned()
+            .collect()
+    }
+
+    pub(super) fn add_marketplace_lease(&self, lease_id: String) {
+        connection_state(self).marketplace_leases.insert(lease_id);
+    }
+
+    pub(super) fn remove_marketplace_lease(&self, lease_id: &str) {
+        connection_state(self).marketplace_leases.remove(lease_id);
+    }
+
+    pub(super) fn owns_marketplace_lease(&self, lease_id: &str) -> bool {
+        connection_state(self).marketplace_leases.contains(lease_id)
+    }
+}
+
+fn connection_state(
+    connection: &ConnectionState,
+) -> std::sync::MutexGuard<'_, ConnectionMutableState> {
+    connection
+        .state
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
 /// A wakeable source for outbound notifications owned by one App Server connection.
@@ -217,6 +294,56 @@ pub struct ConnectionState {
 /// pending protocol notifications. Closing the connection wakes any blocked listener.
 pub struct ConnectionNotifications {
     listener: NotificationListener,
+}
+
+#[derive(Default)]
+struct ConnectionDispatchActivity {
+    active: Mutex<usize>,
+    idle: Condvar,
+}
+
+impl ConnectionDispatchActivity {
+    fn enter(self: &Arc<Self>) -> ConnectionDispatchGuard {
+        *self
+            .active
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) += 1;
+        ConnectionDispatchGuard {
+            activity: Arc::clone(self),
+        }
+    }
+
+    fn while_idle<T>(&self, operation: impl FnOnce() -> T) -> T {
+        let mut active = self
+            .active
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        while *active != 0 {
+            active = self
+                .idle
+                .wait(active)
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+        }
+        operation()
+    }
+}
+
+struct ConnectionDispatchGuard {
+    activity: Arc<ConnectionDispatchActivity>,
+}
+
+impl Drop for ConnectionDispatchGuard {
+    fn drop(&mut self) {
+        let mut active = self
+            .activity
+            .active
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        *active -= 1;
+        if *active == 0 {
+            self.activity.idle.notify_all();
+        }
+    }
 }
 
 impl ConnectionNotifications {
@@ -287,6 +414,7 @@ impl AppServer {
             model,
             model_catalog: unavailable_model_catalog(),
             next_connection_id: AtomicU64::new(1),
+            request_scheduler: RequestScheduler::default(),
             resources,
             attachment_uploads: Mutex::new(AttachmentUploadStore::default()),
             collaboration: Mutex::new(collaboration_runtime::DocumentCollaborationStore::default()),
@@ -427,12 +555,15 @@ impl AppServer {
 
     /// Releases connection-scoped subscriptions and runtime resources.
     pub fn close_connection(&self, connection: ConnectionState) {
+        if !connection.mark_closed() {
+            return;
+        }
+        self.request_scheduler
+            .cancel_connection(connection.connection_id);
         if let Some(marketplace) = &self.marketplace_manager_client {
-            for lease_id in &connection.marketplace_leases {
+            for lease_id in connection.marketplace_leases() {
                 let _ = marketplace.release_capability(
-                    zeta_marketplace_client::ReleaseCapabilityRequest {
-                        lease_id: lease_id.clone(),
-                    },
+                    zeta_marketplace_client::ReleaseCapabilityRequest { lease_id },
                 );
             }
         }
@@ -460,6 +591,8 @@ impl AppServer {
         if let Some(extension_hosts) = &self.extension_hosts {
             extension_hosts.close_owner(connection.connection_id);
         }
+        self.request_scheduler
+            .finish_connection(connection.connection_id);
     }
 
     fn synchronize_browser_tool_availability(&self) -> Result<(), String> {
@@ -1094,13 +1227,60 @@ impl AppServer {
             }
         };
         let request_id = request.id.as_u64().expect("validated request ID");
-        if !connection.request_ids.insert(request_id) {
+        if connection.is_closed()
+            || self
+                .request_scheduler
+                .is_connection_cancelled(connection.connection_id)
+        {
+            return serialize_response(error_response(
+                request.id,
+                -32800,
+                AppServerErrorName::RequestCancelled,
+            ));
+        }
+        if !connection.record_request_id(request_id) {
             return serialize_response(error_response(
                 request.id,
                 -32600,
                 AppServerErrorName::InvalidRequest,
             ));
         }
+        let serialization_scope = if client_method(&request.method)
+            != Some(ClientMethod::Initialize)
+            && !connection.is_initialized()
+        {
+            None
+        } else {
+            match client_method_definition(&request.method)
+                .map(|definition| definition.serialization_scope(&request.params))
+                .transpose()
+            {
+                Ok(scope) => scope.flatten(),
+                Err(_) => {
+                    return serialize_response(error_response(
+                        request.id,
+                        -32602,
+                        AppServerErrorName::InvalidParams,
+                    ));
+                }
+            }
+        };
+        let _permit = match serialization_scope {
+            Some(scope) => match self
+                .request_scheduler
+                .acquire(connection.connection_id, scope)
+            {
+                Ok(permit) => Some(permit),
+                Err(_) => {
+                    return serialize_response(error_response(
+                        request.id,
+                        -32800,
+                        AppServerErrorName::RequestCancelled,
+                    ));
+                }
+            },
+            None => None,
+        };
         let response = match self.dispatch(connection, &mut request) {
             Ok(result) => serde_json::to_value(JsonRpcSuccess::new(request.id, result))
                 .expect("JSON-RPC success response must serialize"),
@@ -1121,7 +1301,9 @@ impl AppServer {
         let mut reader = JsonlReader::new(reader, DEFAULT_MAX_MESSAGE_BYTES);
         let mut connection = self.connection();
         let notifications = self.connection_notifications(&connection);
-        let dispatch_gate = Arc::new(Mutex::new(()));
+        let activity = Arc::new(ConnectionDispatchActivity::default());
+        let (inbound_tx, inbound_rx) = mpsc::sync_channel::<String>(INBOUND_REQUEST_QUEUE_CAPACITY);
+        let inbound_rx = Arc::new(Mutex::new(inbound_rx));
         let (outbound_tx, outbound_rx) =
             mpsc::sync_channel::<String>(OUTBOUND_MESSAGE_QUEUE_CAPACITY);
         thread::scope(|scope| {
@@ -1133,25 +1315,56 @@ impl AppServer {
                 Ok::<(), std::io::Error>(())
             });
             let notification_tx = outbound_tx.clone();
-            let notification_gate = Arc::clone(&dispatch_gate);
+            let notification_activity = Arc::clone(&activity);
             let notification_handle = scope.spawn(move || {
                 while notifications.wait() {
-                    let _guard = notification_gate.lock().map_err(|_| {
-                        std::io::Error::other("App Server dispatch gate lock poisoned")
-                    })?;
-                    for notification in notifications.drain() {
-                        if notification_tx.send(notification).is_err() {
-                            return Ok(());
+                    let delivered = notification_activity.while_idle(|| {
+                        for notification in notifications.drain() {
+                            if notification_tx.send(notification).is_err() {
+                                return false;
+                            }
                         }
+                        true
+                    });
+                    if !delivered {
+                        return Ok(());
                     }
                 }
                 Ok::<(), std::io::Error>(())
             });
+            let mut request_handles = Vec::with_capacity(CONNECTION_REQUEST_WORKERS);
+            for worker_index in 0..CONNECTION_REQUEST_WORKERS {
+                let worker_rx = Arc::clone(&inbound_rx);
+                let worker_tx = outbound_tx.clone();
+                let worker_activity = Arc::clone(&activity);
+                let mut worker_connection = connection.clone();
+                request_handles.push(
+                    thread::Builder::new()
+                        .name(format!("zeta-app-server-request-{worker_index}"))
+                        .spawn_scoped(scope, move || {
+                            loop {
+                                let line = worker_rx
+                                    .lock()
+                                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                                    .recv();
+                                let Ok(mut line) = line else {
+                                    return Ok::<(), std::io::Error>(());
+                                };
+                                let _dispatch = worker_activity.enter();
+                                let response = self.handle_json(&mut worker_connection, &line);
+                                line.zeroize();
+                                worker_tx.send(response).map_err(|_| {
+                                    std::io::Error::new(
+                                        std::io::ErrorKind::BrokenPipe,
+                                        "App Server outbound writer closed",
+                                    )
+                                })?;
+                            }
+                        })?,
+                );
+            }
             let read_result = (|| {
                 while let Some(mut line) = reader.read_message()? {
-                    let _guard = dispatch_gate.lock().map_err(|_| {
-                        std::io::Error::other("App Server dispatch gate lock poisoned")
-                    })?;
                     let envelope = serde_json::from_str::<Value>(&line).map_err(|error| {
                         std::io::Error::new(
                             std::io::ErrorKind::InvalidData,
@@ -1174,17 +1387,45 @@ impl AppServer {
                             "App Server received an unknown JSON-RPC response",
                         ));
                     }
-                    let response = self.handle_json(&mut connection, &line);
-                    line.zeroize();
-                    outbound_tx.send(response).map_err(|_| {
-                        std::io::Error::new(
-                            std::io::ErrorKind::BrokenPipe,
-                            "App Server outbound writer closed",
-                        )
-                    })?;
+                    if connection.is_initialized() {
+                        inbound_tx.send(line).map_err(|_| {
+                            std::io::Error::new(
+                                std::io::ErrorKind::BrokenPipe,
+                                "App Server request workers closed",
+                            )
+                        })?;
+                    } else {
+                        let _dispatch = activity.enter();
+                        let response = self.handle_json(&mut connection, &line);
+                        line.zeroize();
+                        outbound_tx.send(response).map_err(|_| {
+                            std::io::Error::new(
+                                std::io::ErrorKind::BrokenPipe,
+                                "App Server outbound writer closed",
+                            )
+                        })?;
+                    }
                 }
                 Ok::<(), std::io::Error>(())
             })();
+            if read_result.is_err() {
+                self.request_scheduler
+                    .cancel_connection(connection.connection_id);
+            }
+            drop(inbound_tx);
+            let mut request_result = Ok(());
+            for request_handle in request_handles {
+                match request_handle.join() {
+                    Ok(Ok(())) => {}
+                    Ok(Err(error)) if request_result.is_ok() => request_result = Err(error),
+                    Ok(Err(_)) => {}
+                    Err(_) if request_result.is_ok() => {
+                        request_result =
+                            Err(std::io::Error::other("App Server request worker panicked"));
+                    }
+                    Err(_) => {}
+                }
+            }
             self.close_connection(connection);
             drop(outbound_tx);
             let notification_result = notification_handle
@@ -1194,6 +1435,7 @@ impl AppServer {
                 .join()
                 .map_err(|_| std::io::Error::other("App Server writer thread panicked"))?;
             read_result?;
+            request_result?;
             notification_result?;
             writer_result
         })
@@ -1207,12 +1449,17 @@ impl AppServer {
         if client_method(&request.method) == Some(ClientMethod::Initialize) {
             return self.initialize(connection, &request.params);
         }
-        if !connection.initialized {
+        if !connection.is_initialized() {
             return Err(RpcError::new(-32001, AppServerErrorName::NotInitialized));
         }
         match client_method(&request.method) {
             Some(ClientMethod::Initialize) => unreachable!("initialize handled before gate"),
-            Some(ClientMethod::WorkspaceSwitch) => self.workspace_switch(&request.params),
+            Some(ClientMethod::WorkspaceSwitch) => {
+                self.workspace_switch(connection, &request.params)
+            }
+            Some(ClientMethod::WorkspaceTrustRead) => {
+                self.workspace_trust_read(connection, &request.params)
+            }
             Some(ClientMethod::DocumentCollaborationOpen) => {
                 self.document_collaboration_open(connection, &request.params)
             }

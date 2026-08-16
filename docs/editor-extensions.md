@@ -175,10 +175,10 @@ v1 activation event 为 `startup`、`onCommand`、`onLanguage`、`onDemand`、`o
 
 ### 4.2 RPC 与注册
 
-Host RPC v1 是 newline-delimited strict JSON request/response 协议，不是 JSON-RPC，也没有扩展主动
-发送的 event stream。每个消息都绑定 protocol version、request ID、incarnation 和 activation
-generation。未知 request、response kind 不匹配、correlation 不一致、重复/未知 request ID、超限 frame
-或未声明 capability 均使当前 incarnation 失败关闭。
+Host RPC v1 是 newline-delimited strict JSON 协议，不是 JSON-RPC。请求与响应都绑定 protocol version、
+request ID、incarnation 和 activation generation；扩展主动发送的命名 Output event 没有 request ID，但
+仍绑定其余三个 stale-process fence。未知 request、response kind 不匹配、correlation 不一致、重复/未知
+request ID、无效 Output 操作、超限 frame/Output 队列或未声明 capability 均使当前 incarnation 失败关闭。
 
 | Registration kind | Runtime v1 ceiling | 产品接入状态 |
 | --- | --- | --- |
@@ -187,6 +187,12 @@ generation。未知 request、response kind 不匹配、correlation 不一致、
 | Debug Adapter | debugger type | Runtime contract 已实现；Frontend 当前只保留 snapshot 并报告 unsupported bridge，不启动 DAP session |
 | Task Provider | task type | 已接入；只发布用户可选择的 canonical Task，不自动执行命令 |
 | Test Profile Provider | provider ID、label | 已接入 task-backed profile；不冒充完整 test tree/controller API |
+
+扩展命名 Output 是带背压的事件流，不是静态 registration kind，也不扩大 manifest capability ceiling。
+扩展必须先 `create` channel，随后才可 `append`、`replace`、`clear`、`show` 或 `dispose`。Supervisor 分配
+单调 sequence 并保留有界历史；App Server 通过 fleet generation 投影，Workbench 按 sequence 去重，
+恢复内容时不重放旧 `show` 事件。它提供与 VS Code OutputChannel 相近的用户语义，但不是 VS Code Node
+Extension API 的二进制或源码兼容实现。
 
 `capabilities` 是注册种类的最大集合，不代表 extension 已注册 provider，也不批准某次调用的副作用。
 App Server 必须对每个 registration 建立 owner-bound identity，并让领域 owner 定义 operation/payload；
@@ -236,8 +242,9 @@ fleet replacement。任一 gate 失效都拒绝新 activation
 Workspace 切换时停止旧进程。
 
 默认 process/protocol limits 为 1 MiB frame、512 KiB payload、256 registrations、32 个普通和 8 个
-control in-flight requests、256 KiB stderr、10 秒 startup、30 秒 request、2 秒 cancel grace、5 秒
-shutdown。默认 hard limits 请求 512 MiB memory、300 秒 CPU 和单进程。restart policy 在 60 秒窗口内
+control in-flight requests、256 KiB stderr、4096 个 / 512 KiB queued/retained Output events、10 秒
+startup、30 秒 request、2 秒 cancel grace、5 秒 shutdown。默认 hard limits 请求 512 MiB memory、
+300 秒 CPU 和单进程。restart policy 在 60 秒窗口内
 最多允许 5 次，以 100 ms 起步、最高 5 秒指数退避。确切实现和修改义务见 Host crate README。
 
 `TrustedDevelopmentLauncher` 只允许显式可信本地开发。生产第三方执行必须注入能实施所请求隔离的
@@ -283,6 +290,7 @@ Host exit、invalid protocol 或 unknown outcome 会清空旧 registration，终
 | Plugin executable declaration、exact process permission、authority | 已实现 | `zeta-plugins` manifest/package/authority tests |
 | Marketplace executable consumer adapter 与独立 admission | 已实现 | exact sidecar/executable binding、双 lease 与 deferred uninstall tests |
 | Host RPC v1、独立进程监管、取消、配额、restart | 已实现 | `zeta-editor-extension-host` standalone tests |
+| 扩展命名 Output event stream | 已实现 | process-fenced create/append/replace/clear/show/dispose、bounded retention 与 Workbench sequence projection tests |
 | App Server Host fleet、Workspace gate、async invoke/cancel/read | 已实现 | exact operation broker、连接配额/TTL、退役取消与 changed notification |
 | Workbench Commands/Language/Tasks/Testing bridge | 已实现（窄契约） | 原子投影、取消、stale fence 与 last-good 测试；Testing 仅 task-backed profile |
 | Workbench executable Debug bridge | 尚未完成 | registration 可见并产生诊断，但没有异步 Host-broker DAP session seam |
@@ -290,7 +298,7 @@ Host exit、invalid protocol 或 unknown outcome 会清空旧 registration，终
 | Activation-event-driven lazy start | 尚未完成 | Manifest/协议携带 facts；尚无完整事件匹配调度证据 |
 | VS Code Node Extension API / Marketplace compatibility | 非目标 | Host RPC v1 是独立 Zeta 协议 |
 
-当前不支持 generic Node/WASM loader、扩展主动 event stream、publisher signature/revocation feed、
+当前不支持 generic Node/WASM loader、命名 Output 之外的扩展主动 event stream、publisher signature/revocation feed、
 per-platform artifact selector、跨重启 invocation 恢复或多个扩展共享一个 Host process。完整 test tree、
 任意 Webview/UI contribution、任意 App Server method registration 和扩展直接 filesystem/network access
 也不属于 v1 provider bridge。

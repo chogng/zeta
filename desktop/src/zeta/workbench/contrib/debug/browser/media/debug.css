@@ -114,14 +114,59 @@
   padding: 4px 3px;
 }
 
-.zeta-debug-output {
+.zeta-debug-console {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.zeta-debug-console-session {
+  flex: 0 0 auto;
+  margin: 4px 8px;
+  padding: 3px 6px;
+  color: inherit;
+  background: var(--zeta-input-background);
+  border: 1px solid var(--zeta-input-border);
+}
+
+.zeta-debug-console-output {
   flex: 1;
   min-height: 60px;
   margin: 0;
-  padding: 6px;
+  padding: 8px 12px;
   overflow: auto;
   color: var(--zeta-editor-foreground);
   font-family: var(--zeta-font-family-monospace);
   white-space: pre-wrap;
   background: var(--zeta-editor-background);
+}
+
+.zeta-debug-console-form {
+  flex: 0 0 auto;
+  padding: 6px 8px;
+  border-top: 1px solid var(--zeta-border);
+}
+
+.zeta-debug-console-form input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 5px 7px;
+  color: inherit;
+  font: inherit;
+  background: var(--zeta-input-background);
+  border: 1px solid var(--zeta-input-border);
+}
+
+.zeta-debug-console-session:focus-visible,
+.zeta-debug-console-output:focus-visible,
+.zeta-debug-console-form input:focus-visible {
+  outline: 1px solid var(--zeta-focus-border);
+  outline-offset: -1px;
+}
+
+.zeta-debug-console-status {
+  min-height: 0;
+  padding: 0 8px 4px;
+  color: var(--zeta-error-foreground);
+  font-size: 12px;
 }

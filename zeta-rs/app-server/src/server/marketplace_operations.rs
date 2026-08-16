@@ -143,9 +143,7 @@ impl AppServer {
                 },
             })
             .map_err(marketplace_error)?;
-        connection
-            .marketplace_leases
-            .insert(acquired.lease.id.clone());
+        connection.add_marketplace_lease(acquired.lease.id.clone());
         result(&marketplace_projection::acquired_capability(acquired))
     }
 
@@ -161,7 +159,7 @@ impl AppServer {
                 lease_id: params.lease_id.clone(),
             })
             .map_err(marketplace_error)?;
-        connection.marketplace_leases.remove(&params.lease_id);
+        connection.remove_marketplace_lease(&params.lease_id);
         result(&())
     }
 
@@ -217,7 +215,7 @@ impl AppServer {
 }
 
 fn require_owned_lease(connection: &ConnectionState, lease_id: &str) -> Result<(), RpcError> {
-    if connection.marketplace_leases.contains(lease_id) {
+    if connection.owns_marketplace_lease(lease_id) {
         Ok(())
     } else {
         Err(RpcError::new(

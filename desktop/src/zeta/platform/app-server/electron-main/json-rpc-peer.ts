@@ -8,6 +8,7 @@ import {
   trackDisposable,
   toDisposable,
 } from "../../../base/common/lifecycle.js";
+import { AppServerRemoteError } from "../common/appServerError.js";
 import { ChildProcessJsonlTransport } from "./child-process-jsonl-transport.js";
 
 type JsonRpcId = number | string;
@@ -35,17 +36,6 @@ export interface RpcRequestContext {
 export interface JsonRpcPeerOptions {
   maxPendingRequests?: number;
   retiredRequestLimit?: number;
-}
-
-export class JsonRpcRemoteError extends Error {
-  constructor(
-    readonly code: number,
-    message: string,
-    readonly data: unknown,
-  ) {
-    super(message);
-    this.name = "JsonRpcRemoteError";
-  }
 }
 
 export class RpcRequestCancelledError extends CancellationError {
@@ -284,13 +274,14 @@ export class JsonRpcPeer implements IDisposable {
       if (
         !isObject(error) ||
         !Number.isInteger(error.code) ||
-        typeof error.message !== "string"
+        typeof error.message !== "string" ||
+        error.data !== null
       ) {
         pending.reject(new Error("App Server emitted an invalid JSON-RPC error"));
         this.protocolFailure("App Server emitted an invalid JSON-RPC error");
         return;
       }
-      pending.reject(new JsonRpcRemoteError(error.code as number, error.message, error.data));
+      pending.reject(new AppServerRemoteError(error.code as number, error.message, error.data));
       return;
     }
     pending.resolve(message.result);

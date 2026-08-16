@@ -1,7 +1,10 @@
 import { addDisposableListener } from "../../../../base/browser/dom.js";
+import { ActionBar } from "../../../../base/browser/ui/actionbar/actionbar.js";
+import type { IAction } from "../../../../base/common/actions.js";
+import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
 import { type ITaskRun, type ITaskService, type IWorkspaceTask } from "../../../services/tasks/common/taskService.js";
-import { ViewPane, type IViewPaneOptions } from "../../../browser/parts/views/viewPane.js";
-import { TERMINAL_VIEW_ID } from "../../terminal/browser/terminal.contribution.js";
+import { ViewPane, type IViewPaneOptions, type PartTitleProjection } from "../../../browser/parts/views/viewPane.js";
+import { TERMINAL_VIEW_ID } from "../../terminal/common/terminal.js";
 import { type IViewsService } from "../../../services/views/browser/viewsService.js";
 import { type ITerminalService } from "../../../services/terminal/common/terminal.js";
 
@@ -9,6 +12,7 @@ import { type ITerminalService } from "../../../services/terminal/common/termina
 export class TasksViewPane extends ViewPane {
   private readonly statusElement: HTMLDivElement;
   private readonly listElement: HTMLUListElement;
+  private readonly titleActions: ActionBar;
   private renderedTasks: readonly IWorkspaceTask[] = [];
   private refreshing = false;
   private error: string | undefined;
@@ -16,27 +20,25 @@ export class TasksViewPane extends ViewPane {
   constructor(options: IViewPaneOptions, private readonly taskService: ITaskService, private readonly viewsService: IViewsService, private readonly terminalService: ITerminalService) {
     super(options);
     this.contentElement.classList.add("zeta-tasks");
-    const controls = options.ownerDocument.createElement("div");
-    controls.className = "zeta-tasks-controls";
-    const refresh = options.ownerDocument.createElement("button");
-    refresh.type = "button";
-    refresh.className = "zeta-tasks-refresh";
-    refresh.textContent = "Refresh";
-    controls.append(refresh);
+    this.titleActions = this.own(new ActionBar({ ownerDocument: options.ownerDocument, ariaLabel: "Tasks actions" }));
+    this.titleActions.element.classList.add("zeta-toolbar");
     this.statusElement = options.ownerDocument.createElement("div");
     this.statusElement.className = "zeta-tasks-status";
     this.statusElement.setAttribute("role", "status");
     this.listElement = options.ownerDocument.createElement("ul");
     this.listElement.className = "zeta-tasks-list";
     this.listElement.setAttribute("aria-label", "Workspace tasks");
-    this.contentElement.append(controls, this.statusElement, this.listElement);
-    this.own(addDisposableListener(refresh, "click", () => this.refresh()));
+    this.contentElement.append(this.statusElement, this.listElement);
     this.own(addDisposableListener(this.listElement, "click", event => this.activate(event)));
     this.own(taskService.onDidChangeTasks(() => this.render()));
     this.own(taskService.onDidStartTask(() => this.render()));
     this.own(taskService.onDidChangeTaskRun(() => this.render()));
     this.render();
     this.refresh();
+  }
+
+  override get partTitleProjection(): PartTitleProjection {
+    return { actions: this.titleActions.element };
   }
 
   private refresh(): void {
@@ -72,6 +74,16 @@ export class TasksViewPane extends ViewPane {
   }
 
   private render(): void {
+    const refreshAction: IAction = {
+      id: "zeta.tasks.refresh",
+      label: "Refresh Tasks",
+      tooltip: "Refresh Tasks",
+      icon: lxiconsLibrary.refresh,
+      enabled: !this.refreshing,
+      checked: undefined,
+      run: () => this.refresh(),
+    };
+    this.titleActions.updateActions([refreshAction]);
     this.renderedTasks = this.taskService.tasks;
     const runs = this.taskService.lastRun ? [this.taskService.lastRun] : [];
     this.listElement.replaceChildren(...this.renderedTasks.map((task, index) => this.renderTask(task, index)), ...runs.map(run => this.renderRun(run)));

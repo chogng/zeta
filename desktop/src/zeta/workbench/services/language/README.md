@@ -54,10 +54,12 @@ native input before commit so every synchronized change is one atomic undo step.
 Regardless of origin, revision gates, application semantics, and DOM projection
 stay editor-owned.
 
-Language-server log and show-message notifications are retained by the
-Workbench language status service. Logs and active progress appear in the
-Output panel, user-visible messages use the shared dialog service, and active
-work-done progress is summarized through the shared statusbar service.
+Language-server log and show-message notifications are adapted by the Workbench
+language status service. Each server owns a channel registered through the
+canonical [`OutputService`](../output/README.md); the generic Output panel owns
+channel selection and clearing. User-visible messages use the shared dialog
+service. Active work-done progress is summarized through a transient statusbar
+entry, which is removed when no operation remains.
 
 TextMate is a separate provider under `workbench/services/textMate`. The local
 lexical provider remains the deterministic fallback when no external

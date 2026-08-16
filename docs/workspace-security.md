@@ -49,8 +49,20 @@ User Config 可以保存 opaque key 而不存储明文路径。
 
 `zeta-config` 在 `UserConfigDocument.workspace_trust` 中保存用户明确的 Restricted/Trusted
 决定。缺失项解析为 Restricted；checked-in `.zeta/config.toml` 若声明该 section 会被拒绝。
-Client 请求 `workspace/switch` 时，App Server 在 authority-switch safe point 读取最新 User
-snapshot。可信本地 host 在接受 client 请求前固定的 root，则单独标记为 `HostConfiguration`。
+Client 请求 `workspace/switch` 时，App Server 在 authority-switch safe point 解析请求声明的
+authority：普通 client 只能读取最新 User snapshot；声明 `workspaceTrustHost` 的产品 host 可以
+提交一次会话级 `HostConfiguration` trust，或携带 config revision 和 command id 持久化明确的
+Restricted/Trusted 用户决定。App Server 始终先 canonicalize root、自行生成 trust identity，再写入
+User Config；Renderer 不能提供 identity 或直接签发 capability。
+
+当前产品入口的默认语义如下：
+
+| 入口 | trust 来源 | 是否持久化 |
+| --- | --- | --- |
+| `zeta` CLI 的启动 cwd / 显式 root | `HostConfiguration` | ❌，仅该进程 |
+| `zeterm` 启动 cwd | `HostConfiguration` | ❌，仅该 App Server session |
+| `zeterm` 本地目录 picker | `HostConfiguration` | ❌，仅该 App Server session |
+| Desktop 启动 folder / Open Folder | Electron Main 复用已有决定或收集明确用户决定 | ✅，写入 User Config |
 
 User Config 变化也是主动撤销信号。App Server 会失效共享 capability lease，移除本地
 Tool/Git/Search/Terminal，终止 PTY 与 Search process，并在后续工作使用旧 authority 前中断活动
@@ -120,8 +132,8 @@ authority。活动 Turn 会阻止 authority switch，直到旧 runtime 能一致
 
 ## 当前限制
 
-- Trust prompt UI 与 organization policy resolution 尚未实现。User persistence 属于
-  `zeta-config`；policy composition 与 UI consent 属于 host/security layer。
+- Organization policy resolution 尚未实现。Desktop 已由 Electron Main 收集 Open Folder 的
+  Trust / Restricted / Cancel；其它未来 UI host 仍需在自己的安全边界提供 consent。
 - Restricted content Search 尚未安装，因为当前 backend 会启动 `rg`。
 - Revocation 会取消活动 Turn 及 cooperative Tool cancellation token。已经越过操作系统
   side-effect boundary 的 process 仍可能返回 unknown outcome；撤销 capability 不能回滚外部副作用。
@@ -139,7 +151,7 @@ authority。活动 Turn 会阻止 authority switch，直到旧 runtime 能一致
 3. 增加 `/cd` authority switch；它替换项目 identity 并重新加载主目录配置，而不是复用
    `add-dir` mutation。
 4. 在 host trust resolver 中增加 filesystem identity change invalidation。
-5. Electron Main 的 Workspace transition 要求明确 trust decision；Renderer 只投影已提交状态。
+5. 让 Renderer 完整投影 App Server 已提交的 Restricted/Trusted 状态与 capability availability。
 6. Terminal、Workspace MCP/LSP/extension activation、Hook 和 repository mutation 全部使用
    root-bound capability。
 7. 增加 restricted-safe content Search backend，或 narrow sandboxed host-owned Search

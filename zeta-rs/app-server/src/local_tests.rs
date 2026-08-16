@@ -267,6 +267,21 @@ fn local_composition_installs_semantic_models_before_workspace_activation() {
     assert!(server.code_index_semantic_service().is_some());
 }
 
+#[test]
+fn user_config_initial_workspace_fails_closed_without_host_trust() {
+    let profile = tempfile::tempdir().unwrap();
+    let workspace = tempfile::tempdir().unwrap();
+    std::fs::write(workspace.path().join("readable.txt"), "restricted\n").unwrap();
+    let options = LocalAppServerOptions::new(profile.path())
+        .with_user_config_workspace_root(workspace.path())
+        .without_built_in_skills()
+        .with_session_state_mode(SessionStateMode::Ephemeral);
+
+    let server = open_local_app_server(options).unwrap();
+
+    assert!(!server.active_workspace_is_trusted());
+}
+
 struct UnusedSearchBackend;
 
 impl WebSearchBackend for UnusedSearchBackend {

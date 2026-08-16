@@ -35,9 +35,17 @@ pub struct WorkspaceTrustConfig {
 }
 
 impl WorkspaceTrustConfig {
+    /// Returns only a decision that was explicitly persisted for this canonical identity.
+    pub fn explicit_setting_for(
+        &self,
+        workspace: &WorkspaceTrustId,
+    ) -> Option<WorkspaceTrustSetting> {
+        self.roots.get(workspace).copied()
+    }
+
     /// Resolves a user setting, failing closed when no decision has been persisted.
     pub fn setting_for(&self, workspace: &WorkspaceTrustId) -> WorkspaceTrustSetting {
-        self.roots.get(workspace).copied().unwrap_or_default()
+        self.explicit_setting_for(workspace).unwrap_or_default()
     }
 
     /// Resolves the runtime trust decision for one exact canonical root identity.

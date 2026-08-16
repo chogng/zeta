@@ -9,6 +9,7 @@ use zeta_app_server_client::SessionStateMode;
 use zeta_app_server_client::local_profile_root;
 use zeta_app_server_protocol::protocol::common::ClientCapabilities;
 use zeta_app_server_protocol::protocol::common::ClientInfo;
+use zeta_app_server_protocol::protocol::common::WorkspaceTrustHostCapability;
 use zeta_remote::RemoteProfile;
 use zeta_remote::SshHost;
 use zeta_remote_connections::SshAppServerConnectionOptions;
@@ -93,6 +94,10 @@ impl AgentSessionTarget {
             Self::Local { workspace_root } => AppServerSession::start_embedded(
                 InProcessClientOptions::new(local_profile_root(), client_info)
                     .with_session_state_mode(SessionStateMode::Ephemeral)
+                    .with_capabilities(ClientCapabilities {
+                        workspace_trust_host: Some(WorkspaceTrustHostCapability { version: 1 }),
+                        ..ClientCapabilities::default()
+                    })
                     .with_workspace_root(workspace_root),
             )
             .map_err(|error| anyhow!(error.to_string())),

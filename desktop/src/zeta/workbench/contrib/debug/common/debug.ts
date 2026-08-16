@@ -1,4 +1,7 @@
 export const DEBUG_VIEW_ID = "workbench.view.debug";
+export const DEBUG_CONSOLE_VIEW_ID = "workbench.panel.debugConsole";
+export const FOCUS_DEBUG_CONSOLE_COMMAND_ID = "workbench.debug.action.focusRepl";
+export const CLEAR_DEBUG_CONSOLE_COMMAND_ID = "workbench.debug.panel.action.clearReplAction";
 export const START_DEBUG_COMMAND_ID = "workbench.action.debug.start";
 export const STOP_DEBUG_COMMAND_ID = "workbench.action.debug.stop";
 export const STOP_ALL_DEBUG_COMMAND_ID = "workbench.action.debug.stopAll";

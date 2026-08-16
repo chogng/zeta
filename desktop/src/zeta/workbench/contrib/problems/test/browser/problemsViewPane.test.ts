@@ -42,10 +42,18 @@ test("ProblemsViewPane filters diagnostics and opens the selected range", async 
     const { ProblemsViewPane } = await import("../../../../../workbench/contrib/problems/browser/problemsViewPane.js");
     using pane = new ProblemsViewPane({ id: "zeta.problems", title: "Problems", ownerDocument: browser.window.document }, diagnostics, editorPart);
     browser.window.document.body.append(pane.element);
+    const titleActions = pane.partTitleProjection?.actions;
+    assert.ok(titleActions);
+    browser.window.document.body.append(titleActions);
+    const filterAction = titleActions.querySelector<HTMLButtonElement>("[data-action-id='zeta.problems.focusFilter'] button");
+    assert.ok(filterAction);
+    assert.ok(filterAction.querySelector("svg.zeta-icon"));
     assert.equal(pane.element.querySelectorAll(".zeta-problems-item").length, 3);
     assert.equal(pane.element.querySelector(".zeta-problems-status")?.textContent, "3 problems in the workspace.");
 
     const filter = pane.element.querySelector<HTMLInputElement>(".zeta-problems-filter")!;
+    filterAction.click();
+    assert.equal(browser.window.document.activeElement, filter);
     filter.value = "lib.rs";
     filter.dispatchEvent(new browser.window.Event("input", { bubbles: true }));
     assert.equal(pane.element.querySelectorAll(".zeta-problems-item").length, 1);

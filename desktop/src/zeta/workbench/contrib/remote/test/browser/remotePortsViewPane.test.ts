@@ -19,7 +19,19 @@ test("Remote Ports renders Main-owned tunnel state changes", async () => {
     const { RemotePortsViewPane } = await import("../../browser/remotePortsViewPane.js");
     using pane = new RemotePortsViewPane({ id: "zeta.ports.test", title: "Ports", ownerDocument: browser.window.document }, tunnels, remoteAgent);
     browser.window.document.body.append(pane.element);
+    const titleActions = pane.partTitleProjection?.actions;
+    assert.ok(titleActions);
+    browser.window.document.body.append(titleActions);
     await waitFor(() => pane.element.querySelectorAll(".zeta-remote-port").length === 1);
+
+    const forwardPortAction = titleActions.querySelector<HTMLButtonElement>("[data-action-id='zeta.ports.focusForwardPort'] button");
+    const refreshPortsAction = titleActions.querySelector<HTMLButtonElement>("[data-action-id='zeta.ports.refresh'] button");
+    assert.ok(forwardPortAction);
+    assert.ok(refreshPortsAction);
+    assert.ok(forwardPortAction.querySelector("svg.zeta-icon"));
+    assert.ok(refreshPortsAction.querySelector("svg.zeta-icon"));
+    forwardPortAction.click();
+    assert.equal(browser.window.document.activeElement, pane.element.querySelector(".zeta-remote-ports-input"));
 
     assert.equal(pane.element.querySelector(".zeta-remote-port-local")?.textContent, "127.0.0.1:4100");
     assert.equal(pane.element.querySelector(".zeta-remote-port-remote")?.textContent, "127.0.0.1:3000");

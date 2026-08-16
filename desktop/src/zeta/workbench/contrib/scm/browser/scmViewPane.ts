@@ -3,6 +3,7 @@ import { Button } from "../../../../base/browser/ui/button/button.js";
 import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
 import type { GitChangeStatus, GitHead, GitRepositoryChange, GitStatus, IGitService } from "../../../services/git/common/gitService.js";
 import { ViewPane, type IViewPaneOptions } from "../../../browser/parts/views/viewPane.js";
+import { gitErrorMessage } from "./scmError.js";
 
 type GitChangeSide = "index" | "worktree";
 type GitPathAction = "stage" | "unstage" | "discard";
@@ -19,6 +20,7 @@ export class ScmViewPane extends ViewPane {
   private readonly retiredStreamInstanceIds = new Set<string>();
   private revision = 0;
   private busy = false;
+  private unavailable = false;
   private disposed = false;
 
   constructor(options: IViewPaneOptions, gitService: IGitService) {
@@ -179,6 +181,7 @@ export class ScmViewPane extends ViewPane {
       }
     }
     this.status = status;
+    this.unavailable = false;
     this.branchElement.textContent = headLabel(status.head);
     this.branchElement.title = headTitle(status.head);
     this.changesElement.replaceChildren();
@@ -221,7 +224,13 @@ export class ScmViewPane extends ViewPane {
 
   private renderError(error: unknown, revision: number): void {
     if (this.disposed || revision !== this.revision) return;
+    this.status = undefined;
+    this.unavailable = true;
+    this.branchElement.textContent = "Source Control unavailable";
+    this.branchElement.removeAttribute("title");
+    this.changesElement.replaceChildren();
     this.statusElement.textContent = gitErrorMessage(error);
+    this.updateCommandState();
   }
 
   private setBusy(busy: boolean): void {
@@ -232,7 +241,7 @@ export class ScmViewPane extends ViewPane {
   private updateCommandState(): void {
     const hasStagedChanges = (this.status?.changes ?? []).some((change) => !change.conflicted && change.indexStatus !== "unmodified");
     this.commitButton.disabled = this.busy || !hasStagedChanges;
-    this.commitInput.disabled = this.busy;
+    this.commitInput.disabled = this.busy || this.unavailable;
     for (const button of this.changesElement.querySelectorAll<HTMLButtonElement>(".zeta-scm-command")) {
       button.disabled = this.busy;
     }
@@ -344,11 +353,4 @@ function pathActionLabel(action: GitPathAction): string {
     case "unstage": return "Unstaging";
     case "discard": return "Discarding";
   }
-}
-
-function gitErrorMessage(error: unknown): string {
-  if (error instanceof Error && /GitNotRepository/.test(error.message)) {
-    return "The open folder is not a Git repository.";
-  }
-  return error instanceof Error ? error.message : "Git operation failed.";
 }

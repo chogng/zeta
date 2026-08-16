@@ -22,6 +22,8 @@ test("DebugAdapterSession performs DAP configuration, clears breakpoints, and re
   assert.deepEqual(processes.request("setExceptionBreakpoints").arguments, { filters: ["uncaught"] });
   assert.deepEqual(updates, [{ id: "main:4", verified: true }]);
   assert.deepEqual(session.capabilities, { supportsRestart: true, supportsTerminate: true, exceptionBreakpointFilters: [{ filter: "uncaught", label: "Uncaught Exceptions", default: true }, { filter: "caught", label: "Caught Exceptions", default: false }] });
+  processes.event("output", { output: "adapter ready\n" });
+  await waitFor(() => session.output === "adapter ready\n");
 
   processes.reverseRequest("runInTerminal", { kind: "integrated", args: ["app"] });
   await waitFor(() => processes.responses("runInTerminal").length === 1);

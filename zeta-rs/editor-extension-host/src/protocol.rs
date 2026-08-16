@@ -14,7 +14,15 @@ const MAX_LANGUAGE_IDS: usize = 64;
 const MAX_PROVIDER_OPERATIONS: usize = 32;
 const MAX_DISPLAY_TEXT_BYTES: usize = 512;
 
+mod output;
 mod validation;
+
+pub use output::ExtensionHostOutputEvent;
+pub use output::HostEventContext;
+pub use output::HostOutputChannelKind;
+pub use output::HostOutputOperation;
+pub use output::HostOutputSeverity;
+pub use output::SequencedExtensionHostOutputEvent;
 
 use validation::protocol_error;
 use validation::validate_activation;
@@ -320,6 +328,13 @@ pub struct ExtensionHostResponse {
     pub context: RequestContext,
     #[serde(flatten)]
     pub response: HostResponseKind,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+pub(crate) enum ExtensionHostStdoutFrame {
+    Response(ExtensionHostResponse),
+    Output(ExtensionHostOutputEvent),
 }
 
 impl ExtensionHostResponse {

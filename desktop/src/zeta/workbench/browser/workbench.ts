@@ -114,6 +114,7 @@ import { WorkbenchThemeController } from "./theme.js";
 import { WorkbenchLayout } from "./layout.js";
 import { IWorkbenchLayoutService, type WorkbenchPartId } from "../services/layout/browser/layoutService.js";
 import { BrowserStorageService } from "../services/storage/browser/storageService.js";
+import { SystemOutputService } from "../services/output/browser/systemOutputService.js";
 import { IWorkspaceSearchService } from "../../platform/search/common/search.js";
 import { BrowserWorkspaceSearchService } from "../../platform/search/browser/searchService.js";
 import type { WorkbenchPart } from "./part.js";
@@ -172,6 +173,9 @@ import { ICodeIntelligenceDocumentService } from "../services/codeIntelligence/c
 import { AppServerLanguageServerStatusService } from "../services/language/browser/appServerLanguageServerStatusService.js";
 import { ILanguageServerStatusService } from "../services/language/common/languageServerStatusService.js";
 import { ILanguageDiagnosticsService } from "../services/language/common/languageDiagnosticsService.js";
+import { OutputService } from "../services/output/browser/outputService.js";
+import { IOutputService } from "../services/output/common/outputService.js";
+import { OUTPUT_VIEW_ID } from "../contrib/output/common/output.js";
 import { createWorkbenchSession, type WorkbenchSession } from "./workbenchSession.js";
 import { createEditorLineGutterDecorations } from "./parts/editor/editorGutterDecorations.js";
 import { installWorkbenchServiceContributions } from "./workbenchServiceContributions.js";
@@ -368,6 +372,9 @@ export class Workbench extends DisposableOwner {
     this.workbenchWindow = workbenchWindow;
     this.storage = storage;
     services.set(IStorageService, storage);
+    const outputService = this.own(new OutputService({ storageService: storage }));
+    services.set(IOutputService, outputService);
+    this.own(new SystemOutputService(outputService, api.appServer, workbenchWindow));
     const serviceContributionReady: Promise<void>[] = [];
     installWorkbenchServiceContributions({ services, rendererHost: api, fileService, workspaceContext, terminalService, storageService: storage, own: value => this.own(value), blockRestorationUntil: operation => serviceContributionReady.push(operation) });
     services.set(IAccessibleViewInformationService, this.own(new AccessibleViewInformationService(storage)));
@@ -405,7 +412,7 @@ export class Workbench extends DisposableOwner {
     const dialogService = this.own(new DialogService());
     services.set(IDialogService, dialogService);
     services.set(IDialogsModel, dialogService.model);
-    const languageServerStatusService = this.own(new AppServerLanguageServerStatusService(api.events, dialogService, statusbarService, () => services.get(IViewsService).focusView("zeta.output")));
+    const languageServerStatusService = this.own(new AppServerLanguageServerStatusService(api.events, dialogService, outputService, statusbarService));
     services.set(ILanguageServerStatusService, languageServerStatusService);
     services.set(
       IWorkbenchDialogHandler,
@@ -566,6 +573,11 @@ export class Workbench extends DisposableOwner {
       ownerDocument,
       viewDescriptorService: viewDescriptors,
       contextMenuProvider: contextMenus,
+      titleActions: {
+        menuService: menus,
+        contextMenuProvider: contextMenus,
+        menuId: MenuId.PanelTitle,
+      },
     }));
     this.editor = editor;
     const panelCompositeDescriptor = requiredViewContainer(
@@ -664,7 +676,7 @@ export class Workbench extends DisposableOwner {
     if (normalizedSession.layout.agentSidebar.visible) {
       openAgentSidebarComposite(normalizedSession.composition.agentSidebar);
     }
-    services.set(IViewsService, new ViewsService({
+    const viewsService = new ViewsService({
       viewDescriptorService: viewDescriptors,
       openViewContainer: (container) => {
         switch (container.location) {
@@ -682,6 +694,11 @@ export class Workbench extends DisposableOwner {
             return openPanelComposite(container.id);
         }
       },
+    });
+    services.set(IViewsService, viewsService);
+    this.own(outputService.onDidRequestShowChannel(request => {
+      if (request.focus === "take") viewsService.focusView(OUTPUT_VIEW_ID);
+      else viewsService.openView(OUTPUT_VIEW_ID);
     }));
     this.own(bindWorkbenchPartVisibilityContextKeys(contextKeys, layout));
     this.own(sidebar.onDidSelectComposite(

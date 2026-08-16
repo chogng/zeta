@@ -17,6 +17,11 @@ test("normalizes one exact isolated Extension Host fleet snapshot", () => {
       incarnation: 2,
       lifecycle: "ready",
       failure: null,
+      stderr: "extension diagnostic\n",
+      outputEvents: [
+        { sequence: 4, incarnation: 2, activationGeneration: 3, operation: "create", channelId: "review", label: "Review", kind: "log" },
+        { sequence: 5, incarnation: 2, activationGeneration: 3, operation: "append", channelId: "review", text: "ready\n", severity: "information", category: "lifecycle" },
+      ],
       registrations: [
         { registrationId: "commands", kind: "command", command: "acme.run", title: "Run" },
         { registrationId: "language", kind: "languageProvider", languageIds: ["typescript"], operations: ["completion", "hover"] },
@@ -28,12 +33,14 @@ test("normalizes one exact isolated Extension Host fleet snapshot", () => {
   assert.equal(snapshot.generation, 7);
   assert.equal(snapshot.extensions[0]?.activationGeneration, 3);
   assert.equal(snapshot.extensions[0]?.registrations[2]?.kind, "testProfileProvider");
+  assert.equal(snapshot.extensions[0]?.stderr, "extension diagnostic\n");
+  assert.equal(snapshot.extensions[0]?.outputEvents[1]?.operation.operation, "append");
   assert.equal(Object.isFrozen(snapshot.extensions[0]?.registrations), true);
 });
 
 test("rejects malformed fleet authority and oversized JSON payloads", () => {
-  assert.throws(() => normalizeExtensionHostSnapshot({ generation: 1, extensions: [{ id: "bad", version: "1", packageDigest: DIGEST, runtimeApiVersion: 1, activationGeneration: 0, incarnation: 1, lifecycle: "ready", failure: null, registrations: [] }] }), /activation generation/);
-  assert.throws(() => normalizeExtensionHostSnapshot({ generation: 1, extensions: [{ id: "bad", version: "1", packageDigest: DIGEST, runtimeApiVersion: 1, activationGeneration: 1, incarnation: null, lifecycle: "ready", failure: null, registrations: [] }] }), /must have an incarnation/);
+  assert.throws(() => normalizeExtensionHostSnapshot({ generation: 1, extensions: [{ id: "bad", version: "1", packageDigest: DIGEST, runtimeApiVersion: 1, activationGeneration: 0, incarnation: 1, lifecycle: "ready", failure: null, stderr: "", outputEvents: [], registrations: [] }] }), /activation generation/);
+  assert.throws(() => normalizeExtensionHostSnapshot({ generation: 1, extensions: [{ id: "bad", version: "1", packageDigest: DIGEST, runtimeApiVersion: 1, activationGeneration: 1, incarnation: null, lifecycle: "ready", failure: null, stderr: "", outputEvents: [], registrations: [] }] }), /must have an incarnation/);
   const maximum = normalizeExtensionHostPayload("x".repeat(512 * 1024 - 2));
   assert.equal(typeof maximum === "string" ? maximum.length : -1, 512 * 1024 - 2);
   assert.throws(() => normalizeExtensionHostPayload("x".repeat(512 * 1024 - 1)), /too large/);

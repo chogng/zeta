@@ -1,5 +1,6 @@
 import { APP_SERVER_METHODS, APP_SERVER_NOTIFICATIONS, APP_SERVER_SCHEMA_HASH, type AppServerMethod, type AppServerMethodDefinition, type InitializeResult, type MethodParams, type MethodResult, type ServerCapabilities, type ServerNotification } from "../../../../../generated/app-server/types.js";
 import type { AppServerConnectionState } from "../common/appServerApi.js";
+import { AppServerRemoteError } from "../common/appServerError.js";
 import type { DisposableHandle } from "../../ipc/common/ipc.js";
 
 export const WEB_APP_SERVER_PROTOCOL_VERSION = 1;
@@ -36,14 +37,6 @@ interface PendingRequest {
   readonly resolve: (value: unknown) => void;
   readonly reject: (error: Error) => void;
   readonly timeout: ReturnType<typeof setTimeout>;
-}
-
-/** Error returned by a remote App Server JSON-RPC operation. */
-export class WebAppServerRemoteError extends Error {
-  constructor(readonly code: number, message: string, readonly data: unknown) {
-    super(message);
-    this.name = "WebAppServerRemoteError";
-  }
 }
 
 /** Owns one Vite WebSocket-backed development App Server connection. */
@@ -220,11 +213,11 @@ export class ViteDevAppServerConnection {
     if (hasResult === hasError) throw new Error("App Server response must contain exactly one of result or error");
     if (hasError) {
       const error = message.error;
-      if (!isRecord(error) || !Number.isInteger(error.code) || typeof error.message !== "string") {
+      if (!isRecord(error) || !Number.isInteger(error.code) || typeof error.message !== "string" || error.data !== null) {
         pending.reject(new Error("App Server emitted an invalid JSON-RPC error"));
         return;
       }
-      pending.reject(new WebAppServerRemoteError(error.code as number, error.message, error.data));
+      pending.reject(new AppServerRemoteError(error.code as number, error.message, error.data));
       return;
     }
     pending.resolve(message.result);

@@ -11,7 +11,7 @@ Code 可以从 `.vscode/launch.json` 启动或附加到一个调试目标，并�
 | 启动或附加 | ✅ `launch`、`attach`、重启、停止和 `runInTerminal` | Workbench 解释配置；后端启动适配器 |
 | 断点 | ✅ 工作区持久化行断点、适配器确认状态、异常断点 | Editor 只提供通用 gutter |
 | 停住后检查 | ✅ 线程选择、调用栈、作用域、递归变量树和 `sourceReference` | DAP Session 拥有请求语义 |
-| Watch 与控制台 | ✅ 持久 Watch、`evaluate` 和 REPL 输出 | Watch 持久；求值结果与输出临时 |
+| Watch 与控制台 | ✅ 持久 Watch；独立 Panel `Debug Console` 提供多会话 DAP 输出、清理和 `evaluate` | Watch 持久；每窗口控制台历史有界且不进通用 Output |
 | 多目标调试 | ✅ 多会话、会话切换、compound 和 `stopAll` | 后端会话仍按连接隔离 |
 | SSH Remote 调试 | ✅ adapter 由远端 App Server 启动；`${workspaceFolder}`、断点、调用栈源码和 `runInTerminal` 使用远端路径/Terminal | stdio 不需要额外 Tunnel；socket/server adapter 尚未实现 |
 | 调试任务 | ✅ `preLaunchTask`、`postDebugTask` | Tasks 负责执行和退出状态 |
@@ -30,6 +30,7 @@ flowchart LR
     AppServer --> Runtime["zeta-debug-adapter"]
     Runtime --> Adapter["Debug adapter process"]
     Sessions --> View["Run and Debug view"]
+    Sessions --> Console["Debug Console panel"]
     DebugService --> Gutter["Generic editor gutter"]
     Sessions --> Terminal["Integrated terminal"]
 ```
@@ -38,7 +39,7 @@ flowchart LR
 2. 如果存在 `preLaunchTask`，Tasks 必须先返回成功；缺失、歧义、失败或取消都会阻止调试启动。
 3. App Server 校验同一工作区的可执行配置与进程执行能力，启动 stdio 适配器，并把会话归属绑定到发起连接。Remote Workbench 的 App Server 位于 SSH host，因此 adapter executable 与 debuggee 都在远端启动，不回落到本机进程。
 4. DAP Session 完成 `initialize`、`launch`/`attach`、行断点、异常断点和 `configurationDone`。反向 `runInTerminal` 请求委托给现有 Terminal service；Remote Workspace 下该 service 创建 Remote PTY。DAP 返回的绝对源码路径由 Session 投影为当前 Workspace authority 的 URI，View 不自行猜测本机 `file://`。
-5. `stopped` 事件驱动线程、栈帧、作用域、变量、Watch 和源码请求。多个会话独立保存运行状态，视图只选择其中一个作为当前检查对象。
+5. `stopped` 事件驱动线程、栈帧、作用域、变量、Watch 和源码请求。多个会话独立保存运行状态，Run and Debug 侧栏只负责检查；独立 Debug Console Panel 在不可见时也持续捕获 DAP output，并按会话提供 REPL。
 6. 适配器退出、用户停止、工作区切换、信任撤销或连接关闭都会回收进程。Workbench 随后运行对应的 `postDebugTask`。
 
 ## 所有权边界
@@ -56,7 +57,7 @@ Editor 不得 import Debug service；它只提供无领域语义的 gutter decor
 
 ## 持久性与失败语义
 
-工作区存储保留行断点、Watch 表达式和按适配器类型划分的异常过滤器。适配器确认状态、调用栈、变量、控制台输出和活跃会话不会持久化。切换工作区时先保存旧状态，再恢复新工作区状态并停止旧会话。
+工作区存储保留行断点、Watch 表达式和按适配器类型划分的异常过滤器。适配器确认状态、调用栈、变量、控制台输出和活跃会话不会持久化。控制台在当前窗口内最多保留 20 个会话、每会话 128,000 字符；会话结束后仍可查看，但不能继续求值。切换工作区时先保存旧状态，再恢复新工作区状态并停止旧会话。
 
 compound 启动中任一配置失败时，已经启动的会话会回滚。自然退出和主动停止都只执行一次 `postDebugTask`。声明式适配器被卸载后，Workbench 会先清空旧 launch 候选再重新解析，避免继续执行已经失效的命令。
 

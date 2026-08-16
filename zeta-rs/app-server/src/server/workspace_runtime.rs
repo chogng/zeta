@@ -1074,6 +1074,35 @@ impl AppServer {
         self.activate_local_workspace(authorization, host)
     }
 
+    pub(crate) fn switch_local_workspace_root_with_decision(
+        &self,
+        root: PathBuf,
+        decision: WorkspaceTrustDecision,
+    ) -> Result<PathBuf, WorkspaceRuntimeError> {
+        let host = self
+            .local_workspace_host
+            .as_ref()
+            .ok_or(WorkspaceRuntimeError::Unavailable)?;
+        let _workspace_authority = self.workspace_authority_gate.lock().map_err(|_| {
+            WorkspaceRuntimeError::Failed("Workspace authority gate poisoned".into())
+        })?;
+        self.ensure_workspace_switch_is_idle()?;
+        let workspace = WorkspaceRoot::open(root)
+            .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
+        self.activate_local_workspace(WorkspaceAuthorization::new(workspace, decision), host)
+    }
+
+    pub(crate) fn active_workspace_is_trusted(&self) -> bool {
+        self.workspace_runtime
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .authorization
+            .as_ref()
+            .is_some_and(|authorization| {
+                authorization.decision() != WorkspaceTrustDecision::Restricted
+            })
+    }
+
     fn activate_local_workspace(
         &self,
         authorization: WorkspaceAuthorization,

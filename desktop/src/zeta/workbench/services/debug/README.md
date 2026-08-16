@@ -4,7 +4,7 @@ The system-level ownership and current user-visible status are documented in [`d
 
 ## Ownership and execution path
 
-`common/debugService.ts` is the canonical frontend contract. `DebugService` owns launch/compound configuration, workspace-persisted line breakpoints and Watch expressions, exception-breakpoint selection, task orchestration, the active session, and the collection of concurrent sessions. `DebugAdapterSession` owns DAP request pairing, capabilities, initialization, breakpoint synchronization, thread/stack/scope/recursive-variable inspection, `evaluate`, `source`, execution control, output, termination, and reverse requests. `DebugTerminalLauncher` validates `runInTerminal` and delegates presentation to `ITerminalService`.
+`common/debugService.ts` is the canonical frontend contract. `DebugService` owns launch/compound configuration, workspace-persisted line breakpoints and Watch expressions, exception-breakpoint selection, task orchestration, the active session, and the collection of concurrent sessions. `DebugAdapterSession` owns DAP request pairing, capabilities, initialization, breakpoint synchronization, thread/stack/scope/recursive-variable inspection, `evaluate`, `source`, execution control, output, termination, and reverse requests. `common/debugConsoleService.ts` is the separate Debug Console contract; `DebugConsoleService` subscribes before any UI is visible, retains bounded per-session DAP/REPL output, and keeps terminated sessions inspectable. `DebugTerminalLauncher` validates `runInTerminal` and delegates presentation to `ITerminalService`.
 
 The call path is:
 
@@ -32,13 +32,15 @@ All remaining configuration properties are forwarded to the adapter after `${wor
 
 ## Durability and failure semantics
 
-`Memento<PersistedDebugState>` stores line breakpoints, Watch expressions, and per-adapter-type exception filters in workspace scope. Adapter verification state, call stacks, variables, console output, and live sessions are intentionally transient. A workspace switch flushes the old Memento, restores the new workspace state, and terminates all previous sessions.
+`Memento<PersistedDebugState>` stores line breakpoints, Watch expressions, and per-adapter-type exception filters in workspace scope. Adapter verification state, call stacks, variables, Debug Console output, and live sessions are intentionally transient. Debug Console content is retained only for the current window (up to 20 sessions and 128,000 characters per session); it is not sent to generic Output. A workspace switch flushes the old Memento, restores the new workspace state, and terminates all previous sessions.
+
+The Run and Debug sidebar owns inspection and execution controls. `DebugConsoleViewPane` owns the VS Code-shaped Panel destination, session selector, clear action, accessible log, and REPL input. Keeping this projection separate prevents DAP output from being mislabeled as an Output channel or mixed into Terminal PTY bytes.
 
 Pre-launch tasks must finish with `succeeded`; missing, ambiguous, failed, canceled, or status-unknown tasks prevent adapter launch. Post-debug task failures are reported without reviving the terminated session. Compound startup rolls back sessions already started when a later configuration fails. Extension adapter removal clears launch candidates before reparsing so stale commands cannot be launched.
 
 ## Tests and modification impact
 
-Run the Debug tests with the desktop unit runner, or target the compiled files under `services/debug/test`. `debugAdapterSession.test.ts` covers DAP capabilities and inspection requests. `debugService.test.ts` covers persistence, task lifecycle, compounds, multiple sessions, and canonical factory resolution. `debugAdapterFactory.test.ts` covers multi-producer ownership and atomic replacement. `launchConfiguration.test.ts` covers explicit and extension-resolved adapters.
+Run the Debug tests with the desktop unit runner, or target the compiled files under `services/debug/test`. `debugAdapterSession.test.ts` covers DAP capabilities and inspection requests. `debugService.test.ts` covers persistence, task lifecycle, compounds, multiple sessions, and canonical factory resolution. `debugConsoleService.test.ts` covers hidden-panel capture, evaluation, terminated-session retention, and clear. `debugAdapterFactory.test.ts` covers multi-producer ownership and atomic replacement. `launchConfiguration.test.ts` covers explicit and extension-resolved adapters.
 
 Adding DAP client state to the backend, Debug-specific behavior to the editor, direct process execution to the Renderer, deriving Remote authority inside `DebugViewPane`, or live-session data to workspace persistence would signal ownership drift.
 

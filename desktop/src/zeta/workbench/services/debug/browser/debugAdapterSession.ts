@@ -26,6 +26,7 @@ export interface DebugAdapterSessionStartOptions {
 export class DebugAdapterSession extends DisposableOwner implements IDebugSession {
   private readonly stateEmitter = this.own(new Emitter<DebugSessionState>());
   private readonly outputEmitter = this.own(new Emitter<string>());
+  private retainedOutput = "";
   private readonly pending = new Map<number, { readonly resolve: (response: DapResponse) => void; readonly reject: (error: Error) => void; readonly timeout: ReturnType<typeof setTimeout> }>();
   private readonly sessionId: string;
   private requestSequence = 1;
@@ -44,6 +45,7 @@ export class DebugAdapterSession extends DisposableOwner implements IDebugSessio
 
   readonly onDidChangeState: Event<DebugSessionState> = this.stateEmitter.event;
   readonly onDidOutput: Event<string> = this.outputEmitter.event;
+  get output(): string { return this.retainedOutput; }
 
   private constructor(readonly configuration: IDebugConfiguration, private readonly processService: IDebugAdapterProcessService, readonly id: string, private readonly breakpoints: () => readonly IDebugBreakpoint[], private readonly workspace: URI, private readonly runInTerminal: DebugAdapterSessionStartOptions["runInTerminal"], private readonly updateBreakpoints: DebugAdapterSessionStartOptions["updateBreakpoints"], private readonly exceptionBreakpoints: DebugAdapterSessionStartOptions["exceptionBreakpoints"]) {
     super();
@@ -156,7 +158,7 @@ export class DebugAdapterSession extends DisposableOwner implements IDebugSessio
 
   async disconnect(): Promise<void> {
     if (this._state !== "terminated") {
-      try { await this.request("disconnect", { restart: false, ...(this._capabilities.supportsTerminate ? { terminateDebuggee: true } : {}) }); } catch (error) { this.outputEmitter.fire(`Debug disconnect failed: ${message(error)}\n`); }
+      try { await this.request("disconnect", { restart: false, ...(this._capabilities.supportsTerminate ? { terminateDebuggee: true } : {}) }); } catch (error) { this.emitOutput(`Debug disconnect failed: ${message(error)}\n`); }
     }
     await this.closeProcess();
     this.setState("terminated");
@@ -219,7 +221,7 @@ export class DebugAdapterSession extends DisposableOwner implements IDebugSessio
         const read = await this.processService.read(this.sessionId, this.readSequence, 128);
         if (read.outputGap) throw new Error("Debug Adapter output exceeded the retained buffer");
         this.readSequence = read.nextSequence;
-        if (read.stderr) this.outputEmitter.fire(read.stderr);
+        if (read.stderr) this.emitOutput(read.stderr);
         if (read.protocolError) throw new Error(read.protocolError);
         for (const entry of read.messages) this.acceptMessage(entry.message);
         if (read.exited) {
@@ -258,7 +260,7 @@ export class DebugAdapterSession extends DisposableOwner implements IDebugSessio
     const body = eventValue.body && typeof eventValue.body === "object" ? eventValue.body as Record<string, unknown> : {};
     if (eventValue.event === "output") {
       const output = typeof body.output === "string" ? body.output : "";
-      if (output) this.outputEmitter.fire(output);
+      if (output) this.emitOutput(output);
       return;
     }
     if (eventValue.event === "initialized") {
@@ -285,8 +287,14 @@ export class DebugAdapterSession extends DisposableOwner implements IDebugSessio
       const body = await this.runInTerminal(request.arguments);
       await this.processService.send(this.sessionId, { seq: this.requestSequence++, type: "response", request_seq: sequence, success: true, command, body });
     } catch (error) {
-      await this.processService.send(this.sessionId, { seq: this.requestSequence++, type: "response", request_seq: sequence, success: false, command, message: message(error) }).catch(sendError => this.outputEmitter.fire(`Could not answer Debug Adapter request: ${message(sendError)}\n`));
+      await this.processService.send(this.sessionId, { seq: this.requestSequence++, type: "response", request_seq: sequence, success: false, command, message: message(error) }).catch(sendError => this.emitOutput(`Could not answer Debug Adapter request: ${message(sendError)}\n`));
     }
+  }
+
+  private emitOutput(value: string): void {
+    if (!value) return;
+    this.retainedOutput = `${this.retainedOutput}${value}`.slice(-128_000);
+    this.outputEmitter.fire(value);
   }
 
   private setState(state: DebugSessionState): void {

@@ -30,6 +30,8 @@ pub struct ExtensionHostLimits {
     pub maximum_in_flight_requests: usize,
     pub maximum_in_flight_control_requests: usize,
     pub maximum_stderr_bytes: usize,
+    pub maximum_output_event_count: usize,
+    pub maximum_output_bytes: usize,
     pub maximum_argument_count: usize,
     pub maximum_argument_bytes: usize,
     pub maximum_environment_entries: usize,
@@ -62,9 +64,12 @@ impl ExtensionHostLimits {
                 "registration and in-flight request limits must be non-zero",
             ));
         }
-        if self.maximum_stderr_bytes == 0 {
+        if self.maximum_stderr_bytes == 0
+            || self.maximum_output_event_count == 0
+            || self.maximum_output_bytes == 0
+        {
             return Err(ExtensionHostError::InvalidLimits(
-                "maximum stderr bytes must be non-zero",
+                "maximum stderr and Output limits must be non-zero",
             ));
         }
         if self.maximum_argument_count == 0
@@ -105,6 +110,8 @@ impl Default for ExtensionHostLimits {
             maximum_in_flight_requests: 32,
             maximum_in_flight_control_requests: 8,
             maximum_stderr_bytes: 256 * 1024,
+            maximum_output_event_count: 4096,
+            maximum_output_bytes: 512 * 1024,
             maximum_argument_count: 128,
             maximum_argument_bytes: 32 * 1024,
             maximum_environment_entries: 64,

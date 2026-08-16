@@ -5,12 +5,6 @@
   padding: 8px;
 }
 
-.zeta-tasks-controls {
-  display: flex;
-  justify-content: flex-end;
-}
-
-.zeta-tasks-refresh,
 .zeta-tasks-run,
 .zeta-task-run-button {
   border: 0;
@@ -19,11 +13,6 @@
   background: transparent;
   font: inherit;
   cursor: pointer;
-}
-
-.zeta-tasks-refresh {
-  padding: 4px 8px;
-  background: color-mix(in srgb, currentColor 8%, transparent);
 }
 
 .zeta-tasks-status {
@@ -57,8 +46,7 @@
 }
 
 .zeta-tasks-run:focus-visible,
-.zeta-task-run-button:focus-visible,
-.zeta-tasks-refresh:focus-visible {
+.zeta-task-run-button:focus-visible {
   outline: 1px solid var(--zeta-focus-border);
   outline-offset: -1px;
 }

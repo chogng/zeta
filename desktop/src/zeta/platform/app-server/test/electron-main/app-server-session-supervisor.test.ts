@@ -84,7 +84,7 @@ class ProtocolChildProcess extends EventEmitter {
         });
       } else if (request.method === "workspace/switch") {
         const params = request.params as { readonly root: string };
-        this.respond(request.id, { root: params.root });
+        this.respond(request.id, { root: params.root, trust: "restricted" });
       }
     }
   }
@@ -220,9 +220,10 @@ test("workspace switching keeps the current App Server process and connection", 
 
   const switched = await supervisor.request(APP_SERVER_METHODS["workspace/switch"], {
     root: "/test/workspace",
+    trust: { type: "userConfig" },
   });
 
-  assert.deepEqual(switched, { root: "/test/workspace" });
+  assert.deepEqual(switched, { root: "/test/workspace", trust: "restricted" });
   assert.equal(children.length, 1);
   assert.equal(children[0].signalCode, null);
   assert.equal(supervisor.state, "ready");

@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::AtomicU64;
@@ -28,6 +29,7 @@ use crate::RequestContext;
 use crate::RestartDecision;
 use crate::RestartPolicy;
 use crate::RestartTracker;
+use crate::SequencedExtensionHostOutputEvent;
 
 mod invocation;
 
@@ -56,6 +58,12 @@ pub struct ExtensionHostSnapshot {
     pub activation_generation: u64,
     pub registrations: Vec<RegistrationDescriptor>,
     pub stderr: String,
+    pub output_events: Vec<SequencedExtensionHostOutputEvent>,
+}
+
+struct RetainedOutputEvent {
+    event: SequencedExtensionHostOutputEvent,
+    bytes: usize,
 }
 
 struct SupervisorState {
@@ -66,6 +74,9 @@ struct SupervisorState {
     registrations: Vec<RegistrationDescriptor>,
     invocation_leases: BTreeMap<u64, Box<dyn ActivationLease>>,
     restart: RestartTracker,
+    output_events: VecDeque<RetainedOutputEvent>,
+    output_event_bytes: usize,
+    next_output_event_sequence: u64,
 }
 
 struct SupervisorInner {
@@ -114,6 +125,9 @@ impl ExtensionHostSupervisor {
                     registrations: Vec::new(),
                     invocation_leases: BTreeMap::new(),
                     restart,
+                    output_events: VecDeque::new(),
+                    output_event_bytes: 0,
+                    next_output_event_sequence: 1,
                 }),
                 lifecycle: Mutex::new(()),
                 next_request_id: AtomicU64::new(1),
@@ -255,11 +269,42 @@ impl ExtensionHostSupervisor {
     }
 
     pub fn snapshot(&self) -> ExtensionHostSnapshot {
-        let state = self
+        let mut state = self
             .inner
             .state
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let process = state.process.clone();
+        if let Some(process) = &process {
+            for event in process.drain_output_events() {
+                if event.context.incarnation != state.incarnation
+                    || event.context.activation_generation
+                        != self.inner.activation.activation_generation().get()
+                {
+                    continue;
+                }
+                let bytes = serde_json::to_vec(&event).map_or(0, |encoded| encoded.len());
+                let sequence = state.next_output_event_sequence;
+                state.next_output_event_sequence = state
+                    .next_output_event_sequence
+                    .checked_add(1)
+                    .unwrap_or(u64::MAX);
+                state.output_event_bytes = state.output_event_bytes.saturating_add(bytes);
+                state.output_events.push_back(RetainedOutputEvent {
+                    event: SequencedExtensionHostOutputEvent { sequence, event },
+                    bytes,
+                });
+                while state.output_events.len() > self.inner.limits.maximum_output_event_count
+                    || state.output_event_bytes > self.inner.limits.maximum_output_bytes
+                {
+                    let Some(expired) = state.output_events.pop_front() else {
+                        break;
+                    };
+                    state.output_event_bytes =
+                        state.output_event_bytes.saturating_sub(expired.bytes);
+                }
+            }
+        }
         ExtensionHostSnapshot {
             extension_id: self.inner.activation.params().extension_id.clone(),
             runtime_api_version: self.inner.activation.params().runtime_api_version,
@@ -268,11 +313,15 @@ impl ExtensionHostSupervisor {
             incarnation: state.incarnation,
             activation_generation: self.inner.activation.activation_generation().get(),
             registrations: state.registrations.clone(),
-            stderr: state
-                .process
+            stderr: process
                 .as_ref()
                 .map(|process| process.stderr())
                 .unwrap_or_default(),
+            output_events: state
+                .output_events
+                .iter()
+                .map(|retained| retained.event.clone())
+                .collect(),
         }
     }
 

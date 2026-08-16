@@ -38,6 +38,9 @@ pub struct ClientCapabilities {
     #[serde(default)]
     #[ts(optional = nullable)]
     pub browser: Option<BrowserCapability>,
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub workspace_trust_host: Option<WorkspaceTrustHostCapability>,
 }
 
 /// Agent interaction kinds that one client connection can present and resolve.
@@ -65,6 +68,16 @@ pub struct BrowserCapability {
     pub version: u32,
     pub observe: bool,
     pub input: bool,
+}
+
+/// Declares that this connection is owned by a product host that can collect Workspace trust.
+///
+/// This is an authority boundary for host-only protocol operations. Renderer or extension
+/// connections must not declare it merely because they can display a trust prompt.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceTrustHostCapability {
+    pub version: u32,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

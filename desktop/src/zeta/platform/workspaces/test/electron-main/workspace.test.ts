@@ -17,9 +17,9 @@ import { createSshRemoteWorkspaceUri } from "../../../../platform/remote/common/
 import {
   WorkspaceOpenTargetKind,
 } from "../../../../platform/workspaces/common/workspaces.js";
-import { WorkspaceTransitionFailureKind, WorkspaceTransitionFailureStage, WorkspaceTransitionMainService, WorkspaceTransitionPhase, WorkspaceTransitionRecovery, WorkspaceTransitionStatus } from "../../../../platform/workspaces/electron-main/workspaceTransitionMainService.js";
+import { WorkspaceTransitionFailureKind, WorkspaceTransitionFailureStage, WorkspaceTransitionMainService, WorkspaceTransitionPhase, WorkspaceTransitionRecovery, WorkspaceTransitionStatus, WorkspaceTrustChoice } from "../../../../platform/workspaces/electron-main/workspaceTransitionMainService.js";
 import { AppServerWorkspaceTransitionAdapter, type IAppServerWorkspaceTransitionHost } from "../../../../platform/workspaces/electron-main/appServerWorkspaceTransition.js";
-import { JsonRpcRemoteError } from "../../../../platform/app-server/electron-main/json-rpc-peer.js";
+import { AppServerRemoteError } from "../../../../platform/app-server/common/appServerError.js";
 import { parseWorkspaceLaunchArguments, WorkspaceContextMainService, WorkspacesMainService, workspaceContextIpcRoutes } from "../../../../platform/workspaces/electron-main/workspacesMainService.js";
 import {
   getSingleFolderWorkspaceIdentifier,
@@ -300,12 +300,14 @@ test("workspace transition commits only after the runtime accepts the folder", a
     UNKNOWN_EMPTY_WINDOW_WORKSPACE,
   );
   const runtimeSwitches: string[] = [];
+  const trustChoices: WorkspaceTrustChoice[] = [];
   const transitions = new WorkspaceTransitionMainService({
     workspaces,
     context,
     runtime: {
-      async switchWorkspace({ workspace }) {
+      async switchWorkspace({ workspace, trust }) {
         runtimeSwitches.push(workspace.uri.fsPath);
+        trustChoices.push(trust);
         if (workspace.uri.fsPath.endsWith("rejected")) {
           throw new Error("runtime rejected workspace");
         }
@@ -314,12 +316,13 @@ test("workspace transition commits only after the runtime accepts the folder", a
     classifyRuntimeError: () => WorkspaceTransitionFailureKind.RuntimeRejected,
   });
   const acceptedPath = resolve("project");
-  const accepted = await transitions.transitionToFolder(acceptedPath);
+  const accepted = await transitions.transitionToFolder(acceptedPath, WorkspaceTrustChoice.Trusted);
 
   assert.equal(accepted.status, WorkspaceTransitionStatus.Applied);
   assert.ok(accepted.workspace);
   assert.equal(context.getWorkspace().id, accepted.workspace.id);
   assert.deepEqual(runtimeSwitches, [acceptedPath]);
+  assert.deepEqual(trustChoices, [WorkspaceTrustChoice.Trusted]);
 
   const unchanged = await transitions.transitionToFolder(acceptedPath);
   assert.equal(unchanged.status, WorkspaceTransitionStatus.Unchanged);
@@ -464,11 +467,11 @@ test("App Server workspace adapter routes only connection recovery into a retry"
   const adapter = new AppServerWorkspaceTransitionAdapter(host);
 
   assert.equal(
-    adapter.classifyRuntimeError(new JsonRpcRemoteError(-32071, "WorkspaceSwitchBusy", {})),
+    adapter.classifyRuntimeError(new AppServerRemoteError(-32071, "WorkspaceSwitchBusy", null)),
     WorkspaceTransitionFailureKind.RuntimeBusy,
   );
   assert.equal(
-    adapter.classifyRuntimeError(new JsonRpcRemoteError(-32070, "WorkspaceSwitchUnavailable", {})),
+    adapter.classifyRuntimeError(new AppServerRemoteError(-32070, "WorkspaceSwitchUnavailable", null)),
     WorkspaceTransitionFailureKind.RuntimeUnsupported,
   );
   state = "restarting";
@@ -500,6 +503,7 @@ test("App Server workspace adapter routes only connection recovery into a retry"
     transitionId: 1,
     previous: UNKNOWN_EMPTY_WINDOW_WORKSPACE,
     workspace,
+    trust: WorkspaceTrustChoice.UserConfig,
   });
   assert.deepEqual(switchedRoots, [workspace.uri.fsPath]);
 });

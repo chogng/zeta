@@ -1,9 +1,12 @@
 import { addDisposableListener } from "../../../../base/browser/dom.js";
+import { ActionBar } from "../../../../base/browser/ui/actionbar/actionbar.js";
+import type { IAction } from "../../../../base/common/actions.js";
+import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
 import type { RemoteAgentConnection } from "../../../../platform/remote/common/remoteAgentApi.js";
 import type { IRemoteTunnelService } from "../../../../platform/remote/common/remoteTunnelService.js";
 import type { RemoteTunnel } from "../../../../platform/remote/common/remoteTunnelService.js";
 import type { RemoteTunnelChange } from "../../../../platform/remote/common/remoteTunnelService.js";
-import { ViewPane, type IViewPaneOptions } from "../../../browser/parts/views/viewPane.js";
+import { ViewPane, type IViewPaneOptions, type PartTitleProjection } from "../../../browser/parts/views/viewPane.js";
 import type { IRemoteAgentService } from "../../../services/remote/common/remoteAgentService.js";
 import "./media/remotePorts.css";
 
@@ -15,6 +18,7 @@ export class RemotePortsViewPane extends ViewPane {
   private readonly stopAllButton: HTMLButtonElement;
   private readonly statusElement: HTMLDivElement;
   private readonly listElement: HTMLUListElement;
+  private readonly titleActions: ActionBar;
   private readonly tunnels = new Map<string, RemoteTunnel>();
   private readonly closing = new Set<string>();
   private tunnelRevision = 0;
@@ -45,6 +49,8 @@ export class RemotePortsViewPane extends ViewPane {
     this.portInput.step = "1";
     this.portInput.placeholder = "3000";
     this.portInput.required = true;
+    this.titleActions = this.own(new ActionBar({ ownerDocument: options.ownerDocument, ariaLabel: "Ports actions" }));
+    this.titleActions.element.classList.add("zeta-toolbar");
     this.forwardButton = options.ownerDocument.createElement("button");
     this.forwardButton.className = "zeta-remote-ports-forward";
     this.forwardButton.type = "submit";
@@ -72,6 +78,10 @@ export class RemotePortsViewPane extends ViewPane {
     this.defer(() => { this.disposed = true; });
     this.render();
     this.refresh();
+  }
+
+  override get partTitleProjection(): PartTitleProjection {
+    return { actions: this.titleActions.element };
   }
 
   private forward(event: Event): void {
@@ -187,6 +197,25 @@ export class RemotePortsViewPane extends ViewPane {
   private render(): void {
     const remote = this.isRemoteWorkspace();
     const canForward = this.canForward();
+    const forwardPortAction: IAction = {
+      id: "zeta.ports.focusForwardPort",
+      label: "Forward a Port",
+      tooltip: "Forward a Port",
+      icon: lxiconsLibrary.add,
+      enabled: canForward && !this.opening,
+      checked: undefined,
+      run: () => this.portInput.focus(),
+    };
+    const refreshPortsAction: IAction = {
+      id: "zeta.ports.refresh",
+      label: "Refresh Ports",
+      tooltip: "Refresh Ports",
+      icon: lxiconsLibrary.refresh,
+      enabled: remote,
+      checked: undefined,
+      run: () => this.refresh(),
+    };
+    this.titleActions.updateActions([forwardPortAction, refreshPortsAction]);
     this.portInput.disabled = !canForward || this.opening;
     this.forwardButton.disabled = !canForward || this.opening;
     this.forwardButton.textContent = this.opening ? "Forwarding…" : "Forward Port";

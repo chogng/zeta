@@ -79,6 +79,8 @@ use zeta_rollout::LocalStateRepository;
 use zeta_secrets::SecretStore;
 use zeta_skills_extension::BuiltInSkillSource;
 use zeta_skills_extension::SkillConfigSnapshotProvider;
+use zeta_workspace::WorkspaceRoot;
+use zeta_workspace::WorkspaceTrustDecision;
 
 const MAX_GIT_STATUS_LINES: usize = 40;
 const DEFAULT_MODEL_OUTPUT_RESERVATION_TOKENS: u32 = 4_096;
@@ -185,6 +187,7 @@ pub struct LocalAppServerOptions {
     pub workspace_root: Option<PathBuf>,
     pub built_in_skills: BuiltInSkillRoot,
     pub session_state_mode: SessionStateMode,
+    initial_workspace_trust: InitialWorkspaceTrust,
     model_operation_client: Option<Arc<dyn OperationClient>>,
     web_search_backend: Option<Arc<dyn zeta_web_search_extension::WebSearchBackend>>,
     connector_runtime: Option<LocalConnectorRuntime>,
@@ -196,6 +199,13 @@ pub struct LocalAppServerOptions {
     codex_app_server: CodexAppServerOptions,
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+enum InitialWorkspaceTrust {
+    #[default]
+    HostConfiguration,
+    UserConfig,
+}
+
 impl LocalAppServerOptions {
     pub fn new(profile_root: impl Into<PathBuf>) -> Self {
         Self {
@@ -205,6 +215,7 @@ impl LocalAppServerOptions {
             workspace_root: None,
             built_in_skills: BuiltInSkillRoot::AutoDetect,
             session_state_mode: SessionStateMode::Durable,
+            initial_workspace_trust: InitialWorkspaceTrust::HostConfiguration,
             model_operation_client: None,
             web_search_backend: None,
             connector_runtime: None,
@@ -231,6 +242,14 @@ impl LocalAppServerOptions {
     /// Enables local filesystem and shell tools under one canonical Workspace root.
     pub fn with_workspace_root(mut self, workspace_root: impl Into<PathBuf>) -> Self {
         self.workspace_root = Some(workspace_root.into());
+        self.initial_workspace_trust = InitialWorkspaceTrust::HostConfiguration;
+        self
+    }
+
+    /// Resolves the initial root through durable UserConfig instead of granting host trust.
+    pub fn with_user_config_workspace_root(mut self, workspace_root: impl Into<PathBuf>) -> Self {
+        self.workspace_root = Some(workspace_root.into());
+        self.initial_workspace_trust = InitialWorkspaceTrust::UserConfig;
         self
     }
 
@@ -370,6 +389,7 @@ impl fmt::Debug for LocalAppServerOptions {
             .field("workspace", &self.workspace)
             .field("slash_commands", &self.slash_commands)
             .field("workspace_root", &self.workspace_root)
+            .field("initial_workspace_trust", &self.initial_workspace_trust)
             .field("built_in_skills", &self.built_in_skills)
             .field("session_state_mode", &self.session_state_mode)
             .field(
@@ -411,6 +431,7 @@ impl PartialEq for LocalAppServerOptions {
             && self.workspace == other.workspace
             && self.slash_commands == other.slash_commands
             && self.workspace_root == other.workspace_root
+            && self.initial_workspace_trust == other.initial_workspace_trust
             && self.built_in_skills == other.built_in_skills
             && self.session_state_mode == other.session_state_mode
             && match (&self.model_operation_client, &other.model_operation_client) {
@@ -778,11 +799,6 @@ pub fn open_local_app_server_with_code_index_providers(
     let marketplace_manager_client = options.marketplace_manager_client.take();
     let local_marketplace_manager = options.local_marketplace_manager.take();
     let mcp_oauth_providers = std::mem::take(&mut options.mcp_oauth_providers);
-    if options.workspace.is_none()
-        && let Some(workspace_root) = &options.workspace_root
-    {
-        options.workspace = Some(default_workspace_config(workspace_root)?);
-    }
     let image_store =
         zeta_attachments::FileImageAttachmentStore::open(options.profile_root.join("attachments"))
             .map_err(|error| OpenAppServerError(error.to_string()))?;
@@ -821,6 +837,24 @@ pub fn open_local_app_server_with_code_index_providers(
     let user_config = config
         .read_snapshot()
         .map_err(|error| OpenAppServerError(error.0))?;
+    if options.workspace.is_none()
+        && let Some(workspace_root) = &options.workspace_root
+    {
+        let trusted = match options.initial_workspace_trust {
+            InitialWorkspaceTrust::HostConfiguration => true,
+            InitialWorkspaceTrust::UserConfig => {
+                let workspace = WorkspaceRoot::open(workspace_root).map_err(open_error)?;
+                user_config
+                    .values
+                    .workspace_trust
+                    .decision_for(&workspace.trust_id())
+                    != WorkspaceTrustDecision::Restricted
+            }
+        };
+        if trusted {
+            options.workspace = Some(default_workspace_config(workspace_root)?);
+        }
+    }
     let mut connector_runtime = match options.connector_runtime.take() {
         Some(runtime) => Some(runtime),
         None => {
@@ -1015,9 +1049,14 @@ pub fn open_local_app_server_with_code_index_providers(
         )
         .map_err(|error| OpenAppServerError(error.to_string()))?;
     if let Some(workspace_root) = options.workspace_root {
-        server
-            .activate_host_configured_workspace_root(workspace_root)
-            .map_err(|error| OpenAppServerError(error.to_string()))?;
+        match options.initial_workspace_trust {
+            InitialWorkspaceTrust::HostConfiguration => server
+                .activate_host_configured_workspace_root(workspace_root)
+                .map_err(|error| OpenAppServerError(error.to_string()))?,
+            InitialWorkspaceTrust::UserConfig => server
+                .switch_local_workspace_root(workspace_root)
+                .map_err(|error| OpenAppServerError(error.to_string()))?,
+        };
     }
     let (codex_turn_driver, codex_turn_events) = CodexTurnDriver::new(codex_runtime);
     let codex_turn_backend = Arc::new(

@@ -5,6 +5,9 @@ use super::ActivateResult;
 use super::ExtensionCapability;
 use super::ExtensionHostRequest;
 use super::ExtensionHostResponse;
+use super::ExtensionHostStdoutFrame;
+use super::HostEventContext;
+use super::HostOutputOperation;
 use super::HostRequestKind;
 use super::HostResponseKind;
 use super::HostSuccess;
@@ -48,6 +51,30 @@ fn request_round_trip_preserves_all_stale_response_fences() {
     assert!(encoded.contains("\"protocolVersion\":1"));
     assert!(encoded.contains("\"incarnation\":3"));
     assert!(encoded.contains("\"activationGeneration\":11"));
+}
+
+#[test]
+fn stdout_frame_distinguishes_unsolicited_output_from_correlated_responses() {
+    let frame: ExtensionHostStdoutFrame = serde_json::from_value(json!({
+        "protocolVersion": 1,
+        "incarnation": 3,
+        "activationGeneration": 9,
+        "operation": "clear",
+        "channelId": "review"
+    }))
+    .unwrap();
+
+    assert!(matches!(
+        frame,
+        ExtensionHostStdoutFrame::Output(super::ExtensionHostOutputEvent {
+            context: HostEventContext {
+                incarnation: 3,
+                activation_generation: 9,
+                ..
+            },
+            operation: HostOutputOperation::Clear { channel_id }
+        }) if channel_id == "review"
+    ));
 }
 
 #[test]

@@ -30,6 +30,7 @@ export interface ExtensionHostExtension {
   readonly incarnation: number | undefined;
   readonly state: ExtensionRuntimeState;
   readonly failure: ExtensionRuntimeFailure | undefined;
+  readonly stderr: string;
   readonly registrations: readonly ExtensionHostRegistration[];
 }
 

@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::collections::VecDeque;
 use std::io::BufRead;
 use std::io::BufReader;
 use std::io::BufWriter;
@@ -25,8 +26,15 @@ use super::PendingHostRequest;
 use super::reserve_pending;
 use crate::ExtensionHostError;
 use crate::ExtensionHostLimits;
+use crate::ExtensionHostOutputEvent;
 use crate::ExtensionHostRequest;
-use crate::ExtensionHostResponse;
+use crate::protocol::ExtensionHostStdoutFrame;
+
+#[derive(Default)]
+struct OutputEventQueue {
+    events: VecDeque<ExtensionHostOutputEvent>,
+    bytes: usize,
+}
 
 pub(super) struct StdioExtensionHostProcess {
     child: Mutex<Option<Child>>,
@@ -34,6 +42,7 @@ pub(super) struct StdioExtensionHostProcess {
     pending: Arc<Mutex<BTreeMap<u64, PendingEntry>>>,
     exited: Arc<AtomicBool>,
     stderr: Arc<Mutex<Vec<u8>>>,
+    output_events: Arc<Mutex<OutputEventQueue>>,
     stdout_thread: Mutex<Option<JoinHandle<()>>>,
     stderr_thread: Mutex<Option<JoinHandle<()>>>,
     limits: ExtensionHostLimits,
@@ -62,10 +71,12 @@ impl StdioExtensionHostProcess {
         let pending = Arc::new(Mutex::new(BTreeMap::new()));
         let exited = Arc::new(AtomicBool::new(false));
         let stderr = Arc::new(Mutex::new(Vec::new()));
+        let output_events = Arc::new(Mutex::new(OutputEventQueue::default()));
         let stdout_thread = spawn_stdout_reader(
             stdout,
             Arc::clone(&pending),
             Arc::clone(&exited),
+            Arc::clone(&output_events),
             limits.clone(),
         );
         let stderr_thread = spawn_stderr_reader(
@@ -79,6 +90,7 @@ impl StdioExtensionHostProcess {
             pending,
             exited,
             stderr,
+            output_events,
             stdout_thread: Mutex::new(Some(stdout_thread)),
             stderr_thread: Mutex::new(Some(stderr_thread)),
             limits: limits.clone(),
@@ -193,6 +205,16 @@ impl ExtensionHostProcess for StdioExtensionHostProcess {
             .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
             .unwrap_or_default()
     }
+
+    fn drain_output_events(&self) -> Vec<ExtensionHostOutputEvent> {
+        self.output_events
+            .lock()
+            .map(|mut queue| {
+                queue.bytes = 0;
+                queue.events.drain(..).collect()
+            })
+            .unwrap_or_default()
+    }
 }
 
 impl Drop for StdioExtensionHostProcess {
@@ -205,6 +227,7 @@ fn spawn_stdout_reader(
     stdout: ChildStdout,
     pending: Arc<Mutex<BTreeMap<u64, PendingEntry>>>,
     exited: Arc<AtomicBool>,
+    output_events: Arc<Mutex<OutputEventQueue>>,
     limits: ExtensionHostLimits,
 ) -> JoinHandle<()> {
     thread::Builder::new()
@@ -223,12 +246,37 @@ fn spawn_stdout_reader(
                         break;
                     }
                 };
-                let response = match serde_json::from_slice::<ExtensionHostResponse>(&bytes) {
-                    Ok(response) => response,
+                let frame = match serde_json::from_slice::<ExtensionHostStdoutFrame>(&bytes) {
+                    Ok(frame) => frame,
                     Err(error) => {
                         fail_all_pending(&pending, PendingFailure::Protocol(error.to_string()));
                         break;
                     }
+                };
+                let ExtensionHostStdoutFrame::Response(response) = frame else {
+                    let ExtensionHostStdoutFrame::Output(event) = frame else {
+                        unreachable!();
+                    };
+                    if let Err(error) = event.validate(&limits) {
+                        fail_all_pending(&pending, PendingFailure::Protocol(error.to_string()));
+                        break;
+                    }
+                    let Ok(mut queue) = output_events.lock() else {
+                        fail_all_pending(&pending, PendingFailure::Transport);
+                        break;
+                    };
+                    if queue.events.len() >= limits.maximum_output_event_count
+                        || queue.bytes.saturating_add(bytes.len()) > limits.maximum_output_bytes
+                    {
+                        fail_all_pending(
+                            &pending,
+                            PendingFailure::Protocol("Output event quota exceeded".into()),
+                        );
+                        break;
+                    }
+                    queue.bytes += bytes.len();
+                    queue.events.push_back(event);
+                    continue;
                 };
                 let entry = pending
                     .lock()

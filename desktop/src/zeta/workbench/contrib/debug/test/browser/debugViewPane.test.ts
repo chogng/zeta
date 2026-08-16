@@ -7,7 +7,7 @@ import { URI } from "../../../../../base/common/uri.js";
 import { type IEditorPart } from "../../../../browser/parts/editor/editorPart.js";
 import { type DebugEvaluateContext, type DebugSessionState, type IDebugBreakpoint, type IDebugCompound, type IDebugConfiguration, type IDebugEvaluateResult, type IDebugScope, type IDebugService, type IDebugSession, type IDebugSource, type IDebugSourceContent, type IDebugStackFrame, type IDebugThread, type IDebugVariable } from "../../../../services/debug/common/debugService.js";
 
-test("Debug view switches sessions and renders threads, recursive variables, watches, source references, and REPL", async () => {
+test("Debug view switches sessions and renders threads, recursive variables, watches, and source references", async () => {
   const browser = new JSDOM("<!doctype html><body></body>");
   const installedGlobals = installDomGlobals(browser);
   const opened: unknown[] = [];
@@ -33,11 +33,6 @@ test("Debug view switches sessions and renders threads, recursive variables, wat
     const openedInput = opened[0] as Parameters<IEditorPart["openEditor"]>[0];
     assert.equal(openedInput.resource.scheme, "debug-source");
     assert.deepEqual({ ...openedInput, resource: undefined }, { resource: undefined, label: "generated.ts", contentType: "text/typescript", readOnly: true, initialText: "const generated = true;" });
-
-    const consoleInput = view.element.querySelector<HTMLInputElement>("input[aria-label='Debug console expression']")!;
-    consoleInput.value = "answer";
-    consoleInput.form!.dispatchEvent(new browser.window.Event("submit", { bubbles: true, cancelable: true }));
-    await waitFor(() => /42/.test(view.element.querySelector(".zeta-debug-output")?.textContent ?? ""));
 
     const caught = view.element.querySelector<HTMLInputElement>("input[data-exception-filter='caught']")!;
     caught.checked = true;
@@ -118,6 +113,7 @@ class FakeDebugSession extends DisposableOwner implements IDebugSession {
   readonly reason = "breakpoint";
   readonly onDidChangeState = this.stateEmitter.event;
   readonly onDidOutput = this.outputEmitter.event;
+  readonly output = "";
   constructor(readonly id: string, name: string, private readonly stackSource: IDebugSource) { super(); this.configuration = configuration(name); }
   get threadId() { return this.selectedThread; }
   async continue() {}

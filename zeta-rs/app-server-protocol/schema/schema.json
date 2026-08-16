@@ -1191,6 +1191,7 @@
         "InvalidParams",
         "InternalError",
         "ServerOverloaded",
+        "RequestCancelled",
         "NotInitialized",
         "AlreadyInitialized",
         "CommandConflict",
@@ -1829,6 +1830,17 @@
             "null"
           ],
           "default": null
+        },
+        "workspaceTrustHost": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkspaceTrustHostCapability"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       }
     },
@@ -1876,6 +1888,22 @@
             },
             "params": {
               "$ref": "#/$defs/WorkspaceSwitchParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "workspace/trust/read"
+            },
+            "params": {
+              "$ref": "#/$defs/WorkspaceTrustReadParams"
             }
           },
           "required": [
@@ -4744,6 +4772,22 @@
             },
             "result": {
               "$ref": "#/$defs/WorkspaceSwitchResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "workspace/trust/read"
+            },
+            "result": {
+              "$ref": "#/$defs/WorkspaceTrustReadResult"
             }
           },
           "required": [
@@ -10470,6 +10514,13 @@
         "lifecycle": {
           "$ref": "#/$defs/ExtensionHostLifecycleDto"
         },
+        "outputEvents": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ExtensionHostOutputEventDto"
+          },
+          "maxItems": 4096
+        },
         "packageDigest": {
           "type": "string",
           "maxLength": 71,
@@ -10488,6 +10539,10 @@
           "maximum": 65535,
           "minimum": 1
         },
+        "stderr": {
+          "type": "string",
+          "maxLength": 262144
+        },
         "version": {
           "type": "string",
           "maxLength": 128,
@@ -10502,6 +10557,8 @@
         "runtimeApiVersion",
         "activationGeneration",
         "lifecycle",
+        "stderr",
+        "outputEvents",
         "registrations"
       ]
     },
@@ -10773,6 +10830,211 @@
         "recovering",
         "crashLoop",
         "failed"
+      ]
+    },
+    "ExtensionHostOutputChannelKindDto": {
+      "description": "Presentation class of an extension-created Output channel.",
+      "type": "string",
+      "enum": [
+        "output",
+        "log"
+      ]
+    },
+    "ExtensionHostOutputEventDto": {
+      "description": "One process-fenced extension Output mutation in supervisor arrival order.",
+      "type": "object",
+      "properties": {
+        "activationGeneration": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 1
+        },
+        "incarnation": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 1
+        },
+        "sequence": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 1
+        }
+      },
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "channelId": {
+              "type": "string",
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "kind": {
+              "$ref": "#/$defs/ExtensionHostOutputChannelKindDto"
+            },
+            "label": {
+              "type": "string",
+              "maxLength": 512,
+              "minLength": 1
+            },
+            "operation": {
+              "type": "string",
+              "const": "create"
+            }
+          },
+          "required": [
+            "operation",
+            "channelId",
+            "label",
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "category": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "maxLength": 128,
+              "minLength": 1
+            },
+            "channelId": {
+              "type": "string",
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "operation": {
+              "type": "string",
+              "const": "append"
+            },
+            "severity": {
+              "$ref": "#/$defs/ExtensionHostOutputSeverityDto"
+            },
+            "text": {
+              "type": "string",
+              "maxLength": 524288
+            }
+          },
+          "required": [
+            "operation",
+            "channelId",
+            "text",
+            "severity"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "category": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "maxLength": 128,
+              "minLength": 1
+            },
+            "channelId": {
+              "type": "string",
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "operation": {
+              "type": "string",
+              "const": "replace"
+            },
+            "severity": {
+              "$ref": "#/$defs/ExtensionHostOutputSeverityDto"
+            },
+            "text": {
+              "type": "string",
+              "maxLength": 524288
+            }
+          },
+          "required": [
+            "operation",
+            "channelId",
+            "text",
+            "severity"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "channelId": {
+              "type": "string",
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "operation": {
+              "type": "string",
+              "const": "clear"
+            }
+          },
+          "required": [
+            "operation",
+            "channelId"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "channelId": {
+              "type": "string",
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "operation": {
+              "type": "string",
+              "const": "show"
+            },
+            "preserveFocus": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "operation",
+            "channelId",
+            "preserveFocus"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "channelId": {
+              "type": "string",
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "operation": {
+              "type": "string",
+              "const": "dispose"
+            }
+          },
+          "required": [
+            "operation",
+            "channelId"
+          ]
+        }
+      ],
+      "required": [
+        "sequence",
+        "incarnation",
+        "activationGeneration"
+      ],
+      "unevaluatedProperties": false
+    },
+    "ExtensionHostOutputSeverityDto": {
+      "description": "Structured severity of an extension Output entry.",
+      "type": "string",
+      "enum": [
+        "trace",
+        "debug",
+        "information",
+        "warning",
+        "error",
+        "log"
       ]
     },
     "ExtensionHostReconcileModeDto": {
@@ -12205,7 +12467,8 @@
           "default": {
             "agentInteractions": null,
             "browser": null,
-            "notifications": null
+            "notifications": null,
+            "workspaceTrustHost": null
           }
         },
         "clientInfo": {
@@ -14198,11 +14461,15 @@
         },
         "show": {
           "type": "boolean"
+        },
+        "source": {
+          "$ref": "#/$defs/LanguageServerMessageSourceDto"
         }
       },
       "required": [
         "server",
         "severity",
+        "source",
         "show",
         "message"
       ]
@@ -14215,6 +14482,15 @@
         "warning",
         "information",
         "log"
+      ]
+    },
+    "LanguageServerMessageSourceDto": {
+      "description": "Origin retained for filtering language-server output.",
+      "type": "string",
+      "enum": [
+        "protocol",
+        "stderr",
+        "service"
       ]
     },
     "LanguageServerModeDto": {
@@ -14287,6 +14563,125 @@
         "commandId",
         "expectedRevision",
         "serverId"
+      ]
+    },
+    "LanguageServerStateDto": {
+      "description": "Product-visible lifecycle state of one configured language server.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "starting"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "ready"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "attempt": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            },
+            "retryAfterMillis": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "type": {
+              "type": "string",
+              "const": "backingOff"
+            }
+          },
+          "required": [
+            "type",
+            "attempt",
+            "retryAfterMillis"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "message": {
+              "type": "string"
+            },
+            "restartAttempts": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            },
+            "type": {
+              "type": "string",
+              "const": "crashLoop"
+            }
+          },
+          "required": [
+            "type",
+            "restartAttempts",
+            "message"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "message": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "failed"
+            }
+          },
+          "required": [
+            "type",
+            "message"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "stopped"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        }
+      ]
+    },
+    "LanguageServerStateNotification": {
+      "description": "One authoritative language-server lifecycle transition.",
+      "type": "object",
+      "properties": {
+        "server": {
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/$defs/LanguageServerStateDto"
+        }
+      },
+      "required": [
+        "server",
+        "state"
       ]
     },
     "LanguageSignatureHelpParams": {
@@ -17187,6 +17582,22 @@
             },
             "params": {
               "$ref": "#/$defs/LanguageServerProgressNotification"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "language/serverState"
+            },
+            "params": {
+              "$ref": "#/$defs/LanguageServerStateNotification"
             }
           },
           "required": [
@@ -21883,7 +22294,111 @@
       ]
     },
     "WorkspaceSwitchParams": {
-      "description": "Replaces the trusted local Workspace hosted by one App Server.",
+      "description": "Replaces the active local Workspace hosted by one App Server.",
+      "type": "object",
+      "properties": {
+        "root": {
+          "type": "string"
+        },
+        "trust": {
+          "$ref": "#/$defs/WorkspaceSwitchTrust"
+        }
+      },
+      "required": [
+        "root",
+        "trust"
+      ]
+    },
+    "WorkspaceSwitchResult": {
+      "description": "Confirms the canonical Workspace root accepted by the App Server.",
+      "type": "object",
+      "properties": {
+        "root": {
+          "type": "string"
+        },
+        "trust": {
+          "$ref": "#/$defs/WorkspaceTrustStateDto"
+        }
+      },
+      "required": [
+        "root",
+        "trust"
+      ]
+    },
+    "WorkspaceSwitchTrust": {
+      "description": "Authority used to resolve one client-requested Workspace switch.",
+      "oneOf": [
+        {
+          "description": "Resolves the canonical root against the durable UserConfig authority.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "userConfig"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "description": "Grants only this App Server runtime a host-configured trust lease.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "hostSession"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "description": "Persists the explicit choice before activating the canonical root.",
+          "type": "object",
+          "properties": {
+            "commandId": {
+              "$ref": "#/$defs/CommandId"
+            },
+            "expectedRevision": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "setting": {
+              "$ref": "#/$defs/WorkspaceTrustSettingDto"
+            },
+            "type": {
+              "type": "string",
+              "const": "userDecision"
+            }
+          },
+          "required": [
+            "type",
+            "commandId",
+            "expectedRevision",
+            "setting"
+          ]
+        }
+      ]
+    },
+    "WorkspaceTrustHostCapability": {
+      "description": "Declares that this connection is owned by a product host that can collect Workspace trust.\n\nThis is an authority boundary for host-only protocol operations. Renderer or extension\nconnections must not declare it merely because they can display a trust prompt.",
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "version"
+      ]
+    },
+    "WorkspaceTrustReadParams": {
+      "description": "Reads whether one exact canonical Workspace already has a durable user decision.",
       "type": "object",
       "properties": {
         "root": {
@@ -21894,16 +22409,35 @@
         "root"
       ]
     },
-    "WorkspaceSwitchResult": {
-      "description": "Confirms the canonical Workspace root accepted by the App Server.",
+    "WorkspaceTrustReadResult": {
       "type": "object",
       "properties": {
-        "root": {
-          "type": "string"
+        "setting": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkspaceTrustSettingDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
-      },
-      "required": [
-        "root"
+      }
+    },
+    "WorkspaceTrustSettingDto": {
+      "description": "User-owned trust setting collected by a product host.",
+      "type": "string",
+      "enum": [
+        "restricted",
+        "trusted"
+      ]
+    },
+    "WorkspaceTrustStateDto": {
+      "description": "Effective trust state committed by the App Server.",
+      "type": "string",
+      "enum": [
+        "restricted",
+        "trusted"
       ]
     }
   }

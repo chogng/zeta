@@ -3,6 +3,7 @@ use zeta_editor_extension_host::ExtensionHostSnapshot;
 use zeta_editor_extension_host::ExtensionHostStatus;
 use zeta_editor_extension_host::HostErrorCode;
 use zeta_editor_extension_host::RegistrationDescriptor;
+use zeta_editor_extension_host::SequencedExtensionHostOutputEvent;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(in crate::server) struct ExtensionHostFleetSnapshot {
@@ -20,6 +21,8 @@ pub(in crate::server) struct ExtensionHostExtensionSnapshot {
     pub(in crate::server) incarnation: Option<u64>,
     pub(in crate::server) lifecycle: ExtensionHostLifecycle,
     pub(in crate::server) failure: Option<ExtensionHostRuntimeFailure>,
+    pub(in crate::server) stderr: String,
+    pub(in crate::server) output_events: Vec<SequencedExtensionHostOutputEvent>,
     pub(in crate::server) registrations: Vec<RegistrationDescriptor>,
 }
 
@@ -82,6 +85,8 @@ pub(super) fn extension_projection(
         incarnation: (snapshot.incarnation != 0).then_some(snapshot.incarnation),
         lifecycle,
         failure,
+        stderr: snapshot.stderr,
+        output_events: snapshot.output_events,
         registrations: snapshot.registrations,
     }
 }

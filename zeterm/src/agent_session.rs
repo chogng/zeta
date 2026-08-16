@@ -37,6 +37,7 @@ use zeta_app_server_protocol::protocol::session::{
 use zeta_app_server_protocol::protocol::slash_commands::SlashCommandDefinition;
 use zeta_app_server_protocol::protocol::turn::InputItem;
 use zeta_app_server_protocol::protocol::workspace::WorkspaceSwitchParams;
+use zeta_app_server_protocol::protocol::workspace::WorkspaceSwitchTrust;
 use zeta_protocol::{
     ModelRef, Session, SessionId, SessionStatus, SessionThreadStatus, Thread, ThreadId,
     ThreadUpdateEnvelope,
@@ -1066,7 +1067,10 @@ fn switch_workspace(
     root: PathBuf,
 ) -> Result<WorkspaceSwitchProjection> {
     let switched = client
-        .switch_workspace(WorkspaceSwitchParams { root })
+        .switch_workspace(WorkspaceSwitchParams {
+            root,
+            trust: WorkspaceSwitchTrust::HostSession,
+        })
         .map_err(client_error)?;
     Ok(WorkspaceSwitchProjection {
         root: switched.root,

@@ -1,5 +1,5 @@
 import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
-import { Action2, MenuId, registerAction2 } from "../../../../platform/actions/common/actions.js";
+import { Action2, MenuId, MenusRegistry, registerAction2 } from "../../../../platform/actions/common/actions.js";
 import type { ServicesAccessor } from "../../../../platform/instantiation/common/instantiation.js";
 import { AuxiliaryBarVisibleContext, EditorAreaVisibleContext, PanelVisibleContext, SideBarVisibleContext } from "../../../common/contextkeys.js";
 import { IWorkbenchLayoutService } from "../../../services/layout/browser/layoutService.js";
@@ -143,7 +143,7 @@ registerAction2(class ToggleMaximizedPanelAction extends Action2 {
         icon: lxiconsLibrary.screenNormal,
       },
       menu: {
-        id: MenuId.TerminalTitle,
+        id: MenuId.PanelTitle,
         group: "navigation",
         order: 40,
       },
@@ -160,4 +160,15 @@ registerAction2(class ToggleMaximizedPanelAction extends Action2 {
       layout.showPart("editor");
     }
   }
+});
+
+MenusRegistry.appendMenuItem(MenuId.PanelTitle, {
+  command: {
+    id: TogglePanelCommandId,
+    title: "Close Panel",
+    tooltip: "Close Panel",
+    icon: lxiconsLibrary.close,
+  },
+  group: "navigation",
+  order: 50,
 });

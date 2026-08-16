@@ -63,7 +63,7 @@ impl AppServer {
         connection: &mut ConnectionState,
         params: &Value,
     ) -> Result<Value, RpcError> {
-        if connection.initialized {
+        if connection.is_initialized() {
             return Err(RpcError::new(
                 -32002,
                 AppServerErrorName::AlreadyInitialized,
@@ -106,6 +106,15 @@ impl AppServer {
         {
             return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
         }
+        if params
+            .capabilities
+            .workspace_trust_host
+            .as_ref()
+            .is_some_and(|capability| capability.version != 1)
+        {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        connection.set_workspace_trust_host(params.capabilities.workspace_trust_host.is_some());
         self.updates.set_agent_interaction_capability(
             connection.connection_id,
             params.capabilities.agent_interactions,
@@ -121,7 +130,7 @@ impl AppServer {
                 return Err(RpcError::new(-32603, AppServerErrorName::InternalError));
             }
         }
-        connection.initialized = true;
+        connection.set_initialized();
         let (
             file_system,
             git,

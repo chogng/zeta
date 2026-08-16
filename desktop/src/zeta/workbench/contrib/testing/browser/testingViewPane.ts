@@ -3,7 +3,7 @@ import { type ITestProfile, type ITestRun, type ITestingService } from "../../..
 import { type ITerminalService } from "../../../services/terminal/common/terminal.js";
 import { type IViewsService } from "../../../services/views/browser/viewsService.js";
 import { ViewPane, type IViewPaneOptions } from "../../../browser/parts/views/viewPane.js";
-import { TERMINAL_VIEW_ID } from "../../terminal/browser/terminal.contribution.js";
+import { TERMINAL_VIEW_ID } from "../../terminal/common/terminal.js";
 
 /** Test profiles and their latest task-backed run status. */
 export class TestingViewPane extends ViewPane {

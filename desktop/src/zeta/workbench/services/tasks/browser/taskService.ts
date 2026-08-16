@@ -5,6 +5,7 @@ import { FileKind, FileNotFoundError, type IFileService } from "../../../../plat
 import { type IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import { type ITerminalCommandStatusEvent, type ITerminalInstance, type ITerminalService } from "../../terminal/common/terminal.js";
 import { type ITaskRun, type ITaskService, type IWorkspaceTask, type TaskProvider, type TaskProviderRegistration, type TaskProviderTask, type TaskRunStatus } from "../common/taskService.js";
+import type { IOutputChannel, IOutputService, OutputEntrySeverity } from "../../output/common/outputService.js";
 import { cargoWorkspaceTasks, parsePackageTasks, parseWorkspaceTasks } from "../common/workspaceTasks.js";
 
 const TASK_TERMINAL_DIMENSIONS = Object.freeze({ rows: 24, cols: 80 });
@@ -27,13 +28,15 @@ export class TaskService extends DisposableOwner implements ITaskService {
   private loaded = false;
   private disposed = false;
   private _lastRun: TaskRun | undefined;
+  private readonly output: IOutputChannel | undefined;
 
   readonly onDidChangeTasks: Event<readonly IWorkspaceTask[]> = this.changeTasksEmitter.event;
   readonly onDidStartTask: Event<ITaskRun> = this.startTaskEmitter.event;
   readonly onDidChangeTaskRun: Event<ITaskRun> = this.changeTaskRunEmitter.event;
 
-  constructor(private readonly fileService: IFileService, private readonly workspace: IWorkspaceContextService, private readonly terminalService: ITerminalService) {
+  constructor(private readonly fileService: IFileService, private readonly workspace: IWorkspaceContextService, private readonly terminalService: ITerminalService, outputService?: IOutputService) {
     super();
+    this.output = outputService ? this.own(outputService.createChannel({ id: "tasks", label: "Tasks", kind: "log", source: "core" })) : undefined;
     this.own(fileService.onDidChangeFiles(event => {
       if (this.loaded && affectsTaskConfiguration(event.resources)) void this.refresh().catch(reportTaskError);
     }));
@@ -88,15 +91,18 @@ export class TaskService extends DisposableOwner implements ITaskService {
     const generation = ++this.refreshGeneration;
     const root = this.workspace.getWorkspace().folders[0]?.uri;
     const providerSnapshot = [...this.providers.values()].map(entry => entry.provider);
+    this.log("debug", "discovery", `Refreshing workspace tasks from configuration and ${providerSnapshot.length} provider(s).`);
     try {
       const [discovered, providerGroups] = await Promise.all([root ? this.discoverWorkspaceTasks(root) : Promise.resolve(Object.freeze([])), Promise.all(providerSnapshot.map(provider => this.provideTasks(provider, controller.signal)))]);
       const providerTasks = providerGroups.flat();
       if (controller.signal.aborted || generation !== this.refreshGeneration || this.disposed) return this.currentTasks;
       this.loaded = true;
       this.setTasks(mergeTasks(discovered, providerTasks));
+      this.log("information", "discovery", `Discovered ${this.currentTasks.length} workspace task(s).`);
       return this.currentTasks;
     } catch (error) {
       if (controller.signal.aborted || generation !== this.refreshGeneration || this.disposed) return this.currentTasks;
+      this.log("error", "discovery", `Task discovery failed: ${errorMessage(error)}`);
       throw error;
     } finally {
       if (this.activeRefresh === controller) this.activeRefresh = undefined;
@@ -105,8 +111,13 @@ export class TaskService extends DisposableOwner implements ITaskService {
 
   async run(task: IWorkspaceTask): Promise<ITaskRun> {
     const currentTask = resolveKnownTask(task, this.currentTasks);
-    const terminal = await this.terminalService.createTerminal({ dimensions: TASK_TERMINAL_DIMENSIONS, profile: { type: "default" }, title: `Task: ${currentTask.label}` });
+    this.log("information", "execution", `Starting task '${currentTask.label}' (${currentTask.id}).`);
+    let terminal: ITerminalInstance;
+    try { terminal = await this.terminalService.createTerminal({ dimensions: TASK_TERMINAL_DIMENSIONS, profile: { type: "default" }, title: `Task: ${currentTask.label}` }); }
+    catch (error) { this.log("error", "execution", `Could not create a terminal for task '${currentTask.label}': ${errorMessage(error)}`); throw error; }
     const run = this.own(new TaskRun(currentTask, terminal, current => {
+      const exit = current.exitCode === undefined ? "" : ` (exit code ${current.exitCode})`;
+      this.log(current.status === "failed" ? "error" : current.status === "canceled" ? "warning" : "information", "execution", `Task '${current.task.label}' ${current.status}${exit}.`);
       this.changeTaskRunEmitter.fire(current);
       if (current.status !== "running") this.runs.delete(current);
     }));
@@ -115,11 +126,13 @@ export class TaskService extends DisposableOwner implements ITaskService {
     this.startTaskEmitter.fire(run);
     const command = substituteWorkspaceVariables(currentTask.command, this.workspace.getWorkspace().folders[0]?.uri);
     terminal.write(`${taskTerminalCommand(command, terminal.profile.profileId)}\r`);
+    this.log("debug", "execution", `Task '${currentTask.label}' is running in terminal '${terminal.id}'.`);
     return run;
   }
 
   async terminate(run: ITaskRun): Promise<void> {
     if (!this.runs.has(run as TaskRun)) return;
+    this.log("warning", "execution", `Terminating task '${run.task.label}'.`);
     (run as TaskRun).cancel();
     await this.terminalService.closeTerminal(run.terminal);
   }
@@ -169,7 +182,9 @@ export class TaskService extends DisposableOwner implements ITaskService {
   }
 
   private async provideTasks(provider: TaskProvider, signal: AbortSignal): Promise<readonly IWorkspaceTask[]> {
-    const contributions = await provider.provideTasks(signal);
+    let contributions: readonly TaskProviderTask[];
+    try { contributions = await provider.provideTasks(signal); }
+    catch (error) { this.log("error", "provider", `Task provider '${provider.id}' failed: ${errorMessage(error)}`); throw error; }
     if (signal.aborted) return Object.freeze([]);
     if (!Array.isArray(contributions)) throw new TypeError(`Task provider '${provider.id}' must return an array`);
     const ids = new Set<string>();
@@ -183,6 +198,10 @@ export class TaskService extends DisposableOwner implements ITaskService {
 
   private ensureAlive(): void {
     if (this.disposed) throw new ReferenceError("TaskService is already disposed");
+  }
+
+  private log(severity: OutputEntrySeverity, category: string, text: string): void {
+    this.output?.appendLine({ severity, category, text });
   }
 
   private async packageManager(root: URI): Promise<"npm" | "pnpm" | "yarn"> {
@@ -335,4 +354,8 @@ function taskTerminalCommand(command: string, profileId: string): string {
 
 function reportTaskError(error: unknown): void {
   console.error("Could not refresh workspace tasks", error);
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message.slice(0, 4096) : String(error).slice(0, 4096);
 }

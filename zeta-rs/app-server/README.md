@@ -221,6 +221,7 @@ src/
 │       ├── marketplace_language_runtime.rs # 已验证 Language/Executable capability → provider registry
 │       ├── marketplace_extension_sources.rs # 已验证 Language capability → Extension catalog source
 │       ├── marketplace_skill_sources.rs # 已验证 Skill capability → Skill catalog source
+│       ├── request_serialization.rs # cross-connection scope FIFO/shared-read scheduler
 │       └── update_broker.rs       # per-connection subscription/cursor/fanout
 ├── local.rs                       # local composition, session backend selection + model safe point
 ├── local_tools.rs                 # frozen rg registry + Core Tool/Policy adapters
@@ -243,6 +244,8 @@ src/
 | Symbol | 可见性 | 当前职责 | 方向约束 |
 | --- | --- | --- | --- |
 | `AppServer::dispatch` | private | initialization gate 后对 `ClientMethod` exhaustive dispatch | method string lookup只来自 protocol registry |
+| `RequestScheduler` | private | 对 registry 解析出的 global、Session 和 connection-resource key 实施 FIFO/shared-read 调度与 queued disconnect cancellation | 不解析 params、不拥有 transport accept、不做 CPU/token 配额 |
+| `ConnectionDispatchActivity` | private | 在多个 request worker 与 notification waiter 之间维持 response-before-causal-notification barrier | 不决定 method scope，不跨 connection 共享背压 |
 | `AppServer::session_request` | `pub(super)` | 解码 canonical `session/request`，按 typed operation 调用 Session/Thread/Turn helper 并发布 durable gaps | 不在 App Server reducer 或 `zeta-protocol` 中复制 mutation model |
 | `decode<T>` | crate-private | params JSON → typed DTO，统一 InvalidParams | operation 不手读 arbitrary fields |
 | `result<T>` | crate-private | typed result → JSON，统一 serialization failure | external result shape 由 protocol DTO 决定 |
@@ -323,6 +326,8 @@ AppServer::handle_json(connection, raw)
 ├─ deserialize JsonRpcRequest<Value>
 ├─ validate jsonrpc == 2.0 and positive numeric ID
 ├─ reject duplicate request ID within connection
+├─ resolve registry serialization scope from params
+├─ acquire global / Session / connection-resource FIFO permit
 ├─ AppServer::dispatch
 │  ├─ initialize allowed before gate
 │  ├─ require connection.initialized
@@ -335,10 +340,12 @@ AppServer::handle_json(connection, raw)
 └─ JsonRpcSuccess or JsonRpcFailure → JSON string
 ```
 
-`serve_jsonl` 对每一行先写 response，再 drain/write causal notifications。当前 JSONL loop 是
-同步串行的；owned embedded client 通过 `ConnectionNotifications` 在独立 event pump 中等待同一
-queue 的 condition-variable wake。protocol registry 中的 `SerializationScopeDefinition`
-尚未接入并发 scheduler。
+`serve_jsonl` 使用 64 项有界 inbound request queue、4 个固定 connection worker 和 256 项有界
+outbound queue。不同 scope 可并发执行；相同 scope 的 exclusive request 按进入 scheduler 的顺序
+执行，相邻 shared read 可一起执行。`ConnectionDispatchActivity` 让 notification waiter 等全部
+正在 dispatch 的 request response 进入 outbound queue 后再 drain causal notifications。owned
+embedded client 继续通过 `ConnectionNotifications` 在独立 event pump 中等待同一 queue 的
+condition-variable wake。
 
 同一 outbound queue 也承载 `BrowserHost` 的 Server → Client request。Desktop connection 只有在
 `initialize.capabilities.browser.version == 1` 且声明至少一种语义操作时才会注册为 browser host。
@@ -477,9 +484,11 @@ connection failure/recovery，而不是丢 control fact 或继续增长内存。
 `Weak::upgrade` 失败清除 subscriber。共享 embedded client 和 TUI event pump 也使用 1024 项有界
 channel，把 slow-consumer 背压传回该 queue。
 
-stdio/JSONL host 使用独立 notification waiter 和单一 writer thread。request response 与主动
-notification 统一进入 256 项有界 outbound channel；dispatch gate 保证一次 request 内产生的 causal
-notification 排在该 response 之后，而 request reader 阻塞等待下一行时 notification 仍能立即写出。
+stdio/JSONL host 使用独立 notification waiter、固定 request worker pool 和单一 writer thread。
+request response 与主动 notification 统一进入 256 项有界 outbound channel；connection-local
+dispatch activity barrier 保证 request 内产生的 causal notification 排在该 response 之后，而没有
+active request 时 notification 不必等待下一行输入即可写出。每个 connection 拥有独立 inbound、
+outbound 和 worker 状态，因此一个慢 writer 的背压不会占用其他 connection 的队列。
 
 ## Local composition 与模型安全点
 
@@ -785,15 +794,18 @@ surrogate boundary；CodeIndex/SymbolIndex 覆盖 persistent reopen、watcher re
 save handoff、stale materialization 和 symbol-aware retrieval。
 Browser host 覆盖反向 request/response、非 owner 拒绝、target identity、断连 pending failure、
 截图 Resource ownership，以及 Desktop restart-safe handler registration 和原生目标回收。
+Request scheduler 覆盖同 key exclusive FIFO、相邻 shared read、不同 Session 并发、跨 connection
+resource isolation、queued disconnect cancellation，以及慢 connection writer 不阻塞另一 connection。
 
 local tool 的参数白名单、discovery、取消与输出限制由
 [`zeta-shell-command`](../shell-command/README.md) 和
 [`zeta-tool-executor`](../tool-executor/README.md) 维护；
 本 README 只拥有 App Server 组合与 Core port binding。
 
-当前 JSONL 服务仍使用同步循环；自有嵌入式连接已具备可唤醒通知来源，以及显式订阅、资源和
-终端清理；尚无异步多连接调度器、序列化范围强制、持久化资源或完整网络服务
-生命周期。MCP desired config 的热更新、SecretStore credential materialization、provider-injected
+当前 JSONL 服务已具备有界 per-connection worker/queue、跨 connection 的 scope serialization、
+可唤醒通知来源，以及显式订阅、资源和终端清理；remote broker 仍负责 Unix socket accept/thread
+生命周期，当前没有 WebSocket transport、持久化临时资源或 weighted-fair CPU/token quota
+scheduler。MCP desired config 的热更新、SecretStore credential materialization、provider-injected
 OAuth lifecycle、form elicitation 和未来 Tool catalog replacement 已实现；当前仍没有 stdio 进程
 沙箱、自动 OAuth discovery/内建 provider、完整 runtime health/log API、progress 产品投影、URL/复杂
 form elicitation 或 MCP resources/prompts。Marketplace 安装由 Manager 唯一拥有；legacy Plugin

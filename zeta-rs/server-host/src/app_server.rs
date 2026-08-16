@@ -9,6 +9,7 @@ use zeta_install_context::InstallContext;
 
 const PRODUCT_SERVICES_OVERRIDE: &str = "ZETA_PRODUCT_SERVICES_PATH";
 const BUNDLED_PRODUCT_SERVICES: &str = "product-services/product-services.json";
+const WORKSPACE_TRUST_SOURCE: &str = "ZETA_WORKSPACE_TRUST_SOURCE";
 
 pub(super) fn run(arguments: Vec<String>) -> Result<(), String> {
     let product_services = match arguments.as_slice() {
@@ -27,7 +28,19 @@ pub(super) fn run(arguments: Vec<String>) -> Result<(), String> {
     let profile_root = local_profile_root();
     let mut options = LocalAppServerOptions::new(&profile_root);
     if let Some(workspace_root) = env::var_os("ZETA_WORKSPACE_ROOT") {
-        options = options.with_workspace_root(PathBuf::from(workspace_root));
+        options = match env::var(WORKSPACE_TRUST_SOURCE).as_deref() {
+            Ok("userConfig") => {
+                options.with_user_config_workspace_root(PathBuf::from(workspace_root))
+            }
+            Ok("hostConfiguration") | Err(env::VarError::NotPresent) => {
+                options.with_workspace_root(PathBuf::from(workspace_root))
+            }
+            Ok(_) | Err(env::VarError::NotUnicode(_)) => {
+                return Err(format!(
+                    "{WORKSPACE_TRUST_SOURCE} must be userConfig or hostConfiguration"
+                ));
+            }
+        };
     }
     if let Some(path) = product_services.or_else(product_services_path) {
         options = options.with_product_services(

@@ -8,6 +8,7 @@ use std::time::Duration;
 
 use crate::ExtensionHostError;
 use crate::ExtensionHostLimits;
+use crate::ExtensionHostOutputEvent;
 use crate::ExtensionHostRequest;
 use crate::ExtensionHostResponse;
 use crate::ProcessIsolationPolicy;
@@ -124,6 +125,9 @@ pub trait ExtensionHostProcess: Send + Sync {
     fn terminate(&self) -> Result<(), ExtensionHostError>;
 
     fn stderr(&self) -> String;
+
+    /// Drains validated unsolicited Output events in stdout arrival order.
+    fn drain_output_events(&self) -> Vec<ExtensionHostOutputEvent>;
 }
 
 #[derive(Clone, Debug)]

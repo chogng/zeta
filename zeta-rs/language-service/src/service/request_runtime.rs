@@ -699,6 +699,7 @@ impl Supervisor {
                 self.emit(LanguageServiceEvent::ServerMessage {
                     server: server.to_string(),
                     severity: LanguageServerMessageSeverity::Error,
+                    source: super::LanguageServerMessageSource::Service,
                     show: false,
                     message,
                 });
@@ -1883,6 +1884,7 @@ impl Supervisor {
                 self.emit(LanguageServiceEvent::ServerMessage {
                     server: server.to_string(),
                     severity: LanguageServerMessageSeverity::Error,
+                    source: super::LanguageServerMessageSource::Service,
                     show: false,
                     message,
                 });

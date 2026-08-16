@@ -10,6 +10,7 @@ pub enum AppServerErrorName {
     InvalidParams,
     InternalError,
     ServerOverloaded,
+    RequestCancelled,
     NotInitialized,
     AlreadyInitialized,
     CommandConflict,

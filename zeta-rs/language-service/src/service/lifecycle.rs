@@ -288,6 +288,7 @@ impl Supervisor {
             self.emit(LanguageServiceEvent::ServerMessage {
                 server: failure.server.to_string(),
                 severity: LanguageServerMessageSeverity::Error,
+                source: super::LanguageServerMessageSource::Service,
                 show: false,
                 message: failure.message,
             });

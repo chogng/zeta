@@ -62,6 +62,7 @@ import { ServerHostRemoteRuntimeProvisioner } from "../../platform/remote/electr
 import { ServerHostRemoteConnectionProfiles } from "../../platform/remote/electron-main/serverHostRemoteConnectionProfiles.js";
 import { ServerHostRemoteConnections } from "../../platform/remote/electron-main/serverHostRemoteConnections.js";
 import type { RemoteConnectionDefinition } from "../../platform/remote/common/remoteConnectionService.js";
+import { isRemoteResource } from "../../platform/remote/common/remote.js";
 import { RemoteBrowserViewNavigationResolver } from "../../platform/remote/electron-main/remoteBrowserViewNavigationResolver.js";
 import { SshRemoteTunnelService } from "../../platform/remote/electron-main/sshRemoteTunnelService.js";
 import { createRemoteRuntimeInstallProgressLogger } from "../../platform/remote/electron-main/remoteRuntimeBootstrapMainService.js";
@@ -70,8 +71,8 @@ import { ElectronRemoteRuntimeInstallWindow } from "../../platform/remote/electr
 import { electronRemoteWindowMainHost } from "../../platform/remote/electron-main/electronRemoteWindowMainHost.js";
 import { RemoteWindowMainContext } from "../../platform/remote/electron-main/remoteWindowMainContext.js";
 import { WORKSPACE_CONTEXT_CHANGED_CHANNEL } from "../../platform/workspace/common/workspaceIpc.js";
-import { createAppServerWorkspaceTransitionAdapter } from "../../platform/workspaces/electron-main/appServerWorkspaceTransition.js";
-import { type IWorkspaceTransitionFailure, type WorkspaceTransitionMainServiceOptions, WorkspaceTransitionFailureKind, WorkspaceTransitionMainService, WorkspaceTransitionStatus } from "../../platform/workspaces/electron-main/workspaceTransitionMainService.js";
+import { createAppServerWorkspaceTransitionAdapter, readAppServerWorkspaceTrust, switchAppServerWorkspace } from "../../platform/workspaces/electron-main/appServerWorkspaceTransition.js";
+import { type IWorkspaceTransitionFailure, type WorkspaceTransitionMainServiceOptions, WorkspaceTransitionFailureKind, WorkspaceTransitionMainService, WorkspaceTransitionStatus, WorkspaceTrustChoice } from "../../platform/workspaces/electron-main/workspaceTransitionMainService.js";
 import { WorkspaceContextMainService, WorkspacesMainService, parseWorkspaceLaunchArguments, workspaceContextIpcRoutes } from "../../platform/workspaces/electron-main/workspacesMainService.js";
 import type { IWorkbenchWindowRecord } from "./workbenchWindowRegistry.js";
 import { WorkbenchWindowRegistry } from "./workbenchWindowRegistry.js";
@@ -317,6 +318,14 @@ export class ZetaApplication extends DisposableOwner {
         resources.dispose();
         return undefined;
       }
+      if (this.appServerStartupMode === "required" && isSingleFolderWorkspaceIdentifier(workspace) && !isRemoteResource(workspace.uri)) {
+        const trust = await this.resolveLocalWorkspaceTrust(supervisor, workspace.uri.fsPath);
+        if (trust === undefined) {
+          resources.dispose();
+          return undefined;
+        }
+        await switchAppServerWorkspace(supervisor, workspace.uri.fsPath, trust);
+      }
       const existing = this.workbenchWindows.findWorkspace(workspace.id);
       if (existing) {
         existing.focus();
@@ -356,6 +365,7 @@ export class ZetaApplication extends DisposableOwner {
         expectedServerName: "zeta-app-server",
         capabilities: {
           browser: { version: 1, observe: true, input: true },
+          workspaceTrustHost: { version: 1 },
         },
       },
     });
@@ -604,6 +614,7 @@ export class ZetaApplication extends DisposableOwner {
           const folderPath = result.filePaths[0];
           if (result.canceled || !folderPath) return;
           const nextWorkspace = await workspaces.resolveFolder(folderPath);
+          if (nextWorkspace.id === workspaceContext.getWorkspace().id) return;
           const existingWindow = this.workbenchWindows.findWorkspace(nextWorkspace.id);
           if (existingWindow && existingWindow.id !== record.id) {
             existingWindow.focus();
@@ -613,8 +624,10 @@ export class ZetaApplication extends DisposableOwner {
             await this.openWorkspace(nextWorkspace, workspaces);
             return;
           }
+          const trust = await this.resolveLocalWorkspaceTrust(supervisor, folderPath, window);
+          if (trust === undefined) return;
           await record.windowsStateHandler.saveWindowState(window);
-          const transition = await workspaceTransitions.transitionToFolder(folderPath);
+          const transition = await workspaceTransitions.transitionToFolder(folderPath, trust);
           if (transition.status === WorkspaceTransitionStatus.Blocked) {
             await dialog.showMessageBox(window, {
               type: "info",
@@ -932,9 +945,26 @@ export class ZetaApplication extends DisposableOwner {
     return this.closePersistentServicesPromise;
   }
 
-  private appServerEnvironment(
-    workspace: IAnyWorkspaceIdentifier,
-  ): Readonly<Record<string, string>> {
+  private async resolveLocalWorkspaceTrust(supervisor: AppServerSupervisor, root: string, window?: BrowserWindow): Promise<WorkspaceTrustChoice | undefined> {
+    const persisted = await readAppServerWorkspaceTrust(supervisor, root);
+    if (persisted !== undefined) return WorkspaceTrustChoice.UserConfig;
+    const options = {
+      type: "question" as const,
+      buttons: ["Trust Folder", "Open in Restricted Mode", "Cancel"],
+      defaultId: 0,
+      cancelId: 2,
+      noLink: true,
+      message: "Do you trust the authors of the files in this folder?",
+      detail: "Trust enables terminals, Git mutations, tasks, and executable workspace configuration. Restricted Mode keeps file access available without running workspace code.",
+    };
+    const prompt = window
+      ? await dialog.showMessageBox(window, options)
+      : await dialog.showMessageBox(options);
+    if (prompt.response === 2) return undefined;
+    return prompt.response === 0 ? WorkspaceTrustChoice.Trusted : WorkspaceTrustChoice.Restricted;
+  }
+
+  private appServerEnvironment(workspace: IAnyWorkspaceIdentifier): Readonly<Record<string, string>> {
     return buildAppServerEnvironment(process.env, process.platform === "win32" ? "windows" : "posix", {
       ...(process.env.ZETA_RG_PATH
         ? { ZETA_RG_PATH: process.env.ZETA_RG_PATH }
@@ -945,7 +975,10 @@ export class ZetaApplication extends DisposableOwner {
       ZETA_ELECTRON_RUN_AS_NODE_PATH: process.execPath,
       ZETA_PROFILE_ROOT: join(app.getPath("userData"), "state"),
       ...(isSingleFolderWorkspaceIdentifier(workspace)
-        ? { ZETA_WORKSPACE_ROOT: workspace.uri.fsPath }
+        ? {
+          ZETA_WORKSPACE_ROOT: workspace.uri.fsPath,
+          ZETA_WORKSPACE_TRUST_SOURCE: "userConfig",
+        }
         : {}),
     });
   }

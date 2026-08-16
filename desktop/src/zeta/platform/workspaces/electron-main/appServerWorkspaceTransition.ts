@@ -1,13 +1,14 @@
-import { APP_SERVER_METHODS } from "../../../../../generated/app-server/types.js";
+import { randomUUID } from "node:crypto";
+import { APP_SERVER_METHODS, type WorkspaceSwitchTrust } from "../../../../../generated/app-server/types.js";
 import type { IDisposable } from "../../../base/common/lifecycle.js";
 import type { AppServerConnectionState } from "../../app-server/common/appServerApi.js";
+import { AppServerRemoteError } from "../../app-server/common/appServerError.js";
 import type { AppServerSupervisor } from "../../app-server/electron-main/app-server-supervisor.js";
-import { JsonRpcRemoteError } from "../../app-server/electron-main/json-rpc-peer.js";
-import { type IWorkspaceRuntimeSwitcher, type IWorkspaceTransitionContext, type IWorkspaceTransitionFailure, type IWorkspaceTransitionRecoveryRouter, WorkspaceTransitionFailureKind, WorkspaceTransitionRecovery } from "./workspaceTransitionMainService.js";
+import { type IWorkspaceRuntimeSwitcher, type IWorkspaceTransitionContext, type IWorkspaceTransitionFailure, type IWorkspaceTransitionRecoveryRouter, WorkspaceTransitionFailureKind, WorkspaceTransitionRecovery, WorkspaceTrustChoice } from "./workspaceTransitionMainService.js";
 
 export interface IAppServerWorkspaceTransitionHost {
   getState(): AppServerConnectionState;
-  switchWorkspace(root: string): Promise<void>;
+  switchWorkspace(root: string, trust: IWorkspaceTransitionContext["trust"]): Promise<void>;
   onStateChange(listener: (state: AppServerConnectionState) => void): IDisposable;
 }
 
@@ -20,13 +21,13 @@ export interface IAppServerWorkspaceTransitionHost {
 export class AppServerWorkspaceTransitionAdapter implements IWorkspaceRuntimeSwitcher, IWorkspaceTransitionRecoveryRouter {
   constructor(private readonly host: IAppServerWorkspaceTransitionHost) {}
 
-  switchWorkspace({ workspace }: IWorkspaceTransitionContext): Promise<void> {
-    return this.host.switchWorkspace(workspace.uri.fsPath);
+  switchWorkspace({ workspace, trust }: IWorkspaceTransitionContext): Promise<void> {
+    return this.host.switchWorkspace(workspace.uri.fsPath, trust);
   }
 
   classifyRuntimeError(error: unknown): WorkspaceTransitionFailureKind {
-    if (error instanceof JsonRpcRemoteError) {
-      switch (error.message) {
+    if (error instanceof AppServerRemoteError) {
+      switch (error.errorName) {
         case "WorkspaceSwitchBusy":
           return WorkspaceTransitionFailureKind.RuntimeBusy;
         case "WorkspaceSwitchUnavailable":
@@ -98,9 +99,38 @@ export function createAppServerWorkspaceTransitionAdapter(
 ): AppServerWorkspaceTransitionAdapter {
   return new AppServerWorkspaceTransitionAdapter({
     getState: () => supervisor.state,
-    switchWorkspace: async (root) => {
-      await supervisor.request(APP_SERVER_METHODS["workspace/switch"], { root });
+    switchWorkspace: async (root, trust) => {
+      await switchAppServerWorkspace(supervisor, root, trust);
     },
     onStateChange: (listener) => supervisor.onStateChange(listener),
   });
+}
+
+export async function readAppServerWorkspaceTrust(supervisor: AppServerSupervisor, root: string): Promise<WorkspaceTrustChoice | undefined> {
+  const result = await supervisor.request(APP_SERVER_METHODS["workspace/trust/read"], { root });
+  return result.setting === "trusted"
+    ? WorkspaceTrustChoice.Trusted
+    : result.setting === "restricted" ? WorkspaceTrustChoice.Restricted : undefined;
+}
+
+export async function switchAppServerWorkspace(supervisor: AppServerSupervisor, root: string, trust: WorkspaceTrustChoice): Promise<void> {
+  const authority = await workspaceSwitchTrust(supervisor, trust);
+  await supervisor.request(APP_SERVER_METHODS["workspace/switch"], { root, trust: authority });
+}
+
+async function workspaceSwitchTrust(supervisor: AppServerSupervisor, trust: WorkspaceTrustChoice): Promise<WorkspaceSwitchTrust> {
+  switch (trust) {
+    case WorkspaceTrustChoice.UserConfig:
+      return { type: "userConfig" } as const;
+    case WorkspaceTrustChoice.Restricted:
+    case WorkspaceTrustChoice.Trusted: {
+      const config = await supervisor.request(APP_SERVER_METHODS["config/read"], {});
+      return {
+        type: "userDecision" as const,
+        commandId: `desktop-workspace-trust-${randomUUID()}`,
+        expectedRevision: config.revision,
+        setting: trust,
+      };
+    }
+  }
 }

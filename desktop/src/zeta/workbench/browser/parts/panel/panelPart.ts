@@ -2,13 +2,14 @@ import "./panelpart.css";
 import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.js";
 import { ViewContainerLocation } from "../../../common/views.js";
 import type { IViewDescriptorService } from "../../../services/views/common/viewDescriptorService.js";
-import { PaneCompositePart } from "../paneCompositePart.js";
+import { PaneCompositePart, type PaneCompositeTitleActions } from "../paneCompositePart.js";
 
 /** Construction inputs for the bottom Panel Composite host. */
 export interface PanelPartOptions {
   readonly ownerDocument: Document;
   readonly viewDescriptorService: IViewDescriptorService;
   readonly contextMenuProvider?: IContextMenuProvider;
+  readonly titleActions?: PaneCompositeTitleActions;
 }
 
 /** Bottom tool region with Panel tabs and a contextual title toolbar. */
@@ -25,6 +26,7 @@ export class PanelPart extends PaneCompositePart {
       viewsAriaLabel: "Panel views",
       compositeBarPresentation: "label",
       compositeBarContextMenuProvider: options.contextMenuProvider,
+      titleActions: options.titleActions,
     });
     this.titleElement.classList.add("zeta-panel-title-control");
     this.titleActionsSlotElement.classList.add("zeta-panel-title-actions");

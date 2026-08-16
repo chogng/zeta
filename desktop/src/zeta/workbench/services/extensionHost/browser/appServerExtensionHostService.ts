@@ -8,6 +8,7 @@ import type { LanguageProviderBatch, LanguageProviderBatchRegistration } from ".
 import type { ILanguageFeaturesService } from "../../language/common/languageFeaturesService.js";
 import type { ITaskService, TaskProvider, TaskProviderRegistration } from "../../tasks/common/taskService.js";
 import type { ITestingService, TestProfileProvider, TestProfileProviderRegistration } from "../../testing/common/testingService.js";
+import type { IOutputChannel, IOutputService, OutputEntrySeverity } from "../../output/common/outputService.js";
 import { EmptyExtensionHostSnapshot, type ExtensionHostExtension, type ExtensionHostFailure, type ExtensionHostRegistration as WorkbenchExtensionHostRegistration, type ExtensionHostSnapshot, type ExtensionHostState, type IExtensionHostService } from "../common/extensionHostService.js";
 import { createExtensionHostLanguageProviderBatch, extensionHostLanguageProviderId, unsupportedExtensionHostLanguageOperations, type ExtensionHostProviderInvoker } from "./extensionHostLanguageBridge.js";
 import { createExtensionHostTaskProvider, createExtensionHostTestProfileProvider, extensionHostCanonicalTaskId, extensionHostWorkflowProviderId } from "./extensionHostWorkflowBridge.js";
@@ -18,6 +19,7 @@ export interface AppServerExtensionHostServiceOptions {
   readonly tasks: ITaskService;
   readonly testing: ITestingService;
   readonly commands?: CommandRegistry;
+  readonly output?: IOutputService;
   readonly invocationTimeoutMillis?: number;
 }
 
@@ -38,6 +40,26 @@ interface ContributionSet {
   readonly controller: AbortController;
 }
 
+interface ExtensionOutputCursor {
+  readonly incarnation: number | undefined;
+  readonly lifecycle: ExtensionHostRuntime["lifecycle"];
+  readonly stderrLength: number;
+  readonly failureKey: string;
+}
+
+interface ExtensionNamedOutputCursor {
+  readonly activationGeneration: number;
+  readonly sequence: number;
+}
+
+interface ExtensionNamedOutputChannel {
+  readonly extensionId: string;
+  readonly channelId: string;
+  readonly label: string;
+  readonly kind: "output" | "log";
+  readonly channel: IOutputChannel;
+}
+
 /** Owns one coherent frontend projection of the App Server Extension Host fleet. */
 export class AppServerExtensionHostService extends DisposableOwner implements IExtensionHostService {
   private readonly stateEmitter = this.own(new Emitter<ExtensionHostState>());
@@ -49,6 +71,11 @@ export class AppServerExtensionHostService extends DisposableOwner implements IE
   private readonly testRegistration: TestProfileProviderRegistration;
   private readonly commands: CommandRegistry;
   private readonly invocationTimeoutMillis: number;
+  private readonly fleetOutput: IOutputChannel | undefined;
+  private readonly extensionOutputs = new Map<string, IOutputChannel>();
+  private readonly outputCursors = new Map<string, ExtensionOutputCursor>();
+  private readonly namedOutputChannels = new Map<string, ExtensionNamedOutputChannel>();
+  private readonly namedOutputCursors = new Map<string, ExtensionNamedOutputCursor>();
   private _state: ExtensionHostState = "stopped";
   private snapshot: ExtensionHostSnapshot = EmptyExtensionHostSnapshot;
   private activeContributions: ContributionSet | undefined;
@@ -69,6 +96,7 @@ export class AppServerExtensionHostService extends DisposableOwner implements IE
     super();
     this.commands = options.commands ?? CommandsRegistry;
     this.invocationTimeoutMillis = normalizeTimeout(options.invocationTimeoutMillis ?? 30_000);
+    this.fleetOutput = options.output ? this.own(options.output.createChannel({ id: "extension-host", label: "Extension Host", kind: "log", source: "core" })) : undefined;
     this.commandRegistration = this.own(this.commands.registerMany([]));
     this.languageRegistration = this.own(options.languageFeatures.registerProviderBatch({}));
     this.taskRegistration = this.own(options.tasks.registerTaskProviders([]));
@@ -205,6 +233,7 @@ export class AppServerExtensionHostService extends DisposableOwner implements IE
   }
 
   private acceptSnapshot(snapshot: ExtensionHostFleetSnapshot): void {
+    this.projectOutput(snapshot);
     const contributions = this.buildContributions(snapshot);
     const projected = projectSnapshot(snapshot);
     try {
@@ -352,12 +381,94 @@ export class AppServerExtensionHostService extends DisposableOwner implements IE
   private setState(state: ExtensionHostState): void {
     if (this._state === state) return;
     this._state = state;
+    this.fleetOutput?.appendLine({ severity: fleetStateSeverity(state), category: "lifecycle", text: `Extension Host fleet is ${state}.` });
     this.stateEmitter.fire(state);
+  }
+
+  private projectOutput(snapshot: ExtensionHostFleetSnapshot): void {
+    if (!this.options.output) return;
+    const activeExtensions = new Set(snapshot.extensions.map(runtime => runtime.id));
+    for (const extensionId of this.namedOutputCursors.keys()) {
+      if (!activeExtensions.has(extensionId)) this.disposeNamedOutputChannels(extensionId);
+    }
+    for (const runtime of snapshot.extensions) {
+      const channel = this.extensionOutput(runtime.id);
+      const previous = this.outputCursors.get(runtime.id);
+      if (!previous || previous.incarnation !== runtime.incarnation || previous.lifecycle !== runtime.lifecycle) {
+        channel.appendLine({ severity: runtimeLifecycleSeverity(runtime.lifecycle), category: "lifecycle", text: runtimeLifecycleMessage(runtime) });
+      }
+      const stderrStart = previous && previous.incarnation === runtime.incarnation && runtime.stderr.length >= previous.stderrLength ? previous.stderrLength : 0;
+      const stderrDelta = runtime.stderr.slice(stderrStart);
+      if (stderrDelta) channel.append({ severity: "log", category: "stderr", text: stderrDelta });
+      const failureKey = runtime.failure ? `${runtime.failure.code}\0${runtime.failure.incarnation ?? ""}\0${runtime.failure.message}` : "";
+      if (runtime.failure && failureKey !== previous?.failureKey) channel.appendLine({ severity: "error", category: "lifecycle", text: `${runtime.failure.code}: ${runtime.failure.message}` });
+      this.outputCursors.set(runtime.id, { incarnation: runtime.incarnation, lifecycle: runtime.lifecycle, stderrLength: runtime.stderr.length, failureKey });
+      this.projectNamedOutput(runtime);
+    }
+  }
+
+  private projectNamedOutput(runtime: ExtensionHostRuntime): void {
+    const previous = this.namedOutputCursors.get(runtime.id);
+    const reset = previous !== undefined && previous.activationGeneration !== runtime.activationGeneration;
+    if (reset) this.disposeNamedOutputChannels(runtime.id);
+    const initial = previous === undefined || reset;
+    let sequence = reset ? 0 : previous?.sequence ?? 0;
+    for (const event of runtime.outputEvents) {
+      if (event.activationGeneration !== runtime.activationGeneration || event.sequence <= sequence) continue;
+      sequence = event.sequence;
+      const operation = event.operation;
+      const key = namedOutputKey(runtime.id, operation.channelId);
+      if (operation.operation === "create") {
+        const existing = this.namedOutputChannels.get(key);
+        if (existing && existing.label === operation.label && existing.kind === operation.kind) continue;
+        existing?.channel.dispose();
+        const channel = this.own(this.options.output!.createChannel({ id: `extension.${encodeURIComponent(runtime.id)}.${encodeURIComponent(operation.channelId)}`, label: operation.label, kind: operation.kind, source: "extension", extensionId: runtime.id }));
+        this.namedOutputChannels.set(key, { extensionId: runtime.id, channelId: operation.channelId, label: operation.label, kind: operation.kind, channel });
+        continue;
+      }
+      const channel = this.namedOutputChannels.get(key)?.channel;
+      if (!channel) {
+        this.fleetOutput?.appendLine({ severity: "warning", category: "output", text: `${runtime.id} emitted '${operation.operation}' for unknown Output channel '${operation.channelId}'.` });
+        continue;
+      }
+      if (operation.operation === "append") channel.append({ text: operation.text, severity: operation.severity, category: operation.category });
+      else if (operation.operation === "replace") channel.replace({ text: operation.text, severity: operation.severity, category: operation.category });
+      else if (operation.operation === "clear") channel.clear();
+      else if (operation.operation === "show") {
+        if (!initial) channel.show({ focus: operation.preserveFocus ? "preserve" : "take" });
+      } else {
+        channel.dispose();
+        this.namedOutputChannels.delete(key);
+      }
+    }
+    this.namedOutputCursors.set(runtime.id, { activationGeneration: runtime.activationGeneration, sequence });
+  }
+
+  private disposeNamedOutputChannels(extensionId: string): void {
+    for (const [key, value] of this.namedOutputChannels) {
+      if (value.extensionId !== extensionId) continue;
+      value.channel.dispose();
+      this.namedOutputChannels.delete(key);
+    }
+    this.namedOutputCursors.delete(extensionId);
+  }
+
+  private extensionOutput(extensionId: string): IOutputChannel {
+    const existing = this.extensionOutputs.get(extensionId);
+    if (existing) return existing;
+    if (!this.options.output) throw new Error("Extension Host Output service is unavailable");
+    const channel = this.own(this.options.output.createChannel({ id: `extension-host.${encodeURIComponent(extensionId)}`, label: `${extensionId} (Extension Host)`, kind: "log", source: "extension", extensionId }));
+    this.extensionOutputs.set(extensionId, channel);
+    return channel;
   }
 
   private ensureAlive(): void {
     if (this.disposed) throw new ReferenceError("AppServerExtensionHostService is already disposed");
   }
+}
+
+function namedOutputKey(extensionId: string, channelId: string): string {
+  return `${extensionId}\0${channelId}`;
 }
 
 function projectSnapshot(snapshot: ExtensionHostFleetSnapshot): ExtensionHostSnapshot {
@@ -372,9 +483,27 @@ function projectSnapshot(snapshot: ExtensionHostFleetSnapshot): ExtensionHostSna
       incarnation: runtime.incarnation,
       state: runtime.lifecycle,
       failure: runtime.failure,
+      stderr: runtime.stderr,
       registrations: Object.freeze(runtime.registrations.map((registration): WorkbenchExtensionHostRegistration => Object.freeze({ id: registration.registrationId, kind: registration.kind === "testProfileProvider" ? "testProfileProvider" : registration.kind }))),
     }))),
   });
+}
+
+function fleetStateSeverity(state: ExtensionHostState): OutputEntrySeverity {
+  if (state === "failed") return "error";
+  if (state === "degraded") return "warning";
+  return state === "ready" ? "information" : "log";
+}
+
+function runtimeLifecycleSeverity(state: ExtensionHostRuntime["lifecycle"]): OutputEntrySeverity {
+  if (state === "failed" || state === "crashLoop") return "error";
+  if (state === "recovering") return "warning";
+  return state === "ready" ? "information" : "log";
+}
+
+function runtimeLifecycleMessage(runtime: ExtensionHostRuntime): string {
+  const incarnation = runtime.incarnation === undefined ? "" : ` (incarnation ${runtime.incarnation})`;
+  return `Extension Host ${runtime.lifecycle}${incarnation}.`;
 }
 
 function projectState(snapshot: ExtensionHostFleetSnapshot, bridgeIssues: boolean): ExtensionHostState {

@@ -49,8 +49,97 @@ pub struct ExtensionHostExtensionDto {
     pub incarnation: Option<u64>,
     pub lifecycle: ExtensionHostLifecycleDto,
     pub failure: Option<ExtensionHostFailureDto>,
+    #[schemars(length(max = 262_144))]
+    pub stderr: String,
+    #[schemars(length(max = 4096))]
+    pub output_events: Vec<ExtensionHostOutputEventDto>,
     #[schemars(length(max = 2048))]
     pub registrations: Vec<ExtensionHostRegistrationDescriptorDto>,
+}
+
+/// One process-fenced extension Output mutation in supervisor arrival order.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExtensionHostOutputEventDto {
+    #[schemars(range(min = 1))]
+    #[ts(type = "number")]
+    pub sequence: u64,
+    #[schemars(range(min = 1))]
+    #[ts(type = "number")]
+    pub incarnation: u64,
+    #[schemars(range(min = 1))]
+    #[ts(type = "number")]
+    pub activation_generation: u64,
+    #[serde(flatten)]
+    pub operation: ExtensionHostOutputOperationDto,
+}
+
+/// Presentation class of an extension-created Output channel.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum ExtensionHostOutputChannelKindDto {
+    Output,
+    Log,
+}
+
+/// Structured severity of an extension Output entry.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum ExtensionHostOutputSeverityDto {
+    Trace,
+    Debug,
+    Information,
+    Warning,
+    Error,
+    Log,
+}
+
+/// Ordered operation in an extension-created Output channel stream.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    tag = "operation"
+)]
+pub enum ExtensionHostOutputOperationDto {
+    Create {
+        #[schemars(length(min = 1, max = 256))]
+        channel_id: String,
+        #[schemars(length(min = 1, max = 512))]
+        label: String,
+        kind: ExtensionHostOutputChannelKindDto,
+    },
+    Append {
+        #[schemars(length(min = 1, max = 256))]
+        channel_id: String,
+        #[schemars(length(max = 524_288))]
+        text: String,
+        severity: ExtensionHostOutputSeverityDto,
+        #[schemars(length(min = 1, max = 128))]
+        category: Option<String>,
+    },
+    Replace {
+        #[schemars(length(min = 1, max = 256))]
+        channel_id: String,
+        #[schemars(length(max = 524_288))]
+        text: String,
+        severity: ExtensionHostOutputSeverityDto,
+        #[schemars(length(min = 1, max = 128))]
+        category: Option<String>,
+    },
+    Clear {
+        #[schemars(length(min = 1, max = 256))]
+        channel_id: String,
+    },
+    Show {
+        #[schemars(length(min = 1, max = 256))]
+        channel_id: String,
+        preserve_focus: bool,
+    },
+    Dispose {
+        #[schemars(length(min = 1, max = 256))]
+        channel_id: String,
+    },
 }
 
 /// Observable state of one per-extension process supervised by App Server.

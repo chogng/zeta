@@ -361,3 +361,10 @@ function installDomGlobals(browser: JSDOM): readonly string[] {
   }
   return Object.keys(globals);
 }
+test("SCM presents Restricted Mode Git unavailability without raw RPC errors", async () => {
+  const { gitErrorMessage } = await import("../../../../../workbench/contrib/scm/browser/scmError.js");
+  assert.equal(
+    gitErrorMessage(new Error("Error invoking remote method 'zeta:git:status': JsonRpcRemoteError: GitUnavailable")),
+    "Git is unavailable for this folder. Trust the folder to enable Source Control, or continue in Restricted Mode.",
+  );
+});

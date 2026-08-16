@@ -7,12 +7,25 @@ export type ExtensionHostRuntimeLifecycle = "stopped" | "starting" | "handshakin
 export type ExtensionHostFailureCode = "authorityDenied" | "staleSnapshot" | "isolationUnavailable" | "launchFailed" | "handshakeFailed" | "activationFailed" | "registrationNotFound" | "operationNotSupported" | "cancelled" | "deadlineExceeded" | "quotaExceeded" | "hostExited" | "hostRestarted" | "outcomeIndeterminate" | "crashLoop" | "invalidProtocol" | "internal";
 export type ExtensionHostLanguageProviderOperation = "completion" | "definition" | "hover" | "references" | "rename" | "formatting" | "codeAction" | "codeLens" | "documentSymbols" | "foldingRanges" | "documentLinks" | "documentColors" | "semanticTokens" | "inlayHints" | "linkedEditing" | "parameterHints";
 export type ExtensionHostCancellationReason = "caller" | "deadline" | "authorityRevoked" | "shutdown";
+export type ExtensionHostOutputSeverity = "trace" | "debug" | "information" | "warning" | "error" | "log";
+export type ExtensionHostOutputOperation =
+  | { readonly operation: "create"; readonly channelId: string; readonly label: string; readonly kind: "output" | "log" }
+  | { readonly operation: "append" | "replace"; readonly channelId: string; readonly text: string; readonly severity: ExtensionHostOutputSeverity; readonly category: string | undefined }
+  | { readonly operation: "clear" | "dispose"; readonly channelId: string }
+  | { readonly operation: "show"; readonly channelId: string; readonly preserveFocus: boolean };
 export type JsonValue = null | boolean | number | string | readonly JsonValue[] | { readonly [key: string]: JsonValue };
 
 export interface ExtensionHostRuntimeFailure {
   readonly code: ExtensionHostFailureCode;
   readonly message: string;
   readonly incarnation: number | undefined;
+}
+
+export interface ExtensionHostOutputEvent {
+  readonly sequence: number;
+  readonly incarnation: number;
+  readonly activationGeneration: number;
+  readonly operation: ExtensionHostOutputOperation;
 }
 
 interface ExtensionHostRegistrationBase {
@@ -58,6 +71,8 @@ export interface ExtensionHostRuntime {
   readonly incarnation: number | undefined;
   readonly lifecycle: ExtensionHostRuntimeLifecycle;
   readonly failure: ExtensionHostRuntimeFailure | undefined;
+  readonly stderr: string;
+  readonly outputEvents: readonly ExtensionHostOutputEvent[];
   readonly registrations: readonly ExtensionHostRegistration[];
 }
 
@@ -110,7 +125,9 @@ const FAILURE_CODES = ["authorityDenied", "staleSnapshot", "isolationUnavailable
 const LIFECYCLES = ["stopped", "starting", "handshaking", "ready", "recovering", "crashLoop", "failed"] as const;
 const LANGUAGE_OPERATIONS = ["completion", "definition", "hover", "references", "rename", "formatting", "codeAction", "codeLens", "documentSymbols", "foldingRanges", "documentLinks", "documentColors", "semanticTokens", "inlayHints", "linkedEditing", "parameterHints"] as const;
 const CANCELLATION_REASONS = ["caller", "deadline", "authorityRevoked", "shutdown"] as const;
+const OUTPUT_SEVERITIES = ["trace", "debug", "information", "warning", "error", "log"] as const;
 const MAX_PAYLOAD_BYTES = 512 * 1024;
+const MAX_OUTPUT_EVENT_BYTES = 1024 * 1024;
 const MAX_PAYLOAD_NODES = 65_536;
 const MAX_PAYLOAD_DEPTH = 64;
 
@@ -180,9 +197,12 @@ export async function invokeExtensionHost(transport: ExtensionHostInvokeTranspor
 }
 
 function normalizeRuntime(value: unknown): ExtensionHostRuntime {
-  const runtime = exactRecord(value, "Extension Host runtime", ["activationGeneration", "failure", "id", "incarnation", "lifecycle", "packageDigest", "registrations", "runtimeApiVersion", "version"]);
+  const runtime = exactRecord(value, "Extension Host runtime", ["activationGeneration", "failure", "id", "incarnation", "lifecycle", "outputEvents", "packageDigest", "registrations", "runtimeApiVersion", "stderr", "version"]);
   const registrations = boundedArray(runtime.registrations, "Extension Host registrations", 2048).map(normalizeRegistration);
+  const outputEvents = boundedArray(runtime.outputEvents, "Extension Host Output events", 4096).map(normalizeOutputEvent);
+  if (utf8Length(JSON.stringify(outputEvents)) > MAX_OUTPUT_EVENT_BYTES) throw new RangeError("Extension Host Output event history is too large");
   assertUnique(registrations.map(registration => registration.registrationId), "Extension Host registration IDs");
+  assertStrictlyIncreasing(outputEvents.map(event => event.sequence), "Extension Host Output event sequences");
   const lifecycle = stringEnum(runtime.lifecycle, "Extension Host lifecycle", LIFECYCLES);
   const incarnation = optionalPositiveSafeInteger(runtime.incarnation, "Extension Host incarnation");
   if (lifecycle === "ready" && incarnation === undefined) throw new TypeError("Ready Extension Host runtime must have an incarnation");
@@ -195,8 +215,44 @@ function normalizeRuntime(value: unknown): ExtensionHostRuntime {
     incarnation,
     lifecycle,
     failure: runtime.failure === null ? undefined : normalizeFailure(runtime.failure),
+    stderr: boundedOptionalText(runtime.stderr, "Extension Host stderr", 262_144),
+    outputEvents: Object.freeze(outputEvents),
     registrations: Object.freeze(registrations),
   });
+}
+
+function normalizeOutputEvent(value: unknown): ExtensionHostOutputEvent {
+  const input = record(value, "Extension Host Output event");
+  const operation = input.operation;
+  const sequence = positiveSafeInteger(input.sequence, "Extension Host Output event sequence");
+  const incarnation = positiveSafeInteger(input.incarnation, "Extension Host Output event incarnation");
+  const activationGeneration = positiveSafeInteger(input.activationGeneration, "Extension Host Output event activation generation");
+  const channelId = outputChannelId(input.channelId);
+  if (operation === "create") {
+    exactKeys(input, "Extension Host Output create event", ["activationGeneration", "channelId", "incarnation", "kind", "label", "operation", "sequence"]);
+    return Object.freeze({ sequence, incarnation, activationGeneration, operation: Object.freeze({ operation, channelId, label: boundedText(input.label, "Extension Host Output channel label", 512), kind: stringEnum(input.kind, "Extension Host Output channel kind", ["output", "log"] as const) }) });
+  }
+  if (operation === "append" || operation === "replace") {
+    exactKeys(input, `Extension Host Output ${operation} event`, ["activationGeneration", "category", "channelId", "incarnation", "operation", "sequence", "severity", "text"]);
+    const category = input.category === null ? undefined : boundedText(input.category, "Extension Host Output category", 128);
+    return Object.freeze({ sequence, incarnation, activationGeneration, operation: Object.freeze({ operation, channelId, text: boundedOptionalText(input.text, "Extension Host Output text", 524_288), severity: stringEnum(input.severity, "Extension Host Output severity", OUTPUT_SEVERITIES), category }) });
+  }
+  if (operation === "clear" || operation === "dispose") {
+    exactKeys(input, `Extension Host Output ${operation} event`, ["activationGeneration", "channelId", "incarnation", "operation", "sequence"]);
+    return Object.freeze({ sequence, incarnation, activationGeneration, operation: Object.freeze({ operation, channelId }) });
+  }
+  if (operation === "show") {
+    exactKeys(input, "Extension Host Output show event", ["activationGeneration", "channelId", "incarnation", "operation", "preserveFocus", "sequence"]);
+    if (typeof input.preserveFocus !== "boolean") throw new TypeError("Extension Host Output preserve-focus flag is invalid");
+    return Object.freeze({ sequence, incarnation, activationGeneration, operation: Object.freeze({ operation, channelId, preserveFocus: input.preserveFocus }) });
+  }
+  throw new TypeError("Extension Host Output operation is invalid");
+}
+
+function boundedOptionalText(value: unknown, owner: string, maximumLength: number): string {
+  if (typeof value !== "string") throw new TypeError(`${owner} must be a string`);
+  if (value.length > maximumLength || value.includes("\0")) throw new RangeError(`${owner} is invalid`);
+  return value;
 }
 
 function normalizeFailure(value: unknown): ExtensionHostRuntimeFailure {
@@ -384,6 +440,16 @@ function stringEnum<const T extends readonly string[]>(value: unknown, owner: st
 
 function assertUnique(values: readonly string[], owner: string): void {
   if (new Set(values).size !== values.length) throw new TypeError(`${owner} must be unique`);
+}
+
+function assertStrictlyIncreasing(values: readonly number[], owner: string): void {
+  if (values.some((value, index) => index > 0 && value <= values[index - 1]!)) throw new TypeError(`${owner} must be strictly increasing`);
+}
+
+function outputChannelId(value: unknown): string {
+  const result = boundedText(value, "Extension Host Output channel ID", 256);
+  if (/\s/u.test(result)) throw new TypeError("Extension Host Output channel ID is invalid");
+  return result;
 }
 
 function utf8Length(value: string): number {

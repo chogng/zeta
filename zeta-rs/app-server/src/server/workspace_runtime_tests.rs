@@ -195,12 +195,139 @@ fn workspace_switch_rpc_requires_a_local_workspace_host() {
         "jsonrpc": "2.0",
         "id": 2,
         "method": "workspace/switch",
-        "params": {"root": std::env::current_dir().unwrap()}
+        "params": {
+            "root": std::env::current_dir().unwrap(),
+            "trust": {"type": "userConfig"}
+        }
     });
     let response: serde_json::Value =
         serde_json::from_str(&server.handle_json(&mut connection, &request.to_string())).unwrap();
 
     assert_eq!(response["error"]["message"], "WorkspaceSwitchUnavailable");
+}
+
+#[test]
+fn workspace_switch_rpc_requires_host_capability_for_session_trust() {
+    let workspace = TestWorkspace::new("rpc-session-trust", "readable.txt");
+    let config = Arc::new(ConfigStore::open(workspace.path.join("trust.sqlite3")).unwrap());
+    let server = server()
+        .with_config_store(Arc::clone(&config))
+        .with_local_workspace_host(
+            None,
+            WorkspaceSwitchTrustPolicy::UserConfig(Arc::clone(&config)),
+        )
+        .unwrap();
+    let mut connection = server.connection();
+    server.handle_json(
+        &mut connection,
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "clientInfo": {"name": "test", "version": "1"},
+                "capabilities": {}
+            }
+        })
+        .to_string(),
+    );
+
+    let response: serde_json::Value = serde_json::from_str(
+        &server.handle_json(
+            &mut connection,
+            &serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "workspace/switch",
+                "params": {
+                    "root": workspace.path,
+                    "trust": {"type": "hostSession"}
+                }
+            })
+            .to_string(),
+        ),
+    )
+    .unwrap();
+
+    assert_eq!(response["error"]["message"], "WorkspaceTrustRequired");
+    assert!(server.terminal_service().is_err());
+}
+
+#[test]
+fn workspace_switch_rpc_persists_host_collected_user_trust() {
+    let workspace = TestWorkspace::new("rpc-user-trust", "readable.txt");
+    let root = workspace.root();
+    let config_storage = tempfile::tempdir().unwrap();
+    let config = Arc::new(ConfigStore::open(config_storage.path().join("trust.sqlite3")).unwrap());
+    let server = server()
+        .with_config_store(Arc::clone(&config))
+        .with_local_workspace_host(
+            None,
+            WorkspaceSwitchTrustPolicy::UserConfig(Arc::clone(&config)),
+        )
+        .unwrap();
+    let mut connection = server.connection();
+    server.handle_json(
+        &mut connection,
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "clientInfo": {"name": "desktop", "version": "1"},
+                "capabilities": {"workspaceTrustHost": {"version": 1}}
+            }
+        })
+        .to_string(),
+    );
+
+    let response: serde_json::Value = serde_json::from_str(
+        &server.handle_json(
+            &mut connection,
+            &serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "workspace/switch",
+                "params": {
+                    "root": workspace.path,
+                    "trust": {
+                        "type": "userDecision",
+                        "commandId": "desktop-trust-workspace",
+                        "expectedRevision": 0,
+                        "setting": "trusted"
+                    }
+                }
+            })
+            .to_string(),
+        ),
+    )
+    .unwrap();
+
+    assert_eq!(response["result"]["trust"], "trusted", "{response:#}");
+    assert_eq!(
+        config
+            .read_snapshot()
+            .unwrap()
+            .values
+            .workspace_trust
+            .decision_for(&root.trust_id()),
+        WorkspaceTrustDecision::Trusted(WorkspaceTrustSource::ExplicitUserDecision)
+    );
+    let read: serde_json::Value = serde_json::from_str(
+        &server.handle_json(
+            &mut connection,
+            &serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 3,
+                "method": "workspace/trust/read",
+                "params": {"root": workspace.path}
+            })
+            .to_string(),
+        ),
+    )
+    .unwrap();
+    assert_eq!(read["result"]["setting"], "trusted");
+    assert!(server.terminal_service().is_ok());
 }
 
 #[test]

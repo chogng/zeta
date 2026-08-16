@@ -787,12 +787,22 @@ pub enum LanguageServerMessageSeverityDto {
     Log,
 }
 
+/// Origin retained for filtering language-server output.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum LanguageServerMessageSourceDto {
+    Protocol,
+    Stderr,
+    Service,
+}
+
 /// One language-server log or user-visible message.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct LanguageServerMessageNotification {
     pub server: String,
     pub severity: LanguageServerMessageSeverityDto,
+    pub source: LanguageServerMessageSourceDto,
     pub show: bool,
     pub message: String,
 }
@@ -807,6 +817,37 @@ pub struct LanguageServerProgressNotification {
     pub message: Option<String>,
     pub percentage: Option<u32>,
     pub done: bool,
+}
+
+/// Product-visible lifecycle state of one configured language server.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", tag = "type")]
+pub enum LanguageServerStateDto {
+    Starting,
+    Ready,
+    BackingOff {
+        attempt: u32,
+        #[serde(rename = "retryAfterMillis")]
+        #[ts(type = "number")]
+        retry_after_millis: u64,
+    },
+    CrashLoop {
+        #[serde(rename = "restartAttempts")]
+        restart_attempts: u32,
+        message: String,
+    },
+    Failed {
+        message: String,
+    },
+    Stopped,
+}
+
+/// One authoritative language-server lifecycle transition.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageServerStateNotification {
+    pub server: String,
+    pub state: LanguageServerStateDto,
 }
 
 /// Code-action request against one exact source snapshot and selection.

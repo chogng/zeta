@@ -19,6 +19,7 @@ use zeta_file_watcher::WatchPath;
 use zeta_workspace::WorkspaceRoot;
 
 const FILE_SYSTEM_WATCH_DEBOUNCE: Duration = Duration::from_millis(75);
+const FILE_SYSTEM_WATCH_STARTUP_TIMEOUT: Duration = Duration::from_secs(15);
 const ALIASED_PATH_POLL_INTERVAL: Duration = Duration::from_millis(100);
 
 /// Receives projected Workspace filesystem invalidations before client publication.
@@ -204,7 +205,7 @@ impl FileSystemWatcher {
             .name("zeta-file-system-watcher".into())
             .spawn(move || watch_workspace(workspace, updates, observers, shutdown_rx, startup))
             .map_err(|error| FileSystemWatcherError(error.to_string()))?;
-        match startup_rx.recv_timeout(Duration::from_secs(5)) {
+        match startup_rx.recv_timeout(FILE_SYSTEM_WATCH_STARTUP_TIMEOUT) {
             Ok(Ok(())) => {}
             Ok(Err(error)) => {
                 let _ = shutdown.send(());
@@ -326,6 +327,9 @@ fn watch_workspace(
                 return;
             }
         };
+        if startup.send(Ok(())).is_err() {
+            return;
+        }
         if let Some(changes) = &changes {
             changes.files_changed(&FsChanged::RescanRequired);
         }
@@ -333,9 +337,6 @@ fn watch_workspace(
             code_index_worker.schedule(FileWatcherEvent::RescanRequired {
                 watched_paths: vec![workspace.canonical_path().to_path_buf()],
             });
-        }
-        if startup.send(Ok(())).is_err() {
-            return;
         }
         let mut receiver = DebouncedWatchReceiver::new(receiver, FILE_SYSTEM_WATCH_DEBOUNCE);
         loop {

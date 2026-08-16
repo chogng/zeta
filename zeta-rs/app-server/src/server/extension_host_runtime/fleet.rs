@@ -107,6 +107,8 @@ impl RuntimeInner {
             incarnation: None,
             lifecycle: projection::ExtensionHostLifecycle::Failed,
             failure: None,
+            stderr: String::new(),
+            output_events: Vec::new(),
             registrations: Vec::new(),
         };
         let prepared = prepare_extension(workspace, deployment, generation);

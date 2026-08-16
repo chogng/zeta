@@ -20,6 +20,7 @@ test("Extension Host registrations belong to one isolated extension process", ()
     incarnation: 3,
     state: "ready",
     failure: undefined,
+    stderr: "",
     registrations: Object.freeze([{ id: "demo.command", kind: "command" as const }]),
   });
   const snapshot: ExtensionHostSnapshot = Object.freeze({ fleetGeneration: 4, extensions: Object.freeze([extension]) });
@@ -43,6 +44,7 @@ test("Extension Host domain keeps stopped runtimes and authority failure codes",
     incarnation: undefined,
     state: "stopped",
     failure: Object.freeze({ code: "runtime.not_started", incarnation: undefined, message: "Not started" }),
+    stderr: "",
     registrations: Object.freeze([]),
   });
 

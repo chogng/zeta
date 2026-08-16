@@ -65,6 +65,7 @@ use crate::protocol::collaboration::DocumentCollaborationSubmitParams;
 use crate::protocol::collaboration::DocumentCollaborationSubmitResult;
 use crate::protocol::collaboration::DocumentCollaborationUpdate;
 use crate::protocol::common::AgentInteractionCapability;
+use crate::protocol::common::WorkspaceTrustHostCapability;
 use crate::protocol::common::{
     BrowserCapability, ClientCapabilities, ClientInfo, CommandId, EmptyParams, ItemId, RequestId,
     SchemaHash, ServerInfo, SessionId, StreamInstanceId, ThreadId, ToolCallId, ToolName, TurnId,
@@ -151,6 +152,10 @@ use crate::protocol::extension_host::ExtensionHostInvokeStartParams;
 use crate::protocol::extension_host::ExtensionHostInvokeStartResult;
 use crate::protocol::extension_host::ExtensionHostLanguageProviderOperationDto;
 use crate::protocol::extension_host::ExtensionHostLifecycleDto;
+use crate::protocol::extension_host::ExtensionHostOutputChannelKindDto;
+use crate::protocol::extension_host::ExtensionHostOutputEventDto;
+use crate::protocol::extension_host::ExtensionHostOutputOperationDto;
+use crate::protocol::extension_host::ExtensionHostOutputSeverityDto;
 use crate::protocol::extension_host::ExtensionHostReconcileModeDto;
 use crate::protocol::extension_host::ExtensionHostReconcileParams;
 use crate::protocol::extension_host::ExtensionHostRegistrationDescriptorDto;
@@ -205,7 +210,8 @@ use crate::protocol::language::{
     LanguageResolveCodeLensParams, LanguageResolveCompletionParams,
     LanguageResolveDocumentLinkParams, LanguageSemanticTokenDto, LanguageSemanticTokensParams,
     LanguageSemanticTokensResult, LanguageServerMessageNotification,
-    LanguageServerMessageSeverityDto, LanguageServerProgressNotification,
+    LanguageServerMessageSeverityDto, LanguageServerMessageSourceDto,
+    LanguageServerProgressNotification, LanguageServerStateDto, LanguageServerStateNotification,
     LanguageSignatureHelpParams, LanguageSignatureHelpResult, LanguageSignatureHelpTriggerKindDto,
     LanguageSignatureInformationDto, LanguageSynchronizeParams, LanguageTextDocumentEditDto,
     LanguageTextEditDto, LanguageWorkspaceDiagnosticSnapshotDto,
@@ -339,7 +345,13 @@ use crate::protocol::terminal::TerminalWriteParams;
 use crate::protocol::turn::{
     InputItem, TurnInteractionResolveResult, TurnInterruptResult, TurnStartResult,
 };
-use crate::protocol::workspace::{WorkspaceSwitchParams, WorkspaceSwitchResult};
+use crate::protocol::workspace::WorkspaceSwitchParams;
+use crate::protocol::workspace::WorkspaceSwitchResult;
+use crate::protocol::workspace::WorkspaceSwitchTrust;
+use crate::protocol::workspace::WorkspaceTrustReadParams;
+use crate::protocol::workspace::WorkspaceTrustReadResult;
+use crate::protocol::workspace::WorkspaceTrustSettingDto;
+use crate::protocol::workspace::WorkspaceTrustStateDto;
 use schemars::JsonSchema;
 use ts_rs::{Config, TS};
 use zeta_protocol::AgentRequestEnvelope;
@@ -372,6 +384,34 @@ use zeta_protocol::{
     TurnInteraction, TurnStatus, UserInputAnswer, UserInputOption, UserInputQuestion,
 };
 
+/// Selects whether equal scheduling keys exclude or share execution.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SerializationAccess {
+    /// Runs alone for its scheduling key.
+    Exclusive,
+    /// May run with adjacent readers for its scheduling key.
+    SharedRead,
+}
+
+/// Runtime serialization scope resolved from one typed client-method definition.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ClientRequestSerializationScope {
+    /// Coordinates App Server-wide state.
+    Global { access: SerializationAccess },
+    /// Coordinates one durable Session aggregate across connections.
+    Session {
+        session_id: String,
+        access: SerializationAccess,
+    },
+    /// Coordinates one resource namespace owned by the accepting connection.
+    ConnectionResource {
+        namespace: &'static str,
+        resource_id: String,
+        access: SerializationAccess,
+    },
+}
+
+/// Static serialization declaration stored beside a client method's protocol types.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SerializationScopeDefinition {
     None,
@@ -379,7 +419,8 @@ pub enum SerializationScopeDefinition {
     GlobalSharedRead,
     SessionExclusive,
     SessionSharedRead,
-    ResourceExclusive,
+    ResourceExclusive(&'static str),
+    ConnectionExclusive(&'static str),
 }
 
 #[derive(Clone, Copy)]
@@ -399,6 +440,83 @@ impl ClientMethodDefinition {
     pub fn result_type(&self) -> String {
         (self.result_type)()
     }
+
+    /// Resolves this method's scheduling key from its wire parameters.
+    ///
+    /// Implementations enqueue equal keys together. Exclusive requests run FIFO, while adjacent
+    /// shared reads may run concurrently. Connection resources are additionally namespaced by the
+    /// accepting connection in the App Server runtime.
+    pub fn serialization_scope(
+        &self,
+        params: &serde_json::Value,
+    ) -> Result<Option<ClientRequestSerializationScope>, SerializationScopeResolutionError> {
+        let scope = match self.serialization {
+            SerializationScopeDefinition::None => None,
+            SerializationScopeDefinition::GlobalExclusive => {
+                Some(ClientRequestSerializationScope::Global {
+                    access: SerializationAccess::Exclusive,
+                })
+            }
+            SerializationScopeDefinition::GlobalSharedRead => {
+                Some(ClientRequestSerializationScope::Global {
+                    access: SerializationAccess::SharedRead,
+                })
+            }
+            SerializationScopeDefinition::SessionExclusive => {
+                Some(ClientRequestSerializationScope::Session {
+                    session_id: serialization_parameter(params, "sessionId")?,
+                    access: SerializationAccess::Exclusive,
+                })
+            }
+            SerializationScopeDefinition::SessionSharedRead => {
+                Some(ClientRequestSerializationScope::Session {
+                    session_id: serialization_parameter(params, "sessionId")?,
+                    access: SerializationAccess::SharedRead,
+                })
+            }
+            SerializationScopeDefinition::ResourceExclusive(parameter) => {
+                Some(ClientRequestSerializationScope::ConnectionResource {
+                    namespace: parameter,
+                    resource_id: serialization_parameter(params, parameter)?,
+                    access: SerializationAccess::Exclusive,
+                })
+            }
+            SerializationScopeDefinition::ConnectionExclusive(namespace) => {
+                Some(ClientRequestSerializationScope::ConnectionResource {
+                    namespace,
+                    resource_id: String::new(),
+                    access: SerializationAccess::Exclusive,
+                })
+            }
+        };
+        Ok(scope)
+    }
+}
+
+/// Returned when request parameters omit the key declared by their method metadata.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SerializationScopeResolutionError;
+
+impl std::fmt::Display for SerializationScopeResolutionError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("request parameters do not contain the declared serialization key")
+    }
+}
+
+impl std::error::Error for SerializationScopeResolutionError {}
+
+fn serialization_parameter(
+    params: &serde_json::Value,
+    parameter: &'static str,
+) -> Result<String, SerializationScopeResolutionError> {
+    let value = params
+        .as_object()
+        .and_then(|params| params.get(parameter))
+        .ok_or(SerializationScopeResolutionError)?;
+    if let Some(value) = value.as_str() {
+        return Ok(value.to_string());
+    }
+    serde_json::to_string(value).map_err(|_| SerializationScopeResolutionError)
 }
 
 #[derive(Clone, Copy)]
@@ -457,7 +575,7 @@ macro_rules! client_methods {
             $variant:ident => $method:literal {
                 params: $params:ty,
                 response: $response:ty,
-                serialization: $serialization:ident,
+                serialization: $serialization:ident $(($serialization_key:literal))?,
             }
         ),+ $(,)?
     ) => {
@@ -486,7 +604,7 @@ macro_rules! client_methods {
                 ClientMethodDefinition {
                     kind: ClientMethod::$variant,
                     method: $method,
-                    serialization: SerializationScopeDefinition::$serialization,
+                    serialization: SerializationScopeDefinition::$serialization$(($serialization_key))?,
                     params_type: type_name::<$params>,
                     result_type: type_name::<$response>,
                 },
@@ -525,6 +643,11 @@ client_methods! {
         params: WorkspaceSwitchParams,
         response: WorkspaceSwitchResult,
         serialization: GlobalExclusive,
+    },
+    WorkspaceTrustRead => "workspace/trust/read" {
+        params: WorkspaceTrustReadParams,
+        response: WorkspaceTrustReadResult,
+        serialization: GlobalSharedRead,
     },
     DocumentCollaborationOpen => "document/collaboration/open" {
         params: DocumentCollaborationOpenParams,
@@ -924,7 +1047,7 @@ client_methods! {
     SkillResourceOpen => "skill/resource/open" {
         params: SkillResourceOpenParams,
         response: SkillResourceOpenResult,
-        serialization: ResourceExclusive,
+        serialization: ResourceExclusive("skillId"),
     },
     ExtensionList => "extensions/list" {
         params: ExtensionListParams,
@@ -934,7 +1057,7 @@ client_methods! {
     ExtensionResourceOpen => "extensions/resource/open" {
         params: ExtensionResourceOpenParams,
         response: ExtensionResourceOpenResult,
-        serialization: ResourceExclusive,
+        serialization: ResourceExclusive("extensionId"),
     },
     ExtensionHostList => "extensionHost/list" {
         params: EmptyParams,
@@ -969,42 +1092,42 @@ client_methods! {
     ResourceMetadata => "resource/metadata" {
         params: ResourceMetadataParams,
         response: ResourceMetadataResult,
-        serialization: ResourceExclusive,
+        serialization: ResourceExclusive("resourceId"),
     },
     ResourceRead => "resource/read" {
         params: ResourceReadParams,
         response: ResourceReadResult,
-        serialization: ResourceExclusive,
+        serialization: ResourceExclusive("resourceId"),
     },
     ResourceRelease => "resource/release" {
         params: ResourceReleaseParams,
         response: (),
-        serialization: ResourceExclusive,
+        serialization: ResourceExclusive("resourceId"),
     },
     AttachmentUploadStart => "attachment/upload/start" {
         params: AttachmentUploadStartParams,
         response: AttachmentUploadStartResult,
-        serialization: ResourceExclusive,
+        serialization: ConnectionExclusive("attachmentIngress"),
     },
     AttachmentUploadWrite => "attachment/upload/write" {
         params: AttachmentUploadWriteParams,
         response: AttachmentUploadWriteResult,
-        serialization: ResourceExclusive,
+        serialization: ResourceExclusive("uploadId"),
     },
     AttachmentUploadFinish => "attachment/upload/finish" {
         params: AttachmentUploadFinishParams,
         response: AttachmentMaterializeResult,
-        serialization: ResourceExclusive,
+        serialization: ResourceExclusive("uploadId"),
     },
     AttachmentUploadCancel => "attachment/upload/cancel" {
         params: AttachmentUploadCancelParams,
         response: (),
-        serialization: ResourceExclusive,
+        serialization: ResourceExclusive("uploadId"),
     },
     AttachmentImportRemote => "attachment/importRemote" {
         params: AttachmentImportRemoteParams,
         response: AttachmentMaterializeResult,
-        serialization: ResourceExclusive,
+        serialization: ConnectionExclusive("attachmentIngress"),
     },
     FsGetMetadata => "fs/getMetadata" {
         params: FsGetMetadataParams,
@@ -1413,6 +1536,13 @@ client_methods! {
     },
 }
 
+/// Returns the canonical protocol metadata for an exact client method name.
+pub fn client_method_definition(method: &str) -> Option<&'static ClientMethodDefinition> {
+    CLIENT_METHODS
+        .iter()
+        .find(|definition| definition.method == method)
+}
+
 macro_rules! host_methods {
     (
         $(
@@ -1651,6 +1781,9 @@ server_notifications! {
     LanguageServerProgress => "language/serverProgress" {
         params: LanguageServerProgressNotification,
     },
+    LanguageServerState => "language/serverState" {
+        params: LanguageServerStateNotification,
+    },
 }
 
 macro_rules! typescript_bindings {
@@ -1777,6 +1910,7 @@ typescript_bindings! {
     ClientInfo,
     AgentInteractionCapability,
     BrowserCapability,
+    WorkspaceTrustHostCapability,
     BrowserBinaryPayload,
     BrowserCloseParams,
     BrowserCreateParams,
@@ -1918,6 +2052,10 @@ typescript_bindings! {
     ExtensionHostSnapshotDto,
     ExtensionHostExtensionDto,
     ExtensionHostLifecycleDto,
+    ExtensionHostOutputEventDto,
+    ExtensionHostOutputOperationDto,
+    ExtensionHostOutputChannelKindDto,
+    ExtensionHostOutputSeverityDto,
     ExtensionHostFailureCodeDto,
     ExtensionHostFailureDto,
     ExtensionHostRegistrationDescriptorDto,
@@ -1939,6 +2077,11 @@ typescript_bindings! {
     InitializeResult,
     WorkspaceSwitchParams,
     WorkspaceSwitchResult,
+    WorkspaceSwitchTrust,
+    WorkspaceTrustReadParams,
+    WorkspaceTrustReadResult,
+    WorkspaceTrustSettingDto,
+    WorkspaceTrustStateDto,
     SessionStatus,
     ThreadOrigin,
     SessionThreadStatus,
@@ -2160,8 +2303,11 @@ typescript_bindings! {
     LanguageCodeActionDiagnosticDto,
     LanguageDiagnosticsNotification,
     LanguageServerMessageSeverityDto,
+    LanguageServerMessageSourceDto,
     LanguageServerMessageNotification,
     LanguageServerProgressNotification,
+    LanguageServerStateDto,
+    LanguageServerStateNotification,
     LanguageCodeActionsParams,
     LanguageCodeActionDto,
     LanguageCodeActionsResult,
@@ -2261,3 +2407,7 @@ typescript_bindings! {
     AppServerErrorName,
     AppServerError,
 }
+
+#[cfg(test)]
+#[path = "registry_tests.rs"]
+mod tests;

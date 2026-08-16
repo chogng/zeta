@@ -99,6 +99,7 @@ export interface IDebugSession extends IDisposable {
   readonly state: DebugSessionState;
   readonly reason?: string;
   readonly threadId?: number;
+  readonly output: string;
   readonly onDidChangeState: Event<DebugSessionState>;
   readonly onDidOutput: Event<string>;
   continue(): Promise<void>;

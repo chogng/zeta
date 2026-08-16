@@ -12,10 +12,10 @@ import {
 } from "../../../../platform/app-server/electron-main/child-process-jsonl-transport.js";
 import {
   JsonRpcPeer,
-  JsonRpcRemoteError,
   RpcRequestCancelledError,
   type RpcMethodDefinition,
 } from "../../../../platform/app-server/electron-main/json-rpc-peer.js";
+import { AppServerRemoteError } from "../../../../platform/app-server/common/appServerError.js";
 import {
   APP_SERVER_METHODS,
   APP_SERVER_NOTIFICATIONS,
@@ -150,16 +150,29 @@ test("pairs typed requests and preserves remote error details", async () => {
     JSON.parse((chunk as Buffer).toString("utf8")),
   );
   child.stdout.write(
-    `${JSON.stringify({ jsonrpc: "2.0", id: secondId, error: { code: -32030, message: "ConfigUnavailable", data: { retryable: true } } })}\n`,
+    `${JSON.stringify({ jsonrpc: "2.0", id: secondId, error: { code: -32030, message: "ConfigUnavailable", data: null } })}\n`,
   );
 
   await assert.rejects(failed, (error: unknown) => {
-    assert.ok(error instanceof JsonRpcRemoteError);
+    assert.ok(error instanceof AppServerRemoteError);
     assert.equal(error.code, -32030);
-    assert.deepEqual(error.data, { retryable: true });
+    assert.equal(error.errorName, "ConfigUnavailable");
+    assert.equal(error.data, null);
     return true;
   });
   await peer.close();
+});
+
+test("rejects App Server errors with non-null protocol data", async () => {
+  const child = new FakeChildProcess();
+  const peer = new JsonRpcPeer(child as unknown as ChildProcessWithoutNullStreams);
+  const frame = once(child.stdin, "data");
+  const failed = peer.request(APP_SERVER_METHODS["config/read"], {});
+  const [{ id }] = (await frame).map((chunk) => JSON.parse((chunk as Buffer).toString("utf8")));
+  child.stdout.write(`${JSON.stringify({ jsonrpc: "2.0", id, error: { code: -32030, message: "ConfigUnavailable", data: {} } })}\n`);
+
+  await assert.rejects(failed, /invalid JSON-RPC error/);
+  peer.dispose();
 });
 
 test("times out locally and ignores the retired request's late response", async () => {

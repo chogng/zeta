@@ -7,6 +7,7 @@ import { FileKind, FileNotFoundError, type IFileBytes, type IFileService, type I
 import { type IWorkspaceContextService } from "../../../../../platform/workspace/common/workspace.js";
 import { type ITerminalCommandStatusEvent, type ITerminalCreateOptions, type ITerminalDimensions, type ITerminalInstance, type ITerminalProfile, type ITerminalService, type TerminalInstanceState } from "../../../../services/terminal/common/terminal.js";
 import { TaskService } from "../../browser/taskService.js";
+import { OutputService } from "../../../output/browser/outputService.js";
 
 test("TaskService discovers tasks, writes one terminal command, and tracks its exit", async () => {
   const root = URI.file("C:\\project");
@@ -22,7 +23,8 @@ test("TaskService discovers tasks, writes one terminal command, and tracks its e
     getWorkbenchState: () => 2,
   };
   using terminals = new FakeTerminalService();
-  using service = new TaskService(files, workspace, terminals);
+  using output = new OutputService();
+  using service = new TaskService(files, workspace, terminals, output);
   const tasks = await service.refresh();
   assert.deepEqual(tasks.map(task => task.id), ["cargo:build", "cargo:check", "vscode:0:lint", "cargo:test", "pnpm:test", "cargo:run"]);
 
@@ -38,6 +40,9 @@ test("TaskService discovers tasks, writes one terminal command, and tracks its e
   assert.equal(run.exitCode, 2);
   assert.equal(service.activeRuns.length, 0);
   assert.equal(service.lastRun, run);
+  assert.match(output.getChannel("tasks")?.getText() ?? "", /Discovered 6 workspace task/);
+  assert.match(output.getChannel("tasks")?.getText() ?? "", /Task 'Lint' failed \(exit code 2\)/);
+  assert.doesNotMatch(output.getChannel("tasks")?.getText() ?? "", /cargo lint/);
 
   const secondRun = await service.run(task);
   await service.terminate(secondRun);

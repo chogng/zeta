@@ -6,9 +6,10 @@ import { IThemeService } from "../../../../platform/theme/common/themeService.js
 import { ViewContainerLocation, WorkbenchViewContainerId, type WorkbenchViewRegistry, ViewsRegistry } from "../../../common/views.js";
 import { IWorkbenchLayoutService } from "../../../services/layout/browser/layoutService.js";
 import { ITerminalService } from "../../../services/terminal/common/terminal.js";
+import { TERMINAL_VIEW_ID } from "../common/terminal.js";
 import { TerminalViewPane } from "./view/terminalViewPane.js";
 
-export const TERMINAL_VIEW_ID = "zeta.terminal";
+export { TERMINAL_VIEW_ID } from "../common/terminal.js";
 
 /** Registers the integrated terminal in the Workbench panel. */
 export function registerTerminalView(registry: WorkbenchViewRegistry = ViewsRegistry): void {

@@ -8,6 +8,8 @@ use std::sync::Arc;
 use std::sync::Condvar;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::mpsc::Receiver;
+use std::sync::mpsc::Sender;
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use zeta_action_policy::{
@@ -75,6 +77,12 @@ struct CapturingWriter {
     output: Arc<(Mutex<Vec<u8>>, Condvar)>,
 }
 
+struct BlockingWriter {
+    started: Option<Sender<()>>,
+    release: Receiver<()>,
+    released: bool,
+}
+
 #[derive(Default)]
 struct TestLoginDriver;
 
@@ -107,6 +115,25 @@ impl Write for CapturingWriter {
             .map_err(|_| std::io::Error::other("capture lock poisoned"))?
             .extend_from_slice(bytes);
         changed.notify_all();
+        Ok(bytes.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+impl Write for BlockingWriter {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        if !self.released {
+            if let Some(started) = self.started.take() {
+                let _ = started.send(());
+            }
+            self.release
+                .recv()
+                .map_err(|_| std::io::Error::other("blocking writer release channel closed"))?;
+            self.released = true;
+        }
         Ok(bytes.len())
     }
 
@@ -462,6 +489,21 @@ fn initialize_is_required_and_request_ids_are_connection_unique() {
         serde_json::json!({"jsonrpc":"2.0","id":1,"method":"session/list","params":{}}),
     );
     assert_eq!(duplicate["error"]["message"], "InvalidRequest");
+}
+
+#[test]
+fn closed_connections_reject_future_requests() {
+    let server = server();
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    server.close_connection(connection.clone());
+
+    let rejected = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"session/list","params":{}}),
+    );
+    assert_eq!(rejected["error"]["message"], "RequestCancelled");
 }
 
 #[test]
@@ -3285,6 +3327,35 @@ fn jsonl_transport_writes_notifications_without_another_request() {
     wait_for_captured(&output, "\"method\":\"fs/changed\"");
     client.shutdown(Shutdown::Write).unwrap();
     server_thread.join().unwrap().unwrap();
+}
+
+#[test]
+fn slow_connection_writer_does_not_block_another_connection() {
+    let server = Arc::new(server());
+    let input = concat!(
+        "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"clientInfo\":{\"name\":\"slow\",\"version\":\"1\"},\"capabilities\":{}}}\n",
+    );
+    let (started_tx, started_rx) = std::sync::mpsc::channel();
+    let (release_tx, release_rx) = std::sync::mpsc::channel();
+    let served = Arc::clone(&server);
+    let slow = thread::spawn(move || {
+        served.serve_jsonl(
+            Cursor::new(input.as_bytes()),
+            BlockingWriter {
+                started: Some(started_tx),
+                release: release_rx,
+                released: false,
+            },
+        )
+    });
+    started_rx.recv_timeout(Duration::from_secs(1)).unwrap();
+
+    let mut fast_connection = server.connection();
+    initialize(&server, &mut fast_connection);
+
+    release_tx.send(()).unwrap();
+    slow.join().unwrap().unwrap();
+    server.close_connection(fast_connection);
 }
 
 #[test]

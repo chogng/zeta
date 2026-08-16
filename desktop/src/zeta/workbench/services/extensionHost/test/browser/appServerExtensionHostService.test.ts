@@ -4,13 +4,14 @@ import { toDisposable } from "../../../../../base/common/lifecycle.js";
 import { CommandRegistry } from "../../../../../platform/commands/common/commands.js";
 import type { ServicesAccessor } from "../../../../../platform/instantiation/common/instantiation.js";
 import type { AppServerConnectionState } from "../../../../../platform/app-server/common/appServerApi.js";
-import type { ExtensionHostFleetSnapshot, ExtensionHostInvocationRequest, ExtensionHostReconcileMode, IExtensionHostApi, JsonValue } from "../../../../../platform/extensionHost/common/extensionHostApi.js";
+import type { ExtensionHostFleetSnapshot, ExtensionHostInvocationRequest, ExtensionHostOutputEvent, ExtensionHostReconcileMode, IExtensionHostApi, JsonValue } from "../../../../../platform/extensionHost/common/extensionHostApi.js";
 import { TextModel } from "../../../../../editor/common/model/textModel.js";
 import { TextPosition } from "../../../../../editor/common/core/text.js";
 import { LanguageFeaturesService } from "../../../language/common/languageFeaturesService.js";
 import type { ITaskService, TaskProvider, TaskProviderRegistration } from "../../../tasks/common/taskService.js";
 import type { ITestingService, TestProfileProvider, TestProfileProviderRegistration } from "../../../testing/common/testingService.js";
 import { AppServerExtensionHostService } from "../../browser/appServerExtensionHostService.js";
+import { OutputService } from "../../../output/browser/outputService.js";
 
 const DIGEST = `sha256:${"b".repeat(64)}`;
 
@@ -103,6 +104,60 @@ test("keeps the service stopped when the negotiated Host capability is absent", 
   assert.deepEqual(failures, []);
 });
 
+test("projects bounded Extension Host stderr incrementally into extension-owned Output", async () => {
+  const api = new FakeExtensionHostApi(snapshot(1, "acme.run", [], "first diagnostic\n"));
+  const tasks = new ProviderSink<TaskProvider>();
+  const tests = new ProviderSink<TestProfileProvider>();
+  using languages = new LanguageFeaturesService();
+  using output = new OutputService();
+  using service = new AppServerExtensionHostService({ api, commands: new CommandRegistry(), languageFeatures: languages, tasks: tasks as unknown as ITaskService, testing: tests as unknown as ITestingService, output });
+  await service.start();
+
+  const channel = output.getChannel("extension-host.acme.demo");
+  assert.equal(channel?.descriptor.source, "extension");
+  assert.equal(channel?.descriptor.extensionId, "acme.demo");
+  assert.match(channel?.getText() ?? "", /first diagnostic/);
+
+  api.current = snapshot(2, "acme.run", [], "first diagnostic\nsecond diagnostic\n");
+  api.emitChanged(2);
+  await waitFor(() => service.currentSnapshot.fleetGeneration === 2);
+  assert.equal((channel?.getText().match(/first diagnostic/g) ?? []).length, 1);
+  assert.equal((channel?.getText().match(/second diagnostic/g) ?? []).length, 1);
+});
+
+test("projects ordered extension-created named Output channels without replaying old reveal requests", async () => {
+  const created: readonly ExtensionHostOutputEvent[] = Object.freeze([
+    Object.freeze({ sequence: 1, incarnation: 3, activationGeneration: 11, operation: Object.freeze({ operation: "create", channelId: "review", label: "Review", kind: "log" }) }),
+    Object.freeze({ sequence: 2, incarnation: 3, activationGeneration: 11, operation: Object.freeze({ operation: "append", channelId: "review", text: "first\n", severity: "information", category: "review" }) }),
+    Object.freeze({ sequence: 3, incarnation: 3, activationGeneration: 11, operation: Object.freeze({ operation: "show", channelId: "review", preserveFocus: false }) }),
+  ]);
+  const api = new FakeExtensionHostApi(snapshot(1, "acme.run", [], "", created, 11));
+  const tasks = new ProviderSink<TaskProvider>();
+  const tests = new ProviderSink<TestProfileProvider>();
+  using languages = new LanguageFeaturesService();
+  using output = new OutputService();
+  const reveals: string[] = [];
+  output.onDidRequestShowChannel(request => reveals.push(request.focus));
+  using service = new AppServerExtensionHostService({ api, commands: new CommandRegistry(), languageFeatures: languages, tasks: tasks as unknown as ITaskService, testing: tests as unknown as ITestingService, output });
+  await service.start();
+
+  const channelId = "extension.acme.demo.review";
+  assert.equal(output.getChannel(channelId)?.getText(), "first\n");
+  assert.deepEqual(reveals, []);
+
+  const updated = Object.freeze([...created, Object.freeze({ sequence: 4, incarnation: 3, activationGeneration: 11, operation: Object.freeze({ operation: "append" as const, channelId: "review", text: "second\n", severity: "warning" as const, category: undefined }) }), Object.freeze({ sequence: 5, incarnation: 3, activationGeneration: 11, operation: Object.freeze({ operation: "show" as const, channelId: "review", preserveFocus: true }) })]);
+  api.current = snapshot(2, "acme.run", [], "", updated, 11);
+  api.emitChanged(2);
+  await waitFor(() => service.currentSnapshot.fleetGeneration === 2);
+  assert.equal(output.getChannel(channelId)?.getText(), "first\nsecond\n");
+  assert.deepEqual(reveals, ["preserve"]);
+
+  api.current = snapshot(3, "acme.run", [], "", Object.freeze([...updated, Object.freeze({ sequence: 6, incarnation: 3, activationGeneration: 11, operation: Object.freeze({ operation: "dispose" as const, channelId: "review" }) })]), 11);
+  api.emitChanged(3);
+  await waitFor(() => service.currentSnapshot.fleetGeneration === 3);
+  assert.equal(output.getChannel(channelId), undefined);
+});
+
 class FakeExtensionHostApi implements IExtensionHostApi {
   available = true;
   reconciles = 0;
@@ -155,7 +210,7 @@ class ProviderSink<TProvider> {
   }
 }
 
-function snapshot(generation: number, command: string, additional: readonly ExtensionHostFleetSnapshot["extensions"][number]["registrations"][number][] = []): ExtensionHostFleetSnapshot {
+function snapshot(generation: number, command: string, additional: readonly ExtensionHostFleetSnapshot["extensions"][number]["registrations"][number][] = [], stderr = "", outputEvents: readonly ExtensionHostOutputEvent[] = [], activationGeneration = 10 + generation): ExtensionHostFleetSnapshot {
   return Object.freeze({
     generation,
     extensions: Object.freeze([Object.freeze({
@@ -163,10 +218,12 @@ function snapshot(generation: number, command: string, additional: readonly Exte
       version: "1.0.0",
       packageDigest: DIGEST,
       runtimeApiVersion: 1,
-      activationGeneration: 10 + generation,
+      activationGeneration,
       incarnation: 3,
       lifecycle: "ready" as const,
       failure: undefined,
+      stderr,
+      outputEvents: Object.freeze([...outputEvents]),
       registrations: Object.freeze([
         Object.freeze({ registrationId: "command", kind: "command" as const, command, title: "Run" }),
         Object.freeze({ registrationId: "tasks", kind: "taskProvider" as const, taskType: "acme" }),

@@ -38,6 +38,7 @@ pub fn client_capabilities() -> ClientCapabilities {
             dynamic_tools: None,
         }),
         browser: None,
+        workspace_trust_host: None,
     }
 }
 

@@ -508,7 +508,7 @@ Electron 与 Vite development host 只把 Shell 正常运行所需的用户目�
 spawn 前执行 `env_clear`，所以 PTY 看不到最终 map 之外的 App Server 环境。Terminal request DTO
 拒绝 unknown field；通过 `terminal/create.environment` 夹带变量会返回 `InvalidParams`。
 
-当前同步 JSONL transport 不支持独立于 request 的高频主动输出。客户端通过
+当前 Terminal contract 选择有界 pull，而不是高频主动输出。客户端通过
 `terminal/read { terminalId, afterSequence, maxChunks }` 拉取最多 128 个 raw-byte chunk；
 每个 chunk 使用标准 Base64，并以单调 sequence 排序。Server 保留最多 1 MiB 输出，cursor
 落后于 ring 时返回 `outputGap: true`，客户端必须显式显示截断而不能把缺口当作连续输出。

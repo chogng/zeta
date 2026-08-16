@@ -82,6 +82,7 @@ zeta-rs/app-server-protocol/
 | --- | --- |
 | `ClientMethod` | typed enum of every client-callable method |
 | `client_method` | exact string → `ClientMethod` lookup |
+| `client_method_definition` | exact string → method metadata lookup |
 | `CLIENT_METHODS` | method name、params/result type function、serialization scope |
 | `ServerNotificationMethod` | typed enum of server notifications |
 | `server_notification_method` | exact string → notification enum |
@@ -90,7 +91,8 @@ zeta-rs/app-server-protocol/
 | `decode_server_notification` | registry-generated method/payload decoder；未知 method 无损保留为 `Unknown` |
 | `HostMethod` | App Server 可以向已声明能力的 client 发出的 typed request enum |
 | `HOST_METHODS` | host request name 与 params/result type 的唯一 registry |
-| `SerializationScopeDefinition` | dispatcher serialization requirement |
+| `SerializationScopeDefinition` | static dispatcher serialization requirement and declared key field |
+| `ClientRequestSerializationScope` | 从 request params 解析出的 global / Session / connection-resource runtime key |
 
 `ClientCapabilities.browser` 是 connection-local browser host 声明。版本 1 用 `observe` 和 `input`
 显式表示 client 能处理的语义操作；它不授予 Rust 任意 CDP、Node 或浏览器对象访问权。
@@ -170,6 +172,7 @@ Generator 只返回字符串，不读写 filesystem。只有 `write_schema_fixtu
 | Symbol | 可见性 | 当前职责 | 方向约束 |
 | --- | --- | --- | --- |
 | `client_methods!` | private macro | 一次定义 method enum、lookup、metadata、request/result schema enums | method 不得在 dispatcher 建第二份表 |
+| `ClientMethodDefinition::serialization_scope` | public metadata resolver | 按 registry 声明从 params 生成 runtime scope key | 不加入 connection identity、不执行或排队 request |
 | `host_methods!` | private macro | 一次定义 Server → Client method enum、lookup、metadata 与 request/result schema enums | Desktop handler 不手写平行 method name/type map |
 | `server_notifications!` | private macro | 一次定义 method enum、lookup、canonical runtime enum、payload decoder、metadata 与 schema enum | notification list 与 decode mapping 的唯一来源 |
 | `typescript_bindings!` | private macro | 建立显式 DTO declaration list | canonical/re-exported nested types 也必须可生成 |
@@ -219,9 +222,12 @@ typescript()
 └─ CLIENT_METHODS → AppServerMethodMap + constants
 ```
 
-Runtime dispatch 当前使用 `client_method(method)` 得到 typed method；`serialization` 已在 registry
-中声明，但现有同步 `AppServer::handle_json` 尚未读取它来建立 per-scope scheduler。它是待接入
-dispatcher 的 executable metadata，不能被误写成已经落实的并发保证。
+Runtime dispatch 使用 `client_method(method)` 得到 typed method，再通过
+`client_method_definition(method).serialization_scope(params)` 解析 executable scope。Session scope
+要求 canonical `sessionId`；resource scope 在 registry 条目中显式声明 `resourceId`、`uploadId`、
+`skillId` 或 `extensionId`，不得在 App Server 用字段猜测补第二张表。App Server 消费该结果实施
+FIFO/shared-read 调度；connection-resource key 由 runtime 再加入 connection identity，防止跨 owner
+资源互相串行或被错误共享。
 
 ## DTO 建模约束
 

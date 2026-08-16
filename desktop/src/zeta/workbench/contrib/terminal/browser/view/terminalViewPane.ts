@@ -5,6 +5,7 @@ import type { IMenuService } from "../../../../../platform/actions/common/menuSe
 import type { IContextKeyService } from "../../../../../platform/contextkey/common/contextkey.js";
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
 import type { IThemeService } from "../../../../../platform/theme/common/themeService.js";
+import { AppServerRemoteError } from "../../../../../platform/app-server/common/appServerError.js";
 import { ViewPane, type IViewPaneOptions, type PartTitleProjection } from "../../../../browser/parts/views/viewPane.js";
 import type { IWorkbenchLayoutService } from "../../../../services/layout/browser/layoutService.js";
 import type { ITerminalDimensions, ITerminalInstance, ITerminalService } from "../../../../services/terminal/common/terminal.js";
@@ -156,7 +157,7 @@ export class TerminalViewPane extends ViewPane {
       if (!this.disposed) this.focus();
     } catch (error) {
       if (!this.disposed) {
-        this.setStatus(error instanceof Error ? error.message : "Terminal is unavailable");
+        this.setStatus(terminalErrorMessage(error, "Terminal is unavailable"));
       }
     } finally {
       this.creating = false;
@@ -174,7 +175,7 @@ export class TerminalViewPane extends ViewPane {
       if (!this.disposed) item.widget.focus();
     } catch (error) {
       if (!this.disposed) {
-        this.setStatus(error instanceof Error ? error.message : "Terminal relaunch failed");
+        this.setStatus(terminalErrorMessage(error, "Terminal relaunch failed"));
       }
     }
   }
@@ -258,6 +259,15 @@ export class TerminalViewPane extends ViewPane {
     this.statusElement.hidden = message === undefined;
   }
 
+}
+
+function terminalErrorMessage(error: unknown, fallback: string): string {
+  const message = error instanceof Error ? error.message : String(error);
+  const errorName = error instanceof AppServerRemoteError ? error.errorName : message;
+  if (/TerminalUnavailable/.test(errorName)) {
+    return "Terminal is unavailable for this folder. Trust the folder to enable terminal processes, or continue in Restricted Mode.";
+  }
+  return error instanceof Error ? error.message : fallback;
 }
 
 class TerminalViewItem extends DisposableOwner {

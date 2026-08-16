@@ -20,7 +20,7 @@ API。
 | Process supervision | 每扩展一个进程、incarnation fencing、停用、关闭和有界重启 | 平台 launcher 安装 sandbox、hard limits 和 killable process tree |
 | Host RPC v1 | 版本、请求相关性、严格 shape、注册 ceiling 和 byte limits | 扩展程序实现协议；App Server 把注册投影到领域 owner |
 | Provider invocation | 路由到精确 registration、deadline、并发取消和结果校验 | Command、Language、Debug、Tasks、Testing 定义 payload 与消费结果 |
-| Diagnostics | 返回 typed `ExtensionHostError`，保留有界 stderr | App Server 清洗并映射客户端可见故障，不泄漏主机路径 |
+| Diagnostics / Output | 返回 typed `ExtensionHostError`，保留有界 stderr，并接收受配额约束的扩展命名 Output 事件 | App Server 清洗故障并把 Output 事件投影到 Workbench Output 服务 |
 
 出现以下代码表示 ownership 漂移：本 crate 扫描 Marketplace/Plugin 目录、持久化 enable/grant、解释
 `package.json`、注册 Workbench provider、决定工作区信任，或自行把一个普通 Node/WASM 脚本当成
@@ -31,6 +31,7 @@ entrypoint 加载。
 | 文件 | 关键公共契约 | 约束 |
 | --- | --- | --- |
 | `protocol.rs` | `ExtensionHostRequest`、`ExtensionHostResponse`、`RegistrationDescriptor` | Host RPC v1 的唯一 wire shape；严格校验 request/response correlation |
+| `protocol/output.rs` | `ExtensionHostOutputEvent`、`HostOutputOperation` | 扩展发起的命名 Output 事件；按 incarnation/generation fencing，不属于静态 registration |
 | `authority.rs` | `ActivationAuthority`、`ActivationLease`、`ExtensionActivationSpec` | 授权是 live gate，不是 activation 时的一次布尔判断 |
 | `limits.rs` | `ExtensionHostLimits`、`ProcessIsolationPolicy` | 默认要求平台强制隔离；所有 byte/count/deadline limit 必须非零且一致 |
 | `process.rs` | `ExtensionHostLauncher`、`ExtensionHostProcess`、`ExtensionLaunchCommand` | launcher 必须在 entrypoint 执行前完成隔离，并清空继承环境 |
@@ -50,7 +51,7 @@ entrypoint 加载。
 | `ExtensionHostSupervisor::launch_and_activate` | 取得 activation lease，spawn，递增 incarnation，完成 handshake + activate 后一次发布 registrations | 平台 sandbox、activation-event matching | authority、handshake、capability ceiling、restart tests |
 | `ExtensionHostSupervisor::context` | 分配非零且不复用的 request ID，并绑定 incarnation 与 activation generation | 跨进程持久 ID | exhaustion/correlation tests |
 | `reserve_pending` | 在写 stdin 前预留 waiter，分别约束普通请求和 control request，并拒绝 request ID 重用 | provider-level scheduling | concurrent cancel、quota、duplicate-ID tests |
-| `spawn_stdout_reader` | 有界读取一行、strict decode、按 request ID 找 pending entry、执行 response validation | 接受 unsolicited extension events | malformed/oversized/correlation tests |
+| `spawn_stdout_reader` | 有界读取一行，区分 correlated response 与 Output event；前者匹配 pending request，后者严格校验并进入有界队列 | Workbench channel registry 或无限缓冲 | malformed/oversized/correlation/Output quota tests |
 | `read_bounded_line` | 在分配增长前执行 frame byte ceiling，并要求 newline-terminated frame | JSON semantic validation | exact-boundary tests |
 | `ExtensionInvocationHandle::wait` | 轮询 terminal response，观察 caller/deadline cancellation，执行 grace 后 unknown-outcome recovery | 把超时当成确认失败 | cancel/deadline/indeterminate/restart tests |
 | `ExtensionHostSupervisor::recover_locked` | 清除旧注册和 leases、终止旧进程、消费 restart budget、重新握手和激活 | 无限重启或跨授权恢复 | crash-window/backoff/authority-revoked tests |
@@ -74,10 +75,16 @@ flowchart TD
 
 ## 4. Host RPC v1
 
-传输是一行一个 UTF-8 JSON frame 的双向 stdio request/response 协议。每个 frame 都携带
-`protocolVersion`、`requestId`、`incarnation` 和 `activationGeneration`；任一字段为零、版本不匹配、
-response correlation 不完全一致、未知 request ID、错误 response kind 或超过 frame ceiling 都使当前
-进程失败关闭。请求 ID 空间耗尽时返回 `RequestIdentityExhausted`，不能环回并复用旧 identity。
+传输是一行一个 UTF-8 JSON frame 的双向 stdio 协议。请求与响应携带 `protocolVersion`、`requestId`、
+`incarnation` 和 `activationGeneration`；扩展主动发出的 Output event 不带 `requestId`，但必须携带其余
+三个 stale-process fence。任一 fence 为零、版本不匹配、response correlation 不完全一致、未知 request
+ID、错误 response kind、无效 Output channel identity 或超过 frame/Output ceiling 都使当前进程失败关闭。
+请求 ID 空间耗尽时返回 `RequestIdentityExhausted`，不能环回并复用旧 identity。
+
+Output event 是独立的流式协议，不是 `ActivateResult.registrations` 的一种。扩展先发送 `create`，随后可按
+stdout 顺序发送 `append`、`replace`、`clear`、`show` 和 `dispose`。监管器为通过 incarnation/generation
+复核的事件分配单调 sequence，保留有界历史；App Server fleet generation 因事件变化而更新，Renderer
+按 sequence 增量投影。初次连接会重放内容事件以恢复频道，但不会重放旧 `show` 事件抢占焦点。
 
 生命周期顺序固定为 `Initialize → Activate → Invoke* → Deactivate → Shutdown`。`Activate` 一次返回完整
 注册集合，只有整批验证通过才成为 `ExtensionHostSnapshot.registrations`。当前 registration kinds 为
@@ -101,6 +108,7 @@ Linked Editing。
 | ordinary in-flight requests | 32 |
 | in-flight control requests | 8 |
 | captured stderr | 256 KiB |
+| queued / retained Output | 4096 events / 512 KiB |
 | arguments | 128 entries / 32 KiB |
 | environment | 64 entries / 32 KiB |
 | startup / request / cancellation grace / shutdown | 10 s / 30 s / 2 s / 5 s |
@@ -137,7 +145,8 @@ request 不与普通 in-flight quota 竞争。grace 内若仍没有 terminal res
 
 `Drop` 一个未完成 handle 会尝试取消、终止进程并释放 lease。Host exit、invalid protocol 和 unknown
 outcome 都会 fence 当前 incarnation；activation authority 被撤销时恢复失败关闭。`stderr()` 只保留有界
-前缀供上层诊断，App Server 对客户端暴露前仍必须清洗主机路径和实现细节。
+前缀供上层诊断。Output 事件队列在 health loop drain 前若超过配额会使当前进程按协议失败；监管器中的
+retained history则丢弃最旧事件以保持固定上界。App Server 对客户端暴露前仍必须清洗主机路径和实现细节。
 
 ## 7. 接入义务
 
@@ -179,18 +188,19 @@ launcher obligation 时必须增加各平台 isolation acceptance test，不能�
 ## 9. 当前限制与扩展点
 
 Current：Host RPC v1、逐扩展进程监管、live activation/invocation lease、原子 registrations、并发取消、
-有界 stdio/stderr、incarnation/generation fencing、graceful shutdown 与有界 crash recovery 已实现。
+有界 stdio/stderr、扩展命名 Output event stream、incarnation/generation fencing、graceful shutdown 与有界
+crash recovery 已实现。
 
 当前限制：
 
 - crate 没有生产平台 launcher；只有显式不安全的可信开发 launcher；
 - activation-event matching 和 lazy activation 属于上层 composition，监管器只接收 activation facts；
 - 空闲崩溃检测依赖上层 health loop；
-- v1 只有 request/response，没有 extension-originated event stream；
+- v1 的 extension-originated event 目前只覆盖命名 Output channel；其他事件必须先明确领域 owner 与背压语义；
 - 没有 generic Node/WASM loader、VS Code Extension API、Marketplace compatibility 或多扩展共享进程；
 - 没有 publisher signature、revocation feed、跨平台 artifact selector 或 binary ABI 检查；这些属于 package
   supply-chain 与平台 launchability 演进，不应加入协议解析器。
 
-潜在演进必须由真实 consumer 驱动：若增加 extension-originated diagnostics/event、remote host 或新的
-provider kind，应先固定 App Server/domain owner、背压与权限语义，再版本化协议；不能用 v1 unknown
-field 或未声明 capability 静默协商新行为。
+潜在演进必须由真实 consumer 驱动：若增加其他 extension-originated event、remote host 或新的 provider
+kind，应先固定 App Server/domain owner、背压与权限语义，再版本化协议；不能用 v1 unknown field 或未
+声明 capability 静默协商新行为。

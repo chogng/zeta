@@ -27,10 +27,14 @@ use crate::ExtensionCapability;
 use crate::ExtensionHostError;
 use crate::ExtensionHostLauncher;
 use crate::ExtensionHostLimits;
+use crate::ExtensionHostOutputEvent;
 use crate::ExtensionHostProcess;
 use crate::ExtensionHostRequest;
 use crate::ExtensionHostResponse;
 use crate::ExtensionLaunchCommand;
+use crate::HostEventContext;
+use crate::HostOutputOperation;
+use crate::HostOutputSeverity;
 use crate::HostRequestKind;
 use crate::HostResponseKind;
 use crate::HostSuccess;
@@ -106,6 +110,7 @@ struct TestProcess {
     exited: AtomicBool,
     hang_invocations: AtomicBool,
     cancels: AtomicUsize,
+    output_events: Mutex<Vec<ExtensionHostOutputEvent>>,
 }
 
 impl ExtensionHostProcess for TestProcess {
@@ -170,6 +175,13 @@ impl ExtensionHostProcess for TestProcess {
     fn stderr(&self) -> String {
         String::new()
     }
+
+    fn drain_output_events(&self) -> Vec<ExtensionHostOutputEvent> {
+        self.output_events
+            .lock()
+            .map(|mut events| std::mem::take(&mut *events))
+            .unwrap_or_default()
+    }
 }
 
 fn supervisor(
@@ -203,9 +215,9 @@ fn supervisor(
     ExtensionHostSupervisor::new(
         launcher,
         ExtensionLaunchCommand::new(
-            PathBuf::from("C:/immutable/review-host.exe"),
+            PathBuf::from("/immutable/review-host"),
             Vec::<String>::new(),
-            PathBuf::from("C:/immutable"),
+            PathBuf::from("/immutable"),
             BTreeMap::new(),
         )
         .unwrap(),
@@ -248,6 +260,35 @@ fn handshake_activation_and_invoke_hold_exact_authority_leases() {
     assert_eq!(authority.active_leases.load(Ordering::Acquire), 2);
     assert_eq!(handle.wait().unwrap().payload, json!({"ok": true}));
     assert_eq!(authority.active_leases.load(Ordering::Acquire), 1);
+}
+
+#[test]
+fn snapshot_retains_ordered_process_fenced_output_events() {
+    let launcher = Arc::new(TestLauncher::default());
+    let authority = Arc::new(TestAuthority::authorized());
+    let supervisor = supervisor(Arc::clone(&launcher), authority);
+    supervisor.start().unwrap();
+    let process = launcher.processes.lock().unwrap()[0].clone();
+    process
+        .output_events
+        .lock()
+        .unwrap()
+        .push(ExtensionHostOutputEvent {
+            context: HostEventContext::new(1, 9),
+            operation: HostOutputOperation::Append {
+                channel_id: "review".into(),
+                text: "ready\n".into(),
+                severity: HostOutputSeverity::Information,
+                category: None,
+            },
+        });
+
+    let first = supervisor.snapshot();
+    let second = supervisor.snapshot();
+
+    assert_eq!(first.output_events.len(), 1);
+    assert_eq!(first.output_events[0].sequence, 1);
+    assert_eq!(second.output_events, first.output_events);
 }
 
 #[test]

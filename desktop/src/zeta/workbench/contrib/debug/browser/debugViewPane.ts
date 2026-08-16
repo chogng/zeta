@@ -1,5 +1,4 @@
 import { addDisposableListener } from "../../../../base/browser/dom.js";
-import { type IDisposable } from "../../../../base/common/lifecycle.js";
 import { URI } from "../../../../base/common/uri.js";
 import { TextPosition, TextRange } from "../../../../editor/common/core/text.js";
 import { type IEditorPart } from "../../../browser/parts/editor/editorPart.js";
@@ -22,7 +21,7 @@ interface DebugWatchResult {
   readonly error?: string;
 }
 
-/** Code Debug sidebar with multi-session inspection, recursive variables, watches, exceptions, and REPL. */
+/** Code Debug sidebar with multi-session inspection, recursive variables, watches, and exceptions. */
 export class DebugViewPane extends ViewPane {
   private readonly configurationsElement: HTMLSelectElement;
   private readonly sessionsElement: HTMLSelectElement;
@@ -35,12 +34,6 @@ export class DebugViewPane extends ViewPane {
   private readonly watchInput: HTMLInputElement;
   private readonly exceptionsElement: HTMLUListElement;
   private readonly breakpointsElement: HTMLUListElement;
-  private readonly outputElement: HTMLPreElement;
-  private readonly consoleForm: HTMLFormElement;
-  private readonly consoleInput: HTMLInputElement;
-  private readonly outputSubscriptions = new Map<string, IDisposable>();
-  private readonly outputs = new Map<string, string>();
-  private readonly replOutputs = new Map<string, string>();
   private threads: readonly IDebugThread[] = [];
   private frames: readonly IDebugStackFrame[] = [];
   private variableRows: readonly DebugVariableRow[] = [];
@@ -70,11 +63,7 @@ export class DebugViewPane extends ViewPane {
     [this.watchForm, this.watchInput] = inputForm(options.ownerDocument, "Add watch expression", "Add");
     this.exceptionsElement = section(options.ownerDocument, "Exception Breakpoints", "zeta-debug-exceptions");
     this.breakpointsElement = section(options.ownerDocument, "Breakpoints", "zeta-debug-breakpoints");
-    this.outputElement = options.ownerDocument.createElement("pre");
-    this.outputElement.className = "zeta-debug-output";
-    this.outputElement.setAttribute("aria-label", "Debug console output");
-    [this.consoleForm, this.consoleInput] = inputForm(options.ownerDocument, "Debug console expression", "Evaluate");
-    this.contentElement.append(controls, this.statusElement, this.threadsElement, this.stackElement, this.variablesElement, this.watchElement, this.watchForm, this.exceptionsElement, this.breakpointsElement, this.outputElement, this.consoleForm);
+    this.contentElement.append(controls, this.statusElement, this.threadsElement, this.stackElement, this.variablesElement, this.watchElement, this.watchForm, this.exceptionsElement, this.breakpointsElement);
     this.own(addDisposableListener(controls, "click", event => this.control(event)));
     this.own(addDisposableListener(this.sessionsElement, "change", () => this.selectSession()));
     this.own(addDisposableListener(this.threadsElement, "change", () => { void this.selectThread(); }));
@@ -82,7 +71,6 @@ export class DebugViewPane extends ViewPane {
     this.own(addDisposableListener(this.variablesElement, "click", event => this.expandVariable(event)));
     this.own(addDisposableListener(this.watchElement, "click", event => this.removeWatch(event)));
     this.own(addDisposableListener(this.watchForm, "submit", event => this.addWatch(event)));
-    this.own(addDisposableListener(this.consoleForm, "submit", event => { void this.evaluateConsole(event); }));
     this.own(addDisposableListener(this.exceptionsElement, "change", () => { void this.changeExceptionBreakpoints(); }));
     this.own(addDisposableListener(this.breakpointsElement, "click", event => this.activateBreakpoint(event)));
     this.own(debug.onDidChangeConfigurations(() => this.render()));
@@ -90,7 +78,6 @@ export class DebugViewPane extends ViewPane {
     this.own(debug.onDidChangeWatchExpressions(() => { void this.refreshWatches(); this.render(); }));
     this.own(debug.onDidChangeExceptionBreakpoints(() => this.render()));
     this.own(debug.onDidChangeSession(session => this.acceptSessionChange(session)));
-    this.defer(() => { for (const subscription of this.outputSubscriptions.values()) subscription.dispose(); this.outputSubscriptions.clear(); });
     this.render();
     void debug.refresh().catch(error => { this.error = message(error); this.render(); });
   }
@@ -119,7 +106,6 @@ export class DebugViewPane extends ViewPane {
   }
 
   private acceptSessionChange(session: IDebugSession | undefined): void {
-    this.synchronizeOutputSubscriptions();
     if (this.inspectedSessionId !== session?.id) {
       this.inspectedSessionId = session?.id;
       this.threads = [];
@@ -131,25 +117,6 @@ export class DebugViewPane extends ViewPane {
     if (session?.state === "stopped") void this.refreshStoppedState();
     else if (session?.state === "running") { this.threads = []; this.frames = []; this.variableRows = []; this.watchResults = []; this.selectedFrameId = undefined; }
     this.render();
-  }
-
-  private synchronizeOutputSubscriptions(): void {
-    const activeIds = new Set(this.debug.sessions.map(session => session.id));
-    for (const [sessionId, subscription] of this.outputSubscriptions) {
-      if (activeIds.has(sessionId)) continue;
-      subscription.dispose();
-      this.outputSubscriptions.delete(sessionId);
-      this.outputs.delete(sessionId);
-      this.replOutputs.delete(sessionId);
-    }
-    for (const session of this.debug.sessions) {
-      if (this.outputSubscriptions.has(session.id)) continue;
-      const subscription = session.onDidOutput(output => {
-        this.outputs.set(session.id, `${this.outputs.get(session.id) ?? ""}${output}`.slice(-128_000));
-        if (this.debug.session?.id === session.id) this.render();
-      });
-      this.outputSubscriptions.set(session.id, subscription);
-    }
   }
 
   private selectSession(): void {
@@ -265,23 +232,6 @@ export class DebugViewPane extends ViewPane {
     })));
   }
 
-  private async evaluateConsole(event: Event): Promise<void> {
-    event.preventDefault();
-    const session = this.debug.session;
-    if (!session) { this.error = "Debug console requires an active session"; this.render(); return; }
-    const expression = this.consoleInput.value.trim();
-    if (!expression) return;
-    this.consoleInput.value = "";
-    const previous = this.replOutputs.get(session.id) ?? "";
-    try {
-      const result = await session.evaluate(expression, this.selectedFrameId, "repl");
-      this.replOutputs.set(session.id, `${previous}> ${expression}\n${result.result}${result.type ? ` : ${result.type}` : ""}\n`.slice(-128_000));
-    } catch (error) {
-      this.replOutputs.set(session.id, `${previous}> ${expression}\nError: ${message(error)}\n`.slice(-128_000));
-    }
-    this.render();
-  }
-
   private async changeExceptionBreakpoints(): Promise<void> {
     const filters = [...this.exceptionsElement.querySelectorAll<HTMLInputElement>("input[data-exception-filter]:checked")].map(input => input.dataset.exceptionFilter!).filter(Boolean);
     try { await this.debug.setExceptionBreakpoints(filters); }
@@ -316,8 +266,6 @@ export class DebugViewPane extends ViewPane {
     this.exceptionsElement.replaceChildren(heading(this.element.ownerDocument, "Exception Breakpoints"), ...(session?.capabilities.exceptionBreakpointFilters ?? []).map(filter => exceptionItem(this.element.ownerDocument, filter.filter, filter.label, filter.description, selectedExceptions.length > 0 ? selectedExceptions.includes(filter.filter) : filter.default)));
     this.exceptionsElement.hidden = !session || session.capabilities.exceptionBreakpointFilters.length === 0;
     this.breakpointsElement.replaceChildren(heading(this.element.ownerDocument, "Breakpoints"), ...this.debug.breakpoints.map((breakpoint, index) => breakpointItem(this.element.ownerDocument, breakpoint, index)));
-    this.outputElement.textContent = session ? `${this.outputs.get(session.id) ?? ""}${this.replOutputs.get(session.id) ?? ""}` : "";
-    this.consoleInput.disabled = !session;
   }
 
   private scopeRow(scope: IDebugScope): DebugVariableRow { return Object.freeze({ key: ++this.variableKey, name: scope.name, variablesReference: scope.variablesReference, depth: 0, expanded: true }); }

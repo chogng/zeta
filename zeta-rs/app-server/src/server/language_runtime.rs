@@ -23,6 +23,7 @@ use zeta_language_server_catalog::TYPESCRIPT_LANGUAGE_SERVER_ID;
 use zeta_language_service::LanguageRequestId;
 use zeta_language_service::LanguageRequestMetric;
 use zeta_language_service::LanguageServerMessageSeverity;
+use zeta_language_service::LanguageServerMessageSource;
 use zeta_language_service::LanguageServerState;
 use zeta_language_service::LanguageService;
 use zeta_language_service::LanguageServiceConfiguration;
@@ -34,7 +35,10 @@ use zeta_language_service::LanguageServiceMetricsSink;
 use zeta_app_server_protocol::protocol::language::LanguageDiagnosticsNotification;
 use zeta_app_server_protocol::protocol::language::LanguageServerMessageNotification;
 use zeta_app_server_protocol::protocol::language::LanguageServerMessageSeverityDto;
+use zeta_app_server_protocol::protocol::language::LanguageServerMessageSourceDto;
 use zeta_app_server_protocol::protocol::language::LanguageServerProgressNotification;
+use zeta_app_server_protocol::protocol::language::LanguageServerStateDto;
+use zeta_app_server_protocol::protocol::language::LanguageServerStateNotification;
 
 use super::language_operations::diagnostic_to_dto;
 use super::update_broker::UpdateBroker;
@@ -76,6 +80,7 @@ impl LanguageServiceEventSink for AppServerLanguageEventSink {
         if let LanguageServiceEvent::ServerMessage {
             server,
             severity,
+            source,
             show,
             message,
         } = &event
@@ -94,6 +99,17 @@ impl LanguageServiceEventSink for AppServerLanguageEventSink {
                             LanguageServerMessageSeverityDto::Information
                         }
                         LanguageServerMessageSeverity::Log => LanguageServerMessageSeverityDto::Log,
+                    },
+                    source: match source {
+                        LanguageServerMessageSource::Protocol => {
+                            LanguageServerMessageSourceDto::Protocol
+                        }
+                        LanguageServerMessageSource::Stderr => {
+                            LanguageServerMessageSourceDto::Stderr
+                        }
+                        LanguageServerMessageSource::Service => {
+                            LanguageServerMessageSourceDto::Service
+                        }
                     },
                     show: *show,
                     message: message.clone(),
@@ -114,7 +130,40 @@ impl LanguageServiceEventSink for AppServerLanguageEventSink {
             );
             return;
         }
+        if let LanguageServiceEvent::ServerStateChanged { server, state } = &event {
+            self.diagnostics.updates.publish_language_server_state(
+                LanguageServerStateNotification {
+                    server: server.clone(),
+                    state: language_server_state_to_dto(state),
+                },
+            );
+        }
         let _ = self.sender.send(event);
+    }
+}
+
+fn language_server_state_to_dto(state: &LanguageServerState) -> LanguageServerStateDto {
+    match state {
+        LanguageServerState::Starting => LanguageServerStateDto::Starting,
+        LanguageServerState::Ready => LanguageServerStateDto::Ready,
+        LanguageServerState::BackingOff {
+            attempt,
+            retry_after,
+        } => LanguageServerStateDto::BackingOff {
+            attempt: *attempt,
+            retry_after_millis: retry_after.as_millis().min(u128::from(u64::MAX)) as u64,
+        },
+        LanguageServerState::CrashLoop {
+            restart_attempts,
+            message,
+        } => LanguageServerStateDto::CrashLoop {
+            restart_attempts: *restart_attempts,
+            message: message.clone(),
+        },
+        LanguageServerState::Failed(message) => LanguageServerStateDto::Failed {
+            message: message.clone(),
+        },
+        LanguageServerState::Stopped => LanguageServerStateDto::Stopped,
     }
 }
 

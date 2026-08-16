@@ -710,6 +710,9 @@ test("Panel presents its destinations as tabs and active commands as a toolbar",
     ctorDescriptor: new SyncDescriptor(TestPanelView),
   }]));
   const contextKeys = disposables.add(new ContextKeyService());
+  const commands = disposables.add(new CommandService(new ServiceCollection()));
+  const menuService = new MenuService(commands, contextKeys);
+  const contextMenuProvider: IContextMenuProvider = { showContextMenu() {} };
   const viewDescriptors = disposables.add(new ViewDescriptorService({
     contextKeyService: contextKeys,
     registry,
@@ -717,6 +720,11 @@ test("Panel presents its destinations as tabs and active commands as a toolbar",
   const panel = disposables.add(new PanelPart({
     ownerDocument: dom.window.document,
     viewDescriptorService: viewDescriptors,
+    titleActions: {
+      menuService,
+      contextMenuProvider,
+      menuId: MenuId.PanelTitle,
+    },
   }));
   dom.window.document.body.append(panel.element);
 
@@ -727,7 +735,15 @@ test("Panel presents its destinations as tabs and active commands as a toolbar",
     [...(tablist?.querySelectorAll("[role='tab']") ?? [])].map((tab) => tab.textContent),
     ["Problems", "Output", "Terminal", "Ports"],
   );
-  assert.equal(panel.element.querySelectorAll(".zeta-panel-title-control [role='toolbar']").length, 0);
+  const panelToolbar = panel.element.querySelector(".zeta-pane-composite-title-part-actions [role='toolbar']");
+  assert.ok(panelToolbar);
+  const maximizePanel = [...panelToolbar.querySelectorAll("button")].find((button) => button.textContent === "Maximize Panel");
+  const closePanel = [...panelToolbar.querySelectorAll("button")].find((button) => button.textContent === "Close Panel");
+  assert.ok(maximizePanel);
+  assert.ok(closePanel);
+  assert.ok(maximizePanel.querySelector("svg.zeta-icon"));
+  assert.ok(closePanel.querySelector("svg.zeta-icon"));
+  assert.equal(maximizePanel.compareDocumentPosition(closePanel) & browserEnvironment.window.Node.DOCUMENT_POSITION_FOLLOWING, browserEnvironment.window.Node.DOCUMENT_POSITION_FOLLOWING);
 
   const terminalDescriptor = viewDescriptors.getViewContainers(ViewContainerLocation.Panel).find((container) => container.id === "zeta.panel.terminal");
   assert.ok(terminalDescriptor);
@@ -744,7 +760,7 @@ test("Panel presents its destinations as tabs and active commands as a toolbar",
   panel.showComposite(terminal.id);
   panel.setActiveComposite(terminal.id);
 
-  const toolbar = panel.element.querySelector(".zeta-panel-title-actions [role='toolbar']");
+  const toolbar = panel.element.querySelector(".zeta-pane-composite-title-view-actions [role='toolbar']");
   const terminalTab = panel.element.querySelector("[role='tab'][aria-selected='true']");
   assert.equal(toolbar?.getAttribute("aria-label"), "Test panel actions");
   assert.equal(toolbar?.querySelector("button")?.textContent, "Run");
@@ -754,6 +770,27 @@ test("Panel presents its destinations as tabs and active commands as a toolbar",
   assert.equal(terminal.element.classList.contains("zeta-pane-composite-pane-layout-fill"), true);
   assert.equal(terminalTab?.getAttribute("aria-controls"), terminal.element.id);
   assert.equal(terminal.element.getAttribute("aria-labelledby"), terminalTab?.id);
+
+  for (const panelId of ["zeta.panel.problems", "zeta.panel.output", "zeta.panel.ports"]) {
+    const descriptor = viewDescriptors.getViewContainers(ViewContainerLocation.Panel).find((container) => container.id === panelId);
+    assert.ok(descriptor);
+    const composite = new PaneComposite({
+      viewContainer: descriptor,
+      model: viewDescriptors.getViewContainerModel(descriptor.id),
+      instantiationService: new InstantiationService(),
+      contextKeyService: contextKeys,
+      ownerDocument: dom.window.document,
+      paneHeaders: "hidden",
+      paneLayout: "fill",
+    });
+    panel.addComposite(composite);
+    panel.showComposite(composite.id);
+    panel.setActiveComposite(composite.id);
+    assert.equal(panel.element.querySelector(".zeta-pane-composite-title-view-actions [aria-label='Test panel actions']"), null);
+    assert.equal(panelToolbar.isConnected, true);
+    assert.ok([...panelToolbar.querySelectorAll("button")].some((button) => button.textContent === "Maximize Panel"));
+    assert.ok([...panelToolbar.querySelectorAll("button")].some((button) => button.textContent === "Close Panel"));
+  }
 
   disposables.dispose();
   dom.window.close();
@@ -1078,7 +1115,7 @@ test("panel layout actions use state icons", () => {
     .flatMap(([, actions]) => actions)
     .find((action) => action.id === TogglePanelCommandId);
   const maximizePanelAction = () => menuService
-    .getMenuActions(MenuId.TerminalTitle)
+    .getMenuActions(MenuId.PanelTitle)
     .flatMap(([, actions]) => actions)
     .find((action) => action.id === ToggleMaximizedPanelCommandId);
 

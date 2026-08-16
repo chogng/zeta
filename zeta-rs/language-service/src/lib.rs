@@ -53,9 +53,9 @@ pub use requests::{
 pub use restart::LanguageServerRestartPolicy;
 pub use semantic_tokens::{LanguageSemanticToken, LanguageSemanticTokens};
 pub use service::{
-    LanguageServerMessageSeverity, LanguageServerProgress, LanguageServerState, LanguageService,
-    LanguageServiceDocumentOperation, LanguageServiceEvent, LanguageServiceEventSink,
-    NoopLanguageServiceEventSink,
+    LanguageServerMessageSeverity, LanguageServerMessageSource, LanguageServerProgress,
+    LanguageServerState, LanguageService, LanguageServiceDocumentOperation, LanguageServiceEvent,
+    LanguageServiceEventSink, NoopLanguageServiceEventSink,
 };
 pub use workspace_diagnostics::{LanguageWorkspaceDiagnostic, LanguageWorkspaceDiagnostics};
 pub use zeta_language_server_catalog::LanguageServerDefinition;

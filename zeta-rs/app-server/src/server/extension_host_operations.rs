@@ -13,6 +13,10 @@ use zeta_app_server_protocol::protocol::extension_host::ExtensionHostInvokeStart
 use zeta_app_server_protocol::protocol::extension_host::ExtensionHostInvokeStartResult;
 use zeta_app_server_protocol::protocol::extension_host::ExtensionHostLanguageProviderOperationDto;
 use zeta_app_server_protocol::protocol::extension_host::ExtensionHostLifecycleDto;
+use zeta_app_server_protocol::protocol::extension_host::ExtensionHostOutputChannelKindDto;
+use zeta_app_server_protocol::protocol::extension_host::ExtensionHostOutputEventDto;
+use zeta_app_server_protocol::protocol::extension_host::ExtensionHostOutputOperationDto;
+use zeta_app_server_protocol::protocol::extension_host::ExtensionHostOutputSeverityDto;
 use zeta_app_server_protocol::protocol::extension_host::ExtensionHostReconcileModeDto;
 use zeta_app_server_protocol::protocol::extension_host::ExtensionHostReconcileParams;
 use zeta_app_server_protocol::protocol::extension_host::ExtensionHostRegistrationDescriptorDto;
@@ -20,9 +24,13 @@ use zeta_app_server_protocol::protocol::extension_host::ExtensionHostRegistratio
 use zeta_app_server_protocol::protocol::extension_host::ExtensionHostSnapshotDto;
 use zeta_editor_extension_host::CancelReason;
 use zeta_editor_extension_host::ExtensionHostError;
+use zeta_editor_extension_host::HostOutputChannelKind;
+use zeta_editor_extension_host::HostOutputOperation;
+use zeta_editor_extension_host::HostOutputSeverity;
 use zeta_editor_extension_host::LanguageProviderOperation;
 use zeta_editor_extension_host::RegistrationDescriptor;
 use zeta_editor_extension_host::RegistrationKind;
+use zeta_editor_extension_host::SequencedExtensionHostOutputEvent;
 
 use super::AppServer;
 use super::ConnectionState;
@@ -164,6 +172,12 @@ fn fleet_dto(snapshot: ExtensionHostFleetSnapshot) -> ExtensionHostSnapshotDto {
                     ExtensionHostLifecycle::Failed => ExtensionHostLifecycleDto::Failed,
                 },
                 failure: extension.failure.map(failure_dto),
+                stderr: extension.stderr,
+                output_events: extension
+                    .output_events
+                    .into_iter()
+                    .map(output_event_dto)
+                    .collect(),
                 registrations: extension
                     .registrations
                     .into_iter()
@@ -171,6 +185,74 @@ fn fleet_dto(snapshot: ExtensionHostFleetSnapshot) -> ExtensionHostSnapshotDto {
                     .collect(),
             })
             .collect(),
+    }
+}
+
+fn output_event_dto(event: SequencedExtensionHostOutputEvent) -> ExtensionHostOutputEventDto {
+    ExtensionHostOutputEventDto {
+        sequence: event.sequence,
+        incarnation: event.event.context.incarnation,
+        activation_generation: event.event.context.activation_generation,
+        operation: match event.event.operation {
+            HostOutputOperation::Create {
+                channel_id,
+                label,
+                kind,
+            } => ExtensionHostOutputOperationDto::Create {
+                channel_id,
+                label,
+                kind: match kind {
+                    HostOutputChannelKind::Output => ExtensionHostOutputChannelKindDto::Output,
+                    HostOutputChannelKind::Log => ExtensionHostOutputChannelKindDto::Log,
+                },
+            },
+            HostOutputOperation::Append {
+                channel_id,
+                text,
+                severity,
+                category,
+            } => ExtensionHostOutputOperationDto::Append {
+                channel_id,
+                text,
+                severity: output_severity_dto(severity),
+                category,
+            },
+            HostOutputOperation::Replace {
+                channel_id,
+                text,
+                severity,
+                category,
+            } => ExtensionHostOutputOperationDto::Replace {
+                channel_id,
+                text,
+                severity: output_severity_dto(severity),
+                category,
+            },
+            HostOutputOperation::Clear { channel_id } => {
+                ExtensionHostOutputOperationDto::Clear { channel_id }
+            }
+            HostOutputOperation::Show {
+                channel_id,
+                preserve_focus,
+            } => ExtensionHostOutputOperationDto::Show {
+                channel_id,
+                preserve_focus,
+            },
+            HostOutputOperation::Dispose { channel_id } => {
+                ExtensionHostOutputOperationDto::Dispose { channel_id }
+            }
+        },
+    }
+}
+
+fn output_severity_dto(severity: HostOutputSeverity) -> ExtensionHostOutputSeverityDto {
+    match severity {
+        HostOutputSeverity::Trace => ExtensionHostOutputSeverityDto::Trace,
+        HostOutputSeverity::Debug => ExtensionHostOutputSeverityDto::Debug,
+        HostOutputSeverity::Information => ExtensionHostOutputSeverityDto::Information,
+        HostOutputSeverity::Warning => ExtensionHostOutputSeverityDto::Warning,
+        HostOutputSeverity::Error => ExtensionHostOutputSeverityDto::Error,
+        HostOutputSeverity::Log => ExtensionHostOutputSeverityDto::Log,
     }
 }
 

@@ -38,10 +38,17 @@ export enum WorkspaceTransitionRecovery {
   Reconciled = "reconciled",
 }
 
+export enum WorkspaceTrustChoice {
+  UserConfig = "userConfig",
+  Restricted = "restricted",
+  Trusted = "trusted",
+}
+
 export interface IWorkspaceTransitionContext {
   readonly transitionId: number;
   readonly previous: IAnyWorkspaceIdentifier;
   readonly workspace: ISingleFolderWorkspaceIdentifier;
+  readonly trust: WorkspaceTrustChoice;
 }
 
 export interface IWorkspaceRuntimeSwitcher {
@@ -131,13 +138,13 @@ export class WorkspaceTransitionMainService extends DisposableOwner {
     return this._state;
   }
 
-  transitionToFolder(path: string): Promise<IWorkspaceTransitionResult> {
-    const transition = this.transitionQueue.then(() => this.doTransitionToFolder(path));
+  transitionToFolder(path: string, trust: WorkspaceTrustChoice = WorkspaceTrustChoice.UserConfig): Promise<IWorkspaceTransitionResult> {
+    const transition = this.transitionQueue.then(() => this.doTransitionToFolder(path, trust));
     this.transitionQueue = transition.then(() => undefined, () => undefined);
     return transition;
   }
 
-  private async doTransitionToFolder(requestedPath: string): Promise<IWorkspaceTransitionResult> {
+  private async doTransitionToFolder(requestedPath: string, trust: WorkspaceTrustChoice): Promise<IWorkspaceTransitionResult> {
     const transitionId = this.nextTransitionId++;
     const previous = this.context.getWorkspace();
     this.setState({ phase: WorkspaceTransitionPhase.Resolving, transitionId, requestedPath, previous });
@@ -160,7 +167,7 @@ export class WorkspaceTransitionMainService extends DisposableOwner {
       return { status: WorkspaceTransitionStatus.Unchanged, previous, workspace };
     }
 
-    const context = { transitionId, previous, workspace };
+    const context = { transitionId, previous, workspace, trust };
     const runtime = await this.switchRuntime(requestedPath, context);
     if (runtime.failure) return this.finishBeforeCommit(runtime.failure);
 

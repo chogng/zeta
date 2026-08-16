@@ -80,6 +80,14 @@ pub enum LanguageServerMessageSeverity {
     Log,
 }
 
+/// Origin of a product-visible language-server message.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum LanguageServerMessageSource {
+    Protocol,
+    Stderr,
+    Service,
+}
+
 /// Product-visible work-done progress state for one server-owned token.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LanguageServerProgress {
@@ -103,6 +111,7 @@ pub enum LanguageServiceEvent {
     ServerMessage {
         server: String,
         severity: LanguageServerMessageSeverity,
+        source: LanguageServerMessageSource,
         show: bool,
         message: String,
     },
@@ -1252,18 +1261,33 @@ impl Supervisor {
             (ManagedServerPhase::Ready, LanguageServerEvent::Diagnostics(params)) => {
                 self.publish_diagnostics(params);
             }
-            (ManagedServerPhase::Ready, LanguageServerEvent::LogMessage(message)) => {
-                self.emit_server_message(server, message.typ, false, message.message)
-            }
-            (ManagedServerPhase::Ready, LanguageServerEvent::ShowMessage(message)) => {
-                self.emit_server_message(server, message.typ, true, message.message)
-            }
+            (ManagedServerPhase::Ready, LanguageServerEvent::LogMessage(message)) => self
+                .emit_server_message(
+                    server,
+                    message.typ,
+                    LanguageServerMessageSource::Protocol,
+                    false,
+                    message.message,
+                ),
+            (ManagedServerPhase::Ready, LanguageServerEvent::ShowMessage(message)) => self
+                .emit_server_message(
+                    server,
+                    message.typ,
+                    LanguageServerMessageSource::Protocol,
+                    true,
+                    message.message,
+                ),
             (ManagedServerPhase::Ready, LanguageServerEvent::DynamicCapabilitiesChanged(_)) => {
                 self.emit_server_capabilities(&server, server_epoch)
             }
-            (ManagedServerPhase::Ready, LanguageServerEvent::ServerStderr(message)) => {
-                self.emit_server_message(server, MessageType::LOG, false, message)
-            }
+            (ManagedServerPhase::Ready, LanguageServerEvent::ServerStderr(message)) => self
+                .emit_server_message(
+                    server,
+                    MessageType::LOG,
+                    LanguageServerMessageSource::Stderr,
+                    false,
+                    message,
+                ),
             (ManagedServerPhase::Ready, LanguageServerEvent::Telemetry(_))
             | (ManagedServerPhase::Ready, LanguageServerEvent::WorkDoneProgressCreated(_))
             | (ManagedServerPhase::Ready, LanguageServerEvent::UnhandledNotification { .. })
@@ -1361,12 +1385,14 @@ impl Supervisor {
         &self,
         server: LanguageServerName,
         message_type: MessageType,
+        source: LanguageServerMessageSource,
         show: bool,
         message: String,
     ) {
         self.emit(LanguageServiceEvent::ServerMessage {
             server: server.to_string(),
             severity: language_server_message_severity(message_type),
+            source,
             show,
             message,
         });

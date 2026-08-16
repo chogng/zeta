@@ -578,9 +578,10 @@ Terminal title actions 通过 `MenuId.TerminalTitle`、Context Key 与
 `MenuWorkbenchToolBar` 接入 MenuService；profile selector 仍由 Terminal 自定义 action view
 item 呈现。Command/Menu/Toolbar 的分层以 [`menu-system.md`](menu-system.md) 为准。
 
-当前输出采用 `terminal/read` bounded polling，而不是 `terminal/output` notification。这是现有
-同步 JSONL loop 的明确限制；前端 service 将 pull 转成 `onDidWriteData` 事件，因此 future
-transport 支持主动、有背压的 stream 后，Workbench caller 不需要改变。Renderer 对输入做 8 ms
+当前输出采用 `terminal/read` bounded polling，而不是 `terminal/output` notification；这是 Terminal
+protocol 的显式流控选择，不再是 JSONL request loop 的串行限制。前端 service 将 pull 转成
+`onDidWriteData` 事件，因此 future transport 支持主动、有背压的 stream 后，Workbench caller
+不需要改变。Renderer 对输入做 8 ms
 batch，对 resize 做 microtask coalescing；Rust 仍重新校验输入 byte limit、rows/cols、owner 和
 output cursor。
 

@@ -2,8 +2,9 @@ import { Action2, MenuId, registerAction2 } from "../../../../platform/actions/c
 import { Keybinding, logicalKey } from "../../../../base/common/keybindings.js";
 import { type ServicesAccessor } from "../../../../platform/instantiation/common/instantiation.js";
 import { IDebugService } from "../../../services/debug/common/debugService.js";
+import { IDebugConsoleService } from "../../../services/debug/common/debugConsoleService.js";
 import { IViewsService } from "../../../services/views/browser/viewsService.js";
-import { CONTINUE_DEBUG_COMMAND_ID, DEBUG_VIEW_ID, PAUSE_DEBUG_COMMAND_ID, RESTART_DEBUG_COMMAND_ID, START_DEBUG_COMMAND_ID, STEP_INTO_DEBUG_COMMAND_ID, STEP_OUT_DEBUG_COMMAND_ID, STEP_OVER_DEBUG_COMMAND_ID, STOP_ALL_DEBUG_COMMAND_ID, STOP_DEBUG_COMMAND_ID } from "../common/debug.js";
+import { CLEAR_DEBUG_CONSOLE_COMMAND_ID, CONTINUE_DEBUG_COMMAND_ID, DEBUG_CONSOLE_VIEW_ID, DEBUG_VIEW_ID, FOCUS_DEBUG_CONSOLE_COMMAND_ID, PAUSE_DEBUG_COMMAND_ID, RESTART_DEBUG_COMMAND_ID, START_DEBUG_COMMAND_ID, STEP_INTO_DEBUG_COMMAND_ID, STEP_OUT_DEBUG_COMMAND_ID, STEP_OVER_DEBUG_COMMAND_ID, STOP_ALL_DEBUG_COMMAND_ID, STOP_DEBUG_COMMAND_ID } from "../common/debug.js";
 
 registerAction2(class StartDebugAction extends Action2 {
   constructor() { super({ id: START_DEBUG_COMMAND_ID, title: "Start Debugging", f1: true, keybinding: { primary: Keybinding.single(logicalKey("F5")) }, menu: { id: MenuId.MenubarRunMenu, group: "1_debug", order: 1 } }); }
@@ -32,6 +33,16 @@ registerAction2(class RestartDebugAction extends Action2 {
 registerAction2(class StopAllDebugAction extends Action2 {
   constructor() { super({ id: STOP_ALL_DEBUG_COMMAND_ID, title: "Stop All Debugging", f1: true, menu: { id: MenuId.MenubarRunMenu, group: "1_debug", order: 4 } }); }
   override run(accessor: ServicesAccessor): void { void accessor.get(IDebugService).stopAll().catch(reportError); }
+});
+
+registerAction2(class FocusDebugConsoleAction extends Action2 {
+  constructor() { super({ id: FOCUS_DEBUG_CONSOLE_COMMAND_ID, title: "Focus on Debug Console View", f1: true }); }
+  override run(accessor: ServicesAccessor): void { accessor.get(IViewsService).focusView(DEBUG_CONSOLE_VIEW_ID); }
+});
+
+registerAction2(class ClearDebugConsoleAction extends Action2 {
+  constructor() { super({ id: CLEAR_DEBUG_CONSOLE_COMMAND_ID, title: "Clear Console", f1: true }); }
+  override run(accessor: ServicesAccessor): void { accessor.get(IDebugConsoleService).clear(); }
 });
 
 for (const [id, title, keybinding, operation] of [

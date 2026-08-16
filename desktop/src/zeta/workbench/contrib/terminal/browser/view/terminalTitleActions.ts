@@ -9,7 +9,6 @@ import type { IMenuService } from "../../../../../platform/actions/common/menuSe
 import { CommandsRegistry } from "../../../../../platform/commands/common/commands.js";
 import { ContextKeyExpr, type IContextKey, type IContextKeyService, RawContextKey } from "../../../../../platform/contextkey/common/contextkey.js";
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
-import { ToggleMaximizedPanelCommandId, TogglePanelCommandId } from "../../../../browser/parts/titlebar/titlebarActions.js";
 import type { ITerminalInstance, ITerminalProfile } from "../../../../services/terminal/common/terminal.js";
 import { terminalProfileIcon } from "./terminalProfileIcon.js";
 
@@ -70,9 +69,6 @@ export class TerminalTitleActions extends DisposableOwner {
       {
         ariaLabel: "Terminal actions",
         highlightToggledItems: true,
-        moreActionsPlacement: {
-          beforeActionId: ToggleMaximizedPanelCommandId,
-        },
         menuOptions: { shouldForwardArgs: true },
         actionViewItemProvider: (action) => this.createActionViewItem(action, options.contextMenuService),
       },
@@ -161,16 +157,6 @@ export class TerminalTitleActions extends DisposableOwner {
       },
       group: "1_terminal",
       order: 10,
-    }));
-    this.own(MenusRegistry.appendMenuItem(MenuId.TerminalTitle, {
-      command: {
-        id: TogglePanelCommandId,
-        title: "Close Panel",
-        tooltip: "Close Panel",
-        icon: lxiconsLibrary.close,
-      },
-      group: "navigation",
-      order: 50,
     }));
   }
 

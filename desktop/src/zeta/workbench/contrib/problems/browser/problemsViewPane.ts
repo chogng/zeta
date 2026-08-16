@@ -1,8 +1,11 @@
 import { addDisposableListener } from "../../../../base/browser/dom.js";
+import { ActionBar } from "../../../../base/browser/ui/actionbar/actionbar.js";
+import type { IAction } from "../../../../base/common/actions.js";
+import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { LanguageDiagnosticSeverity, type LanguageDiagnostic } from "../../../../editor/common/languages/languageResults.js";
-import { ViewPane, type IViewPaneOptions } from "../../../browser/parts/views/viewPane.js";
 import { type IEditorPart } from "../../../browser/parts/editor/editorPart.js";
+import { ViewPane, type IViewPaneOptions, type PartTitleProjection } from "../../../browser/parts/views/viewPane.js";
 import { type ILanguageDiagnosticsService, type LanguageDiagnosticSnapshot } from "../../../services/language/common/languageDiagnosticsService.js";
 
 interface ProblemEntry {
@@ -27,6 +30,7 @@ const severityLabels: Readonly<Record<LanguageDiagnosticSeverity, string>> = Obj
 /** Aggregated workspace diagnostics with severity filtering and editor navigation. */
 export class ProblemsViewPane extends ViewPane {
   private readonly filterInput: HTMLInputElement;
+  private readonly titleActions: ActionBar;
   private readonly severityButtons = new Map<LanguageDiagnosticSeverity, HTMLButtonElement>();
   private readonly enabledSeverities = new Set<LanguageDiagnosticSeverity>(severities);
   private readonly statusElement: HTMLDivElement;
@@ -48,6 +52,17 @@ export class ProblemsViewPane extends ViewPane {
     this.filterInput.setAttribute("aria-label", "Filter problems by message or file");
     this.filterInput.autocomplete = "off";
     this.filterInput.spellcheck = false;
+    const focusFilterAction: IAction = {
+      id: "zeta.problems.focusFilter",
+      label: "Filter Problems",
+      tooltip: "Filter Problems",
+      icon: lxiconsLibrary.filter,
+      enabled: true,
+      checked: undefined,
+      run: () => this.filterInput.focus(),
+    };
+    this.titleActions = this.own(new ActionBar({ ownerDocument: document, ariaLabel: "Problems actions", actions: [focusFilterAction] }));
+    this.titleActions.element.classList.add("zeta-toolbar");
     const severityControls = document.createElement("div");
     severityControls.className = "zeta-problems-severities";
     severityControls.setAttribute("aria-label", "Problem severities");
@@ -80,6 +95,10 @@ export class ProblemsViewPane extends ViewPane {
     this.own(diagnosticsService.onDidChangeDiagnostics(() => this.render()));
     this.defer(() => { this.disposed = true; });
     this.render();
+  }
+
+  override get partTitleProjection(): PartTitleProjection {
+    return { actions: this.titleActions.element };
   }
 
   private toggleSeverity(severity: LanguageDiagnosticSeverity): void {

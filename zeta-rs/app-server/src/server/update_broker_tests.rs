@@ -1,6 +1,8 @@
 use super::*;
 use crate::server::notification_queue::NotificationQueue;
 use zeta_app_server_protocol::protocol::common::AgentInteractionCapability;
+use zeta_app_server_protocol::protocol::language::LanguageServerStateDto;
+use zeta_app_server_protocol::protocol::language::LanguageServerStateNotification;
 use zeta_protocol::ActionApprovalCapability;
 use zeta_protocol::ActionApprovalCapabilityKind;
 use zeta_protocol::ActionApprovalRequest;
@@ -52,6 +54,32 @@ fn broker_fans_out_filesystem_invalidation_without_a_subscription() {
     assert_eq!(notifications.len(), 1);
     assert_eq!(notifications[0]["method"], "fs/changed");
     assert_eq!(notifications[0]["params"]["paths"][0], "src/lib.rs");
+}
+
+#[test]
+fn broker_fans_out_language_server_lifecycle_without_a_subscription() {
+    let broker = UpdateBroker::default();
+    let queue = NotificationQueue::default();
+    broker.register(1, &queue);
+
+    broker.publish_language_server_state(LanguageServerStateNotification {
+        server: "rust-analyzer".into(),
+        state: LanguageServerStateDto::BackingOff {
+            attempt: 2,
+            retry_after_millis: 1_500,
+        },
+    });
+
+    let notifications = queue.drain();
+    assert_eq!(notifications.len(), 1);
+    assert_eq!(notifications[0]["method"], "language/serverState");
+    assert_eq!(notifications[0]["params"]["server"], "rust-analyzer");
+    assert_eq!(notifications[0]["params"]["state"]["type"], "backingOff");
+    assert_eq!(notifications[0]["params"]["state"]["attempt"], 2);
+    assert_eq!(
+        notifications[0]["params"]["state"]["retryAfterMillis"],
+        1_500
+    );
 }
 
 #[test]

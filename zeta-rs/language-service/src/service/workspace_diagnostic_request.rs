@@ -80,6 +80,7 @@ impl Supervisor {
                 self.emit(LanguageServiceEvent::ServerMessage {
                     server: server.to_string(),
                     severity: super::LanguageServerMessageSeverity::Error,
+                    source: super::LanguageServerMessageSource::Service,
                     show: false,
                     message,
                 });

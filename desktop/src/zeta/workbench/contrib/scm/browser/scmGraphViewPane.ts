@@ -12,6 +12,7 @@ import type { IViewPaneOptions } from "../../../browser/parts/views/viewPane.js"
 import { ViewPane } from "../../../browser/parts/views/viewPane.js";
 import { createScmGraphRows, renderScmGraphRow, type ScmGraphNodeKind } from "./scmGraphRenderer.js";
 import { ScmGraphTitleActions } from "./scmGraphTitleActions.js";
+import { gitErrorMessage } from "./scmError.js";
 
 /** Bounded recent repository history rendered as a compact commit graph. */
 export class ScmGraphViewPane extends ViewPane {
@@ -57,7 +58,7 @@ export class ScmGraphViewPane extends ViewPane {
       const document = this.graphElement.ownerDocument;
       const message = document.createElement("p");
       message.className = "zeta-scm-empty";
-      message.textContent = error instanceof Error ? error.message : String(error);
+      message.textContent = gitErrorMessage(error);
       const retry = document.createElement("button");
       retry.className = "zeta-scm-command";
       retry.type = "button";

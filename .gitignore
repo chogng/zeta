@@ -11,6 +11,10 @@ target/
 .temp
 .tmp/
 output/
+!desktop/src/zeta/workbench/contrib/output/
+!desktop/src/zeta/workbench/contrib/output/**
+!desktop/src/zeta/workbench/services/output/
+!desktop/src/zeta/workbench/services/output/**
 
 # Desktop build products
 desktop/node_modules/

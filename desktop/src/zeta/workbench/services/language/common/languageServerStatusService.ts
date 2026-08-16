@@ -1,13 +1,5 @@
 import { type Event } from "../../../../base/common/event.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
-import { type LanguageServerMessageSeverityDto } from "../../../../../../generated/app-server/types.js";
-
-export interface LanguageServerLogEntry {
-  readonly sequence: number;
-  readonly server: string;
-  readonly severity: LanguageServerMessageSeverityDto;
-  readonly message: string;
-}
 
 export interface LanguageServerProgressState {
   readonly server: string;
@@ -17,12 +9,22 @@ export interface LanguageServerProgressState {
   readonly percentage?: number;
 }
 
+export type LanguageServerLifecycleKind = "starting" | "ready" | "backingOff" | "crashLoop" | "failed" | "stopped";
+
+export interface LanguageServerLifecycleState {
+  readonly server: string;
+  readonly state: LanguageServerLifecycleKind;
+  readonly attempt?: number;
+  readonly retryAfterMillis?: number;
+  readonly restartAttempts?: number;
+  readonly message?: string;
+}
+
 /** Window-scoped language-server messages and active work-done progress. */
 export interface ILanguageServerStatusService {
   readonly onDidChange: Event<void>;
-  getLogEntries(): readonly LanguageServerLogEntry[];
   getProgress(): readonly LanguageServerProgressState[];
-  clearLog(): void;
+  getStates(): readonly LanguageServerLifecycleState[];
 }
 
 export const ILanguageServerStatusService = createServiceIdentifier<ILanguageServerStatusService>("languageServerStatusService");
