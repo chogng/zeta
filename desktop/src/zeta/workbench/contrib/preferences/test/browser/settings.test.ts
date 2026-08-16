@@ -417,7 +417,7 @@ test("Editor settings render supported controls and persist typed preferences", 
   const tabSize = root.querySelector<HTMLInputElement>('[data-configuration-key="editor.tabSize"]')!;
   assert.equal(wordWrap.querySelector<HTMLButtonElement>(".zeta-select-box-button")?.getAttribute("role"), "combobox");
   assert.equal(settingValue(root, "editor.wordWrap"), "Off");
-  assert.equal(settingValue(root, "workbench.editor.defaultNewDocumentEditor"), "Follow build mode");
+  assert.equal(settingValue(root, "workbench.editor.defaultNewDocumentEditor"), "Default");
   const wordWrapButton = wordWrap.querySelector<HTMLButtonElement>(".zeta-select-box-button")!;
   wordWrap.closest<HTMLElement>(".zeta-editor-setting")!.querySelector<HTMLElement>(".zeta-editor-setting-copy")!.click();
   assert.equal(wordWrapButton.getAttribute("aria-expanded"), "false");
@@ -561,8 +561,9 @@ test("Marketplace settings discover and install through the generic service", as
   await new Promise((resolve) => globalThis.setTimeout(resolve, 0));
   await new Promise((resolve) => globalThis.setTimeout(resolve, 0));
   assert.equal(root.querySelector(".zeta-package-marketplace-toolbar > button")?.textContent, "Browse Marketplace");
-  assert.deepEqual([...root.querySelectorAll(".zeta-package-marketplace-filter")].map(button => button.textContent), ["All", "Plugins", "MCPs", "Skills", "Languages", "Themes"]);
-  assert.equal(root.querySelector(".zeta-package-marketplace-filter.checked")?.textContent, "All");
+  assert.equal(root.querySelector(".zeta-package-marketplace-filters [role='tablist']")?.getAttribute("aria-label"), "Marketplace package types");
+  assert.deepEqual([...root.querySelectorAll(".zeta-package-marketplace-filters [role='tab']")].map(tab => tab.textContent), ["All", "Plugins", "MCPs", "Skills", "Languages", "Themes"]);
+  assert.equal(root.querySelector(".zeta-package-marketplace-filters .zeta-tab.checked")?.textContent, "All");
   assert.equal(root.querySelector(".zeta-package-marketplace-card h4")?.textContent, "Docs MCP");
   assert.match(root.textContent ?? "", /mcp: docs-mcp/);
   assert.match(root.textContent ?? "", /Listed in the official MCP Registry · ac\.tandem\/docs-mcp@0\.3\.2/);
@@ -570,14 +571,14 @@ test("Marketplace settings discover and install through the generic service", as
   settings.open("marketplace");
   assert.equal(root.querySelector(".zeta-package-marketplace-card h4")?.textContent, "Docs MCP");
   assert.deepEqual(searches, [{ query: "", packageType: undefined, limit: 100 }]);
-  root.querySelectorAll<HTMLButtonElement>(".zeta-package-marketplace-filter")[3]?.click();
+  root.querySelectorAll<HTMLButtonElement>(".zeta-package-marketplace-filters [role='tab']")[3]?.click();
   await new Promise((resolve) => globalThis.setTimeout(resolve, 0));
   await new Promise((resolve) => globalThis.setTimeout(resolve, 0));
   assert.deepEqual(searches, [
     { query: "", packageType: undefined, limit: 100 },
     { query: "", packageType: "skill", limit: 100 },
   ]);
-  assert.equal(root.querySelector(".zeta-package-marketplace-filter.checked")?.textContent, "Skills");
+  assert.equal(root.querySelector(".zeta-package-marketplace-filters .zeta-tab.checked")?.textContent, "Skills");
   root.querySelector<HTMLButtonElement>(".zeta-package-marketplace-actions button")?.click();
   await new Promise((resolve) => globalThis.setTimeout(resolve, 0));
   assert.deepEqual(installs, ["marketplace/docs-mcp@0.3.2"]);

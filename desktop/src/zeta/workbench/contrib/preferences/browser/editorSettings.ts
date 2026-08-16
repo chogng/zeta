@@ -2,6 +2,7 @@ import "./media/editorSettings.css";
 import { addDisposableListener } from "../../../../base/browser/dom.js";
 import type { IContextViewProvider } from "../../../../base/browser/ui/contextview/contextview.js";
 import { SelectBox } from "../../../../base/browser/ui/selectbox/selectbox.js";
+import { Switch, Toggle } from "../../../../base/browser/ui/toggle/toggle.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import type { IConfigurationKey, IConfigurationService } from "../../../../platform/configuration/common/configurationService.js";
 import { EditorIndentationKind } from "../../../../editor/common/editorIndentation.js";
@@ -15,7 +16,7 @@ import { SettingsTreeModel, type SettingsTreeNode } from "./settingsTreeModels.j
 /** Product settings controls for Aster-backed code editors. */
 export class EditorSettingsPane extends DisposableOwner {
   readonly element: HTMLDivElement;
-  private readonly controls = new Map<string, HTMLInputElement | SelectBox>();
+  private readonly controls = new Map<string, HTMLInputElement | SelectBox | Toggle>();
   private readonly status: HTMLParagraphElement;
 
   constructor(ownerDocument: Document, private readonly configurationService: IConfigurationService, private readonly contextViewProvider: IContextViewProvider) {
@@ -36,9 +37,9 @@ export class EditorSettingsPane extends DisposableOwner {
           label: "Default editor for new documents",
           description: "Follow the active build mode, or explicitly prefer the Code or Academic editor for new untitled documents.",
           options: [
-            { value: "buildMode", label: "Follow build mode" },
-            { value: "code", label: "Code Editor" },
-            { value: "academic", label: "Academic Editor" },
+            { value: "buildMode", label: "Default" },
+            { value: "code", label: "Code" },
+            { value: "academic", label: "Academic" },
           ],
         }),
         this.createInformationalSetting("Existing resources", "Source files continue to open in the Code Editor, while Academic content types and .zeta-paper files open in the Structured Editor.", "Automatic"),
@@ -161,22 +162,17 @@ export class EditorSettingsPane extends DisposableOwner {
 
   private createToggleSetting(key: IConfigurationKey<boolean>, label: string, description: string): HTMLElement {
     const document = this.element.ownerDocument;
-    const setting = document.createElement("label");
-    setting.className = "zeta-editor-setting zeta-editor-toggle-setting";
-    const input = document.createElement("input");
-    input.type = "checkbox";
-    input.dataset.configurationKey = key.key;
-    const track = document.createElement("span");
-    track.className = "zeta-editor-toggle-track";
-    track.setAttribute("aria-hidden", "true");
     const copy = this.createSettingCopy(label, description);
-    setting.append(input, track, copy);
-    this.controls.set(key.key, input);
-    this.own(addDisposableListener(input, "change", () => {
-      setting.classList.toggle("checked", input.checked);
-      void this.updateConfiguration(key, input.checked);
+    const toggle = this.own(new Switch({
+      ownerDocument: document,
+      ariaLabel: label,
+      content: copy,
     }));
-    return setting;
+    toggle.element.classList.add("zeta-editor-setting", "zeta-editor-toggle-setting");
+    toggle.input.dataset.configurationKey = key.key;
+    this.controls.set(key.key, toggle);
+    this.own(toggle.onDidChange(checked => void this.updateConfiguration(key, checked)));
+    return toggle.element;
   }
 
   private createInformationalSetting(label: string, description: string, stateLabel: string): HTMLElement {
@@ -316,9 +312,12 @@ export class EditorSettingsPane extends DisposableOwner {
     const control = this.controls.get(key.key);
     if (!control) return;
     const value = this.configurationService.getValue(key);
+    if (control instanceof Toggle) {
+      control.checked = value as boolean;
+      return;
+    }
     if (control instanceof this.element.ownerDocument.defaultView!.HTMLInputElement && control.type === "checkbox") {
       control.checked = value as boolean;
-      control.closest(".zeta-editor-toggle-setting")?.classList.toggle("checked", control.checked);
       return;
     }
     control.value = String(value);
@@ -341,6 +340,7 @@ export class EditorSettingsPane extends DisposableOwner {
     this.element.classList.toggle("is-saving", !enabled);
     for (const control of this.controls.values()) {
       if (control instanceof SelectBox) control.enabled = enabled;
+      else if (control instanceof Toggle) control.enabled = enabled;
       else control.disabled = !enabled;
     }
   }

@@ -8,8 +8,10 @@
 }
 
 .zeta-select-box-list {
-  min-width: max(160px, var(--dropdown-trigger-width, 0px));
+  width: var(--dropdown-trigger-width, 160px);
+  min-width: var(--dropdown-trigger-width, 160px);
   max-height: min(320px, calc(100vh - 16px));
+  box-sizing: border-box;
   padding: 3px;
   outline: none;
   color: var(--zeta-input-foreground);
@@ -29,8 +31,8 @@
 }
 
 .zeta-select-box-option-active {
-  color: var(--zeta-selection-foreground);
-  background: var(--zeta-selection-background);
+  color: var(--zeta-foreground);
+  background: var(--zeta-list-hover-background);
 }
 
 .zeta-select-box-option-label {
@@ -67,18 +69,18 @@
 }
 
 .zeta-select-box.zeta-select-box-field {
-  width: 60px;
-  min-width: 60px;
+  width: 120px;
+  min-width: 120px;
 }
 
 .zeta-select-box-field > .zeta-select-box-button {
-  width: 60px;
+  width: 120px;
   height: 24px;
   min-height: 24px;
   box-sizing: border-box;
   padding: 2px 6px;
   border: 1px solid var(--zeta-input-border);
-  border-radius: 8px;
+  border-radius: 6px;
   color: var(--zeta-input-foreground);
   background: var(--zeta-input-background);
   font: inherit;

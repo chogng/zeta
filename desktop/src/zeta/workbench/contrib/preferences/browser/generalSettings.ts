@@ -2,6 +2,7 @@ import "./media/generalSettings.css";
 import { addDisposableListener } from "../../../../base/browser/dom.js";
 import type { IContextViewProvider } from "../../../../base/browser/ui/contextview/contextview.js";
 import { SelectBox } from "../../../../base/browser/ui/selectbox/selectbox.js";
+import { Checkbox, Toggle } from "../../../../base/browser/ui/toggle/toggle.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { AccessibilityConfiguration, type AccessibilityReductionConfiguration, type AccessibilitySupportConfiguration } from "../../../../platform/accessibility/common/accessibility.js";
 import type { IConfigurationKey, IConfigurationService } from "../../../../platform/configuration/common/configurationService.js";
@@ -10,7 +11,7 @@ import { MaximumSashHoverDelay, MaximumSashSize, MinimumSashHoverDelay, MinimumS
 import { SettingsTree } from "./settingsTree.js";
 import { SettingsTreeModel, type SettingsTreeNode } from "./settingsTreeModels.js";
 
-type GeneralControl = HTMLInputElement | SelectBox;
+type GeneralControl = HTMLInputElement | SelectBox | Toggle;
 
 /** Core application preferences that are independent of one editor or feature domain. */
 export class GeneralSettingsPane extends DisposableOwner {
@@ -97,16 +98,17 @@ export class GeneralSettingsPane extends DisposableOwner {
   }
 
   private createToggleSetting(key: IConfigurationKey<boolean>, label: string, description: string): HTMLElement {
-    const setting = this.element.ownerDocument.createElement("label");
-    setting.className = "zeta-general-setting zeta-general-toggle-setting";
-    const input = this.element.ownerDocument.createElement("input");
-    input.type = "checkbox";
-    input.dataset.configurationKey = key.key;
     const copy = this.createSettingCopy(label, description);
-    setting.append(copy, input);
-    this.controls.set(key.key, input);
-    this.own(addDisposableListener(input, "change", () => void this.updateConfiguration(key, input.checked)));
-    return setting;
+    const checkbox = this.own(new Checkbox({
+      ownerDocument: this.element.ownerDocument,
+      ariaLabel: label,
+      content: copy,
+    }));
+    checkbox.element.classList.add("zeta-general-setting", "zeta-general-toggle-setting");
+    checkbox.input.dataset.configurationKey = key.key;
+    this.controls.set(key.key, checkbox);
+    this.own(checkbox.onDidChange(checked => void this.updateConfiguration(key, checked)));
+    return checkbox.element;
   }
 
   private createSelectSetting<T extends string>(options: { readonly key: IConfigurationKey<T>; readonly label: string; readonly description: string; readonly options: readonly { readonly value: T; readonly label: string }[] }): HTMLElement {
@@ -179,7 +181,8 @@ export class GeneralSettingsPane extends DisposableOwner {
     const control = this.controls.get(key.key);
     if (!control) return;
     const value = this.configurationService.getValue(key);
-    if (control instanceof this.element.ownerDocument.defaultView!.HTMLInputElement && control.type === "checkbox") control.checked = value as boolean;
+    if (control instanceof Toggle) control.checked = value as boolean;
+    else if (control instanceof this.element.ownerDocument.defaultView!.HTMLInputElement && control.type === "checkbox") control.checked = value as boolean;
     else control.value = String(value);
   }
 
@@ -199,6 +202,7 @@ export class GeneralSettingsPane extends DisposableOwner {
   private setControlsEnabled(enabled: boolean): void {
     for (const control of this.controls.values()) {
       if (control instanceof SelectBox) control.enabled = enabled;
+      else if (control instanceof Toggle) control.enabled = enabled;
       else control.disabled = !enabled;
     }
   }

@@ -54,7 +54,6 @@
 
 .zeta-package-marketplace-toolbar > button,
 .zeta-package-marketplace-actions button,
-.zeta-package-marketplace-filter,
 .zeta-package-marketplace-empty-state button {
   height: 24px;
   padding: 3px 6px;
@@ -68,7 +67,6 @@
 
 .zeta-package-marketplace-toolbar > button:hover,
 .zeta-package-marketplace-actions button:hover,
-.zeta-package-marketplace-filter:hover,
 .zeta-package-marketplace-empty-state button:hover {
   border-color: color-mix(in srgb, var(--zeta-widget-border) 80%, black 20%);
 }
@@ -86,17 +84,16 @@
 }
 
 .zeta-package-marketplace-filters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  min-width: 0;
+  min-height: var(--zeta-tab-height);
 }
 
-.zeta-package-marketplace-filter.checked {
-  border-color: var(--zeta-focus-border);
-  background: transparent;
+.zeta-package-marketplace-filters > .zeta-tab-list {
+  width: max-content;
+  max-width: 100%;
+  height: var(--zeta-tab-height);
 }
 
-.zeta-package-marketplace-filter:focus-visible,
 .zeta-package-marketplace-empty-state button:focus-visible {
   outline: 1px solid var(--zeta-focus-border);
   outline-offset: 2px;

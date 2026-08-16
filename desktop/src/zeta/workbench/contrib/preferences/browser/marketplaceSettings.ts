@@ -1,6 +1,7 @@
 import "./media/marketplaceSettings.css";
 import { addDisposableListener } from "../../../../base/browser/dom.js";
 import { appendIcon } from "../../../../base/browser/ui/icon/icon.js";
+import { TabList } from "../../../../base/browser/ui/tablist/tabList.js";
 import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import type { IMarketplaceService, MarketplaceBrowseSnapshot, MarketplaceInstalledPackage, MarketplacePackageDetails, MarketplacePackageSummary } from "../../../../platform/marketplace/common/marketplaceService.js";
@@ -20,7 +21,7 @@ export class MarketplaceSettingsPane extends DisposableOwner {
   private readonly input: HTMLInputElement;
   private readonly status: HTMLParagraphElement;
   private readonly results: HTMLDivElement;
-  private readonly filterButtons = new Map<string, HTMLButtonElement>();
+  private readonly filterTabs: TabList<string> | undefined;
   private query = "";
   private selectedPackageType: string | undefined;
   private reloadGeneration = 0;
@@ -47,24 +48,20 @@ export class MarketplaceSettingsPane extends DisposableOwner {
     toolbar.append(searchControl, search);
     const filters = document.createElement("div");
     filters.className = "zeta-package-marketplace-filters";
-    filters.setAttribute("aria-label", "Marketplace package types");
-    if (!fixedPackageType) {
-      for (const filter of packageTypeFilters) {
-        const button = document.createElement("button");
-        button.type = "button";
-        button.className = "zeta-package-marketplace-filter";
-        button.textContent = filter.label;
-        button.setAttribute("aria-pressed", String(filter.packageType === this.selectedPackageType));
-        button.classList.toggle("checked", filter.packageType === this.selectedPackageType);
-        this.filterButtons.set(filter.packageType ?? "", button);
-        this.own(addDisposableListener(button, "click", () => {
-          if (this.selectedPackageType === filter.packageType) return;
-          this.selectedPackageType = filter.packageType;
-          this.updateFilterState();
-          void this.reload();
-        }));
-        filters.append(button);
-      }
+    this.filterTabs = fixedPackageType ? undefined : this.own(new TabList<string>({
+      ownerDocument: document,
+      ariaLabel: "Marketplace package types",
+      onActivate: (packageType) => {
+        const nextPackageType = packageType || undefined;
+        if (this.selectedPackageType === nextPackageType) return;
+        this.selectedPackageType = nextPackageType;
+        this.updateFilterState();
+        void this.reload();
+      },
+    }));
+    if (this.filterTabs) {
+      filters.append(this.filterTabs.element);
+      this.updateFilterState();
     }
     this.status = document.createElement("p");
     this.status.className = "zeta-package-marketplace-status";
@@ -117,11 +114,18 @@ export class MarketplaceSettingsPane extends DisposableOwner {
   }
 
   private updateFilterState(): void {
-    for (const [packageType, button] of this.filterButtons) {
-      const checked = packageType === (this.selectedPackageType ?? "");
-      button.classList.toggle("checked", checked);
-      button.setAttribute("aria-pressed", String(checked));
-    }
+    this.filterTabs?.setTabs(
+      packageTypeFilters.map((filter) => {
+        const id = marketplaceFilterId(filter.packageType);
+        return {
+          id,
+          value: filter.packageType ?? "",
+          label: filter.label,
+          tabId: `${id}-tab`,
+        };
+      }),
+      marketplaceFilterId(this.selectedPackageType),
+    );
   }
 
   private emptyState(): HTMLElement {
@@ -198,4 +202,8 @@ export class MarketplaceSettingsPane extends DisposableOwner {
     card.append(actions);
     return card;
   }
+}
+
+function marketplaceFilterId(packageType: string | undefined): string {
+  return `marketplace-filter-${packageType ?? "all"}`;
 }

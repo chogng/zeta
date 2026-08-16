@@ -111,55 +111,6 @@
   grid-template-columns: auto minmax(0, 1fr);
 }
 
-.zeta-editor-toggle-setting > input {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  margin: -1px;
-  padding: 0;
-  clip-path: inset(50%);
-  border: 0;
-  white-space: nowrap;
-}
-
-.zeta-editor-toggle-track {
-  position: relative;
-  width: 34px;
-  height: 18px;
-  border: 1px solid var(--zeta-input-border);
-  border-radius: 10px;
-  background: var(--zeta-input-background);
-  transition: background 120ms ease, border-color 120ms ease;
-}
-
-.zeta-editor-toggle-track::after {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: var(--zeta-description-foreground);
-  content: "";
-  transition: left 120ms ease, background 120ms ease;
-}
-
-.zeta-editor-toggle-setting.checked .zeta-editor-toggle-track {
-  border-color: var(--zeta-focus-border);
-  background: var(--zeta-list-active-selection-background);
-}
-
-.zeta-editor-toggle-setting.checked .zeta-editor-toggle-track::after {
-  left: 18px;
-  background: var(--zeta-list-active-selection-foreground);
-}
-
-.zeta-editor-toggle-setting > input:focus-visible + .zeta-editor-toggle-track {
-  outline: 1px solid var(--zeta-focus-border);
-  outline-offset: 2px;
-}
-
 .zeta-editor-settings.is-saving .zeta-editor-setting {
   cursor: wait;
   opacity: .72;

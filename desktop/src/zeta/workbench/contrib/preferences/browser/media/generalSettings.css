@@ -67,6 +67,10 @@
   box-sizing: border-box;
 }
 
+.zeta-general-setting-control.zeta-select-box {
+  justify-self: end;
+}
+
 .zeta-general-setting-control:not(.zeta-select-box) {
   padding: 4px 8px;
   border: 1px solid var(--zeta-input-border);

@@ -1,1 +1,78 @@
-.zeta-toggle { display: inline-flex; gap: 4px; align-items: center; }
+.zeta-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.zeta-toggle.disabled {
+  opacity: .5;
+  cursor: default;
+}
+
+.zeta-toggle > input:focus-visible {
+  outline: 1px solid var(--zeta-focus-border);
+  outline-offset: 1px;
+}
+
+.zeta-checkbox > input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--zeta-accent-background);
+}
+
+.zeta-switch {
+  gap: 8px;
+}
+
+.zeta-switch > input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  margin: -1px;
+  padding: 0;
+  clip-path: inset(50%);
+  border: 0;
+  white-space: nowrap;
+}
+
+.zeta-switch-track {
+  position: relative;
+  width: 34px;
+  height: 18px;
+  flex: 0 0 34px;
+  box-sizing: border-box;
+  border: 1px solid var(--zeta-input-border);
+  border-radius: 10px;
+  background: var(--zeta-input-background);
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.zeta-switch-track::after {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--zeta-description-foreground);
+  content: "";
+  transition: left 120ms ease, background 120ms ease;
+}
+
+.zeta-switch.checked > .zeta-switch-track {
+  border-color: var(--zeta-focus-border);
+  background: var(--zeta-list-active-selection-background);
+}
+
+.zeta-switch.checked > .zeta-switch-track::after {
+  left: 18px;
+  background: var(--zeta-list-active-selection-foreground);
+}
+
+.zeta-switch > input:focus-visible + .zeta-switch-track {
+  outline: 1px solid var(--zeta-focus-border);
+  outline-offset: 2px;
+}
