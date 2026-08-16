@@ -1175,7 +1175,7 @@ function dragWorkbenchSash(
   targetWindow: typeof browserEnvironment.window,
   container: HTMLElement,
   partId: WorkbenchPartId,
-  previousViewIndex: number,
+  boundaryIndex: number,
   delta: number,
 ): void {
   const part = container.querySelector<HTMLElement>(`[data-part='${partId}']`);
@@ -1184,10 +1184,8 @@ function dragWorkbenchSash(
   if (!splitView?.classList.contains("zeta-split-view")) {
     throw new Error(`Workbench Part ${partId} is not hosted by a SplitView`);
   }
-  const sashes = [...splitView.querySelectorAll<HTMLElement>(
-    `:scope > .zeta-sash[data-previous-view-index='${previousViewIndex}']`,
-  )];
-  const sash = sashes.at(-1);
+  const sashes = [...splitView.querySelectorAll<HTMLElement>(":scope > .zeta-sash")];
+  const sash = sashes[boundaryIndex];
   assert.ok(sash);
   const vertical = sash.classList.contains("zeta-sash-vertical");
   const event = (type: string, coordinate: number) =>

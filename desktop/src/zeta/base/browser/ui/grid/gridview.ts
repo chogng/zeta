@@ -10,7 +10,7 @@ export { type GridLocation, type GridViewDescriptor, type GridViewSizing, type I
 export interface GridViewOptions {
   /** Optional presentation applied to every Grid-owned Sash. */
   readonly sashPresentation?: SashPresentation;
-  /** Whether hidden snap views remain recoverable from an outer Grid edge. */
+  /** Whether hidden snap views remain recoverable from an outer Grid edge. Defaults to false. */
   readonly edgeSnapping?: boolean;
 }
 
@@ -92,7 +92,7 @@ class BranchNode extends GridNode {
   readonly children: readonly GridNode[];
   readonly splitView: SplitView;
   private boundarySashes: BoundarySashes = {};
-  private edgeSnapping = true;
+  private edgeSnapping = false;
 
   constructor(
     readonly orientation: SplitViewOrientation,
@@ -321,7 +321,7 @@ export class GridView extends DisposableOwner {
     this.element = ownerDocument.createElement("div");
     this.element.className = "zeta-grid zeta-grid-view";
     this.sashPresentation = options.sashPresentation;
-    this._edgeSnapping = options.edgeSnapping ?? true;
+    this._edgeSnapping = options.edgeSnapping ?? false;
     this.defer(() => this.element.remove());
     this.rebuild(normalizeRootDescriptor(descriptor));
   }

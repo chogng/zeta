@@ -38,10 +38,11 @@ test("ResizableHTMLElement constrains and positions its edge sashes", () => {
   assert.equal(resizable.domNode.style.height, "100px");
   const sashes = resizable.domNode.querySelectorAll<HTMLElement>(".zeta-sash");
   assert.equal(sashes.length, 4);
-  assert.equal(sashes[0]?.hidden, true);
-  assert.equal(sashes[1]?.hidden, false);
-  assert.equal(sashes[2]?.hidden, false);
-  assert.equal(sashes[3]?.hidden, true);
+  assert.equal(sashes[0]?.classList.contains("zeta-sash-disabled"), true);
+  assert.equal(sashes[0]?.getAttribute("aria-disabled"), "true");
+  assert.equal(sashes[1]?.classList.contains("zeta-sash-disabled"), false);
+  assert.equal(sashes[2]?.classList.contains("zeta-sash-disabled"), false);
+  assert.equal(sashes[3]?.classList.contains("zeta-sash-disabled"), true);
   assert.equal(sashes[1]?.style.left, "200px");
   assert.equal(sashes[1]?.style.height, "100px");
   assert.equal(sashes[2]?.style.top, "100px");

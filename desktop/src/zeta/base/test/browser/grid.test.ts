@@ -299,8 +299,9 @@ test("Grid edge snapping allows collapse but gates outer-edge restore", () => {
       { type: "leaf", view: sidebar, size: 100 },
       { type: "leaf", view: editor, size: 500 },
     ],
-  }, dom.window.document, { edgeSnapping: false });
+  }, dom.window.document);
   grid.layout(600, 300);
+  assert.equal(grid.edgeSnapping, false);
   const sash = grid.element.querySelector<HTMLElement>(".zeta-sash");
   assert.ok(sash);
 

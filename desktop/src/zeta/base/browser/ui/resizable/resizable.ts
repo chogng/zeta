@@ -2,7 +2,7 @@ import { Dimension, type IDimension } from "../../geometry.js";
 import { observeElementSize } from "../../observer.js";
 import { type Event, Emitter } from "../../../common/event.js";
 import { DisposableOwner, type IDisposable } from "../../../common/lifecycle.js";
-import { Sash } from "../sash/sash.js";
+import { Sash, SashState } from "../sash/sash.js";
 
 /** A control whose geometry is driven by an external container layout. */
 export interface IResizable {
@@ -38,10 +38,10 @@ export class ResizableHTMLElement extends DisposableOwner {
   private readonly southSash: Sash;
   private readonly westSash: Sash;
 
-  private sizeValue = Dimension.Zero;
-  private minSizeValue = Dimension.Zero;
-  private maxSizeValue = new Dimension(Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER);
-  private preferredSizeValue: Dimension | undefined;
+  private _size = Dimension.Zero;
+  private _minSize = Dimension.Zero;
+  private _maxSize = new Dimension(Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER);
+  private _preferredSize: Dimension | undefined;
   private resizeStart: Dimension | undefined;
   private deltaX = 0;
   private deltaY = 0;
@@ -84,11 +84,11 @@ export class ResizableHTMLElement extends DisposableOwner {
     const nextHeight = clamp(height, this.minSize.height, this.maxSize.height);
     const nextWidth = clamp(width, this.minSize.width, this.maxSize.width);
     const nextSize = new Dimension(nextWidth, nextHeight);
-    if (Dimension.equals(nextSize, this.sizeValue)) return;
+    if (Dimension.equals(nextSize, this._size)) return;
 
     this.domNode.style.height = `${nextHeight}px`;
     this.domNode.style.width = `${nextWidth}px`;
-    this.sizeValue = nextSize;
+    this._size = nextSize;
     this.layoutSashes();
   }
 
@@ -100,7 +100,7 @@ export class ResizableHTMLElement extends DisposableOwner {
   }
 
   get size(): Dimension {
-    return this.sizeValue;
+    return this._size;
   }
 
   set maxSize(value: Dimension) {
@@ -108,11 +108,11 @@ export class ResizableHTMLElement extends DisposableOwner {
     if (value.width < this.minSize.width || value.height < this.minSize.height) {
       throw new RangeError("Resizable maximum size must not be smaller than its minimum size");
     }
-    this.maxSizeValue = value;
+    this._maxSize = value;
   }
 
   get maxSize(): Dimension {
-    return this.maxSizeValue;
+    return this._maxSize;
   }
 
   set minSize(value: Dimension) {
@@ -120,27 +120,27 @@ export class ResizableHTMLElement extends DisposableOwner {
     if (value.width > this.maxSize.width || value.height > this.maxSize.height) {
       throw new RangeError("Resizable minimum size must not exceed its maximum size");
     }
-    this.minSizeValue = value;
+    this._minSize = value;
   }
 
   get minSize(): Dimension {
-    return this.minSizeValue;
+    return this._minSize;
   }
 
   set preferredSize(value: Dimension | undefined) {
     if (value) assertSize(value, "preferred size");
-    this.preferredSizeValue = value;
+    this._preferredSize = value;
   }
 
   get preferredSize(): Dimension | undefined {
-    return this.preferredSizeValue;
+    return this._preferredSize;
   }
 
   private connectSash(sash: Sash, edge: "north" | "east" | "south" | "west"): void {
     this.own(sash.onDidStart(() => {
       if (this.resizeStart !== undefined) return;
       this._onDidWillResize.fire();
-      this.resizeStart = this.sizeValue;
+      this.resizeStart = this._size;
       this.deltaX = 0;
       this.deltaY = 0;
     }));
@@ -155,7 +155,7 @@ export class ResizableHTMLElement extends DisposableOwner {
         this.resizeStart.width + this.deltaX,
       );
       this._onDidResize.fire({
-        dimension: this.sizeValue,
+        dimension: this._size,
         done: false,
         [edge]: true,
       });
@@ -169,21 +169,19 @@ export class ResizableHTMLElement extends DisposableOwner {
         ? this.preferredSize.width
         : this.size.width;
       this.layout(height, width);
-      this._onDidResize.fire({ dimension: this.sizeValue, done: true });
+      this._onDidResize.fire({ dimension: this._size, done: true });
     }));
     this.own(sash.onDidEnd(() => {
       if (this.resizeStart === undefined) return;
       this.resizeStart = undefined;
       this.deltaX = 0;
       this.deltaY = 0;
-      this._onDidResize.fire({ dimension: this.sizeValue, done: true });
+      this._onDidResize.fire({ dimension: this._size, done: true });
     }));
   }
 
   private setSashEnabled(sash: Sash, enabled: boolean): void {
-    sash.element.hidden = !enabled;
-    sash.element.tabIndex = enabled ? 0 : -1;
-    sash.element.setAttribute("aria-disabled", String(!enabled));
+    sash.state = enabled ? SashState.Enabled : SashState.Disabled;
   }
 
   private layoutSashes(): void {

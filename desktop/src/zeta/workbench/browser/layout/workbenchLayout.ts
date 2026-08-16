@@ -82,7 +82,10 @@ export class WorkbenchLayout
       createWorkbenchGridDescriptor(this.views, initialDimension, initialState),
       { fromJSON: (data) => this.view(parseWorkbenchPartId(data)) },
       container.ownerDocument,
-      { sashPresentation: { type: "inset", gap: PART_GUTTER_SIZE } },
+      {
+        sashPresentation: { type: "inset", gap: PART_GUTTER_SIZE },
+        edgeSnapping: true,
+      },
     ));
     this.element.append(this.grid.element);
     this.own(this.grid.onDidChange(() => {
