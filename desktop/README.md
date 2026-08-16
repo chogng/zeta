@@ -28,7 +28,7 @@ corepack pnpm dev:desktop
 corepack pnpm dev:desktop:ui
 ```
 
-该命令只同步前端生成资源，并启动 Vite、Electron 主进程、预加载脚本和 Electron 窗口；不会构建 Rust 开发包，也不会启动 App Server。窗口中的 App Server 状态会保持为已停止，依赖后端的聊天、文件、Git、终端和搜索操作会明确不可用；选择文件夹仅更新界面的工作区上下文，方便检查前端布局和状态。`dev:desktop:ui:code` 与 `dev:desktop:ui:academic` 可用于选择产品变体。
+该命令只同步前端生成资源，并启动 Vite、Electron 主进程、预加载脚本和 Electron 窗口；不会构建 Rust 开发包，也不会启动 App Server。窗口中的 App Server 状态会保持为已停止，依赖后端的聊天、文件、Git、终端和搜索操作会明确不可用；选择文件夹仅更新界面的工作区上下文，方便检查前端布局和状态。命令本身不区分 Workbench 构建模式；需要检查指定模式时设置 `ZETA_PRODUCT` 环境变量即可。
 
 只开发 Browser Workbench 界面时，在仓库根目录运行：
 
@@ -50,8 +50,8 @@ corepack pnpm dev:web:full
 完整模式监听 `127.0.0.1:5174`，根地址同样会进入当前产品版本。Browser 通过 Vite 已认证的 HMR WebSocket 连接本地开发
 桥接器；桥接器当前仍为每个浏览器连接启动 direct `zeta-server app-server --listen stdio://`
 子进程，浏览器连接关闭时对应子进程也会被回收。Electron 产品改用 `app-server connect`，与
-TUI、zeterm 连接同一 profile/Workspace authority。`dev:web:code`、`dev:web:academic` 与对应的
-`dev:web:full:*` 命令用于显式选择产品版本。
+TUI、zeterm 连接同一 profile/Workspace authority。Browser 命令同样通过 `ZETA_PRODUCT` 选择
+构建模式，而不是维护模式后缀命令。
 
 `dev:desktop` 与 `dev:web:full` 会先通过 Node 开发组装器生成
 `desktop/.tmp/zeta-package`；其中包含 product-neutral `zeta-server` backend host、锁定版本的
@@ -115,25 +115,23 @@ Renderer 类型检查前同步到 `generated/file-icons/`。TypeScript 直接从
 
 ## Electron 启动门禁
 
-`src/main-code.ts` 与 `src/main-aca.ts` 是 Code 和 Academic 的显式 Electron
-启动入口；根入口 `src/main.ts` 保留给打包产物和兼容启动，并由
-`ZETA_ELECTRON_MAIN` 选择产品入口。两个产品入口都会先同步执行 Electron
-bootstrap，再通过 `code/electron-main/codeMain.ts` 或 `acaMain.ts` 在 Electron
-`ready` 事件启动应用，不在 ESM 顶层等待 `app.whenReady()`。
+Electron 的日常启动统一经过 `src/main.ts` 和 `code/electron-main/main.ts`；它们先执行
+bootstrap，再在 Electron `ready` 事件后按 `ZETA_PRODUCT` 解析当前构建模式并启动应用，不在
+ESM 顶层等待 `app.whenReady()`。`src/main-code.ts`、`src/main-aca.ts` 及
+`ZETA_ELECTRON_MAIN` 仅保留给旧的静态入口兼容，不再作为开发命令的一部分。
 `ZetaApplication.startupAfterReady()` 会断言 Electron 已进入 Ready，从结构上避免
 入口模块和 `ready` 生命周期互相等待。
 
-本地 Electron 调试按产品入口分别启动：
+本地 Electron 调试使用统一命令：
 
 ```sh
-pnpm dev:code
-pnpm dev:aca
-pnpm dev:ui:code
-pnpm dev:ui:aca
+pnpm dev
+pnpm dev:ui
+pnpm start
 ```
 
-`code` 与 `aca` 会分别设置匹配的 Renderer 产品和 Electron Main 入口；
-`dev:academic`、`dev:ui:academic`、`start:academic` 保留为 `aca` 的完整别名。
+需要验证 Academic 构建模式时仍使用相同命令，只设置环境变量，例如
+`ZETA_PRODUCT=academic pnpm dev`。
 
 Ready 后在后台启动 App Server，并完成 initialize、server identity、protocol version
 与 schema hash 校验；门禁通过后才创建业务 Workbench 窗口。主窗口初始保持隐藏，
@@ -148,9 +146,9 @@ remote/headless 形态没有 Electron，因此继续使用 package 中的 standa
 
 ## Browser Workbench
 
-三个 Browser HTML 入口现在会直接启动对应产品 Workbench。`workbench/browser/web.factory.ts`
-拥有自动启动与 `pagehide` 释放，`web.api.ts` 定义 embedder 输入，产品入口仍只选择自身的
-Alpha/Gama contribution，并提供自身的 Workbench session profile。
+Browser 与 Electron 现在各自只有一个 `workbench.html` 入口。`workbench/browser/web.factory.ts`
+拥有自动启动与 `pagehide` 释放，`web.api.ts` 定义 embedder 输入；构建模式入口只负责选择
+自身的 contribution，Workbench runtime 和 session profile 保持共享。
 
 Renderer 控件、Workbench Part 与 CSS 状态的 canonical 所有权规范见
 [`docs/ui-styling-ownership.md`](../docs/ui-styling-ownership.md)。
@@ -272,6 +270,11 @@ corepack pnpm dev:desktop
 ```bash
 # 构建桌面端
 corepack pnpm build:desktop
+
+# 运行当前构建模式的 Electron 应用测试
+corepack pnpm test:desktop:app
+# Academic 构建模式仍使用同一个测试命令
+ZETA_PRODUCT=academic corepack pnpm test:desktop:app
 
 # 只运行桌面端主进程测试
 corepack pnpm --dir desktop test:main

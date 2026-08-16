@@ -20,7 +20,8 @@ Zeta 不是一个 UI 宿主的三种包装，而是三条产品线共享 Rust �
 
 产品线与 Electron 的内部构建变体不是同一个维度。当前 Desktop 保留 `code`、`academic`
 两个源码和构建标识；它们是 `zeta` Electron Desktop 的构建变体，不代表
-`zeta code` TUI，也不构成额外的公开产品线。具体说明见
+`zeta code` TUI，也不构成额外的公开产品线。Desktop 的开发、构建和启动命令统一，不按这两个
+标识拆分命令；需要构建矩阵验证时通过 `ZETA_PRODUCT` 选择模式。具体说明见
 [`product-editions.md`](product-editions.md)。
 
 ## 当前调用关系

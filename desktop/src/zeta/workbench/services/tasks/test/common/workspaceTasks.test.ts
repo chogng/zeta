@@ -19,10 +19,10 @@ test("workspace tasks parse supported VS Code shell tasks and preserve explicit 
 });
 
 test("package and Cargo task discovery stays deterministic", () => {
-  const packageTasks = parsePackageTasks('{"scripts":{"test":"node --test","build:code":"vite build","dev":"vite","bad name":"ignored"}}', "pnpm");
+  const packageTasks = parsePackageTasks('{"scripts":{"test":"node --test","build":"vite build","dev":"vite","bad name":"ignored"}}', "pnpm");
   assert.deepEqual(packageTasks.map(task => [task.label, task.command, task.group]), [
     ["test", "pnpm run test", "test"],
-    ["build:code", "pnpm run build:code", "build"],
+    ["build", "pnpm run build", "build"],
     ["dev", "pnpm run dev", "run"],
   ]);
   assert.deepEqual(cargoWorkspaceTasks().map(task => task.command), ["cargo check", "cargo build", "cargo test", "cargo run"]);

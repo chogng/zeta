@@ -1,6 +1,7 @@
 import { defineConfig } from "@playwright/test";
 
 const browserServerMode = process.env.ZETA_PLAYWRIGHT_SERVER;
+const product = process.env.ZETA_PRODUCT === "academic" ? "academic" : "code";
 const browserProjects = browserServerMode === "disconnected"
   ? [{ name: "browser-ui", use: { baseURL: "http://127.0.0.1:5173" } }]
   : browserServerMode === "full"
@@ -17,9 +18,11 @@ export default defineConfig({
     { name: "electron-ui" },
     { name: "electron-academic-ui", testMatch: "**/areas/academic/academic-workbench.spec.ts" },
     { name: "electron-app-server" },
-    { name: "electron-editor-code-app-server", testMatch: "**/areas/editor/editor-open.spec.ts" },
-    { name: "electron-pdf-corpus-code-app-server", testMatch: "**/areas/pdf/pdf-academic-corpus.spec.ts" },
-    { name: "electron-editor-academic-app-server", testMatch: "**/areas/editor/academic-open.spec.ts" },
+    {
+      name: "electron-editor-app-server",
+      testMatch: product === "academic" ? "**/areas/editor/academic-open.spec.ts" : "**/areas/editor/editor-open.spec.ts",
+    },
+    { name: "electron-pdf-corpus-app-server", testMatch: "**/areas/pdf/pdf-academic-corpus.spec.ts" },
   ],
   webServer: process.env.ZETA_SMOKE_BROWSER_EXTERNAL_SERVER
     ? undefined

@@ -64,11 +64,22 @@ Zotero 同步和引用索引等领域能力不得提前放进 Workbench layout �
 
 ## 构建与验证
 
-从仓库根目录执行：
+日常开发和构建只使用统一命令；命令名不携带 `code` 或 `academic` 后缀。
 
 ```bash
-corepack pnpm --dir desktop build:code
-corepack pnpm --dir desktop build:academic
+corepack pnpm build:desktop
+corepack pnpm dev:desktop
+corepack pnpm dev:web
+corepack pnpm dev:web:full
+corepack pnpm test:desktop:app
+```
+
+`ZETA_PRODUCT` 只是构建矩阵选择器，不是另一套命令入口。需要分别验证两个静态构建模式时，
+仍运行同一个命令并设置环境变量：
+
+```bash
+ZETA_PRODUCT=code corepack pnpm build:desktop
+ZETA_PRODUCT=academic corepack pnpm build:desktop
 ```
 
 每次构建必须产生共享命名的 Browser 与 Electron `workbench.html`；只有声明

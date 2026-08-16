@@ -30,7 +30,6 @@ export function resolveElectronConfiguration(options: ElectronLaunchOptions): El
     delete environment.ZETA_DESKTOP_UI_ONLY;
   }
   environment.ZETA_PRODUCT = options.product ?? "code";
-  environment.ZETA_ELECTRON_MAIN = environment.ZETA_PRODUCT;
   delete environment.ELECTRON_RUN_AS_NODE;
 
   return {

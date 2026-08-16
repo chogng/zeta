@@ -53,8 +53,8 @@ just zeta-desktop
 corepack pnpm dev:desktop
 ```
 
-Use `corepack pnpm dev:desktop:code` or `corepack pnpm dev:desktop:academic` to select a build
-variant.
+The Desktop command is shared by both Workbench build modes. The default mode is `code`; build
+matrix checks can set `ZETA_PRODUCT=academic` without changing the command name.
 
 ### Browser Workbench
 

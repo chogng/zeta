@@ -21,15 +21,13 @@ export function playwrightTargetForProject(projectName: string, baseURL: string 
     case "browser-app-server":
       return { kind: "browser", appServerMode: "required", baseURL: requiredBaseURL(baseURL, projectName), product: testProduct() };
     case "electron-ui":
-      return { kind: "electron", appServerMode: "disabled", product: "code" };
+      return { kind: "electron", appServerMode: "disabled", product: testProduct() };
     case "electron-academic-ui":
       return { kind: "electron", appServerMode: "disabled", product: "academic" };
     case "electron-app-server":
-    case "electron-editor-code-app-server":
-    case "electron-pdf-corpus-code-app-server":
-      return { kind: "electron", appServerMode: "required", product: "code" };
-    case "electron-editor-academic-app-server":
-      return { kind: "electron", appServerMode: "required", product: "academic" };
+    case "electron-editor-app-server":
+    case "electron-pdf-corpus-app-server":
+      return { kind: "electron", appServerMode: "required", product: testProduct() };
     default:
       throw new Error(`Unsupported Playwright project: ${projectName}`);
   }
