@@ -144,6 +144,14 @@ export class ScmGraphViewPane extends ViewPane {
     return container;
   }
 
+  private updateLoadMoreControl(): void {
+    const current = this.graphElement.querySelector(".zeta-scm-graph-load-more");
+    if (!current) return;
+    this.loadMoreControls.clear();
+    current.replaceWith(this.renderLoadMoreControl());
+    this.graphElement.setAttribute("aria-busy", this.loadingMore ? "true" : "false");
+  }
+
   private async loadMore(): Promise<void> {
     const graph = this.loadedGraph;
     const head = this.graphHead;
@@ -152,7 +160,7 @@ export class ScmGraphViewPane extends ViewPane {
     const generation = this.graphRequestGeneration;
     this.loadingMore = true;
     this.loadMoreError = undefined;
-    this.renderCommits(graph, head);
+    this.updateLoadMoreControl();
     try {
       const page = await this.gitService.graph({ limit: GRAPH_PAGE_SIZE, skip: this.nextGraphSkip });
       if (this.disposed || generation !== this.graphRequestGeneration) return;
@@ -172,7 +180,7 @@ export class ScmGraphViewPane extends ViewPane {
       if (this.disposed || generation !== this.graphRequestGeneration) return;
       this.loadingMore = false;
       this.loadMoreError = gitErrorMessage(error);
-      this.renderCommits(graph, head);
+      this.updateLoadMoreControl();
     }
   }
 

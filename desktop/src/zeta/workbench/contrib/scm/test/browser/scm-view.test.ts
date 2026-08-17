@@ -184,6 +184,7 @@ test("ScmGraphViewPane loads the next history page", async () => {
     const loadMore = pane.element.querySelector<HTMLButtonElement>(".zeta-scm-graph-load-more > button");
     assert.ok(loadMore);
     loadMore.click();
+    assert.equal(pane.element.querySelector<HTMLButtonElement>(".zeta-scm-graph-load-more > button")?.disabled, true);
     await waitFor(() => pane.element.querySelectorAll(".zeta-scm-graph-commit").length === 3);
 
     assert.deepEqual(graphRequests, [{ limit: 50, skip: 0 }, { limit: 50, skip: 2 }]);
