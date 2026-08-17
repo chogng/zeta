@@ -280,7 +280,7 @@ Desktop 当前实现和 Playwright 后续边界见
 | `syntax/selectionRanges` | stateless syntax | 只沿当前 UTF-16 selections 返回 bounded parser ancestor scopes |
 | `git/status` | workspace | 读取 HEAD、upstream 和 index/worktree change snapshot |
 | `git/textDiff` | workspace | 读取 status 及有界 UTF-8 HEAD/worktree text diff projection |
-| `git/graph` | workspace | 读取 bounded history、local/remote-tracking refs 和 credential-free remote identity |
+| `git/graph` | workspace | 按 `limit`/`skip` 读取一页 history、local/remote-tracking refs 和 credential-free remote identity，并返回 `hasMore` |
 | `git/branch/list` | workspace | 列出现有本地分支及 current/upstream 信息 |
 | `git/branch/switch` | workspace | 切换到 host 重新解析确认存在的本地分支 |
 | `git/stage` | workspace | stage 一组 workspace-relative path |
@@ -416,12 +416,14 @@ modified UTF-8 source，以及文件级和聚合增删行统计。单侧文件�
 非 UTF-8、不可读或超限内容仍保留在 status 中，但不进入 text diff。客户端可以用 source 构建
 presentation diff，不得直接读取 Git revision 或复制 Git 统计规则。
 
-`git/graph` 返回 bounded `git log --all --topo-order` commit summary、local branch refs、
-本地已经 fetch 的 `refs/remotes/*` 以及 configured remote 的 `name` 和可选 credential-free
-identity（`provider`、`host`、`owner`、`repository`）。symbolic remote refs（例如 `origin/HEAD`）
+`git/graph` 接受 `limit`（1–1000）和 `skip`（非负）参数，返回该页 bounded `git log --all
+--topo-order` commit summary、local branch refs、本地已经 fetch 的 `refs/remotes/*` 以及
+configured remote 的 `name` 和可选 credential-free identity（`provider`、`host`、`owner`、
+`repository`），并用 `hasMore` 表示是否还有下一页。symbolic remote refs（例如 `origin/HEAD`）
 不会作为 branch ref 返回。协议不暴露 raw remote URL、token 或本地 `gh` 登录配置；因此该方法
 表示 local Git repository snapshot，不是 GitHub API、PR、Checks 或 review 查询，也不会自动 fetch。
-Desktop SCM 可据此显示不同 graph lane 颜色、local/remote ref labels 和 GitHub repository 摘要。
+Desktop SCM 负责触发后续页并合并 commit；它可据此显示不同 graph lane 颜色、local/remote ref
+labels 和 GitHub repository 摘要。
 
 `git/branch/list` 返回当前仓库的现有本地分支。`git/branch/switch` 只接受有界非空 branch name；
 server 会重新列出当前仓库分支并按 exact name 解析后才执行 mutation，因此客户端提交的字符串

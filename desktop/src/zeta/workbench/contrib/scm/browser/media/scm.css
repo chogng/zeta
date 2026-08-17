@@ -218,6 +218,18 @@
   white-space: nowrap;
 }
 
+.zeta-scm-graph-load-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 4px 8px 8px;
+}
+
+.zeta-scm-graph-load-more > .zeta-scm-empty {
+  padding: 0;
+}
+
 @container zeta-scm-graph (max-width: 360px) {
   .zeta-scm-graph-metadata {
     display: none;

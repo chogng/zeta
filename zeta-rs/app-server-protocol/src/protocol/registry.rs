@@ -179,11 +179,11 @@ use crate::protocol::fs::{
 };
 use crate::protocol::git::{
     GitBranchDto, GitBranchListResult, GitBranchSwitchParams, GitChangeStatusDto, GitCommitParams,
-    GitCommitResult, GitCommitSummaryDto, GitDiffStatisticsDto, GitGraphResult, GitHeadDto,
-    GitHistoryResult, GitOperationResult, GitPathsParams, GitReferenceDto, GitReferenceKindDto,
-    GitRemoteDto, GitRemoteProviderDto, GitRepositoryChangeDto, GitRepositoryIdentityDto,
-    GitStatusChanged, GitStatusResult, GitSubmoduleStateDto, GitTextDiffDto, GitTextDiffResult,
-    GitUpstreamDto,
+    GitCommitResult, GitCommitSummaryDto, GitDiffStatisticsDto, GitGraphParams, GitGraphResult,
+    GitHeadDto, GitHistoryResult, GitOperationResult, GitPathsParams, GitReferenceDto,
+    GitReferenceKindDto, GitRemoteDto, GitRemoteProviderDto, GitRepositoryChangeDto,
+    GitRepositoryIdentityDto, GitStatusChanged, GitStatusResult, GitSubmoduleStateDto,
+    GitTextDiffDto, GitTextDiffResult, GitUpstreamDto,
 };
 use crate::protocol::initialize::{InitializeParams, InitializeResult, ServerCapabilities};
 use crate::protocol::language::{
@@ -1373,7 +1373,7 @@ client_methods! {
         serialization: GlobalSharedRead,
     },
     GitGraph => "git/graph" {
-        params: EmptyParams,
+        params: GitGraphParams,
         response: GitGraphResult,
         serialization: GlobalSharedRead,
     },
@@ -2371,6 +2371,7 @@ typescript_bindings! {
     GitRemoteDto,
     GitReferenceKindDto,
     GitReferenceDto,
+    GitGraphParams,
     GitGraphResult,
     GitBranchSwitchParams,
     GitTextDiffDto,

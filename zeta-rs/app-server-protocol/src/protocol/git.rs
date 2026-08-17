@@ -179,7 +179,17 @@ pub struct GitReferenceDto {
     pub current: bool,
 }
 
-/// Bounded commit graph data for the active workspace repository.
+/// One bounded page request for the active workspace repository graph.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct GitGraphParams {
+    #[schemars(range(min = 1, max = 1000))]
+    pub limit: usize,
+    pub skip: usize,
+}
+
+/// One bounded commit graph page for the active workspace repository.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(rename_all = "camelCase")]
@@ -187,6 +197,7 @@ pub struct GitGraphResult {
     pub commits: Vec<GitCommitSummaryDto>,
     pub references: Vec<GitReferenceDto>,
     pub remotes: Vec<GitRemoteDto>,
+    pub has_more: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

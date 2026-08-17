@@ -4208,7 +4208,7 @@
               "const": "git/graph"
             },
             "params": {
-              "$ref": "#/$defs/EmptyParams"
+              "$ref": "#/$defs/GitGraphParams"
             }
           },
           "required": [
@@ -11953,8 +11953,29 @@
         "deletions"
       ]
     },
+    "GitGraphParams": {
+      "description": "One bounded page request for the active workspace repository graph.",
+      "type": "object",
+      "properties": {
+        "limit": {
+          "type": "integer",
+          "format": "uint",
+          "maximum": 1000,
+          "minimum": 1
+        },
+        "skip": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "limit",
+        "skip"
+      ]
+    },
     "GitGraphResult": {
-      "description": "Bounded commit graph data for the active workspace repository.",
+      "description": "One bounded commit graph page for the active workspace repository.",
       "type": "object",
       "properties": {
         "commits": {
@@ -11962,6 +11983,9 @@
           "items": {
             "$ref": "#/$defs/GitCommitSummaryDto"
           }
+        },
+        "hasMore": {
+          "type": "boolean"
         },
         "references": {
           "type": "array",
@@ -11979,7 +12003,8 @@
       "required": [
         "commits",
         "references",
-        "remotes"
+        "remotes",
+        "hasMore"
       ]
     },
     "GitHeadDto": {

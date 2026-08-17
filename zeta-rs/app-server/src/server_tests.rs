@@ -3925,7 +3925,7 @@ fn git_remote_rpcs_fetch_pull_and_push_against_a_local_bare_remote() {
     let graph = call(
         &server,
         &mut connection,
-        serde_json::json!({"jsonrpc":"2.0","id":7,"method":"git/graph","params":{}}),
+        serde_json::json!({"jsonrpc":"2.0","id":7,"method":"git/graph","params":{"limit":50,"skip":0}}),
     );
     assert!(graph.get("error").is_none(), "{graph}");
     assert!(
@@ -3944,6 +3944,14 @@ fn git_remote_rpcs_fetch_pull_and_push_against_a_local_bare_remote() {
         graph["result"]["remotes"][0]["identity"]["provider"],
         "github"
     );
+    let graph_page = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":8,"method":"git/graph","params":{"limit":1,"skip":0}}),
+    );
+    assert!(graph_page.get("error").is_none(), "{graph_page}");
+    assert_eq!(graph_page["result"]["commits"].as_array().unwrap().len(), 1);
+    assert_eq!(graph_page["result"]["hasMore"], true);
 
     drop(server);
     std::fs::remove_dir_all(root).unwrap();

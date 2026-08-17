@@ -22,7 +22,7 @@ export function createViteDevGitApi(connection: ViteDevAppServerConnection): IGi
   return {
     status: () => viteDevRequest(connection, "git/status", {}),
     history: () => viteDevRequest(connection, "git/history", {}),
-    graph: () => viteDevRequest(connection, "git/graph", {}),
+    graph: (params) => viteDevRequest(connection, "git/graph", params),
     stage: (params) => viteDevRequest(connection, "git/stage", params),
     unstage: (params) => viteDevRequest(connection, "git/unstage", params),
     discardWorktree: (params) => viteDevRequest(connection, "git/discardWorktree", params),

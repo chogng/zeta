@@ -26,7 +26,7 @@ Workspace trust 只限制 Git 的副作用，不隐藏本地只读状态：
 | Git 能力 | Restricted | Trusted |
 | --- | --- | --- |
 | 当前分支、HEAD、改动状态、变更路径 | ✅ | ✅ |
-| 本地分支、bounded history/graph、已 fetch 的 remote-tracking refs、受限文本 diff | ✅ | ✅ |
+| 本地分支、分页 history/graph、已 fetch 的 remote-tracking refs、受限文本 diff | ✅ | ✅ |
 | 暂存、取消暂存、丢弃、提交、切分支 | ❌ | ✅ |
 | fetch、pull、push | ❌ | ✅ |
 
@@ -40,7 +40,7 @@ Trusted workspace。Git query 继续由 `zeta-git` 以禁用 hooks、非交互�
 | 暂存或取消暂存 | 使用明确的工作区相对路径 | 不能越过工作区边界 |
 | 丢弃更改 | 只恢复已跟踪文件，并在界面确认 | 不删除未跟踪文件 |
 | 切换本地分支 | Native 点击底栏当前分支，在菜单中选择另一个本地分支；请求通过 App Server | 冲突时 Git 拒绝切换并保留当前工作树 |
-| 查看 history graph | SCM Graph 读取 bounded `git/graph`，按 lane 分配颜色并显示 local/remote refs | 只包含本地已存在的 refs；不会自动 fetch |
+| 查看 history graph | SCM Graph 以 `limit`/`skip` 分页读取 `git/graph`，按 lane 分配颜色并显示 local/remote refs；滚动到底部后追加下一页 | 只包含本地已存在的 refs；不会自动 fetch |
 | 拉取远端 | 只允许 fast-forward | 需要交互认证时失败 |
 | 提交和推送 | 使用系统 Git 的当前仓库配置 | 尚无凭据提示和进度 UI |
 
@@ -53,7 +53,7 @@ Trusted workspace。Git query 继续由 `zeta-git` 以禁用 hooks、非交互�
 | App Server `GitRuntime` | 串行化 operation、维护 workspace projection/revision、消费 watcher hint、去重并发布状态 | Git command/parsing、Renderer state |
 | App Server `GitService` | 冻结 workspace root、映射 workspace/repository path、持有 Tokio runtime并调用 `zeta-git`；按 `InspectRepository`/`MutateRepository` 再校验读写边界 | live projection、notification |
 | `zeta-app-server-protocol` | Git query/mutation、`git/statusChanged`、DTO、capability 和 stable error name | process/runtime state |
-| `zeta-git` | system Git identity、仓库发现、porcelain-v2 snapshot、bounded graph、local/remote refs、credential-free remote identity、HEAD/worktree 文本 Diff 与增删行统计、typed mutation 与结构化 parsing | App Server lifecycle、workspace product boundary、Renderer state |
+| `zeta-git` | system Git identity、仓库发现、porcelain-v2 snapshot、分页 graph、local/remote refs、credential-free remote identity、HEAD/worktree 文本 Diff 与增删行统计、typed mutation 与结构化 parsing | App Server lifecycle、workspace product boundary、Renderer state |
 
 ## 当前状态
 
@@ -76,9 +76,10 @@ Trusted workspace。Git query 继续由 `zeta-git` 以禁用 hooks、非交互�
 - `git/textDiff` 返回 workspace-scoped status、受限 UTF-8 HEAD/worktree 文本与增删行统计；
 - `git/branch/list` 返回现有本地分支，`git/branch/switch` 只接受 branch name，并在 host 重新解析为
   当前仓库真实分支后执行切换；
-- `git/graph` 返回 bounded `git log --all --topo-order`、local branches、已 fetch 的
-  `refs/remotes/*` 和配置 remote 的 credential-free identity；remote identity 只保留 provider、host、
-  owner、repository，原始 URL、token 和 `gh` 登录配置不会进入协议；
+- `git/graph` 接受有界的 `limit`/`skip` 分页参数，返回该页的 `git log --all --topo-order`、local
+  branches、已 fetch 的 `refs/remotes/*` 和配置 remote 的 credential-free identity，并通过
+  `hasMore` 表示是否还有下一页；remote identity 只保留 provider、host、owner、repository，原始 URL、
+  token 和 `gh` 登录配置不会进入协议；
 - `git/fetch` 执行 all-remotes prune，`git/pull` 仅允许 fast-forward，`git/push` 使用 Git 当前
   upstream/default 配置；所有 remote operation 都是 non-interactive；
 - 每个成功 mutation 都返回新的 `GitStatusResult`，Desktop 立即重绘；首次打开 View 也会自动刷新；

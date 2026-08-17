@@ -6,7 +6,7 @@
 > [`docs/sandboxing.md`](../../docs/sandboxing.md) 维护。
 
 `zeta-git` 是 Zeta 中“如何调用 Git、如何解释 Git 结果”的唯一实现 owner。完整 owner 不等于
-当前已经实现完整 SCM：本阶段提供仓库打开、结构化状态快照、本地 branch、remote、bounded commit
+当前已经实现完整 SCM：本阶段提供仓库打开、结构化状态快照、本地 branch、remote、分页 commit
 graph、local/remote-tracking refs、credential-free remote identity、最近 commit、revision file content、HEAD-to-working-tree 文本 Diff/增删行统计、typed
 stage/unstage/discard/commit/fetch/pull/push、local branch switch 和 patch check/apply；持续监听、
 状态缓存与 tag/worktree mutation 尚未实现。App Server 与 Desktop 已通过 Git SCM 纵向切片消费这些能力，但该 service/protocol/UI
@@ -40,7 +40,7 @@ Git domain owner 下，而不是建立平级的 `zeta-git-utils`：
 | `src/content.rs` | 有界读取 HEAD 或 index 中一个 repository-relative file | `GitFileRevision`、`GitClient::read_file_at_revision` |
 | `src/text_diff.rs` | 从同一次状态快照构建 repository-wide 或 path-scoped 的有界 UTF-8 HEAD/worktree Diff 与文件级、聚合增删行统计 | `GitTextDiffSnapshot`、`GitTextDiff`、`GitDiffStatistics`、`GitClient::text_diff_snapshot[_under]` |
 | `src/info.rs` | local branches、fetch/push remote URLs、credential-free remote identity、bounded recent history | `GitBranch`、`GitRemote`、`GitRemoteIdentity`、`GitRemoteProvider`、`GitCommitSummary` |
-| `src/graph.rs` | local/remote-tracking refs 与 `git log --all` 的 bounded graph snapshot | `GitGraph`、`GitReference`、`GitReferenceKind`、private `parse_references` |
+| `src/graph.rs` | local/remote-tracking refs 与 `git log --all` 的分页 graph page | `GitGraph`、`GitReference`、`GitReferenceKind`、private `parse_references` |
 | `src/mutation.rs` | path set/commit request validation 与常用 index/worktree/branch/remote mutation | `GitPathspecSet`、`GitCommitRequest`、`GitCommitResult`、`GitClient::switch_branch` |
 | `src/patch.rs` | patch request/result、stdin apply、path extraction 和 diagnostics 分类 | `GitPatchRequest`、`GitPatchResult`、private `parse_apply_diagnostics` |
 | `src/fsmonitor.rs` | effective config 与 built-in daemon capability 探测 | private `detect_fsmonitor_override` |
@@ -144,10 +144,11 @@ revision；该 revision 仍不是 mutation CAS token。
 
 ## Graph 与 remote identity 契约
 
-`GitClient::graph` 是一次 bounded observation：它读取 `refs/heads` 与 `refs/remotes`，跳过
-symbolic remote ref（例如 `origin/HEAD`），再从所有本地可见 refs 执行 `git log --all`。因此
-remote branch 只有在本地已经 fetch 后才会进入 graph；graph 不执行 fetch，也不调用 GitHub API。
-`GitReference` 保留 branch/ref 名、object ID、local/remote kind、remote name 和当前分支标记。
+`GitClient::graph` 是一次 bounded page observation：它读取 `refs/heads` 与 `refs/remotes`，跳过
+symbolic remote ref（例如 `origin/HEAD`），再从所有本地可见 refs 执行带 `skip`/`limit` 的
+`git log --all`，额外读取一条记录计算 `GitGraph::has_more`。因此 remote branch 只有在本地已经
+fetch 后才会进入 graph；graph 不执行 fetch，也不调用 GitHub API。`GitReference` 保留 branch/ref
+名、object ID、local/remote kind、remote name 和当前分支标记。
 
 `GitRemote::identity` 从 fetch/push URL 解析 provider-neutral 的 host、owner 和 repository，并
 丢弃 URL 中的 credential。App Server 只投影该 identity 和 remote name；raw URL、`gh` hosts 配置、

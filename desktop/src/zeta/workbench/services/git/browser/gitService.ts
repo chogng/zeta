@@ -3,7 +3,7 @@ import { Emitter } from "../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import type { IAppServerApi, IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
 import type { IGitApi } from "../../../../platform/git/common/gitApi.js";
-import type { GitCommitResult, GitCommitSummary, GitGraph, GitHead, GitRepositoryChange, GitStatus, IGitService } from "../common/gitService.js";
+import type { GitCommitResult, GitCommitSummary, GitGraph, GitGraphQuery, GitHead, GitRepositoryChange, GitStatus, IGitService } from "../common/gitService.js";
 
 export interface GitServiceOptions {
   readonly api: IGitApi;
@@ -42,8 +42,8 @@ export class GitService extends DisposableOwner implements IGitService {
     return result.commits.map((commit) => ({ ...commit }));
   }
 
-  async graph(): Promise<GitGraph> {
-    const result = await this.api.graph();
+  async graph(query: GitGraphQuery): Promise<GitGraph> {
+    const result = await this.api.graph({ limit: query.limit, skip: query.skip });
     return {
       commits: result.commits.map((commit) => ({ ...commit, parentObjectIds: [...commit.parentObjectIds] })),
       references: result.references.map((reference) => ({ ...reference, remoteName: reference.remoteName ?? undefined })),
@@ -51,6 +51,7 @@ export class GitService extends DisposableOwner implements IGitService {
         name: remote.name,
         identity: remote.identity ? { ...remote.identity } : undefined,
       })),
+      hasMore: result.hasMore,
     };
   }
 

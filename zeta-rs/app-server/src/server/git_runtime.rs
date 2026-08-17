@@ -121,13 +121,17 @@ impl GitRuntime {
             .map_err(GitRuntimeError::Service)
     }
 
-    pub(super) fn graph(&self) -> Result<GitGraphResult, GitRuntimeError> {
+    pub(super) fn graph(
+        &self,
+        limit: std::num::NonZeroUsize,
+        skip: usize,
+    ) -> Result<GitGraphResult, GitRuntimeError> {
         let _operation = self
             .operation
             .lock()
             .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
         self.service
-            .graph()
+            .graph(limit, skip)
             .map(project_graph)
             .map_err(GitRuntimeError::Service)
     }
@@ -474,6 +478,7 @@ fn project_graph(graph: GitGraph) -> GitGraphResult {
                 }),
             })
             .collect(),
+        has_more: graph.has_more(),
     }
 }
 

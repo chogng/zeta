@@ -47,12 +47,13 @@ impl GitReference {
     }
 }
 
-/// A bounded graph snapshot containing reachable commits, branch refs, and configured remotes.
+/// A page of graph data containing reachable commits, branch refs, and configured remotes.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct GitGraph {
     commits: Vec<GitCommitSummary>,
     references: Vec<GitReference>,
     remotes: Vec<GitRemote>,
+    has_more: bool,
 }
 
 impl GitGraph {
@@ -67,22 +68,30 @@ impl GitGraph {
     pub fn remotes(&self) -> &[GitRemote] {
         &self.remotes
     }
+
+    pub const fn has_more(&self) -> bool {
+        self.has_more
+    }
 }
 
 impl GitClient {
-    /// Reads all local branch and remote-tracking refs and the bounded history reachable from them.
+    /// Reads one page of local graph history and all branch/remote metadata needed to render it.
     pub async fn graph(
         &self,
         repository: &GitRepository,
         limit: NonZeroUsize,
+        skip: usize,
     ) -> GitResult<GitGraph> {
         let references = self.references(repository).await?;
-        let commits = self.recent_commits_from_all_refs(repository, limit).await?;
+        let (commits, has_more) = self
+            .recent_commits_from_all_refs(repository, limit, skip)
+            .await?;
         let remotes = self.remotes(repository).await?;
         Ok(GitGraph {
             commits,
             references,
             remotes,
+            has_more,
         })
     }
 
@@ -106,8 +115,17 @@ impl GitClient {
         &self,
         repository: &GitRepository,
         limit: NonZeroUsize,
-    ) -> GitResult<Vec<GitCommitSummary>> {
-        let limit_arg = format!("-n{}", limit.get());
+        skip: usize,
+    ) -> GitResult<(Vec<GitCommitSummary>, bool)> {
+        let query_limit = limit
+            .get()
+            .checked_add(1)
+            .ok_or(GitError::InvalidConfiguration {
+                field: "limit",
+                requirement: "must leave room for a has-more probe",
+            })?;
+        let limit_arg = format!("-n{query_limit}");
+        let skip_arg = format!("--skip={skip}");
         let output = self
             .run_query(
                 repository.worktree_root(),
@@ -115,13 +133,19 @@ impl GitClient {
                     OsString::from("log"),
                     OsString::from("--all"),
                     OsString::from("--topo-order"),
+                    OsString::from(skip_arg),
                     OsString::from("-z"),
                     OsString::from("--format=%H%x00%P%x00%ct%x00%s"),
                     OsString::from(limit_arg),
                 ],
             )
             .await?;
-        super::info::parse_commits(&output.stdout, &output.command)
+        let mut commits = super::info::parse_commits(&output.stdout, &output.command)?;
+        let has_more = commits.len() > limit.get();
+        if has_more {
+            commits.truncate(limit.get());
+        }
+        Ok((commits, has_more))
     }
 }
 

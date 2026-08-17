@@ -14,12 +14,22 @@ import { createScmGraphRows, renderScmGraphRow, type ScmGraphNodeKind } from "./
 import { ScmGraphTitleActions } from "./scmGraphTitleActions.js";
 import { gitErrorMessage } from "./scmError.js";
 
-/** Bounded recent repository history rendered as a compact commit graph. */
+const GRAPH_PAGE_SIZE = 50;
+const GRAPH_LOAD_AHEAD_PX = 48;
+
+/** Paged repository history rendered as a compact commit graph. */
 export class ScmGraphViewPane extends ViewPane {
   private readonly gitService: IGitService;
   private readonly titleActions: ScmGraphTitleActions;
   private readonly graphElement: HTMLDivElement;
   private readonly commitHovers = this.own(new ResettableDisposableGroup());
+  private readonly loadMoreControls = this.own(new ResettableDisposableGroup());
+  private loadedGraph: GitGraph | undefined;
+  private graphHead: GitHead | undefined;
+  private graphRequestGeneration = 0;
+  private nextGraphSkip = 0;
+  private loadingMore = false;
+  private loadMoreError: string | undefined;
   private disposed = false;
 
   constructor(options: IViewPaneOptions, gitService: IGitService, menuService: IMenuService, contextMenuService: IContextMenuService, contextKeyService: IContextKeyService, private readonly hoverService: IHoverService) {
@@ -30,6 +40,9 @@ export class ScmGraphViewPane extends ViewPane {
     this.graphElement.className = "zeta-scm-graph";
     this.graphElement.setAttribute("role", "status");
     this.graphElement.setAttribute("aria-live", "polite");
+    this.own(addDisposableListener(this.graphElement, "scroll", () => {
+      if (this.graphElement.scrollTop + this.graphElement.clientHeight >= this.graphElement.scrollHeight - GRAPH_LOAD_AHEAD_PX) void this.loadMore();
+    }));
     this.contentElement.append(this.graphElement);
     this.titleActions = this.own(new ScmGraphTitleActions({
       ownerDocument: options.ownerDocument,
@@ -47,14 +60,28 @@ export class ScmGraphViewPane extends ViewPane {
   }
 
   private async refresh(): Promise<void> {
+    const generation = ++this.graphRequestGeneration;
+    this.loadedGraph = undefined;
+    this.graphHead = undefined;
+    this.nextGraphSkip = 0;
+    this.loadingMore = false;
+    this.loadMoreError = undefined;
     this.commitHovers.clear();
+    this.loadMoreControls.clear();
     this.graphElement.textContent = "Loading commit graph…";
+    this.graphElement.setAttribute("aria-busy", "true");
     try {
-      const [graph, status] = await Promise.all([this.gitService.graph(), this.gitService.status()]);
-      if (this.disposed) return;
+      const [graph, status] = await Promise.all([
+        this.gitService.graph({ limit: GRAPH_PAGE_SIZE, skip: 0 }),
+        this.gitService.status(),
+      ]);
+      if (this.disposed || generation !== this.graphRequestGeneration) return;
+      this.loadedGraph = graph;
+      this.graphHead = status.head;
+      this.nextGraphSkip = graph.commits.length;
       this.renderCommits(graph, status.head);
     } catch (error) {
-      if (this.disposed) return;
+      if (this.disposed || generation !== this.graphRequestGeneration) return;
       const document = this.graphElement.ownerDocument;
       const message = document.createElement("p");
       message.className = "zeta-scm-empty";
@@ -66,28 +93,87 @@ export class ScmGraphViewPane extends ViewPane {
       retry.setAttribute("aria-label", "Retry loading commit graph");
       this.own(addDisposableListener(retry, "click", () => void this.refresh()));
       this.graphElement.replaceChildren(message, retry);
+      this.graphElement.setAttribute("aria-busy", "false");
     }
   }
 
   private renderCommits(graph: GitGraph, head: GitHead): void {
+    this.commitHovers.clear();
+    this.loadMoreControls.clear();
     const remotes = this.renderRemotes(graph);
+    const children: HTMLElement[] = remotes ? [remotes] : [];
     if (graph.commits.length === 0) {
       const empty = this.graphElement.ownerDocument.createElement("p");
       empty.className = "zeta-scm-empty";
       empty.textContent = "No commits yet.";
-      this.graphElement.replaceChildren(...(remotes ? [remotes, empty] : [empty]));
-      return;
+      children.push(empty);
+    } else {
+      const referencesByObjectId = new Map<string, GitReference[]>();
+      for (const reference of graph.references) {
+        const references = referencesByObjectId.get(reference.objectId) ?? [];
+        references.push(reference);
+        referencesByObjectId.set(reference.objectId, references);
+      }
+      const list = this.graphElement.ownerDocument.createElement("ol");
+      list.className = "zeta-scm-graph-list";
+      for (const row of createScmGraphRows(graph.commits)) list.append(this.renderCommit(row.commit, head, referencesByObjectId.get(row.commit.objectId) ?? [], renderScmGraphRow(this.graphElement.ownerDocument, row, graphNodeKind(row.commit, head))));
+      children.push(list);
     }
-    const referencesByObjectId = new Map<string, GitReference[]>();
-    for (const reference of graph.references) {
-      const references = referencesByObjectId.get(reference.objectId) ?? [];
-      references.push(reference);
-      referencesByObjectId.set(reference.objectId, references);
+    if (graph.hasMore) children.push(this.renderLoadMoreControl());
+    this.graphElement.replaceChildren(...children);
+    this.graphElement.setAttribute("aria-busy", this.loadingMore ? "true" : "false");
+  }
+
+  private renderLoadMoreControl(): HTMLDivElement {
+    const container = this.graphElement.ownerDocument.createElement("div");
+    container.className = "zeta-scm-graph-load-more";
+    if (this.loadMoreError) {
+      const error = this.graphElement.ownerDocument.createElement("span");
+      error.className = "zeta-scm-empty";
+      error.textContent = this.loadMoreError;
+      container.append(error);
     }
-    const list = this.graphElement.ownerDocument.createElement("ol");
-    list.className = "zeta-scm-graph-list";
-    for (const row of createScmGraphRows(graph.commits)) list.append(this.renderCommit(row.commit, head, referencesByObjectId.get(row.commit.objectId) ?? [], renderScmGraphRow(this.graphElement.ownerDocument, row, graphNodeKind(row.commit, head))));
-    this.graphElement.replaceChildren(...(remotes ? [remotes, list] : [list]));
+    const button = this.graphElement.ownerDocument.createElement("button");
+    button.className = "zeta-scm-command";
+    button.type = "button";
+    button.disabled = this.loadingMore;
+    button.textContent = this.loadingMore ? "Loading commit history…" : this.loadMoreError ? "Retry" : "Load more commits";
+    button.setAttribute("aria-label", this.loadMoreError ? "Retry loading commit history" : "Load more commits");
+    this.loadMoreControls.add(addDisposableListener(button, "click", () => void this.loadMore()));
+    container.append(button);
+    return container;
+  }
+
+  private async loadMore(): Promise<void> {
+    const graph = this.loadedGraph;
+    const head = this.graphHead;
+    if (!graph || !head || !graph.hasMore || this.loadingMore) return;
+
+    const generation = this.graphRequestGeneration;
+    this.loadingMore = true;
+    this.loadMoreError = undefined;
+    this.renderCommits(graph, head);
+    try {
+      const page = await this.gitService.graph({ limit: GRAPH_PAGE_SIZE, skip: this.nextGraphSkip });
+      if (this.disposed || generation !== this.graphRequestGeneration) return;
+      const commits = [...graph.commits];
+      const knownObjectIds = new Set(commits.map((commit) => commit.objectId));
+      for (const commit of page.commits) {
+        if (knownObjectIds.has(commit.objectId)) continue;
+        knownObjectIds.add(commit.objectId);
+        commits.push(commit);
+      }
+      const nextGraph: GitGraph = { ...page, commits };
+      this.loadedGraph = nextGraph;
+      this.nextGraphSkip += page.commits.length;
+      this.loadingMore = false;
+      this.renderCommits(nextGraph, head);
+    } catch (error) {
+      if (this.disposed || generation !== this.graphRequestGeneration) return;
+      this.loadingMore = false;
+      this.loadMoreError = gitErrorMessage(error);
+      this.renderCommits(graph, head);
+    }
   }
 
   private renderCommit(commit: GitCommitSummary, head: GitHead, references: readonly GitReference[], graph: SVGSVGElement): HTMLLIElement {

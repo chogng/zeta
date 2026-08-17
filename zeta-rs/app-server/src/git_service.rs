@@ -117,13 +117,17 @@ impl GitService {
         })
     }
 
-    pub(crate) fn graph(&self) -> Result<GitGraph, GitServiceError> {
+    pub(crate) fn graph(
+        &self,
+        limit: NonZeroUsize,
+        skip: usize,
+    ) -> Result<GitGraph, GitServiceError> {
         self.ensure_readable()?;
         let runtime = self.runtime.lock().map_err(|_| GitServiceError::Runtime)?;
         runtime.block_on(async {
             let repository = self.open_repository().await?;
             self.client
-                .graph(&repository, RECENT_COMMIT_LIMIT)
+                .graph(&repository, limit, skip)
                 .await
                 .map_err(GitServiceError::Git)
         })

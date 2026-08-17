@@ -2,13 +2,17 @@ use super::{AppServer, RpcError, decode, result};
 use crate::git_service::GitServiceError;
 use crate::server::git_runtime::GitRuntimeError;
 use serde_json::Value;
+use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use zeta_app_server_protocol::protocol::error::AppServerErrorName;
 use zeta_app_server_protocol::protocol::git::{
     GitBranchListResult, GitBranchSwitchParams, GitCommitParams,
-    GitCommitResult as GitCommitResultDto, GitHistoryResult, GitOperationResult, GitPathsParams,
+    GitCommitResult as GitCommitResultDto, GitGraphParams, GitHistoryResult, GitOperationResult,
+    GitPathsParams,
 };
 use zeta_git::GitError;
+
+const MAX_GIT_GRAPH_PAGE_SIZE: usize = 1000;
 
 impl AppServer {
     pub(super) fn git_status(&self) -> Result<Value, RpcError> {
@@ -35,8 +39,18 @@ impl AppServer {
         result(&GitHistoryResult { commits })
     }
 
-    pub(super) fn git_graph(&self) -> Result<Value, RpcError> {
-        result(&self.git_runtime_service()?.graph().map_err(git_error)?)
+    pub(super) fn git_graph(&self, value: &Value) -> Result<Value, RpcError> {
+        let params: GitGraphParams = decode(value)?;
+        if params.limit == 0 || params.limit > MAX_GIT_GRAPH_PAGE_SIZE {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        let limit = NonZeroUsize::new(params.limit).expect("validated graph page size");
+        result(
+            &self
+                .git_runtime_service()?
+                .graph(limit, params.skip)
+                .map_err(git_error)?,
+        )
     }
 
     pub(super) fn git_branch_switch(&self, params: &Value) -> Result<Value, RpcError> {

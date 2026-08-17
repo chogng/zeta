@@ -73,6 +73,13 @@ export interface GitGraph {
   readonly commits: readonly GitCommitSummary[];
   readonly references: readonly GitReference[];
   readonly remotes: readonly GitRemote[];
+  readonly hasMore: boolean;
+}
+
+/** Describes one bounded page of Git graph history requested by a frontend consumer. */
+export interface GitGraphQuery {
+  readonly limit: number;
+  readonly skip: number;
 }
 
 export interface GitCommitResult {
@@ -86,7 +93,7 @@ export interface IGitService {
   readonly onDidBecomeReady: Event<void>;
   status(): Promise<GitStatus>;
   history(): Promise<readonly GitCommitSummary[]>;
-  graph(): Promise<GitGraph>;
+  graph(query: GitGraphQuery): Promise<GitGraph>;
   stage(paths: readonly string[]): Promise<GitStatus>;
   unstage(paths: readonly string[]): Promise<GitStatus>;
   discardWorktree(paths: readonly string[]): Promise<GitStatus>;
