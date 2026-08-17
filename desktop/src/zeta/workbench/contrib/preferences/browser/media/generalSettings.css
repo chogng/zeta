@@ -81,14 +81,9 @@
   font: inherit;
 }
 
-.zeta-general-setting-control:not(.zeta-select-box):focus-visible,
-.zeta-general-toggle-setting input:focus-visible {
+.zeta-general-setting-control:not(.zeta-select-box):focus-visible {
   outline: 1px solid var(--zeta-focus-border);
   outline-offset: 1px;
-}
-
-.zeta-general-toggle-setting input {
-  justify-self: end;
 }
 
 .zeta-general-settings-status {
@@ -106,9 +101,5 @@
   .zeta-general-setting {
     align-items: start;
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  .zeta-general-toggle-setting input {
-    justify-self: start;
   }
 }

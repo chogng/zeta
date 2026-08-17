@@ -3,6 +3,7 @@ import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.j
 import type { IContextViewProvider } from "../../../../base/browser/ui/contextview/contextview.js";
 import { InputBox } from "../../../../base/browser/ui/inputbox/inputbox.js";
 import { ScrollableElement } from "../../../../base/browser/ui/scrollbar/scrollableElement.js";
+import { Checkbox } from "../../../../base/browser/ui/toggle/toggle.js";
 import { DisposableOwner, ResettableDisposableGroup, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { IConfigurationService } from "../../../../platform/configuration/common/configurationService.js";
 import type { IDialogService } from "../../../../platform/dialogs/common/dialogs.js";
@@ -333,12 +334,12 @@ export class SettingsEditor extends DisposableOwner {
     const toolHint = document.createElement("p");
     toolHint.className = "zeta-theme-setting-hint";
     toolHint.textContent = "Lexical search keeps tool metadata local. Hybrid search sends tool names, descriptions, schemas, and the query to the selected embedding model, then merges that ranking with BM25.";
-    const toolEnabledLabel = document.createElement("label");
-    toolEnabledLabel.className = "zeta-indexing-toggle";
-    const toolEnabled = document.createElement("input");
-    toolEnabled.type = "checkbox";
-    toolEnabled.checked = toolConfig.mode === "hybridEmbedding";
-    toolEnabledLabel.append(toolEnabled, " Use hybrid embedding search");
+    const toolEnabled = this.sectionBindings.add(new Checkbox({
+      ownerDocument: document,
+      label: "Use hybrid embedding search",
+      checked: toolConfig.mode === "hybridEmbedding",
+    }));
+    toolEnabled.element.classList.add("zeta-indexing-toggle");
     const toolEmbedding = document.createElement("input");
     toolEmbedding.className = "zeta-settings-text-input";
     toolEmbedding.placeholder = "provider/model (for example ollama/nomic-embed-text)";
@@ -355,7 +356,7 @@ export class SettingsEditor extends DisposableOwner {
     toolSave.className = "zeta-theme-action";
     toolSave.type = "button";
     toolSave.textContent = "Save tool search";
-    this.sectionBindings.add(addDisposableListener(toolEnabled, "change", () => {
+    this.sectionBindings.add(toolEnabled.onDidChange(() => {
       toolEmbedding.disabled = !toolEnabled.checked;
     }));
     this.sectionBindings.add(addDisposableListener(toolSave, "click", () => {
@@ -375,7 +376,7 @@ export class SettingsEditor extends DisposableOwner {
       }).finally(() => { toolGroup.disabled = false; });
     }));
     toolActions.append(toolSave);
-    toolGroup.append(toolLegend, toolHint, toolEnabledLabel, toolEmbedding, toolStatus, toolActions);
+    toolGroup.append(toolLegend, toolHint, toolEnabled.element, toolEmbedding, toolStatus, toolActions);
 
     const group = document.createElement("fieldset");
     group.className = "zeta-indexing-setting";
@@ -405,12 +406,12 @@ export class SettingsEditor extends DisposableOwner {
     providerSave.className = "zeta-theme-action";
     providerSave.type = "button";
     providerSave.textContent = "Save endpoint";
-    const enabledLabel = document.createElement("label");
-    enabledLabel.className = "zeta-indexing-toggle";
-    const enabled = document.createElement("input");
-    enabled.type = "checkbox";
-    enabled.checked = codeConfig.semanticCodeIndex.selection.type === "remote";
-    enabledLabel.append(enabled, " Use an embedding/rerank model endpoint");
+    const enabled = this.sectionBindings.add(new Checkbox({
+      ownerDocument: document,
+      label: "Use an embedding/rerank model endpoint",
+      checked: codeConfig.semanticCodeIndex.selection.type === "remote",
+    }));
+    enabled.element.classList.add("zeta-indexing-toggle");
     const embedding = document.createElement("input");
     embedding.className = "zeta-settings-text-input";
     embedding.placeholder = "provider/model (for example ollama/nomic-embed-text)";
@@ -425,13 +426,13 @@ export class SettingsEditor extends DisposableOwner {
     }
     embedding.disabled = !enabled.checked;
     rerank.disabled = !enabled.checked;
-    const automaticContextLabel = document.createElement("label");
-    automaticContextLabel.className = "zeta-indexing-toggle";
-    const automaticContext = document.createElement("input");
-    automaticContext.type = "checkbox";
-    automaticContext.checked = codeConfig.semanticCodeIndex.automaticContext === "firstInvocation";
-    automaticContext.disabled = !enabled.checked;
-    automaticContextLabel.append(automaticContext, " Automatically add verified code excerpts to the first Agent request");
+    const automaticContext = this.sectionBindings.add(new Checkbox({
+      ownerDocument: document,
+      label: "Automatically add verified code excerpts to the first Agent request",
+      checked: codeConfig.semanticCodeIndex.automaticContext === "firstInvocation",
+      disabled: !enabled.checked,
+    }));
+    automaticContext.element.classList.add("zeta-indexing-toggle");
     const status = document.createElement("p");
     status.className = "zeta-theme-setting-status";
     status.setAttribute("role", "status");
@@ -524,10 +525,10 @@ export class SettingsEditor extends DisposableOwner {
     consent.type = "button";
     consent.textContent = codeConfig.semanticCodeIndex.activeWorkspaceAuthorized ? "Revoke workspace access" : "Authorize active workspace";
     consent.disabled = !enabled.checked;
-    this.sectionBindings.add(addDisposableListener(enabled, "change", () => {
+    this.sectionBindings.add(enabled.onDidChange(() => {
       embedding.disabled = !enabled.checked;
       rerank.disabled = !enabled.checked;
-      automaticContext.disabled = !enabled.checked;
+      automaticContext.enabled = enabled.checked;
       consent.disabled = !enabled.checked;
     }));
     this.sectionBindings.add(addDisposableListener(save, "click", () => {
@@ -562,7 +563,7 @@ export class SettingsEditor extends DisposableOwner {
       }).finally(() => { group.disabled = false; });
     }));
     actions.append(save, consent);
-    group.append(legend, hint, providerHeading, provider, endpoint, providerActions, enabledLabel, embedding, rerank, automaticContextLabel, status, progress, jobActions, actions);
+    group.append(legend, hint, providerHeading, provider, endpoint, providerActions, enabled.element, embedding, rerank, automaticContext.element, status, progress, jobActions, actions);
     this.sectionContent.replaceChildren(toolGroup, group);
     this.contentScrollable.layout();
   }

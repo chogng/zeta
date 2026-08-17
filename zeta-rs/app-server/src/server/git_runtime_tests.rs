@@ -128,6 +128,14 @@ fn runtime_projects_text_diffs_and_switches_only_existing_local_branches() {
     repository.git(&["add", "tracked.txt"]);
     repository.git(&["commit", "-m", "initial"]);
     repository.git(&["branch", "topic"]);
+    repository.git(&[
+        "remote",
+        "add",
+        "origin",
+        "https://github.com/example/zeta.git",
+    ]);
+    let head = repository.git_output(&["rev-parse", "HEAD"]);
+    repository.git(&["update-ref", "refs/remotes/origin/main", &head]);
     repository.write("tracked.txt", "after\n");
     let runtime = GitRuntime::new(
         trusted_workspace(repository.root()),
@@ -158,6 +166,21 @@ fn runtime_projects_text_diffs_and_switches_only_existing_local_branches() {
         branches
             .iter()
             .any(|branch| branch.name == "topic" && !branch.current)
+    );
+    let graph = runtime.graph().unwrap();
+    assert!(graph.references.iter().any(|reference| {
+        reference.name == "origin/main"
+            && reference.kind
+                == zeta_app_server_protocol::protocol::git::GitReferenceKindDto::RemoteBranch
+    }));
+    assert_eq!(graph.remotes[0].name, "origin");
+    assert_eq!(
+        graph.remotes[0]
+            .identity
+            .as_ref()
+            .expect("remote identity")
+            .provider,
+        zeta_app_server_protocol::protocol::git::GitRemoteProviderDto::Github
     );
 
     let switched = runtime.switch_branch("topic").unwrap();
@@ -201,6 +224,10 @@ impl TestRepository {
     }
 
     fn git(&self, arguments: &[&str]) {
+        self.git_output(arguments);
+    }
+
+    fn git_output(&self, arguments: &[&str]) -> String {
         let output = Command::new("git")
             .args(arguments)
             .current_dir(&self.root)
@@ -214,6 +241,7 @@ impl TestRepository {
             arguments.join(" "),
             String::from_utf8_lossy(&output.stderr)
         );
+        String::from_utf8_lossy(&output.stdout).trim().to_string()
     }
 }
 

@@ -7,6 +7,7 @@ export function createDisconnectedGitApi(unavailable: UnavailableOperation): IGi
   return {
     status: () => unavailable("git.status"),
     history: () => unavailable("git.history"),
+    graph: () => unavailable("git.graph"),
     stage: () => unavailable("git.stage"),
     unstage: () => unavailable("git.unstage"),
     discardWorktree: () => unavailable("git.discardWorktree"),
@@ -21,6 +22,7 @@ export function createViteDevGitApi(connection: ViteDevAppServerConnection): IGi
   return {
     status: () => viteDevRequest(connection, "git/status", {}),
     history: () => viteDevRequest(connection, "git/history", {}),
+    graph: () => viteDevRequest(connection, "git/graph", {}),
     stage: (params) => viteDevRequest(connection, "git/stage", params),
     unstage: (params) => viteDevRequest(connection, "git/unstage", params),
     discardWorktree: (params) => viteDevRequest(connection, "git/discardWorktree", params),

@@ -18,6 +18,11 @@ export function gitIpcRoutes(supervisor: AppServerSupervisor): readonly IpcRoute
       invoke: () => supervisor.request(APP_SERVER_METHODS["git/history"], {}),
     }),
     route({
+      channel: "zeta:git:graph",
+      validate: emptyParams,
+      invoke: () => supervisor.request(APP_SERVER_METHODS["git/graph"], {}),
+    }),
+    route({
       channel: "zeta:git:stage",
       validate: gitPathsParams,
       invoke: (params) => supervisor.request(APP_SERVER_METHODS["git/stage"], params),

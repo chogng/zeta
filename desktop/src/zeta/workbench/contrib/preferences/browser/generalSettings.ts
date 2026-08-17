@@ -103,6 +103,7 @@ export class GeneralSettingsPane extends DisposableOwner {
       ownerDocument: this.element.ownerDocument,
       ariaLabel: label,
       content: copy,
+      contentPlacement: "before-control",
     }));
     checkbox.element.classList.add("zeta-general-setting", "zeta-general-toggle-setting");
     checkbox.input.dataset.configurationKey = key.key;

@@ -7,7 +7,7 @@ import type { IMenuService } from "../../../../platform/actions/common/menuServi
 import type { IContextKeyService } from "../../../../platform/contextkey/common/contextkey.js";
 import type { IContextMenuService } from "../../../../platform/contextview/browser/contextMenu.js";
 import type { IHoverService } from "../../../../platform/hover/common/hoverService.js";
-import type { GitCommitSummary, GitHead, IGitService } from "../../../services/git/common/gitService.js";
+import type { GitCommitSummary, GitGraph, GitHead, GitReference, GitRemoteProvider, IGitService } from "../../../services/git/common/gitService.js";
 import type { IViewPaneOptions } from "../../../browser/parts/views/viewPane.js";
 import { ViewPane } from "../../../browser/parts/views/viewPane.js";
 import { createScmGraphRows, renderScmGraphRow, type ScmGraphNodeKind } from "./scmGraphRenderer.js";
@@ -50,9 +50,9 @@ export class ScmGraphViewPane extends ViewPane {
     this.commitHovers.clear();
     this.graphElement.textContent = "Loading commit graph…";
     try {
-      const [commits, status] = await Promise.all([this.gitService.history(), this.gitService.status()]);
+      const [graph, status] = await Promise.all([this.gitService.graph(), this.gitService.status()]);
       if (this.disposed) return;
-      this.renderCommits(commits, status.head);
+      this.renderCommits(graph, status.head);
     } catch (error) {
       if (this.disposed) return;
       const document = this.graphElement.ownerDocument;
@@ -69,21 +69,28 @@ export class ScmGraphViewPane extends ViewPane {
     }
   }
 
-  private renderCommits(commits: readonly GitCommitSummary[], head: GitHead): void {
-    if (commits.length === 0) {
+  private renderCommits(graph: GitGraph, head: GitHead): void {
+    const remotes = this.renderRemotes(graph);
+    if (graph.commits.length === 0) {
       const empty = this.graphElement.ownerDocument.createElement("p");
       empty.className = "zeta-scm-empty";
       empty.textContent = "No commits yet.";
-      this.graphElement.replaceChildren(empty);
+      this.graphElement.replaceChildren(...(remotes ? [remotes, empty] : [empty]));
       return;
+    }
+    const referencesByObjectId = new Map<string, GitReference[]>();
+    for (const reference of graph.references) {
+      const references = referencesByObjectId.get(reference.objectId) ?? [];
+      references.push(reference);
+      referencesByObjectId.set(reference.objectId, references);
     }
     const list = this.graphElement.ownerDocument.createElement("ol");
     list.className = "zeta-scm-graph-list";
-    for (const row of createScmGraphRows(commits)) list.append(this.renderCommit(row.commit, head, renderScmGraphRow(this.graphElement.ownerDocument, row, graphNodeKind(row.commit, head))));
-    this.graphElement.replaceChildren(list);
+    for (const row of createScmGraphRows(graph.commits)) list.append(this.renderCommit(row.commit, head, referencesByObjectId.get(row.commit.objectId) ?? [], renderScmGraphRow(this.graphElement.ownerDocument, row, graphNodeKind(row.commit, head))));
+    this.graphElement.replaceChildren(...(remotes ? [remotes, list] : [list]));
   }
 
-  private renderCommit(commit: GitCommitSummary, head: GitHead, graph: SVGSVGElement): HTMLLIElement {
+  private renderCommit(commit: GitCommitSummary, head: GitHead, references: readonly GitReference[], graph: SVGSVGElement): HTMLLIElement {
     const document = this.graphElement.ownerDocument;
     const item = document.createElement("li");
     item.className = "zeta-scm-graph-commit";
@@ -110,12 +117,43 @@ export class ScmGraphViewPane extends ViewPane {
     subject.textContent = commit.subject;
     details.append(subject);
     if (current) details.append(this.renderHeadLabel(head));
+    const visibleReferences = references.filter((reference) => !(current && reference.kind === "localBranch" && reference.current));
+    if (visibleReferences.length > 0) details.append(this.renderReferenceLabels(visibleReferences));
     const metadata = document.createElement("span");
     metadata.className = "zeta-scm-graph-metadata";
     const date = new Date(commit.timestampSeconds * 1_000);
     metadata.textContent = `${commit.objectId.slice(0, 7)} · ${date.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
     item.append(graph, details, metadata);
     return item;
+  }
+
+  private renderReferenceLabels(references: readonly GitReference[]): HTMLSpanElement {
+    const container = this.graphElement.ownerDocument.createElement("span");
+    container.className = "zeta-scm-graph-refs";
+    container.setAttribute("aria-label", "Git references");
+    for (const reference of references) {
+      const label = this.graphElement.ownerDocument.createElement("span");
+      label.className = `zeta-scm-graph-ref ${reference.kind === "remoteBranch" ? "remote" : "local"}`;
+      label.textContent = reference.name;
+      label.title = reference.kind === "remoteBranch" ? `Fetched remote branch ${reference.name}` : `Local branch ${reference.name}`;
+      container.append(label);
+    }
+    return container;
+  }
+
+  private renderRemotes(graph: GitGraph): HTMLDivElement | undefined {
+    if (graph.remotes.length === 0) return undefined;
+    const container = this.graphElement.ownerDocument.createElement("div");
+    container.className = "zeta-scm-graph-remotes";
+    container.setAttribute("aria-label", "Git remotes");
+    for (const remote of graph.remotes) {
+      const label = this.graphElement.ownerDocument.createElement("span");
+      label.className = "zeta-scm-graph-remote";
+      label.textContent = remote.identity ? `${remoteLabel(remote.identity.provider)} · ${remote.identity.owner}/${remote.identity.repository} · ${remote.name}` : remote.name;
+      label.title = remote.identity ? `${remote.identity.host}/${remote.identity.owner}/${remote.identity.repository}` : `Git remote ${remote.name}`;
+      container.append(label);
+    }
+    return container;
   }
 
   private renderHeadLabel(head: GitHead): HTMLSpanElement {
@@ -151,4 +189,13 @@ function headObjectId(head: GitHead): string | undefined {
 function graphNodeKind(commit: GitCommitSummary, head: GitHead): ScmGraphNodeKind {
   if (headObjectId(head) === commit.objectId) return "head";
   return commit.parentObjectIds.length > 1 ? "merge" : "commit";
+}
+
+function remoteLabel(provider: GitRemoteProvider): string {
+  switch (provider) {
+    case "github": return "GitHub";
+    case "gitlab": return "GitLab";
+    case "bitbucket": return "Bitbucket";
+    case "other": return "Remote";
+  }
 }

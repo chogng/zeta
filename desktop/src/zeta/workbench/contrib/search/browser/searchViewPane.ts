@@ -1,4 +1,5 @@
 import { addDisposableListener } from "../../../../base/browser/dom.js";
+import { Checkbox } from "../../../../base/browser/ui/toggle/toggle.js";
 import type { IWorkspaceSearchQuery, IWorkspaceSearchService, WorkspaceSearchMatch, WorkspaceSearchMatchRange } from "../../../../platform/search/common/search.js";
 import type { IConfigurationKey, IConfigurationService } from "../../../../platform/configuration/common/configurationService.js";
 import { ViewPane, type IViewPaneOptions } from "../../../browser/parts/views/viewPane.js";
@@ -48,12 +49,14 @@ export class SearchViewPane extends ViewPane {
     this.submitButton.textContent = "Search";
     const toggles = document.createElement("div");
     toggles.className = "zeta-search-toggles";
-    this.caseSensitiveInput = checkbox(
+    const caseSensitive = this.own(checkbox(
       document,
       toggles,
       "Match Case",
-    );
-    this.regexInput = checkbox(document, toggles, "Use Regex");
+    ));
+    this.caseSensitiveInput = caseSensitive.input;
+    const regex = this.own(checkbox(document, toggles, "Use Regex"));
+    this.regexInput = regex.input;
     const filters = document.createElement("div");
     filters.className = "zeta-search-filters";
     this.includeInput = input(document, {
@@ -250,14 +253,14 @@ function checkbox(
   document: Document,
   parent: HTMLElement,
   text: string,
-): HTMLInputElement {
-  const label = document.createElement("label");
-  label.className = "zeta-search-toggle";
-  const element = document.createElement("input");
-  element.type = "checkbox";
-  label.append(element, document.createTextNode(text));
-  parent.append(label);
-  return element;
+): Checkbox {
+  const control = new Checkbox({
+    ownerDocument: document,
+    label: text,
+  });
+  control.element.classList.add("zeta-search-toggle");
+  parent.append(control.element);
+  return control;
 }
 
 function patterns(value: string): readonly string[] {

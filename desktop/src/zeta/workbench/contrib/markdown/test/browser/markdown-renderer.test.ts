@@ -91,6 +91,26 @@ test("MarkdownElement owns DOM updates and delegates link activation", () => {
   dom.window.close();
 });
 
+test("Markdown task lists use the shared Checkbox presentation", () => {
+  const dom = createDom();
+  const markdown = new MarkdownElement({
+    ownerDocument: dom.window.document,
+    markdown: "- [x] Done\n- [ ] Todo",
+  });
+  dom.window.document.body.append(markdown.element);
+
+  const controls = markdown.element.querySelectorAll(".zeta-markdown-checkbox");
+  assert.equal(controls.length, 2);
+  assert.equal(controls[0]?.classList.contains("zeta-checkbox"), true);
+  assert.equal(controls[0]?.querySelector<HTMLInputElement>("input")?.checked, true);
+  assert.equal(controls[0]?.querySelector<HTMLInputElement>("input")?.disabled, true);
+  assert.equal(controls[1]?.querySelector<HTMLInputElement>("input")?.checked, false);
+  assert.equal(controls[1]?.querySelector<HTMLInputElement>("input")?.disabled, true);
+
+  markdown.dispose();
+  dom.window.close();
+});
+
 test("MarkdownPreview sanitizes content before creating iframe srcdoc", () => {
   const dom = createDom();
   const preview = new MarkdownPreview({

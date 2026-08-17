@@ -127,6 +127,68 @@ pub struct GitHistoryResult {
     pub commits: Vec<GitCommitSummaryDto>,
 }
 
+/// Provider classification for a configured repository remote.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub enum GitRemoteProviderDto {
+    Github,
+    Gitlab,
+    Bitbucket,
+    Other,
+}
+
+/// Credential-free repository identity parsed from a configured Git remote.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct GitRepositoryIdentityDto {
+    pub provider: GitRemoteProviderDto,
+    pub host: String,
+    pub owner: String,
+    pub repository: String,
+}
+
+/// One configured Git remote, with raw URLs intentionally omitted from the wire contract.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct GitRemoteDto {
+    pub name: String,
+    pub identity: Option<GitRepositoryIdentityDto>,
+}
+
+/// Ref kinds included in a repository graph snapshot.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub enum GitReferenceKindDto {
+    LocalBranch,
+    RemoteBranch,
+}
+
+/// A local or fetched remote-tracking branch ref.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct GitReferenceDto {
+    pub name: String,
+    pub object_id: String,
+    pub kind: GitReferenceKindDto,
+    pub remote_name: Option<String>,
+    pub current: bool,
+}
+
+/// Bounded commit graph data for the active workspace repository.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct GitGraphResult {
+    pub commits: Vec<GitCommitSummaryDto>,
+    pub references: Vec<GitReferenceDto>,
+    pub remotes: Vec<GitRemoteDto>,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct GitBranchSwitchParams {

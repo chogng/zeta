@@ -69,7 +69,19 @@ a { color: LinkText; cursor: pointer; }
 img { max-width: 100%; }
 table { border-collapse: collapse; display: block; max-width: 100%; overflow: auto; }
 th, td { border: 1px solid GrayText; padding: 0.35em 0.7em; }
-input[type="checkbox"] { margin: 0 0.35em 0 0; }
+.zeta-markdown-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  vertical-align: middle;
+}
+.zeta-markdown-checkbox.disabled { opacity: .5; }
+.zeta-markdown-checkbox > input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: AccentColor;
+}
 `;
 
 const LINK_BRIDGE_SCRIPT = `

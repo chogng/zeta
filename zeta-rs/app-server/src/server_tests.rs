@@ -3913,6 +3913,37 @@ fn git_remote_rpcs_fetch_pull_and_push_against_a_local_bare_remote() {
         std::fs::read_to_string(peer.join("local.txt")).unwrap(),
         "from app server\n"
     );
+    run_git(
+        &workspace,
+        &[
+            "remote",
+            "set-url",
+            "origin",
+            "https://github.com/example/zeta.git",
+        ],
+    );
+    let graph = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":7,"method":"git/graph","params":{}}),
+    );
+    assert!(graph.get("error").is_none(), "{graph}");
+    assert!(
+        graph["result"]["references"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|reference| {
+                reference["name"] == "origin/main"
+                    && reference["kind"] == "remoteBranch"
+                    && reference["remoteName"] == "origin"
+            })
+    );
+    assert_eq!(graph["result"]["remotes"][0]["name"], "origin");
+    assert_eq!(
+        graph["result"]["remotes"][0]["identity"]["provider"],
+        "github"
+    );
 
     drop(server);
     std::fs::remove_dir_all(root).unwrap();

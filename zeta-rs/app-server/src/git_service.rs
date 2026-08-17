@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use tokio::runtime::Runtime;
 use zeta_git::{
-    GitBranch, GitClient, GitCommitRequest, GitCommitSummary, GitError, GitPathspecSet,
+    GitBranch, GitClient, GitCommitRequest, GitCommitSummary, GitError, GitGraph, GitPathspecSet,
     GitRepository, GitRepositorySnapshot, GitTextDiffLimits, GitTextDiffSnapshot,
 };
 use zeta_workspace::{TrustedWorkspace, WorkspaceCapability, WorkspaceRoot};
@@ -112,6 +112,18 @@ impl GitService {
             let repository = self.open_repository().await?;
             self.client
                 .recent_commits(&repository, RECENT_COMMIT_LIMIT)
+                .await
+                .map_err(GitServiceError::Git)
+        })
+    }
+
+    pub(crate) fn graph(&self) -> Result<GitGraph, GitServiceError> {
+        self.ensure_readable()?;
+        let runtime = self.runtime.lock().map_err(|_| GitServiceError::Runtime)?;
+        runtime.block_on(async {
+            let repository = self.open_repository().await?;
+            self.client
+                .graph(&repository, RECENT_COMMIT_LIMIT)
                 .await
                 .map_err(GitServiceError::Git)
         })

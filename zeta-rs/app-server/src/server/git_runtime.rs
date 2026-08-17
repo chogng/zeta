@@ -5,13 +5,15 @@ use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::Duration;
 use zeta_app_server_protocol::protocol::git::{
-    GitBranchDto, GitChangeStatusDto, GitCommitSummaryDto, GitDiffStatisticsDto, GitHeadDto,
-    GitRepositoryChangeDto, GitStatusResult, GitSubmoduleStateDto, GitTextDiffDto,
-    GitTextDiffResult, GitUpstreamDto,
+    GitBranchDto, GitChangeStatusDto, GitCommitSummaryDto, GitDiffStatisticsDto, GitGraphResult,
+    GitHeadDto, GitReferenceDto, GitReferenceKindDto, GitRemoteDto, GitRemoteProviderDto,
+    GitRepositoryChangeDto, GitRepositoryIdentityDto, GitStatusResult, GitSubmoduleStateDto,
+    GitTextDiffDto, GitTextDiffResult, GitUpstreamDto,
 };
 use zeta_file_watcher::{DebouncedWatchReceiver, FileWatcher, FileWatcherBackend, WatchPath};
 use zeta_git::{
-    GitChangeStatus, GitHead, GitRepository, GitRepositoryChange, GitRepositorySnapshot,
+    GitChangeStatus, GitGraph, GitHead, GitReferenceKind, GitRemoteProvider, GitRepository,
+    GitRepositoryChange, GitRepositorySnapshot,
 };
 use zeta_protocol::StreamInstanceId;
 use zeta_workspace::TrustedWorkspace;
@@ -116,6 +118,17 @@ impl GitRuntime {
                     })
                     .collect()
             })
+            .map_err(GitRuntimeError::Service)
+    }
+
+    pub(super) fn graph(&self) -> Result<GitGraphResult, GitRuntimeError> {
+        let _operation = self
+            .operation
+            .lock()
+            .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
+        self.service
+            .graph()
+            .map(project_graph)
             .map_err(GitRuntimeError::Service)
     }
 
@@ -415,6 +428,53 @@ fn watch_git(
         }
         drop(registration);
     });
+}
+
+fn project_graph(graph: GitGraph) -> GitGraphResult {
+    GitGraphResult {
+        commits: graph
+            .commits()
+            .iter()
+            .map(|commit| GitCommitSummaryDto {
+                object_id: commit.object_id().into(),
+                parent_object_ids: commit.parent_object_ids().into(),
+                timestamp_seconds: commit.timestamp_seconds(),
+                subject: commit.subject().into(),
+            })
+            .collect(),
+        references: graph
+            .references()
+            .iter()
+            .map(|reference| GitReferenceDto {
+                name: reference.name().into(),
+                object_id: reference.object_id().into(),
+                kind: match reference.kind() {
+                    GitReferenceKind::LocalBranch => GitReferenceKindDto::LocalBranch,
+                    GitReferenceKind::RemoteBranch => GitReferenceKindDto::RemoteBranch,
+                },
+                remote_name: reference.remote_name().map(Into::into),
+                current: reference.is_current(),
+            })
+            .collect(),
+        remotes: graph
+            .remotes()
+            .iter()
+            .map(|remote| GitRemoteDto {
+                name: remote.name().into(),
+                identity: remote.identity().map(|identity| GitRepositoryIdentityDto {
+                    provider: match identity.provider() {
+                        GitRemoteProvider::Github => GitRemoteProviderDto::Github,
+                        GitRemoteProvider::Gitlab => GitRemoteProviderDto::Gitlab,
+                        GitRemoteProvider::Bitbucket => GitRemoteProviderDto::Bitbucket,
+                        GitRemoteProvider::Other => GitRemoteProviderDto::Other,
+                    },
+                    host: identity.host().into(),
+                    owner: identity.owner().into(),
+                    repository: identity.repository().into(),
+                }),
+            })
+            .collect(),
+    }
 }
 
 fn project_status(

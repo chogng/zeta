@@ -90,7 +90,6 @@
   box-sizing: border-box;
 }
 
-.zeta-editor-setting-number,
 .zeta-editor-setting-text {
   padding: 4px 8px;
   border: 1px solid var(--zeta-input-border);
@@ -101,14 +100,8 @@
   font: inherit;
 }
 
-.zeta-editor-setting-number:focus-visible,
 .zeta-editor-setting-text:focus-visible {
   border-color: var(--zeta-focus-border);
-}
-
-.zeta-editor-toggle-setting {
-  position: relative;
-  grid-template-columns: auto minmax(0, 1fr);
 }
 
 .zeta-editor-settings.is-saving .zeta-editor-setting {
@@ -133,7 +126,4 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .zeta-editor-toggle-setting {
-    grid-template-columns: auto minmax(0, 1fr);
-  }
 }

@@ -26,7 +26,7 @@ Workspace trust 只限制 Git 的副作用，不隐藏本地只读状态：
 | Git 能力 | Restricted | Trusted |
 | --- | --- | --- |
 | 当前分支、HEAD、改动状态、变更路径 | ✅ | ✅ |
-| 本地分支、最近提交、受限文本 diff | ✅ | ✅ |
+| 本地分支、bounded history/graph、已 fetch 的 remote-tracking refs、受限文本 diff | ✅ | ✅ |
 | 暂存、取消暂存、丢弃、提交、切分支 | ❌ | ✅ |
 | fetch、pull、push | ❌ | ✅ |
 
@@ -40,6 +40,7 @@ Trusted workspace。Git query 继续由 `zeta-git` 以禁用 hooks、非交互�
 | 暂存或取消暂存 | 使用明确的工作区相对路径 | 不能越过工作区边界 |
 | 丢弃更改 | 只恢复已跟踪文件，并在界面确认 | 不删除未跟踪文件 |
 | 切换本地分支 | Native 点击底栏当前分支，在菜单中选择另一个本地分支；请求通过 App Server | 冲突时 Git 拒绝切换并保留当前工作树 |
+| 查看 history graph | SCM Graph 读取 bounded `git/graph`，按 lane 分配颜色并显示 local/remote refs | 只包含本地已存在的 refs；不会自动 fetch |
 | 拉取远端 | 只允许 fast-forward | 需要交互认证时失败 |
 | 提交和推送 | 使用系统 Git 的当前仓库配置 | 尚无凭据提示和进度 UI |
 
@@ -47,12 +48,12 @@ Trusted workspace。Git query 继续由 `zeta-git` 以禁用 hooks、非交互�
 
 | 层级 | 当前职责 | 不拥有 |
 | --- | --- | --- |
-| Desktop SCM | 分支/upstream、Merge/Staged/Working Tree 分组，提交输入，Git intent，以及按 revision 接收自动状态更新 | Git process、porcelain parser、任意 host path authority |
+| Desktop SCM | 分支/upstream、Merge/Staged/Working Tree 分组，提交输入，Git intent，history graph lane/ref/remote presentation，以及按 revision 接收自动状态更新 | Git process、porcelain parser、任意 host path authority |
 | Electron bridge | 校验 workspace-relative path、commit message 和空参数，再把 typed Git intent 转发给 App Server | Git domain semantics、最终路径授权 |
 | App Server `GitRuntime` | 串行化 operation、维护 workspace projection/revision、消费 watcher hint、去重并发布状态 | Git command/parsing、Renderer state |
 | App Server `GitService` | 冻结 workspace root、映射 workspace/repository path、持有 Tokio runtime并调用 `zeta-git`；按 `InspectRepository`/`MutateRepository` 再校验读写边界 | live projection、notification |
 | `zeta-app-server-protocol` | Git query/mutation、`git/statusChanged`、DTO、capability 和 stable error name | process/runtime state |
-| `zeta-git` | system Git identity、仓库发现、porcelain-v2 snapshot、HEAD/worktree 文本 Diff 与增删行统计、typed mutation 与结构化 parsing | App Server lifecycle、workspace product boundary、Renderer state |
+| `zeta-git` | system Git identity、仓库发现、porcelain-v2 snapshot、bounded graph、local/remote refs、credential-free remote identity、HEAD/worktree 文本 Diff 与增删行统计、typed mutation 与结构化 parsing | App Server lifecycle、workspace product boundary、Renderer state |
 
 ## 当前状态
 
@@ -75,6 +76,9 @@ Trusted workspace。Git query 继续由 `zeta-git` 以禁用 hooks、非交互�
 - `git/textDiff` 返回 workspace-scoped status、受限 UTF-8 HEAD/worktree 文本与增删行统计；
 - `git/branch/list` 返回现有本地分支，`git/branch/switch` 只接受 branch name，并在 host 重新解析为
   当前仓库真实分支后执行切换；
+- `git/graph` 返回 bounded `git log --all --topo-order`、local branches、已 fetch 的
+  `refs/remotes/*` 和配置 remote 的 credential-free identity；remote identity 只保留 provider、host、
+  owner、repository，原始 URL、token 和 `gh` 登录配置不会进入协议；
 - `git/fetch` 执行 all-remotes prune，`git/pull` 仅允许 fast-forward，`git/push` 使用 Git 当前
   upstream/default 配置；所有 remote operation 都是 non-interactive；
 - 每个成功 mutation 都返回新的 `GitStatusResult`，Desktop 立即重绘；首次打开 View 也会自动刷新；
@@ -111,6 +115,9 @@ stderr、磁盘绝对路径和非 UTF-8 path 不进入 Renderer。
 - pull 固定为 fast-forward only；discard 不删除 untracked 文件；
 - 当前是单 workspace root contract，不是 multi-root repository collection；
 - SCM change row 尚未接入 editor diff/open workflow。
+- `git/graph` 展示的是本地 repository 中已经存在的 refs；当前不会读取 `~/.config/gh/hosts.yml`，
+  也不会调用 GitHub API，因此尚未提供 PR、Checks、review 或实时远端分支状态；这些属于独立的
+  provider connector/权限能力，不能由 SCM graph 猜测；
 
 这些限制必须在 UI 中保持可见：未实现的 mutation 不注册空命令，也不显示会误导用户的按钮。
 
@@ -121,7 +128,8 @@ stderr、磁盘绝对路径和非 UTF-8 path 不进入 Renderer。
 1. 增加显式 repository identity 与 multi-root registry；
 2. 为长时间 remote operation 增加 progress、queue state 和 caller cancellation；
 3. 接入 diff/open 与更细粒度的错误 UI；
-4. 按明确产品语义增加 branch lifecycle 等额外 mutation，并让已接受该产品需求的
+4. 在明确的 connector/权限 contract 下接入 GitHub PR、Checks 等 provider data；
+5. 按明确产品语义增加 branch lifecycle 等额外 mutation，并让已接受该产品需求的
    UI consumer 消费同一协议。协议存在不自动使其成为 TUI 功能。
 
 长期不变量是：Desktop、Native 与 TUI 不直接执行 Git；App Server adapter 不复制 Git

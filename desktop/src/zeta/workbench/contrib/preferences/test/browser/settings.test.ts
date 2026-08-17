@@ -424,6 +424,8 @@ test("Editor settings render supported controls and persist typed preferences", 
   assert.equal(fontFamily.value, "");
   assert.equal(fontFamily.placeholder, "Default monospace");
   assert.equal(fontSize.value, "13");
+  assert.equal(fontSize.type, "number");
+  assert.equal(fontSize.closest(".zeta-input-box")?.classList.contains("zeta-input-box-field"), true);
   assert.equal(root.querySelector<HTMLInputElement>('[data-configuration-key="editor.lineHeight"]')?.value, "20");
   assert.equal(root.querySelector<HTMLInputElement>('[data-configuration-key="editor.lineNumbers"]')?.checked, true);
   assert.equal(root.querySelector<HTMLInputElement>('[data-configuration-key="editor.formatOnSave"]')?.checked, false);
@@ -433,6 +435,7 @@ test("Editor settings render supported controls and persist typed preferences", 
   assert.equal(root.querySelector<HTMLInputElement>('[data-configuration-key="search.maxResults"]')?.value, "2000");
   assert.equal(root.querySelector<HTMLInputElement>('[data-configuration-key="diffEditor.showInlineChanges"]')?.checked, true);
   assert.equal(minimap.checked, true);
+  assert.equal(minimap.closest<HTMLElement>(".zeta-editor-setting")?.classList.contains("zeta-toggle-content-before-control"), true);
   assert.equal(settingValue(root, "editor.indentation"), "Spaces");
   assert.equal(tabSize.value, "4");
 

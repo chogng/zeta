@@ -1,4 +1,4 @@
-import type { GitCommitResult, GitHistoryResult, GitOperationResult, GitStatusResult } from "../../../../../generated/app-server/types.js";
+import type { GitCommitResult, GitGraphResult, GitHistoryResult, GitOperationResult, GitStatusResult } from "../../../../../generated/app-server/types.js";
 import { invoke } from "../../ipc/electron-browser/rendererIpc.js";
 import type { IGitApi } from "../common/gitApi.js";
 
@@ -6,6 +6,7 @@ export function createGitApi(): IGitApi {
   return {
     status: () => invoke<GitStatusResult>("zeta:git:status"),
     history: () => invoke<GitHistoryResult>("zeta:git:history"),
+    graph: () => invoke<GitGraphResult>("zeta:git:graph"),
     stage: (params) => invoke<GitOperationResult>("zeta:git:stage", params),
     unstage: (params) => invoke<GitOperationResult>("zeta:git:unstage", params),
     discardWorktree: (params) => invoke<GitOperationResult>("zeta:git:discard-worktree", params),

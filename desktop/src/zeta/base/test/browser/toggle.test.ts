@@ -53,3 +53,22 @@ test("Switch projects the shared state as a switch control", () => {
   assert.equal(switchControl.element.classList.contains("checked"), false);
   dom.window.close();
 });
+
+test("Toggle can place its content before the control", () => {
+  const dom = new JSDOM("<!doctype html><body></body>");
+  const content = dom.window.document.createElement("span");
+  content.textContent = "Minimap";
+  using switchControl = new Switch({
+    ownerDocument: dom.window.document,
+    ariaLabel: "Minimap",
+    content,
+    contentPlacement: "before-control",
+  });
+  dom.window.document.body.append(switchControl.element);
+
+  assert.equal(switchControl.element.classList.contains("zeta-toggle-content-before-control"), true);
+  assert.equal(switchControl.element.querySelector(".zeta-toggle-content")?.firstElementChild, content);
+  assert.equal(switchControl.element.children[1]?.classList.contains("zeta-toggle-content"), true);
+  assert.equal(switchControl.element.children[2], switchControl.track);
+  dom.window.close();
+});

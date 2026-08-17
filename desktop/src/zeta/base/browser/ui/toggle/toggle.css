@@ -5,6 +5,32 @@
   cursor: pointer;
 }
 
+.zeta-toggle-content {
+  display: contents;
+}
+
+.zeta-toggle.zeta-toggle-content-before-control {
+  display: grid;
+  min-width: 0;
+  align-items: center;
+  gap: 18px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.zeta-toggle-content-before-control > .zeta-toggle-content {
+  display: block;
+  min-width: 0;
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.zeta-toggle-content-before-control > input,
+.zeta-toggle-content-before-control > .zeta-switch-track {
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: end;
+}
+
 .zeta-toggle.disabled {
   opacity: .5;
   cursor: default;
@@ -47,7 +73,9 @@
   border: 1px solid var(--zeta-input-border);
   border-radius: 10px;
   background: var(--zeta-input-background);
-  transition: background 120ms ease, border-color 120ms ease;
+  transition:
+    background var(--zeta-animation-duration-fast, 120ms) cubic-bezier(0.4, 0, 0.2, 1),
+    border-color var(--zeta-animation-duration-fast, 120ms) cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .zeta-switch-track::after {
@@ -59,12 +87,14 @@
   border-radius: 50%;
   background: var(--zeta-description-foreground);
   content: "";
-  transition: left 120ms ease, background 120ms ease;
+  transition:
+    left var(--zeta-animation-duration-fast, 120ms) cubic-bezier(0.4, 0, 0.2, 1),
+    background var(--zeta-animation-duration-fast, 120ms) cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .zeta-switch.checked > .zeta-switch-track {
-  border-color: var(--zeta-focus-border);
-  background: var(--zeta-list-active-selection-background);
+  border-color: var(--zeta-success-foreground);
+  background: var(--zeta-success-foreground);
 }
 
 .zeta-switch.checked > .zeta-switch-track::after {
@@ -72,7 +102,7 @@
   background: var(--zeta-list-active-selection-foreground);
 }
 
-.zeta-switch > input:focus-visible + .zeta-switch-track {
+.zeta-switch > input:focus-visible ~ .zeta-switch-track {
   outline: 1px solid var(--zeta-focus-border);
   outline-offset: 2px;
 }

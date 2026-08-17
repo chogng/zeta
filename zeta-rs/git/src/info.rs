@@ -53,6 +53,58 @@ impl GitRemote {
     pub fn push_urls(&self) -> &[String] {
         &self.push_urls
     }
+
+    /// Returns the provider-neutral repository identity parsed from the configured URLs.
+    ///
+    /// The identity intentionally excludes credentials and the original URL. Callers that need
+    /// to display or associate a remote should use this projection rather than forwarding raw
+    /// Git configuration values across a process boundary.
+    pub fn identity(&self) -> Option<GitRemoteIdentity> {
+        self.fetch_urls
+            .iter()
+            .chain(self.push_urls.iter())
+            .find_map(|url| parse_remote_identity(url))
+    }
+}
+
+/// Provider-neutral repository identity derived from one Git remote URL.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GitRemoteIdentity {
+    host: String,
+    owner: String,
+    repository: String,
+}
+
+impl GitRemoteIdentity {
+    pub fn host(&self) -> &str {
+        &self.host
+    }
+
+    pub fn owner(&self) -> &str {
+        &self.owner
+    }
+
+    pub fn repository(&self) -> &str {
+        &self.repository
+    }
+
+    pub fn provider(&self) -> GitRemoteProvider {
+        match self.host.as_str() {
+            "github.com" => GitRemoteProvider::Github,
+            "gitlab.com" => GitRemoteProvider::Gitlab,
+            "bitbucket.org" => GitRemoteProvider::Bitbucket,
+            _ => GitRemoteProvider::Other,
+        }
+    }
+}
+
+/// Well-known provider classification for a Git remote identity.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum GitRemoteProvider {
+    Github,
+    Gitlab,
+    Bitbucket,
+    Other,
 }
 
 /// Minimal commit metadata suitable for history lists and pickers.
@@ -204,7 +256,71 @@ fn parse_lines(bytes: &[u8], command: &str, label: &str) -> GitResult<Vec<String
         .collect())
 }
 
-fn parse_commits(bytes: &[u8], command: &str) -> GitResult<Vec<GitCommitSummary>> {
+fn parse_remote_identity(url: &str) -> Option<GitRemoteIdentity> {
+    let value = url.trim().trim_end_matches('/');
+    let (host, path) = if let Some((_, authority_and_path)) = value.split_once("://") {
+        let (authority, path) = authority_and_path
+            .split_once('/')
+            .unwrap_or((authority_and_path, ""));
+        (remote_host(authority), path)
+    } else if let Some((authority, path)) = value.split_once(':') {
+        if authority.contains('/') {
+            return None;
+        }
+        (remote_host(authority), path)
+    } else {
+        return None;
+    };
+    let host = host.trim().trim_matches(['[', ']']).to_ascii_lowercase();
+    if host.is_empty() {
+        return None;
+    }
+    let path = path.split_once('?').map_or(path, |(path, _)| path);
+    let path = path.split_once('#').map_or(path, |(path, _)| path);
+    let mut segments = path
+        .trim_matches('/')
+        .split('/')
+        .filter(|segment| !segment.is_empty())
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    if segments.len() < 2 {
+        return None;
+    }
+    let mut repository = segments.pop()?;
+    if let Some(stripped) = repository.strip_suffix(".git") {
+        repository = stripped.to_string();
+    }
+    let owner = segments.join("/");
+    if owner.is_empty() || repository.is_empty() {
+        return None;
+    }
+    Some(GitRemoteIdentity {
+        host,
+        owner,
+        repository,
+    })
+}
+
+fn remote_host(authority: &str) -> &str {
+    let authority = authority
+        .rsplit_once('@')
+        .map_or(authority, |(_, host)| host)
+        .trim();
+    if let Some(host) = authority
+        .strip_prefix('[')
+        .and_then(|value| value.split_once(']'))
+    {
+        return host.0;
+    }
+    authority
+        .rsplit_once(':')
+        .filter(|(_, port)| {
+            !port.is_empty() && port.chars().all(|character| character.is_ascii_digit())
+        })
+        .map_or(authority, |(host, _)| host)
+}
+
+pub(crate) fn parse_commits(bytes: &[u8], command: &str) -> GitResult<Vec<GitCommitSummary>> {
     let mut fields = bytes.split(|byte| *byte == 0).collect::<Vec<_>>();
     if fields.last().is_some_and(|field| field.is_empty()) {
         fields.pop();

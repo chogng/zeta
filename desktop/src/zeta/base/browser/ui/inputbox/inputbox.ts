@@ -12,7 +12,8 @@ import { DisposableOwner } from "../../../common/lifecycle.js";
 
 export interface InputBoxOptions {
   readonly placeholder?: string;
-  readonly type?: "text" | "password" | "search";
+  readonly type?: "text" | "number" | "password" | "search";
+  readonly presentation?: "default" | "field";
   readonly ownerDocument?: Document;
   readonly readOnly?: boolean;
   readonly enabled?: boolean;
@@ -49,6 +50,7 @@ export class InputBox extends DisposableOwner {
     const ownerDocument = options.ownerDocument ?? document;
     this.element = ownerDocument.createElement("div");
     this.element.className = "zeta-input-box";
+    if (options.presentation === "field") this.element.classList.add("zeta-input-box-field");
     this.defer(() => this.element.remove());
 
     this.inputElement = ownerDocument.createElement("input");
@@ -138,6 +140,14 @@ export class InputBox extends DisposableOwner {
 
   set placeholder(value: string) {
     this.inputElement.placeholder = value;
+  }
+
+  get step(): string {
+    return this.inputElement.step;
+  }
+
+  set step(value: string) {
+    this.inputElement.step = value;
   }
 
   get readOnly(): boolean {

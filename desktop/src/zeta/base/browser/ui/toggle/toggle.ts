@@ -9,6 +9,7 @@ export interface ToggleOptions {
   readonly ariaLabel?: string;
   readonly content?: Node;
   readonly label?: string;
+  readonly contentPlacement?: "after-control" | "before-control";
   readonly onChange?: (checked: boolean) => void;
 }
 
@@ -18,6 +19,7 @@ type ToggleOptionsOrLabel = ToggleOptions | string;
 export class Toggle extends DisposableOwner {
   readonly element: HTMLLabelElement;
   readonly input: HTMLInputElement;
+  protected readonly contentElement: HTMLSpanElement | undefined;
   private readonly _onDidChange = this.own(new Emitter<boolean>());
   readonly onDidChange: Event<boolean> = this._onDidChange.event;
 
@@ -26,7 +28,7 @@ export class Toggle extends DisposableOwner {
   constructor(optionsOrLabel: ToggleOptionsOrLabel, checked?: boolean, onChange?: (checked: boolean) => void);
   constructor(optionsOrLabel: ToggleOptionsOrLabel = {}, checked = false, onChange?: (checked: boolean) => void) {
     super();
-    const options = typeof optionsOrLabel === "string"
+    const options: ToggleOptions = typeof optionsOrLabel === "string"
       ? { label: optionsOrLabel, checked, onChange }
       : optionsOrLabel;
     const ownerDocument = options.ownerDocument ?? document;
@@ -42,8 +44,22 @@ export class Toggle extends DisposableOwner {
     input.disabled = options.disabled === true;
     if (options.ariaLabel) input.setAttribute("aria-label", options.ariaLabel);
     element.append(input);
-    if (options.content) element.append(options.content);
-    if (options.label) element.append(ownerDocument.createTextNode(options.label));
+    const content = options.content ?? (options.label ? ownerDocument.createTextNode(options.label) : undefined);
+    if (content) {
+      if (options.contentPlacement === "before-control") {
+        const contentElement = ownerDocument.createElement("span");
+        this.contentElement = contentElement;
+        contentElement.className = "zeta-toggle-content";
+        contentElement.append(content);
+        element.append(contentElement);
+      } else {
+        this.contentElement = undefined;
+        element.append(content);
+      }
+    } else {
+      this.contentElement = undefined;
+    }
+    if (options.contentPlacement === "before-control") element.classList.add("zeta-toggle-content-before-control");
 
     this.own(addDisposableListener(input, "change", () => {
       this.syncState();
@@ -108,7 +124,9 @@ export class Switch extends Toggle {
     this.track = track;
     track.className = "zeta-switch-track";
     track.setAttribute("aria-hidden", "true");
-    this.element.insertBefore(track, this.input.nextSibling);
+    const contentPlacement = typeof optionsOrLabel === "string" ? undefined : optionsOrLabel.contentPlacement;
+    if (contentPlacement === "before-control" && this.contentElement) this.element.append(track);
+    else this.element.insertBefore(track, this.input.nextSibling);
     this.syncState();
   }
 }

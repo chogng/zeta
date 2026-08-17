@@ -1,6 +1,6 @@
 import { validateTokenId } from "./colorRegistry.js";
 
-export type SizeUnit = "px" | "rem" | "em" | "%" | "unitless";
+export type SizeUnit = "px" | "rem" | "em" | "%" | "ms" | "unitless";
 
 export interface SizeValue {
   readonly value: number;

@@ -45,6 +45,36 @@ export interface GitCommitSummary {
   readonly subject: string;
 }
 
+export type GitRemoteProvider = "github" | "gitlab" | "bitbucket" | "other";
+
+export interface GitRepositoryIdentity {
+  readonly provider: GitRemoteProvider;
+  readonly host: string;
+  readonly owner: string;
+  readonly repository: string;
+}
+
+export interface GitRemote {
+  readonly name: string;
+  readonly identity: GitRepositoryIdentity | undefined;
+}
+
+export type GitReferenceKind = "localBranch" | "remoteBranch";
+
+export interface GitReference {
+  readonly name: string;
+  readonly objectId: string;
+  readonly kind: GitReferenceKind;
+  readonly remoteName: string | undefined;
+  readonly current: boolean;
+}
+
+export interface GitGraph {
+  readonly commits: readonly GitCommitSummary[];
+  readonly references: readonly GitReference[];
+  readonly remotes: readonly GitRemote[];
+}
+
 export interface GitCommitResult {
   readonly objectId: string;
   readonly status: GitStatus;
@@ -56,6 +86,7 @@ export interface IGitService {
   readonly onDidBecomeReady: Event<void>;
   status(): Promise<GitStatus>;
   history(): Promise<readonly GitCommitSummary[]>;
+  graph(): Promise<GitGraph>;
   stage(paths: readonly string[]): Promise<GitStatus>;
   unstage(paths: readonly string[]): Promise<GitStatus>;
   discardWorktree(paths: readonly string[]): Promise<GitStatus>;

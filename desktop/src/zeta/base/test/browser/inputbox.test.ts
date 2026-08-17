@@ -76,3 +76,18 @@ test("InputBox owns enabled, read-only, and validation accessibility state", () 
   inputBox.dispose();
   dom.window.close();
 });
+
+test("InputBox supports numeric field presentation", () => {
+  const dom = new JSDOM("<!doctype html><body></body>");
+  const inputBox = new InputBox({
+    ownerDocument: dom.window.document,
+    type: "number",
+    presentation: "field",
+  });
+
+  assert.equal(inputBox.inputElement.type, "number");
+  inputBox.step = "1";
+  assert.equal(inputBox.step, "1");
+  assert.equal(inputBox.element.classList.contains("zeta-input-box-field"), true);
+  dom.window.close();
+});

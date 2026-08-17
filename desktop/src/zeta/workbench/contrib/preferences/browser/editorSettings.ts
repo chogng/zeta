@@ -1,6 +1,7 @@
 import "./media/editorSettings.css";
 import { addDisposableListener } from "../../../../base/browser/dom.js";
 import type { IContextViewProvider } from "../../../../base/browser/ui/contextview/contextview.js";
+import { InputBox } from "../../../../base/browser/ui/inputbox/inputbox.js";
 import { SelectBox } from "../../../../base/browser/ui/selectbox/selectbox.js";
 import { Switch, Toggle } from "../../../../base/browser/ui/toggle/toggle.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
@@ -16,7 +17,7 @@ import { SettingsTreeModel, type SettingsTreeNode } from "./settingsTreeModels.j
 /** Product settings controls for Aster-backed code editors. */
 export class EditorSettingsPane extends DisposableOwner {
   readonly element: HTMLDivElement;
-  private readonly controls = new Map<string, HTMLInputElement | SelectBox | Toggle>();
+  private readonly controls = new Map<string, HTMLInputElement | InputBox | SelectBox | Toggle>();
   private readonly status: HTMLParagraphElement;
 
   constructor(ownerDocument: Document, private readonly configurationService: IConfigurationService, private readonly contextViewProvider: IContextViewProvider) {
@@ -167,6 +168,7 @@ export class EditorSettingsPane extends DisposableOwner {
       ownerDocument: document,
       ariaLabel: label,
       content: copy,
+      contentPlacement: "before-control",
     }));
     toggle.element.classList.add("zeta-editor-setting", "zeta-editor-toggle-setting");
     toggle.input.dataset.configurationKey = key.key;
@@ -213,20 +215,24 @@ export class EditorSettingsPane extends DisposableOwner {
 
   private createNumberSetting(key: IConfigurationKey<number>, label: string, description: string, minimum: number, maximum: number): HTMLElement {
     const document = this.element.ownerDocument;
-    const setting = document.createElement("label");
+    const setting = document.createElement("div");
     setting.className = "zeta-editor-setting";
     const copy = this.createSettingCopy(label, description);
-    const input = document.createElement("input");
-    input.className = "zeta-editor-setting-number";
-    input.type = "number";
-    input.min = String(minimum);
-    input.max = String(maximum);
+    const input = this.own(new InputBox({
+      ownerDocument: document,
+      type: "number",
+      ariaLabel: label,
+      presentation: "field",
+    }));
+    input.element.classList.add("zeta-editor-setting-number");
+    input.inputElement.min = String(minimum);
+    input.inputElement.max = String(maximum);
     input.step = "1";
-    input.dataset.configurationKey = key.key;
-    setting.append(copy, input);
+    input.inputElement.dataset.configurationKey = key.key;
+    setting.append(copy, input.element);
     this.controls.set(key.key, input);
-    this.own(addDisposableListener(input, "change", () => {
-      const value = input.valueAsNumber;
+    this.own(addDisposableListener(input.inputElement, "change", () => {
+      const value = input.inputElement.valueAsNumber;
       if (!Number.isSafeInteger(value) || value < minimum || value > maximum) {
         this.syncControl(key);
         this.showStatus(`${label} must be between ${minimum} and ${maximum}.`, true);
@@ -316,6 +322,10 @@ export class EditorSettingsPane extends DisposableOwner {
       control.checked = value as boolean;
       return;
     }
+    if (control instanceof InputBox) {
+      control.value = String(value);
+      return;
+    }
     if (control instanceof this.element.ownerDocument.defaultView!.HTMLInputElement && control.type === "checkbox") {
       control.checked = value as boolean;
       return;
@@ -341,6 +351,7 @@ export class EditorSettingsPane extends DisposableOwner {
     for (const control of this.controls.values()) {
       if (control instanceof SelectBox) control.enabled = enabled;
       else if (control instanceof Toggle) control.enabled = enabled;
+      else if (control instanceof InputBox) control.enabled = enabled;
       else control.disabled = !enabled;
     }
   }

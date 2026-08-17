@@ -99,7 +99,7 @@ zeta-rs/
 不建立职责含糊的 `common`、`service` 或总括式执行 crate。Agent loop 先在 Core 内按模块
 分层；只有具备第二个真实消费者、独立 typed port 与测试 vertical slice 时才提取 crate。
 
-`zeta-git` 当前拥有系统 Git 进程身份、仓库发现、porcelain-v2 快照、分支/远端/历史查询、
+`zeta-git` 当前拥有系统 Git 进程身份、仓库发现、porcelain-v2 快照、分支/远端/ bounded graph 查询、
 类型化暂存/取消暂存/丢弃/提交/获取/拉取/推送以及补丁检查与应用；不拥有实时仓库注册表、
 监听状态、App Server 线协议或 Desktop SCM。
 Git 状态/修改适配器、工作区范围运行时、监听失效/版本通知与 SCM View 已在各自层实现；

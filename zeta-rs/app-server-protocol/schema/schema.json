@@ -4205,6 +4205,22 @@
           "properties": {
             "method": {
               "type": "string",
+              "const": "git/graph"
+            },
+            "params": {
+              "$ref": "#/$defs/EmptyParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
               "const": "git/branch/switch"
             },
             "params": {
@@ -7125,6 +7141,22 @@
             },
             "result": {
               "$ref": "#/$defs/GitHistoryResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "git/graph"
+            },
+            "result": {
+              "$ref": "#/$defs/GitGraphResult"
             }
           },
           "required": [
@@ -11921,6 +11953,35 @@
         "deletions"
       ]
     },
+    "GitGraphResult": {
+      "description": "Bounded commit graph data for the active workspace repository.",
+      "type": "object",
+      "properties": {
+        "commits": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/GitCommitSummaryDto"
+          }
+        },
+        "references": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/GitReferenceDto"
+          }
+        },
+        "remotes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/GitRemoteDto"
+          }
+        }
+      },
+      "required": [
+        "commits",
+        "references",
+        "remotes"
+      ]
+    },
     "GitHeadDto": {
       "oneOf": [
         {
@@ -12029,6 +12090,76 @@
         "paths"
       ]
     },
+    "GitReferenceDto": {
+      "description": "A local or fetched remote-tracking branch ref.",
+      "type": "object",
+      "properties": {
+        "current": {
+          "type": "boolean"
+        },
+        "kind": {
+          "$ref": "#/$defs/GitReferenceKindDto"
+        },
+        "name": {
+          "type": "string"
+        },
+        "objectId": {
+          "type": "string"
+        },
+        "remoteName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "objectId",
+        "kind",
+        "current"
+      ]
+    },
+    "GitReferenceKindDto": {
+      "description": "Ref kinds included in a repository graph snapshot.",
+      "type": "string",
+      "enum": [
+        "localBranch",
+        "remoteBranch"
+      ]
+    },
+    "GitRemoteDto": {
+      "description": "One configured Git remote, with raw URLs intentionally omitted from the wire contract.",
+      "type": "object",
+      "properties": {
+        "identity": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GitRepositoryIdentityDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ]
+    },
+    "GitRemoteProviderDto": {
+      "description": "Provider classification for a configured repository remote.",
+      "type": "string",
+      "enum": [
+        "github",
+        "gitlab",
+        "bitbucket",
+        "other"
+      ]
+    },
     "GitRepositoryChangeDto": {
       "type": "object",
       "properties": {
@@ -12060,6 +12191,30 @@
         "worktreeStatus",
         "conflicted",
         "submodule"
+      ]
+    },
+    "GitRepositoryIdentityDto": {
+      "description": "Credential-free repository identity parsed from a configured Git remote.",
+      "type": "object",
+      "properties": {
+        "host": {
+          "type": "string"
+        },
+        "owner": {
+          "type": "string"
+        },
+        "provider": {
+          "$ref": "#/$defs/GitRemoteProviderDto"
+        },
+        "repository": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider",
+        "host",
+        "owner",
+        "repository"
       ]
     },
     "GitStatusChanged": {

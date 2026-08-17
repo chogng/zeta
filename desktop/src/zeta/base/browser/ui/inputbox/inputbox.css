@@ -4,6 +4,43 @@
   font: inherit;
 }
 
+.zeta-input-box-field {
+  min-height: 30px;
+  box-sizing: border-box;
+  border: 1px solid var(--zeta-input-border);
+  border-radius: 4px;
+  color: var(--zeta-input-foreground);
+  background: var(--zeta-input-background);
+}
+
+.zeta-input-box-field input {
+  min-height: 28px;
+  padding: 4px 8px;
+  border: 0;
+  outline: none;
+  color: inherit;
+  background: transparent;
+}
+
+.zeta-input-box-field input::placeholder {
+  color: var(--zeta-input-placeholder-foreground);
+}
+
+.zeta-input-box-field input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.zeta-input-box-field input[type="number"]::-webkit-inner-spin-button,
+.zeta-input-box-field input[type="number"]::-webkit-outer-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+}
+
+.zeta-input-box-field.is-focused {
+  border-color: var(--zeta-focus-border);
+}
+
 .zeta-input-box.is-disabled {
   opacity: 0.6;
 }

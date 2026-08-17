@@ -3133,6 +3133,30 @@
       "value": "600"
     },
     {
+      "id": "animation.durationFast",
+      "kind": "size",
+      "cssVariable": "--zeta-animation-duration-fast",
+      "owner": "platform.ui",
+      "description": "Short UI state transition duration.",
+      "value": "120ms"
+    },
+    {
+      "id": "animation.durationNormal",
+      "kind": "size",
+      "cssVariable": "--zeta-animation-duration-normal",
+      "owner": "platform.ui",
+      "description": "Standard UI animation duration.",
+      "value": "200ms"
+    },
+    {
+      "id": "animation.durationSlow",
+      "kind": "size",
+      "cssVariable": "--zeta-animation-duration-slow",
+      "owner": "platform.ui",
+      "description": "Emphasized UI animation duration.",
+      "value": "350ms"
+    },
+    {
       "id": "tab.height",
       "kind": "size",
       "cssVariable": "--zeta-tab-height",

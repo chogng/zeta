@@ -30,7 +30,7 @@ test("Git contribution registers Changes, Agent Review, and Graph as ordered pan
 test("ScmGraphViewPane renders bounded repository history", async () => {
   const browser = new JSDOM("<!doctype html><body></body>");
   const installedGlobals = installDomGlobals(browser);
-  let historyRequests = 0;
+  let graphRequests = 0;
   const [
     { ContextKeyService },
     { MenuService },
@@ -62,12 +62,19 @@ test("ScmGraphViewPane renders bounded repository history", async () => {
   };
   const gitService = {
       status: async () => status,
-      history: async () => {
-        historyRequests += 1;
-        return [
-          { objectId: "1234567890abcdef", parentObjectIds: ["abcdef1234567890", "side-parent"], timestampSeconds: 1_753_000_000, subject: "Wire SCM panes" },
-          { objectId: "abcdef1234567890", parentObjectIds: ["parent-one", "parent-two"], timestampSeconds: 1_752_900_000, subject: "Prepare graph data" },
-        ];
+      graph: async () => {
+        graphRequests += 1;
+        return {
+          commits: [
+            { objectId: "1234567890abcdef", parentObjectIds: ["abcdef1234567890", "side-parent"], timestampSeconds: 1_753_000_000, subject: "Wire SCM panes" },
+            { objectId: "abcdef1234567890", parentObjectIds: ["parent-one", "parent-two"], timestampSeconds: 1_752_900_000, subject: "Prepare graph data" },
+          ],
+          references: [
+            { name: "main", objectId: "1234567890abcdef", kind: "localBranch", remoteName: undefined, current: true },
+            { name: "origin/main", objectId: "abcdef1234567890", kind: "remoteBranch", remoteName: "origin", current: false },
+          ],
+          remotes: [{ name: "origin", identity: { provider: "github", host: "github.com", owner: "chogng", repository: "zeta" } }],
+        };
       },
   } as unknown as IGitService;
 
@@ -88,7 +95,7 @@ test("ScmGraphViewPane renders bounded repository history", async () => {
     const refresh = pane.element.querySelector<HTMLButtonElement>('[data-action-id="zeta.git.graph.refresh"] > button');
     assert.ok(refresh);
     refresh.click();
-    await waitFor(() => historyRequests === 2 && pane.element.querySelectorAll(".zeta-scm-graph-subject").length === 2);
+    await waitFor(() => graphRequests === 2 && pane.element.querySelectorAll(".zeta-scm-graph-subject").length === 2);
 
     assert.deepEqual([...pane.element.querySelectorAll(".zeta-scm-graph-subject")].map((element) => element.textContent), ["Wire SCM panes", "Prepare graph data"]);
     assert.equal(pane.element.querySelector(".zeta-scm-graph-commit.current")?.getAttribute("aria-current"), "true");
@@ -97,11 +104,14 @@ test("ScmGraphViewPane renders bounded repository history", async () => {
     assert.ok(pane.element.querySelector(".zeta-scm-graph-commit.head.merge"));
     assert.equal(pane.element.querySelector(".zeta-scm-graph-head")?.textContent, "main");
     assert.ok(pane.element.querySelector(".zeta-scm-graph-head .zeta-icon"));
+    assert.equal(pane.element.querySelector(".zeta-scm-graph-ref.remote")?.textContent, "origin/main");
+    assert.match(pane.element.querySelector(".zeta-scm-graph-remote")?.textContent ?? "", /^GitHub · chogng\/zeta · origin$/);
     assert.equal(hoverOptions.length, 4);
     assert.ok(hoverOptions.every((options) => options.target.classList.contains("zeta-scm-graph-commit")));
     assert.ok(hoverOptions.every((options) => options.anchorAxisAlignment === AnchorAxisAlignment.Horizontal));
     assert.ok(hoverOptions.every((options) => options.anchorPosition === AnchorPosition.Below));
     assert.equal(pane.element.querySelector(".zeta-scm-graph-graph.head")?.querySelectorAll(".zeta-scm-graph-node").length, 2);
+    assert.ok(new Set([...pane.element.querySelectorAll<SVGPathElement>(".zeta-scm-graph-path")].map((path) => path.dataset.laneColor)).size > 1);
     assert.equal(pane.element.querySelector(".zeta-scm-graph-commit.head.merge > .zeta-scm-graph-graph")?.classList.contains("head"), true);
     assert.equal(pane.element.querySelector(".zeta-scm-graph-commit.head.merge > .zeta-scm-graph-graph")?.classList.contains("merge"), false);
     assert.equal(pane.element.querySelector(".zeta-scm-graph-graph.merge")?.querySelectorAll(".zeta-scm-graph-node").length, 2);

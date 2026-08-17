@@ -7,7 +7,8 @@ import {
   type HtmlSanitizerConfig,
   sanitizeHtmlToFragment,
 } from "./domSanitize.js";
-import { DisposableOwner } from "../common/lifecycle.js";
+import { Checkbox } from "./ui/toggle/toggle.js";
+import { DisposableOwner, DisposableStore, ResettableDisposableGroup } from "../common/lifecycle.js";
 
 export interface MarkdownElementOptions {
   readonly ownerDocument: Document;
@@ -89,6 +90,7 @@ export class MarkdownElement extends DisposableOwner {
   private readonly ownerDocument: Document;
   private readonly breaks: boolean;
   private readonly linkHandler: ((href: string) => void) | undefined;
+  private readonly checkboxControls = this.own(new ResettableDisposableGroup());
   private active = true;
 
   readonly element: HTMLElement;
@@ -122,11 +124,18 @@ export class MarkdownElement extends DisposableOwner {
   setMarkdown(markdown: string): void {
     this.requireActive();
     const rawHtml = renderWorkbenchMarkdown(markdown, this.breaks);
+    const fragment = sanitizeMarkdownHtmlToFragment({
+      ownerDocument: this.ownerDocument,
+    }, rawHtml);
+    this.checkboxControls.clear();
+    upgradeMarkdownCheckboxes(
+      fragment,
+      this.ownerDocument,
+      this.checkboxControls,
+    );
     reset(
       this.element,
-      sanitizeMarkdownHtmlToFragment({
-        ownerDocument: this.ownerDocument,
-      }, rawHtml),
+      fragment,
     );
   }
 
@@ -173,9 +182,38 @@ export function sanitizeMarkdownHtmlToString(
   rawHtml: string,
 ): string {
   const fragment = sanitizeMarkdownHtmlToFragment(options, rawHtml);
+  const checkboxControls = new DisposableStore();
+  upgradeMarkdownCheckboxes(fragment, options.ownerDocument, checkboxControls);
   const container = options.ownerDocument.createElement("div");
   container.append(fragment);
-  return container.innerHTML;
+  try {
+    return container.innerHTML;
+  } finally {
+    checkboxControls.dispose();
+  }
+}
+
+interface MarkdownCheckboxOwner {
+  add(resource: Checkbox): Checkbox;
+}
+
+function upgradeMarkdownCheckboxes(
+  fragment: DocumentFragment,
+  ownerDocument: Document,
+  owner: MarkdownCheckboxOwner,
+): void {
+  for (const input of fragment.querySelectorAll<HTMLInputElement>(
+    'input[type="checkbox"]',
+  )) {
+    const checkbox = owner.add(new Checkbox({
+      ownerDocument,
+      checked: input.checked,
+      disabled: input.disabled,
+    }));
+    checkbox.element.classList.add("zeta-markdown-checkbox");
+    if (input.checked) checkbox.input.setAttribute("checked", "");
+    input.replaceWith(checkbox.element);
+  }
 }
 
 function applyMarkdownAttributePolicy(element: Element): void {

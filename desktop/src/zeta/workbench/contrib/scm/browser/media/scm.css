@@ -21,6 +21,14 @@
 
 .zeta-scm-graph {
   --scm-graph-accent: var(--zeta-accent-background);
+  --scm-graph-lane-0: var(--zeta-accent-foreground);
+  --scm-graph-lane-1: var(--zeta-success-foreground);
+  --scm-graph-lane-2: var(--zeta-warning-foreground);
+  --scm-graph-lane-3: var(--zeta-error-foreground);
+  --scm-graph-lane-4: color-mix(in srgb, var(--zeta-accent-foreground) 70%, var(--zeta-foreground));
+  --scm-graph-lane-5: color-mix(in srgb, var(--zeta-success-foreground) 70%, var(--zeta-foreground));
+  --scm-graph-lane-6: color-mix(in srgb, var(--zeta-warning-foreground) 70%, var(--zeta-foreground));
+  --scm-graph-lane-7: color-mix(in srgb, var(--zeta-error-foreground) 70%, var(--zeta-foreground));
   container-name: zeta-scm-graph;
   container-type: inline-size;
   min-height: 0;
@@ -62,16 +70,40 @@
 
 .zeta-scm-graph-path {
   fill: none;
-  stroke: var(--scm-graph-accent);
+  stroke: var(--scm-graph-lane-color, var(--scm-graph-accent));
   stroke-linecap: round;
   stroke-width: 1px;
 }
 
 .zeta-scm-graph-node {
-  fill: var(--scm-graph-accent);
+  fill: var(--scm-graph-lane-color, var(--scm-graph-accent));
   stroke: var(--scm-graph-row-background);
   stroke-width: 2px;
 }
+
+.zeta-scm-graph-path[data-lane-color="0"],
+.zeta-scm-graph-node[data-lane-color="0"] { --scm-graph-lane-color: var(--scm-graph-lane-0); }
+
+.zeta-scm-graph-path[data-lane-color="1"],
+.zeta-scm-graph-node[data-lane-color="1"] { --scm-graph-lane-color: var(--scm-graph-lane-1); }
+
+.zeta-scm-graph-path[data-lane-color="2"],
+.zeta-scm-graph-node[data-lane-color="2"] { --scm-graph-lane-color: var(--scm-graph-lane-2); }
+
+.zeta-scm-graph-path[data-lane-color="3"],
+.zeta-scm-graph-node[data-lane-color="3"] { --scm-graph-lane-color: var(--scm-graph-lane-3); }
+
+.zeta-scm-graph-path[data-lane-color="4"],
+.zeta-scm-graph-node[data-lane-color="4"] { --scm-graph-lane-color: var(--scm-graph-lane-4); }
+
+.zeta-scm-graph-path[data-lane-color="5"],
+.zeta-scm-graph-node[data-lane-color="5"] { --scm-graph-lane-color: var(--scm-graph-lane-5); }
+
+.zeta-scm-graph-path[data-lane-color="6"],
+.zeta-scm-graph-node[data-lane-color="6"] { --scm-graph-lane-color: var(--scm-graph-lane-6); }
+
+.zeta-scm-graph-path[data-lane-color="7"],
+.zeta-scm-graph-node[data-lane-color="7"] { --scm-graph-lane-color: var(--scm-graph-lane-7); }
 
 .zeta-scm-graph-graph.head > .zeta-scm-graph-node.inner {
   fill: var(--scm-graph-row-background);
@@ -126,6 +158,55 @@
   text-overflow: ellipsis;
 }
 
+.zeta-scm-graph-refs {
+  display: flex;
+  min-width: 0;
+  max-width: 48%;
+  flex: 0 1 auto;
+  gap: 3px;
+  align-items: center;
+  overflow: hidden;
+}
+
+.zeta-scm-graph-ref {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 180px;
+  align-items: center;
+  border: 1px solid color-mix(in srgb, var(--scm-graph-ref-color) 45%, transparent);
+  border-radius: 3px;
+  padding: 0 5px;
+  overflow: hidden;
+  color: var(--scm-graph-ref-color);
+  font-size: var(--zeta-font-size-label2);
+  line-height: 17px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zeta-scm-graph-ref.local {
+  --scm-graph-ref-color: var(--scm-graph-lane-0);
+}
+
+.zeta-scm-graph-ref.remote {
+  --scm-graph-ref-color: var(--scm-graph-lane-2);
+}
+
+.zeta-scm-graph-remotes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 0 8px 6px;
+  color: var(--zeta-muted-foreground);
+  font-size: var(--zeta-font-size-label2);
+}
+
+.zeta-scm-graph-remote {
+  border: 1px solid color-mix(in srgb, currentColor 28%, transparent);
+  border-radius: 3px;
+  padding: 1px 5px;
+}
+
 .zeta-scm-graph-metadata {
   flex: 0 0 auto;
   margin-left: 8px;
@@ -140,6 +221,10 @@
 @container zeta-scm-graph (max-width: 360px) {
   .zeta-scm-graph-metadata {
     display: none;
+  }
+
+  .zeta-scm-graph-refs {
+    max-width: 35%;
   }
 }
 

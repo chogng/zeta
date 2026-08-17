@@ -3,6 +3,7 @@ import { registerSize, size } from "../sizeRegistry.js";
 const owner = "platform.ui";
 const dimension = (id: string, value: number, description: string): string => registerSize(id, size(value), { description, owner });
 const scalar = (id: string, value: number, description: string): string => registerSize(id, size(value, "unitless"), { description, owner });
+const duration = (id: string, value: number, description: string): string => registerSize(id, size(value, "ms"), { description, owner });
 
 export const fontSizeHeading1 = dimension("fontSize.heading1", 26, "Largest heading font size.");
 export const fontSizeHeading2 = dimension("fontSize.heading2", 18, "Title heading font size.");
@@ -14,6 +15,10 @@ export const fontSizeLabel2 = dimension("fontSize.label2", 11, "Metadata label f
 export const fontSizeLabel3 = dimension("fontSize.label3", 10, "Badge label font size.");
 export const fontWeightRegular = scalar("fontWeight.regular", 400, "Regular font weight for un-emphasized text.");
 export const fontWeightSemiBold = scalar("fontWeight.semiBold", 600, "Strong font weight paired with any font-size role for tabs, headings, and emphasized text.");
+
+export const animationDurationFast = duration("animation.durationFast", 120, "Short UI state transition duration.");
+export const animationDurationNormal = duration("animation.durationNormal", 200, "Standard UI animation duration.");
+export const animationDurationSlow = duration("animation.durationSlow", 350, "Emphasized UI animation duration.");
 
 export const tabHeight = dimension("tab.height", 24, "Standard height for TabList tabs.");
 export const tabListContentInset = dimension("tabList.contentInset", 4, "Horizontal inset between an inset TabList and its first or last tab.");

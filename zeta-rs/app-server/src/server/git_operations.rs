@@ -35,6 +35,10 @@ impl AppServer {
         result(&GitHistoryResult { commits })
     }
 
+    pub(super) fn git_graph(&self) -> Result<Value, RpcError> {
+        result(&self.git_runtime_service()?.graph().map_err(git_error)?)
+    }
+
     pub(super) fn git_branch_switch(&self, params: &Value) -> Result<Value, RpcError> {
         let params: GitBranchSwitchParams = decode(params)?;
         if params.name.trim().is_empty() || params.name.len() > 1024 || params.name.contains('\0') {
