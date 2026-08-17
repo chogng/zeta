@@ -6,10 +6,14 @@ use std::process::ExitStatus;
 use std::process::Stdio;
 use std::time::Duration;
 
+use tokio::io::AsyncBufReadExt;
 use tokio::io::AsyncRead;
 use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
+use tokio::io::BufReader;
+use tokio::process::Child;
 use tokio::process::ChildStdin;
+use tokio::process::ChildStdout;
 use tokio::process::Command;
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
@@ -194,8 +198,38 @@ impl GitClient {
         self.run(GitInvocation::mutation(cwd, args)).await
     }
 
-    async fn run(&self, invocation: GitInvocation) -> GitResult<GitCommandOutput> {
-        let timeout_duration = invocation.profile.timeout(self.limits);
+    pub(crate) fn start_query_stream<I, S>(&self, cwd: &Path, args: I) -> GitResult<GitQueryStream>
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<OsStr>,
+    {
+        let invocation = GitInvocation::query(cwd, args, FsmonitorOverride::Disabled);
+        let (mut command, command_for_log) = self.configure_command(&invocation);
+        command.stdin(Stdio::null());
+        let mut child = command
+            .spawn()
+            .map_err(|source| GitError::io("spawn Git process", source))?;
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| GitError::runtime("capture Git stdout", "stdout pipe was missing"))?;
+        let stderr = child
+            .stderr
+            .take()
+            .ok_or_else(|| GitError::runtime("capture Git stderr", "stderr pipe was missing"))?;
+        let stderr_task = tokio::spawn(read_bounded(stderr, self.limits.max_output_bytes));
+        Ok(GitQueryStream {
+            child,
+            stdout: BufReader::new(stdout),
+            stderr_task: Some(stderr_task),
+            command: command_for_log,
+            timeout: invocation.profile.timeout(self.limits),
+            max_output_bytes: self.limits.max_output_bytes,
+            bytes_read: 0,
+        })
+    }
+
+    fn configure_command(&self, invocation: &GitInvocation) -> (Command, String) {
         let command_for_log = render_command(&self.executable, &invocation.args);
         let mut command = Command::new(&self.executable);
         command
@@ -217,6 +251,12 @@ impl GitClient {
         } else {
             command.stdin(Stdio::null());
         }
+        (command, command_for_log)
+    }
+
+    async fn run(&self, invocation: GitInvocation) -> GitResult<GitCommandOutput> {
+        let timeout_duration = invocation.profile.timeout(self.limits);
+        let (mut command, command_for_log) = self.configure_command(&invocation);
 
         let mut child = command
             .spawn()
@@ -388,6 +428,115 @@ pub(crate) struct GitCommandOutput {
     pub(crate) status: ExitStatus,
     pub(crate) stdout: Vec<u8>,
     pub(crate) stderr: Vec<u8>,
+}
+
+pub(crate) struct GitQueryStream {
+    child: Child,
+    stdout: BufReader<ChildStdout>,
+    stderr_task: Option<JoinHandle<std::io::Result<BoundedRead>>>,
+    command: String,
+    timeout: Duration,
+    max_output_bytes: usize,
+    bytes_read: usize,
+}
+
+impl GitQueryStream {
+    pub(crate) fn command(&self) -> &str {
+        &self.command
+    }
+
+    pub(crate) async fn next_field(&mut self) -> GitResult<Option<Vec<u8>>> {
+        let mut field = Vec::new();
+        loop {
+            let chunk = timeout(self.timeout, self.stdout.fill_buf())
+                .await
+                .map_err(|_| GitError::TimedOut {
+                    command: self.command.clone(),
+                    timeout: self.timeout,
+                })?
+                .map_err(|source| GitError::io("read Git stdout", source))?;
+            if chunk.is_empty() {
+                if field.is_empty() {
+                    return Ok(None);
+                }
+                return Err(GitError::invalid_output(
+                    &self.command,
+                    "stream ended inside a NUL-delimited field",
+                ));
+            }
+            let terminator = chunk.iter().position(|byte| *byte == 0);
+            let data_len = terminator.unwrap_or(chunk.len());
+            let consumed = data_len + usize::from(terminator.is_some());
+            let next_size =
+                self.bytes_read
+                    .checked_add(consumed)
+                    .ok_or(GitError::OutputLimitExceeded {
+                        command: self.command.clone(),
+                        stream: "stdout",
+                        limit_bytes: self.max_output_bytes,
+                    })?;
+            if next_size > self.max_output_bytes {
+                self.stdout.consume(consumed);
+                return Err(GitError::OutputLimitExceeded {
+                    command: self.command.clone(),
+                    stream: "stdout",
+                    limit_bytes: self.max_output_bytes,
+                });
+            }
+            field.extend_from_slice(&chunk[..data_len]);
+            self.bytes_read = next_size;
+            self.stdout.consume(consumed);
+            if terminator.is_some() {
+                return Ok(Some(field));
+            }
+        }
+    }
+
+    pub(crate) async fn finish(mut self) -> GitResult<()> {
+        let status = match timeout(self.timeout, self.child.wait()).await {
+            Ok(result) => result.map_err(|source| GitError::io("wait for Git process", source))?,
+            Err(_) => {
+                let _ = self.child.kill().await;
+                let _ = self.child.wait().await;
+                if let Some(stderr_task) = self.stderr_task.take() {
+                    let _ = drain_task(stderr_task).await;
+                }
+                return Err(GitError::TimedOut {
+                    command: self.command.clone(),
+                    timeout: self.timeout,
+                });
+            }
+        };
+        let stderr = drain_task(
+            self.stderr_task
+                .take()
+                .expect("Git query stream stderr task is present before finish"),
+        )
+        .await?;
+        if stderr.truncated {
+            return Err(GitError::OutputLimitExceeded {
+                command: self.command.clone(),
+                stream: "stderr",
+                limit_bytes: self.max_output_bytes,
+            });
+        }
+        if status.success() {
+            return Ok(());
+        }
+        Err(GitError::CommandFailed {
+            command: self.command.clone(),
+            exit_code: status.code(),
+            stderr: String::from_utf8_lossy(&stderr.bytes).trim().to_string(),
+        })
+    }
+}
+
+impl Drop for GitQueryStream {
+    fn drop(&mut self) {
+        if let Some(stderr_task) = self.stderr_task.take() {
+            stderr_task.abort();
+        }
+    }
 }
 
 impl GitCommandOutput {

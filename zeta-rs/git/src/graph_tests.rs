@@ -30,8 +30,9 @@ async fn graph_includes_local_and_fetched_remote_refs() {
         .open_repository(repository.root())
         .await
         .expect("open repository");
-    let graph = client
-        .graph(&opened, NonZeroUsize::new(20).expect("non-zero"), 0)
+    let mut cursor = client.start_graph(&opened).await.expect("graph cursor");
+    let graph = cursor
+        .page(NonZeroUsize::new(20).expect("non-zero"))
         .await
         .expect("repository graph");
 
@@ -75,12 +76,13 @@ async fn graph_pages_commits_and_reports_more() {
         .open_repository(repository.root())
         .await
         .expect("open repository");
-    let first_page = client
-        .graph(&opened, NonZeroUsize::new(2).expect("non-zero"), 0)
+    let mut cursor = client.start_graph(&opened).await.expect("graph cursor");
+    let first_page = cursor
+        .page(NonZeroUsize::new(2).expect("non-zero"))
         .await
         .expect("first graph page");
-    let second_page = client
-        .graph(&opened, NonZeroUsize::new(2).expect("non-zero"), 2)
+    let second_page = cursor
+        .page(NonZeroUsize::new(2).expect("non-zero"))
         .await
         .expect("second graph page");
 

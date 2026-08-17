@@ -39,7 +39,7 @@ impl AppServer {
         result(&GitHistoryResult { commits })
     }
 
-    pub(super) fn git_graph(&self, value: &Value) -> Result<Value, RpcError> {
+    pub(super) fn git_graph(&self, connection_id: u64, value: &Value) -> Result<Value, RpcError> {
         let params: GitGraphParams = decode(value)?;
         if params.limit == 0 || params.limit > MAX_GIT_GRAPH_PAGE_SIZE {
             return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
@@ -48,7 +48,7 @@ impl AppServer {
         result(
             &self
                 .git_runtime_service()?
-                .graph(limit, params.skip)
+                .graph(connection_id, limit, params.cursor.as_deref())
                 .map_err(git_error)?,
         )
     }
@@ -149,6 +149,9 @@ fn workspace_paths(paths: Vec<String>) -> Result<Vec<PathBuf>, RpcError> {
 
 fn git_error(error: GitRuntimeError) -> RpcError {
     match error {
+        GitRuntimeError::InvalidGraphCursor => {
+            RpcError::new(-32602, AppServerErrorName::InvalidParams)
+        }
         GitRuntimeError::Boundary
         | GitRuntimeError::Service(GitServiceError::Boundary)
         | GitRuntimeError::Service(GitServiceError::BranchNotFound) => {

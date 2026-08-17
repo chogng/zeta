@@ -10,6 +10,7 @@ const result = spawnSync(process.execPath, [
   "dist/test/src/zeta/editor/**/test/**/*.test.js",
   "dist/test/src/zeta/workbench/contrib/academic/**/test/**/*.test.js",
   "dist/test/src/zeta/workbench/contrib/codeEditor/**/test/**/*.test.js",
+  "dist/test/src/zeta/workbench/contrib/bulkEdit/**/test/**/*.test.js",
   "dist/test/src/zeta/workbench/contrib/documentEditor/**/test/**/*.test.js",
   "dist/test/src/zeta/workbench/services/documentCollaboration/**/test/**/*.test.js",
   "dist/test/src/zeta/workbench/services/language/**/test/**/*.test.js",

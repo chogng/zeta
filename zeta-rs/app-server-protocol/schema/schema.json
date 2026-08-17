@@ -11954,28 +11954,28 @@
       ]
     },
     "GitGraphParams": {
-      "description": "One bounded page request for the active workspace repository graph.",
+      "description": "Starts or continues one bounded traversal of the active workspace repository graph.",
       "type": "object",
       "properties": {
+        "cursor": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "limit": {
           "type": "integer",
           "format": "uint",
           "maximum": 1000,
           "minimum": 1
-        },
-        "skip": {
-          "type": "integer",
-          "format": "uint",
-          "minimum": 0
         }
       },
       "required": [
-        "limit",
-        "skip"
+        "limit"
       ]
     },
     "GitGraphResult": {
-      "description": "One bounded commit graph page for the active workspace repository.",
+      "description": "One bounded commit graph page and its continuation cursor.",
       "type": "object",
       "properties": {
         "commits": {
@@ -11986,6 +11986,12 @@
         },
         "hasMore": {
           "type": "boolean"
+        },
+        "nextCursor": {
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "references": {
           "type": "array",

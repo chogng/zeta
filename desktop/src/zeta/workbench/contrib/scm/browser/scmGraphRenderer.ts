@@ -1,37 +1,50 @@
 import type { GitCommitSummary } from "../../../services/git/common/gitService.js";
 
 const SvgNamespace = "http://www.w3.org/2000/svg";
-const SwimlaneHeight = 22;
-const SwimlaneWidth = 11;
-const SwimlaneCurveRadius = 5;
-const LaneColorCount = 8;
+const LaneHeight = 22;
+const LaneWidth = 11;
+const CurveRadius = 5;
+const ColorCount = 8;
 
-interface ScmGraphLane {
+interface Lane {
   readonly objectId: string;
   readonly colorIndex: number;
 }
 
-interface ScmGraphRow {
+export interface GraphRow {
   readonly commit: GitCommitSummary;
-  readonly inputSwimlanes: readonly ScmGraphLane[];
-  readonly outputSwimlanes: readonly ScmGraphLane[];
+  readonly inputSwimlanes: readonly Lane[];
+  readonly outputSwimlanes: readonly Lane[];
 }
 
-export type ScmGraphNodeKind = "commit" | "head" | "merge";
+export interface GraphState {
+  readonly lanes: readonly Lane[];
+  readonly nextColor: number;
+}
+
+export interface GraphRows {
+  readonly rows: readonly GraphRow[];
+  readonly state: GraphState;
+}
+
+export type GraphNodeKind = "commit" | "head" | "merge";
+
+export const GraphRowHeight = LaneHeight;
 
 /** Projects ordered Git history into stable, color-carrying swimlanes. */
-export function createScmGraphRows(commits: readonly GitCommitSummary[]): readonly ScmGraphRow[] {
-  const rows: ScmGraphRow[] = [];
-  let nextColorIndex = 0;
+export function createRows(commits: readonly GitCommitSummary[], state: GraphState = { lanes: [], nextColor: 0 }): GraphRows {
+  const rows: GraphRow[] = [];
+  let lanes = state.lanes;
+  let nextColorIndex = state.nextColor;
   const allocateColor = (): number => {
     const colorIndex = nextColorIndex;
-    nextColorIndex = (nextColorIndex + 1) % LaneColorCount;
+    nextColorIndex = (nextColorIndex + 1) % ColorCount;
     return colorIndex;
   };
 
   for (const commit of commits) {
-    const inputSwimlanes = rows.at(-1)?.outputSwimlanes.map((lane) => ({ ...lane })) ?? [];
-    const outputSwimlanes: ScmGraphLane[] = [];
+    const inputSwimlanes = lanes.map((lane) => ({ ...lane }));
+    const outputSwimlanes: Lane[] = [];
     let firstParentAdded = false;
     const inputIndex = inputSwimlanes.findIndex((lane) => lane.objectId === commit.objectId);
 
@@ -52,12 +65,13 @@ export function createScmGraphRows(commits: readonly GitCommitSummary[]): readon
       outputSwimlanes.push({ objectId: commit.parentObjectIds[index], colorIndex: allocateColor() });
     }
     rows.push({ commit, inputSwimlanes, outputSwimlanes });
+    lanes = outputSwimlanes;
   }
-  return rows;
+  return { rows, state: { lanes, nextColor: nextColorIndex } };
 }
 
 /** Renders one SCM history swimlane row with a stable color for each branch lane. */
-export function renderScmGraphRow(document: Document, row: ScmGraphRow, kind: ScmGraphNodeKind): SVGSVGElement {
+export function renderRow(document: Document, row: GraphRow, kind: GraphNodeKind): SVGSVGElement {
   const svg = document.createElementNS(SvgNamespace, "svg");
   svg.classList.add("zeta-scm-graph-graph", kind);
   svg.setAttribute("aria-hidden", "true");
@@ -70,7 +84,7 @@ export function renderScmGraphRow(document: Document, row: ScmGraphRow, kind: Sc
     const inputLane = row.inputSwimlanes[index];
     if (inputLane.objectId === row.commit.objectId) {
       if (index !== circleIndex) {
-        appendPath(svg, `M ${SwimlaneWidth * (index + 1)} 0 A ${SwimlaneWidth} ${SwimlaneWidth} 0 0 1 ${SwimlaneWidth * index} ${SwimlaneWidth} H ${SwimlaneWidth * (circleIndex + 1)}`, inputLane.colorIndex);
+        appendPath(svg, `M ${LaneWidth * (index + 1)} 0 A ${LaneWidth} ${LaneWidth} 0 0 1 ${LaneWidth * index} ${LaneWidth} H ${LaneWidth * (circleIndex + 1)}`, inputLane.colorIndex);
       } else {
         outputSwimlaneIndex += 1;
       }
@@ -79,9 +93,9 @@ export function renderScmGraphRow(document: Document, row: ScmGraphRow, kind: Sc
 
     if (outputSwimlaneIndex >= row.outputSwimlanes.length || inputLane.objectId !== row.outputSwimlanes[outputSwimlaneIndex].objectId) continue;
     if (index === outputSwimlaneIndex) {
-      appendPath(svg, `M ${SwimlaneWidth * (index + 1)} 0 V ${SwimlaneHeight}`, inputLane.colorIndex);
+      appendPath(svg, `M ${LaneWidth * (index + 1)} 0 V ${LaneHeight}`, inputLane.colorIndex);
     } else {
-      appendPath(svg, `M ${SwimlaneWidth * (index + 1)} 0 V 6 A ${SwimlaneCurveRadius} ${SwimlaneCurveRadius} 0 0 1 ${(SwimlaneWidth * (index + 1)) - SwimlaneCurveRadius} ${SwimlaneHeight / 2} H ${(SwimlaneWidth * (outputSwimlaneIndex + 1)) + SwimlaneCurveRadius} A ${SwimlaneCurveRadius} ${SwimlaneCurveRadius} 0 0 0 ${SwimlaneWidth * (outputSwimlaneIndex + 1)} ${(SwimlaneHeight / 2) + SwimlaneCurveRadius} V ${SwimlaneHeight}`, inputLane.colorIndex);
+      appendPath(svg, `M ${LaneWidth * (index + 1)} 0 V 6 A ${CurveRadius} ${CurveRadius} 0 0 1 ${(LaneWidth * (index + 1)) - CurveRadius} ${LaneHeight / 2} H ${(LaneWidth * (outputSwimlaneIndex + 1)) + CurveRadius} A ${CurveRadius} ${CurveRadius} 0 0 0 ${LaneWidth * (outputSwimlaneIndex + 1)} ${(LaneHeight / 2) + CurveRadius} V ${LaneHeight}`, inputLane.colorIndex);
     }
     outputSwimlaneIndex += 1;
   }
@@ -90,15 +104,15 @@ export function renderScmGraphRow(document: Document, row: ScmGraphRow, kind: Sc
     const parentOutputIndex = row.outputSwimlanes.findIndex((lane) => lane.objectId === row.commit.parentObjectIds[index]);
     if (parentOutputIndex === -1) continue;
     const parentColorIndex = row.outputSwimlanes[parentOutputIndex].colorIndex;
-    appendPath(svg, `M ${SwimlaneWidth * parentOutputIndex} ${SwimlaneHeight / 2} A ${SwimlaneWidth} ${SwimlaneWidth} 0 0 1 ${SwimlaneWidth * (parentOutputIndex + 1)} ${SwimlaneHeight}`, parentColorIndex);
-    appendPath(svg, `M ${SwimlaneWidth * parentOutputIndex} ${SwimlaneHeight / 2} H ${SwimlaneWidth * (circleIndex + 1)}`, parentColorIndex);
+    appendPath(svg, `M ${LaneWidth * parentOutputIndex} ${LaneHeight / 2} A ${LaneWidth} ${LaneWidth} 0 0 1 ${LaneWidth * (parentOutputIndex + 1)} ${LaneHeight}`, parentColorIndex);
+    appendPath(svg, `M ${LaneWidth * parentOutputIndex} ${LaneHeight / 2} H ${LaneWidth * (circleIndex + 1)}`, parentColorIndex);
   }
 
-  if (inputIndex !== -1) appendPath(svg, `M ${SwimlaneWidth * (circleIndex + 1)} 0 V ${SwimlaneHeight / 2}`, circleColorIndex);
-  if (row.commit.parentObjectIds.length > 0) appendPath(svg, `M ${SwimlaneWidth * (circleIndex + 1)} ${SwimlaneHeight / 2} V ${SwimlaneHeight}`, circleColorIndex);
+  if (inputIndex !== -1) appendPath(svg, `M ${LaneWidth * (circleIndex + 1)} 0 V ${LaneHeight / 2}`, circleColorIndex);
+  if (row.commit.parentObjectIds.length > 0) appendPath(svg, `M ${LaneWidth * (circleIndex + 1)} ${LaneHeight / 2} V ${LaneHeight}`, circleColorIndex);
   appendNode(svg, circleIndex, kind, circleColorIndex);
-  svg.style.width = `${SwimlaneWidth * (Math.max(row.inputSwimlanes.length, row.outputSwimlanes.length, 1) + 1)}px`;
-  svg.style.height = `${SwimlaneHeight}px`;
+  svg.style.width = `${LaneWidth * (Math.max(row.inputSwimlanes.length, row.outputSwimlanes.length, 1) + 1)}px`;
+  svg.style.height = `${LaneHeight}px`;
   return svg;
 }
 
@@ -110,7 +124,7 @@ function appendPath(svg: SVGSVGElement, data: string, colorIndex: number): void 
   svg.append(path);
 }
 
-function appendNode(svg: SVGSVGElement, index: number, kind: ScmGraphNodeKind, colorIndex: number): void {
+function appendNode(svg: SVGSVGElement, index: number, kind: GraphNodeKind, colorIndex: number): void {
   if (kind === "head") {
     appendCircle(svg, index, 7, "outer", colorIndex);
     appendCircle(svg, index, 2, "inner", colorIndex);
@@ -128,8 +142,8 @@ function appendCircle(svg: SVGSVGElement, index: number, radius: number, part: "
   const circle = svg.ownerDocument.createElementNS(SvgNamespace, "circle");
   circle.classList.add("zeta-scm-graph-node", part);
   circle.dataset.laneColor = String(colorIndex);
-  circle.setAttribute("cx", `${SwimlaneWidth * (index + 1)}`);
-  circle.setAttribute("cy", `${SwimlaneHeight / 2}`);
+  circle.setAttribute("cx", `${LaneWidth * (index + 1)}`);
+  circle.setAttribute("cy", `${LaneHeight / 2}`);
   circle.setAttribute("r", `${radius}`);
   svg.append(circle);
 }

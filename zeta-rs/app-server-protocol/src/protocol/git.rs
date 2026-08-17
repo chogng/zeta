@@ -179,17 +179,19 @@ pub struct GitReferenceDto {
     pub current: bool,
 }
 
-/// One bounded page request for the active workspace repository graph.
+/// Starts or continues one bounded traversal of the active workspace repository graph.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(rename_all = "camelCase")]
 pub struct GitGraphParams {
     #[schemars(range(min = 1, max = 1000))]
     pub limit: usize,
-    pub skip: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub cursor: Option<String>,
 }
 
-/// One bounded commit graph page for the active workspace repository.
+/// One bounded commit graph page and its continuation cursor.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(rename_all = "camelCase")]
@@ -198,6 +200,9 @@ pub struct GitGraphResult {
     pub references: Vec<GitReferenceDto>,
     pub remotes: Vec<GitRemoteDto>,
     pub has_more: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub next_cursor: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

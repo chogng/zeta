@@ -168,7 +168,7 @@ fn runtime_projects_text_diffs_and_switches_only_existing_local_branches() {
             .any(|branch| branch.name == "topic" && !branch.current)
     );
     let graph = runtime
-        .graph(std::num::NonZeroUsize::new(50).unwrap(), 0)
+        .graph(1, std::num::NonZeroUsize::new(50).unwrap(), None)
         .unwrap();
     assert!(graph.references.iter().any(|reference| {
         reference.name == "origin/main"

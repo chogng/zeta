@@ -333,25 +333,30 @@ pub(crate) fn parse_commits(bytes: &[u8], command: &str) -> GitResult<Vec<GitCom
     }
     fields
         .chunks_exact(4)
-        .map(|fields| {
-            let object_id = utf8(fields[0], command, "commit object id")?.to_string();
-            let parent_object_ids = utf8(fields[1], command, "commit parent object ids")?
-                .split_whitespace()
-                .map(str::to_string)
-                .collect();
-            let timestamp = utf8(fields[2], command, "commit timestamp")?;
-            let timestamp_seconds = timestamp.parse().map_err(|_| {
-                GitError::invalid_output(command, "commit timestamp was not an integer")
-            })?;
-            let subject = utf8(fields[3], command, "commit subject")?.to_string();
-            Ok(GitCommitSummary {
-                object_id,
-                parent_object_ids,
-                timestamp_seconds,
-                subject,
-            })
-        })
+        .map(|fields| parse_commit_fields([fields[0], fields[1], fields[2], fields[3]], command))
         .collect()
+}
+
+pub(crate) fn parse_commit_fields(
+    fields: [&[u8]; 4],
+    command: &str,
+) -> GitResult<GitCommitSummary> {
+    let object_id = utf8(fields[0], command, "commit object id")?.to_string();
+    let parent_object_ids = utf8(fields[1], command, "commit parent object ids")?
+        .split_whitespace()
+        .map(str::to_string)
+        .collect();
+    let timestamp = utf8(fields[2], command, "commit timestamp")?;
+    let timestamp_seconds = timestamp
+        .parse()
+        .map_err(|_| GitError::invalid_output(command, "commit timestamp was not an integer"))?;
+    let subject = utf8(fields[3], command, "commit subject")?.to_string();
+    Ok(GitCommitSummary {
+        object_id,
+        parent_object_ids,
+        timestamp_seconds,
+        subject,
+    })
 }
 
 fn utf8<'a>(value: &'a [u8], command: &str, label: &str) -> GitResult<&'a str> {

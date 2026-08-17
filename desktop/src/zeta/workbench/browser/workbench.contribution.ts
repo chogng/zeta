@@ -29,6 +29,7 @@ import { registerPanelViews } from "../contrib/panel/browser/panel.contribution.
 import { registerProblemsView } from "../contrib/problems/browser/problems.contribution.js";
 import { registerTerminalView } from "../contrib/terminal/browser/terminal.contribution.js";
 import { lxiconsLibrary } from "../../base/common/lxiconsLibrary.js";
+import "../contrib/bulkEdit/browser/bulkEdit.contribution.js";
 import "../contrib/markdown/browser/markdown.contribution.js";
 import "../contrib/pdf/browser/pdf.contribution.js";
 import "../contrib/preferences/browser/preferences.contribution.js";

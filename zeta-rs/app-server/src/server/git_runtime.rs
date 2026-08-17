@@ -1,6 +1,8 @@
 use super::update_broker::UpdateBroker;
 use crate::git_service::{GitService, GitServiceCommit, GitServiceError};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::Duration;
@@ -12,8 +14,8 @@ use zeta_app_server_protocol::protocol::git::{
 };
 use zeta_file_watcher::{DebouncedWatchReceiver, FileWatcher, FileWatcherBackend, WatchPath};
 use zeta_git::{
-    GitChangeStatus, GitGraph, GitHead, GitReferenceKind, GitRemoteProvider, GitRepository,
-    GitRepositoryChange, GitRepositorySnapshot,
+    GitChangeStatus, GitGraph, GitGraphCursor, GitHead, GitReferenceKind, GitRemoteProvider,
+    GitRepository, GitRepositoryChange, GitRepositorySnapshot,
 };
 use zeta_protocol::StreamInstanceId;
 use zeta_workspace::TrustedWorkspace;
@@ -26,6 +28,8 @@ pub(crate) struct GitRuntime {
     stream_instance_id: StreamInstanceId,
     operation: Mutex<()>,
     state: Mutex<GitRuntimeState>,
+    graph_sessions: Mutex<HashMap<u64, GraphSession>>,
+    next_graph_token: AtomicU64,
     updates: Arc<UpdateBroker>,
 }
 
@@ -41,6 +45,11 @@ struct GitRuntimeState {
     status: Option<GitStatusResult>,
 }
 
+struct GraphSession {
+    token: String,
+    cursor: GitGraphCursor,
+}
+
 pub(super) struct GitRuntimeCommit {
     pub(super) object_id: String,
     pub(super) status: GitStatusResult,
@@ -49,6 +58,7 @@ pub(super) struct GitRuntimeCommit {
 #[derive(Debug)]
 pub(crate) enum GitRuntimeError {
     Boundary,
+    InvalidGraphCursor,
     Service(GitServiceError),
 }
 
@@ -66,6 +76,8 @@ impl GitRuntime {
                 repository: None,
                 status: None,
             }),
+            graph_sessions: Mutex::new(HashMap::new()),
+            next_graph_token: AtomicU64::new(1),
             updates,
         }))
     }
@@ -123,17 +135,69 @@ impl GitRuntime {
 
     pub(super) fn graph(
         &self,
+        connection_id: u64,
         limit: std::num::NonZeroUsize,
-        skip: usize,
+        cursor: Option<&str>,
     ) -> Result<GitGraphResult, GitRuntimeError> {
         let _operation = self
             .operation
             .lock()
             .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
-        self.service
-            .graph(limit, skip)
-            .map(project_graph)
-            .map_err(GitRuntimeError::Service)
+        let mut sessions = self
+            .graph_sessions
+            .lock()
+            .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
+        let (graph, next_cursor) = match cursor {
+            None => {
+                sessions.remove(&connection_id);
+                let mut graph_cursor = self
+                    .service
+                    .open_graph()
+                    .map_err(GitRuntimeError::Service)?;
+                let graph = self
+                    .service
+                    .graph_page(&mut graph_cursor, limit)
+                    .map_err(GitRuntimeError::Service)?;
+                if graph.has_more() {
+                    let token = self.new_graph_token();
+                    sessions.insert(
+                        connection_id,
+                        GraphSession {
+                            token: token.clone(),
+                            cursor: graph_cursor,
+                        },
+                    );
+                    (graph, Some(token))
+                } else {
+                    (graph, None)
+                }
+            }
+            Some(cursor) => {
+                let session = sessions
+                    .get_mut(&connection_id)
+                    .filter(|session| session.token == cursor)
+                    .ok_or(GitRuntimeError::InvalidGraphCursor)?;
+                let graph = self
+                    .service
+                    .graph_page(&mut session.cursor, limit)
+                    .map_err(GitRuntimeError::Service)?;
+                let has_more = graph.has_more();
+                let next_cursor = session.token.clone();
+                if !has_more {
+                    sessions.remove(&connection_id);
+                    (graph, None)
+                } else {
+                    (graph, Some(next_cursor))
+                }
+            }
+        };
+        Ok(project_graph(graph, next_cursor))
+    }
+
+    pub(super) fn close_connection(&self, connection_id: u64) {
+        if let Ok(mut sessions) = self.graph_sessions.lock() {
+            sessions.remove(&connection_id);
+        }
     }
 
     pub(super) fn text_diff(&self) -> Result<GitTextDiffResult, GitRuntimeError> {
@@ -214,6 +278,7 @@ impl GitRuntime {
             .service
             .commit(message)
             .map_err(GitRuntimeError::Service)?;
+        self.invalidate_graphs()?;
         Ok(GitRuntimeCommit {
             object_id,
             status: self.accept(repository, snapshot)?,
@@ -260,6 +325,7 @@ impl GitRuntime {
             .lock()
             .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
         let (repository, snapshot) = operation(&self.service).map_err(GitRuntimeError::Service)?;
+        self.invalidate_graphs()?;
         self.accept(repository, snapshot)
     }
 
@@ -287,6 +353,7 @@ impl GitRuntime {
             .state
             .lock()
             .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
+        let had_state = state.repository.is_some();
         let unchanged = state.repository.as_ref() == Some(&repository)
             && state.status.as_ref().is_some_and(|current| {
                 current.head == projected.head && current.changes == projected.changes
@@ -303,12 +370,38 @@ impl GitRuntime {
         state.repository = Some(repository);
         state.status = Some(projected.clone());
         drop(state);
+        if had_state {
+            self.invalidate_graphs()?
+        }
         self.updates.publish_git_status_changed(projected.clone());
         Ok(projected)
     }
 
+    fn new_graph_token(&self) -> String {
+        format!(
+            "g{:x}",
+            self.next_graph_token.fetch_add(1, Ordering::Relaxed)
+        )
+    }
+
     fn refresh_from_watcher(&self) {
+        let initialized = self
+            .state
+            .lock()
+            .map(|state| state.repository.is_some())
+            .unwrap_or(false);
+        if initialized {
+            self.invalidate_graphs().ok();
+        }
         let _ = self.status();
+    }
+
+    fn invalidate_graphs(&self) -> Result<(), GitRuntimeError> {
+        self.graph_sessions
+            .lock()
+            .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?
+            .clear();
+        Ok(())
     }
 
     fn watched_paths(&self) -> Vec<WatchPath> {
@@ -434,7 +527,7 @@ fn watch_git(
     });
 }
 
-fn project_graph(graph: GitGraph) -> GitGraphResult {
+fn project_graph(graph: GitGraph, next_cursor: Option<String>) -> GitGraphResult {
     GitGraphResult {
         commits: graph
             .commits()
@@ -479,6 +572,7 @@ fn project_graph(graph: GitGraph) -> GitGraphResult {
             })
             .collect(),
         has_more: graph.has_more(),
+        next_cursor,
     }
 }
 

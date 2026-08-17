@@ -4,7 +4,7 @@ import { JSDOM } from "jsdom";
 import { AnchorAxisAlignment, AnchorPosition } from "../../../../../base/common/layout.js";
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
 import type { HoverSetupOptions, IHoverService, IManagedHover } from "../../../../../platform/hover/common/hoverService.js";
-import type { GitGraphQuery, GitStatus, IGitService } from "../../../../../workbench/services/git/common/gitService.js";
+import type { GraphQuery, GitStatus, IGitService } from "../../../../../workbench/services/git/common/gitService.js";
 
 test("Git contribution registers Changes, Agent Review, and Graph as ordered panes", async () => {
   const browser = new JSDOM("<!doctype html><body></body>");
@@ -30,7 +30,7 @@ test("Git contribution registers Changes, Agent Review, and Graph as ordered pan
 test("ScmGraphViewPane renders a repository history page", async () => {
   const browser = new JSDOM("<!doctype html><body></body>");
   const installedGlobals = installDomGlobals(browser);
-  const graphRequests: GitGraphQuery[] = [];
+  const graphRequests: GraphQuery[] = [];
   const [
     { ContextKeyService },
     { MenuService },
@@ -62,7 +62,7 @@ test("ScmGraphViewPane renders a repository history page", async () => {
   };
   const gitService = {
       status: async () => status,
-      graph: async (query: GitGraphQuery) => {
+      graph: async (query: GraphQuery) => {
         graphRequests.push(query);
         return {
           commits: [
@@ -75,6 +75,7 @@ test("ScmGraphViewPane renders a repository history page", async () => {
           ],
           remotes: [{ name: "origin", identity: { provider: "github", host: "github.com", owner: "chogng", repository: "zeta" } }],
           hasMore: false,
+          nextCursor: undefined,
         };
       },
   } as unknown as IGitService;
@@ -97,7 +98,7 @@ test("ScmGraphViewPane renders a repository history page", async () => {
     assert.ok(refresh);
     refresh.click();
     await waitFor(() => graphRequests.length === 2 && pane.element.querySelectorAll(".zeta-scm-graph-subject").length === 2);
-    assert.deepEqual(graphRequests, [{ limit: 50, skip: 0 }, { limit: 50, skip: 0 }]);
+    assert.deepEqual(graphRequests, [{ limit: 50 }, { limit: 50 }]);
 
     assert.deepEqual([...pane.element.querySelectorAll(".zeta-scm-graph-subject")].map((element) => element.textContent), ["Wire SCM panes", "Prepare graph data"]);
     assert.equal(pane.element.querySelector(".zeta-scm-graph-commit.current")?.getAttribute("aria-current"), "true");
@@ -129,7 +130,7 @@ test("ScmGraphViewPane renders a repository history page", async () => {
 test("ScmGraphViewPane loads the next history page", async () => {
   const browser = new JSDOM("<!doctype html><body></body>");
   const installedGlobals = installDomGlobals(browser);
-  const graphRequests: GitGraphQuery[] = [];
+  const graphRequests: GraphQuery[] = [];
   const [
     { ContextKeyService },
     { MenuService },
@@ -157,7 +158,7 @@ test("ScmGraphViewPane loads the next history page", async () => {
   };
   const gitService = {
     status: async () => status,
-    graph: async (query: GitGraphQuery) => {
+    graph: async (query: GraphQuery) => {
       graphRequests.push(query);
       const firstPage = [
         { objectId: "commit-1", parentObjectIds: ["commit-2"], timestampSeconds: 1_753_000_000, subject: "First page one" },
@@ -167,10 +168,11 @@ test("ScmGraphViewPane loads the next history page", async () => {
         { objectId: "commit-3", parentObjectIds: [], timestampSeconds: 1_752_800_000, subject: "Second page one" },
       ];
       return {
-        commits: query.skip === 0 ? firstPage : secondPage,
+        commits: query.cursor ? secondPage : firstPage,
         references: [],
         remotes: [],
-        hasMore: query.skip === 0,
+        hasMore: !query.cursor,
+        nextCursor: query.cursor ? undefined : "cursor-1",
       };
     },
   } as unknown as IGitService;
@@ -183,13 +185,78 @@ test("ScmGraphViewPane loads the next history page", async () => {
 
     const loadMore = pane.element.querySelector<HTMLButtonElement>(".zeta-scm-graph-load-more > button");
     assert.ok(loadMore);
+    const list = pane.element.querySelector(".zeta-scm-graph-list");
     loadMore.click();
     assert.equal(pane.element.querySelector<HTMLButtonElement>(".zeta-scm-graph-load-more > button")?.disabled, true);
     await waitFor(() => pane.element.querySelectorAll(".zeta-scm-graph-commit").length === 3);
 
-    assert.deepEqual(graphRequests, [{ limit: 50, skip: 0 }, { limit: 50, skip: 2 }]);
+    assert.deepEqual(graphRequests, [{ limit: 50 }, { limit: 50, cursor: "cursor-1" }]);
+    assert.equal(pane.element.querySelector(".zeta-scm-graph-list"), list);
     assert.deepEqual([...pane.element.querySelectorAll(".zeta-scm-graph-subject")].map((element) => element.textContent), ["First page one", "First page two", "Second page one"]);
     assert.equal(pane.element.querySelector(".zeta-scm-graph-load-more"), null);
+  } finally {
+    browser.window.close();
+    for (const name of installedGlobals) Reflect.deleteProperty(globalThis, name);
+  }
+});
+
+test("ScmGraphViewPane virtualizes loaded history rows", async () => {
+  const browser = new JSDOM("<!doctype html><body></body>");
+  const installedGlobals = installDomGlobals(browser);
+  const [
+    { ContextKeyService },
+    { MenuService },
+    { ServiceCollection },
+    { CommandService },
+  ] = await Promise.all([
+    import("../../../../../platform/contextkey/common/contextkey.js"),
+    import("../../../../../platform/actions/common/menuService.js"),
+    import("../../../../../platform/instantiation/common/instantiation.js"),
+    import("../../../../../workbench/services/commands/common/commandService.js"),
+  ]);
+  using contextKeyService = new ContextKeyService();
+  const menuService = new MenuService(new CommandService(new ServiceCollection()), contextKeyService);
+  const status: GitStatus = {
+    streamInstanceId: "git-graph-stream",
+    revision: 1,
+    workspacePath: ".",
+    head: { type: "branch", name: "main", objectId: "commit-0", upstream: undefined },
+    changes: [],
+  };
+  const commits = Array.from({ length: 100 }, (_, index) => ({
+    objectId: `commit-${index}`,
+    parentObjectIds: index === 99 ? [] : [`commit-${index + 1}`],
+    timestampSeconds: 1_753_000_000 - index,
+    subject: `Commit ${index}`,
+  }));
+  const gitService = {
+    status: async () => status,
+    graph: async (_query: GraphQuery) => ({ commits, references: [], remotes: [], hasMore: false, nextCursor: undefined }),
+  } as unknown as IGitService;
+  const hoverService: IHoverService = {
+    setupHover: () => testManagedHover(),
+    showHover: () => testManagedHover(),
+    hideHover() {},
+  };
+
+  try {
+    const { ScmGraphViewPane } = await import("../../../../../workbench/contrib/scm/browser/scmGraphViewPane.js");
+    using pane = new ScmGraphViewPane({ id: "zeta.gitGraph.virtualized.test", title: "Graph", ownerDocument: browser.window.document }, gitService, menuService, {} as IContextMenuService, contextKeyService, hoverService);
+    const graph = pane.element.querySelector<HTMLElement>(".zeta-scm-graph");
+    assert.ok(graph);
+    Object.defineProperty(graph, "clientHeight", { configurable: true, value: 100 });
+    browser.window.document.body.append(pane.element);
+    await waitFor(() => pane.element.querySelectorAll(".zeta-scm-graph-commit").length > 0);
+
+    const initialRows = pane.element.querySelectorAll(".zeta-scm-graph-commit").length;
+    assert.ok(initialRows < commits.length);
+    assert.equal(pane.element.querySelectorAll(".zeta-scm-graph-spacer").length, 2);
+    assert.equal(pane.element.querySelectorAll<HTMLElement>(".zeta-scm-graph-spacer")[1].style.height, `${(commits.length - initialRows) * 22}px`);
+
+    Object.defineProperty(graph, "scrollTop", { configurable: true, writable: true, value: 1_000 });
+    graph.dispatchEvent(new browser.window.Event("scroll"));
+    assert.ok([...pane.element.querySelectorAll(".zeta-scm-graph-subject")].some((element) => element.textContent === "Commit 45"));
+    assert.ok(pane.element.querySelectorAll(".zeta-scm-graph-commit").length < commits.length);
   } finally {
     browser.window.close();
     for (const name of installedGlobals) Reflect.deleteProperty(globalThis, name);
@@ -204,6 +271,12 @@ test("ScmAgentReviewViewPane exposes an explicit empty state", async () => {
     const { ScmAgentReviewViewPane } = await import("../../../../../workbench/contrib/scm/browser/scmAgentReviewViewPane.js");
     using pane = new ScmAgentReviewViewPane({ id: "zeta.gitAgentReview.test", title: "Agent Review", ownerDocument: browser.window.document });
     assert.equal(pane.element.querySelector(".zeta-scm-empty")?.textContent, "No agent changes to review.");
+    const findIssues = pane.element.querySelector<HTMLButtonElement>(".zeta-scm-find-issues");
+    assert.ok(findIssues);
+    assert.equal(findIssues.textContent, "Find Issues");
+    assert.ok(findIssues.classList.contains("zeta-button"));
+    assert.ok(findIssues.classList.contains("label-centered"));
+    assert.ok(findIssues.querySelector(".zeta-icon"));
   } finally {
     browser.window.close();
     for (const name of installedGlobals) Reflect.deleteProperty(globalThis, name);

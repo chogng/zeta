@@ -7,6 +7,7 @@ use crate::GitError;
 use crate::GitRemote;
 use crate::GitRepository;
 use crate::GitResult;
+use crate::client::GitQueryStream;
 
 /// The ref kinds that can be shown in a repository graph.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -74,24 +75,118 @@ impl GitGraph {
     }
 }
 
-impl GitClient {
-    /// Reads one page of local graph history and all branch/remote metadata needed to render it.
-    pub async fn graph(
-        &self,
-        repository: &GitRepository,
-        limit: NonZeroUsize,
-        skip: usize,
-    ) -> GitResult<GitGraph> {
-        let references = self.references(repository).await?;
-        let (commits, has_more) = self
-            .recent_commits_from_all_refs(repository, limit, skip)
-            .await?;
-        let remotes = self.remotes(repository).await?;
+/// Stateful reader for one repository graph traversal.
+///
+/// A cursor owns the Git log process and the ref metadata captured when traversal starts. Callers
+/// should keep it for the lifetime of one history list and request pages in order. Dropping it
+/// terminates the underlying process without affecting the repository.
+pub struct GitGraphCursor {
+    stream: Option<GitQueryStream>,
+    references: Vec<GitReference>,
+    remotes: Vec<GitRemote>,
+    pending: Option<GitCommitSummary>,
+    done: bool,
+}
+
+impl GitGraphCursor {
+    /// Reads the next bounded page from this traversal.
+    pub async fn page(&mut self, limit: NonZeroUsize) -> GitResult<GitGraph> {
+        if self.done {
+            return Err(GitError::InvalidConfiguration {
+                field: "graph_cursor",
+                requirement: "must not be exhausted",
+            });
+        }
+        let mut commits = Vec::with_capacity(limit.get());
+        if let Some(commit) = self.pending.take() {
+            commits.push(commit);
+        }
+        while commits.len() < limit.get() {
+            let Some(commit) = self.next_commit().await? else {
+                break;
+            };
+            commits.push(commit);
+        }
+        let has_more = if self.done {
+            false
+        } else if let Some(commit) = self.next_commit().await? {
+            self.pending = Some(commit);
+            true
+        } else {
+            false
+        };
         Ok(GitGraph {
             commits,
+            references: self.references.clone(),
+            remotes: self.remotes.clone(),
+            has_more,
+        })
+    }
+
+    async fn next_commit(&mut self) -> GitResult<Option<GitCommitSummary>> {
+        let Some(object_id) = self
+            .stream
+            .as_mut()
+            .expect("active graph cursor stream")
+            .next_field()
+            .await?
+        else {
+            let stream = self.stream.take().expect("active graph cursor stream");
+            self.done = true;
+            stream.finish().await?;
+            return Ok(None);
+        };
+        let parents = self.required_field("commit parent object ids").await?;
+        let timestamp = self.required_field("commit timestamp").await?;
+        let subject = self.required_field("commit subject").await?;
+        let command = self
+            .stream
+            .as_ref()
+            .map(|stream| stream.command())
+            .unwrap_or("git log");
+        super::info::parse_commit_fields([&object_id, &parents, &timestamp, &subject], command)
+            .map(Some)
+    }
+
+    async fn required_field(&mut self, label: &str) -> GitResult<Vec<u8>> {
+        let field = self
+            .stream
+            .as_mut()
+            .expect("active graph cursor stream")
+            .next_field()
+            .await?;
+        field.ok_or_else(|| {
+            let command = self
+                .stream
+                .as_ref()
+                .map(|stream| stream.command())
+                .unwrap_or("git log");
+            GitError::invalid_output(command, format!("stream omitted {label}"))
+        })
+    }
+}
+
+impl GitClient {
+    /// Starts one repository graph traversal with refs and remotes captured once.
+    pub async fn start_graph(&self, repository: &GitRepository) -> GitResult<GitGraphCursor> {
+        let references = self.references(repository).await?;
+        let remotes = self.remotes(repository).await?;
+        let stream = self.start_query_stream(
+            repository.worktree_root(),
+            [
+                OsString::from("log"),
+                OsString::from("--all"),
+                OsString::from("--topo-order"),
+                OsString::from("-z"),
+                OsString::from("--format=%H%x00%P%x00%ct%x00%s"),
+            ],
+        )?;
+        Ok(GitGraphCursor {
+            stream: Some(stream),
             references,
             remotes,
-            has_more,
+            pending: None,
+            done: false,
         })
     }
 
@@ -109,43 +204,6 @@ impl GitClient {
             )
             .await?;
         parse_references(&output.stdout, &output.command)
-    }
-
-    async fn recent_commits_from_all_refs(
-        &self,
-        repository: &GitRepository,
-        limit: NonZeroUsize,
-        skip: usize,
-    ) -> GitResult<(Vec<GitCommitSummary>, bool)> {
-        let query_limit = limit
-            .get()
-            .checked_add(1)
-            .ok_or(GitError::InvalidConfiguration {
-                field: "limit",
-                requirement: "must leave room for a has-more probe",
-            })?;
-        let limit_arg = format!("-n{query_limit}");
-        let skip_arg = format!("--skip={skip}");
-        let output = self
-            .run_query(
-                repository.worktree_root(),
-                [
-                    OsString::from("log"),
-                    OsString::from("--all"),
-                    OsString::from("--topo-order"),
-                    OsString::from(skip_arg),
-                    OsString::from("-z"),
-                    OsString::from("--format=%H%x00%P%x00%ct%x00%s"),
-                    OsString::from(limit_arg),
-                ],
-            )
-            .await?;
-        let mut commits = super::info::parse_commits(&output.stdout, &output.command)?;
-        let has_more = commits.len() > limit.get();
-        if has_more {
-            commits.truncate(limit.get());
-        }
-        Ok((commits, has_more))
     }
 }
 

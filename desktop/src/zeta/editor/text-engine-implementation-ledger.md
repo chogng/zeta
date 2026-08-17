@@ -158,7 +158,7 @@ Workbench/Electron -> browser adapters -> Aster contracts
 Rust App Server -> browser adapter -> Aster async service contract
 ```
 
-Workbench 侧 `services/language/browser/appServerLanguageProviders.ts` 是 generated DTO 的终点；它把 App Server 的跨文件 location、workspace symbol、hierarchy、rename 与 code action 映射为 editor contract。`BrowserWorkspaceEditService` 负责全量 preflight、ordered file operation、打开模型 dirty 语义、关闭资源持久化与失败回滚。工作区 Quick Access 属于 Workbench contrib，不回流 editor-local `quickAccess`。
+Workbench 侧 `services/language/browser/appServerLanguageProviders.ts` 是 generated DTO 的终点；它把 App Server 的跨文件 location、workspace symbol、hierarchy、rename 与 code action 映射为 editor contract。`BrowserWorkspaceEditService` 负责全量 preflight、ordered file operation、打开模型 dirty 语义、关闭资源持久化与失败回滚；Workbench `contrib/bulkEdit` 负责多条目预览、选择与确认，不复制事务语义。当前 Zeta 的 canonical WorkspaceEdit 只包含 `textDocument/create/rename/delete`；VS Code 参考目录中的 notebook cell 和 opaque attachment 分支必须等对应领域模型与协议 owner 出现后再接入，不能由通用 bulkEdit 偷渡。工作区 Quick Access 属于 Workbench contrib，不回流 editor-local `quickAccess`。
 
 禁止的方向：
 

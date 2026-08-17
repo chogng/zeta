@@ -565,6 +565,9 @@ impl AppServer {
         }
         self.request_scheduler
             .cancel_connection(connection.connection_id);
+        if let Ok(git) = self.git_runtime_service() {
+            git.close_connection(connection.connection_id);
+        }
         if let Some(marketplace) = &self.marketplace_manager_client {
             for lease_id in connection.marketplace_leases() {
                 let _ = marketplace.release_capability(
@@ -1772,7 +1775,9 @@ impl AppServer {
             Some(ClientMethod::GitTextDiff) => self.git_text_diff(),
             Some(ClientMethod::GitBranchList) => self.git_branch_list(),
             Some(ClientMethod::GitHistory) => self.git_history(),
-            Some(ClientMethod::GitGraph) => self.git_graph(&request.params),
+            Some(ClientMethod::GitGraph) => {
+                self.git_graph(connection.connection_id, &request.params)
+            }
             Some(ClientMethod::GitBranchSwitch) => self.git_branch_switch(&request.params),
             Some(ClientMethod::GitStage) => self.git_stage(&request.params),
             Some(ClientMethod::GitUnstage) => self.git_unstage(&request.params),

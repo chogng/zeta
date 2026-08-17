@@ -1,3 +1,5 @@
+import { Button } from "../../../../base/browser/ui/button/button.js";
+import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
 import type { IViewPaneOptions } from "../../../browser/parts/views/viewPane.js";
 import { ViewPane } from "../../../browser/parts/views/viewPane.js";
 
@@ -9,6 +11,14 @@ export class ScmAgentReviewViewPane extends ViewPane {
     const empty = options.ownerDocument.createElement("p");
     empty.className = "zeta-scm-empty";
     empty.textContent = "No agent changes to review.";
-    this.contentElement.append(empty);
+    const findIssues = this.own(new Button({
+      label: "Find Issues",
+      icon: lxiconsLibrary.codeReview,
+      contentAlignment: "labelCentered",
+      ownerDocument: options.ownerDocument,
+      title: "Find Issues",
+    }));
+    findIssues.element.classList.add("zeta-scm-find-issues");
+    this.contentElement.append(empty, findIssues.element);
   }
 }

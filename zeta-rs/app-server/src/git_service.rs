@@ -4,8 +4,8 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use tokio::runtime::Runtime;
 use zeta_git::{
-    GitBranch, GitClient, GitCommitRequest, GitCommitSummary, GitError, GitGraph, GitPathspecSet,
-    GitRepository, GitRepositorySnapshot, GitTextDiffLimits, GitTextDiffSnapshot,
+    GitBranch, GitClient, GitCommitRequest, GitCommitSummary, GitError, GitGraph, GitGraphCursor,
+    GitPathspecSet, GitRepository, GitRepositorySnapshot, GitTextDiffLimits, GitTextDiffSnapshot,
 };
 use zeta_workspace::{TrustedWorkspace, WorkspaceCapability, WorkspaceRoot};
 
@@ -117,20 +117,28 @@ impl GitService {
         })
     }
 
-    pub(crate) fn graph(
-        &self,
-        limit: NonZeroUsize,
-        skip: usize,
-    ) -> Result<GitGraph, GitServiceError> {
+    pub(crate) fn open_graph(&self) -> Result<GitGraphCursor, GitServiceError> {
         self.ensure_readable()?;
         let runtime = self.runtime.lock().map_err(|_| GitServiceError::Runtime)?;
         runtime.block_on(async {
             let repository = self.open_repository().await?;
             self.client
-                .graph(&repository, limit, skip)
+                .start_graph(&repository)
                 .await
                 .map_err(GitServiceError::Git)
         })
+    }
+
+    pub(crate) fn graph_page(
+        &self,
+        cursor: &mut GitGraphCursor,
+        limit: NonZeroUsize,
+    ) -> Result<GitGraph, GitServiceError> {
+        self.ensure_readable()?;
+        let runtime = self.runtime.lock().map_err(|_| GitServiceError::Runtime)?;
+        runtime
+            .block_on(cursor.page(limit))
+            .map_err(GitServiceError::Git)
     }
 
     pub(crate) fn text_diff_snapshot(

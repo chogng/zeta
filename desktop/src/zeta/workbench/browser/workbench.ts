@@ -173,6 +173,9 @@ import { IWorkingCopyBackupService, type WorkingCopyBackup } from "../services/w
 import { projectExtensionTokenTheme } from "../services/textMate/common/textMateThemeProjection.js";
 import { BrowserWorkspaceEditService } from "../services/language/browser/browserWorkspaceEditService.js";
 import { IWorkspaceEditService } from "../services/language/common/workspaceEditService.js";
+import { ITextModelService } from "../../editor/common/services/textModelService.js";
+import { BrowserBulkEditService } from "../contrib/bulkEdit/browser/bulkEditService.js";
+import { IBulkEditService } from "../contrib/bulkEdit/common/bulkEdit.js";
 import { getBrowserTextModelService } from "../../editor/browser/services/browserTextModelService.js";
 import { getBrowserTextResourceStore } from "../contrib/codeEditor/browser/browserTextResourceStore.js";
 import { AppServerLanguageProviders } from "../services/language/browser/appServerLanguageProviders.js";
@@ -317,8 +320,12 @@ export class Workbench extends DisposableOwner {
     this.workingCopyBackups = workingCopyBackups;
     services.set(IWorkingCopyBackupService, workingCopyBackups);
     const textResourceStore = getBrowserTextResourceStore(textFileService);
-    const workspaceEditService = this.own(new BrowserWorkspaceEditService(getBrowserTextModelService(textResourceStore), workingCopyService, fileService));
+    const textModelService = this.own(getBrowserTextModelService(textResourceStore));
+    services.set(ITextModelService, textModelService);
+    const workspaceEditService = this.own(new BrowserWorkspaceEditService(textModelService, workingCopyService, fileService));
     services.set(IWorkspaceEditService, workspaceEditService);
+    const bulkEditService = this.own(new BrowserBulkEditService(workspaceEditService));
+    services.set(IBulkEditService, bulkEditService);
     const textMateService = this.own(new BrowserTextMateService());
     services.set(ITextMateService, textMateService);
     const languageFeaturesService = this.own(new LanguageFeaturesService());
@@ -531,7 +538,7 @@ export class Workbench extends DisposableOwner {
       documentCollaborationApi: api.documentCollaboration,
       serverEvents: api.events,
       workingCopyService,
-      workspaceEditService,
+      bulkEditService,
       createLineGutterDecorations: resource => createEditorLineGutterDecorations(resource, services),
       saveAsResource: nativeHostApi
         ? async (defaultName) => {

@@ -3925,7 +3925,7 @@ fn git_remote_rpcs_fetch_pull_and_push_against_a_local_bare_remote() {
     let graph = call(
         &server,
         &mut connection,
-        serde_json::json!({"jsonrpc":"2.0","id":7,"method":"git/graph","params":{"limit":50,"skip":0}}),
+        serde_json::json!({"jsonrpc":"2.0","id":7,"method":"git/graph","params":{"limit":50}}),
     );
     assert!(graph.get("error").is_none(), "{graph}");
     assert!(
@@ -3947,11 +3947,22 @@ fn git_remote_rpcs_fetch_pull_and_push_against_a_local_bare_remote() {
     let graph_page = call(
         &server,
         &mut connection,
-        serde_json::json!({"jsonrpc":"2.0","id":8,"method":"git/graph","params":{"limit":1,"skip":0}}),
+        serde_json::json!({"jsonrpc":"2.0","id":8,"method":"git/graph","params":{"limit":1}}),
     );
     assert!(graph_page.get("error").is_none(), "{graph_page}");
     assert_eq!(graph_page["result"]["commits"].as_array().unwrap().len(), 1);
     assert_eq!(graph_page["result"]["hasMore"], true);
+    let cursor = graph_page["result"]["nextCursor"]
+        .as_str()
+        .expect("graph continuation cursor");
+    let graph_tail = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":9,"method":"git/graph","params":{"limit":50,"cursor":cursor}}),
+    );
+    assert!(graph_tail.get("error").is_none(), "{graph_tail}");
+    assert_eq!(graph_tail["result"]["hasMore"], false);
+    assert!(graph_tail["result"]["nextCursor"].is_null());
 
     drop(server);
     std::fs::remove_dir_all(root).unwrap();

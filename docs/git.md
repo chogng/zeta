@@ -40,7 +40,7 @@ Trusted workspace。Git query 继续由 `zeta-git` 以禁用 hooks、非交互�
 | 暂存或取消暂存 | 使用明确的工作区相对路径 | 不能越过工作区边界 |
 | 丢弃更改 | 只恢复已跟踪文件，并在界面确认 | 不删除未跟踪文件 |
 | 切换本地分支 | Native 点击底栏当前分支，在菜单中选择另一个本地分支；请求通过 App Server | 冲突时 Git 拒绝切换并保留当前工作树 |
-| 查看 history graph | SCM Graph 以 `limit`/`skip` 分页读取 `git/graph`，按 lane 分配颜色并显示 local/remote refs；滚动到底部后追加下一页 | 只包含本地已存在的 refs；不会自动 fetch |
+| 查看 history graph | SCM Graph 以 `limit`/`cursor` 分页读取 `git/graph`，按 lane 分配颜色并显示 local/remote refs；滚动到底部后追加下一页 | 只包含本地已存在的 refs；不会自动 fetch |
 | 拉取远端 | 只允许 fast-forward | 需要交互认证时失败 |
 | 提交和推送 | 使用系统 Git 的当前仓库配置 | 尚无凭据提示和进度 UI |
 
@@ -76,10 +76,10 @@ Trusted workspace。Git query 继续由 `zeta-git` 以禁用 hooks、非交互�
 - `git/textDiff` 返回 workspace-scoped status、受限 UTF-8 HEAD/worktree 文本与增删行统计；
 - `git/branch/list` 返回现有本地分支，`git/branch/switch` 只接受 branch name，并在 host 重新解析为
   当前仓库真实分支后执行切换；
-- `git/graph` 接受有界的 `limit`/`skip` 分页参数，返回该页的 `git log --all --topo-order`、local
-  branches、已 fetch 的 `refs/remotes/*` 和配置 remote 的 credential-free identity，并通过
-  `hasMore` 表示是否还有下一页；remote identity 只保留 provider、host、owner、repository，原始 URL、
-  token 和 `gh` 登录配置不会进入协议；
+- `git/graph` 首次接受有界 `limit`，后续使用不透明 `cursor` 继续同一次 `git log --all --topo-order`
+  traversal；游标启动时读取一次 local/remote refs 和 configured remote identity，并通过 `hasMore` 与
+  `nextCursor` 表示是否还有下一页。remote identity 只保留 provider、host、owner、repository，原始
+  URL、token 和 `gh` 登录配置不会进入协议；状态变化、mutation 或连接关闭会使游标失效；
 - `git/fetch` 执行 all-remotes prune，`git/pull` 仅允许 fast-forward，`git/push` 使用 Git 当前
   upstream/default 配置；所有 remote operation 都是 non-interactive；
 - 每个成功 mutation 都返回新的 `GitStatusResult`，Desktop 立即重绘；首次打开 View 也会自动刷新；

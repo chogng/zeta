@@ -34,13 +34,13 @@ Git domain owner 下，而不是建立平级的 `zeta-git-utils`：
 
 | 文件 | 当前职责 | 关键 symbol |
 | --- | --- | --- |
-| `src/client.rs` | Git executable identity、process profile、timeout、bounded capture、non-interactive config | `GitClient`、`GitExecutionLimits`、private `GitInvocation`、`GitCommandProfile`、`read_bounded` |
+| `src/client.rs` | Git executable identity、process profile、timeout、bounded capture、non-interactive config，以及流式 query process 生命周期 | `GitClient`、`GitExecutionLimits`、private `GitInvocation`、`GitCommandProfile`、`GitQueryStream`、`read_bounded` |
 | `src/repository.rs` | 从已有 path 打开 working tree，解析 worktree/git/common metadata path | `GitRepository`、`GitRepositoryKind`、`existing_directory` |
 | `src/status.rs` | porcelain-v2 snapshot 与 HEAD/change/submodule model | `GitRepositorySnapshot`、`GitHead`、private `parse_status` |
 | `src/content.rs` | 有界读取 HEAD 或 index 中一个 repository-relative file | `GitFileRevision`、`GitClient::read_file_at_revision` |
 | `src/text_diff.rs` | 从同一次状态快照构建 repository-wide 或 path-scoped 的有界 UTF-8 HEAD/worktree Diff 与文件级、聚合增删行统计 | `GitTextDiffSnapshot`、`GitTextDiff`、`GitDiffStatistics`、`GitClient::text_diff_snapshot[_under]` |
 | `src/info.rs` | local branches、fetch/push remote URLs、credential-free remote identity、bounded recent history | `GitBranch`、`GitRemote`、`GitRemoteIdentity`、`GitRemoteProvider`、`GitCommitSummary` |
-| `src/graph.rs` | local/remote-tracking refs 与 `git log --all` 的分页 graph page | `GitGraph`、`GitReference`、`GitReferenceKind`、private `parse_references` |
+| `src/graph.rs` | local/remote-tracking refs 与单次 `git log --all` traversal 的分页 graph page | `GitGraph`、`GitGraphCursor`、`GitReference`、`GitReferenceKind`、private `parse_references` |
 | `src/mutation.rs` | path set/commit request validation 与常用 index/worktree/branch/remote mutation | `GitPathspecSet`、`GitCommitRequest`、`GitCommitResult`、`GitClient::switch_branch` |
 | `src/patch.rs` | patch request/result、stdin apply、path extraction 和 diagnostics 分类 | `GitPatchRequest`、`GitPatchResult`、private `parse_apply_diagnostics` |
 | `src/fsmonitor.rs` | effective config 与 built-in daemon capability 探测 | private `detect_fsmonitor_override` |
@@ -90,10 +90,10 @@ GitClient::local_branches / remotes / recent_commits
 └─ GitClient::run_query
    └─ strict parser for the command-specific output
 
-GitClient::graph
+GitClient::start_graph → GitGraphCursor::page
 ├─ GitClient::references
 │  └─ git for-each-ref refs/heads refs/remotes
-├─ git log --all --topo-order -z
+├─ one streaming git log --all --topo-order -z process
 └─ GitClient::remotes
    └─ credential-free GitRemoteIdentity projection at the App Server boundary
 
@@ -144,9 +144,10 @@ revision；该 revision 仍不是 mutation CAS token。
 
 ## Graph 与 remote identity 契约
 
-`GitClient::graph` 是一次 bounded page observation：它读取 `refs/heads` 与 `refs/remotes`，跳过
-symbolic remote ref（例如 `origin/HEAD`），再从所有本地可见 refs 执行带 `skip`/`limit` 的
-`git log --all`，额外读取一条记录计算 `GitGraph::has_more`。因此 remote branch 只有在本地已经
+`GitClient::start_graph` 启动一次 bounded traversal：它读取 `refs/heads` 与 `refs/remotes`，跳过
+symbolic remote ref（例如 `origin/HEAD`），再从所有本地可见 refs 启动单个流式 `git log --all`。
+`GitGraphCursor::page` 从该进程继续读取一页并额外读取一条记录计算 `GitGraph::has_more`，因此
+不会为后续页重复 refs/remotes 查询或使用 `--skip` 重新扫描历史。remote branch 只有在本地已经
 fetch 后才会进入 graph；graph 不执行 fetch，也不调用 GitHub API。`GitReference` 保留 branch/ref
 名、object ID、local/remote kind、remote name 和当前分支标记。
 

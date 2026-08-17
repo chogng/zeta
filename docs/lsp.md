@@ -37,7 +37,8 @@ route 默认启用；显式 Config `Disabled` 仍可关闭。缺失或不可执�
 | 意外退出、退避重启和 crash-loop | ✅ 断连 retirement、有限指数退避、状态展示和全文重放 | `zeta-language-service` + Native |
 | 安装、更新和选择其他 server | 部分具备；CSS 的 TUF download、确认、activation 与热 registry 已完成；其他 server 仍需 catalog adapter | Marketplace / catalog |
 | 动态注册与 work-done progress | ✅ 按 server incarnation 隔离，静态与动态 capability 共同参与请求 gate | `zeta-lsp` + `zeta-language-service` |
-| workspace edit、LSP 3.18 新能力 | 尚未完成 | 后续按真实消费者逐项加入 |
+| workspace edit | ✅ Language Service ordered edit、Desktop transaction 与 Workbench preview 已接通 | `zeta-language-service` + Desktop Workbench |
+| LSP 3.18 新能力 | 尚未完成 | 后续按真实消费者逐项加入 |
 
 继续阅读：[一次操作](#1-一次操作)、[所有权](#2-所有权边界)、
 [失败语义](#3-可靠性与失败语义)、[当前状态](#4-当前实现与演进)。

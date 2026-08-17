@@ -1,6 +1,6 @@
 import { APP_SERVER_METHODS, type GitCommitParams, type GitGraphParams, type GitPathsParams } from "../../../../../generated/app-server/types.js";
 import type { AppServerSupervisor } from "../../app-server/electron-main/app-server-supervisor.js";
-import { boundedPositiveInteger, nonNegativeInteger, record, string } from "../../ipc/electron-main/ipcValidation.js";
+import { boundedPositiveInteger, record, string } from "../../ipc/electron-main/ipcValidation.js";
 import type { IpcRoute } from "../../ipc/electron-main/trustedIpcRouter.js";
 import { relativeWorkspacePath } from "../../workspace/electron-main/workspacePathValidation.js";
 
@@ -19,7 +19,7 @@ export function gitIpcRoutes(supervisor: AppServerSupervisor): readonly IpcRoute
     }),
     route({
       channel: "zeta:git:graph",
-      validate: gitGraphParams,
+      validate: graphParams,
       invoke: (params) => supervisor.request(APP_SERVER_METHODS["git/graph"], params),
     }),
     route({
@@ -96,10 +96,10 @@ function gitCommitParams(value: unknown): GitCommitParams {
   return { message };
 }
 
-function gitGraphParams(value: unknown): GitGraphParams {
-  const params = record(value, ["limit", "skip"]);
+function graphParams(value: unknown): GitGraphParams {
+  const params = record(value, ["limit"], ["cursor"]);
   return {
     limit: boundedPositiveInteger(params.limit, "limit", 1000),
-    skip: nonNegativeInteger(params.skip, "skip"),
+    ...(params.cursor === undefined ? {} : { cursor: string(params.cursor, "cursor") }),
   };
 }

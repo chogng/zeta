@@ -20,6 +20,7 @@ export const lxiconsLibrary = {
   chevronDown: register("chevron-down", svg.chevronDown),
   chevronRight: register("chevron-right", svg.chevronRight),
   close: register("close", svg.close),
+  codeReview: register("code-review", svg.codeReview),
   dropdownIndicator: register("dropdown-indicator", svg.chevronDown),
   download: register("download", svg.download),
   ellipsis: register("ellipsis", svg.ellipsis),

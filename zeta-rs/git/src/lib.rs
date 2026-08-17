@@ -22,6 +22,7 @@ pub use content::GitFileRevision;
 pub use error::GitError;
 pub use error::GitResult;
 pub use graph::GitGraph;
+pub use graph::GitGraphCursor;
 pub use graph::GitReference;
 pub use graph::GitReferenceKind;
 pub use info::GitBranch;

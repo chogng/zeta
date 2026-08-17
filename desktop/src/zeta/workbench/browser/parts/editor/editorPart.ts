@@ -23,7 +23,7 @@ import type { TextResourceLanguageResolver } from "../../../../platform/language
 import type { IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";
 import type { IEditorPane } from "./editorPane.js";
 import { EditorPaneRegistry, EditorPanes } from "./editorRegistry.js";
-import type { IWorkspaceEditService } from "../../../services/language/common/workspaceEditService.js";
+import type { IBulkEditService } from "../../../contrib/bulkEdit/common/bulkEdit.js";
 import type { ILanguageDiagnosticsService } from "../../../../editor/common/services/languageDiagnosticsService.js";
 import type { EditorLineGutterDecoration } from "../../../../editor/browser/view/lineGutterDecoration.js";
 
@@ -68,7 +68,7 @@ export interface IEditorPartOptions {
   readonly documentCollaborationApi?: IDocumentCollaborationApi;
   readonly serverEvents?: IServerEventApi;
   readonly workingCopyService?: IWorkingCopyService;
-  readonly workspaceEditService?: IWorkspaceEditService;
+  readonly bulkEditService?: IBulkEditService;
   readonly createLineGutterDecorations?: (resource: URI) => readonly EditorLineGutterDecoration[];
   readonly registry?: EditorPaneRegistry;
   readonly titleActions?: {
@@ -114,7 +114,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
       serverEvents: options.serverEvents,
       workingCopyService: options.workingCopyService,
       onOpenLocation: location => this.openEditor({ resource: location.resource }, { selection: location.selectionRange ?? location.range }).then(() => undefined),
-      onApplyWorkspaceEdit: options.workspaceEditService ? edit => options.workspaceEditService!.apply(edit).then(() => undefined) : undefined,
+      onApplyWorkspaceEdit: options.bulkEditService ? edit => options.bulkEditService!.apply(edit).then(() => undefined) : undefined,
       createLineGutterDecorations: options.createLineGutterDecorations,
       titleActions: options.titleActions,
       ...(options.saveAsResource ? {

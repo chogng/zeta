@@ -46,6 +46,12 @@
   list-style: none;
 }
 
+.zeta-scm-graph-spacer {
+  display: block;
+  padding: 0;
+  pointer-events: none;
+}
+
 .zeta-scm-graph-commit {
   --scm-graph-row-background: var(--zeta-side-bar-background);
   position: relative;
@@ -325,10 +331,21 @@
   outline: 1px solid var(--zeta-focus-border);
 }
 
-.zeta-scm-commit.zeta-button {
+.zeta-scm-commit.zeta-button,
+.zeta-scm-find-issues.zeta-button {
   width: 100%;
   color: var(--zeta-button-primary-foreground);
-  background: var(--zeta-button-primary-background);
+  background: var(--zeta-files-empty-explorer-open-folder-background);
+}
+
+.zeta-scm-commit.zeta-button:not(:disabled):hover,
+.zeta-scm-find-issues.zeta-button:not(:disabled):hover {
+  background: var(--zeta-files-empty-explorer-open-folder-hover-background);
+}
+
+.zeta-scm-find-issues.zeta-button {
+  margin: 0 8px 8px;
+  width: calc(100% - 16px);
 }
 
 .zeta-scm-status {
