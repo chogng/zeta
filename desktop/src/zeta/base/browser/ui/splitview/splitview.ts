@@ -292,6 +292,26 @@ export class SplitView extends DisposableOwner {
     this._onDidChangeViewSizes.fire();
   }
 
+  /**
+   * Resets the nearest visible views around one sash to an even split.
+   * Unrelated views retain their current sizes.
+   */
+  resetSash(boundaryIndex: number): void {
+    if (!Number.isInteger(boundaryIndex) || boundaryIndex < 0 || boundaryIndex >= this.items.length - 1) {
+      throw new RangeError(`SplitView sash boundary is out of range: ${boundaryIndex}`);
+    }
+    if (!this.didLayout) return;
+    const before = this.findVisibleItem(boundaryIndex, -1);
+    const after = this.findVisibleItem(boundaryIndex + 1, 1);
+    if (!before || !after) return;
+    const total = before.size + after.size;
+    const beforeSize = resetLeadingViewSize(total, before, after);
+    before.size = beforeSize;
+    after.size = total - beforeSize;
+    this.render();
+    this._onDidChangeViewSizes.fire();
+  }
+
   private resolveSizing(
     sizing: SplitViewSizing,
   ): { readonly size: number; readonly visible: boolean } {
@@ -408,7 +428,7 @@ export class SplitView extends DisposableOwner {
     this.sashes.add(sash.onDidEnd(() => {
       dragState = undefined;
     }));
-    this.sashes.add(sash.onDidReset(() => this.resetSash(boundaryIndex)));
+    this.sashes.add(sash.onDidReset(() => this.handleSashReset(boundaryIndex)));
     this.element.append(sash.element);
   }
 
@@ -440,7 +460,7 @@ export class SplitView extends DisposableOwner {
     this._onDidChangeViewSizes.fire();
   }
 
-  private resetSash(boundaryIndex: number): void {
+  private handleSashReset(boundaryIndex: number): void {
     const items = this.getResizeItems();
     const before = findFirstSnapIndex(items, Array.from({ length: boundaryIndex + 1 }, (_, index) => boundaryIndex - index));
     const after = findFirstSnapIndex(items, Array.from({ length: items.length - boundaryIndex - 1 }, (_, index) => boundaryIndex + index + 1));
@@ -537,6 +557,14 @@ export class SplitView extends DisposableOwner {
     return this.items.filter((item) => item.visible);
   }
 
+  private findVisibleItem(startIndex: number, direction: -1 | 1): ViewItem | undefined {
+    for (let index = startIndex; index >= 0 && index < this.items.length; index += direction) {
+      const item = this.items[index];
+      if (item?.visible) return item;
+    }
+    return undefined;
+  }
+
   private indexOf(view: ISplitViewView): number {
     const index = this.items.findIndex((item) => item.view === view);
     if (index < 0) throw new Error("SplitView view is not registered");
@@ -608,6 +636,18 @@ function validateViewConstraints(view: ISplitViewView): void {
 
 function isResizable(item: ViewItem): boolean {
   return item.view.minimumSize < item.view.maximumSize;
+}
+
+function resetLeadingViewSize(total: number, leading: ViewItem, trailing: ViewItem): number {
+  const minimum = Math.max(
+    leading.view.minimumSize,
+    total - trailing.view.maximumSize,
+  );
+  const maximum = Math.min(
+    leading.view.maximumSize,
+    total - trailing.view.minimumSize,
+  );
+  return clamp(total / 2, minimum, maximum);
 }
 
 function assertNonNegativeFinite(value: number, name: string): void {

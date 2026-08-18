@@ -393,6 +393,34 @@ test("Workbench layout derives flexible editor size from the container", () => {
   dom.window.close();
 });
 
+test("Workbench sash reset keeps unrelated sidebars at their current widths", () => {
+  const dom = new JSDOM("<!doctype html><body></body>");
+  const harness = createLayoutHarness(dom.window.document, {
+    initialDimension: new Dimension(1_200, 800),
+  });
+  harness.layout.layout(new Dimension(1_200, 800));
+  harness.layout.resizePart(
+    "sidebar",
+    harness.layout.getPartSize("sidebar").with(260),
+  );
+  harness.layout.resizePart(
+    "auxiliarybar",
+    harness.layout.getPartSize("auxiliarybar").with(320),
+  );
+  const sidebarWidth = harness.layout.getPartSize("sidebar").width;
+
+  resetWorkbenchSash(dom.window, harness.container, "auxiliarybar", 1);
+
+  assert.equal(harness.layout.getPartSize("sidebar").width, sidebarWidth);
+  assert.equal(
+    harness.layout.getPartSize("editor").width,
+    harness.layout.getPartSize("auxiliarybar").width,
+  );
+
+  harness.disposables.dispose();
+  dom.window.close();
+});
+
 test("Workbench layout applies the shared profile defaults", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
   const harness = createLayoutHarness(dom.window.document, {
@@ -1211,6 +1239,23 @@ function dragWorkbenchSash(
   sash.dispatchEvent(event("pointerdown", 0));
   targetWindow.dispatchEvent(event("pointermove", delta));
   targetWindow.dispatchEvent(event("pointerup", delta));
+}
+
+function resetWorkbenchSash(
+  targetWindow: typeof browserEnvironment.window,
+  container: HTMLElement,
+  partId: WorkbenchPartId,
+  boundaryIndex: number,
+): void {
+  const part = container.querySelector<HTMLElement>(`[data-part='${partId}']`);
+  assert.ok(part);
+  const splitView = part.parentElement?.parentElement?.parentElement;
+  if (!splitView?.classList.contains("zeta-split-view")) {
+    throw new Error(`Workbench Part ${partId} is not hosted by a SplitView`);
+  }
+  const sash = splitView.querySelectorAll<HTMLElement>(":scope > .zeta-sash")[boundaryIndex];
+  assert.ok(sash);
+  sash.dispatchEvent(new targetWindow.MouseEvent("dblclick", { bubbles: true, detail: 2 }));
 }
 
 function compositeBarDragEvent(targetWindow: { readonly Event: typeof Event }, type: string, clientX = 0): DragEvent {

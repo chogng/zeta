@@ -117,7 +117,7 @@ class BranchNode extends GridNode {
     this.updateBoundarySashes();
     this.tryLink2x2Sashes(host);
     host.ownEvent(this.splitView.onDidChangeViewSizes(() => host.handleSplitViewChange()));
-    host.ownEvent(this.splitView.onDidSashReset(() => this.splitView.distributeViewSizes()));
+    host.ownEvent(this.splitView.onDidSashReset((boundaryIndex) => this.splitView.resetSash(boundaryIndex)));
   }
 
   get minimumWidth(): number {

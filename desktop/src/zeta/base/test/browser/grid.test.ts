@@ -342,6 +342,35 @@ test("Grid resets a visible sash by distributing its sibling sizes", () => {
   dom.window.close();
 });
 
+test("Grid resets only the views adjacent to the selected sash", () => {
+  const dom = new JSDOM("<!doctype html><body></body>");
+  const left = new TestGridView(dom.window.document, 100, 600);
+  const middle = new TestGridView(dom.window.document, 100, 600);
+  const right = new TestGridView(dom.window.document, 100, 600);
+  const grid = new Grid({
+    type: "branch",
+    orientation: "horizontal",
+    size: 600,
+    children: [
+      { type: "leaf", view: left, size: 100 },
+      { type: "leaf", view: middle, size: 300 },
+      { type: "leaf", view: right, size: 200 },
+    ],
+  }, dom.window.document);
+  grid.layout(600, 400);
+  const sashes = grid.element.querySelectorAll<HTMLElement>(":scope > .zeta-split-view > .zeta-sash");
+  const secondSash = sashes[1];
+  assert.ok(secondSash);
+
+  secondSash.dispatchEvent(new dom.window.MouseEvent("dblclick", { bubbles: true }));
+
+  assert.deepEqual(grid.getViewSize(left), { width: 100, height: 400 });
+  assert.deepEqual(grid.getViewSize(middle), { width: 250, height: 400 });
+  assert.deepEqual(grid.getViewSize(right), { width: 250, height: 400 });
+  grid.dispose();
+  dom.window.close();
+});
+
 test("Grid rejects duplicate views in its descriptor", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
   const view = new TestGridView(dom.window.document, 0, Infinity);
